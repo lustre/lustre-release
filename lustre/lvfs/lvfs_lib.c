@@ -47,29 +47,6 @@
 #include <lustre_lib.h>
 #include <lprocfs_status.h>
 
-unsigned int obd_alloc_fail_rate = 0;
-
-int obd_alloc_fail(const void *ptr, const char *name, const char *type,
-                   size_t size, const char *file, int line)
-{
-        if (ptr == NULL ||
-            (cfs_rand() & OBD_ALLOC_FAIL_MASK) < obd_alloc_fail_rate) {
-                CERROR("%s%salloc of %s ("LPU64" bytes) failed at %s:%d\n",
-                       ptr ? "force " :"", type, name, (__u64)size, file,
-                       line);
-                CERROR(LPU64" total bytes and "LPU64" total pages "
-                       "("LPU64" bytes) allocated by Lustre, "
-                       "%d total bytes by LNET\n",
-                       obd_memory_sum(),
-                       obd_pages_sum() << CFS_PAGE_SHIFT,
-                       obd_pages_sum(),
-                       cfs_atomic_read(&libcfs_kmemory));
-                return 1;
-        }
-        return 0;
-}
-EXPORT_SYMBOL(obd_alloc_fail);
-
 #ifdef LPROCFS
 void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 {
@@ -198,5 +175,3 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
 }
 EXPORT_SYMBOL(lprocfs_stats_alloc_one);
 #endif  /* LPROCFS */
-
-EXPORT_SYMBOL(obd_alloc_fail_rate);

@@ -60,14 +60,17 @@ EXPORT_SYMBOL(obd_devs);
 cfs_list_t obd_types;
 DEFINE_RWLOCK(obd_dev_lock);
 
-#ifndef __KERNEL__
 __u64 obd_max_pages = 0;
 __u64 obd_max_alloc = 0;
+#ifndef __KERNEL__
 __u64 obd_alloc;
 __u64 obd_pages;
 #endif
+DEFINE_SPINLOCK(obd_updatemax_lock);
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
+unsigned int obd_alloc_fail_rate = 0;
+EXPORT_SYMBOL(obd_alloc_fail_rate);
 unsigned int obd_debug_peer_on_timeout;
 EXPORT_SYMBOL(obd_debug_peer_on_timeout);
 unsigned int obd_dump_on_timeout;
@@ -161,6 +164,27 @@ int lustre_get_jobid(char *jobid)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_get_jobid);
+
+int obd_alloc_fail(const void *ptr, const char *name, const char *type,
+		   size_t size, const char *file, int line)
+{
+	if (ptr == NULL ||
+	    (cfs_rand() & OBD_ALLOC_FAIL_MASK) < obd_alloc_fail_rate) {
+		CERROR("%s%salloc of %s ("LPU64" bytes) failed at %s:%d\n",
+		       ptr ? "force " :"", type, name, (__u64)size, file,
+		       line);
+		CERROR(LPU64" total bytes and "LPU64" total pages "
+		       "("LPU64" bytes) allocated by Lustre, "
+		       "%d total bytes by LNET\n",
+		       obd_memory_sum(),
+		       obd_pages_sum() << CFS_PAGE_SHIFT,
+		       obd_pages_sum(),
+			cfs_atomic_read(&libcfs_kmemory));
+		return 1;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(obd_alloc_fail);
 
 static inline void obd_data2conn(struct lustre_handle *conn,
                                  struct obd_ioctl_data *data)
@@ -587,6 +611,48 @@ int init_obdclass(void)
 
         return err;
 }
+
+void obd_update_maxusage(void)
+{
+	__u64 max1, max2;
+
+	max1 = obd_pages_sum();
+	max2 = obd_memory_sum();
+
+	spin_lock(&obd_updatemax_lock);
+	if (max1 > obd_max_pages)
+		obd_max_pages = max1;
+	if (max2 > obd_max_alloc)
+		obd_max_alloc = max2;
+	spin_unlock(&obd_updatemax_lock);
+}
+EXPORT_SYMBOL(obd_update_maxusage);
+
+#ifdef LPROCFS
+__u64 obd_memory_max(void)
+{
+	__u64 ret;
+
+	spin_lock(&obd_updatemax_lock);
+	ret = obd_max_alloc;
+	spin_unlock(&obd_updatemax_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(obd_memory_max);
+
+__u64 obd_pages_max(void)
+{
+	__u64 ret;
+
+	spin_lock(&obd_updatemax_lock);
+	ret = obd_max_pages;
+	spin_unlock(&obd_updatemax_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(obd_pages_max);
+#endif
 
 /* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
  * ifdef to the end of the file to cover module and versioning goo.*/

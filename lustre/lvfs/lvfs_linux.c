@@ -58,11 +58,8 @@
 #include <obd.h>
 #include <lustre_lib.h>
 
-__u64 obd_max_pages = 0;
-__u64 obd_max_alloc = 0;
 struct lprocfs_stats *obd_memory = NULL;
 EXPORT_SYMBOL(obd_memory);
-DEFINE_SPINLOCK(obd_updatemax_lock);
 /* refine later and change to seqlock or simlar from libcfs */
 
 /* Debugging check only needed during development */
@@ -245,47 +242,6 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
         return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
 }
 EXPORT_SYMBOL(l_dentry_open);
-
-void obd_update_maxusage()
-{
-	__u64 max1, max2;
-
-	max1 = obd_pages_sum();
-	max2 = obd_memory_sum();
-
-	spin_lock(&obd_updatemax_lock);
-	if (max1 > obd_max_pages)
-		obd_max_pages = max1;
-	if (max2 > obd_max_alloc)
-		obd_max_alloc = max2;
-	spin_unlock(&obd_updatemax_lock);
-
-}
-EXPORT_SYMBOL(obd_update_maxusage);
-
-__u64 obd_memory_max(void)
-{
-	__u64 ret;
-
-	spin_lock(&obd_updatemax_lock);
-	ret = obd_max_alloc;
-	spin_unlock(&obd_updatemax_lock);
-
-	return ret;
-}
-EXPORT_SYMBOL(obd_memory_max);
-
-__u64 obd_pages_max(void)
-{
-	__u64 ret;
-
-	spin_lock(&obd_updatemax_lock);
-	ret = obd_max_pages;
-	spin_unlock(&obd_updatemax_lock);
-
-	return ret;
-}
-EXPORT_SYMBOL(obd_pages_max);
 
 #ifdef LPROCFS
 __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
