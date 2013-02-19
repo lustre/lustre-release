@@ -1423,6 +1423,63 @@ out:
 	return rc;
 }
 
+static int ofd_ioc_get_obj_version(const struct lu_env *env,
+				   struct ofd_device *ofd, void *karg)
+{
+	struct obd_ioctl_data *data = karg;
+	struct lu_fid	       fid;
+	struct ofd_object     *fo;
+	dt_obj_version_t       version;
+	int		       rc = 0;
+
+	ENTRY;
+
+	if (data->ioc_inlbuf2 == NULL || data->ioc_inllen2 != sizeof(version))
+		GOTO(out, rc = -EINVAL);
+
+	if (data->ioc_inlbuf1 != NULL && data->ioc_inllen1 == sizeof(fid)) {
+		fid = *(struct lu_fid *)data->ioc_inlbuf1;
+	} else if (data->ioc_inlbuf3 != NULL &&
+		   data->ioc_inllen3 == sizeof(__u64) &&
+		   data->ioc_inlbuf4 != NULL &&
+		   data->ioc_inllen4 == sizeof(__u64)) {
+		struct ost_id ostid;
+
+		ostid.oi_id = *(__u64 *)data->ioc_inlbuf3;
+		ostid.oi_seq = *(__u64 *)data->ioc_inlbuf4;
+		rc = fid_ostid_unpack(&fid, &ostid, 0);
+		if (rc != 0)
+			GOTO(out, rc);
+	} else {
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (!fid_is_sane(&fid))
+		GOTO(out, rc = -EINVAL);
+
+	fo = ofd_object_find(env, ofd, &fid);
+	if (IS_ERR(fo))
+		GOTO(out, rc = PTR_ERR(fo));
+
+	if (!ofd_object_exists(fo))
+		GOTO(out_fo, rc = -ENOENT);
+
+	if (lu_object_remote(&fo->ofo_obj.do_lu))
+		GOTO(out_fo, rc = -EREMOTE);
+
+	version = dt_version_get(env, ofd_object_child(fo));
+	if (version == 0)
+		GOTO(out_fo, rc = -EIO);
+
+	*(dt_obj_version_t *)data->ioc_inlbuf2 = version;
+
+	EXIT;
+out_fo:
+	ofd_object_put(env, fo);
+out:
+	return rc;
+}
+
 int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		  void *karg, void *uarg)
 {
@@ -1434,7 +1491,7 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	ENTRY;
 
 	CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
-	rc = lu_env_init(&env, LCT_LOCAL);
+	rc = lu_env_init(&env, LCT_DT_THREAD);
 	if (rc)
 		RETURN(rc);
 
@@ -1451,6 +1508,9 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = dt_sync(&env, ofd->ofd_osd);
 		if (rc == 0)
 			rc = dt_ro(&env, ofd->ofd_osd);
+		break;
+	case OBD_IOC_GET_OBJ_VERSION:
+		rc = ofd_ioc_get_obj_version(&env, ofd, karg);
 		break;
 	default:
 		CERROR("%s: not supported cmd = %d\n", obd->obd_name, cmd);

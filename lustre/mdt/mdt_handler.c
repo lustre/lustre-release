@@ -5816,17 +5816,24 @@ static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
 
 static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
 {
-        struct obd_ioctl_data *data = karg;
-        struct lu_fid *fid = (struct lu_fid *)data->ioc_inlbuf1;
-        __u64 version;
-        struct mdt_object *obj;
-        struct mdt_lock_handle  *lh;
-        int rc;
-        ENTRY;
+	struct obd_ioctl_data *data = karg;
+	struct lu_fid *fid;
+	__u64 version;
+	struct mdt_object *obj;
+	struct mdt_lock_handle  *lh;
+	int rc;
+	ENTRY;
 
-        CDEBUG(D_IOCTL, "getting version for "DFID"\n", PFID(fid));
-        if (!fid_is_sane(fid))
-                RETURN(-EINVAL);
+	if (data->ioc_inlbuf1 == NULL || data->ioc_inllen1 != sizeof(*fid) ||
+	    data->ioc_inlbuf2 == NULL || data->ioc_inllen2 != sizeof(version))
+		RETURN(-EINVAL);
+
+	fid = (struct lu_fid *)data->ioc_inlbuf1;
+
+	if (!fid_is_sane(fid))
+		RETURN(-EINVAL);
+
+	CDEBUG(D_IOCTL, "getting version for "DFID"\n", PFID(fid));
 
         lh = &mti->mti_lh[MDT_LH_PARENT];
         mdt_lock_reg_init(lh, LCK_CR);

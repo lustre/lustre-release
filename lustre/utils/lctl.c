@@ -345,7 +345,8 @@ command_t cmdlist[] = {
          "usage: memhog <page count> [<gfp flags>]"},
         {"getobjversion", jt_get_obj_version, 0,
          "get the version of an object on servers\n"
-         "usage: getobjversion <fid>"},
+	 "usage: getobjversion <fid>\n"
+	 "	 getobjversion -i <id> -g <group>"},
 
 	/* LFSCK commands */
 	{"==== LFSCK ====", jt_noop, 0, "LFSCK"},

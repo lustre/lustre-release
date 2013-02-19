@@ -3584,31 +3584,50 @@ out:
 
 int jt_get_obj_version(int argc, char **argv)
 {
-        struct lu_fid fid;
-        struct obd_ioctl_data data;
-        __u64 version;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf, *fidstr;
-        int rc;
+	struct lu_fid fid;
+	struct obd_ioctl_data data;
+	__u64 version, id = ULLONG_MAX, group = ULLONG_MAX;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf, *fidstr;
+	int rc, c;
 
-        if (argc != 2)
-                return CMD_HELP;
+	while ((c = getopt(argc, argv, "i:g:")) != -1) {
+		switch (c) {
+		case 'i':
+			id = strtoull(optarg, NULL, 0);
+			break;
+		case 'g':
+			group = strtoull(optarg, NULL, 0);
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
 
-        fidstr = argv[1];
-        while (*fidstr == '[')
-                fidstr++;
-        sscanf(fidstr, SFID, RFID(&fid));
-        if (!fid_is_sane(&fid)) {
-                fprintf(stderr, "bad FID format [%s], should be "DFID"\n",
-                        fidstr, (__u64)1, 2, 0);
-                return -EINVAL;
-        }
+	argc -= optind;
+	argv += optind;
 
-        memset(&data, 0, sizeof data);
-        data.ioc_dev = cur_device;
-        data.ioc_inlbuf1 = (char *) &fid;
-        data.ioc_inllen1 = sizeof fid;
-        data.ioc_inlbuf2 = (char *) &version;
-        data.ioc_inllen2 = sizeof version;
+	if (!(id != ULLONG_MAX && group != ULLONG_MAX && argc == 0) &&
+	    !(id == ULLONG_MAX && group == ULLONG_MAX && argc == 1))
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof data);
+	data.ioc_dev = cur_device;
+	if (argc == 1) {
+		fidstr = *argv;
+		while (*fidstr == '[')
+			fidstr++;
+		sscanf(fidstr, SFID, RFID(&fid));
+
+		data.ioc_inlbuf1 = (char *) &fid;
+		data.ioc_inllen1 = sizeof fid;
+	} else {
+		data.ioc_inlbuf3 = (char *) &id;
+		data.ioc_inllen3 = sizeof id;
+		data.ioc_inlbuf4 = (char *) &group;
+		data.ioc_inllen4 = sizeof group;
+	}
+	data.ioc_inlbuf2 = (char *) &version;
+	data.ioc_inllen2 = sizeof version;
 
         memset(buf, 0, sizeof *buf);
         rc = obd_ioctl_pack(&data, &buf, sizeof rawbuf);
