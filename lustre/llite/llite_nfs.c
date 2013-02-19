@@ -73,7 +73,8 @@ struct inode *search_inode_for_lustre(struct super_block *sb,
         struct ptlrpc_request *req = NULL;
         struct inode          *inode = NULL;
         int                   eadatalen = 0;
-        unsigned long         hash = (unsigned long) cl_fid_build_ino(fid, 0);
+	unsigned long	      hash = cl_fid_build_ino(fid,
+						      ll_need_32bit_api(sbi));
         struct  md_op_data    *op_data;
         int                   rc;
         ENTRY;
