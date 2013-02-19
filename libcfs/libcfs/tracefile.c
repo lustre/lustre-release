@@ -149,20 +149,21 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
         }
 
         if (tcd->tcd_cur_pages < tcd->tcd_max_pages) {
-                if (tcd->tcd_cur_stock_pages > 0) {
-                        tage = cfs_tage_from_list(tcd->tcd_stock_pages.prev);
-                        -- tcd->tcd_cur_stock_pages;
-                        cfs_list_del_init(&tage->linkage);
-                } else {
-                        tage = cfs_tage_alloc(CFS_ALLOC_ATOMIC);
-                        if (tage == NULL) {
-                                if (printk_ratelimit())
-                                        printk(CFS_KERN_WARNING
-                                               "cannot allocate a tage (%ld)\n",
-                                       tcd->tcd_cur_pages);
-                                return NULL;
-                        }
-                }
+		if (tcd->tcd_cur_stock_pages > 0) {
+			tage = cfs_tage_from_list(tcd->tcd_stock_pages.prev);
+			--tcd->tcd_cur_stock_pages;
+			cfs_list_del_init(&tage->linkage);
+		} else {
+			tage = cfs_tage_alloc(CFS_ALLOC_ATOMIC);
+			if (unlikely(tage == NULL)) {
+				if ((!cfs_memory_pressure_get() ||
+				     cfs_in_interrupt()) && printk_ratelimit())
+					printk(CFS_KERN_WARNING
+					       "cannot allocate a tage (%ld)\n",
+					       tcd->tcd_cur_pages);
+				return NULL;
+			}
+		}
 
                 tage->used = 0;
                 tage->cpu = cfs_smp_processor_id();
