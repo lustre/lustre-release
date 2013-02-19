@@ -738,6 +738,11 @@ static void osp_sync_process_committed(const struct lu_env *env,
 
 	osp_sync_check_for_work(d);
 
+	/* wake up the thread if requested to stop:
+	 * it might be waiting for in-progress to complete */
+	if (unlikely(osp_sync_running(d) == 0))
+		cfs_waitq_signal(&d->opd_syn_waitq);
+
 	EXIT;
 }
 
@@ -832,7 +837,7 @@ static int osp_sync_thread(void *_arg)
 	struct obd_device	*obd = d->opd_obd;
 	struct llog_handle	*llh;
 	struct lu_env		 env;
-	int			 rc;
+	int			 rc, count;
 	char			 pname[16];
 
 	ENTRY;
@@ -878,11 +883,21 @@ static int osp_sync_thread(void *_arg)
 		 d->opd_syn_rpc_in_flight);
 
 	/* wait till all the requests are completed */
+	count = 0;
 	while (d->opd_syn_rpc_in_progress > 0) {
 		osp_sync_process_committed(&env, d);
-		l_wait_event(d->opd_syn_waitq,
-			     d->opd_syn_rpc_in_progress == 0,
-			     &lwi);
+
+		lwi = LWI_TIMEOUT(cfs_time_seconds(5), NULL, NULL);
+		rc = l_wait_event(d->opd_syn_waitq,
+				  d->opd_syn_rpc_in_progress == 0,
+				  &lwi);
+		if (rc == -ETIMEDOUT)
+			count++;
+		LASSERTF(count < 10, "%s: %d %d %sempty\n",
+			 d->opd_obd->obd_name, d->opd_syn_rpc_in_progress,
+			 d->opd_syn_rpc_in_flight,
+			 cfs_list_empty(&d->opd_syn_committed_there) ? "" :"!");
+
 	}
 
 	llog_cat_close(&env, llh);
