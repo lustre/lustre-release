@@ -1104,6 +1104,11 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 			mutex_lock(&res->lr_lvb_mutex);
 			mutex_unlock(&res->lr_lvb_mutex);
                 }
+
+		if (unlikely(res->lr_lvb_len < 0)) {
+			ldlm_resource_putref(res);
+			res = NULL;
+		}
                 return res;
         }
 
@@ -1143,6 +1148,11 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 			mutex_lock(&res->lr_lvb_mutex);
 			mutex_unlock(&res->lr_lvb_mutex);
 		}
+
+		if (unlikely(res->lr_lvb_len < 0)) {
+			ldlm_resource_putref(res);
+			res = NULL;
+		}
 		return res;
 	}
 	/* We won! Let's add the resource. */
@@ -1156,9 +1166,18 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
                 OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
                 rc = ns->ns_lvbo->lvbo_init(res);
-                if (rc)
-                        CERROR("lvbo_init failed for resource "
-                               LPU64": rc %d\n", name->name[0], rc);
+		if (rc < 0) {
+			CERROR("lvbo_init failed for resource "
+			       LPU64": rc %d\n", name->name[0], rc);
+			if (res->lr_lvb_data) {
+				OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+				res->lr_lvb_data = NULL;
+			}
+			res->lr_lvb_len = rc;
+			mutex_unlock(&res->lr_lvb_mutex);
+			ldlm_resource_putref(res);
+			return NULL;
+		}
 	}
 
 	/* We create resource with locked lr_lvb_mutex. */
