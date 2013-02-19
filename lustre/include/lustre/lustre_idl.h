@@ -828,8 +828,8 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 {
 	return fid != NULL &&
 	       ((fid_seq(fid) >= FID_SEQ_START && fid_ver(fid) == 0) ||
-	       fid_is_igif(fid) || fid_is_idif(fid) ||
-	       fid_seq_is_rsvd(fid_seq(fid)));
+		fid_is_igif(fid) || fid_is_idif(fid) ||
+		fid_seq_is_rsvd(fid_seq(fid)));
 }
 
 static inline int fid_is_zero(const struct lu_fid *fid)
