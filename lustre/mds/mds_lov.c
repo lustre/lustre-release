@@ -858,13 +858,14 @@ static int __mds_lov_synchronize(void *data)
 out:
         cfs_up_read(&mds->mds_notify_lock);
         if (rc) {
-                /* Deactivate it for safety */
-                CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
-                       rc);
-                if (!obd->obd_stopping && mds->mds_lov_obd &&
-                    !mds->mds_lov_obd->obd_stopping && !watched->obd_stopping)
+                CERROR("sync %s failed %d\n", obd_uuid2str(uuid), rc);
+                if (rc != -EBUSY && !obd->obd_stopping && mds->mds_lov_obd &&
+                    !mds->mds_lov_obd->obd_stopping && !watched->obd_stopping) {
+                        /* Deactivate it for safety */
+                        CERROR("deactivating %s\n", obd_uuid2str(uuid));
                         obd_notify(mds->mds_lov_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
+                }
         }
 
         class_decref(obd, "mds_lov_synchronize", obd);
