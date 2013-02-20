@@ -1,18 +1,23 @@
 .TH lustreapi 3 "2012 Dec 21" Lustre "Lustre Application Interface Library"
 .SH NAME
-llapi_hsm_state_get \- get HSM state information for a file on Lustre filesystem
+llapi_hsm_state_get llapi_hsm_state_get_fd \- get HSM state information for a file on Lustre filesystem
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .sp
 .BI "int llapi_hsm_state_get(const char *" path ", struct hsm_user_state *" hus ");"
 .sp
+.BI "int llapi_hsm_state_get_fd(int " fd ", struct hsm_user_state *" hus ");"
+.sp
 .fi
 .SH DESCRIPTION
 .LP
 .B llapi_hsm_state_get(\|)
+.B llapi_hsm_state_get_fd(\|)
 read HSM state information like HSM flags and HSM archive ID for file pointed by
-.IR path .
+.IR path
+or
+.IR fd .
 Information is returned in
 .I hus
 which should already be allocated.
@@ -69,7 +74,8 @@ File copy in backend is not usable anymore and file could not be restore.
 .SH RETURN VALUES
 .LP
 .B llapi_hsm_state_get(\|)
-returns:
+.B llapi_hsm_state_get_fd(\|)
+return:
 .TP
 0
 on success
@@ -148,3 +154,4 @@ int main(int argc, char **argv)
 .BR lustre (7),
 .BR lustreapi (7),
 .BR llapi_hsm_state_set (3)
+.BR llapi_hsm_state_set_fd (3)

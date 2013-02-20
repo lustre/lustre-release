@@ -1398,8 +1398,10 @@ static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
  * to the OST with the punch RPC, otherwise we do an explicit setattr RPC.
  * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
  * at the same time.
+ *
+ * In case of HSMimport, we only set attr on MDS.
  */
-int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
+int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1410,9 +1412,10 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         ENTRY;
 
 	CDEBUG(D_VFSTRACE, "%s: setattr inode %p/fid:"DFID" from %llu to %llu, "
-		"valid %x\n", ll_get_fsname(inode->i_sb, NULL, 0), inode,
+		"valid %x, hsm_import %d\n",
+		ll_get_fsname(inode->i_sb, NULL, 0), inode,
 		PFID(&lli->lli_fid), i_size_read(inode), attr->ia_size,
-		attr->ia_valid);
+		attr->ia_valid, hsm_import);
 
 	if (attr->ia_valid & ATTR_SIZE) {
                 /* Check new size against VFS/VM file size limit and rlimit */
@@ -1505,20 +1508,20 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 		ccc_inode_lsm_put(inode, lsm);
 	}
 
-	/* clear size attr for released file
+	/* if not in HSM import mode, clear size attr for released file
 	 * we clear the attribute send to MDT in op_data, not the original
 	 * received from caller in attr which is used later to
 	 * decide return code */
-	if (file_is_released && (attr->ia_valid & ATTR_SIZE))
+	if (file_is_released && (attr->ia_valid & ATTR_SIZE) && !hsm_import)
 		op_data->op_attr.ia_valid &= ~ATTR_SIZE;
 
         rc = ll_md_setattr(dentry, op_data, &mod);
         if (rc)
                 GOTO(out, rc);
 
-	/* truncate failed, others succeed */
+	/* truncate failed (only when non HSM import), others succeed */
 	if (file_is_released) {
-		if (attr->ia_valid & ATTR_SIZE)
+		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			GOTO(out, rc = -ENODATA);
 		else
 			GOTO(out, rc = 0);
@@ -1559,7 +1562,7 @@ out:
 	if (!S_ISDIR(inode->i_mode)) {
 		up_write(&lli->lli_trunc_sem);
 		mutex_lock(&inode->i_mutex);
-		if (attr->ia_valid & ATTR_SIZE)
+		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			inode_dio_wait(inode);
 	}
 
@@ -1571,30 +1574,30 @@ out:
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        int mode = de->d_inode->i_mode;
+	int mode = de->d_inode->i_mode;
 
-        if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
-                              (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
-                attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+	if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
+			      (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
+		attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
 
-        if (((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
-                               (ATTR_SIZE|ATTR_MODE)) &&
-            (((mode & S_ISUID) && !(attr->ia_mode & S_ISUID)) ||
-             (((mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
-              !(attr->ia_mode & S_ISGID))))
-                attr->ia_valid |= ATTR_FORCE;
+	if (((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
+			       (ATTR_SIZE|ATTR_MODE)) &&
+	    (((mode & S_ISUID) && !(attr->ia_mode & S_ISUID)) ||
+	     (((mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
+	      !(attr->ia_mode & S_ISGID))))
+		attr->ia_valid |= ATTR_FORCE;
 
-        if ((mode & S_ISUID) &&
-            !(attr->ia_mode & S_ISUID) &&
-            !(attr->ia_valid & ATTR_KILL_SUID))
-                attr->ia_valid |= ATTR_KILL_SUID;
+	if ((mode & S_ISUID) &&
+	    !(attr->ia_mode & S_ISUID) &&
+	    !(attr->ia_valid & ATTR_KILL_SUID))
+		attr->ia_valid |= ATTR_KILL_SUID;
 
-        if (((mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
-            !(attr->ia_mode & S_ISGID) &&
-            !(attr->ia_valid & ATTR_KILL_SGID))
-                attr->ia_valid |= ATTR_KILL_SGID;
+	if (((mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
+	    !(attr->ia_mode & S_ISGID) &&
+	    !(attr->ia_valid & ATTR_KILL_SGID))
+		attr->ia_valid |= ATTR_KILL_SGID;
 
-        return ll_setattr_raw(de, attr);
+	return ll_setattr_raw(de, attr, false);
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,

@@ -2158,6 +2158,86 @@ free:
 	RETURN(rc);
 }
 
+static int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
+{
+	struct md_op_data	*op_data;
+	int			 rc;
+
+	/* Non-root users are forbidden to set or clear flags which are
+	 * NOT defined in HSM_USER_MASK. */
+	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
+	    !cfs_capable(CFS_CAP_SYS_ADMIN))
+		RETURN(-EPERM);
+
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, hss);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
+
+	rc = obd_iocontrol(LL_IOC_HSM_STATE_SET, ll_i2mdexp(inode),
+			   sizeof(*op_data), op_data, NULL);
+
+	ll_finish_md_op_data(op_data);
+
+	RETURN(rc);
+}
+
+static int ll_hsm_import(struct inode *inode, struct file *file,
+			 struct hsm_user_import *hui)
+{
+	struct hsm_state_set	*hss = NULL;
+	struct iattr		*attr = NULL;
+	int			 rc;
+	ENTRY;
+
+	if (!S_ISREG(inode->i_mode))
+		RETURN(-EINVAL);
+
+	/* set HSM flags */
+	OBD_ALLOC_PTR(hss);
+	if (hss == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	hss->hss_valid = HSS_SETMASK | HSS_ARCHIVE_ID;
+	hss->hss_archive_id = hui->hui_archive_id;
+	hss->hss_setmask = HS_ARCHIVED | HS_EXISTS | HS_RELEASED;
+	rc = ll_hsm_state_set(inode, hss);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	OBD_ALLOC_PTR(attr);
+	if (attr == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	attr->ia_mode = hui->hui_mode & (S_IRWXU | S_IRWXG | S_IRWXO);
+	attr->ia_mode |= S_IFREG;
+	attr->ia_uid = hui->hui_uid;
+	attr->ia_gid = hui->hui_gid;
+	attr->ia_size = hui->hui_size;
+	attr->ia_mtime.tv_sec = hui->hui_mtime;
+	attr->ia_mtime.tv_nsec = hui->hui_mtime_ns;
+	attr->ia_atime.tv_sec = hui->hui_atime;
+	attr->ia_atime.tv_nsec = hui->hui_atime_ns;
+
+	attr->ia_valid = ATTR_SIZE | ATTR_MODE | ATTR_FORCE |
+			 ATTR_UID | ATTR_GID |
+			 ATTR_MTIME | ATTR_MTIME_SET |
+			 ATTR_ATIME | ATTR_ATIME_SET;
+
+	rc = ll_setattr_raw(file->f_dentry, attr, true);
+	if (rc == -ENODATA)
+		rc = 0;
+
+out:
+	if (hss != NULL)
+		OBD_FREE_PTR(hss);
+
+	if (attr != NULL)
+		OBD_FREE_PTR(attr);
+
+	RETURN(rc);
+}
+
 long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct inode		*inode = file->f_dentry->d_inode;
@@ -2320,37 +2400,19 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		RETURN(rc);
 	}
 	case LL_IOC_HSM_STATE_SET: {
-		struct md_op_data	*op_data;
 		struct hsm_state_set	*hss;
 		int			 rc;
 
 		OBD_ALLOC_PTR(hss);
 		if (hss == NULL)
 			RETURN(-ENOMEM);
+
 		if (copy_from_user(hss, (char *)arg, sizeof(*hss))) {
 			OBD_FREE_PTR(hss);
 			RETURN(-EFAULT);
 		}
 
-		/* Non-root users are forbidden to set or clear flags which are
-		 * NOT defined in HSM_USER_MASK. */
-		if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK)
-		    && !cfs_capable(CFS_CAP_SYS_ADMIN)) {
-			OBD_FREE_PTR(hss);
-			RETURN(-EPERM);
-		}
-
-		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-					     LUSTRE_OPC_ANY, hss);
-		if (IS_ERR(op_data)) {
-			OBD_FREE_PTR(hss);
-			RETURN(PTR_ERR(op_data));
-		}
-
-		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
-				   op_data, NULL);
-
-		ll_finish_md_op_data(op_data);
+		rc = ll_hsm_state_set(inode, hss);
 
 		OBD_FREE_PTR(hss);
 		RETURN(rc);
@@ -2462,7 +2524,23 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			}
 		}
 		mutex_unlock(&lli->lli_och_mutex);
+		RETURN(rc);
+	}
+	case LL_IOC_HSM_IMPORT: {
+		struct hsm_user_import *hui;
 
+		OBD_ALLOC_PTR(hui);
+		if (hui == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(hui, (void *)arg, sizeof(*hui))) {
+			OBD_FREE_PTR(hui);
+			RETURN(-EFAULT);
+		}
+
+		rc = ll_hsm_import(inode, file, hui);
+
+		OBD_FREE_PTR(hui);
 		RETURN(rc);
 	}
 	default: {

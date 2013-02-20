@@ -90,97 +90,110 @@ extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
 
-#define VERBOSE_COUNT      0x1
-#define VERBOSE_SIZE       0x2
-#define VERBOSE_OFFSET     0x4
-#define VERBOSE_POOL       0x8
-#define VERBOSE_DETAIL     0x10
-#define VERBOSE_OBJID      0x20
-#define VERBOSE_GENERATION 0x40
-#define VERBOSE_MDTINDEX   0x80
-#define VERBOSE_ALL        (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
-                            VERBOSE_POOL | VERBOSE_OBJID | VERBOSE_GENERATION)
+#define VERBOSE_COUNT		0x1
+#define VERBOSE_SIZE		0x2
+#define VERBOSE_OFFSET		0x4
+#define VERBOSE_POOL		0x8
+#define VERBOSE_DETAIL		0x10
+#define VERBOSE_OBJID		0x20
+#define VERBOSE_GENERATION	0x40
+#define VERBOSE_MDTINDEX	0x80
+#define VERBOSE_LAYOUT		0x100
+#define VERBOSE_ALL		(VERBOSE_COUNT | VERBOSE_SIZE | \
+				 VERBOSE_OFFSET | VERBOSE_POOL | \
+				 VERBOSE_OBJID | VERBOSE_GENERATION |\
+				 VERBOSE_LAYOUT)
 
 struct find_param {
-        unsigned int maxdepth;
-        time_t  atime;
-        time_t  mtime;
-        time_t  ctime;
-        int     asign;  /* cannot be bitfields due to using pointers to */
-        int     csign;  /* access them during argument parsing. */
-        int     msign;
-        int     type;
-        int             size_sign:2,        /* these need to be signed values */
-                        stripesize_sign:2,
-                        stripecount_sign:2;
-        unsigned long long size;
-        unsigned long long size_units;
-        uid_t uid;
-        gid_t gid;
+	unsigned int		 maxdepth;
+	time_t			 atime;
+	time_t			 mtime;
+	time_t			 ctime;
+	/* cannot be bitfields due to using pointers to */
+	int			 asign;
+	/* access them during argument parsing. */
+	int			 csign;
+	int			 msign;
+	int			 type;
+	/* these need to be signed values */
+	int			 size_sign:2,
+				 stripesize_sign:2,
+				 stripecount_sign:2;
+	unsigned long long	 size;
+	unsigned long long	 size_units;
+	uid_t			 uid;
+	gid_t			 gid;
 
-        unsigned long   zeroend:1,
-                        recursive:1,
-                        exclude_pattern:1,
-                        exclude_type:1,
-                        exclude_obd:1,
-                        exclude_mdt:1,
-                        exclude_gid:1,
-                        exclude_uid:1,
-                        check_gid:1,            /* group ID */
-                        check_uid:1,            /* user ID */
-                        check_pool:1,           /* LOV pool name */
-                        check_size:1,           /* file size */
-                        exclude_pool:1,
-                        exclude_size:1,
-                        exclude_atime:1,
-                        exclude_mtime:1,
-                        exclude_ctime:1,
-                        get_lmv:1,              /* get MDT list from LMV */
-                        raw:1,                  /* do not fill in defaults */
-                        check_stripesize:1,     /* LOV stripe size */
-                        exclude_stripesize:1,
-                        check_stripecount:1,    /* LOV stripe count */
-                        exclude_stripecount:1;
+	unsigned long		 zeroend:1,
+				 recursive:1,
+				 exclude_pattern:1,
+				 exclude_type:1,
+				 exclude_obd:1,
+				 exclude_mdt:1,
+				 exclude_gid:1,
+				 exclude_uid:1,
+				 check_gid:1,		/* group ID */
+				 check_uid:1,		/* user ID */
+				 check_pool:1,		/* LOV pool name */
+				 check_size:1,		/* file size */
+				 exclude_pool:1,
+				 exclude_size:1,
+				 exclude_atime:1,
+				 exclude_mtime:1,
+				 exclude_ctime:1,
+				 get_lmv:1,	/* get MDT list from LMV */
+				 raw:1,		/* do not fill in defaults */
+				 check_stripesize:1,	/* LOV stripe size */
+				 exclude_stripesize:1,
+				 check_stripecount:1,	/* LOV stripe count */
+				 exclude_stripecount:1,
+				 check_layout:1,
+				 exclude_layout:1;
 
-        int     verbose;
-        int     quiet;
+	int			 verbose;
+	int			 quiet;
 
-        /* regular expression */
-        char   *pattern;
+	/* regular expression */
+	char			*pattern;
 
-        char   *print_fmt;
+	char			*print_fmt;
 
-        struct  obd_uuid       *obduuid;
-        int                     num_obds;
-        int                     num_alloc_obds;
-        int                     obdindex;
-        int                    *obdindexes;
+	struct  obd_uuid	*obduuid;
+	int			 num_obds;
+	int			 num_alloc_obds;
+	int			 obdindex;
+	int			*obdindexes;
 
-        struct  obd_uuid       *mdtuuid;
-        int                     num_mdts;
-        int                     num_alloc_mdts;
-        int                     mdtindex;
-        int                    *mdtindexes;
-        int                     file_mdtindex;
+	struct  obd_uuid	*mdtuuid;
+	int			 num_mdts;
+	int			 num_alloc_mdts;
+	int			 mdtindex;
+	int			*mdtindexes;
+	int			 file_mdtindex;
 
-	int	lumlen;
-	struct  lov_user_mds_data *lmd;
+	int			 lumlen;
+	struct  lov_user_mds_data	*lmd;
 
-        char poolname[LOV_MAXPOOLNAME + 1];
+	char			poolname[LOV_MAXPOOLNAME + 1];
 
-	int			fp_lmv_count;
+	int			 fp_lmv_count;
 	struct lmv_user_md	*fp_lmv_md;
 
-        unsigned long long stripesize;
-        unsigned long long stripesize_units;
-        unsigned long long stripecount;
+	unsigned long long	 stripesize;
+	unsigned long long	 stripesize_units;
+	unsigned long long	 stripecount;
+	__u32			 layout;
 
-        /* In-process parameters. */
-        unsigned long   got_uuids:1,
-                        obds_printed:1,
-                        have_fileinfo:1;        /* file attrs and LOV xattr */
-        unsigned int    depth;
-        dev_t           st_dev;
+	/* In-process parameters. */
+	unsigned long		 got_uuids:1,
+				 obds_printed:1,
+				 have_fileinfo:1; /* file attrs and LOV xattr */
+	unsigned int		 depth;
+	dev_t			 st_dev;
+	__u64			 padding1;
+	__u64			 padding2;
+	__u64			 padding3;
+	__u64			 padding4;
 };
 
 extern int llapi_ostlist(char *path, struct find_param *param);
@@ -241,7 +254,10 @@ extern int llapi_fd2fid(const int fd, lustre_fid *fid);
 
 extern int llapi_get_version(char *buffer, int buffer_size, char **version);
 extern int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
+extern int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
 extern int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
+extern int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
+				  __u32 archive_id);
 extern int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 			       __u32 archive_id);
 
@@ -294,7 +310,7 @@ extern int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
 extern int llapi_hsm_copy_end(char *mnt, struct hsm_copy *copy,
 			      const struct hsm_progress *hp);
 extern int llapi_hsm_progress(char *mnt, struct hsm_progress *hp);
-extern int llapi_hsm_import(const char *dst, int archive, struct stat *st,
+extern int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 			    unsigned long long stripe_size, int stripe_offset,
 			    int stripe_count, int stripe_pattern,
 			    char *pool_name, lustre_fid *newfid);

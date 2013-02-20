@@ -2186,10 +2186,12 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 }
         }
 
-        if ((verbose & VERBOSE_DETAIL) && !is_dir) {
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_pattern: %x%c",
-                             lum->lmm_pattern, nl);
-        }
+	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
+		if (verbose & ~VERBOSE_LAYOUT)
+			llapi_printf(LLAPI_MSG_NORMAL, "%spattern:        ",
+				     prefix);
+		llapi_printf(LLAPI_MSG_NORMAL, "%.x%c", lum->lmm_pattern, nl);
+	}
 
         if ((verbose & VERBOSE_GENERATION) && !is_dir) {
                 if (verbose & ~VERBOSE_GENERATION)
@@ -2703,11 +2705,12 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         /* Request MDS for the stat info if some of these parameters need
          * to be compared. */
-        if (param->obduuid    || param->mdtuuid || param->check_uid ||
-            param->check_gid || param->check_pool || param->atime   ||
-            param->ctime     || param->mtime || param->check_size ||
-            param->check_stripecount || param->check_stripesize)
-                decision = 0;
+	if (param->obduuid   || param->mdtuuid || param->check_uid ||
+	    param->check_gid || param->check_pool || param->atime   ||
+	    param->ctime     || param->mtime || param->check_size ||
+	    param->check_stripecount || param->check_stripesize ||
+	    param->check_layout)
+		decision = 0;
 
         if (param->type && checked_type == 0)
                 decision = 0;
@@ -2811,6 +2814,18 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 if (decision == -1)
                         goto decided;
         }
+
+	if (param->check_layout) {
+		__u32 found;
+
+		found = (param->lmd->lmd_lmm.lmm_pattern & param->layout);
+		if ((param->lmd->lmd_lmm.lmm_pattern == 0xFFFFFFFF) ||
+		    (found && param->exclude_layout) ||
+		    (!found && !param->exclude_layout)) {
+			decision = -1;
+			goto decided;
+		}
+	}
 
         /* If an OBD UUID is specified but none matches, skip this file. */
         if ((param->obduuid && param->obdindex == OBD_NOT_FOUND) ||

@@ -1,6 +1,6 @@
 .TH lustreapi 3 "2012 Dec 21" Lustre "Lustre Application Interface Library"
 .SH NAME
-llapi_hsm_state_set \- set HSM flags for a file on Lustre filesystem
+llapi_hsm_state_set llapi_hsm_state_set_fd \- set HSM flags for a file on Lustre filesystem
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -8,12 +8,18 @@ llapi_hsm_state_set \- set HSM flags for a file on Lustre filesystem
 .BI "int llapi_hsm_state_set(const char *" path ", __u64 " setmask ",
 .BI "                        __u64 " clearmask ", __u32 " archive_id ");"
 .sp
+.BI "int llapi_hsm_state_set_fd(int " fd ", __u64 " setmask ",
+.BI "                           __u64 " clearmask ", __u32 " archive_id ");"
+.sp
 .fi
 .SH DESCRIPTION
 .LP
 .B llapi_hsm_state_set(\|)
+.B llapi_hsm_state_set_fd(\|)
 sets, clears HSM flags and modifies archive ID for file pointed by
-.IR path .
+.IR path
+or
+.IR fd .
 
 .TP 20
 .I setmask
@@ -33,7 +39,8 @@ for available flags.
 .SH RETURN VALUES
 .LP
 .B llapi_hsm_state_set(\|)
-returns:
+.B llapi_hsm_state_set_fd(\|)
+return:
 .TP
 0
 on success
@@ -93,3 +100,4 @@ int main(int argc, char **argv)
 .BR lustre (7),
 .BR lustreapi (7),
 .BR llapi_hsm_state_get (3)
+.BR llapi_hsm_state_get_fd (3)

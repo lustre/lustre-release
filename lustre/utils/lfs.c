@@ -147,10 +147,11 @@ command_t cmdlist[] = {
 	 "To list the striping info for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
 	 "usage: getstripe [--ost|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
-	 "                 [--stripe-count|-c] [--stripe-index|-i]\n"
-	 "                 [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
-	 "                 [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
-	 "                 <directory|filename> ..."},
+	 "		   [--stripe-count|-c] [--stripe-index|-i]\n"
+	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
+	 "		   [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
+	 "		   [--layout|-L]\n"
+	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a remote directory on a specified MDT.\n"
 	 "usage: setdirstripe <--index|-i mdt_index> <dir>\n"
@@ -188,6 +189,7 @@ command_t cmdlist[] = {
          "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
          "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
+	 "     [[!] --layout|-L released,raid0]\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
          "\t -: used before a value indicates 'AT MOST' requested value\n"
          "\t +: used before a value indicates 'AT LEAST' requested value\n"},
@@ -861,6 +863,25 @@ static int id2name(char **name, unsigned int id, int type)
         return 0;
 }
 
+static int name2layout(__u32 *layout, char *name)
+{
+	char *ptr, *lyt;
+
+	*layout = 0;
+	for (ptr = name; ; ptr = NULL) {
+		lyt = strtok(ptr, ",");
+		if (lyt == NULL)
+			break;
+		if (strcmp(lyt, "released") == 0)
+			*layout |= LOV_PATTERN_F_RELEASED;
+		else if (strcmp(lyt, "raid0") == 0)
+			*layout |= LOV_PATTERN_RAID0;
+		else
+			return -1;
+	}
+	return 0;
+}
+
 #define FIND_POOL_OPT 3
 static int lfs_find(int argc, char **argv)
 {
@@ -877,6 +898,7 @@ static int lfs_find(int argc, char **argv)
                 {"group",        required_argument, 0, 'G'},
                 {"stripe-index", required_argument, 0, 'i'},
                 {"stripe_index", required_argument, 0, 'i'},
+		{"layout",	 required_argument, 0, 'L'},
                 {"mdt",          required_argument, 0, 'm'},
                 {"mtime",        required_argument, 0, 'M'},
                 {"name",         required_argument, 0, 'n'},
@@ -905,11 +927,11 @@ static int lfs_find(int argc, char **argv)
 
         time(&t);
 
-        optind = 0;
-        /* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
-        while ((c = getopt_long_only(argc, argv,
-                                     "-A:c:C:D:g:G:i:m:M:n:O:Ppqrs:S:t:u:U:v",
-                                     long_opts, NULL)) >= 0) {
+	optind = 0;
+	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
+	while ((c = getopt_long_only(argc, argv,
+				     "-A:c:C:D:g:G:i:L:m:M:n:O:Ppqrs:S:t:u:U:v",
+				     long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -1007,6 +1029,13 @@ static int lfs_find(int argc, char **argv)
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
                         break;
+		case 'L':
+			ret = name2layout(&param.layout, optarg);
+			if (ret)
+				goto err;
+			param.exclude_layout = !!neg_opt;
+			param.check_layout = 1;
+			break;
                 case 'u':
                 case 'U':
                         ret = name2id(&param.uid, optarg, USER);
@@ -1203,63 +1232,64 @@ err:
 static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
-        struct option long_opts[] = {
+	struct option long_opts[] = {
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --count option"
 #else
-                /* This formerly implied "stripe-count", but was explicitly
-                 * made "stripe-count" for consistency with other options,
-                 * and to separate it from "mdt-count" when DNE arrives. */
-                {"count",        no_argument,       0, 'c'},
+		/* This formerly implied "stripe-count", but was explicitly
+		 * made "stripe-count" for consistency with other options,
+		 * and to separate it from "mdt-count" when DNE arrives. */
+		{"count",		no_argument,		0, 'c'},
 #endif
-                {"stripe-count", no_argument,       0, 'c'},
-                {"stripe_count", no_argument,       0, 'c'},
-                {"directory",    no_argument,       0, 'd'},
-                {"generation",   no_argument,       0, 'g'},
+		{"stripe-count",	no_argument,		0, 'c'},
+		{"stripe_count",	no_argument,		0, 'c'},
+		{"directory",		no_argument,		0, 'd'},
+		{"generation",		no_argument,		0, 'g'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --index option"
 #else
-                /* This formerly implied "stripe-index", but was explicitly
-                 * made "stripe-index" for consistency with other options,
-                 * and to separate it from "mdt-index" when DNE arrives. */
-                {"index",        no_argument,       0, 'i'},
+		/* This formerly implied "stripe-index", but was explicitly
+		 * made "stripe-index" for consistency with other options,
+		 * and to separate it from "mdt-index" when DNE arrives. */
+		{"index",		no_argument,		0, 'i'},
 #endif
-                {"stripe-index", no_argument,       0, 'i'},
-                {"stripe_index", no_argument,       0, 'i'},
-                {"mdt-index",    no_argument,       0, 'M'},
-                {"mdt_index",    no_argument,       0, 'M'},
+		{"stripe-index",	no_argument,		0, 'i'},
+		{"stripe_index",	no_argument,		0, 'i'},
+		{"layout",		no_argument,		0, 'L'},
+		{"mdt-index",		no_argument,		0, 'M'},
+		{"mdt_index",		no_argument,		0, 'M'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --offset option"
 #else
-                /* This formerly implied "stripe-index", but was confusing
-                 * with "file offset" (which will eventually be needed for
-                 * with different layouts by offset), so deprecate it. */
-                {"offset",       no_argument,       0, 'o'},
+		/* This formerly implied "stripe-index", but was confusing
+		 * with "file offset" (which will eventually be needed for
+		 * with different layouts by offset), so deprecate it. */
+		{"offset",		no_argument,		0, 'o'},
 #endif
-                {"obd",          required_argument, 0, 'O'},
-                {"ost",          required_argument, 0, 'O'},
-                {"pool",         no_argument,       0, 'p'},
-                {"quiet",        no_argument,       0, 'q'},
-                {"recursive",    no_argument,       0, 'r'},
-                {"raw",          no_argument,       0, 'R'},
+		{"obd",			required_argument,	0, 'O'},
+		{"ost",			required_argument,	0, 'O'},
+		{"pool",		no_argument,		0, 'p'},
+		{"quiet",		no_argument,		0, 'q'},
+		{"recursive",		no_argument,		0, 'r'},
+		{"raw",			no_argument,		0, 'R'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --size option"
 #else
-                /* This formerly implied "--stripe-size", but was confusing
-                 * with "lfs find --size|-s", which means "file size", so use
-                 * the consistent "--stripe-size|-S" for all commands. */
-                {"size",         no_argument,       0, 's'},
+		/* This formerly implied "--stripe-size", but was confusing
+		 * with "lfs find --size|-s", which means "file size", so use
+		 * the consistent "--stripe-size|-S" for all commands. */
+		{"size",		no_argument,		0, 's'},
 #endif
-                {"stripe-size",  no_argument,       0, 'S'},
-                {"stripe_size",  no_argument,       0, 'S'},
-                {"verbose",      no_argument,       0, 'v'},
-                {0, 0, 0, 0}
-        };
-        int c, rc;
+		{"stripe-size",		no_argument,		0, 'S'},
+		{"stripe_size",		no_argument,		0, 'S'},
+		{"verbose",		no_argument,		0, 'v'},
+		{0, 0, 0, 0}
+	};
+	int c, rc;
 
 	param->maxdepth = 1;
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "cdghiMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdghiLMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'O':
@@ -1341,6 +1371,12 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'g':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_GENERATION;
+				param->maxdepth = 0;
+			}
+			break;
+		case 'L':
+			if (!(param->verbose & VERBOSE_DETAIL)) {
+				param->verbose |= VERBOSE_LAYOUT;
 				param->maxdepth = 0;
 			}
 			break;
