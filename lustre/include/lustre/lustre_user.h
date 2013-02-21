@@ -944,11 +944,9 @@ static inline void *hur_data(struct hsm_user_request *hur)
 /** Compute the current length of the provided hsm_user_request. */
 static inline int hur_len(struct hsm_user_request *hur)
 {
-	int data_offset;
-
-	data_offset = hur_data(hur) - (void *)hur;
-	data_offset += hur->hur_request.hr_data_len;
-	return data_offset;
+	return offsetof(struct hsm_user_request,
+			hur_user_item[hur->hur_request.hr_itemcount]) +
+		hur->hur_request.hr_data_len;
 }
 
 /****** HSM RPCs to copytool *****/

@@ -3093,7 +3093,7 @@ static int lfs_hsm_prepare_file(char *file, struct lu_fid *fid,
 
 	rc = lstat(file, &st);
 	if (rc) {
-		fprintf(stderr, "Cannot stat %s: %s\n", file, strerror(-errno));
+		fprintf(stderr, "Cannot stat %s: %s\n", file, strerror(errno));
 		return -errno;
 	}
 	/* A request should be ... */

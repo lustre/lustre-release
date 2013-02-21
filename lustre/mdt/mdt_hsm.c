@@ -41,6 +41,19 @@
 
 #include "mdt_internal.h"
 
+/* Max allocation to satisfy single HSM RPC. */
+#define MDT_HSM_ALLOC_MAX (1 << 20)
+
+#define MDT_HSM_ALLOC(ptr, size)			\
+	do {						\
+		if ((size) <= MDT_HSM_ALLOC_MAX)	\
+			OBD_ALLOC_LARGE((ptr), (size));	\
+		else					\
+			(ptr) = NULL;			\
+	} while (0)
+
+#define MDT_HSM_FREE(ptr, size) OBD_FREE_LARGE((ptr), (size))
+
 /*
  * fake functions, will be replace by real one with HSM Coordinator patch
  */
@@ -124,7 +137,8 @@ int mdt_hsm_progress(struct mdt_thread_info *info)
 	ENTRY;
 
 	hpk = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_PROGRESS);
-	LASSERT(hpk);
+	if (hpk == NULL)
+		RETURN(-EPROTO);
 
 	CDEBUG(D_HSM, "Progress on "DFID": len="LPU64" err=%d\n",
 	       PFID(&hpk->hpk_fid), hpk->hpk_extent.length, hpk->hpk_errval);
@@ -151,7 +165,8 @@ int mdt_hsm_ct_register(struct mdt_thread_info *info)
 	ENTRY;
 
 	archives = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_ARCHIVE);
-	LASSERT(archives);
+	if (archives == NULL)
+		RETURN(-EPROTO);
 
 	/* XXX: directly include this function here? */
 	rc = mdt_hsm_agent_register_mask(info, &req->rq_export->exp_client_uuid,
@@ -171,7 +186,6 @@ int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
 
 	RETURN(rc);
 }
-
 
 /**
  * Retrieve the current HSM flags, archive id and undergoing HSM requests for
@@ -213,7 +227,8 @@ int mdt_hsm_state_get(struct mdt_thread_info *info)
 			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
 
 	hus = req_capsule_server_get(info->mti_pill, &RMF_HSM_USER_STATE);
-	LASSERT(hus);
+	if (hus == NULL)
+		GOTO(out_ucred, rc = -EPROTO);
 
 	/* Current HSM flags */
 	hus->hus_states = ma->ma_hsm.mh_flags;
@@ -266,7 +281,8 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 		GOTO(out_ucred, rc);
 
 	hss = req_capsule_client_get(info->mti_pill, &RMF_HSM_STATE_SET);
-	LASSERT(hss);
+	if (hss == NULL)
+		GOTO(out_ucred, rc = -EPROTO);
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
@@ -331,7 +347,8 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	struct hsm_current_action	*hca;
 	struct hsm_action_list		*hal = NULL;
 	struct hsm_action_item		*hai;
-	int				 rc, len;
+	int				 hal_size;
+	int				 rc;
 	ENTRY;
 
 	/* Only valid if client is remote */
@@ -346,15 +363,17 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 
 	hca = req_capsule_server_get(info->mti_pill,
 				     &RMF_MDS_HSM_CURRENT_ACTION);
-	LASSERT(hca);
+	if (hca == NULL)
+		GOTO(out_ucred, rc = -EPROTO);
 
 	/* Coordinator information */
-	len = sizeof(*hal) + MTI_NAME_MAXLEN /* fsname */ +
-		cfs_size_round(sizeof(*hai));
+	hal_size = sizeof(*hal) +
+		   cfs_size_round(MTI_NAME_MAXLEN) /* fsname */ +
+		   cfs_size_round(sizeof(*hai));
 
-	OBD_ALLOC(hal, len);
+	MDT_HSM_ALLOC(hal, hal_size);
 	if (hal == NULL)
-		GOTO(out_ucred, -ENOMEM);
+		GOTO(out_ucred, rc = -ENOMEM);
 
 	hal->hal_version = HAL_VERSION;
 	hal->hal_archive_id = 0;
@@ -407,7 +426,7 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 
 	EXIT;
 out_free:
-	OBD_FREE(hal, len);
+	MDT_HSM_FREE(hal, hal_size);
 out_ucred:
 	mdt_exit_ucred(info);
 	return rc;
@@ -429,27 +448,34 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	struct hsm_user_item		*hui;
 	struct hsm_action_list		*hal;
 	struct hsm_action_item		*hai;
-	char				*opaque;
+	const void			*data;
+	int				 hui_list_size;
+	int				 data_size;
 	enum hsm_copytool_action	 action = HSMA_NONE;
 	__u64				 compound_id;
-	int				 len, i, rc;
+	int				 hal_size, i, rc;
 	ENTRY;
 
 	body = req_capsule_client_get(pill, &RMF_MDT_BODY);
-	LASSERT(body);
-
 	hr = req_capsule_client_get(pill, &RMF_MDS_HSM_REQUEST);
-	LASSERT(hr);
-
 	hui = req_capsule_client_get(pill, &RMF_MDS_HSM_USER_ITEM);
-	LASSERT(hui);
+	data = req_capsule_client_get(pill, &RMF_GENERIC_DATA);
 
-	opaque = req_capsule_client_get(pill, &RMF_GENERIC_DATA);
-	LASSERT(opaque);
+	if (body == NULL || hr == NULL || hui == NULL || data == NULL)
+		RETURN(-EPROTO);
 
 	/* Sanity check. Nothing to do with an empty list */
 	if (hr->hr_itemcount == 0)
 		RETURN(0);
+
+	hui_list_size = req_capsule_get_size(pill, &RMF_MDS_HSM_USER_ITEM,
+					     RCL_CLIENT);
+	if (hui_list_size < hr->hr_itemcount * sizeof(*hui))
+		RETURN(-EPROTO);
+
+	data_size = req_capsule_get_size(pill, &RMF_GENERIC_DATA, RCL_CLIENT);
+	if (data_size != hr->hr_data_len)
+		RETURN(-EPROTO);
 
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, body);
@@ -480,11 +506,11 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 		GOTO(out_ucred, rc = -EINVAL);
 	}
 
-	len = sizeof(*hal) + MTI_NAME_MAXLEN /* fsname */ +
-		cfs_size_round(sizeof(*hai) * hr->hr_itemcount) +
-		cfs_size_round(hr->hr_data_len * hr->hr_itemcount);
+	hal_size = sizeof(*hal) + cfs_size_round(MTI_NAME_MAXLEN) /* fsname */ +
+		   (sizeof(*hai) + cfs_size_round(hr->hr_data_len)) *
+		   hr->hr_itemcount;
 
-	OBD_ALLOC(hal, len);
+	MDT_HSM_ALLOC(hal, hal_size);
 	if (hal == NULL)
 		GOTO(out_ucred, rc = -ENOMEM);
 
@@ -502,7 +528,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 		hai->hai_gid = 0;
 		hai->hai_fid = hui[i].hui_fid;
 		hai->hai_extent = hui[i].hui_extent;
-		memcpy(hai->hai_data, opaque, hr->hr_data_len);
+		memcpy(hai->hai_data, data, hr->hr_data_len);
 		hai->hai_len = sizeof(*hai) + hr->hr_data_len;
 		hai = hai_next(hai);
 	}
@@ -512,10 +538,9 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	if (rc == -ENODATA)
 		rc = 0;
 
-	OBD_FREE(hal, len);
+	MDT_HSM_FREE(hal, hal_size);
 	EXIT;
 out_ucred:
 	mdt_exit_ucred(info);
 	return rc;
 }
-
