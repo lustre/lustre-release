@@ -31,18 +31,20 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 check_and_setup_lustre
 
+if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.61) ]; then
+	skip_env "Need MDS version at least 2.3.61" && exit
+fi
+
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
 build_test_filter
-
 
 test_1() {
 	mkdir -p $DIR/$tdir
@@ -78,7 +80,6 @@ test_1() {
 	    error "root could not clear hsm state"
 	$LFS hsm_state $TESTFILE | grep -q "(0x00000000)" ||
 	    error "wrong hsm state, should be empty"
-
 }
 run_test 1 "lfs hsm flags root/non-root access"
 
@@ -179,7 +180,6 @@ test_3() {
 }
 run_test 3 "Check file dirtyness when opening for write"
 
-
 log "cleanup: ======================================================"
 cd $ORIG_PWD
 check_and_cleanup_lustre
@@ -187,4 +187,3 @@ echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && grep -q FAIL $SANITYLOG && exit 1 ||
 	true
 echo "$0: completed"
-
