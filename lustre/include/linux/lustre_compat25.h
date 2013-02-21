@@ -140,19 +140,28 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_blkdev_put(a, b) blkdev_put(a)
 #endif
 
-static inline struct file *ll_dentry_open(struct dentry *dentry,
-					  struct vfsmount *mnt, int flags,
+#ifdef HAVE_DENTRY_OPEN_USE_PATH
+#define ll_dentry_open(a,b,c)	dentry_open(a,b,c)
+#else
+/*
+ * dentry_open handles its own reference counting since Linux v3.6
+ * (commit 765927b2). Callers should free their own references.
+ *
+ * Prior versions expected the caller to increment the references.
+ * The references are retained on success and freed on error.
+ */
+static inline struct file *ll_dentry_open(struct path *path, int flags,
 					  const struct cred *cred)
 {
-#ifdef HAVE_DENTRY_OPEN_USE_PATH
-	struct path path = { .mnt = mnt, .dentry = dentry };
-	return dentry_open(&path, flags, cred);
-#elif defined HAVE_DENTRY_OPEN_4ARGS
-	return dentry_open(dentry, mnt, flags, cred);
-#else
-	return dentry_open(dentry, mnt, flags);
-#endif
+	mntget(path->mnt);
+	dget(path->dentry);
+# ifdef HAVE_DENTRY_OPEN_4ARGS
+	return dentry_open(path->dentry, path->mnt, flags, cred);
+# else
+	return dentry_open(path->dentry, path->mnt, flags);
+# endif
 }
+#endif
 
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \

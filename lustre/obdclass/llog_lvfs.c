@@ -624,9 +624,9 @@ static int llog_lvfs_open(const struct lu_env *env,  struct llog_handle *handle,
 			       logid->lgl_ogen, rc);
 			GOTO(out, rc);
 		}
-		/* l_dentry_open will call dput(dchild) if there is an error */
 		handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
 						 O_RDWR | O_LARGEFILE);
+		l_dput(dchild);
 		if (IS_ERR(handle->lgh_file)) {
 			rc = PTR_ERR(handle->lgh_file);
 			handle->lgh_file = NULL;
@@ -736,6 +736,7 @@ static int llog_lvfs_create(const struct lu_env *env,
 			GOTO(out, rc = PTR_ERR(dchild));
 
 		file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild, open_flags);
+		l_dput(dchild);
 		if (IS_ERR(file))
 			GOTO(out, rc = PTR_ERR(file));
 		handle->lgh_id.lgl_oseq = oa->o_seq;

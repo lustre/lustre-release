@@ -234,12 +234,15 @@ put_old:
 }
 EXPORT_SYMBOL(lustre_rename);
 
-/* Note: dput(dchild) will be called if there is an error */
+/* Note: dput(dchild) will *not* be called if there is an error */
 struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
-                             int flags)
+			     int flags)
 {
-        mntget(ctxt->pwdmnt);
-        return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
+	struct path path = {
+		.dentry = de,
+		.mnt = ctxt->pwdmnt,
+	};
+	return ll_dentry_open(&path, flags, current_cred());
 }
 EXPORT_SYMBOL(l_dentry_open);
 
