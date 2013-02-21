@@ -238,7 +238,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Builds a Xen domX kernel.
 
   --set-value
-    Set's a variable to a given value.
+    Sets a variable to a given value.
 
 EOF
 
@@ -1865,10 +1865,7 @@ else
   seen_list=$(add_list "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}")
 fi
 backtrace
-echo
-echo "Environment:"
-set
-) | mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:$((LINENO-15)) on $HOSTNAME" brian@whamcloud.com >&2; set $xtrace' ERR
+) ; set $xtrace' ERR
 set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc

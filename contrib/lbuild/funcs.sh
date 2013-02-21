@@ -6,16 +6,15 @@ cleanup() {
 error() {
     local msg="$1"
 
-    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&$STDOUT
-
+    if [ -n "$msg" ]; then
+        echo -e "\n${0##*/}: $msg" >&$STDOUT
+    fi
 }
 
 fatal() {
-
     cleanup
     error "$2"
     exit $1
-
 }
 
 #
