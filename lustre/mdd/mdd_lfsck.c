@@ -2893,6 +2893,9 @@ int mdd_lfsck_stop(const struct lu_env *env, struct md_lfsck *lfsck,
 	struct l_wait_info    lwi    = { 0 };
 	ENTRY;
 
+	if (!lfsck->ml_initialized)
+		RETURN(0);
+
 	mutex_lock(&lfsck->ml_mutex);
 	spin_lock(&lfsck->ml_lock);
 	if (thread_is_init(thread) || thread_is_stopped(thread)) {

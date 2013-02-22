@@ -293,6 +293,12 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	struct llog_ctxt	*ctxt = NULL, *uctxt = NULL;
 	int			 rc;
 
+	ENTRY;
+
+	/* LU-2844 mdd setup failure should not cause umount oops */
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_INIT))
+		RETURN(-EIO);
+
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = mdd->mdd_bottom;
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,

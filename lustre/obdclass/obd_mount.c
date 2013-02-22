@@ -1888,7 +1888,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 			lu_context_enter(&session_ctx);
 			env.le_ses = &session_ctx;
 
-			dev->ld_ops->ldo_prepare(&env, NULL, dev);
+			rc = dev->ld_ops->ldo_prepare(&env, NULL, dev);
 
 			lu_env_fini(&env);
 			lu_context_exit(&session_ctx);
