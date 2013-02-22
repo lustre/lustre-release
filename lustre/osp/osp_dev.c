@@ -695,6 +695,14 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		rc = osp_last_used_init(env, m);
 		if (rc)
 			GOTO(out_proc, rc);
+
+		rc = obd_fid_init(m->opd_obd, NULL, LUSTRE_SEQ_DATA);
+		if (rc) {
+			CERROR("%s: fid init error: rc = %d\n",
+			       m->opd_obd->obd_name, rc);
+			GOTO(out_last_used, rc);
+		}
+
 		/* Initialize precreation thread, it handles new
 		 * connections as well. */
 		rc = osp_init_precreate(m);
@@ -709,12 +717,6 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		if (rc)
 			GOTO(out_precreat, rc);
 
-		rc = obd_fid_init(m->opd_obd, NULL, LUSTRE_SEQ_DATA);
-		if (rc) {
-			CERROR("%s: fid init error: rc = %d\n",
-			       m->opd_obd->obd_name, rc);
-			GOTO(out, rc);
-		}
 	}
 	/*
 	 * Initiate connect to OST

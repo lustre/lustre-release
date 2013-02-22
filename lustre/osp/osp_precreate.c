@@ -912,9 +912,6 @@ static int osp_precreate_thread(void *_arg)
 				     d->opd_new_connection,
 				     &lwi);
 
-			if (!osp_precreate_running(d))
-				break;
-
 			if (!d->opd_new_connection)
 				continue;
 
@@ -923,6 +920,10 @@ static int osp_precreate_thread(void *_arg)
 			break;
 		}
 
+		if (!osp_precreate_running(d))
+			break;
+
+		LASSERT(d->opd_obd->u.cli.cl_seq != NULL);
 		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL) {
 			/* Get new sequence for client first */
 			LASSERT(d->opd_exp != NULL);
