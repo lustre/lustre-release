@@ -38,7 +38,6 @@ BUILD_GEN=6	# TT-1092: don't cache the BUILD dir, to rebuild external OFED
 
 TOPDIR=$PWD
 
-# CVSROOT is inherited from the environment
 KERNELDIR=
 LINUX=
 LUSTRE=
@@ -48,7 +47,6 @@ RELEASE=false
 #       simply don't account for this option
 DO_SRC=true
 DOWNLOAD=true
-TAG=
 CANONICAL_TARGET=
 TARGET=
 TARGET_ARCH="$(uname -m)"
@@ -75,7 +73,6 @@ IOKITRPM=true
 LDISKFSRPM=true
 OSDLDISKFSRPM=true
 OSDZFSRPM=false
-SKIPLDISKFSRPM="v1_4_* b1_4"
 SMPTYPES="smp bigsmp default ''"
 PATCHLESS=false
 XEN=false
@@ -110,7 +107,6 @@ LUSTRE_TESTS=true
 
 DATE=$(date)
 
-USE_DATESTAMP=1
 RPMBUILD=
 
 export CC=${CC:-gcc}
@@ -130,11 +126,6 @@ readlink() {
 usage() {
     cat <<EOF
 Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
-
-  -d CVSROOT
-    Specifies the CVS Root to use when pulling files from CVS.  The
-    environment variable \$CVSROOT is used if this option is not
-    present.
 
   --external-patches=EXTERNAL_PATCHES
     Directory similar to lustre/lustre/kernel_patches/ that lbuild should
@@ -181,8 +172,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Lustre modules and userspace are built.
 
   --lustre=LUSTRE
-    Path to an existing lustre source tarball to use instead of
-    pulling from CVS.
+    Path to an existing lustre source tarball to use.
 
   --nodownload
     Do not try to download a kernel from downloads.lustre.org
@@ -212,9 +202,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     more or less in DIR/<target>-<arch>, and the tarball will be
     placed in DIR.
 
-  --tag=TAG
-    A CVS branch/tag name to build from when pulling from CVS.
-
   --target=TARGET
     The name of the target to build.  The available targets are listed
     below.
@@ -228,11 +215,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
     Also note that by using a non-"base" arch (eg, i386) only kernels
     will be built - there will be no lustre-lite-utils package.
-
-  --disable-datestamp
-    Prevents the datestamp flag (-D) from being passed to cvs for
-    checkouts. This is a workaround for a problem encountered when
-    using lbuild with tinderbox.
 
   --xen
     Builds a Xen domX kernel.
@@ -280,14 +262,8 @@ canon_path() {
 
 check_options() {
 
-    if [ "$LUSTRE" ]; then
-        [ -r "$LUSTRE" ] || \
-            usage 1 "Could not find Lustre source tarball '$LUSTRE'."
-    else
-        [ "$CVSROOT" ] || \
-            usage 1 "Either specify a CVS Root with -d, or a Lustre source tarball with --lustre."
-        [ "$TAG" ] || \
-            usage 1 "A branch/tag name must be specified with --tag when not building from a tarball."
+    if [ -z "$LUSTRE" -o ! -r "$LUSTRE"]; then
+        usage 1 "Could not find Lustre source tarball '$LUSTRE'."
     fi
 
     [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
@@ -298,11 +274,6 @@ check_options() {
 
         [ -d "$KERNELDIR" -o -d "$KERNELTREE" ] || \
             usage 1 "$KERNELDIR and $KERNELTREE are not a directory."
-
-        if ! $RELEASE; then
-            [ "$TAG" ] || \
-                usage 1 "When building a snapshot, a tag name must be used."
-        fi
 
         [ "$TARGET" ] || TARGET=$(autodetect_target "$DISTRO")
 #       TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
@@ -672,7 +643,6 @@ load_target() {
         # kernel.  don't make it look like one
         if $PATCHLESS || [ -n "$SERIES" ]; then
             EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
-#            EXTRA_VERSION="${EXTRA_VERSION}-${TAG}.${TIMESTAMP}"
             if ! $PATCHLESS && [ -n "$BUILDID" ]; then
                 EXTRA_VERSION="${EXTRA_VERSION}.${BUILDID}"
             fi
@@ -736,29 +706,6 @@ unpack_ofed() {
 }
 
 unpack_lustre() {
-
-    if [ -z "$LUSTRE" ]; then
-        local DATESTAMP=""
-
-        if [ -n "$USE_DATESTAMP" ]; then
-            DATESTAMP="-D '$DATE'"
-        fi
-
-        local DIRNAME="lustre-$TAG-$TIMESTAMP"
-
-        cvs -d "$CVSROOT" -qz3 co $DATESTAMP -d "$DIRNAME" lustre || \
-            fatal 1 "There was an error checking out toplevel Lustre from CVS."
-        pushd "$DIRNAME" > /dev/null
-        ./lustrecvs "$TAG" || \
-            fatal 1 "There was an error checking out Lustre/Portals/Build from CVS."
-        echo "Creating lustre tarball..."
-        sh autogen.sh || fatal 1 "There was an error running autogen.sh."
-        ./configure --enable-dist || \
-            fatal 1 "There was an error running ./configure to create makefiles."
-        make dist || fatal 1 "There was an error running 'make dist'."
-        LUSTRE=$PWD/lustre-*.tar.gz
-        popd > /dev/null
-    fi
 
     untar "$LUSTRE" || fatal 1 "Error unpacking Lustre tarball"
     [ -d lustre ] || ln -sf lustre-[0-9].[0-9]* lustre
@@ -872,7 +819,7 @@ build_lustre() {
         fi
     fi
 
-    ( $(skeep_ldiskfs_rpm $TAG) ) || {
+    ( $(skeep_ldiskfs_rpm) ) || {
 
         pushd ldiskfs > /dev/null || return 255
 
@@ -1132,18 +1079,12 @@ stage() {
 
 #check if we need to build separate ldiskfs RPM
 skeep_ldiskfs_rpm() {
-    local tag="$1"
-
     local skip=false
 
     if ! $LDISKFSRPM; then
         skip=true
     elif $PATCHLESS; then
         skip=true
-    else
-        for skiptag in $SKIPLDISKFSRPM; do
-            [[ $tag == $skiptag ]] && skip=true && break
-        done
     fi
 
     echo $skip
@@ -1888,7 +1829,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1904,10 +1845,6 @@ while [ "$1" ]; do
         --ccache)
             CCACHE='ccache'
             shift
-            ;;
-        -d)
-            CVSROOT=$2
-            shift 2
             ;;
         -D)
             DATE=$2
@@ -2014,8 +1951,8 @@ while [ "$1" ]; do
             shift 2
             ;;
         --tag)
-            TAG=$2
             shift 2
+            echo "WARNING: \"--tag\" is deprecated" > 2
             ;;
         --target)
             TARGET=$2
@@ -2024,10 +1961,6 @@ while [ "$1" ]; do
         --target-archs)
             TARGET_ARCHS=$2
             shift 2
-            ;;
-        --disable-datestamp)
-            USE_DATESTAMP=
-            shift
             ;;
         --xen)
             XEN=true
