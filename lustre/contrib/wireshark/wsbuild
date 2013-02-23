@@ -1,0 +1,243 @@
+#!/bin/sh -vx
+
+#
+# Script creates wireshark RPM and an separate  RPM with the wireshare lnet/lustre plugins,
+# installs and test whether the plugins can be selected as filters.
+
+
+#
+#       H E L P E R    F U N C T I O N S
+#
+
+
+error() {
+    local msg="$1"
+
+    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&1
+
+}
+
+fatal() {
+#    cleanup
+    error "$2"
+    exit $1
+}
+
+    # Wipe away the temporary build / install directory + content
+cleanup () {
+
+    echo "Cleanup ${BUILD_DIR}"
+    cd ${BUILD_DIR}
+    if [ $? -ne 0 ] ; then
+        echo "Can't change to ${BUILD_DIR} for clean-up. No clean-up performed."
+	exit 1
+    fi
+        # remove wireshark source directory and tarball and auxiliary directory to tar plugin sources
+    rm -rf wireshark-${WS_VERSION} wireshark-${WS_VERSION}.tar.bz2 ${PLUGIN_RPM_NAME}-${WS_VERSION}/ ${PLUGIN_RPM_NAME}-${WS_VERSION}-root/
+}
+
+
+#
+#       M A I N 
+#
+
+    # Enable download and compile environment settings
+source ${0%/wsbuild}/wsconfig.sh
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't source download and compile evironmnent defined in ${0%/wsbuild}/wsconfig.sh"
+fi
+
+    # Check whether prereqisited software is installed
+echo "Prerequisite software installations:"
+for pkg in $PREREQUISITE_RPMS
+do
+    echo -e "\tPackage '$pkg'\t installed: \c"
+    rpm -q $pkg > /dev/null 2>&1
+    if [ $? -ne 0 ] ; then
+        echo "NO"
+        fatal 1 "RPM (software) '$pkg' not installed. Can't compile wireshark."
+    fi
+    echo "YES"
+
+done
+
+    # Change CWD to top level build directory
+echo -e "Change to top level builddir: \c"
+cd $BUILD_DIR
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't change to directory '${BUILD_DIR}'. Make sure that directory exist."
+fi
+echo "OK"
+
+
+    # Download wireshark
+if [ ! -x /usr/bin/curl ] ; then
+    fatal 1 "curl not installed. Can't download wireshark."
+fi
+ws_file_name=`basename ${WS_SOURCE_URL}`
+# echo "ws_file_name: $ws_file_name"
+echo -e "Download wireshare source tarball: \c"
+    # Download desired wireshark tarball
+/usr/bin/curl ${WS_SOURCE_URL} --output ${BUILD_DIR}/${ws_file_name}
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't download wireshark version ${WS_VERSION}. Check configuration."
+fi
+echo "OK"
+
+
+
+echo -e "Inflating wireshark tarball: \c"
+${UNTAR} ${ws_file_name}
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't untar file '${ws_file_name}'."
+fi
+echo "OK"
+
+
+    # Build wireshark software
+cd ${BUILD_DIR}/wireshark-${WS_VERSION}
+if [ $? -ne 0 ] ; then
+    fatal 1 "Can't change to directory '${BUILD_DIR}/wireshark-${WS_VERSION}'."
+fi
+
+
+    # Executing configure first to create the make file and 
+    # rpm spec file. Procedure is a bit ood, since `make rpm-package' 
+    # is running configure again.
+echo -e "Execute wireshark's configure script: \c"
+./configure
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    echo "----------- configure output ---------------------"
+    cat Configure-$$.log
+    echo "--------------------------------"
+    fatal 1 "configure script in ${BUILD_DIR}/wireshark-${WS_VERSION} stops with errors"
+fi
+echo "OK"
+
+
+    # Currently code works distribution using RPM for package management only, i.e.:
+    # for RHEL/CentOS, SLES (suse)
+    #
+    # Code to support distributions using debian software packaging
+    # have to be added.
+
+    # SLES SP1, 2 specific handling
+if [ -r /etc/SuSE-release ] ; then
+
+        # Correct RPM spec file to build correctly:
+        # Note: changes are based on wireshark version 1.6.8
+        #
+        # -1- Adjust BuildRoot macro. 
+        #    Otherwise packaging will fail since SuSe expand BuildRoot to '/tmp/...'
+        #    Files can't be found by packaging program
+        #
+        # -2- Correct libdir macro.
+        #    Set library prefix to '/usr/lib64'
+        #
+        # -3- Correct file globing used for packaging library files
+        #    Globbing pattern set to '%prefix/lib64/*' in %files section
+        #    to capture the accordingly to change -2-
+        #
+    sed -e "s#\(BuildRoot:[[:space:]]*\)/[a-zA-Z0-9_]*\(/wireshark-%{PACKAGE_VERSION}-root\)#\1${BUILD_DIR}packaging/rpm/BUILD\2#" \
+        -e 's#\(.* \./configure .*\)#\1 --libdir=/usr/lib64#' \
+        -e 's#^\(%prefix/lib\)/\*#\164/\*#' ./packaging/rpm/SPECS/wireshark.spec > new-$$.spec
+        if [ $? -ne 0 ] ; then
+            fatal 1 "Can't modify wireshark SPEC file to build under SLES"
+        fi
+            # Move modified SPEC into effect
+        mv new-$$.spec ./packaging/rpm/SPECS/wireshark.spec
+        if [ $? -ne 0 ] ; then
+            fatal 1 "Can't copy modified wireshark SPEC file (SLES to ${BUILD_DIR}/packaging/rpm/SPECS/wireshark.spec"
+        fi
+
+fi
+
+    
+echo -e "Create wireshark RPM: \c"
+make rpm-package
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    echo "----------- make rpm-package output ---------------------"
+    cat make-rpm-$$.log
+    echo "--------------------------------"
+    fatal 1 "make rmp-package failed in  ${BUILD_DIR}/wireshark-${WS_VERSION}"
+fi
+# Package successfully built in ${BUILD_DIR}/wireshark-${WS_VERSION}/packaging/rpm/RPMS.
+echo "OK"
+
+
+cd ${BUILD_DIR}
+if [ $? -ne 0 ] ; then
+    fatal 1 "Can't change into directory ${BUILD_DIR}"
+fi
+
+PLUGINS_LIBDIR=''
+    # SLES SP1, 2 installs 64Bit libs and binaries into /usr/lib64
+    # 
+if [ -r /etc/SuSE-release ] ; then
+
+    PLUGINS_LIBDIR='/usr/lib64/wireshark/plugins/%ver/*'
+else
+    PLUGINS_LIBDIR='/usr/lib/wireshark/plugins/%ver/*'
+fi
+
+echo -e "Create Lustre/LNet wireshark plugin RPM: \c"
+
+    # Insert the associated version, name and build directory info
+    # to the SPEC template. Use '#' 
+    # as delimiters since path info will be substituted
+sed -e "s#XXX-TOP-LEVEL-BUILD-DIR-XXX#${BUILD_DIR}#" \
+    -e "s#XXX-LUSTRE-PLUGIN-VERSION-XXX#${WS_VERSION}#" \
+    -e "s#XXX-LUSTRE-PLUGIN-RPM-NAME-XXX#${PLUGIN_RPM_NAME}#" \
+    -e "s#XXX-LUSTRE-PLUGIN-LIBDIR-XXX#${PLUGINS_LIBDIR}#" \
+    lustre-wireshark-plugins-template.spec > ${PLUGIN_RPM_NAME}.spec
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't create SPEC file for Lustre/LNet wireshark plugins"
+fi
+
+
+    # Create tarball containing source files plugins to be used rpmbuid mechanism
+if [ -d ${PLUGIN_RPM_NAME}-${WS_VERSION} ] ; then
+    rm -rf lustre-wireshark-plugins-1.6.8
+    if [ $? -ne 0 ] ; then
+        fatal 1 "Can't cleanup auxiliary directory to create tarball of Lustre/LNet plugins"
+    fi
+fi
+    # Create auxiliary directory
+mkdir ${PLUGIN_RPM_NAME}-${WS_VERSION}
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't create packaging directory to create source tarball for lustre wireshark plugins"
+fi
+cp README Makefile packet-lnet.c packet-lustre.c ${PLUGIN_RPM_NAME}-${WS_VERSION}
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't copy files for rpm source tar ball into helper directory for Lustre/LNet wireshark plugins"
+fi
+
+$TAR ${PLUGIN_RPM_NAME}-${WS_VERSION}.tar.bz2 ${PLUGIN_RPM_NAME}-${WS_VERSION}/
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't create rpm source tar ball for Lustre/LNet wireshark plugins"
+fi
+
+    # install source tarball into build directory
+cp ${PLUGIN_RPM_NAME}-${WS_VERSION}.tar.bz2 ${BUILD_DIR}/wireshark-${WS_VERSION}/packaging/rpm/SOURCES
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't copy source tar ball for Lustre/LNet wireshark plugins build directory"
+fi
+
+rpmbuild -bb --define "_topdir ${BUILD_DIR}/wireshark-${WS_VERSION}/packaging/rpm" ${PLUGIN_RPM_NAME}.spec
+if [ $? -ne 0 ] ; then
+    echo "FAILED"
+    fatal 1 "Can't create RPM for Lustre/LNet wireshark plugins"
+fi
+
+exit 0

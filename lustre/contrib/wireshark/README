@@ -1,6 +1,56 @@
 Instructions for Building Lustre/LNet Wireshark Support
 -------------------------------------------------------
 
+To compile the RPMs for Wireshark and the Lustre/LNet wireshark
+plugins, please follow the instruction in paragraph
+'Build with packaging support'.
+
+In case you prefer a lightweight compilation and installation without
+any packging 'overhead', please follow the instruction in paragraph 
+'Build without packaging support'.
+
+
+Supported distributions:
+
+    CentOS 6.3   i686, x86_64
+    SLES 11 SP1        x86_64
+    SLES 11 SP2        x86_64
+
+
+Software Pre-requisits:
+To run and compile wirkshark the following software needs to be installed
+    gtk2
+    gtk2-devel
+    glib2
+    libpcap
+    libpcap-devel
+    perl
+
+
+Build with packaging support
+-------------------------------
+Simply type ./wsbuild on a node that match one of the disribution specified
+above to create the RPMs for wirkshark and the associated Lustre/LNet plugins.
+
+Upon successs the build results can be found in directory
+'wireshark-<version>/packaging/rpm/RPMS/x86_64' relative to this directory.
+The RPMs are:
+
+    wireshark-<version>-2.x86_64.rpm
+    lustre-wireshark-plugins-<version>-2.x86_64.rpm
+
+If one of the software components that need to be available for
+compilation (see 'Software Pre-requisits:' above) is missing the script will
+print an appropiate error message. The wireshark 'configure' script might also
+detect missing pre-requisite software. In both cases the software needs to be
+installed before.
+
+The build can be configured with help of the source file 'wsconfig.sh', but should
+out of the box.
+
+
+Build without packaging support
+-------------------------------
 Pre-requisits:
 
 - source tree for Wireshark (recommend version 1.6.8)

@@ -1,6 +1,46 @@
-# Modify to point to your Wireshark and glib include directories
-#INCS = -I$(HOME)/wireshark-1.6.8 `pkg-config --libs --cflags glib-2.0`
-INCS = `pkg-config --libs --cflags wireshark`
+# Makefile to create the Lustre/LNet plugins for Wireshark.
+# It is intended to be used by script `wsbuild´ that will buil
+# a RPM for wireshark and a separate RPM for the Lustre/LNet plugins.
+#
+# All configuration should be performed with help of shell script
+# `wsconfigs.sh' (see can-edit sections).
+#
+# When using as a stand-alone makefile, set the macros WS_HOME,
+# PLUGIN_DIR and PLUGIN_COMPILE_FLAGS to the values associated with
+# your wireshark installation.
+# Alternatively modify `wsconfigs.sh´ accordingly to your wireshar
+# installation, source wsconfigs.sh and build with help of:
+#
+#      make -e -f Makefile
+#
+
+
+# Installation directory of the Wireshark source code
+#    Note: Leave the macro undefined when using the wsbuild script.
+#
+# WS_HOME =
+WS_HOME = 
+
+# Installation directory for the (compiled) Wireshark plugins
+#    Change the value of the following macro to the installation directory
+#    of the Wireshark plugins for your installation 
+#
+#    Note: When using the cbuild script leave the macro undefined
+#    (default: /usr/lib/wireshark/plugins/$(WS_VERSION))
+#
+#    For non-root and  non-rpmbuilds you might want to set the value to ${HOME}/.wireshark/plugins
+PLUGIN_DIR =
+
+CFLAGS = -DINET6 -D_U_=__attribute__\(\(unused\)\) -Wall -Wpointer-arith -g -DXTHREADS -D_REENTRANT -DXUSE_MTSAFE_API -fPIC -DPIC
+
+ifdef WS_HOME
+#INCS = $(shell echo "-I${WS_HOME} `pkg-config --libs --cflags glib-2.0`")
+INCS = $(shell echo "-I${WS_HOME} $(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H 
+else
+INCS = $(shell pkg-config --libs --cflags wireshark) $(shell echo "$(PLUGIN_COMPILE_FLAGS)")
+endif
+
+CFLAGS += $(INCS)
 
 SRCS_LNET = packet-lnet.c
 SRCS_LUSTRE = packet-lustre.c
@@ -12,22 +52,36 @@ OBJS_LUSTRE = $(foreach src, $(SRCS_LUSTRE), $(src:.c=.o))
 
 PLUGINS=lnet.so lustre.so
 
-ifeq ($(shell id -u), 0)
-WS_CONFIG=$(shell pkg-config --variable=includedir wireshark)/wireshark/config.h
-WS_VERSION:=$(shell sed "s/^.define VERSION //p;d" ${WS_CONFIG})
-PLUGIN_DIR = /usr/local/lib/wireshark/plugins/$(WS_VERSION)
-else
-PLUGIN_DIR = ${HOME}/.wireshark/plugins
+ifneq ($(shell id -u), 0)
+  ifndef DESTDIR
+    PLUGIN_DIR = ${HOME}/.wireshark/plugins
+  endif
 endif
 
-CFLAGS = -DHAVE_CONFIG_H $(INCS) -DINET6 -D_U_=__attribute__\(\(unused\)\) -Wall -Wpointer-arith -g -DXTHREADS -D_REENTRANT -DXUSE_MTSAFE_API -fPIC -DPIC
+ifndef PLUGIN_DIR
+  ifndef WS_VERSION
+    ifndef WS_HOME
+      $(error "WS_HOME not defined")
+    endif
+    WS_CONFIG=$(WS_HOME)/config.h
+    WS_VERSION:=$(shell sed "s/^.define[[:space:]]*VERSION[[:space:]]*\"\(.*\)\"/\1/p;d" ${WS_CONFIG})
+   endif
+   ifeq ($(shell if [ -r /etc/SuSE-release ] ; then echo 0; else echo 1; fi ), 0)
+     PLUGIN_DIR = $(DESTDIR)/usr/lib64/wireshark/plugins/$(WS_VERSION)
+   else
+     PLUGIN_DIR = $(DESTDIR)/usr/lib/wireshark/plugins/$(WS_VERSION)
+  endif 
+endif
+
 
 all: $(PLUGINS)
 
 lustre.so: $(OBJS_LUSTRE)
+	@echo "Running $(INCS)"
 	$(CC) -shared $(OBJS_LUSTRE) -o $@
 
 lnet.so: $(OBJS_LNET)
+	@echo $(INCS)
 	$(CC) -shared $(OBJS_LNET) -o $@
 
 install: $(PLUGINS)
