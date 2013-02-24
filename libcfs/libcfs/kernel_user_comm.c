@@ -273,23 +273,31 @@ CFS_EXPORT_SYMBOL(libcfs_kkuc_group_rem);
 
 int libcfs_kkuc_group_put(int group, void *payload)
 {
-        struct kkuc_reg *reg;
-        int rc = 0;
-        ENTRY;
+	struct kkuc_reg	*reg;
+	int		 rc = 0;
+	int one_success = 0;
+	ENTRY;
 
 	down_read(&kg_sem);
-        cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
-                if (reg->kr_fp != NULL) {
-                rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
-                        if (rc == -EPIPE) {
-                                cfs_put_file(reg->kr_fp);
-                                reg->kr_fp = NULL;
-                        }
-                }
-        }
+	cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
+		if (reg->kr_fp != NULL) {
+			rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
+			if (rc == 0)
+				one_success = 1;
+			else if (rc == -EPIPE) {
+				cfs_put_file(reg->kr_fp);
+				reg->kr_fp = NULL;
+			}
+		}
+	}
 	up_read(&kg_sem);
 
-        RETURN(rc);
+	/* don't return an error if the message has been delivered
+	 * at least to one agent */
+	if (one_success)
+		rc = 0;
+
+	RETURN(rc);
 }
 CFS_EXPORT_SYMBOL(libcfs_kkuc_group_put);
 
