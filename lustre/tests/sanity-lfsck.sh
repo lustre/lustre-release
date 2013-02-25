@@ -52,13 +52,13 @@ lfsck_prep() {
 	echo "formatall"
 	formatall > /dev/null
 
+	echo "setupall"
+	setupall > /dev/null
+
 	if [ ! -z $igif ]; then
 		#define OBD_FAIL_FID_IGIF	0x1504
 		do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1504
 	fi
-
-	echo "setupall"
-	setupall > /dev/null
 
 	echo "preparing... ${nfiles} * ${ndirs} files will be created."
 	mkdir -p $DIR/$tdir

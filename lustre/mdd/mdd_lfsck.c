@@ -261,13 +261,12 @@ static void mdd_lfsck_pos_fill(const struct lu_env *env, struct md_lfsck *lfsck,
 
 		LASSERT(pos->lp_dir_cookie != MDS_DIR_DUMMY_START);
 
-		if (pos->lp_dir_cookie == MDS_DIR_END_OFF)
-			LASSERT(dir_processed);
-
-		/* For the dir which just to be processed,
-		 * lp_dir_cookie will become MDS_DIR_DUMMY_START,
-		 * which can be correctly handled by mdd_lfsck_prep. */
-		if (!dir_processed)
+		if (pos->lp_dir_cookie >= MDS_DIR_END_OFF)
+			pos->lp_dir_cookie = MDS_DIR_END_OFF;
+		else if (!dir_processed)
+			/* For the dir which just to be processed,
+			 * lp_dir_cookie will become MDS_DIR_DUMMY_START,
+			 * which can be correctly handled by mdd_lfsck_prep. */
 			pos->lp_dir_cookie--;
 	} else {
 		fid_zero(&pos->lp_dir_parent);

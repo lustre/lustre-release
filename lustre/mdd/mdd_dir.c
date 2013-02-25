@@ -2007,7 +2007,11 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 	} else if (rc == -ENODATA || rc == -EOPNOTSUPP) {
 		/* If there are no default ACL, fix mode by mask */
 		struct lu_ucred *uc = lu_ucred(env);
-		la->la_mode &= ~uc->uc_umask;
+
+		/* The create triggered by MDT internal events, such as
+		 * LFSCK reset, will not contain valid "uc". */
+		if (unlikely(uc != NULL))
+			la->la_mode &= ~uc->uc_umask;
 		rc = 0;
 	}
 
@@ -2270,7 +2274,7 @@ cleanup:
 
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
-	if (rc == 0 && fid_is_client_mdt_visible(mdo2fid(son)))
+	if (rc == 0 && fid_is_namespace_visible(mdo2fid(son)))
 		rc = mdd_changelog_ns_store(env, mdd,
 			S_ISDIR(attr->la_mode) ? CL_MKDIR :
 			S_ISREG(attr->la_mode) ? CL_CREATE :

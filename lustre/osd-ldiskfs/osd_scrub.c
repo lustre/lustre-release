@@ -455,11 +455,14 @@ iget:
 		ops = DTO_INDEX_INSERT;
 		idx = osd_oi_fid2idx(dev, fid);
 		if (val == SCRUB_NEXT_NOLMA) {
+			sf->sf_flags |= SF_UPGRADE;
+			scrub->os_full_speed = 1;
 			rc = osd_ea_fid_set(info, inode, fid, 0);
 			if (rc != 0)
 				GOTO(out, rc);
 		} else {
 			sf->sf_flags |= SF_RECREATED | SF_INCONSISTENT;
+			scrub->os_full_speed = 1;
 			if (unlikely(!ldiskfs_test_bit(idx, sf->sf_oi_bitmap)))
 				ldiskfs_set_bit(idx, sf->sf_oi_bitmap);
 		}
@@ -467,6 +470,7 @@ iget:
 		GOTO(out, rc = 0);
 	} else {
 		sf->sf_flags |= SF_INCONSISTENT;
+		scrub->os_full_speed = 1;
 	}
 
 	rc = osd_scrub_refresh_mapping(info, dev, fid, lid, ops);
@@ -645,12 +649,11 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
-		if (!scrub) {
-			if (!fid_is_client_visible(&lma->lma_self_fid))
-				rc = SCRUB_NEXT_CONTINUE;
-			else
-				*fid = lma->lma_self_fid;
-		}
+		if (fid_is_llog(&lma->lma_self_fid) ||
+		    (!scrub && fid_is_internal(&lma->lma_self_fid)))
+			rc = SCRUB_NEXT_CONTINUE;
+		else
+			*fid = lma->lma_self_fid;
 	} else if (rc == -ENODATA) {
 		lu_igif_build(fid, inode->i_ino, inode->i_generation);
 		if (scrub)
@@ -749,6 +752,21 @@ static int osd_preload_next(struct osd_thread_info *info,
 	return rc;
 }
 
+static inline int
+osd_scrub_wakeup(struct osd_scrub *scrub, struct osd_otable_it *it)
+{
+	spin_lock(&scrub->os_lock);
+	if (osd_scrub_has_window(scrub, &it->ooi_cache) ||
+	    !cfs_list_empty(&scrub->os_inconsistent_items) ||
+	    it->ooi_waiting || !thread_is_running(&scrub->os_thread))
+		scrub->os_waiting = 0;
+	else
+		scrub->os_waiting = 1;
+	spin_unlock(&scrub->os_lock);
+
+	return !scrub->os_waiting;
+}
+
 static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 			  struct osd_iit_param *param,
 			  struct osd_idmap_cache *oic, int *noslot, int rc)
@@ -792,28 +810,27 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 
 next:
 	scrub->os_pos_current = param->gbase + ++(param->offset);
+
+wait:
 	if (it != NULL && it->ooi_waiting &&
 	    ooc->ooc_pos_preload < scrub->os_pos_current) {
+		spin_lock(&scrub->os_lock);
 		it->ooi_waiting = 0;
 		cfs_waitq_broadcast(&thread->t_ctl_waitq);
+		spin_unlock(&scrub->os_lock);
 	}
 
 	if (scrub->os_full_speed || rc == SCRUB_NEXT_CONTINUE)
 		return 0;
 
-wait:
 	if (osd_scrub_has_window(scrub, ooc)) {
 		*noslot = 0;
 		return 0;
 	}
 
-	scrub->os_waiting = 1;
 	l_wait_event(thread->t_ctl_waitq,
-		     osd_scrub_has_window(scrub, ooc) ||
-		     !cfs_list_empty(&scrub->os_inconsistent_items) ||
-		     !thread_is_running(thread),
+		     osd_scrub_wakeup(scrub, it),
 		     &lwi);
-	scrub->os_waiting = 0;
 
 	if (osd_scrub_has_window(scrub, ooc))
 		*noslot = 0;
@@ -1802,6 +1819,21 @@ static void osd_otable_it_put(const struct lu_env *env, struct dt_it *di)
 	mutex_unlock(&dev->od_otable_mutex);
 }
 
+static inline int
+osd_otable_it_wakeup(struct osd_scrub *scrub, struct osd_otable_it *it)
+{
+	spin_lock(&scrub->os_lock);
+	if (it->ooi_cache.ooc_pos_preload < scrub->os_pos_current ||
+	    scrub->os_waiting || it->ooi_stopping ||
+	    !thread_is_running(&scrub->os_thread))
+		it->ooi_waiting = 0;
+	else
+		it->ooi_waiting = 1;
+	spin_unlock(&scrub->os_lock);
+
+	return !it->ooi_waiting;
+}
+
 static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_otable_it    *it     = (struct osd_otable_it *)di;
@@ -1833,13 +1865,17 @@ again:
 		RETURN(1);
 	}
 
-	it->ooi_waiting = 1;
-	l_wait_event(thread->t_ctl_waitq,
-		     ooc->ooc_pos_preload < scrub->os_pos_current ||
-		     !thread_is_running(thread) ||
-		     it->ooi_stopping,
-		     &lwi);
-	it->ooi_waiting = 0;
+	if (scrub->os_waiting && osd_scrub_has_window(scrub, ooc)) {
+		spin_lock(&scrub->os_lock);
+		scrub->os_waiting = 0;
+		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);
+		spin_unlock(&scrub->os_lock);
+	}
+
+	if (it->ooi_cache.ooc_pos_preload >= scrub->os_pos_current)
+		l_wait_event(thread->t_ctl_waitq,
+			     osd_otable_it_wakeup(scrub, it),
+			     &lwi);
 
 	if (!thread_is_running(thread) && !it->ooi_used_outside)
 		RETURN(1);
@@ -1892,8 +1928,10 @@ static __u64 osd_otable_it_store(const struct lu_env *env,
 
 	if (it->ooi_user_ready)
 		hash = ooc->ooc_pos_preload;
-	else
+	else if (likely(ooc->ooc_consumer_idx != -1))
 		hash = ooc->ooc_cache[ooc->ooc_consumer_idx].oic_lid.oii_ino;
+	else
+		hash = 0;
 	return hash;
 }
 

@@ -18,9 +18,11 @@ init_logging
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
 	skip "Need MDS version at least 2.2.90" && exit 0
 require_dsh_mds || exit 0
+[ "$SLOW" = "no" ] && skip "skip scrub performance test under non-SLOW mode"
+
 
 NTHREADS=${NTHREADS:-0}
-UNIT=${UNIT:-0}
+UNIT=${UNIT:-1048576}
 BACKUP=${BACKUP:-0}
 MINCOUNT=${MINCOUNT:-8192}
 MAXCOUNT=${MAXCOUNT:-32768}
@@ -35,14 +37,14 @@ remote_mds && ECHOCMD=${RCMD} || ECHOCMD="eval"
 
 if [ ${NTHREADS} -eq 0 ]; then
 	CPUCORE=$(${RCMD} cat /proc/cpuinfo | grep "processor.*:" | wc -l)
-	NTHREADS=$((CPUCORE * 3))
+	NTHREADS=$((CPUCORE * 2))
 fi
 
 stopall
 do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
 reformat_external_journal
-add $SINGLEMDS $(mkfs_opts $SINGLEMDS) --backfstype ldiskfs --reformat \
-	$MDT_DEVNAME > /dev/null || exit 2
+add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS} ${MDT_DEVNAME}) --backfstype ldiskfs \
+	--reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null || exit 2
 
 scrub_attach() {
 	${ECHOCMD} "${LCTL} <<-EOF

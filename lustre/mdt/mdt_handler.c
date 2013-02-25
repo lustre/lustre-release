@@ -5688,7 +5688,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 	if (!fid_is_sane(&fp->gf_fid))
 		RETURN(-EINVAL);
 
-	if (!fid_is_client_mdt_visible(&fp->gf_fid)) {
+	if (!fid_is_namespace_visible(&fp->gf_fid)) {
 		CWARN("%s: "DFID" is invalid, sequence should be "
 			">= "LPX64"\n", obd->obd_name,
 			PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);

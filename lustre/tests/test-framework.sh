@@ -2883,6 +2883,9 @@ mkfs_opts() {
 
 		if [ $fstype == ldiskfs ]; then
 			fs_mkfs_opts+=${MDSJOURNALSIZE:+" -J size=$MDSJOURNALSIZE"}
+			if [ ! -z $EJOURNAL ]; then
+				fs_mkfs_opts+=${MDSJOURNALSIZE:+" device=$EJOURNAL"}
+			fi
 			fs_mkfs_opts+=${MDSISIZE:+" -i $MDSISIZE"}
 		fi
 	fi
@@ -6008,8 +6011,9 @@ mds_backup_restore() {
 	reformat_external_journal || return 5
 	# step 8: reformat dev
 	echo "reformat new device"
-	add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS}) --backfstype ldiskfs \
-		--reformat $devname > /dev/null || return 6
+	add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS} ${devname}) --backfstype \
+		ldiskfs --reformat ${devname} $(mdsvdevname 1) > /dev/null ||
+		exit 6
 	# step 9: mount dev
 	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 7
 	# step 10: restore metadata

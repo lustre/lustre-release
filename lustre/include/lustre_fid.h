@@ -290,7 +290,7 @@ static inline int fid_is_quota(const struct lu_fid *fid)
 	       fid_seq(fid) == FID_SEQ_QUOTA_GLB;
 }
 
-static inline int fid_is_client_mdt_visible(const struct lu_fid *fid)
+static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 {
 	const __u64 seq = fid_seq(fid);
 
@@ -299,11 +299,6 @@ static inline int fid_is_client_mdt_visible(const struct lu_fid *fid)
 	return (!fid_is_last_id(fid) &&
 		(fid_seq_is_norm(seq) || fid_seq_is_igif(seq))) ||
 	       fid_is_root(fid) || fid_is_dot_lustre(fid);
-}
-
-static inline int fid_is_client_visible(const struct lu_fid *fid)
-{
-	return fid_is_client_mdt_visible(fid) || fid_is_idif(fid);
 }
 
 static inline int fid_seq_in_fldb(__u64 seq)

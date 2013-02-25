@@ -359,7 +359,7 @@ int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd)
 		   LUSTRE_OSD_ZFS_NAME) != 0) {
 		CERROR("%s: "DFID" is used on ldiskfs?!\n",
 		       mdd2obd_dev(mdd)->obd_name, PFID(&mdd->mdd_root_fid));
-		RETURN(-ENOTSUPP);
+		GOTO(out, rc = -ENOTSUPP);
 	}
 
 	LCONSOLE_INFO("%s: FID of /ROOT has been changed. "

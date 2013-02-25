@@ -502,7 +502,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
-	if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1))
+	if ((fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1)) &&
+	    !OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING))
 		RETURN(-EPERM);
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);

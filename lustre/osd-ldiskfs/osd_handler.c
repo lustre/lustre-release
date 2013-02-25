@@ -2224,9 +2224,6 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INLMA))
 		return 0;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF) && fid_is_client_visible(fid))
-		return 0;
-
 	lustre_lma_init(lma, fid, flags);
 	lustre_lma_swab(lma);
 
@@ -2249,7 +2246,8 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
 				  const struct dt_rec *fid)
 {
-	if (!fid_is_client_mdt_visible((const struct lu_fid *)fid)) {
+	if (!fid_is_namespace_visible((const struct lu_fid *)fid) ||
+	    OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
 		param->edp_magic = 0;
 		return;
 	}
@@ -2415,6 +2413,10 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF) && !fid_is_internal(fid))
+		return result;
+
 	if ((result == 0) &&
 	    (fid_is_last_id(fid) ||
 	     !fid_is_on_ost(info, osd_dt_dev(th->th_dev), fid)))
@@ -4560,6 +4562,19 @@ osd_dirent_has_space(__u16 reclen, __u16 namelen, unsigned blocksize)
 		return 0;
 }
 
+static inline int
+osd_dot_dotdot_has_space(struct ldiskfs_dir_entry_2 *de, int dot_dotdot)
+{
+	LASSERTF(dot_dotdot == 1 || dot_dotdot == 2,
+		 "dot_dotdot = %d\n", dot_dotdot);
+
+	if (LDISKFS_DIR_REC_LEN(de) >=
+	    __LDISKFS_DIR_REC_LEN(dot_dotdot + 1 + sizeof(struct osd_fid_pack)))
+		return 1;
+	else
+		return 0;
+}
+
 static int
 osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 		    struct inode *dir, struct inode *inode,
@@ -4653,18 +4668,15 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 	struct inode		   *inode;
 	int			    credits;
 	int			    rc;
+	int			    dot_dotdot	= 0;
 	bool			    dirty	= false;
-	bool			    is_dotdot	= false;
 	ENTRY;
 
 	if (ent->oied_name[0] == '.') {
-		/* Skip dot entry, even if it has stale FID-in-dirent, because
-		 * we do not use such FID-in-dirent anymore, it is harmless. */
 		if (ent->oied_namelen == 1)
-			RETURN(0);
-
-		if (ent->oied_namelen == 2 && ent->oied_name[1] == '.')
-			is_dotdot = true;
+			dot_dotdot = 1;
+		else if (ent->oied_namelen == 2 && ent->oied_name[1] == '.')
+			dot_dotdot = 2;
 	}
 
 	dentry = osd_child_dentry_get(env, obj, ent->oied_name,
@@ -4697,26 +4709,36 @@ again:
 			       ent->oied_name, rc);
 			RETURN(rc);
 		}
-	}
 
-	if (obj->oo_hl_head != NULL) {
-		hlock = osd_oti_get(env)->oti_hlock;
-		ldiskfs_htree_lock(hlock, obj->oo_hl_head, dir,
-				   LDISKFS_HLOCK_DEL);
+		if (obj->oo_hl_head != NULL) {
+			hlock = osd_oti_get(env)->oti_hlock;
+			/* "0" means exclusive lock for the whole directory.
+			 * We need to prevent others access such name entry
+			 * during the delete + insert. Neither HLOCK_ADD nor
+			 * HLOCK_DEL cannot guarantee the atomicity. */
+			ldiskfs_htree_lock(hlock, obj->oo_hl_head, dir, 0);
+		} else {
+			down_write(&obj->oo_ext_idx_sem);
+		}
 	} else {
-		down_write(&obj->oo_ext_idx_sem);
+		if (obj->oo_hl_head != NULL) {
+			hlock = osd_oti_get(env)->oti_hlock;
+			ldiskfs_htree_lock(hlock, obj->oo_hl_head, dir,
+					   LDISKFS_HLOCK_LOOKUP);
+		} else {
+			down_read(&obj->oo_ext_idx_sem);
+		}
 	}
 
 	bh = osd_ldiskfs_find_entry(dir, dentry, &de, hlock);
-	/* For dotdot entry, if there is not enough space to hold FID-in-dirent,
-	 * just keep it there. It only happens when the device upgraded from 1.8
-	 * or restored from MDT file-level backup. For the whole directory, only
-	 * dotdot entry has no FID-in-dirent and needs to get FID from LMA when
-	 * readdir, it will not affect the performance much. */
+	/* For dot/dotdot entry, if there is not enough space to hold the
+	 * FID-in-dirent, just keep them there. It only happens when the
+	 * device upgraded from 1.8 or restored from MDT file-level backup.
+	 * For the whole directory, only dot/dotdot entry have no FID-in-dirent
+	 * and needs to get FID from LMA when readdir, it will not affect the
+	 * performance much. */
 	if ((bh == NULL) || (le32_to_cpu(de->inode) != ent->oied_ino) ||
-	    (is_dotdot && !osd_dirent_has_space(de->rec_len,
-						ent->oied_namelen,
-						sb->s_blocksize))) {
+	    (dot_dotdot != 0 && !osd_dot_dotdot_has_space(de, dot_dotdot))) {
 		*attr |= LUDA_IGNORE;
 		GOTO(out_journal, rc = 0);
 	}
@@ -4752,7 +4774,7 @@ again:
 				if (hlock != NULL)
 					ldiskfs_htree_unlock(hlock);
 				else
-					up_write(&obj->oo_ext_idx_sem);
+					up_read(&obj->oo_ext_idx_sem);
 				dev->od_dirent_journal = 1;
 				goto again;
 			}
@@ -4766,6 +4788,7 @@ again:
 		} else {
 			/* Do not repair under dryrun mode. */
 			if (*attr & LUDA_VERIFY_DRYRUN) {
+				*fid = lma->lma_self_fid;
 				*attr |= LUDA_REPAIR;
 				GOTO(out_inode, rc = 0);
 			}
@@ -4776,7 +4799,7 @@ again:
 				if (hlock != NULL)
 					ldiskfs_htree_unlock(hlock);
 				else
-					up_write(&obj->oo_ext_idx_sem);
+					up_read(&obj->oo_ext_idx_sem);
 				dev->od_dirent_journal = 1;
 				goto again;
 			}
@@ -4792,10 +4815,13 @@ again:
 	} else if (rc == -ENODATA) {
 		/* Do not repair under dryrun mode. */
 		if (*attr & LUDA_VERIFY_DRYRUN) {
-			if (fid_is_sane(fid))
+			if (fid_is_sane(fid)) {
 				*attr |= LUDA_REPAIR;
-			else
+			} else {
+				lu_igif_build(fid, inode->i_ino,
+					      inode->i_generation);
 				*attr |= LUDA_UPGRADE;
+			}
 			GOTO(out_inode, rc = 0);
 		}
 
@@ -4805,7 +4831,7 @@ again:
 			if (hlock != NULL)
 				ldiskfs_htree_unlock(hlock);
 			else
-				up_write(&obj->oo_ext_idx_sem);
+				up_read(&obj->oo_ext_idx_sem);
 			dev->od_dirent_journal = 1;
 			goto again;
 		}
@@ -4835,10 +4861,14 @@ out_inode:
 
 out_journal:
 	brelse(bh);
-	if (hlock != NULL)
+	if (hlock != NULL) {
 		ldiskfs_htree_unlock(hlock);
-	else
-		up_write(&obj->oo_ext_idx_sem);
+	} else {
+		if (dev->od_dirent_journal)
+			up_write(&obj->oo_ext_idx_sem);
+		else
+			up_read(&obj->oo_ext_idx_sem);
+	}
 	if (jh != NULL)
 		ldiskfs_journal_stop(jh);
 	if (rc >= 0 && !dirty)
