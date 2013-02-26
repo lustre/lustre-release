@@ -3084,6 +3084,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         /* To not check for split by default. */
         info->mti_spec.no_create = 0;
+	info->mti_spec.sp_rm_entry = 0;
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
