@@ -1863,8 +1863,12 @@ ost_evict_client() {
 }
 
 fail() {
-    facet_failover $* || error "failover: $?"
-    clients_up || error "post-failover df: $?"
+	local facets=$1
+	local clients=${CLIENTS:-$HOSTNAME}
+
+	facet_failover $* || error "failover: $?"
+	wait_clients_import_state "$clients" "$facets" FULL
+	clients_up || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -4217,7 +4221,7 @@ _wait_import_state () {
     local CONN_STATE
     local i=0
 
-    CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
     while [ "${CONN_STATE}" != "${expected}" ]; do
         if [ "${expected}" == "DISCONN" ]; then
             # for disconn we can check after proc entry is removed
@@ -4230,7 +4234,8 @@ _wait_import_state () {
             error "can't put import for $CONN_PROC into ${expected} state after $i sec, have ${CONN_STATE}" && \
             return 1
         sleep 1
-        CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+	# Add uniq for multi-mount case
+	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
         i=$(($i + 1))
     done
 
@@ -4247,6 +4252,14 @@ wait_import_state() {
     for param in ${params//,/ }; do
         _wait_import_state $state $param $maxtime || return
     done
+}
+
+wait_import_state_mount() {
+	if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
+		return 0
+	fi
+
+	wait_import_state $*
 }
 
 # One client request could be timed out because server was not ready
@@ -4348,7 +4361,7 @@ wait_clients_import_state () {
     local params=$(expand_list $params $proc_path)
     done
 
-    if ! do_rpc_nodes $list wait_import_state $expected $params; then
+    if ! do_rpc_nodes $list wait_import_state_mount $expected $params; then
         error "import is not in ${expected} state"
         return 1
     fi
