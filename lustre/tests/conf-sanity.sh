@@ -114,7 +114,7 @@ writeconf_or_reformat() {
 	# Better reformat if it fails...
 	writeconf_all $MDSCOUNT 2 ||
 		{ echo "tunefs failed, reformatting instead" &&
-		  reformat_and_config && return 1; }
+		  reformat_and_config && return 0; }
 	return 0
 }
 

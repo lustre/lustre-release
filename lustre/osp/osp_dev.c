@@ -351,9 +351,6 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	ENTRY;
 
 	LASSERT(env);
-	/* release last_used file */
-	if (!d->opd_connect_mdt)
-		osp_last_used_fini(env, d);
 
 	rc = osp_disconnect(d);
 
@@ -363,6 +360,9 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 
 		/* stop sync thread */
 		osp_sync_fini(d);
+
+		/* release last_used file */
+		osp_last_used_fini(env, d);
 	}
 
 	obd_fid_fini(d->opd_obd);
