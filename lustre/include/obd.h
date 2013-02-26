@@ -721,6 +721,8 @@ struct lov_obd {
         cfs_list_t              lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
         enum lustre_sec_part    lov_sp_me;
+        /* to see if there're ongoing notifies */
+        cfs_rw_semaphore_t      lov_notify_lock;
 };
 
 struct lmv_tgt_desc {
