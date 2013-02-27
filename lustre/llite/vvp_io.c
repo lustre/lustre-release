@@ -1010,6 +1010,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
         struct cl_page    *pg     = slice->cpl_page;
         struct inode      *inode  = ccc_object_inode(obj);
         struct ll_sb_info *sbi    = ll_i2sbi(inode);
+	struct ll_inode_info *lli = ll_i2info(inode);
         cfs_page_t        *vmpage = cp->cpg_page;
 
         int    result;
@@ -1089,6 +1090,20 @@ static int vvp_io_commit_write(const struct lu_env *env,
                 result = 0;
         }
         ll_stats_ops_tally(sbi, tallyop, 1);
+
+	/* Inode should be marked DIRTY even if no new page was marked DIRTY
+	 * because page could have been not flushed between 2 modifications.
+	 * It is important the file is marked DIRTY as soon as the I/O is done
+	 * Indeed, when cache is flushed, file could be already closed and it
+	 * is too late to warn the MDT.
+	 * It is acceptable that file is marked DIRTY even if I/O is dropped
+	 * for some reasons before being flushed to OST.
+	 */
+	if (result == 0) {
+		spin_lock(&lli->lli_lock);
+		lli->lli_flags |= LLIF_DATA_MODIFIED;
+		spin_unlock(&lli->lli_lock);
+	}
 
         size = cl_offset(obj, pg->cp_index) + to;
 

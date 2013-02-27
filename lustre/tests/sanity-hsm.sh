@@ -146,7 +146,7 @@ test_3() {
 	$LFS hsm_set --exists $TESTFILE.append ||
 		error "user could not change hsm flags"
 	dd if=/etc/passwd of=$TESTFILE.append bs=1 count=3 \
-	   conv=notrunc,fdatasync oflag=append status=noxfer ||
+	   conv=notrunc oflag=append status=noxfer ||
 		error "could not append to test file"
 	$LFS hsm_state $TESTFILE.append | grep -q " (0x00000003)" ||
 		error "wrong hsm state: !0x3"
@@ -156,7 +156,7 @@ test_3() {
 	$LFS hsm_set --exists $TESTFILE.modify ||
 		error "user could not change hsm flags"
 	dd if=/dev/zero of=$TESTFILE.modify bs=1 count=3 \
-	   conv=notrunc,fdatasync status=noxfer ||
+	   conv=notrunc status=noxfer ||
 		error "could not modify test file"
 	$LFS hsm_state $TESTFILE.modify | grep -q " (0x00000003)" ||
 		error "wrong hsm state: !0x3"
