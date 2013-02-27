@@ -1868,8 +1868,8 @@ static int ll_swap_layout(struct file *file, struct file *file2,
 	if (!S_ISREG(inode2->i_mode))
 		RETURN(-EINVAL);
 
-	if (inode_permission(inode, MAY_WRITE) ||
-	    inode_permission(inode2, MAY_WRITE))
+	if (ll_permission(inode, MAY_WRITE, NULL) ||
+	    ll_permission(inode2, MAY_WRITE, NULL))
 		RETURN(-EPERM);
 
 	if (inode2->i_sb != inode->i_sb)
