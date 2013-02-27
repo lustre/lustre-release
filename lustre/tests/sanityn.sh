@@ -687,16 +687,14 @@ test_29() { # bug 10999
 #bug 11549 - permanently turn test off in b1_5
 run_test 29 "lock put race between glimpse and enqueue ========="
 
-test_30() { #bug #11110
+test_30() { #bug #11110, LU-2523
 	test_mkdir -p $DIR1/$tdir
 	cp -f /bin/bash $DIR1/$tdir/bash
 	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash;
 		    cp /bin/bash $DIR2/$tdir' &
-	local err=$($DIR1/$tdir/bash -c 'sleep 2;
-		openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')
+	$DIR1/$tdir/bash -c 'sleep 2;
+		openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?'
 	wait
-	[ $err -ne 116 ] &&
-		error_ignore 12900 "return code ($err) != -ESTALE" && return
 	true
 }
 

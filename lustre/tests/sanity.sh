@@ -1781,6 +1781,29 @@ test_27A() { # b=19102
 }
 run_test 27A "check filesystem-wide default LOV EA values"
 
+test_27B() { # LU-2523
+	test_mkdir -p $DIR/$tdir
+	rm -f $DIR/$tdir/f0 $DIR/$tdir/f1
+	touch $DIR/$tdir/f0
+	# open f1 with O_LOV_DELAY_CREATE
+	# rename f0 onto f1
+	# call setstripe ioctl on open file descriptor for f1
+	# close
+	multiop $DIR/$tdir/f1 oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:nB1c \
+		$DIR/$tdir/f0
+
+	rm -f $DIR/$tdir/f1
+	# open f1 with O_LOV_DELAY_CREATE
+	# unlink f1
+	# call setstripe ioctl on open file descriptor for f1
+	# close
+	multiop $DIR/$tdir/f1 oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:uB1c
+
+	# Allow multiop to fail in imitation of NFS's busted semantics.
+	true
+}
+run_test 27B "call setstripe on open unlinked file/rename victim"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
