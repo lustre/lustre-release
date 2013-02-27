@@ -2461,6 +2461,8 @@ test_34h() {
 	local sz=1000
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 || error
+	sync # Flush the cache so that multiop below does not block on cache
+	     # flush when getting the group lock
 	$MULTIOP $DIR/$tfile OG${gid}T${sz}g${gid}c &
 	MULTIPID=$!
 	sleep 2
