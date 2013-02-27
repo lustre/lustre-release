@@ -4149,7 +4149,6 @@ run_test() {
             return $?
         fi
         LAST_SKIPPED="y"
-        echo -n "."
         return 0
     fi
 
