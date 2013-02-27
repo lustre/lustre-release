@@ -52,12 +52,12 @@
  *          cpu_npartitions=1:
  *              core[0, 1, ... 7] = partition[0]
  *
- *   . User can also specifiy CPU partitions by string pattern
+ *   . User can also specify CPU partitions by string pattern
  *
  *     Examples: cpu_partitions="0[0,1], 1[2,3]"
  *               cpu_partitions="N 0[0-3], 1[4-8]"
  *
- *     The first charactor "N" means following numbers are numa ID
+ *     The first character "N" means following numbers are numa ID
  *
  *   . NUMA allocators, CPU affinity threads are built over CPU partitions,
  *     instead of HW CPUs or HW nodes.
@@ -67,7 +67,7 @@
  *     configured by cpu_npartitions of the global cfs_cpt_table
  *
  *   . If cpu_npartitions=1(all CPUs in one pool), lustre should work the
- *     same way as 2.2 or earlier verison
+ *     same way as 2.2 or earlier versions
  *
  * Author: liang@whamcloud.com
  */

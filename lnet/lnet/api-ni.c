@@ -251,6 +251,22 @@ lnet_destroy_remote_nets_table(void)
 	the_lnet.ln_remote_nets_hash = NULL;
 }
 
+static void
+lnet_destroy_locks(void)
+{
+	if (the_lnet.ln_res_lock != NULL) {
+		cfs_percpt_lock_free(the_lnet.ln_res_lock);
+		the_lnet.ln_res_lock = NULL;
+	}
+
+	if (the_lnet.ln_net_lock != NULL) {
+		cfs_percpt_lock_free(the_lnet.ln_net_lock);
+		the_lnet.ln_net_lock = NULL;
+	}
+
+	lnet_fini_locks();
+}
+
 static int
 lnet_create_locks(void)
 {
@@ -267,24 +283,8 @@ lnet_create_locks(void)
 	return 0;
 
  failed:
-	lnet_fini_locks();
+	lnet_destroy_locks();
 	return -ENOMEM;
-}
-
-static void
-lnet_destroy_locks(void)
-{
-	if (the_lnet.ln_res_lock != NULL) {
-		cfs_percpt_lock_free(the_lnet.ln_res_lock);
-		the_lnet.ln_res_lock = NULL;
-	}
-
-	if (the_lnet.ln_net_lock != NULL) {
-		cfs_percpt_lock_free(the_lnet.ln_net_lock);
-		the_lnet.ln_net_lock = NULL;
-	}
-
-	lnet_fini_locks();
 }
 
 void lnet_assert_wire_constants (void)

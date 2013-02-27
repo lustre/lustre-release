@@ -55,7 +55,7 @@ CFS_MODULE_PARM(cpu_npartitions, "i", int, 0444, "# of CPU partitions");
  * i.e: "0[0,1,2,3] 1[4,5,6,7]", number before bracket is CPU partition ID,
  *      number in bracket is processor ID (core or HT)
  *
- * i.e: "N 0[0,1] 1[2,3]" the first character 'n' means numbers in bracket
+ * i.e: "N 0[0,1] 1[2,3]" the first character 'N' means numbers in bracket
  *       are NUMA node ID, number before bracket is CPU partition ID.
  *
  * NB: If user specified cpu_pattern, cpu_npartitions will be ignored
@@ -665,7 +665,7 @@ cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 		return rc;
 	}
 
-	/* don't need to set affinity baecause all online CPUs are covered */
+	/* don't need to set affinity because all online CPUs are covered */
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_bind);

@@ -40,7 +40,7 @@
 
 #include <libcfs/libcfs.h>
 
-/** Global cpu partition table */
+/** Global CPU partition table */
 struct cfs_cpt_table   *cfs_cpt_table __read_mostly = NULL;
 EXPORT_SYMBOL(cfs_cpt_table);
 
@@ -89,7 +89,7 @@ cfs_cpt_weight(struct cfs_cpt_table *cptab, int cpt)
 {
 	return 1;
 }
-EXPORT_SYMBOL(cfs_cpt_number);
+EXPORT_SYMBOL(cfs_cpt_weight);
 
 int
 cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
@@ -175,7 +175,7 @@ cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu)
 {
 	return 0;
 }
-EXPORT_SYMBOL(cfs_cpt_from_cpu);
+EXPORT_SYMBOL(cfs_cpt_of_cpu);
 
 int
 cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
