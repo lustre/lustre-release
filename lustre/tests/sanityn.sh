@@ -472,18 +472,18 @@ run_test 20 "test extra readahead page left in cache ===="
 
 cleanup_21() {
 	trap 0
-	umount $DIR1/d21
+	umount $DIR1/$tdir
 }
 
 test_21() { # Bug 5907
-	test_mkdir $DIR1/d21
-	mount /etc $DIR1/d21 --bind || error "mount failed" # Poor man's mount.
+	test_mkdir $DIR1/$tdir
+	mount /etc $DIR1/$tdir --bind || error "mount failed" # Poor man's mount.
 	trap cleanup_21 EXIT
-	rmdir -v $DIR1/d21 && error "Removed mounted directory"
-	rmdir -v $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
-	test -d $DIR1/d21 || error "Mounted directory disappeared"
+	rmdir -v $DIR1/$tdir && error "Removed mounted directory"
+	rmdir -v $DIR2/$tdir && echo "Removed mounted directory from another mountpoint, needs to be fixed"
+	test -d $DIR1/$tdir || error "Mounted directory disappeared"
 	cleanup_21
-	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
+	test -d $DIR2/$tdir || test -d $DIR1/$tdir && error "Removed dir still visible after umount"
 	true
 }
 run_test 21 " Try to remove mountpoint on another dir ===="
