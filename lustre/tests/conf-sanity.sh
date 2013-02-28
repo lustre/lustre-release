@@ -3938,6 +3938,9 @@ test_72() { #LU-2634
 	local cmd="$E2FSCK -fnvd $mdsdev"
 	local fn=3
 
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "ldiskfs only test" && return
+
 	#tune MDT with "-O extents"
 	add $SINGLEMDS \
 		$(mkfs_opts $SINGLEMDS ${mdsdev}) --reformat $mdsdev ||
