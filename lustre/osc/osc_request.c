@@ -932,45 +932,45 @@ static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
  * needed, and avoids shrinking the grant piecemeal. */
 static int osc_shrink_grant(struct client_obd *cli)
 {
-        long target = (cli->cl_max_rpcs_in_flight + 1) *
-                      cli->cl_max_pages_per_rpc;
+	__u64 target_bytes = (cli->cl_max_rpcs_in_flight + 1) *
+			     (cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT);
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        if (cli->cl_avail_grant <= target)
-                target = cli->cl_max_pages_per_rpc;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	if (cli->cl_avail_grant <= target_bytes)
+		target_bytes = cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        return osc_shrink_grant_to_target(cli, target);
+	return osc_shrink_grant_to_target(cli, target_bytes);
 }
 
-int osc_shrink_grant_to_target(struct client_obd *cli, long target)
+int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 {
-        int    rc = 0;
-        struct ost_body     *body;
-        ENTRY;
+	int			rc = 0;
+	struct ost_body        *body;
+	ENTRY;
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        /* Don't shrink if we are already above or below the desired limit
-         * We don't want to shrink below a single RPC, as that will negatively
-         * impact block allocation and long-term performance. */
-        if (target < cli->cl_max_pages_per_rpc)
-                target = cli->cl_max_pages_per_rpc;
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	/* Don't shrink if we are already above or below the desired limit
+	 * We don't want to shrink below a single RPC, as that will negatively
+	 * impact block allocation and long-term performance. */
+	if (target_bytes < cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT)
+		target_bytes = cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
 
-        if (target >= cli->cl_avail_grant) {
-                client_obd_list_unlock(&cli->cl_loi_list_lock);
-                RETURN(0);
-        }
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	if (target_bytes >= cli->cl_avail_grant) {
+		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		RETURN(0);
+	}
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        OBD_ALLOC_PTR(body);
-        if (!body)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_PTR(body);
+	if (!body)
+		RETURN(-ENOMEM);
 
-        osc_announce_cached(cli, &body->oa, 0);
+	osc_announce_cached(cli, &body->oa, 0);
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        body->oa.o_grant = cli->cl_avail_grant - target;
-        cli->cl_avail_grant = target;
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	body->oa.o_grant = cli->cl_avail_grant - target_bytes;
+	cli->cl_avail_grant = target_bytes;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         if (!(body->oa.o_valid & OBD_MD_FLFLAGS)) {
                 body->oa.o_valid |= OBD_MD_FLFLAGS;
