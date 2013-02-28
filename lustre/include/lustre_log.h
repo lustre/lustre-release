@@ -169,21 +169,6 @@ struct llog_process_cat_data {
         int                  lpcd_last_idx;
 };
 
-struct llog_process_cat_args {
-        /**
-         * Llog context used in recovery thread on OST (recov_thread.c)
-         */
-        struct llog_ctxt    *lpca_ctxt;
-        /**
-         * Llog callback used in recovery thread on OST (recov_thread.c)
-         */
-        void                *lpca_cb;
-        /**
-         * Data pointer for llog callback.
-         */
-        void                *lpca_arg;
-};
-
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle);
 int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
@@ -202,7 +187,6 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 			     void *data, int startcat, int startidx, bool fork);
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx);
-int llog_cat_process_thread(void *data);
 int llog_cat_reverse_process(const struct lu_env *env,
 			     struct llog_handle *cat_llh, llog_cb_t cb,
 			     void *data);
@@ -222,9 +206,6 @@ int llog_obd_add(const struct lu_env *env, struct llog_ctxt *ctxt,
 int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
 		struct lov_stripe_md *lsm, int count,
 		struct llog_cookie *cookies, int flags);
-int llog_obd_origin_add(const struct lu_env *env, struct llog_ctxt *ctxt,
-			struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-			struct llog_cookie *logcookies, int numcookies);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *idx);
@@ -234,26 +215,9 @@ int obd_llog_finish(struct obd_device *obd, int count);
 /* llog_ioctl.c */
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data);
-int llog_catalog_list(struct obd_device *obd, int count,
-                      struct obd_ioctl_data *data);
 
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
-int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
-int llog_origin_connect(struct llog_ctxt *ctxt,
-                        struct llog_logid *logid, struct llog_gen *gen,
-                        struct obd_uuid *uuid);
-int llog_handle_connect(struct ptlrpc_request *req);
-
-/* recov_thread.c */
-int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
-			 struct lov_stripe_md *lsm, int count,
-			 struct llog_cookie *cookies, int flags);
-int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
-		       int flags);
-int llog_obd_repl_connect(struct llog_ctxt *ctxt,
-                          struct llog_logid *logid, struct llog_gen *gen,
-                          struct obd_uuid *uuid);
 
 struct llog_operations {
 	int (*lop_destroy)(const struct lu_env *env,
@@ -357,12 +321,6 @@ struct llog_handle {
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
-int llog_get_cat_list(struct obd_device *disk_obd,
-                      char *name, int idx, int count,
-                      struct llog_catid *idarray);
-
-int llog_put_cat_list(struct obd_device *disk_obd,
-                      char *name, int idx, int count, struct llog_catid *idarray);
 
 /* llog_osd.c */
 extern struct llog_operations llog_osd_ops;
@@ -378,7 +336,6 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
-        struct llog_gen          loc_gen;
         struct obd_device       *loc_obd; /* points back to the containing obd*/
         struct obd_llog_group   *loc_olg; /* group containing that ctxt */
         struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
@@ -386,124 +343,11 @@ struct llog_ctxt {
                                              pointing import */
         struct llog_operations  *loc_logops;
         struct llog_handle      *loc_handle;
-        struct llog_commit_master *loc_lcm;
-        struct llog_canceld_ctxt *loc_llcd;
-	struct mutex		 loc_mutex; /* protect loc_llcd and loc_imp */
+	struct mutex		 loc_mutex; /* protect loc_imp */
         cfs_atomic_t             loc_refcount;
-        void                    *llog_proc_cb;
         long                     loc_flags; /* flags, see above defines */
 	struct dt_object	*loc_dir;
 };
-
-#define LCM_NAME_SIZE 64
-
-struct llog_commit_master {
-        /**
-         * Thread control flags (start, stop, etc.)
-         */
-        long                       lcm_flags;
-        /**
-         * Number of llcds onthis lcm.
-         */
-        cfs_atomic_t               lcm_count;
-        /**
-         * The refcount for lcm
-         */
-         cfs_atomic_t              lcm_refcount;
-        /**
-         * Thread control structure. Used for control commit thread.
-         */
-        struct ptlrpcd_ctl         lcm_pc;
-        /**
-         * Lock protecting list of llcds.
-         */
-	spinlock_t		   lcm_lock;
-        /**
-         * Llcds in flight for debugging purposes.
-         */
-        cfs_list_t                 lcm_llcds;
-        /**
-         * Commit thread name buffer. Only used for thread start.
-         */
-        char                       lcm_name[LCM_NAME_SIZE];
-};
-
-static inline struct llog_commit_master
-*lcm_get(struct llog_commit_master *lcm)
-{
-        cfs_atomic_inc(&lcm->lcm_refcount);
-        return lcm;
-}
-
-static inline void
-lcm_put(struct llog_commit_master *lcm)
-{
-        LASSERT_ATOMIC_POS(&lcm->lcm_refcount);
-        if (cfs_atomic_dec_and_test(&lcm->lcm_refcount))
-                OBD_FREE_PTR(lcm);
-}
-
-struct llog_canceld_ctxt {
-        /**
-         * Llog context this llcd is attached to. Used for accessing
-         * ->loc_import and others in process of canceling cookies
-         * gathered in this llcd.
-         */
-        struct llog_ctxt          *llcd_ctxt;
-        /**
-         * Cancel thread control stucture pointer. Used for accessing
-         * it to see if should stop processing and other needs.
-         */
-        struct llog_commit_master *llcd_lcm;
-        /**
-         * Maximal llcd size. Used in calculations on how much of room
-         * left in llcd to cookie comming cookies.
-         */
-        int                        llcd_size;
-        /**
-         * Link to lcm llcds list.
-         */
-        cfs_list_t                 llcd_list;
-        /**
-         * Current llcd size while gathering cookies. This should not be
-         * more than ->llcd_size. Used for determining if we need to
-         * send this llcd (if full) and allocate new one. This is also
-         * used for copying new cookie at the end of buffer.
-         */
-        int                        llcd_cookiebytes;
-        /**
-         * Pointer to the start of cookies buffer.
-         */
-        struct llog_cookie         llcd_cookies[0];
-};
-
-/* ptlrpc/recov_thread.c */
-extern struct llog_commit_master *llog_recov_thread_init(char *name);
-extern void llog_recov_thread_fini(struct llog_commit_master *lcm,
-                                   int force);
-extern int llog_recov_thread_start(struct llog_commit_master *lcm);
-extern void llog_recov_thread_stop(struct llog_commit_master *lcm,
-                                    int force);
-
-static inline void llog_gen_init(struct llog_ctxt *ctxt)
-{
-        struct obd_device *obd = ctxt->loc_exp->exp_obd;
-
-        LASSERTF(obd->u.obt.obt_magic == OBT_MAGIC,
-                 "%s: wrong obt magic %#x\n",
-                 obd->obd_name, obd->u.obt.obt_magic);
-        ctxt->loc_gen.mnt_cnt = obd->u.obt.obt_mount_count;
-        ctxt->loc_gen.conn_cnt++;
-}
-
-static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
-{
-        if (a.mnt_cnt < b.mnt_cnt)
-                return 1;
-        if (a.mnt_cnt > b.mnt_cnt)
-                return 0;
-        return(a.conn_cnt < b.conn_cnt ? 1 : 0);
-}
 
 #define LLOG_PROC_BREAK 0x0001
 #define LLOG_DEL_RECORD 0x0002
@@ -560,20 +404,6 @@ static inline void llog_group_init(struct obd_llog_group *olg, int group)
 	spin_lock_init(&olg->olg_lock);
 	mutex_init(&olg->olg_cat_processing);
 	olg->olg_seq = group;
-}
-
-static inline void llog_group_set_export(struct obd_llog_group *olg,
-                                         struct obd_export *exp)
-{
-	LASSERT(exp != NULL);
-
-	spin_lock(&olg->olg_lock);
-	if (olg->olg_exp != NULL && olg->olg_exp != exp)
-		CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
-		      exp->exp_obd->obd_name, olg->olg_seq,
-		      olg->olg_exp, exp);
-	olg->olg_exp = exp;
-	spin_unlock(&olg->olg_lock);
 }
 
 static inline int llog_group_set_ctxt(struct obd_llog_group *olg,

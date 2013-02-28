@@ -69,7 +69,6 @@ static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
                 class_import_put(ctxt->loc_imp);
                 ctxt->loc_imp = NULL;
         }
-        LASSERT(ctxt->loc_llcd == NULL);
         OBD_FREE_PTR(ctxt);
 }
 
@@ -86,9 +85,6 @@ int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt)
 	}
 	olg->olg_ctxts[ctxt->loc_idx] = NULL;
 	spin_unlock(&olg->olg_lock);
-
-	if (ctxt->loc_lcm)
-		lcm_put(ctxt->loc_lcm);
 
 	obd = ctxt->loc_obd;
 	spin_lock(&obd->obd_dev_lock);
@@ -280,24 +276,6 @@ int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cancel);
-
-/* add for obdfilter/sz and mds/unlink */
-int llog_obd_origin_add(const struct lu_env *env, struct llog_ctxt *ctxt,
-			struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-			struct llog_cookie *logcookies, int numcookies)
-{
-        struct llog_handle *cathandle;
-        int rc;
-        ENTRY;
-
-        cathandle = ctxt->loc_handle;
-        LASSERT(cathandle != NULL);
-	rc = llog_cat_add(env, cathandle, rec, logcookies, NULL);
-        if (rc != 0 && rc != 1)
-                CERROR("write one catalog record failed: %d\n", rc);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_obd_origin_add);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *index)

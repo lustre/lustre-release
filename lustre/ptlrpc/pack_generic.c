@@ -2294,16 +2294,6 @@ void lustre_swab_ldlm_reply (struct ldlm_reply *r)
 }
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 
-/* no one calls this */
-int llog_log_swabbed(struct llog_log_hdr *hdr)
-{
-        if (hdr->llh_hdr.lrh_type == __swab32(LLOG_HDR_MAGIC))
-                return 1;
-        if (hdr->llh_hdr.lrh_type == LLOG_HDR_MAGIC)
-                return 0;
-        return -1;
-}
-
 void lustre_swab_quota_body(struct quota_body *b)
 {
 	lustre_swab_lu_fid(&b->qb_fid);

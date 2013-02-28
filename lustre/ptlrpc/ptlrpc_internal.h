@@ -268,10 +268,6 @@ void sptlrpc_conf_fini(void);
 int  sptlrpc_init(void);
 void sptlrpc_fini(void);
 
-/* recov_thread.c */
-int llog_recov_init(void);
-void llog_recov_fini(void);
-
 static inline int ll_rpc_recoverable_error(int rc)
 {
         return (rc == -ENOTCONN || rc == -ENODEV);

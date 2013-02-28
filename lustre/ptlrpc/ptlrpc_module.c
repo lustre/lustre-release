@@ -104,11 +104,6 @@ __init int ptlrpc_init(void)
         if (rc)
                 GOTO(cleanup, rc);
 
-        cleanup_phase = 6;
-        rc = llog_recov_init();
-        if (rc)
-                GOTO(cleanup, rc);
-
 	cleanup_phase = 7;
 	rc = ptlrpc_nrs_init();
 	if (rc)
@@ -129,8 +124,6 @@ cleanup:
 		ptlrpc_nrs_fini();
 #endif
 	case 7:
-		llog_recov_fini();
-        case 6:
                 sptlrpc_fini();
         case 5:
                 ldlm_exit();
@@ -154,7 +147,6 @@ static void __exit ptlrpc_exit(void)
 {
 	tgt_mod_exit();
 	ptlrpc_nrs_fini();
-        llog_recov_fini();
         sptlrpc_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();

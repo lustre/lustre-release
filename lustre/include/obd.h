@@ -370,9 +370,6 @@ struct filter_obd {
 	 */
 	struct cfs_hash		*fo_iobuf_hash;
 
-	cfs_list_t		fo_llog_list;
-	spinlock_t		fo_llog_list_lock;
-
         struct brw_stats         fo_filter_stats;
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
@@ -389,7 +386,6 @@ struct filter_obd {
         unsigned int             fo_fl_oss_capa;
         cfs_list_t               fo_capa_keys;
         cfs_hlist_head_t        *fo_capa_hash;
-        struct llog_commit_master *fo_lcm;
         int                      fo_sec_level;
 };
 
@@ -436,9 +432,6 @@ struct client_obd {
         enum lustre_sec_part     cl_sp_me;
         enum lustre_sec_part     cl_sp_to;
         struct sptlrpc_flavor    cl_flvr_mgc;   /* fixed flavor of mgc->mgs */
-
-        //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
-        void                    *cl_llcd_offset;
 
         /* the grant values are protected by loi_list_lock below */
         long                     cl_dirty;         /* all _dirty_ in bytes */
@@ -959,13 +952,10 @@ struct target_recovery_data {
 };
 
 struct obd_llog_group {
-        cfs_list_t         olg_list;
         int                olg_seq;
         struct llog_ctxt  *olg_ctxts[LLOG_MAX_CTXTS];
         cfs_waitq_t        olg_waitq;
 	spinlock_t	   olg_lock;
-	struct obd_export *olg_exp;
-	int		   olg_initializing;
 	struct mutex	   olg_cat_processing;
 };
 
