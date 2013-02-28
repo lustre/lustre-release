@@ -1058,6 +1058,9 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
 		      cfs_atomic_read(&imp->imp_inval_count));
 	spin_unlock(&imp->imp_lock);
 
+	if (obd->obd_svc_stats == NULL)
+		goto out_climp;
+
 	header = &obd->obd_svc_stats->ls_cnt_header[PTLRPC_REQWAIT_CNTR];
         lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
         if (ret.lc_count != 0) {
@@ -1137,6 +1140,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                 }
         }
 
+out_climp:
         LPROCFS_CLIMP_EXIT(obd);
         return i;
 }
