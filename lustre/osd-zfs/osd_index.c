@@ -998,14 +998,10 @@ static int osd_dir_it_load(const struct lu_env *env,
 	int		   rc;
 	ENTRY;
 
-	if (it->ozi_pos != 0) {
-		/* the cursor wasn't at the beginning
-		 * so we should reset ZAP cursor as well */
-		udmu_zap_cursor_fini(it->ozi_zc);
-		if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-					 obj->oo_db->db_object, hash))
-			RETURN(-ENOMEM);
-	}
+	udmu_zap_cursor_fini(it->ozi_zc);
+	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
+				 obj->oo_db->db_object, hash))
+		RETURN(-ENOMEM);
 
 	if (hash <= 2) {
 		it->ozi_pos = hash;
