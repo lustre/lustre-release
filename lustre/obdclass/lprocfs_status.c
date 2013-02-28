@@ -1322,9 +1322,8 @@ EXPORT_SYMBOL(lprocfs_obd_cleanup);
 
 static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 {
-        CDEBUG(D_CONFIG, "stat %p - data %p/%p/%p\n", client_stat,
-               client_stat->nid_proc, client_stat->nid_stats,
-               client_stat->nid_brw_stats);
+	CDEBUG(D_CONFIG, "stat %p - data %p/%p\n", client_stat,
+	       client_stat->nid_proc, client_stat->nid_stats);
 
         LASSERTF(cfs_atomic_read(&client_stat->nid_exp_ref_count) == 0,
                  "nid %s:count %d\n", libcfs_nid2str(client_stat->nid),
@@ -1335,9 +1334,6 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 
         if (client_stat->nid_stats)
                 lprocfs_free_stats(&client_stat->nid_stats);
-
-        if (client_stat->nid_brw_stats)
-                OBD_FREE_PTR(client_stat->nid_brw_stats);
 
         if (client_stat->nid_ldlm_stats)
                 lprocfs_free_stats(&client_stat->nid_ldlm_stats);
@@ -2004,7 +2000,6 @@ EXPORT_SYMBOL(lprocfs_nid_stats_clear_read);
 static int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 {
         struct nid_stat *stat = obj;
-        int i;
         ENTRY;
 
         CDEBUG(D_INFO,"refcnt %d\n", cfs_atomic_read(&stat->nid_exp_ref_count));
@@ -2019,10 +2014,6 @@ static int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
         if (stat->nid_stats)
                 lprocfs_clear_stats(stat->nid_stats);
 
-        if (stat->nid_brw_stats) {
-                for (i = 0; i < BRW_LAST; i++)
-                        lprocfs_oh_clear(&stat->nid_brw_stats->hist[i]);
-        }
         RETURN(0);
 }
 

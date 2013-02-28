@@ -51,7 +51,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
-	int			 num_stats, i;
+	int			 num_stats;
 	int			 rc, newnid = 0;
 
 	ENTRY;
@@ -74,18 +74,6 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 
 	stats = exp->exp_nid_stats;
 	LASSERT(stats != NULL);
-
-	OBD_ALLOC(stats->nid_brw_stats, sizeof(struct brw_stats));
-	if (stats->nid_brw_stats == NULL)
-		GOTO(clean, rc = -ENOMEM);
-
-	for (i = 0; i < BRW_LAST; i++)
-		spin_lock_init(&stats->nid_brw_stats->hist[i].oh_lock);
-
-	rc = lprocfs_seq_create(stats->nid_proc, "brw_stats", 0644,
-				&ofd_per_nid_stats_fops, stats);
-	if (rc)
-		CWARN("Error adding the brw_stats file\n");
 
 	num_stats = (sizeof(*obd->obd_type->typ_dt_ops) / sizeof(void *)) +
 		     LPROC_OFD_LAST - 1;

@@ -385,15 +385,12 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 /* lproc_ofd.c */
 #ifdef LPROCFS
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
-int lproc_ofd_attach_seqstat(struct obd_device *dev);
-extern struct file_operations ofd_per_nid_stats_fops;
 void ofd_stats_counter_init(struct lprocfs_stats *stats);
 #else
 static void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars)
 {
 	memset(lvars, 0, sizeof(*lvars));
 }
-static inline int lproc_ofd_attach_seqstat(struct obd_device *dev) {}
 static inline void ofd_stats_counter_init(struct lprocfs_stats *stats) {}
 #endif
 

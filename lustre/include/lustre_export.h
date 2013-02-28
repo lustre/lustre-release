@@ -110,7 +110,7 @@ struct mgs_export_data {
  * per-NID statistics structure.
  * It tracks access patterns to this export on a per-client-NID basis
  */
-typedef struct nid_stat {
+struct nid_stat {
         lnet_nid_t               nid;
         cfs_hlist_node_t         nid_hash;
         cfs_list_t               nid_list;
@@ -118,10 +118,9 @@ typedef struct nid_stat {
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
         struct lprocfs_stats    *nid_ldlm_stats;
-        struct brw_stats        *nid_brw_stats;
         cfs_atomic_t             nid_exp_ref_count; /* for obd_nid_stats_hash
                                                            exp_nid_stats */
-}nid_stat_t;
+};
 
 #define nidstat_getref(nidstat)                                                \
 do {                                                                           \
