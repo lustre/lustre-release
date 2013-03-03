@@ -99,11 +99,8 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
 static int mgc_cleanup(struct obd_device *obd)
 {
-        struct client_obd *cli = &obd->u.cli;
         int rc;
         ENTRY;
-
-        LASSERT(cli->cl_mgc_vfsmnt == NULL);
 
         ptlrpcd_decref();
 

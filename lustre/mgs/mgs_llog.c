@@ -947,7 +947,6 @@ static int mgs_replace_handler(const struct lu_env *env,
 			       struct llog_rec_hdr *rec,
 			       void *data)
 {
-	struct llog_rec_hdr local_rec = *rec;
 	struct mgs_replace_uuid_lookup *mrul;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
 	int cfg_len = REC_DATA_LEN(rec);
@@ -994,9 +993,7 @@ static int mgs_replace_handler(const struct lu_env *env,
 		RETURN(0);
 copy_out:
 	/* Record is placed in temporary llog as is */
-	local_rec.lrh_len -= sizeof(*rec) + sizeof(struct llog_rec_tail);
-	rc = llog_write(env, mrul->temp_llh, &local_rec, NULL, 0,
-                        (void *)lcfg, -1);
+	rc = llog_write(env, mrul->temp_llh, rec, NULL, 0, NULL, -1);
 
 	CDEBUG(D_MGS, "Copied idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
 	       rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command,
@@ -1010,82 +1007,19 @@ skip_out:
 	RETURN(rc);
 }
 
-static int mgs_backup_llog(const struct lu_env *env,
-			   struct obd_device *mgs,
-			   char *fsname, char *backup)
+static int mgs_log_is_empty(const struct lu_env *env,
+			    struct mgs_device *mgs, char *name)
 {
-	struct obd_uuid *uuid;
-	struct llog_handle *orig_llh, *bak_llh;
-	struct llog_ctxt *lctxt;
-	int rc, rc2;
-	ENTRY;
+	struct llog_ctxt	*ctxt;
+	int			 rc;
 
-	lctxt = llog_get_context(mgs, LLOG_CONFIG_ORIG_CTXT);
-	if (!lctxt) {
-		CERROR("%s: missing llog context\n", mgs->obd_name);
-		GOTO(out, rc = -EINVAL);
-	}
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	LASSERT(ctxt != NULL);
 
-	/* Make sure there's no old backup log */
-	rc = llog_erase(env, lctxt, NULL, backup);
-	if (rc < 0 && rc != -ENOENT)
-		GOTO(out_put, rc);
-
-	/* open backup log */
-	rc = llog_open_create(env, lctxt, &bak_llh, NULL, backup);
-	if (rc) {
-		CERROR("%s: backup logfile open %s: rc = %d\n",
-		       mgs->obd_name, backup, rc);
-		GOTO(out_put, rc);
-	}
-
-	/* set the log header uuid */
-	OBD_ALLOC_PTR(uuid);
-	if (uuid == NULL)
-                GOTO(out_put, rc = -ENOMEM);
-	obd_str2uuid(uuid, backup);
-	rc = llog_init_handle(env, bak_llh, LLOG_F_IS_PLAIN, uuid);
-	OBD_FREE_PTR(uuid);
-	if (rc)
-		GOTO(out_close1, rc);
-
-	/* open original log */
-	rc = llog_open(env, lctxt, &orig_llh, NULL, fsname,
-		       LLOG_OPEN_EXISTS);
-	if (rc < 0) {
-		if (rc == -ENOENT)
-			rc = 0;
-		GOTO(out_close1, rc);
-	}
-
-	rc = llog_init_handle(env, orig_llh, LLOG_F_IS_PLAIN, NULL);
-	if (rc)
-		GOTO(out_close2, rc);
-
-	/* Copy remote log */
-	rc = llog_process(env, orig_llh, llog_copy_handler,
-			  (void *)bak_llh, NULL);
-
-out_close2:
-	rc2 = llog_close(env, orig_llh);
-	if (!rc)
-		rc = rc2;
-out_close1:
-	rc2 = llog_close(env, bak_llh);
-        if (!rc)
-                rc = rc2;
-out_put:
-	if (lctxt)
-		llog_ctxt_put(lctxt);
-out:
-	if (rc)
-		CERROR("%s: Failed to backup log %s: rc = %d\n",
-		       mgs->obd_name, fsname, rc);
-	RETURN(rc);
+	rc = llog_is_empty(env, ctxt, name);
+	llog_ctxt_put(ctxt);
+	return rc;
 }
-
-static int mgs_log_is_empty(const struct lu_env *env, struct mgs_device *mgs,
-			    char *name);
 
 static int mgs_replace_nids_log(const struct lu_env *env,
 				struct obd_device *mgs, struct fs_db *fsdb,
@@ -1116,18 +1050,18 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 
 	sprintf(backup, "%s.bak", logname);
 
-	rc = mgs_backup_llog(env, mgs, logname, backup);
-	if (rc < 0) {
+	rc = llog_backup(env, mgs, ctxt, ctxt, logname, backup);
+	if (rc == 0) {
+		/* Now erase original log file. Connections are not allowed.
+		   Backup is already saved */
+		rc = llog_erase(env, ctxt, NULL, logname);
+		if (rc < 0)
+			GOTO(out_free, rc);
+	} else if (rc != -ENOENT) {
 		CERROR("%s: can't make backup for %s: rc = %d\n",
 		       mgs->obd_name, logname, rc);
 		GOTO(out_free,rc);
 	}
-
-	/* Now erase original log file. Connections are not allowed.
-	   Backup is already saved */
-	rc = llog_erase(env, ctxt, NULL, logname);
-	if (rc < 0 && rc != -ENOENT)
-		GOTO(out_free, rc);
 
 	/* open local log */
 	rc = llog_open_create(env, ctxt, &orig_llh, NULL, logname);
@@ -1177,7 +1111,8 @@ out_restore:
 	if (rc) {
 		CERROR("%s: llog should be restored: rc = %d\n",
 		       mgs->obd_name, rc);
-		rc2 = mgs_backup_llog(env, mgs, backup, logname);
+		rc2 = llog_backup(env, mgs, ctxt, ctxt, backup,
+				  logname);
 		if (rc2 < 0)
 			CERROR("%s: can't restore backup %s: rc = %d\n",
 			       mgs->obd_name, logname, rc2);
@@ -1466,35 +1401,6 @@ static int record_end_log(const struct lu_env *env, struct llog_handle **llh)
 	*llh = NULL;
 
 	return rc;
-}
-
-static int mgs_log_is_empty(const struct lu_env *env,
-			    struct mgs_device *mgs, char *name)
-{
-        struct llog_handle *llh;
-        struct llog_ctxt *ctxt;
-        int rc = 0;
-
-	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
-        LASSERT(ctxt != NULL);
-	rc = llog_open(env, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
-	if (rc < 0) {
-		if (rc == -ENOENT)
-			rc = 0;
-		GOTO(out_ctxt, rc);
-	}
-
-	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
-	if (rc)
-		GOTO(out_close, rc);
-	rc = llog_get_size(llh);
-
-out_close:
-	llog_close(env, llh);
-out_ctxt:
-	llog_ctxt_put(ctxt);
-	/* header is record 1 */
-	return (rc <= 1);
 }
 
 /******************** config "macros" *********************/
@@ -4052,5 +3958,3 @@ out_label:
 	OBD_FREE(label, label_sz);
         return rc;
 }
-
-
