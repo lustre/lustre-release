@@ -1638,6 +1638,19 @@ test_27y() {
 			do_facet $SINGLEMDS lctl --device %$OSC activate
 		fi
 	done
+
+	# all osp devices get activated, hence -1 stripe count restored
+	local stripecnt=0
+
+	# sleep 2*lod_qos_maxage seconds waiting for lod qos to notice osp
+	# devices get activated.
+	sleep_maxage
+	$SETSTRIPE -c -1 $DIR/$tfile
+	stripecnt=$($GETSTRIPE -c $DIR/$tfile)
+	rm -f $DIR/$tfile
+	[ $stripecnt -ne $OSTCOUNT ] &&
+		error "Of $OSTCOUNT OSTs, only $stripecnt is available"
+	return 0
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 

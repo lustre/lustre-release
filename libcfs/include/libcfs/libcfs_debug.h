@@ -362,10 +362,10 @@ do {                                                                    \
 
 #endif /* !CDEBUG_ENTRY_EXIT */
 
-#define RETURN_EXIT                                                     \
-do {                                                                    \
-        EXIT_NESTING;                                                   \
-        return;                                                         \
+#define RETURN_EXIT							\
+do {									\
+	EXIT;								\
+	return;								\
 } while (0)
 
 extern int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
