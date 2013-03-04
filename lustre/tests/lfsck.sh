@@ -265,8 +265,10 @@ fi
 generate_db
 
 # remount filesystem
+ORIG_REFORMAT=$REFORMAT
 REFORMAT=""
 check_and_setup_lustre
+REFORMAT=$ORIG_REFORMAT
 
 # run lfsck
 rc=0

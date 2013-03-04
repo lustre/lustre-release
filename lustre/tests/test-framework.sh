@@ -3353,17 +3353,17 @@ is_mounted () {
 }
 
 is_empty_dir() {
-    [ $(find $1 -maxdepth 1 -print | wc -l) = 1 ] && return 0
-    return 1
+	[ $(find $1 -maxdepth 1 -print | wc -l) = 1 ] && return 0
+	return 1
 }
 
 # empty lustre filesystem may have empty directories lost+found and .lustre
 is_empty_fs() {
-    [ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
-       -print | wc -l) = 1 ] || return 1
-    [ ! -d $1/lost+found ] || is_empty_dir $1/lost+found && return 0
-    [ ! -d $1/.lustre ] || is_empty_dir $1/.lustre && return 0
-    return 1
+	[ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
+		-print | wc -l) = 1 ] || return 1
+	[ ! -d $1/lost+found ] || is_empty_dir $1/lost+found || return 1
+	[ ! -d $1/.lustre ] || is_empty_dir $1/.lustre || return 1
+	return 0
 }
 
 check_and_setup_lustre() {
