@@ -310,7 +310,11 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
 
-        opc = mti->mti_flags & LDD_F_OPC_MASK;
+	if (OCD_HAS_FLAG(&req->rq_export->exp_connect_data, IMP_RECOV))
+		opc = mti->mti_flags & LDD_F_OPC_MASK;
+	else
+		opc = LDD_F_OPC_REG;
+
         if (opc == LDD_F_OPC_READY) {
                 CDEBUG(D_MGS, "fs: %s index: %d is ready to reconnect.\n",
                        mti->mti_fsname, mti->mti_stripe_index);
