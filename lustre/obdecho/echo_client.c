@@ -101,16 +101,6 @@ struct echo_lock {
         cfs_atomic_t           el_refcount;
 };
 
-struct echo_io {
-        struct cl_io_slice     ei_cl;
-};
-
-#if 0
-struct echo_req {
-        struct cl_req_slice er_cl;
-};
-#endif
-
 static int echo_client_setup(const struct lu_env *env,
                              struct obd_device *obddev,
                              struct lustre_cfg *lcfg);
@@ -186,8 +176,6 @@ static int cl_echo_cancel    (struct echo_device *d, __u64 cookie);
 static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 			      struct page **pages, int npages, int async);
 
-static struct echo_thread_info *echo_env_info(const struct lu_env *env);
-
 struct echo_thread_info {
 	struct echo_object_conf eti_conf;
 	struct lustre_md        eti_md;
@@ -244,13 +232,6 @@ static struct lu_kmem_descr echo_caches[] = {
                 .ckd_name  = "echo_session_kmem",
                 .ckd_size  = sizeof (struct echo_session_info)
         },
-#if 0
-        {
-                .ckd_cache = &echo_req_kmem,
-                .ckd_name  = "echo_req_kmem",
-                .ckd_size  = sizeof (struct echo_req)
-        },
-#endif
         {
                 .ckd_cache = NULL
         }
@@ -1522,8 +1503,9 @@ static int echo_big_lmm_get(const struct lu_env *env, struct md_object *o,
 	RETURN(0);
 }
 
-int echo_attr_get_complex(const struct lu_env *env, struct md_object *next,
-			  struct md_attr *ma)
+static int echo_attr_get_complex(const struct lu_env *env,
+				 struct md_object *next,
+				 struct md_attr *ma)
 {
 	struct echo_thread_info	*info = echo_env_info(env);
 	struct lu_buf		*buf = &info->eti_buf;
@@ -3168,37 +3150,11 @@ static int echo_client_connect(const struct lu_env *env,
 
 static int echo_client_disconnect(struct obd_export *exp)
 {
-#if 0
-        struct obd_device      *obd;
-        struct echo_client_obd *ec;
-        struct ec_lock         *ecl;
-#endif
         int                     rc;
         ENTRY;
 
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
-
-#if 0
-        obd = exp->exp_obd;
-        ec = &obd->u.echo_client;
-
-        /* no more contention on export's lock list */
-        while (!cfs_list_empty (&exp->exp_ec_data.eced_locks)) {
-                ecl = cfs_list_entry (exp->exp_ec_data.eced_locks.next,
-                                      struct ec_lock, ecl_exp_chain);
-                cfs_list_del (&ecl->ecl_exp_chain);
-
-                rc = obd_cancel(ec->ec_exp, ecl->ecl_object->eco_lsm,
-                                 ecl->ecl_mode, &ecl->ecl_lock_handle);
-
-                CDEBUG (D_INFO, "Cancel lock on object "LPX64" on disconnect "
-                        "(%d)\n", ecl->ecl_object->eco_id, rc);
-
-                echo_put_object (ecl->ecl_object);
-                OBD_FREE (ecl, sizeof (*ecl));
-        }
-#endif
 
         rc = class_disconnect(exp);
         GOTO(out, rc);
@@ -3208,12 +3164,6 @@ static int echo_client_disconnect(struct obd_export *exp)
 
 static struct obd_ops echo_client_obd_ops = {
         .o_owner       = THIS_MODULE,
-
-#if 0
-        .o_setup       = echo_client_setup,
-        .o_cleanup     = echo_client_cleanup,
-#endif
-
         .o_iocontrol   = echo_client_iocontrol,
         .o_connect     = echo_client_connect,
         .o_disconnect  = echo_client_disconnect
