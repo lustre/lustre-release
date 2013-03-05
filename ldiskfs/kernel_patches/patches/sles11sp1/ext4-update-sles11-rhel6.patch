@@ -1016,6 +1016,15 @@ diff -urpN linux-stage.orig/fs/ext4/namei.c linux-stage/fs/ext4/namei.c
  			err = -ENOSPC;
  			goto cleanup;
  		}
+@@ -1904,7 +1921,7 @@
+ 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
+ 	inode->i_nlink = 2;
+ 	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
+-	ext4_handle_dirty_metadata(handle, dir, dir_block);
++	ext4_handle_dirty_metadata(handle, inode, dir_block);
+ 	brelse(dir_block);
+ 	ext4_mark_inode_dirty(handle, inode);
+ 	err = ext4_add_entry(handle, dentry, inode);
 @@ -1943,11 +1960,11 @@ static int empty_dir(struct inode *inode
  	if (inode->i_size < EXT4_DIR_REC_LEN(1) + EXT4_DIR_REC_LEN(2) ||
  	    !(bh = ext4_bread(NULL, inode, 0, 0, &err))) {

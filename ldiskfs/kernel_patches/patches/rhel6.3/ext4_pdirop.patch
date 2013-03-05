@@ -2167,9 +2167,9 @@
  
 -	err = ext4_add_entry(handle, dentry, inode);
 +	err = ext4_add_entry(handle, dentry, inode, NULL);
- 	if (err) {
- 		clear_nlink(inode);
- 		unlock_new_inode(inode);
+ 	if (err)
+ 		goto out_clear_inode;
+	ext4_inc_count(handle, dir);
 @@ -2381,7 +2789,7 @@ static int ext4_rmdir(struct inode *dir,
  		return PTR_ERR(handle);
  
