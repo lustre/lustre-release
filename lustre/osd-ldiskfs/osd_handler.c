@@ -1677,7 +1677,7 @@ static int osd_attr_set(const struct lu_env *env,
 	spin_unlock(&obj->oo_guard);
 
         if (!rc)
-                inode->i_sb->s_op->dirty_inode(inode);
+		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
         return rc;
 }
 
@@ -1929,7 +1929,7 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
                  * enabled on ldiskfs (lquota takes care of it).
                  */
                 LASSERTF(result == 0, "%d", result);
-                inode->i_sb->s_op->dirty_inode(inode);
+		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
         }
 
         attr->la_valid = valid;
@@ -2189,7 +2189,7 @@ static int osd_object_destroy(const struct lu_env *env,
 		spin_lock(&obj->oo_guard);
 		clear_nlink(inode);
 		spin_unlock(&obj->oo_guard);
-		inode->i_sb->s_op->dirty_inode(inode);
+		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 	}
 
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
@@ -2490,7 +2490,7 @@ static int osd_object_ref_add(const struct lu_env *env,
 	}
 	LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
 	spin_unlock(&obj->oo_guard);
-	inode->i_sb->s_op->dirty_inode(inode);
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 	LINVRNT(osd_invariant(obj));
 
 	return 0;
@@ -2539,7 +2539,7 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 	if (S_ISDIR(inode->i_mode) && inode->i_nlink == 0)
 		set_nlink(inode, 1);
 	spin_unlock(&obj->oo_guard);
-	inode->i_sb->s_op->dirty_inode(inode);
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 	LINVRNT(osd_invariant(obj));
 
 	return 0;
@@ -2625,7 +2625,7 @@ static void osd_object_version_set(const struct lu_env *env,
         LDISKFS_I(inode)->i_fs_version = *new_version;
         /** Version is set after all inode operations are finished,
          *  so we should mark it dirty here */
-        inode->i_sb->s_op->dirty_inode(inode);
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 }
 
 /*

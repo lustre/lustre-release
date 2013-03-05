@@ -849,7 +849,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 if (isize > i_size_read(inode)) {
                         i_size_write(inode, isize);
                         LDISKFS_I(inode)->i_disksize = isize;
-                        inode->i_sb->s_op->dirty_inode(inode);
+			ll_dirty_inode(inode, I_DIRTY_DATASYNC);
                 }
 
                 rc = osd_do_bio(osd, inode, iobuf);
@@ -1081,7 +1081,7 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
         memcpy((char *)&LDISKFS_I(inode)->i_data, (char *)buffer, buflen);
         LDISKFS_I(inode)->i_disksize = buflen;
         i_size_write(inode, buflen);
-        inode->i_sb->s_op->dirty_inode(inode);
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 
         return 0;
 }
@@ -1158,8 +1158,8 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 			dirty_inode = 1;
 		}
 		spin_unlock(&inode->i_lock);
-                if (dirty_inode)
-                        inode->i_sb->s_op->dirty_inode(inode);
+		if (dirty_inode)
+			ll_dirty_inode(inode, I_DIRTY_DATASYNC);
         }
 
         if (err == 0)
