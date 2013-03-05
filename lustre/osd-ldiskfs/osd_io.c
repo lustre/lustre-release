@@ -174,7 +174,7 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
         }
 }
 
-#ifndef __REQ_WRITE /* pre-2.6.35 */
+#ifndef REQ_WRITE /* pre-2.6.35 */
 #define __REQ_WRITE BIO_RW
 #endif
 
