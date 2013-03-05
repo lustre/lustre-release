@@ -547,4 +547,37 @@ $ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
 	</section>
   </section>
 
+  <section xml:id="suppressingpings">
+  <title><indexterm><primary>suppressing pings</primary></indexterm>Suppressing Pings</title>
+    <para>On clusters with large numbers of clients and OSTs, OBD_PING messages may impose significant performance overheads.  As an intermediate solution before a more self-contained one is built, Lustre 2.4 introduces an option to suppress pings, allowing ping overheads to be considerably reduced.  Before turning on this option, administrators should consider the following requirements and understand the trade-offs involved:</para>
+    <itemizedlist>
+      <listitem>
+        <para>When suppressing pings, a target can not detect client deaths, since clients do not send pings that are only to keep their connections alive.  Therefore, a mechanism external to Lustre shall be set up to notify Lustre targets of client deaths in a timely manner, so that stale connections do not exist for too long and lock callbacks to dead clients do not always have to wait for timeouts.</para>
+      </listitem>
+      <listitem>
+        <para>Without pings, a client has to rely on Imperative Recovery to notify it of target failures, in order to join recoveries in time.  This dictates that the client shall eargerly keep its MGS connection alive.  Thus, a highly available standalone MGS is recommended and, on the other hand, MGS pings are always sent regardless of how the option is set.</para>
+      </listitem>
+      <listitem>
+        <para>If a client has uncommitted requests to a target and it is not sending any new requests on the connection, it will still ping that target even when pings should be suppressed.  This is because the client needs to query the target's last committed transaction numbers in order to free up local uncommitted requests (and possibly other resources associated).  However, these pings shall stop as soon as all the uncommitted requests have been freed or new requests need to be sent, rendering the pings unnecessary.</para>
+      </listitem>
+    </itemizedlist>
+    <section remap="h3">
+    <title><indexterm><primary>pings</primary><secondary>suppress_pings</secondary></indexterm>"suppress_pings" Kernel Module Parameter</title>
+      <para>The new option that controls whether pings are suppressed is implemented as the ptlrpc kernel module parameter "suppress_pings".  Setting it to "1" on a server turns on ping suppressing for all targets on that server, while leaving it with the default value "0" gives previous pinging behavior.  The parameter is ignored on clients and the MGS.  While the parameter is recommended to be set persistently via the modprobe.conf(5) mechanism, it also accept online changes through sysfs.  Note that an online change only affects connections established later; existing connections' pinging behaviors stay the same.</para>
+    </section>
+    <section remap="h3">
+    <title><indexterm><primary>pings</primary><secondary>evict_client</secondary></indexterm>Client Death Notification</title>
+      <para>The required external client death notification shall write UUIDs of dead clients into targets' "evict_client" procfs entries like</para>
+      <screen>
+/proc/fs/lustre/obdfilter/testfs-OST0000/evict_client
+/proc/fs/lustre/obdfilter/testfs-OST0001/evict_client
+/proc/fs/lustre/mdt/testfs-MDT0000/evict_client
+      </screen>
+      <para>Clients' UUIDs can be obtained from their "uuid" procfs entries like</para>
+      <screen>
+/proc/fs/lustre/llite/testfs-ffff8800612bf800/uuid
+      </screen>
+    </section>
+  </section>
+
 </chapter>
