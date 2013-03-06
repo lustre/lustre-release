@@ -49,7 +49,6 @@ if test x$enable_modules = xyes ; then
 	LB_LINUX_CONFIG([KALLSYMS],[],[
 		AC_MSG_ERROR([ldiskfs requires that CONFIG_KALLSYMS is enabled in your kernel.])
 	])
-	LB_LINUX_MODPOST
 fi
 
 LB_LDISKFS_SERIES([test x$enable_dist = xno])
