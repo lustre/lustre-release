@@ -1855,64 +1855,153 @@ int ll_data_version(struct inode *inode, __u64 *data_version,
 	RETURN(rc);
 }
 
-static int ll_swap_layout(struct file *file, struct file *file2,
-			struct lustre_swap_layouts *lsl)
+struct ll_swap_stack {
+	struct iattr		 ia1, ia2;
+	__u64			 dv1, dv2;
+	struct inode		*inode1, *inode2;
+	bool			 check_dv1, check_dv2;
+};
+
+static int ll_swap_layouts(struct file *file1, struct file *file2,
+			   struct lustre_swap_layouts *lsl)
 {
-	struct mdc_swap_layouts	 msl = { .msl_flags = lsl->sl_flags };
-	struct md_op_data 	*op_data;
-	struct inode 		*inode = file->f_dentry->d_inode;
-	struct inode 		*inode2 = file2->f_dentry->d_inode;
-	__u32 gid;
-	int rc;
+	struct mdc_swap_layouts	 msl;
+	struct md_op_data	*op_data;
+	__u32			 gid;
+	__u64			 dv;
+	struct ll_swap_stack	*llss = NULL;
+	int			 rc, rc1;
 
-	if (!S_ISREG(inode2->i_mode))
-		RETURN(-EINVAL);
+	OBD_ALLOC_PTR(llss);
+	if (llss == NULL)
+		RETURN(-ENOMEM);
 
-	if (ll_permission(inode, MAY_WRITE, NULL) ||
-	    ll_permission(inode2, MAY_WRITE, NULL))
-		RETURN(-EPERM);
+	llss->inode1 = file1->f_dentry->d_inode;
+	llss->inode2 = file2->f_dentry->d_inode;
 
-	if (inode2->i_sb != inode->i_sb)
-		RETURN(-EXDEV);
+	if (!S_ISREG(llss->inode2->i_mode))
+		GOTO(free, rc = -EINVAL);
 
-	rc = lu_fid_cmp(ll_inode2fid(inode), ll_inode2fid(inode2));
+	if (ll_permission(llss->inode1, MAY_WRITE, NULL) ||
+	    ll_permission(llss->inode2, MAY_WRITE, NULL))
+		GOTO(free, rc = -EPERM);
+
+	if (llss->inode2->i_sb != llss->inode1->i_sb)
+		GOTO(free, rc = -EXDEV);
+
+	/* we use 2 bool because it is easier to swap than 2 bits */
+	if (lsl->sl_flags & SWAP_LAYOUTS_CHECK_DV1)
+		llss->check_dv1 = true;
+
+	if (lsl->sl_flags & SWAP_LAYOUTS_CHECK_DV2)
+		llss->check_dv2 = true;
+
+	/* we cannot use lsl->sl_dvX directly because we may swap them */
+	llss->dv1 = lsl->sl_dv1;
+	llss->dv2 = lsl->sl_dv2;
+
+	rc = lu_fid_cmp(ll_inode2fid(llss->inode1), ll_inode2fid(llss->inode2));
 	if (rc == 0) /* same file, done! */
-		RETURN(0);
+		GOTO(free, rc = 0);
 
 	if (rc < 0) { /* sequentialize it */
-		swap(inode, inode2);
-		swap(file, file2);
+		swap(llss->inode1, llss->inode2);
+		swap(file1, file2);
+		swap(llss->dv1, llss->dv2);
+		swap(llss->check_dv1, llss->check_dv2);
 	}
 
 	gid = lsl->sl_gid;
 	if (gid != 0) { /* application asks to flush dirty cache */
-		rc = ll_get_grouplock(inode, file, gid);
+		rc = ll_get_grouplock(llss->inode1, file1, gid);
 		if (rc < 0)
-			RETURN(rc);
+			GOTO(free, rc);
 
-		rc = ll_get_grouplock(inode2, file2, gid);
+		rc = ll_get_grouplock(llss->inode2, file2, gid);
 		if (rc < 0) {
-			ll_put_grouplock(inode, file, gid);
-			RETURN(rc);
+			ll_put_grouplock(llss->inode1, file1, gid);
+			GOTO(free, rc);
 		}
+	}
+
+	/* to be able to restore mtime and atime after swap
+	 * we need to first save them */
+	if (lsl->sl_flags &
+	    (SWAP_LAYOUTS_KEEP_MTIME | SWAP_LAYOUTS_KEEP_ATIME)) {
+		llss->ia1.ia_mtime = llss->inode1->i_mtime;
+		llss->ia1.ia_atime = llss->inode1->i_atime;
+		llss->ia1.ia_valid = ATTR_MTIME | ATTR_ATIME;
+		llss->ia2.ia_mtime = llss->inode2->i_mtime;
+		llss->ia2.ia_atime = llss->inode2->i_atime;
+		llss->ia2.ia_valid = ATTR_MTIME | ATTR_ATIME;
+	}
+
+	/* ultimate check, before swaping the layouts we check if
+	 * dataversion has changed (if requested) */
+	if (llss->check_dv1) {
+		rc = ll_data_version(llss->inode1, &dv, 0);
+		if (rc)
+			GOTO(putgl, rc);
+		if (dv != llss->dv1)
+			GOTO(putgl, rc = -EAGAIN);
+	}
+
+	if (llss->check_dv2) {
+		rc = ll_data_version(llss->inode2, &dv, 0);
+		if (rc)
+			GOTO(putgl, rc);
+		if (dv != llss->dv2)
+			GOTO(putgl, rc = -EAGAIN);
 	}
 
 	/* struct md_op_data is used to send the swap args to the mdt
 	 * only flags is missing, so we use struct mdc_swap_layouts
 	 * through the md_op_data->op_data */
+	/* flags from user space have to be converted before they are send to
+	 * server, no flag is sent today, they are only used on the client */
+	msl.msl_flags = 0;
 	rc = -ENOMEM;
-	op_data = ll_prep_md_op_data(NULL, inode, inode2, NULL, 0, 0,
-					LUSTRE_OPC_ANY, &msl);
+	op_data = ll_prep_md_op_data(NULL, llss->inode1, llss->inode2, NULL, 0,
+				     0, LUSTRE_OPC_ANY, &msl);
 	if (op_data != NULL) {
-		rc = obd_iocontrol(LL_IOC_LOV_SWAP_LAYOUTS, ll_i2mdexp(inode),
-					sizeof(*op_data), op_data, NULL);
+		rc = obd_iocontrol(LL_IOC_LOV_SWAP_LAYOUTS,
+				   ll_i2mdexp(llss->inode1),
+				   sizeof(*op_data), op_data, NULL);
 		ll_finish_md_op_data(op_data);
 	}
 
+putgl:
 	if (gid != 0) {
-		ll_put_grouplock(inode2, file2, gid);
-		ll_put_grouplock(inode, file, gid);
+		ll_put_grouplock(llss->inode2, file2, gid);
+		ll_put_grouplock(llss->inode1, file1, gid);
 	}
+
+	/* rc can be set from obd_iocontrol() or from a GOTO(putgl, ...) */
+	if (rc != 0)
+		GOTO(free, rc);
+
+	/* clear useless flags */
+	if (!(lsl->sl_flags & SWAP_LAYOUTS_KEEP_MTIME)) {
+		llss->ia1.ia_valid &= ~ATTR_MTIME;
+		llss->ia2.ia_valid &= ~ATTR_MTIME;
+	}
+
+	if (!(lsl->sl_flags & SWAP_LAYOUTS_KEEP_ATIME)) {
+		llss->ia1.ia_valid &= ~ATTR_ATIME;
+		llss->ia2.ia_valid &= ~ATTR_ATIME;
+	}
+
+	/* update time if requested */
+	rc = rc1 = 0;
+	if (llss->ia2.ia_valid != 0)
+		rc = ll_setattr(file1->f_dentry, &llss->ia2);
+
+	if (llss->ia1.ia_valid != 0)
+		rc1 = ll_setattr(file2->f_dentry, &llss->ia1);
+
+free:
+	if (llss != NULL)
+		OBD_FREE_PTR(llss);
 
 	RETURN(rc);
 }
@@ -1979,7 +2068,7 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		rc = -EPERM;
 		if ((file2->f_flags & O_ACCMODE) != 0) /* O_WRONLY or O_RDWR */
-			rc = ll_swap_layout(file, file2, &lsl);
+			rc = ll_swap_layouts(file, file2, &lsl);
 		fput(file2);
 		RETURN(rc);
 	}

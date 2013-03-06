@@ -4144,15 +4144,17 @@ int llapi_create_volatile_idx(char *directory, int idx, int mode)
  * first fd received the ioctl, second fd is passed as arg
  * this is assymetric but avoid use of root path for ioctl
  */
-int llapi_fswap_layouts(int fd1, int fd2)
+int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags)
 {
 	struct lustre_swap_layouts lsl;
 	int rc;
 
 	srandom(time(NULL));
 	lsl.sl_fd = fd2;
-	lsl.sl_flags = 0;
+	lsl.sl_flags = flags;
 	lsl.sl_gid = random();
+	lsl.sl_dv1 = dv1;
+	lsl.sl_dv2 = dv2;
 	rc = ioctl(fd1, LL_IOC_LOV_SWAP_LAYOUTS, &lsl);
 	if (rc)
 		rc = -errno;
@@ -4163,7 +4165,8 @@ int llapi_fswap_layouts(int fd1, int fd2)
  * Swap the layouts between 2 files
  * the 2 files are open in write
  */
-int llapi_swap_layouts(const char *path1, const char *path2)
+int llapi_swap_layouts(const char *path1, const char *path2,
+		       __u64 dv1, __u64 dv2, __u64 flags)
 {
 	int	fd1, fd2, rc;
 
@@ -4184,7 +4187,7 @@ int llapi_swap_layouts(const char *path1, const char *path2)
 		return -errno;
 	}
 
-	rc = llapi_fswap_layouts(fd1, fd2);
+	rc = llapi_fswap_layouts(fd1, fd2, dv1, dv2, flags);
 	if (rc < 0)
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			"error: cannot swap layouts between %s and %s\n",

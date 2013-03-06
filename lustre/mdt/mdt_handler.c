@@ -1063,7 +1063,8 @@ int mdt_swap_layouts(struct mdt_thread_info *info)
 		GOTO(put, rc);
 
 	msl = req_capsule_client_get(info->mti_pill, &RMF_SWAP_LAYOUTS);
-	LASSERT(msl != NULL);
+	if (msl == NULL)
+		GOTO(put, rc = -EPROTO);
 
 	lh1 = &info->mti_lh[MDT_LH_NEW];
 	mdt_lock_reg_init(lh1, LCK_EX);

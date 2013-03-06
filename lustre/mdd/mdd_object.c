@@ -1028,7 +1028,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	rc = mdd_declare_xattr_set(env, mdd, mdd_obj, buf, name, 0, handle);
+	rc = mdd_declare_xattr_set(env, mdd, mdd_obj, buf, name, fl, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1158,6 +1158,17 @@ static struct lu_buf *mdd_get_lov_ea(const struct lu_env *env,
 repeat:
 	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_LOV,
 			   mdd_object_capa(env, obj));
+
+	if (rc == -ERANGE) {
+		/* mti_big_buf is allocated but is too small
+		 * we need to increase it */
+		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
+					     buf->lb_len * 2);
+		if (buf->lb_buf == NULL)
+			GOTO(out, rc = -ENOMEM);
+		goto repeat;
+	}
+
 	if (rc < 0)
 		GOTO(out, rc);
 
@@ -1258,7 +1269,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	/* we have to sort the 2 obj, so locking will always
 	 * be in the same order, even in case of 2 concurrent swaps */
 	rc = lu_fid_cmp(mdo2fid(md2mdd_obj(obj1)),
-		       mdo2fid(md2mdd_obj(obj2)));
+			mdo2fid(md2mdd_obj(obj2)));
 	/* same fid ? */
 	if (rc == 0)
 		RETURN(-EPERM);

@@ -940,11 +940,16 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 	case LL_IOC_HSM_ACTION:
 	case LL_IOC_LOV_SWAP_LAYOUTS: {
 		struct md_op_data	*op_data = karg;
-		struct lmv_tgt_desc	*tgt;
+		struct lmv_tgt_desc	*tgt1, *tgt2;
 
-		tgt = lmv_find_target(lmv, &op_data->op_fid1);
-		if (!tgt->ltd_exp)
+		tgt1 = lmv_find_target(lmv, &op_data->op_fid1);
+		tgt2 = lmv_find_target(lmv, &op_data->op_fid2);
+		if ((tgt1->ltd_exp == NULL) || (tgt2->ltd_exp == NULL))
 			RETURN(-EINVAL);
+
+		/* only files on same MDT can be have their layouts swapped */
+		if (tgt1->ltd_idx != tgt2->ltd_idx)
+			RETURN(-EPERM);
 
 		rc = obd_iocontrol(cmd, lmv->tgts[0]->ltd_exp, len, karg, uarg);
 		break;

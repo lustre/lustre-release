@@ -72,6 +72,8 @@
 #include <lustre/lustreapi.h>
 
 #include <libcfs/libcfsutil.h>
+#include <obd.h>
+#include <obd_lov.h>
 #include "obdctl.h"
 
 /* all functions */
@@ -118,32 +120,37 @@ static int lfs_hsm_remove(int argc, char **argv);
 static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
 
+#define SETSTRIPE_USAGE(_cmd, _tgt) \
+	"usage: "_cmd" [--stripe-count|-c <stripe_count>]\n"\
+	"                 [--stripe-index|-i <start_ost_idx>]\n"\
+	"                 [--stripe-size|-S <stripe_size>]\n"\
+	"                 [--pool|-p <pool_name>]\n"\
+	"                 [--block|-b] "_tgt"\n"\
+	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"\
+	"\t              Can be specified with k, m or g (in KB, MB and GB\n"\
+	"\t              respectively)\n"\
+	"\tstart_ost_idx: OST index of first stripe (-1 default)\n"\
+	"\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"\
+	"\tpool_name:    Name of OST pool to use (default none)\n"\
+	"\tblock:	 Block file access during data migration"
+
 /* all avaialable commands */
 command_t cmdlist[] = {
-        {"setstripe", lfs_setstripe, 0,
-         "Create a new file with a specific striping pattern or\n"
-         "set the default striping pattern on an existing directory or\n"
-         "delete the default striping pattern from an existing directory\n"
-         "usage: setstripe [--stripe-count|-c <stripe_count>]\n"
-         "                 [--stripe-index|-i <start_ost_idx>]\n"
-         "                 [--stripe-size|-S <stripe_size>]\n"
-         "                 [--pool|-p <pool_name>] <directory|filename>\n"
-         " or\n"
-         "       setstripe -d <directory>   (to delete default striping)\n"
-         "\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"
-         "\t              Can be specified with k, m or g (in KB, MB and GB\n"
-         "\t              respectively)\n"
-         "\tstart_ost_idx: OST index of first stripe (-1 default)\n"
-         "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"
-         "\tpool_name:    Name of OST pool to use (default none)"},
-        {"getstripe", lfs_getstripe, 0,
-         "To list the striping info for a given file or files in a\n"
-         "directory or recursively for all files in a directory tree.\n"
-         "usage: getstripe [--ost|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
-         "                 [--stripe-count|-c] [--stripe-index|-i]\n"
-         "                 [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
-         "                 [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
-         "                 <directory|filename> ..."},
+	{"setstripe", lfs_setstripe, 0,
+	 "Create a new file with a specific striping pattern or\n"
+	 "set the default striping pattern on an existing directory or\n"
+	 "delete the default striping pattern from an existing directory\n"
+	 "usage: setstripe -d <directory>   (to delete default striping)\n"\
+	 " or\n"
+	 SETSTRIPE_USAGE("setstripe", "<directory|filename>")},
+	{"getstripe", lfs_getstripe, 0,
+	 "To list the striping info for a given file or files in a\n"
+	 "directory or recursively for all files in a directory tree.\n"
+	 "usage: getstripe [--ost|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
+	 "                 [--stripe-count|-c] [--stripe-index|-i]\n"
+	 "                 [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
+	 "                 [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
+	 "                 <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a remote directory on a specified MDT.\n"
 	 "usage: setdirstripe <--index|-i mdt_index> <dir>\n"
@@ -301,6 +308,9 @@ command_t cmdlist[] = {
 	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
+	{"migrate", lfs_setstripe, 0, "migrate file from one layout to "
+	 "another (may be not safe with concurent writes).\n"
+	 SETSTRIPE_USAGE("migrate  ", "<filename>")},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -322,69 +332,291 @@ static int isnumber(const char *str)
         return 1;
 }
 
+#define MIGRATION_BLOCKS 1
+
+static int lfs_migrate(char *name, unsigned long long stripe_size,
+		       int stripe_offset, int stripe_count,
+		       int stripe_pattern, char *pool_name,
+		       __u64 migration_flags)
+{
+	int			 fd, fdv;
+	char			 volatile_file[PATH_MAX];
+	char			 parent[PATH_MAX];
+	char			*ptr;
+	int			 rc;
+	__u64			 dv1;
+	struct lov_user_md	*lum = NULL;
+	int			 lumsz;
+	int			 bufsz;
+	void			*buf = NULL;
+	int			 rsize, wsize;
+	__u64			 rpos, wpos, bufoff;
+	int			 gid = 0, sz;
+	int			 have_gl = 0;
+
+	/* find the right size for the IO and allocate the buffer */
+	lumsz = lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3);
+	lum = malloc(lumsz);
+	if (lum == NULL) {
+		rc = -ENOMEM;
+		goto free;
+	}
+
+	rc = llapi_file_get_stripe(name, lum);
+	/* failure can come from may case and some may be not real error
+	 * (eg: no stripe)
+	 * in case of a real error, a later call will failed with a better
+	 * error management */
+	if (rc < 0)
+		bufsz = 1024*1024;
+	else
+		bufsz = lum->lmm_stripe_size;
+	rc = posix_memalign(&buf, getpagesize(), bufsz);
+	if (rc != 0) {
+		rc = -rc;
+		goto free;
+	}
+
+	if (migration_flags & MIGRATION_BLOCKS) {
+		/* generate a random id for the grouplock */
+		fd = open("/dev/urandom", O_RDONLY);
+		if (fd == -1) {
+			rc = -errno;
+			fprintf(stderr, "cannot open /dev/urandom (%s)\n",
+				strerror(-rc));
+			goto free;
+		}
+		sz = sizeof(gid);
+		rc = read(fd, &gid, sz);
+		close(fd);
+		if (rc < sz) {
+			rc = -errno;
+			fprintf(stderr, "cannot read %d bytes from"
+				" /dev/urandom (%s)\n", sz, strerror(-rc));
+			goto free;
+		}
+	}
+
+	/* search for file directory pathname */
+	strcpy(parent, name);
+	ptr = strrchr(parent, '/');
+	if (ptr == NULL) {
+		if (getcwd(parent, sizeof(parent)) == NULL) {
+			rc = -errno;
+			goto free;
+		}
+	} else {
+		if (ptr == parent)
+			strcpy(parent, "/");
+		else
+			*ptr = '\0';
+	}
+	sprintf(volatile_file, "%s/%s::", parent, LUSTRE_VOLATILE_HDR);
+
+	/* create, open a volatile file, use caching (ie no directio) */
+	/* exclusive create is not needed because volatile files cannot
+	 * conflict on name by construction */
+	fdv = llapi_file_open_pool(volatile_file, O_CREAT | O_WRONLY,
+				   0644, stripe_size, stripe_offset,
+				   stripe_count, stripe_pattern, pool_name);
+	if (fdv < 0) {
+		rc = fdv;
+		fprintf(stderr, "cannot create volatile file in %s (%s)\n",
+			parent, strerror(-rc));
+		goto free;
+	}
+
+	/* open file, direct io */
+	/* even if the file is only read, WR mode is nedeed to allow
+	 * layout swap on fd */
+	fd = open(name, O_RDWR | O_DIRECT);
+	if (fd == -1) {
+		rc = -errno;
+		fprintf(stderr, "cannot open %s (%s)\n", name, strerror(-rc));
+		close(fdv);
+		goto free;
+	}
+
+	/* get file data version */
+	rc = llapi_get_data_version(fd, &dv1, 0);
+	if (rc != 0) {
+		fprintf(stderr, "cannot get dataversion on %s (%s)\n",
+			name, strerror(-rc));
+		goto error;
+	}
+
+	if (migration_flags & MIGRATION_BLOCKS) {
+		/* take group lock to limit concurent access
+		 * this will be no more needed when exclusive access will
+		 * be implemented (see LU-2919) */
+		/* group lock is taken after data version read because it
+		 * blocks data version call */
+		if (ioctl(fd, LL_IOC_GROUP_LOCK, gid) == -1) {
+			rc = -errno;
+			fprintf(stderr, "cannot get group lock on %s (%s)\n",
+				name, strerror(-rc));
+			goto error;
+		}
+		have_gl = 1;
+	}
+
+	/* copy data */
+	rpos = 0;
+	wpos = 0;
+	bufoff = 0;
+	rsize = -1;
+	do {
+		/* read new data only if we have written all
+		 * previously read data */
+		if (wpos == rpos) {
+			rsize = read(fd, buf, bufsz);
+			if (rsize < 0) {
+				rc = -errno;
+				fprintf(stderr, "read failed on %s"
+					" (%s)\n", name,
+					strerror(-rc));
+				goto error;
+			}
+			rpos += rsize;
+			bufoff = 0;
+		}
+		/* eof ? */
+		if (rsize == 0)
+			break;
+		wsize = write(fdv, buf + bufoff, rpos - wpos);
+		if (wsize < 0) {
+			rc = -errno;
+			fprintf(stderr, "write failed on volatile"
+				" for %s (%s)\n", name, strerror(-rc));
+			goto error;
+		}
+		wpos += wsize;
+		bufoff += wsize;
+	} while (1);
+
+	/* flush data */
+	fsync(fdv);
+
+	if (migration_flags & MIGRATION_BLOCKS) {
+		/* give back group lock */
+		if (ioctl(fd, LL_IOC_GROUP_UNLOCK, gid) == -1) {
+			rc = -errno;
+			fprintf(stderr, "cannot put group lock on %s (%s)\n",
+				name, strerror(-rc));
+		}
+		have_gl = 0;
+	}
+
+	/* swap layouts
+	 * for a migration we need to:
+	 * - check data version on file did not change
+	 * - keep file mtime
+	 * - keep file atime
+	 */
+	rc = llapi_fswap_layouts(fd, fdv, dv1, 0,
+				 SWAP_LAYOUTS_CHECK_DV1 |
+				 SWAP_LAYOUTS_KEEP_MTIME |
+				 SWAP_LAYOUTS_KEEP_ATIME);
+	if (rc == -EAGAIN) {
+		fprintf(stderr, "file dataversion for %s has changed"
+				" during copy, migration is aborted\n",
+			name);
+		goto error;
+	}
+	if (rc != 0)
+		fprintf(stderr, "cannot swap layouts between %s and "
+			"a volatile file (%s)\n",
+			name, strerror(-rc));
+
+error:
+	/* give back group lock */
+	if ((migration_flags & MIGRATION_BLOCKS) && have_gl &&
+	    (ioctl(fd, LL_IOC_GROUP_UNLOCK, gid) == -1)) {
+		/* we keep in rc the original error */
+		fprintf(stderr, "cannot put group lock on %s (%s)\n",
+			name, strerror(-errno));
+	}
+
+	close(fdv);
+	close(fd);
+free:
+	if (lum)
+		free(lum);
+	if (buf)
+		free(buf);
+	return rc;
+}
+
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
-        char *fname;
-        int result;
-        unsigned long long st_size;
-        int  st_offset, st_count;
-        char *end;
-        int c;
-        int delete = 0;
-        char *stripe_size_arg = NULL;
-        char *stripe_off_arg = NULL;
-        char *stripe_count_arg = NULL;
-        char *pool_name_arg = NULL;
-        unsigned long long size_units = 1;
+	char			*fname;
+	int			 result;
+	unsigned long long	 st_size;
+	int			 st_offset, st_count;
+	char			*end;
+	int			 c;
+	int			 delete = 0;
+	char			*stripe_size_arg = NULL;
+	char			*stripe_off_arg = NULL;
+	char			*stripe_count_arg = NULL;
+	char			*pool_name_arg = NULL;
+	unsigned long long	 size_units = 1;
+	int			 migrate_mode = 0;
+	__u64			 migration_flags = 0;
 
-        struct option long_opts[] = {
+	struct option		 long_opts[] = {
+		/* valid only in migrate mode */
+		{"block",	 no_argument,	    0, 'b'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --count option"
 #else
-                /* This formerly implied "stripe-count", but was explicitly
-                 * made "stripe-count" for consistency with other options,
-                 * and to separate it from "mdt-count" when DNE arrives. */
-                {"count",        required_argument, 0, 'c'},
+		/* This formerly implied "stripe-count", but was explicitly
+		 * made "stripe-count" for consistency with other options,
+		 * and to separate it from "mdt-count" when DNE arrives. */
+		{"count",	 required_argument, 0, 'c'},
 #endif
-                {"stripe-count", required_argument, 0, 'c'},
-                {"stripe_count", required_argument, 0, 'c'},
-                {"delete",       no_argument,       0, 'd'},
+		{"stripe-count", required_argument, 0, 'c'},
+		{"stripe_count", required_argument, 0, 'c'},
+		{"delete",       no_argument,       0, 'd'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --index option"
 #else
-                /* This formerly implied "stripe-index", but was explicitly
-                 * made "stripe-index" for consistency with other options,
-                 * and to separate it from "mdt-index" when DNE arrives. */
-                {"index",        required_argument, 0, 'i'},
+		/* This formerly implied "stripe-index", but was explicitly
+		 * made "stripe-index" for consistency with other options,
+		 * and to separate it from "mdt-index" when DNE arrives. */
+		{"index",	 required_argument, 0, 'i'},
 #endif
-                {"stripe-index", required_argument, 0, 'i'},
-                {"stripe_index", required_argument, 0, 'i'},
+		{"stripe-index", required_argument, 0, 'i'},
+		{"stripe_index", required_argument, 0, 'i'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --offset option"
 #else
-                /* This formerly implied "stripe-index", but was confusing
-                 * with "file offset" (which will eventually be needed for
-                 * with different layouts by offset), so deprecate it. */
-                {"offset",       required_argument, 0, 'o'},
+		/* This formerly implied "stripe-index", but was confusing
+		 * with "file offset" (which will eventually be needed for
+		 * with different layouts by offset), so deprecate it. */
+		{"offset",       required_argument, 0, 'o'},
 #endif
-                {"pool",         required_argument, 0, 'p'},
+		{"pool",	 required_argument, 0, 'p'},
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --size option"
 #else
-                /* This formerly implied "--stripe-size", but was confusing
-                 * with "lfs find --size|-s", which means "file size", so use
-                 * the consistent "--stripe-size|-S" for all commands. */
-                {"size",         required_argument, 0, 's'},
+		/* This formerly implied "--stripe-size", but was confusing
+		 * with "lfs find --size|-s", which means "file size", so use
+		 * the consistent "--stripe-size|-S" for all commands. */
+		{"size",	 required_argument, 0, 's'},
 #endif
-                {"stripe-size",  required_argument, 0, 'S'},
-                {"stripe_size",  required_argument, 0, 'S'},
-                {0, 0, 0, 0}
-        };
+		{"stripe-size",  required_argument, 0, 'S'},
+		{"stripe_size",  required_argument, 0, 'S'},
+		{0, 0, 0, 0}
+	};
 
         st_size = 0;
         st_offset = -1;
         st_count = 0;
+
+	if (strcmp(argv[0], "migrate") == 0)
+		migrate_mode = 1;
 
 #if LUSTRE_VERSION < OBD_OCD_VERSION(2,4,50,0)
         if (argc == 5 && argv[1][0] != '-' &&
@@ -404,6 +636,14 @@ static int lfs_setstripe(int argc, char **argv)
                 case 0:
                         /* Long options. */
                         break;
+		case 'b':
+			if (migrate_mode == 0) {
+				fprintf(stderr, "--block is valid only for"
+						" migrate mode");
+				return CMD_HELP;
+			}
+			migration_flags |= MIGRATION_BLOCKS;
+			break;
                 case 'c':
 #if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
 #warning "remove deprecated --count option"
@@ -502,18 +742,26 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        do {
-                result = llapi_file_create_pool(fname, st_size, st_offset,
-                                                st_count, 0, pool_name_arg);
-                if (result) {
-                        fprintf(stderr,"error: %s: create stripe file '%s' "
-                                "failed\n", argv[0], fname);
-                        break;
-                }
-                fname = argv[++optind];
-        } while (fname != NULL);
+	do {
+		if (migrate_mode)
+			result = lfs_migrate(fname, st_size, st_offset,
+					     st_count, 0, pool_name_arg,
+					     migration_flags);
+		else
+			result = llapi_file_create_pool(fname, st_size,
+							st_offset, st_count,
+							0, pool_name_arg);
+		if (result) {
+			fprintf(stderr,
+				"error: %s: %s stripe file '%s' failed\n",
+				argv[0], migrate_mode ? "migrate" : "create",
+				fname);
+			break;
+		}
+		fname = argv[++optind];
+	} while (fname != NULL);
 
-        return result;
+	return result;
 }
 
 static int lfs_poollist(int argc, char **argv)
@@ -3315,7 +3563,9 @@ static int lfs_swap_layouts(int argc, char **argv)
 	if (argc != 3)
 		return CMD_HELP;
 
-	return llapi_swap_layouts(argv[1], argv[2]);
+	return llapi_swap_layouts(argv[1], argv[2], 0, 0,
+				  SWAP_LAYOUTS_KEEP_MTIME |
+				  SWAP_LAYOUTS_KEEP_ATIME);
 }
 
 int main(int argc, char **argv)

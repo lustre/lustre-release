@@ -572,10 +572,17 @@ struct if_quotactl {
         struct obd_uuid         obd_uuid;
 };
 
+/* swap layout flags */
+#define	SWAP_LAYOUTS_CHECK_DV1		(1 << 0)
+#define	SWAP_LAYOUTS_CHECK_DV2		(1 << 1)
+#define	SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
+#define	SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 struct lustre_swap_layouts {
 	__u64	sl_flags;
 	__u32	sl_fd;
 	__u32	sl_gid;
+	__u64	sl_dv1;
+	__u64	sl_dv2;
 };
 
 
