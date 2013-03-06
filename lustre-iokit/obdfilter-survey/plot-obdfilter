@@ -93,7 +93,7 @@ sub write_scr_file() {
 	$i = 2;
 	$xrange = 1;
 	# generate instructions for gnuplot, with adjusting X-axes ranges
-	for ($j = $first_thread; $j <= $thread ; $j = $j + $j) {
+	for ($j = $first_obj; $j <= $obj ; $j = $j + $j) {
 			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"$rwlabel-obj$j\" with line\n", $xrange;
 		$i++;
 		$plot = "replot";
@@ -114,12 +114,12 @@ sub write_dat_file() {
 	# Open .csv/.dat file for writing required columns from log file.
 	open ( DATAFILE, "> $file-$rsz-$op.dat" ) or die "Can't open csv file for writing";
 	printf DATAFILE "%-6s", "thrd";
-	for ($j = $first_thread; $j <= $thread ; $j = $j + $j) {
+	for ($j = $first_obj; $j <= $obj; $j = $j + $j) {
 		printf DATAFILE "%-10s", "$op-obj$j";
 	}
-	for ( $i = $first_obj; $i <= $obj; $i = $i + $i ) {
+	for ( $i = $first_thread; $i <= $thread; $i = $i + $i ) {
 	        printf DATAFILE "\n%-6s", $i;
-		for ($j = $first_thread; $j <= $thread ; $j = $j + $j) {
+		for ($j = $first_obj; $j <= $obj; $j = $j + $j) {
 		# switch-case can be used instead if else
 			if ($op eq "rd") {
 					if ( $ard{$i}{$j} ) {
@@ -227,7 +227,7 @@ LABEL: while ( <PFILE> ) {
 			}		
 		}
 	}
-	if ($rsz != $line[5]) {
+	if ($rsz ne $line[5]) {
 		&write_files();
 		$rsz = $line[5];
 		$first_obj = $line[7];
