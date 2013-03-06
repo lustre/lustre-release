@@ -219,9 +219,9 @@ init_logging
 # get the server target devices
 get_svr_devs
 
+TESTDIR=$DIR/d0.$TESTSUITE
 if is_empty_fs $MOUNT; then
     # create test directory
-    TESTDIR=$DIR/d0.$TESTSUITE
     mkdir -p $TESTDIR || error "mkdir $TESTDIR failed"
 
     # create some dirs and files on the filesystem
@@ -290,5 +290,14 @@ else
 fi
 
 complete $SECONDS
+# The test directory contains some files referencing to some object
+# which could cause error when removing the directory.
+RMCNT=0
+while [ -d $TESTDIR ]; do
+	RMCNT=$((RMCNT + 1))
+	rm -fr $TESTDIR || echo "$RMCNT round: rm $TESTDIR failed"
+	[ $RMCNT -ge 10 ] && error "cleanup $TESTDIR failed $RMCNT times"
+	remount_client $MOUNT
+done
 check_and_cleanup_lustre
 exit_status
