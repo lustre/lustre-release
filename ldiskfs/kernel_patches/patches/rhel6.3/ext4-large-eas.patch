@@ -118,7 +118,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +	struct inode *ea_inode = NULL;
 +
 +	ea_inode = ext4_iget(parent->i_sb, ea_ino);
-+	if (ea_inode == NULL || is_bad_inode(ea_inode)) {
++	if (IS_ERR(ea_inode) || is_bad_inode(ea_inode)) {
 +		ext4_error(parent->i_sb, "error while reading EA inode %d",
 +			   ea_ino);
 +		*err = -EIO;
