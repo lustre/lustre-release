@@ -84,28 +84,23 @@
  *
  * No locking is done here.
  */
-int __osd_xattr_cache(const struct lu_env *env, struct osd_object *obj)
+int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr)
 {
-	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
-	sa_handle_t       *sa_hdl;
-	char              *buf;
-	int                size;
-	int                rc;
+	sa_handle_t *sa_hdl;
+	char	    *buf;
+	int	     rc, size;
 
-	LASSERT(obj->oo_sa_xattr == NULL);
-	LASSERT(obj->oo_db != NULL);
+	if (unlikely(dnode == ZFS_NO_OBJECT))
+		return -ENOENT;
 
-	rc = -sa_handle_get(uos->os, obj->oo_db->db_object, NULL,
-			SA_HDL_PRIVATE, &sa_hdl);
+	rc = -sa_handle_get(uos->os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
 		return rc;
 
 	rc = -sa_size(sa_hdl, SA_ZPL_DXATTR(uos), &size);
 	if (rc) {
 		if (rc == -ENOENT)
-			rc = -nvlist_alloc(&obj->oo_sa_xattr,
-					NV_UNIQUE_NAME, KM_SLEEP);
+			rc = -nvlist_alloc(sa_xattr, NV_UNIQUE_NAME, KM_SLEEP);
 		goto out_sa;
 	}
 
@@ -116,12 +111,22 @@ int __osd_xattr_cache(const struct lu_env *env, struct osd_object *obj)
 	}
 	rc = -sa_lookup(sa_hdl, SA_ZPL_DXATTR(uos), buf, size);
 	if (rc == 0)
-		rc = -nvlist_unpack(buf, size, &obj->oo_sa_xattr, KM_SLEEP);
+		rc = -nvlist_unpack(buf, size, sa_xattr, KM_SLEEP);
 	sa_spill_free(buf);
 out_sa:
 	sa_handle_destroy(sa_hdl);
 
 	return rc;
+}
+
+static inline int __osd_xattr_cache(const struct lu_env *env,
+				    struct osd_object *obj)
+{
+	LASSERT(obj->oo_sa_xattr == NULL);
+	LASSERT(obj->oo_db != NULL);
+
+	return __osd_xattr_load(&osd_obj2dev(obj)->od_objset,
+				obj->oo_db->db_object, &obj->oo_sa_xattr);
 }
 
 int __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
@@ -156,28 +161,21 @@ int __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
 	return 0;
 }
 
-int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		struct lu_buf *buf, const char *name, int *sizep)
+int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
+			  uint64_t xattr, struct lu_buf *buf,
+			  const char *name, int *sizep)
 {
-	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
-	uint64_t           xa_data_obj;
-	dmu_buf_t         *xa_data_db;
-	sa_handle_t       *sa_hdl = NULL;
-	uint64_t           size;
-	int                rc;
-
-	/* check SA_ZPL_DXATTR first then fallback to directory xattr */
-	rc = __osd_sa_xattr_get(env, obj, buf, name, sizep);
-	if (rc != -ENOENT)
-		return rc;
+	dmu_buf_t	*xa_data_db;
+	sa_handle_t	*sa_hdl = NULL;
+	uint64_t	 xa_data_obj, size;
+	int		 rc;
 
 	/* are there any extended attributes? */
-	if (obj->oo_xattr == ZFS_NO_OBJECT)
+	if (xattr == ZFS_NO_OBJECT)
 		return -ENOENT;
 
 	/* Lookup the object number containing the xattr data */
-	rc = -zap_lookup(uos->os, obj->oo_xattr, name, sizeof(uint64_t), 1,
+	rc = -zap_lookup(uos->os, xattr, name, sizeof(uint64_t), 1,
 			&xa_data_obj);
 	if (rc)
 		return rc;
@@ -219,6 +217,23 @@ out:
 	sa_handle_destroy(sa_hdl);
 out_rele:
 	dmu_buf_rele(xa_data_db, FTAG);
+
+	return rc;
+}
+
+int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
+		struct lu_buf *buf, const char *name, int *sizep)
+{
+	int rc;
+
+	/* check SA_ZPL_DXATTR first then fallback to directory xattr */
+	rc = __osd_sa_xattr_get(env, obj, buf, name, sizep);
+	if (rc != -ENOENT)
+		return rc;
+
+	rc = __osd_xattr_get_large(env, &osd_obj2dev(obj)->od_objset,
+				   obj->oo_xattr, buf, name, sizep);
+
 	return rc;
 }
 
@@ -790,7 +805,9 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 
 		zap_cursor_advance(zc);
 	}
-	if (rc < 0)
+	if (rc == -ENOENT) /* no more kes in the index */
+		rc = 0;
+	else if (unlikely(rc < 0))
 		GOTO(out_fini, rc);
 	rc = counted;
 

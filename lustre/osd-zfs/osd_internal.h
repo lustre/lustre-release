@@ -428,6 +428,10 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 
 
 /* osd_xattr.c */
+int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr);
+int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
+			  uint64_t xattr, struct lu_buf *buf,
+			  const char *name, int *sizep);
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name,
 		  struct lustre_capa *capa);
