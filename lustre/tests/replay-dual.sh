@@ -455,7 +455,7 @@ run_test 20 "recovery time is not increasing"
 test_21a() {
     local param_file=$TMP/$tfile-params
 
-    save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
+	save_lustre_params $SINGLEMDS "mdt.*.commit_on_sharing" > $param_file
     do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=1
     touch  $MOUNT1/$tfile-1
     mv  $MOUNT2/$tfile-1 $MOUNT2/$tfile-2
@@ -522,7 +522,7 @@ test_21b() {
 
     local num=$(get_mds_dir $MOUNT1)
 
-    save_lustre_params $(facet_active_host mds$num) "mdt.*.commit_on_sharing" > $param_file
+	save_lustre_params mds$num "mdt.*.commit_on_sharing" > $param_file
 
     # COS enabled
     local COS=1
