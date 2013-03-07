@@ -36,23 +36,46 @@
 
 #define MAX_STRING_SIZE 128
 
-extern cfs_atomic_t ldlm_srv_namespace_nr;
-extern cfs_atomic_t ldlm_cli_namespace_nr;
+extern int ldlm_srv_namespace_nr;
+extern int ldlm_cli_namespace_nr;
 extern struct mutex ldlm_srv_namespace_lock;
 extern cfs_list_t ldlm_srv_namespace_list;
 extern struct mutex ldlm_cli_namespace_lock;
-extern cfs_list_t ldlm_cli_namespace_list;
+extern cfs_list_t ldlm_cli_active_namespace_list;
+extern cfs_list_t ldlm_cli_inactive_namespace_list;
 
-static inline cfs_atomic_t *ldlm_namespace_nr(ldlm_side_t client)
+static inline int ldlm_namespace_nr_read(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ?
-                &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
+	return client == LDLM_NAMESPACE_SERVER ?
+		ldlm_srv_namespace_nr : ldlm_cli_namespace_nr;
+}
+
+static inline void ldlm_namespace_nr_inc(ldlm_side_t client)
+{
+	if (client == LDLM_NAMESPACE_SERVER)
+		ldlm_srv_namespace_nr++;
+	else
+		ldlm_cli_namespace_nr++;
+}
+
+static inline void ldlm_namespace_nr_dec(ldlm_side_t client)
+{
+	if (client == LDLM_NAMESPACE_SERVER)
+		ldlm_srv_namespace_nr--;
+	else
+		ldlm_cli_namespace_nr--;
 }
 
 static inline cfs_list_t *ldlm_namespace_list(ldlm_side_t client)
 {
         return client == LDLM_NAMESPACE_SERVER ?
-                &ldlm_srv_namespace_list : &ldlm_cli_namespace_list;
+		&ldlm_srv_namespace_list : &ldlm_cli_active_namespace_list;
+}
+
+static inline cfs_list_t *ldlm_namespace_inactive_list(ldlm_side_t client)
+{
+        return client == LDLM_NAMESPACE_SERVER ?
+		&ldlm_srv_namespace_list : &ldlm_cli_inactive_namespace_list;
 }
 
 static inline struct mutex *ldlm_namespace_lock(ldlm_side_t client)
@@ -60,6 +83,17 @@ static inline struct mutex *ldlm_namespace_lock(ldlm_side_t client)
         return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_lock : &ldlm_cli_namespace_lock;
 }
+
+/* ns_bref is the number of resources in this namespace with the notable
+ * exception of quota namespaces which have their empty refcount at 1 */
+static inline int ldlm_ns_empty(struct ldlm_namespace *ns)
+{
+	return cfs_atomic_read(&ns->ns_bref) == 0;
+}
+
+void ldlm_namespace_move_to_active_locked(struct ldlm_namespace *, ldlm_side_t);
+void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *, ldlm_side_t);
+struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t);
 
 /* ldlm_request.c */
 /* Cancel lru flag, it indicates we cancel aged locks. */
