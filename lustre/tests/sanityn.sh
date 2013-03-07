@@ -829,11 +829,10 @@ print_jbd_stat () {
     local stat=0
     for mds in ${mdts//,/ }; do
         varsvc=${mds}_svc
-        dev=$(basename $(do_facet $mds lctl get_param -n osd*.${!varsvc}.mntdev))
-        val=$(do_facet $mds "procfile=/proc/fs/jbd/$dev/info;
-[ -f \\\$procfile ] || procfile=/proc/fs/jbd2/$dev/info;
-[ -f \\\$procfile ] || procfile=/proc/fs/jbd2/${dev}\:\\\*/info;
-cat \\\$procfile | head -1;")
+        dev=$(basename $(do_facet $mds "lctl get_param -n osd*.${!varsvc}.mntdev|\
+		xargs readlink -f" ))
+        val=$(do_facet $mds "cat /proc/fs/jbd*/${dev}{,:*,-*}/info 2>/dev/null|\
+		head -1")
         val=${val%% *};
         stat=$(( stat + val))
     done
@@ -844,18 +843,19 @@ cat \\\$procfile | head -1;")
 test_33a() {
     remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-    [ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+    [ -z "$CLIENTS" ] && skip "Need two or more clients, have $CLIENTS" && return 0
+    [ $CLIENTCOUNT -lt 2 ] &&
+	skip "Need two or more clients, have $CLIENTCOUNT" && return 0
 
     local nfiles=${TEST33_NFILES:-10000}
     local param_file=$TMP/$tfile-params
+    local fstype=$(facet_fstype $SINGLEMDS)
 
     save_lustre_params $(comma_list $(mdts_nodes)) "mdt.*.commit_on_sharing" > $param_file
 
     local COS
-    local jbdold
-    local jbdnew
+    local jbdold="N/A"
+    local jbdnew="N/A"
     local jbd
 
     for COS in 0 1; do
@@ -865,13 +865,13 @@ test_33a() {
         for i in 1 2 3; do
             do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
-            jbdold=$(print_jbd_stat)
+            [ $fstype = ldiskfs ] && jbdold=$(print_jbd_stat)
             echo "=== START createmany old: $jbdold transaction"
             local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
-            jbdnew=$(print_jbd_stat)
-            jbd=$(( jbdnew - jbdold ))
+            [ $fstype = ldiskfs ] && jbdnew=$(print_jbd_stat)
+            [ $fstype = ldiskfs ] && jbd=$(( jbdnew - jbdold ))
             echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
-            avgjbd=$(( avgjbd + jbd ))
+            [ $fstype = ldiskfs ] && avgjbd=$(( avgjbd + jbd ))
             avgtime=$(( avgtime + elapsed ))
         done
         eval cos${COS}_jbd=$((avgjbd / 3))
