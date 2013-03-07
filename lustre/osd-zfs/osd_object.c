@@ -1024,6 +1024,7 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 	LASSERT(ah);
 
 	memset(ah, 0, sizeof(*ah));
+	ah->dah_parent = parent;
 	ah->dah_mode = child_mode;
 }
 
@@ -1099,14 +1100,13 @@ static int osd_declare_object_create(const struct lu_env *env,
 	RETURN(rc);
 }
 
-int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos,
-		    uint64_t oid, dmu_tx_t *tx, struct lu_attr *la)
+int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos, uint64_t oid,
+		    dmu_tx_t *tx, struct lu_attr *la, uint64_t parent)
 {
 	sa_bulk_attr_t	*bulk;
 	sa_handle_t	*sa_hdl;
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
 	uint64_t	 gen;
-	uint64_t	 parent;
 	uint64_t	 crtime[2];
 	timestruc_t	 now;
 	int		 cnt;
@@ -1116,9 +1116,6 @@ int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos,
 	gen = dmu_tx_get_txg(tx);
 
 	ZFS_TIME_ENCODE(&now, crtime);
-	/* XXX: this should be real id of parent for ZPL access, but we have no
-	 * such info in OSD, probably it can be part of dt_object_format */
-	parent = 0;
 
 	osa->atime[0] = la->la_atime;
 	osa->ctime[0] = la->la_ctime;
@@ -1180,8 +1177,8 @@ out:
  * to a transaction group.
  */
 int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
-			dmu_buf_t **dbp, dmu_tx_t *tx,
-			struct lu_attr *la, void *tag)
+			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la,
+			uint64_t parent, void *tag)
 {
 	uint64_t oid;
 	int	 rc;
@@ -1206,7 +1203,7 @@ int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
 	la->la_size = 0;
 	la->la_nlink = 1;
 
-	return __osd_attr_init(env, uos, oid, tx, la);
+	return __osd_attr_init(env, uos, oid, tx, la, parent);
 }
 
 /*
@@ -1221,7 +1218,8 @@ int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
  * a conversion from the different internal ZAP hash formats being used. */
 int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
 		     dmu_buf_t **zap_dbp, dmu_tx_t *tx,
-		     struct lu_attr *la, void *tag, zap_flags_t flags)
+		     struct lu_attr *la, uint64_t parent,
+		     void *tag, zap_flags_t flags)
 {
 	uint64_t oid;
 	int	 rc;
@@ -1248,11 +1246,12 @@ int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
 	la->la_size = 2;
 	la->la_nlink = 1;
 
-	return __osd_attr_init(env, uos, oid, tx, la);
+	return __osd_attr_init(env, uos, oid, tx, la, parent);
 }
 
 static dmu_buf_t *osd_mkidx(const struct lu_env *env, struct osd_device *osd,
-			    struct lu_attr *la, struct osd_thandle *oh)
+			    struct lu_attr *la, uint64_t parent,
+			    struct osd_thandle *oh)
 {
 	dmu_buf_t *db;
 	int	   rc;
@@ -1263,35 +1262,37 @@ static dmu_buf_t *osd_mkidx(const struct lu_env *env, struct osd_device *osd,
 	 * binary keys */
 	LASSERT(S_ISREG(la->la_mode));
 	rc = __osd_zap_create(env, &osd->od_objset, &db, oh->ot_tx, la,
-			      osd_obj_tag, ZAP_FLAG_UINT64_KEY);
+			      parent, osd_obj_tag, ZAP_FLAG_UINT64_KEY);
 	if (rc)
 		return ERR_PTR(rc);
 	return db;
 }
 
 static dmu_buf_t *osd_mkdir(const struct lu_env *env, struct osd_device *osd,
-			    struct lu_attr *la, struct osd_thandle *oh)
+			    struct lu_attr *la, uint64_t parent,
+			    struct osd_thandle *oh)
 {
 	dmu_buf_t *db;
 	int	   rc;
 
 	LASSERT(S_ISDIR(la->la_mode));
 	rc = __osd_zap_create(env, &osd->od_objset, &db, oh->ot_tx, la,
-			      osd_obj_tag, 0);
+			      parent, osd_obj_tag, 0);
 	if (rc)
 		return ERR_PTR(rc);
 	return db;
 }
 
 static dmu_buf_t* osd_mkreg(const struct lu_env *env, struct osd_device *osd,
-			    struct lu_attr *la, struct osd_thandle *oh)
+			    struct lu_attr *la, uint64_t parent,
+			    struct osd_thandle *oh)
 {
 	dmu_buf_t *db;
 	int	    rc;
 
 	LASSERT(S_ISREG(la->la_mode));
 	rc = __osd_object_create(env, &osd->od_objset, &db, oh->ot_tx, la,
-				 osd_obj_tag);
+				 parent, osd_obj_tag);
 	if (rc)
 		return ERR_PTR(rc);
 
@@ -1314,21 +1315,23 @@ static dmu_buf_t* osd_mkreg(const struct lu_env *env, struct osd_device *osd,
 }
 
 static dmu_buf_t *osd_mksym(const struct lu_env *env, struct osd_device *osd,
-			    struct lu_attr *la, struct osd_thandle *oh)
+			    struct lu_attr *la, uint64_t parent,
+			    struct osd_thandle *oh)
 {
 	dmu_buf_t *db;
 	int	   rc;
 
 	LASSERT(S_ISLNK(la->la_mode));
 	rc = __osd_object_create(env, &osd->od_objset, &db, oh->ot_tx, la,
-				 osd_obj_tag);
+				 parent, osd_obj_tag);
 	if (rc)
 		return ERR_PTR(rc);
 	return db;
 }
 
 static dmu_buf_t *osd_mknod(const struct lu_env *env, struct osd_device *osd,
-			    struct lu_attr *la, struct osd_thandle *oh)
+			    struct lu_attr *la, uint64_t parent,
+			    struct osd_thandle *oh)
 {
 	dmu_buf_t *db;
 	int	   rc;
@@ -1338,14 +1341,17 @@ static dmu_buf_t *osd_mknod(const struct lu_env *env, struct osd_device *osd,
 		la->la_valid |= LA_RDEV;
 
 	rc = __osd_object_create(env, &osd->od_objset, &db, oh->ot_tx, la,
-				 osd_obj_tag);
+				 parent, osd_obj_tag);
 	if (rc)
 		return ERR_PTR(rc);
 	return db;
 }
 
-typedef dmu_buf_t *(*osd_obj_type_f)(const struct lu_env *env, struct osd_device *osd,
-				     struct lu_attr *la, struct osd_thandle *oh);
+typedef dmu_buf_t *(*osd_obj_type_f)(const struct lu_env *env,
+				     struct osd_device *osd,
+				     struct lu_attr *la,
+				     uint64_t parent,
+				     struct osd_thandle *oh);
 
 static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 {
@@ -1435,7 +1441,13 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_db == NULL);
 
-	db = osd_create_type_f(dof->dof_type)(env, osd, attr, oh);
+	/* to follow ZFS on-disk format we need
+	 * to initialize parent dnode properly */
+	zapid = 0;
+	if (hint && hint->dah_parent)
+		zapid = osd_dt_obj(hint->dah_parent)->oo_db->db_object;
+
+	db = osd_create_type_f(dof->dof_type)(env, osd, attr, zapid, oh);
 	if (IS_ERR(db))
 		GOTO(out, rc = PTR_ERR(th));
 

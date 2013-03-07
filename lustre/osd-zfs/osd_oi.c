@@ -177,7 +177,7 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 	la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
 	la->la_uid = la->la_gid = 0;
-	__osd_zap_create(env, &o->od_objset, &db, tx, la, oi_tag, 0);
+	__osd_zap_create(env, &o->od_objset, &db, tx, la, parent, oi_tag, 0);
 
 	zde->zde_dnode = db->db_object;
 	zde->zde_pad = 0;

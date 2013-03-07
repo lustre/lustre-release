@@ -457,7 +457,8 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-		rc = __osd_zap_create(env, uos, &xa_zap_db, tx, la, FTAG, 0);
+		rc = __osd_zap_create(env, uos, &xa_zap_db, tx, la,
+				      obj->oo_db->db_object, FTAG, 0);
 		if (rc)
 			return rc;
 
@@ -512,7 +513,8 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, uos, &xa_data_db, tx, la, FTAG);
+		rc = __osd_object_create(env, uos, &xa_data_db, tx, la,
+					 obj->oo_xattr, FTAG);
 		if (rc)
 			goto out;
 		xa_data_obj = xa_data_db->db_object;

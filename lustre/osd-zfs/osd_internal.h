@@ -406,11 +406,11 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
 int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
-		     dmu_buf_t **zap_dbp, dmu_tx_t *tx,
-		     struct lu_attr *la, void *tag, zap_flags_t flags);
+		     dmu_buf_t **zap_dbp, dmu_tx_t *tx, struct lu_attr *la,
+		     uint64_t parent, void *tag, zap_flags_t flags);
 int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
-			dmu_buf_t **dbp, dmu_tx_t *tx,
-			struct lu_attr *la, void *tag);
+			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la,
+			uint64_t parent, void *tag);
 int __osd_object_free(udmu_objset_t *uos, uint64_t oid, dmu_tx_t *tx);
 
 /* osd_oi.c */
