@@ -33,7 +33,8 @@ push_exit_trap "kill -INT -$$ || true" kill_children
 #BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
 #BUILD_GEN=3	# bz19975: enable the building of src.rpms by default
 #BUILD_GEN=4	# bz22281: use the git hash in the kernel extra version
-BUILD_GEN=5	# TT-107: don't cache the BUILD dir
+#BUILD_GEN=5	# TT-107: don't cache the BUILD dir
+BUILD_GEN=6	# TT-1092: don't cache the BUILD dir, to rebuild external OFED
 
 TOPDIR=$PWD
 
@@ -1268,9 +1269,19 @@ Patch$n: ${file%%*/}"
             let n=$n+1
         done
         for file in $(ls ${TOPDIR}/lustre/build/patches/ofed/*.ed); do
-            ed_fragment3="$ed_fragment3
+            # Only apply the ed-scripts that should be used for the canonical target
+            # ed-files in ${TOPDIR}/lustre/build/patches/ofed/ have to follow the naming
+            # convention
+            # <two-digits>-<descriptive-name>:<canonical_target_1>: ...:<canonical_target_N>.ed
+            # To apply the same change to multiple canonical target simply specify
+            # a list of colon separated canoncial target names in the file name.
+            echo "$file" | grep -q -e ":${CANONICAL_TARGET}:" \
+                                   -e ":${CANONICAL_TARGET}.ed$"
+            if [ $? -eq 0 ] ; then
+                ed_fragment3="$ed_fragment3
 $(cat $file)"
-            let n=$n+1
+                let n=$n+1
+            fi
         done
 
         if [ $n -gt 1 ]; then
@@ -1451,7 +1462,8 @@ build_kernel_with_srpm() {
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo -en $release_str;
                                   echo $BUILD_GEN;
-                                  cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } |
+                                  cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH;
+                                  cat ${0%/lbuild}/lbuild ${0%/lbuild}/lbuild-${DISTRO}; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
         # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
@@ -1565,8 +1577,11 @@ build_ofed() {
     # build kernel-ib/compat-rdma
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo "$ofed_version";
-                                  echo "$(find_linux_release ${linux})";
-                                  cat "${linux}/include/linux/autoconf.h"; } |
+                                  echo "$(find_linux_release ${linux};
+                                  echo "$BUILD_GEN")";
+                                  cat "${linux}/include/linux/autoconf.h";
+                                  cat "${0%/lbuild}/lbuild" ;
+                                  cat "${0%/lbuild}/lbuild-${DISTRO}"; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
         # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
