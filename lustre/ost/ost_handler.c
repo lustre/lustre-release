@@ -2611,9 +2611,9 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		.psc_watchdog_factor	= OSS_SERVICE_WATCHDOG_FACTOR,
 		.psc_buf		= {
 			.bc_nbufs		= OST_NBUFS,
-			.bc_buf_size		= OST_BUFSIZE,
-			.bc_req_max_size	= OST_MAXREQSIZE,
-			.bc_rep_max_size	= OST_MAXREPSIZE,
+			.bc_buf_size		= OST_IO_BUFSIZE,
+			.bc_req_max_size	= OST_IO_MAXREQSIZE,
+			.bc_rep_max_size	= OST_IO_MAXREPSIZE,
 			.bc_req_portal		= OST_IO_PORTAL,
 			.bc_rep_portal		= OSC_REPLY_PORTAL,
 		},
