@@ -585,6 +585,18 @@ unload_modules() {
     return 0
 }
 
+fs_log_size() {
+	local facet=${1:-$SINGLEMDS}
+	local fstype=$(facet_fstype $facet)
+	local size=0
+	case $fstype in
+		ldiskfs) size=50;; # largest seen is 44, leave some headroom
+		zfs)     size=256;;
+	esac
+
+	echo -n $size
+}
+
 check_gss_daemon_nodes() {
     local list=$1
     dname=$2
