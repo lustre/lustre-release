@@ -66,40 +66,41 @@ sem_t sem;
 char usage[] =
 "Usage: %s filename command-sequence [path...]\n"
 "    command-sequence items:\n"
-"        c  close\n"
-"        B[num] call setstripe ioctl to create stripes\n"
-"        C[num] create with optional stripes\n"
-"        d  mkdir\n"
-"        D  open(O_DIRECTORY)\n"
-"        f  statfs\n"
+"	 c  close\n"
+"	 B[num] call setstripe ioctl to create stripes\n"
+"	 C[num] create with optional stripes\n"
+"	 d  mkdir\n"
+"	 D  open(O_DIRECTORY)\n"
+"	 f  statfs\n"
 "	 F  print FID\n"
-"        G gid get grouplock\n"
-"        g gid put grouplock\n"
-"        K  link path to filename\n"
-"        L  link filename to path\n"
-"        l  symlink filename to path\n"
-"        m  mknod\n"
-"        M  rw mmap to EOF (must open and stat prior)\n"
-"        n  rename path to filename\n"
-"        N  rename filename to path\n"
-"        o  open(O_RDONLY)\n"
-"        O  open(O_CREAT|O_RDWR)\n"
-"        r[num] read [optional length]\n"
-"        R  reference entire mmap-ed region\n"
-"        s  stat\n"
-"        S  fstat\n"
-"        t  fchmod\n"
-"        T[num] ftruncate [optional position, default 0]\n"
-"        u  unlink\n"
-"        U  munmap\n"
-"        v  verbose\n"
+"	 G gid get grouplock\n"
+"	 g gid put grouplock\n"
+"	 K  link path to filename\n"
+"	 L  link\n"
+"	 l  symlink filename to path\n"
+"	 m  mknod\n"
+"	 M  rw mmap to EOF (must open and stat prior)\n"
+"	 n  rename path to filename\n"
+"	 N  rename filename to path\n"
+"	 o  open(O_RDONLY)\n"
+"	 O  open(O_CREAT|O_RDWR)\n"
+"	 r[num] read [optional length]\n"
+"	 R  reference entire mmap-ed region\n"
+"	 s  stat\n"
+"	 S  fstat\n"
+"	 t  fchmod\n"
+"	 T[num] ftruncate [optional position, default 0]\n"
+"	 u  unlink\n"
+"	 U  munmap\n"
+"	 v  verbose\n"
 "	 V  open a volatile file\n"
-"        w[num] write optional length\n"
-"        W  write entire mmap-ed region\n"
-"        y  fsync\n"
-"        Y  fdatasync\n"
-"        z[num] seek [optional position, default 0]\n"
-"        _  wait for signal\n";
+"	 w[num] write optional length\n"
+"	 x  get file data version\n"
+"	 W  write entire mmap-ed region\n"
+"	 y  fsync\n"
+"	 Y  fdatasync\n"
+"	 z[num] seek [optional position, default 0]\n"
+"	 _  wait for signal\n";
 
 void usr1_handler(int unused)
 {
@@ -195,21 +196,22 @@ int get_flags(char *data, int *rflags)
 
 int main(int argc, char **argv)
 {
-	char		*fname, *commands;
-	const char	*newfile;
-	const char	*oldpath;
-	struct stat	 st;
-	struct statfs	 stfs;
-	size_t		 mmap_len = 0, i;
-	unsigned char	*mmap_ptr = NULL, junk = 0;
-	int		 rc, len, fd = -1;
-	int		 flags;
-	int		 save_errno;
-	int		 verbose = 0;
-	int		 gid = 0;
-	lustre_fid	 fid;
-	struct timespec	 ts;
-	struct lov_user_md_v3 lum;
+	char			*fname, *commands;
+	const char		*newfile;
+	const char		*oldpath;
+	struct stat		 st;
+	struct statfs		 stfs;
+	size_t			 mmap_len = 0, i;
+	unsigned char		*mmap_ptr = NULL, junk = 0;
+	int			 rc, len, fd = -1;
+	int			 flags;
+	int			 save_errno;
+	int			 verbose = 0;
+	int			 gid = 0;
+	lustre_fid		 fid;
+	struct timespec		 ts;
+	struct lov_user_md_v3	 lum;
+	__u64			 dv;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -536,10 +538,19 @@ int main(int argc, char **argv)
 				len -= rc;
 			}
 			break;
-                case 'W':
-                        for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
-                                mmap_ptr[i] += junk++;
-                        break;
+		case 'W':
+			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
+				mmap_ptr[i] += junk++;
+			break;
+		case 'x':
+			rc = llapi_get_data_version(fd, &dv, 0);
+			if (rc) {
+				fprintf(stderr, "cannot get file data version"
+					" %d\n", rc);
+				exit(-rc);
+			}
+			printf("dataversion is "LPU64"\n", dv);
+			break;
                 case 'y':
                         if (fsync(fd) == -1) {
                                 save_errno = errno;
