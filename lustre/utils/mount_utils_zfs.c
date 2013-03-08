@@ -33,16 +33,71 @@
 #include <libzfs.h>
 #include <dlfcn.h>
 
-/* Persistent mount data is stored in these user  attributes */
-#define LDD_VERSION_PROP                "lustre:version"
-#define LDD_FLAGS_PROP                  "lustre:flags"
-#define LDD_INDEX_PROP                  "lustre:index"
-#define LDD_FSNAME_PROP                 "lustre:fsname"
-#define LDD_SVNAME_PROP                 "lustre:svname"
-#define LDD_UUID_PROP                   "lustre:uuid"
-#define LDD_USERDATA_PROP               "lustre:userdata"
-#define LDD_MOUNTOPTS_PROP              "lustre:mountopts"
-#define LDD_PARAMS_PROP			"lustre:params"
+/* Persistent mount data is stored in these user attributes */
+#define LDD_PREFIX			"lustre:"
+#define LDD_VERSION_PROP		"lustre:version"
+#define LDD_FLAGS_PROP			"lustre:flags"
+#define LDD_INDEX_PROP			"lustre:index"
+#define LDD_FSNAME_PROP			"lustre:fsname"
+#define LDD_SVNAME_PROP			"lustre:svname"
+#define LDD_UUID_PROP			"lustre:uuid"
+#define LDD_USERDATA_PROP		"lustre:userdata"
+#define LDD_MOUNTOPTS_PROP		"lustre:mountopts"
+
+/* This structure is used to help bridge the gap between the ZFS
+ * properties Lustre uses and their corresponding internal LDD fields.
+ * It is meant to be used internally by the mount utility only. */
+struct zfs_ldd_prop_bridge {
+	/* Contains the publicly visible name for the property
+	 * (i.e. what is shown when running "zfs get") */
+	char *zlpb_prop_name;
+	/* Contains the offset into the lustre_disk_data structure where
+	 * the value of this property is or will be stored. (i.e. the
+	 * property is read from and written to this offset within ldd) */
+	int   zlpb_ldd_offset;
+	/* Function pointer responsible for reading in the @prop
+	 * property from @zhp and storing it in @ldd_field */
+	int (*zlpb_get_prop_fn)(zfs_handle_t *zhp, char *prop, void *ldd_field);
+	/* Function pointer responsible for writing the value of @ldd_field
+	 * into the @prop dataset property in @zhp */
+	int (*zlpb_set_prop_fn)(zfs_handle_t *zhp, char *prop, void *ldd_field);
+};
+
+/* Forward declarations needed to initialize the ldd prop bridge list */
+static int zfs_get_prop_int(zfs_handle_t *, char *, void *);
+static int zfs_set_prop_int(zfs_handle_t *, char *, void *);
+static int zfs_get_prop_str(zfs_handle_t *, char *, void *);
+static int zfs_set_prop_str(zfs_handle_t *, char *, void *);
+
+/* Helper for initializing the entries in the special_ldd_prop_params list.
+ *    - @name: stored directly in the zlpb_prop_name field
+ *             (e.g. lustre:fsname, lustre:version, etc.)
+ *    - @field: the field in the lustre_disk_data which directly maps to
+ *              the @name property. (e.g. ldd_fsname, ldd_config_ver, etc.)
+ *    - @type: The type of @field. Only "int" and "str" are supported.
+ */
+#define ZLB_INIT(name, field, type)			\
+{							\
+	name, offsetof(struct lustre_disk_data, field),	\
+	zfs_get_prop_ ## type, zfs_set_prop_ ## type	\
+}
+
+/* These ldd properties are special because they all have their own
+ * individual fields in the lustre_disk_data structure, as opposed to
+ * being globbed into the ldd_params field. As such, these need special
+ * handling when reading/writing the ldd structure to/from persistent
+ * storage. */
+struct zfs_ldd_prop_bridge special_ldd_prop_params[] = {
+	ZLB_INIT(LDD_VERSION_PROP,   ldd_config_ver, int),
+	ZLB_INIT(LDD_FLAGS_PROP,     ldd_flags,      int),
+	ZLB_INIT(LDD_INDEX_PROP,     ldd_svindex,    int),
+	ZLB_INIT(LDD_FSNAME_PROP,    ldd_fsname,     str),
+	ZLB_INIT(LDD_SVNAME_PROP,    ldd_svname,     str),
+	ZLB_INIT(LDD_UUID_PROP,      ldd_uuid,       str),
+	ZLB_INIT(LDD_USERDATA_PROP,  ldd_userdata,   str),
+	ZLB_INIT(LDD_MOUNTOPTS_PROP, ldd_mount_opts, str),
+	{ NULL }
+};
 
 /* indicate if the ZFS OSD has been successfully setup */
 static int osd_zfs_setup = 0;
@@ -66,8 +121,10 @@ struct zfs_symbols {
 	int		(*zfs_name_valid)(const char *, zfs_type_t);
 	zpool_handle_t*	(*zpool_open)(libzfs_handle_t *, const char *);
 	void		(*zpool_close)(zpool_handle_t *zhp);
-	int             (*nvlist_lookup_string)(nvlist_t*, const char*, char**);
+	int		(*nvlist_lookup_string)(nvlist_t*, const char*, char**);
 	int	(*nvlist_lookup_nvlist)(nvlist_t *, const char *, nvlist_t **);
+	nvpair_t *	(*nvlist_next_nvpair)(nvlist_t *, nvpair_t *);
+	char *		(*nvpair_name)(nvpair_t *);
 };
 
 static struct zfs_symbols sym;
@@ -111,6 +168,10 @@ static int zfs_populate_symbols(void)
 #define nvlist_lookup_string (*sym.nvlist_lookup_string)
 	DLSYM(handle_nvpair, nvlist_lookup_nvlist);
 #define nvlist_lookup_nvlist (*sym.nvlist_lookup_nvlist)
+	DLSYM(handle_nvpair, nvlist_next_nvpair);
+#define nvlist_next_nvpair (*sym.nvlist_next_nvpair)
+	DLSYM(handle_nvpair, nvpair_name);
+#define nvpair_name (*sym.nvpair_name)
 
 	error = dlerror();
 	if (error != NULL) {
@@ -121,12 +182,12 @@ static int zfs_populate_symbols(void)
 	return 0;
 }
 
-static int zfs_set_prop_int(zfs_handle_t *zhp, char *prop, __u32 val)
+static int zfs_set_prop_int(zfs_handle_t *zhp, char *prop, void *val)
 {
 	char str[64];
 	int ret;
 
-	(void) snprintf(str, sizeof (str), "%lu", (unsigned long)val);
+	(void) snprintf(str, sizeof (str), "%i", *(int *)val);
 	vprint("  %s=%s\n", prop, str);
 	ret = zfs_prop_set(zhp, prop, str);
 
@@ -137,14 +198,55 @@ static int zfs_set_prop_int(zfs_handle_t *zhp, char *prop, __u32 val)
  * Write the zfs property string, note that properties with a NULL or
  * zero-length value will not be written and 0 returned.
  */
-static int zfs_set_prop_str(zfs_handle_t *zhp, char *prop, char *val)
+static int zfs_set_prop_str(zfs_handle_t *zhp, char *prop, void *val)
 {
 	int ret = 0;
 
 	if (val && strlen(val) > 0) {
-		vprint("  %s=%s\n", prop, val);
-		ret = zfs_prop_set(zhp, prop, val);
+		vprint("  %s=%s\n", prop, (char *)val);
+		ret = zfs_prop_set(zhp, prop, (char *)val);
 	}
+
+	return ret;
+}
+
+/*
+ * Map '<key>=<value> ...' pairs in the passed string to dataset properties
+ * of the form 'lustre:<key>=<value>'.  Malformed <key>=<value> pairs will
+ * be skipped.
+ */
+static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
+{
+	char *params_dup, *token, *key, *value;
+	char *save_token = NULL;
+	char prop_name[ZFS_MAXNAMELEN];
+	int ret = 0;
+
+	params_dup = strdup(params);
+	if (params_dup == NULL)
+		return ENOMEM;
+
+	token = strtok_r(params_dup, " ", &save_token);
+	while (token) {
+		key = strtok(token, "=");
+		if (key == NULL)
+			continue;
+
+		value = strtok(NULL, "=");
+		if (value == NULL)
+			continue;
+
+		sprintf(prop_name, "%s%s", LDD_PREFIX, key);
+		vprint("  %s=%s\n", prop_name, value);
+
+		ret = zfs_prop_set(zhp, prop_name, value);
+		if (ret)
+			break;
+
+		token = strtok_r(NULL, " ", &save_token);
+	}
+
+	free(params_dup);
 
 	return ret;
 }
@@ -166,7 +268,8 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char *ds = mop->mo_device;
 	zfs_handle_t *zhp;
-	int ret = EINVAL;
+	struct zfs_ldd_prop_bridge *bridge;
+	int i, ret = EINVAL;
 
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
@@ -179,43 +282,15 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 
 	vprint("Writing %s properties\n", ds);
 
-	ret = zfs_set_prop_int(zhp, LDD_VERSION_PROP, ldd->ldd_config_ver);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_int(zhp, LDD_FLAGS_PROP, ldd->ldd_flags);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_int(zhp, LDD_INDEX_PROP, ldd->ldd_svindex);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_str(zhp, LDD_FSNAME_PROP, ldd->ldd_fsname);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_str(zhp, LDD_SVNAME_PROP, ldd->ldd_svname);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_str(zhp, LDD_UUID_PROP, (char *)ldd->ldd_uuid);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_str(zhp, LDD_USERDATA_PROP, ldd->ldd_userdata);
-	if (ret)
-		goto out_close;
-
-	ret = zfs_set_prop_str(zhp, LDD_MOUNTOPTS_PROP, ldd->ldd_mount_opts);
-	if (ret)
-		goto out_close;
-
-	if (strlen(ldd->ldd_params) > ZAP_MAXVALUELEN) {
-		ret = E2BIG;
-		goto out_close;
+	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++) {
+		bridge = &special_ldd_prop_params[i];
+		ret = bridge->zlpb_set_prop_fn(zhp, bridge->zlpb_prop_name,
+					(void *)ldd + bridge->zlpb_ldd_offset);
+		if (ret)
+			goto out_close;
 	}
-	ret = zfs_set_prop_str(zhp, LDD_PARAMS_PROP, ldd->ldd_params);
+
+	ret = zfs_set_prop_params(zhp, ldd->ldd_params);
 
 out_close:
 	zfs_close(zhp);
@@ -223,7 +298,7 @@ out:
 	return ret;
 }
 
-static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, __u32 *val)
+static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, void *val)
 {
 	nvlist_t *propval;
 	char *propstr;
@@ -238,14 +313,14 @@ static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, __u32 *val)
 		return ret;
 
 	errno = 0;
-	*val = strtoul(propstr, NULL, 10);
+	*(__u32 *)val = strtoul(propstr, NULL, 10);
 	if (errno)
 		return errno;
 
 	return ret;
 }
 
-static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, char *val)
+static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, void *val)
 {
 	nvlist_t *propval;
 	char *propstr;
@@ -264,6 +339,57 @@ static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, char *val)
 	return ret;
 }
 
+static int zfs_is_special_ldd_prop_param(char *name)
+{
+	int i;
+
+	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++)
+		if (!strcmp(name, special_ldd_prop_params[i].zlpb_prop_name))
+			return 1;
+
+	return 0;
+}
+
+static int zfs_get_prop_params(zfs_handle_t *zhp, char *param, int len)
+{
+	nvlist_t *props;
+	nvpair_t *nvp;
+	char key[ZFS_MAXNAMELEN];
+	char *value;
+	int ret = 0;
+
+	props = zfs_get_user_props(zhp);
+	if (props == NULL)
+		return ENOENT;
+
+	value = malloc(len);
+	if (value == NULL)
+		return ENOMEM;
+
+	nvp = NULL;
+	while (nvp = nvlist_next_nvpair(props, nvp), nvp) {
+		ret = zfs_get_prop_str(zhp, nvpair_name(nvp), value);
+		if (ret)
+			break;
+
+		if (strncmp(nvpair_name(nvp), LDD_PREFIX, strlen(LDD_PREFIX)))
+			continue;
+
+		if (zfs_is_special_ldd_prop_param(nvpair_name(nvp)))
+			continue;
+
+		sprintf(key, "%s=",  nvpair_name(nvp) + strlen(LDD_PREFIX));
+
+		ret = add_param(param, key, value);
+		if (ret)
+			break;
+	}
+
+	free(value);
+
+	return ret;
+}
+
 /*
  * Read the server config as properties associated with the dataset.
  * Missing entries as not treated error and are simply skipped.
@@ -271,7 +397,8 @@ static int zfs_get_prop_str(zfs_handle_t *zhp, char *prop, char *val)
 int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 {
 	zfs_handle_t *zhp;
-	int ret = EINVAL;
+	struct zfs_ldd_prop_bridge *bridge;
+	int i, ret = EINVAL;
 
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
@@ -280,39 +407,15 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 	if (zhp == NULL)
 		goto out;
 
-	ret = zfs_get_prop_int(zhp, LDD_VERSION_PROP, &ldd->ldd_config_ver);
-	if (ret && (ret != ENOENT))
-		goto out_close;
+	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++) {
+		bridge = &special_ldd_prop_params[i];
+		ret = bridge->zlpb_get_prop_fn(zhp, bridge->zlpb_prop_name,
+					(void *)ldd + bridge->zlpb_ldd_offset);
+		if (ret && (ret != ENOENT))
+			goto out_close;
+	}
 
-	ret = zfs_get_prop_int(zhp, LDD_FLAGS_PROP, &ldd->ldd_flags);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_int(zhp, LDD_INDEX_PROP, &ldd->ldd_svindex);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_FSNAME_PROP, ldd->ldd_fsname);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_SVNAME_PROP, ldd->ldd_svname);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_UUID_PROP, (char *)ldd->ldd_uuid);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_USERDATA_PROP, ldd->ldd_userdata);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_MOUNTOPTS_PROP, ldd->ldd_mount_opts);
-	if (ret && (ret != ENOENT))
-		goto out_close;
-
-	ret = zfs_get_prop_str(zhp, LDD_PARAMS_PROP, ldd->ldd_params);
+	ret = zfs_get_prop_params(zhp, ldd->ldd_params, 4096);
 	if (ret && (ret != ENOENT))
 		goto out_close;
 
