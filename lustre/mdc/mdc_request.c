@@ -87,6 +87,24 @@ int mdc_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
         }
 }
 
+static inline int mdc_queue_wait(struct ptlrpc_request *req)
+{
+	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+	int rc;
+
+	/* mdc_enter_request() ensures that this client has no more
+	 * than cl_max_rpcs_in_flight RPCs simultaneously inf light
+	 * against an MDT. */
+	rc = mdc_enter_request(cli);
+	if (rc != 0)
+		return rc;
+
+	rc = ptlrpc_queue_wait(req);
+	mdc_exit_request(cli);
+
+	return rc;
+}
+
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
 /* XXX this should become mdc_get_info("key"), sending MDS_GET_INFO RPC */
 static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
@@ -1218,7 +1236,7 @@ static int mdc_ioc_hsm_progress(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 out:
 	ptlrpc_req_finished(req);
@@ -1246,7 +1264,7 @@ static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archives)
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 out:
 	ptlrpc_req_finished(req);
@@ -1280,7 +1298,7 @@ static int mdc_ioc_hsm_current_action(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1311,7 +1329,7 @@ static int mdc_ioc_hsm_ct_unregister(struct obd_import *imp)
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 out:
 	ptlrpc_req_finished(req);
@@ -1345,7 +1363,7 @@ static int mdc_ioc_hsm_state_get(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1393,7 +1411,7 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 
 	EXIT;
@@ -1449,7 +1467,7 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = ptlrpc_queue_wait(req);
+	rc = mdc_queue_wait(req);
 	GOTO(out, rc);
 
 out:
