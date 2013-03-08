@@ -789,6 +789,9 @@ void ccc_io_update_iov(const struct lu_env *env,
         }
 
         cio->cui_nrsegs = i + 1;
+	LASSERTF(cio->cui_tot_nrsegs >= cio->cui_nrsegs,
+		 "tot_nrsegs: %lu, nrsegs: %lu\n",
+		 cio->cui_tot_nrsegs, cio->cui_nrsegs);
 }
 
 int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
@@ -810,32 +813,39 @@ void ccc_io_advance(const struct lu_env *env,
                     const struct cl_io_slice *ios,
                     size_t nob)
 {
-        struct ccc_io    *cio = cl2ccc_io(env, ios);
-        struct cl_io     *io  = ios->cis_io;
-        struct cl_object *obj = ios->cis_io->ci_obj;
+	struct ccc_io    *cio = cl2ccc_io(env, ios);
+	struct cl_io     *io  = ios->cis_io;
+	struct cl_object *obj = ios->cis_io->ci_obj;
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-        if (cl_is_normalio(env, io) && io->ci_continue) {
-                /* update the iov */
-                LASSERT(cio->cui_tot_nrsegs >= cio->cui_nrsegs);
-                LASSERT(cio->cui_tot_count  >= nob);
+	if (!cl_is_normalio(env, io))
+		return;
 
-                cio->cui_iov        += cio->cui_nrsegs;
-                cio->cui_tot_nrsegs -= cio->cui_nrsegs;
-                cio->cui_tot_count  -= nob;
+	LASSERT(cio->cui_tot_nrsegs >= cio->cui_nrsegs);
+	LASSERT(cio->cui_tot_count  >= nob);
 
-                if (cio->cui_iov_olen) {
-                        struct iovec *iv;
+	cio->cui_iov        += cio->cui_nrsegs;
+	cio->cui_tot_nrsegs -= cio->cui_nrsegs;
+	cio->cui_tot_count  -= nob;
 
-                        cio->cui_iov--;
-                        cio->cui_tot_nrsegs++;
-                        iv = &cio->cui_iov[0];
-                        iv->iov_base += iv->iov_len;
-                        LASSERT(cio->cui_iov_olen > iv->iov_len);
-                        iv->iov_len = cio->cui_iov_olen - iv->iov_len;
-                }
-        }
+	/* update the iov */
+	if (cio->cui_iov_olen > 0) {
+		struct iovec *iv;
+
+		cio->cui_iov--;
+		cio->cui_tot_nrsegs++;
+		iv = &cio->cui_iov[0];
+		if (io->ci_continue) {
+			iv->iov_base += iv->iov_len;
+			LASSERT(cio->cui_iov_olen > iv->iov_len);
+			iv->iov_len = cio->cui_iov_olen - iv->iov_len;
+		} else {
+			/* restore the iov_len, in case of restart io. */
+			iv->iov_len = cio->cui_iov_olen;
+		}
+		cio->cui_iov_olen = 0;
+	}
 }
 
 /**
