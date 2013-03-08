@@ -30,7 +30,7 @@
  * Use is subject to license terms.
  */
 /*
- * Copyright (c) 2010, 2011, Intel Corporation.
+ * Copyright (c) 2010, 2013, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/

@@ -5,6 +5,8 @@
  *
  * This file may be redistributed under the terms of the GNU Public
  * License.
+ *
+ * Copyright (c) 2012, Intel Corporation.
  */
 
 /*

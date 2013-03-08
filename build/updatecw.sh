@@ -3,7 +3,7 @@
 # Does not add copyright notices to files that are missing them
 #
 # Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2012, Intel Corporation.
+# Copyright (c) 2012, 2013, Intel Corporation.
 #
 TMP=${TMP:-/tmp}
 TMPFILE=$(mktemp $TMP/updatecopy.XXXXXX)
