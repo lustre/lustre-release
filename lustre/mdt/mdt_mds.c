@@ -563,9 +563,9 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		.psc_watchdog_factor	= MDT_SERVICE_WATCHDOG_FACTOR,
 		.psc_buf		= {
 			.bc_nbufs		= MDS_NBUFS,
-			.bc_buf_size		= MDS_BUFSIZE,
-			.bc_req_max_size	= MDS_MAXREQSIZE,
-			.bc_rep_max_size	= MDS_MAXREPSIZE,
+			.bc_buf_size		= MDS_OUT_BUFSIZE,
+			.bc_req_max_size	= MDS_OUT_MAXREQSIZE,
+			.bc_rep_max_size	= MDS_OUT_MAXREPSIZE,
 			.bc_req_portal		= MDS_MDS_PORTAL,
 			.bc_rep_portal		= MDC_REPLY_PORTAL,
 		},

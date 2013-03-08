@@ -353,8 +353,17 @@
  */
 #define MDS_LOV_MAXREPSIZE	MDS_LOV_MAXREQSIZE
 
+/**
+ * The update request includes all of updates from the create, which might
+ * include linkea (4K maxim), together with other updates, we set it to 9K:
+ * lustre_msg + ptlrpc_body + UPDATE_BUF_SIZE (8K)
+ */
+#define MDS_OUT_MAXREQSIZE	(9 * 1024)
+#define MDS_OUT_MAXREPSIZE	MDS_MAXREPSIZE
+
 /** MDS_BUFSIZE = max_reqsize (w/o LOV EA) + max sptlrpc payload size */
-#define MDS_BUFSIZE		(MDS_MAXREQSIZE + 1024)
+#define MDS_BUFSIZE		max_t(int, MDS_MAXREQSIZE + 1024, 8 * 1024)
+
 /**
  * MDS_LOV_BUFSIZE should be at least max_reqsize (with LOV EA) +
  * max sptlrpc payload size, however, we need to allocate a much larger buffer
@@ -367,12 +376,21 @@
  * In the meanwhile, size of rqbd can't be too large, because rqbd can't be
  * reused until all requests fit in it have been processed and released,
  * which means one long blocked request can prevent the rqbd be reused.
- * Now we give extra 128K to buffer size, so even each rqbd is unlinked
- * from LNet with unused 48K, buffer utilization will be about 72%.
+ * Now we set request buffer size to 128K, so even each rqbd is unlinked
+ * from LNet with unused 48K, buffer utilization will be about 62%.
  * Please check LU-2432 for details.
  */
 /** MDS_LOV_BUFSIZE = max_reqsize (w/ LOV EA) + max sptlrpc payload size */
-#define MDS_LOV_BUFSIZE		(MDS_LOV_MAXREQSIZE + (1 << 17))
+#define MDS_LOV_BUFSIZE		max_t(int, MDS_LOV_MAXREQSIZE + 1024, \
+					   128 * 1024)
+
+/**
+ * MDS_OUT_BUFSIZE = max_out_reqsize + max sptlrpc payload (~1K) which is
+ * about 10K, for the same reason as MDS_LOV_BUFSIZE, we also give some
+ * extra bytes to each request buffer to improve buffer utilization rate.
+  */
+#define MDS_OUT_BUFSIZE		max_t(int, MDS_OUT_MAXREQSIZE + 1024, \
+					   24 * 1024)
 
 /** FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc */
 #define FLD_MAXREQSIZE  (160)
