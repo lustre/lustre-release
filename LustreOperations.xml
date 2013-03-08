@@ -64,18 +64,23 @@ Mounting by Label</title>
   </section>
   <section xml:id="dbdoclet.50438194_24122">
     <title><indexterm><primary>operations</primary><secondary>starting</secondary></indexterm>Starting Lustre</title>
-    <para>The startup order of Lustre components depends on whether you have a combined MGS/MDT or these components are separate.</para>
-    <itemizedlist>
+    <para>On the first start of a Lustre file system, the components must be started in the following order:</para>
+    <orderedlist>
       <listitem>
-        <para>If you have a combined MGS/MDT, the recommended startup order is OSTs, then the MGS/MDT, and then clients.</para>
+        <para>Mount the MGT.</para>
+		<note><para>If a combined MGT/MDT is present, Lustre will correctly mount the MGT and MDT automatically.</para></note>
       </listitem>
       <listitem>
-        <para> If the MGS and MDT are separate, the recommended startup order is: MGS, then OSTs, then the MDT, and then clients.</para>
+        <para>Mount the MDT.</para>
+		<note><para condition='l24'>Mount all MDTs if multiple MDTs are present.</para></note>
       </listitem>
-    </itemizedlist>
-    <note>
-      <para>If an OST is added to a Lustre file system with a combined MGS/MDT, then the startup order changes slightly; the MGS must be started first because the OST needs to write its configuration data to it. In this scenario, the startup order is MGS/MDT, then OSTs, then the clients.</para>
-    </note>
+      <listitem>
+        <para>Mount the OST(s).</para>
+      </listitem>
+      <listitem>
+        <para>Mount the client(s).</para>
+      </listitem>
+    </orderedlist>
   </section>
   <section xml:id="dbdoclet.50438194_84876">
     <title><indexterm><primary>operations</primary><secondary>mounting</secondary></indexterm>Mounting a Server</title>
