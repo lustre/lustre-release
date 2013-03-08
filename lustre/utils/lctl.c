@@ -402,7 +402,7 @@ command_t cmdlist[] = {
          "usage: del_interface [ip]"},
         {"add_route", jt_ptl_add_route, 0,
          "add an entry to the portals routing table\n"
-         "usage: add_route <gateway> <target> [<target>]"},
+	 "usage: add_route <gateway> [<hops> [<priority>]]"},
         {"del_route", jt_ptl_del_route, 0,
          "delete route via gateway to targets from the portals routing table\n"
          "usage: del_route <gateway> [<target>] [<target>]"},

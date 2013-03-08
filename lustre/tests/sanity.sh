@@ -10679,12 +10679,13 @@ test_215() { # for bugs 18102, 21079, 21517
 
 	# /proc/sys/lnet/routes should look like this:
 	# Routing disabled/enabled
-	# net hops state router
-	# where net is a string like tcp0, hops >= 0, state is up/down,
+	# net hops priority state router
+	# where net is a string like tcp0, hops > 0, priority >= 0,
+	# state is up/down,
 	# router is a string like 192.168.1.1@tcp2
 	L1="^Routing (disabled|enabled)$"
-	L2="^net +hops +state +router$"
-	BR="^$NET +$N +(up|down) +$NID$"
+	L2="^net +hops +priority +state +router$"
+	BR="^$NET +$N +(0|1) +(up|down) +$NID$"
 	create_lnet_proc_files "routes"
 	check_lnet_proc_entry "routes.out" "/proc/sys/lnet/routes" "$BR" "$L1" "$L2"
 	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"

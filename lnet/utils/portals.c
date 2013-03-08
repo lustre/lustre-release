@@ -1126,14 +1126,15 @@ jt_ptl_add_route (int argc, char **argv)
         struct libcfs_ioctl_data data;
         lnet_nid_t               gateway_nid;
         unsigned int             hops = 1;
+	unsigned int		 priority = 0;
         char                    *end;
         int                      rc;
 
-        if (argc < 2 || argc > 3)
-        {
-                fprintf (stderr, "usage: %s gateway [hopcount]\n", argv[0]);
-                return (0);
-        }
+	if (argc < 2 || argc > 4) {
+		fprintf(stderr, "usage: %s gateway [hopcount [priority]]\n",
+			argv[0]);
+		return -1;
+	}
 
         if (!g_net_is_set(argv[0]))
                 return (-1);
@@ -1144,18 +1145,29 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
         }
 
-        if (argc == 3) {
-                hops = strtoul(argv[2], &end, 0);
-                if (hops >= 256 || *end != 0) {
-                        fprintf (stderr, "Can't parse hopcount \"%s\"\n", argv[2]);
-                        return -1;
-                }
-        }
+	if (argc > 2) {
+		hops = strtoul(argv[2], &end, 0);
+		if (hops == 0 || hops >= 256 || (end != NULL && *end != 0)) {
+			fprintf(stderr, "Can't parse hopcount \"%s\"\n",
+				argv[2]);
+			return -1;
+		}
+		if (argc == 4) {
+			priority = strtoul(argv[3], &end, 0);
+			if (end != NULL && *end != 0) {
+				fprintf(stderr,
+					"Can't parse priority \"%s\"\n",
+					argv[3]);
+				return -1;
+			}
+		}
+	}
 
-        LIBCFS_IOC_INIT(data);
-        data.ioc_net = g_net;
-        data.ioc_count = hops;
-        data.ioc_nid = gateway_nid;
+	LIBCFS_IOC_INIT(data);
+	data.ioc_net = g_net;
+	data.ioc_count = hops;
+	data.ioc_nid = gateway_nid;
+	data.ioc_priority = priority;
 
         rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_ROUTE, &data);
         if (rc != 0) {
@@ -1267,6 +1279,7 @@ jt_ptl_print_routes (int argc, char **argv)
         lnet_nid_t                nid;
         unsigned int              hops;
         int                       alive;
+	unsigned int		  pri;
 
         for (index = 0;;index++)
         {
@@ -1281,10 +1294,11 @@ jt_ptl_print_routes (int argc, char **argv)
                 hops    = data.ioc_count;
                 nid     = data.ioc_nid;
                 alive   = data.ioc_flags;
+		pri     = data.ioc_priority;
 
-                printf ("net %18s hops %u gw %32s %s\n", 
-                        libcfs_net2str(net), hops,
-                        libcfs_nid2str(nid), alive ? "up" : "down");
+		printf("net %18s hops %u gw %32s %s pri %u\n",
+		       libcfs_net2str(net), hops,
+		       libcfs_nid2str(nid), alive ? "up" : "down", pri);
         }
 
         if (errno != ENOENT)

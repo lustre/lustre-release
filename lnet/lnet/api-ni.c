@@ -1599,8 +1599,8 @@ LNetCtl(unsigned int cmd, void *arg)
                 return lnet_fail_nid(data->ioc_nid, data->ioc_count);
 
         case IOC_LIBCFS_ADD_ROUTE:
-                rc = lnet_add_route(data->ioc_net, data->ioc_count,
-                                    data->ioc_nid);
+		rc = lnet_add_route(data->ioc_net, data->ioc_count,
+				    data->ioc_nid, data->ioc_priority);
                 return (rc != 0) ? rc : lnet_check_routes();
 
         case IOC_LIBCFS_DEL_ROUTE:
@@ -1609,7 +1609,8 @@ LNetCtl(unsigned int cmd, void *arg)
         case IOC_LIBCFS_GET_ROUTE:
                 return lnet_get_route(data->ioc_count,
                                       &data->ioc_net, &data->ioc_count,
-                                      &data->ioc_nid, &data->ioc_flags);
+				      &data->ioc_nid, &data->ioc_flags,
+				      &data->ioc_priority);
         case IOC_LIBCFS_NOTIFY_ROUTER:
                 return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
                                    cfs_time_current() -
