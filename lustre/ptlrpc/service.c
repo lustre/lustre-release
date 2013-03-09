@@ -3158,22 +3158,23 @@ EXPORT_SYMBOL(ptlrpc_unregister_service);
  * to be shot, so it's intentionally non-aggressive. */
 int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 {
-	struct ptlrpc_request		*request;
+	struct ptlrpc_request		*request = NULL;
 	struct timeval			right_now;
 	long				timediff;
 
 	cfs_gettimeofday(&right_now);
 
 	spin_lock(&svcpt->scp_req_lock);
-	if (!ptlrpc_server_request_pending(svcpt, 1)) {
+        /* How long has the next entry been waiting? */
+	if (ptlrpc_server_high_pending(svcpt, 1))
+		request = ptlrpc_nrs_req_poll_nolock(svcpt, true);
+	else if (ptlrpc_server_normal_pending(svcpt, 1))
+		request = ptlrpc_nrs_req_poll_nolock(svcpt, false);
+
+	if (request == NULL) {
 		spin_unlock(&svcpt->scp_req_lock);
 		return 0;
 	}
-
-        /* How long has the next entry been waiting? */
-	request = ptlrpc_nrs_req_poll_nolock(svcpt, true);
-	if (request == NULL)
-		request = ptlrpc_nrs_req_poll_nolock(svcpt, false);
 
 	timediff = cfs_timeval_sub(&right_now, &request->rq_arrival_time, NULL);
 	spin_unlock(&svcpt->scp_req_lock);
