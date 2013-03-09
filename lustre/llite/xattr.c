@@ -491,6 +491,10 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
                 lump = (struct lov_user_md *)buffer;
                 memcpy(lump, lmm, lmmsize);
+		/* do not return layout gen for getxattr otherwise it would
+		 * confuse tar --xattr by recognizing layout gen as stripe
+		 * offset when the file is restored. See LU-2809. */
+		lump->lmm_layout_gen = 0;
 
                 rc = lmmsize;
 out:

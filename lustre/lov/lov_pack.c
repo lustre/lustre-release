@@ -662,19 +662,19 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lmm_size = lum_size;
         else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
                 GOTO(out_set, rc = -EOVERFLOW);
-        /*
-         * Have a difference between lov_mds_md & lov_user_md.
-         * So we have to re-order the data before copy to user.
-         */
-        lum.lmm_stripe_count = lmmk->lmm_stripe_count;
-        lum.u.lum_layout_gen = lmmk->lmm_layout_gen;
-        ((struct lov_user_md*)lmmk)->u.lum_layout_gen = lum.u.lum_layout_gen;
-        ((struct lov_user_md*)lmmk)->lmm_stripe_count = lum.lmm_stripe_count;
-        if (cfs_copy_to_user(lump, lmmk, lmm_size))
-                rc = -EFAULT;
+	/*
+	 * Have a difference between lov_mds_md & lov_user_md.
+	 * So we have to re-order the data before copy to user.
+	 */
+	lum.lmm_stripe_count = lmmk->lmm_stripe_count;
+	lum.lmm_layout_gen = lmmk->lmm_layout_gen;
+	((struct lov_user_md *)lmmk)->lmm_layout_gen = lum.lmm_layout_gen;
+	((struct lov_user_md *)lmmk)->lmm_stripe_count = lum.lmm_stripe_count;
+	if (cfs_copy_to_user(lump, lmmk, lmm_size))
+		rc = -EFAULT;
 
-        obd_free_diskmd(exp, &lmmk);
+	obd_free_diskmd(exp, &lmmk);
 out_set:
-        set_fs(seg);
-        RETURN(rc);
+	set_fs(seg);
+	RETURN(rc);
 }
