@@ -113,6 +113,7 @@ init_test_env() {
     export TESTSUITE=`basename $0 .sh`
     export TEST_FAILED=false
     export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
+    export RPC_MODE=${RPC_MODE:-false}
 
     export MKE2FS=${MKE2FS:-mke2fs}
     export DEBUGFS=${DEBUGFS:-debugfs}
@@ -247,7 +248,9 @@ init_test_env() {
     # print the durations of each test if "true"
     DDETAILS=${DDETAILS:-false}
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
-    rm -f $TMP/*active
+    if ! $RPC_MODE; then
+        rm -f $TMP/*active
+    fi
 }
 
 case `uname -r` in
