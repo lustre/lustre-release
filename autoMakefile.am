@@ -136,11 +136,11 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
 		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client\""; \
 	fi; \
-	if [[ "X$(BUILD_OSD_LDISKFS)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --define \"build_lustre_osd_ldiskfs 0\""; \
+	if [[ "X$(BUILD_OSD_LDISKFS)" = Xtrue ]]; then \
+		RPMARGS="$$RPMARGS --define \"build_lustre_osd_ldiskfs 1\""; \
 	fi; \
-	if [[ "X$(BUILD_OSD_ZFS)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --define \"build_lustre_osd_zfs 0\""; \
+	if [[ "X$(BUILD_OSD_ZFS)" = Xtrue ]]; then \
+		RPMARGS="$$RPMARGS --define \"build_lustre_osd_zfs 1\""; \
 	fi; \
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz

@@ -20,8 +20,8 @@
 %{!?lustre_name: %global lustre_name lustre}
 %{!?build_lustre_tests: %global build_lustre_tests 1}
 
-%{!?build_lustre_osd_ldiskfs: %global build_lustre_osd_ldiskfs 1}
-%{!?build_lustre_osd_zfs: %global build_lustre_osd_zfs 1}
+%{!?build_lustre_osd_ldiskfs: %global build_lustre_osd_ldiskfs 0}
+%{!?build_lustre_osd_zfs: %global build_lustre_osd_zfs 0}
 
 # in order to get kernel symset and/or kernel module dependencies into
 # the RPM, in order to support weak-modules, the internal dependency gen-

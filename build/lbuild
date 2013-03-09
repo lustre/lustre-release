@@ -68,6 +68,8 @@ USE_BUILD_CACHE=true
 NORPM=false
 IOKITRPM=true
 LDISKFSRPM=true
+OSDLDISKFSRPM=true
+OSDZFSRPM=false
 SKIPLDISKFSRPM="v1_4_* b1_4"
 SMPTYPES="smp bigsmp default ''"
 PATCHLESS=false
@@ -942,9 +944,21 @@ build_lustre() {
         lustre_tests="no"
     fi
 
+    local osd_zfs=""
+    if $OSDZFSRPM; then
+        osd_zfs="yes"
+    fi
+
+    local osd_ldiskfs=""
+    if $OSDLDISKFSRPM; then
+        osd_ldiskfs="yes"
+    fi
+
     $RPMBUILD $targets $rpmbuildopt "$LUSTRE" \
         ${is_patchless:+--define "lustre_name lustre-client"} \
         ${lustre_tests:+--define "build_lustre_tests 0"} \
+        ${osd_zfs:+--define "build_lustre_osd_zfs 1"} \
+        ${osd_ldiskfs:+--define "build_lustre_osd_ldiskfs 1"} \
         ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
         --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
         --define "kdir $linux" \
@@ -1079,6 +1093,8 @@ build_spl_zfs() {
 
         CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*/*) ${CONFIGURE_FLAGS}"
     done
+
+    OSDZFSRPM=true
 
     return 0
 }
