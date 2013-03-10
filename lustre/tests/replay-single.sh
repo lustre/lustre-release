@@ -25,8 +25,8 @@ require_dsh_mds || exit 0
 ALWAYS_EXCEPT="61d   33a 33b    89      $REPLAY_SINGLE_EXCEPT"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-2342  LU-951
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 20b 70a  73a"
+# bug number for skipped test:        LU-951
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 73a"
 
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a      44b    65 66 67 68"
@@ -438,7 +438,7 @@ test_20b() { # bug 10480
     wait_mds_ost_sync || return 3
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
-    [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
+    (( $AFTERUSED > $BEFOREUSED + $(fs_log_size) )) &&
         error "after $AFTERUSED > before $BEFOREUSED"
     return 0
 }
