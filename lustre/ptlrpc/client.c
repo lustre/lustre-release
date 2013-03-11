@@ -1223,6 +1223,16 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
+	/*
+	 * Security layer unwrap might ask resend this request.
+	 */
+	if (req->rq_resend)
+		RETURN(0);
+
+	rc = unpack_reply(req);
+	if (rc)
+		RETURN(rc);
+
 	/* retry indefinitely on EINPROGRESS */
 	if (lustre_msg_get_status(req->rq_repmsg) == -EINPROGRESS &&
 	    ptlrpc_no_resend(req) == 0 && !req->rq_no_retry_einprogress) {
@@ -1251,17 +1261,9 @@ static int after_reply(struct ptlrpc_request *req)
 			req->rq_sent = now + req->rq_timeout;
 		else
 			req->rq_sent = now + req->rq_nr_resend;
+
+		RETURN(0);
 	}
-
-        /*
-         * Security layer unwrap might ask resend this request.
-         */
-        if (req->rq_resend)
-                RETURN(0);
-
-        rc = unpack_reply(req);
-        if (rc)
-                RETURN(rc);
 
         cfs_gettimeofday(&work_start);
         timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
