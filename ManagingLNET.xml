@@ -77,7 +77,7 @@ $ lctl network up</screen>
       <note>
         <para>
 To remove all Lustre modules, run:</para>
-        <para><literal>$ lctl modules | awk &apos;{print $2}&apos; | xargs rmmod</literal></para>
+        <para><literal>$ lustre_rmmod</literal></para>
       </note>
     </section>
   </section>
