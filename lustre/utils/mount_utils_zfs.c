@@ -34,15 +34,15 @@
 #include <dlfcn.h>
 
 /* Persistent mount data is stored in these user attributes */
-#define LDD_PREFIX			"lustre:"
-#define LDD_VERSION_PROP		"lustre:version"
-#define LDD_FLAGS_PROP			"lustre:flags"
-#define LDD_INDEX_PROP			"lustre:index"
-#define LDD_FSNAME_PROP			"lustre:fsname"
-#define LDD_SVNAME_PROP			"lustre:svname"
-#define LDD_UUID_PROP			"lustre:uuid"
-#define LDD_USERDATA_PROP		"lustre:userdata"
-#define LDD_MOUNTOPTS_PROP		"lustre:mountopts"
+#define LDD_PREFIX		"lustre:"
+#define LDD_VERSION_PROP	LDD_PREFIX "version"
+#define LDD_FLAGS_PROP		LDD_PREFIX "flags"
+#define LDD_INDEX_PROP		LDD_PREFIX "index"
+#define LDD_FSNAME_PROP		LDD_PREFIX "fsname"
+#define LDD_SVNAME_PROP		LDD_PREFIX "svname"
+#define LDD_UUID_PROP		LDD_PREFIX "uuid"
+#define LDD_USERDATA_PROP	LDD_PREFIX "userdata"
+#define LDD_MOUNTOPTS_PROP	LDD_PREFIX "mountopts"
 
 /* This structure is used to help bridge the gap between the ZFS
  * properties Lustre uses and their corresponding internal LDD fields.
