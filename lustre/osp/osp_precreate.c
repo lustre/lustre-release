@@ -1139,8 +1139,10 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 
 		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
 				osp_precreate_timeout_condition, d);
-		if (cfs_time_aftereq(cfs_time_current(), expire))
+		if (cfs_time_aftereq(cfs_time_current(), expire)) {
+			rc = -ETIMEDOUT;
 			break;
+		}
 
 		l_wait_event(d->opd_pre_user_waitq,
 			     osp_precreate_ready_condition(env, d), &lwi);
