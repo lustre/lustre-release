@@ -79,6 +79,10 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet-sysctl.h>
 
+#ifdef HAVE_COMPAT_RDMA
+#include <linux/compat-2.6.h>
+#endif
+
 #if !HAVE_GFP_T
 typedef int gfp_t;
 #endif

@@ -490,17 +490,14 @@ fi
 ])
 
 #
-# LB_CONFIG_OFED_BACKPORTS
+# LB_CONFIG_COMPAT_RDMA
 #
-# include any OFED backport headers in all compile commands
-# NOTE: this does only include the backport paths, not the OFED headers
-#       adding the OFED headers is done in the lnet portion
-AC_DEFUN([LB_CONFIG_OFED_BACKPORTS],
-[AC_MSG_CHECKING([whether to use any OFED backport headers])
+AC_DEFUN([LB_CONFIG_COMPAT_RDMA],
+[AC_MSG_CHECKING([whether to use any OFED Compact RDMA])
 # set default
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
-	               [build o2iblnd against path]),
+			[build o2iblnd against path]),
 	[
 		case $with_o2ib in
 		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
@@ -529,6 +526,29 @@ else
 			break
 		fi
 	done
+	compatrdma_found=false
+	if $o2ib_found; then
+		if test \( -f ${O2IBPATH}/include/linux/compat-2.6.h \); then
+			compatrdma_found=true
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_COMPAT_RDMA, 1, [compat rdma found])
+		else
+			AC_MSG_RESULT([no])
+		fi
+	fi
+fi
+])
+
+# LB_CONFIG_OFED_BACKPORTS
+#
+# include any OFED backport headers in all compile commands
+# NOTE: this does only include the backport paths, not the OFED headers
+#       adding the OFED headers is done in the lnet portion
+AC_DEFUN([LB_CONFIG_OFED_BACKPORTS],
+[AC_MSG_CHECKING([whether to use any OFED backport headers])
+if test $ENABLEO2IB -eq 0; then
+	AC_MSG_RESULT([no])
+else
 	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
 		case $ENABLEO2IB in
@@ -538,10 +558,12 @@ else
 			*) AC_MSG_ERROR([internal error]);;
 		esac
 	else
-                if test -f $O2IBPATH/config.mk; then
-			. $O2IBPATH/config.mk
-                elif test -f $O2IBPATH/ofed_patch.mk; then
-			. $O2IBPATH/ofed_patch.mk
+                if ! $compatrdma_found; then
+			if test -f $O2IBPATH/config.mk; then
+				. $O2IBPATH/config.mk
+			elif test -f $O2IBPATH/ofed_patch.mk; then
+				. $O2IBPATH/ofed_patch.mk
+			fi
 		fi
 		if test -n "$BACKPORT_INCLUDES"; then
 			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
@@ -550,7 +572,7 @@ else
 			AC_MSG_RESULT([yes])
 		else
 			AC_MSG_RESULT([no])
-                fi
+		fi
 	fi
 fi
 ])
@@ -633,7 +655,7 @@ fi
 # 2.6.28
 LC_MODULE_LOADING
 
-#LB_LINUX_CONFIG_BIG_STACK
+LB_CONFIG_COMPAT_RDMA
 
 # it's ugly to be doing anything with OFED outside of the lnet module, but
 # this has to be done here so that the backports path is set before all of
