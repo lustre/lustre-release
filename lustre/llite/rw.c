@@ -576,7 +576,13 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
  * know what the actual RPC size is.  If this needs to change, it makes more
  * sense to tune the i_blkbits value for the file based on the OSTs it is
  * striped over, rather than having a constant value for all files here. */
-#define RAS_INCREASE_STEP(inode) (1UL << inode->i_blkbits)
+
+/* RAS_INCREASE_STEP should be (1UL << (inode->i_blkbits - CFS_PAGE_SHIFT)).
+ * Temprarily set RAS_INCREASE_STEP to 1MB. After 4MB RPC is enabled
+ * by default, this should be adjusted corresponding with max_read_ahead_mb
+ * and max_read_ahead_per_file_mb otherwise the readahead budget can be used
+ * up quickly which will affect read performance siginificantly. See LU-2816 */
+#define RAS_INCREASE_STEP(inode) (ONE_MB_BRW_SIZE >> CFS_PAGE_SHIFT)
 
 static inline int stride_io_mode(struct ll_readahead_state *ras)
 {
