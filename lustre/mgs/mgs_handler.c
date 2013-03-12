@@ -1058,7 +1058,6 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		     struct lu_device_type *ldt, struct lustre_cfg *lcfg)
 {
 	static struct ptlrpc_service_conf	 conf;
-	struct lprocfs_static_vars		 lvars = { 0 };
 	struct obd_device			*obd;
 	struct lustre_mount_info		*lmi;
 	struct llog_ctxt			*ctxt;
@@ -1124,13 +1123,11 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	mgs->mgs_start_time = cfs_time_current_sec();
 	spin_lock_init(&mgs->mgs_lock);
 
-	/* Setup proc */
-	lprocfs_mgs_init_vars(&lvars);
-	if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
-		lproc_mgs_setup(mgs, lustre_cfg_string(lcfg, 3));
-		rc = lprocfs_alloc_md_stats(obd, LPROC_MGS_LAST);
-		if (rc)
-			GOTO(err_llog, rc);
+	rc = lproc_mgs_setup(mgs, lustre_cfg_string(lcfg, 3));
+	if (rc != 0) {
+		CERROR("%s: cannot initialize proc entry: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(err_llog, rc);
 	}
 
 	conf = (typeof(conf)) {

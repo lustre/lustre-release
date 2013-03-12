@@ -239,18 +239,17 @@ int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(const struct lu_env *env, struct mgs_device *m);
 int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
 
-#define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
 #ifdef LPROCFS
-int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name);
+int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name);
 void lproc_mgs_cleanup(struct mgs_device *mgs);
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
-static inline int lproc_mgs_setup(struct mgs_device *mgs)
+static inline int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 {return 0;}
-static inline int lproc_mgs_cleanup(struct mgs_device *mgs)
-{return 0;}
+static inline void lproc_mgs_cleanup(struct mgs_device *mgs)
+{}
 static inline int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {return 0;}
 static inline int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
