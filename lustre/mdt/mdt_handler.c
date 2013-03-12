@@ -5703,6 +5703,8 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		rc = -EREMOTE;
 	else if (!mdt_object_exists(obj))
 		rc = -ENOENT;
+	else
+		rc = 0;
 
 	if (rc < 0) {
 		mdt_object_put(info->mti_env, obj);
