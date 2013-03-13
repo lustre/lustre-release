@@ -107,6 +107,10 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/Makefile 							\
 	build/Rules.in
 
+if ARCH_MIC
+EXTRA_DIST += build/gen_filelist.sh
+endif
+
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | \
 		sed -re 's/--(en|dis)able-tests//'); \
@@ -120,6 +124,27 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
 		fi; \
 	fi; \
+	if [ -n "@CROSS_PATH@" ]; then \
+		if [[ "X$(BUILD_SERVER)" = Xtrue ]]; then \
+			echo -e "\n" \
+			"*** Don't support cross compilation for the Intel(R) Xeon Phi(TM) card.\n"; \
+			exit 1; \
+		fi; \
+		CROSS_SUFFIX="-mic"; \
+		RPMARGS="$$RPMARGS --define \"post_script build/gen_filelist.sh\""; \
+		RPMARGS="$$RPMARGS --define \"cross_path @CROSS_PATH@\""; \
+		RPMARGS="$$RPMARGS --define \"rootdir %{cross_path}\""; \
+		RPMARGS="$$RPMARGS --define \"_prefix %{cross_path}/usr\""; \
+		RPMARGS="$$RPMARGS --define \"_mandir %{_prefix}/share/man\""; \
+		RPMARGS="$$RPMARGS --define \"_sysconfdir %{cross_path}/etc\""; \
+		RPMARGS="$$RPMARGS --define \"make_args @CROSS_VARS@\""; \
+		if [ -s @LINUX@/../../.ver.build ]; then \
+			MPSS_VERSION=$$(sed -ne 's/DRIVERS_\(.*\)-.*/\1/p' @LINUX@/../../.ver.build); \
+			if [ -n "$$MPSS_VERSION" ]; then \
+				RPMARGS="$$RPMARGS --define \"cross_requires intel-mic-gpl = 2.1.$$MPSS_VERSION\""; \
+			fi; \
+		fi; \
+	fi; \
 	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
 		sed -re 's/--with-release=[^ ][^ ]*//'); \
 	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
@@ -127,7 +152,7 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
 	fi; \
 	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client\""; \
+		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
 	fi; \
 	if [[ "X$(BUILD_OSD_LDISKFS)" = Xtrue ]]; then \
 		RPMARGS="$$RPMARGS --define \"build_lustre_osd_ldiskfs 1\""; \
