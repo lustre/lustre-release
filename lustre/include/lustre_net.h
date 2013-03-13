@@ -315,6 +315,7 @@
 #define MDS_OTHR_NTHRS_MAX	MDS_MAX_OTHR_THREADS
 
 #define MDS_NBUFS		64
+
 /**
  * Assume file name length = FNAME_MAX = 256 (true for ext3).
  *	  path name length = PATH_MAX = 4096
@@ -355,6 +356,26 @@
 #define MDS_LOV_MAXREPSIZE	MDS_LOV_MAXREQSIZE
 
 /**
+ * This is the size of a maximum REINT_SETXATTR request:
+ *
+ *   lustre_msg		 56 (32 + 4 x 5 + 4)
+ *   ptlrpc_body	184
+ *   mdt_rec_setxattr	136
+ *   lustre_capa	120
+ *   name		256 (XATTR_NAME_MAX)
+ *   value	      65536 (XATTR_SIZE_MAX)
+ */
+#define MDS_EA_MAXREQSIZE	66288
+
+/**
+ * These are the maximum request and reply sizes (rounded up to 1 KB
+ * boundaries) for the "regular" MDS_REQUEST_PORTAL and MDS_REPLY_PORTAL.
+ */
+#define MDS_REG_MAXREQSIZE	(((max(MDS_EA_MAXREQSIZE, \
+				       MDS_LOV_MAXREQSIZE) + 1023) >> 10) << 10)
+#define MDS_REG_MAXREPSIZE	MDS_REG_MAXREQSIZE
+
+/**
  * The update request includes all of updates from the create, which might
  * include linkea (4K maxim), together with other updates, we set it to 9K:
  * lustre_msg + ptlrpc_body + UPDATE_BUF_SIZE (8K)
@@ -363,35 +384,35 @@
 #define MDS_OUT_MAXREPSIZE	MDS_MAXREPSIZE
 
 /** MDS_BUFSIZE = max_reqsize (w/o LOV EA) + max sptlrpc payload size */
-#define MDS_BUFSIZE		max_t(int, MDS_MAXREQSIZE + 1024, 8 * 1024)
+#define MDS_BUFSIZE		max(MDS_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
+				    8 * 1024)
 
 /**
- * MDS_LOV_BUFSIZE should be at least max_reqsize (with LOV EA) +
- * max sptlrpc payload size, however, we need to allocate a much larger buffer
- * for it because LNet requires each MD(rqbd) has at least MDS_LOVE_MAXREQSIZE
- * bytes left to avoid dropping of maximum-sized incoming request.
- * So if MDS_LOV_BUFSIZE is only a little larger than MDS_LOV_MAXREQSIZE,
- * then it can only fit in one request even there are 48K bytes left in
- * a rqbd, and memory utilization is very low.
+ * MDS_REG_BUFSIZE should at least be MDS_REG_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD.
+ * However, we need to allocate a much larger buffer for it because LNet
+ * requires each MD(rqbd) has at least MDS_REQ_MAXREQSIZE bytes left to avoid
+ * dropping of maximum-sized incoming request.  So if MDS_REG_BUFSIZE is only a
+ * little larger than MDS_REG_MAXREQSIZE, then it can only fit in one request
+ * even there are about MDS_REG_MAX_REQSIZE bytes left in a rqbd, and memory
+ * utilization is very low.
  *
  * In the meanwhile, size of rqbd can't be too large, because rqbd can't be
  * reused until all requests fit in it have been processed and released,
  * which means one long blocked request can prevent the rqbd be reused.
- * Now we set request buffer size to 128K, so even each rqbd is unlinked
- * from LNet with unused 48K, buffer utilization will be about 62%.
+ * Now we set request buffer size to 160 KB, so even each rqbd is unlinked
+ * from LNet with unused 65 KB, buffer utilization will be about 59%.
  * Please check LU-2432 for details.
  */
-/** MDS_LOV_BUFSIZE = max_reqsize (w/ LOV EA) + max sptlrpc payload size */
-#define MDS_LOV_BUFSIZE		max_t(int, MDS_LOV_MAXREQSIZE + 1024, \
-					   128 * 1024)
+#define MDS_REG_BUFSIZE		max(MDS_REG_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
+				    160 * 1024)
 
 /**
  * MDS_OUT_BUFSIZE = max_out_reqsize + max sptlrpc payload (~1K) which is
- * about 10K, for the same reason as MDS_LOV_BUFSIZE, we also give some
+ * about 10K, for the same reason as MDS_REG_BUFSIZE, we also give some
  * extra bytes to each request buffer to improve buffer utilization rate.
   */
-#define MDS_OUT_BUFSIZE		max_t(int, MDS_OUT_MAXREQSIZE + 1024, \
-					   24 * 1024)
+#define MDS_OUT_BUFSIZE		max(MDS_OUT_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
+				    24 * 1024)
 
 /** FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc */
 #define FLD_MAXREQSIZE  (160)
