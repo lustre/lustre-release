@@ -190,7 +190,7 @@ static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
 		len = (len + align) & ~align;
 
 		lt = (void *)ent->lde_name + len;
-		lt->lt_type = cpu_to_le16(CFS_DTTOIF(type));
+		lt->lt_type = cpu_to_le16(DTTOIF(type));
 		ent->lde_attrs |= LUDA_TYPE;
 	}
 

@@ -127,9 +127,10 @@ static int mdc_wr_kuc(struct file *file, const char *buffer,
 	if (fd == 0) {
 		rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
 	} else {
-		cfs_file_t *fp = cfs_get_fd(fd);
+		struct file *fp = fget(fd);
+
 		rc = libcfs_kkuc_msg_put(fp, lh);
-		cfs_put_file(fp);
+		fput(fp);
 	}
 	OBD_FREE(lh, len);
 	if (rc < 0)

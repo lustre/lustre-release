@@ -2217,7 +2217,7 @@ static void server_umount_begin(struct super_block *sb)
         EXIT;
 }
 
-static int server_statfs (struct dentry *dentry, cfs_kstatfs_t *buf)
+static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
 	struct super_block *sb = dentry->d_sb;
 	struct lustre_sb_info *lsi = s2lsi(sb);

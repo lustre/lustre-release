@@ -1647,22 +1647,20 @@ void remove_proc(void)
  *  proc process routines of kernel space
  */
 
-cfs_file_t *
-lustre_open_file(char * filename)
+struct file *
+lustre_open_file(char *filename)
 {
-    int rc = 0;
-    cfs_file_t * fh = NULL;
-    cfs_proc_entry_t * fp = NULL;
+	int rc = 0;
+	struct file *fh = NULL;
+	cfs_proc_entry_t *fp = NULL;
 
-    fp = search_proc_entry(filename, cfs_proc_root);
-    if (!fp) {
-        return NULL;
-    }
+	fp = search_proc_entry(filename, cfs_proc_root);
+	if (fp == NULL)
+		return NULL;
 
-    fh = cfs_alloc(sizeof(cfs_file_t), CFS_ALLOC_ZERO);
-    if (!fh) {
-        return NULL;
-    }
+	fh = cfs_alloc(sizeof(*fh), CFS_ALLOC_ZERO);
+	if (fh == NULL)
+		return NULL;
 
     fh->f_inode = cfs_alloc(sizeof(struct inode), CFS_ALLOC_ZERO);
     if (!fh->f_inode) {
@@ -1689,10 +1687,10 @@ lustre_open_file(char * filename)
 }
 
 int
-lustre_close_file(cfs_file_t * fh)
+lustre_close_file(struct file *fh)
 {
-    int rc = 0;
-    cfs_proc_entry_t * fp = NULL;
+	int rc = 0;
+	cfs_proc_entry_t *fp = NULL;
 
     fp = (cfs_proc_entry_t *) fh->f_inode->i_priv;
     if (fh->f_op->release) {
@@ -1708,21 +1706,18 @@ lustre_close_file(cfs_file_t * fh)
 }
 
 int
-lustre_do_ioctl( cfs_file_t * fh,
-                 unsigned long cmd,
-                 ulong_ptr_t arg )
+lustre_do_ioctl(struct file *fh, unsigned long cmd, ulong_ptr_t arg)
 {
-    int rc = 0;
+	int rc = 0;
 
-    if (fh->f_op->ioctl) {
-        rc = (fh->f_op->ioctl)(fh, cmd, arg);
-    }
+	if (fh->f_op->ioctl)
+		rc = (fh->f_op->ioctl)(fh, cmd, arg);
 
-    return rc;
+	return rc;
 }
-    
+
 int
-lustre_ioctl_file(cfs_file_t * fh, PCFS_PROC_IOCTL devctl)
+lustre_ioctl_file(struct file *fh, PCFS_PROC_IOCTL devctl)
 {
     int         rc = 0;
     ulong_ptr_t data;
@@ -1763,16 +1758,10 @@ lustre_ioctl_file(cfs_file_t * fh, PCFS_PROC_IOCTL devctl)
     rc = lustre_do_ioctl(fh, devctl->cmd, data);
 
     return rc;
-} 
-
+}
 
 size_t
-lustre_read_file(
-    cfs_file_t *    fh,
-    loff_t          off,
-    size_t          size,
-    char *          buf
-    )
+lustre_read_file(struct file *fh, loff_t off, size_t size, char *buf)
 {
     size_t  rc = 0;
     off_t   low, high;
@@ -1790,24 +1779,18 @@ lustre_read_file(
 
     return rc;
 }
- 
 
 size_t
-lustre_write_file(
-    cfs_file_t *    fh,
-    loff_t          off,
-    size_t          size,
-    char *          buf
-    )
+lustre_write_file(struct file *fh, loff_t off, size_t size, char *buf)
 {
-    size_t rc = 0;
-    off = 0;
-    if (fh->f_op->write) {
-        rc = (fh->f_op->write)(fh, buf, size, &off);
-    }
+	size_t rc = 0;
 
-    return rc;
-}  
+	off = 0;
+	if (fh->f_op->write)
+		rc = (fh->f_op->write)(fh, buf, size, &off);
+
+	return rc;
+}
 
 
 /*

@@ -368,18 +368,17 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 kqswnal_tx_t *
 kqswnal_get_idle_tx (void)
 {
-        unsigned long  flags;
-        kqswnal_tx_t  *ktx;
+	unsigned long  flags;
+	kqswnal_tx_t  *ktx;
 
-        cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 
-        if (kqswnal_data.kqn_shuttingdown ||
-            cfs_list_empty (&kqswnal_data.kqn_idletxds)) {
-                cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock,
-                                            flags);
+	if (kqswnal_data.kqn_shuttingdown ||
+	    cfs_list_empty(&kqswnal_data.kqn_idletxds)) {
+		spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 
-                return NULL;
-        }
+		return NULL;
+	}
 
         ktx = cfs_list_entry (kqswnal_data.kqn_idletxds.next, kqswnal_tx_t,
                               ktx_list);

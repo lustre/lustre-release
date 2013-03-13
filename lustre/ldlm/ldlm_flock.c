@@ -606,7 +606,7 @@ ldlm_flock_interrupted_wait(void *data)
 int
 ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
-        cfs_flock_t                    *getlk = lock->l_ast_data;
+	struct file_lock		*getlk = lock->l_ast_data;
         struct obd_device              *obd;
         struct obd_import              *imp = NULL;
         struct ldlm_flock_wait_data     fwd;
@@ -705,33 +705,32 @@ granted:
                 /* fcntl(F_GETLK) request */
                 /* The old mode was saved in getlk->fl_type so that if the mode
                  * in the lock changes we can decref the appropriate refcount.*/
-                ldlm_flock_destroy(lock, cfs_flock_type(getlk),
-                                   LDLM_FL_WAIT_NOREPROC);
-                switch (lock->l_granted_mode) {
-                case LCK_PR:
-                        cfs_flock_set_type(getlk, F_RDLCK);
-                        break;
-                case LCK_PW:
-                        cfs_flock_set_type(getlk, F_WRLCK);
-                        break;
-                default:
-                        cfs_flock_set_type(getlk, F_UNLCK);
-                }
-                cfs_flock_set_pid(getlk,
-                                  (pid_t)lock->l_policy_data.l_flock.pid);
-                cfs_flock_set_start(getlk,
-                                    (loff_t)lock->l_policy_data.l_flock.start);
-                cfs_flock_set_end(getlk,
-                                  (loff_t)lock->l_policy_data.l_flock.end);
-        } else {
+		ldlm_flock_destroy(lock, flock_type(getlk),
+				   LDLM_FL_WAIT_NOREPROC);
+		switch (lock->l_granted_mode) {
+		case LCK_PR:
+			flock_set_type(getlk, F_RDLCK);
+			break;
+		case LCK_PW:
+			flock_set_type(getlk, F_WRLCK);
+			break;
+		default:
+			flock_set_type(getlk, F_UNLCK);
+		}
+		flock_set_pid(getlk, (pid_t)lock->l_policy_data.l_flock.pid);
+		flock_set_start(getlk,
+				(loff_t)lock->l_policy_data.l_flock.start);
+		flock_set_end(getlk,
+			      (loff_t)lock->l_policy_data.l_flock.end);
+	} else {
 		__u64 noreproc = LDLM_FL_WAIT_NOREPROC;
 
-                /* We need to reprocess the lock to do merges or splits
-                 * with existing locks owned by this process. */
-                ldlm_process_flock_lock(lock, &noreproc, 1, &err, NULL);
-        }
-        unlock_res_and_lock(lock);
-        RETURN(0);
+		/* We need to reprocess the lock to do merges or splits
+		 * with existing locks owned by this process. */
+		ldlm_process_flock_lock(lock, &noreproc, 1, &err, NULL);
+	}
+	unlock_res_and_lock(lock);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_flock_completion_ast);
 

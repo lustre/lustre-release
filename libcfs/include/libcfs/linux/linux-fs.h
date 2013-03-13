@@ -54,50 +54,52 @@
 #include <linux/mount.h>
 #include <linux/backing-dev.h>
 
-typedef struct file cfs_file_t;
-typedef struct dentry cfs_dentry_t;
-typedef struct dirent64 cfs_dirent_t;
-typedef struct kstatfs cfs_kstatfs_t;
+#define filp_size(f)					\
+	(i_size_read((f)->f_dentry->d_inode))
+#define filp_poff(f)					\
+	(&(f)->f_pos)
 
-#define cfs_filp_size(f)               (i_size_read((f)->f_dentry->d_inode))
-#define cfs_filp_poff(f)                (&(f)->f_pos)
-
-/* 
- * XXX Do we need to parse flags and mode in cfs_filp_open? 
- */
-cfs_file_t *cfs_filp_open (const char *name, int flags, int mode, int *err);
 #ifdef HAVE_FILE_FSYNC_4ARGS
-# define cfs_do_fsync(fp, flag)    ((fp)->f_op->fsync(fp, 0, LLONG_MAX, flag))
+# define do_fsync(fp, flag)				\
+	((fp)->f_op->fsync(fp, 0, LLONG_MAX, flag))
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
-# define cfs_do_fsync(fp, flag)    ((fp)->f_op->fsync(fp, flag))
+# define do_fsync(fp, flag)				\
+	((fp)->f_op->fsync(fp, flag))
 #else
-# define cfs_do_fsync(fp, flag)    ((fp)->f_op->fsync(fp, (fp)->f_dentry, flag))
+# define do_fsync(fp, flag)				\
+	((fp)->f_op->fsync(fp, (fp)->f_dentry, flag))
 #endif
-#define cfs_filp_close(f)                   filp_close(f, NULL)
-#define cfs_filp_read(fp, buf, size, pos)   (fp)->f_op->read((fp), (buf), (size), pos)
-#define cfs_filp_write(fp, buf, size, pos)  (fp)->f_op->write((fp), (buf), (size), pos)
-#define cfs_filp_fsync(fp)                  cfs_do_fsync(fp, 1)
 
-#define cfs_get_file(f)                     get_file(f)
-#define cfs_get_fd(x)                       fget(x)
-#define cfs_put_file(f)                     fput(f)
-#define cfs_file_count(f)                   file_count(f)
+#define filp_read(fp, buf, size, pos)			\
+	((fp)->f_op->read((fp), (buf), (size), pos))
 
-typedef struct file_lock cfs_flock_t;
-#define cfs_flock_type(fl)                  ((fl)->fl_type)
-#define cfs_flock_set_type(fl, type)        do { (fl)->fl_type = (type); } while(0)
-#define cfs_flock_pid(fl)                   ((fl)->fl_pid)
-#define cfs_flock_set_pid(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
-#define cfs_flock_start(fl)                 ((fl)->fl_start)
-#define cfs_flock_set_start(fl, start)      do { (fl)->fl_start = (start); } while(0)
-#define cfs_flock_end(fl)                   ((fl)->fl_end)
-#define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
+#define filp_write(fp, buf, size, pos)			\
+	((fp)->f_op->write((fp), (buf), (size), pos))
 
-ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
+#define filp_fsync(fp)					\
+	do_fsync(fp, 1)
 
-#define CFS_IFSHIFT 12
+#define flock_type(fl)			((fl)->fl_type)
+#define flock_set_type(fl, type)	do { (fl)->fl_type = (type); } while (0)
+#define flock_pid(fl)			((fl)->fl_pid)
+#define flock_set_pid(fl, pid)		do { (fl)->fl_pid = (pid); } while (0)
+#define flock_start(fl)			((fl)->fl_start)
+#define flock_set_start(fl, st)		do { (fl)->fl_start = (st); } while (0)
+#define flock_end(fl)			((fl)->fl_end)
+#define flock_set_end(fl, end)		do { (fl)->fl_end = (end); } while (0)
 
-#define CFS_IFTODT(type)           (((type) & S_IFMT) >> CFS_IFSHIFT)
-#define CFS_DTTOIF(dirtype)        ((dirtype) << CFS_IFSHIFT)
+ssize_t filp_user_write(struct file *filp, const void *buf, size_t count,
+			loff_t *offset);
+
+#ifndef IFSHIFT
+#define IFSHIFT			12
+#endif
+
+#ifndef IFTODT
+#define IFTODT(type)		(((type) & S_IFMT) >> IFSHIFT)
+#endif
+#ifndef DTTOIF
+#define DTTOIF(dirtype)		((dirtype) << IFSHIFT)
+#endif
 
 #endif

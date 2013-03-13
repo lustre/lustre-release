@@ -201,13 +201,13 @@ typedef void *cfs_param_module_t;
 typedef void *cfs_poll_table_t;
 
 typedef struct cfs_param_file_ops {
-        cfs_param_module_t owner;
-        int (*open) (cfs_inode_t *, cfs_file_t *);
-        loff_t (*llseek)(cfs_file_t *, loff_t, int);
-        int (*release) (cfs_inode_t *, cfs_param_file_t *);
-        unsigned int (*poll) (cfs_file_t *, cfs_poll_table_t *);
-        ssize_t (*write) (cfs_file_t *, const char *, size_t, loff_t *);
-        ssize_t (*read)(cfs_file_t *, char *, size_t, loff_t *);
+	cfs_param_module_t owner;
+	int (*open) (cfs_inode_t *, struct file *);
+	loff_t (*llseek)(struct file *, loff_t, int);
+	int (*release) (cfs_inode_t *, cfs_param_file_t *);
+	unsigned int (*poll) (struct file *, cfs_poll_table_t *);
+	ssize_t (*write) (struct file *, const char *, size_t, loff_t *);
+	ssize_t (*read)(struct file *, char *, size_t, loff_t *);
 } cfs_param_file_ops_t;
 typedef cfs_param_file_ops_t *cfs_lproc_filep_t;
 

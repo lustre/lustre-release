@@ -153,7 +153,6 @@ void __up(struct semaphore *s)
  * - complete(c)
  * - wait_for_completion(c)
  */
-
 static wait_handler_t wait_handler;
 
 void init_completion_module(wait_handler_t handler)
@@ -168,11 +167,16 @@ int call_wait_handler(int timeout)
 	return wait_handler(timeout);
 }
 
+#ifndef HAVE_LIBPTHREAD
 void init_completion(struct completion *c)
 {
 	LASSERT(c != NULL);
 	c->done = 0;
 	cfs_waitq_init(&c->wait);
+}
+
+void fini_completion(struct completion *c)
+{
 }
 
 void complete(struct completion *c)
@@ -200,6 +204,7 @@ int wait_for_completion_interruptible(struct completion *c)
 	} while (c->done == 0);
 	return 0;
 }
+#endif /* HAVE_LIBPTHREAD */
 
 /*
  * rw_semaphore:
@@ -268,7 +273,7 @@ void fini_rwsem(struct rw_semaphore *s)
  * Multi-threaded user space completion
  */
 
-void mt_init_completion(mt_completion_t *c)
+void init_completion(struct completion *c)
 {
         LASSERT(c != NULL);
         c->c_done = 0;
@@ -276,14 +281,14 @@ void mt_init_completion(mt_completion_t *c)
         pthread_cond_init(&c->c_cond, NULL);
 }
 
-void mt_fini_completion(mt_completion_t *c)
+void fini_completion(struct completion *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_destroy(&c->c_mut);
         pthread_cond_destroy(&c->c_cond);
 }
 
-void mt_complete(mt_completion_t *c)
+void complete(struct completion *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_lock(&c->c_mut);
@@ -292,7 +297,7 @@ void mt_complete(mt_completion_t *c)
         pthread_mutex_unlock(&c->c_mut);
 }
 
-void mt_wait_for_completion(mt_completion_t *c)
+void wait_for_completion(struct completion *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_lock(&c->c_mut);

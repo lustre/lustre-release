@@ -154,8 +154,8 @@ typedef struct {
         cfs_list_t          upt_pollrequests;   /* list of poll requests */
         pthread_mutex_t     upt_pollrequests_lock; /* serialize */
         int                 upt_errno;         /* non-zero if errored */
-	mt_completion_t upt_completion;    /* wait/signal facility for
-                                                * syncronizing shutdown */
+	struct completion	upt_completion;	/* wait/signal facility for
+						 * syncronizing shutdown */
 } usock_pollthread_t;
 
 /* Number of elements in upt_pollfd[], upt_idx2conn[] and upt_fd2idx[]

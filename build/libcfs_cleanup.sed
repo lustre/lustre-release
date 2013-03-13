@@ -4,14 +4,12 @@
 # Migrate libcfs to emulate Linux kernel APIs.
 # http://jira.whamcloud.com/browse/LU-1346
 
-# remove extra blank line
-# /^$/{N;/^\n$/D}
 
 ################################################################################
 # lock - spinlock, rw_semaphore, rwlock, completion, semaphore, mutex
 #      - lock_kernel, unlock_kernel, lockdep
 
-# spinlok
+# spinlock
 /typedef  *spinlock_t  *cfs_spinlock_t;/d
 s/\bcfs_spinlock_t\b/spinlock_t/g
 s/\bcfs_spin_lock_init\b/spin_lock_init/g
@@ -49,6 +47,7 @@ s/\bCFS_SPIN_LOCK_UNLOCKED\b/SPIN_LOCK_UNLOCKED/g
 /#[ \t]*define[ \t]*\bSPIN_LOCK_UNLOCKED\b[ \t]*\bSPIN_LOCK_UNLOCKED\b/d
 
 # rw_semaphore
+s/\bcfs_semaphore\b/semaphore/g
 s/\bcfs_rw_semaphore_t\b/struct rw_semaphore/g
 s/\bcfs_init_rwsem\b/init_rwsem/g
 /#[ \t]*define[ \t]*\binit_rwsem\b *( *\w* *)[ \t]*\binit_rwsem\b *( *\w* *)/d
@@ -68,24 +67,15 @@ s/\bcfs_fini_rwsem\b/fini_rwsem/g
 s/\bCFS_DECLARE_RWSEM\b/DECLARE_RWSEM/g
 /#[ \t]*define[ \t]*\bDECLARE_RWSEM\b *( *\w* *)[ \t]*\bDECLARE_RWSEM\b *( *\w* *)/d
 
-s/\bcfs_semaphore\b/semaphore/g
-s/\bcfs_rw_semaphore\b/rw_semaphore/g
-s/\bcfs_init_completion_module\b/init_completion_module/g
-s/\bcfs_call_wait_handler\b/call_wait_handler/g
-s/\bcfs_wait_handler_t\b/wait_handler_t/g
-s/\bcfs_mt_completion_t\b/mt_completion_t/g
-s/\bcfs_mt_init_completion\b/mt_init_completion/g
-s/\bcfs_mt_wait_for_completion\b/mt_wait_for_completion/g
-s/\bcfs_mt_complete\b/mt_complete/g
-s/\bcfs_mt_fini_completion\b/mt_fini_completion/g
-s/\bcfs_mt_atomic_t\b/mt_atomic_t/g
-s/\bcfs_mt_atomic_read\b/mt_atomic_read/g
-s/\bcfs_mt_atomic_set\b/mt_atomic_set/g
-s/\bcfs_mt_atomic_dec_and_test\b/mt_atomic_dec_and_test/g
-s/\bcfs_mt_atomic_inc\b/mt_atomic_inc/g
-s/\bcfs_mt_atomic_dec\b/mt_atomic_dec/g
-s/\bcfs_mt_atomic_add\b/mt_atomic_add/g
-s/\bcfs_mt_atomic_sub\b/mt_atomic_sub/g
+#finish this with other atomics
+#s/\bcfs_mt_atomic_t\b/atomic_t/g
+#s/\bcfs_mt_atomic_read\b/atomic_read/g
+#s/\bcfs_mt_atomic_set\b/atomic_set/g
+#s/\bcfs_mt_atomic_dec_and_test\b/atomic_dec_and_test/g
+#s/\bcfs_mt_atomic_inc\b/atomic_inc/g
+#s/\bcfs_mt_atomic_dec\b/atomic_dec/g
+#s/\bcfs_mt_atomic_add\b/atomic_add/g
+#s/\bcfs_mt_atomic_sub\b/atomic_sub/g
 
 # rwlock
 /typedef  *rwlock_t  *cfs_rwlock_t;/d
@@ -112,6 +102,11 @@ s/\bCFS_RW_LOCK_UNLOCKED\b/RW_LOCK_UNLOCKED/g
 
 # completion
 s/\bcfs_completion_t\b/struct completion/g
+s/\bcfs_mt_completion_t\b/struct completion/g
+s/\bcfs_mt_init_completion\b/init_completion/g
+s/\bcfs_mt_wait_for_completion\b/wait_for_completion/g
+s/\bcfs_mt_complete\b/complete/g
+s/\bcfs_mt_fini_completion\b/fini_completion/g
 s/\bCFS_DECLARE_COMPLETION\b/DECLARE_COMPLETION/g
 /#[ \t]*define[ \t]*\bDECLARE_COMPLETION\b *( *\w* *)[ \t]*\bDECLARE_COMPLETION\b *( *\w* *)/d
 s/\bCFS_INIT_COMPLETION\b/INIT_COMPLETION/g
@@ -221,48 +216,48 @@ s/\bcfs_fls\b/fls/g
 ################################################################################
 # file operations
 
-#s/\bcfs_file_t\b/file_t/g
-#s/\bcfs_dentry_t\b/dentry_t/g
-#s/\bcfs_dirent_t\b/dirent_t/g
-#s/\bcfs_kstatfs_t\b/kstatfs_t/g
-#s/\bcfs_filp_size\b/filp_size/g
-#s/\bcfs_filp_poff\b/filp_poff/g
-#s/\bcfs_filp_open\b/filp_open/g
-#/#[ \t]*define[ \t]*\bfilp_open\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bfilp_open\b *( *\w* *, *\w* *, *\w* *)/d
-#s/\bcfs_do_fsync\b/do_fsync/g
-#s/\bcfs_filp_close\b/filp_close/g
-#/#[ \t]*define[ \t]*\bfilp_close\b *( *\w* *, *\w* *)[ \t]*\bfilp_close\b *( *\w* *, *\w* *)/d
-#s/\bcfs_filp_read\b/filp_read/g
-#s/\bcfs_filp_write\b/filp_write/g
-#s/\bcfs_filp_fsync\b/filp_fsync/g
-#s/\bcfs_get_file\b/get_file/g
-#/#[ \t]*define[ \t]*\bget_file\b *( *\w* *)[ \t]*\bget_file\b *( *\w* *)/d
-#s/\bcfs_get_fd\b/fget/g
-#/#[ \t]*define[ \t]*\bfget\b *( *\w* *)[ \t]*\bfget\b *( *\w* *)/d
-#s/\bcfs_put_file\b/fput/g
-#/#[ \t]*define[ \t]*\bfput\b *( *\w* *)[ \t]*\bfput\b *( *\w* *)/d
-#s/\bcfs_file_count\b/file_count/g
-#/#[ \t]*define[ \t]*\bfile_count\b *( *\w* *)[ \t]*\bfile_count\b *( *\w* *)/d
-#s/\bCFS_INT_LIMIT\b/INT_LIMIT/g
-#s/\bCFS_OFFSET_MAX\b/OFFSET_MAX/g
-#s/\bcfs_flock_t\b/flock_t/g
-#s/\bcfs_flock_type\b/flock_type/g
-#s/\bcfs_flock_set_type\b/flock_set_type/g
-#s/\bcfs_flock_pid\b/flock_pid/g
-#s/\bcfs_flock_set_pid\b/flock_set_pid/g
-#s/\bcfs_flock_start\b/flock_start/g
-#s/\bcfs_flock_set_start\b/flock_set_start/g
-#s/\bcfs_flock_end\b/flock_end/g
-#s/\bcfs_flock_set_end\b/flock_set_end/g
-#s/\bcfs_user_write\b/user_write/g
-#s/\bCFS_IFSHIFT\b/IFSHIFT/g
-#s/\bCFS_IFTODT\b/IFTODT/g
-#s/\bCFS_DTTOIF\b/DTTOIF/g
+s/\bcfs_file_t\b/struct file/g
+s/\bcfs_dentry_t\b/struct dentry/g
+s/\bcfs_dirent_t\b/struct dirent64/g
+s/\bcfs_kstatfs_t\b/struct kstatfs/g
+s/\bcfs_filp_size\b/filp_size/g
+s/\bcfs_filp_poff\b/filp_poff/g
+s/\bcfs_filp_open\b/filp_open/g
+/#[ \t]*define[ \t]*\bfilp_open\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bfilp_open\b *( *\w* *, *\w* *, *\w* *)/d
+s/\bcfs_do_fsync\b/do_fsync/g
+s/\bcfs_filp_close\b/filp_close/g
+/#[ \t]*define[ \t]*\bfilp_close\b *( *\w* *, *\w* *)[ \t]*\bfilp_close\b *( *\w* *, *\w* *)/d
+s/\bcfs_filp_read\b/filp_read/g
+s/\bcfs_filp_write\b/filp_write/g
+s/\bcfs_filp_fsync\b/filp_fsync/g
+s/\bcfs_get_file\b/get_file/g
+/#[ \t]*define[ \t]*\bget_file\b *( *\w* *)[ \t]*\bget_file\b *( *\w* *)/d
+s/\bcfs_get_fd\b/fget/g
+/#[ \t]*define[ \t]*\bfget\b *( *\w* *)[ \t]*\bfget\b *( *\w* *)/d
+s/\bcfs_put_file\b/fput/g
+/#[ \t]*define[ \t]*\bfput\b *( *\w* *)[ \t]*\bfput\b *( *\w* *)/d
+s/\bcfs_file_count\b/file_count/g
+/#[ \t]*define[ \t]*\bfile_count\b *( *\w* *)[ \t]*\bfile_count\b *( *\w* *)/d
+s/\bCFS_INT_LIMIT\b/INT_LIMIT/g
+s/\bCFS_OFFSET_MAX\b/OFFSET_MAX/g
+s/\bcfs_flock_t\b/struct file_lock/g
+s/\bcfs_flock_type\b/flock_type/g
+s/\bcfs_flock_set_type\b/flock_set_type/g
+s/\bcfs_flock_pid\b/flock_pid/g
+s/\bcfs_flock_set_pid\b/flock_set_pid/g
+s/\bcfs_flock_start\b/flock_start/g
+s/\bcfs_flock_set_start\b/flock_set_start/g
+s/\bcfs_flock_end\b/flock_end/g
+s/\bcfs_flock_set_end\b/flock_set_end/g
+s/\bcfs_user_write\b/user_write/g
+s/\bCFS_IFSHIFT\b/IFSHIFT/g
+s/\bCFS_IFTODT\b/IFTODT/g
+s/\bCFS_DTTOIF\b/DTTOIF/g
 
 ################################################################################
 # memory operations
 
-#s/\bcfs_page_t\b/page_t/g
+#s/\bcfs_page_t\b/struct page/g
 #s/\bCFS_PAGE_SIZE\b/PAGE_CACHE_SIZE/g
 #/#[ \t]*define[ \t]*\bPAGE_CACHE_SIZE\b[ \t]*\bPAGE_CACHE_SIZE\b/d
 #s/\bCFS_PAGE_SHIFT\b/PAGE_CACHE_SHIFT/g
@@ -341,7 +336,7 @@ s/\bcfs_fls\b/fls/g
 #/#[ \t]*define[ \t]*\bSLAB_NOFS\b[ \t]*\bSLAB_NOFS\b/d
 #s/\bcfs_shrinker\b/shrinker/g
 #/#[ \t]*define[ \t]*\bshrinker\b[ \t]*\bshrinker\b/d
-#s/\bcfs_shrinker_t\b/shrinker_t/g
+#s/\bcfs_shrinker_t\b/struct shrinkert/g
 #/typedef[ \t]*\bshrinker_t\b[ \t]*\bshrinker_t\b/d
 #s/\bcfs_set_shrinker\b/set_shrinker/g
 #/#[ \t]*define[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)/d
@@ -349,13 +344,3 @@ s/\bcfs_fls\b/fls/g
 #/#[ \t]*define[ \t]*\bremove_shrinker\b *( *\w* *)[ \t]*\bremove_shrinker\b *( *\w* *)/d
 #s/\bCFS_DEFAULT_SEEKS\b/DEFAULT_SEEKS/g
 #/#[ \t]*define[ \t]*\bDEFAULT_SEEKS\b[ \t]*\bDEFAULT_SEEKS\b/d
-
-
-#s/\bcfs_\b//g
-#s/\bCFS_\b//g
-#/typedef[ \t]*\b\b[ \t]*\b\b/d
-#/#[ \t]*define[ \t]*\b\b[ \t]*\b\b/d
-#/#[ \t]*define[ \t]*\b\b *( *)[ \t]*\b\b *( *)/d
-#/#[ \t]*define[ \t]*\b\b *( *\w* *)[ \t]*\b\b *( *\w* *)/d
-#/#[ \t]*define[ \t]*\b\b *( *\w* *, *\w* *)[ \t]*\b\b *( *\w* *, *\w* *)/d
-#/#[ \t]*define[ \t]*\b\b *( *\w* *, *\w* *, *\w* *)[ \t]*\b\b *( *\w* *, *\w* *, *\w* *)/d

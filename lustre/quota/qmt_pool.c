@@ -73,7 +73,7 @@ static inline void qpi_getref(struct qmt_pool_info *pool)
 }
 
 static inline void qpi_putref(const struct lu_env *env,
-			       struct qmt_pool_info *pool)
+			      struct qmt_pool_info *pool)
 {
 	LASSERT(atomic_read(&pool->qpi_ref) > 0);
 	if (cfs_atomic_dec_and_test(&pool->qpi_ref))

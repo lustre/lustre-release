@@ -1234,7 +1234,7 @@ err:
 }
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
-                              void *data, cfs_dirent_t *de);
+			      void *data, struct dirent64 *de);
 
 #define OBD_NOT_FOUND           (-1)
 
@@ -1278,7 +1278,7 @@ static void find_param_fini(struct find_param *param)
 }
 
 static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data,
-                          cfs_dirent_t *de)
+			  struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         param->depth--;
@@ -1379,10 +1379,10 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 				   semantic_func_t sem_init,
 				   semantic_func_t sem_fini, void *data,
-				   cfs_dirent_t *de)
+				   struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
-	cfs_dirent_t *dent;
+	struct dirent64 *dent;
 	int len, ret;
 	DIR *d, *p = NULL;
 
@@ -2564,7 +2564,7 @@ static int print_failed_tgt(struct find_param *param, char *path, int type)
 }
 
 static int cb_find_init(char *path, DIR *parent, DIR *dir,
-                        void *data, cfs_dirent_t *de)
+			void *data, struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int decision = 1; /* 1 is accepted; -1 is rejected. */
@@ -2885,7 +2885,7 @@ int llapi_file_fget_mdtidx(int fd, int *mdtidx)
 }
 
 static int cb_get_mdt_index(char *path, DIR *parent, DIR *d, void *data,
-                            cfs_dirent_t *de)
+			    struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int ret = 0;
@@ -2952,7 +2952,7 @@ out:
 }
 
 static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
-                        cfs_dirent_t *de)
+			struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int ret = 0;
@@ -3272,7 +3272,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 }
 
 static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
-                         cfs_dirent_t *de)
+			 struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         lstat_t *st;

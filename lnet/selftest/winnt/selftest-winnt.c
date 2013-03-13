@@ -215,11 +215,11 @@ ProcCreate(
     IN PIRP             Irp
     )
 {
-    NTSTATUS                    Status;
-    PIO_STACK_LOCATION          IrpSp;
+	NTSTATUS			Status;
+	PIO_STACK_LOCATION		IrpSp;
 
-    FILE_FULL_EA_INFORMATION *  ea;
-    cfs_file_t *                fp;
+	FILE_FULL_EA_INFORMATION	*ea;
+	struct file			*fp;
 
     IrpSp = IoGetCurrentIrpStackLocation(Irp);
     ea = (PFILE_FULL_EA_INFORMATION) Irp->AssociatedIrp.SystemBuffer;
@@ -249,12 +249,12 @@ ProcClose(
     IN PDEVICE_OBJECT   DeviceObject,
     IN PIRP             Irp)
 {
-    PIO_STACK_LOCATION          IrpSp;
+	PIO_STACK_LOCATION	IrpSp;
 
-    cfs_file_t *                fp;
+	struct file		*fp;
 
-    IrpSp = IoGetCurrentIrpStackLocation(Irp);
-    fp = (cfs_file_t *) IrpSp->FileObject->FsContext;
+	IrpSp = IoGetCurrentIrpStackLocation(Irp);
+	fp = (file_t *) IrpSp->FileObject->FsContext;
     ASSERT(fp != NULL);
     ASSERT(IrpSp->FileObject->FsContext2 == fp->private_data);
 
@@ -307,10 +307,10 @@ ProcDeviceControl(
 
         case IOCTL_LIBCFS_ENTRY:
         {
-            int rc = 0;
-            cfs_file_t * fp;
+			int rc = 0;
+			struct file *fp;
 
-            fp = (cfs_file_t *) IrpSp->FileObject->FsContext;
+			fp = (struct file *)IrpSp->FileObject->FsContext;
 
             if (!fp) {
                 rc = -EINVAL;
@@ -334,12 +334,12 @@ ProcDeviceControl(
 NTSTATUS
 ProcReadWrite (PDEVICE_OBJECT DeviceObject, PIRP Irp)
 {
-    PIO_STACK_LOCATION  IrpSp;
-    NTSTATUS            Status;
+	PIO_STACK_LOCATION	IrpSp;
+	NTSTATUS		Status;
 
-    cfs_file_t *        fp;
-    int                 rc;
-    PCHAR               buf;
+	struct file		*fp;
+	int			rc;
+	PCHAR			buf;
 
     IrpSp = IoGetCurrentIrpStackLocation(Irp);
     if (Irp->MdlAddress) {
@@ -354,7 +354,7 @@ ProcReadWrite (PDEVICE_OBJECT DeviceObject, PIRP Irp)
         Status = STATUS_SUCCESS;
         rc = 0;
     } else {
-        fp = (cfs_file_t *) IrpSp->FileObject->FsContext;
+		fp = (struct file *)IrpSp->FileObject->FsContext;
 
         if (!fp) {
             Status = STATUS_INVALID_PARAMETER;

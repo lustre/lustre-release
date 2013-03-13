@@ -141,13 +141,12 @@ void *(*memmover)(void *, const void *, size_t) = memmove;
 
 #define NAME_OFFSET(de) ((int) ((de)->d_name - (char *) (de)))
 #define ROUND_UP64(x)   (((x)+sizeof(__u64)-1) & ~(sizeof(__u64)-1))
-static int filldir(char *buf, int buflen,
-                   const char *name, int namelen, loff_t offset,
-                   ino_t ino, unsigned int d_type, int *filled)
+static int filldir(char *buf, int buflen, const char *name, int namelen,
+		   loff_t offset, ino_t ino, unsigned int d_type, int *filled)
 {
-        cfs_dirent_t *dirent = (cfs_dirent_t *) (buf + *filled);
-        cfs_dirent_t  holder;
-        int reclen = ROUND_UP64(NAME_OFFSET(dirent) + namelen + 1);
+	struct dirent64 *dirent = (struct dirent64 *)(buf + *filled);
+	struct dirent64  holder;
+	int reclen = ROUND_UP64(NAME_OFFSET(dirent) + namelen + 1);
 
         /*
          * @buf is not guaranteed to be properly aligned. To work around,

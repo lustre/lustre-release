@@ -304,7 +304,7 @@ enum llog_ctxt_id {
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 
 struct filter_subdirs {
-       cfs_dentry_t *dentry[FILTER_SUBDIR_COUNT];
+	struct dentry *dentry[FILTER_SUBDIR_COUNT];
 };
 
 
@@ -314,14 +314,14 @@ struct filter_ext {
 };
 
 struct filter_obd {
-        /* NB this field MUST be first */
-        struct obd_device_target fo_obt;
-        const char          *fo_fstype;
+	/* NB this field MUST be first */
+	struct obd_device_target fo_obt;
+	const char		*fo_fstype;
 
-        int                  fo_group_count;
-        cfs_dentry_t        *fo_dentry_O;
-        cfs_dentry_t       **fo_dentry_O_groups;
-        struct filter_subdirs   *fo_dentry_O_sub;
+	int			fo_group_count;
+	struct dentry		*fo_dentry_O;
+	struct dentry		**fo_dentry_O_groups;
+	struct filter_subdirs	*fo_dentry_O_sub;
 	struct mutex		fo_init_lock;	/* group initialization lock*/
 	int			fo_committed_group;
 
@@ -749,14 +749,14 @@ struct lmv_obd {
 };
 
 struct niobuf_local {
-	__u64 lnb_file_offset;
-	__u32 lnb_page_offset;
-        __u32 len;
-        __u32 flags;
-        cfs_page_t    *page;
-        cfs_dentry_t  *dentry;
-        int lnb_grant_used;
-        int rc;
+	__u64		lnb_file_offset;
+	__u32		lnb_page_offset;
+	__u32		len;
+	__u32		flags;
+	cfs_page_t	*page;
+	struct dentry	*dentry;
+	int		lnb_grant_used;
+	int		rc;
 };
 
 #define LUSTRE_FLD_NAME         "fld"

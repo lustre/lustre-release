@@ -371,7 +371,7 @@ struct nfs_lock_info {
         void            *host;
 };
 
-typedef struct file_lock {
+struct file_lock {
         struct file_lock *fl_next;  /* singly linked list for this inode  */
         cfs_list_t fl_link;   /* doubly linked list of all locks */
         cfs_list_t fl_block;  /* circular list of blocked processes */
@@ -394,16 +394,16 @@ typedef struct file_lock {
         union {
                 struct nfs_lock_info    nfs_fl;
         } fl_u;
-} cfs_flock_t;
+};
 
-#define cfs_flock_type(fl)                  ((fl)->fl_type)
-#define cfs_flock_set_type(fl, type)        do { (fl)->fl_type = (type); } while(0)
-#define cfs_flock_pid(fl)                   ((fl)->fl_pid)
-#define cfs_flock_set_pid(fl, pid)          do { (fl)->fl_pid = (pid); } while(0)
-#define cfs_flock_start(fl)                 ((fl)->fl_start)
-#define cfs_flock_set_start(fl, start)      do { (fl)->fl_start = (start); } while(0)
-#define cfs_flock_end(fl)                   ((fl)->fl_end)
-#define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
+#define flock_type(fl)			((fl)->fl_type)
+#define flock_set_type(fl, type)	do { (fl)->fl_type = (type); } while (0)
+#define flock_pid(fl)			((fl)->fl_pid)
+#define flock_set_pid(fl, pid)		do { (fl)->fl_pid = (pid); } while (0)
+#define flock_start(fl)			((fl)->fl_start)
+#define flock_set_start(fl, st)		do { (fl)->fl_start = (st); } while (0)
+#define flock_end(fl)			((fl)->fl_end)
+#define flock_set_end(fl, end)		do { (fl)->fl_end = (end); } while (0)
 
 #ifndef OFFSET_MAX
 #define INT_LIMIT(x)    (~((x)1 << (sizeof(x)*8 - 1)))

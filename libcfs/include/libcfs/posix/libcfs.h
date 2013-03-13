@@ -120,14 +120,8 @@ typedef unsigned long long cfs_cycles_t;
 #include <mntent.h>
 #endif
 
-typedef struct file cfs_file_t;
-typedef struct dentry cfs_dentry_t;
-#ifdef __linux__
-typedef struct dirent64 cfs_dirent_t;
-#endif
-
-#define cfs_get_fd(x)   NULL
-#define cfs_put_file(f) do {} while (0)
+#define fget(x) NULL
+#define fput(f) do {} while (0)
 
 #ifdef __linux__
 /* Userpace byte flipping */
@@ -496,9 +490,10 @@ static inline void rb_link_node(struct rb_node *node, struct rb_node *parent,
 
 typedef ssize_t (*read_actor_t)();
 
-#define CFS_IFSHIFT 12
-
-#define CFS_IFTODT(type)           (((type) & S_IFMT) >> CFS_IFSHIFT)
-#define CFS_DTTOIF(dirtype)        ((dirtype) << CFS_IFSHIFT)
+# ifndef IFTODT
+#  define IFSHIFT		12
+#  define IFTODT(type)		(((type) & S_IFMT) >> IFSHIFT)
+#  define DTTOIF(dirtype)	((dirtype) << IFSHIFT)
+# endif
 
 #endif

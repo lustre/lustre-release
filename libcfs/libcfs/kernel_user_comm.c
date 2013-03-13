@@ -152,7 +152,7 @@ int libcfs_ukuc_msg_get(lustre_kernelcomm *link, char *buf, int maxsize,
  * @param payload Payload data.  First field of payload is always
  *   struct kuc_hdr
  */
-int libcfs_kkuc_msg_put(cfs_file_t *filp, void *payload)
+int libcfs_kkuc_msg_put(struct file *filp, void *payload)
 {
         struct kuc_hdr *kuch = (struct kuc_hdr *)payload;
         int rc = -ENOSYS;
@@ -166,11 +166,11 @@ int libcfs_kkuc_msg_put(cfs_file_t *filp, void *payload)
         }
 
 #ifdef __KERNEL__
-        {
-                loff_t offset = 0;
-                rc = cfs_user_write(filp, (char *)payload, kuch->kuc_msglen,
-                                    &offset);
-        }
+	{
+		loff_t offset = 0;
+		rc = filp_user_write(filp, payload, kuch->kuc_msglen,
+				     &offset);
+	}
 #endif
 
         if (rc < 0)
@@ -187,10 +187,10 @@ CFS_EXPORT_SYMBOL(libcfs_kkuc_msg_put);
  * group from any fs */
 /** A single group reigstration has a uid and a file pointer */
 struct kkuc_reg {
-        cfs_list_t  kr_chain;
-        int         kr_uid;
-        cfs_file_t *kr_fp;
-        __u32       kr_data;
+	cfs_list_t	kr_chain;
+	int		kr_uid;
+	struct file	*kr_fp;
+	__u32		kr_data;
 };
 static cfs_list_t kkuc_groups[KUC_GRP_MAX+1] = {};
 /* Protect message sending against remove and adds */
@@ -201,7 +201,7 @@ static DECLARE_RWSEM(kg_sem);
  * @param uid identidier for this receiver
  * @param group group number
  */
-int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group, __u32 data)
+int libcfs_kkuc_group_add(struct file *filp, int uid, int group, __u32 data)
 {
         struct kkuc_reg *reg;
 
@@ -224,14 +224,14 @@ int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group, __u32 data)
         reg->kr_data = data;
 
 	down_write(&kg_sem);
-        if (kkuc_groups[group].next == NULL)
-                CFS_INIT_LIST_HEAD(&kkuc_groups[group]);
-        cfs_list_add(&reg->kr_chain, &kkuc_groups[group]);
+	if (kkuc_groups[group].next == NULL)
+		CFS_INIT_LIST_HEAD(&kkuc_groups[group]);
+	cfs_list_add(&reg->kr_chain, &kkuc_groups[group]);
 	up_write(&kg_sem);
 
-        CDEBUG(D_KUC, "Added uid=%d fp=%p to group %d\n", uid, filp, group);
+	CDEBUG(D_KUC, "Added uid=%d fp=%p to group %d\n", uid, filp, group);
 
-        return 0;
+	return 0;
 }
 CFS_EXPORT_SYMBOL(libcfs_kkuc_group_add);
 
@@ -261,10 +261,10 @@ int libcfs_kkuc_group_rem(int uid, int group)
                         CDEBUG(D_KUC, "Removed uid=%d fp=%p from group %d\n",
                                reg->kr_uid, reg->kr_fp, group);
                         if (reg->kr_fp != NULL)
-                                cfs_put_file(reg->kr_fp);
-                        cfs_free(reg);
-                }
-        }
+				fput(reg->kr_fp);
+			cfs_free(reg);
+		}
+	}
 	up_write(&kg_sem);
 
         RETURN(0);
@@ -285,7 +285,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
 			if (rc == 0)
 				one_success = 1;
 			else if (rc == -EPIPE) {
-				cfs_put_file(reg->kr_fp);
+				fput(reg->kr_fp);
 				reg->kr_fp = NULL;
 			}
 		}

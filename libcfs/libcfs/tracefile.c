@@ -681,25 +681,24 @@ void cfs_trace_debug_print(void)
 
 int cfs_tracefile_dump_all_pages(char *filename)
 {
-        struct page_collection pc;
-        cfs_file_t *filp;
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
-        int rc;
+	struct page_collection	pc;
+	struct file		*filp;
+	struct cfs_trace_page	*tage;
+	struct cfs_trace_page	*tmp;
+	int rc;
 
-        CFS_DECL_MMSPACE;
+	CFS_DECL_MMSPACE;
 
-        cfs_tracefile_write_lock();
+	cfs_tracefile_write_lock();
 
-        filp = cfs_filp_open(filename,
-                             O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600, &rc);
-        if (!filp) {
-                if (rc != -EEXIST)
-                        printk(CFS_KERN_ERR
-                               "LustreError: can't open %s for dump: rc %d\n",
-                               filename, rc);
-                goto out;
-        }
+	filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600);
+	if (IS_ERR(filp)) {
+		rc = PTR_ERR(filp);
+		filp = NULL;
+		printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
+		      filename, rc);
+		goto out;
+	}
 
 	spin_lock_init(&pc.pc_lock);
         pc.pc_want_daemon_pages = 1;
@@ -717,8 +716,8 @@ int cfs_tracefile_dump_all_pages(char *filename)
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
-                rc = cfs_filp_write(filp, cfs_page_address(tage->page),
-                                    tage->used, cfs_filp_poff(filp));
+		rc = filp_write(filp, cfs_page_address(tage->page),
+				tage->used, filp_poff(filp));
                 if (rc != (int)tage->used) {
                         printk(CFS_KERN_WARNING "wanted to write %u but wrote "
                                "%d\n", tage->used, rc);
@@ -729,15 +728,15 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 cfs_list_del(&tage->linkage);
                 cfs_tage_free(tage);
         }
-        CFS_MMSPACE_CLOSE;
-        rc = cfs_filp_fsync(filp);
-        if (rc)
-                printk(CFS_KERN_ERR "sync returns %d\n", rc);
- close:
-        cfs_filp_close(filp);
- out:
-        cfs_tracefile_write_unlock();
-        return rc;
+	CFS_MMSPACE_CLOSE;
+	rc = filp_fsync(filp);
+	if (rc)
+		printk(CFS_KERN_ERR "sync returns %d\n", rc);
+close:
+	filp_close(filp, NULL);
+out:
+	cfs_tracefile_write_unlock();
+	return rc;
 }
 
 void cfs_trace_flush_pages(void)
@@ -980,19 +979,19 @@ int cfs_trace_get_debug_mb(void)
 
 static int tracefiled(void *arg)
 {
-        struct page_collection pc;
-        struct tracefiled_ctl *tctl = arg;
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
-        cfs_file_t *filp;
-        int last_loop = 0;
-        int rc;
+	struct page_collection pc;
+	struct tracefiled_ctl *tctl = arg;
+	struct cfs_trace_page *tage;
+	struct cfs_trace_page *tmp;
+	struct file *filp;
+	int last_loop = 0;
+	int rc;
 
-        CFS_DECL_MMSPACE;
+	CFS_DECL_MMSPACE;
 
-        /* we're started late enough that we pick up init's fs context */
-        /* this is so broken in uml?  what on earth is going on? */
-        cfs_daemonize("ktracefiled");
+	/* we're started late enough that we pick up init's fs context */
+	/* this is so broken in uml?  what on earth is going on? */
+	cfs_daemonize("ktracefiled");
 
 	spin_lock_init(&pc.pc_lock);
 	complete(&tctl->tctl_start);
@@ -1008,13 +1007,16 @@ static int tracefiled(void *arg)
                 filp = NULL;
                 cfs_tracefile_read_lock();
                 if (cfs_tracefile[0] != 0) {
-                        filp = cfs_filp_open(cfs_tracefile,
-                                             O_CREAT | O_RDWR | O_LARGEFILE,
-                                             0600, &rc);
-                        if (!(filp))
-                                printk(CFS_KERN_WARNING "couldn't open %s: "
-                                       "%d\n", cfs_tracefile, rc);
-                }
+			filp = filp_open(cfs_tracefile,
+					 O_CREAT | O_RDWR | O_LARGEFILE,
+					 0600);
+			if (IS_ERR(filp)) {
+				rc = PTR_ERR(filp);
+				filp = NULL;
+				printk(CFS_KERN_WARNING "couldn't open %s: "
+				       "%d\n", cfs_tracefile, rc);
+			}
+		}
                 cfs_tracefile_read_unlock();
                 if (filp == NULL) {
                         put_pages_on_daemon_list(&pc);
@@ -1033,11 +1035,11 @@ static int tracefiled(void *arg)
 
                         if (f_pos >= (off_t)cfs_tracefile_size)
                                 f_pos = 0;
-                        else if (f_pos > (off_t)cfs_filp_size(filp))
-                                f_pos = cfs_filp_size(filp);
+			else if (f_pos > (off_t)filp_size(filp))
+				f_pos = filp_size(filp);
 
-                        rc = cfs_filp_write(filp, cfs_page_address(tage->page),
-                                            tage->used, &f_pos);
+			rc = filp_write(filp, cfs_page_address(tage->page),
+					tage->used, &f_pos);
                         if (rc != (int)tage->used) {
                                 printk(CFS_KERN_WARNING "wanted to write %u "
                                        "but wrote %d\n", tage->used, rc);
@@ -1045,9 +1047,9 @@ static int tracefiled(void *arg)
                                 __LASSERT(cfs_list_empty(&pc.pc_pages));
                         }
                 }
-                CFS_MMSPACE_CLOSE;
+		CFS_MMSPACE_CLOSE;
 
-                cfs_filp_close(filp);
+		filp_close(filp, NULL);
                 put_pages_on_daemon_list(&pc);
                 if (!cfs_list_empty(&pc.pc_pages)) {
                         int i;

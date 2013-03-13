@@ -1972,14 +1972,14 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if ((file->f_flags & O_ACCMODE) == 0) /* O_RDONLY */
 			RETURN(-EPERM);
 
-		file2 = cfs_get_fd(lsl.sl_fd);
+		file2 = fget(lsl.sl_fd);
 		if (file2 == NULL)
 			RETURN(-EBADF);
 
 		rc = -EPERM;
 		if ((file2->f_flags & O_ACCMODE) != 0) /* O_WRONLY or O_RDWR */
 			rc = ll_swap_layout(file, file2, &lsl);
-		cfs_put_file(file2);
+		fput(file2);
 		RETURN(rc);
 	}
         case LL_IOC_LOV_GETSTRIPE:

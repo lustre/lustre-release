@@ -44,13 +44,9 @@ static int   accept_backlog = 127;
 static int   accept_timeout = 5;
 
 struct {
-        int                   pta_shutdown;
-        cfs_socket_t         *pta_sock;
-#ifdef __KERNEL__
+	int			pta_shutdown;
+	cfs_socket_t		*pta_sock;
 	struct completion	pta_signal;
-#else
-	mt_completion_t		pta_signal;
-#endif
 } lnet_acceptor_state;
 
 int
@@ -67,11 +63,6 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 }
 
 #ifdef __KERNEL__
-
-#define mt_init_completion(c)     init_completion(c)
-#define mt_wait_for_completion(c) wait_for_completion(c)
-#define mt_complete(c)            complete(c)
-#define mt_fini_completion(c)     fini_completion(c)
 
 EXPORT_SYMBOL(lnet_acceptor_port);
 
@@ -429,9 +420,9 @@ lnet_acceptor(void *arg)
                 LCONSOLE(0, "Accept %s, port %d\n", accept_type, accept_port);
         }
 
-        /* set init status and unblock parent */
-        lnet_acceptor_state.pta_shutdown = rc;
-	mt_complete(&lnet_acceptor_state.pta_signal);
+	/* set init status and unblock parent */
+	lnet_acceptor_state.pta_shutdown = rc;
+	complete(&lnet_acceptor_state.pta_signal);
 
         if (rc != 0)
                 return rc;
@@ -489,9 +480,9 @@ lnet_acceptor(void *arg)
 
         CDEBUG(D_NET, "Acceptor stopping\n");
 
-        /* unblock lnet_acceptor_stop() */
-	mt_complete(&lnet_acceptor_state.pta_signal);
-        return 0;
+	/* unblock lnet_acceptor_stop() */
+	complete(&lnet_acceptor_state.pta_signal);
+	return 0;
 }
 
 static inline int
@@ -531,59 +522,59 @@ lnet_acceptor_start(void)
                 return 0;
 #endif
 
-	mt_init_completion(&lnet_acceptor_state.pta_signal);
-        rc = accept2secure(accept_type, &secure);
-        if (rc <= 0) {
-		mt_fini_completion(&lnet_acceptor_state.pta_signal);
-                return rc;
-        }
+	init_completion(&lnet_acceptor_state.pta_signal);
+	rc = accept2secure(accept_type, &secure);
+	if (rc <= 0) {
+		fini_completion(&lnet_acceptor_state.pta_signal);
+		return rc;
+	}
 
-        if (lnet_count_acceptor_nis() == 0)  /* not required */
-                return 0;
+	if (lnet_count_acceptor_nis() == 0)  /* not required */
+		return 0;
 
-        rc2 = cfs_create_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure, 0);
-        if (rc2 < 0) {
-                CERROR("Can't start acceptor thread: %d\n", rc);
-		mt_fini_completion(&lnet_acceptor_state.pta_signal);
+	rc2 = cfs_create_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure, 0);
+	if (rc2 < 0) {
+		CERROR("Can't start acceptor thread: %d\n", rc);
+		fini_completion(&lnet_acceptor_state.pta_signal);
 
-                return -ESRCH;
-        }
+		return -ESRCH;
+	}
 
-        /* wait for acceptor to startup */
-	mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
+	/* wait for acceptor to startup */
+	wait_for_completion(&lnet_acceptor_state.pta_signal);
 
-        if (!lnet_acceptor_state.pta_shutdown) {
-                /* started OK */
-                LASSERT (lnet_acceptor_state.pta_sock != NULL);
-                return 0;
-        }
+	if (!lnet_acceptor_state.pta_shutdown) {
+		/* started OK */
+		LASSERT(lnet_acceptor_state.pta_sock != NULL);
+		return 0;
+	}
 
-        LASSERT (lnet_acceptor_state.pta_sock == NULL);
-	mt_fini_completion(&lnet_acceptor_state.pta_signal);
+	LASSERT(lnet_acceptor_state.pta_sock == NULL);
+	fini_completion(&lnet_acceptor_state.pta_signal);
 
-        return -ENETDOWN;
+	return -ENETDOWN;
 }
 
 void
 lnet_acceptor_stop(void)
 {
-        if (lnet_acceptor_state.pta_sock == NULL) /* not running */
-                return;
+	if (lnet_acceptor_state.pta_sock == NULL) /* not running */
+		return;
 
-        lnet_acceptor_state.pta_shutdown = 1;
-        libcfs_sock_abort_accept(lnet_acceptor_state.pta_sock);
+	lnet_acceptor_state.pta_shutdown = 1;
+	libcfs_sock_abort_accept(lnet_acceptor_state.pta_sock);
 
-        /* block until acceptor signals exit */
-	mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
+	/* block until acceptor signals exit */
+	wait_for_completion(&lnet_acceptor_state.pta_signal);
 
-	mt_fini_completion(&lnet_acceptor_state.pta_signal);
+	fini_completion(&lnet_acceptor_state.pta_signal);
 }
 
 #else /* single-threaded user-space */
 int
 lnet_acceptor_start(void)
 {
-        return 0;
+	return 0;
 }
 
 void

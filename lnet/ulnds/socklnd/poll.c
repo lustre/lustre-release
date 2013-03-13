@@ -201,10 +201,10 @@ usocklnd_poll_thread(void *arg)
                 }
         }
 
-        /* unblock usocklnd_shutdown() */
-	mt_complete(&pt_data->upt_completion);
+	/* unblock usocklnd_shutdown() */
+	complete(&pt_data->upt_completion);
 
-        return 0;
+	return 0;
 }
 
 /* Returns 0 on success, <0 else */

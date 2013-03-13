@@ -534,10 +534,10 @@ struct osd_thread_info {
 		struct osd_it_quota	oti_it_quota;
 	};
 
-        /** pre-allocated buffer used by oti_it_ea, size OSD_IT_EA_BUFSIZE */
-        void                  *oti_it_ea_buf;
+	/** pre-allocated buffer used by oti_it_ea, size OSD_IT_EA_BUFSIZE */
+	void			*oti_it_ea_buf;
 
-        cfs_kstatfs_t          oti_ksfs;
+	struct kstatfs		oti_ksfs;
 
         /** IAM iterator for index operation. */
         struct iam_iterator    oti_idx_it;

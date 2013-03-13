@@ -143,15 +143,32 @@ static inline int down_trylock(struct semaphore *sem)
  * - wait_for_completion(c)
  * - wait_for_completion_interruptible(c)
  */
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+
+/*
+ * Multi-threaded user space completion APIs
+ */
+
 struct completion {
-	unsigned int done;
-	cfs_waitq_t wait;
+	int		c_done;
+	pthread_cond_t	c_cond;
+	pthread_mutex_t	c_mut;
 };
+
+#else /* !HAVE_LIBPTHREAD */
+
+struct completion {
+	unsigned int	done;
+	cfs_waitq_t	wait;
+};
+#endif /* HAVE_LIBPTHREAD */
 
 typedef int (*wait_handler_t) (int timeout);
 void init_completion_module(wait_handler_t handler);
 int  call_wait_handler(int timeout);
 void init_completion(struct completion *c);
+void fini_completion(struct completion *c);
 void complete(struct completion *c);
 void wait_for_completion(struct completion *c);
 int wait_for_completion_interruptible(struct completion *c);
@@ -260,21 +277,6 @@ typedef struct { volatile int counter; } cfs_atomic_t;
 
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
-
-/*
- * Multi-threaded user space completion APIs
- */
-
-typedef struct {
-        int c_done;
-        pthread_cond_t c_cond;
-        pthread_mutex_t c_mut;
-} mt_completion_t;
-
-void mt_init_completion(mt_completion_t *c);
-void mt_fini_completion(mt_completion_t *c);
-void mt_complete(mt_completion_t *c);
-void mt_wait_for_completion(mt_completion_t *c);
 
 /*
  * Multi-threaded user space atomic APIs

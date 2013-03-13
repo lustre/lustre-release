@@ -41,32 +41,11 @@
 
 #include <libcfs/libcfs.h>
 
-cfs_file_t *
-cfs_filp_open (const char *name, int flags, int mode, int *err)
-{
-	/* XXX
-	 * Maybe we need to handle flags and mode in the future
-	 */
-	cfs_file_t	*filp = NULL;
-
-	filp = filp_open(name, flags, mode);
-	if (IS_ERR(filp)) {
-		int rc;
-
-		rc = PTR_ERR(filp);
-                printk(KERN_ERR "LustreError: can't open %s file: err %d\n",
-                       name, rc);
-		if (err)
-			*err = rc;
-		filp = NULL;
-	}
-	return filp;
-}
-
 /* write a userspace buffer to disk.
  * NOTE: this returns 0 on success, not the number of bytes written. */
 ssize_t
-cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
+filp_user_write(struct file *filp, const void *buf, size_t count,
+		loff_t *offset)
 {
 	mm_segment_t fs;
 	ssize_t size = 0;
@@ -74,7 +53,7 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	while ((ssize_t)count > 0) {
-		size = vfs_write(filp, (const char __user *)buf, count, offset);
+		size = vfs_write(filp, (const void __user *)buf, count, offset);
 		if (size < 0)
 			break;
 		count -= size;
@@ -85,6 +64,7 @@ cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset)
 
 	return size;
 }
+EXPORT_SYMBOL(filp_user_write);
 
 #if !(CFS_O_CREAT == O_CREAT && CFS_O_EXCL == O_EXCL &&	\
      CFS_O_NOACCESS == O_NOACCESS &&\
@@ -121,16 +101,13 @@ int cfs_oflags2univ(int flags)
 	return (flags);
 }
 #endif
+EXPORT_SYMBOL(cfs_oflags2univ);
 
-/* 
+/*
  * XXX Liang: we don't need cfs_univ2oflags() now.
  */
 int cfs_univ2oflags(int flags)
 {
 	return (flags);
 }
-
-EXPORT_SYMBOL(cfs_filp_open);
-EXPORT_SYMBOL(cfs_user_write);
-EXPORT_SYMBOL(cfs_oflags2univ);
 EXPORT_SYMBOL(cfs_univ2oflags);

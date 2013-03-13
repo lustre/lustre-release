@@ -363,7 +363,7 @@ void t_grep_v(const char *path, char *str)
 
 void t_ls(int fd, char *buf, int size)
 {
-	cfs_dirent_t *ent;
+	struct dirent64 *ent;
 	int rc, pos;
 	loff_t base = 0;
 
@@ -371,7 +371,7 @@ void t_ls(int fd, char *buf, int size)
 	while ((rc = getdirentries64(fd, buf, size, &base)) > 0) {
 		pos = 0;
 		while (pos < rc) {
-			ent = (cfs_dirent_t *) ((char*) buf + pos);
+			ent = (struct dirent64 *)((char *)buf + pos);
 			printf("%s\n", ent->d_name);
 			pos += ent->d_reclen;
 		}

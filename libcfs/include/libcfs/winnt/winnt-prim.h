@@ -109,7 +109,6 @@ extern void     cfs_symbol_put(const char *);
 extern void     cfs_symbol_clean();
 
 typedef struct file_operations cfs_file_operations_t;
-typedef struct file cfs_file_t;
 
 /*
  * Pseudo device register
@@ -366,34 +365,17 @@ extern cfs_list_t *seq_list_next(void *v, cfs_list_t *head, loff_t *ppos);
  *  declaration of proc kernel process routines
  */
 
-cfs_file_t *
-lustre_open_file(char * filename);
+struct file *lustre_open_file(char *filename);
 
-int
-lustre_close_file(cfs_file_t * fh);
+int lustre_close_file(struct file *fh);
 
-int
-lustre_do_ioctl( cfs_file_t * fh,
-                 unsigned long cmd,
-                 ulong_ptr_t arg );
+int lustre_do_ioctl(struct file *fh, unsigned long cmd, ulong_ptr_t arg);
 
-int
-lustre_ioctl_file( cfs_file_t * fh,
-                   PCFS_PROC_IOCTL devctl);
+int lustre_ioctl_file(struct file *fh, PCFS_PROC_IOCTL devctl);
 
-size_t
-lustre_read_file( cfs_file_t *    fh,
-                  loff_t          offl,
-                  size_t          size,
-                  char *          buf
-                  );
+size_t lustre_read_file(struct file *fh, loff_t offl, size_t size, char *buf);
 
-size_t
-lustre_write_file( cfs_file_t *    fh,
-                   loff_t          off,
-                   size_t          size,
-                   char *          buf
-                   );
+size_t lustre_write_file(struct file *fh, loff_t off, size_t size, char *buf);
 
 /*
  * Wait Queue
@@ -950,9 +932,9 @@ void cfs_enter_debugger();
 #define PTHREAD_RECURSIVE_MUTEX_INITIALIZER ((pthread_mutex_t) -2)
 #define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER ((pthread_mutex_t) -3)
 
-typedef struct file {
-    int foo;
-} cfs_file_t;
+struct file {
+	int foo;
+};
 
 #include "../user-prim.h"
 #include "../user-lock.h"
