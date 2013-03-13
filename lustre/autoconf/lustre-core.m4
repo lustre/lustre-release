@@ -20,7 +20,7 @@ LUSTRE="$PWD/lustre"
 AC_SUBST(LUSTRE)
 
 # mount.lustre
-rootsbindir='/sbin'
+rootsbindir='$(CROSS_PATH)/sbin'
 AC_SUBST(rootsbindir)
 
 demodir='$(docdir)/demo'

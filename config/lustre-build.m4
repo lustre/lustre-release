@@ -468,11 +468,11 @@ AC_DEFUN([LB_PATH_DEFAULTS],
 [# directories for binaries
 AC_PREFIX_DEFAULT([/usr])
 
-sysconfdir='/etc'
+sysconfdir='$(CROSS_PATH)/etc'
 AC_SUBST(sysconfdir)
 
 # Directories for documentation and demos.
-docdir='${datadir}/doc/$(PACKAGE)'
+docdir='$(datadir)/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
 LIBCFS_PATH_DEFAULTS
@@ -539,6 +539,7 @@ AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
 AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
+AM_CONDITIONAL(ARCH_MIC, test x$target_cpu = "xx86_64" -a x$target_vendor = "xk1om")
 
 # Sanity check for PCLMULQDQ instruction availability
 # PCLMULQDQ instruction is a new instruction available beginning with
