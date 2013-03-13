@@ -3,25 +3,43 @@ AC_INIT(libsysio, 1.2)
 AC_CANONICAL_SYSTEM
 
 case "$host_os" in
-  aix*)
-  	;;
-  linux*)
-	;;
-  *)
-	AC_MSG_WARN('***' ${host_os}: Unsupported OS target)
-	;;
+	aix*)
+		;;
+	linux*)
+		;;
+	*)
+		AC_MSG_WARN('***' ${host_os}: Unsupported OS target)
+		;;
 esac
 
 AM_INIT_AUTOMAKE([subdir-objects 1.9 tar-ustar])
 AM_MAINTAINER_MODE([enable])
 AC_PROG_CC
 AM_PROG_CC_C_O
-
 AC_PROG_RANLIB
+AC_CHECK_TOOL(CC, gcc, [no])
+AC_CHECK_TOOL(LD, ld, [no])
+AC_CHECK_TOOL(AR, ar, [no])
+AC_CHECK_TOOL(OBJDUMP, objdump, [no])
+AC_CHECK_TOOL(STRIP, strip, [no])
 AC_PROG_MAKE_SET
 AC_HEADER_STDC
 AC_HEADER_STAT
 AC_HEADER_TIME
+
+case $target_vendor in
+	# The K1OM architecture is an extension of the x86 architecture.
+	# So, the $target_arch is x86_64.
+	k1om)
+		CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
+		if test $CC_TARGET_ARCH != x86_64-$target_vendor-linux ; then
+			AC_MSG_ERROR([Cross compiler not found in PATH.])
+		fi
+		CCAS=$CC
+		;;
+	*)
+		;;
+esac
 
 if test ${target_cpu} == "powerpc64"; then
 	AC_MSG_WARN([set compiler with -m64])
@@ -557,4 +575,3 @@ fi
 AC_OUTPUT(
 	Makefile
 	tests/Makefile)
-

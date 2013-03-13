@@ -2,10 +2,6 @@
 #set -xv
 set -e
 
-AR=/usr/bin/ar
-LD=/usr/bin/ld
-RANLIB=/usr/bin/ranlib
-
 CWD=`pwd`
 
 LIBS=$1

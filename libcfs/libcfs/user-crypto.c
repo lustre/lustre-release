@@ -90,7 +90,7 @@ static int adler_wrapper(void *ctx, const unsigned char *p,
 	return 0;
 }
 
-#if (defined i386) || (defined __amd64__)
+#ifdef HAVE_PCLMULQDQ
 static int crc32_pclmul_wrapper(void *ctx, const unsigned char *p,
 				unsigned int len)
 {
@@ -157,7 +157,7 @@ static struct __hash_alg crypto_hash[] = {
 					   .start = start_generic,
 					   .final = final_generic,
 					   .fini = NULL},
-#if (defined i386) || (defined __amd64__)
+#ifdef HAVE_PCLMULQDQ
 					  {.ha_id = CFS_HASH_ALG_CRC32,
 					   .ha_ctx_size = sizeof(unsigned int),
 					   .ha_priority = 100,

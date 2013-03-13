@@ -344,7 +344,7 @@ static int cfs_crypto_test_hashes(void)
 
 static int crc32, adler32;
 
-#ifdef CONFIG_X86
+#ifdef HAVE_PCLMULQDQ
 static int crc32pclmul;
 #endif
 
@@ -353,7 +353,7 @@ int cfs_crypto_register(void)
 	crc32 = cfs_crypto_crc32_register();
 	adler32 = cfs_crypto_adler32_register();
 
-#ifdef CONFIG_X86
+#ifdef HAVE_PCLMULQDQ
 	crc32pclmul = cfs_crypto_crc32_pclmul_register();
 #endif
 
@@ -368,7 +368,7 @@ void cfs_crypto_unregister(void)
 	if (adler32 == 0)
 		cfs_crypto_adler32_unregister();
 
-#ifdef CONFIG_X86
+#ifdef HAVE_PCLMULQDQ
 	if (crc32pclmul == 0)
 		cfs_crypto_crc32_pclmul_unregister();
 #endif

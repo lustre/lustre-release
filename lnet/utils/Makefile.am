@@ -90,6 +90,10 @@ endif
 
 if LIBLUSTRE
 LIB_SELFTEST = $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
+
+export AR
+export RANLIB
+
 liblst.a : $(LIB_SELFTEST) $(LND_LIBS)
 	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
 

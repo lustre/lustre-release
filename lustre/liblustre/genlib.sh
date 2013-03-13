@@ -11,15 +11,13 @@ set -e
 # FIXME: How to do this cleanly use makefile?
 #
 
-AR=/usr/bin/ar
 # see http://osdir.com/ml/gmane.comp.gnu.binutils.bugs/2006-01/msg00016.php
 ppc64_CPU=`uname -p`
 if [ "x${ppc64_CPU}" = "xppc64" ]; then
-  LD="gcc -m64"
+	LD="$CC -m64"
 else
-  LD="gcc"
+	LD=$CC
 fi
-RANLIB=/usr/bin/ranlib
 
 CWD=`pwd`
 
@@ -93,7 +91,7 @@ $RANLIB $CWD/liblsupport.a
 
 # if libsysio is already in our LIBS we don't need to link against it here
 if $(echo "$LIBS" | grep -v -- "-lsysio" >/dev/null) ; then
-  build_sysio_obj_list $SYSIO/lib/libsysio.a
+	build_sysio_obj_list $SYSIO/lib/libsysio.a
 fi
 
 # create static lib lustre
@@ -105,14 +103,14 @@ $RANLIB $CWD/liblustre.a
 rm -f $CWD/liblustre.so
 OS=`uname`
 if test x$OS = xAIX; then
-$LD -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
+	$LD $LDFLAGS -shared -o $CWD/liblustre.so $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
 else
 # using -nostdlib on Ubuntu causes errors such as:
 #./llite_lib.o: In function `liblustre_process_log':
 #/home/brian/rpm/BUILD/lustre-1.8.2.50/lustre/liblustre/llite_lib.c:234: undefined reference to `__stack_chk_fail_local'
 # due to the use of SSP
 #$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
-$LD -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
+	$LD $LDFLAGS -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
 fi
 
 rm -rf $sysio_tmp
