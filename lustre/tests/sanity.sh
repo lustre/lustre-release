@@ -1805,6 +1805,32 @@ test_27B() { # LU-2523
 }
 run_test 27B "call setstripe on open unlinked file/rename victim"
 
+test_27C() { #LU-2871
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	declare -a ost_idx
+	local index
+	local i
+	local j
+
+	test_mkdir -p $DIR/$tdir
+	cd $DIR/$tdir
+	for i in $(seq 0 $((OSTCOUNT - 1))); do
+		# set stripe across all OSTs starting from OST$i
+		$SETSTRIPE -i $i -c -1 $tfile$i
+		# get striping information
+		ost_idx=($($GETSTRIPE $tfile$i |
+		         tail -n $((OSTCOUNT + 1)) | awk '{print $1}'))
+		echo ${ost_idx[@]}
+		# check the layout
+		for j in $(seq 0 $((OSTCOUNT - 1))); do
+			index=$(((i + j) % OSTCOUNT))
+			[ ${ost_idx[$j]} -eq $index ] || error
+		done
+	done
+}
+run_test 27C "check full striping across all OSTs"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
