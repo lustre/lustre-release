@@ -446,12 +446,12 @@ static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 };
 
 static struct lprocfs_vars lprocfs_lod_osd_vars[] = {
-	{ "blocksize",    lprocfs_osd_rd_blksize, 0, 0 },
-	{ "kbytestotal",  lprocfs_osd_rd_kbytestotal, 0, 0 },
-	{ "kbytesfree",   lprocfs_osd_rd_kbytesfree, 0, 0 },
-	{ "kbytesavail",  lprocfs_osd_rd_kbytesavail, 0, 0 },
-	{ "filestotal",   lprocfs_osd_rd_filestotal, 0, 0 },
-	{ "filesfree",    lprocfs_osd_rd_filesfree, 0, 0 },
+	{ "blocksize",    lprocfs_dt_rd_blksize, 0, 0 },
+	{ "kbytestotal",  lprocfs_dt_rd_kbytestotal, 0, 0 },
+	{ "kbytesfree",   lprocfs_dt_rd_kbytesfree, 0, 0 },
+	{ "kbytesavail",  lprocfs_dt_rd_kbytesavail, 0, 0 },
+	{ "filestotal",   lprocfs_dt_rd_filestotal, 0, 0 },
+	{ "filesfree",    lprocfs_dt_rd_filesfree, 0, 0 },
 	{ 0 }
 };
 

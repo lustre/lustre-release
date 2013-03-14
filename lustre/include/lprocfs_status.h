@@ -690,19 +690,6 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
-extern int lprocfs_osd_rd_blksize(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-extern int lprocfs_osd_rd_kbytesfree(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-extern int lprocfs_osd_rd_kbytesavail(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-extern int lprocfs_osd_rd_filestotal(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-extern int lprocfs_osd_rd_filesfree(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-extern int lprocfs_osd_rd_kbytestotal(char *page, char **start, off_t off,
-				int count, int *eof, void *data);
-
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
@@ -810,8 +797,6 @@ int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
 int lprocfs_obd_wr_recovery_time_hard(struct file *file,
                                       const char *buffer,
                                       unsigned long count, void *data);
-int lprocfs_obd_rd_mntdev(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
 int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
                                      int count, int *eof, void *data);
 int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
