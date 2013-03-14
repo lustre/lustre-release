@@ -242,6 +242,7 @@ while IFS= read -u3 LINE; do
                 "index "[0-9a-fA-F]*) break ;;
                 "deleted file mode "*) break  ;;
                 "old mode "*) break ;;
+		"new file mode "*) break ;;
                 esac
                 LINE=${LINE}$'\n'${INDEX}
                 do_default_line
