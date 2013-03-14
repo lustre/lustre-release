@@ -61,8 +61,8 @@ init_logging
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 64b 68 71 77f 78 115 124b"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-2834 LU-1593 LU-2610 LU-2833 LU-1957 LU-2805
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 18      34h     40      48a     180     184c"
+# bug number for skipped test:        LU-1593 LU-2610 LU-2833 LU-1957 LU-2805
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 34h     40      48a     180     184c"
 
 FAIL_ON_ERROR=false
 
@@ -535,12 +535,12 @@ test_17k() { #bug 22301
         rsync --help | grep -q xattr ||
                 skip_env "$(rsync --version| head -1) does not support xattrs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	test_mkdir -p $DIR/$tdir.new
-        touch $DIR/$tdir/$tfile
-        ln -s $DIR/$tdir/$tfile $DIR/$tdir/$tfile.lnk
-        rsync -av -X $DIR/$tdir/ $DIR/$tdir.new ||
-                error "rsync failed with xattrs enabled"
+	touch $DIR/$tdir/$tfile
+	ln -s $DIR/$tdir/$tfile $DIR/$tdir/$tfile.lnk
+	rsync -av -X $DIR/$tdir/ $DIR/$tdir.new ||
+		error "rsync failed with xattrs enabled"
 }
 run_test 17k "symlinks: rsync with xattrs enabled ========================="
 
@@ -678,8 +678,8 @@ test_17n() {
 run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
 test_18() {
-	touch $DIR/f
-	ls $DIR || error
+	touch $DIR/f || error "Failed to touch $DIR/f: $?"
+	ls $DIR || error "Failed to ls $DIR: $?"
 }
 run_test 18 "touch .../f ; ls ... =============================="
 
