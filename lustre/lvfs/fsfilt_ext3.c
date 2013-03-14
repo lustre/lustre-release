@@ -505,8 +505,6 @@ cleanup:
         return rc;
 }
 
-extern int ext3_map_inode_page(struct inode *inode, struct page *page,
-			       unsigned long *blocks, int create);
 int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
 				   int pages, unsigned long *blocks,
 				   int create)

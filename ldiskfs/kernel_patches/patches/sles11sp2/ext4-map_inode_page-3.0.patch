@@ -10,20 +10,20 @@
  extern void ext4_da_update_reserve_space(struct inode *inode,
  					int used, int quota_claim);
 +extern int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			       unsigned long *blocks, int *created,
-+			       int create);
++			       unsigned long *blocks, int created);
++
  /* ioctl.c */
  extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
  extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -5968,3 +5968,71 @@ out_unlock:
+@@ -5968,3 +5968,65 @@ out_unlock:
  	up_read(&inode->i_alloc_sem);
  	return ret;
  }
 +
 +int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			unsigned long *blocks, int *created, int create)
++			unsigned long *blocks, int create)
 +{
 +	unsigned int blocksize, blocks_per_page;
 +	unsigned long iblock;
@@ -39,10 +39,6 @@
 +		blocks[i] = ext4_bmap(inode->i_mapping, iblock);
 +		if (blocks[i] == 0) {
 +			failed++;
-+			if (created)
-+				created[i] = -1;
-+		} else if (created) {
-+			created[i] = 0;
 +		}
 +	}
 +
@@ -80,8 +76,6 @@
 +			unmap_underlying_metadata(inode->i_sb->s_bdev,
 +					map.m_pblk);
 +		blocks[i] = map.m_pblk;
-+		if (created)
-+			created[i] = 1;
 +	}
 +
 +out:

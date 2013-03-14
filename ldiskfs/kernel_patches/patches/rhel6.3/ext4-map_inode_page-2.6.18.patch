@@ -1,14 +1,25 @@
-Index: linux-2.6.18.i386/fs/ext4/inode.c
-===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/inode.c
-+++ linux-2.6.18.i386/fs/ext4/inode.c
-@@ -3666,3 +3666,67 @@ out_unlock:
- 	unlock_page(page);
- 	return ret;
+diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h	2013-03-14 12:04:44.105541822 -0400
++++ b/fs/ext4/ext4.h	2013-03-14 12:09:14.264489405 -0400
+@@ -1661,6 +1661,8 @@
+ extern int ext4_block_truncate_page(handle_t *handle,
+ 		struct address_space *mapping, loff_t from);
+ extern int ext4_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf);
++extern int ext4_map_inode_page(struct inode *inode, struct page *page,
++				unsigned long *blocks, int create);
+ extern qsize_t *ext4_get_reserved_space(struct inode *inode);
+ extern int flush_aio_dio_completed_IO(struct inode *inode);
+ extern void ext4_da_update_reserve_space(struct inode *inode,
+diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c	2013-03-14 12:04:44.103541330 -0400
++++ b/fs/ext4/inode.c	2013-03-14 12:11:16.526353498 -0400
+@@ -6131,3 +6131,62 @@
+ out:
+         return ret;
  }
 +
 +int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			unsigned long *blocks, int *created, int create)
++			unsigned long *blocks, int create)
 +{
 +	unsigned int blocksize, blocks_per_page;
 +	unsigned long iblock;
@@ -24,10 +35,6 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 +		blocks[i] = ext4_bmap(inode->i_mapping, iblock);
 +		if (blocks[i] == 0) {
 +			failed++;
-+			if (created)
-+				created[i] = -1;
-+		} else if (created) {
-+			created[i] = 0;
 +		}
 +	}
 +
@@ -62,8 +69,6 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 +			unmap_underlying_metadata(dummy.b_bdev,
 +					dummy.b_blocknr);
 +		blocks[i] = dummy.b_blocknr;
-+		if (created)
-+			created[i] = 1;
 +	}
 +
 +out:
@@ -71,18 +76,3 @@ Index: linux-2.6.18.i386/fs/ext4/inode.c
 +	return rc;
 +}
 +EXPORT_SYMBOL(ext4_map_inode_page);
-Index: linux-2.6.18.i386/fs/ext4/super.c
-===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/super.c
-+++ linux-2.6.18.i386/fs/ext4/super.c
-@@ -3498,6 +3498,10 @@ static void __exit exit_ext4_fs(void)
- 	__free_page(ext4_zero_page);
- }
- 
-+int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			unsigned long *blocks, int *created, int create);
-+EXPORT_SYMBOL(ext4_map_inode_page);
-+
- MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
- MODULE_DESCRIPTION("Fourth Extended Filesystem with extents");
- MODULE_LICENSE("GPL");
