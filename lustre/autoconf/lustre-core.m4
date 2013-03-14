@@ -120,13 +120,13 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LC_MDS_MAX_THREADS],
 [
-        AC_ARG_WITH([mds_max_threads],
-        AC_HELP_STRING([--with-mds-max-threads=size],
-                        [define the maximum number of threads available on the MDS: (default=512)]),
-        [
-                MDS_THREAD_COUNT=$with_mds_max_threads
-                AC_DEFINE_UNQUOTED(MDT_MAX_THREADS, $MDS_THREAD_COUNT, [maximum number of mdt threads])
-        ])
+	AC_ARG_WITH([mds_max_threads],
+	AC_HELP_STRING([--with-mds-max-threads=count],
+		       [maximum threads available on the MDS: (default=512)]),
+	[
+		MDS_THREAD_COUNT=$with_mds_max_threads
+		AC_DEFINE_UNQUOTED(MDS_MAX_THREADS, $MDS_THREAD_COUNT, [maximum number of MDS threads])
+	])
 ])
 
 #
