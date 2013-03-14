@@ -1035,7 +1035,7 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 			CDEBUG(D_HSM, "Could not read file data version. "
 				      "Request could not be confirmed.\n");
 			if (hpk.hpk_errval == 0)
-				hpk.hpk_errval = rc;
+				hpk.hpk_errval = -rc;
 			GOTO(progress, rc);
 		}
 
