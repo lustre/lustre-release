@@ -55,7 +55,7 @@ COMMON_SOURCES = client.c recover.c connection.c niobuf.c pack_generic.c       \
 	llog_client.c llog_server.c import.c ptlrpcd.c pers.c wiretest.c       \
 	ptlrpc_internal.h layout.c sec.c sec_bulk.c sec_gc.c sec_config.c      \
 	sec_lproc.c sec_null.c sec_plain.c lproc_ptlrpc.c nrs.c nrs_fifo.c     \
-	$(LDLM_COMM_SOURCES)
+	errno.c $(LDLM_COMM_SOURCES)
 
 if LIBLUSTRE
 

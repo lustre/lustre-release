@@ -3708,8 +3708,8 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         /* Get lock from request for possible resent case. */
         mdt_intent_fixup_resent(info, *lockp, &new_lock, lhc);
 
-        ldlm_rep->lock_policy_res2 =
-                mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
+	rc = mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
+	ldlm_rep->lock_policy_res2 = clear_serious(rc);
 
         if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
@@ -3964,8 +3964,14 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 			RETURN(-EROFS);
         }
         if (rc == 0 && flv->it_act != NULL) {
-                /* execute policy */
-                rc = flv->it_act(opc, info, lockp, flags);
+		struct ldlm_reply *rep;
+
+		/* execute policy */
+		rc = flv->it_act(opc, info, lockp, flags);
+
+		rep = req_capsule_server_get(pill, &RMF_DLM_REP);
+		rep->lock_policy_res2 =
+			ptlrpc_status_hton(rep->lock_policy_res2);
         } else {
                 rc = -EOPNOTSUPP;
         }

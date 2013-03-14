@@ -145,6 +145,8 @@ int mdt_hsm_progress(struct mdt_thread_info *info)
 	if (hpk == NULL)
 		RETURN(-EPROTO);
 
+	hpk->hpk_errval = lustre_errno_ntoh(hpk->hpk_errval);
+
 	CDEBUG(D_HSM, "Progress on "DFID": len="LPU64" err=%d\n",
 	       PFID(&hpk->hpk_fid), hpk->hpk_extent.length, hpk->hpk_errval);
 

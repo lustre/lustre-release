@@ -1528,7 +1528,7 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle[0]);
         if (!lock) {
-                req->rq_status = EINVAL;
+		req->rq_status = LUSTRE_EINVAL;
         } else {
                 void *res = NULL;
 
@@ -1542,7 +1542,7 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
                                 LDLM_DEBUG(lock, "converted waiting lock");
                         req->rq_status = 0;
                 } else {
-                        req->rq_status = EDEADLOCK;
+			req->rq_status = LUSTRE_EDEADLK;
                 }
         }
 
@@ -1675,7 +1675,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 RETURN(rc);
 
         if (!ldlm_request_cancel(req, dlm_req, 0))
-                req->rq_status = ESTALE;
+		req->rq_status = LUSTRE_ESTALE;
 
         RETURN(ptlrpc_reply(req));
 }
@@ -2109,6 +2109,8 @@ static int ldlm_handle_qc_callback(struct ptlrpc_request *req)
 		CERROR("Can't unpack obd_quotactl\n");
 		RETURN(-EPROTO);
 	}
+
+	oqctl->qc_stat = ptlrpc_status_ntoh(oqctl->qc_stat);
 
 	cli->cl_qchk_stat = oqctl->qc_stat;
 	return 0;

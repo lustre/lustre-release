@@ -112,6 +112,9 @@ int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
 	if (rc == 0) {
 		check_lcd(tgt->lut_obd->obd_name, index, &tti->tti_lcd);
 		lcd_le_to_cpu(&tti->tti_lcd, lcd);
+		lcd->lcd_last_result = ptlrpc_status_ntoh(lcd->lcd_last_result);
+		lcd->lcd_last_close_result =
+			ptlrpc_status_ntoh(lcd->lcd_last_close_result);
 	}
 
 	CDEBUG(D_INFO, "%s: read lcd @%lld uuid = %s, last_transno = "LPU64
@@ -132,6 +135,9 @@ int tgt_client_data_write(const struct lu_env *env, struct lu_target *tgt,
 {
 	struct tgt_thread_info *tti = tgt_th_info(env);
 
+	lcd->lcd_last_result = ptlrpc_status_hton(lcd->lcd_last_result);
+	lcd->lcd_last_close_result =
+		ptlrpc_status_hton(lcd->lcd_last_close_result);
 	lcd_cpu_to_le(lcd, &tti->tti_lcd);
 	tti_buf_lcd(tti);
 
