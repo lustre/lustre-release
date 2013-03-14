@@ -9,7 +9,7 @@ TBD Intel Corporation
          2.6.18-238.19.1.el5 (RHEL5)
          2.6.16.60-0.69.1    (SLES10)
          3.6.10-2.fc17       (FC17)
-       * Recommended e2fsprogs version: 1.41.90.wc4
+       * Recommended e2fsprogs version: 1.42.6.wc2
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
          stack overflow. For more information, please refer to bugzilla 17630.
