@@ -56,26 +56,20 @@
 #include <lu_object.h>
 #include <md_object.h>
 
+#define OSD_OII_NOGEN (0)
+
 struct lu_fid;
 struct osd_thread_info;
 struct lu_site;
 struct thandle;
 
 struct dt_device;
+struct osd_device;
+struct osd_oi;
 
 enum {
         OSD_OI_FID_16,
         OSD_OI_FID_NR
-};
-
-/*
- * Object Index (oi) instance.
- */
-struct osd_oi {
-        /*
-         * underlying index object, where fid->id mapping in stored.
-         */
-        struct dt_object *oi_dir;
 };
 
 /*
@@ -90,21 +84,39 @@ struct osd_inode_id {
         __u32 oii_gen; /* inode generation */
 };
 
-int osd_oi_mod_init(void);
-int osd_oi_init(struct osd_thread_info *info,
-                struct osd_oi *oi,
-                struct dt_device *dev,
-                struct md_device *mdev);
-void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
+static inline void osd_id_pack(struct osd_inode_id *tgt,
+			       const struct osd_inode_id *src)
+{
+	tgt->oii_ino = cpu_to_be32(src->oii_ino);
+	tgt->oii_gen = cpu_to_be32(src->oii_gen);
+}
 
-int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
+static inline void osd_id_unpack(struct osd_inode_id *tgt,
+				 const struct osd_inode_id *src)
+{
+	tgt->oii_ino = be32_to_cpu(src->oii_ino);
+	tgt->oii_gen = be32_to_cpu(src->oii_gen);
+}
+
+static inline int osd_id_eq(const struct osd_inode_id *id0,
+			    const struct osd_inode_id *id1)
+{
+	return (id0->oii_ino == id1->oii_ino) &&
+	       (id0->oii_gen == id1->oii_gen ||
+		id0->oii_gen == OSD_OII_NOGEN ||
+		id1->oii_gen == OSD_OII_NOGEN);
+}
+
+int osd_oi_mod_init(void);
+int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd);
+void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd);
+int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
                    const struct lu_fid *fid, struct osd_inode_id *id);
-int  osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
+int  osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
                    const struct lu_fid *fid, const struct osd_inode_id *id,
                    struct thandle *th, int ingore_quota);
-int  osd_oi_delete(struct osd_thread_info *info,
-                   struct osd_oi *oi, const struct lu_fid *fid,
-                   struct thandle *th);
+int  osd_oi_delete(struct osd_thread_info *info, struct osd_device *osd,
+                   const struct lu_fid *fid, struct thandle *th);
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

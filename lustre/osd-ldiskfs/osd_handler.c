@@ -83,67 +83,15 @@ static const char dot[] = ".";
 static const char dotdot[] = "..";
 static const char remote_obj_dir[] = "REM_OBJ_DIR";
 
-struct osd_directory {
-        struct iam_container od_container;
-        struct iam_descr     od_descr;
-};
-
-struct osd_object {
-        struct dt_object       oo_dt;
-        /**
-         * Inode for file system object represented by this osd_object. This
-         * inode is pinned for the whole duration of lu_object life.
-         *
-         * Not modified concurrently (either setup early during object
-         * creation, or assigned by osd_object_create() under write lock).
-         */
-        struct inode          *oo_inode;
-        /**
-         * to protect index ops.
-         */
-        cfs_rw_semaphore_t     oo_ext_idx_sem;
-        cfs_rw_semaphore_t     oo_sem;
-        struct osd_directory  *oo_dir;
-        /** protects inode attributes. */
-        cfs_spinlock_t         oo_guard;
-        /**
-         * Following two members are used to indicate the presence of dot and
-         * dotdot in the given directory. This is required for interop mode
-         * (b11826).
-         */
-        int                    oo_compat_dot_created;
-        int                    oo_compat_dotdot_created;
-
-        const struct lu_env   *oo_owner;
-#ifdef CONFIG_LOCKDEP
-        struct lockdep_map     oo_dep_map;
-#endif
-};
-
 static const struct lu_object_operations      osd_lu_obj_ops;
 static const struct lu_device_operations      osd_lu_ops;
-static       struct lu_context_key            osd_key;
 static const struct dt_object_operations      osd_obj_ops;
 static const struct dt_object_operations      osd_obj_ea_ops;
 static const struct dt_body_operations        osd_body_ops;
 static const struct dt_index_operations       osd_index_iam_ops;
 static const struct dt_index_operations       osd_index_ea_ops;
 
-struct osd_thandle {
-        struct thandle          ot_super;
-        handle_t               *ot_handle;
-        struct journal_callback ot_jcb;
-        /* Link to the device, for debugging. */
-        struct lu_ref_link     *ot_dev_link;
-
-#if OSD_THANDLE_STATS
-        /** time when this handle was allocated */
-        cfs_time_t oth_alloced;
-
-        /** time when this thanle was started */
-        cfs_time_t oth_started;
-#endif
-};
+struct lu_context_key            osd_key;
 
 /*
  * Helpers.
@@ -168,11 +116,6 @@ static struct osd_device *osd_dev(const struct lu_device *d)
 static struct osd_device *osd_obj2dev(const struct osd_object *o)
 {
         return osd_dev(o->oo_dt.do_lu.lo_dev);
-}
-
-static struct super_block *osd_sb(const struct osd_device *dev)
-{
-        return dev->od_mount->lmi_mnt->mnt_sb;
 }
 
 static int osd_object_is_root(const struct osd_object *obj)
@@ -246,11 +189,6 @@ osd_pop_ctxt(struct osd_ctxt *save)
 }
 #endif
 
-static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
-{
-        return lu_context_key_get(&env->le_ctx, &osd_key);
-}
-
 /*
  * Concurrency: doesn't matter
  */
@@ -315,12 +253,46 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 return NULL;
 }
 
+static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
+				  const char *name, void *buf, int len)
+{
+	dentry->d_inode = inode;
+	return inode->i_op->getxattr(dentry, name, buf, len);
+}
+
+int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
+		struct dentry *dentry, struct lustre_mdt_attrs *lma)
+{
+	int rc;
+
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA, (void *)lma,
+			     sizeof(*lma));
+	if (rc > 0) {
+		/* Check LMA compatibility */
+		if (lma->lma_incompat & ~cpu_to_le32(LMA_INCOMPAT_SUPP)) {
+			CWARN("%.16s: unsupported incompat LMA feature(s) "
+			      "%lx/%#x\n",
+			      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+			      inode->i_ino, le32_to_cpu(lma->lma_incompat) &
+							~LMA_INCOMPAT_SUPP);
+			rc = -ENOSYS;
+		} else {
+			lustre_lma_swab(lma);
+			rc = 0;
+		}
+	} else if (rc == 0) {
+		rc = -ENODATA;
+	}
+
+	return rc;
+}
+
 /*
  * retrieve object from backend ext fs.
  **/
-static struct inode *osd_iget(struct osd_thread_info *info,
-                              struct osd_device *dev,
-                              const struct osd_inode_id *id)
+struct inode *osd_iget(struct osd_thread_info *info,
+		       struct osd_device *dev,
+		       const struct osd_inode_id *id)
 {
         struct inode *inode = NULL;
 
@@ -369,7 +341,6 @@ static int osd_fid_lookup(const struct lu_env *env,
         struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
         struct osd_device      *dev;
         struct osd_inode_id    *id;
-        struct osd_oi          *oi;
         struct inode           *inode;
         int                     result;
 
@@ -386,14 +357,14 @@ static int osd_fid_lookup(const struct lu_env *env,
         ENTRY;
 
         info = osd_oti_get(env);
+	LASSERT(info);
         dev  = osd_dev(ldev);
         id   = &info->oti_id;
-        oi   = &dev->od_oi;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        result = osd_oi_lookup(info, oi, fid, id);
+        result = osd_oi_lookup(info, dev, fid, id);
         if (result == 0) {
                 inode = osd_iget(info, dev, id);
                 if (!IS_ERR(inode)) {
@@ -464,30 +435,6 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 
         dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
-}
-
-/**
- * IAM Iterator
- */
-static struct iam_path_descr *osd_it_ipd_get(const struct lu_env *env,
-                                             const struct iam_container *bag)
-{
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_it_ipd);
-}
-
-static struct iam_path_descr *osd_idx_ipd_get(const struct lu_env *env,
-                                              const struct iam_container *bag)
-{
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_idx_ipd);
-}
-
-static void osd_ipd_put(const struct lu_env *env,
-                        const struct iam_container *bag,
-                        struct iam_path_descr *ipd)
-{
-        bag->ic_descr->id_ops->id_ipd_free(ipd);
 }
 
 /*
@@ -764,8 +711,7 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
                             OSD_TXN_INODE_DELETE_CREDITS);
         th = osd_trans_start(env_del_obj, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
-                result = osd_oi_delete(osd_oti_get(env_del_obj),
-                                       &osd->od_oi, fid, th);
+                result = osd_oi_delete(osd_oti_get(env_del_obj), osd, fid, th);
                 osd_trans_stop(env_del_obj, th);
         } else
                 result = PTR_ERR(th);
@@ -1466,24 +1412,12 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
         return 0;
 }
 
-static struct dentry * osd_child_dentry_get(const struct lu_env *env,
-                                            struct osd_object *obj,
-                                            const char *name,
-                                            const int namelen)
+struct dentry *osd_child_dentry_get(const struct lu_env *env,
+				     struct osd_object *obj,
+				     const char *name,
+				     const int namelen)
 {
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry *child_dentry = &info->oti_child_dentry;
-        struct dentry *obj_dentry = &info->oti_obj_dentry;
-
-        obj_dentry->d_inode = obj->oo_inode;
-        obj_dentry->d_sb = osd_sb(osd_obj2dev(obj));
-        obj_dentry->d_name.hash = 0;
-
-        child_dentry->d_name.hash = 0;
-        child_dentry->d_parent = obj_dentry;
-        child_dentry->d_name.name = name;
-        child_dentry->d_name.len = namelen;
-        return child_dentry;
+	return osd_child_dentry_by_inode(env, obj->oo_inode, name, namelen);
 }
 
 
@@ -1740,7 +1674,7 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
         id->oii_ino = obj->oo_inode->i_ino;
         id->oii_gen = obj->oo_inode->i_generation;
 
-        return osd_oi_insert(info, &osd->od_oi, fid, id, th,
+        return osd_oi_insert(info, osd, fid, id, th,
                              uc->mu_cap & CFS_CAP_SYS_RESOURCE_MASK);
 }
 
@@ -1834,17 +1768,6 @@ static inline void osd_igif_get(const struct lu_env *env, struct inode  *inode,
 }
 
 /**
- * Helper function to pack the fid, ldiskfs stores fid in packed format.
- */
-void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
-                  struct lu_fid *befider)
-{
-        fid_cpu_to_be(befider, (struct lu_fid *)fid);
-        memcpy(pack->fp_area, befider, sizeof(*befider));
-        pack->fp_len =  sizeof(*befider) + 1;
-}
-
-/**
  * ldiskfs supports fid in dirent, it is passed in dentry->d_fsdata.
  * lustre 1.8 also uses d_fsdata for passing other info to ldiskfs.
  * To have compatilibility with 1.8 ldiskfs driver we need to have
@@ -1860,23 +1783,6 @@ void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
 
         fid_cpu_to_be((struct lu_fid *)param->edp_data,
                       (struct lu_fid *)fid);
-}
-
-int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
-{
-        int result;
-
-        result = 0;
-        switch (pack->fp_len) {
-        case sizeof *fid + 1:
-                memcpy(fid, pack->fp_area, sizeof *fid);
-                fid_be_to_cpu(fid, fid);
-                break;
-        default:
-                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
-                result = -EIO;
-        }
-        return result;
 }
 
 /**
@@ -3876,7 +3782,7 @@ static void osd_key_exit(const struct lu_context *ctx,
 /* type constructor/destructor: osd_type_init, osd_type_fini */
 LU_TYPE_INIT_FINI(osd, &osd_key);
 
-static struct lu_context_key osd_key = {
+struct lu_context_key osd_key = {
         .lct_tags = LCT_DT_THREAD | LCT_MD_THREAD,
         .lct_init = osd_key_init,
         .lct_fini = osd_key_fini,
@@ -3908,7 +3814,7 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
                 lu_object_put(env, &o->od_obj_area->do_lu);
                 o->od_obj_area = NULL;
         }
-        osd_oi_fini(info, &o->od_oi);
+        osd_oi_fini(info, o);
 
         RETURN(0);
 }
@@ -4061,8 +3967,7 @@ static int osd_prepare(const struct lu_env *env,
 
         ENTRY;
         /* 1. initialize oi before any file create or file open */
-        result = osd_oi_init(oti, &osd->od_oi,
-                             &osd->od_dt_dev, lu2md_dev(pdev));
+        result = osd_oi_init(oti, osd);
         if (result != 0)
                 RETURN(result);
 

@@ -78,7 +78,6 @@
 
 struct inode;
 
-#define OSD_OII_NOGEN (0)
 #define OSD_COUNTERS (0)
 
 /** Enable thandle usage statistics */
@@ -91,6 +90,54 @@ struct osd_ctxt {
         cfs_kernel_cap_t oc_cap;
 };
 #endif
+
+struct osd_directory {
+        struct iam_container od_container;
+        struct iam_descr     od_descr;
+};
+
+/*
+ * Object Index (oi) instance.
+ */
+struct osd_oi {
+	/*
+	 * underlying index object, where fid->id mapping in stored.
+	 */
+	struct inode		*oi_inode;
+	struct osd_directory	oi_dir;
+};
+
+struct osd_object {
+        struct dt_object       oo_dt;
+        /**
+         * Inode for file system object represented by this osd_object. This
+         * inode is pinned for the whole duration of lu_object life.
+         *
+         * Not modified concurrently (either setup early during object
+         * creation, or assigned by osd_object_create() under write lock).
+         */
+        struct inode          *oo_inode;
+        /**
+         * to protect index ops.
+         */
+        cfs_rw_semaphore_t     oo_ext_idx_sem;
+        cfs_rw_semaphore_t     oo_sem;
+        struct osd_directory  *oo_dir;
+        /** protects inode attributes. */
+        cfs_spinlock_t         oo_guard;
+        /**
+         * Following two members are used to indicate the presence of dot and
+         * dotdot in the given directory. This is required for interop mode
+         * (b11826).
+         */
+        int                    oo_compat_dot_created;
+        int                    oo_compat_dotdot_created;
+
+        const struct lu_env   *oo_owner;
+#ifdef CONFIG_LOCKDEP
+        struct lockdep_map     oo_dep_map;
+#endif
+};
 
 /*
  * osd device.
@@ -144,6 +191,22 @@ struct osd_device {
 /*
  * osd dev stats
  */
+
+struct osd_thandle {
+        struct thandle          ot_super;
+        handle_t               *ot_handle;
+        struct journal_callback ot_jcb;
+        /* Link to the device, for debugging. */
+        struct lu_ref_link     *ot_dev_link;
+
+#if OSD_THANDLE_STATS
+        /** time when this handle was allocated */
+        cfs_time_t oth_alloced;
+
+        /** time when this thanle was started */
+        cfs_time_t oth_started;
+#endif
+};
 
 #ifdef LPROCFS
 enum {
@@ -223,7 +286,9 @@ struct osd_thread_info {
         struct dentry          oti_it_dentry;
 
         struct lu_fid          oti_fid;
+	struct lu_fid          oti_fid2;
         struct osd_inode_id    oti_id;
+        struct osd_inode_id    oti_id2;
         /*
          * XXX temporary: for ->i_op calls.
          */
@@ -302,6 +367,11 @@ void osd_lprocfs_time_end(const struct lu_env *env,
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                cfs_kstatfs_t *sfs);
+struct inode *osd_iget(struct osd_thread_info *info,
+		       struct osd_device *dev,
+		       const struct osd_inode_id *id);
+int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
+		struct dentry *dentry, struct lustre_mdt_attrs *lma);
 
 /*
  * Invariants, assertions.
@@ -362,6 +432,99 @@ static inline loff_t ldiskfs_get_htree_eof(struct file *filp)
 		return LDISKFS_HTREE_EOF_32BIT;
 	else
 		return LDISKFS_HTREE_EOF_64BIT;
+}
+
+#define osd_ldiskfs_find_entry(dir, dentry, de)   \
+	        ll_ldiskfs_find_entry(dir, dentry, de)
+#define osd_ldiskfs_add_entry(handle, child, cinode) \
+	        ldiskfs_add_entry(handle, child, cinode)
+
+extern struct lu_context_key osd_key;
+
+static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
+{
+        return lu_context_key_get(&env->le_ctx, &osd_key);
+}
+
+static inline struct super_block *osd_sb(const struct osd_device *dev)
+{
+        return dev->od_mount->lmi_mnt->mnt_sb;
+}
+
+/**
+ * IAM Iterator
+ */
+static inline
+struct iam_path_descr *osd_it_ipd_get(const struct lu_env *env,
+				      const struct iam_container *bag)
+{
+	return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+					   osd_oti_get(env)->oti_it_ipd);
+}
+
+static inline
+struct iam_path_descr *osd_idx_ipd_get(const struct lu_env *env,
+				       const struct iam_container *bag)
+{
+	return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+					   osd_oti_get(env)->oti_idx_ipd);
+}
+
+static inline
+void osd_ipd_put(const struct lu_env *env, const struct iam_container *bag,
+		 struct iam_path_descr *ipd)
+{
+	bag->ic_descr->id_ops->id_ipd_free(ipd);
+}
+
+static inline
+struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
+					 struct inode *inode,
+					 const char *name, const int namelen)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *child_dentry = &info->oti_child_dentry;
+	struct dentry *obj_dentry = &info->oti_obj_dentry;
+
+	obj_dentry->d_inode = inode;
+	obj_dentry->d_sb = inode->i_sb;
+	obj_dentry->d_name.hash = 0;
+
+	child_dentry->d_name.hash = 0;
+	child_dentry->d_parent = obj_dentry;
+	child_dentry->d_name.name = name;
+	child_dentry->d_name.len = namelen;
+	return child_dentry;
+}
+
+/**
+ * Helper function to pack the fid, ldiskfs stores fid in packed format.
+ */
+static inline
+void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
+                  struct lu_fid *befider)
+{
+        fid_cpu_to_be(befider, (struct lu_fid *)fid);
+        memcpy(pack->fp_area, befider, sizeof(*befider));
+        pack->fp_len =  sizeof(*befider) + 1;
+}
+
+static inline
+int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
+{
+        int result;
+
+        result = 0;
+        switch (pack->fp_len) {
+        case sizeof *fid + 1:
+                memcpy(fid, pack->fp_area, sizeof *fid);
+                fid_be_to_cpu(fid, fid);
+                break;
+        default:
+                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
+                result = -EIO;
+        }
+        return result;
 }
 
 #endif /* __KERNEL__ */

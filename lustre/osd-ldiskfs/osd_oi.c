@@ -100,133 +100,274 @@ static const struct oi_descr oi_descr[OSD_OI_FID_NR] = {
         }
 };
 
-static int osd_oi_index_create(struct osd_thread_info *info,
-                               struct dt_device *dev,
-                               struct md_device *mdev)
+static int osd_oi_index_create_one(struct osd_thread_info *info,
+				   struct osd_device *osd, const char *name,
+				   struct dt_index_features *feat)
 {
-        const struct lu_env *env;
-        struct lu_fid *oi_fid = &info->oti_fid;
-        struct md_object *mdo;
-        int i;
-        int rc;
+	const struct lu_env		*env = info->oti_env;
+	struct osd_inode_id		*id = &info->oti_id;
+	struct buffer_head		*bh;
+	struct inode			*inode;
+	struct ldiskfs_dir_entry_2	*de;
+	struct dentry			*dentry;
+	struct super_block		*sb = osd_sb(osd);
+	struct inode			*dir = sb->s_root->d_inode;
+	handle_t			*jh;
+	int				rc;
 
-        env = info->oti_env;
+	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
+	bh = osd_ldiskfs_find_entry(dir, dentry, &de);
+	if (bh) {
+		id->oii_ino = le32_to_cpu(de->inode);
+		id->oii_gen = OSD_OII_NOGEN;
+		brelse(bh);
+		inode = osd_iget(info, osd, id);
+		if (!IS_ERR(inode)) {
+			iput(inode);
+			RETURN(-EEXIST);
+		}
+		return PTR_ERR(inode);
+	}
 
-        for (i = rc = 0; i < OSD_OI_FID_NR && rc == 0; ++i) {
-                char *name;
-                name = oi_descr[i].name;
-                lu_local_obj_fid(oi_fid, oi_descr[i].oid);
-                oi_feat.dif_keysize_min = oi_descr[i].fid_size,
-                oi_feat.dif_keysize_max = oi_descr[i].fid_size,
+	jh = ldiskfs_journal_start_sb(sb, 100);
+	if (IS_ERR(jh))
+		return PTR_ERR(jh);
 
-                mdo = llo_store_create_index(env, mdev, dev,
-                                             "", name,
-                                             oi_fid, &oi_feat);
+	inode = ldiskfs_create_inode(jh, dir, (S_IFREG | S_IRUGO | S_IWUSR));
+	if (IS_ERR(inode)) {
+		ldiskfs_journal_stop(jh);
+		return PTR_ERR(inode);
+	}
 
-                if (IS_ERR(mdo))
-                        RETURN(PTR_ERR(mdo));
+	if (feat->dif_flags & DT_IND_VARKEY)
+		rc = iam_lvar_create(inode, feat->dif_keysize_max,
+				     feat->dif_ptrsize, feat->dif_recsize_max,
+				     jh);
+	else
+		rc = iam_lfix_create(inode, feat->dif_keysize_max,
+				     feat->dif_ptrsize, feat->dif_recsize_max,
+				     jh);
 
-                lu_object_put(env, &mdo->mo_lu);
-        }
-        return 0;
+	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
+	rc = osd_ldiskfs_add_entry(jh, dentry, inode);
+	ldiskfs_journal_stop(jh);
+	iput(inode);
+
+	return rc;
 }
 
-int osd_oi_init(struct osd_thread_info *info,
-                struct osd_oi *oi,
-                struct dt_device *dev,
-                struct md_device *mdev)
+static struct inode *osd_oi_index_open(struct osd_thread_info *info,
+				       struct osd_device *osd,
+				       const char *name,
+				       struct dt_index_features *f)
 {
-        const struct lu_env *env;
-        int rc;
-        int i;
+	struct dentry	*dentry;
+	struct inode	*inode;
+	int		rc;
 
-        env = info->oti_env;
+	dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+	if (IS_ERR(dentry))
+		return (void *)dentry;
+
+	if (dentry->d_inode) {
+		LASSERT(!is_bad_inode(dentry->d_inode));
+		inode = dentry->d_inode;
+		atomic_inc(&inode->i_count);
+		dput(dentry);
+		return inode;
+	}
+
+	/* create */
+	dput(dentry);
+	shrink_dcache_parent(osd_sb(osd)->s_root);
+
+	rc = osd_oi_index_create_one(info, osd, name, f);
+	if (rc != 0)
+		RETURN(ERR_PTR(rc));
+
+	dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+	if (IS_ERR(dentry))
+		return (void *)dentry;
+
+	if (dentry->d_inode) {
+		LASSERT(!is_bad_inode(dentry->d_inode));
+		inode = dentry->d_inode;
+		atomic_inc(&inode->i_count);
+		dput(dentry);
+		return inode;
+	}
+
+	dput(dentry);
+	return ERR_PTR(-ENOENT);
+}
+
+/**
+ * Open an OI(Object Index) container.
+ */
+static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
+		       char *name)
+{
+	struct osd_directory	*dir;
+	struct iam_container	*bag;
+	struct inode		*inode;
+	struct osd_oi		*oi = &osd->od_oi;
+	int			rc;
+
+	ENTRY;
+
+	oi_feat.dif_keysize_min = sizeof(struct lu_fid);
+	oi_feat.dif_keysize_max = sizeof(struct lu_fid);
+
+	inode = osd_oi_index_open(info, osd, name, &oi_feat);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
+
+	oi->oi_inode = inode;
+	dir = &oi->oi_dir;
+	bag = &dir->od_container;
+
+	rc = iam_container_init(bag, &dir->od_descr, inode);
+	if (rc < 0)
+		GOTO(out_inode, rc);
+	rc = iam_container_setup(bag);
+	if (rc < 0)
+		GOTO(out_container, rc);
+	RETURN(0);
+
+out_container:
+	iam_container_fini(bag);
+out_inode:
+	iput(inode);
+	return rc;
+}
+
+int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd)
+{
+	struct dt_device	*dev = &osd->od_dt_dev;
+        int			rc;
+
         cfs_mutex_lock(&oi_init_lock);
-        memset(oi, 0, sizeof *oi);
-retry:
-        for (i = rc = 0; i < OSD_OI_FID_NR && rc == 0; ++i) {
-                const char       *name;
-                struct dt_object *obj;
-
-                name = oi_descr[i].name;
-                oi_feat.dif_keysize_min = oi_descr[i].fid_size,
-                oi_feat.dif_keysize_max = oi_descr[i].fid_size,
-
-                obj = dt_store_open(env, dev, "", name, &info->oti_fid);
-                if (!IS_ERR(obj)) {
-                        rc = obj->do_ops->do_index_try(env, obj, &oi_feat);
-                        if (rc == 0) {
-                                LASSERT(obj->do_index_ops != NULL);
-                                oi->oi_dir = obj;
-                        } else {
-                                CERROR("Wrong index \"%s\": %d\n", name, rc);
-                                lu_object_put(env, &obj->do_lu);
-                        }
-                } else {
-                        rc = PTR_ERR(obj);
-                        if (rc == -ENOENT) {
-                                rc = osd_oi_index_create(info, dev, mdev);
-                                if (!rc)
-                                        goto retry;
-                        }
-                        CERROR("Cannot open \"%s\": %d\n", name, rc);
-                }
-        }
-        if (rc != 0)
-                osd_oi_fini(info, oi);
-
+	rc = osd_oi_open(info, osd, oi_descr[0].name);
+	if (rc < 0) {
+		CERROR("%s: can't open %s: rc = %d\n",
+		       dev->dd_lu_dev.ld_obd->obd_name, oi_descr[0].name, rc);
+	}
         cfs_mutex_unlock(&oi_init_lock);
         return rc;
 }
 
-void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
+void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd)
 {
-        if (oi->oi_dir != NULL) {
-                lu_object_put(info->oti_env, &oi->oi_dir->do_lu);
-                oi->oi_dir = NULL;
-        }
+	struct iam_container	*bag;
+
+	LASSERT(osd->od_oi.oi_inode != NULL);
+
+	bag = &(osd->od_oi.oi_dir.od_container);
+	if (bag->ic_object == osd->od_oi.oi_inode)
+		iam_container_fini(bag);
+	iput(osd->od_oi.oi_inode);
+	osd->od_oi.oi_inode = NULL;
 }
 
-int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
+static int osd_oi_iam_lookup(struct osd_thread_info *oti,
+			     struct osd_oi *oi, struct dt_rec *rec,
+			     const struct dt_key *key)
+{
+	struct iam_container  *bag;
+	struct iam_iterator   *it = &oti->oti_idx_it;
+	struct iam_path_descr *ipd;
+	int                    rc;
+	ENTRY;
+
+	LASSERT(oi);
+	LASSERT(oi->oi_inode);
+
+	bag = &oi->oi_dir.od_container;
+	ipd = osd_idx_ipd_get(oti->oti_env, bag);
+	if (IS_ERR(ipd))
+		RETURN(-ENOMEM);
+
+	/* got ipd now we can start iterator. */
+	iam_it_init(it, bag, 0, ipd);
+
+	rc = iam_it_get(it, (struct iam_key *)key);
+	if (rc > 0)
+		iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)rec);
+	iam_it_put(it);
+	iam_it_fini(it);
+	osd_ipd_put(oti->oti_env, bag, ipd);
+
+	LINVRNT(osd_invariant(obj));
+
+	RETURN(rc);
+}
+
+int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        struct lu_fid *oi_fid = &info->oti_fid;
+        struct lu_fid *oi_fid = &info->oti_fid2;
         int rc;
-
-	if (fid_seq(fid) == FID_SEQ_LOCAL_FILE)
-		return -ENOENT;
 
         if (osd_fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
                 rc = 0;
         } else {
-                struct dt_object    *idx;
-                const struct dt_key *key;
-
-                idx = oi->oi_dir;
-                fid_cpu_to_be(oi_fid, fid);
-                key = (struct dt_key *) oi_fid;
-                rc = idx->do_index_ops->dio_lookup(info->oti_env, idx,
-                                                   (struct dt_rec *)id, key,
-                                                   BYPASS_CAPA);
-                if (rc > 0) {
-                        id->oii_ino = be32_to_cpu(id->oii_ino);
-                        id->oii_gen = be32_to_cpu(id->oii_gen);
-                        rc = 0;
-                } else if (rc == 0)
-                        rc = -ENOENT;
-        }
+		fid_cpu_to_be(oi_fid, fid);
+		rc = osd_oi_iam_lookup(info, &osd->od_oi, (struct dt_rec *)id,
+				       (const struct dt_key *)oi_fid);
+		if (rc > 0) {
+			osd_id_unpack(id, id);
+			rc = 0;
+		} else if (rc == 0) {
+			rc = -ENOENT;
+		}
+	}
         return rc;
 }
 
-int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
-                  const struct lu_fid *fid, const struct osd_inode_id *id0,
+static int osd_oi_iam_refresh(struct osd_thread_info *info, struct osd_oi *oi,
+			      const struct dt_rec *rec,
+			      const struct dt_key *key, struct thandle *th,
+			      bool insert)
+{
+	struct iam_container	*bag;
+	struct iam_path_descr	*ipd;
+	struct osd_thandle	*oh;
+	int			rc;
+	ENTRY;
+
+	LASSERT(oi);
+	LASSERT(oi->oi_inode);
+	ll_vfs_dq_init(oi->oi_inode);
+
+	bag = &oi->oi_dir.od_container;
+	ipd = osd_idx_ipd_get(info->oti_env, bag);
+	if (unlikely(ipd == NULL))
+		RETURN(-ENOMEM);
+
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
+	if (insert)
+		rc = iam_insert(oh->ot_handle, bag,
+				(const struct iam_key *)key,
+				(const struct iam_rec *)rec, ipd);
+	else
+		rc = iam_update(oh->ot_handle, bag,
+				(const struct iam_key *)key,
+				(const struct iam_rec *)rec,
+				ipd);
+	osd_ipd_put(info->oti_env, bag, ipd);
+	RETURN(rc);
+}
+
+int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
+                  const struct lu_fid *fid, const struct osd_inode_id *id,
                   struct thandle *th, int ignore_quota)
 {
-        struct lu_fid *oi_fid = &info->oti_fid;
-        struct dt_object    *idx;
-        struct osd_inode_id *id;
-        const struct dt_key *key;
+        struct lu_fid		*oi_fid = &info->oti_fid2;
+        struct osd_inode_id	*oi_id  = &info->oti_id2;
+	int			rc      = 0;
 
 	if (fid_seq(fid) == FID_SEQ_LOCAL_FILE)
 		return 0;
@@ -234,35 +375,103 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         if (osd_fid_is_igif(fid))
                 return 0;
 
-        idx = oi->oi_dir;
         fid_cpu_to_be(oi_fid, fid);
-        key = (struct dt_key *) oi_fid;
+	osd_id_pack(oi_id, id);
+	rc = osd_oi_iam_refresh(info, &osd->od_oi,
+				(const struct dt_rec *)oi_id,
+				(const struct dt_key *)oi_fid, th, true);
+	if (rc != 0) {
+		struct inode *inode;
+		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
 
-        id  = &info->oti_id;
-        id->oii_ino = cpu_to_be32(id0->oii_ino);
-        id->oii_gen = cpu_to_be32(id0->oii_gen);
-        return idx->do_index_ops->dio_insert(info->oti_env, idx,
-                                             (struct dt_rec *)id,
-                                             key, th, BYPASS_CAPA,
-                                             ignore_quota);
+		if (rc != -EEXIST)
+			return rc;
+
+		rc = osd_oi_lookup(info, osd, fid, oi_id);
+		if (unlikely(rc != 0))
+			return rc;
+
+		if (osd_id_eq(id, oi_id)) {
+			CERROR("%.16s: the FID "DFID" is ther already:%u/%u\n",
+			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
+			       PFID(fid), id->oii_ino, id->oii_gen);
+			return -EEXIST;
+		}
+
+		/* Check whether the mapping for oi_id is valid or not. */
+		inode = osd_iget(info, osd, oi_id);
+		if (IS_ERR(inode)) {
+			rc = PTR_ERR(inode);
+			if (rc == -ENOENT || rc == -ESTALE)
+				goto update;
+			return rc;
+		}
+
+		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+		iput(inode);
+		if (rc == -ENODATA)
+			goto update;
+
+		if (rc != 0)
+			return rc;
+
+		if (lu_fid_eq(fid, &lma->lma_self_fid)) {
+			CERROR("%.16s: the FID "DFID" is used by two objects: "
+			       "%u/%u %u/%u\n",
+			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
+			       PFID(fid), oi_id->oii_ino, oi_id->oii_gen,
+			       id->oii_ino, id->oii_gen);
+			return -EEXIST;
+		}
+update:
+		osd_id_pack(oi_id, id);
+		rc = osd_oi_iam_refresh(info, &osd->od_oi,
+					(const struct dt_rec *)oi_id,
+					(const struct dt_key *)oi_fid, th,
+					false);
+	}
+
+	return rc;
 }
 
-int osd_oi_delete(struct osd_thread_info *info,
-                  struct osd_oi *oi, const struct lu_fid *fid,
-                  struct thandle *th)
+static int osd_oi_iam_delete(struct osd_thread_info *info, struct osd_oi *oi,
+			     const struct dt_key *key, struct thandle *handle)
 {
-        struct lu_fid *oi_fid = &info->oti_fid;
-        struct dt_object    *idx;
-        const struct dt_key *key;
+	struct iam_container	*bag;
+	struct iam_path_descr	*ipd;
+	struct osd_thandle	*oh;
+	int			rc;
+	ENTRY;
+
+	LASSERT(oi);
+	LASSERT(oi->oi_inode);
+	ll_vfs_dq_init(oi->oi_inode);
+
+	bag = &oi->oi_dir.od_container;
+	ipd = osd_idx_ipd_get(info->oti_env, bag);
+	if (unlikely(ipd == NULL))
+		RETURN(-ENOMEM);
+
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
+
+	rc = iam_delete(oh->ot_handle, bag, (const struct iam_key *)key, ipd);
+	osd_ipd_put(info->oti_env, bag, ipd);
+	RETURN(rc);
+}
+
+int osd_oi_delete(struct osd_thread_info *info, struct osd_device *osd,
+                  const struct lu_fid *fid, struct thandle *th)
+{
+        struct lu_fid *oi_fid = &info->oti_fid2;
 
         if (osd_fid_is_igif(fid))
                 return 0;
 
-        idx = oi->oi_dir;
         fid_cpu_to_be(oi_fid, fid);
-        key = (struct dt_key *) oi_fid;
-        return idx->do_index_ops->dio_delete(info->oti_env, idx,
-                                             key, th, BYPASS_CAPA);
+	return osd_oi_iam_delete(info, &osd->od_oi,
+				 (const struct dt_key *)oi_fid, th);
 }
 
 int osd_oi_mod_init()

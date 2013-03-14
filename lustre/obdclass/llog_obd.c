@@ -371,7 +371,12 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
         if (!ctxt)
                 RETURN(-ENODEV);
 
-        if (logid && logid->lgl_oid) {
+        if (logid && logid->lgl_oid && logid->lgl_ogen) {
+		/*
+		 * 2.1 catlogid format is ino/0/i_generation, while 2.4 catlogid
+		 * format is oid/FID_SEQ_LLOG/0, if logid has oid and ogen, it's
+		 * 2.1 native logid
+		 */
                 rc = llog_create(ctxt, &handle, logid, NULL);
         } else {
                 rc = llog_create(ctxt, &handle, NULL, (char *)name);
