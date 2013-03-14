@@ -259,7 +259,7 @@
   * threads for each partition to keep service healthy, so total threads
   * number should be 24 * 8 = 192.
   *
-  * So with these constants, threads number wil be at the similar level
+  * So with these constants, threads number will be at the similar level
   * of old versions, unless target machine has over a hundred cores
   */
 #define LDLM_THR_FACTOR		8
@@ -267,11 +267,12 @@
 #define LDLM_NTHRS_BASE		24
 #define LDLM_NTHRS_MAX		(cfs_num_online_cpus() == 1 ? 64 : 128)
 
-#define LDLM_BL_THREADS  LDLM_NTHRS_AUTO_INIT
-#define LDLM_NBUFS      64
-#define LDLM_BUFSIZE    (8 * 1024)
-#define LDLM_MAXREQSIZE (5 * 1024)
-#define LDLM_MAXREPSIZE (1024)
+#define LDLM_BL_THREADS   LDLM_NTHRS_AUTO_INIT
+#define LDLM_CLIENT_NBUFS 1
+#define LDLM_SERVER_NBUFS 64
+#define LDLM_BUFSIZE      (8 * 1024)
+#define LDLM_MAXREQSIZE   (5 * 1024)
+#define LDLM_MAXREPSIZE   (1024)
 
  /*
   * MDS threads constants:

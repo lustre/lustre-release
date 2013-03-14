@@ -2835,7 +2835,7 @@ static int ldlm_setup(void)
 		.psc_name		= "ldlm_cbd",
 		.psc_watchdog_factor	= 2,
 		.psc_buf		= {
-			.bc_nbufs		= LDLM_NBUFS,
+			.bc_nbufs		= LDLM_CLIENT_NBUFS,
 			.bc_buf_size		= LDLM_BUFSIZE,
 			.bc_req_max_size	= LDLM_MAXREQSIZE,
 			.bc_rep_max_size	= LDLM_MAXREPSIZE,
@@ -2874,7 +2874,7 @@ static int ldlm_setup(void)
 		.psc_name		= "ldlm_canceld",
 		.psc_watchdog_factor	= 6,
 		.psc_buf		= {
-			.bc_nbufs		= LDLM_NBUFS,
+			.bc_nbufs		= LDLM_SERVER_NBUFS,
 			.bc_buf_size		= LDLM_BUFSIZE,
 			.bc_req_max_size	= LDLM_MAXREQSIZE,
 			.bc_rep_max_size	= LDLM_MAXREPSIZE,
