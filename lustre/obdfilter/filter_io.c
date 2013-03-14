@@ -917,6 +917,13 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   struct niobuf_local *res, struct obd_trans_info *oti,
                   struct lustre_capa *capa)
 {
+	if (*npages > PTLRPC_MAX_BRW_PAGES) {
+		CERROR("%s: bulk has too many pages %d, which exceeds the"
+		       "maximum pages per RPC of %d\n",
+		       exp->exp_obd->obd_name, *npages, PTLRPC_MAX_BRW_PAGES);
+		RETURN(-EPROTO);
+	}
+
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
                                            nb, npages, res, oti, capa);
