@@ -1082,33 +1082,29 @@ test_36() { #bug 16417
 	i=0
 	SIZE=50
 	let SIZE_B=SIZE*1024*1024
+	sync; sleep 5; sync # wait for delete thread
 
 	while [ $i -le 10 ]; do
 		lctl mark "start test"
-		local before=$($LFS df | awk '{ if ($1 ~/^filesystem/) \
-					      { print $5; exit} }')
+		local before=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		dd if=/dev/zero of=$DIR1/$tdir/$tfile bs=1M count=$SIZE ||
 			error "dd $DIR1/$tdir/$tfile ${SIZE}MB failed"
 		sync          # sync data from client cache
 		sync_all_data # sync data from server cache (delayed allocation)
-		sleep 1
-		local after_dd=$($LFS df | awk '{ if ($1 ~/^filesystem/) \
-						{ print $5; exit} }')
+		sleep 2
+		local after_dd=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		multiop_bg_pause $DIR2/$tdir/$tfile O_r${SIZE_B}c || return 3
 		read_pid=$!
 		rm -f $DIR1/$tdir/$tfile
 		kill -USR1 $read_pid
 		wait $read_pid
 		wait_delete_completed
-		local after=$($LFS df | awk '{ if ($1 ~/^filesystem/) \
-					     { print $5; exit} }')
+		local after=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		echo "*** cycle($i) *** before($before) after_dd($after_dd)" \
 			"after($after)"
 		# this free space! not used
-		if [ $after_dd -ge $after ]; then
-			error "space leaked"
-			return 1;
-		fi
+		(( $after_dd <= $after)) ||
+			error "space leaked after_dd:$after_dd > after:$after"
 		let i=i+1
 	done
 }
