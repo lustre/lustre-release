@@ -357,7 +357,7 @@ int cfs_crypto_register(void)
 	crc32pclmul = cfs_crypto_crc32_pclmul_register();
 #endif
 
-	/* check all algorithms and do perfermance test */
+	/* check all algorithms and do performance test */
 	cfs_crypto_test_hashes();
 	return 0;
 }

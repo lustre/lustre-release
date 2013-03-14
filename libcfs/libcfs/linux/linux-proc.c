@@ -584,9 +584,11 @@ static cfs_sysctl_table_t top_table[] = {
                 INIT_CTL_NAME(0)
         }
 };
+#endif
 
 int insert_proc(void)
 {
+#ifdef CONFIG_SYSCTL
         if (lnet_table_header == NULL)
                 lnet_table_header = cfs_register_sysctl_table(top_table, 0);
 #endif

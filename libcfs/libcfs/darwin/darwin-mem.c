@@ -374,7 +374,7 @@ void *cfs_kmap(cfs_page_t *pg)
 void cfs_kunmap(cfs_page_t *pg)
 {
         LASSERT(page_type_is_valid(pg));
-        return page_ops[pg->type]->page_unmap(pg);
+        page_ops[pg->type]->page_unmap(pg);
 }
 
 void xnu_page_ops_register(int type, struct xnu_page_ops *ops)
