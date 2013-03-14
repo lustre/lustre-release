@@ -3631,6 +3631,7 @@ int mgs_write_log_target(const struct lu_env *env,
 		   get repeat setup instructions for already running
 		   osc's. So don't update the client/mdt logs. */
 		mti->mti_flags &= ~LDD_F_UPDATE;
+		rc = 0;
 	}
 
 	mutex_lock(&fsdb->fsdb_mutex);
