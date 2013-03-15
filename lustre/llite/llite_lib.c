@@ -280,6 +280,14 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	sbi->ll_md_exp->exp_connect_data = *data;
 
+	err = obd_fid_init(sbi->ll_md_exp->exp_obd, sbi->ll_md_exp,
+			   LUSTRE_SEQ_METADATA);
+	if (err) {
+		CERROR("%s: Can't init metadata layer FID infrastructure, "
+		       "rc = %d\n", sbi->ll_md_exp->exp_obd->obd_name, err);
+		GOTO(out_md, err);
+	}
+
 	/* For mount, we only need fs info from MDT0, and also in DNE, it
 	 * can make sure the client can be mounted as long as MDT0 is
 	 * avaible */
@@ -287,7 +295,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 			cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			OBD_STATFS_FOR_MDT0);
 	if (err)
-		GOTO(out_md, err);
+		GOTO(out_md_fid, err);
 
 	/* This needs to be after statfs to ensure connect has finished.
 	 * Note that "data" does NOT contain the valid connect reply.
@@ -310,7 +318,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				   "server or downgrade client.\n",
 				   sbi->ll_md_exp->exp_obd->obd_name, buf);
 		OBD_FREE(buf, CFS_PAGE_SIZE);
-		GOTO(out_md, err = -EPROTO);
+		GOTO(out_md_fid, err = -EPROTO);
 	}
 
 	size = sizeof(*data);
@@ -319,7 +327,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (err) {
 		CERROR("%s: Get connect data failed: rc = %d\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
-		GOTO(out_md, err);
+		GOTO(out_md_fid, err);
 	}
 
 	LASSERT(osfs->os_bsize);
@@ -389,7 +397,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	obd = class_name2obd(dt);
 	if (!obd) {
 		CERROR("DT %s: not setup or attached\n", dt);
-		GOTO(out_md, err = -ENODEV);
+		GOTO(out_md_fid, err = -ENODEV);
 	}
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT     | OBD_CONNECT_VERSION  |
@@ -451,6 +459,14 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	sbi->ll_dt_exp->exp_connect_data = *data;
 
+	err = obd_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
+			   LUSTRE_SEQ_METADATA);
+	if (err) {
+		CERROR("%s: Can't init data layer FID infrastructure, "
+		       "rc = %d\n", sbi->ll_dt_exp->exp_obd->obd_name, err);
+		GOTO(out_dt, err);
+	}
+
 	mutex_lock(&sbi->ll_lco.lco_lock);
 	sbi->ll_lco.lco_flags = data->ocd_connect_flags;
 	sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
@@ -461,13 +477,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
 	if (err) {
 		CERROR("cannot mds_connect: rc = %d\n", err);
-		GOTO(out_dt, err);
+		GOTO(out_lock_cn_cb, err);
 	}
 	if (!fid_is_sane(&sbi->ll_root_fid)) {
 		CERROR("%s: Invalid root fid "DFID" during mount\n",
 		       sbi->ll_md_exp->exp_obd->obd_name,
 		       PFID(&sbi->ll_root_fid));
-		GOTO(out_dt, err = -EINVAL);
+		GOTO(out_lock_cn_cb, err = -EINVAL);
 	}
 	CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
@@ -486,7 +502,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	OBD_ALLOC_PTR(op_data);
 	if (op_data == NULL)
-		GOTO(out_dt, err = -ENOMEM);
+		GOTO(out_lock_cn_cb, err = -ENOMEM);
 
 	op_data->op_fid1 = sbi->ll_root_fid;
 	op_data->op_mode = 0;
@@ -500,7 +516,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (err) {
 		CERROR("%s: md_getattr failed for root: rc = %d\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
-		GOTO(out_dt, err);
+		GOTO(out_lock_cn_cb, err);
 	}
 
 	err = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
@@ -508,7 +524,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (err) {
 		CERROR("failed to understand root inode md: rc = %d\n", err);
 		ptlrpc_req_finished(request);
-		GOTO(out_dt, err);
+		GOTO(out_lock_cn_cb, err);
 	}
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
@@ -589,11 +605,15 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 out_root:
         if (root)
                 iput(root);
+out_lock_cn_cb:
+	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 	/* Make sure all OScs are gone, since cl_cache is accessing sbi. */
 	obd_zombie_barrier();
+out_md_fid:
+	obd_fid_fini(sbi->ll_md_exp->exp_obd);
 out_md:
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
@@ -681,6 +701,7 @@ void client_common_put_super(struct super_block *sb)
 
         cfs_list_del(&sbi->ll_conn_chain);
 
+	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 	/* wait till all OSCs are gone, since cl_cache is accessing sbi.
@@ -689,6 +710,7 @@ void client_common_put_super(struct super_block *sb)
 
         lprocfs_unregister_mountpoint(sbi);
 
+	obd_fid_fini(sbi->ll_md_exp->exp_obd);
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 
