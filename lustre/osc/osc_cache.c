@@ -1482,7 +1482,7 @@ static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
 {
 	int rc;
 	client_obd_list_lock(&cli->cl_loi_list_lock);
-	rc = cfs_list_empty(&ocw->ocw_entry) || cli->cl_w_in_flight == 0;
+	rc = cfs_list_empty(&ocw->ocw_entry);
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
@@ -1528,7 +1528,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	cfs_waitq_init(&ocw.ocw_waitq);
 	ocw.ocw_oap   = oap;
 	ocw.ocw_grant = bytes;
-	if (cli->cl_dirty > 0 || cli->cl_w_in_flight > 0) {
+	while (cli->cl_dirty > 0 || cli->cl_w_in_flight > 0) {
 		cfs_list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
 		ocw.ocw_rc = 0;
 		client_obd_list_unlock(&cli->cl_loi_list_lock);
@@ -1548,20 +1548,13 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 			GOTO(out, rc);
 		}
 
-		/* If ocw_entry isn't empty, which means it's not waked up
-		 * by osc_wake_cache_waiters(), then the page must not be
-		 * granted yet. */
-		if (!cfs_list_empty(&ocw.ocw_entry)) {
-			rc = -EDQUOT;
-			cfs_list_del_init(&ocw.ocw_entry);
-		} else {
-			rc = ocw.ocw_rc;
-		}
+		LASSERT(cfs_list_empty(&ocw.ocw_entry));
+		rc = ocw.ocw_rc;
 
 		if (rc != -EDQUOT)
 			GOTO(out, rc);
 		if (osc_enter_cache_try(cli, oap, bytes, 0))
-			rc = 0;
+			GOTO(out, rc = 0);
 	}
 	EXIT;
 out:
@@ -1578,31 +1571,25 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
 	ENTRY;
 	cfs_list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
-		/* if we can't dirty more, we must wait until some is written */
+		ocw = cfs_list_entry(l, struct osc_cache_waiter, ocw_entry);
+		cfs_list_del_init(&ocw->ocw_entry);
+
+		ocw->ocw_rc = -EDQUOT;
+		/* we can't dirty more */
 		if ((cli->cl_dirty + CFS_PAGE_SIZE > cli->cl_dirty_max) ||
 		    (cfs_atomic_read(&obd_dirty_pages) + 1 >
 		     obd_max_dirty_pages)) {
 			CDEBUG(D_CACHE, "no dirty room: dirty: %ld "
 			       "osc max %ld, sys max %d\n", cli->cl_dirty,
 			       cli->cl_dirty_max, obd_max_dirty_pages);
-			return;
+			goto wakeup;
 		}
-
-		/* if still dirty cache but no grant wait for pending RPCs that
-		 * may yet return us some grant before doing sync writes */
-		if (cli->cl_w_in_flight && cli->cl_avail_grant < CFS_PAGE_SIZE) {
-			CDEBUG(D_CACHE, "%u BRW writes in flight, no grant\n",
-			       cli->cl_w_in_flight);
-			return;
-		}
-
-		ocw = cfs_list_entry(l, struct osc_cache_waiter, ocw_entry);
-		cfs_list_del_init(&ocw->ocw_entry);
 
 		ocw->ocw_rc = 0;
 		if (!osc_enter_cache_try(cli, ocw->ocw_oap, ocw->ocw_grant, 0))
 			ocw->ocw_rc = -EDQUOT;
 
+wakeup:
 		CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant %ld, %d\n",
 		       ocw, ocw->ocw_oap, cli->cl_avail_grant, ocw->ocw_rc);
 
@@ -2145,7 +2132,11 @@ static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		has_rpcs = __osc_list_maint(cli, osc);
 	if (has_rpcs) {
 		if (!async) {
+			/* disable osc_lru_shrink() temporarily to avoid
+			 * potential stack overrun problem. LU-2859 */
+			cfs_atomic_inc(&cli->cl_lru_shrinkers);
 			osc_check_rpcs(env, cli, pol);
+			cfs_atomic_dec(&cli->cl_lru_shrinkers);
 		} else {
 			CDEBUG(D_CACHE, "Queue writeback work for client %p.\n",
 			       cli);
