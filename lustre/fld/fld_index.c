@@ -44,25 +44,17 @@
 #ifdef __KERNEL__
 # include <libcfs/libcfs.h>
 # include <linux/module.h>
-# include <linux/jbd.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
 
-#include <obd.h>
-#include <obd_class.h>
-#include <lustre_ver.h>
 #include <obd_support.h>
-#include <lprocfs_status.h>
-
 #include <dt_object.h>
-#include <md_object.h>
-#include <lustre_mdc.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
-const char fld_index_name[] = "fld";
+static const char fld_index_name[] = "fld";
 
 static const struct lu_seq_range IGIF_FLD_RANGE = {
 	.lsr_start = FID_SEQ_IGIF,
@@ -85,7 +77,7 @@ static const struct lu_seq_range ROOT_FLD_RANGE = {
 	.lsr_flags = LU_SEQ_RANGE_MDT
 };
 
-const struct dt_index_features fld_index_features = {
+static const struct dt_index_features fld_index_features = {
 	.dif_flags       = DT_IND_UPDATE,
 	.dif_keysize_min = sizeof(seqno_t),
 	.dif_keysize_max = sizeof(seqno_t),
@@ -138,10 +130,10 @@ int fld_declare_index_create(const struct lu_env *env,
 			       fld->lsf_name, PRANGE(range), rc);
 			GOTO(out, rc);
 		}
-		memcpy(tmp, new_range, sizeof(*new_range));
+		*tmp = *new_range;
 		tmp->lsr_start = range->lsr_start;
 	} else {
-		memcpy(tmp, new_range, sizeof(*new_range));
+		*tmp = *new_range;
 	}
 
 	range_cpu_to_be(tmp, tmp);
@@ -200,11 +192,11 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 				BYPASS_CAPA);
 		if (rc != 0)
 			GOTO(out, rc);
-		memcpy(tmp, new_range, sizeof(*new_range));
+		*tmp = *new_range;
 		tmp->lsr_start = range->lsr_start;
 		deleted = 1;
 	} else {
-		memcpy(tmp, new_range, sizeof(*new_range));
+		*tmp = *new_range;
 	}
 
 	range_cpu_to_be(tmp, tmp);

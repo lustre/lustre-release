@@ -1,6 +1,7 @@
-MODULES := fld 
-fld-objs := fld_handler.o fld_request.o fld_cache.o fld_index.o lproc_fld.o
+MODULES := fld
+fld-objs := fld_request.o fld_cache.o lproc_fld.o
+@SERVER_TRUE@fld-objs += fld_handler.o fld_index.o
 
-EXTRA_PRE_CFLAGS := -I@LUSTRE@ -I@LUSTRE@/ldiskfs
+EXTRA_PRE_CFLAGS := -I@LUSTRE@
 
 @INCLUDE_RULES@

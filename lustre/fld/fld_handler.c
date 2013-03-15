@@ -44,29 +44,17 @@
 
 #define DEBUG_SUBSYSTEM S_FLD
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-# include <linux/jbd.h>
-# include <asm/div64.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-# include <libcfs/list.h>
-#endif
+#include <libcfs/libcfs.h>
+#include <linux/module.h>
 
 #include <obd.h>
-#include <obd_class.h>
-#include <lustre_ver.h>
 #include <obd_support.h>
-#include <lprocfs_status.h>
-
-#include <md_object.h>
 #include <lustre_fid.h>
+#include <lustre_fld.h>
+#include <lustre_mdt.h> /* err_serious() */
 #include <lustre_req_layout.h>
+#include <lprocfs_status.h>
 #include "fld_internal.h"
-#include <lustre_fid.h>
-
-#ifdef __KERNEL__
 
 /* context key constructor/destructor: fld_key_init, fld_key_fini */
 LU_KEY_INIT_FINI(fld, struct fld_thread_info);
@@ -74,33 +62,20 @@ LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 /* context key: fld_thread_key */
 LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD);
 
-cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
-
-static int __init fld_mod_init(void)
+int fld_server_mod_init(void)
 {
-        fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
-                                             proc_lustre_root,
-                                             NULL, NULL);
-        if (IS_ERR(fld_type_proc_dir))
-                return PTR_ERR(fld_type_proc_dir);
-
-        LU_CONTEXT_KEY_INIT(&fld_thread_key);
-        lu_context_key_register(&fld_thread_key);
-        return 0;
+	LU_CONTEXT_KEY_INIT(&fld_thread_key);
+	return lu_context_key_register(&fld_thread_key);
 }
 
-static void __exit fld_mod_exit(void)
+void fld_server_mod_exit(void)
 {
-        lu_context_key_degister(&fld_thread_key);
-        if (fld_type_proc_dir != NULL && !IS_ERR(fld_type_proc_dir)) {
-                lprocfs_remove(&fld_type_proc_dir);
-                fld_type_proc_dir = NULL;
-        }
+	lu_context_key_degister(&fld_thread_key);
 }
 
 int fld_declare_server_create(const struct lu_env *env,
 			      struct lu_server_fld *fld,
-			      struct lu_seq_range *range,
+			      const struct lu_seq_range *range,
 			      struct thandle *th)
 {
 	int rc;
@@ -117,7 +92,7 @@ EXPORT_SYMBOL(fld_declare_server_create);
  * is granted to a server.
  */
 int fld_server_create(const struct lu_env *env, struct lu_server_fld *fld,
-		      struct lu_seq_range *range, struct thandle *th)
+		      const struct lu_seq_range *range, struct thandle *th)
 {
 	int rc;
 
@@ -445,10 +420,3 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld)
 	EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);
-
-MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre FLD");
-MODULE_LICENSE("GPL");
-
-cfs_module(mdd, "0.1.0", fld_mod_init, fld_mod_exit);
-#endif

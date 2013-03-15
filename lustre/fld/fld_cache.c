@@ -46,22 +46,13 @@
 #ifdef __KERNEL__
 # include <libcfs/libcfs.h>
 # include <linux/module.h>
-# include <linux/jbd.h>
 # include <asm/div64.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 # include <libcfs/list.h>
 #endif
 
-#include <obd.h>
-#include <obd_class.h>
-#include <lustre_ver.h>
 #include <obd_support.h>
-#include <lprocfs_status.h>
-
-#include <dt_object.h>
-#include <md_object.h>
-#include <lustre_req_layout.h>
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
@@ -276,9 +267,9 @@ void fld_cache_flush(struct fld_cache *cache)
  * entry accordingly.
  */
 
-void fld_cache_punch_hole(struct fld_cache *cache,
-                          struct fld_cache_entry *f_curr,
-                          struct fld_cache_entry *f_new)
+static void fld_cache_punch_hole(struct fld_cache *cache,
+				 struct fld_cache_entry *f_curr,
+				 struct fld_cache_entry *f_new)
 {
         const struct lu_seq_range *range = &f_new->fce_range;
         const seqno_t new_start  = range->lsr_start;
@@ -499,9 +490,9 @@ void fld_cache_delete(struct fld_cache *cache,
 	write_unlock(&cache->fci_lock);
 }
 
-struct fld_cache_entry
-*fld_cache_entry_lookup_nolock(struct fld_cache *cache,
-			      struct lu_seq_range *range)
+struct fld_cache_entry *
+fld_cache_entry_lookup_nolock(struct fld_cache *cache,
+			      const struct lu_seq_range *range)
 {
 	struct fld_cache_entry *flde;
 	struct fld_cache_entry *got = NULL;
@@ -523,8 +514,9 @@ struct fld_cache_entry
 /**
  * lookup \a seq sequence for range in fld cache.
  */
-struct fld_cache_entry
-*fld_cache_entry_lookup(struct fld_cache *cache, struct lu_seq_range *range)
+struct fld_cache_entry *
+fld_cache_entry_lookup(struct fld_cache *cache,
+		       const struct lu_seq_range *range)
 {
 	struct fld_cache_entry *got = NULL;
 	ENTRY;
@@ -532,6 +524,7 @@ struct fld_cache_entry
 	read_lock(&cache->fci_lock);
 	got = fld_cache_entry_lookup_nolock(cache, range);
 	read_unlock(&cache->fci_lock);
+
 	RETURN(got);
 }
 
@@ -569,4 +562,3 @@ int fld_cache_lookup(struct fld_cache *cache,
 	read_unlock(&cache->fci_lock);
 	RETURN(-ENOENT);
 }
-

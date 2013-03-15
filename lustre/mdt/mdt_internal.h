@@ -65,6 +65,7 @@
 #include <md_object.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
+#include <lustre_mdt.h>
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
 #include <lvfs.h>

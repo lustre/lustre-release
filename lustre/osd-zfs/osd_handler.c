@@ -57,6 +57,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#include <md_object.h>
 
 #include "osd_internal.h"
 

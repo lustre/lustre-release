@@ -25,10 +25,11 @@
  * Use is subject to license terms.
  */
 
-#include "lquota_internal.h"
-
 #ifndef _QMT_INTERNAL_H
 #define _QMT_INTERNAL_H
+
+#include <lustre_mdt.h> /* err_serious() */
+#include "lquota_internal.h"
 
 /*
  * The Quota Master Target Device.

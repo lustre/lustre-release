@@ -36,6 +36,7 @@
 #include <lustre/lustre_idl.h>
 #include <lu_object.h>
 #include <dt_object.h>
+#include <md_object.h>
 #include <lustre_linkea.h>
 #include <lustre_fid.h>
 #include <lustre_lib.h>

@@ -43,18 +43,16 @@
  */
 
 #include <lustre/lustre_idl.h>
-#include <lustre_mdt.h>
-#include <dt_object.h>
-
 #include <libcfs/libcfs.h>
 
+struct lu_env;
 struct lu_client_fld;
 struct lu_server_fld;
 struct lu_fld_hash;
 struct fld_cache;
-
-extern const struct dt_index_features fld_index_features;
-extern const char fld_index_name[];
+struct thandle;
+struct dt_device;
+struct dt_object;
 
 /*
  * FLD (Fid Location Database) interface.
@@ -64,12 +62,11 @@ enum {
         LUSTRE_CLI_FLD_HASH_RRB
 };
 
-
 struct lu_fld_target {
-        cfs_list_t               ft_chain;
-        struct obd_export       *ft_exp;
-        struct lu_server_fld    *ft_srv;
-        __u64                    ft_idx;
+	cfs_list_t		ft_chain;
+	struct obd_export      *ft_exp;
+	struct lu_server_fld   *ft_srv;
+	__u64			ft_idx;
 };
 
 struct lu_server_fld {
@@ -129,21 +126,10 @@ struct lu_client_fld {
          * Client fld proc entry name. */
         char                     lcf_name[80];
 
-        const struct lu_context *lcf_ctx;
-
-        int                      lcf_flags;
+	int			 lcf_flags;
 };
 
-/**
- * number of blocks to reserve for particular operations. Should be function of
- * ... something. Stub for now.
- */
-enum {
-        /* one insert operation can involve two delete and one insert */
-        FLD_TXN_INDEX_INSERT_CREDITS  = 60,
-        FLD_TXN_INDEX_DELETE_CREDITS  = 20,
-};
-
+struct com_thread_info;
 int fld_query(struct com_thread_info *info);
 
 /* Server methods */
@@ -155,12 +141,12 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld);
 
 int fld_declare_server_create(const struct lu_env *env,
 			      struct lu_server_fld *fld,
-			      struct lu_seq_range *new,
+			      const struct lu_seq_range *range,
 			      struct thandle *th);
 
 int fld_server_create(const struct lu_env *env,
 		      struct lu_server_fld *fld,
-		      struct lu_seq_range *add_range,
+		      const struct lu_seq_range *add_range,
 		      struct thandle *th);
 
 int fld_insert_entry(const struct lu_env *env,

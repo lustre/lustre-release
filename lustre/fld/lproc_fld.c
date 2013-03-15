@@ -50,12 +50,8 @@
 # include <liblustre.h>
 #endif
 
-#include <obd.h>
-#include <obd_class.h>
 #include <dt_object.h>
-#include <md_object.h>
 #include <obd_support.h>
-#include <lustre_req_layout.h>
 #include <lustre_fld.h>
 #include <lustre_fid.h>
 #include "fld_internal.h"
@@ -161,6 +157,14 @@ struct fld_seq_param {
 	unsigned int		fsp_stop:1;
 };
 
+struct lprocfs_vars fld_client_proc_list[] = {
+	{ "targets", fld_proc_read_targets, NULL, NULL },
+	{ "hash", fld_proc_read_hash, fld_proc_write_hash, NULL },
+	{ "cache_flush", NULL, fld_proc_write_cache_flush, NULL },
+	{ NULL }
+};
+
+# ifdef HAVE_SERVER_SUPPORT
 static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
 {
 	struct fld_seq_param    *param = p->private;
@@ -350,20 +354,17 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct lprocfs_vars fld_server_proc_list[] = {
-	{ NULL }};
-
-struct lprocfs_vars fld_client_proc_list[] = {
-	{ "targets",     fld_proc_read_targets, NULL, NULL },
-	{ "hash",        fld_proc_read_hash, fld_proc_write_hash, NULL },
-	{ "cache_flush", NULL, fld_proc_write_cache_flush, NULL },
-	{ NULL }};
-
-struct file_operations fld_proc_seq_fops = {
+const struct file_operations fld_proc_seq_fops = {
 	.owner   = THIS_MODULE,
 	.open    = fldb_seq_open,
 	.read    = seq_read,
 	.release = fldb_seq_release,
 };
 
-#endif
+struct lprocfs_vars fld_server_proc_list[] = {
+	{ NULL }
+};
+
+# endif /* HAVE_SERVER_SUPPORT */
+
+#endif /* LPROCFS */

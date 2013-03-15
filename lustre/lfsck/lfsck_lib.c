@@ -36,6 +36,8 @@
 #include <libcfs/list.h>
 #include <lu_object.h>
 #include <dt_object.h>
+#include <md_object.h>
+#include <lustre_fld.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_lfsck.h>

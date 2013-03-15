@@ -64,13 +64,6 @@ struct md_object;
 struct obd_export;
 
 enum {
-        UCRED_INVALID   = -1,
-        UCRED_INIT      = 0,
-        UCRED_OLD       = 1,
-        UCRED_NEW       = 2
-};
-
-enum {
         MD_CAPAINFO_MAX = 5
 };
 
@@ -857,6 +850,13 @@ struct lu_local_obj_desc {
 int lustre_buf2som(void *buf, int rc, struct md_som_data *msd);
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh);
 void lustre_hsm2buf(void *buf, struct md_hsm *mh);
+
+enum {
+	UCRED_INVALID	= -1,
+	UCRED_INIT	= 0,
+	UCRED_OLD	= 1,
+	UCRED_NEW	= 2,
+};
 
 struct lu_ucred {
 	__u32               uc_valid;

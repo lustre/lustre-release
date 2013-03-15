@@ -41,11 +41,9 @@
 #ifndef __FLD_INTERNAL_H
 #define __FLD_INTERNAL_H
 
+#include <obd.h>
 #include <lustre/lustre_idl.h>
-#include <dt_object.h>
-
 #include <libcfs/libcfs.h>
-#include <lustre_req_layout.h>
 #include <lustre_fld.h>
 
 enum {
@@ -56,7 +54,6 @@ enum {
 struct fld_stats {
         __u64   fst_count;
         __u64   fst_cache;
-        __u64   fst_inflight;
 };
 
 typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
@@ -141,16 +138,23 @@ extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
 
+# ifdef LPROCFS
+extern struct proc_dir_entry *fld_type_proc_dir;
+extern struct lprocfs_vars fld_client_proc_list[];
+# endif
+
+# ifdef HAVE_SERVER_SUPPORT
+struct req_capsule;
 struct fld_thread_info {
-        struct req_capsule *fti_pill;
-        __u64               fti_key;
-        struct lu_seq_range fti_rec;
-        struct lu_seq_range fti_lrange;
-        struct lu_seq_range fti_irange;
+	struct req_capsule *fti_pill;
+	struct lu_seq_range fti_rec;
+	struct lu_seq_range fti_lrange;
+	struct lu_seq_range fti_irange;
 };
 
 extern struct lu_context_key fld_thread_key;
 
+struct dt_device;
 int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 		   struct dt_device *dt);
 
@@ -158,24 +162,30 @@ void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld);
 
 int fld_declare_index_create(const struct lu_env *env,
 			     struct lu_server_fld *fld,
-			     const struct lu_seq_range *new,
+			     const struct lu_seq_range *new_range,
 			     struct thandle *th);
 
 int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
-		     const struct lu_seq_range *new, struct thandle *th);
+		     const struct lu_seq_range *new_range, struct thandle *th);
 
 int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		     seqno_t seq, struct lu_seq_range *range);
 
-int fld_client_rpc(struct obd_export *exp,
-                   struct lu_seq_range *range, __u32 fld_op);
+int fld_server_mod_init(void);
 
-#ifdef LPROCFS
+void fld_server_mod_exit(void);
+
+# ifdef LPROCFS
+extern const struct file_operations fld_proc_seq_fops;
 extern struct lprocfs_vars fld_server_proc_list[];
-extern struct lprocfs_vars fld_client_proc_list[];
-#endif
+# endif
 
-#endif
+# endif /* HAVE_SERVER_SUPPORT */
+
+int fld_client_rpc(struct obd_export *exp,
+		   struct lu_seq_range *range, __u32 fld_op);
+
+#endif /* __KERNEL__ */
 
 struct fld_cache *fld_cache_init(const char *name,
                                  int cache_size, int cache_threshold);
@@ -199,27 +209,26 @@ void fld_cache_delete_nolock(struct fld_cache *cache,
 int fld_cache_lookup(struct fld_cache *cache,
                      const seqno_t seq, struct lu_seq_range *range);
 
-struct fld_cache_entry*
-fld_cache_entry_lookup(struct fld_cache *cache, struct lu_seq_range *range);
+struct fld_cache_entry *
+fld_cache_entry_lookup(struct fld_cache *cache,
+		       const struct lu_seq_range *range);
+
 void fld_cache_entry_delete(struct fld_cache *cache,
 			    struct fld_cache_entry *node);
-void fld_dump_cache_entries(struct fld_cache *cache);
 
-struct fld_cache_entry
-*fld_cache_entry_lookup_nolock(struct fld_cache *cache,
-			      struct lu_seq_range *range);
-int fld_write_range(const struct lu_env *env, struct dt_object *dt,
-		    const struct lu_seq_range *range, struct thandle *th);
+struct fld_cache_entry *
+fld_cache_entry_lookup_nolock(struct fld_cache *cache,
+			      const struct lu_seq_range *range);
 
 static inline const char *
-fld_target_name(struct lu_fld_target *tar)
+fld_target_name(const struct lu_fld_target *tar)
 {
-        if (tar->ft_srv != NULL)
-                return tar->ft_srv->lsf_name;
+#ifdef HAVE_SERVER_SUPPORT
+	if (tar->ft_srv != NULL)
+		return tar->ft_srv->lsf_name;
+#endif
 
-        return (const char *)tar->ft_exp->exp_obd->obd_name;
+	return tar->ft_exp->exp_obd->obd_name;
 }
 
-extern cfs_proc_dir_entry_t *fld_type_proc_dir;
-extern struct file_operations fld_proc_seq_fops;
 #endif /* __FLD_INTERNAL_H */
