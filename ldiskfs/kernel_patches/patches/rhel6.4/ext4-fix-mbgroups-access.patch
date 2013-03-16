@@ -1,0 +1,16 @@
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -4825,6 +4825,11 @@ do_more:
+ 		 * be used until this transaction is committed
+ 		 */
+ 		new_entry = kmem_cache_alloc(ext4_free_data_cachep, GFP_NOFS);
++ 		if (!new_entry) {
++ 			ext4_mb_release_desc(&e4b);
++ 			err = -ENOMEM;
++ 			goto error_return;
++ 		}
+ 		new_entry->efd_start_blk = bit;
+ 		new_entry->efd_group  = block_group;
+ 		new_entry->efd_count = count;

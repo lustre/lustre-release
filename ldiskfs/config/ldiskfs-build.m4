@@ -676,33 +676,29 @@ AC_MSG_RESULT([$LDISKFS_RELEASE])
 AC_SUBST(LDISKFS_RELEASE)
 ])
 
-AC_DEFUN([LB_LDISKFS_SERIES],
-[
-if $1; then
+AC_DEFUN([LB_LDISKFS_SERIES], [
+LDISKFS_SERIES=
+AS_IF([$1], [
 	AC_MSG_CHECKING([which ldiskfs series to use])
-	case $LINUXRELEASE in
-	2.6.32*)
-		if test x$RHEL_KERNEL = xyes; then
-			LDISKFS_SERIES="2.6-rhel6.series"
-		fi
-		if test x$SUSE_KERNEL = xyes; then
-			LDISKFS_SERIES="2.6-sles11.series"
-		fi
-		;;
-	3.0.*)
-		if test x$SUSE_KERNEL = xyes; then
-			LDISKFS_SERIES="3.0-sles11.series"
-		fi
-		;;
-	*)
-		AC_MSG_WARN([Unknown kernel version $LINUXRELEASE])
-		LDISKFS_SERIES=
-		;;
-	esac
+
+	SER=
+	AS_IF([test x$RHEL_KERNEL = xyes], [
+		AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32-343],[
+		AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32],[],
+		[SER="2.6-rhel6.series"],[SER="2.6-rhel6.series"])],
+		[SER="2.6-rhel6.4.series"],[SER="2.6-rhel6.4.series"])
+	], [test x$SUSE_KERNEL = xyes], [
+		AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
+		AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32],[],
+		[SER="2.6-sles11.series"],[SER="2.6-sles11.series"])],
+		[SER="3.0-sles11.series"],[SER="3.0-sles11.series"])
+	])
+	LDISKFS_SERIES=$SER
+
+	AS_IF([test -z "$LDISKFS_SERIES"],
+		[AC_MSG_WARN([Unknown kernel version $LINUXRELEASE])])
 	AC_MSG_RESULT([$LDISKFS_SERIES])
-else
-	LDISKFS_SERIES=
-fi
+])
 AC_SUBST(LDISKFS_SERIES)
 ])
 
