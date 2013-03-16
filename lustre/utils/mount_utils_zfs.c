@@ -692,11 +692,11 @@ int zfs_init(void)
 	 * spamming ldiskfs users. An error message will still be printed if
 	 * someone tries to do some real work involving a ZFS backend */
 
-	handle_libzfs = dlopen("libzfs.so", RTLD_LAZY);
+	handle_libzfs = dlopen("libzfs.so.1", RTLD_LAZY);
 	if (handle_libzfs == NULL)
 		return EINVAL;
 
-	handle_nvpair = dlopen("libnvpair.so", RTLD_LAZY);
+	handle_nvpair = dlopen("libnvpair.so.1", RTLD_LAZY);
 	if (handle_nvpair == NULL) {
 		ret = EINVAL;
 		goto out;
