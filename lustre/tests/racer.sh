@@ -12,8 +12,11 @@ init_logging
 racer=$LUSTRE/tests/racer/racer.sh
 echo racer: $racer with $MDSCOUNT MDTs
 
-DURATION=${DURATION:-900}
-[ "$SLOW" = "no" ] && DURATION=300
+if [ "$SLOW" = "no" ]; then
+    DURATION=${DURATION:-300}
+else
+    DURATION=${DURATION:-900}
+fi
 MOUNT_2=${MOUNT_2:-"yes"}
 
 build_test_filter
