@@ -4211,6 +4211,9 @@ set_inode_slab_tunables() {
 }
 
 test_76() { # Now for bug 20433, added originally in bug 1443
+	[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.3.50) ] &&
+		skip "LU-2857: skip due to not working for LOD/OSP" && return 0
+
 	local SLAB_SETTINGS=`get_inode_slab_tunables`
 	local CPUS=`getconf _NPROCESSORS_ONLN`
 	# we cannot set limit below 1 which means 1 inode in each
