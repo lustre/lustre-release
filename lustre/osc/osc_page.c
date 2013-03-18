@@ -717,6 +717,7 @@ int osc_lru_shrink(struct client_obd *cli, int target)
 
 			clobj = tmp;
 			io->ci_obj = clobj;
+			io->ci_ignore_layout = 1;
 			rc = cl_io_init(env, io, CIT_MISC, clobj);
 
 			client_obd_list_lock(&cli->cl_lru_list_lock);
@@ -778,8 +779,10 @@ static void osc_lru_add(struct client_obd *cli, struct osc_page *opg)
 	}
 	client_obd_list_unlock(&cli->cl_lru_list_lock);
 
-	if (wakeup)
+	if (wakeup) {
+		osc_lru_shrink(cli, osc_cache_too_much(cli));
 		cfs_waitq_broadcast(&osc_lru_waitq);
+	}
 }
 
 /* delete page from LRUlist. The page can be deleted from LRUlist for two
@@ -815,18 +818,22 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg, bool del)
 	}
 }
 
+static inline int max_to_shrink(struct client_obd *cli)
+{
+	return min(cfs_atomic_read(&cli->cl_lru_in_list) >> 1, lru_shrink_max);
+}
+
 static int osc_lru_reclaim(struct client_obd *cli)
 {
 	struct cl_client_cache *cache = cli->cl_cache;
-	struct client_obd *victim;
-	struct client_obd *tmp;
+	int max_scans;
 	int rc;
 
 	LASSERT(cache != NULL);
 	LASSERT(!cfs_list_empty(&cache->ccc_lru));
 
 	rc = osc_lru_shrink(cli, lru_shrink_min);
-	if (rc > 0) {
+	if (rc != 0) {
 		CDEBUG(D_CACHE, "%s: Free %d pages from own LRU: %p.\n",
 			cli->cl_import->imp_obd->obd_name, rc, cli);
 		return rc;
@@ -842,33 +849,31 @@ static int osc_lru_reclaim(struct client_obd *cli)
 	spin_lock(&cache->ccc_lru_lock);
 	cache->ccc_lru_shrinkers++;
 	cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
-	cfs_list_for_each_entry_safe(victim, tmp, &cache->ccc_lru, cl_lru_osc) {
-		if (victim == cli)
-			break;
+
+	max_scans = cfs_atomic_read(&cache->ccc_users);
+	while (--max_scans > 0 && !cfs_list_empty(&cache->ccc_lru)) {
+		cli = cfs_list_entry(cache->ccc_lru.next, struct client_obd,
+					cl_lru_osc);
 
 		CDEBUG(D_CACHE, "%s: cli %p LRU pages: %d, busy: %d.\n",
-			victim->cl_import->imp_obd->obd_name, victim,
-			cfs_atomic_read(&victim->cl_lru_in_list),
-			cfs_atomic_read(&victim->cl_lru_busy));
+			cli->cl_import->imp_obd->obd_name, cli,
+			cfs_atomic_read(&cli->cl_lru_in_list),
+			cfs_atomic_read(&cli->cl_lru_busy));
 
-		cfs_list_move_tail(&victim->cl_lru_osc, &cache->ccc_lru);
-		if (cfs_atomic_read(&victim->cl_lru_in_list) > 0)
-			break;
+		cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
+		if (cfs_atomic_read(&cli->cl_lru_in_list) > 0) {
+			spin_unlock(&cache->ccc_lru_lock);
+
+			rc = osc_lru_shrink(cli, max_to_shrink(cli));
+			spin_lock(&cache->ccc_lru_lock);
+			if (rc != 0)
+				break;
+		}
 	}
 	spin_unlock(&cache->ccc_lru_lock);
-	if (victim == cli) {
-		CDEBUG(D_CACHE, "%s: can't get any free LRU slots.\n",
-			cli->cl_import->imp_obd->obd_name);
-		return 0;
-	}
 
-	rc = osc_lru_shrink(victim,
-			    min(cfs_atomic_read(&victim->cl_lru_in_list) >> 1,
-				lru_shrink_max));
-
-	CDEBUG(D_CACHE, "%s: Free %d pages from other cli: %p.\n",
-		cli->cl_import->imp_obd->obd_name, rc, victim);
-
+	CDEBUG(D_CACHE, "%s: cli %p freed %d pages.\n",
+		cli->cl_import->imp_obd->obd_name, cli, rc);
 	return rc;
 }
 
