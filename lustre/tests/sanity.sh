@@ -468,8 +468,17 @@ str_repeat() {
 
 # Long symlinks and LU-2241
 test_17g() {
-        test_mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	local TESTS="59 60 61 4094 4095"
+
+	# Fix for inode size boundary in 2.1.4
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.1.4) ] &&
+		TESTS="4094 4095"
+
+	# Patch not applied to 2.2 or 2.3 branches
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
+	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.3.55) ] &&
+		TESTS="4094 4095"
 
 	for i in $TESTS; do
 		local SYMNAME=$(str_repeat 'x' $i)
