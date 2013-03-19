@@ -1109,7 +1109,7 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 		GOTO(out_put, rc = 0);
 	}
 
-	OBD_ALLOC(backup, strlen(logname) + 5);
+	OBD_ALLOC(backup, strlen(logname) + strlen(".bak") + 1);
 	if (backup == NULL)
 		GOTO(out_put, rc = -ENOMEM);
 
@@ -1183,7 +1183,7 @@ out_restore:
 	}
 
 out_free:
-	OBD_FREE(backup, strlen(backup) + 5);
+	OBD_FREE(backup, strlen(backup) + 1);
 
 out_put:
 	llog_ctxt_put(ctxt);

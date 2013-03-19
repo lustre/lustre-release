@@ -947,27 +947,32 @@ out_free:
 	case OBD_IOC_REPLACE_NIDS: {
 		if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
 			CERROR("No device name specified!\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			break;
 		}
 
 		if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
 			CERROR("Device name is not NUL terminated!\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			break;
 		}
 
 		if (data->ioc_plen1 > MTI_NAME_MAXLEN) {
 			CERROR("Device name is too long\n");
-			RETURN(-EOVERFLOW);
+			rc = -EOVERFLOW;
+			break;
 		}
 
 		if (!data->ioc_inllen2 || !data->ioc_inlbuf2) {
 			CERROR("No NIDs were specified!\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			break;
 		}
 
 		if (data->ioc_inlbuf2[data->ioc_inllen2 - 1] != 0) {
 			CERROR("NID list is not NUL terminated!\n");
-			RETURN(-EINVAL);
+			rc = -EINVAL;
+			break;
 		}
 
 		/* replace nids in llog */
@@ -977,7 +982,7 @@ out_free:
 			CERROR("%s: error replacing nids: rc = %d\n",
 			       exp->exp_obd->obd_name, rc);
 
-		RETURN(rc);
+		break;
 	}
 
 	case OBD_IOC_POOL:
