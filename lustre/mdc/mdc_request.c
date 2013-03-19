@@ -225,6 +225,11 @@ int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
         int                    rc;
         ENTRY;
 
+	/* Single MDS without an LMV case */
+	if (op_data->op_flags & MF_GET_MDT_IDX) {
+		op_data->op_mds = 0;
+		RETURN(0);
+	}
         *request = NULL;
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_GETATTR);
         if (req == NULL)
