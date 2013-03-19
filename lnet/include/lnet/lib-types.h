@@ -518,7 +518,10 @@ struct lnet_peer_table {
 	cfs_list_t		*pt_hash;	/* NID->peer hash */
 };
 
-#define lnet_peer_aliveness_enabled(lp) ((lp)->lp_ni->ni_peertimeout > 0)
+/* peer aliveness is enabled only on routers for peers in a network where the
+ * lnet_ni_t::ni_peertimeout has been set to a positive value */
+#define lnet_peer_aliveness_enabled(lp) (the_lnet.ln_routing != 0 && \
+					 (lp)->lp_ni->ni_peertimeout > 0)
 
 typedef struct {
 	cfs_list_t		lr_list;	/* chain on net */
