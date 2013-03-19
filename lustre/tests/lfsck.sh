@@ -182,7 +182,7 @@ remove_objects() {
     local i
     local rc
 
-    echo "removing objects from $ostdev on $facet: $objids"
+    echo "removing objects from $ostdev on $node: $objids"
     tmp=$(mktemp $SHARED_DIRECTORY/debugfs.XXXXXXXXXX)
     for i in $objids; do
         echo "rm O/$group/d$((i % 32))/$i" >> $tmp
@@ -212,9 +212,9 @@ init_logging
 # get the server target devices
 get_svr_devs
 
+TESTDIR=$DIR/d0.$TESTSUITE
 if is_empty_fs $MOUNT; then
     # create test directory
-    TESTDIR=$DIR/d0.$TESTSUITE
     mkdir -p $TESTDIR || error "mkdir $TESTDIR failed"
 
     # create some dirs and files on the filesystem
@@ -258,8 +258,10 @@ fi
 generate_db
 
 # remount filesystem
+ORIG_REFORMAT=$REFORMAT
 REFORMAT=""
 check_and_setup_lustre
+REFORMAT=$ORIG_REFORMAT
 
 # run lfsck
 rc=0
@@ -281,5 +283,14 @@ else
 fi
 
 complete $(basename $0) $SECONDS
+# The test directory contains some files referencing to some object
+# which could cause error when removing the directory.
+RMCNT=0
+while [ -d $TESTDIR ]; do
+	RMCNT=$((RMCNT + 1))
+	rm -fr $TESTDIR || echo "$RMCNT round: rm $TESTDIR failed"
+	[ $RMCNT -ge 10 ] && error "cleanup $TESTDIR failed $RMCNT times"
+	remount_client $MOUNT
+done
 check_and_cleanup_lustre
 exit_status
