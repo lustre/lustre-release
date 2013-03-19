@@ -65,18 +65,20 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		GOTO(unlock, rc = -ENOENT);
 
 	/* parse remote buffers to local buffers and prepare the latter */
+	*nr_local = 0;
 	for (i = 0, j = 0; i < niocount; i++) {
 		rc = dt_bufs_get(env, ofd_object_child(fo), rnb + i,
 				 lnb + j, 0, ofd_object_capa(env, fo));
-		LASSERT(rc > 0);
+		if (unlikely(rc < 0))
+			GOTO(buf_put, rc);
 		LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
 		/* correct index for local buffers to continue with */
 		j += rc;
+		*nr_local += rc;
 		LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
 		tot_bytes += rnb[i].rnb_len;
 	}
 
-	*nr_local = j;
 	LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
 	rc = dt_attr_get(env, ofd_object_child(fo), la,
 			 ofd_object_capa(env, fo));
@@ -158,11 +160,13 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	ofd_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
 	/* parse remote buffers to local buffers and prepare the latter */
+	*nr_local = 0;
 	for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
 		rc = dt_bufs_get(env, ofd_object_child(fo),
 				 rnb + i, lnb + j, 1,
 				 ofd_object_capa(env, fo));
-		LASSERT(rc > 0);
+		if (unlikely(rc < 0))
+			GOTO(err, rc);
 		LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
 		/* correct index for local buffers to continue with */
 		for (k = 0; k < rc; k++) {
@@ -176,26 +180,26 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 				lnb[j+k].lnb_flags &= ~OBD_BRW_NOQUOTA;
 		}
 		j += rc;
+		*nr_local += rc;
 		LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
 		tot_bytes += rnb[i].rnb_len;
 	}
-	*nr_local = j;
 	LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
 
 	rc = dt_write_prep(env, ofd_object_child(fo), lnb, *nr_local);
-	if (unlikely(rc != 0)) {
-		dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
-		ofd_read_unlock(env, fo);
-		/* ofd_grant_prepare_write() was called, so we must commit */
-		ofd_grant_commit(env, exp, rc);
-		GOTO(out, rc);
-	}
+	if (unlikely(rc != 0))
+		GOTO(err, rc);
 
 	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
 			    LPROC_OFD_WRITE_BYTES, tot_bytes);
 	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE,
 			 oti->oti_jobid, tot_bytes);
 	RETURN(0);
+err:
+	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
+	ofd_read_unlock(env, fo);
+	/* ofd_grant_prepare_write() was called, so we must commit */
+	ofd_grant_commit(env, exp, rc);
 out:
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.

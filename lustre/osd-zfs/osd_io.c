@@ -271,9 +271,10 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 	 */
 	while (len > 0) {
 		rc = -dmu_buf_hold_array_by_bonus(obj->oo_db, off, len, TRUE,
-						osd_zerocopy_tag, &numbufs,
-						&dbp);
-		LASSERT(rc == 0);
+						  osd_zerocopy_tag, &numbufs,
+						  &dbp);
+		if (unlikely(rc))
+			GOTO(err, rc);
 
 		for (i = 0; i < numbufs; i++) {
 			int bufoff, tocpy, thispage;
@@ -323,6 +324,11 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	RETURN(npages);
+
+err:
+	LASSERT(rc < 0);
+	osd_bufs_put(env, &obj->oo_dt, lnb - npages, npages);
+	RETURN(rc);
 }
 
 static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
