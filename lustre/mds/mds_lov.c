@@ -856,7 +856,6 @@ static int __mds_lov_synchronize(void *data)
 #endif
         EXIT;
 out:
-        cfs_up_read(&mds->mds_notify_lock);
         if (rc) {
                 CERROR("sync %s failed %d\n", obd_uuid2str(uuid), rc);
                 if (rc != -EBUSY && !obd->obd_stopping && mds->mds_lov_obd &&
@@ -867,6 +866,7 @@ out:
                                    OBD_NOTIFY_INACTIVE, NULL);
                 }
         }
+        cfs_up_read(&mds->mds_notify_lock);
 
         class_decref(obd, "mds_lov_synchronize", obd);
         return rc;
