@@ -1228,6 +1228,30 @@ out:
         RETURN(rc);
 }
 
+static char *
+ll_getname(const char __user *filename)
+{
+	int ret = 0, len;
+	char *tmp = __getname();
+
+	if (!tmp)
+		return ERR_PTR(-ENOMEM);
+
+	len = strncpy_from_user(tmp, filename, PATH_MAX);
+	if (len == 0)
+		ret = -ENOENT;
+	else if (len > PATH_MAX)
+		ret = -ENAMETOOLONG;
+
+	if (ret) {
+		__putname(tmp);
+		tmp =  ERR_PTR(ret);
+	}
+	return tmp;
+}
+
+#define ll_putname(filename) __putname(filename)
+
 static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
         struct inode *inode = file->f_dentry->d_inode;
@@ -1430,7 +1454,7 @@ free_lmv:
 		if (!(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_LVB_TYPE))
 			return -ENOTSUPP;
 
-		filename = getname((const char *)arg);
+		filename = ll_getname((const char *)arg);
 		if (IS_ERR(filename))
 			RETURN(PTR_ERR(filename));
 
@@ -1441,7 +1465,7 @@ free_lmv:
 		rc = ll_rmdir_entry(inode, filename, namelen);
 out_rmdir:
                 if (filename)
-                        putname(filename);
+                        ll_putname(filename);
 		RETURN(rc);
 	}
 	case LL_IOC_LOV_SWAP_LAYOUTS:
@@ -1461,7 +1485,7 @@ out_rmdir:
 
                 if (cmd == IOC_MDC_GETFILEINFO ||
                     cmd == IOC_MDC_GETFILESTRIPE) {
-                        filename = getname((const char *)arg);
+                        filename = ll_getname((const char *)arg);
                         if (IS_ERR(filename))
                                 RETURN(PTR_ERR(filename));
 
@@ -1528,7 +1552,7 @@ out_rmdir:
         out_req:
                 ptlrpc_req_finished(request);
                 if (filename)
-                        putname(filename);
+                        ll_putname(filename);
                 return rc;
         }
         case IOC_LOV_GETINFO: {
