@@ -1892,6 +1892,7 @@ test_70b () {
 	# set duration to 900 because it takes some time to boot node
 	[ "$FAILURE_MODE" = HARD ] && duration=900
 
+	local elapsed
 	local start_ts=$(date +%s)
 	local cmd="rundbench 1 -t $duration"
 	local pid=""
@@ -1900,15 +1901,24 @@ test_70b () {
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		MOUNT=$MOUNT DIR=$DIR/$tdir/\\\$(hostname) LCTL=$LCTL $cmd" &
 	pid=$!
+
+	#LU-1897 wait for all dbench copies to start
+	while ! check_for_process $clients dbench; do
+		elapsed=$(($(date +%s) - start_ts))
+		if [ $elapsed -gt $duration]; then
+			killall_process $clients dbench
+			error "dbench failed to start on $clients!"
+		fi
+		sleep 1
+	done
+
 	log "Started rundbench load pid=$pid ..."
 
-	# give rundbench a chance to start, bug 24118
-	sleep 12
-	local elapsed=$(($(date +%s) - start_ts))
+	elapsed=$(($(date +%s) - start_ts))
 	local num_failovers=0
 	while [ $elapsed -lt $duration ]; do
 		if ! check_for_process $clients dbench; then
-			error_noexit "dbench not running on some of $clients!"
+			error_noexit "dbench stopped on some of $clients!"
 			killall_process $clients dbench
 			break
 		fi
