@@ -1718,26 +1718,7 @@ check_seq_oid()
 		local dev=$(ostdevname $ost)
 		local oid_hex
 
-		if [ $(facet_fstype ost$ost) != ldiskfs ]; then
-			echo "Currently only works with ldiskfs-based OSTs"
-			continue
-		fi
-
-                log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
-
-                #don't unmount/remount the OSTs if we don't need to do that
-		# LU-2577 changes filter_fid to be smaller, so debugfs needs
-		# update too, until that use mount/ll_decode_filter_fid/mount
-		local dir=$(facet_mntpt ost$ost)
-		local opts=${OST_MOUNT_OPTS}
-
-		if !  do_facet ost$ost test -b ${dev}; then
-			opts=$(csa_add "$opts" -o loop)
-		fi
-
-		stop ost$ost
-		do_facet ost$ost mount -t $(facet_fstype ost$ost) $opts $dev $dir ||
-			{ error "mounting $dev as $FSTYPE failed"; return 3; }
+		log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
 
 		seq=$(echo $seq | sed -e "s/^0x//g")
 		if [ $seq == 0 ]; then
@@ -1745,25 +1726,48 @@ check_seq_oid()
 		else
 			oid_hex=$(echo $hex | sed -e "s/^0x//g")
 		fi
-		local obj_file=$(do_facet ost$ost find $dir/O/$seq -name $oid_hex)
-		local ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID $obj_file)
-		do_facet ost$ost umount -d $dir
-		start ost$ost $dev $OST_MOUNT_OPTS
+		local obj_file="O/$seq/d$((oid %32))/$oid_hex"
 
-		# re-enable when debugfs will understand new filter_fid
-		#local ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
-                #           $dev 2>/dev/null" | grep "parent=")
+		local ff
+		#
+		# Don't unmount/remount the OSTs if we don't need to do that.
+		# LU-2577 changes filter_fid to be smaller, so debugfs needs
+		# update too, until that use mount/ll_decode_filter_fid/mount.
+		# Re-enable when debugfs will understand new filter_fid.
+		#
+		if false && [ $(facet_fstype ost$ost) == ldiskfs ]; then
+			ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
+				$dev 2>/dev/null" | grep "parent=")
+		else
+			stop ost$ost
+			mount_fstype ost$ost
+			ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID \
+				$(facet_mntpt ost$ost)/$obj_file)
+			unmount_fstype ost$ost
+			start ost$ost $dev $OST_MOUNT_OPTS
+		fi
 
-                [ -z "$ff" ] && error "$obj_file: no filter_fid info"
+		[ -z "$ff" ] && error "$obj_file: no filter_fid info"
 
-                echo "$ff" | sed -e 's#.*objid=#got: objid=#'
+		echo "$ff" | sed -e 's#.*objid=#got: objid=#'
 
-                # /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
-                # fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1
-                local ff_parent=$(echo $ff|sed -e 's/.*parent=.//')
-                local ff_pseq=$(echo $ff_parent | cut -d: -f1)
-                local ff_poid=$(echo $ff_parent | cut -d: -f2)
-                local ff_pstripe=$(echo $ff_parent | sed -e 's/.*stripe=//')
+		# /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
+		# fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1
+		local ff_parent=$(echo $ff|sed -e 's/.*parent=.//')
+		local ff_pseq=$(echo $ff_parent | cut -d: -f1)
+		local ff_poid=$(echo $ff_parent | cut -d: -f2)
+		local ff_pstripe
+		if echo $ff_parent | grep -q 'stripe='; then
+			ff_pstripe=$(echo $ff_parent | sed -e 's/.*stripe=//')
+		else
+			#
+			# $LL_DECODE_FILTER_FID does not print "stripe="; look
+			# into f_ver in this case.  See the comment on
+			# ff_parent.
+			#
+			ff_pstripe=$(echo $ff_parent | cut -d: -f3 |
+				sed -e 's/\]//')
+		fi
 
                 # compare lmm_seq and filter_fid->ff_parent.f_seq
                 [ $ff_pseq = $lmm_seq ] ||
@@ -1771,7 +1775,7 @@ check_seq_oid()
                 # compare lmm_object_id and filter_fid->ff_parent.f_oid
                 [ $ff_poid = $lmm_oid ] ||
                         error "FF parent OID $ff_poid != $lmm_oid"
-                [ $ff_pstripe = $stripe_nr ] ||
+		(($ff_pstripe == $stripe_nr)) ||
                         error "FF stripe $ff_pstripe != $stripe_nr"
 
                 stripe_nr=$((stripe_nr + 1))

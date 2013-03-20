@@ -2994,6 +2994,84 @@ facet_mntpt () {
     echo -n $mntpt
 }
 
+mount_ldiskfs() {
+	local facet=$1
+	local dev=$(facet_device $facet)
+	local mnt=$(facet_mntpt $facet)
+	local opts
+
+	if ! do_facet $facet test -b $dev; then
+		opts="-o loop"
+	fi
+	do_facet $facet mount -t ldiskfs $opts $dev $mnt
+}
+
+unmount_ldiskfs() {
+	local facet=$1
+	local dev=$(facet_device $facet)
+	local mnt=$(facet_mntpt $facet)
+
+	do_facet $facet umount -d $mnt
+}
+
+var_name() {
+	echo -n "$1" | tr -c '[:alnum:]\n' '_'
+}
+
+mount_zfs() {
+	local facet=$1
+	local ds=$(facet_device $facet)
+	local mnt=$(facet_mntpt $facet)
+	local canmnt
+	local mntpt
+
+	import_zpool $facet
+	canmnt=$(do_facet $facet $ZFS get -H -o value canmount $ds)
+	mntpt=$(do_facet $facet $ZFS get -H -o value mountpoint $ds)
+	do_facet $facet $ZFS set canmount=noauto $ds
+	#
+	# The "legacy" mount method is used here because "zfs unmount $mnt"
+	# calls stat(2) on $mnt/../*, which may include $MOUNT.  If certain
+	# targets are not available at the time, the stat(2) on $MOUNT will
+	# hang.
+	#
+	do_facet $facet $ZFS set mountpoint=legacy $ds
+	do_facet $facet mount -t zfs $ds $mnt
+	eval export mz_$(var_name ${facet}_$ds)_canmount=$canmnt
+	eval export mz_$(var_name ${facet}_$ds)_mountpoint=$mntpt
+}
+
+unmount_zfs() {
+	local facet=$1
+	local ds=$(facet_device $facet)
+	local mnt=$(facet_mntpt $facet)
+	local var_mntpt=mz_$(var_name ${facet}_$ds)_mountpoint
+	local var_canmnt=mz_$(var_name ${facet}_$ds)_canmount
+	local mntpt=${!var_mntpt}
+	local canmnt=${!var_canmnt}
+
+	unset $var_mntpt
+	unset $var_canmnt
+	do_facet $facet umount $mnt
+	do_facet $facet $ZFS set mountpoint=$mntpt $ds
+	do_facet $facet $ZFS set canmount=$canmnt $ds
+	export_zpool $facet
+}
+
+mount_fstype() {
+	local facet=$1
+	local fstype=$(facet_fstype $facet)
+
+	mount_$fstype $facet
+}
+
+unmount_fstype() {
+	local facet=$1
+	local fstype=$(facet_fstype $facet)
+
+	unmount_$fstype $facet
+}
+
 ########
 ## MountConf setup
 
