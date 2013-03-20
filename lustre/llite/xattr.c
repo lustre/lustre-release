@@ -345,7 +345,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 if (!acl)
                         RETURN(-ENODATA);
 
-                rc = posix_acl_to_xattr(acl, buffer, size);
+                rc = posix_acl_to_xattr(&init_user_ns, acl, buffer, size);
                 posix_acl_release(acl);
                 RETURN(rc);
         }

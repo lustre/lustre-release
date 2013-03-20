@@ -171,11 +171,13 @@ struct posix_acl {
 };
 
 struct posix_acl *posix_acl_alloc(int count, int flags);
-static inline struct posix_acl *posix_acl_from_xattr(const void *value, 
+static inline struct posix_acl *posix_acl_from_xattr(const void *value,
                                                      size_t size)
-{ 
+{
         return posix_acl_alloc(0, 0);
 }
+#define posix_acl_from_xattr(a,b,c) posix_acl_from_xattr(b,c)
+
 static inline void posix_acl_release(struct posix_acl *acl) {};
 static inline int posix_acl_valid(const struct posix_acl *acl) { return 0; }
 static inline struct posix_acl * posix_acl_dup(struct posix_acl *acl) 

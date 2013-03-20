@@ -41,6 +41,7 @@
 # include <linux/pagemap.h>
 # include <linux/miscdevice.h>
 # include <linux/init.h>
+# include <linux/utsname.h>
 #else
 # include <liblustre.h>
 #endif
@@ -470,7 +471,7 @@ static int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
         if (!buf)
                 RETURN(-EPROTO);
 
-        acl = posix_acl_from_xattr(buf, body->aclsize);
+        acl = posix_acl_from_xattr(&init_user_ns, buf, body->aclsize);
         if (IS_ERR(acl)) {
                 rc = PTR_ERR(acl);
                 CERROR("convert xattr to acl: %d\n", rc);

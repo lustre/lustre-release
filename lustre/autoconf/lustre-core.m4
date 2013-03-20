@@ -2233,6 +2233,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.7 posix_acl_{to,from}_xattr take struct user_namespace
+#
+AC_DEFUN([LC_HAVE_POSIXACL_USER_NS],
+[AC_MSG_CHECKING([if posix_acl_to_xattr takes struct user_namespace])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include <linux/posix_acl_xattr.h>
+],[
+	posix_acl_to_xattr((struct user_namespace *)NULL, NULL, NULL, 0);
+],[
+	AC_DEFINE(HAVE_POSIXACL_USER_NS, 1,
+		  [posix_acl_to_xattr takes struct user_namespace])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2414,6 +2433,8 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_DENTRY_OPEN_USE_PATH
 	 LC_HAVE_IOP_ATOMIC_OPEN
 
+	 # 3.7
+ 	 LC_HAVE_POSIXACL_USER_NS
 	 #
 	 if test x$enable_server = xyes ; then
 		AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])

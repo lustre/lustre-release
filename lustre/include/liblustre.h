@@ -458,6 +458,10 @@ struct posix_acl * posix_acl_from_xattr(const void *value, size_t size)
         return NULL;
 }
 
+/* The kernel version takes 3 arguments, so strip that off first. */
+#define posix_acl_from_xattr(a,b,c)	posix_acl_from_xattr(b,c)
+#define posix_acl_to_xattr(a,b,c)	posix_acl_to_xattr(b,c)
+
 static inline
 int posix_acl_valid(const struct posix_acl *acl)
 {
