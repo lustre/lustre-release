@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
+﻿<?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
   <title xml:id="lustremaintenance.title">Lustre Maintenance</title>
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
@@ -370,8 +370,8 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
             <orderedlist>
               <listitem>
                 <para>List all OSCs on the node, along with their device numbers. Run:</para>
-                <screen>lctl dl|grep osc</screen>
-                <para>This is sample <literal>lctl dl | grep</literal></para>
+                <screen>lctl dl | grep osc</screen>
+                <para>For example: <literal>lctl dl | grep</literal></para>
                 <screen>11 UP osc lustre-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
 12 UP osc lustre-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
 13 IN osc lustre-OST-0000-osc lustre-MDT0000-mdtlov_UUID 5
