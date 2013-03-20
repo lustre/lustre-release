@@ -585,7 +585,7 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
               <para>file_count - number of files per thread to test</para>
             </listitem>
             <listitem>
-              <para>dir_count - total number of directories to test. Must be less than thrhi</para>
+              <para>dir_count - total number of directories to test. Must be less than or equal to <literal>thrhi</literal></para>
             </listitem>
             <listitem>
               <para>stripe_count - number stripe on OST objects</para>
