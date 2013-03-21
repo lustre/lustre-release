@@ -1,7 +1,6 @@
 /*
  * Copyright (C) 2012 Cray, Inc.
  *
- *   Author: Igor Gorodetsky <iogordet@cray.com>
  *   Author: Nic Henke <nic@cray.com>
  *   Author: James Shimek <jshimek@cray.com>
  *
@@ -263,6 +262,7 @@ kgnilnd_unmap_fmablk(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 	/* PHYS blocks don't get mapped */
 	if (fma_blk->gnm_state != GNILND_FMABLK_PHYS) {
 		atomic64_sub(fma_blk->gnm_blk_size, &dev->gnd_nbytes_map);
+		fma_blk->gnm_state = GNILND_FMABLK_IDLE;
 	} else if (kgnilnd_data.kgn_in_reset) {
 		/* in stack reset, clear MDD handle for PHYS blocks, as we'll
 		 * re-use the fma_blk after reset so we don't have to drop/allocate
@@ -388,6 +388,8 @@ kgnilnd_find_free_mbox(kgn_conn_t *conn)
 
 		mbox = &fma_blk->gnm_mbox_info[id];
 		mbox->mbx_create_conn_memset = jiffies;
+		mbox->mbx_nallocs++;
+		mbox->mbx_nallocs_total++;
 
 		/* zero mbox to remove any old data from our last use.
 		 * this better be safe, if not our purgatory timers
@@ -508,6 +510,7 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 			"conn %p bit %d already cleared in fma_blk %p\n",
 			 conn, id, fma_blk);
 		conn->gnc_fma_blk = NULL;
+		mbox->mbx_nallocs--;
 	}
 
 	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_FMABLK_AVAIL)) {
@@ -923,7 +926,7 @@ kgnilnd_alloc_dgram(kgn_dgram_t **dgramp, kgn_device_t *dev, kgn_dgram_type_t ty
 	kgn_dgram_t         *dgram;
 
 	dgram = cfs_mem_cache_alloc(kgnilnd_data.kgn_dgram_cache,
-				    CFS_ALLOC_ATOMIC);
+					CFS_ALLOC_ATOMIC);
 	if (dgram == NULL)
 		return -ENOMEM;
 
@@ -1326,9 +1329,11 @@ kgnilnd_release_dgram(kgn_device_t *dev, kgn_dgram_t *dgram)
 			int     rerc;
 
 			rerc = kgnilnd_post_dgram(dev, LNET_NID_ANY, GNILND_CONNREQ_REQ, 0);
-			LASSERTF(rerc == 0,
-				"error %d: dev %d could not repost wildcard datagram id 0x%p\n",
-				rerc, dev->gnd_id, dgram);
+			if (rerc != 0) {
+				/* We failed to repost the WC dgram for some reason
+				 * mark it so the repost system attempts to repost */
+				kgnilnd_admin_addref(dev->gnd_nwcdgrams);
+			}
 		}
 
 		/* always free the old dgram */
@@ -1740,6 +1745,12 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 		}
 	}
 
+	if (peer->gnp_down == GNILND_RCA_NODE_DOWN) {
+		CNETERR("Received connection request from %s that RCA thinks is"
+			" down.\n", libcfs_nid2str(her_nid));
+		peer->gnp_down = GNILND_RCA_NODE_UP;
+	}
+
 	nstale = kgnilnd_close_stale_conns_locked(peer, conn);
 
 	/* either way with peer (new or existing), we are ok with ref counts here as the
@@ -1760,6 +1771,9 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	 */
 	conn->gnc_last_tx = jiffies - (cfs_time_seconds(GNILND_TO2KA(conn->gnc_timeout)) * 2);
 	conn->gnc_state = GNILND_CONN_ESTABLISHED;
+
+	/* save the dgram type used to establish this connection */
+	conn->gnc_dgram_type = dgram->gndg_type;
 
 	/* refs are not transferred from dgram to tables, so increment to
 	 * take ownership */
@@ -1837,10 +1851,6 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	 * This is a Cray extension to the "standard" LND behavior. */
 	lnet_notify(peer->gnp_net->gnn_ni, peer->gnp_nid,
 		     1, cfs_time_current());
-
-	/* schedule the conn to pick up any SMSG sent by peer before we could
-	 * process this dgram */
-	kgnilnd_schedule_conn(conn);
 
 	/* drop our 'hold' ref */
 	kgnilnd_conn_decref(conn);
@@ -2203,7 +2213,7 @@ kgnilnd_dgram_waitq(void *arg)
 }
 
 int
-kgnilnd_start_outbound_dgrams(kgn_device_t *dev)
+kgnilnd_start_outbound_dgrams(kgn_device_t *dev, unsigned long deadline)
 {
 	int                      did_something = 0, rc;
 	kgn_peer_t              *peer = NULL;
@@ -2211,7 +2221,7 @@ kgnilnd_start_outbound_dgrams(kgn_device_t *dev)
 	spin_lock(&dev->gnd_connd_lock);
 
 	/* Active connect - we added this in kgnilnd_launch_tx */
-	while (!list_empty(&dev->gnd_connd_peers)) {
+	while (!list_empty(&dev->gnd_connd_peers) && time_before(jiffies, deadline)) {
 		peer = list_first_entry(&dev->gnd_connd_peers,
 					kgn_peer_t, gnp_connd_list);
 
@@ -2298,6 +2308,29 @@ kgnilnd_start_outbound_dgrams(kgn_device_t *dev)
 	RETURN(did_something);
 }
 
+int
+kgnilnd_repost_wc_dgrams(kgn_device_t *dev)
+{
+	int did_something = 0, to_repost, i;
+	to_repost = atomic_read(&dev->gnd_nwcdgrams);
+	ENTRY;
+
+	for (i = 0; i < to_repost; ++i) {
+		int	rerc;
+		rerc = kgnilnd_post_dgram(dev, LNET_NID_ANY, GNILND_CONNREQ_REQ, 0);
+		if (rerc == 0) {
+			kgnilnd_admin_decref(dev->gnd_nwcdgrams);
+			did_something += 1;
+		} else {
+			CDEBUG(D_NETERROR, "error %d: dev %d could not post wildcard datagram\n",
+				rerc, dev->gnd_id);
+			break;
+		}
+	}
+
+	RETURN(did_something);
+}
+
 static void
 kgnilnd_dgram_poke_with_stick(unsigned long arg)
 {
@@ -2317,6 +2350,7 @@ kgnilnd_dgram_mover(void *arg)
 	unsigned long            next_purge_check = jiffies - 1;
 	unsigned long            timeout;
 	struct timer_list        timer;
+	unsigned long		 deadline = 0;
 	DEFINE_WAIT(wait);
 
 	snprintf(name, sizeof(name), "kgnilnd_dg_%02d", dev->gnd_id);
@@ -2328,7 +2362,7 @@ kgnilnd_dgram_mover(void *arg)
 	/* we are ok not locking for these variables as the dgram waitq threads
 	 * will block both due to tying up net (kgn_shutdown) and the completion
 	 * event for the dgram_waitq (kgn_quiesce_trigger) */
-
+	deadline = jiffies + cfs_time_seconds(*kgnilnd_tunables.kgn_dgram_timeout);
 	while (!kgnilnd_data.kgn_shutdown) {
 		/* Safe: kgn_shutdown only set when quiescent */
 
@@ -2356,8 +2390,10 @@ kgnilnd_dgram_mover(void *arg)
 
 		up_read(&kgnilnd_data.kgn_net_rw_sem);
 
+		CFS_FAIL_TIMEOUT(CFS_FAIL_GNI_DGRAM_DEADLINE,
+			(*kgnilnd_tunables.kgn_dgram_timeout + 1));
 		/* start new outbound dgrams */
-		did_something += kgnilnd_start_outbound_dgrams(dev);
+		did_something += kgnilnd_start_outbound_dgrams(dev, deadline);
 
 		/* find dead dgrams */
 		if (time_after_eq(jiffies, next_purge_check)) {
@@ -2368,13 +2404,15 @@ kgnilnd_dgram_mover(void *arg)
 				      cfs_time_seconds(kgnilnd_data.kgn_new_min_timeout / 4);
 		}
 
+		did_something += kgnilnd_repost_wc_dgrams(dev);
+
 		/* careful with the jiffy wrap... */
 		timeout = (long)(next_purge_check - jiffies);
 
 		CDEBUG(D_INFO, "did %d timeout %lu next %lu jiffies %lu\n",
 		       did_something, timeout, next_purge_check, jiffies);
 
-		if (did_something || timeout <= 0) {
+		if ((did_something || timeout <= 0) && time_before(jiffies, deadline)) {
 			did_something = 0;
 			continue;
 		}
@@ -2387,8 +2425,9 @@ kgnilnd_dgram_mover(void *arg)
 		/* last second chance for others to poke us */
 		did_something += xchg(&dev->gnd_dgram_ready, GNILND_DGRAM_IDLE);
 
-		/* check flag variables before comitting */
-		if (!did_something &&
+		/* check flag variables before comittingi even if we did something;
+		 * if we are after the deadline call schedule */
+		if ((!did_something || time_after(jiffies, deadline)) &&
 		    !kgnilnd_data.kgn_shutdown &&
 		    !kgnilnd_data.kgn_quiesce_trigger) {
 			CDEBUG(D_INFO, "schedule timeout %ld (%lu sec)\n",
@@ -2396,6 +2435,7 @@ kgnilnd_dgram_mover(void *arg)
 			wake_up_all(&dev->gnd_dgping_waitq);
 			schedule();
 			CDEBUG(D_INFO, "awake after schedule\n");
+			deadline = jiffies + cfs_time_seconds(*kgnilnd_tunables.kgn_dgram_timeout);
 		}
 
 		del_singleshot_timer_sync(&timer);

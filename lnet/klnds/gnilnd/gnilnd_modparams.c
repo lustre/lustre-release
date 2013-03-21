@@ -66,11 +66,7 @@ static int max_immediate = (2<<10);
 CFS_MODULE_PARM(max_immediate, "i", int, 0644,
 		"immediate/RDMA breakpoint");
 
-#ifdef CONFIG_CRAY_GEMINI
-static int checksum = GNILND_CHECKSUM_SMSG_BTE;
-#else
-static int checksum = 0;
-#endif
+static int checksum = GNILND_CHECKSUM_DEFAULT;
 CFS_MODULE_PARM(checksum, "i", int, 0644,
 		"0: None, 1: headers, 2: short msg, 3: all traffic");
 
@@ -78,13 +74,9 @@ static int checksum_dump = 0;
 CFS_MODULE_PARM(checksum_dump, "i", int, 0644,
 		"0: None, 1: dump log on failure, 2: payload data to D_INFO log");
 
-static int bte_hash = 1;
-CFS_MODULE_PARM(bte_hash, "i", int, 0644,
+static int bte_dlvr_mode = GNILND_RDMA_DLVR_OPTION;
+CFS_MODULE_PARM(bte_dlvr_mode, "i", int, 0644,
 		"enable hashing for BTE (RDMA) transfers");
-
-static int bte_adapt = 1;
-CFS_MODULE_PARM(bte_adapt, "i", int, 0644,
-		"enable adaptive request and response for BTE (RDMA) transfers");
 
 static int bte_relaxed_ordering = 1;
 CFS_MODULE_PARM(bte_relaxed_ordering, "i", int, 0644,
@@ -95,7 +87,7 @@ CFS_MODULE_PARM(ptag, "i", int, 0444,
 		"ptag for Gemini CDM");
 
 static int max_retransmits = 1024;
-CFS_MODULE_PARM(max_retransmits, "i", int, 0644,
+CFS_MODULE_PARM(max_retransmits, "i", int, 0444,
 		"max retransmits for FMA");
 
 static int nwildcard = 4;
@@ -121,6 +113,10 @@ CFS_MODULE_PARM(hash_size, "i", int, 0444,
 static int peer_health = 0;
 CFS_MODULE_PARM(peer_health, "i", int, 0444,
 		"Disable peer timeout for LNet peer health, default off, > 0 to enable");
+
+static int peer_timeout = -1;
+CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
+		"Peer timeout used for peer_health, default based on gnilnd timeout, > -1 to manually set");
 
 static int vmap_cksum = 0;
 CFS_MODULE_PARM(vmap_cksum, "i", int, 0644,
@@ -154,6 +150,22 @@ static int mdd_timeout = GNILND_MDD_TIMEOUT;
 CFS_MODULE_PARM(mdd_timeout, "i", int, 0644,
 		"maximum time (in minutes) for mdd to be held");
 
+static int sched_timeout = GNILND_SCHED_TIMEOUT;
+CFS_MODULE_PARM(sched_timeout, "i", int, 0644,
+		"scheduler aliveness in seconds max time");
+
+static int sched_nice = GNILND_SCHED_NICE;
+CFS_MODULE_PARM(sched_nice, "i", int, 0444,
+		"scheduler's nice setting, default compute 0 service -20");
+
+static int reverse_rdma = GNILND_REVERSE_RDMA;
+CFS_MODULE_PARM(reverse_rdma, "i", int, 0644,
+		"Normal 0: Reverse GET: 1 Reverse Put: 2 Reverse Both: 3");
+
+static int dgram_timeout = GNILND_DGRAM_TIMEOUT;
+CFS_MODULE_PARM(dgram_timeout, "i", int, 0644,
+		"dgram thread aliveness seconds max time");
+
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
 	.kgn_max_reconnect_interval = &max_reconnect_interval,
@@ -165,8 +177,7 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_max_immediate          = &max_immediate,
 	.kgn_checksum               = &checksum,
 	.kgn_checksum_dump          = &checksum_dump,
-	.kgn_bte_hash               = &bte_hash,
-	.kgn_bte_adapt              = &bte_adapt,
+	.kgn_bte_dlvr_mode          = &bte_dlvr_mode,
 	.kgn_bte_relaxed_ordering   = &bte_relaxed_ordering,
 	.kgn_ptag                   = &ptag,
 	.kgn_max_retransmits        = &max_retransmits,
@@ -176,6 +187,7 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_loops                  = &loops,
 	.kgn_peer_hash_size         = &hash_size,
 	.kgn_peer_health            = &peer_health,
+	.kgn_peer_timeout           = &peer_timeout,
 	.kgn_vmap_cksum             = &vmap_cksum,
 	.kgn_mbox_per_block         = &mbox_per_block,
 	.kgn_nphys_mbox             = &nphys_mbox,
@@ -183,7 +195,11 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_sched_threads          = &sched_threads,
 	.kgn_net_hash_size          = &net_hash_size,
 	.kgn_hardware_timeout       = &hardware_timeout,
-	.kgn_mdd_timeout            = &mdd_timeout
+	.kgn_mdd_timeout            = &mdd_timeout,
+	.kgn_sched_timeout	    = &sched_timeout,
+	.kgn_sched_nice		    = &sched_nice,
+	.kgn_reverse_rdma           = &reverse_rdma,
+	.kgn_dgram_timeout          = &dgram_timeout
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -254,16 +270,8 @@ static cfs_sysctl_table_t kgnilnd_ctl_table[] = {
 	},
 	{
 		INIT_CTL_NAME(11)
-		.procname = "bte_hash",
-		.data     = &bte_hash,
-		.maxlen   = sizeof(int),
-		.mode     = 0644,
-		.proc_handler = &proc_dointvec
-	},
-	{
-		INIT_CTL_NAME(12)
-		.procname = "bte_adapt",
-		.data     = &bte_adapt,
+		.procname = "bte_dlvr_mode",
+		.data     = &bte_dlvr_mode,
 		.maxlen   = sizeof(int),
 		.mode     = 0644,
 		.proc_handler = &proc_dointvec
@@ -416,6 +424,45 @@ static cfs_sysctl_table_t kgnilnd_ctl_table[] = {
 		INIT_CTL_NAME(31)
 		.procname = "nphys_mbox",
 		.data     = &nphys_mbox,
+		.maxlen   = sizeof(int),
+		.mode     = 0444,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME(32)
+		.procname = "sched_timeout",
+		.data	  = &sched_timeout,
+		.maxlen   = sizeof(int),
+		.mode	  = 0644,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME(33)
+		.procname = "sched_nice",
+		.data	  = &sched_nice,
+		.maxlen	  = sizeof(int),
+		.mode	  = 0444,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME(34)
+		.procname = "reverse_rdma",
+		.data     = &reverse_rdma,
+		.maxlen   = sizeof(int),
+		.mode     = 0644,
+		.proc_handler = &proc_dointvec
+	},
+		INIT_CTL_NAME(35)
+		.procname = "dgram_timeout"
+		.data     = &dgram_timeout,
+		.maxlen   = sizeof(int),
+		.mode     = 0644,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME(36)
+		.procname = "peer_timeout"
+		.data     = &peer_timeout,
 		.maxlen   = sizeof(int),
 		.mode     = 0444,
 		.proc_handler = &proc_dointvec

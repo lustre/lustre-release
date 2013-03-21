@@ -26,10 +26,12 @@
 
 #include "gnilnd.h"
 
+#define GNILND_RCA_INJ_STRLEN 16
 typedef struct kgn_sysctl_data {
 	int                     ksd_pause_trigger;
 	int                     ksd_quiesce_secs;
 	int                     ksd_rdmaq_override;
+	char                    ksd_rca_inject[GNILND_RCA_INJ_STRLEN];
 } kgn_sysctl_data_t;
 
 static kgn_sysctl_data_t        kgnilnd_sysctl;
@@ -45,6 +47,7 @@ enum {
 	GNILND_HW_QUIESCE,
 	GNILND_STACK_RESET,
 	GNILND_RDMAQ_OVERRIDE,
+	GNILND_RCA_INJECT,
 };
 #else
 #define GNILND_VERSION             CTL_UNNUMBERED
@@ -52,6 +55,7 @@ enum {
 #define GNILND_HW_QUIESCE          CTL_UNNUMBERED
 #define GNILND_STACK_RESET         CTL_UNNUMBERED
 #define GNILND_RDMAQ_OVERRIDE      CTL_UNNUMBERED
+#define GNILND_RCA_INJECT          CTL_UNNUMBERED
 #endif
 
 static int LL_PROC_PROTO(proc_toggle_thread_pause)
@@ -172,6 +176,63 @@ static int LL_PROC_PROTO(proc_toggle_rdmaq_override)
 	RETURN(rc);
 }
 
+/* /proc/sys entry point for injecting up/down nid event
+ * <up|down> <nid>
+ */
+static int LL_PROC_PROTO(proc_rca_inject)
+{
+	int             rc;
+	int             nid;
+	int             node_down;
+	char            command[10];
+	ENTRY;
+
+	rc = ll_proc_dostring(table, write, filp, buffer, lenp, ppos);
+
+	if (!write) {
+		/* read */
+		RETURN(rc);
+	}
+
+	if (kgnilnd_data.kgn_init != GNILND_INIT_ALL) {
+		rc = -EINVAL;
+		RETURN(rc);
+	}
+
+	/* convert to nid, up/down values */
+	rc = sscanf(kgnilnd_sysctl.ksd_rca_inject, "%s %d", command, &nid);
+	CDEBUG(D_INFO, "command %s, nid %d\n", command, nid);
+
+	if (rc != 2) {
+		CDEBUG(D_ERROR, "invalid parameter\n");
+		RETURN(rc);
+	} else {
+		switch (command[0]) {
+		case 'd': /* down */
+			node_down = 1;
+			CDEBUG(D_INFO, "take node %d down\n", nid);
+			break;
+		case 'u': /* up */
+			node_down = 0;
+			CDEBUG(D_INFO, "bring node %d up\n", nid);
+			break;
+		default:
+			CDEBUG(D_ERROR, "invalid command %s\n", command);
+			RETURN(-EINVAL);
+		}
+	}
+
+	CDEBUG(D_INFO, "proc_rca_inject: reporting node_down %d, nid %d\n",
+		      node_down, nid);
+	rc = kgnilnd_report_node_state(nid, node_down);
+
+	if (rc) {
+		rc = -EINVAL;
+	}
+
+	RETURN(rc);
+}
+
 static cfs_sysctl_table_t kgnilnd_table[] = {
 	/*
 	 * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -216,6 +277,14 @@ static cfs_sysctl_table_t kgnilnd_table[] = {
 		.maxlen   = sizeof(int),
 		.mode     = 0644,
 		.proc_handler = &proc_toggle_rdmaq_override,
+	},
+	{
+		INIT_CTL_NAME(GNILND_RCA_INJECT)
+		.procname = "rca_inject",
+		.data     = kgnilnd_sysctl.ksd_rca_inject,
+		.maxlen   = GNILND_RCA_INJ_STRLEN,
+		.mode     = 0644,
+		.proc_handler = &proc_rca_inject,
 	},
 	{       INIT_CTL_NAME(0)   }
 };

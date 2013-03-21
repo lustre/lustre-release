@@ -29,6 +29,7 @@
 #define GNILND_PROC_MDD         "mdd"
 #define GNILND_PROC_SMSG        "smsg"
 #define GNILND_PROC_CONN        "conn"
+#define GNILND_PROC_PEER_CONNS  "peer_conns"
 #define GNILND_PROC_PEER        "peer"
 #define GNILND_PROC_CKSUM_TEST  "cksum_test"
 
@@ -236,7 +237,10 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 			   "RDMA rx_bytes: %ld\n"
 			   "VMAP short: %d\n"
 			   "VMAP cksum: %d\n"
-			   "KMAP short: %d\n",
+			   "KMAP short: %d\n"
+			   "RDMA REV length: %d\n"
+			   "RDMA REV offset: %d\n"
+			   "RDMA REV copy: %d\n",
 		now.tv_sec, now.tv_usec,
 		atomic_read(&kgnilnd_data.kgn_ntx),
 		atomic_read(&kgnilnd_data.kgn_npeers),
@@ -262,7 +266,10 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 		atomic_read(&dev->gnd_rdma_nrx), atomic64_read(&dev->gnd_rdma_rxbytes),
 		atomic_read(&kgnilnd_data.kgn_nvmap_short),
 		atomic_read(&kgnilnd_data.kgn_nvmap_cksum),
-		atomic_read(&kgnilnd_data.kgn_nkmap_short));
+		atomic_read(&kgnilnd_data.kgn_nkmap_short),
+		atomic_read(&kgnilnd_data.kgn_rev_length),
+		atomic_read(&kgnilnd_data.kgn_rev_offset),
+		atomic_read(&kgnilnd_data.kgn_rev_copy_buff));
 
 	return rc;
 }
@@ -899,6 +906,123 @@ static struct seq_operations kgn_conn_sops = {
 
 };
 
+#define KGN_DEBUG_PEER_NID_DEFAULT -1
+static int kgnilnd_debug_peer_nid = KGN_DEBUG_PEER_NID_DEFAULT;
+
+static int
+kgnilnd_proc_peer_conns_write(struct file *file, const char *ubuffer,
+			      unsigned long count, void *data)
+{
+	char dummy[8];
+	int  rc;
+
+	if (count >= sizeof(dummy) || count == 0)
+		return -EINVAL;
+
+	if (copy_from_user(dummy, ubuffer, count))
+		return -EFAULT;
+
+	rc = sscanf(dummy, "%d", &kgnilnd_debug_peer_nid);
+
+	if (rc != 1) {
+		return -EINVAL;
+	}
+
+	RETURN(count);
+}
+
+/* debug data to print from conns associated with peer nid
+  -  date/time
+  -  peer nid
+  -  mbox_addr (msg_buffer + mbox_offset)
+  -  gnc_dgram_type
+  -  gnc_in_purgatory
+  -  gnc_state
+  -  gnc_error
+  -  gnc_peer_error
+  -  gnc_tx_seq
+  -  gnc_last_tx
+  -  gnc_last_tx_cq
+  -  gnc_rx_seq
+  -  gnc_first_rx
+  -  gnc_last_rx
+  -  gnc_last_rx_cq
+  -  gnc_tx_retrans
+  -  gnc_close_sent
+  -  gnc_close_recvd
+*/
+
+static int
+kgnilnd_proc_peer_conns_read(char *page, char **start, off_t off,
+			     int count, int *eof, void *data)
+{
+	kgn_peer_t      *peer;
+	kgn_conn_t      *conn;
+	struct tm       ctm;
+	struct timespec now;
+	unsigned long   jifs;
+	int             len = 0;
+	int             rc;
+
+	if (kgnilnd_debug_peer_nid == KGN_DEBUG_PEER_NID_DEFAULT) {
+		rc = sprintf(page, "peer_conns not initialized\n");
+		return rc;
+	}
+
+	/* sample date/time stamp - print time in UTC
+	 * 2012-12-11T16:06:16.966751 123@gni ...
+	 */
+	getnstimeofday(&now);
+	time_to_tm(now.tv_sec, 0, &ctm);
+	jifs = jiffies;
+
+	write_lock(&kgnilnd_data.kgn_peer_conn_lock);
+	peer = kgnilnd_find_peer_locked(kgnilnd_debug_peer_nid);
+
+	if (peer == NULL) {
+		rc = sprintf(page, "peer not found for this nid %d\n",
+			     kgnilnd_debug_peer_nid);
+		write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
+		return rc;
+	}
+
+	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
+		len += scnprintf(page, count - len,
+			"%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s "
+			"mbox adr %p "
+			"dg type %s "
+			"%s "
+			"purg %d "
+			"close s/r %d/%d "
+			"err %d peer err %d "
+			"tx sq %u %dms/%dms "
+			"rx sq %u %dms/%dms/%dms "
+			"tx retran %lld\n",
+			ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday,
+			ctm.tm_hour, ctm.tm_min, ctm.tm_sec, now.tv_nsec,
+			libcfs_nid2str(peer->gnp_nid),
+			conn->remote_mbox_addr,
+			kgnilnd_conn_dgram_type2str(conn->gnc_dgram_type),
+			kgnilnd_conn_state2str(conn),
+			conn->gnc_in_purgatory,
+			conn->gnc_close_sent,
+			conn->gnc_close_recvd,
+			conn->gnc_error,
+			conn->gnc_peer_error,
+			conn->gnc_tx_seq,
+			jiffies_to_msecs(jifs - conn->gnc_last_tx),
+			jiffies_to_msecs(jifs - conn->gnc_last_tx_cq),
+			conn->gnc_rx_seq,
+			jiffies_to_msecs(jifs - conn->gnc_first_rx),
+			jiffies_to_msecs(jifs - conn->gnc_last_rx),
+			jiffies_to_msecs(jifs - conn->gnc_last_rx_cq),
+			conn->gnc_tx_retrans);
+	}
+
+	write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
+	return len;
+}
+
 static int
 kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
 {
@@ -1092,11 +1216,12 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	seq_printf(s, "%p->%s [%d] NIC 0x%x q %d conn %c purg %d "
+	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d "
 		"last %d@%dms dgram %d@%dms "
 		"reconn %dms to %lus \n",
 		peer, libcfs_nid2str(peer->gnp_nid),
 		atomic_read(&peer->gnp_refcount),
+		(peer->gnp_down == GNILND_RCA_NODE_DOWN) ? "down" : "up",
 		peer->gnp_host_id,
 		kgnilnd_count_list(&peer->gnp_tx_queue),
 		conn_str,
@@ -1219,18 +1344,32 @@ kgnilnd_proc_init(void)
 	pde->data = NULL;
 	pde->proc_fops = &kgn_conn_fops;
 
+	/* Initialize peer conns debug */
+	pde = create_proc_entry(GNILND_PROC_PEER_CONNS, 0644, kgn_proc_root);
+	if (pde == NULL) {
+		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER_CONNS);
+		rc = -ENOENT;
+		GOTO(remove_conn, rc);
+	}
+
+	pde->data = NULL;
+	pde->read_proc = kgnilnd_proc_peer_conns_read;
+	pde->write_proc = kgnilnd_proc_peer_conns_write;
+
 	/* Initialize PEER */
 	pde = create_proc_entry(GNILND_PROC_PEER, 0444, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER);
 		rc = -ENOENT;
-		GOTO(remove_conn, rc);
+		GOTO(remove_pc, rc);
 	}
 
 	pde->data = NULL;
 	pde->proc_fops = &kgn_peer_fops;
 	RETURN_EXIT;
 
+remove_pc:
+	remove_proc_entry(GNILND_PROC_PEER_CONNS, kgn_proc_root);
 remove_conn:
 	remove_proc_entry(GNILND_PROC_CONN, kgn_proc_root);
 remove_smsg:
@@ -1250,6 +1389,7 @@ remove_dir:
 void
 kgnilnd_proc_fini(void)
 {
+	remove_proc_entry(GNILND_PROC_PEER_CONNS, kgn_proc_root);
 	remove_proc_entry(GNILND_PROC_PEER, kgn_proc_root);
 	remove_proc_entry(GNILND_PROC_CONN, kgn_proc_root);
 	remove_proc_entry(GNILND_PROC_MDD, kgn_proc_root);
