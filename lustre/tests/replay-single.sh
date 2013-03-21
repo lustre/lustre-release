@@ -2747,7 +2747,7 @@ test_90() { # bug 19494
     # Before failing an OST, get its obd name and index
     local varsvc=${ostfail}_svc
     local obd=$(do_facet $ostfail lctl get_param -n obdfilter.${!varsvc}.uuid)
-    local index=${obd:(-6):1}
+	local index=$(($(facet_number $ostfail) - 1))
 
     echo "Fail $ostfail $obd, display the list of affected files"
     shutdown_facet $ostfail || return 2
