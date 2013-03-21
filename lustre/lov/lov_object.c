@@ -78,6 +78,8 @@ struct lov_layout_operations {
                             struct cl_attr *attr);
 };
 
+static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov);
+
 /*****************************************************************************
  *
  * Lov object layout operations.
@@ -257,8 +259,8 @@ static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
 			    union lov_layout_state *state)
 {
 	LASSERT(lov->lo_type == LLT_EMPTY);
-	if (cfs_atomic_read(&lov->lo_active_ios) > 0)
-		RETURN(-EBUSY);
+
+	lov_layout_wait(env, lov);
 
 	cl_object_prune(env, &lov->lo_cl);
 	return 0;
@@ -321,9 +323,8 @@ static int lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
 	ENTRY;
 
 	dump_lsm(D_INODE, lsm);
-	if (cfs_atomic_read(&lov->lo_active_ios) > 0)
-		RETURN(-EBUSY);
 
+	lov_layout_wait(env, lov);
         if (r0->lo_sub != NULL) {
                 for (i = 0; i < r0->lo_nr; ++i) {
                         struct lovsub_object *los = r0->lo_sub[i];
@@ -579,19 +580,13 @@ static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
-	if (!lov->lo_layout_invalid)
-		RETURN(0);
-
 	while (cfs_atomic_read(&lov->lo_active_ios) > 0) {
-		lov_conf_unlock(lov);
-
 		CDEBUG(D_INODE, "file:"DFID" wait for active IO, now: %d.\n",
 			PFID(lu_object_fid(lov2lu(lov))),
 			cfs_atomic_read(&lov->lo_active_ios));
 
 		l_wait_event(lov->lo_waitq,
 			     cfs_atomic_read(&lov->lo_active_ios) == 0, &lwi);
-		lov_conf_lock(lov);
 	}
 	RETURN(0);
 }
@@ -702,7 +697,12 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	if (conf->coc_opc == OBJECT_CONF_WAIT) {
-		result = lov_layout_wait(env, lov);
+		if (lov->lo_layout_invalid &&
+		    cfs_atomic_read(&lov->lo_active_ios) > 0) {
+			lov_conf_unlock(lov);
+			result = lov_layout_wait(env, lov);
+			lov_conf_lock(lov);
+		}
 		GOTO(out, result);
 	}
 
@@ -719,7 +719,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	/* will change layout - check if there still exists active IO. */
-	if (cfs_atomic_read(&lov->lo_active_ios) > 1) {
+	if (cfs_atomic_read(&lov->lo_active_ios) > 0) {
 		lov->lo_layout_invalid = true;
 		GOTO(out, result = -EBUSY);
 	}
