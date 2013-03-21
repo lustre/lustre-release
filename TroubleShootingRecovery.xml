@@ -26,7 +26,7 @@
         <para>In such a situation, it is normally required that e2fsck only be run on the bad device before placing the device back into service.</para>
         <para>In the vast majority of cases, Lustre can cope with any inconsistencies it finds on the disk and between other devices in the file system.</para>
         <note>
-            <para>The offline <literal>lfsck</literal> tool included with e2fsprogs is rarely required for Lustre operation.</para>
+            <para>The offline LFSCK tool included with e2fsprogs is rarely required for Lustre operation.</para>
         </note>
         <para>For problem analysis, it is strongly recommended that <literal>e2fsck</literal> be run under a logger, like script, to record all of the output and changes that are made to the file system in case this information is needed later.</para>
         <para>If time permits, it is also a good idea to first run <literal>e2fsck</literal> in non-fixing mode (-n option) to assess the type and extent of damage to the file system. The drawback is that in this mode, <literal>e2fsck</literal> does not recover the file system journal, so there may appear to be file system corruption when none really exists.</para>
@@ -45,11 +45,11 @@ root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corrupt
 :
 root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)
         </screen>
-        <para>In addition, the <literal>e2fsprogs</literal> package contains the <literal>lfsck</literal> tool, which does distributed coherency checking for the Lustre file system after <literal>e2fsck</literal> has been run. Running <literal>lfsck</literal> is NOT required in a large majority of cases, at a small risk of having some leaked space in the file system. To avoid a lengthy downtime, it can be run (with care) after Lustre is started.</para>
+        <para>In addition, the <literal>e2fsprogs</literal> package contains the LFSCK tool, which does distributed coherency checking for the Lustre file system after <literal>e2fsck</literal> has been run. Running LFSCK is NOT required in a large majority of cases, at a small risk of having some leaked space in the file system. To avoid a lengthy downtime, it can be run (with care) after Lustre is started.</para>
     </section>
     <section xml:id="dbdoclet.50438225_37365">
         <title><indexterm><primary>recovery</primary><secondary>corruption of Lustre file system</secondary></indexterm>Recovering from Corruption in the Lustre File System</title>
-        <para>In cases where the MDS or an OST becomes corrupt, you can run a distributed check on the file system to determine what sort of problems exist. Use <literal>lfsck</literal> to correct any defects found.</para>
+        <para>In cases where the MDS or an OST becomes corrupt, you can run a distributed check on the file system to determine what sort of problems exist. Use LFSCK to correct any defects found.</para>
         <orderedlist>
             <listitem>
                 <para>Stop the Lustre file system.</para>
@@ -59,7 +59,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                 <para>We recommend running <literal>e2fsck</literal> under script, to create a log of changes made to the file system in case it is needed later. After <literal>e2fsck</literal> is run, bring up the file system, if necessary, to reduce the outage window.</para>
             </listitem>
             <listitem>
-                <para>Run a full <literal>e2fsck</literal> of the MDS to create a database for <literal>lfsck</literal>. You <emphasis>must</emphasis> use the <literal>-n</literal> option for a mounted file system, otherwise you will corrupt the file system.</para>
+                <para>Run a full <literal>e2fsck</literal> of the MDS to create a database for LFSCK. You <emphasis>must</emphasis> use the <literal>-n</literal> option for a mounted file system, otherwise you will corrupt the file system.</para>
                 <screen>e2fsck -n -v --mdsdb /tmp/mdsdb /dev/{mdsdev}
                 </screen>
                 <para>The <literal>mds</literal>db file can grow fairly large, depending on the number of files in the file system (10 GB or more for millions of files, though the actual file size is larger because the file is sparse). It is quicker to write the file to a local file system due to seeking and small writes. Depending on the number of files, this step can take several hours to complete.</para>
@@ -162,7 +162,7 @@ lustre-OST0000: ******* WARNING: Filesystem still has errors *******
                 </screen>
             </listitem>
             <listitem>
-                <para>Make the <literal>mdsdb</literal> file and all <literal>ostdb</literal> files available on a mounted client and run <literal>lfsck</literal> to examine the file system. Optionally, correct the defects found by <literal>lfsck</literal>.</para>
+                <para>Make the <literal>mdsdb</literal> file and all <literal>ostdb</literal> files available on a mounted client and run LFSKC to examine the file system. Optionally, correct the defects found by LFSCK.</para>
                 <screen>script /root/lfsck.lustre.log
                     lfsck -n -v --mdsdb /tmp/mdsdb --ostdb /tmp/{ost1db} /tmp/{ost2db} ... /lustre/mount/point\</screen>
                 <para><emphasis role="bold">Example:</emphasis></para>
@@ -184,7 +184,7 @@ lfsck: ost_idx 0: pass3 OK (321 files total)
 lfsck: pass4: check for duplicate object references
 lfsck: pass4 OK (no duplicates)
 lfsck: fixed 0 errors</screen>
-                <para>By default, <literal>lfsck</literal> reports errors, but it does not repair any inconsistencies found. <literal>lfsck</literal> checks for three kinds of inconsistencies:</para>
+                <para>By default, LFSCK reports errors, but it does not repair any inconsistencies found. LFSCK checks for three kinds of inconsistencies:</para>
                 <itemizedlist>
                     <listitem>
                         <para>Inode exists but has missing objects (dangling inode). This normally happens if there was a problem with an OST.</para>
@@ -196,19 +196,19 @@ lfsck: fixed 0 errors</screen>
                         <para>Multiple inodes reference the same objects. This can happen if the MDS is corrupted or if the MDS storage is cached and loses some, but not all, writes.</para>
                     </listitem>
                 </itemizedlist>
-                <para>If the file system is in use and being modified while the <literal>--mdsdb</literal> and <literal>--ostdb</literal> steps are running, <literal>lfsck</literal> may report inconsistencies where none exist due to files and objects being created/removed after the database files were collected. Examine the <literal>lfsck</literal> results closely. You may want to re-run the test.</para>
+                <para>If the file system is in use and being modified while the <literal>--mdsdb</literal> and <literal>--ostdb</literal> steps are running, LFSCK may report inconsistencies where none exist due to files and objects being created/removed after the database files were collected. Examine the LFSCK results closely. You may want to re-run the test.</para>
             </listitem>
         </orderedlist>
         <section xml:id="dbdoclet.50438225_13916">
             <title><indexterm><primary>recovery</primary><secondary>orphaned objects</secondary></indexterm>Working with Orphaned Objects</title>
-            <para>The easiest problem to resolve is that of orphaned objects. When the <literal>-l</literal> option for <literal>lfsck</literal> is used, these objects are linked to new files and put into <literal>lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary. If you are certain the objects are not useful, run <literal>lfsck</literal> with the <literal>-d</literal> option to delete orphaned objects and free up any space they are using.</para>
-            <para>To fix dangling inodes, use <literal>lfsck</literal> with the <literal>-c</literal> option to create new, zero-length objects on the OSTs. These files read back with binary zeros for stripes that had objects re-created. Even without <literal>lfsck</literal> repair, these files can be read by entering:</para>
+            <para>The easiest problem to resolve is that of orphaned objects. When the <literal>-l</literal> option for LFSCK is used, these objects are linked to new files and put into <literal>lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary. If you are certain the objects are not useful, run LFSCK with the <literal>-d</literal> option to delete orphaned objects and free up any space they are using.</para>
+            <para>To fix dangling inodes, use LFSCK with the <literal>-c</literal> option to create new, zero-length objects on the OSTs. These files read back with binary zeros for stripes that had objects re-created. Even without LFSCK repair, these files can be read by entering:</para>
             <screen>dd if=/lustre/bad/file of=/new/file bs=4k conv=sync,noerror</screen>
             <para>Because it is rarely useful to have files with large holes in them, most users delete these files after reading them (if useful) and/or restoring them from backup.</para>
             <note>
-                <para>You cannot write to the holes of such files without having <literal>lfsck</literal> re-create the objects. Generally, it is easier to delete these files and restore them from backup.</para>
+                <para>You cannot write to the holes of such files without having LFSCK re-create the objects. Generally, it is easier to delete these files and restore them from backup.</para>
             </note>
-            <para>To fix inodes with duplicate objects, use <literal>lfsck</literal> with the <literal>-c</literal> option to copy the duplicate object to a new object and assign it to a file. One file will be okay and the duplicate will likely contain garbage. By itself, <literal>lfsck</literal> cannot tell which file is the usable one.</para>
+            <para>To fix inodes with duplicate objects, use LFSCK with the <literal>-c</literal> option to copy the duplicate object to a new object and assign it to a file. One file will be okay and the duplicate will likely contain garbage. By itself, LFSCK cannot tell which file is the usable one.</para>
         </section>
     </section>
     <section xml:id="dbdoclet.50438225_12316">
@@ -220,12 +220,11 @@ lfsck: fixed 0 errors</screen>
             <para>The version-based recovery (VBR) feature enables a failed client to be &apos;&apos;skipped&apos;&apos;, so remaining clients can replay their requests, resulting in a more successful recovery from a downed OST. For more information about the VBR feature, see <xref linkend="lustrerecovery"/>(Version-based Recovery).</para>
         </note>
     </section>
-    <section xml:id="dbdoclet.lfsckadmin">
+    <section xml:id="dbdoclet.lfsckadmin" condition='l23'>
         <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the file system with LFSCK</title>
-        <para>LFSCK is an administrative tool introduced in Lustre 2.3 for checking and repair of the Lustre-specific attributes of a mounted Lustre filesystem.  It is similar in concept to the offline <literal>lfsck</literal> Lustre repair tool that is included with the Lustre <literal>e2fsprogs</literal> package (see <xref linkend='dbdoclet.50438225_37365'/>), but LFSCK is implemented to run as part of Lustre while the filesystem is mounted and in use.  This allows Lustre consistency checking and repair without unnecessary downtime, and can be run on the largest Lustre filesystems.</para>
+        <para>LFSCK is an administrative tool introduced in Lustre 2.3 for checking and repair of the Lustre-specific attributes of a mounted Lustre filesystem.  It is similar in concept to the offline LFSCK Lustre repair tool that is included with the Lustre <literal>e2fsprogs</literal> package (see <xref linkend='dbdoclet.50438225_37365'/>), but LFSCK is implemented to run as part of Lustre while the filesystem is mounted and in use.  This allows Lustre consistency checking and repair without unnecessary downtime, and can be run on the largest Lustre filesystems.</para>
         <para>In Lustre 2.3, LFSCK can verify and repair the Object Index (OI) table that is used internally to map Lustre File Identifiers (FIDs) to MDT internal inode numbers, through a process called OI Scrub.  An OI Scrub is required after restoring from a file-level MDT backup (<xref linkend='dbdoclet.50438207_71633'/>), or in case the OI table is otherwise corrupted.  Later phases of LFSCK will add further checks to the Lustre distributed filesystem state.</para>
-	<para>Control and monitoring of LFSCK is through <literal>lfsck</literal> and the <literal>/proc filesystem</literal> interfaces.  LFSCK supports three types of interface: switch interfaces, status interfaces and adjustments interfaces. These interfaces are detailed below.</para>
-    </section>
+	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc filesystem</literal> interfaces.  LFSCK supports three types of interface: switch interfaces, status interfaces and adjustments interfaces. These interfaces are detailed below.</para>
     <section>
         <title>LFSCK switch interface</title>
         <section>
@@ -325,7 +324,9 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-t | --type</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>The type of checking/repairing that should be performed. The new LFSCK framework provides the uniform interfaces for kinds of system consistency checking/repairing, including 'layout' (MDT-OST consistency for phase II), and 'DNE' (MDT-MDT consistency for phase III). Additional consistency checks may be added in future. If type is specified the LFSCK component(s) which ran last time and not finished, or the component(s) corresponding to some known system inconsistency, will be started. The default type is OI Scrub.</para>
+                                    <para>The type of checking/repairing that should be performed. The new LFSCK framework provides a single interface for a variety of system consistency checking/repairing operations including:</para>
+<para>Without a specified option: check and repair object index (OI Scrub.)</para>
+<para condition='l24'><literal>namespace</literal>: check and repair FID-in-Dirent and LinkEA consistency.</para>
                                 </entry>
                             </row>
                         </tbody>
@@ -334,7 +335,7 @@ lfsck: fixed 0 errors</screen>
             </section>
         </section>
         <section>
-            <title>Manually Stopping <literal>lfsck</literal></title>
+            <title>Manually Stopping LFSCK</title>
             <section>
                 <title>Synopsis</title>
                 <screen>lctl lfsck_stop -M | --device <replaceable>MDT_device</replaceable> \
@@ -343,7 +344,7 @@ lfsck: fixed 0 errors</screen>
             </section>
             <section>
                 <title>Description</title>
-                <para>This is command is used by <literal>lfsck</literal> after the MDT is mounted.</para>
+                <para>This is command is used by LFSCK after the MDT is mounted.</para>
             </section>
             <section>
                 <title>Options</title>
@@ -386,17 +387,17 @@ lfsck: fixed 0 errors</screen>
         </section>
     </section>
     <section>
-        <title><literal>lfsck</literal> status interface</title>
+        <title>LFSCK status interface</title>
         <section>
-            <title>LFSCK status via <literal>procfs</literal></title>
-            <section>
+            <title>LFSCK status of OI Scrub via <literal>procfs</literal></title>
+            <section >
                 <title>Synopsis</title>
                 <screen>lctl get_param -n osd-ldisk.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
                 </screen>
             </section>
             <section>
                 <title>Description</title>
-                <para>For each LFSCK component there is a dedicated procfs interface to trace corresponding LFSCK component status. For OI Scrub, the interface is the osd layer procfs interface, named <literal>oi_scrub</literal>. To show OI Scrub status, the standard <literal>lctl get_param</literal> command is used as described in the synopsis.</para>
+                <para>For each LFSCK component there is a dedicated procfs interface to trace corresponding LFSCK component status. For OI Scrub, the interface is the OSD layer procfs interface, named <literal>oi_scrub</literal>. To display OI Scrub status, the standard <literal>lctl get_param</literal> command is used as described in the synopsis.</para>
             </section>
             <section>
                 <title>Output</title>
@@ -421,12 +422,12 @@ lfsck: fixed 0 errors</screen>
                                 </entry>
                                 <entry>
                                     <itemizedlist>
-                                        <listitem><para>Name: OI scrub.</para></listitem>
+                                        <listitem><para>Name: OI_scrub.</para></listitem>
                                         <listitem><para>OI scrub magic id (an identifier unique to OI scrub).</para></listitem>
                                         <listitem><para>OI files count.</para></listitem>
-                                        <listitem><para>Status: one of the status - 'init', 'scanning', 'completed', 'failed', 'stopped', 'paused', or 'crashed'.</para></listitem>
-                                        <listitem><para>Flags: including - 'recreated' (OI file(s) is/are removed/recreated), 'inconsistent' (restored from file-level backup), and 'auto' (triggered by non-UI mechanism).</para></listitem>
-                                        <listitem><para>Parameters: OI scrub parameters, like 'failout'.</para></listitem>
+                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
+                                        <listitem><para>Flags: including - <literal>recreated</literal> (OI file(s) is/are removed/recreated), <literal>inconsistent</literal> (restored from file-level backup), <literal>auto</literal> (triggered by non-UI mechanism), and <literal>upgrade</literal> (from Lustre 1.8 IGIF format.)</para></listitem>
+                                        <listitem><para>Parameters: OI scrub parameters, like <literal>failout</literal>.</para></listitem>
                                         <listitem><para>Time Since Last Completed.</para></listitem>
                                         <listitem><para>Time Since Latest Start.</para></listitem>
                                         <listitem><para>Time Since Last Checkpoint.</para></listitem>
@@ -434,9 +435,6 @@ lfsck: fixed 0 errors</screen>
                                         <listitem><para>Last Checkpoint Position.</para></listitem>
                                         <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
                                         <listitem><para>Current Position.</para></listitem>
-                                        <listitem><para></para></listitem>
-                                        <listitem><para></para></listitem>
-                                        <listitem><para></para></listitem>
                                     </itemizedlist>
                                 </entry>
                             </row>
@@ -446,14 +444,97 @@ lfsck: fixed 0 errors</screen>
                                 </entry>
                                 <entry>
                                     <itemizedlist>
-                                        <listitem><para>Checked: how many objects have been scanned.</para></listitem>
-                                        <listitem><para>Updated: how many objects have been repaired.</para></listitem>
-                                        <listitem><para>Failed: how many objects failed to be repaired.</para></listitem>
-                                        <listitem><para>Prior Updated: how many objects have been repaired which are triggered by parallel RPC.</para></listitem>
-                                        <listitem><para>Success Count: how many completed scrub ran on the device.</para></listitem>
-                                        <listitem><para>Run Time: how long the scrub has run, tally from the time of scanning from the beginning of the specified MDT device, not include the paused/failure time among checkpoints.</para></listitem>
-                                        <listitem><para>Average Speed: calculated by checked / run_time.</para></listitem>
-                                        <listitem><para>Real-Time Speed: the speed since last checkpoint if the scrub is running.</para></listitem>
+                                        <listitem><para><literal>Checked</literal> total number of objects scanned.</para></listitem>
+                                        <listitem><para><literal>Updated</literal> total number of objects repaired.</para></listitem>
+                                        <listitem><para><literal>Failed</literal> total number of objects that failed to be repaired.</para></listitem>
+                                        <listitem><para><literal>Ignored</literal> total number of objects marked <literal>I_LUSTER_NOSCRUB</literal>.</para></listitem>
+                                        <listitem><para><literal>IGIF</literal> total number of objects IGIF scanned.</para></listitem>
+                                        <listitem><para><literal>Prior Updated</literal> how many objects have been repaired which are triggered by parallel RPC.</para></listitem>
+                                        <listitem><para><literal>Success Count</literal> total number of completed OI_scrub runs on the device.</para></listitem>
+                                        <listitem><para><literal>Run Time</literal> how long the scrub has run, tally from the time of scanning from the beginning of the specified MDT device, not include the paused/failure time among checkpoints.</para></listitem>
+                                        <listitem><para><literal>Average Speed</literal> calculated by dividing <literal>Checked</literal> by <literal>run_time</literal>.</para></listitem>
+                                        <listitem><para><literal>Real-Time Speed</literal> the speed since last checkpoint if the OI_scrub is running.</para></listitem>
+                                    </itemizedlist>
+                                </entry>
+                            </row>
+                        </tbody>
+                    </tgroup>
+                </informaltable>
+            </section>
+        </section>
+        <section condition='l24'>
+            <title>LFSCK status of namespace via <literal>procfs</literal></title>
+            <section >
+                <title>Synopsis</title>
+                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace
+                </screen>
+            </section>
+            <section>
+                <title>Description</title>
+                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as follows:</para>
+            </section>
+            <section>
+                <title>Output</title>
+                <informaltable frame="all">
+                    <tgroup cols="3">
+                        <colspec colname="c1" colwidth="3*"/>
+                        <colspec colname="c2" colwidth="7*"/>
+                        <thead>
+                            <row>
+                                <entry nameend="c2" namest="c1">
+                                    <para><emphasis role="bold">Information</emphasis></para>
+                                </entry>
+                                <entry>
+                                    <para><emphasis role="bold">Detail</emphasis></para>
+                                </entry>
+                            </row>
+                        </thead>
+                        <tbody>
+                            <row>
+                                <entry>
+                                    <para>General Information</para>
+                                </entry>
+                                <entry>
+                                    <itemizedlist>
+                                        <listitem><para>Name: <literal>lfsck_namespace</literal></para></listitem>
+                                        <listitem><para>LFSCK namespace magic.</para></listitem>
+                                        <listitem><para>LFSCK namespace version..</para></listitem>
+                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
+                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been completed), <literal>inconsistent</literal> (one or more inconsistent FID-in-Dirent or LinkEA entries have been discovered), <literal>upgrade</literal> (from Lustre 1.8 IGIF format.)</para></listitem>
+                                        <listitem><para>Parameters: including <literal>dryrun</literal> and <literal>failout</literal>.</para></listitem>
+                                        <listitem><para>Time Since Last Completed.</para></listitem>
+                                        <listitem><para>Time Since Latest Start.</para></listitem>
+                                        <listitem><para>Time Since Last Checkpoint.</para></listitem>
+                                        <listitem><para>Latest Start Position: the position the checking began most recently.</para></listitem>
+                                        <listitem><para>Last Checkpoint Position.</para></listitem>
+                                        <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
+                                        <listitem><para>Current Position.</para></listitem>
+                                    </itemizedlist>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para>Statistics</para>
+                                </entry>
+                                <entry>
+                                    <itemizedlist>
+                                        <listitem><para><literal>Checked Phase1</literal> total number of objects scanned during <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Checked Phase2</literal> total number of objects scanned during <literal>scanning-phase2</literal>.</para></listitem>
+                                        <listitem><para><literal>Updated Phase1</literal> total number of objects repaired during <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Updated Phase2</literal> total number of objects repaired during <literal>scanning-phase2</literal>.</para></listitem>
+                                        <listitem><para><literal>Failed Phase1</literal> total number of objets that failed to be repaired during <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Failed Phase2</literal> total number of objets that failed to be repaired during <literal>scanning-phase2</literal>.</para></listitem>
+                                        <listitem><para><literal>Dirs</literal> total number of directories scanned.</para></listitem>
+                                        <listitem><para><literal>M-linked</literal> total number of multiple-linked objects that have been scanned.</para></listitem>
+                                        <listitem><para><literal>Nlinks Repaired</literal> total number of objects with nlink attributes that have been repaired.</para></listitem>
+                                        <listitem><para><literal>Name-entry Added</literal> total number of objects that have had a name entry added back to the namespace.</para></listitem>
+                                        <listitem><para><literal>Success Count</literal> the total number off completed LFSCK runs on the device.</para></listitem>
+                                        <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
+                                        <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
+                                        <listitem><para><literal>Average Speed Phase1</literal> calculated by dividing <literal>checked_phase1</literal> by <literal>run_time_phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Average Speed Phase2</literal> calculated by dividing <literal>checked_phase2</literal> by <literal>run_time_phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Real-Time Speed Phase1</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Real-Time Speed Phase2</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase2</literal>.</para></listitem>
                                     </itemizedlist>
                                 </entry>
                             </row>
@@ -464,7 +545,7 @@ lfsck: fixed 0 errors</screen>
         </section>
     </section>
     <section>
-        <title><literal>lfsck</literal> adjustment interface</title>
+        <title>LFSCK adjustment interface</title>
         <section>
             <title>Rate control</title>
             <section>
@@ -543,5 +624,6 @@ lfsck: fixed 0 errors</screen>
                 </informaltable>
             </section>
         </section>
+    </section>
     </section>
 </chapter>
