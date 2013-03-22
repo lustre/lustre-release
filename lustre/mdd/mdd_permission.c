@@ -47,7 +47,7 @@
 #include <lustre_ver.h>
 #include <lprocfs_status.h>
 #include <lustre_mds.h>
-
+#include <lustre_idmap.h>
 #include "mdd_internal.h"
 
 #ifdef CONFIG_FS_POSIX_ACL

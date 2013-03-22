@@ -48,6 +48,11 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_build_version.h>
 #include <libcfs/list.h>
+#include <cl_object.h>
+#ifdef HAVE_SERVER_SUPPORT
+# include <dt_object.h>
+# include <md_object.h>
+#endif /* HAVE_SERVER_SUPPORT */
 #include "llog_internal.h"
 
 #ifndef __KERNEL__
@@ -601,6 +606,24 @@ int init_obdclass(void)
         if (err)
                 return err;
 
+	err = cl_global_init();
+	if (err != 0)
+		return err;
+
+#if defined(__KERNEL__) && defined(HAVE_SERVER_SUPPORT)
+	err = dt_global_init();
+	if (err != 0)
+		return err;
+
+	err = lu_ucred_global_init();
+	if (err != 0)
+		return err;
+
+	err = llo_global_init();
+	if (err != 0)
+		return err;
+#endif
+
 	err = llog_info_init();
 	if (err)
 		return err;
@@ -678,6 +701,12 @@ static void cleanup_obdclass(void)
                 }
         }
 	llog_info_fini();
+#ifdef HAVE_SERVER_SUPPORT
+	llo_global_fini();
+	lu_ucred_global_fini();
+	dt_global_fini();
+#endif
+	cl_global_fini();
         lu_global_fini();
 
         obd_cleanup_caches();

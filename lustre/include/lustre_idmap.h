@@ -47,7 +47,7 @@
  * @{
  */
 
-#include <md_object.h>
+#include <libcfs/libcfs.h>
 
 #define CFS_NGROUPS_PER_BLOCK   ((int)(CFS_PAGE_SIZE / sizeof(gid_t)))
 
@@ -77,6 +77,8 @@ struct lustre_idmap_table {
 	spinlock_t	lit_lock;
 	cfs_list_t	lit_idmaps[CFS_IDMAP_N_HASHES][CFS_IDMAP_HASHSIZE];
 };
+
+struct lu_ucred;
 
 extern void lustre_groups_from_list(cfs_group_info_t *ginfo, gid_t *glist);
 extern void lustre_groups_sort(cfs_group_info_t *group_info);

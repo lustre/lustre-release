@@ -1474,4 +1474,7 @@ static inline struct dt_thread_info *dt_info(const struct lu_env *env)
 	return dti;
 }
 
+int dt_global_init(void);
+void dt_global_fini(void);
+
 #endif /* __LUSTRE_DT_OBJECT_H */

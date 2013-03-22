@@ -38,14 +38,8 @@
 #define __LUSTRE_LU_OBJECT_H
 
 #include <stdarg.h>
-
-/*
- * struct lu_fid
- */
 #include <libcfs/libcfs.h>
-
 #include <lustre/lustre_idl.h>
-
 #include <lu_ref.h>
 
 struct seq_file;
@@ -397,6 +391,11 @@ struct lu_device_type_operations {
          */
         void (*ldto_stop)(struct lu_device_type *t);
 };
+
+static inline int lu_device_is_md(const struct lu_device *d)
+{
+	return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_MD);
+}
 
 /**
  * Flags for the object layers.
@@ -1277,26 +1276,6 @@ int  lu_env_refill(struct lu_env *env);
 int  lu_env_refill_by_tags(struct lu_env *env, __u32 ctags, __u32 stags);
 
 /** @} lu_context */
-
-struct lu_ucred {
-	__u32               uc_valid;
-	__u32               uc_o_uid;
-	__u32               uc_o_gid;
-	__u32               uc_o_fsuid;
-	__u32               uc_o_fsgid;
-	__u32               uc_uid;
-	__u32               uc_gid;
-	__u32               uc_fsuid;
-	__u32               uc_fsgid;
-	__u32               uc_suppgids[2];
-	cfs_cap_t           uc_cap;
-	__u32               uc_umask;
-	cfs_group_info_t   *uc_ginfo;
-	struct md_identity *uc_identity;
-};
-struct lu_ucred *lu_ucred(const struct lu_env *env);
-struct lu_ucred *lu_ucred_check(const struct lu_env *env);
-struct lu_ucred *lu_ucred_assert(const struct lu_env *env);
 
 /**
  * Output site statistical counters into a buffer. Suitable for

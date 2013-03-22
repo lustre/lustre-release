@@ -480,11 +480,6 @@ struct seq_server_site {
 	struct lu_client_seq *ss_client_seq;
 };
 
-static inline int lu_device_is_md(const struct lu_device *d)
-{
-        return ergo(d != NULL, d->ld_type->ldt_tags & LU_DEVICE_MD);
-}
-
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {
         LASSERT(IS_ERR(d) || lu_device_is_md(d));
@@ -904,9 +899,39 @@ int llo_local_objects_setup(const struct lu_env *env,
                              struct md_device * md,
                              struct dt_device * dt);
 
+int llo_global_init(void);
+void llo_global_fini(void);
+
 int lustre_buf2som(void *buf, int rc, struct md_som_data *msd);
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh);
 void lustre_hsm2buf(void *buf, struct md_hsm *mh);
+
+struct lu_ucred {
+	__u32               uc_valid;
+	__u32               uc_o_uid;
+	__u32               uc_o_gid;
+	__u32               uc_o_fsuid;
+	__u32               uc_o_fsgid;
+	__u32               uc_uid;
+	__u32               uc_gid;
+	__u32               uc_fsuid;
+	__u32               uc_fsgid;
+	__u32               uc_suppgids[2];
+	cfs_cap_t           uc_cap;
+	__u32               uc_umask;
+	cfs_group_info_t   *uc_ginfo;
+	struct md_identity *uc_identity;
+};
+
+struct lu_ucred *lu_ucred(const struct lu_env *env);
+
+struct lu_ucred *lu_ucred_check(const struct lu_env *env);
+
+struct lu_ucred *lu_ucred_assert(const struct lu_env *env);
+
+int lu_ucred_global_init(void);
+
+void lu_ucred_global_fini(void);
 
 #define md_cap_t(x) (x)
 

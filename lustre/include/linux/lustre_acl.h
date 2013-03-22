@@ -34,7 +34,7 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/lustre/include/lustre_idmap.h
+ * lustre/lustre/include/lustre_acl.h
  *
  * MDS data structures.
  * See also lustre_idl.h for wire formats of requests.

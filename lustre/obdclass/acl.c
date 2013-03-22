@@ -41,10 +41,14 @@
  */
 
 #define DEBUG_SUBSYSTEM S_SEC
-
+#include <lu_object.h>
 #include <lustre_acl.h>
 #include <lustre_eacl.h>
 #include <obd_support.h>
+#ifdef HAVE_SERVER_SUPPORT
+# include <lustre_idmap.h>
+# include <md_object.h>
+#endif /* HAVE_SERVER_SUPPORT */
 
 #ifdef CONFIG_FS_POSIX_ACL
 
@@ -92,6 +96,7 @@ static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
         d->e_id         = cpu_to_le32(s->e_id);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /*
  * Check permission based on POSIX ACL.
  */
@@ -308,6 +313,136 @@ int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, __u32 *pmode,
 }
 EXPORT_SYMBOL(lustre_posix_acl_create_masq);
 
+/*
+ * Convert server-side uid/gid in the posix ACL items to the client-side ones.
+ * convert rule:
+ * @CFS_IC_NOTHING
+ *  nothing to be converted.
+ * @CFS_IC_ALL
+ *  mapped ids are converted to client-side ones,
+ *  unmapped ones are converted to "nobody".
+ * @CFS_IC_MAPPED
+ *  only mapped ids are converted to "nobody".
+ * @CFS_IC_UNMAPPED
+ *  only unmapped ids are converted to "nobody".
+ */
+int lustre_posix_acl_xattr_id2client(struct lu_ucred *mu,
+				     struct lustre_idmap_table *t,
+				     posix_acl_xattr_header *header,
+				     int size, int flags)
+{
+	int count, i;
+	__u32 id;
+	ENTRY;
+
+	if (unlikely(size < 0))
+		RETURN(-EINVAL);
+	else if (!size)
+		RETURN(0);
+
+	if (unlikely(flags == CFS_IC_NOTHING))
+		RETURN(0);
+
+	count = CFS_ACL_XATTR_COUNT(size, posix_acl_xattr);
+	for (i = 0; i < count; i++) {
+		id = le32_to_cpu(header->a_entries[i].e_id);
+		switch (le16_to_cpu(header->a_entries[i].e_tag)) {
+		case ACL_USER_OBJ:
+		case ACL_GROUP_OBJ:
+		case ACL_MASK:
+		case ACL_OTHER:
+			if (id != ACL_UNDEFINED_ID)
+				RETURN(-EIO);
+			break;
+		case ACL_USER:
+			id = lustre_idmap_lookup_uid(mu, t, 1, id);
+			if (flags == CFS_IC_ALL) {
+				if (id == CFS_IDMAP_NOTFOUND)
+					id = NOBODY_UID;
+				header->a_entries[i].e_id = cpu_to_le32(id);
+			} else if (flags == CFS_IC_MAPPED) {
+				if (id != CFS_IDMAP_NOTFOUND)
+					header->a_entries[i].e_id =
+						cpu_to_le32(NOBODY_UID);
+			} else if (flags == CFS_IC_UNMAPPED) {
+				if (id == CFS_IDMAP_NOTFOUND)
+					header->a_entries[i].e_id =
+						cpu_to_le32(NOBODY_UID);
+			}
+			break;
+		case ACL_GROUP:
+			id = lustre_idmap_lookup_gid(mu, t, 1, id);
+			if (flags == CFS_IC_ALL) {
+				if (id == CFS_IDMAP_NOTFOUND)
+					id = NOBODY_GID;
+				header->a_entries[i].e_id = cpu_to_le32(id);
+			} else if (flags == CFS_IC_MAPPED) {
+				if (id != CFS_IDMAP_NOTFOUND)
+					header->a_entries[i].e_id =
+						cpu_to_le32(NOBODY_GID);
+			} else if (flags == CFS_IC_UNMAPPED) {
+				if (id == CFS_IDMAP_NOTFOUND)
+					header->a_entries[i].e_id =
+						cpu_to_le32(NOBODY_GID);
+			}
+			break;
+		default:
+			RETURN(-EIO);
+		}
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(lustre_posix_acl_xattr_id2client);
+
+/*
+ * Converts client-side uid/gid in the extended ACL items to server-side ones.
+ * convert rule:
+ *  mapped ids are converted to server-side ones,
+ *  unmapped ones cause "EPERM" error.
+ */
+int lustre_ext_acl_xattr_id2server(struct lu_ucred *mu,
+				   struct lustre_idmap_table *t,
+				   ext_acl_xattr_header *header)
+{
+	int i, count = le32_to_cpu(header->a_count);
+	__u32 id;
+	ENTRY;
+
+	for (i = 0; i < count; i++) {
+		id = le32_to_cpu(header->a_entries[i].e_id);
+		switch (le16_to_cpu(header->a_entries[i].e_tag)) {
+		case ACL_USER_OBJ:
+		case ACL_GROUP_OBJ:
+		case ACL_MASK:
+		case ACL_OTHER:
+			if (id != ACL_UNDEFINED_ID)
+				RETURN(-EIO);
+			break;
+		case ACL_USER:
+			id = lustre_idmap_lookup_uid(mu, t, 0, id);
+			if (id == CFS_IDMAP_NOTFOUND)
+				RETURN(-EPERM);
+			else
+				header->a_entries[i].e_id = cpu_to_le32(id);
+			break;
+		case ACL_GROUP:
+			id = lustre_idmap_lookup_gid(mu, t, 0, id);
+			if (id == CFS_IDMAP_NOTFOUND)
+				RETURN(-EPERM);
+			else
+				header->a_entries[i].e_id = cpu_to_le32(id);
+			break;
+		default:
+			RETURN(-EIO);
+		}
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(lustre_ext_acl_xattr_id2server);
+#endif /* HAVE_SERVER_SUPPORT */
+
 /* if "new_count == 0", then "new = {a_version, NULL}", NOT NULL. */
 static int lustre_posix_acl_xattr_reduce_space(posix_acl_xattr_header **header,
                                                int old_count, int new_count)
@@ -455,87 +590,6 @@ _out:
 EXPORT_SYMBOL(lustre_posix_acl_xattr_filter);
 
 /*
- * Convert server-side uid/gid in the posix ACL items to the client-side ones.
- * convert rule:
- * @CFS_IC_NOTHING
- *  nothing to be converted.
- * @CFS_IC_ALL
- *  mapped ids are converted to client-side ones,
- *  unmapped ones are converted to "nobody".
- * @CFS_IC_MAPPED
- *  only mapped ids are converted to "nobody".
- * @CFS_IC_UNMAPPED
- *  only unmapped ids are converted to "nobody".
- */
-int lustre_posix_acl_xattr_id2client(struct lu_ucred *mu,
-				     struct lustre_idmap_table *t,
-				     posix_acl_xattr_header *header,
-				     int size, int flags)
-{
-        int count, i;
-        __u32 id;
-        ENTRY;
-
-        if (unlikely(size < 0))
-                RETURN(-EINVAL);
-        else if (!size)
-                RETURN(0);
-
-        if (unlikely(flags == CFS_IC_NOTHING))
-                RETURN(0);
-
-        count = CFS_ACL_XATTR_COUNT(size, posix_acl_xattr);
-        for (i = 0; i < count; i++) {
-                id = le32_to_cpu(header->a_entries[i].e_id);
-                switch (le16_to_cpu(header->a_entries[i].e_tag)) {
-                case ACL_USER_OBJ:
-                case ACL_GROUP_OBJ:
-                case ACL_MASK:
-                case ACL_OTHER:
-                        if (id != ACL_UNDEFINED_ID)
-                                RETURN(-EIO);
-                        break;
-                case ACL_USER:
-                        id = lustre_idmap_lookup_uid(mu, t, 1, id);
-                        if (flags == CFS_IC_ALL) {
-                                if (id == CFS_IDMAP_NOTFOUND)
-                                        id = NOBODY_UID;
-                                header->a_entries[i].e_id = cpu_to_le32(id);
-                        } else if (flags == CFS_IC_MAPPED) {
-                                if (id != CFS_IDMAP_NOTFOUND)
-                                        header->a_entries[i].e_id =
-                                                        cpu_to_le32(NOBODY_UID);
-                        } else if (flags == CFS_IC_UNMAPPED) {
-                                if (id == CFS_IDMAP_NOTFOUND)
-                                        header->a_entries[i].e_id =
-                                                        cpu_to_le32(NOBODY_UID);
-                        }
-                        break;
-                case ACL_GROUP:
-                        id = lustre_idmap_lookup_gid(mu, t, 1, id);
-                        if (flags == CFS_IC_ALL) {
-                                if (id == CFS_IDMAP_NOTFOUND)
-                                        id = NOBODY_GID;
-                                header->a_entries[i].e_id = cpu_to_le32(id);
-                        } else if (flags == CFS_IC_MAPPED) {
-                                if (id != CFS_IDMAP_NOTFOUND)
-                                        header->a_entries[i].e_id =
-                                                        cpu_to_le32(NOBODY_GID);
-                        } else if (flags == CFS_IC_UNMAPPED) {
-                                if (id == CFS_IDMAP_NOTFOUND)
-                                        header->a_entries[i].e_id =
-                                                        cpu_to_le32(NOBODY_GID);
-                        }
-                        break;
-                 default:
-                        RETURN(-EIO);
-                }
-        }
-    RETURN(0);
-}
-EXPORT_SYMBOL(lustre_posix_acl_xattr_id2client);
-
-/*
  * Release the posix ACL space.
  */
 void lustre_posix_acl_xattr_free(posix_acl_xattr_header *header, int size)
@@ -543,53 +597,6 @@ void lustre_posix_acl_xattr_free(posix_acl_xattr_header *header, int size)
         OBD_FREE(header, size);
 }
 EXPORT_SYMBOL(lustre_posix_acl_xattr_free);
-
-/*
- * Converts client-side uid/gid in the extended ACL items to server-side ones.
- * convert rule:
- *  mapped ids are converted to server-side ones,
- *  unmapped ones cause "EPERM" error.
- */
-int lustre_ext_acl_xattr_id2server(struct lu_ucred *mu,
-				   struct lustre_idmap_table *t,
-				   ext_acl_xattr_header *header)
-
-{
-        int i, count = le32_to_cpu(header->a_count);
-        __u32 id;
-        ENTRY;
-
-        for (i = 0; i < count; i++) {
-                id = le32_to_cpu(header->a_entries[i].e_id);
-                switch (le16_to_cpu(header->a_entries[i].e_tag)) {
-                case ACL_USER_OBJ:
-                case ACL_GROUP_OBJ:
-                case ACL_MASK:
-                case ACL_OTHER:
-                        if (id != ACL_UNDEFINED_ID)
-                                RETURN(-EIO);
-                        break;
-                case ACL_USER:
-                        id = lustre_idmap_lookup_uid(mu, t, 0, id);
-                        if (id == CFS_IDMAP_NOTFOUND)
-                                RETURN(-EPERM);
-                        else
-                                header->a_entries[i].e_id = cpu_to_le32(id);
-                        break;
-                case ACL_GROUP:
-                        id = lustre_idmap_lookup_gid(mu, t, 0, id);
-                        if (id == CFS_IDMAP_NOTFOUND)
-                                RETURN(-EPERM);
-                        else
-                                header->a_entries[i].e_id = cpu_to_le32(id);
-                        break;
-                default:
-                        RETURN(-EIO);
-                }
-        }
-        RETURN(0);
-}
-EXPORT_SYMBOL(lustre_ext_acl_xattr_id2server);
 
 /*
  * Release the extended ACL space.
