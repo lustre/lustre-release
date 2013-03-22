@@ -603,24 +603,25 @@ test_17() {
 		return
 	fi
 
-        setup
-        check_mount || return 41
-        cleanup || return $?
+	setup
+	check_mount || return 41
+	cleanup || return $?
 
-        echo "Remove mds config log"
-        if ! combined_mgs_mds ; then
-                stop mgs
-        fi
+	echo "Remove mds config log"
+	if ! combined_mgs_mds ; then
+		stop mgs
+	fi
 
-        do_facet mgs "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MGSDEV || return \$?" || return $?
+	do_facet mgs "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' \
+		$(mgsdevname) || return \$?" || return $?
 
-        if ! combined_mgs_mds ; then
-                start_mgs
-        fi
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
 
-        start_ost
-        start_mds && return 42
-        reformat_and_config
+	start_ost
+	start_mds && return 42
+	reformat_and_config
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
