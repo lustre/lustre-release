@@ -944,6 +944,7 @@ AC_COMPILE_IFELSE([
 		__u64 *data2 = NULL;
 
 		data1 = data2;
+		data2 = data1;
 		return 0;
 	}
 ],[
