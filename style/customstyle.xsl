@@ -33,34 +33,54 @@
 	</div>
 </xsl:template>
 
-<!-- template_1: this tempate matches condition='l23' and calls
-		the textdecoration_1 template with the relevant class. -->
-<xsl:template match="*[@condition='l23']">
+<!-- conditional matching template: this calls text decoration
+     template with the correct variables. -->
+<xsl:template match="*[@condition]">
 	<xsl:variable name="id">
 		<xsl:call-template name="object.id"/>
 	</xsl:variable>
 	<xsl:call-template name='section.titlepage'/>
-	<xsl:call-template name='textdecoration_1'>
-		<xsl:with-param name='version' select="'introduced in Lustre 2.3'"/>
-		<xsl:with-param name='chunkid' select="$id"/>
-	</xsl:call-template>
+	<xsl:choose>
+		<xsl:when test="@condition = 'l21'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.1'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l22'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.2'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l23'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.3'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l24'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.4'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l25'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.5'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:otherwise>
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'unrecognised Lustre version'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:otherwise>
+	</xsl:choose>
 </xsl:template>
 
-<!-- template_2: this tempate matches condition='l24' and calls
-		the textdecoration_1 template with the relevant class. -->
-<xsl:template match="*[@condition='l24']">
-	<xsl:variable name="id">
-		<xsl:call-template name="object.id"/>
-	</xsl:variable>
-	<xsl:call-template name='section.titlepage'/>
-	<xsl:call-template name='textdecoration_1'>
-		<xsl:with-param name='version' select="'introduced in Lustre 2.4'"/>
-		<xsl:with-param name='chunkid' select="$id"/>
-	</xsl:call-template>
-</xsl:template>
-
-
-<!-- template_3: This template over loads the behavior of creating the table of contents. It
+<!-- toc.line template: This template over loads the behavior of creating the table of contents. It
 		adds in a small entry to identify lustre version specific features.
 		for more information, see this page:
 		http://xml.web.cern.ch/XML/www.sagehill.net/xml/docbookxsl/PrintCustomEx.html#PrintTocEntries -->
@@ -109,11 +129,20 @@
 	</a>
 	</span>
 	<!-- add another span to hold the lustre version annotation -->
-	<xsl:if test="@condition='l24'">
-		<span class='floatright'>L 2.4 </span>
+	<xsl:if test="@condition='l21'">
+		<span class='floatright'>L 2.1 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l22'">
+		<span class='floatright'>L 2.2 </span>
 	</xsl:if>
 	<xsl:if test="@condition='l23'">
 		<span class='floatright'>L 2.3 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l24'">
+		<span class='floatright'>L 2.4 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l25'">
+		<span class='floatright'>L 2.5 </span>
 	</xsl:if>
 </xsl:template>
 
