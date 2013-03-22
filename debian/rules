@@ -361,6 +361,7 @@ kdist_config: prep-deb-files patch-stamp
 	find . -type f -print0 | xargs -0 touch -r COPYING \;
 	# Doesn't seem possible to only build modules...
 	./configure --with-linux=$(KSRC) \
+	            --disable-server \
 		    --disable-quilt  \
 		    --disable-dependency-tracking \
 		    --disable-doc  \
