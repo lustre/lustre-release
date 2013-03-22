@@ -131,7 +131,7 @@ int read_local_files(struct mkfs_opts *mop);
 int is_lustre_target(struct mkfs_opts *mop);
 
 /* loopback helper functions */
-int file_create(char *path, int size);
+int file_create(char *path, __u64 size);
 int loop_format(struct mkfs_opts *mop);
 int loop_setup(struct mkfs_opts *mop);
 int loop_cleanup(struct mkfs_opts *mop);

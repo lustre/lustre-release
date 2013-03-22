@@ -5,7 +5,7 @@ SUBDIRS = gss
 endif
 
 AM_CFLAGS=$(LLCFLAGS)
-AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
+AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1 -D_FILE_OFFSET_BITS=64
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
@@ -124,6 +124,7 @@ llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 lr_reader_SOURCES = lr_reader.c
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
+mount_lustre_CPPFLAGS = $(AM_CPPFLAGS)
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 if LDISKFS_ENABLED
@@ -131,7 +132,7 @@ mount_lustre_SOURCES += mount_utils_ldiskfs.c
 endif
 if ZFS_ENABLED
 mount_lustre_SOURCES += mount_utils_zfs.c
-mount_lustre_CPPFLAGS = -DHAVE_IOCTL_IN_UNISTD_H
+mount_lustre_CPPFLAGS += -DHAVE_IOCTL_IN_UNISTD_H
 mount_lustre_CPPFLAGS += $(EXTRA_LIBZFS_INCLUDE)
 mount_lustre_LDFLAGS = -pthread -rdynamic -ldl
 endif
