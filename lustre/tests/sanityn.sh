@@ -57,7 +57,7 @@ LOVNAME=$($LCTL get_param -n llite.*.lov.common_name | tail -n 1)
 OSTCOUNT=$($LCTL get_param -n lov.$LOVNAME.numobd)
 
 assert_DIR
-rm -rf $DIR1/[df][0-9]* $DIR1/lnk
+rm -rf $DIR1/[df][0-9]* $DIR1/lnk $DIR/[df].${TESTSUITE}*
 
 SAMPLE_FILE=$TMP/$(basename $0 .sh).junk
 dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
