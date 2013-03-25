@@ -1712,28 +1712,37 @@ check_seq_oid()
                 log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
 
                 #don't unmount/remount the OSTs if we don't need to do that
-                #local dir=$(facet_mntpt ost$ost)
-                #stop ost$dev
-                #do_facet ost$dev mount -t $FSTYPE $dev $dir $OST_MOUNT_OPTS ||
-                #       { error "mounting $dev as $FSTYPE failed"; return 3; }
-                #local obj_file=$(do_facet ost$ost find $dir/O/$seq -name $oid)
-                #local ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID $obj_file)
-		seq=$(echo $seq | sed -e "s/^0x//g")
-		if [ $seq == 0 ]; then
-			oid_hex=$(echo $oid)
-		else
-			oid_hex=$(echo $hex | sed -e "s/^0x//g")
+		# LU-2577 changes filter_fid to be smaller, so debugfs needs
+		# update too, until that use mount/ll_decode_filter_fid/mount
+		local dir=$(facet_mntpt ost$ost)
+		local opts=${OST_MOUNT_OPTS}
+
+		if !  do_facet ost$ost test -b ${dev}; then
+			opts=$(csa_add "$opts" -o loop)
 		fi
-                local obj_file="O/$seq/d$((oid %32))/$oid_hex"
-                local ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
-                           $dev 2>/dev/null" | grep "parent=")
+
+		stop ost$ost
+		do_facet ost$ost mount -t $(facet_fstype ost$ost) $opts $dev $dir ||
+			{ error "mounting $dev as $FSTYPE failed"; return 3; }
+		local obj_file=$(do_facet ost$ost find $dir/O/$seq -name $oid)
+		local ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID $obj_file)
+		do_facet ost$ost umount -d $dir
+		start ost$ost $dev $OST_MOUNT_OPTS
+
+		# re-enable when debugfs will understand new filter_fid
+		#seq=$(echo $seq | sed -e "s/^0x//g")
+		#if [ $seq == 0 ]; then
+		#	oid_hex=$(echo $oid)
+		#else
+		#	oid_hex=$(echo $hex | sed -e "s/^0x//g")
+		#fi
+                #local obj_file="O/$seq/d$((oid %32))/$oid_hex"
+		#local ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
+                #           $dev 2>/dev/null" | grep "parent=")
 
                 [ -z "$ff" ] && error "$obj_file: no filter_fid info"
 
                 echo "$ff" | sed -e 's#.*objid=#got: objid=#'
-
-                #do_facet ost$ost umount -d $dir
-                #start ost$ost $dev $OST_MOUNT_OPTS
 
                 # /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
                 # fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1

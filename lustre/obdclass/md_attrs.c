@@ -44,13 +44,12 @@ void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 	lma->lma_compat   = 0;
 	lma->lma_incompat = incompat;
 	lma->lma_self_fid = *fid;
-	lma->lma_flags = 0;
 
 	/* If a field is added in struct lustre_mdt_attrs, zero it explicitly
 	 * and change the test below. */
 	LASSERT(sizeof(*lma) ==
-		(offsetof(struct lustre_mdt_attrs, lma_flags) +
-		 sizeof(lma->lma_flags)));
+		(offsetof(struct lustre_mdt_attrs, lma_self_fid) +
+		 sizeof(lma->lma_self_fid)));
 };
 EXPORT_SYMBOL(lustre_lma_init);
 
@@ -66,7 +65,6 @@ void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 		__swab32s(&lma->lma_compat);
 		__swab32s(&lma->lma_incompat);
 		lustre_swab_lu_fid(&lma->lma_self_fid);
-		__swab64s(&lma->lma_flags);
 	}
 };
 EXPORT_SYMBOL(lustre_lma_swab);

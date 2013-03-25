@@ -248,9 +248,9 @@ static unsigned filetype_dir_table[] = {
 
 static int traverse_lost_found(char *src_dir, const char *mount_path)
 {
-        DIR *dir_ptr;
-        struct filter_fid parent_fid;
-        struct dirent64 *dirent;
+	DIR *dir_ptr;
+	struct lustre_mdt_attrs lma;
+	struct dirent64 *dirent;
 	__u64 ff_seq, ff_objid;
         char *file_path;
         char dest_path[PATH_MAX];
@@ -313,27 +313,36 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 
                 case DT_REG:
                 file_path = src_dir;
-                xattr_len = getxattr(file_path, "trusted.fid",
-                                     (void *)&parent_fid,
-                                     sizeof(parent_fid));
+		xattr_len = getxattr(file_path, "trusted.lma",
+				     (void *)&lma, sizeof(lma));
+		if (xattr_len == -1 || xattr_len < sizeof(lma)) {
+			struct filter_fid_old	ff;
 
-                if (xattr_len == -1 || xattr_len < sizeof(parent_fid))
-                        /*
-                         * Its very much possible that we dont find fid
-                         * on precreated files, LAST_ID
-                         */
-                        continue;
+			/* try old filter_fid EA */
+			xattr_len = getxattr(file_path, "trusted.fid",
+					     (void *)&ff, sizeof(ff));
+			if (xattr_len == -1 || xattr_len < sizeof(ff)) {
+				/*
+				 * Its very much possible that we dont find fid
+				 * on precreated files, LAST_ID
+				 */
+				continue;
+			}
+			ff_seq = le64_to_cpu(ff.ff_seq);
+			ff_objid = le64_to_cpu(ff.ff_objid);
+		} else {
+			ff_seq = le64_to_cpu(lma.lma_self_fid.f_seq);
+			ff_objid = le64_to_cpu(lma.lma_self_fid.f_oid);
+		}
 
-		ff_seq = le64_to_cpu(parent_fid.ff_seq);
 		sprintf(seq_name, (fid_seq_is_rsvd(ff_seq) ||
 			fid_seq_is_mdt0(ff_seq)) ?  LPU64 : LPX64i,
 			fid_seq_is_idif(ff_seq) ? 0 : ff_seq);
 
 
-                ff_objid = le64_to_cpu(parent_fid.ff_objid);
-		sprintf(obj_name, (fid_seq_is_rsvd(parent_fid.ff_seq) ||
-				   fid_seq_is_mdt0(parent_fid.ff_seq) ||
-				   fid_seq_is_idif(parent_fid.ff_seq)) ?
+		sprintf(obj_name, (fid_seq_is_rsvd(ff_seq) ||
+				   fid_seq_is_mdt0(ff_seq) ||
+				   fid_seq_is_idif(ff_seq)) ?
 				   LPU64 : LPX64i, ff_objid);
 
 		grp_info = find_or_create_grp(&grp_info_list, ff_seq,

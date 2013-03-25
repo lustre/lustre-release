@@ -286,34 +286,6 @@ enum lma_incompat {
 };
 #define LMA_INCOMPAT_SUPP	(LMAI_AGENT | LMAI_REMOTE_PARENT)
 
-/**
- * Following struct for MDT attributes, that will be kept inode's EA.
- * Introduced in 2.0 release (please see b15993, for details)
- */
-struct lustre_mdt_attrs {
-        /**
-         * Bitfield for supported data in this structure. From enum lma_compat.
-         * lma_self_fid and lma_flags are always available.
-         */
-        __u32   lma_compat;
-        /**
-         * Per-file incompat feature list. Lustre version should support all
-         * flags set in this field. The supported feature mask is available in
-         * LMA_INCOMPAT_SUPP.
-         */
-        __u32   lma_incompat;
-        /** FID of this inode */
-        struct lu_fid  lma_self_fid;
-        /** mdt/ost type, others */
-        __u64   lma_flags;
-};
-
-/**
- * Prior to 2.4, the LMA structure also included SOM attributes which has since
- * been moved to a dedicated xattr
- */
-#define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 4 * sizeof(__u64))
-
 extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
 			    const struct lu_fid *fid, __u32 incompat);
@@ -509,7 +481,8 @@ static inline int fid_seq_is_special(const __u64 seq)
 
 static inline int fid_seq_is_local_file(const __u64 seq)
 {
-	return seq == FID_SEQ_LOCAL_FILE;
+	return seq == FID_SEQ_LOCAL_FILE ||
+	       seq == FID_SEQ_LOCAL_NAME;
 };
 
 static inline int fid_seq_is_root(const __u64 seq)

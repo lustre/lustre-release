@@ -59,24 +59,37 @@ int main(int argc, char *argv[])
 		struct filter_fid *ff = (void *)buf;
 		int size;
 
-		size = getxattr(argv[i], "trusted.fid", buf, sizeof(buf));
+		size = getxattr(argv[i], "trusted.fid", buf,
+				sizeof(struct filter_fid_old));
 		if (size < 0) {
 			fprintf(stderr, "%s: error reading fid: %s\n",
 				argv[i], strerror(errno));
 			if (rc == 0)
 				rc = size;
-                        continue;
-                }
-                if (size > sizeof(*ff))
-			fprintf(stderr, "%s: warning: fid larger than expected "
-                                "(%d bytes), recompile?\n", argv[i], size);
+			continue;
+		}
+		if (size > sizeof(struct filter_fid_old)) {
+			fprintf(stderr, "%s: warning: fid larger than expected"
+				" (%d bytes), recompile?\n", argv[i], size);
+		} else if (size > sizeof(*ff)) {
+			struct filter_fid_old *ffo = (void *)buf;
 
-                printf("%s: objid="LPU64" seq="LPU64" parent="DFID"\n",
-                       argv[i], le64_to_cpu(ff->ff_objid),
-                       le64_to_cpu(ff->ff_seq),
-                       le64_to_cpu(ff->ff_parent.f_seq),
-                       le32_to_cpu(ff->ff_parent.f_oid),
-                       le32_to_cpu(ff->ff_parent.f_ver));
+			/* old filter_fid */
+			printf("%s: objid="LPU64" seq="LPU64" parent="DFID
+			       " stripe=%u\n", argv[i],
+			       le64_to_cpu(ffo->ff_objid),
+			       le64_to_cpu(ffo->ff_seq),
+			       le64_to_cpu(ffo->ff_parent.f_seq),
+			       le32_to_cpu(ffo->ff_parent.f_oid), 0 /* ver */,
+			       /* this is stripe_nr actually */
+			       le32_to_cpu(ffo->ff_parent.f_ver));
+		} else {
+			printf("%s: parent="DFID" stripe=%u\n", argv[i],
+			       le64_to_cpu(ff->ff_parent.f_seq),
+			       le32_to_cpu(ff->ff_parent.f_oid), 0, /* ver */
+			       /* this is stripe_nr actually */
+			       le32_to_cpu(ff->ff_parent.f_ver));
+		}
 	}
 
 	return rc;

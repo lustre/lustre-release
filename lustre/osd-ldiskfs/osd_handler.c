@@ -2413,17 +2413,11 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
-
-	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF) && !fid_is_internal(fid))
-		return result;
-
-	if ((result == 0) &&
-	    (fid_is_last_id(fid) ||
-	     !fid_is_on_ost(info, osd_dt_dev(th->th_dev), fid)))
+	if (result == 0)
 		result = osd_ea_fid_set(info, obj->oo_inode, fid, 0);
 
-        if (result == 0)
-                result = __osd_oi_insert(env, obj, fid, th);
+	if (result == 0)
+		result = __osd_oi_insert(env, obj, fid, th);
 
 	LASSERT(ergo(result == 0,
 		     dt_object_exists(dt) && !dt_object_remote(dt)));

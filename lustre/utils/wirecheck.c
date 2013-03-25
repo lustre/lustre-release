@@ -206,7 +206,6 @@ check_lustre_mdt_attrs(void)
 	CHECK_MEMBER(lustre_mdt_attrs, lma_compat);
 	CHECK_MEMBER(lustre_mdt_attrs, lma_incompat);
 	CHECK_MEMBER(lustre_mdt_attrs, lma_self_fid);
-	CHECK_MEMBER(lustre_mdt_attrs, lma_flags);
 	CHECK_VALUE_X(LMAI_RELEASED);
 
 	CHECK_VALUE_X(LMAC_HSM);

@@ -112,8 +112,7 @@ struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
 
 int ofd_object_ff_check(const struct lu_env *env, struct ofd_object *fo)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	int			 rc = 0;
+	int rc = 0;
 
 	ENTRY;
 
@@ -122,9 +121,7 @@ int ofd_object_ff_check(const struct lu_env *env, struct ofd_object *fo)
 		 * This actually means that we don't know whether the object
 		 * has the "fid" EA or not.
 		 */
-		info->fti_buf.lb_buf = &info->fti_mds_fid2;
-		info->fti_buf.lb_len = sizeof(info->fti_mds_fid2);
-		rc = dt_xattr_get(env, ofd_object_child(fo), &info->fti_buf,
+		rc = dt_xattr_get(env, ofd_object_child(fo), &LU_BUF_NULL,
 				  XATTR_NAME_FID, BYPASS_CAPA);
 		if (rc >= 0 || rc == -ENODATA) {
 			/*

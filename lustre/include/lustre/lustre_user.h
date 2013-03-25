@@ -145,15 +145,48 @@ struct lu_fid {
 };
 
 struct filter_fid {
-	struct lu_fid   ff_parent;  /* ff_parent.f_ver == file stripe number */
-	__u64	   ff_objid;
-	__u64	   ff_seq;
+	struct lu_fid	ff_parent;  /* ff_parent.f_ver == file stripe number */
+};
+
+/* keep this one for compatibility */
+struct filter_fid_old {
+	struct lu_fid	ff_parent;
+	__u64		ff_objid;
+	__u64		ff_seq;
 };
 
 /* Userspace should treat lu_fid as opaque, and only use the following methods
  * to print or parse them.  Other functions (e.g. compare, swab) could be moved
  * here from lustre_idl.h if needed. */
 typedef struct lu_fid lustre_fid;
+
+/**
+ * Following struct for object attributes, that will be kept inode's EA.
+ * Introduced in 2.0 release (please see b15993, for details)
+ * Added to all objects since Lustre 2.4 as contains self FID
+ */
+struct lustre_mdt_attrs {
+	/**
+	 * Bitfield for supported data in this structure. From enum lma_compat.
+	 * lma_self_fid and lma_flags are always available.
+	 */
+	__u32   lma_compat;
+	/**
+	 * Per-file incompat feature list. Lustre version should support all
+	 * flags set in this field. The supported feature mask is available in
+	 * LMA_INCOMPAT_SUPP.
+	 */
+	__u32   lma_incompat;
+	/** FID of this inode */
+	struct lu_fid  lma_self_fid;
+};
+
+/**
+ * Prior to 2.4, the LMA structure also included SOM attributes which has since
+ * been moved to a dedicated xattr
+ * lma_flags was also removed because of lma_compat/incompat fields.
+ */
+#define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 5 * sizeof(__u64))
 
 /*
  * The ioctl naming rules:
