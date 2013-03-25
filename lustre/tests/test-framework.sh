@@ -3254,7 +3254,7 @@ init_param_vars () {
 		elif [ $current_jobid_var != $JOBID_VAR ]; then
 			echo "seting jobstats to $JOBID_VAR"
 
-			set_conf_param_and_check $HOSTNAME		\
+			set_conf_param_and_check client			\
 				"$LCTL get_param -n jobid_var"		\
 				"$FSNAME.sys.jobid_var" $JOBID_VAR
 		fi
