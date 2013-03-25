@@ -1655,16 +1655,16 @@ t32_test() {
 	}
 
 	if [ "$dne_upgrade" != "no" ]; then
-		$r2 $LCTL conf_param \
+		$r $LCTL conf_param \
 				$fsname-MDT0001.mdc.max_rpcs_in_flight=9 || {
 			error_noexit "Setting MDT1 \"max_rpcs_in_flight\""
 			return 1
 		}
-		$r2 $LCTL conf_param $fsname-MDT0001.failover.node=$nid || {
+		$r $LCTL conf_param $fsname-MDT0001.failover.node=$nid || {
 			error_noexit "Setting MDT1 \"failover.node\""
 			return 1
 		}
-		$r2 $LCTL conf_param $fsname-MDT0001.lov.stripesize=4M || {
+		$r $LCTL conf_param $fsname-MDT0001.lov.stripesize=4M || {
 			error_noexit "Setting MDT1 \"lov.stripesize\""
 			return 1
 		}
