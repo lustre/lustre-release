@@ -26,9 +26,10 @@ XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_F16) 2> /dev/null), \
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
 PRIMARYXSL=$(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl
+PRIMARYCHUNKXSL=$(XSL)/html/chunkfast.xsl
 
 .PHONY: all
-all: clean check xhtml html pdf epub
+all: clean check xhtml html chunked-html pdf epub 
 
 .PHONY: check
 check: $(SRC_XML)
@@ -37,6 +38,10 @@ check: $(SRC_XML)
 # Note: can't use "suffix" instead of "subst", because it keeps the '.'
 # Note: xsl:import is resolved at compile time, so the primary xsl
 #   is substituted into the custom xsl with sed before compliation.
+$(TGT_BASE)/%.html: $(SRCS)
+	sed -e 's;PRIMARYXSL;${PRIMARYCHUNKXSL};' ./style/customstyle.xsl | \
+	xsltproc --xinclude -o ${TGT_BASE}/ - ./index.xml
+
 $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).epub: $(SRCS)
 	sed -e 's;PRIMARYXSL;${PRIMARYXSL};' ./style/customstyle.xsl | \
 	xsltproc --xinclude -o $@ - ./index.xml
@@ -68,6 +73,10 @@ epub: $(TGT_BASE).epub
 	zip -Xr9D $(TGT_BASE).epub OEBPS/*
 	zip -Xr9D $(TGT_BASE).epub META-INF/*
 
+.PHONY: chunked-html
+chunked-html: $(TGT_BASE)/%.html
+	cp -r ./figures ./${TGT_BASE}
+
 
 # get the git hash for the last successful build of the manual
 .PHONY: mastermanual.revision
@@ -97,4 +106,4 @@ clean:
 	rm -f $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).pdf\
 		mastermanual.revision mastermanual.index mimetype\
 		$(TGT_BASE).diff.html $(TGT_BASE).epub $(TGT_BASE).fo
-	rm -rf ./META-INF ./OEBPS
+	rm -rf ./META-INF ./OEBPS ./$(TGT_BASE)
