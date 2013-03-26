@@ -1639,9 +1639,13 @@ static int add_param(char *params, char *key, char *val)
 	return 0;
 }
 
-static int mgs_steal_llog_handler(const struct lu_env *env,
-				  struct llog_handle *llh,
-				  struct llog_rec_hdr *rec, void *data)
+/**
+ * Walk through client config log record and convert the related records
+ * into the target.
+ **/
+static int mgs_steal_client_llog_handler(const struct lu_env *env,
+					 struct llog_handle *llh,
+					 struct llog_rec_hdr *rec, void *data)
 {
 	struct mgs_device *mgs;
 	struct obd_device *obd;
@@ -1682,13 +1686,13 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
 
         lcfg = (struct lustre_cfg *)cfg_buf;
 
-        if (lcfg->lcfg_command == LCFG_MARKER) {
-                struct cfg_marker *marker;
-                marker = lustre_cfg_buf(lcfg, 1);
-                if (!strncmp(marker->cm_comment,"add osc",7) &&
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		struct cfg_marker *marker;
+		marker = lustre_cfg_buf(lcfg, 1);
+		if (!strncmp(marker->cm_comment, "add osc", 7) &&
 		    (marker->cm_flags & CM_START) &&
 		     !(marker->cm_flags & CM_SKIP)) {
-                        got_an_osc_or_mdc = 1;
+			got_an_osc_or_mdc = 1;
 			cplen = strlcpy(tmti->mti_svname, marker->cm_tgtname,
 					sizeof(tmti->mti_svname));
 			if (cplen >= sizeof(tmti->mti_svname))
@@ -1698,45 +1702,47 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
 			if (rc)
 				RETURN(rc);
 			rc = record_marker(env, mdt_llh, fsdb, CM_START,
-                                           mti->mti_svname,"add osc(copied)");
+					   mti->mti_svname, "add osc(copied)");
 			record_end_log(env, &mdt_llh);
-                        last_step = marker->cm_step;
-                        RETURN(rc);
-                }
-                if (!strncmp(marker->cm_comment,"add osc",7) &&
+			last_step = marker->cm_step;
+			RETURN(rc);
+		}
+		if (!strncmp(marker->cm_comment, "add osc", 7) &&
 		    (marker->cm_flags & CM_END) &&
 		     !(marker->cm_flags & CM_SKIP)) {
-                        LASSERT(last_step == marker->cm_step);
-                        last_step = -1;
-                        got_an_osc_or_mdc = 0;
+			LASSERT(last_step == marker->cm_step);
+			last_step = -1;
+			got_an_osc_or_mdc = 0;
+			memset(tmti, 0, sizeof(*tmti));
 			rc = record_start_log(env, mgs, &mdt_llh,
 					      mti->mti_svname);
 			if (rc)
 				RETURN(rc);
 			rc = record_marker(env, mdt_llh, fsdb, CM_END,
-                                           mti->mti_svname,"add osc(copied)");
+					   mti->mti_svname, "add osc(copied)");
 			record_end_log(env, &mdt_llh);
-                        RETURN(rc);
-                }
-                if (!strncmp(marker->cm_comment,"add mdc",7) &&
+			RETURN(rc);
+		}
+		if (!strncmp(marker->cm_comment, "add mdc", 7) &&
 		    (marker->cm_flags & CM_START) &&
 		     !(marker->cm_flags & CM_SKIP)) {
-                        got_an_osc_or_mdc = 2;
-                        last_step = marker->cm_step;
-                        memcpy(tmti->mti_svname, marker->cm_tgtname,
-                               strlen(marker->cm_tgtname));
+			got_an_osc_or_mdc = 2;
+			last_step = marker->cm_step;
+			memcpy(tmti->mti_svname, marker->cm_tgtname,
+			       strlen(marker->cm_tgtname));
 
-                        RETURN(rc);
-                }
-                if (!strncmp(marker->cm_comment,"add mdc",7) &&
+			RETURN(rc);
+		}
+		if (!strncmp(marker->cm_comment, "add mdc", 7) &&
 		    (marker->cm_flags & CM_END) &&
 		     !(marker->cm_flags & CM_SKIP)) {
-                        LASSERT(last_step == marker->cm_step);
-                        last_step = -1;
-                        got_an_osc_or_mdc = 0;
-                        RETURN(rc);
-                }
-        }
+			LASSERT(last_step == marker->cm_step);
+			last_step = -1;
+			got_an_osc_or_mdc = 0;
+			memset(tmti, 0, sizeof(*tmti));
+			RETURN(rc);
+		}
+	}
 
         if (got_an_osc_or_mdc == 0 || last_step < 0)
                 RETURN(rc);
@@ -1852,7 +1858,7 @@ static int mgs_steal_llog_for_mdt_from_client(const struct lu_env *env,
 	if (rc)
 		GOTO(out_close, rc);
 
-	rc = llog_process_or_fork(env, loghandle, mgs_steal_llog_handler,
+	rc = llog_process_or_fork(env, loghandle, mgs_steal_client_llog_handler,
 				  (void *)comp, NULL, false);
 	CDEBUG(D_MGS, "steal llog re = %d\n", rc);
 out_close:
@@ -2493,7 +2499,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	/* NB: don't change record order, because upon MDT steal OSC config
 	 * from client, it treats all nids before LCFG_SETUP as target nids
 	 * (multiple interfaces), while nids after as failover node nids.
-	 * See mgs_steal_llog_handler() LCFG_ADD_UUID.
+	 * See mgs_steal_client_llog_handler() LCFG_ADD_UUID.
 	 */
         for (i = 0; i < mti->mti_nid_count; i++) {
                 CDEBUG(D_MGS, "add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
