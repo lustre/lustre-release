@@ -10,7 +10,7 @@
 #BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
 BUILD_GEN+=".1"	# LU-1361: enable kernel ABI
 
-source ${0%/*}/lbuild-rhel
+source ${LBUILD_DIR}/lbuild-rhel
 
 SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."

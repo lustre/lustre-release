@@ -2,6 +2,9 @@ AC_PREREQ([2.57])
 AC_INIT([Lustre], [LUSTRE_VERSION], [http://bugs.whamcloud.com/], [lustre])
 sinclude(lustre/autoconf/lustre-version.ac)
 
+AC_CONFIG_AUX_DIR([config])
+AC_CONFIG_MACRO_DIR([config])
+
 # Overridden by --without-ldiskfs/--with-zfs configure options
 AM_CONDITIONAL(LDISKFS_ENABLED, true)
 AM_CONDITIONAL(ZFS_ENABLED, false)

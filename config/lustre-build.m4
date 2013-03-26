@@ -565,8 +565,12 @@ AC_DEFUN([LB_CONFIG_FILES],
 	AC_CONFIG_FILES([
 		Makefile
 		autoMakefile]
+		config/Makefile
 		[Rules:build/Rules.in]
 		AC_PACKAGE_TARNAME[.spec]
+		contrib/Makefile
+		contrib/lbuild/Makefile
+		contrib/scripts/Makefile
 	)
 ])
 

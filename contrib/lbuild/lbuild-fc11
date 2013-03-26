@@ -1,8 +1,11 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
+# Replace i686 with i586 for fc11.
 # Please see find_linux_devel_paths() in lbuild-rhel5 file for more details.
-DEVEL_PATH_ARCH_DELIMETER="."
-source ${0%/*}/lbuild-rhel5
+if [ $TARGET_ARCH == 'i686' ]; then
+        DEVEL_PATH_ARCH="i586"
+fi
+source ${LBUILD_DIR}/lbuild-fc
 
 # increment this if you have made a change that should force a new kernel
 # to build built
@@ -10,4 +13,5 @@ source ${0%/*}/lbuild-rhel5
 #BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
 #BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+
 

@@ -1,5 +1,5 @@
 SUBDIRS := @LDISKFS_SUBDIR@ @SPL_SUBDIR@ @ZFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
-DIST_SUBDIRS := @LDISKFS_DIST_SUBDIR@ @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre
+DIST_SUBDIRS := @LDISKFS_DIST_SUBDIR@ @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre config contrib
 SOURCES_SUBDIRS := @LIBCFS_SUBDIR@ lnet lustre
 RPM_SUBDIRS := @LDISKFS_SUBDIR@ @LUSTREIOKIT_SUBDIR@
 MODULE_SYMVERS_DEPS = module-symvers
@@ -104,15 +104,8 @@ dist-hook:
 	  module-dist-hook
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
-	build/Makefile build/lbuild*					\
-	build/Rules.in 							\
-	build/update_oldconfig						\
-	build/autoconf/lustre-build-linux.m4				\
-	build/autoconf/lustre-build-darwin.m4				\
-	build/autoconf/lustre-build-ldiskfs.m4				\
-	build/autoconf/lustre-build.m4 build/rdac_spec                  \
-	build/mptlinux.spec.patch build/patches                         \
-	build/funcs.sh build/find_linux_rpms build/exit_traps.sh
+	build/Makefile 							\
+	build/Rules.in
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | \
@@ -253,7 +246,7 @@ CSTKO=/tmp/checkstack.orig
 checkstack:
 	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv -f ${CSTK} ${CSTKO} || true
 	{ for MOD in $$(find . -name "*.ko"); do			     \
-		objdump -d $$MOD | perl build/checkstack.pl;                 \
+		objdump -d $$MOD | perl contrib/scripts/checkstack.pl;	     \
 	  done } | grep -v " bug " | sort -nr | uniq > ${CSTK}
 	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
 

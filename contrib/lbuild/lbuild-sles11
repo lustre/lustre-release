@@ -5,7 +5,7 @@
 # build on all distributions, update the BUILD_GEN variable in build/lbuild)
 BUILD_GEN+=".0"
 
-source ${0%/*}/lbuild-sles
+source ${LBUILD_DIR}/lbuild-sles
 
 edit_specs() {
 

@@ -1,0 +1,8 @@
+This directory is a catch-all location for useful contributed files and
+scripts that are _not_ part of the lustre package proper.  For
+instance, scripts that are useful to lustre developers, but not used
+by lustre's own build system in configuring, compiling, or packaging lustre.
+
+An example would be the git hook scripts.  We do not package these files,
+and while they are an important part of the lustre development process
+they are not an essential part of the lustre build system.

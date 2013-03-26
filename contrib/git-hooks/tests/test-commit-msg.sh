@@ -23,7 +23,7 @@ for f; do
         esac
 
         cp $f $TEMPFILE
-        results=$(exec 2>&1 ${SHELL:-sh} $progdir/commit-msg $TEMPFILE)
+        results=$(exec 2>&1 ${SHELL:-sh} $progdir/../commit-msg $TEMPFILE)
         case $'\n'"$results" in
         ( *$'\nerror:'* ) OK=0 ;;
         ( * ) OK=1 ;;

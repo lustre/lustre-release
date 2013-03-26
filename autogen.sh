@@ -8,7 +8,7 @@ for HOOK in commit-msg prepare-commit-msg; do
 done
 
 echo "Checking for a complete tree..."
-REQUIRED_DIRS="build libcfs lnet lustre"
+REQUIRED_DIRS="libcfs lnet lustre"
 OPTIONAL_DIRS="snmp portals"
 CONFIGURE_DIRS="libsysio lustre-iokit ldiskfs"
 
@@ -43,7 +43,7 @@ run_cmd()
 	echo
 }
 
-run_cmd "aclocal $ACLOCAL_FLAGS"
+run_cmd "aclocal -I $PWD/config $ACLOCAL_FLAGS"
 run_cmd "autoheader"
 run_cmd "automake -a -c"
 run_cmd autoconf

@@ -11,7 +11,7 @@ BUILD_GEN+=".0"
 # use words that make the bash log readable.
 ZFSNOTSUPPORTED="Zfs Not Supported"
 
-source ${0%/*}/lbuild-rhel
+source ${LBUILD_DIR}/lbuild-rhel
 
 SPEC_NAME="kernel-2.6.spec"
 
