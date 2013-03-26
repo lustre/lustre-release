@@ -1277,7 +1277,7 @@ struct ll_statahead_info {
         cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
         struct ptlrpc_thread    sai_agl_thread; /* AGL thread */
-        cfs_list_t              sai_entries_sent;     /* entries sent out */
+	cfs_list_t              sai_entries;    /* entry list */
         cfs_list_t              sai_entries_received; /* entries returned */
         cfs_list_t              sai_entries_stated;   /* entries stated */
         cfs_list_t              sai_entries_agl; /* AGL entries to be sent */
