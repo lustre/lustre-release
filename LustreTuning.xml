@@ -19,6 +19,9 @@
       <para><xref linkend="dbdoclet.lndtuning"/></para>
     </listitem>
     <listitem>
+      <para><xref linkend="dbdoclet.nrstuning"/></para>
+    </listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438272_25884"/></para>
     </listitem>
     <listitem>
@@ -210,6 +213,264 @@
       <title><indexterm><primary>tuning</primary><secondary>LND tuning</secondary></indexterm>LND Tuning</title>
       <para>LND tuning allows the number of threads per CPU partition to be specified. An administrator can set the threads for both <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> using the <literal>nscheds</literal> parameter. This adjusts the number of threads for each partition, not the overall number of threads on the LND.</para>
                 <note><para>Lustre 2.3 has greatly decreased the default number of threads for <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> on high-core count machines. The current default values are automatically set and are chosen to work well across a number of typical scenarios.</para></note>
+  </section>
+  <section xml:id="dbdoclet.nrstuning" condition='l24'>
+    <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary></indexterm>Network Request Scheduler (NRS) Tuning</title>
+      <para>The Network Request Scheduler (NRS) allows the administrator to influence the order in which RPCs are handled at servers, on a per-PTLRPC service basis, by providing different policies that can be activated and tuned in order to influence the RPC ordering. The aim of this is to provide for better performance, and possibly discrete performance characteristics using future policies.</para>
+      <para>The NRS policy state of a PTLRPC service can be read and set via the <literal>{service}.nrs_policies</literal> tunable. To read a PTLRPC service's NRS policy state, run:</para>
+      <screen>lctl get_param {service}.nrs_policies</screen>
+      <para>For example, to read the NRS policy state of the ost_io service, run:</para>
+      <screen>$ lctl get_param ost.OSS.ost_io.nrs_policies
+ost.OSS.ost_io.nrs_policies=
+
+regular_requests:
+  - name: fifo
+    state: started
+    fallback: yes
+    queued: 0
+    active: 0
+
+  - name: crrn
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: orr
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: trr
+    state: started
+    fallback: no
+    queued: 2420
+    active: 268
+
+high_priority_requests:
+  - name: fifo
+    state: started
+    fallback: yes
+    queued: 0
+    active: 0
+
+  - name: crrn
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: orr
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: trr
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+      </screen>
+      <para>NRS policy state is shown in either one or two sections, depending on the PTLRPC service being queried. The first section is named <literal>regular_requests</literal> and is available for all PTLRPC services, optionally followed by a second section which is named <literal>high_priority_requests</literal>. This is because some PTLRPC services are able to treat some types of RPCs as higher priority ones, such that they are handled by the server with higher priority compared to other, regular RPC traffic. For PTLRPC services that do not support high-priority RPCs, you will only see the <literal>regular_requests</literal> section.</para>
+      <para>There is a separate instance of each NRS policy on each PTLRPC service for handling regular and high-priority RPCs (if the service supports high-priority RPCs). For each policy instance, the following fields are shown:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Field</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal> name </literal></para>
+              </entry>
+              <entry>
+                <para>The name of the policy.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal> state </literal></para>
+              </entry>
+              <entry>
+		      <para>The state of the policy; this can be any of <literal>invalid, stopping, stopped, starting, started</literal>. A fully enabled policy is in the <literal> started</literal> state.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal> fallback </literal></para>
+              </entry>
+              <entry>
+		      <para>Whether the policy is acting as a fallback policy or not. A fallback policy is used to handle RPCs that other enabled policies fail to handle, or do not support the handling of. The possible values are <literal>no, yes</literal>. Currently, only the FIFO policy can act as a fallback policy.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal> queued </literal></para>
+              </entry>
+              <entry>
+                <para>The number of RPCs that the policy has waiting to be serviced.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal> active </literal></para>
+              </entry>
+              <entry>
+                <para>The number of RPCs that the policy is currently handling.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>To enable an NRS policy on a PTLRPC service run:</para>
+      <screen>lctl set_param {service}.nrs_policies=<replaceable>policy_name</replaceable></screen>
+      <para>This will enable the policy <replaceable>policy_name</replaceable> for both regular and high-priority RPCs (if the PLRPC service supports high-priority RPCs) on the given service. For example, to enable the CRR-N NRS policy for the ldlm_cbd service, run:</para>
+      <screen>$ lctl set_param ldlm.services.ldlm_cbd.nrs_policies=crrn
+ldlm.services.ldlm_cbd.nrs_policies=crrn
+      </screen>
+      <para>For PTLRPC services that support high-priority RPCs, you can also supply an optional <replaceable>reg|hp</replaceable> token, in order to enable an NRS policy for handling only regular or high-priority RPCs on a given PTLRPC service, by running:</para>
+      <screen>lctl set_param {service}.nrs_policies="<replaceable>policy_name</replaceable> <replaceable>reg|hp</replaceable>"</screen>
+      <para>For example, to enable the TRR policy for handling only regular, but not high-priority RPCs on the ost_io service, run:</para>
+      <screen>$ lctl set_param ost.OSS.ost_io.nrs_policies="trr reg"
+ost.OSS.ost_io.nrs_policies="trr reg"
+      </screen>
+      <note>
+	<para>When enabling an NRS policy, the policy name must be given in lower-case characters, otherwise the operation will fail with an error message.</para>
+      </note>
+    <section>
+      <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary><tertiary>First In, First Out (FIFO) policy</tertiary></indexterm>First In, First Out (FIFO) policy</title>
+      <para>The First In, First Out (FIFO) policy handles RPCs in a service in the same order as they arrive from the LNet layer, so no special processing takes place to modify the RPC handling stream. FIFO is the default policy for all types of RPCs on all PTLRPC services, and is always enabled irrespective of the state of other policies,  so that it can be used as a backup policy, in case a more elaborate policy that has been enabled fails to handle an RPC, or does not support handling a given type of RPC.</para>
+      <para> The FIFO policy has no tunables that adjust its behaviour.</para>
+    </section>
+    <section>
+      <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary><tertiary>Client Round-Robin over NIDs (CRR-N) policy</tertiary></indexterm>Client Round-Robin over NIDs (CRR-N) policy</title>
+      <para>The Client Round-Robin over NIDs (CRR-N) policy performs batched Round-Robin scheduling of all types of RPCs, with each batch consisting of RPCs originating from the same client node, as identified by its NID. CRR-N aims to provide for better resource utilization across the cluster, and to help shorten completion times of jobs in some cases, by distributing available bandwidth more evenly across all clients.</para>
+      <para>The CRR-N policy can be enabled on all types of PTLRPC services, and has the following tunable that can be used to adjust its behaviour:</para>
+      <itemizedlist>
+	<listitem>
+	  <para><literal>{service}.nrs_crrn_quantum</literal></para>
+	  <para>The <literal>{service}.nrs_crrn_quantum</literal> tunable determines the maximum allowed size of each batch of RPCs; the unit of measure is in number of RPCs. To read the maximum allowed batch size of a CRR-N policy, run:</para>
+	  <screen>lctl get_param {service}.nrs_crrn_quantum</screen>
+	  <para>For example, to read the maximum allowed batch size of a CRR-N policy on the ost_io service, run:</para>
+	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_crrn_quantum
+ost.OSS.ost_io.nrs_crrn_quantum=reg_quantum:16
+hp_quantum:8
+	  </screen>
+	  <para>You can see that there is a separate maximum allowed batch size value for regular (<literal>reg_quantum</literal>) and high-priority (<literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports high-priority RPCs).</para>
+	  <para>To set the maximum allowed batch size of a CRR-N policy on a given service, run:</para>
+	  <screen>lctl set_param {service}.nrs_crrn_quantum=<replaceable>1-65535</replaceable></screen>
+	  <para>This will set the maximum allowed batch size on a given service, for both regular and high-priority RPCs (if the PLRPC service supports high-priority RPCs), to the indicated value.</para>
+	  <para>For example, to set the maximum allowed batch size on the ldlm_canceld service to 16 RPCs, run:</para>
+	  <screen>$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum=16
+ldlm.services.ldlm_canceld.nrs_crrn_quantum=16
+	  </screen>
+	  <para>For PTLRPC services that support high-priority RPCs, you can also specify a different maximum allowed batch size for regular and high-priority RPCs, by running:</para>
+	  <screen>$ lctl set_param {service}.nrs_crrn_quantum=<replaceable>reg_quantum|hp_quantum</replaceable>:<replaceable>1-65535</replaceable>"</screen>
+	  <para>For example, to set the maximum allowed batch size on the ldlm_canceld service, for high-priority RPCs to 32, run:</para>
+	  <screen>$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum="hp_quantum:32"
+ldlm.services.ldlm_canceld.nrs_crrn_quantum=hp_quantum:32
+	  </screen>
+	  <para>By using the last method, you can also set the maximum regular and high-priority RPC batch sizes to different values, in a single command invocation.</para>
+	</listitem>
+      </itemizedlist>
+    </section>
+    <section>
+      <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary><tertiary>Object-based Round-Robin (ORR) policy</tertiary></indexterm>Object-based Round-Robin (ORR) policy</title>
+      <para>The Object-based Round-Robin (ORR) policy performs batched Round-Robin scheduling of bulk read write (brw) RPCs, with each batch consisting of RPCs that pertain to the same backend-filesystem object, as identified by its OST FID.</para>
+      <para>The ORR policy is only available for use on the ost_io service. The RPC batches it forms can potentially consist of mixed bulk read and bulk write RPCs. The RPCs in each batch are ordered in an ascending manner, based on either the file offsets, or the physical disk offsets of each RPC (only applicable to bulk read RPCs).</para>
+      <para>The aim of the ORR policy is to provide for increased bulk read throughput in some cases, by ordering bulk read RPCs (and potentially bulk write RPCs), and thus minimizing costly disk seek operations. Performance may also benefit from any resulting improvement in resource utilization, or by taking advantage of better locality of reference between RPCs.</para>
+      <para>The ORR policy has the following tunables that can be used to adjust its behaviour:</para>
+      <itemizedlist>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_orr_quantum</literal></para>
+	  <para>The <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable determines the maximum allowed size of each batch of RPCs; the unit of measure is in number of RPCs. To read the maximum allowed batch size of the ORR policy, run:</para>
+	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_quantum
+ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:256
+hp_quantum:16
+	  </screen>
+	  <para>You can see that there is a separate maximum allowed batch size value for regular (<literal>reg_quantum</literal>) and high-priority (<literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports high-priority RPCs).</para>
+	  <para>To set the maximum allowed batch size for the ORR policy, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=<replaceable>1-65535</replaceable></screen>
+	  <para>This will set the maximum allowed batch size for both regular and high-priority RPCs, to the indicated value.</para>
+	  <para>You can also specify a different maximum allowed batch size for regular and high-priority RPCs, by running:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=<replaceable>reg_quantum|hp_quantum</replaceable>:<replaceable>1-65535</replaceable></screen>
+	  <para>For example, to set the maximum allowed batch size for regular RPCs to 128, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:128
+ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:128
+	  </screen>
+	  <para>By using the last method, you can also set the maximum regular and high-priority RPC batch sizes to different values, in a single command invocation.</para>
+	</listitem>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_orr_offset_type</literal></para>
+	  <para>The <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable determines whether the ORR policy orders RPCs within each batch based on logical file offsets or physical disk offsets. To read the offset type value for the ORR policy, run:</para>
+	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_offset_type
+ost.OSS.ost_io.nrs_orr_offset_type=reg_offset_type:physical
+hp_offset_type:logical
+	  </screen>
+	  <para>You can see that there is a separate offset type value for regular (<literal>reg_offset_type</literal>) and high-priority (<literal>hp_offset_type</literal>) RPCs.</para>
+	  <para>To set the ordering type for the ORR policy, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=<replaceable>physical|logical</replaceable></screen>
+	  <para>This will set the offset type for both regular and high-priority RPCs, to the indicated value.</para>
+	  <para>You can also specify a different offset type for regular and high-priority RPCs, by running:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=<replaceable>reg_offset_type|hp_offset_type</replaceable>:<replaceable>physical|logical</replaceable></screen>
+	  <para>For example, to set the offset type for high-priority RPCs to physical disk offsets, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical
+ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical
+	  </screen>
+	  <para>By using the last method, you can also set offset type for regular and high-priority RPCs to different values, in a single command invocation.</para>
+	  <note><para>Irrespective of the value of this tunable, only logical offsets can, and are used for ordering bulk write RPCs.</para></note>
+	</listitem>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_orr_supported</literal></para>
+	  <para>The <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable determines the type of RPCs that the ORR policy will handle. To read the types of supported RPCs by the ORR policy, run:</para>
+	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_supported
+ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads
+hp_supported=reads_and_writes
+	  </screen>
+	  <para>You can see that there is a separate supported 'RPC types' value for regular (<literal>reg_supported</literal>) and high-priority (<literal>hp_supported</literal>) RPCs.</para>
+	  <para>To set the supported RPC types for the ORR policy, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=<replaceable>reads|writes|reads_and_writes</replaceable></screen>
+	  <para>This will set the supported RPC types for both regular and high-priority RPCs, to the indicated value.</para>
+	  <para>You can also specify a different supported 'RPC types' value for regular and high-priority RPCs, by running:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=<replaceable>reg_supported|hp_supported</replaceable>:<replaceable>reads|writes|reads_and_writes</replaceable></screen>
+	  <para>For example, to set the supported RPC types to bulk read and bulk write RPCs for regular requests, run:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
+ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
+	  </screen>
+	  <para>By using the last method, you can also set the supported RPC types for regular and high-priority RPC to different values, in a single command invocation.</para>
+	</listitem>
+      </itemizedlist>
+    </section>
+    <section>
+      <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary><tertiary>Target-based Round-Robin (TRR) policy</tertiary></indexterm>Target-based Round-Robin (TRR) policy</title>
+      <para>The Target-based Round-Robin (TRR) policy performs batched Round-Robin scheduling of brw RPCs, with each batch consisting of RPCs that pertain to the same OST, as identified by its OST index.</para>
+      <para>The TRR policy is identical to the Object-based Round-Robin (ORR) policy, apart from using the brw RPC's target OST index instead of the backend-fs object's OST FID, for determining the RPC scheduling order. The goals of TRR are effectively the same as for ORR, and it uses the following tunables to adjust its behaviour:</para>
+      <itemizedlist>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_trr_quantum</literal></para>
+	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable for the ORR policy, and you can use it in exactly the same way.</para>
+	</listitem>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_trr_offset_type</literal></para>
+	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable for the ORR policy, and you can use it in exactly the same way.</para>
+	</listitem>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_trr_supported</literal></para>
+	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable for the ORR policy, and you can use it in exactly the sme way.</para>
+	</listitem>
+      </itemizedlist>
+    </section>
   </section>
   <section xml:id="dbdoclet.50438272_25884">
       <title><indexterm><primary>tuning</primary><secondary>lockless I/O</secondary></indexterm>Lockless I/O Tunables</title>

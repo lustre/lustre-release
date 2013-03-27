@@ -457,6 +457,13 @@
         <para>Node Affinity describes the property of a multithreaded application to behave sensibably on multiple cores. Without the property of Node Affinity, an operating scheduler may move application threads accross processors in an sub-optimal way that significantly reduces performance of the application overall.</para>
       </glossdef>
     </glossentry>
+    <glossentry xml:id="nrs">
+      <glossterm>NRS
+        </glossterm>
+      <glossdef>
+        <para>Network Request Scheduler. A subcomponent of the PTLRPC layer, which determines the order in which RPCs are handled at servers.</para>
+      </glossdef>
+    </glossentry>
     <glossentry xml:id="NUMAdef">
       <glossterm>NUMA
         </glossterm>
