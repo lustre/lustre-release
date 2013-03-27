@@ -977,7 +977,9 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
 
                 LASSERT(cl_lock_nr_mutexed(env) == 0);
 
-		result = -EINTR;
+		/* Returning ERESTARTSYS instead of EINTR so syscalls
+		 * can be restarted if signals are pending here */
+		result = -ERESTARTSYS;
 		if (likely(!OBD_FAIL_CHECK(OBD_FAIL_LOCK_STATE_WAIT_INTR))) {
 			cfs_waitq_wait(&waiter, CFS_TASK_INTERRUPTIBLE);
 			if (!cfs_signal_pending())
