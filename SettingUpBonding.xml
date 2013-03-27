@@ -111,9 +111,8 @@ Settings for eth1:
     <para>To set up bonding:</para>
     <orderedlist>
       <listitem>
-        <para>Create a virtual &apos;bond&apos; interface by creating a configuration file in:</para>
-        <screen>/etc/sysconfig/network-scripts/ # vi /etc/sysconfig/ network-scripts/ifcfg-\
-bond0</screen>
+        <para>Create a virtual &apos;bond&apos; interface by creating a configuration file:</para>
+        <screen># vi /etc/sysconfig/network-scripts/ifcfg-bond0</screen>
       </listitem>
       <listitem>
         <para>Append the following lines to the file.</para>

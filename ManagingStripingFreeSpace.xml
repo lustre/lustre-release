@@ -361,7 +361,7 @@ filesystem summary:        2211572                 41924                   \
       </itemizedlist>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>space</primary><secondary>location weighting</secondary></indexterm>>Adjusting the Weighting Between Free Space and Location</title>
+        <title><indexterm><primary>space</primary><secondary>location weighting</secondary></indexterm>Adjusting the Weighting Between Free Space and Location</title>
       <para>The weighting priority can be adjusted in the <literal>/proc</literal> file <literal>/proc/fs/lustre/lov/lustre-mdtlov/qos_prio_free proc</literal>. The default value is 90%. Use this command on the MGS to permanently change this weighting:</para>
       <screen>lctl conf_param <replaceable>fsname</replaceable>-MDT0000.lov.qos_prio_free=90</screen>
       <para>Increasing this value puts more weighting on free space. When the free space priority is set to 100%, then location is no longer used in stripe-ordering calculations and weighting is based entirely on free space.</para>
