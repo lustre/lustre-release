@@ -5548,7 +5548,7 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	char			*ptr;
 	int			reclen;
 	struct linkea_data	ldata = { 0 };
-	int			rc;
+	int			rc = 0;
 	ENTRY;
 
 	/* temp buffer for path element, the buffer will be finally freed
