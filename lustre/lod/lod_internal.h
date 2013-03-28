@@ -154,10 +154,10 @@ struct lod_object {
 	char		  *ldo_pool;
 	struct dt_object **ldo_stripe;
 	/* to know how much memory to free, ldo_stripenr can be less */
-	int		   ldo_stripes_allocated;
 	/* default striping for directory represented by this object
 	 * is cached in stripenr/stripe_size */
-	unsigned int	   ldo_striping_cached:1,
+	unsigned int	   ldo_stripes_allocated:16,
+			   ldo_striping_cached:1,
 			   ldo_def_striping_set:1;
 	__u32		   ldo_def_stripe_size;
 	__u16		   ldo_def_stripenr;
