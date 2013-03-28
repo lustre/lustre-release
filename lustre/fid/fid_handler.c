@@ -513,7 +513,6 @@ int seq_server_init(struct lu_server_seq *seq,
                         LUSTRE_SEQ_ZERO_RANGE:
                         LUSTRE_SEQ_SPACE_RANGE;
 
-		LASSERT(ss != NULL);
 		seq->lss_space.lsr_index = ss->ss_node_id;
 		LCONSOLE_INFO("%s: No data found "
 			      "on store. Initialize space\n",

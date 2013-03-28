@@ -1269,6 +1269,8 @@ int out_handle(struct tgt_session_info *tsi)
 
 	/* Prepare the update reply buffer */
 	update_reply = req_capsule_server_get(pill, &RMF_UPDATE_REPLY);
+	if (update_reply == NULL)
+		RETURN(err_serious(-EPROTO));
 	update_init_reply_buf(update_reply, count);
 	tti->tti_u.update.tti_update_reply = update_reply;
 

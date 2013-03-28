@@ -3008,7 +3008,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                                  */
                                 rc = -EPROTO;
                         } else {
-                                if (info->mti_mdt->mdt_opts.mo_compat_resname)
+				if (info->mti_mdt &&
+				    info->mti_mdt->mdt_opts.mo_compat_resname)
                                         rc = mdt_lock_resname_compat(
                                                                 info->mti_mdt,
                                                                 dlm_req);
@@ -3057,7 +3058,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         LASSERT(current->journal_info == NULL);
 
-        if (rc == 0 && (flags & HABEO_CLAVIS) &&
+	if (rc == 0 && (flags & HABEO_CLAVIS) && info->mti_mdt &&
             info->mti_mdt->mdt_opts.mo_compat_resname) {
                 struct ldlm_reply *dlmrep;
 
@@ -3449,12 +3450,12 @@ int mdt_handle_common(struct ptlrpc_request *req,
         ENTRY;
 
         env = req->rq_svc_thread->t_env;
+	LASSERT(env != NULL);
 	/* Refill(initilize) the context(mdt_thread_info), in case it is
 	 * not initialized yet. Usually it happens during start up, after
 	 * MDS(ptlrpc threads) is start up, it gets the first CONNECT request,
 	 * before MDT_thread_info is initialized */
 	lu_env_refill(env);
-        LASSERT(env != NULL);
         LASSERT(env->le_ses != NULL);
         LASSERT(env->le_ctx.lc_thread == req->rq_svc_thread);
         info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -5520,7 +5521,7 @@ static int mdt_obd_connect(const struct lu_env *env,
 	 * XXX: probably not very appropriate method is used now
 	 *      at some point we should find a better one
 	 */
-	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) &&
+	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) && data != NULL &&
 	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
 		rc = obd_health_check(env, mdt->mdt_child_exp->exp_obd);
 		if (rc)

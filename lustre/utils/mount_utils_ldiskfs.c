@@ -983,7 +983,8 @@ int set_blockdev_tunables(char *source, struct mount_opts *mop, int fan_out)
 
 		chk_major = strtok_r(buf, ":", &savept);
 		chk_minor = savept;
-		if (major == atoi(chk_major) &&minor == atoi(chk_minor))
+		if (chk_major != NULL && major == atoi(chk_major) &&
+		    chk_minor != NULL && minor == atoi(chk_minor))
 			break;
 	}
 

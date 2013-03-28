@@ -165,12 +165,13 @@ static inline int update_get_reply_buf(struct update_reply *reply, void **buf,
 	int  result;
 
 	ptr = update_get_buf_internal(reply, index, &size);
+	LASSERT(ptr != NULL);
 	result = *(int *)ptr;
 
 	if (result < 0)
 		return result;
 
-	LASSERT((ptr != NULL && size >= sizeof(int)));
+	LASSERT(size >= sizeof(int));
 	*buf = ptr + sizeof(int);
 	return size - sizeof(int);
 }

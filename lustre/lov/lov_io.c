@@ -278,11 +278,12 @@ struct lov_io_sub *lov_page_subio(const struct lu_env *env, struct lov_io *lio,
 static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
                              struct cl_io *io)
 {
-	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	struct lov_stripe_md *lsm;
 	int result;
+	ENTRY;
 
-        LASSERT(lio->lis_object != NULL);
-        ENTRY;
+	LASSERT(lio->lis_object != NULL);
+	lsm = lio->lis_object->lo_lsm;
 
         /*
          * Need to be optimized, we can't afford to allocate a piece of memory
