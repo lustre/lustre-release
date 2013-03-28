@@ -50,8 +50,8 @@ if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] && \
 fi
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:        LU-2836 LU-2836 LU-2059
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 3       6       7d"
+# bug number for skipped test:        LU-2872 LU-2836 LU-2836 LU-2059
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 1       3       6       7d"
 # bug number:     LU-2887
 	ZFS_SLOW="12a"
 fi
@@ -367,8 +367,14 @@ test_quota_performance() {
 	delta=$((etime - stime))
 	if [ $delta -gt 0 ]; then
 	    rate=$((size * 1024 / delta))
-	    [ $rate -gt 1024 ] ||
-		error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+	    if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+		# LU-2872 - see LU-2887 for fix
+		[ $rate -gt 256 ] ||
+			error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+	    else
+		[ $rate -gt 1024 ] ||
+			error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+	    fi
 	fi
 	rm -f $TESTFILE
 }
