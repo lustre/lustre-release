@@ -182,7 +182,7 @@ test_6() {
 
 	local f=$TDIR/$tfile
 	rm -f $f
-	sync && sleep 2 && sync  # wait for delete thread
+	sync && sleep 5 && sync  # wait for delete thread
 
 	# wait till space is returned, following
 	# (( $before > $after_dd)) test counting on that
@@ -195,13 +195,23 @@ test_6() {
 	local stripe_index=$(lfs getstripe -i $f)
 
 	sync
-	sleep 4 # ensure we have a fresh statfs and changes have stablalized
+	sleep 2 # ensure we have a fresh statfs
 	sync
 
 	#define OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
+
+	# retry till statfs returns useful results
 	local after_dd=$(kbytesfree)
-	log "before: $before after_dd: $after_dd"
+	local i=0
+	while (( $before <= $after_dd && $i < 20 )); do
+		sync
+		sleep 1
+		let ++i
+		after_dd=$(kbytesfree)
+	done
+
+	log "before: $before after_dd: $after_dd took $i seconds"
 	(( $before > $after_dd )) ||
 		error "space grew after dd: before:$before after_dd:$after_dd"
 	rm -f $f
@@ -235,6 +245,7 @@ test_7() {
 
 	sync
 	local after_dd=$(kbytesfree)
+	local i=0
 	while (( $before <= $after_dd && $i < 10 )); do
 		sync
 		sleep 1
