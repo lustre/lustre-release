@@ -5917,6 +5917,34 @@ run_llverfs()
         llverfs $partial_arg $llverfs_opts $dir
 }
 
+#Remove objects from OST
+remove_ost_objects() {
+	shift
+	local ostdev=$1
+	local group=$2
+	shift 2
+	local objids="$@"
+	local facet=ost$((OSTIDX + 1))
+	local mntpt=$(facet_mntpt $facet)
+	local opts=$OST_MOUNT_OPTS
+	local i
+	local rc
+
+	echo "removing objects from $ostdev on $facet: $objids"
+	if ! do_facet $facet test -b $ostdev; then
+		opts=$(csa_add "$opts" -o loop)
+	fi
+	mount -t $(facet_fstype $facet) $opts $ostdev $mntpt ||
+		return $?
+	rc=0;
+	for i in $objids; do
+		rm $mntpt/O/$group/d$((i % 32))/$i || { rc=$?; break; }
+	done
+	umount -f $mntpt || return $?
+	return $rc
+}
+
+#Remove files from MDT
 remove_mdt_files() {
 	local facet=$1
 	local mdtdev=$2

@@ -161,7 +161,7 @@ get_files() {
     esac
 
     local files=""
-    local f 
+    local f
     for f in $(seq -f testfile.%g $first $last); do
         test_file=$test_dir/$f
         files="$files $test_file"
@@ -172,29 +172,7 @@ get_files() {
 
 # Remove objects associated with files.
 remove_objects() {
-	local ostdev=$1
-	shift
-	local group=$1
-	shift
-	local objids="$@"
-	local facet=ost$((OSTIDX + 1))
-	local mntpt=$(facet_mntpt $facet)
-	local opts=$OST_MOUNT_OPTS
-	local i
-	local rc
-
-	echo "removing objects from $ostdev on $facet: $objids"
-	if ! do_facet $facet test -b $ostdev; then
-		opts=$(csa_add "$opts" -o loop)
-	fi
-	mount -t $(facet_fstype $facet) $opts $ostdev $mntpt ||
-		return $?
-	rc=0;
-	for i in $objids; do
-		rm $mntpt/O/$group/d$((i % 32))/$i || { rc=$?; break; }
-	done
-	umount -f $mntpt || return $?
-	return $rc
+	do_rpc_nodes $1 remove_ost_objects $@
 }
 
 # Remove files from MDS.
@@ -240,7 +218,7 @@ if is_empty_fs $MOUNT; then
 
     # remove objects associated with files in group $OBJGRP
     # on the OST with index $OSTIDX
-    remove_objects $OSTDEV $OBJGRP $OST_REMOVE ||
+	remove_objects $OSTNODE $OSTDEV $OBJGRP $OST_REMOVE ||
         error "removing objects failed"
 
     # remove files from MDS
