@@ -1242,7 +1242,7 @@ test_7e() {
 		quota_error -u $TSTUSR "create failed, expect success"
 
 	$RUNAS unlinkmany $TESTFILE $((ilimit + 1)) || "unlink failed"
-	$LFS rmdir $DIR/${tdir}-1 || "unlink remote dir failed"
+	rmdir $DIR/${tdir}-1 || "unlink remote dir failed"
 
 	cleanup_quota_test
 	resetquota -u $TSTUSR
@@ -1478,7 +1478,7 @@ test_12b() {
 
 	$RUNAS unlinkmany $TESTFILE1 $((ilimit / 2)) ||
 		error "unlink mdt1 files failed"
-	$LFS rmdir $DIR/${tdir}-1 || error "unlink remote dir failed"
+	rmdir $DIR/${tdir}-1 || error "unlink remote dir failed"
 
 	cleanup_quota_test
 	resetquota -u $TSTUSR
