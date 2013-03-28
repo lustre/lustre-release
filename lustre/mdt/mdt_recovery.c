@@ -534,6 +534,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
                 if (mti->mti_transno != 0) {
 			CERROR("Replay transno "LPU64" failed: rc %d\n",
 				mti->mti_transno, txn->th_result);
+			spin_unlock(&mdt->mdt_lut.lut_translock);
 			return 0;
                 }
         } else if (mti->mti_transno == 0) {
