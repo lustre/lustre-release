@@ -371,8 +371,13 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 #ifdef EXT3_MB_HINT_GROUP_ALLOC
                 ext3_mb_discard_inode_preallocations(inode);
 #endif
-                ext3_free_blocks(handle, inode, ext_pblock(&nex),
-                                 cpu_to_le16(nex.ee_len), 0);
+#ifdef HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD /* Introduced in 2.6.32-rc7 */
+		ext3_free_blocks(handle, inode, NULL, ext_pblock(&nex),
+				 cpu_to_le16(nex.ee_len), 0);
+#else
+		ext3_free_blocks(handle, inode, ext_pblock(&nex),
+				 cpu_to_le16(nex.ee_len), 0);
+#endif
                 goto out;
         }
 

@@ -706,6 +706,24 @@ fi
 AC_SUBST(LDISKFS_SERIES)
 ])
 
+#
+# 2.6.32-rc7 ext4_free_blocks requires struct buffer_head
+#
+AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD],
+[AC_MSG_CHECKING([if ext4_free_blocks needs struct buffer_head])
+ LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include "$EXT_DIR/ext4.h"
+],[
+	ext4_free_blocks(NULL, NULL, NULL, 0, 0, 0);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD, 1,
+		  [ext4_free_blocks do not require struct buffer_head])
+],[
+	AC_MSG_RESULT([no])
+])
+])
 
 #
 # LDISKFS_AC_PATCH_PROGRAM

@@ -66,8 +66,6 @@ AC_ARG_ENABLE([server],
 	])
 AC_MSG_RESULT([$enable_server])
 
-LB_CONFIG_HEADERS
-
 LDISKFSDIR="$PWD/ldiskfs"
 AC_SUBST(LDISKFSDIR)
 
@@ -76,7 +74,10 @@ LDISKFS_AC_PATCH_PROGRAM
 if test x$enable_server$enable_dist = xyesno ; then
 LB_LDISKFS_EXT_DIR
 LB_LDISKFS_EXT_SOURCE
+LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 fi
+
+LB_CONFIG_HEADERS
 
 AC_SUBST(ac_configure_args)
 
