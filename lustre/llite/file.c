@@ -926,8 +926,7 @@ out:
 		CDEBUG(D_VFSTRACE, "Restart %s on %s from %lld, count:%zd\n",
 		       iot == CIT_READ ? "read" : "write",
 		       file->f_dentry->d_name.name, *ppos, count);
-		LASSERTF(io->u.ci_rw.crw_count == count, "%zd != %zd\n",
-			 io->u.ci_rw.crw_count, count);
+		LASSERTF(io->ci_nob == 0, "%zd", io->ci_nob);
 		goto restart;
 	}
 
