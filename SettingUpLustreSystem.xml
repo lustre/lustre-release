@@ -494,7 +494,7 @@
       <para>In addition to the MDS memory requirements mentioned in <xref linkend="dbdoclet.50438256_87676"/>, the OSS requirements include:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Service threads</emphasis> : The service threads on the OSS node pre-allocate a 1 MB I/O buffer for each ost_io service thread, so these buffers do not need to be allocated and freed for each I/O request.</para>
+          <para><emphasis role="bold">Service threads</emphasis> : The service threads on the OSS node pre-allocate a 4 MB I/O buffer for each ost_io service thread, so these buffers do not need to be allocated and freed for each I/O request.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">OSS read cache</emphasis> : OSS read cache provides read-only caching of data on an OSS, using the regular Linux page cache to store the data. Just like caching from a regular file system in Linux, OSS read cache uses as much physical memory as is available.</para>
@@ -506,7 +506,7 @@
         <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>Calculating OSS Memory Requirements</title>
         <para>The minimum recommended RAM size for an OSS with two OSTs is computed below:</para>
         <informalexample>
-          <para>Ethernet/TCP send/receive buffers (1 MB * 512 threads) = 512 MB</para>
+          <para>Ethernet/TCP send/receive buffers (4 MB * 512 threads) = 2048 MB</para>
           <para>400 MB journal size * 2 OST devices = 800 MB</para>
           <para>1.5 MB read/write per OST IO thread * 512 threads = 768 MB</para>
           <para>600 MB file system read cache * 2 OSTs = 1200 MB</para>
