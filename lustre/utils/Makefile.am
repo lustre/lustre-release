@@ -133,7 +133,7 @@ endif
 if ZFS_ENABLED
 mount_lustre_SOURCES += mount_utils_zfs.c
 mount_lustre_CPPFLAGS += -DHAVE_IOCTL_IN_UNISTD_H
-mount_lustre_CPPFLAGS += $(EXTRA_LIBZFS_INCLUDE)
+mount_lustre_CPPFLAGS += $(ZFS_LIBZFS_INCLUDE)
 mount_lustre_LDFLAGS = -pthread -rdynamic -ldl
 endif
 
@@ -149,7 +149,7 @@ endif
 if ZFS_ENABLED
 mkfs_lustre_SOURCES += mount_utils_zfs.c
 mkfs_lustre_CPPFLAGS += -DHAVE_IOCTL_IN_UNISTD_H
-mkfs_lustre_CPPFLAGS += $(EXTRA_LIBZFS_INCLUDE)
+mkfs_lustre_CPPFLAGS += $(ZFS_LIBZFS_INCLUDE)
 mkfs_lustre_LDFLAGS = -pthread -rdynamic -ldl
 endif
 
@@ -163,7 +163,7 @@ endif
 if ZFS_ENABLED
 tunefs_lustre_SOURCES += mount_utils_zfs.c
 tunefs_lustre_CPPFLAGS += -DHAVE_IOCTL_IN_UNISTD_H
-tunefs_lustre_CPPFLAGS += $(EXTRA_LIBZFS_INCLUDE)
+tunefs_lustre_CPPFLAGS += $(ZFS_LIBZFS_INCLUDE)
 tunefs_lustre_LDFLAGS = -pthread -rdynamic -ldl
 endif
 

@@ -189,7 +189,6 @@ else
 fi
 
 if test x$enable_ldiskfs_build = xno; then
-	enable_server='no'
 	enable_ldiskfs_build='no'
 	with_ldiskfs='no'
 	LDISKFS_SUBDIR=

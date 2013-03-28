@@ -993,36 +993,60 @@ build_lustre() {
 #
 # Fetch spl/zfs from the git repo and prepare for lustre build
 #
+# Overrides:
+#   SPLZFSGITREPO - URI of directory where spl.git and zfs.git are located
+#   SPLZFSTAG     - Tag to checkout of clone repositories
+#   SPLZFSVER     - Version to checkout of both (format zfs/spl-$SPLZFSVER)
+#
 # return 0 if successful, else 255
 build_spl_zfs() {
     # make sure the RPM build environment is set up
+    pushd $TOPDIR
     create_rpmbuild_dirs
+    popd
 
     # The spl/zfs spec files expect RPM_BUILD_ROOT to point to the root of the
     # destination for the rpms
     export RPM_BUILD_ROOT=$TOPDIR
+    SPLZFSVER=${SPLZFSVER:-0.6.1}
+    SPLZFSTAG=${SPLZFSTAG:-lustre-zfs}
 
     # The files expect a kver to be set to the kernel version .
-    kver=$(cat ${LINUX}/include/config/kernel.release)
+    local kver=$(find_linux_release ${LINUX})
 
     # build and install the spl and zfs (and -devel) RPMs for lustre to use
     local pkg
     for pkg in spl zfs; do
 
-        local rpmmod spldir
+        local rpmpkg
 
-        [ "$pkg" == "zfs" ] && spldir="$(ls -d $TOPDIR/usr/src/spl-*/*)"
-        rpmmod=$pkg-modules
+        [ "$pkg" == "zfs" ] && spldir="$(ls -d $TOPDIR/usr/src/spl-*/|tail -1)"
 
         # need to fetch the repo in order to build it.
         # default to github but allow override
         git clone ${SPLZFSGITREPO:-"https://github.com/zfsonlinux"}/$pkg.git $pkg 2>&1
 
         pushd $pkg || return 255
+	if [ -n "$SPLZFSTAG" ]; then
+	    git checkout $SPLZFSTAG
+	else
+	    git checkout -b lbuild $pkg-$SPLZFSVER
+	fi
 
-        # XXX - _having_ to give a package a kernel just to have it configure
-        #       enough to do a "make dist" is truely bogus!
-        if  ! ./configure --with-linux=${LINUX} \
+	# This differentiates between older zfs versions
+	if [ -f $pkg-modules.spec.in ]; then
+	    rpmpkg=$pkg-modules
+	    specdir=.
+	    speclist="$pkg.spec $rpmpkg.spec"
+	else
+            rpmpkg=kmod-$pkg-devel
+	    specdir=rpm/generic
+	    speclist="$pkg.spec $pkg-kmod.spec $pkg-dkms.spec"
+	fi
+
+	sh autogen.sh || return 255
+
+        if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUX} \
                           ${spldir:+--with-spl="${spldir}"} 2>&1 ||
             ! make dist 2>&1; then
             popd
@@ -1030,71 +1054,57 @@ build_spl_zfs() {
         fi
         popd
 
-        # XXX - dirty hack time.  ~sigh~
-        #       because the spl tarball contains two .spec files, we cannot
-        #       simply rebuild the tarball
-        ln $pkg/$pkg-*.tar.gz $TOPDIR/SOURCES ||
-            error "failed to link $pkg/$pkg-*.tar.gz into $TOPDIR/SOURCES"
+        ln -f $pkg/$pkg-*.tar.gz $TOPDIR/SOURCES ||
+           error "failed to link $pkg/$pkg-*.tar.gz into $TOPDIR/SOURCES"
+	if [ -f $pkg/scripts/kmodtool ]; then
+	    ln -f $pkg/scripts/kmodtool $TOPDIR/SOURCES/
+	fi
 
-        # First build the userspace tools RPMs
-        if ! $RPMBUILD $targets -bb $pkg/$pkg.spec \
-            --nodeps -v \
-            --define "configure_args ${CONFIGURE_FLAGS}" \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR" 2>&1; then
-            return 255
-        fi
+	local rpmb
+	if $DO_SRC; then
+	    rpmb=-ba
+	else
+	    rpmb=-bb
+	fi
 
-        if $DO_SRC; then
-            if ! $RPMBUILD -bs $pkg/$pkg.spec \
-                --nodeps -v \
-                --define "configure_args ${CONFIGURE_FLAGS}" \
-                --define "_tmppath /var/tmp" \
-                --define "_topdir $TOPDIR" 2>&1; then
-                return 255
+	# set search dir for our own kmodtool to find correct
+	# directories
+	export KERNELSOURCE=$(dirname ${LINUX})
+	# Manually build rpms
+	for spec in $speclist; do
+	    echo "Building RPMs from $pkg/$specdir/$spec"
+            if ! $RPMBUILD $rpmb $pkg/$specdir/$spec \
+		--nodeps -v \
+		--define "require_kdir ${LINUX}" \
+		${LINUXOBJ:+--define "require_kobj ${LINUXOBJ}"} \
+		${spldir:+--define "require_spldir ${spldir}"} \
+		--define "kver $kver" \
+		--define "kernels $kver" \
+		--define "_tmppath /var/tmp" \
+		--define "kernelbuildroot $(find_linux_builddir $LINUX)" \
+		--define "_topdir $TOPDIR" 2>&1; then
+		return 255
             fi
-        fi
+	done
 
-        # Now the kernel module RPMs
-        # Need to provide pointers to the lustre kernel source, objects, usr/src
-        if ! $RPMBUILD $targets -bb $pkg/$rpmmod.spec \
-            --nodeps -v \
-            --define "require_kdir ${linux}" \
-            ${linuxobj:+--define "require_kobj ${linuxobj}"} \
-            ${spldir:+--define "require_spldir ${spldir}"} \
-            --define "configure_args ${CONFIGURE_FLAGS}" \
-            --define "_usrsrc $TOPDIR/usr/src" \
-            --define "kver $kver" \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR" 2>&1; then
-            return 255
-        fi
+#	$DO_SRC && mv $pkg*.src.rpm $TOPDIR/SRPMS/
+#	mv $pkg*.noarch.rpm $TOPDIR/RPMS/noarch/
+#	mv *$pkg*.$TARGET_ARCH.rpm $TOPDIR/RPMS/$(basearch $TARGET_ARCH)/
 
-        if $DO_SRC; then
-            if ! $RPMBUILD -bs $pkg/$rpmmod.spec \
-                --nodeps -v \
-                --define "require_kdir ${linux}" \
-                ${linuxobj:+--define "require_kobj ${linuxobj}"} \
-                ${spldir:+--define "require_spldir ${spldir}"} \
-                --define "configure_args ${CONFIGURE_FLAGS}" \
-                --define "_usrsrc $TOPDIR/usr/src" \
-                --define "kver $kver" \
-                --define "_tmppath /var/tmp" \
-                --define "_topdir $TOPDIR" 2>&1; then
-                return 255
-            fi
-        fi
-
-        # We have built the rpms for the package. No we need to extract the
+        # We have built the rpms for the package. Now we need to extract the
         # contained files so we can build further things against them
-        local rpm=$(ls $TOPDIR/RPMS/*/$rpmmod-devel-*.rpm)
+        local rpms=$(ls -1 $TOPDIR/RPMS/*/$rpmpkg-*.rpm)
 
         # cpio only extract to pwd so we need to go there.
         pushd $TOPDIR
-        rpm2cpio < $rpm | cpio -id
+	local rpm
+	for rpm in $rpms; do
+            rpm2cpio $rpm | cpio -id
+	done
         popd
 
-        CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*/*) ${CONFIGURE_FLAGS}"
+        CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*/|tail -1) ${CONFIGURE_FLAGS}"
+        CONFIGURE_FLAGS="--with-$pkg-obj=$(ls -d $TOPDIR/usr/src/$pkg-*/$kver*|tail -1) ${CONFIGURE_FLAGS}"
     done
 
     OSDZFSRPM=true
@@ -1177,7 +1187,15 @@ find_linux_release() {
     fi
 
     sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' $LINUXRELEASEHEADER
+}
 
+# This funcition finds the buildroot directory for a given linux
+# kernel directory
+find_linux_builddir() {
+    local linux=${1:-${LINUX}}
+    local rel=$(find_linux_release $linux)
+
+    echo ${linux%/usr/src/kernels/${rel}*}
 }
 
 # unpack kernel(/source/devel) RPM
@@ -1765,6 +1783,7 @@ create_rpmbuild_dirs() {
         fi
         [ -d RPMS/$arch ] || mkdir RPMS/$arch
     done
+    [ -d RPMS/noarch ] || mkdir RPMS/noarch
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
     [ -d SPECS ] || mkdir SPECS
