@@ -1,6 +1,6 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
-source ${0%/*}/lbuild-fc
+source ${LBUILD_DIR}/lbuild-fc
 
 # increment this if you have made a change that should force a new kernel
 # to build built
