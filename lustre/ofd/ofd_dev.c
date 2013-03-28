@@ -472,18 +472,38 @@ static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
 	if (osd_dir == NULL)
 		return;
 
-	if (lprocfs_srch(osd_dir, "brw_stats") == NULL)
-		return;
+	if (lprocfs_srch(osd_dir, "brw_stats") != NULL)
+		lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
+				    "../../%s/%s/brw_stats",
+				    osd_root->name, osd_dir->name);
 
-	lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
-			    "../../%s/%s/brw_stats",
-			    osd_root->name, osd_dir->name);
+	if (lprocfs_srch(osd_dir, "read_cache_enable") != NULL)
+		lprocfs_add_symlink("read_cache_enable", obd->obd_proc_entry,
+				    "../../%s/%s/read_cache_enable",
+				    osd_root->name, osd_dir->name);
+
+	if (lprocfs_srch(osd_dir, "readcache_max_filesize") != NULL)
+		lprocfs_add_symlink("readcache_max_filesize",
+				    obd->obd_proc_entry,
+				    "../../%s/%s/readcache_max_filesize",
+				    osd_root->name, osd_dir->name);
+
+	if (lprocfs_srch(osd_dir, "writethrough_cache_enable") != NULL)
+		lprocfs_add_symlink("writethrough_cache_enable",
+				    obd->obd_proc_entry,
+				    "../../%s/%s/writethrough_cache_enable",
+				    osd_root->name, osd_dir->name);
 }
 
 static void ofd_procfs_fini(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 
+	lprocfs_remove_proc_entry("writethrough_cache_enable",
+				  obd->obd_proc_entry);
+	lprocfs_remove_proc_entry("readcache_max_filesize",
+				  obd->obd_proc_entry);
+	lprocfs_remove_proc_entry("read_cache_enable", obd->obd_proc_entry);
 	lprocfs_remove_proc_entry("brw_stats", obd->obd_proc_entry);
 	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 	lprocfs_free_per_client_stats(obd);
