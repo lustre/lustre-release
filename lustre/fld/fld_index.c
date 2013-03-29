@@ -331,7 +331,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	if (attr == NULL)
 		RETURN(-ENOMEM);
 
-	memset(attr, 0, sizeof(attr));
+	memset(attr, 0, sizeof(*attr));
 	attr->la_valid = LA_MODE;
 	attr->la_mode = S_IFREG | 0666;
 	dof.dof_type = DFT_INDEX;

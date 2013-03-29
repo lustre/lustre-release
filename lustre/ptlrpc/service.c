@@ -3195,7 +3195,7 @@ ptlrpc_service_health_check(struct ptlrpc_service *svc)
 	struct ptlrpc_service_part	*svcpt;
 	int				i;
 
-	if (svc == NULL || svc->srv_parts == NULL)
+	if (svc == NULL)
 		return 0;
 
 	ptlrpc_service_for_each_part(svcpt, i, svc) {

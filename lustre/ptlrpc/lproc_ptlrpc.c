@@ -370,7 +370,6 @@ ptlrpc_lprocfs_rd_threads_started(char *page, char **start, off_t off,
 	int	total = 0;
 	int	i;
 
-	LASSERT(svc->srv_parts != NULL);
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svcpt->scp_nthrs_running;
 
@@ -1023,8 +1022,6 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 	int				nob = 0;
 	int				rc = 0;
 	int				i;
-
-	LASSERT(svc->srv_parts != NULL);
 
 	if (AT_OFF) {
 		rc += snprintf(page + rc, count - rc,

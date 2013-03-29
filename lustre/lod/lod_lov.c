@@ -266,7 +266,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	LASSERT(obd->obd_lu_dev);
-	LASSERT(obd->obd_lu_dev->ld_site = lod->lod_dt_dev.dd_lu_dev.ld_site);
+	LASSERT(obd->obd_lu_dev->ld_site == lod->lod_dt_dev.dd_lu_dev.ld_site);
 
 	ldev = obd->obd_lu_dev;
 	d = lu2dt_dev(ldev);

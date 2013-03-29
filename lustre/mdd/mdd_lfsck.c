@@ -484,7 +484,7 @@ static int mdd_lfsck_bookmark_init(const struct lu_env *env,
 	struct lfsck_bookmark *mb = &lfsck->ml_bookmark_ram;
 	int rc;
 
-	memset(mb, 0, sizeof(mb));
+	memset(mb, 0, sizeof(*mb));
 	mb->lb_magic = LFSCK_BOOKMARK_MAGIC;
 	mb->lb_version = LFSCK_VERSION_V2;
 	mutex_lock(&lfsck->ml_mutex);

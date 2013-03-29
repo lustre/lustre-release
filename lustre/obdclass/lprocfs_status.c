@@ -590,7 +590,6 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
         struct obd_device *dev = data;
 
         LASSERT(dev != NULL);
-        LASSERT(dev->obd_name != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", dev->obd_name);
 }

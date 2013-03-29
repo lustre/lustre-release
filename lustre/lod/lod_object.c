@@ -433,7 +433,7 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			if (rc)
 				RETURN(rc);
 		} else {
-			memset(attr, 0, sizeof(attr));
+			memset(attr, 0, sizeof(*attr));
 			attr->la_valid = LA_TYPE | LA_MODE;
 			attr->la_mode = S_IFREG;
 		}

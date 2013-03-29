@@ -90,10 +90,10 @@ int main(int argc, char **argv)
         }
 
         fprintf(stderr, "accessing (1)\n");
-        if (access(fname, F_OK) == 0) {
-                fprintf(stderr, "%s still exists\n", fname2);
-                exit(1);
-        }
+	if (access(fname, F_OK) == 0) {
+		fprintf(stderr, "%s still exists\n", fname);
+		exit(1);
+	}
 
         fprintf(stderr, "seeking (1)\n");
         rc = lseek(fd, 0, SEEK_SET);
