@@ -1095,30 +1095,6 @@ static int osp_md_object_destroy(const struct lu_env *env,
 	RETURN(rc);
 }
 
-struct dt_object_operations osp_md_obj_ops = {
-	.do_read_lock         = osp_md_object_read_lock,
-	.do_write_lock        = osp_md_object_write_lock,
-	.do_read_unlock       = osp_md_object_read_unlock,
-	.do_write_unlock      = osp_md_object_write_unlock,
-	.do_write_locked      = osp_md_object_write_locked,
-	.do_declare_create    = osp_md_declare_object_create,
-	.do_create            = osp_md_object_create,
-	.do_declare_ref_add   = osp_md_declare_ref_add,
-	.do_ref_add           = osp_md_object_ref_add,
-	.do_declare_ref_del   = osp_md_declare_object_ref_del,
-	.do_ref_del           = osp_md_object_ref_del,
-	.do_declare_destroy   = osp_md_declare_object_destroy,
-	.do_destroy           = osp_md_object_destroy,
-	.do_ah_init           = osp_md_ah_init,
-	.do_attr_get	      = osp_md_attr_get,
-	.do_declare_attr_set  = osp_md_declare_attr_set,
-	.do_attr_set          = osp_md_attr_set,
-	.do_declare_xattr_set = osp_md_declare_xattr_set,
-	.do_xattr_set         = osp_md_xattr_set,
-	.do_xattr_get         = osp_md_xattr_get,
-	.do_index_try         = osp_md_index_try,
-};
-
 static int osp_md_object_lock(const struct lu_env *env,
 			      struct dt_object *dt,
 			      struct lustre_handle *lh,
@@ -1157,7 +1133,27 @@ static int osp_md_object_lock(const struct lu_env *env,
 	return rc == ELDLM_OK ? 0 : -EIO;
 }
 
-struct dt_lock_operations osp_md_lock_ops = {
+struct dt_object_operations osp_md_obj_ops = {
+	.do_read_lock         = osp_md_object_read_lock,
+	.do_write_lock        = osp_md_object_write_lock,
+	.do_read_unlock       = osp_md_object_read_unlock,
+	.do_write_unlock      = osp_md_object_write_unlock,
+	.do_write_locked      = osp_md_object_write_locked,
+	.do_declare_create    = osp_md_declare_object_create,
+	.do_create            = osp_md_object_create,
+	.do_declare_ref_add   = osp_md_declare_ref_add,
+	.do_ref_add           = osp_md_object_ref_add,
+	.do_declare_ref_del   = osp_md_declare_object_ref_del,
+	.do_ref_del           = osp_md_object_ref_del,
+	.do_declare_destroy   = osp_md_declare_object_destroy,
+	.do_destroy           = osp_md_object_destroy,
+	.do_ah_init           = osp_md_ah_init,
+	.do_attr_get	      = osp_md_attr_get,
+	.do_declare_attr_set  = osp_md_declare_attr_set,
+	.do_attr_set          = osp_md_attr_set,
+	.do_declare_xattr_set = osp_md_declare_xattr_set,
+	.do_xattr_set         = osp_md_xattr_set,
+	.do_xattr_get         = osp_md_xattr_get,
+	.do_index_try         = osp_md_index_try,
 	.do_object_lock       = osp_md_object_lock,
 };
-

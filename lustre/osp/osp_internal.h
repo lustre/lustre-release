@@ -198,7 +198,6 @@ struct osp_object {
 extern struct lu_object_operations osp_lu_obj_ops;
 extern const struct dt_device_operations osp_dt_ops;
 extern struct dt_object_operations osp_md_obj_ops;
-extern struct dt_lock_operations osp_md_lock_ops;
 
 struct osp_thread_info {
 	struct lu_buf		 osi_lb;

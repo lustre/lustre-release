@@ -370,7 +370,6 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 
 		po->opo_obj.do_ops = &osp_md_obj_ops;
 		o->lo_header->loh_attr |= LOHA_REMOTE;
-		po->opo_obj.do_lock_ops = &osp_md_lock_ops;
 		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
 						     la, NULL);
 		if (rc == 0)

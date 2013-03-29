@@ -1102,6 +1102,23 @@ static int lod_object_sync(const struct lu_env *env, struct dt_object *dt)
 	return dt_object_sync(env, dt_object_child(dt));
 }
 
+static int lod_object_lock(const struct lu_env *env,
+			   struct dt_object *dt, struct lustre_handle *lh,
+			   struct ldlm_enqueue_info *einfo,
+			   void *policy)
+{
+	struct dt_object   *next = dt_object_child(dt);
+	int		 rc;
+	ENTRY;
+
+	/*
+	 * declare setattr on the local object
+	 */
+	rc = dt_object_lock(env, next, lh, einfo, policy);
+
+	RETURN(rc);
+}
+
 struct dt_object_operations lod_obj_ops = {
 	.do_read_lock		= lod_object_read_lock,
 	.do_write_lock		= lod_object_write_lock,
@@ -1129,28 +1146,9 @@ struct dt_object_operations lod_obj_ops = {
 	.do_ref_del		= lod_ref_del,
 	.do_capa_get		= lod_capa_get,
 	.do_object_sync		= lod_object_sync,
+	.do_object_lock		= lod_object_lock,
 };
 
-static int lod_object_lock(const struct lu_env *env,
-			   struct dt_object *dt, struct lustre_handle *lh,
-			   struct ldlm_enqueue_info *einfo,
-			   void *policy)
-{
-	struct dt_object   *next = dt_object_child(dt);
-	int		 rc;
-	ENTRY;
-
-	/*
-	 * declare setattr on the local object
-	 */
-	rc = dt_object_lock(env, next, lh, einfo, policy);
-
-	RETURN(rc);
-}
-
-struct dt_lock_operations lod_lock_ops = {
-	.do_object_lock       = lod_object_lock,
-};
 static ssize_t lod_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos,
 			struct lustre_capa *capa)

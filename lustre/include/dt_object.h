@@ -449,6 +449,14 @@ struct dt_object_operations {
          */
         int (*do_data_get)(const struct lu_env *env, struct dt_object *dt,
                            void **data);
+
+	/**
+	 * Lock object.
+	 */
+	int (*do_object_lock)(const struct lu_env *env, struct dt_object *dt,
+			      struct lustre_handle *lh,
+			      struct ldlm_enqueue_info *einfo,
+			      void *policy);
 };
 
 /**
@@ -526,12 +534,6 @@ struct dt_body_operations {
                           struct lustre_capa *capa);
 };
 
-struct dt_lock_operations {
-	int (*do_object_lock)(const struct lu_env *env, struct dt_object *dt,
-			      struct lustre_handle *lh,
-			      struct ldlm_enqueue_info *einfo,
-			      void *policy);
-};
 /**
  * Incomplete type of index record.
  */
@@ -675,7 +677,6 @@ struct dt_object {
         const struct dt_object_operations *do_ops;
         const struct dt_body_operations   *do_body_ops;
         const struct dt_index_operations  *do_index_ops;
-	const struct dt_lock_operations   *do_lock_ops;
 };
 
 /*
@@ -889,9 +890,9 @@ static inline int dt_object_lock(const struct lu_env *env,
 				 void *policy)
 {
 	LASSERT(o);
-	LASSERT(o->do_lock_ops);
-	LASSERT(o->do_lock_ops->do_object_lock);
-	return o->do_lock_ops->do_object_lock(env, o, lh, einfo, policy);
+	LASSERT(o->do_ops);
+	LASSERT(o->do_ops->do_object_lock);
+	return o->do_ops->do_object_lock(env, o, lh, einfo, policy);
 }
 
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
