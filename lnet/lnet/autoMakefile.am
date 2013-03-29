@@ -1,4 +1,4 @@
-my_sources =    api-errno.c api-ni.c config.c \
+my_sources =    api-ni.c config.c \
 		lib-me.c lib-msg.c lib-eq.c \
 		lib-md.c lib-ptl.c lib-move.c lo.c \
 	        router.c router_proc.c \
@@ -21,7 +21,7 @@ endif # LINUX
 if DARWIN
 macos_PROGRAMS = lnet
 
-lnet_SOURCES = api-errno.c api-ni.c config.c
+lnet_SOURCES = api-ni.c config.c
 lnet_SOURCES += lib-me.c lib-msg.c lib-eq.c lib-md.c
 lnet_SOURCES += lib-move.c module.c lo.c router.c router_proc.c
 lnet_SOURCES += acceptor.c peer.c
