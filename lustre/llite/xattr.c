@@ -169,11 +169,12 @@ int ll_setxattr_common(struct inode *inode, const char *name,
                         }
                         ee_free(ee);
                 } else if (rce->rce_ops == RMT_RSETFACL) {
-                        size = lustre_posix_acl_xattr_filter(
-                                                (posix_acl_xattr_header *)value,
-                                                size, &new_value);
-                        if (unlikely(size < 0))
-                                RETURN(size);
+			int acl_size = lustre_posix_acl_xattr_filter(
+						(posix_acl_xattr_header *)value,
+						size, &new_value);
+			if (unlikely(acl_size < 0))
+				RETURN(acl_size);
+			size = acl_size;
 
                         pv = (const char *)new_value;
                 } else

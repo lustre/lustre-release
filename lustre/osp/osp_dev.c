@@ -539,7 +539,8 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	struct obd_import	*imp;
 	class_uuid_t		uuid;
 	char			*src, *tgt, *mdt, *osdname = NULL;
-	int			rc, idx;
+	int			rc;
+	long                    idx;
 
 	ENTRY;
 
@@ -600,7 +601,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	} else {
 		/* New OSC name fsname-OSTXXXX-osc-MDTXXXX */
 		if (strncmp(tgt, "-MDT", 4) != 0 &&
-			 strncmp(tgt, "-OST", 4) != 0) {
+		    strncmp(tgt, "-OST", 4) != 0) {
 			CERROR("%s: invalid target name %s\n",
 			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
 			RETURN(-EINVAL);

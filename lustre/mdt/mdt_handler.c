@@ -4843,7 +4843,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         const char                *identity_upcall = "NONE";
         struct md_device          *next;
         int                        rc;
-        int                        node_id;
+	long                       node_id;
         mntopt_t                   mntopts;
         ENTRY;
 

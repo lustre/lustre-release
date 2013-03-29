@@ -1829,7 +1829,8 @@ static int setup_indexes(DIR *dir, char *path, struct obd_uuid *obduuids,
                          int num_obds, int **obdindexes, int *obdindex,
                          enum tgt_type type)
 {
-        int ret, obdcount, obd_valid = 0, obdnum, i;
+	int ret, obdcount, obd_valid = 0, obdnum;
+	long i;
         struct obd_uuid *uuids = NULL;
         char buf[16];
         int *indexes;
@@ -3793,7 +3794,8 @@ int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 {
         char fsname[20];
         char *ptr;
-        int fd, index, rc;
+	int fd, rc;
+	long index;
 
         /* Take path, fsname, or MDTname.  Assume MDT0000 in the former cases.
          Open root and parse mdt index. */
@@ -4013,7 +4015,7 @@ int llapi_changelog_free(struct changelog_ext_rec **rech)
 int llapi_changelog_clear(const char *mdtname, const char *idstr,
                           long long endrec)
 {
-        int id;
+	long id;
 
         if (endrec < 0) {
                 llapi_err_noerrno(LLAPI_MSG_ERROR,

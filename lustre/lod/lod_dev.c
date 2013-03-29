@@ -176,7 +176,7 @@ static int lod_cleanup_desc_tgts(const struct lu_env *env,
 	return rc;
 }
 
-static int lodname2mdt_index(char *lodname, int *index)
+static int lodname2mdt_index(char *lodname, long *index)
 {
 	char *ptr, *tmp;
 
@@ -360,10 +360,13 @@ static int lod_process_config(const struct lu_env *env,
 			if (mdt == NULL) {
 				mdt_index = 0;
 			} else {
+				long long_index;
 				rc = lodname2mdt_index(
-					lustre_cfg_string(lcfg, 0), &mdt_index);
+					lustre_cfg_string(lcfg, 0),
+					&long_index);
 				if (rc != 0)
 					GOTO(out, rc);
+				mdt_index = long_index;
 			}
 			rc = lod_add_device(env, lod, arg1, index, gen,
 					    mdt_index, LUSTRE_OSC_NAME, 1);
