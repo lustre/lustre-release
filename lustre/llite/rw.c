@@ -252,18 +252,8 @@ int ll_prepare_write(struct file *file, struct page *vmpage, unsigned from,
                 struct cl_page *page = lcc->lcc_page;
 
                 cl_page_assume(env, io, page);
-                if (cl_io_is_append(io)) {
-                        struct cl_object   *obj   = io->ci_obj;
-                        struct inode       *inode = ccc_object_inode(obj);
-                        /**
-                         * In VFS file->page write loop, for appending, the
-                         * write offset might be reset according to the new
-                         * file size before holding i_mutex. So crw_pos should
-                         * be reset here. BUG:17711.
-                         */
-                        io->u.ci_wr.wr.crw_pos = i_size_read(inode);
-                }
-                result = cl_io_prepare_write(env, io, page, from, to);
+                
+		result = cl_io_prepare_write(env, io, page, from, to);
                 if (result == 0) {
                         /*
                          * Add a reference, so that page is not evicted from
