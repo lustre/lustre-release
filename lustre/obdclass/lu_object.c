@@ -195,16 +195,18 @@ EXPORT_SYMBOL(lu_object_unhash);
  * struct lu_device_operations definition.
  */
 static struct lu_object *lu_object_alloc(const struct lu_env *env,
-                                         struct lu_device *dev,
-                                         const struct lu_fid *f,
-                                         const struct lu_object_conf *conf)
+					 struct lu_device *dev,
+					 const struct lu_fid *f,
+					 const struct lu_object_conf *conf)
 {
-        struct lu_object *scan;
-        struct lu_object *top;
-        cfs_list_t *layers;
-        int clean;
-        int result;
-        ENTRY;
+	struct lu_object *scan;
+	struct lu_object *top;
+	cfs_list_t *layers;
+	unsigned int init_mask = 0;
+	unsigned int init_flag;
+	int clean;
+	int result;
+	ENTRY;
 
 	/*
 	 * Create top-level object slice. This will also create
@@ -221,25 +223,29 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
          */
         top->lo_header->loh_fid = *f;
         layers = &top->lo_header->loh_layers;
-        do {
-                /*
-                 * Call ->loo_object_init() repeatedly, until no more new
-                 * object slices are created.
-                 */
-                clean = 1;
-                cfs_list_for_each_entry(scan, layers, lo_linkage) {
-                        if (scan->lo_flags & LU_OBJECT_ALLOCATED)
-                                continue;
-                        clean = 0;
-                        scan->lo_header = top->lo_header;
-                        result = scan->lo_ops->loo_object_init(env, scan, conf);
-                        if (result != 0) {
-                                lu_object_free(env, top);
-                                RETURN(ERR_PTR(result));
-                        }
-                        scan->lo_flags |= LU_OBJECT_ALLOCATED;
-                }
-        } while (!clean);
+
+	do {
+		/*
+		 * Call ->loo_object_init() repeatedly, until no more new
+		 * object slices are created.
+		 */
+		clean = 1;
+		init_flag = 1;
+		cfs_list_for_each_entry(scan, layers, lo_linkage) {
+			if (init_mask & init_flag)
+				goto next;
+			clean = 0;
+			scan->lo_header = top->lo_header;
+			result = scan->lo_ops->loo_object_init(env, scan, conf);
+			if (result != 0) {
+				lu_object_free(env, top);
+				RETURN(ERR_PTR(result));
+			}
+			init_mask |= init_flag;
+next:
+			init_flag <<= 1;
+		}
+	} while (!clean);
 
         cfs_list_for_each_entry_reverse(scan, layers, lo_linkage) {
                 if (scan->lo_ops->loo_object_start != NULL) {
@@ -486,28 +492,30 @@ EXPORT_SYMBOL(lu_object_header_print);
  * Print human readable representation of the \a o to the \a printer.
  */
 void lu_object_print(const struct lu_env *env, void *cookie,
-                     lu_printer_t printer, const struct lu_object *o)
+		     lu_printer_t printer, const struct lu_object *o)
 {
-        static const char ruler[] = "........................................";
-        struct lu_object_header *top;
-        int depth;
+	static const char ruler[] = "........................................";
+	struct lu_object_header *top;
+	int depth = 4;
 
-        top = o->lo_header;
-        lu_object_header_print(env, cookie, printer, top);
-        (*printer)(env, cookie, "{ \n");
-        cfs_list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-                depth = o->lo_depth + 4;
+	top = o->lo_header;
+	lu_object_header_print(env, cookie, printer, top);
+	(*printer)(env, cookie, "{\n");
 
-                /*
-                 * print `.' \a depth times followed by type name and address
-                 */
-                (*printer)(env, cookie, "%*.*s%s@%p", depth, depth, ruler,
-                           o->lo_dev->ld_type->ldt_name, o);
-                if (o->lo_ops->loo_object_print != NULL)
-                        o->lo_ops->loo_object_print(env, cookie, printer, o);
-                (*printer)(env, cookie, "\n");
-        }
-        (*printer)(env, cookie, "} header@%p\n", top);
+	cfs_list_for_each_entry(o, &top->loh_layers, lo_linkage) {
+		/*
+		 * print `.' \a depth times followed by type name and address
+		 */
+		(*printer)(env, cookie, "%*.*s%s@%p", depth, depth, ruler,
+			   o->lo_dev->ld_type->ldt_name, o);
+
+		if (o->lo_ops->loo_object_print != NULL)
+			(*o->lo_ops->loo_object_print)(env, cookie, printer, o);
+
+		(*printer)(env, cookie, "\n");
+	}
+
+	(*printer)(env, cookie, "} header@%p\n", top);
 }
 EXPORT_SYMBOL(lu_object_print);
 
