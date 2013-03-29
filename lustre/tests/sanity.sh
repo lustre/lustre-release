@@ -6982,6 +6982,15 @@ test_118l()
 }
 run_test 118l "fsync dir ========="
 
+test_118m() # LU-3066
+{
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	test_mkdir -p $DIR/$tdir
+	$MULTIOP $DIR/$tdir DY || error "fdatasync dir failed"
+	rm -rf $DIR/$tdir
+}
+run_test 118m "fdatasync dir ========="
+
 [ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
 
 test_119a() # bug 11737

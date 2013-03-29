@@ -2417,15 +2417,15 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
  */
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
-int ll_fsync(struct file *file, loff_t start, loff_t end, int data)
+int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct dentry *dentry = file->f_dentry;
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
-int ll_fsync(struct file *file, int data)
+int ll_fsync(struct file *file, int datasync)
 {
 	struct dentry *dentry = file->f_dentry;
 #else
-int ll_fsync(struct file *file, struct dentry *dentry, int data)
+int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 {
 #endif
         struct inode *inode = dentry->d_inode;
@@ -2469,7 +2469,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         if (!err)
                 ptlrpc_req_finished(req);
 
-	if (data) {
+	if (datasync && S_ISREG(inode->i_mode)) {
 		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 
 		err = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
