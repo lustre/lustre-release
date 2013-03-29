@@ -2597,6 +2597,12 @@ test_34h() {
 	     # flush when getting the group lock
 	$MULTIOP $DIR/$tfile OG${gid}T${sz}g${gid}c &
 	MULTIPID=$!
+
+	# Since just timed wait is not good enough, let's do a sync write
+	# that way we are sure enough time for a roundtrip + processing
+	# passed + 2 seconds of extra margin.
+	dd if=/dev/zero of=$DIR/${tfile}-1 bs=4096 oflag=direct count=1
+	rm $DIR/${tfile}-1
 	sleep 2
 
 	if [[ `ps h -o comm -p $MULTIPID` == "multiop" ]]; then
