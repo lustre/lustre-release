@@ -230,21 +230,19 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #endif
 
-#define class_export_rpc_get(exp)                                       \
+#define class_export_rpc_inc(exp)                                       \
 ({                                                                      \
         cfs_atomic_inc(&(exp)->exp_rpc_count);                          \
         CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
                (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
-        class_export_get(exp);                                          \
 })
 
-#define class_export_rpc_put(exp)                                       \
+#define class_export_rpc_dec(exp)                                       \
 ({                                                                      \
         LASSERT_ATOMIC_POS(&exp->exp_rpc_count);                        \
         cfs_atomic_dec(&(exp)->exp_rpc_count);                          \
         CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
                (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
-        class_export_put(exp);                                          \
 })
 
 #define class_export_lock_get(exp, lock)                                \

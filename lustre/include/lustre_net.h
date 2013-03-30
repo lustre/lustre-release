@@ -2904,6 +2904,8 @@ int liblustre_check_services(void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);
+void ptlrpc_request_change_export(struct ptlrpc_request *req,
+				  struct obd_export *export);
 
 #ifdef __KERNEL__
 int ptlrpc_hr_init(void);

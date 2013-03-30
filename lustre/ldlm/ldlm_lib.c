@@ -1113,11 +1113,7 @@ dont_check_exports:
          * XXX this will go away when shaver stops sending the "connect" handle
          * in the real "remote handle" field of the request --phik 24 Apr 2003
          */
-        if (req->rq_export != NULL)
-                class_export_put(req->rq_export);
-
-	/* Request takes one export reference. */
-	req->rq_export = class_export_get(export);
+	ptlrpc_request_change_export(req, export);
 
 	spin_lock(&export->exp_lock);
 	if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
@@ -1323,7 +1319,7 @@ EXPORT_SYMBOL(target_destroy_export);
  */
 static void target_request_copy_get(struct ptlrpc_request *req)
 {
-        class_export_rpc_get(req->rq_export);
+	class_export_rpc_inc(req->rq_export);
         LASSERT(cfs_list_empty(&req->rq_list));
         CFS_INIT_LIST_HEAD(&req->rq_replay_list);
 
@@ -1339,7 +1335,7 @@ static void target_request_copy_put(struct ptlrpc_request *req)
         LASSERT_ATOMIC_POS(&req->rq_export->exp_replay_count);
 
         cfs_atomic_dec(&req->rq_export->exp_replay_count);
-        class_export_rpc_put(req->rq_export);
+	class_export_rpc_dec(req->rq_export);
         ptlrpc_server_drop_request(req);
 }
 
