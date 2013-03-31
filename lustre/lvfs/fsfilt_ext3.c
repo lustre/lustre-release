@@ -45,6 +45,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <ldiskfs/ldiskfs_config.h>
 #include <ext4/ext4.h>
 #include <ext4/ext4_jbd2.h>
 #include <linux/version.h>

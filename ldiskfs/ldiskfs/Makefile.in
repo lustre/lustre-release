@@ -67,6 +67,7 @@ patches := @top_srcdir@/kernel_patches/patches
 ###############################
 
 EXTRA_CFLAGS += -I@LINUX@/fs -I@LDISKFSDIR@
+EXTRA_CFLAGS += -include @abs_top_builddir@/ldiskfs/ldiskfs_config.h
 EXTRA_CFLAGS += -include @abs_top_builddir@/config.h
 
 obj-m := ldiskfs.o

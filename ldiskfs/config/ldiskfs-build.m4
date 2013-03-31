@@ -495,7 +495,7 @@ AS_VAR_POPDEF([lb_File])dnl
 # add -include config.h
 #
 AC_DEFUN([LB_CONFIG_HEADERS],[
-	AC_CONFIG_HEADERS([config.h])
+	AC_CONFIG_HEADERS([config.h ldiskfs/ldiskfs_config.h])
 	CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
 	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 	AC_SUBST(EXTRA_KCFLAGS)
@@ -606,28 +606,6 @@ and kernel-debuginfo-common-<arch> packages are installed.
 ])
 
 fi
-])
-
-#
-# LB_LDISKFS_DEFINE_OPTIONS
-#
-# Enable config options related to ldiskfs.  These are used by ldiskfs,
-# lvfs, and the osd-ldiskfs code (which includes ldiskfs headers.)
-#
-AC_DEFUN([LB_LDISKFS_DEFINE_OPTIONS],
-[
-AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1,
-	[enable extended attributes for ldiskfs])
-AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1,
-	[enable posix acls for ldiskfs])
-AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1,
-	[enable fs security for ldiskfs])
-AC_DEFINE(CONFIG_LDISKFSDEV_FS_POSIX_ACL, 1,
-	[enable posix acls for ldiskfs])
-AC_DEFINE(CONFIG_LDISKFSDEV_FS_XATTR, 1,
-	[enable extented attributes for ldiskfs])
-AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1,
-	[enable fs security for ldiskfs])
 ])
 
 AC_DEFUN([LB_LDISKFS_SYMVERS],

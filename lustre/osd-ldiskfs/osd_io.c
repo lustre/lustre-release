@@ -49,11 +49,6 @@
 /* prerequisite for linux/xattr.h */
 #include <linux/fs.h>
 
-/* ext_depth() */
-#include <ldiskfs/ldiskfs.h>
-#include <ldiskfs/ldiskfs_jbd2.h>
-#include <ldiskfs/ldiskfs_extents.h>
-
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
@@ -61,6 +56,9 @@
 #include <obd_support.h>
 
 #include "osd_internal.h"
+
+/* ext_depth() */
+#include <ldiskfs/ldiskfs_extents.h>
 
 #ifndef HAVE_PAGE_CONSTANT
 #define mapping_cap_page_constant_write(mapping) 0
