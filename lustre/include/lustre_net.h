@@ -3152,6 +3152,8 @@ void ping_evictor_stop(void);
 #define ping_evictor_stop()     do {} while (0)
 #endif
 int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
+void ptlrpc_pinger_ir_up(void);
+void ptlrpc_pinger_ir_down(void);
 /** @} */
 int ptlrpc_pinger_suppress_pings(void);
 

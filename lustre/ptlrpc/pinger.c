@@ -232,6 +232,22 @@ int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req)
 
 #ifdef __KERNEL__
 
+static bool ir_up;
+
+void ptlrpc_pinger_ir_up(void)
+{
+	CDEBUG(D_HA, "IR up\n");
+	ir_up = true;
+}
+EXPORT_SYMBOL(ptlrpc_pinger_ir_up);
+
+void ptlrpc_pinger_ir_down(void)
+{
+	CDEBUG(D_HA, "IR down\n");
+	ir_up = false;
+}
+EXPORT_SYMBOL(ptlrpc_pinger_ir_down);
+
 static void ptlrpc_pinger_process_import(struct obd_import *imp,
                                          unsigned long this_ping)
 {
@@ -248,8 +264,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	/*
 	 * This will be used below only if the import is "FULL".
 	 */
-	suppress = !!(imp->imp_connect_data.ocd_connect_flags &
-		      OBD_CONNECT_PINGLESS);
+	suppress = ir_up && OCD_HAS_FLAG(&imp->imp_connect_data, PINGLESS);
 
 	imp->imp_force_verify = 0;
 
@@ -453,7 +468,7 @@ void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 	 * imp_peer_committed_transno.
 	 */
 	if (imp->imp_state != LUSTRE_IMP_FULL ||
-	    imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_PINGLESS)
+	    OCD_HAS_FLAG(&imp->imp_connect_data, PINGLESS))
 		imp->imp_force_next_verify = 1;
 }
 

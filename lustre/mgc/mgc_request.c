@@ -1150,6 +1150,8 @@ static int mgc_import_event(struct obd_device *obd,
         switch (event) {
         case IMP_EVENT_DISCON:
                 /* MGC imports should not wait for recovery */
+		if (OCD_HAS_FLAG(&imp->imp_connect_data, IMP_RECOV))
+			ptlrpc_pinger_ir_down();
                 break;
         case IMP_EVENT_INACTIVE:
                 break;
@@ -1163,6 +1165,8 @@ static int mgc_import_event(struct obd_device *obd,
 		/* Clearing obd_no_recov allows us to continue pinging */
 		obd->obd_no_recov = 0;
 		mgc_notify_active(obd);
+		if (OCD_HAS_FLAG(&imp->imp_connect_data, IMP_RECOV))
+			ptlrpc_pinger_ir_up();
 		break;
         case IMP_EVENT_OCD:
                 break;
