@@ -629,7 +629,11 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         }
 	filp->f_version = inode->i_version;
 #ifdef HAVE_TOUCH_ATIME_1ARG
+#ifdef HAVE_F_PATH_MNT
+	path.mnt = filp->f_path.mnt;
+#else
 	path.mnt = filp->f_vfsmnt;
+#endif
 	path.dentry = filp->f_dentry;
 	touch_atime(&path);
 #else

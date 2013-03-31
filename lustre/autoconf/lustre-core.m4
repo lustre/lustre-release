@@ -1528,6 +1528,28 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.9 killed f_vfsmnt by
+# 182be684784334598eee1d90274e7f7aa0063616
+# replacement is f_path.mnt
+#
+AC_DEFUN([LC_HAVE_F_PATH_MNT],
+[AC_MSG_CHECKING([if struct file has f_path.mnt])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct file *fp = NULL;
+	struct path  path;
+
+	path.mnt = fp->f_path.mnt;
+],[
+	AC_DEFINE(HAVE_F_PATH_MNT,1,[yes])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -1657,6 +1679,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.9
 	 LC_HAVE_HLIST_FOR_EACH_3ARG
+	 LC_HAVE_F_PATH_MNT
 
 	 #
 	 if test x$enable_server = xyes ; then
