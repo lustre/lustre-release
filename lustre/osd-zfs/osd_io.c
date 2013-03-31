@@ -869,7 +869,7 @@ struct dt_body_operations osd_body_ops = {
 	.dbo_declare_write_commit	= osd_declare_write_commit,
 	.dbo_write_commit		= osd_write_commit,
 	.dbo_read_prep			= osd_read_prep,
-	.do_declare_punch		= osd_declare_punch,
-	.do_punch			= osd_punch,
+	.dbo_declare_punch		= osd_declare_punch,
+	.dbo_punch			= osd_punch,
 };
 

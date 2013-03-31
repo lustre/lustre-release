@@ -527,9 +527,9 @@ struct dt_body_operations {
          * Punch object's content
          * precondition: regular object, not index
          */
-        int   (*do_declare_punch)(const struct lu_env *, struct dt_object *,
+        int   (*dbo_declare_punch)(const struct lu_env *, struct dt_object *,
                                   __u64, __u64, struct thandle *th);
-        int   (*do_punch)(const struct lu_env *env, struct dt_object *dt,
+        int   (*dbo_punch)(const struct lu_env *env, struct dt_object *dt,
                           __u64 start, __u64 end, struct thandle *th,
                           struct lustre_capa *capa);
 };
@@ -1222,8 +1222,8 @@ static inline int dt_declare_punch(const struct lu_env *env,
 {
         LASSERT(dt);
         LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->do_declare_punch);
-        return dt->do_body_ops->do_declare_punch(env, dt, start, end, th);
+        LASSERT(dt->do_body_ops->dbo_declare_punch);
+        return dt->do_body_ops->dbo_declare_punch(env, dt, start, end, th);
 }
 
 static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
@@ -1232,8 +1232,8 @@ static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
 {
         LASSERT(dt);
         LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->do_punch);
-        return dt->do_body_ops->do_punch(env, dt, start, end, th, capa);
+        LASSERT(dt->do_body_ops->dbo_punch);
+        return dt->do_body_ops->dbo_punch(env, dt, start, end, th, capa);
 }
 
 static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,

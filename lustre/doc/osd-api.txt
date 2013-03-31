@@ -807,9 +807,9 @@ int (*dbo_read_prep)(const struct lu_env *, struct dt_object *,
 		     struct niobuf_local *, int);
 int (*dbo_fiemap_get)(const struct lu_env *, struct dt_object *,
 		      struct ll_user_fiemap *);
-int (*do_declare_punch)(const struct lu_env*, struct dt_object *, __u64,
+int (*dbo_declare_punch)(const struct lu_env*, struct dt_object *, __u64,
 			  __u64,struct thandle *);
-int (*do_punch)(const struct lu_env *, struct dt_object *, __u64, __u64,
+int (*dbo_punch)(const struct lu_env *, struct dt_object *, __u64, __u64,
 		struct thandle *, struct lustre_capa *);
 
 dbo_read
