@@ -18,3 +18,6 @@
 
 /* ext4_free_blocks do not require struct buffer_head */
 #undef HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD
+
+/* kernel has ext_pblocks */
+#undef HAVE_EXT_PBLOCK

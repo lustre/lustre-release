@@ -75,6 +75,7 @@ if test x$enable_server$enable_dist = xyesno ; then
 LB_LDISKFS_EXT_DIR
 LB_LDISKFS_EXT_SOURCE
 LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
+LB_EXT_PBLOCK
 fi
 
 LB_CONFIG_HEADERS
