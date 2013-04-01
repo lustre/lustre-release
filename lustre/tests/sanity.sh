@@ -7907,6 +7907,16 @@ test_180b() {
 run_test 180b "test obdecho directly on obdfilter"
 
 test_180c() { # LU-2598
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -lt $(version_code 2.1.5) ]] &&
+		skip "Need MDS version at least 2.1.5" && return
+
+	# Patch not applied to 2.2 and 2.3 branches
+	[[ $server_version -ge $(version_code 2.2.0) ]] &&
+	[[ $server_version -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version at least 2.4.0" && return
+
 	local rc=0
 	local rmmod_remote=false
 	local pages=8192 # 32MB bulk I/O RPC size
@@ -7918,9 +7928,15 @@ test_180c() { # LU-2598
 	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4}'|head -1)
 	if [[ -n $target ]]; then
 		obdecho_create_test "$target" ost1 "$pages"
-		if [[ ${PIPESTATUS[0]} != 4 ]]; then
-			echo "obecho_create_test should fail with rc=4"
-			rc=1
+		rc=${PIPESTATUS[0]}
+		if [[ $server_version -ge $(version_code 2.1.5) ]] &&
+		   [[ $server_version -lt $(version_code 2.2.0) ]]; then
+			if [[ $rc -ne 4 ]]; then
+				echo "obecho_create_test should fail with rc=4"
+				rc=1
+			else
+				rc=0
+			fi
 		fi
 	else
 		echo "there is no obdfilter target on ost1"

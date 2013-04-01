@@ -56,6 +56,7 @@ size=${size:-16384}
 # record size (KBytes) ( 7168 max)
 rszlo=${rszlo:-1024}
 rszhi=${rszhi:-1024}
+rszmax=${rszmax:-1024}	# the maximum bulk I/O RPC size
 
 # number of objects per OST
 nobjlo=${nobjlo:-1}
@@ -184,6 +185,32 @@ print_summary () {
     fi
     echo $minusn "$*" >> $rsltf
     echo $minusn "$*"
+}
+
+version_code() {
+	# split arguments like "2.1.5" into "2", "1", "5"
+	eval set -- $(tr "[:punct:]" " " <<< $*)
+	echo -n "$((($1 << 16) | ($2 << 8) | $3))"
+}
+
+get_lustre_version() {
+	local host=${1:-${unique_hosts[0]}}
+	remote_shell $host $lctl get_param -n version |
+		awk '/^lustre:/ {print $2}'
+}
+
+# Check whether the record size (KBytes) exceeds the maximum bulk I/O RPC size
+# or not.
+check_record_size() {
+	[ $(version_code $(get_lustre_version)) -ge $(version_code 2.3.61) ] &&
+		rszmax=4096
+
+	if [ "$rszhi" -gt "$rszmax" ]; then
+		echo "Test disk case support maximum ${rszmax}KB IO data" \
+		     "(rszhi=$rszhi is too big), please use a smaller value."
+		return 1
+	fi
+	return 0
 }
 
 # Customisation variables
@@ -372,6 +399,11 @@ fi
 # disable portals debug and get obdecho loaded on all relevant hosts
 unique_hosts=(`unique ${host_names[@]}`)
 load_obdechos
+
+if [ $case == "disk" ]; then
+	check_record_size || cleanup ${PIPESTATUS[0]}
+fi
+
 pidcount=0
 for host in ${unique_hosts[@]}; do
     host_vmstatf=${vmstatf}_${host}
