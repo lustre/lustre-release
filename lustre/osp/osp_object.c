@@ -241,8 +241,8 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	memcpy(fid, lu_object_fid(&dt->do_lu), sizeof(*fid));
 
-	LASSERTF(fid_is_sane(fid), "fid for osp_obj %p is insane"DFID"!\n",
-		 osp_obj, PFID(fid));
+	LASSERTF(fid_is_sane(fid), "fid for osp_object %p is insane"DFID"!\n",
+		 o, PFID(fid));
 
 	if (!o->opo_reserved) {
 		/* special case, id was assigned outside of transaction
@@ -252,7 +252,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 		spin_unlock(&d->opd_pre_lock);
 	}
 
-	CDEBUG(D_INODE, "fid for osp_obj %p is "DFID"!\n", osp_obj, PFID(fid));
+	CDEBUG(D_INODE, "fid for osp_object %p is "DFID"\n", o, PFID(fid));
 
 	/* If the precreate ends, it means it will be ready to rollover to
 	 * the new sequence soon, all the creation should be synchronized,

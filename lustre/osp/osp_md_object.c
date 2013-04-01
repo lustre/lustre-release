@@ -934,9 +934,11 @@ static void osp_it_put(const struct lu_env *env, struct dt_it *di)
 static int osp_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct dt_object *dt = (struct dt_object *)di;
-	struct osp_object *osp_obj = dt2osp_obj(dt);
-	if (osp_obj->opo_empty)
+	struct osp_object *o = dt2osp_obj(dt);
+
+	if (o->opo_empty)
 		return 1;
+
 	return 0;
 }
 
