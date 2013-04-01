@@ -947,11 +947,11 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		if ((tgt1->ltd_exp == NULL) || (tgt2->ltd_exp == NULL))
 			RETURN(-EINVAL);
 
-		/* only files on same MDT can be have their layouts swapped */
+		/* only files on same MDT can have their layouts swapped */
 		if (tgt1->ltd_idx != tgt2->ltd_idx)
 			RETURN(-EPERM);
 
-		rc = obd_iocontrol(cmd, lmv->tgts[0]->ltd_exp, len, karg, uarg);
+		rc = obd_iocontrol(cmd, tgt1->ltd_exp, len, karg, uarg);
 		break;
 	}
 	default:
