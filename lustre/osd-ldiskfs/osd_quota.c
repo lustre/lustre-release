@@ -968,7 +968,7 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 	struct dt_object	*root, *parent = NULL, *admin = NULL;
 	dt_obj_version_t	 version;
 	char			*fname;
-	bool			 isblk, converted = false;
+	bool			 isblk = false, converted = false;
 	int			 rc;
 	ENTRY;
 

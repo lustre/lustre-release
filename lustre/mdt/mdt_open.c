@@ -1276,7 +1276,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
         struct mdt_object       *parent= NULL;
         struct mdt_object       *o;
         int                      rc;
-	__u64			 ibits;
+	__u64			 ibits = 0;
         ENTRY;
 
 	if (md_should_create(flags) && !(flags & MDS_OPEN_HAS_EA)) {

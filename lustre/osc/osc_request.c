@@ -1214,8 +1214,8 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
 				  pga[i]->off & ~CFS_PAGE_MASK,
 				  count);
-		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d checksum %x\n",
-			       (int)(pga[i]->off & ~CFS_PAGE_MASK), cksum);
+		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d\n",
+			       (int)(pga[i]->off & ~CFS_PAGE_MASK));
 
 		nob -= pga[i]->count;
 		pg_count--;
