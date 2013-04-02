@@ -528,10 +528,13 @@ static int lod_xattr_set(const struct lu_env *env,
 		 * already have during req replay, declare_xattr_set()
 		 * defines striping, then create() does the work
 		*/
-		if (fl & LU_XATTR_REPLACE)
+		if (fl & LU_XATTR_REPLACE) {
+			/* free stripes, then update disk */
+			lod_object_free_striping(env, lod_dt_obj(dt));
 			rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
-		else
+		} else {
 			rc = lod_striping_create(env, dt, NULL, NULL, th);
+		}
 		RETURN(rc);
 	} else {
 		/*

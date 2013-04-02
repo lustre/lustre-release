@@ -1868,7 +1868,7 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 	__u32			 gid;
 	__u64			 dv;
 	struct ll_swap_stack	*llss = NULL;
-	int			 rc, rc1;
+	int			 rc;
 
 	OBD_ALLOC_PTR(llss);
 	if (llss == NULL)
@@ -1990,12 +1990,22 @@ putgl:
 	}
 
 	/* update time if requested */
-	rc = rc1 = 0;
-	if (llss->ia2.ia_valid != 0)
+	rc = 0;
+	if (llss->ia2.ia_valid != 0) {
+		mutex_lock(&llss->inode1->i_mutex);
 		rc = ll_setattr(file1->f_dentry, &llss->ia2);
+		mutex_unlock(&llss->inode1->i_mutex);
+	}
 
-	if (llss->ia1.ia_valid != 0)
+	if (llss->ia1.ia_valid != 0) {
+		int rc1;
+
+		mutex_lock(&llss->inode2->i_mutex);
 		rc1 = ll_setattr(file2->f_dentry, &llss->ia1);
+		mutex_unlock(&llss->inode2->i_mutex);
+		if (rc == 0)
+			rc = rc1;
+	}
 
 free:
 	if (llss != NULL)
