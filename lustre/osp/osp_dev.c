@@ -665,7 +665,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 
 		OBD_ALLOC(cli->cl_rpc_lock, sizeof(*cli->cl_rpc_lock));
 		if (!cli->cl_rpc_lock)
-			RETURN(-ENOMEM);
+			GOTO(out_fini, rc = -ENOMEM);
 		osp_init_rpc_lock(cli->cl_rpc_lock);
 	}
 

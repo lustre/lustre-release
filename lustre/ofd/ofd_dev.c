@@ -553,7 +553,7 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 
 	OBD_ALLOC_PTR(ss->ss_client_seq);
 	if (ss->ss_client_seq == NULL)
-		GOTO(out_free, -ENOMEM);
+		GOTO(out_free, rc = -ENOMEM);
 
 	snprintf(name, strlen(obd_name) + 6, "%p-super", obd_name);
 	rc = seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,

@@ -350,7 +350,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 		sprintf(key, "d%d", i);
 		rc = osd_oi_find_or_create(env, osd, odb, key, &sdb);
 		if (rc)
-			GOTO(out, osd_seq = ERR_PTR(rc));
+			GOTO(out, rc);
 		osd_seq->os_compat_dirs[i] = sdb;
 	}
 
