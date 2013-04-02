@@ -871,8 +871,8 @@ test_23a() {	# was test_23
 		"MOUNT_LUSTRE_PID $MOUNT_LUSTRE_PID still not killed in $WAIT secs"
 		ps -ef | grep mount
 	fi
-	stop_mds || error
-	stop_ost || error
+	stop_mds || error "stopping MDSes failed"
+	stop_ost || error "stopping OSSes failed"
 }
 run_test 23a "interrupt client during recovery mount delay"
 
