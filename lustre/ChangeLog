@@ -1,8 +1,8 @@
 2013-02-28 Intel Corporation
 	* version 1.8.9-wc1
 	* Support for kernels:
-	  2.6.18-348.1.1.el5  (RHEL 5)
-	  2.6.32-279.19.1.el6 (RHEL 6) - patchless client only
+	  2.6.18-348.3.1.el5  (RHEL 5)
+	  2.6.32-358.2.1.el6  (RHEL 6) - patchless client only
 	* Recommended e2fsprogs version: 1.41.90.wc4
 
 See http://wiki.whamcloud.com/display/PUB/Changelog+1.8 for more information.
