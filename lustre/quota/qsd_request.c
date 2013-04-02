@@ -285,6 +285,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	case IT_QUOTA_CONN:
 		/* grab reference on qqi for new lock */
 #ifdef USE_LU_REF
+	{
 		struct ldlm_lock	*lock;
 
 		lock = ldlm_handle2lock(&qti->qti_lockh);
@@ -294,6 +295,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		}
 		lu_ref_add(&qqi->qqi_reference, "glb_lock", lock);
 		LDLM_LOCK_PUT(lock);
+	}
 #endif
 		qqi_getref(qqi);
 		break;

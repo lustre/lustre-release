@@ -1105,9 +1105,9 @@ void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page)
         LASSERT(cfs_list_empty(&page->cp_batch));
         cfs_list_add_tail(&page->cp_batch, &plist->pl_pages);
         ++plist->pl_nr;
-        page->cp_queue_ref = lu_ref_add(&page->cp_reference, "queue", plist);
-        cl_page_get(page);
-        EXIT;
+	lu_ref_add_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
+	cl_page_get(page);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_add);
 
@@ -1126,9 +1126,9 @@ void cl_page_list_del(const struct lu_env *env,
 	mutex_unlock(&page->cp_mutex);
 	lockdep_on();
         --plist->pl_nr;
-        lu_ref_del_at(&page->cp_reference, page->cp_queue_ref, "queue", plist);
-        cl_page_put(env, page);
-        EXIT;
+	lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
+	cl_page_put(env, page);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_del);
 
@@ -1146,9 +1146,9 @@ void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
         cfs_list_move_tail(&page->cp_batch, &dst->pl_pages);
         --src->pl_nr;
         ++dst->pl_nr;
-        lu_ref_set_at(&page->cp_reference,
-                      page->cp_queue_ref, "queue", src, dst);
-        EXIT;
+	lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref, "queue",
+		      src, dst);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_move);
 
@@ -1202,7 +1202,8 @@ void cl_page_list_disown(const struct lu_env *env,
                  * XXX cl_page_disown0() will fail if page is not locked.
                  */
                 cl_page_disown0(env, io, page);
-                lu_ref_del(&page->cp_reference, "queue", plist);
+		lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue",
+			      plist);
                 cl_page_put(env, page);
         }
         EXIT;
@@ -1447,12 +1448,12 @@ static void cl_req_free(const struct lu_env *env, struct cl_req *req)
         if (req->crq_o != NULL) {
                 for (i = 0; i < req->crq_nrobjs; ++i) {
                         struct cl_object *obj = req->crq_o[i].ro_obj;
-                        if (obj != NULL) {
-                                lu_object_ref_del_at(&obj->co_lu,
-                                                     req->crq_o[i].ro_obj_ref,
-                                                     "cl_req", req);
-                                cl_object_put(env, obj);
-                        }
+			if (obj != NULL) {
+				lu_object_ref_del_at(&obj->co_lu,
+						     &req->crq_o[i].ro_obj_ref,
+						     "cl_req", req);
+				cl_object_put(env, obj);
+			}
                 }
                 OBD_FREE(req->crq_o, req->crq_nrobjs * sizeof req->crq_o[0]);
         }
@@ -1570,8 +1571,8 @@ void cl_req_page_add(const struct lu_env *env,
                 if (rqo->ro_obj == NULL) {
                         rqo->ro_obj = obj;
                         cl_object_get(obj);
-                        rqo->ro_obj_ref = lu_object_ref_add(&obj->co_lu,
-                                                            "cl_req", req);
+			lu_object_ref_add_at(&obj->co_lu, &rqo->ro_obj_ref,
+					     "cl_req", req);
                         break;
                 }
         }

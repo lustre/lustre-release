@@ -71,13 +71,6 @@
 	}								\
 } while (0)
 
-struct lu_ref_link {
-        struct lu_ref    *ll_ref;
-        cfs_list_t        ll_linkage;
-        const char       *ll_scope;
-        const void       *ll_source;
-};
-
 static cfs_mem_cache_t *lu_ref_link_kmem;
 
 static struct lu_kmem_descr lu_ref_caches[] = {
@@ -99,9 +92,9 @@ static struct lu_kmem_descr lu_ref_caches[] = {
 static CFS_LIST_HEAD(lu_ref_refs);
 static spinlock_t lu_ref_refs_guard;
 static struct lu_ref lu_ref_marker = {
-	.lf_guard   = DEFINE_SPINLOCK(lu_ref_marker.lf_guard),
-        .lf_list    = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_list),
-        .lf_linkage = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_linkage)
+	.lf_guard	= __SPIN_LOCK_UNLOCKED(lu_ref_marker.lf_guard),
+	.lf_list	= CFS_LIST_HEAD_INIT(lu_ref_marker.lf_list),
+	.lf_linkage	= CFS_LIST_HEAD_INIT(lu_ref_marker.lf_linkage)
 };
 
 void lu_ref_print(const struct lu_ref *ref)
@@ -192,21 +185,33 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
 	return link;
 }
 
-struct lu_ref_link *lu_ref_add(struct lu_ref *ref, const char *scope,
-                               const void *source)
+void lu_ref_add(struct lu_ref *ref, const char *scope, const void *source)
 {
-        cfs_might_sleep();
-        return lu_ref_add_context(ref, CFS_ALLOC_STD, scope, source);
+	cfs_might_sleep();
+	lu_ref_add_context(ref, CFS_ALLOC_STD, scope, source);
 }
 EXPORT_SYMBOL(lu_ref_add);
+
+void lu_ref_add_at(struct lu_ref *ref, struct lu_ref_link *link,
+		   const char *scope, const void *source)
+{
+	link->ll_ref = ref;
+	link->ll_scope = scope;
+	link->ll_source = source;
+	spin_lock(&ref->lf_guard);
+	cfs_list_add_tail(&link->ll_linkage, &ref->lf_list);
+	ref->lf_refs++;
+	spin_unlock(&ref->lf_guard);
+}
+EXPORT_SYMBOL(lu_ref_add_at);
 
 /**
  * Version of lu_ref_add() to be used in non-blockable contexts.
  */
-struct lu_ref_link *lu_ref_add_atomic(struct lu_ref *ref, const char *scope,
-                                      const void *source)
+void lu_ref_add_atomic(struct lu_ref *ref, const char *scope,
+		       const void *source)
 {
-        return lu_ref_add_context(ref, CFS_ALLOC_ATOMIC, scope, source);
+	lu_ref_add_context(ref, CFS_ALLOC_ATOMIC, scope, source);
 }
 EXPORT_SYMBOL(lu_ref_add_atomic);
 
@@ -268,14 +273,12 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope,
 		   const void *source0, const void *source1)
 {
+	REFASSERT(ref, link != NULL && !IS_ERR(link));
+
 	spin_lock(&ref->lf_guard);
-	if (link != ERR_PTR(-ENOMEM)) {
-		REFASSERT(ref, link->ll_ref == ref);
-		REFASSERT(ref, lu_ref_link_eq(link, scope, source0));
-		link->ll_source = source1;
-	} else {
-		REFASSERT(ref, ref->lf_failed > 0);
-	}
+	REFASSERT(ref, link->ll_ref == ref);
+	REFASSERT(ref, lu_ref_link_eq(link, scope, source0));
+	link->ll_source = source1;
 	spin_unlock(&ref->lf_guard);
 }
 EXPORT_SYMBOL(lu_ref_set_at);
@@ -283,20 +286,13 @@ EXPORT_SYMBOL(lu_ref_set_at);
 void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope, const void *source)
 {
-	if (link != ERR_PTR(-ENOMEM)) {
-		spin_lock(&ref->lf_guard);
-		REFASSERT(ref, link->ll_ref == ref);
-		REFASSERT(ref, lu_ref_link_eq(link, scope, source));
-		cfs_list_del(&link->ll_linkage);
-		ref->lf_refs--;
-		spin_unlock(&ref->lf_guard);
-		OBD_SLAB_FREE(link, lu_ref_link_kmem, sizeof(*link));
-	} else {
-		spin_lock(&ref->lf_guard);
-		REFASSERT(ref, ref->lf_failed > 0);
-		ref->lf_failed--;
-		spin_unlock(&ref->lf_guard);
-	}
+	REFASSERT(ref, link != NULL && !IS_ERR(link));
+	spin_lock(&ref->lf_guard);
+	REFASSERT(ref, link->ll_ref == ref);
+	REFASSERT(ref, lu_ref_link_eq(link, scope, source));
+	cfs_list_del(&link->ll_linkage);
+	ref->lf_refs--;
+	spin_unlock(&ref->lf_guard);
 }
 EXPORT_SYMBOL(lu_ref_del_at);
 

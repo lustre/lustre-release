@@ -691,7 +691,7 @@ static void osd_trans_commit_cb(struct super_block *sb,
 		dcb->dcb_func(NULL, th, dcb, error);
 	}
 
-        lu_ref_del_at(&lud->ld_reference, oh->ot_dev_link, "osd-tx", th);
+	lu_ref_del_at(&lud->ld_reference, &oh->ot_dev_link, "osd-tx", th);
         lu_device_put(lud);
         th->th_dev = NULL;
 
@@ -827,8 +827,8 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 lu_context_enter(&th->th_ctx);
 
                 lu_device_get(&d->dd_lu_dev);
-                oh->ot_dev_link = lu_ref_add(&d->dd_lu_dev.ld_reference,
-                                             "osd-tx", th);
+		lu_ref_add_at(&d->dd_lu_dev.ld_reference, &oh->ot_dev_link,
+			      "osd-tx", th);
                 oti->oti_txns++;
                 rc = 0;
         } else {

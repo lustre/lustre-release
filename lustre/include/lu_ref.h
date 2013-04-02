@@ -109,9 +109,6 @@
 
 #ifdef USE_LU_REF
 
-/* An incomplete type (defined locally in lu_ref.c) */
-struct lu_ref_link;
-
 /**
  * Data-structure to keep track of references to a given object. This is used
  * for debugging.
@@ -153,29 +150,48 @@ struct lu_ref {
         cfs_list_t           lf_linkage;
 };
 
+struct lu_ref_link {
+	struct lu_ref	*ll_ref;
+	cfs_list_t	 ll_linkage;
+	const char	*ll_scope;
+	const void	*ll_source;
+};
+
 void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line);
 void lu_ref_fini    (struct lu_ref *ref);
 #define lu_ref_init(ref) lu_ref_init_loc(ref, __FUNCTION__, __LINE__)
 
-struct lu_ref_link *lu_ref_add       (struct lu_ref *ref, const char *scope,
-                                      const void *source);
-struct lu_ref_link *lu_ref_add_atomic(struct lu_ref *ref, const char *scope,
-                                      const void *source);
-void lu_ref_del                      (struct lu_ref *ref, const char *scope,
-                                      const void *source);
-void lu_ref_set_at                   (struct lu_ref *ref,
-                                      struct lu_ref_link *link,
-                                      const char *scope, const void *source0,
-                                      const void *source1);
-void lu_ref_del_at                   (struct lu_ref *ref,
-                                      struct lu_ref_link *link,
-                                      const char *scope, const void *source);
-void lu_ref_print                    (const struct lu_ref *ref);
-void lu_ref_print_all                (void);
+void lu_ref_add(struct lu_ref *ref, const char *scope, const void *source);
+
+void lu_ref_add_atomic(struct lu_ref *ref, const char *scope,
+		       const void *source);
+
+void lu_ref_add_at(struct lu_ref *ref, struct lu_ref_link *link,
+		   const char *scope, const void *source);
+
+void lu_ref_del(struct lu_ref *ref, const char *scope, const void *source);
+
+void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
+		   const char *scope, const void *source0, const void *source1);
+
+void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
+		   const char *scope, const void *source);
+
+void lu_ref_print(const struct lu_ref *ref);
+
+void lu_ref_print_all(void);
+
+int lu_ref_global_init(void);
+
+void lu_ref_global_fini(void);
 
 #else /* !USE_LU_REF */
 
-struct lu_ref  {};
+struct lu_ref {
+};
+
+struct lu_ref_link {
+};
 
 static inline void lu_ref_init(struct lu_ref *ref)
 {
@@ -185,18 +201,23 @@ static inline void lu_ref_fini(struct lu_ref *ref)
 {
 }
 
-static inline struct lu_ref_link *lu_ref_add(struct lu_ref *ref,
-                                             const char *scope,
-                                             const void *source)
+static inline void lu_ref_add(struct lu_ref *ref,
+			      const char *scope,
+			      const void *source)
 {
-        return NULL;
 }
 
-static inline struct lu_ref_link *lu_ref_add_atomic(struct lu_ref *ref,
-                                                    const char *scope,
-                                                    const void *source)
+static inline void lu_ref_add_atomic(struct lu_ref *ref,
+				     const char *scope,
+				     const void *source)
 {
-        return NULL;
+}
+
+static inline void lu_ref_add_at(struct lu_ref *ref,
+				 struct lu_ref_link *link,
+				 const char *scope,
+				 const void *source)
+{
 }
 
 static inline void lu_ref_del(struct lu_ref *ref, const char *scope,

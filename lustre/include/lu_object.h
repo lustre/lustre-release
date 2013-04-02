@@ -493,10 +493,10 @@ struct lu_object {
 	 * Flags from enum lu_object_flags.
 	 */
 	__u32					lo_flags;
-        /**
-         * Link to the device, for debugging.
-         */
-        struct lu_ref_link                *lo_dev_ref;
+	/**
+	 * Link to the device, for debugging.
+	 */
+	struct lu_ref_link                 lo_dev_ref;
 };
 
 enum lu_object_header_flags {
@@ -868,11 +868,19 @@ static inline __u32 lu_object_attr(const struct lu_object *o)
         return o->lo_header->loh_attr;
 }
 
-static inline struct lu_ref_link *lu_object_ref_add(struct lu_object *o,
-                                                    const char *scope,
-                                                    const void *source)
+static inline void lu_object_ref_add(struct lu_object *o,
+				     const char *scope,
+				     const void *source)
 {
-        return lu_ref_add(&o->lo_header->loh_reference, scope, source);
+	lu_ref_add(&o->lo_header->loh_reference, scope, source);
+}
+
+static inline void lu_object_ref_add_at(struct lu_object *o,
+					struct lu_ref_link *link,
+					const char *scope,
+					const void *source)
+{
+	lu_ref_add_at(&o->lo_header->loh_reference, link, scope, source);
 }
 
 static inline void lu_object_ref_del(struct lu_object *o,
