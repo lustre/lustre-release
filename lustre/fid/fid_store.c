@@ -42,23 +42,14 @@
 
 #define DEBUG_SUBSYSTEM S_FID
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
-#include <obd.h>
-#include <obd_class.h>
+#include <libcfs/libcfs.h>
 #include <dt_object.h>
 #include <md_object.h>
 #include <obd_support.h>
-#include <lustre_req_layout.h>
+#include <lustre_capa.h>
 #include <lustre_fid.h>
+#include <lustre_fld.h>
 #include "fid_internal.h"
-
-#ifdef __KERNEL__
 
 static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
 {
@@ -262,4 +253,3 @@ void seq_store_fini(struct lu_server_seq *seq,
 
         EXIT;
 }
-#endif

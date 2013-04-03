@@ -43,15 +43,9 @@
 
 #define DEBUG_SUBSYSTEM S_FID
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
-#include <obd.h>
-#include <lu_object.h>
+#include <libcfs/libcfs.h>
+#include <linux/module.h>
+#include <lustre/lustre_idl.h>
 #include <lustre_fid.h>
 
 /**

@@ -42,20 +42,13 @@
 
 #define DEBUG_SUBSYSTEM S_FID
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
+#include <linux/module.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <dt_object.h>
-#include <md_object.h>
 #include <obd_support.h>
-#include <lustre_req_layout.h>
 #include <lustre_fid.h>
+#include <lprocfs_status.h>
 #include "fid_internal.h"
 
 #ifdef LPROCFS
@@ -97,6 +90,7 @@ seq_proc_read_common(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /*
  * Server side procfs stuff.
  */
@@ -213,6 +207,17 @@ seq_server_proc_read_width(char *page, char **start, off_t off,
 
 	RETURN(rc);
 }
+
+struct lprocfs_vars seq_server_proc_list[] = {
+	{ "space",
+	  seq_server_proc_read_space, seq_server_proc_write_space, NULL },
+	{ "width",
+	  seq_server_proc_read_width, seq_server_proc_write_width, NULL },
+	{ "server",
+	  seq_server_proc_read_server, NULL, NULL },
+	{ NULL }
+};
+#endif /* HAVE_SERVER_SUPPORT */
 
 /* Client side procfs stuff */
 static int
@@ -348,12 +353,6 @@ seq_client_proc_read_server(char *page, char **start, off_t off,
         }
 	RETURN(rc);
 }
-
-struct lprocfs_vars seq_server_proc_list[] = {
-	{ "space",    seq_server_proc_read_space, seq_server_proc_write_space, NULL },
-	{ "width",    seq_server_proc_read_width, seq_server_proc_write_width, NULL },
-	{ "server",   seq_server_proc_read_server, NULL, NULL },
-	{ NULL }};
 
 struct lprocfs_vars seq_client_proc_list[] = {
 	{ "space",    seq_client_proc_read_space, seq_client_proc_write_space, NULL },

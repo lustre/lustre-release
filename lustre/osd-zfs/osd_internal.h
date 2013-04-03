@@ -47,6 +47,7 @@
 #define _OSD_INTERNAL_H
 
 #include <dt_object.h>
+#include <md_object.h>
 #include <lustre_quota.h>
 #include <sys/arc.h>
 
