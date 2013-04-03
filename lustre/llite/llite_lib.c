@@ -1490,6 +1490,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 
 	/* If we are changing file size, file content is modified, flag it. */
 	if (attr->ia_valid & ATTR_SIZE) {
+		attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
 		spin_lock(&lli->lli_lock);
 		lli->lli_flags |= LLIF_DATA_MODIFIED;
 		spin_unlock(&lli->lli_lock);
