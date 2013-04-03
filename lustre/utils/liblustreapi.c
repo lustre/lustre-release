@@ -4219,13 +4219,18 @@ int llapi_create_volatile_idx(char *directory, int idx, int mode)
 		return -errno;
 	}
 	if (idx == -1)
-		sprintf(filename, LUSTRE_VOLATILE_HDR"::%.4X", random);
+		snprintf(filename, sizeof(filename),
+			 LUSTRE_VOLATILE_HDR"::%.4X", random);
 	else
-		sprintf(filename, LUSTRE_VOLATILE_IDX"%.4X", 0, random);
+		snprintf(filename, sizeof(filename),
+			 LUSTRE_VOLATILE_IDX"%.4X", 0, random);
 
-	sprintf(file_path, "%s/%s", directory, filename);
+	rc = snprintf(file_path, sizeof(file_path),
+		      "%s/%s", directory, filename);
+	if (rc >= sizeof(file_path))
+		return -E2BIG;
 
-	fd = open(file_path, O_RDWR|O_CREAT|mode, S_IRUSR|S_IWUSR);
+	fd = open(file_path, (O_RDWR | O_CREAT | mode), (S_IRUSR | S_IWUSR));
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "Cannot create volatile file %s in %s\n",
