@@ -90,7 +90,6 @@ static int linkea_entry_pack(struct link_ea_entry *lee,
 	lee->lee_reclen[1] = reclen & 0xff;
 	return reclen;
 }
-EXPORT_SYMBOL(linkea_entry_pack);
 
 void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 			 struct lu_name *lname, struct lu_fid *pfid)
