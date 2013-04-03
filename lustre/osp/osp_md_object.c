@@ -160,8 +160,8 @@ int osp_trans_stop(const struct lu_env *env, struct thandle *th)
 {
 	int rc = 0;
 
-	osp_destroy_update_req(th->th_current_request);
 	rc = th->th_current_request->ur_rc;
+	osp_destroy_update_req(th->th_current_request);
 	th->th_current_request = NULL;
 
 	return rc;

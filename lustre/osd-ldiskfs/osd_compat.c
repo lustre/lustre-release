@@ -547,18 +547,21 @@ int osd_obj_add_entry(struct osd_thread_info *info,
  * debug messages to objects in the future, and the legacy space
  * of FID_SEQ_OST_MDT0 will be unused in the future.
  **/
-static inline void osd_seq_name(char *seq_name, obd_seq seq)
+static inline void osd_seq_name(char *seq_name, size_t name_size, obd_seq seq)
 {
-	sprintf(seq_name, (fid_seq_is_rsvd(seq) ||
-			   fid_seq_is_mdt0(seq)) ? LPU64 : LPX64i,
-		fid_seq_is_idif(seq) ? 0 : seq);
+	snprintf(seq_name, name_size,
+		 (fid_seq_is_rsvd(seq) ||
+		  fid_seq_is_mdt0(seq)) ? LPU64 : LPX64i,
+		 fid_seq_is_idif(seq) ? 0 : seq);
 }
 
-static inline void osd_oid_name(char *name, const struct lu_fid *fid, obd_id id)
+static inline void osd_oid_name(char *name, size_t name_size,
+				const struct lu_fid *fid, obd_id id)
 {
-	sprintf(name, (fid_seq_is_rsvd(fid_seq(fid)) ||
-		fid_seq_is_mdt0(fid_seq(fid)) ||
-		fid_seq_is_idif(fid_seq(fid))) ? LPU64 : LPX64i, id);
+	snprintf(name, name_size,
+		 (fid_seq_is_rsvd(fid_seq(fid)) ||
+		  fid_seq_is_mdt0(fid_seq(fid)) ||
+		  fid_seq_is_idif(fid_seq(fid))) ? LPU64 : LPX64i, id);
 }
 
 /* external locking is required */
@@ -569,7 +572,7 @@ static int osd_seq_load_locked(struct osd_device *osd,
 	struct dentry       *seq_dir;
 	int		    rc = 0;
 	int		    i;
-	char		    seq_name[32];
+	char		    dir_name[32];
 	ENTRY;
 
 	if (osd_seq->oos_root != NULL)
@@ -578,9 +581,9 @@ static int osd_seq_load_locked(struct osd_device *osd,
 	LASSERT(map);
 	LASSERT(map->om_root);
 
-	osd_seq_name(seq_name, osd_seq->oos_seq);
+	osd_seq_name(dir_name, sizeof(dir_name), osd_seq->oos_seq);
 
-	seq_dir = simple_mkdir(map->om_root, osd->od_mnt, seq_name, 0755, 1);
+	seq_dir = simple_mkdir(map->om_root, osd->od_mnt, dir_name, 0755, 1);
 	if (IS_ERR(seq_dir))
 		GOTO(out_err, rc = PTR_ERR(seq_dir));
 	else if (seq_dir->d_inode == NULL)
@@ -597,27 +600,30 @@ static int osd_seq_load_locked(struct osd_device *osd,
 
 	for (i = 0; i < osd_seq->oos_subdir_count; i++) {
 		struct dentry   *dir;
-		char	     name[32];
 
-		sprintf(name, "d%u", i);
-		dir = simple_mkdir(osd_seq->oos_root, osd->od_mnt, name,
+		snprintf(dir_name, sizeof(dir_name), "d%u", i);
+		dir = simple_mkdir(osd_seq->oos_root, osd->od_mnt, dir_name,
 				   0700, 1);
 		if (IS_ERR(dir)) {
-			rc = PTR_ERR(dir);
-		} else if (dir->d_inode) {
-			ldiskfs_set_inode_state(dir->d_inode,
-						LDISKFS_STATE_LUSTRE_NO_OI);
-			osd_seq->oos_dirs[i] = dir;
-			rc = 0;
-		} else {
-			LBUG();
+			GOTO(out_free, rc = PTR_ERR(dir));
+		} else if (dir->d_inode == NULL) {
+			dput(dir);
+			GOTO(out_free, rc = -EFAULT);
 		}
+
+		ldiskfs_set_inode_state(dir->d_inode, LDISKFS_STATE_LUSTRE_NO_OI);
+		osd_seq->oos_dirs[i] = dir;
 	}
 
-	if (rc != 0)
-		osd_seq_free(map, osd_seq);
-out_put:
 	if (rc != 0) {
+out_free:
+		for (i = 0; i < osd_seq->oos_subdir_count; i++) {
+			if (osd_seq->oos_dirs[i] != NULL)
+				dput(osd_seq->oos_dirs[i]);
+		}
+		OBD_FREE(osd_seq->oos_dirs,
+			 sizeof(seq_dir) * osd_seq->oos_subdir_count);
+out_put:
 		dput(seq_dir);
 		osd_seq->oos_root = NULL;
 	}
@@ -711,7 +717,7 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 	d_seq = osd_seq->oos_dirs[dirn];
 	LASSERT(d_seq);
 
-	osd_oid_name(name, fid, ostid_id(ostid));
+	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
 
 	child = &info->oti_child_dentry;
 	child->d_parent = d_seq;
@@ -767,7 +773,7 @@ int osd_obj_map_insert(struct osd_thread_info *info,
 	d = osd_seq->oos_dirs[dirn];
         LASSERT(d);
 
-	osd_oid_name(name, fid, ostid_id(ostid));
+	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
 	rc = osd_obj_add_entry(info, osd, d, name, id, th);
 
         RETURN(rc);
@@ -798,7 +804,7 @@ int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
 	d = osd_seq->oos_dirs[dirn];
 	LASSERT(d);
 
-	osd_oid_name(name, fid, ostid_id(ostid));
+	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
 	rc = osd_obj_del_entry(info, osd, d, name, th);
 cleanup:
         RETURN(rc);
