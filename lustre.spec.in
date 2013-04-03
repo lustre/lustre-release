@@ -100,7 +100,7 @@ Lustre file system, server and network drivers for Linux %{kversion}.
 %if %{build_lustre_osd_ldiskfs}
 %package osd-ldiskfs
 Summary: osd-ldiskfs is the mandatory glue for LDISKFS support in Lustre.
-Requires: lustre-modules = %{version}, lustre-ldiskfs
+Requires: lustre-modules = %{version}, lustre-ldiskfs >= 4.1.0
 Provides: lustre-osd
 Group: Development/Kernel
 
