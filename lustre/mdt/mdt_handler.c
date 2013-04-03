@@ -5034,8 +5034,11 @@ static int mdt_prepare(const struct lu_env *env,
 	rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
 						   OBD_IOC_START_LFSCK,
 						   0, NULL);
-	if (rc != 0)
-		CWARN("Fail to auto trigger paused LFSCK.\n");
+	if (rc != 0) {
+		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
+		      mdt_obd_name(mdt), rc);
+		rc = 0;
+	}
 
 	if (mdt->mdt_seq_site.ss_node_id == 0) {
 		rc = mdt->mdt_child->md_ops->mdo_root_get(env, mdt->mdt_child,
