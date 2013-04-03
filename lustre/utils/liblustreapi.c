@@ -450,16 +450,95 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
         return get_param(devices, value, val_len);
 }
 
-static int get_mds_md_size(char *path)
+/*
+ * TYPE one of llite, lmv, lov.
+ * /proc/fs/lustre/TYPE/INST the directory of interest.
+ */
+static int get_param_cli(const char *type, const char *inst,
+			 const char *param, char *buf, size_t buf_size)
 {
-        int lumlen = lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3);
-        char buf[16];
+	char param_path[PATH_MAX + 1];
+	FILE *param_file = NULL;
+	int rc;
 
-        /* Now get the maxea from llite proc */
-        if (!get_param_obdvar(NULL, path, "llite", "max_easize",
-                              buf, sizeof(buf)))
-                lumlen = atoi(buf);
-        return lumlen;
+	snprintf(param_path, sizeof(param_path),
+		 "/proc/fs/lustre/%s/%s/%s", type, inst, param);
+
+	param_file = fopen(param_path, "r");
+	if (param_file == NULL) {
+		rc = -errno;
+		goto out;
+	}
+
+	if (fgets(buf, buf_size, param_file) == NULL) {
+		rc = -errno;
+		goto out;
+	}
+
+	rc = 0;
+out:
+	if (param_file != NULL)
+		fclose(param_file);
+
+	return rc;
+}
+
+static int get_param_llite(const char *path,
+			   const char *param, char *buf, size_t buf_size)
+{
+	char inst[80];
+	int rc;
+
+	rc = llapi_getname(path, inst, sizeof(inst));
+	if (rc != 0)
+		return rc;
+
+	return get_param_cli("llite", inst, param, buf, buf_size);
+}
+
+static int get_param_lov(const char *path,
+			 const char *param, char *buf, size_t buf_size)
+{
+	struct obd_uuid uuid;
+	int rc;
+
+	rc = llapi_file_get_lov_uuid(path, &uuid);
+	if (rc != 0)
+		return rc;
+
+	return get_param_cli("lov", uuid.uuid, param, buf, buf_size);
+}
+
+static int get_param_lmv(const char *path,
+			 const char *param, char *buf, size_t buf_size)
+{
+	struct obd_uuid uuid;
+	int rc;
+
+	rc = llapi_file_get_lmv_uuid(path, &uuid);
+	if (rc != 0)
+		return rc;
+
+	return get_param_cli("lmv", uuid.uuid, param, buf, buf_size);
+}
+
+static int get_mds_md_size(const char *path)
+{
+	int md_size = lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3);
+	char buf[80];
+	int rc;
+
+	/* Get the max ea size from llite proc. */
+	rc = get_param_llite(path, "max_easize", buf, sizeof(buf));
+	if (rc != 0)
+		goto out;
+
+	rc = atoi(buf);
+	if (rc > 0)
+		md_size = rc;
+
+out:
+	return md_size;
 }
 
 /*
@@ -1240,7 +1319,12 @@ typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
 
 static int common_param_init(struct find_param *param, char *path)
 {
-	param->lumlen = get_mds_md_size(path);
+	int lumlen = get_mds_md_size(path);
+
+	if (lumlen < PATH_MAX + 1)
+		lumlen = PATH_MAX + 1;
+
+	param->lumlen = lumlen;
 	param->lmd = malloc(sizeof(lstat_t) + param->lumlen);
 	if (param->lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
@@ -1368,14 +1452,6 @@ static int get_lmd_info(char *path, DIR *parent, DIR *dir,
 	return ret;
 }
 
-int llapi_mds_getfileinfo(char *path, DIR *parent,
-                          struct lov_user_mds_data *lmd)
-{
-        int lumlen = get_mds_md_size(path);
-
-        return get_lmd_info(path, parent, NULL, lmd, lumlen);
-}
-
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 				   semantic_func_t sem_init,
 				   semantic_func_t sem_fini, void *data,
@@ -1431,7 +1507,8 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 if (dent->d_type == DT_UNKNOWN) {
 			lstat_t *st = &param->lmd->lmd_st;
 
-			ret = llapi_mds_getfileinfo(path, d, param->lmd);
+			ret = get_lmd_info(path, d, NULL, param->lmd,
+					   param->lumlen);
                         if (ret == 0) {
 				dent->d_type =
 					llapi_filetype_dir_table[st->st_mode &
@@ -1543,6 +1620,23 @@ int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
 
         close(fd);
         return rc;
+}
+
+int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lov_uuid)
+{
+	int fd, rc;
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s", path);
+		return rc;
+	}
+
+	rc = llapi_file_fget_lmv_uuid(fd, lov_uuid);
+
+	close(fd);
+	return rc;
 }
 
 enum tgt_type {
@@ -1734,10 +1828,12 @@ static int setup_indexes(DIR *dir, char *path, struct obd_uuid *obduuids,
         char buf[16];
         int *indexes;
 
-        ret = get_param_obdvar(NULL, path, type == LOV_TYPE ? "lov" : "lmv",
-                               "numobd", buf, sizeof(buf));
-        if (ret)
-                return ret;
+	if (type == LOV_TYPE)
+		ret = get_param_lov(path, "numobd", buf, sizeof(buf));
+	else
+		ret = get_param_lmv(path, "numobd", buf, sizeof(buf));
+	if (ret != 0)
+		return ret;
 
         obdcount = atoi(buf);
         uuids = (struct obd_uuid *)malloc(obdcount *
