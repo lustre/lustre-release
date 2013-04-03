@@ -19,8 +19,6 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$COUNT" ] || COUNT=10000
 [ "$SLOW" = "no" ] && COUNT=1000
 
-[ "$MCREATE" ] || MCREATE=mcreate
-
 [ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
 [ "$RMDIRMANY" ] || RMDIRMANY="unlinkmany -d"
 

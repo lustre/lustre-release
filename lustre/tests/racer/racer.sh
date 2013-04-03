@@ -13,7 +13,8 @@ NUM_THREADS=${NUM_THREADS:-3}
 mkdir -p $DIR
 
 RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
-file_list file_concat file_exec"
+file_list file_concat file_exec file_chown file_chmod file_mknod file_truncate \
+file_delxattr file_getxattr file_setxattr"
 
 if [ $MDSCOUNT -gt 1 ]; then
 	RACER_PROGS="${RACER_PROGS} dir_remote dir_migrate"

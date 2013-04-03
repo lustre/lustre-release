@@ -226,6 +226,7 @@ init_test_env() {
     [ ! -f "$LST" ] && export LST=$(which lst)
     export SGPDDSURVEY=${SGPDDSURVEY:-"$LUSTRE/../lustre-iokit/sgpdd-survey/sgpdd-survey")}
     [ ! -f "$SGPDDSURVEY" ] && export SGPDDSURVEY=$(which sgpdd-survey)
+	export MCREATE=${MCREATE:-mcreate}
     # Ubuntu, at least, has a truncate command in /usr/bin
     # so fully path our truncate command.
     export TRUNCATE=${TRUNCATE:-$LUSTRE/tests/truncate}
