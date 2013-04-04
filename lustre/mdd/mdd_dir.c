@@ -1616,12 +1616,22 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		GOTO(stop, rc);
 
+	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	if (rc)
+		GOTO(stop, rc);
+
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
 		GOTO(stop, rc);
 
 	rc = dt_xattr_set(env, mdd_object_child(son), buf, XATTR_NAME_LOV,
 			  0, handle, mdd_object_capa(env, son));
+
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, son, handle);
+
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
 out_free:

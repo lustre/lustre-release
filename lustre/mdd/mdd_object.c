@@ -672,11 +672,9 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
  * \param mdd_obj - mdd_object of change
  * \param handle - transacion handle
  */
-static int mdd_changelog_data_store(const struct lu_env *env,
-				    struct mdd_device *mdd,
-				    enum changelog_rec_type type,
-				    int flags, struct mdd_object *mdd_obj,
-				    struct thandle *handle)
+int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
+			     enum changelog_rec_type type, int flags,
+			     struct mdd_object *mdd_obj, struct thandle *handle)
 {
 	const struct lu_fid		*tfid;
 	struct llog_changelog_rec	*rec;
@@ -922,16 +920,22 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	/* Only record user xattr changes */
-	if ((strncmp("user.", name, 5) == 0)) {
+	/* Only record user and layout xattr changes */
+	if (strncmp(XATTR_USER_PREFIX, name,
+		    sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
+	    strncmp(XATTR_NAME_LOV, name,
+		    sizeof(XATTR_NAME_LOV) - 1) == 0) {
 		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 		if (rc)
 			return rc;
 	}
 
 	/* If HSM data is modified, this could add a changelog */
-	if (strncmp(XATTR_NAME_HSM, name, sizeof(XATTR_NAME_HSM) - 1) == 0)
+	if (strncmp(XATTR_NAME_HSM, name, sizeof(XATTR_NAME_HSM) - 1) == 0) {
 		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+		if (rc)
+			return rc;
+	}
 
 	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 	return rc;
@@ -1056,8 +1060,10 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	/* Only record system & user xattr changes */
-	if (strncmp(XATTR_USER_PREFIX, name,
+	if (strncmp(XATTR_NAME_LOV, name, sizeof(XATTR_NAME_LOV) - 1) == 0)
+		rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, mdd_obj,
+					      handle);
+	else if (strncmp(XATTR_USER_PREFIX, name,
 			sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
 	    strncmp(POSIX_ACL_XATTR_ACCESS, name,
 			sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
@@ -1424,6 +1430,15 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		}
 		GOTO(stop, rc);
 	}
+
+	/* Issue one changelog record per file */
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, fst_o, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, snd_o, handle);
+	if (rc)
+		GOTO(stop, rc);
 	EXIT;
 
 stop:

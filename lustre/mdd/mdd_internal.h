@@ -390,6 +390,10 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 				struct thandle *handle);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
+int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
+			     enum changelog_rec_type type, int flags,
+			     struct mdd_object *mdd_obj,
+			     struct thandle *handle);
 int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
 			   enum changelog_rec_type type, unsigned flags,
 			   struct mdd_object *target, struct mdd_object *parent,

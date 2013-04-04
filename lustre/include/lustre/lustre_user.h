@@ -655,6 +655,7 @@ enum changelog_rec_type {
         CL_MTIME    = 17, /* Precedence: setattr > mtime > ctime > atime */
         CL_CTIME    = 18,
         CL_ATIME    = 19,
+	CL_LAYOUT   = 20,
         CL_LAST
 };
 
@@ -662,7 +663,9 @@ static inline const char *changelog_type2str(int type) {
 	static const char *changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
-		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME"  };
+		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "LAYOUT"
+	};
+
 	if (type >= 0 && type < CL_LAST)
 		return changelog_str[type];
 	return NULL;
