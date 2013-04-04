@@ -1040,9 +1040,7 @@ int iam_lookup_lock(struct iam_path *path,
                    struct dynlock_handle **dl, enum dynlock_type lt)
 {
         int result;
-        struct inode *dir;
 
-        dir = iam_path_obj(path);
         while ((result = __iam_path_lookup(path)) == 0) {
                 do_corr(schedule());
 		*dl = iam_lock_htree(path->ip_container, path->ip_frame->leaf,
@@ -1072,13 +1070,11 @@ int iam_lookup_lock(struct iam_path *path,
 static int iam_path_lookup(struct iam_path *path, int index)
 {
         struct iam_container *c;
-        struct iam_descr *descr;
         struct iam_leaf  *leaf;
         int result;
 
         c = path->ip_container;
         leaf = &path->ip_leaf;
-        descr = iam_path_descr(path);
         result = iam_lookup_lock(path, &leaf->il_lock, DLT_WRITE);
         assert_inv(iam_path_check(path));
         do_corr(schedule());
@@ -1500,7 +1496,6 @@ int iam_it_next(struct iam_iterator *it)
         int result;
         struct iam_path      *path;
         struct iam_leaf      *leaf;
-        struct inode         *obj;
         do_corr(struct iam_ikey *ik_orig);
 
         /* assert_corr(it->ii_flags&IAM_IT_MOVE); */
@@ -1509,7 +1504,6 @@ int iam_it_next(struct iam_iterator *it)
 
         path = &it->ii_path;
         leaf = &path->ip_leaf;
-        obj  = iam_path_obj(path);
 
         assert_corr(iam_leaf_is_locked(leaf));
 

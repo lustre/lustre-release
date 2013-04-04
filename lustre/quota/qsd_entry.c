@@ -313,13 +313,10 @@ out:
 int qsd_update_lqe(const struct lu_env *env, struct lquota_entry *lqe,
 		   bool global, void *rec)
 {
-	struct qsd_qtype_info *qqi;
 	ENTRY;
 
 	LASSERT(lqe != NULL);
 	LASSERT(!lqe_is_master(lqe));
-
-	qqi = lqe2qqi(lqe);
 
 	/* updating lqe is always serialized, no locking needed. */
 	if (global) {

@@ -4169,7 +4169,7 @@ static int mdt_fld_init(const struct lu_env *env,
 static void mdt_stack_pre_fini(const struct lu_env *env,
 			   struct mdt_device *m, struct lu_device *top)
 {
-	struct obd_device       *obd = mdt2obd_dev(m);
+	struct obd_device       *obd;
 	struct lustre_cfg_bufs  *bufs;
 	struct lustre_cfg       *lcfg;
 	struct mdt_thread_info  *info;
