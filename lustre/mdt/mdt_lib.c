@@ -710,99 +710,51 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         RETURN(0);
 }
 
-static inline unsigned int attr_unpack(__u64 sa_valid) {
-        unsigned int ia_valid = 0;
-
-        if (sa_valid & MDS_ATTR_MODE)
-                ia_valid |= ATTR_MODE;
-        if (sa_valid & MDS_ATTR_UID)
-                ia_valid |= ATTR_UID;
-        if (sa_valid & MDS_ATTR_GID)
-                ia_valid |= ATTR_GID;
-        if (sa_valid & MDS_ATTR_SIZE)
-                ia_valid |= ATTR_SIZE;
-        if (sa_valid & MDS_ATTR_ATIME)
-                ia_valid |= ATTR_ATIME;
-        if (sa_valid & MDS_ATTR_MTIME)
-                ia_valid |= ATTR_MTIME;
-        if (sa_valid & MDS_ATTR_CTIME)
-                ia_valid |= ATTR_CTIME;
-        if (sa_valid & MDS_ATTR_ATIME_SET)
-                ia_valid |= ATTR_ATIME_SET;
-        if (sa_valid & MDS_ATTR_MTIME_SET)
-                ia_valid |= ATTR_MTIME_SET;
-        if (sa_valid & MDS_ATTR_FORCE)
-                ia_valid |= ATTR_FORCE;
-        if (sa_valid & MDS_ATTR_ATTR_FLAG)
-                ia_valid |= ATTR_ATTR_FLAG;
-        if (sa_valid & MDS_ATTR_KILL_SUID)
-                ia_valid |=  ATTR_KILL_SUID;
-        if (sa_valid & MDS_ATTR_KILL_SGID)
-                ia_valid |= ATTR_KILL_SGID;
-        if (sa_valid & MDS_ATTR_CTIME_SET)
-                ia_valid |= ATTR_CTIME_SET;
-        if (sa_valid & MDS_ATTR_FROM_OPEN)
-                ia_valid |= ATTR_FROM_OPEN;
-        if (sa_valid & MDS_ATTR_BLOCKS)
-                ia_valid |= ATTR_BLOCKS;
-        if (sa_valid & MDS_OPEN_OWNEROVERRIDE)
-                ia_valid |= MDS_OPEN_OWNEROVERRIDE;
-        return ia_valid;
-}
-
 static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                                   struct md_attr *ma)
 {
-        __u64 out;
+	__u64 out;
 
-        out = 0;
-        if (in & ATTR_MODE)
-                out |= LA_MODE;
-        if (in & ATTR_UID)
-                out |= LA_UID;
-        if (in & ATTR_GID)
-                out |= LA_GID;
-        if (in & ATTR_SIZE)
-                out |= LA_SIZE;
-        if (in & ATTR_BLOCKS)
-                out |= LA_BLOCKS;
+	out = 0;
+	if (in & MDS_ATTR_MODE)
+		out |= LA_MODE;
+	if (in & MDS_ATTR_UID)
+		out |= LA_UID;
+	if (in & MDS_ATTR_GID)
+		out |= LA_GID;
+	if (in & MDS_ATTR_SIZE)
+		out |= LA_SIZE;
+	if (in & MDS_ATTR_BLOCKS)
+		out |= LA_BLOCKS;
+	if (in & MDS_ATTR_ATIME_SET)
+		out |= LA_ATIME;
+	if (in & MDS_ATTR_CTIME_SET)
+		out |= LA_CTIME;
+	if (in & MDS_ATTR_MTIME_SET)
+		out |= LA_MTIME;
+	if (in & MDS_ATTR_ATTR_FLAG)
+		out |= LA_FLAGS;
+	if (in & MDS_ATTR_KILL_SUID)
+		out |= LA_KILL_SUID;
+	if (in & MDS_ATTR_KILL_SGID)
+		out |= LA_KILL_SGID;
 
-        if (in & ATTR_FROM_OPEN)
-                rr->rr_flags |= MRF_OPEN_TRUNC;
-
-        if (in & ATTR_ATIME_SET)
-                out |= LA_ATIME;
-
-        if (in & ATTR_CTIME_SET)
-                out |= LA_CTIME;
-
-        if (in & ATTR_MTIME_SET)
-                out |= LA_MTIME;
-
-        if (in & ATTR_ATTR_FLAG)
-                out |= LA_FLAGS;
-
-        if (in & ATTR_KILL_SUID)
-                out |= LA_KILL_SUID;
-
-        if (in & ATTR_KILL_SGID)
-                out |= LA_KILL_SGID;
-
+	if (in & MDS_ATTR_FROM_OPEN)
+		rr->rr_flags |= MRF_OPEN_TRUNC;
 	if (in & MDS_OPEN_OWNEROVERRIDE)
 		ma->ma_attr_flags |= MDS_OWNEROVERRIDE;
+	if (in & MDS_ATTR_FORCE)
+		ma->ma_attr_flags |= MDS_PERM_BYPASS;
 
-        if (in & ATTR_FORCE)
-                ma->ma_attr_flags |= MDS_PERM_BYPASS;
-
-        /*XXX need ATTR_RAW?*/
-        in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|ATTR_BLOCKS|
-                ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
-                ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
-                ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE|
-                ATTR_FORCE|ATTR_KILL_SUID|ATTR_KILL_SGID);
-        if (in != 0)
-                CERROR("Unknown attr bits: "LPX64"\n", in);
-        return out;
+	in &= ~(MDS_ATTR_MODE | MDS_ATTR_UID | MDS_ATTR_GID |
+		MDS_ATTR_ATIME | MDS_ATTR_MTIME | MDS_ATTR_CTIME |
+		MDS_ATTR_ATIME_SET | MDS_ATTR_CTIME_SET | MDS_ATTR_MTIME_SET |
+		MDS_ATTR_SIZE | MDS_ATTR_BLOCKS | MDS_ATTR_ATTR_FLAG |
+		MDS_ATTR_FORCE | MDS_ATTR_KILL_SUID | MDS_ATTR_KILL_SGID |
+		MDS_ATTR_FROM_OPEN | MDS_OPEN_OWNEROVERRIDE);
+	if (in != 0)
+		CERROR("Unknown attr bits: "LPX64"\n", in);
+	return out;
 }
 /* unpacking */
 
@@ -829,7 +781,21 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	uc->uc_suppgids[1] = -1;
 
         rr->rr_fid1 = &rec->sa_fid;
-        la->la_valid = mdt_attr_valid_xlate(attr_unpack(rec->sa_valid), rr, ma);
+	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
+	/*  If MDS_ATTR_xTIME is set without MDS_ATTR_xTIME_SET and
+	 *  the client does not have OBD_CONNECT_FULL20, convert it
+	 *  to LA_xTIME. LU-3036 */
+	if (!(exp_connect_flags(info->mti_exp) & OBD_CONNECT_FULL20)) {
+		if (!(rec->sa_valid & MDS_ATTR_ATIME_SET) &&
+		     (rec->sa_valid & MDS_ATTR_ATIME))
+			la->la_valid |= LA_ATIME;
+		if (!(rec->sa_valid & MDS_ATTR_MTIME_SET) &&
+		     (rec->sa_valid & MDS_ATTR_MTIME))
+			la->la_valid |= LA_MTIME;
+		if (!(rec->sa_valid & MDS_ATTR_CTIME_SET) &&
+		     (rec->sa_valid & MDS_ATTR_CTIME))
+			la->la_valid |= LA_CTIME;
+	}
         la->la_mode  = rec->sa_mode;
         la->la_flags = rec->sa_attr_flags;
         la->la_uid   = rec->sa_uid;

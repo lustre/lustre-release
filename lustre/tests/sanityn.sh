@@ -489,28 +489,27 @@ test_21() { # Bug 5907
 run_test 21 " Try to remove mountpoint on another dir ===="
 
 test_23() { # Bug 5972
-	echo "others should see updated atime while another read" > $DIR1/f23
-	
+	local at_diff=$(do_facet $SINGLEMDS $LCTL get_param -n mdd.*.atime_diff)
+	echo "atime should be updated while another read" > $DIR1/$tfile
+
 	# clear the lock(mode: LCK_PW) gotten from creating operation
 	cancel_lru_locks osc
-	
-	time1=`date +%s`	
-	#MAX_ATIME_DIFF 60, we update atime only if older than 60 seconds
-	sleep 61
-	
-	multiop_bg_pause $DIR1/f23 or20_c || return 1
+	time1=$(date +%s)
+	echo "now is $time1"
+	sleep $((at_diff + 1))
+
+	echo "starting reads"
+	multiop_bg_pause $DIR1/$tfile or20_c || return 1
         # with SOM and opencache enabled, we need to close a file and cancel
         # open lock to get atime propogated to MDS
-        kill -USR1 $!
+        kill -USR1 $! || return 2
         cancel_lru_locks mdc
 
-	time2=`stat -c "%X" $DIR2/f23`
+	time2=$(stat -c "%X" $DIR/$tfile)
+	echo "new atime is $time2"
 
-	if (( $time2 <= $time1 )); then
-		error "atime doesn't update among nodes"
-	fi
-
-	rm -f $DIR1/f23 || error "rm -f $DIR1/f23 failed"
+	[ $time2 -gt $time1 ] || error "atime was not updated"
+	rm -f $DIR1/$tfile || error "rm -f $DIR1/$tfile failed"
 	true
 }
 run_test 23 " others should see updated atime while another read===="
@@ -523,7 +522,7 @@ test_24a() {
 	lfs df -i $DIR2 || error "lfs df -i $DIR2 failed"
 	lfs df $DIR1/$tfile || error "lfs df $DIR1/$tfile failed"
 	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
-	
+
 	OSC=`lctl dl | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 #	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
