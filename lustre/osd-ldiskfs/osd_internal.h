@@ -595,8 +595,8 @@ struct osd_thread_info {
 	/* Tracking for transaction credits, to allow debugging and optimizing
 	 * cases where a large number of credits are being allocated for
 	 * single transaction. */
-	unsigned char		oti_declare_ops[OSD_OT_MAX];
-	unsigned char		oti_declare_ops_rb[OSD_OT_MAX];
+	unsigned short		oti_declare_ops[OSD_OT_MAX];
+	unsigned short		oti_declare_ops_rb[OSD_OT_MAX];
 	unsigned short		oti_declare_ops_cred[OSD_OT_MAX];
 	bool			oti_rollback;
 #endif

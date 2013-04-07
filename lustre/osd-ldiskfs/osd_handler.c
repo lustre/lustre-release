@@ -680,10 +680,15 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                 CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
                 osd_th_alloced(oh);
 
-		memset(oti->oti_declare_ops, 0, OSD_OT_MAX);
-		memset(oti->oti_declare_ops_rb, 0, OSD_OT_MAX);
-		memset(oti->oti_declare_ops_cred, 0, OSD_OT_MAX);
+#ifdef OSD_TRACK_DECLARES
+		memset(oti->oti_declare_ops, 0,
+					sizeof(oti->oti_declare_ops));
+		memset(oti->oti_declare_ops_rb, 0,
+					sizeof(oti->oti_declare_ops_rb));
+		memset(oti->oti_declare_ops_cred, 0,
+					sizeof(oti->oti_declare_ops_cred));
 		oti->oti_rollback = false;
+#endif
         }
         RETURN(th);
 }
@@ -713,8 +718,10 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 GOTO(out, rc);
 
 	if (unlikely(osd_param_is_not_sane(dev, th))) {
+#ifdef OSD_TRACK_DECLARES
 		static unsigned long last_printed;
 		static int last_credits;
+#endif
 
 		CWARN("%.16s: too many transaction credits (%d > %d)\n",
 		      LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
