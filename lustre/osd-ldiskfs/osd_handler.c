@@ -2476,8 +2476,10 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
 static int osd_object_ref_add(const struct lu_env *env,
                               struct dt_object *dt, struct thandle *th)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct inode      *inode = obj->oo_inode;
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct inode      *inode = obj->oo_inode;
+	bool		   need_dirty = false;
+	int		   rc = 0;
 
         LINVRNT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
@@ -2486,33 +2488,44 @@ static int osd_object_ref_add(const struct lu_env *env,
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_ADD);
 
-	/*
-	 * DIR_NLINK feature is set for compatibility reasons if:
-	 * 1) nlinks > LDISKFS_LINK_MAX, or
-	 * 2) nlinks == 2, since this indicates i_nlink was previously 1.
+	/* This based on ldiskfs_inc_count(), which is not exported.
 	 *
-	 * It is easier to always set this flag (rather than check and set),
-	 * since it has less overhead, and the superblock will be dirtied
-	 * at some point. Both e2fsprogs and any Lustre-supported ldiskfs
-	 * do not actually care whether this flag is set or not.
+	 * The DIR_NLINK feature allows directories to exceed LDISKFS_LINK_MAX
+	 * (65000) subdirectories by storing "1" in i_nlink if the link count
+	 * would otherwise overflow. Directory tranversal tools understand
+	 * that (st_nlink == 1) indicates that the filesystem dose not track
+	 * hard links count on the directory, and will not abort subdirectory
+	 * scanning early once (st_nlink - 2) subdirs have been found.
+	 *
+	 * This also has to properly handle the case of inodes with nlink == 0
+	 * in case they are being linked into the PENDING directory
 	 */
 	spin_lock(&obj->oo_guard);
-	/* inc_nlink from 0 may cause WARN_ON */
-	if(inode->i_nlink == 0)
+	if (unlikely(!S_ISDIR(inode->i_mode) &&
+		     inode->i_nlink >= LDISKFS_LINK_MAX)) {
+		/* MDD should have checked this, but good to be safe */
+		rc = -EMLINK;
+	} else if (unlikely(inode->i_nlink == 0 ||
+			    (S_ISDIR(inode->i_mode) &&
+			     inode->i_nlink >= LDISKFS_LINK_MAX))) {
+		/* inc_nlink from 0 may cause WARN_ON */
 		set_nlink(inode, 1);
-	else
+		need_dirty = true;
+	} else if (!S_ISDIR(inode->i_mode) ||
+		   (S_ISDIR(inode->i_mode) && inode->i_nlink >= 2)) {
 		inc_nlink(inode);
-	if (S_ISDIR(inode->i_mode) && inode->i_nlink > 1) {
-		if (inode->i_nlink >= LDISKFS_LINK_MAX ||
-		    inode->i_nlink == 2)
-			set_nlink(inode, 1);
-	}
+		need_dirty = true;
+	} /* else (S_ISDIR(inode->i_mode) && inode->i_nlink == 1) { ; } */
+
 	LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
 	spin_unlock(&obj->oo_guard);
-	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+
+	if (need_dirty)
+		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+
 	LINVRNT(osd_invariant(obj));
 
-	return 0;
+	return rc;
 }
 
 static int osd_declare_object_ref_del(const struct lu_env *env,
@@ -2551,15 +2564,24 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 
 	spin_lock(&obj->oo_guard);
 	LASSERT(inode->i_nlink > 0);
-	drop_nlink(inode);
-	/* If this is/was a many-subdir directory (nlink > LDISKFS_LINK_MAX)
-	 * then the nlink count is 1. Don't let it be set to 0 or the directory
-	 * inode will be deleted incorrectly. */
-	if (S_ISDIR(inode->i_mode) && inode->i_nlink == 0)
-		set_nlink(inode, 1);
-	spin_unlock(&obj->oo_guard);
-	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-	LINVRNT(osd_invariant(obj));
+
+	/* This based on ldiskfs_dec_count(), which is not exported.
+	 *
+	 * If a directory already has nlink == 1, then do not drop the nlink
+	 * count to 0, even temporarily, to avoid race conditions with other
+	 * threads not holding oo_guard seeing i_nlink == 0 in rare cases.
+	 *
+	 * nlink == 1 means the directory has/had > EXT4_LINK_MAX subdirs.
+	 * */
+	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 1) {
+		drop_nlink(inode);
+
+		spin_unlock(&obj->oo_guard);
+		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+		LINVRNT(osd_invariant(obj));
+	} else {
+		spin_unlock(&obj->oo_guard);
+	}
 
 	return 0;
 }
