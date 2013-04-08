@@ -451,6 +451,35 @@ static void osd_object_init0(struct osd_object *obj)
                 (LOHA_EXISTS | (obj->oo_inode->i_mode & S_IFMT));
 }
 
+static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
+{
+	struct osd_thread_info	*info	= osd_oti_get(env);
+	struct lustre_mdt_attrs	*lma	= &info->oti_mdt_attrs;
+	int			rc;
+	ENTRY;
+
+	rc = __osd_xattr_get(obj->oo_inode, &info->oti_obj_dentry,
+			     XATTR_NAME_LMA, (void *)lma, sizeof(*lma));
+	if (rc > 0) {
+		rc = 0;
+		if (unlikely((le32_to_cpu(lma->lma_incompat) &
+			      ~LMA_INCOMPAT_SUPP) ||
+			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
+			      DFID"\n", osd_obj2dev(obj)->od_svname,
+			      le32_to_cpu(lma->lma_incompat) &
+			      ~LMA_INCOMPAT_SUPP,
+			      PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+			rc = -EOPNOTSUPP;
+		}
+	} else if (rc == -ENODATA) {
+		/* haven't initialize LMA xattr */
+		rc = 0;
+	}
+
+	RETURN(rc);
+}
+
 /*
  * Concurrency: no concurrent access is possible that early in object
  * life-cycle.
@@ -471,8 +500,10 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
 	obj->oo_dt.do_body_ops = &osd_body_ops_new;
-	if (result == 0 && obj->oo_inode != NULL)
+	if (result == 0 && obj->oo_inode != NULL) {
 		osd_object_init0(obj);
+		result = osd_check_lma(env, obj);
+	}
 
 	LINVRNT(osd_invariant(obj));
 	return result;

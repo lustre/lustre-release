@@ -349,6 +349,38 @@ int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 	RETURN(0);
 }
 
+static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
+{
+	struct lu_buf		buf;
+	int			rc;
+	struct lustre_mdt_attrs	*lma;
+	ENTRY;
+
+	lma = (struct lustre_mdt_attrs *)osd_oti_get(env)->oti_buf;
+	buf.lb_buf = lma;
+	buf.lb_len = sizeof(*lma);
+
+	rc = osd_xattr_get(env, &obj->oo_dt, &buf, XATTR_NAME_LMA, BYPASS_CAPA);
+	if (rc > 0) {
+		rc = 0;
+		if (unlikely((le32_to_cpu(lma->lma_incompat) &
+			      ~LMA_INCOMPAT_SUPP) ||
+			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
+			      DFID"\n", osd_obj2dev(obj)->od_svname,
+			      le32_to_cpu(lma->lma_incompat) &
+			      ~LMA_INCOMPAT_SUPP,
+			      PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+			rc = -EOPNOTSUPP;
+		}
+	} else if (rc == -ENODATA) {
+		/* haven't initialize LMA xattr */
+		rc = 0;
+	}
+
+	RETURN(rc);
+}
+
 /*
  * Concurrency: no concurrent access is possible that early in object
  * life-cycle.
@@ -375,17 +407,24 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 		LASSERT(obj->oo_db == NULL);
 		rc = __osd_obj2dbuf(env, osd->od_objset.os, oid,
 					&obj->oo_db, osd_obj_tag);
-		if (rc == 0) {
-			LASSERT(obj->oo_db);
-			rc = osd_object_init0(env, obj);
-		} else {
+		if (rc != 0) {
 			CERROR("%s: lookup "DFID"/"LPX64" failed: rc = %d\n",
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
+			GOTO(out, rc);
 		}
+		LASSERT(obj->oo_db);
+		rc = osd_object_init0(env, obj);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		rc = osd_check_lma(env, obj);
+		if (rc != 0)
+			GOTO(out, rc);
 	} else if (rc == -ENOENT) {
 		rc = 0;
 	}
 	LASSERT(osd_invariant(obj));
+out:
 	RETURN(rc);
 }
 
