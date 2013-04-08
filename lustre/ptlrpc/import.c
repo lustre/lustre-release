@@ -771,6 +771,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state == LUSTRE_IMP_CLOSED) {
+		imp->imp_connect_tried = 1;
 		spin_unlock(&imp->imp_lock);
 		RETURN(0);
 	}
@@ -985,17 +986,18 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
         }
 
 finish:
-        rc = ptlrpc_import_recovery_state_machine(imp);
-        if (rc != 0) {
-                if (rc == -ENOTCONN) {
-                        CDEBUG(D_HA, "evicted/aborted by %s@%s during recovery;"
-                               "invalidating and reconnecting\n",
-                               obd2cli_tgt(imp->imp_obd),
-                               imp->imp_connection->c_remote_uuid.uuid);
-                        ptlrpc_connect_import(imp);
-                        RETURN(0);
-                }
-        } else {
+	rc = ptlrpc_import_recovery_state_machine(imp);
+	if (rc != 0) {
+		if (rc == -ENOTCONN) {
+			CDEBUG(D_HA, "evicted/aborted by %s@%s during recovery;"
+			       "invalidating and reconnecting\n",
+			       obd2cli_tgt(imp->imp_obd),
+			       imp->imp_connection->c_remote_uuid.uuid);
+			ptlrpc_connect_import(imp);
+			imp->imp_connect_tried = 1;
+			RETURN(0);
+		}
+	} else {
 
 		spin_lock(&imp->imp_lock);
 		cfs_list_del(&imp->imp_conn_current->oic_item);
@@ -1133,6 +1135,8 @@ finish:
         }
 
 out:
+	imp->imp_connect_tried = 1;
+
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
                 if (rc == -EACCES) {

@@ -250,23 +250,41 @@ struct obd_import {
         /** Protects flags, level, generation, conn_cnt, *_list */
 	spinlock_t		  imp_lock;
 
-        /* flags */
-        unsigned long             imp_no_timeout:1,       /* timeouts are disabled */
-                                  imp_invalid:1,          /* evicted */
-                                  imp_deactive:1,         /* administratively disabled */
-                                  imp_replayable:1,       /* try to recover the import */
-                                  imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
-                                  imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                                  imp_delayed_recovery:1, /* VBR: imp in delayed recovery */
-                                  imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */
-                                  imp_vbr_failed:1,       /* recovery by versions was failed */
-                                  imp_force_verify:1,     /* force an immidiate ping */
-				  imp_force_next_verify:1,/* force a scheduled ping */
-                                  imp_pingable:1,         /* pingable */
-                                  imp_resend_replay:1,    /* resend for replay */
-                                  imp_no_pinger_recover:1,/* disable normal recovery, for test only. */
-				  imp_need_mne_swab:1,	  /* need IR MNE swab */
-                                  imp_force_reconnect:1;  /* import must be reconnected instead of chouse new connection */
+	/* flags */
+	unsigned long             imp_no_timeout:1, /* timeouts are disabled */
+				  imp_invalid:1,    /* evicted */
+				  /* administratively disabled */
+				  imp_deactive:1,
+				  /* try to recover the import */
+				  imp_replayable:1,
+				  /* don't run recovery (timeout instead) */
+				  imp_dlm_fake:1,
+				  /* use 1/2 timeout on MDS' OSCs */
+				  imp_server_timeout:1,
+				  /* VBR: imp in delayed recovery */
+				  imp_delayed_recovery:1,
+				  /* VBR: if gap was found then no lock replays
+				   */
+				  imp_no_lock_replay:1,
+				  /* recovery by versions was failed */
+				  imp_vbr_failed:1,
+				  /* force an immidiate ping */
+				  imp_force_verify:1,
+				  /* force a scheduled ping */
+				  imp_force_next_verify:1,
+				  /* pingable */
+				  imp_pingable:1,
+				  /* resend for replay */
+				  imp_resend_replay:1,
+				  /* disable normal recovery, for test only. */
+				  imp_no_pinger_recover:1,
+				  /* need IR MNE swab */
+				  imp_need_mne_swab:1,
+				  /* import must be reconnected instead of
+				   * chouse new connection */
+				  imp_force_reconnect:1,
+				  /* import has tried to connect with server */
+				  imp_connect_tried:1;
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;

@@ -174,6 +174,7 @@ void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc);
 int lov_update_common_set(struct lov_request_set *set,
                           struct lov_request *req, int rc);
+int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx);
 int lov_prep_create_set(struct obd_export *exp, struct obd_info *oifo,
                         struct lov_stripe_md **ea, struct obdo *src_oa,
                         struct obd_trans_info *oti,
