@@ -191,7 +191,7 @@
           <para>Which server node it was communicating with, and so on.</para>
         </listitem>
       </itemizedlist>
-      <para>Lustre logs are dumped to <literal>/proc/sys/lnet/debug_pat</literal>h.</para>
+      <para>Lustre logs are dumped to <literal>/proc/sys/lnet/debug_path</literal>.</para>
       <para>Collect the first group of messages related to a problem, and any messages that precede &quot;LBUG&quot; or &quot;assertion failure&quot; errors. Messages that mention server nodes (OST or MDS) are specific to that server; you must collect similar messages from the relevant server console logs.</para>
       <para>Another Lustre debug log holds information for Lustre action for a short period of time which, in turn, depends on the processes on the node to use Lustre. Use the following command to extract debug logs on each of the nodes, run</para>
       <screen>$ lctl dk <replaceable>filename</replaceable></screen>

@@ -249,7 +249,7 @@ Network-specific Kernel Modules and Libraries</title>
       <section remap="h4">
         <title><indexterm><primary>installing</primary><secondary>tools and utilities</secondary></indexterm>
 Lustre-Specific Tools and Utilities</title>
-        <para>Several third-party utilities are must be installed on servers:</para>
+        <para>Several third-party utilities must be installed on servers:</para>
         <itemizedlist>
           <listitem>
             <para><emphasis role="bold">e2fsprogs</emphasis> : Lustre requires a recent version of e2fsprogs that understands extents and large xattr. Use <literal>e2fsprogs-1.41.90.wc4</literal> or later, available at:</para>

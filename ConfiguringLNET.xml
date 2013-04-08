@@ -43,7 +43,7 @@
     <para>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with Lustre, including which NICs will be configured to work with Lustre and the routing to be used with Lustre.</para>
     <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal> file.  In some cases the parameters may have been stored in <literal>/etc/modprobe.conf</literal>, but this has been deprecated since before RHEL5 and SLES10, and having a separate <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and distribution of the Lustre networking configuration.  This file contains one or more entries with the syntax:</para>
     <screen>options lnet <replaceable>parameter</replaceable>=<replaceable>value</replaceable></screen>
-    <para>To specify the network interfaces that are to be used for Lustre, set either the networks parameter or the <literal>ip2nets</literal> parameter (only one of these parameters can be used at a time):</para>
+    <para>To specify the network interfaces that are to be used for Lustre, set either the <literal>networks</literal> parameter or the <literal>ip2nets</literal> parameter (only one of these parameters can be used at a time):</para>
     <itemizedlist>
       <listitem>
         <para><literal>networks</literal>  - Specifies the networks to be used.</para>
@@ -56,7 +56,7 @@
     <para>To set up routing between networks, use:</para>
     <itemizedlist>
       <listitem>
-        <para>routes  - Lists networks and the NIDs of routers that forward to them.</para>
+        <para><literal>routes</literal>  - Lists networks and the NIDs of routers that forward to them.</para>
       </listitem>
     </itemizedlist>
     <para>See <xref linkend="dbdoclet.50438216_71227"/> for more details.</para>
