@@ -181,28 +181,22 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 {
 	int rc;
 
-	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA, (void *)lma,
-			     sizeof(*lma));
-	if (rc == -ERANGE) {
-		/* try with old lma size */
-		rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA,
-					   info->oti_mdt_attrs_old,
-					   LMA_OLD_SIZE);
-		if (rc > 0)
-			memcpy(lma, info->oti_mdt_attrs_old, sizeof(*lma));
-	}
+	CLASSERT(LMA_OLD_SIZE >= sizeof(*lma));
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA,
+			     info->oti_mdt_attrs_old, LMA_OLD_SIZE);
 	if (rc > 0) {
+		if ((void *)lma != (void *)info->oti_mdt_attrs_old)
+			memcpy(lma, info->oti_mdt_attrs_old, sizeof(*lma));
+		rc = 0;
+		lustre_lma_swab(lma);
 		/* Check LMA compatibility */
-		if (lma->lma_incompat & ~cpu_to_le32(LMA_INCOMPAT_SUPP)) {
-			CWARN("%.16s: unsupported incompat LMA feature(s) "
-			      "%lu/%#x\n",
+		if (lma->lma_incompat & ~LMA_INCOMPAT_SUPP) {
+			CWARN("%.16s: unsupported incompat LMA feature(s) %#x "
+			      "for fid = "DFID", ino = %lu\n",
 			      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-			      inode->i_ino, le32_to_cpu(lma->lma_incompat) &
-							~LMA_INCOMPAT_SUPP);
-			rc = -ENOSYS;
-		} else {
-			lustre_lma_swab(lma);
-			rc = 0;
+			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
+			      PFID(&lma->lma_self_fid), inode->i_ino);
+			rc = -EOPNOTSUPP;
 		}
 	} else if (rc == 0) {
 		rc = -ENODATA;
@@ -451,6 +445,38 @@ static void osd_object_init0(struct osd_object *obj)
                 (LOHA_EXISTS | (obj->oo_inode->i_mode & S_IFMT));
 }
 
+static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
+{
+	struct osd_thread_info	*info	= osd_oti_get(env);
+	struct lustre_mdt_attrs	*lma	= &info->oti_mdt_attrs;
+	int			rc;
+	ENTRY;
+
+	CLASSERT(LMA_OLD_SIZE >= sizeof(*lma));
+	rc = __osd_xattr_get(obj->oo_inode, &info->oti_obj_dentry,
+			     XATTR_NAME_LMA, info->oti_mdt_attrs_old,
+			     LMA_OLD_SIZE);
+	if (rc > 0) {
+		rc = 0;
+		lustre_lma_swab(lma);
+		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
+			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
+			      "fid = "DFID", ino = %lu\n",
+			      osd_obj2dev(obj)->od_svname,
+			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
+			      PFID(lu_object_fid(&obj->oo_dt.do_lu)),
+			      obj->oo_inode->i_ino);
+			rc = -EOPNOTSUPP;
+		}
+	} else if (rc == -ENODATA) {
+		/* haven't initialize LMA xattr */
+		rc = 0;
+	}
+
+	RETURN(rc);
+}
+
 /*
  * Concurrency: no concurrent access is possible that early in object
  * life-cycle.
@@ -471,8 +497,10 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
 	obj->oo_dt.do_body_ops = &osd_body_ops_new;
-	if (result == 0 && obj->oo_inode != NULL)
+	if (result == 0 && obj->oo_inode != NULL) {
 		osd_object_init0(obj);
+		result = osd_check_lma(env, obj);
+	}
 
 	LINVRNT(osd_invariant(obj));
 	return result;
