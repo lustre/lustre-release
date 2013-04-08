@@ -767,6 +767,31 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# FC18 3.7.2-201 unexport sock_map_fd() change to
+# use sock_alloc_file().
+# upstream commit 56b31d1c9f1e6a3ad92e7bfe252721e05d92b285
+#
+AC_DEFUN([LIBCFS_SOCK_ALLOC_FILE],
+[AC_MSG_CHECKING([sock_alloc_file is exported])
+LB_CHECK_SYMBOL_EXPORT([sock_alloc_file], [net/socket.c],[
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/net.h>
+	],[
+		sock_alloc_file(NULL, 0, NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_SOCK_ALLOC_FILE_3ARGS, 1,
+			[sock_alloc_file takes 3 arguments])
+	],[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_SOCK_ALLOC_FILE, 1,
+			[sock_alloc_file is exported])
+	])
+],[
+])
+])
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -822,6 +847,8 @@ LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
 LC_SK_SLEEP
 # 2.6.40 fc15
 LC_SHRINK_CONTROL
+# 3.7
+LIBCFS_SOCK_ALLOC_FILE
 ])
 
 #

@@ -47,11 +47,11 @@
 int
 libcfs_sock_ioctl(int cmd, unsigned long arg)
 {
-        mm_segment_t   oldmm = get_fs();
-        struct socket  *sock;
-        int             fd;
-        int             rc;
-        struct file     *sock_filp;
+	mm_segment_t    oldmm = get_fs();
+	struct socket  *sock;
+	int             fd = -1;
+	int             rc;
+	struct file    *sock_filp;
 
         rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
         if (rc != 0) {
@@ -59,21 +59,29 @@ libcfs_sock_ioctl(int cmd, unsigned long arg)
                 return rc;
         }
 
-#ifdef HAVE_SOCK_MAP_FD_2ARG
-        fd = sock_map_fd(sock,0);
+#if !defined(HAVE_SOCK_ALLOC_FILE) && !defined(HAVE_SOCK_ALLOC_FILE_3ARGS)
+# ifdef HAVE_SOCK_MAP_FD_2ARG
+	fd = sock_map_fd(sock,0);
+# else
+	fd = sock_map_fd(sock);
+# endif
+	if (fd < 0) {
+		rc = fd;
+		sock_release(sock);
+		goto out;
+	}
+	sock_filp = fget(fd);
 #else
-        fd = sock_map_fd(sock);
+# ifdef HAVE_SOCK_ALLOC_FILE_3ARGS
+	sock_filp = sock_alloc_file(sock, 0, NULL);
+# else
+	sock_filp = sock_alloc_file(sock, 0);
+# endif
 #endif
-        if (fd < 0) {
-                rc = fd;
-                sock_release(sock);
-                goto out;
-        }
-
-        sock_filp = fget(fd);
         if (!sock_filp) {
                 rc = -ENOMEM;
-                goto out_fd;
+		sock_release(sock);
+                goto out;
         }
 
 	set_fs(KERNEL_DS);
@@ -83,9 +91,10 @@ libcfs_sock_ioctl(int cmd, unsigned long arg)
 
         fput(sock_filp);
 
- out_fd:
-        sys_close(fd);
  out:
+	if (fd >= 0)
+		sys_close(fd);
+
         return rc;
 }
 
