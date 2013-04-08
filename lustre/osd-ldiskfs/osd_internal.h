@@ -614,6 +614,7 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 
 	ll_vfs_dq_init(inode);
 	dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
 	return inode->i_op->setxattr(dentry, name, buf, buflen, fl);
 }
 

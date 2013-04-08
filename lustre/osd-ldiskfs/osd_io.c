@@ -1307,6 +1307,7 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(inode);
         dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
         file->f_dentry = dentry;
         file->f_mapping = inode->i_mapping;
         file->f_op = inode->i_fop;
