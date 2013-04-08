@@ -4880,21 +4880,33 @@ calc_osc_kbytes () {
         $LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
-# save_lustre_params(node, parameter_mask)
-# generate a stream of formatted strings (<node> <param name>=<param value>)
+# save_lustre_params(comma separated facet list, parameter_mask)
+# generate a stream of formatted strings (<facet> <param name>=<param value>)
 save_lustre_params() {
-        local s
-        do_nodesv $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
+	local facets=$1
+	local facet
+	local nodes
+	local node
+
+	for facet in ${facets//,/ }; do
+		node=$(facet_active_host $facet)
+		[[ *\ $node\ * = " $nodes " ]] && continue
+		nodes="$nodes $node"
+
+		do_node $node "$LCTL get_param $2 |
+			while read s; do echo $facet \\\$s; done"
+	done
 }
 
 # restore lustre parameters from input stream, produces by save_lustre_params
 restore_lustre_params() {
-        local node
-        local name
-        local val
-        while IFS=" =" read node name val; do
-                do_node ${node//:/} "lctl set_param -n $name $val"
-        done
+	local facet
+	local name
+	local val
+
+	while IFS=" =" read facet name val; do
+		do_facet $facet "$LCTL set_param -n $name $val"
+	done
 }
 
 check_catastrophe() {

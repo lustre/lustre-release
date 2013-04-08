@@ -140,10 +140,12 @@ check_jbd_values_facets () {
 test_1b () {
 	local param_file=$TMP/$tfile-params
 
-	do_nodesv $(comma_list $(osts_nodes)) lctl get_param obdfilter.${FSNAME}-*.sync_journal
-
-	save_lustre_params $(comma_list $(osts_nodes)) "obdfilter.${FSNAME}-*.sync_journal" >$param_file
-	do_nodesv $(comma_list $(osts_nodes)) lctl set_param obdfilter.${FSNAME}-*.sync_journal=0
+	do_nodesv $(comma_list $(osts_nodes)) \
+		$LCTL get_param obdfilter.${FSNAME}-*.sync_journal
+	save_lustre_params $(get_facets OST) \
+		"obdfilter.${FSNAME}-*.sync_journal" > $param_file
+	do_nodesv $(comma_list $(osts_nodes)) \
+		$LCTL set_param obdfilter.${FSNAME}-*.sync_journal=0
 
 	local stime=$(date +%s)
 	thrlo=4 nobjhi=1 thrhi=4 obdflter_survey_run disk
@@ -175,10 +177,12 @@ run_test 2a "Stripe F/S over the Network"
 test_2b () {
 	local param_file=$TMP/$tfile-params
 
-	do_nodesv $(comma_list $(osts_nodes)) lctl get_param obdfilter.${FSNAME}-*.sync_journal
-
-	save_lustre_params $(comma_list $(osts_nodes)) "obdfilter.${FSNAME}-*.sync_journal" >$param_file
-	do_nodesv $(comma_list $(osts_nodes)) lctl set_param obdfilter.${FSNAME}-*.sync_journal=0
+	do_nodesv $(comma_list $(osts_nodes)) \
+		$LCTL get_param obdfilter.${FSNAME}-*.sync_journal
+	save_lustre_params $(get_facets OST) \
+		"obdfilter.${FSNAME}-*.sync_journal" > $param_file
+	do_nodesv $(comma_list $(osts_nodes)) \
+		$LCTL set_param obdfilter.${FSNAME}-*.sync_journal=0
 
 	local stime=$(date +%s)
 	thrlo=4 nobjhi=1 thrhi=4 obdflter_survey_run netdisk

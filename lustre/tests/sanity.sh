@@ -10518,16 +10518,20 @@ run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 
 
 test_216() { # bug 20317
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-        local node
-        local p="$TMP/sanityN-$TESTNAME.parameters"
-        save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
-        for node in $(osts_nodes); do
-                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
-                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
-        done
-        clear_osc_stats
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
+	local node
+	local facets=$(get_facets OST)
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "osc.*.contention_seconds" > $p
+	save_lustre_params $facets \
+		"ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+	save_lustre_params $facets \
+		"ldlm.namespaces.filter-*.contended_locks" >> $p
+	save_lustre_params $facets \
+		"ldlm.namespaces.filter-*.contention_seconds" >> $p
+	clear_osc_stats
 
         # agressive lockless i/o settings
         for node in $(osts_nodes); do

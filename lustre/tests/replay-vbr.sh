@@ -94,7 +94,7 @@ get_version() {
 
 #save COS setting
 cos_param_file=$TMP/rvbr-cos-params
-save_lustre_params $(comma_list $(mdts_nodes)) "mdt.*.commit_on_sharing" > $cos_param_file
+save_lustre_params $(get_facets MDS) "mdt.*.commit_on_sharing" > $cos_param_file
 
 test_0a() {
         get_version $CLIENT1 $DIR/$tdir/1a || true
