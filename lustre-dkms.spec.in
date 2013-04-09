@@ -1,0 +1,74 @@
+%define module  @PACKAGE@
+%define buildid 1
+%define mkconf  lustre/scripts/dkms.mkconf
+
+Name:           %{module}-dkms
+
+Version:        @VERSION@
+Release:        %{buildid}%{?dist}
+Summary:        Kernel module(s) (dkms)
+
+Group:          System Environment/Kernel
+License:        GPLv2+
+URL:            http://lustre.opensfs.org/
+Source0:        %{module}-%{version}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+BuildArch:      noarch
+
+Requires:       dkms >= 2.2.0.2
+Requires:       spl-dkms >= 0.6.1
+Requires:       zfs-dkms >= 0.6.1
+Requires:       gcc, make, perl
+Requires:       kernel-devel
+Provides:       %{module}-kmod = %{version}
+Provides:       %{module}-modules = %{version}
+
+%description
+This package contains the dkms Lustre kernel modules.
+
+%prep
+%setup -q -n %{module}-%{version}
+
+%build
+%{mkconf} -n %{module} -v %{version} -f dkms.conf
+sed -i 's/BUILDID[[:print:]]*/BUILDID = %{buildid}/' META
+sed -i 's/PRISTINE[[:print:]]*/PRISTINE = 1/' META
+cp META ldiskfs/META
+
+%install
+if [ "$RPM_BUILD_ROOT" != "/" ]; then
+    rm -rf $RPM_BUILD_ROOT
+fi
+mkdir -p $RPM_BUILD_ROOT/usr/src/
+cp -rfp ${RPM_BUILD_DIR}/%{module}-%{version} $RPM_BUILD_ROOT/usr/src/
+
+%clean
+if [ "$RPM_BUILD_ROOT" != "/" ]; then
+    rm -rf $RPM_BUILD_ROOT
+fi
+
+%files
+%defattr(-,root,root)
+/usr/src/%{module}-%{version}
+
+%post
+for POSTINST in /usr/lib/dkms/common.postinst; do
+    if [ -f $POSTINST ]; then
+        $POSTINST %{module} %{version}
+        exit $?
+    fi
+    echo "WARNING: $POSTINST does not exist."
+done
+echo -e "ERROR: DKMS version is too old and %{module} was not"
+echo -e "built with legacy DKMS support."
+echo -e "You must either rebuild %{module} with legacy postinst"
+echo -e "support or upgrade DKMS to a more current version."
+exit 1
+
+%preun
+dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
+exit 0
+
+%changelog
+* Fri Apr  8 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 2.3.63-1
+- First DKMS packages.
