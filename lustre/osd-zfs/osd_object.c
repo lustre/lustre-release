@@ -234,7 +234,7 @@ int __osd_object_attr_get(const struct lu_env *env, udmu_objset_t *uos,
 	la->la_uid = osa->uid;
 	la->la_gid = osa->gid;
 	la->la_nlink = osa->nlink;
-	la->la_flags = osa->flags;
+	la->la_flags = attrs_zfs2fs(osa->flags);
 	la->la_size = osa->size;
 
 	if (S_ISCHR(la->la_mode) || S_ISBLK(la->la_mode)) {
@@ -988,7 +988,10 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 				 &osa->rdev, 8);
 	}
 	if (la->la_valid & LA_FLAGS) {
-		osa->flags = obj->oo_attr.la_flags = la->la_flags;
+		osa->flags = attrs_fs2zfs(la->la_flags);
+		/* many flags are not supported by zfs, so ensure a good cached
+		 * copy */
+		obj->oo_attr.la_flags = attrs_zfs2fs(osa->flags);
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(uos), NULL,
 				 &osa->flags, 8);
 	}
@@ -1125,7 +1128,7 @@ int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos, uint64_t oid,
 	osa->gid = la->la_gid;
 	osa->rdev = la->la_rdev;
 	osa->nlink = la->la_nlink;
-	osa->flags = la->la_flags;
+	osa->flags = attrs_fs2zfs(la->la_flags);
 	osa->size  = la->la_size;
 
 	/* Now add in all of the "SA" attributes */

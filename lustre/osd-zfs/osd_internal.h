@@ -52,6 +52,7 @@
 
 #include <sys/nvpair.h>
 
+#include <sys/zfs_znode.h>
 #include "udmu.h"
 
 #define LUSTRE_ROOT_FID_SEQ	0
@@ -474,6 +475,20 @@ osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	return rc;
+}
+
+static inline uint64_t attrs_fs2zfs(const uint32_t flags)
+{
+	return (((flags & FS_APPEND_FL)		? ZFS_APPENDONLY	: 0) |
+		((flags & FS_NODUMP_FL)		? ZFS_NODUMP		: 0) |
+		((flags & FS_IMMUTABLE_FL)	? ZFS_IMMUTABLE		: 0));
+}
+
+static inline uint32_t attrs_zfs2fs(const uint64_t flags)
+{
+	return (((flags & ZFS_APPENDONLY)	? FS_APPEND_FL		: 0) |
+		((flags & ZFS_NODUMP)		? FS_NODUMP_FL		: 0) |
+		((flags & ZFS_IMMUTABLE)	? FS_IMMUTABLE_FL	: 0));
 }
 
 #endif
