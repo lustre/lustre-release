@@ -439,9 +439,9 @@ AC_DEFUN([LC_CONFIG_GSS],
         LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
                            [AC_MSG_WARN([kernel SHA512 support is recommended by using GSS.])])
 
-        AC_CHECK_LIB([gssapi], [gss_init_sec_context],
+        AC_CHECK_LIB([gssapi], [gss_export_lucid_sec_context],
                      [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
-                     [AC_CHECK_LIB([gssglue], [gss_init_sec_context],
+                     [AC_CHECK_LIB([gssglue], [gss_export_lucid_sec_context],
                                    [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
                                    [AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])])],)
 
