@@ -1270,6 +1270,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct mdd_device	*mdd = mdo2mdd(obj1);
 	int			 rc;
 	__u16			 fst_gen, snd_gen;
+	int			 fst_fl;
 	ENTRY;
 
 	/* we have to sort the 2 obj, so locking will always
@@ -1306,7 +1307,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		rc = PTR_ERR(lmm1_buf);
 		lmm1_buf = NULL;
 		if (rc != -ENODATA)
-			GOTO(unlock, rc);
+			GOTO(stop, rc);
 	}
 
 	lmm2_buf = mdd_get_lov_ea(env, o2);
@@ -1314,12 +1315,12 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		rc = PTR_ERR(lmm2_buf);
 		lmm2_buf = NULL;
 		if (rc != -ENODATA)
-			GOTO(unlock, rc);
+			GOTO(stop, rc);
 	}
 
 	/* swapping 2 non existant layouts is a success */
 	if ((lmm1_buf == NULL) && (lmm2_buf == NULL))
-		GOTO(unlock, rc = 0);
+		GOTO(stop, rc = 0);
 
 	/* to help inode migration between MDT, it is better to
 	 * start by the no layout file (if one), so we order the swap */
@@ -1339,26 +1340,16 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (fst_buf) {
 		fst_lmm = fst_buf->lb_buf;
 		fst_gen = le16_to_cpu(fst_lmm->lmm_layout_gen);
+		fst_fl  = LU_XATTR_REPLACE;
 	} else {
 		fst_lmm = NULL;
 		fst_gen = 0;
+		fst_fl  = LU_XATTR_CREATE;
 	}
 
-	if (snd_buf) {
-		snd_lmm = snd_buf->lb_buf;
-		snd_gen = le16_to_cpu(snd_lmm->lmm_layout_gen);
-	} else {
-		snd_lmm = NULL;
-		snd_gen = 0;
-	}
-
-	/* save the orignal lmm common header of first file
-	 * to be able to roll back */
-	OBD_ALLOC_PTR(old_fst_lmm);
-	if (old_fst_lmm == NULL)
-		GOTO(unlock, rc = -ENOMEM);
-
-	memcpy(old_fst_lmm, fst_lmm, sizeof(*old_fst_lmm));
+	LASSERT(snd_buf != NULL);
+	snd_lmm = snd_buf->lb_buf;
+	snd_gen = le16_to_cpu(snd_lmm->lmm_layout_gen);
 
 	/* increase the generation layout numbers */
 	snd_gen++;
@@ -1366,23 +1357,41 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	/* set the file specific informations in lmm */
 	if (fst_lmm) {
+		/* save the orignal lmm common header of first file
+		 * to be able to roll back */
+		OBD_ALLOC_PTR(old_fst_lmm);
+		if (old_fst_lmm == NULL)
+			GOTO(stop, rc = -ENOMEM);
+		*old_fst_lmm = *fst_lmm;
+
 		fst_lmm->lmm_layout_gen = cpu_to_le16(snd_gen);
 		fst_lmm->lmm_oi = snd_lmm->lmm_oi;
+
+		snd_lmm->lmm_oi = old_fst_lmm->lmm_oi;
+	} else {
+		if (snd_lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1))
+			snd_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEF);
+		else if (snd_lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3))
+			snd_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V3_DEF);
+		else
+			GOTO(stop, rc = -EPROTO);
 	}
 
-	if (snd_lmm) {
-		snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
-		snd_lmm->lmm_oi = old_fst_lmm->lmm_oi;
-	}
+	snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
 
 	/* prepare transaction */
 	rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_buf, XATTR_NAME_LOV,
-				   LU_XATTR_REPLACE, handle);
+				   fst_fl, handle);
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf, XATTR_NAME_LOV,
-				   LU_XATTR_REPLACE, handle);
+	if (fst_buf)
+		rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf,
+					   XATTR_NAME_LOV, LU_XATTR_REPLACE,
+					   handle);
+	else
+		rc = mdd_declare_xattr_del(env, mdd, snd_o, XATTR_NAME_LOV,
+					   handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1390,15 +1399,18 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV,
-			   LU_XATTR_REPLACE, handle,
+	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle,
 			   mdd_object_capa(env, fst_o));
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
-			   LU_XATTR_REPLACE, handle,
-			   mdd_object_capa(env, snd_o));
+	if (fst_buf)
+		rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
+				   LU_XATTR_REPLACE, handle,
+				   mdd_object_capa(env, snd_o));
+	else
+		rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle,
+				   mdd_object_capa(env, snd_o));
 	if (rc) {
 		int	rc2;
 
@@ -1407,13 +1419,17 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		/* restore object_id, object_seq and generation number
 		 * on first file */
 		if (fst_lmm) {
+			LASSERT(old_fst_lmm != NULL);
 			fst_lmm->lmm_oi = old_fst_lmm->lmm_oi;
 			fst_lmm->lmm_layout_gen = old_fst_lmm->lmm_layout_gen;
+			rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
+					    LU_XATTR_REPLACE, handle,
+					    mdd_object_capa(env, fst_o));
+		} else {
+			rc2 = mdo_xattr_del(env, fst_o, XATTR_NAME_LOV, handle,
+					    mdd_object_capa(env, fst_o));
 		}
 
-		rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
-				    LU_XATTR_REPLACE, handle,
-				    mdd_object_capa(env, fst_o));
 		if (rc2) {
 			/* very bad day */
 			CERROR("%s: unable to roll back after swap layouts"
@@ -1443,7 +1459,6 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
-unlock:
 	mdd_write_unlock(env, o2);
 	mdd_write_unlock(env, o1);
 

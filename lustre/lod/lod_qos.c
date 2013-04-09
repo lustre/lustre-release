@@ -1233,13 +1233,6 @@ static int lod_use_defined_striping(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	/*
-	 * LOD shouldn't be aware of recovery at all,
-	 * but this track recovery status (to some extent)
-	 * to be do additional checks like this one
-	 */
-	LASSERT(d->lod_recovery_completed == 0);
-
 	mo->ldo_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
 	mo->ldo_stripenr = le16_to_cpu(v1->lmm_stripe_count);
 	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);

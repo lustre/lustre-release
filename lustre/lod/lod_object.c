@@ -570,6 +570,8 @@ static int lod_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			 const char *name, struct thandle *th,
 			 struct lustre_capa *capa)
 {
+	if (!strcmp(name, XATTR_NAME_LOV))
+		lod_object_free_striping(env, lod_dt_obj(dt));
 	return dt_xattr_del(env, dt_object_child(dt), name, th, capa);
 }
 

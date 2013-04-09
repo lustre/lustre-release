@@ -4266,7 +4266,7 @@ int llapi_swap_layouts(const char *path1, const char *path2,
 {
 	int	fd1, fd2, rc;
 
-	fd1 = open(path1, O_WRONLY);
+	fd1 = open(path1, O_WRONLY | O_LOV_DELAY_CREATE);
 	if (fd1 < 0) {
 		llapi_error(LLAPI_MSG_ERROR, -errno,
 				"error: cannot open for write %s",
@@ -4274,7 +4274,7 @@ int llapi_swap_layouts(const char *path1, const char *path2,
 		return -errno;
 	}
 
-	fd2 = open(path2, O_WRONLY);
+	fd2 = open(path2, O_WRONLY | O_LOV_DELAY_CREATE);
 	if (fd2 < 0) {
 		llapi_error(LLAPI_MSG_ERROR, -errno,
 				"error: cannot open for write %s",

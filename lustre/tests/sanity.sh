@@ -9755,6 +9755,37 @@ test_184c() {
 }
 run_test 184c "Concurrent write and layout swap"
 
+test_184d() {
+	check_swap_layouts_support && return 0
+
+	local file1=$DIR/$tdir/$tfile-1
+	local file2=$DIR/$tdir/$tfile-2
+	local file3=$DIR/$tdir/$tfile-3
+	local lovea1
+	local lovea2
+
+	mkdir -p $DIR/$tdir
+	touch $file1 || error "create $file1 failed"
+	$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE $file2 ||
+		error "create $file2 failed"
+	$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE $file3 ||
+		error "create $file3 failed"
+	lovea1=$($LFS getstripe $file1 | sed 1d)
+
+	$LFS swap_layouts $file2 $file3 ||
+		error "swap $file2 $file3 layouts failed"
+	$LFS swap_layouts $file1 $file2 ||
+		error "swap $file1 $file2 layouts failed"
+
+	lovea2=$($LFS getstripe $file2 | sed 1d)
+	[ "$lovea1" == "$lovea2" ] || error "lovea $lovea1 != $lovea2"
+
+	lovea1=$(getfattr -n trusted.lov $file1 | grep ^trusted)
+	[ -z $lovea1 ] || error "$file1 shouldn't have lovea"
+}
+run_test 184d "allow stripeless layouts swap"
+
+
 test_185() { # LU-2441
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
 	touch $DIR/$tdir/spoo
