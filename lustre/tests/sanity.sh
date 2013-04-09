@@ -7106,9 +7106,13 @@ test_120a() {
         test_mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
-        lru_resize_disable mdc
-        lru_resize_disable osc
-        cancel_lru_locks mdc
+
+	lru_resize_disable mdc
+	lru_resize_disable osc
+	cancel_lru_locks mdc
+	# asynchronous object destroy at MDT could cause bl ast to client
+	cancel_lru_locks osc
+
         stat $DIR/$tdir > /dev/null
         can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
