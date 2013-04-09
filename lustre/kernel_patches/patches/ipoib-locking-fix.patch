@@ -1,0 +1,40 @@
+commit fa16ebed31f336e41970f3f0ea9e8279f6be2d27
+Author: Shlomo Pongratz <shlomop@mellanox.com>
+Date:   Mon Aug 13 14:39:49 2012 +0000
+
+    IB/ipoib: Add missing locking when CM object is deleted
+    
+    Commit b63b70d87741 ("IPoIB: Use a private hash table for path lookup
+    in xmit path") introduced a bug where in ipoib_cm_destroy_tx() a CM
+    object is moved between lists without any supported locking.  Under a
+    stress test, this eventually leads to list corruption and a crash.
+    
+    Previously when this routine was called, callers were taking the
+    device priv lock.  Currently this function is called from the RCU
+    callback associated with neighbour deletion.  Fix the race by taking
+    the same lock we used to before.
+    
+    Signed-off-by: Shlomo Pongratz <shlomop@mellanox.com>
+    Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+    Signed-off-by: Roland Dreier <roland@purestorage.com>
+
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_cm.c b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+index 95ecf4e..24683fd 100644
+--- a/drivers/infiniband/ulp/ipoib/ipoib_cm.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+@@ -1271,12 +1271,15 @@ struct ipoib_cm_tx *ipoib_cm_create_tx(struct net_device *dev, struct ipoib_path
+ void ipoib_cm_destroy_tx(struct ipoib_cm_tx *tx)
+ {
+ 	struct ipoib_dev_priv *priv = netdev_priv(tx->dev);
++	unsigned long flags;
+ 	if (test_and_clear_bit(IPOIB_FLAG_INITIALIZED, &tx->flags)) {
++		spin_lock_irqsave(&priv->lock, flags);
+ 		list_move(&tx->list, &priv->cm.reap_list);
+ 		queue_work(ipoib_workqueue, &priv->cm.reap_task);
+ 		ipoib_dbg(priv, "Reap connection for gid %pI6\n",
+ 			  tx->neigh->daddr + 4);
+ 		tx->neigh = NULL;
++		spin_unlock_irqrestore(&priv->lock, flags);
+ 	}
+ }
+ 
