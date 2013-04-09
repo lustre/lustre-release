@@ -34,6 +34,12 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
+if MODULES
+if LINUX
+
 modulefs_DATA = lquota$(KMODEXT)
+
+endif LINUX
+endif MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
