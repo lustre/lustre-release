@@ -291,6 +291,16 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
+	/* osp_declare_attr_set() ignores all attributes other than
+	 * UID, GID, and size, and osp_attr_set() ignores all but UID
+	 * and GID.  Declaration of size attr setting happens through
+	 * lod_declare_init_size(), and not through this function.
+	 * Therefore we need not load striping unless ownership is
+	 * changing.  This should save memory and (we hope) speed up
+	 * rename(). */
+	if (!(attr->la_valid & (LA_UID | LA_GID)))
+		RETURN(rc);
+
 	/*
 	 * load striping information, notice we don't do this when object
 	 * is being initialized as we don't need this information till
@@ -332,6 +342,9 @@ static int lod_attr_set(const struct lu_env *env,
 	 */
 	rc = dt_attr_set(env, next, attr, handle, capa);
 	if (rc)
+		RETURN(rc);
+
+	if (!(attr->la_valid & (LA_UID | LA_GID)))
 		RETURN(rc);
 
 	/*

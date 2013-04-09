@@ -1193,6 +1193,7 @@ static int mdd_declare_link(const struct lu_env *env,
                             struct mdd_object *c,
                             const struct lu_name *name,
 			    struct thandle *handle,
+			    struct lu_attr *la,
 			    struct linkea_data *data)
 {
         int rc;
@@ -1205,11 +1206,13 @@ static int mdd_declare_link(const struct lu_env *env,
         if (rc)
                 return rc;
 
-        rc = mdo_declare_attr_set(env, p, NULL, handle);
-        if (rc)
-                return rc;
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdo_declare_attr_set(env, p, la, handle);
+	if (rc != 0)
+		return rc;
 
-        rc = mdo_declare_attr_set(env, c, NULL, handle);
+	la->la_valid = LA_CTIME;
+	rc = mdo_declare_attr_set(env, c, la, handle);
         if (rc)
                 return rc;
 
@@ -1243,8 +1246,11 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
 	memset(ldata, 0, sizeof(*ldata));
 
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+
 	rc = mdd_declare_link(env, mdd, mdd_tobj, mdd_sobj, lname, handle,
-			      ldata);
+			      la, ldata);
         if (rc)
                 GOTO(stop, rc);
 
@@ -1273,9 +1279,6 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 		mdo_ref_del(env, mdd_sobj, handle);
 		GOTO(out_unlock, rc);
 	}
-
-        LASSERT(ma->ma_attr.la_valid & LA_CTIME);
-        la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
         la->la_valid = LA_CTIME | LA_MTIME;
 	rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
@@ -1412,7 +1415,8 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc)
 			return rc;
 
-		rc = mdo_declare_attr_set(env, c, NULL, handle);
+		la->la_valid = LA_CTIME;
+		rc = mdo_declare_attr_set(env, c, la, handle);
 		if (rc)
 			return rc;
 
@@ -2390,6 +2394,9 @@ static int mdd_declare_rename(const struct lu_env *env,
 	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
 	int rc;
 
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+
         LASSERT(mdd_spobj);
         LASSERT(mdd_tpobj);
         LASSERT(mdd_sobj);
@@ -2426,13 +2433,16 @@ static int mdd_declare_rename(const struct lu_env *env,
 
         }
 
-        rc = mdo_declare_attr_set(env, mdd_spobj, NULL, handle);
-        if (rc)
-                return rc;
-
-	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
-	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdo_declare_attr_set(env, mdd_spobj, la, handle);
+	if (rc != 0)
+		return rc;
+
+	rc = mdo_declare_attr_set(env, mdd_tpobj, la, handle);
+	if (rc != 0)
+		return rc;
+
+	la->la_valid = LA_CTIME;
 	rc = mdo_declare_attr_set(env, mdd_sobj, la, handle);
 	if (rc)
 		return rc;
@@ -2440,10 +2450,6 @@ static int mdd_declare_rename(const struct lu_env *env,
 	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata);
 	if (rc)
 		return rc;
-
-        rc = mdo_declare_attr_set(env, mdd_tpobj, NULL, handle);
-        if (rc)
-                return rc;
 
         /* new name */
         rc = mdo_declare_index_insert(env, mdd_tpobj, mdo2fid(mdd_sobj),
@@ -2477,7 +2483,8 @@ static int mdd_declare_rename(const struct lu_env *env,
                                 return rc;
                 }
 
-                rc = mdo_declare_attr_set(env, mdd_tobj, NULL, handle);
+		la->la_valid = LA_CTIME;
+		rc = mdo_declare_attr_set(env, mdd_tobj, la, handle);
                 if (rc)
                         return rc;
 
