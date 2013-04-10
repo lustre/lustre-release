@@ -538,361 +538,6 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int dot_lustre_mdd_permission(const struct lu_env *env,
-                                     struct md_object *pobj,
-                                     struct md_object *cobj,
-                                     struct md_attr *attr, int mask)
-{
-        if (mask & ~(MAY_READ | MAY_EXEC))
-                return -EPERM;
-        else
-                return 0;
-}
-
-static int dot_lustre_mdd_xattr_get(const struct lu_env *env,
-                                    struct md_object *obj, struct lu_buf *buf,
-                                    const char *name)
-{
-        return 0;
-}
-
-static int dot_lustre_mdd_xattr_list(const struct lu_env *env,
-                                     struct md_object *obj, struct lu_buf *buf)
-{
-        return 0;
-}
-
-static int dot_lustre_mdd_xattr_set(const struct lu_env *env,
-                                    struct md_object *obj,
-                                    const struct lu_buf *buf, const char *name,
-                                    int fl)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_xattr_del(const struct lu_env *env,
-                                    struct md_object *obj,
-                                    const char *name)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_swap_layouts(const struct lu_env *env,
-				       struct md_object *obj1,
-				       struct md_object *obj2,
-				       __u64 flags)
-{
-	return -EPERM;
-}
-
-static int dot_lustre_mdd_readlink(const struct lu_env *env,
-                                   struct md_object *obj, struct lu_buf *buf)
-{
-        return 0;
-}
-
-static int dot_lustre_mdd_object_create(const struct lu_env *env,
-                                        struct md_object *obj,
-                                        const struct md_op_spec *spec,
-                                        struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_ref_add(const struct lu_env *env,
-                                  struct md_object *obj,
-                                  const struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_ref_del(const struct lu_env *env,
-                                  struct md_object *obj,
-                                  struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
-                               int flags)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        mdd_obj->mod_count++;
-        mdd_write_unlock(env, mdd_obj);
-
-        return 0;
-}
-
-static int dot_lustre_mdd_close(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, int mode)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        mdd_obj->mod_count--;
-        mdd_write_unlock(env, mdd_obj);
-
-        return 0;
-}
-
-static int dot_lustre_mdd_object_sync(const struct lu_env *env,
-                                      struct md_object *obj)
-{
-        return -ENOSYS;
-}
-
-static int dot_file_lock(const struct lu_env *env, struct md_object *obj,
-                         struct lov_mds_md *lmm, struct ldlm_extent *extent,
-                         struct lustre_handle *lockh)
-{
-        return -ENOSYS;
-}
-
-static int dot_file_unlock(const struct lu_env *env, struct md_object *obj,
-                           struct lov_mds_md *lmm, struct lustre_handle *lockh)
-{
-        return -ENOSYS;
-}
-
-static struct md_object_operations mdd_dot_lustre_obj_ops = {
-	.moo_permission		= dot_lustre_mdd_permission,
-	.moo_attr_get		= mdd_attr_get,
-	.moo_attr_set		= mdd_attr_set,
-	.moo_xattr_get		= dot_lustre_mdd_xattr_get,
-	.moo_xattr_list		= dot_lustre_mdd_xattr_list,
-	.moo_xattr_set		= dot_lustre_mdd_xattr_set,
-	.moo_xattr_del		= dot_lustre_mdd_xattr_del,
-	.moo_swap_layouts	= dot_lustre_mdd_swap_layouts,
-	.moo_readpage		= mdd_readpage,
-	.moo_readlink		= dot_lustre_mdd_readlink,
-	.moo_object_create	= dot_lustre_mdd_object_create,
-	.moo_ref_add		= dot_lustre_mdd_ref_add,
-	.moo_ref_del		= dot_lustre_mdd_ref_del,
-	.moo_open		= dot_lustre_mdd_open,
-	.moo_close		= dot_lustre_mdd_close,
-	.moo_capa_get		= mdd_capa_get,
-	.moo_object_sync	= dot_lustre_mdd_object_sync,
-	.moo_file_lock		= dot_file_lock,
-	.moo_file_unlock	= dot_file_unlock,
-};
-
-
-static int dot_lustre_mdd_lookup(const struct lu_env *env, struct md_object *p,
-                                 const struct lu_name *lname, struct lu_fid *f,
-                                 struct md_op_spec *spec)
-{
-	if (strcmp(lname->ln_name, mdd_obf_dir_name) == 0) {
-		*f = LU_OBF_FID;
-		return 0;
-	}
-
-	return -ENOENT;
-}
-
-static mdl_mode_t dot_lustre_mdd_lock_mode(const struct lu_env *env,
-                                           struct md_object *obj,
-                                           mdl_mode_t mode)
-{
-        return MDL_MINMODE;
-}
-
-static int dot_lustre_mdd_create(const struct lu_env *env,
-                                 struct md_object *pobj,
-                                 const struct lu_name *lname,
-                                 struct md_object *child,
-                                 struct md_op_spec *spec,
-                                 struct md_attr* ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_create_data(const struct lu_env *env,
-                                      struct md_object *p,
-                                      struct md_object *o,
-                                      const struct md_op_spec *spec,
-                                      struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_rename(const struct lu_env *env,
-                                 struct md_object *src_pobj,
-                                 struct md_object *tgt_pobj,
-                                 const struct lu_fid *lf,
-                                 const struct lu_name *lsname,
-                                 struct md_object *tobj,
-                                 const struct lu_name *ltname,
-                                 struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_link(const struct lu_env *env,
-                               struct md_object *tgt_obj,
-                               struct md_object *src_obj,
-                               const struct lu_name *lname,
-                               struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_unlink(const struct lu_env *env,
-				 struct md_object *pobj,
-				 struct md_object *cobj,
-				 const struct lu_name *lname,
-				 struct md_attr *ma, int no_name)
-{
-	return -EPERM;
-}
-
-static int dot_lustre_mdd_name_insert(const struct lu_env *env,
-                                      struct md_object *obj,
-                                      const struct lu_name *lname,
-                                      const struct lu_fid *fid,
-                                      const struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_name_remove(const struct lu_env *env,
-                                      struct md_object *obj,
-                                      const struct lu_name *lname,
-                                      const struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int dot_lustre_mdd_rename_tgt(const struct lu_env *env,
-                                     struct md_object *pobj,
-                                     struct md_object *tobj,
-                                     const struct lu_fid *fid,
-                                     const struct lu_name *lname,
-                                     struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-
-static struct md_dir_operations mdd_dot_lustre_dir_ops = {
-        .mdo_is_subdir   = mdd_is_subdir,
-        .mdo_lookup      = dot_lustre_mdd_lookup,
-        .mdo_lock_mode   = dot_lustre_mdd_lock_mode,
-        .mdo_create      = dot_lustre_mdd_create,
-        .mdo_create_data = dot_lustre_mdd_create_data,
-        .mdo_rename      = dot_lustre_mdd_rename,
-        .mdo_link        = dot_lustre_mdd_link,
-        .mdo_unlink      = dot_lustre_mdd_unlink,
-        .mdo_name_insert = dot_lustre_mdd_name_insert,
-        .mdo_name_remove = dot_lustre_mdd_name_remove,
-        .mdo_rename_tgt  = dot_lustre_mdd_rename_tgt,
-};
-
-static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
-                        struct md_attr *ma)
-{
-	struct mdd_device *mdd = mdo2mdd(obj);
-
-	/* "fid" is a virtual object and hence does not have any "real"
-	 * attributes. So we reuse attributes of .lustre for "fid" dir */
-	return mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
-}
-
-static int obf_attr_set(const struct lu_env *env, struct md_object *obj,
-                        const struct md_attr *ma)
-{
-        return -EPERM;
-}
-
-static int obf_xattr_list(const struct lu_env *env,
-			  struct md_object *obj, struct lu_buf *buf)
-{
-	return 0;
-}
-
-static int obf_xattr_get(const struct lu_env *env,
-                         struct md_object *obj, struct lu_buf *buf,
-                         const char *name)
-{
-	struct mdd_device *mdd = mdo2mdd(obj);
-	struct mdd_object *root;
-	int rc = 0;
-
-	/*
-	 * .lustre returns default striping which is 'stored'
-	 * in the root
-	 */
-	if (strcmp(name, XATTR_NAME_LOV) == 0) {
-		root = mdd_object_find(env, mdd, &mdd->mdd_local_root_fid);
-		if (IS_ERR(root))
-			return PTR_ERR(root);
-		rc = mdo_xattr_get(env, root, buf, name,
-				   mdd_object_capa(env, md2mdd_obj(obj)));
-		mdd_object_put(env, root);
-	}
-
-	return rc;
-}
-
-static int obf_xattr_set(const struct lu_env *env,
-			 struct md_object *obj,
-			 const struct lu_buf *buf, const char *name,
-			 int fl)
-{
-	return -EPERM;
-}
-
-static int obf_xattr_del(const struct lu_env *env,
-			 struct md_object *obj,
-			 const char *name)
-{
-	return -EPERM;
-}
-
-static int obf_mdd_open(const struct lu_env *env, struct md_object *obj,
-                        int flags)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        mdd_obj->mod_count++;
-        mdd_write_unlock(env, mdd_obj);
-
-        return 0;
-}
-
-static int obf_mdd_close(const struct lu_env *env, struct md_object *obj,
-                         struct md_attr *ma, int mode)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        mdd_obj->mod_count--;
-        mdd_write_unlock(env, mdd_obj);
-
-        return 0;
-}
-
-/** Nothing to list in "fid" directory */
-static int obf_mdd_readpage(const struct lu_env *env, struct md_object *obj,
-                            const struct lu_rdpg *rdpg)
-{
-        return -EPERM;
-}
-
-static struct md_object_operations mdd_obf_obj_ops = {
-	.moo_attr_get    = obf_attr_get,
-	.moo_attr_set    = obf_attr_set,
-	.moo_xattr_list  = obf_xattr_list,
-	.moo_xattr_get   = obf_xattr_get,
-	.moo_xattr_set   = obf_xattr_set,
-	.moo_xattr_del   = obf_xattr_del,
-	.moo_open        = obf_mdd_open,
-	.moo_close       = obf_mdd_close,
-	.moo_readpage    = obf_mdd_readpage,
-};
-
 /**
  * Lookup method for "fid" object. Only filenames with correct SEQ:OID format
  * are valid. We also check if object with passed fid exists or not.
@@ -978,27 +623,6 @@ static struct md_dir_operations mdd_obf_dir_ops = {
         .mdo_unlink = obf_unlink
 };
 
-/**
- * Create special in-memory "fid" object for open-by-fid.
- */
-static int mdd_obf_setup(const struct lu_env *env, struct mdd_device *m)
-{
-	struct mdd_object *mdd_obf;
-
-	mdd_obf = mdd_object_find(env, m, &LU_OBF_FID);
-	if (mdd_obf == NULL || IS_ERR(mdd_obf))
-		return -ENOENT;
-
-	m->mdd_dot_lustre_objs.mdd_obf = mdd_obf;
-	mdd_obf->mod_obj.mo_dir_ops = &mdd_obf_dir_ops;
-	mdd_obf->mod_obj.mo_ops = &mdd_obf_obj_ops;
-	/* Don't allow objects to be created in "fid" dir */
-	mdd_obf->mod_flags |= IMMUTE_OBJ;
-
-	mdd2lu_obj(mdd_obf)->lo_header->loh_attr |= LOHA_EXISTS | S_IFDIR;
-	return 0;
-}
-
 static struct md_object *mdo_locate(const struct lu_env *env,
 				    struct md_device *md,
 				    const struct lu_fid *fid)
@@ -1015,6 +639,34 @@ static struct md_object *mdo_locate(const struct lu_env *env,
 		mdo = ERR_PTR(PTR_ERR(obj));
 	}
 	return mdo;
+}
+
+/**
+ * Create special in-memory "fid" object for open-by-fid.
+ */
+static int mdd_obf_setup(const struct lu_env *env, struct mdd_device *m)
+{
+	struct md_object	*mdo;
+	struct mdd_object	*mdd_obf;
+	struct lu_fid		 fid = LU_OBF_FID;
+	int			 rc;
+
+	rc = mdd_local_file_create(env, m, mdd_object_fid(m->mdd_dot_lustre),
+				   mdd_obf_dir_name, S_IFDIR | S_IXUSR, &fid);
+	if (rc < 0)
+		RETURN(rc);
+
+	mdo = mdo_locate(env, &m->mdd_md_dev, &fid);
+	if (IS_ERR(mdo))
+		RETURN(PTR_ERR(mdo));
+
+	LASSERT(lu_object_exists(&mdo->mo_lu));
+
+	mdd_obf = md2mdd_obj(mdo);
+	mdd_obf->mod_obj.mo_dir_ops = &mdd_obf_dir_ops;
+	m->mdd_dot_lustre_objs.mdd_obf = mdd_obf;
+
+	return 0;
 }
 
 /** Setup ".lustre" directory object */
@@ -1039,8 +691,6 @@ static int mdd_dot_lustre_setup(const struct lu_env *env, struct mdd_device *m)
 	LASSERT(lu_object_exists(&mdo->mo_lu));
 
 	m->mdd_dot_lustre = md2mdd_obj(mdo);
-	m->mdd_dot_lustre->mod_obj.mo_dir_ops = &mdd_dot_lustre_dir_ops;
-	m->mdd_dot_lustre->mod_obj.mo_ops = &mdd_dot_lustre_obj_ops;
 
 	rc = mdd_obf_setup(env, m);
 	if (rc) {

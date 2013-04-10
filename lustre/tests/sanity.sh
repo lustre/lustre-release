@@ -8686,16 +8686,13 @@ dot_lustre_fid_permission_check() {
 		error "touch $MOUNT/.lustre/fid/$tfile should fail."
 
 	echo "setxattr to $MOUNT/.lustre/fid"
-	setfattr -n trusted.name1 -v value1 $MOUNT/.lustre/fid &&
-		error "setxattr should fail."
+	setfattr -n trusted.name1 -v value1 $MOUNT/.lustre/fid
 
 	echo "listxattr for $MOUNT/.lustre/fid"
-	getfattr -d -m "^trusted" $MOUNT/.lustre/fid &&
-		error "listxattr should fail."
+	getfattr -d -m "^trusted" $MOUNT/.lustre/fid
 
 	echo "delxattr from $MOUNT/.lustre/fid"
-	setfattr -x trusted.name1 $MOUNT/.lustre/fid &&
-		error "delxattr should fail."
+	setfattr -x trusted.name1 $MOUNT/.lustre/fid
 
 	echo "touch invalid fid: $MOUNT/.lustre/fid/[0x200000400:0x2:0x3]"
 	touch $MOUNT/.lustre/fid/[0x200000400:0x2:0x3] &&
@@ -8713,6 +8710,21 @@ dot_lustre_fid_permission_check() {
 	fid=$($LFS path2fid $MOUNT)
 	mrename $MOUNT/.lustre $MOUNT/.lustre/fid/$fid/.lustre &&
 		error "rename .lustre to itself should fail."
+
+	local old_obf_mode=$(stat --format="%a" $DIR/.lustre/fid)
+	local new_obf_mode=777
+
+	echo "change mode of $DIR/.lustre/fid to $new_obf_mode"
+	chmod $new_obf_mode $DIR/.lustre/fid ||
+		error "chmod $new_obf_mode $DIR/.lustre/fid failed"
+
+	local obf_mode=$(stat --format=%a $DIR/.lustre/fid)
+	[ $obf_mode -eq $new_obf_mode ] ||
+		error "stat $DIR/.lustre/fid returned wrong mode $obf_mode"
+
+	echo "restore mode of $DIR/.lustre/fid to $old_obf_mode"
+	chmod $old_obf_mode $DIR/.lustre/fid ||
+		error "chmod $old_obf_mode $DIR/.lustre/fid failed"
 
 	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $test_dir/$tfile-2
 	fid=$($LFS path2fid $test_dir/$tfile-2)
@@ -8745,7 +8757,6 @@ test_154a() {
 		error "dot lustre permission check $fid failed"
 
 	rm -rf $MOUNT/.lustre && error ".lustre is not allowed to be unlinked"
-	chmod 777 $MOUNT/.lustre && error ".lustre is not allowed to be chmod"
 
 	touch $MOUNT/.lustre/file &&
 		error "creation is not allowed under .lustre"

@@ -1571,11 +1571,6 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         int                rc;
         ENTRY;
 
-	/* do not let users to create stripes via .lustre/
-	 * mdd_obf_setup() sets IMMUTE_OBJ on this directory */
-	if (pobj && mdd_pobj->mod_flags & IMMUTE_OBJ)
-		RETURN(-ENOENT);
-
         rc = mdd_cd_sanity_check(env, son);
         if (rc)
                 RETURN(rc);
