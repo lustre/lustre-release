@@ -9,6 +9,7 @@
 <xsl:import href="PRIMARYXSL"/>
 <xsl:output method='xml'/>
 
+<xsl:param name="fop1.extensions" select="1"></xsl:param>
 <xsl:param name="chapter.autolabel" select="1"></xsl:param>
 <xsl:param name="section.autolabel" select="1"></xsl:param>
 <xsl:param name="appendix.autolabel" select="1"></xsl:param>
