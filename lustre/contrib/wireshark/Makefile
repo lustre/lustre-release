@@ -14,6 +14,10 @@
 #      make -e -f Makefile
 #
 
+#
+# Minimum Wireshark Version - This should match the README file.
+#
+MIN_WIRESHARK_VERSION=1.6.8
 
 # Installation directory of the Wireshark source code
 #    Note: Leave the macro undefined when using the wsbuild script.
@@ -36,8 +40,12 @@ CFLAGS = -DINET6 -D_U_=__attribute__\(\(unused\)\) -Wall -Wpointer-arith -g -DXT
 ifdef WS_HOME
 #INCS = $(shell echo "-I${WS_HOME} `pkg-config --libs --cflags glib-2.0`")
 INCS = $(shell echo "-I${WS_HOME} $(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H 
+
 else
-INCS = $(shell pkg-config --libs --cflags wireshark) $(shell echo "$(PLUGIN_COMPILE_FLAGS)")
+INCS = $(shell pkg-config --libs --cflags wireshark) $(shell echo "$(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H
+WS_VERSION = $(shell pkg-config --modversion wireshark)
+LIBDIR = $(shell pkg-config --variable=libdir wireshark)
+CHECK=pkg-config --atleast-version=${MIN_WIRESHARK_VERSION} wireshark
 endif
 
 CFLAGS += $(INCS)
@@ -52,6 +60,10 @@ OBJS_LUSTRE = $(foreach src, $(SRCS_LUSTRE), $(src:.c=.o))
 
 PLUGINS=lnet.so lustre.so
 
+ifeq (${CHECK},)
+       CHECK=true
+endif
+
 ifneq ($(shell id -u), 0)
   ifndef DESTDIR
     PLUGIN_DIR = ${HOME}/.wireshark/plugins
@@ -65,31 +77,44 @@ ifndef PLUGIN_DIR
     endif
     WS_CONFIG=$(WS_HOME)/config.h
     WS_VERSION:=$(shell sed "s/^.define[[:space:]]*VERSION[[:space:]]*\"\(.*\)\"/\1/p;d" ${WS_CONFIG})
-   endif
-   ifeq ($(shell if [ -r /etc/SuSE-release ] ; then echo 0; else echo 1; fi ), 0)
-     PLUGIN_DIR = $(DESTDIR)/usr/lib64/wireshark/plugins/$(WS_VERSION)
-   else
-     PLUGIN_DIR = $(DESTDIR)/usr/lib/wireshark/plugins/$(WS_VERSION)
-  endif 
+  endif
+  ifeq (${LIBDIR},)
+    ifeq ($(shell if [ -r /etc/SuSE-release ] ; then echo 0; else echo 1; fi ), 0)
+      LIBDIR=/usr/lib64
+    else
+      LIBDIR=/usr/lib
+    endif
+  endif
+  PLUGIN_DIR = $(DESTDIR)$(LIBDIR)/wireshark/plugins/$(WS_VERSION)
 endif
 
 
-all: $(PLUGINS)
+all: check $(PLUGINS)
+
+check:
+	@if ! ${CHECK}; then\
+		echo "Wireshark must be at least version ${MIN_WIRESHARK_VERSION} (installed ${WS_VERSION})";\
+		false; \
+	fi
 
 lustre.so: $(OBJS_LUSTRE)
-	@echo "Running $(INCS)"
 	$(CC) -shared $(OBJS_LUSTRE) -o $@
 
 lnet.so: $(OBJS_LNET)
-	@echo $(INCS)
 	$(CC) -shared $(OBJS_LNET) -o $@
 
-install: $(PLUGINS)
+install: all
 	mkdir -p $(PLUGIN_DIR)
 	install $(PLUGINS) $(PLUGIN_DIR)/
+
+help:
+	@echo "Includes:    "$(INCS)
+	@echo "Install Dir: "$(PLUGIN_DIR)
 
 clean:
 	rm -f $(PLUGINS) $(OBJS_LNET) $(OBJS_LUSTRE)
 
 extraclean: clean
 	(cd $(PLUGIN_DIR)/; rm -f $(PLUGINS))
+
+.PHONEY: check help install extraclean clean all
