@@ -154,6 +154,13 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
         if (name != NULL && (name[0] != '\0')) {
                 LASSERT(namelen > 0);
                 lh->mlh_pdo_hash = full_name_hash(name, namelen);
+		/* XXX Workaround for LU-2856
+		 * Zero is a valid return value of full_name_hash, but several
+		 * users of mlh_pdo_hash assume a non-zero hash value. We
+		 * therefore map zero onto an arbitrary, but consistent
+		 * value (1) to avoid problems further down the road. */
+		if (unlikely(!lh->mlh_pdo_hash))
+			lh->mlh_pdo_hash = 1;
         } else {
                 LASSERT(namelen == 0);
                 lh->mlh_pdo_hash = 0ull;
