@@ -503,6 +503,83 @@ int jt_lcfg_param(int argc, char **argv)
         return rc;
 }
 
+struct param_opts {
+	unsigned int po_only_path:1;
+	unsigned int po_show_path:1;
+	unsigned int po_show_type:1;
+	unsigned int po_recursive:1;
+	unsigned int po_params2:1;
+	unsigned int po_delete:1;
+};
+
+/* Param set to single log file, used by all clients and servers.
+ * This should be loaded after the individual config logs.
+ * Called from set param with -P option.
+ */
+static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
+{
+	int	rc, i;
+	int	first_param;
+	struct	lustre_cfg_bufs bufs;
+	struct	lustre_cfg *lcfg;
+	char	*buf = NULL;
+	int	len;
+
+	first_param = optind;
+	if (first_param < 0 || first_param >= argc)
+		return CMD_HELP;
+
+	for (i = first_param, rc = 0; i < argc; i++) {
+		lustre_cfg_bufs_reset(&bufs, NULL);
+		/* This same command would be executed on all nodes, many
+		 * of which should fail (silently) because they don't have
+		 * that proc file existing locally. There would be no
+		 * preprocessing on the MGS to try to figure out which
+		 * parameter files to add this to, there would be nodes
+		 * processing on the cluster nodes to try to figure out
+		 * if they are the intended targets. They will blindly
+		 * try to set the parameter, and ENOTFOUND means it wasn't
+		 * for them.
+		 * Target name "general" means call on all targets. It is
+		 * left here in case some filtering will be added in
+		 * future.
+		 */
+		lustre_cfg_bufs_set_string(&bufs, 0, "general");
+
+		len = strlen(argv[i]);
+
+		/* put an '=' on the end in case it doesn't have one */
+		if (popt->po_delete && argv[i][len - 1] != '=') {
+			buf = malloc(len + 1);
+			sprintf(buf, "%s=", argv[i]);
+		} else {
+			buf = argv[i];
+		}
+		lustre_cfg_bufs_set_string(&bufs, 1, buf);
+
+		lcfg = lustre_cfg_new(LCFG_SET_PARAM, &bufs);
+		if (IS_ERR(lcfg)) {
+			fprintf(stderr, "error: allocating lcfg for %s: %s\n",
+				jt_cmdname(argv[0]), strerror(PTR_ERR(lcfg)));
+			if (rc == 0)
+				 rc = PTR_ERR(lcfg);
+		} else {
+			int rc2 = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+			if (rc2 != 0) {
+				fprintf(stderr, "error: executing %s: %s\n",
+					jt_cmdname(argv[0]), strerror(rc2));
+				if (rc == 0)
+					rc = rc2;
+			}
+			lustre_cfg_free(lcfg);
+		}
+		if (buf != argv[i])
+			free(buf);
+	}
+
+	return rc;
+}
+
 /* Param set in config log on MGS */
 /* conf_param key=value */
 /* Note we can actually send mgc conf_params from clients, but currently
@@ -565,12 +642,12 @@ int jt_lcfg_mgsparam(int argc, char **argv)
 
 /* Display the path in the same format as sysctl
  * For eg. obdfilter.lustre-OST0000.stats */
-static char *display_name(char *filename, int show_type)
+static char *display_name(char *filename, unsigned int po_show_type)
 {
         char *tmp;
         struct stat st;
 
-        if (show_type) {
+        if (po_show_type) {
                 if (lstat(filename, &st) < 0)
                         return NULL;
         }
@@ -592,7 +669,7 @@ static char *display_name(char *filename, int show_type)
                 *tmp = '.';
 
         /* append the indicator to entries */
-        if (show_type) {
+        if (po_show_type) {
                 if (S_ISDIR(st.st_mode))
                         strcat(filename, "/");
                 else if (S_ISLNK(st.st_mode))
@@ -683,29 +760,22 @@ static void lprocfs_param_pattern(const char *cmd, const char *path, char *buf,
         }
 }
 
-struct param_opts {
-        int only_path:1;
-        int show_path:1;
-        int show_type:1;
-        int recursive:1;
-};
-
 static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
         int ch;
 
-        popt->show_path = 1;
-        popt->only_path = 1;
-        popt->show_type = 0;
-        popt->recursive = 0;
+        popt->po_show_path = 1;
+        popt->po_only_path = 1;
+        popt->po_show_type = 0;
+        popt->po_recursive = 0;
 
         while ((ch = getopt(argc, argv, "FR")) != -1) {
                 switch (ch) {
                 case 'F':
-                        popt->show_type = 1;
+                        popt->po_show_type = 1;
                         break;
                 case 'R':
-                        popt->recursive = 1;
+                        popt->po_recursive = 1;
                         break;
                 default:
                         return -1;
@@ -722,7 +792,7 @@ static int listparam_display(struct param_opts *popt, char *pattern)
         glob_t glob_info;
         char filename[PATH_MAX + 1];    /* extra 1 byte for file type */
 
-        rc = glob(pattern, GLOB_BRACE | (popt->recursive ? GLOB_MARK : 0),
+        rc = glob(pattern, GLOB_BRACE | (popt->po_recursive ? GLOB_MARK : 0),
                   NULL, &glob_info);
         if (rc) {
                 fprintf(stderr, "error: list_param: %s: %s\n",
@@ -743,7 +813,7 @@ static int listparam_display(struct param_opts *popt, char *pattern)
                 else
                         last = 0;
                 strcpy(filename, glob_info.gl_pathv[i]);
-                valuename = display_name(filename, popt->show_type);
+                valuename = display_name(filename, popt->po_show_type);
                 if (valuename)
                         printf("%s\n", valuename);
                 if (last) {
@@ -765,7 +835,7 @@ int jt_lcfg_listparam(int argc, char **argv)
         char *path;
 
         rc = listparam_cmdline(argc, argv, &popt);
-        if (rc == argc && popt.recursive) {
+        if (rc == argc && popt.po_recursive) {
                 rc--;           /* we know at least "-R" is a parameter */
                 argv[rc] = "*";
         } else if (rc < 0 || rc >= argc) {
@@ -791,20 +861,20 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
         int ch;
 
-        popt->show_path = 1;
-        popt->only_path = 0;
-        popt->show_type = 0;
-        popt->recursive = 0;
+        popt->po_show_path = 1;
+        popt->po_only_path = 0;
+        popt->po_show_type = 0;
+        popt->po_recursive = 0;
 
         while ((ch = getopt(argc, argv, "nNF")) != -1) {
                 switch (ch) {
                 case 'N':
-                        popt->only_path = 1;
+                        popt->po_only_path = 1;
                         break;
                 case 'n':
-                        popt->show_path = 0;
+                        popt->po_show_path = 0;
                 case 'F':
-                        popt->show_type = 1;
+                        popt->po_show_type = 1;
                         break;
                 default:
                         return -1;
@@ -837,7 +907,7 @@ static int getparam_display(struct param_opts *popt, char *pattern)
 		memset(buf, 0, PAGE_CACHE_SIZE);
                 /* As listparam_display is used to show param name (with type),
                  * here "if (only_path)" is ignored.*/
-                if (popt->show_path) {
+                if (popt->po_show_path) {
                         strcpy(filename, glob_info.gl_pathv[i]);
                         valuename = display_name(filename, 0);
                 }
@@ -864,7 +934,7 @@ static int getparam_display(struct param_opts *popt, char *pattern)
                         /* Print the output in the format path=value if the
                          * value contains no new line character or cab be
                          * occupied in a line, else print value on new line */
-                        if (valuename && popt->show_path) {
+                        if (valuename && popt->po_show_path) {
                                 int longbuf = strnchr(buf, rc - 1, '\n') != NULL
                                               || rc > 60;
                                 printf("%s=%s", valuename, longbuf ? "\n" : buf);
@@ -909,7 +979,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 
 		lprocfs_param_pattern(argv[0], path, pattern, sizeof(pattern));
 
-		if (popt.only_path)
+		if (popt.po_only_path)
 			rc2 = listparam_display(&popt, pattern);
 		else
 			rc2 = getparam_display(&popt, pattern);
@@ -924,16 +994,24 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
         int ch;
 
-        popt->show_path = 1;
-        popt->only_path = 0;
-        popt->show_type = 0;
-        popt->recursive = 0;
+        popt->po_show_path = 1;
+        popt->po_only_path = 0;
+        popt->po_show_type = 0;
+        popt->po_recursive = 0;
+	popt->po_params2 = 0;
+	popt->po_delete = 0;
 
-        while ((ch = getopt(argc, argv, "n")) != -1) {
+	while ((ch = getopt(argc, argv, "nPd")) != -1) {
                 switch (ch) {
                 case 'n':
-                        popt->show_path = 0;
+                        popt->po_show_path = 0;
                         break;
+		case 'P':
+			popt->po_params2 = 1;
+			break;
+		case 'd':
+			popt->po_delete = 1;
+			break;
                 default:
                         return -1;
                 }
@@ -958,7 +1036,7 @@ static int setparam_display(struct param_opts *popt, char *pattern, char *value)
 	for (i = 0; i  < glob_info.gl_pathc; i++) {
 		char *valuename = NULL;
 
-		if (popt->show_path) {
+		if (popt->po_show_path) {
 			strcpy(filename, glob_info.gl_pathv[i]);
 			valuename = display_name(filename, 0);
 			if (valuename)
@@ -966,7 +1044,7 @@ static int setparam_display(struct param_opts *popt, char *pattern, char *value)
 		}
 		/* Write the new value to the file */
 		fd = open(glob_info.gl_pathv[i], O_WRONLY);
-		if (fd > 0) {
+		if (fd >= 0) {
 			rc = write(fd, value, strlen(value));
 			if (rc < 0)
 				fprintf(stderr, "error: set_param: setting "
@@ -995,6 +1073,11 @@ int jt_lcfg_setparam(int argc, char **argv)
         rc = setparam_cmdline(argc, argv, &popt);
         if (rc < 0 || rc >= argc)
                 return CMD_HELP;
+
+	if (popt.po_params2)
+		/* We can't delete parameters that were
+		 * set with old conf_param interface */
+		return jt_lcfg_mgsparam2(argc, argv, &popt);
 
 	for (i = rc, rc = 0; i < argc; i++) {
 		int rc2;

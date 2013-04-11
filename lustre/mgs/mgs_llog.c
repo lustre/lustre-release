@@ -2711,13 +2711,34 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
                 return rc;
 
         lustre_cfg_bufs_reset(bufs, tgtname);
-        lustre_cfg_bufs_set_string(bufs, 1, ptr);
-        lcfg = lustre_cfg_new(LCFG_PARAM, bufs);
+	lustre_cfg_bufs_set_string(bufs, 1, ptr);
+	if (mti->mti_flags & LDD_F_PARAM2)
+		lustre_cfg_bufs_set_string(bufs, 2, LCTL_UPCALL);
+
+	lcfg = lustre_cfg_new((mti->mti_flags & LDD_F_PARAM2) ?
+			      LCFG_SET_PARAM : LCFG_PARAM, bufs);
+
         if (!lcfg)
                 return -ENOMEM;
 	rc = mgs_write_log_direct(env, mgs, fsdb, logname,lcfg,tgtname,comment);
         lustre_cfg_free(lcfg);
         return rc;
+}
+
+static int mgs_write_log_param2(const struct lu_env *env,
+				struct mgs_device *mgs,
+				struct fs_db *fsdb,
+				struct mgs_target_info *mti, char *ptr)
+{
+	struct lustre_cfg_bufs	bufs;
+	int			rc = 0;
+	ENTRY;
+
+	CDEBUG(D_MGS, "next param '%s'\n", ptr);
+	rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, PARAMS_FILENAME, &bufs,
+			  mti->mti_svname, ptr);
+
+	RETURN(rc);
 }
 
 /* write global variable settings into log */
@@ -3738,10 +3759,14 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
         }
         CDEBUG(D_MGS, "setparam fs='%s' device='%s'\n", fsname, devname);
 
-	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
-        if (rc)
-                RETURN(rc);
-	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
+	rc = mgs_find_or_make_fsdb(env, mgs,
+				   lcfg->lcfg_command == LCFG_SET_PARAM ?
+				   PARAMS_FILENAME : fsname, &fsdb);
+	if (rc)
+		RETURN(rc);
+
+	if (lcfg->lcfg_command != LCFG_SET_PARAM &&
+	    !test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
 	    test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 CERROR("No filesystem targets for %s.  cfg_device from lctl "
                        "is '%s'\n", fsname, devname);
@@ -3771,20 +3796,26 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
                 if (server_make_name(rc, mti->mti_stripe_index, mti->mti_fsname,
                                      mti->mti_svname))
                         GOTO(out, rc = -EINVAL);
+	/*
+	 * Revoke lock so everyone updates.  Should be alright if
+	 * someone was already reading while we were updating the logs,
+	 * so we don't really need to hold the lock while we're
+	 * writing (above).
+	 */
+	if (lcfg->lcfg_command == LCFG_SET_PARAM) {
+		mti->mti_flags = rc | LDD_F_PARAM2;
+		mutex_lock(&fsdb->fsdb_mutex);
+		rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params);
+		mutex_unlock(&fsdb->fsdb_mutex);
+		mgs_revoke_lock(mgs, fsdb, CONFIG_T_PARAMS);
+	} else {
+		mti->mti_flags = rc | LDD_F_PARAM;
+		mutex_lock(&fsdb->fsdb_mutex);
+		rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
+		mutex_unlock(&fsdb->fsdb_mutex);
+		mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
+	}
 
-        mti->mti_flags = rc | LDD_F_PARAM;
-
-	mutex_lock(&fsdb->fsdb_mutex);
-	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
-	mutex_unlock(&fsdb->fsdb_mutex);
-
-        /*
-         * Revoke lock so everyone updates.  Should be alright if
-         * someone was already reading while we were updating the logs,
-         * so we don't really need to hold the lock while we're
-         * writing (above).
-         */
-	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
 out:
         OBD_FREE_PTR(mti);
         RETURN(rc);

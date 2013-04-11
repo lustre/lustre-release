@@ -150,10 +150,13 @@ command_t cmdlist[] = {
          "  -F  When -N specified, add '/', '@' or '=' for directories,\n"
          "      symlinks and writeable files, respectively."},
         {"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-         "usage: set_param [-n] <param_path1=value1 param_path2=value2 ...>\n"
-         "Set the value of the Lustre or LNET parameter at the specified path\n"
-         "  -n  Disable printing of the key name when printing values."},
-        {"list_param", jt_lcfg_listparam, 0,
+	 "usage: set_param [-n] [-P] [-d]"
+	 "<param_path1=value1 param_path2=value2 ...>\n"
+	 "Set the value of the Lustre or LNET parameter at the specified path.\n"
+	 "  -n  Disable printing of the key name when printing values.\n"
+	 "  -P  Set the parameter permanently, filesystem-wide.\n"
+	 "  -d  Remove the permanent setting (only with -P option).\n"},
+	{"list_param", jt_lcfg_listparam, 0,
          "list the Lustre or LNET parameter name\n"
          "usage: list_param [-F|-R] <param_path1 param_path2 ...>\n"
          "List the name of Lustre or LNET parameter from the specified path.\n"

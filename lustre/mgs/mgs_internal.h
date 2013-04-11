@@ -117,6 +117,7 @@ struct mgs_tgt_srpc_conf {
 #define FSDB_MGS_SELF           (3)  /* for '_mgs', used by sptlrpc */
 #define FSDB_OSCNAME18          (4)  /* old 1.8 style OSC naming */
 #define FSDB_UDESC              (5)  /* sptlrpc user desc, will be obsolete */
+#define FSDB_REVOKING_PARAMS	(6)  /* DLM lock is being revoked */
 
 struct fs_db {
         char              fsdb_name[9];

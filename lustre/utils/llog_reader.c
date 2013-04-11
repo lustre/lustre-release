@@ -361,11 +361,16 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_PARAM):{
-                printf("param ");
-                print_1_cfg(lcfg);
-                break;
-        }
+	case(LCFG_PARAM):{
+		printf("param ");
+		print_1_cfg(lcfg);
+		break;
+	}
+	case(LCFG_SET_PARAM):{
+		printf("set_param ");
+		print_1_cfg(lcfg);
+		break;
+	}
         case(LCFG_SPTLRPC_CONF):{
                 printf("sptlrpc_conf ");
                 print_1_cfg(lcfg);

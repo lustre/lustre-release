@@ -1088,7 +1088,7 @@ void lu_context_keys_dump(void);
 
 void ll_put_super(struct super_block *sb)
 {
-        struct config_llog_instance cfg;
+	struct config_llog_instance cfg, params_cfg;
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -1102,6 +1102,9 @@ void ll_put_super(struct super_block *sb)
 
         cfg.cfg_instance = sb;
         lustre_end_log(sb, profilenm, &cfg);
+
+	params_cfg.cfg_instance = sb;
+	lustre_end_log(sb, PARAMS_FILENAME, &params_cfg);
 
         if (sbi->ll_md_exp) {
                 obd = class_exp2obd(sbi->ll_md_exp);

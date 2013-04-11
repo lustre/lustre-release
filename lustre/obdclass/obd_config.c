@@ -1049,6 +1049,45 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 }
 EXPORT_SYMBOL(lustre_cfg_rename);
 
+static int process_param2_config(struct lustre_cfg *lcfg)
+{
+	char *param = lustre_cfg_string(lcfg, 1);
+	char *upcall = lustre_cfg_string(lcfg, 2);
+	char *argv[] = {
+		[0] = "/usr/sbin/lctl",
+		[1] = "set_param",
+		[2] = param,
+		[3] = NULL
+	};
+	struct timeval	start;
+	struct timeval	end;
+	int		rc;
+	ENTRY;
+
+	/* Add upcall processing here. Now only lctl is supported */
+	if (strcmp(upcall, LCTL_UPCALL) != 0) {
+		CERROR("Unsupported upcall %s\n", upcall);
+		RETURN(-EINVAL);
+	}
+
+	cfs_gettimeofday(&start);
+	rc = USERMODEHELPER(argv[0], argv, NULL);
+	cfs_gettimeofday(&end);
+
+	if (rc < 0) {
+		CERROR("lctl: error invoking upcall %s %s %s: rc = %d; "
+		       "time %ldus\n", argv[0], argv[1], argv[2], rc,
+		       cfs_timeval_sub(&end, &start, NULL));
+	} else {
+		CDEBUG(D_HA, "lctl: invoked upcall %s %s %s, time %ldus\n",
+		       argv[0], argv[1], argv[2],
+		       cfs_timeval_sub(&end, &start, NULL));
+		       rc = 0;
+	}
+
+	RETURN(rc);
+}
+
 void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg))
 {
 	quota_process_config = qpc;
@@ -1164,11 +1203,14 @@ int class_process_config(struct lustre_cfg *lcfg)
 			err = (*quota_process_config)(lcfg);
 			GOTO(out, err);
 		}
-                /* Fall through */
-                break;
-        }
-        }
 
+		break;
+	}
+	case LCFG_SET_PARAM: {
+		err = process_param2_config(lcfg);
+		GOTO(out, 0);
+	}
+	}
         /* Commands that require a device */
         obd = class_name2obd(lustre_cfg_string(lcfg, 0));
         if (obd == NULL) {
@@ -1205,24 +1247,20 @@ int class_process_config(struct lustre_cfg *lcfg)
         case LCFG_POOL_NEW: {
                 err = obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
                 GOTO(out, err = 0);
-                break;
         }
         case LCFG_POOL_ADD: {
                 err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
                                    lustre_cfg_string(lcfg, 3));
                 GOTO(out, err = 0);
-                break;
         }
         case LCFG_POOL_REM: {
                 err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
                                    lustre_cfg_string(lcfg, 3));
                 GOTO(out, err = 0);
-                break;
         }
         case LCFG_POOL_DEL: {
                 err = obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
                 GOTO(out, err = 0);
-                break;
         }
         default: {
                 err = obd_process_config(obd, sizeof(*lcfg), lcfg);

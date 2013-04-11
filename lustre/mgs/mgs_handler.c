@@ -132,14 +132,20 @@ out_cfg:
 	return rc;
 }
 
-static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
-				     void *cbdata)
+enum ast_type {
+		AST_CONFIG = 1,
+		AST_PARAMS = 2,
+		AST_IR = 3
+};
+
+static int mgs_completion_ast_generic(struct ldlm_lock *lock, __u64 flags,
+				     void *cbdata, enum ast_type type)
 {
 	ENTRY;
 
 	if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
 		       LDLM_FL_BLOCK_CONV))) {
-                struct fs_db *fsdb;
+		struct fs_db *fsdb;
 
 		/* l_ast_data is used as a marker to avoid cancel ldlm lock
 		 * twice. See LU-2317. */
@@ -151,8 +157,22 @@ static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
 		if (fsdb != NULL) {
 			struct lustre_handle lockh;
 
-			/* clear the bit before lock put */
-			clear_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags);
+			switch(type) {
+				case AST_CONFIG:
+					/* clear the bit before lock put */
+					clear_bit(FSDB_REVOKING_LOCK,
+						  &fsdb->fsdb_flags);
+					break;
+				case AST_PARAMS:
+					clear_bit(FSDB_REVOKING_PARAMS,
+						  &fsdb->fsdb_flags);
+					break;
+				case AST_IR:
+					mgs_ir_notify_complete(fsdb);
+					break;
+				default:
+					LBUG();
+			}
 
 			ldlm_lock2handle(lock, &lockh);
 			ldlm_lock_decref_and_cancel(&lockh, LCK_EX);
@@ -162,80 +182,77 @@ static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
 	RETURN(ldlm_completion_ast(lock, flags, cbdata));
 }
 
-static int mgs_completion_ast_ir(struct ldlm_lock *lock, __u64 flags,
-                                 void *cbdata)
+static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
+				     void *cbdata)
 {
-        ENTRY;
+	return mgs_completion_ast_generic(lock, flags, cbdata, AST_CONFIG);
+}
 
-        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                       LDLM_FL_BLOCK_CONV))) {
-                struct fs_db *fsdb;
+static int mgs_completion_ast_params(struct ldlm_lock *lock, __u64 flags,
+				     void *cbdata)
+{
+	return mgs_completion_ast_generic(lock, flags, cbdata, AST_PARAMS);
+}
 
-                /* l_ast_data is used as a marker to avoid cancel ldlm lock
-                 * twice. See LU-1259. */
-                lock_res_and_lock(lock);
-                fsdb = (struct fs_db *)lock->l_ast_data;
-                lock->l_ast_data = NULL;
-                unlock_res_and_lock(lock);
-
-                if (fsdb != NULL) {
-                        struct lustre_handle lockh;
-
-                        mgs_ir_notify_complete(fsdb);
-
-                        ldlm_lock2handle(lock, &lockh);
-                        ldlm_lock_decref_and_cancel(&lockh, LCK_EX);
-                }
-        }
-
-        RETURN(ldlm_completion_ast(lock, flags, cbdata));
+static int mgs_completion_ast_ir(struct ldlm_lock *lock, __u64 flags,
+				 void *cbdata)
+{
+	return mgs_completion_ast_generic(lock, flags, cbdata, AST_IR);
 }
 
 void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
 {
-        ldlm_completion_callback cp = NULL;
-        struct lustre_handle     lockh = { 0 };
-        struct ldlm_res_id       res_id;
+	ldlm_completion_callback cp = NULL;
+	struct lustre_handle     lockh = { 0 };
+	struct ldlm_res_id       res_id;
 	__u64 flags = LDLM_FL_ATOMIC_CB;
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        LASSERT(fsdb->fsdb_name[0] != '\0');
-        rc = mgc_fsname2resid(fsdb->fsdb_name, &res_id, type);
-        LASSERT(rc == 0);
-
-        switch (type) {
-        case CONFIG_T_CONFIG:
-                cp = mgs_completion_ast_config;
+	LASSERT(fsdb->fsdb_name[0] != '\0');
+	rc = mgc_fsname2resid(fsdb->fsdb_name, &res_id, type);
+	LASSERT(rc == 0);
+	switch (type) {
+	case CONFIG_T_CONFIG:
+		cp = mgs_completion_ast_config;
 		if (test_and_set_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags))
-                        rc = -EALREADY;
-                break;
-        case CONFIG_T_RECOVER:
-                cp = mgs_completion_ast_ir;
-        default:
-                break;
-        }
+			rc = -EALREADY;
+		break;
+	case CONFIG_T_PARAMS:
+		cp = mgs_completion_ast_params;
+		if (test_and_set_bit(FSDB_REVOKING_PARAMS, &fsdb->fsdb_flags))
+			rc = -EALREADY;
+		break;
+	case CONFIG_T_RECOVER:
+		cp = mgs_completion_ast_ir;
+	default:
+		break;
+	}
 
-        if (!rc) {
-                LASSERT(cp != NULL);
+	if (!rc) {
+		LASSERT(cp != NULL);
 		rc = ldlm_cli_enqueue_local(mgs->mgs_obd->obd_namespace,
 					    &res_id, LDLM_PLAIN, NULL, LCK_EX,
 					    &flags, ldlm_blocking_ast, cp,
 					    NULL, fsdb, 0, LVB_T_NONE, NULL,
 					    &lockh);
-                if (rc != ELDLM_OK) {
-                        CERROR("can't take cfg lock for "LPX64"/"LPX64"(%d)\n",
-                               le64_to_cpu(res_id.name[0]),
-                               le64_to_cpu(res_id.name[1]), rc);
+		if (rc != ELDLM_OK) {
+			CERROR("can't take cfg lock for "LPX64"/"LPX64"(%d)\n",
+			       le64_to_cpu(res_id.name[0]),
+			       le64_to_cpu(res_id.name[1]), rc);
 
-                        if (type == CONFIG_T_CONFIG)
+			if (type == CONFIG_T_CONFIG)
 				clear_bit(FSDB_REVOKING_LOCK,
-                                              &fsdb->fsdb_flags);
-                }
-                /* lock has been cancelled in completion_ast. */
-        }
+					  &fsdb->fsdb_flags);
 
-        RETURN_EXIT;
+			if (type == CONFIG_T_PARAMS)
+				clear_bit(FSDB_REVOKING_PARAMS,
+					  &fsdb->fsdb_flags);
+		}
+		/* lock has been cancelled in completion_ast. */
+	}
+
+	RETURN_EXIT;
 }
 
 /* rc=0 means ok
