@@ -36,7 +36,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	# combination in RHEL5 and OEL5, see BZ 21264
 	FREE_SPACE=$($LFS df $TESTDIR|awk '/filesystem summary:/ {print $5}')
 	BLKS=$((FREE_SPACE * 9 / 40))
-	echo "Free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
+	echoerr "Free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
 
 	dd bs=4k count=$BLKS status=noxfer if=/dev/zero of=$TESTDIR/dd-file \
 								1>$LOG &
