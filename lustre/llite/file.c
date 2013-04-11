@@ -526,12 +526,12 @@ int ll_file_open(struct inode *inode, struct file *file)
         it = file->private_data; /* XXX: compat macro */
         file->private_data = NULL; /* prevent ll_local_open assertion */
 
-        fd = ll_file_data_get();
-        if (fd == NULL)
-                GOTO(out_och_free, rc = -ENOMEM);
+	fd = ll_file_data_get();
+	if (fd == NULL)
+		GOTO(out_openerr, rc = -ENOMEM);
 
-        fd->fd_file = file;
-        if (S_ISDIR(inode->i_mode)) {
+	fd->fd_file = file;
+	if (S_ISDIR(inode->i_mode)) {
 		spin_lock(&lli->lli_sa_lock);
 		if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
 		    lli->lli_opendir_pid == 0) {
@@ -540,7 +540,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 			opendir_set = 1;
 		}
 		spin_unlock(&lli->lli_sa_lock);
-        }
+	}
 
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = fd;
