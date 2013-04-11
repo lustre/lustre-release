@@ -953,6 +953,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	/* server namespace, doesn't need lock */
 	lvb_len = ldlm_lvbo_size(lock);
+	/* LU-3124 & LU-2187: to not return layout in completion AST because
+	 * it may deadlock for LU-2187, or client may not have enough space
+	 * for large layout. The layout will be returned to client with an
+	 * extra RPC to fetch xattr.lov */
+	if (ldlm_has_layout(lock))
+		lvb_len = 0;
+
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_CLIENT, lvb_len);
         rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK);
         if (rc) {

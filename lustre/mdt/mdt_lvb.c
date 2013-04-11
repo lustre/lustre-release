@@ -114,8 +114,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 		RETURN(rc);
 	}
 
-	if (lock->l_resource->lr_type != LDLM_IBITS ||
-		!(lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT))
+	if (!ldlm_has_layout(lock))
 		RETURN(0);
 
 	/* layout lock will be granted to client, fill in lvb with layout */
