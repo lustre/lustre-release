@@ -2,6 +2,22 @@
 
 # NOTE: Please avoid bashisms (bash specific syntax) in this script
 
+# die a horrible death.  All output goes to stderr.
+#
+die()
+{
+	echo "bootstrap failure:  $*"
+	echo Aborting
+	exit 1
+} 1>&2
+
+run_cmd()
+{
+	echo -n "Running $*"
+	eval "$@" || die "command exited with code $?"
+	echo
+}
+
 # install Lustre Git commit hooks by default - LU-2083
 for HOOK in commit-msg prepare-commit-msg; do
 	if [ -d .git/hooks -a ! -e .git/hooks/$HOOK ]; then
@@ -15,13 +31,10 @@ OPTIONAL_DIRS="snmp portals"
 CONFIGURE_DIRS="libsysio lustre-iokit ldiskfs"
 
 for dir in $REQUIRED_DIRS ; do
-	if [ ! -d "$dir" ] ; then
-		cat >&2 <<EOF
-Your tree seems to be missing $dir.
-Please read README.lustrecvs for details.
-EOF
-		exit 1
-	fi
+	test -d "$dir" || \
+		die "Your tree seems to be missing $dir.
+Please read README.lustrecvs for details."
+
 	ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
 done
 # optional directories for Lustre
@@ -31,31 +44,18 @@ for dir in $OPTIONAL_DIRS; do
 	fi
 done
 
-run_cmd()
-{
-	cmd="$@"
-	echo -n "Running $cmd"
-	eval $cmd
-	res=$?
-	if [ $res -ne 0 ]; then
-		echo " failed: $res"
-		echo "Aborting"
-		exit 1
-	fi
-	echo
-}
+PWD_SAVE=$PWD
 
 run_cmd "aclocal -I $PWD/config $ACLOCAL_FLAGS"
 run_cmd "autoheader"
 run_cmd "automake -a -c"
 run_cmd autoconf
 
-# Run autogen.sh in these directories
-PWD_SAVE=$PWD
+# bootstrap in these directories
 for dir in $CONFIGURE_DIRS; do
 	if [ -d $dir ] ; then
 		cd $dir
-		echo "Running autogen for $dir..."
+		echo "bootstrapping in $dir..."
 		run_cmd "sh autogen.sh"
 	fi
 	cd $PWD_SAVE

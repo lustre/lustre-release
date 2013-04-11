@@ -1260,20 +1260,23 @@ static int llu_file_flock(struct inode *ino,
                           int cmd,
                           struct file_lock *file_lock)
 {
-        struct llu_inode_info *lli = llu_i2info(ino);
-        struct intnl_stat *st = llu_i2stat(ino);
-        struct ldlm_res_id res_id =
-                { .name = {fid_seq(&lli->lli_fid),
-                           fid_oid(&lli->lli_fid),
-                           fid_ver(&lli->lli_fid),
-                           LDLM_FLOCK} };
-        struct ldlm_enqueue_info einfo = { LDLM_FLOCK, 0, NULL,
-                ldlm_flock_completion_ast, NULL, NULL, file_lock };
-
-        struct lustre_handle lockh = {0};
-        ldlm_policy_data_t flock;
+	struct llu_inode_info *lli = llu_i2info(ino);
+	struct ldlm_res_id res_id =
+		{ .name = {fid_seq(&lli->lli_fid),
+			   fid_oid(&lli->lli_fid),
+			   fid_ver(&lli->lli_fid),
+			   LDLM_FLOCK} };
+	struct ldlm_enqueue_info einfo = {
+		.ei_type	= LDLM_FLOCK,
+		.ei_mode	= 0,
+		.ei_cb_cp	= ldlm_flock_completion_ast,
+		.ei_cbdata	= file_lock,
+	};
+	struct intnl_stat     *st  = llu_i2stat(ino);
+	struct lustre_handle lockh = {0};
+	ldlm_policy_data_t flock;
 	__u64 flags = 0;
-        int rc;
+	int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu file_lock=%p\n",
                (unsigned long long)st->st_ino, file_lock);
@@ -1635,25 +1638,29 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
 }
 
 static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
-                                     struct lov_user_md *lum, int lum_size)
+				     struct lov_user_md *lum, int lum_size)
 {
-        struct llu_sb_info *sbi = llu_i2sbi(ino);
-        struct llu_inode_info *lli = llu_i2info(ino);
-        struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
-        struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CR,
-                llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
-        struct ptlrpc_request *req = NULL;
-        struct lustre_md md;
-        struct md_op_data data = {{ 0 }};
-        struct lustre_handle lockh;
-        int rc = 0;
-        ENTRY;
+	struct llu_sb_info *sbi = llu_i2sbi(ino);
+	struct llu_inode_info *lli = llu_i2info(ino);
+	struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
+	struct ldlm_enqueue_info einfo = {
+		.ei_type	= LDLM_IBITS,
+		.ei_mode	= LCK_CR,
+		.ei_cb_bl	= llu_md_blocking_ast,
+		.ei_cb_cp	= ldlm_completion_ast,
+	};
+	struct ptlrpc_request *req = NULL;
+	struct lustre_md md;
+	struct md_op_data data = {{ 0 }};
+	struct lustre_handle lockh;
+	int rc = 0;
+	ENTRY;
 
 	if (lli->lli_has_smd) {
-                CDEBUG(D_IOCTL, "stripe already exists for ino "DFID"\n",
-                       PFID(&lli->lli_fid));
-                return -EEXIST;
-        }
+		CDEBUG(D_IOCTL, "stripe already exists for ino "DFID"\n",
+		       PFID(&lli->lli_fid));
+		return -EEXIST;
+	}
 
         llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR,
                             LUSTRE_OPC_ANY);

@@ -675,10 +675,10 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 granted:
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
 
-        if (lock->l_destroyed) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
-                RETURN(0);
-        }
+	if (lock->l_flags & LDLM_FL_DESTROYED) {
+		LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
+		RETURN(0);
+	}
 
         if (lock->l_flags & LDLM_FL_FAILED) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: failed");

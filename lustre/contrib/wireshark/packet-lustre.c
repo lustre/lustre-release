@@ -271,38 +271,8 @@ enum fld_rpc_opc {
   FLD_FIRST_OPC    = FLD_QUERY
 };
 
-#define LDLM_FL_LOCK_CHANGED                      0x000001
-#define LDLM_FL_BLOCK_GRANTED                     0x000002
-#define LDLM_FL_BLOCK_CONV                        0x000004
-#define LDLM_FL_BLOCK_WAIT                        0x000008
-#define LDLM_FL_CBPENDING		0x000010
-#define LDLM_FL_AST_SENT                          0x000020
-#define LDLM_FL_WAIT_NOREPROC		0x000040
-#define LDLM_FL_CANCEL			0x000080
-#define LDLM_FL_REPLAY                            0x000100
-#define LDLM_FL_INTENT_ONLY                       0x000200
-#define LDLM_FL_LOCAL_ONLY		0x000400
-#define LDLM_FL_FAILED			0x000800
-#define LDLM_FL_HAS_INTENT                        0x001000
-#define LDLM_FL_CANCELING		0x002000
-#define LDLM_FL_LOCAL			0x004000
-#define LDLM_FL_WARN			0x008000
-#define LDLM_FL_DISCARD_DATA                      0x010000
-#define LDLM_FL_NO_TIMEOUT                        0x020000
-#define LDLM_FL_BLOCK_NOWAIT                      0x040000
-#define LDLM_FL_TEST_LOCK                         0x080000
-#define LDLM_FL_LVB_READY		0x100000
-#define LDLM_FL_KMS_IGNORE		0x200000
-#define LDLM_FL_NO_LRU			0x400000
-#define LDLM_FL_CANCEL_ON_BLOCK                   0x800000
-#define LDLM_FL_CP_REQD			0x1000000
-#define LDLM_FL_CLEANED			0x2000000
-#define LDLM_FL_ATOMIC_CB		0x4000000
-#define LDLM_FL_BL_AST			0x10000000
-#define LDLM_FL_BL_DONE			0x20000000
-#define LDLM_FL_DENY_ON_CONTENTION              0x40000000
-#define LDLM_AST_DISCARD_DATA                   0x80000000
-
+#define  WIRESHARK_COMPILE
+#include "lustre_dlm_flags.h"
 
 #define LDLM_ENQUEUE (101)
 #define LDLM_CONVERT (102)
@@ -510,37 +480,7 @@ static int hf_lustre_mgs_config_res_size = -1;
 
 static int hf_lustre_ost_lvb = -1 ;
 
-static int hf_lustre_ldlm_fl_lock_changed        = -1;
-static int hf_lustre_ldlm_fl_block_granted       = -1;
-static int hf_lustre_ldlm_fl_block_conv          = -1;
-static int hf_lustre_ldlm_fl_block_wait          = -1;
-static int hf_lustre_ldlm_fl_cbpending           = -1;
-static int hf_lustre_ldlm_fl_ast_sent            = -1;
-static int hf_lustre_ldlm_fl_wait_noreproc       = -1;
-static int hf_lustre_ldlm_fl_cancel              = -1;
-static int hf_lustre_ldlm_fl_replay              = -1;
-static int hf_lustre_ldlm_fl_intent_only         = -1;
-static int hf_lustre_ldlm_fl_local_only          = -1;
-static int hf_lustre_ldlm_fl_failed              = -1;
-static int hf_lustre_ldlm_fl_has_intent          = -1;
-static int hf_lustre_ldlm_fl_canceling           = -1;
-static int hf_lustre_ldlm_fl_local               = -1;
-static int hf_lustre_ldlm_fl_warn                = -1;
-static int hf_lustre_ldlm_fl_discard_data        = -1;
-static int hf_lustre_ldlm_fl_no_timeout          = -1;
-static int hf_lustre_ldlm_fl_block_nowait        = -1;
-static int hf_lustre_ldlm_fl_test_lock           = -1;
-static int hf_lustre_ldlm_fl_lvb_ready           = -1;
-static int hf_lustre_ldlm_fl_kms_ignore          = -1;
-static int hf_lustre_ldlm_fl_no_lru              = -1;
-static int hf_lustre_ldlm_fl_cancel_on_block     = -1;
-static int hf_lustre_ldlm_fl_cp_reqd             = -1;
-static int hf_lustre_ldlm_fl_cleaned             = -1;
-static int hf_lustre_ldlm_fl_atomic_cb           = -1;
-static int hf_lustre_ldlm_fl_bl_ast              = -1;
-static int hf_lustre_ldlm_fl_bl_done             = -1;
-static int hf_lustre_ldlm_fl_deny_on_contention  = -1;
-static int hf_lustre_ldlm_ast_discard_data       = -1;
+#define hf_lustre_ldlm_ast_discard_data hf_lustre_ldlm_fl_ast_discard_data
 
 static int hf_lustre_mdt_body = -1 ;
 static int hf_lustre_mdt_body_fid1 = -1;
@@ -1108,41 +1048,6 @@ const value_string lustre_ldlm_opcode[] = {
 const value_string lustre_lov_magic[] = {
   { LOV_MAGIC_V1,   "LOV_MAGIC_V1" },
   {0, NULL}
-};
-
-const value_string lustre_ldlm_flags_vals[] = {
-  {0x000001 , "LDLM_FL_LOCK_CHANGED"},
-  {0x000002 , "LDLM_FL_BLOCK_GRANTED"},
-  {0x000004 , "LDLM_FL_BLOCK_CONV"},
-  {0x000008 , "LDLM_FL_BLOCK_WAIT"},
-  {0x000010 , "LDLM_FL_CBPENDING"},
-  {0x000020 , "LDLM_FL_AST_SENT"},
-  {0x000040 , "LDLM_FL_WAIT_NOREPROC"},
-  {0x000080 , "LDLM_FL_CANCEL"},
-  {0x000100 , "LDLM_FL_REPLAY"},
-  {0x000200 , "LDLM_FL_INTENT_ONLY"},
-  {0x000400 , "LDLM_FL_LOCAL_ONLY"},
-  {0x000800 , "LDLM_FL_FAILED"},
-  {0x001000 , "LDLM_FL_HAS_INTENT"},
-  {0x002000 , "LDLM_FL_CANCELING"},
-  {0x004000 , "LDLM_FL_LOCAL"},
-  {0x008000 , "LDLM_FL_WARN"},
-  {0x010000 , "LDLM_FL_DISCARD_DATA"},
-  {0x020000 , "LDLM_FL_NO_TIMEOUT"},
-  {0x040000 , "LDLM_FL_BLOCK_NOWAIT"},
-  {0x080000 , "LDLM_FL_TEST_LOCK"},
-  {0x100000 , "LDLM_FL_LVB_READY"},
-  {0x200000 , "LDLM_FL_KMS_IGNORE"},
-  {0x400000 , "LDLM_FL_NO_LRU"},
-  {0x800000 , "LDLM_FL_CANCEL_ON_BLOCK"},
-  {0x1000000 , "LDLM_FL_CP_REQD"},
-  {0x2000000 , "LDLM_FL_CLEANED"},
-  {0x4000000 , "LDLM_FL_ATOMIC_CB"},
-  {0x10000000 , "LDLM_FL_BL_AST"},
-  {0x20000000 , "LDLM_FL_BL_DONE"},
-  {0x40000000 , "LDLM_FL_DENY_ON_CONTENTION"},
-  {0x80000000 , "LDLM_AST_DISCARD_DATA"},
-  { 0, NULL }
 };
 
 const value_string lustre_llog_op_type[] = {
@@ -5767,7 +5672,7 @@ lustre_dissect_element_ldlm_lock_flags(tvbuff_t *tvb _U_, int offset _U_, packet
     item = proto_tree_add_item(parent_tree,hf_index, tvb, offset, 4, TRUE);
     tree = proto_item_add_subtree(item, ett_lustre_ldlm_lock_flags);
   }
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_ast_discard_data);
+  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_discard_data);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_deny_on_contention);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_bl_done           );
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_bl_ast            );
@@ -10584,7 +10489,7 @@ void proto_register_dcerpc_lustre(void)
     {&hf_lustre_ldlm_fl_bl_ast, {"LDLM_FL_BL_AST", "lustre.ldlm_fl_bl_ast", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_AST, "", HFILL } },
     {&hf_lustre_ldlm_fl_bl_done, {"LDLM_FL_BL_DONE", "lustre.ldlm_fl_bl_done", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_DONE, "", HFILL } },
     {&hf_lustre_ldlm_fl_deny_on_contention, {"LDLM_FL_DENY_ON_CONTENTION", "lustre.ldlm_fl_deny_on_contention", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_DENY_ON_CONTENTION, "", HFILL } },
-    {&hf_lustre_ldlm_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_AST_DISCARD_DATA, "", HFILL } },
+    {&hf_lustre_ldlm_fl_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_AST_DISCARD_DATA, "", HFILL } },
 
     { &hf_lustre_obdo_o_misc,
       { "O Misc", "lustre.obdo.o_misc", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},

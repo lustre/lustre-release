@@ -694,7 +694,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 
         LASSERT(cfs_list_empty(&res->lr_converting));
         LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
-                !(lock->l_flags & LDLM_AST_DISCARD_DATA));
+		!(lock->l_flags & LDLM_FL_AST_DISCARD_DATA));
         check_res_locked(res);
         *err = ELDLM_OK;
 
@@ -759,47 +759,45 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
                     !ns_is_client(ldlm_res_to_ns(res)))
                         class_fail_export(lock->l_export);
 
-                lock_res(res);
-                if (rc == -ERESTART) {
-                        /* 15715: The lock was granted and destroyed after
-                         * resource lock was dropped. Interval node was freed
-                         * in ldlm_lock_destroy. Anyway, this always happens
-                         * when a client is being evicted. So it would be
-                         * ok to return an error. -jay */
-                        if (lock->l_destroyed) {
-                                *err = -EAGAIN;
-                                GOTO(out, rc = -EAGAIN);
-                        }
+		lock_res(res);
+		if (rc == -ERESTART) {
+			/* 15715: The lock was granted and destroyed after
+			 * resource lock was dropped. Interval node was freed
+			 * in ldlm_lock_destroy. Anyway, this always happens
+			 * when a client is being evicted. So it would be
+			 * ok to return an error. -jay */
+			if (lock->l_flags & LDLM_FL_DESTROYED) {
+				*err = -EAGAIN;
+				GOTO(out, rc = -EAGAIN);
+			}
 
-                        /* lock was granted while resource was unlocked. */
-                        if (lock->l_granted_mode == lock->l_req_mode) {
-                                /* bug 11300: if the lock has been granted,
-                                 * break earlier because otherwise, we will go
-                                 * to restart and ldlm_resource_unlink will be
-                                 * called and it causes the interval node to be
-                                 * freed. Then we will fail at
-                                 * ldlm_extent_add_lock() */
-                                *flags &= ~(LDLM_FL_BLOCK_GRANTED | LDLM_FL_BLOCK_CONV |
-                                            LDLM_FL_BLOCK_WAIT);
-                                GOTO(out, rc = 0);
-                        }
+			/* lock was granted while resource was unlocked. */
+			if (lock->l_granted_mode == lock->l_req_mode) {
+				/* bug 11300: if the lock has been granted,
+				 * break earlier because otherwise, we will go
+				 * to restart and ldlm_resource_unlink will be
+				 * called and it causes the interval node to be
+				 * freed. Then we will fail at
+				 * ldlm_extent_add_lock() */
+				*flags &= ~LDLM_FL_BLOCKED_MASK;
+				GOTO(out, rc = 0);
+			}
 
-                        GOTO(restart, -ERESTART);
-                }
+			GOTO(restart, -ERESTART);
+		}
 
-                *flags |= LDLM_FL_BLOCK_GRANTED;
-                /* this way we force client to wait for the lock
-                 * endlessly once the lock is enqueued -bzzz */
-                *flags |= LDLM_FL_NO_TIMEOUT;
+		/* this way we force client to wait for the lock
+		 * endlessly once the lock is enqueued -bzzz */
+		*flags |= LDLM_FL_BLOCK_GRANTED | LDLM_FL_NO_TIMEOUT;
 
-        }
-        RETURN(0);
+	}
+	RETURN(0);
 out:
-        if (!cfs_list_empty(&rpc_list)) {
-                LASSERT(!(lock->l_flags & LDLM_AST_DISCARD_DATA));
-                discard_bl_list(&rpc_list);
-        }
-        RETURN(rc);
+	if (!cfs_list_empty(&rpc_list)) {
+		LASSERT(!(lock->l_flags & LDLM_FL_AST_DISCARD_DATA));
+		discard_bl_list(&rpc_list);
+	}
+	RETURN(rc);
 }
 #endif /* HAVE_SERVER_SUPPORT */
 

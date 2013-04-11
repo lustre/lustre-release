@@ -45,7 +45,7 @@ EXTRA_DIST = ioctl.h liblustre.h lprocfs_status.h lustre_cfg.h 	\
              lustre_fsfilt.h lustre_ha.h lustre_handles.h lustre_import.h \
              lustre_lib.h lustre_sec.h	lustre_lite.h lustre_log.h lustre_mds.h \
              lustre_mdc.h lustre_net.h lustre_quota.h lvfs.h \
-             obd_cache.h obd_class.h obd.h obd_lov.h \
+             obd_cache.h obd_class.h obd.h obd_lov.h lustre_dlm_flags.h \
 	     obd_ost.h obd_support.h lustre_ver.h lu_object.h \
              md_object.h dt_object.h lustre_param.h lustre_mdt.h \
              lustre_fid.h lustre_fld.h lustre_req_layout.h lustre_capa.h \

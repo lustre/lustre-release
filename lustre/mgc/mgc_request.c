@@ -909,13 +909,17 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 		       void *data, __u32 lvb_len, void *lvb_swabber,
 		       struct lustre_handle *lockh)
 {
-        struct config_llog_data *cld = (struct config_llog_data *)data;
-        struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
-                         ldlm_completion_ast, NULL, NULL, NULL };
-        struct ptlrpc_request *req;
-        int short_limit = cld_is_sptlrpc(cld);
-        int rc;
-        ENTRY;
+	struct config_llog_data *cld = (struct config_llog_data *)data;
+	struct ldlm_enqueue_info einfo = {
+		.ei_type	= type,
+		.ei_mode	= mode,
+		.ei_cb_bl	= mgc_blocking_ast,
+		.ei_cb_cp	= ldlm_completion_ast,
+	};
+	struct ptlrpc_request *req;
+	int short_limit = cld_is_sptlrpc(cld);
+	int rc;
+	ENTRY;
 
         CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
                cld->cld_resid.name[0]);

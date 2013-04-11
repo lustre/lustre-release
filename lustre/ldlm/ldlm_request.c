@@ -161,24 +161,24 @@ EXPORT_SYMBOL(ldlm_get_enq_timeout);
  */
 static int ldlm_completion_tail(struct ldlm_lock *lock)
 {
-        long delay;
-        int  result;
+	long delay;
+	int  result;
 
-        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
-                LDLM_DEBUG(lock, "client-side enqueue: destroyed");
-                result = -EIO;
-        } else {
-                delay = cfs_time_sub(cfs_time_current_sec(),
-                                     lock->l_last_activity);
-                LDLM_DEBUG(lock, "client-side enqueue: granted after "
-                           CFS_DURATION_T"s", delay);
+	if (lock->l_flags & (LDLM_FL_DESTROYED | LDLM_FL_FAILED)) {
+		LDLM_DEBUG(lock, "client-side enqueue: destroyed");
+		result = -EIO;
+	} else {
+		delay = cfs_time_sub(cfs_time_current_sec(),
+				     lock->l_last_activity);
+		LDLM_DEBUG(lock, "client-side enqueue: granted after "
+			   CFS_DURATION_T"s", delay);
 
-                /* Update our time estimate */
-                at_measured(ldlm_lock_to_ns_at(lock),
-                            delay);
-                result = 0;
-        }
-        return result;
+		/* Update our time estimate */
+		at_measured(ldlm_lock_to_ns_at(lock),
+			    delay);
+		result = 0;
+	}
+	return result;
 }
 
 /**
@@ -890,17 +890,16 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LDLM_DEBUG(lock, "client-side enqueue START");
                 LASSERT(exp == lock->l_conn_export);
         } else {
-                const struct ldlm_callback_suite cbs = {
-                        .lcs_completion = einfo->ei_cb_cp,
-                        .lcs_blocking   = einfo->ei_cb_bl,
-                        .lcs_glimpse    = einfo->ei_cb_gl,
-                        .lcs_weigh      = einfo->ei_cb_wg
-                };
-                lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
-                                        einfo->ei_mode, &cbs, einfo->ei_cbdata,
+		const struct ldlm_callback_suite cbs = {
+			.lcs_completion = einfo->ei_cb_cp,
+			.lcs_blocking	= einfo->ei_cb_bl,
+			.lcs_glimpse	= einfo->ei_cb_gl
+		};
+		lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
+					einfo->ei_mode, &cbs, einfo->ei_cbdata,
 					lvb_len, lvb_type);
-                if (lock == NULL)
-                        RETURN(-ENOMEM);
+		if (lock == NULL)
+			RETURN(-ENOMEM);
                 /* for the local lock, add the reference */
                 ldlm_lock_addref_internal(lock, einfo->ei_mode);
                 ldlm_lock2handle(lock, lockh);

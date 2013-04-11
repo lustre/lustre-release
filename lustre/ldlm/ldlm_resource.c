@@ -1318,18 +1318,18 @@ int ldlm_resource_putref_locked(struct ldlm_resource *res)
 void ldlm_resource_add_lock(struct ldlm_resource *res, cfs_list_t *head,
                             struct ldlm_lock *lock)
 {
-        check_res_locked(res);
+	check_res_locked(res);
 
-        LDLM_DEBUG(lock, "About to add this lock:\n");
+	LDLM_DEBUG(lock, "About to add this lock:\n");
 
-        if (lock->l_destroyed) {
-                CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
-                return;
-        }
+	if (lock->l_flags & LDLM_FL_DESTROYED) {
+		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
+		return;
+	}
 
-        LASSERT(cfs_list_empty(&lock->l_res_link));
+	LASSERT(cfs_list_empty(&lock->l_res_link));
 
-        cfs_list_add_tail(&lock->l_res_link, head);
+	cfs_list_add_tail(&lock->l_res_link, head);
 }
 
 /**
@@ -1347,10 +1347,10 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
         ldlm_resource_dump(D_INFO, res);
         LDLM_DEBUG(new, "About to insert this lock after %p:\n", original);
 
-        if (new->l_destroyed) {
-                CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
-                goto out;
-        }
+	if (new->l_flags & LDLM_FL_DESTROYED) {
+		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
+		goto out;
+	}
 
         LASSERT(cfs_list_empty(&new->l_res_link));
 

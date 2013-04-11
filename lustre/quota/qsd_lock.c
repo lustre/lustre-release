@@ -39,6 +39,30 @@
 
 #include "qsd_internal.h"
 
+typedef int (enqi_bl_cb_t)(struct ldlm_lock *lock,
+                           struct ldlm_lock_desc *desc, void *data,
+                           int flag);
+static enqi_bl_cb_t qsd_glb_blocking_ast, qsd_id_blocking_ast;
+
+typedef int (enqi_gl_cb_t)(struct ldlm_lock *lock, void *data);
+static enqi_gl_cb_t qsd_glb_glimpse_ast, qsd_id_glimpse_ast;
+
+struct ldlm_enqueue_info qsd_glb_einfo = {
+	.ei_type	= LDLM_PLAIN,
+	.ei_mode	= LCK_CR,
+	.ei_cb_bl	= qsd_glb_blocking_ast,
+	.ei_cb_cp	= ldlm_completion_ast,
+	.ei_cb_gl	= qsd_glb_glimpse_ast,
+};
+
+struct ldlm_enqueue_info qsd_id_einfo = {
+	.ei_type	= LDLM_PLAIN,
+	.ei_mode	= LCK_CR,
+	.ei_cb_bl	= qsd_id_blocking_ast,
+	.ei_cb_cp	= ldlm_completion_ast,
+	.ei_cb_gl	= qsd_id_glimpse_ast,
+};
+
 /*
  * Return qsd_qtype_info structure associated with a global lock
  *
@@ -262,13 +286,7 @@ out:
 	return rc;
 }
 
-struct ldlm_enqueue_info qsd_glb_einfo = { LDLM_PLAIN,
-					   LCK_CR,
-					   qsd_glb_blocking_ast,
-					   ldlm_completion_ast,
-					   qsd_glb_glimpse_ast,
-					   NULL, NULL };
-/*
+/**
  * Blocking callback handler for per-ID lock
  *
  * \param lock - is the lock for which ast occurred.
@@ -440,14 +458,7 @@ out:
 	RETURN(rc);
 }
 
-struct ldlm_enqueue_info qsd_id_einfo = { LDLM_PLAIN,
-				          LCK_CR,
-					  qsd_id_blocking_ast,
-					  ldlm_completion_ast,
-					  qsd_id_glimpse_ast,
-					  NULL, NULL };
-
-/*
+/**
  * Check whether a slave already own a ldlm lock for the quota identifier \qid.
  *
  * \param lockh  - is the local lock handle from lquota entry.

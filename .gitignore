@@ -22,6 +22,8 @@
 .tmp_versions
 .Xrefs
 *~
+\.#*
+\#*
 *.a
 *.dSYM
 *.i
