@@ -680,7 +680,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (osfs->os_bsize * osfs->os_blocks < OFD_PRECREATE_SMALL_FS)
 		m->ofd_precreate_batch = OFD_PRECREATE_BATCH_SMALL;
 
-	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "filter-%p", m);
+	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "%s-%s",
+		 "filter"/*LUSTRE_OST_NAME*/, obd->obd_uuid.uuid);
 	m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.name,
 					      LDLM_NAMESPACE_SERVER,
 					      LDLM_NAMESPACE_GREEDY,

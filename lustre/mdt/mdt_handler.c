@@ -4740,8 +4740,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if (rc)
 		GOTO(err_fini_fld, rc);
 
-        snprintf(info->mti_u.ns_name, sizeof info->mti_u.ns_name,
-                 LUSTRE_MDT_NAME"-%p", m);
+	snprintf(info->mti_u.ns_name, sizeof(info->mti_u.ns_name), "%s-%s",
+		 LUSTRE_MDT_NAME, obd->obd_uuid.uuid);
         m->mdt_namespace = ldlm_namespace_new(obd, info->mti_u.ns_name,
                                               LDLM_NAMESPACE_SERVER,
                                               LDLM_NAMESPACE_GREEDY,
