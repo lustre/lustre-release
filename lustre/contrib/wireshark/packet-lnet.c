@@ -44,23 +44,26 @@
 #include <epan/dissectors/packet-tcp.h>
 #include <epan/dissectors/packet-infiniband.h>
 
+/* This value inidcates whether we are processing an Infiniband packet, or
+   TCP.  It gets set to the extra bytes the IB header requires if IB,
+   or zero if TCP. */
+static guint ib_lnd_extra_bytes;
+
 /* How much data has at least to be available to be able to determine the
  * length of the lnet message.
  * Note: This is only used for TCP-based LNet packets.  Not used for Infiniband.
  */
 #define LNET_HEADER_LEN 52
-#define LNET_NID_DEST_OFFSET 24
-#define LNET_NID_SRC_OFFSET 32
-#define LNET_MSG_TYPE_OFFSET 48
-#define LNET_PTL_INDEX_OFFSET_PUT 88
+#define LNET_NID_DEST_OFFSET (24 + ib_lnd_extra_bytes)
+#define LNET_NID_SRC_OFFSET (32 + ib_lnd_extra_bytes)
+#define LNET_MSG_TYPE_OFFSET (48 + ib_lnd_extra_bytes)
+#define LNET_PTL_INDEX_OFFSET_PUT (88 + ib_lnd_extra_bytes)
+
+#define EXTRA_IB_HEADER_SIZE 24
 
 /* TCP ports used for LNet. */
 static guint global_lnet_tcp_port = 988;
 static guint lnet_tcp_port = 988;
-
-/* This boolean inidcates whether we are processing an Infiniband packet, or
-   TCP. */
-static guint ib_packet;
 
 void proto_reg_handoff_lnet(void);
 
@@ -288,7 +291,7 @@ static int dissect_csum(tvbuff_t * tvb, proto_tree *tree, int offset)
 	if (!csum)
 		proto_tree_add_text(tree, tvb, offset, 4, "Checksum Disabled");
 	else {
-		if (ib_packet)
+		if (ib_lnd_extra_bytes)
 			proto_tree_add_item(tree, hf_lnet_ib_csum, tvb, offset,
 					    4, little_endian);
 		else
@@ -537,12 +540,14 @@ get_lnet_message_len(packet_info  __attribute__((__unused__))*pinfo, tvbuff_t *t
 	guint32 plen;
 
 	/* Get the payload length */
-	plen = tvb_get_letohl(tvb,offset+28+24); /* 24 = ksm header,
+	plen = tvb_get_letohl(tvb, offset + 28 + 24 + ib_lnd_extra_bytes);
+						  /* 24 = ksm header,
 						     28 = the rest of the
 							  headers */
 
 	/* That length doesn't include the header; add that in. */
-	return plen + 72 +24 ; /*  +24 == ksock msg header.. :D */
+	return plen + 72 + 24 + ib_lnd_extra_bytes; /*  +24 == ksock msg
+							header.. :D */
 
 }
 
@@ -558,10 +563,9 @@ dissect_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	/* TODO : correct this, now we do a difference between packet with
 	   NOOP and others ..  but I don't find how to use pdu_dissect with
 	   a variable length<=LNET_HEADER_LEN */
-	ib_packet = 0;
+	ib_lnd_extra_bytes = 0;
 	switch(tvb_get_letohl(tvb,0)){
 		case KSOCK_MSG_NOOP:
-			/*g_print("ksock noop %d \n", pinfo->fd->num);*/
 			tcp_dissect_pdus(tvb,pinfo,tree,TRUE,0, get_noop_message_len,dissect_ksock_msg_noop);
 			break;
 		case KSOCK_MSG_LNET:
@@ -581,8 +585,9 @@ dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 		return 0;
 	}
 
-	ib_packet = 1;
-	dissect_lnet_message(tvb, pinfo, tree);
+	ib_lnd_extra_bytes = EXTRA_IB_HEADER_SIZE;
+	tcp_dissect_pdus(tvb, pinfo, tree, TRUE, LNET_HEADER_LEN,
+			 get_lnet_message_len, dissect_lnet_message);
 	return tvb_length(tvb);
 }
 
@@ -736,7 +741,7 @@ dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 
 		lnet_tree = proto_item_add_subtree(ti,ett_lnet); /* add the subtree*/
 
-		if (ib_packet) {
+		if (ib_lnd_extra_bytes) {
 			offset = dissect_ib_msg(tvb, lnet_tree, offset);
 			if (offset == 0) {
 				/*  There was no LNet payload, only ob2lnd. */
@@ -805,7 +810,7 @@ dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 
 
 		/* padding */
-		msg_filler_length = 72 - offset + 24 ; 
+		msg_filler_length = 72 - offset + 24 + ib_lnd_extra_bytes;
 		if ( msg_filler_length > 72)
 			return ;
 		/*  +24 : ksosck_message take 24bytes, and allready in offset  */
