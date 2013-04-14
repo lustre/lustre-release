@@ -1114,7 +1114,7 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         }
         conf->eoc_md = lsmp;
 
-        fid  = &info->eti_fid;
+	fid  = &info->eti_fid;
 	rc = ostid_to_fid(fid, &lsm->lsm_oi, 0);
 	if (rc != 0)
 		GOTO(out, eco = ERR_PTR(rc));

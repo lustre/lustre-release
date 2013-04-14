@@ -3254,20 +3254,36 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		down_write(&obj->oo_ext_idx_sem);
         }
 
-        bh = osd_ldiskfs_find_entry(dir, dentry, &de, hlock);
+        bh = ldiskfs_find_entry(dir, &dentry->d_name, &de, hlock);
         if (bh) {
 		__u32 ino = 0;
 
-		/* Tried to delete local agent inode for the entries,
-		 * If it tries to delete .., which only happens during
-		 * rename or move the dir to /ORPHAN, even .. might
-		 * point to the remote parent, but it do not have
-		 * local agent inode, so we do not need check .. at all,
-		 * Note: we need delete entry first, then inode to keep
-		 * lfsck safe. */
+		/* If this is not the ".." entry, it might be a remote DNE
+		 * entry and  we need to check if the FID is for a remote
+		 * MDT.  If the FID is  not in the directory entry (e.g.
+		 * upgraded 1.8 filesystem without dirdata enabled) then
+		 * we need to get the FID from the LMA. For a remote directory
+		 * there HAS to be an LMA, it cannot be an IGIF inode in this
+		 * case.
+		 *
+		 * Delete the entry before the agent inode in order to
+		 * simplify error handling.  At worst an error after deleting
+		 * the entry first might leak the agent inode afterward. The
+		 * reverse would need filesystem abort in case of error deleting
+		 * the entry after the agent had been removed, or leave a
+		 * dangling entry pointing at a random inode. */
 		if (strcmp((char *)key, dotdot) != 0) {
 			LASSERT(de != NULL);
 			rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
+			/* If Fid is not in dentry, try to get it from LMA */
+			if (rc == -ENODATA) {
+				struct osd_inode_id *id;
+
+				id = &osd_oti_get(env)->oti_id;
+				rc = osd_ea_fid_get(env, obj,
+						    le32_to_cpu(de->inode),
+						    fid, id);
+			}
 			if (rc == 0 &&
 			    unlikely(osd_remote_fid(env, osd, fid)))
 				/* Need to delete agent inode */

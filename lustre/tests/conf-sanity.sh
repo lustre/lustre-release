@@ -1356,7 +1356,7 @@ t32_test_cleanup() {
 		$r umount -d $tmp/mnt/mdt || rc=$?
 	fi
 	if $shall_cleanup_mdt1; then
-		$r2 umount -d $tmp/mnt/mdt1 || rc=$?
+		$r umount -d $tmp/mnt/mdt1 || rc=$?
 	fi
 	if $shall_cleanup_ost; then
 		$r umount -d $tmp/mnt/ost || rc=$?
@@ -1507,7 +1507,6 @@ t32_test() {
 	local node=$(facet_active_host $SINGLEMDS)
 	local r="do_node $node"
 	local node2=$(facet_active_host mds2)
-	local r2="do_node $node2"
 	local tmp=$TMP/t32
 	local img_commit
 	local img_kernel
@@ -1568,21 +1567,28 @@ t32_test() {
 	shall_cleanup_mdt=true
 
 	if [ "$dne_upgrade" != "no" ]; then
-		echo "mkfs new MDT...."
-		add mds2 $(mkfs_opts mds2 $(mdsdevname 2) $fsname) --reformat \
-			$(mdsdevname 2) $(mdsvdevname 2) > /dev/null || {
+		local fs2mdsdev=$(mdsdevname 1_2)
+		local fs2mdsvdev=$(mdsvdevname 1_2)
+
+		echo "mkfs new MDT on ${fs2mdsdev}...."
+		if [ $(facet_fstype mds1) == ldiskfs ]; then
+			mkfsoptions="--mkfsoptions=\\\"-J size=8\\\""
+		fi
+
+		add fs2mds $(mkfs_opts mds2 $fs2mdsdev $fsname) --reformat \
+			   $mkfsoptions $fs2mdsdev $fs2mdsvdev > /dev/null || {
 			error_noexit "Mkfs new MDT failed"
 			return 1
 		}
 
-		$r2 $TUNEFS --dryrun $(mdsdevname 2) || {
+		$r $TUNEFS --dryrun $fs2mdsdev || {
 			error_noexit "tunefs.lustre before mounting the MDT"
 			return 1
 		}
 
-		echo "mount new MDT...."
-		$r2 mkdir -p $tmp/mnt/mdt1
-		$r2 mount -t lustre -o $mopts $(mdsdevname 2) $tmp/mnt/mdt1 || {
+		echo "mount new MDT....$fs2mdsdev"
+		$r mkdir -p $tmp/mnt/mdt1
+		$r mount -t lustre -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
 			error_noexit "mount mdt1 failed"
 			return 1
 		}
@@ -1804,7 +1810,7 @@ t32_test() {
 		shall_cleanup_lustre=false
 	else
 		if [ "$dne_upgrade" != "no" ]; then
-			$r2 umount -d $tmp/mnt/mdt1 || {
+			$r umount -d $tmp/mnt/mdt1 || {
 				error_noexit "Unmounting the MDT2"
 				return 1
 			}
