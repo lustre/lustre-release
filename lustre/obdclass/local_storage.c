@@ -783,22 +783,12 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		rc = dt_record_write(env, o, &dti->dti_lb, &dti->dti_off, th);
 		if (rc)
 			GOTO(out_lock, rc);
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 90, 0)
-#error "fix this before release"
-#endif
-		/*
-		 * there is one technical debt left in Orion:
-		 * proper hanlding of named vs no-name objects.
-		 * Llog objects have name always as they are placed in O/d/...
-		 */
-		if (fid_seq(&dti->dti_fid) != FID_SEQ_LLOG) {
-			rc = dt_insert(env, root,
-				       (const struct dt_rec *)&dti->dti_fid,
-				       (const struct dt_key *)dti->dti_buf,
-				       th, BYPASS_CAPA, 1);
-			if (rc)
-				GOTO(out_lock, rc);
-		}
+		rc = dt_insert(env, root,
+			       (const struct dt_rec *)&dti->dti_fid,
+			       (const struct dt_key *)dti->dti_buf,
+			       th, BYPASS_CAPA, 1);
+		if (rc)
+			GOTO(out_lock, rc);
 out_lock:
 		dt_write_unlock(env, o);
 		dt_write_unlock(env, root);

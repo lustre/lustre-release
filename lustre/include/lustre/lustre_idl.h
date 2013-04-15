@@ -425,10 +425,11 @@ static inline obd_id fid_ver_oid(const struct lu_fid *fid)
  */
 enum fid_seq {
 	FID_SEQ_OST_MDT0	= 0,
-	FID_SEQ_LLOG		= 1,
+	FID_SEQ_LLOG		= 1, /* unnamed llogs */
 	FID_SEQ_ECHO		= 2,
 	FID_SEQ_OST_MDT1	= 3,
 	FID_SEQ_OST_MAX		= 9, /* Max MDT count before OST_on_FID */
+	FID_SEQ_LLOG_NAME	= 10, /* named llogs */
 	FID_SEQ_RSVD		= 11,
 	FID_SEQ_IGIF		= 12,
 	FID_SEQ_IGIF_MAX	= 0x0ffffffffULL,
@@ -500,7 +501,8 @@ static inline int fid_seq_is_llog(obd_seq seq)
 
 static inline int fid_is_llog(const struct lu_fid *fid)
 {
-	return fid_seq_is_llog(fid_seq(fid));
+	/* file with OID == 1 is not llog but contains last oid */
+	return fid_seq_is_llog(fid_seq(fid)) && fid_oid(fid) > 1;
 }
 
 static inline int fid_seq_is_rsvd(const __u64 seq)
