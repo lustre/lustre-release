@@ -2153,35 +2153,35 @@ static int ost_io_hpreq_handler(struct ptlrpc_request *req)
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 int ost_handle(struct ptlrpc_request *req)
 {
-        struct obd_trans_info trans_info = { 0, };
-        struct obd_trans_info *oti = &trans_info;
-        int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
-        struct obd_device *obd = NULL;
-        ENTRY;
+	struct obd_trans_info trans_info = { 0, };
+	struct obd_trans_info *oti = &trans_info;
+	int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
+	struct obd_device *obd = NULL;
+	__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+	ENTRY;
 
-        /* OST module is kept between remounts, but the last reference
-         * to specific module (say, osd or ofd) kills all related keys
-         * from the environment. so we have to refill it until the root
-         * cause is fixed properly */
-        lu_env_refill(req->rq_svc_thread->t_env);
+	/* OST module is kept between remounts, but the last reference
+	 * to specific module (say, osd or ofd) kills all related keys
+	 * from the environment. so we have to refill it until the root
+	 * cause is fixed properly */
+	lu_env_refill(req->rq_svc_thread->t_env);
 
-        LASSERT(current->journal_info == NULL);
+	LASSERT(current->journal_info == NULL);
 
-        /* primordial rpcs don't affect server recovery */
-        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
-        case SEC_CTX_INIT:
-        case SEC_CTX_INIT_CONT:
-        case SEC_CTX_FINI:
-                GOTO(out, rc = 0);
-        }
+	/* primordial rpcs don't affect server recovery */
+	switch (opc) {
+	case SEC_CTX_INIT:
+	case SEC_CTX_INIT_CONT:
+	case SEC_CTX_FINI:
+		GOTO(out, rc = 0);
+	}
 
-        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
+	req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
-        if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
-                if (!class_connected_export(req->rq_export)) {
-                        CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
-                               lustre_msg_get_opc(req->rq_reqmsg),
-                               libcfs_id2str(req->rq_peer));
+	if (opc != OST_CONNECT) {
+		if (!class_connected_export(req->rq_export)) {
+			CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
+			       opc, libcfs_id2str(req->rq_peer));
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
@@ -2212,7 +2212,7 @@ int ost_handle(struct ptlrpc_request *req)
 	    (exp_connect_flags(req->rq_export) & OBD_CONNECT_JOBSTATS))
 		oti->oti_jobid = lustre_msg_get_jobid(req->rq_reqmsg);
 
-        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+	switch (opc) {
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
                 req_capsule_set(&req->rq_pill, &RQF_OST_CONNECT);
@@ -2414,8 +2414,7 @@ int ost_handle(struct ptlrpc_request *req)
                 CERROR("callbacks should not happen on OST\n");
                 /* fall through */
         default:
-                CERROR("Unexpected opcode %d\n",
-                       lustre_msg_get_opc(req->rq_reqmsg));
+		CERROR("Unexpected opcode %d\n", opc);
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
                 RETURN(rc);
@@ -2425,7 +2424,7 @@ int ost_handle(struct ptlrpc_request *req)
 
         EXIT;
         /* If we're DISCONNECTing, the export_data is already freed */
-        if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != OST_DISCONNECT)
+	if (!rc && opc != OST_DISCONNECT)
                 target_committed_to_req(req);
 
 out:
