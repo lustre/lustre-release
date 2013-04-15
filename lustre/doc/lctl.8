@@ -284,6 +284,54 @@ Unregister an existing changelog user.  If the user's "clear" record number
 is the minimum for the device, changelog records will be purged until the
 next minimum.  
 .PP
+.SS LFSCK
+An on-line Lustre consistency check and repair tool.
+.TP
+.B lfsck_start \fR<-M | --device MDT_device>
+     \fR[-e | --error <error_handle>]
+     \fR[-h | --help]
+     \fR[-n | --dryrun <switch>]
+     \fR[-r | --reset]
+     \fR[-s | --speed <speed_limit>]
+     \fR[-t | --type <lfsck_type[,lfsck_type...]>]
+.br
+Start LFSCK on the specified MDT device with specified parameters.
+.TP
+  -M, --device <MDT_device>
+The MDT device to check.
+.TP
+  -e, --error <error_handle>
+With error_handle as 'abort' LFSCK will stop if a repair is impossible. If no
+value is specified, the saved value will be used if resuming from a checkpoint.
+Otherwise the default behavior is to 'continue' if a rapair is impossible.
+.TP
+  -h, --help
+Show this help.
+.TP
+  -n, --dryrun <on|off>
+Perform a trial run with no changes made.
+.TP
+  -r, --reset
+Set the current position of LFSCK progress to the beginning of the specified
+MDT.
+.TP
+  -s, --speed <speed_limit>
+Set the upper limit of LFSCK processing in objects per second. If no value is
+specified the saved value is used (if resuming from a check point). Otherwise
+the default value of 0 is used. 0 means run as fast as possible.
+.TP
+  -t, --type <lfsck_type[,lfsck_type...]>
+Specify the type of LFSCK to execute. By default, OI Scrub is executed.
+Alternative types include FID-in-dirent and linkEA (namespace).
+.TP
+.B lfsck_stop  \fR<-M | --device MDT_device> [-h | --help]
+Stop LFSCK on the specified MDT device.
+.TP
+  -M, --device <MDT_device>
+The MDT device.
+.TP
+  -h, --help
+Show this help.
 .SS Debug
 .TP 
 .BI debug_daemon 
