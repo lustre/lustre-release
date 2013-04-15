@@ -2542,29 +2542,29 @@ struct mdt_rec_setxattr {
  * rr_padding_x fields, then update lustre_swab_mdt_rec_reint() also.
  */
 struct mdt_rec_reint {
-        __u32           rr_opcode;
-        __u32           rr_cap;
-        __u32           rr_fsuid;
-        __u32           rr_fsuid_h;
-        __u32           rr_fsgid;
-        __u32           rr_fsgid_h;
-        __u32           rr_suppgid1;
-        __u32           rr_suppgid1_h;
-        __u32           rr_suppgid2;
-        __u32           rr_suppgid2_h;
-        struct lu_fid   rr_fid1;
-        struct lu_fid   rr_fid2;
-        obd_time        rr_mtime;
-        obd_time        rr_atime;
-        obd_time        rr_ctime;
-        __u64           rr_size;
-        __u64           rr_blocks;
-        __u32           rr_bias;
-        __u32           rr_mode;
-        __u32           rr_flags;
-        __u32           rr_padding_2; /* also fix lustre_swab_mdt_rec_reint */
-        __u32           rr_padding_3; /* also fix lustre_swab_mdt_rec_reint */
-        __u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
+	__u32           rr_opcode;
+	__u32           rr_cap;
+	__u32           rr_fsuid;
+	__u32           rr_fsuid_h;
+	__u32           rr_fsgid;
+	__u32           rr_fsgid_h;
+	__u32           rr_suppgid1;
+	__u32           rr_suppgid1_h;
+	__u32           rr_suppgid2;
+	__u32           rr_suppgid2_h;
+	struct lu_fid   rr_fid1;
+	struct lu_fid   rr_fid2;
+	obd_time        rr_mtime;
+	obd_time        rr_atime;
+	obd_time        rr_ctime;
+	__u64           rr_size;
+	__u64           rr_blocks;
+	__u32           rr_bias;
+	__u32           rr_mode;
+	__u32           rr_flags;
+	__u32           rr_flags_h;
+	__u32           rr_umask;
+	__u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
 };
 
 extern void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);

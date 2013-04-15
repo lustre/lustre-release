@@ -1173,8 +1173,8 @@ check_mdt_rec_reint(void)
 	CHECK_MEMBER(mdt_rec_reint, rr_bias);
 	CHECK_MEMBER(mdt_rec_reint, rr_mode);
 	CHECK_MEMBER(mdt_rec_reint, rr_flags);
-	CHECK_MEMBER(mdt_rec_reint, rr_padding_2);
-	CHECK_MEMBER(mdt_rec_reint, rr_padding_3);
+	CHECK_MEMBER(mdt_rec_reint, rr_flags_h);
+	CHECK_MEMBER(mdt_rec_reint, rr_umask);
 	CHECK_MEMBER(mdt_rec_reint, rr_padding_4);
 }
 
