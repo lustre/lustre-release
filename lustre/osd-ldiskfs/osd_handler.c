@@ -3309,11 +3309,38 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 			/* If Fid is not in dentry, try to get it from LMA */
 			if (rc == -ENODATA) {
 				struct osd_inode_id *id;
+				struct inode *inode;
 
-				id = &osd_oti_get(env)->oti_id;
-				rc = osd_ea_fid_get(env, obj,
-						    le32_to_cpu(de->inode),
-						    fid, id);
+				/* Before trying to get fid from the inode,
+				 * check whether the inode is valid.
+				 *
+				 * If the inode has been deleted, do not go
+				 * ahead to do osd_ea_fid_get, which will set
+				 * the inode to bad inode, which might cause
+				 * the inode to be deleted uncorrectly */
+				inode = ldiskfs_iget(osd_sb(osd),
+						     le32_to_cpu(de->inode));
+				if (IS_ERR(inode)) {
+					CDEBUG(D_INODE, "%s: "DFID"get inode"
+					       "error.\n", osd_name(osd),
+					       PFID(fid));
+					rc = PTR_ERR(inode);
+				} else {
+					if (likely(inode->i_nlink != 0)) {
+						id = &osd_oti_get(env)->oti_id;
+						rc = osd_ea_fid_get(env, obj,
+						        le32_to_cpu(de->inode),
+								    fid, id);
+					} else {
+						CDEBUG(D_INFO, "%s: %u "DFID
+						       "deleted.\n",
+						       osd_name(osd),
+						       le32_to_cpu(de->inode),
+						       PFID(fid));
+						rc = -ESTALE;
+					}
+					iput(inode);
+				}
 			}
 			if (rc == 0 &&
 			    unlikely(osd_remote_fid(env, osd, fid)))

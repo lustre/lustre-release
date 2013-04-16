@@ -1822,6 +1822,7 @@ t32_test() {
 			return 1
 		}
 		shall_cleanup_mdt=false
+
 		$r umount -d $tmp/mnt/ost || {
 			error_noexit "Unmounting the OST"
 			return 1
