@@ -434,8 +434,16 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                         GOTO(out_unlock, rc);
         }
 
+	/* Ensure constant striping during chown(). See LU-2789. */
+	if (ma->ma_attr.la_valid & (LA_UID|LA_GID))
+		mutex_lock(&mo->mot_lov_mutex);
+
         /* all attrs are packed into mti_attr in unpack_setattr */
         rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
+
+	if (ma->ma_attr.la_valid & (LA_UID|LA_GID))
+		mutex_unlock(&mo->mot_lov_mutex);
+
         if (rc != 0)
                 GOTO(out_unlock, rc);
 
