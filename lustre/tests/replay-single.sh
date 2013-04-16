@@ -908,8 +908,8 @@ run_test 43 "mds osc import failure during recovery; don't LBUG"
 test_44a() { # was test_44
 	local at_max_saved=0
 
-	local mdcdev=$($LCTL get_param -n devices |
-		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
+	local mdcdev=$($LCTL dl |
+		awk "/${FSNAME}-MDT0000-mdc-/ {if (\$2 == \"UP\") {print \$1}}")
 	[ "$mdcdev" ] || return 2
 	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
 		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
@@ -937,8 +937,8 @@ test_44a() { # was test_44
 run_test 44a "race in target handle connect"
 
 test_44b() {
-	local mdcdev=$($LCTL get_param -n devices |
-		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
+	local mdcdev=$($LCTL dl |
+		awk "/${FSNAME}-MDT0000-mdc-/ {if (\$2 == \"UP\") {print \$1}}")
 	[ "$mdcdev" ] || return 2
 	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
 		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
