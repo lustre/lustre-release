@@ -226,7 +226,7 @@ case x$with_sysio in
 esac
 
 # We have to configure even if we don't build here for make dist to work
-AC_CONFIG_SUBDIRS(libsysio)
+AC_CONFIG_SUBDIRS([libsysio])
 ])
 
 #
@@ -265,7 +265,7 @@ case x$with_lustre_iokit in
 esac
 AC_SUBST(LUSTREIOKIT_SUBDIR)
 # We have to configure even if we don't build here for make dist to work
-AC_CONFIG_SUBDIRS(lustre-iokit)
+AC_CONFIG_SUBDIRS([lustre-iokit])
 AM_CONDITIONAL(BUILD_LUSTREIOKIT, [test "x$with_lustre_iokit" != xno])
 ])
 

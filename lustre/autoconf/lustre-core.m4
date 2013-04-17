@@ -1609,9 +1609,11 @@ AC_DEFUN([LC_QUOTA],
 [#check global
 LC_CONFIG_QUOTA
 #check for utils
+if test x$enable_quota != xno -a x$enable_utils != xno; then
 AC_CHECK_HEADER(sys/quota.h,
                 [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
                 [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
+fi
 ])
 
 #

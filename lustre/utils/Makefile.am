@@ -33,7 +33,6 @@ endif
 bin_PROGRAMS = lfs req_layout
 bin_SCRIPTS = $(bin_scripts)
 sbin_SCRIPTS = $(sbin_scripts)
-endif # UTILS
 
 lib_LIBRARIES = liblustreapi.a
 if LDISKFS_ENABLED
@@ -108,11 +107,6 @@ if LDISKFS_ENABLED
 libiam_a_SOURCES = libiam.c
 endif
 
-wirecheck_SOURCES = wirecheck.c
-wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
-
-wiretest_SOURCES = wiretest.c
-
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 req_layout_SOURCES = req-layout.c
@@ -172,6 +166,12 @@ l_getidentity_LDADD := $(LIBPTLCTL)
 l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
 
 ltrack_stats_SOURCES = ltrack_stats.c
+endif # UTILS
+
+wirecheck_SOURCES = wirecheck.c
+wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
+
+wiretest_SOURCES = wiretest.c
 
 lhsmtool_posix_SOURCES = lhsmtool_posix.c
 lhsmtool_posix_LDADD := liblustreapi.a $(PTHREAD_LIBS)

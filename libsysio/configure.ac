@@ -101,7 +101,7 @@ AC_ARG_WITH(automount,
   AC_HELP_STRING([--with-automount@<:@=<automount-file-name>@:>@],
     [with automounts @<:@<automount-file-name>=.mount@:>@]),
   [	if test x${withval} = xyes; then
-	 AUTOMOUNT=-DAUTOMOUNT_FILE_NAME="\\\".mount\\\"" 
+	 AUTOMOUNT=-DAUTOMOUNT_FILE_NAME="\\\".mount\\\""
 	elif test x${withval} != x; then
 	 AUTOMOUNT=-DAUTOMOUNT_FILE_NAME="\\\"${withval}\\\""
 	fi])
@@ -153,7 +153,7 @@ AC_SUBST(TRACING)
 
 AC_ARG_WITH(cplant_yod,
    AC_HELP_STRING([--with-cplant-yod],[build cplant yod I/O driver]),
-   [	case "${withval}" in	
+   [	case "${withval}" in
 	yes) if test x${with_stdfd_dev} != xyes; then
 		with_stdfd_dev=yes
 		AM_CONDITIONAL(WITH_STDFD_DEV, test x$with_stdfd_dev = xyes)
@@ -171,7 +171,7 @@ AC_ARG_WITH(cplant_tests,
 	yes) AC_MSG_ERROR(need path to compiler for --with-cplant-tests);;
 	no)  with_cplant_tests=no;;
 	*) CC=${withval}
-	   CCDEPMODE=${CC} 
+	   CCDEPMODE=${CC}
 	   CPP="${CC} -E"
 	   AC_CHECK_FILE(${CC},
 		[ if test x${with_cplant_yod} != xyes; then
@@ -341,8 +341,8 @@ if test x$sysio_largefile64_source_required = xyes; then
 	AC_DEFINE(_LARGEFILE64_SOURCE)
 fi
 
-# Alpha linux defines 
-# 
+# Alpha linux defines
+#
 AC_MSG_CHECKING(for alpha linux)
 alpha_linux_env=no
 if test `expr ${machine} : "alpha"` = 5 && \
@@ -353,7 +353,7 @@ fi
 AC_MSG_RESULT($alpha_linux_env)
 AM_CONDITIONAL(TEST_ALPHA_ARG, test x$alpha_linux_env = xyes)
 
-# Check for __st_ino 
+# Check for __st_ino
 #
 AC_MSG_CHECKING(for __st_ino)
 AC_TRY_COMPILE([
@@ -367,7 +367,7 @@ if test x$have__st_ino = xyes; then
 	AC_DEFINE(HAVE__ST_INO)
 fi
 
-# Check for st_gen 
+# Check for st_gen
 #
 AC_MSG_CHECKING(for st_gen)
 AC_TRY_COMPILE([
@@ -419,7 +419,7 @@ int scandir(const char *dir,
 ],[
 ], [
 AC_DEFINE(HAVE_POSIX2008_SCANDIR, 1, [POSIX 2008 scandir])
-AC_MSG_RESULT(yes) 
+AC_MSG_RESULT(yes)
 ],[
 AC_MSG_RESULT(no)
 ])
@@ -464,7 +464,7 @@ int scandir(const char *dir,
 ],[
 ], [
 AC_DEFINE(HAVE_POSIX2008_SCANDIR, 1, [POSIX 2008 scandir])
-AC_MSG_RESULT(yes) 
+AC_MSG_RESULT(yes)
 ],[
 AC_MSG_RESULT(no)
 ])

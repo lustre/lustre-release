@@ -1,6 +1,7 @@
-AC_INIT
+AC_PREREQ([2.57])
+AC_INIT([lustre-iokit],[2.3.65], [http://bugs.hpdd.intel.com/])
 AC_CONFIG_AUX_DIR([.])
-AM_INIT_AUTOMAKE(lustre-iokit,1.4.0)
+AM_INIT_AUTOMAKE
 AC_PATH_PROGS(BASH, bash)
 AC_PATH_PROGS(PERL, perl)
 RELEASE="1"
