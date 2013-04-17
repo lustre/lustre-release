@@ -1017,7 +1017,7 @@ int ldiskfs_label_lustre(struct mount_opts *mop)
 	int rc;
 
 	snprintf(label_cmd, sizeof(label_cmd),
-		 TUNE2FS" -f -L %s %s >/dev/null 2>&1",
+		 TUNE2FS" -f -L '%s' '%s' >/dev/null 2>&1",
 		 mop->mo_ldd.ldd_svname, mop->mo_source);
 	rc = run_command(label_cmd, sizeof(label_cmd));
 
