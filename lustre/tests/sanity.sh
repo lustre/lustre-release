@@ -1270,7 +1270,7 @@ run_test 27e "setstripe existing file (should return error) ======"
 test_27f() {
 	test_mkdir -p $DIR/d27
 	$SETSTRIPE -S 100 -i 0 -c 1 $DIR/d27/fbad && error "setstripe failed"
-	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
+	dd if=/dev/zero of=$DIR/d27/fbad bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "$GETSTRIPE failed"
 }
 run_test 27f "setstripe with bad stripe size (should return error)"
