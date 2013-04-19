@@ -3664,7 +3664,7 @@ test_66() {
 	stop_mds || error "stopping mds failed"
 
 	if combined_mgs_mds; then
-		start_mds "-o nosvc" ||
+		start_mdt 1 "-o nosvc" ||
 			error "starting mds with nosvc option failed"
 	fi
 
@@ -3963,10 +3963,14 @@ test_72() { #LU-2634
 		skip "ldiskfs only test" && return
 
 	#tune MDT with "-O extents"
-	add $SINGLEMDS \
-		$(mkfs_opts $SINGLEMDS ${mdsdev}) --reformat $mdsdev ||
-			error "add $SINGLEMDS failed"
-	$TUNE2FS -O extents $mdsdev
+
+	for num in $(seq $MDSCOUNT); do
+		add mds${num} $(mkfs_opts mds$num $(mdsdevname $num)) \
+		--reformat $(mdsdevname $num) $(mdsvdevname $num) ||
+		error "add mds $num failed"
+		$TUNE2FS -O extents $(mdsdevname $num)
+	done
+
 	add ost1 $(mkfs_opts ost1 $ostdev) --reformat $ostdev ||
 		error "add $ostdev failed"
 	start_mgsmds || error "start mds failed"

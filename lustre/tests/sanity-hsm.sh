@@ -37,6 +37,10 @@ FAIL_ON_ERROR=false
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 check_and_setup_lustre
 
+if [ $MDSCOUNT -ge 2 ]; then
+	skip_env "Only run with single MDT for now" && exit
+fi
+
 if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.61) ]; then
 	skip_env "Need MDS version at least 2.3.61" && exit
 fi

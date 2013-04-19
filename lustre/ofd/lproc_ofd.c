@@ -191,7 +191,14 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 
 	read_lock(&ofd->ofd_seq_list_lock);
 	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
-		rc = snprintf(page, count, DOSTID"\n", POSTID(&oseq->os_oi));
+		__u64 seq;
+
+		seq = ostid_seq(&oseq->os_oi) == 0 ?
+		      fid_idif_seq(ostid_id(&oseq->os_oi),
+				   ofd->ofd_lut.lut_lsd.lsd_osd_index) :
+		      ostid_seq(&oseq->os_oi);
+		rc = snprintf(page, count, DOSTID"\n", seq,
+			      ostid_id(&oseq->os_oi));
 		if (rc < 0) {
 			retval = rc;
 			break;

@@ -1882,7 +1882,8 @@ test_27C() { #LU-2871
 		# check the layout
 		for j in $(seq 0 $((OSTCOUNT - 1))); do
 			index=$(((i + j) % OSTCOUNT))
-			[ ${ost_idx[$j]} -eq $index ] || error
+			[ ${ost_idx[$j]} -eq $index ] ||
+				error "$j:${ost_idx[$j]} != $index"
 		done
 	done
 }
@@ -3788,28 +3789,47 @@ test_53() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	local param
+	local param_seq
 	local ostname
 	local mds_last
+	local mds_last_seq
 	local ost_last
+	local ost_last_seq
+	local ost_last_id
 	local ostnum
 	local node
+	local found=0
 
 	# only test MDT0000
         local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS)
         for value in $(do_facet $SINGLEMDS lctl get_param osc.$mdtosc.prealloc_last_id) ; do
-                param=`echo ${value[0]} | cut -d "=" -f1`
-                ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
-                mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)
+                param=$(echo ${value[0]} | cut -d "=" -f1)
+                ostname=$(echo $param | cut -d "." -f2 | cut -d - -f 1-2)
+                param_seq=$(echo ${param} |
+			    sed -e s/prealloc_last_id/prealloc_last_seq/g)
+		mds_last_seq=$(do_facet $SINGLEMDS lctl get_param -n $param_seq)
+		mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)
+
 		ostnum=$(index_from_ostuuid ${ostname}_UUID)
 		node=$(facet_active_host ost$((ostnum+1)))
 		param="obdfilter.$ostname.last_id"
-		ost_last=$(do_node $node lctl get_param -n $param | head -n 1 |
-			   awk -F':' '{print $2}')
-                echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
-                if [ $ost_last != $mds_last ]; then
-                    error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
-                fi
+		for ost_last in $(do_node $node lctl get_param -n $param) ; do
+			echo "$ostname.last_id=$ost_last ;MDS.last_id=$mds_last"
+			ost_last_id=$(echo $ost_last | awk -F':' '{print $2}' |
+				      sed -e "s/^0x//g")
+			ost_last_seq=$(echo $ost_last | awk -F':' '{print $1}')
+			if [ $ost_last_seq = $mds_last_seq ]; then
+				if [ $ost_last_id != $mds_last ]; then
+					error "$ost_last != $mds_last_id"
+				else
+					found=1
+					break
+				fi
+			fi
+		done
         done
+	[ $found = 0 ] && error "can not match last_seq/last_id for $mdtosc"
+	return 0
 }
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
@@ -7803,6 +7823,9 @@ test_130b() {
 	[ "$OSTCOUNT" -lt "2" ] &&
 		skip_env "skipping FIEMAP on 2-stripe file test" && return
 
+	[ "$OSTCOUNT" -ge "10" ] &&
+		skip_env "skipping FIEMAP with >= 10 OSTs" && return
+
 	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
 		return
@@ -7858,6 +7881,9 @@ run_test 130b "FIEMAP (2-stripe file)"
 test_130c() {
 	[ "$OSTCOUNT" -lt "2" ] &&
 		skip_env "skipping FIEMAP on 2-stripe file" && return
+
+	[ "$OSTCOUNT" -ge "10" ] &&
+		skip_env "skipping FIEMAP with >= 10 OSTs" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
@@ -7918,6 +7944,9 @@ run_test 130c "FIEMAP (2-stripe file with hole)"
 test_130d() {
 	[ "$OSTCOUNT" -lt "3" ] && skip_env "skipping FIEMAP on N-stripe file test" && return
 
+	[ "$OSTCOUNT" -ge "10" ] &&
+		skip_env "skipping FIEMAP with >= 10 OSTs" && return
+
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
@@ -7968,6 +7997,9 @@ run_test 130d "FIEMAP (N-stripe file)"
 
 test_130e() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping continuation FIEMAP test" && return
+
+	[ "$OSTCOUNT" -ge "10" ] &&
+		skip_env "skipping FIEMAP with >= 10 OSTs" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
