@@ -123,14 +123,14 @@ static struct cl_object *lov_sub_find(const struct lu_env *env,
 }
 
 static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
-                        struct cl_object *stripe,
-                        struct lov_layout_raid0 *r0, int idx)
+			struct cl_object *stripe, struct lov_layout_raid0 *r0,
+			int idx)
 {
-        struct cl_object_header *hdr;
-        struct cl_object_header *subhdr;
-        struct cl_object_header *parent;
-        struct lov_oinfo        *oinfo;
-        int result;
+	struct cl_object_header *hdr;
+	struct cl_object_header *subhdr;
+	struct cl_object_header *parent;
+	struct lov_oinfo        *oinfo;
+	int result;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LOV_INIT)) {
 		/* For sanity:test_206.
@@ -143,9 +143,8 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 		return -EIO;
 	}
 
-        hdr    = cl_object_header(lov2cl(lov));
-        subhdr = cl_object_header(stripe);
-        parent = subhdr->coh_parent;
+	hdr    = cl_object_header(lov2cl(lov));
+	subhdr = cl_object_header(stripe);
 
 	oinfo = lov->lo_lsm->lsm_oinfo[idx];
 	CDEBUG(D_INODE, DFID"@%p[%d] -> "DFID"@%p: ostid: "DOSTID
@@ -154,19 +153,24 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 	       PFID(&hdr->coh_lu.loh_fid), hdr, POSTID(&oinfo->loi_oi),
 	       oinfo->loi_ost_idx, oinfo->loi_ost_gen);
 
-        if (parent == NULL) {
-                subhdr->coh_parent = hdr;
-                subhdr->coh_nesting = hdr->coh_nesting + 1;
-                lu_object_ref_add(&stripe->co_lu, "lov-parent", lov);
-                r0->lo_sub[idx] = cl2lovsub(stripe);
-                r0->lo_sub[idx]->lso_super = lov;
-                r0->lo_sub[idx]->lso_index = idx;
-                result = 0;
-        } else {
+	/* reuse ->coh_attr_guard to protect coh_parent change */
+	spin_lock(&subhdr->coh_attr_guard);
+	parent = subhdr->coh_parent;
+	if (parent == NULL) {
+		subhdr->coh_parent = hdr;
+		spin_unlock(&subhdr->coh_attr_guard);
+		subhdr->coh_nesting = hdr->coh_nesting + 1;
+		lu_object_ref_add(&stripe->co_lu, "lov-parent", lov);
+		r0->lo_sub[idx] = cl2lovsub(stripe);
+		r0->lo_sub[idx]->lso_super = lov;
+		r0->lo_sub[idx]->lso_index = idx;
+		result = 0;
+	} else {
 		struct lu_object  *old_obj;
 		struct lov_object *old_lov;
 		unsigned int mask = D_INODE;
 
+		spin_unlock(&subhdr->coh_attr_guard);
 		old_obj = lu_object_locate(&parent->coh_lu, &lov_device_type);
 		LASSERT(old_obj != NULL);
 		old_lov = cl2lov(lu2cl(old_obj));
@@ -185,8 +189,8 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 		LU_OBJECT_DEBUG(mask, env, old_obj, "owned.\n");
 		LU_OBJECT_HEADER(mask, env, lov2lu(lov), "try to own.\n");
 		cl_object_put(env, stripe);
-        }
-        return result;
+	}
+	return result;
 }
 
 static int lov_init_raid0(const struct lu_env *env,
