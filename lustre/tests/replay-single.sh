@@ -922,7 +922,8 @@ test_44a() { # was test_44
 
 	for i in `seq 1 10`; do
 		echo "$i of 10 ($(date +%s))"
-		do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+		do_facet $SINGLEMDS \
+			"lctl get_param -n md[ts].*.mdt.timeouts | grep service"
 #define OBD_FAIL_TGT_CONN_RACE     0x701
 		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
                 # lctl below may fail, it is valid case
@@ -944,7 +945,8 @@ test_44b() {
 
 	for i in `seq 1 10`; do
 		echo "$i of 10 ($(date +%s))"
-		do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+		do_facet $SINGLEMDS \
+			"lctl get_param -n md[ts].*.mdt.timeouts | grep service"
         #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
 		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
         # lctl below may fail, it is valid case
