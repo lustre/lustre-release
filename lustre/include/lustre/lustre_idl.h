@@ -837,6 +837,7 @@ struct lu_seq_range {
         __u32 lsr_padding;
 };
 
+extern void lustre_swab_lu_seq_range(struct lu_seq_range *range);
 /**
  * returns  width of given range \a r
  */

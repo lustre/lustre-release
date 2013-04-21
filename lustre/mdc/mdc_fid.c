@@ -103,8 +103,9 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
         if (rc)
                 GOTO(out_req, rc);
 
-        out = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                            sizeof(struct lu_seq_range));
+        out = lustre_swab_repbuf(req, REPLY_REC_OFF,
+                                 sizeof(struct lu_seq_range),
+                                 lustre_swab_lu_seq_range);
         *output = *out;
 
         if (!range_is_sane(output)) {

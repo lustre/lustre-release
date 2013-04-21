@@ -107,6 +107,14 @@ void lustre_swab_lu_fid(struct lu_fid *fid)
 }
 EXPORT_SYMBOL(lustre_swab_lu_fid);
 
+void lustre_swab_lu_seq_range(struct lu_seq_range *range)
+{
+        __swab64s(&range->lsr_start);
+        __swab64s(&range->lsr_end);
+        __swab32s(&range->lsr_mdt);
+}
+EXPORT_SYMBOL(lustre_swab_lu_seq_range);
+
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 {
         __swab32s(&rec->lrh_len);
