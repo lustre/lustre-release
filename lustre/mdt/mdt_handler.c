@@ -3720,6 +3720,9 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			     __u64 flags)
 {
 	struct layout_intent *layout;
+	struct lu_fid *fid;
+	struct mdt_object *obj = NULL;
+	struct md_object *child = NULL;
 	int rc;
 	ENTRY;
 
@@ -3728,6 +3731,26 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			opcode);
 		RETURN(-EINVAL);
 	}
+
+	fid = &info->mti_tmp_fid2;
+	fid_build_from_res_name(fid, &(*lockp)->l_resource->lr_name);
+
+	obj = mdt_object_find(info->mti_env, info->mti_mdt, fid);
+	if (IS_ERR(obj))
+		RETURN(PTR_ERR(obj));
+
+	if (mdt_object_exists(obj) && !mdt_object_remote(obj)) {
+		child = mdt_object_child(obj);
+
+		/* get the length of lsm */
+		rc = mo_xattr_get(info->mti_env, child, &LU_BUF_NULL,
+				  XATTR_NAME_LOV);
+
+		if (rc > info->mti_mdt->mdt_max_mdsize)
+			info->mti_mdt->mdt_max_mdsize = rc;
+	}
+
+	mdt_object_put(info->mti_env, obj);
 
 	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
 	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
