@@ -198,7 +198,7 @@ static uint64_t udmu_objs_count_estimate(uint64_t refdbytes,
 	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
 
 	est_refdblocks = (refdbytes >> SPA_MAXBLOCKSHIFT) +
-		(OSD_DNODE_EST_COUNT << OSD_DNODE_EST_BLKSHIFT);
+			 (OSD_DNODE_EST_COUNT >> OSD_DNODE_EST_BLKSHIFT);
 	est_usedobjs   = usedobjs + OSD_DNODE_EST_COUNT;
 
 	/* Average space/dnode more than maximum dnode size, use max dnode
