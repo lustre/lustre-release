@@ -618,10 +618,6 @@ int init_obdclass(void)
 	err = lu_ucred_global_init();
 	if (err != 0)
 		return err;
-
-	err = llo_global_init();
-	if (err != 0)
-		return err;
 #endif
 
 	err = llog_info_init();
@@ -702,7 +698,6 @@ static void cleanup_obdclass(void)
         }
 	llog_info_fini();
 #ifdef HAVE_SERVER_SUPPORT
-	llo_global_fini();
 	lu_ucred_global_fini();
 	dt_global_fini();
 #endif

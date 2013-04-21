@@ -5635,15 +5635,6 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	int		   result = 0;
 	ENTRY;
 
-	if (dev->ld_site && lu_device_is_md(dev->ld_site->ls_top_dev)) {
-		/* MDT/MDD still use old infrastructure to create
-		 * special files */
-		result = llo_local_objects_setup(env, lu2md_dev(pdev),
-						 lu2dt_dev(dev));
-		if (result)
-			RETURN(result);
-	}
-
 	if (osd->od_quota_slave != NULL)
 		/* set up quota slave objects */
 		result = qsd_prepare(env, osd->od_quota_slave);
