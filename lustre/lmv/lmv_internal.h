@@ -123,7 +123,8 @@ lmv_get_target(struct lmv_obd *lmv, mdsno_t mds)
 		if (lmv->tgts[i]->ltd_idx == mds)
 			return lmv->tgts[i];
 	}
-	return NULL;
+
+	return ERR_PTR(-ENODEV);
 }
 
 static inline struct lmv_tgt_desc *

@@ -943,7 +943,13 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		struct lmv_tgt_desc	*tgt1, *tgt2;
 
 		tgt1 = lmv_find_target(lmv, &op_data->op_fid1);
+		if (IS_ERR(tgt1))
+			RETURN(PTR_ERR(tgt1));
+
 		tgt2 = lmv_find_target(lmv, &op_data->op_fid2);
+		if (IS_ERR(tgt2))
+			RETURN(PTR_ERR(tgt2));
+
 		if ((tgt1->ltd_exp == NULL) || (tgt2->ltd_exp == NULL))
 			RETURN(-EINVAL);
 
@@ -1079,21 +1085,23 @@ static int lmv_placement_policy(struct obd_device *obd,
 }
 
 int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
-                    mdsno_t mds)
+		    mdsno_t mds)
 {
-        struct lmv_tgt_desc *tgt;
-        int                  rc;
-        ENTRY;
+	struct lmv_tgt_desc	*tgt;
+	int			 rc;
+	ENTRY;
 
-        tgt = lmv_get_target(lmv, mds);
+	tgt = lmv_get_target(lmv, mds);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
 
-        /*
-         * New seq alloc and FLD setup should be atomic. Otherwise we may find
-         * on server that seq in new allocated fid is not yet known.
-         */
+	/*
+	 * New seq alloc and FLD setup should be atomic. Otherwise we may find
+	 * on server that seq in new allocated fid is not yet known.
+	 */
 	mutex_lock(&tgt->ltd_fid_mutex);
 
-	if (tgt == NULL || tgt->ltd_active == 0 || tgt->ltd_exp == NULL)
+	if (tgt->ltd_active == 0 || tgt->ltd_exp == NULL)
 		GOTO(out, rc = -ENODEV);
 
         /*
@@ -1491,6 +1499,9 @@ struct lmv_tgt_desc
 	struct lmv_tgt_desc *tgt;
 
 	tgt = lmv_find_target(lmv, fid);
+	if (IS_ERR(tgt))
+		return tgt;
+
 	op_data->op_mds = tgt->ltd_idx;
 
 	return tgt;
