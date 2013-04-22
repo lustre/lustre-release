@@ -1005,7 +1005,6 @@ static int osd_scrub_main(void *args)
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(post, rc = 0);
 
-		LASSERT(scrub->os_pos_current >= ooc->ooc_pos_preload);
 		scrub->os_pos_current = ooc->ooc_pos_preload;
 	}
 
@@ -1922,7 +1921,7 @@ static __u64 osd_otable_it_store(const struct lu_env *env,
 	struct osd_otable_cache *ooc = &it->ooi_cache;
 	__u64			 hash;
 
-	if (it->ooi_user_ready)
+	if (!it->ooi_user_ready)
 		hash = ooc->ooc_pos_preload;
 	else if (likely(ooc->ooc_consumer_idx != -1))
 		hash = ooc->ooc_cache[ooc->ooc_consumer_idx].oic_lid.oii_ino;
@@ -1951,10 +1950,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 	if (hash > OSD_OTABLE_MAX_HASH)
 		hash = OSD_OTABLE_MAX_HASH;
 
-	/* Skip the one that has been processed last time. */
-	if (ooc->ooc_pos_preload > hash)
-		ooc->ooc_pos_preload = hash;
-
+	ooc->ooc_pos_preload = hash;
 	if (ooc->ooc_pos_preload <= LDISKFS_FIRST_INO(osd_sb(dev)))
 		ooc->ooc_pos_preload = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
 

@@ -194,7 +194,7 @@ struct lfsck_operations {
 
 	void (*lfsck_fail)(const struct lu_env *env,
 			   struct lfsck_component *com,
-			   bool oit, bool new_checked);
+			   bool new_checked);
 
 	int (*lfsck_checkpoint)(const struct lu_env *env,
 				struct lfsck_component *com,
@@ -214,7 +214,7 @@ struct lfsck_operations {
 
 	int (*lfsck_post)(const struct lu_env *env,
 			  struct lfsck_component *com,
-			  int result);
+			  int result, bool init);
 
 	int (*lfsck_dump)(const struct lu_env *env,
 			  struct lfsck_component *com,
@@ -309,7 +309,8 @@ struct md_lfsck {
 	unsigned int		 ml_paused:1, /* The lfsck is paused. */
 				 ml_oit_over:1, /* oit is finished. */
 				 ml_drop_dryrun:1, /* Ever dryrun, not now. */
-				 ml_initialized:1; /* lfsck_setup is called. */
+				 ml_initialized:1, /* lfsck_setup is called. */
+				 ml_current_oit_processed:1;
 };
 
 enum lfsck_linkea_flags {

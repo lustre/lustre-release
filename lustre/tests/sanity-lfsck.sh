@@ -62,7 +62,7 @@ lfsck_prep() {
 
 	echo "preparing... ${nfiles} * ${ndirs} files will be created."
 	mkdir -p $DIR/$tdir
-	cp $LUSTRE/tests/*.sh $DIR/$tdir/
+	cp $LUSTRE/tests/*.sh $DIR/
 	for ((i=0; i<${ndirs}; i++)); do
 		mkdir $DIR/$tdir/d${i}
 		touch $DIR/$tdir/f${i}

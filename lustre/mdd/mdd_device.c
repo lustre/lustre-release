@@ -562,10 +562,12 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
                 GOTO(out, rc = -EINVAL);
         }
 
-	if (!fid_is_norm(f)) {
+	if (!fid_is_norm(f) && !fid_is_igif(f)) {
 		CWARN("%s: "DFID" is invalid, sequence should be "
-		      ">= "LPX64"\n", mdd2obd_dev(mdd)->obd_name, PFID(f),
-		      (__u64)FID_SEQ_NORMAL);
+		      ">= "LPX64" or within ["LPX64","LPX64"].\n",
+		      mdd2obd_dev(mdd)->obd_name, PFID(f),
+		      (__u64)FID_SEQ_NORMAL, (__u64)FID_SEQ_IGIF,
+		      (__u64)FID_SEQ_IGIF_MAX);
 		GOTO(out, rc = -EINVAL);
 	}
 
