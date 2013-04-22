@@ -193,13 +193,11 @@ Status: $result: rc=$rc"
     # stop the client loads
     stop_client_loads $NODES_TO_USE $LOAD_PID_FILE
 
-    if [ $rc -ne 0 ]; then
-        # we are interested in only on failed clients and servers
-        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
-        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
-        gather_logs $(comma_list $(osts_nodes) $(mdts_nodes) \
-                      $mdsfailover_HOST $failedclients)
-    fi
+	if [ $rc -ne 0 ]; then
+		# we are interested in only on failed clients and servers
+		local failedclients=$(cat $END_RUN_FILE | grep -v $0)
+		gather_logs $(comma_list $(all_server_nodes) $failedclients)
+	fi
 
     exit $rc
 }

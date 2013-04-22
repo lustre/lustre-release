@@ -2432,6 +2432,24 @@ facet_active_host() {
     fi
 }
 
+# Get the passive failover partner host of facet.
+facet_passive_host() {
+	local facet=$1
+	[[ $facet = client ]] && return
+
+	local host=${facet}_HOST
+	local failover_host=${facet}failover_HOST
+	local active_host=$(facet_active_host $facet)
+
+	[[ -z ${!failover_host} || ${!failover_host} = ${!host} ]] && return
+
+	if [[ $active_host = ${!host} ]]; then
+		echo -n ${!failover_host}
+	else
+		echo -n ${!host}
+	fi
+}
+
 change_active() {
     local facetlist=$1
     local facet
@@ -3006,7 +3024,7 @@ writeconf_facet() {
 	local dev=$2
 
 	stop ${facet} -f
-	rm -f ${facet}active
+	rm -f $TMP/${facet}active
 	do_facet ${facet} "$TUNEFS --quiet --writeconf $dev" || return 1
 	return 0
 }
@@ -4522,64 +4540,121 @@ local_mode ()
         $(single_local_node $(comma_list $(nodes_list)))
 }
 
-mdts_nodes () {
-    local MDSNODES
-    local NODES_sort
-    for num in `seq $MDSCOUNT`; do
-        MDSNODES="$MDSNODES $(facet_host mds$num)"
-    done
-    NODES_sort=$(for i in $MDSNODES; do echo $i; done | sort -u)
-
-    echo $NODES_sort
-}
-
 remote_servers () {
     remote_ost && remote_mds
 }
 
+# Get the active nodes for facets.
 facets_nodes () {
-    local facets=$1
-    local nodes
-    local NODES_sort
+	local facets=$1
+	local facet
+	local nodes
+	local nodes_sort
+	local i
 
-    for facet in ${facets//,/ }; do
-        if [ "$FAILURE_MODE" = HARD ]; then
-            nodes="$nodes $(facet_active_host $facet)"
-        else
-            nodes="$nodes $(facet_host $facet)"
-        fi
-    done
-    NODES_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	for facet in ${facets//,/ }; do
+		nodes="$nodes $(facet_active_host $facet)"
+	done
 
-    echo $NODES_sort
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
 }
 
+# Get all of the active MDS nodes.
+mdts_nodes () {
+	echo -n $(facets_nodes $(get_facets MDS))
+}
+
+# Get all of the active OSS nodes.
 osts_nodes () {
-    local facets=$(get_facets OST)
-    local nodes=$(facets_nodes $facets)
-
-    echo $nodes
+	echo -n $(facets_nodes $(get_facets OST))
 }
 
+# Get all of the client nodes and active server nodes.
 nodes_list () {
-    # FIXME. We need a list of clients
-    local myNODES=$HOSTNAME
-    local myNODES_sort
+	local nodes=$HOSTNAME
+	local nodes_sort
+	local i
 
-    # CLIENTS (if specified) contains the local client
-    [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
+	# CLIENTS (if specified) contains the local client
+	[ -n "$CLIENTS" ] && nodes=${CLIENTS//,/ }
 
-    if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
-        myNODES="$myNODES $(facets_nodes $(get_facets))"
-    fi
+	if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
+		nodes="$nodes $(facets_nodes $(get_facets))"
+	fi
 
-    myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
-
-    echo $myNODES_sort
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
 }
 
+# Get all of the remote client nodes and remote active server nodes.
 remote_nodes_list () {
-	echo $(nodes_list) | sed -re "s/\<$HOSTNAME\>//g"
+	echo -n $(nodes_list) | sed -re "s/\<$HOSTNAME\>//g"
+}
+
+# Get all of the MDS nodes, including active and passive nodes.
+all_mdts_nodes () {
+	local host
+	local failover_host
+	local nodes
+	local nodes_sort
+	local i
+
+	for i in $(seq $MDSCOUNT); do
+		host=mds${i}_HOST
+		failover_host=mds${i}failover_HOST
+		nodes="$nodes ${!host} ${!failover_host}"
+	done
+
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
+}
+
+# Get all of the OSS nodes, including active and passive nodes.
+all_osts_nodes () {
+	local host
+	local failover_host
+	local nodes
+	local nodes_sort
+	local i
+
+	for i in $(seq $OSTCOUNT); do
+		host=ost${i}_HOST
+		failover_host=ost${i}failover_HOST
+		nodes="$nodes ${!host} ${!failover_host}"
+	done
+
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
+}
+
+# Get all of the server nodes, including active and passive nodes.
+all_server_nodes () {
+	local nodes
+	local nodes_sort
+	local i
+
+	nodes="$mgs_HOST $mgsfailover_HOST $(all_mdts_nodes) $(all_osts_nodes)"
+
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
+}
+
+# Get all of the client and server nodes, including active and passive nodes.
+all_nodes () {
+	local nodes=$HOSTNAME
+	local nodes_sort
+	local i
+
+	# CLIENTS (if specified) contains the local client
+	[ -n "$CLIENTS" ] && nodes=${CLIENTS//,/ }
+
+	if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
+		nodes="$nodes $(all_server_nodes)"
+	fi
+
+	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
+	echo -n $nodes_sort
 }
 
 init_clients_lists () {

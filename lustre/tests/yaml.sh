@@ -17,10 +17,10 @@ yml_nodes_file() {
     export logdir=$1
 
     if [ -f $logdir/shared ]; then
-        do_rpc_nodes $(comma_list $(nodes_list)) \
+        do_rpc_nodes $(comma_list $(all_nodes)) \
             "yml_node >> $logdir/node.\\\$(hostname -s).yml"
     else
-        do_rpc_nodes $(comma_list $(nodes_list)) yml_node | split_output
+        do_rpc_nodes $(comma_list $(all_nodes)) yml_node | split_output
     fi
     yml_entities
 }
@@ -129,23 +129,43 @@ EOF
 }
 
 yml_entities() {
-    local host
-    for num in $(seq $MDSCOUNT); do
-        host=$(short_hostname $(facet_active_host mds$num))
-        yml_entity "MDS $num" $host >> $logdir/node.$host.yml
-    done
+	local host
+	local f_host
+	local i
 
-    for num in $(seq $OSTCOUNT); do
-        host=$(short_hostname $(facet_active_host ost$num))
-        yml_entity "OST $num" $host >> $logdir/node.$host.yml
-    done
+	if ! combined_mgs_mds; then
+		host=$(short_hostname $(facet_active_host mgs))
+		f_host=$(short_hostname $(facet_passive_host mgs))
 
-    i=1
-    for host in ${CLIENTS//,/ }; do
-        host=$(short_hostname $host)
-        yml_entity "Client $i" $host >> $logdir/node.$host.yml
-        i=$((i+1))
-    done
+		yml_entity "MGS" $host >> $logdir/node.$host.yml
+		[[ -n $f_host ]] &&
+			yml_entity "MGS" $f_host >> $logdir/node.$f_host.yml
+	fi
+
+	for i in $(seq $MDSCOUNT); do
+		host=$(short_hostname $(facet_active_host mds$i))
+		f_host=$(short_hostname $(facet_passive_host mds$i))
+
+		yml_entity "MDS $i" $host >> $logdir/node.$host.yml
+		[[ -n $f_host ]] &&
+			yml_entity "MDS $i" $f_host >> $logdir/node.$f_host.yml
+	done
+
+	for i in $(seq $OSTCOUNT); do
+		host=$(short_hostname $(facet_active_host ost$i))
+		f_host=$(short_hostname $(facet_passive_host ost$i))
+
+		yml_entity "OST $i" $host >> $logdir/node.$host.yml
+		[[ -n $f_host ]] &&
+			yml_entity "OST $i" $f_host >> $logdir/node.$f_host.yml
+	done
+
+	i=1
+	for host in ${CLIENTS//,/ }; do
+		host=$(short_hostname $host)
+		yml_entity "Client $i" $host >> $logdir/node.$host.yml
+		i=$((i+1))
+	done
 }
 
 yml_log_test() {
