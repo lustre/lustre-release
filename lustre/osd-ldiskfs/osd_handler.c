@@ -4324,6 +4324,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         struct osd_object       *obj  = osd_dt_obj(dt);
         struct osd_thread_info  *info = osd_oti_get(env);
         struct osd_it_ea        *it   = &info->oti_it_ea;
+	struct file		*file = &it->oie_file;
         struct lu_object        *lo   = &dt->do_lu;
         struct dentry           *obj_dentry = &info->oti_it_dentry;
         ENTRY;
@@ -4338,17 +4339,20 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         it->oie_dirent          = NULL;
         it->oie_buf             = info->oti_it_ea_buf;
         it->oie_obj             = obj;
-        it->oie_file.f_pos      = 0;
-        it->oie_file.f_dentry   = obj_dentry;
-        if (attr & LUDA_64BITHASH)
-		it->oie_file.f_mode |= FMODE_64BITHASH;
-        else
-		it->oie_file.f_mode |= FMODE_32BITHASH;
-        it->oie_file.f_mapping    = obj->oo_inode->i_mapping;
-        it->oie_file.f_op         = obj->oo_inode->i_fop;
-        it->oie_file.private_data = NULL;
-        lu_object_get(lo);
-        RETURN((struct dt_it *) it);
+
+	/* Reset the "file" totally to avoid to reuse any old value from
+	 * former readdir handling, the "file->f_pos" should be zero. */
+	memset(file, 0, sizeof(*file));
+	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
+	if (attr & LUDA_64BITHASH)
+		file->f_mode	= FMODE_64BITHASH;
+	else
+		file->f_mode	= FMODE_32BITHASH;
+	file->f_dentry		= obj_dentry;
+	file->f_mapping 	= obj->oo_inode->i_mapping;
+	file->f_op		= obj->oo_inode->i_fop;
+	lu_object_get(lo);
+	RETURN((struct dt_it *) it);
 }
 
 /**
