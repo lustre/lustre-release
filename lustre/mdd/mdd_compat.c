@@ -56,7 +56,7 @@ static int mdd_convert_remove_dots(const struct lu_env *env,
 				   struct mdd_device *mdd,
 				   struct mdd_object *o)
 {
-	struct thandle		*th = NULL;
+	struct thandle		*th;
 	const struct dt_key	*dot = (const struct dt_key *)".";
 	const struct dt_key	*dotdot = (const struct dt_key *)"..";
 	int			 rc;
@@ -68,6 +68,7 @@ static int mdd_convert_remove_dots(const struct lu_env *env,
 	th = dt_trans_create(env, mdd->mdd_child);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
+
 	rc = dt_declare_delete(env, mdd_object_child(o), dot, th);
 	if (rc)
 		GOTO(out, rc);
@@ -91,8 +92,7 @@ static int mdd_convert_remove_dots(const struct lu_env *env,
 		GOTO(out, rc);
 
 out:
-	if (th)
-		dt_trans_stop(env, mdd->mdd_child, th);
+	dt_trans_stop(env, mdd->mdd_child, th);
 	RETURN(rc);
 }
 
@@ -101,12 +101,15 @@ static int mdd_convert_linkea(const struct lu_env *env,
 			      struct mdd_object *o,
 			      const struct lu_name *name)
 {
-	struct thandle	*th = NULL;
+	struct thandle	*th;
 	struct lu_fid	 oldfid;
 	int		 rc;
 	ENTRY;
 
 	th = dt_trans_create(env, mdd->mdd_child);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
 	rc = mdd_declare_links_add(env, o, th, NULL);
 	if (rc)
 		GOTO(out, rc);
@@ -123,8 +126,7 @@ static int mdd_convert_linkea(const struct lu_env *env,
 		rc = 0;
 
 out:
-	if (th)
-		dt_trans_stop(env, mdd->mdd_child, th);
+	dt_trans_stop(env, mdd->mdd_child, th);
 	RETURN(rc);
 }
 
@@ -171,7 +173,7 @@ static int mdd_convert_lma(const struct lu_env *env, struct mdd_device *mdd,
 			   struct mdd_object *o)
 {
 	struct lustre_mdt_attrs	*lma;
-	struct thandle		*th = NULL;
+	struct thandle		*th;
 	struct lu_fid		 fid;
 	struct lu_buf		 buf;
 	int			 rc;
@@ -196,8 +198,7 @@ static int mdd_convert_lma(const struct lu_env *env, struct mdd_device *mdd,
 		GOTO(out, rc);
 	rc = mdo_xattr_set(env, o, &buf, XATTR_NAME_LMA, 0, th, BYPASS_CAPA);
 out:
-	if (th)
-		dt_trans_stop(env, mdd->mdd_child, th);
+	dt_trans_stop(env, mdd->mdd_child, th);
 	RETURN(rc);
 }
 

@@ -326,11 +326,12 @@ static int orphan_object_destroy(const struct lu_env *env,
         int rc = 0;
         ENTRY;
 
-        th = mdd_trans_create(env, mdd);
-        if (IS_ERR(th)) {
-                CERROR("Cannot get thandle\n");
-                RETURN(-ENOMEM);
-        }
+	th = mdd_trans_create(env, mdd);
+	if (IS_ERR(th)) {
+		CERROR("Cannot get thandle\n");
+		RETURN(PTR_ERR(th));
+	}
+
         rc = orph_declare_index_delete(env, obj, th);
         if (rc)
                 GOTO(stop, rc);
