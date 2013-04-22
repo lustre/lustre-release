@@ -923,7 +923,7 @@ test_29a() { # bug 22273 - error adding new clients
 	# fail abort so client will be new again
 	fail_abort $SINGLEMDS
 	client_up || error "reconnect failed"
-	wait_osc_import_state mds ost FULL
+	wait_osc_import_state $SINGLEMDS ost FULL
 	return 0
 }
 run_test 29a "error adding new clients doesn't cause LBUG (bug 22273)"

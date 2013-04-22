@@ -788,16 +788,12 @@ test_21d() {
 run_test 21d "start mgs then ost and then mds"
 
 test_22() {
-	local num
-
 	start_mds
 
 	echo Client mount with ost in logs, but none running
 	start_ost
 	# wait until mds connected to ost and open client connection
-	for num in $(seq 1 $MDSCOUNT); do
-		wait_osc_import_state mds${num} ost FULL
-	done
+	wait_osc_import_state mds ost FULL
 	stop_ost
 	mount_client $MOUNT
 	# check_mount will block trying to contact ost
@@ -817,9 +813,7 @@ test_22() {
 		sleep $((TIMEOUT + TIMEOUT + TIMEOUT))
 	fi
 	mount_client $MOUNT
-	for num in $(seq 1 $MDSCOUNT); do
-		wait_osc_import_state mds${num} ost FULL
-	done
+	wait_osc_import_state mds ost FULL
 	wait_osc_import_state client ost FULL
 	check_mount || return 41
 	pass

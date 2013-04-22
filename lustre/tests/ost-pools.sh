@@ -1388,7 +1388,6 @@ run_test 24 "Independence of pool from other setstripe parameters"
 
 test_25() {
     set_cleanup_trap
-    local dev=$(mdsdevname ${SINGLEMDS//mds/})
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
     mkdir -p $POOL_ROOT
@@ -1400,11 +1399,9 @@ test_25() {
             sort -u | tr '\n' ' ' " "$FSNAME-OST0000_UUID " >/dev/null ||
                 error "pool_add failed: $1; $2"
 
-        stop $SINGLEMDS || return 1
-        start $SINGLEMDS ${dev} $MDS_MOUNT_OPTS ||
-            { error "Failed to start $SINGLEMDS after stopping" && break; }
-        wait_osc_import_state mds ost FULL
-        clients_up
+	facet_failover $SINGLEMDS || error "failed to failover $SINGLEMDS"
+	wait_osc_import_state $SINGLEMDS ost FULL
+	clients_up
 
         wait_mds_ost_sync
         # Veriy that the pool got created and is usable
