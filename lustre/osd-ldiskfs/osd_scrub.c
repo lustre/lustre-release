@@ -79,6 +79,13 @@ static inline int osd_scrub_has_window(struct osd_scrub *scrub,
 	return scrub->os_pos_current < ooc->ooc_pos_preload + SCRUB_WINDOW_SIZE;
 }
 
+/**
+ * update/insert/delete the specified OI mapping (@fid @id) according to the ops
+ *
+ * \retval   1, changed nothing
+ * \retval   0, changed successfully
+ * \retval -ve, on error
+ */
 static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 				     struct osd_device *dev,
 				     const struct lu_fid *fid,
@@ -112,13 +119,19 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		RETURN(-ENOMEM);
 	}
 
-	if (ops == DTO_INDEX_UPDATE) {
+	switch (ops) {
+	case DTO_INDEX_UPDATE:
 		rc = iam_update(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
-	} else {
+		if (unlikely(rc == -ENOENT)) {
+			/* Some unlink thread mat removed the OI mapping. */
+			rc = 1;
+		}
+		break;
+	case DTO_INDEX_INSERT:
 		rc = iam_insert(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
-		if (rc == -EEXIST) {
+		if (unlikely(rc == -EEXIST)) {
 			rc = 1;
 			/* XXX: There are trouble things when adding OI
 			 *	mapping for IGIF object, which may cause
@@ -152,6 +165,18 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 			 *
 			 *	Anyway, it is rare, only exists in theory. */
 		}
+		break;
+	case DTO_INDEX_DELETE:
+		rc = iam_delete(jh, bag, (const struct iam_key *)oi_fid, ipd);
+		if (rc == -ENOENT) {
+			/* It is normal that the unlink thread has removed the
+			 * OI mapping already. */
+			rc = 1;
+		}
+		break;
+	default:
+		LASSERTF(0, "Unexpected ops %d\n", ops);
+		break;
 	}
 	osd_ipd_put(info->oti_env, bag, ipd);
 	ldiskfs_journal_stop(jh);
@@ -444,10 +469,8 @@ iget:
 			GOTO(out, rc);
 		}
 
-		/* Prevent the inode to be unlinked during OI scrub. */
-		mutex_lock(&inode->i_mutex);
+		/* Check whether the inode to be unlinked during OI scrub. */
 		if (unlikely(inode->i_nlink == 0)) {
-			mutex_unlock(&inode->i_mutex);
 			iput(inode);
 			GOTO(out, rc = 0);
 		}
@@ -494,7 +517,11 @@ out:
 	}
 
 	if (ops == DTO_INDEX_INSERT) {
-		mutex_unlock(&inode->i_mutex);
+		/* There may be conflict unlink during the OI scrub,
+		 * if happend, then remove the new added OI mapping. */
+		if (unlikely(inode->i_nlink == 0))
+			osd_scrub_refresh_mapping(info, dev, fid, lid,
+						  DTO_INDEX_DELETE);
 		iput(inode);
 	}
 	up_write(&scrub->os_rwsem);

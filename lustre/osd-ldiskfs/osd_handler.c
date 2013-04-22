@@ -2180,9 +2180,6 @@ static int osd_object_destroy(const struct lu_env *env,
 	if (unlikely(fid_is_acct(fid)))
 		RETURN(-EPERM);
 
-	/* Parallel control for OI scrub. For most of cases, there is no
-	 * lock contention. So it will not affect unlink performance. */
-	mutex_lock(&inode->i_mutex);
 	if (S_ISDIR(inode->i_mode)) {
 		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1);
 		/* it will check/delete the inode from remote parent,
@@ -2201,7 +2198,6 @@ static int osd_object_destroy(const struct lu_env *env,
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
 
         result = osd_oi_delete(osd_oti_get(env), osd, fid, th);
-	mutex_unlock(&inode->i_mutex);
 
         /* XXX: add to ext3 orphan list */
         /* rc = ext3_orphan_add(handle_t *handle, struct inode *inode) */
