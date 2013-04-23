@@ -3437,7 +3437,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	int rc;
 	ENTRY;
 
-	*gen = LL_LAYOUT_GEN_NONE;
+	*gen = lli->lli_layout_gen;
 	if (!(sbi->ll_flags & LL_SBI_LAYOUT_LOCK))
 		RETURN(0);
 
