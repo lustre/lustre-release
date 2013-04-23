@@ -677,30 +677,6 @@ test_17n() {
 }
 run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
-test_17o() {
-	local WDIR=$DIR/${tdir}o
-	local mdt_index
-	local mdtdevname
-	local rc=0
-
-	mkdir -p $WDIR
-	mdt_index=$($LFS getstripe -M $WDIR)
-	mdt_index=$((mdt_index+1))
-	mdtdevname=$(mdsdevname $mdt_index)
-
-	touch $WDIR/$tfile
-	stop mds${mdt_index}
-	start mds${mdt_index} $mdtdevname $MDS_MOUNT_OPTS
-
-	#define OBD_FAIL_OSD_LMA_INCOMPAT 0x194
-	do_facet mds${mdt_index} lctl set_param fail_loc=0x194
-	ls -l $WDIR/$tfile && rc=1
-	do_facet mds${mdt_index} lctl set_param fail_loc=0
-	[[ $rc -ne 0 ]] && error "stat file should fail"
-	true
-}
-run_test 17o "stat file with incompat LMA feature"
-
 test_18() {
 	touch $DIR/f || error "Failed to touch $DIR/f: $?"
 	ls $DIR || error "Failed to ls $DIR: $?"
