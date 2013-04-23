@@ -1895,6 +1895,39 @@ test_50() {
 }
 run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
 
+test_71() {
+	checkfiemap --test ||
+		{ skip "checkfiemap not runnable: $?" && return; }
+	# write data this way: hole - data - hole - data
+	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tfile) + 1)))" = \
+		"zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
+	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
+	GET_STAT="lctl get_param -n ldlm.services.ldlm_cbd.stats"
+	stat $DIR2/$tfile
+	local can1=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
+	echo $can1
+	checkfiemap $DIR2/$tfile 81920 ||
+		error "data is not flushed from client"
+	local can2=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
+	echo $can2
+
+	# common case of "create file, copy file" on a single node
+	# should not flush data from ost
+	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
+	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
+	stat $DIR1/$tfile
+	local can3=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
+	echo $can3
+	checkfiemap $DIR1/$tfile 81920 ||
+	error 4
+	local can4=$($GET_STAT | awk '/ldlm_bl_callback/ {print $2}')
+	echo $can2
+	[ $can3 -eq $can4 ] || error $((can2-can1)) "cancel RPC occured."
+}
+run_test 71 "correct file map just after write operation is finished"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

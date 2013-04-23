@@ -1215,11 +1215,87 @@ out:
         RETURN(rc);
 }
 
+struct locked_region {
+	cfs_list_t  list;
+	struct lustre_handle lh;
+};
+
+static int lock_region(struct obd_export *exp, struct obdo *oa,
+		       unsigned long long begin, unsigned long long end,
+		       cfs_list_t *locked)
+{
+	struct locked_region *region = NULL;
+	int rc;
+
+	LASSERT(begin <= end);
+	OBD_ALLOC_PTR(region);
+	if (region == NULL)
+		return -ENOMEM;
+
+	rc = ost_lock_get(exp, oa, begin, end - begin, &region->lh, LCK_PR, 0);
+	if (rc)
+		return rc;
+
+	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n",
+	       begin, end, &region->lh);
+	cfs_list_add(&region->list, locked);
+
+	return 0;
+}
+
+static int lock_zero_regions(struct obd_export *exp, struct obdo *oa,
+			     struct ll_user_fiemap *fiemap,
+			     cfs_list_t *locked)
+{
+	__u64 begin = fiemap->fm_start;
+	unsigned int i;
+	int rc = 0;
+	struct ll_fiemap_extent *fiemap_start = fiemap->fm_extents;
+	ENTRY;
+
+	CDEBUG(D_OTHER, "extents count %u\n", fiemap->fm_mapped_extents);
+	for (i = 0; i < fiemap->fm_mapped_extents; i++) {
+		if (fiemap_start[i].fe_logical > begin) {
+			CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
+			       begin, fiemap_start[i].fe_logical);
+			rc = lock_region(exp, oa, begin,
+				    fiemap_start[i].fe_logical, locked);
+			if (rc)
+				RETURN(rc);
+		}
+
+		begin = fiemap_start[i].fe_logical + fiemap_start[i].fe_length;
+	}
+
+	if (begin < (fiemap->fm_start + fiemap->fm_length)) {
+		CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
+		       begin, fiemap->fm_start + fiemap->fm_length);
+		rc = lock_region(exp, oa, begin,
+				 fiemap->fm_start + fiemap->fm_length, locked);
+	}
+
+	RETURN(rc);
+}
+
+static void unlock_zero_regions(struct obd_export *exp, cfs_list_t *locked)
+{
+	struct locked_region *entry, *temp;
+	cfs_list_for_each_entry_safe(entry, temp, locked, list) {
+		CDEBUG(D_OTHER, "ost unlock lh=%p\n", &entry->lh);
+		ost_lock_put(exp, &entry->lh, LCK_PR);
+		cfs_list_del(&entry->list);
+		OBD_FREE_PTR(entry);
+	}
+}
+
 static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
         void *key, *reply;
         int keylen, replylen, rc = 0;
         struct req_capsule *pill = &req->rq_pill;
+	cfs_list_t locked = CFS_LIST_HEAD_INIT(locked);
+	struct ll_fiemap_info_key *fm_key = NULL;
+	struct ll_user_fiemap *fiemap;
         ENTRY;
 
         /* this common part for get_info rpc */
@@ -1231,9 +1307,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         keylen = req_capsule_get_size(pill, &RMF_SETINFO_KEY, RCL_CLIENT);
 
         if (KEY_IS(KEY_FIEMAP)) {
-                struct ll_fiemap_info_key *fm_key = key;
-                int rc;
-
+                fm_key = key;
                 rc = ost_validate_obdo(exp, &fm_key->oa, NULL);
                 if (rc)
                         RETURN(rc);
@@ -1256,6 +1330,22 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 
         /* call again to fill in the reply buffer */
         rc = obd_get_info(exp, keylen, key, &replylen, reply, NULL);
+
+        /* LU-3219: Lock the sparse areas to make sure dirty flushed back
+         * from client, then call fiemap again. */
+        if (KEY_IS(KEY_FIEMAP) && (fm_key->oa.o_valid & OBD_MD_FLFLAGS) &&
+            (fm_key->oa.o_flags & OBD_FL_SRVLOCK)) {
+                fiemap = (struct ll_user_fiemap *)reply;
+                fm_key = key;
+
+                rc = lock_zero_regions(exp, &fm_key->oa, fiemap, &locked);
+                if (rc == 0 && !cfs_list_empty(&locked))
+                        rc = obd_get_info(exp, keylen, key,
+                                          &replylen, reply, NULL);
+                unlock_zero_regions(exp, &locked);
+                if (rc)
+                        RETURN(rc);
+        }
 
         lustre_msg_set_status(req->rq_repmsg, 0);
         RETURN(rc);
