@@ -1911,7 +1911,7 @@ test_70b () {
 	#LU-1897 wait for all dbench copies to start
 	while ! check_for_process $clients dbench; do
 		elapsed=$(($(date +%s) - start_ts))
-		if [ $elapsed -gt $duration]; then
+		if [ $elapsed -gt $duration ]; then
 			killall_process $clients dbench
 			error "dbench failed to start on $clients!"
 		fi
