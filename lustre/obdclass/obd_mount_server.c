@@ -1384,6 +1384,8 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		LDD_F_WRITECONF : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
 		LDD_F_VIRGIN : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_UPDATE) ?
+		LDD_F_UPDATE : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
 		LDD_F_SV_TYPE_MGS : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?

@@ -314,6 +314,58 @@ static int add_mgsnids(struct mount_opts *mop, char *options,
 	return 0;
 }
 
+static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
+{
+	char always_mountopts[512] = "";
+	char default_mountopts[512] = "";
+	struct mkfs_opts mkop;
+	int ret;
+
+	memset(&mkop, 0, sizeof(mkop));
+	mkop.mo_ldd = *ldd;
+	mkop.mo_ldd.ldd_flags &= ~LDD_F_UPDATE;
+	strcpy(mkop.mo_device, source);
+
+	ret = osd_prepare_lustre(&mkop,
+			default_mountopts, sizeof(default_mountopts),
+			always_mountopts, sizeof(always_mountopts));
+	if (ret) {
+		fatal();
+		fprintf(stderr, "Can't prepare device %s: %s\n",
+			source, strerror(ret));
+		return ret;
+	}
+
+	/* Create the loopback file */
+	if (mkop.mo_flags & MO_IS_LOOP) {
+		ret = access(mkop.mo_device, F_OK);
+		if (ret) {
+			ret = errno;
+			fatal();
+			fprintf(stderr, "Can't access device %s: %s\n",
+					source, strerror(ret));
+			return ret;
+		}
+
+		ret = loop_setup(&mkop);
+		if (ret) {
+			fatal();
+			fprintf(stderr, "Loop device setup for %s failed: %s\n",
+					mkop.mo_device, strerror(ret));
+			return ret;
+		}
+	}
+	ret = osd_write_ldd(&mkop);
+	if (ret != 0) {
+		fatal();
+		fprintf(stderr, "failed to write local files: %s\n",
+			strerror(ret));
+	}
+	loop_cleanup(&mkop);
+
+	return ret;
+}
+
 static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
@@ -349,8 +401,11 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 		return EINVAL;
 	}
 
+	if (ldd->ldd_flags & LDD_F_UPDATE)
+		clear_update_ondisk(source, ldd);
+
 	/* Since we never rewrite ldd, ignore temp flags */
-	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | LDD_F_WRITECONF);
+	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_WRITECONF);
 
 	/* svname of the form lustre:OST1234 means never registered */
 	rc = strlen(ldd->ldd_svname);
@@ -387,6 +442,8 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 
 	if (ldd->ldd_flags & LDD_F_VIRGIN)
 		append_option(options, "virgin");
+	if (ldd->ldd_flags & LDD_F_UPDATE)
+		append_option(options, "update");
 	if (ldd->ldd_flags & LDD_F_WRITECONF)
 		append_option(options, "writeconf");
 	if (ldd->ldd_flags & LDD_F_NO_PRIMNODE)

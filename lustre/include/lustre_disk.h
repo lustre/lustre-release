@@ -240,6 +240,7 @@ struct lustre_mount_data {
 #define LMD_FLG_IAM	     0x0400  /* IAM dir */
 #define LMD_FLG_NO_PRIMNODE  0x0800  /* all nodes are service nodes */
 #define LMD_FLG_VIRGIN	     0x1000  /* the service registers first time */
+#define LMD_FLG_UPDATE	     0x2000  /* update parameters */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
