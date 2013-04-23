@@ -587,10 +587,10 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		ofd_seq_put(env, oseq);
 		*vallen = sizeof(*last_id);
 	} else if (KEY_IS(KEY_FIEMAP)) {
-		struct ofd_thread_info		*info;
 		struct ofd_device		*ofd = ofd_exp(exp);
 		struct ofd_object		*fo;
 		struct ll_fiemap_info_key	*fm_key = key;
+		struct lu_fid			 fid;
 
 		if (val == NULL) {
 			*vallen = fiemap_count_to_size(
@@ -598,17 +598,16 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out, rc = 0);
 		}
 
-		info = ofd_info_init(env, exp);
-		rc = ostid_to_fid(&info->fti_fid, &fm_key->oa.o_oi, 0);
+		rc = ostid_to_fid(&fid, &fm_key->oa.o_oi, 0);
 		if (rc != 0)
 			GOTO(out, rc);
 		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n",
-		       PFID(&info->fti_fid));
+		       PFID(&fid));
 
-		fo = ofd_object_find(env, ofd, &info->fti_fid);
+		fo = ofd_object_find(env, ofd, &fid);
 		if (IS_ERR(fo)) {
 			CERROR("%s: error finding object "DFID"\n",
-			       exp->exp_obd->obd_name, PFID(&info->fti_fid));
+			       exp->exp_obd->obd_name, PFID(&fid));
 			rc = PTR_ERR(fo);
 		} else {
 			struct ll_user_fiemap *fiemap = val;
