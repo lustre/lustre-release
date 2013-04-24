@@ -759,7 +759,7 @@ int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
 {
 	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
 
-	switch(opc) {
+	switch((enum nrs_ctl_orr)opc) {
 	default:
 		RETURN(-EINVAL);
 
