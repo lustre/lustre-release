@@ -310,7 +310,7 @@ command_t cmdlist[] = {
         {"test_setxattr", jt_obd_test_setxattr, 0,
          "Set EA for files/directory on MDT by echo client\n"
          "usage: test_setxattr [-d parent_baseid] <-D parent_count>"
-         "[-b child_base_id] [-x size] [-n count] <-t time>\n"},
+         "[-b child_base_id] [-n count] <-t time>\n"},
         {"test_md_getattr", jt_obd_test_md_getattr, 0,
          "getattr files on MDT by echo client\n"
          "usage: test_md_getattr [-d parent_basedir] <-D parent_count>"

@@ -1209,7 +1209,6 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
         __u64                  seconds = 0;
         double                 diff;
         int                    c;
-        int                    xattr_size = 0;
         __u64                  total_count = 0;
         char                  *name = NULL;
         struct jt_fid_space    fid_space = {0};
@@ -1224,12 +1223,11 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                 {"count",             required_argument, 0, 'n'},
                 {"time",              required_argument, 0, 't'},
                 {"version",           no_argument,       0, 'v'},
-                {"xattr_size",        required_argument, 0, 'x'},
                 {0, 0, 0, 0}
         };
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "b:c:d:D:m:n:t:vx:",
+        while ((c = getopt_long(argc, argv, "b:c:d:D:m:n:t:v",
                                 long_opts, NULL)) >= 0) {
                 switch (c) {
                 case 'b':
@@ -1293,15 +1291,6 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                         break;
                 case 'v':
                         version = 1;
-                        break;
-                case 'x':
-                        xattr_size = strtoul(optarg, &end, 0);
-                        if (*end) {
-                                fprintf(stderr, "error: %s: xattr_size '%s'\n",
-                                        jt_cmdname(argv[0]), optarg);
-                                return CMD_HELP;
-                        }
-                        SET_BUT_UNUSED(xattr_size);
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '%s' "

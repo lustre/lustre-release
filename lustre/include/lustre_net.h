@@ -3465,7 +3465,6 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
                               enum timeout_event event);
 struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
 int ptlrpc_obd_ping(struct obd_device *obd);
-cfs_time_t ptlrpc_suspend_wakeup_time(void);
 #ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);
@@ -3473,7 +3472,6 @@ void ping_evictor_stop(void);
 #define ping_evictor_start()    do {} while (0)
 #define ping_evictor_stop()     do {} while (0)
 #endif
-int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
 void ptlrpc_pinger_ir_up(void);
 void ptlrpc_pinger_ir_down(void);
 /** @} */

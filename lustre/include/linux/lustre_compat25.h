@@ -422,13 +422,15 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
         hlist_for_each_entry(dentry, p, i_dentry, alias)
 #endif
+#define DECLARE_LL_D_HLIST_NODE_PTR(name) struct ll_d_hlist_node *name
 #else
 #define ll_d_hlist_node list_head
 #define ll_d_hlist_empty(list) list_empty(list)
 #define ll_d_hlist_entry(ptr, type, name) list_entry(ptr.next, type, name)
 #define ll_d_hlist_for_each(tmp, i_dentry) list_for_each(tmp, i_dentry)
 #define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
-        p = NULL; list_for_each_entry(dentry, i_dentry, alias)
+	list_for_each_entry(dentry, i_dentry, alias)
+#define DECLARE_LL_D_HLIST_NODE_PTR(name) /* nothing */
 #endif
 
 

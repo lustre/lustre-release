@@ -595,8 +595,6 @@ swi_state2str (int state)
 #undef STATE2STR
 }
 
-#define UNUSED(x)       ( (void)(x) )
-
 #ifndef __KERNEL__
 
 int stt_poll_interval(void);

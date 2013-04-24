@@ -148,9 +148,6 @@ static inline int ptlrpc_next_reconnect(struct obd_import *imp)
                 return cfs_time_shift(obd_timeout);
 }
 
-static cfs_atomic_t suspend_timeouts = CFS_ATOMIC_INIT(0);
-static cfs_time_t suspend_wakeup_time = 0;
-
 cfs_duration_t pinger_check_timeout(cfs_time_t time)
 {
         struct timeout_item *item;
@@ -168,66 +165,6 @@ cfs_duration_t pinger_check_timeout(cfs_time_t time)
 
         return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
                                          cfs_time_current());
-}
-
-static cfs_waitq_t suspend_timeouts_waitq;
-
-cfs_time_t ptlrpc_suspend_wakeup_time(void)
-{
-        return suspend_wakeup_time;
-}
-
-void ptlrpc_deactivate_timeouts(struct obd_import *imp)
-{
-        /*XXX: disabled for now, will be replaced by adaptive timeouts */
-#if 0
-        if (imp->imp_no_timeout)
-                return;
-        imp->imp_no_timeout = 1;
-        cfs_atomic_inc(&suspend_timeouts);
-        CDEBUG(D_HA|D_WARNING, "deactivate timeouts %u\n",
-               cfs_atomic_read(&suspend_timeouts));
-#endif
-}
-
-void ptlrpc_activate_timeouts(struct obd_import *imp)
-{
-        /*XXX: disabled for now, will be replaced by adaptive timeouts */
-#if 0
-        if (!imp->imp_no_timeout)
-                return;
-        imp->imp_no_timeout = 0;
-        LASSERT(cfs_atomic_read(&suspend_timeouts) > 0);
-        if (cfs_atomic_dec_and_test(&suspend_timeouts)) {
-                suspend_wakeup_time = cfs_time_current();
-                cfs_waitq_signal(&suspend_timeouts_waitq);
-        }
-        CDEBUG(D_HA|D_WARNING, "activate timeouts %u\n",
-               cfs_atomic_read(&suspend_timeouts));
-#endif
-}
-
-int ptlrpc_check_suspend(void)
-{
-        if (cfs_atomic_read(&suspend_timeouts))
-                return 1;
-        return 0;
-}
-
-int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req)
-{
-        struct l_wait_info lwi;
-
-        if (cfs_atomic_read(&suspend_timeouts)) {
-                DEBUG_REQ(D_NET, req, "-- suspend %d regular timeout",
-                          cfs_atomic_read(&suspend_timeouts));
-                lwi = LWI_INTR(NULL, NULL);
-                l_wait_event(suspend_timeouts_waitq,
-                             cfs_atomic_read(&suspend_timeouts) == 0, &lwi);
-                DEBUG_REQ(D_NET, req, "-- recharge regular timeout");
-                return 1;
-        }
-        return 0;
 }
 
 #ifdef __KERNEL__
@@ -392,7 +329,6 @@ int ptlrpc_start_pinger(void)
 		RETURN(-EALREADY);
 
 	cfs_waitq_init(&pinger_thread.t_ctl_waitq);
-	cfs_waitq_init(&suspend_timeouts_waitq);
 
 	strcpy(pinger_thread.t_name, "ll_ping");
 

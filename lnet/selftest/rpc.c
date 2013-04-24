@@ -142,7 +142,6 @@ srpc_bulk_t *
 srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 {
 	srpc_bulk_t  *bk;
-	struct page  **pages;
 	int	      i;
 
 	LASSERT(bulk_npg > 0 && bulk_npg <= LNET_MAX_IOV);
@@ -159,18 +158,22 @@ srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 	bk->bk_len    = bulk_len;
 	bk->bk_niov   = bulk_npg;
 #ifndef __KERNEL__
-	LIBCFS_CPT_ALLOC(pages, lnet_cpt_table(), cpt,
-			 sizeof(struct page *) * bulk_npg);
-	if (pages == NULL) {
-		LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[bulk_npg]));
-		CERROR("Can't allocate page array for %d pages\n", bulk_npg);
-		return NULL;
-	}
+	{
+		struct page  **pages;
 
-	memset(pages, 0, sizeof(struct page *) * bulk_npg);
-	bk->bk_pages = pages;
-#else
-	UNUSED(pages);
+		LIBCFS_CPT_ALLOC(pages, lnet_cpt_table(), cpt,
+				 sizeof(struct page *) * bulk_npg);
+		if (pages == NULL) {
+			LIBCFS_FREE(bk, offsetof(srpc_bulk_t,
+				    bk_iovs[bulk_npg]));
+			CERROR("Can't allocate page array for %d pages\n",
+				bulk_npg);
+			return NULL;
+		}
+
+		memset(pages, 0, sizeof(struct page *) * bulk_npg);
+		bk->bk_pages = pages;
+	}
 #endif
 
 	for (i = 0; i < bulk_npg; i++) {

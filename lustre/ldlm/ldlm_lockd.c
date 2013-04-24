@@ -312,53 +312,6 @@ static void waiting_locks_callback(unsigned long unused)
                     (lock->l_req_mode == LCK_GROUP))
                         break;
 
-                if (ptlrpc_check_suspend()) {
-                        /* there is a case when we talk to one mds, holding
-                         * lock from another mds. this way we easily can get
-                         * here, if second mds is being recovered. so, we
-                         * suspend timeouts. bug 6019 */
-
-                        LDLM_ERROR(lock, "recharge timeout: %s@%s nid %s ",
-                                   lock->l_export->exp_client_uuid.uuid,
-                                   lock->l_export->exp_connection->c_remote_uuid.uuid,
-                                   libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
-
-                        cfs_list_del_init(&lock->l_pending_chain);
-			if (lock->l_flags & LDLM_FL_DESTROYED) {
-				/* relay the lock refcount decrease to
-				 * expired lock thread */
-				cfs_list_add(&lock->l_pending_chain,
-					&expired_lock_thread.elt_expired_locks);
-			} else {
-				__ldlm_add_waiting_lock(lock,
-						ldlm_get_enq_timeout(lock));
-			}
-			continue;
-                }
-
-                /* if timeout overlaps the activation time of suspended timeouts
-                 * then extend it to give a chance for client to reconnect */
-                if (cfs_time_before(cfs_time_sub(lock->l_callback_timeout,
-                                                 cfs_time_seconds(obd_timeout)/2),
-                                    ptlrpc_suspend_wakeup_time())) {
-                        LDLM_ERROR(lock, "extend timeout due to recovery: %s@%s nid %s ",
-                                   lock->l_export->exp_client_uuid.uuid,
-                                   lock->l_export->exp_connection->c_remote_uuid.uuid,
-                                   libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
-
-                        cfs_list_del_init(&lock->l_pending_chain);
-			if (lock->l_flags & LDLM_FL_DESTROYED) {
-				/* relay the lock refcount decrease to
-				 * expired lock thread */
-				cfs_list_add(&lock->l_pending_chain,
-					&expired_lock_thread.elt_expired_locks);
-			} else {
-				__ldlm_add_waiting_lock(lock,
-						ldlm_get_enq_timeout(lock));
-			}
-			continue;
-                }
-
                 /* Check if we need to prolong timeout */
                 if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
                     ldlm_lock_busy(lock)) {

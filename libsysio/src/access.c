@@ -218,13 +218,6 @@ _sysio_ldcreds(uid_t uid, gid_t gid, struct creds *crp)
 	return 0;
 }
 
-static int
-_sysio_getcreds(struct creds *crp)
-{
-
-	return _sysio_ldcreds(getuid(), getgid(), crp);
-}
-
 /*
  * Determine if a given access is permitted to a given file.
  */

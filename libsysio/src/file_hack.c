@@ -282,7 +282,7 @@ _sysio_fd_close(int fd)
 {
 	struct file *fil;
 
-	fil = fil = __sysio_fd_get(fd, 1);
+	fil = __sysio_fd_get(fd, 1);
 	if (!fil)
 		return -EBADF;
 
@@ -399,23 +399,19 @@ _sysio_oftable_close_all(oftab_t *oftab)
 int
 _sysio_fd_close_all()
 {
-	int	fd;
-	struct file **filp;
-	oftab_t *oftab;
-	int i;
-
-	/*
-	 * Close all open descriptors.
-	 */
+	/* Close all open descriptors */
 	_sysio_oftable_close_all(&_sysio_oftab[OFTAB_VIRTUAL]);
-	/* XXX see liblustre/llite_lib.c for explaination */
+	/* FIXME: libsysio does not currently perform enough cleanup of
+	 * open files to allow __liblustre_cleanup_() to safely call
+	 * unmount(). See the related FIXME comment in that function
+	 * for details. The following disabled code is left in place to
+	 * document the solution that was originally under consideration
+	 * but never fully implemented. */
 #if 0
 	_sysio_oftable_close_all(&_sysio_oftab[OFTAB_NATIVE]);
 #endif
 
-	/*
-	 * Release current working directory.
-	 */
+	/* Release current working directory */
 	if (_sysio_cwd) {
 		P_RELE(_sysio_cwd);
 		_sysio_cwd = NULL;

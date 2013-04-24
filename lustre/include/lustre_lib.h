@@ -790,6 +790,7 @@ do {                                                                           \
 } while (0)
 
 #else /* !__KERNEL__ */
+
 #define __l_wait_event(wq, condition, info, ret, l_add_wait)            \
 do {                                                                    \
         long __timeout = info->lwi_timeout;                             \
@@ -832,7 +833,6 @@ do {                                                                    \
                         }                                               \
                 }                                                       \
         }                                                               \
-        SET_BUT_UNUSED(wq);                                             \
 } while (0)
 
 #endif /* __KERNEL__ */

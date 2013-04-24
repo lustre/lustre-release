@@ -674,7 +674,6 @@ int ptlrpcd_idle(void *arg)
 int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
 {
         int rc;
-        int env = 0;
         ENTRY;
 
         /*
@@ -694,6 +693,16 @@ int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
                 GOTO(out, rc = -ENOMEM);
+
+#ifndef __KERNEL__
+        pc->pc_wait_callback =
+                liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",
+                                                 &ptlrpcd_check_async_rpcs, pc);
+        pc->pc_idle_callback =
+                liblustre_register_idle_callback("ptlrpcd_check_idle_rpcs",
+                                                 &ptlrpcd_idle, pc);
+	RETURN(0);
+#else
         /*
          * So far only "client" ptlrpcd uses an environment. In the future,
          * ptlrpcd thread (or a thread-set) has to be given an argument,
@@ -701,52 +710,40 @@ int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
          */
         rc = lu_context_init(&pc->pc_env.le_ctx, LCT_CL_THREAD|LCT_REMEMBER);
         if (rc != 0)
-                GOTO(out, rc);
+		GOTO(out_set, rc);
 
-        env = 1;
-#ifdef __KERNEL__
 	{
 		cfs_task_t *task;
 		if (index >= 0) {
 			rc = ptlrpcd_bind(index, max);
 			if (rc < 0)
-				GOTO(out, rc);
+				GOTO(out_env, rc);
 		}
 
 		task = kthread_run(ptlrpcd, pc, pc->pc_name);
 		if (IS_ERR(task))
-			GOTO(out, rc = PTR_ERR(task));
+			GOTO(out_env, rc = PTR_ERR(task));
 
-		rc = 0;
 		wait_for_completion(&pc->pc_starting);
 	}
-#else
-        pc->pc_wait_callback =
-                liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",
-                                                 &ptlrpcd_check_async_rpcs, pc);
-        pc->pc_idle_callback =
-                liblustre_register_idle_callback("ptlrpcd_check_idle_rpcs",
-                                                 &ptlrpcd_idle, pc);
+	RETURN(0);
+
+out_env:
+	lu_context_fini(&pc->pc_env.le_ctx);
+
+out_set:
+	if (pc->pc_set != NULL) {
+		struct ptlrpc_request_set *set = pc->pc_set;
+
+		spin_lock(&pc->pc_lock);
+		pc->pc_set = NULL;
+		spin_unlock(&pc->pc_lock);
+		ptlrpc_set_destroy(set);
+	}
+	clear_bit(LIOD_BIND, &pc->pc_flags);
 #endif
 out:
-        if (rc) {
-#ifdef __KERNEL__
-                if (pc->pc_set != NULL) {
-                        struct ptlrpc_request_set *set = pc->pc_set;
-
-			spin_lock(&pc->pc_lock);
-			pc->pc_set = NULL;
-			spin_unlock(&pc->pc_lock);
-			ptlrpc_set_destroy(set);
-		}
-		if (env != 0)
-			lu_context_fini(&pc->pc_env.le_ctx);
-		clear_bit(LIOD_BIND, &pc->pc_flags);
-#else
-		SET_BUT_UNUSED(env);
-#endif
-		clear_bit(LIOD_START, &pc->pc_flags);
-	}
+	clear_bit(LIOD_START, &pc->pc_flags);
 	RETURN(rc);
 }
 

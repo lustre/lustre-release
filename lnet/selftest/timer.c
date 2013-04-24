@@ -179,9 +179,6 @@ int
 stt_timer_main (void *arg)
 {
         int rc = 0;
-        UNUSED(arg);
-
-        SET_BUT_UNUSED(rc);
 
         cfs_block_allsigs();
 
@@ -192,12 +189,13 @@ stt_timer_main (void *arg)
                                    stt_data.stt_shuttingdown,
                                    cfs_time_seconds(STTIMER_SLOTTIME),
                                    rc);
+                rc = 0; /* Discard jiffies remaining before timeout. */
         }
 
 	spin_lock(&stt_data.stt_lock);
 	stt_data.stt_nthreads--;
 	spin_unlock(&stt_data.stt_lock);
-	return 0;
+	return rc;
 }
 
 int
