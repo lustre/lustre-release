@@ -4053,13 +4053,13 @@ run_test 72 "test fast symlink with extents flag enabled"
 
 test_73() { #LU-3006
 	load_modules
-	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@tcp $(ostdevname 1)" ||
+	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@$NETTYPE $(ostdevname 1)" ||
 		error "1st tunefs failed"
 	start_mgsmds || error "start mds failed"
 	start_ost || error "start ost failed"
 	mount_client $MOUNT || error "mount client failed"
 	lctl get_param -n osc.*OST0000-osc-[^M]*.import | grep failover_nids |
-		grep 1.2.3.4@tcp || error "failover nids haven't changed"
+		grep 1.2.3.4@$NETTYPE || error "failover nids haven't changed"
 	umount_client $MOUNT || error "umount client failed"
 	stopall
 	reformat
