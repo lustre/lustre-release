@@ -2847,6 +2847,14 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli)
                         else if (rc == 0)
                                 race_counter++;
                 }
+
+		/* Refresh loi just in case it has been freed during
+		 * cl_loi_list_lock release in osc_send_oap_rpc().
+		 */
+		loi = osc_next_loi(cli);
+		if (loi == NULL)
+			break;
+
                 if (lop_makes_rpc(cli, &loi->loi_read_lop, OBD_BRW_READ)) {
                         rc = osc_send_oap_rpc(env, cli, loi, OBD_BRW_READ,
                                               &loi->loi_read_lop);
