@@ -553,7 +553,7 @@ int fld_cache_lookup(struct fld_cache *cache,
 	cfs_list_for_each_entry(flde, head, fce_list) {
 		if (flde->fce_range.lsr_start > seq) {
 			if (prev != NULL)
-				memcpy(range, prev, sizeof(*range));
+				*range = prev->fce_range;
 			break;
 		}
 
