@@ -276,16 +276,16 @@ command_t cmdlist[] = {
          "interest to consumer <id>, allowing the system to free up space.\n"
          "An <endrec> of 0 means all records.\n"
          "usage: changelog_clear <mdtname> <id> <endrec>"},
-        {"fid2path", lfs_fid2path, 0,
-         "Resolve the full path to a given FID. For a specific hardlink "
-         "specify link number <linkno>.\n"
-         /* "For a historical name, specify changelog record <recno>.\n" */
-         "usage: fid2path <fsname|rootpath> <fid> [--link <linkno>]"
-                /*[--rec <recno>]*/},
-        {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
-         "usage: path2fid <path>"},
-        {"data_version", lfs_data_version, 0, "Display file data version for "
-         "a given path.\n" "usage: data_version [-n] <path>"},
+	{"fid2path", lfs_fid2path, 0,
+	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
+	 "specify link number <linkno>.\n"
+	/* "For a historical link name, specify changelog record <recno>.\n" */
+	 "usage: fid2path [--link <linkno>] <fsname|rootpath> <fid> ..."
+		/* [ --rec <recno> ] */ },
+	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
+	 "usage: path2fid <path> ..."},
+	{"data_version", lfs_data_version, 0, "Display file data version for "
+	 "a given path.\n" "usage: data_version [-n] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
 	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
 	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"
@@ -3030,7 +3030,7 @@ static int lfs_fid2path(int argc, char **argv)
         int linkno = -1;
         int lnktmp;
         int printcur = 0;
-        int rc;
+	int rc = 0;
 
         optind = 0;
 
@@ -3054,68 +3054,88 @@ static int lfs_fid2path(int argc, char **argv)
                         return CMD_HELP;
                 }
         }
-        device = argv[optind++];
-        fid = argv[optind++];
-        if (optind != argc)
-                return CMD_HELP;
 
-        path = calloc(1, PATH_MAX);
+	if (argc < 3)
+		return CMD_HELP;
 
-        lnktmp = (linkno >= 0) ? linkno : 0;
-        while (1) {
-                int oldtmp = lnktmp;
-                long long rectmp = recno;
-                rc = llapi_fid2path(device, fid, path, PATH_MAX, &rectmp,
-                                    &lnktmp);
-                if (rc < 0) {
-                        fprintf(stderr, "%s error: %s\n", argv[0],
-                                strerror(errno = -rc));
-                        break;
-                }
+	device = argv[optind++];
+	path = calloc(1, PATH_MAX);
 
-                if (printcur)
-                        fprintf(stdout, "%lld ", rectmp);
-                if (device[0] == '/') {
-                        fprintf(stdout, "%s", device);
-                        if (device[strlen(device) - 1] != '/')
-                                fprintf(stdout, "/");
-                } else if (path[0] == '\0') {
-                        fprintf(stdout, "/");
-                }
-                fprintf(stdout, "%s\n", path);
+	rc = 0;
+	while (optind < argc) {
+		fid = argv[optind++];
 
-                if (linkno >= 0)
-                        /* specified linkno */
-                        break;
-                if (oldtmp == lnktmp)
-                        /* no more links */
-                        break;
-        }
+		lnktmp = (linkno >= 0) ? linkno : 0;
+		while (1) {
+			int oldtmp = lnktmp;
+			long long rectmp = recno;
+			int rc2;
+			rc2 = llapi_fid2path(device, fid, path, PATH_MAX,
+					     &rectmp, &lnktmp);
+			if (rc2 < 0) {
+				fprintf(stderr, "%s: error on FID %s: %s\n",
+					argv[0], fid, strerror(errno = -rc2));
+				if (rc == 0)
+					rc = rc2;
+				break;
+			}
 
-        free(path);
-        return rc;
+			if (printcur)
+				fprintf(stdout, "%lld ", rectmp);
+			if (device[0] == '/') {
+				fprintf(stdout, "%s", device);
+				if (device[strlen(device) - 1] != '/')
+					fprintf(stdout, "/");
+			} else if (path[0] == '\0') {
+				fprintf(stdout, "/");
+			}
+			fprintf(stdout, "%s\n", path);
+
+			if (linkno >= 0)
+				/* specified linkno */
+				break;
+			if (oldtmp == lnktmp)
+				/* no more links */
+				break;
+		}
+	}
+
+	free(path);
+	return rc;
 }
 
 static int lfs_path2fid(int argc, char **argv)
 {
-        char *path;
-        lustre_fid fid;
-        int rc;
+	char **path;
+	const char *sep = "";
+	lustre_fid fid;
+	int rc = 0;
 
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc < 2)
+		return CMD_HELP;
+	else if (argc > 2)
+		sep = ": ";
 
-        path = argv[1];
-        rc = llapi_path2fid(path, &fid);
-        if (rc) {
-                fprintf(stderr, "can't get fid for %s: %s\n", path,
-                        strerror(errno = -rc));
-                return rc;
-        }
+	path = argv + 1;
+	while (*path != NULL) {
+		int err = llapi_path2fid(*path, &fid);
 
-        printf(DFID"\n", PFID(&fid));
+		if (err) {
+			fprintf(stderr, "%s: can't get fid for %s: %s\n",
+				argv[0], *path, strerror(-err));
+			if (rc == 0) {
+				rc = err;
+				errno = -err;
+			}
+			goto out;
+		}
+		printf("%s%s"DFID"\n", *sep != '\0' ? *path : "", sep,
+		       PFID(&fid));
+out:
+		path++;
+	}
 
-        return 0;
+	return rc;
 }
 
 static int lfs_data_version(int argc, char **argv)

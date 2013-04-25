@@ -13,6 +13,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs df [-i] [-h] [--pool|-p <fsname>[.<pool>] [path]
 .br
+.B lfs fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
+.br
 .B lfs find <directory|filename>
         \fB[[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N] [[!] --ctime|-C [+-]N]
         \fB[--maxdepth|-D N] [[!] --mdt|-m <uuid|index,...>] [--name|-n pattern]
@@ -39,6 +41,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs osts
 .RB [ path ]
+.br
+.B path2fid <path> ...
 .br
 .B lfs pool_list <filesystem>[.<pool>] | <pathname>
 .br
@@ -194,6 +198,18 @@ must be part of the pool or an error will be returned.
 .TP
 .B setstripe -d
 Delete the default striping on the specified directory.
+.TP
+.B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
+Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
+mounted at \fBrootpath\fR or named \fBfsname\fR.  If a file has multiple
+hard links, then all of the pathnames for that file are printed, unless
+\fB--link\fR limits the printing to only the specified link number (starting
+at 0, in no particular order).  If multiple fids are specified, but only a
+single pathname is needed for each file, use \fB--link 0\fR.
+.TP
+.B path2fid <path> ...
+Print out the FIDs for the specified \fBpath(s)\fR.  If multiple pathnames
+are given, then they will be printed one per line with the path as prefix.
 .TP
 .B pool_list
 .RI { filesystem }[ .poolname "] | {" pathname }
