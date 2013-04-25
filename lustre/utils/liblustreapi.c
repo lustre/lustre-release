@@ -4369,37 +4369,38 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 }
 
 int llapi_fid2path(const char *device, const char *fidstr, char *buf,
-                   int buflen, long long *recno, int *linkno)
+		   int buflen, long long *recno, int *linkno)
 {
-        struct lu_fid fid;
-        struct getinfo_fid2path *gf;
-        int rc;
+	struct lu_fid fid;
+	struct getinfo_fid2path *gf;
+	int rc;
 
-        while (*fidstr == '[')
-                fidstr++;
+	while (*fidstr == '[')
+		fidstr++;
 
-        sscanf(fidstr, SFID, RFID(&fid));
-        if (!fid_is_sane(&fid)) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "bad FID format [%s], should be "DFID"\n",
-                                  fidstr, (__u64)1, 2, 0);
-                return -EINVAL;
-        }
+	sscanf(fidstr, SFID, RFID(&fid));
+	if (!fid_is_sane(&fid)) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "bad FID format [%s], should be [seq:oid:ver]"
+				  " (e.g. "DFID")\n", fidstr,
+				  (unsigned long long)FID_SEQ_NORMAL, 2, 0);
+		return -EINVAL;
+	}
 
-        gf = malloc(sizeof(*gf) + buflen);
-        if (gf == NULL)
-                return -ENOMEM;
-        gf->gf_fid = fid;
-        gf->gf_recno = *recno;
-        gf->gf_linkno = *linkno;
-        gf->gf_pathlen = buflen;
+	gf = malloc(sizeof(*gf) + buflen);
+	if (gf == NULL)
+		return -ENOMEM;
+	gf->gf_fid = fid;
+	gf->gf_recno = *recno;
+	gf->gf_linkno = *linkno;
+	gf->gf_pathlen = buflen;
 
-        /* Take path or fsname */
-        rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
-        if (rc) {
-                if (rc != -ENOENT)
-                        llapi_error(LLAPI_MSG_ERROR, rc, "ioctl err %d", rc);
-        } else {
+	/* Take path or fsname */
+	rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
+	if (rc) {
+		if (rc != -ENOENT)
+			llapi_error(LLAPI_MSG_ERROR, rc, "ioctl err %d", rc);
+	} else {
 		memcpy(buf, gf->gf_path, gf->gf_pathlen);
 		if (buf[0] == '\0') { /* ROOT path */
 			buf[0] = '/';
