@@ -332,11 +332,11 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 			ff_objid = le64_to_cpu(ff.ff_objid);
 		} else {
 			ff_seq = le64_to_cpu(lma.lma_self_fid.f_seq);
-			ff_objid = le64_to_cpu(lma.lma_self_fid.f_oid);
+			ff_objid = le32_to_cpu(lma.lma_self_fid.f_oid);
 		}
 
 		sprintf(seq_name, (fid_seq_is_rsvd(ff_seq) ||
-			fid_seq_is_mdt0(ff_seq)) ?  LPU64 : LPX64i,
+				   fid_seq_is_mdt0(ff_seq)) ? LPU64 : LPX64i,
 			fid_seq_is_idif(ff_seq) ? 0 : ff_seq);
 
 
