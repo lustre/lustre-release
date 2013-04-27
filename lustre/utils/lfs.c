@@ -235,7 +235,14 @@ command_t cmdlist[] = {
          "       -b can be used instead of --block-softlimit/--block-grace\n"
          "       -B can be used instead of --block-hardlimit\n"
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
-         "       -I can be used instead of --inode-hardlimit"},
+	 "       -I can be used instead of --inode-hardlimit\n\n"
+	 "Note: The total quota space will be split into many qunits and\n"
+	 "      balanced over all server targets, the minimal qunit size is\n"
+	 "      1M bytes for block space and 1K inodes for inode space.\n\n"
+	 "      Quota space rebalancing process will stop when this mininum\n"
+	 "      value is reached. As a result, quota exceeded can be returned\n"
+	 "      while many targets still have 1MB or 1K inodes of spare\n"
+	 "      quota space."},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
          "usage: quota [-q] [-v] [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>]\n"
          "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
@@ -2296,19 +2303,43 @@ int lfs_setquota(int argc, char **argv)
                         ARG2ULL(dqb->dqb_bsoftlimit, optarg, 1024);
                         dqb->dqb_bsoftlimit >>= 10;
                         limit_mask |= BSLIMIT;
+			if (dqb->dqb_bsoftlimit &&
+			    dqb->dqb_bsoftlimit <= 1024) /* <= 1M? */
+				fprintf(stderr, "warning: block softlimit is "
+					"smaller than the miminal qunit size, "
+					"please see the help of setquota or "
+					"Lustre manual for details.\n");
                         break;
                 case 'B':
                         ARG2ULL(dqb->dqb_bhardlimit, optarg, 1024);
                         dqb->dqb_bhardlimit >>= 10;
                         limit_mask |= BHLIMIT;
+			if (dqb->dqb_bhardlimit &&
+			    dqb->dqb_bhardlimit <= 1024) /* <= 1M? */
+				fprintf(stderr, "warning: block hardlimit is "
+					"smaller than the miminal qunit size, "
+					"please see the help of setquota or "
+					"Lustre manual for details.\n");
                         break;
                 case 'i':
                         ARG2ULL(dqb->dqb_isoftlimit, optarg, 1);
                         limit_mask |= ISLIMIT;
+			if (dqb->dqb_isoftlimit &&
+			    dqb->dqb_isoftlimit <= 1024) /* <= 1K inodes? */
+				fprintf(stderr, "warning: inode softlimit is "
+					"smaller than the miminal qunit size, "
+					"please see the help of setquota or "
+					"Lustre manual for details.\n");
                         break;
                 case 'I':
                         ARG2ULL(dqb->dqb_ihardlimit, optarg, 1);
                         limit_mask |= IHLIMIT;
+			if (dqb->dqb_ihardlimit &&
+			    dqb->dqb_ihardlimit <= 1024) /* <= 1K inodes? */
+				fprintf(stderr, "warning: inode hardlimit is "
+					"smaller than the miminal qunit size, "
+					"please see the help of setquota or "
+					"Lustre manual for details.\n");
                         break;
                 default: /* getopt prints error message for us when opterr != 0 */
                         return CMD_HELP;
