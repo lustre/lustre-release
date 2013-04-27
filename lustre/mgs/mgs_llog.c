@@ -1207,26 +1207,24 @@ out_put:
  */
 static int mgs_parse_devname(char *devname, char *fsname, __u32 *index)
 {
-	char *ptr;
+	int rc;
 	ENTRY;
 
 	/* Extract fsname */
-	ptr = strrchr(devname, '-');
-
 	if (fsname) {
-		if (!ptr) {
+		rc = server_name2fsname(devname, fsname, NULL);
+		if (rc < 0) {
 			CDEBUG(D_MGS, "Device name %s without fsname\n",
 			       devname);
 			RETURN(-EINVAL);
 		}
-		memset(fsname, 0, MTI_NAME_MAXLEN);
-		strncpy(fsname, devname, ptr - devname);
-		fsname[MTI_NAME_MAXLEN - 1] = 0;
 	}
 
 	if (index) {
-		if (server_name2index(ptr, index, NULL) < 0) {
-			CDEBUG(D_MGS, "Device name with wrong index\n");
+		rc = server_name2index(devname, index, NULL);
+		if (rc < 0) {
+			CDEBUG(D_MGS, "Device name %s with wrong index\n",
+			       devname);
 			RETURN(-EINVAL);
 		}
 	}
