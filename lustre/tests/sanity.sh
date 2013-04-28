@@ -141,13 +141,13 @@ umask 077
 
 OLDDEBUG=$(lctl get_param -n debug 2> /dev/null)
 lctl set_param debug=-1 2> /dev/null || true
-test_0() {
+test_0a() {
 	touch $DIR/$tfile
 	$CHECKSTAT -t file $DIR/$tfile || error "$tfile is not a file"
 	rm $DIR/$tfile
 	$CHECKSTAT -a $DIR/$tfile || error "$tfile was not removed"
 }
-run_test 0 "touch .../$tfile ; rm .../$tfile ====================="
+run_test 0a "touch; rm ====================="
 
 test_0b() {
 	chmod 0755 $DIR || error "chmod 0755 $DIR failed"
@@ -193,14 +193,6 @@ test_3() {
 }
 run_test 3 "mkdir; touch; rmdir; check dir ====================="
 
-test_4() {
-	test_mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
-	$CHECKSTAT -t dir $DIR/$tdir || error "$tdir is not a directory"
-	test_mkdir $DIR/$tdir/d2 || error "mkdir $tdir/d2 failed"
-	$CHECKSTAT -t dir $DIR/$tdir/d2 || error "$tdir/d2 is not a directory"
-}
-run_test 4 "mkdir =============================================="
-
 test_5() {
 	test_mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
 	test_mkdir $DIR/$tdir/d2 || error "mkdir $tdir/d2 failed"
@@ -215,20 +207,11 @@ test_6a() {
 	chmod 0666 $DIR/$tfile || error "chmod 0666 $tfile failed"
 	$CHECKSTAT -t file -p 0666 -u \#$UID $DIR/$tfile ||
 		error "$tfile does not have perm 0666 or UID $UID"
-}
-run_test 6a "touch .../f6a; chmod .../f6a ======================"
-
-test_6b() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
-	if [ ! -f $DIR/$tfile ]; then
-		touch $DIR/$tfile
-		chmod 0666 $DIR/$tfile
-	fi
 	$RUNAS chmod 0444 $DIR/$tfile && error "chmod $tfile worked on UID $UID"
 	$CHECKSTAT -t file -p 0666 -u \#$UID $DIR/$tfile ||
 		error "$tfile should be 0666 and owned by UID $UID"
 }
-run_test 6b "$RUNAS chmod .../f6a (should return error) =="
+run_test 6a "touch f6a; chmod f6a; $RUNAS chmod f6a (should return error) =="
 
 test_6c() {
 	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
@@ -236,20 +219,11 @@ test_6c() {
 	chown $RUNAS_ID $DIR/$tfile || error "chown $RUNAS_ID $file failed"
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/$tfile ||
 		error "$tfile should be owned by UID $RUNAS_ID"
-}
-run_test 6c "touch .../f6c; chown .../f6c ======================"
-
-test_6d() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
-	if [ ! -f $DIR/$tfile ]; then
-		touch $DIR/$tfile
-		chown $RUNAS_ID $DIR/$tfile
-	fi
 	$RUNAS chown $UID $DIR/$tfile && error "chown $UID $file succeeded"
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/$tfile ||
 		error "$tfile should be owned by UID $RUNAS_ID"
 }
-run_test 6d "$RUNAS chown .../f6c (should return error) =="
+run_test 6c "touch f6c; chown f6c; $RUNAS chown f6c (should return error) =="
 
 test_6e() {
 	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
@@ -257,20 +231,11 @@ test_6e() {
 	chgrp $RUNAS_ID $DIR/$tfile || error "chgrp $RUNAS_ID $file failed"
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/$tfile ||
 		error "$tfile should be owned by GID $UID"
-}
-run_test 6e "touch .../f6e; chgrp .../f6e ======================"
-
-test_6f() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
-	if [ ! -f $DIR/$tfile ]; then
-		touch $DIR/$tfile
-		chgrp $RUNAS_ID $DIR/$tfile
-	fi
 	$RUNAS chgrp $UID $DIR/$tfile && error "chgrp $UID $file succeeded"
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/$tfile ||
 		error "$tfile should be owned by UID $UID and GID $RUNAS_ID"
 }
-run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
+run_test 6e "touch f6e; chgrp f6e; $RUNAS chgrp f6e (should return error) =="
 
 test_6g() {
 	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
