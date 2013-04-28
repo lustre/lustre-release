@@ -782,7 +782,7 @@ do {									      \
 
 #define __OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, type)	      \
 do {									      \
-        LASSERT(ergo(type != CFS_ALLOC_ATOMIC, !cfs_in_interrupt()));         \
+	LASSERT(ergo((type) != CFS_ALLOC_ATOMIC, !cfs_in_interrupt()));	      \
 	(ptr) = (cptab) == NULL ?					      \
 		cfs_mem_cache_alloc(slab, type) :			      \
 		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, type);	      \
