@@ -1,0 +1,119 @@
+--- a/block/blk-settings.c	2013-02-06 12:40:44.000000000 -0500
++++ b/block/blk-settings.c	2013-02-06 12:55:28.000000000 -0500
+@@ -19,6 +19,12 @@
+ 
+ unsigned long blk_max_pfn;
+ 
++int default_max_sectors = BLK_DEF_MAX_SECTORS;
++module_param(default_max_sectors, int, 0);
++
++int default_max_segments = BLK_MAX_SEGMENTS;
++module_param(default_max_segments, int, 0);
++
+ /**
+  * blk_queue_prep_rq - set a prepare_request function for queue
+  * @q:		queue
+@@ -108,7 +114,7 @@
+  */
+ void blk_set_default_limits(struct queue_limits *lim)
+ {
+-	lim->max_segments = BLK_MAX_SEGMENTS;
++	lim->max_segments = default_max_segments;
+ 	lim->max_integrity_segments = 0;
+ 	lim->seg_boundary_mask = BLK_SEG_BOUNDARY_MASK;
+ 	lim->max_segment_size = BLK_MAX_SEGMENT_SIZE;
+@@ -255,7 +261,7 @@
+ 
+ 	limits->max_hw_sectors = max_hw_sectors;
+ 	limits->max_sectors = min_t(unsigned int, max_hw_sectors,
+-				    BLK_DEF_MAX_SECTORS);
++				    default_max_sectors);
+ }
+ EXPORT_SYMBOL(blk_limits_max_hw_sectors);
+ 
+--- a/drivers/scsi/Kconfig	2013-02-07 09:25:49.000000000 -0500
++++ b/drivers/scsi/Kconfig	2013-02-07 09:30:15.000000000 -0500
+@@ -245,6 +245,15 @@ config SCSI_SCAN_ASYNC
+	  there should be no noticeable performance impact as long as you have
+	  logging turned off.
+ 
++config SCSI_MAX_SG_SEGMENTS
++	int "Maximum SCSI scatter gather segment size"
++	range 32 256 
++	default "128"
++	depends on SCSI
++	help
++	  Control the maximum limit for scatter gather buffers for the
++	  SCSI device.
++
+ config SCSI_SCAN_ASYNC
+ 	bool "Asynchronous SCSI scanning"
+ 	depends on SCSI
+--- a/include/scsi/scsi.h	2013-02-07 09:55:02.000000000 -0500
++++ b/include/scsi/scsi.h	2013-02-07 09:55:20.000000000 -0500
+@@ -20,7 +20,7 @@ struct scsi_cmnd;
+  * to SG_MAX_SINGLE_ALLOC to pack correctly at the highest order.  The
+  * minimum value is 32
+  */
+-#define SCSI_MAX_SG_SEGMENTS	128
++#define SCSI_MAX_SG_SEGMENTS	CONFIG_SCSI_MAX_SG_SEGMENTS
+ 
+ /*
+  * Like SCSI_MAX_SG_SEGMENTS, but for archs that have sg chaining. This limit
+--- a/drivers/scsi/isci/init.c	2013-02-08 10:13:00.000000000 -0500
++++ b/drivers/scsi/isci/init.c	2013-02-08 10:15:04.000000000 -0500
+@@ -118,6 +118,10 @@ unsigned char phy_gen = 3;
+ module_param(phy_gen, byte, 0);
+ MODULE_PARM_DESC(phy_gen, "PHY generation (1: 1.5Gbps 2: 3.0Gbps 3: 6.0Gbps)");
+ 
++u16 sg_table_size = SG_ALL;
++module_param(sg_table_size, ushort, 0);
++MODULE_PARM_DESC(sg_table_size, "Size in KB of scatter gather table");
++
+ unsigned char max_concurr_spinup = 1;
+ module_param(max_concurr_spinup, byte, 0);
+ MODULE_PARM_DESC(max_concurr_spinup, "Max concurrent device spinup");
+@@ -155,7 +159,6 @@ static struct scsi_host_template isci_sh
+ 	.can_queue			= ISCI_CAN_QUEUE_VAL,
+ 	.cmd_per_lun			= 1,
+ 	.this_id			= -1,
+-	.sg_tablesize			= SG_ALL,
+ 	.max_sectors			= SCSI_DEFAULT_MAX_SECTORS,
+ 	.use_clustering			= ENABLE_CLUSTERING,
+ 	.eh_device_reset_handler	= sas_eh_device_reset_handler,
+@@ -407,6 +410,7 @@ static struct isci_host *isci_host_alloc
+ 	isci_host->pdev = pdev;
+ 	isci_host->id = id;
+ 
++	isci_sht.sg_tablesize = sg_table_size;
+ 	shost = scsi_host_alloc(&isci_sht, sizeof(void *));
+ 	if (!shost)
+ 		return NULL;
+--- a/drivers/message/fusion/Kconfig	2013-02-08 10:21:25.000000000 -0500
++++ b/drivers/message/fusion/Kconfig	2013-02-08 10:22:37.000000000 -0500
+@@ -61,9 +61,9 @@
+ 	  LSISAS1078
+ 
+ config FUSION_MAX_SGE
+-	int "Maximum number of scatter gather entries for SAS and SPI (16 - 128)"
+-	default "128"
+-	range 16 128
++	int "Maximum number of scatter gather entries for SAS and SPI (16 - 256)"
++	default "256"
++	range 16 256 
+ 	help
+ 	  This option allows you to specify the maximum number of scatter-
+ 	  gather entries per I/O. The driver default is 128, which matches
+--- a/drivers/message/fusion/mptbase.h	2013-02-08 10:32:45.000000000 -0500
++++ b/drivers/message/fusion/mptbase.h	2013-02-08 10:32:55.000000000 -0500
+@@ -168,8 +168,8 @@
+ #ifdef  CONFIG_FUSION_MAX_SGE
+ #if     CONFIG_FUSION_MAX_SGE  < 16
+ #define MPT_SCSI_SG_DEPTH	16
+-#elif   CONFIG_FUSION_MAX_SGE  > 128
+-#define MPT_SCSI_SG_DEPTH	128
++#elif   CONFIG_FUSION_MAX_SGE  > 256
++#define MPT_SCSI_SG_DEPTH	256
+ #else
+ #define MPT_SCSI_SG_DEPTH	CONFIG_FUSION_MAX_SGE
+ #endif

@@ -1,0 +1,29 @@
+Force MD devices to pass SYNC reads directly to the disk
+instead of handling from cache.  This is needed for MMP
+on MD RAID devices, and in theory could be accepted in
+the upstream kernel.  Not needed for DMU.
+
+Index: linux-3.0.35/drivers/md/raid5.c
+===================================================================
+--- linux-3.0.35.orig/drivers/md/raid5.c	2012-06-22 06:09:49.000000000 -0400
++++ linux-3.0.35/drivers/md/raid5.c	2013-01-25 10:11:10.076431000 -0500
+@@ -2169,6 +2169,9 @@ static int add_stripe_bio(struct stripe_
+ 		bi->bi_next = *bip;
+ 	*bip = bi;
+ 	bi->bi_phys_segments++;
++	/* force to read from disk. */
++	if ((bi->bi_rw & REQ_SYNC) && !forwrite)
++		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags);
+ 	spin_unlock_irq(&conf->device_lock);
+ 	spin_unlock(&sh->lock);
+ 
+@@ -4097,6 +4100,9 @@ static int make_request(mddev_t *mddev,
+ 		bio_endio(bi, 0);
+ 	}
+ 
++	if (bi->bi_rw & REQ_SYNC)
++		md_wakeup_thread(mddev->thread);
++
+ 	return 0;
+ }
+ 

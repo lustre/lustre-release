@@ -1,0 +1,150 @@
+diff -ur linux-2.6.32.46-0.orig//block/blk-core.c linux-2.6.32.46-0/block/blk-core.c
+--- linux-2.6.32.46-0.orig//block/blk-core.c	2013-04-26 10:23:22.000000000 -0400
++++ linux-2.6.32.46-0/block/blk-core.c	2013-04-26 10:25:46.000000000 -0400
+@@ -1350,6 +1350,8 @@
+ 
+ #endif /* CONFIG_FAIL_MAKE_REQUEST */
+ 
++int dev_check_rdonly(struct block_device *bdev);
++
+ /*
+  * Check whether this bio extends beyond the end of the device.
+  */
+@@ -1451,6 +1453,12 @@
+ 		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
+ 			goto end_io;
+ 
++		/* this is cfs's dev_rdonly check */
++		if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
++			err = 0;
++			goto end_io;
++		}
++
+ 		if (should_fail_request(bio))
+ 			goto end_io;
+ 
+@@ -2494,6 +2502,99 @@
+ }
+ EXPORT_SYMBOL(kblockd_schedule_work);
+ 
++ /*
++ * Debug code for turning block devices "read-only" (will discard writes
++ * silently).  This is for filesystem crash/recovery testing.
++ */
++struct deventry {
++	dev_t dev;
++	struct deventry *next;
++};
++
++static struct deventry *devlist = NULL;
++static spinlock_t devlock = SPIN_LOCK_UNLOCKED;
++
++int dev_check_rdonly(struct block_device *bdev)
++{
++	struct deventry *cur;
++
++	if (!bdev)
++		return 0;
++
++	spin_lock(&devlock);
++	cur = devlist;
++	while(cur) {
++		if (bdev->bd_dev == cur->dev) {
++			spin_unlock(&devlock);
++			return 1;
++		}
++		cur = cur->next;
++	}
++	spin_unlock(&devlock);
++	return 0;
++}
++
++void dev_set_rdonly(struct block_device *bdev)
++{
++	struct deventry *newdev, *cur;
++
++	if (!bdev)
++		return;
++
++	newdev = kmalloc(sizeof(struct deventry), GFP_KERNEL);
++	if (!newdev)
++		return;
++
++	spin_lock(&devlock);
++	cur = devlist;
++	while(cur) {
++		if (bdev->bd_dev == cur->dev) {
++			spin_unlock(&devlock);
++			kfree(newdev);
++			return;
++		}
++		cur = cur->next;
++	}
++	newdev->dev = bdev->bd_dev;
++	newdev->next = devlist;
++	devlist = newdev;
++	spin_unlock(&devlock);
++	printk(KERN_WARNING "Turning device %s (%#x) read-only\n",
++		bdev->bd_disk ? bdev->bd_disk->disk_name : "", bdev->bd_dev);
++}
++
++void dev_clear_rdonly(struct block_device *bdev)
++{
++	struct deventry *cur, *last = NULL;
++
++	if (!bdev)
++		return;
++
++	spin_lock(&devlock);
++	cur = devlist;
++	while(cur) {
++		if (bdev->bd_dev == cur->dev) {
++			if (last)
++				last->next = cur->next;
++			else
++				devlist = cur->next;
++			spin_unlock(&devlock);
++			kfree(cur);
++			printk(KERN_WARNING "Removing read-only on %s (%#x)\n",
++				bdev->bd_disk ? bdev->bd_disk->disk_name :
++						"unknown block",
++				bdev->bd_dev);
++			return;
++		}
++		last = cur;
++		cur = cur->next;
++	}
++	spin_unlock(&devlock);
++}
++
++EXPORT_SYMBOL(dev_set_rdonly);
++EXPORT_SYMBOL(dev_clear_rdonly);
++EXPORT_SYMBOL(dev_check_rdonly);
+ int __init blk_dev_init(void)
+ {
+ 	BUILD_BUG_ON(__REQ_NR_BITS > 8 *
+diff -ur linux-2.6.32.46-0.orig//fs/block_dev.c linux-2.6.32.46-0/fs/block_dev.c
+--- linux-2.6.32.46-0.orig//fs/block_dev.c	2013-04-26 10:23:31.000000000 -0400
++++ linux-2.6.32.46-0/fs/block_dev.c	2013-04-26 10:25:46.000000000 -0400
+@@ -1374,6 +1374,7 @@
+ 		if (bdev != bdev->bd_contains)
+ 			victim = bdev->bd_contains;
+ 		bdev->bd_contains = NULL;
++		dev_clear_rdonly(bdev);
+ 	}
+ 	unlock_kernel();
+ 	mutex_unlock(&bdev->bd_mutex);
+diff -ur linux-2.6.32.46-0.orig//include/linux/fs.h linux-2.6.32.46-0/include/linux/fs.h
+--- linux-2.6.32.46-0.orig//include/linux/fs.h	2013-04-26 10:23:39.000000000 -0400
++++ linux-2.6.32.46-0/include/linux/fs.h	2013-04-26 10:25:46.000000000 -0400
+@@ -2237,6 +2237,10 @@
+ extern void submit_bio(int, struct bio *);
+ extern int bdev_read_only(struct block_device *);
+ #endif
++#define HAVE_CLEAR_RDONLY_ON_PUT
++extern void dev_set_rdonly(struct block_device *bdev);
++extern int dev_check_rdonly(struct block_device *bdev);
++extern void dev_clear_rdonly(struct block_device *bdev);
+ extern int set_blocksize(struct block_device *, int);
+ extern int sb_set_blocksize(struct super_block *, int);
+ extern int sb_min_blocksize(struct super_block *, int);

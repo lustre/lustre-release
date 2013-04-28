@@ -1,3 +1,5 @@
-# This file is a place holder for the patch series file
-# The correct patches will be placed in here for SLES-SP2 3.x kernel server build
-# The changes for SLES server are beyond the scope of change request LU-1691
+raid5-mmp-unplug-dev-sles11sp2.patch
+replace_dqptr_sem-sles11sp2.patch
+dev_read_only-3.0-sles11.patch
+blkdev_tunables-3.0-sles11.patch
+bh_lru_size_config.patch

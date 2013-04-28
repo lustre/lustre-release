@@ -447,8 +447,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry,mnt)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)            \
                 vfs_mknod(dir,entry,mnt,mode,dev)
-#define ll_security_inode_unlink(dir,entry,mnt)         \
-                security_inode_unlink(dir,entry,mnt)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
@@ -457,7 +455,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
 #define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)    vfs_mknod(dir,entry,mode,dev)
-#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,new,new_dir)
 #endif /* HAVE_SECURITY_PLUG */
