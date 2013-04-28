@@ -1078,7 +1078,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 
 	rc = mgs_connect_to_osd(mgs, lustre_cfg_string(lcfg, 3));
 	if (rc)
-		RETURN(rc);
+		GOTO(err_lmi, rc);
 
 	obd = class_name2obd(lustre_cfg_string(lcfg, 0));
 	LASSERT(obd);
@@ -1195,6 +1195,9 @@ err_ops:
 				lu_cdebug_printer);
 	}
 	obd_disconnect(mgs->mgs_bottom_exp);
+err_lmi:
+	if (lmi)
+		server_put_mount(obd->obd_name, lmi->lmi_mnt);
 	RETURN(rc);
 }
 
