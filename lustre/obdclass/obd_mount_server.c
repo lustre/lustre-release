@@ -258,9 +258,14 @@ static int server_start_mgs(struct super_block *sb)
 		rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
 					 LUSTRE_MGS_OBDNAME, 0, 0,
 					 lsi->lsi_osd_obdname, 0);
-		/* Do NOT call server_deregister_mount() here. This leads to
-		 * inability cleanup cleanly and free lsi and other stuff when
-		 * mgs calls server_put_mount() in error handling case. -umka */
+		/* server_deregister_mount() is not called previously, for lsi
+		 * and other stuff can't be freed cleanly when mgs calls
+		 * server_put_mount() in error handling case (see b=17758),
+		 * this problem is caused by a bug in mgs_init0, which forgot
+		 * calling server_put_mount in error case. */
+
+		if (rc)
+			server_deregister_mount(LUSTRE_MGS_OBDNAME);
 	}
 
 	if (rc)
