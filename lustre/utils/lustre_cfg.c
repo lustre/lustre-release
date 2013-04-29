@@ -955,34 +955,34 @@ static int setparam_display(struct param_opts *popt, char *pattern, char *value)
                         pattern, globerrstr(rc));
                 return -ESRCH;
         }
-        for (i = 0; i  < glob_info.gl_pathc; i++) {
-                char *valuename = NULL;
+	for (i = 0; i  < glob_info.gl_pathc; i++) {
+		char *valuename = NULL;
 
-                if (popt->show_path) {
-                        strcpy(filename, glob_info.gl_pathv[i]);
-                        valuename = display_name(filename, 0);
-                        if (valuename)
-                                printf("%s=%s\n", valuename, value);
-                }
-                /* Write the new value to the file */
-                fd = open(glob_info.gl_pathv[i], O_WRONLY);
-                if (fd > 0) {
-                        rc = write(fd, value, strlen(value));
-                        if (rc < 0)
-                                fprintf(stderr, "error: set_param: "
-                                        "writing to file %s: %s\n",
-                                        glob_info.gl_pathv[i], strerror(errno));
-                        else
-                                rc = 0;
-                        close(fd);
-                } else {
-                        fprintf(stderr, "error: set_param: %s opening %s\n",
-                                strerror(rc = errno), glob_info.gl_pathv[i]);
-                }
-        }
+		if (popt->show_path) {
+			strcpy(filename, glob_info.gl_pathv[i]);
+			valuename = display_name(filename, 0);
+			if (valuename)
+				printf("%s=%s\n", valuename, value);
+		}
+		/* Write the new value to the file */
+		fd = open(glob_info.gl_pathv[i], O_WRONLY);
+		if (fd > 0) {
+			rc = write(fd, value, strlen(value));
+			if (rc < 0)
+				fprintf(stderr, "error: set_param: setting "
+					"%s=%s: %s\n", glob_info.gl_pathv[i],
+					value, strerror(errno));
+			else
+				rc = 0;
+			close(fd);
+		} else {
+			fprintf(stderr, "error: set_param: %s opening %s\n",
+				strerror(rc = errno), glob_info.gl_pathv[i]);
+		}
+	}
 
-        globfree(&glob_info);
-        return rc;
+	globfree(&glob_info);
+	return rc;
 }
 
 int jt_lcfg_setparam(int argc, char **argv)
