@@ -73,6 +73,10 @@ int ldiskfs_pdo = 1;
 CFS_MODULE_PARM(ldiskfs_pdo, "i", int, 0644,
                 "ldiskfs with parallel directory operations");
 
+int ldiskfs_track_declares_assert;
+CFS_MODULE_PARM(ldiskfs_track_declares_assert, "i", int, 0644,
+		"LBUG during tracking of declares");
+
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 static const char remote_obj_dir[] = "REM_OBJ_DIR";
@@ -84,7 +88,6 @@ static const struct dt_object_operations      osd_obj_otable_it_ops;
 static const struct dt_index_operations       osd_index_iam_ops;
 static const struct dt_index_operations       osd_index_ea_ops;
 
-#ifdef OSD_TRACK_DECLARES
 int osd_trans_declare_op2rb[] = {
 	[OSD_OT_ATTR_SET]	= OSD_OT_ATTR_SET,
 	[OSD_OT_PUNCH]		= OSD_OT_MAX,
@@ -98,7 +101,6 @@ int osd_trans_declare_op2rb[] = {
 	[OSD_OT_DELETE]		= OSD_OT_INSERT,
 	[OSD_OT_QUOTA]		= OSD_OT_MAX,
 };
-#endif
 
 static int osd_has_index(const struct osd_object *obj)
 {
@@ -709,7 +711,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                 CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
                 osd_th_alloced(oh);
 
-#ifdef OSD_TRACK_DECLARES
 		memset(oti->oti_declare_ops, 0,
 					sizeof(oti->oti_declare_ops));
 		memset(oti->oti_declare_ops_rb, 0,
@@ -717,7 +718,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 		memset(oti->oti_declare_ops_cred, 0,
 					sizeof(oti->oti_declare_ops_cred));
 		oti->oti_rollback = false;
-#endif
         }
         RETURN(th);
 }
@@ -747,16 +747,13 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 GOTO(out, rc);
 
 	if (unlikely(osd_param_is_not_sane(dev, th))) {
-#ifdef OSD_TRACK_DECLARES
 		static unsigned long last_printed;
 		static int last_credits;
-#endif
 
 		CWARN("%.16s: too many transaction credits (%d > %d)\n",
 		      LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
 		      oh->ot_credits,
 		      osd_journal(dev)->j_max_transaction_buffers);
-#ifdef OSD_TRACK_DECLARES
 		CWARN("  create: %u/%u, delete: %u/%u, destroy: %u/%u\n",
 		      oti->oti_declare_ops[OSD_OT_CREATE],
 		      oti->oti_declare_ops_cred[OSD_OT_CREATE],
@@ -793,7 +790,6 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			last_credits = oh->ot_credits;
 			last_printed = jiffies;
 		}
-#endif
 		/* XXX Limit the credits to 'max_transaction_buffers', and
 		 *     let the underlying filesystem to catch the error if
 		 *     we really need so many credits.

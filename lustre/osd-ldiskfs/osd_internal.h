@@ -319,10 +319,6 @@ enum {
 	OSD_OT_MAX		= 11
 };
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
-# define OSD_TRACK_DECLARES
-#endif
-
 struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
@@ -591,7 +587,6 @@ struct osd_thread_info {
 	__u64			oti_quota_id;
 	struct lu_seq_range	oti_seq_range;
 
-#ifdef OSD_TRACK_DECLARES
 	/* Tracking for transaction credits, to allow debugging and optimizing
 	 * cases where a large number of credits are being allocated for
 	 * single transaction. */
@@ -599,7 +594,6 @@ struct osd_thread_info {
 	unsigned short		oti_declare_ops_rb[OSD_OT_MAX];
 	unsigned short		oti_declare_ops_cred[OSD_OT_MAX];
 	bool			oti_rollback;
-#endif
 
 	char			oti_name[48];
 };
@@ -882,8 +876,8 @@ struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
         return child_dentry;
 }
 
-#ifdef OSD_TRACK_DECLARES
 extern int osd_trans_declare_op2rb[];
+extern int ldiskfs_track_declares_assert;
 
 static inline void osd_trans_declare_op(const struct lu_env *env,
 					struct osd_thandle *oh,
@@ -892,10 +886,18 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 	struct osd_thread_info *oti = osd_oti_get(env);
 
 	LASSERT(oh->ot_handle == NULL);
-	LASSERT(op < OSD_OT_MAX);
-
-	oti->oti_declare_ops[op]++;
-	oti->oti_declare_ops_cred[op] += credits;
+	if (unlikely(op >= OSD_OT_MAX)) {
+		if (unlikely(ldiskfs_track_declares_assert))
+			LASSERT(op < OSD_OT_MAX);
+		else {
+			CWARN("%s: Invalid operation index %d\n",
+			      osd_name(oti->oti_dev), op);
+			libcfs_debug_dumpstack(NULL);
+		}
+	} else {
+		oti->oti_declare_ops[op]++;
+		oti->oti_declare_ops_cred[op] += credits;
+	}
 	oh->ot_credits += credits;
 }
 
@@ -908,7 +910,16 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 	unsigned int		rb;
 
 	LASSERT(oh->ot_handle != NULL);
-	LASSERT(op < OSD_OT_MAX);
+	if (unlikely(op >= OSD_OT_MAX)) {
+		if (unlikely(ldiskfs_track_declares_assert))
+			LASSERT(op < OSD_OT_MAX);
+		else {
+			CWARN("%s: Invalid operation index %d\n",
+			      osd_name(oti->oti_dev), op);
+			libcfs_debug_dumpstack(NULL);
+			return;
+		}
+	}
 
 	if (likely(!oti->oti_rollback && oti->oti_declare_ops[op] > 0)) {
 		oti->oti_declare_ops[op]--;
@@ -917,8 +928,28 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 		/* all future updates are considered rollback */
 		oti->oti_rollback = true;
 		rb = osd_trans_declare_op2rb[op];
-		LASSERTF(rb < OSD_OT_MAX, "op = %u\n", op);
-		LASSERTF(oti->oti_declare_ops_rb[rb] > 0, "rb = %u\n", rb);
+		if (unlikely(rb >= OSD_OT_MAX)) {
+			if (unlikely(ldiskfs_track_declares_assert))
+				LASSERTF(rb < OSD_OT_MAX, "rb = %u\n", rb);
+			else {
+				CWARN("%s: Invalid rollback index %d\n",
+				      osd_name(oti->oti_dev), rb);
+				libcfs_debug_dumpstack(NULL);
+				return;
+			}
+		}
+		if (unlikely(oti->oti_declare_ops_rb[rb] == 0)) {
+			if (unlikely(ldiskfs_track_declares_assert))
+				LASSERTF(oti->oti_declare_ops_rb[rb] > 0,
+					 "rb = %u\n", rb);
+			else {
+				CWARN("%s: Overflow in tracking declares for "
+				      "index, rb = %d\n",
+				      osd_name(oti->oti_dev), rb);
+				libcfs_debug_dumpstack(NULL);
+				return;
+			}
+		}
 		oti->oti_declare_ops_rb[rb]--;
 	}
 }
@@ -931,28 +962,19 @@ static inline void osd_trans_declare_rb(const struct lu_env *env,
 						   ot_super);
 
 	LASSERT(oh->ot_handle != NULL);
-	LASSERT(op < OSD_OT_MAX);
+	if (unlikely(op >= OSD_OT_MAX)) {
+		if (unlikely(ldiskfs_track_declares_assert))
+			LASSERT(op < OSD_OT_MAX);
+		else {
+			CWARN("%s: Invalid operation index %d\n",
+			      osd_name(oti->oti_dev), op);
+			libcfs_debug_dumpstack(NULL);
+		}
 
-	oti->oti_declare_ops_rb[op]++;
+	} else {
+		oti->oti_declare_ops_rb[op]++;
+	}
 }
-#else
-static inline void osd_trans_declare_op(const struct lu_env *env,
-					struct osd_thandle *oh,
-					unsigned int op, int credits)
-{
-	oh->ot_credits += credits;
-}
-
-static inline void osd_trans_exec_op(const struct lu_env *env,
-				     struct thandle *th, unsigned int op)
-{
-}
-
-static inline void osd_trans_declare_rb(const struct lu_env *env,
-					struct thandle *th, unsigned int op)
-{
-}
-#endif
 
 /**
  * Helper function to pack the fid, ldiskfs stores fid in packed format.

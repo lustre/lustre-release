@@ -442,6 +442,31 @@ static int lprocfs_osd_wr_auto_scrub(struct file *file, const char *buffer,
 	return count;
 }
 
+static int lprocfs_osd_rd_track_declares_assert(char *page, char **start,
+						off_t off, int count,
+						int *eof, void *data)
+{
+	*eof = 1;
+
+	return snprintf(page, count, "%d\n", ldiskfs_track_declares_assert);
+}
+
+static int lprocfs_osd_wr_track_declares_assert(struct file *file,
+						const char *buffer,
+						unsigned long count, void *data)
+{
+	int     track_declares_assert;
+	int     rc;
+
+	rc = lprocfs_write_helper(buffer, count, &track_declares_assert);
+	if (rc != 0)
+		return rc;
+
+	ldiskfs_track_declares_assert = !!track_declares_assert;
+
+	return count;
+}
+
 static int lprocfs_osd_rd_oi_scrub(char *page, char **start, off_t off,
 				   int count, int *eof, void *data)
 {
@@ -514,6 +539,9 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 
 struct lprocfs_vars lprocfs_osd_module_vars[] = {
         { "num_refs",        lprocfs_rd_numrefs,     0, 0 },
+	{ "track_declares_assert",	lprocfs_osd_rd_track_declares_assert,
+					lprocfs_osd_wr_track_declares_assert,
+					0 },
         { 0 }
 };
 

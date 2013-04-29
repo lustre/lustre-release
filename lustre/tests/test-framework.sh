@@ -3458,6 +3458,12 @@ check_and_setup_lustre() {
         set_default_debug_nodes $(comma_list $(nodes_list))
     fi
 
+	if [ -n "$OSD_TRACK_DECLARES_LBUG" ] ; then
+		do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
+			 "$LCTL set_param osd-*.track_declares_assert=1" \
+			 > /dev/null
+	fi
+
 	init_gss
 	if $GSS; then
 		set_flavor_all $SEC
