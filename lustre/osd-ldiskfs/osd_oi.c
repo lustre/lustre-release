@@ -527,6 +527,11 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	if (unlikely(fid_is_acct(fid)))
 		return osd_acct_obj_lookup(info, osd, fid, id);
 
+	if (!osd->od_igif_inoi && fid_is_igif(fid)) {
+		osd_id_gen(id, lu_igif_ino(fid), lu_igif_gen(fid));
+		return 0;
+	}
+
 	return __osd_oi_lookup(info, osd, fid, id);
 }
 

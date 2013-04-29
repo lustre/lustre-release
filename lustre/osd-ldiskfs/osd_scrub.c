@@ -124,7 +124,7 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		rc = iam_update(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
 		if (unlikely(rc == -ENOENT)) {
-			/* Some unlink thread mat removed the OI mapping. */
+			/* Some unlink thread may removed the OI mapping. */
 			rc = 1;
 		}
 		break;
@@ -483,8 +483,11 @@ iget:
 			rc = osd_ea_fid_set(info, inode, fid, 0);
 			if (rc != 0)
 				GOTO(out, rc);
+
+			if (!(sf->sf_flags & SF_INCONSISTENT))
+				dev->od_igif_inoi = 0;
 		} else {
-			sf->sf_flags |= SF_RECREATED | SF_INCONSISTENT;
+			sf->sf_flags |= SF_RECREATED;
 			scrub->os_full_speed = 1;
 			if (unlikely(!ldiskfs_test_bit(idx, sf->sf_oi_bitmap)))
 				ldiskfs_set_bit(idx, sf->sf_oi_bitmap);
@@ -494,6 +497,20 @@ iget:
 	} else {
 		sf->sf_flags |= SF_INCONSISTENT;
 		scrub->os_full_speed = 1;
+
+		/* XXX: If the device is restored from file-level backup, then
+		 *	some IGIFs may have been already in OI files, and some
+		 *	may be not yet. Means upgrading from 1.8 may be partly
+		 *	processed, but some clients may hold some immobilized
+		 *	IGIFs, and use them to access related objects. Under
+		 *	such case, OSD does not know whether an given IGIF has
+		 *	been processed or to be processed, and it also cannot
+		 *	generate local ino#/gen# directly from the immobilized
+		 *	IGIF because of the backup/restore. Then force OSD to
+		 *	lookup the given IGIF in OI files, and if no entry,
+		 *	then ask the client to retry after upgrading completed.
+		 *	No better choice. */
+		dev->od_igif_inoi = 1;
 	}
 
 	rc = osd_scrub_refresh_mapping(info, dev, fid, lid, ops);
@@ -576,6 +593,10 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 	}
 	sf->sf_time_last_checkpoint = cfs_time_current_sec();
 	if (result > 0) {
+		struct osd_device *dev =
+			container_of0(scrub, struct osd_device, od_scrub);
+
+		dev->od_igif_inoi = 1;
 		sf->sf_status = SS_COMPLETED;
 		memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
 		sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
@@ -1710,14 +1731,33 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		RETURN(rc);
 
 	rc = osd_initial_OI_scrub(info, dev);
-	if (rc == 0 && !dev->od_noscrub &&
-	    ((sf->sf_status == SS_PAUSED) ||
-	     (sf->sf_status == SS_CRASHED &&
-	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE |
-			      SF_AUTO)) ||
-	     (sf->sf_status == SS_INIT &&
-	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))))
-		rc = osd_scrub_start(dev);
+	if (rc == 0) {
+		if ((sf->sf_flags & SF_UPGRADE) &&
+		   !(sf->sf_flags & SF_INCONSISTENT))
+			/* The 'od_igif_inoi' will be set after the
+			 * upgrading completed, needs NOT remount. */
+			dev->od_igif_inoi = 0;
+		else
+			/* The 'od_igif_inoi' will be set under the
+			 * following cases:
+			 * 1) new created system, or
+			 * 2) restored from file-level backup, or
+			 * 3) the upgrading completed.
+			 *
+			 * The 'od_igif_inoi' may be cleared by OI scrub
+			 * later if found that the system is upgrading. */
+			dev->od_igif_inoi = 1;
+
+		if (!dev->od_noscrub &&
+		    ((sf->sf_status == SS_PAUSED) ||
+		     (sf->sf_status == SS_CRASHED &&
+		      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+				      SF_UPGRADE | SF_AUTO)) ||
+		     (sf->sf_status == SS_INIT &&
+		      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+				      SF_UPGRADE))))
+			rc = osd_scrub_start(dev);
+	}
 
 	RETURN(rc);
 }
@@ -1948,12 +1988,10 @@ static __u64 osd_otable_it_store(const struct lu_env *env,
 	struct osd_otable_cache *ooc = &it->ooi_cache;
 	__u64			 hash;
 
-	if (!it->ooi_user_ready)
-		hash = ooc->ooc_pos_preload;
-	else if (likely(ooc->ooc_consumer_idx != -1))
+	if (it->ooi_user_ready && ooc->ooc_consumer_idx != -1)
 		hash = ooc->ooc_cache[ooc->ooc_consumer_idx].oic_lid.oii_ino;
 	else
-		hash = 0;
+		hash = ooc->ooc_pos_preload;
 	return hash;
 }
 

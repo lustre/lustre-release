@@ -244,7 +244,12 @@ struct osd_device {
          * Fid Capability
          */
 	unsigned int              od_fl_capa:1,
-				  od_is_md:1; /* set in ->ldo_prepare */
+				  od_is_md:1, /* set in ->ldo_prepare */
+				  od_noscrub:1,
+				  od_dirent_journal:1,
+				  od_handle_nolma:1,
+				  od_igif_inoi:1;
+
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;
         struct lustre_capa_key   *od_capa_keys;
@@ -258,10 +263,6 @@ struct osd_device {
         cfs_time_t                od_osfs_age;
         struct obd_statfs         od_statfs;
 	spinlock_t		  od_osfs_lock;
-
-	unsigned int		  od_noscrub:1,
-				  od_dirent_journal:1,
-				  od_handle_nolma:1;
 
 	struct fsfilt_operations *od_fsops;
 	int			  od_connects;
