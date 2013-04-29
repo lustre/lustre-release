@@ -8796,11 +8796,6 @@ dot_lustre_fid_permission_check() {
 	mrename $test_dir/$tdir $MOUNT/.lustre/fid &&
 		error "rename to $MOUNT/.lustre/fid should fail."
 
-	echo "rename .lustre to itself"
-	fid=$($LFS path2fid $MOUNT)
-	mrename $MOUNT/.lustre $MOUNT/.lustre/fid/$fid/.lustre &&
-		error "rename .lustre to itself should fail."
-
 	local old_obf_mode=$(stat --format="%a" $DIR/.lustre/fid)
 	local new_obf_mode=777
 
@@ -11197,6 +11192,13 @@ test_232() {
 	mount_client $MOUNT || error "mount failed"
 }
 run_test 232 "failed lock should not block umount"
+
+test_233() {
+	local fid=$($LFS path2fid $MOUNT)
+	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
+		error "cannot access $MOUNT using its FID '$fid'"
+}
+run_test 233 "checking that OBF of the FS root succeeds"
 
 #
 # tests that do cleanup/setup should be run at the end
