@@ -89,7 +89,6 @@ void class_handle_hash(struct portals_handle *h,
 	spin_lock(&handle_base_lock);
 	handle_base += HANDLE_INCR;
 
-	h->h_cookie = handle_base;
 	if (unlikely(handle_base == 0)) {
 		/*
 		 * Cookie of zero is "dangerous", because in many places it's
@@ -99,6 +98,7 @@ void class_handle_hash(struct portals_handle *h,
 		CWARN("The universe has been exhausted: cookie wrap-around.\n");
 		handle_base += HANDLE_INCR;
 	}
+	h->h_cookie = handle_base;
 	spin_unlock(&handle_base_lock);
 
 	h->h_ops = ops;
