@@ -55,7 +55,7 @@ LNET Self-Test Overview</title>
       </listitem>
     </itemizedlist>
     <note>
-      <para>Test nodes can be in either kernel or userspace. A <emphasis>console node</emphasis> can invite a kernel <emphasis>test node</emphasis> to join the session by running <literal>lst add_group NID</literal>, but the <emphasis>console node</emphasis> cannot actively add a userspace <emphasis>test node</emphasis> to the session. A <emphasis>console node</emphasis> can passively accept a <emphasis>test node</emphasis> to the session while the <emphasis>test node</emphasis> is running <literal>lstclient</literal> to connect to the <emphasis>console node</emphasis>.</para>
+      <para><emphasis>Test nodes</emphasis> can be in either kernel or userspace. A <emphasis>console node</emphasis> can invite a kernel <emphasis>test node</emphasis> to join the session by running <literal>lst add_group NID</literal>, but the <emphasis>console node</emphasis> cannot actively add a userspace <emphasis>test node</emphasis> to the session. A <emphasis>console node</emphasis> can passively accept a <emphasis>test node</emphasis> to the session while the <emphasis>test node</emphasis> is running <literal>lstclient</literal> to connect to the <emphasis>console node</emphasis>.</para>
     </note>
     <section remap="h3">
       <title>Prerequisites</title>
@@ -71,7 +71,7 @@ LNET Self-Test Overview</title>
           <para><literal>lnet_selftest</literal></para>
         </listitem>
         <listitem>
-          <para> One of the <literal>klnds</literal> (i.e, <literal>ksocklnd</literal>, <literal>ko2iblnd</literal>...) as needed by your network configuration</para>
+          <para><literal>klnds</literal>: A kernel Lustre network driver (LND) (i.e, <literal>ksocklnd</literal>, <literal>ko2iblnd</literal>...) as needed by your network configuration.</para>
         </listitem>
       </itemizedlist>
       <para>To load the required modules, run:</para>
@@ -87,7 +87,7 @@ LNET Self-Test Overview</title>
     <para>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
     <section remap="h3">
       <title>Creating a Session</title>
-      <para>A <emphasis>session</emphasis> is a set of processes that run on a <emphasis>test node</emphasis>. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (new_session, end_session, show_session). For more about session parameters, see <xref linkend="dbdoclet.50438223_91247"/>.</para>
+      <para>A <emphasis>session</emphasis> is a set of processes that run on a <emphasis>test node</emphasis>. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (<literal>new_session</literal>, <literal>end_session</literal>, <literal>show_session</literal>). For more about session parameters, see <xref linkend="dbdoclet.50438223_91247"/>.</para>
       <para>Almost all operations should be performed within the context of a session. From the <emphasis>console node</emphasis>, a user can only operate nodes in his own session. If a session ends, the session context in all test nodes is stopped.</para>
       <para>The following commands set the <literal>LST_SESSION</literal> environment variable to identify the session on the console node and create a session called <literal>read_write</literal>:</para>
       <screen>export LST_SESSION=$$
@@ -222,7 +222,7 @@ lst end_session</screen>
                 <para><literal>--force</literal></para>
               </entry>
               <entry>
-                <para>Ends conflicting sessions. This determines who &apos;wins&apos; when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the -force flag is specified. If the -force flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already &apos;owned&apos; by another session, the -force flag allows this session to &apos;steal&apos; the node.</para>
+                <para>Ends conflicting sessions. This determines who &apos;wins&apos; when one session conflicts with another. For example, if there is already an active session on this node, then the attempt to create a new session fails unless the <literal>--force</literal> flag is specified. If the <literal>--force</literal> flag is specified, then the active session is ended. Similarly, if a session attempts to add a node that is already &apos;owned&apos; by another session, the <literal>--force</literal> flag allows this session to &apos;steal&apos; the node.</para>
               </entry>
             </row>
             <row>
@@ -544,7 +544,7 @@ Client1 $ lstclient --sesid 192.168.1.52@tcp --group clients</screen>
       <title>Batch and Test Commands</title>
       <para>This section describes <literal>lst</literal> batch and test commands.</para>
       <para><literal>add_batch <replaceable>name</replaceable></literal></para>
-      <para>A default batch test set named batch is created when the session is started. You can specify a batch name by using add_batch:</para>
+      <para>A default batch test set named batch is created when the session is started. You can specify a batch name by using <literal>add_batch</literal>:</para>
       <screen>$ lst add_batch bulkperf</screen>
       <para>Creates a batch test called <literal>bulkperf</literal>.</para>
       <screen>
@@ -790,7 +790,7 @@ $ lst list_batch bulkperf --server --active
             <replaceable>name</replaceable>
             [--test <replaceable>index</replaceable>] 
             [--timeout <replaceable>seconds</replaceable>] 
-            [--loop <replaceable>loopcount</replaceable>] 
+            [--loop <replaceable>loopcount</replaceable>]
             [--delay <replaceable>seconds</replaceable>] 
             [--all]
           </literal>
