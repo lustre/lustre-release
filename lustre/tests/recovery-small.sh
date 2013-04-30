@@ -1060,57 +1060,58 @@ test_55() {
 
 	mkdir -p $DIR/$tdir
 
+	# Minimum pass speed is 2MBps
+	local ddtimeout=64
+	# LU-2887/LU-3089 - set min pass speed to 500KBps
+	[ "$(facet_fstype ost1)" = "zfs" ] && ddtimeout=256
+
 	# first dd should be finished quickly
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile-1
-	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
+	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4 &
 	DDPID=$!
 	count=0
 	echo  "step1: testing ......"
-	while [ true ]; do
-	    if [ -z `ps x | awk '$1 == '$DDPID' { print $5 }'` ]; then break; fi
-	    count=$[count+1]
-	    if [ $count -gt 64 ]; then
-		error "dd should be finished!"
-	    fi
-	    sleep 1
-	done	
+	while kill -0 $DDPID 2> /dev/null; do
+		let count++
+		if [ $count -gt $ddtimeout ]; then
+			error "dd should be finished!"
+		fi
+		sleep 1
+	done
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile-2
 	#define OBD_FAIL_OST_DROP_REQ            0x21d
 	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
-	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4  &	
+	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4 &
 	DDPID=$!
 	count=0
 	echo  "step2: testing ......"
-	while [ $count -le 64 ]; do
-	    dd_name="`ps x | awk '$1 == '$DDPID' { print $5 }'`"	    
-	    if [ -z  $dd_name ]; then 
-                ls -l $DIR/$tdir
-		echo  "debug: (dd_name=$dd_name, dd_pid=$DDPID, time=$count)"
-		error "dd shouldn't be finished!"
-	    fi
-	    count=$[count+1]
-	    sleep 1
-	done	
+	while [ $count -le $ddtimeout ]; do
+		if ! kill -0 $DDPID 2> /dev/null; then
+			ls -l $DIR/$tdir
+			error "dd shouldn't be finished! (time=$count)"
+		fi
+		let count++
+		sleep 1
+	done
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
 	do_facet ost1 lctl set_param fail_loc=0
 	count=0
 	echo  "step3: testing ......"
-	while [ true ]; do
-	    if [ -z `ps x | awk '$1 == '$DDPID' { print $5 }'` ]; then break; fi
-	    count=$[count+1]
-	    if [ $count -gt 500 ]; then
-		error "dd should be finished!"
-	    fi
-	    sleep 1
-	done	
+	while kill -0 $DDPID 2> /dev/null; do
+		let count++
+		if [ $count -gt $((ddtimeout + 440)) ]; then
+			error "dd should be finished!"
+		fi
+		sleep 1
+	done
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-        rm -rf $DIR/$tdir
+	rm -rf $DIR/$tdir
 }
 run_test 55 "ost_brw_read/write drops timed-out read/write request"
 
