@@ -1044,7 +1044,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 	struct l_wait_info	 lwi;
 	cfs_time_t		 expire = cfs_time_shift(obd_timeout);
 	int			 precreated, rc;
-	int			 count = 0;
 
 	ENTRY;
 
@@ -1061,17 +1060,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 	 */
 	while ((rc = d->opd_pre_status) == 0 || rc == -ENOSPC ||
 		rc == -ENODEV || rc == -EAGAIN) {
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
-		/*
-		 * to address Andreas's concern on possible busy-loop
-		 * between this thread and osp_precreate_send()
-		 */
-		if (unlikely(count++ == 1000)) {
-			osp_precreate_timeout_condition(d);
-			LBUG();
-		}
-#endif
 
 		/*
 		 * increase number of precreations
