@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2012 Intel Corporation.
+ * Copyright (c) 2013, Intel Corporation.
  */
 /*
  * lustre/mdd/mdd_lfsck.h

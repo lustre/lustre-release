@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2012, 2013, Intel Corporation.
  * Use is subject to license terms.
  * Copyright (c) 2011, 2012 Commissariat a l'energie atomique et aux energies
  *                          alternatives

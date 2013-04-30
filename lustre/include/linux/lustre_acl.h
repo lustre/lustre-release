@@ -28,7 +28,7 @@
  * Use is subject to license terms.
  */
 /*
- * Copyright (c) 2011, Intel Corporation.
+ * Copyright (c) 2011, 2012, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
