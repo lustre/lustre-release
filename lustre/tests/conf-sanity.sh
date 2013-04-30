@@ -4002,7 +4002,7 @@ test_73() { #LU-3006
 	lctl get_param -n osc.*OST0000-osc-[^M]*.import | grep failover_nids |
 		grep 1.2.3.4@tcp || error "failover nids haven't changed"
 	umount_client $MOUNT || error "umount client failed"
-	stop_all
+	stopall
 	reformat
 }
 run_test 73 "failnode to update from mountdata properly"

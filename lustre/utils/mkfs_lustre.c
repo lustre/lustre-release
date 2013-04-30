@@ -591,6 +591,16 @@ int main(int argc, char *const argv[])
         }
 	mop.mo_ldd.ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN);
 
+	/* svname of the form lustre:OST1234 means never registered */
+	ret = strlen(mop.mo_ldd.ldd_svname);
+	if (mop.mo_ldd.ldd_svname[ret - 8] == ':') {
+		mop.mo_ldd.ldd_svname[ret - 8] = '-';
+		mop.mo_ldd.ldd_flags |= LDD_F_VIRGIN;
+	} else if (mop.mo_ldd.ldd_svname[ret - 8] == '=') {
+		mop.mo_ldd.ldd_svname[ret - 8] = '-';
+		mop.mo_ldd.ldd_flags |= LDD_F_WRITECONF;
+	}
+
         if (strstr(mop.mo_ldd.ldd_params, PARAM_MGSNODE))
             mop.mo_mgs_failnodes++;
 
