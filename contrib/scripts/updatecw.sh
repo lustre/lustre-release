@@ -3,7 +3,7 @@
 # Does not add copyright notices to files that are missing them
 #
 # Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2012, Intel Corporation.
+# Copyright (c) 2012, 2013, Intel Corporation.
 #
 TMP=${TMP:-/tmp}
 TMPFILE=$(mktemp $TMP/updatecopy.XXXXXX)
@@ -16,6 +16,8 @@ EXCLUDE=${EXCLUDE:-'e3a7c58aebafce40323db54bf6056029e5af4a70\n
 f2a9374170e4522b9d2ac3b7096cf2912339d480\n
 3f90f344ae059b30e7d23e4fe554a985eb827b02\n
 320e014a2c93cb905637d178269b80847cb8d277\n
+08aa217ce49aba1ded52e0f7adb8a607035123fd\n
+2841be335687840cf98961e6c6cde6ee9312e4d7\n
 cd8c65642f1c36b56ae74a0414a1f1f27337a662'}
 
 XYRACOPY="Copyright.*Xyratex Technology Limited"
@@ -40,18 +42,18 @@ ECHOE=${ECHOE:-"echo -e"}
 echo -e $EXCLUDE > $EXCFILE
 
 git ls-files $DIRS | grep -v ${0##*/} | while read FILE; do
-#FILE=lustre/mdt/mdt_hsm.c
-#FILE=lustre/include/lustre_quota.h
- 	if [ "$FILE" == 'build/updatecw.sh' ]; then
+ 	if [ "$FILE" == 'contrib/scripts/updatecw.sh' ]; then
 		echo $FILE": *** EDIT MANUALLY ***"
 		continue
 	fi
 
 	NEEDCOPY=false
 	# Pick only files that have changed since START
-	git log --follow --since=$START --author=$AUTH_WHAM --author=$AUTH_INT\
-		--pretty=format:"%ai %H" $FILE | grep -v -f $EXCFILE |
-		cut -d- -f1 > $TMPFILE
+	# %ai author dates holds has bad data:  April 2013
+	git log --follow --since=$START --pretty=format:"%ae %ci %H" $FILE |\
+		grep -v -f $EXCFILE |\
+		awk "/$AUTH_WHAM|$AUTH_INT/ {print substr(\$2,1,4)}"> $TMPFILE
+
 	# Skip files not modified by $AUTHOR
 	[ -s "$TMPFILE" ] || continue
 
