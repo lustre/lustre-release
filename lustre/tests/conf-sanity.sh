@@ -3705,6 +3705,64 @@ test_66() {
 }
 run_test 66 "replace nids"
 
+test_67() { #LU-2950
+	local legacy="$TMP/legacy_lnet_config"
+	local new="$TMP/new_routes_test"
+	local out="$TMP/config_out_file"
+	local verify="$TMP/conv_verify"
+	local verify_conf="$TMP/conf_verify"
+
+	# Create the legacy file that will be run through the
+	# lustre_routes_conversion script
+	cat <<- LEGACY_LNET_CONFIG > $legacy
+		tcp1 23 192.168.213.1@tcp:1; tcp5 34 193.30.4.3@tcp:4;
+		tcp2 54 10.1.3.2@tcp;
+		tcp3 10.3.4.3@tcp:3;
+		tcp4 10.3.3.4@tcp;
+	LEGACY_LNET_CONFIG
+
+	# Create the verification file to verify the output of
+	# lustre_routes_conversion script against.
+	cat <<- VERIFY_LNET_CONFIG > $verify
+		tcp1: { gateway: 192.168.213.1@tcp, hop: 23, priority: 1 }
+		tcp5: { gateway: 193.30.4.3@tcp, hop: 34, priority: 4 }
+		tcp2: { gateway: 10.1.3.2@tcp, hop: 54 }
+		tcp3: { gateway: 10.3.4.3@tcp, priority: 3 }
+		tcp4: { gateway: 10.3.3.4@tcp }
+	VERIFY_LNET_CONFIG
+
+	# Create the verification file to verify the output of
+	# lustre_routes_config script against
+	cat <<- VERIFY_LNET_CONFIG > $verify_conf
+		lctl --net tcp1 add_route 192.168.213.1@tcp 23 1
+		lctl --net tcp5 add_route 193.30.4.3@tcp 34 4
+		lctl --net tcp2 add_route 10.1.3.2@tcp 54 4
+		lctl --net tcp3 add_route 10.3.4.3@tcp 1 3
+		lctl --net tcp4 add_route 10.3.3.4@tcp 1 3
+	VERIFY_LNET_CONFIG
+
+	lustre_routes_conversion $legacy $new > /dev/null
+	if [ -f $new ]; then
+		# verify the conversion output
+		cmp -s $new $verify > /dev/null
+		if [ $? -eq 1 ]; then
+			error "routes conversion failed"
+		fi
+
+		lustre_routes_config --dry-run --verbose $new > $out
+		# check that the script succeeded
+		cmp -s $out $verify_conf > /dev/null
+		if [ $? -eq 1 ]; then
+			error "routes config failed"
+		fi
+	else
+		error "routes conversion test failed"
+	fi
+	# remove generated files
+	rm -f $new $legacy $verify $verify_conf $out
+}
+run_test 67 "test routes conversion and configuration"
+
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1

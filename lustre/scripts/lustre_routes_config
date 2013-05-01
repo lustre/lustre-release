@@ -1,0 +1,142 @@
+# !/bin/bash
+#
+# lustre_route_config
+# This script configures lnet with the routes in the passed in file.
+# The routes should be in the following format:
+# <network>: { gateway: <gateway>@<exit network> [hop: <hop>] [priority: <prioirty>] }
+#
+# Examples:
+# tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
+# tcp4: { gateway: 10.3.3.4@tcp }
+# tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+# tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
+#
+# The purpose of this script is to circumvent the limitation on the number of
+# routes which could be configured through the lustre.conf module parameters.
+#
+###########################################################################
+
+
+progname=$(basename $0)
+
+# print usage
+usage() {
+	cat <<- USAGE
+	Setup or cleanup LNET routes from specified config file"
+	usage: $progname [--setup|--cleanup|--dry-run|--verbose]
+	<config_file>
+		--setup: configure routes listed in config_file
+		--cleanup: unconfigure routes listed in config_file
+		--dry-run: echo commands to be run, but do not execute them
+		--verbose: echo commands before they are executed
+	USAGE
+}
+
+# Set default paramters
+CMD=add_route
+VERBOSE=false
+EXEC=true
+
+# sanity check
+[ -z "$1" ] && usage && exit 1
+
+# check parameters
+while [ ! -f "$1" ]; do
+	case "$1" in
+	-c|--cleanup) CMD=del_route; shift ;;
+	-h|--help)    usage; exit 0 ;;
+	-n|--dry-run) EXEC=false; VERBOSE=true; shift ;;
+	-s|--setup)   CMD=add_route; shift ;;
+	-v|--verbose) VERBOSE=true; shift ;;
+	*)            usage; exit 1 ;;
+	esac
+done
+
+# Usage: do_lctl <params>
+# execut the command and/or print if verbose is set
+do_lctl() {
+	local RC=0
+
+	$VERBOSE && echo "lctl $@"
+	if $EXEC; then
+		lctl "$@"
+		RC=$?
+	fi
+
+	return $RC
+}
+
+# Usage: find_arg_value <array> <arg>
+find_arg_value() {
+	local i=0
+	local value=""
+	local arg="$2"
+
+	declare -a array=("${!1}")
+	for ((i = 0; i < ${#array[@]}; i++)); do
+		if [ "${array[$i]}" == "$arg" ]; then
+			value="${array[$((i + 1))]}"
+			break
+		fi
+	done
+	echo -n $value
+}
+
+while read line; do
+	# Parse line using ':' and ',' as delimiters and ignoring all
+	# white space, tabs and linefeed
+	IFS="$IFS:,"
+	params=($line)
+
+	# get the mandatory parameters: network and gateway
+	# If either is not present skip that line
+	network=${params[0]}
+	OBR=${params[1]}
+        GATE=${params[2]}
+	gateway=${params[3]}
+
+	if [ -z $network ] || [ -z $gateway ] ||
+	   [ $GATE != "gateway" ]; then
+		continue
+	fi
+
+	case "$CMD" in
+		add_route)
+			baselctl="--net $network add_route $gateway"
+
+			# walk through the optional params until you hit
+			# the closing brace.  Build an associative db:
+			# option=value
+			i=4
+			while [ $i -lt ${#params[@]} ]; do
+				option=${params[$i]}
+				if [ "$option" == "}" ]; then
+					break
+				fi
+				outoptions[$i]=$option
+				((i++))
+				value=${params[$i]}
+				outoptions[$i]=$value
+				((i++))
+			done
+
+			# find the hop and priority
+			# This can be expanded later on if we add extra
+			# parameters
+			# NOTE: the order between hop and priority is not
+			# enforced.  It's also possible to add hop without
+			# prio or prio without hop
+			priority=$(find_arg_value outoptions[@] "priority")
+			hop=$(find_arg_value outoptions[@] "hop")
+			if [ -n "$priority" ] && [ -z "$hop" ]; then
+				baselctl+=" 1 $priority"
+			else
+				baselctl+=" $hop $priority"
+			fi
+			;;
+		del_route)
+			baselctl="del_route $gateway"
+	esac
+
+	do_lctl $baselctl
+done < "$1"

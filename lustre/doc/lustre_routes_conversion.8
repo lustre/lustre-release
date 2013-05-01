@@ -1,0 +1,47 @@
+.TH lustre_routes_conversion 8 "Apr 23, 2013" Lustre "utilities"
+.SH NAME
+lustre_routes_conversion \- converts a legacy routes configuration file to
+the new syntax.
+.SH SYNOPSIS
+.B "lustre_routes_conversion"
+.SH DESCRIPTION
+lustre_route_conversion takes as a first parameter a file with routes
+configured as follows:
+.LP
+<network> [<hop>] <gateway>@<exit network>[:<priority>];
+.LP
+Then converts it to:
+.LP
+<network>: { gateway: <gateway>@<exit network> [hop: <hop>]
+             [priority: <prioirty>] }
+.LP
+and appends it to the output file passed in as the second parameter to
+the script.
+.LP
+Usage:
+.br
+lustre_routes_conversion <legacy file> <new file>
+.SH EXAMPLE
+An example of legacy configuration file:
+.LP
+tcp1 10.1.1.2@tcp0:1;
+.br
+tcp1 1 10.1.1.2@tcp0;
+.LP
+
+An example of script output:
+.LP
+tcp1: {gateway: 10.1.1.2@tcp0 priority: 1}
+.br
+tcp1: {gateway: 10.1.1.2@tcp0 hop: 1}
+.LP
+An example of script execution:
+.LP
+lustre_routes_conversion <path/to/legacy_config_file> <path/to/new_config_file>
+.SH SEE ALSO
+.BR lustre (7)
+.BR nids (5)
+.BR lctl (8)
+.BR lustre_routes_config (8)
+.SH AUTHOR
+Amir Shehata

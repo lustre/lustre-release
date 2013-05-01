@@ -1,0 +1,110 @@
+# !/bin/bash
+#
+# lustre_routes_conversion
+#   This script takes a file with routes configured as follows:
+# <network>  [<hop>] <gateway>@<exit network>[:<priority>];
+# Ex:
+# tcp1 10.1.1.2@tcp0:1
+# or
+# tcp1 1 10.1.1.2@tcp0
+#
+# and converts it to:
+# <network>: { gateway: <gateway>@<exit network> [hop: <hop>] [priority:
+#              <priority>] }
+#
+# The purpose of this script is to covert legacy route configuration
+# syntax to the new route configuration syntax
+#
+############################################################################
+
+progname=$(basename $0)
+
+usage() {
+	cat <<- USAGE
+	convert legacy route config syntax to new route config syntax"
+	usage: $progname <legacy file> <new file>
+            -h|--help: display this message
+	USAGE
+}
+
+while [ ! -f "$1" ]; do
+	case "$1" in
+	-h|--help)    usage; exit 0 ;;
+	*)            usage; exit 1 ;;
+	esac
+done
+
+[ -z "$1" ] || [ -z "$2" ] && usage && exit 1
+
+# Usage: read_and_parse <file name>
+# Read a routes_config file and parse it out, then feed the proper input
+# int lcl --net <> add_route <> to configure a route.
+read_and_parse()
+{
+	local infile=$1
+	local outfile=$2
+
+	while read line; do
+		# Split the input string at ';', since multiple routes on
+		# the same line are separated by ';'
+		OLDIFS="$IFS"
+		IFS=';'
+
+		# It is possible that one single line can contain multiple
+		# route entries.
+		multi_routes=($line)
+		echo "${multi_routes[@]}"
+
+		# Iterate over each of the routes on this line.  This
+		# returns indicies from the routes[] array, which are
+		# dereferenced and split separately to avoid confusion
+		# between whitespaces of routes on the same line.
+		for index in "${!multi_routes[@]}"; do
+			# initialize variables.
+			local network=""
+			local gateway=""
+			local gatewayorhop=""
+			local priority=""
+			local hop=""
+
+			# Split at ':' and '  ' to get the priority if it exists
+			# Also will split all the different tokens in the
+			# line.
+			IFS="$OLDIFS: "
+			tokens=(${multi_routes[$index]})
+
+			# Split at ' ' to separate the network from the gateway
+			network=${tokens[0]}
+			gatewayorhop=${tokens[1]}
+
+			# since hop is an optional parameter after we get this
+			# position we need to check if we got the hop or gateway
+			# parameter.  Set gateway is always of the form ip@intf,
+			# then we can simply check for the '@' character in the
+			# string.  if it exists then we don't have a hop but a
+			# gateway.  If we don't then we assume that a hop exists
+			# and a gateway follows it
+			if [[ "$gatewayorhop" == *@* ]]; then
+				gateway=$gatewayorhop
+				priority=${tokens[2]}
+			else
+				hop=$gatewayorhop
+				gateway=${tokens[2]}
+				priority=${tokens[3]}
+			fi
+
+			if [ -z "$network" ] || [ -z "$gateway" ]; then
+				continue;
+			fi
+
+			# Write the translated line into the file.
+			echo -n "$network: { gateway: $gateway"
+			[ -n "$hop" ] && echo -n ", hop: $hop"
+			[ -n "$priority" ] && echo -n ", priority: $priority"
+			echo " }"
+		done >> "$outfile"
+	done < "$infile"
+	echo "$progname: converted routes written to $outfile"
+}
+
+read_and_parse $1 $2
