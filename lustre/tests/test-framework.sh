@@ -5938,19 +5938,18 @@ run_llverfs()
 
 #Remove objects from OST
 remove_ost_objects() {
-	shift
-	local ostdev=$1
-	local group=$2
-	shift 2
+	local facet=$1
+	local ostdev=$2
+	local group=$3
+	shift 3
 	local objids="$@"
-	local facet=ost$((OSTIDX + 1))
 	local mntpt=$(facet_mntpt $facet)
 	local opts=$OST_MOUNT_OPTS
 	local i
 	local rc
 
 	echo "removing objects from $ostdev on $facet: $objids"
-	if ! do_facet $facet test -b $ostdev; then
+	if ! test -b $ostdev; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
 	mount -t $(facet_fstype $facet) $opts $ostdev $mntpt ||
