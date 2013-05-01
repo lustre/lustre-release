@@ -950,9 +950,9 @@ int mdt_getattr(struct mdt_thread_info *info)
         }
 
         LASSERT(obj != NULL);
-        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
+	LASSERT(lu_object_assert_exists(&obj->mot_obj));
 
-        mode = lu_object_attr(&obj->mot_obj.mo_lu);
+	mode = lu_object_attr(&obj->mot_obj);
 
         /* old clients may not report needed easize, use max value then */
         req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
@@ -1224,7 +1224,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 	if (unlikely(!mdt_object_exists(parent))) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
-				&parent->mot_obj.mo_lu,
+				&parent->mot_obj,
 				"Parent doesn't exist!\n");
 		RETURN(-ESTALE);
 	} else if (!info->mti_cross_ref) {
@@ -1284,7 +1284,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         if (lname) {
                 /* step 1: lock parent only if parent is a directory */
-                if (S_ISDIR(lu_object_attr(&parent->mot_obj.mo_lu))) {
+		if (S_ISDIR(lu_object_attr(&parent->mot_obj))) {
                         lhp = &info->mti_lh[MDT_LH_PARENT];
                         mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
                         rc = mdt_object_lock(info, parent, lhp,
@@ -1355,7 +1355,7 @@ relock:
 
 		if (!mdt_object_exists(child)) {
 			LU_OBJECT_DEBUG(D_INODE, info->mti_env,
-					&child->mot_obj.mo_lu,
+					&child->mot_obj,
 					"Object doesn't exist!\n");
 			GOTO(out_child, rc = -ENOENT);
 		}
@@ -1387,7 +1387,7 @@ relock:
 		LASSERT(!(child_bits & MDS_INODELOCK_LAYOUT));
 		if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
 		    exp_connect_layout(info->mti_exp) &&
-		    S_ISREG(lu_object_attr(&child->mot_obj.mo_lu)) &&
+		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    ldlm_rep != NULL) {
 			/* try to grant layout lock for regular file. */
 			try_layout = true;
@@ -2351,8 +2351,8 @@ int mdt_quota_dqacq(struct mdt_thread_info *info)
 
 static struct mdt_object *mdt_obj(struct lu_object *o)
 {
-        LASSERT(lu_device_is_mdt(o->lo_dev));
-        return container_of0(o, struct mdt_object, mot_obj.mo_lu);
+	LASSERT(lu_device_is_mdt(o->lo_dev));
+	return container_of0(o, struct mdt_object, mot_obj);
 }
 
 struct mdt_object *mdt_object_new(const struct lu_env *env,
@@ -2365,7 +2365,7 @@ struct mdt_object *mdt_object_new(const struct lu_env *env,
 	ENTRY;
 
 	CDEBUG(D_INFO, "Allocate object for "DFID"\n", PFID(f));
-	o = lu_object_find(env, &d->mdt_md_dev.md_lu_dev, f, &conf);
+	o = lu_object_find(env, &d->mdt_lu_dev, f, &conf);
 	if (unlikely(IS_ERR(o)))
 		m = (struct mdt_object *)o;
 	else
@@ -2374,20 +2374,21 @@ struct mdt_object *mdt_object_new(const struct lu_env *env,
 }
 
 struct mdt_object *mdt_object_find(const struct lu_env *env,
-                                   struct mdt_device *d,
-                                   const struct lu_fid *f)
+				   struct mdt_device *d,
+				   const struct lu_fid *f)
 {
-        struct lu_object *o;
-        struct mdt_object *m;
-        ENTRY;
+	struct lu_object *o;
+	struct mdt_object *m;
+	ENTRY;
 
-        CDEBUG(D_INFO, "Find object for "DFID"\n", PFID(f));
-        o = lu_object_find(env, &d->mdt_md_dev.md_lu_dev, f, NULL);
-        if (unlikely(IS_ERR(o)))
-                m = (struct mdt_object *)o;
-        else
-                m = mdt_obj(o);
-        RETURN(m);
+	CDEBUG(D_INFO, "Find object for "DFID"\n", PFID(f));
+	o = lu_object_find(env, &d->mdt_lu_dev, f, NULL);
+	if (unlikely(IS_ERR(o)))
+		m = (struct mdt_object *)o;
+	else
+		m = mdt_obj(o);
+
+	RETURN(m);
 }
 
 /**
@@ -2582,8 +2583,8 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
                         RETURN(-ESTALE);
                 } else {
                         /* Non-dir object shouldn't have PDO lock */
-                        if (!S_ISDIR(lu_object_attr(&o->mot_obj.mo_lu)))
-                                RETURN(-ENOTDIR);
+			if (!S_ISDIR(lu_object_attr(&o->mot_obj)))
+				RETURN(-ENOTDIR);
                 }
         }
 
@@ -4403,8 +4404,8 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	site = mdt->mdt_child_exp->exp_obd->obd_lu_dev->ld_site;
 	LASSERT(site);
 	LASSERT(mdt_lu_site(mdt) == NULL);
-	mdt->mdt_md_dev.md_lu_dev.ld_site = site;
-	site->ls_top_dev = &mdt->mdt_md_dev.md_lu_dev;
+	mdt->mdt_lu_dev.ld_site = site;
+	site->ls_top_dev = &mdt->mdt_lu_dev;
 	mdt->mdt_child = lu2md_dev(mdt->mdt_child_exp->exp_obd->obd_lu_dev);
 
 
@@ -4421,7 +4422,7 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	if (rc != 0)
 		CERROR("Failure to refill session: '%d'\n", rc);
 
-	lu_dev_add_linkage(site, &mdt->mdt_md_dev.md_lu_dev);
+	lu_dev_add_linkage(site, &mdt->mdt_lu_dev);
 
 	EXIT;
 class_detach:
@@ -4532,7 +4533,7 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 
 	/* configure local quota objects */
 	rc = mdt->mdt_qmt_dev->ld_ops->ldo_prepare(env,
-						   &mdt->mdt_md_dev.md_lu_dev,
+						   &mdt->mdt_lu_dev,
 						   mdt->mdt_qmt_dev);
 	if (rc)
 		GOTO(class_cleanup, rc);
@@ -4589,8 +4590,8 @@ static void mdt_quota_fini(const struct lu_env *env, struct mdt_device *mdt)
 
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
-        struct md_device  *next = m->mdt_child;
-        struct lu_device  *d    = &m->mdt_md_dev.md_lu_dev;
+	struct md_device  *next = m->mdt_child;
+	struct lu_device  *d    = &m->mdt_lu_dev;
         struct obd_device *obd = mdt2obd_dev(m);
         ENTRY;
 
@@ -4692,7 +4693,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         mntopt_t                   mntopts;
         ENTRY;
 
-        md_device_init(&m->mdt_md_dev, ldt);
+	lu_device_init(&m->mdt_lu_dev, ldt);
         /*
          * Environment (env) might be missing mdt_thread_key values at that
          * point, if device is allocated when mdt_thread_key is in QUIESCENT
@@ -4749,10 +4750,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_remote_dir = 0;
 	m->mdt_enable_remote_dir_gid = 0;
 
-        m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
-        m->mdt_md_dev.md_lu_dev.ld_obd = obd;
-        /* set this lu_device to obd, because error handling need it */
-        obd->obd_lu_dev = &m->mdt_md_dev.md_lu_dev;
+	m->mdt_lu_dev.ld_ops = &mdt_lu_ops;
+	m->mdt_lu_dev.ld_obd = obd;
+	/* Set this lu_device to obd for error handling purposes. */
+	obd->obd_lu_dev = &m->mdt_lu_dev;
 
 	/* init the stack */
 	rc = mdt_stack_init((struct lu_env *)env, m, cfg);
@@ -5007,7 +5008,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
                 struct lu_object *o;
                 struct lu_object_header *h;
 
-                o = &mo->mot_obj.mo_lu;
+		o = &mo->mot_obj;
                 h = &mo->mot_header;
                 lu_object_header_init(h);
                 lu_object_init(o, h, d);
@@ -6046,12 +6047,13 @@ static struct lu_device* mdt_device_fini(const struct lu_env *env,
 static struct lu_device *mdt_device_free(const struct lu_env *env,
                                          struct lu_device *d)
 {
-        struct mdt_device *m = mdt_dev(d);
-        ENTRY;
+	struct mdt_device *m = mdt_dev(d);
+	ENTRY;
 
-        md_device_fini(&m->mdt_md_dev);
-        OBD_FREE_PTR(m);
-        RETURN(NULL);
+	lu_device_fini(&m->mdt_lu_dev);
+	OBD_FREE_PTR(m);
+
+	RETURN(NULL);
 }
 
 static struct lu_device *mdt_device_alloc(const struct lu_env *env,
@@ -6065,7 +6067,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_env *env,
         if (m != NULL) {
                 int rc;
 
-                l = &m->mdt_md_dev.md_lu_dev;
+		l = &m->mdt_lu_dev;
                 rc = mdt_init0(env, m, t, cfg);
                 if (rc != 0) {
                         mdt_device_free(env, l);

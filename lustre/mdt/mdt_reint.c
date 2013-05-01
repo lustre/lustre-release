@@ -462,7 +462,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 	rc = mdt_attr_get_complex(info, mo, ma);
 	if (rc) {
 		CERROR("file attribute read error for "DFID": %d.\n",
-			PFID(lu_object_fid(&mo->mot_obj.mo_lu)), rc);
+			PFID(mdt_object_fid(mo)), rc);
 		RETURN(rc);
 	}
 
@@ -474,7 +474,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
 		if (rc) {
 			CERROR("file attribute change error for "DFID": %d\n",
-				PFID(lu_object_fid(&mo->mot_obj.mo_lu)), rc);
+				PFID(mdt_object_fid(mo)), rc);
 			RETURN(rc);
 		}
 	}
@@ -597,7 +597,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 	if (info->mti_mdt->mdt_opts.mo_oss_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
-	    S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu)) &&
+	    S_ISREG(lu_object_attr(&mo->mot_obj)) &&
 	    (ma->ma_attr.la_valid & LA_SIZE) && !som_au) {
                 struct lustre_capa *capa;
 

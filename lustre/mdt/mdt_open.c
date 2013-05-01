@@ -173,9 +173,9 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
         int rc = 0;
         ENTRY;
 
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
-            !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
-                RETURN(0);
+	if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
+	    !S_ISREG(lu_object_attr(&o->mot_obj)))
+		RETURN(0);
 
 	mutex_lock(&o->mot_ioepoch_mutex);
 	if (mdt_ioepoch_opened(o)) {
@@ -438,12 +438,12 @@ error_up:
  */
 static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        ENTRY;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	ENTRY;
 
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
-            !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
-                RETURN(0);
+	if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
+	    !S_ISREG(lu_object_attr(&o->mot_obj)))
+		RETURN(0);
 
         LASSERT(o->mot_ioepoch_count);
         LASSERT(info->mti_ioepoch == NULL ||
@@ -472,16 +472,16 @@ static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
  */
 int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        __u64 ioepoch = 0;
-        int act = MDT_SOM_ENABLE;
-        int rc = 0;
-        ENTRY;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	__u64			 ioepoch = 0;
+	int			 act = MDT_SOM_ENABLE;
+	int			 rc = 0;
+	ENTRY;
 
-        LASSERT(!req || info->mti_ioepoch);
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
-            !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
-                RETURN(0);
+	LASSERT(!req || info->mti_ioepoch);
+	if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
+	    !S_ISREG(lu_object_attr(&o->mot_obj)))
+		RETURN(0);
 
         /* No size whereas MF_SOM_CHANGE is set means client failed to
          * obtain ost attributes, drop the SOM cache on disk if so. */
@@ -903,9 +903,10 @@ int mdt_finish_open(struct mdt_thread_info *info,
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
         }
+
 	if (info->mti_mdt->mdt_opts.mo_oss_capa &&
 	    exp_connect_flags(exp) & OBD_CONNECT_OSS_CAPA &&
-	    S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
+	    S_ISREG(lu_object_attr(&o->mot_obj))) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
@@ -1176,7 +1177,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		*ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN;
 	}
 
-	if (S_ISREG(lu_object_attr(&obj->mot_obj.mo_lu))) {
+	if (S_ISREG(lu_object_attr(&obj->mot_obj))) {
 		if (ma->ma_need & MA_LOV && !(ma->ma_valid & MA_LOV) &&
 		    md_should_create(open_flags))
 			create_layout = true;
@@ -1375,7 +1376,7 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 		CERROR("%s: "DFID" isn't on this server!: rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(fid), -EFAULT);
 		LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
-				&o->mot_obj.mo_lu,
+				&o->mot_obj,
 				"Object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
 	} else {

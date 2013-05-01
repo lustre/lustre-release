@@ -90,17 +90,9 @@ struct mdt_file_data {
 #define MDT_FL_SYNCED 1
 
 struct mdt_device {
-        /* super-class */
-        struct md_device           mdt_md_dev;
+	/* super-class */
+	struct lu_device	   mdt_lu_dev;
 	struct seq_server_site	   mdt_seq_site;
-        struct ptlrpc_service     *mdt_regular_service;
-        struct ptlrpc_service     *mdt_readpage_service;
-	struct ptlrpc_service     *mdt_out_service;
-        struct ptlrpc_service     *mdt_setattr_service;
-        struct ptlrpc_service     *mdt_mdsc_service;
-        struct ptlrpc_service     *mdt_mdss_service;
-        struct ptlrpc_service     *mdt_dtss_service;
-        struct ptlrpc_service     *mdt_fld_service;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
@@ -189,8 +181,8 @@ struct mdt_device {
 #define MDT_COS_DEFAULT         (0)
 
 struct mdt_object {
-        struct lu_object_header mot_header;
-        struct md_object        mot_obj;
+	struct lu_object_header	mot_header;
+	struct lu_object	mot_obj;
         __u64                   mot_ioepoch;
         __u64                   mot_flags;
         int                     mot_ioepoch_count;
@@ -543,8 +535,8 @@ mdt_child_ops(struct mdt_device * m)
 
 static inline struct md_object *mdt_object_child(struct mdt_object *o)
 {
-        LASSERT(o);
-        return lu2md(lu_object_next(&o->mot_obj.mo_lu));
+	LASSERT(o);
+	return lu2md(lu_object_next(&o->mot_obj));
 }
 
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
@@ -565,39 +557,39 @@ static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
 }
 
 static inline void mdt_object_get(const struct lu_env *env,
-                                  struct mdt_object *o)
+				  struct mdt_object *o)
 {
-        ENTRY;
-        lu_object_get(&o->mot_obj.mo_lu);
-        EXIT;
+	ENTRY;
+	lu_object_get(&o->mot_obj);
+	EXIT;
 }
 
 static inline void mdt_object_put(const struct lu_env *env,
-                                  struct mdt_object *o)
+				  struct mdt_object *o)
 {
-        ENTRY;
-        lu_object_put(env, &o->mot_obj.mo_lu);
-        EXIT;
+	ENTRY;
+	lu_object_put(env, &o->mot_obj);
+	EXIT;
 }
 
 static inline int mdt_object_exists(const struct mdt_object *o)
 {
-        return lu_object_exists(&o->mot_obj.mo_lu);
+	return lu_object_exists(&o->mot_obj);
 }
 
 static inline int mdt_object_remote(const struct mdt_object *o)
 {
-	return lu_object_remote(&o->mot_obj.mo_lu);
+	return lu_object_remote(&o->mot_obj);
 }
 
 static inline const struct lu_fid *mdt_object_fid(const struct mdt_object *o)
 {
-        return lu_object_fid(&o->mot_obj.mo_lu);
+	return lu_object_fid(&o->mot_obj);
 }
 
 static inline struct lu_site *mdt_lu_site(const struct mdt_device *mdt)
 {
-        return mdt->mdt_md_dev.md_lu_dev.ld_site;
+	return mdt->mdt_lu_dev.ld_site;
 }
 
 static inline struct seq_server_site *mdt_seq_site(struct mdt_device *mdt)
@@ -821,18 +813,18 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
-//        LASSERT(lu_device_is_mdt(d));
-        return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+	return container_of0(d, struct mdt_device, mdt_lu_dev);
 }
 
 static inline struct dt_object *mdt_obj2dt(struct mdt_object *mo)
 {
-        struct lu_object *lo;
-        struct mdt_device *mdt = mdt_dev(mo->mot_obj.mo_lu.lo_dev);
+	struct lu_object	*lo;
+	struct mdt_device	*mdt = mdt_dev(mo->mot_obj.lo_dev);
 
-        lo = lu_object_locate(mo->mot_obj.mo_lu.lo_header,
-                              mdt->mdt_bottom->dd_lu_dev.ld_type);
-        return lu2dt(lo);
+	lo = lu_object_locate(mo->mot_obj.lo_header,
+			      mdt->mdt_bottom->dd_lu_dev.ld_type);
+
+	return lu2dt(lo);
 }
 
 /* mdt/mdt_identity.c */
@@ -1063,7 +1055,7 @@ static inline void mdt_dump_capainfo(struct mdt_thread_info *info)
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {
-        return mdt->mdt_md_dev.md_lu_dev.ld_obd;
+	return mdt->mdt_lu_dev.ld_obd;
 }
 
 extern const struct lu_device_operations mdt_lu_ops;
@@ -1077,12 +1069,12 @@ static inline struct mdt_device *lu2mdt_dev(struct lu_device *d)
 {
 	LASSERTF(lu_device_is_mdt(d), "It is %s instead of MDT %p %p\n",
 		 d->ld_type->ldt_name, d->ld_ops, &mdt_lu_ops);
-	return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+	return container_of0(d, struct mdt_device, mdt_lu_dev);
 }
 
 static inline char *mdt_obd_name(struct mdt_device *mdt)
 {
-	return mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name;
+	return mdt->mdt_lu_dev.ld_obd->obd_name;
 }
 
 int mds_mod_init(void);
