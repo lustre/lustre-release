@@ -5224,13 +5224,6 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
 
-	osd_scrub_cleanup(env, o);
-
-	if (o->od_fsops) {
-		fsfilt_put_ops(o->od_fsops);
-		o->od_fsops = NULL;
-	}
-
 	/* shutdown quota slave instance associated with the device */
 	if (o->od_quota_slave != NULL) {
 		qsd_fini(env, o->od_quota_slave);
@@ -5238,6 +5231,26 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	}
 
 	RETURN(0);
+}
+
+static void osd_umount(const struct lu_env *env, struct osd_device *o)
+{
+	ENTRY;
+
+	if (o->od_fsops) {
+		fsfilt_put_ops(o->od_fsops);
+		o->od_fsops = NULL;
+	}
+
+	if (o->od_mnt != NULL) {
+		shrink_dcache_sb(osd_sb(o));
+		osd_sync(env, &o->od_dt_dev);
+
+		mntput(o->od_mnt);
+		o->od_mnt = NULL;
+	}
+
+	EXIT;
 }
 
 static int osd_mount(const struct lu_env *env,
@@ -5339,30 +5352,18 @@ out:
 }
 
 static struct lu_device *osd_device_fini(const struct lu_env *env,
-                                         struct lu_device *d)
+					 struct lu_device *d)
 {
-        int rc;
-        ENTRY;
+	struct osd_device *o = osd_dev(d);
+	ENTRY;
 
-	rc = osd_shutdown(env, osd_dev(d));
+	osd_procfs_fini(o);
+	osd_shutdown(env, o);
+	osd_scrub_cleanup(env, o);
+	osd_obj_map_fini(o);
+	osd_umount(env, o);
 
-	osd_obj_map_fini(osd_dev(d));
-
-        shrink_dcache_sb(osd_sb(osd_dev(d)));
-        osd_sync(env, lu2dt_dev(d));
-
-        rc = osd_procfs_fini(osd_dev(d));
-        if (rc) {
-                CERROR("proc fini error %d \n", rc);
-                RETURN (ERR_PTR(rc));
-        }
-
-	if (osd_dev(d)->od_mnt) {
-		mntput(osd_dev(d)->od_mnt);
-		osd_dev(d)->od_mnt = NULL;
-	}
-
-        RETURN(NULL);
+	RETURN(NULL);
 }
 
 static int osd_device_init0(const struct lu_env *env,
@@ -5400,12 +5401,6 @@ static int osd_device_init0(const struct lu_env *env,
 	if (rc)
 		GOTO(out_capa, rc);
 
-	CFS_INIT_LIST_HEAD(&o->od_ios_list);
-	/* setup scrub, including OI files initialization */
-	rc = osd_scrub_setup(env, o);
-	if (rc < 0)
-		GOTO(out_mnt, rc);
-
 	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname));
 	if (cplen >= sizeof(o->od_svname)) {
@@ -5415,22 +5410,28 @@ static int osd_device_init0(const struct lu_env *env,
 
 	rc = osd_obj_map_init(env, o);
 	if (rc != 0)
-		GOTO(out_scrub, rc);
+		GOTO(out_mnt, rc);
 
 	rc = lu_site_init(&o->od_site, l);
-	if (rc)
+	if (rc != 0)
 		GOTO(out_compat, rc);
 	o->od_site.ls_bottom_dev = l;
 
 	rc = lu_site_init_finish(&o->od_site);
-	if (rc)
+	if (rc != 0)
+		GOTO(out_site, rc);
+
+	CFS_INIT_LIST_HEAD(&o->od_ios_list);
+	/* setup scrub, including OI files initialization */
+	rc = osd_scrub_setup(env, o);
+	if (rc < 0)
 		GOTO(out_site, rc);
 
 	rc = osd_procfs_init(o, o->od_svname);
 	if (rc != 0) {
 		CERROR("%s: can't initialize procfs: rc = %d\n",
 		       o->od_svname, rc);
-		GOTO(out_site, rc);
+		GOTO(out_scrub, rc);
 	}
 
 	LASSERT(l->ld_site->ls_linkage.next && l->ld_site->ls_linkage.prev);
@@ -5445,23 +5446,21 @@ static int osd_device_init0(const struct lu_env *env,
 	}
 
 	RETURN(0);
+
 out_procfs:
 	osd_procfs_fini(o);
+out_scrub:
+	osd_scrub_cleanup(env, o);
 out_site:
 	lu_site_fini(&o->od_site);
 out_compat:
 	osd_obj_map_fini(o);
-out_scrub:
-	osd_scrub_cleanup(env, o);
 out_mnt:
-	osd_oi_fini(info, o);
-	osd_shutdown(env, o);
-	mntput(o->od_mnt);
-	o->od_mnt = NULL;
+	osd_umount(env, o);
 out_capa:
 	cleanup_capa_hash(o->od_capa_hash);
 out:
-	RETURN(rc);
+	return rc;
 }
 
 static struct lu_device *osd_device_alloc(const struct lu_env *env,
