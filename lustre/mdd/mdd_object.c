@@ -273,6 +273,12 @@ static int mdd_xattr_get(const struct lu_env *env,
                 return -ENOENT;
         }
 
+	/* If the object has been delete from the namespace, then
+	 * get linkEA should return -ENOENT as well */
+	if (unlikely((mdd_obj->mod_flags & (DEAD_OBJ | ORPHAN_OBJ)) &&
+		      strcmp(name, XATTR_NAME_LINK) == 0))
+		RETURN(-ENOENT);
+
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdo_xattr_get(env, mdd_obj, buf, name,
                            mdd_object_capa(env, mdd_obj));

@@ -1346,8 +1346,11 @@ existing_lock:
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
 	err = ldlm_lock_enqueue(ns, &lock, cookie, &flags);
-        if (err)
-                GOTO(out, err);
+	if (err) {
+		if ((int)err < 0)
+			rc = (int)err;
+		GOTO(out, err);
+	}
 
         dlm_rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
 	dlm_rep->lock_flags = ldlm_flags_to_wire(flags);

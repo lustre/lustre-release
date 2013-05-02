@@ -1287,7 +1287,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 
         LASSERT(mdd_write_locked(env, obj) != 0);
 
-	if (rc == 0 && (ma->ma_attr.la_nlink == 0 || is_dir)) {
+	if (ma->ma_attr.la_nlink == 0 || is_dir) {
                 obj->mod_flags |= DEAD_OBJ;
                 /* add new orphan and the object
                  * will be deleted during mdd_close() */

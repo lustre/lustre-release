@@ -463,13 +463,25 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 		lustre_lma_swab(lma);
 		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+			rc = -EOPNOTSUPP;
 			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-			      "fid = "DFID", ino = %lu\n",
+			      "fid = "DFID", ino = %lu: rc = %d\n",
 			      osd_obj2dev(obj)->od_svname,
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
 			      PFID(lu_object_fid(&obj->oo_dt.do_lu)),
-			      obj->oo_inode->i_ino);
-			rc = -EOPNOTSUPP;
+			      obj->oo_inode->i_ino, rc);
+		}
+		if (unlikely(!lu_fid_eq(lu_object_fid(&obj->oo_dt.do_lu),
+					&lma->lma_self_fid))) {
+			CDEBUG(D_INODE, "%s: FID "DFID" != self_fid "DFID"\n",
+			       osd_obj2dev(obj)->od_svname,
+			       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
+			       PFID(&lma->lma_self_fid));
+			if (obj->oo_inode != NULL) {
+				iput(obj->oo_inode);
+				obj->oo_inode = NULL;
+			}
+			rc = -ESTALE;
 		}
 	} else if (rc == -ENODATA) {
 		/* haven't initialize LMA xattr */
@@ -500,8 +512,11 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
 	obj->oo_dt.do_body_ops = &osd_body_ops_new;
 	if (result == 0 && obj->oo_inode != NULL) {
-		osd_object_init0(obj);
 		result = osd_check_lma(env, obj);
+		if (result != 0)
+			return result;
+
+		osd_object_init0(obj);
 	}
 
 	LINVRNT(osd_invariant(obj));
@@ -3773,6 +3788,19 @@ static int osd_fail_fid_lookup(struct osd_thread_info *oti,
 	return rc;
 }
 
+static int osd_add_oi_cache(struct osd_thread_info *info,
+			    struct osd_device *osd,
+			    struct osd_inode_id *id,
+			    struct lu_fid *fid)
+{
+	CDEBUG(D_INODE, "add "DFID" %u:%u to info %p\n", PFID(fid),
+	       id->oii_ino, id->oii_gen, info);
+	info->oti_cache.oic_lid = *id;
+	info->oti_cache.oic_fid = *fid;
+
+	return 0;
+}
+
 /**
  * Calls ->lookup() to find dentry. From dentry get inode and
  * read inode's ea to get fid. This is required for  interoperability
@@ -3836,8 +3864,10 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			GOTO(out, rc);
 		}
 
-		oic->oic_lid = *id;
-		oic->oic_fid = *fid;
+		rc = osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id,
+				      fid);
+		if (rc != 0)
+			GOTO(out, rc);
 		if ((scrub->os_pos_current <= ino) &&
 		    ((sf->sf_flags & SF_INCONSISTENT) ||
 		     (sf->sf_flags & SF_UPGRADE && fid_is_igif(fid)) ||
@@ -5038,10 +5068,8 @@ pack:
 	if (osd_remote_fid(env, dev, fid))
 		RETURN(0);
 
-	if (likely(!(attr & LUDA_IGNORE))) {
-		oic->oic_lid = *id;
-		oic->oic_fid = *fid;
-	}
+	if (likely(!(attr & LUDA_IGNORE)))
+		rc = osd_add_oi_cache(oti, dev, id, fid);
 
 	if (!(attr & LUDA_VERIFY) &&
 	    (scrub->os_pos_current <= ino) &&
