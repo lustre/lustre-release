@@ -29,7 +29,7 @@ init_logging
 
 check_and_setup_lustre
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="23b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="5b 18 22 23b 25"
 
 DIR=${DIR:-$MOUNT}
 assert_DIR
@@ -576,18 +576,18 @@ sub_test_5() {
     destroy_pool $POOL2
 }
 
-test_5() {
+test_5a() {
     set_cleanup_trap
     # Issue commands from client
-    sub_test_5 $LCTL
     sub_test_5 $LFS
-
-    # Issue commands from MDS
-    sub_test_5 "do_facet $SINGLEMDS lctl"
-    sub_test_5 "do_facet $SINGLEMDS lfs"
-
 }
-run_test 5 "lfs/lctl pool_list"
+run_test 5a "lfs pool_list from client"
+
+test_5b() {
+    set_cleanup_trap
+    sub_test_5 "do_facet $SINGLEMDS lctl"
+}
+run_test 5b "lctl pool_list from MDS"
 
 test_6() {
     set_cleanup_trap
