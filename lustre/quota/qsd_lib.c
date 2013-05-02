@@ -235,8 +235,6 @@ static int qsd_conn_callback(void *data)
 	/* qsd_exp should now be valid */
 	LASSERT(qsd->qsd_exp);
 
-	/* grab reference on namespace */
-	ldlm_namespace_get(class_exp2obd(qsd->qsd_exp)->obd_namespace);
 	qsd->qsd_ns = class_exp2obd(qsd->qsd_exp)->obd_namespace;
 
 	write_lock(&qsd->qsd_lock);
@@ -475,9 +473,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 		qsd_stop_reint_thread(qsd->qsd_type_array[qtype]);
 	}
 
-	/* release reference on namespace */
 	if (qsd->qsd_ns != NULL) {
-		ldlm_namespace_put(qsd->qsd_ns);
 		qsd->qsd_ns = NULL;
 	}
 
