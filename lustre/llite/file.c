@@ -669,16 +669,18 @@ restart:
                  * (bug 3430) */
                 /* XXX (green): Should not we bail out on any error here, not
                  * just open error? */
-                rc = it_open_error(DISP_OPEN_OPEN, it);
-                if (rc)
-                        GOTO(out_och_free, rc);
+		rc = it_open_error(DISP_OPEN_OPEN, it);
+		if (rc != 0)
+			GOTO(out_och_free, rc);
 
-                LASSERT(it_disposition(it, DISP_ENQ_OPEN_REF));
+		LASSERTF(it_disposition(it, DISP_ENQ_OPEN_REF),
+			 "inode %p: disposition %x, status %d\n", inode,
+			 it_disposition(it, ~0), it->d.lustre.it_status);
 
-                rc = ll_local_open(file, it, fd, *och_p);
-                if (rc)
-                        GOTO(out_och_free, rc);
-        }
+		rc = ll_local_open(file, it, fd, *och_p);
+		if (rc)
+			GOTO(out_och_free, rc);
+	}
 	mutex_unlock(&lli->lli_och_mutex);
         fd = NULL;
 
