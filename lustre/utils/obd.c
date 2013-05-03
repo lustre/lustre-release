@@ -1585,9 +1585,9 @@ int jt_obd_create(int argc, char **argv)
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
 
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		data.ioc_obdo1.o_mode = mode;
-		ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 		ostid_set_id(&data.ioc_obdo1.o_oi, base_id);
 		data.ioc_obdo1.o_uid = 0;
 		data.ioc_obdo1.o_gid = 0;
@@ -1641,6 +1641,7 @@ int jt_obd_setattr(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
@@ -1720,6 +1721,7 @@ int jt_obd_test_setattr(int argc, char **argv)
                 printf("%s: setting "LPD64" attrs (objid "LPX64"): %s",
                        jt_cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
 
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
                 data.ioc_obdo1.o_mode = S_IFREG;
@@ -1804,6 +1806,7 @@ int jt_obd_destroy(int argc, char **argv)
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
 
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++, id++) {
 		ostid_set_id(&data.ioc_obdo1.o_oi, id);
 		data.ioc_obdo1.o_mode = S_IFREG | 0644;
@@ -1845,6 +1848,7 @@ int jt_obd_getattr(int argc, char **argv)
 
 	memset(&data, 0, sizeof(data));
 	data.ioc_dev = cur_device;
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
 	if (*end) {
 		fprintf(stderr, "error: %s: invalid objid '%s'\n",
@@ -1926,6 +1930,7 @@ int jt_obd_test_getattr(int argc, char **argv)
                 printf("%s: getting "LPD64" attrs (objid "LPX64"): %s",
                        jt_cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
 
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
 		data.ioc_obdo1.o_mode = S_IFREG;

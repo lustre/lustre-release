@@ -9538,7 +9538,7 @@ cleanup_obdecho_osc () {
         return 0
 }
 
-obdecho_create_test() {
+obdecho_test() {
         local OBD=$1
         local node=$2
         local rc=0
@@ -9551,9 +9551,13 @@ obdecho_create_test() {
             [ ${PIPESTATUS[0]} -eq 0 -a -n "$id" ] || rc=3
         fi
         echo "New object id is $id"
-        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 10 w v 64 $id" ||
-                           rc=4; }
-        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
+	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec getattr $id" ||
+			   rc=4; }
+	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 10 w v 64 $id" ||
+			   rc=4; }
+	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec destroy $id 1" ||
+			   rc=4; }
+	[ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
                                         "cleanup" || rc=5; }
         [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
                                         "detach" || rc=6; }
@@ -9563,43 +9567,43 @@ obdecho_create_test() {
 
 test_180a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-        local rc=0
-        local rmmod_local=0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	local rc=0
+	local rmmod_local=0
 
-        if ! module_loaded obdecho; then
-            load_module obdecho/obdecho
-            rmmod_local=1
-        fi
+	if ! module_loaded obdecho; then
+	    load_module obdecho/obdecho
+	    rmmod_local=1
+	fi
 
-        local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
-        local host=$(lctl get_param -n osc.$osc.import |
-                             awk '/current_connection:/ {print $2}' )
-        local target=$(lctl get_param -n osc.$osc.import |
-                             awk '/target:/ {print $2}' )
-        target=${target%_UUID}
+	local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
+	local host=$(lctl get_param -n osc.$osc.import |
+			     awk '/current_connection:/ {print $2}' )
+	local target=$(lctl get_param -n osc.$osc.import |
+			     awk '/target:/ {print $2}' )
+	target=${target%_UUID}
 
-        [[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
-        [ $rc -eq 0 ] && { obdecho_create_test ${target}_osc client || rc=2; }
-        [[ -n $target ]] && cleanup_obdecho_osc $target
-        [ $rmmod_local -eq 1 ] && rmmod obdecho
-        return $rc
+	[[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
+	[ $rc -eq 0 ] && { obdecho_test ${target}_osc client || rc=2; }
+	[[ -n $target ]] && cleanup_obdecho_osc $target
+	[ $rmmod_local -eq 1 ] && rmmod obdecho
+	return $rc
 }
 run_test 180a "test obdecho on osc"
 
 test_180b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-        local rc=0
-        local rmmod_remote=0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	local rc=0
+	local rmmod_remote=0
 
-        do_facet ost1 "lsmod | grep -q obdecho || "                      \
-                      "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
-                      "modprobe obdecho; }" && rmmod_remote=1
-        target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4;exit}')
-        [[ -n $target ]] && { obdecho_create_test $target ost1 || rc=1; }
-        [ $rmmod_remote -eq 1 ] && do_facet ost1 "rmmod obdecho"
-        return $rc
+	do_facet ost1 "lsmod | grep -q obdecho || "                      \
+		      "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
+		      "modprobe obdecho; }" && rmmod_remote=1
+	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4;exit}')
+	[[ -n $target ]] && { obdecho_test $target ost1 || rc=1; }
+	[ $rmmod_remote -eq 1 ] && do_facet ost1 "rmmod obdecho"
+	return $rc
 }
 run_test 180b "test obdecho directly on obdfilter"
 
