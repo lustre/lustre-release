@@ -793,8 +793,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	if (!target) {
 		deuuidify(str, NULL, &target_start, &target_len);
-		LCONSOLE_ERROR_MSG(0x137, "UUID '%s' is not available for "
-				   "connect (no target)\n", str);
+		LCONSOLE_ERROR_MSG(0x137, "%s: not available for connect "
+				   "from %s (no target)\n", str,
+				   libcfs_nid2str(req->rq_peer.nid));
 		GOTO(out, rc = -ENODEV);
 	}
 
@@ -803,11 +804,11 @@ int target_handle_connect(struct ptlrpc_request *req)
 		spin_unlock(&target->obd_dev_lock);
 
 		deuuidify(str, NULL, &target_start, &target_len);
-		LCONSOLE_ERROR_MSG(0x137, "%.*s: Not available for connect "
-				   "from %s (%s)\n", target_len, target_start,
-				   libcfs_nid2str(req->rq_peer.nid), 
-				   (target->obd_stopping ?
-				   "stopping" : "not set up"));
+		LCONSOLE_INFO("%.*s: Not available for connect from %s (%s)\n",
+			      target_len, target_start,
+			      libcfs_nid2str(req->rq_peer.nid),
+			      (target->obd_stopping ?
+			       "stopping" : "not set up"));
 		GOTO(out, rc = -ENODEV);
 	}
 

@@ -814,10 +814,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
 		GOTO(unlock_child, rc = -EREMOTE);
 	} else if (info->mti_spec.sp_rm_entry) {
-		CERROR("%s: lfs rmdir should not be used on local dir %s\n",
-		       mdt_obd_name(info->mti_mdt),
-		       (char *)rr->rr_name);
-		GOTO(put_child, rc = -EPERM);
+		rc = -EPERM;
+		CDEBUG(D_INFO, "%s: no rm_entry on local dir '%s': rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), (char *)rr->rr_name, rc);
+		GOTO(put_child, rc);
 	}
 
 	rc = mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_FULL,

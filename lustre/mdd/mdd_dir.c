@@ -981,7 +981,7 @@ out:
 		rc = rc2;
 	if (rc) {
 		int error = 1;
-		if (rc == -EOVERFLOW || rc == -ENOENT)
+		if (rc == -EOVERFLOW || rc == -ENOENT || rc == -ENOSPC)
 			error = 0;
 		if (oldpfid == NULL)
 			CDEBUG(error ? D_ERROR : D_OTHER,

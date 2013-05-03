@@ -371,8 +371,8 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
 		CWARN("%s: disable \"identity_upcall\" with ACL enabled maybe "
 		      "cause unexpected \"EACCESS\"\n", mdt_obd_name(mdt));
 
-	CWARN("%s: identity upcall set to %s\n", mdt_obd_name(mdt),
-	      hash->uc_upcall);
+	CDEBUG(D_CONFIG, "%s: identity upcall set to %s\n", mdt_obd_name(mdt),
+	       hash->uc_upcall);
 	OBD_FREE(kernbuf, count + 1);
 	RETURN(count);
 

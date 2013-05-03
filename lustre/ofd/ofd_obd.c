@@ -1145,9 +1145,9 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	skip_orphan = !!(exp_connect_flags(exp) & OBD_CONNECT_SKIP_ORPHAN);
 
 	last = ofd_seq_last_oid(oseq);
-	LCONSOLE_INFO("%s: deleting orphan objects from "LPX64":"LPU64
-		      " to "LPU64"\n", ofd_name(ofd), ostid_seq(&oa->o_oi),
-		      end_id + 1, last);
+	LCONSOLE(D_INFO, "%s: deleting orphan objects from "DOSTID
+		 " to "DOSTID"\n", ofd_name(ofd), ostid_seq(&oa->o_oi),
+		 end_id + 1, ostid_seq(&oa->o_oi), last);
 
 	for (ostid_set_id(&oi, last); ostid_id(&oi) > end_id;
 			  ostid_dec_id(&oi)) {
@@ -1156,8 +1156,8 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 			GOTO(out_put, rc);
 		rc = ofd_destroy_by_fid(env, ofd, &info->fti_fid, 1);
 		if (rc && rc != -ENOENT) /* this is pretty fatal... */
-			CEMERG("error destroying precreated id "DOSTID": %d\n",
-			       POSTID(&oi), rc);
+			CEMERG("%s: error destroying precreated id "DOSTID
+			       ": rc = %d\n", ofd_name(ofd), POSTID(&oi), rc);
 		if (!skip_orphan) {
 			ofd_seq_last_oid_set(oseq, ostid_id(&oi) - 1);
 			/* update last_id on disk periodically so that if we
@@ -1167,7 +1167,7 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 				ofd_seq_last_oid_write(env, ofd, oseq);
 		}
 	}
-	CDEBUG(D_HA, "%s: after destroy: set last_objids"DOSTID"\n",
+	CDEBUG(D_HA, "%s: after destroy: set last_id to "DOSTID"\n",
 	       ofd_obd(ofd)->obd_name, POSTID(&oa->o_oi));
 	if (!skip_orphan) {
 		rc = ofd_seq_last_oid_write(env, ofd, oseq);

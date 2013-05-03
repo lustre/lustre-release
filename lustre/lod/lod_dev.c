@@ -81,11 +81,8 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
 	fld_range_set_type(&range, type);
 	rc = fld_server_lookup(env, server_fld, fid_seq(fid), &range);
-	if (rc) {
-		CERROR("%s: Can't find tgt by seq "LPX64", rc %d\n",
-		       lod2obd(lod)->obd_name, fid_seq(fid), rc);
+	if (rc)
 		RETURN(rc);
-	}
 
 	*tgt = range.lsr_index;
 

@@ -595,7 +595,8 @@ static cfs_binheap_ops_t nrs_orr_heap_ops = {
 
 /**
  * Prints a warning message if an ORR/TRR policy is started on a service with
- * more than one CPT.
+ * more than one CPT.  Not printed on the console for now, since we don't
+ * have any performance metrics in the first place, and it is annoying.
  *
  * \param[in] policy the policy instance
  *
@@ -603,16 +604,13 @@ static cfs_binheap_ops_t nrs_orr_heap_ops = {
  */
 static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
 {
-	if (policy->pol_nrs->nrs_svcpt->scp_service->srv_ncpts > 1) {
-		bool is_orr = strncmp(policy->pol_desc->pd_name,
-				      NRS_POL_NAME_ORR, NRS_POL_NAME_MAX) == 0;
+	if (policy->pol_nrs->nrs_svcpt->scp_service->srv_ncpts > 1)
+		CDEBUG(D_CONFIG, "%s: The %s NRS policy was registered on a "
+		      "service with multiple service partitions. This policy "
+		      "may perform better with a single partition.\n",
+		      policy->pol_nrs->nrs_svcpt->scp_service->srv_name,
+		      policy->pol_desc->pd_name);
 
-		CWARN("A%s %s NRS policy has been registered on a PTLRPC "
-		      "service which has more than one service partition. "
-		      "Please be advised that this policy may perform better "
-		      "on services with only one partition.\n",
-		      is_orr ? "n" : "", policy->pol_desc->pd_name);
-	}
 	return 0;
 }
 

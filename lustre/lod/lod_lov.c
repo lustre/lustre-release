@@ -920,9 +920,11 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 
 void lod_fix_desc_stripe_size(__u64 *val)
 {
-	if (*val < LOV_DEFAULT_STRIPE_SIZE) {
-		LCONSOLE_WARN("Increasing default stripe size to min %u\n",
-			      LOV_DEFAULT_STRIPE_SIZE);
+	if (*val < LOV_MIN_STRIPE_SIZE) {
+		if (*val != 0)
+			LCONSOLE_INFO("Increasing default stripe size to "
+				      "minimum value %u\n",
+				      LOV_DEFAULT_STRIPE_SIZE);
 		*val = LOV_DEFAULT_STRIPE_SIZE;
 	} else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
 		*val &= ~(LOV_MIN_STRIPE_SIZE - 1);
