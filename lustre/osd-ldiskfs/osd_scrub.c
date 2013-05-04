@@ -1137,7 +1137,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 		osd_ios_general_scan, osd_ios_varfid_fill },
 
 	/* PENDING */
-	{ "PENDING", { FID_SEQ_LOCAL_FILE, MDD_ORPHAN_OID, 0 }, 0, NULL, NULL },
+	{ "PENDING", { 0, 0, 0 }, 0, NULL, NULL },
 
 	/* ROOT */
 	{ "ROOT", { FID_SEQ_ROOT, 1, 0 },
@@ -1158,8 +1158,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 		NULL, NULL },
 
 	/* lfsck_bookmark */
-	{ "lfsck_bookmark", { FID_SEQ_LOCAL_FILE, LFSCK_BOOKMARK_OID, 0 }, 0,
-		NULL, NULL },
+	{ "lfsck_bookmark", { 0, 0, 0 }, 0, NULL, NULL },
 
 	/* lov_objid */
 	{ LOV_OBJID, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OID, 0 }, OLF_SHOW_NAME,
@@ -1185,17 +1184,12 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "seq_srv", { FID_SEQ_LOCAL_FILE, FID_SEQ_SRV_OID, 0 },
 		OLF_SHOW_NAME, NULL, NULL },
 
-	/* LAST_GROUP */
-	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
-
 	/* health_check */
 	{ HEALTH_CHECK, { FID_SEQ_LOCAL_FILE, OFD_HEALTH_CHECK_OID, 0 },
 		OLF_SHOW_NAME, NULL, NULL },
 
 	/* lfsck_namespace */
-	{ "lfsck_namespace", { FID_SEQ_LOCAL_FILE, LFSCK_BOOKMARK_OID, 0 }, 0,
-		NULL, NULL },
+	{ "lfsck_namespace", { 0, 0, 0 }, 0, NULL, NULL },
 
 	/* OBJECTS, upgrade from old device */
 	{ OBJECTS, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, osd_ios_OBJECTS_scan, NULL },
@@ -1205,6 +1199,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 
 	/* lquota_v2.group, upgrade from old device */
 	{ "lquota_v2.group", { 0, 0, 0 }, 0, NULL, NULL },
+
+	/* LAST_GROUP, upgrade from old device */
+	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
+		OLF_SHOW_NAME, NULL, NULL },
 
 	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
 };
