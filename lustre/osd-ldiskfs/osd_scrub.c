@@ -1462,7 +1462,31 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 			}
 		}
 	} else {
-		rc = osd_ios_scan_one(info, dev, child->d_inode, NULL, 0);
+		/* For lustre-2.x (x <= 3), the ".lustre" has NO FID-in-LMA,
+		 * so the client will get IGIF for the ".lustre" object when
+		 * the MDT restart.
+		 *
+		 * From the OI scrub view, when the MDT upgrade to Lustre-2.4,
+		 * it does not know whether there are some old clients cached
+		 * the ".lustre" IGIF during the upgrading. Two choices:
+		 *
+		 * 1) Generate IGIF-in-LMA and IGIF-in-OI for the ".lustre".
+		 *    It will allow the old connected clients to access the
+		 *    ".lustre" with cached IGIF. But it will cause others
+		 *    on the MDT failed to check "fid_is_dot_lustre()".
+		 *
+		 * 2) Use fixed FID {FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE, 0}
+		 *    for ".lustre" in spite of whether there are some clients
+		 *    cached the ".lustre" IGIF or not. It enables the check
+		 *    "fid_is_dot_lustre()" on the MDT, although it will cause
+		 *    that the old connected clients cannot access the ".lustre"
+		 *    with the cached IGIF.
+		 *
+		 * Usually, it is rare case for the old connected clients
+		 * to access the ".lustre" with cached IGIF. So we prefer
+		 * to the solution 2). */
+		rc = osd_ios_scan_one(info, dev, child->d_inode,
+				      &LU_DOT_LUSTRE_FID, 0);
 		dput(child);
 	}
 
