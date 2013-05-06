@@ -809,7 +809,8 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg, bool del)
 			 * stealing one of them.
 			 * cl_lru_shrinkers is to avoid recursive call in case
 			 * we're already in the context of osc_lru_shrink(). */
-			if (cfs_atomic_read(&cli->cl_lru_shrinkers) == 0)
+			if (cfs_atomic_read(&cli->cl_lru_shrinkers) == 0 &&
+			    !cfs_memory_pressure_get())
 				osc_lru_shrink(cli, osc_cache_too_much(cli));
 			cfs_waitq_signal(&osc_lru_waitq);
 		}

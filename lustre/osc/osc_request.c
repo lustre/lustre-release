@@ -2049,21 +2049,26 @@ static int brw_interpret(const struct lu_env *env,
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		  cfs_list_t *ext_list, int cmd, pdl_policy_t pol)
 {
-	struct ptlrpc_request *req = NULL;
-	struct osc_extent *ext;
+	struct ptlrpc_request		*req = NULL;
+	struct osc_extent		*ext;
+	struct brw_page			**pga = NULL;
+	struct osc_brw_async_args	*aa = NULL;
+	struct obdo			*oa = NULL;
+	struct osc_async_page		*oap;
+	struct osc_async_page		*tmp;
+	struct cl_req			*clerq = NULL;
+	enum cl_req_type		crt = (cmd & OBD_BRW_WRITE) ? CRT_WRITE :
+								      CRT_READ;
+	struct ldlm_lock		*lock = NULL;
+	struct cl_req_attr		*crattr = NULL;
+	obd_off				starting_offset = OBD_OBJECT_EOF;
+	obd_off				ending_offset = 0;
+	int				mpflag = 0;
+	int				mem_tight = 0;
+	int				page_count = 0;
+	int				i;
+	int				rc;
 	CFS_LIST_HEAD(rpc_list);
-	struct brw_page **pga = NULL;
-	struct osc_brw_async_args *aa = NULL;
-        struct obdo *oa = NULL;
-        struct osc_async_page *oap;
-        struct osc_async_page *tmp;
-        struct cl_req *clerq = NULL;
-        enum cl_req_type crt = (cmd & OBD_BRW_WRITE) ? CRT_WRITE : CRT_READ;
-        struct ldlm_lock *lock = NULL;
-        struct cl_req_attr crattr;
-	obd_off starting_offset = OBD_OBJECT_EOF;
-	obd_off ending_offset = 0;
-	int i, rc, mpflag = 0, mem_tight = 0, page_count = 0;
 
 	ENTRY;
 	LASSERT(!cfs_list_empty(ext_list));
@@ -2091,7 +2096,10 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	if (mem_tight)
 		mpflag = cfs_memory_pressure_get_and_set();
 
-	memset(&crattr, 0, sizeof crattr);
+	OBD_ALLOC(crattr, sizeof(*crattr));
+	if (crattr == NULL)
+		GOTO(out, rc = -ENOMEM);
+
 	OBD_ALLOC(pga, sizeof(*pga) * page_count);
 	if (pga == NULL)
 		GOTO(out, rc = -ENOMEM);
@@ -2105,42 +2113,40 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		struct cl_page *page = oap2cl_page(oap);
 		if (clerq == NULL) {
 			clerq = cl_req_alloc(env, page, crt,
-					     1 /* only 1-object rpcs for
-						* now */);
+					     1 /* only 1-object rpcs for now */);
 			if (IS_ERR(clerq))
 				GOTO(out, rc = PTR_ERR(clerq));
 			lock = oap->oap_ldlm_lock;
 		}
 		if (mem_tight)
 			oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
-                pga[i] = &oap->oap_brw_page;
-                pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
-                CDEBUG(0, "put page %p index %lu oap %p flg %x to pga\n",
-                       pga[i]->pg, cfs_page_index(oap->oap_page), oap, pga[i]->flag);
-                i++;
-                cl_req_page_add(env, clerq, page);
-        }
+		pga[i] = &oap->oap_brw_page;
+		pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
+		CDEBUG(0, "put page %p index %lu oap %p flg %x to pga\n",
+		       pga[i]->pg, cfs_page_index(oap->oap_page), oap,
+		       pga[i]->flag);
+		i++;
+		cl_req_page_add(env, clerq, page);
+	}
 
-        /* always get the data for the obdo for the rpc */
+	/* always get the data for the obdo for the rpc */
 	LASSERT(clerq != NULL);
-	crattr.cra_oa = oa;
-	crattr.cra_capa = NULL;
-	memset(crattr.cra_jobid, 0, JOBSTATS_JOBID_SIZE);
-        cl_req_attr_set(env, clerq, &crattr, ~0ULL);
-        if (lock) {
-                oa->o_handle = lock->l_remote_handle;
-                oa->o_valid |= OBD_MD_FLHANDLE;
-        }
+	crattr->cra_oa = oa;
+	cl_req_attr_set(env, clerq, crattr, ~0ULL);
+	if (lock) {
+		oa->o_handle = lock->l_remote_handle;
+		oa->o_valid |= OBD_MD_FLHANDLE;
+	}
 
-        rc = cl_req_prep(env, clerq);
-        if (rc != 0) {
-                CERROR("cl_req_prep failed: %d\n", rc);
+	rc = cl_req_prep(env, clerq);
+	if (rc != 0) {
+		CERROR("cl_req_prep failed: %d\n", rc);
 		GOTO(out, rc);
 	}
 
 	sort_brw_pages(pga, page_count);
 	rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count,
-			pga, &req, crattr.cra_capa, 1, 0);
+			pga, &req, crattr->cra_capa, 1, 0);
 	if (rc != 0) {
 		CERROR("prep_req failed: %d\n", rc);
 		GOTO(out, rc);
@@ -2148,17 +2154,17 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 	req->rq_interpret_reply = brw_interpret;
 	if (mem_tight != 0)
-                req->rq_memalloc = 1;
+		req->rq_memalloc = 1;
 
-        /* Need to update the timestamps after the request is built in case
-         * we race with setattr (locally or in queue at OST).  If OST gets
-         * later setattr before earlier BRW (as determined by the request xid),
-         * the OST will not use BRW timestamps.  Sadly, there is no obvious
-         * way to do this in a single call.  bug 10150 */
-        cl_req_attr_set(env, clerq, &crattr,
-                        OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME);
+	/* Need to update the timestamps after the request is built in case
+	 * we race with setattr (locally or in queue at OST).  If OST gets
+	 * later setattr before earlier BRW (as determined by the request xid),
+	 * the OST will not use BRW timestamps.  Sadly, there is no obvious
+	 * way to do this in a single call.  bug 10150 */
+	cl_req_attr_set(env, clerq, crattr,
+			OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME);
 
-	lustre_msg_set_jobid(req->rq_reqmsg, crattr.cra_jobid);
+	lustre_msg_set_jobid(req->rq_reqmsg, crattr->cra_jobid);
 
 	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
 	aa = ptlrpc_req_async_args(req);
@@ -2225,16 +2231,20 @@ out:
 	if (mem_tight != 0)
 		cfs_memory_pressure_restore(mpflag);
 
-	capa_put(crattr.cra_capa);
+	if (crattr != NULL) {
+		capa_put(crattr->cra_capa);
+		OBD_FREE(crattr, sizeof(*crattr));
+	}
+
 	if (rc != 0) {
 		LASSERT(req == NULL);
 
-                if (oa)
-                        OBDO_FREE(oa);
-                if (pga)
-                        OBD_FREE(pga, sizeof(*pga) * page_count);
-                /* this should happen rarely and is pretty bad, it makes the
-                 * pending list not follow the dirty order */
+		if (oa)
+			OBDO_FREE(oa);
+		if (pga)
+			OBD_FREE(pga, sizeof(*pga) * page_count);
+		/* this should happen rarely and is pretty bad, it makes the
+		 * pending list not follow the dirty order */
 		while (!cfs_list_empty(ext_list)) {
 			ext = cfs_list_entry(ext_list->next, struct osc_extent,
 					     oe_link);
