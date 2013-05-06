@@ -5,22 +5,23 @@
 # build on all distributions, update the BUILD_GEN variable in build/lbuild)
 BUILD_GEN+=".0"
 
+# This distro does not support zfs, so define ZFSNOTSUPPORTED
+# use words that make the bash log readable.
+ZFSNOTSUPPORTED="Zfs Not Supported"
+
 source ${LBUILD_DIR}/lbuild-sles
 
 edit_specs() {
 
     # edit the SPECs with our changes
     local spec
+    (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
-               -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
                -e '/^%setup /a\
-cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+cp  %_sourcedir/linux-3.0-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
-               -e "/flavor=\${config/a\
-    [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-               -e "s/^\(BuildRequires:  kernel-dummy\)/# \1/" \
           SOURCES/kernel-${spec}.spec || \
             fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
 

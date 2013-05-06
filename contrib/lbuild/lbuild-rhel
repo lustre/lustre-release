@@ -206,3 +206,8 @@ find_linux_rpm-rhel() {
     return 0
 
 }
+
+# This function digs out the linux release from the linux source tree
+find_linux_release() {
+	_find_linux_release $LINUX
+}

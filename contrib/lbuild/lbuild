@@ -1012,7 +1012,7 @@ build_spl_zfs() {
     SPLZFSTAG=${SPLZFSTAG:-lustre-zfs}
 
     # The files expect a kver to be set to the kernel version .
-    local kver=$(find_linux_release ${LINUX})
+    local kver=$(find_linux_release)
 
     # build and install the spl and zfs (and -devel) RPMs for lustre to use
     local pkg
@@ -1046,7 +1046,7 @@ build_spl_zfs() {
 
 	sh autogen.sh || return 255
 
-        if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUX} \
+        if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUXOBJ:-$LINUX} \
                           ${spldir:+--with-spl="${spldir}"} 2>&1 ||
             ! make dist 2>&1; then
             popd
@@ -1081,7 +1081,7 @@ build_spl_zfs() {
 		--define "kver $kver" \
 		--define "kernels $kver" \
 		--define "_tmppath /var/tmp" \
-		--define "kernelbuildroot $(find_linux_builddir $LINUX)" \
+		--define "kernelbuildroot $TOPDIR/reused" \
 		--define "_topdir $TOPDIR" 2>&1; then
 		return 255
             fi
@@ -1176,26 +1176,25 @@ set_rpm_smp_type() {
 
 }
 
-# This function takes a linux source pool and digs out the linux release
-# from it
-find_linux_release() {
-    local SRCDIR="$1"
+# This function takes a linux include tree and digs out the linux release
+# from it. It is never called directly, only called from the distro
+# specific function find_linux_release() in lbuild-{rhel,sles}.
+_find_linux_release() {
+    local SRC="$1"
+    local LINUXRELEASEHEADER=""
 
-    local LINUXRELEASEHEADER=$SRCDIR/include/linux/version.h
-    if [ -s $SRCDIR/include/linux/utsrelease.h ]; then
-        LINUXRELEASEHEADER=$SRCDIR/include/linux/utsrelease.h
+    LINUXRELEASEHEADER=$SRC/include/linux/version.h
+    if [ -s $SRC/include/generated/utsrelease.h ]; then
+        LINUXRELEASEHEADER=$SRC/include/generated/utsrelease.h
+    elif [ -s $SRC/include/linux/utsrelease.h ]; then
+        LINUXRELEASEHEADER=$SRC/include/linux/utsrelease.h
+    fi
+
+    if [ ! -s $LINUXRELEASEHEADER ]; then
+        fatal 1 "could not find UTS_RELEASE"
     fi
 
     sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' $LINUXRELEASEHEADER
-}
-
-# This funcition finds the buildroot directory for a given linux
-# kernel directory
-find_linux_builddir() {
-    local linux=${1:-${LINUX}}
-    local rel=$(find_linux_release $linux)
-
-    echo ${linux%/usr/src/kernels/${rel}*}
 }
 
 # unpack kernel(/source/devel) RPM
@@ -1316,7 +1315,7 @@ EOF
         fi
     fi
 
-    local linuxrelease=$(find_linux_release "$linux")
+    local linuxrelease=$(find_linux_release)
     if compare_version $OFED_VERSION 3.0; then
         local OFA_KERNEL_RELEASE=$(echo -n ${linuxrelease} | sed -e 's/-/_/g')
     fi
@@ -1534,7 +1533,7 @@ build_kernel_with_srpm() {
 
     # figure out the EXTRA_VERSION of the kernel we built or are re-using
     local KERNEL_RPM
-    if ! KERNEL_RPM=$(find_rpm "$TOPDIR/RPMS/$TARGET_ARCH/" provides "^kernel ="); then
+    if ! KERNEL_RPM=$(find_rpm "$TOPDIR/RPMS/$TARGET_ARCH/" provides "^kernel(-default)? ="); then
         fatal 1 "Failed to find a kernel RPM in $TOPDIR/RPMS/$TARGET_ARCH/"
     fi
     kernel_extra_version=$(rpm -q --queryformat "%{RELEASE}" -p $TOPDIR/RPMS/$TARGET_ARCH/$KERNEL_RPM)
@@ -1595,7 +1594,7 @@ build_ofed() {
     # build kernel-ib/compat-rdma
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo "$ofed_version";
-                                  echo "$(find_linux_release ${linux};
+                                  echo "$(find_linux_release;
                                   echo "$BUILD_GEN")";
                                   cat "${linux}/include/linux/autoconf.h";
                                   cat "${0%/lbuild}/lbuild" ;
@@ -1652,7 +1651,7 @@ build_ofed() {
     cd ${kib_rpm}-devel
     # the actual ofed RPMs don't have the -rc$n or -$date string appened that
     # might be present on the file
-    local linuxrelease=$(find_linux_release "$linux")
+    local linuxrelease=$(find_linux_release)
     ofed_version=$(echo $ofed_version |
                    sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
     local rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
