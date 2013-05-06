@@ -17,10 +17,10 @@ Signed-off-by: Johann Lombardi <johann <at> whamcloud.com>
  4 files changed, 444 insertions(+), 4 deletions(-)
  create mode 100644 fs/ext4/mmp.c
 
-Index: linux-stage/fs/ext4/Makefile
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext4/Makefile
-+++ linux-stage/fs/ext4/Makefile
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/Makefile
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/Makefile
 @@ -6,7 +6,8 @@ obj-$(CONFIG_EXT4_FS) += ext4.o
  
  ext4-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
@@ -31,11 +31,11 @@ Index: linux-stage/fs/ext4/Makefile
  
  ext4-$(CONFIG_EXT4_FS_XATTR)		+= xattr.o xattr_user.o xattr_trusted.o
  ext4-$(CONFIG_EXT4_FS_POSIX_ACL)	+= acl.o
-Index: linux-stage/fs/ext4/ext4.h
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
-@@ -973,7 +973,7 @@ struct ext4_super_block {
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/ext4.h
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
+@@ -1009,7 +1009,7 @@ struct ext4_super_block {
  	__le16	s_want_extra_isize; 	/* New inodes should reserve # bytes */
  	__le32	s_flags;		/* Miscellaneous flags */
  	__le16  s_raid_stride;		/* RAID stride */
@@ -44,17 +44,17 @@ Index: linux-stage/fs/ext4/ext4.h
  	__le64  s_mmp_block;            /* Block for multi-mount protection */
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
-@@ -1145,6 +1145,9 @@ struct ext4_sb_info {
-	struct ext4_li_request *s_li_request;
-	/* Wait multiplier for lazy initialization thread */
-	unsigned int s_li_wait_mult;
-+
+@@ -1182,6 +1182,9 @@ struct ext4_sb_info {
+ 	/* Wait multiplier for lazy initialization thread */
+ 	unsigned int s_li_wait_mult;
+ 
 +	/* Kernel thread for multiple mount protection */
 +	struct task_struct *s_mmp_tsk;
- 
-	/* record the last minlen when FITRIM is called. */
-	atomic_t s_last_trim_minblks;
-@@ -1283,7 +1286,8 @@ EXT4_INODE_BIT_FNS(state, state_flags)
++
+ 	/* record the last minlen when FITRIM is called. */
+ 	atomic_t s_last_trim_minblks;
+ };
+@@ -1322,7 +1325,8 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
@@ -64,7 +64,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1533,6 +1537,67 @@ struct ext4_features {
+@@ -1576,6 +1580,67 @@ struct ext4_features {
  };
  
  /*
@@ -132,7 +132,7 @@ Index: linux-stage/fs/ext4/ext4.h
   * Function prototypes
   */
  
-@@ -1703,6 +1768,10 @@ extern void __ext4_warning(struct super_
+@@ -1757,6 +1822,10 @@ extern void __ext4_warning(struct super_
  #define ext4_warning(sb, message...)	__ext4_warning(sb, __func__, ## message)
  extern void ext4_msg(struct super_block *, const char *, const char *, ...)
  	__attribute__ ((format (printf, 3, 4)));
@@ -143,7 +143,7 @@ Index: linux-stage/fs/ext4/ext4.h
  extern void ext4_grp_locked_error(struct super_block *, ext4_group_t,
  				const char *, const char *, ...)
  	__attribute__ ((format (printf, 4, 5)));
-@@ -1986,6 +2055,8 @@ extern int ext4_move_extents(struct file
+@@ -2050,6 +2119,8 @@ extern int ext4_move_extents(struct file
  			     __u64 start_orig, __u64 start_donor,
  			     __u64 len, __u64 *moved_len);
  
@@ -152,10 +152,10 @@ Index: linux-stage/fs/ext4/ext4.h
  
  /*
   * Add new method to test wether block and inode bitmaps are properly
-Index: linux-stage/fs/ext4/mmp.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mmp.c
 ===================================================================
 --- /dev/null
-+++ linux-stage/fs/ext4/mmp.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mmp.c
 @@ -0,0 +1,351 @@
 +#include <linux/fs.h>
 +#include <linux/random.h>
@@ -508,10 +508,10 @@ Index: linux-stage/fs/ext4/mmp.c
 +}
 +
 +
-Index: linux-stage/fs/ext4/super.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/super.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
 @@ -40,6 +40,8 @@
  #include <linux/log2.h>
  #include <linux/crc16.h>
@@ -521,7 +521,7 @@ Index: linux-stage/fs/ext4/super.c
  
  #include <linux/kthread.h>
  #include <linux/freezer.h>
-@@ -712,6 +714,8 @@ static void ext4_put_super(struct super_
+@@ -716,6 +718,8 @@ static void ext4_put_super(struct super_
  		invalidate_bdev(sbi->journal_bdev);
  		ext4_blkdev_remove(sbi);
  	}
@@ -530,7 +530,7 @@ Index: linux-stage/fs/ext4/super.c
  	sb->s_fs_info = NULL;
  	/*
  	 * Now that we are completely done shutting down the
-@@ -3235,6 +3239,10 @@ static int ext4_fill_super(struct super_
+@@ -3241,6 +3245,10 @@ static int ext4_fill_super(struct super_
  	needs_recovery = (es->s_last_orphan != 0 ||
  			  EXT4_HAS_INCOMPAT_FEATURE(sb,
  				    EXT4_FEATURE_INCOMPAT_RECOVER));
@@ -541,7 +541,7 @@ Index: linux-stage/fs/ext4/super.c
  
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
-@@ -3478,6 +3486,8 @@ failed_mount3:
+@@ -3491,6 +3499,8 @@ failed_mount3:
  	percpu_counter_destroy(&sbi->s_freeinodes_counter);
  	percpu_counter_destroy(&sbi->s_dirs_counter);
  	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
@@ -550,8 +550,8 @@ Index: linux-stage/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3986,7 +3996,7 @@ static int ext4_remount(struct super_blo
- 	struct ext4_mount_options old_opts;
+@@ -4001,7 +4011,7 @@ static int ext4_remount(struct super_blo
+ 	int enable_quota = 0;
  	ext4_group_t g;
  	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
 -	int err;
@@ -559,10 +559,10 @@ Index: linux-stage/fs/ext4/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -4108,6 +4118,13 @@ static int ext4_remount(struct super_blo
- 				goto restore_opts;
+@@ -4130,6 +4140,13 @@ static int ext4_remount(struct super_blo
  			if (!ext4_setup_super(sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
+ 			enable_quota = 1;
 +			if (EXT4_HAS_INCOMPAT_FEATURE(sb,
 +						    EXT4_FEATURE_INCOMPAT_MMP))
 +				if (ext4_multi_mount_protect(sb,

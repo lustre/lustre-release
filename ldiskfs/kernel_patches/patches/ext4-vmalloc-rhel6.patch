@@ -1,8 +1,8 @@
-Index: linux-stage/fs/ext4/super.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
-@@ -675,7 +675,12 @@ static void ext4_put_super(struct super_
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/super.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
+@@ -690,7 +690,12 @@ static void ext4_put_super(struct super_
  
  	for (i = 0; i < sbi->s_gdb_count; i++)
  		brelse(sbi->s_group_desc[i]);
@@ -16,7 +16,7 @@ Index: linux-stage/fs/ext4/super.c
  	if (is_vmalloc_addr(sbi->s_flex_groups))
  		vfree(sbi->s_flex_groups);
  	else
-@@ -2519,12 +2524,13 @@ static int ext4_fill_super(struct super_
+@@ -2937,12 +2942,13 @@ static int ext4_fill_super(struct super_
  	unsigned long offset = 0;
  	unsigned long journal_devnum = 0;
  	unsigned long def_mount_opts;
@@ -31,7 +31,7 @@ Index: linux-stage/fs/ext4/super.c
  	unsigned int i;
  	int needs_recovery, has_huge_files;
  	__u64 blocks_count;
-@@ -2850,11 +2856,18 @@ static int ext4_fill_super(struct super_
+@@ -3285,11 +3291,18 @@ static int ext4_fill_super(struct super_
  			(EXT4_MAX_BLOCK_FILE_PHYS / EXT4_BLOCKS_PER_GROUP(sb)));
  	db_count = (sbi->s_groups_count + EXT4_DESC_PER_BLOCK(sb) - 1) /
  		   EXT4_DESC_PER_BLOCK(sb);
@@ -54,43 +54,37 @@ Index: linux-stage/fs/ext4/super.c
  	}
  
  #ifdef __BIG_ENDIAN
-@@ -3064,17 +3077,16 @@ no_journal:
- 	if (IS_ERR(root)) {
- 		ext4_msg(sb, KERN_ERR, "get root inode failed");
- 		ret = PTR_ERR(root);
-+		root = NULL;
- 		goto failed_mount4;
+@@ -3504,12 +3517,10 @@ no_journal:
  	}
  	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size) {
--		iput(root);
  		ext4_msg(sb, KERN_ERR, "corrupt root inode, run e2fsck");
+-		iput(root);
  		goto failed_mount4;
  	}
  	sb->s_root = d_alloc_root(root);
  	if (!sb->s_root) {
- 		ext4_msg(sb, KERN_ERR, "get root dentry failed");
 -		iput(root);
+ 		ext4_msg(sb, KERN_ERR, "get root dentry failed");
  		ret = -ENOMEM;
  		goto failed_mount4;
- 	}
-@@ -3125,6 +3137,7 @@ no_journal:
+@@ -3561,6 +3572,7 @@ no_journal:
  	if (err) {
  		ext4_msg(sb, KERN_ERR, "failed to initalize mballoc (%d)",
  			 err);
 +		ret = err;
- 		goto failed_mount4;
+ 		goto failed_mount5;
  	}
  
-@@ -3166,6 +3179,8 @@ cantfind_ext4:
- 	goto failed_mount;
- 
+@@ -3615,6 +3627,8 @@ failed_mount4a:
+ 	dput(sb->s_root);
+ 	sb->s_root = NULL;
  failed_mount4:
 +	iput(root);
 +	sb->s_root = NULL;
  	ext4_msg(sb, KERN_ERR, "mount failed");
  	destroy_workqueue(EXT4_SB(sb)->dio_unwritten_wq);
  failed_mount_wq:
-@@ -3190,7 +3205,11 @@ failed_mount3:
+@@ -3638,7 +3652,11 @@ failed_mount3:
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
@@ -103,10 +97,10 @@ Index: linux-stage/fs/ext4/super.c
  failed_mount:
  	if (sbi->s_proc) {
  		remove_proc_entry(sb->s_id, ext4_proc_root);
-Index: linux-stage/fs/ext4/mballoc.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c
-+++ linux-stage/fs/ext4/mballoc.c
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/mballoc.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mballoc.c
 @@ -2408,24 +2408,37 @@ static int ext4_mb_init_backend(struct s
  	while (array_size < sizeof(*sbi->s_group_info) *
  	       num_meta_group_infos_max)
@@ -165,7 +159,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	return -ENOMEM;
  }
  
-@@ -2622,7 +2638,10 @@ int ext4_mb_release(struct super_block *
+@@ -2627,7 +2643,10 @@ int ext4_mb_release(struct super_block *
  			EXT4_DESC_PER_BLOCK_BITS(sb);
  		for (i = 0; i < num_meta_group_infos; i++)
  			kfree(sbi->s_group_info[i]);

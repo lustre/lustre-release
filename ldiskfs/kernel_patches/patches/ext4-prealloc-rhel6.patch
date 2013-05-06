@@ -1,8 +1,8 @@
-Index: linux-stage/fs/ext4/ext4.h
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
-@@ -1100,11 +1100,14 @@ struct ext4_sb_info {
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/ext4.h
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
+@@ -1136,11 +1136,14 @@ struct ext4_sb_info {
  
  	/* tunables */
  	unsigned long s_stripe;
@@ -18,10 +18,10 @@ Index: linux-stage/fs/ext4/ext4.h
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_max_writeback_mb_bump;
  	/* where last allocation was done - for stream allocation */
-Index: linux-stage/fs/ext4/mballoc.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c
-+++ linux-stage/fs/ext4/mballoc.c
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/mballoc.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/mballoc.c
 @@ -1838,6 +1838,25 @@ void ext4_mb_complex_scan_group(struct e
  	ext4_mb_check_limits(ac, e4b, 1);
  }
@@ -231,7 +231,19 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	if (sbi->s_journal)
  		sbi->s_journal->j_commit_callback = release_blocks_on_commit;
-@@ -2466,6 +2613,7 @@ int ext4_mb_release(struct super_block *
+@@ -2448,8 +2595,10 @@ int ext4_mb_release(struct super_block *
+ 	struct ext4_group_info *grinfo;
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 
+-	if (sbi->s_proc)
++	if (sbi->s_proc) {
+ 		remove_proc_entry("mb_groups", sbi->s_proc);
++		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
++	}
+ 
+ 	if (sbi->s_group_info) {
+ 		for (i = 0; i < ngroups; i++) {
+@@ -2469,6 +2618,7 @@ int ext4_mb_release(struct super_block *
  			kfree(sbi->s_group_info[i]);
  		kfree(sbi->s_group_info);
  	}
@@ -239,19 +251,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	kfree(sbi->s_mb_offsets);
  	kfree(sbi->s_mb_maxs);
  	if (sbi->s_buddy_cache)
-@@ -2495,8 +2643,10 @@ int ext4_mb_release(struct super_block *
- 	}
- 
- 	free_percpu(sbi->s_locality_groups);
--	if (sbi->s_proc)
-+	if (sbi->s_proc) {
- 		remove_proc_entry("mb_groups", sbi->s_proc);
-+		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
-+	}
- 
- 	return 0;
- }
-@@ -2797,11 +2947,12 @@ static noinline_for_stack void
+@@ -2798,11 +2948,12 @@ static noinline_for_stack void
  ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
@@ -266,7 +266,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	struct ext4_prealloc_space *pa;
  
  	/* do normalize only data requests, metadata requests
-@@ -2831,49 +2982,35 @@ ext4_mb_normalize_request(struct ext4_al
+@@ -2832,49 +2983,35 @@ ext4_mb_normalize_request(struct ext4_al
  	size = size << bsbits;
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
@@ -341,7 +341,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	/* don't cover already allocated blocks in selected range */
  	if (ar->pleft && start <= ar->lleft) {
-@@ -2945,7 +3082,6 @@ ext4_mb_normalize_request(struct ext4_al
+@@ -2946,7 +3083,6 @@ ext4_mb_normalize_request(struct ext4_al
  	}
  	BUG_ON(start + size <= ac->ac_o_ex.fe_logical &&
  			start > ac->ac_o_ex.fe_logical);
@@ -349,7 +349,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	/* now prepare goal request */
  
-@@ -3929,11 +4065,19 @@ static void ext4_mb_group_or_file(struct
+@@ -3930,11 +4066,19 @@ static void ext4_mb_group_or_file(struct
  
  	/* don't use group allocation for large files */
  	size = max(size, isize);
@@ -370,11 +370,11 @@ Index: linux-stage/fs/ext4/mballoc.c
  	BUG_ON(ac->ac_lg != NULL);
  	/*
  	 * locality group prealloc space are per cpu. The reason for having
-Index: linux-stage/fs/ext4/super.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
-@@ -2353,7 +2353,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/super.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
+@@ -2357,7 +2357,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats
  EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_order2_req, s_mb_order2_reqs);
@@ -384,7 +384,7 @@ Index: linux-stage/fs/ext4/super.c
  EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
  EXT4_RW_ATTR_SBI_UI(max_writeback_mb_bump, s_max_writeback_mb_bump);
  
-@@ -2368,7 +2369,8 @@ static struct attribute *ext4_attrs[] = 
+@@ -2372,7 +2373,8 @@ static struct attribute *ext4_attrs[] =
  	ATTR_LIST(mb_max_to_scan),
  	ATTR_LIST(mb_min_to_scan),
  	ATTR_LIST(mb_order2_req),
@@ -394,11 +394,11 @@ Index: linux-stage/fs/ext4/super.c
  	ATTR_LIST(mb_group_prealloc),
  	ATTR_LIST(max_writeback_mb_bump),
  	NULL,
-Index: linux-stage/fs/ext4/inode.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/inode.c
 ===================================================================
---- linux-stage.orig/fs/ext4/inode.c
-+++ linux-stage/fs/ext4/inode.c
-@@ -3049,6 +3049,11 @@ static int ext4_da_writepages(struct add
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/inode.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/inode.c
+@@ -3070,6 +3070,11 @@ static int ext4_da_writepages(struct add
  	if (unlikely(sbi->s_mount_flags & EXT4_MF_FS_ABORTED))
  		return -EROFS;
  

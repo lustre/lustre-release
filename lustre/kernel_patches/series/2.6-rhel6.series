@@ -6,3 +6,4 @@ dev_read_only-2.6.32-rhel6.patch
 blkdev_tunables-2.6-rhel6.patch
 export-2.6.32-vanilla.patch
 jbd2-jcberr-2.6-rhel6.patch
+ipoib-locking-fix.patch

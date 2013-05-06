@@ -152,6 +152,9 @@ struct fsfilt_cb_data {
 #define fsfilt_log_start_commit(journal, tid) jbd2_log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) jbd2_log_wait_commit(journal, tid)
 #define fsfilt_journal_callback_set(handle, func, jcb) jbd2_journal_callback_set(handle, func, jcb)
+# ifdef HAVE_EXT4_EXT_PBLOCK
+#  define ext_pblock(ex) ext4_ext_pblock(ex)
+# endif
 #else
 #define fsfilt_log_start_commit(journal, tid) log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) log_wait_commit(journal, tid)

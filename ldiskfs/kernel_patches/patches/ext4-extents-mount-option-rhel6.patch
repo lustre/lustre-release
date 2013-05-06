@@ -1,8 +1,8 @@
-Index: linux-stage/fs/ext4/ext4.h
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
-@@ -859,6 +859,7 @@ struct ext4_inode_info {
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/ext4.h
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4.h
+@@ -894,6 +894,7 @@ struct ext4_inode_info {
  #define EXT4_MOUNT_QUOTA		0x80000 /* Some quota option set */
  #define EXT4_MOUNT_USRQUOTA		0x100000 /* "old" user quota */
  #define EXT4_MOUNT_GRPQUOTA		0x200000 /* "old" group quota */
@@ -10,10 +10,10 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MOUNT_JOURNAL_CHECKSUM	0x800000 /* Journal checksums */
  #define EXT4_MOUNT_JOURNAL_ASYNC_COMMIT	0x1000000 /* Journal Async Commit */
  #define EXT4_MOUNT_I_VERSION            0x2000000 /* i_version support */
-Index: linux-stage/fs/ext4/ext4_jbd2.h
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.h
-+++ linux-stage/fs/ext4/ext4_jbd2.h
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/ext4_jbd2.h
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ext4_jbd2.h
 @@ -33,7 +33,7 @@
  
  #define EXT4_SINGLEDATA_TRANS_BLOCKS(sb)				\
@@ -23,11 +23,11 @@ Index: linux-stage/fs/ext4/ext4_jbd2.h
  
  #define ext4_journal_dirty_metadata(handle, bh)  \
  		ext4_handle_dirty_metadata(handle, NULL, bh)
-Index: linux-stage/fs/ext4/extents.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/extents.c
 ===================================================================
---- linux-stage.orig/fs/ext4/extents.c
-+++ linux-stage/fs/ext4/extents.c
-@@ -2554,7 +2554,7 @@ void ext4_ext_init(struct super_block *s
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/extents.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/extents.c
+@@ -2730,7 +2730,7 @@ void ext4_ext_init(struct super_block *s
  	 * possible initialization would be here
  	 */
  
@@ -36,7 +36,7 @@ Index: linux-stage/fs/ext4/extents.c
  #if defined(AGGRESSIVE_TEST) || defined(CHECK_BINSEARCH) || defined(EXTENTS_STATS)
  		printk(KERN_INFO "EXT4-fs: file extents enabled");
  #ifdef AGGRESSIVE_TEST
-@@ -2581,7 +2581,7 @@ void ext4_ext_init(struct super_block *s
+@@ -2757,7 +2757,7 @@ void ext4_ext_init(struct super_block *s
   */
  void ext4_ext_release(struct super_block *sb)
  {
@@ -45,10 +45,10 @@ Index: linux-stage/fs/ext4/extents.c
  		return;
  
  #ifdef EXTENTS_STATS
-Index: linux-stage/fs/ext4/ialloc.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ialloc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/ialloc.c
-+++ linux-stage/fs/ext4/ialloc.c
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/ialloc.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/ialloc.c
 @@ -1063,7 +1063,7 @@ got:
  	if (err)
  		goto fail_free_drop;
@@ -58,11 +58,11 @@ Index: linux-stage/fs/ext4/ialloc.c
  		/* set extent flag only for directory, file and normal symlink*/
  		if (S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode)) {
  			ext4_set_inode_flag(inode, EXT4_INODE_EXTENTS);
-Index: linux-stage/fs/ext4/migrate.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/migrate.c
 ===================================================================
---- linux-stage.orig/fs/ext4/migrate.c
-+++ linux-stage/fs/ext4/migrate.c
-@@ -459,13 +459,10 @@ int ext4_ext_migrate(struct inode *inode
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/migrate.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/migrate.c
+@@ -464,13 +464,10 @@ int ext4_ext_migrate(struct inode *inode
  	unsigned long max_entries;
  	__u32 goal;
  
@@ -80,11 +80,11 @@ Index: linux-stage/fs/ext4/migrate.c
  		return -EINVAL;
  
  	if (S_ISLNK(inode->i_mode) && inode->i_blocks == 0)
-Index: linux-stage/fs/ext4/super.c
+Index: linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
-@@ -956,6 +956,8 @@ static int ext4_show_options(struct seq_
+--- linux-2.6.32-358.6.1.el6.x86_64.orig/fs/ext4/super.c
++++ linux-2.6.32-358.6.1.el6.x86_64/fs/ext4/super.c
+@@ -959,6 +959,8 @@ static int ext4_show_options(struct seq_
  		seq_puts(seq, ",journal_async_commit");
  	if (test_opt(sb, NOBH))
  		seq_puts(seq, ",nobh");
@@ -93,15 +93,15 @@ Index: linux-stage/fs/ext4/super.c
  	if (test_opt(sb, I_VERSION))
  		seq_puts(seq, ",i_version");
  	if (!test_opt(sb, DELALLOC) &&
-@@ -1186,6 +1188,7 @@ enum {
+@@ -1189,6 +1191,7 @@ enum {
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
 +	Opt_extents, Opt_noextents,
- 	Opt_discard, Opt_nodiscard,
- 	Opt_init_inode_table, Opt_noinit_inode_table,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
  };
-@@ -1260,6 +1263,8 @@ static const match_table_t tokens = {
+ 
+@@ -1262,6 +1265,8 @@ static const match_table_t tokens = {
  	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_force_over_128tb, "force_over_128tb"},
  	{Opt_mballoc, "mballoc"},
@@ -109,8 +109,8 @@ Index: linux-stage/fs/ext4/super.c
 +	{Opt_noextents, "noextents"},
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
- 	{Opt_init_inode_table, "init_itable=%u"},
-@@ -1307,6 +1312,7 @@ static int parse_options(char *options, 
+ 	{Opt_init_itable, "init_itable=%u"},
+@@ -1309,6 +1314,7 @@ static int parse_options(char *options,
  	int qtype, qfmt;
  	char *qname;
  #endif
@@ -118,7 +118,7 @@ Index: linux-stage/fs/ext4/super.c
  
  	if (!options)
  		return 1;
-@@ -1729,6 +1735,32 @@ set_qf_format:
+@@ -1731,6 +1737,32 @@ set_qf_format:
  		case Opt_force_over_128tb:
  			force_over_128tb = 1;
  			break;
@@ -151,7 +151,7 @@ Index: linux-stage/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-@@ -2972,6 +3004,14 @@ static int ext4_fill_super(struct super_
+@@ -2977,6 +3009,14 @@ static int ext4_fill_super(struct super_
  		set_opt(sbi->s_mount_opt, BARRIER);
  
  	/*

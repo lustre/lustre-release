@@ -2264,6 +2264,28 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_EXT4_EXT_PBLOCK
+# rhel6.4 change ext_pblock to ext4_ext_pblock
+#
+AC_DEFUN([LC_EXT4_EXT_PBLOCK],
+[AC_MSG_CHECKING([ext4_ext_pblock exist in kernel])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-I$LINUX/fs"
+LB_LINUX_TRY_COMPILE([
+        #include <ext4/ext4_extents.h>
+],[
+        ext4_ext_pblock(NULL);
+],[
+        AC_DEFINE([HAVE_LDISKFS_EXT_PBLOCK], 1,
+                  [ext4_ext_pblock exist in kernel])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # 2.6.39 replace get_sb with mount in struct file_system_type
 #
 AC_DEFUN([LC_HAVE_FSTYPE_MOUNT],
@@ -2463,6 +2485,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
          LC_WALK_SPACE_HAS_DATA_SEM
          LC_SELINUX_IS_ENABLED
+         LC_EXT4_EXT_PBLOCK
 
 	 # 2.6.39
 	 LC_HAVE_FSTYPE_MOUNT
