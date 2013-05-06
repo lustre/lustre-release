@@ -70,9 +70,6 @@ void cfs_kunmap(cfs_page_t *pg);
 #define cfs_page_pin(page) do {} while (0)
 #define cfs_page_unpin(page) do {} while (0)
 
-#define inc_zone_page_state(page, state) do {} while (0)
-#define dec_zone_page_state(page, state) do {} while (0)
-
 /*
  * Memory allocator
  * Inline function, so utils can use them without linking of libcfs
