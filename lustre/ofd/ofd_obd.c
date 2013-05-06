@@ -1013,6 +1013,8 @@ static int ofd_destroy_by_fid(const struct lu_env *env,
 	fo = ofd_object_find(env, ofd, fid);
 	if (IS_ERR(fo))
 		RETURN(PTR_ERR(fo));
+	if (!ofd_object_exists(fo))
+		GOTO(out, rc = -ENOENT);
 
 	/* Tell the clients that the object is gone now and that they should
 	 * throw away any cached pages. */
@@ -1029,7 +1031,8 @@ static int ofd_destroy_by_fid(const struct lu_env *env,
 	LASSERT(fo != NULL);
 
 	rc = ofd_object_destroy(env, fo, orphan);
-
+	EXIT;
+out:
 	ofd_object_put(env, fo);
 	RETURN(rc);
 }
