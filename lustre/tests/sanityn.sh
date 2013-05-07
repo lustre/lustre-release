@@ -430,26 +430,25 @@ test_22() { # Bug 9926
 run_test 22 " After joining in one dir,  open/close unlink file in anther dir"
 
 test_23() { # Bug 5972
-	echo "others should see updated atime while another read" > $DIR1/f23
+	local atime_diff=$(do_facet mds $LCTL get_param -n md*.*.atime_diff)
 
+	echo "should see updated atime while another read" > $DIR1/$tfile
 	# clear the lock(mode: LCK_PW) gotten from creating operation
 	cancel_lru_locks osc
+	time1=$(date +%s)
+	echo "now is $time1"
+	sleep $((atime_diff + 1))
 
-	time1=`date +%s`
-	sleep 2
+	multiop_bg_pause $DIR1/$tfile or20_c || return 1
+	kill -USR1 $! || return 2
+	wait
+	cancel_lru_locks mdc
 
-	multiop_bg_pause $DIR1/f23 or20_c || return 1
-	MULTIPID=$!
+	time2=$(stat -c "%X" $DIR2/$tfile)
+	echo "new atime is $time2"
 
-	time2=`stat -c "%X" $DIR2/f23`
-
-	if (( $time2 <= $time1 )); then
-		kill -USR1 $MULTIPID
-		error "atime doesn't update among nodes"
-	fi
-
-	kill -USR1 $MULTIPID || return 1
-	rm -f $DIR1/f23 || error "rm -f $DIR1/f23 failed"
+	[ $time2 -gt $time1 ] || error "atime doesn't update among nodes"
+	rm -f $DIR1/$tfile || error "rm -f $DIR1/$tfile failed"
 	true
 }
 run_test 23 " others should see updated atime while another read===="

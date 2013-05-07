@@ -894,15 +894,15 @@ static void mdc_close_pack_20(struct ptlrpc_request *req, int offset,
 
         if (oa->o_valid & OBD_MD_FLATIME) {
                 rec->sa_atime = oa->o_atime;
-                rec->sa_valid |= MDS_ATTR_ATIME;
+                rec->sa_valid |= MDS_ATTR_ATIME | MDS_ATTR_ATIME_SET;
         }
         if (oa->o_valid & OBD_MD_FLMTIME) {
                 rec->sa_mtime = oa->o_mtime;
-                rec->sa_valid |= MDS_ATTR_MTIME;
+                rec->sa_valid |= MDS_ATTR_MTIME | MDS_ATTR_MTIME_SET;
         }
         if (oa->o_valid & OBD_MD_FLCTIME) {
                 rec->sa_ctime = oa->o_ctime;
-                rec->sa_valid |= MDS_ATTR_CTIME;
+                rec->sa_valid |= MDS_ATTR_CTIME | MDS_ATTR_CTIME_SET;
         }
         if (oa->o_valid & OBD_MD_FLSIZE) {
                 rec->sa_size = oa->o_size;
