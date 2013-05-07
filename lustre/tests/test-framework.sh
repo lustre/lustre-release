@@ -2394,9 +2394,9 @@ is_empty_dir() {
 is_empty_fs() {
     [ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
        -print | wc -l) = 1 ] || return 1
-    [ ! -d $1/lost+found ] || is_empty_dir $1/lost+found && return 0
-    [ ! -d $1/.lustre ] || is_empty_dir $1/.lustre && return 0
-    return 1
+    [ ! -d $1/lost+found ] || is_empty_dir $1/lost+found || return 1
+    [ ! -d $1/.lustre ] || is_empty_dir $1/.lustre || return 1
+    return 0
 }
 
 check_and_setup_lustre() {
@@ -4210,6 +4210,29 @@ max_recovery_time () {
     echo $service_time
 }
 
+# Remove objects from OST
+remove_ost_objects() {
+    local facet=$1
+    local ostdev=$2
+    local group=$3
+    shift 3
+    local objids="$@"
+    local mntpt=$(facet_mntpt $facet)
+    local opts=$OST_MOUNT_OPTS
+    local i
+    local rc
+
+    echo "removing objects from $ostdev on $facet: $objids"
+    mount -t $FSTYPE $OST_MOUNT_OPTS $ostdev $mntpt || return $?
+    rc=0
+    for i in $objids; do
+        rm $mntpt/O/$group/d$((i % 32))/$i || { rc=$?; break; }
+    done
+    umount -f $mntpt || return $?
+    return $rc
+}
+
+#Remove files from MDT
 remove_mdt_files() {
     local facet=$1
     local mdtdev=$2
@@ -4219,7 +4242,7 @@ remove_mdt_files() {
 
     echo "removing files from $mdtdev on $facet: $files"
     mount -t $FSTYPE $MDS_MOUNT_OPTS $mdtdev $mntpt || return $?
-    rc=0;
+    rc=0
     for f in $files; do
 	rm $mntpt/ROOT/$f || { rc=$?; break; }
     done
