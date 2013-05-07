@@ -698,7 +698,8 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
 		if (fid_is_llog(&lma->lma_self_fid) ||
-		    (!scrub && fid_is_internal(&lma->lma_self_fid)))
+		    (!scrub && fid_is_internal(&lma->lma_self_fid)) ||
+		    (scrub && (lma->lma_incompat & LMAI_AGENT)))
 			rc = SCRUB_NEXT_CONTINUE;
 		else
 			*fid = lma->lma_self_fid;

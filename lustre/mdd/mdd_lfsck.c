@@ -877,7 +877,8 @@ again:
 		if (!mdd_object_exists(parent))
 			goto shrink;
 
-		/* XXX: need more processing for remote object in the future. */
+		/* XXX: Currently, skip remote object, the consistency for
+		 *	remote object will be processed in LFSCK phase III. */
 		if (mdd_object_remote(parent)) {
 			mdd_object_put(env, parent);
 			ldata.ld_lee = LINKEA_NEXT_ENTRY(ldata);
@@ -1752,7 +1753,8 @@ static int mdd_lfsck_namespace_double_scan(const struct lu_env *env,
 			goto checkpoint;
 		}
 
-		/* XXX: need more processing for remote object in the future. */
+		/* XXX: Currently, skip remote object, the consistency for
+		 *	remote object will be processed in LFSCK phase III. */
 		if (!mdd_object_exists(target) || mdd_object_remote(target))
 			goto obj_put;
 
@@ -2149,7 +2151,8 @@ static int mdd_lfsck_prep(struct lu_env *env, struct md_lfsck *lfsck)
 	else if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 
-	/* XXX: need more processing for remote object in the future. */
+	/* XXX: Currently, skip remote object, the consistency for
+	 *	remote object will be processed in LFSCK phase III. */
 	if (!mdd_object_exists(obj) || mdd_object_remote(obj) ||
 	    unlikely(!S_ISDIR(mdd_object_type(obj))))
 		GOTO(out, rc = 0);
@@ -2390,7 +2393,8 @@ static int mdd_lfsck_dir_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		/* XXX: need more processing for remote object in the future. */
+		/* XXX: Currently, skip remote object, the consistency for
+		 *	remote object will be processed in LFSCK phase III. */
 		if (mdd_object_exists(child) && !mdd_object_remote(child))
 			rc = mdd_lfsck_exec_dir(env, lfsck, child, ent);
 		mdd_object_put(env, child);
@@ -2485,9 +2489,8 @@ static int mdd_lfsck_oit_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		/* XXX: In fact, low layer otable-based iteration should not
-		 * 	return agent object. But before LU-2646 resolved, we
-		 * 	need more processing for agent object. */
+		/* XXX: Currently, skip remote object, the consistency for
+		 *	remote object will be processed in LFSCK phase III. */
 		if (mdd_object_exists(target) && !mdd_object_remote(target))
 			rc = mdd_lfsck_exec_oit(env, lfsck, target);
 		mdd_object_put(env, target);

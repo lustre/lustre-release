@@ -192,6 +192,7 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
 
+	ldiskfs_set_inode_state(d->d_inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	omm->omm_remote_parent = d;
 
 	/* Set LMA for remote parent inode */

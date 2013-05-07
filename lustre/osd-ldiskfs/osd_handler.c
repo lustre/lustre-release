@@ -4886,6 +4886,10 @@ again:
 		GOTO(out_journal, rc);
 	}
 
+	/* skip the REMOTE_PARENT_DIR. */
+	if (inode == dev->od_mdt_map->omm_remote_parent->d_inode)
+		GOTO(out_inode, rc = 0);
+
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
 		if (fid_is_sane(fid)) {
