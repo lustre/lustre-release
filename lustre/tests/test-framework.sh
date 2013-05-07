@@ -297,6 +297,7 @@ init_test_env() {
     fi
 
     export SHUTDOWN_ATTEMPTS=${SHUTDOWN_ATTEMPTS:-3}
+	export OSD_TRACK_DECLARES_LBUG=${OSD_TRACK_DECLARES_LBUG:-"yes"}
 
     # command line
 
@@ -3458,10 +3459,22 @@ check_and_setup_lustre() {
         set_default_debug_nodes $(comma_list $(nodes_list))
     fi
 
-	if [ -n "$OSD_TRACK_DECLARES_LBUG" ] ; then
-		do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
-			 "$LCTL set_param osd-*.track_declares_assert=1" \
-			 > /dev/null
+	if [ $(lower $OSD_TRACK_DECLARES_LBUG) == 'yes' ] ; then
+		local facets="$(get_facets OST),$(get_facets MDS),mgs"
+		local facet
+		local nodes
+		local node
+		for facet in ${facets//,/ }; do
+			if [ $(facet_fstype $node) == "ldiskfs" ] ; then
+				node=$(facet_host ${facet})
+				nodes="$nodes $node"
+			fi
+		done
+		if [ -n "$nodes" ] ; then
+			nodes=$(for i in $nodes; do echo $i; done | sort -u)
+			do_nodes $(comma_list $nodes) "$LCTL set_param \
+				 osd-ldiskfs.track_declares_assert=1"
+		fi
 	fi
 
 	init_gss
