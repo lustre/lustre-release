@@ -943,7 +943,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
 	LASSERT(ctxt);
 
-	if (likely(ostid_id(&osi->osi_cid.lci_logid.lgl_oi) != 0)) {
+	if (likely(logid_id(&osi->osi_cid.lci_logid) != 0)) {
 		rc = llog_open(env, ctxt, &lgh, &osi->osi_cid.lci_logid, NULL,
 			       LLOG_OPEN_EXISTS);
 		/* re-create llog if it is missing */
