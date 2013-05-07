@@ -1219,7 +1219,7 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
-	lustre_set_wire_obdo(&body->oa, oa);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
 	/* XXX: capa support? */
 	/* osc_pack_capa(req, body, capa); */

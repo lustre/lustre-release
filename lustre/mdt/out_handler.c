@@ -320,7 +320,7 @@ static int out_create(struct out_thread_info *info)
 	}
 
 	obdo_le_to_cpu(wobdo, wobdo);
-	lustre_get_wire_obdo(lobdo, wobdo);
+	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
 	dof->dof_type = dt_mode_to_dft(attr->la_mode);
@@ -432,7 +432,7 @@ static int out_attr_set(struct out_thread_info *info)
 	attr->la_valid = 0;
 	attr->la_valid = 0;
 	obdo_le_to_cpu(wobdo, wobdo);
-	lustre_get_wire_obdo(lobdo, wobdo);
+	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
 	rc = out_tx_attr_set(info->mti_env, obj, attr, &info->mti_handle,
@@ -499,7 +499,7 @@ static int out_attr_get(struct out_thread_info *info)
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, la, la->la_valid);
 	obdo_cpu_to_le(obdo, obdo);
-	lustre_set_wire_obdo(obdo, obdo);
+	lustre_set_wire_obdo(NULL, obdo, obdo);
 
 out_unlock:
 	dt_read_unlock(env, obj);

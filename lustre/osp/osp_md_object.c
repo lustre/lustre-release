@@ -322,7 +322,7 @@ static int osp_get_attr_from_req(const struct lu_env *env,
 		return -EPROTO;
 
 	obdo_le_to_cpu(wobdo, wobdo);
-	lustre_get_wire_obdo(lobdo, wobdo);
+	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
 	return 0;
@@ -355,7 +355,7 @@ static int osp_md_declare_object_create(const struct lu_env *env,
 	osi->osi_obdo.o_valid = 0;
 	LASSERT(S_ISDIR(attr->la_mode));
 	obdo_from_la(&osi->osi_obdo, attr, attr->la_valid);
-	lustre_set_wire_obdo(&osi->osi_obdo, &osi->osi_obdo);
+	lustre_set_wire_obdo(NULL, &osi->osi_obdo, &osi->osi_obdo);
 	obdo_cpu_to_le(&osi->osi_obdo, &osi->osi_obdo);
 
 	bufs[0] = (char *)&osi->osi_obdo;
@@ -545,7 +545,7 @@ static int osp_md_declare_attr_set(const struct lu_env *env,
 	LASSERT(!(attr->la_valid & (LA_MODE | LA_TYPE)));
 	obdo_from_la(&osi->osi_obdo, (struct lu_attr *)attr,
 		     attr->la_valid);
-	lustre_set_wire_obdo(&osi->osi_obdo, &osi->osi_obdo);
+	lustre_set_wire_obdo(NULL, &osi->osi_obdo, &osi->osi_obdo);
 	obdo_cpu_to_le(&osi->osi_obdo, &osi->osi_obdo);
 
 	buf = (char *)&osi->osi_obdo;

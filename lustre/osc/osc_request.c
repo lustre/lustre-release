@@ -179,13 +179,14 @@ static inline void osc_pack_capa(struct ptlrpc_request *req,
 static inline void osc_pack_req_body(struct ptlrpc_request *req,
                                      struct obd_info *oinfo)
 {
-        struct ost_body *body;
+	struct ost_body *body;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-        LASSERT(body);
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
 
-        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
-        osc_pack_capa(req, body, oinfo->oi_capa);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa,
+			     oinfo->oi_oa);
+	osc_pack_capa(req, body, oinfo->oi_capa);
 }
 
 static inline void osc_set_capa_size(struct ptlrpc_request *req,
@@ -211,8 +212,9 @@ static int osc_getattr_interpret(const struct lu_env *env,
 
         body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         if (body) {
-                CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-                lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
+		CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
+		lustre_get_wire_obdo(&req->rq_import->imp_connect_data,
+				     aa->aa_oi->oi_oa, &body->oa);
 
 		/* This should really be sent by the OST */
 		aa->aa_oi->oi_oa->o_blksize = DT_MAX_BRW_SIZE;
@@ -290,8 +292,9 @@ static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
+	CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
+	lustre_get_wire_obdo(&req->rq_import->imp_connect_data, oinfo->oi_oa,
+			     &body->oa);
 
 	oinfo->oi_oa->o_blksize = cli_brw_size(exp->exp_obd);
 	oinfo->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
@@ -335,7 +338,8 @@ static int osc_setattr(const struct lu_env *env, struct obd_export *exp,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
+	lustre_get_wire_obdo(&req->rq_import->imp_connect_data, oinfo->oi_oa,
+			     &body->oa);
 
         EXIT;
 out:
@@ -357,7 +361,8 @@ static int osc_setattr_interpret(const struct lu_env *env,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        lustre_get_wire_obdo(sa->sa_oa, &body->oa);
+	lustre_get_wire_obdo(&req->rq_import->imp_connect_data, sa->sa_oa,
+			     &body->oa);
 out:
         rc = sa->sa_upcall(sa->sa_cookie, rc);
         RETURN(rc);
@@ -453,7 +458,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        lustre_set_wire_obdo(&body->oa, oa);
+
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
         ptlrpc_request_set_replen(req);
 
@@ -473,7 +479,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         if (body == NULL)
                 GOTO(out_req, rc = -EPROTO);
 
-        lustre_get_wire_obdo(oa, &body->oa);
+	CDEBUG(D_INFO, "oa flags %x\n", oa->o_flags);
+	lustre_get_wire_obdo(&req->rq_import->imp_connect_data, oa, &body->oa);
 
 	oa->o_blksize = cli_brw_size(exp->exp_obd);
 	oa->o_valid |= OBD_MD_FLBLKSZ;
@@ -528,10 +535,11 @@ int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
         ptlrpc_at_set_req_timeout(req);
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-        LASSERT(body);
-        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
-        osc_pack_capa(req, body, oinfo->oi_capa);
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa,
+			     oinfo->oi_oa);
+	osc_pack_capa(req, body, oinfo->oi_capa);
 
         ptlrpc_request_set_replen(req);
 
@@ -604,11 +612,12 @@ int osc_sync_base(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 
-        /* overload the size and blocks fields in the oa with start/end */
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-        LASSERT(body);
-        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
-        osc_pack_capa(req, body, oinfo->oi_capa);
+	/* overload the size and blocks fields in the oa with start/end */
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa,
+			     oinfo->oi_oa);
+	osc_pack_capa(req, body, oinfo->oi_capa);
 
         ptlrpc_request_set_replen(req);
         req->rq_interpret_reply = osc_sync_interpret;
@@ -781,11 +790,11 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
         ptlrpc_at_set_req_timeout(req);
 
-        if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
-                oa->o_lcookie = *oti->oti_logcookies;
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-        LASSERT(body);
-        lustre_set_wire_obdo(&body->oa, oa);
+	if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
+		oa->o_lcookie = *oti->oti_logcookies;
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
         osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
@@ -1305,7 +1314,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
         LASSERT(body != NULL && ioobj != NULL && niobuf != NULL);
 
-        lustre_set_wire_obdo(&body->oa, oa);
+	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
 	obdo_to_ioobj(oa, ioobj);
 	ioobj->ioo_bufcnt = niocount;
@@ -1636,8 +1645,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 rc = 0;
         }
 out:
-        if (rc >= 0)
-                lustre_get_wire_obdo(aa->aa_oa, &body->oa);
+	if (rc >= 0)
+		lustre_get_wire_obdo(&req->rq_import->imp_connect_data,
+				     aa->aa_oa, &body->oa);
 
         RETURN(rc);
 }

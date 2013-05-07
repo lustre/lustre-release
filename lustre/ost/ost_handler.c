@@ -103,25 +103,50 @@ static void ost_drop_id(struct obd_export *exp, struct obdo *oa)
  * Validate oa from client.
  * If the request comes from 2.0 clients, currently only RSVD seq and IDIF
  * req are valid.
- *    a. for single MDS  seq = FID_SEQ_OST_MDT0,
- *    b. for CMD, seq = FID_SEQ_OST_MDT0, FID_SEQ_OST_MDT1 - FID_SEQ_OST_MAX
+ *    a. objects in Single MDT FS  seq = FID_SEQ_OST_MDT0, oi_id != 0
+ *    b. Echo objects(seq = 2), old echo client still use oi_id/oi_seq to
+ *       pack ost_id. Because non-zero oi_seq will make it diffcult to tell
+ *       whether this is oi_fid or real ostid. So it will check
+ *       OBD_CONNECT_FID, then convert the ostid to FID for old client.
+ *    c. Old FID-disable osc will send IDIF.
+ *    d. new FID-enable osc/osp will send normal FID.
+ *
+ * And also oi_id/f_oid should always start from 1. oi_id/f_oid = 0 will
+ * be used for LAST_ID file, and only being accessed inside OST now.
  */
 static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 			     struct obd_ioobj *ioobj)
 {
-	if (unlikely(oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP))) {
-		ostid_set_seq_mdt0(&oa->o_oi);
-		if (ioobj)
-			ostid_set_seq_mdt0(&ioobj->ioo_oid);
-	} else if (unlikely(oa == NULL ||
-			    !(fid_seq_is_idif(ostid_seq(&oa->o_oi)) ||
-			      fid_seq_is_mdt(ostid_seq(&oa->o_oi)) ||
-			      fid_seq_is_echo(ostid_seq(&oa->o_oi))))) {
-		CERROR("%s: client %s sent bad object "DOSTID": rc = -EPROTO\n",
-		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
-		       oa ? ostid_seq(&oa->o_oi) : -1,
-		       oa ? ostid_id(&oa->o_oi) : -1);
-		return -EPROTO;
+	int rc = 0;
+
+	if (unlikely(!(exp_connect_flags(exp) & OBD_CONNECT_FID) &&
+		     fid_seq_is_echo(oa->o_oi.oi.oi_seq) && oa != NULL)) {
+		/* Sigh 2.[123] client still sends echo req with oi_id = 0
+		 * during create, and we will reset this to 1, since this
+		 * oi_id is basically useless in the following create process,
+		 * but oi_id == 0 will make it difficult to tell whether it is
+		 * real FID or ost_id. */
+		oa->o_oi.oi_fid.f_oid = oa->o_oi.oi.oi_id ?: 1;
+		oa->o_oi.oi_fid.f_seq = FID_SEQ_ECHO;
+		oa->o_oi.oi_fid.f_ver = 0;
+	} else {
+		if (unlikely((oa == NULL) || ostid_id(&oa->o_oi) == 0))
+			GOTO(out, rc = -EPROTO);
+
+		/* Note: this check might be forced in 2.5 or 2.6, i.e.
+		 * all of the requests are required to setup FLGROUP */
+		if (unlikely(!(oa->o_valid & OBD_MD_FLGROUP))) {
+			ostid_set_seq_mdt0(&oa->o_oi);
+			if (ioobj)
+				ostid_set_seq_mdt0(&ioobj->ioo_oid);
+			oa->o_valid |= OBD_MD_FLGROUP;
+		}
+
+		if (unlikely(!(fid_seq_is_idif(ostid_seq(&oa->o_oi)) ||
+			       fid_seq_is_mdt0(ostid_seq(&oa->o_oi)) ||
+			       fid_seq_is_norm(ostid_seq(&oa->o_oi)) ||
+			       fid_seq_is_echo(ostid_seq(&oa->o_oi)))))
+			GOTO(out, rc = -EPROTO);
 	}
 
 	if (ioobj != NULL) {
@@ -132,11 +157,18 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 			       ": rc = -EPROTO\n", exp->exp_obd->obd_name,
 			       obd_export_nid2str(exp), max_brw,
 			       POSTID(&oa->o_oi));
-			return -EPROTO;
+			GOTO(out, rc = -EPROTO);
 		}
 		ioobj->ioo_oid = oa->o_oi;
 	}
-	return 0;
+
+out:
+	if (rc != 0)
+		CERROR("%s: client %s sent bad object "DOSTID": rc = %d\n",
+		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+		       oa ? ostid_seq(&oa->o_oi) : -1,
+		       oa ? ostid_id(&oa->o_oi) : -1, rc);
+	return rc;
 }
 
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
