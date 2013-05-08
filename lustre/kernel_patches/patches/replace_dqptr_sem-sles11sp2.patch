@@ -578,14 +578,3 @@ diff -urp linux-3.0.61-0.orig/include/linux/fs.h linux-3.0.61-0/include/linux/fs
  loff_t inode_get_bytes(struct inode *inode);
  void inode_set_bytes(struct inode *inode, loff_t bytes);
  
-diff -urp linux-3.0.61-0.orig/include/linux/quota.h linux-3.0.61-0/include/linux/quota.h
---- linux-3.0.61-0.orig/include/linux/quota.h	2013-04-10 15:15:10.000000000 -0400
-+++ linux-3.0.61-0/include/linux/quota.h	2013-04-24 10:27:22.000000000 -0400
-@@ -413,6 +413,7 @@ struct quota_module_name {
- #define INIT_QUOTA_MODULE_NAMES {\
- 	{QFMT_VFS_OLD, "quota_v1"},\
- 	{QFMT_VFS_V0, "quota_v2"},\
-+	{QFMT_VFS_V1, "quota_v2"},\
- 	{0, NULL}}
- 
- #else

@@ -1,11 +1,9 @@
 sles11sp2/ext4-introduce-ext4_kvmalloc-ext4_kzalloc-and-ext4_kvfree.patch
 sles11sp2/ext4-speed-up-fitrim-by-recording-flags-in-ext4_group_info.patch
-sles11sp2/ext4-add-missing-kfree-on-error-return-path-in-add_new_gdb.patch
 sles11sp2/ext4-use-ext4_kvzalloc-ext4_kvmalloc-for-s_group_desc-and-s_group_info.patch
 sles11sp2/ext4-use-ext4_msg-instead-of-printk-in-mballoc.patch
 sles11sp2/revert-ext4-avoid-uninitialized-memory-references-in-ext3_htree_next_block.patch
 sles11sp2/ext4-journal-callback.patch
-sles11sp2/ext4-free-resources-in-some-error-path-in-ext4_fill_super.patch
 sles11sp2/ext4-make-quota-as-first-class-supported-feature.patch
 
 sles11sp2/ext4-handle-cleanup-after-quota-failure.patch
