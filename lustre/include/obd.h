@@ -427,9 +427,9 @@ struct niobuf_local {
 	__u32		lnb_page_offset;
 	__u32		lnb_len;
 	__u32		lnb_flags;
+	int		lnb_rc;
 	struct page	*lnb_page;
 	void		*lnb_data;
-	int		lnb_rc;
 };
 
 #define LUSTRE_FLD_NAME         "fld"
@@ -581,14 +581,14 @@ struct obd_llog_group {
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
 
 struct obd_device {
-	struct obd_type		*obd_type;
-	__u32			 obd_magic;
+	struct obd_type			*obd_type;
+	__u32				 obd_magic; /* OBD_DEVICE_MAGIC */
+	int				 obd_minor; /* device number: lctl dl */
+	struct lu_device		*obd_lu_dev;
 
-        /* common and UUID name of this device */
-	char			 obd_name[MAX_OBD_NAME];
-	struct obd_uuid		 obd_uuid;
-	int			 obd_minor;
-	struct lu_device	*obd_lu_dev;
+	/* common and UUID name of this device */
+	struct obd_uuid			 obd_uuid;
+	char				 obd_name[MAX_OBD_NAME];
 
 	/* bitfield modification is protected by obd_dev_lock */
 	unsigned long
@@ -597,8 +597,7 @@ struct obd_device {
 		obd_recovering:1,	/* there are recoverable clients */
 		obd_abort_recovery:1,	/* recovery expired */
 		obd_version_recov:1,	/* obd uses version checking */
-		obd_replayable:1,	/* recovery is enabled;
-					 * inform clients */
+		obd_replayable:1,	/* recovery enabled; inform clients */
 		obd_no_transno:1,	/* no committed-transno notification */
 		obd_no_recov:1,		/* fail instead of retry messages */
 		obd_stopping:1,		/* started cleanup */
@@ -625,22 +624,22 @@ struct obd_device {
 	/* client_generation-export hash body */
 	struct cfs_hash		    *obd_gen_hash;
 	struct list_head	obd_nid_stats;
-	atomic_t		obd_refcount;
 	struct list_head	obd_exports;
 	struct list_head	obd_unlinked_exports;
 	struct list_head	obd_delayed_exports;
 	struct list_head	obd_lwp_list;
+	atomic_t		obd_refcount;
 	int                     obd_num_exports;
 	spinlock_t		obd_nid_lock;
 	struct ldlm_namespace  *obd_namespace;
 	struct ptlrpc_client	obd_ldlm_client; /* XXX OST/MDS only */
 	/* a spinlock is OK for what we do now, may need a semaphore later */
 	spinlock_t		obd_dev_lock; /* protect OBD bitfield above */
-	struct mutex		obd_dev_mutex;
-	__u64			obd_last_committed;
 	spinlock_t		obd_osfs_lock;
 	struct obd_statfs	obd_osfs;       /* locked by obd_osfs_lock */
 	__u64			obd_osfs_age;
+	__u64			obd_last_committed;
+	struct mutex		obd_dev_mutex;
 	struct lvfs_run_ctxt	obd_lvfs_ctxt;
 	struct obd_llog_group	obd_olg;	/* default llog group */
 	struct obd_device	*obd_observer;
@@ -673,10 +672,11 @@ struct obd_device {
 	int			obd_recovery_ir_factor;
 
 	/* new recovery stuff from CMD2 */
-	struct target_recovery_data	obd_recovery_data;
 	int				obd_replayed_locks;
 	atomic_t			obd_req_replay_clients;
 	atomic_t			obd_lock_replay_clients;
+	struct target_recovery_data	obd_recovery_data;
+
 	/* all lists are protected by obd_recovery_task_lock */
 	struct list_head		obd_req_replay_queue;
 	struct list_head		obd_lock_replay_queue;
@@ -694,12 +694,13 @@ struct obd_device {
 		struct lov_obd lov;
 		struct lmv_obd lmv;
 	} u;
-	/* Fields used by LProcFS */
-	unsigned int           obd_cntr_base;
-	struct lprocfs_stats  *obd_stats;
 
-	unsigned int	       obd_md_cntr_base;
-	struct lprocfs_stats  *obd_md_stats;
+	/* Fields used by LProcFS */
+	struct lprocfs_stats		*obd_stats;
+	unsigned int			obd_cntr_base;
+
+	unsigned int			 obd_md_cntr_base;
+	struct lprocfs_stats		*obd_md_stats;
 
 	struct proc_dir_entry	*obd_proc_entry;
 	struct proc_dir_entry	*obd_proc_exports_entry;
@@ -710,20 +711,18 @@ struct obd_device {
 	wait_queue_head_t	obd_evict_inprogress_waitq;
 	struct list_head	obd_evict_list;	/* protected with pet_lock */
 
-        /**
-         * Ldlm pool part. Save last calculated SLV and Limit.
-         */
-	rwlock_t		obd_pool_lock;
-	int			obd_pool_limit;
-	__u64			obd_pool_slv;
+	/**
+	 * LDLM pool part. Save last calculated SLV and Limit.
+	 */
+	rwlock_t			obd_pool_lock;
+	__u64				obd_pool_slv;
+	int				obd_pool_limit;
 
-        /**
-         * A list of outstanding class_incref()'s against this obd. For
-         * debugging.
-         */
-        struct lu_ref          obd_reference;
+	int				obd_conn_inprogress;
 
-	int		       obd_conn_inprogress;
+	/**
+	 * List of outstanding class_incref()'s fo this OBD. For debugging. */
+	struct lu_ref			obd_reference;
 };
 
 /* get/set_info keys */

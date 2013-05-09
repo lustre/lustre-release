@@ -668,6 +668,10 @@ struct ptlrpc_reply_state {
         unsigned long          rs_committed:1;/* the transaction was committed
                                                  and the rs was dispatched
                                                  by ptlrpc_commit_replies */
+	atomic_t		rs_refcount;	/* number of users */
+	/** Number of locks awaiting client ACK */
+	int			rs_nlocks;
+
         /** Size of the state */
         int                    rs_size;
         /** opcode */
@@ -679,26 +683,23 @@ struct ptlrpc_reply_state {
 	struct obd_export     *rs_export;
 	struct ptlrpc_service_part *rs_svcpt;
 	/** Lnet metadata handle for the reply */
-	lnet_handle_md_t       rs_md_h;
-	atomic_t	       rs_refcount;
+	lnet_handle_md_t	rs_md_h;
 
 	/** Context for the sevice thread */
-	struct ptlrpc_svc_ctx *rs_svc_ctx;
+	struct ptlrpc_svc_ctx	*rs_svc_ctx;
 	/** Reply buffer (actually sent to the client), encoded if needed */
-	struct lustre_msg     *rs_repbuf;       /* wrapper */
-        /** Size of the reply buffer */
-        int                    rs_repbuf_len;   /* wrapper buf length */
-        /** Size of the reply message */
-        int                    rs_repdata_len;  /* wrapper msg length */
-        /**
-         * Actual reply message. Its content is encrupted (if needed) to
-         * produce reply buffer for actual sending. In simple case
-         * of no network encryption we jus set \a rs_repbuf to \a rs_msg
-         */
-        struct lustre_msg     *rs_msg;          /* reply message */
+	struct lustre_msg	*rs_repbuf;	/* wrapper */
+	/** Size of the reply buffer */
+	int			rs_repbuf_len;	/* wrapper buf length */
+	/** Size of the reply message */
+	int			rs_repdata_len;	/* wrapper msg length */
+	/**
+	 * Actual reply message. Its content is encrupted (if needed) to
+	 * produce reply buffer for actual sending. In simple case
+	 * of no network encryption we jus set \a rs_repbuf to \a rs_msg
+	 */
+	struct lustre_msg	*rs_msg;	/* reply message */
 
-	/** Number of locks awaiting client ACK */
-	int			rs_nlocks;
 	/** Handles of locks awaiting client reply ACK */
 	struct lustre_handle	rs_locks[RS_MAX_LOCKS];
 	/** Lock modes of locks in \a rs_locks */
