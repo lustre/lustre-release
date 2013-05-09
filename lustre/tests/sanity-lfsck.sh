@@ -717,38 +717,48 @@ test_9a() {
 	[ "$STATUS" == "init" ] ||
 		error "(2) Expect 'init', but got '$STATUS'"
 
-	$START_NAMESPACE -s 100 || error "(3) Fail to start LFSCK!"
+	local BASE_SPEED1=100
+	local RUN_TIME1=10
+	$START_NAMESPACE -s $BASE_SPEED1 || error "(3) Fail to start LFSCK!"
 
-	sleep 10
+	sleep $RUN_TIME1
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
 		error "(3) Expect 'scanning-phase1', but got '$STATUS'"
 
 	local SPEED=$($SHOW_NAMESPACE |
 		      awk '/^average_speed_phase1/ { print $2 }')
-	# There may be time error, normally it should be less than 2.
-	# We allow another 10% schedule error.
-	#
-	# SPEED1 = (100 * (time + 2)) / time * 1.1
-	SPEED1=$((100 * (10 + 2) / 10 * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(4) Got speed $SPEED, expected less than $SPEED1"
+
+	# There may be time error, normally it should be less than 2 seconds.
+	# We allow another 20% schedule error.
+	local TIME_DIFF=2
+	# MAX_MARGIN = 1.2 = 12 / 10
+	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
+			   RUN_TIME1 * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(4) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	# adjust speed limit
+	local BASE_SPEED2=300
+	local RUN_TIME2=10
 	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 300
-	sleep 10
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit $BASE_SPEED2
+	sleep $RUN_TIME2
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase1/ { print $2 }')
-	# SPEED1=(100 * (time1 - 2) + 300 * (time2 - 2)) / (time1 + time2) * 0.9
-	SPEED1=$(((100 * (10 - 2) + 300 * (10 - 2)) / (10 + 10) * 9 / 10))
-	[ $SPEED -gt $SPEED1 ] ||
-		error "(5) Got speed $SPEED, expected more than $SPEED1"
+	# MIN_MARGIN = 0.8 = 8 / 10
+	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+	[ $SPEED -gt $MIN_SPEED ] ||
+		error "(5) Got speed $SPEED, expected more than $MIN_SPEED"
 
-	# SPEED1=(100 * (time1 + 2) + 300 * (time2 + 2)) / (time1 + time2) * 1.1
-	SPEED1=$(((100 * (10 + 2) + 300 * (10 + 2)) / (10 + 10) * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(6) Got speed $SPEED, expected less than $SPEED1"
+	# MAX_MARGIN = 1.2 = 12 / 10
+	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(6) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
@@ -797,38 +807,48 @@ test_9b() {
 		error "(5) Expect 'stopped', but got '$STATUS'"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	$START_NAMESPACE -s 50 || error "(6) Fail to start LFSCK!"
 
-	sleep 10
+	local BASE_SPEED1=50
+	local RUN_TIME1=10
+	$START_NAMESPACE -s $BASE_SPEED1 || error "(6) Fail to start LFSCK!"
+
+	sleep $RUN_TIME1
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase2" ] ||
 		error "(7) Expect 'scanning-phase2', but got '$STATUS'"
 
 	local SPEED=$($SHOW_NAMESPACE |
 		      awk '/^average_speed_phase2/ { print $2 }')
-	# There may be time error, normally it should be less than 2.
-	# We allow another 10% schedule error.
-	#
-	# SPEED1 = (50 * (time + 2)) / time * 1.1
-	SPEED1=$((50 * (10 + 2) / 10 * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(8) Got speed $SPEED, expected less than $SPEED1"
+	# There may be time error, normally it should be less than 2 seconds.
+	# We allow another 20% schedule error.
+	local TIME_DIFF=2
+	# MAX_MARGIN = 1.2 = 12 / 10
+	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
+			  RUN_TIME1 * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(8) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	# adjust speed limit
+	local BASE_SPEED2=150
+	local RUN_TIME2=10
 	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 150
-	sleep 10
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit $BASE_SPEED2
+	sleep $RUN_TIME2
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase2/ { print $2 }')
-	# SPEED1=(50 * (time1 - 2) + 150 * (time2 - 2)) / (time1 + time2) * 0.9
-	SPEED1=$(((50 * (10 - 2) + 150 * (10 - 2)) / (10 + 10) * 9 / 10))
-	[ $SPEED -gt $SPEED1 ] ||
-		error "(9) Got speed $SPEED, expected more than $SPEED1"
+	# MIN_MARGIN = 0.8 = 8 / 10
+	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+	[ $SPEED -gt $MIN_SPEED ] ||
+		error "(9) Got speed $SPEED, expected more than $MIN_SPEED"
 
-	# SPEED1=(50 * (time1 + 2) + 150 * (time2 + 2)) / (time1 + time2) * 1.1
-	SPEED1=$(((50 * (10 + 2) + 150 * (10 + 2)) / (10 + 10) * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(10) Got speed $SPEED, expected less than $SPEED1"
+	# MAX_MARGIN = 1.2 = 12 / 10
+	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(10) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
