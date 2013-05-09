@@ -1697,7 +1697,7 @@ test_18_sub () {
 
 	local testfile_size=$(stat -c %s $TESTFILE)
 	if [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] ; then
-		quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)),"
+		quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100))," \
 			"got ${testfile_size}. Verifying file failed!"
 	fi
 	cleanup_quota_test
