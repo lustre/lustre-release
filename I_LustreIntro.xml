@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part.intro'>
-    <title>Introducing Lustre</title>
+    <title>Introducing the Lustre* File System</title>
     <partintro>
-        <para>Part I provides background information to help you understand the Lustre architecture and how the major components fit together. You will find information in this section about:
-  </para>
+        <para>Part I provides background information to help you understand the Lustre* file system
+            architecture and how the major components fit together. You will find information in
+            this section about: </para>
 
   <itemizedlist>
       <listitem>
@@ -25,7 +26,7 @@
 
   </partintro>
 
-  <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="UnderstandingLustre.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   <xi:include href="UnderstandingLustreNetworking.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="UnderstandingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 

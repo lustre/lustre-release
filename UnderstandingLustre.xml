@@ -1,37 +1,71 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustre">
-  <title xml:id="understandinglustre.title">Understanding Lustre</title>
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
+  xml:lang="en-US" xml:id="understandinglustre">
+  <title xml:id="understandinglustre.title">Understanding  Lustre Architecture</title>
   <info/>
-  <para>This chapter describes the Lustre architecture and features of Lustre. It includes the following sections:</para>
+  <para>This chapter describes the Lustre architecture and features of Lustre. It includes the
+    following sections:</para>
   <itemizedlist>
     <listitem>
       <para>
-              <xref linkend="understandinglustre.whatislustre"/>
-          </para>
+        <xref linkend="understandinglustre.whatislustre"/>
+      </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="understandinglustre.components"/>
-          </para>
+        <xref linkend="understandinglustre.components"/>
+      </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="understandinglustre.storageio"/>
-          </para>
+        <xref linkend="understandinglustre.storageio"/>
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="understandinglustre.whatislustre">
-    <title><indexterm><primary>Lustre</primary></indexterm>What Lustre Is (and What It Isn&apos;t)</title>
-    <para>Lustre is a storage architecture for clusters. The central component of the Lustre architecture is the Lustre file system, which is supported on the Linux operating system and provides a POSIX-compliant UNIX file system interface.</para>
-    <para>The Lustre storage architecture is used for many different kinds of clusters. It is best known for powering seven of the ten largest high-performance computing (HPC) clusters worldwide, with tens of thousands of client systems, petabytes (PB) of storage and hundreds of gigabytes per second (GB/sec) of I/O throughput. Many HPC sites use Lustre as a site-wide global file system, serving dozens of clusters.</para>
-    <para>The ability of a Lustre file system to scale capacity and performance for any need reduces the need to deploy many separate file systems, such as one for each compute cluster. Storage management is simplified by avoiding the need to copy data between compute clusters. In addition to aggregating storage capacity of many servers, the I/O throughput is also aggregated and scales with additional servers. Moreover, throughput and/or capacity can be easily increased by adding servers dynamically.</para>
-    <para>While Lustre can function in many work environments, it is not necessarily the best choice for all applications. It is best suited for uses that exceed the capacity that a single server can provide, though in some use cases Lustre can perform better with a single server than other filesystems due to its strong locking and data coherency.</para>
-    <para>Lustre is currently not particularly well suited for &quot;peer-to-peer&quot; usage models where there are clients and servers running on the same node, each sharing a small amount of storage, due to the lack of Lustre-level data replication. In such uses, if one client/server fails, then the data stored on that node will not be accessible until the node is restarted.</para>
+    <title><indexterm>
+        <primary>Lustre</primary>
+      </indexterm>What a Lustre File System Is (and What It Isn&apos;t)</title>
+    <para>The Lustre architecture is a storage architecture for clusters. The central component of
+      the Lustre architecture is the Lustre file system, which is supported on the Linux operating
+      system and provides a POSIX-compliant UNIX file system interface.</para>
+    <para>The Lustre storage architecture is used for many different kinds of clusters. It is best
+      known for powering many of the largest high-performance computing (HPC) clusters worldwide,
+      with tens of thousands of client systems, petabytes (PB) of storage and hundreds of gigabytes
+      per second (GB/sec) of I/O throughput. Many HPC sites use a Lustre file system as a site-wide
+      global file system, serving dozens of clusters.</para>
+    <para>The ability of a Lustre file system to scale capacity and performance for any need reduces
+      the need to deploy many separate file systems, such as one for each compute cluster. Storage
+      management is simplified by avoiding the need to copy data between compute clusters. In
+      addition to aggregating storage capacity of many servers, the I/O throughput is also
+      aggregated and scales with additional servers. Moreover, throughput and/or capacity can be
+      easily increased by adding servers dynamically.</para>
+    <para>While a Lustre file system can function in many work environments, it is not necessarily
+      the best choice for all applications. It is best suited for uses that exceed the capacity that
+      a single server can provide, though in some use cases, a Lustre file system can perform better
+      with a single server than other file systems due to its strong locking and data
+      coherency.</para>
+    <para>A Lustre file system is currently not particularly well suited for
+      &quot;peer-to-peer&quot; usage models where clients and servers are running on the same node,
+      each sharing a small amount of storage, due to the lack of Lustre-level data replication. In
+      such uses, if one client/server fails, then the data stored on that node will not be
+      accessible until the node is restarted.</para>
     <section remap="h3">
-      <title><indexterm><primary>Lustre</primary><secondary>features</secondary></indexterm>Lustre Features</title>
-      <para>Lustre runs on a variety of vendor&apos;s kernels. For more details, see <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix">Lustre Support Matrix</link> on the Intel Lustre wiki.</para>
-      <para>A Lustre installation can be scaled up or down with respect to the number of client nodes, disk storage and bandwidth. Scalability and performance are dependent on available disk and network bandwidth and the processing power of the servers in the system. Lustre can be deployed in a wide variety of configurations that can be scaled well beyond the size and performance observed in production systems to date.</para>
-      <para><xref linkend="understandinglustre.tab1"/> shows the practical range of scalability and performance characteristics of the Lustre file system and some test results in production systems.</para>
+      <title><indexterm>
+          <primary>Lustre</primary>
+          <secondary>features</secondary>
+        </indexterm>Lustre Features</title>
+      <para>Lustre file systems run on a variety of vendor&apos;s kernels. For more details, see the
+          <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix">Lustre Support
+          Matrix</link> on the Intel Lustre community wiki.</para>
+      <para>A Lustre installation can be scaled up or down with respect to the number of client
+        nodes, disk storage and bandwidth. Scalability and performance are dependent on available
+        disk and network bandwidth and the processing power of the servers in the system. A Lustre
+        file system can be deployed in a wide variety of configurations that can be scaled well
+        beyond the size and performance observed in production systems to date.</para>
+      <para><xref linkend="understandinglustre.tab1"/> shows the practical range of scalability and
+        performance characteristics of a Lustre file system and some test results in production
+        systems.</para>
       <table frame="all">
         <title xml:id="understandinglustre.tab1">Lustre Scalability and Performance</title>
         <tgroup cols="3">
@@ -54,7 +88,8 @@
           <tbody>
             <row>
               <entry>
-                <para> <emphasis role="bold">Client Scalability</emphasis></para>
+                <para>
+                  <emphasis role="bold">Client Scalability</emphasis></para>
               </entry>
               <entry>
                 <para> 100-100000</para>
@@ -68,13 +103,15 @@
                 <para><emphasis role="bold">Client Performance</emphasis></para>
               </entry>
               <entry>
-                <para> <emphasis>Single client: </emphasis></para>
+                <para>
+                  <emphasis>Single client: </emphasis></para>
                 <para>I/O 90% of network bandwidth</para>
                 <para><emphasis>Aggregate:</emphasis></para>
                 <para>2.5 TB/sec I/O</para>
               </entry>
               <entry>
-                <para> <emphasis>Single client: </emphasis></para>
+                <para>
+                  <emphasis>Single client: </emphasis></para>
                 <para>2 GB/sec I/O, 1000 metadata ops/sec</para>
                 <para><emphasis>Aggregate:</emphasis></para>
                 <para>240 GB/sec I/O </para>
@@ -82,63 +119,79 @@
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">OSS Scalability</emphasis></para>
+                <para>
+                  <emphasis role="bold">OSS Scalability</emphasis></para>
               </entry>
               <entry>
-                <para> <emphasis>Single OSS:</emphasis></para>
+                <para>
+                  <emphasis>Single OSS:</emphasis></para>
                 <para>1-32 OSTs per OSS,</para>
                 <para>128TB per OST</para>
-                <para> <emphasis>OSS count:</emphasis></para>
+                <para>
+                  <emphasis>OSS count:</emphasis></para>
                 <para>500 OSSs, with up to 4000 OSTs</para>
-                <para/>
               </entry>
               <entry>
-                <para> <emphasis>Single OSS:</emphasis></para>
+                <para>
+                  <emphasis>Single OSS:</emphasis></para>
                 <para>8 OSTs per OSS,</para>
                 <para>16TB per OST</para>
-                <para> <emphasis>OSS count:</emphasis></para>
+                <para>
+                  <emphasis>OSS count:</emphasis></para>
                 <para>450 OSSs with 1000 4TB OSTs</para>
                 <para>192 OSSs with 1344 8TB OSTs</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">OSS Performance</emphasis></para>
+                <para>
+                  <emphasis role="bold">OSS Performance</emphasis></para>
               </entry>
               <entry>
-                <para> <emphasis>Single OSS:</emphasis></para>
+                <para>
+                  <emphasis>Single OSS:</emphasis></para>
                 <para> 5 GB/sec</para>
-                <para> <emphasis>Aggregate:</emphasis></para>
+                <para>
+                  <emphasis>Aggregate:</emphasis></para>
                 <para> 2.5 TB/sec</para>
               </entry>
               <entry>
-                <para> <emphasis>Single OSS:</emphasis></para>
+                <para>
+                  <emphasis>Single OSS:</emphasis></para>
                 <para> 2.0+ GB/sec</para>
-                <para> <emphasis>Aggregate:</emphasis></para>
+                <para>
+                  <emphasis>Aggregate:</emphasis></para>
                 <para> 240 GB/sec</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">MDS Scalability</emphasis></para>
+                <para>
+                  <emphasis role="bold">MDS Scalability</emphasis></para>
               </entry>
               <entry>
-                <para> <emphasis>Single MDS:</emphasis></para>
+                <para>
+                  <emphasis>Single MDS:</emphasis></para>
                 <para> 4 billion files</para>
-                <para> <emphasis>MDS count:</emphasis></para>
+                <para>
+                  <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
-                <para condition='l24'>Since Lustre 2.4: up to 4096 MDSs and up to 4096 MDTs.</para>
+                <para condition="l24">Since Lustre* Release 2.4: up to 4096 MDSs and up to 4096
+                  MDTs.</para>
               </entry>
               <entry>
-                <para> <emphasis>Single MDS:</emphasis></para>
+                <para>
+                  <emphasis>Single MDS:</emphasis></para>
                 <para> 750 million files</para>
-                <para> <emphasis>MDS count:</emphasis></para>
+                <para>
+                  <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">MDS Performance</emphasis></para>
+                <para>
+                  <emphasis role="bold">MDS Performance</emphasis></para>
               </entry>
               <entry>
                 <para> 35000/s create operations,</para>
@@ -151,18 +204,23 @@
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">Filesystem Scalability</emphasis></para>
+                <para>
+                  <emphasis role="bold">File system Scalability</emphasis></para>
               </entry>
               <entry>
-                <para> <emphasis>Single File:</emphasis></para>
+                <para>
+                  <emphasis>Single File:</emphasis></para>
                 <para>2.5 PB max file size</para>
-                <para> <emphasis>Aggregate:</emphasis></para>
+                <para>
+                  <emphasis>Aggregate:</emphasis></para>
                 <para>512 PB space, 4 billion files</para>
               </entry>
               <entry>
-                <para> <emphasis>Single File:</emphasis></para>
+                <para>
+                  <emphasis>Single File:</emphasis></para>
                 <para>multi-TB max file size</para>
-                <para> <emphasis>Aggregate:</emphasis></para>
+                <para>
+                  <emphasis>Aggregate:</emphasis></para>
                 <para>10 PB space, 750 million files</para>
               </entry>
             </row>
@@ -172,108 +230,207 @@
       <para>Other Lustre features are:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis>  Lustre uses an improved version of the ext4 journaling file system to store data and metadata. This version, called <emphasis role="italic"><literal>ldiskfs</literal></emphasis>, has been enhanced to improve performance and provide additional functionality needed by Lustre.</para>
+          <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis> The Lustre
+            file system uses an improved version of the ext4 journaling file system to store data
+            and metadata. This version, called <emphasis role="italic"
+              ><literal>ldiskfs</literal></emphasis>, has been enhanced to improve performance and
+            provide additional functionality needed by the Lustre file system.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">POSIX compliance:</emphasis> The full POSIX test suite passes in an identical manner to a local ext4 filesystem, with limited exceptions on Lustre clients. In a cluster, most operations are atomic so that clients never see stale data or metadata. Lustre supports mmap() file I/O.</para>
+          <para><emphasis role="bold">POSIX* compliance:</emphasis> The full POSIX test suite passes
+            in an identical manner to a local ext4 filesystem, with limited exceptions on Lustre
+            clients. In a cluster, most operations are atomic so that clients never see stale data
+            or metadata. The Lustre software supports mmap() file I/O.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">High-performance heterogeneous networking:</emphasis>  Lustre supports a variety of high performance, low latency networks and permits Remote Direct Memory Access (RDMA) for Infiniband (OFED) and other advanced networks for fast and efficient network transport. Multiple RDMA networks can be bridged using Lustre routing for maximum performance. Lustre also provides integrated network diagnostics.</para>
+          <para><emphasis role="bold">High-performance heterogeneous networking:</emphasis> The
+            Lustre software supports a variety of high performance, low latency networks and permits
+            Remote Direct Memory Access (RDMA) for Infiniband* (OFED) and other advanced networks
+            for fast and efficient network transport. Multiple RDMA networks can be bridged using
+            Lustre routing for maximum performance. The Lustre software also includes integrated
+            network diagnostics.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">High-availability:</emphasis>  Lustre offers active/active failover using shared storage partitions for OSS targets (OSTs). Lustre 2.3 and earlier offers active/passive failover using a shared storage partition for the MDS target (MDT).</para><para condition='l24'>With Lustre 2.4 or later servers and clients it is possible to configure active/active failover of multiple MDTs</para><para>This allows application transparent recovery. Lustre can work with a variety of high availability (HA) managers to allow automated failover and has no single point of failure (NSPF). Multiple mount protection (MMP) provides integrated protection from errors in highly-available systems that would otherwise cause file system corruption.</para>
+          <para><emphasis role="bold">High-availability:</emphasis> The Lustre file system supports
+            active/active failover using shared storage partitions for OSS targets (OSTs). Lustre
+            Release 2.3 and earlier releases offer active/passive failover using a shared storage
+            partition for the MDS target (MDT).</para>
+          <para condition="l24">With Lustre Release 2.4 or later servers and clients it is possible
+            to configure active/active failover of multiple MDTs. This allows application
+            transparent recovery. The Lustre file system can work with a variety of high
+            availability (HA) managers to allow automated failover and has no single point of
+            failure (NSPF). Multiple mount protection (MMP) provides integrated protection from
+            errors in highly-available systems that would otherwise cause file system
+            corruption.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Security:</emphasis>  By default TCP connections are only allowed from privileged ports. Unix group membership is verified on the MDS.</para>
+          <para><emphasis role="bold">Security:</emphasis> By default TCP connections are only
+            allowed from privileged ports. UNIX group membership is verified on the MDS.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Access control list (ACL), extended attributes:</emphasis>  the Lustre security model follows that of a UNIX file system, enhanced with POSIX ACLs. Noteworthy additional features include root squash.</para>
+          <para><emphasis role="bold">Access control list (ACL), extended attributes:</emphasis> the
+            Lustre security model follows that of a UNIX file system, enhanced with POSIX ACLs.
+            Noteworthy additional features include root squash.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Interoperability:</emphasis>  Lustre runs on a variety of CPU architectures and mixed-endian clusters and is interoperable between successive major Lustre software releases.</para>
+          <para><emphasis role="bold">Interoperability:</emphasis> The Lustre file system runs on a
+            variety of CPU architectures and mixed-endian clusters and is interoperable between
+            successive major Lustre software releases.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Object-based architecture:</emphasis>  Clients are isolated from the on-disk file structure enabling upgrading of the storage architecture without affecting the client.</para>
+          <para><emphasis role="bold">Object-based architecture:</emphasis> Clients are isolated
+            from the on-disk file structure enabling upgrading of the storage architecture without
+            affecting the client.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Byte-granular file and fine-grained metadata locking:</emphasis>  Many clients can read and modify the same file or directory concurrently. The Lustre distributed lock manager (LDLM) ensures that files are coherent between all clients and servers in the filesystem.  The MDT LDLM manages locks on inode permissions and pathnames.   Each OST has its own LDLM for locks on file stripes stored thereon, which scales the locking performance as the filesystem grows.</para>
+          <para><emphasis role="bold">Byte-granular file and fine-grained metadata
+              locking:</emphasis> Many clients can read and modify the same file or directory
+            concurrently. The Lustre distributed lock manager (LDLM) ensures that files are coherent
+            between all clients and servers in the file system. The MDT LDLM manages locks on inode
+            permissions and pathnames. Each OST has its own LDLM for locks on file stripes stored
+            thereon, which scales the locking performance as the file system grows.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Quotas:</emphasis> User and group quotas are available for Lustre.</para>
+          <para><emphasis role="bold">Quotas:</emphasis> User and group quotas are available for a
+            Lustre file system.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Capacity growth:</emphasis>  The size of a Lustre file system and aggregate cluster bandwidth can be increased without interruption by adding a new OSS with OSTs to the cluster.</para>
+          <para><emphasis role="bold">Capacity growth:</emphasis> The size of a Lustre file system
+            and aggregate cluster bandwidth can be increased without interruption by adding a new
+            OSS with OSTs to the cluster.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Controlled striping:</emphasis> The layout of files across OSTs can be configured on a per file, per directory, or per file system basis. This allows file I/O to be tuned to specific application requirements within a single filesystem. Lustre uses RAID-0 striping and balances space usage across OSTs.</para>
+          <para><emphasis role="bold">Controlled striping:</emphasis> The layout of files across
+            OSTs can be configured on a per file, per directory, or per file system basis. This
+            allows file I/O to be tuned to specific application requirements within a single file
+            system. The Lustre file system uses RAID-0 striping and balances space usage across
+            OSTs.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Network data integrity protection:</emphasis>  A checksum of all data sent from the client to the OSS protects against corruption during data transfer.</para>
+          <para><emphasis role="bold">Network data integrity protection:</emphasis> A checksum of
+            all data sent from the client to the OSS protects against corruption during data
+            transfer.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">MPI I/O:</emphasis>  Lustre has a dedicated MPI ADIO layer that optimizes parallel I/O to match the underlying file system architecture.</para>
+          <para><emphasis role="bold">MPI I/O:</emphasis> The Lustre architecture has a dedicated
+            MPI ADIO layer that optimizes parallel I/O to match the underlying file system
+            architecture.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">NFS and CIFS export:</emphasis>  Lustre files can be re-exported using NFS or CIFS (via Samba) enabling them to be shared with non-Linux clients.</para>
+          <para><emphasis role="bold">NFS and CIFS export:</emphasis> Lustre files can be
+            re-exported using NFS or CIFS (via Samba) enabling them to be shared with non-Linux
+            clients.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Disaster recovery tool:</emphasis>  Lustre provides a distributed file system check (lfsck) that can restore consistency between storage components in case of a major file system error. Lustre can operate even in the presence of file system inconsistencies, so lfsck is not required before returning the file system to production.</para>
+          <para><emphasis role="bold">Disaster recovery tool:</emphasis> The Lustre file system
+            provides a distributed file system check (lfsck) that can restore consistency between
+            storage components in case of a major file system error. A Lustre file system can
+            operate even in the presence of file system inconsistencies, so lfsck is not required
+            before returning the file system to production.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Performance monitoring:</emphasis>  Lustre offers a variety of mechanisms to examine performance and tuning.</para>
+          <para><emphasis role="bold">Performance monitoring:</emphasis> The Lustre file system
+            offers a variety of mechanisms to examine performance and tuning.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Open source:</emphasis>  Lustre is licensed under the GPL 2.0 license for use with Linux.</para>
+          <para><emphasis role="bold">Open source:</emphasis> The Lustre software is licensed under
+            the GPL 2.0 license for use with Linux.</para>
         </listitem>
       </itemizedlist>
     </section>
   </section>
   <section xml:id="understandinglustre.components">
-    <title><indexterm><primary>Lustre</primary><secondary>components</secondary></indexterm>Lustre Components</title>
-    <para>An installation of the Lustre software includes a management server (MGS) and one or more Lustre file systems interconnected with Lustre networking (LNET).</para>
-    <para>A basic configuration of Lustre components is shown in <xref linkend="understandinglustre.fig.cluster"/>.</para>
+    <title><indexterm>
+        <primary>Lustre</primary>
+        <secondary>components</secondary>
+      </indexterm>Lustre Components</title>
+    <para>An installation of the Lustre software includes a management server (MGS) and one or more
+      Lustre file systems interconnected with Lustre networking (LNET).</para>
+    <para>A basic configuration of Lustre components is shown in <xref
+        linkend="understandinglustre.fig.cluster"/>.</para>
     <figure>
-      <title xml:id="understandinglustre.fig.cluster">Lustre components in a basic cluster </title>
+      <title xml:id="understandinglustre.fig.cluster">Lustre* components in a basic cluster </title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%" fileref="./figures/Basic_Cluster.png"/>
         </imageobject>
         <textobject>
-          <phrase> Lustre components in a basic cluster </phrase>
+          <phrase> Lustre* components in a basic cluster </phrase>
         </textobject>
       </mediaobject>
     </figure>
     <section remap="h3">
-      <title><indexterm><primary>Lustre</primary><secondary>MGS</secondary></indexterm>Management Server (MGS)</title>
-      <para>The MGS stores configuration information for all the Lustre file systems in a cluster and provides this information to other Lustre components. Each Lustre target contacts the MGS to provide information, and Lustre clients contact the MGS to retrieve information.</para>
-      <para>It is preferable that the MGS have its own storage space so that it can be managed independently. However, the MGS can be co-located and share storage space with an MDS as shown in <xref linkend="understandinglustre.fig.cluster"/>.</para>
+      <title><indexterm>
+          <primary>Lustre</primary>
+          <secondary>MGS</secondary>
+        </indexterm>Management Server (MGS)</title>
+      <para>The MGS stores configuration information for all the Lustre file systems in a cluster
+        and provides this information to other Lustre components. Each Lustre target contacts the
+        MGS to provide information, and Lustre clients contact the MGS to retrieve
+        information.</para>
+      <para>It is preferable that the MGS have its own storage space so that it can be managed
+        independently. However, the MGS can be co-located and share storage space with an MDS as
+        shown in <xref linkend="understandinglustre.fig.cluster"/>.</para>
     </section>
     <section remap="h3">
       <title>Lustre File System Components</title>
       <para>Each Lustre file system consists of the following components:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Metadata Server (MDS)</emphasis>  - The MDS makes metadata stored in one or more MDTs available to Lustre clients. Each MDS manages the names and directories in the Lustre file system(s) and provides network request handling for one or more local MDTs.</para>
+          <para><emphasis role="bold">Metadata Server (MDS)</emphasis> - The MDS makes metadata
+            stored in one or more MDTs available to Lustre clients. Each MDS manages the names and
+            directories in the Lustre file system(s) and provides network request handling for one
+            or more local MDTs.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Metadata Target (MDT</emphasis> ) - For Lustre 2.3 and earlier, each filesystem has one MDT. The MDT stores metadata (such as filenames, directories, permissions and file layout) on storage attached to an MDS. Each file system has one MDT. An MDT on a shared storage target can be available to multiple MDSs, although only one can access it at a time. If an active MDS fails, a standby MDS can serve the MDT and make it available to clients. This is referred to as MDS failover.</para>
-		<para condition='l24'>Since Lustre 2.4, multiple MDTs are supported. Each filesystem has at least one MDT. An MDT on shared storage target can be available via multiple MDSs, although only one MDS can export the MDT to the clients at one time. Two MDS machines share storage for two or more MDTs. After the failure of one MDS, the remaining MDS begins serving the MDT(s) of the failed MDS.</para>
+          <para><emphasis role="bold">Metadata Target (MDT</emphasis> ) - For Lustre Release 2.3 and
+            earlier, each file system has one MDT. The MDT stores metadata (such as filenames,
+            directories, permissions and file layout) on storage attached to an MDS. Each file
+            system has one MDT. An MDT on a shared storage target can be available to multiple MDSs,
+            although only one can access it at a time. If an active MDS fails, a standby MDS can
+            serve the MDT and make it available to clients. This is referred to as MDS
+            failover.</para>
+          <para condition="l24">Since Lustre Release 2.4, multiple MDTs are supported. Each file
+            system has at least one MDT. An MDT on a shared storage target can be available via
+            multiple MDSs, although only one MDS can export the MDT to the clients at one time. Two
+            MDS machines share storage for two or more MDTs. After the failure of one MDS, the
+            remaining MDS begins serving the MDT(s) of the failed MDS.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Object Storage Servers (OSS)</emphasis> : The OSS provides file I/O service, and network request handling for one or more local OSTs. Typically, an OSS serves between 2 and 8 OSTs, up to 16 TB each. A typical configuration is an MDT on a dedicated node, two or more OSTs on each OSS node, and a client on each of a large number of compute nodes.</para>
+          <para><emphasis role="bold">Object Storage Servers (OSS)</emphasis> : The OSS provides
+            file I/O service and network request handling for one or more local OSTs. Typically, an
+            OSS serves between two and eight OSTs, up to 16 TB each. A typical configuration is an
+            MDT on a dedicated node, two or more OSTs on each OSS node, and a client on each of a
+            large number of compute nodes.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Object Storage Target (OST)</emphasis> : User file data is stored in one or more objects, each object on a separate OST in a Lustre file system. The number of objects per file is configurable by the user and can be tuned to optimize performance for a given workload.</para>
+          <para><emphasis role="bold">Object Storage Target (OST)</emphasis> : User file data is
+            stored in one or more objects, each object on a separate OST in a Lustre file system.
+            The number of objects per file is configurable by the user and can be tuned to optimize
+            performance for a given workload.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Lustre clients</emphasis> : Lustre clients are computational, visualization or desktop nodes that are running Lustre client software, allowing them to mount the Lustre file system.</para>
+          <para><emphasis role="bold">Lustre clients</emphasis> : Lustre clients are computational,
+            visualization or desktop nodes that are running Lustre client software, allowing them to
+            mount the Lustre file system.</para>
         </listitem>
       </itemizedlist>
-      <para>The Lustre client software provides an interface between the Linux virtual file system and the Lustre servers. The client software includes a Management Client (MGC), a Metadata Client (MDC), and multiple Object Storage Clients (OSCs), one corresponding to each OST in the file system.</para>
-      <para>A logical object volume (LOV) aggregates the OSCs to provide transparent access across all the OSTs. Thus, a client with the Lustre file system mounted sees a single, coherent, synchronized namespace. Several clients can write to different parts of the same file simultaneously, while, at the same time, other clients can read from the file.</para>
-      <para><xref linkend="understandinglustre.tab.storagerequire"/> provides the requirements for attached storage for each Lustre file system component and describes desirable characteristics of the hardware used.</para>
+      <para>The Lustre client software provides an interface between the Linux virtual file system
+        and the Lustre servers. The client software includes a management client (MGC), a metadata
+        client (MDC), and multiple object storage clients (OSCs), one corresponding to each OST in
+        the file system.</para>
+      <para>A logical object volume (LOV) aggregates the OSCs to provide transparent access across
+        all the OSTs. Thus, a client with the Lustre file system mounted sees a single, coherent,
+        synchronized namespace. Several clients can write to different parts of the same file
+        simultaneously, while, at the same time, other clients can read from the file.</para>
+      <para><xref linkend="understandinglustre.tab.storagerequire"/> provides the requirements for
+        attached storage for each Lustre file system component and describes desirable
+        characteristics of the hardware used.</para>
       <table frame="all">
-        <title xml:id="understandinglustre.tab.storagerequire"><indexterm><primary>Lustre</primary><secondary>requirements</secondary></indexterm>Storage and hardware requirements for Lustre components</title>
+        <title xml:id="understandinglustre.tab.storagerequire"><indexterm>
+            <primary>Lustre</primary>
+            <secondary>requirements</secondary>
+          </indexterm>Storage and hardware requirements for Lustre* components</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
           <colspec colname="c2" colwidth="3*"/>
@@ -294,7 +451,8 @@
           <tbody>
             <row>
               <entry>
-                <para> <emphasis role="bold">MDSs</emphasis></para>
+                <para>
+                  <emphasis role="bold">MDSs</emphasis></para>
               </entry>
               <entry>
                 <para> 1-2% of file system capacity</para>
@@ -305,18 +463,21 @@
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">OSSs</emphasis></para>
+                <para>
+                  <emphasis role="bold">OSSs</emphasis></para>
               </entry>
               <entry>
                 <para> 1-16 TB per OST, 1-8 OSTs per OSS</para>
               </entry>
               <entry>
-                <para> Good bus bandwidth. Recommended that storage be balanced evenly across OSSs.</para>
+                <para> Good bus bandwidth. Recommended that storage be balanced evenly across
+                  OSSs.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <emphasis role="bold">Clients</emphasis></para>
+                <para>
+                  <emphasis role="bold">Clients</emphasis></para>
               </entry>
               <entry>
                 <para> None</para>
@@ -328,36 +489,67 @@
           </tbody>
         </tgroup>
       </table>
-      <para>For additional hardware requirements and considerations, see <xref linkend="settinguplustresystem"/>.</para>
+      <para>For additional hardware requirements and considerations, see <xref
+          linkend="settinguplustresystem"/>.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>Lustre</primary><secondary>LNET</secondary></indexterm>Lustre Networking (LNET)</title>
-      <para>Lustre Networking (LNET) is a custom networking API that provides the communication infrastructure that handles metadata and file I/O data for the Lustre file system servers and clients. For more information about LNET, see <xref linkend="understandinglustrenetworking"/>.</para>
+      <title><indexterm>
+          <primary>Lustre</primary>
+          <secondary>LNET</secondary>
+        </indexterm>Lustre Networking (LNET)</title>
+      <para>Lustre Networking (LNET) is a custom networking API that provides the communication
+        infrastructure that handles metadata and file I/O data for the Lustre file system servers
+        and clients. For more information about LNET, see <xref
+          linkend="understandinglustrenetworking"/>.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>Lustre</primary><secondary>cluster</secondary></indexterm>Lustre Cluster</title>
-      <para>At scale, the Lustre cluster can include hundreds of OSSs and thousands of clients (see <xref linkend="understandinglustre.fig.lustrescale"/>). More than one type of network can be used in a Lustre cluster. Shared storage between OSSs enables failover capability. For more details about OSS failover, see <xref linkend="understandingfailover"/>.</para>
+      <title><indexterm>
+          <primary>Lustre</primary>
+          <secondary>cluster</secondary>
+        </indexterm>Lustre Cluster</title>
+      <para>At scale, the Lustre cluster can include hundreds of OSSs and thousands of clients (see
+          <xref linkend="understandinglustre.fig.lustrescale"/>). More than one type of network can
+        be used in a Lustre cluster. Shared storage between OSSs enables failover capability. For
+        more details about OSS failover, see <xref linkend="understandingfailover"/>.</para>
       <figure>
-        <title xml:id="understandinglustre.fig.lustrescale"><indexterm><primary>Lustre</primary><secondary>at scale</secondary></indexterm>Lustre cluster at scale</title>
+        <title xml:id="understandinglustre.fig.lustrescale"><indexterm>
+            <primary>Lustre</primary>
+            <secondary>at scale</secondary>
+          </indexterm>Lustre* cluster at scale</title>
         <mediaobject>
           <imageobject>
             <imagedata scalefit="1" width="100%" fileref="./figures/Scaled_Cluster.png"/>
           </imageobject>
           <textobject>
-            <phrase> Lustre clustre at scale </phrase>
+            <phrase> Lustre* clustre at scale </phrase>
           </textobject>
         </mediaobject>
       </figure>
     </section>
   </section>
   <section xml:id="understandinglustre.storageio">
-      <title><indexterm><primary>Lustre</primary><secondary>storage</secondary></indexterm>
-          <indexterm><primary>Lustre</primary><secondary>I/O</secondary></indexterm>
-          Lustre Storage and I/O</title>
-    <para>In a Lustre file system, a file stored on the MDT points to one or more objects associated with a data file, as shown in <xref linkend="understandinglustre.fig.mdtost"/>. Each object contains data and is stored on an OST. If the MDT file points to one object, all the file data is stored in that object. If the file points to more than one object, the file data is &apos;striped&apos; across the objects (using RAID 0) and each object is stored on a different OST. (For more information about how striping is implemented in Lustre, see <xref linkend="dbdoclet.50438250_89922"/>)</para>
-    <para>In <xref linkend="understandinglustre.fig.mdtost"/>, each filename points to an inode. The inode contains all of the file attributes, such as owner, access permissions, Lustre striping layout, access time, and access control. Multiple filenames may point to the same inode.</para>
+    <title><indexterm>
+        <primary>Lustre</primary>
+        <secondary>storage</secondary>
+      </indexterm>
+      <indexterm>
+        <primary>Lustre</primary>
+        <secondary>I/O</secondary>
+      </indexterm> Lustre Storage and I/O</title>
+    <para>In a Lustre file system, a file stored on the MDT points to one or more objects associated
+      with a data file, as shown in <xref linkend="understandinglustre.fig.mdtost"/>. Each object
+      contains data and is stored on an OST. If the MDT file points to one object, all the file data
+      is stored in that object. If the file points to more than one object, the file data is
+      &apos;striped&apos; across the objects (using RAID 0) and each object is stored on a different
+      OST. (For more information about how striping is implemented in a Lustre file system, see
+        <xref linkend="dbdoclet.50438250_89922"/>)</para>
+    <para>In <xref linkend="understandinglustre.fig.mdtost"/>, each filename points to an inode. The
+      inode contains all of the file attributes, such as owner, access permissions, Lustre striping
+      layout, access time, and access control. Multiple filenames may point to the same
+      inode.</para>
     <figure>
-      <title xml:id="understandinglustre.fig.mdtost">MDT file points to objects on OSTs containing file data</title>
+      <title xml:id="understandinglustre.fig.mdtost">MDT file points to objects on OSTs containing
+        file data</title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%" fileref="./figures/Metadata_File.png"/>
@@ -367,63 +559,110 @@
         </textobject>
       </mediaobject>
     </figure>
-    <para>When a client opens a file, the <literal>fileopen</literal> operation transfers the file layout from the MDS to the client. The client then uses this information to perform I/O on the file, directly interacting with the OSS nodes where the objects are stored. This process is illustrated in <xref linkend="understandinglustre.fig.fileio"/>.</para>
+    <para>When a client opens a file, the <literal>fileopen</literal> operation transfers the file
+      layout from the MDS to the client. The client then uses this information to perform I/O on the
+      file, directly interacting with the OSS nodes where the objects are stored. This process is
+      illustrated in <xref linkend="understandinglustre.fig.fileio"/>.</para>
     <figure>
-      <title xml:id="understandinglustre.fig.fileio">File open and file I/O in Lustre</title>
+      <title xml:id="understandinglustre.fig.fileio">File open and file I/O in Lustre*</title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%" fileref="./figures/File_Write.png"/>
         </imageobject>
         <textobject>
-          <phrase> File open and file I/O in Lustre </phrase>
+          <phrase> File open and file I/O in Lustre* </phrase>
         </textobject>
       </mediaobject>
     </figure>
-    <para>Each file on the MDT contains the layout of the associated data file, including the OST number and object identifier. Clients request the file layout from the MDS and then perform file I/O operations by communicating directly with the OSSs that manage that file data.</para>
+    <para>Each file on the MDT contains the layout of the associated data file, including the OST
+      number and object identifier. Clients request the file layout from the MDS and then perform
+      file I/O operations by communicating directly with the OSSs that manage that file data.</para>
     <para>The available bandwidth of a Lustre file system is determined as follows:</para>
     <itemizedlist>
       <listitem>
-        <para>The <emphasis>network bandwidth</emphasis> equals the aggregated bandwidth of the OSSs to the targets.</para>
+        <para>The <emphasis>network bandwidth</emphasis> equals the aggregated bandwidth of the OSSs
+          to the targets.</para>
       </listitem>
       <listitem>
-        <para>The <emphasis>disk bandwidth</emphasis> equals the sum of the disk bandwidths of the storage targets (OSTs) up to the limit of the network bandwidth.</para>
+        <para>The <emphasis>disk bandwidth</emphasis> equals the sum of the disk bandwidths of the
+          storage targets (OSTs) up to the limit of the network bandwidth.</para>
       </listitem>
       <listitem>
-        <para>The <emphasis>aggregate bandwidth</emphasis> equals the minimum of the disk bandwidth and the network bandwidth.</para>
+        <para>The <emphasis>aggregate bandwidth</emphasis> equals the minimum of the disk bandwidth
+          and the network bandwidth.</para>
       </listitem>
       <listitem>
-        <para>The <emphasis>available file system space</emphasis> equals the sum of the available space of all the OSTs.</para>
+        <para>The <emphasis>available file system space</emphasis> equals the sum of the available
+          space of all the OSTs.</para>
       </listitem>
     </itemizedlist>
     <section xml:id="dbdoclet.50438250_89922">
-        <title>
-            <indexterm><primary>Lustre</primary><secondary>striping</secondary></indexterm>
-            <indexterm><primary>striping</primary><secondary>overview</secondary></indexterm>
-            Lustre File System and Striping</title>
-      <para>One of the main factors leading to the high performance of Lustre file systems is the ability to stripe data across multiple OSTs in a round-robin fashion. Users can optionally configure for each file the number of stripes, stripe size, and OSTs that are used.</para>
-      <para>Striping can be used to improve performance when the aggregate bandwidth to a single file exceeds the bandwidth of a single OST. The ability to stripe is also useful when a single OST does not have enough free space to hold an entire file. For more information about benefits and drawbacks of file striping, see <xref linkend="dbdoclet.50438209_48033"/>.</para>
-      <para>Striping allows segments or &apos;chunks&apos; of data in a file to be stored on different OSTs, as shown in <xref linkend="understandinglustre.fig.filestripe"/>. In the Lustre file system, a RAID 0 pattern is used in which data is &quot;striped&quot; across a certain number of objects. The number of objects in a single file is called the <literal>stripe_count</literal>.</para>
-      <para>Each object contains a chunk of data from the file. When the chunk of data being written to a particular object exceeds the <literal>stripe_size</literal>, the next chunk of data in the file is stored on the next object.</para>
-      <para>Default values for <literal>stripe_count</literal> and <literal>stripe_size</literal> are set for the file system. The default value for <literal>stripe_count</literal> is 1 stripe for file and the default value for <literal>stripe_size</literal> is 1MB. The user may change these values on a per directory or per file basis. For more details, see <xref linkend="dbdoclet.50438209_78664"/>.</para>
-      <para><xref linkend="understandinglustre.fig.filestripe"/>, the <literal>stripe_size</literal> for File C is larger than the <literal>stripe_size</literal> for File A, allowing more data to be stored in a single stripe for File C. The <literal>stripe_count</literal> for File A is 3, resulting in data striped across three objects, while the <literal>stripe_count</literal> for File B and File C is 1.</para>
-      <para>No space is reserved on the OST for unwritten data. File A in <xref linkend="understandinglustre.fig.filestripe"/>.</para>
+      <title>
+        <indexterm>
+          <primary>Lustre</primary>
+          <secondary>striping</secondary>
+        </indexterm>
+        <indexterm>
+          <primary>striping</primary>
+          <secondary>overview</secondary>
+        </indexterm> Lustre File System and Striping</title>
+      <para>One of the main factors leading to the high performance of Lustre file systems is the
+        ability to stripe data across multiple OSTs in a round-robin fashion. Users can optionally
+        configure for each file the number of stripes, stripe size, and OSTs that are used.</para>
+      <para>Striping can be used to improve performance when the aggregate bandwidth to a single
+        file exceeds the bandwidth of a single OST. The ability to stripe is also useful when a
+        single OST does not have enough free space to hold an entire file. For more information
+        about benefits and drawbacks of file striping, see <xref linkend="dbdoclet.50438209_48033"
+        />.</para>
+      <para>Striping allows segments or &apos;chunks&apos; of data in a file to be stored on
+        different OSTs, as shown in <xref linkend="understandinglustre.fig.filestripe"/>. In the
+        Lustre file system, a RAID 0 pattern is used in which data is &quot;striped&quot; across a
+        certain number of objects. The number of objects in a single file is called the
+          <literal>stripe_count</literal>.</para>
+      <para>Each object contains a chunk of data from the file. When the chunk of data being written
+        to a particular object exceeds the <literal>stripe_size</literal>, the next chunk of data in
+        the file is stored on the next object.</para>
+      <para>Default values for <literal>stripe_count</literal> and <literal>stripe_size</literal>
+        are set for the file system. The default value for <literal>stripe_count</literal> is 1
+        stripe for file and the default value for <literal>stripe_size</literal> is 1MB. The user
+        may change these values on a per directory or per file basis. For more details, see <xref
+          linkend="dbdoclet.50438209_78664"/>.</para>
+      <para><xref linkend="understandinglustre.fig.filestripe"/>, the <literal>stripe_size</literal>
+        for File C is larger than the <literal>stripe_size</literal> for File A, allowing more data
+        to be stored in a single stripe for File C. The <literal>stripe_count</literal> for File A
+        is 3, resulting in data striped across three objects, while the
+          <literal>stripe_count</literal> for File B and File C is 1.</para>
+      <para>No space is reserved on the OST for unwritten data. File A in <xref
+          linkend="understandinglustre.fig.filestripe"/>.</para>
       <figure>
-        <title xml:id="understandinglustre.fig.filestripe">File striping on Lustre</title>
+        <title xml:id="understandinglustre.fig.filestripe">File striping on a Lustre* file
+          system</title>
         <mediaobject>
           <imageobject>
             <imagedata scalefit="1" width="100%" fileref="./figures/File_Striping.png"/>
           </imageobject>
           <textobject>
-            <phrase>File striping pattern across three OSTs for three different data files. The file is sparse and missing chunk 6. </phrase>
+            <phrase>File striping pattern across three OSTs for three different data files. The file
+              is sparse and missing chunk 6. </phrase>
           </textobject>
         </mediaobject>
       </figure>
-      <para>The maximum file size is not limited by the size of a single target. Lustre can stripe files across multiple objects (up to 2000), and each object can be up to 16 TB in size with ldiskfs. This leads to a maximum file size of 31.25 PB. (Note that Lustre itself can support files up to 2^64 bytes depending on the backing storage used by OSTs.)</para>
+      <para>The maximum file size is not limited by the size of a single target. In a Lustre file
+        system,   files can be striped across multiple objects (up to 2000), and each object can be
+        up to 16 TB in size with ldiskfs. This leads to a maximum file size of 31.25 PB. (Note that
+        a Lustre file system can support files up to 2^64 bytes depending on the backing storage
+        used by OSTs.)</para>
       <note>
-        <para>Versions of Lustre prior to 2.2 had a maximum stripe count for a single file was limited to 160 OSTs.</para>
+        <para>Versions of the Lustre software prior to Release 2.2 limited the  maximum stripe count
+          for a single file to 160 OSTs.</para>
       </note>
-      <para>Although a single file can only be striped over 2000 objects, Lustre file systems can have thousands of OSTs. The I/O bandwidth to access a single file is the aggregated I/O bandwidth to the objects in a file, which can be as much as a bandwidth of up to 2000 servers. On systems with more than 2000 OSTs, clients can do I/O using multiple files to utilize the full file system bandwidth.</para>
-      <para>For more information about striping, see <xref linkend="managingstripingfreespace"/>.</para>
+      <para>Although a single file can only be striped over 2000 objects, Lustre file systems can
+        have thousands of OSTs. The I/O bandwidth to access a single file is the aggregated I/O
+        bandwidth to the objects in a file, which can be as much as a bandwidth of up to 2000
+        servers. On systems with more than 2000 OSTs, clients can do I/O using multiple files to
+        utilize the full file system bandwidth.</para>
+      <para>For more information about striping, see <xref linkend="managingstripingfreespace"
+        />.</para>
     </section>
   </section>
 </chapter>
