@@ -710,7 +710,7 @@ out:
 static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 				struct lustre_cfg *cfg)
 {
-	mdd_lfsck_cleanup(env, m);
+	lfsck_degister(env, m->mdd_bottom);
 	mdd_changelog_fini(env, m);
 	orph_index_fini(env, m);
 	if (m->mdd_dot_lustre_objs.mdd_obf)
@@ -880,7 +880,7 @@ static int mdd_prepare(const struct lu_env *env,
 		GOTO(out_orph, rc);
 	}
 
-	rc = mdd_lfsck_setup(env, mdd);
+	rc = lfsck_register(env, mdd->mdd_bottom, mdd->mdd_child, true);
 	if (rc != 0) {
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);
@@ -1309,16 +1309,16 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
                 RETURN(0);
         }
 	case OBD_IOC_START_LFSCK: {
-		rc = mdd_lfsck_start(env, &mdd->mdd_lfsck,
-				     (struct lfsck_start *)karg);
+		rc = lfsck_start(env, mdd->mdd_bottom,
+				 (struct lfsck_start_param *)karg);
 		RETURN(rc);
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		rc = mdd_lfsck_stop(env, &mdd->mdd_lfsck, false);
+		rc = lfsck_stop(env, mdd->mdd_bottom, false);
 		RETURN(rc);
 	}
 	case OBD_IOC_PAUSE_LFSCK: {
-		rc = mdd_lfsck_stop(env, &mdd->mdd_lfsck, true);
+		rc = lfsck_stop(env, mdd->mdd_bottom, true);
 		RETURN(rc);
 	}
         }

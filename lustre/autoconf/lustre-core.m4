@@ -2882,6 +2882,8 @@ lustre/mdc/Makefile
 lustre/mdc/autoMakefile
 lustre/lmv/Makefile
 lustre/lmv/autoMakefile
+lustre/lfsck/Makefile
+lustre/lfsck/autoMakefile
 lustre/mdt/Makefile
 lustre/mdt/autoMakefile
 lustre/mdd/Makefile

@@ -46,14 +46,12 @@
 #include <md_object.h>
 #include <dt_object.h>
 #include <lustre_fsfilt.h>
-#include <lustre/lustre_lfsck_user.h>
+#include <lustre_lfsck.h>
 #include <lustre_fid.h>
 #include <lustre_capa.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
 #include <lustre_linkea.h>
-
-#include "mdd_lfsck.h"
 
 /* PDO lock is unnecessary for current MDT stack because operations
  * are already protected by ldlm lock */
@@ -94,9 +92,6 @@ struct mdd_dot_lustre_objs {
         struct mdd_object *mdd_obf;
 };
 
-extern const char lfsck_bookmark_name[];
-extern const char lfsck_namespace_name[];
-
 struct mdd_device {
         struct md_device                 mdd_md_dev;
 	struct obd_export               *mdd_child_exp;
@@ -111,7 +106,6 @@ struct mdd_device {
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
-	struct md_lfsck			 mdd_lfsck;
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
 	struct local_oid_storage	*mdd_los;
@@ -433,18 +427,6 @@ int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
                     void *cookie);
 int mdd_txn_start_cb(const struct lu_env *env, struct thandle *,
                      void *cookie);
-
-/* mdd_lfsck.c */
-int mdd_lfsck_set_speed(const struct lu_env *env, struct md_lfsck *lfsck,
-			__u32 limit);
-int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
-		    struct lfsck_start *start);
-int mdd_lfsck_stop(const struct lu_env *env, struct md_lfsck *lfsck,
-		   bool pause);
-int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd);
-void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd);
-int mdd_lfsck_dump(const struct lu_env *env, struct md_lfsck *lfsck,
-		   __u16 type, char *buf, int len);
 
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,

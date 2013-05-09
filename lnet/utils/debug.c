@@ -57,14 +57,14 @@ static int debug_mask = ~0;
 #define MAX_MARK_SIZE 256
 
 static const char *libcfs_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc",
-         "ost", "class", "log", "llite",
-         "rpc", "mgmt", "lnet", "lnd",
-         "pinger", "filter", "", "echo",
-         "ldlm", "lov", "lquota", "",
-         "", "", "", "lmv",
-         "", "sec", "gss", "", 
-         "mgc", "mgs", "fid", "fld", NULL};
+	{"undefined", "mdc", "mds", "osc",
+	 "ost", "class", "log", "llite",
+	 "rpc", "mgmt", "lnet", "lnd",
+	 "pinger", "filter", "", "echo",
+	 "ldlm", "lov", "lquota", "osd",
+	 "lfsck", "", "", "lmv",
+	 "", "sec", "gss", "",
+	 "mgc", "mgs", "fid", "fld", NULL};
 static const char *libcfs_debug_masks[] =
         {"trace", "inode", "super", "ext2",
          "malloc", "cache", "info", "ioctl",
@@ -892,6 +892,7 @@ static struct mod_paths {
         {"fld", "lustre/fld"},
 	{"lod", "lustre/lod"},
 	{"osp", "lustre/osp"},
+	{ "lfsck", "lustre/lfsck" },
         {NULL, NULL}
 };
 

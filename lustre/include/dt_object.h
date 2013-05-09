@@ -697,6 +697,11 @@ struct local_oid_storage {
 	__u32		  los_last_oid;
 };
 
+static inline struct lu_device *dt2lu_dev(struct dt_device *d)
+{
+        return &d->dd_lu_dev;
+}
+
 static inline struct dt_object *lu2dt(struct lu_object *l)
 {
         LASSERT(l == NULL || IS_ERR(l) || lu_device_is_dt(l->lo_dev));

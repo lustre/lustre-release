@@ -41,4 +41,4 @@ modulefs_DATA = mdd$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
-EXTRA_DIST := $(mdd-objs:%.o=%.c) mdd_internal.h mdd_lfsck.h
+EXTRA_DIST := $(mdd-objs:%.o=%.c) mdd_internal.h

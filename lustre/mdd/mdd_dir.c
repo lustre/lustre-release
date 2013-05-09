@@ -1108,7 +1108,7 @@ int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
 		ea_len = ldata->ld_leh->leh_len;
 		linkea = ldata->ld_buf->lb_buf;
 	} else {
-		ea_len = 4096;
+		ea_len = DEFAULT_LINKEA_SIZE;
 		linkea = NULL;
 	}
 
@@ -1289,6 +1289,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 
 	if (ma->ma_attr.la_nlink == 0 || is_dir) {
                 obj->mod_flags |= DEAD_OBJ;
+
                 /* add new orphan and the object
                  * will be deleted during mdd_close() */
                 if (obj->mod_count) {

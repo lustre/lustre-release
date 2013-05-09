@@ -27,6 +27,8 @@
  * Author: di wang <di.wang@intel.com>
  */
 
+#define DEFAULT_LINKEA_SIZE	4096
+
 struct linkea_data {
 	/**
 	 * Buffer to keep link EA body.

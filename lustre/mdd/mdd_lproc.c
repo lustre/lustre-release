@@ -269,18 +269,19 @@ static int lprocfs_rd_lfsck_speed_limit(char *page, char **start, off_t off,
 					int count, int *eof, void *data)
 {
 	struct mdd_device *mdd = data;
+	int rc;
 
 	LASSERT(mdd != NULL);
 	*eof = 1;
-	return snprintf(page, count, "%u\n",
-			mdd->mdd_lfsck.ml_bookmark_ram.lb_speed_limit);
+
+	rc = lfsck_get_speed(mdd->mdd_bottom, page, count);
+	return rc != 0 ? rc : count;
 }
 
 static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
 					unsigned long count, void *data)
 {
 	struct mdd_device *mdd = data;
-	struct md_lfsck *lfsck;
 	__u32 val;
 	int rc;
 
@@ -289,36 +290,20 @@ static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
 	if (rc != 0)
 		return rc;
 
-	lfsck = &mdd->mdd_lfsck;
-	if (val != lfsck->ml_bookmark_ram.lb_speed_limit) {
-		struct lu_env env;
-
-		rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
-		if (rc != 0)
-			return rc;
-
-		rc = mdd_lfsck_set_speed(&env, lfsck, val);
-		lu_env_fini(&env);
-	}
+	rc = lfsck_set_speed(mdd->mdd_bottom, val);
 	return rc != 0 ? rc : count;
 }
 
 static int lprocfs_rd_lfsck_namespace(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
 {
-	struct lu_env env;
 	struct mdd_device *mdd = data;
 	int rc;
 
 	LASSERT(mdd != NULL);
 	*eof = 1;
 
-	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
-	if (rc != 0)
-		return rc;
-
-	rc = mdd_lfsck_dump(&env, &mdd->mdd_lfsck, LT_NAMESPACE, page, count);
-	lu_env_fini(&env);
+	rc = lfsck_dump(mdd->mdd_bottom, page, count, LT_NAMESPACE);
 	return rc;
 }
 
