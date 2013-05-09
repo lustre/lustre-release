@@ -548,10 +548,12 @@ test_9() {
 	[ "$FLAGS" == "inconsistent" ] ||
 		error "(4) Expect 'inconsistent', but got '$FLAGS'"
 
+	local BASE_SPEED1=100
+	local RUN_TIME1=10
 	# OI scrub should run with full speed under inconsistent case
-	$START_SCRUB -s 100 || error "(5) Fail to start OI scrub!"
+	$START_SCRUB -s $BASE_SPEED1 || error "(5) Fail to start OI scrub!"
 
-	sleep 10
+	sleep $RUN_TIME1
 	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "completed" ] ||
 		error "(6) Expect 'completed', but got '$STATUS'"
@@ -560,42 +562,49 @@ test_9() {
 	[ -z "$FLAGS" ] || error "(7) Expect empty flags, but got '$FLAGS'"
 
 	# OI scrub should run with limited speed under non-inconsistent case
-	$START_SCRUB -s 100 -r || error "(8) Fail to start OI scrub!"
+	$START_SCRUB -s $BASE_SPEED1 -r || error "(8) Fail to start OI scrub!"
 
-	sleep 10
+	sleep $RUN_TIME1
 	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning" ] ||
 		error "(9) Expect 'scanning', but got '$STATUS'"
 
 	local SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
-	# Do NOT ignore that there are 1024 pre-fetched items.
-	# And there may be time error, normally it should be less than 2.
-	# We allow another 10% schedule error.
-	#
-	# SPEED1 = (pre-fetched + 100 * (time - 2)) / time * 1.1
-	local SPEED1=$(((1024 + 100 * (10 + 2)) / 10 * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(10) Got speed $SPEED, expected less than $SPEED1"
+
+	# Do NOT ignore that there are 1024 pre-fetched items. And there
+	# may be time error, normally it should be less than 2 seconds.
+	# We allow another 20% schedule error.
+	local PRE_FETCHED=1024
+	local TIME_DIFF=2
+	# MAX_MARGIN = 1.2 = 12 / 10
+	local MAX_SPEED=$(((PRE_FETCHED + BASE_SPEED1 * \
+			    (RUN_TIME1 + TIME_DIFF)) / RUN_TIME1 * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(10) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	# adjust speed limit
+	local BASE_SPEED2=300
+	local RUN_TIME2=10
 	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 300
-	sleep 10
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit $BASE_SPEED2
+	sleep $RUN_TIME2
 
 	SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
-	# SPEED1 = (pre-fetched + 100 * (time1 - 2) + 300 * (time2 - 2)) / \
-	#	   (time1 + time2) * 0.9
-	SPEED1=$(((1024 + 100 * (10 - 2) + 300 * (10 - 2)) / \
-		  (10 + 10) * 9 / 10))
-	[ $SPEED -gt $SPEED1 ] ||
-		error "(11) Got speed $SPEED, expected more than $SPEED1"
+	# MIN_MARGIN = 0.8 = 8 / 10
+	local MIN_SPEED=$(((PRE_FETCHED + \
+			    BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
+			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
+			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+	[ $SPEED -gt $MIN_SPEED ] ||
+		error "(11) Got speed $SPEED, expected more than $MIN_SPEED"
 
-	# SPEED1 = (pre-fetched + 100 * (time1 + 2) + 300 * (time2 + 2)) / \
-	#	   (time1 + time2) * 1.1
-	SPEED1=$(((1024 + 100 * (10 + 2) + 300 * (10 + 2)) / \
-		  (10 + 10) * 11 / 10))
-	[ $SPEED -lt $SPEED1 ] ||
-		error "(12) Got speed $SPEED, expected less than $SPEED1"
+	# MAX_MARGIN = 1.2 = 12 / 10
+	MAX_SPEED=$(((PRE_FETCHED + \
+		      BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
+		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
+		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+	[ $SPEED -lt $MAX_SPEED ] ||
+		error "(12) Got speed $SPEED, expected less than $MAX_SPEED"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
