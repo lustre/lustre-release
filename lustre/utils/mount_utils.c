@@ -701,8 +701,8 @@ int file_create(char *path, __u64 size)
 	 */
 	size_max = (off_t)1 << (_FILE_OFFSET_BITS - 1 - 10);
 	if (size >= size_max) {
-		fprintf(stderr, "%s: %llu KB: Backing store size must be "
-			"smaller than %llu KB\n", progname, size, size_max);
+		fprintf(stderr, "%s: "LPU64" KB: Backing store size must be "
+			"smaller than "LPU64" KB\n", progname, size, size_max);
 		return EFBIG;
 	}
 
