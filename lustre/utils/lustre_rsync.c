@@ -1495,7 +1495,7 @@ int lr_replicate()
                 case CL_CLOSE:
                 case CL_EXT:
                 case CL_OPEN:
-                case CL_IOCTL:
+                case CL_LAYOUT:
                 case CL_MARK:
                         /* Nothing needs to be done for these entries */
                 default:

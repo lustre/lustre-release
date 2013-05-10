@@ -490,7 +490,7 @@ enum changelog_rec_type {
         CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
         CL_OPEN     = 10, /* not currently used */
         CL_CLOSE    = 11, /* may be written to log only with mtime change */
-        CL_IOCTL    = 12,
+        CL_LAYOUT   = 12, /* file layout/striping modified */
         CL_TRUNC    = 13,
         CL_SETATTR  = 14,
         CL_XATTR    = 15,
@@ -501,11 +501,14 @@ enum changelog_rec_type {
         CL_LAST
 };
 
-static inline const char *changelog_type2str(int type) {
-	static const char *changelog_str[] = {
+static inline const char *changelog_type2str(int type)
+{
+	static const char const *changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
-		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
-		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME"  };
+		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
+		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME",
+	};
+
 	if (type >= 0 && type < CL_LAST)
 		return changelog_str[type];
 	return NULL;
