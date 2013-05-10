@@ -1051,7 +1051,7 @@ int jt_obd_create(int argc, char **argv)
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
         struct obd_ioctl_data data;
         struct timeval next_time;
-        __u64 count = 1, next_count, base_id = 0;
+        __u64 count = 1, next_count, base_id = 1;
         int verbose = 1, mode = 0100644, rc = 0, i, valid_lsm = 0;
         char *end;
 
