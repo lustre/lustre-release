@@ -860,6 +860,10 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota"
 test_6() {
 	local LIMIT=3 # 3M
 
+	# Clear dmesg so watchdog is not triggered by previous
+	# test output
+	do_facet ost1 dmesg -c > /dev/null
+
 	setup_quota_test
 	trap cleanup_quota_test EXIT
 
@@ -918,12 +922,8 @@ test_6() {
 
 	# no watchdog is triggered
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
-	watchdog=$(awk '/sanity-quota test 6/ {start = 1;}
-	               /Service thread pid/ && /was inactive/ {
-			       if (start) {
-				       print;
-			       }
-		       }' $TMP/lustre-log-${TESTNAME}.log)
+	watchdog=$(awk '/Service thread pid/ && /was inactive/ \
+			{ print; }' $TMP/lustre-log-${TESTNAME}.log)
 	[ -z "$watchdog" ] || error "$watchdog"
 
 	rm -f $TMP/lustre-log-${TESTNAME}.log
