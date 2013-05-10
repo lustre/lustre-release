@@ -647,23 +647,22 @@ enum changelog_rec_type {
         CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
         CL_OPEN     = 10, /* not currently used */
         CL_CLOSE    = 11, /* may be written to log only with mtime change */
-        CL_IOCTL    = 12,
-        CL_TRUNC    = 13,
-        CL_SETATTR  = 14,
-        CL_XATTR    = 15,
-        CL_HSM      = 16, /* HSM specific events, see flags */
-        CL_MTIME    = 17, /* Precedence: setattr > mtime > ctime > atime */
-        CL_CTIME    = 18,
-        CL_ATIME    = 19,
-	CL_LAYOUT   = 20,
-        CL_LAST
+	CL_LAYOUT   = 12, /* file layout/striping modified, no data changed */
+	CL_TRUNC    = 13,
+	CL_SETATTR  = 14,
+	CL_XATTR    = 15,
+	CL_HSM      = 16, /* HSM specific events, see flags */
+	CL_MTIME    = 17, /* Precedence: setattr > mtime > ctime > atime */
+	CL_CTIME    = 18,
+	CL_ATIME    = 19,
+	CL_LAST
 };
 
 static inline const char *changelog_type2str(int type) {
 	static const char *changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
-		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
-		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "LAYOUT"
+		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LAYOUT", "TRUNC",
+		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME",
 	};
 
 	if (type >= 0 && type < CL_LAST)

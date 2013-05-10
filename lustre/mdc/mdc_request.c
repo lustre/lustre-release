@@ -1517,28 +1517,29 @@ struct changelog_show {
 	struct obd_device *cs_obd;
 };
 
-static int changelog_show_cb(const struct lu_env *env, struct llog_handle *llh,
+static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
 			     struct llog_rec_hdr *hdr, void *data)
 {
-        struct changelog_show *cs = data;
-        struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
-        struct kuc_hdr *lh;
-        int len, rc;
-        ENTRY;
+	struct changelog_show *cs = data;
+	struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
+	struct kuc_hdr *lh;
+	int len, rc;
+	ENTRY;
 
-        if ((rec->cr_hdr.lrh_type != CHANGELOG_REC) ||
-            (rec->cr.cr_type >= CL_LAST)) {
-                CERROR("Not a changelog rec %d/%d\n", rec->cr_hdr.lrh_type,
-                       rec->cr.cr_type);
-                RETURN(-EINVAL);
-        }
+	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
+		rc = -EINVAL;
+		CERROR("%s: not a changelog rec %x/%d: rc = %d\n",
+		       cs->cs_obd->obd_name, rec->cr_hdr.lrh_type,
+		       rec->cr.cr_type, rc);
+		RETURN(rc);
+	}
 
-        if (rec->cr.cr_index < cs->cs_startrec) {
-                /* Skip entries earlier than what we are interested in */
-                CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64"\n",
-                       rec->cr.cr_index, cs->cs_startrec);
-                RETURN(0);
-        }
+	if (rec->cr.cr_index < cs->cs_startrec) {
+		/* Skip entries earlier than what we are interested in */
+		CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64"\n",
+		       rec->cr.cr_index, cs->cs_startrec);
+		RETURN(0);
+	}
 
 	CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
 		" %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
@@ -1598,7 +1599,7 @@ static int mdc_changelog_send_thread(void *csdata)
 		GOTO(out, rc);
 	}
 
-	rc = llog_cat_process(NULL, llh, changelog_show_cb, cs, 0, 0);
+	rc = llog_cat_process(NULL, llh, changelog_kkuc_cb, cs, 0, 0);
 
         /* Send EOF no matter what our result */
         if ((kuch = changelog_kuc_hdr(cs->cs_buf, sizeof(*kuch),

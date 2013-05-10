@@ -1519,15 +1519,16 @@ int lr_replicate()
                 case CL_XATTR:
                         rc = lr_setxattr(info);
                         break;
-                case CL_CLOSE:
-                case CL_EXT:
-                case CL_OPEN:
-                case CL_IOCTL:
-                case CL_MARK:
-                        /* Nothing needs to be done for these entries */
-                default:
-                        break;
-                }
+		case CL_CLOSE:
+		case CL_EXT:
+		case CL_OPEN:
+		case CL_LAYOUT:
+		case CL_MARK:
+			/* Nothing needs to be done for these entries */
+			/* fallthrough */
+		default:
+			break;
+		}
 		DEBUG_EXIT(info, rc);
                 if (rc && rc != -ENOENT) {
                         lr_print_failure(info, rc);
