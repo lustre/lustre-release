@@ -1707,17 +1707,17 @@ test_18_sub () {
 # test when mds does failover, the ost still could work well
 # this test shouldn't trigger watchdog b=14840
 test_18() {
+	# Clear dmesg so watchdog is not triggered by previous
+	# test output
+	do_facet ost1 dmesg -c > /dev/null
+
 	test_18_sub normal
 	test_18_sub directio
 
 	# check if watchdog is triggered
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
-	local watchdog=$(awk '/sanity-quota test 18/ {start = 1;}
-	               /Service thread pid/ && /was inactive/ {
-			       if (start) {
-				       print;
-			       }
-		       }' $TMP/lustre-log-${TESTNAME}.log)
+	local watchdog=$(awk '/Service thread pid/ && /was inactive/ \
+			{ print; }' $TMP/lustre-log-${TESTNAME}.log)
 	[ -z "$watchdog" ] || error "$watchdog"
 	rm -f $TMP/lustre-log-${TESTNAME}.log
 }
