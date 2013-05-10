@@ -1180,8 +1180,11 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		rc = tgt_sync(&env, tgt, obj);
 		if (rc < 0) {
-			CERROR("%s: sync failed on lock cancel: rc = %d\n",
-			       tgt_name(tgt), rc);
+			CERROR("%s: syncing "DFID" ("LPU64"-"LPU64") on lock "
+			       "cancel: rc = %d\n",
+			       tgt_name(tgt), PFID(&fid),
+			       lock->l_policy_data.l_extent.start,
+			       lock->l_policy_data.l_extent.end, rc);
 		}
 err_put:
 		lu_object_put(&env, &obj->do_lu);

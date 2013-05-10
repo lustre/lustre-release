@@ -106,8 +106,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                                    "client and the MGS are running compatible "
                                    "versions of Lustre.\n",
                                    mgc->obd_name, logname, rc);
-
-        if (rc)
+	else if (rc != 0)
                 LCONSOLE_ERROR_MSG(0x15c, "%s: The configuration from log '%s' "
                                    "failed (%d). This may be the result of "
                                    "communication errors between this node and "

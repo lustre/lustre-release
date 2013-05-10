@@ -1041,10 +1041,8 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	cfg->cfg_callback = class_config_llog_handler;
         /* set up client obds */
         err = lustre_process_log(sb, profilenm, cfg);
-        if (err < 0) {
-                CERROR("Unable to process log: %d\n", err);
-                GOTO(out_free, err);
-        }
+	if (err < 0)
+		GOTO(out_free, err);
 
         /* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
         lprof = class_get_profile(profilenm);
