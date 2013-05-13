@@ -890,14 +890,15 @@ static int osp_sync_thread(void *_arg)
 	if (rc)
 		CERROR("can't cleanup llog: %d\n", rc);
 out:
-	thread->t_flags = SVC_STOPPED;
-
-	cfs_waitq_signal(&thread->t_ctl_waitq);
 	LASSERTF(d->opd_syn_rpc_in_progress == 0,
 		 "%s: %d %d %sempty\n",
 		 d->opd_obd->obd_name, d->opd_syn_rpc_in_progress,
 		 d->opd_syn_rpc_in_flight,
 		 cfs_list_empty(&d->opd_syn_committed_there) ? "" : "!");
+
+	thread->t_flags = SVC_STOPPED;
+
+	cfs_waitq_signal(&thread->t_ctl_waitq);
 
 	lu_env_fini(&env);
 
