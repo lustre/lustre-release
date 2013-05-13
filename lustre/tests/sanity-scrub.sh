@@ -35,6 +35,9 @@ check_and_setup_lustre
 	skip "Need MDS version at least 2.2.90" && check_and_cleanup_lustre &&
 	exit 0
 
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.90) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 1a"
+
 build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
