@@ -440,12 +440,12 @@ static struct ptlrpc_request *mdc_intent_unlink_pack(struct obd_export *exp,
         /* pack the intended request */
         mdc_unlink_pack(req, op_data);
 
-        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
-                             obddev->u.cli.cl_max_mds_easize);
-        req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
-                             obddev->u.cli.cl_max_mds_cookiesize);
-        ptlrpc_request_set_replen(req);
-        RETURN(req);
+	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+			     obddev->u.cli.cl_default_mds_easize);
+	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
+			     obddev->u.cli.cl_default_mds_cookiesize);
+	ptlrpc_request_set_replen(req);
+	RETURN(req);
 }
 
 static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
@@ -482,17 +482,17 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
         lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
         lit->opc = (__u64)it->it_op;
 
-        /* pack the intended request */
-        mdc_getattr_pack(req, valid, it->it_flags, op_data,
-                         obddev->u.cli.cl_max_mds_easize);
+	/* pack the intended request */
+	mdc_getattr_pack(req, valid, it->it_flags, op_data,
+			 obddev->u.cli.cl_default_mds_easize);
 
-        req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
-                             obddev->u.cli.cl_max_mds_easize);
-        if (client_is_remote(exp))
-                req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
-                                     sizeof(struct mdt_remote_perm));
-        ptlrpc_request_set_replen(req);
-        RETURN(req);
+	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+			     obddev->u.cli.cl_default_mds_easize);
+	if (client_is_remote(exp))
+		req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
+				     sizeof(struct mdt_remote_perm));
+	ptlrpc_request_set_replen(req);
+	RETURN(req);
 }
 
 static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
@@ -529,7 +529,7 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 	layout->li_opc = LAYOUT_INTENT_ACCESS;
 
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-			obd->u.cli.cl_max_mds_easize);
+			     obd->u.cli.cl_default_mds_easize);
 	ptlrpc_request_set_replen(req);
 	RETURN(req);
 }

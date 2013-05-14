@@ -541,7 +541,7 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	struct md_op_data *op_data;
 	ENTRY;
 
-	rc = ll_get_max_mdsize(sbi, &lmm_size);
+	rc = ll_get_default_mdsize(sbi, &lmm_size);
 	if (rc)
 		RETURN(rc);
 

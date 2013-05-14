@@ -101,10 +101,6 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 RETURN(size);
         }
 
-        if (info->mti_body->eadatasize != 0 &&
-            info->mti_body->eadatasize < size)
-                RETURN(-ERANGE);
-
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
                              info->mti_body->eadatasize == 0 ? 0 : size);
         rc = req_capsule_server_pack(pill);

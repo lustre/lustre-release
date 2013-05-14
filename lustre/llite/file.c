@@ -1539,9 +1539,9 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         struct md_op_data *op_data;
         int rc, lmmsize;
 
-        rc = ll_get_max_mdsize(sbi, &lmmsize);
-        if (rc)
-                RETURN(rc);
+	rc = ll_get_default_mdsize(sbi, &lmmsize);
+	if (rc)
+		RETURN(rc);
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, filename,
                                      strlen(filename), lmmsize,
@@ -3268,12 +3268,12 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 struct md_op_data *op_data;
                 int ealen = 0;
 
-                if (S_ISREG(inode->i_mode)) {
-                        rc = ll_get_max_mdsize(sbi, &ealen);
-                        if (rc)
-                                RETURN(rc);
-                        valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
-                }
+		if (S_ISREG(inode->i_mode)) {
+			rc = ll_get_default_mdsize(sbi, &ealen);
+			if (rc)
+				RETURN(rc);
+			valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
+		}
 
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
                                              0, ealen, LUSTRE_OPC_ANY,
@@ -3755,7 +3755,7 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	 * layout here. Please note that we can't use the LVB buffer in
 	 * completion AST because it doesn't have a large enough buffer */
 	oc = ll_mdscapa_get(inode);
-	rc = ll_get_max_mdsize(sbi, &lmmsize);
+	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc == 0)
 		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
 				OBD_MD_FLXATTR, XATTR_NAME_LOV, NULL, 0,
@@ -3765,7 +3765,7 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 		RETURN(rc);
 
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-	if (body == NULL || body->eadatasize > lmmsize)
+	if (body == NULL)
 		GOTO(out, rc = -EPROTO);
 
 	lmmsize = body->eadatasize;
