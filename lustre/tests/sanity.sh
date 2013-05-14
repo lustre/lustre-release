@@ -7727,31 +7727,44 @@ test_129() {
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
+	ENOSPC=28
 	EFBIG=27
-	MAX=16384
 
-	set_dir_limits $MAX
 	test_mkdir -p $DIR/$tdir
 
+	MAX=$(stat -c%s "$DIR/$tdir")
+	set_dir_limits $MAX
 	local I=0
 	local J=0
-	while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
+	while [ ! $I -gt $MAX ]; do
 		$MULTIOP $DIR/$tdir/$J Oc
 		rc=$?
-		if [ $rc -eq $EFBIG ]; then
+		#check two errors ENOSPC for new version of ext4 max_dir_size patch
+		#mainline kernel commit df981d03eeff7971ac7e6ff37000bfa702327ef1
+		#and EFBIG for previous versions
+		if [ $rc -eq $EFBIG -o $rc -eq $ENOSPC ] && [ $I -gt 0 ]; then
 			set_dir_limits 0
 			echo "return code $rc received as expected"
-			return 0
+			multiop $DIR/$tdir/$J Oc
+			rc=$?
+			I=$(stat -c%s "$DIR/$tdir")
+			if [ $I -gt $MAX ] && [ $rc -eq 0 ]; then
+				return 0
+			else
+				error_exit "return code $rc current dir size $I " \
+					   "previous limit $MAX"
+			fi
 		elif [ $rc -ne 0 ]; then
 			set_dir_limits 0
-			error_exit "return code $rc received instead of expected $EFBIG"
+			error_exit "return code $rc received instead of expected " \
+				   "$EFBIG or $ENOSPC, files in dir $I"
 		fi
 		J=$((J+1))
 		I=$(stat -c%s "$DIR/$tdir")
 	done
 
 	set_dir_limits 0
-	error "exceeded dir size limit $MAX x $MDSCOUNT $((MAX * MDSCOUNT)) : $I bytes"
+	error "exceeded dir size limit $MAX x $MDSCOUNT $MAX : $I bytes"
 }
 run_test 129 "test directory size limit ========================"
 

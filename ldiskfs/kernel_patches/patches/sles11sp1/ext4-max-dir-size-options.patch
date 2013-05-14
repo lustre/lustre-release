@@ -1,0 +1,36 @@
+diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
+--- linux-stage.orig/fs/ext4/super.c	2013-05-13 11:44:45.000000000 -0400
++++ linux-stage/fs/ext4/super.c	2013-05-13 11:50:19.000000000 -0400
+@@ -1248,8 +1248,8 @@ enum {
+ 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
+ 	Opt_extents, Opt_noextents,
+ 	Opt_no_mbcache,
+-	Opt_discard, Opt_nodiscard,
+-	Opt_init_inode_table, Opt_noinit_inode_table,
++	Opt_discard, Opt_nodiscard, Opt_init_inode_table, Opt_noinit_inode_table,
++	Opt_max_dir_size_kb,
+ };
+ 
+ static const match_table_t tokens = {
+@@ -1326,6 +1326,7 @@ static const match_table_t tokens = {
+ 	{Opt_noextents, "noextents"},
+ 	{Opt_discard, "discard"},
+ 	{Opt_nodiscard, "nodiscard"},
++	{Opt_max_dir_size_kb, "max_dir_size_kb=%u"},
+ 	{Opt_err, NULL},
+ };
+ 
+@@ -1708,6 +1709,13 @@ set_qf_format:
+ 		case Opt_nodelalloc:
+ 			clear_opt(sbi->s_mount_opt, DELALLOC);
+ 			break;
++		case Opt_max_dir_size_kb:
++			if (match_int(&args[0], &option))
++				return 0;
++			if (option < 0)
++				return 0;
++			sbi->s_max_dir_size = option * 1024;
++			break;
+ 		case Opt_stripe:
+ 			if (match_int(&args[0], &option))
+ 				return 0;
