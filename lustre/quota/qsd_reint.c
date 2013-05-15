@@ -509,7 +509,7 @@ static int qsd_reint_main(void *args)
 		qsd_bump_version(qqi, qqi->qqi_slv_ver, false);
 	}
 
-	/* wait for the connection to master established */
+	/* wait for the qsd instance started (target recovery done) */
 	l_wait_event(thread->t_ctl_waitq,
 		     qsd_started(qsd) || !thread_is_running(thread), &lwi);
 
@@ -626,15 +626,16 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 {
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
-	struct l_wait_info	lwi = { 0 };
-	int			rc;
+	struct l_wait_info	 lwi = { 0 };
+	int			 rc;
+	char			*name;
 	ENTRY;
 
 	/* don't bother to do reintegration when quota isn't enabled */
-	if (!qsd_type_enabled(qqi->qqi_qsd, qqi->qqi_qtype))
+	if (!qsd_type_enabled(qsd, qqi->qqi_qtype))
 		RETURN(0);
 
-	if (qqi->qqi_qsd->qsd_acct_failed)
+	if (qsd->qsd_acct_failed)
 		/* no space accounting support, can't enable enforcement */
 		RETURN(0);
 
@@ -660,7 +661,16 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 		RETURN(0);
 	}
 
-	rc = PTR_ERR(kthread_run(qsd_reint_main, (void *)qqi, "qsd_reint"));
+	OBD_ALLOC(name, MTI_NAME_MAXLEN);
+	if (name == NULL)
+		RETURN(-ENOMEM);
+
+	snprintf(name, MTI_NAME_MAXLEN, "qsd_reint_%d.%s",
+		 qqi->qqi_qtype, qsd->qsd_svname);
+
+	rc = PTR_ERR(kthread_run(qsd_reint_main, (void *)qqi, name));
+	OBD_FREE(name, MTI_NAME_MAXLEN);
+
 	if (IS_ERR_VALUE(rc)) {
 		thread_set_flags(thread, SVC_STOPPED);
 		write_lock(&qsd->qsd_lock);
