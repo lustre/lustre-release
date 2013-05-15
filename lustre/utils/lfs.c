@@ -355,7 +355,7 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 	int			 have_gl = 0;
 
 	/* find the right size for the IO and allocate the buffer */
-	lumsz = lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3);
+	lumsz = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
 	lum = malloc(lumsz);
 	if (lum == NULL) {
 		rc = -ENOMEM;

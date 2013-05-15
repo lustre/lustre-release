@@ -524,7 +524,7 @@ static int get_param_lmv(const char *path,
 
 static int get_mds_md_size(const char *path)
 {
-	int md_size = lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3);
+	int md_size = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
 	char buf[80];
 	int rc;
 
@@ -3098,7 +3098,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
 			 * The object_seq needs to be set for the "(Default)"
 			 * prefix to be displayed. */
 			struct lov_user_md *lmm = &param->lmd->lmd_lmm;
-			lmm->lmm_magic = LOV_MAGIC_V1;
+			lmm->lmm_magic = LOV_USER_MAGIC_V1;
 			if (!param->raw)
 				ostid_set_seq(&lmm->lmm_oi,
 					      FID_SEQ_LOV_DEFAULT);
