@@ -2794,6 +2794,7 @@ static cfs_hash_ops_t ldlm_export_lock_ops = {
 
 int ldlm_init_export(struct obd_export *exp)
 {
+	int rc;
         ENTRY;
 
         exp->exp_lock_hash =
@@ -2809,7 +2810,14 @@ int ldlm_init_export(struct obd_export *exp)
         if (!exp->exp_lock_hash)
                 RETURN(-ENOMEM);
 
+	rc = ldlm_init_flock_export(exp);
+	if (rc)
+		GOTO(err, rc);
+
         RETURN(0);
+err:
+	ldlm_destroy_export(exp);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_init_export);
 
