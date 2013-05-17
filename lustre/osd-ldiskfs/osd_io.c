@@ -1240,7 +1240,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
         struct inode       *inode = obj->oo_inode;
         handle_t           *h;
         tid_t               tid;
-        int                 rc, rc2 = 0;
+	loff_t		   oldsize;
+	int		   rc = 0, rc2 = 0;
         ENTRY;
 
         LASSERT(end == OBD_OBJECT_EOF);
@@ -1257,13 +1258,17 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 
         tid = oh->ot_handle->h_transaction->t_tid;
 
-        rc = vmtruncate(inode, start);
+	oldsize=inode->i_size;
+	i_size_write(inode, start);
+	truncate_pagecache(inode, oldsize, start);
+	if (inode->i_op->truncate)
+		inode->i_op->truncate(inode);
 
         /*
          * For a partial-page truncate, flush the page to disk immediately to
          * avoid data corruption during direct disk write.  b=17397
          */
-        if (rc == 0 && (start & ~CFS_PAGE_MASK) != 0)
+	if ((start & ~CFS_PAGE_MASK) != 0)
                 rc = filemap_fdatawrite_range(inode->i_mapping, start, start+1);
 
         h = journal_current_handle();
