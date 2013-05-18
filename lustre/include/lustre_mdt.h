@@ -63,7 +63,6 @@ enum {
 static inline int err_serious(int rc)
 {
         LASSERT(rc < 0);
-        LASSERT(-rc < ESERIOUS);
         return -(-rc | ESERIOUS);
 }
 
