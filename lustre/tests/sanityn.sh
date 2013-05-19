@@ -2571,6 +2571,82 @@ test_75() {
 }
 run_test 75 "osc: upcall after unuse lock==================="
 
+test_76() { #LU-946
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
+		skip "Need MDS version at least 2.5.53" && return
+
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local fcount=2048
+	local fd
+	local cmd
+	local mdt_idx
+	local mds_idx
+	declare -a fd_list
+	declare -a fid_list
+
+	if remote_mds; then
+		nid=$($LCTL list_nids | sed  "s/\./\\\./g")
+	else
+		nid="0@lo"
+	fi
+
+	rm -rf $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
+	if [ $MDSCOUNT -gt 1 ]; then
+		mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
+	else
+		mdt_idx=0
+	fi
+	mds_idx=$((mdt_idx + 1))
+	proc_ofile="mdt.*$mdt_idx.exports.'$nid'.open_files"
+
+	cancel_lru_locks mdc
+
+	echo -n "open files "
+	ulimit -n 8096
+	for (( i = 0; i < $fcount; i++ )) ; do
+		touch $DIR/$tdir/f_$i
+		fd=$(free_fd)
+		cmd="exec $fd<$DIR/$tdir/f_$i"
+		eval $cmd
+		fd_list[i]=$fd
+		echo -n "."
+	done
+	echo
+
+	fid_list=($(do_facet mds$mds_idx $LCTL get_param -n $proc_ofile))
+
+	# Possible errors in openfiles FID list.
+	# 1. Missing FIDs. Check 1
+	# 2. Extra FIDs. Check 1
+	# 3. Duplicated FID. Check 2
+	# 4. Invalid FIDs. Check 2
+	# 5. Valid FID, points to some other file. Check 3
+
+	# Check 1
+	[ ${#fid_list[@]} -ne $fcount ] &&
+		error "${#fid_list[@]} != $fcount open files"
+
+	for (( i = 0; i < $fcount; i++ )) ; do
+		cmd="exec ${fd_list[i]}</dev/null"
+		eval $cmd
+		filename=$($LFS fid2path $DIR2 ${fid_list[i]})
+
+		# Check 2
+		rm --interactive=no $filename
+		[ $? -ne 0 ] &&
+			error "Nonexisting fid ${fid_list[i]} listed."
+	done
+
+	# Check 3
+	ls_op=$(ls $DIR2/$tdir | wc -l)
+	[ $ls_op -ne 0 ] &&
+		error "Some openfiles are missing in lproc output"
+
+	rm -rf $DIR/$tdir
+}
+run_test 76 "Verify open file for 2048 files"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

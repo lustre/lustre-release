@@ -2498,10 +2498,10 @@ int lprocfs_exp_rd_nid(char *page, char **start, off_t off, int count,
 }
 
 struct exp_uuid_cb_data {
-        char                   *page;
-        int                     count;
-        int                    *eof;
-        int                    *len;
+	char                   *page;
+	int                     count;
+	int                    *eof;
+	int                    *len;
 };
 
 static void
