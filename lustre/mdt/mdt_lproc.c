@@ -1049,6 +1049,59 @@ struct lprocfs_vars lprocfs_mds_module_vars[] = {
 	{ 0 }
 };
 
+int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+				 cfs_hlist_node_t *hnode, void *v)
+{
+	struct obd_export	*exp = cfs_hash_object(hs, hnode);
+	struct seq_file		*seq = v;
+
+	if (exp->exp_lock_hash != NULL) {
+		struct mdt_export_data  *med = &exp->exp_mdt_data;
+		struct mdt_file_data	*mfd;
+
+		spin_lock(&med->med_open_lock);
+		cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+			seq_printf(seq, DFID"\n",
+				   PFID(mdt_object_fid(mfd->mfd_object)));
+		}
+		spin_unlock(&med->med_open_lock);
+	}
+
+	return 0;
+}
+
+int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
+{
+	struct nid_stat *stats = seq->private;
+	struct obd_device *obd = stats->nid_obd;
+
+	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+			      lprocfs_mdt_print_open_files, seq);
+
+	return 0;
+}
+
+int lprocfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)
+{
+	struct proc_dir_entry	*dp = PDE(inode);
+	struct seq_file		*seq;
+	struct nid_stat		*tmp;
+	int			rc;
+
+	if (LPROCFS_ENTRY_CHECK(dp))
+		return -ENOENT;
+
+	tmp = dp->data;
+	rc = single_open(file, &lprocfs_mdt_open_files_seq_show, NULL);
+	if (rc != 0)
+		return rc;
+
+	seq = file->private_data;
+	seq->private = tmp;
+
+	return 0;
+}
+
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 {
 	struct obd_export *exp = req->rq_export;
