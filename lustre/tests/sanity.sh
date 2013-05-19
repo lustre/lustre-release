@@ -5865,40 +5865,31 @@ test_101c() {
 	local STRIPE_SIZE=1048576
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local nreads=10000
-	local osc
+	local osc_rpc_stats
 
-    setup_test101bc
+	setup_test101bc
 
-    cancel_lru_locks osc
-    $LCTL set_param osc.*.rpc_stats 0
-    $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
-    for osc in $($LCTL get_param -N osc.*); do
-        if [ "$osc" == "osc.num_refs" ]; then
-            continue
-        fi
+	cancel_lru_locks osc
+	$LCTL set_param osc.*.rpc_stats 0
+	$READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
+	for osc_rpc_stats in $($LCTL get_param -N osc.*.rpc_stats); do
+		local stats=$($LCTL get_param -n $osc_rpc_stats)
+		local lines=$(echo "$stats" | awk 'END {print NR;}')
+		local size
 
-        local lines=$($LCTL get_param -n ${osc}.rpc_stats | wc | awk '{print $1}')
-        if [ $lines -le 20 ]; then
-            continue
-        fi
-
-        local rpc4k=$($LCTL get_param -n ${osc}.rpc_stats |
-                                     awk '$1 == "1:" { print $2; exit; }')
-        local rpc8k=$($LCTL get_param -n ${osc}.rpc_stats |
-                                     awk '$1 == "2:" { print $2; exit; }')
-        local rpc16k=$($LCTL get_param -n ${osc}.rpc_stats |
-                                     awk '$1 == "4:" { print $2; exit; }')
-        local rpc32k=$($LCTL get_param -n ${osc}.rpc_stats |
-                                     awk '$1 == "8:" { print $2; exit; }')
-
-        [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
-        [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
-        [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
-        [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
-        echo "${osc} rpc check passed!"
-    done
-    cleanup_test101bc
-    true
+		if [ $lines -le 20 ]; then
+			continue
+		fi
+		for size in 1 2 4 8; do
+			local rpc=$(echo "$stats" |
+				    awk '($1 == "'$size':") {print $2; exit; }')
+			[ $rpc != 0 ] &&
+				error "Small $((size*4))k read IO $rpc !"
+		done
+		echo "$osc_rpc_stats check passed!"
+	done
+	cleanup_test101bc
+	true
 }
 run_test 101c "check stripe_size aligned read-ahead ================="
 
