@@ -284,6 +284,45 @@ test_2b()
 }
 run_test 2b "LFSCK can find out and remove invalid linkEA entry"
 
+test_2c()
+{
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_MORE2	0x1605
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1605
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase2/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	stat $DIR/$tdir/dummy | grep "Links: 1" > /dev/null ||
+		error "(7) Fail to stat $DIR/$tdir/dummy"
+
+	local dummyfid=$($LFS path2fid $DIR/$tdir/dummy)
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
+		error "(8) Fail to repair linkEA: $dummyfid $dummyname"
+}
+run_test 2c "LFSCK can find out and remove repeated linkEA entry"
+
 test_4()
 {
 	lfsck_prep 3 3

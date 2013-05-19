@@ -52,8 +52,27 @@ void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname);
 int linkea_links_find(struct linkea_data *ldata, const struct lu_name *lname,
 		      const struct lu_fid  *pfid);
 
-#define LINKEA_NEXT_ENTRY(ldata)	\
-	(struct link_ea_entry *)((char *)ldata.ld_lee + ldata.ld_reclen)
+static inline void linkea_first_entry(struct linkea_data *ldata)
+{
+	LASSERT(ldata != NULL);
+	LASSERT(ldata->ld_leh != NULL);
 
-#define LINKEA_FIRST_ENTRY(ldata)	\
-	(struct link_ea_entry *)(ldata.ld_leh + 1)
+	if (ldata->ld_leh->leh_reccount == 0)
+		ldata->ld_lee = NULL;
+	else
+		ldata->ld_lee = (struct link_ea_entry *)(ldata->ld_leh + 1);
+}
+
+static inline void linkea_next_entry(struct linkea_data *ldata)
+{
+	LASSERT(ldata != NULL);
+	LASSERT(ldata->ld_leh != NULL);
+
+	if (ldata->ld_lee != NULL) {
+		ldata->ld_lee = (struct link_ea_entry *)((char *)ldata->ld_lee +
+							 ldata->ld_reclen);
+		if ((char *)ldata->ld_lee >= ((char *)ldata->ld_leh +
+					      ldata->ld_leh->leh_len))
+			ldata->ld_lee = NULL;
+	}
+}
