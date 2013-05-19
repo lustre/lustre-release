@@ -5044,10 +5044,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 		if (unlikely(ino == osd_sb(dev)->s_root->d_inode->i_ino)) {
 			attr |= LUDA_IGNORE;
 			rc = 0;
-			goto pack;
+		} else {
+			rc = osd_dirent_check_repair(env, obj, it, fid, id,
+						     &attr);
 		}
-
-		rc = osd_dirent_check_repair(env, obj, it, fid, id, &attr);
 	} else {
 		attr &= ~LU_DIRENT_ATTRS_MASK;
 		if (!fid_is_sane(fid)) {
@@ -5060,14 +5060,14 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 		}
 	}
 
-	if (rc < 0)
-		RETURN(rc);
-
-pack:
+	/* Pack the entry anyway, at least the offset is right. */
 	osd_it_pack_dirent(lde, fid, it->oie_dirent->oied_off,
 			   it->oie_dirent->oied_name,
 			   it->oie_dirent->oied_namelen,
 			   it->oie_dirent->oied_type, attr);
+
+	if (rc < 0)
+		RETURN(rc);
 
 	if (osd_remote_fid(env, dev, fid))
 		RETURN(0);

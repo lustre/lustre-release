@@ -340,9 +340,7 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 {
 	const struct dt_it_ops *iops = &lfsck->li_obj_oit->do_index_ops->dio_it;
 
-	spin_lock(&lfsck->li_lock);
 	if (unlikely(lfsck->li_di_oit == NULL)) {
-		spin_unlock(&lfsck->li_lock);
 		memset(pos, 0, sizeof(*pos));
 		return;
 	}
@@ -369,7 +367,6 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 		fid_zero(&pos->lp_dir_parent);
 		pos->lp_dir_cookie = 0;
 	}
-	spin_unlock(&lfsck->li_lock);
 }
 
 static void __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
@@ -633,6 +630,7 @@ int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck)
 	}
 
 	lfsck->li_obj_dir = lfsck_object_get(obj);
+	lfsck->li_cookie_dir = iops->store(env, di);
 	spin_lock(&lfsck->li_lock);
 	lfsck->li_di_dir = di;
 	spin_unlock(&lfsck->li_lock);
@@ -707,6 +705,7 @@ int lfsck_exec_oit(const struct lu_env *env, struct lfsck_instance *lfsck,
 	}
 
 	lfsck->li_obj_dir = lfsck_object_get(obj);
+	lfsck->li_cookie_dir = iops->store(env, di);
 	spin_lock(&lfsck->li_lock);
 	lfsck->li_di_dir = di;
 	spin_unlock(&lfsck->li_lock);
@@ -1060,11 +1059,6 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key, bool pause)
 	if (pause)
 		lfsck->li_paused = 1;
 	thread_set_flags(thread, SVC_STOPPING);
-	/* The LFSCK thread may be sleeping on low layer wait queue,
-	 * wake it up. */
-	if (likely(lfsck->li_di_oit != NULL))
-		lfsck->li_obj_oit->do_index_ops->dio_it.put(env,
-							    lfsck->li_di_oit);
 	spin_unlock(&lfsck->li_lock);
 
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);

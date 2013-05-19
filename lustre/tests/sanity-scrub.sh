@@ -498,7 +498,7 @@ test_8() {
 		error "(4) Expect 'inconsistent', but got '$FLAGS'"
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
 	$START_SCRUB || error "(5) Fail to start OI scrub!"
 
@@ -639,7 +639,7 @@ test_10a() {
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
 	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
 		error "(6) File diff failed unexpected!"
@@ -684,6 +684,7 @@ test_10a() {
 }
 run_test 10a "non-stopped OI scrub should auto restarts after MDS remount (1)"
 
+# test_10b is obsolete, it will be coverded by related sanity-lfsck tests.
 test_10b() {
 	scrub_prep 0
 	mds_backup_restore || error "(1) Fail to backup/restore!"
@@ -742,7 +743,7 @@ test_10b() {
 	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
 	[ -z "$FLAGS" ] || error "(14) Expect empty flags, but got '$FLAGS'"
 }
-run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
+#run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 
 test_11() {
 	echo "stopall"

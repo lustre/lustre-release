@@ -80,7 +80,7 @@ enum lfsck_status {
 };
 
 enum lfsck_flags {
-	/* Finish to the cycle scanning. */
+	/* Finish the first cycle scanning. */
 	LF_SCANNED_ONCE	= 0x00000001ULL,
 
 	/* There is some namespace inconsistency. */
@@ -311,6 +311,9 @@ struct lfsck_instance {
 
 	/* It for directory traversal */
 	struct dt_it		 *li_di_dir;
+
+	/* namespace-based directory traversal position. */
+	__u64			  li_cookie_dir;
 
 	/* Arguments for low layer otable-based iteration. */
 	__u32			  li_args_oit;

@@ -177,7 +177,7 @@ struct osd_mdobj_map {
 #define osd_ldiskfs_add_entry(handle, child, cinode, hlock) \
         ldiskfs_add_entry(handle, child, cinode, hlock)
 
-#define OSD_OTABLE_IT_CACHE_SIZE	128
+#define OSD_OTABLE_IT_CACHE_SIZE	64
 #define OSD_OTABLE_IT_CACHE_MASK	(~(OSD_OTABLE_IT_CACHE_SIZE - 1))
 
 struct osd_inconsistent_item {
@@ -209,7 +209,6 @@ struct osd_otable_cache {
 
 struct osd_otable_it {
 	struct osd_device       *ooi_dev;
-	pid_t			 ooi_pid;
 	struct osd_otable_cache  ooi_cache;
 
 	/* The following bits can be updated/checked w/o lock protection.
@@ -221,9 +220,7 @@ struct osd_otable_it {
 						    * filled into cache. */
 				 ooi_user_ready:1, /* The user out of OSD is
 						    * ready to iterate. */
-				 ooi_waiting:1, /* it::next is waiting. */
-				 ooi_stopping:1; /* Someone is stopping
-						  * the iteration. */
+				 ooi_waiting:1; /* it::next is waiting. */
 };
 
 extern const int osd_dto_credits_noquota[];

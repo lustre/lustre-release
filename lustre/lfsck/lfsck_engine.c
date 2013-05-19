@@ -42,10 +42,10 @@
 
 #include "lfsck_internal.h"
 
-static void lfsck_unpack_ent(struct lu_dirent *ent)
+static void lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie)
 {
 	fid_le_to_cpu(&ent->lde_fid, &ent->lde_fid);
-	ent->lde_hash = le64_to_cpu(ent->lde_hash);
+	*cookie = le64_to_cpu(ent->lde_hash);
 	ent->lde_reclen = le16_to_cpu(ent->lde_reclen);
 	ent->lde_namelen = le16_to_cpu(ent->lde_namelen);
 	ent->lde_attrs = le32_to_cpu(ent->lde_attrs);
@@ -56,6 +56,33 @@ static void lfsck_unpack_ent(struct lu_dirent *ent)
 	ent->lde_name[ent->lde_namelen] = 0;
 }
 
+static void lfsck_di_oit_put(const struct lu_env *env, struct lfsck_instance *lfsck)
+{
+	const struct dt_it_ops	*iops;
+	struct dt_it		*di;
+
+	spin_lock(&lfsck->li_lock);
+	iops = &lfsck->li_obj_oit->do_index_ops->dio_it;
+	di = lfsck->li_di_oit;
+	lfsck->li_di_oit = NULL;
+	spin_unlock(&lfsck->li_lock);
+	iops->put(env, di);
+}
+
+static void lfsck_di_dir_put(const struct lu_env *env, struct lfsck_instance *lfsck)
+{
+	const struct dt_it_ops	*iops;
+	struct dt_it		*di;
+
+	spin_lock(&lfsck->li_lock);
+	iops = &lfsck->li_obj_dir->do_index_ops->dio_it;
+	di = lfsck->li_di_dir;
+	lfsck->li_di_dir = NULL;
+	lfsck->li_cookie_dir = 0;
+	spin_unlock(&lfsck->li_lock);
+	iops->put(env, di);
+}
+
 static void lfsck_close_dir(const struct lu_env *env,
 			    struct lfsck_instance *lfsck)
 {
@@ -63,11 +90,7 @@ static void lfsck_close_dir(const struct lu_env *env,
 	const struct dt_it_ops	*dir_iops = &dir_obj->do_index_ops->dio_it;
 	struct dt_it		*dir_di   = lfsck->li_di_dir;
 
-	spin_lock(&lfsck->li_lock);
-	lfsck->li_di_dir = NULL;
-	spin_unlock(&lfsck->li_lock);
-
-	dir_iops->put(env, dir_di);
+	lfsck_di_dir_put(env, lfsck);
 	dir_iops->fini(env, dir_di);
 	lfsck->li_obj_dir = NULL;
 	lfsck_object_put(env, dir_obj);
@@ -104,6 +127,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		lfsck->li_new_scanned++;
 		rc = iops->rec(env, di, (struct dt_rec *)ent,
 			       lfsck->li_args_dir);
+		lfsck_unpack_ent(ent, &lfsck->li_cookie_dir);
 		if (rc != 0) {
 			lfsck_fail(env, lfsck, true);
 			if (bk->lb_param & LPF_FAILOUT)
@@ -112,7 +136,6 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		lfsck_unpack_ent(ent);
 		if (ent->lde_attrs & LUDA_IGNORE)
 			goto checkpoint;
 
@@ -320,19 +343,13 @@ int lfsck_master_engine(void *args)
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
 	       cfs_curproc_pid(), rc);
 
-	if (lfsck->li_paused && cfs_list_empty(&lfsck->li_list_scan))
-		oit_iops->put(&env, oit_di);
-
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
 		rc = lfsck_post(&env, lfsck, rc);
 	if (lfsck->li_di_dir != NULL)
 		lfsck_close_dir(&env, lfsck);
 
 fini_oit:
-	spin_lock(&lfsck->li_lock);
-	lfsck->li_di_oit = NULL;
-	spin_unlock(&lfsck->li_lock);
-
+	lfsck_di_oit_put(&env, lfsck);
 	oit_iops->fini(&env, oit_di);
 	if (rc == 1) {
 		if (!cfs_list_empty(&lfsck->li_list_double_scan))

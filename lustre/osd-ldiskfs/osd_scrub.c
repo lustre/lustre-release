@@ -973,18 +973,10 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 				brelse(param.bitmap);
 				RETURN(rc);
 			}
-
-			if (preload && dev->od_otable_it->ooi_stopping) {
-				brelse(param.bitmap);
-				RETURN(0);
-			}
 		}
 
 next_group:
 		brelse(param.bitmap);
-
-		if (preload && dev->od_otable_it->ooi_stopping)
-			RETURN(0);
 	}
 
 	if (*pos > limit)
@@ -1822,7 +1814,6 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 
 	dev->od_otable_it = it;
 	it->ooi_dev = dev;
-	it->ooi_pid = cfs_curproc_pid();
 	it->ooi_cache.ooc_consumer_idx = -1;
 	if (flags & DOIF_OUTUSED)
 		it->ooi_used_outside = 1;
@@ -1874,30 +1865,8 @@ static int osd_otable_it_get(const struct lu_env *env,
 	return 0;
 }
 
-/**
- * It is hack here:
- *
- * Sometimes the otable-based iteration driver (LFSCK) may be blocked in OSD
- * layer when someone wants to stop/pause the iteration. Under such case, we
- * need some mechanism to notify the event and wakeup the blocker.
- */
 static void osd_otable_it_put(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_otable_it *it  = (struct osd_otable_it *)di;
-	struct osd_device    *dev = it->ooi_dev;
-
-	/* od_otable_mutex: prevent curcurrent init/fini */
-	mutex_lock(&dev->od_otable_mutex);
-	if (it->ooi_pid == cfs_curproc_pid()) {
-		dev->od_scrub.os_paused = 1;
-	} else {
-		struct ptlrpc_thread *thread = &dev->od_scrub.os_thread;
-
-		it->ooi_stopping = 1;
-		if (it->ooi_waiting)
-			cfs_waitq_broadcast(&thread->t_ctl_waitq);
-	}
-	mutex_unlock(&dev->od_otable_mutex);
 }
 
 static inline int
@@ -1905,7 +1874,7 @@ osd_otable_it_wakeup(struct osd_scrub *scrub, struct osd_otable_it *it)
 {
 	spin_lock(&scrub->os_lock);
 	if (it->ooi_cache.ooc_pos_preload < scrub->os_pos_current ||
-	    scrub->os_waiting || it->ooi_stopping ||
+	    scrub->os_waiting ||
 	    !thread_is_running(&scrub->os_thread))
 		it->ooi_waiting = 0;
 	else
@@ -1960,9 +1929,6 @@ again:
 
 	if (!thread_is_running(thread) && !it->ooi_used_outside)
 		RETURN(1);
-
-	if (it->ooi_stopping)
-		RETURN(0);
 
 	rc = osd_otable_it_preload(env, it);
 	if (rc >= 0)
