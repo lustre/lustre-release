@@ -1095,6 +1095,7 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 	struct llog_ctxt *ctxt;
 	struct mgs_replace_uuid_lookup *mrul;
 	struct mgs_device *mgs_dev = lu2mgs_dev(mgs->obd_lu_dev);
+	static struct obd_uuid	 cfg_uuid = { .uuid = "config_uuid" };
 	char *backup;
 	int rc, rc2;
 	ENTRY;
@@ -1133,7 +1134,7 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 	if (rc)
 		GOTO(out_restore, rc);
 
-	rc = llog_init_handle(env, orig_llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, orig_llh, LLOG_F_IS_PLAIN, &cfg_uuid);
 	if (rc)
 		GOTO(out_closel, rc);
 
