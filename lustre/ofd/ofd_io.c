@@ -218,6 +218,13 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 	struct ofd_thread_info	*info;
 	int			 rc = 0;
 
+	if (*nr_local > PTLRPC_MAX_BRW_PAGES) {
+		CERROR("%s: bulk has too many pages %d, which exceeds the"
+		       "maximum pages per RPC of %d\n",
+		       exp->exp_obd->obd_name, *nr_local, PTLRPC_MAX_BRW_PAGES);
+		RETURN(-EPROTO);
+	}
+
 	rc = lu_env_refill((struct lu_env *)env);
 	LASSERT(rc == 0);
 	info = ofd_info_init(env, exp);
