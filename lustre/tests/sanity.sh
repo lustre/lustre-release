@@ -9541,6 +9541,7 @@ cleanup_obdecho_osc () {
 obdecho_test() {
         local OBD=$1
         local node=$2
+	local pages=${3:-64}
         local rc=0
         local id
         do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
@@ -9553,8 +9554,8 @@ obdecho_test() {
         echo "New object id is $id"
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec getattr $id" ||
 			   rc=4; }
-	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 10 w v 64 $id" ||
-			   rc=4; }
+	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec "		       \
+			   "test_brw 10 w v $pages $id" || rc=4; }
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec destroy $id 1" ||
 			   rc=4; }
 	[ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
@@ -9606,6 +9607,32 @@ test_180b() {
 	return $rc
 }
 run_test 180b "test obdecho directly on obdfilter"
+
+test_180c() { # LU-2598
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version at least 2.4.0" && return
+
+	local rc=0
+	local rmmod_remote=false
+	local pages=16384 # 64MB bulk I/O RPC size
+	local target
+
+	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
+		rmmod_remote=true || error "failed to load module obdecho"
+
+	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4}'|head -1)
+	if [[ -n $target ]]; then
+		obdecho_test "$target" ost1 "$pages" ||
+			rc=${PIPESTATUS[0]}
+	else
+		echo "there is no obdfilter target on ost1"
+		rc=2
+	fi
+	$rmmod_remote && do_facet ost1 "rmmod obdecho" || true
+	return $rc
+}
+run_test 180c "test huge bulk I/O size on obdfilter, don't LASSERT"
 
 test_181() { # bug 22177
 	test_mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
