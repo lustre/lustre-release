@@ -402,6 +402,9 @@ static int osp_rd_destroys_in_flight(char *page, char **start, off_t off,
 	struct obd_device *dev = data;
 	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
 
+	if (osp == NULL)
+		return -EINVAL;
+
 	/*
 	 * This counter used to determine if OST has space returned.
 	 * Now we need to wait for the following:

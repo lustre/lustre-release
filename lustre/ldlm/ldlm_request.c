@@ -451,8 +451,13 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                 lock->l_policy_data = *policy;
         if (client_cookie != NULL)
                 lock->l_client_cookie = *client_cookie;
-        if (type == LDLM_EXTENT)
-                lock->l_req_extent = policy->l_extent;
+	if (type == LDLM_EXTENT) {
+		/* extent lock without policy is a bug */
+		if (policy == NULL)
+			LBUG();
+
+		lock->l_req_extent = policy->l_extent;
+	}
 
         err = ldlm_lock_enqueue(ns, &lock, policy, flags);
         if (unlikely(err != ELDLM_OK))
@@ -910,8 +915,13 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                                 lock->l_policy_data = *policy;
                 }
 
-                if (einfo->ei_type == LDLM_EXTENT)
-                        lock->l_req_extent = policy->l_extent;
+		if (einfo->ei_type == LDLM_EXTENT) {
+			/* extent lock without policy is a bug */
+			if (policy == NULL)
+				LBUG();
+
+			lock->l_req_extent = policy->l_extent;
+		}
                 LDLM_DEBUG(lock, "client-side enqueue START, flags %llx\n",
 			   *flags);
         }

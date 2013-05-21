@@ -671,46 +671,47 @@ int
 lst_stat_query_ioctl(lstio_stat_args_t *args)
 {
         int             rc;
-        char           *name;
+	char           *name = NULL;
 
         /* TODO: not finished */
         if (args->lstio_sta_key != console_session.ses_key)
                 return -EACCES;
 
-        if (args->lstio_sta_resultp == NULL ||
-            (args->lstio_sta_namep  == NULL &&
-             args->lstio_sta_idsp   == NULL) ||
-            args->lstio_sta_nmlen <= 0 ||
-            args->lstio_sta_nmlen > LST_NAME_SIZE)
-                return -EINVAL;
+	if (args->lstio_sta_resultp == NULL)
+		return -EINVAL;
 
-        if (args->lstio_sta_idsp != NULL &&
-            args->lstio_sta_count <= 0)
-                return -EINVAL;
+	if (args->lstio_sta_idsp != NULL) {
+		if (args->lstio_sta_count <= 0)
+			return -EINVAL;
 
-        LIBCFS_ALLOC(name, args->lstio_sta_nmlen + 1);
-        if (name == NULL)
-                return -ENOMEM;
-
-	if (copy_from_user(name, args->lstio_sta_namep,
-                               args->lstio_sta_nmlen)) {
-                LIBCFS_FREE(name, args->lstio_sta_nmlen + 1);
-                return -EFAULT;
-        }
-
-        if (args->lstio_sta_idsp == NULL) {
-                rc = lstcon_group_stat(name, args->lstio_sta_timeout,
-                                       args->lstio_sta_resultp);
-        } else {
-                rc = lstcon_nodes_stat(args->lstio_sta_count,
+		rc = lstcon_nodes_stat(args->lstio_sta_count,
                                        args->lstio_sta_idsp,
                                        args->lstio_sta_timeout,
                                        args->lstio_sta_resultp);
-        }
+	} else if (args->lstio_sta_namep != NULL) {
+		if (args->lstio_sta_nmlen <= 0 ||
+		    args->lstio_sta_nmlen > LST_NAME_SIZE)
+			return -EINVAL;
 
-        LIBCFS_FREE(name, args->lstio_sta_nmlen + 1);
+		LIBCFS_ALLOC(name, args->lstio_sta_nmlen + 1);
+		if (name == NULL)
+			return -ENOMEM;
 
-        return rc;
+		rc = copy_from_user(name, args->lstio_sta_namep,
+				    args->lstio_sta_nmlen);
+		if (rc == 0)
+			rc = lstcon_group_stat(name, args->lstio_sta_timeout,
+					       args->lstio_sta_resultp);
+		else
+			rc = -EFAULT;
+
+	} else {
+		rc = -EINVAL;
+	}
+
+	if (name != NULL)
+		LIBCFS_FREE(name, args->lstio_sta_nmlen + 1);
+	return rc;
 }
 
 int lst_test_add_ioctl(lstio_test_args_t *args)

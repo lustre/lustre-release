@@ -483,8 +483,7 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	l->ldo_def_stripe_size = 0;
 	l->ldo_def_stripenr = 0;
 
-	LASSERT(buf);
-	LASSERT(buf->lb_buf);
+	LASSERT(buf != NULL && buf->lb_buf != NULL);
 	lum = buf->lb_buf;
 
 	rc = lod_verify_striping(d, buf, 0);

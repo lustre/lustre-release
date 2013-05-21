@@ -607,6 +607,9 @@ extern int ldiskfs_pdo;
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 				  const char *name, void *buf, int len)
 {
+	if (inode == NULL)
+		return -EINVAL;
+
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
 	return inode->i_op->getxattr(dentry, name, buf, len);

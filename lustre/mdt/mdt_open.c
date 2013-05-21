@@ -457,7 +457,7 @@ static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                 RETURN(mdt_ioepoch_close_on_eviction(info, o));
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 RETURN(mdt_ioepoch_close_on_replay(info, o));
-        if (info->mti_ioepoch->flags & MF_EPOCH_CLOSE)
+	if (info->mti_ioepoch && (info->mti_ioepoch->flags & MF_EPOCH_CLOSE))
                 RETURN(mdt_ioepoch_close_reg(info, o));
         /* IO epoch is not closed. */
         RETURN(MDT_IOEPOCH_OPENED);
@@ -503,7 +503,8 @@ int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
                 ioepoch =  info->mti_ioepoch ?
                         info->mti_ioepoch->ioepoch : o->mot_ioepoch;
 
-                if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
+		if (req != NULL
+		    && !(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
                         rc = mdt_som_attr_set(info, o, ioepoch, act);
                 mdt_object_som_enable(o, ioepoch);
         }

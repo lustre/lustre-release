@@ -2859,13 +2859,16 @@ static int jt_blockdev_find_module(const char *module)
         FILE *fp;
         int found = 0;
         char buf[1024];
+	char *ptr;
 
         fp = fopen("/proc/modules", "r");
         if (fp == NULL)
                 return -1;
 
         while (fgets(buf, 1024, fp) != NULL) {
-                *strchr(buf, ' ') = 0;
+		ptr = strchr(buf, ' ');
+		if (ptr != NULL)
+			*ptr = 0;
                 if (strcmp(module, buf) == 0) {
                         found = 1;
                         break;

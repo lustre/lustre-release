@@ -316,7 +316,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	}
 
 	CDEBUG(D_HA, "%s: get connection from MDS %d\n", obd->obd_name,
-	       data->ocd_group);
+	       data ? data->ocd_group : -1);
 
 out:
 	if (rc != 0) {

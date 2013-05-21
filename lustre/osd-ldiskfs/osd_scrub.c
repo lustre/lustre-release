@@ -1074,7 +1074,7 @@ next:
 	scrub->os_pos_current = param->gbase + ++(param->offset);
 
 wait:
-	if (it != NULL && it->ooi_waiting &&
+	if (it != NULL && it->ooi_waiting && ooc != NULL &&
 	    ooc->ooc_pos_preload < scrub->os_pos_current) {
 		spin_lock(&scrub->os_lock);
 		it->ooi_waiting = 0;

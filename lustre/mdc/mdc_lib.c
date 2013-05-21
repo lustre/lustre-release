@@ -229,41 +229,41 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
 	/* XXX do something about time, uid, gid */
-	rec->cr_opcode   = REINT_OPEN;
-	rec->cr_fsuid   = current_fsuid();
-	rec->cr_fsgid   = current_fsgid();
-	rec->cr_cap      = cfs_curproc_cap_pack();
-	if (op_data != NULL) {
-		rec->cr_fid1 = op_data->op_fid1;
-		rec->cr_fid2 = op_data->op_fid2;
-	}
-	rec->cr_mode     = mode;
+	rec->cr_opcode = REINT_OPEN;
+	rec->cr_fsuid  = current_fsuid();
+	rec->cr_fsgid  = current_fsgid();
+	rec->cr_cap    = cfs_curproc_cap_pack();
+	rec->cr_mode   = mode;
 	cr_flags = mds_pack_open_flags(flags, mode);
-	rec->cr_rdev     = rdev;
-	rec->cr_time     = op_data->op_mod_time;
-	rec->cr_suppgid1 = op_data->op_suppgids[0];
-	rec->cr_suppgid2 = op_data->op_suppgids[1];
-	rec->cr_bias     = op_data->op_bias;
-	rec->cr_umask    = current_umask();
-	rec->cr_old_handle = op_data->op_handle;
+	rec->cr_rdev   = rdev;
+	rec->cr_umask  = current_umask();
+	if (op_data != NULL) {
+		rec->cr_fid1       = op_data->op_fid1;
+		rec->cr_fid2       = op_data->op_fid2;
+		rec->cr_time       = op_data->op_mod_time;
+		rec->cr_suppgid1   = op_data->op_suppgids[0];
+		rec->cr_suppgid2   = op_data->op_suppgids[1];
+		rec->cr_bias       = op_data->op_bias;
+		rec->cr_old_handle = op_data->op_handle;
 
-	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-	/* the next buffer is child capa, which is used for replay,
-	 * will be packed from the data in reply message. */
+		mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
+		/* the next buffer is child capa, which is used for replay,
+		 * will be packed from the data in reply message. */
 
-	if (op_data->op_name) {
-		tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-		LOGL0(op_data->op_name, op_data->op_namelen, tmp);
-		if (op_data->op_bias & MDS_CREATE_VOLATILE)
-			cr_flags |= MDS_OPEN_VOLATILE;
-	}
-
-	if (lmm) {
-		cr_flags |= MDS_OPEN_HAS_EA;
+		if (op_data->op_name) {
+			tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
+			LOGL0(op_data->op_name, op_data->op_namelen, tmp);
+			if (op_data->op_bias & MDS_CREATE_VOLATILE)
+				cr_flags |= MDS_OPEN_VOLATILE;
+		}
 #ifndef __KERNEL__
 		/*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
 		rec->cr_fid2 = op_data->op_fid2;
 #endif
+	}
+
+	if (lmm) {
+		cr_flags |= MDS_OPEN_HAS_EA;
 		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
 		memcpy(tmp, lmm, lmmlen);
 	}

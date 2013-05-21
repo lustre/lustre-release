@@ -997,7 +997,8 @@ static void osp_sync_llog_fini(const struct lu_env *env, struct osp_device *d)
 	struct llog_ctxt *ctxt;
 
 	ctxt = llog_get_context(d->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
-	llog_cat_close(env, ctxt->loc_handle);
+	if (ctxt != NULL)
+		llog_cat_close(env, ctxt->loc_handle);
 	llog_cleanup(env, ctxt);
 }
 

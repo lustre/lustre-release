@@ -208,7 +208,9 @@ static char *nl_nid_lookup_ipaddr(char *nid)
                                     NI_NAMEREQD | NI_NOFQDN) == 0) {
                                         if ((p = strchr(name, '.')))
                                                 *p = '\0';
-                                        len = strlen(name) + strlen(lnet) + 2;
+					len = strlen(name) + 2;
+					if (lnet)
+						len += strlen(lnet);
                                         if (!(res = malloc(len)))
                                                 nl_oom();
                                         snprintf(res, len, "%s@%s", name, lnet);

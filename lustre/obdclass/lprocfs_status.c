@@ -2221,18 +2221,20 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         }
 
         units = 1;
-        switch(*end) {
-        case 'p': case 'P':
-                units <<= 10;
-        case 't': case 'T':
-                units <<= 10;
-        case 'g': case 'G':
-                units <<= 10;
-        case 'm': case 'M':
-                units <<= 10;
-        case 'k': case 'K':
-                units <<= 10;
-        }
+	if (end != NULL) {
+		switch (*end) {
+		case 'p': case 'P':
+			units <<= 10;
+		case 't': case 'T':
+			units <<= 10;
+		case 'g': case 'G':
+			units <<= 10;
+		case 'm': case 'M':
+			units <<= 10;
+		case 'k': case 'K':
+			units <<= 10;
+		}
+	}
         /* Specified units override the multiplier */
         if (units)
                 mult = mult < 0 ? -units : units;

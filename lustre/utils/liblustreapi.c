@@ -438,7 +438,8 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
                                 continue;
                         strcpy(dev, tmp);
                         tmp = strchr(dev, ' ');
-                        *tmp = '\0';
+			if (tmp != NULL)
+				*tmp = '\0';
                         break;
                 }
         }
@@ -557,10 +558,14 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
         if (ostname != NULL)
                 len = strlen(ostname);
 
-        if (poolname == NULL)
-                rc = find_target_obdpath(fsname, buffer);
-        else
+	if (poolname == NULL) {
+		if (len == 0)
+			rc = -EINVAL;
+		else
+			rc = find_target_obdpath(fsname, buffer);
+	} else {
                 rc = find_poolpath(fsname, poolname, buffer);
+	}
         if (rc)
                 return rc;
 

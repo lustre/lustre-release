@@ -428,7 +428,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
         if (info)
                 mdt_body_reverse_idmap(info, b);
 
-        if (b->valid & OBD_MD_FLSIZE)
+	if (fid != NULL && (b->valid & OBD_MD_FLSIZE))
                 CDEBUG(D_VFSTRACE, DFID": returning size %llu\n",
                        PFID(fid), (unsigned long long)b->size);
 }
