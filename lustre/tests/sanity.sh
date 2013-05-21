@@ -1114,6 +1114,21 @@ test_24z() {
 }
 run_test 24z "rename one remote dir to another remote dir should fail"
 
+test_24A() { # LU-3182
+	local NFILES=5000
+
+	mkdir -p $DIR/$tdir
+	createmany -m $DIR/$tdir/$tfile $NFILES
+	local t=`ls $DIR/$tdir | wc -l`
+	local u=`ls $DIR/$tdir | sort -u | wc -l`
+	if [ $t -ne $NFILES -o $u -ne $NFILES ] ; then
+		error "Expected $NFILES files, got $t ($u unique)"
+	fi
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24A "readdir() returns correct number of entries."
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 
