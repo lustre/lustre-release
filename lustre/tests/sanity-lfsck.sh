@@ -30,6 +30,11 @@ MDSSIZE=100000
 OSTSIZE=100000
 
 check_and_setup_lustre
+
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
+        skip "Need MDS version at least 2.2.90" && check_and_cleanup_lustre &&
+        exit 0
+
 build_test_filter
 
 $LCTL set_param debug=+lfsck > /dev/null || true
