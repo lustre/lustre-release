@@ -204,7 +204,7 @@
       </listitem>
     </itemizedlist>
     <caution>
-      <para>The <literal>obdfilter_survey</literal> script is destructive and should not be run on devices that containing existing data that needs to be preserved. Thus, tests using <literal>obdfilter_survey</literal> should be run before the Lustre file system is placed in production.</para>
+      <para>The <literal>obdfilter_survey</literal> script is potentially destructive and there is a small risk data may be lost. To reduce this risk, <literal>obdfilter_survey</literal> should not be run on devices that contain data that needs to be preserved. Thus, the best time to run <literal>obdfilter_survey</literal> is before the Lustre file system is put into production. The reason <literal>obdfilter_survey</literal> may be safe to run on a production file system is because it creates objects with object sequence 2. Normal file system objects are typically created with object sequence 0.</para>
     </caution>
     <note>
       <para>If the <literal>obdfilter_survey</literal> test is terminated before it completes, some small amount of space is leaked. you can either ignore it or reformat the file system.</para>
