@@ -2663,11 +2663,11 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
         CDEBUG(D_INFO, "trying to match res "DFID" mode %s\n", PFID(fid),
                ldlm_lockname[mode]);
 
-        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-        for (i = 0; i < MDS_INODELOCK_MAXSHIFT && *bits != 0; i++) {
-                policy.l_inodebits.bits = *bits & (1 << i);
-                if (policy.l_inodebits.bits == 0)
-                        continue;
+	flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
+	for (i = 0; i <= MDS_INODELOCK_MAXSHIFT && *bits != 0; i++) {
+		policy.l_inodebits.bits = *bits & (1 << i);
+		if (policy.l_inodebits.bits == 0)
+			continue;
 
                 if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS,
                                   &policy, mode, &lockh)) {
