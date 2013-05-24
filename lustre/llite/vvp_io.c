@@ -542,15 +542,16 @@ static int vvp_io_read_start(const struct lu_env *env,
         }
 
 out:
-        if (result >= 0) {
-                if (result < cnt)
-                        io->ci_continue = 0;
-                io->ci_nob += result;
-                ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
-                                  cio->cui_fd, pos, result, 0);
-                result = 0;
-        }
-        return result;
+	if (result >= 0) {
+		if (result < cnt)
+			io->ci_continue = 0;
+		io->ci_nob += result;
+		ll_rw_stats_tally(ll_i2sbi(inode), current->pid, cio->cui_fd,
+				  pos, result, READ);
+		result = 0;
+	}
+
+	return result;
 }
 
 static void vvp_io_read_fini(const struct lu_env *env, const struct cl_io_slice *ios)
@@ -599,15 +600,16 @@ static int vvp_io_write_start(const struct lu_env *env,
         else
                 result = lustre_generic_file_write(file, cio, &pos);
 
-        if (result > 0) {
-                if (result < cnt)
-                        io->ci_continue = 0;
-                io->ci_nob += result;
-                ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
-                                  cio->cui_fd, pos, result, 0);
-                result = 0;
-        }
-        RETURN(result);
+	if (result > 0) {
+		if (result < cnt)
+			io->ci_continue = 0;
+		io->ci_nob += result;
+		ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
+				  cio->cui_fd, pos, result, WRITE);
+		result = 0;
+	}
+
+	RETURN(result);
 }
 
 #ifndef HAVE_VM_OP_FAULT
