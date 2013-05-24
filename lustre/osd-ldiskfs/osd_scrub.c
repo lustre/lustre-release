@@ -100,7 +100,8 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 	ENTRY;
 
 	fid_cpu_to_be(oi_fid, fid);
-	osd_id_pack(oi_id, id);
+	if (id != NULL)
+		osd_id_pack(oi_id, id);
 	jh = ldiskfs_journal_start_sb(osd_sb(dev),
 				      osd_dto_credits_noquota[ops]);
 	if (IS_ERR(jh)) {
@@ -1530,11 +1531,12 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 static int osd_initial_OI_scrub(struct osd_thread_info *info,
 				struct osd_device *dev)
 {
-	struct osd_ios_item *item    = NULL;
-	scandir_t	     scandir = osd_ios_general_scan;
-	filldir_t	     filldir = osd_ios_root_fill;
-	struct dentry	    *dentry  = osd_sb(dev)->s_root;
-	int		     rc;
+	struct osd_ios_item	*item    = NULL;
+	scandir_t		 scandir = osd_ios_general_scan;
+	filldir_t		 filldir = osd_ios_root_fill;
+	struct dentry		*dentry  = osd_sb(dev)->s_root;
+	const struct osd_lf_map *map     = osd_lf_maps;
+	int			 rc;
 	ENTRY;
 
 	while (1) {
@@ -1568,7 +1570,32 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 		OBD_FREE_PTR(item);
 	}
 
-	RETURN(rc);
+	if (rc != 0)
+		RETURN(rc);
+
+	/* There maybe the case that the object has been removed, but its OI
+	 * mapping is still in the OI file, such as the "CATALOGS" after MDT
+	 * file-level backup/restore. So here cleanup the stale OI mappings. */
+	while (map->olm_name != NULL) {
+		struct dentry *child;
+
+		if (fid_is_zero(&map->olm_fid)) {
+			map++;
+			continue;
+		}
+
+		child = osd_ios_lookup_one_len(map->olm_name,
+					       osd_sb(dev)->s_root,
+					       strlen(map->olm_name));
+		if (!IS_ERR(child))
+			dput(child);
+		else if (PTR_ERR(child) == -ENOENT)
+			osd_scrub_refresh_mapping(info, dev, &map->olm_fid,
+						  NULL, DTO_INDEX_DELETE);
+		map++;
+	}
+
+	RETURN(0);
 }
 
 char *osd_lf_fid2name(const struct lu_fid *fid)

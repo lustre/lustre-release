@@ -324,7 +324,10 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	struct osd_scrub       *scrub;
 	struct scrub_file      *sf;
 	int			result;
-	int			verify = 0;
+	int			saved  = 0;
+	bool			verify = false;
+	bool			in_oi  = false;
+	bool			triggered = false;
 	ENTRY;
 
 	LINVRNT(osd_invariant(obj));
@@ -356,7 +359,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	if (sf->sf_flags & SF_INCONSISTENT)
-		verify = 1;
+		verify = true;
 
 	/*
 	 * Objects are created as locking anchors or place holders for objects
@@ -382,19 +385,47 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (result != 0)
 		GOTO(out, result);
 
+	in_oi = true;
+
 iget:
-	if (verify == 0)
+	if (!verify)
 		inode = osd_iget(info, dev, id);
 	else
 		inode = osd_iget_verify(info, dev, id, fid);
 	if (IS_ERR(inode)) {
 		result = PTR_ERR(inode);
 		if (result == -ENOENT || result == -ESTALE) {
-			fid_zero(&oic->oic_fid);
-			result = 0;
+			if (!in_oi) {
+				fid_zero(&oic->oic_fid);
+				GOTO(out, result = 0);
+			}
+
+			/* XXX: There are three possible cases:
+			 *	1. Backup/restore caused the OI invalid.
+			 *	2. Someone unlinked the object but NOT removed
+			 *	   the OI mapping, such as mount target device
+			 *	   as ldiskfs, and modify something directly.
+			 *	3. Someone just removed the object between the
+			 *	   former oi_lookup and the iget. It is normal.
+			 *
+			 *	It is diffcult to distinguish the 2nd from the
+			 *	1st case. Relatively speaking, the 1st case is
+			 *	common than the 2nd case, trigger OI scrub. */
+			result = osd_oi_lookup(info, dev, fid, id, true);
+			if (result == 0)
+				/* It is the case 1 or 2. */
+				goto trigger;
+
+			if (result == -ENOENT)
+				/* It is the case 3. */
+				result = 0;
 		} else if (result == -EREMCHG) {
 
 trigger:
+			if (unlikely(triggered))
+				GOTO(out, result = saved);
+
+			triggered = true;
 			if (thread_is_running(&scrub->os_thread)) {
 				result = -EINPROGRESS;
 			} else if (!dev->od_noscrub) {
@@ -408,6 +439,32 @@ trigger:
 				else
 					result = -EREMCHG;
 			}
+
+			/* We still have chance to get the valid inode: for the
+			 * object which is referenced by remote name entry, the
+			 * object on the local MDT will be linked under the dir
+			 * of "/REMOTE_PARENT_DIR" with its FID string as name.
+			 *
+			 * We do not know whether the object for the given FID
+			 * is referenced by some remote name entry or not, and
+			 * especially for DNE II, a multiple-linked object may
+			 * have many name entries reside on many MDTs.
+			 *
+			 * To simplify the operation, OSD will not distinguish
+			 * more, just lookup "/REMOTE_PARENT_DIR". Usually, it
+			 * only happened for the RPC from other MDT during the
+			 * OI scrub, or for the client side RPC with FID only,
+			 * such as FID to path, or from old connected client. */
+			saved = result;
+			result = osd_lookup_in_remote_parent(info, dev,
+							     fid, id);
+			if (result == 0) {
+				in_oi = false;
+				verify = false;
+				goto iget;
+			}
+
+			result = saved;
 		}
 
                 GOTO(out, result);
@@ -3788,10 +3845,8 @@ static int osd_fail_fid_lookup(struct osd_thread_info *oti,
 	return rc;
 }
 
-static int osd_add_oi_cache(struct osd_thread_info *info,
-			    struct osd_device *osd,
-			    struct osd_inode_id *id,
-			    struct lu_fid *fid)
+int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
+		     struct osd_inode_id *id, const struct lu_fid *fid)
 {
 	CDEBUG(D_INODE, "add "DFID" %u:%u to info %p\n", PFID(fid),
 	       id->oii_ino, id->oii_gen, info);

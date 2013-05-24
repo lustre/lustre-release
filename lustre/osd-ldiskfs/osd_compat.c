@@ -319,6 +319,39 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	RETURN(rc);
 }
 
+int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
+				struct osd_device *osd,
+				const struct lu_fid *fid,
+				struct osd_inode_id *id)
+{
+	struct osd_mdobj_map	    *omm = osd->od_mdt_map;
+	char			    *name = oti->oti_name;
+	struct dentry		    *parent;
+	struct dentry		    *dentry;
+	struct ldiskfs_dir_entry_2 *de;
+	struct buffer_head	   *bh;
+	int			    rc;
+	ENTRY;
+
+	parent = omm->omm_remote_parent;
+	sprintf(name, DFID_NOBRACE, PFID(fid));
+	dentry = osd_child_dentry_by_inode(oti->oti_env, parent->d_inode,
+					   name, strlen(name));
+	mutex_lock(&parent->d_inode->i_mutex);
+	bh = osd_ldiskfs_find_entry(parent->d_inode, dentry, &de, NULL);
+	if (bh == NULL) {
+		rc = -ENOENT;
+	} else {
+		rc = 0;
+		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
+		brelse(bh);
+	}
+	mutex_unlock(&parent->d_inode->i_mutex);
+	if (rc == 0)
+		osd_add_oi_cache(oti, osd, id, fid);
+	RETURN(rc);
+}
+
 /*
  * directory structure on legacy OST:
  *

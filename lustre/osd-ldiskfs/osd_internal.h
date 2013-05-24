@@ -631,6 +631,8 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u64 flags);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		struct dentry *dentry, struct lustre_mdt_attrs *lma);
+int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
+		     struct osd_inode_id *id, const struct lu_fid *fid);
 
 int osd_obj_map_init(const struct lu_env *env, struct osd_device *osd);
 void osd_obj_map_fini(struct osd_device *dev);
@@ -668,6 +670,10 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_thandle *oh);
 int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 			     struct osd_object *obj, struct osd_thandle *oh);
+int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
+				struct osd_device *osd,
+				const struct lu_fid *fid,
+				struct osd_inode_id *id);
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
