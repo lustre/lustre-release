@@ -3750,7 +3750,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	}
 
 	fid = &info->mti_tmp_fid2;
-	fid_build_from_res_name(fid, &(*lockp)->l_resource->lr_name);
+	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
 
 	obj = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(obj))
