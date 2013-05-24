@@ -1308,30 +1308,34 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
                    "R/W", "PID", "RANGE START", "RANGE END",
                    "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
-        /* We stored the discontiguous offsets here; print them first */
-        for(i = 0; i < LL_OFFSET_HIST_MAX; i++) {
-                if (offset[i].rw_pid != 0)
-                        seq_printf(seq,"%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
-                                   offset[i].rw_op ? 'W' : 'R',
-                                   offset[i].rw_pid,
-                                   offset[i].rw_range_start,
-                                   offset[i].rw_range_end,
-                                   (unsigned long)offset[i].rw_smallest_extent,
-                                   (unsigned long)offset[i].rw_largest_extent,
-                                   offset[i].rw_offset);
-        }
-        /* Then print the current offsets for each process */
-        for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
-                if (process[i].rw_pid != 0)
-                        seq_printf(seq,"%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
-                                   process[i].rw_op ? 'W' : 'R',
-                                   process[i].rw_pid,
-                                   process[i].rw_range_start,
-                                   process[i].rw_last_file_pos,
-                                   (unsigned long)process[i].rw_smallest_extent,
-                                   (unsigned long)process[i].rw_largest_extent,
-                                   process[i].rw_offset);
-        }
+
+	/* We stored the discontiguous offsets here; print them first */
+	for (i = 0; i < LL_OFFSET_HIST_MAX; i++) {
+		if (offset[i].rw_pid != 0)
+			seq_printf(seq,
+				   "%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
+				   offset[i].rw_op == READ ? 'R' : 'W',
+				   offset[i].rw_pid,
+				   offset[i].rw_range_start,
+				   offset[i].rw_range_end,
+				   (unsigned long)offset[i].rw_smallest_extent,
+				   (unsigned long)offset[i].rw_largest_extent,
+				   offset[i].rw_offset);
+	}
+
+	/* Then print the current offsets for each process */
+	for (i = 0; i < LL_PROCESS_HIST_MAX; i++) {
+		if (process[i].rw_pid != 0)
+			seq_printf(seq,
+				   "%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
+				   process[i].rw_op == READ ? 'R' : 'W',
+				   process[i].rw_pid,
+				   process[i].rw_range_start,
+				   process[i].rw_last_file_pos,
+				   (unsigned long)process[i].rw_smallest_extent,
+				   (unsigned long)process[i].rw_largest_extent,
+				   process[i].rw_offset);
+	}
 	spin_unlock(&sbi->ll_process_lock);
 
 	return 0;
