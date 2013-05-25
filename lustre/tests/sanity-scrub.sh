@@ -26,6 +26,7 @@ SAVED_OSTSIZE=${OSTSIZE}
 MDSSIZE=100000
 OSTSIZE=100000
 
+MOUNT_2=""
 check_and_setup_lustre
 
 [ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
@@ -759,6 +760,9 @@ test_11() {
 
 	createmany -o $MOUNT/$tname/f $CREATED || error "(2) Fail to create!"
 
+	cleanup_mount $MOUNT
+	do_facet $SINGLEMDS $LCTL clear
+	start_full_debug_logging
 	# reset OI scrub start point by force
 	$START_SCRUB -r || error "(3) Fail to start OI scrub!"
 	sleep 3
@@ -788,6 +792,8 @@ test_11() {
 	[ $SKIPPED -eq 0 ] ||
 		error "(8) Expect 0 objects skipped, but got $SKIPPED"
 
+	stop_full_debug_logging
+	restore_mount $MOUNT || error "(9) Fail to start client!"
 	rm -rf $MOUNT/$tname > /dev/null
 }
 run_test 11 "OI scrub skips the new created objects only once"
