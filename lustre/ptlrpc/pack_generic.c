@@ -96,6 +96,46 @@ int ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
 }
 EXPORT_SYMBOL(ptlrpc_buf_need_swab);
 
+/* This enlarges the req buffer of request \a req to the next power of 2
+ * multiple of \a newbuf_size.
+ * Returns zero on success or ENOMEM if it failed to allocate the new buffer.
+ *
+ * This is used in the reply path on the client if the server responded
+ * with a bigger message than we expected so we can save the new state for
+ * a possible future replay where we'll need to present this new info
+ * (usually striping that's not available at create time) */
+int ptlrpc_enlarge_req_buffer(struct ptlrpc_request *req, int newbuf_size)
+{
+	struct lustre_msg *newbuf;
+
+	newbuf_size = size_roundup_power2(newbuf_size);
+
+	OBD_ALLOC_LARGE(newbuf, newbuf_size);
+	if (newbuf == NULL)
+		return -ENOMEM;
+
+	/* Must lock this, so that otherwise unprotected change of
+	 * rq_reqmsg is not racing with parallel processing of
+	 * imp_replay_list traversing threads. See LU-3333
+	 * This is a bandaid at best, we really need to deal with this
+	 * in request enlarging code before unpacking what's already
+	 * there */
+	if (req->rq_import)
+		spin_lock(&req->rq_import->imp_lock);
+
+	memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
+
+	OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+	req->rq_reqbuf = newbuf;
+	req->rq_reqbuf_len = newbuf_size;
+	req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 1, 0);
+
+	if (req->rq_import)
+		spin_unlock(&req->rq_import->imp_lock);
+
+	return 0;
+}
+
 static inline int lustre_msg_check_version_v2(struct lustre_msg_v2 *msg,
                                               __u32 version)
 {

@@ -49,6 +49,7 @@
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
+#include "ptlrpc_internal.h"
 
 struct plain_sec {
         struct ptlrpc_sec       pls_base;
@@ -671,9 +672,9 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
                          struct ptlrpc_request *req,
                          int segment, int newsize)
 {
-        struct lustre_msg      *newbuf;
         int                     oldsize;
         int                     newmsg_size, newbuf_size;
+	int			rc;
         ENTRY;
 
         LASSERT(req->rq_reqbuf);
@@ -699,20 +700,10 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
         LASSERT(!req->rq_pool || req->rq_reqbuf_len >= newbuf_size);
 
         if (req->rq_reqbuf_len < newbuf_size) {
-                newbuf_size = size_roundup_power2(newbuf_size);
-
-                OBD_ALLOC_LARGE(newbuf, newbuf_size);
-                if (newbuf == NULL)
-                        RETURN(-ENOMEM);
-
-                memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
-
-                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqbuf = newbuf;
-                req->rq_reqbuf_len = newbuf_size;
-                req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf,
-                                                PLAIN_PACK_MSG_OFF, 0);
-        }
+		rc = ptlrpc_enlarge_req_buffer(req, newbuf_size);
+		if (rc != 0)
+			RETURN(rc);
+	}
 
         _sptlrpc_enlarge_msg_inplace(req->rq_reqbuf, PLAIN_PACK_MSG_OFF,
                                      newmsg_size);
