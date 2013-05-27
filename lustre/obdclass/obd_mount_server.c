@@ -978,13 +978,9 @@ static int server_stop_servers(int lsiflags)
 	}
 
 	if (obd != NULL && (type == NULL || type->typ_refcnt == 0)) {
-		int err;
-
 		obd->obd_force = 1;
 		/* obd_fail doesn't mean much on a server obd */
-		err = class_manual_cleanup(obd);
-		if (rc != 0)
-			rc = err;
+		rc = class_manual_cleanup(obd);
 	}
 
 	mutex_unlock(&server_start_lock);
