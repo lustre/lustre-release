@@ -20,8 +20,15 @@ check_and_setup_lustre
 cleanup_mount $MOUNT
 # mount lustre on mds
 lustre_client=$(facet_active_host $SINGLEMDS)
-[ "$NFSVERSION" = "4" ] && cl_mnt_opt="$MOUNTOPT,32bitapi" || cl_mnt_opt=""
-zconf_mount_clients $lustre_client $MOUNT "$cl_mnt_opt" || \
+CL_MNT_OPT=""
+if [[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.61) ]]; then
+	# Mount Lustre client with "32bitapi" option while exporting the
+	# filesystem with a 64-bit root inode. This is a temporary workaround
+	# for LU-2904, and it should be removed when there is a patch that
+	# fixes the NFS FSID generation problem.
+	CL_MNT_OPT="$MOUNTOPT,32bitapi"
+fi
+zconf_mount_clients $lustre_client $MOUNT "$CL_MNT_OPT" ||
     error "mount lustre on $lustre_client failed"
 
 # setup the nfs
