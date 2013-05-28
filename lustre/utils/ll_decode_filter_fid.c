@@ -74,11 +74,13 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "%s: warning: fid larger than expected "
                                 "(%d bytes), recompile?\n", argv[i], size);
 
-                printf("%s: objid="LPU64" seq="LPU64" parent="DFID"\n",
-                       argv[i], le64_to_cpu(ff->ff_objid),
+                printf("%s: objid="LPU64" seq="LPU64" parent="DFID
+		       " stripe=%u\n", argv[i],
+		       le64_to_cpu(ff->ff_objid),
                        le64_to_cpu(ff->ff_seq),
                        le64_to_cpu(ff->ff_parent.f_seq),
-                       le32_to_cpu(ff->ff_parent.f_oid),
+                       le32_to_cpu(ff->ff_parent.f_oid), 0 /* ver */,
+		       /* this is stripe_nr actually */
                        le32_to_cpu(ff->ff_parent.f_ver));
 	}
 
