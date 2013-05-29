@@ -504,9 +504,8 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(lo);
-	LASSERT(lo->ldo_stripenr > 0);
 
-	magic = lo->ldo_pool ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
+	magic = lo->ldo_pool != NULL ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
 	lmm_size = lov_mds_md_size(lo->ldo_stripenr, magic);
 	if (info->lti_ea_store_size < lmm_size) {
 		rc = lod_ea_store_resize(info, lmm_size);
@@ -514,14 +513,19 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 			RETURN(rc);
 	}
 
+	if (lo->ldo_pattern == 0) /* default striping */
+		lo->ldo_pattern = LOV_PATTERN_RAID0;
+
 	lmm = info->lti_ea_store;
 
 	lmm->lmm_magic = cpu_to_le32(magic);
-	lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
+	lmm->lmm_pattern = cpu_to_le32(lo->ldo_pattern);
 	fid_to_lmm_oi(fid, &lmm->lmm_oi);
 	lmm_oi_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
 	lmm->lmm_stripe_size = cpu_to_le32(lo->ldo_stripe_size);
 	lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_stripenr);
+	if (lo->ldo_pattern & LOV_PATTERN_F_RELEASED)
+		lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_released_stripenr);
 	lmm->lmm_layout_gen = 0;
 	if (magic == LOV_MAGIC_V1) {
 		objs = &lmm->lmm_objects[0];
@@ -678,7 +682,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	int			 i, idx, rc = 0;
 	ENTRY;
 
-	LASSERT(lo);
+	LASSERT(lo != NULL);
 	LASSERT(lo->ldo_stripe == NULL);
 	LASSERT(lo->ldo_stripenr > 0);
 	LASSERT(lo->ldo_stripe_size > 0);
@@ -746,6 +750,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	struct lov_mds_md_v1	*lmm;
 	struct lov_ost_data_v1	*objs;
 	__u32			 magic;
+	__u32			 pattern;
 	int			 rc = 0;
 	ENTRY;
 
@@ -755,15 +760,20 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 	lmm = (struct lov_mds_md_v1 *) buf->lb_buf;
 	magic = le32_to_cpu(lmm->lmm_magic);
+	pattern = le32_to_cpu(lmm->lmm_pattern);
 
 	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)
 		GOTO(out, rc = -EINVAL);
-	if (le32_to_cpu(lmm->lmm_pattern) != LOV_PATTERN_RAID0)
+	if (lov_pattern(pattern) != LOV_PATTERN_RAID0)
 		GOTO(out, rc = -EINVAL);
 
+	lo->ldo_pattern = pattern;
 	lo->ldo_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
-	lo->ldo_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
 	lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
+	lo->ldo_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
+	/* released file stripenr fixup. */
+	if (pattern & LOV_PATTERN_F_RELEASED)
+		lo->ldo_stripenr = 0;
 
 	LASSERT(buf->lb_len >= lov_mds_md_size(lo->ldo_stripenr, magic));
 
@@ -775,7 +785,8 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		objs = &lmm->lmm_objects[0];
 	}
 
-	rc = lod_initialize_objects(env, lo, objs);
+	if (lo->ldo_stripenr > 0)
+		rc = lod_initialize_objects(env, lo, objs);
 
 out:
 	RETURN(rc);

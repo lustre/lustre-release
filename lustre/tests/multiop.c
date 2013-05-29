@@ -320,6 +320,17 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         break;
+		case 'H':
+			len = atoi(commands+1);
+			fd = llapi_file_open(fname, O_CREAT | O_WRONLY,
+				0644, 0, 0, len,
+				LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED);
+			if (fd == -1) {
+				save_errno = errno;
+				perror("create stripe file");
+				exit(save_errno);
+			}
+			break;
 		case 'K':
 			oldpath = POP_ARG();
 			if (oldpath == NULL)

@@ -2244,7 +2244,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                 lov_dump_user_lmm_header(lum, path, objects, is_dir, header,
                                          depth, raw, pool_name);
 
-        if (!is_dir && (header & VERBOSE_OBJID)) {
+        if (!is_dir && (header & VERBOSE_OBJID) &&
+	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
                 if (obdstripe == 1)
                         llapi_printf(LLAPI_MSG_NORMAL,
 				   "\tobdidx\t\t objid\t\t objid\t\t group\n");

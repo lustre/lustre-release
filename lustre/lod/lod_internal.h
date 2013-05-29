@@ -151,6 +151,8 @@ struct lod_object {
 	__u16		   ldo_stripenr;
 	__u16		   ldo_layout_gen;
 	__u32		   ldo_stripe_size;
+	__u32		   ldo_pattern;
+	__u16		   ldo_released_stripenr;
 	char		  *ldo_pool;
 	struct dt_object **ldo_stripe;
 	/* to know how much memory to free, ldo_stripenr can be less */

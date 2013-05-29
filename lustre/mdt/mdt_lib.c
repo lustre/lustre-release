@@ -542,7 +542,8 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 	       le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size=0x%x, stripe_count=0x%x\n",
                le32_to_cpu(lmm->lmm_stripe_size), count);
-        if (count == LOV_ALL_STRIPES)
+        if (count == LOV_ALL_STRIPES ||
+	    le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_RELEASED)
                 return;
 
 	LASSERT(count <= LOV_MAX_STRIPE_COUNT);
