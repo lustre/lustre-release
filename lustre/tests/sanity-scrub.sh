@@ -50,6 +50,34 @@ build_test_filter
 MDT_DEV="${FSNAME}-MDT0000"
 OST_DEV="${FSNAME}-OST0000"
 MDT_DEVNAME=$(mdsdevname ${SINGLEMDS//mds/})
+
+scrub_start() {
+	local error_id=$1
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL lfsck_start -M $(facet_svc mds$n) "$@" ||
+			error "($error_id) Failed to start OI scrub on mds$n"
+	done
+}
+
+scrub_stop() {
+	local error_id=$1
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL lfsck_stop -M $(facet_svc mds$n) ||
+			error "($error_id) Failed to stop OI scrub on mds$n"
+	done
+}
+
+scrub_status() {
+	local n=$1
+
+	do_facet mds$n $LCTL get_param -n \
+		osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+}
+
 START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV}"
 START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV}"
 STOP_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
@@ -62,41 +90,144 @@ MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
 
 scrub_prep() {
 	local nfiles=$1
+	local n
 
 	echo "formatall"
 	formatall > /dev/null
 	echo "setupall"
 	setupall > /dev/null
 
-	echo "preparing... ${nfiles} files will be created."
-	mkdir -p $DIR/$tdir
-	cp $LUSTRE/tests/*.sh $DIR/$tdir/
-	[[ $nfiles -gt 0 ]] && { createmany -o $DIR/$tdir/$tfile $nfiles ||
-				error "createmany failed"; }
-
+	echo "preparing..."
+	for n in $(seq $MDSCOUNT); do
+		echo "creating $nfiles files on mds$n"
+		if [ $n -eq 1 ]; then
+			mkdir -p $DIR/$tdir/mds$n ||
+				error "Failed to create directory mds$n"
+		else
+			$LFS mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
+				error "Failed to create remote directory mds$n"
+		fi
+		cp $LUSTRE/tests/*.sh $DIR/$tdir/mds$n ||
+			error "Failed to copy files to mds$n"
+		if [[ $nfiles -gt 0 ]]; then
+			createmany -o $DIR/$tdir/mds$n/$tfile $nfiles ||
+				error "createmany failed on mds$n"
+		fi
+	done
 	echo "prepared."
 	cleanup_mount $MOUNT > /dev/null || error "Fail to stop client!"
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "Fail to stop MDS!"
+	for n in $(seq $MDSCOUNT); do
+		echo "stop mds$n"
+		stop mds$n > /dev/null || error "Fail to stop MDS$n!"
+	done
+}
+
+scrub_start_mds() {
+	local error_id=$1
+	local opts=$2
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		start mds$n $(mdsdevname $n) $opts >/dev/null ||
+			error "($error_id) Failed to start mds$n"
+	done
+}
+
+scrub_stop_mds() {
+	local error_id=$1
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		echo "stopping mds$n"
+		stop mds$n >/dev/null ||
+			error "($error_id) Failed to stop mds$n"
+	done
+}
+
+scrub_check_status() {
+	local error_id=$1
+	local expected=$2
+	local actual
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		actual=$(do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			awk '/^status/ { print $2 }')
+		if [ "$actual" != "$expected" ]; then
+			error "($error_id) Expected '$expected' on mds$n, but" \
+			       "got '$actual'"
+		fi
+	done
+}
+
+scrub_check_flags() {
+	local error_id=$1
+	local expected=$2
+	local actual
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		actual=$(do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			awk '/^flags/ { print $2 }')
+		if [ "$actual" != "$expected" ]; then
+			error "($error_id) Expected '$expected' on mds$n, but" \
+			       "got '$actual'"
+		fi
+	done
+}
+
+scrub_check_data() {
+	local error_id=$1
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		diff -q $LUSTRE/tests/test-framework.sh \
+			$DIR/$tdir/mds$n/test-framework.sh ||
+			error "($error_id) File data check failed"
+	done
+}
+
+scrub_remove_ois() {
+	local error_id=$1
+	local index=$2
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		mds_remove_ois mds$n $index ||
+			error "($error_id) Failed to remove OI .$index on mds$n"
+	done
+}
+
+scrub_backup_restore() {
+	local error_id=$1
+	local igif=$2
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		mds_backup_restore mds$n $igif ||
+			error "(error_id) Backup/restore on mds$n failed"
+	done
+}
+
+scrub_enable_auto() {
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).auto_scrub 1
+	done
 }
 
 test_0() {
 	scrub_prep 0
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(1) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(2) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(3) Expect empty flags, but got '$FLAGS'"
-
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
+	scrub_check_status 2 init
+	scrub_check_flags 3 ""
 	mount_client $MOUNT || error "(4) Fail to start client!"
-
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(5) File diff failed unexpected!"
+	scrub_check_data 5
 }
 run_test 0 "Do not auto trigger OI scrub for non-backup/restore case"
 
@@ -142,21 +273,13 @@ run_test 1a "Auto trigger initial OI scrub when server mounts"
 
 test_1b() {
 	scrub_prep 0
-	mds_remove_ois || error "(1) Fail to remove/recreate!"
-
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
+	scrub_remove_ois 1
+	echo "start MDTs without disabling OI scrub"
+	scrub_start_mds 2 "$MOUNT_OPTS_SCRUB"
 	sleep 3
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(3) Expect 'completed', but got '$STATUS'"
-
+	scrub_check_status 3 completed
 	mount_client $MOUNT || error "(4) Fail to start client!"
-
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(5) File diff failed unexpected!"
+	scrub_check_data 5
 }
 run_test 1b "Trigger OI scrub when MDT mounts for OI files remove/recreate case"
 
@@ -172,64 +295,39 @@ test_1c() {
 	# idx 7: oi.16.{7,49}
 	for index in 0 1 2 3 5 7; do
 		scrub_prep 0
-		mds_remove_ois ${index} || error "(1) Fail to remove/recreate!"
+		scrub_remove_ois 1 $index
 
-		echo "start $SINGLEMDS with disabling OI scrub"
-		start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > \
-			/dev/null || error "(2) Fail to start MDS!"
-
-		local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-		[ "$FLAGS" == "recreated" ] ||
-			error "(3) Expect 'recreated', but got '$FLAGS'"
-
-		$START_SCRUB || error "(4) Fail to start OI scrub!"
+		echo "start MDTs with OI scrub disabled"
+		scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+		scrub_check_flags 3 recreated
+		scrub_start 4
 		sleep 3
-		local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-		[ "$STATUS" == "completed" ] ||
-			error "(5) Expect 'completed', but got '$STATUS'"
-
-		FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-		[ -z "$FLAGS" ] ||
-			error "(6) Expect empty flags, but got '$FLAGS'"
+		scrub_check_status 5 completed
+		scrub_check_flags 6 ""
 	done
 }
 run_test 1c "Auto detect kinds of OI file(s) removed/recreated cases"
 
 test_2() {
 	scrub_prep 0
-	mds_backup_restore || error "(1) Fail to backup/restore!"
-
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
+	scrub_backup_restore 1
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 2 "$MOUNT_OPTS_SCRUB"
 	sleep 3
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(3) Expect 'completed', but got '$STATUS'"
-
+	scrub_check_status 3 completed
 	mount_client $MOUNT || error "(4) Fail to start client!"
-
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(5) File diff failed unexpected!"
+	scrub_check_data 5
 }
 run_test 2 "Trigger OI scrub when MDT mounts for backup/restore case"
 
 test_3() {
 	scrub_prep 0
-	mds_backup_restore || error "(1) Fail to backup/restore!"
-
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	scrub_backup_restore 1
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	sleep 3
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
 	echo "stopall"
 	stopall > /dev/null
 }
@@ -237,307 +335,262 @@ run_test 3 "Do not trigger OI scrub when MDT mounts if 'noscrub' specified"
 
 test_4() {
 	scrub_prep 0
-	mds_backup_restore || error "(1) Fail to backup/restore!"
-
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
-
+	scrub_backup_restore 1
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
-
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(6) File diff failed unexpected!"
-
+	scrub_enable_auto
+	scrub_check_data 6
 	sleep 3
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(7) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 7 completed
 }
 run_test 4 "Trigger OI scrub automatically if inconsistent OI mapping was found"
 
 test_5() {
 	scrub_prep 1500
-	mds_backup_restore || error "(1) Fail to backup/restore!"
-
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
-
+	scrub_backup_restore 1
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
+	scrub_enable_auto
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(6) File diff failed unexpected!"
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	scrub_check_data 6
 
 	umount_client $MOUNT || error "(7) Fail to stop client!"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(8) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 8 scanning
 
-	#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000191
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
+		do_facet mds$n $LCTL set_param fail_loc=0x191
+	done
 	sleep 4
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(9) Fail to stop MDS!"
+	scrub_stop_mds 9
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(10) Fail to start MDS!"
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "crashed" ] ||
-		error "(11) Expect 'crashed', but got '$STATUS'"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 10 "$MOUNT_OPTS_NOSCRUB"
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(12) Fail to stop MDS!"
+	scrub_check_status 11 crashed
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(13) Fail to start MDS!"
+	scrub_stop_mds 12
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(14) Expect 'scanning', but got '$STATUS'"
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 13 "$MOUNT_OPTS_SCRUB"
 
-	#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000192
+	scrub_check_status 14 scanning
+
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
+		do_facet mds$n $LCTL set_param fail_loc=0x192
+	done
 	sleep 4
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "failed" ] ||
-		error "(15) Expect 'failed', but got '$STATUS'"
+	scrub_check_status 15 failed
 
 	mount_client $MOUNT || error "(16) Fail to start client!"
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	stat $DIR/$tdir/${tfile}1000 ||
-		error "(17) Fail to stat $DIR/$tdir/${tfile}1000!"
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+		stat $DIR/$tdir/mds$n/${tfile}1000 ||
+			error "(17) Failed to stat mds$n/${tfile}1000"
+	done
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(18) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 18 scanning
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(19) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 19 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(20) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 20 ""
 }
 run_test 5 "OI scrub state machine"
 
 test_6() {
 	scrub_prep 1000
-	mds_backup_restore || error "(1) Fail to backup/restore!"
-
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
-
+	scrub_backup_restore 1
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
-
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(6) File diff failed unexpected!"
+	scrub_enable_auto
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	scrub_check_data 6
 
 	# Sleep 5 sec to guarantee at least one object processed by OI scrub
 	sleep 5
 	# Fail the OI scrub to guarantee there is at least one checkpoint
-	#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000192
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
+		do_facet mds$n $LCTL set_param fail_loc=0x192
+	done
 	sleep 4
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "failed" ] ||
-		error "(7) Expect 'failed', but got '$STATUS'"
+	scrub_check_status 7 failed
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	# stat will re-trigger OI scrub
-	stat $DIR/$tdir/${tfile}800 ||
-		error "(8) Fail to stat $DIR/$tdir/${tfile}800!"
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+		# stat will re-trigger OI scrub
+		stat $DIR/$tdir/mds$n/${tfile}800 ||
+			error "(8) Failed to stat mds$n/${tfile}800"
+	done
 
 	umount_client $MOUNT || error "(9) Fail to stop client!"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(10) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 10 scanning
 
-	#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000191
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
+		do_facet mds$n $LCTL set_param fail_loc=0x191
+	done
 	sleep 4
-	local POSITION0=$($SHOW_SCRUB |
+	local -a position0
+	for n in $(seq $MDSCOUNT); do
+		position0[$n]=$(scrub_status $n |
 			awk '/^last_checkpoint_position/ {print $2}')
-	POSITION0=$((POSITION0 + 1))
+		position0[$n]=$((${position0[$n]} + 1))
+	done
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(11) Fail to stop MDS!"
+	scrub_stop_mds 11
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(12) Fail to start MDS!"
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 12 "$MOUNT_OPTS_SCRUB"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(13) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 13 scanning
 
-	local POSITION1=$($SHOW_SCRUB |
+	local -a position1
+	for n in $(seq $MDSCOUNT); do
+		positions1[$n]=$(scrub_status $n |
 			awk '/^latest_start_position/ {print $2}')
-	[ $POSITION0 -eq $POSITION1 ] ||
-		error "(14) Expect position: $POSITION0, but got $POSITION1"
+		if [ ${position0[$n]} -ne ${position1[$n]} ]; then
+			error "(14) Expected position ${position0[$n]}, but" \
+				"got ${position1[$n]}"
+		fi
+	done
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(15) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 15 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(16) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 16 ""
 }
 run_test 6 "OI scrub resumes from last checkpoint"
 
 test_7() {
 	scrub_prep 500
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	scrub_backup_restore 1
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
-
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
-
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
 
 	mount_client $MOUNT || error "(5) Fail to start client!"
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(6) File diff failed unexpected!"
+	scrub_enable_auto
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	scrub_check_data 6
 
-	stat $DIR/$tdir/${tfile}300 ||
-		error "(7) Fail to stat $DIR/$tdir/${tfile}300!"
+	for n in $(seq $MDSCOUNT); do
+		stat $DIR/$tdir/mds$n/${tfile}300 ||
+			error "(7) Failed to stat mds$n/${tfile}300!"
+	done
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(8) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 8 scanning
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent,auto" ] ||
-		error "(9) Expect 'inconsistent,auto', but got '$FLAGS'"
+	scrub_check_flags 9 inconsistent,auto
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(10) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 10 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(11) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags ""
 }
 run_test 7 "System is available during OI scrub scanning"
 
 test_8() {
 	scrub_prep 128
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	scrub_backup_restore 1
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
+	scrub_check_status 3 init
 
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	scrub_check_flags 4 inconsistent
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=1
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	$START_SCRUB || error "(5) Fail to start OI scrub!"
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=1
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	scrub_start 5
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(6) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 6 scanning
 
-	$STOP_SCRUB || error "(7) Fail to stop OI scrub!"
+	scrub_stop 7
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "stopped" ] ||
-		error "(8) Expect 'stopped', but got '$STATUS'"
+	scrub_check_status 8 stopped
 
-	$START_SCRUB || error "(9) Fail to start OI scrub!"
+	scrub_start 9
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(10) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 10 scanning
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(11) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 11 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(12) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 12 ""
 }
 run_test 8 "Control OI scrub manually"
 
@@ -548,42 +601,30 @@ test_9() {
 	fi
 
 	scrub_prep 8000
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	scrub_backup_restore 1
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
+	scrub_check_status 3 init
 
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	scrub_check_flags 4 inconsistent
 
 	local BASE_SPEED1=100
 	local RUN_TIME1=10
 	# OI scrub should run with full speed under inconsistent case
-	$START_SCRUB -s $BASE_SPEED1 || error "(5) Fail to start OI scrub!"
+	scrub_start 5 -s $BASE_SPEED1
 
 	sleep $RUN_TIME1
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(6) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 6 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(7) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 7 ""
 
 	# OI scrub should run with limited speed under non-inconsistent case
-	$START_SCRUB -s $BASE_SPEED1 -r || error "(8) Fail to start OI scrub!"
+	scrub_start 8 -s $BASE_SPEED1 -r
 
 	sleep $RUN_TIME1
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(9) Expect 'scanning', but got '$STATUS'"
-
-	local SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
+	scrub_check_status 9 scanning
 
 	# Do NOT ignore that there are 1024 pre-fetched items. And there
 	# may be time error, normally it should be less than 2 seconds.
@@ -592,167 +633,148 @@ test_9() {
 	local TIME_DIFF=2
 	# MAX_MARGIN = 1.2 = 12 / 10
 	local MAX_SPEED=$(((PRE_FETCHED + BASE_SPEED1 * \
-			    (RUN_TIME1 + TIME_DIFF)) / RUN_TIME1 * 12 / 10))
-	[ $SPEED -lt $MAX_SPEED ] ||
-		error "(10) Got speed $SPEED, expected less than $MAX_SPEED"
+		(RUN_TIME1 + TIME_DIFF)) / RUN_TIME1 * 12 / 10))
+	local n
+	for n in $(seq $MDSCOUNT); do
+		local SPEED=$(scrub_status $n | \
+			awk '/^average_speed/ { print $2 }')
+		[ $SPEED -lt $MAX_SPEED ] ||
+			error "(10) Got speed $SPEED, expected less than" \
+				"$MAX_SPEED"
+	done
 
 	# adjust speed limit
 	local BASE_SPEED2=300
 	local RUN_TIME2=10
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit $BASE_SPEED2
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param -n \
+			mdd.$(facet_svc mds$n).lfsck_speed_limit $BASE_SPEED2
+	done
 	sleep $RUN_TIME2
 
-	SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
 	# MIN_MARGIN = 0.8 = 8 / 10
 	local MIN_SPEED=$(((PRE_FETCHED + \
 			    BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
 			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
-	[ $SPEED -gt $MIN_SPEED ] ||
-		error "(11) Got speed $SPEED, expected more than $MIN_SPEED"
-
 	# MAX_MARGIN = 1.2 = 12 / 10
 	MAX_SPEED=$(((PRE_FETCHED + \
 		      BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
 		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
 		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
-	[ $SPEED -lt $MAX_SPEED ] ||
-		error "(12) Got speed $SPEED, expected less than $MAX_SPEED"
+	for n in $(seq $MDSCOUNT); do
+		SPEED=$(scrub_status $n | awk '/^average_speed/ { print $2 }')
+		[ $SPEED -gt $MIN_SPEED ] ||
+			error "(11) Got speed $SPEED, expected more than" \
+				"$MIN_SPEED"
+		[ $SPEED -lt $MAX_SPEED ] ||
+			error "(12) Got speed $SPEED, expected less than" \
+				"$MAX_SPEED"
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+		do_facet mds$n $LCTL set_param -n \
+				mdd.$(facet_svc mds$n).lfsck_speed_limit 0
+	done
 	sleep 6
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(13) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 13 completed
 }
 run_test 9 "OI scrub speed control"
 
 test_10a() {
 	scrub_prep 0
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	scrub_backup_restore 1
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	echo "starting mds$n with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
+	scrub_check_status 3 init
 
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	scrub_check_flags 4 inconsistent
 
 	mount_client $MOUNT || error "(5) Fail to start client!"
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n osd-ldiskfs.${MDT_DEV}.auto_scrub 1
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=1
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
-	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
-		error "(6) File diff failed unexpected!"
+	scrub_enable_auto
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=1
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
+	scrub_check_data 6
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(7) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 7 scanning
 
 	umount_client $MOUNT || error "(8) Fail to stop client!"
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(9) Fail to stop MDS!"
+	scrub_stop_mds 9
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(10) Fail to start MDS!"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 10 "$MOUNT_OPTS_NOSCRUB"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "paused" ] ||
-		error "(11) Expect 'paused', but got '$STATUS'"
+	scrub_check_status 11 paused
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(12) Fail to stop MDS!"
+	scrub_stop_mds 12
 
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(13) Fail to start MDS!"
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 13 "$MOUNT_OPTS_SCRUB"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(14) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 14 scanning
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(15) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 15 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(16) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 16 ""
 }
 run_test 10a "non-stopped OI scrub should auto restarts after MDS remount (1)"
 
 # test_10b is obsolete, it will be coverded by related sanity-lfsck tests.
 test_10b() {
 	scrub_prep 0
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	scrub_backup_restore 1
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(2) Fail to start MDS!"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "init" ] ||
-		error "(3) Expect 'init', but got '$STATUS'"
+	scrub_check_status 3 init
 
-	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ "$FLAGS" == "inconsistent" ] ||
-		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+	scrub_check_flags 4 inconsistent
 
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x190
+	local n
+	for n in $(seq $MDSCOUNT); do
+		#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+		do_facet mds$n $LCTL set_param fail_val=3
+		do_facet mds$n $LCTL set_param fail_loc=0x190
+	done
 
-	$START_SCRUB || error "(5) Fail to start OI scrub!"
+	scrub_start 5
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(6) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 6 scanning
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(7) Fail to stop MDS!"
+	scrub_stop_mds 7
 
-	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
-		error "(8) Fail to start MDS!"
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 8 "$MOUNT_OPTS_NOSCRUB"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "paused" ] ||
-		error "(9) Expect 'paused', but got '$STATUS'"
+	scrub_check_status 9 paused
 
-	echo "stop $SINGLEMDS"
-	stop $SINGLEMDS > /dev/null || error "(10) Fail to stop MDS!"
+	scrub_stop_mds 10
 
-	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(11) Fail to start MDS!"
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 11 "$MOUNT_OPTS_SCRUB"
 
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning" ] ||
-		error "(12) Expect 'scanning', but got '$STATUS'"
+	scrub_check_status 12 scanning
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	for n in $(seq $MDSCOUNT); do
+		do_facet mds$n $LCTL set_param fail_loc=0
+		do_facet mds$n $LCTL set_param fail_val=0
+	done
 	sleep 5
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(13) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 13 completed
 
-	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
-	[ -z "$FLAGS" ] || error "(14) Expect empty flags, but got '$FLAGS'"
+	scrub_check_flags 14 ""
 }
 #run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 
@@ -767,41 +789,49 @@ test_11() {
 	local CREATED=100
 	local tname=`date +%s`
 	rm -rf $MOUNT/$tname > /dev/null
-	mkdir $MOUNT/$tname || error "(1) Fail to mkdir $MOUNT/$tname"
+	mkdir -p $MOUNT/$tname || error "(0) Failed to create $MOUNT/$tname"
+	local n
+	for n in $(seq $MDSCOUNT); do
+		$LFS mkdir -i $((n - 1)) $MOUNT/$tname/mds$n ||
+			error "(1) Fail to mkdir $MOUNT/$tname/mds$n"
 
-	createmany -o $MOUNT/$tname/f $CREATED || error "(2) Fail to create!"
+		createmany -o $MOUNT/$tname/mds$n/f $CREATED ||
+			error "(2) Fail to create in $tname/mds$n"
+	done
 
 	cleanup_mount $MOUNT
 	do_facet $SINGLEMDS $LCTL clear
 	start_full_debug_logging
 	# reset OI scrub start point by force
-	$START_SCRUB -r || error "(3) Fail to start OI scrub!"
+	scrub_start 3 -r
 	sleep 3
-	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(4) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 4 completed
 
 	# OI scrub should skip the new created objects for the first accessing
-	local SKIPPED=$($SHOW_SCRUB | awk '/^noscrub/ { print $2 }')
 	# notice we're creating a new llog for every OST on every startup
 	# new features can make this even less stable, so we only check
 	# that the number of skipped files is less than 2x the number of files
 	local MAXIMUM=$((CREATED * 2))
 	local MINIMUM=$((CREATED + 1)) # files + directory
-	[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
-	error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects skipped, got $SKIPPED"
+	for n in $(seq $MDSCOUNT); do
+		local SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
+		[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
+			error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects" \
+				"skipped on mds$n, but got $SKIPPED"
+	done
 
 	# reset OI scrub start point by force
-	$START_SCRUB -r || error "(6) Fail to start OI scrub!"
+	scrub_start -r
 	sleep 3
-	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(7) Expect 'completed', but got '$STATUS'"
+	scrub_check_status 7 completed
 
 	# OI scrub should skip the new created object only once
-	SKIPPED=$($SHOW_SCRUB | awk '/^noscrub/ { print $2 }')
-	[ $SKIPPED -eq 0 ] ||
-		error "(8) Expect 0 objects skipped, but got $SKIPPED"
+	for n in $(seq $MDSCOUNT); do
+		SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
+		[ $SKIPPED -eq 0 ] ||
+			error "(8) Expect 0 objects skipped on mds$n, but" \
+				"got $SKIPPED"
+	done
 
 	stop_full_debug_logging
 	restore_mount $MOUNT || error "(9) Fail to start client!"

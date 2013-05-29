@@ -341,7 +341,7 @@ run_test 2c "LFSCK can find out and remove repeated linkEA entry"
 test_4()
 {
 	lfsck_prep 3 3
-	mds_backup_restore || error "(1) Fail to backup/restore!"
+	mds_backup_restore $SINGLEMDS || error "(1) Fail to backup/restore!"
 	echo "start $SINGLEMDS with disabling OI scrub"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(2) Fail to start MDS!"
@@ -392,7 +392,7 @@ run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
 test_5()
 {
 	lfsck_prep 1 1 1
-	mds_backup_restore 1 || error "(1) Fail to backup/restore!"
+	mds_backup_restore $SINGLEMDS 1 || error "(1) Fail to backup/restore!"
 	echo "start $SINGLEMDS with disabling OI scrub"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(2) Fail to start MDS!"

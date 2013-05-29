@@ -712,6 +712,13 @@ cleanup_gss() {
     fi
 }
 
+facet_svc() {
+	local facet=$1
+	local var=${facet}_svc
+
+	echo -n ${!var}
+}
+
 facet_type() {
 	local facet=$1
 
@@ -6274,30 +6281,33 @@ generate_string() {
 }
 
 reformat_external_journal() {
-	if [ ! -z ${EJOURNAL} ]; then
-		local rcmd="do_facet ${SINGLEMDS}"
+	local facet=$1
 
-		echo "reformat external journal on ${SINGLEMDS}:${EJOURNAL}"
+	if [ ! -z ${EJOURNAL} ]; then
+		local rcmd="do_facet $facet"
+
+		echo "reformat external journal on $facet:${EJOURNAL}"
 		${rcmd} mke2fs -O journal_dev ${EJOURNAL} || return 1
 	fi
 }
 
 # MDT file-level backup/restore
 mds_backup_restore() {
-	local devname=$(mdsdevname ${SINGLEMDS//mds/})
+	local facet=$1
+	local igif=$2
+	local devname=$(mdsdevname $(facet_number $facet))
 	local mntpt=$(facet_mntpt brpt)
-	local rcmd="do_facet ${SINGLEMDS}"
+	local rcmd="do_facet $facet"
 	local metaea=${TMP}/backup_restore.ea
 	local metadata=${TMP}/backup_restore.tgz
 	local opts=${MDS_MOUNT_OPTS}
-	local svc=${SINGLEMDS}_svc
-	local igif=$1
+	local svc=${facet}_svc
 
 	if ! ${rcmd} test -b ${devname}; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
 
-	echo "file-level backup/restore on ${SINGLEMDS}:${devname}"
+	echo "file-level backup/restore on $facet:${devname}"
 
 	# step 1: build mount point
 	${rcmd} mkdir -p $mntpt
@@ -6319,12 +6329,12 @@ mds_backup_restore() {
 	# step 6: umount
 	${rcmd} umount -d $mntpt || return 4
 	# step 7: reformat external journal if needed
-	reformat_external_journal || return 5
+	reformat_external_journal $facet || return 5
 	# step 8: reformat dev
 	echo "reformat new device"
-	add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS} ${devname}) --backfstype \
-		ldiskfs --reformat ${devname} $(mdsvdevname 1) > /dev/null ||
-		exit 6
+	add $facet $(mkfs_opts $facet ${devname}) --backfstype ldiskfs \
+		--reformat ${devname} $(mdsvdevname $(facet_number $facet)) \
+		> /dev/null || exit 6
 	# step 9: mount dev
 	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 7
 	# step 10: restore metadata
@@ -6346,17 +6356,18 @@ mds_backup_restore() {
 
 # remove OI files
 mds_remove_ois() {
-	local devname=$(mdsdevname ${SINGLEMDS//mds/})
+	local facet=$1
+	local idx=$2
+	local devname=$(mdsdevname $(facet_number $facet))
 	local mntpt=$(facet_mntpt brpt)
-	local rcmd="do_facet ${SINGLEMDS}"
-	local idx=$1
+	local rcmd="do_facet $facet"
 	local opts=${MDS_MOUNT_OPTS}
 
 	if ! ${rcmd} test -b ${devname}; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
 
-	echo "remove OI files: idx=${idx}"
+	echo "removing OI files on $facet: idx=${idx}"
 
 	# step 1: build mount point
 	${rcmd} mkdir -p $mntpt

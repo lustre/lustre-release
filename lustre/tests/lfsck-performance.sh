@@ -191,7 +191,7 @@ test_1() {
 		BCOUNT=${i}
 		local stime=$(date +%s)
 		echo "backup/restore ${i} files start at: $(date)"
-		mds_backup_restore || error "Fail to backup/restore!"
+		mds_backup_restore $SINGLEMDS || error "Fail to backup/restore!"
 		echo "backup/restore ${i} files end at: $(date)"
 		local etime=$(date +%s)
 		local delta=$((etime - stime))

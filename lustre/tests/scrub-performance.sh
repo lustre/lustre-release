@@ -143,7 +143,8 @@ test_0() {
 		if [ ${BACKUP} -ne 0 ]; then
 			stime=$(date +%s)
 			echo "backup/restore ${i} files start at: $(date)"
-			mds_backup_restore || error "Fail to backup/restore!"
+			mds_backup_restore $SINGLEMDS ||
+				error "Fail to backup/restore!"
 			echo "backup/restore ${i} files end at: $(date)"
 			etime=$(date +%s)
 			delta=$((etime - stime))
@@ -151,7 +152,8 @@ test_0() {
 			echo "backup/restore ${i} files used ${delta} seconds"
 			echo "backup/restore speed is $((i / delta))/sec"
 		else
-			mds_remove_ois || error "Fail to remove/recreate!"
+			mds_remove_ois $SINGLEMDS ||
+				error "Fail to remove/recreate!"
 		fi
 
 		echo "--- start to rebuild OI for $i files set at: $(date) ---"
