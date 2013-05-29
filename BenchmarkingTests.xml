@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="benchmarkingtests">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="benchmarkingtests">
   <title xml:id="benchmarkingtests.title">Benchmarking Lustre Performance (Lustre I/O Kit)</title>
   <para>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a Lustre cluster, and PIOS, a parallel I/O simulator for Linux and Solaris. It includes:</para>
   <itemizedlist>
@@ -124,6 +123,12 @@
 /proc/scsi/sg/allow_dio = 1
 /sys/module/ib_srp/parameters/srp_sg_tablesize = 255
 /sys/block/sdN/queue/scheduler</screen>
+      <note>
+        <para>Recommended schedulers are <emphasis role="bold">deadline</emphasis> and <emphasis
+            role="bold">noop</emphasis>. The  scheduler is set by default to <emphasis role="bold"
+            >deadline</emphasis>, unless it has already been set to <emphasis role="bold"
+            >noop</emphasis>.</para>
+      </note>
     </section>
     <section remap="h3">
       <title>Running sgpdd_survey</title>
