@@ -7,7 +7,12 @@
 #exec 3>&1; STDOUT=3
 STDOUT=2
 
-. ${0%/find_linux_rpms}/funcs.sh
+# Assume that lbuild's support files can be found in the same
+# canonicalized path as this very script.
+THIS_SCRIPT=$(readlink -f ${0})
+LBUILD_DIR=${LBUILD_DIR:-$(dirname ${THIS_SCRIPT})}
+
+. $LBUILD_DIR/funcs.sh
 
 TOPDIR=$PWD
 
@@ -16,7 +21,7 @@ KERNELRPMSDIR="$1"
 
 DISTRO=$(autodetect_distro)
 
-source ${0%/*}/lbuild-$DISTRO
+source $LBUILD_DIR/lbuild-$DISTRO
 
 TARGET_ARCH="$(uname -m)"
 TARGET_ARCHS="$(uname -m)"
