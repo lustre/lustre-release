@@ -849,8 +849,10 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 
 	/* ignore quota enforcement request when:
 	 *    - quota isn't enforced for this quota type
-	 * or - the user/group is root */
-	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0)
+	 * or - the user/group is root
+	 * or - quota accounting isn't enabled */
+	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0 ||
+	    qsd->qsd_acct_failed)
 		RETURN(0);
 
 	LASSERTF(trans->lqt_id_cnt <= QUOTA_MAX_TRANSIDS, "id_cnt=%d",
