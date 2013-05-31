@@ -1,5 +1,5 @@
-26-03-2013 Whamcloud, Inc.
-       * version 2.1.5
+06-06-2013 Whamcloud, Inc.
+       * version 2.1.6
        * Server support for kernels:
          2.6.18-348.6.1.el5  (RHEL5)
          2.6.32-358.6.2.el6  (RHEL6)
