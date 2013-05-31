@@ -1348,8 +1348,10 @@ static int lock_region(struct obd_export *exp, struct obdo *oa,
 		return -ENOMEM;
 
 	rc = ost_lock_get(exp, oa, begin, end - begin, &region->lh, LCK_PR, 0);
-	if (rc)
+	if (rc) {
+		OBD_FREE_PTR(region);
 		return rc;
+	}
 
 	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n",
 	       begin, end, &region->lh);
