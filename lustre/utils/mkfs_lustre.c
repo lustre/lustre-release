@@ -626,11 +626,13 @@ int main(int argc, char *const argv[])
 
 	/* Stand alone MGS doesn't need a index */
 	if (!IS_MDT(ldd) && IS_MGS(ldd)) {
+#ifndef TUNEFS /* mkfs.lustre */
 		/* But if --index was specified flag an error */
 		if (!(mop.mo_ldd.ldd_flags & LDD_F_NEED_INDEX)) {
-			badopt("--index", "MDT,OST");
+			badopt("index", "MDT,OST");
 			goto out;
 		}
+#endif
 		mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
 	}
 
