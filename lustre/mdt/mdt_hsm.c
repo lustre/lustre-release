@@ -52,7 +52,7 @@
 #define MDT_HSM_FREE(ptr, size) OBD_FREE_LARGE((ptr), (size))
 
 /*
- * fake functions, will be replace by real one with HSM Coordinator patch
+ * fake functions, will be replaced by real one with HSM Coordinator patch
  */
 
 int mdt_hsm_copytool_send(struct obd_export *exp)
@@ -90,7 +90,7 @@ static int mdt_hsm_coordinator_actions(struct mdt_thread_info *info,
 				       __u64 *compound_id,
 				       int mti_attr_is_valid)
 {
-	return 0;
+	return -ENODATA;
 }
 
 /**
@@ -553,7 +553,9 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 		rc = 0;
 
 	MDT_HSM_FREE(hal, hal_size);
-	EXIT;
+
+	GOTO(out_ucred, rc);
+
 out_ucred:
 	mdt_exit_ucred(info);
 	return rc;

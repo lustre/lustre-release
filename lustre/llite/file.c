@@ -927,7 +927,7 @@ out:
         cl_io_fini(env, io);
 	/* If any bit been read/written (result != 0), we just return
 	 * short read/write instead of restart io. */
-	if (result == 0 && io->ci_need_restart) {
+	if ((result == 0 || result == -ENODATA) && io->ci_need_restart) {
 		CDEBUG(D_VFSTRACE, "Restart %s on %s from %lld, count:%zd\n",
 		       iot == CIT_READ ? "read" : "write",
 		       file->f_dentry->d_name.name, *ppos, count);
@@ -2801,13 +2801,13 @@ out:
 }
 
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
-                           __u64 ibits)
+			   __u64 ibits)
 {
-        struct inode *inode = dentry->d_inode;
-        int rc;
-        ENTRY;
+	struct inode	*inode = dentry->d_inode;
+	int		 rc;
+	ENTRY;
 
-        rc = __ll_inode_revalidate_it(dentry, it, ibits);
+	rc = __ll_inode_revalidate_it(dentry, it, ibits);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -2817,9 +2817,17 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
 		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
 		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
 	} else {
-		rc = ll_glimpse_size(inode);
+		/* In case of restore, the MDT has the right size and has
+		 * already send it back without granting the layout lock,
+		 * inode is up-to-date so glimpse is useless.
+		 * Also to glimpse we need the layout, in case of a running
+		 * restore the MDT holds the layout lock so the glimpse will
+		 * block up to the end of restore (getattr will block)
+		 */
+		if (!(ll_i2info(inode)->lli_flags & LLIF_FILE_RESTORING))
+			rc = ll_glimpse_size(inode);
 	}
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
@@ -3305,6 +3313,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	unlock_res_and_lock(lock);
 	/* checking lvb_ready is racy but this is okay. The worst case is
 	 * that multi processes may configure the file on the same time. */
+
 	if (lvb_ready || !reconf) {
 		rc = -ENODATA;
 		if (lvb_ready) {
@@ -3484,3 +3493,32 @@ again:
 
 	RETURN(rc);
 }
+
+/**
+ *  This function send a restore request to the MDT
+ */
+int ll_layout_restore(struct inode *inode)
+{
+	struct hsm_user_request	*hur;
+	int			 len, rc;
+	ENTRY;
+
+	len = sizeof(struct hsm_user_request) +
+	      sizeof(struct hsm_user_item);
+	OBD_ALLOC(hur, len);
+	if (hur == NULL)
+		RETURN(-ENOMEM);
+
+	hur->hur_request.hr_action = HUA_RESTORE;
+	hur->hur_request.hr_archive_id = 0;
+	hur->hur_request.hr_flags = 0;
+	memcpy(&hur->hur_user_item[0].hui_fid, &ll_i2info(inode)->lli_fid,
+	       sizeof(hur->hur_user_item[0].hui_fid));
+	hur->hur_user_item[0].hui_extent.length = -1;
+	hur->hur_request.hr_itemcount = 1;
+	rc = obd_iocontrol(LL_IOC_HSM_REQUEST, cl_i2sbi(inode)->ll_md_exp,
+			   len, hur, NULL);
+	OBD_FREE(hur, len);
+	RETURN(rc);
+}
+

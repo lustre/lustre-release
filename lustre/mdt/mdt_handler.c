@@ -396,7 +396,12 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                 b->blocks = 0;
                 /* if no object is allocated on osts, the size on mds is valid. b=22272 */
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-        }
+	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm &&
+		   (ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
+		/* A released file stores its size on MDS. */
+		b->blocks = 0;
+		b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+	}
 
         if (fid) {
                 b->fid1 = *fid;
@@ -732,6 +737,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		       mdt_obd_name(info->mti_mdt),
 		       PFID(mdt_object_fid(o)), rc);
 		RETURN(rc);
+	}
+
+	/* if file is released, check if a restore is running */
+	if ((ma->ma_valid & MA_HSM) && (ma->ma_hsm.mh_flags & HS_RELEASED) &&
+	    mdt_hsm_restore_is_running(info, mdt_object_fid(o))) {
+		repbody->t_state = MS_RESTORE;
+		repbody->valid |= OBD_MD_TSTATE;
 	}
 
 	is_root = lu_fid_eq(mdt_object_fid(o), &info->mti_mdt->mdt_md_root_fid);

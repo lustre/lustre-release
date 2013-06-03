@@ -592,6 +592,7 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_MDS);
 	CHECK_DEFINE_64X(OBD_MD_REINT);
 	CHECK_DEFINE_64X(OBD_MD_MEA);
+	CHECK_DEFINE_64X(OBD_MD_TSTATE);
 	CHECK_DEFINE_64X(OBD_MD_FLXATTR);
 	CHECK_DEFINE_64X(OBD_MD_FLXATTRLS);
 	CHECK_DEFINE_64X(OBD_MD_FLXATTRRM);
@@ -870,7 +871,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, atime);
 	CHECK_MEMBER(mdt_body, ctime);
 	CHECK_MEMBER(mdt_body, blocks);
-	CHECK_MEMBER(mdt_body, unused1);
+	CHECK_MEMBER(mdt_body, t_state);
 	CHECK_MEMBER(mdt_body, fsuid);
 	CHECK_MEMBER(mdt_body, fsgid);
 	CHECK_MEMBER(mdt_body, capability);

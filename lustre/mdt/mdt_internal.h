@@ -908,6 +908,15 @@ int mdt_hsm_progress(struct mdt_thread_info *info);
 int mdt_hsm_ct_register(struct mdt_thread_info *info);
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
 int mdt_hsm_request(struct mdt_thread_info *info);
+/* HSM restore cannot be active yet, until the coordinator
+ * patch is landed, so this function always returns false for now, but
+ * allows the other parts of the code to start checking for this.
+ */
+static inline bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
+					      const struct lu_fid *fid)
+{
+	return false;
+}
 
 /* mdt/mdt_hsm_cdt_actions.c */
 extern const struct file_operations mdt_agent_actions_fops;
