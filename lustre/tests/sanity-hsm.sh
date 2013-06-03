@@ -58,32 +58,41 @@ test_1() {
 	$RUNAS touch $TESTFILE
 
 	# User flags
-	$RUNAS $LFS hsm_state $TESTFILE | grep -q "(0x00000000)" ||
-	   error "wrong initial hsm state"
+	local state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong initial hsm state $state"
+
 	$RUNAS $LFS hsm_set --norelease $TESTFILE ||
-	   error "user could not change hsm flags"
-	$RUNAS $LFS hsm_state $TESTFILE | grep -q "(0x00000010)" ||
-	   error "wrong hsm state, should be: --norelease"
+		error "user could not change hsm flags"
+	state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000010)" ]] ||
+		error "wrong hsm state $state, should be: --norelease"
+
 	$RUNAS $LFS hsm_clear --norelease $TESTFILE ||
-	   error "user could not clear hsm flags"
-	$RUNAS $LFS hsm_state $TESTFILE | grep -q "(0x00000000)" ||
-	   error "wrong hsm state, should be empty"
+		error "user could not clear hsm flags"
+	state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong hsm state $state, should be empty"
 
 	# User could not change those flags...
 	$RUNAS $LFS hsm_set --exists $TESTFILE &&
-	   error "user should not set this flag"
-	$RUNAS $LFS hsm_state $TESTFILE | grep -q "(0x00000000)" ||
-	   error "wrong hsm state, should be empty"
+		error "user should not set this flag"
+	state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong hsm state $state, should be empty"
 
 	# ...but root can
 	$LFS hsm_set --exists $TESTFILE ||
-	   error "root could not change hsm flags"
-	$LFS hsm_state $TESTFILE | grep -q "(0x00000001)" ||
-	    error "wrong hsm state, should be: --exists"
+		error "root could not change hsm flags"
+	state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
+
 	$LFS hsm_clear --exists $TESTFILE ||
-	    error "root could not clear hsm state"
-	$LFS hsm_state $TESTFILE | grep -q "(0x00000000)" ||
-	    error "wrong hsm state, should be empty"
+		error "root could not clear hsm state"
+	state=$($RUNAS $LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong hsm state $state, should be empty"
 }
 run_test 1 "lfs hsm flags root/non-root access"
 
@@ -93,31 +102,38 @@ test_2() {
 	touch $TESTFILE
 
 	# New files are not dirty
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000000)" ||
-		error "wrong hsm state: !0x0"
+	local state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong hsm state $state, should be empty"
 
 	# For test, we simulate an archived file.
 	$LFS hsm_set --exists $TESTFILE || error "user could not change hsm flags"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# chmod do not put the file dirty
 	chmod 600 $TESTFILE || error "could not chmod test file"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# chown do not put the file dirty
 	chown $RUNAS_ID $TESTFILE || error "could not chown test file"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# truncate put the file dirty
-	./truncate $TESTFILE 1 || error "could not truncate test file"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000003)" ||
-		error "wrong hsm state: !0x3"
+	$TRUNCATE $TESTFILE 1 || error "could not truncate test file"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000003)" ]] ||
+		error "wrong hsm state $state, should be 0x00000003"
+
 	$LFS hsm_clear --dirty $TESTFILE || error "could not clear hsm flags"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 }
 run_test 2 "Check file dirtyness when doing setattr"
 
@@ -127,24 +143,28 @@ test_3() {
 
 	# New files are not dirty
 	cp -p /etc/passwd $TESTFILE
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000000)" ||
-		error "wrong hsm state: !0x0"
+	local state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000000)" ]] ||
+		error "wrong hsm state $state, should be empty"
 
 	# For test, we simulate an archived file.
 	$LFS hsm_set --exists $TESTFILE ||
 		error "user could not change hsm flags"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# Reading a file, does not set dirty
 	cat $TESTFILE > /dev/null || error "could not read file"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# Open for write without modifying data, does not set dirty
 	openfile -f O_WRONLY $TESTFILE || error "could not open test file"
-	$LFS hsm_state $TESTFILE | grep -q " (0x00000001)" ||
-		error "wrong hsm state: !0x1"
+	state=$($LFS hsm_state $TESTFILE | cut -f 2 -d" ")
+	[[ $state == "(0x00000001)" ]] ||
+		error "wrong hsm state $state, should be: --exists"
 
 	# Append to a file sets it dirty
 	cp -p /etc/passwd $TESTFILE.append || error "could not create file"
@@ -153,8 +173,9 @@ test_3() {
 	dd if=/etc/passwd of=$TESTFILE.append bs=1 count=3 \
 	   conv=notrunc oflag=append status=noxfer ||
 		error "could not append to test file"
-	$LFS hsm_state $TESTFILE.append | grep -q " (0x00000003)" ||
-		error "wrong hsm state: !0x3"
+	state=$($LFS hsm_state $TESTFILE.append | cut -f 2 -d" ")
+	[[ $state == "(0x00000003)" ]] ||
+		error "wrong hsm state $state, should be 0x00000003"
 
 	# Modify a file sets it dirty
 	cp -p /etc/passwd $TESTFILE.modify || error "could not create file"
@@ -163,24 +184,27 @@ test_3() {
 	dd if=/dev/zero of=$TESTFILE.modify bs=1 count=3 \
 	   conv=notrunc status=noxfer ||
 		error "could not modify test file"
-	$LFS hsm_state $TESTFILE.modify | grep -q " (0x00000003)" ||
-		error "wrong hsm state: !0x3"
+	state=$($LFS hsm_state $TESTFILE.modify | cut -f 2 -d" ")
+	[[ $state == "(0x00000003)" ]] ||
+		error "wrong hsm state $state, should be 0x00000003"
 
 	# Open O_TRUNC sets dirty
 	cp -p /etc/passwd $TESTFILE.trunc || error "could not create file"
 	$LFS hsm_set --exists $TESTFILE.trunc ||
 		error "user could not change hsm flags"
 	cp /etc/group $TESTFILE.trunc || error "could not override a file"
-	$LFS hsm_state $TESTFILE.trunc | grep -q " (0x00000003)" ||
-		error "wrong hsm state: !0x3"
+	state=$($LFS hsm_state $TESTFILE.trunc | cut -f 2 -d" ")
+	[[ $state == "(0x00000003)" ]] ||
+		error "wrong hsm state $state, should be 0x00000003"
 
 	# Mmapped a file sets dirty
 	cp -p /etc/passwd $TESTFILE.mmap || error "could not create file"
 	$LFS hsm_set --exists $TESTFILE.mmap ||
 		error "user could not change hsm flags"
 	multiop $TESTFILE.mmap OSMWUc || error "could not mmap a file"
-	$LFS hsm_state $TESTFILE.mmap | grep -q " (0x00000003)" ||
-		error "wrong hsm state: !0x3"
+	state=$($LFS hsm_state $TESTFILE.mmap | cut -f 2 -d" ")
+	[[ $state == "(0x00000003)" ]] ||
+		error "wrong hsm state $state, should be 0x00000003"
 }
 run_test 3 "Check file dirtyness when opening for write"
 

@@ -1127,16 +1127,15 @@ static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 /* Return size of an hsm_action_list */
 static inline int hal_size(struct hsm_action_list *hal)
 {
-        int i, sz;
-        struct hsm_action_item *hai;
+	int i, sz;
+	struct hsm_action_item *hai;
 
-        sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
-        hai = hai_zero(hal);
-        for (i = 0 ; i < hal->hal_count ; i++) {
-                sz += cfs_size_round(hai->hai_len);
-                hai = hai_next(hai);
-        }
-        return(sz);
+	sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
+	hai = hai_zero(hal);
+	for (i = 0 ; i < hal->hal_count ; i++, hai = hai_next(hai))
+		sz += cfs_size_round(hai->hai_len);
+
+	return sz;
 }
 
 /* Copytool progress reporting */

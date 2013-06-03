@@ -930,16 +930,6 @@ int mdt_hsm_progress(struct mdt_thread_info *info);
 int mdt_hsm_ct_register(struct mdt_thread_info *info);
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
 int mdt_hsm_request(struct mdt_thread_info *info);
-/* HSM restore cannot be active yet, until the coordinator
- * patch is landed, so this function always returns false for now, but
- * allows the other parts of the code to start checking for this.
- */
-static inline bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
-					      const struct lu_fid *fid)
-{
-	return false;
-}
-
 /* mdt/mdt_hsm_cdt_actions.c */
 extern const struct file_operations mdt_agent_actions_fops;
 void dump_llog_agent_req_rec(char *prefix, struct llog_agent_req_rec *larr);
@@ -954,6 +944,16 @@ int mdt_agent_record_update(const struct lu_env *env,
 int mdt_agent_llog_update_rec(const struct lu_env *env, struct mdt_device *mdt,
 			      struct llog_handle *llh,
 			      struct llog_agent_req_rec *larr);
+
+/* mdt/mdt_hsm_cdt_client.c */
+int mdt_hsm_add_actions(struct mdt_thread_info *info,
+			struct hsm_action_list *hal, __u64 *compound_id);
+int mdt_hsm_get_actions(struct mdt_thread_info *mti,
+			struct hsm_action_list *hal);
+int mdt_hsm_get_running(struct mdt_thread_info *mti,
+			struct hsm_action_list *hal);
+bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
+				const struct lu_fid *fid);
 
 /* mdt/mdt_hsm_cdt_requests.c */
 extern const struct file_operations mdt_hsm_request_fops;
@@ -981,6 +981,52 @@ static inline int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
 {
 	return 0;
 }
+static inline struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
+						    struct lu_fid *fid,
+						    struct md_hsm *hsm,
+						    struct mdt_lock_handle *lh)
+{
+	return ERR_PTR(-EINVAL);
+}
+static inline bool mdt_hsm_is_action_compat(struct hsm_action_item *hai,
+					    int hal_an, __u64 rq_flags,
+					    struct md_hsm *hsm)
+{
+	return false;
+}
+static inline int mdt_hsm_cdt_init(struct mdt_device *mdt)
+{
+	struct coordinator      *cdt = &mdt->mdt_coordinator;
+
+	/* minimal init before final patch landing */
+	sema_init(&cdt->cdt_llog_lock, 1);
+	init_rwsem(&cdt->cdt_agent_lock);
+	init_rwsem(&cdt->cdt_request_lock);
+
+	CFS_INIT_LIST_HEAD(&cdt->cdt_requests);
+	CFS_INIT_LIST_HEAD(&cdt->cdt_agents);
+	CFS_INIT_LIST_HEAD(&cdt->cdt_restore_hdl);
+
+	cdt->cdt_state = CDT_STOPPED;
+	return 0;
+}
+static inline int mdt_hsm_cdt_start(struct mdt_device *mdt)
+{
+	return 0;
+}
+static inline int mdt_hsm_cdt_stop(struct mdt_device *mdt)
+{
+	return 0;
+}
+static inline int mdt_hsm_cdt_fini(struct mdt_device *mdt)
+{
+	return 0;
+}
+static inline int mdt_hsm_cdt_wakeup(struct mdt_device *mdt)
+{
+	return 0;
+}
+/* end of fake functions */
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
