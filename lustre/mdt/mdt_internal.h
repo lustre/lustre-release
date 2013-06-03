@@ -584,6 +584,51 @@ struct mdt_opc_slice {
 	struct mdt_handler	*mos_hs;
 };
 
+struct cdt_req_progress {
+	struct mutex		 crp_lock;	/**< protect tree */
+	struct interval_node	*crp_root;	/**< tree to track extent
+						 *   moved */
+	struct interval_node	**crp_node;	/**< buffer for tree nodes
+						 *   vector of fixed size
+						 *   vectors */
+	int			 crp_cnt;	/**< # of used nodes */
+	int			 crp_max;	/**< # of allocated nodes */
+};
+
+struct cdt_agent_req {
+	cfs_list_t		 car_request_list; /**< to chain all the req. */
+	cfs_atomic_t		 car_refcount;     /**< reference counter */
+	__u64			 car_compound_id;  /**< compound id */
+	__u64			 car_flags;        /**< request original flags */
+	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
+	__u32			 car_archive_id;   /**< archive id */
+	int			 car_canceled;     /**< request was canceled */
+	cfs_time_t		 car_req_start;    /**< start time */
+	cfs_time_t		 car_req_update;   /**< last update time */
+	struct hsm_action_item	*car_hai;          /**< req. to the agent */
+	struct cdt_req_progress	 car_progress;     /**< track data mvt
+						    *   progress */
+};
+
+struct hsm_agent {
+	cfs_list_t	 ha_list;		/**< to chain the agents */
+	struct obd_uuid	 ha_uuid;		/**< agent uuid */
+	__u32		*ha_archive_id;		/**< archive id */
+	int		 ha_archive_cnt;	/**< number of archive entries
+						 *   0 means any archive */
+	cfs_atomic_t	 ha_requests;		/**< current request count */
+	cfs_atomic_t	 ha_success;		/**< number of successful
+						 * actions */
+	cfs_atomic_t	 ha_failure;		/**< number of failed actions */
+};
+
+struct cdt_restore_handle {
+	cfs_list_t		 crh_list;	/**< to chain the handle */
+	struct lu_fid		 crh_fid;	/**< fid of the object */
+	struct ldlm_extent	 crh_extent;	/**< extent of the restore */
+	struct mdt_lock_handle	 crh_lh;	/**< lock handle */
+};
+
 static inline const struct md_device_operations *
 mdt_child_ops(struct mdt_device * m)
 {
@@ -933,6 +978,33 @@ int mdt_agent_record_update(const struct lu_env *env,
 int mdt_agent_llog_update_rec(const struct lu_env *env, struct mdt_device *mdt,
 			      struct llog_handle *llh,
 			      struct llog_agent_req_rec *larr);
+
+/* mdt/mdt_hsm_cdt_requests.c */
+extern const struct file_operations mdt_hsm_request_fops;
+void dump_requests(char *prefix, struct coordinator *cdt);
+struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
+					    __u64 flags, struct obd_uuid *uuid,
+					    struct hsm_action_item *hai);
+void mdt_cdt_free_request(struct cdt_agent_req *car);
+int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car);
+struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt,
+					   __u64 cookie,
+					   const struct lu_fid *fid);
+void mdt_cdt_get_work_done(struct cdt_agent_req *car, __u64 *done_sz);
+void mdt_cdt_get_request(struct cdt_agent_req *car);
+void mdt_cdt_put_request(struct cdt_agent_req *car);
+struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
+					     struct hsm_progress_kernel *pgs);
+int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie);
+
+/* fake functions, will be remove with patch LU-3342 */
+static inline int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
+						  int succ_rq, int fail_rq,
+						  int new_rq,
+						  const struct obd_uuid *uuid)
+{
+	return 0;
+}
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
