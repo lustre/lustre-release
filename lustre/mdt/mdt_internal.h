@@ -945,6 +945,25 @@ int mdt_agent_llog_update_rec(const struct lu_env *env, struct mdt_device *mdt,
 			      struct llog_handle *llh,
 			      struct llog_agent_req_rec *larr);
 
+/* mdt/mdt_hsm_cdt_agent.c */
+extern const struct file_operations mdt_hsm_agent_fops;
+int mdt_hsm_agent_register(struct mdt_thread_info *info,
+			   const struct obd_uuid *uuid,
+			   int nr_archives, __u32 *archive_num);
+int mdt_hsm_agent_register_mask(struct mdt_thread_info *info,
+				const struct obd_uuid *uuid,
+				__u32 archive_mask);
+int mdt_hsm_agent_unregister(struct mdt_thread_info *info,
+			     const struct obd_uuid *uuid);
+int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
+				    int succ_rq, int fail_rq, int new_rq,
+				    const struct obd_uuid *uuid);
+int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
+			    struct obd_uuid *uuid);
+int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_action_list *hal,
+		       bool purge);
+int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
+			       struct hsm_progress_kernel *pgs);
 /* mdt/mdt_hsm_cdt_client.c */
 int mdt_hsm_add_actions(struct mdt_thread_info *info,
 			struct hsm_action_list *hal, __u64 *compound_id);
@@ -973,14 +992,7 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 					     struct hsm_progress_kernel *pgs);
 int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie);
 
-/* fake functions, will be remove with patch LU-3342 */
-static inline int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
-						  int succ_rq, int fail_rq,
-						  int new_rq,
-						  const struct obd_uuid *uuid)
-{
-	return 0;
-}
+/* fake functions, will be remove with patch LU-3343 */
 static inline struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 						    struct lu_fid *fid,
 						    struct md_hsm *hsm,
@@ -1023,6 +1035,18 @@ static inline int mdt_hsm_cdt_fini(struct mdt_device *mdt)
 	return 0;
 }
 static inline int mdt_hsm_cdt_wakeup(struct mdt_device *mdt)
+{
+	return 0;
+}
+static inline int mdt_hsm_add_hal(struct mdt_thread_info *mti,
+				  struct hsm_action_list *hal,
+				  const struct obd_uuid *uuid)
+{
+	return 0;
+}
+static inline int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
+					       struct hsm_progress_kernel *pgs,
+					       bool update_record)
 {
 	return 0;
 }
@@ -1152,7 +1176,6 @@ static inline struct lu_name *mdt_name_copy(struct lu_name *tlname,
 
 void mdt_enable_cos(struct mdt_device *, int);
 int mdt_cos_is_enabled(struct mdt_device *);
-int mdt_hsm_copytool_send(struct obd_export *exp);
 
 /* lprocfs stuff */
 enum {

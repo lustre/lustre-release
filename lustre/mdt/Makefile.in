@@ -5,5 +5,6 @@ mdt-objs += mdt_lvb.o mdt_hsm.o mdt_mds.o out_handler.o
 mdt-objs += mdt_hsm_cdt_actions.o
 mdt-objs += mdt_hsm_cdt_requests.o
 mdt-objs += mdt_hsm_cdt_client.o
+mdt-objs += mdt_hsm_cdt_agent.o
 
 @INCLUDE_RULES@

@@ -894,54 +894,6 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         return count;
 }
 
-/* Temporary; for testing purposes only */
-static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
-			      unsigned long count, void *data)
-{
-	struct obd_device *obd = data;
-	struct obd_export *exp = NULL;
-	struct obd_uuid   *uuid;
-	char		  *kbuf;
-	char		  *tmpbuf;
-
-	OBD_ALLOC(kbuf, UUID_MAX);
-	if (kbuf == NULL)
-		return -ENOMEM;
-
-	/*
-	 * OBD_ALLOC() will zero kbuf, but we only copy UUID_MAX - 1
-	 * bytes into kbuf, to ensure that the string is NUL-terminated.
-	 * UUID_MAX should include a trailing NUL already.
-	 */
-	if (copy_from_user(kbuf, buffer,
-			   min_t(unsigned long, UUID_MAX - 1, count))) {
-		count = -EFAULT;
-		goto out;
-	}
-	tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, UUID_MAX - 1, count));
-
-	OBD_ALLOC(uuid, UUID_MAX);
-	if (uuid == NULL) {
-		count = -ENOMEM;
-		goto out;
-	}
-
-	obd_str2uuid(uuid, tmpbuf);
-	exp = cfs_hash_lookup(obd->obd_uuid_hash, uuid);
-	if (exp == NULL) {
-		CERROR("%s: no export %s found\n",
-		       obd->obd_name, obd_uuid2str(uuid));
-	} else {
-		mdt_hsm_copytool_send(exp);
-		class_export_put(exp);
-	}
-
-	OBD_FREE(uuid, UUID_MAX);
-out:
-	OBD_FREE(kbuf, UUID_MAX);
-	return count;
-}
-
 static int lprocfs_rd_enable_remote_dir(char *page, char **start, off_t off,
 					int count, int *eof, void *data)
 {
@@ -1028,7 +980,6 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
                                         lprocfs_wr_nosquash_nids,           0 },
         { "som",                        lprocfs_rd_mdt_som,
                                         lprocfs_wr_mdt_som, 0 },
-        { "mdccomm",                    0, lprocfs_mdt_wr_mdc,              0 },
         { "instance",                   lprocfs_target_rd_instance,         0 },
         { "ir_factor",                  lprocfs_obd_rd_ir_factor,
                                         lprocfs_obd_wr_ir_factor,           0 },

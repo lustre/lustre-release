@@ -439,10 +439,10 @@ struct obd_uuid {
         char uuid[UUID_MAX];
 };
 
-static inline int obd_uuid_equals(const struct obd_uuid *u1,
-                                  const struct obd_uuid *u2)
+static inline bool obd_uuid_equals(const struct obd_uuid *u1,
+				   const struct obd_uuid *u2)
 {
-        return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
+	return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
 }
 
 static inline int obd_uuid_empty(struct obd_uuid *uuid)
@@ -457,7 +457,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(struct obd_uuid *uuid)
+static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 {
         if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
                 /* Obviously not safe, but for printfs, no real harm done...
