@@ -455,28 +455,72 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         return;
 }
 
+static void print_logid(struct llog_logid_rec *lid)
+{
+	printf("ogen=%X name="DOSTID"\n",
+		lid->lid_id.lgl_ogen,
+		POSTID(&lid->lid_id.lgl_oi));
+}
+
+static void print_hsm_action(struct llog_agent_req_rec *larr)
+{
+	char	buf[12];
+	int	sz;
+
+	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
+	printf("lrh=[type=%X len=%d idx=%d] fid="DFID
+	       " compound/cookie="LPX64"/"LPX64
+	       " status=%s action=%s archive#=%d flags="LPX64
+	       " create="LPU64" change="LPU64
+	       " extent="LPX64"-"LPX64" gid="LPX64" datalen=%d"
+	       " data=[%s]\n",
+	       larr->arr_hdr.lrh_type,
+	       larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
+	       PFID(&larr->arr_hai.hai_fid),
+	       larr->arr_compound_id, larr->arr_hai.hai_cookie,
+	       agent_req_status2name(larr->arr_status),
+	       hsm_copytool_action2name(larr->arr_hai.hai_action),
+	       larr->arr_archive_id,
+	       larr->arr_flags,
+	       larr->arr_req_create, larr->arr_req_change,
+	       larr->arr_hai.hai_extent.offset,
+	       larr->arr_hai.hai_extent.length,
+	       larr->arr_hai.hai_gid, sz,
+	       hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
+}
+
 void print_records(struct llog_rec_hdr **recs, int rec_number)
 {
-        __u32 lopt;
-        int i, skip = 0;
+	__u32 lopt;
+	int i, skip = 0;
 
-        for(i = 0; i < rec_number; i++) {
-                printf("#%.2d (%.3d)", le32_to_cpu(recs[i]->lrh_index),
-                       le32_to_cpu(recs[i]->lrh_len));
+	for (i = 0; i < rec_number; i++) {
+		printf("#%.2d (%.3d)", le32_to_cpu(recs[i]->lrh_index),
+		       le32_to_cpu(recs[i]->lrh_len));
 
-                lopt = le32_to_cpu(recs[i]->lrh_type);
+		lopt = le32_to_cpu(recs[i]->lrh_type);
 
-                if (recs[i]->lrh_id == CANCELLED)
-                        printf("NOT SET ");
+		if (recs[i]->lrh_id == CANCELLED)
+			printf("NOT SET ");
 
-                if (lopt == OBD_CFG_REC) {
-                        struct lustre_cfg *lcfg;
-                        lcfg = (struct lustre_cfg *)((char*)(recs[i]) +
-                                                     sizeof(struct llog_rec_hdr));
-                        print_lustre_cfg(lcfg, &skip);
-                } else if (lopt == LLOG_PAD_MAGIC) {
-                        printf("padding\n");
-                } else
-                        printf("unknown type %x\n", lopt);
-        }
+		switch (lopt) {
+		case OBD_CFG_REC:
+			print_lustre_cfg(
+				(struct lustre_cfg *)((char *)(recs[i]) +
+				sizeof(struct llog_rec_hdr)), &skip);
+			break;
+		case LLOG_PAD_MAGIC:
+			printf("padding\n");
+			break;
+		case LLOG_LOGID_MAGIC:
+			print_logid((struct llog_logid_rec *)recs[i]);
+			break;
+		case HSM_AGENT_REC:
+			print_hsm_action((struct llog_agent_req_rec *)recs[i]);
+			break;
+		default:
+			printf("unknown type %x\n", lopt);
+			break;
+		}
+	}
 }

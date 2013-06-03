@@ -709,10 +709,84 @@ out:
 	return rc;
 }
 
+
+static struct llog_operations hsm_actions_logops;
+
+/**
+ * set llog methods and create LLOG_AGENT_ORIG_CTXT llog
+ * object in obd_device
+ */
+static int mdd_hsm_actions_llog_init(const struct lu_env *env,
+				     struct mdd_device *m)
+{
+	struct obd_device	*obd = mdd2obd_dev(m);
+	struct llog_ctxt	*ctxt = NULL;
+	int			 rc;
+	ENTRY;
+
+	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+	obd->obd_lvfs_ctxt.dt = m->mdd_bottom;
+
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_AGENT_ORIG_CTXT,
+			obd, &hsm_actions_logops);
+	if (rc) {
+		CERROR("%s: hsm actions llog setup failed: rc = %d\n",
+			obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	ctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	rc = llog_open_create(env, ctxt, &ctxt->loc_handle, NULL,
+			      HSM_ACTIONS);
+	if (rc) {
+		CERROR("%s: hsm actions llog open_create failed: rc = %d\n",
+			obd->obd_name, rc);
+		GOTO(out_cleanup, rc);
+	}
+
+	rc = llog_cat_init_and_process(env, ctxt->loc_handle);
+	if (rc)
+		GOTO(out_close, rc);
+
+	llog_ctxt_put(ctxt);
+	RETURN(0);
+
+out_close:
+	llog_cat_close(env, ctxt->loc_handle);
+	ctxt->loc_handle = NULL;
+out_cleanup:
+	llog_cleanup(env, ctxt);
+
+	return rc;
+}
+
+/**
+ * cleanup the context created by llog_setup_named()
+ */
+static int mdd_hsm_actions_llog_fini(const struct lu_env *env,
+				     struct mdd_device *m)
+{
+	struct obd_device	*obd = mdd2obd_dev(m);
+	struct llog_ctxt	*lctxt;
+	ENTRY;
+
+	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
+	if (lctxt) {
+		llog_cat_close(env, lctxt->loc_handle);
+		lctxt->loc_handle = NULL;
+		llog_cleanup(env, lctxt);
+	}
+
+	RETURN(0);
+}
+
 static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 				struct lustre_cfg *cfg)
 {
 	lfsck_degister(env, m->mdd_bottom);
+	mdd_hsm_actions_llog_fini(env, m);
 	mdd_changelog_fini(env, m);
 	orph_index_fini(env, m);
 	if (m->mdd_dot_lustre_objs.mdd_obf)
@@ -882,13 +956,19 @@ static int mdd_prepare(const struct lu_env *env,
 		GOTO(out_orph, rc);
 	}
 
+	rc = mdd_hsm_actions_llog_init(env, mdd);
+	if (rc != 0)
+		GOTO(out_changelog, rc);
+
 	rc = lfsck_register(env, mdd->mdd_bottom, mdd->mdd_child, true);
 	if (rc != 0) {
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);
-		GOTO(out_changelog, rc);
+		GOTO(out_hsm, rc);
 	}
 	RETURN(0);
+out_hsm:
+	mdd_hsm_actions_llog_fini(env, mdd);
 out_changelog:
 	mdd_changelog_fini(env, mdd);
 out_orph:
@@ -903,6 +983,7 @@ out_dot:
 out_los:
 	local_oid_storage_fini(env, mdd->mdd_los);
 	mdd->mdd_los = NULL;
+
 	return rc;
 }
 
@@ -1415,6 +1496,10 @@ static int __init mdd_mod_init(void)
 	changelog_orig_logops.lop_cancel = llog_changelog_cancel;
 	changelog_orig_logops.lop_add = llog_cat_add_rec;
 	changelog_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
+
+	hsm_actions_logops = llog_osd_ops;
+	hsm_actions_logops.lop_add = llog_cat_add_rec;
+	hsm_actions_logops.lop_declare_add = llog_cat_declare_add_rec;
 
 	rc = class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
 				 LUSTRE_MDD_NAME, &mdd_device_type);

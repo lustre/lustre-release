@@ -75,6 +75,7 @@ static inline int req_xid_is_last(struct ptlrpc_request *req)
 }
 
 struct mdt_object;
+
 /* file data for open files on MDS */
 struct mdt_file_data {
         struct portals_handle mfd_handle; /* must be first */
@@ -83,6 +84,60 @@ struct mdt_file_data {
         __u64                 mfd_xid;    /* xid of the open request */
         struct lustre_handle  mfd_old_handle; /* old handle in replay case */
         struct mdt_object    *mfd_object; /* point to opened object */
+};
+
+#define CDT_NONBLOCKING_RESTORE		0x0000000000000001ULL
+#define CDT_NORETRY_ACTION		0x0000000000000002ULL
+#define CDT_POLICY_MASK			CDT_NONBLOCKING_RESTORE | \
+					CDT_NORETRY_ACTION
+
+/* when adding a new policy, do not forget to update
+ * lustre/mdt/mdt_coordinator.c::hsm_policy_names[]
+ */
+#define CDT_DEFAULT_POLICY		0x0000000000000000ULL
+
+enum cdt_states { CDT_STOPPED = 0,
+		  CDT_INIT,
+		  CDT_RUNNING,
+		  CDT_DISABLE,
+		  CDT_STOPPING };
+
+/* when multiple lock are needed, the lock order is
+ * cdt_llog_lock
+ * cdt_agent_lock
+ * cdt_counter_lock
+ * cdt_restore_lock
+ * cdt_request_lock
+ */
+struct coordinator {
+	struct ptlrpc_thread	*cdt_thread;	    /**< coordinator thread */
+	struct lu_env		 cdt_env;	    /**< coordinator lustre
+						     * env */
+	struct proc_dir_entry	*cdt_proc_dir;      /**< cdt /proc directory */
+	__u64			 cdt_policy;	    /**< flags to defined
+						     * policy */
+	enum cdt_states		 cdt_state;	    /**< state */
+	cfs_atomic_t		 cdt_compound_id;   /**< compound id counter */
+	__u64			 cdt_last_cookie;   /**< last cookie allocated */
+	struct semaphore	 cdt_counter_lock;  /**< protect request
+						     * counter */
+	struct semaphore	 cdt_llog_lock;     /**< protect llog access */
+	struct rw_semaphore	 cdt_agent_lock;    /**< protect agent list */
+	struct rw_semaphore	 cdt_request_lock;  /**< protect request list */
+	struct semaphore	 cdt_restore_lock;  /**< protect restore list */
+	cfs_time_t		 cdt_loop_period;   /**< llog scan period */
+	cfs_time_t		 cdt_delay;	    /**< request grace delay */
+	cfs_time_t		 cdt_timeout;	    /**< request timeout */
+	__u64			 cdt_max_request;   /**< max count of started
+						     * requests */
+	__u64			 cdt_request_count; /**< current count of
+						     * started requests */
+	cfs_list_t		 cdt_requests;      /**< list of started
+						     * requests */
+	cfs_list_t		 cdt_agents;	    /**< list of register
+						     * agents */
+	cfs_list_t		 cdt_restore_hdl;   /**< list of restore lock
+						     * handles */
 };
 
 /* mdt state flag bits */
@@ -113,7 +168,8 @@ struct mdt_device {
 				   mo_compat_resname:1,
 				   mo_mds_capa:1,
 				   mo_oss_capa:1,
-				   mo_cos:1;
+				   mo_cos:1,
+				   mo_coordinator:1;
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
@@ -171,6 +227,8 @@ struct mdt_device {
 	struct obd_export	  *mdt_qmt_exp;
 	/* quota master device associated with this MDT */
 	struct lu_device	  *mdt_qmt_dev;
+
+	struct coordinator	   mdt_coordinator;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
@@ -850,6 +908,21 @@ int mdt_hsm_progress(struct mdt_thread_info *info);
 int mdt_hsm_ct_register(struct mdt_thread_info *info);
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
 int mdt_hsm_request(struct mdt_thread_info *info);
+
+/* mdt/mdt_hsm_cdt_actions.c */
+extern const struct file_operations mdt_agent_actions_fops;
+void dump_llog_agent_req_rec(char *prefix, struct llog_agent_req_rec *larr);
+int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
+		     llog_cb_t cb, void *data);
+int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
+			 __u64 compound_id, __u32 archive_id,
+			 __u64 flags, struct hsm_action_item *hai);
+int mdt_agent_record_update(const struct lu_env *env,
+			    struct mdt_device *mdt, __u64 *cookies,
+			    int cookies_count, enum agent_req_status status);
+int mdt_agent_llog_update_rec(const struct lu_env *env, struct mdt_device *mdt,
+			      struct llog_handle *llh,
+			      struct llog_agent_req_rec *larr);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/

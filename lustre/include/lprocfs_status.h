@@ -55,15 +55,15 @@
 #include <libcfs/params_tree.h>
 
 struct lprocfs_vars {
-        const char             *name;
-        cfs_read_proc_t        *read_fptr;
-        cfs_write_proc_t       *write_fptr;
-        void                   *data;
-        struct file_operations *fops;
-        /**
-         * /proc file mode.
-         */
-        mode_t                  proc_mode;
+	const char			*name;
+	cfs_read_proc_t			*read_fptr;
+	cfs_write_proc_t		*write_fptr;
+	void				*data;
+	const struct file_operations	*fops;
+	/**
+	 * /proc file mode.
+	*/
+	mode_t				 proc_mode;
 };
 
 struct lprocfs_static_vars {
@@ -863,9 +863,6 @@ extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
 extern int lprocfs_quota_wr_qs_factor(struct file *file,
                                       const char *buffer,
                                       unsigned long count, void *data);
-
-
-
 #else
 /* LPROCFS is not defined */
 

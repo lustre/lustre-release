@@ -4599,8 +4599,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         ping_evictor_stop();
 
-
 	mdt_stack_pre_fini(env, m, md2lu_dev(m->mdt_child));
+
+	mdt_llog_ctxt_unclone(env, m, LLOG_AGENT_ORIG_CTXT);
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         obd_exports_barrier(obd);
         obd_zombie_barrier();
@@ -4717,6 +4718,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_som_conf = 0;
 
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
+
 	lmi = server_get_mount(dev);
         if (lmi == NULL) {
                 CERROR("Cannot get mount info for %s!\n", dev);
@@ -4888,20 +4890,21 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         RETURN(0);
 
 err_procfs:
-        mdt_procfs_fini(m);
+	mdt_procfs_fini(m);
 err_recovery:
-        target_recovery_fini(obd);
-        upcall_cache_cleanup(m->mdt_identity_cache);
-        m->mdt_identity_cache = NULL;
+	target_recovery_fini(obd);
+	upcall_cache_cleanup(m->mdt_identity_cache);
+	m->mdt_identity_cache = NULL;
 err_llog_cleanup:
-        mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        mdt_fs_cleanup(env, m);
+	mdt_llog_ctxt_unclone(env, m, LLOG_AGENT_ORIG_CTXT);
+	mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
+	mdt_fs_cleanup(env, m);
 err_capa:
-        cfs_timer_disarm(&m->mdt_ck_timer);
-        mdt_ck_thread_stop(m);
+	cfs_timer_disarm(&m->mdt_ck_timer);
+	mdt_ck_thread_stop(m);
 err_free_ns:
-        ldlm_namespace_free(m->mdt_namespace, NULL, 0);
-        obd->obd_namespace = m->mdt_namespace = NULL;
+	ldlm_namespace_free(m->mdt_namespace, NULL, 0);
+	obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:
 	mdt_seq_fini(env, m);
 err_fini_fld:
@@ -4909,11 +4912,11 @@ err_fini_fld:
 err_lut:
 	tgt_fini(env, &m->mdt_lut);
 err_fini_stack:
-        mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
+	mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_lmi:
 	if (lmi)
 		server_put_mount(dev, lmi->lmi_mnt);
-        return (rc);
+	return(rc);
 }
 
 /* For interoperability, the left element is old parameter, the right one
@@ -5092,6 +5095,10 @@ static int mdt_prepare(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
+	rc = mdt_llog_ctxt_clone(env, mdt, LLOG_AGENT_ORIG_CTXT);
+	if (rc)
+		RETURN(rc);
+
 	lsp.lsp_start = NULL;
 	lsp.lsp_namespace = mdt->mdt_namespace;
 	rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
@@ -5109,6 +5116,7 @@ static int mdt_prepare(const struct lu_env *env,
 		if (rc)
 			RETURN(rc);
 	}
+
 	LASSERT(!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state));
 	target_recovery_init(&mdt->mdt_lut, mdt_recovery_handle);
 	set_bit(MDT_FL_CFGLOG, &mdt->mdt_state);

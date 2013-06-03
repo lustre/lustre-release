@@ -454,6 +454,7 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
 /* mdd_prepare.c */
 int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
 
+/* inline functions */
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
