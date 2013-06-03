@@ -15,6 +15,9 @@
     <listitem>
       <para><xref linkend="dbdoclet.50438203_78227"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="managinglnet.configuringroutes"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438203_51732">
       <title><indexterm><primary>LNET</primary><secondary>management</secondary></indexterm>
@@ -205,6 +208,45 @@ ents&quot;</screen>
            o2ib1(ib0),o2ib2(ib1)           192.168.[2-253].[1-253/2)       \
 #odd clients&quot;</screen>
       <para>This configuration includes two additional proxy o2ib networks to work around Lustre&apos;s simplistic NID selection algorithm. It connects &quot;even&quot; clients to &quot;even&quot; servers with <literal>o2ib0</literal> on <literal>rail0</literal>, and &quot;odd&quot; servers with <literal>o2ib3</literal> on <literal>rail1</literal>. Similarly, it connects &quot;odd&quot; clients to &quot;odd&quot; servers with <literal>o2ib1</literal> on <literal>rail0</literal>, and &quot;even&quot; servers with <literal>o2ib2</literal> on <literal>rail1</literal>.</para>
+    </section>
+  </section>
+  <section xml:id="managinglnet.configuringroutes" condition='l24'>
+    <title><indexterm><primary>LNET</primary></indexterm>Dynamically Configuring LNET Routes</title>
+    <para>Two scripts are provided: <literal>lustre/scripts/lustre_routes_config</literal> and <literal>lustre/scripts/lustre_routes_conversion</literal>.</para>
+    <para><literal>lustre_routes_config</literal> sets or cleans up LNET routes from the specified config file.  <literal>/etc/sysconfig/lustre_routes.conf</literal> file can be used to automatically configure routes on LNET startup. </para>
+    <para><literal>lustre_routes_conversion</literal> converts a legacy routes configuration file to the new syntax, which is parsed by <literal>lustre_routes_config</literal>.</para>
+    <section remap="h3">
+      <title><indexterm><primary>LNET</primary></indexterm><literal>lustre_routes_config</literal></title>
+      <para><literal>lustre_routes_config</literal> usage is as follows</para>
+      <screen><literal>lustre_routes_config [--setup|--cleanup|--dry-run|--verbose] <replaceable>config_file</replaceable></literal>
+         --setup: configure routes listed in config_file
+         --cleanup: unconfigure routes listed in config_file
+         --dry-run: echo commands to be run, but do not execute them
+         --verbose: echo commands before they are executed </screen>
+      <para> The format of the file which is passed into the script is as follows: </para>
+      <para><literal><replaceable>network</replaceable>: { gateway: <replaceable>gateway</replaceable>@<replaceable>exit_network</replaceable> [hop: <replaceable>hop</replaceable>] [priority: <replaceable>priority</replaceable>] }</literal></para>
+      <para> An LNET router is identified when its local NID appears within the list of routes.  However, this can not be achieved by the use of this script, since the script only adds extra routes after the router is identified.  To ensure that a router is identified correctly, make sure to add its local NID in the routes parameter in the modprobe lustre configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
+    </section>
+    <section remap="h3">
+      <title><indexterm><primary>LNET</primary></indexterm><literal>lustre_routes_conversion</literal></title>
+      <para><literal>lustre_routes_conversion</literal> usage is as follows:</para>
+      <screen><literal>lustre_routes_conversion <replaceable>legacy_file</replaceable> <replaceable>new_file</replaceable></literal></screen>
+      <para><literal>lustre_routes_conversion</literal> takes as a first parameter a file with routes configured as follows:</para>
+      <para><literal><replaceable>network</replaceable> [<replaceable>hop</replaceable>] <replaceable>gateway</replaceable>@<replaceable>exit network</replaceable>[:<replaceable>priority</replaceable>];</literal></para>
+      <para>The script then converts each routes entry in the provided file to:</para>
+      <para><literal><replaceable>network</replaceable>: { gateway: <replaceable>gateway</replaceable>@<replaceable>exit network</replaceable> [hop: <replaceable>hop</replaceable>] [priority: <replaceable>priority</replaceable>] }</literal></para>
+      <para>and appends each converted entry to the output file passed in as the second parameter to the script.</para>
+    </section>
+    <section remap="h3">
+      <title><indexterm><primary>LNET</primary></indexterm><literal>Route Configuration Examples</literal></title>
+      <para>Below is an example of a legacy LNET route configuration.  A legacy configuration file can have multiple entries.</para>
+      <screen><literal>tcp1 10.1.1.2@tcp0:1;
+tcp2 10.1.1.3@tcp0:2;
+tcp3 10.1.1.4@tcp0;</literal></screen>
+      <para>Below is an example of the converted LNET route configuration.  The following would be the result of the <literal>lustre_routes_conversion</literal> script, when run on the above legacy entries.</para>
+      <screen><literal>tcp1: { gateway: 10.1.1.2@tcp0 priority: 1 }
+tcp2: { gateway: 10.1.1.2@tcp0 priority: 2 }
+tcp1: { gateway: 10.1.1.4@tcp0 }</literal></screen>
     </section>
   </section>
 </chapter>
