@@ -373,17 +373,17 @@ static int ofd_recovery_complete(const struct lu_env *env,
 {
 	struct ofd_device	*ofd = ofd_dev(dev);
 	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
-	int			 rc = 0;
+	int			 rc = 0, max_precreate;
 
 	ENTRY;
 
 	/* Grant space for object precreation on the self export.
-	 * This initial reserved space (i.e. 20MB for zfs and 560KB for ldiskfs)
-	 * is enough to create 20k objects. It is then adapted based on the
-	 * precreate request size (see ofd_grant_create()
+	 * This initial reserved space (i.e. 10MB for zfs and 280KB for ldiskfs)
+	 * is enough to create 10k objects. More space is then acquired for
+	 * precreation in ofd_grant_create().
 	 */
-	ofd_grant_connect(env, dev->ld_obd->obd_self_export,
-			  OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace,
+	max_precreate = OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace / 2;
+	ofd_grant_connect(env, dev->ld_obd->obd_self_export, max_precreate,
 			  false);
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
