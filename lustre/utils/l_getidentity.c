@@ -137,7 +137,8 @@ int get_groups_local(struct identity_downcall_data *data,
 	groups_tmp = malloc(maxgroups * sizeof(gid_t));
 	if (groups_tmp == NULL) {
 		free(pw_name);
-		errlog("malloc error\n");
+		data->idd_err = errno ? errno : ENOMEM;
+		errlog("malloc error=%u\n",data->idd_err);
 		return -1;
 	}
 
@@ -146,7 +147,9 @@ int get_groups_local(struct identity_downcall_data *data,
 	    0) {
 		free(pw_name);
 		free(groups_tmp);
-		errlog("getgrouplist() error\n");
+		data->idd_err = errno ? errno : EIDRM;
+		errlog("getgrouplist() error for uid %u: error=%u\n",
+			data->idd_uid, data->idd_err);
 		return -1;
 	}
 
