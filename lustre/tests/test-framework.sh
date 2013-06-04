@@ -2421,42 +2421,43 @@ host_nids_address() {
 }
 
 h2name_or_ip() {
-    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        echo $1"@$2"
-    fi
+	if [ "$1" = "'*'" ]; then echo \'*\'; else
+		echo $1"@$2"
+	fi
 }
 
 h2ptl() {
-   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-       ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | awk '{print $1}'`
-       if [ -z "$ID" ]; then
-           echo "Could not get a ptl id for $1..."
-           exit 1
-       fi
-       echo $ID"@ptl"
-   fi
+	if [ "$1" = "'*'" ]; then echo \'*\'; else
+		ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | \
+							awk '{print $1}'`
+		if [ -z "$ID" ]; then
+			echo "Could not get a ptl id for $1..."
+			exit 1
+		fi
+		echo $ID"@ptl"
+	fi
 }
 declare -fx h2ptl
 
 h2tcp() {
-    h2name_or_ip "$1" "tcp"
+	h2name_or_ip "$1" "tcp"
 }
 declare -fx h2tcp
 
 h2elan() {
-    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        if type __h2elan >/dev/null 2>&1; then
-            ID=$(__h2elan $1)
-        else
-            ID=`echo $1 | sed 's/[^0-9]*//g'`
-        fi
-        echo $ID"@elan"
-    fi
+	if [ "$1" = "'*'" ]; then echo \'*\'; else
+		if type __h2elan >/dev/null 2>&1; then
+			ID=$(__h2elan $1)
+		else
+			ID=`echo $1 | sed 's/[^0-9]*//g'`
+		fi
+		echo $ID"@elan"
+	fi
 }
 declare -fx h2elan
 
 h2o2ib() {
-    h2name_or_ip "$1" "o2ib"
+	h2name_or_ip "$1" "o2ib"
 }
 declare -fx h2o2ib
 
