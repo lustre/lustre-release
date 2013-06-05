@@ -27,19 +27,21 @@ AC_HEADER_STDC
 AC_HEADER_STAT
 AC_HEADER_TIME
 
-case $target_vendor in
-	# The K1OM architecture is an extension of the x86 architecture.
-	# So, the $target_arch is x86_64.
-	k1om)
-		CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
-		if test $CC_TARGET_ARCH != x86_64-$target_vendor-linux ; then
-			AC_MSG_ERROR([Cross compiler not found in PATH.])
-		fi
-		CCAS=$CC
-		;;
-	*)
-		;;
-esac
+AS_IF([test "x$cross_compiling" = xyes],
+	[case $host_vendor in
+		# The K1OM architecture is an extension of the x86 architecture.
+		# So, the $host_arch is x86_64.
+		k1om)
+			CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
+			if test $CC_TARGET_ARCH != x86_64-$host_vendor-linux ; then
+				AC_MSG_ERROR([Cross compiler not found in PATH.])
+			fi
+			CCAS=$CC
+			;;
+		*)
+			;;
+	esac]
+)
 
 if test ${target_cpu} == "powerpc64"; then
 	AC_MSG_WARN([set compiler with -m64])

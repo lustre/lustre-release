@@ -295,30 +295,32 @@ AC_DEFUN([LB_LINUX_CROSS],
 	[AC_MSG_CHECKING([for cross compilation])
 CROSS_VARS=
 CROSS_PATH=
-case $target_vendor in
-	# The K1OM architecture is an extension of the x86 architecture.
-	# So, the $target_arch is x86_64.
-	k1om)
-		AC_MSG_RESULT([Intel(R) Xeon Phi(TM)])
-		CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
-		if test $CC_TARGET_ARCH != x86_64-$target_vendor-linux ; then
-			AC_MSG_ERROR([Cross compiler not found in PATH.])
-		fi
-		CROSS_VARS="ARCH=$target_vendor CROSS_COMPILE=x86_64-$target_vendor-linux-"
-		CROSS_PATH=${CROSS_PATH:=/opt/intel/mic/lustre/device-k1om}
-		CCAS=$CC
-		# need to produce special section for debuginfo extraction
-		LDFLAGS="${LDFLAGS} -Wl,--build-id"
-		EXTRA_KLDFLAGS="${EXTRA_KLDFLAGS} -Wl,--build-id"
-		if test x$enable_server = xyes ; then
-			AC_MSG_WARN([Disabling server (not supported for x86_64-$target_vendor-linux).])
-			enable_server='no'
-		fi
-		;;
-	*)
-		AC_MSG_RESULT([no])
-		;;
-esac
+AS_IF([test "x$cross_compiling" = xno], [AC_MSG_RESULT([no])],
+	[case $host_vendor in
+		# The K1OM architecture is an extension of the x86 architecture.
+		# So, the $host_arch is x86_64.
+		k1om)
+			AC_MSG_RESULT([Intel(R) Xeon Phi(TM)])
+			CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
+			if test $CC_TARGET_ARCH != x86_64-$host_vendor-linux ; then
+				AC_MSG_ERROR([Cross compiler not found in PATH.])
+			fi
+			CROSS_VARS="ARCH=$host_vendor CROSS_COMPILE=x86_64-$host_vendor-linux-"
+			CROSS_PATH=${CROSS_PATH:=/opt/intel/mic/lustre/device-k1om}
+			CCAS=$CC
+			# need to produce special section for debuginfo extraction
+			LDFLAGS="${LDFLAGS} -Wl,--build-id"
+			EXTRA_KLDFLAGS="${EXTRA_KLDFLAGS} -Wl,--build-id"
+			if test x$enable_server = xyes ; then
+				AC_MSG_WARN([Disabling server (not supported for x86_64-$host_vendor-linux).])
+				enable_server='no'
+			fi
+			;;
+		*)
+			AC_MSG_RESULT([yes, but no changes])
+			;;
+	esac
+	])
 AC_SUBST(CROSS_VARS)
 AC_SUBST(CROSS_PATH)
 ])
