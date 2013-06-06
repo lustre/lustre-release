@@ -1079,7 +1079,9 @@ static int osc_extent_make_ready(const struct lu_env *env,
 		last->oap_count = osc_refresh_count(env, last, OBD_BRW_WRITE);
 		LASSERT(last->oap_count > 0);
 		LASSERT(last->oap_page_off + last->oap_count <= PAGE_CACHE_SIZE);
+		spin_lock(&last->oap_lock);
 		last->oap_async_flags |= ASYNC_COUNT_STABLE;
+		spin_unlock(&last->oap_lock);
 	}
 
 	/* for the rest of pages, we don't need to call osf_refresh_count()
@@ -1087,7 +1089,9 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	cfs_list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
 		if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE)) {
 			oap->oap_count = PAGE_CACHE_SIZE - oap->oap_page_off;
+			spin_lock(&oap->oap_lock);
 			oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+			spin_unlock(&oap->oap_lock);
 		}
 	}
 
@@ -2273,6 +2277,8 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	oap->oap_cmd = cmd;
 	oap->oap_page_off = ops->ops_from;
 	oap->oap_count = ops->ops_to - ops->ops_from;
+	/* No need to hold a lock here,
+	 * since this page is not in any list yet. */
 	oap->oap_async_flags = 0;
 	oap->oap_brw_flags = brw_flags;
 
