@@ -1237,7 +1237,9 @@ static int after_reply(struct ptlrpc_request *req)
                  * will roundup it */
                 req->rq_replen       = req->rq_nob_received;
                 req->rq_nob_received = 0;
-                req->rq_resend       = 1;
+		spin_lock(&req->rq_lock);
+		req->rq_resend       = 1;
+		spin_unlock(&req->rq_lock);
                 RETURN(0);
         }
 
@@ -1456,7 +1458,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                         req->rq_status = rc;
                         RETURN(1);
                 } else {
-                        req->rq_wait_ctx = 1;
+			spin_lock(&req->rq_lock);
+			req->rq_wait_ctx = 1;
+			spin_unlock(&req->rq_lock);
                         RETURN(0);
                 }
         }
@@ -1471,7 +1475,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         rc = ptl_send_rpc(req, 0);
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
-                req->rq_net_err = 1;
+		spin_lock(&req->rq_lock);
+		req->rq_net_err = 1;
+		spin_unlock(&req->rq_lock);
                 RETURN(rc);
         }
         RETURN(0);
