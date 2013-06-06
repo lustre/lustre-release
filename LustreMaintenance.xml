@@ -489,13 +489,16 @@ oss# mount -t ldiskfs <replaceable>/dev/new_ost_dev</replaceable> <replaceable>/
           <listitem>
             <para>Recreate the OST configuration files, if unavailable.
         </para>
-            <para>Follow the procedure in <xref linkend="dbdoclet.50438198_69657"/> to recreate the LAST_ID file for this OST index. The <literal>last_rcvd</literal> file will be recreated when the OST is first mounted using the default parameters, which are normally correct for all file systems.
-
-The <literal>CONFIGS/mountdata</literal> file is created by <literal>mkfs.lustre</literal> at format time, but has flags set that request it to register itself with the MGS. It is possible to copy these flags from another working OST (which should be the same):
-
-<screen>oss1# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; <replaceable>/dev/other_osdev</replaceable>
+            <para>Follow the procedure in <xref linkend="dbdoclet.50438198_69657"/> to recreate the
+            LAST_ID file for this OST index. The <literal>last_rcvd</literal> file will be recreated
+            when the OST is first mounted using the default parameters, which are normally correct
+            for all file systems. The <literal>CONFIGS/mountdata</literal> file is created by
+              <literal>mkfs.lustre</literal> at format time, but has flags set that request it to
+            register itself with the MGS. It is possible to copy these flags from another working
+            OST (which should be the same):
+            <screen>oss1# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; <replaceable>/dev/other_osdev</replaceable>
 oss1# scp /tmp/ldd oss0:/tmp/ldd
-oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5</screen></para>
+oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 conv=notrunc</screen></para>
           </listitem>
           <listitem>
             <para>
