@@ -567,15 +567,18 @@ static int osc_lock_upcall(void *cookie, int errcode)
                                 lock->cll_flags |= CLF_FROM_UPCALL;
                                 cl_wait_try(env, lock);
                                 lock->cll_flags &= ~CLF_FROM_UPCALL;
-                                if (!olck->ols_glimpse)
-                                        olck->ols_agl = 0;
                         }
                         cl_lock_signal(env, lock);
                         /* del user for lock upcall cookie */
-                        cl_unuse_try(env, lock);
+                        if (olck->ols_agl) {
+                                if (!olck->ols_glimpse)
+                                        olck->ols_agl = 0;
+				cl_unuse_try(env, lock);
+			}
                 } else {
                         /* del user for lock upcall cookie */
-                        cl_lock_user_del(env, lock);
+                        if (olck->ols_agl)
+				cl_lock_user_del(env, lock);
                         cl_lock_error(env, lock, rc);
                 }
 
@@ -1143,8 +1146,9 @@ static int osc_lock_enqueue(const struct lu_env *env,
 			/* lock will be passed as upcall cookie,
 			 * hold ref to prevent to be released. */
                         cl_lock_hold_add(env, lock, "upcall", lock);
-                        /* a user for lock also */
-                        cl_lock_user_add(env, lock);
+			/* a user for agl lock also */
+			if (ols->ols_agl)
+				cl_lock_user_add(env, lock);
                         ols->ols_state = OLS_ENQUEUED;
 
                         /*
@@ -1162,7 +1166,8 @@ static int osc_lock_enqueue(const struct lu_env *env,
                                           ols, einfo, &ols->ols_handle,
                                           PTLRPCD_SET, 1, ols->ols_agl);
                         if (result != 0) {
-                                cl_lock_user_del(env, lock);
+				if (ols->ols_agl)
+					cl_lock_user_del(env, lock);
 				cl_lock_unhold(env, lock, "upcall", lock);
                                 if (unlikely(result == -ECANCELED)) {
                                         ols->ols_state = OLS_NEW;
