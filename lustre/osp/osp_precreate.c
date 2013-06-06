@@ -721,7 +721,9 @@ out:
 	if (req)
 		ptlrpc_req_finished(req);
 
+	spin_lock(&d->opd_pre_lock);
 	d->opd_pre_recovering = 0;
+	spin_unlock(&d->opd_pre_lock);
 
 	/*
 	 * If rc is zero, the pre-creation window should have been emptied.
@@ -795,8 +797,10 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 			       d->opd_syn_changes, d->opd_syn_rpc_in_progress);
 		} else if (old == -ENOSPC) {
 			d->opd_pre_status = 0;
+			spin_lock(&d->opd_pre_lock);
 			d->opd_pre_grow_slow = 0;
 			d->opd_pre_grow_count = OST_MIN_PRECREATE;
+			spin_unlock(&d->opd_pre_lock);
 			cfs_waitq_signal(&d->opd_pre_waitq);
 			CDEBUG(D_INFO, "%s: no space: "LPU64" blocks, "LPU64
 			       " free, "LPU64" used, "LPU64" avail -> %d: "
