@@ -395,8 +395,10 @@ static int osd_scrub_prep(struct osd_device *dev)
 		scrub->os_full_speed = 1;
 
 	scrub->os_in_prior = 0;
+	spin_lock(&scrub->os_lock);
 	scrub->os_waiting = 0;
 	scrub->os_paused = 0;
+	spin_unlock(&scrub->os_lock);
 	scrub->os_new_checked = 0;
 	if (sf->sf_pos_last_checkpoint != 0)
 		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
@@ -1214,8 +1216,10 @@ static int osd_otable_it_preload(const struct lu_env *env,
 	       ooc->ooc_pos_preload, rc);
 
 	if (scrub->os_waiting && osd_scrub_has_window(scrub, ooc)) {
+		spin_lock(&scrub->os_lock);
 		scrub->os_waiting = 0;
 		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);
+		spin_unlock(&scrub->os_lock);
 	}
 
 	RETURN(rc < 0 ? rc : ooc->ooc_cached_items);
