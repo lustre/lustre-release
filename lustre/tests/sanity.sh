@@ -2149,6 +2149,29 @@ test_31n() {
 }
 run_test 31n "check link count of unlinked file"
 
+link_one() {
+	local TEMPNAME=$(mktemp $1_XXXXXX)
+	mlink $TEMPNAME $1 2> /dev/null &&
+		echo "$BASHPID: link $TEMPNAME to $1 succeeded"
+	munlink $TEMPNAME
+}
+
+test_31o() { # LU-2901
+	mkdir -p $DIR/$tdir
+	for LOOP in $(seq 100); do
+		rm -f $DIR/$tdir/$tfile*
+		for THREAD in $(seq 8); do
+			link_one $DIR/$tdir/$tfile.$LOOP &
+		done
+		wait
+		local LINKS=$(ls -1 $DIR/$tdir | grep -c $tfile.$LOOP)
+		[ $LINKS -gt 1 ] && ls $DIR/$tdir &&
+			error "$LINKS duplicate links to $tfile.$LOOP" &&
+			break || true
+	done
+}
+run_test 31o "duplicate hard links with same filename"
+
 cleanup_test32_mount() {
 	trap 0
 	$UMOUNT $DIR/$tdir/ext2-mountpoint
