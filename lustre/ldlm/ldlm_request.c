@@ -624,25 +624,19 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                         lock->l_req_mode = newmode;
                 }
 
-                if (memcmp(reply->lock_desc.l_resource.lr_name.name,
-                          lock->l_resource->lr_name.name,
-                          sizeof(struct ldlm_res_id))) {
-                        CDEBUG(D_INFO, "remote intent success, locking "
-                                        "(%ld,%ld,%ld) instead of "
-                                        "(%ld,%ld,%ld)\n",
-                              (long)reply->lock_desc.l_resource.lr_name.name[0],
-                              (long)reply->lock_desc.l_resource.lr_name.name[1],
-                              (long)reply->lock_desc.l_resource.lr_name.name[2],
-                              (long)lock->l_resource->lr_name.name[0],
-                              (long)lock->l_resource->lr_name.name[1],
-                              (long)lock->l_resource->lr_name.name[2]);
+		if (!ldlm_res_eq(&reply->lock_desc.l_resource.lr_name,
+				 &lock->l_resource->lr_name)) {
+			CDEBUG(D_INFO, "remote intent success, locking "DLDLMRES
+				       " instead of "DLDLMRES"\n",
+			       PLDLMRES(&reply->lock_desc.l_resource),
+			       PLDLMRES(lock->l_resource));
 
-                        rc = ldlm_lock_change_resource(ns, lock,
-                                        &reply->lock_desc.l_resource.lr_name);
-                        if (rc || lock->l_resource == NULL)
-                                GOTO(cleanup, rc = -ENOMEM);
-                        LDLM_DEBUG(lock, "client-side enqueue, new resource");
-                }
+			rc = ldlm_lock_change_resource(ns, lock,
+					&reply->lock_desc.l_resource.lr_name);
+			if (rc || lock->l_resource == NULL)
+				GOTO(cleanup, rc = -ENOMEM);
+			LDLM_DEBUG(lock, "client-side enqueue, new resource");
+		}
 		if (with_policy)
 			if (!(type == LDLM_IBITS &&
 			      !(exp_connect_flags(exp) & OBD_CONNECT_IBITS)))
@@ -1947,7 +1941,8 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                            0, flags | LCF_BL_AST, opaque);
         rc = ldlm_cli_cancel_list(&cancels, count, NULL, flags);
         if (rc != ELDLM_OK)
-                CERROR("ldlm_cli_cancel_unused_resource: %d\n", rc);
+		CERROR("canceling unused lock "DLDLMRES": rc = %d\n",
+		       PLDLMRES(res), rc);
 
         LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
@@ -1961,21 +1956,16 @@ struct ldlm_cli_cancel_arg {
 };
 
 static int ldlm_cli_hash_cancel_unused(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                                       cfs_hlist_node_t *hnode, void *arg)
+				       cfs_hlist_node_t *hnode, void *arg)
 {
-        struct ldlm_resource           *res = cfs_hash_object(hs, hnode);
-        struct ldlm_cli_cancel_arg     *lc = arg;
-        int                             rc;
+	struct ldlm_resource           *res = cfs_hash_object(hs, hnode);
+	struct ldlm_cli_cancel_arg     *lc = arg;
 
-        rc = ldlm_cli_cancel_unused_resource(ldlm_res_to_ns(res), &res->lr_name,
-                                             NULL, LCK_MINMODE,
-                                             lc->lc_flags, lc->lc_opaque);
-        if (rc != 0) {
-                CERROR("ldlm_cli_cancel_unused ("LPU64"): %d\n",
-                       res->lr_name.name[0], rc);
-        }
-        /* must return 0 for hash iteration */
-        return 0;
+	ldlm_cli_cancel_unused_resource(ldlm_res_to_ns(res), &res->lr_name,
+					NULL, LCK_MINMODE, lc->lc_flags,
+					lc->lc_opaque);
+	/* must return 0 for hash iteration */
+	return 0;
 }
 
 /**

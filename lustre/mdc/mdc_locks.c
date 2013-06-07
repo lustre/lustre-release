@@ -973,16 +973,11 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
                 ldlm_policy_data_t policy = lock->l_policy_data;
                 LDLM_DEBUG(lock, "matching against this");
 
-                LASSERTF(fid_res_name_eq(&mdt_body->fid1,
-                                         &lock->l_resource->lr_name),
-                         "Lock res_id: %lu/%lu/%lu, fid: %lu/%lu/%lu.\n",
-                         (unsigned long)lock->l_resource->lr_name.name[0],
-                         (unsigned long)lock->l_resource->lr_name.name[1],
-                         (unsigned long)lock->l_resource->lr_name.name[2],
-                         (unsigned long)fid_seq(&mdt_body->fid1),
-                         (unsigned long)fid_oid(&mdt_body->fid1),
-                         (unsigned long)fid_ver(&mdt_body->fid1));
-                LDLM_LOCK_PUT(lock);
+		LASSERTF(fid_res_name_eq(&mdt_body->fid1,
+					 &lock->l_resource->lr_name),
+			 "Lock res_id: "DLDLMRES", fid: "DFID"\n",
+			 PLDLMRES(lock->l_resource), PFID(&mdt_body->fid1));
+		LDLM_LOCK_PUT(lock);
 
                 memcpy(&old_lock, lockh, sizeof(*lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
