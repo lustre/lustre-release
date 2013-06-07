@@ -936,8 +936,9 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 	if (mdt_object_remote(ms)) {
 		mdt_object_put(info->mti_env, ms);
-		CERROR("Target directory "DFID" is on another MDT\n",
-			PFID(rr->rr_fid1));
+		CERROR("%s: source inode "DFID" on remote MDT from "DFID"\n",
+		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+		       PFID(rr->rr_fid2));
 		GOTO(out_unlock_parent, rc = -EXDEV);
 	}
 
@@ -964,6 +965,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 GOTO(out_unlock_child, rc);
         /* save version of file name for replay, it must be ENOENT here */
         if (!req_is_replay(mdt_info_req(info))) {
+		if (rc != -ENOENT) {
+			CDEBUG(D_INFO, "link target %.*s existed!\n",
+			       rr->rr_namelen, (char *)rr->rr_name);
+			GOTO(out_unlock_child, rc = -EEXIST);
+		}
                 info->mti_ver[2] = ENOENT_VERSION;
                 mdt_version_save(mdt_info_req(info), info->mti_ver[2], 2);
         }
