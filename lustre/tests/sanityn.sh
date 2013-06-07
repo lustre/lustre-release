@@ -2435,12 +2435,22 @@ test_70b() { # LU-2781
 run_test 70b "remove files after calling rm_entry"
 
 test_71() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -lt $(version_code 2.1.6) ]] &&
+		skip "Need MDS version at least 2.1.6" && return
+
+	# Patch not applied to 2.2 and 2.3 branches
+	[[ $server_version -ge $(version_code 2.2.0) ]] &&
+	[[ $server_version -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version at least 2.4.0" && return
+
 	checkfiemap --test ||
 		{ skip "checkfiemap not runnable: $?" && return; }
 	# write data this way: hole - data - hole - data
 	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tfile) + 1)))" = \
-		"zfs" ] && 
+		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
 	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
 	GET_STAT="lctl get_param -n ldlm.services.ldlm_cbd.stats"
