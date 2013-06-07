@@ -50,6 +50,7 @@
 #include <sys/queue.h>
 
 #include "llite_lib.h"
+#include <lustre_fid.h>
 
 void ll_intent_drop_lock(struct lookup_intent *it)
 {
@@ -148,15 +149,10 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
                 if (bits & MDS_INODELOCK_UPDATE)
                         lli->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
 
-                fid = &lli->lli_fid;
-                if (lock->l_resource->lr_name.name[0] != fid_seq(fid) ||
-                    lock->l_resource->lr_name.name[1] != fid_oid(fid) ||
-                    lock->l_resource->lr_name.name[2] != fid_ver(fid)) {
-                        LDLM_ERROR(lock,"data mismatch with ino %llu/%llu/%llu",
-                                  (long long)fid_seq(fid), 
-                                  (long long)fid_oid(fid),
-                                  (long long)fid_ver(fid));
-                }
+		fid = &lli->lli_fid;
+		if (!fid_res_name_eq(fid, &lock->l_resource->lr_name))
+			LDLM_ERROR(lock, "data mismatch with object "
+				   DFID" (%p)", PFID(fid), inode);
                 if (S_ISDIR(st->st_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {
                         CDEBUG(D_INODE, "invalidating inode %llu\n",

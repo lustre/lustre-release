@@ -798,26 +798,19 @@ static int ldlm_resource_clean(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 }
 
 static int ldlm_resource_complain(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                                  cfs_hlist_node_t *hnode, void *arg)
+				  cfs_hlist_node_t *hnode, void *arg)
 {
-        struct ldlm_resource  *res = cfs_hash_object(hs, hnode);
+	struct ldlm_resource  *res = cfs_hash_object(hs, hnode);
 
 	lock_res(res);
-        CERROR("Namespace %s resource refcount nonzero "
-               "(%d) after lock cleanup; forcing "
-               "cleanup.\n",
-               ldlm_ns_name(ldlm_res_to_ns(res)),
-               cfs_atomic_read(&res->lr_refcount) - 1);
-
-        CERROR("Resource: %p ("LPU64"/"LPU64"/"LPU64"/"
-               LPU64") (rc: %d)\n", res,
-               res->lr_name.name[0], res->lr_name.name[1],
-               res->lr_name.name[2], res->lr_name.name[3],
-               cfs_atomic_read(&res->lr_refcount) - 1);
+	CERROR("%s: namespace resource "DLDLMRES" (%p) refcount nonzero "
+	       "(%d) after lock cleanup; forcing cleanup.\n",
+	       ldlm_ns_name(ldlm_res_to_ns(res)), PLDLMRES(res), res,
+	       cfs_atomic_read(&res->lr_refcount) - 1);
 
 	ldlm_resource_dump(D_ERROR, res);
 	unlock_res(res);
-        return 0;
+	return 0;
 }
 
 /**
@@ -1443,18 +1436,16 @@ EXPORT_SYMBOL(ldlm_namespace_dump);
  */
 void ldlm_resource_dump(int level, struct ldlm_resource *res)
 {
-        struct ldlm_lock *lock;
-        unsigned int granted = 0;
+	struct ldlm_lock *lock;
+	unsigned int granted = 0;
 
-        CLASSERT(RES_NAME_SIZE == 4);
+	CLASSERT(RES_NAME_SIZE == 4);
 
-        if (!((libcfs_debug | D_ERROR) & level))
-                return;
+	if (!((libcfs_debug | D_ERROR) & level))
+		return;
 
-        CDEBUG(level, "--- Resource: %p ("LPU64"/"LPU64"/"LPU64"/"LPU64
-               ") (rc: %d)\n", res, res->lr_name.name[0], res->lr_name.name[1],
-               res->lr_name.name[2], res->lr_name.name[3],
-               cfs_atomic_read(&res->lr_refcount));
+	CDEBUG(level, "--- Resource: "DLDLMRES" (%p) refcount = %d\n",
+	       PLDLMRES(res), res, cfs_atomic_read(&res->lr_refcount));
 
         if (!cfs_list_empty(&res->lr_granted)) {
                 CDEBUG(level, "Granted locks (in reverse order):\n");
