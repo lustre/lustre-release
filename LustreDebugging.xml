@@ -17,21 +17,31 @@
     <title><indexterm><primary>debugging</primary></indexterm>
 Diagnostic and Debugging Tools</title>
     <para>A variety of diagnostic and analysis tools are available to debug issues with the Lustre software. Some of these are provided in Linux distributions, while others have been developed and are made available by the Lustre project.</para>
-    <section remap="h3">
-      <title><indexterm><primary>debugging</primary><secondary>tools</secondary></indexterm>
-Lustre Debugging Tools</title>
-      <para>The following in-kernel debug mechanisms are incorporated into the Lustre software:</para>
+    <section remap="h3" xml:id="section_dms_q21_kk">
+      <title><indexterm>
+          <primary>debugging</primary>
+          <secondary>tools</secondary>
+        </indexterm> Lustre Debugging Tools</title>
+      <para>The following in-kernel debug mechanisms are incorporated into the Lustre
+        software:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Debug logs</emphasis>  - A circular debug buffer to which Lustre internal debug messages are written (in contrast to error messages, which are printed to the syslog or console). Entries to the Lustre debug log are controlled by the mask set by <literal>/proc/sys/lnet/debug</literal>. The log size defaults to 5 MB per CPU but can be increased as a busy system will quickly overwrite 5 MB. When the buffer fills, the oldest information is discarded.</para>
+          <para xml:id="para_fkj_rld_hk"><emphasis role="bold">Debug logs</emphasis> - A circular
+            debug buffer to which Lustre internal debug messages are written (in contrast to error
+            messages, which are printed to the syslog or console). Entries to the Lustre debug log
+            are controlled by the mask set by <literal>/proc/sys/lnet/debug</literal>. The log size
+            defaults to 5 MB per CPU but can be increased as a busy system will quickly overwrite 5
+            MB. When the buffer fills, the oldest information is discarded.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Debug daemon</emphasis>  - The debug daemon controls logging of debug messages.</para>
+          <para><emphasis role="bold">Debug daemon</emphasis> - The debug daemon controls logging of
+            debug messages.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">
               <literal>/proc/sys/lnet/debug</literal>
-            </emphasis>  - This file contains a mask that can be used to delimit the debugging information written out to the kernel debug logs.</para>
+            </emphasis> - This file contains a mask that can be used to delimit the debugging
+            information written out to the kernel debug logs.</para>
         </listitem>
       </itemizedlist>
       <para>The following tools are also provided with the Lustre software:</para>
@@ -39,17 +49,25 @@ Lustre Debugging Tools</title>
         <listitem>
           <para><emphasis role="bold">
               <literal>lctl</literal>
-            </emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref linkend="dbdoclet.50438219_38274"/>.</para>
+            </emphasis> - This tool is used with the debug_kernel option to manually dump the Lustre
+            debugging log or post-process debugging logs that are dumped automatically. For more
+            information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref
+              linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
-          <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>timestamp</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
+          <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes
+            Lustre to dump the debug log to the file
+                <literal>/tmp/lustre-log.<replaceable>timestamp</replaceable></literal> where it can
+            be retrieved after a reboot. For more information, see <xref
+              linkend="dbdoclet.50438198_40669"/>.</para>
         </listitem>
         <listitem>
           <para>
-                  <literal>
+            <literal>
               <replaceable>lfs</replaceable>
-            </literal>
-                  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more information about lfs, see <xref linkend="dbdoclet.50438206_94597"/>.</para>
+            </literal> - This utility provides access to the extended attributes (EAs) of a Lustre
+            file (along with other information). For more information about lfs, see <xref
+              linkend="dbdoclet.50438206_94597"/>.</para>
         </listitem>
       </itemizedlist>
     </section>

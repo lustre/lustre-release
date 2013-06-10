@@ -203,14 +203,99 @@
   <section xml:id="dbdoclet.50438198_30989">
       <title><indexterm><primary>troubleshooting</primary><secondary>reporting bugs</secondary></indexterm><indexterm><primary>reporting bugs</primary><see>troubleshooting</see></indexterm>
           Reporting a Lustre Bug</title>
-    <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
-    <para>You can also post a question to the <link xl:href="http://wiki.whamcloud.com/display/PUB/Community+Resources">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
-    <para>A Lustre diagnostics tool is available for downloading at: <link xl:href="http://downloads.whamcloud.com/public/tools/">http://downloads.whamcloud.com/public/tools/</link></para>
-    <para>You can run this tool to capture diagnostics output to include in the reported bug. To run this tool, enter one of these commands:</para>
-    <screen># lustre-diagnostics -t <replaceable>bug_number</replaceable>
-# lustre-diagnostics.
-</screen>
-    <para>Output is sent directly to the terminal. Use normal file redirection to send the output to a file, and then manually attach the file to the bug you are submitting.</para>
+    <para>If you cannot resolve a problem by troubleshooting your Lustre file system, other options are:<itemizedlist>
+        <listitem>
+          <para>Post a question to the <link xmlns:xlink="http://www.w3.org/1999/xlink"
+              xlink:href="https://lists.01.org/mailman/listinfo/hpdd-discuss">hppd-discuss</link>
+            email list or search the archives for information about your issue.</para>
+        </listitem>
+        <listitem>
+          <para>Submit a Jira ticket. The <link xmlns:xlink="http://www.w3.org/1999/xlink"
+              xlink:href="https://jira.hpdd.intel.com/secure/Dashboard.jspa">Jira</link> project
+            tracker is the bug tracking and project management tool used for the Lustre project. If
+            you are a first-time user, you'll need to open an account by clicking on <emphasis
+              role="bold">Sign up</emphasis> on the Welcome page.</para>
+        </listitem>
+      </itemizedlist> To submit a Jira ticket, follow these steps:<orderedlist>
+        <listitem>
+          <para>To avoid filing a duplicate ticket, search for existing tickets for your issue.
+              <emphasis role="italic">For search tips, see <xref
+                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_jj2_4b1_kk"
+              />.</emphasis></para>
+        </listitem>
+        <listitem>
+          <para>To create a ticket, click <emphasis role="bold">+Create Issue</emphasis> in the
+            upper right corner. <emphasis role="italic">Create a separate ticket for each issue you
+              wish to submit.</emphasis></para>
+        </listitem>
+        <listitem>
+          <para>In the form displayed, enter the following information:<itemizedlist>
+              <listitem>
+                <para><emphasis role="italic">Project</emphasis> - Select <emphasis role="bold"
+                    >Lustre</emphasis> or <emphasis role="bold">Lustre Documentation</emphasis> or
+                  an appropriate project.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Issue type</emphasis> - Select <emphasis role="bold"
+                    >Bug</emphasis>.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Summary</emphasis> - Enter a short description of the
+                  issue. Use terms that would be useful for someone searching for a similar issue. A
+                  LustreError or ASSERT/panic message often makes a good summary.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Affects version(s)</emphasis> - Select your Lustre
+                  version.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Environment</emphasis> - Enter your kernel with
+                  version number.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Description</emphasis> - Include a detailed
+                  description of <emphasis role="italic">visible symptoms</emphasis> and, if
+                  possible, <emphasis role="italic">how the problem is produced</emphasis>. Other
+                  useful information may include <emphasis role="italic">the behavior you expect to
+                    see</emphasis> and <emphasis role="italic">what you have tried so far to
+                    diagnose the problem</emphasis>.</para>
+              </listitem>
+              <listitem>
+                <para><emphasis role="italic">Attachments</emphasis> - Attach log sources such as
+                  Lustre debug log dumps (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="dbdoclet.50438274_15874"/>), syslogs, or console logs. <emphasis
+                    role="italic"><emphasis role="bold">Note:</emphasis></emphasis> Lustre debug
+                  logs must be processed using <code>lctl df</code> prior to attaching to a Jira
+                  ticket. For more information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="dbdoclet.50438274_62472"/>. </para>
+              </listitem>
+            </itemizedlist>Other fields in the form are used for project tracking and are irrelevant
+            to reporting an issue. You can leave these in their default state.</para>
+        </listitem>
+      </orderedlist></para>
+    <section xml:id="section_jj2_4b1_kk">
+      <title>Searching Jira for Duplicate Tickets</title>
+      <para>Before submitting a ticket, always search Jira for an existing ticket for your
+        issue.This avoids duplicating effort and may immediately provide you with a solution to your
+        problem. </para>
+      <para>To do a search in Jira, select the <emphasis role="bold">Issues</emphasis> tab and click
+        on <emphasis role="bold">New filter</emphasis>. Use the filters provided to select criteria
+        for your search. To search for specific text, enter the text in the "Contains text" field
+        and click the magnifying glass icon.</para>
+      <para>When searching for text such as an ASSERTION or LustreError message, you can remove NIDS
+        and other installation-specific text from your search string by following the example
+        below.</para>
+      <para><emphasis role="italic">Original error message:</emphasis></para>
+      <para><code>"(filter_io_26.c:</code><emphasis role="bold"
+          >791</emphasis><code>:filter_commitrw_write()) ASSERTION(oti-&gt;oti_transno
+          &lt;=obd-&gt;obd_last_committed) failed: oti_transno </code><emphasis role="bold"
+          >752</emphasis>
+        <code>last_committed </code><emphasis role="bold">750</emphasis><code>"</code></para>
+      <para><emphasis role="italic">Optimized search string :</emphasis></para>
+      <para><code>"(filter_io_26.c:" </code><emphasis role="bold">AND</emphasis>
+        <code>":filter_commitrw_write()) ASSERTION(oti-&gt;oti_transno
+          &lt;=obd-&gt;obd_last_committed) failed:</code></para>
+    </section>
   </section>
   <section xml:id="dbdoclet.50438198_93109">
     <title><indexterm><primary>troubleshooting</primary><secondary>common problems</secondary></indexterm>Common Lustre Problems</title>
