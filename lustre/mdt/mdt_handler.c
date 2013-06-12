@@ -3970,9 +3970,13 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 		/* execute policy */
 		rc = flv->it_act(opc, info, lockp, flags);
 
-		rep = req_capsule_server_get(pill, &RMF_DLM_REP);
-		rep->lock_policy_res2 =
-			ptlrpc_status_hton(rep->lock_policy_res2);
+		/* Check whether the reply has been packed successfully. */
+		if (mdt_info_req(info)->rq_repmsg != NULL) {
+			rep = req_capsule_server_get(info->mti_pill,
+						     &RMF_DLM_REP);
+			rep->lock_policy_res2 =
+				ptlrpc_status_hton(rep->lock_policy_res2);
+		}
         } else {
                 rc = -EOPNOTSUPP;
         }
