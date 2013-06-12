@@ -2160,22 +2160,8 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                 rc = mo_attr_set(info->mti_env, next, ma);
         }
 
-	/* If file data is modified, add the dirty flag.
-	 *
-	 * If MDS_CLOSE_CLEANUP is set, this file is being closed due to an
-	 * eviction, file could have been modified and now dirty
-	 * regarding to HSM archive, check this!
-	 * The logic here is to mark a file dirty if there's a chance it was
-	 * dirtied before the client was evicted, so that we don't have to wait
-	 * for a release attempt before finding out the file was actually dirty
-	 * and fail the release. Aggressively marking it dirty here will cause
-	 * the policy engine to attempt to re-archive it; when rearchiving, we
-	 * can compare the current version to the LMA data_version and make the
-	 * archive request into a noop if it's not actually dirty.
-	 */
-	if ((ma->ma_attr_flags & MDS_DATA_MODIFIED) ||
-	    ((ma->ma_attr_flags & MDS_CLOSE_CLEANUP) &&
-	     (mode & (FMODE_WRITE|MDS_FMODE_TRUNC))))
+	/* If file data is modified, add the dirty flag. */
+	if (ma->ma_attr_flags & MDS_DATA_MODIFIED)
 		rc = mdt_add_dirty_flag(info, o, ma);
 
         ma->ma_need |= MA_INODE;

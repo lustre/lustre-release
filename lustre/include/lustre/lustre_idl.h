@@ -2398,7 +2398,7 @@ enum mds_op_bias {
 	MDS_PERM_BYPASS		= 1 << 3,
 	MDS_SOM			= 1 << 4,
 	MDS_QUOTA_IGNORE	= 1 << 5,
-	MDS_CLOSE_CLEANUP	= 1 << 6,
+	/* Was MDS_CLOSE_CLEANUP (1 << 6), No more used */
 	MDS_KEEP_ORPHAN		= 1 << 7,
 	MDS_RECOV_OPEN		= 1 << 8,
 	MDS_DATA_MODIFIED	= 1 << 9,
