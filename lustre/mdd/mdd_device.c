@@ -196,6 +196,8 @@ static int changelog_user_init_cb(const struct lu_env *env,
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
+	if (rec->cur_endrec > mdd->mdd_cl.mc_index)
+		mdd->mdd_cl.mc_index = rec->cur_endrec;
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	return LLOG_PROC_BREAK;
