@@ -128,18 +128,18 @@ int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
 	ct->kuc.lk_data = ct->archives;
 	rc = root_ioctl(ct->fsname, LL_IOC_HSM_CT_START, &(ct->kuc), NULL,
 			WANT_ERROR);
-	/* ignore if it was already registered on coordinator */
-	if (rc == -EEXIST)
-		rc = 0;
 	/* Only the kernel reference keeps the write side open */
 	close(ct->kuc.lk_wfd);
 	ct->kuc.lk_wfd = 0;
 	if (rc < 0)
-		goto out_err;
+		goto out_kuc;
 
 	*priv = ct;
 	return 0;
 
+out_kuc:
+	/* cleanup the kuc channel */
+	libcfs_ukuc_stop(&ct->kuc);
 out_err:
 	if (ct->fsname)
 		free(ct->fsname);
