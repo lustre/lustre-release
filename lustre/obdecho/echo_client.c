@@ -2809,7 +2809,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (env == NULL)
                 RETURN(-ENOMEM);
 
-        rc = lu_env_init(env, LCT_DT_THREAD);
+        rc = lu_env_init(env, LCT_DT_THREAD | LCT_MD_THREAD);
         if (rc)
                 GOTO(out, rc = -ENOMEM);
 

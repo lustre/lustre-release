@@ -550,15 +550,6 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
-/*
- * sec context handlers
- */
-/* XXX: Implement based on mdt_sec_ctx_handle()? */
-static int mgs_sec_ctx_handle(struct tgt_session_info *tsi)
-{
-	return 0;
-}
-
 static inline int mgs_init_export(struct obd_export *exp)
 {
 	struct mgs_export_data *data = &exp->u.eu_mgs_data;
@@ -883,12 +874,6 @@ TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
 };
 
-static struct tgt_handler mgs_sec_ctx_handlers[] = {
-TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT,		mgs_sec_ctx_handle),
-TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT_CONT,	mgs_sec_ctx_handle),
-TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		mgs_sec_ctx_handle),
-};
-
 static struct tgt_opc_slice mgs_common_slice[] = {
 	{
 		.tos_opc_start = MGS_FIRST_OPC,
@@ -913,7 +898,7 @@ static struct tgt_opc_slice mgs_common_slice[] = {
 	{
 		.tos_opc_start = SEC_FIRST_OPC,
 		.tos_opc_end   = SEC_LAST_OPC,
-		.tos_hs        = mgs_sec_ctx_handlers
+		.tos_hs        = tgt_sec_ctx_handlers
 	},
 	{
 		.tos_hs        = NULL

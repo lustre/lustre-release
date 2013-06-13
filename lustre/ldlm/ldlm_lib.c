@@ -1062,6 +1062,9 @@ dont_check_exports:
                         rc = obd_connect(req->rq_svc_thread->t_env,
                                          &export, target, &cluuid, data,
                                          client_nid);
+			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
+				lustre_msg_add_op_flags(req->rq_repmsg,
+						MSG_CONNECT_RECOVERING);
                         if (rc == 0)
                                 conn.cookie = export->exp_handle.h_cookie;
                 }

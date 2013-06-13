@@ -413,6 +413,9 @@ struct mdt_thread_info {
 
         struct mdt_device         *mti_mdt;
         const struct lu_env       *mti_env;
+	/* XXX: temporary flag to have healthy mti during OUT calls
+	 * to be removed upon moving MDT to the unified target code */
+	bool			   mti_txn_compat;
 
         /*
          * Additional fail id that can be set by handler. Passed to
@@ -625,12 +628,6 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
          return info->mti_pill ? info->mti_pill->rc_req : NULL;
-}
-
-static inline int req_is_replay(struct ptlrpc_request *req)
-{
-        LASSERT(req->rq_reqmsg);
-        return !!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
 }
 
 static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
@@ -864,6 +861,10 @@ int mdt_llog_prev_block(struct mdt_thread_info *info);
 int mdt_sec_ctx_handle(struct mdt_thread_info *info);
 int mdt_readpage(struct mdt_thread_info *info);
 int mdt_obd_idx_read(struct mdt_thread_info *info);
+int mdt_tgt_connect(struct tgt_session_info *tsi);
+void mdt_thread_info_init(struct ptlrpc_request *req,
+			  struct mdt_thread_info *mti);
+void mdt_thread_info_fini(struct mdt_thread_info *mti);
 
 extern struct mdt_opc_slice mdt_regular_handlers[];
 extern struct mdt_opc_slice mdt_seq_handlers[];
@@ -1284,38 +1285,6 @@ static inline char *mdt_obd_name(struct mdt_device *mdt)
 
 int mds_mod_init(void);
 void mds_mod_exit(void);
-
-/* Update handlers */
-int out_handle(struct mdt_thread_info *info);
-
-#define out_tx_create(info, obj, attr, fid, dof, th, reply, idx) \
-	__out_tx_create(info, obj, attr, fid, dof, th, reply, idx, \
-			__FILE__, __LINE__)
-
-#define out_tx_attr_set(info, obj, attr, th, reply, idx) \
-	__out_tx_attr_set(info, obj, attr, th, reply, idx, \
-			  __FILE__, __LINE__)
-
-#define out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx)	\
-	__out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx,	\
-			   __FILE__, __LINE__)
-
-#define out_tx_ref_add(info, obj, th, reply, idx) \
-	__out_tx_ref_add(info, obj, th, reply, idx, __FILE__, __LINE__)
-
-#define out_tx_ref_del(info, obj, th, reply, idx) \
-	__out_tx_ref_del(info, obj, th, reply, idx, __FILE__, __LINE__)
-
-#define out_tx_index_insert(info, obj, th, name, fid, reply, idx) \
-	__out_tx_index_insert(info, obj, th, name, fid, reply, idx, \
-			      __FILE__, __LINE__)
-
-#define out_tx_index_delete(info, obj, th, name, reply, idx) \
-	__out_tx_index_delete(info, obj, th, name, reply, idx, \
-			      __FILE__, __LINE__)
-
-#define out_tx_destroy(info, obj, th, reply, idx) \
-	__out_tx_destroy(info, obj, th, reply, idx, __FILE__, __LINE__)
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

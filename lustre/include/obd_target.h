@@ -73,11 +73,12 @@ struct echo_obd {
 };
 
 struct ost_obd {
-	struct ptlrpc_service	       *ost_service;
-	struct ptlrpc_service	       *ost_create_service;
-	struct ptlrpc_service	       *ost_io_service;
-	struct ptlrpc_service	       *ost_seq_service;
-	struct mutex			ost_health_mutex;
+	struct ptlrpc_service	*ost_service;
+	struct ptlrpc_service	*ost_create_service;
+	struct ptlrpc_service	*ost_io_service;
+	struct ptlrpc_service	*ost_seq_service;
+	struct ptlrpc_service	*ost_out_service;
+	struct mutex		 ost_health_mutex;
 };
 
 #endif /* __OBD_TARGET_H */

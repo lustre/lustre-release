@@ -39,6 +39,7 @@
 
 #include <dt_object.h>
 #include <lustre_export.h>
+#include <lustre_update.h>
 #include <lustre_disk.h>
 
 struct lu_target {
@@ -177,6 +178,12 @@ static inline __u64 tgt_conn_flags(struct tgt_session_info *tsi)
 	return exp_connect_flags(tsi->tsi_exp);
 }
 
+static inline int req_is_replay(struct ptlrpc_request *req)
+{
+	LASSERT(req->rq_reqmsg);
+	return !!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
+}
+
 /* target/tgt_handler.c */
 int tgt_request_handle(struct ptlrpc_request *req);
 char *tgt_name(struct lu_target *tgt);
@@ -199,6 +206,12 @@ int tgt_llog_prev_block(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init_cont(struct tgt_session_info *tsi);
 int tgt_sec_ctx_fini(struct tgt_session_info *tsi);
+
+extern struct tgt_handler tgt_sec_ctx_handlers[];
+extern struct tgt_handler tgt_obd_handlers[];
+extern struct tgt_handler tgt_dlm_handlers[];
+extern struct tgt_handler tgt_llog_handlers[];
+extern struct tgt_handler tgt_out_handlers[];
 
 typedef void (*tgt_cb_t)(struct lu_target *lut, __u64 transno,
 			 void *data, int err);
@@ -229,8 +242,13 @@ int tgt_client_data_write(const struct lu_env *env, struct lu_target *tg,
 int tgt_server_data_read(const struct lu_env *env, struct lu_target *tg);
 int tgt_server_data_write(const struct lu_env *env, struct lu_target *tg,
 			  struct thandle *th);
-int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg, int sync);
-int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg, loff_t off);
+int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
+			   int sync);
+int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
+			   loff_t off);
+int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
+			 struct dt_object *obj, __u64 opdata,
+			 struct thandle *th, struct ptlrpc_request *req);
 
 enum {
 	ESERIOUS = 0x0001000
@@ -268,46 +286,77 @@ static inline int is_serious(int rc)
 	.th_version	= version					\
 }
 
+/* MDT Request with a format known in advance */
+#define TGT_MDT_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(MDS_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MDS_VERSION)
+/* Request with a format we do not yet know */
+#define TGT_MDT_HDL_VAR(flags, name, fn)				\
+	TGT_RPC_HANDLER(MDS_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_MDS_VERSION)
+
 /* MGS request with a format known in advance */
 #define TGT_MGS_HDL(flags, name, fn)					\
-	TGT_RPC_HANDLER(MGS_FIRST_OPC, flags, name, fn, &RQF_ ## name,\
-			   LUSTRE_MGS_VERSION)
+	TGT_RPC_HANDLER(MGS_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MGS_VERSION)
 #define TGT_MGS_HDL_VAR(flags, name, fn)				\
-	TGT_RPC_HANDLER(MGS_FIRST_OPC, flags, name, fn, NULL,	\
-			   LUSTRE_MGS_VERSION)
+	TGT_RPC_HANDLER(MGS_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_MGS_VERSION)
 
 /*
  * OBD handler macros and generic functions.
  */
 #define TGT_OBD_HDL(flags, name, fn)					\
-	TGT_RPC_HANDLER(OBD_FIRST_OPC, flags, name, fn, &RQF_ ## name,\
-			   LUSTRE_OBD_VERSION)
+	TGT_RPC_HANDLER(OBD_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_OBD_VERSION)
+#define TGT_OBD_HDL_VAR(flags, name, fn)				\
+	TGT_RPC_HANDLER(OBD_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_OBD_VERSION)
 
 /*
  * DLM handler macros and generic functions.
  */
 #define TGT_DLM_HDL_VAR(flags, name, fn)				\
-	TGT_RPC_HANDLER(LDLM_FIRST_OPC, flags, name, fn, NULL,	\
-			   LUSTRE_DLM_VERSION)
+	TGT_RPC_HANDLER(LDLM_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_DLM_VERSION)
 #define TGT_DLM_HDL(flags, name, fn)					\
-	TGT_RPC_HANDLER(LDLM_FIRST_OPC, flags, name, fn, &RQF_ ## name,\
-			   LUSTRE_DLM_VERSION)
+	TGT_RPC_HANDLER(LDLM_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_DLM_VERSION)
 
 /*
  * LLOG handler macros and generic functions.
  */
 #define TGT_LLOG_HDL_VAR(flags, name, fn)				\
-	TGT_RPC_HANDLER(LLOG_FIRST_OPC, flags, name, fn, NULL,	\
-			   LUSTRE_LOG_VERSION)
+	TGT_RPC_HANDLER(LLOG_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_LOG_VERSION)
 #define TGT_LLOG_HDL(flags, name, fn)					\
-	TGT_RPC_HANDLER(LLOG_FIRST_OPC, flags, name, fn, &RQF_ ## name,\
-			   LUSTRE_LOG_VERSION)
+	TGT_RPC_HANDLER(LLOG_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_LOG_VERSION)
 
 /*
  * Sec context handler macros and generic functions.
  */
 #define TGT_SEC_HDL_VAR(flags, name, fn)				\
-	TGT_RPC_HANDLER(SEC_FIRST_OPC, flags, name, fn, NULL,	\
-			   LUSTRE_OBD_VERSION)
+	TGT_RPC_HANDLER(SEC_FIRST_OPC, flags, name, fn, NULL,		\
+			LUSTRE_OBD_VERSION)
+
+#define TGT_QUOTA_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(QUOTA_DQACQ, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MDS_VERSION)
+
+/* Sequence service handlers */
+#define TGT_SEQ_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(SEQ_QUERY, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MDS_VERSION)
+
+/* FID Location Database handlers */
+#define TGT_FLD_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(FLD_QUERY, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MDS_VERSION)
+
+/* Request with a format known in advance */
+#define TGT_UPDATE_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(UPDATE_OBJ, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_MDS_VERSION)
 
 #endif /* __LUSTRE_LU_TARGET_H */

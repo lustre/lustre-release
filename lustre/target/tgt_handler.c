@@ -184,6 +184,7 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
 	case MDS_DISCONNECT:
 	case OST_DISCONNECT:
+	case OBD_IDX_READ:
 		*process = 1;
 		RETURN(0);
 	case MDS_CLOSE:
@@ -191,6 +192,7 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
 	case MDS_SYNC: /* used in unmounting */
 	case OBD_PING:
 	case MDS_REINT:
+	case UPDATE_OBJ:
 	case SEQ_QUERY:
 	case FLD_QUERY:
 	case LDLM_ENQUEUE:
@@ -215,21 +217,13 @@ int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 	ENTRY;
 
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+	case MDS_CONNECT:
+	case OST_CONNECT:
+	case MGS_CONNECT:
 	case SEC_CTX_INIT:
 	case SEC_CTX_INIT_CONT:
 	case SEC_CTX_FINI:
 		RETURN(+1);
-	}
-
-	if (unlikely(!class_connected_export(req->rq_export))) {
-		CERROR("%s: operation %d on unconnected export from %s\n",
-		       req->rq_export != NULL ?
-		       req->rq_export->exp_obd->obd_name : "?",
-		       lustre_msg_get_opc(req->rq_reqmsg),
-		       libcfs_id2str(req->rq_peer));
-		req->rq_status = -ENOTCONN;
-		target_send_reply(req, -ENOTCONN, reply_fail_id);
-		RETURN(0);
 	}
 
 	if (!req->rq_export->exp_obd->obd_replayable)
@@ -276,6 +270,7 @@ int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 int tgt_request_handle(struct ptlrpc_request *req)
 {
 	struct tgt_session_info	*tsi = tgt_ses_info(req->rq_svc_thread->t_env);
+
 	struct lustre_msg	*msg = req->rq_reqmsg;
 	struct tgt_handler	*h;
 	struct tgt_opc_slice	*s;
@@ -303,16 +298,13 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		}
 	}
 
-	/* this should be assertion actually, but keep it reporting error
-	 * for unified target development time */
-	if (req->rq_export == NULL) {
-		CERROR("Request with no export from %s, opcode %u\n",
-		       libcfs_nid2str(req->rq_peer.nid), opc);
-		req->rq_status = -EFAULT;
+	if (unlikely(!class_connected_export(req->rq_export))) {
+		CDEBUG(D_HA, "operation %d on unconnected OST from %s\n",
+		       opc, libcfs_id2str(req->rq_peer));
+		req->rq_status = -ENOTCONN;
 		rc = ptlrpc_error(req);
 		GOTO(out, rc);
 	}
-
 
 	tsi->tsi_tgt = tgt = class_exp2tgt(req->rq_export);
 	tsi->tsi_exp = req->rq_export;
@@ -639,12 +631,145 @@ int tgt_obd_qc_callback(struct tgt_session_info *tsi)
 }
 EXPORT_SYMBOL(tgt_obd_qc_callback);
 
+static int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg,
+			int nob)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct obd_export	*exp = req->rq_export;
+	struct ptlrpc_bulk_desc	*desc;
+	struct l_wait_info	*lwi = &tti->tti_u.rdpg.tti_wait_info;
+	int			 tmpcount;
+	int			 tmpsize;
+	int			 i;
+	int			 rc;
+
+	ENTRY;
+
+	desc = ptlrpc_prep_bulk_exp(req, rdpg->rp_npages, 1, BULK_PUT_SOURCE,
+				    MDS_BULK_PORTAL);
+	if (desc == NULL)
+		RETURN(-ENOMEM);
+
+	if (!(exp_connect_flags(exp) & OBD_CONNECT_BRW_SIZE))
+		/* old client requires reply size in it's PAGE_CACHE_SIZE,
+		 * which is rdpg->rp_count */
+		nob = rdpg->rp_count;
+
+	for (i = 0, tmpcount = nob; i < rdpg->rp_npages && tmpcount > 0;
+	     i++, tmpcount -= tmpsize) {
+		tmpsize = min_t(int, tmpcount, PAGE_CACHE_SIZE);
+		ptlrpc_prep_bulk_page_pin(desc, rdpg->rp_pages[i], 0, tmpsize);
+	}
+
+	LASSERT(desc->bd_nob == nob);
+	rc = target_bulk_io(exp, desc, lwi);
+	ptlrpc_free_bulk_pin(desc);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_sendpage);
+
+/*
+ * OBD_IDX_READ handler
+ */
+int tgt_obd_idx_read(struct tgt_session_info *tsi)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
+	struct lu_rdpg		*rdpg = &tti->tti_u.rdpg.tti_rdpg;
+	struct idx_info		*req_ii, *rep_ii;
+	int			 rc, i;
+
+	ENTRY;
+
+	memset(rdpg, 0, sizeof(*rdpg));
+	req_capsule_set(tsi->tsi_pill, &RQF_OBD_IDX_READ);
+
+	/* extract idx_info buffer from request & reply */
+	req_ii = req_capsule_client_get(tsi->tsi_pill, &RMF_IDX_INFO);
+	if (req_ii == NULL || req_ii->ii_magic != IDX_INFO_MAGIC)
+		RETURN(err_serious(-EPROTO));
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc)
+		RETURN(err_serious(rc));
+
+	rep_ii = req_capsule_server_get(tsi->tsi_pill, &RMF_IDX_INFO);
+	if (rep_ii == NULL)
+		RETURN(err_serious(-EFAULT));
+	rep_ii->ii_magic = IDX_INFO_MAGIC;
+
+	/* extract hash to start with */
+	rdpg->rp_hash = req_ii->ii_hash_start;
+
+	/* extract requested attributes */
+	rdpg->rp_attrs = req_ii->ii_attrs;
+
+	/* check that fid packed in request is valid and supported */
+	if (!fid_is_sane(&req_ii->ii_fid))
+		RETURN(-EINVAL);
+	rep_ii->ii_fid = req_ii->ii_fid;
+
+	/* copy flags */
+	rep_ii->ii_flags = req_ii->ii_flags;
+
+	/* compute number of pages to allocate, ii_count is the number of 4KB
+	 * containers */
+	if (req_ii->ii_count <= 0)
+		GOTO(out, rc = -EFAULT);
+	rdpg->rp_count = min_t(unsigned int, req_ii->ii_count << LU_PAGE_SHIFT,
+			       exp_max_brw_size(tsi->tsi_exp));
+	rdpg->rp_npages = (rdpg->rp_count + PAGE_CACHE_SIZE -1) >> PAGE_CACHE_SHIFT;
+
+	/* allocate pages to store the containers */
+	OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+	if (rdpg->rp_pages == NULL)
+		GOTO(out, rc = -ENOMEM);
+	for (i = 0; i < rdpg->rp_npages; i++) {
+		rdpg->rp_pages[i] = alloc_page(GFP_IOFS);
+		if (rdpg->rp_pages[i] == NULL)
+			GOTO(out, rc = -ENOMEM);
+	}
+
+	/* populate pages with key/record pairs */
+	rc = dt_index_read(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, rep_ii, rdpg);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	LASSERTF(rc <= rdpg->rp_count, "dt_index_read() returned more than "
+		 "asked %d > %d\n", rc, rdpg->rp_count);
+
+	/* send pages to client */
+	rc = tgt_sendpage(tsi, rdpg, rc);
+	if (rc)
+		GOTO(out, rc);
+	EXIT;
+out:
+	if (rdpg->rp_pages) {
+		for (i = 0; i < rdpg->rp_npages; i++)
+			if (rdpg->rp_pages[i])
+				__free_page(rdpg->rp_pages[i]);
+		OBD_FREE(rdpg->rp_pages,
+			 rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+	}
+	return rc;
+}
+EXPORT_SYMBOL(tgt_obd_idx_read);
+
+struct tgt_handler tgt_obd_handlers[] = {
+TGT_OBD_HDL    (0,	OBD_PING,		tgt_obd_ping),
+TGT_OBD_HDL_VAR(0,	OBD_LOG_CANCEL,		tgt_obd_log_cancel),
+TGT_OBD_HDL_VAR(0,	OBD_QC_CALLBACK,	tgt_obd_qc_callback),
+TGT_OBD_HDL    (0,	OBD_IDX_READ,		tgt_obd_idx_read)
+};
+EXPORT_SYMBOL(tgt_obd_handlers);
+
 /*
  * Unified target DLM handlers.
  */
 struct ldlm_callback_suite tgt_dlm_cbs = {
-	.lcs_completion = ldlm_server_completion_ast,
-	.lcs_blocking = ldlm_server_blocking_ast,
+	.lcs_completion	= ldlm_server_completion_ast,
+	.lcs_blocking	= ldlm_server_blocking_ast,
+	.lcs_glimpse	= ldlm_server_glimpse_ast
 };
 
 int tgt_enqueue(struct tgt_session_info *tsi)
@@ -694,6 +819,15 @@ int tgt_cp_callback(struct tgt_session_info *tsi)
 	return err_serious(-EOPNOTSUPP);
 }
 EXPORT_SYMBOL(tgt_cp_callback);
+
+/* generic LDLM target handler */
+struct tgt_handler tgt_dlm_handlers[] = {
+TGT_DLM_HDL    (HABEO_CLAVIS,	LDLM_ENQUEUE,		tgt_enqueue),
+TGT_DLM_HDL_VAR(HABEO_CLAVIS,	LDLM_CONVERT,		tgt_convert),
+TGT_DLM_HDL_VAR(0,		LDLM_BL_CALLBACK,	tgt_bl_callback),
+TGT_DLM_HDL_VAR(0,		LDLM_CP_CALLBACK,	tgt_cp_callback)
+};
+EXPORT_SYMBOL(tgt_dlm_handlers);
 
 /*
  * Unified target LLOG handlers.
@@ -770,3 +904,30 @@ int tgt_llog_prev_block(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_llog_prev_block);
+
+/* generic llog target handler */
+struct tgt_handler tgt_llog_handlers[] = {
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	tgt_llog_open),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_DESTROY,	tgt_llog_destroy),
+TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
+};
+EXPORT_SYMBOL(tgt_llog_handlers);
+
+/*
+ * sec context handlers
+ */
+/* XXX: Implement based on mdt_sec_ctx_handle()? */
+int tgt_sec_ctx_handle(struct tgt_session_info *tsi)
+{
+	return 0;
+}
+
+struct tgt_handler tgt_sec_ctx_handlers[] = {
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT,		tgt_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT_CONT,	tgt_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		tgt_sec_ctx_handle),
+};
+EXPORT_SYMBOL(tgt_sec_ctx_handlers);

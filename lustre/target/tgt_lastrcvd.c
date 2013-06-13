@@ -684,3 +684,149 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_client_del);
+
+/*
+ * last_rcvd & last_committed update callbacks
+ */
+int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
+			 struct dt_object *obj, __u64 opdata,
+			 struct thandle *th, struct ptlrpc_request *req)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct tg_export_data	*ted;
+	__u64			*transno_p;
+	int			 rc = 0;
+	bool			 lw_client, update = false;
+
+	ENTRY;
+
+	/* that can be OUT target and we need tgt_session_info */
+	if (req == NULL) {
+		struct tgt_session_info	*tsi = tgt_ses_info(env);
+
+		req = tgt_ses_req(tsi);
+		if (req == NULL) /* echo client case */
+			RETURN(0);
+	}
+
+	ted = &req->rq_export->exp_target_data;
+
+	lw_client = exp_connect_flags(req->rq_export) & OBD_CONNECT_LIGHTWEIGHT;
+
+	tti->tti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+	spin_lock(&tgt->lut_translock);
+	if (th->th_result != 0) {
+		if (tti->tti_transno != 0) {
+			CERROR("%s: replay transno "LPU64" failed: rc = %d\n",
+			       tgt_name(tgt), tti->tti_transno, th->th_result);
+		}
+	} else if (tti->tti_transno == 0) {
+		tti->tti_transno = ++tgt->lut_last_transno;
+	} else {
+		/* should be replay */
+		if (tti->tti_transno > tgt->lut_last_transno)
+			tgt->lut_last_transno = tti->tti_transno;
+	}
+	spin_unlock(&tgt->lut_translock);
+
+	/** VBR: set new versions */
+	if (th->th_result == 0 && obj != NULL)
+		dt_version_set(env, obj, tti->tti_transno, th);
+
+	/* filling reply data */
+	CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
+	       tti->tti_transno, tgt->lut_obd->obd_last_committed);
+
+	req->rq_transno = tti->tti_transno;
+	lustre_msg_set_transno(req->rq_repmsg, tti->tti_transno);
+
+	/* if can't add callback, do sync write */
+	th->th_sync |= !!tgt_last_commit_cb_add(th, tgt, req->rq_export,
+						tti->tti_transno);
+
+	if (lw_client) {
+		/* All operations performed by LW clients are synchronous and
+		 * we store the committed transno in the last_rcvd header */
+		spin_lock(&tgt->lut_translock);
+		if (tti->tti_transno > tgt->lut_lsd.lsd_last_transno) {
+			tgt->lut_lsd.lsd_last_transno = tti->tti_transno;
+			update = true;
+		}
+		spin_unlock(&tgt->lut_translock);
+		/* Although lightweight (LW) connections have no slot in
+		 * last_rcvd, we still want to maintain the in-memory
+		 * lsd_client_data structure in order to properly handle reply
+		 * reconstruction. */
+	} else if (ted->ted_lr_off <= 0) {
+		CERROR("%s: client idx %d has offset %lld\n",
+		       tgt_name(tgt), ted->ted_lr_idx, ted->ted_lr_off);
+		RETURN(-EINVAL);
+	}
+
+	/* if the export has already been disconnected, we have no last_rcvd
+	 * slot, update server data with latest transno then */
+	if (ted->ted_lcd == NULL) {
+		CWARN("commit transaction for disconnected client %s: rc %d\n",
+		      req->rq_export->exp_client_uuid.uuid, rc);
+		GOTO(srv_update, rc = 0);
+	}
+
+	mutex_lock(&ted->ted_lcd_lock);
+	LASSERT(ergo(tti->tti_transno == 0, th->th_result != 0));
+	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
+	    lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
+		transno_p = &ted->ted_lcd->lcd_last_close_transno;
+		ted->ted_lcd->lcd_last_close_xid = req->rq_xid;
+		ted->ted_lcd->lcd_last_close_result = th->th_result;
+	} else {
+		/* VBR: save versions in last_rcvd for reconstruct. */
+		__u64 *pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
+
+		if (pre_versions) {
+			ted->ted_lcd->lcd_pre_versions[0] = pre_versions[0];
+			ted->ted_lcd->lcd_pre_versions[1] = pre_versions[1];
+			ted->ted_lcd->lcd_pre_versions[2] = pre_versions[2];
+			ted->ted_lcd->lcd_pre_versions[3] = pre_versions[3];
+		}
+		transno_p = &ted->ted_lcd->lcd_last_transno;
+		ted->ted_lcd->lcd_last_xid = req->rq_xid;
+		ted->ted_lcd->lcd_last_result = th->th_result;
+		/* XXX: lcd_last_data is __u32 but intent_dispostion is __u64,
+		 * see struct ldlm_reply->lock_policy_res1; */
+		ted->ted_lcd->lcd_last_data = opdata;
+	}
+
+	/* Update transno in slot only if non-zero number, i.e. no errors */
+	if (likely(tti->tti_transno != 0)) {
+		if (*transno_p > tti->tti_transno) {
+			CERROR("%s: trying to overwrite bigger transno:"
+			       "on-disk: "LPU64", new: "LPU64" replay: %d. "
+			       "see LU-617.\n", tgt_name(tgt), *transno_p,
+			       tti->tti_transno, req_is_replay(req));
+			if (req_is_replay(req)) {
+				spin_lock(&req->rq_export->exp_lock);
+				req->rq_export->exp_vbr_failed = 1;
+				spin_unlock(&req->rq_export->exp_lock);
+			}
+			mutex_unlock(&ted->ted_lcd_lock);
+			RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
+		}
+		*transno_p = tti->tti_transno;
+	}
+
+	if (!lw_client) {
+		tti->tti_off = ted->ted_lr_off;
+		rc = tgt_client_data_write(env, tgt, ted->ted_lcd, &tti->tti_off, th);
+		if (rc < 0) {
+			mutex_unlock(&ted->ted_lcd_lock);
+			RETURN(rc);
+		}
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+	EXIT;
+srv_update:
+	if (update)
+		rc = tgt_server_data_write(env, tgt, th);
+	return rc;
+}
+EXPORT_SYMBOL(tgt_last_rcvd_update);

@@ -380,8 +380,8 @@
  * include linkea (4K maxim), together with other updates, we set it to 9K:
  * lustre_msg + ptlrpc_body + UPDATE_BUF_SIZE (8K)
  */
-#define MDS_OUT_MAXREQSIZE	(9 * 1024)
-#define MDS_OUT_MAXREPSIZE	MDS_MAXREPSIZE
+#define OUT_MAXREQSIZE	(9 * 1024)
+#define OUT_MAXREPSIZE	MDS_MAXREPSIZE
 
 /** MDS_BUFSIZE = max_reqsize (w/o LOV EA) + max sptlrpc payload size */
 #define MDS_BUFSIZE		max(MDS_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
@@ -407,11 +407,11 @@
 				    160 * 1024)
 
 /**
- * MDS_OUT_BUFSIZE = max_out_reqsize + max sptlrpc payload (~1K) which is
+ * OUT_BUFSIZE = max_out_reqsize + max sptlrpc payload (~1K) which is
  * about 10K, for the same reason as MDS_REG_BUFSIZE, we also give some
  * extra bytes to each request buffer to improve buffer utilization rate.
   */
-#define MDS_OUT_BUFSIZE		max(MDS_OUT_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
+#define OUT_BUFSIZE		max(OUT_MAXREQSIZE + SPTLRPC_MAX_PAYLOAD, \
 				    24 * 1024)
 
 /** FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc */

@@ -347,153 +347,35 @@ out:
 /*
  * last_rcvd & last_committed update callbacks
  */
-static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
-                                struct thandle *th)
-{
-        struct mdt_device *mdt = mti->mti_mdt;
-        struct ptlrpc_request *req = mdt_info_req(mti);
-        struct tg_export_data *ted;
-        struct lsd_client_data *lcd;
-        loff_t off;
-        int err;
-        __s32 rc = th->th_result;
-
-        ENTRY;
-        LASSERT(req);
-        LASSERT(req->rq_export);
-        LASSERT(mdt);
-        ted = &req->rq_export->exp_target_data;
-        LASSERT(ted);
-
-	mutex_lock(&ted->ted_lcd_lock);
-	lcd = ted->ted_lcd;
-	/* if the export has already been disconnected, we have no last_rcvd
-	 * slot, update server data with latest transno then */
-	if (lcd == NULL) {
-		mutex_unlock(&ted->ted_lcd_lock);
-                CWARN("commit transaction for disconnected client %s: rc %d\n",
-                      req->rq_export->exp_client_uuid.uuid, rc);
-		err = tgt_server_data_write(mti->mti_env, &mdt->mdt_lut, th);
-                RETURN(err);
-        }
-
-        off = ted->ted_lr_off;
-        LASSERT(ergo(mti->mti_transno == 0, rc != 0));
-        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
-            lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
-                if (mti->mti_transno != 0) {
-                        if (lcd->lcd_last_close_transno > mti->mti_transno) {
-                                CERROR("Trying to overwrite bigger transno:"
-                                       "on-disk: "LPU64", new: "LPU64" "
-                                       "replay: %d. see LU-617.\n",
-                                       lcd->lcd_last_close_transno,
-                                       mti->mti_transno, req_is_replay(req));
-                                if (req_is_replay(req)) {
-					spin_lock(&req->rq_export->exp_lock);
-					req->rq_export->exp_vbr_failed = 1;
-					spin_unlock(&req->rq_export->exp_lock);
-				}
-				mutex_unlock(&ted->ted_lcd_lock);
-                                RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
-                        }
-                        lcd->lcd_last_close_transno = mti->mti_transno;
-                }
-                lcd->lcd_last_close_xid = req->rq_xid;
-                lcd->lcd_last_close_result = rc;
-        } else {
-                /* VBR: save versions in last_rcvd for reconstruct. */
-                __u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
-                if (pre_versions) {
-                        lcd->lcd_pre_versions[0] = pre_versions[0];
-                        lcd->lcd_pre_versions[1] = pre_versions[1];
-                        lcd->lcd_pre_versions[2] = pre_versions[2];
-                        lcd->lcd_pre_versions[3] = pre_versions[3];
-                }
-                if (mti->mti_transno != 0) {
-                        if (lcd->lcd_last_transno > mti->mti_transno) {
-                                CERROR("Trying to overwrite bigger transno:"
-                                       "on-disk: "LPU64", new: "LPU64" "
-                                       "replay: %d. see LU-617.\n",
-                                       lcd->lcd_last_transno,
-                                       mti->mti_transno, req_is_replay(req));
-                                if (req_is_replay(req)) {
-					spin_lock(&req->rq_export->exp_lock);
-					req->rq_export->exp_vbr_failed = 1;
-					spin_unlock(&req->rq_export->exp_lock);
-				}
-				mutex_unlock(&ted->ted_lcd_lock);
-                                RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
-                        }
-                        lcd->lcd_last_transno = mti->mti_transno;
-                }
-                lcd->lcd_last_xid = req->rq_xid;
-                lcd->lcd_last_result = rc;
-                /*XXX: save intent_disposition in mdt_thread_info?
-                 * also there is bug - intent_dispostion is __u64,
-                 * see struct ldlm_reply->lock_policy_res1; */
-                lcd->lcd_last_data = mti->mti_opdata;
-        }
-
-	if (exp_connect_flags(mti->mti_exp) & OBD_CONNECT_LIGHTWEIGHT) {
-		/* Although lightweight (LW) connections have no slot in
-		 * last_rcvd, we still want to maintain the in-memory
-		 * lsd_client_data structure in order to properly handle reply
-		 * reconstruction. */
-		struct lu_target	*tg = &mdt->mdt_lut;
-		bool			 update = false;
-
-		mutex_unlock(&ted->ted_lcd_lock);
-		err = 0;
-
-		/* All operations performed by LW clients are synchronous and
-		 * we store the committed transno in the last_rcvd header */
-		spin_lock(&tg->lut_translock);
-		if (mti->mti_transno > tg->lut_lsd.lsd_last_transno) {
-			tg->lut_lsd.lsd_last_transno = mti->mti_transno;
-			update = true;
-		}
-		spin_unlock(&tg->lut_translock);
-
-		if (update)
-			err = tgt_server_data_write(mti->mti_env, tg, th);
-	} else if (off <= 0) {
-		CERROR("%s: client idx %d has offset %lld\n",
-		       mdt_obd_name(mdt), ted->ted_lr_idx, off);
-		mutex_unlock(&ted->ted_lcd_lock);
-		err = -EINVAL;
-	} else {
-		err = tgt_client_data_write(mti->mti_env, &mdt->mdt_lut, lcd,
-					    &off, th);
-		mutex_unlock(&ted->ted_lcd_lock);
-	}
-	RETURN(err);
-}
-
 extern struct lu_context_key mdt_thread_key;
 
 /* add credits for last_rcvd update */
 static int mdt_txn_start_cb(const struct lu_env *env,
 			    struct thandle *th, void *cookie)
 {
-	struct mdt_device *mdt = cookie;
-	struct mdt_thread_info *mti;
-	int rc;
-	ENTRY;
+	struct lu_target	*tgt = cookie;
+	struct mdt_thread_info	*mti;
+	int			 rc;
+
+	/* if there is no session, then this transaction is not result of
+	 * request processing but some local operation or echo client */
+	if (env->le_ses == NULL)
+		return 0;
 
 	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-	LASSERT(mdt->mdt_lut.lut_last_rcvd);
+	LASSERT(tgt->lut_last_rcvd);
 	if (mti->mti_exp == NULL)
-		RETURN(0);
+		return 0;
 
-	rc = dt_declare_record_write(env, mdt->mdt_lut.lut_last_rcvd,
+	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
 				     sizeof(struct lsd_client_data),
 				     mti->mti_exp->exp_target_data.ted_lr_off,
 				     th);
 	if (rc)
 		return rc;
 
-	rc = dt_declare_record_write(env, mdt->mdt_lut.lut_last_rcvd,
+	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
 				     sizeof(struct lr_server_data), 0, th);
 	if (rc)
 		return rc;
@@ -510,66 +392,34 @@ static int mdt_txn_start_cb(const struct lu_env *env,
 static int mdt_txn_stop_cb(const struct lu_env *env,
                            struct thandle *txn, void *cookie)
 {
-        struct mdt_device *mdt = cookie;
-        struct mdt_thread_info *mti;
-        struct ptlrpc_request *req;
+	struct lu_target	*tgt = cookie;
+	struct mdt_thread_info	*mti;
+	struct dt_object	*obj = NULL;
+	int			 rc;
 
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        req = mdt_info_req(mti);
-
-	if (mti->mti_mdt == NULL || req == NULL)
+	if (env->le_ses == NULL)
 		return 0;
 
-        if (mti->mti_has_trans) {
-                /* XXX: currently there are allowed cases, but the wrong cases
-                 * are also possible, so better check is needed here */
-                CDEBUG(D_INFO, "More than one transaction "LPU64"\n",
-                       mti->mti_transno);
-                return 0;
-        }
+	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	LASSERT(mti);
+	if (mti->mti_has_trans) {
+		/* XXX: currently there are allowed cases, but the wrong cases
+		 * are also possible, so better check is needed here */
+		CDEBUG(D_INFO, "More than one transaction "LPU64"\n",
+		       mti->mti_transno);
+		return 0;
+	}
 
-        mti->mti_has_trans = 1;
-	spin_lock(&mdt->mdt_lut.lut_translock);
-        if (txn->th_result != 0) {
-                if (mti->mti_transno != 0) {
-			CERROR("Replay transno "LPU64" failed: rc %d\n",
-				mti->mti_transno, txn->th_result);
-			spin_unlock(&mdt->mdt_lut.lut_translock);
-			return 0;
-                }
-        } else if (mti->mti_transno == 0) {
-                mti->mti_transno = ++ mdt->mdt_lut.lut_last_transno;
-        } else {
-                /* should be replay */
-                if (mti->mti_transno > mdt->mdt_lut.lut_last_transno)
-                        mdt->mdt_lut.lut_last_transno = mti->mti_transno;
-        }
-	spin_unlock(&mdt->mdt_lut.lut_translock);
-        /* sometimes the reply message has not been successfully packed */
-        LASSERT(req != NULL && req->rq_repmsg != NULL);
+	mti->mti_has_trans = 1;
 
-        /** VBR: set new versions */
-	/* we probably should not set local transno to the remote object
-	 * on another storage, What about VBR on remote object? XXX */
-	if (txn->th_result == 0 && mti->mti_mos != NULL &&
-	    !mdt_object_remote(mti->mti_mos)) {
+	if (mti->mti_mos != NULL &&
+	    mdt_object_remote(mti->mti_mos)) {
+		obj = mdt_obj2dt(mti->mti_mos);
+	}
 
-                dt_version_set(env, mdt_obj2dt(mti->mti_mos),
-                               mti->mti_transno, txn);
-                mti->mti_mos = NULL;
-        }
-
-        /* filling reply data */
-        CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
-               mti->mti_transno, req->rq_export->exp_obd->obd_last_committed);
-
-        req->rq_transno = mti->mti_transno;
-        lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
-        /* if can't add callback, do sync write */
-        txn->th_sync |= !!tgt_last_commit_cb_add(txn, &mdt->mdt_lut,
-                                                 mti->mti_exp,
-                                                 mti->mti_transno);
-        return mdt_last_rcvd_update(mti, txn);
+	rc = tgt_last_rcvd_update(env, tgt, obj, mti->mti_opdata, txn,
+				  mdt_info_req(mti));
+	return rc;
 }
 
 int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
@@ -586,13 +436,15 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         mdt->mdt_txn_cb.dtc_txn_start = mdt_txn_start_cb;
         mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
         mdt->mdt_txn_cb.dtc_txn_commit = NULL;
-        mdt->mdt_txn_cb.dtc_cookie = mdt;
+        mdt->mdt_txn_cb.dtc_cookie = &mdt->mdt_lut;
         mdt->mdt_txn_cb.dtc_tag = LCT_MD_THREAD;
         CFS_INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);
 
-        dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
+	rc = mdt_server_data_init(env, mdt, lsi);
+	if (rc != 0)
+		RETURN(rc);
 
-        rc = mdt_server_data_init(env, mdt, lsi);
+	dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
 	RETURN(rc);
 }

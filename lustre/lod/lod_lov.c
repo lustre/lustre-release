@@ -247,7 +247,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		spin_lock(&imp->imp_lock);
 		imp->imp_server_timeout = 1;
 		spin_unlock(&imp->imp_lock);
-		imp->imp_client->cli_request_portal = MDS_MDS_PORTAL;
+		imp->imp_client->cli_request_portal = OUT_PORTAL;
 		CDEBUG(D_OTHER, "%s: Set 'mds' portal and timeout\n",
 		      obd->obd_name);
 		ltd = &lod->lod_mdt_descs;
