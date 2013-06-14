@@ -643,6 +643,7 @@ kptllnd_base_startup (void)
         struct timeval  tv;
         lnet_process_id_t  target;
         ptl_err_t       ptl_rc;
+	char            name[16];
 
         if (*kptllnd_tunables.kptl_max_procs_per_node < 1) {
                 CERROR("max_procs_per_node must be >= 1\n");
@@ -824,6 +825,7 @@ kptllnd_base_startup (void)
          * now that PTLLND_INIT_DATA state has been entered */
         CDEBUG(D_NET, "starting %d scheduler threads\n", PTLLND_N_SCHED);
         for (i = 0; i < PTLLND_N_SCHED; i++) {
+		snprintf(name, sizeof(name), "kptllnd_sd_%02d", i);
                 rc = kptllnd_thread_start(kptllnd_scheduler, (void *)((long)i));
                 if (rc != 0) {
                         CERROR("Can't spawn scheduler[%d]: %d\n", i, rc);
@@ -831,7 +833,8 @@ kptllnd_base_startup (void)
                 }
         }
 
-        rc = kptllnd_thread_start(kptllnd_watchdog, NULL);
+	snprintf(name, sizeof(name), "kptllnd_wd_%02d", i);
+	rc = kptllnd_thread_start(kptllnd_watchdog, NULL, name);
         if (rc != 0) {
                 CERROR("Can't spawn watchdog: %d\n", rc);
                 goto failed;

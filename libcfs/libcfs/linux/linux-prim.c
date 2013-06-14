@@ -259,35 +259,6 @@ void cfs_enter_debugger(void)
 #endif
 }
 
-void cfs_daemonize(char *str) {
-        unsigned long flags;
-
-        daemonize(str);
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-}
-
-int cfs_daemonize_ctxt(char *str) {
-
-        cfs_daemonize(str);
-#ifndef HAVE_UNSHARE_FS_STRUCT
-        {
-        struct task_struct *tsk = current;
-        struct fs_struct *fs = NULL;
-        fs = copy_fs_struct(tsk->fs);
-        if (fs == NULL)
-                return -ENOMEM;
-        exit_fs(tsk);
-        tsk->fs = fs;
-        }
-#else
-        unshare_fs_struct();
-#endif
-        return 0;
-}
-
 sigset_t
 cfs_block_allsigs(void)
 {
@@ -373,8 +344,6 @@ libcfs_arch_cleanup(void)
 EXPORT_SYMBOL(libcfs_arch_init);
 EXPORT_SYMBOL(libcfs_arch_cleanup);
 EXPORT_SYMBOL(cfs_enter_debugger);
-EXPORT_SYMBOL(cfs_daemonize);
-EXPORT_SYMBOL(cfs_daemonize_ctxt);
 EXPORT_SYMBOL(cfs_block_allsigs);
 EXPORT_SYMBOL(cfs_block_sigs);
 EXPORT_SYMBOL(cfs_block_sigsinv);

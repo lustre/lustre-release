@@ -213,18 +213,10 @@ static void lcw_dump_stack(struct lc_watchdog *lcw)
 static int lcw_dispatch_main(void *data)
 {
         int                 rc = 0;
-        unsigned long       flags;
         struct lc_watchdog *lcw;
         CFS_LIST_HEAD      (zombies);
 
         ENTRY;
-
-        cfs_daemonize("lc_watchdogd");
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
 
 	complete(&lcw_start_completion);
 
@@ -312,7 +304,7 @@ static int lcw_dispatch_main(void *data)
 
 static void lcw_dispatch_start(void)
 {
-	int rc;
+	cfs_task_t *task;
 
 	ENTRY;
 	LASSERT(lcw_refcount == 1);
@@ -321,13 +313,14 @@ static void lcw_dispatch_start(void)
 	init_completion(&lcw_start_completion);
         cfs_waitq_init(&lcw_event_waitq);
 
-        CDEBUG(D_INFO, "starting dispatch thread\n");
-        rc = cfs_create_thread(lcw_dispatch_main, NULL, 0);
-        if (rc < 0) {
-                CERROR("error spawning watchdog dispatch thread: %d\n", rc);
-                EXIT;
-                return;
-        }
+	CDEBUG(D_INFO, "starting dispatch thread\n");
+	task = kthread_run(lcw_dispatch_main, NULL, "lc_watchdogd");
+	if (IS_ERR(task)) {
+		CERROR("error spawning watchdog dispatch thread: %ld\n",
+			PTR_ERR(task));
+		EXIT;
+		return;
+	}
 	wait_for_completion(&lcw_start_completion);
 	CDEBUG(D_INFO, "watchdog dispatcher initialization complete.\n");
 

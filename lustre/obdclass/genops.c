@@ -1744,14 +1744,7 @@ EXPORT_SYMBOL(obd_zombie_barrier);
  */
 static int obd_zombie_impexp_thread(void *unused)
 {
-	int rc;
-
-	rc = cfs_daemonize_ctxt("obd_zombid");
-	if (rc != 0) {
-		complete(&obd_zombie_start);
-		RETURN(rc);
-	}
-
+	unshare_fs_struct();
 	complete(&obd_zombie_start);
 
 	obd_zombie_pid = cfs_curproc_pid();
@@ -1800,7 +1793,9 @@ int obd_zombie_impexp_kill(void *arg)
  */
 int obd_zombie_impexp_init(void)
 {
-	int rc;
+#ifdef __KERNEL__
+	cfs_task_t *task;
+#endif
 
 	CFS_INIT_LIST_HEAD(&obd_zombie_imports);
 	CFS_INIT_LIST_HEAD(&obd_zombie_exports);
@@ -1811,9 +1806,9 @@ int obd_zombie_impexp_init(void)
 	obd_zombie_pid = 0;
 
 #ifdef __KERNEL__
-	rc = cfs_create_thread(obd_zombie_impexp_thread, NULL, 0);
-	if (rc < 0)
-		RETURN(rc);
+	task = kthread_run(obd_zombie_impexp_thread, NULL, "obd_zombid");
+	if (IS_ERR(task))
+		RETURN(PTR_ERR(task));
 
 	wait_for_completion(&obd_zombie_start);
 #else
@@ -1825,9 +1820,8 @@ int obd_zombie_impexp_init(void)
         obd_zombie_impexp_idle_cb =
                 liblustre_register_idle_callback("obd_zombi_impexp_check",
                                                  &obd_zombie_impexp_check, NULL);
-        rc = 0;
 #endif
-        RETURN(rc);
+	RETURN(0);
 }
 /**
  * stop destroy zombie import/export thread

@@ -891,15 +891,13 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 }
 
 int
-kranal_thread_start (int(*fn)(void *arg), void *arg)
+kranal_thread_start(int(*fn)(void *arg), void *arg, char *name)
 {
-        long    pid = cfs_create_thread(fn, arg, 0);
+	cfs_task_t *task = cfs_thread_run(fn, arg, name);
 
-        if (pid < 0)
-                return(int)pid;
-
-        cfs_atomic_inc(&kranal_data.kra_nthreads);
-        return 0;
+	if (!IS_ERR(task))
+		cfs_atomic_inc(&kranal_data.kra_nthreads);
+	return PTR_ERR(task);
 }
 
 void
@@ -1054,15 +1052,12 @@ int
 kranal_connd (void *arg)
 {
         long               id = (long)arg;
-        char               name[16];
         cfs_waitlink_t     wait;
         unsigned long      flags;
         kra_peer_t        *peer;
         kra_acceptsock_t  *ras;
         int                did_something;
 
-        snprintf(name, sizeof(name), "kranal_connd_%02ld", id);
-        cfs_daemonize(name);
         cfs_block_allsigs();
 
         cfs_waitlink_init(&wait);
@@ -1159,7 +1154,6 @@ kranal_reaper (void *arg)
         long               next_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
         long               current_min_timeout = 1;
 
-        cfs_daemonize("kranal_reaper");
         cfs_block_allsigs();
 
         cfs_waitlink_init(&wait);
@@ -1932,7 +1926,6 @@ kranal_scheduler (void *arg)
 {
         kra_device_t     *dev = (kra_device_t *)arg;
         cfs_waitlink_t    wait;
-        char              name[16];
         kra_conn_t       *conn;
         unsigned long     flags;
         unsigned long     deadline;
@@ -1945,8 +1938,6 @@ kranal_scheduler (void *arg)
         int               dropped_lock;
         int               busy_loops = 0;
 
-        snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
-        cfs_daemonize(name);
         cfs_block_allsigs();
 
         dev->rad_scheduler = current;

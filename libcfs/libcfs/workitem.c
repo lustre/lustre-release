@@ -245,17 +245,7 @@ static int
 cfs_wi_scheduler (void *arg)
 {
 	struct cfs_wi_sched	*sched = (cfs_wi_sched_t *)arg;
-	char			name[16];
 
-	if (sched->ws_cptab != NULL && sched->ws_cpt >= 0) {
-		snprintf(name, sizeof(name), "%s_%02d_%02d",
-			 sched->ws_name, sched->ws_cpt, sched->ws_nthreads);
-	} else {
-		snprintf(name, sizeof(name), "%s_%02d",
-			 sched->ws_name, sched->ws_nthreads);
-	}
-
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 
 	/* CPT affinity scheduler? */
@@ -463,6 +453,8 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 	rc = 0;
 #ifdef __KERNEL__
 	while (nthrs > 0)  {
+		char	name[16];
+		cfs_task_t	*task;
 		spin_lock(&cfs_wi_data.wi_glock);
 		while (sched->ws_starting > 0) {
 			spin_unlock(&cfs_wi_data.wi_glock);
@@ -473,11 +465,21 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 		sched->ws_starting++;
 		spin_unlock(&cfs_wi_data.wi_glock);
 
-		rc = cfs_create_thread(cfs_wi_scheduler, sched, 0);
-		if (rc >= 0) {
+		if (sched->ws_cptab != NULL && sched->ws_cpt >= 0) {
+			snprintf(name, sizeof(name), "%s_%02d_%02d",
+				 sched->ws_name, sched->ws_cpt,
+				 sched->ws_nthreads);
+		} else {
+			snprintf(name, sizeof(name), "%s_%02d",
+				 sched->ws_name, sched->ws_nthreads);
+		}
+
+		task = kthread_run(cfs_wi_scheduler, sched, name);
+		if (!IS_ERR(task)) {
 			nthrs--;
 			continue;
 		}
+		rc = PTR_ERR(task);
 
 		CERROR("Failed to create thread for WI scheduler %s: %d\n",
 		       name, rc);

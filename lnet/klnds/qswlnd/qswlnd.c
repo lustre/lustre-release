@@ -526,7 +526,8 @@ kqswnal_startup (lnet_ni_t *ni)
 	/**********************************************************************/
 	/* Spawn scheduling threads */
 	for (i = 0; i < cfs_num_online_cpus(); i++) {
-		rc = kqswnal_thread_start (kqswnal_scheduler, NULL);
+		rc = kqswnal_thread_start(kqswnal_scheduler, NULL,
+					  "kqswnal_sched");
 		if (rc != 0)
 		{
 			CERROR ("failed to spawn scheduling thread: %d\n", rc);

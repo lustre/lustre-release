@@ -404,7 +404,6 @@ static int qsd_upd_thread(void *arg)
 	struct l_wait_info	 lwi;
 	cfs_list_t		 queue;
 	struct qsd_upd_rec	*upd, *n;
-	char			 pname[MTI_NAME_MAXLEN];
 	struct lu_env		*env;
 	int			 qtype, rc = 0;
 	bool			 uptodate;
@@ -422,9 +421,6 @@ static int qsd_upd_thread(void *arg)
 		OBD_FREE_PTR(env);
 		RETURN(rc);
 	}
-
-	snprintf(pname, MTI_NAME_MAXLEN, "lquota_wb_%s", qsd->qsd_svname);
-	cfs_daemonize(pname);
 
 	thread_set_flags(thread, SVC_RUNNING);
 	cfs_waitq_signal(&thread->t_ctl_waitq);
@@ -487,14 +483,16 @@ int qsd_start_upd_thread(struct qsd_instance *qsd)
 {
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
 	struct l_wait_info	 lwi = { 0 };
-	int			 rc;
+	cfs_task_t		*task;
 	ENTRY;
 
-	rc = cfs_create_thread(qsd_upd_thread, (void *)qsd, 0);
-	if (rc < 0) {
-		CERROR("Fail to start quota update thread. rc: %d\n", rc);
+	task = kthread_run(qsd_upd_thread, (void *)qsd,
+			   "lquota_wb_%s", qsd->qsd_svname);
+	if (IS_ERR(task)) {
+		CERROR("Fail to start quota update thread. rc: %ld\n",
+			PTR_ERR(task));
 		thread_set_flags(thread, SVC_STOPPED);
-		RETURN(rc);
+		RETURN(PTR_ERR(task));
 	}
 
 	l_wait_event(thread->t_ctl_waitq,

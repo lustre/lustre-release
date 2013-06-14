@@ -440,7 +440,6 @@ static int mgs_ir_notify(void *arg)
 
         LASSERTF(sizeof(name) < 32, "name is too large to be in stack.\n");
         sprintf(name, "mgs_%s_notify", fsdb->fsdb_name);
-        cfs_daemonize(name);
 
 	complete(&fsdb->fsdb_notify_comp);
 
@@ -471,7 +470,7 @@ static int mgs_ir_notify(void *arg)
 int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 		   struct fs_db *fsdb)
 {
-        int rc;
+	cfs_task_t *task;
 
         if (!ir_timeout)
                 ir_timeout = OBD_IR_MGS_TIMEOUT;
@@ -488,11 +487,13 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
         cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
         cfs_waitq_init(&fsdb->fsdb_notify_waitq);
 	init_completion(&fsdb->fsdb_notify_comp);
-        rc = cfs_create_thread(mgs_ir_notify, fsdb, CFS_DAEMON_FLAGS);
-        if (rc > 0)
+
+	task = kthread_run(mgs_ir_notify, fsdb,
+			       "mgs_%s_notify", fsdb->fsdb_name);
+	if (!IS_ERR(task))
 		wait_for_completion(&fsdb->fsdb_notify_comp);
-        else
-                CERROR("Start notify thread error %d\n", rc);
+	else
+		CERROR("Start notify thread error %ld\n", PTR_ERR(task));
 
 	mgs_nidtbl_init_fs(env, fsdb);
         return 0;

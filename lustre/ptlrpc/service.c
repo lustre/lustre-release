@@ -2400,7 +2400,7 @@ static int ptlrpc_main(void *arg)
         ENTRY;
 
         thread->t_pid = cfs_curproc_pid();
-        cfs_daemonize_ctxt(thread->t_name);
+	unshare_fs_struct();
 
 	/* NB: we will call cfs_cpt_bind() for all threads, because we
 	 * might want to run lustre server only on a subset of system CPUs,
@@ -2599,7 +2599,7 @@ static int ptlrpc_hr_main(void *arg)
 
 	snprintf(threadname, sizeof(threadname), "ptlrpc_hr%02d_%03d",
 		 hrp->hrp_cpt, hrt->hrt_id);
-	cfs_daemonize_ctxt(threadname);
+	unshare_fs_struct();
 
 	rc = cfs_cpt_bind(ptlrpc_hr.hr_cpt_table, hrp->hrp_cpt);
 	if (rc != 0) {
@@ -2665,15 +2665,18 @@ static int ptlrpc_start_hr_threads(void)
 		int	rc = 0;
 
 		for (j = 0; j < hrp->hrp_nthrs; j++) {
-			rc = cfs_create_thread(ptlrpc_hr_main,
-					       &hrp->hrp_thrs[j],
-					       CLONE_VM | CLONE_FILES);
-			if (rc < 0)
+			struct	ptlrpc_hr_thread *hrt = &hrp->hrp_thrs[j];
+			rc = PTR_ERR(kthread_run(ptlrpc_hr_main,
+						 &hrp->hrp_thrs[j],
+						 "ptlrpc_hr%02d_%03d",
+						 hrp->hrp_cpt,
+						 hrt->hrt_id));
+			if (IS_ERR_VALUE(rc))
 				break;
 		}
 		cfs_wait_event(ptlrpc_hr.hr_waitq,
 			       cfs_atomic_read(&hrp->hrp_nstarted) == j);
-		if (rc >= 0)
+		if (!IS_ERR_VALUE(rc))
 			continue;
 
 		CERROR("Reply handling thread %d:%d Failed on starting: "
@@ -2856,12 +2859,8 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 	}
 
 	CDEBUG(D_RPCTRACE, "starting thread '%s'\n", thread->t_name);
-	/*
-	 * CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-	 * just drop the VM and FILES in cfs_daemonize_ctxt() right away.
-	 */
-	rc = cfs_create_thread(ptlrpc_main, thread, CFS_DAEMON_FLAGS);
-	if (rc < 0) {
+	rc = PTR_ERR(kthread_run(ptlrpc_main, thread, thread->t_name));
+	if (IS_ERR_VALUE(rc)) {
 		CERROR("cannot start thread '%s': rc %d\n",
 		       thread->t_name, rc);
 		spin_lock(&svcpt->scp_lock);

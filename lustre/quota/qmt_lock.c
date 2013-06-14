@@ -715,7 +715,6 @@ static int qmt_reba_thread(void *arg)
 	struct l_wait_info	 lwi = { 0 };
 	struct lu_env		*env;
 	struct lquota_entry	*lqe, *tmp;
-	char			 pname[MTI_NAME_MAXLEN];
 	int			 rc;
 	ENTRY;
 
@@ -729,9 +728,6 @@ static int qmt_reba_thread(void *arg)
 		OBD_FREE_PTR(env);
 		RETURN(rc);
 	}
-
-	snprintf(pname, MTI_NAME_MAXLEN, "qmt_reba_%s", qmt->qmt_svname);
-	cfs_daemonize(pname);
 
 	thread_set_flags(thread, SVC_RUNNING);
 	cfs_waitq_signal(&thread->t_ctl_waitq);
@@ -772,15 +768,16 @@ int qmt_start_reba_thread(struct qmt_device *qmt)
 {
 	struct ptlrpc_thread	*thread = &qmt->qmt_reba_thread;
 	struct l_wait_info	 lwi    = { 0 };
-	int			 rc;
+	cfs_task_t		*task;
 	ENTRY;
 
-	rc = cfs_create_thread(qmt_reba_thread, (void *)qmt, 0);
-	if (rc < 0) {
-		CERROR("%s: failed to start rebalance thread (%d)\n",
-		       qmt->qmt_svname, rc);
+	task = kthread_run(qmt_reba_thread, (void *)qmt,
+			       "qmt_reba_%s", qmt->qmt_svname);
+	if (IS_ERR(task)) {
+		CERROR("%s: failed to start rebalance thread (%ld)\n",
+		       qmt->qmt_svname, PTR_ERR(task));
 		thread_set_flags(thread, SVC_STOPPED);
-		RETURN(rc);
+		RETURN(PTR_ERR(task));
 	}
 
 	l_wait_event(thread->t_ctl_waitq,

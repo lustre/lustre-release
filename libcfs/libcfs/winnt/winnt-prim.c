@@ -82,22 +82,22 @@ cfs_thread_proc(
 }
 
 /*
- * cfs_create_thread
+ * kthread_run
  *   Create a system thread to execute the routine specified
  *
  * Arguments:
  *   func:  function to be executed in the thread
  *   arg:   argument transferred to func function
- *   flag:  thread creation flags.
+ *   name:  thread name to create
  *
  * Return Value:
- *   int:   0 on success or error codes
+ *   cfs_task_t:   0 on success or error codes
  *
  * Notes:
  *   N/A
  */
 
-int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
+cfs_task_t kthread_run(int (*func)(void *), void *arg, char *name)
 {
     cfs_handle_t  thread = NULL;
     NTSTATUS      status;
@@ -108,7 +108,7 @@ int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
     context = cfs_alloc(sizeof(cfs_thread_context_t), CFS_ALLOC_ZERO);
 
     if (!context) {
-        return -ENOMEM;
+	return ERR_PTR(-ENOMEM);
     }
 
     context->func  = func;
@@ -130,7 +130,7 @@ int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
 
         /* We need translate the nt status to linux error code */
 
-        return cfs_error_code(status);
+	return ERR_PTR(cfs_error_code(status));
     }
 
     //
@@ -139,7 +139,7 @@ int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
 
     ZwClose(thread);
 
-    return 0;
+	return (cfs_task_t)0;
 }
 
 
@@ -529,18 +529,9 @@ cfs_time_t cfs_timer_deadline(cfs_timer_t * timer)
     return timer->deadline;
 }
 
-/*
- * daemonize routine stub
- */
-
-void cfs_daemonize(char *str)
+int unshare_fs_struct()
 {
-    return;
-}
-
-int cfs_daemonize_ctxt(char *str) {
-    cfs_daemonize(str);
-    return 0;
+	return 0;
 }
 
 /*

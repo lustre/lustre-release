@@ -872,14 +872,10 @@ static int osp_precreate_thread(void *_arg)
 	struct osp_device	*d = _arg;
 	struct ptlrpc_thread	*thread = &d->opd_pre_thread;
 	struct l_wait_info	 lwi = { 0 };
-	char			 pname[16];
 	struct lu_env		 env;
 	int			 rc;
 
 	ENTRY;
-
-	sprintf(pname, "osp-pre-%u", d->opd_index);
-	cfs_daemonize(pname);
 
 	rc = lu_env_init(&env, d->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
 	if (rc) {
@@ -1239,7 +1235,7 @@ out:
 int osp_init_precreate(struct osp_device *d)
 {
 	struct l_wait_info	 lwi = { 0 };
-	int			 rc;
+	cfs_task_t		*task;
 
 	ENTRY;
 
@@ -1274,10 +1270,11 @@ int osp_init_precreate(struct osp_device *d)
 	/*
 	 * start thread handling precreation and statfs updates
 	 */
-	rc = cfs_create_thread(osp_precreate_thread, d, 0);
-	if (rc < 0) {
-		CERROR("can't start precreate thread %d\n", rc);
-		RETURN(rc);
+	task = kthread_run(osp_precreate_thread, d,
+			       "osp-pre-%u", d->opd_index);
+	if (IS_ERR(task)) {
+		CERROR("can't start precreate thread %ld\n", PTR_ERR(task));
+		RETURN(PTR_ERR(task));
 	}
 
 	l_wait_event(d->opd_pre_thread.t_ctl_waitq,

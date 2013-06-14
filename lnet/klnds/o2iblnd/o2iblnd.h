@@ -1067,7 +1067,7 @@ void kiblnd_tunables_fini(void);
 
 int  kiblnd_connd (void *arg);
 int  kiblnd_scheduler(void *arg);
-int  kiblnd_thread_start (int (*fn)(void *arg), void *arg);
+int  kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name);
 int  kiblnd_failover_thread (void *arg);
 
 int  kiblnd_alloc_pages(kib_pages_t **pp, int cpt, int npages);

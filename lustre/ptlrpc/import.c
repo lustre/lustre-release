@@ -1267,7 +1267,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ENTRY;
 
-        cfs_daemonize_ctxt("ll_imp_inval");
+	unshare_fs_struct();
 
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
@@ -1337,20 +1337,24 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		spin_unlock(&imp->imp_lock);
 
 #ifdef __KERNEL__
-                /* bug 17802:  XXX client_disconnect_export vs connect request
-                 * race. if client will evicted at this time, we start
-                 * invalidate thread without reference to import and import can
-                 * be freed at same time. */
-                class_import_get(imp);
-                rc = cfs_create_thread(ptlrpc_invalidate_import_thread, imp,
-                                       CFS_DAEMON_FLAGS);
-                if (rc < 0) {
-                        class_import_put(imp);
-                        CERROR("error starting invalidate thread: %d\n", rc);
-                } else {
-                        rc = 0;
-                }
-                RETURN(rc);
+		{
+		cfs_task_t *task;
+		/* bug 17802:  XXX client_disconnect_export vs connect request
+		 * race. if client will evicted at this time, we start
+		 * invalidate thread without reference to import and import can
+		 * be freed at same time. */
+		class_import_get(imp);
+		task = kthread_run(ptlrpc_invalidate_import_thread, imp,
+				     "ll_imp_inval");
+		if (IS_ERR(task)) {
+			class_import_put(imp);
+			CERROR("error starting invalidate thread: %d\n", rc);
+			rc = PTR_ERR(task);
+		} else {
+			rc = 0;
+		}
+		RETURN(rc);
+		}
 #else
                 ptlrpc_invalidate_import(imp);
 

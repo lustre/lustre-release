@@ -5898,10 +5898,10 @@ ks_init_tdi_data()
     }
     for (i = 0; i < ks_data.ksnd_engine_nums; i++) {
 		spin_lock_init(&ks_data.ksnd_engine_mgr[i].lock);
-        cfs_init_event(&ks_data.ksnd_engine_mgr[i].start, TRUE, FALSE);
-        cfs_init_event(&ks_data.ksnd_engine_mgr[i].exit, TRUE, FALSE);
-        CFS_INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
-        cfs_create_thread(KsDeliveryEngineThread, &ks_data.ksnd_engine_mgr[i], 0);
+	cfs_init_event(&ks_data.ksnd_engine_mgr[i].start, TRUE, FALSE);
+	cfs_init_event(&ks_data.ksnd_engine_mgr[i].exit, TRUE, FALSE);
+	CFS_INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
+	kthread_run(KsDeliveryEngineThread, &ks_data.ksnd_engine_mgr[i], "");
     }
 
     /* register pnp handlers to watch network condition */

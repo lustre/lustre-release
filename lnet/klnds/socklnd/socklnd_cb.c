@@ -1007,17 +1007,17 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 }
 
 int
-ksocknal_thread_start (int (*fn)(void *arg), void *arg)
+ksocknal_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-        long          pid = cfs_create_thread (fn, arg, 0);
+	cfs_task_t *task = kthread_run(fn, arg, name);
 
-        if (pid < 0)
-                return ((int)pid);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-        ksocknal_data.ksnd_nthreads++;
+	ksocknal_data.ksnd_nthreads++;
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
-        return (0);
+	return 0;
 }
 
 void
@@ -1396,22 +1396,17 @@ int ksocknal_scheduler(void *arg)
 	ksock_tx_t		*tx;
 	int			rc;
 	int			nloops = 0;
-	char			name[20];
 	long			id = (long)arg;
 
 	info = ksocknal_data.ksnd_sched_info[KSOCK_THREAD_CPT(id)];
 	sched = &info->ksi_scheds[KSOCK_THREAD_SID(id)];
 
-	snprintf(name, sizeof(name), "socknal_sd%02d_%02d",
-		 info->ksi_cpt, (int)(sched - &info->ksi_scheds[0]));
-
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 
 	rc = cfs_cpt_bind(lnet_cpt_table(), info->ksi_cpt);
 	if (rc != 0) {
-		CERROR("Can't set CPT affinity for %s to %d: %d\n",
-		       name, info->ksi_cpt, rc);
+		CERROR("Can't set CPT affinity to %d: %d\n",
+		       info->ksi_cpt, rc);
 	}
 
 	spin_lock_bh(&sched->kss_lock);
@@ -2023,6 +2018,7 @@ ksocknal_connect (ksock_route_t *route)
 static int
 ksocknal_connd_check_start(long sec, long *timeout)
 {
+	char name[16];
         int rc;
         int total = ksocknal_data.ksnd_connd_starting +
                     ksocknal_data.ksnd_connd_running;
@@ -2060,7 +2056,8 @@ ksocknal_connd_check_start(long sec, long *timeout)
 	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 
 	/* NB: total is the next id */
-	rc = ksocknal_thread_start(ksocknal_connd, (void *)((long)total));
+	snprintf(name, sizeof(name), "socknal_cd%02d", total);
+	rc = ksocknal_thread_start(ksocknal_connd, NULL, name);
 
 	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
         if (rc == 0)
@@ -2145,15 +2142,11 @@ int
 ksocknal_connd (void *arg)
 {
 	spinlock_t    *connd_lock = &ksocknal_data.ksnd_connd_lock;
-        long               id = (long)(long_ptr_t)arg;
-        char               name[16];
         ksock_connreq_t   *cr;
         cfs_waitlink_t     wait;
         int                nloops = 0;
         int                cons_retry = 0;
 
-        snprintf (name, sizeof (name), "socknal_cd%02ld", id);
-        cfs_daemonize (name);
         cfs_block_allsigs ();
 
         cfs_waitlink_init (&wait);
@@ -2546,7 +2539,6 @@ ksocknal_reaper (void *arg)
         int                peer_index = 0;
         cfs_time_t         deadline = cfs_time_current();
 
-        cfs_daemonize ("socknal_reaper");
         cfs_block_allsigs ();
 
         CFS_INIT_LIST_HEAD(&enomem_conns);

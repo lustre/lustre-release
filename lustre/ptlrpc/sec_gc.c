@@ -169,7 +169,7 @@ static int sec_gc_main(void *arg)
         struct ptlrpc_thread *thread = (struct ptlrpc_thread *) arg;
         struct l_wait_info    lwi;
 
-        cfs_daemonize_ctxt("sptlrpc_gc");
+	unshare_fs_struct();
 
         /* Record that the thread is running */
         thread_set_flags(thread, SVC_RUNNING);
@@ -222,7 +222,7 @@ again:
 int sptlrpc_gc_init(void)
 {
 	struct l_wait_info lwi = { 0 };
-	int                rc;
+	cfs_task_t *task;
 
 	mutex_init(&sec_gc_mutex);
 	spin_lock_init(&sec_gc_list_lock);
@@ -232,10 +232,10 @@ int sptlrpc_gc_init(void)
         memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));
         cfs_waitq_init(&sec_gc_thread.t_ctl_waitq);
 
-        rc = cfs_create_thread(sec_gc_main, &sec_gc_thread, CFS_DAEMON_FLAGS);
-        if (rc < 0) {
-                CERROR("can't start gc thread: %d\n", rc);
-                return rc;
+	task = kthread_run(sec_gc_main, &sec_gc_thread, "sptlrpc_gc");
+	if (IS_ERR(task)) {
+		CERROR("can't start gc thread: %ld\n", PTR_ERR(task));
+		return PTR_ERR(task);
         }
 
         l_wait_event(sec_gc_thread.t_ctl_waitq,

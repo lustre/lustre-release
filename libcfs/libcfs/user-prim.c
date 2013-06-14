@@ -223,24 +223,25 @@ static void *cfs_thread_helper(void *data)
         return NULL;
 }
 
-int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flags)
+void *kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 {
-        pthread_t tid;
-        pthread_attr_t tattr;
-        int rc;
-        struct lustre_thread_arg *targ_p = malloc(sizeof(struct lustre_thread_arg));
+	pthread_t tid;
+	pthread_attr_t tattr;
+	int rc;
+	struct lustre_thread_arg *targ_p =
+				malloc(sizeof(struct lustre_thread_arg));
 
-        if ( targ_p == NULL )
-                return -ENOMEM;
+	if (targ_p == NULL)
+		return ERR_PTR(-ENOMEM);
 
-        targ_p->f = func;
-        targ_p->arg = arg;
+	targ_p->f = func;
+	targ_p->arg = arg;
 
-        pthread_attr_init(&tattr);
-        pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
-        rc = pthread_create(&tid, &tattr, cfs_thread_helper, targ_p);
-        pthread_attr_destroy(&tattr);
-        return -rc;
+	pthread_attr_init(&tattr);
+	pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
+	rc = pthread_create(&tid, &tattr, cfs_thread_helper, targ_p);
+	pthread_attr_destroy(&tattr);
+	return ERR_PTR(rc);
 }
 #endif
 
@@ -314,14 +315,9 @@ void cfs_enter_debugger(void)
          */
 }
 
-void cfs_daemonize(char *str)
+int unshare_fs_struct()
 {
-        return;
-}
-
-int cfs_daemonize_ctxt(char *str)
-{
-        return 0;
+	return 0;
 }
 
 cfs_sigset_t cfs_block_allsigs(void)

@@ -981,12 +981,6 @@ static int ll_agl_thread(void *arg)
         struct l_wait_info        lwi    = { 0 };
         ENTRY;
 
-        {
-                char pname[16];
-                snprintf(pname, 15, "ll_agl_%u", plli->lli_opendir_pid);
-                cfs_daemonize(pname);
-        }
-
         CDEBUG(D_READA, "agl thread started: [pid %d] [parent %.*s]\n",
                cfs_curproc_pid(), parent->d_name.len, parent->d_name.name);
 
@@ -1040,25 +1034,28 @@ static int ll_agl_thread(void *arg)
 
 static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 {
-        struct ptlrpc_thread *thread = &sai->sai_agl_thread;
-        struct l_wait_info    lwi    = { 0 };
-        int                   rc;
-        ENTRY;
+	struct ptlrpc_thread *thread = &sai->sai_agl_thread;
+	struct l_wait_info    lwi    = { 0 };
+	struct ll_inode_info  *plli;
+	cfs_task_t	      *task;
+	ENTRY;
 
-        CDEBUG(D_READA, "start agl thread: [pid %d] [parent %.*s]\n",
-               cfs_curproc_pid(), parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "start agl thread: [pid %d] [parent %.*s]\n",
+	       cfs_curproc_pid(), parent->d_name.len, parent->d_name.name);
 
-        rc = cfs_create_thread(ll_agl_thread, parent, 0);
-        if (rc < 0) {
-                CERROR("can't start ll_agl thread, rc: %d\n", rc);
-                thread_set_flags(thread, SVC_STOPPED);
-                RETURN_EXIT;
-        }
+	plli = ll_i2info(parent->d_inode);
+	task = kthread_run(ll_agl_thread, parent,
+			       "ll_agl_%u", plli->lli_opendir_pid);
+	if (IS_ERR(task)) {
+		CERROR("can't start ll_agl thread, rc: %ld\n", PTR_ERR(task));
+		thread_set_flags(thread, SVC_STOPPED);
+		RETURN_EXIT;
+	}
 
-        l_wait_event(thread->t_ctl_waitq,
-                     thread_is_running(thread) || thread_is_stopped(thread),
-                     &lwi);
-        EXIT;
+	l_wait_event(thread->t_ctl_waitq,
+		     thread_is_running(thread) || thread_is_stopped(thread),
+		     &lwi);
+	EXIT;
 }
 
 static int ll_statahead_thread(void *arg)
@@ -1078,12 +1075,6 @@ static int ll_statahead_thread(void *arg)
         struct ll_dir_chain       chain;
         struct l_wait_info        lwi    = { 0 };
         ENTRY;
-
-        {
-                char pname[16];
-                snprintf(pname, 15, "ll_sa_%u", plli->lli_opendir_pid);
-                cfs_daemonize(pname);
-        }
 
         CDEBUG(D_READA, "statahead thread started: [pid %d] [parent %.*s]\n",
                cfs_curproc_pid(), parent->d_name.len, parent->d_name.name);
@@ -1548,6 +1539,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
         struct ptlrpc_thread     *thread;
         struct l_wait_info        lwi   = { 0 };
         int                       rc    = 0;
+	struct ll_inode_info     *plli;
         ENTRY;
 
         LASSERT(lli->lli_opendir_pid == cfs_curproc_pid());
@@ -1693,11 +1685,14 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                cfs_curproc_pid(), parent->d_name.len, parent->d_name.name);
 
         lli->lli_sai = sai;
-        rc = cfs_create_thread(ll_statahead_thread, parent, 0);
-        thread = &sai->sai_thread;
-        if (rc < 0) {
-                CERROR("can't start ll_sa thread, rc: %d\n", rc);
-                dput(parent);
+
+	plli = ll_i2info(parent->d_inode);
+	rc = PTR_ERR(kthread_run(ll_statahead_thread, parent,
+				 "ll_sa_%u", plli->lli_opendir_pid));
+	thread = &sai->sai_thread;
+	if (IS_ERR_VALUE(rc)) {
+		CERROR("can't start ll_sa thread, rc: %d\n", rc);
+		dput(parent);
                 lli->lli_opendir_key = NULL;
                 thread_set_flags(thread, SVC_STOPPED);
                 thread_set_flags(&sai->sai_agl_thread, SVC_STOPPED);

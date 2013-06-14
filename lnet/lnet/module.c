@@ -127,11 +127,11 @@ init_lnet(void)
         rc = libcfs_register_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
-        if (config_on_load) {
-                /* Have to schedule a separate thread to avoid deadlocking
-                 * in modload */
-                (void) cfs_create_thread(lnet_configure, NULL, 0);
-        }
+	if (config_on_load) {
+		/* Have to schedule a separate thread to avoid deadlocking
+		 * in modload */
+		(void) kthread_run(lnet_configure, NULL, "lnet_initd");
+	}
 
         RETURN(0);
 }

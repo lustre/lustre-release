@@ -1972,19 +1972,12 @@ static int target_recovery_thread(void *arg)
         struct ptlrpc_request *req;
         struct target_recovery_data *trd = &obd->obd_recovery_data;
         unsigned long delta;
-        unsigned long flags;
         struct lu_env *env;
         struct ptlrpc_thread *thread = NULL;
         int rc = 0;
         ENTRY;
 
-        cfs_daemonize_ctxt("tgt_recov");
-
-        SIGNAL_MASK_LOCK(current, flags);
-        sigfillset(&current->blocked);
-        RECALC_SIGPENDING;
-        SIGNAL_MASK_UNLOCK(current, flags);
-
+	unshare_fs_struct();
         OBD_ALLOC_PTR(thread);
         if (thread == NULL)
                 RETURN(-ENOMEM);
@@ -2109,22 +2102,24 @@ static int target_recovery_thread(void *arg)
 static int target_start_recovery_thread(struct lu_target *lut,
                                         svc_handler_t handler)
 {
-        struct obd_device *obd = lut->lut_obd;
-        int rc = 0;
-        struct target_recovery_data *trd = &obd->obd_recovery_data;
+	struct obd_device *obd = lut->lut_obd;
+	int rc = 0;
+	struct target_recovery_data *trd = &obd->obd_recovery_data;
 
-        memset(trd, 0, sizeof(*trd));
+	memset(trd, 0, sizeof(*trd));
 	init_completion(&trd->trd_starting);
 	init_completion(&trd->trd_finishing);
-        trd->trd_recovery_handler = handler;
+	trd->trd_recovery_handler = handler;
 
-        if (cfs_create_thread(target_recovery_thread, lut, 0) > 0) {
+	if (!IS_ERR(kthread_run(target_recovery_thread,
+				lut, "tgt_recov"))) {
 		wait_for_completion(&trd->trd_starting);
-                LASSERT(obd->obd_recovering != 0);
-        } else
-                rc = -ECHILD;
+		LASSERT(obd->obd_recovering != 0);
+	} else {
+		rc = -ECHILD;
+	}
 
-        return rc;
+	return rc;
 }
 
 void target_stop_recovery_thread(struct obd_device *obd)

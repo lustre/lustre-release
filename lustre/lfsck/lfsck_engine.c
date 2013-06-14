@@ -293,7 +293,6 @@ int lfsck_master_engine(void *args)
 	int			 rc;
 	ENTRY;
 
-	cfs_daemonize("lfsck_master");
 	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
 	if (rc != 0) {
 		CERROR("%s: LFSCK, fail to init env, rc = %d\n",

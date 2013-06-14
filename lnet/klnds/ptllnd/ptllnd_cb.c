@@ -651,26 +651,24 @@ kptllnd_thread_fini (void)
 }
 
 int
-kptllnd_thread_start (int (*fn)(void *arg), void *arg)
+kptllnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-        long                pid;
+	cfs_task_t *task;
 
-        cfs_atomic_inc(&kptllnd_data.kptl_nthreads);
+	cfs_atomic_inc(&kptllnd_data.kptl_nthreads);
 
-        pid = cfs_create_thread (fn, arg, 0);
-        if (pid >= 0)
-                return 0;
-
-        CERROR("Failed to start thread: error %d\n", (int)pid);
-        kptllnd_thread_fini();
-        return (int)pid;
+	task = kthread_run(fn, arg, name);
+	if (IS_ERR(task)) {
+		CERROR("Failed to start thread: error %ld\n", PTR_ERR(task));
+		kptllnd_thread_fini();
+	}
+	return PTR_ERR(task);
 }
 
 int
 kptllnd_watchdog(void *arg)
 {
         int                 id = (long)arg;
-        char                name[16];
         cfs_waitlink_t      waitlink;
         int                 stamp = 0;
         int                 peer_index = 0;
@@ -678,8 +676,6 @@ kptllnd_watchdog(void *arg)
         int                 timeout;
         int                 i;
 
-        snprintf(name, sizeof(name), "kptllnd_wd_%02d", id);
-        cfs_daemonize(name);
         cfs_block_allsigs();
 
         cfs_waitlink_init(&waitlink);
@@ -740,7 +736,6 @@ int
 kptllnd_scheduler (void *arg)
 {
         int                 id = (long)arg;
-        char                name[16];
         cfs_waitlink_t      waitlink;
         unsigned long       flags;
         int                 did_something;
@@ -749,8 +744,6 @@ kptllnd_scheduler (void *arg)
         kptl_rx_buffer_t   *rxb;
         kptl_tx_t          *tx;
 
-        snprintf(name, sizeof(name), "kptllnd_sd_%02d", id);
-        cfs_daemonize(name);
         cfs_block_allsigs();
 
         cfs_waitlink_init(&waitlink);

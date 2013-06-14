@@ -452,7 +452,7 @@ extern kra_peer_t *kranal_find_peer_locked (lnet_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
 extern int kranal_del_peer (lnet_nid_t nid);
 extern void kranal_device_callback (RAP_INT32 devid, RAP_PVOID arg);
-extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
+extern int kranal_thread_start(int(*fn)(void *arg), void *arg, char *name);
 extern int kranal_connd (void *arg);
 extern int kranal_reaper (void *arg);
 extern int kranal_scheduler (void *arg);

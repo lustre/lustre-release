@@ -1,4 +1,4 @@
-EXTRA_DIST = linux-debug.c linux-lwt.c linux-prim.c linux-tracefile.c	\
+EXTRA_DIST = linux-debug.c linux-prim.c linux-tracefile.c	\
 	linux-fs.c linux-mem.c linux-proc.c linux-utils.c linux-lock.c	\
 	linux-module.c linux-sync.c linux-curproc.c linux-tcpip.c	\
 	linux-cpu.c linux-crypto.c linux-crypto-crc32.c linux-crypto-adler.c \

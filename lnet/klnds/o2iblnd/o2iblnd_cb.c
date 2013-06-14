@@ -1805,15 +1805,15 @@ kiblnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 }
 
 int
-kiblnd_thread_start (int (*fn)(void *arg), void *arg)
+kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-        long    pid = cfs_create_thread (fn, arg, 0);
+	cfs_task_t *task = kthread_run(fn, arg, name);
 
-        if (pid < 0)
-                return ((int)pid);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
 
-        cfs_atomic_inc (&kiblnd_data.kib_nthreads);
-        return (0);
+	cfs_atomic_inc(&kiblnd_data.kib_nthreads);
+	return 0;
 }
 
 void
@@ -3135,7 +3135,6 @@ kiblnd_connd (void *arg)
         int                peer_index = 0;
         unsigned long      deadline = jiffies;
 
-        cfs_daemonize ("kiblnd_connd");
         cfs_block_allsigs ();
 
         cfs_waitlink_init (&wait);
@@ -3329,15 +3328,10 @@ kiblnd_scheduler(void *arg)
 	cfs_waitlink_t		wait;
 	unsigned long		flags;
 	struct ib_wc		wc;
-	char			name[20];
 	int			did_something;
 	int			busy_loops = 0;
 	int			rc;
 
-	snprintf(name, sizeof(name), "kiblnd_sd_%02ld_%02ld",
-		 KIB_THREAD_CPT(id), KIB_THREAD_TID(id));
-
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 
 	cfs_waitlink_init(&wait);
@@ -3346,10 +3340,10 @@ kiblnd_scheduler(void *arg)
 
 	rc = cfs_cpt_bind(lnet_cpt_table(), sched->ibs_cpt);
 	if (rc != 0) {
-		CWARN("Failed to bind %s on CPT %d, please verify whether "
+		CWARN("Failed to bind on CPT %d, please verify whether "
 		      "all CPUs are healthy and reload modules if necessary, "
 		      "otherwise your system might under risk of low "
-		      "performance\n", name, sched->ibs_cpt);
+		      "performance\n", sched->ibs_cpt);
 	}
 
 	spin_lock_irqsave(&sched->ibs_lock, flags);
@@ -3464,7 +3458,6 @@ kiblnd_failover_thread(void *arg)
 
         LASSERT (*kiblnd_tunables.kib_dev_failover != 0);
 
-        cfs_daemonize ("kiblnd_failover");
         cfs_block_allsigs ();
 
         cfs_waitlink_init(&wait);

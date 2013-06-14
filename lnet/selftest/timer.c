@@ -183,7 +183,6 @@ stt_timer_main (void *arg)
 
         SET_BUT_UNUSED(rc);
 
-        cfs_daemonize("st_timer");
         cfs_block_allsigs();
 
         while (!stt_data.stt_shuttingdown) {
@@ -204,13 +203,13 @@ stt_timer_main (void *arg)
 int
 stt_start_timer_thread (void)
 {
-        long pid;
+	cfs_task_t *task;
 
-        LASSERT (!stt_data.stt_shuttingdown);
+	LASSERT(!stt_data.stt_shuttingdown);
 
-        pid = cfs_create_thread(stt_timer_main, NULL, 0);
-        if (pid < 0)
-                return (int)pid;
+	task = kthread_run(stt_timer_main, NULL, "st_timer");
+	if (IS_ERR(task))
+		return PTR_ERR(task);
 
 	spin_lock(&stt_data.stt_lock);
 	stt_data.stt_nthreads++;

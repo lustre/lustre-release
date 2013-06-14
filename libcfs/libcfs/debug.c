@@ -369,16 +369,16 @@ void libcfs_debug_dumplog(void)
         /* we're being careful to ensure that the kernel thread is
          * able to set our state to running as it exits before we
          * get to schedule() */
-        cfs_waitlink_init(&wait);
-        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-        cfs_waitq_add(&debug_ctlwq, &wait);
+	cfs_waitlink_init(&wait);
+	cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+	cfs_waitq_add(&debug_ctlwq, &wait);
 
-        dumper = cfs_kthread_run(libcfs_debug_dumplog_thread,
-                                 (void*)(long)cfs_curproc_pid(),
-                                 "libcfs_debug_dumper");
-        if (IS_ERR(dumper))
-                printk(CFS_KERN_ERR "LustreError: cannot start log dump thread:"
-                       " %ld\n", PTR_ERR(dumper));
+	dumper = kthread_run(libcfs_debug_dumplog_thread,
+			     (void *)(long)cfs_curproc_pid(),
+			     "libcfs_debug_dumper");
+	if (IS_ERR(dumper))
+		printk(CFS_KERN_ERR "LustreError: cannot start log dump thread:"
+		       " %ld\n", PTR_ERR(dumper));
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 

@@ -1573,13 +1573,6 @@ static int mdc_changelog_send_thread(void *csdata)
         CDEBUG(D_CHANGELOG, "changelog to fp=%p start "LPU64"\n",
                cs->cs_fp, cs->cs_startrec);
 
-        /*
-         * It's important to daemonize here to close unused FDs.
-         * The write fd from pipe is already opened by the caller,
-         * so it's fine to clear all files here
-         */
-        cfs_daemonize("mdc_clg_send_thread");
-
         OBD_ALLOC(cs->cs_buf, CR_MAXSIZE);
         if (cs->cs_buf == NULL)
                 GOTO(out, rc = -ENOMEM);
@@ -1616,12 +1609,10 @@ out:
 		llog_cat_close(NULL, llh);
         if (ctxt)
                 llog_ctxt_put(ctxt);
-        if (cs->cs_buf)
-                OBD_FREE(cs->cs_buf, CR_MAXSIZE);
-        OBD_FREE_PTR(cs);
-        /* detach from parent process so we get cleaned up */
-        cfs_daemonize("cl_send");
-        return rc;
+	if (cs->cs_buf)
+		OBD_FREE(cs->cs_buf, CR_MAXSIZE);
+	OBD_FREE_PTR(cs);
+	return rc;
 }
 
 static int mdc_ioc_changelog_send(struct obd_device *obd,
@@ -1641,13 +1632,16 @@ static int mdc_ioc_changelog_send(struct obd_device *obd,
 	cs->cs_fp = fget(icc->icc_id);
 	cs->cs_flags = icc->icc_flags;
 
-        /* New thread because we should return to user app before
-           writing into our pipe */
-        rc = cfs_create_thread(mdc_changelog_send_thread, cs, CFS_DAEMON_FLAGS);
-        if (rc >= 0) {
-                CDEBUG(D_CHANGELOG, "start changelog thread: %d\n", rc);
-                return 0;
-        }
+	/*
+	 * New thread because we should return to user app before
+	 * writing into our pipe
+	 */
+	rc = PTR_ERR(kthread_run(mdc_changelog_send_thread, cs,
+				 "mdc_clg_send_thread"));
+	if (!IS_ERR_VALUE(rc)) {
+		CDEBUG(D_CHANGELOG, "start changelog thread\n");
+		return 0;
+	}
 
         CERROR("Failed to start changelog thread: %d\n", rc);
         OBD_FREE_PTR(cs);

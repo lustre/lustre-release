@@ -417,8 +417,6 @@ static int qsd_reint_main(void *args)
 	int			 rc;
 	ENTRY;
 
-	cfs_daemonize("qsd_reint");
-
 	CDEBUG(D_QUOTA, "%s: Starting reintegration thread for "DFID"\n",
 	       qsd->qsd_svname, PFID(&qqi->qqi_fid));
 
@@ -662,8 +660,8 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 		RETURN(0);
 	}
 
-	rc = cfs_create_thread(qsd_reint_main, (void *)qqi, 0);
-	if (rc < 0) {
+	rc = PTR_ERR(kthread_run(qsd_reint_main, (void *)qqi, "qsd_reint"));
+	if (IS_ERR_VALUE(rc)) {
 		thread_set_flags(thread, SVC_STOPPED);
 		write_lock(&qsd->qsd_lock);
 		qqi->qqi_reint = 0;

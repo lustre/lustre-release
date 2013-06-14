@@ -823,7 +823,6 @@ static int osp_sync_thread(void *_arg)
 	struct llog_handle	*llh;
 	struct lu_env		 env;
 	int			 rc, count;
-	char			 pname[16];
 
 	ENTRY;
 
@@ -833,9 +832,6 @@ static int osp_sync_thread(void *_arg)
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
-
-	sprintf(pname, "osp-syn-%u", d->opd_index);
-	cfs_daemonize(pname);
 
 	spin_lock(&d->opd_syn_lock);
 	thread->t_flags = SVC_RUNNING;
@@ -1042,8 +1038,9 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 	cfs_waitq_init(&d->opd_syn_thread.t_ctl_waitq);
 	CFS_INIT_LIST_HEAD(&d->opd_syn_committed_there);
 
-	rc = cfs_create_thread(osp_sync_thread, d, 0);
-	if (rc < 0) {
+	rc = PTR_ERR(kthread_run(osp_sync_thread, d,
+				 "osp-syn-%u", d->opd_index));
+	if (IS_ERR_VALUE(rc)) {
 		CERROR("%s: can't start sync thread: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
 		GOTO(err_llog, rc);

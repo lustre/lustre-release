@@ -385,24 +385,25 @@ failed_with_init:
  * mxlnd_thread_start - spawn a kernel thread with this function
  * @fn - function pointer
  * @arg - pointer to the parameter data
+ * @name - name of new thread
  *
  * Returns 0 on success and a negative value on failure
  */
 int
-mxlnd_thread_start(int (*fn)(void *arg), void *arg)
+mxlnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-        int     pid = 0;
+	cfs_task *task;
         int     i   = (int) ((long) arg);
 
         cfs_atomic_inc(&kmxlnd_data.kmx_nthreads);
 	init_completion(&kmxlnd_data.kmx_completions[i]);
 
-        pid = cfs_create_thread(fn, arg, 0);
-        if (pid < 0) {
-                CERROR("cfs_create_thread() failed with %d\n", pid);
-                cfs_atomic_dec(&kmxlnd_data.kmx_nthreads);
-        }
-        return pid;
+	task = kthread_run(fn, arg, name);
+	if (IS_ERR(task)) {
+		CERROR("cfs_create_thread() failed with %d\n", PTR_ERR(task));
+		cfs_atomic_dec(&kmxlnd_data.kmx_nthreads);
+	}
+	return PTR_ERR(task);
 }
 
 /**
@@ -616,9 +617,13 @@ mxlnd_startup (lnet_ni_t *ni)
                 *kmxlnd_tunables.kmx_n_waitd == 1 ? "thread" : "threads");
 
         for (i = 0; i < *kmxlnd_tunables.kmx_n_waitd; i++) {
+		char                    name[24];
+		memset(name, 0, sizeof(name));
+		snprintf(name, sizeof(name), "mxlnd_request_waitd_%02ld", i);
                 ret = mxlnd_thread_start(mxlnd_request_waitd, (void*)((long)i));
-                if (ret < 0) {
-                        CERROR("Starting mxlnd_request_waitd[%d] failed with %d\n", i, ret);
+		if (ret < 0) {
+			CERROR("Starting mxlnd_request_waitd[%d] "
+				"failed with %d\n", i, ret);
                         cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                         mx_wakeup(kmxlnd_data.kmx_endpt);
                         for (--i; i >= 0; i--) {
@@ -631,7 +636,8 @@ mxlnd_startup (lnet_ni_t *ni)
                         goto failed;
                 }
         }
-        ret = mxlnd_thread_start(mxlnd_tx_queued, (void*)((long)i++));
+	ret = mxlnd_thread_start(mxlnd_tx_queued, (void *)((long)i++),
+				 "mxlnd_tx_queued");
         if (ret < 0) {
                 CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
@@ -644,7 +650,8 @@ mxlnd_startup (lnet_ni_t *ni)
 			nthreads * sizeof(struct completion));
                 goto failed;
         }
-        ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
+	ret = mxlnd_thread_start(mxlnd_timeoutd, (void *)((long)i++),
+				 "mxlnd_timeoutd");
         if (ret < 0) {
                 CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
@@ -658,7 +665,8 @@ mxlnd_startup (lnet_ni_t *ni)
 			nthreads * sizeof(struct completion));
                 goto failed;
         }
-        ret = mxlnd_thread_start(mxlnd_connd, (void*)((long)i++));
+	ret = mxlnd_thread_start(mxlnd_connd, (void *)((long)i++),
+				 "mxlnd_connd");
         if (ret < 0) {
                 CERROR("Starting mxlnd_connd failed with %d\n", ret);
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);

@@ -410,7 +410,7 @@ static int ptlrpcd(void *arg)
         int rc, exit = 0;
         ENTRY;
 
-	cfs_daemonize_ctxt(pc->pc_name);
+	unshare_fs_struct();
 #if defined(CONFIG_SMP) && \
 (defined(HAVE_CPUMASK_OF_NODE) || defined(HAVE_NODE_TO_CPUMASK))
 	if (test_bit(LIOD_BIND, &pc->pc_flags)) {
@@ -709,18 +709,21 @@ int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
 
         env = 1;
 #ifdef __KERNEL__
-        if (index >= 0) {
-                rc = ptlrpcd_bind(index, max);
-                if (rc < 0)
-                        GOTO(out, rc);
-        }
+	{
+		cfs_task_t *task;
+		if (index >= 0) {
+			rc = ptlrpcd_bind(index, max);
+			if (rc < 0)
+				GOTO(out, rc);
+		}
 
-        rc = cfs_create_thread(ptlrpcd, pc, 0);
-        if (rc < 0)
-                GOTO(out, rc);
+		task = kthread_run(ptlrpcd, pc, pc->pc_name);
+		if (IS_ERR(task))
+			GOTO(out, rc = PTR_ERR(task));
 
-        rc = 0;
-	wait_for_completion(&pc->pc_starting);
+		rc = 0;
+		wait_for_completion(&pc->pc_starting);
+	}
 #else
         pc->pc_wait_callback =
                 liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",

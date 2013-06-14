@@ -157,9 +157,10 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);
-int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flags);
+void *kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...);
 #else
-#define cfs_create_thread(l,m) LBUG()
+/* Fine, crash, but stop giving me compile warnings */
+#define kthread_run(f, a, n, ...) LBUG()
 #endif
 
 uid_t cfs_curproc_uid(void);

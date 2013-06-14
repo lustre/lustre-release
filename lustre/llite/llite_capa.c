@@ -173,8 +173,6 @@ static int capa_thread_main(void *unused)
         int rc;
         ENTRY;
 
-        cfs_daemonize("ll_capa");
-
         thread_set_flags(&ll_capa_thread, SVC_RUNNING);
         cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
 
@@ -293,20 +291,21 @@ void ll_capa_timer_callback(unsigned long unused)
 
 int ll_capa_thread_start(void)
 {
-        int rc;
-        ENTRY;
+	cfs_task_t *task;
+	ENTRY;
 
-        cfs_waitq_init(&ll_capa_thread.t_ctl_waitq);
+	cfs_waitq_init(&ll_capa_thread.t_ctl_waitq);
 
-        rc = cfs_create_thread(capa_thread_main, NULL, 0);
-        if (rc < 0) {
-                CERROR("cannot start expired capa thread: rc %d\n", rc);
-                RETURN(rc);
-        }
-        cfs_wait_event(ll_capa_thread.t_ctl_waitq,
-                       thread_is_running(&ll_capa_thread));
+	task = kthread_run(capa_thread_main, NULL, "ll_capa");
+	if (IS_ERR(task)) {
+		CERROR("cannot start expired capa thread: rc %ld\n",
+			PTR_ERR(task));
+		RETURN(PTR_ERR(task));
+	}
+	cfs_wait_event(ll_capa_thread.t_ctl_waitq,
+		       thread_is_running(&ll_capa_thread));
 
-        RETURN(0);
+	RETURN(0);
 }
 
 void ll_capa_thread_stop(void)

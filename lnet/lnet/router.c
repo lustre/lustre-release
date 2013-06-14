@@ -1095,16 +1095,17 @@ lnet_router_checker_start(void)
 
         the_lnet.ln_rc_state = LNET_RC_STATE_RUNNING;
 #ifdef __KERNEL__
-        rc = cfs_create_thread(lnet_router_checker, NULL, 0);
-        if (rc < 0) {
-                CERROR("Can't start router checker thread: %d\n", rc);
-                /* block until event callback signals exit */
+	rc = PTR_ERR(kthread_run(lnet_router_checker,
+				 NULL, "router_checker"));
+	if (IS_ERR_VALUE(rc)) {
+		CERROR("Can't start router checker thread: %d\n", rc);
+		/* block until event callback signals exit */
 		down(&the_lnet.ln_rc_signal);
-                rc = LNetEQFree(the_lnet.ln_rc_eqh);
-                LASSERT (rc == 0);
-                the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
-                return -ENOMEM;
-        }
+		rc = LNetEQFree(the_lnet.ln_rc_eqh);
+		LASSERT(rc == 0);
+		the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
+		return -ENOMEM;
+	}
 #endif
 
         if (check_routers_before_use) {
@@ -1230,7 +1231,6 @@ lnet_router_checker(void *arg)
         lnet_peer_t       *rtr;
         cfs_list_t        *entry;
 
-        cfs_daemonize("router_checker");
         cfs_block_allsigs();
 
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);

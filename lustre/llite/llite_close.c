@@ -349,12 +349,6 @@ static int ll_close_thread(void *arg)
         struct ll_close_queue *lcq = arg;
         ENTRY;
 
-        {
-                char name[CFS_CURPROC_COMM_MAX];
-                snprintf(name, sizeof(name) - 1, "ll_close");
-                cfs_daemonize(name);
-        }
-
 	complete(&lcq->lcq_comp);
 
         while (1) {
@@ -382,25 +376,25 @@ static int ll_close_thread(void *arg)
 
 int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 {
-        struct ll_close_queue *lcq;
-        pid_t pid;
+	struct ll_close_queue *lcq;
+	cfs_task_t *task;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CLOSE_THREAD))
-                return -EINTR;
+	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CLOSE_THREAD))
+		return -EINTR;
 
-        OBD_ALLOC(lcq, sizeof(*lcq));
-        if (lcq == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(lcq, sizeof(*lcq));
+	if (lcq == NULL)
+		return -ENOMEM;
 
 	spin_lock_init(&lcq->lcq_lock);
 	CFS_INIT_LIST_HEAD(&lcq->lcq_head);
 	cfs_waitq_init(&lcq->lcq_waitq);
 	init_completion(&lcq->lcq_comp);
 
-	pid = cfs_create_thread(ll_close_thread, lcq, 0);
-	if (pid < 0) {
+	task = kthread_run(ll_close_thread, lcq, "ll_close");
+	if (IS_ERR(task)) {
 		OBD_FREE(lcq, sizeof(*lcq));
-		return pid;
+		return PTR_ERR(task);
 	}
 
 	wait_for_completion(&lcq->lcq_comp);

@@ -480,11 +480,8 @@ static void do_requeue(struct config_llog_data *cld)
 
 static int mgc_requeue_thread(void *data)
 {
-        char name[] = "ll_cfg_requeue";
         int rc = 0;
         ENTRY;
-
-        cfs_daemonize(name);
 
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
@@ -776,20 +773,20 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         sptlrpc_lprocfs_cliobd_attach(obd);
 
         if (cfs_atomic_inc_return(&mgc_count) == 1) {
-                rq_state = 0;
-                cfs_waitq_init(&rq_waitq);
+		rq_state = 0;
+		cfs_waitq_init(&rq_waitq);
 
-                /* start requeue thread */
-                rc = cfs_create_thread(mgc_requeue_thread, NULL,
-                                       CFS_DAEMON_FLAGS);
-                if (rc < 0) {
-                        CERROR("%s: Cannot start requeue thread (%d),"
-                               "no more log updates!\n",
-                               obd->obd_name, rc);
-                        GOTO(err_cleanup, rc);
-                }
-                /* rc is the pid of mgc_requeue_thread. */
-                rc = 0;
+		/* start requeue thread */
+		rc = PTR_ERR(kthread_run(mgc_requeue_thread, NULL,
+					     "ll_cfg_requeue"));
+		if (IS_ERR_VALUE(rc)) {
+			CERROR("%s: Cannot start requeue thread (%d),"
+			       "no more log updates!\n",
+			       obd->obd_name, rc);
+			GOTO(err_cleanup, rc);
+		}
+		/* rc is the task_struct pointer of mgc_requeue_thread. */
+		rc = 0;
         }
 
         RETURN(rc);

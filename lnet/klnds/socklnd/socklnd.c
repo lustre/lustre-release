@@ -2465,12 +2465,15 @@ ksocknal_base_startup(void)
         }
 
         for (i = 0; i < *ksocknal_tunables.ksnd_nconnds; i++) {
+		char name[16];
 		spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 		ksocknal_data.ksnd_connd_starting++;
 		spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 
+
+		snprintf(name, sizeof(name), "socknal_cd%02d", i);
 		rc = ksocknal_thread_start(ksocknal_connd,
-					   (void *)((ulong_ptr_t)i));
+					   (void *)((ulong_ptr_t)i), name);
 		if (rc != 0) {
 			spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 			ksocknal_data.ksnd_connd_starting--;
@@ -2480,7 +2483,7 @@ ksocknal_base_startup(void)
                 }
         }
 
-        rc = ksocknal_thread_start (ksocknal_reaper, NULL);
+	rc = ksocknal_thread_start(ksocknal_reaper, NULL, "socknal_reaper");
         if (rc != 0) {
                 CERROR ("Can't spawn socknal reaper: %d\n", rc);
                 goto failed;
@@ -2724,10 +2727,16 @@ ksocknal_start_schedulers(struct ksock_sched_info *info)
 	}
 
 	for (i = 0; i < nthrs; i++) {
-		long	id;
-
+		long		id;
+		char		name[20];
+		ksock_sched_t	*sched;
 		id = KSOCK_THREAD_ID(info->ksi_cpt, info->ksi_nthreads + i);
-		rc = ksocknal_thread_start(ksocknal_scheduler, (void *)id);
+		sched = &info->ksi_scheds[KSOCK_THREAD_SID(id)];
+		snprintf(name, sizeof(name), "socknal_sd%02d_%02d",
+			 info->ksi_cpt, (int)(sched - &info->ksi_scheds[0]));
+
+		rc = ksocknal_thread_start(ksocknal_scheduler,
+					   (void *)id, name);
 		if (rc == 0)
 			continue;
 

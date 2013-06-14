@@ -2554,8 +2554,6 @@ mxlnd_tx_queued(void *arg)
 	spinlock_t		*tx_q_lock = &kmxlnd_data.kmx_tx_queue_lock;
 	rwlock_t		*g_lock  = &kmxlnd_data.kmx_global_lock;
 
-	cfs_daemonize("mxlnd_tx_queued");
-
 	while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
 		ret = down_interruptible(&kmxlnd_data.kmx_tx_queue_sem);
 		if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
@@ -3485,7 +3483,6 @@ int
 mxlnd_request_waitd(void *arg)
 {
         long                    id              = (long) arg;
-        char                    name[24];
         __u32                   result          = 0;
         mx_return_t             mxret           = MX_SUCCESS;
         mx_status_t             status;
@@ -3496,10 +3493,6 @@ mxlnd_request_waitd(void *arg)
 #if MXLND_POLLING
         int                     count           = 0;
 #endif
-
-        memset(name, 0, sizeof(name));
-        snprintf(name, sizeof(name), "mxlnd_request_waitd_%02ld", id);
-        cfs_daemonize(name);
 
         memset(&status, 0, sizeof(status));
 
@@ -3965,8 +3958,6 @@ mxlnd_connd(void *arg)
 {
         long                    id              = (long) arg;
 
-        cfs_daemonize("mxlnd_connd");
-
         CDEBUG(D_NET, "connd starting\n");
 
         while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
@@ -4039,8 +4030,6 @@ mxlnd_timeoutd(void *arg)
         kmx_peer_t     *temp    = NULL;
         kmx_conn_t     *conn    = NULL;
 	rwlock_t   *g_lock  = &kmxlnd_data.kmx_global_lock;
-
-        cfs_daemonize("mxlnd_timeoutd");
 
         CDEBUG(D_NET, "timeoutd starting\n");
 

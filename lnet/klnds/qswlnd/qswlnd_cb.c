@@ -1655,15 +1655,15 @@ kqswnal_recv (lnet_ni_t     *ni,
 }
 
 int
-kqswnal_thread_start (int (*fn)(void *arg), void *arg)
+kqswnal_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-        long    pid = cfs_create_thread (fn, arg, 0);
+	cfs_task_t *task = cfs_thread_run(fn, arg, name);
 
-        if (pid < 0)
-                return ((int)pid);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
 
-        cfs_atomic_inc (&kqswnal_data.kqn_nthreads);
-        return (0);
+	cfs_atomic_inc(&kqswnal_data.kqn_nthreads);
+	return 0;
 }
 
 void
@@ -1682,7 +1682,6 @@ kqswnal_scheduler (void *arg)
         int              counter = 0;
         int              did_something;
 
-        cfs_daemonize ("kqswnal_sched");
         cfs_block_allsigs ();
 
 	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);

@@ -1566,6 +1566,7 @@ kranal_startup (lnet_ni_t *ni)
         int               rc;
         int               i;
         kra_device_t     *dev;
+	char		  name[16];
 
         LASSERT (ni->ni_lnd == &the_kralnd);
 
@@ -1658,14 +1659,16 @@ kranal_startup (lnet_ni_t *ni)
         if (rc != 0)
                 goto failed;
 
-        rc = kranal_thread_start(kranal_reaper, NULL);
+	rc = kranal_thread_start(kranal_reaper, NULL, "kranal_reaper");
         if (rc != 0) {
                 CERROR("Can't spawn ranal reaper: %d\n", rc);
                 goto failed;
         }
 
         for (i = 0; i < *kranal_tunables.kra_n_connd; i++) {
-                rc = kranal_thread_start(kranal_connd, (void *)(unsigned long)i);
+		snprintf(name, sizeof(name), "kranal_connd_%02ld", i);
+		rc = kranal_thread_start(kranal_connd,
+					 (void *)(unsigned long)i, name);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal connd[%d]: %d\n",
                                i, rc);
@@ -1691,7 +1694,8 @@ kranal_startup (lnet_ni_t *ni)
         
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
                 dev = &kranal_data.kra_devices[i];
-                rc = kranal_thread_start(kranal_scheduler, dev);
+		snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
+		rc = kranal_thread_start(kranal_scheduler, dev, name);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal scheduler[%d]: %d\n",
                                i, rc);

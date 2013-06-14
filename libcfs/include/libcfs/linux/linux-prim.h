@@ -183,15 +183,6 @@ typedef long                            cfs_task_state_t;
 
 #define CFS_DECL_WAITQ(wq)		DECLARE_WAIT_QUEUE_HEAD(wq)
 
-#define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
-
-/* Kernel thread */
-typedef int (*cfs_thread_t)(void *);
-
-#define CFS_DAEMON_FLAGS (CLONE_VM | CLONE_FILES)
-extern int cfs_create_thread(int (*fn)(void *),
-                             void *arg, unsigned long flags);
-
 /*
  * Task struct
  */

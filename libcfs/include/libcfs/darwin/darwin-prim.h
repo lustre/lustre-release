@@ -202,10 +202,8 @@ extern task_t	kernel_task;
 
 #define CLONE_SIGNAL    (CLONE_SIGHAND | CLONE_THREAD)
 
-#define CFS_DAEMON_FLAGS (CLONE_VM | CLONE_FILES)
-
-extern int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flag);
-
+extern cfs_task_t kthread_run(cfs_thread_t func, void *arg,
+			      const char namefmt[], ...);
 
 /*
  * Wait Queue implementation

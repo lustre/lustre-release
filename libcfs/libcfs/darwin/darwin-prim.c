@@ -333,24 +333,29 @@ cfs_thread_agent (void)
 
 extern thread_t kernel_thread(task_t task, void (*start)(void));
 
-int
-cfs_create_thread(cfs_thread_t  func, void *arg, unsigned long flag)
+cfs_task_t
+kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 {
-        int ret = 0;
-        thread_t th = NULL;
+	int ret = 0;
+	thread_t th = NULL;
 
-        thread_arg_hold(&cfs_thread_arg, func, arg);
-        th = kernel_thread(kernel_task, cfs_thread_agent);
-        thread_arg_release(&cfs_thread_arg);
-        if (th == THREAD_NULL)
+	thread_arg_hold(&cfs_thread_arg, func, arg);
+	th = kernel_thread(kernel_task, cfs_thread_agent);
+	thread_arg_release(&cfs_thread_arg);
+	if (th != THREAD_NULL) {
+		/*
+		 * FIXME: change child thread name...
+		 * cfs_curproc_comm() is already broken. So it is left as is...
+		va_list args;
+		va_start(args, namefmt);
+		snprintf(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX,
+			 namefmt, args);
+		va_end(args);
+		 */
+	} else {
                 ret = -1;
-        return ret;
-}
-
-void cfs_daemonize(char *str)
-{
-        snprintf(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX, "%s", str);
-        return;
+	}
+	return (cfs_task_t)((long)ret);
 }
 
 /*
