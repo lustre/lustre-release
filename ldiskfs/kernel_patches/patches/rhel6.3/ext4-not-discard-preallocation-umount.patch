@@ -1,0 +1,14 @@
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -3781,7 +3781,8 @@ ext4_mb_release_inode_pa(struct ext4_bud
+ 		 * from the bitmap and continue.
+ 		 */
+ 	}
+-	BUG_ON(pa->pa_free != free);
++	/* do not verify if the file system is being umounted */
++	BUG_ON(atomic_read(&sb->s_active) > 0 && pa->pa_free != free);
+ 	atomic_add(free, &sbi->s_mb_discarded);
+ 
+ 	return err;
