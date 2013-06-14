@@ -288,25 +288,6 @@ struct mdt_opc_slice mdt_seq_handlers[] = {
 	}
 };
 
-/* FID Location Database handlers */
-#define DEF_FLD_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(FLD_QUERY, flags, name, fn, &RQF_ ## name)
-
-static struct mdt_handler mdt_fld_ops[] = {
-DEF_FLD_HDL(0,				FLD_QUERY,	  (void *)fld_query),
-};
-
-struct mdt_opc_slice mdt_fld_handlers[] = {
-	{
-		.mos_opc_start = FLD_QUERY,
-		.mos_opc_end   = FLD_LAST_OPC,
-		.mos_hs	= mdt_fld_ops
-	},
-	{
-		.mos_hs	= NULL
-	}
-};
-
 static int mds_regular_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_regular_handlers);
@@ -325,11 +306,6 @@ static int mds_mdsc_handle(struct ptlrpc_request *req)
 static int mds_mdss_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_seq_handlers);
-}
-
-static int mds_fld_handle(struct ptlrpc_request *req)
-{
-	return mdt_handle_common(req, mdt_fld_handlers);
 }
 
 /* device init/fini methods */
@@ -643,10 +619,10 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_thr_name		= LUSTRE_MDT_NAME "_fld",
 			.tc_nthrs_init		= MDS_OTHR_NTHRS_INIT,
 			.tc_nthrs_max		= MDS_OTHR_NTHRS_MAX,
-			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD
+			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_fld_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= NULL,
 		},

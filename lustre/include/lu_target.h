@@ -212,6 +212,7 @@ extern struct tgt_handler tgt_obd_handlers[];
 extern struct tgt_handler tgt_dlm_handlers[];
 extern struct tgt_handler tgt_llog_handlers[];
 extern struct tgt_handler tgt_out_handlers[];
+extern struct tgt_handler fld_handlers[];
 
 typedef void (*tgt_cb_t)(struct lu_target *lut, __u64 transno,
 			 void *data, int err);

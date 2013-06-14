@@ -3465,9 +3465,6 @@ int mdt_recovery_handle(struct ptlrpc_request *req)
         ENTRY;
 
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
-        case FLD_QUERY:
-                rc = mdt_handle_common(req, mdt_fld_handlers);
-                break;
         case SEQ_QUERY:
                 rc = mdt_handle_common(req, mdt_seq_handlers);
                 break;
@@ -4691,32 +4688,37 @@ TGT_RPC_HANDLER(MDS_FIRST_OPC,
 
 static struct tgt_opc_slice mdt_common_slice[] = {
 	{
-		.tos_opc_start = MDS_FIRST_OPC,
-		.tos_opc_end   = MDS_LAST_OPC,
-		.tos_hs        = mdt_tgt_handlers
+		.tos_opc_start	= MDS_FIRST_OPC,
+		.tos_opc_end	= MDS_LAST_OPC,
+		.tos_hs		= mdt_tgt_handlers
 	},
 	{
-		.tos_opc_start = OBD_FIRST_OPC,
-		.tos_opc_end   = OBD_LAST_OPC,
-		.tos_hs        = tgt_obd_handlers
+		.tos_opc_start	= OBD_FIRST_OPC,
+		.tos_opc_end	= OBD_LAST_OPC,
+		.tos_hs		= tgt_obd_handlers
 	},
 	{
-		.tos_opc_start = LDLM_FIRST_OPC,
-		.tos_opc_end   = LDLM_LAST_OPC,
-		.tos_hs        = tgt_dlm_handlers
+		.tos_opc_start	= LDLM_FIRST_OPC,
+		.tos_opc_end	= LDLM_LAST_OPC,
+		.tos_hs		= tgt_dlm_handlers
 	},
 	{
-		.tos_opc_start = SEC_FIRST_OPC,
-		.tos_opc_end   = SEC_LAST_OPC,
-		.tos_hs        = tgt_sec_ctx_handlers
+		.tos_opc_start	= SEC_FIRST_OPC,
+		.tos_opc_end	= SEC_LAST_OPC,
+		.tos_hs		= tgt_sec_ctx_handlers
 	},
 	{
-		.tos_opc_start = UPDATE_OBJ,
-		.tos_opc_end   = UPDATE_LAST_OPC,
-		.tos_hs        = tgt_out_handlers
+		.tos_opc_start	= UPDATE_OBJ,
+		.tos_opc_end	= UPDATE_LAST_OPC,
+		.tos_hs		= tgt_out_handlers
 	},
 	{
-		.tos_hs        = NULL
+		.tos_opc_start	= FLD_FIRST_OPC,
+		.tos_opc_end	= FLD_LAST_OPC,
+		.tos_hs		= fld_handlers
+	},
+	{
+		.tos_hs		= NULL
 	}
 };
 

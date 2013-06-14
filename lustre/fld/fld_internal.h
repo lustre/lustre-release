@@ -144,9 +144,7 @@ extern struct lprocfs_vars fld_client_proc_list[];
 # endif
 
 # ifdef HAVE_SERVER_SUPPORT
-struct req_capsule;
 struct fld_thread_info {
-	struct req_capsule *fti_pill;
 	struct lu_seq_range fti_rec;
 	struct lu_seq_range fti_lrange;
 	struct lu_seq_range fti_irange;

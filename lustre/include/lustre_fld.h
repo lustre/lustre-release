@@ -129,9 +129,6 @@ struct lu_client_fld {
 	int			 lcf_flags;
 };
 
-struct com_thread_info;
-int fld_query(struct com_thread_info *info);
-
 /* Server methods */
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		    struct dt_device *dt, const char *prefix, int mds_node_id,

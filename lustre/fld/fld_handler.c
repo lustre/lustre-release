@@ -60,6 +60,7 @@
 LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 
 /* context key: fld_thread_key */
+/* MGS thread may create llog file causing FLD lookup */
 LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD);
 
 int fld_server_mod_init(void)
@@ -163,55 +164,49 @@ EXPORT_SYMBOL(fld_server_lookup);
  * All MDT server handle fld lookup operation. But only MDT0 has fld index.
  * if entry is not found in cache we need to forward lookup request to MDT0
  */
-
 static int fld_server_handle(struct lu_server_fld *fld,
-                             const struct lu_env *env,
-                             __u32 opc, struct lu_seq_range *range,
-                             struct fld_thread_info *info)
+			     const struct lu_env *env,
+			     __u32 opc, struct lu_seq_range *range)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        switch (opc) {
-        case FLD_LOOKUP:
+	ENTRY;
+
+	switch (opc) {
+	case FLD_LOOKUP:
 		rc = fld_server_lookup(env, fld, range->lsr_start, range);
-                break;
-        default:
-                rc = -EINVAL;
-                break;
-        }
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
 
-        CDEBUG(D_INFO, "%s: FLD req handle: error %d (opc: %d, range: "
-               DRANGE"\n", fld->lsf_name, rc, opc, PRANGE(range));
+	CDEBUG(D_INFO, "%s: FLD req handle: error %d (opc: %d, range: "
+	       DRANGE"\n", fld->lsf_name, rc, opc, PRANGE(range));
 
-        RETURN(rc);
-
+	RETURN(rc);
 }
 
-static int fld_req_handle(struct ptlrpc_request *req,
-                          struct fld_thread_info *info)
+static int fld_handler(struct tgt_session_info *tsi)
 {
-        struct obd_export *exp = req->rq_export;
-        struct lu_site *site = exp->exp_obd->obd_lu_dev->ld_site;
-        struct lu_seq_range *in;
-        struct lu_seq_range *out;
-        int rc;
-        __u32 *opc;
-        ENTRY;
+	struct obd_export	*exp = tsi->tsi_exp;
+	struct lu_site		*site = exp->exp_obd->obd_lu_dev->ld_site;
+	struct lu_seq_range	*in;
+	struct lu_seq_range	*out;
+	int			 rc;
+	__u32			*opc;
 
-        rc = req_capsule_server_pack(info->fti_pill);
-        if (rc)
-                RETURN(err_serious(rc));
+	ENTRY;
 
-        opc = req_capsule_client_get(info->fti_pill, &RMF_FLD_OPC);
-        if (opc != NULL) {
-                in = req_capsule_client_get(info->fti_pill, &RMF_FLD_MDFLD);
-                if (in == NULL)
-                        RETURN(err_serious(-EPROTO));
-                out = req_capsule_server_get(info->fti_pill, &RMF_FLD_MDFLD);
-                if (out == NULL)
-                        RETURN(err_serious(-EPROTO));
-                *out = *in;
+	opc = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_OPC);
+	if (opc != NULL) {
+		in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
+		if (in == NULL)
+			RETURN(err_serious(-EPROTO));
+		out = req_capsule_server_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
+		if (out == NULL)
+			RETURN(err_serious(-EPROTO));
+		*out = *in;
 
 		/* For old 2.0 client, the 'lsr_flags' is uninitialized.
 		 * Set it as 'LU_SEQ_RANGE_MDT' by default. */
@@ -222,56 +217,13 @@ static int fld_req_handle(struct ptlrpc_request *req,
 			fld_range_set_mdt(out);
 
 		rc = fld_server_handle(lu_site2seq(site)->ss_server_fld,
-				       req->rq_svc_thread->t_env,
-				       *opc, out, info);
+				       tsi->tsi_env, *opc, out);
 	} else {
-                rc = err_serious(-EPROTO);
+		rc = err_serious(-EPROTO);
 	}
 
 	RETURN(rc);
 }
-
-static void fld_thread_info_init(struct ptlrpc_request *req,
-                                 struct fld_thread_info *info)
-{
-        info->fti_pill = &req->rq_pill;
-        /* Init request capsule. */
-        req_capsule_init(info->fti_pill, req, RCL_SERVER);
-        req_capsule_set(info->fti_pill, &RQF_FLD_QUERY);
-}
-
-static void fld_thread_info_fini(struct fld_thread_info *info)
-{
-        req_capsule_fini(info->fti_pill);
-}
-
-static int fld_handle(struct ptlrpc_request *req)
-{
-        struct fld_thread_info *info;
-        const struct lu_env *env;
-        int rc;
-
-        env = req->rq_svc_thread->t_env;
-        LASSERT(env != NULL);
-
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        LASSERT(info != NULL);
-
-        fld_thread_info_init(req, info);
-        rc = fld_req_handle(req, info);
-        fld_thread_info_fini(info);
-
-        return rc;
-}
-
-/*
- * Entry point for handling FLD RPCs called from MDT.
- */
-int fld_query(struct com_thread_info *info)
-{
-        return fld_handle(info->cti_pill->rc_req);
-}
-EXPORT_SYMBOL(fld_query);
 
 /*
  * Returns true, if fid is local to this server node.
@@ -361,45 +313,44 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 {
 	int cache_size, cache_threshold;
 	int rc;
+
 	ENTRY;
 
-        snprintf(fld->lsf_name, sizeof(fld->lsf_name),
-                 "srv-%s", prefix);
+	snprintf(fld->lsf_name, sizeof(fld->lsf_name),
+		 "srv-%s", prefix);
 
-        cache_size = FLD_SERVER_CACHE_SIZE /
-                sizeof(struct fld_cache_entry);
+	cache_size = FLD_SERVER_CACHE_SIZE / sizeof(struct fld_cache_entry);
 
-        cache_threshold = cache_size *
-                FLD_SERVER_CACHE_THRESHOLD / 100;
+	cache_threshold = cache_size * FLD_SERVER_CACHE_THRESHOLD / 100;
 
 	mutex_init(&fld->lsf_lock);
-        fld->lsf_cache = fld_cache_init(fld->lsf_name,
-                                        cache_size, cache_threshold);
-        if (IS_ERR(fld->lsf_cache)) {
-                rc = PTR_ERR(fld->lsf_cache);
-                fld->lsf_cache = NULL;
-                GOTO(out, rc);
-        }
+	fld->lsf_cache = fld_cache_init(fld->lsf_name, cache_size,
+					cache_threshold);
+	if (IS_ERR(fld->lsf_cache)) {
+		rc = PTR_ERR(fld->lsf_cache);
+		fld->lsf_cache = NULL;
+		RETURN(rc);
+	}
 
 	if (!mds_node_id && type == LU_SEQ_RANGE_MDT) {
 		rc = fld_index_init(env, fld, dt);
-                if (rc)
-                        GOTO(out, rc);
-        } else {
-                fld->lsf_obj = NULL;
+		if (rc)
+			GOTO(out_cache, rc);
+	} else {
+		fld->lsf_obj = NULL;
 	}
 
-        rc = fld_server_proc_init(fld);
-        if (rc)
-                GOTO(out, rc);
-
-        fld->lsf_control_exp = NULL;
-
-	GOTO(out, rc);
-
-out:
+	rc = fld_server_proc_init(fld);
 	if (rc)
-		fld_server_fini(env, fld);
+		GOTO(out_index, rc);
+
+	fld->lsf_control_exp = NULL;
+
+	RETURN(0);
+out_index:
+	fld_index_fini(env, fld);
+out_cache:
+	fld_cache_fini(fld->lsf_cache);
 	return rc;
 }
 EXPORT_SYMBOL(fld_server_init);
@@ -420,3 +371,8 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld)
 	EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);
+
+struct tgt_handler fld_handlers[] = {
+TGT_FLD_HDL(HABEO_REFERO,	FLD_QUERY,	fld_handler),
+};
+EXPORT_SYMBOL(fld_handlers);
