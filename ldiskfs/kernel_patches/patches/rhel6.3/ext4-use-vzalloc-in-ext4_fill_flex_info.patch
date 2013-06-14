@@ -1,0 +1,38 @@
+From 94de56ab2062be59d80e2efb7c0dc60ecf616075 Mon Sep 17 00:00:00 2001
+From: Joe Perches <joe@perches.com>
+Date: Sun, 19 Dec 2010 22:21:02 -0500
+Subject: ext4: Use vzalloc in ext4_fill_flex_info()
+Git-commit: 94de56ab
+Patch-mainline: v2.6.38-rc1
+
+Signed-off-by: Joe Perches <joe@perches.com>
+Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+Acked-by: Jeff Mahoney <jeffm@suse.com>
+---
+ fs/ext4/super.c |   15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1817,14 +1817,13 @@ static int ext4_fill_flex_info(struct su
+ 	size = flex_group_count * sizeof(struct flex_groups);
+ 	sbi->s_flex_groups = kzalloc(size, GFP_KERNEL);
+ 	if (sbi->s_flex_groups == NULL) {
+-		sbi->s_flex_groups = vmalloc(size);
+-		if (sbi->s_flex_groups)
+-			memset(sbi->s_flex_groups, 0, size);
+-	}
+-	if (sbi->s_flex_groups == NULL) {
+-		ext4_msg(sb, KERN_ERR, "not enough memory for "
+-				"%u flex groups", flex_group_count);
+-		goto failed;
++		sbi->s_flex_groups = vzalloc(size);
++		if (sbi->s_flex_groups == NULL) {
++			ext4_msg(sb, KERN_ERR,
++				 "not enough memory for %u flex groups",
++				 flex_group_count);
++			goto failed;
++		}
+ 	}
+
+ 	for (i = 0; i < sbi->s_groups_count; i++) {

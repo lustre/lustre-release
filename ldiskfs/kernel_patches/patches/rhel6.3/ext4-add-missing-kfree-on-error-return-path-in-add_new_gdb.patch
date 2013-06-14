@@ -1,0 +1,28 @@
+From c49bafa3842751b8955a962859f42d307673d75d Mon Sep 17 00:00:00 2001
+From: Dan Carpenter <error27@gmail.com>
+Date: Sat, 30 Jul 2011 12:58:41 -0400
+Subject: ext4: add missing kfree() on error return path in add_new_gdb()
+Git-commit: c49bafa3
+Patch-mainline: v3.1-rc1
+
+We added some more error handling in b40971426a "ext4: add error
+checking to calls to ext4_handle_dirty_metadata()".  But we need to
+call kfree() as well to avoid a memory leak.
+
+Signed-off-by: Dan Carpenter <error27@gmail.com>
+Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+Acked-by: Jeff Mahoney <jeffm@suse.com>
+---
+ fs/ext4/resize.c |    1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/fs/ext4/resize.c
++++ b/fs/ext4/resize.c
+@@ -475,6 +475,7 @@ static int add_new_gdb(handle_t *handle,
+ 	return 0;
+
+ exit_inode:
++	kfree(n_group_desc);
+ 	/* ext4_journal_release_buffer(handle, iloc.bh); */
+ 	brelse(iloc.bh);
+ exit_dindj:
