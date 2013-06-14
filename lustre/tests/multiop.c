@@ -73,6 +73,7 @@ char usage[] =
 "	 D  open(O_DIRECTORY)\n"
 "	 f  statfs\n"
 "	 F  print FID\n"
+"	 H[num] create HSM released file with num stripes\n"
 "	 G gid get grouplock\n"
 "	 g gid put grouplock\n"
 "	 K  link path to filename\n"

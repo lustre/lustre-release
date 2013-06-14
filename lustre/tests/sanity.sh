@@ -11130,12 +11130,15 @@ test_228c() {
 }
 run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 
-test_229() { # LU-2482
+test_229() { # LU-2482, LU-3448
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
-	# Create a file with a release layout (stripe count = 0)
+	rm -f $DIR/$tfile
+
+	# Create a file with a released layout and stripe count 2.
 	$MULTIOP $DIR/$tfile H2c ||
-		error "failed to create file w. released layout"
+		error "failed to create file with released layout"
 
 	$GETSTRIPE -v $DIR/$tfile
 
@@ -11147,8 +11150,13 @@ test_229() { # LU-2482
 	[ $stripe_count -eq 2 ] || error "stripe count not 2 ($stripe_count)"
 	stat $DIR/$tfile || error "failed to stat released file"
 
-	$TRUNCATE $DIR/$tfile 200000
-	$CHECKSTAT -s 200000 $DIR/$tfile || error
+	# Truncate should fail.
+	$TRUNCATE $DIR/$tfile 200000 &&
+		error "truncate of released file should fail"
+
+	# Ensure that nothing happened anyway.
+	$CHECKSTAT -s 0 $DIR/$tfile ||
+		error "released file size should not change"
 
 	# Stripe count should be no change after truncate
 	stripe_count=$($GETSTRIPE -c $DIR/$tfile) || error "getstripe failed"
@@ -11156,7 +11164,7 @@ test_229() { # LU-2482
 
 	rm $DIR/$tfile || error "failed to remove released file"
 }
-run_test 229 "getstripe/stat/rm work on released files (stripe count = 0)"
+run_test 229 "getstripe/stat/rm work on released files (stripe count = 2)"
 
 test_230a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
