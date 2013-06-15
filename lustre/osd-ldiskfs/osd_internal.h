@@ -52,7 +52,6 @@
 /* struct dirent64 */
 #include <linux/dirent.h>
 
-#include <ldiskfs/ldiskfs_config.h>
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
 

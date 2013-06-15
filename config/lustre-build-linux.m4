@@ -33,42 +33,55 @@ AC_SUBST(KMODEXT)
 ])
 
 #
+# LB_LINUX_UTSRELEASE
+#
+# Determine the Linux kernel version string from the utsrelease
+#
+AC_DEFUN([LB_LINUX_UTSRELEASE], [
+	AC_MSG_CHECKING([kernel source version])
+
+	utsrelease1=${LINUX_OBJ}/include/generated/utsrelease.h
+	utsrelease2=${LINUX_OBJ}/include/linux/utsrelease.h
+	utsrelease3=${LINUX_OBJ}/include/linux/version.h
+	AS_IF([test -r ${utsrelease1} && fgrep -q UTS_RELEASE ${utsrelease1}], [
+		utsrelease=${utsrelease1}
+	], [test -r ${utsrelease2} && fgrep -q UTS_RELEASE ${utsrelease2}], [
+		utsrelease=${utsrelease2}
+	], [test -r ${utsrelease3} && fgrep -q UTS_RELEASE ${utsrelease3}], [
+		utsrelease=${utsrelease3}
+	])
+
+	AS_IF([test ! -z "${utsrelease}"], [
+		UTS_RELEASE=$(awk -F \" '/ UTS_RELEASE / { print [$]2 }' \
+		              ${utsrelease})
+		AS_IF([test -z "$UTS_RELEASE"], [
+			AC_MSG_RESULT([Not found])
+			AC_MSG_ERROR([*** Cannot determine kernel version.])
+		])
+	], [
+		AC_MSG_RESULT([Not found])
+		AC_MSG_ERROR([
+	*** Cannot find UTS_RELEASE definition.
+	*** This is often provided by the kernel-devel package.])
+	])
+
+	AC_MSG_RESULT([${UTS_RELEASE}])
+
+	LINUX_VERSION=${UTS_RELEASE}
+	AC_SUBST(LINUX_VERSION)
+	LINUXRELEASE=${UTS_RELEASE}
+	AC_SUBST(LINUXRELEASE)
+])
+
+
+#
 # LB_LINUX_RELEASE
 #
 # get the release version of linux
 #
 AC_DEFUN([LB_LINUX_RELEASE],
-[LINUXRELEASE=
-rm -f build/conftest.i
-AC_MSG_CHECKING([for Linux release])
-if test -s $LINUX_OBJ/include/$AUTOCONF_HDIR/utsrelease.h ; then
-	LINUXRELEASEHEADER=$AUTOCONF_HDIR/utsrelease.h
-else
-	LINUXRELEASEHEADER=$VERSION_HDIR/version.h
-fi
-LB_LINUX_TRY_MAKE([
-	#include <$LINUXRELEASEHEADER>
-],[
-	char *LINUXRELEASE;
-	LINUXRELEASE=UTS_RELEASE;
-],[
-	$makerule LUSTRE_KERNEL_TEST=conftest.i
-],[
-	test -s build/conftest.i
-],[
-	# LINUXRELEASE="UTS_RELEASE"
-	eval $(grep "LINUXRELEASE=" build/conftest.i)
-],[
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])
-])
-rm -f build/conftest.i
-if test x$LINUXRELEASE = x ; then
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not determine Linux release version from $LINUXRELEASEHEADER.])
-fi
-AC_MSG_RESULT([$LINUXRELEASE])
-AC_SUBST(LINUXRELEASE)
+[
+LB_LINUX_UTSRELEASE
 
 moduledir='$(CROSS_PATH)/lib/modules/$(LINUXRELEASE)/updates/kernel'
 AC_SUBST(moduledir)
@@ -81,7 +94,7 @@ AC_SUBST(modulenetdir)
 
 # ------------ RELEASE --------------------------------
 AC_MSG_CHECKING([for Lustre release])
-AC_ARG_WITH([release],
+AC_ARG_WITH([release],[
 	AC_HELP_STRING([--with-release=string],
 		       [set the release string (default=$kvers_YYYYMMDDhhmm)]),
 	[RELEASE=$withval],
@@ -89,16 +102,17 @@ AC_ARG_WITH([release],
 	if test -n "$DOWNSTREAM_RELEASE"; then
 		RELEASE="${DOWNSTREAM_RELEASE}_"
 	fi
-	RELEASE="$RELEASE`echo ${LINUXRELEASE} | tr '-' '_'`_$BUILDID")
+	RELEASE="$RELEASE`echo ${LINUXRELEASE} | tr '-' '_'`_$BUILDID"
+])
 AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
 
-# check is redhat/suse kernels
+# check if the kernel is one from RHEL or SUSE
 AC_MSG_CHECKING([for RedHat kernel version])
-	AS_IF([fgrep -q RHEL_RELEASE ${LINUX_OBJ}/include/linux/version.h], [
+	AS_IF([fgrep -q RHEL_RELEASE ${LINUX_OBJ}/include/$VERSION_HDIR/version.h], [
 		RHEL_KERNEL="yes"
 		RHEL_RELEASE=$(expr 0$(awk -F \" '/ RHEL_RELEASE / { print [$]2 }' \
-		               ${LINUX_OBJ}/include/linux/version.h) + 1)
+			       ${LINUX_OBJ}/include/$VERSION_HDIR/version.h) + 1)
 		KERNEL_VERSION=$(sed -e 's/\(@<:@23@:>@\.@<:@0-9@:>@*\.@<:@0-9@:>@*\).*/\1/' <<< ${LINUXRELEASE})
 		RHEL_KERNEL_VERSION=${KERNEL_VERSION}-${RHEL_RELEASE}
 		AC_SUBST(RHEL_KERNEL_VERSION)
@@ -312,7 +326,7 @@ AS_IF([test "x$cross_compiling" = xno], [AC_MSG_RESULT([no])],
 			# need to produce special section for debuginfo extraction
 			LDFLAGS="${LDFLAGS} -Wl,--build-id"
 			EXTRA_KLDFLAGS="${EXTRA_KLDFLAGS} -Wl,--build-id"
-			if test x$enable_server = xyes ; then
+			if test x$enable_server != xno ; then
 				AC_MSG_WARN([Disabling server (not supported for x86_64-$host_vendor-linux).])
 				enable_server='no'
 			fi

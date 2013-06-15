@@ -11,6 +11,6 @@ $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 EXTRA_DIST = $(lvfs-objs:.o=.c) fsfilt_ext3.c
 
 # for <ext3/xattr.h> on 2.6
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@abs_top_builddir@ -I@abs_top_builddir@/ldiskfs
 
 @INCLUDE_RULES@

@@ -35,6 +35,3 @@
 #
 
 SUBDIRS = libcfs include autoconf
-
-sources:
-	$(MAKE) sources -C libcfs

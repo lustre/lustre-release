@@ -36,5 +36,3 @@
 
 SUBDIRS = lnet klnds ulnds selftest doc utils include	\
 	autoconf
-
-sources:

@@ -368,12 +368,11 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-utils \
 		    --disable-liblustre \
 		    --disable-snmp \
-		    --enable-ldiskfs \
 		    --disable-zerocopy \
 		    --disable-tests \
 		    --enable-quota
 
-kdist_configure: kdist_config 
+kdist_configure: kdist_config
 
 # the binary-modules rule is invoked by module-assistant while processing the
 # kdist* targets. It is called by module-assistant or make-kpkg and *not*

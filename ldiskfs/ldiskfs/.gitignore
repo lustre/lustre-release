@@ -1,9 +1,0 @@
-/linux-stage
-/linux
-/modules.order
-/Module.symvers
-/stamp-h2
-/*.c
-/*.h
-/sources
-/trace

@@ -2,6 +2,7 @@
 /*.xml
 /Makefile.in
 /XMLCONFIG
+/checkfiemap
 /checkstat
 /chownmany
 /cmknod

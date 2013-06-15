@@ -123,9 +123,12 @@ Lustre file system, server and network drivers for Linux %{kversion}.
 
 %if %{with ldiskfs}
 %package osd-ldiskfs
-Summary: osd-ldiskfs is the mandatory glue for LDISKFS support in Lustre.
-Requires: lustre-modules = %{version}, lustre-ldiskfs >= 4.1.0
+Summary: osd-ldiskfs contains both ldiskfs and its osd interface in Lustre.
+Requires: lustre-modules = %{version}
+Requires: modutils >= 2.4.10
+Requires: ldiskfsprogs >= 1.42.7.wc1
 Provides: lustre-osd
+Obsoletes: lustre-ldiskfs
 Group: Development/Kernel
 
 %description osd-ldiskfs
@@ -261,8 +264,6 @@ make -j $RPM_BUILD_NCPUS -s %{?make_args}
 make install DESTDIR=$RPM_BUILD_ROOT
 # hack to avoid changing the libsysio code for "make install"
 rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
-# Remove ldiskfs module(s) - they are packaged by the ldiskfs .spec.
-rm -rf $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs
 
 # hack to include the llog_test module in lustre-tests
 llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
@@ -379,6 +380,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko
 %endif
 %if %{with ldiskfs}
+%exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/fsfilt_ldiskfs.ko
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
 %endif
@@ -394,6 +396,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %if %{with ldiskfs}
 %files osd-ldiskfs
+%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/fsfilt_ldiskfs.ko
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
 %if %{defined rpm_post_base}

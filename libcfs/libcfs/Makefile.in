@@ -25,8 +25,6 @@ endif
 
 default: all
 
-sources:
-
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 
 libcfs-all-objs := debug.o fail.o nidstrings.o module.o tracefile.o \

@@ -507,7 +507,7 @@ load_modules_local() {
 			#
 			grep -q exportfs_decode_fh $SYMLIST ||
 				{ modprobe exportfs 2> /dev/null || true; }
-			load_module ../ldiskfs/ldiskfs/ldiskfs
+			load_module ../ldiskfs/ldiskfs
 			load_module lvfs/fsfilt_ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi

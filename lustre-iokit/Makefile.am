@@ -5,3 +5,6 @@ EXTRA_DIST = lustre-iokit.spec
 
 rpms rpm: dist
 	rpmbuild -ta $(PACKAGE)-$(VERSION).tar.gz
+
+srpm: dist
+	rpmbuild -ts $(PACKAGE)-$(VERSION).tar.gz

@@ -306,7 +306,7 @@ AC_DEFUN([LB_ZFS_USER], [
 	AC_SUBST(ZFS_LIBZFS_INCLUDE)
 ])
 
-AC_DEFUN([LB_PATH_ZFS], [
+AC_DEFUN([LB_CONFIG_ZFS], [
 	AC_ARG_WITH([zfs],
 		[AS_HELP_STRING([--with-zfs=PATH], [Path to zfs source])],
 		[
@@ -322,8 +322,7 @@ AC_DEFUN([LB_PATH_ZFS], [
 				zfssrc="$withval"
 			])
 		], [
-			AS_IF([test x$enable_server = xyes &&
-			    test x$enable_dist = xno], [
+			AS_IF([test x$enable_server != xno], [
 				require_zfs=no
 				enable_zfs=yes
 			], [

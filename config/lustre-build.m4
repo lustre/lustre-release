@@ -24,7 +24,8 @@ AC_DEFUN([LB_CANONICAL_SYSTEM],
 		;;
 	solaris*)
 		lb_target_os="SunOS"
-		;;esac
+		;;
+esac
 AC_SUBST(lb_target_os)
 ])
 
@@ -89,8 +90,7 @@ if git branch >/dev/null 2>&1; then
 		ver=${ver//_/.}
 	fi
 
-	# only do this test for lustre (not ldiskfs)
-	if test "$PACKAGE" = "lustre" -a "$ver" != "$VERSION"; then
+	if test "$ver" != "$VERSION"; then
 		AC_MSG_WARN([most recent tag found: $ver does not match current version $VERSION.])
 	fi
 
@@ -266,6 +266,7 @@ esac
 AC_SUBST(LUSTREIOKIT_SUBDIR)
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(lustre-iokit)
+AM_CONDITIONAL(BUILD_LUSTREIOKIT, [test "x$with_lustre_iokit" != xno])
 ])
 
 # Define no libcfs by default.
@@ -540,6 +541,8 @@ AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
 AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
 AM_CONDITIONAL(ARCH_MIC, test x$target_cpu = "xx86_64" -a x$target_vendor = "xk1om")
+AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
+
 
 # Sanity check for PCLMULQDQ instruction availability
 # PCLMULQDQ instruction is a new instruction available beginning with
@@ -585,7 +588,58 @@ AC_DEFUN([LB_CONFIG_FILES],
 		contrib/Makefile
 		contrib/lbuild/Makefile
 		contrib/scripts/Makefile
+		ldiskfs/Makefile
+		ldiskfs/autoMakefile
 	)
+])
+
+#
+# LB_CONFIG_SERVERS
+#
+AC_DEFUN([LB_CONFIG_SERVERS],
+[
+AC_ARG_ENABLE([server],
+	AC_HELP_STRING([--disable-server],
+			[disable Lustre server support]),
+	[AS_IF([test x$enable_server != xyes -a x$enable_server != xno],
+		[AC_MSG_ERROR([server valid options are "yes" or "no"])])
+	AS_IF([test x$enable_server = xyes -a x$enable_dist = xyes],
+		[AC_MSG_ERROR([--enable-server cannot be used with --enable-dist])])
+	],
+	[AS_IF([test x$enable_dist = xyes],
+		     [enable_server=no],
+		     [enable_server=maybe])
+	]
+)
+
+# There are at least two good reasons why we should really run
+# LB_CONFIG_MODULES elsewhere before the call to LB_CONFIG_SERVERS:
+# LB_CONFIG_MODULES needs to be run for client support even when
+# servers are disabled, and because module support is actually a
+# prerequisite of server support.  However, some things under
+# LB_CONFIG_MODULES need us to already have checked for --disable-server,
+# before running, so until LB_CONFIG_MODULES can be reorganized, we
+# call it here.
+LB_CONFIG_MODULES
+AS_IF([test x$enable_modules = xno],[enable_server=no])
+LB_CONFIG_LDISKFS
+LB_CONFIG_ZFS
+
+# If no backends were configured, and the user did not explicitly
+# require servers to be enabled, we just disable servers.
+AS_IF([test x$enable_ldiskfs = xno -a x$enable_zfs = xno],
+	[AS_CASE([$enable_server],
+		[maybe], [enable_server=no],
+		[yes], [AC_MSG_ERROR([cannot enable servers, no backends were configured])])
+	],
+	[AS_IF([test x$enable_server = xmaybe], [enable_server=yes])]
+)
+
+AC_MSG_CHECKING([whether to build Lustre server support])
+AC_MSG_RESULT([$enable_server])
+AS_IF([test x$enable_server = xyes],
+	[AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])]
+)
 ])
 
 #
@@ -615,20 +669,18 @@ LC_OSD_ADDON
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
-LC_CONFIG_CLIENT_SERVER
+LC_CONFIG_CLIENT
+LB_CONFIG_SERVERS
 
 # two macros for cmd3
 m4_ifdef([LC_CONFIG_SPLIT], [LC_CONFIG_SPLIT])
 LN_CONFIG_CDEBUG
 LC_QUOTA
 
-LB_CONFIG_MODULES
 LN_CONFIG_USERSPACE
 
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
-LB_PATH_LDISKFS
-LB_PATH_ZFS
 LB_PATH_LUSTREIOKIT
 
 LB_DEFINE_E2FSPROGS_NAMES

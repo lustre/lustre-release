@@ -1,8 +1,5 @@
 SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
-DIST_SUBDIRS := @LDISKFS_DIST_SUBDIR@ @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre config contrib
-SOURCES_SUBDIRS := @LIBCFS_SUBDIR@ lnet lustre
-RPM_SUBDIRS := @LDISKFS_SUBDIR@ @LUSTREIOKIT_SUBDIR@
-MODULE_SYMVERS_DEPS = module-symvers
+DIST_SUBDIRS := ldiskfs @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre config contrib
 
 @TESTS_TRUE@BUILD_TESTS = true
 @TESTS_FALSE@BUILD_TESTS = false
@@ -18,17 +15,8 @@ MODULE_SYMVERS_DEPS = module-symvers
 AUTOMAKE_OPTIONS = foreign
 
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
-		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage \
+		     -path $(top_srcdir)/ldiskfs/linux-stage \
 		     -prune -false -o -type f -name '*.[hc]'
-
-MAKEEACHSUBDIR =					\
-	for subdir in $(RPM_SUBDIRS) ; do		\
-		echo "Making $@ in $$subdir" ; 		\
-		cd $$subdir ;				\
-		$(MAKE) $(AM_MAKEFLAGS) $@ ;		\
-		cd - ;					\
-		echo "Finished $@ in $$subdir" ;	\
-	done
 
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules
@@ -73,10 +61,8 @@ doxygen-%: build/doxyfile.%
 if MODULES
 sources: all-sources
 
-all-sources: $(MODULE_SYMVERS_DEPS)
-	for dir in $(SOURCES_SUBDIRS) ; do \
-		$(MAKE) sources -C $$dir || exit $$? ; \
-	done
+all-sources: module-symvers
+	$(MAKE) sources -C lustre || exit $$?
 
 if LINUX
 all-am: modules
@@ -92,7 +78,6 @@ endif # LINUX
 endif # MODULES
 
 dist-hook:
-	$(RM) $(distdir)/ldiskfs/*.spec
 	$(RM) $(distdir)/lustre-iokit/*.spec
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
@@ -170,14 +155,18 @@ srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="--without lustre_tests"; \
 	fi; \
-	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
+	eval rpmbuild $$RPMARGS -ts $(distdir).tar.gz
 
 rpms:
-	@$(MAKEEACHSUBDIR)
+if BUILD_LUSTREIOKIT
+	$(MAKE) -C @LUSTREIOKIT_SUBDIR@ $(AM_MAKEFLAGS) $@
+endif
 	$(MAKE) $(AM_MAKEFLAGS) rpms-real
 
 srpm:
-	@$(MAKEEACHSUBDIR)
+if BUILD_LUSTREIOKIT
+	$(MAKE) -C @LUSTREIOKIT_SUBDIR@ $(AM_MAKEFLAGS) $@
+endif
 	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 
 # In the debs target, first make sure what's in the changelog reflects
@@ -228,20 +217,6 @@ if USES_DPKG
 EXTRA_DIST += debian/*
 endif
 
-module-symvers-ldiskfs:
-if LDISKFS_ENABLED
-	@if [ -f @LDISKFS_DIR@/@SYMVERFILE@ ]; then \
-		cat @LDISKFS_DIR@/@SYMVERFILE@ >>@SYMVERFILE@; \
-	elif [ -f @LDISKFS_DIR@/ldiskfs/@SYMVERFILE@ ]; then \
-		cat @LDISKFS_DIR@/ldiskfs/@SYMVERFILE@ >>@SYMVERFILE@; \
-	else \
-		echo -e "\n" \
-		"*** Missing ldiskfs symbols. Ensure you have built ldiskfs:\n"\
-		"*** - @LDISKFS_OBJ@/ldiskfs/@SYMVERFILE@\n"; \
-		exit 1; \
-	fi
-endif # LDISKFS_ENABLED
-
 module-symvers-zfs:
 if ZFS_ENABLED
 	@if [ -f @SPL_OBJ@/@SPL_SYMBOLS@ ]; then \
@@ -266,7 +241,7 @@ if ZFS_ENABLED
 	fi
 endif # ZFS_ENABLED
 
-module-symvers: module-symvers-ldiskfs module-symvers-zfs
+module-symvers: module-symvers-zfs
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig
@@ -293,8 +268,3 @@ module-dist-hook:
 		echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
 		exit 1; \
 	fi
-if LDISKFS_ENABLED
-	if [ -f $(distdir)/META -a -d $(distdir)/ldiskfs ]; then \
-		cp $(distdir)/META $(distdir)/ldiskfs/META; \
-	fi
-endif

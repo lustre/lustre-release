@@ -70,7 +70,6 @@ USE_BUILD_CACHE=true
 # what does this do exactly?  does it imply no kernel build?
 NORPM=false
 IOKITRPM=true
-LDISKFSRPM=true
 OSDLDISKFSRPM=true
 OSDZFSRPM=false
 SMPTYPES="smp bigsmp default ''"
@@ -182,7 +181,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     tarball.
 
   --ldiskfs
-    Do ldiskfs RPM. Now true by default
+    Build with ldiskfs support. (Deprecated, always true)
 
   --noiokit
     Do not build lustre-iokit RPM. Now true by default
@@ -819,59 +818,6 @@ build_lustre() {
         fi
     fi
 
-    ( $(skeep_ldiskfs_rpm) ) || {
-
-        pushd ldiskfs > /dev/null || return 255
-
-        if !  ./configure --enable-dist; then
-            echo "failed to configure in ldiskfs"
-            popd >/dev/null # pushd ldiskfs
-            popd >/dev/null # pushd lustre
-            return 255
-        fi
-
-        if ! make dist 2>&1; then
-            popd >/dev/null # pushd ldiskfs
-            popd >/dev/null # pushd lustre
-            return 255
-        fi
-
-        #cp lustre-ldiskfs*.tar.gz $TOPDIR/SOURCES || \
-        #    fatal 1 "Could not copy lustre-ldiskfs*.tar.gz to $TOPDIR/SOURCES"
-
-        if ! $RPMBUILD $targets $rpmbuildopt lustre-ldiskfs*.tar.gz \
-            --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
-            --define "kdir $linux" \
-            ${linuxobj:+--define "kobjdir $linuxobj"} \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR" 2>&1; then
-            popd >/dev/null # pushd ldiskfs
-            popd >/dev/null # pushd lustre
-            return 255
-        fi
-
-        if $DO_SRC; then
-            if ! $RPMBUILD -ts lustre-ldiskfs*.tar.gz \
-                --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
-                --define "kdir $linux" \
-                ${linuxobj:+--define "kobjdir $linuxobj"} \
-                --define "_tmppath /var/tmp" \
-                --define "_topdir $TOPDIR" 2>&1; then
-                popd >/dev/null # pushd ldiskfs
-                popd >/dev/null # pushd lustre
-                return 255
-            fi
-        fi
-        popd >/dev/null # pushd ldiskfs
-
-        # tell lustre where ldiskfs is
-        # XXX - pointing to the RPM BUILD dir is a hack.  we need to flesh
-        #       out the ldiskfs RPM build so that it builds a
-        #       lustre-ldiskfs-devel RPM and install that and point lustre
-        #       to that instead
-        confoptions="$confoptions --with-ldiskfs=$(ls -d $TOPDIR/BUILD/lustre-ldiskfs-*)"
-    }
-
     if $IOKITRPM; then
         if ! build_iokit $rpmbuildopt; then
             echo "failed to build lustre-iokit"
@@ -1084,20 +1030,6 @@ stage() {
     done
 
     cp -v "$LUSTRE" "$STAGEDIR"
-
-}
-
-#check if we need to build separate ldiskfs RPM
-skeep_ldiskfs_rpm() {
-    local skip=false
-
-    if ! $LDISKFSRPM; then
-        skip=true
-    elif $PATCHLESS; then
-        skip=true
-    fi
-
-    echo $skip
 
 }
 
@@ -1913,7 +1845,7 @@ while [ "$1" ]; do
             shift
             ;;
         --ldiskfs)
-            LDISKFSRPM=true
+	    echo "WARNING: \"--ldiskfs\" is deprecated" > 2
             shift
             ;;
         --noiokit)

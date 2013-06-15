@@ -5,10 +5,6 @@ sinclude(lustre/autoconf/lustre-version.ac)
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
 
-# Overridden by --without-ldiskfs/--with-zfs configure options
-AM_CONDITIONAL(LDISKFS_ENABLED, true)
-AM_CONDITIONAL(ZFS_ENABLED, false)
-
 LB_CHECK_VERSION
 
 LC_CONFIG_SRCDIR
