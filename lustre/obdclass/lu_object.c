@@ -540,7 +540,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         __u64  ver = cfs_hash_bd_version_get(bd);
 
         if (*version == ver)
-                return NULL;
+		return ERR_PTR(-ENOENT);
 
         *version = ver;
         bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, bd);
@@ -549,7 +549,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 	hnode = cfs_hash_bd_peek_locked(s->ls_obj_hash, bd, (void *)f);
         if (hnode == NULL) {
                 lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_MISS);
-                return NULL;
+		return ERR_PTR(-ENOENT);
         }
 
         h = container_of0(hnode, struct lu_object_header, loh_hash);
@@ -571,6 +571,31 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         cfs_set_current_state(CFS_TASK_UNINT);
         lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
         return ERR_PTR(-EAGAIN);
+}
+
+static struct lu_object *htable_lookup_nowait(struct lu_site *s,
+					      cfs_hash_bd_t *bd,
+					      const struct lu_fid *f)
+{
+	cfs_hlist_node_t	*hnode;
+	struct lu_object_header *h;
+
+	/* cfs_hash_bd_peek_locked is a somehow "internal" function
+	 * of cfs_hash, it doesn't add refcount on object. */
+	hnode = cfs_hash_bd_peek_locked(s->ls_obj_hash, bd, (void *)f);
+	if (hnode == NULL) {
+		lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_MISS);
+		return ERR_PTR(-ENOENT);
+	}
+
+	h = container_of0(hnode, struct lu_object_header, loh_hash);
+	if (unlikely(lu_object_is_dying(h)))
+		return ERR_PTR(-ENOENT);
+
+	cfs_hash_get(s->ls_obj_hash, hnode);
+	lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_HIT);
+	cfs_list_del_init(&h->loh_lru);
+	return lu_object_top(h);
 }
 
 /**
@@ -653,7 +678,7 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
         cfs_hash_bd_get_and_lock(hs, (void *)f, &bd, 1);
         o = htable_lookup(s, &bd, f, waiter, &version);
         cfs_hash_bd_unlock(hs, &bd, 1);
-        if (o != NULL)
+	if (!IS_ERR(o) || PTR_ERR(o) != -ENOENT)
                 return o;
 
         /*
@@ -669,7 +694,7 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
         cfs_hash_bd_lock(hs, &bd, 1);
 
         shadow = htable_lookup(s, &bd, f, waiter, &version);
-        if (likely(shadow == NULL)) {
+	if (likely(IS_ERR(shadow) && PTR_ERR(shadow) == -ENOENT)) {
                 struct lu_site_bkt_data *bkt;
 
                 bkt = cfs_hash_bd_extra_get(hs, &bd);
@@ -713,6 +738,30 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
         }
 }
 EXPORT_SYMBOL(lu_object_find_at);
+
+/**
+ * Try to find the object in cache without waiting for the dead object
+ * to be released nor allocating object if no cached one was found.
+ *
+ * The found object will be set as LU_OBJECT_HEARD_BANSHEE for purging.
+ */
+void lu_object_purge(const struct lu_env *env, struct lu_device *dev,
+		     const struct lu_fid *f)
+{
+	struct lu_site		*s  = dev->ld_site;
+	cfs_hash_t		*hs = s->ls_obj_hash;
+	cfs_hash_bd_t		 bd;
+	struct lu_object	*o;
+
+	cfs_hash_bd_get_and_lock(hs, f, &bd, 1);
+	o = htable_lookup_nowait(s, &bd, f);
+	cfs_hash_bd_unlock(hs, &bd, 1);
+	if (!IS_ERR(o)) {
+		set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
+		lu_object_put(env, o);
+	}
+}
+EXPORT_SYMBOL(lu_object_purge);
 
 /**
  * Find object with given fid, and return its slice belonging to given device.
@@ -2113,7 +2162,7 @@ void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
 	cfs_hash_bd_get_and_lock(hs, (void *)fid, &bd, 1);
 	shadow = htable_lookup(s, &bd, fid, &waiter, &version);
 	/* supposed to be unique */
-	LASSERT(shadow == NULL);
+	LASSERT(IS_ERR(shadow) && PTR_ERR(shadow) == -ENOENT);
 	*old = *fid;
 	bkt = cfs_hash_bd_extra_get(hs, &bd);
 	cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);

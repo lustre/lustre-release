@@ -744,6 +744,8 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
                                     struct lu_device *dev,
                                     const struct lu_fid *f,
                                     const struct lu_object_conf *conf);
+void lu_object_purge(const struct lu_env *env, struct lu_device *dev,
+		     const struct lu_fid *f);
 struct lu_object *lu_object_find_slice(const struct lu_env *env,
                                        struct lu_device *dev,
                                        const struct lu_fid *f,

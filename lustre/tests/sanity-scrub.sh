@@ -483,7 +483,7 @@ test_7() {
 run_test 7 "System is available during OI scrub scanning"
 
 test_8() {
-	scrub_prep 0
+	scrub_prep 128
 	mds_backup_restore || error "(1) Fail to backup/restore!"
 
 	echo "start $SINGLEMDS with disabling OI scrub"

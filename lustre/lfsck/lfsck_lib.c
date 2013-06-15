@@ -869,7 +869,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	struct lfsck_component *com;
 	struct l_wait_info      lwi    = { 0 };
 	bool			dirty  = false;
-	int			rc     = 0;
+	long			rc     = 0;
 	__u16			valid  = 0;
 	__u16			flags  = 0;
 	ENTRY;
@@ -1015,16 +1015,18 @@ trigger:
 	thread_set_flags(thread, 0);
 	if (lfsck->li_master)
 		rc = PTR_ERR(kthread_run(lfsck_master_engine, lfsck, "lfsck"));
-	if (rc < 0)
-		CERROR("%s: cannot start LFSCK thread, rc = %d\n",
+	if (IS_ERR_VALUE(rc)) {
+		CERROR("%s: cannot start LFSCK thread, rc = %ld\n",
 		       lfsck_lfsck2name(lfsck), rc);
-	else
+	} else {
+		rc = 0;
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_running(thread) ||
 			     thread_is_stopped(thread),
 			     &lwi);
+	}
 
-	GOTO(out, rc = 0);
+	GOTO(out, rc);
 
 out:
 	mutex_unlock(&lfsck->li_mutex);

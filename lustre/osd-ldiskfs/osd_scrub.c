@@ -517,6 +517,9 @@ iget:
 			sf->sf_items_updated_prior++;
 		else
 			sf->sf_items_updated++;
+
+		/* The target has been changed, need to be re-loaded. */
+		lu_object_purge(info->oti_env, osd2lu_dev(dev), fid);
 	}
 
 	GOTO(out, rc);
