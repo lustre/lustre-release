@@ -179,7 +179,7 @@ typedef int (* renew_capa_cb_t)(struct obd_capa *, struct lustre_capa *);
 extern cfs_list_t capa_list[];
 extern spinlock_t capa_lock;
 extern int capa_count[];
-extern cfs_mem_cache_t *capa_cachep;
+extern struct kmem_cache *capa_cachep;
 
 cfs_hlist_head_t *init_capa_hash(void);
 void cleanup_capa_hash(cfs_hlist_head_t *hash);

@@ -163,8 +163,8 @@ void cfs_get_random_bytes(void *ptr, int size);
 /* memory */
 
 /* memory size: used for some client tunables */
-#define cfs_num_physpages  (256 * 1024) /* 1GB */
-#define CFS_NUM_CACHEPAGES cfs_num_physpages
+#define num_physpages  (256 * 1024) /* 1GB */
+#define NUM_CACHEPAGES num_physpages
 
 
 /* VFS stuff */

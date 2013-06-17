@@ -46,7 +46,6 @@
 #define _DMU_H
 
 #include <sys/zap.h>
-#include <sys/vnode.h>
 #include <sys/mode.h>
 #include <sys/sa.h>
 

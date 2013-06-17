@@ -55,14 +55,14 @@
 #include <lustre_param.h>
 #include "llite_internal.h"
 
-cfs_mem_cache_t *ll_remote_perm_cachep = NULL;
-cfs_mem_cache_t *ll_rmtperm_hash_cachep = NULL;
+struct kmem_cache *ll_remote_perm_cachep;
+struct kmem_cache *ll_rmtperm_hash_cachep;
 
 static inline struct ll_remote_perm *alloc_ll_remote_perm(void)
 {
 	struct ll_remote_perm *lrp;
 
-	OBD_SLAB_ALLOC_PTR_GFP(lrp, ll_remote_perm_cachep, CFS_ALLOC_KERNEL);
+	OBD_SLAB_ALLOC_PTR_GFP(lrp, ll_remote_perm_cachep, GFP_KERNEL);
 	if (lrp)
 		CFS_INIT_HLIST_NODE(&lrp->lrp_list);
 	return lrp;
@@ -85,7 +85,7 @@ cfs_hlist_head_t *alloc_rmtperm_hash(void)
 
 	OBD_SLAB_ALLOC_GFP(hash, ll_rmtperm_hash_cachep,
 			   REMOTE_PERM_HASHSIZE * sizeof(*hash),
-			   CFS_ALLOC_STD);
+			   GFP_IOFS);
         if (!hash)
                 return NULL;
 

@@ -769,7 +769,7 @@ static int nrs_policy_register(struct ptlrpc_nrs *nrs,
 	LASSERT(desc->pd_compat != NULL);
 
 	OBD_CPT_ALLOC_GFP(policy, svcpt->scp_service->srv_cptable,
-			  svcpt->scp_cpt, sizeof(*policy), CFS_ALLOC_IO);
+			  svcpt->scp_cpt, sizeof(*policy), __GFP_IO);
 	if (policy == NULL)
 		RETURN(-ENOMEM);
 

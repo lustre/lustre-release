@@ -355,7 +355,7 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
 	OBD_ALLOC(kernbuf, count + 1);
 	if (kernbuf == NULL)
 		GOTO(failed, rc = -ENOMEM);
-	if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
 		GOTO(failed, rc = -EFAULT);
 
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
@@ -416,7 +416,7 @@ again:
 	if (param == NULL)
 		return -ENOMEM;
 
-	if (cfs_copy_from_user(param, buffer, size)) {
+	if (copy_from_user(param, buffer, size)) {
 		CERROR("%s: bad identity data\n", mdt_obd_name(mdt));
 		GOTO(out, rc = -EFAULT);
 	}
@@ -597,8 +597,8 @@ static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
          * bytes into kbuf, to ensure that the string is NUL-terminated.
          * UUID_MAX should include a trailing NUL already.
          */
-        if (cfs_copy_from_user(kbuf, buffer,
-                               min_t(unsigned long, BUFLEN - 1, count))) {
+	if (copy_from_user(kbuf, buffer,
+			   min_t(unsigned long, BUFLEN - 1, count))) {
                 count = -EFAULT;
                 goto out;
         }
@@ -714,7 +714,7 @@ static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
 		errmsg = "string too long";
 		GOTO(failed, rc = -EINVAL);
 	}
-	if (cfs_copy_from_user(kernbuf, buffer, count)) {
+	if (copy_from_user(kernbuf, buffer, count)) {
 		errmsg = "bad address";
 		GOTO(failed, rc = -EFAULT);
 	}
@@ -783,7 +783,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
 		errmsg = "no memory";
 		GOTO(failed, rc = -ENOMEM);
 	}
-	if (cfs_copy_from_user(kernbuf, buffer, count)) {
+	if (copy_from_user(kernbuf, buffer, count)) {
 		errmsg = "bad address";
 		GOTO(failed, rc = -EFAULT);
 	}
@@ -856,7 +856,7 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -913,8 +913,8 @@ static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
 	 * bytes into kbuf, to ensure that the string is NUL-terminated.
 	 * UUID_MAX should include a trailing NUL already.
 	 */
-	if (cfs_copy_from_user(kbuf, buffer,
-			       min_t(unsigned long, UUID_MAX - 1, count))) {
+	if (copy_from_user(kbuf, buffer,
+			   min_t(unsigned long, UUID_MAX - 1, count))) {
 		count = -EFAULT;
 		goto out;
 	}

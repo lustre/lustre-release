@@ -198,7 +198,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         char *page, *start = NULL;
         int rc = 0, eof = 1, count;
 
-        if (*ppos >= CFS_PAGE_SIZE)
+	if (*ppos >= PAGE_CACHE_SIZE)
                 return 0;
 
         page = (char *)__get_free_page(GFP_KERNEL);
@@ -212,7 +212,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
         if (dp->read_proc)
-                rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE,
+		rc = dp->read_proc(page, &start, *ppos, PAGE_CACHE_SIZE,
                                    &eof, dp->data);
         LPROCFS_EXIT();
         if (rc <= 0)
@@ -233,7 +233,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         }
 
         count = (rc < size) ? rc : size;
-        if (cfs_copy_to_user(buf, start, count)) {
+	if (copy_to_user(buf, start, count)) {
                 rc = -EFAULT;
                 goto out;
         }
@@ -519,7 +519,7 @@ int lprocfs_wr_uint(struct file *file, const char *buffer,
         unsigned long tmp;
 
         dummy[MAX_STRING_SIZE] = '\0';
-        if (cfs_copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+	if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
                 return -EFAULT;
 
         tmp = simple_strtoul(dummy, &end, 0);
@@ -2055,7 +2055,7 @@ int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -2161,7 +2161,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -2371,11 +2371,13 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
            what we need to read */
         *start = page + off;
 
-        /* We know we are allocated a page here.
-           Also we know that this function will
-           not need to write more than a page
-           so we can truncate at CFS_PAGE_SIZE.  */
-        size = min(count + (int)off + 1, (int)CFS_PAGE_SIZE);
+	/*
+	 * We know we are allocated a page here.
+	 * Also we know that this function will
+	 * not need to write more than a page
+	 * so we can truncate at PAGE_CACHE_SIZE.
+	 */
+	size = min(count + (int)off + 1, (int)PAGE_CACHE_SIZE);
 
         /* Initialize the page */
         memset(page, 0, size);

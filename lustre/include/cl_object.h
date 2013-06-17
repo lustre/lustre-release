@@ -322,7 +322,7 @@ struct cl_object_operations {
          *         to be used instead of newly created.
          */
 	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
-				struct cl_page *page, cfs_page_t *vmpage);
+				struct cl_page *page, struct page *vmpage);
         /**
          * Initialize lock slice for this layer. Called top-to-bottom through
          * every object layer when a new cl_lock is instantiated. Layer
@@ -481,7 +481,7 @@ struct cl_object_header {
  *    corresponding radix tree at the corresponding logical offset.
  *
  * cl_page is associated with VM page of the hosting environment (struct
- *    page in Linux kernel, for example), cfs_page_t. It is assumed, that this
+ *    page in Linux kernel, for example), struct page. It is assumed, that this
  *    association is implemented by one of cl_page layers (top layer in the
  *    current design) that
  *
@@ -491,7 +491,7 @@ struct cl_object_header {
  *        - translates state (page flag bits) and locking between lustre and
  *          environment.
  *
- *    The association between cl_page and cfs_page_t is immutable and
+ *    The association between cl_page and struct page is immutable and
  *    established when cl_page is created.
  *
  * cl_page can be "owned" by a particular cl_io (see below), guaranteeing
@@ -500,7 +500,7 @@ struct cl_object_header {
  *    eviction of the page from the memory). Note, that in general cl_io
  *    cannot be identified with a particular thread, and page ownership is not
  *    exactly equal to the current thread holding a lock on the page. Layer
- *    implementing association between cl_page and cfs_page_t has to implement
+ *    implementing association between cl_page and struct page has to implement
  *    ownership on top of available synchronization mechanisms.
  *
  *    While lustre client maintains the notion of an page ownership by io,
@@ -534,7 +534,7 @@ struct cl_object_header {
  *            - by doing a lookup in the cl_object radix tree, protected by the
  *              spin-lock;
  *
- *            - by starting from VM-locked cfs_page_t and following some
+ *            - by starting from VM-locked struct page and following some
  *              hosting environment method (e.g., following ->private pointer in
  *              the case of Linux kernel), see cl_vmpage_page();
  *
@@ -561,7 +561,7 @@ struct cl_object_header {
  *
  * Linux Kernel implementation.
  *
- *    Binding between cl_page and cfs_page_t (which is a typedef for
+ *    Binding between cl_page and struct page (which is a typedef for
  *    struct page) is implemented in the vvp layer. cl_page is attached to the
  *    ->private pointer of the struct page, together with the setting of
  *    PG_private bit in page->flags, and acquiring additional reference on the
@@ -710,7 +710,7 @@ enum cl_page_flags {
 };
 
 /**
- * Fields are protected by the lock on cfs_page_t, except for atomics and
+ * Fields are protected by the lock on struct page, except for atomics and
  * immutables.
  *
  * \invariant Data type invariants are in cl_page_invariant(). Basically:
@@ -835,7 +835,7 @@ enum cl_req_type {
  */
 struct cl_page_operations {
         /**
-         * cl_page<->cfs_page_t methods. Only one layer in the stack has to
+	 * cl_page<->struct page methods. Only one layer in the stack has to
          * implement these. Current code assumes that this functionality is
          * provided by the topmost layer, see cl_page_disown0() as an example.
          */
@@ -843,7 +843,7 @@ struct cl_page_operations {
         /**
          * \return the underlying VM page. Optional.
          */
-        cfs_page_t *(*cpo_vmpage)(const struct lu_env *env,
+	struct page *(*cpo_vmpage)(const struct lu_env *env,
                                   const struct cl_page_slice *slice);
         /**
          * Called when \a io acquires this page into the exclusive
@@ -2808,9 +2808,9 @@ void            cl_page_print       (const struct lu_env *env, void *cookie,
 void            cl_page_header_print(const struct lu_env *env, void *cookie,
                                      lu_printer_t printer,
                                      const struct cl_page *pg);
-cfs_page_t     *cl_page_vmpage      (const struct lu_env *env,
+struct page     *cl_page_vmpage      (const struct lu_env *env,
                                      struct cl_page *page);
-struct cl_page *cl_vmpage_page      (cfs_page_t *vmpage, struct cl_object *obj);
+struct cl_page *cl_vmpage_page      (struct page *vmpage, struct cl_object *obj);
 struct cl_page *cl_page_top         (struct cl_page *page);
 
 const struct cl_page_slice *cl_page_at(const struct cl_page *page,

@@ -485,20 +485,21 @@ static __inline cfs_group_info_t *cfs_groups_alloc(int gidsetsize)
 {
     cfs_group_info_t * groupinfo;
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
-    groupinfo =
-        (cfs_group_info_t *)cfs_alloc(sizeof(cfs_group_info_t), 0);
+    groupinfo = kmalloc(sizeof(cfs_group_info_t), 0);
 
     if (groupinfo) {
         memset(groupinfo, 0, sizeof(cfs_group_info_t));
     }
     return groupinfo;
 }
+
 static __inline void cfs_groups_free(cfs_group_info_t *group_info)
 {
-    KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
-            __FUNCTION__));
-    cfs_free(group_info);
+	KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
+		__FUNCTION__));
+	kfree(group_info);
 }
+
 static __inline int
 cfs_set_current_groups(cfs_group_info_t *group_info)
 {
@@ -506,6 +507,7 @@ cfs_set_current_groups(cfs_group_info_t *group_info)
              __FUNCTION__));
     return 0;
 }
+
 static __inline int groups_search(cfs_group_info_t *group_info,
                                   gid_t grp) {
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
@@ -597,7 +599,7 @@ typedef struct _TASK_MAN {
 
 	spinlock_t	Lock;		/* Protection lock */
 
-	cfs_mem_cache_t	*slab;		/* Memory slab for task slot */
+	struct kmem_cache	*slab;		/* Memory slab for task slot */
 
 	ULONG		NumOfTasks;	/* Total tasks (threads) */
 	LIST_ENTRY	TaskList;	/* List of task slots */

@@ -1636,14 +1636,14 @@ static const struct cl_lock_operations osc_lock_lockless_ops = {
 };
 
 int osc_lock_init(const struct lu_env *env,
-                  struct cl_object *obj, struct cl_lock *lock,
-                  const struct cl_io *unused)
+		  struct cl_object *obj, struct cl_lock *lock,
+		  const struct cl_io *unused)
 {
-        struct osc_lock *clk;
-        int result;
+	struct osc_lock *clk;
+	int result;
 
-        OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, CFS_ALLOC_IO);
-        if (clk != NULL) {
+	OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, __GFP_IO);
+	if (clk != NULL) {
 		__u32 enqflags = lock->cll_descr.cld_enq_flags;
 
 		osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
@@ -1668,10 +1668,10 @@ int osc_lock_init(const struct lu_env *env,
 		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags %llx\n",
 				lock, clk, clk->ols_flags);
 
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return result;
+		result = 0;
+	} else
+		result = -ENOMEM;
+	return result;
 }
 
 int osc_dlm_lock_pageref(struct ldlm_lock *dlm)

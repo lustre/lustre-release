@@ -659,7 +659,7 @@ static int osp_md_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	if (size < 0)
 		GOTO(out, rc = size);
 
-	LASSERT(size > 0 && size < CFS_PAGE_SIZE);
+	LASSERT(size > 0 && size < PAGE_CACHE_SIZE);
 	LASSERT(ea_buf != NULL);
 
 	rc = size;

@@ -1156,9 +1156,9 @@ int krb5_decrypt_bulk(struct ll_crypto_cipher *tfm,
                 }
 
                 if (desc->bd_iov[i].kiov_len % blocksize != 0) {
-                        memcpy(cfs_page_address(desc->bd_iov[i].kiov_page) +
+			memcpy(page_address(desc->bd_iov[i].kiov_page) +
                                desc->bd_iov[i].kiov_offset,
-                               cfs_page_address(desc->bd_enc_iov[i].kiov_page) +
+			       page_address(desc->bd_enc_iov[i].kiov_page) +
                                desc->bd_iov[i].kiov_offset,
                                desc->bd_iov[i].kiov_len);
                 }

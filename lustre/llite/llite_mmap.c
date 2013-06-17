@@ -65,7 +65,7 @@ void policy_from_vma(ldlm_policy_data_t *policy,
                             size_t count)
 {
         policy->l_extent.start = ((addr - vma->vm_start) & CFS_PAGE_MASK) +
-                                 (vma->vm_pgoff << CFS_PAGE_SHIFT);
+				 (vma->vm_pgoff << PAGE_CACHE_SHIFT);
         policy->l_extent.end = (policy->l_extent.start + count - 1) |
                                ~CFS_PAGE_MASK;
 }
@@ -576,7 +576,8 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
 {
-        return vma->vm_start + (byte - ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT));
+	return vma->vm_start +
+	       (byte - ((__u64)vma->vm_pgoff << PAGE_CACHE_SHIFT));
 
 }
 
@@ -590,7 +591,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
         LASSERTF(last > first, "last "LPU64" first "LPU64"\n", last, first);
         if (mapping_mapped(mapping)) {
                 rc = 0;
-                unmap_mapping_range(mapping, first + CFS_PAGE_SIZE - 1,
+		unmap_mapping_range(mapping, first + PAGE_CACHE_SIZE - 1,
                                     last - first + 1, 0);
         }
 

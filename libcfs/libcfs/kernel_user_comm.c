@@ -215,7 +215,7 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group, __u32 data)
                 return -EBADF;
 
         /* freed in group_rem */
-        reg = cfs_alloc(sizeof(*reg), 0);
+	reg = kmalloc(sizeof(*reg), 0);
         if (reg == NULL)
                 return -ENOMEM;
 
@@ -262,7 +262,7 @@ int libcfs_kkuc_group_rem(int uid, int group)
                                reg->kr_uid, reg->kr_fp, group);
                         if (reg->kr_fp != NULL)
 				fput(reg->kr_fp);
-			cfs_free(reg);
+			kfree(reg);
 		}
 	}
 	up_write(&kg_sem);

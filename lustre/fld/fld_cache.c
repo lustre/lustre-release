@@ -277,7 +277,7 @@ static void fld_cache_punch_hole(struct fld_cache *cache,
         struct fld_cache_entry *fldt;
 
         ENTRY;
-        OBD_ALLOC_GFP(fldt, sizeof *fldt, CFS_ALLOC_ATOMIC);
+	OBD_ALLOC_GFP(fldt, sizeof *fldt, GFP_ATOMIC);
         if (!fldt) {
                 OBD_FREE_PTR(f_new);
                 EXIT;

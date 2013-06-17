@@ -40,7 +40,7 @@
 
 #include "lquota_internal.h"
 
-cfs_mem_cache_t *lqe_kmem;
+struct kmem_cache *lqe_kmem;
 
 struct lu_kmem_descr lquota_caches[] = {
 	{

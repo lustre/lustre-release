@@ -41,7 +41,7 @@
 do {									\
 	if ((h)->cbh_flags & CBH_FLAG_ATOMIC_GROW)			\
 		LIBCFS_CPT_ALLOC_GFP((ptr), h->cbh_cptab, h->cbh_cptid,	\
-				     CBH_NOB, CFS_ALLOC_ATOMIC);	\
+				     CBH_NOB, GFP_ATOMIC);		\
 	else								\
 		LIBCFS_CPT_ALLOC((ptr), h->cbh_cptab, h->cbh_cptid,	\
 				 CBH_NOB);				\

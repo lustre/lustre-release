@@ -65,7 +65,7 @@
 
 /* This should not be "optimized" use ~0ULL because page->index is a long and
  * 32-bit systems are therefore limited to 16TB in a mapping */
-#define MAX_LFS_FILESIZE ((__u64)(~0UL) << CFS_PAGE_SHIFT)
+#define MAX_LFS_FILESIZE ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         __u32 fd_flags;
@@ -345,7 +345,7 @@ static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 #define LLU_IO_GROUP_SIZE(x) \
         (sizeof(struct llu_io_group) + \
          (sizeof(struct ll_async_page) + \
-          sizeof(cfs_page_t) + \
+	  sizeof(struct page) + \
           llap_cookie_size) * (x))
 
 struct llu_io_session {

@@ -352,7 +352,7 @@ out:
  */
 int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 		    struct idx_info *ii, unsigned int npages,
-		    cfs_page_t **pages, bool *need_swab)
+		    struct page **pages, bool *need_swab)
 {
 	struct ptlrpc_request	*req;
 	struct idx_info		*req_ii;
@@ -385,7 +385,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 
 	/* req now owns desc and will free it when it gets freed */
 	for (i = 0; i < npages; i++)
-		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, CFS_PAGE_SIZE);
+		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, PAGE_CACHE_SIZE);
 
 	/* pack index information in request */
 	req_ii = req_capsule_client_get(&req->rq_pill, &RMF_IDX_INFO);

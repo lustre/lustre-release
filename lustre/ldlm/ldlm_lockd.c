@@ -60,8 +60,8 @@ static char *ldlm_cpts;
 CFS_MODULE_PARM(ldlm_cpts, "s", charp, 0444,
 		"CPU partitions ldlm threads should run on");
 
-extern cfs_mem_cache_t *ldlm_resource_slab;
-extern cfs_mem_cache_t *ldlm_lock_slab;
+extern struct kmem_cache *ldlm_resource_slab;
+extern struct kmem_cache *ldlm_lock_slab;
 static struct mutex	ldlm_ref_mutex;
 static int ldlm_refcount;
 
@@ -212,14 +212,15 @@ static int expired_lock_main(void *arg)
 
                         lock = cfs_list_entry(expired->next, struct ldlm_lock,
                                           l_pending_chain);
-                        if ((void *)lock < LP_POISON + CFS_PAGE_SIZE &&
-                            (void *)lock >= LP_POISON) {
+			if ((void *)lock < LP_POISON + PAGE_CACHE_SIZE &&
+			    (void *)lock >= LP_POISON) {
 				spin_unlock_bh(&waiting_locks_spinlock);
-                                CERROR("free lock on elt list %p\n", lock);
-                                LBUG();
-                        }
-                        cfs_list_del_init(&lock->l_pending_chain);
-                        if ((void *)lock->l_export < LP_POISON + CFS_PAGE_SIZE &&
+				CERROR("free lock on elt list %p\n", lock);
+				LBUG();
+			}
+			cfs_list_del_init(&lock->l_pending_chain);
+			if ((void *)lock->l_export <
+			     LP_POISON + PAGE_CACHE_SIZE &&
                             (void *)lock->l_export >= LP_POISON) {
                                 CERROR("lock with free export on elt list %p\n",
                                        lock->l_export);
@@ -1960,7 +1961,7 @@ static inline void init_blwi(struct ldlm_bl_work_item *blwi,
 	init_completion(&blwi->blwi_comp);
         CFS_INIT_LIST_HEAD(&blwi->blwi_head);
 
-        if (cfs_memory_pressure_get())
+	if (memory_pressure_get())
                 blwi->blwi_mem_pressure = 1;
 
         blwi->blwi_ns = ns;
@@ -2651,7 +2652,7 @@ static int ldlm_bl_thread_main(void *arg)
                         ldlm_bl_thread_start(blp);
 
                 if (blwi->blwi_mem_pressure)
-                        cfs_memory_pressure_set();
+			memory_pressure_set();
 
                 if (blwi->blwi_count) {
                         int count;
@@ -2669,7 +2670,7 @@ static int ldlm_bl_thread_main(void *arg)
                                                 blwi->blwi_lock);
                 }
                 if (blwi->blwi_mem_pressure)
-                        cfs_memory_pressure_clr();
+			memory_pressure_clr();
 
 		if (blwi->blwi_flags & LCF_ASYNC)
 			OBD_FREE(blwi, sizeof(*blwi));
@@ -3054,26 +3055,26 @@ int ldlm_init(void)
 	mutex_init(&ldlm_ref_mutex);
 	mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
 	mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
-        ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
-                                               sizeof(struct ldlm_resource), 0,
-                                               CFS_SLAB_HWCACHE_ALIGN);
-        if (ldlm_resource_slab == NULL)
-                return -ENOMEM;
+	ldlm_resource_slab = kmem_cache_create("ldlm_resources",
+					       sizeof(struct ldlm_resource), 0,
+					       SLAB_HWCACHE_ALIGN, NULL);
+	if (ldlm_resource_slab == NULL)
+		return -ENOMEM;
 
-	ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
+	ldlm_lock_slab = kmem_cache_create("ldlm_locks",
 			      sizeof(struct ldlm_lock), 0,
-			      CFS_SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU);
+			      SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU, NULL);
 	if (ldlm_lock_slab == NULL) {
-		cfs_mem_cache_destroy(ldlm_resource_slab);
+		kmem_cache_destroy(ldlm_resource_slab);
 		return -ENOMEM;
 	}
 
-        ldlm_interval_slab = cfs_mem_cache_create("interval_node",
+	ldlm_interval_slab = kmem_cache_create("interval_node",
                                         sizeof(struct ldlm_interval),
-                                        0, CFS_SLAB_HWCACHE_ALIGN);
+					0, SLAB_HWCACHE_ALIGN, NULL);
         if (ldlm_interval_slab == NULL) {
-                cfs_mem_cache_destroy(ldlm_resource_slab);
-                cfs_mem_cache_destroy(ldlm_lock_slab);
+		kmem_cache_destroy(ldlm_resource_slab);
+		kmem_cache_destroy(ldlm_lock_slab);
                 return -ENOMEM;
         }
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
@@ -3084,19 +3085,15 @@ int ldlm_init(void)
 
 void ldlm_exit(void)
 {
-        int rc;
-        if (ldlm_refcount)
-                CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
-        rc = cfs_mem_cache_destroy(ldlm_resource_slab);
-        LASSERTF(rc == 0, "couldn't free ldlm resource slab\n");
+	if (ldlm_refcount)
+		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
+	kmem_cache_destroy(ldlm_resource_slab);
 #ifdef __KERNEL__
-        /* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
-         * synchronize_rcu() to wait a grace period elapsed, so that
-         * ldlm_lock_free() get a chance to be called. */
-        synchronize_rcu();
+	/* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
+	 * synchronize_rcu() to wait a grace period elapsed, so that
+	 * ldlm_lock_free() get a chance to be called. */
+	synchronize_rcu();
 #endif
-        rc = cfs_mem_cache_destroy(ldlm_lock_slab);
-        LASSERTF(rc == 0, "couldn't free ldlm lock slab\n");
-        rc = cfs_mem_cache_destroy(ldlm_interval_slab);
-        LASSERTF(rc == 0, "couldn't free interval node slab\n");
+	kmem_cache_destroy(ldlm_lock_slab);
+	kmem_cache_destroy(ldlm_interval_slab);
 }

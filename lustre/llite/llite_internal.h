@@ -296,10 +296,10 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
-#define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - CFS_PAGE_SHIFT))
+#define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
 
 /* default to read-ahead full files smaller than 2MB on the second read */
-#define SBI_DEFAULT_READAHEAD_WHOLE_MAX (2UL << (20 - CFS_PAGE_SHIFT))
+#define SBI_DEFAULT_READAHEAD_WHOLE_MAX (2UL << (20 - PAGE_CACHE_SHIFT))
 
 enum ra_stat {
         RA_STAT_HIT = 0,
@@ -609,7 +609,7 @@ struct ll_readahead_state {
         unsigned long   ras_consecutive_stride_requests;
 };
 
-extern cfs_mem_cache_t *ll_file_data_slab;
+extern struct kmem_cache *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
@@ -655,7 +655,7 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 
 #define LLAP_MAGIC 98764321
 
-extern cfs_mem_cache_t *ll_async_page_slab;
+extern struct kmem_cache *ll_async_page_slab;
 extern size_t ll_async_page_slab_size;
 
 void ll_ra_read_in(struct file *f, struct ll_ra_read *rar);
@@ -857,7 +857,7 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry);
 #else
 int ll_show_options(struct seq_file *seq, struct vfsmount *vfs);
 #endif
-void ll_dirty_page_discard_warn(cfs_page_t *page, int ioret);
+void ll_dirty_page_discard_warn(struct page *page, int ioret);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 		  struct super_block *, struct lookup_intent *);
 void lustre_dump_dentry(struct dentry *, int recur);
@@ -940,7 +940,7 @@ struct vvp_io {
                         /**
                          *  locked page returned from vvp_io
                          */
-                        cfs_page_t            *ft_vmpage;
+			struct page            *ft_vmpage;
 #ifndef HAVE_VM_OP_FAULT
                         struct vm_nopage_api {
                                 /**
@@ -1099,7 +1099,7 @@ static inline void ll_invalidate_page(struct page *vmpage)
         if (mapping == NULL)
                 return;
 
-        ll_teardown_mmaps(mapping, offset, offset + CFS_PAGE_SIZE);
+	ll_teardown_mmaps(mapping, offset, offset + PAGE_CACHE_SIZE);
         truncate_complete_page(mapping, vmpage);
 }
 
@@ -1170,8 +1170,8 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
 
 /* llite/remote_perm.c */
-extern cfs_mem_cache_t *ll_remote_perm_cachep;
-extern cfs_mem_cache_t *ll_rmtperm_hash_cachep;
+extern struct kmem_cache *ll_remote_perm_cachep;
+extern struct kmem_cache *ll_rmtperm_hash_cachep;
 
 cfs_hlist_head_t *alloc_rmtperm_hash(void);
 void free_rmtperm_hash(cfs_hlist_head_t *hash);

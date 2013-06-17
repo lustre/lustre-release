@@ -92,7 +92,7 @@ extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
 extern int  cfs_trace_max_debug_mb(void);
 
-#define TCD_MAX_PAGES (5 << (20 - CFS_PAGE_SHIFT))
+#define TCD_MAX_PAGES (5 << (20 - PAGE_CACHE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
 #define CFS_TRACEFILE_SIZE (500 << 20)
 
@@ -101,7 +101,7 @@ extern int  cfs_trace_max_debug_mb(void);
 /*
  * Private declare for tracefile
  */
-#define TCD_MAX_PAGES (5 << (20 - CFS_PAGE_SHIFT))
+#define TCD_MAX_PAGES (5 << (20 - PAGE_CACHE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
 
 #define CFS_TRACEFILE_SIZE (500 << 20)
@@ -239,7 +239,7 @@ struct cfs_trace_page {
 	/*
 	 * page itself
 	 */
-	cfs_page_t          *page;
+	struct page          *page;
 	/*
 	 * linkage into one of the lists in trace_data_union or
 	 * page_collection
@@ -337,8 +337,8 @@ do {                                                                    \
 do {                                                                    \
         __LASSERT(tage != NULL);                                        \
         __LASSERT(tage->page != NULL);                                  \
-        __LASSERT(tage->used <= CFS_PAGE_SIZE);                         \
-        __LASSERT(cfs_page_count(tage->page) > 0);                      \
+	__LASSERT(tage->used <= PAGE_CACHE_SIZE);                         \
+	__LASSERT(page_count(tage->page) > 0);                      \
 } while (0)
 
 #endif	/* LUSTRE_TRACEFILE_PRIVATE */

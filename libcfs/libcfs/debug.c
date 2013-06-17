@@ -414,7 +414,7 @@ int libcfs_debug_init(unsigned long bufsize)
                 max = TCD_MAX_PAGES;
         } else {
                 max = (max / cfs_num_possible_cpus());
-                max = (max << (20 - CFS_PAGE_SHIFT));
+		max = (max << (20 - PAGE_CACHE_SHIFT));
         }
         rc = cfs_tracefile_init(max);
 

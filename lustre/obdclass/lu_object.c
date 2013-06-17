@@ -851,12 +851,12 @@ static int lu_htable_order(void)
          *
          * Size of lu_object is (arbitrary) taken as 1K (together with inode).
          */
-        cache_size = cfs_num_physpages;
+	cache_size = num_physpages;
 
 #if BITS_PER_LONG == 32
         /* limit hashtable size for lowmem systems to low RAM */
-        if (cache_size > 1 << (30 - CFS_PAGE_SHIFT))
-                cache_size = 1 << (30 - CFS_PAGE_SHIFT) * 3 / 4;
+	if (cache_size > 1 << (30 - PAGE_CACHE_SHIFT))
+		cache_size = 1 << (30 - PAGE_CACHE_SHIFT) * 3 / 4;
 #endif
 
         /* clear off unreasonable cache setting. */
@@ -869,7 +869,7 @@ static int lu_htable_order(void)
                 lu_cache_percent = LU_CACHE_PERCENT_DEFAULT;
         }
         cache_size = cache_size / 100 * lu_cache_percent *
-                (CFS_PAGE_SIZE / 1024);
+		(PAGE_CACHE_SIZE / 1024);
 
         for (bits = 1; (1 << bits) < cache_size; ++bits) {
                 ;
@@ -1784,7 +1784,7 @@ int lu_env_refill_by_tags(struct lu_env *env, __u32 ctags,
 }
 EXPORT_SYMBOL(lu_env_refill_by_tags);
 
-static struct cfs_shrinker *lu_site_shrinker = NULL;
+static struct shrinker *lu_site_shrinker;
 
 typedef struct lu_site_stats{
         unsigned        lss_populated;
@@ -1985,7 +1985,7 @@ int lu_global_init(void)
          * inode, one for ea. Unfortunately setting this high value results in
          * lu_object/inode cache consuming all the memory.
          */
-        lu_site_shrinker = cfs_set_shrinker(CFS_DEFAULT_SEEKS, lu_cache_shrink);
+	lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, lu_cache_shrink);
         if (lu_site_shrinker == NULL)
                 return -ENOMEM;
 
@@ -1998,7 +1998,7 @@ int lu_global_init(void)
 void lu_global_fini(void)
 {
         if (lu_site_shrinker != NULL) {
-                cfs_remove_shrinker(lu_site_shrinker);
+		remove_shrinker(lu_site_shrinker);
                 lu_site_shrinker = NULL;
         }
 
@@ -2062,9 +2062,9 @@ int lu_kmem_init(struct lu_kmem_descr *caches)
         struct lu_kmem_descr *iter = caches;
 
         for (result = 0; iter->ckd_cache != NULL; ++iter) {
-                *iter->ckd_cache = cfs_mem_cache_create(iter->ckd_name,
-                                                        iter->ckd_size,
-                                                        0, 0);
+		*iter->ckd_cache = kmem_cache_create(iter->ckd_name,
+						     iter->ckd_size,
+						     0, 0, NULL);
                 if (*iter->ckd_cache == NULL) {
                         result = -ENOMEM;
                         /* free all previously allocated caches */
@@ -2082,13 +2082,9 @@ EXPORT_SYMBOL(lu_kmem_init);
  */
 void lu_kmem_fini(struct lu_kmem_descr *caches)
 {
-        int rc;
-
         for (; caches->ckd_cache != NULL; ++caches) {
                 if (*caches->ckd_cache != NULL) {
-                        rc = cfs_mem_cache_destroy(*caches->ckd_cache);
-                        LASSERTF(rc == 0, "couldn't destroy %s slab\n",
-                                 caches->ckd_name);
+			kmem_cache_destroy(*caches->ckd_cache);
                         *caches->ckd_cache = NULL;
                 }
         }

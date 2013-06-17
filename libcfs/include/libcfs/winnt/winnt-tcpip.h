@@ -639,14 +639,14 @@ typedef struct {
 
 	int		ksnd_ntconns;		/* number of tconns in list */
 	cfs_list_t	ksnd_tconns;		/* tdi connections list */
-	cfs_mem_cache_t *ksnd_tconn_slab;	/* ks_tconn_t allocation slabs*/
+	struct kmem_cache *ksnd_tconn_slab;	/* ks_tconn_t allocation slabs*/
 	event_t		ksnd_tconn_exit;	/* event signal by last tconn */
 
 	spinlock_t	ksnd_tsdu_lock;		/* tsdu access serialise */
 
     int                   ksnd_ntsdus;          /* number of tsdu buffers allocated */
     ulong                 ksnd_tsdu_size;       /* the size of a signel tsdu buffer */
-    cfs_mem_cache_t       *ksnd_tsdu_slab;       /* slab cache for tsdu buffer allocation */
+	struct kmem_cache	*ksnd_tsdu_slab; /* slab cache for tsdu buffer allocation */
 
     int                   ksnd_nfreetsdus;      /* number of tsdu buffers in the freed list */
     cfs_list_t            ksnd_freetsdus;       /* List of the freed Tsdu buffer. */

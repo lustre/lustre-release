@@ -817,7 +817,7 @@ ssize_t gss_pipe_upcall(struct file *filp, struct rpc_pipe_msg *msg,
 
         if (mlen > buflen)
                 mlen = buflen;
-        left = cfs_copy_to_user(dst, data, mlen);
+	left = copy_to_user(dst, data, mlen);
         if (left < 0) {
                 msg->errno = left;
                 RETURN(left);
@@ -848,7 +848,7 @@ ssize_t gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         if (!buf)
                 RETURN(-ENOMEM);
 
-        if (cfs_copy_from_user(buf, src, mlen)) {
+	if (copy_from_user(buf, src, mlen)) {
                 CERROR("failed copy user space data\n");
                 GOTO(out_free, rc = -EFAULT);
         }

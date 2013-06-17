@@ -150,16 +150,16 @@ struct file *filp_open(const char *name, int flags, int mode, int *err)
 			return ERR_PTR(-EINVAL);
 	}
 
-	AnsiString = cfs_alloc(sizeof(CHAR) * (NameLength + PrefixLength + 1),
-				CFS_ALLOC_ZERO);
+	AnsiString = kmalloc(sizeof(CHAR) * (NameLength + PrefixLength + 1),
+				__GFP_ZERO);
 	if (NULL == AnsiString)
 		return ERR_PTR(-ENOMEM);
 
 	UnicodeString =
-		cfs_alloc(sizeof(WCHAR) * (NameLength + PrefixLength + 1),
-			  CFS_ALLOC_ZERO);
+		kmalloc(sizeof(WCHAR) * (NameLength + PrefixLength + 1),
+			  __GFP_ZERO);
 	if (NULL == UnicodeString) {
-		cfs_free(AnsiString);
+		kfree(AnsiString);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -205,19 +205,19 @@ struct file *filp_open(const char *name, int flags, int mode, int *err)
 
 	/* Check the returned status of IoStatus... */
 	if (!NT_SUCCESS(IoStatus.Status)) {
-		cfs_free(UnicodeString);
-		cfs_free(AnsiString);
+		kfree(UnicodeString);
+		kfree(AnsiString);
 		return ERR_PTR(cfs_error_code(IoStatus.Status));
 	}
 
 	/* Allocate the file_t: libcfs file object */
-	fp = cfs_alloc(sizeof(*fp) + NameLength, CFS_ALLOC_ZERO);
+	fp = kmalloc(sizeof(*fp) + NameLength, __GFP_ZERO);
 
 	if (NULL == fp) {
 		Status = ZwClose(FileHandle);
 		ASSERT(NT_SUCCESS(Status));
-		cfs_free(UnicodeString);
-		cfs_free(AnsiString);
+		kfree(UnicodeString);
+		kfree(AnsiString);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -227,11 +227,11 @@ struct file *filp_open(const char *name, int flags, int mode, int *err)
     fp->f_mode  = (mode_t)mode;
     fp->f_count = 1;
 
-    /* free the memory of temporary name strings */
-    cfs_free(UnicodeString);
-    cfs_free(AnsiString);
+	/* free the memory of temporary name strings */
+	kfree(UnicodeString);
+	kfree(AnsiString);
 
-    return fp;
+	return fp;
 }
 
 
@@ -261,9 +261,9 @@ int filp_close(file_t *fp, void *id)
     Status = ZwClose(fp->f_handle);
     ASSERT(NT_SUCCESS(Status));
 
-    /* free the file flip structure */
-    cfs_free(fp);
-    return 0;
+	/* free the file flip structure */
+	kfree(fp);
+	return 0;
 }
 
 
@@ -683,6 +683,6 @@ void dput(struct dentry *de)
         return;
     }
     if (cfs_atomic_dec_and_test(&de->d_count)) {
-        cfs_free(de);
+	kfree(de);
     }
 }

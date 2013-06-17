@@ -134,7 +134,7 @@ int LL_PROC_PROTO(proc_memory_alloc)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (cfs_copy_to_user(buffer, buf, len))
+	if (copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -158,7 +158,7 @@ int LL_PROC_PROTO(proc_pages_alloc)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (cfs_copy_to_user(buffer, buf, len))
+	if (copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -182,7 +182,7 @@ int LL_PROC_PROTO(proc_mem_max)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (cfs_copy_to_user(buffer, buf, len))
+	if (copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -206,7 +206,7 @@ int LL_PROC_PROTO(proc_pages_max)
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
-        if (cfs_copy_to_user(buffer, buf, len))
+	if (copy_to_user(buffer, buf, len))
                 return -EFAULT;
         *lenp = len;
         *ppos += *lenp;
@@ -215,44 +215,44 @@ int LL_PROC_PROTO(proc_pages_max)
 
 int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
 {
-        int rc = 0;
-        DECLARE_LL_PROC_PPOS_DECL;
+	int rc = 0;
+	DECLARE_LL_PROC_PPOS_DECL;
 
-        if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write) {
-                rc = lprocfs_write_frac_helper(buffer, *lenp,
-                                               (unsigned int*)table->data,
-                                               1 << (20 - CFS_PAGE_SHIFT));
-                /* Don't allow them to let dirty pages exceed 90% of system
-                 * memory and set a hard minimum of 4MB. */
-                if (obd_max_dirty_pages > ((cfs_num_physpages / 10) * 9)) {
-                        CERROR("Refusing to set max dirty pages to %u, which "
-                               "is more than 90%% of available RAM; setting "
-                               "to %lu\n", obd_max_dirty_pages,
-                               ((cfs_num_physpages / 10) * 9));
-                        obd_max_dirty_pages = ((cfs_num_physpages / 10) * 9);
-                } else if (obd_max_dirty_pages < 4 << (20 - CFS_PAGE_SHIFT)) {
-                        obd_max_dirty_pages = 4 << (20 - CFS_PAGE_SHIFT);
-                }
-        } else {
-                char buf[21];
-                int len;
+	if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
+		*lenp = 0;
+		return 0;
+	}
+	if (write) {
+		rc = lprocfs_write_frac_helper(buffer, *lenp,
+					       (unsigned int *)table->data,
+					       1 << (20 - PAGE_CACHE_SHIFT));
+		/* Don't allow them to let dirty pages exceed 90% of system
+		 * memory and set a hard minimum of 4MB. */
+		if (obd_max_dirty_pages > ((num_physpages / 10) * 9)) {
+			CERROR("Refusing to set max dirty pages to %u, which "
+			       "is more than 90%% of available RAM; setting "
+			       "to %lu\n", obd_max_dirty_pages,
+			       ((num_physpages / 10) * 9));
+			obd_max_dirty_pages = ((num_physpages / 10) * 9);
+		} else if (obd_max_dirty_pages < 4 << (20 - PAGE_CACHE_SHIFT)) {
+			obd_max_dirty_pages = 4 << (20 - PAGE_CACHE_SHIFT);
+		}
+	} else {
+		char buf[21];
+		int len;
 
-                len = lprocfs_read_frac_helper(buf, sizeof(buf),
-                                               *(unsigned int*)table->data,
-                                               1 << (20 - CFS_PAGE_SHIFT));
-                if (len > *lenp)
-                        len = *lenp;
-                buf[len] = '\0';
-                if (cfs_copy_to_user(buffer, buf, len))
-                        return -EFAULT;
-                *lenp = len;
-        }
-        *ppos += *lenp;
-        return rc;
+		len = lprocfs_read_frac_helper(buf, sizeof(buf),
+					       *(unsigned int *)table->data,
+					       1 << (20 - PAGE_CACHE_SHIFT));
+		if (len > *lenp)
+			len = *lenp;
+		buf[len] = '\0';
+		if (copy_to_user(buffer, buf, len))
+			return -EFAULT;
+		*lenp = len;
+	}
+	*ppos += *lenp;
+	return rc;
 }
 
 #ifdef RANDOM_FAIL_ALLOC
@@ -279,7 +279,7 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
                 if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
-                if (cfs_copy_to_user(buffer, buf, len))
+		if (copy_to_user(buffer, buf, len))
                         return -EFAULT;
                 *lenp = len;
         }

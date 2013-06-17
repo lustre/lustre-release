@@ -1020,7 +1020,7 @@ void* pgalloc(size_t factor)
 {
     LPVOID page;
 
-    page = VirtualAlloc(NULL, CFS_PAGE_SIZE << factor,
+    page = VirtualAlloc(NULL, PAGE_CACHE_SIZE << factor,
                         MEM_COMMIT, PAGE_READWRITE);
     return page;
 }

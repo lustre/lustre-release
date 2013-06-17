@@ -122,7 +122,7 @@ struct trace_cpu_data *trace_get_tcd(void)
 	tcd = &trace_data[0].tcd;
         CFS_INIT_LIST_HEAD(&pages);
 	if (get_preemption_level() == 0)
-		nr_pages = trace_refill_stock(tcd, CFS_ALLOC_STD, &pages);
+		nr_pages = trace_refill_stock(tcd, GFP_IOFS, &pages);
 	else
 		nr_pages = 0;
 	spin_lock(&trace_cpu_serializer);

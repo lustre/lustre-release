@@ -98,7 +98,7 @@ out:
 static int qsd_reint_entries(const struct lu_env *env,
 			     struct qsd_qtype_info *qqi,
 			     struct idx_info *ii, bool global,
-			     cfs_page_t **pages,
+			     struct page **pages,
 			     unsigned int npages, bool need_swab)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
@@ -123,7 +123,7 @@ static int qsd_reint_entries(const struct lu_env *env,
 	size = ii->ii_recsize + ii->ii_keysize;
 
 	for (i = 0; i < npages; i++) {
-		union lu_page	*lip = cfs_kmap(pages[i]);
+		union lu_page	*lip = kmap(pages[i]);
 
 		for (j = 0; j < LU_PAGE_COUNT; j++) {
 			if (need_swab)
@@ -173,7 +173,7 @@ static int qsd_reint_entries(const struct lu_env *env,
 			lip++;
 		}
 out:
-		cfs_kunmap(pages[i]);
+		kunmap(pages[i]);
 		if (rc)
 			break;
 	}
@@ -187,7 +187,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct idx_info		*ii = &qti->qti_ii;
 	struct lu_fid		*fid;
-	cfs_page_t		**pages = NULL;
+	struct page		**pages = NULL;
 	unsigned int		 npages, pg_cnt;
 	__u64			 start_hash = 0, ver = 0;
 	bool			 need_swab = false;
@@ -198,14 +198,14 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 
 	/* let's do a 1MB bulk */
 	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
-	npages /= CFS_PAGE_SIZE;
+	npages /= PAGE_CACHE_SIZE;
 
 	/* allocate pages for bulk index read */
 	OBD_ALLOC(pages, npages * sizeof(*pages));
 	if (pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < npages; i++) {
-		pages[i] = cfs_alloc_page(CFS_ALLOC_STD);
+		pages[i] = alloc_page(GFP_IOFS);
 		if (pages[i] == NULL)
 			GOTO(out, rc = -ENOMEM);
 	}
@@ -258,7 +258,7 @@ repeat:
 		ver = ii->ii_version;
 
 	pg_cnt = (ii->ii_count + (LU_PAGE_COUNT) - 1);
-	pg_cnt >>= CFS_PAGE_SHIFT - LU_PAGE_SHIFT;
+	pg_cnt >>= PAGE_CACHE_SHIFT - LU_PAGE_SHIFT;
 
 	if (pg_cnt > npages) {
 		CERROR("%s: master returned more pages than expected, %u > %u"
@@ -278,7 +278,7 @@ out:
 	if (pages != NULL) {
 		for (i = 0; i < npages; i++)
 			if (pages[i] != NULL)
-				cfs_free_page(pages[i]);
+				__free_page(pages[i]);
 		OBD_FREE(pages, npages * sizeof(*pages));
 	}
 

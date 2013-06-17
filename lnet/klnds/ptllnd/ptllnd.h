@@ -270,7 +270,7 @@ struct kptl_data
         cfs_waitq_t             kptl_watchdog_waitq;   /* watchdog sleeps here */
 
         kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
-        cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
+	struct kmem_cache	*kptl_rx_cache;         /* rx descripter cache */
 
         cfs_atomic_t            kptl_ntx;              /* # tx descs allocated */
 	spinlock_t		kptl_tx_lock;	     /* serialise idle tx list*/

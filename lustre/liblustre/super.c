@@ -1600,7 +1600,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) ==
                 sizeof(lump->lmm_objects[0]));
-        if (cfs_copy_from_user(&lum, lump, sizeof(lum)))
+	if (copy_from_user(&lum, lump, sizeof(lum)))
                 return(-EFAULT);
 
         switch (lum.lmm_magic) {
@@ -1712,7 +1712,7 @@ static int llu_lov_file_setstripe(struct inode *ino, unsigned long arg)
 
         LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
-        if (cfs_copy_from_user(&lum, lump, sizeof(lum)))
+	if (copy_from_user(&lum, lump, sizeof(lum)))
                 RETURN(-EFAULT);
 
         rc = llu_lov_setstripe_ea_info(ino, flags, &lum, sizeof(lum));

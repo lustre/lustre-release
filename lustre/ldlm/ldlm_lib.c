@@ -342,9 +342,9 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;
 	/* FIXME: Should limit this for the sum of all cl_dirty_max. */
-        cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-        if (cli->cl_dirty_max >> CFS_PAGE_SHIFT > cfs_num_physpages / 8)
-                cli->cl_dirty_max = cfs_num_physpages << (CFS_PAGE_SHIFT - 3);
+	cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
+	if (cli->cl_dirty_max >> PAGE_CACHE_SHIFT > num_physpages / 8)
+		cli->cl_dirty_max = num_physpages << (PAGE_CACHE_SHIFT - 3);
         CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
@@ -390,17 +390,17 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	 * 1MB until we know what the performance looks like.
 	 * In the future this should likely be increased. LU-1431 */
 	cli->cl_max_pages_per_rpc = min_t(int, PTLRPC_MAX_BRW_PAGES,
-					  LNET_MTU >> CFS_PAGE_SHIFT);
+					  LNET_MTU >> PAGE_CACHE_SHIFT);
 
-        if (!strcmp(name, LUSTRE_MDC_NAME)) {
-                cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;
-        } else if (cfs_num_physpages >> (20 - CFS_PAGE_SHIFT) <= 128 /* MB */) {
-                cli->cl_max_rpcs_in_flight = 2;
-        } else if (cfs_num_physpages >> (20 - CFS_PAGE_SHIFT) <= 256 /* MB */) {
-                cli->cl_max_rpcs_in_flight = 3;
-        } else if (cfs_num_physpages >> (20 - CFS_PAGE_SHIFT) <= 512 /* MB */) {
-                cli->cl_max_rpcs_in_flight = 4;
-        } else {
+	if (!strcmp(name, LUSTRE_MDC_NAME)) {
+		cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;
+	} else if (num_physpages >> (20 - PAGE_CACHE_SHIFT) <= 128 /* MB */) {
+		cli->cl_max_rpcs_in_flight = 2;
+	} else if (num_physpages >> (20 - PAGE_CACHE_SHIFT) <= 256 /* MB */) {
+		cli->cl_max_rpcs_in_flight = 3;
+	} else if (num_physpages >> (20 - PAGE_CACHE_SHIFT) <= 512 /* MB */) {
+		cli->cl_max_rpcs_in_flight = 4;
+	} else {
 		if (osc_on_mdt(obddev->obd_name))
 			cli->cl_max_rpcs_in_flight = MDS_OSC_MAX_RIF_DEFAULT;
 		else

@@ -40,7 +40,7 @@
 
 #include "ofd_internal.h"
 
-static cfs_mem_cache_t *ll_fmd_cachep;
+static struct kmem_cache *ll_fmd_cachep;
 
 /* drop fmd reference, free it if last ref. must be called with fed_lock held.*/
 static inline void ofd_fmd_put_nolock(struct obd_export *exp,
@@ -227,9 +227,9 @@ void ofd_fmd_cleanup(struct obd_export *exp)
 
 int ofd_fmd_init(void)
 {
-	ll_fmd_cachep = cfs_mem_cache_create("ll_fmd_cache",
-					     sizeof(struct ofd_mod_data),
-					     0, 0);
+	ll_fmd_cachep = kmem_cache_create("ll_fmd_cache",
+					  sizeof(struct ofd_mod_data),
+					  0, 0, NULL);
 	if (!ll_fmd_cachep)
 		return -ENOMEM;
 	else
@@ -239,9 +239,7 @@ int ofd_fmd_init(void)
 void ofd_fmd_exit(void)
 {
 	if (ll_fmd_cachep) {
-		int rc = cfs_mem_cache_destroy(ll_fmd_cachep);
-
-		LASSERTF(rc == 0, "Cannot destroy ll_fmd_cachep: rc %d\n", rc);
+		kmem_cache_destroy(ll_fmd_cachep);
 		ll_fmd_cachep = NULL;
 	}
 }

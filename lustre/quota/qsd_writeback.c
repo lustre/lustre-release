@@ -36,7 +36,7 @@
 
 #include "qsd_internal.h"
 
-extern cfs_mem_cache_t *upd_kmem;
+extern struct kmem_cache *upd_kmem;
 
 /*
  * Allocate and fill an qsd_upd_rec structure to be processed by the writeback
@@ -58,7 +58,7 @@ static struct qsd_upd_rec *qsd_upd_alloc(struct qsd_qtype_info *qqi,
 {
 	struct qsd_upd_rec	*upd;
 
-	OBD_SLAB_ALLOC_PTR_GFP(upd, upd_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(upd, upd_kmem, __GFP_IO);
 	if (upd == NULL) {
 		CERROR("Failed to allocate upd");
 		return NULL;

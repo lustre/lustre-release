@@ -49,7 +49,7 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
         hdr = (struct libcfs_ioctl_hdr *)buf;
         data = (struct libcfs_ioctl_data *)buf;
 
-        err = cfs_copy_from_user(buf, (void *)arg, sizeof(*hdr));
+	err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
         if (err)
                 RETURN(err);
 
@@ -68,7 +68,7 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
                 RETURN(-EINVAL);
         }
 
-        err = cfs_copy_from_user(buf, (void *)arg, hdr->ioc_len);
+	err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
         if (err)
                 RETURN(err);
 
@@ -89,7 +89,7 @@ int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 
 int libcfs_ioctl_popdata(void *arg, void *data, int size)
 {
-	if (cfs_copy_to_user((char *)arg, data, size))
+	if (copy_to_user((char *)arg, data, size))
 		return -EFAULT;
 	return 0;
 }

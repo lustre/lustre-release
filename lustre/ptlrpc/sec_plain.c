@@ -158,19 +158,19 @@ static int plain_verify_bulk_csum(struct ptlrpc_bulk_desc *desc,
 #ifdef __KERNEL__
 static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
 {
-        char           *ptr;
-        unsigned int    off, i;
+	char           *ptr;
+	unsigned int    off, i;
 
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                if (desc->bd_iov[i].kiov_len == 0)
-                        continue;
+	for (i = 0; i < desc->bd_iov_count; i++) {
+		if (desc->bd_iov[i].kiov_len == 0)
+			continue;
 
-                ptr = cfs_kmap(desc->bd_iov[i].kiov_page);
-                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                ptr[off] ^= 0x1;
-                cfs_kunmap(desc->bd_iov[i].kiov_page);
-                return;
-        }
+		ptr = kmap(desc->bd_iov[i].kiov_page);
+		off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+		ptr[off] ^= 0x1;
+		kunmap(desc->bd_iov[i].kiov_page);
+		return;
+	}
 }
 #else
 static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)

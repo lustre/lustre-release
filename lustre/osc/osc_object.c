@@ -264,7 +264,7 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
         struct osc_object *osc;
         struct lu_object  *obj;
 
-        OBD_SLAB_ALLOC_PTR_GFP(osc, osc_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(osc, osc_object_kmem, __GFP_IO);
         if (osc != NULL) {
                 obj = osc2lu(osc);
                 lu_object_init(obj, NULL, dev);

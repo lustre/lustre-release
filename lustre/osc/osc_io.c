@@ -365,7 +365,7 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 
 #ifdef __linux__
 	{
-		cfs_page_t *vmpage = cl_page_vmpage(env, page);
+		struct page *vmpage = cl_page_vmpage(env, page);
 		if (PageLocked(vmpage))
 			CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
 			       ops, page->cp_index,
@@ -834,7 +834,7 @@ int osc_req_init(const struct lu_env *env, struct cl_device *dev,
         struct osc_req *or;
         int result;
 
-        OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, __GFP_IO);
         if (or != NULL) {
                 cl_req_slice_add(req, &or->or_cl, dev, &osc_req_ops);
                 result = 0;

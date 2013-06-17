@@ -49,7 +49,7 @@
 
 #include "lod_internal.h"
 
-extern cfs_mem_cache_t *lod_object_kmem;
+extern struct kmem_cache *lod_object_kmem;
 static const struct dt_body_operations lod_body_lnk_ops;
 
 static int lod_index_lookup(const struct lu_env *env, struct dt_object *dt,

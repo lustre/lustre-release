@@ -1076,10 +1076,10 @@ restart_bulk:
 
         /* NB req now owns desc and will free it when it gets freed */
         for (i = 0; i < op_data->op_npages; i++)
-		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, CFS_PAGE_SIZE);
+		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, PAGE_CACHE_SIZE);
 
         mdc_readdir_pack(req, op_data->op_offset,
-                         CFS_PAGE_SIZE * op_data->op_npages,
+			 PAGE_CACHE_SIZE * op_data->op_npages,
                          &op_data->op_fid1, op_data->op_capa1);
 
         ptlrpc_request_set_replen(req);
@@ -1110,7 +1110,7 @@ restart_bulk:
         if (req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK) {
                 CERROR("Unexpected # bytes transferred: %d (%ld expected)\n",
                         req->rq_bulk->bd_nob_transferred,
-                        CFS_PAGE_SIZE * op_data->op_npages);
+			PAGE_CACHE_SIZE * op_data->op_npages);
                 ptlrpc_req_finished(req);
                 RETURN(-EPROTO);
         }
@@ -1883,18 +1883,18 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         GOTO(out, rc = -ENODEV);
 
                 /* copy UUID */
-                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
-                                     min((int) data->ioc_plen2,
-                                         (int) sizeof(struct obd_uuid))))
-                        GOTO(out, rc = -EFAULT);
+		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
+				 min((int)data->ioc_plen2,
+				     (int)sizeof(struct obd_uuid))))
+			GOTO(out, rc = -EFAULT);
 
-                rc = mdc_statfs(NULL, obd->obd_self_export, &stat_buf,
-                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                0);
-                if (rc != 0)
-                        GOTO(out, rc);
+		rc = mdc_statfs(NULL, obd->obd_self_export, &stat_buf,
+				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				0);
+		if (rc != 0)
+			GOTO(out, rc);
 
-                if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
+		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
                                      min((int) data->ioc_plen1,
                                          (int) sizeof(stat_buf))))
                         GOTO(out, rc = -EFAULT);
@@ -1920,7 +1920,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
         }
 	case LL_IOC_GET_CONNECT_FLAGS: {
-		if (cfs_copy_to_user(uarg,
+		if (copy_to_user(uarg,
 				     exp_connect_flags_ptr(exp),
 				     sizeof(__u64)))
 			GOTO(out, rc = -EFAULT);

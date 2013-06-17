@@ -808,7 +808,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		int		 i;
 
 		LASSERT(pageidx < rdpg->rp_npages);
-		lp = cfs_kmap(rdpg->rp_pages[pageidx]);
+		lp = kmap(rdpg->rp_pages[pageidx]);
 
 		/* fill lu pages */
 		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, nob -= LU_PAGE_SIZE) {
@@ -822,7 +822,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 				/* end of index */
 				break;
 		}
-		cfs_kunmap(rdpg->rp_pages[i]);
+		kunmap(rdpg->rp_pages[i]);
 	}
 
 	iops->put(env, it);

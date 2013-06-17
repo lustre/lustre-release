@@ -61,7 +61,7 @@
 #include <cl_object.h>
 #include "cl_internal.h"
 
-static cfs_mem_cache_t *cl_env_kmem;
+static struct kmem_cache *cl_env_kmem;
 
 /** Lock class of cl_object_header::coh_page_guard */
 static struct lock_class_key cl_page_guard_class;
@@ -749,7 +749,7 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
         struct lu_env *env;
         struct cl_env *cle;
 
-        OBD_SLAB_ALLOC_PTR_GFP(cle, cl_env_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(cle, cl_env_kmem, __GFP_IO);
         if (cle != NULL) {
                 int rc;
 

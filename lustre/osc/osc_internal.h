@@ -188,7 +188,7 @@ static inline struct osc_device *obd2osc_dev(const struct obd_device *d)
 
 int osc_dlm_lock_pageref(struct ldlm_lock *dlm);
 
-extern cfs_mem_cache_t *osc_quota_kmem;
+extern struct kmem_cache *osc_quota_kmem;
 struct osc_quota_info {
         /** linkage for quota hash table */
         cfs_hlist_node_t oqi_hash;

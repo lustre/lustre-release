@@ -48,7 +48,6 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 
-#include "udmu.h"
 #include "osd_internal.h"
 
 #ifdef LPROCFS

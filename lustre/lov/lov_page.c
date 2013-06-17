@@ -159,7 +159,7 @@ static void lov_empty_page_fini(const struct lu_env *env,
 }
 
 int lov_page_init_raid0(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, cfs_page_t *vmpage)
+			struct cl_page *page, struct page *vmpage)
 {
         struct lov_object *loo = cl2lov(obj);
         struct lov_layout_raid0 *r0 = lov_r0(loo);
@@ -217,16 +217,16 @@ static const struct cl_page_operations lov_empty_page_ops = {
 };
 
 int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, cfs_page_t *vmpage)
+			struct cl_page *page, struct page *vmpage)
 {
         struct lov_page *lpg = cl_object_page_slice(obj, page);
 	void *addr;
         ENTRY;
 
 	cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_empty_page_ops);
-	addr = cfs_kmap(vmpage);
+	addr = kmap(vmpage);
 	memset(addr, 0, cl_page_size(obj));
-	cfs_kunmap(vmpage);
+	kunmap(vmpage);
 	cl_page_export(env, page, 1);
         RETURN(0);
 }

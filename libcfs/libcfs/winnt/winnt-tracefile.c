@@ -62,8 +62,8 @@ int cfs_tracefile_init_arch()
 	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
 	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
 		cfs_trace_data[i] =
-                        cfs_alloc(sizeof(union cfs_trace_data_union) * \
-				  CFS_NR_CPUS, CFS_ALLOC_KERNEL);
+			kmalloc(sizeof(union cfs_trace_data_union) * \
+				  CFS_NR_CPUS, GFP_KERNEL);
 		if (cfs_trace_data[i] == NULL)
 			goto out;
 	}
@@ -78,8 +78,8 @@ int cfs_tracefile_init_arch()
 	for (i = 0; i < cfs_num_possible_cpus(); i++)
 		for (j = 0; j < CFS_TCD_TYPE_MAX; j++) {
 			cfs_trace_console_buffers[i][j] =
-				cfs_alloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
-					  CFS_ALLOC_KERNEL);
+				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
+					  GFP_KERNEL);
 
 			if (cfs_trace_console_buffers[i][j] == NULL)
 				goto out;
@@ -102,14 +102,14 @@ void cfs_tracefile_fini_arch()
 	for (i = 0; i < cfs_num_possible_cpus(); i++) {
 		for (j = 0; j < CFS_TCD_TYPE_MAX; j++) {
 			if (cfs_trace_console_buffers[i][j] != NULL) {
-				cfs_free(cfs_trace_console_buffers[i][j]);
+				kfree(cfs_trace_console_buffers[i][j]);
 				cfs_trace_console_buffers[i][j] = NULL;
 			}
 		}
 	}
 
 	for (i = 0; cfs_trace_data[i] != NULL; i++) {
-		cfs_free(cfs_trace_data[i]);
+		kfree(cfs_trace_data[i]);
 		cfs_trace_data[i] = NULL;
 	}
 
@@ -217,7 +217,7 @@ void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 
 int cfs_trace_max_debug_mb(void)
 {
-	int  total_mb = (cfs_num_physpages >> (20 - CFS_PAGE_SHIFT));
+	int  total_mb = (num_physpages >> (20 - PAGE_CACHE_SHIFT));
 	
 	return MAX(512, (total_mb * 80)/100);
 }

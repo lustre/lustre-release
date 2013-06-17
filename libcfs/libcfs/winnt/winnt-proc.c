@@ -64,7 +64,7 @@ cfs_proc_entry_t *              cfs_proc_dev = NULL;
 
 
 /* SLAB object for cfs_proc_entry_t allocation */
-cfs_mem_cache_t *               proc_entry_cache = NULL;
+struct kmem_cache *proc_entry_cache;
 
 /* root node for sysctl table */
 cfs_sysctl_table_header_t       root_table_header;
@@ -98,9 +98,10 @@ proc_file_read(struct file * file, const char * buf, size_t nbytes, loff_t *ppos
     char    *start;
     cfs_proc_entry_t * dp;
 
-    dp = (cfs_proc_entry_t  *) file->f_inode->i_priv;
-    if (!(page = (char*) cfs_alloc(CFS_PAGE_SIZE, 0)))
-        return -ENOMEM;
+	dp = (cfs_proc_entry_t  *) file->f_inode->i_priv;
+	page = (char *) kmalloc(PAGE_CACHE_SIZE, 0);
+	if (page == NULL)
+		return -ENOMEM;
 
     while ((nbytes > 0) && !eof) {
 
@@ -132,7 +133,7 @@ proc_file_read(struct file * file, const char * buf, size_t nbytes, loff_t *ppos
             break;
         }
         
-        n -= cfs_copy_to_user((void *)buf, start, n);
+	n -= copy_to_user((void *)buf, start, n);
         if (n == 0) {
             if (retval == 0)
                 retval = -EFAULT;
@@ -144,9 +145,9 @@ proc_file_read(struct file * file, const char * buf, size_t nbytes, loff_t *ppos
         buf += n;
         retval += n;
     }
-    cfs_free(page);
+	kfree(page);
 
-    return retval;
+	return retval;
 }
 
 static ssize_t
@@ -181,10 +182,9 @@ proc_alloc_entry()
 {
     cfs_proc_entry_t * entry = NULL;
 
-    entry = cfs_mem_cache_alloc(proc_entry_cache, 0);
-    if (!entry) {
-        return NULL;
-    }
+	entry = kmem_cache_alloc(proc_entry_cache, 0);
+	if (!entry)
+		return NULL;
 
     memset(entry, 0, sizeof(cfs_proc_entry_t));
 
@@ -199,11 +199,9 @@ proc_alloc_entry()
 
 void
 proc_free_entry(cfs_proc_entry_t * entry)
-
 {
-    ASSERT(entry->magic == CFS_PROC_ENTRY_MAGIC);
-
-    cfs_mem_cache_free(proc_entry_cache, entry);
+	ASSERT(entry->magic == CFS_PROC_ENTRY_MAGIC);
+	kmem_cache_free(proc_entry_cache, entry);
 }
 
 /* dissect the path string for a given full proc path */
@@ -413,11 +411,10 @@ proc_search_entry(
     parent = root;
     entry = NULL;
 
-    ename = cfs_alloc(0x21, CFS_ALLOC_ZERO);
+	ename = kmalloc(0x21, __GFP_ZERO);
 
-    if (ename == NULL) {
-        goto errorout;
-    }
+	if (ename == NULL)
+		goto errorout;
 
 again:
 
@@ -452,7 +449,7 @@ again:
 errorout:
 
     if (ename) {
-        cfs_free(ename);
+	kfree(ename);
     }
 
     return entry;   
@@ -494,12 +491,10 @@ again:
             entry = proc_alloc_entry();
             memcpy(entry->name, ename, flen);
 
-            if (entry) {
-                if(!proc_insert_splay(parent, entry)) {
-                    proc_free_entry(entry);
-                    entry = NULL;
-                }
-            }
+		if (entry && !proc_insert_splay(parent, entry)) {
+			proc_free_entry(entry);
+			entry = NULL;
+		}
         }
 
         if (!entry) {
@@ -711,17 +706,15 @@ void proc_destory_subtree(cfs_proc_entry_t *entry)
 
 void proc_destroy_fs()
 {
-    LOCK_PROCFS();
+	LOCK_PROCFS();
 
-    if (cfs_proc_root) {
-        proc_destroy_splay(cfs_proc_root);
-    }
+	if (cfs_proc_root)
+		proc_destroy_splay(cfs_proc_root);
 
-    if (proc_entry_cache) {
-        cfs_mem_cache_destroy(proc_entry_cache);
-    }
+	if (proc_entry_cache)
+		kmem_cache_destroy(proc_entry_cache);
    
-    UNLOCK_PROCFS();
+	UNLOCK_PROCFS();
 }
 
 static char proc_item_path[512];
@@ -797,12 +790,8 @@ int proc_init_fs()
     CFS_INIT_LIST_HEAD(&(root_table_header.ctl_entry));
 
     INIT_PROCFS_LOCK();
-    proc_entry_cache = cfs_mem_cache_create(
-                            NULL,
-                            sizeof(cfs_proc_entry_t),
-                            0,
-                            0
-                            );
+    proc_entry_cache = kmem_cache_create(NULL, sizeof(cfs_proc_entry_t),
+					 0, 0, NULL);
 
     if (!proc_entry_cache) {
         return (-ENOMEM);
@@ -999,26 +988,27 @@ int sysctl_string(cfs_sysctl_table_t *table, int *name, int nlen,
         return -ENOTDIR;
     
     if (oldval && oldlenp) {
-        if(get_user(len, oldlenp))
+	if (get_user(len, oldlenp))
             return -EFAULT;
-        if (len) {
-            l = strlen(table->data);
-            if (len > l) len = l;
-            if (len >= table->maxlen)
-                len = table->maxlen;
-            if(cfs_copy_to_user(oldval, table->data, len))
-                return -EFAULT;
-            if(put_user(0, ((char *) oldval) + len))
-                return -EFAULT;
-            if(put_user(len, oldlenp))
-                return -EFAULT;
-        }
+	if (len) {
+		l = strlen(table->data);
+		if (len > l)
+			len = l;
+		if (len >= table->maxlen)
+			len = table->maxlen;
+		if (copy_to_user(oldval, table->data, len))
+			return -EFAULT;
+		if (put_user(0, ((char *) oldval) + len))
+			return -EFAULT;
+		if (put_user(len, oldlenp))
+			return -EFAULT;
+	}
     }
     if (newval && newlen) {
         len = newlen;
         if (len > table->maxlen)
             len = table->maxlen;
-        if(cfs_copy_from_user(table->data, newval, len))
+	if (copy_from_user(table->data, newval, len))
             return -EFAULT;
         if (len == table->maxlen)
             len--;
@@ -1088,12 +1078,12 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
         if (write) {
             while (left) {
                 char c;
-                if(get_user(c,(char *) buffer))
-                    return -EFAULT;
+		if (get_user(c, (char *)buffer))
+			return -EFAULT;
                 if (!isspace(c))
-                    break;
+			break;
                 left--;
-                ((char *) buffer)++;
+		((char *)buffer)++;
             }
             if (!left)
                 break;
@@ -1101,7 +1091,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
             len = left;
             if (len > TMPBUFLEN-1)
                 len = TMPBUFLEN-1;
-            if(cfs_copy_from_user(buf, buffer, len))
+	    if (copy_from_user(buf, buffer, len))
                 return -EFAULT;
             buf[len] = 0;
             p = buf;
@@ -1119,17 +1109,25 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
                 val = -val;
             (char *)buffer += len;
             left -= len;
-            switch(op) {
-            case OP_SET:    *i = val; break;
-            case OP_AND:    *i &= val; break;
-            case OP_OR: *i |= val; break;
-            case OP_MAX:    if(*i < val)
-                        *i = val;
-                    break;
-            case OP_MIN:    if(*i > val)
-                        *i = val;
-                    break;
-            }
+		switch(op) {
+		case OP_SET:
+			*i = val;
+			break;
+		case OP_AND:
+			*i &= val;
+			break;
+		case OP_OR:
+			*i |= val;
+			break;
+		case OP_MAX:
+			if (*i < val)
+				*i = val;
+			break;
+		case OP_MIN:
+			if (*i > val)
+				*i = val;
+			break;
+		}
         } else {
             p = buf;
             if (!first)
@@ -1138,7 +1136,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
             len = strlen(buf);
             if (len > left)
                 len = left;
-            if(cfs_copy_to_user(buffer, buf, len))
+	    if (copy_to_user(buffer, buf, len))
                 return -EFAULT;
             left -= len;
             (char *)buffer += len;
@@ -1146,7 +1144,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
     }
 
     if (!write && !first && left) {
-        if(put_user('\n', (char *) buffer))
+	if (put_user('\n', (char *) buffer))
             return -EFAULT;
         left--, ((char *)buffer)++;
     }
@@ -1154,7 +1152,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
         p = (char *) buffer;
         while (left) {
             char c;
-            if(get_user(c, p++))
+	    if (get_user(c, p++))
                 return -EFAULT;
             if (!isspace(c))
                 break;
@@ -1222,7 +1220,7 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
         len = 0;
         p = buffer;
         while (len < *lenp) {
-            if(get_user(c, p++))
+	    if (get_user(c, p++))
                 return -EFAULT;
             if (c == 0 || c == '\n')
                 break;
@@ -1230,7 +1228,7 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
         }
         if (len >= (size_t)table->maxlen)
             len = (size_t)table->maxlen-1;
-        if(cfs_copy_from_user(table->data, buffer, len))
+	if (copy_from_user(table->data, buffer, len))
             return -EFAULT;
         ((char *) table->data)[len] = 0;
         filp->f_pos += *lenp;
@@ -1241,10 +1239,10 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
         if (len > *lenp)
             len = *lenp;
         if (len)
-            if(cfs_copy_to_user(buffer, table->data, len))
+	    if (copy_to_user(buffer, table->data, len))
                 return -EFAULT;
         if (len < *lenp) {
-            if(put_user('\n', ((char *) buffer) + len))
+	    if (put_user('\n', ((char *) buffer) + len))
                 return -EFAULT;
             len++;
         }
@@ -1285,9 +1283,9 @@ int do_sysctl_strategy (cfs_sysctl_table_t *table,
             if (len) {
                 if (len > (size_t)table->maxlen)
                     len = (size_t)table->maxlen;
-                if(cfs_copy_to_user(oldval, table->data, len))
+		if (copy_to_user(oldval, table->data, len))
                     return -EFAULT;
-                if(put_user(len, oldlenp))
+		if (put_user(len, oldlenp))
                     return -EFAULT;
             }
         }
@@ -1295,7 +1293,7 @@ int do_sysctl_strategy (cfs_sysctl_table_t *table,
             len = newlen;
             if (len > (size_t)table->maxlen)
                 len = (size_t)table->maxlen;
-            if(cfs_copy_from_user(table->data, newval, len))
+	    if (copy_from_user(table->data, newval, len))
                 return -EFAULT;
         }
     }
@@ -1366,7 +1364,7 @@ int do_sysctl(int *name, int nlen, void *oldval, size_t *oldlenp,
                     newval, newlen, head->ctl_table,
                     &context);
         if (context)
-            cfs_free(context);
+	    kfree(context);
         if (error != -ENOTDIR)
             return error;
         tmp = tmp->next;
@@ -1447,7 +1445,7 @@ struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table,
                            int insert_at_head)
 {
     struct ctl_table_header *tmp;
-    tmp = cfs_alloc(sizeof(struct ctl_table_header), 0);
+    tmp = kmalloc(sizeof(struct ctl_table_header), 0);
     if (!tmp)
         return NULL;
     tmp->ctl_table = table;
@@ -1476,7 +1474,7 @@ void unregister_sysctl_table(struct ctl_table_header * header)
 #ifdef CONFIG_PROC_FS
     unregister_proc_table(header->ctl_table, cfs_proc_sys);
 #endif
-    cfs_free(header);
+    kfree(header);
 }
 
 
@@ -1658,13 +1656,13 @@ lustre_open_file(char *filename)
 	if (fp == NULL)
 		return NULL;
 
-	fh = cfs_alloc(sizeof(*fh), CFS_ALLOC_ZERO);
+	fh = kmalloc(sizeof(*fh), __GFP_ZERO);
 	if (fh == NULL)
 		return NULL;
 
-    fh->f_inode = cfs_alloc(sizeof(struct inode), CFS_ALLOC_ZERO);
+    fh->f_inode = kmalloc(sizeof(struct inode), __GFP_ZERO);
     if (!fh->f_inode) {
-        cfs_free(fh);
+	kfree(fh);
         return NULL;
     }
 
@@ -1678,8 +1676,8 @@ lustre_open_file(char *filename)
     }
 
     if (0 != rc) {
-        cfs_free(fh->f_inode);
-        cfs_free(fh);
+	kfree(fh->f_inode);
+	kfree(fh);
         return NULL;
     }
 
@@ -1699,8 +1697,8 @@ lustre_close_file(struct file *fh)
         fp->nlink--;
     }
 
-    cfs_free(fh->f_inode);
-    cfs_free(fh);
+    kfree(fh->f_inode);
+    kfree(fh);
 
     return rc;
 }
@@ -1877,7 +1875,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	/* if not empty - flush it first */
 	if (m->count) {
 		n = min(m->count, size);
-		err = cfs_copy_to_user(buf, m->buf + m->from, n);
+		err = copy_to_user(buf, m->buf + m->from, n);
 		if (err)
 			goto Efault;
 		m->count -= n;
@@ -1903,7 +1901,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 		if (m->count < m->size)
 			goto Fill;
 		m->op->stop(m, p);
-		cfs_free(m->buf);
+		kfree(m->buf);
 		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
 		if (!m->buf)
 			goto Enomem;
@@ -1932,7 +1930,7 @@ Fill:
 	}
 	m->op->stop(m, p);
 	n = min(m->count, size);
-	err = cfs_copy_to_user(buf, m->buf, n);
+	err = copy_to_user(buf, m->buf, n);
 	if (err)
 		goto Efault;
 	copied += n;
@@ -2007,8 +2005,8 @@ static int traverse(struct seq_file *m, loff_t offset)
 
 Eoverflow:
 	m->op->stop(m, p);
-	cfs_free(m->buf);
-	m->buf = cfs_alloc(m->size <<= 1, CFS_ALLOC_KERNEL | CFS_ALLOC_ZERO);
+	kfree(m->buf);
+	m->buf = kmalloc(m->size <<= 1, GFP_KERNEL | __GFP_ZERO);
 	return !m->buf ? -ENOMEM : -EAGAIN;
 }
 
@@ -2067,8 +2065,8 @@ int seq_release(struct inode *inode, struct file *file)
 	struct seq_file *m = (struct seq_file *)file->private_data;
     if (m) {
         if (m->buf)
-	        cfs_free(m->buf);
-	    cfs_free(m);
+		kfree(m->buf);
+	    kfree(m);
     }
 	return 0;
 }
@@ -2195,7 +2193,7 @@ int single_open(struct file *file, int (*show)(struct seq_file *, void *),
 		if (!res)
 			((struct seq_file *)file->private_data)->private = data;
 		else
-			cfs_free(op);
+			kfree(op);
 	}
 	return res;
 }
@@ -2205,7 +2203,7 @@ int single_release(struct inode *inode, struct file *file)
 {
 	const struct seq_operations *op = ((struct seq_file *)file->private_data)->op;
 	int res = seq_release(inode, file);
-	cfs_free((void *)op);
+	kfree((void *)op);
 	return res;
 }
 EXPORT_SYMBOL(single_release);
@@ -2214,7 +2212,7 @@ int seq_release_private(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq = file->private_data;
 
-	cfs_free(seq->private);
+	kfree(seq->private);
 	seq->private = NULL;
 	return seq_release(inode, file);
 }
@@ -2227,7 +2225,7 @@ void *__seq_open_private(struct file *f, const struct seq_operations *ops,
 	void *private;
 	struct seq_file *seq;
 
-	private = cfs_alloc(psize, CFS_ALLOC_KERNEL | CFS_ALLOC_ZERO);
+	private = kmalloc(psize, GFP_KERNEL | __GFP_ZERO);
 	if (private == NULL)
 		goto out;
 
@@ -2240,7 +2238,7 @@ void *__seq_open_private(struct file *f, const struct seq_operations *ops,
 	return private;
 
 out_free:
-	cfs_free(private);
+	kfree(private);
 out:
 	return NULL;
 }

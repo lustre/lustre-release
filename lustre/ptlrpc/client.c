@@ -162,26 +162,26 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
 
-/**
+/*
  * Add a page \a page to the bulk descriptor \a desc.
  * Data to transfer in the page starts at offset \a pageoffset and
  * amount of data to transfer from the page is \a len
  */
 void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
-			     cfs_page_t *page, int pageoffset, int len, int pin)
+			     struct page *page, int pageoffset, int len, int pin)
 {
-        LASSERT(desc->bd_iov_count < desc->bd_max_iov);
-        LASSERT(page != NULL);
-        LASSERT(pageoffset >= 0);
-        LASSERT(len > 0);
-        LASSERT(pageoffset + len <= CFS_PAGE_SIZE);
+	LASSERT(desc->bd_iov_count < desc->bd_max_iov);
+	LASSERT(page != NULL);
+	LASSERT(pageoffset >= 0);
+	LASSERT(len > 0);
+	LASSERT(pageoffset + len <= PAGE_CACHE_SIZE);
 
-        desc->bd_nob += len;
+	desc->bd_nob += len;
 
 	if (pin)
-		cfs_page_pin(page);
+		page_cache_get(page);
 
-        ptlrpc_add_bulk_page(desc, page, pageoffset, len);
+	ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 EXPORT_SYMBOL(__ptlrpc_prep_bulk_page);
 
@@ -208,7 +208,7 @@ void __ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc, int unpin)
 
 	if (unpin) {
 		for (i = 0; i < desc->bd_iov_count ; i++)
-			cfs_page_unpin(desc->bd_iov[i].kiov_page);
+			page_cache_release(desc->bd_iov[i].kiov_page);
 	}
 
 	OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,

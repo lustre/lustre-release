@@ -157,7 +157,7 @@ struct cfs_crypto_hash_desc*
  *     @retval 0		for success.
  */
 int cfs_crypto_hash_update_page(struct cfs_crypto_hash_desc *desc,
-				cfs_page_t *page, unsigned int offset,
+				struct page *page, unsigned int offset,
 				unsigned int len);
 
 /**    Update digest by part of data.

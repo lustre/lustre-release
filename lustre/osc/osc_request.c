@@ -855,7 +855,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		oa->o_undirty = 0;
 	} else {
 		long max_in_flight = (cli->cl_max_pages_per_rpc <<
-				      CFS_PAGE_SHIFT)*
+				      PAGE_CACHE_SHIFT) *
 				     (cli->cl_max_rpcs_in_flight + 1);
                 oa->o_undirty = max(cli->cl_dirty_max, max_in_flight);
         }
@@ -937,11 +937,11 @@ static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
 static int osc_shrink_grant(struct client_obd *cli)
 {
 	__u64 target_bytes = (cli->cl_max_rpcs_in_flight + 1) *
-			     (cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT);
+			     (cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT);
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
 	if (cli->cl_avail_grant <= target_bytes)
-		target_bytes = cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
+		target_bytes = cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
 	return osc_shrink_grant_to_target(cli, target_bytes);
@@ -957,8 +957,8 @@ int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 	/* Don't shrink if we are already above or below the desired limit
 	 * We don't want to shrink below a single RPC, as that will negatively
 	 * impact block allocation and long-term performance. */
-	if (target_bytes < cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT)
-		target_bytes = cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
+	if (target_bytes < cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT)
+		target_bytes = cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
 
 	if (target_bytes >= cli->cl_avail_grant) {
 		client_obd_list_unlock(&cli->cl_loi_list_lock);
@@ -1005,7 +1005,7 @@ static int osc_should_shrink_grant(struct client_obd *client)
 		/* Get the current RPC size directly, instead of going via:
 		 * cli_brw_size(obd->u.cli.cl_import->imp_obd->obd_self_export)
 		 * Keep comment here so that it can be found by searching. */
-		int brw_size = client->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
+		int brw_size = client->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
 
 		if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
 		    client->cl_avail_grant > brw_size)
@@ -1079,7 +1079,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
         }
 
 	/* determine the appropriate chunk size used by osc_extent. */
-	cli->cl_chunkbits = max_t(int, CFS_PAGE_SHIFT, ocd->ocd_blocksize);
+	cli->cl_chunkbits = max_t(int, PAGE_CACHE_SHIFT, ocd->ocd_blocksize);
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
 	CDEBUG(D_CACHE, "%s, setting cl_avail_grant: %ld cl_lost_grant: %ld."
@@ -1105,29 +1105,29 @@ static void handle_short_read(int nob_read, obd_count page_count,
         while (nob_read > 0) {
                 LASSERT (page_count > 0);
 
-                if (pga[i]->count > nob_read) {
-                        /* EOF inside this page */
-                        ptr = cfs_kmap(pga[i]->pg) +
-                                (pga[i]->off & ~CFS_PAGE_MASK);
-                        memset(ptr + nob_read, 0, pga[i]->count - nob_read);
-                        cfs_kunmap(pga[i]->pg);
-                        page_count--;
-                        i++;
-                        break;
-                }
+		if (pga[i]->count > nob_read) {
+			/* EOF inside this page */
+			ptr = kmap(pga[i]->pg) +
+				(pga[i]->off & ~CFS_PAGE_MASK);
+			memset(ptr + nob_read, 0, pga[i]->count - nob_read);
+			kunmap(pga[i]->pg);
+			page_count--;
+			i++;
+			break;
+		}
 
                 nob_read -= pga[i]->count;
                 page_count--;
                 i++;
         }
 
-        /* zero remaining pages */
-        while (page_count-- > 0) {
-                ptr = cfs_kmap(pga[i]->pg) + (pga[i]->off & ~CFS_PAGE_MASK);
-                memset(ptr, 0, pga[i]->count);
-                cfs_kunmap(pga[i]->pg);
-                i++;
-        }
+	/* zero remaining pages */
+	while (page_count-- > 0) {
+		ptr = kmap(pga[i]->pg) + (pga[i]->off & ~CFS_PAGE_MASK);
+		memset(ptr, 0, pga[i]->count);
+		kunmap(pga[i]->pg);
+		i++;
+	}
 }
 
 static int check_write_rcs(struct ptlrpc_request *req,
@@ -1212,10 +1212,10 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 		 * simulate an OST->client data error */
 		if (i == 0 && opc == OST_READ &&
 		    OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
-			unsigned char *ptr = cfs_kmap(pga[i]->pg);
+			unsigned char *ptr = kmap(pga[i]->pg);
 			int off = pga[i]->off & ~CFS_PAGE_MASK;
 			memcpy(ptr + off, "bad1", min(4, nob));
-			cfs_kunmap(pga[i]->pg);
+			kunmap(pga[i]->pg);
 		}
 		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
 				  pga[i]->off & ~CFS_PAGE_MASK,
@@ -1333,13 +1333,13 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 
                 LASSERT(pg->count > 0);
                 /* make sure there is no gap in the middle of page array */
-                LASSERTF(page_count == 1 ||
-                         (ergo(i == 0, poff + pg->count == CFS_PAGE_SIZE) &&
-                          ergo(i > 0 && i < page_count - 1,
-                               poff == 0 && pg->count == CFS_PAGE_SIZE)   &&
-                          ergo(i == page_count - 1, poff == 0)),
-                         "i: %d/%d pg: %p off: "LPU64", count: %u\n",
-                         i, page_count, pg, pg->off, pg->count);
+		LASSERTF(page_count == 1 ||
+			 (ergo(i == 0, poff + pg->count == PAGE_CACHE_SIZE) &&
+			  ergo(i > 0 && i < page_count - 1,
+			       poff == 0 && pg->count == PAGE_CACHE_SIZE)   &&
+			  ergo(i == page_count - 1, poff == 0)),
+			 "i: %d/%d pg: %p off: "LPU64", count: %u\n",
+			 i, page_count, pg, pg->off, pg->count);
 #ifdef __linux__
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
@@ -1840,7 +1840,7 @@ static obd_count max_unfragmented_pages(struct brw_page **pg, obd_count pages)
                 if (pages == 0)         /* that's all */
                         return count;
 
-                if (offset + pg[i]->count < CFS_PAGE_SIZE)
+		if (offset + pg[i]->count < PAGE_CACHE_SIZE)
                         return count;   /* doesn't end on page boundary */
 
                 i++;
@@ -2099,7 +2099,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 						oap->oap_count;
 			else
 				LASSERT(oap->oap_page_off + oap->oap_count ==
-					CFS_PAGE_SIZE);
+					PAGE_CACHE_SIZE);
 		}
 	}
 
@@ -2133,7 +2133,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		pga[i] = &oap->oap_brw_page;
 		pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
 		CDEBUG(0, "put page %p index %lu oap %p flg %x to pga\n",
-		       pga[i]->pg, cfs_page_index(oap->oap_page), oap,
+		       pga[i]->pg, page_index(oap->oap_page), oap,
 		       pga[i]->flag);
 		i++;
 		cl_req_page_add(env, clerq, page);
@@ -2201,7 +2201,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		tmp->oap_request = ptlrpc_request_addref(req);
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
-	starting_offset >>= CFS_PAGE_SHIFT;
+	starting_offset >>= PAGE_CACHE_SHIFT;
 	if (cmd == OBD_BRW_READ) {
 		cli->cl_r_in_flight++;
 		lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
@@ -2891,7 +2891,7 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         /* we only need the header part from user space to get lmm_magic and
          * lmm_stripe_count, (the header part is common to v1 and v3) */
         lum_size = sizeof(struct lov_user_md_v1);
-        if (cfs_copy_from_user(&lum, lump, lum_size))
+	if (copy_from_user(&lum, lump, lum_size))
                 RETURN(-EFAULT);
 
         if ((lum.lmm_magic != LOV_USER_MAGIC_V1) &&
@@ -2923,15 +2923,15 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 	}
 
 	lumk->lmm_oi = lsm->lsm_oi;
-        lumk->lmm_stripe_count = 1;
+	lumk->lmm_stripe_count = 1;
 
-        if (cfs_copy_to_user(lump, lumk, lum_size))
-                rc = -EFAULT;
+	if (copy_to_user(lump, lumk, lum_size))
+		rc = -EFAULT;
 
-        if (lumk != &lum)
-                OBD_FREE(lumk, lum_size);
+	if (lumk != &lum)
+		OBD_FREE(lumk, lum_size);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 
@@ -2981,7 +2981,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 memcpy(data->ioc_inlbuf2, &obd->obd_uuid, sizeof(uuid));
 
-                err = cfs_copy_to_user((void *)uarg, buf, len);
+		err = copy_to_user((void *)uarg, buf, len);
                 if (err)
                         err = -EFAULT;
                 obd_ioctl_freedata(buf, len);
@@ -3089,12 +3089,12 @@ static int osc_get_info(const struct lu_env *env, struct obd_export *exp,
 						CFS_PAGE_MASK;
 
 		if (OBD_OBJECT_EOF - fm_key->fiemap.fm_length <=
-		    fm_key->fiemap.fm_start + CFS_PAGE_SIZE - 1)
+		    fm_key->fiemap.fm_start + PAGE_CACHE_SIZE - 1)
 			policy.l_extent.end = OBD_OBJECT_EOF;
 		else
 			policy.l_extent.end = (fm_key->fiemap.fm_start +
 				fm_key->fiemap.fm_length +
-				CFS_PAGE_SIZE - 1) & CFS_PAGE_MASK;
+				PAGE_CACHE_SIZE - 1) & CFS_PAGE_MASK;
 
 		ostid_build_res_name(&fm_key->oa.o_oi, &res_id);
 		mode = ldlm_lock_match(exp->exp_obd->obd_namespace,

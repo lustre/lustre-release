@@ -1050,7 +1050,7 @@ int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
 	/* First try a small buf */
 	LASSERT(env != NULL);
 	ldata->ld_buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_link_buf,
-					       CFS_PAGE_SIZE);
+					       PAGE_CACHE_SIZE);
 	if (ldata->ld_buf->lb_buf == NULL)
 		return -ENOMEM;
 

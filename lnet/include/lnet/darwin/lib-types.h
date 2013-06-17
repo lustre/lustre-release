@@ -46,7 +46,7 @@
 /*
  * XXX Liang:
  *
- * Temporary fix, because lnet_me_free()->cfs_free->FREE() can be blocked in xnu,
+ * Temporary fix, because lnet_me_free()->kfree->FREE() can be blocked in xnu,
  * at then same time we've taken LNET_LOCK(), which is a spinlock.
  * by using LNET_USE_LIB_FREELIST, we can avoid calling of FREE().
  *

@@ -58,7 +58,7 @@
 #include <obd_class.h>
 #include "qsd_internal.h"
 
-cfs_mem_cache_t *upd_kmem;
+struct kmem_cache *upd_kmem;
 
 struct lu_kmem_descr qsd_caches[] = {
 	{

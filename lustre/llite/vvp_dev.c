@@ -60,8 +60,8 @@
  * "llite_" (var. "ll_") prefix.
  */
 
-cfs_mem_cache_t *vvp_thread_kmem;
-static cfs_mem_cache_t *vvp_session_kmem;
+struct kmem_cache *vvp_thread_kmem;
+static struct kmem_cache *vvp_session_kmem;
 static struct lu_kmem_descr vvp_caches[] = {
         {
                 .ckd_cache = &vvp_thread_kmem,
@@ -79,14 +79,14 @@ static struct lu_kmem_descr vvp_caches[] = {
 };
 
 static void *vvp_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
+			  struct lu_context_key *key)
 {
-        struct vvp_thread_info *info;
+	struct vvp_thread_info *info;
 
-        OBD_SLAB_ALLOC_PTR_GFP(info, vvp_thread_kmem, CFS_ALLOC_IO);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
+	OBD_SLAB_ALLOC_PTR_GFP(info, vvp_thread_kmem, __GFP_IO);
+	if (info == NULL)
+		info = ERR_PTR(-ENOMEM);
+	return info;
 }
 
 static void vvp_key_fini(const struct lu_context *ctx,
@@ -97,14 +97,14 @@ static void vvp_key_fini(const struct lu_context *ctx,
 }
 
 static void *vvp_session_key_init(const struct lu_context *ctx,
-                                  struct lu_context_key *key)
+				  struct lu_context_key *key)
 {
-        struct vvp_session *session;
+	struct vvp_session *session;
 
-        OBD_SLAB_ALLOC_PTR_GFP(session, vvp_session_kmem, CFS_ALLOC_IO);
-        if (session == NULL)
-                session = ERR_PTR(-ENOMEM);
-        return session;
+	OBD_SLAB_ALLOC_PTR_GFP(session, vvp_session_kmem, __GFP_IO);
+	if (session == NULL)
+		session = ERR_PTR(-ENOMEM);
+	return session;
 }
 
 static void vvp_session_key_fini(const struct lu_context *ctx,
@@ -403,9 +403,9 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
 static void vvp_pgcache_page_show(const struct lu_env *env,
                                   struct seq_file *seq, struct cl_page *page)
 {
-        struct ccc_page *cpg;
-        cfs_page_t      *vmpage;
-        int              has_flags;
+	struct ccc_page *cpg;
+	struct page      *vmpage;
+	int              has_flags;
 
         cpg = cl2ccc_page(cl_page_at(page, &vvp_device_type));
         vmpage = cpg->cpg_page;

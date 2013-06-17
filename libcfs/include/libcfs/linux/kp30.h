@@ -216,7 +216,7 @@ extern lwt_cpu_t lwt_cpus[];
 
 #define LWTSTR(n)       #n
 #define LWTWHERE(f,l)   f ":" LWTSTR(l)
-#define LWT_EVENTS_PER_PAGE (CFS_PAGE_SIZE / sizeof (lwt_event_t))
+#define LWT_EVENTS_PER_PAGE (PAGE_CACHE_SIZE / sizeof(lwt_event_t))
 
 #define LWT_EVENT(p1, p2, p3, p4)                                       \
 do {                                                                    \

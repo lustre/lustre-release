@@ -98,7 +98,7 @@ extern struct lu_object_operations lod_lu_robj_ops;
 extern struct dt_object_operations lod_obj_ops;
 
 /* Slab for OSD object allocation */
-cfs_mem_cache_t *lod_object_kmem;
+struct kmem_cache *lod_object_kmem;
 
 static struct lu_kmem_descr lod_caches[] = {
 	{
@@ -125,7 +125,7 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 	int			rc = 0;
 	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, __GFP_IO);
 	if (lod_obj == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 

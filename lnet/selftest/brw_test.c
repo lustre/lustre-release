@@ -87,7 +87,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 		npg   = breq->blk_npg;
 		/* NB: this is not going to work for variable page size,
 		 * but we have to keep it for compatibility */
-		len   = npg * CFS_PAGE_SIZE;
+		len   = npg * PAGE_CACHE_SIZE;
 
 	} else {
 		test_bulk_req_v1_t  *breq = &tsi->tsi_u.bulk_v1;
@@ -99,7 +99,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
-		npg   = (len + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+		npg   = (len + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	}
 
 	if (npg > LNET_MAX_IOV || npg <= 0)
@@ -150,9 +150,9 @@ brw_inject_one_error (void)
 }
 
 void
-brw_fill_page (cfs_page_t *pg, int pattern, __u64 magic)
+brw_fill_page (struct page *pg, int pattern, __u64 magic)
 {
-        char *addr = cfs_page_address(pg);
+	char *addr = page_address(pg);
         int   i;
 
         LASSERT (addr != NULL);
@@ -164,13 +164,13 @@ brw_fill_page (cfs_page_t *pg, int pattern, __u64 magic)
 
         if (pattern == LST_BRW_CHECK_SIMPLE) {
                 memcpy(addr, &magic, BRW_MSIZE);
-                addr += CFS_PAGE_SIZE - BRW_MSIZE;
+		addr += PAGE_CACHE_SIZE - BRW_MSIZE;
                 memcpy(addr, &magic, BRW_MSIZE);
                 return;
         }
 
         if (pattern == LST_BRW_CHECK_FULL) {
-                for (i = 0; i < CFS_PAGE_SIZE / BRW_MSIZE; i++)
+		for (i = 0; i < PAGE_CACHE_SIZE / BRW_MSIZE; i++)
                         memcpy(addr + i * BRW_MSIZE, &magic, BRW_MSIZE);
                 return;
         }
@@ -180,9 +180,9 @@ brw_fill_page (cfs_page_t *pg, int pattern, __u64 magic)
 }
 
 int
-brw_check_page (cfs_page_t *pg, int pattern, __u64 magic)
+brw_check_page (struct page *pg, int pattern, __u64 magic)
 {
-        char  *addr = cfs_page_address(pg);
+	char  *addr = page_address(pg);
         __u64  data = 0; /* make compiler happy */
         int    i;
 
@@ -195,7 +195,7 @@ brw_check_page (cfs_page_t *pg, int pattern, __u64 magic)
                 data = *((__u64 *) addr);
                 if (data != magic) goto bad_data;
 
-                addr += CFS_PAGE_SIZE - BRW_MSIZE;
+		addr += PAGE_CACHE_SIZE - BRW_MSIZE;
                 data = *((__u64 *) addr);
                 if (data != magic) goto bad_data;
 
@@ -203,7 +203,7 @@ brw_check_page (cfs_page_t *pg, int pattern, __u64 magic)
         }
 
         if (pattern == LST_BRW_CHECK_FULL) {
-                for (i = 0; i < CFS_PAGE_SIZE / BRW_MSIZE; i++) {
+		for (i = 0; i < PAGE_CACHE_SIZE / BRW_MSIZE; i++) {
                         data = *(((__u64 *) addr) + i);
                         if (data != magic) goto bad_data;
                 }
@@ -223,7 +223,7 @@ void
 brw_fill_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
 {
         int         i;
-        cfs_page_t *pg;
+	struct page *pg;
 
         for (i = 0; i < bk->bk_niov; i++) {
 #ifdef __KERNEL__
@@ -240,7 +240,7 @@ int
 brw_check_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
 {
         int         i;
-        cfs_page_t *pg;
+	struct page *pg;
 
         for (i = 0; i < bk->bk_niov; i++) {
 #ifdef __KERNEL__
@@ -283,7 +283,7 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		npg   = breq->blk_npg;
-		len   = npg * CFS_PAGE_SIZE;
+		len   = npg * PAGE_CACHE_SIZE;
 
 	} else {
 		test_bulk_req_v1_t  *breq = &tsi->tsi_u.bulk_v1;
@@ -295,7 +295,7 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
-		npg   = (len + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+		npg   = (len + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	}
 
 	rc = sfw_create_test_rpc(tsu, dest, sn->sn_features, npg, len, &rpc);
@@ -470,10 +470,10 @@ brw_server_handle(struct srpc_server_rpc *rpc)
 			reply->brw_status = EINVAL;
 			return 0;
 		}
-		npg = reqst->brw_len >> CFS_PAGE_SHIFT;
+		npg = reqst->brw_len >> PAGE_CACHE_SHIFT;
 
 	} else {
-		npg = (reqst->brw_len + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+		npg = (reqst->brw_len + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	}
 
 	replymsg->msg_ses_feats = reqstmsg->msg_ses_feats;

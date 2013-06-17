@@ -2933,7 +2933,7 @@ lst_get_bulk_param(int argc, char **argv, lst_test_bulk_param_t *bulk)
                         else if (*end == 'm' || *end == 'M')
                                 bulk->blk_size *= 1024 * 1024;
 
-                        if (bulk->blk_size > CFS_PAGE_SIZE * LNET_MAX_IOV) {
+			if (bulk->blk_size > PAGE_CACHE_SIZE * LNET_MAX_IOV) {
                                 fprintf(stderr, "Size exceed limitation: %d bytes\n",
                                         bulk->blk_size);
                                 return -1;

@@ -58,7 +58,7 @@
 #include "mdd_internal.h"
 
 static const struct lu_object_operations mdd_lu_obj_ops;
-extern cfs_mem_cache_t *mdd_object_kmem;
+extern struct kmem_cache *mdd_object_kmem;
 
 static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
@@ -145,7 +145,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 {
         struct mdd_object *mdd_obj;
 
-	OBD_SLAB_ALLOC_PTR_GFP(mdd_obj, mdd_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(mdd_obj, mdd_object_kmem, __GFP_IO);
         if (mdd_obj != NULL) {
                 struct lu_object *o;
 
@@ -1895,12 +1895,12 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 LASSERT(rdpg->rp_pages != NULL);
 
                 pg = rdpg->rp_pages[0];
-                dp = (struct lu_dirpage*)cfs_kmap(pg);
+		dp = (struct lu_dirpage *)kmap(pg);
                 memset(dp, 0 , sizeof(struct lu_dirpage));
                 dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
                 dp->ldp_hash_end   = cpu_to_le64(MDS_DIR_END_OFF);
                 dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
-                cfs_kunmap(pg);
+		kunmap(pg);
                 GOTO(out_unlock, rc = LU_PAGE_SIZE);
         }
 
@@ -1909,7 +1909,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 	if (rc >= 0) {
 		struct lu_dirpage	*dp;
 
-		dp = cfs_kmap(rdpg->rp_pages[0]);
+		dp = kmap(rdpg->rp_pages[0]);
 		dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
 		if (rc == 0) {
 			/*
@@ -1919,7 +1919,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 			dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
 			rc = min_t(unsigned int, LU_PAGE_SIZE, rdpg->rp_count);
 		}
-		cfs_kunmap(rdpg->rp_pages[0]);
+		kunmap(rdpg->rp_pages[0]);
 	}
 
 	GOTO(out_unlock, rc);

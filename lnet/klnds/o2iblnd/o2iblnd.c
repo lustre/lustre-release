@@ -1188,7 +1188,7 @@ kiblnd_free_pages(kib_pages_t *p)
 
 	for (i = 0; i < npages; i++) {
 		if (p->ibp_pages[i] != NULL)
-			cfs_free_page(p->ibp_pages[i]);
+			__free_page(p->ibp_pages[i]);
 	}
 
 	LIBCFS_FREE(p, offsetof(kib_pages_t, ibp_pages[npages]));
@@ -1212,7 +1212,7 @@ kiblnd_alloc_pages(kib_pages_t **pp, int cpt, int npages)
 
         for (i = 0; i < npages; i++) {
 		p->ibp_pages[i] = cfs_page_cpt_alloc(lnet_cpt_table(), cpt,
-						     CFS_ALLOC_IO);
+						     __GFP_IO);
                 if (p->ibp_pages[i] == NULL) {
                         CERROR("Can't allocate page %d of %d\n", i, npages);
                         kiblnd_free_pages(p);

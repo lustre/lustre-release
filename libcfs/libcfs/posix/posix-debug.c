@@ -171,13 +171,13 @@ libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                    const char *format1, va_list args,
                    const char *format2, ...)
 {
-        struct timeval tv;
-        int            nob;
-        int            remain;
-        va_list        ap;
-        char           buf[CFS_PAGE_SIZE]; /* size 4096 used for compatimble
-                                            * with linux, where message can`t
-                                            * be exceed PAGE_SIZE */
+	struct timeval tv;
+	int            nob;
+	int            remain;
+	va_list        ap;
+	char           buf[PAGE_CACHE_SIZE]; /* size 4096 used for compatimble
+					    * with linux, where message can`t
+					    * be exceed PAGE_SIZE */
         int            console = 0;
         char *prefix = "Lustre";
 

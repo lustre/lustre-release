@@ -364,7 +364,7 @@ struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 void lquota_generate_fid(struct lu_fid *, int, int, int);
 int lquota_extract_fid(const struct lu_fid *, int *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
-extern cfs_mem_cache_t *lqe_kmem;
+extern struct kmem_cache *lqe_kmem;
 
 /* lquota_entry.c */
 /* site create/destroy */

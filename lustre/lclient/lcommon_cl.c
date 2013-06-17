@@ -85,11 +85,11 @@ const struct cl_req_operations ccc_req_ops;
  * ccc_ prefix stands for "Common Client Code".
  */
 
-static cfs_mem_cache_t *ccc_lock_kmem;
-static cfs_mem_cache_t *ccc_object_kmem;
-static cfs_mem_cache_t *ccc_thread_kmem;
-static cfs_mem_cache_t *ccc_session_kmem;
-static cfs_mem_cache_t *ccc_req_kmem;
+static struct kmem_cache *ccc_lock_kmem;
+static struct kmem_cache *ccc_object_kmem;
+static struct kmem_cache *ccc_thread_kmem;
+static struct kmem_cache *ccc_session_kmem;
+static struct kmem_cache *ccc_req_kmem;
 
 static struct lu_kmem_descr ccc_caches[] = {
         {
@@ -133,7 +133,7 @@ void *ccc_key_init(const struct lu_context *ctx,
 {
         struct ccc_thread_info *info;
 
-        OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, __GFP_IO);
         if (info == NULL)
                 info = ERR_PTR(-ENOMEM);
         return info;
@@ -151,7 +151,7 @@ void *ccc_session_key_init(const struct lu_context *ctx,
 {
         struct ccc_session *session;
 
-        OBD_SLAB_ALLOC_PTR_GFP(session, ccc_session_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(session, ccc_session_kmem, __GFP_IO);
         if (session == NULL)
                 session = ERR_PTR(-ENOMEM);
         return session;
@@ -269,7 +269,7 @@ int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
         struct ccc_req *vrq;
         int result;
 
-        OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, __GFP_IO);
         if (vrq != NULL) {
                 cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
                 result = 0;
@@ -345,7 +345,7 @@ struct lu_object *ccc_object_alloc(const struct lu_env *env,
         struct ccc_object *vob;
         struct lu_object  *obj;
 
-        OBD_SLAB_ALLOC_PTR_GFP(vob, ccc_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(vob, ccc_object_kmem, __GFP_IO);
         if (vob != NULL) {
                 struct cl_object_header *hdr;
 
@@ -414,7 +414,7 @@ int ccc_lock_init(const struct lu_env *env,
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-        OBD_SLAB_ALLOC_PTR_GFP(clk, ccc_lock_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(clk, ccc_lock_kmem, __GFP_IO);
         if (clk != NULL) {
                 cl_lock_slice_add(lock, &clk->clk_cl, obj, lkops);
                 result = 0;
@@ -479,7 +479,7 @@ static void ccc_object_size_unlock(struct cl_object *obj)
  *
  */
 
-cfs_page_t *ccc_page_vmpage(const struct lu_env *env,
+struct page *ccc_page_vmpage(const struct lu_env *env,
                             const struct cl_page_slice *slice)
 {
         return cl2vm_page(slice);
@@ -885,12 +885,14 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                                  * kernel will check such case correctly.
                                  * linux-2.6.18-128.1.1 miss to do that.
                                  * --bug 17336 */
-                                loff_t size = cl_isize_read(inode);
-                                unsigned long cur_index = start >> CFS_PAGE_SHIFT;
+				loff_t size = cl_isize_read(inode);
+				unsigned long cur_index = start >>
+							  PAGE_CACHE_SHIFT;
 
-                                if ((size == 0 && cur_index != 0) ||
-                                    (((size - 1) >> CFS_PAGE_SHIFT) < cur_index))
-                                *exceed = 1;
+				if ((size == 0 && cur_index != 0) ||
+				    (((size - 1) >> PAGE_CACHE_SHIFT) <
+				     cur_index))
+				*exceed = 1;
                         }
                         return result;
                 } else {
@@ -1096,7 +1098,7 @@ struct ccc_req *cl2ccc_req(const struct cl_req_slice *slice)
         return container_of0(slice, struct ccc_req, crq_cl);
 }
 
-cfs_page_t *cl2vm_page(const struct cl_page_slice *slice)
+struct page *cl2vm_page(const struct cl_page_slice *slice)
 {
         return cl2ccc_page(slice)->cpg_page;
 }
@@ -1126,7 +1128,7 @@ struct inode *ccc_object_inode(const struct cl_object *obj)
  * additional reference to the resulting page. This is an unsafe version of
  * cl_vmpage_page() that can only be used under vmpage lock.
  */
-struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage)
+struct cl_page *ccc_vmpage_page_transient(struct page *vmpage)
 {
         KLASSERT(PageLocked(vmpage));
         return (struct cl_page *)vmpage->private;

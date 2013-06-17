@@ -154,14 +154,14 @@ do {						\
 #endif /* LIBCFS_DEBUG */
 
 #ifndef LIBCFS_VMALLOC_SIZE
-#define LIBCFS_VMALLOC_SIZE        (2 << CFS_PAGE_SHIFT) /* 2 pages */
+#define LIBCFS_VMALLOC_SIZE        (2 << PAGE_CACHE_SHIFT) /* 2 pages */
 #endif
 
 #define LIBCFS_ALLOC_PRE(size, mask)					    \
 do {									    \
 	LASSERT(!cfs_in_interrupt() ||					    \
 		((size) <= LIBCFS_VMALLOC_SIZE &&			    \
-		 ((mask) & CFS_ALLOC_ATOMIC)) != 0);			    \
+		 ((mask) & GFP_ATOMIC)) != 0);			    \
 } while (0)
 
 #define LIBCFS_ALLOC_POST(ptr, size)					    \
@@ -186,7 +186,7 @@ do {									    \
 do {									    \
 	LIBCFS_ALLOC_PRE((size), (mask));				    \
 	(ptr) = (size) <= LIBCFS_VMALLOC_SIZE ?				    \
-		cfs_alloc((size), (mask)) : cfs_alloc_large(size);	    \
+		kmalloc((size), (mask)) : vmalloc(size);	    \
 	LIBCFS_ALLOC_POST((ptr), (size));				    \
 } while (0)
 
@@ -194,13 +194,13 @@ do {									    \
  * default allocator
  */
 #define LIBCFS_ALLOC(ptr, size) \
-        LIBCFS_ALLOC_GFP(ptr, size, CFS_ALLOC_IO)
+	LIBCFS_ALLOC_GFP(ptr, size, __GFP_IO)
 
 /**
  * non-sleeping allocator
  */
 #define LIBCFS_ALLOC_ATOMIC(ptr, size) \
-        LIBCFS_ALLOC_GFP(ptr, size, CFS_ALLOC_ATOMIC)
+	LIBCFS_ALLOC_GFP(ptr, size, GFP_ATOMIC)
 
 /**
  * allocate memory for specified CPU partition
@@ -218,23 +218,23 @@ do {									    \
 
 /** default numa allocator */
 #define LIBCFS_CPT_ALLOC(ptr, cptab, cpt, size)				    \
-	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, CFS_ALLOC_IO)
+	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, __GFP_IO)
 
-#define LIBCFS_FREE(ptr, size)                                          \
-do {                                                                    \
-        int s = (size);                                                 \
-        if (unlikely((ptr) == NULL)) {                                  \
-                CERROR("LIBCFS: free NULL '" #ptr "' (%d bytes) at "    \
-                       "%s:%d\n", s, __FILE__, __LINE__);               \
-                break;                                                  \
-        }                                                               \
-        libcfs_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
+#define LIBCFS_FREE(ptr, size)						\
+do {									\
+	int s = (size);                                                 \
+	if (unlikely((ptr) == NULL)) {                                  \
+		CERROR("LIBCFS: free NULL '" #ptr "' (%d bytes) at "    \
+		       "%s:%d\n", s, __FILE__, __LINE__);               \
+		break;                                                  \
+	}                                                               \
+	libcfs_kmem_dec((ptr), s);                                      \
+	CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
 	       s, (ptr), libcfs_kmem_read());				\
-        if (unlikely(s > LIBCFS_VMALLOC_SIZE))                          \
-                cfs_free_large(ptr);                                    \
-        else                                                            \
-                cfs_free(ptr);                                          \
+	if (unlikely(s > LIBCFS_VMALLOC_SIZE))                          \
+		vfree(ptr);						\
+	else								\
+		kfree(ptr);						\
 } while (0)
 
 /******************************************************************************/
@@ -586,8 +586,8 @@ int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 
 struct libcfs_device_userstate
 {
-        int           ldu_memhog_pages;
-        cfs_page_t   *ldu_memhog_root_page;
+	int		ldu_memhog_pages;
+	struct page	*ldu_memhog_root_page;
 };
 
 /* what used to be in portals_lib.h */

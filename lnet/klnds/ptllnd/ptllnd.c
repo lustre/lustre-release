@@ -618,7 +618,7 @@ kptllnd_base_shutdown (void)
         LASSERT (cfs_list_empty(&kptllnd_data.kptl_idle_txs));
 
         if (kptllnd_data.kptl_rx_cache != NULL)
-                cfs_mem_cache_destroy(kptllnd_data.kptl_rx_cache);
+		kmem_cache_destroy(kptllnd_data.kptl_rx_cache);
 
         if (kptllnd_data.kptl_peers != NULL)
                 LIBCFS_FREE(kptllnd_data.kptl_peers,
@@ -797,7 +797,7 @@ kptllnd_base_startup (void)
         kptllnd_rx_buffer_pool_init(&kptllnd_data.kptl_rx_buffer_pool);
 
         kptllnd_data.kptl_rx_cache =
-                cfs_mem_cache_create("ptllnd_rx",
+		kmem_cache_create("ptllnd_rx",
                                      sizeof(kptl_rx_t) + 
                                      *kptllnd_tunables.kptl_max_msg_size,
                                      0,    /* offset */

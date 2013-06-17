@@ -406,7 +406,7 @@ struct osd_it_ea_dirent {
  * there  would be one ext3 readdir for every mdd readdir page.
  */
 
-#define OSD_IT_EA_BUFSIZE       (CFS_PAGE_SIZE + CFS_PAGE_SIZE/4)
+#define OSD_IT_EA_BUFSIZE       (PAGE_CACHE_SIZE + PAGE_CACHE_SIZE/4)
 
 /**
  * This is iterator's in-memory data structure in interoperability
@@ -457,7 +457,7 @@ struct osd_it_quota {
 	cfs_list_t		 oiq_list;
 };
 
-#define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
+#define MAX_BLOCKS_PER_PAGE (PAGE_CACHE_SIZE / 512)
 
 struct osd_iobuf {
 	cfs_waitq_t        dr_wait;

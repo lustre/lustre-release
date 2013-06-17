@@ -386,7 +386,7 @@ static int lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
 
 	ldata->ld_buf =
 		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf,
-				       CFS_PAGE_SIZE);
+				       PAGE_CACHE_SIZE);
 	if (ldata->ld_buf->lb_buf == NULL)
 		return -ENOMEM;
 

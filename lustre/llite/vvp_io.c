@@ -516,10 +516,7 @@ static int vvp_io_read_start(const struct lu_env *env,
         if (!vio->cui_ra_window_set) {
                 vio->cui_ra_window_set = 1;
                 bead->lrr_start = cl_index(obj, pos);
-                /*
-                 * XXX: explicit CFS_PAGE_SIZE
-                 */
-                bead->lrr_count = cl_index(obj, tot + CFS_PAGE_SIZE - 1);
+		bead->lrr_count = cl_index(obj, tot + PAGE_CACHE_SIZE - 1);
                 ll_ra_read_in(file, bead);
         }
 
@@ -626,7 +623,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 #ifndef HAVE_VM_OP_FAULT
 static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 {
-        cfs_page_t *vmpage;
+	struct page *vmpage;
 
         vmpage = filemap_nopage(cfio->ft_vma, cfio->nopage.ft_address,
                                 cfio->nopage.ft_type);
@@ -698,7 +695,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	struct vvp_fault_io *cfio    = &vio->u.fault;
 	loff_t               offset;
 	int                  result  = 0;
-	cfs_page_t          *vmpage  = NULL;
+	struct page          *vmpage  = NULL;
 	struct cl_page      *page;
 	loff_t               size;
 	pgoff_t              last; /* last page in a file data region */
@@ -865,7 +862,7 @@ static int vvp_io_read_page(const struct lu_env *env,
         struct ll_sb_info         *sbi    = ll_i2sbi(inode);
         struct ll_file_data       *fd     = cl2ccc_io(env, ios)->cui_fd;
         struct ll_readahead_state *ras    = &fd->fd_ras;
-        cfs_page_t                *vmpage = cp->cpg_page;
+	struct page                *vmpage = cp->cpg_page;
         struct cl_2queue          *queue  = &io->ci_queue;
         int rc;
 
@@ -984,7 +981,7 @@ static int vvp_io_prepare_write(const struct lu_env *env,
         struct cl_object *obj    = slice->cpl_obj;
         struct ccc_page  *cp     = cl2ccc_page(slice);
         struct cl_page   *pg     = slice->cpl_page;
-        cfs_page_t       *vmpage = cp->cpg_page;
+	struct page       *vmpage = cp->cpg_page;
 
         int result;
 
@@ -1001,7 +998,7 @@ static int vvp_io_prepare_write(const struct lu_env *env,
                  * We're completely overwriting an existing page, so _don't_
                  * set it up to date until commit_write
                  */
-                if (from == 0 && to == CFS_PAGE_SIZE) {
+		if (from == 0 && to == PAGE_CACHE_SIZE) {
                         CL_PAGE_HEADER(D_PAGE, env, pg, "full page write\n");
                         POISON_PAGE(page, 0x11);
                 } else
@@ -1024,7 +1021,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
         struct inode      *inode  = ccc_object_inode(obj);
         struct ll_sb_info *sbi    = ll_i2sbi(inode);
 	struct ll_inode_info *lli = ll_i2info(inode);
-        cfs_page_t        *vmpage = cp->cpg_page;
+	struct page        *vmpage = cp->cpg_page;
 
         int    result;
         int    tallyop;
@@ -1066,7 +1063,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
                         set_page_dirty(vmpage);
                         vvp_write_pending(cl2ccc(obj), cp);
                 } else if (result == -EDQUOT) {
-                        pgoff_t last_index = i_size_read(inode) >> CFS_PAGE_SHIFT;
+			pgoff_t last_index = i_size_read(inode) >> PAGE_CACHE_SHIFT;
                         bool need_clip = true;
 
                         /*
@@ -1084,7 +1081,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
                          * being.
                          */
                         if (last_index > pg->cp_index) {
-                                to = CFS_PAGE_SIZE;
+				to = PAGE_CACHE_SIZE;
                                 need_clip = false;
                         } else if (last_index == pg->cp_index) {
                                 int size_to = i_size_read(inode) & ~CFS_PAGE_MASK;

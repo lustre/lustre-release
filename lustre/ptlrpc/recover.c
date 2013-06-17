@@ -172,7 +172,7 @@ int ptlrpc_resend(struct obd_import *imp)
 
         cfs_list_for_each_entry_safe(req, next, &imp->imp_sending_list,
                                      rq_list) {
-                LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
+		LASSERTF((long)req > PAGE_CACHE_SIZE && req != LP_POISON,
                          "req %p bad\n", req);
                 LASSERTF(req->rq_type != LI_POISON, "req %p freed\n", req);
                 if (!ptlrpc_no_resend(req))

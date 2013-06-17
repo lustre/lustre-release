@@ -1296,7 +1296,7 @@ lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
         int sz = offsetof(lnet_rtrbuf_t, rb_kiov[npages]);
 
         while (--npages >= 0)
-                cfs_free_page(rb->rb_kiov[npages].kiov_page);
+		__free_page(rb->rb_kiov[npages].kiov_page);
 
         LIBCFS_FREE(rb, sz);
 }
@@ -1318,16 +1318,16 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp, int cpt)
 
 	for (i = 0; i < npages; i++) {
 		page = cfs_page_cpt_alloc(lnet_cpt_table(), cpt,
-					  CFS_ALLOC_ZERO | CFS_ALLOC_STD);
+					  __GFP_ZERO | GFP_IOFS);
                 if (page == NULL) {
                         while (--i >= 0)
-                                cfs_free_page(rb->rb_kiov[i].kiov_page);
+				__free_page(rb->rb_kiov[i].kiov_page);
 
                         LIBCFS_FREE(rb, sz);
                         return NULL;
                 }
 
-                rb->rb_kiov[i].kiov_len = CFS_PAGE_SIZE;
+		rb->rb_kiov[i].kiov_len = PAGE_CACHE_SIZE;
                 rb->rb_kiov[i].kiov_offset = 0;
                 rb->rb_kiov[i].kiov_page = page;
         }
@@ -1489,7 +1489,7 @@ int
 lnet_rtrpools_alloc(int im_a_router)
 {
 	lnet_rtrbufpool_t *rtrp;
-	int	large_pages = (LNET_MTU + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+	int	large_pages = (LNET_MTU + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	int	small_pages = 1;
 	int	nrb_tiny;
 	int	nrb_small;

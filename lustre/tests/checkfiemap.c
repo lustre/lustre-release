@@ -40,6 +40,7 @@
 #include <getopt.h>
 
 #ifndef HAVE_FIEMAP
+# include <linux/types.h>
 # include <linux/fiemap.h>
 #endif
 

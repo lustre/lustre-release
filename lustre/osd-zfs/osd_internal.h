@@ -49,6 +49,15 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_quota.h>
+
+#define _SPL_KMEM_H
+#include <sys/kstat.h>
+#define kmem_zalloc(a, b)	kzalloc(a, b)
+#define kmem_free(ptr, sz)	((void)(sz), kfree(ptr))
+#ifndef KM_SLEEP
+#define KM_SLEEP		GFP_KERNEL
+#endif
+
 #include <sys/arc.h>
 
 #include <sys/nvpair.h>

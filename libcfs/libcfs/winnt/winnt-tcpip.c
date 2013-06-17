@@ -360,7 +360,7 @@ KsAllocateKsTsdu()
 
     } else {
 
-        KsTsdu = (PKS_TSDU) cfs_mem_cache_alloc(
+	KsTsdu = (PKS_TSDU) kmem_cache_alloc(
                         ks_data.ksnd_tsdu_slab, 0);
     }
 
@@ -393,7 +393,7 @@ KsFreeKsTsdu(
     PKS_TSDU  KsTsdu
     )
 {
-    cfs_mem_cache_free(
+    kmem_cache_free(
             ks_data.ksnd_tsdu_slab,
             KsTsdu );
 }
@@ -3035,7 +3035,7 @@ KsCleanupIpAddresses()
 
         list = RemoveHeadList(&ks_data.ksnd_addrs_list);
         slot = CONTAINING_RECORD(list, ks_addr_slot_t, link);
-        cfs_free(slot);
+	kfree(slot);
         ks_data.ksnd_naddrs--;
     }
 
@@ -3081,7 +3081,7 @@ KsAddAddressHandler(
                 return;
             }
 
-            slot = cfs_alloc(sizeof(ks_addr_slot_t) + DeviceName->Length, CFS_ALLOC_ZERO);
+	    slot = kmalloc(sizeof(ks_addr_slot_t) + DeviceName->Length, __GFP_ZERO);
             if (slot != NULL) {
 		spin_lock(&ks_data.ksnd_addrs_lock);
                 InsertTailList(&ks_data.ksnd_addrs_list, &slot->link);
@@ -3574,7 +3574,7 @@ KsTcpReceiveCompletionRoutine(
         /* free the Context structure... */
         ASSERT(Context->Magic == KS_TCP_CONTEXT_MAGIC);
         Context->Magic = 'CDAB';
-        cfs_free(Context);
+	kfree(Context);
     }
 
     /* free the Irp */
@@ -3745,7 +3745,7 @@ KsTcpSendCompletionRoutine(
     if (context) {
         ASSERT(context->Magic == KS_TCP_CONTEXT_MAGIC);
         context->Magic = 'CDAB';
-        cfs_free(context);
+	kfree(context);
     }
 
     /* free the Irp structure */
@@ -3854,7 +3854,7 @@ KsTcpReceiveEventHandler(
 
         /* there's still data in tdi internal queue, we need issue a new
            Irp to receive all of them. first allocate the tcp context */
-        context = cfs_alloc(sizeof(KS_TCP_COMPLETION_CONTEXT), 0);
+	context = kmalloc(sizeof(KS_TCP_COMPLETION_CONTEXT), 0);
         if (!context) {
             status = STATUS_INSUFFICIENT_RESOURCES;
             goto errorout;
@@ -3939,7 +3939,7 @@ errorout:
     if (context) {
         ASSERT(context->Magic == KS_TCP_CONTEXT_MAGIC);
         context->Magic = 'CDAB';
-        cfs_free(context);
+	kfree(context);
     }
 
     ks_abort_tconn(tconn);
@@ -4305,8 +4305,8 @@ ks_create_tconn()
     ks_tconn_t * tconn = NULL;
 
     /* allocate ksoc_tconn_t from the slab cache memory */
-    tconn = (ks_tconn_t *)cfs_mem_cache_alloc(
-                ks_data.ksnd_tconn_slab, CFS_ALLOC_ZERO);
+    tconn = (ks_tconn_t *)kmem_cache_alloc(
+		ks_data.ksnd_tconn_slab, __GFP_ZERO);
 
     if (tconn) {
 
@@ -4384,7 +4384,7 @@ ks_free_tconn(ks_tconn_t * tconn)
 	spin_unlock(&(ks_data.ksnd_tconn_lock));
 
     /* free the structure memory */
-    cfs_mem_cache_free(ks_data.ksnd_tconn_slab, tconn);
+    kmem_cache_free(ks_data.ksnd_tconn_slab, tconn);
 
     KsPrint((3, "ks_free_tconn: tconn %p is freed.\n", tconn));
 }
@@ -5645,7 +5645,7 @@ KsBuildSend(ks_tconn_t * tconn, PKS_TSDUMGR TsduMgr,
     length = KsQueryMdlsSize(mdl);
 
     /* we need allocate the ks_tx_t structure from memory pool. */
-    context = cfs_alloc(sizeof(ks_tdi_tx_t), 0);
+    context = kmalloc(sizeof(ks_tdi_tx_t), 0);
     if (!context) {
         status = STATUS_INSUFFICIENT_RESOURCES;
         goto errorout;
@@ -5696,7 +5696,7 @@ errorout:
     if (context) {
         ASSERT(context->Magic == KS_TCP_CONTEXT_MAGIC);
         context->Magic = 'CDAB';
-        cfs_free(context);
+	kfree(context);
     }
 
     /* here need free the Irp. */
@@ -5865,8 +5865,8 @@ ks_init_tdi_data()
     CFS_INIT_LIST_HEAD(&ks_data.ksnd_tconns);
     cfs_init_event(&ks_data.ksnd_tconn_exit, TRUE, FALSE);
 
-    ks_data.ksnd_tconn_slab = cfs_mem_cache_create(
-        "tcon", sizeof(ks_tconn_t) , 0, 0);
+    ks_data.ksnd_tconn_slab = kmem_cache_create("tcon", sizeof(ks_tconn_t),
+						0, 0, NULL);
 
     if (!ks_data.ksnd_tconn_slab) {
         rc = -ENOMEM;
@@ -5877,8 +5877,8 @@ ks_init_tdi_data()
 	spin_lock_init(&ks_data.ksnd_tsdu_lock);
     CFS_INIT_LIST_HEAD(&ks_data.ksnd_freetsdus);
     ks_data.ksnd_tsdu_size = TDINAL_TSDU_DEFAULT_SIZE; /* 64k */
-    ks_data.ksnd_tsdu_slab = cfs_mem_cache_create(
-        "tsdu", ks_data.ksnd_tsdu_size, 0, 0);
+    ks_data.ksnd_tsdu_slab = kmem_cache_create("tsdu", ks_data.ksnd_tsdu_size,
+					       0, 0, NULL);
 
     if (!ks_data.ksnd_tsdu_slab) {
         rc = -ENOMEM;
@@ -5890,8 +5890,8 @@ ks_init_tdi_data()
     if (ks_data.ksnd_engine_nums < 4) {
         ks_data.ksnd_engine_nums = 4;
     }
-    ks_data.ksnd_engine_mgr = cfs_alloc(sizeof(ks_engine_mgr_t) * 
-                         ks_data.ksnd_engine_nums,CFS_ALLOC_ZERO);
+    ks_data.ksnd_engine_mgr = kmalloc(sizeof(ks_engine_mgr_t) *
+			 ks_data.ksnd_engine_nums, __GFP_ZERO);
     if (ks_data.ksnd_engine_mgr == NULL) {
         rc = -ENOMEM;
         goto errorout;
@@ -5912,7 +5912,7 @@ errorout:
     /* do cleanup in case we get failures */
     if (rc < 0) {
         if (ks_data.ksnd_tconn_slab) {
-            cfs_mem_cache_destroy(ks_data.ksnd_tconn_slab);
+kmem_cache_destroy(ks_data.ksnd_tconn_slab);
             ks_data.ksnd_tconn_slab = NULL;
         }
     }
@@ -5967,7 +5967,7 @@ ks_fini_tdi_data()
     cfs_wait_event_internal(&ks_data.ksnd_tconn_exit, 0);
 
     /* it's safe to delete the tconn slab ... */
-    cfs_mem_cache_destroy(ks_data.ksnd_tconn_slab);
+kmem_cache_destroy(ks_data.ksnd_tconn_slab);
     ks_data.ksnd_tconn_slab = NULL;
 
     /* clean up all the tsud buffers in the free list */
@@ -5975,14 +5975,14 @@ ks_fini_tdi_data()
     cfs_list_for_each (list, &ks_data.ksnd_freetsdus) {
         KsTsdu = cfs_list_entry (list, KS_TSDU, Link);
 
-        cfs_mem_cache_free(
+	kmem_cache_free(
                 ks_data.ksnd_tsdu_slab,
                 KsTsdu );
     }
 	spin_unlock(&(ks_data.ksnd_tsdu_lock));
 
     /* it's safe to delete the tsdu slab ... */
-    cfs_mem_cache_destroy(ks_data.ksnd_tsdu_slab);
+kmem_cache_destroy(ks_data.ksnd_tsdu_slab);
     ks_data.ksnd_tsdu_slab = NULL;
 
     /* good! it's smooth to do the cleaning up...*/
@@ -6554,7 +6554,7 @@ int libcfs_ipif_enumerate(char ***names)
 
 	spin_lock(&ks_data.ksnd_addrs_lock);
 
-    *names = cfs_alloc(sizeof(char *) * ks_data.ksnd_naddrs, CFS_ALLOC_ZERO);
+    *names = kmalloc(sizeof(char *) * ks_data.ksnd_naddrs, __GFP_ZERO);
     if (*names == NULL) {
         goto errorout;
     }
@@ -6578,7 +6578,7 @@ errorout:
 void libcfs_ipif_free_enumeration(char **names, int n)
 {
     if (names) {
-        cfs_free(names);
+	kfree(names);
     }
 }
 

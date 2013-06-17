@@ -179,9 +179,9 @@ libcfs_ipif_enumerate (char ***namesp)
         nalloc = 16;    /* first guess at max interfaces */
         toobig = 0;
         for (;;) {
-                if (nalloc * sizeof(*ifr) > CFS_PAGE_SIZE) {
+		if (nalloc * sizeof(*ifr) > PAGE_CACHE_SIZE) {
                         toobig = 1;
-                        nalloc = CFS_PAGE_SIZE/sizeof(*ifr);
+			nalloc = PAGE_CACHE_SIZE/sizeof(*ifr);
                         CWARN("Too many interfaces: only enumerating first %d\n",
                               nalloc);
                 }
@@ -821,9 +821,9 @@ libcfs_ipif_enumerate (char ***namesp)
         nalloc = 16;    /* first guess at max interfaces */
         toobig = 0;
         for (;;) {
-                if (nalloc * sizeof(*ifr) > CFS_PAGE_SIZE) {
+		if (nalloc * sizeof(*ifr) > PAGE_CACHE_SIZE) {
                         toobig = 1;
-                        nalloc = CFS_PAGE_SIZE/sizeof(*ifr);
+			nalloc = PAGE_CACHE_SIZE/sizeof(*ifr);
                         CWARN("Too many interfaces: only enumerating first %d\n",
                               nalloc);
                 }

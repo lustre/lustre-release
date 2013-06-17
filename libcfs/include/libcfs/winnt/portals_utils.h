@@ -265,16 +265,16 @@ static inline void read_random(char *buf, int len)
 	((unsigned char *)&addr)[1],	\
 	((unsigned char *)&addr)[0]
 
-static int cfs_copy_from_user(void *to, void *from, int c) 
+static int copy_from_user(void *to, void *from, int c)
 {
-    memcpy(to, from, c);
-    return 0;
+	memcpy(to, from, c);
+	return 0;
 }
 
-static int cfs_copy_to_user(void *to, const void *from, int c) 
+static int copy_to_user(void *to, const void *from, int c)
 {
-    memcpy(to, from, c);
-    return 0;
+	memcpy(to, from, c);
+	return 0;
 }
 
 static unsigned long
@@ -297,8 +297,8 @@ clear_user(void __user *to, unsigned long n)
     0                           \
 )
 
-#define cfs_num_physpages               (64 * 1024)
-#define CFS_NUM_CACHEPAGES              cfs_num_physpages
+#define num_physpages               (64 * 1024)
+#define NUM_CACHEPAGES              num_physpages
 
 #else
 

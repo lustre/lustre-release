@@ -224,7 +224,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
                 offset = (pgoff_t)(bio->bi_sector << 9) + lo->lo_offset;
                 bio_for_each_segment(bvec, bio, i) {
                         BUG_ON(bvec->bv_offset != 0);
-                        BUG_ON(bvec->bv_len != CFS_PAGE_SIZE);
+			BUG_ON(bvec->bv_len != PAGE_CACHE_SIZE);
 
                         pages[page_count] = bvec->bv_page;
                         offsets[page_count] = offset;
@@ -518,7 +518,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 
         set_device_ro(bdev, (lo_flags & LO_FLAGS_READ_ONLY) != 0);
 
-        lo->lo_blocksize = CFS_PAGE_SIZE;
+	lo->lo_blocksize = PAGE_CACHE_SIZE;
         lo->lo_device = bdev;
         lo->lo_flags = lo_flags;
         lo->lo_backing_file = file;
@@ -539,13 +539,13 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         lo->lo_queue->unplug_fn = loop_unplug;
 #endif
 
-        /* queue parameters */
-        CLASSERT(CFS_PAGE_SIZE < (1 << (sizeof(unsigned short) * 8)));
-        blk_queue_logical_block_size(lo->lo_queue,
-                                     (unsigned short)CFS_PAGE_SIZE);
-        blk_queue_max_hw_sectors(lo->lo_queue,
-                                 LLOOP_MAX_SEGMENTS << (CFS_PAGE_SHIFT - 9));
-        blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
+	/* queue parameters */
+	CLASSERT(PAGE_CACHE_SIZE < (1 << (sizeof(unsigned short) * 8)));
+	blk_queue_logical_block_size(lo->lo_queue,
+				     (unsigned short)PAGE_CACHE_SIZE);
+	blk_queue_max_hw_sectors(lo->lo_queue,
+				 LLOOP_MAX_SEGMENTS << (PAGE_CACHE_SHIFT - 9));
+	blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
 
         set_capacity(disks[lo->lo_number], size);
         bd_set_size(bdev, size << 9);

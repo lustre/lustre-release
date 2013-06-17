@@ -88,9 +88,9 @@ void srpc_set_counters (const srpc_counters_t *cnt)
 }
 
 int
-srpc_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i, int nob)
+srpc_add_bulk_page(srpc_bulk_t *bk, struct page *pg, int i, int nob)
 {
-	nob = min(nob, (int)CFS_PAGE_SIZE);
+	nob = min(nob, (int)PAGE_CACHE_SIZE);
 
 	LASSERT(nob > 0);
 	LASSERT(i >= 0 && i < bk->bk_niov);
@@ -104,7 +104,7 @@ srpc_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i, int nob)
 
 	bk->bk_pages[i] = pg;
 	bk->bk_iovs[i].iov_len  = nob;
-	bk->bk_iovs[i].iov_base = cfs_page_address(pg);
+	bk->bk_iovs[i].iov_base = page_address(pg);
 #endif
 	return nob;
 }
@@ -113,7 +113,7 @@ void
 srpc_free_bulk (srpc_bulk_t *bk)
 {
         int         i;
-        cfs_page_t *pg;
+	struct page *pg;
 
         LASSERT (bk != NULL);
 #ifndef __KERNEL__
@@ -128,11 +128,11 @@ srpc_free_bulk (srpc_bulk_t *bk)
 #endif
                 if (pg == NULL) break;
 
-                cfs_free_page(pg);
+		__free_page(pg);
         }
 
 #ifndef __KERNEL__
-        LIBCFS_FREE(bk->bk_pages, sizeof(cfs_page_t *) * bk->bk_niov);
+	LIBCFS_FREE(bk->bk_pages, sizeof(struct page *) * bk->bk_niov);
 #endif
         LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[bk->bk_niov]));
         return;
@@ -142,7 +142,7 @@ srpc_bulk_t *
 srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 {
 	srpc_bulk_t  *bk;
-	cfs_page_t  **pages;
+	struct page  **pages;
 	int	      i;
 
 	LASSERT(bulk_npg > 0 && bulk_npg <= LNET_MAX_IOV);
@@ -160,24 +160,24 @@ srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 	bk->bk_niov   = bulk_npg;
 #ifndef __KERNEL__
 	LIBCFS_CPT_ALLOC(pages, lnet_cpt_table(), cpt,
-			 sizeof(cfs_page_t *) * bulk_npg);
+			 sizeof(struct page *) * bulk_npg);
 	if (pages == NULL) {
 		LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[bulk_npg]));
 		CERROR("Can't allocate page array for %d pages\n", bulk_npg);
 		return NULL;
 	}
 
-	memset(pages, 0, sizeof(cfs_page_t *) * bulk_npg);
+	memset(pages, 0, sizeof(struct page *) * bulk_npg);
 	bk->bk_pages = pages;
 #else
 	UNUSED(pages);
 #endif
 
 	for (i = 0; i < bulk_npg; i++) {
-		cfs_page_t *pg;
+		struct page *pg;
 		int	    nob;
 
-		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, CFS_ALLOC_STD);
+		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, GFP_IOFS);
 		if (pg == NULL) {
 			CERROR("Can't allocate page %d of %d\n", i, bulk_npg);
 			srpc_free_bulk(bk);

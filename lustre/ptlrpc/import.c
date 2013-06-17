@@ -1089,7 +1089,7 @@ finish:
 
 		if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
 			cli->cl_max_pages_per_rpc =
-				min(ocd->ocd_brw_size >> CFS_PAGE_SHIFT,
+				min(ocd->ocd_brw_size >> PAGE_CACHE_SHIFT,
 				    cli->cl_max_pages_per_rpc);
 		else if (imp->imp_connect_op == MDS_CONNECT ||
 			 imp->imp_connect_op == MGS_CONNECT)

@@ -134,7 +134,7 @@
  * a header lu_dirpage which describes the start/end hash, and whether this
  * page is empty (contains no dir entry) or hash collide with next page.
  * After client receives reply, several pages will be integrated into dir page
- * in CFS_PAGE_SIZE (if CFS_PAGE_SIZE greater than LU_PAGE_SIZE), and the
+ * in PAGE_CACHE_SIZE (if PAGE_CACHE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted. See
  * lmv_adjust_dirpages().
  *
@@ -156,7 +156,7 @@ static int ll_dir_filler(void *_hash, struct page *page0)
         struct pagevec lru_pvec;
 #endif
         struct lu_dirpage *dp;
-        int max_pages = ll_i2sbi(inode)->ll_md_brw_size >> CFS_PAGE_SHIFT;
+	int max_pages = ll_i2sbi(inode)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
         int nrdpgs = 0; /* number of pages read actually */
         int npages;
         int i;
@@ -196,8 +196,8 @@ static int ll_dir_filler(void *_hash, struct page *page0)
                 if (body->valid & OBD_MD_FLSIZE)
                         cl_isize_write(inode, body->size);
 
-                nrdpgs = (request->rq_bulk->bd_nob_transferred+CFS_PAGE_SIZE-1)
-                         >> CFS_PAGE_SHIFT;
+		nrdpgs = (request->rq_bulk->bd_nob_transferred +
+			  PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
                 SetPageUptodate(page0);
         }
         unlock_page(page0);
@@ -219,9 +219,9 @@ static int ll_dir_filler(void *_hash, struct page *page0)
 
                 SetPageUptodate(page);
 
-                dp = cfs_kmap(page);
-                hash = le64_to_cpu(dp->ldp_hash_start);
-                cfs_kunmap(page);
+		dp = kmap(page);
+		hash = le64_to_cpu(dp->ldp_hash_start);
+		kunmap(page);
 
                 offset = hash_x_index(hash, hash64);
 
@@ -299,7 +299,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, __u64 *hash,
                  */
                 wait_on_page(page);
                 if (PageUptodate(page)) {
-                        dp = cfs_kmap(page);
+			dp = kmap(page);
                         if (BITS_PER_LONG == 32 && hash64) {
                                 *start = le64_to_cpu(dp->ldp_hash_start) >> 32;
                                 *end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
@@ -1080,7 +1080,7 @@ static int copy_and_ioctl(int cmd, struct obd_export *exp, void *data, int len)
         OBD_ALLOC(ptr, len);
         if (ptr == NULL)
                 return -ENOMEM;
-        if (cfs_copy_from_user(ptr, data, len)) {
+	if (copy_from_user(ptr, data, len)) {
                 OBD_FREE(ptr, len);
                 return -EFAULT;
         }
@@ -1385,11 +1385,11 @@ lmv_out_free:
                 LASSERT(sizeof(lumv3.lmm_objects[0]) ==
                         sizeof(lumv3p->lmm_objects[0]));
                 /* first try with v1 which is smaller than v3 */
-                if (cfs_copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
+		if (copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
                         RETURN(-EFAULT);
 
                 if ((lumv1->lmm_magic == LOV_USER_MAGIC_V3) ) {
-                        if (cfs_copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
+			if (copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
                                 RETURN(-EFAULT);
                 }
 
@@ -1516,8 +1516,8 @@ out_rmdir:
                         lmdp = (struct lov_user_mds_data *)arg;
                         lump = &lmdp->lmd_lmm;
                 }
-                if (cfs_copy_to_user(lump, lmm, lmmsize)) {
-                        if (cfs_copy_to_user(lump, lmm, sizeof(*lump)))
+		if (copy_to_user(lump, lmm, lmmsize)) {
+			if (copy_to_user(lump, lmm, sizeof(*lump)))
                                 GOTO(out_req, rc = -EFAULT);
                         rc = -EOVERFLOW;
                 }
@@ -1533,7 +1533,7 @@ out_rmdir:
                         st.st_gid     = body->gid;
                         st.st_rdev    = body->rdev;
                         st.st_size    = body->size;
-                        st.st_blksize = CFS_PAGE_SIZE;
+			st.st_blksize = PAGE_CACHE_SIZE;
                         st.st_blocks  = body->blocks;
                         st.st_atime   = body->atime;
                         st.st_mtime   = body->mtime;
@@ -1541,7 +1541,7 @@ out_rmdir:
                         st.st_ino     = inode->i_ino;
 
                         lmdp = (struct lov_user_mds_data *)arg;
-                        if (cfs_copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
+			if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
                                 GOTO(out_req, rc = -EFAULT);
                 }
 
@@ -1571,7 +1571,7 @@ out_rmdir:
 		if (lmm == NULL)
 			RETURN(-ENOMEM);
 
-		if (cfs_copy_from_user(lmm, lum, lmmsize))
+		if (copy_from_user(lmm, lum, lmmsize))
 			GOTO(free_lmm, rc = -EFAULT);
 
                 switch (lmm->lmm_magic) {
@@ -1608,7 +1608,7 @@ out_rmdir:
                 if (rc)
                         GOTO(free_lsm, rc);
 
-                if (cfs_copy_to_user(&lumd->lmd_st, &st, sizeof(st)))
+		if (copy_to_user(&lumd->lmd_st, &st, sizeof(st)))
                         GOTO(free_lsm, rc = -EFAULT);
 
                 EXIT;
@@ -1661,9 +1661,9 @@ out_rmdir:
                                    NULL);
                 if (rc) {
                         CDEBUG(D_QUOTA, "mdc ioctl %d failed: %d\n", cmd, rc);
-                        if (cfs_copy_to_user((void *)arg, check,
+			if (copy_to_user((void *)arg, check,
                                              sizeof(*check)))
-                                CDEBUG(D_QUOTA, "cfs_copy_to_user failed\n");
+				CDEBUG(D_QUOTA, "copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
 
@@ -1671,9 +1671,9 @@ out_rmdir:
                                    NULL);
                 if (rc) {
                         CDEBUG(D_QUOTA, "osc ioctl %d failed: %d\n", cmd, rc);
-                        if (cfs_copy_to_user((void *)arg, check,
+			if (copy_to_user((void *)arg, check,
                                              sizeof(*check)))
-                                CDEBUG(D_QUOTA, "cfs_copy_to_user failed\n");
+				CDEBUG(D_QUOTA, "copy_to_user failed\n");
                         GOTO(out_poll, rc);
                 }
         out_poll:
@@ -1695,7 +1695,7 @@ out_rmdir:
                 if (!qctl_20)
                         GOTO(out_quotactl_18, rc = -ENOMEM);
 
-                if (cfs_copy_from_user(qctl_18, (void *)arg, sizeof(*qctl_18)))
+		if (copy_from_user(qctl_18, (void *)arg, sizeof(*qctl_18)))
                         GOTO(out_quotactl_20, rc = -ENOMEM);
 
                 QCTL_COPY(qctl_20, qctl_18);
@@ -1720,7 +1720,7 @@ out_rmdir:
                         QCTL_COPY(qctl_18, qctl_20);
                         qctl_18->obd_uuid = qctl_20->obd_uuid;
 
-                        if (cfs_copy_to_user((void *)arg, qctl_18,
+			if (copy_to_user((void *)arg, qctl_18,
                                              sizeof(*qctl_18)))
                                 rc = -EFAULT;
                 }
@@ -1741,12 +1741,12 @@ out_rmdir:
                 if (!qctl)
                         RETURN(-ENOMEM);
 
-                if (cfs_copy_from_user(qctl, (void *)arg, sizeof(*qctl)))
+		if (copy_from_user(qctl, (void *)arg, sizeof(*qctl)))
                         GOTO(out_quotactl, rc = -EFAULT);
 
                 rc = quotactl_ioctl(sbi, qctl);
 
-                if (rc == 0 && cfs_copy_to_user((void *)arg,qctl,sizeof(*qctl)))
+		if (rc == 0 && copy_to_user((void *)arg, qctl, sizeof(*qctl)))
                         rc = -EFAULT;
 
         out_quotactl:
@@ -1777,7 +1777,7 @@ out_rmdir:
                 int count, vallen;
                 struct obd_export *exp;
 
-                if (cfs_copy_from_user(&count, (int *)arg, sizeof(int)))
+		if (copy_from_user(&count, (int *)arg, sizeof(int)))
                         RETURN(-EFAULT);
 
                 /* get ost count when count is zero, get mdt count otherwise */
@@ -1790,13 +1790,13 @@ out_rmdir:
                         RETURN(rc);
                 }
 
-                if (cfs_copy_to_user((int *)arg, &count, sizeof(int)))
+		if (copy_to_user((int *)arg, &count, sizeof(int)))
                         RETURN(-EFAULT);
 
                 RETURN(0);
         }
         case LL_IOC_PATH2FID:
-                if (cfs_copy_to_user((void *)arg, ll_inode2fid(inode),
+		if (copy_to_user((void *)arg, ll_inode2fid(inode),
                                      sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);
@@ -1819,7 +1819,7 @@ out_rmdir:
 			RETURN(-ENOMEM);
 
 		/* We don't know the true size yet; copy the fixed-size part */
-		if (cfs_copy_from_user(hur, (void *)arg, sizeof(*hur))) {
+		if (copy_from_user(hur, (void *)arg, sizeof(*hur))) {
 			OBD_FREE_PTR(hur);
 			RETURN(-EFAULT);
 		}
@@ -1832,7 +1832,7 @@ out_rmdir:
 			RETURN(-ENOMEM);
 
 		/* Copy the whole struct */
-		if (cfs_copy_from_user(hur, (void *)arg, totalsize)) {
+		if (copy_from_user(hur, (void *)arg, totalsize)) {
 			OBD_FREE_LARGE(hur, totalsize);
 			RETURN(-EFAULT);
 		}
@@ -1848,7 +1848,7 @@ out_rmdir:
 		struct hsm_progress_kernel	hpk;
 		struct hsm_progress		hp;
 
-		if (cfs_copy_from_user(&hp, (void *)arg, sizeof(hp)))
+		if (copy_from_user(&hp, (void *)arg, sizeof(hp)))
 			RETURN(-EFAULT);
 
 		hpk.hpk_fid = hp.hp_fid;
@@ -1876,13 +1876,13 @@ out_rmdir:
 		OBD_ALLOC_PTR(copy);
 		if (copy == NULL)
 			RETURN(-ENOMEM);
-		if (cfs_copy_from_user(copy, (char *)arg, sizeof(*copy))) {
+		if (copy_from_user(copy, (char *)arg, sizeof(*copy))) {
 			OBD_FREE_PTR(copy);
 			RETURN(-EFAULT);
 		}
 
 		rc = ll_ioc_copy_start(inode->i_sb, copy);
-		if (cfs_copy_to_user((char *)arg, copy, sizeof(*copy)))
+		if (copy_to_user((char *)arg, copy, sizeof(*copy)))
 			rc = -EFAULT;
 
 		OBD_FREE_PTR(copy);
@@ -1895,13 +1895,13 @@ out_rmdir:
 		OBD_ALLOC_PTR(copy);
 		if (copy == NULL)
 			RETURN(-ENOMEM);
-		if (cfs_copy_from_user(copy, (char *)arg, sizeof(*copy))) {
+		if (copy_from_user(copy, (char *)arg, sizeof(*copy))) {
 			OBD_FREE_PTR(copy);
 			RETURN(-EFAULT);
 		}
 
 		rc = ll_ioc_copy_end(inode->i_sb, copy);
-		if (cfs_copy_to_user((char *)arg, copy, sizeof(*copy)))
+		if (copy_to_user((char *)arg, copy, sizeof(*copy)))
 			rc = -EFAULT;
 
 		OBD_FREE_PTR(copy);

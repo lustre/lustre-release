@@ -156,7 +156,7 @@ char *ldlm_it2str(int it)
 }
 EXPORT_SYMBOL(ldlm_it2str);
 
-extern cfs_mem_cache_t *ldlm_lock_slab;
+extern struct kmem_cache *ldlm_lock_slab;
 
 #ifdef HAVE_SERVER_SUPPORT
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
@@ -475,7 +475,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         if (resource == NULL)
                 LBUG();
 
-        OBD_SLAB_ALLOC_PTR_GFP(lock, ldlm_lock_slab, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lock, ldlm_lock_slab, __GFP_IO);
         if (lock == NULL)
                 RETURN(NULL);
 
@@ -1688,7 +1688,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
          * have to allocate the interval node early otherwise we can't regrant
          * this lock in the future. - jay */
         if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
-                OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, CFS_ALLOC_IO);
+		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, __GFP_IO);
 
         lock_res_and_lock(lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
@@ -2313,9 +2313,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
         /* I can't check the type of lock here because the bitlock of lock
          * is not held here, so do the allocation blindly. -jay */
-        OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, CFS_ALLOC_IO);
-	if (node == NULL)
-		/* Actually, this causes LUSTRE_EDEADLK to be returned */
+	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, __GFP_IO);
+	if (node == NULL)  /* Actually, this causes EDEADLOCK to be returned */
                 RETURN(NULL);
 
         LASSERTF((new_mode == LCK_PW && lock->l_granted_mode == LCK_PR),

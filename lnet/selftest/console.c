@@ -392,9 +392,9 @@ lstcon_sesrpc_readent(int transop, srpc_msg_t *msg,
         case LST_TRANS_SESQRY:
                 rep = &msg->msg_body.dbg_reply;
 
-                if (cfs_copy_to_user(&ent_up->rpe_priv[0],
+		if (copy_to_user(&ent_up->rpe_priv[0],
                                      &rep->dbg_timeout, sizeof(int)) ||
-                    cfs_copy_to_user(&ent_up->rpe_payload[0],
+		    copy_to_user(&ent_up->rpe_payload[0],
                                      &rep->dbg_name, LST_NAME_SIZE))
                         return -EFAULT;
 
@@ -426,7 +426,7 @@ lstcon_group_nodes_add(lstcon_group_t *grp,
         }
 
         for (i = 0 ; i < count; i++) {
-                if (cfs_copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
                         rc = -EFAULT;
                         break;
                 }
@@ -495,7 +495,7 @@ lstcon_group_nodes_remove(lstcon_group_t *grp,
         }
 
         for (i = 0; i < count; i++) {
-                if (cfs_copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
                         rc = -EFAULT;
                         goto error;
                 }
@@ -740,7 +740,7 @@ lstcon_group_list(int index, int len, char *name_up)
         cfs_list_for_each_entry_typed(grp, &console_session.ses_grp_list,
                                       lstcon_group_t, grp_link) {
                 if (index-- == 0) {
-                        return cfs_copy_to_user(name_up, grp->grp_name, len) ?
+			return copy_to_user(name_up, grp->grp_name, len) ?
                                -EFAULT : 0;
                 }
         }
@@ -770,9 +770,9 @@ lstcon_nodes_getent(cfs_list_t *head, int *index_p,
                         break;
 
                 nd = ndl->ndl_node;
-                if (cfs_copy_to_user(&dents_up[count].nde_id,
+		if (copy_to_user(&dents_up[count].nde_id,
                                      &nd->nd_id, sizeof(nd->nd_id)) ||
-                    cfs_copy_to_user(&dents_up[count].nde_state,
+		    copy_to_user(&dents_up[count].nde_state,
                                      &nd->nd_state, sizeof(nd->nd_state)))
                         return -EFAULT;
 
@@ -827,7 +827,7 @@ lstcon_group_info(char *name, lstcon_ndlist_ent_t *gents_p,
                                       lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, gentp);
 
-        rc = cfs_copy_to_user(gents_p, gentp,
+	rc = copy_to_user(gents_p, gentp,
                               sizeof(lstcon_ndlist_ent_t)) ? -EFAULT: 0;
 
         LIBCFS_FREE(gentp, sizeof(lstcon_ndlist_ent_t));
@@ -924,7 +924,7 @@ lstcon_batch_list(int index, int len, char *name_up)
         cfs_list_for_each_entry_typed(bat, &console_session.ses_bat_list,
                                       lstcon_batch_t, bat_link) {
                 if (index-- == 0) {
-                        return cfs_copy_to_user(name_up,bat->bat_name, len) ?
+			return copy_to_user(name_up, bat->bat_name, len) ?
                                -EFAULT: 0;
                 }
         }
@@ -1000,7 +1000,7 @@ lstcon_batch_info(char *name, lstcon_test_batch_ent_t *ent_up, int server,
         cfs_list_for_each_entry_typed(ndl, srvlst, lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, &entp->tbe_srv_nle);
 
-        rc = cfs_copy_to_user(ent_up, entp,
+	rc = copy_to_user(ent_up, entp,
                               sizeof(lstcon_test_batch_ent_t)) ? -EFAULT : 0;
 
         LIBCFS_FREE(entp, sizeof(lstcon_test_batch_ent_t));
@@ -1369,7 +1369,7 @@ lstcon_tsbrpc_readent(int transop, srpc_msg_t *msg,
                  transop == LST_TRANS_TSBSRVQRY);
 
         /* positive errno, framework error code */
-        if (cfs_copy_to_user(&ent_up->rpe_priv[0],
+	if (copy_to_user(&ent_up->rpe_priv[0],
                              &rep->bar_active, sizeof(rep->bar_active)))
                 return -EFAULT;
 
@@ -1454,9 +1454,9 @@ lstcon_statrpc_readent(int transop, srpc_msg_t *msg,
         srpc_stat = (srpc_counters_t *)((char *)sfwk_stat + sizeof(*sfwk_stat));
         lnet_stat = (lnet_counters_t *)((char *)srpc_stat + sizeof(*srpc_stat));
 
-        if (cfs_copy_to_user(sfwk_stat, &rep->str_fw, sizeof(*sfwk_stat)) ||
-            cfs_copy_to_user(srpc_stat, &rep->str_rpc, sizeof(*srpc_stat)) ||
-            cfs_copy_to_user(lnet_stat, &rep->str_lnet, sizeof(*lnet_stat)))
+	if (copy_to_user(sfwk_stat, &rep->str_fw, sizeof(*sfwk_stat)) ||
+	    copy_to_user(srpc_stat, &rep->str_rpc, sizeof(*srpc_stat)) ||
+	    copy_to_user(lnet_stat, &rep->str_lnet, sizeof(*lnet_stat)))
                 return -EFAULT;
 
         return 0;
@@ -1524,7 +1524,7 @@ lstcon_nodes_stat(int count, lnet_process_id_t *ids_up,
         }
 
         for (i = 0 ; i < count; i++) {
-                if (cfs_copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
                         rc = -EFAULT;
                         break;
                 }
@@ -1636,7 +1636,7 @@ lstcon_nodes_debug(int timeout,
         }
 
         for (i = 0; i < count; i++) {
-                if (cfs_copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
                         rc = -EFAULT;
                         break;
                 }
@@ -1739,7 +1739,7 @@ lstcon_session_new(char *name, int key, unsigned feats,
                 return rc;
         }
 
-        if (cfs_copy_to_user(sid_up, &console_session.ses_id,
+	if (copy_to_user(sid_up, &console_session.ses_id,
                              sizeof(lst_sid_t)) == 0)
                 return rc;
 
@@ -1769,14 +1769,14 @@ lstcon_session_info(lst_sid_t *sid_up, int *key_up, unsigned *featp,
                                       lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, entp);
 
-        if (cfs_copy_to_user(sid_up, &console_session.ses_id,
+	if (copy_to_user(sid_up, &console_session.ses_id,
                              sizeof(lst_sid_t)) ||
-	    cfs_copy_to_user(key_up, &console_session.ses_key,
+	    copy_to_user(key_up, &console_session.ses_key,
 			     sizeof(*key_up)) ||
-	    cfs_copy_to_user(featp, &console_session.ses_features,
+	    copy_to_user(featp, &console_session.ses_features,
 			     sizeof(*featp)) ||
-            cfs_copy_to_user(ndinfo_up, entp, sizeof(*entp)) ||
-            cfs_copy_to_user(name_up, console_session.ses_name, len))
+	    copy_to_user(ndinfo_up, entp, sizeof(*entp)) ||
+	    copy_to_user(name_up, console_session.ses_name, len))
                 rc = -EFAULT;
 
         LIBCFS_FREE(entp, sizeof(*entp));

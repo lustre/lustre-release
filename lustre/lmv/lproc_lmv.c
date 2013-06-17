@@ -107,7 +107,7 @@ static int lmv_wr_placement(struct file *file, const char *buffer,
         placement_policy_t       policy;
         struct lmv_obd          *lmv;
 
-        if (cfs_copy_from_user(dummy, buffer, MAX_POLICY_STRING_SIZE))
+	if (copy_from_user(dummy, buffer, MAX_POLICY_STRING_SIZE))
                 return -EFAULT;
 
         LASSERT(dev != NULL);

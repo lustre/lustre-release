@@ -120,10 +120,10 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         return rc;
 }
 
-static cfs_page_t *llu_dir_read_page(struct inode *ino, __u64 hash,
+static struct page *llu_dir_read_page(struct inode *ino, __u64 hash,
                                      int exact, struct ll_dir_chain *chain)
 {
-        cfs_page_t *page;
+	struct page *page;
         int rc;
         ENTRY;
 
@@ -193,7 +193,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
         struct intnl_stat     *st = llu_i2stat(dir);
         loff_t                 pos = *basep;
         struct ll_dir_chain    chain;
-        cfs_page_t            *page;
+	struct page            *page;
         int filled = 0;
         int rc;
         int done;

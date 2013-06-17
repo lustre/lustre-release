@@ -155,18 +155,12 @@ struct idr_context * cfs_win_task_slot_idp = NULL;
  *  task slot routiens
  */
 
-PTASK_SLOT
-alloc_task_slot()
+PTASK_SLOT alloc_task_slot()
 {
-    PTASK_SLOT task = NULL;
-
-    if (cfs_win_task_manger.slab) {
-        task = cfs_mem_cache_alloc(cfs_win_task_manger.slab, 0);
-    } else {
-        task = cfs_alloc(sizeof(TASK_SLOT), 0);
-    }
-
-    return task;
+	if (cfs_win_task_manger.slab)
+		return kmem_cache_alloc(cfs_win_task_manger.slab, 0);
+	else
+		return kmalloc(sizeof(TASK_SLOT), 0);
 }
 
 void
@@ -178,18 +172,15 @@ init_task_slot(PTASK_SLOT task)
     cfs_init_event(&task->Event, TRUE, FALSE);
 }
 
-void
-cleanup_task_slot(PTASK_SLOT task)
+void cleanup_task_slot(PTASK_SLOT task)
 {
-    if (task->task.pid) {
-        cfs_idr_remove(cfs_win_task_slot_idp, task->task.pid);
-    }
+	if (task->task.pid)
+		cfs_idr_remove(cfs_win_task_slot_idp, task->task.pid);
 
-    if (cfs_win_task_manger.slab) {
-        cfs_mem_cache_free(cfs_win_task_manger.slab, task);
-    } else {
-        cfs_free(task);
-    }
+	if (cfs_win_task_manger.slab)
+		kmem_cache_free(cfs_win_task_manger.slab, task);
+	else
+		kfree(task);
 }
 
 /*
@@ -243,9 +234,9 @@ init_task_manager()
     /* initialize the spinlock protection */
 	spin_lock_init(&cfs_win_task_manger.Lock);
 
-    /* create slab memory cache */
-    cfs_win_task_manger.slab = cfs_mem_cache_create(
-        "TSLT", sizeof(TASK_SLOT), 0, 0);
+	/* create slab memory cache */
+	cfs_win_task_manger.slab = kmem_cache_create("TSLT", sizeof(TASK_SLOT),
+						     0, 0, NULL);
 
     /* intialize the list header */
     InitializeListHead(&(cfs_win_task_manger.TaskList));
@@ -300,9 +291,9 @@ cleanup_task_manager()
 
 	spin_unlock(&cfs_win_task_manger.Lock);
 
-    /* destroy the taskslot cache slab */
-    cfs_mem_cache_destroy(cfs_win_task_manger.slab);
-    memset(&cfs_win_task_manger, 0, sizeof(TASK_MAN));
+	/* destroy the taskslot cache slab */
+	kmem_cache_destroy(cfs_win_task_manger.slab);
+	memset(&cfs_win_task_manger, 0, sizeof(TASK_MAN));
 }
 
 

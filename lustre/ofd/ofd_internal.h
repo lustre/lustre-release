@@ -440,7 +440,7 @@ static inline int ofd_grant_compat(struct obd_export *exp,
 				   struct ofd_device *ofd)
 {
 	/* Clients which don't support OBD_CONNECT_GRANT_PARAM cannot handle
-	 * a block size > page size and consume CFS_PAGE_SIZE of grant when
+	 * a block size > page size and consume PAGE_CACHE_SIZE of grant when
 	 * dirtying a page regardless of the block size */
 	return !!(ofd_obd(ofd)->obd_self_export != exp &&
 		  ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT &&
@@ -453,7 +453,7 @@ static inline int ofd_grant_prohibit(struct obd_export *exp,
 	/* When ofd_grant_compat_disable is set, we don't grant any space to
 	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
 	 * Otherwise, space granted to such a client is inflated since it
-	 * consumes CFS_PAGE_SIZE of grant space per block */
+	 * consumes PAGE_CACHE_SIZE of grant space per block */
 	return !!(ofd_grant_compat(exp, ofd) && ofd->ofd_grant_compat_disable);
 }
 

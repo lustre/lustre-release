@@ -275,19 +275,19 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 {
 	struct mm_struct *mm;
 	char *buffer, *tmp_buf = NULL;
-	int buf_len = CFS_PAGE_SIZE;
+	int buf_len = PAGE_CACHE_SIZE;
 	int key_len = strlen(key);
 	unsigned long addr;
 	int rc;
 	ENTRY;
 
-	buffer = cfs_alloc(buf_len, CFS_ALLOC_USER);
+	buffer = kmalloc(buf_len, GFP_USER);
 	if (!buffer)
 		RETURN(-ENOMEM);
 
 	mm = get_task_mm(current);
 	if (!mm) {
-		cfs_free(buffer);
+		kfree(buffer);
 		RETURN(-EINVAL);
 	}
 
@@ -363,9 +363,9 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 
 out:
 	mmput(mm);
-	cfs_free((void *)buffer);
+	kfree((void *)buffer);
 	if (tmp_buf)
-		cfs_free((void *)tmp_buf);
+		kfree((void *)tmp_buf);
 	return rc;
 }
 EXPORT_SYMBOL(cfs_get_environ);

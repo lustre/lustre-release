@@ -185,39 +185,6 @@ struct cfs_psdev_ops {
 };
 
 /*
- * Universal memory allocator API
- */
-enum cfs_alloc_flags {
-        /* allocation is not allowed to block */
-        CFS_ALLOC_ATOMIC = 0x1,
-        /* allocation is allowed to block */
-        CFS_ALLOC_WAIT   = 0x2,
-        /* allocation should return zeroed memory */
-        CFS_ALLOC_ZERO   = 0x4,
-        /* allocation is allowed to call file-system code to free/clean
-         * memory */
-        CFS_ALLOC_FS     = 0x8,
-        /* allocation is allowed to do io to free/clean memory */
-        CFS_ALLOC_IO     = 0x10,
-        /* don't report allocation failure to the console */
-        CFS_ALLOC_NOWARN = 0x20,
-        /* standard allocator flag combination */
-        CFS_ALLOC_STD    = CFS_ALLOC_FS | CFS_ALLOC_IO,
-        CFS_ALLOC_USER   = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO,
-	CFS_ALLOC_NOFS   = CFS_ALLOC_WAIT | CFS_ALLOC_IO,
-	CFS_ALLOC_KERNEL = CFS_ALLOC_WAIT | CFS_ALLOC_IO | CFS_ALLOC_FS,
-};
-
-/* flags for cfs_page_alloc() in addition to enum cfs_alloc_flags */
-enum cfs_alloc_page_flags {
-	/* allow to return page beyond KVM. It has to be mapped into KVM by
-	 * cfs_kmap() and unmapped with cfs_kunmap(). */
-	CFS_ALLOC_HIGHMEM  = 0x40,
-	CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO |
-			     CFS_ALLOC_HIGHMEM,
-};
-
-/*
  * Drop into debugger, if possible. Implementation is provided by platform.
  */
 

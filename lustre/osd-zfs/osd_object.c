@@ -79,7 +79,7 @@ static struct lu_object_operations osd_lu_obj_ops;
 extern struct dt_body_operations osd_body_ops;
 static struct dt_object_operations osd_obj_otable_it_ops;
 
-extern cfs_mem_cache_t *osd_object_kmem;
+extern struct kmem_cache *osd_object_kmem;
 
 static void
 osd_object_sa_fini(struct osd_object *obj)
@@ -290,7 +290,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 {
 	struct osd_object *mo;
 
-	OBD_SLAB_ALLOC_PTR_GFP(mo, osd_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(mo, osd_object_kmem, __GFP_IO);
 	if (mo != NULL) {
 		struct lu_object *l;
 

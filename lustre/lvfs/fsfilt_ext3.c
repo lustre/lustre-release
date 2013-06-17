@@ -76,7 +76,7 @@
 #define fsfilt_log_start_commit(journal, tid) jbd2_log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) jbd2_log_wait_commit(journal, tid)
 
-static cfs_mem_cache_t *fcb_cache;
+static struct kmem_cache *fcb_cache;
 
 struct fsfilt_cb_data {
 	struct ext4_journal_cb_entry cb_jcb; /* private data - MUST BE FIRST */
@@ -470,7 +470,7 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 				    int pages, unsigned long *blocks,
 				    int create)
 {
-        int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
         int rc = 0, i = 0;
         struct page *fp = NULL;
         int clen = 0;
@@ -519,7 +519,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
 				   int pages, unsigned long *blocks,
 				   int create)
 {
-	int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 	unsigned long *b;
 	int rc = 0, i;
 
@@ -739,32 +739,28 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
 
 static int __init fsfilt_ext3_init(void)
 {
-        int rc;
+	int rc;
 
-        fcb_cache = cfs_mem_cache_create("fsfilt_ext3_fcb",
-                                         sizeof(struct fsfilt_cb_data), 0, 0);
-        if (!fcb_cache) {
-                CERROR("error allocating fsfilt journal callback cache\n");
-                GOTO(out, rc = -ENOMEM);
-        }
+	fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
+				      sizeof(struct fsfilt_cb_data),
+				      0, 0, NULL);
+	if (!fcb_cache) {
+		CERROR("error allocating fsfilt journal callback cache\n");
+		GOTO(out, rc = -ENOMEM);
+	}
 
-        rc = fsfilt_register_ops(&fsfilt_ext3_ops);
+	rc = fsfilt_register_ops(&fsfilt_ext3_ops);
 
-        if (rc) {
-                int err = cfs_mem_cache_destroy(fcb_cache);
-                LASSERTF(err == 0, "error destroying new cache: rc %d\n", err);
-        }
+	if (rc)
+		kmem_cache_destroy(fcb_cache);
 out:
-        return rc;
+	return rc;
 }
 
 static void __exit fsfilt_ext3_exit(void)
 {
-        int rc;
-
-        fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        rc = cfs_mem_cache_destroy(fcb_cache);
-        LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
+	fsfilt_unregister_ops(&fsfilt_ext3_ops);
+	kmem_cache_destroy(fcb_cache);
 }
 
 module_init(fsfilt_ext3_init);

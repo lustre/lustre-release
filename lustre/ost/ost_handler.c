@@ -1064,7 +1064,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if ((remote_nb[0].flags & OBD_BRW_MEMALLOC) &&
             (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
-                cfs_memory_pressure_set();
+		memory_pressure_set();
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
                 capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
@@ -1247,7 +1247,7 @@ out:
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp), rc);
         }
-        cfs_memory_pressure_clr();
+	memory_pressure_clr();
         RETURN(rc);
 }
 
@@ -2902,7 +2902,7 @@ static int __init ost_init(void)
         int rc;
         ENTRY;
 
-	ost_page_to_corrupt = cfs_alloc_page(CFS_ALLOC_STD);
+	ost_page_to_corrupt = alloc_page(GFP_IOFS);
 
         lprocfs_ost_init_vars(&lvars);
         rc = class_register_type(&ost_obd_ops, NULL, lvars.module_vars,

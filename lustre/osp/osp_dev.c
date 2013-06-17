@@ -55,7 +55,7 @@
 #include "osp_internal.h"
 
 /* Slab for OSP object allocation */
-cfs_mem_cache_t *osp_object_kmem;
+struct kmem_cache *osp_object_kmem;
 
 static struct lu_kmem_descr osp_caches[] = {
 	{
@@ -76,7 +76,7 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 	struct osp_object	*o;
 	struct lu_object	*l;
 
-	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, __GFP_IO);
 	if (o != NULL) {
 		l = &o->opo_obj.do_lu;
 

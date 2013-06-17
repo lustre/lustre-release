@@ -242,16 +242,12 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	return 0;
 }
 
-static struct page *kmem_to_page(void *addr)
+static inline struct page *kmem_to_page(void *addr)
 {
-	struct page *page;
-
-	if (kmem_virt(addr))
-		page = vmalloc_to_page(addr);
+	if (is_vmalloc_addr(addr))
+		return vmalloc_to_page(addr);
 	else
-		page = virt_to_page(addr);
-
-	return page;
+		return virt_to_page(addr);
 }
 
 static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
@@ -292,8 +288,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			dbf = (void *) ((unsigned long)dbp[i] | 1);
 
 			while (tocpy > 0) {
-				thispage = CFS_PAGE_SIZE;
-				thispage -= bufoff & (CFS_PAGE_SIZE - 1);
+				thispage = PAGE_CACHE_SIZE;
+				thispage -= bufoff & (PAGE_CACHE_SIZE - 1);
 				thispage = min(tocpy, thispage);
 
 				lnb->rc = 0;
@@ -366,7 +362,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			/* go over pages arcbuf contains, put them as
 			 * local niobufs for ptlrpc's bulks */
 			while (sz_in_block > 0) {
-				plen = min_t(int, sz_in_block, CFS_PAGE_SIZE);
+				plen = min_t(int, sz_in_block, PAGE_CACHE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = 0;
@@ -400,7 +396,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 
 			/* can't use zerocopy, allocate temp. buffers */
 			while (sz_in_block > 0) {
-				plen = min_t(int, sz_in_block, CFS_PAGE_SIZE);
+				plen = min_t(int, sz_in_block, PAGE_CACHE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = 0;

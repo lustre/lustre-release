@@ -224,7 +224,7 @@ struct ldlm_state {
 };
 
 /* interval tree, for LDLM_EXTENT. */
-extern cfs_mem_cache_t *ldlm_interval_slab; /* slab cache for ldlm_interval */
+extern struct kmem_cache *ldlm_interval_slab; /* slab cache for ldlm_interval */
 extern void ldlm_interval_attach(struct ldlm_interval *n, struct ldlm_lock *l);
 extern struct ldlm_interval *ldlm_interval_detach(struct ldlm_lock *l);
 extern struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock);

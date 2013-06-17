@@ -277,21 +277,21 @@ static inline int cfs_module_refcount(cfs_module_t *m)
  *
  ***************************************************************************/
 
-struct cfs_shrinker {
+struct shrinker {
         ;
 };
 
-#define CFS_DEFAULT_SEEKS (0)
+#define DEFAULT_SEEKS (0)
 
-typedef int (*cfs_shrinker_t)(int, unsigned int);
+typedef int (*shrinker_t)(int, unsigned int);
 
 static inline
-struct cfs_shrinker *cfs_set_shrinker(int seeks, cfs_shrinker_t shrink)
+struct shrinker *set_shrinker(int seeks, shrinker_t shrink)
 {
-        return (struct cfs_shrinker *)0xdeadbea1; // Cannot return NULL here
+	return (struct shrinker *)0xdeadbea1; /* Cannot return NULL here */
 }
 
-static inline void cfs_remove_shrinker(struct cfs_shrinker *shrinker)
+static inline void remove_shrinker(struct shrinker *shrinker)
 {
 }
 

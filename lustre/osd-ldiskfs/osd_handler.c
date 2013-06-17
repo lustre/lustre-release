@@ -770,7 +770,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         LASSERT(cfs_atomic_read(&iobuf->dr_numreqs) == 0);
 
         th = ERR_PTR(-ENOMEM);
-        OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
+	OBD_ALLOC_GFP(oh, sizeof *oh, __GFP_IO);
         if (oh != NULL) {
 		oh->ot_quota_trans = &oti->oti_quota_trans;
 		memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
@@ -5368,7 +5368,7 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-ENOTSUPP);
 	}
 
-	OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
+	OBD_PAGE_ALLOC(__page, GFP_IOFS);
 	if (__page == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -5378,7 +5378,7 @@ static int osd_mount(const struct lu_env *env,
 	if (str)
 		lmd_flags = simple_strtoul(str + 1, NULL, 0);
 	opts = lustre_cfg_string(cfg, 3);
-	page = (unsigned long)cfs_page_address(__page);
+	page = (unsigned long)page_address(__page);
 	options = (char *)page;
 	*options = '\0';
 	if (opts == NULL)
@@ -5389,7 +5389,7 @@ static int osd_mount(const struct lu_env *env,
 	/* Glom up mount options */
 	if (*options != '\0')
 		strcat(options, ",");
-	strlcat(options, "no_mbcache", CFS_PAGE_SIZE);
+	strlcat(options, "no_mbcache", PAGE_CACHE_SIZE);
 
 	type = get_fs_type("ldiskfs");
 	if (!type) {

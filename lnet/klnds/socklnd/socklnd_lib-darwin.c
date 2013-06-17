@@ -264,7 +264,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         int           i;
         
         for (nob = i = 0; i < niov; i++) {
-                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) +
+		scratchiov[i].iov_base = kmap(kiov[i].kiov_page) +
                                          kiov[i].kiov_offset;
                 nob += scratchiov[i].iov_len = kiov[i].kiov_len;
         }
@@ -276,7 +276,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
          */
         rc = -sock_send(sock, &msg, MSG_DONTWAIT, &sndlen);
         for (i = 0; i < niov; i++)
-                cfs_kunmap(kiov[i].kiov_page);
+		kunmap(kiov[i].kiov_page);
         if (rc == 0)
                 rc = sndlen;
         return rc;
@@ -351,14 +351,14 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         /* NB we can't trust socket ops to either consume our iovs
          * or leave them alone. */
         for (nob = i = 0; i < niov; i++) {
-                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) + \
+		scratchiov[i].iov_base = kmap(kiov[i].kiov_page) + \
                                          kiov[i].kiov_offset;
                 nob += scratchiov[i].iov_len = kiov[i].kiov_len;
         }
         LASSERT (nob <= conn->ksnc_rx_nob_wanted);
         rc = -sock_receive(C2B_SOCK(conn->ksnc_sock), &msg, MSG_DONTWAIT, &rcvlen); 
         for (i = 0; i < niov; i++)
-                cfs_kunmap(kiov[i].kiov_page); 
+		kunmap(kiov[i].kiov_page);
         if (rc == 0)
                 rc = rcvlen;
         return (rc);
@@ -609,7 +609,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         CFS_DECL_NET_DATA; 
         
         for (nob = i = 0; i < niov; i++) { 
-                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) + 
+		scratchiov[i].iov_base = kmap(kiov[i].kiov_page) +
                                          kiov[i].kiov_offset; 
                 nob += scratchiov[i].iov_len = kiov[i].kiov_len; 
         }
@@ -620,7 +620,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         CFS_NET_EX;
 
         for (i = 0; i < niov; i++) 
-                cfs_kunmap(kiov[i].kiov_page);
+		kunmap(kiov[i].kiov_page);
 
         if (rc != 0) {
                 if (suio.uio_resid != nob &&\
@@ -800,7 +800,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         CFS_DECL_NET_DATA;
 
         for (nob = i = 0; i < niov; i++) { 
-                scratchiov[i].iov_base = cfs_kmap(kiov[i].kiov_page) + kiov[i].kiov_offset; 
+		scratchiov[i].iov_base = kmap(kiov[i].kiov_page) + kiov[i].kiov_offset;
                 nob += scratchiov[i].iov_len = kiov[i].kiov_len; 
         } 
         LASSERT (nob <= conn->ksnc_rx_nob_wanted);
@@ -812,7 +812,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         CFS_NET_EX;
 
         for (i = 0; i < niov; i++) 
-                cfs_kunmap(kiov[i].kiov_page);
+		kunmap(kiov[i].kiov_page);
 
         if (rc){
                 if (ruio.uio_resid != nob && \

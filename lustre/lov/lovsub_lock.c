@@ -472,7 +472,7 @@ int lovsub_lock_init(const struct lu_env *env, struct cl_object *obj,
         int result;
 
         ENTRY;
-        OBD_SLAB_ALLOC_PTR_GFP(lsk, lovsub_lock_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lsk, lovsub_lock_kmem, __GFP_IO);
         if (lsk != NULL) {
                 CFS_INIT_LIST_HEAD(&lsk->lss_parents);
                 cl_lock_slice_add(lock, &lsk->lss_cl, obj, &lovsub_lock_ops);

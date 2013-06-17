@@ -65,7 +65,7 @@
 
 #ifdef __KERNEL__
 
-#define PTRS_PER_PAGE   (CFS_PAGE_SIZE / sizeof(void *))
+#define PTRS_PER_PAGE   (PAGE_CACHE_SIZE / sizeof(void *))
 #define PAGES_PER_POOL  (PTRS_PER_PAGE)
 
 #define IDLE_IDX_MAX            (100)
@@ -120,17 +120,17 @@ static struct ptlrpc_enc_page_pool {
         unsigned long    epp_st_lowfree;        /* lowest free pages reached */
         unsigned int     epp_st_max_wqlen;      /* highest waitqueue length */
         cfs_time_t       epp_st_max_wait;       /* in jeffies */
-        /*
-         * pointers to pools
-         */
-        cfs_page_t    ***epp_pools;
+	/*
+	 * pointers to pools
+	 */
+	struct page    ***epp_pools;
 } page_pools;
 
 /*
  * memory shrinker
  */
-const int pools_shrinker_seeks = CFS_DEFAULT_SEEKS;
-static struct cfs_shrinker *pools_shrinker = NULL;
+const int pools_shrinker_seeks = DEFAULT_SEEKS;
+static struct shrinker *pools_shrinker;
 
 
 /*
@@ -163,7 +163,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       "max waitqueue depth:     %u\n"
                       "max wait time:           "CFS_TIME_T"/%u\n"
                       ,
-                      cfs_num_physpages,
+		      num_physpages,
                       PAGES_PER_POOL,
                       page_pools.epp_max_pages,
                       page_pools.epp_max_pools,
@@ -214,7 +214,7 @@ static void enc_pools_release_free_pages(long npages)
                 LASSERT(page_pools.epp_pools[p_idx]);
                 LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
 
-                cfs_free_page(page_pools.epp_pools[p_idx][g_idx]);
+		__free_page(page_pools.epp_pools[p_idx][g_idx]);
                 page_pools.epp_pools[p_idx][g_idx] = NULL;
 
                 if (++g_idx == PAGES_PER_POOL) {
@@ -226,7 +226,7 @@ static void enc_pools_release_free_pages(long npages)
         /* free unused pools */
         while (p_idx_max1 < p_idx_max2) {
                 LASSERT(page_pools.epp_pools[p_idx_max2]);
-                OBD_FREE(page_pools.epp_pools[p_idx_max2], CFS_PAGE_SIZE);
+		OBD_FREE(page_pools.epp_pools[p_idx_max2], PAGE_CACHE_SIZE);
                 page_pools.epp_pools[p_idx_max2] = NULL;
                 p_idx_max2--;
         }
@@ -282,25 +282,25 @@ int npages_to_npools(unsigned long npages)
 /*
  * return how many pages cleaned up.
  */
-static unsigned long enc_pools_cleanup(cfs_page_t ***pools, int npools)
+static unsigned long enc_pools_cleanup(struct page ***pools, int npools)
 {
-        unsigned long cleaned = 0;
-        int           i, j;
+	unsigned long cleaned = 0;
+	int           i, j;
 
-        for (i = 0; i < npools; i++) {
-                if (pools[i]) {
-                        for (j = 0; j < PAGES_PER_POOL; j++) {
-                                if (pools[i][j]) {
-                                        cfs_free_page(pools[i][j]);
-                                        cleaned++;
-                                }
-                        }
-                        OBD_FREE(pools[i], CFS_PAGE_SIZE);
-                        pools[i] = NULL;
-                }
-        }
+	for (i = 0; i < npools; i++) {
+		if (pools[i]) {
+			for (j = 0; j < PAGES_PER_POOL; j++) {
+				if (pools[i][j]) {
+					__free_page(pools[i][j]);
+					cleaned++;
+				}
+			}
+			OBD_FREE(pools[i], PAGE_CACHE_SIZE);
+			pools[i] = NULL;
+		}
+	}
 
-        return cleaned;
+	return cleaned;
 }
 
 /*
@@ -310,7 +310,7 @@ static unsigned long enc_pools_cleanup(cfs_page_t ***pools, int npools)
  * we have options to avoid most memory copy with some tricks. but we choose
  * the simplest way to avoid complexity. It's not frequently called.
  */
-static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
+static void enc_pools_insert(struct page ***pools, int npools, int npages)
 {
         int     freeslot;
         int     op_idx, np_idx, og_idx, ng_idx;
@@ -394,7 +394,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
 static int enc_pools_add_pages(int npages)
 {
 	static DEFINE_MUTEX(add_pages_mutex);
-	cfs_page_t   ***pools;
+	struct page   ***pools;
 	int             npools, alloced = 0;
 	int             i, j, rc = -ENOMEM;
 
@@ -414,21 +414,21 @@ static int enc_pools_add_pages(int npages)
         if (pools == NULL)
                 goto out;
 
-        for (i = 0; i < npools; i++) {
-                OBD_ALLOC(pools[i], CFS_PAGE_SIZE);
-                if (pools[i] == NULL)
-                        goto out_pools;
+	for (i = 0; i < npools; i++) {
+		OBD_ALLOC(pools[i], PAGE_CACHE_SIZE);
+		if (pools[i] == NULL)
+			goto out_pools;
 
-                for (j = 0; j < PAGES_PER_POOL && alloced < npages; j++) {
-			pools[i][j] = cfs_alloc_page(CFS_ALLOC_IO |
-						     CFS_ALLOC_HIGHMEM);
-                        if (pools[i][j] == NULL)
-                                goto out_pools;
+		for (j = 0; j < PAGES_PER_POOL && alloced < npages; j++) {
+			pools[i][j] = alloc_page(__GFP_IO |
+						     __GFP_HIGHMEM);
+			if (pools[i][j] == NULL)
+				goto out_pools;
 
-                        alloced++;
-                }
-        }
-        LASSERT(alloced == npages);
+			alloced++;
+		}
+	}
+	LASSERT(alloced == npages);
 
         enc_pools_insert(pools, npools, npages);
         CDEBUG(D_SEC, "added %d pages into pools\n", npages);
@@ -712,7 +712,7 @@ int sptlrpc_enc_pool_init(void)
          * maximum capacity is 1/8 of total physical memory.
          * is the 1/8 a good number?
          */
-        page_pools.epp_max_pages = cfs_num_physpages / 8;
+	page_pools.epp_max_pages = num_physpages / 8;
         page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);
 
         cfs_waitq_init(&page_pools.epp_waitq);
@@ -743,7 +743,7 @@ int sptlrpc_enc_pool_init(void)
         if (page_pools.epp_pools == NULL)
                 return -ENOMEM;
 
-        pools_shrinker = cfs_set_shrinker(pools_shrinker_seeks,
+	pools_shrinker = set_shrinker(pools_shrinker_seeks,
                                           enc_pools_shrink);
         if (pools_shrinker == NULL) {
                 enc_pools_free();
@@ -761,7 +761,7 @@ void sptlrpc_enc_pool_fini(void)
         LASSERT(page_pools.epp_pools);
         LASSERT(page_pools.epp_total_pages == page_pools.epp_free_pages);
 
-        cfs_remove_shrinker(pools_shrinker);
+	remove_shrinker(pools_shrinker);
 
         npools = npages_to_npools(page_pools.epp_total_pages);
         cleaned = enc_pools_cleanup(page_pools.epp_pools, npools);

@@ -59,7 +59,7 @@ static const char mdd_root_dir_name[] = "ROOT";
 static const char mdd_obf_dir_name[] = "fid";
 
 /* Slab for MDD object allocation */
-cfs_mem_cache_t *mdd_object_kmem;
+struct kmem_cache *mdd_object_kmem;
 
 static struct lu_kmem_descr mdd_caches[] = {
 	{

@@ -1958,9 +1958,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         RETURN(-EINVAL);
 
                 /* copy UUID */
-                if (cfs_copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
-                                     min((int) data->ioc_plen2,
-                                         (int) sizeof(struct obd_uuid))))
+		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
+				 min((int)data->ioc_plen2,
+				     (int)sizeof(struct obd_uuid))))
                         RETURN(-EFAULT);
 
 		flags = uarg ? *(__u32*)uarg : 0;
@@ -1970,7 +1970,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                 flags);
                 if (rc)
                         RETURN(rc);
-                if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,
+		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
                                      min((int) data->ioc_plen1,
                                          (int) sizeof(stat_buf))))
                         RETURN(-EFAULT);
@@ -2016,7 +2016,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         *genp = lov->lov_tgts[i]->ltd_gen;
                 }
 
-                if (cfs_copy_to_user((void *)uarg, buf, len))
+		if (copy_to_user((void *)uarg, buf, len))
                         rc = -EFAULT;
                 obd_ioctl_freedata(buf, len);
                 break;
@@ -2879,14 +2879,14 @@ struct obd_ops lov_obd_ops = {
         .o_quotacheck          = lov_quotacheck,
 };
 
-cfs_mem_cache_t *lov_oinfo_slab;
+struct kmem_cache *lov_oinfo_slab;
 
 extern struct lu_kmem_descr lov_caches[];
 
 int __init lov_init(void)
 {
         struct lprocfs_static_vars lvars = { 0 };
-        int rc, rc2;
+	int rc;
         ENTRY;
 
         /* print an address of _any_ initialized kernel symbol from this
@@ -2898,9 +2898,9 @@ int __init lov_init(void)
         if (rc)
                 return rc;
 
-        lov_oinfo_slab = cfs_mem_cache_create("lov_oinfo",
-                                              sizeof(struct lov_oinfo),
-                                              0, CFS_SLAB_HWCACHE_ALIGN);
+	lov_oinfo_slab = kmem_cache_create("lov_oinfo",
+					   sizeof(struct lov_oinfo), 0,
+					   SLAB_HWCACHE_ALIGN, NULL);
         if (lov_oinfo_slab == NULL) {
                 lu_kmem_fini(lov_caches);
                 return -ENOMEM;
@@ -2911,8 +2911,7 @@ int __init lov_init(void)
                                  LUSTRE_LOV_NAME, &lov_device_type);
 
         if (rc) {
-                rc2 = cfs_mem_cache_destroy(lov_oinfo_slab);
-                LASSERT(rc2 == 0);
+		kmem_cache_destroy(lov_oinfo_slab);
                 lu_kmem_fini(lov_caches);
         }
 
@@ -2922,12 +2921,8 @@ int __init lov_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ lov_exit(void)
 {
-        int rc;
-
-        class_unregister_type(LUSTRE_LOV_NAME);
-        rc = cfs_mem_cache_destroy(lov_oinfo_slab);
-        LASSERT(rc == 0);
-
+	class_unregister_type(LUSTRE_LOV_NAME);
+	kmem_cache_destroy(lov_oinfo_slab);
 	lu_kmem_fini(lov_caches);
 }
 

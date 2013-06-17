@@ -1144,7 +1144,7 @@ struct lu_context_key {
         {                                                         \
                 type *value;                                      \
                                                                   \
-                CLASSERT(CFS_PAGE_SIZE >= sizeof (*value));       \
+		CLASSERT(PAGE_CACHE_SIZE >= sizeof (*value));       \
                                                                   \
                 OBD_ALLOC_PTR(value);                             \
                 if (value == NULL)                                \
@@ -1331,7 +1331,7 @@ int lu_global_init(void);
 void lu_global_fini(void);
 
 struct lu_kmem_descr {
-        cfs_mem_cache_t **ckd_cache;
+	struct kmem_cache **ckd_cache;
         const char       *ckd_name;
         const size_t      ckd_size;
 };

@@ -51,13 +51,6 @@ void echo_persistent_pages_fini(void);
 # endif
 #else /* ! __KERNEL__ */
 /* Kludge here, define some functions and macros needed by liblustre -jay */
-static inline void page_cache_get(struct page *page)
-{
-}
-
-static inline void page_cache_release(struct page *page)
-{
-}
 
 #define READ    0
 #define WRITE   1

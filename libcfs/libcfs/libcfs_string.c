@@ -140,7 +140,7 @@ char *cfs_strdup(const char *str, u_int32_t flags)
 
         lenz = strlen(str) + 1;
 
-        dup_str = cfs_alloc(lenz, flags);
+	dup_str = kmalloc(lenz, flags);
         if (dup_str == NULL)
                 return NULL;
 

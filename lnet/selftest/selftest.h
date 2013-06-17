@@ -170,7 +170,7 @@ typedef struct {
 #ifdef __KERNEL__
         lnet_kiov_t      bk_iovs[0];
 #else
-        cfs_page_t     **bk_pages;
+	struct page     **bk_pages;
         lnet_md_iovec_t  bk_iovs[0];
 #endif
 } srpc_bulk_t; /* bulk descriptor */
@@ -399,10 +399,10 @@ typedef struct sfw_test_instance {
 	} tsi_u;
 } sfw_test_instance_t;
 
-/* XXX: trailing (CFS_PAGE_SIZE % sizeof(lnet_process_id_t)) bytes at
+/* XXX: trailing (PAGE_CACHE_SIZE % sizeof(lnet_process_id_t)) bytes at
  * the end of pages are not used */
 #define SFW_MAX_CONCUR     LST_MAX_CONCUR
-#define SFW_ID_PER_PAGE    (CFS_PAGE_SIZE / sizeof(lnet_process_id_packed_t))
+#define SFW_ID_PER_PAGE    (PAGE_CACHE_SIZE / sizeof(lnet_process_id_packed_t))
 #define SFW_MAX_NDESTS     (LNET_MAX_IOV * SFW_ID_PER_PAGE)
 #define sfw_id_pages(n)    (((n) + SFW_ID_PER_PAGE - 1) / SFW_ID_PER_PAGE)
 
@@ -433,7 +433,7 @@ void sfw_post_rpc(srpc_client_rpc_t *rpc);
 void sfw_client_rpc_done(srpc_client_rpc_t *rpc);
 void sfw_unpack_message(srpc_msg_t *msg);
 void sfw_free_pages(srpc_server_rpc_t *rpc);
-void sfw_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i);
+void sfw_add_bulk_page(srpc_bulk_t *bk, struct page *pg, int i);
 int sfw_alloc_pages(srpc_server_rpc_t *rpc, int cpt, int npages, int len,
 		    int sink);
 int sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply);

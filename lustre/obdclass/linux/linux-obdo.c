@@ -172,8 +172,8 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 	if (valid & OBD_MD_FLBLKSZ && src->o_blksize > (1 << dst->i_blkbits))
 		dst->i_blkbits = ffs(src->o_blksize) - 1;
 
-	if (dst->i_blkbits < CFS_PAGE_SHIFT)
-		dst->i_blkbits = CFS_PAGE_SHIFT;
+	if (dst->i_blkbits < PAGE_CACHE_SHIFT)
+		dst->i_blkbits = PAGE_CACHE_SHIFT;
 
         /* allocation of space */
         if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)

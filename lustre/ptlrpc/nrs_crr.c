@@ -352,8 +352,8 @@ int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 		goto out;
 
 	OBD_CPT_ALLOC_GFP(cli, nrs_pol2cptab(policy), nrs_pol2cptid(policy),
-			  sizeof(*cli), moving_req ? CFS_ALLOC_ATOMIC :
-			  CFS_ALLOC_IO);
+			  sizeof(*cli), moving_req ? GFP_ATOMIC :
+			  __GFP_IO);
 	if (cli == NULL)
 		return -ENOMEM;
 
@@ -725,7 +725,7 @@ static int ptlrpc_lprocfs_wr_nrs_crrn_quantum(struct file *file,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-	if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
         kernbuf[count] = '\0';

@@ -50,10 +50,10 @@
 extern cfs_list_t obd_types;
 spinlock_t obd_types_lock;
 
-cfs_mem_cache_t *obd_device_cachep;
-cfs_mem_cache_t *obdo_cachep;
+struct kmem_cache *obd_device_cachep;
+struct kmem_cache *obdo_cachep;
 EXPORT_SYMBOL(obdo_cachep);
-cfs_mem_cache_t *import_cachep;
+struct kmem_cache *import_cachep;
 
 cfs_list_t      obd_zombie_imports;
 cfs_list_t      obd_zombie_exports;
@@ -73,13 +73,13 @@ EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
  */
 static struct obd_device *obd_device_alloc(void)
 {
-        struct obd_device *obd;
+	struct obd_device *obd;
 
-        OBD_SLAB_ALLOC_PTR_GFP(obd, obd_device_cachep, CFS_ALLOC_IO);
-        if (obd != NULL) {
-                obd->obd_magic = OBD_DEVICE_MAGIC;
-        }
-        return obd;
+	OBD_SLAB_ALLOC_PTR_GFP(obd, obd_device_cachep, __GFP_IO);
+	if (obd != NULL) {
+		obd->obd_magic = OBD_DEVICE_MAGIC;
+	}
+	return obd;
 }
 
 static void obd_device_free(struct obd_device *obd)
@@ -642,27 +642,21 @@ EXPORT_SYMBOL(class_notify_sptlrpc_conf);
 
 void obd_cleanup_caches(void)
 {
-        int rc;
-
         ENTRY;
         if (obd_device_cachep) {
-                rc = cfs_mem_cache_destroy(obd_device_cachep);
-                LASSERTF(rc == 0, "Cannot destropy ll_obd_device_cache: rc %d\n", rc);
+		kmem_cache_destroy(obd_device_cachep);
                 obd_device_cachep = NULL;
         }
         if (obdo_cachep) {
-                rc = cfs_mem_cache_destroy(obdo_cachep);
-                LASSERTF(rc == 0, "Cannot destory ll_obdo_cache\n");
+		kmem_cache_destroy(obdo_cachep);
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
-                rc = cfs_mem_cache_destroy(import_cachep);
-                LASSERTF(rc == 0, "Cannot destory ll_import_cache\n");
+		kmem_cache_destroy(import_cachep);
                 import_cachep = NULL;
         }
         if (capa_cachep) {
-                rc = cfs_mem_cache_destroy(capa_cachep);
-                LASSERTF(rc == 0, "Cannot destory capa_cache\n");
+		kmem_cache_destroy(capa_cachep);
                 capa_cachep = NULL;
         }
         EXIT;
@@ -670,38 +664,38 @@ void obd_cleanup_caches(void)
 
 int obd_init_caches(void)
 {
-        ENTRY;
+	ENTRY;
 
-        LASSERT(obd_device_cachep == NULL);
-        obd_device_cachep = cfs_mem_cache_create("ll_obd_dev_cache",
-                                                 sizeof(struct obd_device),
-                                                 0, 0);
-        if (!obd_device_cachep)
-                GOTO(out, -ENOMEM);
+	LASSERT(obd_device_cachep == NULL);
+	obd_device_cachep = kmem_cache_create("ll_obd_dev_cache",
+					      sizeof(struct obd_device),
+					      0, 0, NULL);
+	if (!obd_device_cachep)
+		GOTO(out, -ENOMEM);
 
-        LASSERT(obdo_cachep == NULL);
-        obdo_cachep = cfs_mem_cache_create("ll_obdo_cache", sizeof(struct obdo),
-                                           0, 0);
-        if (!obdo_cachep)
-                GOTO(out, -ENOMEM);
+	LASSERT(obdo_cachep == NULL);
+	obdo_cachep = kmem_cache_create("ll_obdo_cache", sizeof(struct obdo),
+					0, 0, NULL);
+	if (!obdo_cachep)
+		GOTO(out, -ENOMEM);
 
-        LASSERT(import_cachep == NULL);
-        import_cachep = cfs_mem_cache_create("ll_import_cache",
-                                             sizeof(struct obd_import),
-                                             0, 0);
-        if (!import_cachep)
-                GOTO(out, -ENOMEM);
+	LASSERT(import_cachep == NULL);
+	import_cachep = kmem_cache_create("ll_import_cache",
+					  sizeof(struct obd_import),
+					  0, 0, NULL);
+	if (!import_cachep)
+		GOTO(out, -ENOMEM);
 
-        LASSERT(capa_cachep == NULL);
-        capa_cachep = cfs_mem_cache_create("capa_cache",
-                                           sizeof(struct obd_capa), 0, 0);
-        if (!capa_cachep)
-                GOTO(out, -ENOMEM);
+	LASSERT(capa_cachep == NULL);
+	capa_cachep = kmem_cache_create("capa_cache", sizeof(struct obd_capa),
+					0, 0, NULL);
+	if (!capa_cachep)
+		GOTO(out, -ENOMEM);
 
-        RETURN(0);
- out:
-        obd_cleanup_caches();
-        RETURN(-ENOMEM);
+	RETURN(0);
+out:
+	obd_cleanup_caches();
+	RETURN(-ENOMEM);
 
 }
 

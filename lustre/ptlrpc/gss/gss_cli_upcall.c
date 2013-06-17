@@ -135,7 +135,7 @@ int ctx_init_pack_request(struct obd_import *imp,
         /* 4. now the token */
         LASSERT(size >= (sizeof(__u32) + token_size));
         *p++ = cpu_to_le32(((__u32) token_size));
-        if (cfs_copy_from_user(p, token, token_size)) {
+	if (copy_from_user(p, token, token_size)) {
                 CERROR("can't copy token\n");
                 return -EFAULT;
         }
@@ -179,43 +179,43 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
         status = 0;
         effective = 0;
 
-        if (cfs_copy_to_user(outbuf, &status, 4))
-                return -EFAULT;
-        outbuf += 4;
-        if (cfs_copy_to_user(outbuf, &ghdr->gh_major, 4))
-                return -EFAULT;
-        outbuf += 4;
-        if (cfs_copy_to_user(outbuf, &ghdr->gh_minor, 4))
-                return -EFAULT;
-        outbuf += 4;
-        if (cfs_copy_to_user(outbuf, &ghdr->gh_seqwin, 4))
-                return -EFAULT;
-        outbuf += 4;
-        effective += 4 * 4;
+	if (copy_to_user(outbuf, &status, 4))
+		return -EFAULT;
+	outbuf += 4;
+	if (copy_to_user(outbuf, &ghdr->gh_major, 4))
+		return -EFAULT;
+	outbuf += 4;
+	if (copy_to_user(outbuf, &ghdr->gh_minor, 4))
+		return -EFAULT;
+	outbuf += 4;
+	if (copy_to_user(outbuf, &ghdr->gh_seqwin, 4))
+		return -EFAULT;
+	outbuf += 4;
+	effective += 4 * 4;
 
-        /* handle */
-        obj_len = ghdr->gh_handle.len;
-        round_len = (obj_len + 3) & ~ 3;
-        if (cfs_copy_to_user(outbuf, &obj_len, 4))
-                return -EFAULT;
-        outbuf += 4;
-        if (cfs_copy_to_user(outbuf, (char *) ghdr->gh_handle.data, round_len))
-                return -EFAULT;
-        outbuf += round_len;
-        effective += 4 + round_len;
+	/* handle */
+	obj_len = ghdr->gh_handle.len;
+	round_len = (obj_len + 3) & ~3;
+	if (copy_to_user(outbuf, &obj_len, 4))
+		return -EFAULT;
+	outbuf += 4;
+	if (copy_to_user(outbuf, (char *) ghdr->gh_handle.data, round_len))
+		return -EFAULT;
+	outbuf += round_len;
+	effective += 4 + round_len;
 
-        /* out token */
-        obj_len = msg->lm_buflens[2];
-        round_len = (obj_len + 3) & ~ 3;
-        if (cfs_copy_to_user(outbuf, &obj_len, 4))
-                return -EFAULT;
-        outbuf += 4;
-        if (cfs_copy_to_user(outbuf, lustre_msg_buf(msg, 2, 0), round_len))
-                return -EFAULT;
-        outbuf += round_len;
-        effective += 4 + round_len;
+	/* out token */
+	obj_len = msg->lm_buflens[2];
+	round_len = (obj_len + 3) & ~3;
+	if (copy_to_user(outbuf, &obj_len, 4))
+		return -EFAULT;
+	outbuf += 4;
+	if (copy_to_user(outbuf, lustre_msg_buf(msg, 2, 0), round_len))
+		return -EFAULT;
+	outbuf += round_len;
+	effective += 4 + round_len;
 
-        return effective;
+	return effective;
 }
 
 /* XXX move to where lgssd could see */
@@ -249,7 +249,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                        "version\n", count, (unsigned long) sizeof(param));
                 RETURN(-EINVAL);
         }
-        if (cfs_copy_from_user(&param, buffer, sizeof(param))) {
+	if (copy_from_user(&param, buffer, sizeof(param))) {
                 CERROR("failed copy data from lgssd\n");
                 RETURN(-EFAULT);
         }
@@ -365,7 +365,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         param.reply_length = lsize;
 
 out_copy:
-        if (cfs_copy_to_user(buffer, &param, sizeof(param)))
+	if (copy_to_user(buffer, &param, sizeof(param)))
                 rc = -EFAULT;
         else
                 rc = 0;

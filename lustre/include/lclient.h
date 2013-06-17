@@ -234,7 +234,7 @@ struct ccc_page {
          */
         cfs_list_t           cpg_pending_linkage;
         /** VM page */
-        cfs_page_t          *cpg_page;
+	struct page          *cpg_page;
 };
 
 static inline struct ccc_page *cl2ccc_page(const struct cl_page_slice *slice)
@@ -242,7 +242,7 @@ static inline struct ccc_page *cl2ccc_page(const struct cl_page_slice *slice)
         return container_of(slice, struct ccc_page, cpg_cl);
 }
 
-struct cl_page    *ccc_vmpage_page_transient(cfs_page_t *vmpage);
+struct cl_page    *ccc_vmpage_page_transient(struct page *vmpage);
 
 struct ccc_device {
         struct cl_device    cdv_cl;
@@ -304,7 +304,7 @@ int ccc_object_glimpse(const struct lu_env *env,
                        const struct cl_object *obj, struct ost_lvb *lvb);
 int ccc_conf_set(const struct lu_env *env, struct cl_object *obj,
                  const struct cl_object_conf *conf);
-cfs_page_t *ccc_page_vmpage(const struct lu_env *env,
+struct page *ccc_page_vmpage(const struct lu_env *env,
                             const struct cl_page_slice *slice);
 int ccc_page_is_under_lock(const struct lu_env *env,
                            const struct cl_page_slice *slice, struct cl_io *io);
@@ -373,14 +373,14 @@ struct ccc_lock    *cl2ccc_lock     (const struct cl_lock_slice *slice);
 struct ccc_io      *cl2ccc_io       (const struct lu_env *env,
                                      const struct cl_io_slice *slice);
 struct ccc_req     *cl2ccc_req      (const struct cl_req_slice *slice);
-cfs_page_t         *cl2vm_page      (const struct cl_page_slice *slice);
+struct page         *cl2vm_page      (const struct cl_page_slice *slice);
 struct inode       *ccc_object_inode(const struct cl_object *obj);
 struct ccc_object  *cl_inode2ccc    (struct inode *inode);
 
 int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
                    struct obd_capa *capa);
 
-struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage);
+struct cl_page *ccc_vmpage_page_transient(struct page *vmpage);
 int ccc_object_invariant(const struct cl_object *obj);
 int cl_file_inode_init(struct inode *inode, struct lustre_md *md);
 void cl_inode_fini(struct inode *inode);

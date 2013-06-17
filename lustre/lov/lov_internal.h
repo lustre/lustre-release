@@ -87,7 +87,7 @@ struct lov_request_set {
 	spinlock_t			set_lock;
 };
 
-extern cfs_mem_cache_t *lov_oinfo_slab;
+extern struct kmem_cache *lov_oinfo_slab;
 
 void lov_finish_set(struct lov_request_set *set);
 

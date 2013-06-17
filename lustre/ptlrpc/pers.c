@@ -68,7 +68,7 @@ void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
 		md->start = &desc->bd_iov[mdidx * LNET_MAX_IOV];
 }
 
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
                           int pageoffset, int len)
 {
         lnet_kiov_t *kiov = &desc->bd_iov[desc->bd_iov_count];
@@ -114,7 +114,7 @@ static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)
         return 0;
 }
 
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
                           int pageoffset, int len)
 {
         lnet_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];

@@ -256,91 +256,100 @@ s/\bCFS_DTTOIF\b/DTTOIF/g
 
 ################################################################################
 # memory operations
-
-#s/\bcfs_page_t\b/struct page/g
-#s/\bCFS_PAGE_SIZE\b/PAGE_CACHE_SIZE/g
-#/#[ \t]*define[ \t]*\bPAGE_CACHE_SIZE\b[ \t]*\bPAGE_CACHE_SIZE\b/d
-#s/\bCFS_PAGE_SHIFT\b/PAGE_CACHE_SHIFT/g
-#/#[ \t]*define[ \t]*\bPAGE_CACHE_SHIFT\b[ \t]*\bPAGE_CACHE_SHIFT\b/d
-#s/\bCFS_PAGE_MASK\b/PAGE_CACHE_MASK/g
-#/#[ \t]*define[ \t]*\bPAGE_CACHE_MASK\b[ \t]*\bPAGE_CACHE_MASK\b/d
-#s/\bcfs_num_physpages\b/num_physpages/g
-#/#[ \t]*define[ \t]*\bnum_physpages\b[ \t]*\bnum_physpages\b/d
-#s/\bcfs_copy_from_user\b/copy_from_user/g
-#/#[ \t]*define[ \t]*\bcopy_from_user\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bcopy_from_user\b *( *\w* *, *\w* *, *\w* *)/d
-#s/\bcfs_copy_to_user\b/copy_to_user/g
-#/#[ \t]*define[ \t]*\bcopy_to_user\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bcopy_to_user\b *( *\w* *, *\w* *, *\w* *)/d
-#s/\bcfs_page_address\b/page_address/g
-#/#[ \t]*define[ \t]*\bpage_address\b *( *\w* *)[ \t]*\bpage_address\b *( *\w* *)/d
-#s/\bcfs_kmap\b/kmap/g
-#/#[ \t]*define[ \t]*\bkmap\b *( *\w* *)[ \t]*\bkmap\b *( *\w* *)/d
-#s/\bcfs_kunmap\b/kunmap/g
-#/#[ \t]*define[ \t]*\bkunmap\b *( *\w* *)[ \t]*\bkunmap\b *( *\w* *)/d
-#s/\bcfs_get_page\b/get_page/g
-#/#[ \t]*define[ \t]*\bget_page\b *( *\w* *)[ \t]*\bget_page\b *( *\w* *)/d
-#s/\bcfs_page_count\b/page_count/g
-#/#[ \t]*define[ \t]*\bpage_count\b *( *\w* *)[ \t]*\bpage_count\b *( *\w* *)/d
-#s/\bcfs_page_index\b/page_index/g
-#/#[ \t]*define[ \t]*\bpage_index\b *( *\w* *)[ \t]*\bpage_index\b *( *\w* *)/d
-#s/\bcfs_page_pin\b/page_cache_get/g
-#/#[ \t]*define[ \t]*\bpage_cache_get\b *( *\w* *)[ \t]*\bpage_cache_get\b *( *\w* *)/d
-#s/\bcfs_page_unpin\b/page_cache_release/g
-#/#[ \t]*define[ \t]*\bpage_cache_release\b *( *\w* *)[ \t]*\bpage_cache_release\b *( *\w* *)/d
-#s/\bcfs_memory_pressure_get\b/memory_pressure_get/g
-#s/\bcfs_memory_pressure_set\b/memory_pressure_set/g
-#s/\bcfs_memory_pressure_clr\b/memory_pressure_clr/g
-#s/\bCFS_NUM_CACHEPAGES\b/NUM_CACHEPAGES/g
-# memory allocator
-#s/\bCFS_ALLOC_ATOMIC\b/GFP_ATOMIC/g
-#/#[ \t]*define[ \t]*\bGFP_ATOMIC\b[ \t]*\bGFP_ATOMIC\b/d
-#s/\bCFS_ALLOC_WAIT\b/__GFP_WAIT/g
-#/#[ \t]*define[ \t]*\b__GFP_WAIT\b[ \t]*\b__GFP_WAIT\b/d
-#s/\bCFS_ALLOC_ZERO\b/__GFP_ZERO/g
-#/#[ \t]*define[ \t]*\b__GFP_ZERO\b[ \t]*\b__GFP_ZERO\b/d
-#s/\bCFS_ALLOC_FS\b/__GFP_FS/g
-#/#[ \t]*define[ \t]*\b__GFP_FS\b[ \t]*\b__GFP_FS\b/d
-#s/\bCFS_ALLOC_IO\b/__GFP_IO/g
-#/#[ \t]*define[ \t]*\b__GFP_IO\b[ \t]*\b__GFP_IO\b/d
-#s/\bCFS_ALLOC_NOWARN\b/__GFP_NOWARN/g
-#/#[ \t]*define[ \t]*\b__GFP_NOWARN\b[ \t]*\b__GFP_NOWARN\b/d
-#s/\bCFS_ALLOC_STD\b/GFP_IOFS/g
-#/#[ \t]*define[ \t]*\bGFP_IOFS\b[ \t]*\bGFP_IOFS\b/d
-#s/\bCFS_ALLOC_USER\b/GFP_KERNEL/g
-#/#[ \t]*define[ \t]*\bGFP_KERNEL\b[ \t]*\bGFP_KERNEL\b/d
-#s/\bCFS_ALLOC_HIGHMEM\b/__GFP_HIGHMEM/g
-#/#[ \t]*define[ \t]*\b__GFP_HIGHMEM\b[ \t]*\b__GFP_HIGHMEM\b/d
-#s/\bCFS_ALLOC_HIGHUSER\b/GFP_HIGHUSER/g
-#/#[ \t]*define[ \t]*\bGFP_HIGHUSER\b[ \t]*\bGFP_HIGHUSER\b/d
-#s/\bCFS_ALLOC_ATOMIC_TRY\b/ALLOC_ATOMIC_TRY/g
-#s/\bcfs_alloc\b/kmalloc/g
-#/#[ \t]*define[ \t]*\bkmalloc\b *( *\w* *, *\w* *)[ \t]*\bkmalloc\b *( *\w* *, *\w* *)/d
-#s/\bcfs_free\b/kfree/g
-#/#[ \t]*define[ \t]*\bkfree\b *( *\w* *)[ \t]*\bkfree\b *( *\w* *)/d
-#s/\bcfs_alloc_large\b/vmalloc/g
-#/#[ \t]*define[ \t]*\bvmalloc\b *( *\w* *)[ \t]*\bvmalloc\b *( *\w* *)/d
-#s/\bcfs_free_large\b/vfree/g
-#/#[ \t]*define[ \t]*\bvfree\b *( *\w* *)[ \t]*\bvfree\b *( *\w* *)/d
-#s/\bcfs_alloc_page\b/alloc_page/g
-#/#[ \t]*define[ \t]*\balloc_page\b *( *\w* *)[ \t]*\balloc_page\b *( *\w* *)/d
-#s/\bcfs_free_page\b/__free_page/g
-#/#[ \t]*define[ \t]*\b__free_page\b *( *\w* *)[ \t]*\b__free_page\b *( *\w* *)/d
+s/\bcfs_page_t\b/struct page/g
+/typedef[ \t]*\bstruct page\b[ \t]*\bstruct page\b/d
+s/\bCFS_PAGE_SIZE\b/PAGE_CACHE_SIZE/g
+/#[ \t]*define[ \t]*\bPAGE_CACHE_SIZE\b[ \t]*\bPAGE_CACHE_SIZE\b/d
+s/\bCFS_PAGE_SHIFT\b/PAGE_CACHE_SHIFT/g
+/#[ \t]*define[ \t]*\bPAGE_CACHE_SHIFT\b[ \t]*\bPAGE_CACHE_SHIFT\b/d
+s/\bcfs_num_physpages\b/num_physpages/g
+/#[ \t]*define[ \t]*\bnum_physpages\b[ \t]*\bnum_physpages\b/d
+s/\bcfs_copy_from_user\b/copy_from_user/g
+/#[ \t]*define[ \t]*\bcopy_from_user\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bcopy_from_user\b *( *\w* *, *\w* *, *\w* *)/d
+s/\bcfs_copy_to_user\b/copy_to_user/g
+/#[ \t]*define[ \t]*\bcopy_to_user\b *( *\w* *, *\w* *, *\w* *)[ \t]*\bcopy_to_user\b *( *\w* *, *\w* *, *\w* *)/d
+s/\bcfs_page_address\b/page_address/g
+/#[ \t]*define[ \t]*\bpage_address\b *( *\w* *)[ \t]*\bpage_address\b *( *\w* *)/d
+s/\bcfs_kmap\b/kmap/g
+/#[ \t]*define[ \t]*\bkmap\b *( *\w* *)[ \t]*\bkmap\b *( *\w* *)/d
+s/\bcfs_kunmap\b/kunmap/g
+/#[ \t]*define[ \t]*\bkunmap\b *( *\w* *)[ \t]*\bkunmap\b *( *\w* *)/d
+s/\bcfs_get_page\b/get_page/g
+/#[ \t]*define[ \t]*\bget_page\b *( *\w* *)[ \t]*\bget_page\b *( *\w* *)/d
+s/\bcfs_page_count\b/page_count/g
+/#[ \t]*define[ \t]*\bpage_count\b *( *\w* *)[ \t]*\bpage_count\b *( *\w* *)/d
+s/\bcfs_page_index\b/page_index/g
+/#[ \t]*define[ \t]*\bpage_index\b *( *\w* *)[ \t]*\bpage_index\b *( *\w* *)/d
+s/\bcfs_page_pin\b/page_cache_get/g
+/#[ \t]*define[ \t]*\bpage_cache_get\b *( *\w* *)[ \t]*\bpage_cache_get\b *( *\w* *)/d
+s/\bcfs_page_unpin\b/page_cache_release/g
+/#[ \t]*define[ \t]*\bpage_cache_release\b *( *\w* *)[ \t]*\bpage_cache_release\b *( *\w* *)/d
+s/\bcfs_memory_pressure_get\b/memory_pressure_get/g
+s/\bcfs_memory_pressure_set\b/memory_pressure_set/g
+s/\bcfs_memory_pressure_clr\b/memory_pressure_clr/g
+s/\bCFS_NUM_CACHEPAGES\b/NUM_CACHEPAGES/g
+ # memory allocator
+s/\bCFS_ALLOC_ATOMIC\b/GFP_ATOMIC/g
+/#[ \t]*define[ \t]*\bGFP_ATOMIC\b[ \t]*\bGFP_ATOMIC\b/d
+s/\bCFS_ALLOC_WAIT\b/__GFP_WAIT/g
+/#[ \t]*define[ \t]*\b__GFP_WAIT\b[ \t]*\b__GFP_WAIT\b/d
+s/\bCFS_ALLOC_ZERO\b/__GFP_ZERO/g
+/#[ \t]*define[ \t]*\b__GFP_ZERO\b[ \t]*\b__GFP_ZERO\b/d
+s/\bCFS_ALLOC_FS\b/__GFP_FS/g
+/#[ \t]*define[ \t]*\b__GFP_FS\b[ \t]*\b__GFP_FS\b/d
+s/\bCFS_ALLOC_IO\b/__GFP_IO/g
+/#[ \t]*define[ \t]*\b__GFP_IO\b[ \t]*\b__GFP_IO\b/d
+s/\bCFS_ALLOC_NOWARN\b/__GFP_NOWARN/g
+/#[ \t]*define[ \t]*\b__GFP_NOWARN\b[ \t]*\b__GFP_NOWARN\b/d
+s/\bCFS_ALLOC_STD\b/GFP_IOFS/g
+/#[ \t]*define[ \t]*\bGFP_IOFS\b[ \t]*\bGFP_IOFS\b/d
+s/\bCFS_ALLOC_USER\b/GFP_USER/g
+/#[ \t]*define[ \t]*\bGFP_USER\b[ \t]*\bGFP_USER\b/d
+s/\bCFS_ALLOC_KERNEL\b/GFP_KERNEL/g
+/#[ \t]*define[ \t]*\bGFP_KERNEL\b[ \t]*\bGFP_KERNEL\b/d
+s/\bCFS_ALLOC_NOFS\b/GFP_NOFS/g
+/#[ \t]*define[ \t]*\bGFP_NOFS\b[ \t]*\bGFP_NOFS\b/d
+s/\bCFS_ALLOC_HIGHMEM\b/__GFP_HIGHMEM/g
+/#[ \t]*define[ \t]*\b__GFP_HIGHMEM\b[ \t]*\b__GFP_HIGHMEM\b/d
+s/\bCFS_ALLOC_HIGHUSER\b/GFP_HIGHUSER/g
+/#[ \t]*define[ \t]*\bGFP_HIGHUSER\b[ \t]*\bGFP_HIGHUSER\b/d
+s/\bCFS_ALLOC_ATOMIC_TRY\b/ALLOC_ATOMIC_TRY/g
+s/\bcfs_alloc\b/kmalloc/g
+/#[ \t]*define[ \t]*\bkmalloc\b *( *\w* *, *\w* *)[ \t]*\bkmalloc\b *( *\w* *, *\w* *)/d
+s/\bcfs_free\b/kfree/g
+/#[ \t]*define[ \t]*\bkfree\b *( *\w* *)[ \t]*\bkfree\b *( *\w* *)/d
+s/\bcfs_alloc_large\b/vmalloc/g
+/#[ \t]*define[ \t]*\bvmalloc\b *( *\w* *)[ \t]*\bvmalloc\b *( *\w* *)/d
+s/\bcfs_free_large\b/vfree/g
+/#[ \t]*define[ \t]*\bvfree\b *( *\w* *)[ \t]*\bvfree\b *( *\w* *)/d
+s/\bcfs_alloc_page\b/alloc_page/g
+/#[ \t]*define[ \t]*\balloc_page\b *( *\w* *)[ \t]*\balloc_page\b *( *\w* *)/d
+s/\bcfs_free_page\b/__free_page/g
+/#[ \t]*define[ \t]*\b__free_page\b *( *\w* *)[ \t]*\b__free_page\b *( *\w* *)/d
 # TODO: SLAB allocator
-#s/\bCFS_DECL_MMSPACE\b/DECL_MMSPACE/g
-#s/\bCFS_MMSPACE_OPEN\b/MMSPACE_OPEN/g
-#s/\bCFS_MMSPACE_CLOSE\b/MMSPACE_CLOSE/g
-#s/\bCFS_SLAB_HWCACHE_ALIGN\b/SLAB_HWCACHE_ALIGN/g
-#/#[ \t]*define[ \t]*\bSLAB_HWCACHE_ALIGN\b[ \t]*\bSLAB_HWCACHE_ALIGN\b/d
-#s/\bCFS_SLAB_KERNEL\b/SLAB_KERNEL/g
-#/#[ \t]*define[ \t]*\bSLAB_KERNEL\b[ \t]*\bSLAB_KERNEL\b/d
-#s/\bCFS_SLAB_NOFS\b/SLAB_NOFS/g
-#/#[ \t]*define[ \t]*\bSLAB_NOFS\b[ \t]*\bSLAB_NOFS\b/d
-#s/\bcfs_shrinker\b/shrinker/g
-#/#[ \t]*define[ \t]*\bshrinker\b[ \t]*\bshrinker\b/d
-#s/\bcfs_shrinker_t\b/struct shrinkert/g
-#/typedef[ \t]*\bshrinker_t\b[ \t]*\bshrinker_t\b/d
-#s/\bcfs_set_shrinker\b/set_shrinker/g
-#/#[ \t]*define[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)/d
-#s/\bcfs_remove_shrinker\b/remove_shrinker/g
-#/#[ \t]*define[ \t]*\bremove_shrinker\b *( *\w* *)[ \t]*\bremove_shrinker\b *( *\w* *)/d
-#s/\bCFS_DEFAULT_SEEKS\b/DEFAULT_SEEKS/g
-#/#[ \t]*define[ \t]*\bDEFAULT_SEEKS\b[ \t]*\bDEFAULT_SEEKS\b/d
+s/\bCFS_DECL_MMSPACE\b/DECL_MMSPACE/g
+s/\bCFS_MMSPACE_OPEN\b/MMSPACE_OPEN/g
+s/\bCFS_MMSPACE_CLOSE\b/MMSPACE_CLOSE/g
+s/\bCFS_SLAB_HWCACHE_ALIGN\b/SLAB_HWCACHE_ALIGN/g
+/#[ \t]*define[ \t]*\bSLAB_HWCACHE_ALIGN\b[ \t]*\bSLAB_HWCACHE_ALIGN\b/d
+s/\bCFS_SLAB_KERNEL\b/SLAB_KERNEL/g
+/#[ \t]*define[ \t]*\bSLAB_KERNEL\b[ \t]*\bSLAB_KERNEL\b/d
+s/\bCFS_SLAB_NOFS\b/SLAB_NOFS/g
+/#[ \t]*define[ \t]*\bSLAB_NOFS\b[ \t]*\bSLAB_NOFS\b/d
+s/\bcfs_shrinker\b/shrinker/g
+/#[ \t]*define[ \t]*\bshrinker\b[ \t]*\bshrinker\b/d
+s/\bcfs_shrinker_t\b/shrinker_t/g
+/typedef[ \t]*\bshrinker_t\b[ \t]*\bshrinker_t\b/d
+s/\bcfs_set_shrinker\b/set_shrinker/g
+/#[ \t]*define[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)[ \t]*\bset_shrinker\b *( *\w* *, *\w* *)/d
+s/\bcfs_remove_shrinker\b/remove_shrinker/g
+/#[ \t]*define[ \t]*\bremove_shrinker\b *( *\w* *)[ \t]*\bremove_shrinker\b *( *\w* *)/d
+s/\bCFS_DEFAULT_SEEKS\b/DEFAULT_SEEKS/g
+/#[ \t]*define[ \t]*\bDEFAULT_SEEKS\b[ \t]*\bDEFAULT_SEEKS\b/d
+s/cfs_mem_cache_t/struct kmem_cache/g
+s/cfs_mem_cache_create/kmem_cache_create/g
+s/\w+[ =]*cfs_mem_cache_destroy/kmem_cache_destroy/g
+s/cfs_mem_cache_destroy/kmem_cache_destroy/g
+s/cfs_mem_cache_alloc/kmem_cache_alloc/g
+s/cfs_mem_cache_free/kmem_cache_free/g
+s/cfs_mem_is_in_cache/kmem_is_in_cache/g

@@ -837,14 +837,14 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 		GOTO(out_pool, rc = -EINVAL);
         }
 
-	if (data->ioc_plen1 > CFS_PAGE_SIZE)
+	if (data->ioc_plen1 > PAGE_CACHE_SIZE)
 		GOTO(out_pool, rc = -E2BIG);
 
         OBD_ALLOC(lcfg, data->ioc_plen1);
         if (lcfg == NULL)
                 GOTO(out_pool, rc = -ENOMEM);
 
-        if (cfs_copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 		GOTO(out_lcfg, rc = -EFAULT);
 
 	if (lcfg->lcfg_bufcount < 2)
@@ -929,7 +929,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 if (lcfg == NULL)
 			GOTO(out, rc = -ENOMEM);
-                if (cfs_copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+		if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
                         GOTO(out_free, rc = -EFAULT);
 
                 if (lcfg->lcfg_bufcount < 1)

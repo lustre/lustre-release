@@ -342,7 +342,7 @@ kptllnd_rx_alloc(void)
                 return NULL;
         }
 
-        rx = cfs_mem_cache_alloc(kptllnd_data.kptl_rx_cache, CFS_ALLOC_ATOMIC);
+	rx = kmem_cache_alloc(kptllnd_data.kptl_rx_cache, GFP_ATOMIC);
         if (rx == NULL) {
                 CERROR("Failed to allocate rx\n");
                 return NULL;
@@ -390,7 +390,7 @@ kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
                 kptllnd_peer_decref(peer);
         }
 
-        cfs_mem_cache_free(kptllnd_data.kptl_rx_cache, rx);
+	kmem_cache_free(kptllnd_data.kptl_rx_cache, rx);
 }
 
 void

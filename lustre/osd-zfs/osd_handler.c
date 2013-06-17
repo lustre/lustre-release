@@ -79,7 +79,7 @@ struct lu_context_key	osd_key;
 static char *root_tag = "osd_mount, rootdb";
 
 /* Slab for OSD object allocation */
-cfs_mem_cache_t *osd_object_kmem;
+struct kmem_cache *osd_object_kmem;
 
 static struct lu_kmem_descr osd_caches[] = {
 	{

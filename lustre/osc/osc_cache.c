@@ -309,7 +309,7 @@ static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
 {
 	struct osc_extent *ext;
 
-	OBD_SLAB_ALLOC_PTR_GFP(ext, osc_extent_kmem, CFS_ALLOC_STD);
+	OBD_SLAB_ALLOC_PTR_GFP(ext, osc_extent_kmem, GFP_IOFS);
 	if (ext == NULL)
 		return NULL;
 
@@ -505,7 +505,7 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 		return -ERANGE;
 
 	LASSERT(cur->oe_osclock == victim->oe_osclock);
-	ppc_bits = osc_cli(obj)->cl_chunkbits - CFS_PAGE_SHIFT;
+	ppc_bits = osc_cli(obj)->cl_chunkbits - PAGE_CACHE_SHIFT;
 	chunk_start = cur->oe_start >> ppc_bits;
 	chunk_end   = cur->oe_end   >> ppc_bits;
 	if (chunk_start   != (victim->oe_end >> ppc_bits) + 1 &&
@@ -612,8 +612,8 @@ struct osc_extent *osc_extent_find(const struct lu_env *env,
 	LASSERT(lock != NULL);
 	LASSERT(lock->cll_descr.cld_mode >= CLM_WRITE);
 
-	LASSERT(cli->cl_chunkbits >= CFS_PAGE_SHIFT);
-	ppc_bits   = cli->cl_chunkbits - CFS_PAGE_SHIFT;
+	LASSERT(cli->cl_chunkbits >= PAGE_CACHE_SHIFT);
+	ppc_bits   = cli->cl_chunkbits - PAGE_CACHE_SHIFT;
 	chunk_mask = ~((1 << ppc_bits) - 1);
 	chunksize  = 1 << cli->cl_chunkbits;
 	chunk      = index >> ppc_bits;
@@ -827,8 +827,8 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 
 	if (!sent) {
 		lost_grant = ext->oe_grants;
-	} else if (blocksize < CFS_PAGE_SIZE &&
-		   last_count != CFS_PAGE_SIZE) {
+	} else if (blocksize < PAGE_CACHE_SIZE &&
+		   last_count != PAGE_CACHE_SIZE) {
 		/* For short writes we shouldn't count parts of pages that
 		 * span a whole chunk on the OST side, or our accounting goes
 		 * wrong.  Should match the code in filter_grant_check. */
@@ -838,7 +838,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		if (end)
 			count += blocksize - end;
 
-		lost_grant = CFS_PAGE_SIZE - count;
+		lost_grant = PAGE_CACHE_SIZE - count;
 	}
 	if (ext->oe_grants > 0)
 		osc_free_grant(cli, nr_pages, lost_grant);
@@ -920,7 +920,8 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	struct osc_async_page *oap;
 	struct osc_async_page *tmp;
 	int                    pages_in_chunk = 0;
-	int                    ppc_bits    = cli->cl_chunkbits - CFS_PAGE_SHIFT;
+	int                    ppc_bits    = cli->cl_chunkbits -
+					     PAGE_CACHE_SHIFT;
 	__u64                  trunc_chunk = trunc_index >> ppc_bits;
 	int                    grants   = 0;
 	int                    nr_pages = 0;
@@ -1077,7 +1078,7 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	if (!(last->oap_async_flags & ASYNC_COUNT_STABLE)) {
 		last->oap_count = osc_refresh_count(env, last, OBD_BRW_WRITE);
 		LASSERT(last->oap_count > 0);
-		LASSERT(last->oap_page_off + last->oap_count <= CFS_PAGE_SIZE);
+		LASSERT(last->oap_page_off + last->oap_count <= PAGE_CACHE_SIZE);
 		last->oap_async_flags |= ASYNC_COUNT_STABLE;
 	}
 
@@ -1085,7 +1086,7 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	 * because it's known they are not the last page */
 	cfs_list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
 		if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE)) {
-			oap->oap_count = CFS_PAGE_SIZE - oap->oap_page_off;
+			oap->oap_count = PAGE_CACHE_SIZE - oap->oap_page_off;
 			oap->oap_async_flags |= ASYNC_COUNT_STABLE;
 		}
 	}
@@ -1109,7 +1110,7 @@ static int osc_extent_expand(struct osc_extent *ext, pgoff_t index, int *grants)
 	struct osc_object *obj = ext->oe_obj;
 	struct client_obd *cli = osc_cli(obj);
 	struct osc_extent *next;
-	int ppc_bits = cli->cl_chunkbits - CFS_PAGE_SHIFT;
+	int ppc_bits = cli->cl_chunkbits - PAGE_CACHE_SHIFT;
 	pgoff_t chunk = index >> ppc_bits;
 	pgoff_t end_chunk;
 	pgoff_t end_index;
@@ -1241,9 +1242,9 @@ static int osc_refresh_count(const struct lu_env *env,
 		return 0;
 	else if (cl_offset(obj, page->cp_index + 1) > kms)
 		/* catch sub-page write at end of file */
-		return kms % CFS_PAGE_SIZE;
+		return kms % PAGE_CACHE_SIZE;
 	else
-		return CFS_PAGE_SIZE;
+		return PAGE_CACHE_SIZE;
 }
 
 static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
@@ -1326,10 +1327,10 @@ static void osc_consume_write_grant(struct client_obd *cli,
 	LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock.lock);
 	LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
 	cfs_atomic_inc(&obd_dirty_pages);
-	cli->cl_dirty += CFS_PAGE_SIZE;
+	cli->cl_dirty += PAGE_CACHE_SIZE;
 	pga->flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
-	       CFS_PAGE_SIZE, pga, pga->pg);
+	       PAGE_CACHE_SIZE, pga, pga->pg);
 	osc_update_next_shrink(cli);
 }
 
@@ -1348,11 +1349,11 @@ static void osc_release_write_grant(struct client_obd *cli,
 
 	pga->flag &= ~OBD_BRW_FROM_GRANT;
 	cfs_atomic_dec(&obd_dirty_pages);
-	cli->cl_dirty -= CFS_PAGE_SIZE;
+	cli->cl_dirty -= PAGE_CACHE_SIZE;
 	if (pga->flag & OBD_BRW_NOCACHE) {
 		pga->flag &= ~OBD_BRW_NOCACHE;
 		cfs_atomic_dec(&obd_dirty_transit_pages);
-		cli->cl_dirty_transit -= CFS_PAGE_SIZE;
+		cli->cl_dirty_transit -= PAGE_CACHE_SIZE;
 	}
 	EXIT;
 }
@@ -1408,7 +1409,7 @@ void osc_unreserve_grant(struct client_obd *cli,
  * used, we should return these grants to OST. There're two cases where grants
  * can be lost:
  * 1. truncate;
- * 2. blocksize at OST is less than CFS_PAGE_SIZE and a partial page was
+ * 2. blocksize at OST is less than PAGE_CACHE_SIZE and a partial page was
  *    written. In this case OST may use less chunks to serve this partial
  *    write. OSTs don't actually know the page size on the client side. so
  *    clients have to calculate lost grant by the blocksize on the OST.
@@ -1421,7 +1422,7 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
 	cfs_atomic_sub(nr_pages, &obd_dirty_pages);
-	cli->cl_dirty -= nr_pages << CFS_PAGE_SHIFT;
+	cli->cl_dirty -= nr_pages << PAGE_CACHE_SHIFT;
 	cli->cl_lost_grant += lost_grant;
 	if (cli->cl_avail_grant < grant && cli->cl_lost_grant >= grant) {
 		/* borrow some grant from truncate to avoid the case that
@@ -1463,11 +1464,11 @@ static int osc_enter_cache_try(struct client_obd *cli,
 	if (rc < 0)
 		return 0;
 
-	if (cli->cl_dirty + CFS_PAGE_SIZE <= cli->cl_dirty_max &&
+	if (cli->cl_dirty + PAGE_CACHE_SIZE <= cli->cl_dirty_max &&
 	    cfs_atomic_read(&obd_dirty_pages) + 1 <= obd_max_dirty_pages) {
 		osc_consume_write_grant(cli, &oap->oap_brw_page);
 		if (transient) {
-			cli->cl_dirty_transit += CFS_PAGE_SIZE;
+			cli->cl_dirty_transit += PAGE_CACHE_SIZE;
 			cfs_atomic_inc(&obd_dirty_transit_pages);
 			oap->oap_brw_flags |= OBD_BRW_NOCACHE;
 		}
@@ -1512,7 +1513,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	/* force the caller to try sync io.  this can jump the list
 	 * of queued writes and create a discontiguous rpc stream */
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_NO_GRANT) ||
-	    cli->cl_dirty_max < CFS_PAGE_SIZE     ||
+	    cli->cl_dirty_max < PAGE_CACHE_SIZE     ||
 	    cli->cl_ar.ar_force_sync || loi->loi_ar.ar_force_sync)
 		GOTO(out, rc = -EDQUOT);
 
@@ -1577,7 +1578,7 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
 		ocw->ocw_rc = -EDQUOT;
 		/* we can't dirty more */
-		if ((cli->cl_dirty + CFS_PAGE_SIZE > cli->cl_dirty_max) ||
+		if ((cli->cl_dirty + PAGE_CACHE_SIZE > cli->cl_dirty_max) ||
 		    (cfs_atomic_read(&obd_dirty_pages) + 1 >
 		     obd_max_dirty_pages)) {
 			CDEBUG(D_CACHE, "no dirty room: dirty: %ld "
@@ -2162,7 +2163,7 @@ void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
 }
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
-			cfs_page_t *page, loff_t offset)
+			struct page *page, loff_t offset)
 {
 	struct obd_export     *exp = osc_export(osc);
 	struct osc_async_page *oap = &ops->ops_oap;
@@ -2443,7 +2444,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 	oap->oap_async_flags |= ASYNC_READY|ASYNC_URGENT;
 	spin_unlock(&oap->oap_lock);
 
-	if (cfs_memory_pressure_get())
+	if (memory_pressure_get())
 		ext->oe_memalloc = 1;
 
 	ext->oe_urgent = 1;

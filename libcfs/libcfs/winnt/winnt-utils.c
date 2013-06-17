@@ -114,7 +114,7 @@ static int idr_pre_get(struct idr_context *idp)
 	while (idp->id_free_cnt < IDR_FREE_MAX) {
 		struct idr_layer *new;
 
-        new = cfs_alloc(sizeof(struct idr_layer), CFS_ALLOC_ZERO);
+	new = kmalloc(sizeof(struct idr_layer), __GFP_ZERO);
 		if(new == NULL)
 			return (0);
 		free_layer(idp, new);
@@ -326,7 +326,7 @@ static int _idr_remove(struct idr_context *idp, int id)
 	}
 	while (idp->id_free_cnt >= IDR_FREE_MAX) {
 		p = alloc_layer(idp);
-		cfs_free(p);
+		kfree(p);
 	}
 	return 0;
 }
@@ -341,7 +341,7 @@ static int _idr_remove(struct idr_context *idp, int id)
 struct idr_context *cfs_idr_init()
 {
     struct idr_context * idp = NULL;
-    idp = cfs_alloc(sizeof(struct idr_context), 0);
+    idp = kmalloc(sizeof(struct idr_context), 0);
     if (idp) {
         memset(idp, 0, sizeof(struct idr_context));
     }
@@ -404,7 +404,7 @@ void *cfs_idr_find(struct idr_context *idp, int id)
 void cfs_idr_exit(struct idr_context *idp)
 {
     if (idp) {
-	    cfs_free(idp);
+	    kfree(idp);
     }
 }
 

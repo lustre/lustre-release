@@ -214,7 +214,7 @@ struct cfs_crypto_hash_desc
 		return ERR_PTR(-ENODEV);
 	}
 
-	hdesc = cfs_alloc(sizeof(*hdesc) + ha->ha_ctx_size, 0);
+	hdesc = kmalloc(sizeof(*hdesc) + ha->ha_ctx_size, 0);
 	if (hdesc == NULL)
 		return ERR_PTR(-ENOMEM);
 
@@ -225,7 +225,7 @@ struct cfs_crypto_hash_desc
 		if (err == 0) {
 			return (struct cfs_crypto_hash_desc *) hdesc;
 		} else {
-			cfs_free(hdesc);
+			kfree(hdesc);
 			return ERR_PTR(err);
 		}
 	}
@@ -241,7 +241,7 @@ int cfs_crypto_hash_update(struct cfs_crypto_hash_desc *desc, const void *buf,
 }
 
 int cfs_crypto_hash_update_page(struct cfs_crypto_hash_desc *desc,
-				cfs_page_t *page, unsigned int offset,
+				struct page *page, unsigned int offset,
 				unsigned int len)
 {
 	const void *p = page->addr + offset;
@@ -262,7 +262,7 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 	int	err;
 
 	if (hash_len == NULL) {
-		cfs_free(d);
+		kfree(d);
 		return 0;
 	}
 	if (hash == NULL || *hash_len < size) {
@@ -274,7 +274,7 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 	err = d->hd_hash->final(d->hd_ctx, hash, *hash_len);
 	if (err == 0) {
 		  /* If get final digest success free hash descriptor */
-		  cfs_free(d);
+		  kfree(d);
 	}
 
 	return err;
@@ -370,7 +370,7 @@ static int cfs_crypto_test_hashes(void)
 	unsigned char	   *data;
 	unsigned int	    j, data_len = 1024 * 1024;
 
-	data = cfs_alloc(data_len, 0);
+	data = kmalloc(data_len, 0);
 	if (data == NULL) {
 		CERROR("Failed to allocate mem\n");
 		return -ENOMEM;
@@ -381,7 +381,7 @@ static int cfs_crypto_test_hashes(void)
 	for (i = 0; i < CFS_HASH_ALG_MAX; i++)
 		cfs_crypto_performance_test(i, data, data_len);
 
-	cfs_free(data);
+	kfree(data);
 	return 0;
 }
 

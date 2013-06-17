@@ -68,7 +68,7 @@ struct lov_layout_operations {
         int  (*llo_print)(const struct lu_env *env, void *cookie,
                           lu_printer_t p, const struct lu_object *o);
         int  (*llo_page_init)(const struct lu_env *env, struct cl_object *obj,
-				struct cl_page *page, cfs_page_t *vmpage);
+				struct cl_page *page, struct page *vmpage);
         int  (*llo_lock_init)(const struct lu_env *env,
                               struct cl_object *obj, struct cl_lock *lock,
                               const struct cl_io *io);
@@ -814,7 +814,7 @@ static int lov_object_print(const struct lu_env *env, void *cookie,
 }
 
 int lov_page_init(const struct lu_env *env, struct cl_object *obj,
-		struct cl_page *page, cfs_page_t *vmpage)
+		  struct cl_page *page, struct page *vmpage)
 {
         return LOV_2DISPATCH_NOLOCK(cl2lov(obj),
 				    llo_page_init, env, obj, page, vmpage);
@@ -888,7 +888,7 @@ struct lu_object *lov_object_alloc(const struct lu_env *env,
         struct lu_object  *obj;
 
         ENTRY;
-        OBD_SLAB_ALLOC_PTR_GFP(lov, lov_object_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lov, lov_object_kmem, __GFP_IO);
         if (lov != NULL) {
                 obj = lov2lu(lov);
                 lu_object_init(obj, NULL, dev);

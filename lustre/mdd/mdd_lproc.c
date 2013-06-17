@@ -103,7 +103,7 @@ static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-        if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
                 return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -144,29 +144,29 @@ static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
 }
 
 static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
-                                     unsigned long count, void *data)
+				     unsigned long count, void *data)
 {
-        struct mdd_device *mdd = data;
-        char *kernbuf;
-        int rc;
-        ENTRY;
+	struct mdd_device *mdd = data;
+	char *kernbuf;
+	int rc;
+	ENTRY;
 
-        if (count >= CFS_PAGE_SIZE)
-                RETURN(-EINVAL);
-        OBD_ALLOC(kernbuf, CFS_PAGE_SIZE);
-        if (kernbuf == NULL)
-                RETURN(-ENOMEM);
-        if (cfs_copy_from_user(kernbuf, buffer, count))
-                GOTO(out, rc = -EFAULT);
-        kernbuf[count] = 0;
+	if (count >= PAGE_CACHE_SIZE)
+		RETURN(-EINVAL);
+	OBD_ALLOC(kernbuf, PAGE_CACHE_SIZE);
+	if (kernbuf == NULL)
+		RETURN(-ENOMEM);
+	if (copy_from_user(kernbuf, buffer, count))
+		GOTO(out, rc = -EFAULT);
+	kernbuf[count] = 0;
 
-        rc = cfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
-                          CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
-        if (rc == 0)
-                rc = count;
+	rc = cfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
+			  CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
+	if (rc == 0)
+		rc = count;
 out:
-        OBD_FREE(kernbuf, CFS_PAGE_SIZE);
-        return rc;
+	OBD_FREE(kernbuf, PAGE_CACHE_SIZE);
+	return rc;
 }
 
 struct cucb_data {

@@ -61,9 +61,9 @@ struct cfs_zone_nob {
 static struct cfs_zone_nob      cfs_zone_nob;
 static spinlock_t		cfs_zone_guard;
 
-cfs_mem_cache_t *mem_cache_find(const char *name, size_t objsize)
+struct kmem_cache *mem_cache_find(const char *name, size_t objsize)
 {
-	cfs_mem_cache_t		*walker = NULL;
+	struct kmem_cache		*walker = NULL;
 
 	LASSERT(cfs_zone_nob.z_nob != NULL);
 
@@ -85,12 +85,12 @@ cfs_mem_cache_t *mem_cache_find(const char *name, size_t objsize)
  * survives kext unloading, so that @name cannot be just static string
  * embedded into kext image.
  */
-cfs_mem_cache_t *mem_cache_create(vm_size_t objsize, const char *name)
+struct kmem_cache *mem_cache_create(vm_size_t objsize, const char *name)
 {
-	cfs_mem_cache_t	*mc = NULL;
+	struct kmem_cache	*mc = NULL;
         char *cname;
 
-	MALLOC(mc, cfs_mem_cache_t *, sizeof(cfs_mem_cache_t), M_TEMP, M_WAITOK|M_ZERO);
+	MALLOC(mc, struct kmem_cache *, sizeof(struct kmem_cache), M_TEMP, M_WAITOK|M_ZERO);
 	if (mc == NULL){
 		CERROR("cfs_mem_cache created fail!\n");
 		return NULL;
@@ -105,7 +105,7 @@ cfs_mem_cache_t *mem_cache_create(vm_size_t objsize, const char *name)
         return mc;
 }
 
-void mem_cache_destroy(cfs_mem_cache_t *mc)
+void mem_cache_destroy(struct kmem_cache *mc)
 {
         /*
          * zone can NOT be destroyed after creating, 
@@ -128,17 +128,17 @@ void mem_cache_destroy(cfs_mem_cache_t *mc)
 
 #else  /* !CFS_INDIVIDUAL_ZONE */
 
-cfs_mem_cache_t *
+struct kmem_cache *
 mem_cache_find(const char *name, size_t objsize)
 {
         return NULL;
 }
 
-cfs_mem_cache_t *mem_cache_create(vm_size_t size, const char *name)
+struct kmem_cache *mem_cache_create(vm_size_t size, const char *name)
 {
-        cfs_mem_cache_t *mc = NULL;
+	struct kmem_cache *mc = NULL;
 
-	MALLOC(mc, cfs_mem_cache_t *, sizeof(cfs_mem_cache_t), M_TEMP, M_WAITOK|M_ZERO);
+	MALLOC(mc, struct kmem_cache *, sizeof(struct kmem_cache), M_TEMP, M_WAITOK|M_ZERO);
 	if (mc == NULL){
 		CERROR("cfs_mem_cache created fail!\n");
 		return NULL;
@@ -148,7 +148,7 @@ cfs_mem_cache_t *mem_cache_create(vm_size_t size, const char *name)
         return mc;
 }
 
-void mem_cache_destroy(cfs_mem_cache_t *mc)
+void mem_cache_destroy(struct kmem_cache *mc)
 {
         OSMalloc_Tagfree(mc->mc_cache);
         FREE(mc, M_TEMP);
@@ -160,45 +160,45 @@ void mem_cache_destroy(cfs_mem_cache_t *mc)
 
 #endif /* !CFS_INDIVIDUAL_ZONE */
 
-cfs_mem_cache_t *
-cfs_mem_cache_create (const char *name,
-                      size_t objsize, size_t off, unsigned long arg1)
+struct kmem_cache *
+kmem_cache_create(const char *name, size_t objsize, size_t off,
+		  unsigned long arg1, void *ctro)
 {
-        cfs_mem_cache_t *mc;
+	struct kmem_cache *mc;
 
-        mc = mem_cache_find(name, objsize);
-        if (mc)
-                return mc;
-        mc = mem_cache_create(objsize, name);
+	mc = mem_cache_find(name, objsize);
+	if (mc)
+		return mc;
+	mc = mem_cache_create(objsize, name);
 	return mc;
 }
 
-int cfs_mem_cache_destroy (cfs_mem_cache_t *cachep)
+kmem_cache_destroy (struct kmem_cache *cachep)
 {
-        mem_cache_destroy(cachep);
-        return 0;
+	mem_cache_destroy(cachep);
+	return 0;
 }
 
-void *cfs_mem_cache_alloc (cfs_mem_cache_t *cachep, int flags)
+void *kmem_cache_alloc (struct kmem_cache *cachep, int flags)
 {
-        void *result;
+	void *result;
 
-        /* zalloc_canblock() is not exported... Emulate it. */
-        if (flags & CFS_ALLOC_ATOMIC) {
-                result = (void *)mem_cache_alloc_nb(cachep);
-        } else {
-                LASSERT(get_preemption_level() == 0);
-                result = (void *)mem_cache_alloc(cachep);
-        }
-        if (result != NULL && (flags & CFS_ALLOC_ZERO))
-                memset(result, 0, cachep->mc_size);
+	/* zalloc_canblock() is not exported... Emulate it. */
+	if (flags & GFP_ATOMIC) {
+		result = (void *)mem_cache_alloc_nb(cachep);
+	} else {
+		LASSERT(get_preemption_level() == 0);
+		result = (void *)mem_cache_alloc(cachep);
+	}
+	if (result != NULL && (flags & __GFP_ZERO))
+		memset(result, 0, cachep->mc_size);
 
-        return result;
+	return result;
 }
 
-void cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
+void kmem_cache_free (struct kmem_cache *cachep, void *objp)
 {
-        mem_cache_free(cachep, objp);
+	mem_cache_free(cachep, objp);
 }
 
 /* ---------------------------------------------------------------------------
@@ -210,8 +210,8 @@ void cfs_mem_cache_free (cfs_mem_cache_t *cachep, void *objp)
  * "Raw" pages
  */
 
-static unsigned int raw_pages = 0;
-static cfs_mem_cache_t  *raw_page_cache = NULL;
+static unsigned int raw_pages;
+static struct kmem_cache  *raw_page_cache;
 
 static struct xnu_page_ops raw_page_ops;
 static struct xnu_page_ops *page_ops[XNU_PAGE_NTYPES] = {
@@ -219,35 +219,35 @@ static struct xnu_page_ops *page_ops[XNU_PAGE_NTYPES] = {
 };
 
 #if defined(LIBCFS_DEBUG)
-static int page_type_is_valid(cfs_page_t *page)
+static int page_type_is_valid(struct page *page)
 {
-        LASSERT(page != NULL);
-        return 0 <= page->type && page->type < XNU_PAGE_NTYPES;
+	LASSERT(page != NULL);
+	return 0 <= page->type && page->type < XNU_PAGE_NTYPES;
 }
 
-static int page_is_raw(cfs_page_t *page)
+static int page_is_raw(struct page *page)
 {
-        return page->type == XNU_PAGE_RAW;
+	return page->type == XNU_PAGE_RAW;
 }
 #endif
 
-static struct xnu_raw_page *as_raw(cfs_page_t *page)
+static struct xnu_raw_page *as_raw(struct page *page)
 {
-        LASSERT(page_is_raw(page));
-        return list_entry(page, struct xnu_raw_page, header);
+	LASSERT(page_is_raw(page));
+	return list_entry(page, struct xnu_raw_page, header);
 }
 
-static void *raw_page_address(cfs_page_t *pg)
+static void *raw_page_address(struct page *pg)
 {
-        return (void *)as_raw(pg)->virtual;
+	return (void *)as_raw(pg)->virtual;
 }
 
-static void *raw_page_map(cfs_page_t *pg)
+static void *raw_page_map(struct page *pg)
 {
-        return (void *)as_raw(pg)->virtual;
+	return (void *)as_raw(pg)->virtual;
 }
 
-static void raw_page_unmap(cfs_page_t *pg)
+static void raw_page_unmap(struct page *pg)
 {
 }
 
@@ -264,10 +264,10 @@ spinlock_t page_death_row_phylax;
 
 static void raw_page_finish(struct xnu_raw_page *pg)
 {
-        -- raw_pages;
-        if (pg->virtual != NULL)
-                cfs_mem_cache_free(raw_page_cache, pg->virtual);
-        cfs_free(pg);
+	--raw_pages;
+	if (pg->virtual != NULL)
+		kmem_cache_free(raw_page_cache, pg->virtual);
+	kfree(pg);
 }
 
 void raw_page_death_row_clean(void)
@@ -294,7 +294,7 @@ void free_raw_page(struct xnu_raw_page *pg)
 	/*
 	 * kmem_free()->vm_map_remove()->vm_map_delete()->lock_write() may
 	 * block. (raw_page_done()->upl_abort() can block too) On the other
-	 * hand, cfs_free_page() may be called in non-blockable context. To
+	 * hand, __free_page() may be called in non-blockable context. To
 	 * work around this, park pages on global list when cannot block.
 	 */
 	if (get_preemption_level() > 0) {
@@ -307,74 +307,74 @@ void free_raw_page(struct xnu_raw_page *pg)
 	}
 }
 
-cfs_page_t *cfs_alloc_page(u_int32_t flags)
+struct page *alloc_page(u_int32_t flags)
 {
-        struct xnu_raw_page *page;
+	struct xnu_raw_page *page;
 
-        /*
-         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
-         * from here: this will lead to infinite recursion.
-         */
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
-        page = cfs_alloc(sizeof *page, flags);
-        if (page != NULL) {
-                page->virtual = cfs_mem_cache_alloc(raw_page_cache, flags);
-                if (page->virtual != NULL) {
-                        ++ raw_pages;
-                        page->header.type = XNU_PAGE_RAW;
-                        atomic_set(&page->count, 1);
-                } else {
-                        cfs_free(page);
-                        page = NULL;
-                }
-        }
-        return page != NULL ? &page->header : NULL;
+	page = kmalloc(sizeof *page, flags);
+	if (page != NULL) {
+		page->virtual = kmem_cache_alloc(raw_page_cache, flags);
+		if (page->virtual != NULL) {
+			++raw_pages;
+			page->header.type = XNU_PAGE_RAW;
+			atomic_set(&page->count, 1);
+		} else {
+			kfree(page);
+			page = NULL;
+		}
+	}
+	return page != NULL ? &page->header : NULL;
 }
 
-void cfs_free_page(cfs_page_t *pages)
+void __free_page(struct page *pages)
 {
-        free_raw_page(as_raw(pages));
+	free_raw_page(as_raw(pages));
 }
 
-void cfs_get_page(cfs_page_t *p)
+void get_page(struct page *p)
 {
-        atomic_inc(&as_raw(p)->count);
+	atomic_inc(&as_raw(p)->count);
 }
 
-int cfs_put_page_testzero(cfs_page_t *p)
+int cfs_put_page_testzero(struct page *p)
 {
 	return atomic_dec_and_test(&as_raw(p)->count);
 }
 
-int cfs_page_count(cfs_page_t *p)
+int page_count(struct page *p)
 {
-        return atomic_read(&as_raw(p)->count);
+	return atomic_read(&as_raw(p)->count);
 }
 
 /*
  * Generic page operations
  */
 
-void *cfs_page_address(cfs_page_t *pg)
+void *page_address(struct page *pg)
 {
-        /*
-         * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
-         * from here: this will lead to infinite recursion.
-         */
-        LASSERT(page_type_is_valid(pg));
-        return page_ops[pg->type]->page_address(pg);
+	/*
+	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+	LASSERT(page_type_is_valid(pg));
+	return page_ops[pg->type]->page_address(pg);
 }
 
-void *cfs_kmap(cfs_page_t *pg)
+void *kmap(struct page *pg)
 {
-        LASSERT(page_type_is_valid(pg));
-        return page_ops[pg->type]->page_map(pg);
+	LASSERT(page_type_is_valid(pg));
+	return page_ops[pg->type]->page_map(pg);
 }
 
-void cfs_kunmap(cfs_page_t *pg)
+void kunmap(struct page *pg)
 {
-        LASSERT(page_type_is_valid(pg));
-        page_ops[pg->type]->page_unmap(pg);
+	LASSERT(page_type_is_valid(pg));
+	page_ops[pg->type]->page_unmap(pg);
 }
 
 void xnu_page_ops_register(int type, struct xnu_page_ops *ops)
@@ -403,39 +403,39 @@ extern int get_preemption_level(void);
 #define get_preemption_level() (0)
 #endif
 
-void *cfs_alloc(size_t nr_bytes, u_int32_t flags)
+void *kmalloc(size_t nr_bytes, u_int32_t flags)
 {
-        int mflags;
+	int mflags;
 
-        mflags = 0;
-        if (flags & CFS_ALLOC_ATOMIC) {
-                mflags |= M_NOWAIT;
-        } else {
-                LASSERT(get_preemption_level() == 0);
-                mflags |= M_WAITOK;
-        }
+	mflags = 0;
+	if (flags & GFP_ATOMIC) {
+		mflags |= M_NOWAIT;
+	} else {
+		LASSERT(get_preemption_level() == 0);
+		mflags |= M_WAITOK;
+	}
 
-        if (flags & CFS_ALLOC_ZERO)
-                mflags |= M_ZERO;
+	if (flags & __GFP_ZERO)
+		mflags |= M_ZERO;
 
-        return _MALLOC(nr_bytes, M_TEMP, mflags);
+	return _MALLOC(nr_bytes, M_TEMP, mflags);
 }
 
-void cfs_free(void *addr)
+void kfree(void *addr)
 {
-        return _FREE(addr, M_TEMP);
+	return _FREE(addr, M_TEMP);
 }
 
-void *cfs_alloc_large(size_t nr_bytes)
+void *vmalloc(size_t nr_bytes)
 {
-        LASSERT(get_preemption_level() == 0);
-        return _MALLOC(nr_bytes, M_TEMP, M_WAITOK);
+	LASSERT(get_preemption_level() == 0);
+	return _MALLOC(nr_bytes, M_TEMP, M_WAITOK);
 }
 
-void  cfs_free_large(void *addr)
+void  vfree(void *addr)
 {
-        LASSERT(get_preemption_level() == 0);
-        return _FREE(addr, M_TEMP);
+	LASSERT(get_preemption_level() == 0);
+	return _FREE(addr, M_TEMP);
 }
 
 /*
@@ -477,7 +477,8 @@ int cfs_mem_init(void)
 #endif
 	CFS_INIT_LIST_HEAD(&page_death_row);
 	spin_lock_init(&page_death_row_phylax);
-	raw_page_cache = cfs_mem_cache_create("raw-page", CFS_PAGE_SIZE, 0, 0);
+	raw_page_cache = kmem_cache_create("raw-page", PAGE_CACHE_SIZE,
+					   0, 0, NULL);
 	return 0;
 }
 
@@ -485,7 +486,7 @@ void cfs_mem_fini(void)
 {
 	raw_page_death_row_clean();
 	spin_lock_done(&page_death_row_phylax);
-	cfs_mem_cache_destroy(raw_page_cache);
+	kmem_cache_destroy(raw_page_cache);
 
 #if CFS_INDIVIDUAL_ZONE
 	cfs_zone_nob.z_nob = NULL;

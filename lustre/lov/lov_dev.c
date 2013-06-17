@@ -45,17 +45,17 @@
 
 #include "lov_cl_internal.h"
 
-cfs_mem_cache_t *lov_lock_kmem;
-cfs_mem_cache_t *lov_object_kmem;
-cfs_mem_cache_t *lov_thread_kmem;
-cfs_mem_cache_t *lov_session_kmem;
-cfs_mem_cache_t *lov_req_kmem;
+struct kmem_cache *lov_lock_kmem;
+struct kmem_cache *lov_object_kmem;
+struct kmem_cache *lov_thread_kmem;
+struct kmem_cache *lov_session_kmem;
+struct kmem_cache *lov_req_kmem;
 
-cfs_mem_cache_t *lovsub_lock_kmem;
-cfs_mem_cache_t *lovsub_object_kmem;
-cfs_mem_cache_t *lovsub_req_kmem;
+struct kmem_cache *lovsub_lock_kmem;
+struct kmem_cache *lovsub_object_kmem;
+struct kmem_cache *lovsub_req_kmem;
 
-cfs_mem_cache_t *lov_lock_link_kmem;
+struct kmem_cache *lov_lock_link_kmem;
 
 /** Lock class of lov_device::ld_mutex. */
 struct lock_class_key cl_lov_device_mutex_class;
@@ -143,7 +143,7 @@ static void *lov_key_init(const struct lu_context *ctx,
 {
         struct lov_thread_info *info;
 
-        OBD_SLAB_ALLOC_PTR_GFP(info, lov_thread_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(info, lov_thread_kmem, __GFP_IO);
         if (info != NULL)
                 CFS_INIT_LIST_HEAD(&info->lti_closure.clc_list);
         else
@@ -170,7 +170,7 @@ static void *lov_session_key_init(const struct lu_context *ctx,
 {
         struct lov_session *info;
 
-        OBD_SLAB_ALLOC_PTR_GFP(info, lov_session_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(info, lov_session_kmem, __GFP_IO);
         if (info == NULL)
                 info = ERR_PTR(-ENOMEM);
         return info;
@@ -261,7 +261,7 @@ static int lov_req_init(const struct lu_env *env, struct cl_device *dev,
         int result;
 
         ENTRY;
-        OBD_SLAB_ALLOC_PTR_GFP(lr, lov_req_kmem, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lr, lov_req_kmem, __GFP_IO);
         if (lr != NULL) {
                 cl_req_slice_add(req, &lr->lr_cl, dev, &lov_req_ops);
                 result = 0;

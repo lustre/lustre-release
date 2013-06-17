@@ -47,18 +47,18 @@
 #include <lprocfs_status.h>
 #include "llite_internal.h"
 
-static cfs_mem_cache_t *ll_inode_cachep;
+static struct kmem_cache *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
-        struct ll_inode_info *lli;
-        ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
-        OBD_SLAB_ALLOC_PTR_GFP(lli, ll_inode_cachep, CFS_ALLOC_IO);
-        if (lli == NULL)
-                return NULL;
+	struct ll_inode_info *lli;
+	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
+	OBD_SLAB_ALLOC_PTR_GFP(lli, ll_inode_cachep, __GFP_IO);
+	if (lli == NULL)
+		return NULL;
 
-        inode_init_once(&lli->lli_vfs_inode);
-        return &lli->lli_vfs_inode;
+	inode_init_once(&lli->lli_vfs_inode);
+	return &lli->lli_vfs_inode;
 }
 
 static void ll_destroy_inode(struct inode *inode)
@@ -69,20 +69,17 @@ static void ll_destroy_inode(struct inode *inode)
 
 int ll_init_inodecache(void)
 {
-        ll_inode_cachep = cfs_mem_cache_create("lustre_inode_cache",
-                                               sizeof(struct ll_inode_info),
-                                               0, CFS_SLAB_HWCACHE_ALIGN);
-        if (ll_inode_cachep == NULL)
-                return -ENOMEM;
-        return 0;
+	ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
+					    sizeof(struct ll_inode_info),
+					    0, SLAB_HWCACHE_ALIGN, NULL);
+	if (ll_inode_cachep == NULL)
+		return -ENOMEM;
+	return 0;
 }
 
 void ll_destroy_inodecache(void)
 {
-        int rc;
-
-        rc = cfs_mem_cache_destroy(ll_inode_cachep);
-        LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
+	kmem_cache_destroy(ll_inode_cachep);
 }
 
 /* exported operations */
@@ -126,36 +123,36 @@ static int __init init_lustre_lite(void)
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
-        ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
-                                                 sizeof(struct ll_file_data), 0,
-                                                 CFS_SLAB_HWCACHE_ALIGN);
-        if (ll_file_data_slab == NULL) {
-                ll_destroy_inodecache();
-                return -ENOMEM;
-        }
+	ll_file_data_slab = kmem_cache_create("ll_file_data",
+						 sizeof(struct ll_file_data), 0,
+						 SLAB_HWCACHE_ALIGN, NULL);
+	if (ll_file_data_slab == NULL) {
+		ll_destroy_inodecache();
+		return -ENOMEM;
+	}
 
-        ll_remote_perm_cachep = cfs_mem_cache_create("ll_remote_perm_cache",
-                                                  sizeof(struct ll_remote_perm),
-                                                      0, 0);
-        if (ll_remote_perm_cachep == NULL) {
-                cfs_mem_cache_destroy(ll_file_data_slab);
-                ll_file_data_slab = NULL;
-                ll_destroy_inodecache();
-                return -ENOMEM;
-        }
+	ll_remote_perm_cachep = kmem_cache_create("ll_remote_perm_cache",
+						  sizeof(struct ll_remote_perm),
+						  0, 0, NULL);
+	if (ll_remote_perm_cachep == NULL) {
+		kmem_cache_destroy(ll_file_data_slab);
+		ll_file_data_slab = NULL;
+		ll_destroy_inodecache();
+		return -ENOMEM;
+	}
 
-        ll_rmtperm_hash_cachep = cfs_mem_cache_create("ll_rmtperm_hash_cache",
-                                                   REMOTE_PERM_HASHSIZE *
-                                                   sizeof(cfs_list_t),
-                                                   0, 0);
-        if (ll_rmtperm_hash_cachep == NULL) {
-                cfs_mem_cache_destroy(ll_remote_perm_cachep);
-                ll_remote_perm_cachep = NULL;
-                cfs_mem_cache_destroy(ll_file_data_slab);
-                ll_file_data_slab = NULL;
-                ll_destroy_inodecache();
-                return -ENOMEM;
-        }
+	ll_rmtperm_hash_cachep = kmem_cache_create("ll_rmtperm_hash_cache",
+						   REMOTE_PERM_HASHSIZE *
+						   sizeof(cfs_list_t),
+						   0, 0, NULL);
+	if (ll_rmtperm_hash_cachep == NULL) {
+		kmem_cache_destroy(ll_remote_perm_cachep);
+		ll_remote_perm_cachep = NULL;
+		kmem_cache_destroy(ll_file_data_slab);
+		ll_file_data_slab = NULL;
+		ll_destroy_inodecache();
+		return -ENOMEM;
+	}
 
         proc_lustre_fs_root = proc_lustre_root ?
                               lprocfs_register("llite", proc_lustre_root, NULL, NULL) : NULL;
@@ -195,8 +192,6 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
-        int rc;
-
         vvp_global_fini();
         del_timer(&ll_capa_timer);
         ll_capa_thread_stop();
@@ -211,18 +206,15 @@ static void __exit exit_lustre_lite(void)
 
         ll_destroy_inodecache();
 
-        rc = cfs_mem_cache_destroy(ll_rmtperm_hash_cachep);
-        LASSERTF(rc == 0, "couldn't destroy ll_rmtperm_hash_cachep\n");
-        ll_rmtperm_hash_cachep = NULL;
+	kmem_cache_destroy(ll_rmtperm_hash_cachep);
+	ll_rmtperm_hash_cachep = NULL;
 
-        rc = cfs_mem_cache_destroy(ll_remote_perm_cachep);
-        LASSERTF(rc == 0, "couldn't destroy ll_remote_perm_cachep\n");
-        ll_remote_perm_cachep = NULL;
+	kmem_cache_destroy(ll_remote_perm_cachep);
+	ll_remote_perm_cachep = NULL;
 
-        rc = cfs_mem_cache_destroy(ll_file_data_slab);
-        LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
-        if (proc_lustre_fs_root)
-                lprocfs_remove(&proc_lustre_fs_root);
+	kmem_cache_destroy(ll_file_data_slab);
+	if (proc_lustre_fs_root)
+		lprocfs_remove(&proc_lustre_fs_root);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

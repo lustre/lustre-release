@@ -45,110 +45,109 @@
 void
 kportal_memhog_free (struct libcfs_device_userstate *ldu)
 {
-        cfs_page_t **level0p = &ldu->ldu_memhog_root_page;
-        cfs_page_t **level1p;
-        cfs_page_t **level2p;
-        int           count1;
-        int           count2;
+	struct page **level0p = &ldu->ldu_memhog_root_page;
+	struct page **level1p;
+	struct page **level2p;
+	int           count1;
+	int           count2;
 
-        if (*level0p != NULL) {
+	if (*level0p != NULL) {
+		level1p = (struct page **)page_address(*level0p);
+		count1 = 0;
 
-                level1p = (cfs_page_t **)cfs_page_address(*level0p);
-                count1 = 0;
+		while (count1 < PAGE_CACHE_SIZE/sizeof(struct page *) &&
+		       *level1p != NULL) {
 
-                while (count1 < CFS_PAGE_SIZE/sizeof(cfs_page_t *) &&
-                       *level1p != NULL) {
+			level2p = (struct page **)page_address(*level1p);
+			count2 = 0;
 
-                        level2p = (cfs_page_t **)cfs_page_address(*level1p);
-                        count2 = 0;
+			while (count2 < PAGE_CACHE_SIZE/sizeof(struct page *) &&
+			       *level2p != NULL) {
 
-                        while (count2 < CFS_PAGE_SIZE/sizeof(cfs_page_t *) &&
-                               *level2p != NULL) {
+				__free_page(*level2p);
+				ldu->ldu_memhog_pages--;
+				level2p++;
+				count2++;
+			}
 
-                                cfs_free_page(*level2p);
-                                ldu->ldu_memhog_pages--;
-                                level2p++;
-                                count2++;
-                        }
+			__free_page(*level1p);
+			ldu->ldu_memhog_pages--;
+			level1p++;
+			count1++;
+		}
 
-                        cfs_free_page(*level1p);
-                        ldu->ldu_memhog_pages--;
-                        level1p++;
-                        count1++;
-                }
+		__free_page(*level0p);
+		ldu->ldu_memhog_pages--;
 
-                cfs_free_page(*level0p);
-                ldu->ldu_memhog_pages--;
+		*level0p = NULL;
+	}
 
-                *level0p = NULL;
-        }
-
-        LASSERT (ldu->ldu_memhog_pages == 0);
+	LASSERT(ldu->ldu_memhog_pages == 0);
 }
 
 int
 kportal_memhog_alloc (struct libcfs_device_userstate *ldu, int npages, int flags)
 {
-        cfs_page_t **level0p;
-        cfs_page_t **level1p;
-        cfs_page_t **level2p;
-        int           count1;
-        int           count2;
+	struct page **level0p;
+	struct page **level1p;
+	struct page **level2p;
+	int           count1;
+	int           count2;
 
-        LASSERT (ldu->ldu_memhog_pages == 0);
-        LASSERT (ldu->ldu_memhog_root_page == NULL);
+	LASSERT(ldu->ldu_memhog_pages == 0);
+	LASSERT(ldu->ldu_memhog_root_page == NULL);
 
-        if (npages < 0)
-                return -EINVAL;
+	if (npages < 0)
+		return -EINVAL;
 
-        if (npages == 0)
-                return 0;
+	if (npages == 0)
+		return 0;
 
-        level0p = &ldu->ldu_memhog_root_page;
-        *level0p = cfs_alloc_page(flags);
-        if (*level0p == NULL)
-                return -ENOMEM;
-        ldu->ldu_memhog_pages++;
+	level0p = &ldu->ldu_memhog_root_page;
+	*level0p = alloc_page(flags);
+	if (*level0p == NULL)
+		return -ENOMEM;
+	ldu->ldu_memhog_pages++;
 
-        level1p = (cfs_page_t **)cfs_page_address(*level0p);
-        count1 = 0;
-        memset(level1p, 0, CFS_PAGE_SIZE);
+	level1p = (struct page **)page_address(*level0p);
+	count1 = 0;
+	memset(level1p, 0, PAGE_CACHE_SIZE);
 
-        while (ldu->ldu_memhog_pages < npages &&
-               count1 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
+	while (ldu->ldu_memhog_pages < npages &&
+	       count1 < PAGE_CACHE_SIZE/sizeof(struct page *)) {
 
-                if (cfs_signal_pending())
-                        return (-EINTR);
+		if (cfs_signal_pending())
+			return -EINTR;
 
-                *level1p = cfs_alloc_page(flags);
-                if (*level1p == NULL)
-                        return -ENOMEM;
-                ldu->ldu_memhog_pages++;
+		*level1p = alloc_page(flags);
+		if (*level1p == NULL)
+			return -ENOMEM;
+		ldu->ldu_memhog_pages++;
 
-                level2p = (cfs_page_t **)cfs_page_address(*level1p);
-                count2 = 0;
-                memset(level2p, 0, CFS_PAGE_SIZE);
+		level2p = (struct page **)page_address(*level1p);
+		count2 = 0;
+		memset(level2p, 0, PAGE_CACHE_SIZE);
 
-                while (ldu->ldu_memhog_pages < npages &&
-                       count2 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
+		while (ldu->ldu_memhog_pages < npages &&
+		       count2 < PAGE_CACHE_SIZE/sizeof(struct page *)) {
 
-                        if (cfs_signal_pending())
-                                return (-EINTR);
+			if (cfs_signal_pending())
+				return -EINTR;
 
-                        *level2p = cfs_alloc_page(flags);
-                        if (*level2p == NULL)
-                                return (-ENOMEM);
-                        ldu->ldu_memhog_pages++;
+			*level2p = alloc_page(flags);
+			if (*level2p == NULL)
+				return -ENOMEM;
+			ldu->ldu_memhog_pages++;
 
-                        level2p++;
-                        count2++;
-                }
+			level2p++;
+			count2++;
+		}
 
-                level1p++;
-                count1++;
-        }
+		level1p++;
+		count1++;
+	}
 
-        return 0;
+	return 0;
 }
 
 /* called when opening /dev/device */
@@ -326,16 +325,17 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
         RETURN(err);
 }
 
-static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *arg)
+static int libcfs_ioctl(struct cfs_psdev_file *pfile,
+			unsigned long cmd, void *arg)
 {
-        char    *buf;
-        struct libcfs_ioctl_data *data;
-        int err = 0;
-        ENTRY;
+	char    *buf;
+	struct libcfs_ioctl_data *data;
+	int err = 0;
+	ENTRY;
 
-        LIBCFS_ALLOC_GFP(buf, 1024, CFS_ALLOC_STD);
-        if (buf == NULL)
-                RETURN(-ENOMEM);
+	LIBCFS_ALLOC_GFP(buf, 1024, GFP_IOFS);
+	if (buf == NULL)
+		RETURN(-ENOMEM);
 
         /* 'cmd' and permissions get checked in our arch-specific caller */
         if (libcfs_ioctl_getdata(buf, buf + 800, (void *)arg)) {

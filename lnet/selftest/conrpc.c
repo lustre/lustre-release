@@ -160,7 +160,7 @@ lstcon_rpc_put(lstcon_rpc_t *crpc)
                 if (bulk->bk_iovs[i].kiov_page == NULL)
                         continue;
 
-                cfs_free_page(bulk->bk_iovs[i].kiov_page);
+		__free_page(bulk->bk_iovs[i].kiov_page);
         }
 
         srpc_client_rpc_decref(crpc->crp_rpc);
@@ -494,7 +494,7 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 
         cfs_list_for_each_entry_typed(crpc, &trans->tas_rpcs_list,
                                       lstcon_rpc_t, crp_link) {
-                if (cfs_copy_from_user(&tmp, next,
+		if (copy_from_user(&tmp, next,
                                        sizeof(cfs_list_t)))
                         return -EFAULT;
 
@@ -515,35 +515,36 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
                       (cfs_time_t)console_session.ses_id.ses_stamp);
                 cfs_duration_usec(dur, &tv);
 
-                if (cfs_copy_to_user(&ent->rpe_peer,
-                                     &nd->nd_id, sizeof(lnet_process_id_t)) ||
-                    cfs_copy_to_user(&ent->rpe_stamp, &tv, sizeof(tv)) ||
-                    cfs_copy_to_user(&ent->rpe_state,
-                                     &nd->nd_state, sizeof(nd->nd_state)) ||
-                    cfs_copy_to_user(&ent->rpe_rpc_errno, &error,
-                                     sizeof(error)))
-                        return -EFAULT;
+		if (copy_to_user(&ent->rpe_peer,
+				 &nd->nd_id, sizeof(lnet_process_id_t)) ||
+		    copy_to_user(&ent->rpe_stamp, &tv, sizeof(tv)) ||
+		    copy_to_user(&ent->rpe_state,
+				 &nd->nd_state, sizeof(nd->nd_state)) ||
+		    copy_to_user(&ent->rpe_rpc_errno, &error,
+				     sizeof(error)))
+			return -EFAULT;
 
-                if (error != 0)
-                        continue;
+		if (error != 0)
+			continue;
 
-                /* RPC is done */
-                rep = (srpc_generic_reply_t *)&msg->msg_body.reply;
+		/* RPC is done */
+		rep = (srpc_generic_reply_t *)&msg->msg_body.reply;
 
-                if (cfs_copy_to_user(&ent->rpe_sid,
-                                     &rep->sid, sizeof(lst_sid_t)) ||
-                    cfs_copy_to_user(&ent->rpe_fwk_errno,
-                                     &rep->status, sizeof(rep->status)))
-                        return -EFAULT;
+		if (copy_to_user(&ent->rpe_sid,
+				 &rep->sid, sizeof(lst_sid_t)) ||
+		    copy_to_user(&ent->rpe_fwk_errno,
+				 &rep->status, sizeof(rep->status)))
+			return -EFAULT;
 
-                if (readent == NULL)
-                        continue;
+		if (readent == NULL)
+			continue;
 
-                if ((error = readent(trans->tas_opc, msg, ent)) != 0)
-                        return error;
-        }
+		error = readent(trans->tas_opc, msg, ent);
+		if (error != 0)
+			return error;
+	}
 
-        return 0;
+	return 0;
 }
 
 void
@@ -720,7 +721,7 @@ lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
         
         LASSERT (i < nkiov);
 
-        pid = (lnet_process_id_packed_t *)cfs_page_address(kiov[i].kiov_page);
+	pid = (lnet_process_id_packed_t *)page_address(kiov[i].kiov_page);
 
         return &pid[idx % SFW_ID_PER_PAGE];
 }
@@ -797,11 +798,12 @@ lstcon_bulkrpc_v0_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
 {
 	test_bulk_req_t *brq = &req->tsr_u.bulk_v0;
 
-        brq->blk_opc    = param->blk_opc;
-        brq->blk_npg    = (param->blk_size + CFS_PAGE_SIZE - 1) / CFS_PAGE_SIZE;
-        brq->blk_flags  = param->blk_flags;
+	brq->blk_opc    = param->blk_opc;
+	brq->blk_npg    = (param->blk_size + PAGE_CACHE_SIZE - 1) /
+			   PAGE_CACHE_SIZE;
+	brq->blk_flags  = param->blk_flags;
 
-        return 0;
+	return 0;
 }
 
 int
@@ -833,7 +835,7 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
 	if (transop == LST_TRANS_TSBCLIADD) {
 		npg = sfw_id_pages(test->tes_span);
 		nob = (feats & LST_FEAT_BULK_LEN) == 0 ?
-		      npg * CFS_PAGE_SIZE :
+		      npg * PAGE_CACHE_SIZE :
 		      sizeof(lnet_process_id_packed_t) * test->tes_span;
 	}
 
@@ -860,13 +862,13 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
 			LASSERT(nob > 0);
 
 			len = (feats & LST_FEAT_BULK_LEN) == 0 ?
-			      CFS_PAGE_SIZE : min_t(int, nob, CFS_PAGE_SIZE);
+			      PAGE_CACHE_SIZE : min_t(int, nob, PAGE_CACHE_SIZE);
 			nob -= len;
 
 			bulk->bk_iovs[i].kiov_offset = 0;
 			bulk->bk_iovs[i].kiov_len    = len;
 			bulk->bk_iovs[i].kiov_page   =
-				cfs_alloc_page(CFS_ALLOC_STD);
+				alloc_page(GFP_IOFS);
 
 			if (bulk->bk_iovs[i].kiov_page == NULL) {
 				lstcon_rpc_put(*crpc);

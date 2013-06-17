@@ -814,10 +814,10 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
                 int                       j;
 
 #ifdef __KERNEL__
-                dests = cfs_page_address(bk->bk_iovs[i / SFW_ID_PER_PAGE].kiov_page);
-                LASSERT (dests != NULL);  /* my pages are within KVM always */
+		dests = page_address(bk->bk_iovs[i / SFW_ID_PER_PAGE].kiov_page);
+		LASSERT (dests != NULL);  /* my pages are within KVM always */
 #else
-                dests = cfs_page_address(bk->bk_pages[i / SFW_ID_PER_PAGE]);
+		dests = page_address(bk->bk_pages[i / SFW_ID_PER_PAGE]);
 #endif
                 id = dests[i % SFW_ID_PER_PAGE];
                 if (msg->msg_magic != SRPC_MSG_MAGIC)
@@ -1202,7 +1202,7 @@ sfw_add_test (srpc_server_rpc_t *rpc)
 		int	len;
 
 		if ((sn->sn_features & LST_FEAT_BULK_LEN) == 0) {
-			len = npg * CFS_PAGE_SIZE;
+			len = npg * PAGE_CACHE_SIZE;
 
 		} else  {
 			len = sizeof(lnet_process_id_packed_t) *

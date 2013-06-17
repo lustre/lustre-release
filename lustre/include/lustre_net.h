@@ -108,13 +108,13 @@
  */
 #define PTLRPC_MAX_BRW_BITS	(LNET_MTU_BITS + PTLRPC_BULK_OPS_BITS)
 #define PTLRPC_MAX_BRW_SIZE	(1 << PTLRPC_MAX_BRW_BITS)
-#define PTLRPC_MAX_BRW_PAGES	(PTLRPC_MAX_BRW_SIZE >> CFS_PAGE_SHIFT)
+#define PTLRPC_MAX_BRW_PAGES	(PTLRPC_MAX_BRW_SIZE >> PAGE_CACHE_SHIFT)
 
 #define ONE_MB_BRW_SIZE		(1 << LNET_MTU_BITS)
 #define MD_MAX_BRW_SIZE		(1 << LNET_MTU_BITS)
-#define MD_MAX_BRW_PAGES	(MD_MAX_BRW_SIZE >> CFS_PAGE_SHIFT)
+#define MD_MAX_BRW_PAGES	(MD_MAX_BRW_SIZE >> PAGE_CACHE_SHIFT)
 #define DT_MAX_BRW_SIZE		PTLRPC_MAX_BRW_SIZE
-#define DT_MAX_BRW_PAGES	(DT_MAX_BRW_SIZE >> CFS_PAGE_SHIFT)
+#define DT_MAX_BRW_PAGES	(DT_MAX_BRW_SIZE >> PAGE_CACHE_SHIFT)
 #define OFD_MAX_BRW_SIZE	(1 << LNET_MTU_BITS)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
@@ -122,8 +122,8 @@
 # if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
 #  error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
 # endif
-# if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * CFS_PAGE_SIZE))
-#  error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * CFS_PAGE_SIZE"
+# if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE))
+#  error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE"
 # endif
 # if (PTLRPC_MAX_BRW_SIZE > LNET_MTU * PTLRPC_BULK_OPS_COUNT)
 #  error "PTLRPC_MAX_BRW_SIZE too big"
@@ -465,7 +465,7 @@
   */
  /* depress threads factor for VM with small memory size */
 #define OSS_THR_FACTOR		min_t(int, 8, \
-				CFS_NUM_CACHEPAGES >> (28 - CFS_PAGE_SHIFT))
+				NUM_CACHEPAGES >> (28 - PAGE_CACHE_SHIFT))
 #define OSS_NTHRS_INIT		(PTLRPC_NTHRS_INIT + 1)
 #define OSS_NTHRS_BASE		64
 #define OSS_NTHRS_MAX		512
@@ -1567,7 +1567,7 @@ struct nrs_orr_key {
  * id number, so this _should_ be more than enough for the maximum number of
  * CPTs on any system. If it does happen that this statement is incorrect,
  * nrs_orr_genobjname() will inevitably yield a non-unique name and cause
- * cfs_mem_cache_create() to complain (on Linux), so the erroneous situation
+ * kmem_cache_create() to complain (on Linux), so the erroneous situation
  * will hopefully not go unnoticed.
  */
 #define NRS_ORR_OBJ_NAME_MAX	(sizeof("nrs_orr_reg_") + 3)
@@ -1579,7 +1579,7 @@ struct nrs_orr_data {
 	struct ptlrpc_nrs_resource	od_res;
 	cfs_binheap_t		       *od_binheap;
 	cfs_hash_t		       *od_obj_hash;
-	cfs_mem_cache_t		       *od_cache;
+	struct kmem_cache		       *od_cache;
 	/**
 	 * Used when a new scheduling round commences, in order to synchronize
 	 * all object or OST batches with the new round number.
@@ -2983,16 +2983,16 @@ static inline void ptlrpc_free_bulk_nopin(struct ptlrpc_bulk_desc *bulk)
 	__ptlrpc_free_bulk(bulk, 0);
 }
 void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
-			     cfs_page_t *page, int pageoffset, int len, int);
+			     struct page *page, int pageoffset, int len, int);
 static inline void ptlrpc_prep_bulk_page_pin(struct ptlrpc_bulk_desc *desc,
-					     cfs_page_t *page, int pageoffset,
+					     struct page *page, int pageoffset,
 					     int len)
 {
 	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 1);
 }
 
 static inline void ptlrpc_prep_bulk_page_nopin(struct ptlrpc_bulk_desc *desc,
-					       cfs_page_t *page, int pageoffset,
+					       struct page *page, int pageoffset,
 					       int len)
 {
 	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 0);

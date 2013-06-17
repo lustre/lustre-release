@@ -403,12 +403,12 @@ struct osc_page {
         struct cl_lock       *ops_lock;
 };
 
-extern cfs_mem_cache_t *osc_lock_kmem;
-extern cfs_mem_cache_t *osc_object_kmem;
-extern cfs_mem_cache_t *osc_thread_kmem;
-extern cfs_mem_cache_t *osc_session_kmem;
-extern cfs_mem_cache_t *osc_req_kmem;
-extern cfs_mem_cache_t *osc_extent_kmem;
+extern struct kmem_cache *osc_lock_kmem;
+extern struct kmem_cache *osc_object_kmem;
+extern struct kmem_cache *osc_thread_kmem;
+extern struct kmem_cache *osc_session_kmem;
+extern struct kmem_cache *osc_req_kmem;
+extern struct kmem_cache *osc_extent_kmem;
 
 extern struct lu_device_type osc_device_type;
 extern struct lu_context_key osc_key;
@@ -427,7 +427,7 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *dev);
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
-		  struct cl_page *page, cfs_page_t *vmpage);
+		  struct cl_page *page, struct page *vmpage);
 
 void osc_index2policy  (ldlm_policy_data_t *policy, const struct cl_object *obj,
                         pgoff_t start, pgoff_t end);
@@ -440,7 +440,7 @@ int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
 int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
 			obd_flag async_flags);
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
-			cfs_page_t *page, loff_t offset);
+			struct page *page, loff_t offset);
 int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		       struct osc_page *ops);
 int osc_teardown_async_page(const struct lu_env *env, struct osc_object *obj,

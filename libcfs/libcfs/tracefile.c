@@ -68,41 +68,41 @@ cfs_tage_from_list(cfs_list_t *list)
 
 static struct cfs_trace_page *cfs_tage_alloc(int gfp)
 {
-        cfs_page_t            *page;
-        struct cfs_trace_page *tage;
+	struct page            *page;
+	struct cfs_trace_page *tage;
 
-        /* My caller is trying to free memory */
-        if (!cfs_in_interrupt() && cfs_memory_pressure_get())
-                return NULL;
+	/* My caller is trying to free memory */
+	if (!cfs_in_interrupt() && memory_pressure_get())
+		return NULL;
 
-        /*
-         * Don't spam console with allocation failures: they will be reported
-         * by upper layer anyway.
-         */
-        gfp |= CFS_ALLOC_NOWARN;
-        page = cfs_alloc_page(gfp);
-        if (page == NULL)
-                return NULL;
+	/*
+	 * Don't spam console with allocation failures: they will be reported
+	 * by upper layer anyway.
+	 */
+	gfp |= __GFP_NOWARN;
+	page = alloc_page(gfp);
+	if (page == NULL)
+		return NULL;
 
-        tage = cfs_alloc(sizeof(*tage), gfp);
-        if (tage == NULL) {
-                cfs_free_page(page);
-                return NULL;
-        }
+	tage = kmalloc(sizeof(*tage), gfp);
+	if (tage == NULL) {
+		__free_page(page);
+		return NULL;
+	}
 
-        tage->page = page;
-        cfs_atomic_inc(&cfs_tage_allocated);
-        return tage;
+	tage->page = page;
+	cfs_atomic_inc(&cfs_tage_allocated);
+	return tage;
 }
 
 static void cfs_tage_free(struct cfs_trace_page *tage)
 {
-        __LASSERT(tage != NULL);
-        __LASSERT(tage->page != NULL);
+	__LASSERT(tage != NULL);
+	__LASSERT(tage->page != NULL);
 
-        cfs_free_page(tage->page);
-        cfs_free(tage);
-        cfs_atomic_dec(&cfs_tage_allocated);
+	__free_page(tage->page);
+	kfree(tage);
+	cfs_atomic_dec(&cfs_tage_allocated);
 }
 
 static void cfs_tage_to_tail(struct cfs_trace_page *tage,
@@ -144,7 +144,7 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
         if (tcd->tcd_cur_pages > 0) {
                 __LASSERT(!cfs_list_empty(&tcd->tcd_pages));
                 tage = cfs_tage_from_list(tcd->tcd_pages.prev);
-                if (tage->used + len <= CFS_PAGE_SIZE)
+		if (tage->used + len <= PAGE_CACHE_SIZE)
                         return tage;
         }
 
@@ -154,9 +154,9 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 			--tcd->tcd_cur_stock_pages;
 			cfs_list_del_init(&tage->linkage);
 		} else {
-			tage = cfs_tage_alloc(CFS_ALLOC_ATOMIC);
+			tage = cfs_tage_alloc(GFP_ATOMIC);
 			if (unlikely(tage == NULL)) {
-				if ((!cfs_memory_pressure_get() ||
+				if ((!memory_pressure_get() ||
 				     cfs_in_interrupt()) && printk_ratelimit())
 					printk(CFS_KERN_WARNING
 					       "cannot allocate a tage (%ld)\n",
@@ -225,7 +225,7 @@ static struct cfs_trace_page *cfs_trace_get_tage(struct cfs_trace_cpu_data *tcd,
          * from here: this will lead to infinite recursion.
          */
 
-        if (len > CFS_PAGE_SIZE) {
+	if (len > PAGE_CACHE_SIZE) {
                 printk(CFS_KERN_ERR
                        "cowardly refusing to write %lu bytes in a page\n", len);
                 return NULL;
@@ -317,7 +317,7 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
         for (i = 0; i < 2; i++) {
                 tage = cfs_trace_get_tage(tcd, needed + known_size + 1);
                 if (tage == NULL) {
-                        if (needed + known_size > CFS_PAGE_SIZE)
+			if (needed + known_size > PAGE_CACHE_SIZE)
                                 mask |= D_ERROR;
 
                         cfs_trace_put_tcd(tcd);
@@ -325,10 +325,10 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                         goto console;
                 }
 
-                string_buf = (char *)cfs_page_address(tage->page) +
+		string_buf = (char *)page_address(tage->page) +
                                         tage->used + known_size;
 
-                max_nob = CFS_PAGE_SIZE - tage->used - known_size;
+		max_nob = PAGE_CACHE_SIZE - tage->used - known_size;
                 if (max_nob <= 0) {
                         printk(CFS_KERN_EMERG "negative max_nob: %d\n",
                                max_nob);
@@ -365,7 +365,7 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                        "newline\n", file, msgdata->msg_line, msgdata->msg_fn);
 
         header.ph_len = known_size + needed;
-        debug_buf = (char *)cfs_page_address(tage->page) + tage->used;
+	debug_buf = (char *)page_address(tage->page) + tage->used;
 
         if (libcfs_debug_binary) {
                 memcpy(debug_buf, &header, sizeof(header));
@@ -392,7 +392,7 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
         __LASSERT(debug_buf == string_buf);
 
         tage->used += needed;
-        __LASSERT (tage->used <= CFS_PAGE_SIZE);
+	__LASSERT(tage->used <= PAGE_CACHE_SIZE);
 
 console:
         if ((mask & libcfs_printk) == 0) {
@@ -652,14 +652,14 @@ void cfs_trace_debug_print(void)
         collect_pages(&pc);
         cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
                                            struct cfs_trace_page, linkage) {
-                char *p, *file, *fn;
-                cfs_page_t *page;
+		char *p, *file, *fn;
+		struct page *page;
 
-                __LASSERT_TAGE_INVARIANT(tage);
+		__LASSERT_TAGE_INVARIANT(tage);
 
-                page = tage->page;
-                p = cfs_page_address(page);
-                while (p < ((char *)cfs_page_address(page) + tage->used)) {
+		page = tage->page;
+		p = page_address(page);
+		while (p < ((char *)page_address(page) + tage->used)) {
                         struct ptldebug_header *hdr;
                         int len;
                         hdr = (void *)p;
@@ -688,7 +688,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 	struct cfs_trace_page	*tmp;
 	int rc;
 
-	CFS_DECL_MMSPACE;
+	DECL_MMSPACE;
 
 	cfs_tracefile_write_lock();
 
@@ -711,13 +711,13 @@ int cfs_tracefile_dump_all_pages(char *filename)
 
         /* ok, for now, just write the pages.  in the future we'll be building
          * iobufs with the pages and calling generic_direct_IO */
-        CFS_MMSPACE_OPEN;
+	MMSPACE_OPEN;
         cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
                                            struct cfs_trace_page, linkage) {
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
-		rc = filp_write(filp, cfs_page_address(tage->page),
+		rc = filp_write(filp, page_address(tage->page),
 				tage->used, filp_poff(filp));
                 if (rc != (int)tage->used) {
                         printk(CFS_KERN_WARNING "wanted to write %u but wrote "
@@ -729,7 +729,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 cfs_list_del(&tage->linkage);
                 cfs_tage_free(tage);
         }
-	CFS_MMSPACE_CLOSE;
+	MMSPACE_CLOSE;
 	rc = filp_fsync(filp);
 	if (rc)
 		printk(CFS_KERN_ERR "sync returns %d\n", rc);
@@ -768,7 +768,7 @@ int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
         if (usr_buffer_nob > knl_buffer_nob)
                 return -EOVERFLOW;
 
-        if (cfs_copy_from_user((void *)knl_buffer,
+	if (copy_from_user((void *)knl_buffer,
                            (void *)usr_buffer, usr_buffer_nob))
                 return -EFAULT;
 
@@ -799,11 +799,11 @@ int cfs_trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
         if (nob > usr_buffer_nob)
                 nob = usr_buffer_nob;
 
-        if (cfs_copy_to_user(usr_buffer, knl_buffer, nob))
+	if (copy_to_user(usr_buffer, knl_buffer, nob))
                 return -EFAULT;
 
         if (append != NULL && nob < usr_buffer_nob) {
-                if (cfs_copy_to_user(usr_buffer + nob, append, 1))
+		if (copy_to_user(usr_buffer + nob, append, 1))
                         return -EFAULT;
 
                 nob++;
@@ -815,10 +815,10 @@ EXPORT_SYMBOL(cfs_trace_copyout_string);
 
 int cfs_trace_allocate_string_buffer(char **str, int nob)
 {
-        if (nob > 2 * CFS_PAGE_SIZE)            /* string must be "sensible" */
+	if (nob > 2 * PAGE_CACHE_SIZE)	/* string must be "sensible" */
                 return -EINVAL;
 
-        *str = cfs_alloc(nob, CFS_ALLOC_STD | CFS_ALLOC_ZERO);
+	*str = kmalloc(nob, GFP_IOFS | __GFP_ZERO);
         if (*str == NULL)
                 return -ENOMEM;
 
@@ -827,7 +827,7 @@ int cfs_trace_allocate_string_buffer(char **str, int nob)
 
 void cfs_trace_free_string_buffer(char *str, int nob)
 {
-        cfs_free(str);
+	kfree(str);
 }
 
 int cfs_trace_dump_debug_buffer_usrstr(void *usr_str, int usr_str_nob)
@@ -937,7 +937,7 @@ int cfs_trace_set_debug_mb(int mb)
         }
 
         mb /= cfs_num_possible_cpus();
-        pages = mb << (20 - CFS_PAGE_SHIFT);
+	pages = mb << (20 - PAGE_CACHE_SHIFT);
 
         cfs_tracefile_write_lock();
 
@@ -975,7 +975,7 @@ int cfs_trace_get_debug_mb(void)
 
         cfs_tracefile_read_unlock();
 
-        return (total_pages >> (20 - CFS_PAGE_SHIFT)) + 1;
+	return (total_pages >> (20 - PAGE_CACHE_SHIFT)) + 1;
 }
 
 static int tracefiled(void *arg)
@@ -988,7 +988,7 @@ static int tracefiled(void *arg)
 	int last_loop = 0;
 	int rc;
 
-	CFS_DECL_MMSPACE;
+	DECL_MMSPACE;
 
 	/* we're started late enough that we pick up init's fs context */
 	/* this is so broken in uml?  what on earth is going on? */
@@ -1024,7 +1024,7 @@ static int tracefiled(void *arg)
                         goto end_loop;
                 }
 
-                CFS_MMSPACE_OPEN;
+		MMSPACE_OPEN;
 
                 cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
                                                    struct cfs_trace_page,
@@ -1038,7 +1038,7 @@ static int tracefiled(void *arg)
 			else if (f_pos > (off_t)filp_size(filp))
 				f_pos = filp_size(filp);
 
-			rc = filp_write(filp, cfs_page_address(tage->page),
+			rc = filp_write(filp, page_address(tage->page),
 					tage->used, &f_pos);
                         if (rc != (int)tage->used) {
                                 printk(CFS_KERN_WARNING "wanted to write %u "
@@ -1047,7 +1047,7 @@ static int tracefiled(void *arg)
                                 __LASSERT(cfs_list_empty(&pc.pc_pages));
                         }
                 }
-		CFS_MMSPACE_CLOSE;
+		MMSPACE_CLOSE;
 
 		filp_close(filp, NULL);
                 put_pages_on_daemon_list(&pc);

@@ -652,9 +652,9 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy)
 	/**
 	 * Slab cache for NRS ORR/TRR objects.
 	 */
-	orrd->od_cache = cfs_mem_cache_create(orrd->od_objname,
-					      sizeof(struct nrs_orr_object),
-					      0, 0);
+	orrd->od_cache = kmem_cache_create(orrd->od_objname,
+					   sizeof(struct nrs_orr_object),
+					   0, 0, NULL);
 	if (orrd->od_cache == NULL)
 		GOTO(failed, rc = -ENOMEM);
 
@@ -702,7 +702,7 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy)
 
 failed:
 	if (orrd->od_cache) {
-		rc = cfs_mem_cache_destroy(orrd->od_cache);
+		kmem_cache_destroy(orrd->od_cache);
 		LASSERTF(rc == 0, "Could not destroy od_cache slab\n");
 	}
 	if (orrd->od_binheap != NULL)
@@ -735,7 +735,7 @@ static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
 
 	cfs_binheap_destroy(orrd->od_binheap);
 	cfs_hash_putref(orrd->od_obj_hash);
-	cfs_mem_cache_destroy(orrd->od_cache);
+	kmem_cache_destroy(orrd->od_cache);
 
 	OBD_FREE_PTR(orrd);
 }
@@ -882,8 +882,8 @@ int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
 
 	OBD_SLAB_CPT_ALLOC_PTR_GFP(orro, orrd->od_cache,
 				   nrs_pol2cptab(policy), nrs_pol2cptid(policy),
-				   (moving_req ? CFS_ALLOC_ATOMIC :
-				    CFS_ALLOC_IO));
+				   (moving_req ? GFP_ATOMIC :
+				    __GFP_IO));
 	if (orro == NULL)
 		RETURN(-ENOMEM);
 
@@ -1312,7 +1312,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_quantum(struct file *file,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-	if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -1531,7 +1531,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_offset_type(struct file *file,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-	if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
         kernbuf[count] = '\0';
@@ -1793,7 +1793,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_supported(struct file *file,
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
-	if (cfs_copy_from_user(kernbuf, buffer, count))
+	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
         kernbuf[count] = '\0';

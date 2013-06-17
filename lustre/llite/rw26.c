@@ -203,8 +203,9 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                 return -EFBIG;
         }
 
-        *max_pages = (user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        *max_pages -= user_addr >> CFS_PAGE_SHIFT;
+	*max_pages = (user_addr + size + PAGE_CACHE_SIZE - 1) >>
+		     PAGE_CACHE_SHIFT;
+	*max_pages -= user_addr >> PAGE_CACHE_SHIFT;
 
         OBD_ALLOC_LARGE(*pages, *max_pages * sizeof(**pages));
         if (*pages) {
@@ -281,9 +282,9 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                 /* check the page type: if the page is a host page, then do
                  * write directly */
                 if (clp->cp_type == CPT_CACHEABLE) {
-                        cfs_page_t *vmpage = cl_page_vmpage(env, clp);
-                        cfs_page_t *src_page;
-                        cfs_page_t *dst_page;
+			struct page *vmpage = cl_page_vmpage(env, clp);
+			struct page *src_page;
+			struct page *dst_page;
                         void       *src;
                         void       *dst;
 
@@ -370,7 +371,7 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
  * representing PAGE_SIZE worth of user data, into a single buffer, and
  * then truncate this to be a full-sized RPC.  For 4kB PAGE_SIZE this is
  * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc. */
-#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * CFS_PAGE_SIZE) & \
+#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_CACHE_SIZE) & \
 		      ~(DT_MAX_BRW_SIZE - 1))
 static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                const struct iovec *iov, loff_t file_offset,
@@ -399,8 +400,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size=%lu (max %lu), "
                "offset=%lld=%llx, pages %lu (max %lu)\n",
                inode->i_ino, inode->i_generation, inode, count, MAX_DIO_SIZE,
-               file_offset, file_offset, count >> CFS_PAGE_SHIFT,
-               MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
+	       file_offset, file_offset, count >> PAGE_CACHE_SHIFT,
+	       MAX_DIO_SIZE >> PAGE_CACHE_SHIFT);
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {
@@ -443,7 +444,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                                        &pages, &max_pages);
                         if (likely(page_count > 0)) {
                                 if (unlikely(page_count <  max_pages))
-                                        bytes = page_count << CFS_PAGE_SHIFT;
+					bytes = page_count << PAGE_CACHE_SHIFT;
                                 result = ll_direct_IO_26_seg(env, io, rw, inode,
                                                              file->f_mapping,
                                                              bytes, file_offset,
@@ -461,8 +462,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                  * We should always be able to kmalloc for a
                                  * page worth of page pointers = 4MB on i386. */
                                 if (result == -ENOMEM &&
-                                    size > (CFS_PAGE_SIZE / sizeof(*pages)) *
-                                           CFS_PAGE_SIZE) {
+				    size > (PAGE_CACHE_SIZE / sizeof(*pages)) *
+					   PAGE_CACHE_SIZE) {
                                         size = ((((size / 2) - 1) |
                                                  ~CFS_PAGE_MASK) + 1) &
                                                 CFS_PAGE_MASK;

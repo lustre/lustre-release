@@ -54,7 +54,7 @@ struct ll_file_data *ll_file_data_get(void)
 {
 	struct ll_file_data *fd;
 
-	OBD_SLAB_ALLOC_PTR_GFP(fd, ll_file_data_slab, CFS_ALLOC_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(fd, ll_file_data_slab, __GFP_IO);
 	if (fd == NULL)
 		return NULL;
 
@@ -2074,7 +2074,7 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		struct file *file2;
 		struct lustre_swap_layouts lsl;
 
-		if (cfs_copy_from_user(&lsl, (char *)arg,
+		if (copy_from_user(&lsl, (char *)arg,
 				       sizeof(struct lustre_swap_layouts)))
 			RETURN(-EFAULT);
 
@@ -2241,7 +2241,7 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
 				   op_data, NULL);
 
-		if (cfs_copy_to_user((char *)arg, hca, sizeof(*hca)))
+		if (copy_to_user((char *)arg, hca, sizeof(*hca)))
 			rc = -EFAULT;
 
 		ll_finish_md_op_data(op_data);
