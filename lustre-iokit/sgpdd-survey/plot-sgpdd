@@ -41,29 +41,28 @@ my @GraphTitle;
 #Subroutine to write .scr file that further used by gnuplot to plot the graph.
 sub write_scr_file() {
 	my $op = $_[0];
+	my $rwlabel = $_[1];
 	print "generating plot $file-$rsz-$op.png\n";
 	open ( SCRFILE, "> $file-$rsz-$op.scr" ) or die "Can't open scr file for writing";
-	if ($op eq "rd") {
-		$rwlabel = "Read";
-	}
-	if ($op eq "wr") {
-		$rwlabel = "Write";
-	}
 	
 	if ($opt_rdtitle || $opt_wrtitle) {
 		if ($op eq "rd") {
-			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes, $opt_rdtitle\"\n";
+			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, " .
+				      "Rsize = $rsz, $lun LUNs, $opt_rdtitle\"\n";
 		}
 		if ($op eq "wr") {
-			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes, $opt_wrtitle\"\n";
+			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, " .
+				      "Rsize = $rsz, $lun LUNs, $opt_wrtitle\"\n";
 		}
 	} else {
-		print SCRFILE "set title \"@GraphTitle\\n$rwlabel, Rsize = $rsz KBytes\"\n";
+		print SCRFILE "set title \"@GraphTitle\\n$rwlabel, " .
+			      "Rsize = $rsz, $lun LUNs\"\n";
 	}
-	print SCRFILE "set xlabel \"Threads\"\n";
-	print SCRFILE "set ylabel \"Speeds(MB/s)\"\n";
+	print SCRFILE "set xlabel \"Threads/LUN\"\n";
+	print SCRFILE "set ylabel \"Throughput (MiB/s)\"\n";
 	print SCRFILE "set logscale x\n";
 	print SCRFILE "set grid\n";
+	print SCRFILE "set key right bottom\n";
         print SCRFILE "set terminal png\n";
         print SCRFILE "set output \"/dev/null\"\n";
 	if ($opt_y != 0) {
@@ -74,19 +73,14 @@ sub write_scr_file() {
 
 	my $plot = "plot";
 	$i = 2;
-	my @numrgs = split " ", $regions;
 	$xrange = 1;
 	# generate instructions for gnuplot, with adjusting X-axes ranges
-	
-	foreach my $j (sort numerically split " ", $threads) {
-		if ($op eq "wr") {
-			$using = ( $i < $#numrgs ) ? $i : $#numrgs;
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$using axes x%dy1 title \"write-obj$j\" with line\n", $xrange;
-		}
-		if ($op eq "rd") {
-			$using = ( $i < $#numrgs ) ? $i : $#numrgs;
-			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$using axes x%dy1 title \"read-obj$j\" with line\n", $xrange;
-		}
+	for ($j = $first_crg; $j <= $crg ; $j = $j + $j) {
+		$tmp=$j/$lun;
+		printf SCRFILE "$plot \"$file-$rsz-$op.dat\" " .
+			       "using 1:$i:xticlabels(1) axes x%dy1 " .
+			       "title \"$tmp crg/LUN\" " .
+			       "with linespoints lw 2\n", $xrange;
 		$i++;
 		$plot = "replot";
 	}
@@ -98,28 +92,6 @@ sub write_scr_file() {
 	system ("rm $file-$rsz-$op.scr");
 }
 
-sub check_data_file () {
-        my $file=shift;
-        my @values;
-        my @tmp;
-
-        open ( FILE, "< $file" ) or die "Can't open $file for reading";
-        while ( <FILE> ) {
-                @tmp = split;
-                push @values, [ @tmp ];
-        }
-        close FILE;
-
-        for ( $j = 0; $j <= $#tmp; $j++) {
-                my $sum=0;
-                for ($i = 2; $i <= $#values ; $i ++) {
-                        $values [$i][$j] =~ "-" or $sum = $sum + $values [$i][$j];
-                }
-                die "File: $file : $j column contains no data.\n" unless $sum != 0;
-        }
-}
-
-sub numerically { $a <=> $b; }
 
 #Subroutine to write .dat file that further used by gnuplot to plot the graph.
 sub write_dat_file() {
@@ -128,53 +100,59 @@ sub write_dat_file() {
 	# Open .csv/.dat file for writing required columns from log file.
 	my $datafile = "$file-$rsz-$op.dat";
 	open ( DATAFILE, "> $datafile" ) or die "Can't open csv $datafile for writing";
-	printf DATAFILE "%-6s", "0";
-	
-	foreach my $j (sort numerically split " ", $regions) {
-		printf DATAFILE "%-8s", "$op$j";
+	printf DATAFILE "%-6s", "thrd";
+	for ($j = $first_crg; $j <= $crg ; $j = $j + $j) {
+		$tmp = $j/$lun;
+		printf DATAFILE "%-10s", "$tmp-crg";
 	}
-
-	# threads, line [7], strings
-	foreach my $i (sort numerically split " ", $threads) {
-	        printf DATAFILE "\n%-6s", $i;
-
-		# regions, line [5], column
-		foreach my $j (sort numerically split " ", $regions) {
-			if (($op eq "rd" && $rdwr) || ($op eq "wr" && $wrrd) || ($readop) || ($writeop)) {
-				if ( $out{$i}{$j} ) {
-					printf DATAFILE "%-8s", $out{$i}{$j};
+	for ( $i = $first_thread; $i <= $thread; $i = $i + $i ) {
+	        printf DATAFILE "\n%-6s", $i/$lun;
+		for ($j = $first_crg; $j <= $crg ; $j = $j + $j) {
+			if ($op eq "rd") {
+				if ( $ard{$i}{$j} ) {
+					printf DATAFILE "%-10s", $ard{$i}{$j};
 				} else {
-					printf DATAFILE "%-8s", "-";
+					printf DATAFILE "%-10s", "-";
 				}
-			} else {
-				if (($j <= 1 && $out{$i}{$j - 1})) {
-					printf DATAFILE "%-8s", $out{$i}{$j - 1};
-				}elsif ($out{$i}{$j + 1} && $j > 1) {
-					printf DATAFILE "%-8s", $out{$i}{$j + 1};
+			} elsif ($op eq "wr" ) {
+				if ( $awr{$i}{$j} ) {
+					printf DATAFILE "%-10s", $awr{$i}{$j};
 				} else {
-					printf DATAFILE "%-8s", "-";
+					printf DATAFILE "%-10s", "-";
 				}
 			}
 		}
 	}
 	close DATAFILE;
-	&check_data_file ( $datafile );
+}
+
+#Subroutine to call .scr and .dat file write routines.
+sub write_files() {
+	for ($cnt = 0; $cnt < @operations; $cnt = $cnt + 1) {
+		if($operations[$cnt] eq "read") {
+			&write_dat_file("rd");
+			&write_scr_file("rd", "read");
+		} elsif ($operations[$cnt] eq "write") {
+			&write_dat_file("wr");
+			&write_scr_file("wr", "write");
+		}
+	}
 }
 
 if ( !$ARGV[0] ) {
 	usage();
 }
-$regions = "";
-$threads = "";
+$crg = 0;
+$thread = 0;
+$first_crg = 1;
+$first_thread = 1;
 $count = 0;
-$wrrd = 0;
-$rdwr = 0;
-$writeop = 0;
-$readop = 0;
 $rsz = 0;
 $opt_rdtitle = "";
 $opt_wrtitle = "";
 $opt_y = 0;
+$cnt = 0;
+@operations = ();
 # Command line parameter parsing
 use Getopt::Long;
 GetOptions ('help' => \$opt_help, 'rt=s' => \$opt_rdtitle, 'wt=s' => \$opt_wrtitle, 'y=i' => \$opt_y) or usage(); 
@@ -186,105 +164,58 @@ $file = $ARGV[0];
 open ( PFILE, "$file") or die "Can't open $file";
 LABEL: while ( <PFILE> ) {
 	chomp;
+	# replace error strings to ensure same ordering of line fields
+	s/failed/failed . . . . ./g;
 	@line = split( /\s+/ );
-	# Remove the 'K' after rsz
-	$frsz = substr($line[3], 0, -1);
-	if ($line[28] && $count != 0) {
-		print "invalid file format\n";
-		exit 1;
-	} 
 	if ($count == 0) {
-		@GraphTitle = @line;
+		@GraphTitle = @line[0 .. 6];
 		$count++;
 		next LABEL;
 	}
-	if ($line[8]) {
-		if ($line[8] eq "ENOMEM") {
+	# output format
+	# dev  1 sz  1048576K rsz 1024K crg     1 thr     8 write  604.55 [  606.43,  606.43]  read  754.02 [  756.95,  756.95]
+	$linelen = @line;
+	if ($linelen < 11) {
+		print "invalid file format at line $count\n";
+		exit 1;
+	}
+	if ($line[10]) {
+		if ($line[10] eq "ENOMEM") {
 			next LABEL;
 		}
 	}
-	if (!$rsz && $frsz) {
-		$rsz = $frsz
-	}
-	if ($rsz != $frsz) {
-		if($readop) {
-			&write_dat_file("rd");
-			&write_scr_file("rd");
-		}
-		if($writeop) {
-			&write_dat_file("wr");
-			&write_scr_file("wr");
-		}
-		if ($wrrd || $rdwr) {
-			&write_dat_file("rd");
-			&write_scr_file("rd");
-			&write_dat_file("wr");
-			&write_scr_file("wr");
-		}
-		$rsz = substr($line[3],0,-1);;
-		$regions = "";
-		$threads = "";
-	}
-	$rindex = 20;
-	print "DEBUG rg$line[7] th$line[9] w$line[11] r$line[$rindex]\n";
-	if ($line[18]) {
-		if ($line[12] eq "failed") {
-			$rindex = 12;
-		}
-		if ($line[10] eq "write" && $line[19] eq "read") {
-			$wrrd = 1;
-		}
-		if ($line[10] eq "read" && $line[19] eq "write") {
-			$rdwr = 1;
-		}
-	} else {
-		if ($line[10] eq "write" && $line[11]) {
-			$writeop = 1;
-		}
-		if ($line[10] eq "read" && $line[11]) {
-			$readop = 1;
-		}
-	}
-	if ($wrrd || $rdwr) {
-		$out{$line[9]}{$line[7]} = $line[11];
-		if ($line[$rindex+1]) {
-			if (!($line[$rindex+1] eq "failed")) {
-				goto LABEL2;
-			}
-		} else {
-LABEL2:			if ($line[7] <= 1 ) {
-				$out{$line[9]}{$line[7] - 1} = $line[$rindex];
-			} else {
-				$out{$line[9]}{$line[7] + 1} = $line[$rindex];
+	if (!$rsz || $rsz ne $line[5]) {
+		&write_files() unless !$rsz;
+		$cnt = 0;
+		$lun = $line[1];
+		$rsz = $line[5];
+		$first_crg = $line[7];
+		$first_thread = $line[9];
+		for ($i = 10; $i <= $linelen; $i = $i + 5) {
+			if ($line[$i]) {
+				$operations[$cnt] = $line[$i];
+				$cnt++;
 			}
 		}
 	}
-	if ($writeop) {
-		$out{$line[9]}{$line[7]} = $line[11];
+	for ($i = 0; $i < @operations; $i++) {
+		if ($operations[$i] eq "read") {
+			$ard{$line[9]}{$line[7]} = $line[$i * 5 + 11];
+		} elsif ($operations[$i] eq "write") {
+			$awr{$line[9]}{$line[7]} = $line[$i * 5 + 11];
+		}
 	}
-	if ($readop) {
-		$out{$line[9]}{$line[7]} = $line[11];
+	if ( $crg < $line[7] ) {
+		$crg = $line[7];
 	}
-	$regions .= " $line[7]" unless $regions =~ $line[7];
-	$threads .= " $line[9]" unless $threads =~ $line[9];
+	if ( $thread < $line[9] ) {
+		$thread = $line[9];
+	}
 	$count++;
 }
 close PFILE;
 if ($count > 1 && $rsz) {
-	if($readop) {
-		&write_dat_file("rd");
-		&write_scr_file("rd");
-	}
-	if($writeop) {
-		&write_dat_file("wr");
-		&write_scr_file("wr");
-	}
-	if ($wrrd || $rdwr) {
-		&write_dat_file("rd");
-		&write_scr_file("rd");
-		&write_dat_file("wr");
-		&write_scr_file("wr");
-	}
+	&write_files()
 } else {
 	print "Invalid log file format\n";
 }

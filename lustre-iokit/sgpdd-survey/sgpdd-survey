@@ -44,7 +44,6 @@ thrhi=${thrhi:-4096}
 # and max # threads one instance will spawn
 SG_MAX_QUEUE=16
 
-
 unique () {
     echo "$@" | xargs -n1 echo | sort -u
 }
@@ -138,27 +137,28 @@ if [ "$scsidevs" ]; then
     done
 
     for ((i=0; i < $ndevs; i++)); do
-	# resolv symbolic link if any
+	# resolve symbolic link if any
 	devs[$i]=$(remote_shell ${hosts[$i]} readlink -f ${devs[$i]})
 
 	# retrieve associated sg device
 	# we will test for a LUN, the test for a partition
 	# if the partition number is > 9 this will fail
-	devs[$i]=$(remote_shell ${hosts[$i]} sg_map | \
-		   awk -v dev=${devs[$i]} '{if ($2 == dev) print $1}')
-	if [ -z "${devs[i]}" ]; then
+	tmp=$(remote_shell ${hosts[$i]} sg_map | \
+	      awk -v dev=${devs[$i]} '{if ($2 == dev) print $1}')
+	if [ -z "$tmp" ]; then
 	    echo "Can't find SG device for ${hosts[$i]}:${devs[$i]}, " \
 		 "testing for partition"
 	    pt=`echo ${devs[$i]} | sed 's/[0-9]*$//'`
 	    # Try again
-	    devs[$i]=$(remote_shell ${hosts[$i]} sg_map | \
-		       awk -v dev=$pt '{if ($2 == dev) print $1}')
-	    if [ -z "${devs[i]}" ]; then
+	    tmp=$(remote_shell ${hosts[$i]} sg_map | \
+		  awk -v dev=$pt '{if ($2 == dev) print $1}')
+	    if [ -z "$tmp" ]; then
 		echo -e "Can't find SG device ${hosts[$i]}:$pt.\n" \
 			"Do you have the sg module configured for your kernel?"
 		exit 1
 	   fi
 	fi
+	devs[$i]=$tmp
     done
 elif [ "$rawdevs" ]; then
     for ((i=0; i < $ndevs; i++)); do
@@ -330,15 +330,17 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		if ((ok != ndevs*crg)); then
 		    print_summary -n "$((ndevs*crg - ok)) failed "
 		else
-		    # compute MB/sec from elapsed
-		    bw=`awk "BEGIN {printf \"%7.2f MB/s\", \
+		    # compute bandwidth in MiB/s from total data / elapsed time
+		    bw=`awk "BEGIN {printf \"%7.2f \", \
 				    $total_size / (( $t1 - $t0 ) * 1024); exit}"`
-		    # compute MB/sec from nregions*slowest
-		    check=`awk < $tmpf \
+		    # compute global min/max stats
+		    minmax=`awk < $tmpf \
 			'/time to transfer data/ {mb=$8/1.048576; \
-						  if (n == 0 || mb < min) min = mb; n++}\
-			END {printf "%5d x %6.2f = %7.2f MB/s", n, min, min * n}'`
-		    print_summary -n "$bw $check "
+						  if (n == 0 || mb < min) min = mb; \
+						  if (n == 0 || mb > max) max = mb; \
+						  n++} \
+			END {printf "[ %7.2f, %7.2f] ",min,max;}'`
+		    print_summary -n "$bw $minmax "
 		fi
 		rm $tmpf
 	    done

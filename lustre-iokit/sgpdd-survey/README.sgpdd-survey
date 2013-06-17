@@ -58,11 +58,12 @@ ${rslt}_<date/time>.detail     collected tmp files for post-mortem
 
 The summary file and stdout contain lines like...
 
-total_size  8388608K rsz 1024 thr     1 crg   1  180.45 MB/s   1 x  180.50 =  180.50 MB/s
+dev 30 sz 125829120K rsz 1024K crg    60 thr   120 write 6036.79  [  100.69,  106.49]  read 6720.94  [  112.64,  220.85]
 
-The number immediately before the first MB/s is the bandwidth computed by
-measuring total data and elapsed time.  The other numbers are a check on
-the bandwidths reported by the individual sgp_dd instances.
+The number immediately after the write and the read word is the bandwidth
+in MiB/s computed by measuring total data and elapsed time.  The other numbers
+are the minimal and maximal bandwidths reported by the individual sgp_dd
+instances.
 
 If there are so many threads that sgp_dd is unlikely to be able to allocate
 I/O buffers, "ENOMEM" is printed.
