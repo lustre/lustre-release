@@ -593,7 +593,7 @@ fs_log_size() {
 	local size=0
 	case $fstype in
 		ldiskfs) size=50;; # largest seen is 44, leave some headroom
-		zfs)     size=256;;
+		zfs)     size=400;; # largest seen is 384
 	esac
 
 	echo -n $size
