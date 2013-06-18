@@ -3462,19 +3462,10 @@ check_and_setup_lustre() {
 
 	if [ $(lower $OSD_TRACK_DECLARES_LBUG) == 'yes' ] ; then
 		local facets="$(get_facets OST),$(get_facets MDS),mgs"
-		local facet
-		local nodes
-		local node
-		for facet in ${facets//,/ }; do
-			if [ $(facet_fstype $node) == "ldiskfs" ] ; then
-				node=$(facet_host ${facet})
-				nodes="$nodes $node"
-			fi
-		done
+		local nodes="$(facets_hosts ${facets})"
 		if [ -n "$nodes" ] ; then
-			nodes=$(for i in $nodes; do echo $i; done | sort -u)
-			do_nodes $(comma_list $nodes) "$LCTL set_param \
-				 osd-ldiskfs.track_declares_assert=1"
+			do_nodes $nodes "$LCTL set_param \
+				 osd-ldiskfs.track_declares_assert=1 || true"
 		fi
 	fi
 
