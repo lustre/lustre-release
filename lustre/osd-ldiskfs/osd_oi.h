@@ -131,22 +131,28 @@ static inline int osd_id_eq_strict(const struct osd_inode_id *id0,
 	return (id0->oii_ino == id1->oii_ino && id0->oii_gen == id1->oii_gen);
 }
 
+enum oi_check_flags {
+	OI_CHECK_FLD	= 0x00000001,
+	OI_KNOWN_ON_OST	= 0x00000002,
+};
+
 int osd_oi_mod_init(void);
 int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd);
-int __osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
-		    const struct lu_fid *fid, struct osd_inode_id *id);
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, struct osd_inode_id *id,
-		   bool check_fld);
+		   enum oi_check_flags flags);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, const struct osd_inode_id *id,
-		   struct thandle *th);
+		   struct thandle *th, enum oi_check_flags flags);
 int  osd_oi_delete(struct osd_thread_info *info,
 		   struct osd_device *osd, const struct lu_fid *fid,
-		   struct thandle *th);
+		   struct thandle *th, enum oi_check_flags flags);
+int  osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
+		   const struct lu_fid *fid, const struct osd_inode_id *id,
+		   struct thandle *th, enum oi_check_flags flags);
 
 int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
-		  const struct lu_fid *fid);
+		  const struct lu_fid *fid, enum oi_check_flags flags);
 #endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

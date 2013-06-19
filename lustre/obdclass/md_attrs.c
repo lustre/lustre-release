@@ -39,9 +39,9 @@
  * \param incompat - features that MDS must understand to access object
  */
 void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
-		     __u32 incompat)
+		     __u32 compat, __u32 incompat)
 {
-	lma->lma_compat   = 0;
+	lma->lma_compat   = compat;
 	lma->lma_incompat = incompat;
 	lma->lma_self_fid = *fid;
 

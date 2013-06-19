@@ -1430,7 +1430,7 @@ static inline int osd_init_lma(const struct lu_env *env, struct osd_object *obj,
 	struct lu_buf		 buf;
 	int rc;
 
-	lustre_lma_init(lma, fid, 0);
+	lustre_lma_init(lma, fid, 0, 0);
 	lustre_lma_swab(lma);
 	buf.lb_buf = lma;
 	buf.lb_len = sizeof(*lma);
