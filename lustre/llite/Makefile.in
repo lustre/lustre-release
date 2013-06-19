@@ -8,11 +8,12 @@ lustre-objs += glimpse.o
 lustre-objs += lcommon_cl.o
 lustre-objs += lcommon_misc.o
 lustre-objs += vvp_dev.o vvp_page.o vvp_lock.o vvp_io.o vvp_object.o
+lustre-objs += range_lock.o
 
 llite_lloop-objs := lloop.o
 
 EXTRA_DIST := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c
 EXTRA_DIST += $(llite_lloop-objs:.o=.c)
-EXTRA_DIST += vvp_internal.h
+EXTRA_DIST += vvp_internal.h range_lock.h
 
 @INCLUDE_RULES@

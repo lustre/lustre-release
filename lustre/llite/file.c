@@ -1141,6 +1141,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct ll_file_data  *fd  = LUSTRE_FPRIVATE(file);
 	struct cl_io         *io;
 	ssize_t               result;
+	struct range_lock     range;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zd\n",
@@ -1151,10 +1152,14 @@ restart:
         ll_io_init(io, file, iot == CIT_WRITE);
 
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
-                struct vvp_io *vio = vvp_env_io(env);
-                struct ccc_io *cio = ccc_env_io(env);
-                int write_mutex_locked = 0;
+		struct vvp_io *vio = vvp_env_io(env);
+		struct ccc_io *cio = ccc_env_io(env);
+		bool range_locked = false;
 
+		if (file->f_flags & O_APPEND)
+			range_lock_init(&range, 0, LUSTRE_EOF);
+		else
+			range_lock_init(&range, *ppos, *ppos + count - 1);
 		cio->cui_fd  = LUSTRE_FPRIVATE(file);
 		vio->cui_io_subtype = args->via_io_subtype;
 
@@ -1166,10 +1171,14 @@ restart:
                         cio->cui_iocb = args->u.normal.via_iocb;
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-				if (mutex_lock_interruptible(&lli->
-							lli_write_mutex))
-					GOTO(out, result = -ERESTARTSYS);
-				write_mutex_locked = 1;
+				CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
+				       RL_PARA(&range));
+				result = range_lock(&lli->lli_write_tree,
+						    &range);
+				if (result < 0)
+					GOTO(out, result);
+
+				range_locked = true;
 			}
 			down_read(&lli->lli_trunc_sem);
                         break;
@@ -1188,8 +1197,11 @@ restart:
 
 		if (args->via_io_subtype == IO_NORMAL)
 			up_read(&lli->lli_trunc_sem);
-		if (write_mutex_locked)
-			mutex_unlock(&lli->lli_write_mutex);
+		if (range_locked) {
+			CDEBUG(D_VFSTRACE, "Range unlock "RL_FMT"\n",
+			       RL_PARA(&range));
+			range_unlock(&lli->lli_write_tree, &range);
+		}
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
