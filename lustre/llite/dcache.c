@@ -693,7 +693,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 
 #ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 supports rcu-walk, but lustre doesn't. */
-	if (nd->flags & LOOKUP_RCU)
+	if (nd && (nd->flags & LOOKUP_RCU))
 		return -ECHILD;
 #endif
 
