@@ -1736,6 +1736,38 @@ test_31m() {
 }
 run_test 31m "link to file: the same, non-existing, dir==============="
 
+link_one() {
+	local TEMPNAME=$(mktemp $1_XXXXXX)
+	mlink $TEMPNAME $1 2> /dev/null &&
+		echo "$BASHPID: link $TEMPNAME to $1 succeeded"
+	munlink $TEMPNAME
+}
+
+test_31o() { # LU-2901
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	if [[ $server_version -lt $(version_code 2.1.6) ]] ||
+	   [[ $server_version -ge $(version_code 2.2.0) &&
+	      $server_version -lt $(version_code 2.4.1) ]]; then
+		skip "Need MDS version at least 2.1.6 or 2.4.1"
+		return 0
+	fi
+
+	mkdir -p $DIR/$tdir
+	for LOOP in $(seq 100); do
+		rm -f $DIR/$tdir/$tfile*
+		for THREAD in $(seq 8); do
+			link_one $DIR/$tdir/$tfile.$LOOP &
+		done
+		wait
+		local LINKS=$(ls -1 $DIR/$tdir | grep -c $tfile.$LOOP)
+		[ $LINKS -gt 1 ] && ls $DIR/$tdir &&
+			error "$LINKS duplicate links to $tfile.$LOOP" &&
+			break || true
+	done
+}
+run_test 31o "duplicate hard links with same filename"
+
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
 	[ -e $DIR/d32a ] && rm -fr $DIR/d32a

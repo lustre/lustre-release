@@ -879,6 +879,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 GOTO(out_unlock_child, rc);
         /* save version of file name for replay, it must be ENOENT here */
         if (!req_is_replay(mdt_info_req(info))) {
+		if (rc != -ENOENT) {
+			CDEBUG(D_INFO, "link target %.*s existed!\n",
+			       rr->rr_namelen, (char *)rr->rr_name);
+			GOTO(out_unlock_child, rc = -EEXIST);
+		}
                 info->mti_ver[2] = ENOENT_VERSION;
                 mdt_version_save(mdt_info_req(info), info->mti_ver[2], 2);
         }
