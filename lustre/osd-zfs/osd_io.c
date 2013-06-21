@@ -41,9 +41,6 @@
  * Author: Mike Pershin <tappro@whamcloud.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_OSD
 
 #include <lustre_ver.h>

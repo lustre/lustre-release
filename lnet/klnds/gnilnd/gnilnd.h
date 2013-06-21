@@ -26,9 +26,6 @@
 #ifndef _GNILND_GNILND_H_
 #define _GNILND_GNILND_H_
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>

@@ -66,10 +66,6 @@
  * mdt_quota_init() for more details.
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <obd_class.h>

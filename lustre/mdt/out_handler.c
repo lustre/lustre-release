@@ -29,9 +29,6 @@
  * Author: di.wang <di.wang@intel.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"

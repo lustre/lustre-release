@@ -48,10 +48,6 @@
  * - lquota_disk_update_ver:	  update version of an index file
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include "lquota_internal.h"
