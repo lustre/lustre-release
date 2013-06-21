@@ -93,17 +93,26 @@ static void qsd_upd_add(struct qsd_instance *qsd, struct qsd_upd_rec *upd)
 		/* wake up the upd thread */
 		cfs_waitq_signal(&qsd->qsd_upd_thread.t_ctl_waitq);
 	} else {
-		CWARN("%s: discard deferred update.\n", qsd->qsd_svname);
+		CWARN("%s: discard update.\n", qsd->qsd_svname);
 		if (upd->qur_lqe)
-			LQUOTA_WARN(upd->qur_lqe, "discard deferred update.");
+			LQUOTA_WARN(upd->qur_lqe, "discard update.");
 		qsd_upd_free(upd);
 	}
 }
 
 /* must hold the qsd_lock */
-static void qsd_add_deferred(cfs_list_t *list, struct qsd_upd_rec *upd)
+static void qsd_add_deferred(struct qsd_instance *qsd, cfs_list_t *list,
+			     struct qsd_upd_rec *upd)
 {
 	struct qsd_upd_rec	*tmp, *n;
+
+	if (qsd->qsd_stopping) {
+		CWARN("%s: discard deferred udpate.\n", qsd->qsd_svname);
+		if (upd->qur_lqe)
+			LQUOTA_WARN(upd->qur_lqe, "discard deferred update.");
+		qsd_upd_free(upd);
+		return;
+	}
 
 	/* Sort the updates in ascending order */
 	cfs_list_for_each_entry_safe_reverse(tmp, n, list, qur_link) {
@@ -261,7 +270,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 		 * the reintegration is in progress. Defer the update. */
 		cfs_list_t *list = global ? &qqi->qqi_deferred_glb :
 					    &qqi->qqi_deferred_slv;
-		qsd_add_deferred(list, upd);
+		qsd_add_deferred(qsd, list, upd);
 	}
 
 	write_unlock(&qsd->qsd_lock);
@@ -310,6 +319,13 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 {
 	struct qsd_instance	*qsd = lqe2qqi(lqe)->qqi_qsd;
 	bool			 added = false;
+
+	read_lock(&qsd->qsd_lock);
+	if (qsd->qsd_stopping) {
+		read_unlock(&qsd->qsd_lock);
+		return;
+	}
+	read_unlock(&qsd->qsd_lock);
 
 	lqe_getref(lqe);
 	spin_lock(&qsd->qsd_adjust_lock);
