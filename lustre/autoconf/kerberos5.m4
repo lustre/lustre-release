@@ -66,7 +66,7 @@ AC_DEFUN([AC_KERBEROS_V5],[
     fi
   done
   dnl We didn't find a usable Kerberos environment
-  if test "x$KRBDIR" = "x"; then
+  if test "x$require_krb5" = "xyes" && "x$KRBDIR" = "x"; then
     if test "x$krb5_with" = "x"; then
       AC_MSG_ERROR(Kerberos v5 with GSS support not found: consider --disable-gss or --with-krb5=)
     else

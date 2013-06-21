@@ -286,7 +286,9 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
 
 AC_DEFUN([LC_CONFIG_SUNRPC],
 [LB_LINUX_CONFIG_IM([SUNRPC],[],
-                    [AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])])
+                    [if test x$sunrpc_required == xyes; then
+                         AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])
+                     fi])
 ])
 
 #
@@ -299,12 +301,14 @@ AC_DEFUN([LC_CONFIG_GSS],
 [AC_MSG_CHECKING([whether to enable gss/krb5 support])
  AC_ARG_ENABLE([gss],
                [AC_HELP_STRING([--enable-gss], [enable gss/krb5 support])],
-               [],[enable_gss='no'])
+               [],[enable_gss='auto'])
  AC_MSG_RESULT([$enable_gss])
 
- if test x$enable_gss == xyes; then
+ if test x$enable_gss != xno; then
         LC_CONFIG_GSS_KEYRING
+        sunrpc_required=$enable_gss
         LC_CONFIG_SUNRPC
+        sunrpc_required=no
 
         AC_DEFINE([HAVE_GSS], [1], [Define this if you enable gss])
 
@@ -317,15 +321,20 @@ AC_DEFUN([LC_CONFIG_GSS],
         LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
                            [AC_MSG_WARN([kernel SHA512 support is recommended by using GSS.])])
 
-        AC_CHECK_LIB([gssapi], [gss_export_lucid_sec_context],
-                     [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
-                     [AC_CHECK_LIB([gssglue], [gss_export_lucid_sec_context],
-                                   [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
-                                   [AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])])],)
-
-        AC_SUBST(GSSAPI_LIBS)
-
+        require_krb5=$enable_gss
         AC_KERBEROS_V5
+        require_krb5=no
+
+        if test x$KRBDIR != x; then
+            AC_CHECK_LIB([gssapi], [gss_export_lucid_sec_context],
+                         [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
+                         [AC_CHECK_LIB([gssglue], [gss_export_lucid_sec_context],
+                                       [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
+                                       [if test x$enable_gss == xyes; then
+                                            AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])
+                                        fi])],)
+            AC_SUBST(GSSAPI_LIBS)
+        fi
  fi
 ])
 
