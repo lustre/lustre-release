@@ -318,6 +318,7 @@ static struct ptlrpc_thread pinger_thread;
 int ptlrpc_start_pinger(void)
 {
 	struct l_wait_info lwi = { 0 };
+	struct task_struct *task;
 	int rc;
 #ifndef ENABLE_PINGER
 	return 0;
@@ -334,12 +335,14 @@ int ptlrpc_start_pinger(void)
 
 	/* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
 	 * just drop the VM and FILES in kthread_run() right away. */
-	rc = PTR_ERR(kthread_run(ptlrpc_pinger_main,
-				 &pinger_thread, pinger_thread.t_name));
-	if (IS_ERR_VALUE(rc)) {
-		CERROR("cannot start thread: %d\n", rc);
+	task = kthread_run(ptlrpc_pinger_main, &pinger_thread,
+			   pinger_thread.t_name);
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("cannot start pinger thread: rc = %d\n", rc);
 		RETURN(rc);
 	}
+
 	l_wait_event(pinger_thread.t_ctl_waitq,
 		     thread_is_running(&pinger_thread), &lwi);
 
