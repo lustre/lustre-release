@@ -50,7 +50,6 @@
 
 #if defined(__KERNEL__)
 
-#include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
 #include <obd_class.h>
@@ -59,7 +58,6 @@
 #include <md_object.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
-#include <lustre_mdt.h>
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
 #include <lustre_idmap.h>

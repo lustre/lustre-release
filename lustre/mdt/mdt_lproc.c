@@ -59,7 +59,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_mds.h>
-#include <lustre_mdt.h>
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
 #include <lnet/lib-lnet.h>

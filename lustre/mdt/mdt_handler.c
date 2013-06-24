@@ -62,7 +62,6 @@
 /* lu2dt_dev() */
 #include <dt_object.h>
 #include <lustre_mds.h>
-#include <lustre_mdt.h>
 #include <lustre_log.h>
 #include "mdt_internal.h"
 #include <lustre_acl.h>
@@ -3461,19 +3460,13 @@ int mdt_handle_common(struct ptlrpc_request *req,
  */
 int mdt_recovery_handle(struct ptlrpc_request *req)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
-        case SEQ_QUERY:
-                rc = mdt_handle_common(req, mdt_seq_handlers);
-                break;
-        default:
-                rc = mdt_handle_common(req, mdt_regular_handlers);
-                break;
-        }
+	ENTRY;
 
-        RETURN(rc);
+	rc = mdt_handle_common(req, mdt_regular_handlers);
+
+	RETURN(rc);
 }
 
 enum mdt_it_code {
@@ -4716,6 +4709,11 @@ static struct tgt_opc_slice mdt_common_slice[] = {
 		.tos_opc_start	= FLD_FIRST_OPC,
 		.tos_opc_end	= FLD_LAST_OPC,
 		.tos_hs		= fld_handlers
+	},
+	{
+		.tos_opc_start	= SEQ_FIRST_OPC,
+		.tos_opc_end	= SEQ_LAST_OPC,
+		.tos_hs		= seq_handlers
 	},
 	{
 		.tos_hs		= NULL

@@ -1819,15 +1819,6 @@ int ost_msg_check_version(struct lustre_msg *msg)
                                lustre_msg_get_version(msg),
                                LUSTRE_OBD_VERSION);
                 break;
-	case SEQ_QUERY:
-		/* Note: client always use MDS_VERSION for FID request */
-		rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
-		if (rc)
-			CERROR("bad opc %u version %08x, expecting %08x\n",
-			       lustre_msg_get_opc(msg),
-			       lustre_msg_get_version(msg),
-			       LUSTRE_MDS_VERSION);
-		break;
         case OST_CREATE:
         case OST_DESTROY:
         case OST_GETATTR:
@@ -2463,10 +2454,6 @@ int ost_handle(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_OST_GET_INFO_GENERIC);
                 rc = ost_get_info(req->rq_export, req);
                 break;
-	case SEQ_QUERY:
-		CDEBUG(D_INODE, "seq\n");
-		rc = seq_handle(req);
-		break;
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
                 req_capsule_set(&req->rq_pill, &RQF_OST_QUOTACHECK);
@@ -2786,7 +2773,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.cc_pattern	     = oss_cpts,
 		},
 		.psc_ops		= {
-			.so_req_handler		= ost_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= NULL,
 		},

@@ -49,7 +49,6 @@
 /* lu2dt_dev() */
 #include <dt_object.h>
 #include <lustre_mds.h>
-#include <lustre_mdt.h>
 #include "mdt_internal.h"
 #include <lustre_quota.h>
 #include <lustre_acl.h>
@@ -269,25 +268,6 @@ static struct mdt_opc_slice mdt_readpage_handlers[] = {
 	}
 };
 
-/* Sequence service handlers */
-#define DEF_SEQ_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(SEQ_QUERY, flags, name, fn, &RQF_ ## name)
-
-static struct mdt_handler mdt_seq_ops[] = {
-DEF_SEQ_HDL(0,				SEQ_QUERY,	  (void *)seq_query),
-};
-
-struct mdt_opc_slice mdt_seq_handlers[] = {
-	{
-		.mos_opc_start = SEQ_QUERY,
-		.mos_opc_end   = SEQ_LAST_OPC,
-		.mos_hs	= mdt_seq_ops
-	},
-	{
-		.mos_hs	= NULL
-	}
-};
-
 static int mds_regular_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_regular_handlers);
@@ -296,16 +276,6 @@ static int mds_regular_handle(struct ptlrpc_request *req)
 static int mds_readpage_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_readpage_handlers);
-}
-
-static int mds_mdsc_handle(struct ptlrpc_request *req)
-{
-	return mdt_handle_common(req, mdt_seq_handlers);
-}
-
-static int mds_mdss_handle(struct ptlrpc_request *req)
-{
-	return mdt_handle_common(req, mdt_seq_handlers);
 }
 
 /* device init/fini methods */
@@ -552,7 +522,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_mdsc_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= NULL,
 		},
@@ -588,7 +558,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_mdss_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= NULL,
 		},

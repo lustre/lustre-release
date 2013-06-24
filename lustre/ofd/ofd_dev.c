@@ -617,6 +617,11 @@ static struct tgt_opc_slice ofd_common_slice[] = {
 		.tos_hs        = tgt_out_handlers
 	},
 	{
+		.tos_opc_start	= SEQ_FIRST_OPC,
+		.tos_opc_end	= SEQ_LAST_OPC,
+		.tos_hs		= seq_handlers
+	},
+	{
 		.tos_hs		= NULL
 	}
 };

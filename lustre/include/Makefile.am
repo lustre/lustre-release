@@ -73,7 +73,6 @@ EXTRA_DIST = \
 	lustre_log.h \
 	lustre_mdc.h \
 	lustre_mds.h \
-	lustre_mdt.h \
 	lustre_net.h \
 	lustre_param.h \
 	lustre_quota.h \

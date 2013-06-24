@@ -51,7 +51,6 @@
 #include <obd_support.h>
 #include <lustre_req_layout.h>
 #include <lustre_fid.h>
-#include <lustre_mdt.h> /* err_serious() */
 #include "fid_internal.h"
 
 static void seq_server_proc_fini(struct lu_server_seq *seq);
@@ -321,95 +320,50 @@ static int seq_server_handle(struct lu_site *site,
 	RETURN(rc);
 }
 
-static int seq_req_handle(struct ptlrpc_request *req,
-                          const struct lu_env *env,
-                          struct seq_thread_info *info)
+static int seq_handler(struct tgt_session_info *tsi)
 {
-        struct lu_seq_range *out, *tmp;
-        struct lu_site *site;
-        int rc = -EPROTO;
-        __u32 *opc;
-        ENTRY;
+	struct lu_seq_range	*out, *tmp;
+	struct lu_site		*site;
+	int			 rc;
+	__u32			*opc;
 
-	LASSERT(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY));
-        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
-        LASSERT(site != NULL);
+	ENTRY;
 
-        rc = req_capsule_server_pack(info->sti_pill);
-        if (rc)
-                RETURN(err_serious(rc));
+	LASSERT(!(lustre_msg_get_flags(tgt_ses_req(tsi)->rq_reqmsg) & MSG_REPLAY));
+	site = tsi->tsi_exp->exp_obd->obd_lu_dev->ld_site;
+	LASSERT(site != NULL);
 
-        opc = req_capsule_client_get(info->sti_pill, &RMF_SEQ_OPC);
-        if (opc != NULL) {
-                out = req_capsule_server_get(info->sti_pill, &RMF_SEQ_RANGE);
-                if (out == NULL)
-                        RETURN(err_serious(-EPROTO));
+	opc = req_capsule_client_get(tsi->tsi_pill, &RMF_SEQ_OPC);
+	if (opc != NULL) {
+		out = req_capsule_server_get(tsi->tsi_pill, &RMF_SEQ_RANGE);
+		if (out == NULL)
+			RETURN(err_serious(-EPROTO));
 
-                tmp = req_capsule_client_get(info->sti_pill, &RMF_SEQ_RANGE);
+		tmp = req_capsule_client_get(tsi->tsi_pill, &RMF_SEQ_RANGE);
 
-                /* seq client passed mdt id, we need to pass that using out
-                 * range parameter */
+		/* seq client passed mdt id, we need to pass that using out
+		 * range parameter */
 
-                out->lsr_index = tmp->lsr_index;
-                out->lsr_flags = tmp->lsr_flags;
-                rc = seq_server_handle(site, env, *opc, out);
-        } else
-                rc = err_serious(-EPROTO);
+		out->lsr_index = tmp->lsr_index;
+		out->lsr_flags = tmp->lsr_flags;
+		rc = seq_server_handle(site, tsi->tsi_env, *opc, out);
+	} else {
+		rc = err_serious(-EPROTO);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
+
+struct tgt_handler seq_handlers[] = {
+TGT_SEQ_HDL(HABEO_REFERO,	SEQ_QUERY,	seq_handler),
+};
+EXPORT_SYMBOL(seq_handlers);
 
 /* context key constructor/destructor: seq_key_init, seq_key_fini */
 LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 
 /* context key: seq_thread_key */
 LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD | LCT_DT_THREAD);
-
-static void seq_thread_info_init(struct ptlrpc_request *req,
-                                 struct seq_thread_info *info)
-{
-        info->sti_pill = &req->rq_pill;
-        /* Init request capsule */
-        req_capsule_init(info->sti_pill, req, RCL_SERVER);
-        req_capsule_set(info->sti_pill, &RQF_SEQ_QUERY);
-}
-
-static void seq_thread_info_fini(struct seq_thread_info *info)
-{
-        req_capsule_fini(info->sti_pill);
-}
-
-int seq_handle(struct ptlrpc_request *req)
-{
-        const struct lu_env *env;
-        struct seq_thread_info *info;
-        int rc;
-
-        env = req->rq_svc_thread->t_env;
-        LASSERT(env != NULL);
-
-        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
-        LASSERT(info != NULL);
-
-        seq_thread_info_init(req, info);
-        rc = seq_req_handle(req, env, info);
-        /* XXX: we don't need replay but MDT assign transno in any case,
-         * remove it manually before reply*/
-        lustre_msg_set_transno(req->rq_repmsg, 0);
-        seq_thread_info_fini(info);
-
-        return rc;
-}
-EXPORT_SYMBOL(seq_handle);
-
-/*
- * Entry point for handling FLD RPCs called from MDT.
- */
-int seq_query(struct com_thread_info *info)
-{
-        return seq_handle(info->cti_pill->rc_req);
-}
-EXPORT_SYMBOL(seq_query);
 
 static int seq_server_proc_init(struct lu_server_seq *seq)
 {
