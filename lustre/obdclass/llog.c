@@ -449,17 +449,19 @@ int llog_process_or_fork(const struct lu_env *env,
 
 #ifdef __KERNEL__
 	if (fork) {
+		struct task_struct *task;
+
 		/* The new thread can't use parent env,
 		 * init the new one in llog_process_thread_daemonize. */
 		lpi->lpi_env = NULL;
 		init_completion(&lpi->lpi_completion);
-		rc = PTR_ERR(kthread_run(llog_process_thread_daemonize, lpi,
-					     "llog_process_thread"));
-		if (IS_ERR_VALUE(rc)) {
+		task = kthread_run(llog_process_thread_daemonize, lpi,
+				   "llog_process_thread");
+		if (IS_ERR(task)) {
+			rc = PTR_ERR(task);
 			CERROR("%s: cannot start thread: rc = %d\n",
 			       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
-			OBD_FREE_PTR(lpi);
-			RETURN(rc);
+			GOTO(out_lpi, rc);
 		}
 		wait_for_completion(&lpi->lpi_completion);
 	} else {
@@ -470,9 +472,13 @@ int llog_process_or_fork(const struct lu_env *env,
 	lpi->lpi_env = env;
 	llog_process_thread(lpi);
 #endif
-        rc = lpi->lpi_rc;
-        OBD_FREE_PTR(lpi);
-        RETURN(rc);
+	rc = lpi->lpi_rc;
+
+#ifdef __KERNEL__
+out_lpi:
+#endif
+	OBD_FREE_PTR(lpi);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process_or_fork);
 

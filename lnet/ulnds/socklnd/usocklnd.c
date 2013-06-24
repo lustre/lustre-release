@@ -297,12 +297,13 @@ usocklnd_base_startup()
 
         /* Spawn poll threads */
 	for (i = 0; i < usock_data.ud_npollthreads; i++) {
-		rc = PTR_ERR(kthread_run(usocklnd_poll_thread,
-					     &usock_data.ud_pollthreads[i],
-					     ""));
-		if (IS_ERR_VALUE(rc)) {
+		struct task_struct *task;
+
+		task = kthread_run(usocklnd_poll_thread,
+				   &usock_data.ud_pollthreads[i], "");
+		if (IS_ERR(task)) {
 			usocklnd_base_shutdown(i);
-			return rc;
+			return PTR_ERR(task);
 		}
 	}
 

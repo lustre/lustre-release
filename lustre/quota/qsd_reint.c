@@ -623,6 +623,7 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct l_wait_info	 lwi = { 0 };
+	struct task_struct	*task;
 	int			 rc;
 	char			*name;
 	ENTRY;
@@ -664,10 +665,11 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	snprintf(name, MTI_NAME_MAXLEN, "qsd_reint_%d.%s",
 		 qqi->qqi_qtype, qsd->qsd_svname);
 
-	rc = PTR_ERR(kthread_run(qsd_reint_main, (void *)qqi, name));
+	task = kthread_run(qsd_reint_main, qqi, name);
 	OBD_FREE(name, MTI_NAME_MAXLEN);
 
-	if (IS_ERR_VALUE(rc)) {
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
 		thread_set_flags(thread, SVC_STOPPED);
 		write_lock(&qsd->qsd_lock);
 		qqi->qqi_reint = 0;

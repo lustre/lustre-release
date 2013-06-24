@@ -1998,6 +1998,7 @@ static int do_osd_scrub_start(struct osd_device *dev, __u32 flags)
 	struct osd_scrub     *scrub  = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
 	struct l_wait_info    lwi    = { 0 };
+	struct task_struct   *task;
 	int		      rc;
 	ENTRY;
 
@@ -2021,9 +2022,10 @@ again:
 
 	scrub->os_start_flags = flags;
 	thread_set_flags(thread, 0);
-	rc = PTR_ERR(kthread_run(osd_scrub_main, dev, "OI_scrub"));
-	if (IS_ERR_VALUE(rc)) {
-		CERROR("%.16s: cannot start iteration thread, rc = %d\n",
+	task = kthread_run(osd_scrub_main, dev, "OI_scrub");
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("%.16s: cannot start iteration thread: rc = %d\n",
 		       LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name, rc);
 		RETURN(rc);
 	}
