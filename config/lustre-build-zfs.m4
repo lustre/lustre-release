@@ -18,6 +18,11 @@ dnl #                       * /usr/src/zfs-${VERSION}
 dnl #                       * ../spl/
 dnl #                       * $LINUX
 dnl #
+dnl # --with-zfs-devel=path
+dnl #                 - User provided directory where zfs development headers
+dnl #                   are located. This option is typically used when user
+dnl #                   uses rpm2cpio to unpack src rpm.
+dnl #
 dnl # --with-zfs=path - Enable zfs support and use the zfs headers in the
 dnl #                   provided path.  No autodetection is performed and
 dnl #                   if no headers are found this is a fatal error.
@@ -263,16 +268,37 @@ AC_DEFUN([LB_ZFS], [
 	AC_SUBST(ZFS_SYMBOLS)
 ])
 
+AC_DEFUN([LB_ZFS_DEVEL], [
+	AC_ARG_WITH([zfs-devel],
+		[AS_HELP_STRING([--with-zfs-devel=PATH],
+		[Path to zfs development headers])],
+		[zfsdevel="$withval"])
+
+	AC_MSG_CHECKING([user provided zfs devel headers])
+	AS_IF([test ! -z "${zfsdevel}"], [
+		AS_IF([test -d "${zfsdevel}/usr/include/libspl" && test -d "${zfsdevel}/usr/include/libzfs"], [
+			zfslib="-I $zfsdevel/usr/include/libspl -I $zfsdevel/usr/include/libzfs"
+		], [
+			AC_MSG_ERROR([Path to development headers directory does not exist])
+		])
+	])
+	AC_MSG_RESULT([$zfslib])
+])
+
 AC_DEFUN([LB_ZFS_USER], [
 	dnl #
 	dnl # Detect user space zfs development headers.
 	dnl #
 	AC_MSG_CHECKING([zfs devel headers])
-	AS_IF([test -d /usr/include/libzfs && test -d /usr/include/libspl], [
-		zfslib="-I /usr/include/libspl -I /usr/include/libzfs"
-	], [
-		zfslib="[Not found]"
-		enable_zfs=no
+	AS_IF([test -z "${zfslib}"], [
+        	AS_IF([test -e $zfssrc/include/libzfs.h && test -e $zfssrc/lib/libspl/include], [
+                	zfslib="-I $zfssrc/lib/libspl/include -I $zfssrc/include"
+		], [test -d /usr/include/libzfs && test -d /usr/include/libspl], [
+			zfslib="-I /usr/include/libspl -I /usr/include/libzfs"
+		], [
+			zfslib="[Not Found]"
+			enable_zfs=no
+		])
 	])
 	AC_MSG_RESULT([$zfslib])
 
@@ -314,7 +340,7 @@ AC_DEFUN([LB_PATH_ZFS], [
 			LB_SPL
 			LB_ZFS
 		])
-
+		LB_ZFS_DEVEL
 		LB_ZFS_USER
 
 		dnl #
