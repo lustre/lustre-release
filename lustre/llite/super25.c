@@ -61,11 +61,25 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 	return &lli->lli_vfs_inode;
 }
 
+#ifdef HAVE_INODE_I_RCU
+static void ll_inode_destroy_callback(struct rcu_head *head)
+{
+	struct inode *inode = container_of(head, struct inode, i_rcu);
+	struct ll_inode_info *ptr = ll_i2info(inode);
+	OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
+}
+
 static void ll_destroy_inode(struct inode *inode)
 {
-        struct ll_inode_info *ptr = ll_i2info(inode);
-        OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
+	call_rcu(&inode->i_rcu, ll_inode_destroy_callback);
 }
+#else
+static void ll_destroy_inode(struct inode *inode)
+{
+	struct ll_inode_info *ptr = ll_i2info(inode);
+	OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
+}
+#endif
 
 int ll_init_inodecache(void)
 {

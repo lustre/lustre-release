@@ -1639,6 +1639,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.38 inode.i_rcu added.
+#
+AC_DEFUN([LC_INODE_I_RCU],
+[AC_MSG_CHECKING([if inode.i_rcu exists])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode ino;
+	struct rcu_head rcu = {};
+	ino.i_rcu = rcu;
+],[
+	AC_DEFINE(HAVE_INODE_I_RCU, 1,
+		[inode.i_rcu exists])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.38 export blkdev_get_by_dev
 #
 AC_DEFUN([LC_BLKDEV_GET_BY_DEV],
@@ -2344,6 +2364,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_GENERIC_PERMISSION
          LC_QUOTA_ON_USE_PATH
          LC_DCACHE_LOCK
+	 LC_INODE_I_RCU
          LC_D_COMPARE_7ARGS
          LC_D_DELETE_CONST
 
