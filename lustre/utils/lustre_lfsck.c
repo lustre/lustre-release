@@ -70,7 +70,6 @@ struct lfsck_type_name {
 
 static struct lfsck_type_name lfsck_types_names[] = {
 	{ "layout",     6,	LT_LAYOUT },
-	{ "DNE",	3,	LT_DNE },
 	{ "namespace",	9,	LT_NAMESPACE},
 	{ 0,		0,	0 }
 };
@@ -92,13 +91,13 @@ static void usage_start(void)
 {
 	fprintf(stderr, "Start LFSCK.\n"
 		"SYNOPSIS:\n"
-		"lfsck_start <-M | --device MDT_device>\n"
+		"lfsck_start <-M | --device [MDT,OST]_device>\n"
 		"	     [-e | --error error_handle] [-h | --help]\n"
 		"	     [-n | --dryrun switch] [-r | --reset]\n"
 		"	     [-s | --speed speed_limit]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
 		"OPTIONS:\n"
-		"-M: The MDT device to start LFSCK on.\n"
+		"-M: The device to start LFSCK/scrub on.\n"
 		"-e: Error handle, 'continue'(default) or 'abort'.\n"
 		"-h: Help information.\n"
 		"-n: Check without modification. 'off'(default) or 'on'.\n"
@@ -113,9 +112,9 @@ static void usage_stop(void)
 {
 	fprintf(stderr, "Stop LFSCK.\n"
 		"SYNOPSIS:\n"
-		"lfsck_stop <-M | --device MDT_device> [-h | --help]\n"
+		"lfsck_stop <-M | --device [MDT,OST]_device> [-h | --help]\n"
 		"OPTIONS:\n"
-		"-M: The MDT device to stop LFSCK on.\n"
+		"-M: The device to stop LFSCK/scrub on.\n"
 		"-h: Help information.\n");
 }
 
@@ -124,7 +123,7 @@ static int lfsck_pack_dev(struct obd_ioctl_data *data, char *device, char *arg)
 	int len = strlen(arg) + 1;
 
 	if (len > MAX_OBD_NAME) {
-		fprintf(stderr, "MDT device name is too long. "
+		fprintf(stderr, "device name is too long. "
 			"Valid length should be less than %d\n", MAX_OBD_NAME);
 		return -EINVAL;
 	}
@@ -216,8 +215,8 @@ int jt_lfsck_start(int argc, char **argv)
 				if (type == 0) {
 					fprintf(stderr, "Invalid type (%s).\n"
 						"The valid value should be "
-						"'layout', 'DNE' or "
-						"'namespace'.\n", str);
+						"'layout' or 'namespace'.\n",
+						str);
 					*p = c;
 					return -EINVAL;
 				}
@@ -230,7 +229,7 @@ int jt_lfsck_start(int argc, char **argv)
 			if (start.ls_active == 0) {
 				fprintf(stderr, "Miss LFSCK type(s).\n"
 					"The valid value should be "
-					"'layout', 'DNE' or 'namespace'.\n");
+					"'layout' or 'namespace'.\n");
 				return -EINVAL;
 			}
 			break;
@@ -242,9 +241,15 @@ int jt_lfsck_start(int argc, char **argv)
 	}
 
 	if (data.ioc_inlbuf4 == NULL) {
-		fprintf(stderr,
-			"Must sepcify MDT device to start LFSCK.\n");
-		return -EINVAL;
+		if (lcfg_get_devname() != NULL) {
+			rc = lfsck_pack_dev(&data, device, lcfg_get_devname());
+			if (rc != 0)
+				return rc;
+		} else {
+			fprintf(stderr,
+				"Must specify device to start LFSCK.\n");
+			return -EINVAL;
+		}
 	}
 
 	data.ioc_inlbuf1 = (char *)&start;
@@ -264,9 +269,9 @@ int jt_lfsck_start(int argc, char **argv)
 
 	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
 	if (start.ls_active == 0) {
-		printf("Started LFSCK on the MDT device %s", device);
+		printf("Started LFSCK on the device %s", device);
 	} else {
-		printf("Started LFSCK on the MDT device %s:", device);
+		printf("Started LFSCK on the device %s:", device);
 		i = 0;
 		while (lfsck_types_names[i].name != NULL) {
 			if (start.ls_active & lfsck_types_names[i].type) {
@@ -314,9 +319,15 @@ int jt_lfsck_stop(int argc, char **argv)
 	}
 
 	if (data.ioc_inlbuf4 == NULL) {
-		fprintf(stderr,
-			"Must sepcify MDT device to stop LFSCK.\n");
-		return -EINVAL;
+		if (lcfg_get_devname() != NULL) {
+			rc = lfsck_pack_dev(&data, device, lcfg_get_devname());
+			if (rc != 0)
+				return rc;
+		} else {
+			fprintf(stderr,
+				"Must sepcify device to stop LFSCK.\n");
+			return -EINVAL;
+		}
 	}
 
 	memset(buf, 0, sizeof(rawbuf));
@@ -332,6 +343,6 @@ int jt_lfsck_stop(int argc, char **argv)
 		return rc;
 	}
 
-	printf("Stopped LFSCK on the MDT device %s.\n", device);
+	printf("Stopped LFSCK on the device %s.\n", device);
 	return 0;
 }

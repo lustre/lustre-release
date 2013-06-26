@@ -45,6 +45,7 @@
 #include <obd_class.h>
 #include <lustre_param.h>
 #include <lustre_fid.h>
+#include <lustre_lfsck.h>
 
 #include "ofd_internal.h"
 
@@ -335,11 +336,12 @@ extern int ost_handle(struct ptlrpc_request *req);
 static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *dev)
 {
-	struct ofd_thread_info *info;
-	struct ofd_device	*ofd = ofd_dev(dev);
-	struct obd_device	*obd = ofd_obd(ofd);
-	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
-	int			 rc;
+	struct ofd_thread_info		*info;
+	struct ofd_device		*ofd = ofd_dev(dev);
+	struct obd_device		*obd = ofd_obd(ofd);
+	struct lu_device		*next = &ofd->ofd_osd->dd_lu_dev;
+	struct lfsck_start_param	 lsp;
+	int				 rc;
 
 	ENTRY;
 
@@ -355,6 +357,24 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 
 	/* initialize lower device */
 	rc = next->ld_ops->ldo_prepare(env, dev, next);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = lfsck_register(env, ofd->ofd_osd, &ofd->ofd_dt_dev, false);
+	if (rc != 0) {
+		CERROR("%s: failed to initialize lfsck: rc = %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	lsp.lsp_start = NULL;
+	lsp.lsp_namespace = ofd->ofd_namespace;
+	rc = lfsck_start(env, ofd->ofd_osd, &lsp);
+	if (rc != 0) {
+		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
+		      obd->obd_name, rc);
+		rc = 0;
+	}
 
 	target_recovery_init(&ofd->ofd_lut, ost_handle);
 	LASSERT(obd->obd_no_conn);
@@ -756,6 +776,8 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	struct obd_device *obd = ofd_obd(m);
 	struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
 
+	lfsck_stop(env, m->ofd_osd, true);
+	lfsck_degister(env, m->ofd_osd);
 	target_recovery_fini(obd);
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();

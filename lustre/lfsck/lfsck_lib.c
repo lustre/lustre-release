@@ -1013,8 +1013,7 @@ trigger:
 
 	lfsck->li_args_oit = (flags << DT_OTABLE_IT_FLAGS_SHIFT) | valid;
 	thread_set_flags(thread, 0);
-	if (lfsck->li_master)
-		rc = PTR_ERR(kthread_run(lfsck_master_engine, lfsck, "lfsck"));
+	rc = PTR_ERR(kthread_run(lfsck_master_engine, lfsck, "lfsck"));
 	if (IS_ERR_VALUE(rc)) {
 		CERROR("%s: cannot start LFSCK thread, rc = %ld\n",
 		       lfsck_lfsck2name(lfsck), rc);

@@ -659,28 +659,31 @@ int osd_obj_add_entry(struct osd_thread_info *info,
 		      const struct osd_inode_id *id,
 		      struct thandle *th)
 {
-        struct osd_thandle *oh;
-        struct dentry *child;
-        struct inode *inode;
-        int rc;
+	struct osd_thandle *oh;
+	struct dentry *child;
+	struct inode *inode;
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        oh = container_of(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
-        LASSERT(oh->ot_handle->h_transaction != NULL);
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY))
+		RETURN(0);
 
-        inode = &info->oti_inode;
-        inode->i_sb = osd_sb(osd);
+	oh = container_of(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
+
+	inode = &info->oti_inode;
+	inode->i_sb = osd_sb(osd);
 	osd_id_to_inode(inode, id);
 	inode->i_mode = S_IFREG; /* for type in ldiskfs dir entry */
 
-        child = &info->oti_child_dentry;
-        child->d_name.hash = 0;
-        child->d_name.name = name;
-        child->d_name.len = strlen(name);
-        child->d_parent = dir;
-        child->d_inode = inode;
+	child = &info->oti_child_dentry;
+	child->d_name.hash = 0;
+	child->d_name.name = name;
+	child->d_name.len = strlen(name);
+	child->d_parent = dir;
+	child->d_inode = inode;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
 		inode->i_ino++;

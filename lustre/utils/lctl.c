@@ -351,13 +351,13 @@ command_t cmdlist[] = {
 	/* LFSCK commands */
 	{"==== LFSCK ====", jt_noop, 0, "LFSCK"},
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
-	 "usage: lfsck_start <-M | --device MDT_device>\n"
+	 "usage: lfsck_start <-M | --device [MDT,OST]_device>\n"
 	 "		     [-e | --error error_handle] [-h | --help]\n"
 	 "		     [-n | --dryrun switch] [-r | --reset]\n"
 	 "		     [-s | --speed speed_limit]\n"
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]"},
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
-	 "usage: lfsck_stop <-M | --device MDT_device> [-h | --help]"},
+	 "usage: lfsck_stop <-M | --device [MDT,OST]_device> [-h | --help]"},
 
         {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */

@@ -46,6 +46,7 @@
 #include "ofd_internal.h"
 #include <obd_cksum.h>
 #include <lustre_quota.h>
+#include <lustre_lfsck.h>
 
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp, void *client_nid)
@@ -1545,6 +1546,24 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (rc == 0)
 			rc = dt_ro(&env, ofd->ofd_osd);
 		break;
+	case OBD_IOC_START_LFSCK: {
+		struct obd_ioctl_data *data = karg;
+		struct lfsck_start_param lsp;
+
+		if (unlikely(data == NULL)) {
+			rc = -EINVAL;
+			break;
+		}
+
+		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
+		lsp.lsp_namespace = ofd->ofd_namespace;
+		rc = lfsck_start(&env, ofd->ofd_osd, &lsp);
+		break;
+	}
+	case OBD_IOC_STOP_LFSCK: {
+		rc = lfsck_stop(&env, ofd->ofd_osd, false);
+		break;
+	}
 	case OBD_IOC_GET_OBJ_VERSION:
 		rc = ofd_ioc_get_obj_version(&env, ofd, karg);
 		break;

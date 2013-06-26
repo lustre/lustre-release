@@ -45,6 +45,7 @@ MDT_DEV="${FSNAME}-MDT0000"
 OST_DEV="${FSNAME}-OST0000"
 MDT_DEVNAME=$(mdsdevname ${SINGLEMDS//mds/})
 START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV}"
+START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV}"
 STOP_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
 SHOW_SCRUB="do_facet $SINGLEMDS \
 		$LCTL get_param -n osd-ldiskfs.${MDT_DEV}.oi_scrub"
@@ -837,6 +838,43 @@ test_12() {
 	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(4) ls should succeed"
 }
 run_test 12 "OI scrub can rebuild invalid /O entries"
+
+test_13() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+
+	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
+	do_facet ost1 $LCTL set_param fail_loc=0x196
+	createmany -o $DIR/$tdir/f 1000
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	local STATUS=$($SHOW_SCRUB_ON_OST | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(1) Expect 'init', but got '$STATUS'"
+
+	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(2) ls should fail"
+
+	$START_SCRUB_ON_OST || error "(3) Fail to start OI scrub on OST!"
+	sleep 3
+	local STATUS=$($SHOW_SCRUB_ON_OST | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(5) ls should succeed"
+}
+run_test 13 "OI scrub can rebuild missed /O entries"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
