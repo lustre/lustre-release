@@ -4624,7 +4624,8 @@ TEST60_HEAD="test_60 run $RANDOM"
 test_60a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-        [ ! -f run-llog.sh ] && skip_env "missing subtest run-llog.sh" && return
+	do_facet mgs "! which run-llog.sh &> /dev/null" &&
+		skip_env "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	do_facet mgs sh run-llog.sh
 }
