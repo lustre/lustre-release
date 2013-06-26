@@ -5590,9 +5590,7 @@ static int mdt_links_read(struct mdt_thread_info *info,
 	if (rc < 0)
 		return rc;
 
-	linkea_init(ldata);
-
-	return 0;
+	return linkea_init(ldata);
 }
 
 static int mdt_path_current(struct mdt_thread_info *info,
@@ -5644,7 +5642,7 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		rc = mdt_links_read(info, mdt_obj, &ldata);
 		mdt_object_put(info->mti_env, mdt_obj);
 		if (rc != 0)
-			GOTO(out, rc = PTR_ERR(buf));
+			GOTO(out, rc);
 
 		leh = buf->lb_buf;
 		lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
