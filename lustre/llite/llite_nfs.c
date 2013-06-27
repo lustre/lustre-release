@@ -168,11 +168,11 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 		spin_unlock(&lli->lli_lock);
 	}
 
-        result = d_obtain_alias(inode);
-        if (IS_ERR(result))
-                RETURN(result);
-
-        ll_dops_init(result, 1, 0);
+	result = d_obtain_alias(inode);
+	if (IS_ERR(result)) {
+		iput(inode);
+		RETURN(result);
+	}
 
         RETURN(result);
 }

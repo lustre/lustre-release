@@ -37,6 +37,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/quotaops.h>
+#include <linux/kernel.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -205,7 +206,7 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	RETURN(0);
 }
 
-static int ll_set_dd(struct dentry *de)
+int ll_d_init(struct dentry *de)
 {
 	ENTRY;
 	LASSERT(de != NULL);
@@ -220,42 +221,24 @@ static int ll_set_dd(struct dentry *de)
 		OBD_ALLOC_PTR(lld);
 		if (likely(lld != NULL)) {
 			spin_lock(&de->d_lock);
-			if (likely(de->d_fsdata == NULL))
+			if (likely(de->d_fsdata == NULL)) {
 				de->d_fsdata = lld;
-			else
+				__d_lustre_invalidate(de);
+#ifdef HAVE_DCACHE_LOCK
+				/* kernel >= 2.6.38 d_op is set in d_alloc() */
+				de->d_op = &ll_d_ops;
+#endif
+			} else {
 				OBD_FREE_PTR(lld);
+			}
 			spin_unlock(&de->d_lock);
 		} else {
 			RETURN(-ENOMEM);
 		}
 	}
+	LASSERT(de->d_op == &ll_d_ops);
 
 	RETURN(0);
-}
-
-int ll_dops_init(struct dentry *de, int block, int init_sa)
-{
-        struct ll_dentry_data *lld = ll_d2d(de);
-        int rc = 0;
-
-        if (lld == NULL && block != 0) {
-                rc = ll_set_dd(de);
-                if (rc)
-                        return rc;
-
-                lld = ll_d2d(de);
-        }
-
-        if (lld != NULL && init_sa != 0)
-                lld->lld_sa_generation = 0;
-
-#ifdef HAVE_DCACHE_LOCK
-	de->d_op = &ll_d_ops;
-#else
-	/* kernel >= 2.6.38 d_op is set in d_alloc() */
-	LASSERT(de->d_op == &ll_d_ops);
-#endif
-        return rc;
 }
 
 void ll_intent_drop_lock(struct lookup_intent *it)
@@ -401,6 +384,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
                LL_IT2STR(it));
 
+	LASSERT(de != de->d_sb->s_root);
+
         if (de->d_inode == NULL) {
                 __u64 ibits;
 
@@ -424,14 +409,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
                 GOTO(out_sa, rc = 1);
-
-        /* need to get attributes in case root got changed from other client */
-        if (de == de->d_sb->s_root) {
-                rc = __ll_inode_revalidate_it(de, it, MDS_INODELOCK_LOOKUP);
-                if (rc == 0)
-                        rc = 1;
-                GOTO(out_sa, rc);
-        }
 
         exp = ll_i2mdexp(de->d_inode);
 
