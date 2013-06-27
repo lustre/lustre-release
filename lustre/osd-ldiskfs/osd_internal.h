@@ -655,6 +655,9 @@ int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
 int osd_obj_map_update(struct osd_thread_info *info, struct osd_device *osd,
 		       const struct lu_fid *fid, const struct osd_inode_id *id,
 		       struct thandle *th);
+int osd_obj_map_recover(struct osd_thread_info *info, struct osd_device *osd,
+			struct inode *src_parent, struct dentry *src_child,
+			const struct lu_fid *fid);
 int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id);
 int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,

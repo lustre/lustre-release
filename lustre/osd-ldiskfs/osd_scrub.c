@@ -703,14 +703,104 @@ static int osd_scrub_check_local_fldb(struct osd_thread_info *info,
 	return 0;
 }
 
+static int osd_scrub_get_fid(struct osd_thread_info *info,
+			     struct osd_device *dev, struct inode *inode,
+			     struct lu_fid *fid, bool scrub)
+{
+	struct lustre_mdt_attrs *lma	 = &info->oti_mdt_attrs;
+	int			 rc;
+	bool			 has_lma = false;
+
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+	if (rc == 0) {
+		has_lma = true;
+		if (lma->lma_compat & LMAC_NOT_IN_OI) {
+			ldiskfs_set_inode_state(inode,
+						LDISKFS_STATE_LUSTRE_NO_OI);
+			return SCRUB_NEXT_CONTINUE;
+		}
+
+		*fid = lma->lma_self_fid;
+		if (fid_is_internal(&lma->lma_self_fid)) {
+			if (!scrub)
+				rc = SCRUB_NEXT_CONTINUE;
+			return rc;
+		}
+
+		if (!scrub)
+			return 0;
+
+		if (fid_is_namespace_visible(fid) && !fid_is_norm(fid))
+			return 0;
+
+		if (lma->lma_compat & LMAC_FID_ON_OST)
+			return SCRUB_NEXT_OSTOBJ;
+
+		if (fid_is_idif(fid) || fid_is_last_id(fid))
+			return SCRUB_NEXT_OSTOBJ_OLD;
+
+		if (lma->lma_incompat & LMAI_AGENT)
+			return SCRUB_NEXT_CONTINUE;
+
+		/* Here, it may be MDT-object, or may be 2.4 OST-object.
+		 * Fall through. */
+	}
+
+	if (rc == -ENODATA || rc == 0) {
+		rc = osd_get_idif(info, inode, &info->oti_obj_dentry, fid);
+		if (rc == 0) {
+			if (scrub)
+				/* It is old 2.x (x <= 3) or 1.8 OST-object. */
+				rc = SCRUB_NEXT_OSTOBJ_OLD;
+			return rc;
+		}
+
+		if (rc > 0) {
+			if (!has_lma)
+				/* It is FID-on-OST, but we do not know how
+				 * to generate its FID, ignore it directly. */
+				rc = SCRUB_NEXT_CONTINUE;
+			else
+				/* It is 2.4 OST-object. */
+				rc = SCRUB_NEXT_OSTOBJ_OLD;
+			return rc;
+		}
+
+		if (rc != -ENODATA)
+			return rc;
+
+		if (!has_lma) {
+			if (dev->od_handle_nolma) {
+				lu_igif_build(fid, inode->i_ino,
+					      inode->i_generation);
+				if (scrub)
+					rc = SCRUB_NEXT_NOLMA;
+				else
+					rc = 0;
+			} else {
+				/* It may be FID-on-OST, or may be FID for
+				 * non-MDT0, anyway, we do not know how to
+				 * generate its FID, ignore it directly. */
+				rc = SCRUB_NEXT_CONTINUE;
+			}
+			return rc;
+		}
+
+		/* For OI scrub case only: the object has LMA but has no ff
+		 * (or ff crashed). It may be MDT-object, may be OST-object
+		 * with crashed ff. The last check is local FLDB. */
+		rc = osd_scrub_check_local_fldb(info, dev, fid);
+	}
+
+	return rc;
+}
+
 static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 			struct lu_fid *fid, struct osd_inode_id *lid, __u32 pos,
 			struct super_block *sb, bool scrub)
 {
-	struct lustre_mdt_attrs *lma		= &info->oti_mdt_attrs;
-	struct inode		*inode;
-	int			 rc		= 0;
-	bool			 has_lma	= false;
+	struct inode *inode;
+	int	      rc;
 	ENTRY;
 
 	osd_id_gen(lid, pos, OSD_OII_NOGEN);
@@ -739,89 +829,7 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		GOTO(put, rc = SCRUB_NEXT_NOSCRUB);
 	}
 
-	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
-	if (rc == 0) {
-		has_lma = true;
-		if (lma->lma_compat & LMAC_NOT_IN_OI) {
-			ldiskfs_set_inode_state(inode,
-						LDISKFS_STATE_LUSTRE_NO_OI);
-			GOTO(put, rc = SCRUB_NEXT_CONTINUE);
-		}
-
-		if (fid_is_llog(&lma->lma_self_fid))
-			GOTO(put, rc = SCRUB_NEXT_CONTINUE);
-
-		*fid = lma->lma_self_fid;
-		if (fid_is_internal(&lma->lma_self_fid)) {
-			if (!scrub)
-				rc = SCRUB_NEXT_CONTINUE;
-			GOTO(put, rc);
-		}
-
-		if (!scrub)
-			GOTO(put, rc);
-
-		if (fid_is_namespace_visible(fid) && !fid_is_norm(fid))
-			GOTO(put, rc);
-
-		if (lma->lma_compat & LMAC_FID_ON_OST || fid_is_last_id(fid))
-			GOTO(put, rc = SCRUB_NEXT_OSTOBJ);
-
-		if (fid_is_idif(fid))
-			GOTO(put, rc = SCRUB_NEXT_OSTOBJ_OLD);
-
-		if (lma->lma_incompat & LMAI_AGENT)
-			GOTO(put, rc = SCRUB_NEXT_CONTINUE);
-
-		/* Here, it may be MDT-object, or may be 2.4 OST-object.
-		 * Fall through. */
-	}
-
-	if (rc == -ENODATA || rc == 0) {
-		rc = osd_get_idif(info, inode, &info->oti_obj_dentry, fid);
-		if (rc == 0) {
-			if (scrub)
-				/* It is old 2.x (x <= 3) or 1.8 OST-object. */
-				rc = SCRUB_NEXT_OSTOBJ_OLD;
-			GOTO(put, rc);
-		}
-
-		if (rc > 0) {
-			if (!has_lma)
-				/* It is FID-on-OST, but we do not know how
-				 * to generate its FID, ignore it directly. */
-				rc = SCRUB_NEXT_CONTINUE;
-			else
-				/* It is 2.4 OST-object. */
-				rc = SCRUB_NEXT_OSTOBJ_OLD;
-			GOTO(put, rc);
-		}
-
-		if (rc != -ENODATA)
-			GOTO(put, rc);
-
-		if (!has_lma) {
-			if (dev->od_handle_nolma) {
-				lu_igif_build(fid, inode->i_ino,
-					      inode->i_generation);
-				if (scrub)
-					rc = SCRUB_NEXT_NOLMA;
-				else
-					rc = 0;
-			} else {
-				/* It may be FID-on-OST, or may be FID for
-				 * non-MDT0, anyway, we do not know how to
-				 * generate its FID, ignore it directly. */
-				rc = SCRUB_NEXT_CONTINUE;
-			}
-			GOTO(put, rc);
-		}
-
-		/* For OI scrub case only: the object has LMA but has no ff
-		 * (or ff crashed). It may be MDT-object, may be OST-object
-		 * with crashed ff. The last check is local FLDB. */
-		rc = osd_scrub_check_local_fldb(info, dev, fid);
-	}
+	rc = osd_scrub_get_fid(info, dev, inode, fid, scrub);
 
 	GOTO(put, rc);
 
@@ -1203,6 +1211,8 @@ typedef int (*scandir_t)(struct osd_thread_info *, struct osd_device *,
 
 static int osd_ios_varfid_fill(void *buf, const char *name, int namelen,
 			       loff_t offset, __u64 ino, unsigned d_type);
+static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
+			   loff_t offset, __u64 ino, unsigned d_type);
 
 static int
 osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
@@ -1219,6 +1229,7 @@ enum osd_lf_flags {
 	OLF_SCAN_SUBITEMS	= 0x0001,
 	OLF_HIDE_FID		= 0x0002,
 	OLF_SHOW_NAME		= 0x0004,
+	OLF_NO_OI		= 0x0008,
 };
 
 struct osd_lf_map {
@@ -1311,6 +1322,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	/* LAST_GROUP, upgrade from old device */
 	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
 		OLF_SHOW_NAME, NULL, NULL },
+
+	/* lost+found */
+	{ "lost+found", { 0, 0, 0 }, OLF_SCAN_SUBITEMS | OLF_NO_OI,
+		osd_ios_general_scan, osd_ios_lf_fill },
 
 	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
 };
@@ -1459,6 +1474,77 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	RETURN(rc);
 }
 
+/**
+ * It scans the /lost+found, and for the OST-object (with filter_fid
+ * or filter_fid_old), move them back to its proper /O/<seq>/d<x>.
+ */
+static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
+			   loff_t offset, __u64 ino, unsigned d_type)
+{
+	struct osd_ios_filldir_buf *fill_buf = buf;
+	struct osd_thread_info     *info     = fill_buf->oifb_info;
+	struct osd_device	   *dev      = fill_buf->oifb_dev;
+	struct lu_fid		   *fid      = &info->oti_fid;
+	struct osd_scrub	   *scrub    = &dev->od_scrub;
+	struct dentry		   *parent   = fill_buf->oifb_dentry;
+	struct dentry		   *child;
+	struct inode		   *dir      = parent->d_inode;
+	struct inode		   *inode;
+	int			    rc;
+	ENTRY;
+
+	/* skip any '.' started names */
+	if (name[0] == '.')
+		RETURN(0);
+
+	scrub->os_lf_scanned++;
+	child = osd_ios_lookup_one_len(name, parent, namelen);
+	if (IS_ERR(child)) {
+		CWARN("%s: cannot lookup child '%.*s': rc = %d\n",
+		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
+		RETURN(0);
+	}
+
+	inode = child->d_inode;
+	if (S_ISDIR(inode->i_mode)) {
+		rc = osd_ios_new_item(dev, child, osd_ios_general_scan,
+				      osd_ios_lf_fill);
+		if (rc != 0)
+			CWARN("%s: cannot add child '%.*s': rc = %d\n",
+			      osd_name(dev), namelen, name, rc);
+		GOTO(put, rc);
+	}
+
+	if (!S_ISREG(inode->i_mode))
+		GOTO(put, rc = 0);
+
+	rc = osd_scrub_get_fid(info, dev, inode, fid, true);
+	if (rc == SCRUB_NEXT_OSTOBJ || rc == SCRUB_NEXT_OSTOBJ_OLD) {
+		rc = osd_obj_map_recover(info, dev, dir, child, fid);
+		if (rc == 0) {
+			CDEBUG(D_LFSCK, "recovered '%.*s' ["DFID"] from "
+			       "/lost+found.\n", namelen, name, PFID(fid));
+			scrub->os_lf_repaired++;
+		} else {
+			CWARN("%s: cannot rename for '%.*s' "DFID": rc = %d\n",
+			      osd_name(dev), namelen, name, PFID(fid), rc);
+		}
+	}
+
+	/* XXX: For MDT-objects, we can move them from /lost+found to namespace
+	 * 	visible place, such as the /ROOT/.lustre/lost+found, then LFSCK
+	 * 	can process them in furtuer. */
+
+	GOTO(put, rc);
+
+put:
+	if (rc < 0)
+		scrub->os_lf_failed++;
+	dput(child);
+	/* skip the failure to make the scanning to continue. */
+	return 0;
+}
+
 static int osd_ios_varfid_fill(void *buf, const char *name, int namelen,
 			       loff_t offset, __u64 ino, unsigned d_type)
 {
@@ -1515,8 +1601,9 @@ static int osd_ios_root_fill(void *buf, const char *name, int namelen,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
-			      &map->olm_fid, map->olm_flags);
+	if (!(map->olm_flags & OLF_NO_OI))
+		rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
+				      &map->olm_fid, map->olm_flags);
 	if (rc == 0 && map->olm_flags & OLF_SCAN_SUBITEMS)
 		rc = osd_ios_new_item(dev, child, map->olm_scandir,
 				      map->olm_filldir);
@@ -2460,8 +2547,13 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 			      "run_time: %u seconds\n"
 			      "average_speed: "LPU64" objects/sec\n"
 			      "real-time_speed: "LPU64" objects/sec\n"
-			      "current_position: %u\n",
-			      rtime, speed, new_checked, scrub->os_pos_current);
+			      "current_position: %u\n"
+			      "lf_scanned: "LPU64"\n"
+			      "lf_reparied: "LPU64"\n"
+			      "lf_failed: "LPU64"\n",
+			      rtime, speed, new_checked, scrub->os_pos_current,
+			      scrub->os_lf_scanned, scrub->os_lf_repaired,
+			      scrub->os_lf_failed);
 	} else {
 		if (sf->sf_run_time != 0)
 			do_div(speed, sf->sf_run_time);
@@ -2469,8 +2561,12 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 			      "run_time: %u seconds\n"
 			      "average_speed: "LPU64" objects/sec\n"
 			      "real-time_speed: N/A\n"
-			      "current_position: N/A\n",
-			      sf->sf_run_time, speed);
+			      "current_position: N/A\n"
+			      "lf_scanned: "LPU64"\n"
+			      "lf_reparied: "LPU64"\n"
+			      "lf_failed: "LPU64"\n",
+			      sf->sf_run_time, speed, scrub->os_lf_scanned,
+			      scrub->os_lf_repaired, scrub->os_lf_failed);
 	}
 	if (rc <= 0)
 		goto out;

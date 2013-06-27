@@ -32,12 +32,18 @@ check_and_setup_lustre
 [ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
 	skip "test OI scrub only for ldiskfs" && check_and_cleanup_lustre &&
 	exit 0
+[ $(facet_fstype ost1) != ldiskfs ] &&
+	skip "test OI scrub only for ldiskfs" && check_and_cleanup_lustre &&
+	exit 0
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
 	skip "Need MDS version at least 2.2.90" && check_and_cleanup_lustre &&
 	exit 0
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.90) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 1a"
+
+[[ $(lustre_version_code ost1) -lt $(version_code 2.4.50) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14"
 
 build_test_filter
 
@@ -875,6 +881,52 @@ test_13() {
 	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(5) ls should succeed"
 }
 run_test 13 "OI scrub can rebuild missed /O entries"
+
+test_14() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+
+	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
+	do_facet ost1 $LCTL set_param fail_loc=0x196
+	createmany -o $DIR/$tdir/f 64
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	local STATUS=$($SHOW_SCRUB_ON_OST | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(1) Expect 'init', but got '$STATUS'"
+
+	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(2) ls should fail"
+
+	echo "stopall"
+	stopall > /dev/null
+
+	echo "run e2fsck"
+	run_e2fsck $(facet_host ost1) $(ostdevname 1) "-y" ||
+		error "(3) Fail to run e2fsck error"
+
+	echo "setupall"
+	setupall > /dev/null
+
+	local LF_REPAIRED=$($SHOW_SCRUB_ON_OST |
+			    awk '/^lf_reparied/ { print $2 }')
+	[ $LF_REPAIRED -gt 0 ] ||
+		error "(4) Some entry under /lost+found should be repaired"
+
+	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(5) ls should succeed"
+}
+run_test 14 "OI scrub can repair objects under lost+found"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}

@@ -193,6 +193,16 @@ struct osd_scrub {
 	/* The time for next checkpoint, jiffies */
 	cfs_time_t		os_time_next_checkpoint;
 
+	/* statistics for /lost+found are in ram only, it will be reset
+	 * when each time the device remount. */
+
+	/* How many objects have been scanned during initial OI scrub. */
+	__u64			os_lf_scanned;
+	/* How many objects have been repaired during initial OI scrub. */
+	__u64			os_lf_repaired;
+	/* How many objects failed to be processed during initial OI scrub. */
+	__u64			os_lf_failed;
+
 	/* How many objects have been checked since last checkpoint. */
 	__u32			os_new_checked;
 	__u32			os_pos_current;
