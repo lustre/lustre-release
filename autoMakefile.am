@@ -68,7 +68,7 @@ mkid:
 doxygen:  doxygen-api doxygen-ref
 
 doxygen-%: build/doxyfile.%
-	   doxygen $<
+	doxygen $<
 
 if MODULES
 sources: all-sources
