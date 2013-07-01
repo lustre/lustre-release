@@ -529,11 +529,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
 
-        if (it->it_op & IT_CREAT ||
-            (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT))
-                opc = LUSTRE_OPC_CREATE;
-        else
-                opc = LUSTRE_OPC_ANY;
+	if (it->it_op & IT_CREAT)
+		opc = LUSTRE_OPC_CREATE;
+	else
+		opc = LUSTRE_OPC_ANY;
 
         op_data = ll_prep_md_op_data(NULL, parent, NULL, dentry->d_name.name,
                                      dentry->d_name.len, lookup_flags, opc,
@@ -631,7 +630,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		RETURN(-ENOMEM);
 
 	it->it_op = IT_OPEN;
-	if (mode) {
+	if (open_flags & O_CREAT) {
 		it->it_op |= IT_CREAT;
 		lookup_flags |= LOOKUP_CREATE;
 	}
