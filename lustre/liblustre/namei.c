@@ -432,13 +432,11 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
 
-        if (it->it_op & IT_CREAT || 
-            (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
-                opc = LUSTRE_OPC_CREATE;
-        } else {
-                opc = LUSTRE_OPC_ANY;
-        }
-        
+	if (it->it_op & IT_CREAT)
+		opc = LUSTRE_OPC_CREATE;
+	else
+		opc = LUSTRE_OPC_ANY;
+
         llu_prep_md_op_data(&op_data, parent, NULL,
                             pnode->p_base->pb_name.name,
                             pnode->p_base->pb_name.len, flags, opc);
