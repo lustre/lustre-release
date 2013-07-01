@@ -160,8 +160,8 @@ static int ll_dir_filler(void *_hash, struct page *page0)
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) hash "LPU64"\n",
-               inode->i_ino, inode->i_generation, inode, hash);
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) hash "LPU64"\n",
+	       PFID(ll_inode2fid(inode)), inode, hash);
 
 	LASSERT(max_pages > 0 && max_pages <= MD_MAX_BRW_PAGES);
 
@@ -379,8 +379,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
 			return ERR_PTR(rc);
 		}
 
-		CDEBUG(D_INODE, "setting lr_lvb_inode to inode %p (%lu/%u)\n",
-		       dir, dir->i_ino, dir->i_generation);
+		CDEBUG(D_INODE, "setting lr_lvb_inode to inode "DFID"(%p)\n",
+		       PFID(ll_inode2fid(dir)), dir);
 		md_set_lock_data(ll_i2sbi(dir)->ll_md_exp,
 				 &it.d.lustre.it_lock_handle, dir, NULL);
         } else {
@@ -609,8 +609,8 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	else
 		pos = 0;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu "
-	       " 32bit_api %d\n", inode->i_ino, inode->i_generation,
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) pos %lu/%llu "
+	       " 32bit_api %d\n", PFID(ll_inode2fid(inode)),
 	       inode, (unsigned long)pos, i_size_read(inode), api32);
 
 	if (pos == MDS_DIR_END_OFF)
@@ -832,9 +832,8 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
         rc = md_getattr(sbi->ll_md_exp, op_data, &req);
         ll_finish_md_op_data(op_data);
         if (rc < 0) {
-                CDEBUG(D_INFO, "md_getattr failed on inode "
-                       "%lu/%u: rc %d\n", inode->i_ino,
-                       inode->i_generation, rc);
+		CDEBUG(D_INFO, "md_getattr failed on inode "
+		       DFID": rc %d\n", PFID(ll_inode2fid(inode)), rc);
                 GOTO(out, rc);
         }
 
@@ -1266,8 +1265,8 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), cmd=%#x\n",
-               inode->i_ino, inode->i_generation, inode, cmd);
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), cmd=%#x\n",
+	       PFID(ll_inode2fid(inode)), inode, cmd);
 
         /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
         if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */

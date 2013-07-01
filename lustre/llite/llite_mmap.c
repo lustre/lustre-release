@@ -395,10 +395,10 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
                 result = ll_page_mkwrite0(vma, vmf->page, &retry);
 
                 if (!printed && ++count > 16) {
-                        CWARN("app(%s): the page %lu of file %lu is under heavy"
-                              " contention.\n",
-                              current->comm, vmf->pgoff,
-                              vma->vm_file->f_dentry->d_inode->i_ino);
+			CWARN("app(%s): the page %lu of file "DFID" is under"
+			      " heavy contention\n",
+			      current->comm, vmf->pgoff,
+			      PFID(ll_inode2fid(vma->vm_file->f_dentry->d_inode)));
                         printed = true;
                 }
         } while (retry);

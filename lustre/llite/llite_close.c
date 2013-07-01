@@ -95,16 +95,16 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                 struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
 
                 if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-                        CWARN("ino %lu/%u(flags %u) som valid it just after "
-                              "recovery\n",
-                              inode->i_ino, inode->i_generation,
-                              lli->lli_flags);
-                /* DONE_WRITING is allowed and inode has no dirty page. */
+			CWARN("%s: file "DFID"(flags %u) Size-on-MDS valid, "
+			      "done writing allowed and no diry pages\n",
+			      ll_get_fsname(inode->i_sb, NULL, 0),
+			      PFID(ll_inode2fid(inode)), lli->lli_flags);
+		/* DONE_WRITING is allowed and inode has no dirty page. */
 		spin_lock(&lcq->lcq_lock);
 
-                LASSERT(cfs_list_empty(&lli->lli_close_list));
-                CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
-                       inode->i_ino, inode->i_generation);
+		LASSERT(cfs_list_empty(&lli->lli_close_list));
+		CDEBUG(D_INODE, "adding inode "DFID" to close list\n",
+		       PFID(ll_inode2fid(inode)));
                 cfs_list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
 
 		/* Avoid a concurrent insertion into the close thread queue:
@@ -131,9 +131,10 @@ void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data)
         op_data->op_flags |= MF_SOM_CHANGE;
         /* Check if Size-on-MDS attributes are valid. */
         if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-                CERROR("ino %lu/%u(flags %u) som valid it just after "
-                       "recovery\n", inode->i_ino, inode->i_generation,
-                       lli->lli_flags);
+		CERROR("%s: inode "DFID"(flags %u) MDS holds lock on "
+		       "Size-on-MDS attributes\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(inode)), lli->lli_flags);
 
         if (!cl_local_size(inode)) {
                 /* Send Size-on-MDS Attributes if valid. */
@@ -229,9 +230,10 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
 
         LASSERT(op_data != NULL);
         if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
-                CERROR("ino %lu/%u(flags %u) som valid it just after "
-                       "recovery\n", inode->i_ino, inode->i_generation,
-                       lli->lli_flags);
+		CERROR("%s: inode "DFID"(flags %u) MDS holds lock on "
+		       "Size-on-MDS attributes\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(inode)), lli->lli_flags);
 
         OBDO_ALLOC(oa);
         if (!oa) {
@@ -249,10 +251,11 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
                 if (rc) {
                         oa->o_valid = 0;
 			if (rc != -ENOENT)
-                                CERROR("inode_getattr failed (%d): unable to "
-                                       "send a Size-on-MDS attribute update "
-                                       "for inode %lu/%u\n", rc, inode->i_ino,
-                                       inode->i_generation);
+				CERROR("%s: inode_getattr failed - unable to "
+				       "send a Size-on-MDS attribute update "
+				       "for inode "DFID": rc = %d\n",
+				       ll_get_fsname(inode->i_sb, NULL, 0),
+				       PFID(ll_inode2fid(inode)), rc);
                 } else {
                         CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n",
                                PFID(&lli->lli_fid));
@@ -315,8 +318,9 @@ static void ll_done_writing(struct inode *inode)
                  * OSTs and send setattr to back to MDS. */
                 rc = ll_som_update(inode, op_data);
         } else if (rc) {
-                CERROR("inode %lu mdc done_writing failed: rc = %d\n",
-                       inode->i_ino, rc);
+		CERROR("%s: inode "DFID" mdc done_writing failed: rc = %d\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(inode)), rc);
         }
 out:
         ll_finish_md_op_data(op_data);
@@ -363,8 +367,8 @@ static int ll_close_thread(void *arg)
                         break;
 
                 inode = ll_info2i(lli);
-                CDEBUG(D_INFO, "done_writting for inode %lu/%u\n",
-                       inode->i_ino, inode->i_generation);
+		CDEBUG(D_INFO, "done_writting for inode "DFID"\n",
+		       PFID(ll_inode2fid(inode)));
                 ll_done_writing(inode);
                 iput(inode);
         }
