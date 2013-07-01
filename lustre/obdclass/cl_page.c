@@ -514,7 +514,7 @@ static inline int cl_page_invariant(const struct cl_page *pg)
         child  = pg->cp_child;
         owner  = pg->cp_owner;
 
-        return cl_page_in_use(pg) &&
+        return cl_page_in_use_noref(pg) &&
                 ergo(parent != NULL, parent->cp_child == pg) &&
                 ergo(child != NULL, child->cp_parent == pg) &&
                 ergo(child != NULL, pg->cp_obj != child->cp_obj) &&
@@ -863,7 +863,7 @@ void cl_page_disown0(const struct lu_env *env,
         ENTRY;
         state = pg->cp_state;
         PINVRNT(env, pg, state == CPS_OWNED || state == CPS_FREEING);
-        PINVRNT(env, pg, cl_page_invariant(pg));
+        PINVRNT(env, pg, cl_page_invariant(pg) || state == CPS_FREEING);
         cl_page_owner_clear(pg);
 
         if (state == CPS_OWNED)
@@ -1045,7 +1045,8 @@ EXPORT_SYMBOL(cl_page_unassume);
 void cl_page_disown(const struct lu_env *env,
                     struct cl_io *io, struct cl_page *pg)
 {
-        PINVRNT(env, pg, cl_page_is_owned(pg, io));
+        PINVRNT(env, pg, cl_page_is_owned(pg, io) ||
+			 pg->cp_state == CPS_FREEING);
 
         ENTRY;
         pg = cl_page_top(pg);
