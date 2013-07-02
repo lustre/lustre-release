@@ -916,9 +916,9 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
                 RETURN(-EACCES);
         }
 
-        OBD_ALLOC_PTR(req);
-        if (!req)
-                RETURN(-ENOMEM);
+	req = ptlrpc_request_cache_alloc(__GFP_IO);
+	if (!req)
+		RETURN(-ENOMEM);
 
 	spin_lock_init(&req->rq_lock);
         cfs_atomic_set(&req->rq_refcount, 10000);
@@ -932,9 +932,9 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
         rc = sptlrpc_req_refresh_ctx(req, 0);
         LASSERT(cfs_list_empty(&req->rq_ctx_chain));
         sptlrpc_cli_ctx_put(req->rq_cli_ctx, 1);
-        OBD_FREE_PTR(req);
+	ptlrpc_request_cache_free(req);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
@@ -1097,13 +1097,13 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
 int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
                                    struct ptlrpc_request **req_ret)
 {
-        struct ptlrpc_request  *early_req;
-        char                   *early_buf;
-        int                     early_bufsz, early_size;
-        int                     rc;
-        ENTRY;
+	struct ptlrpc_request  *early_req;
+	char                   *early_buf;
+	int                     early_bufsz, early_size;
+	int                     rc;
+	ENTRY;
 
-        OBD_ALLOC_PTR(early_req);
+	early_req = ptlrpc_request_cache_alloc(__GFP_IO);
         if (early_req == NULL)
                 RETURN(-ENOMEM);
 
@@ -1175,8 +1175,8 @@ err_ctx:
 err_buf:
         OBD_FREE_LARGE(early_buf, early_bufsz);
 err_req:
-        OBD_FREE_PTR(early_req);
-        RETURN(rc);
+	ptlrpc_request_cache_free(early_req);
+	RETURN(rc);
 }
 
 /**
@@ -1186,13 +1186,13 @@ err_req:
  */
 void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req)
 {
-        LASSERT(early_req->rq_repbuf);
-        LASSERT(early_req->rq_repdata);
-        LASSERT(early_req->rq_repmsg);
+	LASSERT(early_req->rq_repbuf);
+	LASSERT(early_req->rq_repdata);
+	LASSERT(early_req->rq_repmsg);
 
-        sptlrpc_cli_ctx_put(early_req->rq_cli_ctx, 1);
-        OBD_FREE_LARGE(early_req->rq_repbuf, early_req->rq_repbuf_len);
-        OBD_FREE_PTR(early_req);
+	sptlrpc_cli_ctx_put(early_req->rq_cli_ctx, 1);
+	OBD_FREE_LARGE(early_req->rq_repbuf, early_req->rq_repbuf_len);
+	ptlrpc_request_cache_free(early_req);
 }
 
 /**************************************************

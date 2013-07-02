@@ -869,11 +869,11 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         sptlrpc_svc_ctx_decref(req);
 
         if (req != &req->rq_rqbd->rqbd_req) {
-                /* NB request buffers use an embedded
-                 * req if the incoming req unlinked the
-                 * MD; this isn't one of them! */
-                OBD_FREE(req, sizeof(*req));
-        }
+		/* NB request buffers use an embedded
+		 * req if the incoming req unlinked the
+		 * MD; this isn't one of them! */
+		ptlrpc_request_cache_free(req);
+	}
 }
 
 /**
@@ -1342,14 +1342,12 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	}
 	newdl = cfs_time_current_sec() + at_get(&svcpt->scp_at_estimate);
 
-        OBD_ALLOC(reqcopy, sizeof *reqcopy);
-        if (reqcopy == NULL)
-                RETURN(-ENOMEM);
-        OBD_ALLOC_LARGE(reqmsg, req->rq_reqlen);
-        if (!reqmsg) {
-                OBD_FREE(reqcopy, sizeof *reqcopy);
-                RETURN(-ENOMEM);
-        }
+	reqcopy = ptlrpc_request_cache_alloc(__GFP_IO);
+	if (reqcopy == NULL)
+		RETURN(-ENOMEM);
+	OBD_ALLOC_LARGE(reqmsg, req->rq_reqlen);
+	if (!reqmsg)
+		GOTO(out_free, rc = -ENOMEM);
 
         *reqcopy = *req;
         reqcopy->rq_reply_state = NULL;
@@ -1402,12 +1400,13 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 
 out_put:
 	class_export_rpc_dec(reqcopy->rq_export);
-        class_export_put(reqcopy->rq_export);
+	class_export_put(reqcopy->rq_export);
 out:
-        sptlrpc_svc_ctx_decref(reqcopy);
-        OBD_FREE_LARGE(reqmsg, req->rq_reqlen);
-        OBD_FREE(reqcopy, sizeof *reqcopy);
-        RETURN(rc);
+	sptlrpc_svc_ctx_decref(reqcopy);
+	OBD_FREE_LARGE(reqmsg, req->rq_reqlen);
+out_free:
+	ptlrpc_request_cache_free(reqcopy);
+	RETURN(rc);
 }
 
 /* Send early replies to everybody expiring within at_early_margin

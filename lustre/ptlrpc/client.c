@@ -387,6 +387,34 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req)
 	RETURN(rc);
 }
 
+struct kmem_cache *request_cache;
+
+int ptlrpc_request_cache_init()
+{
+	request_cache = kmem_cache_create("ptlrpc_cache",
+					  sizeof(struct ptlrpc_request),
+					  0, SLAB_HWCACHE_ALIGN, NULL);
+	return request_cache == NULL ? -ENOMEM : 0;
+}
+
+void ptlrpc_request_cache_fini()
+{
+	kmem_cache_destroy(request_cache);
+}
+
+struct ptlrpc_request *ptlrpc_request_cache_alloc(int flags)
+{
+	struct ptlrpc_request *req;
+
+	OBD_SLAB_ALLOC_PTR_GFP(req, request_cache, flags);
+	return req;
+}
+
+void ptlrpc_request_cache_free(struct ptlrpc_request *req)
+{
+	OBD_SLAB_FREE_PTR(req, request_cache);
+}
+
 /**
  * Wind down request pool \a pool.
  * Frees all requests from the pool too
@@ -405,7 +433,7 @@ void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
 		LASSERT(req->rq_reqbuf);
 		LASSERT(req->rq_reqbuf_len == pool->prp_rq_size);
 		OBD_FREE_LARGE(req->rq_reqbuf, pool->prp_rq_size);
-		OBD_FREE(req, sizeof(*req));
+		ptlrpc_request_cache_free(req);
 	}
 	spin_unlock(&pool->prp_lock);
 	OBD_FREE(pool, sizeof(*pool));
@@ -435,13 +463,13 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
 		struct lustre_msg *msg;
 
 		spin_unlock(&pool->prp_lock);
-                OBD_ALLOC(req, sizeof(struct ptlrpc_request));
-                if (!req)
-                        return;
-                OBD_ALLOC_LARGE(msg, size);
-                if (!msg) {
-                        OBD_FREE(req, sizeof(struct ptlrpc_request));
-                        return;
+		req = ptlrpc_request_cache_alloc(__GFP_IO);
+		if (!req)
+			return;
+		OBD_ALLOC_LARGE(msg, size);
+		if (!msg) {
+			ptlrpc_request_cache_free(req);
+			return;
                 }
                 req->rq_reqbuf = msg;
                 req->rq_reqbuf_len = size;
@@ -671,13 +699,13 @@ static inline
 struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
                                               struct ptlrpc_request_pool *pool)
 {
-        struct ptlrpc_request *request = NULL;
+	struct ptlrpc_request *request = NULL;
 
-        if (pool)
-                request = ptlrpc_prep_req_from_pool(pool);
+	if (pool)
+		request = ptlrpc_prep_req_from_pool(pool);
 
-        if (!request)
-                OBD_ALLOC_PTR(request);
+	if (!request)
+		request = ptlrpc_request_cache_alloc(__GFP_IO);
 
         if (request) {
                 LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
@@ -745,10 +773,10 @@ EXPORT_SYMBOL(ptlrpc_request_alloc_pool);
  */
 void ptlrpc_request_free(struct ptlrpc_request *request)
 {
-        if (request->rq_pool)
-                __ptlrpc_free_req_to_pool(request);
-        else
-                OBD_FREE_PTR(request);
+	if (request->rq_pool)
+		__ptlrpc_free_req_to_pool(request);
+	else
+		ptlrpc_request_cache_free(request);
 }
 EXPORT_SYMBOL(ptlrpc_request_free);
 
@@ -2244,8 +2272,8 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_pool)
                 __ptlrpc_free_req_to_pool(request);
         else
-                OBD_FREE(request, sizeof(*request));
-        EXIT;
+		ptlrpc_request_cache_free(request);
+	EXIT;
 }
 
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
@@ -2981,7 +3009,7 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
                 RETURN(ERR_PTR(-EINVAL));
 
         /* copy some code from deprecated fakereq. */
-        OBD_ALLOC_PTR(req);
+        req = ptlrpc_request_cache_alloc(__GFP_IO);
         if (req == NULL) {
                 CERROR("ptlrpc: run out of memory!\n");
                 RETURN(ERR_PTR(-ENOMEM));
