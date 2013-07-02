@@ -91,12 +91,4 @@ static inline wait_queue_head_t *cfs_sk_sleep(struct sock *sk)
 #else
 #define cfs_sk_sleep(sk)	sk_sleep(sk)
 #endif
-
-#ifdef HAVE_INIT_NET
-#define DEFAULT_NET	(&init_net)
-#else
-/* some broken backports */
-#define DEFAULT_NET	(NULL)
-#endif
-
 #endif

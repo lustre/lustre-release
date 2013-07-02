@@ -53,7 +53,6 @@ void libcfs_unregister_panic_notifier();
 
 
 #define cfs_work_struct_t WORK_QUEUE_ITEM
-#define cfs_prepare_work(tq, routine, contex)
 #define cfs_schedule_work(tq)
 #define cfs_get_work_data(type,field,data)   (data)
 

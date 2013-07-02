@@ -37,9 +37,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
-#ifdef HAVE_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
-#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

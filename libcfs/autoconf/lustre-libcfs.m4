@@ -82,56 +82,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# LIBCFS_TASKLIST_LOCK
-# 2.6.18 remove tasklist_lock export
-AC_DEFUN([LIBCFS_TASKLIST_LOCK],
-[LB_CHECK_SYMBOL_EXPORT([tasklist_lock],
-[kernel/fork.c],[
-AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
-         [tasklist_lock exported])
-],[
-])
-])
-
-# LIBCFS_DIGEST_SETKEY_FLAGS
-# digest_alg.dia_setkey takes 4 args (2.6.18)
-#
-AC_DEFUN([LIBCFS_DIGEST_SETKEY_FLAGS],
-[AC_MSG_CHECKING([if kernel dia_setkey takes 4 args])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/err.h>
-	#include <linux/crypto.h>
-],[
-	struct digest_alg alg;
-
-	alg.dia_setkey(NULL, NULL, 0, NULL);
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_DIGEST_SETKEY_FLAGS, 1, [kernel dia_setkey takes 4 args])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.19 API changes
-# kmem_cache_destroy(cachep) return void instead of
-# int
-AC_DEFUN([LIBCFS_KMEM_CACHE_DESTROY_INT],
-[AC_MSG_CHECKING([kmem_cache_destroy(cachep) return int])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/slab.h>
-],[
-	int i __attribute__ ((unused));
-	i = kmem_cache_destroy(NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE_DESTROY_INT, 1,
-                [kmem_cache_destroy(cachep) return int])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
 # check cpumask_size (2.6.28)
 AC_DEFUN([LIBCFS_CPUMASK_SIZE],
 [AC_MSG_CHECKING([whether have cpumask_size()])
@@ -270,74 +220,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 
-# 2.6.20 API change INIT_WORK use 2 args and not
-# store data inside
-AC_DEFUN([LIBCFS_3ARGS_INIT_WORK],
-[AC_MSG_CHECKING([check INIT_WORK want 3 args])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/workqueue.h>
-],[
-	struct work_struct work __attribute__ ((unused));
-
-	INIT_WORK(&work, NULL, NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_3ARGS_INIT_WORK, 1,
-                  [INIT_WORK use 3 args and store data inside])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.21 api change. 'register_sysctl_table' use only one argument,
-# instead of more old which need two.
-AC_DEFUN([LIBCFS_2ARGS_REGISTER_SYSCTL],
-[AC_MSG_CHECKING([check register_sysctl_table want 2 args])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/sysctl.h>
-],[
-	register_sysctl_table(NULL,0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_2ARGS_REGISTER_SYSCTL, 1,
-                  [register_sysctl_table want 2 args])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.23 lost dtor argument
-AC_DEFUN([LIBCFS_KMEM_CACHE_CREATE_DTOR],
-[AC_MSG_CHECKING([check kmem_cache_create has dtor argument])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/slab.h>
-],[
-	kmem_cache_create(NULL, 0, 0, 0, NULL, NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE_CREATE_DTOR, 1,
-                  [kmem_cache_create has dtor argument])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-#2.6.23 has new shrinker API
-AC_DEFUN([LC_REGISTER_SHRINKER],
-[AC_MSG_CHECKING([if kernel has register_shrinker])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-],[
-        register_shrinker(NULL);
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
-                [kernel has register_shrinker])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.24 request not use real numbers for ctl_name
 AC_DEFUN([LIBCFS_SYSCTL_UNNUMBERED],
 [AC_MSG_CHECKING([for CTL_UNNUMBERED])
@@ -351,57 +233,6 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_SYSCTL_UNNUMBERED, 1,
                   [sysctl has CTL_UNNUMBERED])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.24 lost scatterlist->page
-AC_DEFUN([LIBCFS_SCATTERLIST_SETPAGE],
-[AC_MSG_CHECKING([for exist sg_set_page])
-LB_LINUX_TRY_COMPILE([
-        #include <asm/types.h>
-        #include <linux/scatterlist.h>
-],[
-	sg_set_page(NULL,NULL,0,0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SCATTERLIST_SETPAGE, 1,
-                  [struct scatterlist has no page member])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.24-rc1 sg_init_table
-AC_DEFUN([LIBCFS_SCATTERLIST_INITTABLE],
-[AC_MSG_CHECKING([for sg_init_table])
-LB_LINUX_TRY_COMPILE([
-	#include <asm/types.h>
-	#include <linux/scatterlist.h>
-],[
-	sg_init_table(NULL,0);
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_SCATTERLIST_INITTABLE, 1,
-		  [scatterlist has sg_init_table])
-],[
-	AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.24
-AC_DEFUN([LIBCFS_NETWORK_NAMESPACE],
-[AC_MSG_CHECKING([for network stack has namespaces])
-LB_LINUX_TRY_COMPILE([
-        #include <net/net_namespace.h>
-],[
-        struct net *net __attribute__ ((unused));
-        net = &init_net;
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_INIT_NET, 1,
-                  [kernel is support network namespaces ])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -481,24 +312,6 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 
-# 2.6.26 use int instead of atomic for sem.count
-AC_DEFUN([LIBCFS_SEM_COUNT],
-[AC_MSG_CHECKING([atomic sem.count])
-LB_LINUX_TRY_COMPILE([
-        #include <asm/semaphore.h>
-],[
-	struct semaphore s __attribute__ ((unused));
-
-	atomic_read(&s.count);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SEM_COUNT_ATOMIC, 1,
-                  [semaphore counter is atomic])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
 # 2.6.27 have second argument to sock_map_fd
 AC_DEFUN([LIBCFS_SOCK_MAP_FD_2ARG],
 [AC_MSG_CHECKING([sock_map_fd have second argument])
@@ -513,89 +326,6 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT(NO)
 ])
-])
-
-# LIBCFS_CRED_WRAPPERS
-#
-# wrappers for task's credentials are in sles11
-#
-AC_DEFUN([LIBCFS_CRED_WRAPPERS],
-[AC_MSG_CHECKING([if kernel has wrappers for task's credentials])
-LB_LINUX_TRY_COMPILE([
-       #include <linux/sched.h>
-],[
-       uid_t uid;
-
-       uid = current_uid() + sizeof(uid);
-],[
-       AC_MSG_RESULT([yes])
-       AC_DEFINE(HAVE_CRED_WRAPPERS, 1, [task's cred wrappers found])
-],[
-       AC_MSG_RESULT([no])
-])
-])
-
-#
-# LN_STRUCT_CRED_IN_TASK
-#
-# struct cred was introduced in 2.6.29 to streamline credentials in task struct
-#
-AC_DEFUN([LIBCFS_STRUCT_CRED_IN_TASK],
-[AC_MSG_CHECKING([if kernel has struct cred])
-LB_LINUX_TRY_COMPILE([
-       #include <linux/sched.h>
-],[
-       struct task_struct *tsk = NULL;
-       tsk->real_cred = NULL;
-],[
-       AC_MSG_RESULT([yes])
-       AC_DEFINE(HAVE_STRUCT_CRED, 1, [struct cred found])
-],[
-       AC_MSG_RESULT([no])
-])
-])
-
-# LIBCFS_STRUCT_SHASH_ALG
-# struct shash_alg was introduced in 2.6.29
-#
-AC_DEFUN([LIBCFS_STRUCT_SHASH_ALG],
-[AC_MSG_CHECKING([if kernel has struct shash_alg])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/err.h>
-	#include <crypto/internal/hash.h>
-],[
-	struct shash_alg foo;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_STRUCT_SHASH_ALG, 1, [kernel has struct shash_alg])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-
-#
-# LIBCFS_FUNC_UNSHARE_FS_STRUCT
-#
-# unshare_fs_struct was introduced in 2.6.30 to prevent others to directly
-# mess with copy_fs_struct
-#
-AC_DEFUN([LIBCFS_FUNC_UNSHARE_FS_STRUCT],
-[AC_MSG_CHECKING([if kernel defines unshare_fs_struct()])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-       #include <linux/sched.h>
-       #include <linux/fs_struct.h>
-],[
-       unshare_fs_struct();
-],[
-       AC_MSG_RESULT([yes])
-       AC_DEFINE(HAVE_UNSHARE_FS_STRUCT, 1, [unshare_fs_struct found])
-],[
-       AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -646,27 +376,6 @@ AC_DEFUN([LIBCFS_HAVE_KEYTYPE_H],
         AC_MSG_RESULT([no])
 ])
 ])
-
-#
-# check set_mems_allowed
-# 2.6.31 adds function set_mems_allowed in cpuset.h
-#
-AC_DEFUN([LIBCFS_HAVE_SET_MEMS_ALLOWED],
-[AC_MSG_CHECKING([whether have set_mems_allowed()])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/cpuset.h>
-],[
-	nodemask_t mask;
-
-	set_mems_allowed(mask);
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_SET_MEMS_ALLOWED, 1, [have set_mems_allowed()])
-],[
-	AC_MSG_RESULT(NO)
-])
-])
-
 
 #
 # RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
@@ -802,40 +511,17 @@ LIBCFS_CONFIG_PANIC_DUMPLOG
 
 LIBCFS_U64_LONG_LONG_LINUX
 # 2.6.18
-LIBCFS_TASKLIST_LOCK
 LIBCFS_HAVE_IS_COMPAT_TASK
-LIBCFS_DIGEST_SETKEY_FLAGS
-# 2.6.19
-LIBCFS_KMEM_CACHE_DESTROY_INT
-# 2.6.20
-LIBCFS_3ARGS_INIT_WORK
-# 2.6.21
-LIBCFS_2ARGS_REGISTER_SYSCTL
-# 2.6.23
-LIBCFS_KMEM_CACHE_CREATE_DTOR
-LC_REGISTER_SHRINKER
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
-LIBCFS_SCATTERLIST_SETPAGE
-LIBCFS_SCATTERLIST_INITTABLE
-LIBCFS_NETWORK_NAMESPACE
 LIBCFS_FUNC_DUMP_TRACE
 LIBCFS_HAVE_KEYTYPE_H
-# 2.6.26
-LIBCFS_SEM_COUNT
-# 2.6.27
-LIBCFS_CRED_WRAPPERS
 # 2.6.28
 LIBCFS_CPUMASK_SIZE
 # 2.6.29
-LIBCFS_STRUCT_CRED_IN_TASK
 LIBCFS_CPU_TOPOLOGY
-LIBCFS_STRUCT_SHASH_ALG
 # 2.6.30
-LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
-# 2.6.31
-LIBCFS_HAVE_SET_MEMS_ALLOWED
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR

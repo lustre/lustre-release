@@ -656,9 +656,7 @@ cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 #else
 		rc = set_cpus_allowed_ptr(cfs_current(), cpumask);
 #endif
-#ifdef HAVE_SET_MEMS_ALLOWED
 		set_mems_allowed(*nodemask);
-#endif
 		if (rc == 0)
 			cfs_schedule(); /* switch to allowed CPU */
 

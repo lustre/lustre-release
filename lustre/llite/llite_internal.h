@@ -847,11 +847,7 @@ void ll_delete_inode(struct inode *inode);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 int ll_flush_ctx(struct inode *inode);
-#ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
-void ll_umount_begin(struct vfsmount *vfsmnt, int flags);
-#else
 void ll_umount_begin(struct super_block *sb);
-#endif
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 #ifdef HAVE_SUPEROPS_USE_DENTRY
 int ll_show_options(struct seq_file *seq, struct dentry *dentry);
@@ -943,19 +939,6 @@ struct vvp_io {
                          *  locked page returned from vvp_io
                          */
 			struct page            *ft_vmpage;
-#ifndef HAVE_VM_OP_FAULT
-                        struct vm_nopage_api {
-                                /**
-                                 * Virtual address at which fault occurred.
-                                 */
-                                unsigned long   ft_address;
-                                /**
-                                 * Fault type, as to be supplied to
-                                 * filemap_nopage().
-                                 */
-                                int             *ft_type;
-                        } nopage;
-#else
                         struct vm_fault_api {
                                 /**
                                  * kernel fault info
@@ -966,7 +949,6 @@ struct vvp_io {
                                  */
                                 unsigned int    ft_flags;
                         } fault;
-#endif
                 } fault;
         } u;
         /**

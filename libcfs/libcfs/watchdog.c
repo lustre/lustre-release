@@ -104,11 +104,7 @@ static void
 lcw_dump(struct lc_watchdog *lcw)
 {
         ENTRY;
-#if defined(HAVE_TASKLIST_LOCK)
-	read_lock(&tasklist_lock);
-#else
         rcu_read_lock();
-#endif
        if (lcw->lcw_task == NULL) {
                 LCONSOLE_WARN("Process " LPPID " was not found in the task "
                               "list; watchdog callback may be incomplete\n",
@@ -117,11 +113,7 @@ lcw_dump(struct lc_watchdog *lcw)
                 libcfs_debug_dumpstack(lcw->lcw_task);
         }
 
-#if defined(HAVE_TASKLIST_LOCK)
-	read_unlock(&tasklist_lock);
-#else
         rcu_read_unlock();
-#endif
         EXIT;
 }
 

@@ -973,17 +973,11 @@ void ll_lli_init(struct ll_inode_info *lli)
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
 {
-#ifdef HAVE_BDI_REGISTER
         static atomic_t ll_bdi_num = ATOMIC_INIT(0);
 
-#ifdef HAVE_BDI_NAME
         bdi->name = "lustre";
-#endif
         return bdi_register(bdi, NULL, "lustre-%d",
                             atomic_inc_return(&ll_bdi_num));
-#else
-        return 0;
-#endif
 }
 
 int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
@@ -1028,9 +1022,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free, err);
 
-#ifdef HAVE_SB_BDI
         sb->s_bdi = &lsi->lsi_bdi;
-#endif
 
         /* Generate a string unique to this super, in case some joker tries
            to mount the same fs at two mount points.
@@ -1377,50 +1369,6 @@ static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
 
         return rc;
 }
-
-#ifndef HAVE_VFS_INODE_NEWSIZE_OK
-/**
- * inode_newsize_ok - may this inode be truncated to a given size
- * @inode:      the inode to be truncated
- * @offset:     the new size to assign to the inode
- * @Returns:    0 on success, -ve errno on failure
- *
- * inode_newsize_ok will check filesystem limits and ulimits to check that the
- * new inode size is within limits. inode_newsize_ok will also send SIGXFSZ
- * when necessary. Caller must not proceed with inode size change if failure is
- * returned. @inode must be a file (not directory), with appropriate
- * permissions to allow truncate (inode_newsize_ok does NOT check these
- * conditions).
- *
- * inode_newsize_ok must be called with i_mutex held.
- */
-int inode_newsize_ok(const struct inode *inode, loff_t offset)
-{
-	if (inode->i_size < offset) {
-		unsigned long limit;
-
-		limit = rlimit(RLIMIT_FSIZE);
-		if (limit != RLIM_INFINITY && offset > limit)
-			goto out_sig;
-		if (offset > inode->i_sb->s_maxbytes)
-			goto out_big;
-	} else {
-		/*
-		 * truncation of in-use swapfiles is disallowed - it would
-		 * cause subsequent swapout to scribble on the now-freed
-		 * blocks.
-		 */
-		if (IS_SWAPFILE(inode))
-			return -ETXTBSY;
-	}
-
-	return 0;
-out_sig:
-	send_sig(SIGXFSZ, current, 0);
-out_big:
-	return -EFBIG;
-}
-#endif
 
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
@@ -2047,25 +1995,12 @@ int ll_flush_ctx(struct inode *inode)
 }
 
 /* umount -f client means force down, don't save state */
-#ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
-void ll_umount_begin(struct vfsmount *vfsmnt, int flags)
-{
-        struct super_block *sb = vfsmnt->mnt_sb;
-#else
 void ll_umount_begin(struct super_block *sb)
 {
-#endif
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data *ioc_data;
         ENTRY;
-
-#ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
-        if (!(flags & MNT_FORCE)) {
-                EXIT;
-                return;
-        }
-#endif
 
         CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
                sb->s_count, atomic_read(&sb->s_active));
@@ -2104,17 +2039,6 @@ void ll_umount_begin(struct super_block *sb)
          * schedule() and sleep one second if needed, and hope.
          */
         cfs_schedule();
-#ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
-        if (atomic_read(&vfsmnt->mnt_count) > 2) {
-                cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
-                                                   cfs_time_seconds(1));
-                if (atomic_read(&vfsmnt->mnt_count) > 2)
-                        LCONSOLE_WARN("Mount still busy with %d refs! You "
-                                      "may try to umount it a bit later\n",
-                                      atomic_read(&vfsmnt->mnt_count));
-        }
-#endif
-
         EXIT;
 }
 

@@ -218,9 +218,6 @@ int cfs_curproc_is_32bit(void)
 static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
 				 void *buf, int len, int write)
 {
-#ifdef HAVE_ACCESS_PROCESS_VM
-	return access_process_vm(tsk, addr, buf, len, write);
-#else
 	/* Just copied from kernel for the kernels which doesn't
 	 * have access_process_vm() exported */
 	struct mm_struct *mm;
@@ -267,7 +264,6 @@ static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
 	mmput(mm);
 
 	return buf - old_buf;
-#endif /* HAVE_ACCESS_PROCESS_VM */
 }
 
 /* Read the environment variable of current process specified by @key. */

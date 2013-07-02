@@ -29,11 +29,7 @@
  * Author:     Alexander Boyko <Alexander_Boyko@xyratex.com>
  */
 #include <linux/crc32.h>
-#ifdef HAVE_STRUCT_SHASH_ALG
 #include <crypto/internal/hash.h>
-#else
-#include <linux/crypto.h>
-#endif
 #include <linux/crc32.h>
 #include <asm/cpufeature.h>
 #include <asm/i387.h>
@@ -90,7 +86,6 @@ static int crc32_pclmul_cra_init(struct crypto_tfm *tfm)
 	return 0;
 }
 
-#ifdef HAVE_STRUCT_SHASH_ALG
 /*
  * Setting the seed allows arbitrary accumulators and flexible XOR policy
  * If your algorithm starts with ~0, then XOR with ~0 before you set
@@ -176,68 +171,6 @@ static struct shash_alg alg = {
 			.cra_init		= crc32_pclmul_cra_init,
 	}
 };
-#else   /* HAVE_STRUCT_SHASH_ALG */
-#ifdef HAVE_DIGEST_SETKEY_FLAGS
-static int crc32_digest_setkey(struct crypto_tfm *tfm, const u8 *key,
-			       unsigned int keylen, unsigned int *flags)
-#else
-static int crc32_digest_setkey(struct crypto_tfm *tfm, const u8 *key,
-			       unsigned int keylen)
-#endif
-{
-	u32 *mctx = crypto_tfm_ctx(tfm);
-
-	if (keylen != sizeof(u32)) {
-		tfm->crt_flags |= CRYPTO_TFM_RES_BAD_KEY_LEN;
-		return -EINVAL;
-	}
-	*mctx = le32_to_cpup((__le32 *)key);
-	return 0;
-}
-
-static void crc32_digest_init(struct crypto_tfm *tfm)
-{
-	u32 *mctx = crypto_tfm_ctx(tfm);
-
-	*mctx = 0;
-}
-
-static void crc32_digest_update(struct crypto_tfm *tfm, const u8 *data,
-				unsigned int len)
-{
-	u32 *crcp = crypto_tfm_ctx(tfm);
-
-	*crcp = crc32_pclmul_le(*crcp, data, len);
-}
-
-static void crc32_digest_final(struct crypto_tfm *tfm, u8 *out)
-{
-	u32 *crcp = crypto_tfm_ctx(tfm);
-
-	*(__le32 *)out = cpu_to_le32p(crcp);
-}
-
-static struct crypto_alg alg = {
-	.cra_name		= "crc32",
-	.cra_flags		= CRYPTO_ALG_TYPE_DIGEST,
-	.cra_driver_name	= "crc32-pclmul",
-	.cra_priority		= 200,
-	.cra_blocksize		= CHKSUM_BLOCK_SIZE,
-	.cra_ctxsize		= sizeof(u32),
-	.cra_module		= THIS_MODULE,
-	.cra_init		= crc32_pclmul_cra_init,
-	.cra_list		= LIST_HEAD_INIT(alg.cra_list),
-	.cra_u			= {
-		.digest	= {
-				.dia_digestsize	= CHKSUM_DIGEST_SIZE,
-				.dia_setkey	= crc32_digest_setkey,
-				.dia_init	= crc32_digest_init,
-				.dia_update	= crc32_digest_update,
-				.dia_final	= crc32_digest_final
-		}
-	}
-};
-#endif  /* HAVE_STRUCT_SHASH_ALG */
 
 #ifndef X86_FEATURE_PCLMULQDQ
 #define X86_FEATURE_PCLMULQDQ	(4 * 32 + 1)	/* PCLMULQDQ instruction */
@@ -251,18 +184,10 @@ int cfs_crypto_crc32_pclmul_register(void)
 		       "detected.\n");
 		return -ENODEV;
 	}
-#ifdef HAVE_STRUCT_SHASH_ALG
 	return crypto_register_shash(&alg);
-#else
-	return crypto_register_alg(&alg);
-#endif
 }
 
 void cfs_crypto_crc32_pclmul_unregister(void)
 {
-#ifdef HAVE_STRUCT_SHASH_ALG
 	crypto_unregister_shash(&alg);
-#else
-	crypto_unregister_alg(&alg);
-#endif
 }

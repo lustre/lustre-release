@@ -73,25 +73,7 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
-#ifdef HAVE_3ARGS_INIT_WORK
-
-#define prepare_work(wq,cb,cbdata)                                            \
-do {                                                                          \
-        INIT_WORK((wq), (void *)(cb), (void *)(cbdata));                      \
-} while (0)
-
-#define cfs_get_work_data(type,field,data)   (data)
-
-#else
-
-#define prepare_work(wq,cb,cbdata)                                            \
-do {                                                                          \
-        INIT_WORK((wq), (void *)(cb));                                        \
-} while (0)
-
 #define cfs_get_work_data(type,field,data) container_of(data,type,field)
-
-#endif
 
 #define cfs_num_online_cpus() num_online_cpus()
 #define wait_on_page wait_on_page_locked
@@ -109,12 +91,6 @@ do {                                                                          \
 
 #define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 #define LASSERT_MUTEX_LOCKED(x) LASSERT(mutex_is_locked(x))
-
-#ifdef HAVE_SEM_COUNT_ATOMIC
-#define SEM_COUNT(sem)          (atomic_read(&(sem)->count))
-#else
-#define SEM_COUNT(sem)          ((sem)->count)
-#endif
 
 #define LIBCFS_PANIC(msg)            panic(msg)
 
@@ -327,22 +303,6 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 #endif
 
 #undef _LWORDSIZE
-
-/* compat macroses */
-#ifndef HAVE_SCATTERLIST_SETPAGE
-static inline void sg_set_page(struct scatterlist *sg, struct page *page,
-                               unsigned int len, unsigned int offset)
-{
-        sg->page = page;
-        sg->offset = offset;
-        sg->length = len;
-}
-
-static inline void sg_assign_page(struct scatterlist *sg, struct page *page)
-{
-	sg->page = page;
-}
-#endif
 
 #define cfs_smp_processor_id()  smp_processor_id()
 

@@ -31,11 +31,7 @@
 
 #include <linux/module.h>
 #include <linux/zutil.h>
-#ifdef HAVE_STRUCT_SHASH_ALG
 #include <crypto/internal/hash.h>
-#else
-#include <linux/crypto.h>
-#endif
 
 
 #define CHKSUM_BLOCK_SIZE	1
@@ -56,7 +52,6 @@ static int adler32_cra_init(struct crypto_tfm *tfm)
 	return 0;
 }
 
-#ifdef HAVE_STRUCT_SHASH_ALG
 static int adler32_setkey(struct crypto_shash *hash, const u8 *key,
 			  unsigned int keylen)
 {
@@ -134,86 +129,15 @@ static struct shash_alg alg = {
 		.cra_init		= adler32_cra_init,
 	}
 };
-#else   /* HAVE_STRUCT_SHASH_ALG */
-#ifdef HAVE_DIGEST_SETKEY_FLAGS
-static int adler32_digest_setkey(struct crypto_tfm *tfm, const u8 *key,
-				 unsigned int keylen, u32 *flags)
-#else
-static int adler32_digest_setkey(struct crypto_tfm *tfm, const u8 *key,
-				 unsigned int keylen)
-#endif
-{
-	u32 *mctx = crypto_tfm_ctx(tfm);
-
-	if (keylen != sizeof(u32)) {
-		tfm->crt_flags |= CRYPTO_TFM_RES_BAD_KEY_LEN;
-		return -EINVAL;
-	}
-	*mctx = le32_to_cpup((__le32 *)key);
-	return 0;
-}
-
-static void adler32_digest_init(struct crypto_tfm *tfm)
-{
-	u32 *mctx = crypto_tfm_ctx(tfm);
-
-	*mctx = 0;
-
-}
-static void adler32_digest_update(struct crypto_tfm *tfm, const u8 *data,
-				  unsigned int len)
-{
-	u32 *crcp = crypto_tfm_ctx(tfm);
-
-	*crcp = __adler32(*crcp, data, len);
-}
-
-static void adler32_digest_final(struct crypto_tfm *tfm, u8 *out)
-{
-	u32 *chksum = crypto_tfm_ctx(tfm);
-
-	*(__le32 *)out = cpu_to_le32p(chksum);
-}
-
-static struct crypto_alg alg = {
-	.cra_name		= "adler32",
-	.cra_flags		= CRYPTO_ALG_TYPE_DIGEST,
-	.cra_driver_name	= "adler32-zlib",
-	.cra_priority		= 100,
-	.cra_blocksize		= CHKSUM_BLOCK_SIZE,
-	.cra_ctxsize		= sizeof(u32),
-	.cra_module		= THIS_MODULE,
-	.cra_init		= adler32_cra_init,
-	.cra_list		= LIST_HEAD_INIT(alg.cra_list),
-	.cra_u			= {
-		.digest		= {
-				.dia_digestsize	= CHKSUM_DIGEST_SIZE,
-				.dia_setkey	= adler32_digest_setkey,
-				.dia_init	= adler32_digest_init,
-				.dia_update	= adler32_digest_update,
-				.dia_final	= adler32_digest_final
-		}
-	}
-};
-#endif  /* HAVE_STRUCT_SHASH_ALG */
-
 
 int cfs_crypto_adler32_register(void)
 {
-#ifdef HAVE_STRUCT_SHASH_ALG
 	return crypto_register_shash(&alg);
-#else
-	return crypto_register_alg(&alg);
-#endif
 }
 EXPORT_SYMBOL(cfs_crypto_adler32_register);
 
 void cfs_crypto_adler32_unregister(void)
 {
-#ifdef HAVE_STRUCT_SHASH_ALG
 	crypto_unregister_shash(&alg);
-#else
-	crypto_unregister_alg(&alg);
-#endif
 }
 EXPORT_SYMBOL(cfs_crypto_adler32_unregister);

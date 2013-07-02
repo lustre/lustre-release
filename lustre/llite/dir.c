@@ -152,9 +152,6 @@ static int ll_dir_filler(void *_hash, struct page *page0)
 	__u64 hash = *((__u64 *)_hash);
         struct page **page_pool;
         struct page *page;
-#ifndef HAVE_ADD_TO_PAGE_CACHE_LRU
-        struct pagevec lru_pvec;
-#endif
         struct lu_dirpage *dp;
 	int max_pages = ll_i2sbi(inode)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
         int nrdpgs = 0; /* number of pages read actually */
@@ -205,7 +202,6 @@ static int ll_dir_filler(void *_hash, struct page *page0)
 
         CDEBUG(D_VFSTRACE, "read %d/%d pages\n", nrdpgs, npages);
 
-        ll_pagevec_init(&lru_pvec, 0);
         for (i = 1; i < npages; i++) {
                 unsigned long offset;
                 int ret;
@@ -228,17 +224,13 @@ static int ll_dir_filler(void *_hash, struct page *page0)
 		prefetchw(&page->flags);
 		ret = add_to_page_cache_lru(page, inode->i_mapping, offset,
 					    GFP_KERNEL);
-                if (ret == 0) {
+		if (ret == 0)
                         unlock_page(page);
-                        if (ll_pagevec_add(&lru_pvec, page) == 0)
-                                ll_pagevec_lru_add_file(&lru_pvec);
-                } else {
+		else
                         CDEBUG(D_VFSTRACE, "page %lu add to page cache failed:"
                                " %d\n", offset, ret);
-                }
                 page_cache_release(page);
         }
-        ll_pagevec_lru_add_file(&lru_pvec);
 
         if (page_pool != &page0)
                 OBD_FREE(page_pool, sizeof(struct page *) * max_pages);

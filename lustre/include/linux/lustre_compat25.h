@@ -111,17 +111,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define module_init(a)     late_initcall(a)
 #endif
 
-#ifndef HAVE_TRYLOCK_PAGE
-#define trylock_page(page)		(!TestSetPageLocked(page))
-#endif
-
 #define LTIME_S(time)                   (time.tv_sec)
-
-#ifdef HAVE_EXPORT_INODE_PERMISSION
-#define ll_permission(inode,mask,nd)    inode_permission(inode,mask)
-#else
-#define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
-#endif
 
 #ifdef HAVE_GENERIC_PERMISSION_2ARGS
 # define ll_generic_permission(inode, mask, flags, check_acl) \
@@ -155,11 +145,7 @@ static inline struct file *ll_dentry_open(struct path *path, int flags,
 {
 	mntget(path->mnt);
 	dget(path->dentry);
-# ifdef HAVE_DENTRY_OPEN_4ARGS
 	return dentry_open(path->dentry, path->mnt, flags, cred);
-# else
-	return dentry_open(path->dentry, path->mnt, flags);
-# endif
 }
 #endif
 
@@ -230,25 +216,8 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define FS_RENAME_DOES_D_MOVE		FS_ODD_RENAME
 #endif
 
-#ifndef HAVE_D_OBTAIN_ALIAS
-/* The old d_alloc_anon() didn't free the inode reference on error
- * like d_obtain_alias().  Hide that difference/inconvenience here. */
-static inline struct dentry *d_obtain_alias(struct inode *inode)
-{
-	struct dentry *anon = d_alloc_anon(inode);
-
-	if (anon == NULL) {
-		iput(inode);
-                anon = ERR_PTR(-ENOMEM);
-        }
-
-	return anon;
-}
-#endif
-
 /* add a lustre compatible layer for crypto API */
 #include <linux/crypto.h>
-#ifdef HAVE_ASYNC_BLOCK_CIPHER
 #define ll_crypto_hash          crypto_hash
 #define ll_crypto_cipher        crypto_blkcipher
 #define ll_crypto_alloc_hash(name, type, mask)  crypto_alloc_hash(name, type, mask)
@@ -313,132 +282,6 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #define ll_crypto_blkcipher_blocksize(tfm)  crypto_blkcipher_blocksize(tfm)
 #define ll_crypto_free_hash(tfm)            crypto_free_hash(tfm)
 #define ll_crypto_free_blkcipher(tfm)       crypto_free_blkcipher(tfm)
-#else /* HAVE_ASYNC_BLOCK_CIPHER */
-#include <linux/scatterlist.h>
-#define ll_crypto_hash          crypto_tfm
-#define ll_crypto_cipher        crypto_tfm
-#ifndef HAVE_STRUCT_HASH_DESC
-struct hash_desc {
-        struct ll_crypto_hash *tfm;
-        u32                    flags;
-};
-#endif
-#ifndef HAVE_STRUCT_BLKCIPHER_DESC
-struct blkcipher_desc {
-        struct ll_crypto_cipher *tfm;
-        void                    *info;
-        u32                      flags;
-};
-#endif
-#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
-        crypto_cipher_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
-        crypto_cipher_set_iv(tfm, src, len)
-#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
-        crypto_cipher_get_iv(tfm, dst, len)
-#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
-        crypto_cipher_encrypt((desc)->tfm, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
-        crypto_cipher_decrypt((desc)->tfm, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
-        crypto_cipher_decrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
-#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
-        crypto_cipher_encrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
-
-static inline
-struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
-                                                   u32 type, u32 mask)
-{
-	struct ll_crypto_cipher *rtn;
-	char        		 buf[CRYPTO_MAX_ALG_NAME + 1];
-	const char 		*pan = algname;
-	u32         		 flag = 0;
-
-	if (strncmp("cbc(", algname, 4) == 0)
-		flag |= CRYPTO_TFM_MODE_CBC;
-	else if (strncmp("ecb(", algname, 4) == 0)
-		flag |= CRYPTO_TFM_MODE_ECB;
-	if (flag) {
-		char *vp = strnchr(algname, CRYPTO_MAX_ALG_NAME, ')');
-		if (vp) {
-			memcpy(buf, algname + 4, vp - algname - 4);
-			buf[vp - algname - 4] = '\0';
-			pan = buf;
-		} else {
-			flag = 0;
-		}
-	}
-	rtn = crypto_alloc_tfm(pan, flag);
-	return (rtn == NULL ?  ERR_PTR(-ENOMEM) : rtn);
-}
-
-static inline
-struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
-{
-        char        buf[CRYPTO_MAX_ALG_NAME + 1];
-        const char *pan = alg;
-
-        if (strncmp("hmac(", alg, 5) == 0) {
-                char *vp = strnchr(alg, CRYPTO_MAX_ALG_NAME, ')');
-                if (vp) {
-                        memcpy(buf, alg+ 5, vp - alg- 5);
-                        buf[vp - alg - 5] = 0x00;
-                        pan = buf;
-                }
-        }
-        return crypto_alloc_tfm(pan, 0);
-}
-static inline int ll_crypto_hash_init(struct hash_desc *desc)
-{
-       crypto_digest_init(desc->tfm); return 0;
-}
-static inline int ll_crypto_hash_update(struct hash_desc *desc,
-                                        struct scatterlist *sg,
-                                        unsigned int nbytes)
-{
-        struct scatterlist *sl = sg;
-        unsigned int        count;
-                /*
-                 * This way is very weakness. We must ensure that
-                 * the sum of sg[0..i]->length isn't greater than nbytes.
-                 * In the upstream kernel the crypto_hash_update() also
-                 * via the nbytes computed the count of sg[...].
-                 * The old style is more safely. but it gone.
-                 */
-        for (count = 0; nbytes > 0; count ++, sl ++) {
-                nbytes -= sl->length;
-        }
-        crypto_digest_update(desc->tfm, sg, count); return 0;
-}
-static inline int ll_crypto_hash_final(struct hash_desc *desc, u8 *out)
-{
-        crypto_digest_final(desc->tfm, out); return 0;
-}
-static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
-                                 u8 *key, unsigned int *keylen,
-                                 struct scatterlist *sg,
-                                 unsigned int nbytes,
-                                 u8 *out)
-{
-        struct scatterlist *sl = sg;
-        int                 count;
-        for (count = 0; nbytes > 0; count ++, sl ++) {
-                nbytes -= sl->length;
-        }
-        crypto_hmac(tfm, key, keylen, sg, count, out);
-        return 0;
-}
-
-#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_digest_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_blocksize(tfm)      crypto_tfm_alg_blocksize(tfm)
-#define ll_crypto_blkcipher_ivsize(tfm) crypto_tfm_alg_ivsize(tfm)
-#define ll_crypto_hash_digestsize(tfm)  crypto_tfm_alg_digestsize(tfm)
-#define ll_crypto_hash_blocksize(tfm)   crypto_tfm_alg_blocksize(tfm)
-#define ll_crypto_free_hash(tfm)        crypto_free_tfm(tfm)
-#define ll_crypto_free_blkcipher(tfm)   crypto_free_tfm(tfm)
-#define ll_crypto_tfm_alg_min_keysize	crypto_tfm_alg_min_keysize
-#define ll_crypto_tfm_alg_max_keysize	crypto_tfm_alg_max_keysize
-#endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
@@ -491,18 +334,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define SLAB_DESTROY_BY_RCU 0
 #endif
 
-#ifndef HAVE_SB_HAS_QUOTA_ACTIVE
-#define sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
-#endif
-
-#ifndef HAVE_SB_ANY_QUOTA_LOADED
-# ifdef HAVE_SB_ANY_QUOTA_ACTIVE
-# define sb_any_quota_loaded(sb) sb_any_quota_active(sb)
-# else
-# define sb_any_quota_loaded(sb) sb_any_quota_enabled(sb)
-# endif
-#endif
-
 static inline int
 ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
 {
@@ -548,22 +379,11 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
                 return -ENOSYS;
 }
 
-#ifndef HAVE_BLK_QUEUE_LOG_BLK_SIZE /* added in 2.6.31 */
-#define blk_queue_logical_block_size(q, sz) blk_queue_hardsect_size(q, sz)
-#endif
-
 #ifndef HAVE_DQUOT_SUSPEND
-#ifndef HAVE_VFS_DQ_OFF
-# define ll_vfs_dq_init             DQUOT_INIT
-# define ll_vfs_dq_drop             DQUOT_DROP
-# define ll_vfs_dq_transfer         DQUOT_TRANSFER
-# define ll_vfs_dq_off(sb, remount) DQUOT_OFF(sb)
-#else
 # define ll_vfs_dq_init             vfs_dq_init
 # define ll_vfs_dq_drop             vfs_dq_drop
 # define ll_vfs_dq_transfer         vfs_dq_transfer
 # define ll_vfs_dq_off(sb, remount) vfs_dq_off(sb, remount)
-#endif
 #else
 # define ll_vfs_dq_init             dquot_initialize
 # define ll_vfs_dq_drop             dquot_drop
@@ -571,24 +391,8 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define ll_vfs_dq_off(sb, remount) dquot_suspend(sb, -1)
 #endif
 
-#ifndef HAVE_BDI_INIT
-#define bdi_init(bdi)    0
-#define bdi_destroy(bdi) do { } while (0)
-#endif
-
-#ifdef HAVE_BLK_QUEUE_MAX_SECTORS /* removed in rhel6 */
-#define blk_queue_max_hw_sectors(q, sect) blk_queue_max_sectors(q, sect)
-#endif
-
 #ifndef HAVE_BLKDEV_GET_BY_DEV
 # define blkdev_get_by_dev(dev, mode, holder) open_by_devnum(dev, mode)
-#endif
-
-#ifndef HAVE_REQUEST_QUEUE_LIMITS
-#define queue_max_sectors(rq)             ((rq)->max_sectors)
-#define queue_max_hw_sectors(rq)          ((rq)->max_hw_sectors)
-#define queue_max_phys_segments(rq)       ((rq)->max_phys_segments)
-#define queue_max_hw_segments(rq)         ((rq)->max_hw_segments)
 #endif
 
 #ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
@@ -633,28 +437,6 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define bio_hw_segments(q, bio) 0
 #endif
 
-#ifndef HAVE_PAGEVEC_LRU_ADD_FILE
-#define pagevec_lru_add_file pagevec_lru_add
-#endif
-
-#ifdef HAVE_ADD_TO_PAGE_CACHE_LRU
-#define ll_pagevec_init(pv, cold)       do {} while (0)
-#define ll_pagevec_add(pv, pg)          (0)
-#define ll_pagevec_lru_add_file(pv)     do {} while (0)
-#else
-#define add_to_page_cache_lru(pg, mapping, off, gfp) \
-        add_to_page_cache(pg, mapping, off, gfp)
-#define ll_pagevec_init(pv, cold)       pagevec_init(pv, cold);
-#define ll_pagevec_add(pv, pg)					\
-({								\
-	int __ret;						\
-								\
-	page_cache_get(pg);					\
-	__ret = pagevec_add(pv, pg);				\
-})
-#define ll_pagevec_lru_add_file(pv)     pagevec_lru_add_file(pv)
-#endif
-
 #if !defined(HAVE_CPUMASK_OF_NODE) && defined(HAVE_NODE_TO_CPUMASK)
 # ifdef HAVE_OFED_CPUMASK_OF_NODE
 # undef cpumask_of_node
@@ -693,13 +475,6 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
 #else
 # define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET)
-#endif
-
-#ifndef HAVE_SELINUX_IS_ENABLED
-static inline bool selinux_is_enabled(void)
-{
-        return 0;
-}
 #endif
 
 #ifndef HAVE_LM_XXX_LOCK_MANAGER_OPS

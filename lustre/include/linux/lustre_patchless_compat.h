@@ -44,10 +44,6 @@
 #include <linux/mm.h>
 #include <linux/hash.h>
 
-#ifndef HAVE_CANCEL_DIRTY_PAGE /* 2.6.20 */
-#define cancel_dirty_page(page, size) clear_page_dirty(page)
-#endif
-
 #ifndef HAVE_DELETE_FROM_PAGE_CACHE /* 2.6.39 */
 #ifndef HAVE_REMOVE_FROM_PAGE_CACHE /* 2.6.35 - 2.6.38 */
 

@@ -576,8 +576,6 @@ out:
         return(ret);
 }
 
-#ifdef HAVE_ASYNC_BLOCK_CIPHER
-
 static inline
 int krb5_digest_hmac(struct ll_crypto_hash *tfm,
                      rawobj_t *key,
@@ -619,48 +617,6 @@ int krb5_digest_hmac(struct ll_crypto_hash *tfm,
 
         return ll_crypto_hash_final(&desc, cksum->data);
 }
-
-#else /* ! HAVE_ASYNC_BLOCK_CIPHER */
-
-static inline
-int krb5_digest_hmac(struct ll_crypto_hash *tfm,
-                     rawobj_t *key,
-                     struct krb5_header *khdr,
-                     int msgcnt, rawobj_t *msgs,
-                     int iovcnt, lnet_kiov_t *iovs,
-                     rawobj_t *cksum)
-{
-        struct scatterlist sg[1];
-        __u32              keylen = key->len, i;
-
-        crypto_hmac_init(tfm, key->data, &keylen);
-
-        for (i = 0; i < msgcnt; i++) {
-                if (msgs[i].len == 0)
-                        continue;
-                buf_to_sg(sg, (char *) msgs[i].data, msgs[i].len);
-                crypto_hmac_update(tfm, sg, 1);
-        }
-
-        for (i = 0; i < iovcnt; i++) {
-                if (iovs[i].kiov_len == 0)
-                        continue;
-
-		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
-			    iovs[i].kiov_offset);
-                crypto_hmac_update(tfm, sg, 1);
-        }
-
-        if (khdr) {
-                buf_to_sg(sg, (char *) khdr, sizeof(*khdr));
-                crypto_hmac_update(tfm, sg, 1);
-        }
-
-        crypto_hmac_final(tfm, key->data, &keylen, cksum->data);
-        return 0;
-}
-
-#endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
 static inline
 int krb5_digest_norm(struct ll_crypto_hash *tfm,

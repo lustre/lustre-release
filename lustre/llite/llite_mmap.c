@@ -268,79 +268,6 @@ out:
 	return result;
 }
 
-
-#ifndef HAVE_VM_OP_FAULT
-/**
- * Lustre implementation of a vm_operations_struct::nopage() method, called by
- * VM to server page fault (both in kernel and user space).
- *
- * This function sets up CIT_FAULT cl_io that does the job.
- *
- * \param vma - is virtiual area struct related to page fault
- * \param address - address when hit fault
- * \param type - of fault
- *
- * \return allocated and filled _unlocked_ page for address
- * \retval NOPAGE_SIGBUS if page not exist on this address
- * \retval NOPAGE_OOM not have memory for allocate new page
- */
-struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
-                       int *type)
-{
-        struct lu_env           *env;
-        struct cl_env_nest      nest;
-        struct cl_io            *io;
-        struct page             *page  = NOPAGE_SIGBUS;
-        struct vvp_io           *vio = NULL;
-        unsigned long           ra_flags;
-        pgoff_t                 pg_offset;
-        int                     result;
-        const unsigned long     writable = VM_SHARED|VM_WRITE;
-	cfs_sigset_t            set;
-        ENTRY;
-
-        pg_offset = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
-        io = ll_fault_io_init(vma, &env,  &nest, pg_offset, &ra_flags);
-        if (IS_ERR(io))
-                return NOPAGE_SIGBUS;
-
-        result = io->ci_result;
-        if (result < 0)
-                goto out_err;
-
-        io->u.ci_fault.ft_writable = (vma->vm_flags&writable) == writable;
-
-        vio = vvp_env_io(env);
-        vio->u.fault.ft_vma            = vma;
-        vio->u.fault.nopage.ft_address = address;
-        vio->u.fault.nopage.ft_type    = type;
-        vio->u.fault.ft_vmpage         = NULL;
-
-	set = cfs_block_sigsinv(sigmask(SIGKILL)|sigmask(SIGTERM));
-	result = cl_io_loop(env, io);
-	cfs_restore_sigs(set);
-
-	page = vio->u.fault.ft_vmpage;
-	if (result != 0 && page != NULL) {
-		page_cache_release(page);
-		page = NOPAGE_SIGBUS;
-	}
-
-out_err:
-        if (result == -ENOMEM)
-                page = NOPAGE_OOM;
-
-        vma->vm_flags &= ~VM_RAND_READ;
-        vma->vm_flags |= ra_flags;
-
-        cl_io_fini(env, io);
-        cl_env_nested_put(&nest, env);
-
-        RETURN(page);
-}
-
-#else
-
 static inline int to_fault_error(int result)
 {
 	switch(result) {
@@ -455,38 +382,7 @@ restart:
 	cfs_restore_sigs(set);
         return result;
 }
-#endif
 
-#ifndef HAVE_PGMKWRITE_USE_VMFAULT
-static int ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage)
-{
-        int count = 0;
-        bool printed = false;
-        bool retry;
-        int result;
-
-        do {
-                retry = false;
-                result = ll_page_mkwrite0(vma, vmpage, &retry);
-
-                if (!printed && ++count > 16) {
-                        CWARN("app(%s): the page %lu of file %lu is under heavy"
-                              " contention.\n",
-                              current->comm, page_index(vmpage),
-                              vma->vm_file->f_dentry->d_inode->i_ino);
-                        printed = true;
-                }
-        } while (retry);
-
-        if (result == 0)
-                unlock_page(vmpage);
-        else if (result == -ENODATA)
-                result = 0; /* kernel will know truncate has happened and
-                             * retry */
-
-        return result;
-}
-#else
 static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
         int count = 0;
@@ -529,7 +425,6 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 
         return result;
 }
-#endif
 
 /**
  *  To avoid cancel the locks covering mmapped region for lock cache pressure,
@@ -562,23 +457,6 @@ static void ll_vm_close(struct vm_area_struct *vma)
         EXIT;
 }
 
-#ifndef HAVE_VM_OP_FAULT
-#ifndef HAVE_FILEMAP_POPULATE
-static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
-#endif
-static int ll_populate(struct vm_area_struct *area, unsigned long address,
-                       unsigned long len, pgprot_t prot, unsigned long pgoff,
-                       int nonblock)
-{
-        int rc = 0;
-        ENTRY;
-
-        /* always set nonblock as true to avoid page read ahead */
-        rc = filemap_populate(area, address, len, prot, pgoff, 1);
-        RETURN(rc);
-}
-#endif
-
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
 {
@@ -605,17 +483,8 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
 }
 
 static struct vm_operations_struct ll_file_vm_ops = {
-#ifndef HAVE_VM_OP_FAULT
-	.nopage			= ll_nopage,
-	.populate		= ll_populate,
-#else
 	.fault			= ll_fault,
-#endif
-#ifndef HAVE_PGMKWRITE_COMPACT
 	.page_mkwrite		= ll_page_mkwrite,
-#else
-	._pmkw.page_mkwrite	= ll_page_mkwrite,
-#endif
 	.open			= ll_vm_open,
 	.close			= ll_vm_close,
 };
@@ -632,10 +501,6 @@ int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE) && !defined(HAVE_VM_OP_FAULT)
-                if (!filemap_populate)
-                        filemap_populate = vma->vm_ops->populate;
-#endif
                 vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */

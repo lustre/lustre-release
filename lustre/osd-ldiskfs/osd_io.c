@@ -66,31 +66,6 @@
 #define ClearPageConstant(page) do {} while (0)
 #endif
 
-#ifndef HAS_GENERIC_ERROR_REMOVE_PAGE
-int generic_error_remove_page(struct address_space *mapping, struct page *page)
-{
-        if (mapping == NULL)
-                return -EINVAL;
-
-        if (mapping != page->mapping)
-                return -EIO;
-        /*
-         * Only punch for normal data pages for now.
-         * Handling other types like directories would need more auditing.
-         */
-        if (!S_ISREG(mapping->host->i_mode))
-                return -EIO;
-
-        if (page_mapped(page)) {
-                unmap_mapping_range(mapping,
-                                    (loff_t)page->index << PAGE_CACHE_SHIFT,
-                                    PAGE_CACHE_SIZE, 0);
-        }
-        truncate_complete_page(mapping, page);
-        return 0;
-}
-#endif
-
 static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 			    int rw, int line, int pages)
 {

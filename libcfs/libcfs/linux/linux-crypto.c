@@ -36,73 +36,6 @@
  */
 static int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
 
-
-#ifndef HAVE_STRUCT_HASH_DESC
-/** 2.6.18 kernel have no crypto_hash function
- *  this part was copied from lustre_compat25.h */
-#define crypto_hash     crypto_tfm
-struct hash_desc {
-	struct crypto_hash	*tfm;
-	unsigned int		flags;
-};
-
-static inline
-struct crypto_hash *crypto_alloc_hash(const char *alg, unsigned int type,
-				      unsigned int mask)
-{
-	return crypto_alloc_tfm(alg, 0);
-}
-
-static inline void crypto_free_hash(struct crypto_hash *tfm)
-{
-	crypto_free_tfm(tfm);
-}
-
-static inline int crypto_hash_init(struct hash_desc *desc)
-{
-	crypto_digest_init(desc->tfm);
-	return 0;
-}
-
-static inline int crypto_hash_update(struct hash_desc *desc,
-				     struct scatterlist *sg,
-				     unsigned int nbytes)
-{
-	if (desc->tfm->crt_digest.dit_update == NULL)
-		return -1;
-
-	LASSERT(nbytes == sg->length);
-	crypto_digest_update(desc->tfm, sg, 1);
-
-	return 0;
-}
-
-static inline int crypto_hash_digest(struct hash_desc *desc,
-				     struct scatterlist *sg,
-				     unsigned int nbytes, unsigned char *out)
-{
-	crypto_hash_update(desc, sg, nbytes);
-	crypto_digest_final(desc->tfm, out);
-	return 0;
-}
-
-static inline int crypto_hash_final(struct hash_desc *desc, unsigned char *out)
-{
-	crypto_digest_final(desc->tfm, out);
-	return 0;
-}
-
-static inline struct crypto_tfm *crypto_hash_tfm(struct crypto_hash *tfm)
-{
-	return tfm;
-}
-
-#define crypto_hash_setkey(tfm, key, keylen) \
-		crypto_digest_setkey(tfm, key, keylen)
-#define crypto_hash_digestsize(tfm)  crypto_tfm_alg_digestsize(tfm)
-#define crypto_hash_blocksize(tfm)   crypto_tfm_alg_blocksize(tfm)
-#endif
-
 static int cfs_crypto_hash_alloc(unsigned char alg_id,
 				 const struct cfs_crypto_hash_type **type,
 				 struct hash_desc *desc, unsigned char *key,
@@ -130,15 +63,6 @@ static int cfs_crypto_hash_alloc(unsigned char alg_id,
 
 	desc->flags = 0;
 
-	/** Shash have different logic for initialization then digest
-	 * shash: crypto_hash_setkey, crypto_hash_init
-	 * digest: crypto_digest_init, crypto_digest_setkey
-	 * Skip this function for digest, because we use shash logic at
-	 * cfs_crypto_hash_alloc.
-	 */
-#ifndef HAVE_STRUCT_SHASH_ALG
-	crypto_hash_init(desc);
-#endif
 	if (key != NULL) {
 		err = crypto_hash_setkey(desc->tfm, key, key_len);
 	} else if ((*type)->cht_key != 0) {
@@ -157,11 +81,7 @@ static int cfs_crypto_hash_alloc(unsigned char alg_id,
 	       (crypto_hash_tfm(desc->tfm))->__crt_alg->cra_driver_name,
 	       cfs_crypto_hash_speeds[alg_id]);
 
-#ifdef HAVE_STRUCT_SHASH_ALG
 	return crypto_hash_init(desc);
-#else
-	return 0;
-#endif
 }
 
 int cfs_crypto_hash_digest(unsigned char alg_id,
