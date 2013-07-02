@@ -1116,7 +1116,8 @@ test_7c() {
 	# trigger reintegration
 	local procf="osd-$(facet_fstype ost1).$FSNAME-OST*."
 	procf=${procf}quota_slave.force_reint
-	$LCTL set_param $procf=1 || "force reintegration failed"
+	do_facet ost1 $LCTL set_param $procf=1 ||
+		error "force reintegration failed"
 
 	echo "Stop mds..."
 	stop mds1
