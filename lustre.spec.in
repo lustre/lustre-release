@@ -1,4 +1,18 @@
 # lustre.spec
+
+# Declare rpmbuild --with/--without parameters
+%bcond_without servers
+%bcond_without ldiskfs
+%bcond_with zfs
+%bcond_without lustre_tests
+
+%if %{without servers}
+    # --without servers overrides --with {ldiskfs|zfs}
+    # so undefine the internal variables set by bcond_*
+    %undefine with_ldiskfs
+    %undefine with_zfs
+%endif
+
 %{!?version: %global version @VERSION@}
 %{!?kver: %global kver ""}
 %{!?kdir: %global kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else if [ -n "%kver" ]; then kversion="%kver"; else kversion="$(uname -r)"; fi; echo "/lib/modules/$kversion/source"; fi)}
@@ -16,12 +30,6 @@
 
 # always append the buildid, even when the caller defines %release
 %define fullrelease %{myrelease}%{buildid}
-
-%{!?lustre_name: %global lustre_name lustre}
-%{!?build_lustre_tests: %global build_lustre_tests 1}
-
-%{!?build_lustre_osd_ldiskfs: %global build_lustre_osd_ldiskfs 0}
-%{!?build_lustre_osd_zfs: %global build_lustre_osd_zfs 0}
 
 # in order to get kernel symset and/or kernel module dependencies into
 # the RPM, in order to support weak-modules, the internal dependency gen-
@@ -43,7 +51,6 @@
 # response from them
 #%%global _use_internal_dependency_generator 0
 
-%define is_client %(bash -c "if [[ %{lustre_name} = *-client* ]]; then echo -n '1'; else echo -n '0'; fi")
 # for those uses that don't want the -smp/-bigsmp (or the .arch) on the end
 # of %kversion
 %define krequires %(bash -c "echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
@@ -54,9 +61,13 @@
 %define flavor %(bash -c "echo %{kversion} | sed -e 's/^.*-//'")
 %endif
 
-%if %is_client
-%define build_lustre_osd_ldiskfs 0
-%define build_lustre_osd_zfs 0
+# Set the package name prefix
+%if %{undefined lustre_name}
+    %if %{with servers}
+        %global lustre_name lustre
+    %else
+        %global lustre_name lustre-client
+    %endif
 %endif
 
 %if %{defined cross_path} && %{defined post_script}
@@ -75,7 +86,7 @@ BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 Requires: %{name}-modules = %{version}
-%if ! %{is_client}
+%if %{with servers}
 Requires: lustre-osd
 %endif
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
@@ -110,7 +121,7 @@ Group: Development/Kernel
 %description modules
 Lustre file system, server and network drivers for Linux %{kversion}.
 
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %package osd-ldiskfs
 Summary: osd-ldiskfs is the mandatory glue for LDISKFS support in Lustre.
 Requires: lustre-modules = %{version}, lustre-ldiskfs >= 4.1.0
@@ -125,7 +136,7 @@ implementation of the OSD API for using the Ldiskfs filesystem as the underlying
 backing store of a Lustre server.
 %endif
 
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %package osd-zfs
 Summary: osd-zfs is the mandatory glue for ZFS support in Lustre.
 Requires: lustre-modules = %{version}, zfs-kmod
@@ -220,7 +231,7 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # build failures
 %define optflags -g -O2 -Werror
 CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests --enable-liblustre-tests"
 %else
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests --disable-liblustre-tests"
@@ -327,7 +338,7 @@ if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ;
   echo '%attr(-, root, root) %{_includedir}/linux/lustre_types.h' >>lustre.files
 fi
 
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
 echo '%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
@@ -342,13 +353,13 @@ if [ -f $POST_SCRIPT ]; then
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}.sh
 	echo '%attr(0555, root, root) %{rpm_post_base}.sh' >>lustre.files
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-modules.sh
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-ldiskfs.sh
 %endif
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-zfs.sh
 %endif
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-tests.sh
 	echo '%attr(0555, root, root) %{rpm_post_base}-tests.sh' >>lustre-tests.files
 %endif
@@ -364,14 +375,14 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %files modules
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/*
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko
 %endif
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/fsfilt_ldiskfs.ko
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
 %endif
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
 %endif
 %if %{defined rpm_post_base}
@@ -381,7 +392,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %attr(-, root, root) %doc ChangeLog-lustre
 %attr(-, root, root) %doc ChangeLog-lnet
 
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %files osd-ldiskfs
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/fsfilt_ldiskfs.ko
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
@@ -390,7 +401,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %endif
 %endif
 
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %files osd-zfs
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
 %if %{defined rpm_post_base}
@@ -405,7 +416,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 # %files deps-sles
 # %files deps-rhel
 
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 %files tests -f lustre-tests.files
 %endif
 
@@ -462,7 +473,7 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
 fi
 %endif
 
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %post osd-ldiskfs
 %if %{defined rpm_post_base}
 if [ -x %{rpm_post_base}-osd-ldiskfs.sh ]; then
@@ -505,7 +516,7 @@ fi
 %endif
 %endif
 
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %post osd-zfs
 %if %{defined rpm_post_base}
 if [ -x %{rpm_post_base}-osd-zfs.sh ]; then
@@ -558,7 +569,7 @@ MODULES_RPM_NAME=$(rpm -q %{name}-modules | grep "%{version}-%{release}")
 rpm -ql $MODULES_RPM_NAME | grep '\.ko$' > /var/run/%{name}-modules || true
 %endif
 
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %preun osd-ldiskfs
 %if %{defined rpm_post_base}
 if [ -x %{rpm_post_base}-osd-ldiskfs.sh ]; then
@@ -570,7 +581,7 @@ rpm -ql $OSD_LDISKFS_RPM_NAME | grep '\.ko$' > /var/run/%{name}-osd-ldiskfs || t
 %endif
 %endif
 
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %preun osd-zfs
 %if %{defined rpm_post_base}
 if [ -x %{rpm_post_base}-osd-zfs.sh ]; then
@@ -603,7 +614,7 @@ if [ -x /sbin/weak-modules ]; then
 fi
 rm /var/run/%{name}-modules
 
-%if %{build_lustre_osd_ldiskfs}
+%if %{with ldiskfs}
 %postun osd-ldiskfs
 if [ -f /boot/System.map-%{kversion} ]; then
        depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -625,7 +636,7 @@ fi
 rm /var/run/%{name}-osd-ldiskfs
 %endif
 
-%if %{build_lustre_osd_zfs}
+%if %{with zfs}
 %postun osd-zfs
 if [ -f /boot/System.map-%{kversion} ]; then
        depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -648,7 +659,7 @@ rm /var/run/%{name}-osd-zfs
 %endif
 %endif
 
-%if %{build_lustre_tests}
+%if %{with lustre_tests}
 %post tests
 %if %{defined rpm_post_base}
 if [ -x %{rpm_post_base}-tests.sh ]; then

@@ -905,10 +905,10 @@ build_lustre() {
     fi
 
     $RPMBUILD $targets $rpmbuildopt "$LUSTRE" \
-        ${is_patchless:+--define "lustre_name lustre-client"} \
-        ${lustre_tests:+--define "build_lustre_tests 0"} \
-        ${osd_zfs:+--define "build_lustre_osd_zfs 1"} \
-        ${osd_ldiskfs:+--define "build_lustre_osd_ldiskfs 1"} \
+        ${is_patchless:+--without servers} \
+        ${lustre_tests:+--without lustre_tests} \
+        ${osd_zfs:+--with zfs} \
+        ${osd_ldiskfs:+--with ldiskfs} \
         ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
         --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
         --define "kdir $linux" \
@@ -919,8 +919,8 @@ build_lustre() {
 
     if $DO_SRC; then
         if ! $RPMBUILD -ts "$LUSTRE" \
-                 ${is_patchless:+--define "lustre_name lustre-client"} \
-                 ${lustre_tests:+--define "build_lustre_tests 0"} \
+                 ${is_patchless:+--without servers} \
+                 ${lustre_tests:+--without lustre_tests} \
                  ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
                  --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
                  --define "kdir $linux" \

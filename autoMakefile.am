@@ -149,23 +149,26 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 		sed -re 's/--with-release=[^ ][^ ]*//'); \
 	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
+		RPMARGS="$$RPMARGS --without lustre_tests"; \
 	fi; \
 	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
+		RPMARGS="$$RPMARGS --without servers"; \
+		if [ -n "@CROSS_PATH@" ]; then \
+			RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
+		fi; \
 	fi; \
 	if [[ "X$(BUILD_OSD_LDISKFS)" = Xtrue ]]; then \
-		RPMARGS="$$RPMARGS --define \"build_lustre_osd_ldiskfs 1\""; \
+		RPMARGS="$$RPMARGS --with ldiskfs"; \
 	fi; \
 	if [[ "X$(BUILD_OSD_ZFS)" = Xtrue ]]; then \
-		RPMARGS="$$RPMARGS --define \"build_lustre_osd_zfs 1\""; \
+		RPMARGS="$$RPMARGS --with zfs"; \
 	fi; \
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
-		RPMARGS="--define \"build_lustre_tests 0\""; \
+		RPMARGS="--without lustre_tests"; \
 	fi; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
