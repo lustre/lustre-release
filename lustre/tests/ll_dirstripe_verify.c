@@ -74,32 +74,33 @@ union {
  */
 int read_proc_entry(char *proc_path, char *buf, int len)
 {
-        int rc, fd;
+	int rc, fd;
 
-        memset(buf, 0, len);
+	memset(buf, 0, len);
 
-        fd = open(proc_path, O_RDONLY);
-        if (fd == -1) {
-                llapi_error(LLAPI_MSG_ERROR, -errno, "open('%s') failed: %s\n",
-                            proc_path);
-                return -2;
-        }
+	fd = open(proc_path, O_RDONLY);
+	if (fd < 0) {
+		llapi_error(LLAPI_MSG_ERROR, -errno, "cannot open '%s'",
+			    proc_path);
+		return -2;
+	}
 
-        rc = read(fd, buf, len - 1);
-        if (rc < 0) {
-                llapi_error(LLAPI_MSG_ERROR, -errno,
-                            "read('%s') failed: %s\n", proc_path);
-                rc = -3;
-        } else if (rc == 0) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "read('%s') zero bytes\n", proc_path);
-                rc = -4;
-        } else if (/* rc > 0 && */ buf[rc - 1] == '\n') {
-                buf[rc - 1] = '\0'; /* Remove trailing newline */
-        }
-        close(fd);
+	rc = read(fd, buf, len - 1);
+	if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, -errno,
+			    "error reading from '%s'", proc_path);
+		rc = -3;
+	} else if (rc == 0) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "read zero bytes from '%s'", proc_path);
+		rc = -4;
+	} else if (buf[rc - 1] == '\n') {
+		buf[rc - 1] = '\0'; /* Remove trailing newline */
+	}
 
-        return (rc);
+	close(fd);
+
+	return rc;
 }
 
 int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
@@ -115,18 +116,20 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         int i;
         FILE *fp;
 
-        fp = popen("\\ls -d  /proc/fs/lustre/lov/*clilov* | head -1", "r");
-        if (!fp) {
-                llapi_error(LLAPI_MSG_ERROR, -errno,
-                            "open(lustre/lov/*clilov*) failed: %s\n");
-                return 2;
+	fp = popen("\\ls -d  /proc/fs/lustre/lov/*clilov* | head -1", "r");
+	if (fp == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, -errno,
+			    "open(lustre/lov/*clilov*) failed");
+		return 2;
         }
-        if (fscanf(fp, "%s", lov_path) < 1) {
-                llapi_error(LLAPI_MSG_ERROR, -EINVAL,
-                            "read(lustre/lov/*clilov*) failed: %s\n");
-                pclose(fp);
-                return 3;
-        }
+
+	if (fscanf(fp, "%s", lov_path) < 1) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "read(lustre/lov/*clilov*) failed");
+		pclose(fp);
+		return 3;
+	}
+
         pclose(fp);
 
         snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount",

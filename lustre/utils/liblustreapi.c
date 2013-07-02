@@ -131,7 +131,7 @@ void llapi_msg_set_level(int level)
 }
 
 /* llapi_error will preserve errno */
-void llapi_error(int level, int _rc, char *fmt, ...)
+void llapi_error(int level, int _rc, const char *fmt, ...)
 {
         va_list args;
         int tmp_errno = errno;
@@ -153,7 +153,7 @@ void llapi_error(int level, int _rc, char *fmt, ...)
 }
 
 /* llapi_printf will preserve errno */
-void llapi_printf(int level, char *fmt, ...)
+void llapi_printf(int level, const char *fmt, ...)
 {
         va_list args;
         int tmp_errno = errno;
@@ -243,7 +243,7 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 	}
 	if ((stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
 		rc = -EINVAL;
-		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %lu, "
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %llu, "
 				"must be an even multiple of %d bytes",
 				stripe_size, page_size);
 		return rc;
@@ -1330,7 +1330,7 @@ static int common_param_init(struct find_param *param, char *path)
 	param->lmd = malloc(sizeof(lstat_t) + param->lumlen);
 	if (param->lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
-			    "error: allocation of %d bytes for ioctl",
+			    "error: allocation of %zu bytes for ioctl",
 			    sizeof(lstat_t) + param->lumlen);
 		return -ENOMEM;
 	}
@@ -4237,7 +4237,7 @@ int llapi_create_volatile_idx(char *directory, int idx, int mode)
 	close(fd);
 	if (rc < sizeof(random)) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "Cannot read %d bytes from /dev/urandom\n",
+			    "cannot read %zu bytes from /dev/urandom",
 			    sizeof(random));
 		return -errno;
 	}

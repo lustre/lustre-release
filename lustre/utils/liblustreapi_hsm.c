@@ -122,7 +122,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	for (rc = 0; rc < archive_count; rc++) {
 		if (archives[rc] > 8 * sizeof(ct->archives)) {
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "Maximum of %d archives supported",
+					  "maximum of %zu archives supported",
 					  8 * sizeof(ct->archives));
 			goto out_err;
 		}

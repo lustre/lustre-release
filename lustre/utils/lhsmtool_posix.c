@@ -32,12 +32,12 @@
  *
  * This particular tool can also import an existing HSM archive.
  */
-
+#include <stdint.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <errno.h>
 #include <utime.h>
 #include <sys/xattr.h>
-#include <dirent.h>
-#include <stdlib.h>
-#include <sys/errno.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
@@ -204,7 +204,7 @@ static int ct_parseopts(int argc, char * const *argv)
 			if ((opt.o_archive_cnt >= MAX_ARCHIVE_CNT) ||
 			    (atoi(optarg) >= MAX_ARCHIVE_CNT)) {
 				CT_ERROR("archive number must be less"
-					 "than %lu\n", MAX_ARCHIVE_CNT);
+					 "than %zu\n", MAX_ARCHIVE_CNT);
 				return -E2BIG;
 			}
 			opt.o_archive_id[opt.o_archive_cnt] = atoi(optarg);
@@ -522,9 +522,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 
 	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
 	if (rc < 0) {
-		CT_ERROR("'%s' seek to read to "LPU64" (len %zu)"
+		CT_ERROR("'%s' seek to read to "LPU64" (len %jd)"
 			 " failed (%s)\n",
-			 src, hai->hai_extent.offset, src_st.st_size,
+			 src, hai->hai_extent.offset, (intmax_t)src_st.st_size,
 			 strerror(errno));
 		rc = -errno;
 		goto out;
@@ -674,8 +674,8 @@ out:
 		rc = ftruncate(dst_fd, src_st.st_size);
 		if (rc < 0) {
 			rc = -errno;
-			CT_ERROR("'%s' final truncate to %lu failed (%s)\n",
-				 dst, src_st.st_size, strerror(-rc));
+			CT_ERROR("'%s' final truncate to %jd failed (%s)\n",
+				 dst, (intmax_t)src_st.st_size, strerror(-rc));
 			err_major++;
 		}
 	}

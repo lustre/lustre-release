@@ -63,10 +63,14 @@ enum llapi_message_level {
 #define LLAPI_MSG_NO_ERRNO      0x00000010
 
 extern void llapi_msg_set_level(int level);
-extern void llapi_error(int level, int rc, char *fmt, ...);
-#define llapi_err_noerrno(level, fmt, a...)                             \
+
+void llapi_error(int level, int rc, const char *fmt, ...)
+	__attribute__((__format__(__printf__, 3, 4)));
+#define llapi_err_noerrno(level, fmt, a...)			\
 	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
-extern void llapi_printf(int level, char *fmt, ...);
+void llapi_printf(int level, const char *fmt, ...)
+	__attribute__((__format__(__printf__, 2, 3)));
+
 extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
