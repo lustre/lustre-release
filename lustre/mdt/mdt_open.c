@@ -1003,7 +1003,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         struct lsd_client_data  *lcd  = ted->ted_lcd;
         struct md_attr          *ma   = &info->mti_attr;
         struct mdt_reint_record *rr   = &info->mti_rr;
-        __u32                   flags = info->mti_spec.sp_cr_flags;
+	__u64                   flags = info->mti_spec.sp_cr_flags;
         struct ldlm_reply       *ldlm_rep;
         struct mdt_object       *parent;
         struct mdt_object       *child;
@@ -1109,10 +1109,9 @@ out:
         LASSERT(ergo(rc < 0, lustre_msg_get_transno(req->rq_repmsg) == 0));
 }
 
-int mdt_open_by_fid(struct mdt_thread_info* info,
-                    struct ldlm_reply *rep)
+int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep)
 {
-        __u32                    flags = info->mti_spec.sp_cr_flags;
+	__u64			 flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_object       *o;
