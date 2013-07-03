@@ -8814,20 +8814,23 @@ dot_lustre_fid_permission_check() {
 	mrename $test_dir/$tdir $MOUNT/.lustre/fid &&
 		error "rename to $MOUNT/.lustre/fid should fail."
 
-	local old_obf_mode=$(stat --format="%a" $DIR/.lustre/fid)
-	local new_obf_mode=777
+	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.51) ]
+	then		# LU-3547
+		local old_obf_mode=$(stat --format="%a" $DIR/.lustre/fid)
+		local new_obf_mode=777
 
-	echo "change mode of $DIR/.lustre/fid to $new_obf_mode"
-	chmod $new_obf_mode $DIR/.lustre/fid ||
-		error "chmod $new_obf_mode $DIR/.lustre/fid failed"
+		echo "change mode of $DIR/.lustre/fid to $new_obf_mode"
+		chmod $new_obf_mode $DIR/.lustre/fid ||
+			error "chmod $new_obf_mode $DIR/.lustre/fid failed"
 
-	local obf_mode=$(stat --format=%a $DIR/.lustre/fid)
-	[ $obf_mode -eq $new_obf_mode ] ||
-		error "stat $DIR/.lustre/fid returned wrong mode $obf_mode"
+		local obf_mode=$(stat --format=%a $DIR/.lustre/fid)
+		[ $obf_mode -eq $new_obf_mode ] ||
+			error "stat $DIR/.lustre/fid returned wrong mode $obf_mode"
 
-	echo "restore mode of $DIR/.lustre/fid to $old_obf_mode"
-	chmod $old_obf_mode $DIR/.lustre/fid ||
-		error "chmod $old_obf_mode $DIR/.lustre/fid failed"
+		echo "restore mode of $DIR/.lustre/fid to $old_obf_mode"
+		chmod $old_obf_mode $DIR/.lustre/fid ||
+			error "chmod $old_obf_mode $DIR/.lustre/fid failed"
+	fi
 
 	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $test_dir/$tfile-2
 	fid=$($LFS path2fid $test_dir/$tfile-2)
