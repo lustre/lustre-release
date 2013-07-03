@@ -9909,6 +9909,10 @@ run_test 184d "allow stripeless layouts swap"
 
 
 test_185() { # LU-2441
+	# LU-3553 - no volatile file support in old servers
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.60) ]] ||
+		{ skip "Need MDS version at least 2.3.60"; return 0; }
+
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
 	touch $DIR/$tdir/spoo
 	local mtime1=$(stat -c "%Y" $DIR/$tdir)
