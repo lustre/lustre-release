@@ -3353,16 +3353,21 @@ static int mdt_handle0(struct ptlrpc_request *req,
                         if (likely(h != NULL)) {
                                 rc = mdt_req_handle(info, h, req);
                         } else {
-                                CERROR("The unsupported opc: 0x%x\n",
-                                       lustre_msg_get_opc(msg) );
+				CERROR("%s: opc unsupported: 0x%x\n",
+					mdt_obd_name(info->mti_mdt),
+					lustre_msg_get_opc(msg));
                                 req->rq_status = -ENOTSUPP;
                                 rc = ptlrpc_error(req);
                                 RETURN(rc);
                         }
                 }
-        } else
-                CERROR(LUSTRE_MDT_NAME" drops mal-formed request\n");
-        RETURN(rc);
+	} else {
+		CDEBUG(D_INFO, "%s: drops mal-formed request: rc = %d\n",
+			mdt_obd_name(info->mti_mdt), rc);
+		req->rq_status = rc;
+		rc = ptlrpc_error(req);
+	}
+	RETURN(rc);
 }
 
 /*
