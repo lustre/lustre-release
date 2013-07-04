@@ -1696,6 +1696,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 }
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
+		if (exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
+			GOTO(out_parent, result = -EROFS);
                 *child_fid = *info->mti_rr.rr_fid2;
                 LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n",
                          PFID(child_fid));

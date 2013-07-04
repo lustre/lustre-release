@@ -3537,7 +3537,14 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_OCREAT]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = MUTABOR,
+		/*
+		 * OCREAT is not a MUTABOR request as if the file
+		 * already exists.
+		 * We do the extra check of OBD_CONNECT_RDONLY in
+		 * mdt_reint_open() when we really need to create
+		 * the object.
+		 */
+		.it_flags = 0,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
