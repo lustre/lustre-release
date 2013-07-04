@@ -100,7 +100,7 @@ static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
 /*
  * Check permission based on POSIX ACL.
  */
-int lustre_posix_acl_permission(struct lu_ucred *mu, struct lu_attr *la,
+int lustre_posix_acl_permission(struct lu_ucred *mu, const struct lu_attr *la,
 				int want, posix_acl_xattr_entry *entry,
 				int count)
 {

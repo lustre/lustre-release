@@ -60,7 +60,8 @@ static struct lu_name lname_dotdot = {
 /* Get FID from name and parent */
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-	     const struct lu_name *lname, struct lu_fid* fid, int mask)
+	     const struct lu_attr *pattr, const struct lu_name *lname,
+	     struct lu_fid* fid, int mask)
 {
 	const char *name		= lname->ln_name;
 	const struct dt_key *key	= (const struct dt_key *)name;
@@ -84,7 +85,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
 		RETURN(-ENAMETOOLONG);
 
-	rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask,
+	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
 					    MOR_TGT_PARENT);
 	if (rc)
 		RETURN(rc);
@@ -106,19 +107,27 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 }
 
 int mdd_lookup(const struct lu_env *env,
-               struct md_object *pobj, const struct lu_name *lname,
-               struct lu_fid* fid, struct md_op_spec *spec)
+	       struct md_object *pobj, const struct lu_name *lname,
+	       struct lu_fid *fid, struct md_op_spec *spec)
 {
+	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
         int rc;
         ENTRY;
-	rc = __mdd_lookup(env, pobj, lname, fid, MAY_EXEC);
+
+	rc = mdd_la_get(env, md2mdd_obj(pobj), pattr, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = __mdd_lookup(env, pobj, pattr, lname, fid, MAY_EXEC);
         RETURN(rc);
 }
 
-int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
-		   struct lu_fid *fid)
+static inline int mdd_parent_fid(const struct lu_env *env,
+				 struct mdd_object *obj,
+				 const struct lu_attr *attr,
+				 struct lu_fid *fid)
 {
-	return __mdd_lookup(env, &obj->mod_obj, &lname_dotdot, fid, 0);
+	return __mdd_lookup(env, &obj->mod_obj, attr, &lname_dotdot, fid, 0);
 }
 
 /*
@@ -141,10 +150,11 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid)
  * otherwise: values < 0, errors.
  */
 static int mdd_is_parent(const struct lu_env *env,
-                         struct mdd_device *mdd,
-                         struct mdd_object *p1,
-                         const struct lu_fid *lf,
-                         struct lu_fid *pf)
+			struct mdd_device *mdd,
+			struct mdd_object *p1,
+			const struct lu_attr *attr,
+			const struct lu_fid *lf,
+			struct lu_fid *pf)
 {
         struct mdd_object *parent = NULL;
         struct lu_fid *pfid;
@@ -159,11 +169,11 @@ static int mdd_is_parent(const struct lu_env *env,
                 RETURN(0);
 
         for(;;) {
-                /* this is done recursively, bypass capa for each obj */
-                mdd_set_capainfo(env, 4, p1, BYPASS_CAPA);
-                rc = mdd_parent_fid(env, p1, pfid);
-                if (rc)
-                        GOTO(out, rc);
+		/* this is done recursively, bypass capa for each obj */
+		mdd_set_capainfo(env, 4, p1, BYPASS_CAPA);
+		rc = mdd_parent_fid(env, p1, attr, pfid);
+		if (rc)
+			GOTO(out, rc);
                 if (mdd_is_root(mdd, pfid))
                         GOTO(out, rc = 0);
                 if (lu_fid_eq(pfid, lf))
@@ -201,25 +211,30 @@ out:
  * returns < 0: if error
  */
 int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
-                  const struct lu_fid *fid, struct lu_fid *sfid)
+		  const struct lu_fid *fid, struct lu_fid *sfid)
 {
-        struct mdd_device *mdd = mdo2mdd(mo);
-        int rc;
-        ENTRY;
+	struct mdd_device *mdd = mdo2mdd(mo);
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+	int rc;
+	ENTRY;
 
-        if (!S_ISDIR(mdd_object_type(md2mdd_obj(mo))))
-                RETURN(0);
+	if (!S_ISDIR(mdd_object_type(md2mdd_obj(mo))))
+		RETURN(0);
 
-        rc = mdd_is_parent(env, mdd, md2mdd_obj(mo), fid, sfid);
-        if (rc == 0) {
-                /* found root */
-                fid_zero(sfid);
-        } else if (rc == 1) {
-                /* found @fid is parent */
-                *sfid = *fid;
-                rc = 0;
-        }
-        RETURN(rc);
+	rc = mdd_la_get(env, md2mdd_obj(mo), attr, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = mdd_is_parent(env, mdd, md2mdd_obj(mo), attr, fid, sfid);
+	if (rc == 0) {
+		/* found root */
+		fid_zero(sfid);
+	} else if (rc == 1) {
+		/* found @fid is parent */
+		*sfid = *fid;
+		rc = 0;
+	}
+	RETURN(rc);
 }
 
 /*
@@ -271,79 +286,79 @@ static int mdd_dir_is_empty(const struct lu_env *env,
         RETURN(result);
 }
 
-static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj)
+static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
+			  const struct lu_attr *la)
 {
-        struct mdd_device *m = mdd_obj2mdd_dev(obj);
-        struct lu_attr *la = &mdd_env_info(env)->mti_la;
-        int rc;
-        ENTRY;
+	struct mdd_device *m = mdd_obj2mdd_dev(obj);
+	ENTRY;
 
-        rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-        if (rc)
-                RETURN(rc);
+	LASSERT(la != NULL);
 
-        /*
-         * Subdir count limitation can be broken through.
-         */
-        if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink &&
-            !S_ISDIR(la->la_mode))
-                RETURN(-EMLINK);
-        else
-                RETURN(0);
+	if (!S_ISDIR(la->la_mode))
+		RETURN(0);
+
+	/*
+	 * Subdir count limitation can be broken through.
+	 */
+	if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+		RETURN(-EMLINK);
+	else
+		RETURN(0);
 }
 
 /*
  * Check whether it may create the cobj under the pobj.
  * cobj maybe NULL
  */
-int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
-                   struct mdd_object *cobj, int check_perm, int check_nlink)
+int mdd_may_create(const struct lu_env *env,
+		   struct mdd_object *pobj, const struct lu_attr *pattr,
+		   struct mdd_object *cobj, int check_perm, int check_nlink)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
 	if (cobj && mdd_object_exists(cobj))
-                RETURN(-EEXIST);
+		RETURN(-EEXIST);
 
-        if (mdd_is_dead_obj(pobj))
-                RETURN(-ENOENT);
+	if (mdd_is_dead_obj(pobj))
+		RETURN(-ENOENT);
 
-        if (check_perm)
-                rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                                    MAY_WRITE | MAY_EXEC,
-                                                    MOR_TGT_PARENT);
-        if (!rc && check_nlink)
-                rc = __mdd_may_link(env, pobj);
+	if (check_perm)
+		rc = mdd_permission_internal_locked(env, pobj, pattr,
+						    MAY_WRITE | MAY_EXEC,
+						    MOR_TGT_PARENT);
+	if (!rc && check_nlink)
+		rc = __mdd_may_link(env, pobj, pattr);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /*
  * Check whether can unlink from the pobj in the case of "cobj == NULL".
  */
 int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
-		   const struct lu_attr *attr)
+		   const struct lu_attr *pattr, const struct lu_attr *attr)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        if (mdd_is_dead_obj(pobj))
-                RETURN(-ENOENT);
+	if (mdd_is_dead_obj(pobj))
+		RETURN(-ENOENT);
 
 	if ((attr->la_valid & LA_FLAGS) &&
 	    (attr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL)))
-                RETURN(-EPERM);
+		RETURN(-EPERM);
 
-        rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                            MAY_WRITE | MAY_EXEC,
-                                            MOR_TGT_PARENT);
-        if (rc)
-                RETURN(rc);
+	rc = mdd_permission_internal_locked(env, pobj, pattr,
+					    MAY_WRITE | MAY_EXEC,
+					    MOR_TGT_PARENT);
+	if (rc)
+		RETURN(rc);
 
-        if (mdd_is_append(pobj))
-                RETURN(-EPERM);
+	if (mdd_is_append(pobj))
+		RETURN(-EPERM);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /*
@@ -352,34 +367,30 @@ int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
  */
 static inline int mdd_is_sticky(const struct lu_env *env,
 				struct mdd_object *pobj,
-				struct mdd_object *cobj)
+				const struct lu_attr *pattr,
+				struct mdd_object *cobj,
+				const struct lu_attr *cattr)
 {
-	struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
 	struct lu_ucred *uc = lu_ucred_assert(env);
-	int rc;
 
-	if (pobj) {
-		rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
-		if (rc)
-			return rc;
-
-		if (!(tmp_la->la_mode & S_ISVTX) ||
-		    (tmp_la->la_uid == uc->uc_fsuid))
+	if (pobj != NULL) {
+		LASSERT(pattr != NULL);
+		if (!(pattr->la_mode & S_ISVTX) ||
+		    (pattr->la_uid == uc->uc_fsuid))
 			return 0;
 	}
 
-	rc = mdd_la_get(env, cobj, tmp_la, BYPASS_CAPA);
-	if (rc)
-		return rc;
-
-	if (tmp_la->la_uid == uc->uc_fsuid)
+	LASSERT(cattr != NULL);
+	if (cattr->la_uid == uc->uc_fsuid)
 		return 0;
 
 	return !md_capable(uc, CFS_CAP_FOWNER);
 }
 
 static int mdd_may_delete_entry(const struct lu_env *env,
-				struct mdd_object *pobj, int check_perm)
+				struct mdd_object *pobj,
+				const struct lu_attr *pattr,
+				int check_perm)
 {
 	ENTRY;
 
@@ -392,7 +403,7 @@ static int mdd_may_delete_entry(const struct lu_env *env,
 
 	if (check_perm) {
 		int rc;
-		rc = mdd_permission_internal_locked(env, pobj, NULL,
+		rc = mdd_permission_internal_locked(env, pobj, pattr,
 					    MAY_WRITE | MAY_EXEC,
 					    MOR_TGT_PARENT);
 		if (rc)
@@ -409,67 +420,70 @@ static int mdd_may_delete_entry(const struct lu_env *env,
  * Check whether it may delete the cobj from the pobj.
  * pobj maybe NULL
  */
-int mdd_may_delete(const struct lu_env *env, struct mdd_object *pobj,
-		   struct mdd_object *cobj, struct lu_attr *cattr,
-		   struct lu_attr *src_attr, int check_perm, int check_empty)
+int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
+		   const struct lu_attr *tpattr, struct mdd_object *tobj,
+		   const struct lu_attr *tattr, const struct lu_attr *cattr,
+		   int check_perm, int check_empty)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-	if (pobj) {
-		rc = mdd_may_delete_entry(env, pobj, check_perm);
+	if (tpobj) {
+		LASSERT(tpattr != NULL);
+		rc = mdd_may_delete_entry(env, tpobj, tpattr, check_perm);
 		if (rc != 0)
 			RETURN(rc);
 	}
 
-	if (cobj == NULL)
+	if (tobj == NULL)
 		RETURN(0);
 
-        if (!mdd_object_exists(cobj))
-                RETURN(-ENOENT);
+	if (!mdd_object_exists(tobj))
+		RETURN(-ENOENT);
 
-        if (mdd_is_dead_obj(cobj))
-                RETURN(-ESTALE);
+	if (mdd_is_dead_obj(tobj))
+		RETURN(-ESTALE);
 
+	if (mdd_is_sticky(env, tpobj, tpattr, tobj, tattr))
+		RETURN(-EPERM);
 
-	if (mdd_is_sticky(env, pobj, cobj))
-                RETURN(-EPERM);
+	if (mdd_is_immutable(tobj) || mdd_is_append(tobj))
+		RETURN(-EPERM);
 
-        if (mdd_is_immutable(cobj) || mdd_is_append(cobj))
-                RETURN(-EPERM);
-
-	if ((cattr->la_valid & LA_FLAGS) &&
-	    (cattr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL)))
-                RETURN(-EPERM);
+	if ((tattr->la_valid & LA_FLAGS) &&
+	    (tattr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL)))
+		RETURN(-EPERM);
 
 	/* additional check the rename case */
-	if (src_attr) {
-		if (S_ISDIR(src_attr->la_mode)) {
-			struct mdd_device *mdd = mdo2mdd(&cobj->mod_obj);
+	if (cattr) {
+		if (S_ISDIR(cattr->la_mode)) {
+			struct mdd_device *mdd = mdo2mdd(&tobj->mod_obj);
 
-			if (!S_ISDIR(cattr->la_mode))
+			if (!S_ISDIR(tattr->la_mode))
 				RETURN(-ENOTDIR);
 
-			if (lu_fid_eq(mdo2fid(cobj), &mdd->mdd_root_fid))
+			if (lu_fid_eq(mdo2fid(tobj), &mdd->mdd_root_fid))
 				RETURN(-EBUSY);
-		} else if (S_ISDIR(cattr->la_mode))
+		} else if (S_ISDIR(tattr->la_mode))
 			RETURN(-EISDIR);
 	}
 
-	if (S_ISDIR(cattr->la_mode) && check_empty)
-                rc = mdd_dir_is_empty(env, cobj);
+	if (S_ISDIR(tattr->la_mode) && check_empty)
+		rc = mdd_dir_is_empty(env, tobj);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /*
  * tgt maybe NULL
  * has mdd_write_lock on src already, but not on tgt yet
  */
-int mdd_link_sanity_check(const struct lu_env *env,
-                          struct mdd_object *tgt_obj,
-                          const struct lu_name *lname,
-                          struct mdd_object *src_obj)
+static int mdd_link_sanity_check(const struct lu_env *env,
+				 struct mdd_object *tgt_obj,
+				 const struct lu_attr *tattr,
+				 const struct lu_name *lname,
+				 struct mdd_object *src_obj,
+				 const struct lu_attr *cattr)
 {
         struct mdd_device *m = mdd_obj2mdd_dev(src_obj);
         int rc = 0;
@@ -491,16 +505,16 @@ int mdd_link_sanity_check(const struct lu_env *env,
         if (S_ISDIR(mdd_object_type(src_obj)))
                 RETURN(-EPERM);
 
-        LASSERT(src_obj != tgt_obj);
-        if (tgt_obj) {
-                rc = mdd_may_create(env, tgt_obj, NULL, 1, 0);
-                if (rc)
-                        RETURN(rc);
-        }
+	LASSERT(src_obj != tgt_obj);
+	if (tgt_obj) {
+		rc = mdd_may_create(env, tgt_obj, tattr, NULL, 1, 0);
+		if (rc)
+			RETURN(rc);
+	}
 
-        rc = __mdd_may_link(env, src_obj);
+	rc = __mdd_may_link(env, src_obj, cattr);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *pobj,
@@ -1209,11 +1223,21 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
+	struct lu_attr	  *cattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr	  *tattr = MDD_ENV_VAR(env, tattr);
         struct mdd_device *mdd = mdo2mdd(src_obj);
         struct thandle *handle;
 	struct linkea_data *ldata = &mdd_env_info(env)->mti_link_data;
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
+
+	rc = mdd_la_get(env, mdd_sobj, cattr, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = mdd_la_get(env, mdd_tobj, tattr, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
@@ -1233,10 +1257,11 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (rc)
                 GOTO(stop, rc);
 
-        mdd_write_lock(env, mdd_sobj, MOR_TGT_CHILD);
-        rc = mdd_link_sanity_check(env, mdd_tobj, lname, mdd_sobj);
-        if (rc)
-                GOTO(out_unlock, rc);
+	mdd_write_lock(env, mdd_sobj, MOR_TGT_CHILD);
+	rc = mdd_link_sanity_check(env, mdd_tobj, tattr, lname, mdd_sobj,
+				   cattr);
+	if (rc)
+		GOTO(out_unlock, rc);
 
 	rc = mdo_ref_add(env, mdd_sobj, handle);
 	if (rc)
@@ -1251,13 +1276,13 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 		GOTO(out_unlock, rc);
 	}
 
-        la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
-        if (rc)
-                GOTO(out_unlock, rc);
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdd_update_time(env, mdd_tobj, tattr, la, handle);
+	if (rc)
+		GOTO(out_unlock, rc);
 
-        la->la_valid = LA_CTIME;
-        rc = mdd_attr_check_set_internal(env, mdd_sobj, la, handle, 0);
+	la->la_valid = LA_CTIME;
+	rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
 	if (rc == 0) {
 		rc = mdd_linkea_prepare(env, mdd_sobj, NULL, NULL,
 					mdo2fid(mdd_tobj), lname, 0, 0,
@@ -1341,14 +1366,16 @@ int mdd_finish_unlink(const struct lu_env *env,
  * has mdd_write_lock on cobj already, but not on pobj yet
  */
 int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
-			    struct mdd_object *cobj, struct lu_attr *cattr)
+			    const struct lu_attr *pattr,
+			    struct mdd_object *cobj,
+			    const struct lu_attr *cattr)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-	rc = mdd_may_delete(env, pobj, cobj, cattr, NULL, 1, 1);
+	rc = mdd_may_delete(env, pobj, pattr, cobj, cattr, NULL, 1, 1);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
@@ -1452,8 +1479,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		      struct md_attr *ma, int no_name)
 {
 	const char *name = lname->ln_name;
-	struct lu_attr     *cattr = &mdd_env_info(env)->mti_cattr;
-	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *mdd_cobj = NULL;
 	struct mdd_device *mdd = mdo2mdd(pobj);
@@ -1466,10 +1494,11 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		mdd_cobj = md2mdd_obj(cobj);
 		if (mdd_object_exists(mdd_cobj) == 0)
 			RETURN(-ENOENT);
-		/* currently it is assume, it could only delete
-		 * name entry of remote directory */
-		is_dir = 1;
 	}
+
+	rc = mdd_la_get(env, mdd_pobj, pattr, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
@@ -1488,16 +1517,14 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
 
 		/* fetch cattr */
-		rc = mdd_la_get(env, mdd_cobj, cattr,
-				mdd_object_capa(env, mdd_cobj));
+		rc = mdd_la_get(env, mdd_cobj, cattr, BYPASS_CAPA);
 		if (rc)
 			GOTO(cleanup, rc);
 
 		is_dir = S_ISDIR(cattr->la_mode);
-
 	}
 
-	rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, cattr);
+	rc = mdd_unlink_sanity_check(env, mdd_pobj, pattr, mdd_cobj, cattr);
 	if (rc)
 		GOTO(cleanup, rc);
 
@@ -1523,8 +1550,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 			mdo_ref_del(env, mdd_cobj, handle);
 
 		/* fetch updated nlink */
-		rc = mdd_la_get(env, mdd_cobj, cattr,
-				mdd_object_capa(env, mdd_cobj));
+		rc = mdd_la_get(env, mdd_cobj, cattr, BYPASS_CAPA);
 		if (rc)
 			GOTO(cleanup, rc);
 	}
@@ -1533,7 +1559,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
 	la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_attr_check_set_internal(env, mdd_pobj, la, handle, 0);
+	rc = mdd_update_time(env, mdd_pobj, pattr, la, handle);
 	if (rc)
 		GOTO(cleanup, rc);
 
@@ -1545,7 +1571,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		/* update ctime of an unlinked file only if it is still
 		 * opened or a link still exists */
 		la->la_valid = LA_CTIME;
-		rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
+		rc = mdd_update_time(env, mdd_cobj, cattr, la, handle);
 		if (rc)
 			GOTO(cleanup, rc);
 	}
@@ -1557,8 +1583,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
 	/* fetch updated nlink */
 	if (rc == 0)
-		rc = mdd_la_get(env, mdd_cobj, cattr,
-				mdd_object_capa(env, mdd_cobj));
+		rc = mdd_la_get(env, mdd_cobj, cattr, BYPASS_CAPA);
 
 	if (!is_dir)
 		/* old files may not have link ea; ignore errors */
@@ -1606,28 +1631,27 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         RETURN(0);
-
 }
 
 static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
                            struct md_object *cobj, const struct md_op_spec *spec,
                            struct md_attr *ma)
 {
-        struct mdd_device *mdd = mdo2mdd(cobj);
-        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
-        struct mdd_object *son = md2mdd_obj(cobj);
-        struct thandle    *handle;
+	struct mdd_device *mdd = mdo2mdd(cobj);
+	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
+	struct mdd_object *son = md2mdd_obj(cobj);
+	struct thandle    *handle;
 	const struct lu_buf *buf;
-	struct lu_attr    *attr = &mdd_env_info(env)->mti_cattr;
-        int                rc;
-        ENTRY;
+	struct lu_attr    *attr = MDD_ENV_VAR(env, cattr);
+	int		   rc;
+	ENTRY;
 
-        rc = mdd_cd_sanity_check(env, son);
-        if (rc)
-                RETURN(rc);
+	rc = mdd_cd_sanity_check(env, son);
+	if (rc)
+		RETURN(rc);
 
-        if (!md_should_create(spec->sp_cr_flags))
-                RETURN(0);
+	if (!md_should_create(spec->sp_cr_flags))
+		RETURN(0);
 
 	/*
 	 * there are following use cases for this function:
@@ -1635,7 +1659,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	 *    striping can be specified or not
 	 * 2) CMD?
 	 */
-	rc = mdd_la_get(env, son, attr, mdd_object_capa(env, son));
+	rc = mdd_la_get(env, son, attr, BYPASS_CAPA);
 	if (rc)
 		RETURN(rc);
 
@@ -1768,7 +1792,7 @@ static int mdd_object_initialize(const struct lu_env *env,
 /* has not lock on pobj yet */
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
-				   struct lu_attr *pattr,
+				   const struct lu_attr *pattr,
                                    const struct lu_name *lname,
 				   struct lu_attr *cattr,
                                    struct md_op_spec *spec)
@@ -1795,20 +1819,21 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                  * _index_insert also, for avoiding rolling back if exists
                  * _index_insert.
                  */
-		rc = __mdd_lookup(env, pobj, lname, fid, MAY_WRITE | MAY_EXEC);
+		rc = __mdd_lookup(env, pobj, pattr, lname, fid,
+				  MAY_WRITE | MAY_EXEC);
                 if (rc != -ENOENT)
                         RETURN(rc ? : -EEXIST);
         } else {
-                /*
-                 * Check WRITE permission for the parent.
-                 * EXEC permission have been checked
-                 * when lookup before create already.
-                 */
+		/*
+		 * Check WRITE permission for the parent.
+		 * EXEC permission have been checked
+		 * when lookup before create already.
+		 */
 		rc = mdd_permission_internal_locked(env, obj, pattr, MAY_WRITE,
 						    MOR_TGT_PARENT);
-                if (rc)
-                        RETURN(rc);
-        }
+		if (rc)
+			RETURN(rc);
+	}
 
         /* sgid check */
 	if (pattr->la_mode & S_ISGID) {
@@ -2041,10 +2066,10 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (rc != 0)
 		RETURN(rc);
 
-        /* Sanity checks before big job. */
+	/* Sanity checks before big job. */
 	rc = mdd_create_sanity_check(env, pobj, pattr, lname, attr, spec);
-        if (rc)
-                RETURN(rc);
+	if (rc)
+		RETURN(rc);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
 		GOTO(out_free, rc = -EINPROGRESS);
@@ -2178,7 +2203,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	/* update parent directory mtime/ctime */
 	*la = *attr;
 	la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_attr_check_set_internal(env, mdd_pobj, la, handle, 0);
+	rc = mdd_update_time(env, mdd_pobj, pattr, la, handle);
 	if (rc)
 		GOTO(cleanup, rc);
 
@@ -2252,6 +2277,7 @@ enum rename_order {
 static int mdd_rename_order(const struct lu_env *env,
                             struct mdd_device *mdd,
                             struct mdd_object *src_pobj,
+			    const struct lu_attr *pattr,
                             struct mdd_object *tgt_pobj)
 {
         /* order of locking, 1 - tgt-src, 0 - src-tgt*/
@@ -2267,7 +2293,8 @@ static int mdd_rename_order(const struct lu_env *env,
         } else if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(tgt_pobj))) {
                 rc = MDD_RN_TGTSRC;
         } else {
-                rc = mdd_is_parent(env, mdd, src_pobj, mdo2fid(tgt_pobj), NULL);
+		rc = mdd_is_parent(env, mdd, src_pobj, pattr, mdo2fid(tgt_pobj),
+				   NULL);
                 if (rc == -EREMOTE)
                         rc = 0;
 
@@ -2283,11 +2310,13 @@ static int mdd_rename_order(const struct lu_env *env,
 /* has not mdd_write{read}_lock on any obj yet. */
 static int mdd_rename_sanity_check(const struct lu_env *env,
                                    struct mdd_object *src_pobj,
+				   const struct lu_attr *pattr,
                                    struct mdd_object *tgt_pobj,
+				   const struct lu_attr *tpattr,
                                    struct mdd_object *sobj,
+				   const struct lu_attr *cattr,
                                    struct mdd_object *tobj,
-				   struct lu_attr *so_attr,
-				   struct lu_attr *tg_attr)
+				   const struct lu_attr *tattr)
 {
 	int rc = 0;
 	ENTRY;
@@ -2297,7 +2326,7 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * before mdd_rename and enable MDS_PERM_BYPASS. */
 	LASSERT(sobj);
 
-	rc = mdd_may_delete(env, src_pobj, sobj, so_attr, NULL, 1, 0);
+	rc = mdd_may_delete(env, src_pobj, pattr, sobj, cattr, NULL, 1, 0);
 	if (rc)
 		RETURN(rc);
 
@@ -2307,15 +2336,14 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * MDS_PERM_BYPASS).
 	 * So check may_create, but not check may_unlink. */
 	if (!tobj)
-		rc = mdd_may_create(env, tgt_pobj, NULL,
+		rc = mdd_may_create(env, tgt_pobj, tpattr, NULL,
 				    (src_pobj != tgt_pobj), 0);
 	else
-		rc = mdd_may_delete(env, tgt_pobj, tobj, tg_attr, so_attr,
+		rc = mdd_may_delete(env, tgt_pobj, tpattr, tobj, tattr, cattr,
 				    (src_pobj != tgt_pobj), 1);
 
-	if (!rc && !tobj && (src_pobj != tgt_pobj) &&
-	    S_ISDIR(so_attr->la_mode))
-		rc = __mdd_may_link(env, tgt_pobj);
+	if (!rc && !tobj && (src_pobj != tgt_pobj) && S_ISDIR(cattr->la_mode))
+		rc = __mdd_may_link(env, tgt_pobj, tpattr);
 
 	RETURN(rc);
 }
@@ -2371,7 +2399,6 @@ static int mdd_declare_rename(const struct lu_env *env,
                 rc = mdo_declare_ref_add(env, mdd_tpobj, handle);
                 if (rc)
                         return rc;
-
         }
 
 	la->la_valid = LA_CTIME | LA_MTIME;
@@ -2455,13 +2482,15 @@ static int mdd_rename(const struct lu_env *env,
 	const char *sname = lsname->ln_name;
 	const char *tname = ltname->ln_name;
 	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
-	struct lu_attr    *so_attr = &mdd_env_info(env)->mti_cattr;
-	struct lu_attr    *tg_attr = &mdd_env_info(env)->mti_pattr;
 	struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj); /* source parent */
 	struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
 	struct mdd_device *mdd = mdo2mdd(src_pobj);
 	struct mdd_object *mdd_sobj = NULL;                  /* source object */
 	struct mdd_object *mdd_tobj = NULL;
+	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *pattr = MDD_ENV_VAR(env, pattr);
+	struct lu_attr *tattr = MDD_ENV_VAR(env, tattr);
+	struct lu_attr *tpattr = MDD_ENV_VAR(env, tpattr);
 	struct thandle *handle;
 	struct linkea_data  *ldata = &mdd_env_info(env)->mti_link_data;
 	const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
@@ -2473,25 +2502,31 @@ static int mdd_rename(const struct lu_env *env,
 	int rc, rc2;
 	ENTRY;
 
-        if (tobj)
-                mdd_tobj = md2mdd_obj(tobj);
+	if (tobj)
+		mdd_tobj = md2mdd_obj(tobj);
 
-        mdd_sobj = mdd_object_find(env, mdd, lf);
+	mdd_sobj = mdd_object_find(env, mdd, lf);
 
-	rc = mdd_la_get(env, mdd_sobj, so_attr,
-			mdd_object_capa(env, mdd_sobj));
+	rc = mdd_la_get(env, mdd_sobj, cattr, BYPASS_CAPA);
+	if (rc)
+		GOTO(out_pending, rc);
+
+	rc = mdd_la_get(env, mdd_spobj, pattr, BYPASS_CAPA);
 	if (rc)
 		GOTO(out_pending, rc);
 
 	if (mdd_tobj) {
-		rc = mdd_la_get(env, mdd_tobj, tg_attr,
-				mdd_object_capa(env, mdd_tobj));
+		rc = mdd_la_get(env, mdd_tobj, tattr, BYPASS_CAPA);
 		if (rc)
 			GOTO(out_pending, rc);
 	}
 
-	rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj, mdd_sobj,
-				     mdd_tobj, so_attr, tg_attr);
+	rc = mdd_la_get(env, mdd_tpobj, tpattr, BYPASS_CAPA);
+	if (rc)
+		GOTO(out_pending, rc);
+
+	rc = mdd_rename_sanity_check(env, mdd_spobj, pattr, mdd_tpobj, tpattr,
+				     mdd_sobj, cattr, mdd_tobj, tattr);
 	if (rc)
 		GOTO(out_pending, rc);
 
@@ -2512,11 +2547,11 @@ static int mdd_rename(const struct lu_env *env,
                 GOTO(stop, rc);
 
         /* FIXME: Should consider tobj and sobj too in rename_lock. */
-        rc = mdd_rename_order(env, mdd, mdd_spobj, mdd_tpobj);
-        if (rc < 0)
-                GOTO(cleanup_unlocked, rc);
+	rc = mdd_rename_order(env, mdd, mdd_spobj, pattr, mdd_tpobj);
+	if (rc < 0)
+		GOTO(cleanup_unlocked, rc);
 
-	is_dir = S_ISDIR(so_attr->la_mode);
+	is_dir = S_ISDIR(cattr->la_mode);
 
         /* Remove source name from source directory */
         rc = __mdd_index_delete(env, mdd_spobj, sname, is_dir, handle,
@@ -2562,12 +2597,12 @@ static int mdd_rename(const struct lu_env *env,
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
         /* XXX: mdd_sobj must be local one if it is NOT NULL. */
-        if (mdd_sobj) {
-                la->la_valid = LA_CTIME;
-		rc = mdd_attr_check_set_internal(env, mdd_sobj, la, handle, 0);
-                if (rc)
-                        GOTO(fixup_tpobj, rc);
-        }
+	if (mdd_sobj) {
+		la->la_valid = LA_CTIME;
+		rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
+		if (rc)
+			GOTO(fixup_tpobj, rc);
+	}
 
         /* Remove old target object
          * For tobj is remote case cmm layer has processed
@@ -2586,13 +2621,12 @@ static int mdd_rename(const struct lu_env *env,
                 mdo_ref_del(env, mdd_tobj, handle);
 
                 /* Remove dot reference. */
-		if (S_ISDIR(tg_attr->la_mode))
+		if (S_ISDIR(tattr->la_mode))
                         mdo_ref_del(env, mdd_tobj, handle);
 		tobj_ref = 1;
 
 		/* fetch updated nlink */
-		rc = mdd_la_get(env, mdd_tobj, tg_attr,
-				mdd_object_capa(env, mdd_tobj));
+		rc = mdd_la_get(env, mdd_tobj, tattr, BYPASS_CAPA);
 		if (rc != 0) {
 			CERROR("%s: Failed to get nlink for tobj "
 				DFID": rc = %d\n",
@@ -2602,7 +2636,7 @@ static int mdd_rename(const struct lu_env *env,
 		}
 
 		la->la_valid = LA_CTIME;
-		rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
+		rc = mdd_update_time(env, mdd_tobj, tattr, la, handle);
 		if (rc != 0) {
 			CERROR("%s: Failed to set ctime for tobj "
 				DFID": rc = %d\n",
@@ -2612,7 +2646,7 @@ static int mdd_rename(const struct lu_env *env,
 		}
 
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
-		ma->ma_attr = *tg_attr;
+		ma->ma_attr = *tattr;
 		ma->ma_valid |= MA_INODE;
 		rc = mdd_finish_unlink(env, mdd_tobj, ma, handle);
 		if (rc != 0) {
@@ -2624,8 +2658,7 @@ static int mdd_rename(const struct lu_env *env,
 		}
 
 		/* fetch updated nlink */
-		rc = mdd_la_get(env, mdd_tobj, tg_attr,
-				mdd_object_capa(env, mdd_tobj));
+		rc = mdd_la_get(env, mdd_tobj, tattr, BYPASS_CAPA);
 		if (rc != 0) {
 			CERROR("%s: Failed to get nlink for tobj "
 				DFID": rc = %d\n",
@@ -2634,26 +2667,25 @@ static int mdd_rename(const struct lu_env *env,
 			GOTO(fixup_tpobj, rc);
 		}
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
-		ma->ma_attr = *tg_attr;
+		ma->ma_attr = *tattr;
 		ma->ma_valid |= MA_INODE;
 
-		if (tg_attr->la_nlink == 0) {
+		if (tattr->la_nlink == 0) {
 			cl_flags |= CLF_RENAME_LAST;
 			if (mdd_hsm_archive_exists(env, mdd_tobj, ma))
 				cl_flags |= CLF_RENAME_LAST_EXISTS;
 		}
         }
 
-        la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_attr_check_set_internal(env, mdd_spobj, la, handle, 0);
-        if (rc)
-                GOTO(fixup_tpobj, rc);
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdd_update_time(env, mdd_spobj, pattr, la, handle);
+	if (rc)
+		GOTO(fixup_tpobj, rc);
 
-        if (mdd_spobj != mdd_tpobj) {
-                la->la_valid = LA_CTIME | LA_MTIME;
-		rc = mdd_attr_check_set_internal(env, mdd_tpobj, la,
-						 handle, 0);
-        }
+	if (mdd_spobj != mdd_tpobj) {
+		la->la_valid = LA_CTIME | LA_MTIME;
+		rc = mdd_update_time(env, mdd_tpobj, tpattr, la, handle);
+	}
 
 	if (rc == 0 && mdd_sobj) {
 		mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);

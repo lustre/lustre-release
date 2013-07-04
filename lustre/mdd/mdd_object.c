@@ -84,6 +84,7 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                        mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
                 return -ENOENT;
         }
+
         return mdo_attr_get(env, obj, la, capa);
 }
 
@@ -184,10 +185,18 @@ static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
 
 static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
 {
-	if (lu_object_exists(o))
-                return mdd_get_flags(env, lu2mdd_obj(o));
-        else
-                return 0;
+	int rc = 0;
+
+	if (lu_object_exists(o)) {
+		struct mdd_object *mdd_obj = lu2mdd_obj(o);
+		struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+
+		rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+		if (rc == 0)
+			mdd_flags_xlate(mdd_obj, attr->la_flags);
+	}
+
+	return rc;
 }
 
 static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
@@ -220,20 +229,6 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    const struct lu_fid *f)
 {
         return md2mdd_obj(md_object_find_slice(env, &d->mdd_md_dev, f));
-}
-
-/* Returns the full path to this fid, as of changelog record recno. */
-int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct lu_attr *la = &mdd_env_info(env)->mti_la;
-        int rc;
-
-        ENTRY;
-        rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-        if (rc == 0) {
-                mdd_flags_xlate(obj, la->la_flags);
-        }
-        RETURN(rc);
 }
 
 /*
@@ -386,31 +381,6 @@ int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
 	RETURN(rc);
 }
 
-/**
- * Make sure the ctime is increased only.
- */
-static inline int mdd_attr_check(const struct lu_env *env,
-                                 struct mdd_object *obj,
-                                 struct lu_attr *attr)
-{
-        struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
-        int rc;
-        ENTRY;
-
-        if (attr->la_valid & LA_CTIME) {
-                rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-                if (rc)
-                        RETURN(rc);
-
-                if (attr->la_ctime < tmp_la->la_ctime)
-                        attr->la_valid &= ~(LA_MTIME | LA_CTIME);
-                else if (attr->la_valid == LA_CTIME &&
-                         attr->la_ctime == tmp_la->la_ctime)
-                        attr->la_valid &= ~LA_CTIME;
-        }
-        RETURN(0);
-}
-
 int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
 			  const struct lu_attr *attr, struct thandle *handle,
 			  int needacl)
@@ -426,20 +396,29 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
         RETURN(rc);
 }
 
-int mdd_attr_check_set_internal(const struct lu_env *env,
-				struct mdd_object *obj, struct lu_attr *attr,
-				struct thandle *handle, int needacl)
+int mdd_update_time(const struct lu_env *env, struct mdd_object *obj,
+		    const struct lu_attr *oattr, struct lu_attr *attr,
+		    struct thandle *handle)
 {
-        int rc;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-        rc = mdd_attr_check(env, obj, attr);
-        if (rc)
-                RETURN(rc);
+	LASSERT(attr->la_valid & LA_CTIME);
+	LASSERT(oattr != NULL);
 
-        if (attr->la_valid)
-                rc = mdd_attr_set_internal(env, obj, attr, handle, needacl);
-        RETURN(rc);
+	/* Make sure the ctime is increased only, however, it's not strictly
+	 * reliable at here because there is not guarantee to hold lock on
+	 * object, so we just bypass some unnecessary cmtime setting first
+	 * and OSD has to check it again. */
+	if (attr->la_ctime < oattr->la_ctime)
+		attr->la_valid &= ~(LA_MTIME | LA_CTIME);
+	else if (attr->la_valid == LA_CTIME &&
+		 attr->la_ctime == oattr->la_ctime)
+		attr->la_valid &= ~LA_CTIME;
+
+	if (attr->la_valid != 0)
+		rc = mdd_attr_set_internal(env, obj, attr, handle, 0);
+	RETURN(rc);
 }
 
 /*
@@ -450,23 +429,25 @@ int mdd_attr_check_set_internal(const struct lu_env *env,
  * This API is ported from mds_fix_attr but remove some unnecesssary stuff.
  */
 static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
-			struct lu_attr *la, const unsigned long flags)
+			const struct lu_attr *oattr, struct lu_attr *la,
+			const unsigned long flags)
 {
-        struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
 	struct lu_ucred  *uc;
-        int               rc;
-        ENTRY;
+	int		  rc = 0;
+	ENTRY;
 
-        if (!la->la_valid)
-                RETURN(0);
+	if (!la->la_valid)
+		RETURN(0);
 
-        /* Do not permit change file type */
-        if (la->la_valid & LA_TYPE)
-                RETURN(-EPERM);
+	/* Do not permit change file type */
+	if (la->la_valid & LA_TYPE)
+		RETURN(-EPERM);
 
-        /* They should not be processed by setattr */
-        if (la->la_valid & (LA_NLINK | LA_RDEV | LA_BLKSIZE))
-                RETURN(-EPERM);
+	/* They should not be processed by setattr */
+	if (la->la_valid & (LA_NLINK | LA_RDEV | LA_BLKSIZE))
+		RETURN(-EPERM);
+
+	LASSERT(oattr != NULL);
 
 	/* export destroy does not have ->le_ses, but we may want
 	 * to drop LUSTRE_SOM_FL. */
@@ -474,36 +455,33 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if (uc == NULL)
 		RETURN(0);
 
-        rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-        if (rc)
-                RETURN(rc);
-
-        if (la->la_valid == LA_CTIME) {
+	if (la->la_valid == LA_CTIME) {
 		if (!(flags & MDS_PERM_BYPASS))
-                        /* This is only for set ctime when rename's source is
-                         * on remote MDS. */
-			rc = mdd_may_delete(env, NULL, obj, tmp_la, NULL, 1, 0);
-                if (rc == 0 && la->la_ctime <= tmp_la->la_ctime)
-                        la->la_valid &= ~LA_CTIME;
-                RETURN(rc);
-        }
+			/* This is only for set ctime when rename's source is
+			 * on remote MDS. */
+			rc = mdd_may_delete(env, NULL, NULL, obj, oattr, NULL,
+					    1, 0);
+		if (rc == 0 && la->la_ctime <= oattr->la_ctime)
+			la->la_valid &= ~LA_CTIME;
+		RETURN(rc);
+	}
 
-        if (la->la_valid == LA_ATIME) {
-                /* This is atime only set for read atime update on close. */
-                if (la->la_atime >= tmp_la->la_atime &&
-                    la->la_atime < (tmp_la->la_atime +
-                                    mdd_obj2mdd_dev(obj)->mdd_atime_diff))
-                        la->la_valid &= ~LA_ATIME;
-                RETURN(0);
-        }
+	if (la->la_valid == LA_ATIME) {
+		/* This is atime only set for read atime update on close. */
+		if (la->la_atime >= oattr->la_atime &&
+		    la->la_atime < (oattr->la_atime +
+				mdd_obj2mdd_dev(obj)->mdd_atime_diff))
+			la->la_valid &= ~LA_ATIME;
+		RETURN(0);
+	}
 
-        /* Check if flags change. */
-        if (la->la_valid & LA_FLAGS) {
-                unsigned int oldflags = 0;
-                unsigned int newflags = la->la_flags &
-                                (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
+	/* Check if flags change. */
+	if (la->la_valid & LA_FLAGS) {
+		unsigned int oldflags = 0;
+		unsigned int newflags = la->la_flags &
+				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 
-		if ((uc->uc_fsuid != tmp_la->la_uid) &&
+		if ((uc->uc_fsuid != oattr->la_uid) &&
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
@@ -517,159 +495,159 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		    !md_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
 			RETURN(-EPERM);
 
-                if (!S_ISDIR(tmp_la->la_mode))
-                        la->la_flags &= ~LUSTRE_DIRSYNC_FL;
-        }
+		if (!S_ISDIR(oattr->la_mode))
+			la->la_flags &= ~LUSTRE_DIRSYNC_FL;
+	}
 
-        if ((mdd_is_immutable(obj) || mdd_is_append(obj)) &&
-            (la->la_valid & ~LA_FLAGS) &&
+	if ((mdd_is_immutable(obj) || mdd_is_append(obj)) &&
+	    (la->la_valid & ~LA_FLAGS) &&
 	    !(flags & MDS_PERM_BYPASS))
-                RETURN(-EPERM);
+		RETURN(-EPERM);
 
 	/* Check for setting the obj time. */
 	if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
 	    !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-		if ((uc->uc_fsuid != tmp_la->la_uid) &&
+		if ((uc->uc_fsuid != oattr->la_uid) &&
 		    !md_capable(uc, CFS_CAP_FOWNER)) {
-			rc = mdd_permission_internal(env, obj, tmp_la,
+			rc = mdd_permission_internal(env, obj, oattr,
 						     MAY_WRITE);
 			if (rc)
 				RETURN(rc);
 		}
 	}
 
-        if (la->la_valid & LA_KILL_SUID) {
-                la->la_valid &= ~LA_KILL_SUID;
-                if ((tmp_la->la_mode & S_ISUID) &&
-                    !(la->la_valid & LA_MODE)) {
-                        la->la_mode = tmp_la->la_mode;
-                        la->la_valid |= LA_MODE;
-                }
-                la->la_mode &= ~S_ISUID;
-        }
+	if (la->la_valid & LA_KILL_SUID) {
+		la->la_valid &= ~LA_KILL_SUID;
+		if ((oattr->la_mode & S_ISUID) &&
+		    !(la->la_valid & LA_MODE)) {
+			la->la_mode = oattr->la_mode;
+			la->la_valid |= LA_MODE;
+		}
+		la->la_mode &= ~S_ISUID;
+	}
 
-        if (la->la_valid & LA_KILL_SGID) {
-                la->la_valid &= ~LA_KILL_SGID;
-                if (((tmp_la->la_mode & (S_ISGID | S_IXGRP)) ==
-                                        (S_ISGID | S_IXGRP)) &&
-                    !(la->la_valid & LA_MODE)) {
-                        la->la_mode = tmp_la->la_mode;
-                        la->la_valid |= LA_MODE;
-                }
-                la->la_mode &= ~S_ISGID;
-        }
+	if (la->la_valid & LA_KILL_SGID) {
+		la->la_valid &= ~LA_KILL_SGID;
+		if (((oattr->la_mode & (S_ISGID | S_IXGRP)) ==
+			(S_ISGID | S_IXGRP)) &&
+		    !(la->la_valid & LA_MODE)) {
+			la->la_mode = oattr->la_mode;
+			la->la_valid |= LA_MODE;
+		}
+		la->la_mode &= ~S_ISGID;
+	}
 
-        /* Make sure a caller can chmod. */
-        if (la->la_valid & LA_MODE) {
+	/* Make sure a caller can chmod. */
+	if (la->la_valid & LA_MODE) {
 		if (!(flags & MDS_PERM_BYPASS) &&
-		    (uc->uc_fsuid != tmp_la->la_uid) &&
+		    (uc->uc_fsuid != oattr->la_uid) &&
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
 		if (la->la_mode == (umode_t) -1)
-			la->la_mode = tmp_la->la_mode;
+			la->la_mode = oattr->la_mode;
 		else
 			la->la_mode = (la->la_mode & S_IALLUGO) |
-				      (tmp_la->la_mode & ~S_IALLUGO);
+					(oattr->la_mode & ~S_IALLUGO);
 
 		/* Also check the setgid bit! */
 		if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ?
-				       la->la_gid : tmp_la->la_gid) &&
+				       la->la_gid : oattr->la_gid) &&
 		    !md_capable(uc, CFS_CAP_FSETID))
 			la->la_mode &= ~S_ISGID;
 	} else {
-	       la->la_mode = tmp_la->la_mode;
+	       la->la_mode = oattr->la_mode;
 	}
 
-        /* Make sure a caller can chown. */
-        if (la->la_valid & LA_UID) {
-                if (la->la_uid == (uid_t) -1)
-                        la->la_uid = tmp_la->la_uid;
-		if (((uc->uc_fsuid != tmp_la->la_uid) ||
-		     (la->la_uid != tmp_la->la_uid)) &&
+	/* Make sure a caller can chown. */
+	if (la->la_valid & LA_UID) {
+		if (la->la_uid == (uid_t) -1)
+			la->la_uid = oattr->la_uid;
+		if (((uc->uc_fsuid != oattr->la_uid) ||
+		     (la->la_uid != oattr->la_uid)) &&
 		    !md_capable(uc, CFS_CAP_CHOWN))
 			RETURN(-EPERM);
 
-                /* If the user or group of a non-directory has been
-                 * changed by a non-root user, remove the setuid bit.
-                 * 19981026 David C Niemi <niemi@tux.org>
-                 *
-                 * Changed this to apply to all users, including root,
-                 * to avoid some races. This is the behavior we had in
-                 * 2.0. The check for non-root was definitely wrong
-                 * for 2.2 anyway, as it should have been using
-                 * CAP_FSETID rather than fsuid -- 19990830 SD. */
-                if (((tmp_la->la_mode & S_ISUID) == S_ISUID) &&
-                    !S_ISDIR(tmp_la->la_mode)) {
-                        la->la_mode &= ~S_ISUID;
-                        la->la_valid |= LA_MODE;
-                }
-        }
+		/* If the user or group of a non-directory has been
+		 * changed by a non-root user, remove the setuid bit.
+		 * 19981026 David C Niemi <niemi@tux.org>
+		 *
+		 * Changed this to apply to all users, including root,
+		 * to avoid some races. This is the behavior we had in
+		 * 2.0. The check for non-root was definitely wrong
+		 * for 2.2 anyway, as it should have been using
+		 * CAP_FSETID rather than fsuid -- 19990830 SD. */
+		if (((oattr->la_mode & S_ISUID) == S_ISUID) &&
+		!S_ISDIR(oattr->la_mode)) {
+			la->la_mode &= ~S_ISUID;
+			la->la_valid |= LA_MODE;
+		}
+	}
 
-        /* Make sure caller can chgrp. */
-        if (la->la_valid & LA_GID) {
-                if (la->la_gid == (gid_t) -1)
-                        la->la_gid = tmp_la->la_gid;
-		if (((uc->uc_fsuid != tmp_la->la_uid) ||
-		     ((la->la_gid != tmp_la->la_gid) &&
+	/* Make sure caller can chgrp. */
+	if (la->la_valid & LA_GID) {
+		if (la->la_gid == (gid_t) -1)
+			la->la_gid = oattr->la_gid;
+		if (((uc->uc_fsuid != oattr->la_uid) ||
+		     ((la->la_gid != oattr->la_gid) &&
 		      !lustre_in_group_p(uc, la->la_gid))) &&
 		    !md_capable(uc, CFS_CAP_CHOWN))
 			RETURN(-EPERM);
 
-                /* Likewise, if the user or group of a non-directory
-                 * has been changed by a non-root user, remove the
-                 * setgid bit UNLESS there is no group execute bit
-                 * (this would be a file marked for mandatory
-                 * locking).  19981026 David C Niemi <niemi@tux.org>
-                 *
-                 * Removed the fsuid check (see the comment above) --
-                 * 19990830 SD. */
-                if (((tmp_la->la_mode & (S_ISGID | S_IXGRP)) ==
-                     (S_ISGID | S_IXGRP)) && !S_ISDIR(tmp_la->la_mode)) {
-                        la->la_mode &= ~S_ISGID;
-                        la->la_valid |= LA_MODE;
-                }
-        }
+		/* Likewise, if the user or group of a non-directory
+		 * has been changed by a non-root user, remove the
+		 * setgid bit UNLESS there is no group execute bit
+		 * (this would be a file marked for mandatory
+		 * locking).  19981026 David C Niemi <niemi@tux.org>
+		 *
+		 * Removed the fsuid check (see the comment above) --
+		 * 19990830 SD. */
+		if (((oattr->la_mode & (S_ISGID | S_IXGRP)) ==
+		    (S_ISGID | S_IXGRP)) && !S_ISDIR(oattr->la_mode)) {
+			la->la_mode &= ~S_ISGID;
+			la->la_valid |= LA_MODE;
+		}
+	}
 
-        /* For both Size-on-MDS case and truncate case,
-         * "la->la_valid & (LA_SIZE | LA_BLOCKS)" are ture.
+	/* For both Size-on-MDS case and truncate case,
+	 * "la->la_valid & (LA_SIZE | LA_BLOCKS)" are ture.
 	 * We distinguish them by "flags & MDS_SOM".
-         * For SOM case, it is true, the MAY_WRITE perm has been checked
-         * when open, no need check again. For truncate case, it is false,
-         * the MAY_WRITE perm should be checked here. */
+	 * For SOM case, it is true, the MAY_WRITE perm has been checked
+	 * when open, no need check again. For truncate case, it is false,
+	 * the MAY_WRITE perm should be checked here. */
 	if (flags & MDS_SOM) {
-                /* For the "Size-on-MDS" setattr update, merge coming
-                 * attributes with the set in the inode. BUG 10641 */
-                if ((la->la_valid & LA_ATIME) &&
-                    (la->la_atime <= tmp_la->la_atime))
-                        la->la_valid &= ~LA_ATIME;
+		/* For the "Size-on-MDS" setattr update, merge coming
+		 * attributes with the set in the inode. BUG 10641 */
+		if ((la->la_valid & LA_ATIME) &&
+		    (la->la_atime <= oattr->la_atime))
+			la->la_valid &= ~LA_ATIME;
 
-                /* OST attributes do not have a priority over MDS attributes,
-                 * so drop times if ctime is equal. */
-                if ((la->la_valid & LA_CTIME) &&
-                    (la->la_ctime <= tmp_la->la_ctime))
-                        la->la_valid &= ~(LA_MTIME | LA_CTIME);
-        } else {
-                if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
+		/* OST attributes do not have a priority over MDS attributes,
+		 * so drop times if ctime is equal. */
+		if ((la->la_valid & LA_CTIME) &&
+		    (la->la_ctime <= oattr->la_ctime))
+			la->la_valid &= ~(LA_MTIME | LA_CTIME);
+	} else {
+		if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
 			if (!((flags & MDS_OWNEROVERRIDE) &&
-			      (uc->uc_fsuid == tmp_la->la_uid)) &&
+			      (uc->uc_fsuid == oattr->la_uid)) &&
 			    !(flags & MDS_PERM_BYPASS)) {
 				rc = mdd_permission_internal(env, obj,
-							     tmp_la, MAY_WRITE);
+							     oattr, MAY_WRITE);
 				if (rc != 0)
 					RETURN(rc);
 			}
-                }
-                if (la->la_valid & LA_CTIME) {
-                        /* The pure setattr, it has the priority over what is
-                         * already set, do not drop it if ctime is equal. */
-                        if (la->la_ctime < tmp_la->la_ctime)
-                                la->la_valid &= ~(LA_ATIME | LA_MTIME |
-                                                  LA_CTIME);
-                }
-        }
+		}
+		if (la->la_valid & LA_CTIME) {
+			/* The pure setattr, it has the priority over what is
+			 * already set, do not drop it if ctime is equal. */
+			if (la->la_ctime < oattr->la_ctime)
+				la->la_valid &= ~(LA_ATIME | LA_MTIME |
+							LA_CTIME);
+		}
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /** Store a data change changelog record
@@ -829,35 +807,63 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 	return rc;
 }
 
-static inline bool permission_is_reduced(const struct lu_attr *old,
+/*
+ * LU-3671
+ *
+ * permission changes may require sync operation, to mitigate performance
+ * impact, only do this for dir and when permission is reduced.
+ *
+ * For regular files, version is updated with permission change (see VBR), async
+ * permission won't cause any issue, while missing permission change on
+ * directory may affect accessibility of other objects after recovery.
+ */
+static inline bool permission_needs_sync(const struct lu_attr *old,
 					 const struct lu_attr *new)
 {
-	return ((new->la_mode & old->la_mode) & S_IRWXUGO) !=
-	       (old->la_mode & S_IRWXUGO);
+	if (!S_ISDIR(old->la_mode))
+		return false;
+
+	if (new->la_valid & (LA_UID | LA_GID))
+		return true;
+
+	if (new->la_valid & LA_MODE &&
+	    new->la_mode & (S_ISUID | S_ISGID | S_ISVTX))
+		return true;
+
+	if ((new->la_valid & LA_MODE) &&
+	    ((new->la_mode & old->la_mode) & S_IRWXUGO) !=
+	     (old->la_mode & S_IRWXUGO))
+		return true;
+
+	return false;
 }
 
 /* set attr and LOV EA at once, return updated attr */
 int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		 const struct md_attr *ma)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle *handle;
-        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct thandle *handle;
+	struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
-	bool sync_perm = false;
 	int rc;
-        ENTRY;
+	ENTRY;
 
 	/* we do not use ->attr_set() for LOV/SOM/HSM EA any more */
 	LASSERT((ma->ma_valid & MA_LOV) == 0);
 	LASSERT((ma->ma_valid & MA_HSM) == 0);
 	LASSERT((ma->ma_valid & MA_SOM) == 0);
 
-        *la_copy = ma->ma_attr;
-	rc = mdd_fix_attr(env, mdd_obj, la_copy, ma->ma_attr_flags);
+	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
 	if (rc)
-                RETURN(rc);
+		RETURN(rc);
+
+	*la_copy = ma->ma_attr;
+	rc = mdd_fix_attr(env, mdd_obj, attr, la_copy, ma->ma_attr_flags);
+	if (rc)
+		RETURN(rc);
 
         /* setattr on "close" only change atime, or do nothing */
 	if (la->la_valid == LA_ATIME && la_copy->la_valid == 0)
@@ -875,38 +881,8 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 GOTO(stop, rc);
 
-	/*
-	 * LU-3671
-	 *
-	 * permission changes may require sync operation, to mitigate
-	 * performance impact, only do this for dir and when permission is
-	 * reduced.
-	 *
-	 * For regular files, version is updated with permission change
-	 * (see VBR), async permission won't cause any issue, while missing
-	 * permission change on directory may affect accessibility of other
-	 * objects.
-	 */
-	if (S_ISDIR(mdd_object_type(mdd_obj))) {
-		if (la->la_valid & (LA_UID | LA_GID)) {
-			sync_perm = true;
-		} else if (la->la_valid & LA_MODE &&
-			   la->la_mode & (S_ISUID | S_ISGID | S_ISVTX)) {
-			sync_perm = true;
-		} else if (la->la_valid & LA_MODE) {
-			struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
-
-			rc = mdd_la_get(env, mdd_obj, tmp_la, BYPASS_CAPA);
-			if (rc)
-				GOTO(stop, rc);
-
-			if (permission_is_reduced(tmp_la, la))
-				sync_perm = true;
-		}
-	}
-
-	if (sync_perm)
-		handle->th_sync |= !!mdd->mdd_sync_permission;
+	if (mdd->mdd_sync_permission && permission_needs_sync(attr, la))
+		handle->th_sync = 1;
 
 	if (la->la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
@@ -929,25 +905,19 @@ stop:
 }
 
 static int mdd_xattr_sanity_check(const struct lu_env *env,
-				  struct mdd_object *obj)
+				  struct mdd_object *obj,
+				  const struct lu_attr *attr)
 {
-	struct lu_attr  *tmp_la = &mdd_env_info(env)->mti_la;
 	struct lu_ucred *uc     = lu_ucred_assert(env);
-	int rc;
 	ENTRY;
 
 	if (mdd_is_immutable(obj) || mdd_is_append(obj))
 		RETURN(-EPERM);
 
-	rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-	if (rc)
-		RETURN(rc);
-
-	if ((uc->uc_fsuid != tmp_la->la_uid) &&
-	    !md_capable(uc, CFS_CAP_FOWNER))
+	if ((uc->uc_fsuid != attr->la_uid) && !md_capable(uc, CFS_CAP_FOWNER))
 		RETURN(-EPERM);
 
-	RETURN(rc);
+	RETURN(0);
 }
 
 static int mdd_declare_xattr_set(const struct lu_env *env,
@@ -1056,17 +1026,22 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 			 int fl)
 {
 	struct mdd_object	*mdd_obj = md2mdd_obj(obj);
+	struct lu_attr		*attr = MDD_ENV_VAR(env, cattr);
 	struct mdd_device	*mdd = mdo2mdd(obj);
 	struct thandle		*handle;
 	int			 rc;
-        ENTRY;
+	ENTRY;
+
+	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
 
 	if (!strcmp(name, XATTR_NAME_ACL_ACCESS)) {
-		rc = mdd_acl_set(env, mdd_obj, buf, fl);
+		rc = mdd_acl_set(env, mdd_obj, attr, buf, fl);
 		RETURN(rc);
 	}
 
-	rc = mdd_xattr_sanity_check(env, mdd_obj);
+	rc = mdd_xattr_sanity_check(env, mdd_obj, attr);
 	if (rc)
 		RETURN(rc);
 
@@ -1142,15 +1117,20 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
 int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                   const char *name)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle *handle;
-        int  rc;
-        ENTRY;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct thandle *handle;
+	int  rc;
+	ENTRY;
 
-        rc = mdd_xattr_sanity_check(env, mdd_obj);
-        if (rc)
-                RETURN(rc);
+	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdd_xattr_sanity_check(env, mdd_obj, attr);
+	if (rc)
+		RETURN(rc);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
@@ -1279,12 +1259,11 @@ static int mdd_xattr_hsm_replace(const struct lu_env *env,
  */
 static int mdd_layout_swap_allowed(const struct lu_env *env,
 				   struct mdd_object *o1,
-				   struct mdd_object *o2)
+				   const struct lu_attr *attr1,
+				   struct mdd_object *o2,
+				   const struct lu_attr *attr2)
 {
 	const struct lu_fid	*fid1, *fid2;
-	__u32			 uid, gid;
-	struct lu_attr		*tmp_la = &mdd_env_info(env)->mti_la;
-	int			 rc;
 	ENTRY;
 
 	fid1 = mdo2fid(o1);
@@ -1294,19 +1273,8 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 	    (mdd_object_type(o1) != mdd_object_type(o2)))
 		RETURN(-EPERM);
 
-	tmp_la->la_valid = 0;
-	rc = mdd_la_get(env, o1, tmp_la, BYPASS_CAPA);
-	if (rc)
-		RETURN(rc);
-	uid = tmp_la->la_uid;
-	gid = tmp_la->la_gid;
-
-	tmp_la->la_valid = 0;
-	rc = mdd_la_get(env, o2, tmp_la, BYPASS_CAPA);
-	if (rc)
-		RETURN(rc);
-
-	if ((uid != tmp_la->la_uid) || (gid != tmp_la->la_gid))
+	if ((attr1->la_uid != attr2->la_uid) ||
+	    (attr1->la_gid != attr2->la_gid))
 		RETURN(-EPERM);
 
 	RETURN(0);
@@ -1321,6 +1289,8 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct mdd_thread_info	*info = mdd_env_info(env);
 	struct mdd_object	*fst_o = md2mdd_obj(obj1);
 	struct mdd_object	*snd_o = md2mdd_obj(obj2);
+	struct lu_attr		*fst_la = MDD_ENV_VAR(env, cattr);
+	struct lu_attr		*snd_la = MDD_ENV_VAR(env, tattr);
 	struct mdd_device	*mdd = mdo2mdd(obj1);
 	struct lov_mds_md	*fst_lmm, *snd_lmm;
 	struct lu_buf		*fst_buf = &info->mti_buf[0];
@@ -1347,8 +1317,16 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc < 0)
 		swap(fst_o, snd_o);
 
+	rc = mdd_la_get(env, fst_o, fst_la, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = mdd_la_get(env, snd_o, snd_la, BYPASS_CAPA);
+	if (rc != 0)
+		RETURN(rc);
+
 	/* check if layout swapping is allowed */
-	rc = mdd_layout_swap_allowed(env, fst_o, snd_o);
+	rc = mdd_layout_swap_allowed(env, fst_o, fst_la, snd_o, snd_la);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1576,7 +1554,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 /*
  * do NOT or the MAY_*'s, you'll get the weakest
  */
-int accmode(const struct lu_env *env, struct lu_attr *la, int flags)
+int accmode(const struct lu_env *env, const struct lu_attr *la, int flags)
 {
 	int res = 0;
 
@@ -1602,45 +1580,41 @@ int accmode(const struct lu_env *env, struct lu_attr *la, int flags)
 }
 
 static int mdd_open_sanity_check(const struct lu_env *env,
-                                 struct mdd_object *obj, int flag)
+				struct mdd_object *obj,
+				const struct lu_attr *attr, int flag)
 {
-        struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
-        int mode, rc;
-        ENTRY;
+	int mode, rc;
+	ENTRY;
 
-        /* EEXIST check */
-        if (mdd_is_dead_obj(obj))
-                RETURN(-ENOENT);
+	/* EEXIST check */
+	if (mdd_is_dead_obj(obj))
+		RETURN(-ENOENT);
 
-        rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-        if (rc)
-               RETURN(rc);
+	if (S_ISLNK(attr->la_mode))
+		RETURN(-ELOOP);
 
-        if (S_ISLNK(tmp_la->la_mode))
-                RETURN(-ELOOP);
+	mode = accmode(env, attr, flag);
 
-        mode = accmode(env, tmp_la, flag);
+	if (S_ISDIR(attr->la_mode) && (mode & MAY_WRITE))
+		RETURN(-EISDIR);
 
-        if (S_ISDIR(tmp_la->la_mode) && (mode & MAY_WRITE))
-                RETURN(-EISDIR);
+	if (!(flag & MDS_OPEN_CREATED)) {
+		rc = mdd_permission_internal(env, obj, attr, mode);
+		if (rc)
+			RETURN(rc);
+	}
 
-        if (!(flag & MDS_OPEN_CREATED)) {
-                rc = mdd_permission_internal(env, obj, tmp_la, mode);
-                if (rc)
-                        RETURN(rc);
-        }
+	if (S_ISFIFO(attr->la_mode) || S_ISSOCK(attr->la_mode) ||
+	    S_ISBLK(attr->la_mode) || S_ISCHR(attr->la_mode))
+		flag &= ~MDS_OPEN_TRUNC;
 
-        if (S_ISFIFO(tmp_la->la_mode) || S_ISSOCK(tmp_la->la_mode) ||
-            S_ISBLK(tmp_la->la_mode) || S_ISCHR(tmp_la->la_mode))
-                flag &= ~MDS_OPEN_TRUNC;
-
-        /* For writing append-only file must open it with append mode. */
-        if (mdd_is_append(obj)) {
-                if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
-                        RETURN(-EPERM);
-                if (flag & MDS_OPEN_TRUNC)
-                        RETURN(-EPERM);
-        }
+	/* For writing append-only file must open it with append mode. */
+	if (mdd_is_append(obj)) {
+		if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
+			RETURN(-EPERM);
+		if (flag & MDS_OPEN_TRUNC)
+			RETURN(-EPERM);
+	}
 
 #if 0
         /*
@@ -1651,29 +1625,34 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 
 		if (uc && ((uc->uc_valid == UCRED_OLD) ||
 			   (uc->uc_valid == UCRED_NEW)) &&
-		    (uc->uc_fsuid != tmp_la->la_uid) &&
+		    (uc->uc_fsuid != attr->la_uid) &&
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
         }
 #endif
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mdd_open(const struct lu_env *env, struct md_object *obj,
-                    int flags)
+		    int flags)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        int rc = 0;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+	int rc = 0;
 
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
-        rc = mdd_open_sanity_check(env, mdd_obj, flags);
-        if (rc == 0)
-                mdd_obj->mod_count++;
+	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
 
-        mdd_write_unlock(env, mdd_obj);
-        return rc;
+	rc = mdd_open_sanity_check(env, mdd_obj, attr, flags);
+	if (rc == 0)
+		mdd_obj->mod_count++;
+
+	mdd_write_unlock(env, mdd_obj);
+	return rc;
 }
 
 int mdd_declare_object_kill(const struct lu_env *env, struct mdd_object *obj,

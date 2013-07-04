@@ -136,7 +136,7 @@ static int mdd_convert_object(const struct lu_env *env,
 			      const struct lu_name *name)
 {
 	struct mdd_object	*o;
-	struct lu_attr		*la = &mdd_env_info(env)->mti_la;
+	struct lu_attr		*la = MDD_ENV_VAR(env, cattr);
 	int			 rc;
 	ENTRY;
 
