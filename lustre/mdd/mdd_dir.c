@@ -932,7 +932,7 @@ static int mdd_linkea_prepare(const struct lu_env *env,
 	if (oldpfid != NULL) {
 		rc = __mdd_links_del(env, mdd_obj, ldata, oldlname, oldpfid);
 		if (rc) {
-			if ((check == 0) ||
+			if ((check == 1) ||
 			    (rc != -ENODATA && rc != -ENOENT))
 				RETURN(rc);
 			/* No changes done. */
@@ -946,8 +946,6 @@ static int mdd_linkea_prepare(const struct lu_env *env,
 		 * old link */
 		rc2 = __mdd_links_add(env, mdd_obj, ldata, newlname, newpfid,
 				      first, check);
-		if (rc2 == -EEXIST)
-			rc2 = 0;
 	}
 
 	rc = rc != 0 ? rc : rc2;
@@ -987,7 +985,7 @@ out:
 		rc = rc2;
 	if (rc) {
 		int error = 1;
-		if (rc == -EOVERFLOW || rc == -ENOENT || rc == -ENOSPC)
+		if (rc == -EOVERFLOW || rc == -ENOSPC)
 			error = 0;
 		if (oldpfid == NULL)
 			CDEBUG(error ? D_ERROR : D_OTHER,
@@ -1075,8 +1073,7 @@ int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
 	if (rc < 0)
 		return rc;
 
-	linkea_init(ldata);
-	return 0;
+	return linkea_init(ldata);
 }
 
 /** Read the link EA into a temp buffer.
