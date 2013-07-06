@@ -100,7 +100,7 @@ static inline void lfsck_component_put(const struct lu_env *env,
 {
 	if (atomic_dec_and_test(&com->lc_ref)) {
 		if (com->lc_obj != NULL)
-			lu_object_put(env, &com->lc_obj->do_lu);
+			lu_object_put_nocache(env, &com->lc_obj->do_lu);
 		if (com->lc_file_ram != NULL)
 			OBD_FREE(com->lc_file_ram, com->lc_file_size);
 		if (com->lc_file_disk != NULL)
@@ -167,7 +167,7 @@ static void lfsck_instance_cleanup(const struct lu_env *env,
 	LASSERT(thread_is_init(thread) || thread_is_stopped(thread));
 
 	if (lfsck->li_obj_oit != NULL) {
-		lu_object_put(env, &lfsck->li_obj_oit->do_lu);
+		lu_object_put_nocache(env, &lfsck->li_obj_oit->do_lu);
 		lfsck->li_obj_oit = NULL;
 	}
 
@@ -197,7 +197,7 @@ static void lfsck_instance_cleanup(const struct lu_env *env,
 	}
 
 	if (lfsck->li_bookmark_obj != NULL) {
-		lu_object_put(env, &lfsck->li_bookmark_obj->do_lu);
+		lu_object_put_nocache(env, &lfsck->li_bookmark_obj->do_lu);
 		lfsck->li_bookmark_obj = NULL;
 	}
 
@@ -207,7 +207,7 @@ static void lfsck_instance_cleanup(const struct lu_env *env,
 	}
 
 	if (lfsck->li_local_root != NULL) {
-		lu_object_put(env, &lfsck->li_local_root->do_lu);
+		lu_object_put_nocache(env, &lfsck->li_local_root->do_lu);
 		lfsck->li_local_root = NULL;
 	}
 
