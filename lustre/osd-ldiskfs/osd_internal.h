@@ -239,11 +239,11 @@ struct osd_device {
          * Fid Capability
          */
 	unsigned int              od_fl_capa:1,
-				  od_is_md:1, /* set in ->ldo_prepare */
+				  od_maybe_new:1,
 				  od_noscrub:1,
 				  od_dirent_journal:1,
-				  od_handle_nolma:1,
-				  od_igif_inoi:1;
+				  od_igif_inoi:1,
+				  od_check_ff:1;
 
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;
@@ -595,7 +595,10 @@ struct osd_thread_info {
 	bool			oti_rollback;
 
 	char			oti_name[48];
-	struct filter_fid_old	oti_ff;
+	union {
+		struct filter_fid_old	oti_ff;
+		struct filter_fid	oti_ff_new;
+	};
 };
 
 extern int ldiskfs_pdo;

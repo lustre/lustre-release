@@ -396,9 +396,21 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
         LASSERT(dev->od_fsops);
         osd_push_ctxt(dev, &new, &save);
 
-        d = simple_mkdir(rootd, dev->od_mnt, "O", 0755, 1);
+	d = ll_lookup_one_len("O", rootd, strlen("O"));
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
+	if (d->d_inode == NULL) {
+		dput(d);
+		/* The lookup() may be called again inside simple_mkdir().
+		 * Since the repeated lookup() only be called for "/O" at
+		 * mount time, it will not affect the whole performance. */
+		d = simple_mkdir(rootd, dev->od_mnt, "O", 0755, 1);
+		if (IS_ERR(d))
+			GOTO(cleanup, rc = PTR_ERR(d));
+
+		/* It is quite probably that the device is new formatted. */
+		dev->od_maybe_new = 1;
+	}
 
 	inode = d->d_inode;
 	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);

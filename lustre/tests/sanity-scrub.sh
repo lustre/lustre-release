@@ -29,10 +29,10 @@ OSTSIZE=100000
 MOUNT_2=""
 check_and_setup_lustre
 
-[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
 	skip "test OI scrub only for ldiskfs" && check_and_cleanup_lustre &&
 	exit 0
-[ $(facet_fstype ost1) != ldiskfs ] &&
+[ $(facet_fstype ost1) != "ldiskfs" ] &&
 	skip "test OI scrub only for ldiskfs" && check_and_cleanup_lustre &&
 	exit 0
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&

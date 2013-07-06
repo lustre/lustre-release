@@ -325,7 +325,7 @@ int jt_lfsck_stop(int argc, char **argv)
 				return rc;
 		} else {
 			fprintf(stderr,
-				"Must sepcify device to stop LFSCK.\n");
+				"Must specify device to stop LFSCK.\n");
 			return -EINVAL;
 		}
 	}
