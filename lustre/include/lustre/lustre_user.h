@@ -1071,7 +1071,7 @@ struct hsm_action_item {
  * \param len [IN] max buffer len
  * \retval buffer
  */
-static inline char *hai_dump_data_field(struct hsm_action_item *hai,
+static inline char *hai_dump_data_field(const struct hsm_action_item *hai,
                                         char *buffer, int len)
 {
         int i, sz, data_len;

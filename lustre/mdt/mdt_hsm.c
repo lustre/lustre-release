@@ -55,7 +55,7 @@
  * Update on-disk HSM attributes.
  */
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
-		     struct md_hsm *mh)
+		     const struct md_hsm *mh)
 {
 	struct md_object	*next = mdt_object_child(obj);
 	struct lu_buf		*buf = &info->mti_buf;
@@ -505,9 +505,6 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	}
 
 	rc = mdt_hsm_add_actions(info, hal, &compound_id);
-	/* ENODATA error code is needed only for implicit requests */
-	if (rc == -ENODATA)
-		rc = 0;
 
 	MDT_HSM_FREE(hal, hal_size);
 

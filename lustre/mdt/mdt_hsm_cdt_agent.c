@@ -367,30 +367,35 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 			struct mdt_object *obj;
 			struct md_hsm hsm;
 
-			obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm,
-						 NULL);
-			if (IS_ERR(obj) && (hai->hai_action == HSMA_REMOVE))
-				continue;
+			obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
+			if (!IS_ERR(obj)) {
+				mdt_object_put(mti->mti_env, obj);
+			} else {
+				if (hai->hai_action == HSMA_REMOVE)
+					continue;
 
-			if (IS_ERR(obj) && (PTR_ERR(obj) == -ENOENT)) {
-				fail_request = true;
-				rc = mdt_agent_record_update(mti->mti_env, mdt,
+				if (PTR_ERR(obj) == -ENOENT) {
+					fail_request = true;
+					rc = mdt_agent_record_update(
+							     mti->mti_env, mdt,
 							     &hai->hai_cookie,
 							     1, ARS_FAILED);
-				if (rc) {
-					CERROR("%s: mdt_agent_record_update() "
+					if (rc) {
+						CERROR(
+					      "%s: mdt_agent_record_update() "
 					      "failed, rc=%d, cannot update "
 					      "status to %s for cookie "
 					      LPX64": rc = %d\n",
 					      mdt_obd_name(mdt), rc,
 					      agent_req_status2name(ARS_FAILED),
 					      hai->hai_cookie, rc);
-					GOTO(out_buf, rc);
+						GOTO(out_buf, rc);
+					}
+					continue;
 				}
-				continue;
-			}
-			if (IS_ERR(obj))
 				GOTO(out_buf, rc = PTR_ERR(obj));
+			}
+
 
 			if (!mdt_hsm_is_action_compat(hai, hal->hal_archive_id,
 						      hal->hal_flags, &hsm)) {

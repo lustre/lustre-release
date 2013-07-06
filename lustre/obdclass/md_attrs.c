@@ -185,7 +185,7 @@ EXPORT_SYMBOL(lustre_buf2hsm);
  * \param buf - is the output buffer where to pack the on-disk HSM xattr.
  * \param mh  - is the md_hsm structure to pack.
  */
-void lustre_hsm2buf(void *buf, struct md_hsm *mh)
+void lustre_hsm2buf(void *buf, const struct md_hsm *mh)
 {
 	struct hsm_attrs *attrs = (struct hsm_attrs *)buf;
 	ENTRY;

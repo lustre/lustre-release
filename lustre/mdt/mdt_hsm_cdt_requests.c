@@ -153,8 +153,8 @@ out:
 /**
  * update data moved information during a request
  */
-static int mdt_cdt_update_work(struct cdt_req_progress *crp,
-			       struct hsm_extent *extent)
+static int hsm_update_work(struct cdt_req_progress *crp,
+			   const struct hsm_extent *extent)
 {
 	int			  rc, osz, nsz;
 	struct interval_node	**new_vv;
@@ -239,11 +239,11 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 	struct cdt_agent_req *car;
 	ENTRY;
 
-	OBD_ALLOC_PTR(car);
+	OBD_SLAB_ALLOC_PTR(car, mdt_hsm_car_kmem);
 	if (car == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	cfs_atomic_set(&car->car_refcount, 0);
+	cfs_atomic_set(&car->car_refcount, 1);
 	car->car_compound_id = compound_id;
 	car->car_archive_id = archive_id;
 	car->car_flags = flags;
@@ -253,7 +253,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 	car->car_uuid = *uuid;
 	OBD_ALLOC(car->car_hai, hai->hai_len);
 	if (car->car_hai == NULL) {
-		OBD_FREE_PTR(car);
+		OBD_SLAB_FREE_PTR(car, mdt_hsm_car_kmem);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 	memcpy(car->car_hai, hai, hai->hai_len);
@@ -271,7 +271,7 @@ void mdt_cdt_free_request(struct cdt_agent_req *car)
 {
 	mdt_cdt_free_request_tree(&car->car_progress);
 	OBD_FREE(car->car_hai, car->car_hai->hai_len);
-	OBD_FREE_PTR(car);
+	OBD_SLAB_FREE_PTR(car, mdt_hsm_car_kmem);
 }
 
 /**
@@ -290,6 +290,7 @@ void mdt_cdt_get_request(struct cdt_agent_req *car)
  */
 void mdt_cdt_put_request(struct cdt_agent_req *car)
 {
+	LASSERT(cfs_atomic_read(&car->car_refcount) > 0);
 	if (cfs_atomic_dec_and_test(&car->car_refcount))
 		mdt_cdt_free_request(car);
 }
@@ -306,25 +307,20 @@ static struct cdt_agent_req *cdt_find_request_nolock(struct coordinator *cdt,
 						     __u64 cookie,
 						     const struct lu_fid *fid)
 {
-	cfs_list_t		*pos;
-	struct cdt_agent_req	*car;
+	struct cdt_agent_req *car;
+	struct cdt_agent_req *found = NULL;
 	ENTRY;
 
-	if (cfs_list_empty(&cdt->cdt_requests))
-		goto notfound;
-
-	cfs_list_for_each(pos, &cdt->cdt_requests) {
-		car = cfs_list_entry(pos, struct cdt_agent_req,
-				     car_request_list);
+	cfs_list_for_each_entry(car, &cdt->cdt_requests, car_request_list) {
 		if ((car->car_hai->hai_cookie == cookie) ||
 		    ((fid != NULL) && lu_fid_eq(fid, &car->car_hai->hai_fid))) {
 			mdt_cdt_get_request(car);
-			RETURN(car);
+			found = car;
+			break;
 		}
 	}
 
-notfound:
-	RETURN(ERR_PTR(-ENOENT));
+	RETURN(found);
 }
 
 /**
@@ -343,23 +339,19 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car)
 	LASSERT(new_car->car_hai->hai_action != HSMA_CANCEL);
 
 	down_write(&cdt->cdt_request_lock);
-
 	car = cdt_find_request_nolock(cdt, new_car->car_hai->hai_cookie, NULL);
-	if (!IS_ERR(car)) {
+	if (car != NULL) {
 		mdt_cdt_put_request(car);
 		up_write(&cdt->cdt_request_lock);
 		RETURN(-EEXIST);
 	}
 
-	mdt_cdt_get_request(new_car);
 	cfs_list_add_tail(&new_car->car_request_list, &cdt->cdt_requests);
 	up_write(&cdt->cdt_request_lock);
 
 	mdt_hsm_agent_update_statistics(cdt, 0, 0, 1, &new_car->car_uuid);
 
-	down(&cdt->cdt_counter_lock);
-	cdt->cdt_request_count++;
-	up(&cdt->cdt_counter_lock);
+	atomic_inc(&cdt->cdt_request_count);
 
 	RETURN(0);
 }
@@ -372,16 +364,14 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car)
  * \retval request pointer
  */
 struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt,
-					   __u64 cookie,
+					   const __u64 cookie,
 					   const struct lu_fid *fid)
 {
 	struct cdt_agent_req	*car;
 	ENTRY;
 
 	down_read(&cdt->cdt_request_lock);
-
 	car = cdt_find_request_nolock(cdt, cookie, fid);
-
 	up_read(&cdt->cdt_request_lock);
 
 	RETURN(car);
@@ -395,20 +385,23 @@ struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt,
  */
 int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 {
-	struct cdt_agent_req	*car;
+	struct cdt_agent_req *car;
 	ENTRY;
 
 	down_write(&cdt->cdt_request_lock);
-
 	car = cdt_find_request_nolock(cdt, cookie, NULL);
-	if (!IS_ERR(car)) {
+	if (car != NULL) {
 		cfs_list_del(&car->car_request_list);
-		mdt_cdt_put_request(car);
 		up_write(&cdt->cdt_request_lock);
 
-		down(&cdt->cdt_counter_lock);
-		cdt->cdt_request_count--;
-		up(&cdt->cdt_counter_lock);
+		/* reference from cdt_requests list */
+		mdt_cdt_put_request(car);
+
+		/* reference from cdt_find_request_nolock() */
+		mdt_cdt_put_request(car);
+
+		LASSERT(atomic_read(&cdt->cdt_request_count) > 0);
+		atomic_dec(&cdt->cdt_request_count);
 
 		RETURN(0);
 	}
@@ -426,21 +419,21 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
  * \retval -ve failure
  */
 struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
-					     struct hsm_progress_kernel *pgs)
+					  const struct hsm_progress_kernel *pgs)
 {
 	struct cdt_agent_req	*car;
 	int			 rc;
 	ENTRY;
 
 	car = mdt_cdt_find_request(cdt, pgs->hpk_cookie, NULL);
-	if (IS_ERR(car))
-		RETURN(car);
+	if (car == NULL)
+		RETURN(ERR_PTR(-ENOENT));
 
 	car->car_req_update = cfs_time_current_sec();
 
 	/* update progress done by copy tool */
 	if (pgs->hpk_errval == 0 && pgs->hpk_extent.length != 0) {
-		rc = mdt_cdt_update_work(&car->car_progress, &pgs->hpk_extent);
+		rc = hsm_update_work(&car->car_progress, &pgs->hpk_extent);
 		if (rc) {
 			mdt_cdt_put_request(car);
 			RETURN(ERR_PTR(rc));

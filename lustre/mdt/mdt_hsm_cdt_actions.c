@@ -43,7 +43,8 @@
 #include <lustre_log.h>
 #include "mdt_internal.h"
 
-void dump_llog_agent_req_rec(char *prefix, struct llog_agent_req_rec *larr)
+void dump_llog_agent_req_rec(const char *prefix,
+			     const struct llog_agent_req_rec *larr)
 {
 	char	buf[12];
 	int	sz;
@@ -95,7 +96,7 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 	if ((lctxt == NULL) || (lctxt->loc_handle == NULL))
 		RETURN(-ENOENT);
 
-	down(&cdt->cdt_llog_lock);
+	mutex_lock(&cdt->cdt_llog_lock);
 
 	rc = llog_cat_process(env, lctxt->loc_handle, cb, data, 0, 0);
 	if (rc < 0)
@@ -105,7 +106,7 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 		rc = 0;
 
 	llog_ctxt_put(lctxt);
-	up(&cdt->cdt_llog_lock);
+	mutex_unlock(&cdt->cdt_llog_lock);
 	RETURN(rc);
 }
 
@@ -150,7 +151,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 	if ((lctxt == NULL) || (lctxt->loc_handle == NULL))
 		GOTO(free, rc = -ENOENT);
 
-	down(&cdt->cdt_llog_lock);
+	mutex_lock(&cdt->cdt_llog_lock);
 
 	/* in case of cancel request, the cookie is already set to the
 	 * value of the request cookie to be cancelled
@@ -164,7 +165,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 	if (rc > 0)
 		rc = 0;
 
-	up(&cdt->cdt_llog_lock);
+	mutex_unlock(&cdt->cdt_llog_lock);
 	llog_ctxt_put(lctxt);
 
 	EXIT;

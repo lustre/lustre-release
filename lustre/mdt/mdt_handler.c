@@ -100,11 +100,27 @@ static const struct lu_object_operations mdt_obj_ops;
 /* Slab for MDT object allocation */
 static struct kmem_cache *mdt_object_kmem;
 
+/* For HSM restore handles */
+struct kmem_cache *mdt_hsm_cdt_kmem;
+
+/* For HSM request handles */
+struct kmem_cache *mdt_hsm_car_kmem;
+
 static struct lu_kmem_descr mdt_caches[] = {
 	{
 		.ckd_cache = &mdt_object_kmem,
 		.ckd_name  = "mdt_obj",
 		.ckd_size  = sizeof(struct mdt_object)
+	},
+	{
+		.ckd_cache      = &mdt_hsm_cdt_kmem,
+		.ckd_name       = "mdt_cdt_restore_handle",
+		.ckd_size       = sizeof(struct cdt_restore_handle)
+	},
+	{
+		.ckd_cache      = &mdt_hsm_car_kmem,
+		.ckd_name       = "mdt_cdt_agent_req",
+		.ckd_size       = sizeof(struct cdt_agent_req)
 	},
 	{
 		.ckd_cache = NULL
@@ -4957,13 +4973,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         cfs_timer_init(&m->mdt_ck_timer, mdt_ck_timer_callback, m);
 
 	rc = mdt_hsm_cdt_init(m);
-	if (rc != 0)
-		CERROR("%s: Cannot init coordinator, rc %d\n",
+	if (rc != 0) {
+		CERROR("%s: error initializing coordinator, rc %d\n",
 		       mdt_obd_name(m), rc);
+                GOTO(err_free_ns, rc);
+	}
 
         rc = mdt_ck_thread_start(m);
         if (rc)
-                GOTO(err_free_ns, rc);
+                GOTO(err_free_hsm, rc);
 
 	rc = tgt_init(env, &m->mdt_lut, obd, m->mdt_bottom, mdt_common_slice,
 		      OBD_FAIL_MDS_ALL_REQUEST_NET,
@@ -5053,6 +5071,8 @@ err_tgt:
 err_capa:
 	cfs_timer_disarm(&m->mdt_ck_timer);
 	mdt_ck_thread_stop(m);
+err_free_hsm:
+	mdt_hsm_cdt_fini(m);
 err_free_ns:
 	ldlm_namespace_free(m->mdt_namespace, NULL, 0);
 	obd->obd_namespace = m->mdt_namespace = NULL;
