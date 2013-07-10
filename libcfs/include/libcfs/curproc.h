@@ -58,7 +58,6 @@ void   cfs_curproc_groups_dump(gid_t *array, int size);
 mode_t cfs_curproc_umask(void);
 char  *cfs_curproc_comm(void);
 
-
 /*
  * Plus, platform-specific constant
  *
@@ -68,9 +67,6 @@ char  *cfs_curproc_comm(void);
  *
  * cfs_kernel_cap_t
  */
-
-/* check if task is running in compat mode.*/
-int cfs_curproc_is_32bit(void);
 #endif
 uid_t  cfs_curproc_uid(void);
 gid_t  cfs_curproc_gid(void);

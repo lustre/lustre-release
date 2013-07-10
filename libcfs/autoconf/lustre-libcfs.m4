@@ -206,27 +206,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LIBCFS_HAVE_IS_COMPAT_TASK
-#
-# Added in 2.6.17, it wasn't until 2.6.29 that all
-# Linux architectures have is_compat_task()
-#
-AC_DEFUN([LIBCFS_HAVE_IS_COMPAT_TASK],
-[AC_MSG_CHECKING([if is_compat_task() is declared])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/compat.h>
-],[
-        int i __attribute__ ((unused));
-        i = is_compat_task();
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_IS_COMPAT_TASK, 1, [is_compat_task() is available])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
 # LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 #
 # 2.6.32-30.el6 adds a new 'walk_stack' field in 'struct stacktrace_ops'
@@ -387,8 +366,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX],
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
 LIBCFS_U64_LONG_LONG_LINUX
-# 2.6.18
-LIBCFS_HAVE_IS_COMPAT_TASK
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_FUNC_DUMP_TRACE

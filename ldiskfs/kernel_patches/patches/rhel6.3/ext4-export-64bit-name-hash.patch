@@ -1,19 +1,8 @@
 diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
 --- linux-stage.orig/fs/ext4/dir.c	2012-06-21 10:26:23.000000000 -0400
 +++ linux-stage/fs/ext4/dir.c	2012-06-21 10:37:39.000000000 -0400
-@@ -247,22 +247,63 @@ out:
-	return ret;
- }
+@@ -247,20 +247,52 @@ out:
 
-+static inline int is_32bit_api(void)
-+{
-+#ifdef HAVE_IS_COMPAT_TASK
-+        return is_compat_task();
-+#else
-+        return (BITS_PER_LONG == 32);
-+#endif
-+}
-+
  /*
   * These functions convert from the major/minor hash to an f_pos
 - * value.
@@ -35,7 +24,7 @@ diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
 +static inline loff_t hash2pos(struct file *filp, __u32 major, __u32 minor)
 +{
 +	if ((filp->f_mode & FMODE_32BITHASH) ||
-+	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_compat_task()))
 +		return major >> 1;
 +	else
 +		return ((__u64)(major >> 1) << 32) | (__u64)minor;
@@ -44,7 +33,7 @@ diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
 +static inline __u32 pos2maj_hash(struct file *filp, loff_t pos)
 +{
 +	if ((filp->f_mode & FMODE_32BITHASH) ||
-+	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_compat_task()))
 +		return (pos << 1) & 0xffffffff;
 +	else
 +		return ((pos >> 32) << 1) & 0xffffffff;
@@ -53,7 +42,7 @@ diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
 +static inline __u32 pos2min_hash(struct file *filp, loff_t pos)
 +{
 +	if ((filp->f_mode & FMODE_32BITHASH) ||
-+	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_compat_task()))
 +		return 0;
 +	else
 +		return pos & 0xffffffff;
@@ -68,7 +57,7 @@ diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
 +static inline loff_t ext4_get_htree_eof(struct file *filp)
 +{
 +	if ((filp->f_mode & FMODE_32BITHASH) ||
-+	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_compat_task()))
 +		return EXT4_HTREE_EOF_32BIT;
 +	else
 +		return EXT4_HTREE_EOF_64BIT;
