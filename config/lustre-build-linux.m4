@@ -44,7 +44,7 @@ AC_MSG_CHECKING([for Linux release])
 if test -s $LINUX_OBJ/include/$AUTOCONF_HDIR/utsrelease.h ; then
 	LINUXRELEASEHEADER=$AUTOCONF_HDIR/utsrelease.h
 else
-	LINUXRELEASEHEADER=linux/version.h
+	LINUXRELEASEHEADER=$VERSION_HDIR/version.h
 fi
 LB_LINUX_TRY_MAKE([
 	#include <$LINUXRELEASEHEADER>
@@ -65,7 +65,7 @@ LB_LINUX_TRY_MAKE([
 rm -f build/conftest.i
 if test x$LINUXRELEASE = x ; then
 	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
+	AC_MSG_ERROR([Could not determine Linux release version from $LINUXRELEASEHEADER.])
 fi
 AC_MSG_RESULT([$LINUXRELEASE])
 AC_SUBST(LINUXRELEASE)
@@ -96,7 +96,7 @@ AC_SUBST(RELEASE)
 # check is redhat/suse kernels
 AC_MSG_CHECKING([that RedHat kernel])
 LB_LINUX_TRY_COMPILE([
-		#include <linux/version.h>
+		#include <$VERSION_HDIR/version.h>
 	],[
 		#ifndef RHEL_RELEASE_CODE
 		#error "not redhat kernel"
@@ -222,8 +222,12 @@ LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated
         [LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])])
         AC_SUBST(AUTOCONF_HDIR)
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
-	[AC_MSG_ERROR([Run make config in $LINUX.])])
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h], [VERSION_HDIR=linux],
+	[LB_CHECK_FILE([$LINUX_OBJ/include/generated/uapi/linux/version.h],
+		[VERSION_HDIR=generated/uapi/linux],
+		[AC_MSG_ERROR([Run make config in $LINUX.])])
+	])
+	AC_SUBST(VERSION_HDIR)
 
 # ----------- kconfig.h exists ---------------
 # kernel 3.1, $LINUX/include/linux/kconfig.h is added
@@ -240,7 +244,7 @@ LB_CHECK_FILE([$LINUX_OBJ/include/linux/kconfig.h],
 # tarred up the tree and ran make dep etc. in it, then
 # version.h gets overwritten with a standard linux one.
 
-if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
+if grep rhconfig $LINUX_OBJ/include/$VERSION_HDIR/version.h >/dev/null ; then
 	# This is a clean kernel-source tree, we need to
 	# enable extensive workarounds to get this to build
 	# modules
@@ -352,7 +356,8 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`echo $target_cpu|sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/arch/`echo $target_cpu|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $CROSS_VARS $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+SUBARCH=$(echo $target_cpu | sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/')
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/$SUBARCH/include -I$LINUX/arch/$SUBARCH/include/generated -Iinclude -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -I$LINUX/include/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $CROSS_VARS $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])

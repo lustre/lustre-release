@@ -1,9 +1,9 @@
 AC_DEFUN([LDISKFS_AC_LINUX_VERSION], [
 	AC_MSG_CHECKING([kernel source version])
 
-	utsrelease1=${LINUX_OBJ}/include/linux/version.h
+	utsrelease1=${LINUX_OBJ}/include/generated/utsrelease.h
 	utsrelease2=${LINUX_OBJ}/include/linux/utsrelease.h
-	utsrelease3=${LINUX_OBJ}/include/generated/utsrelease.h
+	utsrelease3=${LINUX_OBJ}/include/linux/version.h
 	AS_IF([test -r ${utsrelease1} && fgrep -q UTS_RELEASE ${utsrelease1}], [
 		utsrelease=${utsrelease1}
 	], [test -r ${utsrelease2} && fgrep -q UTS_RELEASE ${utsrelease2}], [
@@ -60,10 +60,10 @@ AC_SUBST(RELEASE)
 
 # check is redhat/suse kernels
 AC_MSG_CHECKING([for RedHat kernel version])
-	AS_IF([fgrep -q RHEL_RELEASE ${LINUX_OBJ}/include/linux/version.h], [
+	AS_IF([fgrep -q RHEL_RELEASE ${LINUX_OBJ}/include/$VERSION_HDIR/version.h], [
 		RHEL_KERNEL="yes"
 		RHEL_RELEASE=$(expr 0$(awk -F \" '/ RHEL_RELEASE / { print [$]2 }' \
-		               ${LINUX_OBJ}/include/linux/version.h) + 1)
+		               ${LINUX_OBJ}/include/$VERSION_HDIR/version.h) + 1)
 		KERNEL_VERSION=$(sed -e 's/\(@<:@23@:>@\.@<:@0-9@:>@*\.@<:@0-9@:>@*\).*/\1/' <<< ${LINUXRELEASE})
 		RHEL_KERNEL_VERSION=${KERNEL_VERSION}-${RHEL_RELEASE}
 		AC_SUBST(RHEL_KERNEL_VERSION)
@@ -184,8 +184,14 @@ LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated
         [LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])])
         AC_SUBST(AUTOCONF_HDIR)
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
-	[AC_MSG_ERROR([Run make config in $LINUX.])])
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h], [VERSION_HDIR=linux],
+       [LB_CHECK_FILE([$LINUX_OBJ/include/generated/uapi/linux/version.h],
+	       [VERSION_HDIR=generated/uapi/linux],
+	       [AC_MSG_ERROR([Run make config in $LINUX.])])
+       ])
+       AC_SUBST(VERSION_HDIR)
+
+
 
 # ----------- kconfig.h exists ---------------
 # kernel 3.1, $LINUX/include/linux/kconfig.h is added
@@ -202,7 +208,7 @@ LB_CHECK_FILE([$LINUX_OBJ/include/linux/kconfig.h],
 # tarred up the tree and ran make dep etc. in it, then
 # version.h gets overwritten with a standard linux one.
 
-if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
+if grep rhconfig $LINUX_OBJ/include/$VERSION_HDIR/version.h >/dev/null ; then
 	# This is a clean kernel-source tree, we need to
 	# enable extensive workarounds to get this to build
 	# modules

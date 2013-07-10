@@ -43,8 +43,10 @@ sub get_kernver($$)
     my $objdir = shift;
 
     my $ver = new IO::File;
-    if (!$ver->open("$objdir/include/linux/utsrelease.h") &&
+    if (!$ver->open("$objdir/include/generated/utsrelease.h") &&
+	!$ver->open("$objdir/include/linux/utsrelease.h") &&
         !$ver->open("$objdir/include/linux/version.h") &&
+	!$ver->open("$dir/include/generated/utsrelease.h") &&
         !$ver->open("$dir/include/linux/utsrelease.h") &&
         !$ver->open("$dir/include/linux/version.h")) {
             die "Run make dep on '$dir'\n";
