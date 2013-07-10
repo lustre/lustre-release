@@ -396,44 +396,6 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [])
 ])
 
-# 2.6.19
-
-# LC_FILE_WRITEV
-# 2.6.19 replaced writev with aio_write
-AC_DEFUN([LC_FILE_WRITEV],
-[AC_MSG_CHECKING([writev in fops])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct file_operations *fops = NULL;
-        fops->writev = NULL;
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_FILE_WRITEV, 1,
-                [use fops->writev])
-],[
-	AC_MSG_RESULT(no)
-])
-])
-
-# LC_FILE_READV
-# 2.6.19 replaced readv with aio_read
-AC_DEFUN([LC_FILE_READV],
-[AC_MSG_CHECKING([readv in fops])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct file_operations *fops = NULL;
-        fops->readv = NULL;
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_FILE_READV, 1,
-                [use fops->readv])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 # raid5-zerocopy patch
 
 #
@@ -1622,10 +1584,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          #2.6.18 + RHEL5 (fc6)
          LC_LINUX_FIEMAP_H
-
-         # 2.6.19
-         LC_FILE_WRITEV
-         LC_FILE_READV
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT

@@ -1088,9 +1088,7 @@ restart:
                         cio->cui_iov = args->u.normal.via_iov;
                         cio->cui_nrsegs = args->u.normal.via_nrsegs;
                         cio->cui_tot_nrsegs = cio->cui_nrsegs;
-#ifndef HAVE_FILE_WRITEV
                         cio->cui_iocb = args->u.normal.via_iocb;
-#endif
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 				if (mutex_lock_interruptible(&lli->
@@ -1189,56 +1187,6 @@ static int ll_file_get_iov_count(const struct iovec *iov,
         return 0;
 }
 
-#ifdef HAVE_FILE_READV
-static ssize_t ll_file_readv(struct file *file, const struct iovec *iov,
-                              unsigned long nr_segs, loff_t *ppos)
-{
-        struct lu_env      *env;
-        struct vvp_io_args *args;
-        size_t              count;
-        ssize_t             result;
-        int                 refcheck;
-        ENTRY;
-
-        result = ll_file_get_iov_count(iov, &nr_segs, &count);
-        if (result)
-                RETURN(result);
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
-        args = vvp_env_args(env, IO_NORMAL);
-        args->u.normal.via_iov = (struct iovec *)iov;
-        args->u.normal.via_nrsegs = nr_segs;
-
-        result = ll_file_io_generic(env, args, file, CIT_READ, ppos, count);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
-}
-
-static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
-                            loff_t *ppos)
-{
-        struct lu_env *env;
-        struct iovec  *local_iov;
-        ssize_t        result;
-        int            refcheck;
-        ENTRY;
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
-        local_iov = &vvp_env_info(env)->vti_local_iov;
-        local_iov->iov_base = (void __user *)buf;
-        local_iov->iov_len = count;
-        result = ll_file_readv(file, local_iov, 1, ppos);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
-}
-
-#else
 static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
                                 unsigned long nr_segs, loff_t pos)
 {
@@ -1296,62 +1244,11 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         cl_env_put(env, &refcheck);
         RETURN(result);
 }
-#endif
 
 /*
  * Write to a file (through the page cache).
+ * AIO stuff
  */
-#ifdef HAVE_FILE_WRITEV
-static ssize_t ll_file_writev(struct file *file, const struct iovec *iov,
-                              unsigned long nr_segs, loff_t *ppos)
-{
-        struct lu_env      *env;
-        struct vvp_io_args *args;
-        size_t              count;
-        ssize_t             result;
-        int                 refcheck;
-        ENTRY;
-
-        result = ll_file_get_iov_count(iov, &nr_segs, &count);
-        if (result)
-                RETURN(result);
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
-        args = vvp_env_args(env, IO_NORMAL);
-        args->u.normal.via_iov = (struct iovec *)iov;
-        args->u.normal.via_nrsegs = nr_segs;
-
-        result = ll_file_io_generic(env, args, file, CIT_WRITE, ppos, count);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
-}
-
-static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t *ppos)
-{
-        struct lu_env    *env;
-        struct iovec     *local_iov;
-        ssize_t           result;
-        int               refcheck;
-        ENTRY;
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
-        local_iov = &vvp_env_info(env)->vti_local_iov;
-        local_iov->iov_base = (void __user *)buf;
-        local_iov->iov_len = count;
-
-        result = ll_file_writev(file, local_iov, 1, ppos);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
-}
-
-#else /* AIO stuff */
 static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
                                  unsigned long nr_segs, loff_t pos)
 {
@@ -1409,7 +1306,6 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         cl_env_put(env, &refcheck);
         RETURN(result);
 }
-#endif
 
 /*
  * Send file content (through pagecache) somewhere with helper
@@ -3286,24 +3182,12 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	RETURN(rc);
 }
 
-#ifdef HAVE_FILE_READV
-#define READ_METHOD readv
-#define READ_FUNCTION ll_file_readv
-#define WRITE_METHOD writev
-#define WRITE_FUNCTION ll_file_writev
-#else
-#define READ_METHOD aio_read
-#define READ_FUNCTION ll_file_aio_read
-#define WRITE_METHOD aio_write
-#define WRITE_FUNCTION ll_file_aio_write
-#endif
-
 /* -o localflock - only provides locally consistent flock locks */
 struct file_operations ll_file_operations = {
         .read           = ll_file_read,
-        .READ_METHOD    = READ_FUNCTION,
+	.aio_read    = ll_file_aio_read,
         .write          = ll_file_write,
-        .WRITE_METHOD   = WRITE_FUNCTION,
+	.aio_write   = ll_file_aio_write,
         .unlocked_ioctl = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,
@@ -3316,9 +3200,9 @@ struct file_operations ll_file_operations = {
 
 struct file_operations ll_file_operations_flock = {
         .read           = ll_file_read,
-        .READ_METHOD    = READ_FUNCTION,
+	.aio_read    = ll_file_aio_read,
         .write          = ll_file_write,
-        .WRITE_METHOD   = WRITE_FUNCTION,
+	.aio_write   = ll_file_aio_write,
         .unlocked_ioctl = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,
@@ -3334,9 +3218,9 @@ struct file_operations ll_file_operations_flock = {
 /* These are for -o noflock - to return ENOSYS on flock calls */
 struct file_operations ll_file_operations_noflock = {
         .read           = ll_file_read,
-        .READ_METHOD    = READ_FUNCTION,
+	.aio_read    = ll_file_aio_read,
         .write          = ll_file_write,
-        .WRITE_METHOD   = WRITE_FUNCTION,
+	.aio_write   = ll_file_aio_write,
         .unlocked_ioctl = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,

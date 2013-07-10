@@ -485,19 +485,6 @@ static void vvp_io_setattr_fini(const struct lu_env *env,
 	vvp_io_fini(env, ios);
 }
 
-#ifdef HAVE_FILE_READV
-static ssize_t lustre_generic_file_read(struct file *file,
-                                        struct ccc_io *vio, loff_t *ppos)
-{
-        return generic_file_readv(file, vio->cui_iov, vio->cui_nrsegs, ppos);
-}
-
-static ssize_t lustre_generic_file_write(struct file *file,
-                                         struct ccc_io *vio, loff_t *ppos)
-{
-        return generic_file_writev(file, vio->cui_iov, vio->cui_nrsegs, ppos);
-}
-#else
 static ssize_t lustre_generic_file_read(struct file *file,
                                         struct ccc_io *vio, loff_t *ppos)
 {
@@ -511,7 +498,6 @@ static ssize_t lustre_generic_file_write(struct file *file,
         return generic_file_aio_write(vio->cui_iocb, vio->cui_iov,
                                       vio->cui_nrsegs, *ppos);
 }
-#endif
 
 static int vvp_io_read_start(const struct lu_env *env,
                              const struct cl_io_slice *ios)
@@ -625,9 +611,7 @@ static int vvp_io_write_start(const struct lu_env *env,
                  * out-of-order writes.
                  */
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
-#ifndef HAVE_FILE_WRITEV
                 cio->cui_iocb->ki_pos = pos;
-#endif
         }
 
         CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);

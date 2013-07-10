@@ -986,9 +986,7 @@ struct vvp_io_args {
 
         union {
                 struct {
-#ifndef HAVE_FILE_WRITEV
                         struct kiocb      *via_iocb;
-#endif
                         struct iovec      *via_iov;
                         unsigned long      via_nrsegs;
                 } normal;

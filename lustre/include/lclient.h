@@ -114,9 +114,7 @@ struct ccc_io {
          * File descriptor against which IO is done.
          */
         struct ll_file_data *cui_fd;
-#ifndef HAVE_FILE_WRITEV
         struct kiocb *cui_iocb;
-#endif
 };
 
 /**
