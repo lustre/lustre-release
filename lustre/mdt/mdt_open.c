@@ -58,18 +58,20 @@ static struct portals_handle_ops mfd_handle_ops = {
 
 /* Create a new mdt_file_data struct, initialize it,
  * and insert it to global hash table */
-struct mdt_file_data *mdt_mfd_new(void)
+struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 {
-        struct mdt_file_data *mfd;
-        ENTRY;
+	struct mdt_file_data *mfd;
+	ENTRY;
 
-        OBD_ALLOC_PTR(mfd);
-        if (mfd != NULL) {
-                CFS_INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
-                CFS_INIT_LIST_HEAD(&mfd->mfd_list);
+	OBD_ALLOC_PTR(mfd);
+	if (mfd != NULL) {
+		CFS_INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
+		mfd->mfd_handle.h_owner = med;
+		CFS_INIT_LIST_HEAD(&mfd->mfd_list);
 		class_handle_hash(&mfd->mfd_handle, &mfd_handle_ops);
-        }
-        RETURN(mfd);
+	}
+
+	RETURN(mfd);
 }
 
 /*
@@ -77,25 +79,25 @@ struct mdt_file_data *mdt_mfd_new(void)
  * In case of replay the handle is obsoleted
  * but mfd can be found in mfd list by that handle
  */
-struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *info,
-                                     const struct lustre_handle *handle)
+struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
+				     const struct lustre_handle *handle,
+				     bool is_replay)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct mdt_file_data  *mfd;
-        ENTRY;
+	struct mdt_file_data   *mfd;
+	ENTRY;
 
-        LASSERT(handle != NULL);
-        mfd = class_handle2object(handle->cookie);
-        /* during dw/setattr replay the mfd can be found by old handle */
-        if (mfd == NULL && req_is_replay(req)) {
-                struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
-                cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
-                        if (mfd->mfd_old_handle.cookie == handle->cookie)
-                                RETURN (mfd);
-                }
-                mfd = NULL;
-        }
-        RETURN (mfd);
+	LASSERT(handle != NULL);
+	mfd = class_handle2object(handle->cookie, med);
+	/* during dw/setattr replay the mfd can be found by old handle */
+	if (mfd == NULL && is_replay) {
+		cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+			if (mfd->mfd_old_handle.cookie == handle->cookie)
+				RETURN(mfd);
+		}
+		mfd = NULL;
+	}
+
+	RETURN(mfd);
 }
 
 /* free mfd */
@@ -725,76 +727,77 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         if (rc)
                 GOTO(err_out, rc);
 
-        mfd = mdt_mfd_new();
-        if (mfd != NULL) {
-                /*
-                 * Keep a reference on this object for this open, and is
-                 * released by mdt_mfd_close().
-                 */
-                mdt_object_get(info->mti_env, o);
+	mfd = mdt_mfd_new(med);
+	if (mfd == NULL)
+		GOTO(err_out, rc = -ENOMEM);
 
-                /*
-                 * @flags is always not zero. At least it should be FMODE_READ,
-                 * FMODE_WRITE or MDS_FMODE_EXEC.
-                 */
-                LASSERT(flags != 0);
+	/*
+	 * Keep a reference on this object for this open, and is
+	 * released by mdt_mfd_close().
+	 */
+	mdt_object_get(info->mti_env, o);
 
-                /* Open handling. */
-                mdt_mfd_set_mode(mfd, flags);
+	/*
+	 * @flags is always not zero. At least it should be FMODE_READ,
+	 * FMODE_WRITE or MDS_FMODE_EXEC.
+	 */
+	LASSERT(flags != 0);
 
-                mfd->mfd_object = o;
-                mfd->mfd_xid = req->rq_xid;
+	/* Open handling. */
+	mdt_mfd_set_mode(mfd, flags);
 
-                /* replay handle */
-                if (req_is_replay(req)) {
-                        struct mdt_file_data *old_mfd;
-                        /* Check wheather old cookie already exist in
-                         * the list, becasue when do recovery, client
-                         * might be disconnected from server, and
-                         * restart replay, so there maybe some orphan
-                         * mfd here, we should remove them */
-                        LASSERT(info->mti_rr.rr_handle != NULL);
-                        old_mfd = mdt_handle2mfd(info, info->mti_rr.rr_handle);
-                        if (old_mfd) {
-                                CDEBUG(D_HA, "del orph mfd %p fid=("DFID") "
-                                       "cookie=" LPX64"\n", mfd,
-                                       PFID(mdt_object_fid(mfd->mfd_object)),
-                                       info->mti_rr.rr_handle->cookie);
-				spin_lock(&med->med_open_lock);
-				class_handle_unhash(&old_mfd->mfd_handle);
-				cfs_list_del_init(&old_mfd->mfd_list);
-				spin_unlock(&med->med_open_lock);
-                                /* no attr update for that close */
-                                la->la_valid = 0;
-                                ma->ma_valid |= MA_FLAGS;
-                                ma->ma_attr_flags |= MDS_RECOV_OPEN;
-                                mdt_mfd_close(info, old_mfd);
-                                ma->ma_attr_flags &= ~MDS_RECOV_OPEN;
-                                ma->ma_valid &= ~MA_FLAGS;
-                        }
-                        CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
-                               info->mti_rr.rr_handle->cookie);
-                        mfd->mfd_old_handle.cookie =
-                                                info->mti_rr.rr_handle->cookie;
-                }
-                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+	mfd->mfd_object = o;
+	mfd->mfd_xid = req->rq_xid;
 
-                if (req->rq_export->exp_disconnected) {
+	/* replay handle */
+	if (req_is_replay(req)) {
+		struct mdt_file_data *old_mfd;
+		/* Check wheather old cookie already exist in
+		 * the list, becasue when do recovery, client
+		 * might be disconnected from server, and
+		 * restart replay, so there maybe some orphan
+		 * mfd here, we should remove them */
+		LASSERT(info->mti_rr.rr_handle != NULL);
+		old_mfd = mdt_handle2mfd(med, info->mti_rr.rr_handle, true);
+		if (old_mfd != NULL) {
+			CDEBUG(D_HA, "delete orphan mfd = %p, fid = "DFID", "
+			       "cookie = "LPX64"\n", mfd,
+			       PFID(mdt_object_fid(mfd->mfd_object)),
+			       info->mti_rr.rr_handle->cookie);
 			spin_lock(&med->med_open_lock);
-			class_handle_unhash(&mfd->mfd_handle);
-			cfs_list_del_init(&mfd->mfd_list);
+			class_handle_unhash(&old_mfd->mfd_handle);
+			cfs_list_del_init(&old_mfd->mfd_list);
 			spin_unlock(&med->med_open_lock);
-			mdt_mfd_close(info, mfd);
-		} else {
-			spin_lock(&med->med_open_lock);
-			cfs_list_add(&mfd->mfd_list, &med->med_open_head);
-			spin_unlock(&med->med_open_lock);
-                }
+			/* no attr update for that close */
+			la->la_valid = 0;
+			ma->ma_valid |= MA_FLAGS;
+			ma->ma_attr_flags |= MDS_RECOV_OPEN;
+			mdt_mfd_close(info, old_mfd);
+			ma->ma_attr_flags &= ~MDS_RECOV_OPEN;
+			ma->ma_valid &= ~MA_FLAGS;
+		}
 
-                mdt_empty_transno(info, rc);
-        } else {
-                GOTO(err_out, rc = -ENOMEM);
-        }
+		CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
+		       info->mti_rr.rr_handle->cookie);
+
+		mfd->mfd_old_handle.cookie = info->mti_rr.rr_handle->cookie;
+	}
+
+	repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+
+	if (req->rq_export->exp_disconnected) {
+		spin_lock(&med->med_open_lock);
+		class_handle_unhash(&mfd->mfd_handle);
+		cfs_list_del_init(&mfd->mfd_list);
+		spin_unlock(&med->med_open_lock);
+		mdt_mfd_close(info, mfd);
+	} else {
+		spin_lock(&med->med_open_lock);
+		cfs_list_add(&mfd->mfd_list, &med->med_open_head);
+		spin_unlock(&med->med_open_lock);
+	}
+
+	mdt_empty_transno(info, rc);
 
         RETURN(rc);
 
@@ -1881,7 +1884,8 @@ int mdt_close(struct mdt_thread_info *info)
 
         med = &req->rq_export->exp_mdt_data;
 	spin_lock(&med->med_open_lock);
-	mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
+	mfd = mdt_handle2mfd(med, &info->mti_ioepoch->handle,
+			     req_is_replay(req));
 	if (mdt_mfd_closed(mfd)) {
 		spin_unlock(&med->med_open_lock);
 		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
@@ -1956,7 +1960,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
         med = &info->mti_exp->exp_mdt_data;
 	spin_lock(&med->med_open_lock);
-	mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
+	mfd = mdt_handle2mfd(med, &info->mti_ioepoch->handle,
+			     req_is_replay(req));
 	if (mfd == NULL) {
 		spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for done write: fid = "DFID

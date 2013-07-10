@@ -79,7 +79,8 @@ struct portals_handle_ops {
 struct portals_handle {
 	cfs_list_t			h_link;
 	__u64				h_cookie;
-	struct portals_handle_ops	*h_ops;
+	const void		       *h_owner;
+	struct portals_handle_ops      *h_ops;
 
 	/* newly added fields to handle the RCU issue. -jxiong */
 	cfs_rcu_head_t			h_rcu;
@@ -96,7 +97,7 @@ void class_handle_hash(struct portals_handle *,
 		       struct portals_handle_ops *ops);
 void class_handle_unhash(struct portals_handle *);
 void class_handle_hash_back(struct portals_handle *);
-void *class_handle2object(__u64 cookie);
+void *class_handle2object(__u64 cookie, const void *owner);
 void class_handle_free_cb(cfs_rcu_head_t *);
 int class_handle_init(void);
 void class_handle_cleanup(void);

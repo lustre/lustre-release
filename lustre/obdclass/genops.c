@@ -716,8 +716,8 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
         }
 
         CDEBUG(D_INFO, "looking for export cookie "LPX64"\n", conn->cookie);
-        export = class_handle2object(conn->cookie);
-        RETURN(export);
+	export = class_handle2object(conn->cookie, NULL);
+	RETURN(export);
 }
 EXPORT_SYMBOL(class_conn2export);
 
