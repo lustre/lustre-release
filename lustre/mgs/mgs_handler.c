@@ -1197,7 +1197,7 @@ err_ops:
 	obd_disconnect(mgs->mgs_bottom_exp);
 err_lmi:
 	if (lmi)
-		server_put_mount(obd->obd_name, lmi->lmi_mnt);
+		server_put_mount(lustre_cfg_string(lcfg, 0), lmi->lmi_mnt);
 	RETURN(rc);
 }
 
