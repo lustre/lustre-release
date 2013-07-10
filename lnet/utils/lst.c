@@ -927,6 +927,54 @@ lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
 }
 
 int
+lst_del_group_ioctl(char *name)
+{
+	lstio_group_del_args_t args = {0};
+
+	args.lstio_grp_key   = session_key;
+	args.lstio_grp_nmlen = strlen(name);
+	args.lstio_grp_namep = name;
+
+	return lst_ioctl(LSTIO_GROUP_DEL, &args, sizeof(args));
+}
+
+int
+lst_del_group(char *grp_name)
+{
+	int	rc;
+
+	rc = lst_del_group_ioctl(grp_name);
+	if (rc == 0) {
+		fprintf(stdout, "Group is deleted\n");
+		return 0;
+	}
+
+	if (rc == -1) {
+		lst_print_error("group", "Failed to delete group: %s\n",
+				strerror(errno));
+		return rc;
+	}
+
+	fprintf(stderr, "Group is deleted with some errors\n");
+
+	if (trans_stat.trs_rpc_errno != 0) {
+		fprintf(stderr,
+			"[RPC] Failed to send %d end session RPCs: %s\n",
+			lstcon_rpc_stat_failure(&trans_stat, 0),
+			strerror(trans_stat.trs_rpc_errno));
+	}
+
+	if (trans_stat.trs_fwk_errno != 0) {
+		fprintf(stderr,
+			"[FWK] Failed to end session on %d nodes: %s\n",
+		lstcon_sesop_stat_failure(&trans_stat, 0),
+		strerror(trans_stat.trs_fwk_errno));
+	}
+
+	return -1;
+}
+
+int
 lst_add_group_ioctl (char *name)
 {
         lstio_group_add_args_t args = {0};
@@ -941,57 +989,60 @@ lst_add_group_ioctl (char *name)
 int
 jt_lst_add_group(int argc, char **argv)
 {
-        cfs_list_t         head;
-        lnet_process_id_t *ids;
-        char              *name;
+	cfs_list_t	   head;
+	lnet_process_id_t *ids;
+	char		  *name;
 	unsigned	   feats = session_features;
-        int                count;
-        int                rc;
-        int                i;
+	int		   count;
+	int		   rc;
+	int		   i;
+	bool		   nodes_added = false;
 
-        if (session_key == 0) {
-                fprintf(stderr,
-                        "Can't find env LST_SESSION or value is not valid\n");
-                return -1;
-        }
+	if (session_key == 0) {
+		fprintf(stderr,
+			"Can't find env LST_SESSION or value is not valid\n");
+		return -1;
+	}
 
-        if (argc < 3) {
-                lst_print_usage(argv[0]);
-                return -1;
-        }
+	if (argc < 3) {
+		lst_print_usage(argv[0]);
+		return -1;
+	}
 
-        name = argv[1];
-        if (strlen(name) >= LST_NAME_SIZE) {
-                fprintf(stderr, "Name length is limited to %d\n",
-                        LST_NAME_SIZE - 1);
-                return -1;
-        }
+	name = argv[1];
+	if (strlen(name) >= LST_NAME_SIZE) {
+		fprintf(stderr, "Name length is limited to %d\n",
+			LST_NAME_SIZE - 1);
+		return -1;
+	}
 
-        rc = lst_add_group_ioctl(name);
-        if (rc != 0) {
-                lst_print_error("group", "Failed to add group %s: %s\n",
-                                name, strerror(errno));
-                return -1;
-        }
+	rc = lst_add_group_ioctl(name);
+	if (rc != 0) {
+		lst_print_error("group", "Failed to add group %s: %s\n",
+				name, strerror(errno));
+		return -1;
+	}
 
-        CFS_INIT_LIST_HEAD(&head);
+	CFS_INIT_LIST_HEAD(&head);
 
-        for (i = 2; i < argc; i++) {
-                /* parse address list */
-                rc = lst_parse_nids(argv[i], &count, &ids);
-                if (rc < 0) {
-                        fprintf(stderr, "Ignore invalid id list %s\n",
-                                argv[i]);
-                        continue;
-                }
+	for (i = 2; i < argc; i++) {
+		/* parse address list */
+		rc = lst_parse_nids(argv[i], &count, &ids);
+		if (rc < 0) {
+			fprintf(stderr, "Ignore invalid id list %s\n",
+				argv[i]);
+			continue;
+		}
 
-                if (count == 0)
-                        continue;
+		if (count == 0)
+			continue;
 
-                rc = lst_alloc_rpcent(&head, count, 0);
-                if (rc != 0) {
-                        fprintf(stderr, "Out of memory\n");
-			return -1;
+		rc = lst_alloc_rpcent(&head, count, 0);
+		if (rc != 0) {
+			fprintf(stderr, "Out of memory\n");
+			free(ids);
+			rc = -1;
+			goto failed;
 		}
 
 		rc = lst_add_nodes_ioctl(name, count, ids, &feats, &head);
@@ -1002,6 +1053,8 @@ jt_lst_add_group(int argc, char **argv)
 			goto failed;
 
 		fprintf(stdout, "%s are added to session\n", argv[i]);
+
+		nodes_added = true;
 
 		if ((feats & session_features) != session_features) {
 			fprintf(stdout,
@@ -1014,7 +1067,24 @@ jt_lst_add_group(int argc, char **argv)
 		lst_free_rpcent(&head);
 	}
 
-	return 0;
+	if (!nodes_added) {
+		/*
+		 * The selftest kernel module expects that a group should
+		 * have at least one node, since it doesn't make sense for
+		 * an empty group to be added to a test.
+		 */
+		fprintf(stderr,
+			"No nodes added successfully, deleting group %s\n",
+			name);
+		rc = lst_del_group(name);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Failed to delete group %s."
+				"  Group is empty.\n", name);
+		}
+	}
+
+	return rc;
 
 failed:
 	if (rc == -1) {
@@ -1034,19 +1104,18 @@ failed:
 
 	lst_free_rpcent(&head);
 
+	if (!nodes_added) {
+		fprintf(stderr,
+			"No nodes added successfully, deleting group %s\n",
+			name);
+		if (lst_del_group(name) != 0) {
+			fprintf(stderr,
+				"Failed to delete group %s."
+				"  Group is empty.\n", name);
+		}
+	}
+
 	return rc;
-}
-
-int
-lst_del_group_ioctl (char *name)
-{
-        lstio_group_del_args_t args = {0};
-
-        args.lstio_grp_key   = session_key;
-        args.lstio_grp_nmlen = strlen(name);
-        args.lstio_grp_namep = name;
-
-        return lst_ioctl(LSTIO_GROUP_DEL, &args, sizeof(args));
 }
 
 int
@@ -1065,34 +1134,9 @@ jt_lst_del_group(int argc, char **argv)
                 return -1;
         }
 
-        rc = lst_del_group_ioctl(argv[1]);
-        if (rc == 0) {
-                fprintf(stdout, "Group is deleted\n");
-                return 0;
-        }
+	rc = lst_del_group(argv[1]);
 
-        if (rc == -1) {
-                lst_print_error("group", "Failed to delete group: %s\n",
-                                strerror(errno));
-                return rc;
-        }
-
-        fprintf(stderr, "Group is deleted with some errors\n");
-
-        if (trans_stat.trs_rpc_errno != 0) {
-                fprintf(stderr, "[RPC] Failed to send %d end session RPCs: %s\n",
-                        lstcon_rpc_stat_failure(&trans_stat, 0),
-                        strerror(trans_stat.trs_rpc_errno));
-        }
-
-        if (trans_stat.trs_fwk_errno != 0) {
-                fprintf(stderr,
-                        "[FWK] Failed to end session on %d nodes: %s\n",
-                        lstcon_sesop_stat_failure(&trans_stat, 0),
-                        strerror(trans_stat.trs_fwk_errno));
-        }
-
-        return -1;
+	return rc;
 }
 
 int

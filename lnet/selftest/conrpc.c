@@ -287,13 +287,13 @@ lstcon_rpc_trans_addreq(lstcon_rpc_trans_t *trans, lstcon_rpc_t *crpc)
 void
 lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error)
 {
-        srpc_client_rpc_t *rpc;
-        lstcon_rpc_t      *crpc;
-        lstcon_node_t     *nd;
+	srpc_client_rpc_t *rpc;
+	lstcon_rpc_t	  *crpc;
+	lstcon_node_t	  *nd;
 
-        cfs_list_for_each_entry_typed (crpc, &trans->tas_rpcs_list,
-                                       lstcon_rpc_t, crp_link) {
-                rpc = crpc->crp_rpc;
+	cfs_list_for_each_entry_typed(crpc, &trans->tas_rpcs_list,
+				      lstcon_rpc_t, crp_link) {
+		rpc = crpc->crp_rpc;
 
 		spin_lock(&rpc->crpc_lock);
 
@@ -312,18 +312,18 @@ lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error)
 
 		spin_unlock(&rpc->crpc_lock);
 
-                sfw_abort_rpc(rpc);
+		sfw_abort_rpc(rpc);
 
-                if  (error != ETIMEDOUT)
-                        continue;
+		if (error != -ETIMEDOUT)
+			continue;
 
-                nd = crpc->crp_node;
-                if (cfs_time_after(nd->nd_stamp, crpc->crp_stamp))
-                        continue;
+		nd = crpc->crp_node;
+		if (cfs_time_after(nd->nd_stamp, crpc->crp_stamp))
+			continue;
 
-                nd->nd_stamp = crpc->crp_stamp;
-                nd->nd_state = LST_NODE_DOWN;
-        }
+		nd->nd_stamp = crpc->crp_stamp;
+		nd->nd_state = LST_NODE_DOWN;
+	}
 }
 
 static int
