@@ -51,10 +51,6 @@
 #include <linux/topology.h>
 #include <linux/version.h>
 
-#ifndef HAVE_CPUMASK_SIZE
-#define cpumask_size()		sizeof(cpumask_t)
-#endif
-
 #ifdef CONFIG_SMP
 
 #define HAVE_LIBCFS_CPT
@@ -123,11 +119,7 @@ int cfs_cpu_ht_nsiblings(int cpu);
  * #define cfs_cpu_mask_for_each(i, mask)      for_each_cpu_mask(i, mask)
  * #define cfs_cpu_mask_bind(t, mask)          set_cpus_allowed(t, mask)
  *
- * #ifdef HAVE_CPUMASK_COPY
  * #define cfs_cpu_mask_copy(dst, src)         cpumask_copy(dst, src)
- * #else
- * #define cfs_cpu_mask_copy(dst, src)         memcpy(dst, src, sizeof(*src))
- * #endif
  *
  * static inline void
  * cfs_cpu_mask_of_online(cfs_cpumask_t *mask)
@@ -150,13 +142,7 @@ int cfs_cpu_ht_nsiblings(int cpu);
  *
  * static inline void cfs_node_to_cpumask(int node, cfs_cpumask_t *mask)
  * {
- * #if defined(HAVE_NODE_TO_CPUMASK)
- *      *mask = node_to_cpumask(node);
- * #elif defined(HAVE_CPUMASK_OF_NODE)
  *      cfs_cpu_mask_copy(mask, cpumask_of_node(node));
- * #else
- * # error "Needs node_to_cpumask or cpumask_of_node"
- * #endif
  * }
  *
  * #define cfs_node_mask_set(i, mask)          node_set(i, mask)
