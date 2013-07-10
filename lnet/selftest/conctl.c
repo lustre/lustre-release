@@ -715,25 +715,25 @@ lst_stat_query_ioctl(lstio_stat_args_t *args)
 
 int lst_test_add_ioctl(lstio_test_args_t *args)
 {
-        char           *name;
-        char           *srcgrp = NULL;
-        char           *dstgrp = NULL;
-        void           *param = NULL;
-        int             ret = 0;
-        int             rc = -ENOMEM;
+	char		*batch_name;
+	char		*src_name = NULL;
+	char		*dst_name = NULL;
+	void		*param = NULL;
+	int		ret = 0;
+	int		rc = -ENOMEM;
 
-        if (args->lstio_tes_resultp == NULL ||
-            args->lstio_tes_retp == NULL ||
-            args->lstio_tes_bat_name == NULL || /* no specified batch */
-            args->lstio_tes_bat_nmlen <= 0 ||
-            args->lstio_tes_bat_nmlen > LST_NAME_SIZE ||
-            args->lstio_tes_sgrp_name == NULL || /* no source group */
-            args->lstio_tes_sgrp_nmlen <= 0 ||
-            args->lstio_tes_sgrp_nmlen > LST_NAME_SIZE ||
-            args->lstio_tes_dgrp_name == NULL || /* no target group */
-            args->lstio_tes_dgrp_nmlen <= 0 ||
-            args->lstio_tes_dgrp_nmlen > LST_NAME_SIZE)
-                return -EINVAL;
+	if (args->lstio_tes_resultp == NULL ||
+	    args->lstio_tes_retp == NULL ||
+	    args->lstio_tes_bat_name == NULL || /* no specified batch */
+	    args->lstio_tes_bat_nmlen <= 0 ||
+	    args->lstio_tes_bat_nmlen > LST_NAME_SIZE ||
+	    args->lstio_tes_sgrp_name == NULL || /* no source group */
+	    args->lstio_tes_sgrp_nmlen <= 0 ||
+	    args->lstio_tes_sgrp_nmlen > LST_NAME_SIZE ||
+	    args->lstio_tes_dgrp_name == NULL || /* no target group */
+	    args->lstio_tes_dgrp_nmlen <= 0 ||
+	    args->lstio_tes_dgrp_nmlen > LST_NAME_SIZE)
+		return -EINVAL;
 
 	if (args->lstio_tes_loop == 0 || /* negative is infinite */
 	    args->lstio_tes_concur <= 0 ||
@@ -748,60 +748,61 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
 	     PAGE_CACHE_SIZE - sizeof(lstcon_test_t)))
                 return -EINVAL;
 
-        LIBCFS_ALLOC(name, args->lstio_tes_bat_nmlen + 1);
-        if (name == NULL)
-                return rc;
+	LIBCFS_ALLOC(batch_name, args->lstio_tes_bat_nmlen + 1);
+	if (batch_name == NULL)
+		return rc;
 
-        LIBCFS_ALLOC(srcgrp, args->lstio_tes_sgrp_nmlen + 1);
-        if (srcgrp == NULL) 
-                goto out;
+	LIBCFS_ALLOC(src_name, args->lstio_tes_sgrp_nmlen + 1);
+	if (src_name == NULL)
+		goto out;
 
-        LIBCFS_ALLOC(dstgrp, args->lstio_tes_dgrp_nmlen + 1);
-	 if (dstgrp == NULL)
-                goto out;
+	LIBCFS_ALLOC(dst_name, args->lstio_tes_dgrp_nmlen + 1);
+	 if (dst_name == NULL)
+		goto out;
 
-        if (args->lstio_tes_param != NULL) {
-                LIBCFS_ALLOC(param, args->lstio_tes_param_len);
-                if (param == NULL) 
-                        goto out;
-        }
+	if (args->lstio_tes_param != NULL) {
+		LIBCFS_ALLOC(param, args->lstio_tes_param_len);
+		if (param == NULL)
+			goto out;
+	}
 
 	rc = -EFAULT;
-	if (copy_from_user(name, args->lstio_tes_bat_name,
+	if (copy_from_user(batch_name, args->lstio_tes_bat_name,
 			   args->lstio_tes_bat_nmlen) ||
-	    copy_from_user(srcgrp, args->lstio_tes_sgrp_name,
+	    copy_from_user(src_name, args->lstio_tes_sgrp_name,
 			   args->lstio_tes_sgrp_nmlen) ||
-	    copy_from_user(dstgrp, args->lstio_tes_dgrp_name,
+	    copy_from_user(dst_name, args->lstio_tes_dgrp_name,
 			   args->lstio_tes_dgrp_nmlen) ||
 	    copy_from_user(param, args->lstio_tes_param,
 			      args->lstio_tes_param_len))
 		goto out;
 
-        rc = lstcon_test_add(name,
-                            args->lstio_tes_type,
-                            args->lstio_tes_loop,
-                            args->lstio_tes_concur,
-                            args->lstio_tes_dist, args->lstio_tes_span,
-                            srcgrp, dstgrp, param, args->lstio_tes_param_len,
-                            &ret, args->lstio_tes_resultp);
+	rc = lstcon_test_add(batch_name,
+			    args->lstio_tes_type,
+			    args->lstio_tes_loop,
+			    args->lstio_tes_concur,
+			    args->lstio_tes_dist, args->lstio_tes_span,
+			    src_name, dst_name, param,
+			    args->lstio_tes_param_len,
+			    &ret, args->lstio_tes_resultp);
 
         if (ret != 0)
 		rc = (copy_to_user(args->lstio_tes_retp, &ret,
                                        sizeof(ret))) ? -EFAULT : 0;
 out:
-        if (name != NULL)
-                LIBCFS_FREE(name, args->lstio_tes_bat_nmlen + 1);
+	if (batch_name != NULL)
+		LIBCFS_FREE(batch_name, args->lstio_tes_bat_nmlen + 1);
 
-        if (srcgrp != NULL)
-                LIBCFS_FREE(srcgrp, args->lstio_tes_sgrp_nmlen + 1);
+	if (src_name != NULL)
+		LIBCFS_FREE(src_name, args->lstio_tes_sgrp_nmlen + 1);
 
-        if (dstgrp != NULL)
-                LIBCFS_FREE(dstgrp, args->lstio_tes_dgrp_nmlen + 1);
+	if (dst_name != NULL)
+		LIBCFS_FREE(dst_name, args->lstio_tes_dgrp_nmlen + 1);
 
-        if (param != NULL)
-                LIBCFS_FREE(param, args->lstio_tes_param_len);
+	if (param != NULL)
+		LIBCFS_FREE(param, args->lstio_tes_param_len);
 
-        return rc;
+	return rc;
 }
 
 int

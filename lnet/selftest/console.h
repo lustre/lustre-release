@@ -225,10 +225,11 @@ extern int lstcon_group_stat(char *grp_name, int timeout,
                              cfs_list_t *result_up);
 extern int lstcon_nodes_stat(int count, lnet_process_id_t *ids_up,
                              int timeout, cfs_list_t *result_up);
-extern int lstcon_test_add(char *name, int type, int loop, int concur,
-                           int dist, int span, char *src_name, char * dst_name,
-                           void *param, int paramlen, int *retp,
-                           cfs_list_t *result_up);
+extern int lstcon_test_add(char *batch_name, int type, int loop,
+			   int concur, int dist, int span,
+			   char *src_name, char *dst_name,
+			   void *param, int paramlen, int *retp,
+			   cfs_list_t *result_up);
 #endif
 
 #endif

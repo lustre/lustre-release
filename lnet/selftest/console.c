@@ -269,21 +269,21 @@ lstcon_group_decref(lstcon_group_t *grp)
 }
 
 static int
-lstcon_group_find(char *name, lstcon_group_t **grpp)
+lstcon_group_find(const char *name, lstcon_group_t **grpp)
 {
-        lstcon_group_t   *grp;
+	lstcon_group_t	 *grp;
 
-        cfs_list_for_each_entry_typed(grp, &console_session.ses_grp_list,
-                                      lstcon_group_t, grp_link) {
-                if (strncmp(grp->grp_name, name, LST_NAME_SIZE) != 0)
-                        continue;
+	cfs_list_for_each_entry_typed(grp, &console_session.ses_grp_list,
+				      lstcon_group_t, grp_link) {
+		if (strncmp(grp->grp_name, name, LST_NAME_SIZE) != 0)
+			continue;
 
-                lstcon_group_addref(grp);  /* +1 ref for caller */
-                *grpp = grp;
-                return 0;
-        }
+		lstcon_group_addref(grp);  /* +1 ref for caller */
+		*grpp = grp;
+		return 0;
+	}
 
-        return -ENOENT;
+	return -ENOENT;
 }
 
 static void
@@ -297,7 +297,7 @@ lstcon_group_ndlink_find(lstcon_group_t *grp, lnet_process_id_t id,
                          lstcon_ndlink_t **ndlpp, int create)
 {
         int     rc;
-        
+
         rc = lstcon_ndlink_find(&grp->grp_ndl_hash[0], id, ndlpp, create);
         if (rc != 0)
                 return rc;
@@ -837,20 +837,20 @@ lstcon_group_info(char *name, lstcon_ndlist_ent_t *gents_p,
         return 0;
 }
 
-int
-lstcon_batch_find(char *name, lstcon_batch_t **batpp)
+static int
+lstcon_batch_find(const char *name, lstcon_batch_t **batpp)
 {
-        lstcon_batch_t   *bat;
+	lstcon_batch_t	 *bat;
 
-        cfs_list_for_each_entry_typed(bat, &console_session.ses_bat_list,
-                                      lstcon_batch_t, bat_link) {
-                if (strncmp(bat->bat_name, name, LST_NAME_SIZE) == 0) {
-                        *batpp = bat;
-                        return 0;
-                }
-        }
+	cfs_list_for_each_entry_typed(bat, &console_session.ses_bat_list,
+				      lstcon_batch_t, bat_link) {
+		if (strncmp(bat->bat_name, name, LST_NAME_SIZE) == 0) {
+			*batpp = bat;
+			return 0;
+		}
+	}
 
-        return -ENOENT;
+	return -ENOENT;
 }
 
 int
@@ -1247,100 +1247,139 @@ again:
         goto again;
 }
 
-int
-lstcon_test_add(char *name, int type, int loop, int concur,
-                int dist, int span, char *src_name, char * dst_name,
-                void *param, int paramlen, int *retp,
-                cfs_list_t *result_up)
+static int
+lstcon_verify_batch(const char *name, lstcon_batch_t **batch)
 {
-        lstcon_group_t  *src_grp = NULL;
-        lstcon_group_t  *dst_grp = NULL;
-        lstcon_test_t   *test    = NULL;
-        lstcon_batch_t  *batch;
-        int              rc;
+	int rc;
 
-        rc = lstcon_batch_find(name, &batch);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find batch %s\n", name);
-                return rc;
-        }
+	rc = lstcon_batch_find(name, batch);
+	if (rc != 0) {
+		CDEBUG(D_NET, "Can't find batch %s\n", name);
+		return rc;
+	}
 
-        if (batch->bat_state != LST_BATCH_IDLE) {
-                CDEBUG(D_NET, "Can't change running batch %s\n", name);
-                return rc;
-        }
+	if ((*batch)->bat_state != LST_BATCH_IDLE) {
+		CDEBUG(D_NET, "Can't change running batch %s\n", name);
+		return -EINVAL;
+	}
 
-        rc = lstcon_group_find(src_name, &src_grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", src_name);
-                goto out;
-        }
+	return 0;
+}
 
-        rc = lstcon_group_find(dst_name, &dst_grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", dst_name);
-                goto out;
-        }
+static int
+lstcon_verify_group(const char *name, lstcon_group_t **grp)
+{
+	int			rc;
+	lstcon_ndlink_t		*ndl;
 
-        if (dst_grp->grp_userland)
-                *retp = 1;
+	rc = lstcon_group_find(name, grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "can't find group %s\n", name);
+		return rc;
+	}
 
-        LIBCFS_ALLOC(test, offsetof(lstcon_test_t, tes_param[paramlen]));
-        if (!test) {
-                CERROR("Can't allocate test descriptor\n");
-                rc = -ENOMEM;
+	cfs_list_for_each_entry_typed(ndl, &(*grp)->grp_ndl_list,
+				      lstcon_ndlink_t, ndl_link) {
+		if (ndl->ndl_node->nd_state == LST_NODE_ACTIVE) {
+			return 0;
+		}
+	}
 
-                goto out;
-        }
+	CDEBUG(D_NET, "Group %s has no ACTIVE nodes\n", name);
 
-        memset(test, 0, offsetof(lstcon_test_t, tes_param[paramlen]));
-        test->tes_hdr.tsb_id    = batch->bat_hdr.tsb_id;
-        test->tes_batch         = batch;
-        test->tes_type          = type;
-        test->tes_oneside       = 0; /* TODO */
-        test->tes_loop          = loop;
-        test->tes_concur        = concur;
-        test->tes_stop_onerr    = 1; /* TODO */
-        test->tes_span          = span;
-        test->tes_dist          = dist;
-        test->tes_cliidx        = 0; /* just used for creating RPC */
-        test->tes_src_grp       = src_grp;
-        test->tes_dst_grp       = dst_grp;
-        CFS_INIT_LIST_HEAD(&test->tes_trans_list);
+	return -EINVAL;
+}
 
-        if (param != NULL) {
-                test->tes_paramlen = paramlen;
-                memcpy(&test->tes_param[0], param, paramlen);
-        }
+int
+lstcon_test_add(char *batch_name, int type, int loop,
+		int concur, int dist, int span,
+		char *src_name, char *dst_name,
+		void *param, int paramlen, int *retp,
+		cfs_list_t *result_up)
+{
+	lstcon_test_t	 *test	 = NULL;
+	int		 rc;
+	lstcon_group_t	 *src_grp = NULL;
+	lstcon_group_t	 *dst_grp = NULL;
+	lstcon_batch_t	 *batch = NULL;
 
-        rc = lstcon_test_nodes_add(test, result_up);
+	/*
+	 * verify that a batch of the given name exists, and the groups
+	 * that will be part of the batch exist and have at least one
+	 * active node
+	 */
+	rc = lstcon_verify_batch(batch_name, &batch);
+	if (rc != 0)
+		goto out;
 
-        if (rc != 0)
-                goto out;
+	rc = lstcon_verify_group(src_name, &src_grp);
+	if (rc != 0)
+		goto out;
 
-        if (lstcon_trans_stat()->trs_rpc_errno != 0 ||
-            lstcon_trans_stat()->trs_fwk_errno != 0)
-                CDEBUG(D_NET, "Failed to add test %d to batch %s\n", type, name);
+	rc = lstcon_verify_group(dst_name, &dst_grp);
+	if (rc != 0)
+		goto out;
 
-        /* add to test list anyway, so user can check what's going on */
-        cfs_list_add_tail(&test->tes_link, &batch->bat_test_list);
+	if (dst_grp->grp_userland)
+		*retp = 1;
 
-        batch->bat_ntest ++;
-        test->tes_hdr.tsb_index = batch->bat_ntest;
+	LIBCFS_ALLOC(test, offsetof(lstcon_test_t, tes_param[paramlen]));
+	if (!test) {
+		CERROR("Can't allocate test descriptor\n");
+		rc = -ENOMEM;
 
-        /*  hold groups so nobody can change them */
-        return rc;
+		goto out;
+	}
+
+	memset(test, 0, offsetof(lstcon_test_t, tes_param[paramlen]));
+	test->tes_hdr.tsb_id	= batch->bat_hdr.tsb_id;
+	test->tes_batch		= batch;
+	test->tes_type		= type;
+	test->tes_oneside	= 0; /* TODO */
+	test->tes_loop		= loop;
+	test->tes_concur	= concur;
+	test->tes_stop_onerr	= 1; /* TODO */
+	test->tes_span		= span;
+	test->tes_dist		= dist;
+	test->tes_cliidx	= 0; /* just used for creating RPC */
+	test->tes_src_grp	= src_grp;
+	test->tes_dst_grp	= dst_grp;
+	CFS_INIT_LIST_HEAD(&test->tes_trans_list);
+
+	if (param != NULL) {
+		test->tes_paramlen = paramlen;
+		memcpy(&test->tes_param[0], param, paramlen);
+	}
+
+	rc = lstcon_test_nodes_add(test, result_up);
+
+	if (rc != 0)
+		goto out;
+
+	if (lstcon_trans_stat()->trs_rpc_errno != 0 ||
+	    lstcon_trans_stat()->trs_fwk_errno != 0)
+		CDEBUG(D_NET, "Failed to add test %d to batch %s\n", type,
+		       batch_name);
+
+	/* add to test list anyway, so user can check what's going on */
+	cfs_list_add_tail(&test->tes_link, &batch->bat_test_list);
+
+	batch->bat_ntest++;
+	test->tes_hdr.tsb_index = batch->bat_ntest;
+
+	/*  hold groups so nobody can change them */
+	return rc;
 out:
-        if (test != NULL)
-                LIBCFS_FREE(test, offsetof(lstcon_test_t, tes_param[paramlen]));
+	if (test != NULL)
+		LIBCFS_FREE(test, offsetof(lstcon_test_t, tes_param[paramlen]));
 
-        if (dst_grp != NULL)
-                lstcon_group_put(dst_grp);
+	if (dst_grp != NULL)
+		lstcon_group_put(dst_grp);
 
-        if (src_grp != NULL)
-                lstcon_group_put(src_grp);
+	if (src_grp != NULL)
+		lstcon_group_put(src_grp);
 
-        return rc;
+	return rc;
 }
 
 int
