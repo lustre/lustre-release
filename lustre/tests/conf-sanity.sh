@@ -3241,7 +3241,7 @@ thread_sanity() {
         tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min")
         tmax=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max")
         tstarted=$(do_facet $facet "lctl get_param -n ${paramp}.threads_started")
-        lassert 28 "$msg" '(($tstarted == $tmin && $tstarted == $tmax ))' || return $?
+        lassert 28 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' || return $?
         cleanup
 
         load_modules
@@ -3363,6 +3363,7 @@ run_test 56 "check big indexes"
 test_57a() { # bug 22656
 	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
 	writeconf_or_reformat
+	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --failnode=$NID `ostdevname 1`" || error "tunefs failed"
 	start_mgsmds
 	start_ost && error "OST registration from failnode should fail"
@@ -3373,6 +3374,7 @@ run_test 57a "initial registration from failnode should fail (should return errs
 test_57b() {
 	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
 	writeconf_or_reformat
+	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --servicenode=$NID `ostdevname 1`" || error "tunefs failed"
 	start_mgsmds
 	start_ost || error "OST registration from servicenode should not fail"
@@ -4062,6 +4064,7 @@ run_test 72 "test fast symlink with extents flag enabled"
 
 test_73() { #LU-3006
 	load_modules
+	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@$NETTYPE $(ostdevname 1)" ||
 		error "1st tunefs failed"
 	start_mgsmds || error "start mds failed"
