@@ -717,8 +717,9 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd,
 int mdt_reint_open(struct mdt_thread_info *info,
                    struct mdt_lock_handle *lhc);
 
-struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *,
-                                     const struct lustre_handle *);
+struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
+				     const struct lustre_handle *handle,
+				     bool is_replay);
 
 enum {
         MDT_IOEPOCH_CLOSED  = 0,
@@ -739,7 +740,7 @@ int mdt_object_is_som_enabled(struct mdt_object *mo);
 int mdt_write_get(struct mdt_object *o);
 void mdt_write_put(struct mdt_object *o);
 int mdt_write_read(struct mdt_object *o);
-struct mdt_file_data *mdt_mfd_new(void);
+struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med);
 int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd);
 void mdt_mfd_free(struct mdt_file_data *mfd);
 int mdt_close(struct mdt_thread_info *info);

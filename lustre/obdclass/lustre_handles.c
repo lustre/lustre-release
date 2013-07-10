@@ -164,7 +164,7 @@ void class_handle_hash_back(struct portals_handle *h)
 }
 EXPORT_SYMBOL(class_handle_hash_back);
 
-void *class_handle2object(__u64 cookie)
+void *class_handle2object(__u64 cookie, const void *owner)
 {
         struct handle_bucket *bucket;
         struct portals_handle *h;
@@ -179,7 +179,7 @@ void *class_handle2object(__u64 cookie)
 
         rcu_read_lock();
         list_for_each_entry_rcu(h, &bucket->head, h_link) {
-                if (h->h_cookie != cookie)
+		if (h->h_cookie != cookie || h->h_owner != owner)
                         continue;
 
 		spin_lock(&h->h_lock);

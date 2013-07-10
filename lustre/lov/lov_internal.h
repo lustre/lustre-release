@@ -105,10 +105,10 @@ static inline void lov_put_reqset(struct lov_request_set *set)
 }
 
 static inline struct lov_lock_handles *
-lov_handle2llh(struct lustre_handle *handle)
+lov_handle2llh(const struct lustre_handle *handle)
 {
-        LASSERT(handle != NULL);
-        return(class_handle2object(handle->cookie));
+	LASSERT(handle != NULL);
+	return class_handle2object(handle->cookie, NULL);
 }
 
 static inline void lov_llh_put(struct lov_lock_handles *llh)
