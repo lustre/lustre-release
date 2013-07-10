@@ -202,12 +202,6 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 }
 #endif
 
-#ifdef HAVE_INVALIDATE_BDEV_2ARG
-#define ll_invalidate_bdev(a,b)         invalidate_bdev((a),(b))
-#else
-#define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
-#endif
-
 #ifndef FS_HAS_FIEMAP
 #define FS_HAS_FIEMAP			(0)
 #endif
