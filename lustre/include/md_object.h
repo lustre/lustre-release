@@ -63,30 +63,10 @@ struct md_device_operations;
 struct md_object;
 struct obd_export;
 
-enum {
-        MD_CAPAINFO_MAX = 5
-};
-
-/** there are at most 5 fids in one operation, see rename, NOTE the last one
- * is a temporary one used for is_subdir() */
-struct md_capainfo {
-        __u32                   mc_auth;
-        __u32                   mc_padding;
-        struct lu_fid           mc_fid[MD_CAPAINFO_MAX];
-        struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
-};
-
 struct md_quota {
         struct obd_export       *mq_exp;
 };
 
-/**
- * Implemented in mdd/mdd_handler.c.
- *
- * XXX should be moved into separate .h/.c together with all md security
- * related definitions.
- */
-struct md_capainfo *md_capainfo(const struct lu_env *env);
 struct md_quota *md_quota(const struct lu_env *env);
 
 /** metadata attributes */

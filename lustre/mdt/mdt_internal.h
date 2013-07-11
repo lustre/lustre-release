@@ -1185,45 +1185,9 @@ int mdt_ck_thread_start(struct mdt_device *mdt);
 void mdt_ck_thread_stop(struct mdt_device *mdt);
 void mdt_ck_timer_callback(unsigned long castmeharder);
 int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
-
-static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
-				    const struct lu_fid *fid,
-				    struct lustre_capa *capa)
-{
-	struct md_capainfo *ci;
-
-	LASSERT(offset >= 0 && offset < MD_CAPAINFO_MAX);
-	if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
-	    !(exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA))
-		return;
-
-	ci = md_capainfo(info->mti_env);
-	LASSERT(ci);
-	ci->mc_fid[offset]  = *fid;
-	ci->mc_capa[offset] = capa;
-}
-
-static inline void mdt_dump_capainfo(struct mdt_thread_info *info)
-{
-        struct md_capainfo *ci = md_capainfo(info->mti_env);
-        int i;
-
-        if (!ci)
-                return;
-        for (i = 0; i < MD_CAPAINFO_MAX; i++) {
-                if (!ci->mc_capa[i]) {
-                        CERROR("no capa for index %d "DFID"\n",
-                               i, PFID(&ci->mc_fid[i]));
-                        continue;
-                }
-                if (ci->mc_capa[i] == BYPASS_CAPA) {
-                        CERROR("bypass for index %d "DFID"\n",
-                               i, PFID(&ci->mc_fid[i]));
-                        continue;
-                }
-                DEBUG_CAPA(D_ERROR, ci->mc_capa[i], "index %d", i);
-        }
-}
+void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
+		      const struct lu_fid *fid, struct lustre_capa *capa);
+void mdt_dump_capainfo(struct mdt_thread_info *info);
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {

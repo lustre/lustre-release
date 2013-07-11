@@ -298,13 +298,30 @@ struct filter_capa_key {
         struct lustre_capa_key  k_key;
 };
 
-enum {
-        LC_ID_NONE      = 0,
-        LC_ID_PLAIN     = 1,
-        LC_ID_CONVERT   = 2
+enum lc_auth_id {
+	LC_ID_NONE	= 0,
+	LC_ID_PLAIN	= 1,
+	LC_ID_CONVERT	= 2
 };
 
 #define BYPASS_CAPA (struct lustre_capa *)ERR_PTR(-ENOENT)
+
+enum {
+	LU_CAPAINFO_MAX = 5
+};
+
+/** there are at most 5 FIDs in one operation, see rename,
+ *  NOTE the last one is a temporary one used for is_subdir() */
+struct lu_capainfo {
+	enum lc_auth_id		 lci_auth;
+	__u32			 lci_padding;
+	struct lu_fid		 lci_fid[LU_CAPAINFO_MAX];
+	struct lustre_capa	*lci_capa[LU_CAPAINFO_MAX];
+};
+
+int  lu_capainfo_init(void);
+void lu_capainfo_fini(void);
+struct lu_capainfo *lu_capainfo_get(const struct lu_env *env);
 
 /** @} capa */
 

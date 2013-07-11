@@ -408,3 +408,44 @@ void _debug_capa(struct lustre_capa *c,
         va_end(args);
 }
 EXPORT_SYMBOL(_debug_capa);
+
+/*
+ * context key constructor/destructor:
+ * lu_capainfo_key_init, lu_capainfo_key_fini
+ */
+LU_KEY_INIT_FINI(lu_capainfo, struct lu_capainfo);
+
+struct lu_context_key lu_capainfo_key = {
+	.lct_tags = LCT_SESSION,
+	.lct_init = lu_capainfo_key_init,
+	.lct_fini = lu_capainfo_key_fini
+};
+
+struct lu_capainfo *lu_capainfo_get(const struct lu_env *env)
+{
+	/* NB, in mdt_init0 */
+	if (env->le_ses == NULL)
+		return NULL;
+	return lu_context_key_get(env->le_ses, &lu_capainfo_key);
+}
+EXPORT_SYMBOL(lu_capainfo_get);
+
+/**
+ * Initialization of lu_capainfo_key data.
+ */
+int lu_capainfo_init(void)
+{
+	int rc;
+
+	LU_CONTEXT_KEY_INIT(&lu_capainfo_key);
+	rc = lu_context_key_register(&lu_capainfo_key);
+	return rc;
+}
+
+/**
+ * Dual to lu_capainfo_init().
+ */
+void lu_capainfo_fini(void)
+{
+	lu_context_key_degister(&lu_capainfo_key);
+}

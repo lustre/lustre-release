@@ -565,34 +565,36 @@ static inline struct seq_server_site *mdd_seq_site(struct mdd_device *mdd)
 }
 
 static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,
-                                                  const struct mdd_object *obj)
+						  const struct mdd_object *obj)
 {
-        struct md_capainfo *ci = md_capainfo(env);
-        const struct lu_fid *fid = mdo2fid(obj);
-        int i;
+	struct lu_capainfo *lci = lu_capainfo_get(env);
+	const struct lu_fid *fid = mdo2fid(obj);
+	int i;
 
-        /* NB: in mdt_init0 */
-        if (!ci)
-                return BYPASS_CAPA;
-        for (i = 0; i < MD_CAPAINFO_MAX; i++)
-                if (lu_fid_eq(&ci->mc_fid[i], fid))
-                        return ci->mc_capa[i];
-        return NULL;
+	/* NB: in mdt_init0 */
+	if (lci == NULL)
+		return BYPASS_CAPA;
+
+	for (i = 0; i < LU_CAPAINFO_MAX; i++)
+		if (lu_fid_eq(&lci->lci_fid[i], fid))
+			return lci->lci_capa[i];
+	return NULL;
 }
 
 static inline void mdd_set_capainfo(const struct lu_env *env, int offset,
-                                    const struct mdd_object *obj,
-                                    struct lustre_capa *capa)
+				    const struct mdd_object *obj,
+				    struct lustre_capa *capa)
 {
-        struct md_capainfo *ci = md_capainfo(env);
-        const struct lu_fid *fid = mdo2fid(obj);
+	struct lu_capainfo *lci = lu_capainfo_get(env);
+	const struct lu_fid *fid = mdo2fid(obj);
 
-	LASSERT(offset >= 0 && offset < MD_CAPAINFO_MAX);
-        /* NB: in mdt_init0 */
-        if (!ci)
-                return;
-        ci->mc_fid[offset]  = *fid;
-        ci->mc_capa[offset] = capa;
+	LASSERT(offset >= 0 && offset < LU_CAPAINFO_MAX);
+	/* NB: in mdt_init0 */
+	if (lci == NULL)
+		return;
+
+	lci->lci_fid[offset]  = *fid;
+	lci->lci_capa[offset] = capa;
 }
 
 static inline const char *mdd_obj_dev_name(const struct mdd_object *obj)

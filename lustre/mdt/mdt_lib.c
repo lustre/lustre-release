@@ -757,6 +757,48 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		CERROR("Unknown attr bits: "LPX64"\n", in);
 	return out;
 }
+
+void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
+		      const struct lu_fid *fid, struct lustre_capa *capa)
+{
+	struct lu_capainfo *lci;
+
+	LASSERT(offset >= 0 && offset < LU_CAPAINFO_MAX);
+	if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
+	    !(exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA))
+		return;
+
+	lci = lu_capainfo_get(info->mti_env);
+	LASSERT(lci);
+	lci->lci_fid[offset]  = *fid;
+	lci->lci_capa[offset] = capa;
+}
+
+#ifdef DEBUG_CAPA
+void mdt_dump_capainfo(struct mdt_thread_info *info)
+{
+	struct lu_capainfo *lci = lu_capainfo_get(info->mti_env);
+	int i;
+
+	if (lci == NULL)
+		return;
+
+	for (i = 0; i < LU_CAPAINFO_MAX; i++) {
+		if (lci->lci_capa[i] == NULL) {
+			CERROR("no capa for index %d "DFID"\n",
+			       i, PFID(&lci->lci_fid[i]));
+			continue;
+		}
+		if (lci->lci_capa[i] == BYPASS_CAPA) {
+			CERROR("bypass for index %d "DFID"\n",
+			       i, PFID(&lci->lci_fid[i]));
+			continue;
+		}
+		DEBUG_CAPA(D_ERROR, lci->lci_capa[i], "index %d", i);
+	}
+}
+#endif /* DEBUG_CAPA */
+
 /* unpacking */
 
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
