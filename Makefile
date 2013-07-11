@@ -9,6 +9,7 @@ MASTER_URL_LAB=http://build.lab.whamcloud.com:8080/job/lustre-manual/lastSuccess
 MASTER_XHTML=$(MASTER_URL)/artifact/$(TGT_BASE).xhtml
 MASTER_XHTML_LAB=$(MASTER_URL_LAB)/artifact/$(TGT_BASE).xhtml
 TGT_MASTER=$(TMP)/mastermanual
+CHUNKED_HTML=chunked-html
 
 
 RNG_UBN=/usr/share/xml/docbook/schema/rng/5.0/docbookxi.rng
@@ -29,7 +30,7 @@ PRIMARYXSL=$(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl
 PRIMARYCHUNKXSL=$(XSL)/html/chunkfast.xsl
 
 .PHONY: all
-all: clean check xhtml html chunked-html pdf epub 
+all: clean check xhtml html chunked-html pdf epub
 
 .PHONY: check
 check: $(SRC_XML)
@@ -38,9 +39,9 @@ check: $(SRC_XML)
 # Note: can't use "suffix" instead of "subst", because it keeps the '.'
 # Note: xsl:import is resolved at compile time, so the primary xsl
 #   is substituted into the custom xsl with sed before compliation.
-$(TGT_BASE)/%.html: $(SRCS)
+$(CHUNKED_HTML)/%.html: $(SRCS)
 	sed -e 's;PRIMARYXSL;${PRIMARYCHUNKXSL};' ./style/customstyle.xsl | \
-	xsltproc --xinclude -o ${TGT_BASE}/ - ./index.xml
+	xsltproc --xinclude -o ${CHUNKED_HTML}/ - ./index.xml
 
 $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).epub: $(SRCS)
 	sed -e 's;PRIMARYXSL;${PRIMARYXSL};' ./style/customstyle.xsl | \
@@ -74,8 +75,8 @@ epub: $(TGT_BASE).epub
 	zip -Xr9D $(TGT_BASE).epub META-INF/*
 
 .PHONY: chunked-html
-chunked-html: $(TGT_BASE)/%.html
-	cp -r ./figures ./${TGT_BASE}
+chunked-html: $(CHUNKED_HTML)/%.html
+	cp -r ./figures ./${CHUNKED_HTML}
 
 
 # get the git hash for the last successful build of the manual
