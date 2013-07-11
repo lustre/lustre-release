@@ -1,0 +1,28 @@
+# On branch master
+# Your branch is ahead of 'origin/master' by 1 commit.
+#
+# Changes to be committed:
+#   (use "git reset HEAD <file>..." to unstage)
+#
+#	modified:   contrib/git-hooks/commit-msg
+#	new file:   contrib/git-hooks/tests/commit.ok_comment
+#	modified:   contrib/git-hooks/tests/test-commit-msg.sh
+
+LU-3568 contrib: ignore initial comments
+
+Sometimes, git likes to insert "git status" commentary
+at the top of an auto-generated commit message starter
+file. If the committer carelessly neglects to remove
+the stuff, the script thinks the message has a missing
+commit summary line.
+
+* contrib/tests/test-commit-msg.sh: pass through xtrace setting
+* contrib/tests/commit.ok_commit: This message with cruft
+* contrib/commit-msg: use a flag instead of a line number to see
+  if we still need to process the summary line.
+
+Signed-off-by: Bruce Korb <bruce_korb@xyratex.com>
+Reviewed-by: Cheng Shao <cheng_shao@xyratex.com>
+Xyratex-bug-id: MRP-1160
+Change-Id: I46e2951f2e28cbbf53bf2e96e420ddcea7c0d991
+

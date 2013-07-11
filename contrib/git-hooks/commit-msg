@@ -42,6 +42,7 @@ init() {
 	HAS_BODY=false
 	HAS_SIGNOFF=false
 	HAS_CHANGEID=false
+	NEEDS_FIRST_LINE=true
 
 	IS_WRAPPING_UP=false
 
@@ -111,7 +112,7 @@ function do_default_line() {
 		error "invalid signoff section line"
 		return
 	}
-	if (( NUM == 1 )); then
+	if ${NEEDS_FIRST_LINE}; then
 		HAS_JIRA_COMPONENT=$(echo "$LINE" | grep "$JIRA_FMT_A")
 
 		if (( ${#HAS_JIRA_COMPONENT} == 0 )); then
@@ -126,6 +127,7 @@ function do_default_line() {
 		else
 			HAS_SUMMARY=true
 		fi
+		NEEDS_FIRST_LINE=false
 
 	elif (( ${#LINE} > WIDTH_REG )); then
 		error "has line longer than $WIDTH_REG columns."
@@ -219,7 +221,11 @@ while IFS= read -u3 LINE; do
 
 	"")
 		HAS_LAST_BLANK=true
-		$IS_WRAPPING_UP && continue
+
+		# Do not emit blank lines before summary line or after
+		# the tag lines have begun.
+		#
+		${NEEDS_FIRST_LINE} || ${IS_WRAPPING_UP} && continue
 		;;
 
 	\#*)
@@ -251,12 +257,13 @@ while IFS= read -u3 LINE; do
 	*)
 		if [[ "$LINE" =~ ^($INNOCUOUS): ]]; then
 			do_innocuous
+
 		elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
-			ck_wrapup
-		else
 			# Allow arbitrary external bug identifiers for tracking.
-			# I can't seem to find a pattern for the "case" that
-			# checks for "*-bug-id", so this is checked here.
+			#
+			ck_wrapup
+
+		else
 			do_default_line
 		fi
 		;;
