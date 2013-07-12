@@ -215,14 +215,14 @@ struct lustre_intent_data {
 };
 
 struct lookup_intent {
-        int     it_magic;
-        void    (*it_op_release)(struct lookup_intent *);
-        int     it_op;
-        int     it_flags;
-        int     it_create_mode;
-        union {
-                struct lustre_intent_data lustre;
-        } d;
+	int	it_magic;
+	void	(*it_op_release)(struct lookup_intent *);
+	int	it_op;
+	int	it_create_mode;
+	__u64	it_flags;
+	union {
+		struct lustre_intent_data lustre;
+	} d;
 };
 
 static inline void intent_init(struct lookup_intent *it, int op, int flags)

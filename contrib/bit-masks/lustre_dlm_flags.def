@@ -329,3 +329,9 @@ flag[54] = {
     f-mask  = local_only;
     f-desc  = 'Flag whether this is a server namespace lock.';
 };
+
+flag[55] = {
+    f-name  = excl;
+    f-mask  = local_only;
+    f-desc  = 'Flag whether this lock can be reused. Used by exclusive open.';
+};

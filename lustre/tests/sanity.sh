@@ -10488,6 +10488,57 @@ test_207b() {
 }
 run_test 207b "can refresh layout at open"
 
+test_208() {
+	# FIXME: in this test suite, only RD lease is used. This is okay
+	# for now as only exclusive open is supported. After generic lease
+	# is done, this test suite should be revised. - Jinshan
+
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.52) ]] ||
+		{ skip "Need MDS version at least 2.4.52"; return 0; }
+
+	echo "==== test 1: verify get lease work"
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:eRE+eU || error "get lease error"
+
+	echo "==== test 2: verify lease can be broken by upcoming open"
+	$MULTIOP $DIR/$tfile oO_RDONLY:eR_E-eUc &
+	local PID=$!
+	sleep 1
+
+	$MULTIOP $DIR/$tfile oO_RDONLY:c
+	kill -USR1 $PID && wait $PID || error "break lease error"
+
+	echo "==== test 3: verify lease can't be granted if an open already exists"
+	$MULTIOP $DIR/$tfile oO_RDONLY:_c &
+	local PID=$!
+	sleep 1
+
+	$MULTIOP $DIR/$tfile oO_RDONLY:eReUc && error "apply lease should fail"
+	kill -USR1 $PID && wait $PID || error "open file error"
+
+	echo "==== test 4: lease can sustain over recovery"
+	$MULTIOP $DIR/$tfile oO_RDONLY:eR_E+eUc &
+	PID=$!
+	sleep 1
+
+	fail mds1
+
+	kill -USR1 $PID && wait $PID || error "lease broken over recovery"
+
+	echo "==== test 5: lease broken can't be regained by replay"
+	$MULTIOP $DIR/$tfile oO_RDONLY:eR_E-eUc &
+	PID=$!
+	sleep 1
+
+	# open file to break lease and then recovery
+	$MULTIOP $DIR/$tfile oO_RDWR:c || error "open file error"
+	fail mds1
+
+	kill -USR1 $PID && wait $PID || error "lease not broken over recovery"
+
+	rm -f $DIR/$tfile
+}
+run_test 208 "Exclusive open"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))

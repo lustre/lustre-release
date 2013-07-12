@@ -5031,9 +5031,10 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
                 o->lo_ops = &mdt_obj_ops;
 		mutex_init(&mo->mot_ioepoch_mutex);
 		mutex_init(&mo->mot_lov_mutex);
-                RETURN(o);
-        } else
-                RETURN(NULL);
+		init_rwsem(&mo->mot_open_sem);
+		RETURN(o);
+	}
+	RETURN(NULL);
 }
 
 static int mdt_object_init(const struct lu_env *env, struct lu_object *o,
@@ -5068,11 +5069,14 @@ static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
         CDEBUG(D_INFO, "object free, fid = "DFID"\n",
                PFID(lu_object_fid(o)));
 
-        lu_object_fini(o);
-        lu_object_header_fini(h);
+	LASSERT(atomic_read(&mo->mot_open_count) == 0);
+	LASSERT(atomic_read(&mo->mot_lease_count) == 0);
+
+	lu_object_fini(o);
+	lu_object_header_fini(h);
 	OBD_SLAB_FREE_PTR(mo, mdt_object_kmem);
 
-        EXIT;
+	EXIT;
 }
 
 static int mdt_object_print(const struct lu_env *env, void *cookie,

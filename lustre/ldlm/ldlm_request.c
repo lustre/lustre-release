@@ -928,7 +928,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	lock->l_conn_export = exp;
 	lock->l_export = NULL;
 	lock->l_blocking_ast = einfo->ei_cb_bl;
-	lock->l_flags |= (*flags & LDLM_FL_NO_LRU);
+	lock->l_flags |= (*flags & (LDLM_FL_NO_LRU | LDLM_FL_EXCL));
 
         /* lock not sent to server yet */
 
@@ -1359,10 +1359,10 @@ int ldlm_cli_cancel(struct lustre_handle *lockh,
         }
 
         rc = ldlm_cli_cancel_local(lock);
-	if (rc == LDLM_FL_LOCAL_ONLY) {
-                LDLM_LOCK_RELEASE(lock);
+	if (rc == LDLM_FL_LOCAL_ONLY || cancel_flags & LCF_LOCAL) {
+		LDLM_LOCK_RELEASE(lock);
 		RETURN(0);
-        }
+	}
 	/* Even if the lock is marked as LDLM_FL_BL_AST, this is a LDLM_CANCEL
 	 * RPC which goes to canceld portal, so we can cancel other LRU locks
 	 * here and send them all as one LDLM_CANCEL RPC. */

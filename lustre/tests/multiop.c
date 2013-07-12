@@ -51,6 +51,7 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <time.h>
+#include <err.h>
 
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
@@ -71,6 +72,8 @@ char usage[] =
 "	 C[num] create with optional stripes\n"
 "	 d  mkdir\n"
 "	 D  open(O_DIRECTORY)\n"
+"	 e[R|W|U] apply lease. R: Read; W: Write; U: Unlock\n"
+"	 E[+|-] get lease. +/-: expect lease to (not) exist\n"
 "	 f  statfs\n"
 "	 F  print FID\n"
 "	 H[num] create HSM released file with num stripes\n"
@@ -286,13 +289,71 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         break;
-                case 'f':
-                        if (statfs(fname, &stfs) == -1) {
-                                save_errno = errno;
-                                perror("statfs()");
-                                exit(save_errno);
-                        }
-                        break;
+		case 'e':
+			commands++;
+			switch (*commands) {
+			case 'U':
+				flags = F_UNLCK;
+				break;
+			case 'R':
+				flags = F_RDLCK;
+				break;
+			case 'W':
+				flags = F_WRLCK;
+				break;
+			default:
+				errx(-1, "unknown mode: %c", *commands);
+			}
+
+			rc = ioctl(fd, LL_IOC_SET_LEASE, flags);
+			if (rc < 0)
+				err(errno, "apply lease error");
+
+			if (flags != F_UNLCK)
+				break;
+
+			/* F_UNLCK, interpret return code */
+			if (rc > 0) {
+				const char *str = "Unknown";
+				if (rc == FMODE_READ)
+					str = "FMODE_READ";
+				else if (rc == FMODE_WRITE)
+					str = "FMODE_WRITE";
+				fprintf(stdout, "%s lease(%d) released.\n",
+					str, rc);
+			} else if (rc == 0) {
+				fprintf(stdout, "lease already broken.\n");
+			}
+			break;
+		case 'E':
+			commands++;
+			if (*commands != '-' && *commands != '+')
+				errx(-1, "unknown mode: %c\n", *commands);
+
+			rc = ioctl(fd, LL_IOC_GET_LEASE);
+			if (rc > 0) {
+				const char *str = "Unknown";
+
+				if (rc == FMODE_READ)
+					str = "FMODE_READ";
+				else if (rc == FMODE_WRITE)
+					str = "FMODE_WRITE";
+				fprintf(stdout, "%s lease(%d) has applied.\n",
+					str, rc);
+				if (*commands == '-')
+					errx(-1, "expect lease to not exist");
+			} else if (rc == 0) {
+				fprintf(stdout, "no lease applied.\n");
+				if (*commands == '+')
+					errx(-1, "expect lease exists");
+			} else {
+				err(errno, "free lease error");
+			}
+			break;
+		case 'f':
+			if (statfs(fname, &stfs) == -1)
+				errx(-1, "statfs()");
+			break;
 		case 'F':
 			if (fd == -1)
 				rc = llapi_path2fid(fname, &fid);
