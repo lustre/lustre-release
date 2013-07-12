@@ -8617,12 +8617,48 @@ test_150() {
 }
 run_test 150 "truncate/append tests"
 
+#LU-2902 roc_hit was not able to read all values from lproc
+function roc_hit_init() {
+	local list=$(comma_list $(osts_nodes))
+	local dir=$DIR/$tdir-check
+	local file=$dir/file
+	local BEFORE
+	local AFTER
+	local idx
+
+	test_mkdir -p $dir
+	#use setstripe to do a write to every ost
+	for i in $(seq 0 $((OSTCOUNT-1))); do
+		$SETSTRIPE -c 1 -i $i $dir || error "$SETSTRIPE $file failed"
+		dd if=/dev/urandom of=$file bs=4k count=4 2>&1 > /dev/null
+		idx=$(printf %04x $i)
+		BEFORE=$(get_osd_param $list *OST*$idx stats |
+		    awk '$1 == "cache_access" {sum += $2} END { print sum }')
+		if [ -z "$BEFORE" ]; then
+			BEFORE=0
+		fi
+
+		cancel_lru_locks osc
+		cat $file >/dev/null
+
+		AFTER=$(get_osd_param $list *OST*$idx stats |
+		    awk '$1 == "cache_access" {sum += $2} END { print sum }')
+
+		echo BEFORE:$BEFORE AFTER:$AFTER
+		if ! let "AFTER - BEFORE == 4"; then
+			rm -rf $dir
+			error "roc_hit is not safe to use"
+		fi
+		rm $file
+	done
+
+	rm -rf $dir
+}
+
 function roc_hit() {
 	local list=$(comma_list $(osts_nodes))
-	#debug temp debug for LU-2902: lets see what values we get back
-	echo $(get_osd_param $list '' stats) 1>&2
 	echo $(get_osd_param $list '' stats |
-	       awk '/'cache_hit'/ {sum+=$2} END {print sum}')
+		awk '$1 == "cache_hit" {sum += $2} END { print sum }')
 }
 
 function set_cache() {
@@ -8663,6 +8699,8 @@ test_151() {
 		echo "oss write cache is NOT enabled"
 		return 0
 	fi
+
+	roc_hit_init
 
 	#define OBD_FAIL_OBD_NO_LRU  0x609
 	do_nodes $list $LCTL set_param fail_loc=0x609
@@ -9078,6 +9116,8 @@ test_156() {
 	[ "$(facet_fstype ost1)" = "zfs" ] &&
 		skip "LU-1956/LU-2261: stats unimplemented on OSD ZFS" &&
 		return
+
+	roc_hit_init
 
     log "Turn on read and write cache"
     set_cache read on
