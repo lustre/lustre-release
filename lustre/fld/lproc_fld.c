@@ -282,7 +282,7 @@ static int fldb_seq_open(struct inode *inode, struct file *file)
 	int			env_init = 0;
 	int			rc;
 
-	LPROCFS_ENTRY_AND_CHECK(dp);
+	LPROCFS_ENTRY_CHECK(dp);
 	rc = seq_open(file, &fldb_sops);
 	if (rc)
 		GOTO(out, rc);
@@ -319,7 +319,6 @@ out:
 			lu_env_fini(&param->fsp_env);
 		if (param != NULL)
 			OBD_FREE_PTR(param);
-		LPROCFS_EXIT();
 	}
 	return rc;
 }
