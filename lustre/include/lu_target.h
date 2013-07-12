@@ -94,6 +94,10 @@ struct tgt_session_info {
 	struct obd_export	*tsi_exp;
 	const struct lu_env	*tsi_env;
 	struct lu_target	*tsi_tgt;
+
+	const struct mdt_body	*tsi_mdt_body;
+	struct lu_object	*tsi_corpus;
+
 	/*
 	 * Additional fail id that can be set by handler.
 	 */
@@ -208,6 +212,7 @@ int tgt_llog_prev_block(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init_cont(struct tgt_session_info *tsi);
 int tgt_sec_ctx_fini(struct tgt_session_info *tsi);
+int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob);
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];
 extern struct tgt_handler tgt_obd_handlers[];

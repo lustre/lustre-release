@@ -99,186 +99,6 @@ static char *mds_attr_num_cpts;
 CFS_MODULE_PARM(mds_attr_num_cpts, "c", charp, 0444,
 		"CPU partitions MDS setattr threads should run on");
 
-#define DEFINE_RPC_HANDLER(base, flags, opc, fn, fmt)			\
-[opc - base] = {							\
-	.mh_name	= #opc,						\
-	.mh_fail_id	= OBD_FAIL_ ## opc ## _NET,			\
-	.mh_opc		= opc,						\
-	.mh_flags	= flags,					\
-	.mh_act		= fn,						\
-	.mh_fmt		= fmt						\
-}
-
-/* Request with a format known in advance */
-#define DEF_MDT_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(MDS_GETATTR, flags, name, fn, &RQF_ ## name)
-
-/* Request with a format we do not yet know */
-#define DEF_MDT_HDL_VAR(flags, name, fn)				\
-	DEFINE_RPC_HANDLER(MDS_GETATTR, flags, name, fn, NULL)
-
-/* Map one non-standard request format handler.  This should probably get
- * a common OBD_SET_INFO RPC opcode instead of this mismatch. */
-#define RQF_MDS_SET_INFO RQF_OBD_SET_INFO
-
-static struct mdt_handler mdt_mds_ops[] = {
-DEF_MDT_HDL(0,				MDS_CONNECT,	  mdt_connect),
-DEF_MDT_HDL(0,				MDS_DISCONNECT,	  mdt_disconnect),
-DEF_MDT_HDL(0,				MDS_SET_INFO,	  mdt_set_info),
-DEF_MDT_HDL(0,				MDS_GET_INFO,	  mdt_get_info),
-DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_GETSTATUS,	  mdt_getstatus),
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_GETATTR,	  mdt_getattr),
-DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_GETXATTR,	  mdt_getxattr),
-DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_STATFS,	  mdt_statfs),
-DEF_MDT_HDL(0		| MUTABOR,	MDS_REINT,	  mdt_reint),
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	  mdt_close),
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING, mdt_done_writing),
-DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_PIN,	  mdt_pin),
-DEF_MDT_HDL_VAR(0,			MDS_SYNC,	  mdt_sync),
-DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_IS_SUBDIR,	  mdt_is_subdir),
-DEF_MDT_HDL(0,				MDS_QUOTACHECK,	  mdt_quotacheck),
-DEF_MDT_HDL(0,				MDS_QUOTACTL,	  mdt_quotactl),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, MDS_HSM_PROGRESS,
-	    mdt_hsm_progress),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, MDS_HSM_CT_REGISTER,
-	    mdt_hsm_ct_register),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, MDS_HSM_CT_UNREGISTER,
-	    mdt_hsm_ct_unregister),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO, MDS_HSM_STATE_GET, mdt_hsm_state_get),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, MDS_HSM_STATE_SET,
-	    mdt_hsm_state_set),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO, MDS_HSM_ACTION, mdt_hsm_action),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO, MDS_HSM_REQUEST, mdt_hsm_request),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, MDS_SWAP_LAYOUTS,
-	    mdt_swap_layouts),
-};
-
-#define DEF_OBD_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(OBD_PING, flags, name, fn, NULL)
-
-static struct mdt_handler mdt_obd_ops[] = {
-DEF_OBD_HDL(0,				OBD_PING,	  mdt_obd_ping),
-DEF_OBD_HDL(0,				OBD_LOG_CANCEL,	  mdt_obd_log_cancel),
-DEF_OBD_HDL(0,				OBD_QC_CALLBACK,  mdt_obd_qc_callback),
-DEF_OBD_HDL(0,				OBD_IDX_READ,	  mdt_obd_idx_read)
-};
-
-#define DEF_DLM_HDL_VAR(flags, name, fn)				\
-	DEFINE_RPC_HANDLER(LDLM_ENQUEUE, flags, name, fn, NULL)
-#define DEF_DLM_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(LDLM_ENQUEUE, flags, name, fn, &RQF_ ## name)
-
-static struct mdt_handler mdt_dlm_ops[] = {
-DEF_DLM_HDL    (HABEO_CLAVIS,		LDLM_ENQUEUE,	  mdt_enqueue),
-DEF_DLM_HDL_VAR(HABEO_CLAVIS,		LDLM_CONVERT,	  mdt_convert),
-DEF_DLM_HDL_VAR(0,			LDLM_BL_CALLBACK, mdt_bl_callback),
-DEF_DLM_HDL_VAR(0,			LDLM_CP_CALLBACK, mdt_cp_callback)
-};
-
-#define DEF_LLOG_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(LLOG_ORIGIN_HANDLE_CREATE, flags, name, fn, NULL)
-
-static struct mdt_handler mdt_llog_ops[] = {
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_CREATE,	  mdt_llog_create),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	  mdt_llog_next_block),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_READ_HEADER,	  mdt_llog_read_header),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_WRITE_REC,	  NULL),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_CLOSE,	  NULL),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_CONNECT,		  NULL),
-DEF_LLOG_HDL(0,		LLOG_CATINFO,			  NULL),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_PREV_BLOCK,	  mdt_llog_prev_block),
-DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_DESTROY,	  mdt_llog_destroy),
-};
-
-#define DEF_SEC_HDL(flags, name, fn)					\
-	DEFINE_RPC_HANDLER(SEC_CTX_INIT, flags, name, fn, NULL)
-
-static struct mdt_handler mdt_sec_ctx_ops[] = {
-DEF_SEC_HDL(0,				SEC_CTX_INIT,	  mdt_sec_ctx_handle),
-DEF_SEC_HDL(0,				SEC_CTX_INIT_CONT,mdt_sec_ctx_handle),
-DEF_SEC_HDL(0,				SEC_CTX_FINI,	  mdt_sec_ctx_handle)
-};
-
-#define DEF_QUOTA_HDL(flags, name, fn)				\
-	DEFINE_RPC_HANDLER(QUOTA_DQACQ, flags, name, fn, &RQF_ ## name)
-
-static struct mdt_handler mdt_quota_ops[] = {
-DEF_QUOTA_HDL(HABEO_REFERO,		QUOTA_DQACQ,	  mdt_quota_dqacq),
-};
-
-struct mdt_opc_slice mdt_regular_handlers[] = {
-	{
-		.mos_opc_start	= MDS_GETATTR,
-		.mos_opc_end	= MDS_LAST_OPC,
-		.mos_hs		= mdt_mds_ops
-	},
-	{
-		.mos_opc_start	= OBD_PING,
-		.mos_opc_end	= OBD_LAST_OPC,
-		.mos_hs		= mdt_obd_ops
-	},
-	{
-		.mos_opc_start	= LDLM_ENQUEUE,
-		.mos_opc_end	= LDLM_LAST_OPC,
-		.mos_hs		= mdt_dlm_ops
-	},
-	{
-		.mos_opc_start	= LLOG_ORIGIN_HANDLE_CREATE,
-		.mos_opc_end	= LLOG_LAST_OPC,
-		.mos_hs		= mdt_llog_ops
-	},
-	{
-		.mos_opc_start	= SEC_CTX_INIT,
-		.mos_opc_end	= SEC_LAST_OPC,
-		.mos_hs		= mdt_sec_ctx_ops
-	},
-	{
-		.mos_opc_start	= QUOTA_DQACQ,
-		.mos_opc_end	= QUOTA_LAST_OPC,
-		.mos_hs		= mdt_quota_ops
-	},
-	{
-		.mos_hs		= NULL
-	}
-};
-
-/* Readpage/readdir handlers */
-static struct mdt_handler mdt_readpage_ops[] = {
-DEF_MDT_HDL(0,			MDS_CONNECT,  mdt_connect),
-DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO, MDS_READPAGE, mdt_readpage),
-/* XXX: this is ugly and should be fixed one day, see mdc_close() for
- * detailed comments. --umka */
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	  mdt_close),
-DEF_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING, mdt_done_writing),
-};
-
-static struct mdt_opc_slice mdt_readpage_handlers[] = {
-	{
-		.mos_opc_start = MDS_GETATTR,
-		.mos_opc_end   = MDS_LAST_OPC,
-		.mos_hs	= mdt_readpage_ops
-	},
-	{
-		.mos_opc_start = OBD_FIRST_OPC,
-		.mos_opc_end   = OBD_LAST_OPC,
-		.mos_hs	= mdt_obd_ops
-	},
-	{
-		.mos_hs	= NULL
-	}
-};
-
-static int mds_regular_handle(struct ptlrpc_request *req)
-{
-	return mdt_handle_common(req, mdt_regular_handlers);
-}
-
-static int mds_readpage_handle(struct ptlrpc_request *req)
-{
-	return mdt_handle_common(req, mdt_readpage_handlers);
-}
-
 /* device init/fini methods */
 static void mds_stop_ptlrpc_service(struct mds_device *m)
 {
@@ -354,7 +174,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.cc_pattern		= mds_num_cpts,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_regular_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= ptlrpc_hpreq_handler,
 		},
@@ -398,7 +218,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.cc_pattern		= mds_rdpg_num_cpts,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_readpage_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 		},
 	};
@@ -444,7 +264,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.cc_pattern		= mds_attr_num_cpts,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mds_regular_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 			.so_hpreq_handler	= NULL,
 		},

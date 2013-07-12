@@ -104,19 +104,19 @@ static inline bool mdt_hsm_is_admin(struct mdt_thread_info *info)
  *
  * This is HSM_PROGRESS RPC handler.
  */
-int mdt_hsm_progress(struct mdt_thread_info *info)
+int mdt_hsm_progress(struct tgt_session_info *tsi)
 {
+	struct mdt_thread_info		*info;
 	struct hsm_progress_kernel	*hpk;
 	int				 rc;
 	ENTRY;
 
-	hpk = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_PROGRESS);
-
-	if (info->mti_body == NULL || hpk == NULL)
+	if (tsi->tsi_mdt_body == NULL)
 		RETURN(-EPROTO);
 
-	if (!mdt_hsm_is_admin(info))
-		RETURN(-EPERM);
+	hpk = req_capsule_client_get(tsi->tsi_pill, &RMF_MDS_HSM_PROGRESS);
+	if (hpk == NULL)
+		RETURN(err_serious(-EPROTO));
 
 	hpk->hpk_errval = lustre_errno_ntoh(hpk->hpk_errval);
 
@@ -132,47 +132,56 @@ int mdt_hsm_progress(struct mdt_thread_info *info)
 		CDEBUG(D_HSM, "Finished "DFID" (%d) cancel cookie="LPX64"\n",
 		       PFID(&hpk->hpk_fid), hpk->hpk_errval, hpk->hpk_cookie);
 
-	rc = mdt_hsm_coordinator_update(info, hpk);
+	info = tsi2mdt_info(tsi);
+	if (!mdt_hsm_is_admin(info))
+		GOTO(out, rc = -EPERM);
 
+	rc = mdt_hsm_coordinator_update(info, hpk);
+out:
+	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
 
-int mdt_hsm_ct_register(struct mdt_thread_info *info)
+int mdt_hsm_ct_register(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct mdt_thread_info	*info;
 	__u32			*archives;
 	int			 rc;
 	ENTRY;
 
-	if (!mdt_hsm_is_admin(info))
-		RETURN(-EPERM);
-
-	archives = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_ARCHIVE);
+	archives = req_capsule_client_get(tsi->tsi_pill, &RMF_MDS_HSM_ARCHIVE);
 	if (archives == NULL)
-		RETURN(-EPROTO);
+		RETURN(err_serious(-EPROTO));
+
+	info = tsi2mdt_info(tsi);
+	if (!mdt_hsm_is_admin(info))
+		GOTO(out, rc = -EPERM);
 
 	/* XXX: directly include this function here? */
-	rc = mdt_hsm_agent_register_mask(info, &req->rq_export->exp_client_uuid,
+	rc = mdt_hsm_agent_register_mask(info, &tsi->tsi_exp->exp_client_uuid,
 					 *archives);
-
+out:
+	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
 
-int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
+int mdt_hsm_ct_unregister(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct mdt_thread_info	*info;
 	int			 rc;
 	ENTRY;
 
-	if (info->mti_body == NULL)
+	if (tsi->tsi_mdt_body == NULL)
 		RETURN(-EPROTO);
 
+	info = tsi2mdt_info(tsi);
 	if (!mdt_hsm_is_admin(info))
-		RETURN(-EPERM);
+		GOTO(out, rc = -EPERM);
 
 	/* XXX: directly include this function here? */
-	rc = mdt_hsm_agent_unregister(info, &req->rq_export->exp_client_uuid);
-
+	rc = mdt_hsm_agent_unregister(info, &tsi->tsi_exp->exp_client_uuid);
+out:
+	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
 
@@ -184,8 +193,9 @@ int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
  *
  * This is MDS_HSM_STATE_GET RPC handler.
  */
-int mdt_hsm_state_get(struct mdt_thread_info *info)
+int mdt_hsm_state_get(struct tgt_session_info *tsi)
 {
+	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	struct mdt_object	*obj = info->mti_object;
 	struct md_attr		*ma  = &info->mti_attr;
 	struct hsm_user_state	*hus;
@@ -194,12 +204,12 @@ int mdt_hsm_state_get(struct mdt_thread_info *info)
 	ENTRY;
 
 	if (info->mti_body == NULL || obj == NULL)
-		RETURN(-EPROTO);
+		GOTO(out, rc = -EPROTO);
 
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc < 0)
-		RETURN(err_serious(rc));
+		GOTO(out, rc = err_serious(rc));
 
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PR);
@@ -216,9 +226,10 @@ int mdt_hsm_state_get(struct mdt_thread_info *info)
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
-			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
+				 req_capsule_client_get(info->mti_pill,
+				 &RMF_CAPA1));
 
-	hus = req_capsule_server_get(info->mti_pill, &RMF_HSM_USER_STATE);
+	hus = req_capsule_server_get(tsi->tsi_pill, &RMF_HSM_USER_STATE);
 	if (hus == NULL)
 		GOTO(out_unlock, rc = -EPROTO);
 
@@ -231,7 +242,8 @@ out_unlock:
 	mdt_object_unlock(info, obj, lh, 1);
 out_ucred:
 	mdt_exit_ucred(info);
-
+out:
+	mdt_thread_info_fini(info);
 	return rc;
 }
 
@@ -244,8 +256,9 @@ out_ucred:
  *
  * This is MDS_HSM_STATE_SET RPC handler.
  */
-int mdt_hsm_state_set(struct mdt_thread_info *info)
+int mdt_hsm_state_set(struct tgt_session_info *tsi)
 {
+	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	struct mdt_object	*obj = info->mti_object;
 	struct md_attr          *ma = &info->mti_attr;
 	struct hsm_state_set	*hss;
@@ -257,12 +270,12 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 	hss = req_capsule_client_get(info->mti_pill, &RMF_HSM_STATE_SET);
 
 	if (info->mti_body == NULL || obj == NULL || hss == NULL)
-		RETURN(-EPROTO);
+		GOTO(out, rc = -EPROTO);
 
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc < 0)
-		RETURN(err_serious(rc));
+		GOTO(out, rc = err_serious(rc));
 
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PW);
@@ -333,7 +346,8 @@ out_unlock:
 	mdt_object_unlock(info, obj, lh, 1);
 out_ucred:
 	mdt_exit_ucred(info);
-
+out:
+	mdt_thread_info_fini(info);
 	return rc;
 }
 
@@ -343,8 +357,9 @@ out_ucred:
  *
  * This is MDS_HSM_ACTION RPC handler.
  */
-int mdt_hsm_action(struct mdt_thread_info *info)
+int mdt_hsm_action(struct tgt_session_info *tsi)
 {
+	struct mdt_thread_info		*info;
 	struct hsm_current_action	*hca;
 	struct hsm_action_list		*hal = NULL;
 	struct hsm_action_item		*hai;
@@ -352,18 +367,21 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	int				 rc;
 	ENTRY;
 
-	hca = req_capsule_server_get(info->mti_pill,
+	hca = req_capsule_server_get(tsi->tsi_pill,
 				     &RMF_MDS_HSM_CURRENT_ACTION);
+	if (hca == NULL)
+		RETURN(err_serious(-EPROTO));
 
-	if (info->mti_body == NULL || hca == NULL)
+	if (tsi->tsi_mdt_body == NULL)
 		RETURN(-EPROTO);
 
+	info = tsi2mdt_info(tsi);
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
-		RETURN(rc = err_serious(rc));
+		GOTO(out, rc = err_serious(rc));
 
-	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+	if (req_capsule_get_size(tsi->tsi_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
 				 req_capsule_client_get(info->mti_pill,
 							&RMF_CAPA1));
@@ -431,6 +449,8 @@ out_free:
 	MDT_HSM_FREE(hal, hal_size);
 out_ucred:
 	mdt_exit_ucred(info);
+out:
+	mdt_thread_info_fini(info);
 	return rc;
 }
 
@@ -442,9 +462,10 @@ out_ucred:
  *
  * This is MDS_HSM_REQUEST RPC handler.
  */
-int mdt_hsm_request(struct mdt_thread_info *info)
+int mdt_hsm_request(struct tgt_session_info *tsi)
 {
-	struct req_capsule		*pill = info->mti_pill;
+	struct mdt_thread_info		*info;
+	struct req_capsule		*pill = tsi->tsi_pill;
 	struct hsm_request		*hr;
 	struct hsm_user_item		*hui;
 	struct hsm_action_list		*hal;
@@ -461,7 +482,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	hui = req_capsule_client_get(pill, &RMF_MDS_HSM_USER_ITEM);
 	data = req_capsule_client_get(pill, &RMF_GENERIC_DATA);
 
-	if (info->mti_body == NULL || hr == NULL || hui == NULL || data == NULL)
+	if (tsi->tsi_mdt_body == NULL || hr == NULL || hui == NULL || data == NULL)
 		RETURN(-EPROTO);
 
 	/* Sanity check. Nothing to do with an empty list */
@@ -477,10 +498,11 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	if (data_size != hr->hr_data_len)
 		RETURN(-EPROTO);
 
+	info = tsi2mdt_info(tsi);
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
-		RETURN(err_serious(rc));
+		GOTO(out, rc);
 
 	switch (hr->hr_action) {
 	/* code to be removed in hsm1_merge and final patch */
@@ -540,5 +562,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 
 out_ucred:
 	mdt_exit_ucred(info);
+out:
+	mdt_thread_info_fini(info);
 	return rc;
 }

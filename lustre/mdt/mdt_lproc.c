@@ -473,12 +473,12 @@ out:
 static int lprocfs_rd_capa(char *page, char **start, off_t off,
                            int count, int *eof, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-        return snprintf(page, count, "capability on: %s %s\n",
-                        mdt->mdt_opts.mo_oss_capa ? "oss" : "",
-                        mdt->mdt_opts.mo_mds_capa ? "mds" : "");
+	return snprintf(page, count, "capability on: %s %s\n",
+			mdt->mdt_lut.lut_oss_capa ? "oss" : "",
+			mdt->mdt_lut.lut_mds_capa ? "mds" : "");
 }
 
 static int lprocfs_wr_capa(struct file *file, const char *buffer,
@@ -508,15 +508,15 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
 		return -EINVAL;
 	}
 
-	mdt->mdt_opts.mo_oss_capa = (val & 0x1);
-	mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);
+	mdt->mdt_lut.lut_oss_capa = !!(val & 0x1);
+	mdt->mdt_lut.lut_mds_capa = !!(val & 0x2);
 	mdt->mdt_capa_conf = 1;
 	LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
 		      mdt_obd_name(mdt),
-		      mdt->mdt_opts.mo_mds_capa ? "enabled" : "disabled");
+		      mdt->mdt_lut.lut_mds_capa ? "enabled" : "disabled");
 	LCONSOLE_INFO("MDS %s %s OSS fid capability.\n",
 		      mdt_obd_name(mdt),
-		      mdt->mdt_opts.mo_oss_capa ? "enabled" : "disabled");
+		      mdt->mdt_lut.lut_oss_capa ? "enabled" : "disabled");
 	return count;
 }
 
@@ -631,7 +631,7 @@ static int lprocfs_rd_sec_level(char *page, char **start, off_t off,
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-        return snprintf(page, count, "%d\n", mdt->mdt_sec_level);
+	return snprintf(page, count, "%d\n", mdt->mdt_lut.lut_sec_level);
 }
 
 static int lprocfs_wr_sec_level(struct file *file, const char *buffer,
@@ -654,8 +654,8 @@ static int lprocfs_wr_sec_level(struct file *file, const char *buffer,
                 return -EINVAL;
         }
 
-        mdt->mdt_sec_level = val;
-        return count;
+	mdt->mdt_lut.lut_sec_level = val;
+	return count;
 }
 
 static int lprocfs_rd_cos(char *page, char **start, off_t off,

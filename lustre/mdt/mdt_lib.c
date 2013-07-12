@@ -693,7 +693,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
                 repbody->valid |= OBD_MD_FLCOOKIE;
         }
 
-	if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
 	    repbody->valid & OBD_MD_FLEASIZE) {
                 struct lustre_capa *capa;
@@ -764,7 +764,7 @@ void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
 	struct lu_capainfo *lci;
 
 	LASSERT(offset >= 0 && offset < LU_CAPAINFO_MAX);
-	if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
+	if (!info->mti_mdt->mdt_lut.lut_mds_capa ||
 	    !(exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA))
 		return;
 

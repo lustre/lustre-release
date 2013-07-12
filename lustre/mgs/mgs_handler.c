@@ -880,7 +880,20 @@ TGT_OBD_HDL(0,	OBD_PING,	tgt_obd_ping),
 };
 
 static struct tgt_handler mgs_dlm_handlers[] = {
-TGT_DLM_HDL(HABEO_CLAVIS,	LDLM_ENQUEUE,	tgt_enqueue),
+[LDLM_ENQUEUE - LDLM_FIRST_OPC] = {
+	.th_name = "LDLM_ENQUEUE",
+	/* don't use th_fail_id for MGS to don't interfere with MDS tests.
+	 * * There are no tests for MGS with OBD_FAIL_LDLM_ENQUEUE_NET so it
+	 * * is safe. If such tests will be needed we have to distinguish
+	 * * MDS and MGS fail ids, e.g use OBD_FAIL_MGS_ENQUEUE_NET for MGS
+	 * * instead of common OBD_FAIL_LDLM_ENQUEUE_NET */
+	.th_fail_id = 0,
+	.th_opc = LDLM_ENQUEUE,
+	.th_flags = HABEO_CLAVIS,
+	.th_act = tgt_enqueue,
+	.th_fmt = &RQF_LDLM_ENQUEUE,
+	.th_version = LUSTRE_DLM_VERSION,
+	},
 };
 
 static struct tgt_handler mgs_llog_handlers[] = {

@@ -176,9 +176,6 @@ struct mdt_device {
 	struct {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
-				   mo_compat_resname:1,
-				   mo_mds_capa:1,
-				   mo_oss_capa:1,
 				   mo_cos:1,
 				   mo_coordinator:1;
 	} mdt_opts;
@@ -199,10 +196,6 @@ struct mdt_device {
 	int			   mdt_max_ea_size;
 
         struct upcall_cache        *mdt_identity_cache;
-
-        /* sptlrpc rules */
-	rwlock_t		   mdt_sptlrpc_lock;
-        struct sptlrpc_rule_set    mdt_sptlrpc_rset;
 
 	/* capability keys */
 	unsigned long              mdt_capa_timeout;
@@ -232,7 +225,6 @@ struct mdt_device {
         int                        mdt_nosquash_strlen;
 	struct rw_semaphore	   mdt_squash_sem;
 
-        int                        mdt_sec_level;
         struct rename_stats        mdt_rename_stats;
 	struct lu_fid		   mdt_md_root_fid;
 
@@ -426,12 +418,6 @@ struct mdt_thread_info {
 	 * to be removed upon moving MDT to the unified target code */
 	bool			   mti_txn_compat;
 
-        /*
-         * Additional fail id that can be set by handler. Passed to
-         * target_send_reply().
-         */
-        int                        mti_fail_id;
-
         /* transaction number of current request */
         __u64                      mti_transno;
 
@@ -550,6 +536,18 @@ struct mdt_thread_info {
 	struct thandle_exec_args   mti_handle;
 	struct ldlm_enqueue_info   mti_einfo;
 };
+
+extern struct lu_context_key mdt_thread_key;
+
+static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
+{
+	struct mdt_thread_info *mti;
+
+	lu_env_refill((void *)env);
+	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	LASSERT(mti);
+	return mti;
+}
 
 /* ptlrpc request handler for MDT. All handlers are
  * grouped into several slices - struct mdt_opc_slice,
@@ -781,8 +779,6 @@ int mdt_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
                           void *client_nid);
 
-int mdt_pin(struct mdt_thread_info* info);
-
 int mdt_lock_new_child(struct mdt_thread_info *info,
                        struct mdt_object *o,
                        struct mdt_lock_handle *child_lockh);
@@ -808,6 +804,7 @@ enum {
         MDT_SOM_ENABLE  = 1,
 };
 
+int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
 int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
@@ -819,12 +816,12 @@ int mdt_write_read(struct mdt_object *o);
 struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med);
 int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd);
 void mdt_mfd_free(struct mdt_file_data *mfd);
-int mdt_close(struct mdt_thread_info *info);
+int mdt_close(struct tgt_session_info *tsi);
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                  struct md_attr *ma, int flags);
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma);
-int mdt_done_writing(struct mdt_thread_info *info);
+int mdt_done_writing(struct tgt_session_info *tsi);
 int mdt_fix_reply(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
@@ -844,47 +841,10 @@ int mdt_version_get_check(struct mdt_thread_info *, struct mdt_object *, int);
 void mdt_version_get_save(struct mdt_thread_info *, struct mdt_object *, int);
 int mdt_version_get_check_save(struct mdt_thread_info *, struct mdt_object *,
                                int);
-int mdt_handle_common(struct ptlrpc_request *req,
-		      struct mdt_opc_slice *supported);
-int mdt_connect(struct mdt_thread_info *info);
-int mdt_disconnect(struct mdt_thread_info *info);
-int mdt_set_info(struct mdt_thread_info *info);
-int mdt_get_info(struct mdt_thread_info *info);
-int mdt_getstatus(struct mdt_thread_info *info);
-int mdt_getattr(struct mdt_thread_info *info);
-int mdt_getattr_name(struct mdt_thread_info *info);
-int mdt_statfs(struct mdt_thread_info *info);
-int mdt_reint(struct mdt_thread_info *info);
-int mdt_sync(struct mdt_thread_info *info);
-int mdt_is_subdir(struct mdt_thread_info *info);
-int mdt_obd_ping(struct mdt_thread_info *info);
-int mdt_obd_log_cancel(struct mdt_thread_info *info);
-int mdt_obd_qc_callback(struct mdt_thread_info *info);
-int mdt_enqueue(struct mdt_thread_info *info);
-int mdt_convert(struct mdt_thread_info *info);
-int mdt_bl_callback(struct mdt_thread_info *info);
-int mdt_cp_callback(struct mdt_thread_info *info);
-int mdt_llog_create(struct mdt_thread_info *info);
-int mdt_llog_destroy(struct mdt_thread_info *info);
-int mdt_llog_read_header(struct mdt_thread_info *info);
-int mdt_llog_next_block(struct mdt_thread_info *info);
-int mdt_llog_prev_block(struct mdt_thread_info *info);
-int mdt_sec_ctx_handle(struct mdt_thread_info *info);
-int mdt_readpage(struct mdt_thread_info *info);
-int mdt_obd_idx_read(struct mdt_thread_info *info);
-int mdt_tgt_connect(struct tgt_session_info *tsi);
 void mdt_thread_info_init(struct ptlrpc_request *req,
 			  struct mdt_thread_info *mti);
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
-
-extern struct mdt_opc_slice mdt_regular_handlers[];
-extern struct mdt_opc_slice mdt_seq_handlers[];
-extern struct mdt_opc_slice mdt_fld_handlers[];
-
-int mdt_quotacheck(struct mdt_thread_info *info);
-int mdt_quotactl(struct mdt_thread_info *info);
-int mdt_quota_dqacq(struct mdt_thread_info *info);
-int mdt_swap_layouts(struct mdt_thread_info *info);
+struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi);
 
 extern struct lprocfs_vars lprocfs_mds_module_vars[];
 extern struct lprocfs_vars lprocfs_mds_obd_vars[];
@@ -892,13 +852,10 @@ extern struct lprocfs_vars lprocfs_mds_obd_vars[];
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh);
 
-struct mdt_handler *mdt_handler_find(__u32 opc,
-				     struct mdt_opc_slice *supported);
 /* mdt_idmap.c */
-int mdt_init_sec_level(struct mdt_thread_info *);
-int mdt_init_idmap(struct mdt_thread_info *);
+int mdt_init_idmap(struct tgt_session_info *tsi);
 void mdt_cleanup_idmap(struct mdt_export_data *);
-int mdt_handle_idmap(struct mdt_thread_info *);
+int mdt_handle_idmap(struct tgt_session_info *tsi);
 int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *,
                               struct ptlrpc_user_desc *);
 void mdt_body_reverse_idmap(struct mdt_thread_info *,
@@ -910,6 +867,11 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
 	return container_of0(d, struct mdt_device, mdt_lu_dev);
+}
+
+static inline struct mdt_object *mdt_obj(struct lu_object *o)
+{
+	return container_of0(o, struct mdt_object, mot_obj);
 }
 
 static inline struct dt_object *mdt_obj2dt(struct mdt_object *mo)
@@ -939,13 +901,14 @@ __u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
 int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
 /* mdt/mdt_hsm.c */
-int mdt_hsm_state_get(struct mdt_thread_info *info);
-int mdt_hsm_state_set(struct mdt_thread_info *info);
-int mdt_hsm_action(struct mdt_thread_info *info);
-int mdt_hsm_progress(struct mdt_thread_info *info);
-int mdt_hsm_ct_register(struct mdt_thread_info *info);
-int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
-int mdt_hsm_request(struct mdt_thread_info *info);
+int mdt_hsm_state_get(struct tgt_session_info *tsi);
+int mdt_hsm_state_set(struct tgt_session_info *tsi);
+int mdt_hsm_action(struct tgt_session_info *tsi);
+int mdt_hsm_progress(struct tgt_session_info *tsi);
+int mdt_hsm_ct_register(struct tgt_session_info *tsi);
+int mdt_hsm_ct_unregister(struct tgt_session_info *tsi);
+int mdt_hsm_request(struct tgt_session_info *tsi);
+
 /* mdt/mdt_hsm_cdt_actions.c */
 extern const struct file_operations mdt_hsm_actions_fops;
 void dump_llog_agent_req_rec(const char *prefix,
@@ -1040,6 +1003,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				 const int update_record);
 
 extern struct lu_context_key       mdt_thread_key;
+
 /* debug issues helper starts here*/
 static inline int mdt_fail_write(const struct lu_env *env,
                                  struct dt_device *dd, int id)
@@ -1056,7 +1020,12 @@ static inline int mdt_fail_write(const struct lu_env *env,
 
 static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)
 {
-        return &req->rq_export->exp_mdt_data;
+	return &req->rq_export->exp_mdt_data;
+}
+
+static inline struct mdt_device *mdt_exp2dev(struct obd_export *exp)
+{
+	return mdt_dev(exp->exp_obd->obd_lu_dev);
 }
 
 typedef void (*mdt_reconstruct_t)(struct mdt_thread_info *mti,
@@ -1210,18 +1179,6 @@ static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 }
 
 extern const struct lu_device_operations mdt_lu_ops;
-
-static inline int lu_device_is_mdt(struct lu_device *d)
-{
-	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
-}
-
-static inline struct mdt_device *lu2mdt_dev(struct lu_device *d)
-{
-	LASSERTF(lu_device_is_mdt(d), "It is %s instead of MDT %p %p\n",
-		 d->ld_type->ldt_name, d->ld_ops, &mdt_lu_ops);
-	return container_of0(d, struct mdt_device, mdt_lu_dev);
-}
 
 static inline char *mdt_obd_name(struct mdt_device *mdt)
 {

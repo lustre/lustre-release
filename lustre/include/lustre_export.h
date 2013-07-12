@@ -77,8 +77,6 @@ struct mdt_export_data {
 	/** List of all files opened by client on this MDT */
 	cfs_list_t		med_open_head;
 	spinlock_t		med_open_lock; /* med_open_head, mfd_list */
-	/** Bitmask of all ibit locks this MDT understands */
-	__u64			med_ibits_known;
 	struct mutex		med_idmap_mutex;
 	struct lustre_idmap_table *med_idmap;
 };

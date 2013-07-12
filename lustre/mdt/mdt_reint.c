@@ -66,7 +66,7 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
         if (repbody->valid & OBD_MD_FLMDSCAPA)
                 RETURN(rc);
 
-	if (rc == 0 && info->mti_mdt->mdt_opts.mo_mds_capa &&
+	if (rc == 0 && info->mti_mdt->mdt_lut.lut_mds_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA) {
                 struct lustre_capa *capa;
 
@@ -598,12 +598,12 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
 	rc = mdt_attr_get_complex(info, mo, ma);
-        if (rc != 0)
-                GOTO(out_put, rc);
+	if (rc != 0)
+		GOTO(out_put, rc);
 
-        mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
+	mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
-	if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
 	    S_ISREG(lu_object_attr(&mo->mot_obj)) &&
 	    (ma->ma_attr.la_valid & LA_SIZE) && !som_au) {
