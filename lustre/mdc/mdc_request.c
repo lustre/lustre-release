@@ -1836,6 +1836,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 	case LL_IOC_HSM_STATE_SET:
 		rc = mdc_ioc_hsm_state_set(exp, karg);
+		GOTO(out, rc);
 	case LL_IOC_HSM_ACTION:
 		rc = mdc_ioc_hsm_current_action(exp, karg);
 		GOTO(out, rc);
@@ -1904,44 +1905,42 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 GOTO(out, rc = 0);
         }
-        case OBD_IOC_QUOTACTL: {
-                struct if_quotactl *qctl = karg;
-                struct obd_quotactl *oqctl;
+	case OBD_IOC_QUOTACTL: {
+		struct if_quotactl *qctl = karg;
+		struct obd_quotactl *oqctl;
 
-                OBD_ALLOC_PTR(oqctl);
-                if (!oqctl)
-                        RETURN(-ENOMEM);
+		OBD_ALLOC_PTR(oqctl);
+		if (oqctl == NULL)
+			GOTO(out, rc = -ENOMEM);
 
-                QCTL_COPY(oqctl, qctl);
-                rc = obd_quotactl(exp, oqctl);
-                if (rc == 0) {
-                        QCTL_COPY(qctl, oqctl);
-                        qctl->qc_valid = QC_MDTIDX;
-                        qctl->obd_uuid = obd->u.cli.cl_target_uuid;
-                }
-                OBD_FREE_PTR(oqctl);
-                break;
-        }
-	case LL_IOC_GET_CONNECT_FLAGS: {
-		if (copy_to_user(uarg,
-				     exp_connect_flags_ptr(exp),
-				     sizeof(__u64)))
+		QCTL_COPY(oqctl, qctl);
+		rc = obd_quotactl(exp, oqctl);
+		if (rc == 0) {
+			QCTL_COPY(qctl, oqctl);
+			qctl->qc_valid = QC_MDTIDX;
+			qctl->obd_uuid = obd->u.cli.cl_target_uuid;
+		}
+
+		OBD_FREE_PTR(oqctl);
+		GOTO(out, rc);
+	}
+	case LL_IOC_GET_CONNECT_FLAGS:
+		if (copy_to_user(uarg, exp_connect_flags_ptr(exp),
+				 sizeof(*exp_connect_flags_ptr(exp))))
 			GOTO(out, rc = -EFAULT);
-		else
-			GOTO(out, rc = 0);
-	}
-	case LL_IOC_LOV_SWAP_LAYOUTS: {
-		rc = mdc_ioc_swap_layouts(exp, karg);
-		break;
-	}
-        default:
-                CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
-                GOTO(out, rc = -ENOTTY);
-        }
-out:
-        cfs_module_put(THIS_MODULE);
 
-        return rc;
+		GOTO(out, rc = 0);
+	case LL_IOC_LOV_SWAP_LAYOUTS:
+		rc = mdc_ioc_swap_layouts(exp, karg);
+		GOTO(out, rc);
+	default:
+		CERROR("unrecognised ioctl: cmd = %#x\n", cmd);
+		GOTO(out, rc = -ENOTTY);
+	}
+out:
+	cfs_module_put(THIS_MODULE);
+
+	return rc;
 }
 
 int mdc_get_info_rpc(struct obd_export *exp,
