@@ -45,6 +45,9 @@
  * Author: Mike Pershin <tappro@whamcloud.com>
  */
 
+#include <lustre/lustre_idl.h>  /* OBD_OBJECT_EOF */
+#include <lustre/lustre_user.h> /* struct obd_statfs */
+
 #include <sys/dnode.h>
 #include <sys/dbuf.h>
 #include <sys/spa.h>
@@ -57,9 +60,6 @@
 #include <sys/dsl_prop.h>
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
-
-#include <lustre/lustre_idl.h>  /* OBD_OBJECT_EOF */
-#include <lustre/lustre_user.h> /* struct obd_statfs */
 
 #include "udmu.h"
 
