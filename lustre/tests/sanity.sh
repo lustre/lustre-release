@@ -1218,15 +1218,10 @@ test_27b() {
 	$GETSTRIPE -c $DIR/d27/f01
 	[ $($GETSTRIPE -c $DIR/d27/f01) -eq 2 ] ||
 		error "two-stripe file doesn't have two stripes"
-}
-run_test 27b "create two stripe file"
-
-test_27c() {
-	[ -f $DIR/d27/f01 ] || skip "test_27b not run" && return
 
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
-run_test 27c "write to two stripe file"
+run_test 27b "create and write to two stripe file"
 
 test_27d() {
 	test_mkdir -p $DIR/d27
@@ -5288,68 +5283,55 @@ test_77a() { # bug 10889
 	set_checksums 0
 	rm -f $DIR/$tfile
 }
-run_test 77a "normal checksum read/write operation ============="
+run_test 77a "normal checksum read/write operation"
 
 test_77b() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-	lctl set_param fail_loc=0x80000409
+	$LCTL set_param fail_loc=0x80000409
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/f77b bs=1M count=$F77SZ conv=sync || \
-		error "dd error: $?"
-	lctl set_param fail_loc=0
-	set_checksums 0
-}
-run_test 77b "checksum error on client write ===================="
 
-test_77c() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
-	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return
-	set_checksums 1
+	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ conv=sync ||
+		error "dd error: $?"
+	$LCTL set_param fail_loc=0
+
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
 		set_checksum_type $algo
 		#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
-		lctl set_param fail_loc=0x80000408
-		cmp $F77_TMP $DIR/f77b || error "file compare failed"
-		lctl set_param fail_loc=0
+		$LCTL set_param fail_loc=0x80000408
+		cmp $F77_TMP $DIR/$tfile || error "file compare failed"
+		$LCTL set_param fail_loc=0
 	done
 	set_checksums 0
 	set_checksum_type $ORIG_CSUM_TYPE
-	rm -f $DIR/f77b
+	rm -f $DIR/$tfile
 }
-run_test 77c "checksum error on client read ==================="
+run_test 77b "checksum error on client write, read"
 
 test_77d() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-	lctl set_param fail_loc=0x80000409
+	$LCTL set_param fail_loc=0x80000409
 	set_checksums 1
-	directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
+	$DIRECTIO write $DIR/$tfile 0 $F77SZ $((1024 * 1024)) ||
 		error "direct write: rc=$?"
-	lctl set_param fail_loc=0
+	$LCTL set_param fail_loc=0
 	set_checksums 0
-}
-run_test 77d "checksum error on OST direct write ==============="
 
-test_77e() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
-	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
-	lctl set_param fail_loc=0x80000408
+	$LCTL set_param fail_loc=0x80000408
 	set_checksums 1
 	cancel_lru_locks osc
-	directio read $DIR/f77 0 $F77SZ $((1024 * 1024)) || \
+	$DIRECTIO read $DIR/$tfile 0 $F77SZ $((1024 * 1024)) ||
 		error "direct read: rc=$?"
-	lctl set_param fail_loc=0
+	$LCTL set_param fail_loc=0
 	set_checksums 0
 }
-run_test 77e "checksum error on OST direct read ================"
+run_test 77d "checksum error on OST direct write, read"
 
 test_77f() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -5359,15 +5341,15 @@ test_77f() { # bug 10889
 		cancel_lru_locks osc
 		set_checksum_type $algo
 		#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
-		lctl set_param fail_loc=0x409
-		directio write $DIR/f77 0 $F77SZ $((1024 * 1024)) && \
+		$LCTL set_param fail_loc=0x409
+		$DIRECTIO write $DIR/$tfile 0 $F77SZ $((1024 * 1024)) &&
 			error "direct write succeeded"
-		lctl set_param fail_loc=0
+		$LCTL set_param fail_loc=0
 	done
 	set_checksum_type $ORIG_CSUM_TYPE
 	set_checksums 0
 }
-run_test 77f "repeat checksum error on write (expect error) ===="
+run_test 77f "repeat checksum error on write (expect error)"
 
 test_77g() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -5376,32 +5358,24 @@ test_77g() { # bug 10889
 
 	[ ! -f $F77_TMP ] && setup_f77
 
-	$SETSTRIPE -c 1 -i 0 $DIR/f77g
+	$SETSTRIPE -c 1 -i 0 $DIR/$tfile
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	do_facet ost1 lctl set_param fail_loc=0x8000021a
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/f77g bs=1M count=$F77SZ || \
+	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ ||
 		error "write error: rc=$?"
 	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
-}
-run_test 77g "checksum error on OST write ======================"
 
-test_77h() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-
-	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	do_facet ost1 lctl set_param fail_loc=0x8000021b
 	set_checksums 1
-	cmp $F77_TMP $DIR/f77g || error "file compare failed"
+	cmp $F77_TMP $DIR/$tfile || error "file compare failed"
 	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
 }
-run_test 77h "checksum error on OST read ======================="
+run_test 77g "checksum error on OST write, read"
 
 test_77i() { # bug 13805
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -5417,7 +5391,7 @@ test_77i() { # bug 13805
 	done
 	remount_client $MOUNT
 }
-run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
+run_test 77i "client not supporting OSD_CONNECT_CKSUM"
 
 test_77j() { # bug 13805
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -5434,7 +5408,7 @@ test_77j() { # bug 13805
 	done
 	remount_client $MOUNT
 }
-run_test 77j "client only supporting ADLER32 ===================="
+run_test 77j "client only supporting ADLER32"
 
 [ "$ORIG_CSUM" ] && set_checksums $ORIG_CSUM || true
 rm -f $F77_TMP
