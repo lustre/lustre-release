@@ -595,10 +595,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
         uuid = obd_get_uuid(sbi->ll_md_exp);
-	if (uuid != NULL) {
+	if (uuid != NULL)
 		sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
-		get_uuid2fsid(uuid->uuid, strlen(uuid->uuid), &sbi->ll_fsid);
-	}
 
         if (data != NULL)
                 OBD_FREE_PTR(data);
@@ -1652,6 +1650,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
 	struct obd_statfs osfs;
+	__u64 fsid = huge_encode_dev(sb->s_dev);
 	int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op: at "LPU64" jiffies\n", get_jiffies_64());
@@ -1683,7 +1682,8 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
         sfs->f_blocks = osfs.os_blocks;
         sfs->f_bfree = osfs.os_bfree;
         sfs->f_bavail = osfs.os_bavail;
-	sfs->f_fsid = ll_s2sbi(sb)->ll_fsid;
+	sfs->f_fsid.val[0] = (__u32)fsid;
+	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
 	return 0;
 }
 
