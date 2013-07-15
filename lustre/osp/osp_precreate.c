@@ -1009,9 +1009,13 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 	if (d->opd_pre_reserved + 1 < osp_objs_precreated(env, d))
 		return 1;
 
-	/* ready if OST reported no space and no destoys in progress */
+	/* ready if OST reported no space and no destroys in progress */
 	if (d->opd_syn_changes + d->opd_syn_rpc_in_progress == 0 &&
 	    d->opd_pre_status == -ENOSPC)
+		return 1;
+
+	/* Bail out I/O fails to OST */
+	if (d->opd_pre_status == -EIO)
 		return 1;
 
 	return 0;
