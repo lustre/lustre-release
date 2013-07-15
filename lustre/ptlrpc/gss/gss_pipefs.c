@@ -141,19 +141,19 @@ void ctx_enhash_pf(struct ptlrpc_cli_ctx *ctx, cfs_hlist_head_t *hash)
 static
 void ctx_unhash_pf(struct ptlrpc_cli_ctx *ctx, cfs_hlist_head_t *freelist)
 {
-        LASSERT_SPIN_LOCKED(&ctx->cc_sec->ps_lock);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(spin_is_locked(&ctx->cc_sec->ps_lock));
+	LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
-        LASSERT(!cfs_hlist_unhashed(&ctx->cc_cache));
+	LASSERT(!cfs_hlist_unhashed(&ctx->cc_cache));
 
 	clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
 
-        if (cfs_atomic_dec_and_test(&ctx->cc_refcount)) {
-                __cfs_hlist_del(&ctx->cc_cache);
-                cfs_hlist_add_head(&ctx->cc_cache, freelist);
-        } else {
-                cfs_hlist_del_init(&ctx->cc_cache);
-        }
+	if (cfs_atomic_dec_and_test(&ctx->cc_refcount)) {
+		__cfs_hlist_del(&ctx->cc_cache);
+		cfs_hlist_add_head(&ctx->cc_cache, freelist);
+	} else {
+		cfs_hlist_del_init(&ctx->cc_cache);
+	}
 }
 
 /*
@@ -731,17 +731,17 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
 static
 void gss_unhash_msg_nolock(struct gss_upcall_msg *gmsg)
 {
-        __u32 idx = gmsg->gum_mechidx;
+	__u32 idx = gmsg->gum_mechidx;
 
-        LASSERT(idx < MECH_MAX);
-        LASSERT_SPIN_LOCKED(&upcall_locks[idx]);
+	LASSERT(idx < MECH_MAX);
+	LASSERT(spin_is_locked(&upcall_locks[idx]));
 
-        if (cfs_list_empty(&gmsg->gum_list))
-                return;
+	if (cfs_list_empty(&gmsg->gum_list))
+		return;
 
-        cfs_list_del_init(&gmsg->gum_list);
-        LASSERT(cfs_atomic_read(&gmsg->gum_refcount) > 1);
-        cfs_atomic_dec(&gmsg->gum_refcount);
+	cfs_list_del_init(&gmsg->gum_list);
+	LASSERT(cfs_atomic_read(&gmsg->gum_refcount) > 1);
+	cfs_atomic_dec(&gmsg->gum_refcount);
 }
 
 static

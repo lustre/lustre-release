@@ -42,12 +42,10 @@
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
-#define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
 /* winnt panic */
 void libcfs_panic(char *msg);
-#define LIBCFS_PANIC(msg) libcfs_panic(msg)
+#define panic(msg) libcfs_panic(msg)
 void libcfs_register_panic_notifier();
 void libcfs_unregister_panic_notifier();
 
@@ -87,11 +85,9 @@ void libcfs_unregister_panic_notifier();
 #define cfs_assert     _ASSERT
 
 #ifndef get_cpu
-#define cfs_get_cpu() cfs_smp_processor_id()
-#define cfs_put_cpu() do { } while (0)
+#define get_cpu() smp_processor_id()
+#define put_cpu() do { } while (0)
 #else
-#define cfs_get_cpu() get_cpu()
-#define cfs_put_cpu() put_cpu()
 #endif
 
 #endif /* End of !__KERNEL__ */

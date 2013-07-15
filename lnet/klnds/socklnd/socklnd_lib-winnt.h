@@ -51,7 +51,7 @@ int ksocknal_nsched(void)
 static inline int
 ksocknal_nsched(void)
 {
-        return cfs_num_online_cpus();
+	return num_online_cpus();
 }
 
 static inline int

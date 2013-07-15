@@ -72,7 +72,7 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-#define LDLM_DEFAULT_LRU_SIZE (100 * cfs_num_online_cpus())
+#define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 #define LDLM_CTIME_AGE_LIMIT (10)
 #define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024
@@ -1491,7 +1491,7 @@ static inline void unlock_res(struct ldlm_resource *res)
 /** Check if resource is already locked, assert if not. */
 static inline void check_res_locked(struct ldlm_resource *res)
 {
-        LASSERT_SPIN_LOCKED(&res->lr_lock);
+	LASSERT(spin_is_locked(&res->lr_lock));
 }
 
 struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);

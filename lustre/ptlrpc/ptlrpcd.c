@@ -114,10 +114,10 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
                 return &ptlrpcds->pd_thread_rcv;
 
 #ifdef __KERNEL__
-        switch (policy) {
-        case PDL_POLICY_SAME:
-                idx = cfs_smp_processor_id() % ptlrpcds->pd_nthreads;
-                break;
+	switch (policy) {
+	case PDL_POLICY_SAME:
+		idx = smp_processor_id() % ptlrpcds->pd_nthreads;
+		break;
         case PDL_POLICY_LOCAL:
                 /* Before CPU partition patches available, process it the same
                  * as "PDL_POLICY_ROUND". */
@@ -128,7 +128,7 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
                  * CPU partition patches are available. */
                 index = -1;
         case PDL_POLICY_PREFERRED:
-                if (index >= 0 && index < cfs_num_online_cpus()) {
+		if (index >= 0 && index < num_online_cpus()) {
                         idx = index % ptlrpcds->pd_nthreads;
                         break;
                 }
@@ -138,7 +138,7 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
         case PDL_POLICY_ROUND:
                 /* We do not care whether it is strict load balance. */
                 idx = ptlrpcds->pd_index + 1;
-                if (idx == cfs_smp_processor_id())
+		if (idx == smp_processor_id())
                         idx++;
                 idx %= ptlrpcds->pd_nthreads;
                 ptlrpcds->pd_index = idx;
@@ -415,9 +415,9 @@ static int ptlrpcd(void *arg)
 	if (test_bit(LIOD_BIND, &pc->pc_flags)) {
 		int index = pc->pc_index;
 
-                if (index >= 0 && index < cfs_num_possible_cpus()) {
+		if (index >= 0 && index < num_possible_cpus()) {
 			while (!cpu_online(index)) {
-				if (++index >= cfs_num_possible_cpus())
+				if (++index >= num_possible_cpus())
 					index = 0;
 			}
 			set_cpus_allowed_ptr(cfs_current(),
@@ -547,7 +547,7 @@ static int ptlrpcd_bind(int index, int max)
 	{
 		int i;
 		mask = *cpumask_of_node(cpu_to_node(index));
-		for (i = max; i < cfs_num_online_cpus(); i++)
+		for (i = max; i < num_online_cpus(); i++)
 			cpu_clear(i, mask);
 		pc->pc_npartners = cpus_weight(mask) - 1;
 		set_bit(LIOD_BIND, &pc->pc_flags);
@@ -828,10 +828,10 @@ static void ptlrpcd_fini(void)
 
 static int ptlrpcd_init(void)
 {
-        int nthreads = cfs_num_online_cpus();
-        char name[16];
-        int size, i = -1, j, rc = 0;
-        ENTRY;
+	int nthreads = num_online_cpus();
+	char name[16];
+	int size, i = -1, j, rc = 0;
+	ENTRY;
 
 #ifdef __KERNEL__
         if (max_ptlrpcds > 0 && max_ptlrpcds < nthreads)

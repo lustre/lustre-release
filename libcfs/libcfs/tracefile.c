@@ -165,11 +165,11 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 			}
 		}
 
-                tage->used = 0;
-                tage->cpu = cfs_smp_processor_id();
-                tage->type = tcd->tcd_type;
-                cfs_list_add_tail(&tage->linkage, &tcd->tcd_pages);
-                tcd->tcd_cur_pages++;
+		tage->used = 0;
+		tage->cpu = smp_processor_id();
+		tage->type = tcd->tcd_type;
+		cfs_list_add_tail(&tage->linkage, &tcd->tcd_pages);
+		tcd->tcd_cur_pages++;
 
                 if (tcd->tcd_cur_pages > 8 && thread_running) {
                         struct tracefiled_ctl *tctl = &trace_tctl;
@@ -482,22 +482,22 @@ EXPORT_SYMBOL(libcfs_debug_vmsg2);
 
 void
 cfs_trace_assertion_failed(const char *str,
-                           struct libcfs_debug_msg_data *msgdata)
+			   struct libcfs_debug_msg_data *msgdata)
 {
-        struct ptldebug_header hdr;
+	struct ptldebug_header hdr;
 
-        libcfs_panic_in_progress = 1;
-        libcfs_catastrophe = 1;
-        cfs_mb();
+	libcfs_panic_in_progress = 1;
+	libcfs_catastrophe = 1;
+	cfs_mb();
 
-        cfs_set_ptldebug_header(&hdr, msgdata, CDEBUG_STACK());
+	cfs_set_ptldebug_header(&hdr, msgdata, CDEBUG_STACK());
 
-        cfs_print_to_console(&hdr, D_EMERG, str, strlen(str),
-                             msgdata->msg_file, msgdata->msg_fn);
+	cfs_print_to_console(&hdr, D_EMERG, str, strlen(str),
+			     msgdata->msg_file, msgdata->msg_fn);
 
-        LIBCFS_PANIC("Lustre debug assertion failure\n");
+	panic("Lustre debug assertion failure\n");
 
-        /* not reached */
+	/* not reached */
 }
 
 static void
@@ -916,37 +916,37 @@ int cfs_trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
 
 int cfs_trace_set_debug_mb(int mb)
 {
-        int i;
-        int j;
-        int pages;
-        int limit = cfs_trace_max_debug_mb();
-        struct cfs_trace_cpu_data *tcd;
+	int i;
+	int j;
+	int pages;
+	int limit = cfs_trace_max_debug_mb();
+	struct cfs_trace_cpu_data *tcd;
 
-        if (mb < cfs_num_possible_cpus()) {
-                printk(CFS_KERN_WARNING
-                       "Lustre: %d MB is too small for debug buffer size, "
-                       "setting it to %d MB.\n", mb, cfs_num_possible_cpus());
-                mb = cfs_num_possible_cpus();
-        }
+	if (mb < num_possible_cpus()) {
+		printk(CFS_KERN_WARNING
+		       "Lustre: %d MB is too small for debug buffer size, "
+		       "setting it to %d MB.\n", mb, num_possible_cpus());
+		mb = num_possible_cpus();
+	}
 
-        if (mb > limit) {
-                printk(CFS_KERN_WARNING
-                       "Lustre: %d MB is too large for debug buffer size, "
-                       "setting it to %d MB.\n", mb, limit);
-                mb = limit;
-        }
+	if (mb > limit) {
+		printk(CFS_KERN_WARNING
+		       "Lustre: %d MB is too large for debug buffer size, "
+		       "setting it to %d MB.\n", mb, limit);
+		mb = limit;
+	}
 
-        mb /= cfs_num_possible_cpus();
+	mb /= num_possible_cpus();
 	pages = mb << (20 - PAGE_CACHE_SHIFT);
 
-        cfs_tracefile_write_lock();
+	cfs_tracefile_write_lock();
 
-        cfs_tcd_for_each(tcd, i, j)
-                tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
+	cfs_tcd_for_each(tcd, i, j)
+		tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
 
-        cfs_tracefile_write_unlock();
+	cfs_tracefile_write_unlock();
 
-        return 0;
+	return 0;
 }
 
 int cfs_trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob)
@@ -1054,16 +1054,16 @@ static int tracefiled(void *arg)
                 if (!cfs_list_empty(&pc.pc_pages)) {
                         int i;
 
-                        printk(CFS_KERN_ALERT "Lustre: trace pages aren't "
-                               " empty\n");
-                        printk(CFS_KERN_ERR "total cpus(%d): ",
-                               cfs_num_possible_cpus());
-                        for (i = 0; i < cfs_num_possible_cpus(); i++)
-                                if (cpu_online(i))
-                                        printk(CFS_KERN_ERR "%d(on) ", i);
-                                else
-                                        printk(CFS_KERN_ERR "%d(off) ", i);
-                        printk(CFS_KERN_ERR "\n");
+			printk(CFS_KERN_ALERT "Lustre: trace pages aren't "
+			       " empty\n");
+			printk(CFS_KERN_ERR "total cpus(%d): ",
+			       num_possible_cpus());
+			for (i = 0; i < num_possible_cpus(); i++)
+				if (cpu_online(i))
+					printk(CFS_KERN_ERR "%d(on) ", i);
+				else
+					printk(CFS_KERN_ERR "%d(off) ", i);
+			printk(CFS_KERN_ERR "\n");
 
                         i = 0;
                         cfs_list_for_each_entry_safe(tage, tmp, &pc.pc_pages,

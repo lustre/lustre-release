@@ -64,7 +64,7 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	ENTRY;
 
 	LASSERT(res);
-	LASSERT_MUTEX_LOCKED(&res->lr_lvb_mutex);
+	LASSERT(mutex_is_locked(&res->lr_lvb_mutex));
 
 	if (res->lr_lvb_data != NULL)
 		RETURN(0);

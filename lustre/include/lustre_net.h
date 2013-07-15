@@ -265,7 +265,7 @@
 #define LDLM_THR_FACTOR		8
 #define LDLM_NTHRS_INIT		PTLRPC_NTHRS_INIT
 #define LDLM_NTHRS_BASE		24
-#define LDLM_NTHRS_MAX		(cfs_num_online_cpus() == 1 ? 64 : 128)
+#define LDLM_NTHRS_MAX		(num_online_cpus() == 1 ? 64 : 128)
 
 #define LDLM_BL_THREADS   LDLM_NTHRS_AUTO_INIT
 #define LDLM_CLIENT_NBUFS 1

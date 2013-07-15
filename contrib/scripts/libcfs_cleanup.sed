@@ -353,3 +353,29 @@ s/cfs_mem_cache_destroy/kmem_cache_destroy/g
 s/cfs_mem_cache_alloc/kmem_cache_alloc/g
 s/cfs_mem_cache_free/kmem_cache_free/g
 s/cfs_mem_is_in_cache/kmem_is_in_cache/g
+
+################################################################################
+# macros in kp30.h
+
+s/\bcfs_num_online_cpus\b/num_online_cpus/g
+/#[ \t]*define[ \t]*\bnum_online_cpus\b *( *)[ \t]*\bnum_online_cpus\b *( *)/d
+s/\bwait_on_page\b/wait_on_page_locked/g
+/#[ \t]*define[ \t]*\bwait_on_page_locked\b[ \t]*\bwait_on_page_locked\b/d
+s/^\([ \t]*\)LASSERT_SPIN_LOCKED\b *\((.*)\)/\1LASSERT(spin_is_locked\2)/g
+/#[ \t]*define[ \t]*\bLASSERT_SPIN_LOCKED\b/d
+s/^\([ \t]*\)LINVRNT_SPIN_LOCKED\b *\((.*)\)/\1LINVRNT(spin_is_locked\2)/g
+/#[ \t]*define[ \t]*\bLINVRNT_SPIN_LOCKED\b/d
+s/^\([ \t]*\)LASSERT_SEM_LOCKED\b *\((.*)\)/\1LASSERT(down_trylock\2 != 0)/g
+/#[ \t]*define[ \t]*\bLASSERT_SEM_LOCKED\b/d
+s/^\([ \t]*\)LASSERT_MUTEX_LOCKED\b *\((.*)\)/\1LASSERT(mutex_is_locked\2)/g
+/#[ \t]*define[ \t]*\bLASSERT_MUTEX_LOCKED\b/d
+s/\bLIBCFS_PANIC\b/panic/g
+/#[ \t]*define[ \t]*\bpanic\b *( *\w* *)[ \t]*\bpanic\b *( *\w* *)/d
+s/\bcfs_num_possible_cpus\b/num_possible_cpus/g
+/#[ \t]*define[ \t]*\bnum_possible_cpus\b *( *)[ \t]*\bnum_possible_cpus\b *( *)/d
+s/\bcfs_smp_processor_id\b/smp_processor_id/g
+/#[ \t]*define[ \t]*\bsmp_processor_id\b *( *)[ \t]*\bsmp_processor_id\b *( *)/d
+s/\bcfs_get_cpu\b/get_cpu/g
+/#[ \t]*define[ \t]*\bget_cpu\b *( *)[ \t]*\bget_cpu\b *( *)/d
+s/\bcfs_put_cpu\b/put_cpu/g
+/#[ \t]*define[ \t]*\bput_cpu\b *( *)[ \t]*\bput_cpu\b *( *)/d

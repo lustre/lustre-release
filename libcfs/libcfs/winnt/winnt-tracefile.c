@@ -75,7 +75,7 @@ int cfs_tracefile_init_arch()
 		tcd->tcd_cpu = (USHORT)j;
 	}
 
-	for (i = 0; i < cfs_num_possible_cpus(); i++)
+	for (i = 0; i < num_possible_cpus(); i++)
 		for (j = 0; j < CFS_TCD_TYPE_MAX; j++) {
 			cfs_trace_console_buffers[i][j] =
 				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
@@ -99,7 +99,7 @@ void cfs_tracefile_fini_arch()
 	int    i;
 	int    j;
 
-	for (i = 0; i < cfs_num_possible_cpus(); i++) {
+	for (i = 0; i < num_possible_cpus(); i++) {
 		for (j = 0; j < CFS_TCD_TYPE_MAX; j++) {
 			if (cfs_trace_console_buffers[i][j] != NULL) {
 				kfree(cfs_trace_console_buffers[i][j]);
@@ -175,7 +175,7 @@ cfs_set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 
 	header->ph_subsys = subsys;
 	header->ph_mask = mask;
-	header->ph_cpu_id = cfs_smp_processor_id();
+	header->ph_cpu_id = smp_processor_id();
 	header->ph_type = cfs_trace_buf_idx_get();
 	header->ph_sec = (__u32)tv.tv_sec;
 	header->ph_usec = tv.tv_usec;

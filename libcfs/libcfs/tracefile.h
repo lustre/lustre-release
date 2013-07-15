@@ -189,11 +189,11 @@ union cfs_trace_data_union {
 #define TCD_MAX_TYPES      8
 extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS];
 
-#define cfs_tcd_for_each(tcd, i, j)                                       \
-    for (i = 0; cfs_trace_data[i] != NULL; i++)                           \
-        for (j = 0, ((tcd) = &(*cfs_trace_data[i])[j].tcd);               \
-             j < cfs_num_possible_cpus();                                 \
-             j++, (tcd) = &(*cfs_trace_data[i])[j].tcd)
+#define cfs_tcd_for_each(tcd, i, j)					  \
+    for (i = 0; cfs_trace_data[i] != NULL; i++)				  \
+	for (j = 0, ((tcd) = &(*cfs_trace_data[i])[j].tcd);		  \
+	     j < num_possible_cpus();					  \
+	     j++, (tcd) = &(*cfs_trace_data[i])[j].tcd)
 
 #define cfs_tcd_for_each_type_lock(tcd, i, cpu)                           \
     for (i = 0; cfs_trace_data[i] &&                                      \
@@ -279,38 +279,34 @@ extern void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
 extern char *cfs_trace_console_buffers[CFS_NR_CPUS][CFS_TCD_TYPE_MAX];
 extern cfs_trace_buf_type_t cfs_trace_buf_idx_get(void);
 
-static inline char *
-cfs_trace_get_console_buffer(void)
+static inline char *cfs_trace_get_console_buffer(void)
 {
-        unsigned int i = cfs_get_cpu();
-        unsigned int j = cfs_trace_buf_idx_get();
+	unsigned int i = get_cpu();
+	unsigned int j = cfs_trace_buf_idx_get();
 
-        return cfs_trace_console_buffers[i][j];
+	return cfs_trace_console_buffers[i][j];
 }
 
 static inline void
 cfs_trace_put_console_buffer(char *buffer)
 {
-        cfs_put_cpu();
+	put_cpu();
 }
 
-static inline struct cfs_trace_cpu_data *
-cfs_trace_get_tcd(void)
+static inline struct cfs_trace_cpu_data *cfs_trace_get_tcd(void)
 {
 	struct cfs_trace_cpu_data *tcd =
-                &(*cfs_trace_data[cfs_trace_buf_idx_get()])[cfs_get_cpu()].tcd;
+		&(*cfs_trace_data[cfs_trace_buf_idx_get()])[get_cpu()].tcd;
 
 	cfs_trace_lock_tcd(tcd, 0);
 
 	return tcd;
 }
 
-static inline void
-cfs_trace_put_tcd (struct cfs_trace_cpu_data *tcd)
+static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
 {
 	cfs_trace_unlock_tcd(tcd, 0);
-
-	cfs_put_cpu();
+	put_cpu();
 }
 
 int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, int gfp,

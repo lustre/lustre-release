@@ -5886,7 +5886,7 @@ ks_init_tdi_data()
     }
 
     /* initialize engine threads list */
-    ks_data.ksnd_engine_nums = cfs_num_online_cpus();
+    ks_data.ksnd_engine_nums = num_online_cpus();
     if (ks_data.ksnd_engine_nums < 4) {
         ks_data.ksnd_engine_nums = 4;
     }

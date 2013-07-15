@@ -59,24 +59,13 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
  * Just present a single processor until will add thread support.
  */
 #ifndef smp_processor_id
-# define cfs_smp_processor_id() 0
-#else
-# define cfs_smp_processor_id() smp_processor_id()
+# define smp_processor_id() 0
 #endif
 #ifndef num_online_cpus
-# define cfs_num_online_cpus() 1
-#else
-# define cfs_num_online_cpus() num_online_cpus()
+# define num_online_cpus() 1
 #endif
 #ifndef num_possible_cpus
-# define cfs_num_possible_cpus() 1
-#else
-# define cfs_num_possible_cpus() num_possible_cpus()
-#endif
-#ifndef num_present_cpus
-# define cfs_num_present_cpus() 1
-#else
-# define cfs_num_present_cpus() num_present_cpus()
+# define num_possible_cpus() 1
 #endif
 /*
  * Wait Queue.

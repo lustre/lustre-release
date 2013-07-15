@@ -525,7 +525,7 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	/**********************************************************************/
 	/* Spawn scheduling threads */
-	for (i = 0; i < cfs_num_online_cpus(); i++) {
+	for (i = 0; i < num_online_cpus(); i++) {
 		rc = kqswnal_thread_start(kqswnal_scheduler, NULL,
 					  "kqswnal_sched");
 		if (rc != 0)

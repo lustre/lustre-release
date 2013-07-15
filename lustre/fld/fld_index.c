@@ -173,7 +173,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
 
-	LASSERT_MUTEX_LOCKED(&fld->lsf_lock);
+	LASSERT(mutex_is_locked(&fld->lsf_lock));
 
 	range = &info->fti_lrange;
 	memset(range, 0, sizeof(*range));

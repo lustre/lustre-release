@@ -155,14 +155,14 @@ cl_page_at_trusted(const struct cl_page *page,
  */
 struct cl_page *cl_page_lookup(struct cl_object_header *hdr, pgoff_t index)
 {
-        struct cl_page *page;
+	struct cl_page *page;
 
-        LASSERT_SPIN_LOCKED(&hdr->coh_page_guard);
+	LASSERT(spin_is_locked(&hdr->coh_page_guard));
 
-        page = radix_tree_lookup(&hdr->coh_tree, index);
-        if (page != NULL)
-                cl_page_get_trust(page);
-        return page;
+	page = radix_tree_lookup(&hdr->coh_tree, index);
+	if (page != NULL)
+		cl_page_get_trust(page);
+	return page;
 }
 EXPORT_SYMBOL(cl_page_lookup);
 

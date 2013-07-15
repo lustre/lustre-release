@@ -408,15 +408,15 @@ int libcfs_debug_init(unsigned long bufsize)
                         libcfs_debug_file_path, PATH_MAX-1);
         }
 
-        /* If libcfs_debug_mb is set to an invalid value or uninitialized
-         * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
-        if (max > cfs_trace_max_debug_mb() || max < cfs_num_possible_cpus()) {
-                max = TCD_MAX_PAGES;
-        } else {
-                max = (max / cfs_num_possible_cpus());
+	/* If libcfs_debug_mb is set to an invalid value or uninitialized
+	 * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
+	if (max > cfs_trace_max_debug_mb() || max < num_possible_cpus()) {
+		max = TCD_MAX_PAGES;
+	} else {
+		max = (max / num_possible_cpus());
 		max = (max << (20 - PAGE_CACHE_SHIFT));
-        }
-        rc = cfs_tracefile_init(max);
+	}
+	rc = cfs_tracefile_init(max);
 
         if (rc == 0)
                 libcfs_register_panic_notifier();

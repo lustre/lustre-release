@@ -504,11 +504,11 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
 
         ENTRY;
 
-        head = cl_object_header(obj);
-        LINVRNT_SPIN_LOCKED(&head->coh_lock_guard);
+	head = cl_object_header(obj);
+	LINVRNT(spin_is_locked(&head->coh_lock_guard));
 	CS_LOCK_INC(obj, lookup);
-        cfs_list_for_each_entry(lock, &head->coh_locks, cll_linkage) {
-                int matched;
+	cfs_list_for_each_entry(lock, &head->coh_locks, cll_linkage) {
+		int matched;
 
                 matched = cl_lock_ext_match(&lock->cll_descr, need) &&
                           lock->cll_state < CLS_FREEING &&

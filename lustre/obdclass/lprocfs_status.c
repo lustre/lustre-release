@@ -1287,7 +1287,7 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 	if (flags & LPROCFS_STATS_FLAG_NOPERCPU)
 		num_entry = 1;
 	else
-		num_entry = cfs_num_possible_cpus();
+		num_entry = num_possible_cpus();
 
 	/* alloc percpu pointers for all possible cpu slots */
 	LIBCFS_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
@@ -1340,7 +1340,7 @@ void lprocfs_free_stats(struct lprocfs_stats **statsh)
 	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
 		num_entry = 1;
 	else
-		num_entry = cfs_num_possible_cpus();
+		num_entry = num_possible_cpus();
 
 	percpusize = lprocfs_stats_counter_size(stats);
 	for (i = 0; i < num_entry; i++)

@@ -64,7 +64,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	int i;
 	int rc = 0;
 
-	LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+	LASSERT(spin_is_locked(&lsm->lsm_lock));
 #ifdef __KERNEL__
 	LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
 #endif
@@ -155,9 +155,9 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u64 kms;
         ENTRY;
 
-        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+	LASSERT(spin_is_locked(&lsm->lsm_lock));
 #ifdef __KERNEL__
-        LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
+	LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
 #endif
 
         if (shrink) {

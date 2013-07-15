@@ -218,11 +218,11 @@ EXPORT_SYMBOL(cl_object_attr_unlock);
 int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
                        struct cl_attr *attr)
 {
-        struct lu_object_header *top;
-        int result;
+	struct lu_object_header *top;
+	int result;
 
-        LASSERT_SPIN_LOCKED(cl_object_attr_guard(obj));
-        ENTRY;
+	LASSERT(spin_is_locked(cl_object_attr_guard(obj)));
+	ENTRY;
 
         top = obj->co_lu.lo_header;
         result = 0;
@@ -250,11 +250,11 @@ EXPORT_SYMBOL(cl_object_attr_get);
 int cl_object_attr_set(const struct lu_env *env, struct cl_object *obj,
                        const struct cl_attr *attr, unsigned v)
 {
-        struct lu_object_header *top;
-        int result;
+	struct lu_object_header *top;
+	int result;
 
-        LASSERT_SPIN_LOCKED(cl_object_attr_guard(obj));
-        ENTRY;
+	LASSERT(spin_is_locked(cl_object_attr_guard(obj)));
+	ENTRY;
 
         top = obj->co_lu.lo_header;
         result = 0;

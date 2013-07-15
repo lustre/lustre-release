@@ -1471,8 +1471,8 @@ static inline void cl_isize_unlock(struct inode *inode)
 
 static inline void cl_isize_write_nolock(struct inode *inode, loff_t kms)
 {
-        LASSERT_SEM_LOCKED(&ll_i2info(inode)->lli_size_sem);
-        i_size_write(inode, kms);
+	LASSERT(down_trylock(&ll_i2info(inode)->lli_size_sem) != 0);
+	i_size_write(inode, kms);
 }
 
 static inline void cl_isize_write(struct inode *inode, loff_t kms)

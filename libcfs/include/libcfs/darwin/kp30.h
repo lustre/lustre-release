@@ -51,21 +51,10 @@
 #include <libcfs/darwin/darwin-prim.h>
 #include <lnet/lnet.h>
 
-#ifdef CONFIG_SMP
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0) /* XXX */
-#else
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
-#endif
-#define LASSERT_SEM_LOCKED(sem) do {} while(0) /* XXX */
-
-#define LIBCFS_PANIC(msg) panic(msg)
 #error libcfs_register_panic_notifier() missing
 #error libcfs_unregister_panic_notifier() missing
 
 /* --------------------------------------------------------------------- */
-
-#define PORTAL_SYMBOL_REGISTER(x)               cfs_symbol_register(#x, &x)
-#define PORTAL_SYMBOL_UNREGISTER(x)             cfs_symbol_unregister(#x)
 
 #define PORTAL_SYMBOL_GET(x)                    ((typeof(&x))cfs_symbol_get(#x))
 #define PORTAL_SYMBOL_PUT(x)                    cfs_symbol_put(#x)

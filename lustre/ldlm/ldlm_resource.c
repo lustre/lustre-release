@@ -1033,7 +1033,7 @@ void ldlm_namespace_move_to_active_locked(struct ldlm_namespace *ns,
 				       ldlm_side_t client)
 {
 	LASSERT(!cfs_list_empty(&ns->ns_list_chain));
-	LASSERT_MUTEX_LOCKED(ldlm_namespace_lock(client));
+	LASSERT(mutex_is_locked(ldlm_namespace_lock(client)));
 	cfs_list_move_tail(&ns->ns_list_chain, ldlm_namespace_list(client));
 }
 
@@ -1042,7 +1042,7 @@ void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *ns,
 					 ldlm_side_t client)
 {
 	LASSERT(!cfs_list_empty(&ns->ns_list_chain));
-	LASSERT_MUTEX_LOCKED(ldlm_namespace_lock(client));
+	LASSERT(mutex_is_locked(ldlm_namespace_lock(client)));
 	cfs_list_move_tail(&ns->ns_list_chain,
 			   ldlm_namespace_inactive_list(client));
 }
@@ -1050,10 +1050,10 @@ void ldlm_namespace_move_to_inactive_locked(struct ldlm_namespace *ns,
 /** Should be called with ldlm_namespace_lock(client) taken. */
 struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client)
 {
-        LASSERT_MUTEX_LOCKED(ldlm_namespace_lock(client));
-        LASSERT(!cfs_list_empty(ldlm_namespace_list(client)));
-        return container_of(ldlm_namespace_list(client)->next,
-                struct ldlm_namespace, ns_list_chain);
+	LASSERT(mutex_is_locked(ldlm_namespace_lock(client)));
+	LASSERT(!cfs_list_empty(ldlm_namespace_list(client)));
+	return container_of(ldlm_namespace_list(client)->next,
+			    struct ldlm_namespace, ns_list_chain);
 }
 
 /** Create and initialize new resource. */

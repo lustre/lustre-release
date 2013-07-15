@@ -173,7 +173,7 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 	struct buffer_head *bh;
 	int err;
 
-	LASSERT_SEM_LOCKED(&c->ic_idle_sem);
+	LASSERT(down_trylock(&c->ic_idle_sem) != 0);
 
 	if (blk == 0)
 		return NULL;

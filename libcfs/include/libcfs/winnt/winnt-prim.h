@@ -838,10 +838,9 @@ libcfs_arch_cleanup(void);
 #define SMP_CACHE_BYTES             128
 #define CFS_NR_CPUS                 (32)
 #define smp_num_cpus                ((CCHAR)KeNumberProcessors)
-#define cfs_num_possible_cpus()     smp_num_cpus
-#define cfs_num_present_cpus()      smp_num_cpus
-#define cfs_num_online_cpus()       smp_num_cpus
-#define cfs_smp_processor_id()	    ((USHORT)KeGetCurrentProcessorNumber())
+#define num_possible_cpus()     smp_num_cpus
+#define num_online_cpus()       smp_num_cpus
+#define smp_processor_id()	    ((USHORT)KeGetCurrentProcessorNumber())
 #define smp_call_function(f, a, n, w)		do {} while(0)
 #define smp_rmb()                   do {} while(0)
 

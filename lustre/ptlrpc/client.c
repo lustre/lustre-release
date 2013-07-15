@@ -2255,8 +2255,8 @@ static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
  */
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
 {
-        LASSERT_SPIN_LOCKED(&request->rq_import->imp_lock);
-        (void)__ptlrpc_req_finished(request, 1);
+	LASSERT(spin_is_locked(&request->rq_import->imp_lock));
+	(void)__ptlrpc_req_finished(request, 1);
 }
 EXPORT_SYMBOL(ptlrpc_req_finished_with_imp_lock);
 
@@ -2404,9 +2404,8 @@ void ptlrpc_free_committed(struct obd_import *imp)
         struct ptlrpc_request *last_req = NULL; /* temporary fire escape */
         ENTRY;
 
-        LASSERT(imp != NULL);
-
-        LASSERT_SPIN_LOCKED(&imp->imp_lock);
+	LASSERT(imp != NULL);
+	LASSERT(spin_is_locked(&imp->imp_lock));
 
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
@@ -2535,9 +2534,9 @@ EXPORT_SYMBOL(ptlrpc_request_addref);
 void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                                       struct obd_import *imp)
 {
-        cfs_list_t *tmp;
+	cfs_list_t *tmp;
 
-        LASSERT_SPIN_LOCKED(&imp->imp_lock);
+	LASSERT(spin_is_locked(&imp->imp_lock));
 
         if (req->rq_transno == 0) {
                 DEBUG_REQ(D_EMERG, req, "saving request with zero transno");

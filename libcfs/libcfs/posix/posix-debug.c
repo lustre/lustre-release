@@ -54,7 +54,7 @@ struct utsname *tmp_utsname;
 static char source_nid[sizeof(tmp_utsname->nodename)];
 
 static int source_pid;
-int cfs_smp_processor_id = 1;
+int smp_processor_id = 1;
 char libcfs_debug_file_path[1024];
 FILE *debug_file_fd;
 

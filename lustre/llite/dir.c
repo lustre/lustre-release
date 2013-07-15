@@ -289,8 +289,8 @@ static struct page *ll_dir_page_locate(struct inode *dir, __u64 *hash,
                  * In fact, page cannot be locked here at all, because
 		 * ll_dir_filler() does synchronous io.
                  */
-                wait_on_page(page);
-                if (PageUptodate(page)) {
+		wait_on_page_locked(page);
+		if (PageUptodate(page)) {
 			dp = kmap(page);
                         if (BITS_PER_LONG == 32 && hash64) {
                                 *start = le64_to_cpu(dp->ldp_hash_start) >> 32;
@@ -423,13 +423,13 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
                 GOTO(out_unlock, page);
         }
 
-        wait_on_page(page);
-        (void)kmap(page);
-        if (!PageUptodate(page)) {
-                CERROR("page not updated: "DFID" at "LPU64": rc %d\n",
-                       PFID(ll_inode2fid(dir)), hash, -5);
-                goto fail;
-        }
+	wait_on_page_locked(page);
+	(void)kmap(page);
+	if (!PageUptodate(page)) {
+		CERROR("page not updated: "DFID" at "LPU64": rc %d\n",
+		       PFID(ll_inode2fid(dir)), hash, -5);
+		goto fail;
+	}
         if (!PageChecked(page))
                 ll_check_page(dir, page);
         if (PageError(page)) {

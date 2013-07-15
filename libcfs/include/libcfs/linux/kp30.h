@@ -73,31 +73,7 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
-#define cfs_get_work_data(type,field,data) container_of(data,type,field)
-
-#define cfs_num_online_cpus() num_online_cpus()
-#define wait_on_page wait_on_page_locked
-#define our_recalc_sigpending(current) recalc_sigpending()
-#define strtok(a,b) strpbrk(a, b)
-#define work_struct_t      struct work_struct
-
-#ifdef CONFIG_SMP
-#define LASSERT_SPIN_LOCKED(lock) LASSERT(spin_is_locked(lock))
-#define LINVRNT_SPIN_LOCKED(lock) LINVRNT(spin_is_locked(lock))
-#else
-#define LASSERT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
-#define LINVRNT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
-#endif
-
-#define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
-#define LASSERT_MUTEX_LOCKED(x) LASSERT(mutex_is_locked(x))
-
-#define LIBCFS_PANIC(msg)            panic(msg)
-
 /* ------------------------------------------------------------------- */
-
-#define PORTAL_SYMBOL_REGISTER(x)
-#define PORTAL_SYMBOL_UNREGISTER(x)
 
 #define PORTAL_SYMBOL_GET(x) symbol_get(x)
 #define PORTAL_SYMBOL_PUT(x) symbol_put(x)
@@ -131,9 +107,6 @@
 # define fprintf(a, format, b...) CDEBUG(D_OTHER, format , ## b)
 # define printf(format, b...) CDEBUG(D_OTHER, format , ## b)
 # define time(a) CURRENT_TIME
-
-# define cfs_num_possible_cpus() num_possible_cpus()
-# define cfs_num_present_cpus()  num_present_cpus()
 
 /******************************************************************************/
 /* Light-weight trace
@@ -303,21 +276,6 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 #endif
 
 #undef _LWORDSIZE
-
-#define cfs_smp_processor_id()  smp_processor_id()
-
-#ifndef get_cpu
-# ifdef CONFIG_PREEMPT
-#  define cfs_get_cpu()  ({ preempt_disable(); smp_processor_id(); })
-#  define cfs_put_cpu()  preempt_enable()
-# else
-#  define cfs_get_cpu()  smp_processor_id()
-#  define cfs_put_cpu()
-# endif
-#else
-# define cfs_get_cpu()   get_cpu()
-# define cfs_put_cpu()   put_cpu()
-#endif /* get_cpu & put_cpu */
 
 #ifdef HAVE_SYSCTL_CTLNAME
 #define INIT_CTL_NAME(a) .ctl_name = a,

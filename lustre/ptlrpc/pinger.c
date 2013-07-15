@@ -386,7 +386,7 @@ EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 {
 	ptlrpc_update_next_ping(imp, 1);
-	LASSERT_SPIN_LOCKED(&imp->imp_lock);
+	LASSERT(spin_is_locked(&imp->imp_lock));
 	/*
 	 * Avoid reading stale imp_connect_data.  When not sure if pings are
 	 * expected or not on next connection, we assume they are not and force
@@ -470,13 +470,13 @@ static struct timeout_item*
 ptlrpc_pinger_register_timeout(int time, enum timeout_event event,
                                timeout_cb_t cb, void *data)
 {
-        struct timeout_item *item, *tmp;
+	struct timeout_item *item, *tmp;
 
-        LASSERT_MUTEX_LOCKED(&pinger_mutex);
+	LASSERT(mutex_is_locked(&pinger_mutex));
 
-        cfs_list_for_each_entry(item, &timeout_list, ti_chain)
-                if (item->ti_event == event)
-                        goto out;
+	cfs_list_for_each_entry(item, &timeout_list, ti_chain)
+		if (item->ti_event == event)
+			goto out;
 
         item = ptlrpc_new_timeout(time, event, cb, data);
         if (item) {

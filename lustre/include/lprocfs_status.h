@@ -417,12 +417,12 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int opc,
 				spin_lock(&stats->ls_lock);
 			return 0;
 		} else {
-			unsigned int cpuid = cfs_get_cpu();
+			unsigned int cpuid = get_cpu();
 
 			if (unlikely(stats->ls_percpu[cpuid] == NULL)) {
 				rc = lprocfs_stats_alloc_one(stats, cpuid);
 				if (rc < 0) {
-					cfs_put_cpu();
+					put_cpu();
 					return rc;
 				}
 			}
@@ -458,7 +458,7 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats, int opc,
 				spin_unlock(&stats->ls_lock);
 			}
 		} else {
-			cfs_put_cpu();
+			put_cpu();
 		}
 		return;
 

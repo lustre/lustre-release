@@ -404,20 +404,20 @@ ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs)
 {
 	ENTRY;
 
-	LASSERT_SPIN_LOCKED(&rs->rs_svcpt->scp_rep_lock);
-        LASSERT_SPIN_LOCKED(&rs->rs_lock);
-        LASSERT (rs->rs_difficult);
-        rs->rs_scheduled_ever = 1;  /* flag any notification attempt */
+	LASSERT(spin_is_locked(&rs->rs_svcpt->scp_rep_lock));
+	LASSERT(spin_is_locked(&rs->rs_lock));
+	LASSERT (rs->rs_difficult);
+	rs->rs_scheduled_ever = 1;  /* flag any notification attempt */
 
-        if (rs->rs_scheduled) {     /* being set up or already notified */
-                EXIT;
-                return;
-        }
+	if (rs->rs_scheduled) {     /* being set up or already notified */
+		EXIT;
+		return;
+	}
 
-        rs->rs_scheduled = 1;
-        cfs_list_del_init(&rs->rs_list);
-        ptlrpc_dispatch_difficult_reply(rs);
-        EXIT;
+	rs->rs_scheduled = 1;
+	cfs_list_del_init(&rs->rs_list);
+	ptlrpc_dispatch_difficult_reply(rs);
+	EXIT;
 }
 EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
 

@@ -105,8 +105,8 @@ lwt_control (int enable, int clear)
                 cfs_schedule_timeout(10);
         }
 
-        for (i = 0; i < cfs_num_online_cpus(); i++) {
-                p = lwt_cpus[i].lwtc_current_page;
+	for (i = 0; i < num_online_cpus(); i++) {
+		p = lwt_cpus[i].lwtc_current_page;
 
                 if (p == NULL)
                         return (-ENODATA);
@@ -141,19 +141,18 @@ lwt_snapshot(cfs_cycles_t *now, int *ncpu, int *total_size,
 	int          i;
 	int          j;
 
-        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-                return (-EPERM);
+	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+		return (-EPERM);
 
-        *ncpu = cfs_num_online_cpus();
-        *total_size = cfs_num_online_cpus() * lwt_pages_per_cpu *
-                bytes_per_page;
-        *now = get_cycles();
+	*ncpu = num_online_cpus();
+	*total_size = num_online_cpus() * lwt_pages_per_cpu * bytes_per_page;
+	*now = get_cycles();
 
-        if (user_ptr == NULL)
-                return (0);
+	if (user_ptr == NULL)
+		return (0);
 
-        for (i = 0; i < cfs_num_online_cpus(); i++) {
-                p = lwt_cpus[i].lwtc_current_page;
+	for (i = 0; i < num_online_cpus(); i++) {
+		p = lwt_cpus[i].lwtc_current_page;
 
                 if (p == NULL)
 			return -ENODATA;
@@ -172,24 +171,22 @@ lwt_snapshot(cfs_cycles_t *now, int *ncpu, int *total_size,
         return (0);
 }
 
-int
-lwt_init ()
+int lwt_init ()
 {
 	int     i;
-        int     j;
+	int     j;
 
-        for (i = 0; i < cfs_num_online_cpus(); i++)
-                if (lwt_cpus[i].lwtc_current_page != NULL)
-                        return (-EALREADY);
+	for (i = 0; i < num_online_cpus(); i++)
+		if (lwt_cpus[i].lwtc_current_page != NULL)
+			return (-EALREADY);
 
-        LASSERT (!lwt_enabled);
+	LASSERT (!lwt_enabled);
 
 	/* NULL pointers, zero scalars */
 	memset (lwt_cpus, 0, sizeof (lwt_cpus));
-	lwt_pages_per_cpu =
-		LWT_MEMORY / (cfs_num_online_cpus() * PAGE_CACHE_SIZE);
+	lwt_pages_per_cpu = LWT_MEMORY / (num_online_cpus() * PAGE_CACHE_SIZE);
 
-	for (i = 0; i < cfs_num_online_cpus(); i++)
+	for (i = 0; i < num_online_cpus(); i++)
 		for (j = 0; j < lwt_pages_per_cpu; j++) {
 			struct page *page = alloc_page(GFP_KERNEL);
 			lwt_page_t  *lwtp;
@@ -229,16 +226,15 @@ lwt_init ()
         return (0);
 }
 
-void
-lwt_fini ()
+void lwt_fini ()
 {
-        int    i;
+	int    i;
 
-        lwt_control(0, 0);
+	lwt_control(0, 0);
 
-        for (i = 0; i < cfs_num_online_cpus(); i++)
-                while (lwt_cpus[i].lwtc_current_page != NULL) {
-                        lwt_page_t *lwtp = lwt_cpus[i].lwtc_current_page;
+	for (i = 0; i < num_online_cpus(); i++)
+		while (lwt_cpus[i].lwtc_current_page != NULL) {
+			lwt_page_t *lwtp = lwt_cpus[i].lwtc_current_page;
 
                         if (cfs_list_empty (&lwtp->lwtp_list)) {
                                 lwt_cpus[i].lwtc_current_page = NULL;
