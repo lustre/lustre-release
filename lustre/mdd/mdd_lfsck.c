@@ -997,6 +997,8 @@ static int mdd_lfsck_namespace_reset(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
+	lu_object_put(env, &com->lc_obj->do_lu);
+	com->lc_obj = NULL;
 	dto = local_index_find_or_create(env, mdd->mdd_los, root,
 					 lfsck_namespace_name,
 					 S_IFREG | S_IRUGO | S_IWUSR,

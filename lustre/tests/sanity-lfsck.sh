@@ -128,6 +128,21 @@ test_0() {
 			 awk '/^updated_phase1/ { print $2 }')
 	[ $repaired -eq 0 ] ||
 		error "(10) Expect nothing to be repaired, but got: $repaired"
+
+	local scanned1=$($SHOW_NAMESPACE | awk '/^success_count/ { print $2 }')
+	$START_NAMESPACE -r || error "(11) Fail to reset LFSCK!"
+	sleep 3
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(12) Expect 'completed', but got '$STATUS'"
+
+	local scanned2=$($SHOW_NAMESPACE | awk '/^success_count/ { print $2 }')
+	[ $((scanned1 + 1)) -eq $scanned2 ] ||
+		error "(13) Expect success $((scanned1 + 1)), but got $scanned2"
+
+	echo "stopall, should NOT crash LU-3649"
+	stopall > /dev/null
 }
 run_test 0 "Control LFSCK manually"
 
