@@ -262,7 +262,7 @@ canon_path() {
 
 check_options() {
 
-    if [ -z "$LUSTRE" -o ! -r "$LUSTRE"]; then
+    if [ -z "$LUSTRE" -o ! -r "$LUSTRE" ]; then
         usage 1 "Could not find Lustre source tarball '$LUSTRE'."
     fi
 
