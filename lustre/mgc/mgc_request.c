@@ -540,13 +540,13 @@ static int mgc_requeue_thread(void *data)
 		rq_state &= ~(RQ_NOW | RQ_LATER);
 		spin_unlock(&config_list_lock);
 
-                /* Always wait a few seconds to allow the server who
-                   caused the lock revocation to finish its setup, plus some
-                   random so everyone doesn't try to reconnect at once. */
-                to = MGC_TIMEOUT_MIN_SECONDS * CFS_HZ;
-                to += rand * CFS_HZ / 100; /* rand is centi-seconds */
-                lwi = LWI_TIMEOUT(to, NULL, NULL);
-                l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi);
+		/* Always wait a few seconds to allow the server who
+		   caused the lock revocation to finish its setup, plus some
+		   random so everyone doesn't try to reconnect at once. */
+		to = MGC_TIMEOUT_MIN_SECONDS * HZ;
+		to += rand * HZ / 100; /* rand is centi-seconds */
+		lwi = LWI_TIMEOUT(to, NULL, NULL);
+		l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi);
 
                 /*
                  * iterate & processing through the list. for each cld, process

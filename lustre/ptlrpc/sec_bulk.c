@@ -177,11 +177,11 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       page_pools.epp_st_grow_fails,
                       page_pools.epp_st_shrinks,
                       page_pools.epp_st_access,
-                      page_pools.epp_st_missings,
-                      page_pools.epp_st_lowfree,
-                      page_pools.epp_st_max_wqlen,
-                      page_pools.epp_st_max_wait, CFS_HZ
-                     );
+		      page_pools.epp_st_missings,
+		      page_pools.epp_st_lowfree,
+		      page_pools.epp_st_max_wqlen,
+		      page_pools.epp_st_max_wait, HZ
+		     );
 
 	spin_unlock(&page_pools.epp_lock);
 	return rc;
@@ -776,10 +776,10 @@ void sptlrpc_enc_pool_fini(void)
                        CFS_TIME_T"/%d\n",
                        page_pools.epp_st_max_pages, page_pools.epp_st_grows,
                        page_pools.epp_st_grow_fails,
-                       page_pools.epp_st_shrinks, page_pools.epp_st_access,
-                       page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
-                       page_pools.epp_st_max_wait, CFS_HZ);
-        }
+		       page_pools.epp_st_shrinks, page_pools.epp_st_access,
+		       page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
+		       page_pools.epp_st_max_wait, HZ);
+	}
 }
 
 #else /* !__KERNEL__ */

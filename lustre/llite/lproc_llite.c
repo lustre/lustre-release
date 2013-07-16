@@ -1101,12 +1101,12 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
         struct timeval now;
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
-        int k;
+	int k;
 
-        cfs_gettimeofday(&now);
+	do_gettimeofday(&now);
 
-        if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "disabled\n"
+	if (!sbi->ll_rw_stats_on) {
+		seq_printf(seq, "disabled\n"
                                 "write anything in this file to activate, "
                                 "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
@@ -1163,13 +1163,13 @@ LPROC_SEQ_FOPS(ll_rw_extents_stats_pp);
 
 static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
-        struct ll_sb_info *sbi = seq->private;
-        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+	struct timeval now;
+	struct ll_sb_info *sbi = seq->private;
+	struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
 
-        cfs_gettimeofday(&now);
+	do_gettimeofday(&now);
 
-        if (!sbi->ll_rw_stats_on) {
+	if (!sbi->ll_rw_stats_on) {
                 seq_printf(seq, "disabled\n"
                                 "write anything in this file to activate, "
                                 "then 0 or \"[D/d]isabled\" to deactivate\n");
@@ -1329,11 +1329,11 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
         struct ll_rw_process_info *process = sbi->ll_rw_process_info;
-        int i;
+	int i;
 
-        cfs_gettimeofday(&now);
+	do_gettimeofday(&now);
 
-        if (!sbi->ll_rw_stats_on) {
+	if (!sbi->ll_rw_stats_on) {
                 seq_printf(seq, "disabled\n"
                                 "write anything in this file to activate, "
                                 "then 0 or \"[D/d]isabled\" to deactivate\n");

@@ -125,10 +125,10 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
         argv[0] = cache->uc_upcall;
         snprintf(keystr, sizeof(keystr), LPU64, entry->ue_key);
 
-        cfs_gettimeofday(&start);
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        cfs_gettimeofday(&end);
-        if (rc < 0) {
+	do_gettimeofday(&start);
+	rc = USERMODEHELPER(argv[0], argv, envp);
+	do_gettimeofday(&end);
+	if (rc < 0) {
                 CERROR("%s: error invoking upcall %s %s %s: rc %d; "
                        "check /proc/fs/lustre/mdt/%s/identity_upcall, "
                        "time %ldus\n",

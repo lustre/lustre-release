@@ -128,7 +128,7 @@ typedef     __u32       suseconds_t;
 typedef     __u16       uid_t, gid_t;
 
 typedef     __u16       mode_t;
-typedef     __u16       cfs_umode_t;
+typedef     __u16       umode_t;
 
 typedef     __u32       sigset_t;
 

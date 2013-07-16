@@ -1176,8 +1176,8 @@ kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         LASSERT (!tx->tx_queued);               /* not queued for sending already */
         LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
-        tx->tx_queued = 1;
-        tx->tx_deadline = jiffies + (*kiblnd_tunables.kib_timeout * CFS_HZ);
+	tx->tx_queued = 1;
+	tx->tx_deadline = jiffies + (*kiblnd_tunables.kib_timeout * HZ);
 
         if (tx->tx_conn == NULL) {
                 kiblnd_conn_addref(conn);
@@ -3200,13 +3200,13 @@ kiblnd_connd (void *arg)
                         if (chunk == 0)
                                 chunk = 1;
 
-                        for (i = 0; i < chunk; i++) {
-                                kiblnd_check_conns(peer_index);
-                                peer_index = (peer_index + 1) %
-                                             kiblnd_data.kib_peer_hash_size;
-                        }
+			for (i = 0; i < chunk; i++) {
+				kiblnd_check_conns(peer_index);
+				peer_index = (peer_index + 1) %
+					     kiblnd_data.kib_peer_hash_size;
+			}
 
-                        deadline += p * CFS_HZ;
+			deadline += p * HZ;
 			spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 		}
 

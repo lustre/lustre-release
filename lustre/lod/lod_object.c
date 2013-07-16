@@ -678,7 +678,7 @@ static void lod_ah_init(const struct lu_env *env,
 			struct dt_allocation_hint *ah,
 			struct dt_object *parent,
 			struct dt_object *child,
-			cfs_umode_t child_mode)
+			umode_t child_mode)
 {
 	struct lod_device *d = lu2lod_dev(child->do_lu.lo_dev);
 	struct dt_object  *nextp = NULL;

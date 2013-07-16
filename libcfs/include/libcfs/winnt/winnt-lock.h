@@ -144,7 +144,7 @@ cfs_wait_event_internal(event_t * event, int64_t timeout)
     NTSTATUS        Status;
     LARGE_INTEGER   TimeOut;
 
-    TimeOut.QuadPart = -1 * (10000000/CFS_HZ) * timeout;
+    TimeOut.QuadPart = -1 * (10000000/HZ) * timeout;
 
     Status = KeWaitForSingleObject(
                 event,

@@ -552,11 +552,11 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
         unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
-        int i;
+	int i;
 
-        cfs_gettimeofday(&now);
+	do_gettimeofday(&now);
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
+	client_obd_list_lock(&cli->cl_loi_list_lock);
 
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
@@ -664,21 +664,21 @@ LPROC_SEQ_FOPS(osc_rpc_stats);
 
 static int osc_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
-        struct obd_device *dev = seq->private;
-        struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
+	struct timeval now;
+	struct obd_device *dev = seq->private;
+	struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
 
-        cfs_gettimeofday(&now);
+	do_gettimeofday(&now);
 
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
-        seq_printf(seq, "lockless_write_bytes\t\t"LPU64"\n",
-                   stats->os_lockless_writes);
-        seq_printf(seq, "lockless_read_bytes\t\t"LPU64"\n",
-                   stats->os_lockless_reads);
-        seq_printf(seq, "lockless_truncate\t\t"LPU64"\n",
-                   stats->os_lockless_truncates);
-        return 0;
+	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+		   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "lockless_write_bytes\t\t"LPU64"\n",
+		   stats->os_lockless_writes);
+	seq_printf(seq, "lockless_read_bytes\t\t"LPU64"\n",
+		   stats->os_lockless_reads);
+	seq_printf(seq, "lockless_truncate\t\t"LPU64"\n",
+		   stats->os_lockless_truncates);
+	return 0;
 }
 
 static ssize_t osc_stats_seq_write(struct file *file, const char *buf,

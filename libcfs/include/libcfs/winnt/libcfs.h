@@ -92,14 +92,12 @@ static inline __u32 query_stack_size()
 
 #endif /* __KERNEL__*/
 
-#ifndef CFS_THREAD_SIZE
-# define CFS_THREAD_SIZE query_stack_size()
+#ifndef THREAD_SIZE
+# define THREAD_SIZE query_stack_size()
 #endif
 
-#define LUSTRE_TRACE_SIZE (CFS_THREAD_SIZE >> 5)
-
 #ifdef __KERNEL__
-#define CDEBUG_STACK() (CFS_THREAD_SIZE - (__u32)IoGetRemainingStackSize())
+#define CDEBUG_STACK() (THREAD_SIZE - (__u32)IoGetRemainingStackSize())
 #define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #else /* !__KERNEL__ */
 #define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)

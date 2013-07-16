@@ -43,7 +43,7 @@
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 
-#define HALF_SEC			(CFS_HZ >> 1)
+#define HALF_SEC			(HZ >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
 
 #define LFSCK_NAMEENTRY_DEAD    	1 /* The object has been unlinked. */
@@ -512,7 +512,7 @@ static void inline lfsck_position_cpu_to_le(struct lfsck_position *des,
 	des->lp_dir_cookie = cpu_to_le64(src->lp_dir_cookie);
 }
 
-static inline cfs_umode_t lfsck_object_type(const struct dt_object *obj)
+static inline umode_t lfsck_object_type(const struct dt_object *obj)
 {
 	return lu_object_attr(&obj->do_lu);
 }

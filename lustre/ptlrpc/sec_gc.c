@@ -201,14 +201,14 @@ again:
                 }
 		mutex_unlock(&sec_gc_mutex);
 
-                /* check ctx list again before sleep */
-                sec_process_ctx_list();
+		/* check ctx list again before sleep */
+		sec_process_ctx_list();
 
-                lwi = LWI_TIMEOUT(SEC_GC_INTERVAL * CFS_HZ, NULL, NULL);
-                l_wait_event(thread->t_ctl_waitq,
-                             thread_is_stopping(thread) ||
-                             thread_is_signal(thread),
-                             &lwi);
+		lwi = LWI_TIMEOUT(SEC_GC_INTERVAL * HZ, NULL, NULL);
+		l_wait_event(thread->t_ctl_waitq,
+			     thread_is_stopping(thread) ||
+			     thread_is_signal(thread),
+			     &lwi);
 
                 if (thread_test_and_clear_flags(thread, SVC_STOPPING))
                         break;

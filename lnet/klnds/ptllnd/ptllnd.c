@@ -758,13 +758,13 @@ kptllnd_base_startup (void)
                 goto failed;
         }
 
-        /* Initialized the incarnation - it must be for-all-time unique, even
-         * accounting for the fact that we increment it when we disconnect a
-         * peer that's using it */
-        cfs_gettimeofday(&tv);
-        kptllnd_data.kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) +
-                                        tv.tv_usec;
-        CDEBUG(D_NET, "Incarnation="LPX64"\n", kptllnd_data.kptl_incarnation);
+	/* Initialized the incarnation - it must be for-all-time unique, even
+	 * accounting for the fact that we increment it when we disconnect a
+	 * peer that's using it */
+	do_gettimeofday(&tv);
+	kptllnd_data.kptl_incarnation = (((__u64)tv.tv_sec) * 1000000) +
+					tv.tv_usec;
+	CDEBUG(D_NET, "Incarnation="LPX64"\n", kptllnd_data.kptl_incarnation);
 
         target.nid = LNET_NID_ANY;
         target.pid = LNET_PID_ANY; /* NB target for NAK doesn't matter */

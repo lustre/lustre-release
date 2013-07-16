@@ -91,17 +91,17 @@ static inline char *fsfilt_get_label(struct obd_device *obd,
 
 #define __fsfilt_check_slow(obd, start, msg)                              \
 do {                                                                      \
-        if (cfs_time_before(jiffies, start + 15 * CFS_HZ))                \
-                break;                                                    \
-        else if (cfs_time_before(jiffies, start + 30 * CFS_HZ))           \
-                CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name,   \
-                       msg, (jiffies-start) / CFS_HZ);                    \
-        else if (cfs_time_before(jiffies, start + DISK_TIMEOUT * CFS_HZ)) \
-                CWARN("%s: slow %s %lus\n", obd->obd_name, msg,           \
-                      (jiffies - start) / CFS_HZ);                        \
-        else                                                              \
-                CERROR("%s: slow %s %lus\n", obd->obd_name, msg,          \
-                       (jiffies - start) / CFS_HZ);                       \
+	if (cfs_time_before(jiffies, start + 15 * HZ))			  \
+		break;                                                    \
+	else if (cfs_time_before(jiffies, start + 30 * HZ))		  \
+		CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name,   \
+		       msg, (jiffies-start) / HZ);                    	  \
+	else if (cfs_time_before(jiffies, start + DISK_TIMEOUT * HZ))	  \
+		CWARN("%s: slow %s %lus\n", obd->obd_name, msg,           \
+		      (jiffies - start) / HZ);				  \
+	else                                                              \
+		CERROR("%s: slow %s %lus\n", obd->obd_name, msg,          \
+		       (jiffies - start) / HZ);				  \
 } while (0)
 
 #define fsfilt_check_slow(obd, start, msg)              \

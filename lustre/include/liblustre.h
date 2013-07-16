@@ -61,7 +61,7 @@
 
 #define loff_t long long
 #define ERESTART 2001
-typedef unsigned short cfs_umode_t;
+typedef unsigned short umode_t;
 
 #endif
 
@@ -154,7 +154,11 @@ extern int echo_client_init(void);
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
 #endif
-#define CFS_HZ 1
+
+#ifdef HZ
+#undef HZ
+#endif
+#define HZ 1
 
 /* random */
 
@@ -188,15 +192,15 @@ void cfs_get_random_bytes(void *ptr, int size);
 #define ATTR_FILE       0
 
 struct iattr {
-        unsigned int    ia_valid;
-        cfs_umode_t     ia_mode;
-        uid_t           ia_uid;
-        gid_t           ia_gid;
-        loff_t          ia_size;
-        time_t          ia_atime;
-        time_t          ia_mtime;
-        time_t          ia_ctime;
-        unsigned int    ia_attr_flags;
+	unsigned int    ia_valid;
+	umode_t		ia_mode;
+	uid_t           ia_uid;
+	gid_t           ia_gid;
+	loff_t          ia_size;
+	time_t          ia_atime;
+	time_t          ia_mtime;
+	time_t          ia_ctime;
+	unsigned int    ia_attr_flags;
 };
 
 /* defined in kernel header include/linux/namei.h */
@@ -298,7 +302,7 @@ int cfs_curproc_is_in_groups(gid_t gid);
 #define SIGNAL_MASK_ASSERT()
 #define CFS_KERN_INFO
 
-#if CFS_HZ != 1
+#if HZ != 1
 #error "liblustre's jiffies currently expects HZ to be 1"
 #endif
 #define jiffies                                 \

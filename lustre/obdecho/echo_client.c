@@ -1516,7 +1516,7 @@ int echo_attr_get_complex(const struct lu_env *env, struct md_object *next,
 {
 	struct echo_thread_info	*info = echo_env_info(env);
 	struct lu_buf		*buf = &info->eti_buf;
-	cfs_umode_t		 mode = lu_object_attr(&next->mo_lu);
+	umode_t		 mode = lu_object_attr(&next->mo_lu);
 	int			 need = ma->ma_need;
 	int			 rc = 0, rc2;
 

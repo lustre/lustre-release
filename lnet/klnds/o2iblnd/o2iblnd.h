@@ -764,9 +764,9 @@ kiblnd_get_conn_locked (kib_peer_t *peer)
 static inline int
 kiblnd_send_keepalive(kib_conn_t *conn)
 {
-        return (*kiblnd_tunables.kib_keepalive > 0) &&
-                cfs_time_after(jiffies, conn->ibc_last_send +
-                               *kiblnd_tunables.kib_keepalive*CFS_HZ);
+	return (*kiblnd_tunables.kib_keepalive > 0) &&
+		cfs_time_after(jiffies, conn->ibc_last_send +
+			       *kiblnd_tunables.kib_keepalive*HZ);
 }
 
 static inline int

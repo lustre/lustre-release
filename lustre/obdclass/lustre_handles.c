@@ -227,10 +227,10 @@ int class_handle_init(void)
 		spin_lock_init(&bucket->lock);
 	}
 
-        /** bug 21430: add randomness to the initial base */
-        cfs_get_random_bytes(seed, sizeof(seed));
-        cfs_gettimeofday(&tv);
-        cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+	/** bug 21430: add randomness to the initial base */
+	cfs_get_random_bytes(seed, sizeof(seed));
+	do_gettimeofday(&tv);
+	cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
         cfs_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);

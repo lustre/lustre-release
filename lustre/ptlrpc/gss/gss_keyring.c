@@ -163,23 +163,22 @@ static void ctx_upcall_timeout_kr(unsigned long data)
         key_revoke_locked(key);
 }
 
-static
-void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, long timeout)
+static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, long timeout)
 {
-        struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
-        struct timer_list          *timer = gctx_kr->gck_timer;
+	struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
+	struct timer_list          *timer = gctx_kr->gck_timer;
 
-        LASSERT(timer);
+	LASSERT(timer);
 
-        CDEBUG(D_SEC, "ctx %p: start timer %lds\n", ctx, timeout);
-        timeout = timeout * CFS_HZ + cfs_time_current();
+	CDEBUG(D_SEC, "ctx %p: start timer %lds\n", ctx, timeout);
+	timeout = timeout * HZ + cfs_time_current();
 
-        init_timer(timer);
-        timer->expires = timeout;
-        timer->data = (unsigned long ) ctx;
-        timer->function = ctx_upcall_timeout_kr;
+	init_timer(timer);
+	timer->expires = timeout;
+	timer->data = (unsigned long ) ctx;
+	timer->function = ctx_upcall_timeout_kr;
 
-        add_timer(timer);
+	add_timer(timer);
 }
 
 /*

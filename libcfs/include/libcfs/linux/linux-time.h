@@ -90,7 +90,6 @@
 
 #define ONE_BILLION ((u_int64_t)1000000000)
 #define ONE_MILLION 1000000
-#define CFS_HZ      HZ
 
 #ifndef __KERNEL__
 #error This include is only for kernel use.
@@ -131,7 +130,6 @@ static inline unsigned long long __cfs_fs_time_flat(cfs_fs_time_t *t)
         return (unsigned long long)t->tv_sec * ONE_BILLION + t->tv_nsec;
 }
 
-#define CURRENT_KERN_TIME        CURRENT_TIME
 
 /*
  * Generic kernel stuff
@@ -163,7 +161,7 @@ static inline time_t cfs_time_current_sec(void)
 
 static inline void cfs_fs_time_current(cfs_fs_time_t *t)
 {
-        *t = CURRENT_KERN_TIME;
+	*t = CURRENT_TIME;
 }
 
 static inline time_t cfs_fs_time_sec(cfs_fs_time_t *t)
@@ -270,7 +268,6 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"
 
-#define cfs_gettimeofday(tv) do_gettimeofday(tv)
 
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */
 /*

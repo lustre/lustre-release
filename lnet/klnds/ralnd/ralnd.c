@@ -838,8 +838,7 @@ kranal_connect (kra_peer_t *peer)
                 MIN(peer->rap_reconnect_interval,
                     *kranal_tunables.kra_max_reconnect_interval);
 
-        peer->rap_reconnect_time = jiffies + peer->rap_reconnect_interval *
-                CFS_HZ;
+	peer->rap_reconnect_time = jiffies + peer->rap_reconnect_interval * HZ;
 
         /* Grab all blocked packets while we have the global lock */
         cfs_list_add(&zombies, &peer->rap_tx_queue);
@@ -1596,15 +1595,15 @@ kranal_startup (lnet_ni_t *ni)
         ni->ni_data = &kranal_data;
         kranal_data.kra_ni = ni;
 
-        /* CAVEAT EMPTOR: Every 'Fma' message includes the sender's NID and
-         * a unique (for all time) connstamp so we can uniquely identify
-         * the sender.  The connstamp is an incrementing counter
-         * initialised with seconds + microseconds at startup time.  So we
-         * rely on NOT creating connections more frequently on average than
-         * 1MHz to ensure we don't use old connstamps when we reboot. */
-        cfs_gettimeofday(&tv);
-        kranal_data.kra_connstamp =
-        kranal_data.kra_peerstamp = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+	/* CAVEAT EMPTOR: Every 'Fma' message includes the sender's NID and
+	 * a unique (for all time) connstamp so we can uniquely identify
+	 * the sender.  The connstamp is an incrementing counter
+	 * initialised with seconds + microseconds at startup time.  So we
+	 * rely on NOT creating connections more frequently on average than
+	 * 1MHz to ensure we don't use old connstamps when we reboot. */
+	do_gettimeofday(&tv);
+	kranal_data.kra_connstamp =
+	kranal_data.kra_peerstamp = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
 	rwlock_init(&kranal_data.kra_global_lock);
 

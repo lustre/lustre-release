@@ -248,7 +248,7 @@ int lprocfs_ofd_rd_fmd_max_age(char *page, char **start, off_t off,
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 rc;
 
-	rc = snprintf(page, count, "%ld\n", ofd->ofd_fmd_max_age / CFS_HZ);
+	rc = snprintf(page, count, "%ld\n", ofd->ofd_fmd_max_age / HZ);
 	return rc;
 }
 
@@ -267,7 +267,7 @@ int lprocfs_ofd_wr_fmd_max_age(struct file *file, const char *buffer,
 	if (val > 65536 || val < 1)
 		return -EINVAL;
 
-	ofd->ofd_fmd_max_age = val * CFS_HZ;
+	ofd->ofd_fmd_max_age = val * HZ;
 	return count;
 }
 

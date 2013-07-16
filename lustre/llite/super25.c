@@ -189,8 +189,8 @@ static int __init init_lustre_lite(void)
                 }
         }
 
-        cfs_gettimeofday(&tv);
-        cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+	do_gettimeofday(&tv);
+	cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
         init_timer(&ll_capa_timer);
         ll_capa_timer.function = ll_capa_timer_callback;

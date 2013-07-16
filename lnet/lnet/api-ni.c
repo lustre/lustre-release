@@ -506,25 +506,24 @@ lnet_freelist_fini (lnet_freelist_t *fl)
 
 #endif /* LNET_USE_LIB_FREELIST */
 
-__u64
-lnet_create_interface_cookie (void)
+__u64 lnet_create_interface_cookie (void)
 {
-        /* NB the interface cookie in wire handles guards against delayed
-         * replies and ACKs appearing valid after reboot. Initialisation time,
-         * even if it's only implemented to millisecond resolution is probably
-         * easily good enough. */
-        struct timeval tv;
-        __u64          cookie;
+	/* NB the interface cookie in wire handles guards against delayed
+	 * replies and ACKs appearing valid after reboot. Initialisation time,
+	 * even if it's only implemented to millisecond resolution is probably
+	 * easily good enough. */
+	struct timeval tv;
+	__u64          cookie;
 #ifndef __KERNEL__
-        int            rc = gettimeofday (&tv, NULL);
-        LASSERT (rc == 0);
+	int            rc = gettimeofday (&tv, NULL);
+	LASSERT (rc == 0);
 #else
-        cfs_gettimeofday(&tv);
+	do_gettimeofday(&tv);
 #endif
-        cookie = tv.tv_sec;
-        cookie *= 1000000;
-        cookie += tv.tv_usec;
-        return cookie;
+	cookie = tv.tv_sec;
+	cookie *= 1000000;
+	cookie += tv.tv_usec;
+	return cookie;
 }
 
 static char *

@@ -375,11 +375,11 @@ struct dt_object_operations {
          * (2) The type of child is in \a child_mode.
          * (3) The result hint is stored in \a ah;
          */
-        void  (*do_ah_init)(const struct lu_env *env,
-                            struct dt_allocation_hint *ah,
-                            struct dt_object *parent,
+	void  (*do_ah_init)(const struct lu_env *env,
+			    struct dt_allocation_hint *ah,
+			    struct dt_object *parent,
 			    struct dt_object *child,
-                            cfs_umode_t child_mode);
+			    umode_t child_mode);
         /**
          * Create new object on this device.
          *

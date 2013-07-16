@@ -156,7 +156,7 @@ static inline void mdd_orphan_ref_del(const struct lu_env *env,
 
 int orph_declare_index_insert(const struct lu_env *env,
 			      struct mdd_object *obj,
-			      cfs_umode_t mode, struct thandle *th)
+			      umode_t mode, struct thandle *th)
 {
 	struct mdd_device	*mdd = mdo2mdd(&obj->mod_obj);
 	struct dt_key		*key;

@@ -442,7 +442,7 @@ void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
     KeAcquireSpinLock(&(timer->Lock), &Irql);
     if (!cfs_is_flag_set(timer->Flags, CFS_TIMER_FLAG_TIMERED)){
 
-        timeout.QuadPart = (LONGLONG)-1*1000*1000*10/CFS_HZ*deadline;
+	timeout.QuadPart = (LONGLONG)-1*1000*1000*10/HZ*deadline;
 
         if (KeSetTimer(&timer->Timer, timeout, &timer->Dpc)) {
             cfs_set_flag(timer->Flags, CFS_TIMER_FLAG_TIMERED);

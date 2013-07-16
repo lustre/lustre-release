@@ -852,8 +852,8 @@ static int __ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                        "dlm namespace %s free waiting on refcount %d\n",
                        ldlm_ns_name(ns), cfs_atomic_read(&ns->ns_bref));
 force_wait:
-                if (force)
-                        lwi = LWI_TIMEOUT(obd_timeout * CFS_HZ / 4, NULL, NULL);
+		if (force)
+			lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
 
                 rc = l_wait_event(ns->ns_waitq,
                                   cfs_atomic_read(&ns->ns_bref) == 0, &lwi);

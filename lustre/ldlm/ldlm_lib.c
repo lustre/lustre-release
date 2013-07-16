@@ -2075,13 +2075,13 @@ static int target_recovery_thread(void *arg)
                 target_request_copy_put(req);
         }
 
-        delta = (jiffies - delta) / CFS_HZ;
-        CDEBUG(D_INFO,"4: recovery completed in %lus - %d/%d reqs/locks\n",
-              delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
-        if (delta > OBD_RECOVERY_TIME_SOFT) {
-                CWARN("too long recovery - read logs\n");
-                libcfs_debug_dumplog();
-        }
+	delta = (jiffies - delta) / HZ;
+	CDEBUG(D_INFO,"4: recovery completed in %lus - %d/%d reqs/locks\n",
+	      delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
+	if (delta > OBD_RECOVERY_TIME_SOFT) {
+		CWARN("too long recovery - read logs\n");
+		libcfs_debug_dumplog();
+	}
 
         target_finish_recovery(obd);
 

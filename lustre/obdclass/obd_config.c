@@ -1070,9 +1070,9 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 		RETURN(-EINVAL);
 	}
 
-	cfs_gettimeofday(&start);
+	do_gettimeofday(&start);
 	rc = USERMODEHELPER(argv[0], argv, NULL);
-	cfs_gettimeofday(&end);
+	do_gettimeofday(&end);
 
 	if (rc < 0) {
 		CERROR("lctl: error invoking upcall %s %s %s: rc = %d; "

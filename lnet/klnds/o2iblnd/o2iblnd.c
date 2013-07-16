@@ -3161,10 +3161,10 @@ kiblnd_startup (lnet_ni_t *ni)
         if (net == NULL)
                 goto failed;
 
-        memset(net, 0, sizeof(*net));
+	memset(net, 0, sizeof(*net));
 
-        cfs_gettimeofday(&tv);
-        net->ibn_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+	do_gettimeofday(&tv);
+	net->ibn_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
         ni->ni_peertimeout    = *kiblnd_tunables.kib_peertimeout;
         ni->ni_maxtxcredits   = *kiblnd_tunables.kib_credits;

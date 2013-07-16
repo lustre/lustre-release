@@ -55,7 +55,6 @@
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/linux/linux-tcpip.h>
 #include <libcfs/linux/linux-bitops.h>
-#include <libcfs/linux/linux-types.h>
 #include <libcfs/linux/kp30.h>
 
 #ifdef HAVE_ASM_TYPES_H
@@ -66,8 +65,6 @@
 #include <linux/sched.h> /* THREAD_SIZE */
 #include <linux/rbtree.h>
 
-#define CFS_THREAD_SIZE   THREAD_SIZE
-#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #if !defined(__x86_64__)
 # ifdef  __ia64__
@@ -116,7 +113,6 @@ do {                                                                    \
 #define CFS_CURPROC_COMM_MAX (sizeof ((struct task_struct *)0)->comm)
 
 #include <linux/capability.h>
-typedef kernel_cap_t cfs_kernel_cap_t;
 
 /*
  * No stack-back-tracing in Linux for now.

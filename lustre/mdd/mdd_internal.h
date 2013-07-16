@@ -347,7 +347,7 @@ int __mdd_orphan_del(const struct lu_env *, struct mdd_object *,
 int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
 int orph_declare_index_insert(const struct lu_env *, struct mdd_object *,
-			      cfs_umode_t mode, struct thandle *);
+			      umode_t mode, struct thandle *);
 int orph_declare_index_delete(const struct lu_env *, struct mdd_object *,
                               struct thandle *);
 
@@ -524,7 +524,7 @@ static inline int mdd_object_obf(const struct mdd_object *obj)
 	return lu_fid_eq(mdo2fid(obj), &LU_OBF_FID);
 }
 
-static inline cfs_umode_t mdd_object_type(const struct mdd_object *obj)
+static inline umode_t mdd_object_type(const struct mdd_object *obj)
 {
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }

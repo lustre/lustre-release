@@ -843,12 +843,12 @@ mxlnd_ip2nic_id(u32 ip, u64 *nic_id, int tries)
                                 if (tmp_id != 0ULL)
                                         ret = 0;
                                 break;
-                        } else if (ret == -EHOSTUNREACH && try < tries) {
-                                /* add a little backoff */
-                                CDEBUG(D_NET, "sleeping for %d jiffies\n",
-                                       CFS_HZ/4);
-                                mxlnd_sleep(CFS_HZ/4);
-                        }
+			} else if (ret == -EHOSTUNREACH && try < tries) {
+				/* add a little backoff */
+				CDEBUG(D_NET, "sleeping for %d jiffies\n",
+				       HZ/4);
+				mxlnd_sleep(HZ/4);
+			}
                 }
         } while (try++ < tries);
         CDEBUG(D_NET, "done trying. ret = %d\n", ret);
@@ -2714,9 +2714,9 @@ mxlnd_iconnect(kmx_peer_t *peer, u8 msg_type)
                        mx_strerror(mxret), mxret, libcfs_nid2str(peer->mxp_nid));
                 mxlnd_conn_decref(conn);
         }
-        mx_set_request_timeout(kmxlnd_data.kmx_endpt, request,
-                               MXLND_CONNECT_TIMEOUT/CFS_HZ*1000);
-        return;
+	mx_set_request_timeout(kmxlnd_data.kmx_endpt, request,
+			       MXLND_CONNECT_TIMEOUT/HZ*1000);
+	return;
 }
 
 #define MXLND_STATS 0
@@ -2764,14 +2764,14 @@ mxlnd_check_sends(kmx_peer_t *peer)
         }
 
 #if MXLND_STATS
-        if (cfs_time_after(jiffies, last)) {
-                last = jiffies + CFS_HZ;
-                CDEBUG(D_NET, "status= %s credits= %d outstanding= %d ntx_msgs= %d "
-                              "ntx_posted= %d ntx_data= %d data_posted= %d\n",
-                              mxlnd_connstatus_to_str(conn->mxk_status), conn->mxk_credits,
-                              conn->mxk_outstanding, conn->mxk_ntx_msgs, conn->mxk_ntx_posted,
-                              conn->mxk_ntx_data, conn->mxk_data_posted);
-        }
+	if (cfs_time_after(jiffies, last)) {
+		last = jiffies + HZ;
+		CDEBUG(D_NET, "status= %s credits= %d outstanding= %d ntx_msgs= %d "
+			      "ntx_posted= %d ntx_data= %d data_posted= %d\n",
+			      mxlnd_connstatus_to_str(conn->mxk_status), conn->mxk_credits,
+			      conn->mxk_outstanding, conn->mxk_ntx_msgs, conn->mxk_ntx_posted,
+			      conn->mxk_ntx_data, conn->mxk_data_posted);
+	}
 #endif
 
 	spin_lock(&conn->mxk_lock);
@@ -4021,14 +4021,14 @@ mxlnd_connd(void *arg)
 int
 mxlnd_timeoutd(void *arg)
 {
-        int             i       = 0;
-        long            id      = (long) arg;
-        unsigned long   now     = 0;
-        unsigned long   next    = 0;
-        unsigned long   delay   = CFS_HZ;
-        kmx_peer_t     *peer    = NULL;
-        kmx_peer_t     *temp    = NULL;
-        kmx_conn_t     *conn    = NULL;
+	int             i       = 0;
+	long            id      = (long) arg;
+	unsigned long   now     = 0;
+	unsigned long   next    = 0;
+	unsigned long   delay   = HZ;
+	kmx_peer_t     *peer    = NULL;
+	kmx_peer_t     *temp    = NULL;
+	kmx_conn_t     *conn    = NULL;
 	rwlock_t   *g_lock  = &kmxlnd_data.kmx_global_lock;
 
         CDEBUG(D_NET, "timeoutd starting\n");
@@ -4063,11 +4063,11 @@ mxlnd_timeoutd(void *arg)
                                         continue;
                                 }
 
-                                if ((conn->mxk_status == MXLND_CONN_READY ||
-                                    conn->mxk_status == MXLND_CONN_FAIL) &&
-                                    cfs_time_after(now,
-                                                   conn->mxk_last_tx +
-                                                   CFS_HZ)) {
+				if ((conn->mxk_status == MXLND_CONN_READY ||
+				    conn->mxk_status == MXLND_CONN_FAIL) &&
+				    cfs_time_after(now,
+						   conn->mxk_last_tx +
+						   HZ)) {
 					write_unlock(g_lock);
 					mxlnd_check_sends(peer);
 					write_lock(g_lock);

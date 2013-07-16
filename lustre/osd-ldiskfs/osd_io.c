@@ -572,8 +572,8 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         if (isize > osd->od_readcache_max_filesize)
                 cache = 0;
 
-        cfs_gettimeofday(&start);
-        for (i = 0; i < npages; i++) {
+	do_gettimeofday(&start);
+	for (i = 0; i < npages; i++) {
 
                 if (cache == 0)
                         generic_error_remove_page(inode->i_mapping,
@@ -603,11 +603,11 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
                         if (off)
 				memset(p + off, 0, PAGE_CACHE_SIZE - off);
                         kunmap(lnb[i].page);
-                }
-        }
-        cfs_gettimeofday(&end);
-        timediff = cfs_timeval_sub(&end, &start, NULL);
-        lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
+		}
+	}
+	do_gettimeofday(&end);
+	timediff = cfs_timeval_sub(&end, &start, NULL);
+	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
 		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
@@ -870,8 +870,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 	if (i_size_read(inode) > osd->od_readcache_max_filesize)
 		cache = 0;
 
-        cfs_gettimeofday(&start);
-        for (i = 0; i < npages; i++) {
+	do_gettimeofday(&start);
+	for (i = 0; i < npages; i++) {
 
 		if (i_size_read(inode) <= lnb[i].lnb_file_offset)
                         /* If there's no more data, abort early.
@@ -894,12 +894,12 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
                                             LPROC_OSD_CACHE_MISS, 1);
                         osd_iobuf_add_page(iobuf, lnb[i].page);
                 }
-                if (cache == 0)
-                        generic_error_remove_page(inode->i_mapping,lnb[i].page);
-        }
-        cfs_gettimeofday(&end);
-        timediff = cfs_timeval_sub(&end, &start, NULL);
-        lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
+		if (cache == 0)
+			generic_error_remove_page(inode->i_mapping,lnb[i].page);
+	}
+	do_gettimeofday(&end);
+	timediff = cfs_timeval_sub(&end, &start, NULL);
+	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
 		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,

@@ -1949,12 +1949,12 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 
         ptlrpc_rqphase_move(request, RQ_PHASE_INTERPRET);
 
-        if(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DUMP_LOG))
-                libcfs_debug_dumplog();
+	if(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DUMP_LOG))
+		libcfs_debug_dumplog();
 
-        cfs_gettimeofday(&work_start);
-        timediff = cfs_timeval_sub(&work_start, &request->rq_arrival_time,NULL);
-        if (likely(svc->srv_stats != NULL)) {
+	do_gettimeofday(&work_start);
+	timediff = cfs_timeval_sub(&work_start, &request->rq_arrival_time,NULL);
+	if (likely(svc->srv_stats != NULL)) {
                 lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR,
                                     timediff);
                 lprocfs_counter_add(svc->srv_stats, PTLRPC_REQQDEPTH_CNTR,
@@ -2030,8 +2030,8 @@ put_conn:
 					    request->rq_deadline));
 	}
 
-        cfs_gettimeofday(&work_end);
-        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+	do_gettimeofday(&work_end);
+	timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
 	CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
                "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
                "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
@@ -3199,10 +3199,10 @@ int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 	struct timeval			right_now;
 	long				timediff;
 
-	cfs_gettimeofday(&right_now);
+	do_gettimeofday(&right_now);
 
 	spin_lock(&svcpt->scp_req_lock);
-        /* How long has the next entry been waiting? */
+	/* How long has the next entry been waiting? */
 	if (ptlrpc_server_high_pending(svcpt, true))
 		request = ptlrpc_nrs_req_peek_nolock(svcpt, true);
 	else if (ptlrpc_server_normal_pending(svcpt, true))

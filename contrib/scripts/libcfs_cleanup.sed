@@ -379,3 +379,24 @@ s/\bcfs_get_cpu\b/get_cpu/g
 /#[ \t]*define[ \t]*\bget_cpu\b *( *)[ \t]*\bget_cpu\b *( *)/d
 s/\bcfs_put_cpu\b/put_cpu/g
 /#[ \t]*define[ \t]*\bput_cpu\b *( *)[ \t]*\bput_cpu\b *( *)/d
+
+################################################################################
+# macros in linux-time.h
+s/\bCFS_HZ\b/HZ/g
+/#[ \t]*define[ \t]*\bHZ\b[ \t]*\bHZ\b/d
+s/\bCURRENT_KERN_TIME\b/CURRENT_TIME/g
+/#[ \t]*define[ \t]*\bCURRENT_TIME\b[ \t]*\bCURRENT_TIME\b/d
+s/\bcfs_gettimeofday\b/do_gettimeofday/g
+/#[ \t]*define[ \t]*\bdo_gettimeofday\b *( *\w* *)[ \t]*\bdo_gettimeofday\b *( *\w* *)/d
+
+################################################################################
+# macros in linux-type.h
+s/\bcfs_umode_t\b/umode_t/g
+/typedef[ \t]*\bumode_t\b[ \t]*\bumode_t\b/d
+
+################################################################################
+# macros in libcfs/include/libcfs/linux/libcfs.h
+s/\bCFS_THREAD_SIZE\b/THREAD_SIZE/g
+/#[ \t]*define[ \t]*\bTHREAD_SIZE\b[ \t]*\bTHREAD_SIZE\b/d
+s/\bcfs_kernel_cap_t\b/kernel_cap_t/g
+/typedef[ \t]*\bkernel_cap_t\b[ \t]*\bkernel_cap_t\b/d

@@ -537,7 +537,7 @@ static __inline int groups_search(cfs_group_info_t *group_info,
  *  capabilities support 
  */
 
-typedef __u32 cfs_kernel_cap_t;
+typedef __u32 kernel_cap_t;
 
 #define cap_raise(c, flag)  do {} while(0)
 #define cap_lower(c, flag)  do {} while(0)
@@ -569,7 +569,7 @@ typedef struct task_sruct{
     int                   cgroups;
     gid_t                 groups[NGROUPS];
     cfs_group_info_t     *group_info;
-    cfs_kernel_cap_t      cap_effective,
+    kernel_cap_t      cap_effective,
                           cap_inheritable,
                           cap_permitted;
 

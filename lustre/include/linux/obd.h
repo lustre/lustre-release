@@ -74,42 +74,42 @@ typedef struct {
 
 #ifdef CLIENT_OBD_LIST_LOCK_DEBUG
 static inline void __client_obd_list_lock(client_obd_lock_t *lock,
-                                          const char *func, int line)
+					  const char *func, int line)
 {
 	unsigned long cur = jiffies;
 	while (1) {
 		if (spin_trylock(&lock->lock)) {
-                        LASSERT(lock->task == NULL);
-                        lock->task = current;
-                        lock->func = func;
-                        lock->line = line;
-                        lock->time = jiffies;
-                        break;
-                }
+			LASSERT(lock->task == NULL);
+			lock->task = current;
+			lock->func = func;
+			lock->line = line;
+			lock->time = jiffies;
+			break;
+		}
 
-                if ((jiffies - cur > 5 * CFS_HZ) &&
-                    (jiffies - lock->time > 5 * CFS_HZ)) {
+		if ((jiffies - cur > 5 * HZ) &&
+		    (jiffies - lock->time > 5 * HZ)) {
 			struct task_struct *task = lock->task;
 
 			if (task == NULL)
 				continue;
 
-                        LCONSOLE_WARN("%s:%d: lock %p was acquired"
-                                      " by <%s:%d:%s:%d> for %lu seconds.\n",
+			LCONSOLE_WARN("%s:%d: lock %p was acquired"
+				      " by <%s:%d:%s:%d> for %lu seconds.\n",
 				      current->comm, current->pid,
-                                      lock, task->comm, task->pid,
-                                      lock->func, lock->line,
-                                      (jiffies - lock->time) / CFS_HZ);
-                        LCONSOLE_WARN("====== for process holding the "
-                                      "lock =====\n");
-                        libcfs_debug_dumpstack(task);
-                        LCONSOLE_WARN("====== for current process =====\n");
-                        libcfs_debug_dumpstack(NULL);
-                        LCONSOLE_WARN("====== end =======\n");
-                        cfs_pause(1000 * CFS_HZ);
-                }
+				      lock, task->comm, task->pid,
+				      lock->func, lock->line,
+				      (jiffies - lock->time) / HZ);
+			LCONSOLE_WARN("====== for process holding the "
+				      "lock =====\n");
+			libcfs_debug_dumpstack(task);
+			LCONSOLE_WARN("====== for current process =====\n");
+			libcfs_debug_dumpstack(NULL);
+			LCONSOLE_WARN("====== end =======\n");
+			cfs_pause(1000 * HZ);
+		}
 		cpu_relax();
-        }
+	}
 }
 
 #define client_obd_list_lock(lock) \

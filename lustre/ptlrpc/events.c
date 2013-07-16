@@ -334,12 +334,12 @@ void request_in_callback(lnet_event_t *ev)
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
         req->rq_reqbuf = ev->md.start + ev->offset;
-        if (ev->type == LNET_EVENT_PUT && ev->status == 0)
-                req->rq_reqdata_len = ev->mlength;
-        cfs_gettimeofday(&req->rq_arrival_time);
-        req->rq_peer = ev->initiator;
-        req->rq_self = ev->target.nid;
-        req->rq_rqbd = rqbd;
+	if (ev->type == LNET_EVENT_PUT && ev->status == 0)
+		req->rq_reqdata_len = ev->mlength;
+	do_gettimeofday(&req->rq_arrival_time);
+	req->rq_peer = ev->initiator;
+	req->rq_self = ev->target.nid;
+	req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
 	spin_lock_init(&req->rq_lock);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);

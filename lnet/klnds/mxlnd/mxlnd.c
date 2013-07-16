@@ -342,15 +342,15 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 goto failed_with_init;
         }
 
-        mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &kmxlnd_data.kmx_epa);
-        mx_decompose_endpoint_addr(kmxlnd_data.kmx_epa, &nic_id, &ep_id);
-        mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id,
-                           MXLND_MSG_MAGIC, MXLND_CONNECT_TIMEOUT/CFS_HZ*1000,
-                           &kmxlnd_data.kmx_epa);
-        if (mxret != MX_SUCCESS) {
-                CNETERR("unable to connect to myself (%s)\n", mx_strerror(mxret));
-                goto failed_with_endpoint;
-        }
+	mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &kmxlnd_data.kmx_epa);
+	mx_decompose_endpoint_addr(kmxlnd_data.kmx_epa, &nic_id, &ep_id);
+	mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id,
+			   MXLND_MSG_MAGIC, MXLND_CONNECT_TIMEOUT/HZ*1000,
+			   &kmxlnd_data.kmx_epa);
+	if (mxret != MX_SUCCESS) {
+		CNETERR("unable to connect to myself (%s)\n", mx_strerror(mxret));
+		goto failed_with_endpoint;
+	}
 
         ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
         CDEBUG(D_NET, "My NID is 0x%llx\n", ni->ni_nid);
@@ -364,13 +364,13 @@ mxlnd_init_mx(lnet_ni_t *ni)
                          mx_strerror(mxret));
                 goto failed_with_endpoint;
         }
-        mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL,
-                                       MXLND_COMM_TIMEOUT/CFS_HZ*1000);
-        if (mxret != MX_SUCCESS) {
-                CERROR("mx_set_request_timeout() failed with %s\n",
-                        mx_strerror(mxret));
-                goto failed_with_endpoint;
-        }
+	mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL,
+				       MXLND_COMM_TIMEOUT/HZ*1000);
+	if (mxret != MX_SUCCESS) {
+		CERROR("mx_set_request_timeout() failed with %s\n",
+			mx_strerror(mxret));
+		goto failed_with_endpoint;
+	}
         return 0;
 
 failed_with_endpoint:
@@ -452,11 +452,11 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 /* calls write_[un]lock(kmx_global_lock) */
                 mxlnd_del_peer(LNET_NID_ANY);
 
-                /* wakeup request_waitds */
-                mx_wakeup(kmxlnd_data.kmx_endpt);
+		/* wakeup request_waitds */
+		mx_wakeup(kmxlnd_data.kmx_endpt);
 		up(&kmxlnd_data.kmx_tx_queue_sem);
 		up(&kmxlnd_data.kmx_conn_sem);
-                mxlnd_sleep(2 * CFS_HZ);
+		mxlnd_sleep(2 * HZ);
 
                 /* fall through */
 
@@ -557,9 +557,9 @@ mxlnd_startup (lnet_ni_t *ni)
         kmxlnd_data.kmx_ni = ni;
         ni->ni_data = &kmxlnd_data;
 
-        cfs_gettimeofday(&tv);
-        kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-        CDEBUG(D_NET, "my incarnation is %llu\n", kmxlnd_data.kmx_incarnation);
+	do_gettimeofday(&tv);
+	kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+	CDEBUG(D_NET, "my incarnation is %llu\n", kmxlnd_data.kmx_incarnation);
 
 	rwlock_init (&kmxlnd_data.kmx_global_lock);
 	spin_lock_init (&kmxlnd_data.kmx_mem_lock);

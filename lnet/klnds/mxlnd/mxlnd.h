@@ -134,9 +134,9 @@
 #define MXLND_NDAEMONS          3               /* connd, timeoutd, tx_queued */
 #define MXLND_MX_BOARD          0               /* Use the first MX NIC if more than 1 avail */
 #define MXLND_MX_EP_ID          0               /* MX endpoint ID */
-#define MXLND_COMM_TIMEOUT      (20 * CFS_HZ)   /* timeout for send/recv (jiffies) */
-#define MXLND_WAIT_TIMEOUT      CFS_HZ          /* timeout for wait (jiffies) */
-#define MXLND_CONNECT_TIMEOUT   (5 * CFS_HZ)    /* timeout for connections (jiffies) */
+#define MXLND_COMM_TIMEOUT      (20 * HZ)   /* timeout for send/recv (jiffies) */
+#define MXLND_WAIT_TIMEOUT      HZ          /* timeout for wait (jiffies) */
+#define MXLND_CONNECT_TIMEOUT   (5 * HZ)    /* timeout for connections (jiffies) */
 #define MXLND_POLLING           1000            /* poll iterations before blocking */
 #define MXLND_LOOKUP_COUNT      5               /* how many times to try to resolve MAC */
 #define MXLND_MAX_PEERS         1024            /* number of nodes talking to me */

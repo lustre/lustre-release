@@ -44,6 +44,13 @@
 /* For sys_open & sys_close */
 #include <linux/syscalls.h>
 
+#ifndef HAVE_SK_SLEEP
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+	return sk->sk_sleep;
+}
+#endif
+
 int
 libcfs_sock_ioctl(int cmd, unsigned long arg)
 {
@@ -600,18 +607,18 @@ libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 
         newsock->ops = sock->ops;
 
-        set_current_state(TASK_INTERRUPTIBLE);
-	add_wait_queue(cfs_sk_sleep(sock->sk), &wait);
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(sk_sleep(sock->sk), &wait);
 
-        rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
-        if (rc == -EAGAIN) {
-                /* Nothing ready, so wait for activity */
-                schedule();
-                rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
-        }
+	rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
+	if (rc == -EAGAIN) {
+		/* Nothing ready, so wait for activity */
+		schedule();
+		rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
+	}
 
-	remove_wait_queue(cfs_sk_sleep(sock->sk), &wait);
-        set_current_state(TASK_RUNNING);
+	remove_wait_queue(sk_sleep(sock->sk), &wait);
+	set_current_state(TASK_RUNNING);
 
         if (rc != 0)
                 goto failed;
@@ -629,7 +636,7 @@ EXPORT_SYMBOL(libcfs_sock_accept);
 void
 libcfs_sock_abort_accept (struct socket *sock)
 {
-	wake_up_all(cfs_sk_sleep(sock->sk));
+	wake_up_all(sk_sleep(sock->sk));
 }
 
 EXPORT_SYMBOL(libcfs_sock_abort_accept);

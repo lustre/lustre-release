@@ -911,12 +911,12 @@ cache_check:
                                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                         read_unlock(&rsi_cache.hash_lock);
 
-                        if (valid == 0)
-                                cfs_schedule_timeout(GSS_SVC_UPCALL_TIMEOUT *
-                                                     CFS_HZ);
+			if (valid == 0)
+				cfs_schedule_timeout(GSS_SVC_UPCALL_TIMEOUT *
+						     HZ);
 
-                        cache_get(&rsip->h);
-                        goto cache_check;
+			cache_get(&rsip->h);
+			goto cache_check;
                 }
                 CWARN("waited %ds timeout, drop\n", GSS_SVC_UPCALL_TIMEOUT);
                 break;
@@ -1078,13 +1078,13 @@ int __init gss_init_svc_upcall(void)
          * upcall issued before the channel be opened thus nfsv4 cache code will
          * drop the request direclty, thus lead to unnecessary recovery time.
          * here we wait at miximum 1.5 seconds. */
-        for (i = 0; i < 6; i++) {
-                if (atomic_read(&rsi_cache.readers) > 0)
-                        break;
-                cfs_set_current_state(TASK_UNINTERRUPTIBLE);
-                LASSERT(CFS_HZ >= 4);
-                cfs_schedule_timeout(CFS_HZ / 4);
-        }
+	for (i = 0; i < 6; i++) {
+		if (atomic_read(&rsi_cache.readers) > 0)
+			break;
+		cfs_set_current_state(TASK_UNINTERRUPTIBLE);
+		LASSERT(HZ >= 4);
+		cfs_schedule_timeout(HZ / 4);
+	}
 
         if (atomic_read(&rsi_cache.readers) == 0)
                 CWARN("Init channel is not opened by lsvcgssd, following "

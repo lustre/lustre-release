@@ -106,7 +106,7 @@
 #include <libcfs/posix/posix-wordsize.h>
 #include <libcfs/user-bitops.h>
 
-# define cfs_gettimeofday(tv) gettimeofday(tv, NULL);
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
 typedef unsigned long long cfs_cycles_t;
 
 #define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
@@ -199,12 +199,9 @@ typedef unsigned long long cfs_cycles_t;
 #endif
 
 # ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */
-#  define CFS_THREAD_SIZE 8192
+#  define THREAD_SIZE 8192
 # else
-#  define CFS_THREAD_SIZE THREAD_SIZE
 # endif
-
-#define LUSTRE_TRACE_SIZE (CFS_THREAD_SIZE >> 5)
 
 #define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)
@@ -224,7 +221,7 @@ typedef unsigned long long cfs_cycles_t;
  */
 #define CFS_CURPROC_COMM_MAX (sizeof ((struct task_struct *)0)->comm)
 
-typedef __u32 cfs_kernel_cap_t;
+typedef __u32 kernel_cap_t;
 
 /**
  * Module support (probably shouldn't be used in generic code?)

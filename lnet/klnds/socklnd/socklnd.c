@@ -2352,19 +2352,18 @@ ksocknal_base_shutdown(void)
         PORTAL_MODULE_UNUSE;
 }
 
-__u64
-ksocknal_new_incarnation (void)
+__u64 ksocknal_new_incarnation (void)
 {
-        struct timeval tv;
+	struct timeval tv;
 
-        /* The incarnation number is the time this module loaded and it
-         * identifies this particular instance of the socknal.  Hopefully
-         * we won't be able to reboot more frequently than 1MHz for the
-         * forseeable future :) */
+	/* The incarnation number is the time this module loaded and it
+	 * identifies this particular instance of the socknal.  Hopefully
+	 * we won't be able to reboot more frequently than 1MHz for the
+	 * forseeable future :) */
 
-        cfs_gettimeofday(&tv);
+	do_gettimeofday(&tv);
 
-        return (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+	return (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 }
 
 int

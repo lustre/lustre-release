@@ -553,9 +553,9 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
                        "ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
                        newctx, newctx->cc_flags);
 
-                cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
-                                                   CFS_HZ);
-        } else {
+		cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
+						   HZ);
+	} else {
                 /*
                  * it's possible newctx == oldctx if we're switching
                  * subflavor with the same sec.
@@ -775,9 +775,9 @@ again:
 	req->rq_restart = 0;
 	spin_unlock(&req->rq_lock);
 
-        lwi = LWI_TIMEOUT_INTR(timeout * CFS_HZ, ctx_refresh_timeout,
-                               ctx_refresh_interrupt, req);
-        rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
+	lwi = LWI_TIMEOUT_INTR(timeout * HZ, ctx_refresh_timeout,
+			       ctx_refresh_interrupt, req);
+	rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
 
         /*
          * following cases could lead us here:

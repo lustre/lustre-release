@@ -37,6 +37,8 @@
 #ifndef __LIBCFS_LINUX_PORTALS_COMPAT_H__
 #define __LIBCFS_LINUX_PORTALS_COMPAT_H__
 
+#include <net/sock.h>
+
 // XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
 #if defined(SPINLOCK_DEBUG) && SPINLOCK_DEBUG
 #  define SIGNAL_MASK_ASSERT() \
@@ -110,5 +112,12 @@ int proc_call_handler(void *data, int write,
                       loff_t *ppos, void *buffer, size_t *lenp,
                       int (*handler)(void *data, int write,
                                      loff_t pos, void *buffer, int len));
+
+#ifdef HAVE_INIT_NET
+# define DEFAULT_NET	(&init_net)
+#else
+/* some broken backports */
+# define DEFAULT_NET	(NULL)
+#endif
 
 #endif /* _PORTALS_COMPAT_H */

@@ -131,22 +131,21 @@ brw_client_init (sfw_test_instance_t *tsi)
 #define BRW_MAGIC       0xeeb0eeb1eeb2eeb3ULL
 #define BRW_MSIZE       sizeof(__u64)
 
-int
-brw_inject_one_error (void)
+int brw_inject_one_error (void)
 {
-        struct timeval tv;
+	struct timeval tv;
 
-        if (brw_inject_errors <= 0) return 0;
+	if (brw_inject_errors <= 0) return 0;
 
 #ifndef __KERNEL__
-        gettimeofday(&tv, NULL);
+	gettimeofday(&tv, NULL);
 #else
-        cfs_gettimeofday(&tv);
+	do_gettimeofday(&tv);
 #endif
 
-        if ((tv.tv_usec & 1) == 0) return 0;
+	if ((tv.tv_usec & 1) == 0) return 0;
 
-        return brw_inject_errors--;
+	return brw_inject_errors--;
 }
 
 void

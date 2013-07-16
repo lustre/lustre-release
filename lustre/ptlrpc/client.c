@@ -1293,13 +1293,13 @@ static int after_reply(struct ptlrpc_request *req)
 		RETURN(0);
 	}
 
-        cfs_gettimeofday(&work_start);
-        timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
-        if (obd->obd_svc_stats != NULL) {
-                lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
-                                    timediff);
-                ptlrpc_lprocfs_rpc_sent(req, timediff);
-        }
+	do_gettimeofday(&work_start);
+	timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
+	if (obd->obd_svc_stats != NULL) {
+		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
+				    timediff);
+		ptlrpc_lprocfs_rpc_sent(req, timediff);
+	}
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {

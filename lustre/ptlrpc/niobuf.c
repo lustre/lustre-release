@@ -810,12 +810,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQACTIVE_CNTR,
                         cfs_atomic_read(&request->rq_import->imp_inflight));
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
+	OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
-        cfs_gettimeofday(&request->rq_arrival_time);
-        request->rq_sent = cfs_time_current_sec();
-        /* We give the server rq_timeout secs to process the req, and
-           add the network latency for our local timeout. */
+	do_gettimeofday(&request->rq_arrival_time);
+	request->rq_sent = cfs_time_current_sec();
+	/* We give the server rq_timeout secs to process the req, and
+	   add the network latency for our local timeout. */
         request->rq_deadline = request->rq_sent + request->rq_timeout +
                 ptlrpc_at_get_net_latency(request);
 

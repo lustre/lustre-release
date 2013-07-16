@@ -600,10 +600,10 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
         }
 
 
-        tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * CFS_HZ);
-        tx->tx_active = 1;
-        tx->tx_msg_mdh = msg_mdh;
-        kptllnd_queue_tx(peer, tx);
+	tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * HZ);
+	tx->tx_active = 1;
+	tx->tx_msg_mdh = msg_mdh;
+	kptllnd_queue_tx(peer, tx);
 }
 
 /* NB "restarts" comes from peer_sendq of a single peer */

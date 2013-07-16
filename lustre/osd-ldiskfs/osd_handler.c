@@ -1798,9 +1798,8 @@ struct dentry *osd_child_dentry_get(const struct lu_env *env,
 }
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
-                      cfs_umode_t mode,
-                      struct dt_allocation_hint *hint,
-                      struct thandle *th)
+		      umode_t mode, struct dt_allocation_hint *hint,
+		      struct thandle *th)
 {
         int result;
         struct osd_device  *osd = osd_obj2dev(obj);
@@ -1933,16 +1932,16 @@ static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
 }
 
 static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr,
-                     struct dt_allocation_hint *hint,
-                     struct dt_object_format *dof,
-                     struct thandle *th)
+		     struct lu_attr *attr,
+		     struct dt_allocation_hint *hint,
+		     struct dt_object_format *dof,
+		     struct thandle *th)
 {
-        cfs_umode_t mode = attr->la_mode & (S_IFMT | S_IALLUGO | S_ISVTX);
-        int result;
+	umode_t mode = attr->la_mode & (S_IFMT | S_IALLUGO | S_ISVTX);
+	int result;
 
-        LINVRNT(osd_invariant(obj));
-        LASSERT(obj->oo_inode == NULL);
+	LINVRNT(osd_invariant(obj));
+	LASSERT(obj->oo_inode == NULL);
         LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
                 S_ISFIFO(mode) || S_ISSOCK(mode));
 
@@ -1997,7 +1996,7 @@ static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 
 static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 			struct dt_object *parent, struct dt_object *child,
-			cfs_umode_t child_mode)
+			umode_t child_mode)
 {
         LASSERT(ah);
 

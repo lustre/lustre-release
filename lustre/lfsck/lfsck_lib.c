@@ -372,12 +372,12 @@ static void __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
 {
 	lfsck->li_bookmark_ram.lb_speed_limit = limit;
 	if (limit != LFSCK_SPEED_NO_LIMIT) {
-		if (limit > CFS_HZ) {
-			lfsck->li_sleep_rate = limit / CFS_HZ;
+		if (limit > HZ) {
+			lfsck->li_sleep_rate = limit / HZ;
 			lfsck->li_sleep_jif = 1;
 		} else {
 			lfsck->li_sleep_rate = 1;
-			lfsck->li_sleep_jif = CFS_HZ / limit;
+			lfsck->li_sleep_jif = HZ / limit;
 		}
 	} else {
 		lfsck->li_sleep_jif = 0;

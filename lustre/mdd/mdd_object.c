@@ -566,11 +566,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
-                if (la->la_mode == (cfs_umode_t) -1)
-                        la->la_mode = tmp_la->la_mode;
-                else
-                        la->la_mode = (la->la_mode & S_IALLUGO) |
-                                      (tmp_la->la_mode & ~S_IALLUGO);
+		if (la->la_mode == (umode_t) -1)
+			la->la_mode = tmp_la->la_mode;
+		else
+			la->la_mode = (la->la_mode & S_IALLUGO) |
+				      (tmp_la->la_mode & ~S_IALLUGO);
 
 		/* Also check the setgid bit! */
 		if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ?

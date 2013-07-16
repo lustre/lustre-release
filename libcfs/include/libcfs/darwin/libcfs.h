@@ -95,7 +95,6 @@ typedef unsigned long long cycles_t;
 #else
 # define THREAD_SIZE 8192
 #endif
-#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #define CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)
@@ -190,7 +189,7 @@ __entry_nesting(&__cdd);
 /*
  * XNU has no capabilities
  */
-typedef __u32 cfs_kernel_cap_t;
+typedef __u32 kernel_cap_t;
 
 #ifdef __KERNEL__
 enum {

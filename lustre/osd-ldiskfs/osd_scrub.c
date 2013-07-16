@@ -46,7 +46,7 @@
 #include "osd_oi.h"
 #include "osd_scrub.h"
 
-#define HALF_SEC	(CFS_HZ >> 1)
+#define HALF_SEC	(HZ >> 1)
 
 #define OSD_OTABLE_MAX_HASH		0x00000000ffffffffULL
 
@@ -2625,7 +2625,7 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 	if (thread_is_running(&scrub->os_thread)) {
 		cfs_duration_t duration = cfs_time_current() -
 					  scrub->os_time_last_checkpoint;
-		__u64 new_checked = scrub->os_new_checked * CFS_HZ;
+		__u64 new_checked = scrub->os_new_checked * HZ;
 		__u32 rtime = sf->sf_run_time +
 			      cfs_duration_sec(duration + HALF_SEC);
 

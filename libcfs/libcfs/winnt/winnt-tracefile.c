@@ -171,7 +171,7 @@ cfs_set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 {
 	struct timeval tv;
 
-	cfs_gettimeofday(&tv);
+	do_gettimeofday(&tv);
 
 	header->ph_subsys = subsys;
 	header->ph_mask = mask;

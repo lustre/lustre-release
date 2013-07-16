@@ -125,12 +125,12 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
-        struct timeval now;
+	struct timeval now;
 
-        /* this sampling races with updates */
-        cfs_gettimeofday(&now);
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
+	/* this sampling races with updates */
+	do_gettimeofday(&now);
+	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+		   now.tv_sec, now.tv_usec);
 
         display_brw_stats(seq, "pages per bulk r/w", "rpcs",
                           &brw_stats->hist[BRW_R_PAGES],
@@ -152,9 +152,9 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
                           &brw_stats->hist[BRW_R_RPC_HIST],
                           &brw_stats->hist[BRW_W_RPC_HIST], 0);
 
-        display_brw_stats(seq, "I/O time (1/1000s)", "ios",
-                          &brw_stats->hist[BRW_R_IO_TIME],
-                          &brw_stats->hist[BRW_W_IO_TIME], 1000 / CFS_HZ);
+	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
+			  &brw_stats->hist[BRW_R_IO_TIME],
+			  &brw_stats->hist[BRW_W_IO_TIME], 1000 / HZ);
 
         display_brw_stats(seq, "disk I/O size", "ios",
                           &brw_stats->hist[BRW_R_DISK_IOSIZE],

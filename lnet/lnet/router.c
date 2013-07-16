@@ -266,10 +266,10 @@ static void lnet_shuffle_seed(void)
                         seed[0] ^= (LNET_NIDADDR(ni->ni_nid) | lnd_type);
         }
 
-        cfs_gettimeofday(&tv);
-        cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
-        seeded = 1;
-        return;
+	do_gettimeofday(&tv);
+	cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+	seeded = 1;
+	return;
 }
 
 /* NB expects LNET_LOCK held */

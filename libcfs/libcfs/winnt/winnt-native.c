@@ -206,7 +206,7 @@ int nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 }
 
 
-void cfs_gettimeofday(struct timeval *tv)
+void do_gettimeofday(struct timeval *tv)
 {
     LARGE_INTEGER Time;
 
@@ -218,7 +218,7 @@ void cfs_gettimeofday(struct timeval *tv)
 
 int gettimeofday(struct timeval *tv, void * tz)
 {
-    cfs_gettimeofday(tv);
+    do_gettimeofday(tv);
     return 0;
 }
 
