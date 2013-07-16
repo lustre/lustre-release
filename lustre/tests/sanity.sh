@@ -9689,6 +9689,9 @@ test_182() {
 run_test 182 "Disable MDC RPCs semaphore wouldn't crash client ================"
 
 test_183() { # LU-2275
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.56) ]] &&
+		skip "Need MDS version at least 2.3.56" && return
+
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
 	echo aaa > $DIR/$tdir/$tfile
