@@ -638,6 +638,9 @@ test_17n() {
 run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
 test_17o() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.64) ]] &&
+		skip "Need MDS version at least 2.3.64" && return
+
 	local WDIR=$DIR/${tdir}o
 	local mdt_index
 	local mdtdevname
