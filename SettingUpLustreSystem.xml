@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settinguplustresystem">
-  <title xml:id="settinguplustresystem.title">Setting Up a Lustre File System</title>
-  <para>This chapter describes hardware configuration requirements for a Lustre file system including:</para>
+  <title xml:id="settinguplustresystem.title">Determining Hardware Configuration Requirements and
+    Formatting Options</title>
+  <para>This chapter describes hardware configuration requirements for a Lustre* file system
+    including:</para>
   <itemizedlist>
     <listitem>
       <para>
@@ -34,7 +36,10 @@
   <indexterm><primary>setup</primary><secondary>hardware</secondary></indexterm>        
   <indexterm><primary>design</primary><see>setup</see></indexterm>        
           Hardware Considerations</title>
-    <para>Lustre can work with any kind of block storage device such as single disks, software RAID, hardware RAID, or a logical volume manager. In contrast to some networked file systems, the block devices are only attached to the MDS and OSS nodes in Lustre and are not accessed by the clients directly.</para>
+    <para>A Lustre file system can utilize any kind of block storage device such as single disks,
+      software RAID, hardware RAID, or a logical volume manager. In contrast to some networked file
+      systems, the block devices are only attached to the MDS and OSS nodes in a Lustre file system
+      and are not accessed by the clients directly.</para>
     <para>Since the block devices are accessed by only one or two server nodes, a storage area network (SAN) that is accessible from all the servers is not required. Expensive switches are not needed because point-to-point connections between the servers and the storage arrays normally provide the simplest and best attachments. (If failover capability is desired, the storage must be attached to multiple servers.)</para>
     <para>For a production environment, it is preferable that the MGS have separate storage to allow future expansion to multiple file systems. However, it is possible to run the MDS and MGS on the same machine and have them share the same storage device.</para>
     <para>For best performance in a production environment, dedicated clients are required. For a non-production Lustre environment or for testing, a Lustre client and server can run on the same machine. However, dedicated clients are the only supported configuration.</para>
@@ -47,9 +52,18 @@
         <para>Running the OSS and a client on the same machine can cause issues with low memory and memory pressure. If the client consumes all the memory and then tries to write data to the file system, the OSS will need to allocate pages to receive data from the client but will not be able to perform this operation due to low memory. This can cause the client to hang.</para>
       </listitem>
     </itemizedlist>
-    <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are typically used for testing to match expected customer usage and avoid limitations due to the 4 GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs. Also, due to kernel API limitations, performing backups of Lustre 2.x. filesystems on 32-bit clients may cause backup tools to confuse files that have the same 32-bit inode number.</para>
-    <para>The storage attached to the servers typically uses RAID to provide fault tolerance and can optionally be organized with logical volume management (LVM). It is then formatted by Lustre as a file system. Lustre OSS and MDS servers read, write and modify data in the format imposed by the file system.</para>
-    <para>Lustre uses journaling file system technology on both the MDTs and OSTs. For a MDT, as much as a 20 percent performance gain can be obtained by placing the journal on a separate device.</para>
+    <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are
+      typically used for testing to match expected customer usage and avoid limitations due to the 4
+      GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs.
+      Also, due to kernel API limitations, performing backups of Lustre 2.x. file systems on 32-bit
+      clients may cause backup tools to confuse files that have the same 32-bit inode number.</para>
+    <para>The storage attached to the servers typically uses RAID to provide fault tolerance and can
+      optionally be organized with logical volume management (LVM), which is then formatted as a
+      Lustre file system. Lustre OSS and MDS servers read, write and modify data in the format
+      imposed by the file system.</para>
+    <para>The Lustre file system uses journaling file system technology on both the MDTs and OSTs.
+      For a MDT, as much as a 20 percent performance gain can be obtained by placing the journal on
+      a separate device.</para>
     <para>The MDS can effectively utilize a lot of CPU cycles. A minimum of four processor cores are recommended. More are advisable for files systems with many clients.</para>
     <note>
       <para>Lustre clients running on architectures with different endianness are supported. One limitation is that the PAGE_SIZE kernel macro on the client must be as large as the PAGE_SIZE of the server. In particular, ia64 or PPC clients with large pages (up to 64kB pages) can run with x86 servers (4kB pages). If you are running x86 clients with ia64 or PPC servers, you must compile the ia64 kernel with a 4kB PAGE_SIZE (so the server page size is not larger than the client page size). </para>
@@ -62,13 +76,26 @@
       <para>If you need a larger MDT, create multiple RAID1 devices from pairs of disks, and then make a RAID0 array of the RAID1 devices. This ensures maximum reliability because multiple disk failures only have a small chance of hitting both disks in the same RAID1 device.</para>
       <para>Doing the opposite (RAID1 of a pair of RAID0 devices) has a 50% chance that even two disk failures can cause the loss of the whole MDT device. The first failure disables an entire half of the mirror and the second failure has a 50% chance of disabling the remaining mirror.</para>
       <para condition='l24'>If multiple MDTs are going to be present in the system, each MDT should be specified for the anticipated usage and load.</para>
-      <warning condition='l24'><para>MDT0 contains the root of the Lustre filesystem. If MDT0 is unavailable for any reason, the filesystem cannot be used.</para></warning>
-      <note condition='l24'><para>Additional MDTs can be dedicated to sub-directories off the root filesystem provided by MDT0. Subsequent directories may also be configured to have their own MDT. If an MDT serving a subdirectory becomes unavailable this subdirectory and all directories beneath it will also become unavailable. Configuring multiple levels of MDTs is an experimental feature for Lustre 2.4.</para></note>
+      <warning condition='l24'><para>MDT0 contains the root of the Lustre file system. If MDT0 is unavailable for any reason, the
+          file system cannot be used.</para></warning>
+      <note condition='l24'><para>Additional MDTs can be dedicated to sub-directories off the root file system provided by MDT0.
+          Subsequent directories may also be configured to have their own MDT. If an MDT serving a
+          subdirectory becomes unavailable this subdirectory and all directories beneath it will
+          also become unavailable. Configuring multiple levels of MDTs is an experimental feature
+          for the Lustre 2.4 release.</para></note>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
       <para>The data access pattern for the OSS storage is a streaming I/O pattern that is dependent on the access patterns of applications being used. Each OSS can manage multiple object storage targets (OSTs), one for each volume with I/O traffic load-balanced between servers and targets. An OSS should be configured to have a balance between the network bandwidth and the attached storage bandwidth to prevent bottlenecks in the I/O path. Depending on the server hardware, an OSS typically serves between 2 and 8 targets, with each target up to 128 terabytes (TBs) in size.</para>
-      <para>Lustre file system capacity is the sum of the capacities provided by the targets. For example, 64 OSSs, each with two 8 TB targets, provide a file system with a capacity of nearly 1 PB. If each OST uses ten 1 TB SATA disks (8 data disks plus 2 parity disks in a RAID 6 configuration), it may be possible to get 50 MB/sec from each drive, providing up to 400 MB/sec of disk bandwidth per OST. If this system is used as storage backend with a system network like InfiniBand that provides a similar bandwidth, then each OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural constraints described here are simple, in practice it takes careful hardware selection, benchmarking and integration to obtain such results.)</para>
+      <para>Lustre file system capacity is the sum of the capacities provided by the targets. For
+        example, 64 OSSs, each with two 8 TB targets, provide a file system with a capacity of
+        nearly 1 PB. If each OST uses ten 1 TB SATA disks (8 data disks plus 2 parity disks in a
+        RAID 6 configuration), it may be possible to get 50 MB/sec from each drive, providing up to
+        400 MB/sec of disk bandwidth per OST. If this system is used as storage backend with a
+        system network, such as the InfiniBand* network, that provides a similar bandwidth, then
+        each OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural
+        constraints described here are simple, in practice it takes careful hardware selection,
+        benchmarking and integration to obtain such results.)</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_31079">
@@ -80,7 +107,12 @@
     <para>In a Lustre ldiskfs file system, all the inodes are allocated on the MDT and OSTs when the file system is first formatted. The total number of inodes on a formatted MDT or OST cannot be easily changed, although it is possible to add OSTs with additional space and corresponding inodes. Thus, the number of inodes created at format time should be generous enough to anticipate future expansion.</para>
     <para>When the file system is in use and a file is created, the metadata associated with that file is stored in one of the pre-allocated inodes and does not consume any of the free space used to store file data.</para>
     <note>
-      <para>By default, the ldiskfs file system used by Lustre servers to store user-data objects and system data reserves 5% of space that cannot be used by Lustre. Additionally, Lustre reserves up to 400 MB on each OST for journal use and a small amount of space outside the journal to store accounting data for Lustre. This reserved space is unusable for general storage. Thus, at least 400 MB of space is used on each OST before any file object data is saved.</para>
+      <para>By default, the ldiskfs file system used by Lustre servers to store user-data objects
+        and system data reserves 5% of space that cannot be used by the Lustre file system.
+        Additionally, a Lustre file system reserves up to 400 MB on each OST for journal use and a
+        small amount of space outside the journal to store accounting data. This reserved space is
+        unusable for general storage. Thus, at least 400 MB of space is used on each OST before any
+        file object data is saved.</para>
     </note>
     <section xml:id="dbdoclet.50438256_87676">
         <title><indexterm><primary>setup</primary><secondary>MDS/MDT</secondary></indexterm>
@@ -95,10 +127,9 @@
       <informalexample>
         <para>2 KB/inode * 40 million inodes = 80 GB</para>
       </informalexample>
-      <note>
-          <para>Inode size depends on stripe count. Without any stripes an inode allocation of 512 bytes might be sufficient. As striping grows to ~80 stripes per file, the inode allocation is around 2KB. At 160 stripes, a rough estimate for inode allocation is 4.5KB.</para>
-      </note>
-      <para>If the average file size is small, 4 KB for example, Lustre is not very efficient as the MDT uses as much space as the OSTs. However, this is not a common configuration for Lustre.</para>
+      <para>If the average file size is small, 4 KB for example, the Lustre file system is not very
+        efficient as the MDT uses as much space as the OSTs. However, this is not a common
+        configuration for a Lustre environment.</para>
       <note>
         <para>If the MDT is too small, this can cause all the space on the OSTs to be unusable. Be sure to determine the appropriate size of the MDT needed to support the file system before formatting the file system. It is difficult to increase the number of inodes after the file system is formatted.</para>
       </note>
@@ -107,7 +138,12 @@
         <title><indexterm><primary>setup</primary><secondary>OSS/OST</secondary></indexterm>
           <indexterm><primary>space</primary><secondary>determining OSS/OST requirements</secondary></indexterm>
       Determining OSS/OST Space Requirements</title>
-      <para>For the OST, the amount of space taken by each object depends on the usage pattern of the users/applications running on the system. Lustre defaults to a conservative estimate for the object size (16 KB per object). If you are confident that the average file size for your applications will be larger than this, you can specify a larger average file size (fewer total inodes) to reduce file system overhead and minimize file system check time. See <xref linkend="dbdoclet.50438256_53886"/> for more details.</para>
+      <para>For the OST, the amount of space taken by each object depends on the usage pattern of
+        the users/applications running on the system. The Lustre software defaults to a conservative
+        estimate for the object size (16 KB per object). If you are confident that the average file
+        size for your applications will be larger than this, you can specify a larger average file
+        size (fewer total inodes) to reduce file system overhead and minimize file system check
+        time. See <xref linkend="dbdoclet.50438256_53886"/> for more details.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_84701">
@@ -115,123 +151,164 @@
           <indexterm><primary>file system</primary><secondary>formatting options</secondary></indexterm>
           <indexterm><primary>setup</primary><secondary>file system</secondary></indexterm>
           Setting File System Formatting Options</title>
-    <para>The default behavior of <literal>mkfs.lustre</literal> applies options to Ext4 to enhance Lustre performance and scalability. These options include:</para>
+    <para>By default, the <literal>mkfs.lustre</literal> utility applies these options to the Lustre
+      backing file system used to store data and metadata in order to enhance Lustre file system
+      performance and scalability. These options include:</para>
         <itemizedlist>
             <listitem>
-              <para><literal>flex_bg</literal> aggregates block and inode bitmaps for multiple groups together in order to avoid seeking when reading/writing the bitmaps, and reduce read/modify/write on typical RAID storage with 1MB RAID stripe width.  This is enabled on both OST and MDT filesystems. On MDT filesystems the flex_bg factor (the number of groups' metadata co-located on disk) is left at the default 16. On OSTs the flex_bg factor is set to 256, to allow all of the block or inode bitmaps in a single flex_bg to be read or written in a single IO on typical RAID storage.</para>
+              <para><literal>flex_bg</literal> - When the flag is set to enable this
+          flexible-block-groups feature, block and inode bitmaps for multiple groups are aggregated
+          to minimize seeking when bitmaps are read or written and to reduce read/modify/write
+          operations on typical RAID storage (with 1 MB RAID stripe widths). This flag is enabled on
+          both OST and MDT file systems. On MDT file systems the <literal>flex_bg</literal> factor
+          is left at the default value of 16. On OSTs, the <literal>flex_bg</literal> factor is set
+          to 256 to allow all of the block or inode bitmaps in a single <literal>flex_bg</literal>
+          to be read or written in a single I/O on typical RAID storage.</para>
             </listitem>
             <listitem>
-              <para><literal>huge_file</literal> allows files on OSTs to be larger than 2TB in size.</para>
+              <para><literal>huge_file</literal> - Setting this flag allows files on OSTs to be
+          larger than 2 TB in size.</para>
             </listitem>
             <listitem>
-              <para><literal>lazy_journal_init</literal> is an extended option to avoid a full overwrite of the 400MB journal that Lustre allocates by default. This reduces the filesystem format time.</para>
+              <para><literal>lazy_journal_init</literal> - This extended option is enabled to
+          prevent a full overwrite of the 400 MB journal that is allocated by default in a Lustre
+          file system, which reduces the file system format time.</para>
             </listitem>
         </itemizedlist>
-    <para>To override the default formatting options for any of the Lustre backing file systems, use this argument to <literal>mkfs.lustre</literal> to pass formatting options to the backing <literal>mkfs</literal>:</para>
+    <para>To override the default formatting options, use arguments to
+        <literal>mkfs.lustre</literal> to pass formatting options to the backing file system:</para>
     <screen>--mkfsoptions=&apos;backing fs options&apos;</screen>
-    <para>For other options to format backing ldiskfs filesystems, see the Linux man page for <literal>mke2fs(8)</literal>.</para>
+    <para>For other <literal>mkfs.lustre</literal> options, see the Linux* man page for
+        <literal>mke2fs(8)</literal>.</para>
     <section xml:id="dbdoclet.50438256_pgfId-1293228">
-      <title><indexterm><primary>inodes</primary><secondary>MDS</secondary></indexterm><indexterm><primary>setup</primary><secondary>inodes</secondary></indexterm>Setting the Number of Inodes for the MDS</title>
-      <para>The number of inodes on the MDT is determined at format time based on the total size of the file system to be created. The default MDT inode ratio is one inode for every 4096 bytes of file system space. To override the inode ratio, use the following option:</para>
-      <screen>-i <replaceable>bytes_per_inode</replaceable></screen>
-      <para>For example, use the following option to create one inode per 2048 bytes of file system space.</para>
-      <screen>--mkfsoptions=&quot;-i 2048&quot; </screen>
-      <para>To avoid mke2fs creating an unusable file system, do not specify the -i option with an inode ratio below one inode per 1024 bytes. Instead, specify an absolute number of inodes, using this option:</para>
-      <screen>-N <replaceable>number_of_inodes</replaceable></screen>
-      <para>For example, by default, a 2 TB MDT will have 512M inodes. The largest currently-supported file system size is 16 TB, which would hold 4B inodes, the maximum possible number of inodes in a ldiskfs file system. With an MDS inode ratio of 1024 bytes per inode, a 2 TB MDT would hold 2B inodes, and a 4 TB MDT would hold 4B inodes.</para>
-    </section>
-    <section remap="h3">
-      <title><indexterm><primary>inodes</primary><secondary>MDT</secondary></indexterm>Setting the Inode Size for the MDT</title>
-      <para>Lustre uses &quot;large&quot; inodes on backing file systems to efficiently store Lustre metadata with each file. On the MDT, each inode is at least 512 bytes in size (by default), while on the OST each inode is 256 bytes in size.</para>
-      <para>The backing ldiskfs file system also needs sufficient space for other metadata like the journal (up to 400 MB), bitmaps and directories and a few files that Lustre uses to maintain cluster consistency.</para>
-      <para>To specify a larger inode size, use the <literal>-I <replaceable>inode_size</replaceable></literal> option. We recommend you do NOT specify a smaller-than-default inode size, as this can lead to serious performance problems; and you cannot change this parameter after formatting the file system. The inode ratio must always be larger than the inode size.</para>
+      <title><indexterm>
+          <primary>inodes</primary>
+          <secondary>MDS</secondary>
+        </indexterm><indexterm>
+          <primary>setup</primary>
+          <secondary>inodes</secondary>
+        </indexterm>Setting Formatting Options for an MDT</title>
+      <para>The number of inodes on the MDT is determined at format time based on the total size of
+        the file system to be created. The default <emphasis role="italic"
+          >bytes-per-inode</emphasis> ratio ("inode ratio") for an MDT is optimized at one inode for
+        every 2048 bytes of file system space. It is recommended that this value not be changed for
+        MDTs.</para>
+      <para>This setting takes into account the space needed for additional metadata, such as the
+        journal (up to 400 MB), bitmaps and directories, and a few files that the Lustre file system
+        uses to maintain cluster consistency.</para>
     </section>
     <section xml:id="dbdoclet.50438256_53886">
-      <title><indexterm><primary>inodes</primary><secondary>OST</secondary></indexterm>Setting the Number of Inodes for an OST</title>
-      <para>When formatting OST file systems, it is normally advantageous to take local file system usage into account. Try to minimize the number of inodes on each OST, while keeping enough margin for potential variance in future usage. This helps reduce the format and file system check time, and makes more space available for data.</para>
-      <para>The current default is to create one inode per 16 KB of space in the OST file system, but in many environments, this is far too many inodes for the average file size. As a good rule of thumb, the OSTs should have at least:</para>
-      <para>num_ost_inodes = 4 * <replaceable>number_of_mds_inodes</replaceable> * <replaceable>default_stripe_count</replaceable> / <replaceable>number_of_osts</replaceable></para>
-      <table frame="all">
-            <title xml:id="settinguplustresystem.tab1">Inode Ratio to be considered</title>
-            <tgroup cols="3">
-              <colspec colname="c1" colwidth="3*"/>
-              <colspec colname="c2" colwidth="2*"/>
-              <colspec colname="c3" colwidth="4*"/>
-              <thead>
-                <row>
-                  <entry>
-                    <para><emphasis role="bold">LUN/OST size</emphasis></para>
-                  </entry>
-                  <entry>
-                    <para><emphasis role="bold">Inode ratio</emphasis></para>
-                  </entry>
-                  <entry>
-                    <para><emphasis role="bold">Total inodes</emphasis></para>
-                  </entry>
-                </row>
-              </thead>
-              <tbody>
-                <row>
-                  <entry>
-                    <para> over 10GB </para>
-                  </entry>
-                  <entry>
-                    <para> 1 inode/16KB </para>
-                  </entry>
-                  <entry>
-                    <para> 640 - 655k </para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> 10GB - 1TB </para>
-                  </entry>
-                  <entry>
-                    <para> 1 inode/68kiB </para>
-                  </entry>
-                  <entry>
-                    <para> 153k - 15.7M </para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> 1TB - 8TB </para>
-                  </entry>
-                  <entry>
-                    <para> 1 inode/256kB </para>
-                  </entry>
-                  <entry>
-                    <para> 4.2M - 33.6M </para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> over 8TB </para>
-                  </entry>
-                  <entry>
-                    <para> 1 inode/1MB </para>
-                  </entry>
-                  <entry>
-                    <para> 8.4M - 134M </para>
-                  </entry>
-                </row>
+      <title><indexterm>
+          <primary>inodes</primary>
+          <secondary>OST</secondary>
+        </indexterm>Setting Formatting Options for an OST</title>
+      <para>When formatting OST file systems, it is normally advantageous to take local file system
+        usage into account. When doing so, try to minimize the number of inodes on each OST, while
+        keeping enough margin for potential variations in future usage. This helps reduce the format
+        and file system check time and makes more space available for data.</para>
+      <para>The table below shows the default <emphasis role="italic">bytes-per-inode
+        </emphasis>ratio ("inode ratio") used for OSTs of various sizes when they are formatted. </para>
+      <para>
+        <table frame="all">
+          <title xml:id="settinguplustresystem.tab1">Inode Ratios Used for Newly Formatted
+            OSTs</title>
+          <tgroup cols="3">
+            <colspec colname="c1" colwidth="3*"/>
+            <colspec colname="c2" colwidth="2*"/>
+            <colspec colname="c3" colwidth="4*"/>
+            <thead>
+              <row>
+                <entry>
+                  <para><emphasis role="bold">LUN/OST size</emphasis></para>
+                </entry>
+                <entry>
+                  <para><emphasis role="bold">Inode ratio</emphasis></para>
+                </entry>
+                <entry>
+                  <para><emphasis role="bold">Total inodes</emphasis></para>
+                </entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <para> over 10GB </para>
+                </entry>
+                <entry>
+                  <para> 1 inode/16KB </para>
+                </entry>
+                <entry>
+                  <para> 640 - 655k </para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> 10GB - 1TB </para>
+                </entry>
+                <entry>
+                  <para> 1 inode/68kiB </para>
+                </entry>
+                <entry>
+                  <para> 153k - 15.7M </para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> 1TB - 8TB </para>
+                </entry>
+                <entry>
+                  <para> 1 inode/256kB </para>
+                </entry>
+                <entry>
+                  <para> 4.2M - 33.6M </para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> over 8TB </para>
+                </entry>
+                <entry>
+                  <para> 1 inode/1MB </para>
+                </entry>
+                <entry>
+                  <para> 8.4M - 134M </para>
+                </entry>
+              </row>
             </tbody>
-            </tgroup>
+          </tgroup>
         </table>
-      <para>&#160;</para>
-      <para>You can specify the number of inodes on the OST file systems using the following option to the <literal>--mkfs</literal> option:</para>
-      <screen>-N <replaceable>num_inodes</replaceable></screen>
-      <para> Alternately, if you know the average file size, then you can specify the OST inode count for the OST file systems using:</para>
-      <screen>-i <replaceable>average_file_size</replaceable> / (<replaceable>number_of_stripes</replaceable> * 4)</screen>
-      <para>For example, if the average file size is 16 MB and there are, by default 4 stripes per file, then <literal>--mkfsoptions=&apos;-i 1048576&apos;</literal> would be appropriate.</para>
+      </para>
+      <para>In environments with few small files, the default inode ratio may result in far too many
+        inodes for the average file size. In this case, performance can be improved by increasing
+        the number of <emphasis role="italic">bytes-per-inode</emphasis>.To set the inode ratio, use
+        the <literal>-i</literal> argument to <literal>mkfs.lustre</literal> to specify the
+          <emphasis role="italic">bytes-per-inode</emphasis> value. </para>
       <note>
-        <para>In addition to the number of inodes, file system check time on OSTs is affected by a number of other variables: size of the file system, number of allocated blocks, distribution of allocated blocks on the disk, disk speed, CPU speed, and amount of RAM on the server. Reasonable file system check times (without serious file system problems), are expected to take five and thirty minutes per TB.</para>
+        <para>File system check time on OSTs is affected by a number of  variables in addition to
+          the number of inodes, including the size of the file system, the number of allocated
+          blocks, the distribution of allocated blocks on the disk, disk speed, CPU speed, and the
+          amount of RAM on the server. Reasonable file system check times are 5-30 minutes per
+          TB.</para>
       </note>
-      <para>For more details on formatting MDT and OST file systems, see <xref linkend="dbdoclet.50438208_51921"/>.</para>
+      <para>For more details about formatting MDT and OST file systems, see <xref
+          linkend="dbdoclet.50438208_51921"/>.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>setup</primary><secondary>limits</secondary></indexterm>File and File System Limits</title>
-      <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits. These limits are imposed by either the Lustre architecture or the Linux virtual file system (VFS) and virtual memory subsystems. In a few cases, a limit is defined within the code and can be changed by re-compiling Lustre (see <xref linkend="installinglustrefromsourcecode"/>). In these cases, the indicated limit was used for Lustre testing. </para>
+      <title><indexterm>
+          <primary>setup</primary>
+          <secondary>limits</secondary>
+        </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
+          <primary>wide striping</primary>
+        </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
+          <primary>xattr</primary>
+          <secondary><emphasis role="italic">See</emphasis> wide striping</secondary>
+        </indexterm>File and File System Limits</title>
+      <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits.
+        These limits are imposed by either the Lustre architecture or the Linux virtual file system
+        (VFS) and virtual memory subsystems. In a few cases, a limit is defined within the code and
+        can be changed by re-compiling the Lustre software (see <xref
+          linkend="installinglustrefromsourcecode"/>). In these cases, the indicated limit was used
+        for testing of the Lustre software. </para>
       <table frame="all">
         <title xml:id="settinguplustresystem.tab2">File and file system limits</title>
         <tgroup cols="3">
@@ -261,8 +338,12 @@
                 <para condition='l24'>4096</para>
               </entry>
               <entry>
-                <para>Lustre 2.3 and earlier allows a maximum of 1 MDT per file system, but a single MDS can host multiple MDTs, each one for a separate file system.</para>
-                <para condition='l24'>Lustre 2.4 and later requires one MDT for the root. Upto 4095 additional MDTs can be added to the filesystem and attached into the namespace with remote directories.</para>
+                <para>The Lustre 2.3 release and earlier allows a maximum of 1 MDT per file system,
+                  but a single MDS can host multiple MDTs, each one for a separate file
+                  system.</para>
+                <para condition="l24">The Lustre 2.4 release and later requires one MDT for the
+                  root. Upto 4095 additional MDTs can be added to the file system and attached into
+                  the namespace with remote directories.</para>
               </entry>
             </row>
             <row>
@@ -273,7 +354,8 @@
                 <para> 8150</para>
               </entry>
               <entry>
-                <para>The maximum number of OSTs is a constant that can be changed at compile time. Lustre has been tested with up to 4000 OSTs.</para>
+                <para>The maximum number of OSTs is a constant that can be changed at compile time.
+                  Lustre file systems with up to 4000 OSTs have been tested.</para>
               </entry>
             </row>
             <row>
@@ -284,7 +366,8 @@
                 <para> 128TB </para>
               </entry>
               <entry>
-                <para> This is not a <emphasis>hard</emphasis> limit. Larger OSTs are possible but today typical production systems do not go beyond 128TB per OST. </para>
+                <para>This is not a <emphasis>hard</emphasis> limit. Larger OSTs are possible but
+                  today typical production systems do not go beyond 128TB per OST. </para>
               </entry>
             </row>
             <row>
@@ -349,7 +432,9 @@
                 <para> 16 TB</para>
               </entry>
               <entry>
-                <para>The amount of data that can be stored in a single object. An object corresponds to a stripe. The ldiskfs limit of 16 TB for a single object applies. Lustre allows files to consist of up to 2000 stripes, each of 16 TB. </para>
+                <para>The amount of data that can be stored in a single object. An object
+                  corresponds to a stripe. The ldiskfs limit of 16 TB for a single object applies.
+                  Files can consist of up to 2000 stripes, each 16 TB in size. </para>
               </entry>
             </row>
             <row>
@@ -362,7 +447,10 @@
                 <para> 31.25 PB on 64-bit systems</para>
               </entry>
               <entry>
-                <para>Individual files have a hard limit of nearly 16 TB on 32-bit systems imposed by the kernel memory subsystem. On 64-bit systems this limit does not exist. Hence, files can be 64-bits in size. Lustre imposes an additional size limit of up to the number of stripes, where each stripe is 16 TB.</para>
+                <para>Individual files have a hard limit of nearly 16 TB on 32-bit systems imposed
+                  by the kernel memory subsystem. On 64-bit systems this limit does not exist.
+                  Hence, files can be 64-bits in size. An additional size limit of up to the number
+                  of stripes is imposed, where each stripe is 16 TB.</para>
                 <para>A single file can have a maximum of 2000 stripes, which gives an upper single file limit of 31.25 PB for 64-bit systems. The actual amount of data that can be stored in a file depends upon the amount of free space in each OST on which the file is striped.</para>
               </entry>
             </row>
@@ -374,8 +462,11 @@
                 <para> 10 million files</para>
               </entry>
               <entry>
-                <para>Lustre uses the ldiskfs hashed directory code, which has a limit of about 10 million files depending on the length of the file name. The limit on subdirectories is the same as the limit on regular files.</para>
-                <para>Lustre is tested with ten million files in a single directory.</para>
+                <para>The Lustre software uses the ldiskfs hashed directory code, which has a limit
+                  of about 10 million files depending on the length of the file name. The limit on
+                  subdirectories is the same as the limit on regular files.</para>
+                <para>Lustre file systems are tested with ten million files in a single
+                  directory.</para>
               </entry>
             </row>
             <row>
@@ -389,7 +480,9 @@
               <entry>
                 <para>The ldiskfs file system imposes an upper limit of 4 billion inodes. By default, the MDS file system is formatted with 2KB of space per inode, meaning 1 billion inodes per file system of 2 TB.</para>
                 <para>This can be increased initially, at the time of MDS file system creation. For more information, see <xref linkend="settinguplustresystem"/>.</para>
-				<para condition='l24'>Each additional MDT can hold up to 4 billion additional files, depending on available inodes and the distribution directories and files in the filesystem.</para>
+				<para condition="l24">Each additional MDT can hold up to 4 billion additional files, depending
+                  on available inodes and the distribution directories and files in the file
+                  system.</para>
               </entry>
             </row>
             <row>
@@ -416,13 +509,17 @@
             </row>
             <row>
               <entry>
-                <para> Maximum number of open files for Lustre file systems</para>
+                <para> Maximum number of open files for a Lustre file system</para>
               </entry>
               <entry>
                 <para> None</para>
               </entry>
               <entry>
-                <para>Lustre does not impose a maximum for the number of open files, but the practical limit depends on the amount of RAM on the MDS. No &quot;tables&quot; for open files exist on the MDS, as they are only linked in a list to a given client&apos;s export. Each client process probably has a limit of several thousands of open files which depends on the ulimit.</para>
+                <para>The Lustre software does not impose a maximum for the number of open files,
+                  but the practical limit depends on the amount of RAM on the MDS. No
+                  &quot;tables&quot; for open files exist on the MDS, as they are only linked in a
+                  list to a given client&apos;s export. Each client process probably has a limit of
+                  several thousands of open files which depends on the ulimit.</para>
               </entry>
             </row>
           </tbody>
@@ -430,7 +527,13 @@
       </table>
       <para>&#160;</para>
       <note>
-        <para>Versions of Lustre prior to 2.2 had a maximum stripe count for a single file was limited to 160 OSTs. In Lustre version 2.2, the large xattr feature which supports up to 2000 OSTs is disabled by default at mkfs.lustre time. In order to enable this feature, the "-O large_xattr" option needs to be set on MDT either with --mkfsoptions at format time or via tune2fs.</para>
+        <para condition="l22">In Lustre releases prior to 2.2, the maximum stripe count for a single
+          file was limited to 160 OSTs. In Lustre release 2.2, the large <literal>xattr</literal>
+          feature ("wide striping") was added to support up to 2000 OSTs. This feature is disabled
+          by default at <literal>mkfs.lustre</literal> time. In order to enable this feature, set
+          the "<literal>-O large_xattr</literal>" option on the MDT either by using
+            <literal>--mkfsoptions</literal> at format time or by using
+          <literal>tune2fs</literal>.</para>
       </note>
     </section>
   </section>
@@ -490,7 +593,10 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>OSS Memory Requirements</title>
-      <para>When planning the hardware for an OSS node, consider the memory usage of several components in the Lustre system (i.e., journal, service threads, file system metadata, etc.). Also, consider the effect of the OSS read cache feature, which consumes memory as it caches data on the OSS node.</para>
+      <para>When planning the hardware for an OSS node, consider the memory usage of several
+        components in the Lustre file system (i.e., journal, service threads, file system metadata,
+        etc.). Also, consider the effect of the OSS read cache feature, which consumes memory as it
+        caches data on the OSS node.</para>
       <para>In addition to the MDS memory requirements mentioned in <xref linkend="dbdoclet.50438256_87676"/>, the OSS requirements include:</para>
       <itemizedlist>
         <listitem>
@@ -513,8 +619,8 @@
           <para>1000 * 4-core clients * 100 files/core * 2kB = 800MB</para>
           <para>16 interactive clients * 10,000 files * 2kB = 320MB</para>
           <para>1,600,000 file extra working set * 1.5kB/file = 2400MB</para>
-          <para>     DLM locks + filesystem metadata TOTAL = 3520MB</para>
-          <para>Per OSS DLM locks + filesystem metadata = 3520MB/6 OSS = 600MB (approx.)</para>
+          <para> DLM locks + file system metadata TOTAL = 3520MB</para>
+          <para>Per OSS DLM locks + file system metadata = 3520MB/6 OSS = 600MB (approx.)</para>
           <para>Per OSS RAM minimum requirement = 4096MB (approx.)</para>
         </informalexample>
         <para>This consumes about 1,400 MB just for the pre-allocated buffers, and an additional 2 GB for minimal file system and kernel usage. Therefore, for a non-failover configuration, the minimum RAM would be 4 GB for an OSS node with two OSTs. Adding additional memory on the OSS will improve the performance of reading smaller, frequently-accessed files.</para>
@@ -524,9 +630,15 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_78272">
-    <title><indexterm><primary>setup</primary><secondary>network</secondary></indexterm>Implementing Networks To Be Used by Lustre</title>
-    <para>As a high performance file system, Lustre places heavy loads on networks. Thus, a network interface in each Lustre server and client is commonly dedicated to Lustre traffic. This is often a dedicated TCP/IP subnet, although other network hardware can also be used.</para>
-    <para>A typical Lustre implementation may include the following:</para>
+    <title><indexterm>
+        <primary>setup</primary>
+        <secondary>network</secondary>
+      </indexterm>Implementing Networks To Be Used by the Lustre File System</title>
+    <para>As a high performance file system, the Lustre file system places heavy loads on networks.
+      Thus, a network interface in each Lustre server and client is commonly dedicated to Lustre
+      file system traffic. This is often a dedicated TCP/IP subnet, although other network hardware
+      can also be used.</para>
+    <para>A typical Lustre file system implementation may include the following:</para>
     <itemizedlist>
       <listitem>
         <para>A high-performance backend network for the Lustre servers, typically an InfiniBand (IB) network.</para>
@@ -538,16 +650,30 @@
         <para>Lustre routers to connect the two networks.</para>
       </listitem>
     </itemizedlist>
-    <para>Lustre networks and routing are configured and managed by specifying parameters to the Lustre Networking (<literal>lnet</literal>) module in <literal>/etc/modprobe.d/lustre.conf</literal>.</para>
-    <para>To prepare to configure Lustre Networking, complete the following steps:</para>
+    <para>Lustre networks and routing are configured and managed by specifying parameters to the
+      Lustre networking (<literal>lnet</literal>) module in
+        <literal>/etc/modprobe.d/lustre.conf</literal>.</para>
+    <para>To prepare to configure Lustre networking, complete the following steps:</para>
     <orderedlist>
       <listitem>
-        <para><emphasis role="bold">Identify all machines that will be running Lustre and the network interfaces they will use to run Lustre traffic. These machines will form the Lustre network.</emphasis></para>
-        <para>A network is a group of nodes that communicate directly with one another. Lustre includes Lustre network drivers (LNDs) to support a variety of network types and hardware (see <xref linkend="understandinglustrenetworking"/> for a complete list). The standard rules for specifying networks applies to Lustre networks. For example, two TCP networks on two different subnets (<literal>tcp0</literal> and <literal>tcp1</literal>) are considered to be two different Lustre networks.</para>
+        <para><emphasis role="bold">Identify all machines that will be running Lustre software and
+            the network interfaces they will use to run Lustre file system traffic. These machines
+            will form the Lustre network .</emphasis></para>
+        <para>A network is a group of nodes that communicate directly with one another. The Lustre
+          software includes Lustre network drivers (LNDs) to support a variety of network types and
+          hardware (see <xref linkend="understandinglustrenetworking"/> for a complete list). The
+          standard rules for specifying networks applies to Lustre networks. For example, two TCP
+          networks on two different subnets (<literal>tcp0</literal> and <literal>tcp1</literal>)
+          are considered to be two different Lustre networks.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">If routing is needed, identify the nodes to be used to route traffic between networks.</emphasis></para>
-        <para>If you are using multiple network types, then you&apos;ll need a router. Any node with appropriate interfaces can route Lustre Networking (LNET) traffic between different network hardware types or topologies --the node may be a server, a client, or a standalone router. LNET can route messages between different network types (such as TCP-to-InfiniBand) or across different topologies (such as bridging two InfiniBand or TCP/IP networks). Routing will be configured in <xref linkend="configuringlnet"/>.</para>
+        <para>If you are using multiple network types, then you will need a router. Any node with
+          appropriate interfaces can route Lustre networking (LNET) traffic between different
+          network hardware types or topologies --the node may be a server, a client, or a standalone
+          router. LNET can route messages between different network types (such as
+          TCP-to-InfiniBand) or across different topologies (such as bridging two InfiniBand or
+          TCP/IP networks). Routing will be configured in <xref linkend="configuringlnet"/>.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Identify the network interfaces to include in or exclude from LNET. </emphasis>
