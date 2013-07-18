@@ -1,6 +1,6 @@
-diff -urp linux-2.6.32.46-0.orig/fs/quota/dquot.c linux-2.6.32.46-0/fs/quota/dquot.c
---- linux-2.6.32.46-0.orig/fs/quota/dquot.c	2013-04-26 11:56:35.000000000 -0400
-+++ linux-2.6.32.46-0/fs/quota/dquot.c	2013-04-26 12:00:44.000000000 -0400
+diff -urp linux-2.6.32-53.7.orig/fs/quota/dquot.c linux-2.6.32.46-0/fs/quota/dquot.c
+--- linux-2.6.32-53.7.orig/fs/quota/dquot.c	2013-04-26 11:56:35.000000000 -0400
++++ linux-2.6.32-53.7/fs/quota/dquot.c	2013-04-26 12:00:44.000000000 -0400
 @@ -89,22 +89,17 @@
  /*
   * There are three quota SMP locks. dq_list_lock protects all lists with quotas
@@ -571,9 +571,9 @@ diff -urp linux-2.6.32.46-0.orig/fs/quota/dquot.c linux-2.6.32.46-0/fs/quota/dqu
  	}
  	mutex_unlock(&dqopt->dqonoff_mutex);
  out_fmt:
-diff -urp linux-2.6.32.46-0.orig/fs/quota/quota.c linux-2.6.32.46-0/fs/quota/quota.c
---- linux-2.6.32.46-0.orig/fs/quota/quota.c	2009-12-02 22:51:21.000000000 -0500
-+++ linux-2.6.32.46-0/fs/quota/quota.c	2013-04-26 11:59:22.000000000 -0400
+diff -urp linux-2.6.32-53.7.orig/fs/quota/quota.c linux-2.6.32.46-0/fs/quota/quota.c
+--- linux-2.6.32-53.7.orig/fs/quota/quota.c	2009-12-02 22:51:21.000000000 -0500
++++ linux-2.6.32-53.7/fs/quota/quota.c	2013-04-26 11:59:22.000000000 -0400
 @@ -255,13 +255,13 @@ static int do_quotactl(struct super_bloc
  		case Q_GETFMT: {
  			__u32 fmt;
@@ -591,9 +591,9 @@ diff -urp linux-2.6.32.46-0.orig/fs/quota/quota.c linux-2.6.32.46-0/fs/quota/quo
  			if (copy_to_user(addr, &fmt, sizeof(fmt)))
  				return -EFAULT;
  			return 0;
-diff -urp linux-2.6.32.46-0.orig/fs/stat.c linux-2.6.32.46-0/fs/stat.c
---- linux-2.6.32.46-0.orig/fs/stat.c	2013-04-26 11:56:28.000000000 -0400
-+++ linux-2.6.32.46-0/fs/stat.c	2013-04-26 11:59:22.000000000 -0400
+diff -urp linux-2.6.32-53.7.orig/fs/stat.c linux-2.6.32.46-0/fs/stat.c
+--- linux-2.6.32-53.7.orig/fs/stat.c	2013-04-26 11:56:28.000000000 -0400
++++ linux-2.6.32-53.7/fs/stat.c	2013-04-26 11:59:22.000000000 -0400
 @@ -422,9 +422,8 @@ void inode_add_bytes(struct inode *inode
  
  EXPORT_SYMBOL(inode_add_bytes);
@@ -635,9 +635,9 @@ diff -urp linux-2.6.32.46-0.orig/fs/stat.c linux-2.6.32.46-0/fs/stat.c
  	spin_unlock(&inode->i_lock);
  	return ret;
  }
-diff -urp linux-2.6.32.46-0.orig/fs/super.c linux-2.6.32.46-0/fs/super.c
---- linux-2.6.32.46-0.orig/fs/super.c	2013-04-26 11:56:52.000000000 -0400
-+++ linux-2.6.32.46-0/fs/super.c	2013-04-26 11:59:22.000000000 -0400
+diff -urp linux-2.6.32-53.7.orig/fs/super.c linux-2.6.32.46-0/fs/super.c
+--- linux-2.6.32-53.7.orig/fs/super.c	2013-04-26 11:56:52.000000000 -0400
++++ linux-2.6.32-53.7/fs/super.c	2013-04-26 11:59:22.000000000 -0400
 @@ -98,7 +98,6 @@ static struct super_block *alloc_super(s
  		mutex_init(&s->s_vfs_rename_mutex);
  		mutex_init(&s->s_dquot.dqio_mutex);
@@ -646,9 +646,9 @@ diff -urp linux-2.6.32.46-0.orig/fs/super.c linux-2.6.32.46-0/fs/super.c
  		init_waitqueue_head(&s->s_wait_unfrozen);
  		s->s_maxbytes = MAX_NON_LFS;
  		s->dq_op = sb_dquot_ops;
-diff -urp linux-2.6.32.46-0.orig/include/linux/fs.h linux-2.6.32.46-0/include/linux/fs.h
---- linux-2.6.32.46-0.orig/include/linux/fs.h	2013-04-26 11:56:52.000000000 -0400
-+++ linux-2.6.32.46-0/include/linux/fs.h	2013-04-26 11:59:22.000000000 -0400
+diff -urp linux-2.6.32-53.7.orig/include/linux/fs.h linux-2.6.32.46-0/include/linux/fs.h
+--- linux-2.6.32-53.7.orig/include/linux/fs.h	2013-04-26 11:56:52.000000000 -0400
++++ linux-2.6.32-53.7/include/linux/fs.h	2013-04-26 11:59:22.000000000 -0400
 @@ -2356,7 +2356,9 @@ extern void generic_fillattr(struct inod
  extern int vfs_getattr(struct vfsmount *, struct dentry *, struct kstat *);
  void __inode_add_bytes(struct inode *inode, loff_t bytes);

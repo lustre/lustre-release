@@ -1,4 +1,5 @@
 raid5-mmp-unplug-dev-sles11sp2.patch
-replace_dqptr_sem-sles11sp2.patch
+quota-replace-dqptr-sem-sles11sp2.patch
+quota-avoid-dqget-calls-sles11sp2.patch
 blkdev_tunables-3.0-sles11.patch
 bh_lru_size_config.patch
