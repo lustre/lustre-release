@@ -1,0 +1,56 @@
+--- linux-3.0/fs/quota/dquot.c.orig	2013-07-18 09:46:28.000000000 -0400
++++ linux-3.0/fs/quota/dquot.c	2013-07-18 09:49:20.000000000 -0400
+@@ -1342,7 +1342,7 @@
+ static void __dquot_initialize(struct inode *inode, int type)
+ {
+ 	unsigned int id = 0;
+-	int cnt;
++	int cnt, ret = 0, dq_get = 0;
+ 	struct dquot *got[MAXQUOTAS];
+ 	struct super_block *sb = inode->i_sb;
+ 	qsize_t rsv;
+@@ -1352,7 +1352,14 @@
+ 	if (!dquot_active(inode))
+ 		return;
+ 
+-	/* First get references to structures we might need. */
++	/* In most case, the i_dquot should have been initialized, except
++	 * the newly allocated one. We'd always try to skip the dqget() and
++	 * dqput() calls to avoid unnecessary global lock contention. */
++	if (!(inode->i_state & I_NEW))
++		goto init_idquot;
++
++get_dquots:
++	dq_get = 1;
+ 	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+ 		got[cnt] = NULL;
+ 		if (type != -1 && cnt != type)
+@@ -1367,7 +1374,7 @@
+ 		}
+ 		got[cnt] = dqget(sb, id, cnt);
+ 	}
+-
++init_idquot:
+ 	spin_lock(&inode->i_lock);
+ 	if (IS_NOQUOTA(inode))
+ 		goto out_err;
+@@ -1381,6 +1388,10 @@
+ 		if (!got[cnt])
+ 			continue;
+ 		if (!inode->i_dquot[cnt]) {
++			if (dq_get == 0) {
++				spin_unlock(&inode->i_lock);
++				goto get_dquots;
++			}
+ 			inode->i_dquot[cnt] = got[cnt];
+ 			got[cnt] = NULL;
+ 			/*
+@@ -1388,7 +1399,7 @@
+ 			 * did a write before quota was turned on
+ 			 */
+ 			rsv = inode_get_rsv_space(inode);
+-			if (unlikely(rsv)) {
++			if (unlikely(rsv) && likely(inode->i_dquot[cnt])) {
+ 				spin_lock(&dq_data_lock);
+ 				dquot_resv_space(inode->i_dquot[cnt], rsv);
+ 				spin_unlock(&dq_data_lock);

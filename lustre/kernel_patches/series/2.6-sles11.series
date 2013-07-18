@@ -5,4 +5,5 @@ quota-support-64-bit-quota-format.patch
 export-2.6.32-vanilla.patch
 jbd2-jcberr-2.6-rhel6.patch
 bh_lru_size_config.patch
-replace_dqptr_sem-sles11.patch
+quota-replace-dqptr-sem-sles11.patch
+quota-avoid-dqget-calls.patch
