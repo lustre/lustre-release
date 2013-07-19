@@ -340,7 +340,6 @@ struct agent_action_iterator {
 	struct lu_env		 aai_env;	 /**< lustre env for llog */
 	struct obd_device	*aai_obd;	 /**< metadata device */
 	struct llog_ctxt	*aai_ctxt;	 /**< llog context */
-	struct llog_handle	*aai_llh;	 /**< llog handle */
 	int			 aai_index_done; /**< idx already shown */
 	int			 aai_index_cb;	 /**< current idx in loop cb */
 	int			 aai_eof;	 /**< all done */
@@ -353,25 +352,16 @@ struct agent_action_iterator {
 static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
 {
 	struct agent_action_iterator	*aai = s->private;
-	int				 rc;
 	ENTRY;
 
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
 		 aai->aai_magic);
 
 	aai->aai_ctxt = llog_get_context(aai->aai_obd, LLOG_AGENT_ORIG_CTXT);
-	if (aai->aai_ctxt == NULL) {
+	if ((aai->aai_ctxt == NULL) || (aai->aai_ctxt->loc_handle == NULL)) {
 		CERROR("llog_get_context() failed\n");
 		RETURN(ERR_PTR(-ENOENT));
 	}
-	rc = llog_open(&aai->aai_env, aai->aai_ctxt, &aai->aai_llh, NULL,
-		       HSM_ACTIONS, LLOG_OPEN_EXISTS);
-	if (rc)
-		GOTO(err, rc);
-
-	rc = llog_init_handle(&aai->aai_env, aai->aai_llh, LLOG_F_IS_CAT, NULL);
-	if (rc)
-		GOTO(err, rc);
 
 	CDEBUG(D_HSM, "llog succesfully initialized, start from "LPD64"\n",
 	       *pos);
@@ -383,16 +373,6 @@ static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
 	}
 
 	RETURN(aai);
-err:
-	if (aai->aai_llh) {
-		llog_cat_close(&aai->aai_env, aai->aai_llh);
-		aai->aai_llh = NULL;
-	}
-
-	if (aai->aai_ctxt)
-		llog_ctxt_put(aai->aai_ctxt);
-
-	RETURN(ERR_PTR(rc));
 }
 
 /**
@@ -492,7 +472,7 @@ static int mdt_agent_actions_proc_show(struct seq_file *s, void *v)
 		RETURN(0);
 
 	aai->aai_index_cb = 0;
-	rc = llog_cat_process(&aai->aai_env, aai->aai_llh,
+	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
 			      agent_actions_show_cb, s, 0, 0);
 	/* was all llog parsed? */
 	if (rc == 0)
@@ -516,12 +496,9 @@ static void mdt_agent_actions_proc_stop(struct seq_file *s, void *v)
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
 		 aai->aai_magic);
 
-	if (aai->aai_llh) {
-		llog_cat_close(&aai->aai_env, aai->aai_llh);
-		aai->aai_llh = NULL;
-	}
 	if (aai->aai_ctxt)
 		llog_ctxt_put(aai->aai_ctxt);
+
 	EXIT;
 	return;
 }
@@ -559,7 +536,6 @@ static int lprocfs_open_agent_actions(struct inode *inode, struct file *file)
 	if (rc)
 		GOTO(err, rc);
 
-	aai->aai_llh = NULL;
 	/* mdt is saved in proc_dir_entry->data by
 	 * mdt_coordinator_procfs_init() calling lprocfs_register()
 	 */
