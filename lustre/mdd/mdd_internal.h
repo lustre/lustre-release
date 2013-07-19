@@ -148,7 +148,7 @@ struct mdd_thread_info {
 	struct lu_dirent	  mti_ent;
 	char			  mti_key[NAME_MAX + 16];
         struct obd_trans_info     mti_oti;
-        struct lu_buf             mti_buf;
+        struct lu_buf             mti_buf[4];
         struct lu_buf             mti_big_buf; /* biggish persistent buf */
 	struct lu_buf		  mti_link_buf; /* buf for link ea */
         struct lu_name            mti_name;

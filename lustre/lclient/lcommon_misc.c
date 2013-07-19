@@ -140,11 +140,13 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         io->ci_obj = obj;
 	io->ci_ignore_layout = 1;
 
-        rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
-        if (rc) {
-                LASSERT(rc < 0);
-                cl_env_put(env, &refcheck);
-                return rc;
+	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
+	if (rc) {
+		/* Does not make sense to take GL for released layout */
+		if (rc > 0)
+			rc = -ENOTSUPP;
+		cl_env_put(env, &refcheck);
+		return rc;
         }
 
         descr = &ccc_env_info(env)->cti_descr;

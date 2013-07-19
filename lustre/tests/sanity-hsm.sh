@@ -24,6 +24,7 @@ ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT"
 TMP=${TMP:-/tmp}
 
 ORIG_PWD=${PWD}
+MCREATE=${MCREATE:-mcreate}
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
@@ -49,6 +50,37 @@ DIR=${DIR:-$MOUNT}
 assert_DIR
 
 build_test_filter
+
+# $RUNAS_ID may get set incorrectly somewhere else
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
+	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+
+check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
+
+copytool_cleanup() {
+	# TODO: add copytool cleanup code here!
+	return
+}
+
+copytool_setup() {
+	# TODO: add copytool setup code here!
+	return
+}
+
+fail() {
+	copytool_cleanup
+	error $*
+}
+
+path2fid() {
+	$LFS path2fid $1 | tr -d '[]'
+}
+
+make_small() {
+	local file2=${1/$DIR/$DIR}
+	dd if=/dev/urandom of=$file2 count=2 bs=1M
+		path2fid $1
+}
 
 test_1() {
 	mkdir -p $DIR/$tdir
@@ -207,6 +239,191 @@ test_3() {
 		error "wrong hsm state $state, should be 0x00000003"
 }
 run_test 3 "Check file dirtyness when opening for write"
+
+test_20() {
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/sample
+	touch $f
+
+	# Could not release a non-archived file
+	$LFS hsm_release $f && error "release should not succeed"
+
+	# For following tests, we must test them with HS_ARCHIVED set
+	$LFS hsm_set --exists --archived $f || error "could not add flag"
+
+	# Could not release a file if no-release is set
+	$LFS hsm_set --norelease $f || error "could not add flag"
+	$LFS hsm_release $f && error "release should not succeed"
+	$LFS hsm_clear --norelease $f || error "could not remove flag"
+
+	# Could not release a file if lost
+	$LFS hsm_set --lost $f || error "could not add flag"
+	$LFS hsm_release $f && error "release should not succeed"
+	$LFS hsm_clear --lost $f || error "could not remove flag"
+
+	# Could not release a file if dirty
+	$LFS hsm_set --dirty $f || error "could not add flag"
+	$LFS hsm_release $f && error "release should not succeed"
+	$LFS hsm_clear --dirty $f || error "could not remove flag"
+
+}
+run_test 20 "Release is not permitted"
+
+test_21() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/test_release
+
+	# Create a file and check its states
+	local fid=$(make_small $f)
+	$LFS hsm_state $f | grep -q " (0x00000000)" ||
+		fail "wrong clean hsm state"
+
+#	$LFS hsm_archive $f || fail "could not archive file"
+#	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_set --archived --exist $f || fail "could not archive file"
+
+	[ $(stat -c "%b" $f) -ne "0" ] || fail "wrong block number"
+	local sz=$(stat -c "%s" $f)
+	[ $sz -ne "0" ] || fail "file size should not be zero"
+
+	# Release and check states
+	$LFS hsm_release $f || fail "could not release file"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+	[ $(stat -c "%b" $f) -eq "0" ] || fail "wrong block number"
+	[ $(stat -c "%s" $f) -eq $sz ] || fail "wrong file size"
+
+	# Check we can release an file without stripe info
+	f=$f.nolov
+	$MCREATE $f
+	fid=$(path2fid $f)
+	$LFS hsm_state $f | grep -q " (0x00000000)" ||
+		fail "wrong clean hsm state"
+
+#	$LFS hsm_archive $f || fail "could not archive file"
+#	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_set --archived --exist $f || fail "could not archive file"
+
+	# Release and check states
+	$LFS hsm_release $f || fail "could not release file"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+
+	# Release again a file that is already released is OK
+	$LFS hsm_release $f || fail "second release should succeed"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+
+	copytool_cleanup
+}
+run_test 21 "Simple release tests"
+
+test_22() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/test_release
+	local swap=$DIR/$tdir/test_swap
+
+	# Create a file and check its states
+	local fid=$(make_small $f)
+	$LFS hsm_state $f | grep -q " (0x00000000)" ||
+		fail "wrong clean hsm state"
+
+#	$LFS hsm_archive $f || fail "could not archive file"
+#	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_set --archived --exist $f || fail "could not archive file"
+
+	# Release and check states
+	$LFS hsm_release $f || fail "could not release file"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+
+	make_small $swap || fail "could not create $swap"
+	$LFS swap_layouts $swap $f && fail "swap_layouts should failed"
+
+	true
+	copytool_cleanup
+}
+run_test 22 "Could not swap a release file"
+
+
+test_23() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/test_mtime
+
+	# Create a file and check its states
+	local fid=$(make_small $f)
+	$LFS hsm_state $f | grep -q " (0x00000000)"  ||
+		fail "wrong clean hsm state"
+
+#	$LFS hsm_archive $f || fail "could not archive file"
+#	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_set --archived --exist $f || fail "could not archive file"
+
+	# Set modification time in the past
+	touch -m -a -d @978261179 $f
+
+	# Release and check states
+	$LFS hsm_release $f || fail "could not release file"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+	local MTIME=$(stat -c "%Y" $f)
+	local ATIME=$(stat -c "%X" $f)
+	[ $MTIME -eq "978261179" ] || fail "bad mtime: $MTIME"
+	[ $ATIME -eq "978261179" ] || fail "bad atime: $ATIME"
+
+	copytool_cleanup
+}
+run_test 23 "Release does not change a/mtime (utime)"
+
+test_24() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/test_mtime
+
+	# Create a file and check its states
+	local fid=$(make_small $f)
+	$LFS hsm_state $f | grep -q " (0x00000000)" ||
+		fail "wrong clean hsm state"
+
+	# ensure mtime is different
+	sleep 1
+	echo "append" >> $f
+	local MTIME=$(stat -c "%Y" $f)
+	local ATIME=$(stat -c "%X" $f)
+
+#	$LFS hsm_archive $f || fail "could not archive file"
+#	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_set --archived --exist $f || fail "could not archive file"
+
+	# Release and check states
+	$LFS hsm_release $f || fail "could not release file"
+	$LFS hsm_state $f | grep -q " (0x0000000d)" ||
+		fail "wrong released hsm state"
+
+	[ "$(stat -c "%Y" $f)" -eq "$MTIME" ] ||
+		fail "mtime should be $MTIME"
+
+#	[ "$(stat -c "%X" $f)" -eq "$ATIME" ] ||
+#		fail "atime should be $ATIME"
+
+	copytool_cleanup
+}
+run_test 24 "Release does not change a/mtime (i/o)"
 
 log "cleanup: ======================================================"
 cd $ORIG_PWD

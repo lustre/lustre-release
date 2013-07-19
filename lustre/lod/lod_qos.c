@@ -1211,17 +1211,12 @@ static int lod_use_defined_striping(const struct lu_env *env,
 				    struct lod_object *mo,
 				    const struct lu_buf *buf)
 {
-	struct lod_device      *d = lu2lod_dev(lod2lu_obj(mo)->lo_dev);
 	struct lov_mds_md_v1   *v1 = buf->lb_buf;
 	struct lov_mds_md_v3   *v3 = buf->lb_buf;
 	struct lov_ost_data_v1 *objs;
 	__u32			magic;
-	int			rc;
+	int			rc = 0;
 	ENTRY;
-
-	rc = lod_verify_striping(d, buf, 1);
-	if (rc)
-		RETURN(rc);
 
 	magic = le32_to_cpu(v1->lmm_magic);
 	if (magic == LOV_MAGIC_V1_DEF) {
@@ -1239,7 +1234,14 @@ static int lod_use_defined_striping(const struct lu_env *env,
 	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 	LASSERT(buf->lb_len >= lov_mds_md_size(mo->ldo_stripenr, magic));
 
-	rc = lod_initialize_objects(env, mo, objs);
+	/* fixup for released file before object initialization */
+	if (mo->ldo_pattern & LOV_PATTERN_F_RELEASED) {
+		mo->ldo_released_stripenr = mo->ldo_stripenr;
+		mo->ldo_stripenr = 0;
+	}
+
+	if (mo->ldo_stripenr > 0)
+		rc = lod_initialize_objects(env, mo, objs);
 
 out:
 	RETURN(rc);

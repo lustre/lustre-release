@@ -93,6 +93,7 @@
 #define lustre_swab_hsm_request NULL
 #define lustre_swab_update_buf NULL
 #define lustre_swab_update_reply_buf NULL
+#define lustre_swab_close_data NULL
 
 #define dump_rniobuf NULL
 #define dump_ioo NULL

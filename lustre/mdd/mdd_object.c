@@ -120,23 +120,23 @@ const struct lu_name *mdd_name_get_const(const struct lu_env *env,
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
 {
-        struct lu_buf *buf;
+	struct lu_buf *buf;
 
-        buf = &mdd_env_info(env)->mti_buf;
-        buf->lb_buf = area;
-        buf->lb_len = len;
-        return buf;
+	buf = &mdd_env_info(env)->mti_buf[0];
+	buf->lb_buf = area;
+	buf->lb_len = len;
+	return buf;
 }
 
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len)
 {
-        struct lu_buf *buf;
+	struct lu_buf *buf;
 
-        buf = &mdd_env_info(env)->mti_buf;
-        buf->lb_buf = (void *)area;
-        buf->lb_len = len;
-        return buf;
+	buf = &mdd_env_info(env)->mti_buf[0];
+	buf->lb_buf = (void *)area;
+	buf->lb_len = len;
+	return buf;
 }
 
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
@@ -964,7 +964,7 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 	struct mdd_thread_info *info = mdd_env_info(env);
 	struct mdd_device      *mdd = mdo2mdd(obj);
 	struct mdd_object      *mdd_obj = md2mdd_obj(obj);
-	struct lu_buf          *current_buf = &info->mti_buf;
+	struct lu_buf          *current_buf;
 	struct md_hsm          *current_mh;
 	struct md_hsm          *new_mh;
 	int                     rc;
@@ -975,12 +975,12 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	/* Read HSM attrs from disk */
-	current_buf->lb_buf = info->mti_xattr_buf;
-	current_buf->lb_len = sizeof(info->mti_xattr_buf);
 	CLASSERT(sizeof(struct hsm_attrs) <= sizeof(info->mti_xattr_buf));
+	current_buf = mdd_buf_get(env, info->mti_xattr_buf,
+				  sizeof(info->mti_xattr_buf));
 	rc = mdo_xattr_get(env, mdd_obj, current_buf, XATTR_NAME_HSM,
 			   mdd_object_capa(env, mdd_obj));
-	rc = lustre_buf2hsm(info->mti_xattr_buf, rc, current_mh);
+	rc = lustre_buf2hsm(current_buf->lb_buf, rc, current_mh);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(free, rc);
 	else if (rc == -ENODATA)
@@ -1009,7 +1009,6 @@ free:
 	OBD_FREE_PTR(current_mh);
 	return(rc);
 }
-
 
 /**
  * The caller should guarantee to update the object ctime
@@ -1159,11 +1158,11 @@ stop:
  * read lov EA of an object
  * return the lov EA in an allocated lu_buf
  */
-static struct lu_buf *mdd_get_lov_ea(const struct lu_env *env,
-				     struct mdd_object *obj)
+static int mdd_get_lov_ea(const struct lu_env *env,
+			  struct mdd_object *obj,
+			  struct lu_buf *lmm_buf)
 {
 	struct lu_buf	*buf = &mdd_env_info(env)->mti_big_buf;
-	struct lu_buf	*lmm_buf = NULL;
 	int		 rc, sz;
 	ENTRY;
 
@@ -1198,28 +1197,46 @@ repeat:
 		goto repeat;
 	}
 
-	OBD_ALLOC_PTR(lmm_buf);
-	if (!lmm_buf)
+	lu_buf_alloc(lmm_buf, sz);
+	if (lmm_buf->lb_buf == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	OBD_ALLOC(lmm_buf->lb_buf, sz);
-	if (!lmm_buf->lb_buf)
-		GOTO(free, rc = -ENOMEM);
-
 	memcpy(lmm_buf->lb_buf, buf->lb_buf, sz);
-	lmm_buf->lb_len = sz;
+	rc = 0;
+	EXIT;
 
-	GOTO(out, rc = 0);
-
-free:
-	if (lmm_buf)
-		OBD_FREE_PTR(lmm_buf);
 out:
-	if (rc)
-		return ERR_PTR(rc);
-	return lmm_buf;
+	if (rc < 0)
+		lu_buf_free(lmm_buf);
+	return rc;
 }
 
+static int mdd_xattr_hsm_replace(const struct lu_env *env,
+				 struct mdd_object *o, struct lu_buf *buf,
+				 struct thandle *handle)
+{
+	struct hsm_attrs *attrs;
+	__u32 hsm_flags;
+	int flags = 0;
+	int rc;
+	ENTRY;
+
+	rc = mdo_xattr_set(env, o, buf, XATTR_NAME_HSM, LU_XATTR_REPLACE,
+			   handle, mdd_object_capa(env, o));
+	if (rc != 0)
+		RETURN(rc);
+
+	attrs = buf->lb_buf;
+	hsm_flags = le32_to_cpu(attrs->hsm_flags);
+	if (!(hsm_flags & HS_RELEASED) || mdd_is_dead_obj(o))
+		RETURN(0);
+
+	/* Add a changelog record for release. */
+	hsm_set_cl_event(&flags, HE_RELEASE);
+	rc = mdd_changelog_data_store(env, mdo2mdd(&o->mod_obj), CL_HSM,
+				      flags, o, handle);
+	RETURN(rc);
+}
 
 /*
  *  check if layout swapping between 2 objects is allowed
@@ -1268,36 +1285,38 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			    struct md_object *obj2, __u64 flags)
 {
-	struct mdd_object	*o1, *o2, *fst_o, *snd_o;
-	struct lu_buf		*lmm1_buf = NULL, *lmm2_buf = NULL;
-	struct lu_buf		*fst_buf, *snd_buf;
-	struct lov_mds_md	*fst_lmm, *snd_lmm, *old_fst_lmm = NULL;
-	struct thandle		*handle;
+	struct mdd_thread_info	*info = mdd_env_info(env);
+	struct mdd_object	*fst_o = md2mdd_obj(obj1);
+	struct mdd_object	*snd_o = md2mdd_obj(obj2);
 	struct mdd_device	*mdd = mdo2mdd(obj1);
-	int			 rc;
+	struct lov_mds_md	*fst_lmm, *snd_lmm;
+	struct lu_buf		*fst_buf = &info->mti_buf[0];
+	struct lu_buf		*snd_buf = &info->mti_buf[1];
+	struct lu_buf		*fst_hsm_buf = &info->mti_buf[2];
+	struct lu_buf		*snd_hsm_buf = &info->mti_buf[3];
+	struct ost_id		*saved_oi = NULL;
+	struct thandle		*handle;
 	__u16			 fst_gen, snd_gen;
 	int			 fst_fl;
+	int			 rc;
+	int			 rc2;
 	ENTRY;
+
+	CLASSERT(ARRAY_SIZE(info->mti_buf) >= 4);
+	memset(info->mti_buf, 0, sizeof(info->mti_buf));
 
 	/* we have to sort the 2 obj, so locking will always
 	 * be in the same order, even in case of 2 concurrent swaps */
-	rc = lu_fid_cmp(mdo2fid(md2mdd_obj(obj1)),
-			mdo2fid(md2mdd_obj(obj2)));
-	/* same fid ? */
-	if (rc == 0)
+	rc = lu_fid_cmp(mdo2fid(fst_o), mdo2fid(snd_o));
+	if (rc == 0) /* same fid ? */
 		RETURN(-EPERM);
 
-	if (rc > 0) {
-		o1 = md2mdd_obj(obj1);
-		o2 = md2mdd_obj(obj2);
-	} else {
-		o1 = md2mdd_obj(obj2);
-		o2 = md2mdd_obj(obj1);
-	}
+	if (rc < 0)
+		swap(fst_o, snd_o);
 
 	/* check if layout swapping is allowed */
-	rc = mdd_layout_swap_allowed(env, o1, o2);
-	if (rc)
+	rc = mdd_layout_swap_allowed(env, fst_o, snd_o);
+	if (rc != 0)
 		RETURN(rc);
 
 	handle = mdd_trans_create(env, mdd);
@@ -1305,45 +1324,30 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		RETURN(PTR_ERR(handle));
 
 	/* objects are already sorted */
-	mdd_write_lock(env, o1, MOR_TGT_CHILD);
-	mdd_write_lock(env, o2, MOR_TGT_CHILD);
+	mdd_write_lock(env, fst_o, MOR_TGT_CHILD);
+	mdd_write_lock(env, snd_o, MOR_TGT_CHILD);
 
-	lmm1_buf = mdd_get_lov_ea(env, o1);
-	if (IS_ERR(lmm1_buf)) {
-		rc = PTR_ERR(lmm1_buf);
-		lmm1_buf = NULL;
-		if (rc != -ENODATA)
-			GOTO(stop, rc);
-	}
+	rc = mdd_get_lov_ea(env, fst_o, fst_buf);
+	if (rc < 0 && rc != -ENODATA)
+		GOTO(stop, rc);
 
-	lmm2_buf = mdd_get_lov_ea(env, o2);
-	if (IS_ERR(lmm2_buf)) {
-		rc = PTR_ERR(lmm2_buf);
-		lmm2_buf = NULL;
-		if (rc != -ENODATA)
-			GOTO(stop, rc);
-	}
+	rc = mdd_get_lov_ea(env, snd_o, snd_buf);
+	if (rc < 0 && rc != -ENODATA)
+		GOTO(stop, rc);
 
 	/* swapping 2 non existant layouts is a success */
-	if ((lmm1_buf == NULL) && (lmm2_buf == NULL))
+	if (fst_buf->lb_buf == NULL && snd_buf->lb_buf == NULL)
 		GOTO(stop, rc = 0);
 
 	/* to help inode migration between MDT, it is better to
 	 * start by the no layout file (if one), so we order the swap */
-	if (lmm1_buf == NULL) {
-		fst_o = o1;
-		fst_buf = lmm1_buf;
-		snd_o = o2;
-		snd_buf = lmm2_buf;
-	} else {
-		fst_o = o2;
-		fst_buf = lmm2_buf;
-		snd_o = o1;
-		snd_buf = lmm1_buf;
+	if (snd_buf->lb_buf == NULL) {
+		swap(fst_o, snd_o);
+		swap(fst_buf, snd_buf);
 	}
 
 	/* lmm and generation layout initialization */
-	if (fst_buf) {
+	if (fst_buf->lb_buf != NULL) {
 		fst_lmm = fst_buf->lb_buf;
 		fst_gen = le16_to_cpu(fst_lmm->lmm_layout_gen);
 		fst_fl  = LU_XATTR_REPLACE;
@@ -1353,7 +1357,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		fst_fl  = LU_XATTR_CREATE;
 	}
 
-	LASSERT(snd_buf != NULL);
+	LASSERT(snd_buf->lb_buf != NULL);
 	snd_lmm = snd_buf->lb_buf;
 	snd_gen = le16_to_cpu(snd_lmm->lmm_layout_gen);
 
@@ -1362,18 +1366,13 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	fst_gen++;
 
 	/* set the file specific informations in lmm */
-	if (fst_lmm) {
-		/* save the orignal lmm common header of first file
-		 * to be able to roll back */
-		OBD_ALLOC_PTR(old_fst_lmm);
-		if (old_fst_lmm == NULL)
-			GOTO(stop, rc = -ENOMEM);
-		*old_fst_lmm = *fst_lmm;
+	if (fst_lmm != NULL) {
+		saved_oi = &info->mti_oa.o_oi;
 
+		*saved_oi = fst_lmm->lmm_oi;
 		fst_lmm->lmm_layout_gen = cpu_to_le16(snd_gen);
 		fst_lmm->lmm_oi = snd_lmm->lmm_oi;
-
-		snd_lmm->lmm_oi = old_fst_lmm->lmm_oi;
+		snd_lmm->lmm_oi = *saved_oi;
 	} else {
 		if (snd_lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1))
 			snd_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEF);
@@ -1382,52 +1381,98 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		else
 			GOTO(stop, rc = -EPROTO);
 	}
-
 	snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
+
+	/* Prepare HSM attribute if it's required */
+	if (flags & SWAP_LAYOUTS_MDS_HSM) {
+		const int buflen = sizeof(struct hsm_attrs);
+
+		lu_buf_alloc(fst_hsm_buf, buflen);
+		lu_buf_alloc(snd_hsm_buf, buflen);
+		if (fst_hsm_buf->lb_buf == NULL || snd_hsm_buf->lb_buf == NULL)
+			GOTO(stop, rc = -ENOMEM);
+
+		/* Read HSM attribute */
+		rc = mdo_xattr_get(env, fst_o, fst_hsm_buf, XATTR_NAME_HSM,
+				   BYPASS_CAPA);
+		if (rc < 0)
+			GOTO(stop, rc);
+
+		rc = mdo_xattr_get(env, snd_o, snd_hsm_buf, XATTR_NAME_HSM,
+				   BYPASS_CAPA);
+		if (rc < 0)
+			GOTO(stop, rc);
+
+		rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_hsm_buf,
+					   XATTR_NAME_HSM, LU_XATTR_REPLACE,
+					   handle);
+		if (rc < 0)
+			GOTO(stop, rc);
+
+		rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_hsm_buf,
+					   XATTR_NAME_HSM, LU_XATTR_REPLACE,
+					   handle);
+		if (rc < 0)
+			GOTO(stop, rc);
+	}
 
 	/* prepare transaction */
 	rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_buf, XATTR_NAME_LOV,
 				   fst_fl, handle);
-	if (rc)
+	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (fst_buf)
+	if (fst_buf->lb_buf != NULL)
 		rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf,
 					   XATTR_NAME_LOV, LU_XATTR_REPLACE,
 					   handle);
 	else
 		rc = mdd_declare_xattr_del(env, mdd, snd_o, XATTR_NAME_LOV,
 					   handle);
-	if (rc)
+	if (rc != 0)
 		GOTO(stop, rc);
 
 	rc = mdd_trans_start(env, mdd, handle);
-	if (rc)
+	if (rc != 0)
 		GOTO(stop, rc);
+
+	if (flags & SWAP_LAYOUTS_MDS_HSM) {
+		rc = mdd_xattr_hsm_replace(env, fst_o, snd_hsm_buf, handle);
+		if (rc < 0)
+			GOTO(stop, rc);
+
+		rc = mdd_xattr_hsm_replace(env, snd_o, fst_hsm_buf, handle);
+		if (rc < 0) {
+			rc2 = mdd_xattr_hsm_replace(env, fst_o, fst_hsm_buf,
+						    handle);
+			if (rc2 < 0)
+				CERROR("%s: restore "DFID" HSM error: %d/%d\n",
+				       mdd_obj_dev_name(fst_o),
+				       PFID(mdo2fid(fst_o)), rc, rc2);
+			GOTO(stop, rc);
+		}
+	}
 
 	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle,
 			   mdd_object_capa(env, fst_o));
-	if (rc)
+	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (fst_buf)
+	if (fst_buf->lb_buf != NULL)
 		rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
 				   LU_XATTR_REPLACE, handle,
 				   mdd_object_capa(env, snd_o));
 	else
 		rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle,
 				   mdd_object_capa(env, snd_o));
-	if (rc) {
-		int	rc2;
+	if (rc != 0) {
+		int steps = 0;
 
 		/* failure on second file, but first was done, so we have
-		 * to roll back first */
-		/* restore object_id, object_seq and generation number
-		 * on first file */
-		if (fst_lmm) {
-			LASSERT(old_fst_lmm != NULL);
-			fst_lmm->lmm_oi = old_fst_lmm->lmm_oi;
-			fst_lmm->lmm_layout_gen = old_fst_lmm->lmm_layout_gen;
+		 * to roll back first. */
+		if (fst_buf->lb_buf != NULL) {
+			fst_lmm->lmm_oi = *saved_oi;
+			fst_lmm->lmm_layout_gen = cpu_to_le16(fst_gen - 1);
 			rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
 					    LU_XATTR_REPLACE, handle,
 					    mdd_object_capa(env, fst_o));
@@ -1435,15 +1480,25 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			rc2 = mdo_xattr_del(env, fst_o, XATTR_NAME_LOV, handle,
 					    mdd_object_capa(env, fst_o));
 		}
+		if (rc2 < 0)
+			goto do_lbug;
 
-		if (rc2) {
+		++steps;
+		rc2 = mdd_xattr_hsm_replace(env, fst_o, fst_hsm_buf, handle);
+		if (rc2 < 0)
+			goto do_lbug;
+
+		++steps;
+		rc2 = mdd_xattr_hsm_replace(env, snd_o, snd_hsm_buf, handle);
+
+	do_lbug:
+		if (rc2 < 0) {
 			/* very bad day */
-			CERROR("%s: unable to roll back after swap layouts"
-			       " failure between "DFID" and "DFID
-			       " rc2 = %d rc = %d)\n",
-			       mdd2obd_dev(mdd)->obd_name,
+			CERROR("%s: unable to roll back layout swap. FIDs: "
+			       DFID" and "DFID "error: %d/%d, steps: %d\n",
+			       mdd_obj_dev_name(fst_o),
 			       PFID(mdo2fid(snd_o)), PFID(mdo2fid(fst_o)),
-			       rc2, rc);
+			       rc, rc2, steps);
 			/* a solution to avoid journal commit is to panic,
 			 * but it has strong consequences so we use LBUG to
 			 * allow sysdamin to choose to panic or not
@@ -1465,22 +1520,13 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
-	mdd_write_unlock(env, o2);
-	mdd_write_unlock(env, o1);
+	mdd_write_unlock(env, snd_o);
+	mdd_write_unlock(env, fst_o);
 
-	if (lmm1_buf && lmm1_buf->lb_buf)
-		OBD_FREE(lmm1_buf->lb_buf, lmm1_buf->lb_len);
-	if (lmm1_buf)
-		OBD_FREE_PTR(lmm1_buf);
-
-	if (lmm2_buf && lmm2_buf->lb_buf)
-		OBD_FREE(lmm2_buf->lb_buf, lmm2_buf->lb_len);
-	if (lmm2_buf)
-		OBD_FREE_PTR(lmm2_buf);
-
-	if (old_fst_lmm)
-		OBD_FREE_PTR(old_fst_lmm);
-
+	lu_buf_free(fst_buf);
+	lu_buf_free(snd_buf);
+	lu_buf_free(fst_hsm_buf);
+	lu_buf_free(snd_hsm_buf);
 	return rc;
 }
 

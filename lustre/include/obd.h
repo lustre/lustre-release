@@ -1084,24 +1084,24 @@ struct md_op_data {
 #ifdef __KERNEL__
 	unsigned int            op_attr_flags;
 #endif
-        __u64                   op_valid;
-        loff_t                  op_attr_blocks;
+	__u64                   op_valid;
+	loff_t                  op_attr_blocks;
 
-        /* Size-on-MDS epoch and flags. */
-        __u64                   op_ioepoch;
+	/* Size-on-MDS epoch and flags. */
+	__u64                   op_ioepoch;
 	__u32                   op_flags;
 
-        /* Capa fields */
-        struct obd_capa        *op_capa1;
-        struct obd_capa        *op_capa2;
+	/* Capa fields */
+	struct obd_capa        *op_capa1;
+	struct obd_capa        *op_capa2;
 
-        /* Various operation flags. */
-	__u32                   op_bias;
+	/* Various operation flags. */
+	enum mds_op_bias        op_bias;
 
-        /* Operation type */
+	/* Operation type */
 	__u32                   op_opc;
 
-        /* Used by readdir */
+	/* Used by readdir */
 	__u64                   op_offset;
 
 	/* Used by readdir */
@@ -1110,6 +1110,10 @@ struct md_op_data {
 	/* used to transfer info between the stacks of MD client
 	 * see enum op_cli_flags */
 	__u32			op_cli_flags;
+
+	/* File object data version for HSM release, on client */
+	__u64			op_data_version;
+	struct lustre_handle	op_lease_handle;
 };
 
 enum op_cli_flags {

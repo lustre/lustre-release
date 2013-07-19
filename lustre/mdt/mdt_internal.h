@@ -1014,6 +1014,7 @@ static inline int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	sema_init(&cdt->cdt_llog_lock, 1);
 	init_rwsem(&cdt->cdt_agent_lock);
 	init_rwsem(&cdt->cdt_request_lock);
+	sema_init(&cdt->cdt_restore_lock, 1);
 
 	CFS_INIT_LIST_HEAD(&cdt->cdt_requests);
 	CFS_INIT_LIST_HEAD(&cdt->cdt_agents);
