@@ -40,7 +40,8 @@ tgt_%.c: @LUSTRE@/target/tgt_%.c
 	ln -sf $< $@
 
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
-@SERVER_TRUE@EXTRA_DIST += $(TARGET)tgt_internal.h
+EXTRA_DIST += $(TARGET)tgt_internal.h
+@SERVER_FALSE@EXTRA_DIST += $(target_objs:.o=.c)
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm -I@LUSTRE@/target
 

@@ -1,4 +1,8 @@
 MODULES := fid
 fid-objs := fid_request.o lproc_fid.o
 @SERVER_TRUE@fid-objs += fid_handler.o fid_store.o fid_lib.o
+
+EXTRA_DIST = $(fid-objs:%.o=%.c) fid_internal.h
+@SERVER_FALSE@EXTRA_DIST += fid_handler.c fid_store.c fid_lib.c
+
 @INCLUDE_RULES@

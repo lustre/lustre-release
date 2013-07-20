@@ -44,9 +44,12 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 \
 	lustre_rsync.8 lfs_migrate.1 lhbadm.8 ldev.8 ldev.conf.5 nids.5 \
 	lfs-hsm.1 llapi_hsm_state_get.3 llapi_hsm_state_set.3 \
 	lustre_routes_config.8 lustre_routes_conversion.8
+SERVER_MANFILES = mkfs.lustre.8 tunefs.lustre.8
 
 if SERVER
-MANFILES += mkfs.lustre.8 tunefs.lustre.8
+MANFILES += $(SERVER_MANFILES)
+else
+DISTONLY_MANFILES = $(SERVER_MANFILES)
 endif
 
 if UTILS
@@ -55,6 +58,6 @@ endif
 
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = $(MANFILES)
+EXTRA_DIST = $(MANFILES) $(DISTONLY_MANFILES)
 
 all:

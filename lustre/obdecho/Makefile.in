@@ -3,5 +3,6 @@ obdecho-objs := echo_client.o lproc_echo.o
 @SERVER_TRUE@obdecho-objs += echo.o
 
 EXTRA_DIST = $(obdecho-objs:%.o=%.c) echo_internal.h
+@SERVER_FALSE@EXTRA_DIST += echo.c
 
 @INCLUDE_RULES@
