@@ -114,23 +114,58 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          * imp_lock is being held by ptlrpc_replay, but it's not. it's
          * just a little race...
          */
-        cfs_list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
-                req = cfs_list_entry(tmp, struct ptlrpc_request,
-                                     rq_replay_list);
 
-                /* If need to resend the last sent transno (because a
-                   reconnect has occurred), then stop on the matching
-                   req and send it again. If, however, the last sent
-                   transno has been committed then we continue replay
-                   from the next request. */
-                if (req->rq_transno > last_transno) {
-                        if (imp->imp_resend_replay)
-                                lustre_msg_add_flags(req->rq_reqmsg,
-                                                     MSG_RESENT);
-                        break;
-                }
-                req = NULL;
-        }
+	/* Replay all the committed open requests on committed_list first */
+	if (!cfs_list_empty(&imp->imp_committed_list)) {
+		tmp = imp->imp_committed_list.prev;
+		req = cfs_list_entry(tmp, struct ptlrpc_request,
+				     rq_replay_list);
+
+		/* The last request on committed_list hasn't been replayed */
+		if (req->rq_transno > last_transno) {
+			/* Since the imp_committed_list is immutable before
+			 * all of it's requests being replayed, it's safe to
+			 * use a cursor to accelerate the search */
+			imp->imp_replay_cursor = imp->imp_replay_cursor->next;
+
+			while (imp->imp_replay_cursor !=
+			       &imp->imp_committed_list) {
+				req = cfs_list_entry(imp->imp_replay_cursor,
+						     struct ptlrpc_request,
+						     rq_replay_list);
+				if (req->rq_transno > last_transno)
+					break;
+
+				req = NULL;
+				imp->imp_replay_cursor =
+					imp->imp_replay_cursor->next;
+			}
+		} else {
+			/* All requests on committed_list have been replayed */
+			imp->imp_replay_cursor = &imp->imp_committed_list;
+			req = NULL;
+		}
+	}
+
+	/* All the requests in committed list have been replayed, let's replay
+	 * the imp_replay_list */
+	if (req == NULL) {
+		cfs_list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
+			req = cfs_list_entry(tmp, struct ptlrpc_request,
+					     rq_replay_list);
+
+			if (req->rq_transno > last_transno)
+				break;
+			req = NULL;
+		}
+	}
+
+	/* If need to resend the last sent transno (because a reconnect
+	 * has occurred), then stop on the matching req and send it again.
+	 * If, however, the last sent transno has been committed then we 
+	 * continue replay from the next request. */
+	if (req != NULL && imp->imp_resend_replay)
+		lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
 	spin_lock(&imp->imp_lock);
 	imp->imp_resend_replay = 0;

@@ -10841,6 +10841,31 @@ test_208() {
 }
 run_test 208 "Exclusive open"
 
+test_209() {
+	[[ $($LCTL get_param -n mdc.*.connect_flags) == ~disp_stripe ]] &&
+		skip_env "must have disp_stripe" && return
+
+	touch $DIR/$tfile
+	sync; sleep 5; sync;
+
+	echo 3 > /proc/sys/vm/drop_caches
+	req_before=$(awk '/ptlrpc_cache / { print $2 }' /proc/slabinfo)
+
+	# open/close 500 times
+	for i in $(seq 500); do
+		cat $DIR/$tfile
+	done
+
+	echo 3 > /proc/sys/vm/drop_caches
+	req_after=$(awk '/ptlrpc_cache / { print $2 }' /proc/slabinfo)
+
+	echo "before: $req_before, after: $req_after"
+	[ $((req_after - req_before)) -ge 300 ] &&
+		error "open/close requests are not freed"
+	return 0
+}
+run_test 209 "read-only open/close requests should be freed promptly"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))

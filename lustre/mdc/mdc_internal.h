@@ -121,8 +121,8 @@ int mdc_get_lustre_md(struct obd_export *md_exp, struct ptlrpc_request *req,
 int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
 
 int mdc_set_open_replay_data(struct obd_export *exp,
-                             struct obd_client_handle *och,
-                             struct ptlrpc_request *open_req);
+			     struct obd_client_handle *och,
+			     struct lookup_intent *it);
 
 int mdc_clear_open_replay_data(struct obd_export *exp,
                                struct obd_client_handle *och);
