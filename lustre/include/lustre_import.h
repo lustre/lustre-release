@@ -180,6 +180,17 @@ struct obd_import {
         cfs_list_t                imp_delayed_list;
         /** @} */
 
+	/**
+	 * List of requests that are retained for committed open replay. Once
+	 * open is committed, open replay request will be moved from the
+	 * imp_replay_list into the imp_committed_list.
+	 * The imp_replay_cursor is for accelerating searching during replay.
+	 * @{
+	 */
+	cfs_list_t		  imp_committed_list;
+	cfs_list_t		 *imp_replay_cursor;
+	/** @} */
+
         /** obd device for this import */
         struct obd_device        *imp_obd;
 

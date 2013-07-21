@@ -664,7 +664,8 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, __u64 mode)
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
-                        struct mdt_object *o, __u64 flags, int created)
+			struct mdt_object *o, __u64 flags, int created,
+			struct ldlm_reply *rep)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
@@ -692,6 +693,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                 rc = mdt_create_data(info, p, o);
                 if (rc)
                         RETURN(rc);
+
+		if (exp_connect_flags(req->rq_export) & OBD_CONNECT_DISP_STRIPE)
+			mdt_set_disposition(info, rep, DISP_OPEN_STRIPE);
         }
 
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n",
@@ -986,15 +990,15 @@ int mdt_finish_open(struct mdt_thread_info *info,
                                         repbody->valid |= OBD_MD_FLEASIZE;
                         }
 			mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
-                        RETURN(0);
-                }
-        }
+			RETURN(0);
+		}
+	}
 
-        rc = mdt_mfd_open(info, p, o, flags, created);
+	rc = mdt_mfd_open(info, p, o, flags, created, rep);
 	if (!rc)
 		mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 extern void mdt_req_from_lcd(struct ptlrpc_request *req,

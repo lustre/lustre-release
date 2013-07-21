@@ -173,8 +173,7 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         fd->fd_mds_och.och_fid   = lli->lli_fid;
         lli->lli_file_data = fd;
         llu_ioepoch_open(lli, body->ioepoch);
-        md_set_open_replay_data(lli->lli_sbi->ll_md_exp,
-                                &fd->fd_mds_och, it->d.lustre.it_data);
+	md_set_open_replay_data(lli->lli_sbi->ll_md_exp, &fd->fd_mds_och, it);
 
         RETURN(0);
 }

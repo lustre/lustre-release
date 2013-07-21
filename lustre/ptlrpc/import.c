@@ -567,20 +567,32 @@ static int import_select_connection(struct obd_import *imp)
  */
 static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 {
-        struct ptlrpc_request *req;
-        cfs_list_t *tmp;
+	struct ptlrpc_request	*req;
+	cfs_list_t		*tmp;
 
-        if (cfs_list_empty(&imp->imp_replay_list))
-                return 0;
-        tmp = imp->imp_replay_list.next;
-        req = cfs_list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-        *transno = req->rq_transno;
-        if (req->rq_transno == 0) {
-                DEBUG_REQ(D_ERROR, req, "zero transno in replay");
-                LBUG();
-        }
-
-        return 1;
+	/* The requests in committed_list always have smaller transnos than
+	 * the requests in replay_list */
+	if (!cfs_list_empty(&imp->imp_committed_list)) {
+		tmp = imp->imp_committed_list.next;
+		req = cfs_list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+		*transno = req->rq_transno;
+		if (req->rq_transno == 0) {
+			DEBUG_REQ(D_ERROR, req, "zero transno in committed_list");
+			LBUG();
+		}
+		return 1;
+	}
+	if (!cfs_list_empty(&imp->imp_replay_list)) {
+		tmp = imp->imp_replay_list.next;
+		req = cfs_list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+		*transno = req->rq_transno;
+		if (req->rq_transno == 0) {
+			DEBUG_REQ(D_ERROR, req, "zero transno in replay_list");
+			LBUG();
+		}
+		return 1;
+	}
+	return 0;
 }
 
 /**

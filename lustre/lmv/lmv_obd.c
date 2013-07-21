@@ -2695,19 +2695,19 @@ int lmv_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
 }
 
 int lmv_set_open_replay_data(struct obd_export *exp,
-                             struct obd_client_handle *och,
-                             struct ptlrpc_request *open_req)
+			     struct obd_client_handle *och,
+			     struct lookup_intent *it)
 {
-        struct obd_device       *obd = exp->exp_obd;
-        struct lmv_obd          *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc     *tgt;
-        ENTRY;
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	struct lmv_tgt_desc	*tgt;
+	ENTRY;
 
-        tgt = lmv_find_target(lmv, &och->och_fid);
-        if (IS_ERR(tgt))
-                RETURN(PTR_ERR(tgt));
+	tgt = lmv_find_target(lmv, &och->och_fid);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
 
-        RETURN(md_set_open_replay_data(tgt->ltd_exp, och, open_req));
+	RETURN(md_set_open_replay_data(tgt->ltd_exp, och, it));
 }
 
 int lmv_clear_open_replay_data(struct obd_export *exp,
