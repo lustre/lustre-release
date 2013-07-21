@@ -3819,9 +3819,9 @@ out:
 
 static int mgs_write_log_pool(const struct lu_env *env,
 			      struct mgs_device *mgs, char *logname,
-                              struct fs_db *fsdb, char *lovname,
+			      struct fs_db *fsdb, char *tgtname,
                               enum lcfg_command_type cmd,
-                              char *poolname, char *fsname,
+			      char *fsname, char *poolname,
                               char *ostname, char *comment)
 {
         struct llog_handle *llh = NULL;
@@ -3830,13 +3830,14 @@ static int mgs_write_log_pool(const struct lu_env *env,
 	rc = record_start_log(env, mgs, &llh, logname);
 	if (rc)
 		return rc;
-	rc = record_marker(env, llh, fsdb, CM_START, lovname, comment);
+	rc = record_marker(env, llh, fsdb, CM_START, tgtname, comment);
 	if (rc)
 		goto out;
-	rc = record_base(env, llh, lovname, 0, cmd, poolname, fsname, ostname, 0);
+	rc = record_base(env, llh, tgtname, 0, cmd,
+			 fsname, poolname, ostname, 0);
 	if (rc)
 		goto out;
-	rc = record_marker(env, llh, fsdb, CM_END, lovname, comment);
+	rc = record_marker(env, llh, fsdb, CM_END, tgtname, comment);
 out:
 	record_end_log(env, &llh);
         return rc;
