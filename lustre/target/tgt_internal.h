@@ -56,7 +56,7 @@ struct tx_arg {
 	tx_exec_func_t		 undo_fn;
 	struct dt_object	*object;
 	char			*file;
-	struct update_reply	*reply;
+	struct object_update_reply *reply;
 	int			 line;
 	int			 index;
 	union {
@@ -129,12 +129,12 @@ struct tgt_thread_info {
 			struct l_wait_info tti_wait_info;
 		} rdpg;
 		struct {
-			struct dt_object_format	 tti_update_dof;
-			struct update_reply	*tti_update_reply;
-			struct update		*tti_update;
-			int			 tti_update_reply_index;
-			struct obdo		 tti_obdo;
-			struct dt_object	*tti_dt_object;
+			struct dt_object_format	   tti_update_dof;
+			struct object_update_reply *tti_update_reply;
+			struct object_update	   *tti_update;
+			int			   tti_update_reply_index;
+			struct obdo		   tti_obdo;
+			struct dt_object	   *tti_dt_object;
 		} update;
 	} tti_u;
 	struct lfsck_request tti_lr;

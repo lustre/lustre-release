@@ -2000,33 +2000,58 @@ static void check_hsm_user_import(void)
 	CHECK_MEMBER(hsm_user_import, hui_archive_id);
 }
 
-static void check_update_buf(void)
+static void check_object_update_param(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(update_buf);
-	CHECK_MEMBER(update_buf, ub_magic);
-	CHECK_MEMBER(update_buf, ub_count);
-	CHECK_MEMBER(update_buf, ub_bufs);
+	CHECK_STRUCT(object_update_param);
+	CHECK_MEMBER(object_update_param, oup_len);
+	CHECK_MEMBER(object_update_param, oup_padding);
+	CHECK_MEMBER(object_update_param, oup_padding2);
+	CHECK_MEMBER(object_update_param, oup_buf);
 }
 
-static void check_update_reply(void)
+static void check_object_update(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(update_reply);
-	CHECK_MEMBER(update_reply, ur_version);
-	CHECK_MEMBER(update_reply, ur_count);
-	CHECK_MEMBER(update_reply, ur_lens);
+	CHECK_STRUCT(object_update);
+	CHECK_MEMBER(object_update, ou_type);
+	CHECK_MEMBER(object_update, ou_params_count);
+	CHECK_MEMBER(object_update, ou_master_index);
+	CHECK_MEMBER(object_update, ou_flags);
+	CHECK_MEMBER(object_update, ou_padding1);
+	CHECK_MEMBER(object_update, ou_batchid);
+	CHECK_MEMBER(object_update, ou_fid);
+	CHECK_MEMBER(object_update, ou_params);
 }
 
-static void check_update(void)
+static void check_object_update_request(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(update);
-	CHECK_MEMBER(update, u_type);
-	CHECK_MEMBER(update, u_batchid);
-	CHECK_MEMBER(update, u_fid);
-	CHECK_MEMBER(update, u_lens);
-	CHECK_MEMBER(update, u_bufs);
+	CHECK_STRUCT(object_update_request);
+	CHECK_MEMBER(object_update_request, ourq_magic);
+	CHECK_MEMBER(object_update_request, ourq_count);
+	CHECK_MEMBER(object_update_request, ourq_padding);
+	CHECK_MEMBER(object_update_request, ourq_updates);
+}
+
+static void check_object_update_result(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(object_update_result);
+	CHECK_MEMBER(object_update_result, our_rc);
+	CHECK_MEMBER(object_update_result, our_datalen);
+	CHECK_MEMBER(object_update_result, our_padding);
+	CHECK_MEMBER(object_update_result, our_data);
+}
+
+static void check_object_update_reply(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(object_update_reply);
+	CHECK_MEMBER(object_update_reply, ourp_magic);
+	CHECK_MEMBER(object_update_reply, ourp_count);
+	CHECK_MEMBER(object_update_reply, ourp_padding);
+	CHECK_MEMBER(object_update_reply, ourp_lens);
 }
 
 static void check_lfsck_request(void)
@@ -2299,8 +2324,8 @@ main(int argc, char **argv)
 	CHECK_CVALUE(LUSTRE_RES_ID_VER_OID_OFF);
 	/* CHECK_CVALUE(LUSTRE_RES_ID_WAS_VER_OFF); packed with OID */
 
-	CHECK_VALUE(UPDATE_OBJ);
-	CHECK_VALUE(UPDATE_LAST_OPC);
+	CHECK_VALUE(OUT_UPDATE);
+	CHECK_VALUE(OUT_UPDATE_LAST_OPC);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_SEQ_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_VER_OID_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_HSH_OFF);
@@ -2340,18 +2365,18 @@ main(int argc, char **argv)
 	check_lu_seq_range();
 	check_lustre_mdt_attrs();
 
-	CHECK_VALUE(OBJ_CREATE);
-	CHECK_VALUE(OBJ_DESTROY);
-	CHECK_VALUE(OBJ_REF_ADD);
-	CHECK_VALUE(OBJ_REF_DEL);
-	CHECK_VALUE(OBJ_ATTR_SET);
-	CHECK_VALUE(OBJ_ATTR_GET);
-	CHECK_VALUE(OBJ_XATTR_SET);
-	CHECK_VALUE(OBJ_XATTR_GET);
-	CHECK_VALUE(OBJ_INDEX_LOOKUP);
-	CHECK_VALUE(OBJ_INDEX_LOOKUP);
-	CHECK_VALUE(OBJ_INDEX_INSERT);
-	CHECK_VALUE(OBJ_INDEX_DELETE);
+	CHECK_VALUE(OUT_CREATE);
+	CHECK_VALUE(OUT_DESTROY);
+	CHECK_VALUE(OUT_REF_ADD);
+	CHECK_VALUE(OUT_REF_DEL);
+	CHECK_VALUE(OUT_ATTR_SET);
+	CHECK_VALUE(OUT_ATTR_GET);
+	CHECK_VALUE(OUT_XATTR_SET);
+	CHECK_VALUE(OUT_XATTR_GET);
+	CHECK_VALUE(OUT_INDEX_LOOKUP);
+	CHECK_VALUE(OUT_INDEX_LOOKUP);
+	CHECK_VALUE(OUT_INDEX_INSERT);
+	CHECK_VALUE(OUT_INDEX_DELETE);
 
 	check_som_attrs();
 	check_hsm_attrs();
@@ -2452,9 +2477,11 @@ main(int argc, char **argv)
 	check_hsm_user_request();
 	check_hsm_user_import();
 
-	check_update_buf();
-	check_update_reply();
-	check_update();
+	check_object_update_param();
+	check_object_update();
+	check_object_update_request();
+	check_object_update_result();
+	check_object_update_reply();
 
 	check_lfsck_request();
 	check_lfsck_reply();

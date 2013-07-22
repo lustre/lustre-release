@@ -515,8 +515,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LFSCK_QUERY_NET	0x16f1
 
 /* UPDATE */
-#define OBD_FAIL_UPDATE_OBJ_NET			0x1700
-#define OBD_FAIL_UPDATE_OBJ_NET_REP		0x1701
+#define OBD_FAIL_OUT_UPDATE_NET		0x1700
+#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 
 
 /* Assign references to moved code to reduce code changes */

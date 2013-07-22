@@ -530,7 +530,7 @@ static int osp_prep_unlink_update_req(const struct lu_env *env,
 				      struct ptlrpc_request **reqp)
 {
 	struct llog_unlink64_rec	*rec = (struct llog_unlink64_rec *)h;
-	struct update_request		*update = NULL;
+	struct dt_update_request	*update = NULL;
 	struct ptlrpc_request		*req;
 	const char			*buf;
 	struct llog_cookie		lcookie;
@@ -544,12 +544,12 @@ static int osp_prep_unlink_update_req(const struct lu_env *env,
 
 	/* This can only happens for unlink slave directory, so decrease
 	 * ref for ".." and "." */
-	rc = out_insert_update(env, update, OBJ_REF_DEL, &rec->lur_fid, 0,
+	rc = out_insert_update(env, update, OUT_REF_DEL, &rec->lur_fid, 0,
 			       NULL, NULL);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = out_insert_update(env, update, OBJ_REF_DEL, &rec->lur_fid, 0,
+	rc = out_insert_update(env, update, OUT_REF_DEL, &rec->lur_fid, 0,
 			       NULL, NULL);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -560,13 +560,15 @@ static int osp_prep_unlink_update_req(const struct lu_env *env,
 	size = sizeof(lcookie);
 	buf = (const char *)&lcookie;
 
-	rc = out_insert_update(env, update, OBJ_DESTROY, &rec->lur_fid, 1,
+	rc = out_insert_update(env, update, OUT_DESTROY, &rec->lur_fid, 1,
 			       &size, &buf);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
-				 update->ur_buf, UPDATE_BUFFER_SIZE, &req);
+				 update->dur_req, &req);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	INIT_LIST_HEAD(&req->rq_exp_list);
 	req->rq_svc_thread = (void *)OSP_JOB_MAGIC;
@@ -762,18 +764,19 @@ static void osp_sync_process_committed(const struct lu_env *env,
 		cfs_list_del_init(&req->rq_exp_list);
 
 		if (d->opd_connect_mdt) {
-			struct update_buf *ubuf;
-			struct update *update;
-			ubuf = req_capsule_client_get(&req->rq_pill,
-						      &RMF_UPDATE);
-			LASSERT(ubuf != NULL &&
-				ubuf->ub_magic == UPDATE_BUFFER_MAGIC);
+			struct object_update_request *ureq;
+			struct object_update *update;
+			ureq = req_capsule_client_get(&req->rq_pill,
+						      &RMF_OUT_UPDATE);
+			LASSERT(ureq != NULL &&
+				ureq->ourq_magic == UPDATE_REQUEST_MAGIC);
+
 			/* 1st/2nd is for decref . and .., 3rd one is for
 			 * destroy, where the log cookie is stored.
 			 * See osp_prep_unlink_update_req */
-			update = update_buf_get(ubuf, 2, NULL);
+			update = object_update_request_get(ureq, 2, NULL);
 			LASSERT(update != NULL);
-			lcookie = update_param_buf(update, 0, NULL);
+			lcookie = object_update_param_get(update, 0, NULL);
 			LASSERT(lcookie != NULL);
 		} else {
 			body = req_capsule_client_get(&req->rq_pill,

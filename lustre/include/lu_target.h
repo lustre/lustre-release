@@ -335,19 +335,20 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
 
 /* target/out_lib.c */
-struct update_request *
+struct dt_update_request *
 out_find_update(struct thandle_update *tu, struct dt_device *dt_dev);
-void out_destroy_update_req(struct update_request *update);
-struct update_request *out_create_update_req(struct dt_device *dt);
-struct update_request *out_find_create_update_loc(struct thandle *th,
+void out_destroy_update_req(struct dt_update_request *update);
+struct dt_update_request *out_create_update_req(struct dt_device *dt);
+struct dt_update_request *out_find_create_update_loc(struct thandle *th,
 						  struct dt_object *dt);
 int out_prep_update_req(const struct lu_env *env, struct obd_import *imp,
-			const struct update_buf *ubuf, int ubuf_len,
+			const struct object_update_request *ureq,
 			struct ptlrpc_request **reqp);
 int out_remote_sync(const struct lu_env *env, struct obd_import *imp,
-		    struct update_request *update,
+		    struct dt_update_request *update,
 		    struct ptlrpc_request **reqp);
-int out_insert_update(const struct lu_env *env, struct update_request *update,
+int out_insert_update(const struct lu_env *env,
+		      struct dt_update_request *update,
 		      int op, const struct lu_fid *fid, int count,
 		      int *lens, const char **bufs);
 
@@ -485,7 +486,7 @@ static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
 
 /* Request with a format known in advance */
 #define TGT_UPDATE_HDL(flags, name, fn)					\
-	TGT_RPC_HANDLER(UPDATE_OBJ, flags, name, fn, &RQF_ ## name,	\
+	TGT_RPC_HANDLER(OUT_UPDATE, flags, name, fn, &RQF_ ## name,	\
 			LUSTRE_MDS_VERSION)
 
 #endif /* __LUSTRE_LU_TARGET_H */

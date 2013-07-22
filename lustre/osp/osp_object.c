@@ -207,7 +207,7 @@ static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
 }
 
 static int osp_get_attr_from_reply(const struct lu_env *env,
-				   struct update_reply *reply,
+				   struct object_update_reply *reply,
 				   struct lu_attr *attr,
 				   struct osp_object *obj, int index)
 {
@@ -215,9 +215,9 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 	struct lu_buf		*rbuf	= &osi->osi_lb2;
 	struct obdo		*lobdo	= &osi->osi_obdo;
 	struct obdo		*wobdo;
-	int			 rc;
+	int			rc;
 
-	rc = update_get_reply_buf(reply, rbuf, index);
+	rc = object_update_result_data_get(reply, rbuf, index);
 	if (rc < 0)
 		return rc;
 
@@ -243,7 +243,7 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 }
 
 static int osp_attr_get_interpterer(const struct lu_env *env,
-				    struct update_reply *reply,
+				    struct object_update_reply *reply,
 				    struct osp_object *obj,
 				    void *data, int index, int rc)
 {
@@ -275,7 +275,7 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osp_object	*obj	= dt2osp_obj(dt);
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
-	struct update_request	*update;
+	struct dt_update_request *update;
 	int			 rc	= 0;
 
 	if (obj->opo_ooa == NULL) {
@@ -289,7 +289,7 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		rc = PTR_ERR(update);
 	else
-		rc = osp_insert_async_update(env, update, OBJ_ATTR_GET, obj, 0,
+		rc = osp_insert_async_update(env, update, OUT_ATTR_GET, obj, 0,
 					     NULL, NULL,
 					     &obj->opo_ooa->ooa_attr,
 					     osp_attr_get_interpterer);
@@ -301,13 +301,13 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		 struct lu_attr *attr, struct lustre_capa *capa)
 {
-	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
-	struct osp_object	*obj	= dt2osp_obj(dt);
-	struct dt_device	*dev	= &osp->opd_dt_dev;
-	struct update_request	*update;
-	struct update_reply	*reply;
-	struct ptlrpc_request	*req	= NULL;
-	int			 rc	= 0;
+	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
+	struct osp_object		*obj = dt2osp_obj(dt);
+	struct dt_device		*dev = &osp->opd_dt_dev;
+	struct dt_update_request	*update;
+	struct object_update_reply	*reply;
+	struct ptlrpc_request		*req = NULL;
+	int				rc = 0;
 	ENTRY;
 
 	if (is_ost_obj(&dt->do_lu) && obj->opo_non_exist)
@@ -328,7 +328,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = out_insert_update(env, update, OBJ_ATTR_GET,
+	rc = out_insert_update(env, update, OUT_ATTR_GET,
 			       lu_object_fid(&dt->do_lu), 0, NULL, NULL);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
@@ -354,9 +354,10 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 
 	osp2lu_obj(obj)->lo_header->loh_attr |= LOHA_EXISTS;
 	obj->opo_non_exist = 0;
-	reply = req_capsule_server_sized_get(&req->rq_pill, &RMF_UPDATE_REPLY,
-					     UPDATE_BUFFER_SIZE);
-	if (reply == NULL || reply->ur_version != UPDATE_REPLY_V1)
+	reply = req_capsule_server_sized_get(&req->rq_pill,
+					     &RMF_OUT_UPDATE_REPLY,
+					     OUT_UPDATE_REPLY_SIZE);
+	if (reply == NULL || reply->ourp_magic != UPDATE_REPLY_MAGIC)
 		GOTO(out, rc = -EPROTO);
 
 	rc = osp_get_attr_from_reply(env, reply, attr, obj, 0);
@@ -498,7 +499,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osp_xattr_get_interpterer(const struct lu_env *env,
-				     struct update_reply *reply,
+				     struct object_update_reply *reply,
 				     struct osp_object *obj,
 				     void *data, int index, int rc)
 {
@@ -511,7 +512,7 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 	if (rc == 0) {
 		int len = sizeof(*oxe) + oxe->oxe_namelen + 1;
 
-		rc = update_get_reply_buf(reply, rbuf, index);
+		rc = object_update_result_data_get(reply, rbuf, index);
 		if (rc < 0 || rbuf->lb_len > (oxe->oxe_buflen - len)) {
 			spin_lock(&obj->opo_lock);
 			oxe->oxe_ready = 0;
@@ -549,7 +550,7 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osp_object	*obj	 = dt2osp_obj(dt);
 	struct osp_device	*osp	 = lu2osp_dev(dt->do_lu.lo_dev);
-	struct update_request	*update;
+	struct dt_update_request *update;
 	struct osp_xattr_entry	*oxe;
 	int			 namelen = strlen(name);
 	int			 rc	 = 0;
@@ -578,7 +579,7 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		mutex_unlock(&osp->opd_async_requests_mutex);
 		osp_oac_xattr_put(oxe);
 	} else {
-		rc = osp_insert_async_update(env, update, OBJ_XATTR_GET, obj,
+		rc = osp_insert_async_update(env, update, OUT_XATTR_GET, obj,
 					     1, &namelen, &name, oxe,
 					     osp_xattr_get_interpterer);
 		if (rc != 0) {
@@ -591,8 +592,8 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			 *
 			 *	We will improve it in the future. */
 			update = osp->opd_async_requests;
-			if (update != NULL && update->ur_buf != NULL &&
-			    update->ur_buf->ub_count > 0) {
+			if (update != NULL && update->dur_req != NULL &&
+			    update->dur_req->ourq_count > 0) {
 				osp->opd_async_requests = NULL;
 				mutex_unlock(&osp->opd_async_requests_mutex);
 				rc = osp_unplug_async_update(env, osp, update);
@@ -613,9 +614,9 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*obj	= dt2osp_obj(dt);
 	struct dt_device	*dev	= &osp->opd_dt_dev;
 	struct lu_buf		*rbuf	= &osp_env_info(env)->osi_lb2;
-	struct update_request	*update = NULL;
+	struct dt_update_request *update = NULL;
 	struct ptlrpc_request	*req	= NULL;
-	struct update_reply	*reply;
+	struct object_update_reply *reply;
 	struct osp_xattr_entry	*oxe	= NULL;
 	const char		*dname  = dt->do_lu.lo_dev->ld_obd->obd_name;
 	int			 namelen;
@@ -658,8 +659,8 @@ unlock:
 	if (IS_ERR(update))
 		GOTO(out, rc = PTR_ERR(update));
 
-	namelen = strlen(name);
-	rc = out_insert_update(env, update, OBJ_XATTR_GET,
+	namelen = strlen(name) + 1;
+	rc = out_insert_update(env, update, OUT_XATTR_GET,
 			       lu_object_fid(&dt->do_lu), 1, &namelen, &name);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
@@ -696,21 +697,20 @@ unlock:
 		GOTO(out, rc);
 	}
 
-	reply = req_capsule_server_sized_get(&req->rq_pill, &RMF_UPDATE_REPLY,
-					    UPDATE_BUFFER_SIZE);
-	if (reply->ur_version != UPDATE_REPLY_V1) {
+	reply = req_capsule_server_sized_get(&req->rq_pill,
+					     &RMF_OUT_UPDATE_REPLY,
+					     OUT_UPDATE_REPLY_SIZE);
+	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
 		CERROR("%s: Wrong version %x expected %x "DFID": rc = %d\n",
-		       dname, reply->ur_version, UPDATE_REPLY_V1,
+		       dname, reply->ourp_magic, UPDATE_REPLY_MAGIC,
 		       PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
 
 		GOTO(out, rc = -EPROTO);
 	}
 
-	rc = update_get_reply_buf(reply, rbuf, 0);
+	rc = object_update_result_data_get(reply, rbuf, 0);
 	if (rc < 0)
 		GOTO(out, rc);
-
-	LASSERT(rbuf->lb_len > 0 && rbuf->lb_len < PAGE_CACHE_SIZE);
 
 	if (buf->lb_buf == NULL)
 		GOTO(out, rc = rbuf->lb_len);
@@ -783,7 +783,7 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			  int flag, struct thandle *th)
 {
 	struct osp_object	*o	 = dt2osp_obj(dt);
-	struct update_request	*update;
+	struct dt_update_request *update;
 	struct lu_fid		*fid;
 	struct osp_xattr_entry	*oxe;
 	int			sizes[3] = {strlen(name), buf->lb_len,
@@ -807,7 +807,7 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	bufs[2] = (char *)&flag;
 
 	fid = (struct lu_fid *)lu_object_fid(&dt->do_lu);
-	rc = out_insert_update(env, update, OBJ_XATTR_SET, fid,
+	rc = out_insert_update(env, update, OUT_XATTR_SET, fid,
 			       ARRAY_SIZE(sizes), sizes, (const char **)bufs);
 	if (rc != 0 || o->opo_ooa == NULL)
 		return rc;

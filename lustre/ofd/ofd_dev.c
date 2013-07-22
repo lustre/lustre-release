@@ -2063,8 +2063,8 @@ static struct tgt_opc_slice ofd_common_slice[] = {
 		.tos_hs		= tgt_dlm_handlers
 	},
 	{
-		.tos_opc_start	= UPDATE_OBJ,
-		.tos_opc_end	= UPDATE_LAST_OPC,
+		.tos_opc_start	= OUT_UPDATE_FIRST_OPC,
+		.tos_opc_end	= OUT_UPDATE_LAST_OPC,
 		.tos_hs		= tgt_out_handlers
 	},
 	{

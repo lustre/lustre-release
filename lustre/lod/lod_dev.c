@@ -421,12 +421,12 @@ static int lod_trans_start(const struct lu_env *env, struct dt_device *dev,
 
 	if (unlikely(th->th_update != NULL)) {
 		struct thandle_update *tu = th->th_update;
-		struct update_request *update;
+		struct dt_update_request *update;
 
 		list_for_each_entry(update, &tu->tu_remote_update_list,
-				    ur_list) {
-			LASSERT(update->ur_dt != NULL);
-			rc = dt_trans_start(env, update->ur_dt, th);
+				    dur_list) {
+			LASSERT(update->dur_dt != NULL);
+			rc = dt_trans_start(env, update->dur_dt, th);
 			if (rc != 0)
 				return rc;
 		}
@@ -437,21 +437,22 @@ static int lod_trans_start(const struct lu_env *env, struct dt_device *dev,
 static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	struct thandle_update	*tu = th->th_update;
-	struct update_request	*update;
-	struct update_request	*tmp;
-	int			rc2 = 0;
-	int			rc;
+	struct thandle_update		*tu = th->th_update;
+	struct dt_update_request	*update;
+	struct dt_update_request	*tmp;
+	int				rc2 = 0;
+	int				rc;
 	ENTRY;
 
 	rc = dt_trans_stop(env, th->th_dev, th);
 	if (likely(tu == NULL))
 		RETURN(rc);
 
-	list_for_each_entry_safe(update, tmp, &tu->tu_remote_update_list,
-				 ur_list) {
+	list_for_each_entry_safe(update, tmp,
+				 &tu->tu_remote_update_list,
+				 dur_list) {
 		/* update will be freed inside dt_trans_stop */
-		rc2 = dt_trans_stop(env, update->ur_dt, th);
+		rc2 = dt_trans_stop(env, update->dur_dt, th);
 		if (unlikely(rc2 != 0 && rc == 0))
 			rc = rc2;
 	}
