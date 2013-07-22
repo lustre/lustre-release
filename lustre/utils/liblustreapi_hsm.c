@@ -289,6 +289,8 @@ int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
 		return rc;
 
 	rc = ioctl(fd, LL_IOC_HSM_COPY_START, copy);
+	/* If error, return errno value */
+	rc = rc ? -errno : 0;
 	close(fd);
 
 	return rc;
@@ -344,6 +346,8 @@ int llapi_hsm_copy_end(char *mnt, struct hsm_copy *copy,
 		goto out_free;
 
 	rc = ioctl(fd, LL_IOC_HSM_COPY_END, copy);
+	/* If error, return errno value */
+	rc = rc ? -errno : 0;
 	close(fd);
 
 out_free:
