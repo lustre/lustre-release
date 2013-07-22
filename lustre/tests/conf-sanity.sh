@@ -1407,6 +1407,7 @@ t32_check() {
 
 t32_test_cleanup() {
 	local tmp=$TMP/t32
+	local fstype=$(facet_fstype $SINGLEMDS)
 	local rc=$?
 
 	if $shall_cleanup_lustre; then
@@ -1424,6 +1425,10 @@ t32_test_cleanup() {
 
 	$r rm -rf $tmp
 	rm -rf $tmp
+	if [ $fstype == "zfs" ]; then
+		$r $ZPOOL destroy t32fs-mdt1 || rc=$?
+		$r $ZPOOL destroy t32fs-ost1 || rc=$?
+	fi
 	return $rc
 }
 
@@ -1586,6 +1591,8 @@ t32_test() {
 	local nrpcs
 	local list
 	local fstype=$(facet_fstype $SINGLEMDS)
+	local mdt_dev=$tmp/mdt
+	local ost_dev=$tmp/ost
 
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
@@ -1608,17 +1615,31 @@ t32_test() {
 	local version=$(version_code $img_commit)
 	[[ $version -gt $(version_code 2.4.0) ]] && ff_convert="no"
 
+	if [ $fstype == "zfs" ]; then
+		# import pool first
+		$r $ZPOOL import -f -d $tmp t32fs-mdt1
+		$r $ZPOOL import -f -d $tmp t32fs-ost1
+		mdt_dev=t32fs-mdt1/mdt1
+		ost_dev=t32fs-ost1/ost1
+		wait_update_facet $SINGLEMDS "$ZPOOL list |
+			awk '/^t32fs-mdt1/ { print \\\$1 }'" "t32fs-mdt1" || {
+				error_noexit "import zfs pool failed"
+				return 1
+			}
+	fi
+
 	$r $LCTL set_param debug="$PTLDEBUG"
 
-	$r $TUNEFS --dryrun $tmp/mdt || {
+	$r $TUNEFS --dryrun $mdt_dev || {
 		$r losetup -a
 		error_noexit "tunefs.lustre before mounting the MDT"
 		return 1
 	}
 	if [ "$writeconf" ]; then
-		mopts=loop,writeconf
+		mopts=writeconf
 		if [ $fstype == "ldiskfs" ]; then
-			$r $TUNEFS --quota $tmp/mdt || {
+			mopts="loop,$mopts"
+			$r $TUNEFS --quota $mdt_dev || {
 				$r losetup -a
 				error_noexit "Enable mdt quota feature"
 				return 1
@@ -1633,18 +1654,25 @@ t32_test() {
 			local osthost=$(facet_active_host ost1)
 			local ostnid=$(do_node $osthost $LCTL list_nids | head -1)
 
-			$r mount -t lustre -o loop,nosvc $tmp/mdt $tmp/mnt/mdt
+			mopts=nosvc
+			if [ $fstype == "ldiskfs" ]; then
+				mopts="loop,$mopts"
+			fi
+			$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt
 			$r lctl replace_nids $fsname-OST0000 $ostnid
 			$r lctl replace_nids $fsname-MDT0000 $nid
 			$r umount -d $tmp/mnt/mdt
 		fi
 
-		mopts=loop,exclude=$fsname-OST0000
+		mopts=exclude=$fsname-OST0000
+		if [ $fstype == "ldiskfs" ]; then
+			mopts="loop,$mopts"
+		fi
 	fi
 
 	t32_wait_til_devices_gone $node
 
-	$r mount -t lustre -o $mopts $tmp/mdt $tmp/mnt/mdt || {
+	$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt || {
 		$r losetup -a
 		error_noexit "Mounting the MDT"
 		return 1
@@ -1689,23 +1717,27 @@ t32_test() {
 		return 1
 	fi
 
-	$r $TUNEFS --dryrun $tmp/ost || {
+	$r $TUNEFS --dryrun $ost_dev || {
 		error_noexit "tunefs.lustre before mounting the OST"
 		return 1
 	}
 	if [ "$writeconf" ]; then
-		mopts=loop,mgsnode=$nid,$writeconf
+		mopts=mgsnode=$nid,$writeconf
 		if [ $fstype == "ldiskfs" ]; then
-			$r $TUNEFS --quota $tmp/ost || {
+			mopts="loop,$mopts"
+			$r $TUNEFS --quota $ost_dev || {
 				$r losetup -a
 				error_noexit "Enable ost quota feature"
 				return 1
 			}
 		fi
 	else
-		mopts=loop,mgsnode=$nid
+		mopts=mgsnode=$nid
+		if [ $fstype == "ldiskfs" ]; then
+			mopts="loop,$mopts"
+		fi
 	fi
-	$r mount -t lustre -o $mopts $tmp/ost $tmp/mnt/ost || {
+	$r mount -t lustre -o $mopts $ost_dev $tmp/mnt/ost || {
 		error_noexit "Mounting the OST"
 		return 1
 	}
@@ -1945,13 +1977,17 @@ t32_test() {
 		}
 
 		# mount a second time to make sure we didnt leave upgrade flag on
-		$r $TUNEFS --dryrun $tmp/mdt || {
+		$r $TUNEFS --dryrun $mdt_dev || {
 			$r losetup -a
 			error_noexit "tunefs.lustre before remounting the MDT"
 			return 1
 		}
-		$r mount -t lustre -o loop,exclude=$fsname-OST0000 $tmp/mdt \
-				 $tmp/mnt/mdt || {
+
+		mopts=exclude=$fsname-OST0000
+		if [ $fstype == "ldiskfs" ]; then
+			mopts="loop,$mopts"
+		fi
+		$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt || {
 			error_noexit "Remounting the MDT"
 			return 1
 		}

@@ -10,6 +10,7 @@ DIST_SUBDIRS = mpi
 
 noinst_DATA = disk1_8-ldiskfs.tar.bz2 disk2_1-ldiskfs.tar.bz2
 noinst_DATA += disk2_3-ldiskfs.tar.bz2 disk2_4-ldiskfs.tar.bz2
+noinst_DATA += disk2_4-zfs.tar.bz2
 noinst_DATA += admin_quotafile_v2.usr admin_quotafile_v2.grp
 noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests sanity.sh
