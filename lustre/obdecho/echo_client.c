@@ -189,25 +189,27 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 static struct echo_thread_info *echo_env_info(const struct lu_env *env);
 
 struct echo_thread_info {
-        struct echo_object_conf eti_conf;
-        struct lustre_md        eti_md;
+	struct echo_object_conf eti_conf;
+	struct lustre_md        eti_md;
 
-        struct cl_2queue        eti_queue;
-        struct cl_io            eti_io;
-        struct cl_lock_descr    eti_descr;
-        struct lu_fid           eti_fid;
+	struct cl_2queue        eti_queue;
+	struct cl_io            eti_io;
+	struct cl_lock_descr    eti_descr;
+	struct lu_fid           eti_fid;
 	struct lu_fid		eti_fid2;
-        struct md_op_spec       eti_spec;
-        struct lov_mds_md_v3    eti_lmm;
-        struct lov_user_md_v3   eti_lum;
-        struct md_attr          eti_ma;
-        struct lu_name          eti_lname;
+#ifdef HAVE_SERVER_SUPPORT
+	struct md_op_spec       eti_spec;
+	struct lov_mds_md_v3    eti_lmm;
+	struct lov_user_md_v3   eti_lum;
+	struct md_attr          eti_ma;
+	struct lu_name          eti_lname;
 	/* per-thread values, can be re-used */
 	void			*eti_big_lmm;
 	int			eti_big_lmmsize;
-        char                    eti_name[20];
-        struct lu_buf           eti_buf;
-        char                    eti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
+	char                    eti_name[20];
+	struct lu_buf           eti_buf;
+	char                    eti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
+#endif
 };
 
 /* No session used right now */
@@ -734,7 +736,8 @@ static struct lu_context_key echo_session_key = {
 
 LU_TYPE_INIT_FINI(echo, &echo_thread_key, &echo_session_key);
 
-#define ECHO_SEQ_WIDTH 0xffffffff
+#ifdef HAVE_SERVER_SUPPORT
+# define ECHO_SEQ_WIDTH 0xffffffff
 static int echo_fid_init(struct echo_device *ed, char *obd_name,
 			 struct seq_server_site *ss)
 {
@@ -782,6 +785,7 @@ static int echo_fid_fini(struct obd_device *obddev)
 
         RETURN(0);
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static struct lu_device *echo_device_alloc(const struct lu_env *env,
                                            struct lu_device_type *t,
@@ -841,6 +845,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
         cleanup = 4;
 
         if (ed->ed_next_ismd) {
+#ifdef HAVE_SERVER_SUPPORT
                 /* Suppose to connect to some Metadata layer */
                 struct lu_site *ls;
                 struct lu_device *ld;
@@ -887,6 +892,12 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
 			CERROR("echo fid init error %d\n", rc);
 			GOTO(out, rc);
 		}
+#else /* !HAVE_SERVER_SUPPORT */
+		CERROR("Local operations are NOT supported on client side. "
+		       "Only remote operations are supported. Metadata client "
+		       "must be run on server side.\n");
+		GOTO(out, rc = -EOPNOTSUPP);
+#endif
         } else {
                  /* if echo client is to be stacked upon ost device, the next is
                   * NULL since ost is not a clio device so far */
@@ -1023,12 +1034,14 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 
         LASSERT(cfs_list_empty(&ec->ec_locks));
 
-        CDEBUG(D_INFO, "No object exists, exiting...\n");
+	CDEBUG(D_INFO, "No object exists, exiting...\n");
 
-        echo_client_cleanup(d->ld_obd);
-        echo_fid_fini(d->ld_obd);
-        while (next && !ed->ed_next_ismd)
-                next = next->ld_type->ldt_ops->ldto_device_free(env, next);
+	echo_client_cleanup(d->ld_obd);
+#ifdef HAVE_SERVER_SUPPORT
+	echo_fid_fini(d->ld_obd);
+#endif
+	while (next && !ed->ed_next_ismd)
+		next = next->ld_type->ldt_ops->ldto_device_free(env, next);
 
         LASSERT(ed->ed_site == lu2cl_site(d->ld_site));
         echo_site_fini(env, ed);
@@ -1455,6 +1468,7 @@ echo_copyin_lsm (struct echo_device *ed, struct lov_stripe_md *lsm,
         return (0);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 static inline void echo_md_build_name(struct lu_name *lname, char *name,
 				      __u64 id)
 {
@@ -2241,6 +2255,7 @@ out_env:
         cl_env_put(env, &refcheck);
         return rc;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
                               int on_target, struct obdo *oa, void *ulsm,
@@ -2843,6 +2858,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                         data->ioc_plen1, &dummy_oti);
                 GOTO(out, rc);
 
+#ifdef HAVE_SERVER_SUPPORT
 	case OBD_IOC_ECHO_MD: {
 		int count;
 		int cmd;
@@ -2908,6 +2924,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			return -EFAULT;
 		GOTO(out, rc);
         }
+#endif /* HAVE_SERVER_SUPPORT */
         case OBD_IOC_DESTROY:
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
@@ -3053,11 +3070,17 @@ static int echo_client_setup(const struct lu_env *env,
         ec->ec_unique = 0;
         ec->ec_nstripes = 0;
 
-        if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDT_NAME)) {
-                lu_context_tags_update(ECHO_MD_CTX_TAG);
-                lu_session_tags_update(ECHO_MD_SES_TAG);
-                RETURN(0);
-        }
+	if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDT_NAME)) {
+#ifdef HAVE_SERVER_SUPPORT
+		lu_context_tags_update(ECHO_MD_CTX_TAG);
+		lu_session_tags_update(ECHO_MD_SES_TAG);
+#else
+		CERROR("Local operations are NOT supported on client side. "
+		       "Only remote operations are supported. Metadata client "
+		       "must be run on server side.\n");
+#endif
+		RETURN(0);
+	}
 
         OBD_ALLOC(ocd, sizeof(*ocd));
         if (ocd == NULL) {
@@ -3106,8 +3129,13 @@ static int echo_client_cleanup(struct obd_device *obddev)
                 RETURN(0);
 
         if (ed->ed_next_ismd) {
-                lu_context_tags_clear(ECHO_MD_CTX_TAG);
-                lu_session_tags_clear(ECHO_MD_SES_TAG);
+#ifdef HAVE_SERVER_SUPPORT
+		lu_context_tags_clear(ECHO_MD_CTX_TAG);
+		lu_session_tags_clear(ECHO_MD_SES_TAG);
+#else
+		CERROR("This is client-side only module, does not support "
+			"metadata echo client.\n");
+#endif
                 RETURN(0);
         }
 
