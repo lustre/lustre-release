@@ -2663,7 +2663,7 @@ static int mdd_rename(const struct lu_env *env,
 		ma->ma_attr = *tg_attr;
 		ma->ma_valid |= MA_INODE;
 
-		if (so_attr->la_nlink == 0)
+		if (tg_attr->la_nlink == 0)
 			cl_flags |= CLF_RENAME_LAST;
         }
 
