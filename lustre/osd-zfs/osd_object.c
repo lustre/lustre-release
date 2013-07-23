@@ -874,7 +874,10 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
 	LASSERT(obj->oo_sa_hdl != NULL);
+	LASSERT(oh->ot_tx != NULL);
 	dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
+	if (oh->ot_tx->tx_err != 0)
+		RETURN(-oh->ot_tx->tx_err);
 
 	sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
 	bspace = toqb(bspace * blksize);
