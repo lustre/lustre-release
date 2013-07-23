@@ -119,7 +119,7 @@ static int osp_async_update_interpret(const struct lu_env *env,
 				rc1 = -EINVAL;
 		}
 
-		oaui->oaui_interpterer(env, reply, oaui->oaui_obj,
+		oaui->oaui_interpterer(env, reply, req, oaui->oaui_obj,
 				       oaui->oaui_data, index, rc1);
 		osp_async_update_item_fini(env, oaui);
 		index++;
@@ -147,7 +147,7 @@ int osp_unplug_async_update(const struct lu_env *env,
 		list_for_each_entry_safe(oaui, next,
 					 &update->dur_cb_items, oaui_list) {
 			list_del_init(&oaui->oaui_list);
-			oaui->oaui_interpterer(env, NULL, oaui->oaui_obj,
+			oaui->oaui_interpterer(env, NULL, NULL, oaui->oaui_obj,
 					       oaui->oaui_data, 0, rc);
 			osp_async_update_item_fini(env, oaui);
 		}

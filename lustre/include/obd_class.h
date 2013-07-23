@@ -340,9 +340,6 @@ void md_from_obdo(struct md_op_data *op_data, struct obdo *oa, obd_flag valid);
 void obdo_from_md(struct obdo *oa, struct md_op_data *op_data,
                   unsigned int valid);
 
-void obdo_cpu_to_le(struct obdo *dobdo, struct obdo *sobdo);
-void obdo_le_to_cpu(struct obdo *dobdo, struct obdo *sobdo);
-
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
 #define MDP(dev, op)    (dev)->obd_type->typ_md_ops->m_ ## op

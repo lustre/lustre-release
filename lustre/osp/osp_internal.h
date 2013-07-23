@@ -454,6 +454,7 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 
 typedef int (*osp_async_update_interpterer_t)(const struct lu_env *env,
 					      struct object_update_reply *reply,
+					      struct ptlrpc_request *req,
 					      struct osp_object *obj,
 					      void *data, int index, int rc);
 

@@ -332,38 +332,3 @@ void obdo_from_md(struct obdo *oa, struct md_op_data *op_data,
         }
 }
 EXPORT_SYMBOL(obdo_from_md);
-
-void obdo_cpu_to_le(struct obdo *dobdo, struct obdo *sobdo)
-{
-	dobdo->o_size = cpu_to_le64(sobdo->o_size);
-	dobdo->o_mtime = cpu_to_le64(sobdo->o_mtime);
-	dobdo->o_atime = cpu_to_le64(sobdo->o_atime);
-	dobdo->o_ctime = cpu_to_le64(sobdo->o_ctime);
-	dobdo->o_blocks = cpu_to_le64(sobdo->o_blocks);
-	dobdo->o_mode = cpu_to_le32(sobdo->o_mode);
-	dobdo->o_uid = cpu_to_le32(sobdo->o_uid);
-	dobdo->o_gid = cpu_to_le32(sobdo->o_gid);
-	dobdo->o_flags = cpu_to_le32(sobdo->o_flags);
-	dobdo->o_nlink = cpu_to_le32(sobdo->o_nlink);
-	dobdo->o_blksize = cpu_to_le32(sobdo->o_blksize);
-	dobdo->o_valid = cpu_to_le64(sobdo->o_valid);
-}
-EXPORT_SYMBOL(obdo_cpu_to_le);
-
-void obdo_le_to_cpu(struct obdo *dobdo, struct obdo *sobdo)
-{
-	dobdo->o_size = le64_to_cpu(sobdo->o_size);
-	dobdo->o_mtime = le64_to_cpu(sobdo->o_mtime);
-	dobdo->o_atime = le64_to_cpu(sobdo->o_atime);
-	dobdo->o_ctime = le64_to_cpu(sobdo->o_ctime);
-	dobdo->o_blocks = le64_to_cpu(sobdo->o_blocks);
-	dobdo->o_mode = le32_to_cpu(sobdo->o_mode);
-	dobdo->o_uid = le32_to_cpu(sobdo->o_uid);
-	dobdo->o_gid = le32_to_cpu(sobdo->o_gid);
-	dobdo->o_flags = le32_to_cpu(sobdo->o_flags);
-	dobdo->o_nlink = le32_to_cpu(sobdo->o_nlink);
-	dobdo->o_blksize = le32_to_cpu(sobdo->o_blksize);
-	dobdo->o_valid = le64_to_cpu(sobdo->o_valid);
-}
-EXPORT_SYMBOL(obdo_le_to_cpu);
-

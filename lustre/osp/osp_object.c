@@ -208,6 +208,7 @@ static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
 
 static int osp_get_attr_from_reply(const struct lu_env *env,
 				   struct object_update_reply *reply,
+				   struct ptlrpc_request *req,
 				   struct lu_attr *attr,
 				   struct osp_object *obj, int index)
 {
@@ -225,7 +226,10 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 	if (rbuf->lb_len != sizeof(*wobdo))
 		return -EPROTO;
 
-	obdo_le_to_cpu(wobdo, wobdo);
+	LASSERT(req != NULL);
+	if (ptlrpc_req_need_swab(req))
+		lustre_swab_obdo(wobdo);
+
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	spin_lock(&obj->opo_lock);
 	if (obj->opo_ooa != NULL) {
@@ -244,6 +248,7 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 
 static int osp_attr_get_interpterer(const struct lu_env *env,
 				    struct object_update_reply *reply,
+				    struct ptlrpc_request *req,
 				    struct osp_object *obj,
 				    void *data, int index, int rc)
 {
@@ -255,7 +260,8 @@ static int osp_attr_get_interpterer(const struct lu_env *env,
 		osp2lu_obj(obj)->lo_header->loh_attr |= LOHA_EXISTS;
 		obj->opo_non_exist = 0;
 
-		return osp_get_attr_from_reply(env, reply, NULL, obj, index);
+		return osp_get_attr_from_reply(env, reply, req, NULL, obj,
+					       index);
 	} else {
 		if (rc == -ENOENT) {
 			osp2lu_obj(obj)->lo_header->loh_attr &= ~LOHA_EXISTS;
@@ -360,7 +366,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (reply == NULL || reply->ourp_magic != UPDATE_REPLY_MAGIC)
 		GOTO(out, rc = -EPROTO);
 
-	rc = osp_get_attr_from_reply(env, reply, attr, obj, 0);
+	rc = osp_get_attr_from_reply(env, reply, req, attr, obj, 0);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -500,6 +506,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 static int osp_xattr_get_interpterer(const struct lu_env *env,
 				     struct object_update_reply *reply,
+				     struct ptlrpc_request *req,
 				     struct osp_object *obj,
 				     void *data, int index, int rc)
 {

@@ -64,19 +64,16 @@ int osp_md_declare_object_create(const struct lu_env *env,
 	osi->osi_obdo.o_valid = 0;
 	obdo_from_la(&osi->osi_obdo, attr, attr->la_valid);
 	lustre_set_wire_obdo(NULL, &osi->osi_obdo, &osi->osi_obdo);
-	obdo_cpu_to_le(&osi->osi_obdo, &osi->osi_obdo);
 
 	bufs[0] = (char *)&osi->osi_obdo;
 	buf_count = 1;
 	fid1 = (struct lu_fid *)lu_object_fid(&dt->do_lu);
 	if (hint != NULL && hint->dah_parent) {
 		struct lu_fid *fid2;
-		struct lu_fid *tmp_fid = &osi->osi_fid;
 
 		fid2 = (struct lu_fid *)lu_object_fid(&hint->dah_parent->do_lu);
-		fid_cpu_to_le(tmp_fid, fid2);
-		sizes[1] = sizeof(*tmp_fid);
-		bufs[1] = (char *)tmp_fid;
+		sizes[1] = sizeof(*fid2);
+		bufs[1] = (char *)fid2;
 		buf_count++;
 	}
 
@@ -248,7 +245,6 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	obdo_from_la(&osi->osi_obdo, (struct lu_attr *)attr,
 		     attr->la_valid);
 	lustre_set_wire_obdo(NULL, &osi->osi_obdo, &osi->osi_obdo);
-	obdo_cpu_to_le(&osi->osi_obdo, &osi->osi_obdo);
 
 	buf = (char *)&osi->osi_obdo;
 	fid = (struct lu_fid *)lu_object_fid(&dt->do_lu);
@@ -376,7 +372,8 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	fid = lbuf->lb_buf;
-	fid_le_to_cpu(fid, fid);
+	if (ptlrpc_rep_need_swab(req))
+		lustre_swab_lu_fid(fid);
 	if (!fid_is_sane(fid)) {
 		CERROR("%s: lookup "DFID" %s invalid fid "DFID"\n",
 		       dt_dev->dd_lu_dev.ld_obd->obd_name,
