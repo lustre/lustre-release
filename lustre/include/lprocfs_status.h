@@ -750,8 +750,14 @@ extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)                           \
 static int name##_single_open(cfs_inode_t *inode, struct file *file) {     \
         struct proc_dir_entry *dp = PDE(inode);                            \
-	LPROCFS_ENTRY_CHECK(dp);                                           \
-	return single_open(file, name##_seq_show, dp->data);               \
+        int rc;                                                            \
+        LPROCFS_ENTRY_AND_CHECK(dp);                                       \
+        rc = single_open(file, name##_seq_show, dp->data);                 \
+        if (rc) {                                                          \
+                LPROCFS_EXIT();                                            \
+                return rc;                                                 \
+        }                                                                  \
+        return 0;                                                          \
 }                                                                          \
 struct file_operations name##_fops = {                                     \
         .owner   = THIS_MODULE,                                            \

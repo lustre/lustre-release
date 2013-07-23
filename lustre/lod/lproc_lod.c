@@ -418,10 +418,12 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 	struct seq_file *seq;
 	int rc;
 
-	LPROCFS_ENTRY_CHECK(dp);
+	LPROCFS_ENTRY_AND_CHECK(dp);
 	rc = seq_open(file, &lod_osts_sops);
-	if (rc)
+	if (rc) {
+		LPROCFS_EXIT();
 		return rc;
+	}
 
 	seq = file->private_data;
 	seq->private = dp->data;

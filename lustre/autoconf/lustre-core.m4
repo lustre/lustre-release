@@ -461,6 +461,36 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.23 add code to wait other users to complete before removing procfs entry
+AC_DEFUN([LC_PROCFS_USERS],
+[AC_MSG_CHECKING([if kernel has pde_users member in procfs entry struct])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/proc_fs.h>
+],[
+        struct proc_dir_entry pde;
+
+        pde.pde_users   = 0;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_PROCFS_USERS, 1,
+                [kernel has pde_users member in procfs entry struct])
+],[
+	LB_LINUX_TRY_COMPILE([
+		#include "$LINUX/fs/proc/internal.h"
+	],[
+		struct proc_dir_entry_aux pde_aux;
+
+		pde_aux.pde_users = 0;
+	],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_PROCFS_USERS, 1,
+			[kernel has pde_users member in proc_dir_entry_aux])
+	],[
+		AC_MSG_RESULT([no])
+	])
+])
+])
+
 # 2.6.24
 
 # 2.6.24 has bio_endio with 2 args
@@ -474,6 +504,24 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_BIO_ENDIO_2ARG, 1,
                 [kernel has bio_endio with 2 args])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.24 removes long aged procfs entry -> deleted member
+AC_DEFUN([LC_PROCFS_DELETED],
+[AC_MSG_CHECKING([if kernel has deleted member in procfs entry struct])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/proc_fs.h>
+],[
+        struct proc_dir_entry pde;
+
+        pde.deleted = sizeof(pde);
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_PROCFS_DELETED, 1,
+                [kernel has deleted member in procfs entry struct])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -1516,9 +1564,11 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.23
          LC_UNREGISTER_BLKDEV_RETURN_INT
+         LC_PROCFS_USERS
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
+         LC_PROCFS_DELETED
 
          # 2.6.26
          LC_FS_STRUCT_USE_PATH

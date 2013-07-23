@@ -280,19 +280,21 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 		goto out_lqp;
 	}
 
-	if (LPROCFS_ENTRY_CHECK(dp)) {
+	if (LPROCFS_ENTRY_AND_CHECK(dp)) {
 		rc = -ENOENT;
 		goto out_env;
 	}
 
 	rc = seq_open(file, &lprocfs_quota_seq_sops);
 	if (rc)
-		goto out_env;
+		goto out_lprocfs;
 
 	seq = file->private_data;
 	seq->private = lqp;
 	return 0;
 
+out_lprocfs:
+	LPROCFS_EXIT();
 out_env:
 	lu_env_fini(&lqp->lqp_env);
 out_lqp:
@@ -304,6 +306,8 @@ static int lprocfs_quota_seq_release(struct inode *inode, struct file *file)
 {
 	struct seq_file		*seq = file->private_data;
 	struct lquota_procfs	*lqp = seq->private;
+
+	LPROCFS_EXIT();
 
 	LASSERT(lqp);
 	lu_env_fini(&lqp->lqp_env);

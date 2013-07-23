@@ -541,12 +541,14 @@ static int lprocfs_open_agent_actions(struct inode *inode, struct file *file)
 	struct mdt_device		*mdt;
 	ENTRY;
 
-	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
+	if (LPROCFS_ENTRY_AND_CHECK(PDE(inode)))
 		RETURN(-ENOENT);
 
 	rc = seq_open(file, &mdt_agent_actions_proc_ops);
-	if (rc)
+	if (rc) {
+		LPROCFS_EXIT();
 		RETURN(rc);
+	}
 
 	OBD_ALLOC_PTR(aai);
 	if (aai == NULL)

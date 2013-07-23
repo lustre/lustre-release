@@ -420,12 +420,14 @@ static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
 	struct seq_file *seq;
 	int rc;
 
-	if (LPROCFS_ENTRY_CHECK(dp))
+	if (LPROCFS_ENTRY_AND_CHECK(dp))
 		return -ENOENT;
 
 	rc = seq_open(file, &lprocfs_jobstats_seq_sops);
-	if (rc)
+	if (rc) {
+		LPROCFS_EXIT();
 		return rc;
+	}
 	seq = file->private_data;
 	seq->private = dp->data;
 	return 0;

@@ -62,12 +62,14 @@ EXPORT_SYMBOL(_lprocfs_lock);
 
 int lprocfs_single_release(struct inode *inode, struct file *file)
 {
+        LPROCFS_EXIT();
         return single_release(inode, file);
 }
 EXPORT_SYMBOL(lprocfs_single_release);
 
 int lprocfs_seq_release(struct inode *inode, struct file *file)
 {
+        LPROCFS_EXIT();
         return seq_release(inode, file);
 }
 EXPORT_SYMBOL(lprocfs_seq_release);
@@ -203,7 +205,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         if (page == NULL)
                 return -ENOMEM;
 
-	if (LPROCFS_ENTRY_CHECK(dp)) {
+        if (LPROCFS_ENTRY_AND_CHECK(dp)) {
                 rc = -ENOENT;
                 goto out;
         }
@@ -212,6 +214,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         if (dp->read_proc)
 		rc = dp->read_proc(page, &start, *ppos, PAGE_CACHE_SIZE,
                                    &eof, dp->data);
+        LPROCFS_EXIT();
         if (rc <= 0)
                 goto out;
 
@@ -247,10 +250,11 @@ static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         int rc = -EIO;
 
-	if (LPROCFS_ENTRY_CHECK(dp))
+        if (LPROCFS_ENTRY_AND_CHECK(dp))
                 return -ENOENT;
         if (dp->write_proc)
                 rc = dp->write_proc(f, buf, size, dp->data);
+        LPROCFS_EXIT();
         return rc;
 }
 
@@ -1468,12 +1472,14 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
         struct seq_file *seq;
         int rc;
 
-	if (LPROCFS_ENTRY_CHECK(dp))
+        if (LPROCFS_ENTRY_AND_CHECK(dp))
                 return -ENOENT;
 
         rc = seq_open(file, &lprocfs_stats_seq_sops);
-	if (rc)
+        if (rc) {
+                LPROCFS_EXIT();
                 return rc;
+        }
         seq = file->private_data;
         seq->private = dp->data;
         return 0;
