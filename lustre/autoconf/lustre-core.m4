@@ -436,28 +436,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.26
-
-# 2.6.26 isn't export set_fs_pwd and change paramter in fs struct
-AC_DEFUN([LC_FS_STRUCT_USE_PATH],
-[AC_MSG_CHECKING([fs_struct use path structure])
-LB_LINUX_TRY_COMPILE([
-        #include <asm/atomic.h>
-        #include <linux/spinlock.h>
-        #include <linux/fs_struct.h>
-],[
-        struct fs_struct fs;
-
-        fs.pwd = *((struct path *)sizeof(fs));
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_FS_STRUCT_USE_PATH, 1,
-                [fs_struct use path structure])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 #
 # 2.6.27
 #
@@ -1471,9 +1449,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.24
          LC_BIO_ENDIO_2ARG
          LC_PROCFS_DELETED
-
-         # 2.6.26
-         LC_FS_STRUCT_USE_PATH
 
          # 2.6.27
          LC_SECURITY_PLUG  # for SLES10 SP2

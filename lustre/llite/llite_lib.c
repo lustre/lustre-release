@@ -2457,7 +2457,6 @@ static char* ll_d_path(struct dentry *dentry, char *buf, int bufsize)
 {
 	char *path = NULL;
 
-#ifdef HAVE_FS_STRUCT_USE_PATH
 	struct path p;
 
 	p.dentry = dentry;
@@ -2465,10 +2464,6 @@ static char* ll_d_path(struct dentry *dentry, char *buf, int bufsize)
 	path_get(&p);
 	path = d_path(&p, buf, bufsize);
 	path_put(&p);
-#else
-	path = d_path(dentry, current->fs->rootmnt, buf, bufsize);
-#endif
-
 	return path;
 }
 
