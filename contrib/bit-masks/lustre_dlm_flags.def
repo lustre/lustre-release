@@ -64,7 +64,13 @@ flag[12] = {
     f-desc  = 'lock request has intent';
 };
 
-// Skipped bits 13, 14 and 15
+// Skipped bits 13, 14
+
+flag[15] = {
+    f-name  = flock_deadlock;
+    f-mask  = on_wire, ast;
+    f-desc  = 'flock deadlock detected';
+};
 
 flag[16] = {
     f-name  = discard_data;

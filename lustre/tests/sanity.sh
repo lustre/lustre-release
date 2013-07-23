@@ -11460,6 +11460,22 @@ test_234() {
 }
 run_test 234 "xattr cache should not crash on ENOMEM"
 
+test_235() {
+	 [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.52) ] &&
+		skip "Need MDS version at least 2.4.52" && return
+	flock_deadlock $DIR/$tfile
+	local RC=$?
+	case $RC in
+		0)
+		;;
+		124) error "process hangs on a deadlock"
+		;;
+		*) error "error executing flock_deadlock $DIR/$tfile"
+		;;
+	esac
+}
+run_test 235 "LU-1715: flock deadlock detection does not work properly"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

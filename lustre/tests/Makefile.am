@@ -66,7 +66,7 @@ noinst_PROGRAMS += statone runas openfile rmdirmany
 noinst_PROGRAMS += small_write multiop ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog
-noinst_PROGRAMS += mmap_sanity writemany reads flocks_test
+noinst_PROGRAMS += mmap_sanity writemany reads flocks_test flock_deadlock
 noinst_PROGRAMS += write_time_limit rwv lgetxattr_size_check checkfiemap
 
 bin_PROGRAMS = mcreate munlink
