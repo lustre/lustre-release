@@ -235,26 +235,6 @@ AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
          ])
 
 #
-# added in 2.6.17
-#
-AC_DEFUN([LC_BIT_SPINLOCK_H],
-[LB_CHECK_FILE([$LINUX/include/linux/bit_spinlock.h],[
-	AC_MSG_CHECKING([if bit_spinlock.h can be compiled])
-	LB_LINUX_TRY_COMPILE([
-		#include <asm/processor.h>
-		#include <linux/spinlock.h>
-		#include <linux/bit_spinlock.h>
-	],[],[
-		AC_MSG_RESULT([yes])
-		AC_DEFINE(HAVE_BIT_SPINLOCK_H, 1, [Kernel has bit_spinlock.h])
-	],[
-		AC_MSG_RESULT([no])
-	])
-],
-[])
-])
-
-#
 # LC_CAPA_CRYPTO
 #
 AC_DEFUN([LC_CAPA_CRYPTO],
@@ -1499,8 +1479,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # RHEL4 patches
          LC_EXPORT_TRUNCATE_COMPLETE
-
-         LC_BIT_SPINLOCK_H
 
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
