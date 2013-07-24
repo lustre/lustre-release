@@ -3887,14 +3887,13 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
                 break;
         }
 
-	mutex_lock(&fsdb->fsdb_mutex);
-
         if (canceled_label != NULL) {
                 OBD_ALLOC_PTR(mti);
                 if (mti == NULL)
 			GOTO(out_cancel, rc = -ENOMEM);
         }
 
+	mutex_lock(&fsdb->fsdb_mutex);
         /* write pool def to all MDT logs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
 		if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
