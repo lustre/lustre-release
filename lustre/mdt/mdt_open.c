@@ -2011,9 +2011,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 		CDEBUG(D_HSM, DFID" data_version mismatches: packed="LPU64
 		       " and on-disk="LPU64"\n", PFID(mdt_object_fid(o)),
 		       data->cd_data_version, ma->ma_hsm.mh_arch_ver);
-		/* XXX: Enable this line when hsm_archive is operational!
 		GOTO(out_unlock, rc = -EPERM);
-		*/
 	}
 
 	ma->ma_valid = MA_INODE;
