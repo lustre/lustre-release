@@ -128,7 +128,7 @@ struct shrinker *set_shrinker(int seek, shrinker_t func)
 {
         struct shrinker *s;
 
-        s = kmalloc(sizeof(*s), GFP_KERNEL);
+	s = kzalloc(sizeof(*s), GFP_KERNEL);
         if (s == NULL)
                 return (NULL);
 
