@@ -173,9 +173,6 @@ run_test 0 "Fail all nodes, independently"
 test_1() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	[ "$(facet_fstype mds2)" = "zfs" ] &&
-		skip "LU-2059: no local config for ZFS MDTs" && return
-
 	clients_up
 
 	shutdown_facet mds1

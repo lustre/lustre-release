@@ -455,17 +455,16 @@ run_test 5c "cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5d() {
 	grep " $MOUNT " /etc/mtab &&
-		error false "unexpected entry in mtab before mount" && return 10
+		error "unexpected entry in mtab before mount"
 
 	start_ost || error "OST start failed"
 	start_mds || error "MDS start failed"
-	stop_ost || error "Unable to stop OST1"
+	stop_ost -f || error "Unable to stop OST1"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 	umount_client $MOUNT -f || error "umount_client $MOUNT failed"
 	cleanup_nocli || error "cleanup_nocli failed with $?"
-	grep " $MOUNT " /etc/mtab &&
+	! grep " $MOUNT " /etc/mtab ||
 		error "$MOUNT entry in mtab after unmount"
-	pass
 }
 run_test 5d "mount with ost down"
 
@@ -702,7 +701,7 @@ run_test 19a "start/stop MDS without OSTs"
 
 test_19b() {
 	start_ost || error "Unable to start OST1"
-	stop_ost || error "Unable to stop OST1"
+	stop_ost -f || error "Unable to stop OST1"
 }
 run_test 19b "start/stop OSTs without MDS"
 
