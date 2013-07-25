@@ -38,6 +38,7 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -58,6 +59,9 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 #include <linux/pci.h>
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
+#include <linux/pci-dma.h>
+#endif
 
 #include <net/sock.h>
 #include <linux/in.h>
