@@ -53,16 +53,19 @@
 #include <md_object.h>
 
 #ifdef LPROCFS
-/*
- * Note: this function is only used for testing, it is no safe for production
- * use.
+/**
+ * Reduce the SEQ range allocated to a node to a strict subset of the range
+ * currently-allocated SEQ range.  If the specified range is "clear", then
+ * drop all allocated sequences and request a new one from the master.
+ *
+ * Note: this function should only be used for testing, it is not necessarily
+ * safe for production use.
  */
-static int
-seq_proc_write_common(struct file *file, const char *buffer,
-                      unsigned long count, void *data,
-                      struct lu_seq_range *range)
+static int seq_proc_write_common(struct file *file, const char *buffer,
+				 unsigned long count, void *data,
+				 struct lu_seq_range *range)
 {
-	struct lu_seq_range tmp;
+	struct lu_seq_range tmp = { 0, };
 	int rc;
 	ENTRY;
 
@@ -73,24 +76,25 @@ seq_proc_write_common(struct file *file, const char *buffer,
 		RETURN(0);
 	}
 
-        rc = sscanf(buffer, "[%llx - %llx]\n",
-                    (long long unsigned *)&tmp.lsr_start,
-                    (long long unsigned *)&tmp.lsr_end);
-	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp))
+	/* of the form "[0x0000000240000400 - 0x000000028000400]" */
+	rc = sscanf(buffer, "[%llx - %llx]\n",
+		    (long long unsigned *)&tmp.lsr_start,
+		    (long long unsigned *)&tmp.lsr_end);
+	if (!range_is_sane(&tmp) || range_is_zero(&tmp) ||
+	    tmp.lsr_start < range->lsr_start || tmp.lsr_end > range->lsr_end)
 		RETURN(-EINVAL);
 	*range = tmp;
-        RETURN(0);
+	RETURN(0);
 }
 
-static int
-seq_proc_read_common(char *page, char **start, off_t off,
-                     int count, int *eof, void *data,
-                     struct lu_seq_range *range)
+static int seq_proc_read_common(char *page, char **start, off_t off,
+				int count, int *eof, void *data,
+				struct lu_seq_range *range)
 {
 	int rc;
 	ENTRY;
 
-        *eof = 1;
+	*eof = 1;
 	rc = snprintf(page, count, "["LPX64" - "LPX64"]:%x:%s\n",
 			PRANGE(range));
 	RETURN(rc);
