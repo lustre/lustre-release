@@ -6614,53 +6614,79 @@ test_116a() { # was previously test_116()
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
 
 	echo -n "Free space priority "
-	lctl get_param -n lov.*-clilov-*.qos_prio_free
+	do_facet $SINGLEMDS lctl get_param -n lo*.*-mdtlov.qos_prio_free |
+		head -1
 	declare -a AVAIL
 	free_min_max
-	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI, skip" &&\
-		return
 
-	# generate uneven OSTs
+	[ $MINV -eq 0 ] && skip "no free space in OST$MINI, skip" && return
+	trap simple_cleanup_common EXIT
+
+	# Check if we need to generate uneven OSTs
 	test_mkdir -p $DIR/$tdir/OST${MINI}
-	declare -i FILL
-	FILL=$(($MINV / 4))
-	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
-	i=0
-	while [ $FILL -gt 0 ]; do
-	    i=$(($i + 1))
-	    dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i bs=2M count=1 2>/dev/null
-	    FILL=$(($FILL - 2048))
-	    echo -n .
-	done
-	FILL=$(($MINV / 4))
-	sync
-	sleep_maxage
+	local FILL=$(($MINV / 4))
+	local DIFF=$(($MAXV - $MINV))
+	local DIFF2=$(($DIFF * 100 / $MINV))
 
-	free_min_max
+	local threshold=$(do_facet $SINGLEMDS \
+		lctl get_param -n *.*MDT0000-mdtlov.qos_threshold_rr | head -1)
+	threshold=${threshold%%%}
+	echo -n "Check for uneven OSTs: "
+	echo -n "diff=${DIFF}KB (${DIFF2}%) must be > ${threshold}% ..."
+
+	if [ $DIFF2 -gt $threshold ]; then
+		echo "ok"
+		echo "Don't need to fill OST$MINI"
+	else
+		# generate uneven OSTs. Write 2% over the QOS threshold value
+		echo "no"
+		DIFF=$(($threshold - $DIFF2 + 2))
+		DIFF2=$(( ($MINV * $DIFF)/100 ))
+		echo "Fill ${DIFF}% remaining space in OST${MINI} with ${DIFF2}KB"
+		$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI} ||
+			error "setstripe failed"
+		DIFF=$(($DIFF2 / 2048))
+		i=0
+		while [ $i -lt $DIFF ]; do
+			i=$(($i + 1))
+			dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i \
+				bs=2M count=1 2>/dev/null
+			echo -n .
+		done
+		echo .
+		sync
+		sleep_maxage
+		free_min_max
+	fi
+
 	DIFF=$(($MAXV - $MINV))
 	DIFF2=$(($DIFF * 100 / $MINV))
-	echo -n "diff=${DIFF}=${DIFF2}% must be > 20% for QOS mode..."
-	if [ $DIFF2 -gt 20 ]; then
-	    echo "ok"
+	echo -n "diff=${DIFF}=${DIFF2}% must be > ${threshold}% for QOS mode..."
+	if [ $DIFF2 -gt $threshold ]; then
+		echo "ok"
 	else
-	    echo "failed - QOS mode won't be used"
-	    error_ignore "QOS imbalance criteria not met"
-	    return
+		echo "failed - QOS mode won't be used"
+		error_ignore 0000 "QOS imbalance criteria not met"
+		simple_cleanup_common
+		return
 	fi
 
 	MINI1=$MINI; MINV1=$MINV
 	MAXI1=$MAXI; MAXV1=$MAXV
 
 	# now fill using QOS
-	echo writing a bunch of files to QOS-assigned OSTs
 	$SETSTRIPE -c 1 $DIR/$tdir
+	FILL=$(($FILL / 200))
+	if [ $FILL -gt 600 ]; then
+		FILL=600
+	fi
+	echo "writing $FILL files to QOS-assigned OSTs"
 	i=0
-	while [ $FILL -gt 0 ]; do
-	    i=$(($i + 1))
-	    dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=1024 count=200 2>/dev/null
-	    FILL=$(($FILL - 200))
-	    echo -n .
+	while [ $i -lt $FILL ]; do
+		i=$(($i + 1))
+		dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=200k \
+			count=1 2>/dev/null
+		echo -n .
 	done
 	echo "wrote $i 200k files"
 	sync
@@ -6672,26 +6698,31 @@ test_116a() { # was previously test_116()
 	echo "free space delta: orig $DIFF final $DIFF2"
 	[ $DIFF2 -gt $DIFF ] && echo "delta got worse!"
 	DIFF=$(($MINV1 - ${AVAIL[$MINI1]}))
-	echo "Wrote $DIFF to smaller OST $MINI1"
+	echo "Wrote ${DIFF}KB to smaller OST $MINI1"
 	DIFF2=$(($MAXV1 - ${AVAIL[$MAXI1]}))
-	echo "Wrote $DIFF2 to larger OST $MAXI1"
-	[ $DIFF -gt 0 ] && echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more data to larger OST $MAXI1"
+	echo "Wrote ${DIFF2}KB to larger OST $MAXI1"
+	FILL=$(($DIFF2 * 100 / $DIFF - 100))
+	[ $DIFF -gt 0 ] &&
+		echo "Wrote ${FILL}% more data to larger OST $MAXI1"
 
 	# Figure out which files were written where
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-               awk '/'$MINI1': / {print $2; exit}')
+		  awk '/'$MINI1': / {print $2; exit}')
 	echo $UUID
-        MINC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
+	MINC=$($GETSTRIPE --ost $UUID $DIR/$tdir | grep $DIR | wc -l)
 	echo "$MINC files created on smaller OST $MINI1"
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-               awk '/'$MAXI1': / {print $2; exit}')
+		  awk '/'$MAXI1': / {print $2; exit}')
 	echo $UUID
-        MAXC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
+	MAXC=$($GETSTRIPE --ost $UUID $DIR/$tdir | grep $DIR | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
-	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
-	[ $MAXC -gt $MINC ] || error_ignore "stripe QOS didn't balance free space"
+	FILL=$(($MAXC * 100 / $MINC - 100))
+	[ $MINC -gt 0 ] &&
+		echo "Wrote ${FILL}% more files to larger OST $MAXI1"
+	[ $MAXC -gt $MINC ] ||
+		error_ignore 0000 "stripe QOS didn't balance free space"
 
-	rm -rf $DIR/$tdir
+	simple_cleanup_common
 }
 run_test 116a "stripe QOS: free space balance ==================="
 
