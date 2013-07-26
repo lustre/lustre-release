@@ -1365,7 +1365,6 @@ int ofd_getattr(const struct lu_env *env, struct obd_export *exp,
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
 	struct ofd_object	*fo;
-	__u64			 curr_version;
 	int			 rc = 0;
 
 	ENTRY;
@@ -1383,19 +1382,27 @@ int ofd_getattr(const struct lu_env *env, struct obd_export *exp,
 	fo = ofd_object_find(env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
 		GOTO(out, rc = PTR_ERR(fo));
+	if (!ofd_object_exists(fo))
+		GOTO(out_put, rc = -ENOENT);
+
 	LASSERT(fo != NULL);
 	rc = ofd_attr_get(env, fo, &info->fti_attr);
 	oinfo->oi_oa->o_valid = OBD_MD_FLID;
-	if (rc == 0)
+	if (rc == 0) {
+		__u64 curr_version;
+
 		obdo_from_la(oinfo->oi_oa, &info->fti_attr,
 			     OFD_VALID_FLAGS | LA_UID | LA_GID);
 
-	/* Store object version in reply */
-	curr_version = dt_version_get(env, ofd_object_child(fo));
-	if ((__s64)curr_version != -EOPNOTSUPP) {
-		oinfo->oi_oa->o_valid |= OBD_MD_FLDATAVERSION;
-		oinfo->oi_oa->o_data_version = curr_version;
+		/* Store object version in reply */
+		curr_version = dt_version_get(env, ofd_object_child(fo));
+		if ((__s64)curr_version != -EOPNOTSUPP) {
+			oinfo->oi_oa->o_valid |= OBD_MD_FLDATAVERSION;
+			oinfo->oi_oa->o_data_version = curr_version;
+		}
 	}
+
+out_put:
 	ofd_object_put(env, fo);
 out:
 	RETURN(rc);
