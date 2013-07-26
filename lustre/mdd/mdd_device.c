@@ -1038,6 +1038,17 @@ static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
         RETURN(rc);
 }
 
+static int mdd_maxeasize_get(const struct lu_env *env, struct md_device *m,
+				int *easize)
+{
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+	ENTRY;
+
+	*easize = mdd->mdd_dt_conf.ddp_max_ea_size;
+
+	RETURN(0);
+}
+
 static int mdd_update_capa_key(const struct lu_env *env,
                                struct md_device *m,
                                struct lustre_capa_key *key)
@@ -1442,6 +1453,7 @@ const struct md_device_operations mdd_ops = {
 	.mdo_update_capa_key= mdd_update_capa_key,
 	.mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
 	.mdo_iocontrol      = mdd_iocontrol,
+	.mdo_maxeasize_get  = mdd_maxeasize_get,
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {

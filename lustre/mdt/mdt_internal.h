@@ -185,6 +185,8 @@ struct mdt_device {
         int                        mdt_max_mdsize;
         int                        mdt_max_cookiesize;
 
+	int			   mdt_max_ea_size;
+
         struct upcall_cache        *mdt_identity_cache;
 
         /* sptlrpc rules */
@@ -254,6 +256,8 @@ struct mdt_object {
 	struct rw_semaphore	mot_open_sem;
 	atomic_t		mot_lease_count;
 	atomic_t		mot_open_count;
+	/* A lock to protect EA data from racing setxattr and getxattrall */
+	struct rw_semaphore	mot_xattr_sem;
 };
 
 enum mdt_object_flags {

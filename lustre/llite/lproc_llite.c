@@ -218,6 +218,40 @@ static int ll_rd_sb_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
+static int ll_rd_xattr_cache(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
+{
+	struct super_block *sb = (struct super_block *)data;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int rc;
+
+	rc = snprintf(page, count, "%u\n", sbi->ll_xattr_cache_enabled);
+
+	return rc;
+}
+
+static int ll_wr_xattr_cache(struct file *file, const char *buffer,
+				unsigned long count, void *data)
+{
+	struct super_block *sb = (struct super_block *)data;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int val, rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0 && val != 1)
+		return -ERANGE;
+
+	if (val == 1 && !(sbi->ll_flags & LL_SBI_XATTR_CACHE))
+		return -ENOTSUPP;
+
+	sbi->ll_xattr_cache_enabled = val;
+
+	return count;
+}
+
 static int ll_rd_site_stats(char *page, char **start, off_t off,
                             int count, int *eof, void *data)
 {
@@ -773,6 +807,7 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "lazystatfs",       ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
         { "max_easize",       ll_rd_maxea_size, 0, 0 },
 	{ "sbi_flags",        ll_rd_sbi_flags, 0, 0 },
+	{ "xattr_cache",      ll_rd_xattr_cache, ll_wr_xattr_cache, 0 },
         { 0 }
 };
 
@@ -824,6 +859,7 @@ struct llite_file_opcode {
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
         { LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
         { LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
+	{ LPROC_LL_GETXATTR_HITS,  LPROCFS_TYPE_REGS, "getxattr_hits" },
         { LPROC_LL_LISTXATTR,      LPROCFS_TYPE_REGS, "listxattr" },
         { LPROC_LL_REMOVEXATTR,    LPROCFS_TYPE_REGS, "removexattr" },
         { LPROC_LL_INODE_PERM,     LPROCFS_TYPE_REGS, "inode_permission" },

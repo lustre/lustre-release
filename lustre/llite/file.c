@@ -2915,7 +2915,8 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
 }
 
 ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
-                            struct lustre_handle *lockh, __u64 flags)
+			    struct lustre_handle *lockh, __u64 flags,
+			    ldlm_mode_t mode)
 {
         ldlm_policy_data_t policy = { .l_inodebits = {bits}};
         struct lu_fid *fid;
@@ -2925,10 +2926,10 @@ ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
         fid = &ll_i2info(inode)->lli_fid;
         CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
-        rc = md_lock_match(ll_i2mdexp(inode), LDLM_FL_BLOCK_GRANTED|flags,
-			   fid, LDLM_IBITS, &policy,
-                           LCK_CR|LCK_CW|LCK_PR|LCK_PW, lockh);
-        RETURN(rc);
+	rc = md_lock_match(ll_i2mdexp(inode), LDLM_FL_BLOCK_GRANTED|flags,
+			   fid, LDLM_IBITS, &policy, mode, lockh);
+
+	RETURN(rc);
 }
 
 static int ll_inode_revalidate_fini(struct inode *inode, int rc)
@@ -3664,7 +3665,8 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 
 	/* mostly layout lock is caching on the local side, so try to match
 	 * it before grabbing layout lock mutex. */
-	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0);
+	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
+			       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
 	if (mode != 0) { /* hit cached lock */
 		rc = ll_layout_lock_set(&lockh, mode, inode, gen, false);
 		if (rc == 0)
@@ -3679,7 +3681,8 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 
 again:
 	/* try again. Maybe somebody else has done this. */
-	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0);
+	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
+			       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
 	if (mode != 0) { /* hit cached lock */
 		rc = ll_layout_lock_set(&lockh, mode, inode, gen, true);
 		if (rc == -EAGAIN)

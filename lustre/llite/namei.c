@@ -222,12 +222,16 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		 * for mdc - bug 24555 */
 		LASSERT(lock->l_ast_data == NULL);
 
-                /* Invalidate all dentries associated with this inode */
-                if (inode == NULL)
-                        break;
+		/* Invalidate all dentries associated with this inode */
+		if (inode == NULL)
+			break;
 
-                LASSERT(lock->l_flags & LDLM_FL_CANCELING);
-                /* For OPEN locks we differentiate between lock modes
+		LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+
+		if (bits & MDS_INODELOCK_XATTR)
+			ll_xattr_cache_destroy(inode);
+
+		/* For OPEN locks we differentiate between lock modes
 		 * LCK_CR, LCK_CW, LCK_PR - bug 22891 */
 		if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
 			    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM))

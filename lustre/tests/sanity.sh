@@ -11424,6 +11424,29 @@ test_233() {
 }
 run_test 233 "checking that OBF of the FS root succeeds"
 
+test_234() {
+	local p="$TMP/sanityN-$TESTNAME.parameters"
+	save_lustre_params client "llite.*.xattr_cache" > $p
+	lctl set_param llite.*.xattr_cache 1 ||
+		{ skip "xattr cache is not supported"; return 0; }
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+	touch $DIR/$tdir/$tfile || error "touch failed"
+	# OBD_FAIL_LLITE_XATTR_ENOMEM
+	$LCTL set_param fail_loc=0x1405
+	setfattr -n user.attr -v value $DIR/$tdir/$tfile &&
+		error "setfattr should have failed with ENOMEM"
+	# attr pre-2.4.44-7 had a bug with rc
+	getfattr -n user.attr $DIR/$tdir/$tfile &&
+		error "getfattr should have failed with ENOMEM"
+	$LCTL set_param fail_loc=0x0
+	rm -rf $DIR/$tdir
+
+	restore_lustre_params < $p
+	rm -f $p
+}
+run_test 234 "xattr cache should not crash on ENOMEM"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

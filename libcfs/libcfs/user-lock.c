@@ -242,6 +242,12 @@ void down_write(struct rw_semaphore *s)
 	(void)s;
 }
 
+void downgrade_write(struct rw_semaphore *s)
+{
+	LASSERT(s != NULL);
+	(void)s;
+}
+
 int down_write_trylock(struct rw_semaphore *s)
 {
 	LASSERT(s != NULL);

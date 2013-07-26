@@ -201,6 +201,7 @@ void init_rwsem(struct rw_semaphore *s);
 void down_read(struct rw_semaphore *s);
 int down_read_trylock(struct rw_semaphore *s);
 void down_write(struct rw_semaphore *s);
+void downgrade_write(struct rw_semaphore *s);
 int down_write_trylock(struct rw_semaphore *s);
 void up_read(struct rw_semaphore *s);
 void up_write(struct rw_semaphore *s);
