@@ -720,8 +720,13 @@ int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	ted = &req->rq_export->exp_target_data;
 
 	lw_client = exp_connect_flags(req->rq_export) & OBD_CONNECT_LIGHTWEIGHT;
+	if (ted->ted_lr_idx < 0 && !lw_client)
+		/* ofd connect may cause transaction before export has
+		 * last_rcvd slot */
+		RETURN(0);
 
 	tti->tti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+
 	spin_lock(&tgt->lut_translock);
 	if (th->th_result != 0) {
 		if (tti->tti_transno != 0) {
@@ -765,7 +770,7 @@ int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 		 * last_rcvd, we still want to maintain the in-memory
 		 * lsd_client_data structure in order to properly handle reply
 		 * reconstruction. */
-	} else if (ted->ted_lr_off <= 0) {
+	} else if (ted->ted_lr_off == 0) {
 		CERROR("%s: client idx %d has offset %lld\n",
 		       tgt_name(tgt), ted->ted_lr_idx, ted->ted_lr_off);
 		RETURN(-EINVAL);
@@ -839,3 +844,46 @@ srv_update:
 }
 EXPORT_SYMBOL(tgt_last_rcvd_update);
 
+/*
+ * last_rcvd update for echo client simulation.
+ * It updates last_rcvd client slot and version of object in
+ * simple way but with all locks to simulate all drawbacks
+ */
+int tgt_last_rcvd_update_echo(const struct lu_env *env, struct lu_target *tgt,
+			      struct dt_object *obj, struct thandle *th,
+			      struct obd_export *exp)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct tg_export_data	*ted = &exp->exp_target_data;
+	int			 rc = 0;
+
+	ENTRY;
+
+	tti->tti_transno = 0;
+
+	spin_lock(&tgt->lut_translock);
+	if (th->th_result == 0)
+		tti->tti_transno = ++tgt->lut_last_transno;
+	spin_unlock(&tgt->lut_translock);
+
+	/** VBR: set new versions */
+	if (th->th_result == 0 && obj != NULL)
+		dt_version_set(env, obj, tti->tti_transno, th);
+
+	/* if can't add callback, do sync write */
+	th->th_sync |= !!tgt_last_commit_cb_add(th, tgt, exp,
+						tti->tti_transno);
+
+	LASSERT(ted->ted_lr_off > 0);
+
+	mutex_lock(&ted->ted_lcd_lock);
+	LASSERT(ergo(tti->tti_transno == 0, th->th_result != 0));
+	ted->ted_lcd->lcd_last_transno = tti->tti_transno;
+	ted->ted_lcd->lcd_last_result = th->th_result;
+
+	tti->tti_off = ted->ted_lr_off;
+	rc = tgt_client_data_write(env, tgt, ted->ted_lcd, &tti->tti_off, th);
+	mutex_unlock(&ted->ted_lcd_lock);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_last_rcvd_update_echo);

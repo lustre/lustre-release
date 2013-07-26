@@ -79,18 +79,15 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	stats = exp->exp_nid_stats;
 	LASSERT(stats != NULL);
 
-	num_stats = NUM_OBD_STATS + LPROC_OFD_LAST;
+	num_stats = NUM_OBD_STATS + LPROC_OFD_STATS_LAST;
+
 	stats->nid_stats = lprocfs_alloc_stats(num_stats,
 					       LPROCFS_STATS_FLAG_NOPERCPU);
 	if (stats->nid_stats == NULL)
 		return -ENOMEM;
 
-	lprocfs_init_ops_stats(LPROC_OFD_LAST, stats->nid_stats);
-	lprocfs_counter_init(stats->nid_stats, LPROC_OFD_READ_BYTES,
-			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-	lprocfs_counter_init(stats->nid_stats, LPROC_OFD_WRITE_BYTES,
-			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-
+	lprocfs_init_ops_stats(LPROC_OFD_STATS_LAST, stats->nid_stats);
+	ofd_stats_counter_init(stats->nid_stats);
 	rc = lprocfs_register_stats(stats->nid_proc, "stats",
 				    stats->nid_stats);
 	if (rc)
@@ -255,13 +252,6 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 
 	ofd = ofd_dev(obd->obd_lu_dev);
 
-	rc = lu_env_refill((struct lu_env *)env);
-	if (rc != 0) {
-		CERROR("Failure to refill session: '%d'\n", rc);
-		RETURN(rc);
-	}
-
-	ofd_info_init(env, exp);
 	rc = ofd_parse_connect_data(env, exp, data, false);
 	if (rc == 0)
 		ofd_export_stats_init(ofd, exp, localdata);
@@ -290,14 +280,6 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 
 	exp = class_conn2export(&conn);
 	LASSERT(exp != NULL);
-
-	rc = lu_env_refill((struct lu_env *)env);
-	if (rc != 0) {
-		CERROR("Failure to refill session: '%d'\n", rc);
-		GOTO(out, rc);
-	}
-
-	ofd_info_init(env, exp);
 
 	rc = ofd_parse_connect_data(env, exp, data, true);
 	if (rc)
@@ -345,16 +327,17 @@ static int ofd_obd_disconnect(struct obd_export *exp)
 
 	ofd_grant_discard(exp);
 
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	if (rc)
-		RETURN(rc);
-
 	/* Do not erase record for recoverable client. */
 	if (exp->exp_obd->obd_replayable &&
-	    (!exp->exp_obd->obd_fail || exp->exp_failed))
-		tgt_client_del(&env, exp);
-	lu_env_fini(&env);
+	    (!exp->exp_obd->obd_fail || exp->exp_failed)) {
+		rc = lu_env_init(&env, LCT_DT_THREAD);
+		if (rc)
+			GOTO(out, rc);
 
+		tgt_client_del(&env, exp);
+		lu_env_fini(&env);
+	}
+out:
 	class_export_put(exp);
 	RETURN(rc);
 }
@@ -624,9 +607,6 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 			ofd_read_unlock(env, fo);
 			ofd_object_put(env, fo);
 		}
-	} else if (KEY_IS(KEY_SYNC_LOCK_CANCEL)) {
-		*((__u32 *) val) = ofd->ofd_sync_lock_cancel;
-		*vallen = sizeof(__u32);
 	} else if (KEY_IS(KEY_LAST_FID)) {
 		struct ofd_device	*ofd = ofd_exp(exp);
 		struct ofd_seq		*oseq;
@@ -749,8 +729,8 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 	return 0;
 }
 
-static int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
-		      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
+	       struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
         struct obd_device	*obd = class_exp2obd(exp);
 	struct ofd_device	*ofd = ofd_dev(exp->exp_obd->obd_lu_dev);
@@ -996,9 +976,8 @@ out_env:
 	return rc;
 }
 
-static int ofd_destroy_by_fid(const struct lu_env *env,
-			      struct ofd_device *ofd,
-			      const struct lu_fid *fid, int orphan)
+int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
+		       const struct lu_fid *fid, int orphan)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct lustre_handle	 lockh;
@@ -1121,9 +1100,8 @@ out:
 	RETURN(rc);
 }
 
-static int ofd_orphans_destroy(const struct lu_env *env,
-			       struct obd_export *exp, struct ofd_device *ofd,
-			       struct obdo *oa)
+int ofd_orphans_destroy(const struct lu_env *env, struct obd_export *exp,
+			struct ofd_device *ofd, struct obdo *oa)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	obd_id			 last;

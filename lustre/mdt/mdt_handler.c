@@ -4108,30 +4108,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	EXIT;
 }
 
-static int mdt_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
-{
-	struct mdt_device	*m = mdt_dev(obd->obd_lu_dev);
-	struct sptlrpc_rule_set	 tmp_rset;
-	int			 rc;
-
-	sptlrpc_rule_set_init(&tmp_rset);
-	rc = sptlrpc_conf_target_get_rules(obd, &tmp_rset, initial);
-	if (rc) {
-		CERROR("mdt %s: failed get sptlrpc rules: %d\n",
-		       mdt_obd_name(m), rc);
-		return rc;
-	}
-
-	sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
-
-	write_lock(&m->mdt_lut.lut_sptlrpc_lock);
-	sptlrpc_rule_set_free(&m->mdt_lut.lut_sptlrpc_rset);
-	m->mdt_lut.lut_sptlrpc_rset = tmp_rset;
-	write_unlock(&m->mdt_lut.lut_sptlrpc_lock);
-
-	return 0;
-}
-
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
@@ -4292,7 +4268,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if (rc)
 		GOTO(err_tgt, rc);
 
-        mdt_adapt_sptlrpc_conf(obd, 1);
+	tgt_adapt_sptlrpc_conf(&m->mdt_lut, 1);
 
         next = m->mdt_child;
         rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
@@ -4628,18 +4604,16 @@ static int mdt_obd_set_info_async(const struct lu_env *env,
                                   __u32 vallen, void *val,
                                   struct ptlrpc_request_set *set)
 {
-        struct obd_device     *obd = exp->exp_obd;
-        int                    rc;
-        ENTRY;
+	int rc;
 
-        LASSERT(obd);
+	ENTRY;
 
-        if (KEY_IS(KEY_SPTLRPC_CONF)) {
-                rc = mdt_adapt_sptlrpc_conf(obd, 0);
-                RETURN(rc);
-        }
+	if (KEY_IS(KEY_SPTLRPC_CONF)) {
+		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp), 0);
+		RETURN(rc);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /**

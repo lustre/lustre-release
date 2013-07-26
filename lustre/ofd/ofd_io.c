@@ -46,8 +46,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct ofd_device *ofd, struct lu_fid *fid,
 			   struct lu_attr *la, int niocount,
 			   struct niobuf_remote *rnb, int *nr_local,
-			   struct niobuf_local *lnb,
-			   struct obd_trans_info *oti)
+			   struct niobuf_local *lnb, char *jobid)
 {
 	struct ofd_object	*fo;
 	int			 i, j, rc, tot_bytes = 0;
@@ -88,10 +87,8 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	rc = dt_read_prep(env, ofd_object_child(fo), lnb, *nr_local);
 	if (unlikely(rc))
 		GOTO(buf_put, rc);
-	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
-			    LPROC_OFD_READ_BYTES, tot_bytes);
-	ofd_counter_incr(exp, LPROC_OFD_STATS_READ,
-			 oti->oti_jobid, tot_bytes);
+
+	ofd_counter_incr(exp, LPROC_OFD_STATS_READ, jobid, tot_bytes);
 	RETURN(0);
 
 buf_put:
@@ -107,8 +104,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct lu_attr *la, struct obdo *oa,
 			    int objcount, struct obd_ioobj *obj,
 			    struct niobuf_remote *rnb, int *nr_local,
-			    struct niobuf_local *lnb,
-			    struct obd_trans_info *oti)
+			    struct niobuf_local *lnb, char *jobid)
 {
 	struct ofd_object	*fo;
 	int			 i, j, k, rc = 0, tot_bytes = 0;
@@ -152,9 +148,6 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		GOTO(out, rc = -ENOENT);
 	}
 
-	/* Always sync if syncjournal parameter is set */
-	oti->oti_sync_write = ofd->ofd_syncjournal;
-
 	/* Process incoming grant info, set OBD_BRW_GRANTED flag and grant some
 	 * space back if possible */
 	ofd_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
@@ -173,8 +166,6 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			lnb[j+k].lnb_flags = rnb[i].rnb_flags;
 			if (!(rnb[i].rnb_flags & OBD_BRW_GRANTED))
 				lnb[j+k].lnb_rc = -ENOSPC;
-			if (!(rnb[i].rnb_flags & OBD_BRW_ASYNC))
-				oti->oti_sync_write = 1;
 			/* remote client can't break through quota */
 			if (exp_connect_rmtclient(exp))
 				lnb[j+k].lnb_flags &= ~OBD_BRW_NOQUOTA;
@@ -190,10 +181,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (unlikely(rc != 0))
 		GOTO(err, rc);
 
-	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
-			    LPROC_OFD_WRITE_BYTES, tot_bytes);
-	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE,
-			 oti->oti_jobid, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid, tot_bytes);
 	RETURN(0);
 err:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
@@ -208,14 +196,16 @@ out:
 	return rc;
 }
 
-int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
+int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
 	       struct niobuf_local *lnb, struct obd_trans_info *oti,
 	       struct lustre_capa *capa)
 {
+	struct tgt_session_info	*tsi = tgt_ses_info(env);
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
+	char			*jobid;
 	int			 rc = 0;
 
 	if (*nr_local > PTLRPC_MAX_BRW_PAGES) {
@@ -225,14 +215,22 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 		RETURN(-EPROTO);
 	}
 
-	rc = lu_env_refill((struct lu_env *)env);
-	LASSERT(rc == 0);
-	info = ofd_info_init(env, exp);
+	if (tgt_ses_req(tsi) == NULL) { /* echo client case */
+		LASSERT(oti != NULL);
+		lu_env_refill((struct lu_env *)env);
+		info = ofd_info_init(env, exp);
+		ofd_oti2info(info, oti);
+		jobid = oti->oti_jobid;
+	} else {
+		info = tsi2ofd_info(tsi);
+		jobid = tsi->tsi_jobid;
+	}
 
 	LASSERT(oa != NULL);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
 		struct ofd_seq		*oseq;
+
 		oseq = ofd_seq_load(env, ofd, ostid_seq(&oa->o_oi));
 		if (IS_ERR(oseq)) {
 			CERROR("%s: Can not find seq for "DOSTID
@@ -265,7 +263,7 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 			la_from_obdo(&info->fti_attr, oa, OBD_MD_FLGETATTR);
 			rc = ofd_preprw_write(env, exp, ofd, &info->fti_fid,
 					      &info->fti_attr, oa, objcount,
-					      obj, rnb, nr_local, lnb, oti);
+					      obj, rnb, nr_local, lnb, jobid);
 		}
 	} else if (cmd == OBD_BRW_READ) {
 		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
@@ -274,7 +272,7 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 			ofd_grant_prepare_read(env, exp, oa);
 			rc = ofd_preprw_read(env, exp, ofd, &info->fti_fid,
 					     &info->fti_attr, obj->ioo_bufcnt,
-					     rnb, nr_local, lnb, oti);
+					     rnb, nr_local, lnb, jobid);
 			obdo_from_la(oa, &info->fti_attr, LA_ATIME);
 		}
 	} else {
@@ -401,8 +399,7 @@ static int
 ofd_commitrw_write(const struct lu_env *env, struct ofd_device *ofd,
 		   struct lu_fid *fid, struct lu_attr *la,
 		   struct filter_fid *ff, int objcount,
-		   int niocount, struct niobuf_local *lnb,
-		   struct obd_trans_info *oti, int old_rc)
+		   int niocount, struct niobuf_local *lnb, int old_rc)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_object	*fo;
@@ -410,6 +407,7 @@ ofd_commitrw_write(const struct lu_env *env, struct ofd_device *ofd,
 	struct thandle		*th;
 	int			 rc = 0;
 	int			 retries = 0;
+	int			 i;
 
 	ENTRY;
 
@@ -442,7 +440,15 @@ retry:
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	th->th_sync |= oti->oti_sync_write;
+	th->th_sync |= ofd->ofd_syncjournal;
+	if (th->th_sync == 0) {
+		for (i = 0; i < niocount; i++) {
+			if (!(lnb[i].lnb_flags & OBD_BRW_ASYNC)) {
+				th->th_sync = 1;
+				break;
+			}
+		}
+	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
 		GOTO(out_stop, rc = -EINPROGRESS);
@@ -504,15 +510,12 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct niobuf_local *lnb, struct obd_trans_info *oti,
 		 int old_rc)
 {
-	struct ofd_thread_info	*info;
+	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_mod_data	*fmd;
 	__u64			 valid;
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct filter_fid	*ff = NULL;
 	int			 rc = 0;
-
-	info = ofd_info(env);
-	ofd_oti2info(info, oti);
 
 	LASSERT(npages > 0);
 
@@ -542,7 +545,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 		rc = ofd_commitrw_write(env, ofd, &info->fti_fid,
 					&info->fti_attr, ff, objcount, npages,
-					lnb, oti, old_rc);
+					lnb, old_rc);
 		if (rc == 0)
 			obdo_from_la(oa, &info->fti_attr,
 				     OFD_VALID_FLAGS | LA_GID | LA_UID);
@@ -588,7 +591,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			}
 		}
 		rc = ofd_commitrw_read(env, ofd, &info->fti_fid, objcount,
-					  npages, lnb);
+				       npages, lnb);
 		if (old_rc)
 			rc = old_rc;
 	} else {
@@ -596,6 +599,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		rc = -EPROTO;
 	}
 
-	ofd_info2oti(info, oti);
+	if (oti != NULL)
+		ofd_info2oti(info, oti);
 	RETURN(rc);
 }

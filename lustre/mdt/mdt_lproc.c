@@ -508,8 +508,10 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
 		return -EINVAL;
 	}
 
+	spin_lock(&mdt->mdt_lut.lut_flags_lock);
 	mdt->mdt_lut.lut_oss_capa = !!(val & 0x1);
 	mdt->mdt_lut.lut_mds_capa = !!(val & 0x2);
+	spin_unlock(&mdt->mdt_lut.lut_flags_lock);
 	mdt->mdt_capa_conf = 1;
 	LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
 		      mdt_obd_name(mdt),

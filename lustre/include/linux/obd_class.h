@@ -55,7 +55,7 @@
 /* obdo.c */
 #ifdef __KERNEL__
 void obdo_from_la(struct obdo *dst, struct lu_attr *la, __u64 valid);
-void la_from_obdo(struct lu_attr *la, struct obdo *dst, obd_flag valid);
+void la_from_obdo(struct lu_attr *la, const struct obdo *dst, obd_flag valid);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 #define ll_inode_flags(inode)         (inode->i_flags)

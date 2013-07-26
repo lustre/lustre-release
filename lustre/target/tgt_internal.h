@@ -195,4 +195,10 @@ int out_handle(struct tgt_session_info *tsi);
 #define out_tx_destroy(info, obj, th, reply, idx) \
 	__out_tx_destroy(info, obj, th, reply, idx, __FILE__, __LINE__)
 
+extern struct page *tgt_page_to_corrupt;
+
+struct tgt_thread_big_cache {
+	struct niobuf_local	local[PTLRPC_MAX_BRW_PAGES];
+};
+
 #endif /* _TG_INTERNAL_H */

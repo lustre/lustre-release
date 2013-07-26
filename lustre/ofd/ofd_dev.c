@@ -46,6 +46,9 @@
 #include <lustre_param.h>
 #include <lustre_fid.h>
 #include <lustre_lfsck.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
+#include <lustre_quota.h>
 
 #include "ofd_internal.h"
 
@@ -154,7 +157,6 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	ENTRY;
 
 	lu_site_purge(env, top->ld_site, ~0);
-
 	/* process cleanup, pass mdt obd name to get obd umount flags */
 	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
 	if (obd->obd_force)
@@ -173,6 +175,10 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	lustre_cfg_free(lcfg);
 
 	lu_site_purge(env, top->ld_site, ~0);
+	if (!cfs_hash_is_empty(top->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, top->ld_site, &msgdata, lu_cdebug_printer);
+	}
 
 	LASSERT(m->ofd_osd_exp);
 	obd_disconnect(m->ofd_osd_exp);
@@ -376,7 +382,7 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		rc = 0;
 	}
 
-	target_recovery_init(&ofd->ofd_lut, ost_handle);
+	target_recovery_init(&ofd->ofd_lut, tgt_request_handle);
 	LASSERT(obd->obd_no_conn);
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 0;
@@ -435,18 +441,12 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		RETURN(rc);
 	}
 
-	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_LAST);
+	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
 	if (rc) {
 		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
 		       obd->obd_name, rc);
 		GOTO(obd_cleanup, rc);
 	}
-
-	/* Init OFD private stats here */
-	lprocfs_counter_init(obd->obd_stats, LPROC_OFD_READ_BYTES,
-			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-	lprocfs_counter_init(obd->obd_stats, LPROC_OFD_WRITE_BYTES,
-			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
 
 	obd->obd_uses_nid_stats = 1;
 
@@ -468,6 +468,8 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		       obd->obd_name, rc);
 		GOTO(obd_cleanup, rc);
 	}
+
+	ofd_stats_counter_init(obd->obd_stats);
 
 	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
 				    ofd_stats_counter_init);
@@ -612,11 +614,1014 @@ out_free:
 	return rc;
 }
 
+int ofd_set_info_hdl(struct tgt_session_info *tsi)
+{
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct ost_body		*body = NULL, *repbody;
+	void			*key, *val = NULL;
+	int			 keylen, vallen, rc = 0;
+	bool			 is_grant_shrink;
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+
+	ENTRY;
+
+	key = req_capsule_client_get(tsi->tsi_pill, &RMF_SETINFO_KEY);
+	if (key == NULL) {
+		DEBUG_REQ(D_HA, req, "no set_info key");
+		RETURN(err_serious(-EFAULT));
+	}
+	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_KEY,
+				      RCL_CLIENT);
+
+	val = req_capsule_client_get(tsi->tsi_pill, &RMF_SETINFO_VAL);
+	if (val == NULL) {
+		DEBUG_REQ(D_HA, req, "no set_info val");
+		RETURN(err_serious(-EFAULT));
+	}
+	vallen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_VAL,
+				      RCL_CLIENT);
+
+	is_grant_shrink = KEY_IS(KEY_GRANT_SHRINK);
+	if (is_grant_shrink)
+		/* In this case the value is actually an RMF_OST_BODY, so we
+		 * transmutate the type of this PTLRPC */
+		req_capsule_extend(tsi->tsi_pill, &RQF_OST_SET_GRANT_INFO);
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc < 0)
+		RETURN(rc);
+
+	if (is_grant_shrink) {
+		body = req_capsule_client_get(tsi->tsi_pill, &RMF_OST_BODY);
+
+		repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+		*repbody = *body;
+
+		/** handle grant shrink, similar to a read request */
+		ofd_grant_prepare_read(tsi->tsi_env, tsi->tsi_exp,
+				       &repbody->oa);
+	} else if (KEY_IS(KEY_EVICT_BY_NID)) {
+		if (vallen > 0)
+			obd_export_evict_by_nid(tsi->tsi_exp->exp_obd, val);
+		rc = 0;
+	} else if (KEY_IS(KEY_CAPA_KEY)) {
+		rc = ofd_update_capa_key(ofd, val);
+	} else if (KEY_IS(KEY_SPTLRPC_CONF)) {
+		rc = tgt_adapt_sptlrpc_conf(tsi->tsi_tgt, 0);
+	} else {
+		CERROR("%s: Unsupported key %s\n",
+		       tgt_name(tsi->tsi_tgt), (char *)key);
+		rc = -EOPNOTSUPP;
+	}
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SET_INFO,
+			 tsi->tsi_jobid, 1);
+
+	RETURN(rc);
+}
+
+static int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
+			  struct lu_fid *fid, struct ll_user_fiemap *fiemap)
+{
+	struct ofd_object	*fo;
+	int			 rc;
+
+	fo = ofd_object_find(env, ofd, fid);
+	if (IS_ERR(fo)) {
+		CERROR("%s: error finding object "DFID"\n",
+		       ofd_name(ofd), PFID(fid));
+		return PTR_ERR(fo);
+	}
+
+	ofd_read_lock(env, fo);
+	if (ofd_object_exists(fo))
+		rc = dt_fiemap_get(env, ofd_object_child(fo), fiemap);
+	else
+		rc = -ENOENT;
+	ofd_read_unlock(env, fo);
+	ofd_object_put(env, fo);
+	return rc;
+}
+
+struct locked_region {
+	cfs_list_t		list;
+	struct lustre_handle	lh;
+};
+
+static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+		       unsigned long long begin, unsigned long long end,
+		       cfs_list_t *locked)
+{
+	struct locked_region	*region = NULL;
+	__u64			 flags = 0;
+	int			 rc;
+
+	LASSERT(begin <= end);
+	OBD_ALLOC_PTR(region);
+	if (region == NULL)
+		return -ENOMEM;
+
+	rc = tgt_extent_lock(ns, res_id, begin, end, &region->lh,
+			     LCK_PR, &flags);
+	if (rc != 0)
+		return rc;
+
+	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n", begin, end,
+	       &region->lh);
+	cfs_list_add(&region->list, locked);
+
+	return 0;
+}
+
+static int lock_zero_regions(struct ldlm_namespace *ns,
+			     struct ldlm_res_id *res_id,
+			     struct ll_user_fiemap *fiemap,
+			     cfs_list_t *locked)
+{
+	__u64 begin = fiemap->fm_start;
+	unsigned int i;
+	int rc = 0;
+	struct ll_fiemap_extent *fiemap_start = fiemap->fm_extents;
+
+	ENTRY;
+
+	CDEBUG(D_OTHER, "extents count %u\n", fiemap->fm_mapped_extents);
+	for (i = 0; i < fiemap->fm_mapped_extents; i++) {
+		if (fiemap_start[i].fe_logical > begin) {
+			CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
+			       begin, fiemap_start[i].fe_logical);
+			rc = lock_region(ns, res_id, begin,
+					 fiemap_start[i].fe_logical, locked);
+			if (rc)
+				RETURN(rc);
+		}
+
+		begin = fiemap_start[i].fe_logical + fiemap_start[i].fe_length;
+	}
+
+	if (begin < (fiemap->fm_start + fiemap->fm_length)) {
+		CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
+		       begin, fiemap->fm_start + fiemap->fm_length);
+		rc = lock_region(ns, res_id, begin,
+				 fiemap->fm_start + fiemap->fm_length, locked);
+	}
+
+	RETURN(rc);
+}
+
+static void unlock_zero_regions(struct ldlm_namespace *ns, cfs_list_t *locked)
+{
+	struct locked_region *entry, *temp;
+
+	cfs_list_for_each_entry_safe(entry, temp, locked, list) {
+		CDEBUG(D_OTHER, "ost unlock lh=%p\n", &entry->lh);
+		tgt_extent_unlock(&entry->lh, LCK_PR);
+		cfs_list_del(&entry->list);
+		OBD_FREE_PTR(entry);
+	}
+}
+
+int ofd_get_info_hdl(struct tgt_session_info *tsi)
+{
+	struct obd_export		*exp = tsi->tsi_exp;
+	struct ofd_device		*ofd = ofd_exp(exp);
+	struct ofd_thread_info		*fti = tsi2ofd_info(tsi);
+	void				*key;
+	int				 keylen;
+	int				 replylen, rc = 0;
+
+	ENTRY;
+
+	/* this common part for get_info rpc */
+	key = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_KEY);
+	if (key == NULL) {
+		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no get_info key");
+		RETURN(err_serious(-EPROTO));
+	}
+	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_GETINFO_KEY,
+				      RCL_CLIENT);
+
+	if (KEY_IS(KEY_LAST_ID)) {
+		obd_id		*last_id;
+		struct ofd_seq	*oseq;
+
+		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_LAST_ID);
+		rc = req_capsule_server_pack(tsi->tsi_pill);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		last_id = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_ID);
+
+		oseq = ofd_seq_load(tsi->tsi_env, ofd,
+				    (obd_seq)exp->exp_filter_data.fed_group);
+		if (IS_ERR(oseq))
+			rc = -EFAULT;
+		else
+			*last_id = ofd_seq_last_oid(oseq);
+		ofd_seq_put(tsi->tsi_env, oseq);
+	} else if (KEY_IS(KEY_FIEMAP)) {
+		struct ll_fiemap_info_key	*fm_key;
+		struct ll_user_fiemap		*fiemap;
+		struct lu_fid			*fid = &fti->fti_fid;
+
+		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_FIEMAP);
+
+		fm_key = req_capsule_client_get(tsi->tsi_pill, &RMF_FIEMAP_KEY);
+		rc = tgt_validate_obdo(tsi, &fm_key->oa);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		replylen = fiemap_count_to_size(fm_key->fiemap.fm_extent_count);
+		req_capsule_set_size(tsi->tsi_pill, &RMF_FIEMAP_VAL,
+				     RCL_SERVER, replylen);
+
+		rc = req_capsule_server_pack(tsi->tsi_pill);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		fiemap = req_capsule_server_get(tsi->tsi_pill, &RMF_FIEMAP_VAL);
+		if (fiemap == NULL)
+			RETURN(-ENOMEM);
+
+		rc = ostid_to_fid(fid, &fm_key->oa.o_oi, 0);
+		if (rc != 0)
+			RETURN(rc);
+
+		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
+
+		*fiemap = fm_key->fiemap;
+		rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid, fiemap);
+
+		/* LU-3219: Lock the sparse areas to make sure dirty
+		 * flushed back from client, then call fiemap again. */
+		if (fm_key->oa.o_valid & OBD_MD_FLFLAGS &&
+		    fm_key->oa.o_flags & OBD_FL_SRVLOCK) {
+			cfs_list_t locked = CFS_LIST_HEAD_INIT(locked);
+
+			ost_fid_build_resid(fid, &fti->fti_resid);
+			rc = lock_zero_regions(ofd->ofd_namespace,
+					       &fti->fti_resid, fiemap,
+					       &locked);
+			if (rc == 0 && !cfs_list_empty(&locked)) {
+				rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid,
+						    fiemap);
+				unlock_zero_regions(ofd->ofd_namespace,
+						    &locked);
+			}
+		}
+	} else if (KEY_IS(KEY_LAST_FID)) {
+		struct ofd_device	*ofd = ofd_exp(exp);
+		struct ofd_seq		*oseq;
+		struct lu_fid		*fid;
+		int			 rc;
+
+		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_LAST_FID);
+		rc = req_capsule_server_pack(tsi->tsi_pill);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		fid = req_capsule_client_get(tsi->tsi_pill, &RMF_FID);
+		if (fid == NULL)
+			RETURN(err_serious(-EPROTO));
+
+		fid_le_to_cpu(&fti->fti_ostid.oi_fid, fid);
+
+		fid = req_capsule_server_get(tsi->tsi_pill, &RMF_FID);
+		if (fid == NULL)
+			RETURN(-ENOMEM);
+
+		oseq = ofd_seq_load(tsi->tsi_env, ofd,
+				    ostid_seq(&fti->fti_ostid));
+		if (IS_ERR(oseq))
+			RETURN(PTR_ERR(oseq));
+
+		rc = ostid_to_fid(fid, &oseq->os_oi,
+				  ofd->ofd_lut.lut_lsd.lsd_osd_index);
+		if (rc != 0)
+			GOTO(out_put, rc);
+
+		CDEBUG(D_HA, "%s: LAST FID is "DFID"\n", ofd_name(ofd),
+		       PFID(fid));
+out_put:
+		ofd_seq_put(tsi->tsi_env, oseq);
+	} else {
+		CERROR("%s: not supported key %s\n", tgt_name(tsi->tsi_tgt),
+		       (char *)key);
+		rc = -EOPNOTSUPP;
+	}
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_GET_INFO,
+			 tsi->tsi_jobid, 1);
+
+	RETURN(rc);
+}
+
+static int ofd_getattr_hdl(struct tgt_session_info *tsi)
+{
+	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+	struct ost_body		*repbody;
+	struct lustre_handle	 lh = { 0 };
+	struct ofd_object	*fo;
+	__u64			 flags = 0;
+	ldlm_mode_t		 lock_mode = LCK_PR;
+	bool			 srvlock;
+	int			 rc;
+
+	ENTRY;
+
+	LASSERT(tsi->tsi_ost_body != NULL);
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	repbody->oa.o_oi = tsi->tsi_ost_body->oa.o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	srvlock = tsi->tsi_ost_body->oa.o_valid & OBD_MD_FLFLAGS &&
+		  tsi->tsi_ost_body->oa.o_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock) {
+		if (unlikely(tsi->tsi_ost_body->oa.o_flags & OBD_FL_FLUSH))
+			lock_mode = LCK_PW;
+
+		rc = tgt_extent_lock(tsi->tsi_tgt->lut_obd->obd_namespace,
+				     &tsi->tsi_resid, 0, OBD_OBJECT_EOF, &lh,
+				     lock_mode, &flags);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	fo = ofd_object_find_exists(tsi->tsi_env, ofd, &tsi->tsi_fid);
+	if (IS_ERR(fo))
+		GOTO(out, rc = PTR_ERR(fo));
+
+	rc = ofd_attr_get(tsi->tsi_env, fo, &fti->fti_attr);
+	if (rc == 0) {
+		__u64	 curr_version;
+
+		obdo_from_la(&repbody->oa, &fti->fti_attr,
+			     OFD_VALID_FLAGS | LA_UID | LA_GID);
+		tgt_drop_id(tsi->tsi_exp, &repbody->oa);
+
+		/* Store object version in reply */
+		curr_version = dt_version_get(tsi->tsi_env,
+					      ofd_object_child(fo));
+		if ((__s64)curr_version != -EOPNOTSUPP) {
+			repbody->oa.o_valid |= OBD_MD_FLDATAVERSION;
+			repbody->oa.o_data_version = curr_version;
+		}
+	}
+
+	ofd_object_put(tsi->tsi_env, fo);
+out:
+	if (srvlock)
+		tgt_extent_unlock(&lh, lock_mode);
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_GETATTR,
+			 tsi->tsi_jobid, 1);
+
+	repbody->oa.o_valid |= OBD_MD_FLFLAGS;
+	repbody->oa.o_flags = OBD_FL_FLUSH;
+
+	RETURN(rc);
+}
+
+static int ofd_setattr_hdl(struct tgt_session_info *tsi)
+{
+	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+	struct ost_body		*body = tsi->tsi_ost_body;
+	struct ost_body		*repbody;
+	struct ldlm_resource	*res;
+	struct ofd_object	*fo;
+	struct filter_fid	*ff = NULL;
+	int			 rc = 0;
+
+	ENTRY;
+
+	LASSERT(body != NULL);
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	repbody->oa.o_oi = body->oa.o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	/* This would be very bad - accidentally truncating a file when
+	 * changing the time or similar - bug 12203. */
+	if (body->oa.o_valid & OBD_MD_FLSIZE &&
+	    body->oa.o_size != OBD_OBJECT_EOF) {
+		static char mdsinum[48];
+
+		if (body->oa.o_valid & OBD_MD_FLFID)
+			snprintf(mdsinum, sizeof(mdsinum) - 1,
+				 "of parent "DFID, body->oa.o_parent_seq,
+				 body->oa.o_parent_oid, 0);
+		else
+			mdsinum[0] = '\0';
+
+		CERROR("%s: setattr from %s is trying to truncate object "DFID
+		       " %s\n", ofd_name(ofd), obd_export_nid2str(tsi->tsi_exp),
+		       PFID(&tsi->tsi_fid), mdsinum);
+		RETURN(-EPERM);
+	}
+
+	fo = ofd_object_find_exists(tsi->tsi_env, ofd, &tsi->tsi_fid);
+	if (IS_ERR(fo))
+		GOTO(out, rc = PTR_ERR(fo));
+
+	la_from_obdo(&fti->fti_attr, &body->oa, body->oa.o_valid);
+	fti->fti_attr.la_valid &= ~LA_TYPE;
+
+	if (body->oa.o_valid & OBD_MD_FLFID) {
+		ff = &fti->fti_mds_fid;
+		ofd_prepare_fidea(ff, &body->oa);
+	}
+
+	/* setting objects attributes (including owner/group) */
+	rc = ofd_attr_set(tsi->tsi_env, fo, &fti->fti_attr, ff);
+	if (rc != 0)
+		GOTO(out_put, rc);
+
+	obdo_from_la(&repbody->oa, &fti->fti_attr,
+		     OFD_VALID_FLAGS | LA_UID | LA_GID);
+	tgt_drop_id(tsi->tsi_exp, &repbody->oa);
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SETATTR,
+			 tsi->tsi_jobid, 1);
+	EXIT;
+out_put:
+	ofd_object_put(tsi->tsi_env, fo);
+out:
+	if (rc == 0) {
+		/* we do not call this before to avoid lu_object_find() in
+		 *  ->lvbo_update() holding another reference on the object.
+		 * otherwise concurrent destroy can make the object unavailable
+		 * for 2nd lu_object_find() waiting for the first reference
+		 * to go... deadlock! */
+		res = ldlm_resource_get(ofd->ofd_namespace, NULL,
+					&tsi->tsi_resid, LDLM_EXTENT, 0);
+		if (res != NULL) {
+			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_resource_putref(res);
+		}
+	}
+	return rc;
+}
+
+static int ofd_create_hdl(struct tgt_session_info *tsi)
+{
+	struct ost_body		*repbody;
+	const struct obdo	*oa = &tsi->tsi_ost_body->oa;
+	struct obdo		*rep_oa;
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+	obd_seq			 seq = ostid_seq(&oa->o_oi);
+	obd_id			 oid = ostid_id(&oa->o_oi);
+	struct ofd_seq		*oseq;
+	int			 rc = 0, diff;
+	int			 sync_trans = 0;
+
+	ENTRY;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
+		RETURN(-EROFS);
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	rep_oa = &repbody->oa;
+	rep_oa->o_oi = oa->o_oi;
+
+	LASSERT(seq >= FID_SEQ_OST_MDT0);
+	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+	CDEBUG(D_INFO, "ofd_create("DOSTID")\n", POSTID(&oa->o_oi));
+
+	oseq = ofd_seq_load(tsi->tsi_env, ofd, seq);
+	if (IS_ERR(oseq)) {
+		CERROR("%s: Can't find FID Sequence "LPX64": rc = %ld\n",
+		       ofd_name(ofd), seq, PTR_ERR(oseq));
+		RETURN(-EINVAL);
+	}
+
+	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+	    (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+		if (!ofd_obd(ofd)->obd_recovering ||
+		    oid > ofd_seq_last_oid(oseq)) {
+			CERROR("%s: recreate objid "DOSTID" > last id "LPU64
+			       "\n", ofd_name(ofd), POSTID(&oa->o_oi),
+			       ofd_seq_last_oid(oseq));
+			GOTO(out_nolock, rc = -EINVAL);
+		}
+		/* Do nothing here, we re-create objects during recovery
+		 * upon write replay, see ofd_preprw_write() */
+		GOTO(out_nolock, rc = 0);
+	}
+	/* former ofd_handle_precreate */
+	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+	    (oa->o_flags & OBD_FL_DELORPHAN)) {
+		/* destroy orphans */
+		if (lustre_msg_get_conn_cnt(tgt_ses_req(tsi)->rq_reqmsg) <
+		    tsi->tsi_exp->exp_conn_cnt) {
+			CERROR("%s: dropping old orphan cleanup request\n",
+			       ofd_name(ofd));
+			GOTO(out_nolock, rc = 0);
+		}
+		/* This causes inflight precreates to abort and drop lock */
+		oseq->os_destroys_in_progress = 1;
+		mutex_lock(&oseq->os_create_lock);
+		if (!oseq->os_destroys_in_progress) {
+			CERROR("%s:["LPU64"] destroys_in_progress already"
+			       " cleared\n", ofd_name(ofd), seq);
+			ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
+			GOTO(out, rc = 0);
+		}
+		diff = oid - ofd_seq_last_oid(oseq);
+		CDEBUG(D_HA, "ofd_last_id() = "LPU64" -> diff = %d\n",
+			ofd_seq_last_oid(oseq), diff);
+		if (-diff > OST_MAX_PRECREATE) {
+			/* FIXME: should reset precreate_next_id on MDS */
+			rc = 0;
+		} else if (diff < 0) {
+			rc = ofd_orphans_destroy(tsi->tsi_env, tsi->tsi_exp,
+						 ofd, rep_oa);
+			oseq->os_destroys_in_progress = 0;
+		} else {
+			/* XXX: Used by MDS for the first time! */
+			oseq->os_destroys_in_progress = 0;
+		}
+	} else {
+		mutex_lock(&oseq->os_create_lock);
+		if (lustre_msg_get_conn_cnt(tgt_ses_req(tsi)->rq_reqmsg) <
+		    tsi->tsi_exp->exp_conn_cnt) {
+			CERROR("%s: dropping old precreate request\n",
+			       ofd_name(ofd));
+			GOTO(out, rc = 0);
+		}
+		/* only precreate if seq is 0, IDIF or normal and also o_id
+		 * must be specfied */
+		if ((!fid_seq_is_mdt(seq) && !fid_seq_is_norm(seq) &&
+		     !fid_seq_is_idif(seq)) || oid == 0) {
+			diff = 1; /* shouldn't we create this right now? */
+		} else {
+			diff = oid - ofd_seq_last_oid(oseq);
+			/* Do sync create if the seq is about to used up */
+			if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq)) {
+				if (unlikely(oid >= IDIF_MAX_OID - 1))
+					sync_trans = 1;
+			} else if (fid_seq_is_norm(seq)) {
+				if (unlikely(oid >=
+					     LUSTRE_DATA_SEQ_MAX_WIDTH - 1))
+					sync_trans = 1;
+			} else {
+				CERROR("%s : invalid o_seq "DOSTID"\n",
+				       ofd_name(ofd), POSTID(&oa->o_oi));
+				GOTO(out, rc = -EINVAL);
+			}
+		}
+	}
+	if (diff > 0) {
+		cfs_time_t	 enough_time = cfs_time_shift(DISK_TIMEOUT);
+		obd_id		 next_id;
+		int		 created = 0;
+		int		 count;
+
+		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
+			/* don't enforce grant during orphan recovery */
+			rc = ofd_grant_create(tsi->tsi_env,
+					      ofd_obd(ofd)->obd_self_export,
+					      &diff);
+			if (rc) {
+				CDEBUG(D_HA, "%s: failed to acquire grant "
+				       "space for precreate (%d): rc = %d\n",
+				       ofd_name(ofd), diff, rc);
+				diff = 0;
+			}
+		}
+
+		/* This can happen if a new OST is formatted and installed
+		 * in place of an old one at the same index.  Instead of
+		 * precreating potentially millions of deleted old objects
+		 * (possibly filling the OST), only precreate the last batch.
+		 * LFSCK will eventually clean up any orphans. LU-14 */
+		if (diff > 5 * OST_MAX_PRECREATE) {
+			diff = OST_MAX_PRECREATE / 2;
+			LCONSOLE_WARN("%s: precreate FID "DOSTID" is over %u "
+				      "larger than the LAST_ID "DOSTID", only "
+				      "precreating the last %u objects.\n",
+				      ofd_name(ofd), POSTID(&oa->o_oi),
+				      5 * OST_MAX_PRECREATE,
+				      POSTID(&oseq->os_oi), diff);
+			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
+		}
+
+		while (diff > 0) {
+			next_id = ofd_seq_last_oid(oseq) + 1;
+			count = ofd_precreate_batch(ofd, diff);
+
+			CDEBUG(D_HA, "%s: reserve %d objects in group "LPX64
+			       " at "LPU64"\n", ofd_name(ofd),
+			       count, seq, next_id);
+
+			if (cfs_time_after(jiffies, enough_time)) {
+				LCONSOLE_WARN("%s: Slow creates, %d/%d objects"
+					      " created at a rate of %d/s\n",
+					      ofd_name(ofd), created,
+					      diff + created,
+					      created / DISK_TIMEOUT);
+				break;
+			}
+
+			rc = ofd_precreate_objects(tsi->tsi_env, ofd, next_id,
+						   oseq, count, sync_trans);
+			if (rc > 0) {
+				created += rc;
+				diff -= rc;
+			} else if (rc < 0) {
+				break;
+			}
+		}
+		if (created > 0)
+			/* some objects got created, we can return
+			 * them, even if last creation failed */
+			rc = 0;
+		else
+			CERROR("%s: unable to precreate: rc = %d\n",
+			       ofd_name(ofd), rc);
+
+		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+		    !(oa->o_flags & OBD_FL_DELORPHAN))
+			ofd_grant_commit(tsi->tsi_env,
+					 ofd_obd(ofd)->obd_self_export, rc);
+
+		ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
+	}
+	EXIT;
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_CREATE,
+			 tsi->tsi_jobid, 1);
+out:
+	mutex_unlock(&oseq->os_create_lock);
+out_nolock:
+	if (rc == 0)
+		rep_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	ofd_seq_put(tsi->tsi_env, oseq);
+	return rc;
+}
+
+static int ofd_destroy_hdl(struct tgt_session_info *tsi)
+{
+	const struct ost_body	*body = tsi->tsi_ost_body;
+	struct ost_body		*repbody;
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
+	obd_count		 count;
+	int			 rc = 0;
+
+	ENTRY;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
+		RETURN(-EROFS);
+
+	/* This is old case for clients before Lustre 2.4 */
+	/* If there's a DLM request, cancel the locks mentioned in it */
+	if (req_capsule_field_present(tsi->tsi_pill, &RMF_DLM_REQ,
+				      RCL_CLIENT)) {
+		struct ldlm_request *dlm;
+
+		dlm = req_capsule_client_get(tsi->tsi_pill, &RMF_DLM_REQ);
+		if (dlm == NULL)
+			RETURN(-EFAULT);
+		ldlm_request_cancel(tgt_ses_req(tsi), dlm, 0);
+	}
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	repbody->oa.o_oi = body->oa.o_oi;
+
+	/* check that o_misc makes sense */
+	if (body->oa.o_valid & OBD_MD_FLOBJCOUNT)
+		count = body->oa.o_misc;
+	else
+		count = 1; /* default case - single destroy */
+
+	/**
+	 * There can be sequence of objects to destroy. Therefore this request
+	 * may have multiple transaction involved in. It is OK, we need only
+	 * the highest used transno to be reported back in reply but not for
+	 * replays, they must report their transno
+	 */
+	if (fti->fti_transno == 0) /* not replay */
+		fti->fti_mult_trans = 1;
+
+	CDEBUG(D_HA, "%s: Destroy object "DOSTID" count %d\n", ofd_name(ofd),
+	       POSTID(&body->oa.o_oi), count);
+	while (count > 0) {
+		int lrc;
+
+		lrc = ostid_to_fid(&fti->fti_fid, &repbody->oa.o_oi, 0);
+		if (lrc != 0) {
+			if (rc == 0)
+				rc = lrc;
+			GOTO(out, rc);
+		}
+		lrc = ofd_destroy_by_fid(tsi->tsi_env, ofd, &fti->fti_fid, 0);
+		if (lrc == -ENOENT) {
+			CDEBUG(D_INODE,
+			       "%s: destroying non-existent object "DFID"\n",
+			       ofd_name(ofd), PFID(&fti->fti_fid));
+			/* rewrite rc with -ENOENT only if it is 0 */
+			if (rc == 0)
+				rc = lrc;
+		} else if (lrc != 0) {
+			CERROR("%s: error destroying object "DFID": %d\n",
+			       ofd_name(ofd), PFID(&fti->fti_fid),
+			       rc);
+			rc = lrc;
+		}
+		count--;
+		ostid_inc_id(&repbody->oa.o_oi);
+	}
+
+	/* if we have transaction then there were some deletions, we don't
+	 * need to return ENOENT in that case because it will not wait
+	 * for commit of these deletions. The ENOENT must be returned only
+	 * if there were no transations.
+	 */
+	if (rc == -ENOENT) {
+		if (fti->fti_transno != 0)
+			rc = 0;
+	} else if (rc != 0) {
+		/*
+		 * If we have at least one transaction then llog record
+		 * on server will be removed upon commit, so for rc != 0
+		 * we return no transno and llog record will be reprocessed.
+		 */
+		fti->fti_transno = 0;
+	}
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_DESTROY,
+			 tsi->tsi_jobid, 1);
+out:
+	RETURN(rc);
+}
+
+static int ofd_statfs_hdl(struct tgt_session_info *tsi)
+{
+	struct obd_statfs	*osfs;
+	int			 rc;
+
+	ENTRY;
+
+	osfs = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_STATFS);
+
+	rc = ofd_statfs(tsi->tsi_env, tsi->tsi_exp, osfs,
+			cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
+	if (rc != 0)
+		CERROR("%s: statfs failed: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), rc);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_STATFS_EINPROGRESS))
+		rc = -EINPROGRESS;
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_STATFS,
+			 tsi->tsi_jobid, 1);
+
+	RETURN(rc);
+}
+
+static int ofd_sync_hdl(struct tgt_session_info *tsi)
+{
+	struct ost_body		*body = tsi->tsi_ost_body;
+	struct ost_body		*repbody;
+	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
+	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
+	struct ofd_object	*fo = NULL;
+	int			 rc = 0;
+
+	ENTRY;
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+
+	/* if no objid is specified, it means "sync whole filesystem" */
+	if (!fid_is_zero(&tsi->tsi_fid)) {
+		fo = ofd_object_find_exists(tsi->tsi_env, ofd, &tsi->tsi_fid);
+		if (IS_ERR(fo))
+			RETURN(PTR_ERR(fo));
+	}
+
+	rc = tgt_sync(tsi->tsi_env, tsi->tsi_tgt,
+		      fo != NULL ? ofd_object_child(fo) : NULL);
+	if (rc)
+		GOTO(put, rc);
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SYNC,
+			 tsi->tsi_jobid, 1);
+	if (fo == NULL)
+		RETURN(0);
+
+	repbody->oa.o_oi = body->oa.o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	rc = ofd_attr_get(tsi->tsi_env, fo, &fti->fti_attr);
+	if (rc == 0)
+		obdo_from_la(&repbody->oa, &fti->fti_attr,
+			     OFD_VALID_FLAGS);
+	else
+		/* don't return rc from getattr */
+		rc = 0;
+	EXIT;
+put:
+	if (fo != NULL)
+		ofd_object_put(tsi->tsi_env, fo);
+	return rc;
+}
+
+static int ofd_punch_hdl(struct tgt_session_info *tsi)
+{
+	const struct obdo	*oa = &tsi->tsi_ost_body->oa;
+	struct ost_body		*repbody;
+	struct ofd_thread_info	*info = tsi2ofd_info(tsi);
+	struct ldlm_namespace	*ns = tsi->tsi_tgt->lut_obd->obd_namespace;
+	struct ldlm_resource	*res;
+	struct ofd_object	*fo;
+	struct filter_fid	*ff = NULL;
+	__u64			 flags = 0;
+	struct lustre_handle	 lh = { 0, };
+	int			 rc;
+	__u64			 start, end;
+	bool			 srvlock;
+
+	ENTRY;
+
+	/* check that we do support OBD_CONNECT_TRUNCLOCK. */
+	CLASSERT(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK);
+
+	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
+		RETURN(err_serious(-EPROTO));
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(err_serious(-ENOMEM));
+
+	/* punch start,end are passed in o_size,o_blocks throught wire */
+	start = oa->o_size;
+	end = oa->o_blocks;
+
+	if (end != OBD_OBJECT_EOF) /* Only truncate is supported */
+		RETURN(-EPROTO);
+
+	/* standard truncate optimization: if file body is completely
+	 * destroyed, don't send data back to the server. */
+	if (start == 0)
+		flags |= LDLM_FL_AST_DISCARD_DATA;
+
+	repbody->oa.o_oi = oa->o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID;
+
+	srvlock = oa->o_valid & OBD_MD_FLFLAGS &&
+		  oa->o_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock) {
+		rc = tgt_extent_lock(ns, &tsi->tsi_resid, start, end, &lh,
+				     LCK_PW, &flags);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	CDEBUG(D_INODE, "calling punch for object "DFID", valid = "LPX64
+	       ", start = "LPD64", end = "LPD64"\n", PFID(&tsi->tsi_fid),
+	       oa->o_valid, start, end);
+
+	fo = ofd_object_find_exists(tsi->tsi_env, ofd_exp(tsi->tsi_exp),
+				    &tsi->tsi_fid);
+	if (IS_ERR(fo))
+		GOTO(out, rc = PTR_ERR(fo));
+
+	la_from_obdo(&info->fti_attr, oa,
+		     OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
+	info->fti_attr.la_size = start;
+	info->fti_attr.la_valid |= LA_SIZE;
+
+	if (oa->o_valid & OBD_MD_FLFID) {
+		ff = &info->fti_mds_fid;
+		ofd_prepare_fidea(ff, oa);
+	}
+
+	rc = ofd_object_punch(tsi->tsi_env, fo, start, end, &info->fti_attr,
+			      ff);
+	if (rc)
+		GOTO(out_put, rc);
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_PUNCH,
+			 tsi->tsi_jobid, 1);
+	EXIT;
+out_put:
+	ofd_object_put(tsi->tsi_env, fo);
+out:
+	if (srvlock)
+		tgt_extent_unlock(&lh, LCK_PW);
+	if (rc == 0) {
+		/* we do not call this before to avoid lu_object_find() in
+		 *  ->lvbo_update() holding another reference on the object.
+		 * otherwise concurrent destroy can make the object unavailable
+		 * for 2nd lu_object_find() waiting for the first reference
+		 * to go... deadlock! */
+		res = ldlm_resource_get(ns, NULL, &tsi->tsi_resid,
+				        LDLM_EXTENT, 0);
+		if (res != NULL) {
+			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_resource_putref(res);
+		}
+	}
+	return rc;
+}
+
+
+static int ofd_quotactl(struct tgt_session_info *tsi)
+{
+	struct obd_quotactl	*oqctl, *repoqc;
+	int			 rc;
+
+	ENTRY;
+
+	oqctl = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
+	if (oqctl == NULL)
+		RETURN(err_serious(-EPROTO));
+
+	repoqc = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
+	if (repoqc == NULL)
+		RETURN(err_serious(-ENOMEM));
+
+	/* report success for quota on/off for interoperability with current MDT
+	 * stack */
+	if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF)
+		RETURN(0);
+
+	*repoqc = *oqctl;
+	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc);
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
+			 tsi->tsi_jobid, 1);
+
+	RETURN(rc);
+}
+
+#define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
+#define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
+#define OST_BRW_READ	OST_READ
+#define OST_BRW_WRITE	OST_WRITE
+
+static struct tgt_handler ofd_tgt_handlers[] = {
+TGT_RPC_HANDLER(OST_FIRST_OPC,
+		0,			OST_CONNECT,	tgt_connect,
+		&RQF_CONNECT, LUSTRE_OBD_VERSION),
+TGT_RPC_HANDLER(OST_FIRST_OPC,
+		0,			OST_DISCONNECT,	tgt_disconnect,
+		&RQF_OST_DISCONNECT, LUSTRE_OBD_VERSION),
+TGT_RPC_HANDLER(OST_FIRST_OPC,
+		0,			OST_SET_INFO,	ofd_set_info_hdl,
+		&RQF_OBD_SET_INFO, LUSTRE_OST_VERSION),
+TGT_OST_HDL(0,				OST_GET_INFO,	ofd_get_info_hdl),
+TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO,	OST_GETATTR,	ofd_getattr_hdl),
+TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR,
+					OST_SETATTR,	ofd_setattr_hdl),
+TGT_OST_HDL(0		| HABEO_REFERO | MUTABOR,
+					OST_CREATE,	ofd_create_hdl),
+TGT_OST_HDL(0		| HABEO_REFERO | MUTABOR,
+					OST_DESTROY,	ofd_destroy_hdl),
+TGT_OST_HDL(0		| HABEO_REFERO,	OST_STATFS,	ofd_statfs_hdl),
+TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO,	OST_BRW_READ,	tgt_brw_read),
+/* don't set CORPUS flag for brw_write because -ENOENT may be valid case */
+TGT_OST_HDL(MUTABOR,			OST_BRW_WRITE,	tgt_brw_write),
+TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR,
+					OST_PUNCH,	ofd_punch_hdl),
+TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO,	OST_SYNC,	ofd_sync_hdl),
+TGT_OST_HDL(0		| HABEO_REFERO,	OST_QUOTACTL,	ofd_quotactl),
+};
+
 static struct tgt_opc_slice ofd_common_slice[] = {
 	{
-		.tos_opc_start = UPDATE_OBJ,
-		.tos_opc_end   = UPDATE_LAST_OPC,
-		.tos_hs        = tgt_out_handlers
+		.tos_opc_start	= OST_FIRST_OPC,
+		.tos_opc_end	= OST_LAST_OPC,
+		.tos_hs		= ofd_tgt_handlers
+	},
+	{
+		.tos_opc_start	= OBD_FIRST_OPC,
+		.tos_opc_end	= OBD_LAST_OPC,
+		.tos_hs		= tgt_obd_handlers
+	},
+	{
+		.tos_opc_start	= LDLM_FIRST_OPC,
+		.tos_opc_end	= LDLM_LAST_OPC,
+		.tos_hs		= tgt_dlm_handlers
+	},
+	{
+		.tos_opc_start	= UPDATE_OBJ,
+		.tos_opc_end	= UPDATE_LAST_OPC,
+		.tos_hs		= tgt_out_handlers
 	},
 	{
 		.tos_opc_start	= SEQ_FIRST_OPC,

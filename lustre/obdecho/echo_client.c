@@ -2782,6 +2782,9 @@ static int
 echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                       void *karg, void *uarg)
 {
+#ifdef HAVE_SERVER_SUPPORT
+	struct tgt_session_info *tsi;
+#endif
         struct obd_device      *obd = exp->exp_obd;
         struct echo_device     *ed = obd2echo_dev(obd);
         struct echo_client_obd *ec = ed->ed_ec;
@@ -2795,6 +2798,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int                     rw = OBD_BRW_READ;
         int                     rc = 0;
         int                     i;
+#ifdef HAVE_SERVER_SUPPORT
+	struct lu_context	 echo_session;
+#endif
         ENTRY;
 
         memset(&dummy_oti, 0, sizeof(dummy_oti));
@@ -2814,10 +2820,20 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (env == NULL)
                 RETURN(-ENOMEM);
 
-        rc = lu_env_init(env, LCT_DT_THREAD | LCT_MD_THREAD);
-        if (rc)
-                GOTO(out, rc = -ENOMEM);
+	rc = lu_env_init(env, LCT_DT_THREAD);
+	if (rc)
+		GOTO(out_alloc, rc = -ENOMEM);
 
+#ifdef HAVE_SERVER_SUPPORT
+	env->le_ses = &echo_session;
+	rc = lu_context_init(env->le_ses, LCT_SERVER_SESSION | LCT_NOREF);
+	if (unlikely(rc < 0))
+		GOTO(out_env, rc);
+	lu_context_enter(env->le_ses);
+
+	tsi = tgt_ses_info(env);
+	tsi->tsi_exp = ec->ec_exp;
+#endif
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
@@ -2989,7 +3005,13 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         EXIT;
 out:
+#ifdef HAVE_SERVER_SUPPORT
+	lu_context_exit(env->le_ses);
+	lu_context_fini(env->le_ses);
+out_env:
+#endif
         lu_env_fini(env);
+out_alloc:
         OBD_FREE_PTR(env);
 
         /* XXX this should be in a helper also called by target_send_reply */

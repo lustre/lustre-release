@@ -396,11 +396,11 @@ int lprocfs_ofd_rd_sync_lock_cancel(char *page, char **start, off_t off,
 				    int count, int *eof, void *data)
 {
 	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target	*tgt = obd->u.obt.obt_lut;
 	int			 rc;
 
 	rc = snprintf(page, count, "%s\n",
-		      sync_on_cancel_states[ofd->ofd_sync_lock_cancel]);
+		      sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
 	return rc;
 }
 
@@ -408,7 +408,7 @@ int lprocfs_ofd_wr_sync_lock_cancel(struct file *file, const char *buffer,
 				    unsigned long count, void *data)
 {
 	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target	*tgt = obd->u.obt.obt_lut;
 	int			 val = -1;
 	int			 i;
 
@@ -430,9 +430,9 @@ int lprocfs_ofd_wr_sync_lock_cancel(struct file *file, const char *buffer,
 	if (val < 0 || val > 2)
 		return -EINVAL;
 
-	spin_lock(&ofd->ofd_flags_lock);
-	ofd->ofd_sync_lock_cancel = val;
-	spin_unlock(&ofd->ofd_flags_lock);
+	spin_lock(&tgt->lut_flags_lock);
+	tgt->lut_sync_lock_cancel = val;
+	spin_unlock(&tgt->lut_flags_lock);
 	return count;
 }
 
@@ -532,16 +532,32 @@ void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars)
 
 void ofd_stats_counter_init(struct lprocfs_stats *stats)
 {
-	LASSERT(stats && stats->ls_num == LPROC_OFD_STATS_LAST);
+	LASSERT(stats && stats->ls_num >= LPROC_OFD_STATS_LAST);
+
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ,
-			     LPROCFS_CNTR_AVGMINMAX, "read", "bytes");
+			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE,
-			     LPROCFS_CNTR_AVGMINMAX, "write", "bytes");
+			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_GETATTR,
+			     0, "getattr", "reqs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SETATTR,
 			     0, "setattr", "reqs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_PUNCH,
 			     0, "punch", "reqs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SYNC,
 			     0, "sync", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_DESTROY,
+			     0, "destroy", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_CREATE,
+			     0, "create", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_STATFS,
+			     0, "statfs", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_GET_INFO,
+			     0, "get_info", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_SET_INFO,
+			     0, "set_info", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_QUOTACTL,
+			     0, "quotactl", "reqs");
 }
+
 #endif /* LPROCFS */

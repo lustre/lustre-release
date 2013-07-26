@@ -55,8 +55,12 @@ struct lu_target {
 	rwlock_t		 lut_sptlrpc_lock;
 	struct sptlrpc_rule_set	 lut_sptlrpc_rset;
 	int			 lut_sec_level;
+
+	spinlock_t		 lut_flags_lock;
 	unsigned int		 lut_mds_capa:1,
-				 lut_oss_capa:1;
+				 lut_oss_capa:1,
+				 lut_syncjournal:1,
+				 lut_sync_lock_cancel:2;
 
 	/* LAST_RCVD parameters */
 	/** last_rcvd file */
@@ -96,15 +100,20 @@ struct tgt_session_info {
 	struct lu_target	*tsi_tgt;
 
 	const struct mdt_body	*tsi_mdt_body;
+	struct ost_body		*tsi_ost_body;
 	struct lu_object	*tsi_corpus;
 
+	struct lu_fid		 tsi_fid;
+	struct ldlm_res_id	 tsi_resid;
 	/*
 	 * Additional fail id that can be set by handler.
 	 */
 	int			 tsi_reply_fail_id;
 	int			 tsi_request_fail_id;
 
-	__u32			 tsi_has_trans:1; /* has txn already? */
+	int			 tsi_has_trans:1; /* has txn already? */
+	/* request JobID */
+	char                    *tsi_jobid;
 };
 
 static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
@@ -163,6 +172,8 @@ struct tgt_handler {
 	int			 th_version;
 	/* Handler function */
 	int			(*th_act)(struct tgt_session_info *tti);
+	/* Handler function for high priority requests */
+	int			(*th_hp)(struct tgt_session_info *tti);
 	/* Request format for this request */
 	const struct req_format	*th_fmt;
 };
@@ -196,6 +207,7 @@ char *tgt_name(struct lu_target *tgt);
 void tgt_counter_incr(struct obd_export *exp, int opcode);
 int tgt_connect_check_sptlrpc(struct ptlrpc_request *req,
 			      struct obd_export *exp);
+int tgt_adapt_sptlrpc_conf(struct lu_target *tgt, int initial);
 int tgt_connect(struct tgt_session_info *tsi);
 int tgt_disconnect(struct tgt_session_info *uti);
 int tgt_obd_ping(struct tgt_session_info *tsi);
@@ -213,6 +225,25 @@ int tgt_sec_ctx_init(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init_cont(struct tgt_session_info *tsi);
 int tgt_sec_ctx_fini(struct tgt_session_info *tsi);
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob);
+int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa);
+int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
+	     struct dt_object *obj);
+
+int tgt_io_thread_init(struct ptlrpc_thread *thread);
+void tgt_io_thread_done(struct ptlrpc_thread *thread);
+
+int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+		    __u64 start, __u64 end, struct lustre_handle *lh,
+		    int mode, __u64 *flags);
+void tgt_extent_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
+int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+		 struct obd_ioobj *obj, struct niobuf_remote *nb,
+		 struct lustre_handle *lh, int mode);
+void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
+		    struct lustre_handle *lh, int mode);
+int tgt_brw_read(struct tgt_session_info *tsi);
+int tgt_brw_write(struct tgt_session_info *tsi);
+int tgt_hpreq_handler(struct ptlrpc_request *req);
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];
 extern struct tgt_handler tgt_obd_handlers[];
@@ -258,6 +289,10 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 			 struct dt_object *obj, __u64 opdata,
 			 struct thandle *th, struct ptlrpc_request *req);
+int tgt_last_rcvd_update_echo(const struct lu_env *env, struct lu_target *tgt,
+			      struct dt_object *obj, struct thandle *th,
+			      struct obd_export *exp);
+
 enum {
 	ESERIOUS = 0x0001000
 };
@@ -278,6 +313,18 @@ static inline int clear_serious(int rc)
 static inline int is_serious(int rc)
 {
 	return (rc < 0 && -rc & ESERIOUS);
+}
+
+/**
+ * Do not return server-side uid/gid to remote client
+ */
+static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
+{
+	if (unlikely(exp_connect_rmtclient(exp))) {
+		oa->o_uid = -1;
+		oa->o_gid = -1;
+		oa->o_valid &= ~(OBD_MD_FLUID | OBD_MD_FLGID);
+	}
 }
 
 /*
@@ -302,6 +349,11 @@ static inline int is_serious(int rc)
 #define TGT_MDT_HDL_VAR(flags, name, fn)				\
 	TGT_RPC_HANDLER(MDS_FIRST_OPC, flags, name, fn, NULL,		\
 			LUSTRE_MDS_VERSION)
+
+/* MDT Request with a format known in advance */
+#define TGT_OST_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(OST_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
+			LUSTRE_OST_VERSION)
 
 /* MGS request with a format known in advance */
 #define TGT_MGS_HDL(flags, name, fn)					\

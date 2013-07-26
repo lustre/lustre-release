@@ -539,11 +539,8 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
-	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY, RCL_CLIENT,
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY, RCL_CLIENT,
 			     sizeof(KEY_LAST_FID));
-
-	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL, RCL_CLIENT,
-			     sizeof(struct lu_fid));
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GET_INFO);
 	if (rc) {
@@ -551,12 +548,13 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
 	memcpy(tmp, KEY_LAST_FID, sizeof(KEY_LAST_FID));
 
 	req->rq_no_delay = req->rq_no_resend = 1;
-	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
-	fid_cpu_to_le((struct lu_fid *)tmp, &d->opd_last_used_fid);
+	last_fid = req_capsule_client_get(&req->rq_pill, &RMF_FID);
+	fid_cpu_to_le(last_fid, &d->opd_last_used_fid);
+
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);

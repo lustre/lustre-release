@@ -72,37 +72,37 @@ struct ofd_mod_data {
 #define OFD_FMD_MAX_NUM_DEFAULT 128
 #define OFD_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
 
-enum {
-	LPROC_OFD_READ_BYTES = 0,
-	LPROC_OFD_WRITE_BYTES = 1,
-	LPROC_OFD_LAST,
-};
-
-/* for job stats */
+/* request stats */
 enum {
 	LPROC_OFD_STATS_READ = 0,
-	LPROC_OFD_STATS_WRITE = 1,
-	LPROC_OFD_STATS_SETATTR = 2,
-	LPROC_OFD_STATS_PUNCH = 3,
-	LPROC_OFD_STATS_SYNC = 4,
+	LPROC_OFD_STATS_WRITE,
+	LPROC_OFD_STATS_GETATTR,
+	LPROC_OFD_STATS_SETATTR,
+	LPROC_OFD_STATS_PUNCH,
+	LPROC_OFD_STATS_SYNC,
+	LPROC_OFD_STATS_DESTROY,
+	LPROC_OFD_STATS_CREATE,
+	LPROC_OFD_STATS_STATFS,
+	LPROC_OFD_STATS_GET_INFO,
+	LPROC_OFD_STATS_SET_INFO,
+	LPROC_OFD_STATS_QUOTACTL,
 	LPROC_OFD_STATS_LAST,
 };
 
 static inline void ofd_counter_incr(struct obd_export *exp, int opcode,
 				    char *jobid, long amount)
 {
+	if (exp->exp_obd && exp->exp_obd->obd_stats)
+		lprocfs_counter_add(exp->exp_obd->obd_stats, opcode, amount);
+
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd, jobid, opcode, amount);
 
 	if (exp->exp_nid_stats != NULL &&
 	    exp->exp_nid_stats->nid_stats != NULL) {
-		if (opcode == LPROC_OFD_STATS_READ)
-			lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
-					    LPROC_OFD_READ_BYTES, amount);
-		else if (opcode == LPROC_OFD_STATS_WRITE)
-			lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
-					    LPROC_OFD_WRITE_BYTES, amount);
+		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
+				    amount);
 	}
 }
 
@@ -180,8 +180,6 @@ struct ofd_device {
 	unsigned long		 ofd_raid_degraded:1,
 				 /* sync journal on writes */
 				 ofd_syncjournal:1,
-				 /* sync on lock cancel */
-				 ofd_sync_lock_cancel:2,
 				 /* shall we grant space to clients not
 				  * supporting OBD_CONNECT_GRANT_PARAM? */
 				 ofd_grant_compat_disable:1;
@@ -338,6 +336,12 @@ extern struct obd_ops ofd_obd_ops;
 int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 			struct obd_statfs *osfs, __u64 max_age,
 			int *from_cache);
+int ofd_orphans_destroy(const struct lu_env *env, struct obd_export *exp,
+			struct ofd_device *ofd, struct obdo *oa);
+int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
+		       const struct lu_fid *fid, int orphan);
+int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
+	       struct obd_statfs *osfs, __u64 max_age, __u32 flags);
 
 /* ofd_fs.c */
 obd_id ofd_seq_last_oid(struct ofd_seq *oseq);
@@ -414,6 +418,21 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
 int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr);
+
+static inline
+struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
+					  struct ofd_device *ofd,
+					  struct lu_fid *fid)
+{
+	struct ofd_object *fo;
+
+	fo = ofd_object_find(env, ofd, fid);
+	if (!IS_ERR(fo) && !ofd_object_exists(fo)) {
+		ofd_object_put(env, fo);
+		fo = ERR_PTR(-ENOENT);
+	}
+	return fo;
+}
 
 /* ofd_grants.c */
 #define OFD_GRANT_RATIO_SHIFT 8
@@ -499,24 +518,22 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		      void *req_cookie, ldlm_mode_t mode, __u64 flags,
 		      void *data);
 
-static inline struct ofd_thread_info * ofd_info(const struct lu_env *env)
+static inline struct ofd_thread_info *ofd_info(const struct lu_env *env)
 {
 	struct ofd_thread_info *info;
 
+	lu_env_refill((void *)env);
 	info = lu_context_key_get(&env->le_ctx, &ofd_thread_key);
 	LASSERT(info);
-	LASSERT(info->fti_env);
-	LASSERT(info->fti_env == env);
 	return info;
 }
 
-static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
-						     struct obd_export *exp)
+static inline struct ofd_thread_info *ofd_info_init(const struct lu_env *env,
+						    struct obd_export *exp)
 {
 	struct ofd_thread_info *info;
 
-	info = lu_context_key_get(&env->le_ctx, &ofd_thread_key);
-	LASSERT(info);
+	info = ofd_info(env);
 	LASSERT(info->fti_exp == NULL);
 	LASSERT(info->fti_env == NULL);
 	LASSERT(info->fti_attr.la_valid == 0);
@@ -526,6 +543,32 @@ static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
 	info->fti_pre_version = 0;
 	info->fti_transno = 0;
 	info->fti_has_trans = 0;
+	return info;
+}
+
+static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
+{
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct ofd_thread_info	*info;
+
+	info = ofd_info(tsi->tsi_env);
+	LASSERT(info->fti_exp == NULL);
+	LASSERT(info->fti_env == NULL);
+	LASSERT(info->fti_attr.la_valid == 0);
+
+	info->fti_env = tsi->tsi_env;
+	info->fti_exp = tsi->tsi_exp;
+	info->fti_has_trans = 0;
+
+	info->fti_xid = req->rq_xid;
+	/** VBR: take versions from request */
+	if (req->rq_reqmsg != NULL &&
+	    lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+		__u64 *pre_version = lustre_msg_get_versions(req->rq_reqmsg);
+
+		info->fti_pre_version = pre_version ? pre_version[0] : 0;
+		info->fti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+	}
 	return info;
 }
 
@@ -555,15 +598,14 @@ static inline void ofd_info2oti(struct ofd_thread_info *info,
 static inline void ofd_slc_set(struct ofd_device *ofd)
 {
 	if (ofd->ofd_syncjournal == 1)
-		ofd->ofd_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
-	else if (ofd->ofd_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
-		ofd->ofd_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
+		ofd->ofd_lut.lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+	else if (ofd->ofd_lut.lut_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
+		ofd->ofd_lut.lut_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
 }
 
-static inline void ofd_prepare_fidea(struct filter_fid *ff, struct obdo *oa)
+static inline void ofd_prepare_fidea(struct filter_fid *ff,
+				     const struct obdo *oa)
 {
-	if (!(oa->o_valid & OBD_MD_FLGROUP))
-		ostid_set_seq_mdt0(&oa->o_oi);
 	/* packing fid and converting it to LE for storing into EA.
 	 * Here ->o_stripe_idx should be filled by LOV and rest of
 	 * fields - by client. */

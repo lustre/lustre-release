@@ -39,31 +39,6 @@
 
 #define OSS_SERVICE_WATCHDOG_FACTOR 2
 
-/*
- * tunables for per-thread page pool (bug 5137)
- */
-#define OST_THREAD_POOL_SIZE PTLRPC_MAX_BRW_PAGES  /* pool size in pages */
-#define OST_THREAD_POOL_GFP  GFP_HIGHUSER    /* GFP mask for pool pages */
-
-struct page;
-struct niobuf_local;
-struct niobuf_remote;
-struct ptlrpc_request;
-
-/*
- * struct ost_thread_local_cache is allocated and initialized for each OST
- * thread by ost_thread_init().
- */
-struct ost_thread_local_cache {
-        /*
-         * pool of nio buffers used by write-path
-         */
-        struct niobuf_local   local[OST_THREAD_POOL_SIZE];
-        unsigned int          temporary:1;
-};
-
-struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
-
 #ifdef LPROCFS
 void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars);
 #else
