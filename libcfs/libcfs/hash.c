@@ -1035,8 +1035,10 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         LASSERT(ops->hs_hash);
         LASSERT(ops->hs_object);
         LASSERT(ops->hs_keycmp);
-        LASSERT(ops->hs_get != NULL);
-        LASSERT(ops->hs_put_locked != NULL);
+	if ((flags & CFS_HASH_NO_ITEMREF) == 0) {
+		LASSERT(ops->hs_get != NULL);
+		LASSERT(ops->hs_put_locked != NULL);
+	}
 
         if ((flags & CFS_HASH_REHASH) != 0)
                 flags |= CFS_HASH_COUNTER; /* must have counter */

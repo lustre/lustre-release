@@ -632,21 +632,9 @@ static int osd_object_destroy(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	/* Remove object from inode accounting. It is not fatal for the destroy
-	 * operation if something goes wrong while updating accounting, but we
-	 * still log an error message to notify the administrator */
-	rc = -zap_increment_int(osd->od_objset.os, osd->od_iusr_oid,
-			obj->oo_attr.la_uid, -1, oh->ot_tx);
-	if (rc)
-		CERROR("%s: failed to remove "DFID" from accounting ZAP for usr"
-			" %d: rc = %d\n", osd->od_svname, PFID(fid),
-			obj->oo_attr.la_uid, rc);
-	rc = -zap_increment_int(osd->od_objset.os, osd->od_igrp_oid,
-				obj->oo_attr.la_gid, -1, oh->ot_tx);
-	if (rc)
-		CERROR("%s: failed to remove "DFID" from accounting ZAP for grp"
-			" %d: rc = %d\n", osd->od_svname, PFID(fid),
-			obj->oo_attr.la_gid, rc);
+	/* do object accounting */
+	osd_zfs_acct_uid(env, osd, obj->oo_attr.la_uid, -1, oh);
+	osd_zfs_acct_gid(env, osd, obj->oo_attr.la_gid, -1, oh);
 
 	/* kill object */
 	rc = __osd_object_destroy(env, obj, oh->ot_tx, osd_obj_tag);
@@ -956,34 +944,14 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	/* do both accounting updates outside oo_attr_lock below */
 	if ((la->la_valid & LA_UID) && (la->la_uid != obj->oo_attr.la_uid)) {
-		/* Update user accounting. Failure isn't fatal, but we still
-		 * log an error message */
-		rc = -zap_increment_int(osd->od_objset.os, osd->od_iusr_oid,
-					la->la_uid, 1, oh->ot_tx);
-		if (rc)
-			CERROR("%s: failed to update accounting ZAP for user "
-				"%d (%d)\n", osd->od_svname, la->la_uid, rc);
-		rc = -zap_increment_int(osd->od_objset.os, osd->od_iusr_oid,
-					obj->oo_attr.la_uid, -1, oh->ot_tx);
-		if (rc)
-			CERROR("%s: failed to update accounting ZAP for user "
-				"%d (%d)\n", osd->od_svname,
-				obj->oo_attr.la_uid, rc);
+		/* do object accounting */
+		osd_zfs_acct_uid(env, osd, la->la_uid, 1, oh);
+		osd_zfs_acct_uid(env, osd, obj->oo_attr.la_uid, -1, oh);
 	}
 	if ((la->la_valid & LA_GID) && (la->la_gid != obj->oo_attr.la_gid)) {
-		/* Update group accounting. Failure isn't fatal, but we still
-		 * log an error message */
-		rc = -zap_increment_int(osd->od_objset.os, osd->od_igrp_oid,
-					la->la_gid, 1, oh->ot_tx);
-		if (rc)
-			CERROR("%s: failed to update accounting ZAP for user "
-				"%d (%d)\n", osd->od_svname, la->la_gid, rc);
-		rc = -zap_increment_int(osd->od_objset.os, osd->od_igrp_oid,
-					obj->oo_attr.la_gid, -1, oh->ot_tx);
-		if (rc)
-			CERROR("%s: failed to update accounting ZAP for user "
-				"%d (%d)\n", osd->od_svname,
-				obj->oo_attr.la_gid, rc);
+		/* do object accounting */
+		osd_zfs_acct_gid(env, osd, la->la_gid, 1, oh);
+		osd_zfs_acct_gid(env, osd, obj->oo_attr.la_gid, -1, oh);
 	}
 
 	write_lock(&obj->oo_attr_lock);
@@ -1505,18 +1473,9 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* Add new object to inode accounting.
 	 * Errors are not considered as fatal */
-	rc = -zap_increment_int(osd->od_objset.os, osd->od_iusr_oid,
-				(attr->la_valid & LA_UID) ? attr->la_uid : 0, 1,
-				oh->ot_tx);
-	if (rc)
-		CERROR("%s: failed to add "DFID" to accounting ZAP for usr %d "
-			"(%d)\n", osd->od_svname, PFID(fid), attr->la_uid, rc);
-	rc = -zap_increment_int(osd->od_objset.os, osd->od_igrp_oid,
-				(attr->la_valid & LA_GID) ? attr->la_gid : 0, 1,
-				oh->ot_tx);
-	if (rc)
-		CERROR("%s: failed to add "DFID" to accounting ZAP for grp %d "
-			"(%d)\n", osd->od_svname, PFID(fid), attr->la_gid, rc);
+	/* XXX: UID/GID must be defined otherwise we can break accounting */
+	osd_zfs_acct_uid(env, osd, attr->la_uid, 1, oh);
+	osd_zfs_acct_gid(env, osd, attr->la_gid, 1, oh);
 
 	/* configure new osd object */
 	obj->oo_db = db;

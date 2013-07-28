@@ -82,6 +82,8 @@ struct osd_it_quota {
 	zap_cursor_t		*oiq_zc;
 	/** identifier for current quota record */
 	__u64			 oiq_id;
+	/* the hash where object accounting is cached */
+	cfs_hash_t		*oiq_hash;
 	unsigned		 oiq_reset:1; /* 1 -- no need to advance */
 };
 
@@ -227,6 +229,16 @@ struct osd_seq_list {
 #define OSD_OST_MAP_SIZE	32
 
 /*
+ * this structure tracks changes made to the accounting within specific TXG
+ */
+struct osd_zfs_acct_txg {
+	uint64_t		 zat_txg;
+	cfs_hash_t		*zat_usr;
+	cfs_hash_t		*zat_grp;
+	struct osd_device	*zat_osd;
+};
+
+/*
  * osd device.
  */
 struct osd_device {
@@ -279,6 +291,13 @@ struct osd_device {
 	atomic_t		 od_zerocopy_pin;
 
 	arc_prune_t		*arc_prune_cb;
+
+	/* quota: object accounting */
+	spinlock_t		 od_known_txg_lock;
+	uint64_t		 od_known_txg;
+	struct osd_zfs_acct_txg *od_acct_delta;
+	cfs_hash_t		*od_acct_usr;
+	cfs_hash_t		*od_acct_grp;
 };
 
 struct osd_object {
@@ -313,7 +332,6 @@ struct osd_object {
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
 extern const struct dt_index_operations osd_acct_index_ops;
-uint64_t osd_quota_fid2dmu(const struct lu_fid *fid);
 extern struct lu_device_operations  osd_lu_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      qid_t uid, qid_t gid, long long space,
@@ -495,6 +513,13 @@ osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 
 	return rc;
 }
+
+void osd_zfs_acct_uid(const struct lu_env *env, struct osd_device *osd,
+		     __u64 uid, int delta, struct osd_thandle *oh);
+void osd_zfs_acct_gid(const struct lu_env *env, struct osd_device *osd,
+		     __u64 gid, int delta, struct osd_thandle *oh);
+int osd_zfs_acct_init(const struct lu_env *env, struct osd_device *osd);
+void osd_zfs_acct_fini(const struct lu_env *env, struct osd_device *osd);
 
 static inline uint64_t attrs_fs2zfs(const uint32_t flags)
 {
