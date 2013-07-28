@@ -155,7 +155,7 @@ void lu_ref_fini(struct lu_ref *ref)
 EXPORT_SYMBOL(lu_ref_fini);
 
 static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
-                                              enum cfs_alloc_flags flags,
+                                              int flags,
                                               const char *scope,
                                               const void *source)
 {
