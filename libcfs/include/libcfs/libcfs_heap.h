@@ -166,6 +166,7 @@ cfs_binheap_t *cfs_binheap_create(cfs_binheap_ops_t *ops, unsigned int flags,
 cfs_binheap_node_t *cfs_binheap_find(cfs_binheap_t *h, unsigned int idx);
 int cfs_binheap_insert(cfs_binheap_t *h, cfs_binheap_node_t *e);
 void cfs_binheap_remove(cfs_binheap_t *h, cfs_binheap_node_t *e);
+void cfs_binheap_relocate(cfs_binheap_t *h, cfs_binheap_node_t *e);
 
 static inline int
 cfs_binheap_size(cfs_binheap_t *h)
