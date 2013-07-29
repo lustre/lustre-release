@@ -567,7 +567,6 @@ out:
  **/
 static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi)
 {
-	struct obd_connect_data *data = NULL;
 	struct obd_device	*obd;
 	char			*lwpname = NULL;
 	char			*lwpuuid = NULL;
@@ -612,8 +611,6 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi)
 	if (rc != 0)
 		CERROR("%s: connect failed: rc = %d\n", lwpname, rc);
 out:
-	if (data != NULL)
-		OBD_FREE_PTR(data);
 	if (lwpname != NULL)
 		OBD_FREE(lwpname, MTI_NAME_MAXLEN);
 	if (lwpuuid != NULL)

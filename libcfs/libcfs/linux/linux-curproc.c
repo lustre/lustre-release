@@ -254,7 +254,7 @@ static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
 int cfs_get_environ(const char *key, char *value, int *val_len)
 {
 	struct mm_struct *mm;
-	char *buffer, *tmp_buf = NULL;
+	char *buffer;
 	int buf_len = PAGE_CACHE_SIZE;
 	int key_len = strlen(key);
 	unsigned long addr;
@@ -346,8 +346,6 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 out:
 	mmput(mm);
 	kfree((void *)buffer);
-	if (tmp_buf)
-		kfree((void *)tmp_buf);
 	return rc;
 }
 EXPORT_SYMBOL(cfs_get_environ);

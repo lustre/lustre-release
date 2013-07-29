@@ -868,34 +868,30 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out, rc);
 
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
-                if (!data) {
-                        DEBUG_REQ(D_WARNING, req, "Refusing old (unversioned) "
-                                  "libclient connection attempt");
-                        GOTO(out, rc = -EPROTO);
-                } else if (data->ocd_version < LUSTRE_VERSION_CODE -
-                                               LUSTRE_VERSION_ALLOWED_OFFSET ||
-                           data->ocd_version > LUSTRE_VERSION_CODE +
-                                               LUSTRE_VERSION_ALLOWED_OFFSET) {
-                        DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
-                                  "libclient connection attempt",
-                                  data->ocd_version < LUSTRE_VERSION_CODE ?
-                                  "old" : "new",
-                                  OBD_OCD_VERSION_MAJOR(data->ocd_version),
-                                  OBD_OCD_VERSION_MINOR(data->ocd_version),
-                                  OBD_OCD_VERSION_PATCH(data->ocd_version),
-                                  OBD_OCD_VERSION_FIX(data->ocd_version));
-                        data = req_capsule_server_sized_get(&req->rq_pill,
-                                                        &RMF_CONNECT_DATA,
-                                    offsetof(typeof(*data), ocd_version) +
-                                             sizeof(data->ocd_version));
-                        if (data) {
-                                data->ocd_connect_flags = OBD_CONNECT_VERSION;
-                                data->ocd_version = LUSTRE_VERSION_CODE;
-                        }
-                        GOTO(out, rc = -EPROTO);
-                }
-        }
+	if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
+		if (data->ocd_version < LUSTRE_VERSION_CODE -
+		                               LUSTRE_VERSION_ALLOWED_OFFSET ||
+		    data->ocd_version > LUSTRE_VERSION_CODE +
+		                               LUSTRE_VERSION_ALLOWED_OFFSET) {
+			DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
+				  "libclient connection attempt",
+				  data->ocd_version < LUSTRE_VERSION_CODE ?
+				  "old" : "new",
+				  OBD_OCD_VERSION_MAJOR(data->ocd_version),
+				  OBD_OCD_VERSION_MINOR(data->ocd_version),
+				  OBD_OCD_VERSION_PATCH(data->ocd_version),
+				  OBD_OCD_VERSION_FIX(data->ocd_version));
+			data = req_capsule_server_sized_get(&req->rq_pill,
+							    &RMF_CONNECT_DATA,
+				    offsetof(typeof(*data), ocd_version) +
+					     sizeof(data->ocd_version));
+			if (data) {
+				data->ocd_connect_flags = OBD_CONNECT_VERSION;
+				data->ocd_version = LUSTRE_VERSION_CODE;
+			}
+			GOTO(out, rc = -EPROTO);
+		}
+	}
 
         if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) &&
             (data->ocd_connect_flags & OBD_CONNECT_MDS))
