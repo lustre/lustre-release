@@ -3566,8 +3566,8 @@ int jt_pool_cmd(int argc, char **argv)
                                 free(array);
                         if (cmds)
                                 free(cmds);
-                        if (ostnames_buf);
-                                free(ostnames_buf);
+			if (ostnames_buf != NULL)
+				free(ostnames_buf);
                 }
                 /* fall through */
         }
