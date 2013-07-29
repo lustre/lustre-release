@@ -279,6 +279,9 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
             !(oa->o_flags & OBD_FL_SRVLOCK))
                 RETURN(0);
 
+	if (mode == LCK_MINMODE)
+		RETURN(0);
+
 	ostid_build_res_name(&oa->o_oi, &res_id);
         CDEBUG(D_INODE, "OST-side extent lock.\n");
 
@@ -314,6 +317,7 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         struct obd_info *oinfo;
         struct lustre_handle lh = { 0 };
         struct lustre_capa *capa = NULL;
+	ldlm_mode_t lock_mode;
         int rc;
         ENTRY;
 
@@ -340,9 +344,17 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         repbody->oa = body->oa;
 
-        rc = ost_lock_get(exp, &repbody->oa, 0, OBD_OBJECT_EOF, &lh, LCK_PR, 0);
-        if (rc)
-                RETURN(rc);
+	lock_mode = LCK_MINMODE;
+	if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    body->oa.o_flags & OBD_FL_SRVLOCK) {
+		lock_mode = LCK_PR;
+		if (body->oa.o_flags & OBD_FL_FLUSH)
+			lock_mode = LCK_PW;
+	}
+	rc = ost_lock_get(exp, &repbody->oa, 0, OBD_OBJECT_EOF, &lh,
+			  lock_mode, 0);
+	if (rc)
+		RETURN(rc);
 
         OBD_ALLOC_PTR(oinfo);
         if (!oinfo)
@@ -356,9 +368,15 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 
         ost_drop_id(exp, &repbody->oa);
 
+	if (!(repbody->oa.o_valid & OBD_MD_FLFLAGS)) {
+		repbody->oa.o_valid |= OBD_MD_FLFLAGS;
+		repbody->oa.o_flags = 0;
+	}
+	repbody->oa.o_flags |= OBD_FL_FLUSH;
+
 unlock:
-        ost_lock_put(exp, &lh, LCK_PR);
-        RETURN(rc);
+	ost_lock_put(exp, &lh, lock_mode);
+	RETURN(rc);
 }
 
 static int ost_statfs(struct ptlrpc_request *req)

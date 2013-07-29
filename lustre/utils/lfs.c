@@ -51,6 +51,7 @@
 #include <string.h>
 #include <mntent.h>
 #include <errno.h>
+#include <err.h>
 #include <pwd.h>
 #include <grp.h>
 #include <sys/types.h>
@@ -287,7 +288,7 @@ command_t cmdlist[] = {
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid <path> ..."},
 	{"data_version", lfs_data_version, 0, "Display file data version for "
-	 "a given path.\n" "usage: data_version [-n] <path>"},
+	 "a given path.\n" "usage: data_version -[n|r|w] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
 	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
 	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"
@@ -447,7 +448,7 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 	}
 
 	/* get file data version */
-	rc = llapi_get_data_version(fd, &dv1, 0);
+	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
 	if (rc != 0) {
 		fprintf(stderr, "cannot get dataversion on %s (%s)\n",
 			name, strerror(-rc));
@@ -3178,46 +3179,47 @@ out:
 
 static int lfs_data_version(int argc, char **argv)
 {
-        char *path;
-        __u64 data_version;
-        int fd;
-        int rc;
-        int c;
-        int nolock = 0;
+	char *path;
+	__u64 data_version;
+	int fd;
+	int rc;
+	int c;
+	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 
-        if (argc < 2)
-                return CMD_HELP;
+	if (argc < 2)
+		return CMD_HELP;
 
-        optind = 0;
-        while ((c = getopt(argc, argv, "n")) != -1) {
-                switch (c) {
-                case 'n':
-                        nolock = LL_DV_NOFLUSH;
-                        break;
-                default:
-                        return CMD_HELP;
-                }
-        }
-        if (optind == argc)
-                return CMD_HELP;
+	optind = 0;
+	while ((c = getopt(argc, argv, "nrw")) != -1) {
+		switch (c) {
+		case 'n':
+			data_version_flags = 0;
+			break;
+		case 'r':
+			data_version_flags |= LL_DV_RD_FLUSH;
+			break;
+		case 'w':
+			data_version_flags |= LL_DV_WR_FLUSH;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
+	if (optind == argc)
+		return CMD_HELP;
 
-        path = argv[optind];
-        fd = open(path, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "can't open %s: %s\n", path,
-                        strerror(errno));
-                return errno;
-        }
+	path = argv[optind];
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+		err(errno, "cannot open file %s", path);
 
-        rc = llapi_get_data_version(fd, &data_version, nolock);
-        if (rc) {
-                fprintf(stderr, "can't get version for %s: %s\n", path,
-                        strerror(errno = -rc));
-	} else
+	rc = llapi_get_data_version(fd, &data_version, data_version_flags);
+	if (rc < 0)
+		err(errno, "cannot get version for %s", path);
+	else
 		printf(LPU64 "\n", data_version);
 
 	close(fd);
-
 	return rc;
 }
 

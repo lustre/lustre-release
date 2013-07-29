@@ -4184,9 +4184,12 @@ int llapi_get_version(char *buffer, int buffer_size,
  * this value to verify if file data was modified. This only checks the file
  * data, not metadata.
  *
- * \param  flags  If set to LL_DV_NOFLUSH, the data version will be read
- *                directly from OST without regard to possible dirty cache on
- *                client nodes.
+ * \param  flags  0: no flush pages, usually used it the process has already
+ *		    taken locks;
+ *                LL_DV_RD_FLUSH: OSTs will take LCK_PR to flush dirty pages
+ *                  from clients;
+ *                LL_DV_WR_FLUSH: OSTs will take LCK_PW to flush all caching
+ *                  pages from clients.
  *
  * \retval 0 on success.
  * \retval -errno on error.
