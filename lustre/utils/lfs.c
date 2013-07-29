@@ -1774,24 +1774,25 @@ static int lfs_df(int argc, char **argv)
                 {0, 0, 0, 0}
         };
 
-        optind = 0;
+	optind = 0;
 	while ((c = getopt_long(argc, argv, "hilp:", long_opts, NULL)) != -1) {
-                switch (c) {
-                case 'i':
-                        ishow = 1;
-                        break;
-                case 'h':
-                        cooked = 1;
-                        break;
-                case 'l':
-                        lazy = 1;
-                case 'p':
-                        pool_name = optarg;
-                        break;
-                default:
-                        return CMD_HELP;
-                }
-        }
+		switch (c) {
+		case 'i':
+			ishow = 1;
+			break;
+		case 'h':
+			cooked = 1;
+			break;
+		case 'l':
+			lazy = 1;
+			break;
+		case 'p':
+			pool_name = optarg;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
         if (optind < argc && !realpath(argv[optind], path)) {
                 rc = -errno;
                 fprintf(stderr, "error: invalid path '%s': %s\n",

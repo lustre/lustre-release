@@ -380,6 +380,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                 break;
         case CLS_HELD:
                 CL_LOCK_DEBUG(D_ERROR, env, parent, "Delete CLS_HELD lock\n");
+		/* falling through */
         default:
                 CERROR("Impossible state: %d\n", parent->cll_state);
                 LBUG();

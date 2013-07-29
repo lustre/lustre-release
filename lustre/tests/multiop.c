@@ -632,11 +632,12 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'Y':
-                        if (fdatasync(fd) == -1) {
-                                save_errno = errno;
-                                perror("fdatasync");
-                                exit(save_errno);
-                        }
+			if (fdatasync(fd) == -1) {
+				save_errno = errno;
+				perror("fdatasync");
+				exit(save_errno);
+			}
+			break;
                 case 'z':
                         len = atoi(commands+1);
                         if (lseek(fd, len, SEEK_SET) == -1) {
