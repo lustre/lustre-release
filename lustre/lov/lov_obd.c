@@ -2035,13 +2035,13 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 struct lov_tgt_desc *tgt = NULL;
                 struct obd_quotactl *oqctl;
 
-                if (qctl->qc_valid == QC_OSTIDX) {
-                        if (qctl->qc_idx < 0 || count <= qctl->qc_idx)
-                                RETURN(-EINVAL);
+		if (qctl->qc_valid == QC_OSTIDX) {
+			if (count <= qctl->qc_idx)
+				RETURN(-EINVAL);
 
-                        tgt = lov->lov_tgts[qctl->qc_idx];
-                        if (!tgt || !tgt->ltd_exp)
-                                RETURN(-EINVAL);
+			tgt = lov->lov_tgts[qctl->qc_idx];
+			if (!tgt || !tgt->ltd_exp)
+				RETURN(-EINVAL);
                 } else if (qctl->qc_valid == QC_UUID) {
                         for (i = 0; i < count; i++) {
                                 tgt = lov->lov_tgts[i];

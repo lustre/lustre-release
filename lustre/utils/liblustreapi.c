@@ -241,7 +241,7 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 				"larger than expected (%u)", page_size,
 				LOV_MIN_STRIPE_SIZE);
 	}
-	if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+	if ((stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %lu, "
 				"must be an even multiple of %d bytes",
@@ -1418,8 +1418,6 @@ static int get_lmd_info(char *path, DIR *parent, DIR *dir,
                 /* retrieve needed file info */
                 strncpy((char *)lmd, fname, lumlen);
                 ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
-        } else {
-                return ret;
         }
 
         if (ret) {
@@ -2630,12 +2628,10 @@ static int check_mdt_match(struct find_param *param)
                 return 0;
 
         /* FIXME: For striped dir, we should get stripe information and check */
-        for (i = 0; i < param->num_mdts; i++) {
-                if (param->mdtindexes[i] == param->file_mdtindex)
-                        if (param->exclude_mdt)
-                                return 0;
-                        return 1;
-        }
+	for (i = 0; i < param->num_mdts; i++) {
+		if (param->mdtindexes[i] == param->file_mdtindex)
+			return !param->exclude_mdt;
+	}
 
         if (param->exclude_mdt)
                 return 1;

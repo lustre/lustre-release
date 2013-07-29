@@ -122,15 +122,15 @@ off_t		biggest = 0;
 char		state[256];
 unsigned long	testcalls = 0;		/* calls to function "test" */
 
-unsigned long	simulatedopcount = 0;	/* -b flag */
+long	simulatedopcount = 0;		/* -b flag */
 int	closeprob = 0;			/* -c flag */
 int	debug = 0;			/* -d flag */
-unsigned long	debugstart = 0;		/* -D flag */
-unsigned long	maxfilelen = 256 * 1024;	/* -l flag */
+long	debugstart = 0;			/* -D flag */
+long	maxfilelen = 256 * 1024;	/* -l flag */
 int	sizechecks = 1;			/* -n flag disables them */
 int	maxoplen = 64 * 1024;		/* -o flag */
 int	quiet = 0;			/* -q flag */
-unsigned long progressinterval = 0;	/* -p flag */
+long	progressinterval = 0;		/* -p flag */
 int	readbdy = 1;			/* -r flag */
 int	style = 0;			/* -s flag */
 int	truncbdy = 1;			/* -t flag */

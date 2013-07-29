@@ -2466,16 +2466,16 @@ static int mdd_declare_rename(const struct lu_env *env,
 
 		la->la_valid = LA_CTIME;
 		rc = mdo_declare_attr_set(env, mdd_tobj, la, handle);
-                if (rc)
-                        return rc;
+		if (rc)
+			return rc;
 
-		mdd_declare_links_del(env, mdd_tobj, handle);
-                if (rc)
-                        return rc;
+		rc = mdd_declare_links_del(env, mdd_tobj, handle);
+		if (rc)
+			return rc;
 
-                rc = mdd_declare_finish_unlink(env, mdd_tobj, ma, handle);
-                if (rc)
-                        return rc;
+		rc = mdd_declare_finish_unlink(env, mdd_tobj, ma, handle);
+		if (rc)
+			return rc;
         }
 
 	rc = mdd_declare_changelog_ext_store(env, mdd, tname, sname, handle);

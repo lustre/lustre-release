@@ -914,7 +914,7 @@ static int lprocfs_wr_enable_remote_dir(struct file *file, const char *buffer,
 	if (rc)
 		return rc;
 
-	if (val < 0 || val > 1)
+	if (val > 1)
 		return -ERANGE;
 
 	mdt->mdt_enable_remote_dir = val;
