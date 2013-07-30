@@ -121,7 +121,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  				"[ %-5s %-5s %-5s %-5s %-5s %-5s %-5s "
  				  "%-5s %-5s %-5s %-5s %-5s %-5s %-5s ]\n",
 -			   "group", "free", "frags", "first",
-+			   "group", "free", "frags", "first", "first", "pa",
++			   "group", "free", "free", "frags", "first", "pa",
  			   "2^0", "2^1", "2^2", "2^3", "2^4", "2^5", "2^6",
  			   "2^7", "2^8", "2^9", "2^10", "2^11", "2^12", "2^13");
  
