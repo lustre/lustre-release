@@ -5884,12 +5884,13 @@ test_101d() {
 
 	local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
 	[ $space -gt $((size * 1024)) ] ||
-		{ skip "Need free space ${size}M, have $space" && return; }
+		{ skip "Need free space ${size}M, have ${space}K" && return; }
 
-    echo Creating ${size}M test file $file
-    dd if=/dev/zero of=$file bs=1M count=$size || error "dd failed"
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
+	echo "Creating test file $file of size ${size}M with ${space}K free space"
+	$SETSTRIPE -c -1 $file || error "setstripe failed"
+	dd if=/dev/zero of=$file bs=1M count=$size || error "dd failed"
+	echo Cancel LRU locks on lustre client to flush the client cache
+	cancel_lru_locks osc
 
     echo Disable read-ahead
     local old_READAHEAD=$(set_read_ahead 0)
