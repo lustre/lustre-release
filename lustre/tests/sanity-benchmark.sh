@@ -29,6 +29,7 @@ RSIZE=${RSIZE:-512}
 DEBUG_LVL=${DEBUG_LVL:-0}
 DEBUG_OFF=${DEBUG_OFF:-"eval lctl set_param debug=\"$DEBUG_LVL\""}
 DEBUG_ON=${DEBUG_ON:-"eval lctl set_param debug=0x33f0484"}
+DIRECTIO=${DIRECTIO:-directio}
 
 PIOSBIN=${PIOSBIN:-$(which pios 2> /dev/null || true)}
 
@@ -143,7 +144,7 @@ test_iozone() {
     # check if O_DIRECT support is implemented in kernel
     if [ -z "$O_DIRECT" ]; then
 	touch $DIR/f.iozone
-	if ! ./directio write $DIR/f.iozone 0 1; then
+	if ! $DIRECTIO write $DIR/f.iozone 0 1; then
 	    log "SKIP iozone DIRECT IO test"
 	    O_DIRECT=no
 	fi
