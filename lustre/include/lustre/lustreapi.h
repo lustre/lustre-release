@@ -216,7 +216,7 @@ extern int llapi_find(char *path, struct find_param *param);
 extern int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 extern int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 				 int stripe_count, int stripe_pattern,
-				 char *poolname);
+				 const char *poolname);
 int llapi_direntry_remove(char *dname);
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,

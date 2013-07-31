@@ -35,12 +35,13 @@
 #include <lustre_update.h>
 #include <obd.h>
 
-struct update_request *out_find_update(struct thandle *th,
+struct update_request *out_find_update(struct thandle_update *tu,
 				       struct dt_device *dt_dev)
 {
 	struct update_request   *update;
 
-	list_for_each_entry(update, &th->th_remote_update_list, ur_list) {
+	LASSERT(tu != NULL);
+	list_for_each_entry(update, &tu->tu_remote_update_list, ur_list) {
 		if (update->ur_dt == dt_dev)
 			return update;
 	}
@@ -90,7 +91,7 @@ struct update_request *out_create_update_req(struct dt_device *dt)
 EXPORT_SYMBOL(out_create_update_req);
 
 /**
- * Find one loc in th_dev/dev_obj_update for the update,
+ * Find or create one loc in th_dev/dev_obj_update for the update,
  * Because only one thread can access this thandle, no need
  * lock now.
  */
@@ -98,10 +99,21 @@ struct update_request *out_find_create_update_loc(struct thandle *th,
 						  struct dt_object *dt)
 {
 	struct dt_device	*dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
+	struct thandle_update	*tu = th->th_update;
 	struct update_request	*update;
 	ENTRY;
 
-	update = out_find_update(th, dt_dev);
+	if (tu == NULL) {
+		OBD_ALLOC_PTR(tu);
+		if (tu == NULL)
+			RETURN(ERR_PTR(-ENOMEM));
+
+		INIT_LIST_HEAD(&tu->tu_remote_update_list);
+		tu->tu_sent_after_local_trans = 0;
+		th->th_update = tu;
+	}
+
+	update = out_find_update(tu, dt_dev);
 	if (update != NULL)
 		RETURN(update);
 
@@ -109,7 +121,9 @@ struct update_request *out_find_create_update_loc(struct thandle *th,
 	if (IS_ERR(update))
 		RETURN(update);
 
-	list_add_tail(&update->ur_list, &th->th_remote_update_list);
+	list_add_tail(&update->ur_list, &tu->tu_remote_update_list);
+
+	thandle_get(th);
 
 	RETURN(update);
 }

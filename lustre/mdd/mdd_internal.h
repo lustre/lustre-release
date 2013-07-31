@@ -139,6 +139,8 @@ struct mdd_thread_info {
 	struct lu_attr            mti_tattr;
 	/** used to set c/mtime */
 	struct lu_attr            mti_la_for_fix;
+	/* Only used in mdd_object_start */
+	struct lu_attr		  mti_la_for_start;
 	struct md_attr            mti_ma;
 	struct obd_info           mti_oi;
 	/* mti_ent and mti_key must be conjoint,
@@ -390,7 +392,8 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la);
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
-			  struct mdd_object *child, struct lu_attr *attr);
+			  struct mdd_object *child, const struct lu_attr *attr,
+			  const struct md_op_spec *spec);
 
 static inline void mdd_object_get(struct mdd_object *o)
 {

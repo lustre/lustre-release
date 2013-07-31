@@ -78,6 +78,14 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                   struct md_op_data *op_data);
 
+int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
+		  const union lmv_mds_md *lmm, int stripe_count);
+
+int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
+			  struct lmv_stripe_md *lsm,
+			  ldlm_blocking_callback cb_blocking,
+			  int extra_lock_flags);
+
 static inline struct lmv_tgt_desc *
 lmv_get_target(struct lmv_obd *lmv, mdsno_t mds)
 {
@@ -110,33 +118,6 @@ lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
         return lmv_get_target(lmv, mds);
 }
 
-static inline unsigned int
-mea_last_char_hash(unsigned int count, const char *name, int namelen)
-{
-	unsigned int c;
-
-	c = name[namelen - 1];
-	if (c == 0)
-		CWARN("invalid name %.*s\n", namelen, name);
-
-	c = c % count;
-
-	return c;
-}
-
-static inline unsigned int
-mea_all_chars_hash(unsigned int count, const char *name, int namelen)
-{
-	unsigned int c = 0;
-
-	while (--namelen >= 0)
-		c += name[namelen];
-
-	c = c % count;
-
-	return c;
-}
-
 static inline int lmv_stripe_md_size(int stripe_count)
 {
 	struct lmv_stripe_md *lsm;
@@ -144,7 +125,24 @@ static inline int lmv_stripe_md_size(int stripe_count)
 	return sizeof(*lsm) + stripe_count * sizeof(lsm->lsm_md_oinfo[0]);
 }
 
-int raw_name2idx(int hashtype, int count, const char *name, int namelen);
+int lmv_name_to_stripe_index(enum lmv_hash_type hashtype,
+			     unsigned int max_mdt_index,
+			     const char *name, int namelen);
+
+static inline const struct lmv_oinfo *
+lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
+			int namelen)
+{
+	int stripe_index;
+
+	stripe_index = lmv_name_to_stripe_index(lsm->lsm_md_hash_type,
+						lsm->lsm_md_stripe_count,
+						name, namelen);
+	LASSERT(stripe_index < lsm->lsm_md_stripe_count);
+
+	return &lsm->lsm_md_oinfo[stripe_index];
+}
+
 
 struct lmv_tgt_desc
 *lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,

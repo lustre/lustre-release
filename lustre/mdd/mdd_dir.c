@@ -1664,7 +1664,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 		RETURN(rc);
 
 	/* calling ->ah_make_hint() is used to transfer information from parent */
-	mdd_object_make_hint(env, mdd_pobj, son, attr);
+	mdd_object_make_hint(env, mdd_pobj, son, attr, spec);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
@@ -1678,8 +1678,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	       spec->u.sp_ea.eadata, spec->u.sp_ea.eadatalen,
 	       spec->sp_cr_flags, spec->no_create);
 
-	if (spec->no_create || spec->sp_cr_flags & MDS_OPEN_HAS_EA) {
-		/* replay case or lfs setstripe */
+	if (spec->no_create || (spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
 		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
 					spec->u.sp_ea.eadatalen);
 	} else {
@@ -1925,13 +1924,14 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		GOTO(out, rc);
 
 	/* replay case, create LOV EA from client data */
-	if (spec->no_create || (spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
+	if (spec->no_create ||
+	    (spec->sp_cr_flags & MDS_OPEN_HAS_EA && S_ISREG(attr->la_mode))) {
 		const struct lu_buf *buf;
 
 		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
 					spec->u.sp_ea.eadatalen);
-		rc = mdo_declare_xattr_set(env, c, buf, XATTR_NAME_LOV,
-					   0, handle);
+		rc = mdo_declare_xattr_set(env, c, buf, XATTR_NAME_LOV, 0,
+					   handle);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -1958,8 +1958,14 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
         if (rc)
                 return rc;
 
+	/* XXX: For remote create, it should indicate the remote RPC
+	 * will be sent after local transaction is finished, which
+	 * is not very nice, but it will be removed once we fully support
+	 * async update */
+	if (mdd_object_remote(p) && handle->th_update != NULL)
+		handle->th_update->tu_sent_after_local_trans = 1;
 out:
-        return rc;
+	return rc;
 }
 
 static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
@@ -2082,7 +2088,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (rc < 0)
 		GOTO(out_free, rc);
 
-	mdd_object_make_hint(env, mdd_pobj, son, attr);
+	mdd_object_make_hint(env, mdd_pobj, son, attr, spec);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
@@ -2143,13 +2149,14 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	 *      probably this way we code can be made better.
 	 */
 	if (rc == 0 && (spec->no_create ||
-			(spec->sp_cr_flags & MDS_OPEN_HAS_EA))) {
+			(spec->sp_cr_flags & MDS_OPEN_HAS_EA &&
+			 S_ISREG(attr->la_mode)))) {
 		const struct lu_buf *buf;
 
 		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
 				spec->u.sp_ea.eadatalen);
 		rc = mdo_xattr_set(env, son, buf, XATTR_NAME_LOV, 0, handle,
-				BYPASS_CAPA);
+				   BYPASS_CAPA);
 	}
 
 	if (rc == 0 && spec->sp_cr_flags & MDS_OPEN_VOLATILE)

@@ -663,6 +663,33 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, __u64 mode)
 	mfd->mfd_mode = mode;
 }
 
+/**
+ * prep ma_lmm/ma_lmv for md_attr from reply
+ */
+void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
+			      struct mdt_object *obj,
+			      struct md_attr *ma)
+{
+	LASSERT(ma->ma_lmv == NULL && ma->ma_lmm == NULL);
+	if (S_ISDIR(obj->mot_header.loh_attr)) {
+		ma->ma_lmv = req_capsule_server_get(info->mti_pill,
+						    &RMF_MDT_MD);
+		ma->ma_lmv_size = req_capsule_get_size(info->mti_pill,
+						       &RMF_MDT_MD,
+						       RCL_SERVER);
+		if (ma->ma_lmv_size > 0)
+			ma->ma_need |= MA_LMV;
+	} else {
+		ma->ma_lmm = req_capsule_server_get(info->mti_pill,
+						    &RMF_MDT_MD);
+		ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
+						       &RMF_MDT_MD,
+						       RCL_SERVER);
+		if (ma->ma_lmm_size > 0)
+			ma->ma_need |= MA_LOV;
+	}
+}
+
 static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 			struct mdt_object *o, __u64 flags, int created,
 			struct ldlm_reply *rep)
@@ -709,6 +736,13 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
+
+	if (ma->ma_valid & MA_LMV) {
+		LASSERT(ma->ma_lmv_size != 0);
+		repbody->eadatasize = ma->ma_lmv_size;
+		LASSERT(isdir);
+		repbody->valid |= OBD_MD_FLDIREA | OBD_MD_MEA;
+	}
 
         if (flags & FMODE_WRITE) {
                 rc = mdt_write_get(o);
@@ -1021,13 +1055,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         ldlm_rep = req_capsule_server_get(pill, &RMF_DLM_REP);
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
-        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
-                                               RCL_SERVER);
 	ma->ma_need = MA_INODE | MA_HSM;
-        if (ma->ma_lmm_size > 0)
-                ma->ma_need |= MA_LOV;
-
         ma->ma_valid = 0;
 
         mdt_req_from_lcd(req, lcd);
@@ -1086,6 +1114,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 			if (mdt_object_exists(child)) {
 				mdt_set_capainfo(info, 1, rr->rr_fid2,
 						 BYPASS_CAPA);
+				mdt_prep_ma_buf_from_rep(info, child, ma);
 				rc = mdt_attr_get_complex(info, child, ma);
 				if (rc == 0)
 					rc = mdt_finish_open(info, parent,
@@ -1144,7 +1173,7 @@ int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep)
 			mdt_set_disposition(info, rep, (DISP_IT_EXECD |
 							DISP_LOOKUP_EXECD |
 							DISP_LOOKUP_POS));
-
+			mdt_prep_ma_buf_from_rep(info, o, ma);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc == 0)
 				rc = mdt_finish_open(info, NULL, o, flags, 0,
@@ -1451,6 +1480,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
 
 	mdt_set_disposition(info, rep, (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
+	mdt_prep_ma_buf_from_rep(info, o, ma);
 	if (flags & MDS_OPEN_RELEASE)
 		ma->ma_need |= MA_HSM;
 	rc = mdt_attr_get_complex(info, o, ma);
@@ -1528,6 +1558,7 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (rc)
 				goto out;
 
+			mdt_prep_ma_buf_from_rep(info, o, ma);
 			mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc != 0)
@@ -1581,13 +1612,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	mdt_counter_incr(req, LPROC_MDT_OPEN);
         repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
-        ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
-                                               RCL_SERVER);
         ma->ma_need = MA_INODE;
-        if (ma->ma_lmm_size > 0)
-                ma->ma_need |= MA_LOV;
-
         ma->ma_valid = 0;
 
         LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
@@ -1766,7 +1791,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                         GOTO(out_child, result);
                 } else {
-
+			mdt_prep_ma_buf_from_rep(info, child, ma);
 			/* XXX: we should call this once, see few lines below */
 			if (result == 0)
 				result = mdt_attr_get_complex(info, child, ma);
@@ -1820,13 +1845,13 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		} else if (mdt_object_exists(child)) {
 			/* We have to get attr & LOV EA & HSM for this
 			 * object. */
+			mdt_prep_ma_buf_from_rep(info, child, ma);
 			ma->ma_need |= MA_HSM;
 			result = mdt_attr_get_complex(info, child, ma);
 		} else {
 			/* Object does not exist. Likely FS corruption. */
 			CERROR("%s: name '"DNAME"' present, but FID "
-			       DFID" is invalid\n",
-			       mdt_obd_name(info->mti_mdt),
+			       DFID" is invalid\n", mdt_obd_name(info->mti_mdt),
 			       PNAME(&rr->rr_name), PFID(child_fid));
 			GOTO(out_child, result = -EIO);
 		}

@@ -3188,6 +3188,27 @@ out:
         return rc;
 }
 
+static int ll_merge_md_attr(struct inode *inode)
+{
+	struct cl_attr attr = { 0 };
+	int rc;
+
+	LASSERT(ll_i2info(inode)->lli_lsm_md != NULL);
+	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
+			   &attr);
+	if (rc != 0)
+		RETURN(rc);
+
+	ll_i2info(inode)->lli_stripe_dir_size = attr.cat_size;
+	ll_i2info(inode)->lli_stripe_dir_nlink = attr.cat_nlink;
+
+	ll_i2info(inode)->lli_lvb.lvb_atime = attr.cat_atime;
+	ll_i2info(inode)->lli_lvb.lvb_mtime = attr.cat_mtime;
+	ll_i2info(inode)->lli_lvb.lvb_ctime = attr.cat_ctime;
+
+	RETURN(0);
+}
+
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
 			   __u64 ibits)
 {
@@ -3201,6 +3222,13 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
 
 	/* if object isn't regular file, don't validate size */
 	if (!S_ISREG(inode->i_mode)) {
+		if (S_ISDIR(inode->i_mode) &&
+		    ll_i2info(inode)->lli_lsm_md != NULL) {
+			rc = ll_merge_md_attr(inode);
+			if (rc != 0)
+				RETURN(rc);
+		}
+
 		LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
 		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
 		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
@@ -3233,23 +3261,29 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
         if (res)
                 return res;
 
-        stat->dev = inode->i_sb->s_dev;
-        if (ll_need_32bit_api(sbi))
-                stat->ino = cl_fid_build_ino(&lli->lli_fid, 1);
-        else
-                stat->ino = inode->i_ino;
-        stat->mode = inode->i_mode;
-        stat->nlink = inode->i_nlink;
-        stat->uid = inode->i_uid;
-        stat->gid = inode->i_gid;
+	stat->dev = inode->i_sb->s_dev;
+	if (ll_need_32bit_api(sbi))
+		stat->ino = cl_fid_build_ino(&lli->lli_fid, 1);
+	else
+		stat->ino = inode->i_ino;
+	stat->mode = inode->i_mode;
+	stat->uid = inode->i_uid;
+	stat->gid = inode->i_gid;
 	stat->rdev = inode->i_rdev;
-        stat->atime = inode->i_atime;
-        stat->mtime = inode->i_mtime;
-        stat->ctime = inode->i_ctime;
+	stat->atime = inode->i_atime;
+	stat->mtime = inode->i_mtime;
+	stat->ctime = inode->i_ctime;
 	stat->blksize = 1 << inode->i_blkbits;
+	stat->blocks = inode->i_blocks;
 
-        stat->size = i_size_read(inode);
-        stat->blocks = inode->i_blocks;
+	if (S_ISDIR(inode->i_mode) &&
+		ll_i2info(inode)->lli_lsm_md != NULL) {
+		stat->nlink = lli->lli_stripe_dir_nlink;
+		stat->size = lli->lli_stripe_dir_size;
+	} else {
+		stat->nlink = inode->i_nlink;
+		stat->size = i_size_read(inode);
+	}
 
         return 0;
 }

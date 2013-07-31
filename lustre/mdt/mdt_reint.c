@@ -276,27 +276,46 @@ static int mdt_md_create(struct mdt_thread_info *info)
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh, LCK_PW, &rr->rr_name);
 
-        parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
-                                      MDS_INODELOCK_UPDATE);
-        if (IS_ERR(parent))
-                RETURN(PTR_ERR(parent));
+	parent = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
+	if (IS_ERR(parent))
+		RETURN(PTR_ERR(parent));
 
-        rc = mdt_version_get_check_save(info, parent, 0);
-        if (rc)
-                GOTO(out_put_parent, rc);
+	if (!mdt_object_exists(parent))
+		GOTO(put_parent, rc = -ENOENT);
 
-        /*
-         * Check child name version during replay.
-         * During create replay a file may exist with same name.
-         */
+	lh = &info->mti_lh[MDT_LH_PARENT];
+	if (mdt_object_remote(parent)) {
+		mdt_lock_reg_init(lh, LCK_EX);
+		rc = mdt_remote_object_lock(info, parent, &lh->mlh_rreg_lh,
+					    lh->mlh_rreg_mode,
+					    MDS_INODELOCK_UPDATE);
+		if (rc != ELDLM_OK)
+			GOTO(put_parent, rc);
+
+	} else {
+		mdt_lock_pdo_init(lh, LCK_PW, &rr->rr_name);
+		rc = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE,
+				     MDT_LOCAL_LOCK);
+		if (rc)
+			GOTO(put_parent, rc);
+
+		rc = mdt_version_get_check_save(info, parent, 0);
+		if (rc)
+			GOTO(unlock_parent, rc);
+	}
+
+	/*
+	 * Check child name version during replay.
+	 * During create replay a file may exist with same name.
+	 */
 	rc = mdt_lookup_version_check(info, parent, &rr->rr_name,
 				      &info->mti_tmp_fid1, 1);
 	if (rc == 0)
-		GOTO(out_put_parent, rc = -EEXIST);
+		GOTO(unlock_parent, rc = -EEXIST);
 
 	/* -ENOENT is expected here */
 	if (rc != -ENOENT)
-		GOTO(out_put_parent, rc);
+		GOTO(unlock_parent, rc);
 
 	/* save version of file name for replay, it must be ENOENT here */
 	mdt_enoent_version_save(info, 1);
@@ -381,9 +400,11 @@ out_put_child:
                 rc = PTR_ERR(child);
         }
         mdt_create_pack_capa(info, rc, child, repbody);
-out_put_parent:
-        mdt_object_unlock_put(info, parent, lh, rc);
-        RETURN(rc);
+unlock_parent:
+	mdt_object_unlock(info, parent, lh, rc);
+put_parent:
+	mdt_object_put(info->mti_env, parent);
+	RETURN(rc);
 }
 
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,

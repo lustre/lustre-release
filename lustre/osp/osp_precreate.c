@@ -1289,7 +1289,7 @@ int osp_init_precreate(struct osp_device *d)
 	 * start thread handling precreation and statfs updates
 	 */
 	task = kthread_run(osp_precreate_thread, d,
-			       "osp-pre-%u", d->opd_index);
+			   "osp-pre-%u-%u", d->opd_index, d->opd_group);
 	if (IS_ERR(task)) {
 		CERROR("can't start precreate thread %ld\n", PTR_ERR(task));
 		RETURN(PTR_ERR(task));

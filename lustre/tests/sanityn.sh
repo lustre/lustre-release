@@ -1264,11 +1264,6 @@ test_40a() {
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
-	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS mkdir -i 1 $DIR2/$tfile-6
-		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
-	fi
-
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
@@ -1299,11 +1294,6 @@ test_40b() {
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 	# all operations above shouldn't wait the first one
 
-	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS mkdir -i 1 $DIR2/$tfile-6
-		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
-	fi
-
         check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
 	rm -r $DIR1/*
@@ -1332,11 +1322,6 @@ test_40c() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-5
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
-
-	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS mkdir -i 1 $DIR2/$tfile-6
-		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
-	fi
 
         # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
@@ -1368,11 +1353,6 @@ test_40d() {
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
-	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS mkdir -i 1 $DIR2/$tfile-6
-		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
-	fi
-
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
@@ -1399,11 +1379,6 @@ test_40e() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-2
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
-
-	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS mkdir -i 1 $DIR2/$tfile-6
-		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
-	fi
 
        # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"

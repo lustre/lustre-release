@@ -2062,6 +2062,27 @@ static inline int md_free_lustre_md(struct obd_export *exp,
         RETURN(MDP(exp->exp_obd, free_lustre_md)(exp, md));
 }
 
+static inline int md_update_lsm_md(struct obd_export *exp,
+				   struct lmv_stripe_md *lsm,
+				   struct mdt_body *body,
+				   ldlm_blocking_callback cb)
+{
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, update_lsm_md);
+	EXP_MD_COUNTER_INCREMENT(exp, update_lsm_md);
+	RETURN(MDP(exp->exp_obd, update_lsm_md)(exp, lsm, body, cb));
+}
+
+static inline int md_merge_attr(struct obd_export *exp,
+				const struct lmv_stripe_md *lsm,
+				struct cl_attr *attr)
+{
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, merge_attr);
+	EXP_MD_COUNTER_INCREMENT(exp, merge_attr);
+	RETURN(MDP(exp->exp_obd, merge_attr)(exp, lsm, attr));
+}
+
 static inline int md_setxattr(struct obd_export *exp,
                               const struct lu_fid *fid, struct obd_capa *oc,
                               obd_valid valid, const char *name,
@@ -2292,10 +2313,6 @@ int class_del_uuid (const char *uuid);
 int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
-
-/* mea.c */
-int mea_name2idx(struct lmv_stripe_md *mea, const char *name, int namelen);
-int raw_name2idx(int hashtype, int count, const char *name, int namelen);
 
 /* prng.c */
 #define ll_generate_random_uuid(uuid_out) cfs_get_random_bytes(uuid_out, sizeof(class_uuid_t))

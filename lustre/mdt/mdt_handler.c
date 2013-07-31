@@ -531,6 +531,7 @@ int mdt_attr_get_lov(struct mdt_thread_info *info,
 	buf->lb_buf = ma->ma_lmm;
 	buf->lb_len = ma->ma_lmm_size;
 	rc = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_LOV);
+
 	if (rc > 0) {
 		ma->ma_lmm_size = rc;
 		ma->ma_valid |= MA_LOV;
@@ -754,7 +755,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		ma->ma_lmv = buffer->lb_buf;
 		ma->ma_lmv_size = buffer->lb_len;
 		ma->ma_need = MA_INODE;
-		if (ma->ma_lmm_size > 0)
+		if (ma->ma_lmv_size > 0)
 			ma->ma_need |= MA_LMV;
 	} else {
 		ma->ma_lmm = buffer->lb_buf;
@@ -2671,7 +2672,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
 
-        /* To not check for split by default. */
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
 }

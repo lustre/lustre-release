@@ -624,8 +624,6 @@ static int inline lod_qos_dev_is_full(struct obd_statfs *msfs)
 	return (msfs->os_bavail < used);
 }
 
-int lod_ea_store_resize(struct lod_thread_info *info, int size);
-
 static inline int lod_qos_ost_in_use_clear(const struct lu_env *env, int stripes)
 {
 	struct lod_thread_info *info = lod_env_info(env);

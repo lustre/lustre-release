@@ -623,23 +623,23 @@ test_22a () {
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 
-	fail mds${MDTIDX}
+	fail mds$((MDTIDX + 1))
 	wait $CLIENT_PID || error "lfs mkdir failed"
 
-	replay_barrier mds${MDTIDX}
+	replay_barrier mds$MDTIDX
 	create_remote_dir_files_22 || error "Remote creation failed $?"
-	fail mds${MDTIDX}
+	fail mds$MDTIDX
 
 	checkstat_22 || error "check stat failed $?"
 
 	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
 	return 0
 }
-run_test 22a "c1 lfs mkdir -i 1 dir1, M0 drop reply & fail, c2 mkdir dir1/dir"
+run_test 22a "c1 lfs mkdir -i 1 dir1, M1 drop reply & fail, c2 mkdir dir1/dir"
 
 test_22b () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
@@ -649,7 +649,7 @@ test_22b () {
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 
@@ -665,7 +665,7 @@ test_22b () {
 	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
 	return 0
 }
-run_test 22b "c1 lfs mkdir -i 1 d1, M0 drop reply & fail M0/M1, c2 mkdir d1/dir"
+run_test 22b "c1 lfs mkdir -i 1 d1, M1 drop reply & fail M0/M1, c2 mkdir d1/dir"
 
 test_22c () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
@@ -679,12 +679,12 @@ test_22c () {
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
 	# OBD_FAIL_UPDATE_OBJ_NET_REP    0x1701
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1701
+	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
-	fail mds$((MDTIDX+1))
+	fail mds$MDTIDX
 	wait $CLIENT_PID || error "lfs mkdir failed"
 
 	replay_barrier mds$MDTIDX
@@ -706,10 +706,10 @@ test_22d () {
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
 	# OBD_FAIL_UPDATE_OBJ_NET_REP    0x1701
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1701
+	do_facet mds$MDTIDX lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+	do_facet mds$MDTIDX lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
 	wait $CLIENT_PID || error "lfs mkdir failed"

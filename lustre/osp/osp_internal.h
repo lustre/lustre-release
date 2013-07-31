@@ -273,7 +273,9 @@ struct osp_thread_info {
 	struct obdo		 osi_obdo;
 };
 
-static inline bool is_remote_trans(struct thandle *th)
+/* The transaction only include the updates on the remote node, and
+ * no local updates at all */
+static inline bool is_only_remote_trans(struct thandle *th)
 {
 	return th->th_dev->dd_ops == &osp_dt_ops;
 }
@@ -472,7 +474,6 @@ struct thandle *osp_trans_create(const struct lu_env *env,
 				 struct dt_device *d);
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th);
-int osp_trans_stop(const struct lu_env *env, struct thandle *th);
 
 /* osp_object.c */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
@@ -490,6 +491,9 @@ int osp_declare_object_destroy(const struct lu_env *env,
 			       struct dt_object *dt, struct thandle *th);
 int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 		       struct thandle *th);
+
+int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
+		   struct thandle *th);
 
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);

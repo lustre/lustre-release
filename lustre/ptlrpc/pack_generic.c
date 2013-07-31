@@ -2130,9 +2130,6 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 	__swab32s(&lum->lum_hash_type);
 	__swab32s(&lum->lum_type);
 	CLASSERT(offsetof(typeof(*lum), lum_padding1) != 0);
-	CLASSERT(offsetof(typeof(*lum), lum_padding2) != 0);
-	CLASSERT(offsetof(typeof(*lum), lum_padding3) != 0);
-
 	for (i = 0; i < lum->lum_stripe_count; i++) {
 		__swab32s(&lum->lum_objects[i].lum_mds);
 		lustre_swab_lu_fid(&lum->lum_objects[i].lum_fid);

@@ -1040,7 +1040,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 	CFS_INIT_LIST_HEAD(&d->opd_syn_committed_there);
 
 	rc = PTR_ERR(kthread_run(osp_sync_thread, d,
-				 "osp-syn-%u", d->opd_index));
+				 "osp-syn-%u-%u", d->opd_index, d->opd_group));
 	if (IS_ERR_VALUE(rc)) {
 		CERROR("%s: can't start sync thread: rc = %d\n",
 		       d->opd_obd->obd_name, rc);

@@ -339,7 +339,7 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 
 /* target/out_lib.c */
 struct update_request *
-out_find_update(struct thandle *th, struct dt_device *dt_dev);
+out_find_update(struct thandle_update *tu, struct dt_device *dt_dev);
 void out_destroy_update_req(struct update_request *update);
 struct update_request *out_create_update_req(struct dt_device *dt);
 struct update_request *out_find_create_update_loc(struct thandle *th,

@@ -1717,7 +1717,7 @@ test_110c () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	drop_update_reply $((MDTIDX + 1)) "$LFS mkdir -i $MDTIDX $remote_dir" ||
+	drop_update_reply $MDTIDX "$LFS mkdir -i $MDTIDX $remote_dir" ||
 						error "lfs mkdir failed"
 
 	diridx=$($GETSTRIPE -M $remote_dir)

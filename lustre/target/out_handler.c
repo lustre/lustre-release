@@ -263,7 +263,7 @@ static int __out_tx_create(const struct lu_env *env, struct dt_object *obj,
 	lu_object_get(&obj->do_lu);
 	arg->object = obj;
 	arg->u.create.attr = *attr;
-	if (parent_fid)
+	if (parent_fid != NULL)
 		arg->u.create.fid = *parent_fid;
 	memset(&arg->u.create.hint, 0, sizeof(arg->u.create.hint));
 	arg->u.create.dof  = *dof;
@@ -300,7 +300,7 @@ static int out_create(struct tgt_session_info *tsi)
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
 	dof->dof_type = dt_mode_to_dft(attr->la_mode);
-	if (S_ISDIR(attr->la_mode)) {
+	if (update->u_lens[1] > 0) {
 		int size;
 
 		fid = update_param_buf(update, 1, &size);

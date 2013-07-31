@@ -931,7 +931,7 @@ static void osd_trans_commit_cb(struct super_block *sb,
 
         lu_context_exit(&th->th_ctx);
         lu_context_fini(&th->th_ctx);
-        OBD_FREE_PTR(oh);
+	thandle_put(th);
 }
 
 static struct thandle *osd_trans_create(const struct lu_env *env,
@@ -956,7 +956,9 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                 th->th_result = 0;
                 th->th_tags = LCT_TX_HANDLE;
                 oh->ot_credits = 0;
-                oti->oti_dev = osd_dt_dev(d);
+		atomic_set(&th->th_refc, 1);
+		th->th_alloc_size = sizeof(*oh);
+		oti->oti_dev = osd_dt_dev(d);
                 CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
                 osd_th_alloced(oh);
 
@@ -1097,7 +1099,8 @@ static int osd_seq_exists(const struct lu_env *env,
 /*
  * Concurrency: shouldn't matter.
  */
-static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
+static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
+			  struct thandle *th)
 {
         int                     rc = 0;
         struct osd_thandle     *oh;
@@ -1140,7 +1143,7 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 if (rc != 0)
                         CERROR("Failure to stop transaction: %d\n", rc);
         } else {
-                OBD_FREE_PTR(oh);
+		thandle_put(&oh->ot_super);
         }
 
 	/* as we want IO to journal and data IO be concurrent, we don't block
@@ -2195,7 +2198,6 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 {
         LASSERT(ah);
 
-        memset(ah, 0, sizeof(*ah));
         ah->dah_parent = parent;
         ah->dah_mode = child_mode;
 }
@@ -2969,6 +2971,9 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
+
+	CDEBUG(D_INODE, DFID" set xattr '%s' with size %zd\n",
+	       PFID(lu_object_fid(&dt->do_lu)), name, buf->lb_len);
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 	if (fl & LU_XATTR_REPLACE)
@@ -4831,14 +4836,16 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
         else
 		up_read(&obj->oo_ext_idx_sem);
 
-        if (it->oie_rd_dirent == 0) {
-                result = -EIO;
-        } else {
-                it->oie_dirent = it->oie_buf;
-                it->oie_it_dirent = 1;
-        }
+	if (it->oie_rd_dirent == 0) {
+		/*If it does not get any dirent, it means it has been reached
+		 *to the end of the dir */
+		it->oie_file.f_pos = ldiskfs_get_htree_eof(&it->oie_file);
+	} else {
+		it->oie_dirent = it->oie_buf;
+		it->oie_it_dirent = 1;
+	}
 
-        RETURN(result);
+	RETURN(result);
 }
 
 /**

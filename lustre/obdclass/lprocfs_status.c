@@ -2482,6 +2482,8 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_MD_OP_INIT(num_private_stats, stats, init_ea_size);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, get_lustre_md);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, free_lustre_md);
+	LPROCFS_MD_OP_INIT(num_private_stats, stats, update_lsm_md);
+	LPROCFS_MD_OP_INIT(num_private_stats, stats, merge_attr);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, clear_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);

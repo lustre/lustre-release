@@ -77,13 +77,11 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 	if (o != NULL) {
 		l = &o->opo_obj.do_lu;
 
-		/* For data object, OSP obj would always be the top
-		 * object, i.e. hdr is always NULL, see lu_object_alloc.
-		 * But for metadata object, we always build the object
-		 * stack from MDT. i.e. mdt_object will be the top object
-		 * i.e.  hdr != NULL */
+		/* If hdr is NULL, it means the object is not built
+		 * from the top dev(MDT/OST), usually it happens when
+		 * building striped object, like data object on MDT or
+		 * striped object for directory */
 		if (hdr == NULL) {
-			/* object for OST */
 			h = &o->opo_header;
 			lu_object_header_init(h);
 			dt_object_init(&o->opo_obj, h, d);
@@ -1161,6 +1159,16 @@ static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
+int osp_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+		  struct md_op_data *op_data)
+{
+	struct client_obd *cli = &exp->exp_obd->u.cli;
+	struct lu_client_seq *seq = cli->cl_seq;
+
+	ENTRY;
+	RETURN(seq_client_alloc_fid(NULL, seq, fid));
+}
+
 /* context key constructor/destructor: mdt_key_init, mdt_key_fini */
 LU_KEY_INIT_FINI(osp, struct osp_thread_info);
 static void osp_key_exit(const struct lu_context *ctx,
@@ -1182,7 +1190,7 @@ struct lu_context_key osp_thread_key = {
 LU_KEY_INIT_FINI(osp_txn, struct osp_txn_info);
 
 struct lu_context_key osp_txn_key = {
-	.lct_tags = LCT_OSP_THREAD,
+	.lct_tags = LCT_OSP_THREAD | LCT_TX_HANDLE,
 	.lct_init = osp_txn_key_init,
 	.lct_fini = osp_txn_key_fini
 };
@@ -1221,6 +1229,7 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_statfs	= osp_obd_statfs,
 	.o_fid_init	= client_fid_init,
 	.o_fid_fini	= client_fid_fini,
+	.o_fid_alloc	= osp_fid_alloc,
 };
 
 struct llog_operations osp_mds_ost_orig_logops;

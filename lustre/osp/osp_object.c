@@ -1088,6 +1088,7 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 			po->opo_non_exist = 1;
 			rc = 0;
 		}
+		init_rwsem(&po->opo_sem);
 	}
 	RETURN(rc);
 }

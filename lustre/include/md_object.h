@@ -136,7 +136,7 @@ struct md_attr {
         struct lu_fid           ma_pfid;
         struct md_hsm           ma_hsm;
         struct lov_mds_md      *ma_lmm;
-        struct lmv_stripe_md   *ma_lmv;
+	union lmv_mds_md       *ma_lmv;
         void                   *ma_acl;
         struct llog_cookie     *ma_cookie;
         struct lustre_capa     *ma_capa;

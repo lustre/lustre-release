@@ -63,11 +63,13 @@ static inline void *update_param_buf(struct update *update, int index,
 	if (index >= UPDATE_BUF_COUNT)
 		return NULL;
 
-	ptr = (char *)update + cfs_size_round(offsetof(struct update,
-						       u_bufs[0]));
-	for (i = 0; i < index; i++) {
-		LASSERT(update->u_lens[i] > 0);
-		ptr += cfs_size_round(update->u_lens[i]);
+	if (unlikely(update->u_lens[index] == 0)) {
+		ptr = NULL;
+	} else {
+		ptr = (char *)update +
+		      cfs_size_round(offsetof(struct update, u_bufs[0]));
+		for (i = 0; i < index; i++)
+			ptr += cfs_size_round(update->u_lens[i]);
 	}
 
 	if (size != NULL)
