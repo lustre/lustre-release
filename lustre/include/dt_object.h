@@ -1157,7 +1157,7 @@ static inline struct obd_capa *dt_capa_get(const struct lu_env *env,
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
-        LASSERT(dt->do_ops->do_ref_del);
+	LASSERT(dt->do_ops->do_capa_get);
         return dt->do_ops->do_capa_get(env, dt, old, opc);
 }
 
