@@ -535,7 +535,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	/* only configure qsd for MDT & OST */
 	type = server_name2index(svname, &idx, NULL);
 	if (type != LDD_F_SV_TYPE_MDT && type != LDD_F_SV_TYPE_OST)
-		RETURN(ERR_PTR(-EINVAL));
+		RETURN(NULL);
 
 	/* allocate qsd instance */
 	OBD_ALLOC_PTR(qsd);
