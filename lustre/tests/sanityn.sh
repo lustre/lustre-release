@@ -2479,6 +2479,8 @@ run_test 71 "correct file map just after write operation is finished"
 
 test_72() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
+	local tlink1
+	local tlink2
 	save_lustre_params client "llite.*.xattr_cache" > $p
 	lctl set_param llite.*.xattr_cache 1 ||
 		{ skip "xattr cache is not supported"; return 0; }
@@ -2492,6 +2494,14 @@ test_72() {
 		error "setfattr2 failed"
 	getfattr -n user.attr1 $DIR1/$tfile | grep value2 ||
 		error "getfattr2 failed"
+
+	# check that trusted.link is consistent
+	tlink1=$(getfattr -n trusted.link $DIR1/$tfile | md5sum)
+	ln $DIR2/$tfile $DIR2/$tfile-2 || error "failed to link"
+	tlink2=$(getfattr -n trusted.link $DIR1/$tfile | md5sum)
+	echo "$tlink1 $tlink2"
+	[ "$tlink1" = "$tlink2" ] && error "trusted.link should have changed!"
+
 	rm -f $DIR2/$tfile
 
 	restore_lustre_params < $p

@@ -1116,13 +1116,13 @@ int mdt_swap_layouts(struct mdt_thread_info *info)
 	lh2 = &info->mti_lh[MDT_LH_OLD];
 	mdt_lock_reg_init(lh2, LCK_EX);
 
-	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT,
-			     MDT_LOCAL_LOCK);
+	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
+			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
 	if (rc < 0)
 		GOTO(put, rc);
 
-	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT,
-			     MDT_LOCAL_LOCK);
+	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
+			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
 	if (rc < 0)
 		GOTO(unlock1, rc);
 

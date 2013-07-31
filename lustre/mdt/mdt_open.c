@@ -2089,22 +2089,25 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	ma->ma_hsm.mh_flags |= HS_RELEASED;
 	lustre_hsm2buf(buf->lb_buf, &ma->ma_hsm);
 	ma->ma_hsm.mh_flags &= ~HS_RELEASED;
-	rc = mo_xattr_set(info->mti_env, mdt_object_child(orphan), buf,
-			  XATTR_NAME_HSM, 0);
-	if (rc < 0)
-		GOTO(out_close, rc);
 
 	mdt_lock_reg_init(lh, LCK_EX);
-	rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_LAYOUT, MDT_LOCAL_LOCK);
-	if (rc == 0) {
+	rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_LAYOUT |
+			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
+	if (rc != 0)
+		GOTO(out_close, rc);
+
+	rc = mo_xattr_set(info->mti_env, mdt_object_child(orphan), buf,
+			  XATTR_NAME_HSM, 0);
+
+	if (rc == 0)
 		/* Swap layout with orphan object */
 		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
 				     mdt_object_child(orphan),
 				     SWAP_LAYOUTS_MDS_HSM);
 
-		/* Release exclusive LL */
-		mdt_object_unlock(info, o, lh, 1);
-	}
+	/* Release exclusive LL */
+	mdt_object_unlock(info, o, lh, 1);
+
 	EXIT;
 
 out_close:

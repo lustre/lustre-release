@@ -469,14 +469,21 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 	/* If an up2date copy exists in the backend, add dirty flag */
 	if ((ma->ma_valid & MA_HSM) && (ma->ma_hsm.mh_flags & HS_EXISTS)
 	    && !(ma->ma_hsm.mh_flags & (HS_DIRTY|HS_RELEASED))) {
+		struct mdt_lock_handle  *lh = &info->mti_lh[MDT_LH_CHILD];
 
 		ma->ma_hsm.mh_flags |= HS_DIRTY;
+
+		mdt_lock_reg_init(lh, LCK_PW);
+		rc = mdt_object_lock(info, mo, lh, MDS_INODELOCK_XATTR,
+				     MDT_LOCAL_LOCK);
+		if (rc != 0)
+			RETURN(rc);
+
 		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
-		if (rc) {
+		if (rc)
 			CERROR("file attribute change error for "DFID": %d\n",
 				PFID(mdt_object_fid(mo)), rc);
-			RETURN(rc);
-		}
+		mdt_object_unlock(info, mo, lh, rc);
 	}
 
 	RETURN(rc);
@@ -943,8 +950,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 		GOTO(out_unlock_parent, rc = -EXDEV);
 	}
 
-        rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
-                            MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE |
+			     MDS_INODELOCK_XATTR, MDT_CROSS_LOCK);
         if (rc != 0) {
                 mdt_object_put(info->mti_env, ms);
                 GOTO(out_unlock_parent, rc);
@@ -1235,8 +1242,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
         mdt_lock_reg_init(lh_oldp, LCK_EX);
-        rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP,
-                             MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP |
+			     MDS_INODELOCK_XATTR, MDT_CROSS_LOCK);
         if (rc != 0) {
                 mdt_object_put(info->mti_env, mold);
                 GOTO(out_unlock_target, rc);
