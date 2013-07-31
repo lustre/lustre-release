@@ -3575,7 +3575,7 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_GETXATTR] = {
 		.it_fmt   = &RQF_LDLM_INTENT_GETXATTR,
-                .it_flags = 0,
+		.it_flags = HABEO_CORPUS,
 		.it_act   = mdt_intent_getxattr
         },
 	[MDT_IT_LAYOUT] = {
