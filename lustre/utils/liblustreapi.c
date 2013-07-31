@@ -792,6 +792,50 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
         return 0;
 }
 
+int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
+				     int stripe_count, int stripe_pattern,
+				     const char *pool_name)
+{
+	struct lmv_user_md	lum = { 0 };
+	int			fd;
+	int			rc = 0;
+
+	lum.lum_magic = LMV_USER_MAGIC;
+	lum.lum_stripe_offset = stripe_offset;
+	lum.lum_stripe_count = stripe_count;
+	lum.lum_hash_type = stripe_pattern;
+	if (pool_name != NULL) {
+		if (strlen(pool_name) >= sizeof(lum.lum_pool_name)) {
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "error LL_IOC_LMV_SET_DEFAULT_STRIPE '%s'"
+				  ": too large pool name: %s", name, pool_name);
+			return -E2BIG;
+		}
+		strncpy(lum.lum_pool_name, pool_name, strlen(pool_name));
+	}
+
+	fd = open(name, O_DIRECTORY | O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
+		return rc;
+	}
+
+	rc = ioctl(fd, LL_IOC_LMV_SET_DEFAULT_STRIPE, &lum);
+	if (rc < 0) {
+		char *errmsg = "stripe already set";
+		rc = -errno;
+		if (errno != EEXIST && errno != EALREADY)
+			errmsg = strerror(errno);
+
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "error on LL_IOC_LMV_SETSTRIPE '%s' (%d): %s",
+				  name, fd, errmsg);
+	}
+	close(fd);
+	return rc;
+}
+
 int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 			  int stripe_count, int stripe_pattern,
 			  const char *pool_name)
@@ -1460,8 +1504,12 @@ static int cb_get_dirstripe(char *path, DIR *d, struct find_param *param)
 	int ret = 0;
 
 	lmv->lum_stripe_count = param->fp_lmv_count;
-	lmv->lum_magic = LMV_MAGIC_V1;
+	if (param->get_default_lmv)
+		lmv->lum_magic = LMV_USER_MAGIC;
+	else
+		lmv->lum_magic = LMV_MAGIC_V1;
 	ret = ioctl(dirfd(d), LL_IOC_LMV_GETSTRIPE, lmv);
+
 	return ret;
 }
 
@@ -2379,11 +2427,8 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			verbose = VERBOSE_OBJID;
 	}
 
-	if (lum->lum_magic == LMV_USER_MAGIC)
-		verbose &= ~VERBOSE_OBJID;
-
 	if (depth && path && ((verbose != VERBOSE_OBJID)))
-		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%s\n", prefix, path);
 
 	if (verbose & VERBOSE_COUNT) {
 		if (verbose & ~VERBOSE_COUNT)
@@ -2399,16 +2444,16 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			     (int)lum->lum_stripe_offset);
 	}
 
-	if (verbose & VERBOSE_OBJID) {
+	if (verbose & VERBOSE_OBJID && lum->lum_magic != LMV_USER_MAGIC) {
 		if ((obdstripe == 1))
 			llapi_printf(LLAPI_MSG_NORMAL,
-				     "\tmdtidx\t\t FID[seq:oid:ver]\n");
+				     "mdtidx\t\t FID[seq:oid:ver]\n");
 		for (i = 0; i < lum->lum_stripe_count; i++) {
 			int idx = objects[i].lum_mds;
 			struct lu_fid *fid = &objects[i].lum_fid;
 			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
 				llapi_printf(LLAPI_MSG_NORMAL,
-					     "\t%6u\t\t "DFID"\t\t%s\n",
+					     "%6u\t\t "DFID"\t\t%s\n",
 					    idx, PFID(fid),
 					    obdindex == idx ? " *" : "");
 		}
@@ -2428,7 +2473,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 {
 	__u32 magic;
 
-	if (param->get_lmv)
+	if (param->get_lmv || param->get_default_lmv)
 		magic = (__u32)param->fp_lmv_md->lum_magic;
 	else
 		magic = *(__u32 *)&param->lmd->lmd_lmm; /* lum->lmm_magic */
@@ -3156,7 +3201,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
         }
 
 	if (d) {
-		if (param->get_lmv) {
+		if (param->get_lmv || param->get_default_lmv) {
 			ret = cb_get_dirstripe(path, d, param);
 		} else {
 			ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE,
@@ -3188,15 +3233,24 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
 			 * a check later on in the code path.
 			 * The object_seq needs to be set for the "(Default)"
 			 * prefix to be displayed. */
-			struct lov_user_md *lmm = &param->lmd->lmd_lmm;
-			lmm->lmm_magic = LOV_USER_MAGIC_V1;
-			if (!param->raw)
-				ostid_set_seq(&lmm->lmm_oi,
-					      FID_SEQ_LOV_DEFAULT);
-			lmm->lmm_stripe_count = 0;
-			lmm->lmm_stripe_size = 0;
-			lmm->lmm_stripe_offset = -1;
-			goto dump;
+			if (param->get_default_lmv) {
+				struct lmv_user_md *lum = param->fp_lmv_md;
+
+				lum->lum_magic = LMV_USER_MAGIC;
+				lum->lum_stripe_count = 0;
+				lum->lum_stripe_offset = -1;
+				goto dump;
+			} else {
+				struct lov_user_md *lmm = &param->lmd->lmd_lmm;
+				lmm->lmm_magic = LOV_USER_MAGIC_V1;
+				if (!param->raw)
+					ostid_set_seq(&lmm->lmm_oi,
+						      FID_SEQ_LOV_DEFAULT);
+				lmm->lmm_stripe_count = 0;
+				lmm->lmm_stripe_size = 0;
+				lmm->lmm_stripe_offset = -1;
+				goto dump;
+			}
                 } else if (errno == ENODATA && parent != NULL) {
 			if (!param->obduuid && !param->mdtuuid)
                                 llapi_printf(LLAPI_MSG_NORMAL,

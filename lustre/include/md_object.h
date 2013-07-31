@@ -71,17 +71,18 @@ struct md_quota *md_quota(const struct lu_env *env);
 
 /** metadata attributes */
 enum ma_valid {
-        MA_INODE     = (1 << 0),
-        MA_LOV       = (1 << 1),
-        MA_COOKIE    = (1 << 2),
-        MA_FLAGS     = (1 << 3),
-        MA_LMV       = (1 << 4),
-        MA_ACL_DEF   = (1 << 5),
-        MA_LOV_DEF   = (1 << 6),
-        MA_LAY_GEN   = (1 << 7),
-        MA_HSM       = (1 << 8),
-        MA_SOM       = (1 << 9),
-        MA_PFID      = (1 << 10)
+	MA_INODE     = (1 << 0),
+	MA_LOV       = (1 << 1),
+	MA_COOKIE    = (1 << 2),
+	MA_FLAGS     = (1 << 3),
+	MA_LMV       = (1 << 4),
+	MA_ACL_DEF   = (1 << 5),
+	MA_LOV_DEF   = (1 << 6),
+	MA_LAY_GEN   = (1 << 7),
+	MA_HSM       = (1 << 8),
+	MA_SOM       = (1 << 9),
+	MA_PFID      = (1 << 10),
+	MA_LMV_DEF   = (1 << 11)
 };
 
 typedef enum {

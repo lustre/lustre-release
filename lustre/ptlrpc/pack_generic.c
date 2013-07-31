@@ -2120,6 +2120,31 @@ void lustre_swab_lmv_desc (struct lmv_desc *ld)
         /* uuid endian insensitive */
 }
 
+/* This structure is always in little-endian */
+static void lustre_swab_lmv_mds_md_v1(struct lmv_mds_md_v1 *lmm1)
+{
+	int i;
+
+	__swab32s(&lmm1->lmv_magic);
+	__swab32s(&lmm1->lmv_stripe_count);
+	__swab32s(&lmm1->lmv_master_mdt_index);
+	__swab32s(&lmm1->lmv_hash_type);
+	__swab32s(&lmm1->lmv_layout_version);
+	for (i = 0; i < lmm1->lmv_stripe_count; i++)
+		lustre_swab_lu_fid(&lmm1->lmv_stripe_fids[i]);
+}
+
+void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm)
+{
+	switch (lmm->lmv_magic) {
+	case LMV_MAGIC_V1:
+		lustre_swab_lmv_mds_md_v1(&lmm->lmv_md_v1);
+		break;
+	default:
+		break;
+	}
+}
+
 void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 {
 	int i;

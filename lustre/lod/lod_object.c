@@ -902,8 +902,40 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			attr->la_mode = S_IFREG;
 		}
 		rc = lod_declare_striped_object(env, dt, attr, buf, th);
-		if (rc)
+	} else if (S_ISDIR(mode)) {
+		struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
+		struct lod_object	*lo = lod_dt_obj(dt);
+		int			i;
+
+		if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
+			struct lmv_user_md_v1 *lum;
+
+			LASSERT(buf != NULL && buf->lb_buf != NULL);
+			lum = buf->lb_buf;
+			rc = lod_verify_md_striping(d, lum);
+			if (rc != 0)
+				RETURN(rc);
+		}
+
+		rc = dt_declare_xattr_set(env, next, buf, name, fl, th);
+		if (rc != 0)
 			RETURN(rc);
+
+		/* set xattr to each stripes, if needed */
+		rc = lod_load_striping(env, lo);
+		if (rc != 0)
+			RETURN(rc);
+
+		if (lo->ldo_stripenr == 0)
+			RETURN(rc);
+
+		for (i = 0; i < lo->ldo_stripenr; i++) {
+			LASSERT(lo->ldo_stripe[i]);
+			rc = dt_declare_xattr_set(env, lo->ldo_stripe[i], buf,
+						  name, fl, th);
+			if (rc != 0)
+				break;
+		}
 	} else {
 		rc = dt_declare_xattr_set(env, next, buf, name, fl, th);
 	}
@@ -969,6 +1001,53 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 			rc = 0;
 	} else {
 		rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+	}
+
+	RETURN(rc);
+}
+
+static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
+					    struct dt_object *dt,
+					    const struct lu_buf *buf,
+					    const char *name, int fl,
+					    struct thandle *th,
+					    struct lustre_capa *capa)
+{
+	struct dt_object	*next = dt_object_child(dt);
+	struct lod_object	*l = lod_dt_obj(dt);
+	struct lmv_user_md_v1	*lum;
+	int			 rc;
+	ENTRY;
+
+	LASSERT(buf != NULL && buf->lb_buf != NULL);
+	lum = buf->lb_buf;
+
+	CDEBUG(D_OTHER, "set default stripe_count # %u stripe_offset %d\n",
+	      le32_to_cpu(lum->lum_stripe_count),
+	      (int)le32_to_cpu(lum->lum_stripe_offset));
+
+	if (LMVEA_DELETE_VALUES((le32_to_cpu(lum->lum_stripe_count)),
+				 le32_to_cpu(lum->lum_stripe_offset)) &&
+				le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC) {
+		rc = dt_xattr_del(env, next, name, th, capa);
+		if (rc == -ENODATA)
+			rc = 0;
+	} else {
+		rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+		if (rc != 0)
+			RETURN(rc);
+
+		/* Update default stripe cache */
+		if (l->ldo_dir_stripe == NULL) {
+			OBD_ALLOC_PTR(l->ldo_dir_stripe);
+			if (l->ldo_dir_stripe == NULL)
+				RETURN(-ENOMEM);
+		}
+
+		l->ldo_dir_striping_cached = 0;
+		l->ldo_dir_def_striping_set = 1;
+		l->ldo_dir_def_stripenr =
+			le32_to_cpu(lum->lum_stripe_count) - 1;
 	}
 
 	RETURN(rc);
@@ -1071,9 +1150,11 @@ static int lod_xattr_set(const struct lu_env *env,
 			 const char *name, int fl, struct thandle *th,
 			 struct lustre_capa *capa)
 {
+	struct lod_object	*lo = lod_dt_obj(dt);
 	struct dt_object	*next = dt_object_child(dt);
 	__u32			 attr;
 	int			 rc;
+	int			i;
 	ENTRY;
 
 	attr = dt->do_lu.lo_header->loh_attr & S_IFMT;
@@ -1092,12 +1173,30 @@ static int lod_xattr_set(const struct lu_env *env,
 		} else {
 			rc = lod_striping_create(env, dt, NULL, NULL, th);
 		}
-		RETURN(rc);
+	} else if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
+		if (!S_ISDIR(attr))
+			RETURN(-ENOTDIR);
+		rc = lod_xattr_set_default_lmv_on_dir(env, dt, buf, name, fl,
+						      th, capa);
 	} else {
 		/*
 		 * behave transparantly for all other EAs
 		 */
 		rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+	}
+
+	if (rc != 0 || !S_ISDIR(attr))
+		RETURN(rc);
+
+	if (lo->ldo_stripenr == 0)
+		RETURN(rc);
+
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_xattr_set(env, lo->ldo_stripe[i], buf, name, fl, th,
+				  capa);
+		if (rc != 0)
+			break;
 	}
 
 	RETURN(rc);
@@ -1622,11 +1721,11 @@ int lod_dir_striping_create_internal(const struct lu_env *env,
 		info->lti_buf.lb_len = sizeof(*v1);
 		if (declare)
 			rc = dt_declare_xattr_set(env, next, &info->lti_buf,
-						  XATTR_NAME_DEFALT_LMV, 0,
+						  XATTR_NAME_DEFAULT_LMV, 0,
 						  th);
 		else
 			rc = dt_xattr_set(env, next, &info->lti_buf,
-					   XATTR_NAME_DEFALT_LMV, 0, th,
+					   XATTR_NAME_DEFAULT_LMV, 0, th,
 					   BYPASS_CAPA);
 		if (rc != 0)
 			RETURN(rc);

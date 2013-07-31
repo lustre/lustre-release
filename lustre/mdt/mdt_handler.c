@@ -521,31 +521,66 @@ static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 	RETURN(rc);
 }
 
-int mdt_attr_get_lov(struct mdt_thread_info *info,
-		     struct mdt_object *o, struct md_attr *ma)
+static int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+			  struct md_attr *ma, char *name)
 {
 	struct md_object *next = mdt_object_child(o);
 	struct lu_buf    *buf = &info->mti_buf;
 	int rc;
 
-	buf->lb_buf = ma->ma_lmm;
-	buf->lb_len = ma->ma_lmm_size;
-	rc = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_LOV);
+	if (strcmp(name, XATTR_NAME_LOV) == 0) {
+		buf->lb_buf = ma->ma_lmm;
+		buf->lb_len = ma->ma_lmm_size;
+		LASSERT(!(ma->ma_valid & MA_LOV));
+	} else if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		buf->lb_buf = ma->ma_lmv;
+		buf->lb_len = ma->ma_lmv_size;
+		LASSERT(!(ma->ma_valid & MA_LMV));
+	} else if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
+		buf->lb_buf = ma->ma_lmv;
+		buf->lb_len = ma->ma_lmv_size;
+		LASSERT(!(ma->ma_valid & MA_LMV_DEF));
+	} else {
+		return -EINVAL;
+	}
 
+	rc = mo_xattr_get(info->mti_env, next, buf, name);
 	if (rc > 0) {
-		ma->ma_lmm_size = rc;
-		ma->ma_valid |= MA_LOV;
+		if (strcmp(name, XATTR_NAME_LOV) == 0) {
+			ma->ma_lmm_size = rc;
+			ma->ma_valid |= MA_LOV;
+		} else if (strcmp(name, XATTR_NAME_LMV) == 0) {
+			ma->ma_lmv_size = rc;
+			ma->ma_valid |= MA_LMV;
+		} else if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
+			ma->ma_lmv_size = rc;
+			ma->ma_valid |= MA_LMV_DEF;
+		}
+
 		rc = 0;
 	} else if (rc == -ENODATA) {
 		/* no LOV EA */
 		rc = 0;
 	} else if (rc == -ERANGE) {
-		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LOV);
+		/* Default LMV has fixed size, so it must be able to fit
+		 * in the original buffer */
+		if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0)
+			return rc;
+		rc = mdt_big_xattr_get(info, o, name);
 		if (rc > 0) {
 			info->mti_big_lmm_used = 1;
-			ma->ma_valid |= MA_LOV;
-			ma->ma_lmm = info->mti_big_lmm;
-			ma->ma_lmm_size = rc;
+			if (!strcmp(name, XATTR_NAME_LOV)) {
+				ma->ma_valid |= MA_LOV;
+				ma->ma_lmm = info->mti_big_lmm;
+				ma->ma_lmm_size = rc;
+			} else if (!strcmp(name, XATTR_NAME_LMV)) {
+				ma->ma_valid |= MA_LMV;
+				ma->ma_lmv = info->mti_big_lmm;
+				ma->ma_lmv_size = rc;
+			} else {
+				return -EINVAL;
+			}
+
 			/* update mdt_max_mdsize so all clients
 			 * will be aware about that */
 			if (info->mti_mdt->mdt_max_mdsize < rc)
@@ -634,23 +669,21 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	}
 
 	if (need & MA_LOV && (S_ISREG(mode) || S_ISDIR(mode))) {
-		rc = mdt_attr_get_lov(info, o, ma);
+		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
 		if (rc)
 			GOTO(out, rc);
 	}
 
 	if (need & MA_LMV && S_ISDIR(mode)) {
-		buf->lb_buf = ma->ma_lmv;
-		buf->lb_len = ma->ma_lmv_size;
-		rc2 = mo_xattr_get(env, next, buf, XATTR_NAME_LMV);
-		if (rc2 > 0) {
-			ma->ma_lmv_size = rc2;
-			ma->ma_valid |= MA_LMV;
-		} else if (rc2 == -ENODATA) {
-			/* no LMV EA */
-			ma->ma_lmv_size = 0;
-		} else
-			GOTO(out, rc = rc2);
+		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_LMV);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
+
+	if (need & MA_LMV_DEF && S_ISDIR(mode)) {
+		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
+		if (rc != 0)
+			GOTO(out, rc);
 	}
 
 	if (need & MA_SOM && S_ISREG(mode)) {
@@ -750,13 +783,17 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	/* If it is dir object and client require MEA, then we got MEA */
 	if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
-	    reqbody->valid & OBD_MD_MEA) {
+	    (reqbody->valid & (OBD_MD_MEA | OBD_MD_DEFAULT_MEA))) {
 		/* Assumption: MDT_MD size is enough for lmv size. */
 		ma->ma_lmv = buffer->lb_buf;
 		ma->ma_lmv_size = buffer->lb_len;
 		ma->ma_need = MA_INODE;
-		if (ma->ma_lmv_size > 0)
-			ma->ma_need |= MA_LMV;
+		if (ma->ma_lmv_size > 0) {
+			if (reqbody->valid & OBD_MD_MEA)
+				ma->ma_need |= MA_LMV;
+			else if (reqbody->valid & OBD_MD_DEFAULT_MEA)
+				ma->ma_need |= MA_LMV_DEF;
+		}
 	} else {
 		ma->ma_lmm = buffer->lb_buf;
 		ma->ma_lmm_size = buffer->lb_len;
@@ -806,7 +843,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		root = mdt_object_find(env, mdt, &rootfid);
 		if (IS_ERR(root))
 			RETURN(PTR_ERR(root));
-		rc = mdt_attr_get_lov(info, root, ma);
+		rc = mdt_stripe_get(info, root, ma, XATTR_NAME_LOV);
 		mdt_object_put(info->mti_env, root);
 		if (unlikely(rc)) {
 			CERROR("%s: getattr error for "DFID": rc = %d\n",
@@ -831,11 +868,17 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         else
                                 repbody->valid |= OBD_MD_FLEASIZE;
                 }
-                if (ma->ma_valid & MA_LMV) {
-                        LASSERT(S_ISDIR(la->la_mode));
-                        repbody->eadatasize = ma->ma_lmv_size;
-                        repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
-                }
+		if (ma->ma_valid & MA_LMV) {
+			LASSERT(S_ISDIR(la->la_mode));
+			mdt_dump_lmv(D_INFO, ma->ma_lmv);
+			repbody->eadatasize = ma->ma_lmv_size;
+			repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
+		}
+		if (ma->ma_valid & MA_LMV_DEF) {
+			LASSERT(S_ISDIR(la->la_mode));
+			repbody->eadatasize = ma->ma_lmv_size;
+			repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_DEFAULT_MEA);
+		}
 	} else if (S_ISLNK(la->la_mode) &&
 		   reqbody->valid & OBD_MD_LINKNAME) {
 		buffer->lb_buf = ma->ma_lmm;

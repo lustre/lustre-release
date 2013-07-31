@@ -555,6 +555,24 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 	}
 }
 
+void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
+{
+	const struct lmv_mds_md_v1 *lmm1;
+	int			   i;
+
+	lmm1 = &lmv->lmv_md_v1;
+	CDEBUG(level, "magic 0x%08X, master %#X stripe_count %#x\n",
+	       le32_to_cpu(lmm1->lmv_magic),
+	       le32_to_cpu(lmm1->lmv_master_mdt_index),
+	       le32_to_cpu(lmm1->lmv_stripe_count));
+	for (i = 0; i < le32_to_cpu(lmm1->lmv_stripe_count); i++) {
+		struct lu_fid fid;
+
+		fid_le_to_cpu(&fid, &lmm1->lmv_stripe_fids[i]);
+		CDEBUG(level, "idx %u subobj "DFID"\n", i, PFID(&fid));
+	}
+}
+
 /* Shrink and/or grow reply buffers */
 int mdt_fix_reply(struct mdt_thread_info *info)
 {
@@ -946,15 +964,26 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                         RCL_CLIENT);
-                ma->ma_lmm_size = rr->rr_eadatalen;
-                if (ma->ma_lmm_size > 0) {
-                        ma->ma_lmm = (void *)rr->rr_eadata;
-                        ma->ma_valid |= MA_LOV;
-                }
-        }
+		if (rr->rr_eadatalen > 0) {
+			const struct lmv_user_md	*lum;
 
-        rc = mdt_dlmreq_unpack(info);
-        RETURN(rc);
+			lum = rr->rr_eadata;
+			/* Sigh ma_valid(from req) does not indicate whether
+			 * it will set LOV/LMV EA, so we have to check magic */
+			if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC) {
+				ma->ma_valid |= MA_LMV;
+				ma->ma_lmv = (void *)rr->rr_eadata;
+				ma->ma_lmv_size = rr->rr_eadatalen;
+			} else {
+				ma->ma_valid |= MA_LOV;
+				ma->ma_lmm = (void *)rr->rr_eadata;
+				ma->ma_lmm_size = rr->rr_eadatalen;
+			}
+		}
+	}
+
+	rc = mdt_dlmreq_unpack(info);
+	RETURN(rc);
 }
 
 static int mdt_hsm_release_unpack(struct mdt_thread_info *info)

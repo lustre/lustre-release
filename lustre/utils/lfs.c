@@ -156,16 +156,18 @@ command_t cmdlist[] = {
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a remote directory on a specified MDT.\n"
 	 "usage: setdirstripe <--count|-c stripe_count>\n"
-	 "[--index|-i mdt_index] [--hash-type|-t hash_type] <dir>\n"
+	 "[--index|-i mdt_index] [--hash-type|-t hash_type]\n"
+	 "[--default_stripe|-D ] <dir>\n"
 	 "\tstripe_count: stripe count of the striped directory\n"
 	 "\tmdt_index:	MDT index of first stripe\n"
-	 "\thash_type:	hash type of the striped directory\n"},
+	 "\thash_type:	hash type of the striped directory\n"
+	 "\tdefault_stripe: set default dirstripe of the directory\n"},
 	{"getdirstripe", lfs_getdirstripe, 0,
 	 "To list the striping info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
 	 "		 [--count|-c ] [--index|-i ] [--raw|-R]\n"
-	 "		 [--recursive | -r] <dir> ..."},
+	 "		 [--recursive | -r] [ --default_stripe | -D ] <dir> "},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "To create a remote directory on a specified MDT. And this can only\n"
 	 "be done on MDT0 by administrator.\n"
@@ -1239,6 +1241,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe-count",	no_argument,		0, 'c'},
 		{"stripe_count",	no_argument,		0, 'c'},
 		{"directory",		no_argument,		0, 'd'},
+		{"default",		no_argument,		0, 'D'},
 		{"generation",		no_argument,		0, 'g'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was explicitly
@@ -1278,7 +1281,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 
 	param->maxdepth = 1;
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "cdghiLMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdDghiLMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'O':
@@ -1295,6 +1298,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case 'd':
 			param->maxdepth = 0;
+			break;
+		case 'D':
+			param->get_default_lmv = 1;
 			break;
 		case 'r':
 			param->recursive = 1;
@@ -1460,24 +1466,28 @@ static int lfs_setdirstripe(int argc, char **argv)
 	char			*stripe_offset_opt = NULL;
 	char			*stripe_count_opt = NULL;
 	char			*stripe_hash_opt = NULL;
-	int			flags = 0;
+	int			default_stripe = 0;
 
 	struct option long_opts[] = {
 		{"count",	required_argument, 0, 'c'},
 		{"index",	required_argument, 0, 'i'},
 		{"hash-type",	required_argument, 0, 't'},
+		{"default_stripe", required_argument, 0, 'D'},
 		{0, 0, 0, 0}
 	};
 
 	optind = 0;
 
-	while ((c = getopt_long(argc, argv, "c:i:t:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "c:Di:t:", long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
 			break;
 		case 'c':
 			stripe_count_opt = optarg;
+			break;
+		case 'D':
+			default_stripe = 1;
 			break;
 		case 'i':
 			stripe_offset_opt = optarg;
@@ -1538,8 +1548,16 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	dname = argv[optind];
 	do {
-		result = llapi_dir_create_pool(dname, flags, stripe_offset,
-					       stripe_count, hash_type, NULL);
+		if (default_stripe == 1) {
+			result = llapi_dir_set_default_lmv_stripe(dname,
+						    stripe_offset, stripe_count,
+						    hash_type, NULL);
+		} else {
+			result = llapi_dir_create_pool(dname, 0, stripe_offset,
+						       stripe_count, hash_type,
+						       NULL);
+		}
+
 		if (result) {
 			fprintf(stderr, "error: %s: create stripe dir '%s' "
 				"failed\n", argv[0], dname);

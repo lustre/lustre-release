@@ -160,7 +160,8 @@ struct find_param {
 				 check_stripecount:1,	/* LOV stripe count */
 				 exclude_stripecount:1,
 				 check_layout:1,
-				 exclude_layout:1;
+				 exclude_layout:1,
+				 get_default_lmv:1; /* Get default LMV */
 
 	int			 verbose;
 	int			 quiet;
@@ -214,6 +215,9 @@ extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 
 extern int llapi_file_fget_mdtidx(int fd, int *mdtidx);
+extern int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
+					   int stripe_count, int stripe_pattern,
+					    const char *pool_name);
 extern int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 				 int stripe_count, int stripe_pattern,
 				 const char *poolname);

@@ -615,6 +615,16 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 				  buf, XATTR_NAME_LOV, 0);
 		if (rc)
 			GOTO(out_put, rc);
+	} else if ((ma->ma_valid & MA_LMV) && (ma->ma_valid & MA_INODE)) {
+		struct lu_buf *buf  = &info->mti_buf;
+
+		LASSERT(ma->ma_attr.la_valid == 0);
+		buf->lb_buf = ma->ma_lmv;
+		buf->lb_len = ma->ma_lmv_size;
+		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
+				  buf, XATTR_NAME_DEFAULT_LMV, 0);
+		if (rc)
+			GOTO(out_put, rc);
 	} else
 		LBUG();
 

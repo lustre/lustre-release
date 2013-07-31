@@ -1688,7 +1688,7 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define XATTR_NAME_LOV          "trusted.lov"
 #define XATTR_NAME_LMA          "trusted.lma"
 #define XATTR_NAME_LMV          "trusted.lmv"
-#define XATTR_NAME_DEFALT_LMV	"trusted.dmv"
+#define XATTR_NAME_DEFAULT_LMV	"trusted.dmv"
 #define XATTR_NAME_LINK         "trusted.link"
 #define XATTR_NAME_FID          "trusted.fid"
 #define XATTR_NAME_VERSION      "trusted.version"
@@ -1779,6 +1779,8 @@ static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 
 #define OBD_MD_FLDATAVERSION (0x0010000000000000ULL) /* iversion sum */
 #define OBD_MD_FLRELEASED    (0x0020000000000000ULL) /* file released */
+
+#define OBD_MD_DEFAULT_MEA   (0x0040000000000000ULL) /* default MEA */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -2734,6 +2736,8 @@ union lmv_mds_md {
 	struct lmv_mds_md_v1	 lmv_md_v1;
 	struct lmv_user_md	 lmv_user_md;
 };
+
+extern void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm);
 
 static inline int lmv_mds_md_size(int stripe_count, unsigned int lmm_magic)
 {

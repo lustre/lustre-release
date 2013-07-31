@@ -387,7 +387,7 @@ lod_get_lmv_ea(const struct lu_env *env, struct lod_object *lo)
 static inline int
 lod_get_default_lmv_ea(const struct lu_env *env, struct lod_object *lo)
 {
-	return lod_get_ea(env, lo, XATTR_NAME_DEFALT_LMV);
+	return lod_get_ea(env, lo, XATTR_NAME_DEFAULT_LMV);
 }
 
 void lod_fix_desc(struct lov_desc *desc);
