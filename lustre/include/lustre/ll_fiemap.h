@@ -43,12 +43,10 @@
 #ifndef _LUSTRE_FIEMAP_H
 #define _LUSTRE_FIEMAP_H
 
-#if !defined(HAVE_LINUX_FIEMAP_H) || !defined(__KERNEL__)
+#if !defined(__KERNEL__)
 
-#ifndef __KERNEL__
 #include <stddef.h>
 #include <libcfs/posix/posix-types.h>
-#endif
 
 struct ll_fiemap_extent {
         __u64 fe_logical;  /* logical offset in bytes for the start of
@@ -98,7 +96,6 @@ struct ll_user_fiemap {
 #define FIEMAP_EXTENT_MERGED            0x00001000 /* File does not natively
                                                     * support extents. Result
                                                     * merged for efficiency. */
-
 #else
 
 #define ll_fiemap_extent fiemap_extent

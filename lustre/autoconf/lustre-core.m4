@@ -354,28 +354,6 @@ EXTRA_KCFLAGS="$tmp_flags"
 
 #2.6.18 + RHEL5 (fc6)
 
-#
-# LC_LINUX_FIEMAP_H
-#
-# fiemap.h is added since v2.6.28
-# RHEL5 2.6.18 has it, while SLES10 2.6.27 does not
-#
-AC_DEFUN([LC_LINUX_FIEMAP_H],
-[LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
-        AC_MSG_CHECKING([if fiemap.h can be compiled])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/types.h>
-                #include <linux/fiemap.h>
-        ],[],[
-                AC_MSG_RESULT([yes])
-                AC_DEFINE(HAVE_LINUX_FIEMAP_H, 1, [Kernel has fiemap.h])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-],
-[])
-])
-
 # raid5-zerocopy patch
 
 #
@@ -1483,9 +1461,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.12
          LC_RW_TREE_LOCK
-
-         #2.6.18 + RHEL5 (fc6)
-         LC_LINUX_FIEMAP_H
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT
