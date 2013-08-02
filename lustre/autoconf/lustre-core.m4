@@ -216,10 +216,10 @@ AC_DEFUN([LC_QUOTA_CONFIG],
 	])
 ])
 
-# truncate_complete_page() was exported from RHEL5/SLES10, but not in SLES11 SP0 (2.6.27)
+# truncate_complete_page() has never been exported from an upstream kernel
 # remove_from_page_cache() was exported between 2.6.35 and 2.6.38
 # delete_from_page_cache() is exported from 2.6.39
-AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
+AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE_PAGE],
          [LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
                                  [mm/truncate.c],
                                  [AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
@@ -1477,9 +1477,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_LRU_RESIZE
          LC_LLITE_LLOOP_MODULE
 
-         # RHEL4 patches
-         LC_EXPORT_TRUNCATE_COMPLETE
-
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
@@ -1523,6 +1520,7 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.35, 3.0.0
          LC_FILE_FSYNC
          LC_EXPORT_SIMPLE_SETATTR
+	 LC_EXPORT_TRUNCATE_COMPLETE_PAGE
 
          # 2.6.36
          LC_FS_STRUCT_RWLOCK
