@@ -631,23 +631,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_LOCK_MAP_ACQUIRE
-# after 2.6.27 lock_map_acquire replaces lock_acquire
-AC_DEFUN([LC_LOCK_MAP_ACQUIRE],
-[AC_MSG_CHECKING([if lock_map_acquire is defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/lockdep.h>
-],[
-        lock_map_acquire(NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_LOCK_MAP_ACQUIRE, 1,
-                [lock_map_acquire is defined])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 # 2.6.27.15-2 sles11
 
 # 2.6.27 sles11 remove the bi_hw_segments
@@ -1569,7 +1552,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_INODE_PERMISION_2ARGS
          LC_QUOTA_ON_5ARGS
          LC_QUOTA_OFF_3ARGS
-         LC_LOCK_MAP_ACQUIRE
 
          # 2.6.27.15-2 sles11
          LC_BI_HW_SEGMENTS

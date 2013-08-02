@@ -166,20 +166,14 @@ static void cl_lock_lockdep_acquire(const struct lu_env *env,
                                     struct cl_lock *lock, __u32 enqflags)
 {
         cl_lock_counters(env, lock)->ctc_nr_locks_acquired++;
-#ifdef HAVE_LOCK_MAP_ACQUIRE
         lock_map_acquire(&lock->dep_map);
-#else  /* HAVE_LOCK_MAP_ACQUIRE */
-        lock_acquire(&lock->dep_map, !!(enqflags & CEF_ASYNC),
-                     /* try: */ 0, lock->cll_descr.cld_mode <= CLM_READ,
-                     /* check: */ 2, RETIP);
-#endif /* HAVE_LOCK_MAP_ACQUIRE */
 }
 
 static void cl_lock_lockdep_release(const struct lu_env *env,
                                     struct cl_lock *lock)
 {
         cl_lock_counters(env, lock)->ctc_nr_locks_acquired--;
-        lock_release(&lock->dep_map, 0, RETIP);
+	lock_map_release(&lock->dep_map);
 }
 
 #else /* !CONFIG_LOCKDEP */
