@@ -442,25 +442,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.23
-
-# 2.6.23 have return type 'void' for unregister_blkdev
-AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
-[AC_MSG_CHECKING([if unregister_blkdev return int])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        int i __attribute__ ((unused));
-        i = unregister_blkdev(0,NULL);
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1,
-                [unregister_blkdev return int])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.24
 
 # 2.6.24 has bio_endio with 2 args
@@ -1536,9 +1517,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 2.6.22
          LC_FS_RENAME_DOES_D_MOVE
-
-         # 2.6.23
-         LC_UNREGISTER_BLKDEV_RETURN_INT
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
