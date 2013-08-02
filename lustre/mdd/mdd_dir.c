@@ -1385,6 +1385,39 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 	return rc;
 }
 
+/*
+ * test if a file has an HSM archive
+ * if HSM attributes are not found in ma update them from
+ * HSM xattr
+ */
+static bool mdd_hsm_archive_exists(const struct lu_env *env,
+				   struct mdd_object *obj,
+				   struct md_attr *ma)
+{
+	ENTRY;
+
+	if (!(ma->ma_valid & MA_HSM)) {
+		/* no HSM MD provided, read xattr */
+		struct lu_buf	*hsm_buf;
+		const size_t	 buflen = sizeof(struct hsm_attrs);
+		int		 rc;
+
+		hsm_buf = mdd_buf_get(env, NULL, 0);
+		lu_buf_alloc(hsm_buf, buflen);
+		rc = mdo_xattr_get(env, obj, hsm_buf, XATTR_NAME_HSM,
+				   mdd_object_capa(env, obj));
+		rc = lustre_buf2hsm(hsm_buf->lb_buf, rc, &ma->ma_hsm);
+		lu_buf_free(hsm_buf);
+		if (rc < 0)
+			RETURN(false);
+
+		ma->ma_valid = MA_HSM;
+	}
+	if (ma->ma_hsm.mh_flags & HS_EXISTS)
+		RETURN(true);
+	RETURN(false);
+}
+
 /**
  * Delete name entry and the object.
  * Note: no_name == 1 means it only destory the object, i.e. name_entry
@@ -1398,16 +1431,16 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		      struct md_object *cobj, const struct lu_name *lname,
 		      struct md_attr *ma, int no_name)
 {
-        const char *name = lname->ln_name;
+	const char *name = lname->ln_name;
 	struct lu_attr     *cattr = &mdd_env_info(env)->mti_cattr;
-        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
-        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
+	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *mdd_cobj = NULL;
-        struct mdd_device *mdd = mdo2mdd(pobj);
-        struct dynlock_handle *dlh;
-        struct thandle    *handle;
+	struct mdd_device *mdd = mdo2mdd(pobj);
+	struct dynlock_handle *dlh;
+	struct thandle    *handle;
 	int rc, is_dir = 0;
-        ENTRY;
+	ENTRY;
 
 	/* cobj == NULL means only delete name entry */
 	if (likely(cobj != NULL)) {
@@ -1420,8 +1453,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	}
 
 	handle = mdd_trans_create(env, mdd);
-        if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
 
 	rc = mdd_declare_unlink(env, mdd, mdd_pobj, mdd_cobj,
 				lname, ma, handle, no_name);
@@ -1496,25 +1529,25 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	}
 
 	if (cattr->la_nlink > 0 || mdd_cobj->mod_count > 0) {
-                /* update ctime of an unlinked file only if it is still
-                 * opened or a link still exists */
-                la->la_valid = LA_CTIME;
-                rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
-                if (rc)
-                        GOTO(cleanup, rc);
-        }
+		/* update ctime of an unlinked file only if it is still
+		 * opened or a link still exists */
+		la->la_valid = LA_CTIME;
+		rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
+		if (rc)
+			GOTO(cleanup, rc);
+	}
 
 	/* XXX: this transfer to ma will be removed with LOD/OSP */
 	ma->ma_attr = *cattr;
 	ma->ma_valid |= MA_INODE;
-        rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
+	rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
 
 	/* fetch updated nlink */
 	if (rc == 0)
 		rc = mdd_la_get(env, mdd_cobj, cattr,
 				mdd_object_capa(env, mdd_cobj));
 
-        if (!is_dir)
+	if (!is_dir)
 		/* old files may not have link ea; ignore errors */
 		mdd_links_del(env, mdd_cobj, mdo2fid(mdd_pobj), lname, handle);
 
@@ -1523,27 +1556,29 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		ma->ma_attr = *cattr;
 		ma->ma_valid |= MA_INODE;
 	}
-        EXIT;
+	EXIT;
 cleanup:
-        mdd_write_unlock(env, mdd_cobj);
-        mdd_pdo_write_unlock(env, mdd_pobj, dlh);
-        if (rc == 0) {
-                int cl_flags;
+	mdd_write_unlock(env, mdd_cobj);
+	mdd_pdo_write_unlock(env, mdd_pobj, dlh);
+	if (rc == 0) {
+		int cl_flags = 0;
 
-		cl_flags = (cattr->la_nlink == 0) ? CLF_UNLINK_LAST : 0;
-                if ((ma->ma_valid & MA_HSM) &&
-                    (ma->ma_hsm.mh_flags & HS_EXISTS))
-                        cl_flags |= CLF_UNLINK_HSM_EXISTS;
+		if (cattr->la_nlink == 0) {
+			cl_flags |= CLF_UNLINK_LAST;
+			/* search for an existing archive */
+			if (mdd_hsm_archive_exists(env, mdd_cobj, ma))
+				cl_flags |= CLF_UNLINK_HSM_EXISTS;
+		}
 
 		rc = mdd_changelog_ns_store(env, mdd,
 			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
 			mdd_cobj, mdd_pobj, lname, handle);
-        }
+	}
 
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	mdd_trans_stop(env, mdd, rc, handle);
 
-        return rc;
+	return rc;
 }
 
 /*
@@ -2663,8 +2698,11 @@ static int mdd_rename(const struct lu_env *env,
 		ma->ma_attr = *tg_attr;
 		ma->ma_valid |= MA_INODE;
 
-		if (tg_attr->la_nlink == 0)
+		if (tg_attr->la_nlink == 0) {
 			cl_flags |= CLF_RENAME_LAST;
+			if (mdd_hsm_archive_exists(env, mdd_tobj, ma))
+				cl_flags |= CLF_RENAME_LAST_EXISTS;
+		}
         }
 
         la->la_valid = LA_CTIME | LA_MTIME;

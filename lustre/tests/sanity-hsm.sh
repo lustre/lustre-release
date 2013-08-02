@@ -14,8 +14,8 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 # skip test cases failed before landing - Jinshan
-ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 24 30a 31a 34 35 36 52 58 59"
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110a 200 201 221 222a 223a 223b 225 226"
+ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 24 30a 31a 34 35 36 58 59"
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110a 200 201 221 222a 223a 223b 225"
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
@@ -36,7 +36,7 @@ fi
 
 check_and_setup_lustre
 
-if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ]; then
+if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ]]; then
 	skip_env "Need MDS version at least 2.4.53" && exit
 fi
 
