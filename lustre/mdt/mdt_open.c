@@ -1966,7 +1966,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	/* try to hold open_sem so that nobody else can open the file */
 	if (!down_write_trylock(&o->mot_open_sem)) {
 		ldlm_lock_cancel(lease);
-		ldlm_lock_put(lease);
+		LDLM_LOCK_PUT(lease);
 		RETURN(-EBUSY);
 	}
 
@@ -1982,7 +1982,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	 * have been cancelled. It's okay to cancel it now as we've
 	 * held mot_open_sem. */
 	ldlm_lock_cancel(lease);
-	ldlm_lock_put(lease);
+	LDLM_LOCK_PUT(lease);
 
 	if (lease_broken) /* don't perform release task */
 		GOTO(out_unlock, rc = -ESTALE);

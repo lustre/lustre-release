@@ -56,23 +56,8 @@ static int debug_mask = ~0;
 
 #define MAX_MARK_SIZE 256
 
-static const char *libcfs_debug_subsystems[] =
-	{"undefined", "mdc", "mds", "osc",
-	 "ost", "class", "log", "llite",
-	 "rpc", "mgmt", "lnet", "lnd",
-	 "pinger", "filter", "", "echo",
-	 "ldlm", "lov", "lquota", "osd",
-	 "lfsck", "", "", "lmv",
-	 "", "sec", "gss", "",
-	 "mgc", "mgs", "fid", "fld", NULL};
-static const char *libcfs_debug_masks[] =
-        {"trace", "inode", "super", "ext2",
-         "malloc", "cache", "info", "ioctl",
-         "neterror", "net", "warning", "buffs",
-         "other", "dentry", "nettrace", "page",
-         "dlmtrace", "error", "emerg", "ha",
-         "rpctrace", "vfstrace", "reada", "mmap",
-         "config", "console", "quota", "sec", NULL};
+static const char *libcfs_debug_subsystems[] = LIBCFS_DEBUG_SUBSYS_NAMES;
+static const char *libcfs_debug_masks[] = LIBCFS_DEBUG_MASKS_NAMES;
 
 #ifdef __linux__
 

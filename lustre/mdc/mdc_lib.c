@@ -517,7 +517,7 @@ static void mdc_hsm_release_pack(struct ptlrpc_request *req,
 		lock = ldlm_handle2lock(&op_data->op_lease_handle);
 		if (lock != NULL) {
 			data->cd_handle = lock->l_remote_handle;
-			ldlm_lock_put(lock);
+			LDLM_LOCK_PUT(lock);
 		}
 		ldlm_cli_cancel(&op_data->op_lease_handle, LCF_LOCAL);
 
