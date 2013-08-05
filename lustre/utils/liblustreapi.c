@@ -759,7 +759,8 @@ int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "error LL_IOC_LMV_SETSTRIPE '%s' : too large"
 				  "pool name: %s", name, pool_name);
-			GOTO(out, rc = -E2BIG);
+			rc = -E2BIG;
+			goto out;
 		}
 		memcpy(lmu.lum_pool_name, pool_name, strlen(pool_name));
 	}
@@ -777,14 +778,14 @@ int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "error: LL_IOC_LMV_SETSTRIPE pack failed '%s'.",
 			    name);
-		GOTO(out, rc);
+		goto out;
 	}
 
 	fd = open(dir, O_DIRECTORY | O_RDONLY);
 	if (fd < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
-		GOTO(out, rc);
+		goto out;
 	}
 
 	if (ioctl(fd, LL_IOC_LMV_SETSTRIPE, buf)) {
@@ -827,7 +828,7 @@ int llapi_direntry_remove(char *dname)
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'",
 			    filename);
-		GOTO(out, rc);
+		goto out;
 	}
 
 	if (ioctl(fd, LL_IOC_REMOVE_ENTRY, filename)) {
@@ -1475,15 +1476,19 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
         } else if (!d && !parent) {
                 /* ENOTDIR. Open the parent dir. */
                 p = opendir_parent(path);
-                if (!p)
-                        GOTO(out, ret = -errno);
+		if (!p) {
+			ret = -errno;
+			goto out;
+		}
         }
 
         if (sem_init && (ret = sem_init(path, parent ?: p, d, data, de)))
                 goto err;
 
-	if (!d || (param->get_lmv && !param->recursive))
-		GOTO(out, ret = 0);
+	if (!d || (param->get_lmv && !param->recursive)) {
+		ret = 0;
+		goto out;
+	}
 
 	while ((dent = readdir64(d)) != NULL) {
 		param->have_fileinfo = 0;
