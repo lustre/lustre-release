@@ -3816,6 +3816,52 @@ test_67() { #LU-2950
 }
 run_test 67 "test routes conversion and configuration"
 
+test_68() {
+	local fid
+	local seq
+	local START
+	local END
+
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.53) ] ||
+		{ skip "Need MDS version at least 2.4.53"; return 0; }
+
+	umount_client $MOUNT || error "umount client failed"
+
+	start_mds || error "MDT start failed"
+	start_ost
+
+	# START-END - the sequences we'll be reserving
+	START=$(do_facet $SINGLEMDS \
+		lctl get_param -n seq.ctl*.space | awk -F'[[ ]' '{print $2}')
+	END=$((START + (1 << 30)))
+	do_facet $SINGLEMDS \
+		lctl set_param seq.ctl*.fldb="[$START-$END\):0:mdt"
+
+	# reset the sequences MDT0000 has already assigned
+	do_facet $SINGLEMDS \
+		lctl set_param seq.srv*MDT0000.space=clear
+
+	# remount to let the client allocate new sequence
+	mount_client $MOUNT || error "mount client failed"
+
+	touch $DIR/$tfile
+	do_facet $SINGLEMDS \
+		lctl get_param seq.srv*MDT0000.space
+	$LFS path2fid $DIR/$tfile
+
+	local old_ifs="$IFS"
+	IFS='[:]'
+	fid=($($LFS path2fid $DIR/$tfile))
+	IFS="$old_ifs"
+	let seq=${fid[1]}
+
+	if [[ $seq < $END ]]; then
+		error "used reserved sequence $seq?"
+	fi
+	cleanup || return $?
+}
+run_test 68 "be able to reserve specific sequences in FLDB"
+
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1

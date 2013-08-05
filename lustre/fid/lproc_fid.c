@@ -50,6 +50,7 @@
 #include <lustre_fid.h>
 #include <lprocfs_status.h>
 #include "fid_internal.h"
+#include <md_object.h>
 
 #ifdef LPROCFS
 /*
@@ -66,6 +67,11 @@ seq_proc_write_common(struct file *file, const char *buffer,
 	ENTRY;
 
 	LASSERT(range != NULL);
+
+	if (count == 5 && strcmp(buffer, "clear") == 0) {
+		memset(range, 0, sizeof(*range));
+		RETURN(0);
+	}
 
         rc = sscanf(buffer, "[%llx - %llx]\n",
                     (long long unsigned *)&tmp.lsr_start,
@@ -217,6 +223,279 @@ struct lprocfs_vars seq_server_proc_list[] = {
 	  seq_server_proc_read_server, NULL, NULL },
 	{ NULL }
 };
+
+struct fld_seq_param {
+	struct lu_env		fsp_env;
+	struct dt_it		*fsp_it;
+	struct lu_server_fld	*fsp_fld;
+	struct lu_server_seq	*fsp_seq;
+	unsigned int		fsp_stop:1;
+};
+
+/*
+ * XXX: below is a copy of the functions in lustre/fld/lproc_fld.c.
+ * we want to avoid this duplication either by exporting the
+ * functions or merging fid and fld into a single module.
+ */
+static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
+{
+	struct fld_seq_param    *param = p->private;
+	struct lu_server_fld    *fld;
+	struct dt_object        *obj;
+	const struct dt_it_ops  *iops;
+
+	if (param == NULL || param->fsp_stop)
+		return NULL;
+
+	fld = param->fsp_fld;
+	obj = fld->lsf_obj;
+	LASSERT(obj != NULL);
+	iops = &obj->do_index_ops->dio_it;
+
+	iops->load(&param->fsp_env, param->fsp_it, *pos);
+
+	*pos = be64_to_cpu(*(__u64 *)iops->key(&param->fsp_env, param->fsp_it));
+	return param;
+}
+
+static void fldb_seq_stop(struct seq_file *p, void *v)
+{
+	struct fld_seq_param    *param = p->private;
+	const struct dt_it_ops	*iops;
+	struct lu_server_fld	*fld;
+	struct dt_object	*obj;
+
+	if (param == NULL)
+		return;
+
+	fld = param->fsp_fld;
+	obj = fld->lsf_obj;
+	LASSERT(obj != NULL);
+	iops = &obj->do_index_ops->dio_it;
+
+	iops->put(&param->fsp_env, param->fsp_it);
+}
+
+static void *fldb_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+	struct fld_seq_param    *param = p->private;
+	struct lu_server_fld	*fld;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+	int			rc;
+
+	if (param == NULL || param->fsp_stop)
+		return NULL;
+
+	fld = param->fsp_fld;
+	obj = fld->lsf_obj;
+	LASSERT(obj != NULL);
+	iops = &obj->do_index_ops->dio_it;
+
+	rc = iops->next(&param->fsp_env, param->fsp_it);
+	if (rc > 0) {
+		param->fsp_stop = 1;
+		return NULL;
+	}
+
+	*pos = be64_to_cpu(*(__u64 *)iops->key(&param->fsp_env, param->fsp_it));
+	return param;
+}
+
+static int fldb_seq_show(struct seq_file *p, void *v)
+{
+	struct fld_seq_param    *param = p->private;
+	struct lu_server_fld	*fld;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+	struct lu_seq_range	 fld_rec;
+	int			rc;
+
+	if (param == NULL || param->fsp_stop)
+		return 0;
+
+	fld = param->fsp_fld;
+	obj = fld->lsf_obj;
+	LASSERT(obj != NULL);
+	iops = &obj->do_index_ops->dio_it;
+
+	rc = iops->rec(&param->fsp_env, param->fsp_it,
+		       (struct dt_rec *)&fld_rec, 0);
+	if (rc != 0) {
+		CERROR("%s: read record error: rc = %d\n",
+		       fld->lsf_name, rc);
+	} else if (fld_rec.lsr_start != 0) {
+		range_be_to_cpu(&fld_rec, &fld_rec);
+		rc = seq_printf(p, DRANGE"\n", PRANGE(&fld_rec));
+	}
+
+	return rc;
+}
+
+struct seq_operations fldb_sops = {
+	.start = fldb_seq_start,
+	.stop = fldb_seq_stop,
+	.next = fldb_seq_next,
+	.show = fldb_seq_show,
+};
+
+static int fldb_seq_open(struct inode *inode, struct file *file)
+{
+	struct proc_dir_entry	*dp = PDE(inode);
+	struct seq_file		*seq;
+	struct lu_server_seq    *ss = (struct lu_server_seq *)dp->data;
+	struct lu_server_fld    *fld;
+	struct dt_object	*obj;
+	const struct dt_it_ops  *iops;
+	struct fld_seq_param    *param = NULL;
+	int			env_init = 0;
+	int			rc;
+
+	fld = ss->lss_site->ss_server_fld;
+	LASSERT(fld != NULL);
+
+	LPROCFS_ENTRY_AND_CHECK(dp);
+	rc = seq_open(file, &fldb_sops);
+	if (rc)
+		GOTO(out, rc);
+
+	obj = fld->lsf_obj;
+	if (obj == NULL) {
+		seq = file->private_data;
+		seq->private = NULL;
+		return 0;
+	}
+
+	OBD_ALLOC_PTR(param);
+	if (param == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = lu_env_init(&param->fsp_env, LCT_MD_THREAD);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	env_init = 1;
+	iops = &obj->do_index_ops->dio_it;
+	param->fsp_it = iops->init(&param->fsp_env, obj, 0, NULL);
+	if (IS_ERR(param->fsp_it))
+		GOTO(out, rc = PTR_ERR(param->fsp_it));
+
+	param->fsp_fld = fld;
+	param->fsp_seq = ss;
+	param->fsp_stop = 0;
+
+	seq = file->private_data;
+	seq->private = param;
+out:
+	if (rc != 0) {
+		if (env_init == 1)
+			lu_env_fini(&param->fsp_env);
+		if (param != NULL)
+			OBD_FREE_PTR(param);
+		LPROCFS_EXIT();
+	}
+	return rc;
+}
+
+static int fldb_seq_release(struct inode *inode, struct file *file)
+{
+	struct seq_file		*seq = file->private_data;
+	struct fld_seq_param	*param;
+	struct lu_server_fld	*fld;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+
+	param = seq->private;
+	if (param == NULL) {
+		lprocfs_seq_release(inode, file);
+		return 0;
+	}
+
+	fld = param->fsp_fld;
+	obj = fld->lsf_obj;
+	LASSERT(obj != NULL);
+	iops = &obj->do_index_ops->dio_it;
+
+	LASSERT(iops != NULL);
+	LASSERT(obj != NULL);
+	LASSERT(param->fsp_it != NULL);
+	iops->fini(&param->fsp_env, param->fsp_it);
+	lu_env_fini(&param->fsp_env);
+	OBD_FREE_PTR(param);
+	lprocfs_seq_release(inode, file);
+
+	return 0;
+}
+
+static ssize_t fldb_seq_write(struct file *file, const char *buf,
+			      size_t len, loff_t *off)
+{
+	struct seq_file		*seq = file->private_data;
+	struct fld_seq_param	*param;
+	struct lu_seq_range	 range;
+	int			 rc = 0;
+	char			*buffer, *_buffer;
+	ENTRY;
+
+	param = seq->private;
+	if (param == NULL)
+		RETURN(-EINVAL);
+
+	OBD_ALLOC(buffer, len + 1);
+	if (buffer == NULL)
+		RETURN(-ENOMEM);
+	memcpy(buffer, buf, len);
+	buffer[len] = 0;
+	_buffer = buffer;
+
+	/*
+	 * format - [0x0000000200000007-0x0000000200000008):0:mdt
+	 */
+	if (*buffer != '[')
+		GOTO(out, rc = -EINVAL);
+	buffer++;
+
+	range.lsr_start = simple_strtoull(buffer, &buffer, 0);
+	if (*buffer != '-')
+		GOTO(out, rc = -EINVAL);
+	buffer++;
+
+	range.lsr_end = simple_strtoull(buffer, &buffer, 0);
+	if (*buffer != ')')
+		GOTO(out, rc = -EINVAL);
+	buffer++;
+	if (*buffer != ':')
+		GOTO(out, rc = -EINVAL);
+	buffer++;
+
+	range.lsr_index = simple_strtoul(buffer, &buffer, 0);
+	if (*buffer != ':')
+		GOTO(out, rc = -EINVAL);
+	buffer++;
+
+	if (strncmp(buffer, "mdt", 3) == 0)
+		range.lsr_flags = LU_SEQ_RANGE_MDT;
+	else if (strncmp(buffer, "ost", 3) == 0)
+		range.lsr_flags = LU_SEQ_RANGE_OST;
+	else
+		GOTO(out, rc = -EINVAL);
+
+	rc = seq_server_alloc_spec(param->fsp_seq->lss_site->ss_control_seq,
+				   &range, &param->fsp_env);
+
+out:
+	OBD_FREE(_buffer, len + 1);
+	RETURN(rc < 0 ? rc : len);
+}
+
+const struct file_operations seq_fld_proc_seq_fops = {
+	.owner	 = THIS_MODULE,
+	.open	 = fldb_seq_open,
+	.read	 = seq_read,
+	.write	 = fldb_seq_write,
+	.release = fldb_seq_release,
+};
+
 #endif /* HAVE_SERVER_SUPPORT */
 
 /* Client side procfs stuff */

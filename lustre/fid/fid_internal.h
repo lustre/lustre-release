@@ -81,6 +81,10 @@ int seq_store_read(struct lu_server_seq *seq,
 int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 		     struct lu_seq_range *out, int sync);
 
+int seq_server_alloc_spec(struct lu_server_seq *seq,
+			  struct lu_seq_range *spec,
+			  const struct lu_env *env);
+
 int fid_server_mod_init(void);
 
 void fid_server_mod_exit(void);

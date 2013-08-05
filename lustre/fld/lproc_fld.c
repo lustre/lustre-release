@@ -55,6 +55,7 @@
 #include <lustre_fld.h>
 #include <lustre_fid.h>
 #include "fld_internal.h"
+#include <md_object.h>
 
 #ifdef LPROCFS
 static int
