@@ -307,11 +307,12 @@ extern int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
 extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
 				   struct hsm_action_list **hal, int *msgsize);
 extern void llapi_hsm_action_list_free(struct hsm_action_list **hal);
-extern int llapi_hsm_action_begin(struct hsm_copyaction_private **hcp,
-				  const struct hsm_copytool_private *ct_priv,
+extern int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
+				  const struct hsm_copytool_private *ct,
 				  const struct hsm_action_item *hai,
+				  int restore_mdt_index, int restore_open_flags,
 				  bool is_error);
-extern int llapi_hsm_action_end(struct hsm_copyaction_private **hcp,
+extern int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 				const struct hsm_extent *he, int flags,
 				int errval);
 extern int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
