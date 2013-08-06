@@ -175,7 +175,13 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	int			rc;
 	ENTRY;
 
-	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
+	/* Note: client might open with some random flags(sanity 33b), so we can
+	 * not make sure op_fid2 is being initialized with BY_FID flag */
+	if (it->it_flags & MDS_OPEN_BY_FID && fid_is_sane(&op_data->op_fid2))
+		tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid2);
+	else
+		tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
+
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
