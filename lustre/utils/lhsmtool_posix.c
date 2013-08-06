@@ -1737,7 +1737,7 @@ static int ct_daemon(void)
 				continue;
 		}
 
-		hai = hai_zero(hal);
+		hai = hai_first(hal);
 		while (++i <= hal->hal_count) {
 			if ((char *)hai - (char *)hal > msgsize) {
 				CT_ERROR("'%s' item %d past end of message!\n",

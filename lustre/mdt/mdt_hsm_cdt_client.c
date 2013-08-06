@@ -77,12 +77,12 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 	hcdcb = data;
 	/* a compatible request must be WAITING or STARTED
 	 * and not a cancel */
-	if (((larr->arr_status != ARS_WAITING) &&
-	     (larr->arr_status != ARS_STARTED)) ||
-	    (larr->arr_hai.hai_action == HSMA_CANCEL))
+	if ((larr->arr_status != ARS_WAITING &&
+	     larr->arr_status != ARS_STARTED) ||
+	    larr->arr_hai.hai_action == HSMA_CANCEL)
 		RETURN(0);
 
-	hai = hai_zero(hcdcb->hal);
+	hai = hai_first(hcdcb->hal);
 	for (i = 0; i < hcdcb->hal->hal_count; i++, hai = hai_next(hai)) {
 		/* if request is a CANCEL:
 		 * if cookie set in the request, there is no need to find a
@@ -92,7 +92,7 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 		 * if the caller sets the cookie, we assume he also sets the
 		 * arr_archive_id
 		 */
-		if ((hai->hai_action == HSMA_CANCEL) && (hai->hai_cookie != 0))
+		if (hai->hai_action == HSMA_CANCEL && hai->hai_cookie != 0)
 			continue;
 
 		if (!lu_fid_eq(&hai->hai_fid, &larr->arr_hai.hai_fid))
@@ -110,8 +110,8 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 		 */
 		hai->hai_cookie = larr->arr_hai.hai_cookie;
 		/* we read the archive number from the request we cancel */
-		if ((hai->hai_action == HSMA_CANCEL) &&
-		    (hcdcb->hal->hal_archive_id == 0))
+		if (hai->hai_action == HSMA_CANCEL &&
+		    hcdcb->hal->hal_archive_id == 0)
 			hcdcb->hal->hal_archive_id = larr->arr_archive_id;
 	}
 	RETURN(0);
@@ -136,13 +136,13 @@ static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 	ENTRY;
 
 	ok_cnt = 0;
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		/* in a cancel request hai_cookie may be set by caller to
 		 * show the request to be canceled
 		 * if not we need to search by FID
 		 */
-		if ((hai->hai_action == HSMA_CANCEL) && (hai->hai_cookie != 0))
+		if (hai->hai_action == HSMA_CANCEL && hai->hai_cookie != 0)
 			ok_cnt++;
 		else
 			hai->hai_cookie = 0;
@@ -181,7 +181,7 @@ static bool hsm_action_is_needed(struct hsm_action_item *hai, int hal_an,
 	hsm_flags = hsm->mh_flags;
 	switch (hai->hai_action) {
 	case HSMA_ARCHIVE:
-		if ((hsm_flags & HS_DIRTY) || !(hsm_flags & HS_ARCHIVED))
+		if (hsm_flags & HS_DIRTY || !(hsm_flags & HS_ARCHIVED))
 			is_needed = true;
 		break;
 	case HSMA_RESTORE:
@@ -227,7 +227,7 @@ static bool hal_is_sane(struct hsm_action_list *hal)
 	if (hal->hal_count == 0)
 		RETURN(false);
 
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		if (!fid_is_sane(&hai->hai_fid))
 			RETURN(false);
@@ -277,7 +277,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 	if (!hal_is_sane(hal))
 		RETURN(-EINVAL);
 
-	*compound_id = cfs_atomic_inc_return(&cdt->cdt_compound_id);
+	*compound_id = atomic_inc_return(&cdt->cdt_compound_id);
 
 	/* search for compatible request, if found hai_cookie is set
 	 * to the request cookie
@@ -287,7 +287,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 	if (rc)
 		GOTO(out, rc);
 
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		int archive_id;
 		__u64 flags;
@@ -310,10 +310,10 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 		 * do not record
 		 */
 		/* redundant case */
-		if ((hai->hai_action != HSMA_CANCEL) && (hai->hai_cookie != 0))
+		if (hai->hai_action != HSMA_CANCEL && hai->hai_cookie != 0)
 			continue;
 		/* cancel nothing case */
-		if ((hai->hai_action == HSMA_CANCEL) && (hai->hai_cookie == 0))
+		if (hai->hai_action == HSMA_CANCEL && hai->hai_cookie == 0)
 			continue;
 
 		/* new request or cancel request
@@ -327,11 +327,13 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 
 		/* get HSM attributes */
 		obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &mh);
-		if (IS_ERR(obj)) {
+		if (IS_ERR(obj) || obj == NULL) {
 			/* in case of archive remove, Lustre file
 			 * is not mandatory */
 			if (hai->hai_action == HSMA_REMOVE)
 				goto record;
+			if (obj == NULL)
+				GOTO(out, rc = -ENOENT);
 			GOTO(out, rc = PTR_ERR(obj));
 		}
 		mdt_object_put(mti->mti_env, obj);
@@ -356,8 +358,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 		 * warranty an agent can serve any combinaison of archive
 		 * backend
 		 */
-		if ((hai->hai_action != HSMA_CANCEL) &&
-		    (archive_id == 0))
+		if (hai->hai_action != HSMA_CANCEL && archive_id == 0)
 			archive_id = mh.mh_arch_id;
 
 		/* if restore, take an exclusive lock on layout */
@@ -396,8 +397,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 			mdt_object_put(mti->mti_env, child);
 
 			mutex_lock(&cdt->cdt_restore_lock);
-			cfs_list_add_tail(&crh->crh_list,
-					  &cdt->cdt_restore_hdl);
+			list_add_tail(&crh->crh_list, &cdt->cdt_restore_hdl);
 			mutex_unlock(&cdt->cdt_restore_lock);
 		}
 record:
@@ -416,7 +416,7 @@ record:
 	GOTO(out, rc);
 out:
 	/* if work has been added, wake up coordinator */
-	if ((rc == 0) || (rc == -ENODATA))
+	if (rc == 0 || rc == -ENODATA)
 		mdt_hsm_cdt_wakeup(mdt);
 
 	return rc;
@@ -438,7 +438,7 @@ int mdt_hsm_get_running(struct mdt_thread_info *mti,
 	int			 i;
 	ENTRY;
 
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		struct cdt_agent_req *car;
 
@@ -471,7 +471,6 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 {
 	struct mdt_device		*mdt = mti->mti_mdt;
 	struct coordinator		*cdt = &mdt->mdt_coordinator;
-	cfs_list_t			*pos, *tmp;
 	struct cdt_restore_handle	*crh;
 	bool				 rc = false;
 	ENTRY;
@@ -480,8 +479,7 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 		RETURN(rc);
 
 	mutex_lock(&cdt->cdt_restore_lock);
-	cfs_list_for_each_safe(pos, tmp, &cdt->cdt_restore_hdl) {
-		crh = cfs_list_entry(pos, struct cdt_restore_handle, crh_list);
+	list_for_each_entry(crh, &cdt->cdt_restore_hdl, crh_list) {
 		if (lu_fid_eq(&crh->crh_fid, fid)) {
 			rc = true;
 			break;
@@ -507,7 +505,7 @@ int mdt_hsm_get_actions(struct mdt_thread_info *mti,
 	int			 i, rc;
 	ENTRY;
 
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		hai->hai_action = HSMA_NONE;
 		if (!fid_is_sane(&hai->hai_fid))
@@ -530,7 +528,7 @@ int mdt_hsm_get_actions(struct mdt_thread_info *mti,
 	 * we may want do give back dynamic informations on the
 	 * running request
 	 */
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		struct cdt_agent_req *car;
 

@@ -129,11 +129,11 @@ struct coordinator {
 						     * requests */
 	atomic_t		 cdt_request_count; /**< current count of
 						     * started requests */
-	cfs_list_t		 cdt_requests;      /**< list of started
+	struct list_head	 cdt_requests;      /**< list of started
 						     * requests */
-	cfs_list_t		 cdt_agents;	    /**< list of register
+	struct list_head	 cdt_agents;	    /**< list of register
 						     * agents */
-	cfs_list_t		 cdt_restore_hdl;   /**< list of restore lock
+	struct list_head	 cdt_restore_hdl;   /**< list of restore lock
 						     * handles */
 };
 
@@ -577,7 +577,7 @@ struct cdt_req_progress {
 
 struct cdt_agent_req {
 	cfs_list_t		 car_request_list; /**< to chain all the req. */
-	cfs_atomic_t		 car_refcount;     /**< reference counter */
+	atomic_t		 car_refcount;     /**< reference counter */
 	__u64			 car_compound_id;  /**< compound id */
 	__u64			 car_flags;        /**< request original flags */
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
@@ -597,10 +597,10 @@ struct hsm_agent {
 	__u32		*ha_archive_id;		/**< archive id */
 	int		 ha_archive_cnt;	/**< number of archive entries
 						 *   0 means any archive */
-	cfs_atomic_t	 ha_requests;		/**< current request count */
-	cfs_atomic_t	 ha_success;		/**< number of successful
+	atomic_t	 ha_requests;		/**< current request count */
+	atomic_t	 ha_success;		/**< number of successful
 						 * actions */
-	cfs_atomic_t	 ha_failure;		/**< number of failed actions */
+	atomic_t	 ha_failure;		/**< number of failed actions */
 };
 
 struct cdt_restore_handle {

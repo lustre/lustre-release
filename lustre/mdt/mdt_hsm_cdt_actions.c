@@ -93,7 +93,7 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 	ENTRY;
 
 	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
-	if ((lctxt == NULL) || (lctxt->loc_handle == NULL))
+	if (lctxt == NULL || lctxt->loc_handle == NULL)
 		RETURN(-ENOENT);
 
 	mutex_lock(&cdt->cdt_llog_lock);
@@ -148,7 +148,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 	memcpy(&larr->arr_hai, hai, hai->hai_len);
 
 	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
-	if ((lctxt == NULL) || (lctxt->loc_handle == NULL))
+	if (lctxt == NULL || lctxt->loc_handle == NULL)
 		GOTO(free, rc = -ENOENT);
 
 	mutex_lock(&cdt->cdt_llog_lock);
@@ -223,8 +223,8 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 	 * the 1st has to be set to ARS_CANCELED and the 2nd to ARS_SUCCEED
 	 */
 	if (agent_req_in_final_state(larr->arr_status) ||
-	    ((larr->arr_hai.hai_action == HSMA_CANCEL) &&
-	     (ducb->status == ARS_CANCELED)))
+	    (larr->arr_hai.hai_action == HSMA_CANCEL &&
+	     ducb->status == ARS_CANCELED))
 		RETURN(0);
 
 	rc = 0;
@@ -359,7 +359,7 @@ static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
 		 aai->aai_magic);
 
 	aai->aai_ctxt = llog_get_context(aai->aai_obd, LLOG_AGENT_ORIG_CTXT);
-	if ((aai->aai_ctxt == NULL) || (aai->aai_ctxt->loc_handle == NULL)) {
+	if (aai->aai_ctxt == NULL || aai->aai_ctxt->loc_handle == NULL) {
 		CERROR("llog_get_context() failed\n");
 		RETURN(ERR_PTR(-ENOENT));
 	}

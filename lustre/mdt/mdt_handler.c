@@ -411,8 +411,8 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                 b->blocks = 0;
                 /* if no object is allocated on osts, the size on mds is valid. b=22272 */
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm &&
-		   (ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
+	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL &&
+		   ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) {
 		/* A released file stores its size on MDS. */
 		b->blocks = 0;
 		b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
@@ -766,7 +766,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	/* the Lustre protocol supposes to return default striping
 	 * on the user-visible root if explicitly requested */
 	if ((ma->ma_valid & MA_LOV) == 0 && S_ISDIR(la->la_mode) &&
-	    (ma->ma_need & MA_LOV_DEF && is_root) && (ma->ma_need & MA_LOV)) {
+	    (ma->ma_need & MA_LOV_DEF && is_root) && ma->ma_need & MA_LOV) {
 		struct lu_fid      rootfid;
 		struct mdt_object *root;
 		struct mdt_device *mdt = info->mti_mdt;
@@ -2561,7 +2561,7 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 
 	LASSERT(mdt_object_remote(o));
 
-	LASSERT((ibits & MDS_INODELOCK_UPDATE));
+	LASSERT(ibits & MDS_INODELOCK_UPDATE);
 
 	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
@@ -5857,8 +5857,8 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		linkea_entry_unpack(lee, &reclen, tmpname, tmpfid);
 		/* If set, use link #linkno for path lookup, otherwise use
 		   link #0.  Only do this for the final path element. */
-		if ((pli->pli_fidcount == 0) &&
-		    (pli->pli_linkno < leh->leh_reccount)) {
+		if (pli->pli_fidcount == 0 &&
+		    pli->pli_linkno < leh->leh_reccount) {
 			int count;
 			for (count = 0; count < pli->pli_linkno; count++) {
 				lee = (struct link_ea_entry *)

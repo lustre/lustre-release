@@ -284,10 +284,10 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 	 * LOST without ARCHIVED: cannot lost a non-archived file.
 	 */
 	flags = ma->ma_hsm.mh_flags;
-	if (((flags & HS_DIRTY) && !(flags & HS_EXISTS)) ||
-	    ((flags & HS_RELEASED) && (flags & HS_DIRTY)) ||
-	    ((flags & HS_RELEASED) && !(flags & HS_ARCHIVED)) ||
-	    ((flags & HS_LOST)     && !(flags & HS_ARCHIVED))) {
+	if ((flags & HS_DIRTY    && !(flags & HS_EXISTS)) ||
+	    (flags & HS_RELEASED && flags & HS_DIRTY) ||
+	    (flags & HS_RELEASED && !(flags & HS_ARCHIVED)) ||
+	    (flags & HS_LOST     && !(flags & HS_ARCHIVED))) {
 		CDEBUG(D_HSM, "Incompatible flag change on "DFID
 			      "flags="LPX64"\n",
 		       PFID(&info->mti_body->fid1), flags);
@@ -353,7 +353,7 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
 			MTI_NAME_MAXLEN);
 	hal->hal_count = 1;
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	hai->hai_action = HSMA_NONE;
 	hai->hai_cookie = 0;
 	hai->hai_gid = 0;
@@ -493,7 +493,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 			MTI_NAME_MAXLEN);
 
 	hal->hal_count = hr->hr_itemcount;
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hr->hr_itemcount; i++, hai = hai_next(hai)) {
 		hai->hai_action = action;
 		hai->hai_cookie = 0;

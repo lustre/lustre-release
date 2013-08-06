@@ -57,10 +57,8 @@ static struct hsm_agent *mdt_hsm_agent_lookup(struct coordinator *cdt,
 					      const struct obd_uuid *uuid)
 {
 	struct hsm_agent	*ha;
-	cfs_list_t		*pos;
 
-	cfs_list_for_each(pos, &cdt->cdt_agents) {
-		ha = cfs_list_entry(pos, struct hsm_agent, ha_list);
+	list_for_each_entry(ha, &cdt->cdt_agents, ha_list) {
 		if (obd_uuid_equals(&ha->ha_uuid, uuid))
 			return ha;
 	}
@@ -120,7 +118,7 @@ int mdt_hsm_agent_register(struct mdt_thread_info *mti,
 		GOTO(out_free, rc = -EEXIST);
 	}
 
-	cfs_list_add_tail(&ha->ha_list, &cdt->cdt_agents);
+	list_add_tail(&ha->ha_list, &cdt->cdt_agents);
 
 	if (ha->ha_archive_cnt == 0)
 		CDEBUG(D_HSM, "agent %s registered for all archives\n",
@@ -134,7 +132,7 @@ int mdt_hsm_agent_register(struct mdt_thread_info *mti,
 
 out_free:
 
-	if ((ha != NULL) && (ha->ha_archive_id != NULL))
+	if (ha != NULL && ha->ha_archive_id != NULL)
 		OBD_FREE(ha->ha_archive_id,
 			 ha->ha_archive_cnt * sizeof(*ha->ha_archive_id));
 	if (ha != NULL)
@@ -205,7 +203,7 @@ int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 
 	ha = mdt_hsm_agent_lookup(cdt, uuid);
 	if (ha != NULL)
-		cfs_list_del_init(&ha->ha_list);
+		list_del_init(&ha->ha_list);
 
 	up_write(&cdt->cdt_agent_lock);
 
@@ -239,14 +237,14 @@ int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
 				    int succ_rq, int fail_rq, int new_rq,
 				    const struct obd_uuid *uuid)
 {
-	struct hsm_agent	*ha, *tmp;
+	struct hsm_agent	*ha;
 	int			 rc;
 	ENTRY;
 
 	down_read(&cdt->cdt_agent_lock);
-	cfs_list_for_each_entry_safe(ha, tmp, &cdt->cdt_agents, ha_list) {
+	list_for_each_entry(ha, &cdt->cdt_agents, ha_list) {
 		if (obd_uuid_equals(&ha->ha_uuid, uuid)) {
-			if ((succ_rq == 0) && (fail_rq == 0) && (new_rq == 0)) {
+			if (succ_rq == 0 && fail_rq == 0 && new_rq == 0) {
 				atomic_set(&ha->ha_success, 0);
 				atomic_set(&ha->ha_failure, 0);
 				atomic_set(&ha->ha_requests, 0);
@@ -279,23 +277,22 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 			    struct obd_uuid *uuid)
 {
 	int			 rc = -EAGAIN, i, load = -1;
-	struct hsm_agent	*ha, *tmp;
+	struct hsm_agent	*ha;
 	ENTRY;
 
 	/* Choose an export to send a copytool req to */
 	down_read(&cdt->cdt_agent_lock);
-	cfs_list_for_each_entry_safe(ha, tmp, &cdt->cdt_agents, ha_list) {
+	list_for_each_entry(ha, &cdt->cdt_agents, ha_list) {
 		for (i = 0; (i < ha->ha_archive_cnt) &&
 			      (ha->ha_archive_id[i] != archive); i++) {
 			/* nothing to do, just skip unmatching records */
 		}
 
 		/* archive count == 0 means copy tool serves any backend */
-		if ((ha->ha_archive_cnt != 0) && (i == ha->ha_archive_cnt))
+		if (ha->ha_archive_cnt != 0 && i == ha->ha_archive_cnt)
 			continue;
 
-		if ((load == -1) ||
-		    (load > atomic_read(&ha->ha_requests))) {
+		if (load == -1 || load > atomic_read(&ha->ha_requests)) {
 			load = atomic_read(&ha->ha_requests);
 			*uuid = ha->ha_uuid;
 			rc = 0;
@@ -361,20 +358,20 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 
 	/* Check if request is still valid (cf file hsm flags) */
 	fail_request = false;
-	hai = hai_zero(hal);
+	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		if (hai->hai_action != HSMA_CANCEL) {
 			struct mdt_object *obj;
 			struct md_hsm hsm;
 
 			obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
-			if (!IS_ERR(obj)) {
+			if (!IS_ERR(obj) && obj != NULL) {
 				mdt_object_put(mti->mti_env, obj);
 			} else {
 				if (hai->hai_action == HSMA_REMOVE)
 					continue;
 
-				if (PTR_ERR(obj) == -ENOENT) {
+				if (obj == NULL) {
 					fail_request = true;
 					rc = mdt_agent_record_update(
 							     mti->mti_env, mdt,
@@ -383,10 +380,10 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 					if (rc) {
 						CERROR(
 					      "%s: mdt_agent_record_update() "
-					      "failed, rc=%d, cannot update "
+					      "failed, cannot update "
 					      "status to %s for cookie "
 					      LPX64": rc = %d\n",
-					      mdt_obd_name(mdt), rc,
+					      mdt_obd_name(mdt),
 					      agent_req_status2name(ARS_FAILED),
 					      hai->hai_cookie, rc);
 						GOTO(out_buf, rc);
@@ -395,7 +392,6 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 				}
 				GOTO(out_buf, rc = PTR_ERR(obj));
 			}
-
 
 			if (!mdt_hsm_is_action_compat(hai, hal->hal_archive_id,
 						      hal->hal_flags, &hsm)) {
@@ -409,10 +405,10 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 							     1, ARS_FAILED);
 				if (rc) {
 					CERROR("%s: mdt_agent_record_update() "
-					      "failed, rc=%d, cannot update "
+					      "failed, cannot update "
 					      "status to %s for cookie "
 					      LPX64": rc = %d\n",
-					      mdt_obd_name(mdt), rc,
+					      mdt_obd_name(mdt),
 					      agent_req_status2name(ARS_FAILED),
 					      hai->hai_cookie, rc);
 					GOTO(out_buf, rc);
@@ -449,7 +445,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	 * from a server (MDT) to a client (MDC), backwards of normal comms.
 	 */
 	exp = cfs_hash_lookup(mdt2obd_dev(mdt)->obd_uuid_hash, &uuid);
-	if ((exp == NULL) || (exp->exp_disconnected)) {
+	if (exp == NULL || exp->exp_disconnected) {
 		/* This should clean up agents on evicted exports */
 		rc = -ENOENT;
 		CERROR("%s: agent uuid (%s) not found, unregistering:"
@@ -481,7 +477,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 out:
 	if (rc != 0 && is_registered) {
 		/* in case of error, we have to unregister requests */
-		hai = hai_zero(hal);
+		hai = hai_first(hal);
 		for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 			if (hai->hai_action == HSMA_CANCEL)
 				continue;
@@ -522,20 +518,20 @@ static void *mdt_hsm_agent_proc_start(struct seq_file *s, loff_t *off)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	cfs_list_t		*pos;
+	struct list_head	*pos;
 	loff_t			 i;
 	ENTRY;
 
 	down_read(&cdt->cdt_agent_lock);
 
-	if (cfs_list_empty(&cdt->cdt_agents))
+	if (list_empty(&cdt->cdt_agents))
 		RETURN(NULL);
 
 	if (*off == 0)
 		RETURN(SEQ_START_TOKEN);
 
 	i = 0;
-	cfs_list_for_each(pos, &cdt->cdt_agents) {
+	list_for_each(pos, &cdt->cdt_agents) {
 		i++;
 		if (i >= *off)
 			RETURN(pos);
@@ -552,7 +548,7 @@ static void *mdt_hsm_agent_proc_next(struct seq_file *s, void *v, loff_t *p)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	cfs_list_t		*pos = v;
+	struct list_head	*pos = v;
 	ENTRY;
 
 	if (pos == SEQ_START_TOKEN)
@@ -571,7 +567,7 @@ static void *mdt_hsm_agent_proc_next(struct seq_file *s, void *v, loff_t *p)
  */
 static int mdt_hsm_agent_proc_show(struct seq_file *s, void *v)
 {
-	cfs_list_t		*pos = v;
+	struct list_head	*pos = v;
 	struct hsm_agent	*ha;
 	int			 i;
 	ENTRY;
@@ -579,7 +575,7 @@ static int mdt_hsm_agent_proc_show(struct seq_file *s, void *v)
 	if (pos == SEQ_START_TOKEN)
 		RETURN(0);
 
-	ha = cfs_list_entry(pos, struct hsm_agent, ha_list);
+	ha = list_entry(pos, struct hsm_agent, ha_list);
 	seq_printf(s, "uuid=%s archive#=%d (", ha->ha_uuid.uuid,
 		   ha->ha_archive_cnt);
 	if (ha->ha_archive_cnt == 0)
