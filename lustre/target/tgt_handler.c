@@ -281,6 +281,10 @@ int tgt_request_handle(struct ptlrpc_request *req)
 
 	ENTRY;
 
+	/* Refill(initilize) the context, in case it is
+	 * not initialized yet. */
+	lu_env_refill(req->rq_svc_thread->t_env);
+
 	req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 	tsi->tsi_pill = &req->rq_pill;
 	tsi->tsi_env = req->rq_svc_thread->t_env;
