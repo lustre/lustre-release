@@ -402,15 +402,6 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
 	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 	LASSERT(mti);
-	if (mti->mti_has_trans) {
-		/* XXX: currently there are allowed cases, but the wrong cases
-		 * are also possible, so better check is needed here */
-		CDEBUG(D_INFO, "More than one transaction "LPU64"\n",
-		       mti->mti_transno);
-		return 0;
-	}
-
-	mti->mti_has_trans = 1;
 
 	if (mti->mti_mos != NULL &&
 	    mdt_object_remote(mti->mti_mos)) {

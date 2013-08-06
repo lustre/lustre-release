@@ -99,6 +99,8 @@ struct tgt_session_info {
 	 */
 	int			 tsi_reply_fail_id;
 	int			 tsi_request_fail_id;
+
+	__u32			 tsi_has_trans:1; /* has txn already? */
 };
 
 static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
@@ -251,7 +253,6 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 			 struct dt_object *obj, __u64 opdata,
 			 struct thandle *th, struct ptlrpc_request *req);
-
 enum {
 	ESERIOUS = 0x0001000
 };
