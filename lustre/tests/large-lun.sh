@@ -35,12 +35,23 @@ RUN_FSCK=${RUN_FSCK:-true}
 [[ $SLOW = yes ]] && FULL_MODE=true
 #########################################################################
 # Dump the super block information for the filesystem present on device.
-run_dumpe2fs() {
+run_dumpfs() {
 	local facet=$1
 	local dev=$2
+	local cmd
 
 	log "dump the super block information on $facet device $dev"
-	local cmd="$DUMPE2FS -h $dev"
+	local fstype=$(facet_fstype $facet)
+
+	case $fstype in
+		ldiskfs )
+			cmd="$DUMPE2FS -h $dev" ;;
+		zfs )
+			cmd="$ZDB -l $(facet_vdevice $facet)" ;;
+		* )
+			error "unknown fstype!" ;;
+	esac
+
 	do_facet $facet "$cmd"
 }
 
@@ -101,22 +112,39 @@ run_mdsrate() {
 	fi
 }
 
+check_fsfacet() {
+	local facet=$1
+	local fstype=$(facet_fstype $facet)
+
+	case $fstype in
+	    ldiskfs)
+		run_e2fsck $(facet_active_host $facet) $(facet_device $facet) \
+		    "-y" || error "run e2fsck error"
+		;;
+	    zfs)
+		# Could call fsck.zfs, but currently it does nothing,
+		# Could also call zpool scrub, but that could take a LONG time
+		# do_facet $facet "fsck.zfs $(facet_device $facet)"
+		;;
+	esac
+}
+
 # Run e2fsck on MDS and OST
 do_fsck() {
 	$RUN_FSCK || return
-	local dev
-	run_e2fsck $(facet_host $SINGLEMDS) $(mdsdevname ${SINGLEMDS//mds/}) \
-		"-y" || error "run e2fsck error"
+
+	check_fsfacet $SINGLEMDS
+
 	for num in $(seq $OSTCOUNT); do
-		dev=$(ostdevname $num)
-		run_e2fsck $(facet_host ost${num}) $dev "-y" ||
-			error "run e2fsck error"
+		check_fsfacet ost${num}
 	done
 }
 ################################## Main Flow ###################################
 trap cleanupall EXIT
 
 test_1 () {
+	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+		skip "Only applicable to ldiskfs-based nodes" && return
 	local dev
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
@@ -130,26 +158,34 @@ run_test 1 "run llverdev on raw LUN"
 test_2 () {
 	local dev
 	local ostmnt
+	local fstype
 
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
 		ostmnt=$(facet_mntpt ost${num})
+		fstype=$(facet_fstype ost${num})
 
 		# Mount the OST as an ldiskfs filesystem.
-		log "mount the OST $dev as a ldiskfs filesystem"
-		add ost${num} $(mkfs_opts ost${num}) $FSTYPE_OPT --reformat \
-			$(ostdevname $num) > /dev/null ||
+		log "mount the OST $dev as a $fstype filesystem"
+		add ost${num} $(mkfs_opts ost${num} $dev) $FSTYPE_OPT \
+			--reformat $(ostdevname $num) \
+			$(ostvdevname $num) > /dev/null ||
 			error "format ost${num} error"
-		run_dumpe2fs ost${num} $dev
-		do_facet ost${num} mount -t $(facet_fstype ost${num}) $dev \
+		if [ $fstype == zfs ]; then
+			import_zpool ost${num}
+			do_facet ost${num} "$ZFS set canmount=on $dev; " \
+			    "$ZFS set mountpoint=legacy $dev; $ZFS list $dev"
+		fi
+		run_dumpfs ost${num} $dev
+		do_facet ost${num} mount -t $fstype $dev \
 			$ostmnt "$OST_MOUNT_OPTS"
 
 		# Run llverfs on the mounted ldiskfs filesystem in partial mode
 		# to ensure that the kernel can perform filesystem operations
 		# on the complete device without any errors.
-		log "run llverfs in partial mode on the OST ldiskfs $ostmnt"
+		log "run llverfs in partial mode on the OST $fstype $ostmnt"
 		do_rpc_nodes $(facet_host ost${num}) run_llverfs $ostmnt -vpl \
-			"no" || error "run_llverfs error on ldiskfs"
+			"no" || error "run_llverfs error on $fstype"
 
 		# Unmount the OST.
 		log "unmount the OST $dev"
@@ -157,25 +193,27 @@ test_2 () {
 
 		# After llverfs is run on the ldiskfs filesystem in partial
 		# mode, a full e2fsck should be run to catch any errors early.
-		$RUN_FSCK && run_e2fsck $(facet_host ost${num}) $dev "-y" ||
-			error "run e2fsck error"
+		$RUN_FSCK && check_fsfacet ost${num}
 
 		if $FULL_MODE; then
-			log "full mode, mount the OST $dev as a ldiskfs again"
+			log "full mode, mount the OST $dev as a $fstype again"
+			if [ $fstype == zfs ]; then
+				import_zpool ost${num}
+			fi
 			do_facet ost${num} mount -t $(facet_fstype ost${num}) \
 				$dev $ostmnt "$OST_MOUNT_OPTS"
 			cleanup_dirs ost${num} $ostmnt
 			do_facet ost${num} "sync"
 
-			run_dumpe2fs ost${num} $dev
+			run_dumpfs ost${num} $dev
 
 			# Run llverfs on the mounted ldiskfs filesystem in full
 			# mode to ensure that the kernel can perform filesystem
 			# operations on the complete device without any errors.
-			log "run llverfs in full mode on OST ldiskfs $ostmnt"
+			log "run llverfs in full mode on OST $fstype $ostmnt"
 			do_rpc_nodes $(facet_host ost${num}) run_llverfs \
 				$ostmnt -vl "no" ||
-				error "run_llverfs error on ldiskfs"
+				error "run_llverfs error on $fstype"
 
 			# Unmount the OST.
 			log "unmount the OST $dev"
@@ -184,12 +222,11 @@ test_2 () {
 			# After llverfs is run on the ldiskfs filesystem in
 			# full mode, a full e2fsck should be run to catch any
 			#  errors early.
-			$RUN_FSCK && run_e2fsck $(facet_host ost${num}) $dev \
-				"-y" || error "run e2fsck error"
+			$RUN_FSCK && check_fsfacet ost${num}
 		fi
 	done
 }
-run_test 2 "run llverfs on OST ldiskfs filesystem"
+run_test 2 "run llverfs on OST ldiskfs/zfs filesystem"
 
 test_3 () {
 	[ -z "$CLIENTS" ] && skip_env "CLIENTS not defined, skipping" && return
@@ -219,7 +256,7 @@ test_4 () {
 
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
-		run_dumpe2fs ost${num} $dev
+		run_dumpfs ost${num} $dev
 	done
 
 	# Run llverfs on the mounted Lustre filesystem both in partial and
@@ -243,7 +280,7 @@ test_4 () {
 
 		for num in $(seq $OSTCOUNT); do
 			dev=$(ostdevname $num)
-			run_dumpe2fs ost${num} $dev
+			run_dumpfs ost${num} $dev
 		done
 
 		log "run llverfs in full mode on the Lustre filesystem $MOUNT"
