@@ -145,7 +145,11 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		       fld->lsf_name, seq, -EIO);
 		RETURN(-EIO);
 	} else {
-		LASSERT(fld->lsf_control_exp);
+		if (fld->lsf_control_exp == NULL) {
+			CERROR("%s: lookup "LPX64", but not connects to MDT0"
+			       "yet: rc = %d.\n", fld->lsf_name, seq, -EIO);
+			RETURN(-EIO);
+		}
 		/* send request to mdt0 i.e. super seq. controller.
 		 * This is temporary solution, long term solution is fld
 		 * replication on all mdt servers.

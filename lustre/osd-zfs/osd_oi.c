@@ -208,18 +208,18 @@ osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
  * the object is located (tgt index) and it is MDT or OST object.
  */
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   const struct lu_fid *fid, struct lu_seq_range *range)
+		   obd_seq seq, struct lu_seq_range *range)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 
-	if (fid_is_idif(fid)) {
+	if (fid_seq_is_idif(seq)) {
 		fld_range_set_ost(range);
-		range->lsr_index = fid_idif_ost_idx(fid);
+		range->lsr_index = idif_ost_idx(seq);
 		return 0;
 	}
 
-	if (!fid_seq_in_fldb(fid_seq(fid))) {
+	if (!fid_seq_in_fldb(seq)) {
 		fld_range_set_mdt(range);
 		if (ss != NULL)
 			/* FIXME: If ss is NULL, it suppose not get lsr_index
@@ -230,34 +230,22 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 
 	LASSERT(ss != NULL);
 	fld_range_set_any(range);
-	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
+	rc = fld_server_lookup(env, ss->ss_server_fld, seq, range);
 	if (rc != 0)
-		CERROR("%s: cannot find FLD range for "DFID": rc = %d\n",
-		       osd_name(osd), PFID(fid), rc);
+		CERROR("%s: cannot find FLD range for "LPX64": rc = %d\n",
+		       osd_name(osd), seq, rc);
 	return rc;
 }
 
 int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 		  const struct lu_fid *fid)
 {
-	struct lu_seq_range *range = &osd_oti_get(env)->oti_seq_range;
-	int rc;
 	ENTRY;
 
 	if (fid_is_idif(fid))
 		RETURN(1);
 
-	rc = osd_fld_lookup(env, osd, fid, range);
-	if (rc != 0) {
-		CERROR("%s: Can not lookup fld for "DFID"\n",
-		       osd_name(osd), PFID(fid));
-		RETURN(rc);
-	}
-
-	CDEBUG(D_INFO, "fid "DFID" range "DRANGE"\n", PFID(fid),
-	       PRANGE(range));
-
-	if (fld_range_is_ost(range))
+	if (osd->od_is_ost)
 		RETURN(1);
 
 	RETURN(0);
@@ -326,12 +314,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 	if (osd_seq->os_compat_dirs == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	rc = osd_oi_lookup(env, osd, osd->od_root, "O", &oi);
-	if (rc != 0) {
-		CERROR("%s: Can not find O: rc = %d\n", osd_name(osd), rc);
-		GOTO(out, rc);
-	}
-
+	oi.oi_zapid = osd->od_O_id;
 	sprintf(seq_name, (fid_seq_is_rsvd(seq) ||
 		fid_seq_is_mdt0(seq)) ?  LPU64 : LPX64i,
 		fid_seq_is_idif(seq) ? 0 : seq);
@@ -654,6 +637,8 @@ osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 	rc = osd_oi_find_or_create(env, o, o->od_root, "O", &sdb);
 	if (rc)
 		RETURN(rc);
+
+	o->od_O_id = sdb;
 
 	osd_ost_seq_init(env, o);
 	/* Create on-disk indexes to maintain per-UID/GID inode usage.

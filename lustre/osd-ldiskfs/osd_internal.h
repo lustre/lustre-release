@@ -243,7 +243,8 @@ struct osd_device {
 				  od_noscrub:1,
 				  od_dirent_journal:1,
 				  od_igif_inoi:1,
-				  od_check_ff:1;
+				  od_check_ff:1,
+				  od_is_ost:1;
 
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;
@@ -683,7 +684,7 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 int osd_scrub_dump(struct osd_device *dev, char *buf, int len);
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   const struct lu_fid *fid, struct lu_seq_range *range);
+		   obd_seq seq, struct lu_seq_range *range);
 
 int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_device *osd,
@@ -696,6 +697,8 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 				const struct lu_fid *fid,
 				struct osd_inode_id *id);
 
+int osd_ost_seq_exists(struct osd_thread_info *info, struct osd_device *osd,
+		       __u64 seq);
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
                       int type, uint blk, int depth, uint index,
@@ -840,7 +843,6 @@ static inline char *osd_name(struct osd_device *osd)
 {
 	return osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name;
 }
-
 
 extern const struct dt_body_operations osd_body_ops;
 extern struct lu_context_key osd_key;

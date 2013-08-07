@@ -529,6 +529,9 @@ static int osd_mount(const struct lu_env *env,
 	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
 		sizeof(o->od_svname) - 1);
 
+	if (server_name_is_ost(o->od_svname))
+		o->od_is_ost = 1;
+
 	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
 	if (rc) {
 		CERROR("can't open objset %s: %d\n", o->od_mntdev, rc);

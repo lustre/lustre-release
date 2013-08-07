@@ -611,10 +611,15 @@ static inline obd_id fid_idif_id(obd_seq seq, __u32 oid, __u32 ver)
         return ((__u64)ver << 48) | ((seq & 0xffff) << 32) | oid;
 }
 
+static inline __u32 idif_ost_idx(obd_seq seq)
+{
+	return (seq >> 16) & 0xffff;
+}
+
 /* extract ost index from IDIF FID */
 static inline __u32 fid_idif_ost_idx(const struct lu_fid *fid)
 {
-	return (fid_seq(fid) >> 16) & 0xffff;
+	return idif_ost_idx(fid_seq(fid));
 }
 
 /* extract OST sequence (group) from a wire ost_id (id/seq) pair */

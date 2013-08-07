@@ -393,7 +393,8 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		RETURN(-ENOENT);
 
 	/* Search order: 1. per-thread cache. */
-	if (lu_fid_eq(fid, &oic->oic_fid)) {
+	if (lu_fid_eq(fid, &oic->oic_fid) &&
+	    likely(oic->oic_dev == dev)) {
 		id = &oic->oic_lid;
 		goto iget;
 	}
@@ -2096,18 +2097,18 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   const struct lu_fid *fid, struct lu_seq_range *range)
+		   obd_seq seq, struct lu_seq_range *range)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 
-	if (fid_is_idif(fid)) {
+	if (fid_seq_is_idif(seq)) {
 		fld_range_set_ost(range);
-		range->lsr_index = fid_idif_ost_idx(fid);
+		range->lsr_index = idif_ost_idx(seq);
 		return 0;
 	}
 
-	if (!fid_seq_in_fldb(fid_seq(fid))) {
+	if (!fid_seq_in_fldb(seq)) {
 		fld_range_set_mdt(range);
 		if (ss != NULL)
 			/* FIXME: If ss is NULL, it suppose not get lsr_index
@@ -2118,10 +2119,10 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 
 	LASSERT(ss != NULL);
 	fld_range_set_any(range);
-	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
+	rc = fld_server_lookup(env, ss->ss_server_fld, seq, range);
 	if (rc != 0) {
-		CERROR("%s: cannot find FLD range for "DFID": rc = %d\n",
-		       osd_name(osd), PFID(fid), rc);
+		CERROR("%s: cannot find FLD range for "LPX64": rc = %d\n",
+		       osd_name(osd), seq, rc);
 	}
 	return rc;
 }
@@ -2181,7 +2182,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 	if (fid_is_norm(lu_object_fid(&dt->do_lu)) &&
 		!fid_is_last_id(lu_object_fid(&dt->do_lu)))
 		osd_fld_lookup(env, osd_dt_dev(handle->th_dev),
-			       lu_object_fid(&dt->do_lu), range);
+			       fid_seq(lu_object_fid(&dt->do_lu)), range);
 
 
 	RETURN(rc);
@@ -3322,26 +3323,45 @@ static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
 	return rc;
 }
 
-static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
-			  struct lu_fid *fid)
+static int osd_mdt_seq_exists(const struct lu_env *env,
+			      struct osd_device *osd, obd_seq seq)
 {
 	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 	ENTRY;
 
-	/* Those FID seqs, which are not in FLDB, must be local seq */
-	if (unlikely(!fid_seq_in_fldb(fid_seq(fid)) || ss == NULL))
-		RETURN(0);
+	if (ss == NULL)
+		RETURN(1);
 
-	rc = osd_fld_lookup(env, osd, fid, range);
+	/* XXX: currently, each MDT only store avaible sequence on disk, and no
+	 * allocated sequences information on disk, so we have to lookup FLDB,
+	 * but it probably makes more sense also store allocated sequence
+	 * locally, so we do not need do remote FLDB lookup in OSD */
+	rc = osd_fld_lookup(env, osd, seq, range);
 	if (rc != 0) {
-		CERROR("%s: Can not lookup fld for "DFID"\n",
-		       osd_name(osd), PFID(fid));
-		RETURN(rc);
+		CERROR("%s: Can not lookup fld for "LPX64"\n",
+		       osd_name(osd), seq);
+		RETURN(0);
 	}
 
-	RETURN(ss->ss_node_id != range->lsr_index);
+	RETURN(ss->ss_node_id == range->lsr_index);
+}
+
+static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
+			  struct lu_fid *fid)
+{
+	ENTRY;
+
+	/* FID seqs not in FLDB, must be local seq */
+	if (unlikely(!fid_seq_in_fldb(fid_seq(fid))))
+		RETURN(0);
+
+	/* Currently only check this for FID on MDT */
+	if (osd_mdt_seq_exists(env, osd, fid_seq(fid)))
+		RETURN(0);
+
+	RETURN(1);
 }
 
 /**
@@ -3880,6 +3900,7 @@ int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
 	       id->oii_ino, id->oii_gen, info);
 	info->oti_cache.oic_lid = *id;
 	info->oti_cache.oic_fid = *fid;
+	info->oti_cache.oic_dev = osd;
 
 	return 0;
 }
@@ -3942,7 +3963,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			rc = osd_ea_fid_get(env, obj, ino, fid, id);
 		else
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
-		if (rc != 0 || osd_remote_fid(env, dev, fid)) {
+		if (rc != 0) {
 			fid_zero(&oic->oic_fid);
 			GOTO(out, rc);
 		}
@@ -5537,6 +5558,9 @@ static int osd_device_init0(const struct lu_env *env,
 		rc = -E2BIG;
 		GOTO(out_mnt, rc);
 	}
+
+	if (server_name_is_ost(o->od_svname))
+		o->od_is_ost = 1;
 
 	rc = osd_obj_map_init(env, o);
 	if (rc != 0)

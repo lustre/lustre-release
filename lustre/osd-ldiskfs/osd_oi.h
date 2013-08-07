@@ -87,6 +87,7 @@ struct osd_inode_id {
 struct osd_idmap_cache {
 	struct lu_fid		oic_fid;
 	struct osd_inode_id	oic_lid;
+	struct osd_device	*oic_dev;
 };
 
 static inline void osd_id_pack(struct osd_inode_id *tgt,

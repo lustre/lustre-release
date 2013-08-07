@@ -532,6 +532,7 @@ int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);
 int server_name2svname(const char *label, char *svname, const char **endptr,
 		       size_t svsize);
+int server_name_is_ost(const char *svname);
 
 int lustre_put_lsi(struct super_block *sb);
 int lustre_start_simple(char *obdname, char *type, char *uuid,

@@ -245,13 +245,16 @@ struct osd_device {
 	struct lprocfs_stats	*od_stats;
 
 	uint64_t		 od_root;
+	uint64_t		 od_O_id;
 	struct osd_oi		**od_oi_table;
 	unsigned int		 od_oi_count;
 	struct osd_seq_list	od_seq_list;
 
 	unsigned int		 od_rdonly:1,
 				 od_xattr_in_sa:1,
-				 od_quota_iused_est:1;
+				 od_quota_iused_est:1,
+				 od_is_ost:1;
+
 	char			 od_mntdev[128];
 	char			 od_svname[128];
 
@@ -433,12 +436,13 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 int osd_options_init(void);
 int osd_convert_root_to_new_seq(const struct lu_env *env,
 				struct osd_device *o);
-
+int osd_ost_seq_exists(const struct lu_env *env, struct osd_device *osd,
+		       __u64 seq);
 /* osd_index.c */
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   const struct lu_fid *fid, struct lu_seq_range *range);
+		   obd_seq seq, struct lu_seq_range *range);
 
 /* osd_xattr.c */
 int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr);

@@ -472,25 +472,44 @@ static inline void osd_object_put(const struct lu_env *env,
 	lu_object_put(env, &obj->oo_dt.do_lu);
 }
 
-static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
-			  struct lu_fid *fid)
+static int osd_mdt_seq_exists(const struct lu_env *env, struct osd_device *osd,
+			      obd_seq seq)
 {
 	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 	ENTRY;
 
+	if (ss == NULL)
+		RETURN(1);
+
+	/* XXX: currently, each MDT only store avaible sequence on disk,
+	 * and no allocated sequences information on disk, so it has to
+	 * lookup FLDB. It probably makes more sense also store allocated
+	 * sequence locally, so we do not need do remote FLDB lookup in OSD */
+	rc = osd_fld_lookup(env, osd, seq, range);
+	if (rc != 0) {
+		CERROR("%s: Can not lookup fld for "LPX64"\n",
+		       osd_name(osd), seq);
+		RETURN(0);
+	}
+
+	RETURN(ss->ss_node_id == range->lsr_index);
+}
+
+static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
+			  struct lu_fid *fid)
+{
+	ENTRY;
+
 	if (!fid_is_norm(fid) && !fid_is_root(fid))
 		RETURN(0);
 
-	rc = osd_fld_lookup(env, osd, fid, range);
-	if (rc != 0) {
-		CERROR("%s: Can not lookup fld for "DFID"\n",
-		       osd_name(osd), PFID(fid));
-		RETURN(rc);
-	}
+	/* Currently, it only used to check FID on MDT */
+	if (osd_mdt_seq_exists(env, osd, fid_seq(fid)))
+		RETURN(0);
 
-	RETURN(ss->ss_node_id != range->lsr_index);
+	RETURN(1);
 }
 
 /**
