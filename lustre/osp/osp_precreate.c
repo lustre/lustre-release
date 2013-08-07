@@ -1066,7 +1066,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 	 *  - OST can allocate fid sequence.
 	 */
 	while ((rc = d->opd_pre_status) == 0 || rc == -ENOSPC ||
-		rc == -ENODEV || rc == -EAGAIN) {
+		rc == -ENODEV || rc == -EAGAIN || rc == -ENOTCONN) {
 
 		/*
 		 * increase number of precreations
