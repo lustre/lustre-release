@@ -128,6 +128,11 @@ get_mdt_devices() {
 	done
 }
 
+search_copytools() {
+	local agents=${1:-$(facet_active_host $SINGLEAGT)}
+	do_nodesv $agents "pgrep -x $HSMTOOL_BASE"
+}
+
 search_and_kill_copytool() {
 	local agents=${1:-$(facet_active_host $SINGLEAGT)}
 
@@ -540,12 +545,15 @@ wait_request_state() {
 	local fid=$1
 	local request=$2
 	local state=$3
+	# 4th arg (mdt index) is optional
+	local mdtidx=${4:-0}
+	local mds=mds$(($mdtidx + 1))
 
-	local cmd="$LCTL get_param -n $HSM_PARAM.actions"
+	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.actions"
 	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 
-	wait_result $SINGLEMDS "$cmd" $state 100 ||
-		error "request on $fid is not $state"
+	wait_result $mds "$cmd" $state 100 ||
+		error "request on $fid is not $state on $mds"
 }
 
 get_request_state() {
@@ -2595,28 +2603,70 @@ test_105() {
 }
 run_test 105 "Restart of coordinator"
 
-test_106() {
-	# test needs a running copytool
-	copytool_setup
+get_agent_by_uuid_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	do_facet $mds "$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.agents |\
+		 grep $uuid"
+}
 
+check_agent_registered_by_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
+	if [[ ! -z "$agent" ]]; then
+		echo "found agent $agent on $mds"
+	else
+		error "uuid $uuid not found in agent list on $mds"
+	fi
+}
+
+check_agent_unregistered_by_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
+	if [[ -z "$agent" ]]; then
+		echo "uuid not found in agent list on $mds"
+	else
+		error "uuid found in agent list on $mds: $agent"
+	fi
+}
+
+check_agent_registered() {
+	local uuid=$1
+	local mdsno
+	for mdsno in $(seq 1 $MDSCOUNT); do
+		check_agent_registered_by_mdt $uuid $((mdsno - 1))
+	done
+}
+
+check_agent_unregistered() {
+	local uuid=$1
+	local mdsno
+	for mdsno in $(seq 1 $MDSCOUNT); do
+		check_agent_unregistered_by_mdt $uuid $((mdsno - 1))
+	done
+}
+
+test_106() {
 	local uuid=$(do_rpc_nodes $(facet_active_host $SINGLEAGT) \
 		get_client_uuid $MOUNT | cut -d' ' -f2)
-	local agent=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.agents |
-		grep $uuid)
-	copytool_cleanup
-	[[ ! -z "$agent" ]] || error "My uuid $uuid not found in agent list"
-	local agent=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.agents |
-		grep $uuid)
-	[[ -z "$agent" ]] ||
-		error "My uuid $uuid still found in agent list,"\
-		      " after copytool shutdown"
+
 	copytool_setup
-	local agent=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.agents |
-		grep $uuid)
+	check_agent_registered $uuid
+
+	search_copytools || error "No copytool found"
+
 	copytool_cleanup
-	[[ ! -z "$agent" ]] ||
-		error "My uuid $uuid not found in agent list after"\
-		      " copytool restart"
+	check_agent_unregistered $uuid
+
+	copytool_setup
+	check_agent_registered $uuid
+
+	copytool_cleanup
 }
 run_test 106 "Copytool register/unregister"
 
@@ -3352,7 +3402,11 @@ test_302() {
 	cdt_shutdown
 
 	set_hsm_param default_archive_id $new -P
-	fail $SINGLEMDS
+
+	local mdtno
+	for mdtno in $(seq 1 $MDSCOUNT); do
+		fail mds${mdtno}
+	done
 
 	# check cdt is on
 	cdt_check_state enabled
@@ -3365,6 +3419,168 @@ test_302() {
 	[[ $new == $res ]] || error "Value after MDS restart is $res != $new"
 }
 run_test 302 "HSM tunnable are persistent when CDT is off"
+
+test_400() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local dir_mdt0=$DIR/$tdir/mdt0
+	local dir_mdt1=$DIR/$tdir/mdt1
+
+	# create 1 dir per MDT
+	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
+	$LFS mkdir -i 1 $dir_mdt1 || error "lfs mkdir"
+
+	# create 1 file in each MDT
+	local fid1=$(make_small $dir_mdt0/$tfile)
+	local fid2=$(make_small $dir_mdt1/$tfile)
+
+	# check that hsm request on mdt0 is sent to the right MDS
+	$LFS hsm_archive $dir_mdt0/$tfile || error "lfs hsm_archive"
+	wait_request_state $fid1 ARCHIVE SUCCEED 0 &&
+		echo "archive successful on mdt0"
+
+	# check that hsm request on mdt1 is sent to the right MDS
+	$LFS hsm_archive $dir_mdt1/$tfile || error "lfs hsm_archive"
+	wait_request_state $fid2 ARCHIVE SUCCEED 1 &&
+		echo "archive successful on mdt1"
+
+	copytool_cleanup
+	# clean test files and directories
+	rm -rf $dir_mdt0 $dir_mdt1
+}
+run_test 400 "Single request is sent to the right MDT"
+
+test_401() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local dir_mdt0=$DIR/$tdir/mdt0
+	local dir_mdt1=$DIR/$tdir/mdt1
+
+	# create 1 dir per MDT
+	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
+	$LFS mkdir -i 1 $dir_mdt1 || error "lfs mkdir"
+
+	# create 1 file in each MDT
+	local fid1=$(make_small $dir_mdt0/$tfile)
+	local fid2=$(make_small $dir_mdt1/$tfile)
+
+	# check that compound requests are shunt to the rights MDTs
+	$LFS hsm_archive $dir_mdt0/$tfile $dir_mdt1/$tfile ||
+		error "lfs hsm_archive"
+	wait_request_state $fid1 ARCHIVE SUCCEED 0 &&
+		echo "archive successful on mdt0"
+	wait_request_state $fid2 ARCHIVE SUCCEED 1 &&
+		echo "archive successful on mdt1"
+
+	copytool_cleanup
+	# clean test files and directories
+	rm -rf $dir_mdt0 $dir_mdt1
+}
+run_test 401 "Compound requests split and sent to their respective MDTs"
+
+mdc_change_state() # facet, MDT_pattern, activate|deactivate
+{
+	local facet=$1
+	local pattern="$2"
+	local state=$3
+	local node=$(facet_active_host $facet)
+	local mdc
+	for mdc in $(do_facet $facet "$LCTL dl | grep -E ${pattern}-mdc" |
+			awk '{print $4}'); do
+		echo "$3 $mdc on $node"
+		do_facet $facet "$LCTL --device $mdc $state" || return 1
+	done
+}
+
+test_402() {
+	# make sure there is no running copytool
+	copytool_cleanup
+
+	# deactivate all mdc on agent1
+	mdc_change_state $SINGLEAGT "MDT000." "deactivate"
+
+	copytool_setup $SINGLEAGT
+
+	check_agent_unregistered "uuid" # match any agent
+
+	# no expected running copytool
+	search_copytools $agent && error "Copytool start should have failed"
+
+	# reactivate MDCs
+	mdc_change_state $SINGLEAGT "MDT000." "activate"
+}
+run_test 402 "Copytool start fails if all MDTs are inactive"
+
+test_403() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	# make sure there is no running copytool
+	copytool_cleanup
+
+        local agent=$(facet_active_host $SINGLEAGT)
+	local uuid=$(do_rpc_nodes $agent get_client_uuid | cut -d' ' -f2)
+
+	# deactivate all mdc for MDT0001
+	mdc_change_state $SINGLEAGT "MDT0001" "deactivate"
+
+	copytool_setup
+	# check the agent is registered on MDT0000, and not on MDT0001
+	check_agent_registered_by_mdt $uuid 0
+	check_agent_unregistered_by_mdt $uuid 1
+
+	# check running copytool process
+	search_copytools $agent || error "No running copytools on $agent"
+
+	# reactivate all mdc for MDT0001
+	mdc_change_state $SINGLEAGT "MDT0001" "activate"
+
+	# make sure the copytool is now registered to all MDTs
+	check_agent_registered $uuid
+
+	copytool_cleanup
+}
+run_test 403 "Copytool starts with inactive MDT and register on reconnect"
+
+test_404() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	copytool_setup
+
+	# create files on both MDT0000 and MDT0001
+	mkdir -p $DIR/$tdir
+
+	local dir_mdt0=$DIR/$tdir/mdt0
+	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
+
+	# create 1 file on mdt0
+	local fid1=$(make_small $dir_mdt0/$tfile)
+
+	# deactivate all mdc for MDT0001
+	mdc_change_state $SINGLEAGT "MDT0001" "deactivate"
+
+	# send an HSM request for files in MDT0000
+	$LFS hsm_archive $dir_mdt0/$tfile || error "lfs hsm_archive"
+
+	# check for completion of files in MDT0000
+	wait_request_state $fid1 ARCHIVE SUCCEED 0 &&
+		echo "archive successful on mdt0"
+
+	# reactivate all mdc for MDT0001
+	mdc_change_state $SINGLEAGT "MDT0001" "activate"
+
+	copytool_cleanup
+	# clean test files and directories
+	rm -rf $dir_mdt0
+}
+run_test 404 "Inactive MDT does not block requests for active MDTs"
 
 copytool_cleanup
 
