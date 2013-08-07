@@ -4262,6 +4262,47 @@ test_76() {
 }
 run_test 76 "set permanent params set_param -P"
 
+test_77() { # LU-3445
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -ge $(version_code 2.2.60) ]] &&
+	[[ $server_version -le $(version_code 2.4.0) ]] &&
+		skip "Need MDS version < 2.2.60 or > 2.4.0" && return
+
+	if [[ -z "$fs2ost_DEV" || -z "$fs2mds_DEV" ]]; then
+		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
+		skip_env "mixed loopback and real device not working" && return
+	fi
+
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+	local fsname=test1234
+	local mgsnid
+	local failnid="$(h2$NETTYPE 1.2.3.4),$(h2$NETTYPE 4.3.2.1)"
+
+	add fs2mds $(mkfs_opts mds1 $fs2mdsdev) --mgs --fsname=$fsname \
+		--reformat $fs2mdsdev $fs2mdsvdev || error "add fs2mds failed"
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT ||
+		error "start fs2mds failed"
+
+	mgsnid=$(do_facet fs2mds $LCTL list_nids | xargs | tr ' ' ,)
+	[[ $mgsnid = *,* ]] || mgsnid+=",$mgsnid"
+
+	add fs2ost $(mkfs_opts ost1 $fs2ostdev) --mgsnode=$mgsnid \
+		--failnode=$failnid --fsname=$fsname \
+		--reformat $fs2ostdev $fs2ostvdev ||
+			error "add fs2ost failed"
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS || error "start fs2ost failed"
+
+	mkdir -p $MOUNT2
+	mount -t lustre $mgsnid:/$fsname $MOUNT2 || error "mount $MOUNT2 failed"
+	DIR=$MOUNT2 MOUNT=$MOUNT2 check_mount || error "check $MOUNT2 failed"
+	cleanup_24a
+}
+run_test 77 "comma-separated MGS NIDs and failover node NIDs"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
