@@ -643,9 +643,8 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (lum.lmm_magic == LOV_USER_MAGIC) {
                 /* User request for v1, we need skip lmm_pool_name */
                 if (lmmk->lmm_magic == LOV_MAGIC_V3) {
-                        memmove((char*)(&lmmk->lmm_stripe_count) +
-                                sizeof(lmmk->lmm_stripe_count),
-                                ((struct lov_mds_md_v3*)lmmk)->lmm_objects,
+			memmove(((struct lov_mds_md_v1 *)lmmk)->lmm_objects,
+				((struct lov_mds_md_v3 *)lmmk)->lmm_objects,
                                 lmmk->lmm_stripe_count *
                                 sizeof(struct lov_ost_data_v1));
                         lmm_size -= LOV_MAXPOOLNAME;
