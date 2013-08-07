@@ -164,7 +164,8 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 				mdd_object_capa(env, obj));
 
 	/* security-replated changes may require sync */
-	handle->th_sync |= !!mdd->mdd_sync_permission;
+	if (S_ISDIR(mdd_object_type(obj)))
+		handle->th_sync |= !!mdd->mdd_sync_permission;
 unlock:
 	mdd_write_unlock(env, obj);
 stop:

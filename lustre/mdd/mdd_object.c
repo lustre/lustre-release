@@ -829,6 +829,13 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 	return rc;
 }
 
+static inline bool permission_is_reduced(const struct lu_attr *old,
+					 const struct lu_attr *new)
+{
+	return ((new->la_mode & old->la_mode) & S_IRWXUGO) !=
+	       (old->la_mode & S_IRWXUGO);
+}
+
 /* set attr and LOV EA at once, return updated attr */
 int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		 const struct md_attr *ma)
@@ -838,6 +845,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct thandle *handle;
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
 	const struct lu_attr *la = &ma->ma_attr;
+	bool sync_perm = false;
 	int rc;
         ENTRY;
 
@@ -867,9 +875,38 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 GOTO(stop, rc);
 
-        /* permission changes may require sync operation */
-	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
-                handle->th_sync |= !!mdd->mdd_sync_permission;
+	/*
+	 * LU-3671
+	 *
+	 * permission changes may require sync operation, to mitigate
+	 * performance impact, only do this for dir and when permission is
+	 * reduced.
+	 *
+	 * For regular files, version is updated with permission change
+	 * (see VBR), async permission won't cause any issue, while missing
+	 * permission change on directory may affect accessibility of other
+	 * objects.
+	 */
+	if (S_ISDIR(mdd_object_type(mdd_obj))) {
+		if (la->la_valid & (LA_UID | LA_GID)) {
+			sync_perm = true;
+		} else if (la->la_valid & LA_MODE &&
+			   la->la_mode & (S_ISUID | S_ISGID | S_ISVTX)) {
+			sync_perm = true;
+		} else if (la->la_valid & LA_MODE) {
+			struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
+
+			rc = mdd_la_get(env, mdd_obj, tmp_la, BYPASS_CAPA);
+			if (rc)
+				GOTO(stop, rc);
+
+			if (permission_is_reduced(tmp_la, la))
+				sync_perm = true;
+		}
+	}
+
+	if (sync_perm)
+		handle->th_sync |= !!mdd->mdd_sync_permission;
 
 	if (la->la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
@@ -1044,10 +1081,6 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
 		GOTO(stop, rc);
-
-	/* security-replated changes may require sync */
-	if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
-		handle->th_sync |= !!mdd->mdd_sync_permission;
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
