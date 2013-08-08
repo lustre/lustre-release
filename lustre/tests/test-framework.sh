@@ -1873,30 +1873,43 @@ cleanup_check() {
 }
 
 wait_update () {
-    local node=$1
-    local TEST=$2
-    local FINAL=$3
-    local MAX=${4:-90}
+	local verbose=false
+	if [[ "$1" == "--verbose" ]]; then
+		shift
+		verbose=true
+	fi
 
-        local RESULT
-        local WAIT=0
-        local sleep=1
-        local print=10
-        while [ true ]; do
-            RESULT=$(do_node $node "$TEST")
-            if [ "$RESULT" == "$FINAL" ]; then
-                [ -z "$RESULT" -o $WAIT -le $sleep ] ||
-                    echo "Updated after ${WAIT}s: wanted '$FINAL' got '$RESULT'"
-                return 0
-            fi
-            [ $WAIT -ge $MAX ] && break
-            [ $((WAIT % print)) -eq 0 ] &&
-                echo "Waiting $((MAX - WAIT)) secs for update"
-            WAIT=$((WAIT + sleep))
-            sleep $sleep
-        done
-        echo "Update not seen after ${MAX}s: wanted '$FINAL' got '$RESULT'"
-        return 3
+	local node=$1
+	local TEST=$2
+	local FINAL=$3
+	local MAX=${4:-90}
+	local RESULT
+	local PREV_RESULT
+	local WAIT=0
+	local sleep=1
+	local print=10
+
+	while [ true ]; do
+		RESULT=$(do_node $node "$TEST")
+		if [[ "$RESULT" == "$FINAL" ]]; then
+			[[ -z "$RESULT" || $WAIT -le $sleep ]] ||
+				echo "Updated after ${WAIT}s: wanted '$FINAL'"\
+				     "got '$RESULT'"
+			return 0
+		fi
+		if [[ $verbose && "$RESULT" != "$PREV_RESULT" ]]; then
+			echo "Changed after ${WAIT}s: from '$PREV_RESULT'"\
+			     "to '$RESULT'"
+			PREV_RESULT=$RESULT
+		fi
+		[[ $WAIT -ge $MAX ]] && break
+		[[ $((WAIT % print)) -eq 0 ]] &&
+			echo "Waiting $((MAX - WAIT)) secs for update"
+		WAIT=$((WAIT + sleep))
+		sleep $sleep
+	done
+	echo "Update not seen after ${MAX}s: wanted '$FINAL' got '$RESULT'"
+	return 3
 }
 
 wait_update_facet() {
