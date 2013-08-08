@@ -77,7 +77,8 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 /*
  * Find the mfd pointed to by handle in global hash table.
  * In case of replay the handle is obsoleted
- * but mfd can be found in mfd list by that handle
+ * but mfd can be found in mfd list by that handle.
+ * Callers need to be holding med_open_lock.
  */
 struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
 				     const struct lustre_handle *handle,
@@ -758,13 +759,13 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		 * restart replay, so there maybe some orphan
 		 * mfd here, we should remove them */
 		LASSERT(info->mti_rr.rr_handle != NULL);
+		spin_lock(&med->med_open_lock);
 		old_mfd = mdt_handle2mfd(med, info->mti_rr.rr_handle, true);
 		if (old_mfd != NULL) {
 			CDEBUG(D_HA, "delete orphan mfd = %p, fid = "DFID", "
 			       "cookie = "LPX64"\n", mfd,
 			       PFID(mdt_object_fid(mfd->mfd_object)),
 			       info->mti_rr.rr_handle->cookie);
-			spin_lock(&med->med_open_lock);
 			class_handle_unhash(&old_mfd->mfd_handle);
 			cfs_list_del_init(&old_mfd->mfd_list);
 			spin_unlock(&med->med_open_lock);
@@ -775,6 +776,12 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 			mdt_mfd_close(info, old_mfd);
 			ma->ma_attr_flags &= ~MDS_RECOV_OPEN;
 			ma->ma_valid &= ~MA_FLAGS;
+		} else {
+			spin_unlock(&med->med_open_lock);
+			CDEBUG(D_HA, "orphan mfd not found, fid = "DFID", "
+			       "cookie = "LPX64"\n",
+			       PFID(mdt_object_fid(mfd->mfd_object)),
+			       info->mti_rr.rr_handle->cookie);
 		}
 
 		CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
