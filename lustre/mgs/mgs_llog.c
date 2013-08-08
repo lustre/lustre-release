@@ -67,9 +67,6 @@ int class_dentry_readdir(const struct lu_env *env,
 
 	CFS_INIT_LIST_HEAD(list);
 
-	if (!dt_try_as_dir(env, dir))
-		GOTO(out, rc = -ENOTDIR);
-
 	LASSERT(dir);
 	LASSERT(dir->do_index_ops);
 
@@ -122,7 +119,6 @@ next:
 
 fini:
 	iops->fini(env, it);
-out:
 	if (rc)
 		CERROR("%s: key failed when listing %s: rc = %d\n",
 		       mgs->mgs_obd->obd_name, MOUNT_CONFIGS_DIR, rc);

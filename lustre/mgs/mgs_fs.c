@@ -151,6 +151,11 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 	if (IS_ERR(o))
 		GOTO(out_root, rc = PTR_ERR(o));
 
+	if (!dt_try_as_dir(env, o)) {
+		lu_object_put(env, &o->do_lu);
+		GOTO(out_root, rc = -ENOTDIR);
+	}
+
 	mgs->mgs_configs_dir = o;
 
 	/* create directory to store nid table versions */
