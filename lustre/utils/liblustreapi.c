@@ -3889,7 +3889,7 @@ int llapi_changelog_start(void **priv, int flags, const char *device,
                              startrec, flags);
         /* Only the kernel reference keeps the write side open */
         close(cp->kuc.lk_wfd);
-        cp->kuc.lk_wfd = 0;
+        cp->kuc.lk_wfd = LK_NOFD;
         if (rc < 0) {
                 /* frees and clears priv */
                 llapi_changelog_fini(priv);

@@ -97,6 +97,7 @@ extern int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
 				     void *cb_arg);
 
 #define LK_FLG_STOP 0x01
+#define LK_NOFD -1U
 
 /* kernelcomm control structure, passed from userspace to kernel */
 typedef struct lustre_kernelcomm {

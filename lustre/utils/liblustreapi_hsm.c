@@ -155,7 +155,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 
 	/* Only the kernel reference keeps the write side open */
 	close(ct->kuc.lk_wfd);
-	ct->kuc.lk_wfd = 0;
+	ct->kuc.lk_wfd = LK_NOFD;
 	if (rc < 0)
 		goto out_kuc;
 
