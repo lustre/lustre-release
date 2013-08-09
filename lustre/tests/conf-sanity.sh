@@ -3862,6 +3862,40 @@ test_68() {
 }
 run_test 68 "be able to reserve specific sequences in FLDB"
 
+test_69() {
+	setup
+
+	# use OST0000 since it probably has the most creations
+	local OSTNAME=$(ostname_from_index 0)
+	local mdtosc_proc1=$(get_mdtosc_proc_path mds1 $OSTNAME)
+	local last_id=$(do_facet mds1 lctl get_param -n \
+			osc.$mdtosc_proc1.prealloc_last_id)
+
+	# Want to have OST LAST_ID over 1.5 * OST_MAX_PRECREATE to
+	# verify that the LAST_ID recovery is working properly.  If
+	# not, then the OST will refuse to allow the MDS connect
+	# because the LAST_ID value is too different from the MDS
+	#define OST_MAX_PRECREATE=20000
+	local num_create=$((20000 * 3/2 - $last_id + 100))
+
+	mkdir $DIR/$tdir
+	$LFS setstripe -i 0 $DIR/$tdir
+	createmany $DIR/$tdir/$tfile- $num_create
+	# delete all of the files with objects on OST0 so the
+	# filesystem is not inconsistent later on
+	$LFS find $MOUNT --index 0 -print0 | xargs -0 unlink
+
+	stop_ost || error "OST0 stop failure"
+	add ost1 $(mkfs_opts ost1 $ostdev) --reformat --replace $ostdev ||
+		error "reformat and replace $ostdev failed"
+	start_ost || error "OST0 restart failure"
+
+	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
+	local idx=$($LFS getstripe -c $DIR/$tdir/$tfile-last)
+	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
+}
+run_test 68 "replace an OST with the same index"
+
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1

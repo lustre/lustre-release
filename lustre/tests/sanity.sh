@@ -1358,9 +1358,9 @@ exhaust_precreations() {
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path mds${MDSIDX} $OST)
 	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n \
-        osc.$mdtosc_proc1.prealloc_last_id)
+			osc.$mdtosc_proc1.prealloc_last_id)
 	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n \
-        osc.$mdtosc_proc1.prealloc_next_id)
+			osc.$mdtosc_proc1.prealloc_next_id)
 
 	local mdtosc_proc2=$(get_mdtosc_proc_path mds${MDSIDX})
 	do_facet mds${MDSIDX} lctl get_param osc.$mdtosc_proc2.prealloc*
