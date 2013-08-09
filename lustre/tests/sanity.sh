@@ -6338,7 +6338,15 @@ test_102l() {
 
 	return 0;
 }
-run_test 102l "listxattr filter test =================================="
+run_test 102l "listxattr size test =================================="
+
+test_102m() { # LU-3403 llite: error of listxattr when buffer is small
+	local path=$DIR/$tfile
+	touch $path
+
+	listxattr_size_check $path || error "listattr_size_check $path failed"
+}
+run_test 102m "Ensure listxattr fails on small bufffer ========"
 
 cleanup_test102
 
