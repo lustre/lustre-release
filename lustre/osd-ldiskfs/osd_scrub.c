@@ -484,7 +484,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 
 		rc1 = __osd_xattr_set(info, inode, XATTR_NAME_FID, ff, size,
 				      XATTR_CREATE);
-		if (rc1 != 0 && rc != 0)
+		if (rc1 != 0 && rc == 0)
 			rc = rc1;
 	}
 
