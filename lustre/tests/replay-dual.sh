@@ -24,6 +24,10 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="21b"
 
+[[ $(facet_fstype $SINGLEMDS) == zfs ]] &&
+# bug number for skipped test:	      LU-2230
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21b"
+
 build_test_filter
 
 check_and_setup_lustre
