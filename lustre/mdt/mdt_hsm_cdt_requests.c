@@ -567,12 +567,11 @@ static int lprocfs_open_hsm_request(struct inode *inode, struct file *file)
 	int		 rc;
 	ENTRY;
 
-	if (LPROCFS_ENTRY_AND_CHECK(PDE(inode)))
+	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
 		RETURN(-ENOENT);
 
 	rc = seq_open(file, &mdt_hsm_request_proc_ops);
 	if (rc) {
-		LPROCFS_EXIT();
 		RETURN(rc);
 	}
 	s = file->private_data;

@@ -992,12 +992,10 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         struct seq_file       *seqf;
         int                    rc;
 
-        LPROCFS_ENTRY_AND_CHECK(dp);
+	LPROCFS_ENTRY_CHECK(dp);
         rc = seq_open(file, &sops);
-        if (rc) {
-                LPROCFS_EXIT();
+	if (rc)
                 return rc;
-        }
 
         seqf = file->private_data;
         seqf->private = dp->data;
@@ -1242,14 +1240,6 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                 goto out;
         }
         tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
-        /* Kludge code(deadlock situation): the lprocfs lock has been held
-         * since the client is evicted by writting client's
-         * uuid/nid to procfs "evict_client" entry. However,
-         * obd_export_evict_by_uuid() will call lprocfs_remove() to destroy
-         * the proc entries under the being destroyed export{}, so I have
-         * to drop the lock at first here.
-         * - jay, jxiong@clusterfs.com */
-        LPROCFS_EXIT();
 	class_incref(obd, __FUNCTION__, cfs_current());
 
         if (strncmp(tmpbuf, "nid:", 4) == 0)
@@ -1260,7 +1250,6 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                 obd_export_evict_by_uuid(obd, tmpbuf);
 
 	class_decref(obd, __FUNCTION__, cfs_current());
-        LPROCFS_ENTRY();
 
 out:
         OBD_FREE(kbuf, BUFLEN);

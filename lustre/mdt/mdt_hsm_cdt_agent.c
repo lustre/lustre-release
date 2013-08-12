@@ -620,14 +620,13 @@ static int lprocfs_open_hsm_agent(struct inode *inode, struct file *file)
 	int		 rc;
 	ENTRY;
 
-	if (LPROCFS_ENTRY_AND_CHECK(PDE(inode)))
-			RETURN(-ENOENT);
+	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
+		RETURN(-ENOENT);
 
 	rc = seq_open(file, &mdt_hsm_agent_proc_ops);
-	if (rc) {
-		LPROCFS_EXIT();
+	if (rc)
 		RETURN(rc);
-	}
+
 	s = file->private_data;
 	s->private = PDE(inode)->data;
 
