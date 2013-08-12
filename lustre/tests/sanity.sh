@@ -11602,9 +11602,12 @@ test_234() {
 	$LCTL set_param fail_loc=0x1405
 	setfattr -n user.attr -v value $DIR/$tdir/$tfile &&
 		error "setfattr should have failed with ENOMEM"
-	# attr pre-2.4.44-7 had a bug with rc
-	getfattr -n user.attr $DIR/$tdir/$tfile &&
-		error "getfattr should have failed with ENOMEM"
+	if [ ! -f /etc/SuSE-release ]; then
+		# attr pre-2.4.44-7 had a bug with rc
+		# LU-3703 - SLES clients have older attr
+		getfattr -n user.attr $DIR/$tdir/$tfile &&
+			error "getfattr should have failed with ENOMEM"
+	fi
 	$LCTL set_param fail_loc=0x0
 	rm -rf $DIR/$tdir
 
