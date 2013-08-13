@@ -11,6 +11,8 @@ DIST_SUBDIRS := ldiskfs @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@
 @LDISKFS_ENABLED_FALSE@BUILD_OSD_LDISKFS = false
 @ZFS_ENABLED_TRUE@BUILD_OSD_ZFS = true
 @ZFS_ENABLED_FALSE@BUILD_OSD_ZFS = false
+@BUILD_LUSTREIOKIT_TRUE@BUILD_LUSTREIOKIT = true
+@BUILD_LUSTREIOKIT_FALSE@BUILD_LUSTREIOKIT = false
 
 AUTOMAKE_OPTIONS = foreign
 
@@ -78,7 +80,6 @@ endif # LINUX
 endif # MODULES
 
 dist-hook:
-	$(RM) $(distdir)/lustre-iokit/*.spec
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
@@ -145,6 +146,9 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_OSD_ZFS)" = Xtrue ]]; then \
 		RPMARGS="$$RPMARGS --with zfs"; \
 	fi; \
+        if [[ "X$(BUILD_LUSTREIOKIT)" = Xfalse ]]; then \
+                RPMARGS="$$RPMARGS --without lustre_iokit"; \
+        fi; \
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
@@ -152,6 +156,9 @@ srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="--without lustre_tests"; \
 	fi; \
+        if [[ "X$(BUILD_LUSTREIOKIT)" = Xfalse ]]; then \
+                RPMARGS="$$RPMARGS --without lustre_iokit"; \
+        fi; \
 	eval rpmbuild $$RPMARGS -ts $(distdir).tar.gz
 
 rpms:

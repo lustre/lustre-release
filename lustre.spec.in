@@ -5,6 +5,7 @@
 %bcond_without ldiskfs
 %bcond_with zfs
 %bcond_without lustre_tests
+%bcond_without lustre_iokit
 
 %if %{without servers}
     # --without servers overrides --with {ldiskfs|zfs}
@@ -206,11 +207,47 @@ systems.
 Summary: Lustre testing framework
 Group: Development/Kernel
 Provides: %{name}-tests = %{version}
-Requires: %{name} = %{version}, %{name}-modules = %{version}
+Requires: %{name} = %{version}, %{name}-modules = %{version}, lustre-iokit
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
+
+%if %{with lustre_iokit}
+%package -n lustre-iokit
+Summary: The Lustre IO-Kit is a collection of benchmark tools for a cluster with the Lustre file system.
+Group: Applications/System
+Requires: python > 2.2, sg3_utils
+
+%description -n lustre-iokit
+This package includes five tools:
+sgpdd-survey:
+A test of the 'bare metal' performance, bypassing as much of the kernel as we can. Uses the sgp_dd utility.
+
+obdfilter-survey
+This survey can be run in 3 modes to test disk I/O including the filesystem,
+network I/O, and disk I/O via the network.  The script does sequential I/O
+with varying numbers of threads and objects (files) by using lctl::test_brw
+to drive the echo_client connected to local or remote obdfilter instances,
+or remote obdecho instances.
+
+ost-survey
+This survey tests the client-to-disk performance of individual OSTs, and
+ranks then for comparison.
+
+stats-collect
+This script will collect IO stats on a defined set of nodes.
+
+ior-survey:
+A script to run the IOR benchmark. The latest version can be downloaded from
+http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
+
+mds-survey:
+This survey tests the local metadata performance using the echo_client to drive
+the MDD layer to perform operations. It is run with multiple threads (to
+simulate MDT service threads) locally on the MDS node, and does not need Lustre
+clients in order to run
+%endif
 
 %if 0%{?suse_version}
 %debug_package
@@ -244,6 +281,9 @@ CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
 CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests --enable-liblustre-tests"
 %else
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests --disable-liblustre-tests"
+%endif
+%if %{without lustre_iokit}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-iokit"
 %endif
 
 # if %%kdir was given, make sure it's not in the configure arguments
@@ -297,7 +337,16 @@ find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
 cat >lustre.files <<EOF
 %attr(-, root, root) %{?rootdir}/sbin/mount.lustre
 %attr(-, root, root) %{_sbindir}/*
-%attr(-, root, root) %{_bindir}/*
+%attr(-, root, root) %{_bindir}/lfs
+%attr(-, root, root) %{_bindir}/lfs_migrate
+%attr(-, root, root) %{_bindir}/llbackup
+%attr(-, root, root) %{_bindir}/llobdstat
+%attr(-, root, root) %{_bindir}/llstat
+%attr(-, root, root) %{_bindir}/lustre_req_history
+%attr(-, root, root) %{_bindir}/mcreate
+%attr(-, root, root) %{_bindir}/munlink
+%attr(-, root, root) %{_bindir}/plot-llstat
+%attr(-, root, root) %{_bindir}/req_layout
 %attr(-, root, root) %{_libdir}/libptlctl.a
 %attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) %{_libdir}/liblustreapi.so
@@ -427,6 +476,29 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %if %{with lustre_tests}
 %files tests -f lustre-tests.files
+%endif
+
+%if %{with lustre_iokit}
+%files -n lustre-iokit
+%attr(-, root, root) %{_bindir}/ior-survey
+%attr(-, root, root) %{_bindir}/parse-ior
+%attr(-, root, root) %{_bindir}/libecho
+%attr(-, root, root) %{_bindir}/obdfilter-survey
+%attr(-, root, root) %{_bindir}/plot-obdfilter
+%attr(-, root, root) %{_bindir}/plot-ost
+%attr(-, root, root) %{_bindir}/ost-survey
+%attr(-, root, root) %{_bindir}/sgpdd-survey
+%attr(-, root, root) %{_bindir}/plot-sgpdd
+%attr(-, root, root) %{_bindir}/lstats.sh
+%attr(-, root, root) %{_bindir}/gather_stats_everywhere.sh
+%attr(-, root, root) %{_bindir}/config.sh
+%attr(-, root, root) %{_bindir}/mds-survey
+%doc lustre-iokit/obdfilter-survey/README.obdfilter-survey
+%doc lustre-iokit/ior-survey/README.ior-survey
+%doc lustre-iokit/ost-survey/README.ost-survey
+%doc lustre-iokit/mds-survey/README.mds-survey
+%doc lustre-iokit/sgpdd-survey/README.sgpdd-survey
+%doc lustre-iokit/stats-collect/README.lstats.sh
 %endif
 
 %if %{defined rpm_post_base}
