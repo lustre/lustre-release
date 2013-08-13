@@ -124,12 +124,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 	 generic_permission(inode, mask, check_acl)
 #endif
 
-#ifdef HAVE_BLKDEV_PUT_2ARGS
-#define ll_blkdev_put(a, b) blkdev_put(a, b)
-#else
-#define ll_blkdev_put(a, b) blkdev_put(a)
-#endif
-
 #ifdef HAVE_DENTRY_OPEN_USE_PATH
 #define ll_dentry_open(a,b,c)	dentry_open(a,b,c)
 #else

@@ -600,15 +600,9 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         return 0;
 }
 
-#ifdef HAVE_BLKDEV_PUT_2ARGS
 static int lo_open(struct block_device *bdev, fmode_t mode)
 {
         struct lloop_device *lo = bdev->bd_disk->private_data;
-#else
-static int lo_open(struct inode *inode, struct file *file)
-{
-        struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
-#endif
 
 	mutex_lock(&lo->lo_ctl_mutex);
         lo->lo_refcnt++;
@@ -617,15 +611,9 @@ static int lo_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-#ifdef HAVE_BLKDEV_PUT_2ARGS
 static int lo_release(struct gendisk *disk, fmode_t mode)
 {
         struct lloop_device *lo = disk->private_data;
-#else
-static int lo_release(struct inode *inode, struct file *file)
-{
-        struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
-#endif
 
 	mutex_lock(&lo->lo_ctl_mutex);
         --lo->lo_refcnt;
@@ -635,28 +623,19 @@ static int lo_release(struct inode *inode, struct file *file)
 }
 
 /* lloop device node's ioctl function. */
-#ifdef HAVE_BLKDEV_PUT_2ARGS
 static int lo_ioctl(struct block_device *bdev, fmode_t mode,
                     unsigned int cmd, unsigned long arg)
 {
         struct lloop_device *lo = bdev->bd_disk->private_data;
         struct inode *inode = NULL;
         int err = 0;
-#else
-static int lo_ioctl(struct inode *inode, struct file *unused,
-                    unsigned int cmd, unsigned long arg)
-{
-        struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
-        struct block_device *bdev = inode->i_bdev;
-        int err = 0;
-#endif
 
 	mutex_lock(&lloop_mutex);
         switch (cmd) {
         case LL_IOC_LLOOP_DETACH: {
                 err = loop_clr_fd(lo, bdev, 2);
                 if (err == 0)
-                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
+			blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
                 break;
         }
 
@@ -751,7 +730,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 err = loop_set_fd(lo, NULL, bdev, file);
                 if (err) {
                         fput(file);
-                        ll_blkdev_put(bdev, 0);
+			blkdev_put(bdev, 0);
                 }
 
                 break;
@@ -775,7 +754,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 bdev = lo->lo_device;
                 err = loop_clr_fd(lo, bdev, 1);
                 if (err == 0)
-                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
+			blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
 
                 break;
         }
