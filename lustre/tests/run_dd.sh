@@ -17,7 +17,7 @@ set -x
 
 . $(dirname $0)/functions.sh
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS
+assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS CLIENT_COUNT
 
 trap signaled TERM
 
@@ -35,8 +35,8 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	# suppress dd xfer stat to workaround buggy coreutils/gettext
 	# combination in RHEL5 and OEL5, see BZ 21264
 	FREE_SPACE=$($LFS df $TESTDIR|awk '/filesystem summary:/ {print $5}')
-	BLKS=$((FREE_SPACE * 9 / 40))
-	echoerr "Free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
+	BLKS=$((FREE_SPACE * 9 / 40 / CLIENT_COUNT))
+	echoerr "Total free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
 
 	dd bs=4k count=$BLKS status=noxfer if=/dev/zero of=$TESTDIR/dd-file \
 								1>$LOG &
