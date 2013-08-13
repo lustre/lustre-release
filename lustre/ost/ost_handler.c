@@ -2787,6 +2787,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		GOTO(out_io, rc);
 	}
 
+#if 0
 	/* Object update service */
 	memset(&svc_conf, 0, sizeof(svc_conf));
 	svc_conf = (typeof(svc_conf)) {
@@ -2831,12 +2832,10 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		ost->ost_out_service = NULL;
 		GOTO(out_seq, rc);
 	}
+#endif
 	ping_evictor_start();
 
 	RETURN(0);
-out_seq:
-	ptlrpc_unregister_service(ost->ost_seq_service);
-	ost->ost_seq_service = NULL;
 out_io:
 	ptlrpc_unregister_service(ost->ost_io_service);
 	ost->ost_io_service = NULL;
@@ -2867,7 +2866,9 @@ static int ost_cleanup(struct obd_device *obd)
 	ptlrpc_unregister_service(ost->ost_create_service);
 	ptlrpc_unregister_service(ost->ost_io_service);
 	ptlrpc_unregister_service(ost->ost_seq_service);
+#if 0
 	ptlrpc_unregister_service(ost->ost_out_service);
+#endif
 	ost->ost_service = NULL;
 	ost->ost_create_service = NULL;
 	ost->ost_io_service = NULL;
