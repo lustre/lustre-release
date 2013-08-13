@@ -1432,7 +1432,8 @@ static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 }
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
-                             int flags, struct lov_user_md *lum, int lum_size)
+                             __u64  flags, struct lov_user_md *lum,
+			     int lum_size)
 {
 	struct lov_stripe_md *lsm = NULL;
 	struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
@@ -1554,7 +1555,7 @@ out:
 static int ll_lov_setea(struct inode *inode, struct file *file,
                             unsigned long arg)
 {
-	int			 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
+	__u64			 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
 	struct lov_user_md	*lump;
 	int			 lum_size = sizeof(struct lov_user_md) +
 					    sizeof(struct lov_user_ost_data);
@@ -1587,7 +1588,7 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 	struct lov_user_md_v1	*lumv1p = (struct lov_user_md_v1 *)arg;
 	struct lov_user_md_v3	*lumv3p = (struct lov_user_md_v3 *)arg;
 	int			 lum_size, rc;
-	int			 flags = FMODE_WRITE;
+	__u64			 flags = FMODE_WRITE;
 	ENTRY;
 
 	/* first try with v1 which is smaller than v3 */

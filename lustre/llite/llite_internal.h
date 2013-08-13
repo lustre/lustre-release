@@ -821,8 +821,8 @@ int ll_inode_permission(struct inode *inode, int mask);
 #endif
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
-                             int flags, struct lov_user_md *lum,
-                             int lum_size);
+			     __u64  flags, struct lov_user_md *lum,
+			     int lum_size);
 int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct lov_mds_md **lmm, int *lmm_size,
                              struct ptlrpc_request **request);
