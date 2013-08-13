@@ -17,7 +17,7 @@ set -x
 
 . $(dirname $0)/functions.sh
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE
+assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS CLIENT_COUNT
 
 trap signaled TERM
 
@@ -33,32 +33,41 @@ do_tar() {
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
-    echoerr "$(date +'%F %H:%M:%S'): tar run starting"
-    mkdir -p $TESTDIR
-    cd $TESTDIR
-    do_tar &
-    wait $!
-    RC=$?
-    PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
-    if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then
-        echoerr "$(date +'%F %H:%M:%S'): tar errors earlier, ignoring"
-        RC=0
-    fi
-    if [ $RC -eq 0 ]; then
-        echoerr "$(date +'%F %H:%M:%S'): tar succeeded"
-        cd $TMP
-        rm -rf $TESTDIR
-        echoerr "$(date +'%F %H:%M:%S'): tar run finished"
-    else
-        echoerr "$(date +'%F %H:%M:%S'): tar failed"
-        if [ -z "$ERRORS_OK" ]; then
-            echo $(hostname) >> $END_RUN_FILE
-        fi
-        if [ $BREAK_ON_ERROR ]; then
-            # break
-            CONTINUE=false
-        fi
-    fi
+	echoerr "$(date +'%F %H:%M:%S'): tar run starting"
+	mkdir -p $TESTDIR
+	USAGE=$(du -s /etc | awk '{print $1}')
+	FREE_SPACE=$($LFS df $TESTDIR | awk '/filesystem summary:/ {print $5}')
+	AVAIL=$((FREE_SPACE * 9 / 10 / CLIENT_COUNT))
+	if [ $AVAIL -lt $USAGE ]; then
+		echoerr "no enough free disk space: need $USAGE, avail $AVAIL"
+		echo $(hostname) >> $END_RUN_FILE
+		break
+	fi
+
+	cd $TESTDIR
+	do_tar &
+	wait $!
+	RC=$?
+	PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
+	if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then
+		echoerr "$(date +'%F %H:%M:%S'): tar errors earlier, ignoring"
+		RC=0
+	fi
+	if [ $RC -eq 0 ]; then
+		echoerr "$(date +'%F %H:%M:%S'): tar succeeded"
+		cd $TMP
+		rm -rf $TESTDIR
+		echoerr "$(date +'%F %H:%M:%S'): tar run finished"
+	else
+		echoerr "$(date +'%F %H:%M:%S'): tar failed"
+		if [ -z "$ERRORS_OK" ]; then
+			echo $(hostname) >> $END_RUN_FILE
+		fi
+		if [ $BREAK_ON_ERROR ]; then
+			# break
+			CONTINUE=false
+		fi
+	fi
 done
 
 echoerr "$(date +'%F %H:%M:%S'): tar run exiting"
