@@ -131,7 +131,7 @@ int osd_last_rcvd_subdir_count(struct osd_device *osd)
         struct dentry        *dlast;
         loff_t                off;
         int                   rc = 0;
-	int                   count = FILTER_SUBDIR_COUNT;
+	int                   count = OBJ_SUBDIR_COUNT;
 
         ENTRY;
 

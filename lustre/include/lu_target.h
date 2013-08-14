@@ -54,15 +54,14 @@ struct lu_target {
 	/* sptlrpc rules */
 	rwlock_t		 lut_sptlrpc_lock;
 	struct sptlrpc_rule_set	 lut_sptlrpc_rset;
-	int			 lut_sec_level;
-
 	spinlock_t		 lut_flags_lock;
+	int			 lut_sec_level;
 	unsigned int		 lut_mds_capa:1,
 				 lut_oss_capa:1,
 				 lut_syncjournal:1,
-				 lut_sync_lock_cancel:2;
-
-	/* LAST_RCVD parameters */
+				 lut_sync_lock_cancel:2,
+				 /* e.g. OST node */
+				 lut_no_reconstruct:1;
 	/** last_rcvd file */
 	struct dt_object	*lut_last_rcvd;
 	/* transaction callbacks */
@@ -105,13 +104,19 @@ struct tgt_session_info {
 
 	struct lu_fid		 tsi_fid;
 	struct ldlm_res_id	 tsi_resid;
+
+	/* object affected by VBR, for last_rcvd_update */
+	struct dt_object	*tsi_vbr_obj;
+	/* opdata for mdt_reint_open(), has the same value as
+	 * ldlm_reply:lock_policy_res1.  The tgt_update_last_rcvd() stores
+	 * this value onto disk for recovery when tgt_txn_stop_cb() is called.
+	 */
+	__u64			 tsi_opdata;
+
 	/*
 	 * Additional fail id that can be set by handler.
 	 */
 	int			 tsi_reply_fail_id;
-	int			 tsi_request_fail_id;
-
-	int			 tsi_has_trans:1; /* has txn already? */
 	/* request JobID */
 	char                    *tsi_jobid;
 };
@@ -124,6 +129,37 @@ static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
 	tsi = lu_context_key_get(env->le_ses, &tgt_session_key);
 	LASSERT(tsi);
 	return tsi;
+}
+
+static inline void tgt_vbr_obj_set(const struct lu_env *env,
+				   struct dt_object *obj)
+{
+	struct tgt_session_info	*tsi;
+
+	if (env->le_ses != NULL) {
+		tsi = tgt_ses_info(env);
+		tsi->tsi_vbr_obj = obj;
+	}
+}
+
+static inline void tgt_opdata_set(const struct lu_env *env, __u64 flags)
+{
+	struct tgt_session_info	*tsi;
+
+	if (env->le_ses != NULL) {
+		tsi = tgt_ses_info(env);
+		tsi->tsi_opdata |= flags;
+	}
+}
+
+static inline void tgt_opdata_clear(const struct lu_env *env, __u64 flags)
+{
+	struct tgt_session_info	*tsi;
+
+	if (env->le_ses != NULL) {
+		tsi = tgt_ses_info(env);
+		tsi->tsi_opdata &= ~flags;
+	}
 }
 
 /*
@@ -286,12 +322,6 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
 int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
-int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
-			 struct dt_object *obj, __u64 opdata,
-			 struct thandle *th, struct ptlrpc_request *req);
-int tgt_last_rcvd_update_echo(const struct lu_env *env, struct lu_target *tgt,
-			      struct dt_object *obj, struct thandle *th,
-			      struct obd_export *exp);
 
 enum {
 	ESERIOUS = 0x0001000

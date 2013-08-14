@@ -1721,12 +1721,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1))
 			GOTO(out_child, result = -EPERM);
 
-                /* save versions in reply */
-                mdt_version_get_save(info, parent, 0);
-                mdt_version_get_save(info, child, 1);
+		/* save versions in reply */
+		mdt_version_get_save(info, parent, 0);
+		mdt_version_get_save(info, child, 1);
 
-                /* version of child will be changed */
-                info->mti_mos = child;
+		/* version of child will be changed */
+		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(child));
 
                 /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);

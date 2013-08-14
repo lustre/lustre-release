@@ -335,60 +335,6 @@ enum mdt_reint_flag {
         MRF_OPEN_TRUNC = 1 << 0,
 };
 
-struct mdt_thread_info;
-struct tx_arg;
-typedef int (*tx_exec_func_t)(const struct lu_env *, struct thandle *,
-			      struct tx_arg *);
-
-struct tx_arg {
-	tx_exec_func_t		exec_fn;
-	tx_exec_func_t		undo_fn;
-	struct dt_object	*object;
-	char			*file;
-	struct update_reply	*reply;
-	int			line;
-	int			index;
-	union {
-		struct {
-			const struct dt_rec	*rec;
-			const struct dt_key	*key;
-		} insert;
-		struct {
-		} ref;
-		struct {
-			struct lu_attr	attr;
-		} attr_set;
-		struct {
-			struct lu_buf	buf;
-			const char	*name;
-			int		flags;
-			__u32		csum;
-		} xattr_set;
-		struct {
-			struct lu_attr			attr;
-			struct dt_allocation_hint	hint;
-			struct dt_object_format		dof;
-			struct lu_fid			fid;
-		} create;
-		struct {
-			struct lu_buf	buf;
-			loff_t		pos;
-		} write;
-		struct {
-			struct ost_body	    *body;
-		} destroy;
-	} u;
-};
-
-#define TX_MAX_OPS	  10
-struct thandle_exec_args {
-	struct thandle		*ta_handle;
-	struct dt_device	*ta_dev;
-	int			ta_err;
-	struct tx_arg		ta_args[TX_MAX_OPS];
-	int			ta_argno;   /* used args */
-};
-
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -414,9 +360,6 @@ struct mdt_thread_info {
 
         struct mdt_device         *mti_mdt;
         const struct lu_env       *mti_env;
-	/* XXX: temporary flag to have healthy mti during OUT calls
-	 * to be removed upon moving MDT to the unified target code */
-	bool			   mti_txn_compat;
 
         /* transaction number of current request */
         __u64                      mti_transno;
@@ -467,8 +410,6 @@ struct mdt_thread_info {
          */
         struct mdt_reint_record    mti_rr;
 
-        /** md objects included in operation */
-        struct mdt_object         *mti_mos;
         __u64                      mti_ver[PTLRPC_NUM_VERSIONS];
         /*
          * Operation specification (currently create and lookup)
@@ -505,14 +446,6 @@ struct mdt_thread_info {
                         struct md_attr attr;
                         struct md_som_data data;
                 } som;
-		struct {
-			struct dt_object_format	mti_update_dof;
-			struct update_reply	*mti_update_reply;
-			struct update		*mti_update;
-			int			mti_update_reply_index;
-			struct obdo		mti_obdo;
-			struct dt_object	*mti_dt_object;
-		} update;
         } mti_u;
 
         /* IO epoch related stuff. */
@@ -533,7 +466,6 @@ struct mdt_thread_info {
 	int			   mti_big_lmm_used;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
-	struct thandle_exec_args   mti_handle;
 	struct ldlm_enqueue_info   mti_einfo;
 };
 

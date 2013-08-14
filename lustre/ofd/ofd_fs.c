@@ -418,223 +418,6 @@ int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 	return rc;
 }
 
-int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
-			  unsigned long fsize)
-{
-	struct obd_device		*obd = ofd_obd(ofd);
-	struct lr_server_data	 	*lsd = &ofd->ofd_lut.lut_lsd;
-	struct lsd_client_data		*lcd = NULL;
-	struct filter_export_data	*fed;
-	int				 cl_idx;
-	int				 rc = 0;
-	loff_t				 off = lsd->lsd_client_start;
-
-	CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
-		 sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
-
-	OBD_ALLOC_PTR(lcd);
-	if (lcd == NULL)
-		RETURN(-ENOMEM);
-
-	for (cl_idx = 0; off < fsize; cl_idx++) {
-		struct obd_export	*exp;
-		__u64			 last_rcvd;
-
-		/* Don't assume off is incremented properly by
-		 * read_record(), in case sizeof(*lcd)
-		 * isn't the same as fsd->lsd_client_size.  */
-		off = lsd->lsd_client_start + cl_idx * lsd->lsd_client_size;
-		rc = tgt_client_data_read(env, &ofd->ofd_lut, lcd, &off, cl_idx);
-		if (rc) {
-			CERROR("%s: error reading FILT %s idx %d off %llu: "
-			       "rc = %d\n", ofd_name(ofd), LAST_RCVD, cl_idx,
-			       off, rc);
-			rc = 0;
-			break; /* read error shouldn't cause startup to fail */
-		}
-
-		if (lcd->lcd_uuid[0] == '\0') {
-			CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
-			       cl_idx);
-			continue;
-		}
-
-		last_rcvd = lcd->lcd_last_transno;
-
-		/* These exports are cleaned up by ofd_disconnect(), so they
-		 * need to be set up like real exports as ofd_connect() does.
-		 */
-		exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
-
-		CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-		       " srv lr: "LPU64"\n", lcd->lcd_uuid, cl_idx,
-		       last_rcvd, lsd->lsd_last_transno);
-
-		if (IS_ERR(exp)) {
-			if (PTR_ERR(exp) == -EALREADY) {
-				/* export already exists, zero out this one */
-				CERROR("%s: Duplicate export %s!\n",
-				       ofd_name(ofd), lcd->lcd_uuid);
-				continue;
-			}
-			GOTO(err_out, rc = PTR_ERR(exp));
-		}
-
-		fed = &exp->exp_filter_data;
-		*fed->fed_ted.ted_lcd = *lcd;
-
-		rc = tgt_client_add(env, exp, cl_idx);
-		LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
-		/* VBR: set export last committed version */
-		exp->exp_last_committed = last_rcvd;
-		spin_lock(&exp->exp_lock);
-		exp->exp_connecting = 0;
-		exp->exp_in_recovery = 0;
-		spin_unlock(&exp->exp_lock);
-		obd->obd_max_recoverable_clients++;
-		class_export_put(exp);
-
-		/* Need to check last_rcvd even for duplicated exports. */
-		CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
-		       cl_idx, last_rcvd);
-
-		spin_lock(&ofd->ofd_lut.lut_translock);
-		if (last_rcvd > lsd->lsd_last_transno)
-			lsd->lsd_last_transno = last_rcvd;
-		spin_unlock(&ofd->ofd_lut.lut_translock);
-	}
-
-err_out:
-	OBD_FREE_PTR(lcd);
-	RETURN(rc);
-}
-
-int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
-{
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct lr_server_data	*lsd = &ofd->ofd_lut.lut_lsd;
-	struct obd_device	*obd = ofd_obd(ofd);
-	unsigned long		last_rcvd_size;
-	__u32			index;
-	int			rc;
-
-	rc = dt_attr_get(env, ofd->ofd_lut.lut_last_rcvd, &info->fti_attr,
-			 BYPASS_CAPA);
-	if (rc)
-		RETURN(rc);
-
-	last_rcvd_size = (unsigned long)info->fti_attr.la_size;
-
-	/* ensure padding in the struct is the correct size */
-	CLASSERT (offsetof(struct lr_server_data, lsd_padding) +
-		  sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
-
-	rc = server_name2index(obd->obd_name, &index, NULL);
-	if (rc < 0) {
-		CERROR("%s: Can not get index from obd_name: rc = %d\n",
-		       obd->obd_name, rc);
-		RETURN(rc);
-	}
-
-	if (last_rcvd_size == 0) {
-		LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
-
-		memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,
-		       sizeof(lsd->lsd_uuid));
-		lsd->lsd_last_transno = 0;
-		lsd->lsd_mount_count = 0;
-		lsd->lsd_server_size = LR_SERVER_SIZE;
-		lsd->lsd_client_start = LR_CLIENT_START;
-		lsd->lsd_client_size = LR_CLIENT_SIZE;
-		lsd->lsd_subdir_count = FILTER_SUBDIR_COUNT;
-		lsd->lsd_feature_incompat = OBD_INCOMPAT_OST;
-		lsd->lsd_osd_index = index;
-	} else {
-		rc = tgt_server_data_read(env, &ofd->ofd_lut);
-		if (rc) {
-			CDEBUG(D_INODE,"OBD ofd: error reading %s: rc %d\n",
-			       LAST_RCVD, rc);
-			GOTO(err_fsd, rc);
-		}
-		if (strcmp((char *)lsd->lsd_uuid,
-			   (char *)obd->obd_uuid.uuid)) {
-			LCONSOLE_ERROR("Trying to start OBD %s using the wrong"
-				       " disk %s. Were the /dev/ assignments "
-				       "rearranged?\n",
-				       obd->obd_uuid.uuid, lsd->lsd_uuid);
-			GOTO(err_fsd, rc = -EINVAL);
-		}
-
-		if (lsd->lsd_osd_index == 0) {
-			lsd->lsd_osd_index = index;
-		} else if (lsd->lsd_osd_index != index) {
-			LCONSOLE_ERROR("%s: index %d in last rcvd is different"
-				       " with the index %d in config log."
-				       " It might be disk corruption!\n",
-				       obd->obd_name, lsd->lsd_osd_index,
-				       index);
-			GOTO(err_fsd, rc = -EINVAL);
-		}
-	}
-
-	lsd->lsd_mount_count++;
-	obd->u.obt.obt_mount_count = lsd->lsd_mount_count;
-	obd->u.obt.obt_instance = (__u32)obd->u.obt.obt_mount_count;
-	ofd->ofd_subdir_count = lsd->lsd_subdir_count;
-
-	if (lsd->lsd_feature_incompat & ~OFD_INCOMPAT_SUPP) {
-		CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
-		       obd->obd_name,
-		       lsd->lsd_feature_incompat & ~OFD_INCOMPAT_SUPP);
-		GOTO(err_fsd, rc = -EINVAL);
-	}
-	if (lsd->lsd_feature_rocompat & ~OFD_ROCOMPAT_SUPP) {
-		CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
-		       obd->obd_name,
-		       lsd->lsd_feature_rocompat & ~OFD_ROCOMPAT_SUPP);
-		/* Do something like remount filesystem read-only */
-		GOTO(err_fsd, rc = -EINVAL);
-	}
-
-	CDEBUG(D_INODE, "%s: server last_transno : "LPU64"\n",
-	       obd->obd_name, lsd->lsd_last_transno);
-	CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
-	       obd->obd_name, lsd->lsd_mount_count);
-	CDEBUG(D_INODE, "%s: server data size: %u\n",
-	       obd->obd_name, lsd->lsd_server_size);
-	CDEBUG(D_INODE, "%s: per-client data start: %u\n",
-	       obd->obd_name, lsd->lsd_client_start);
-	CDEBUG(D_INODE, "%s: per-client data size: %u\n",
-	       obd->obd_name, lsd->lsd_client_size);
-	CDEBUG(D_INODE, "%s: server subdir_count: %u\n",
-	       obd->obd_name, lsd->lsd_subdir_count);
-	CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", obd->obd_name,
-	       last_rcvd_size <= lsd->lsd_client_start ? 0 :
-	       (last_rcvd_size - lsd->lsd_client_start) /
-	       lsd->lsd_client_size);
-
-	if (!obd->obd_replayable)
-		CWARN("%s: recovery support OFF\n", obd->obd_name);
-
-	rc = ofd_clients_data_init(env, ofd, last_rcvd_size);
-
-	spin_lock(&ofd->ofd_lut.lut_translock);
-	obd->obd_last_committed = lsd->lsd_last_transno;
-	ofd->ofd_lut.lut_last_transno = lsd->lsd_last_transno;
-	spin_unlock(&ofd->ofd_lut.lut_translock);
-
-	/* save it, so mount count and last_transno is current */
-	rc = tgt_server_data_update(env, &ofd->ofd_lut, 0);
-	if (rc)
-		GOTO(err_fsd, rc);
-
-	RETURN(0);
-
-err_fsd:
-	class_disconnect_exports(obd);
-	RETURN(rc);
-}
-
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd)
 {
@@ -646,20 +429,6 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
 		RETURN (-ENOENT);
-
-	/* prepare transactions callbacks */
-	ofd->ofd_txn_cb.dtc_txn_start = NULL;
-	ofd->ofd_txn_cb.dtc_txn_stop = ofd_txn_stop_cb;
-	ofd->ofd_txn_cb.dtc_txn_commit = NULL;
-	ofd->ofd_txn_cb.dtc_cookie = ofd;
-	ofd->ofd_txn_cb.dtc_tag = LCT_DT_THREAD;
-	CFS_INIT_LIST_HEAD(&ofd->ofd_txn_cb.dtc_linkage);
-
-	dt_txn_callback_add(ofd->ofd_osd, &ofd->ofd_txn_cb);
-
-	rc = ofd_server_data_init(env, ofd);
-	if (rc)
-		GOTO(out, rc);
 
 	lu_local_obj_fid(&info->fti_fid, OFD_HEALTH_CHECK_OID);
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
@@ -682,7 +451,6 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 out_hc:
 	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
 out:
-	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 	return rc;
 }
 
@@ -699,9 +467,6 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 	i = dt_sync(env, ofd->ofd_osd);
 	if (i)
 		CERROR("can't sync: %d\n", i);
-
-	/* Remove transaction callback */
-	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 
 	if (ofd->ofd_health_check_file) {
 		lu_object_put(env, &ofd->ofd_health_check_file->do_lu);

@@ -455,10 +455,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
 
-        info->mti_mos = obj;
-        rc = mdt_version_get_check_save(info, obj, 0);
-        if (rc)
-                GOTO(out_unlock, rc);
+	tgt_vbr_obj_set(env, mdt_obj2dt(obj));
+	rc = mdt_version_get_check_save(info, obj, 0);
+	if (rc)
+		GOTO(out_unlock, rc);
 
 	if (unlikely(!(valid & OBD_MD_FLCTIME))) {
 		/* This isn't strictly an error, but all current clients

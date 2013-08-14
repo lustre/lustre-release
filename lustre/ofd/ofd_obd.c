@@ -1041,15 +1041,6 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 	else
 		count = 1; /* default case - single destroy */
 
-	/**
-	 * There can be sequence of objects to destroy. Therefore this request
-	 * may have multiple transaction involved in. It is OK, we need only
-	 * the highest used transno to be reported back in reply but not for
-	 * replays, they must report their transno
-	 */
-	if (info->fti_transno == 0) /* not replay */
-		info->fti_mult_trans = 1;
-
 	CDEBUG(D_HA, "%s: Destroy object "DOSTID" count %d\n", ofd_name(ofd),
 	       POSTID(&oa->o_oi), count);
 	while (count > 0) {
@@ -1079,22 +1070,6 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 		ostid_inc_id(&oa->o_oi);
 	}
 
-	/* if we have transaction then there were some deletions, we don't
-	 * need to return ENOENT in that case because it will not wait
-	 * for commit of these deletions. The ENOENT must be returned only
-	 * if there were no transations.
-	 */
-	if (rc == -ENOENT) {
-		if (info->fti_transno != 0)
-			rc = 0;
-	} else if (rc != 0) {
-		/*
-		 * If we have at least one transaction then llog record
-		 * on server will be removed upon commit, so for rc != 0
-		 * we return no transno and llog record will be reprocessed.
-		 */
-		info->fti_transno = 0;
-	}
 	ofd_info2oti(info, oti);
 out:
 	RETURN(rc);

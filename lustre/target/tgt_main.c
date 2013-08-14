@@ -90,16 +90,36 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lu_local_obj_fid(&fid, LAST_RECV_OID);
 
 	o = dt_find_or_create(env, lut->lut_bottom, &fid, &dof, &attr);
-	if (!IS_ERR(o)) {
-		lut->lut_last_rcvd = o;
-	} else {
-		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
-		lut->lut_client_bitmap = NULL;
+	if (IS_ERR(o)) {
 		rc = PTR_ERR(o);
-		CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
+		CERROR("%s: cannot open LAST_RCVD: rc = %d\n", tgt_name(lut),
+		       rc);
+		GOTO(out_bitmap, rc);
 	}
 
-	RETURN(rc);
+	lut->lut_last_rcvd = o;
+	rc = tgt_server_data_init(env, lut);
+	if (rc < 0)
+		GOTO(out_obj, rc);
+
+	/* prepare transactions callbacks */
+	lut->lut_txn_cb.dtc_txn_start = tgt_txn_start_cb;
+	lut->lut_txn_cb.dtc_txn_stop = tgt_txn_stop_cb;
+	lut->lut_txn_cb.dtc_txn_commit = NULL;
+	lut->lut_txn_cb.dtc_cookie = lut;
+	lut->lut_txn_cb.dtc_tag = LCT_DT_THREAD | LCT_MD_THREAD;
+	CFS_INIT_LIST_HEAD(&lut->lut_txn_cb.dtc_linkage);
+
+	dt_txn_callback_add(lut->lut_bottom, &lut->lut_txn_cb);
+
+	RETURN(0);
+out_obj:
+	lu_object_put(env, &lut->lut_last_rcvd->do_lu);
+	lut->lut_last_rcvd = NULL;
+out_bitmap:
+	OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
+	lut->lut_client_bitmap = NULL;
+	return rc;
 }
 EXPORT_SYMBOL(tgt_init);
 
@@ -114,6 +134,7 @@ void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 		lut->lut_client_bitmap = NULL;
 	}
 	if (lut->lut_last_rcvd) {
+		dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
 		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
 		lut->lut_last_rcvd = NULL;
 	}
@@ -123,9 +144,22 @@ EXPORT_SYMBOL(tgt_fini);
 
 /* context key constructor/destructor: tg_key_init, tg_key_fini */
 LU_KEY_INIT_FINI(tgt, struct tgt_thread_info);
+static void tgt_key_exit(const struct lu_context *ctx,
+			 struct lu_context_key *key, void *data)
+{
+	struct tgt_thread_info *tti = data;
+
+	tti->tti_has_trans = 0;
+	tti->tti_mult_trans = 0;
+}
 
 /* context key: tg_thread_key */
-LU_CONTEXT_KEY_DEFINE(tgt, LCT_MD_THREAD | LCT_DT_THREAD);
+struct lu_context_key tgt_thread_key = {
+	.lct_tags = LCT_MD_THREAD | LCT_DT_THREAD,
+	.lct_init = tgt_key_init,
+	.lct_fini = tgt_key_fini,
+	.lct_exit = tgt_key_exit,
+};
 EXPORT_SYMBOL(tgt_thread_key);
 
 LU_KEY_INIT_GENERIC(tgt);

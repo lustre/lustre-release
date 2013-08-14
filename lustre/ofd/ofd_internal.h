@@ -49,7 +49,7 @@
 #define OFD_ROCOMPAT_SUPP (0)
 #define OFD_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
 			   OBD_INCOMPAT_COMMON_LR)
-#define OFD_PRECREATE_BATCH_DEFAULT (FILTER_SUBDIR_COUNT * 4)
+#define OFD_PRECREATE_BATCH_DEFAULT (OBJ_SUBDIR_COUNT * 4)
 
 /* on small filesystems we should not precreate too many objects in
  * a single transaction, otherwise we can overflow transactions */
@@ -123,9 +123,6 @@ struct ofd_device {
 	struct dt_device_param	 ofd_dt_conf;
 	/* DLM name-space for meta-data locks maintained by this server */
 	struct ldlm_namespace	*ofd_namespace;
-
-	/* transaction callbacks */
-	struct dt_txn_callback	 ofd_txn_cb;
 
 	/* last_rcvd file */
 	struct lu_target	 ofd_lut;
@@ -290,10 +287,7 @@ struct ofd_thread_info {
 
 	struct obd_export		*fti_exp;
 	__u64				 fti_xid;
-	__u64				 fti_transno;
 	__u64				 fti_pre_version;
-	__u32				 fti_has_trans:1, /* has txn already */
-					 fti_mult_trans:1;
 
 	struct lu_fid			 fti_fid;
 	struct lu_attr			 fti_attr;
@@ -541,8 +535,6 @@ static inline struct ofd_thread_info *ofd_info_init(const struct lu_env *env,
 	info->fti_env = env;
 	info->fti_exp = exp;
 	info->fti_pre_version = 0;
-	info->fti_transno = 0;
-	info->fti_has_trans = 0;
 	return info;
 }
 
@@ -558,7 +550,6 @@ static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
 
 	info->fti_env = tsi->tsi_env;
 	info->fti_exp = tsi->tsi_exp;
-	info->fti_has_trans = 0;
 
 	info->fti_xid = req->rq_xid;
 	/** VBR: take versions from request */
@@ -567,7 +558,6 @@ static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
 		__u64 *pre_version = lustre_msg_get_versions(req->rq_reqmsg);
 
 		info->fti_pre_version = pre_version ? pre_version[0] : 0;
-		info->fti_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	}
 	return info;
 }
@@ -576,7 +566,6 @@ static inline void ofd_oti2info(struct ofd_thread_info *info,
 				struct obd_trans_info *oti)
 {
 	info->fti_xid = oti->oti_xid;
-	info->fti_transno = oti->oti_transno;
 	info->fti_pre_version = oti->oti_pre_version;
 }
 
@@ -584,11 +573,6 @@ static inline void ofd_info2oti(struct ofd_thread_info *info,
                                 struct obd_trans_info *oti)
 {
 	oti->oti_xid = info->fti_xid;
-	LASSERTF(ergo(oti->oti_transno > 0,
-		      oti->oti_transno == info->fti_transno),
-		 "Overwrite replay transno "LPX64" by "LPX64"\n",
-		 oti->oti_transno, info->fti_transno);
-	oti->oti_transno = info->fti_transno;
 	oti->oti_pre_version = info->fti_pre_version;
 }
 

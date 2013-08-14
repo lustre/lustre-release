@@ -135,21 +135,25 @@ int mdt_get_disposition(struct ldlm_reply *rep, int flag)
 }
 
 void mdt_clear_disposition(struct mdt_thread_info *info,
-                           struct ldlm_reply *rep, int flag)
+			   struct ldlm_reply *rep, int flag)
 {
-        if (info)
-                info->mti_opdata &= ~flag;
-        if (rep)
-                rep->lock_policy_res1 &= ~flag;
+	if (info) {
+		info->mti_opdata &= ~flag;
+		tgt_opdata_clear(info->mti_env, flag);
+	}
+	if (rep)
+		rep->lock_policy_res1 &= ~flag;
 }
 
 void mdt_set_disposition(struct mdt_thread_info *info,
-                         struct ldlm_reply *rep, int flag)
+			 struct ldlm_reply *rep, int flag)
 {
-        if (info)
-                info->mti_opdata |= flag;
-        if (rep)
-                rep->lock_policy_res1 |= flag;
+	if (info) {
+		info->mti_opdata |= flag;
+		tgt_opdata_set(info->mti_env, flag);
+	}
+	if (rep)
+		rep->lock_policy_res1 |= flag;
 }
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
@@ -2637,7 +2641,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
                 info->mti_mdt = NULL;
 	info->mti_env = req->rq_svc_thread->t_env;
 	info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
-	info->mti_mos = NULL;
 
         memset(&info->mti_attr, 0, sizeof(info->mti_attr));
 	info->mti_big_buf = LU_BUF_NULL;

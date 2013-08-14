@@ -48,7 +48,7 @@ struct obd_device_target {
 	struct obd_job_stats	obt_jobstats;
 };
 
-#define FILTER_SUBDIR_COUNT 32 /* set to zero for no subdirs */
+#define OBJ_SUBDIR_COUNT 32 /* set to zero for no subdirs */
 
 struct filter_obd {
 	/* NB this field MUST be first */

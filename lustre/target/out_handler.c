@@ -1278,6 +1278,8 @@ int out_handle(struct tgt_session_info *tsi)
 	if (rc != 0)
 		RETURN(rc);
 
+	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
+
 	/* Walk through updates in the request to execute them synchronously */
 	off = cfs_size_round(offsetof(struct update_buf, ub_bufs[0]));
 	for (i = 0; i < count; i++) {

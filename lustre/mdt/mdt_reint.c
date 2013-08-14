@@ -349,7 +349,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
                 /* Version of child will be updated on disk. */
-                info->mti_mos = child;
+		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(child));
                 rc = mdt_version_get_check_save(info, child, 2);
                 if (rc)
                         GOTO(out_put_child, rc);
@@ -428,7 +428,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
         /* VBR: update version if attr changed are important for recovery */
         if (do_vbr) {
                 /* update on-disk version of changed object */
-                info->mti_mos = mo;
+		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mo));
                 rc = mdt_version_get_check_save(info, mo, 0);
                 if (rc)
                         GOTO(out_unlock, rc);
@@ -964,7 +964,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
-        info->mti_mos = ms;
+	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(ms));
         rc = mdt_version_get_check_save(info, ms, 1);
         if (rc)
                 GOTO(out_unlock_child, rc);
@@ -1252,7 +1252,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 GOTO(out_unlock_target, rc);
         }
 
-        info->mti_mos = mold;
+	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mold));
         /* save version after locking */
         mdt_version_get_save(info, mold, 2);
         mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
