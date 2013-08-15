@@ -904,7 +904,7 @@ int set_blockdev_scheduler(const char *path, const char *scheduler)
 /* This is to tune the kernel for good SCSI performance.
  * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
  * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-int set_blockdev_tunables(char *source, struct mount_opts *mop, int fan_out)
+int set_blockdev_tunables(char *source, struct mount_opts *mop)
 {
 	glob_t glob_info = { 0 };
 	struct stat stat_buf;
@@ -915,6 +915,7 @@ int set_blockdev_tunables(char *source, struct mount_opts *mop, int fan_out)
 	char real_path[PATH_MAX] = {'\0'};
 	int i, rc = 0;
 	int major, minor;
+	char *slave = NULL;
 
 	if (!source)
 		return -EINVAL;
@@ -1060,45 +1061,42 @@ set_params:
 	snprintf(real_path, sizeof(real_path), "%s/%s", path, SCHEDULER_PATH);
 	set_blockdev_scheduler(real_path, DEFAULT_SCHEDULER);
 
-	if (fan_out) {
-		char *slave = NULL;
-		glob_info.gl_pathc = 0;
-		glob_info.gl_offs = 0;
-		/* if device is multipath device, tune its slave devices */
-		snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
-		rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
+	/* if device is multipath device, tune its slave devices */
+	glob_info.gl_pathc = 0;
+	glob_info.gl_offs = 0;
+	snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
+	rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
 
-		for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++){
-			slave = basename(glob_info.gl_pathv[i]);
-			snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
-			rc = set_blockdev_tunables(real_path, mop, 0);
-		}
-
-		if (rc == GLOB_NOMATCH) {
-			/* no slave device is not an error */
-			rc = 0;
-		} else if (rc && verbose) {
-			if (slave == NULL) {
-				fprintf(stderr, "warning: %s, failed to read"
-					" entries under %s/slaves\n",
-					strerror(errno), path);
-			} else {
-				fprintf(stderr, "unable to set tunables for"
-					" slave device %s (slave would be"
-					" unable to handle IO request from"
-					" master %s)\n",
-					real_path, source);
-			}
-		}
-		globfree(&glob_info);
+	for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++) {
+		slave = basename(glob_info.gl_pathv[i]);
+		snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
+		rc = set_blockdev_tunables(real_path, mop);
 	}
+
+	if (rc == GLOB_NOMATCH) {
+		/* no slave device is not an error */
+		rc = 0;
+	} else if (rc && verbose) {
+		if (slave == NULL) {
+			fprintf(stderr, "warning: %s, failed to read"
+				" entries under %s/slaves\n",
+				strerror(errno), path);
+		} else {
+			fprintf(stderr, "unable to set tunables for"
+				" slave device %s (slave would be"
+				" unable to handle IO request from"
+				" master %s)\n",
+				real_path, source);
+		}
+	}
+	globfree(&glob_info);
 
 	return rc;
 }
 
 int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop)
 {
-	return set_blockdev_tunables(dev, mop, 1);
+	return set_blockdev_tunables(dev, mop);
 }
 
 int ldiskfs_label_lustre(struct mount_opts *mop)
