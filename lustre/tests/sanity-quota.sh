@@ -480,7 +480,7 @@ test_2() {
 
 	[ "$SLOW" = "no" ] && LIMIT=1024 # 1k inodes
 
-	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $5}')
+	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $4}')
 	[ $FREE_INODES -lt $LIMIT ] &&
 		skip "not enough free inodes $FREE_INODES required $LIMIT" &&
 		return
