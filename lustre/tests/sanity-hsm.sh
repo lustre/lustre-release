@@ -114,6 +114,7 @@ copytool_device() {
 cleanup() {
 	copytool_cleanup
 	changelog_cleanup
+	cdt_set_sanity_policy
 }
 
 search_and_kill_copytool() {
@@ -243,26 +244,33 @@ set_test_state() {
 }
 
 cdt_set_sanity_policy() {
-	# clear all
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-nra
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-nbr
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-gc
+	if [[ "$CDT_POLICY_HAD_CHANGED" ]]
+	then
+		# clear all
+		do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=+NRA
+		do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-NBR
+		CDT_POLICY_HAD_CHANGED=
+	fi
 }
 
 cdt_set_no_retry() {
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=+nra
+	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=+NRA
+	CDT_POLICY_HAD_CHANGED=true
 }
 
 cdt_clear_no_retry() {
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-nra
+	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-NRA
+	CDT_POLICY_HAD_CHANGED=true
 }
 
-cdt_set_no_blocking_restore() {
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=+nbr
+cdt_set_non_blocking_restore() {
+	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=+NBR
+	CDT_POLICY_HAD_CHANGED=true
 }
 
-cdt_clear_no_blocking_restore() {
-	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-nbr
+cdt_clear_non_blocking_restore() {
+	do_facet $SINGLEMDS $LCTL set_param $HSM_PARAM.policy=-NBR
+	CDT_POLICY_HAD_CHANGED=true
 }
 
 cdt_clear_mount_state() {
@@ -511,6 +519,9 @@ cdt_check_state enabled
 
 echo "Start copytool"
 copytool_setup
+
+echo "Set sanity-hsm HSM policy"
+cdt_set_sanity_policy
 
 # finished requests are quickly removed from list
 set_hsm_param grace_delay 10
@@ -2371,6 +2382,41 @@ test_107() {
 }
 run_test 107 "Copytool re-register after MDS restart"
 
+policy_set_and_test()
+{
+	local change="$1"
+	local target="$2"
+	do_facet $SINGLEMDS $LCTL set_param "$HSM_PARAM.policy=\\\"$change\\\""
+	local policy=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.policy)
+	[[ "$policy" == "$target" ]] ||
+		error "Wrong policy after '$change': '$policy' != '$target'"
+}
+
+test_109() {
+	# to force default policy setting if error
+	CDT_POLICY_HAD_CHANGED=true
+
+	local policy=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.policy)
+	local default="NonBlockingRestore [NoRetryAction]"
+	[[ "$policy" == "$default" ]] ||
+		error "default policy has changed,"\
+		      " '$policy' != '$default' update the test"
+	policy_set_and_test "+NBR" "[NonBlockingRestore] [NoRetryAction]"
+	policy_set_and_test "+NRA" "[NonBlockingRestore] [NoRetryAction]"
+	policy_set_and_test "-NBR" "NonBlockingRestore [NoRetryAction]"
+	policy_set_and_test "-NRA" "NonBlockingRestore NoRetryAction"
+	policy_set_and_test "NRA NBR" "[NonBlockingRestore] [NoRetryAction]"
+	# useless bacause we know but safer for futur changes to use real value
+	local policy=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.policy)
+	echo "Next set_param must failed"
+	policy_set_and_test "wrong" "$policy"
+
+	# return to default
+	echo "Back to default policy"
+	cdt_set_sanity_policy
+}
+run_test 109 "Policy display/change"
+
 test_110a() {
 	# test needs a running copytool
 	copytool_setup
@@ -2381,13 +2427,13 @@ test_110a() {
 	import_file $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
-	cdt_set_no_blocking_restore
+	cdt_set_non_blocking_restore
 	md5sum $f
 	local st=$?
 
 	# cleanup
 	wait_request_state $fid RESTORE SUCCEED
-	cdt_clear_no_blocking_restore
+	cdt_clear_non_blocking_restore
 
 	# Test result
 	[[ $st == 1 ]] ||
@@ -2409,13 +2455,13 @@ test_110b() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
-	cdt_set_no_blocking_restore
+	cdt_set_non_blocking_restore
 	md5sum $f
 	local st=$?
 
 	# cleanup
 	wait_request_state $fid RESTORE SUCCEED
-	cdt_clear_no_blocking_restore
+	cdt_clear_non_blocking_restore
 
 	# Test result
 	[[ $st == 1 ]] ||

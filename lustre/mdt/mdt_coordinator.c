@@ -922,6 +922,7 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		RETURN(-EALREADY);
 	}
 
+	CLASSERT(1 << (CDT_POLICY_SHIFT_COUNT - 1) == CDT_POLICY_LAST);
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 	cdt->cdt_state = CDT_INIT;
 
@@ -1716,8 +1717,8 @@ static const struct {
 	char		*name;
 	char		*nickname;
 } hsm_policy_names[] = {
-	{ CDT_NONBLOCKING_RESTORE,	"non_blocking_restore",	"nbr"},
-	{ CDT_NORETRY_ACTION,		"no_retry_action",	"nra"},
+	{ CDT_NONBLOCKING_RESTORE,	"NonBlockingRestore",	"NBR"},
+	{ CDT_NORETRY_ACTION,		"NoRetryAction",	"NRA"},
 	{ 0 },
 };
 
@@ -1732,7 +1733,8 @@ static __u64 hsm_policy_str2bit(const char *name)
 	int	 i;
 
 	for (i = 0; hsm_policy_names[i].bit != 0; i++)
-		if (strcmp(hsm_policy_names[i].nickname, name) == 0)
+		if (strcmp(hsm_policy_names[i].nickname, name) == 0 ||
+		    strcmp(hsm_policy_names[i].name, name) == 0)
 			return hsm_policy_names[i].bit;
 	return 0;
 }
@@ -1740,11 +1742,13 @@ static __u64 hsm_policy_str2bit(const char *name)
 /**
  * convert a policy bit field to a string
  * \param mask [IN] policy bit field
+ * \param hexa [IN] print mask before bit names
  * \param buffer [OUT] string
  * \param count [IN] size of buffer
  * \retval size filled in buffer
  */
-static int hsm_policy_bit2str(const __u64 mask, char *buffer, int count)
+static int hsm_policy_bit2str(const __u64 mask, const bool hexa, char *buffer,
+			      int count)
 {
 	int	 i, j, sz;
 	char	*ptr;
@@ -1752,25 +1756,31 @@ static int hsm_policy_bit2str(const __u64 mask, char *buffer, int count)
 	ENTRY;
 
 	ptr = buffer;
-	sz = snprintf(buffer, count, "("LPX64") ", mask);
-	ptr += sz;
-	count -= sz;
-	for (i = 0; i < (sizeof(mask) * 8); i++) {
+	if (hexa) {
+		sz = snprintf(buffer, count, "("LPX64") ", mask);
+		ptr += sz;
+		count -= sz;
+	}
+	for (i = 0; i < CDT_POLICY_SHIFT_COUNT; i++) {
 		bit = (1ULL << i);
-		if (!(bit  & mask))
-			continue;
 
 		for (j = 0; hsm_policy_names[j].bit != 0; j++) {
-			if (hsm_policy_names[j].bit == bit) {
-				sz = snprintf(ptr, count, "%s(%s) ",
-					      hsm_policy_names[j].name,
-					      hsm_policy_names[j].nickname);
-				ptr += sz;
-				count -= sz;
+			if (hsm_policy_names[j].bit == bit)
 				break;
-			}
 		}
+		if (bit & mask)
+			sz = snprintf(ptr, count, "[%s] ",
+				      hsm_policy_names[j].name);
+		else
+			sz = snprintf(ptr, count, "%s ",
+				      hsm_policy_names[j].name);
+
+		ptr += sz;
+		count -= sz;
 	}
+	/* remove last ' ' */
+	*ptr = '\0';
+	ptr--;
 	RETURN(ptr - buffer);
 }
 
@@ -1783,7 +1793,7 @@ static int lprocfs_rd_hsm_policy(char *page, char **start, off_t off,
 	int			 sz;
 	ENTRY;
 
-	sz = hsm_policy_bit2str(cdt->cdt_policy, page, count);
+	sz = hsm_policy_bit2str(cdt->cdt_policy, false, page, count);
 	page[sz] = '\n';
 	sz++;
 	page[sz] = '\0';
@@ -1796,24 +1806,16 @@ static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
 {
 	struct mdt_device	*mdt = data;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	int			 sz;
-	char			*start, *end;
-	__u64			 policy;
-	int			 set;
+	char			*start, *token, sign;
 	char			*buf;
+	__u64			 policy;
+	__u64			 add_mask, remove_mask, set_mask;
+	int			 sz;
+	int			 rc;
 	ENTRY;
 
-	if (strncmp(buffer, "help", 4) == 0) {
-		sz = PAGE_SIZE;
-		OBD_ALLOC(buf, sz);
-		if (!buf)
-			RETURN(-ENOMEM);
-
-		hsm_policy_bit2str(CDT_POLICY_MASK, buf, sz);
-		CWARN("Supported policies are: %s\n", buf);
-		OBD_FREE(buf, sz);
-		RETURN(count);
-	}
+	if (count + 1 > PAGE_SIZE)
+		RETURN(-EINVAL);
 
 	OBD_ALLOC(buf, count + 1);
 	if (buf == NULL)
@@ -1821,48 +1823,74 @@ static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
 
 	if (copy_from_user(buf, buffer, count))
 		RETURN(-EFAULT);
-
 	buf[count] = '\0';
-	start = buf;
 
-	policy = 0;
+	start = buf;
+	CDEBUG(D_HSM, "%s: receive new policy: '%s'\n", mdt_obd_name(mdt),
+	       start);
+
+	add_mask = remove_mask = set_mask = 0;
 	do {
-		end = strchr(start, ' ');
-		if (end != NULL)
-			*end = '\0';
-		switch (*start) {
+		token = strsep(&start, "\n ");
+		sign = *token;
+
+		if (sign == '\0')
+			continue;
+
+		if (sign == '-' || sign == '+')
+			token++;
+
+		policy = hsm_policy_str2bit(token);
+		if (policy == 0) {
+			char *msg;
+
+			sz = PAGE_SIZE;
+			OBD_ALLOC(msg, sz);
+			if (!msg)
+				RETURN(-ENOMEM);
+
+			hsm_policy_bit2str(0, false, msg, sz);
+			CWARN("%s: '%s' is unknown, "
+			      "supported policies are: %s\n", mdt_obd_name(mdt),
+			      token, msg);
+			OBD_FREE(msg, sz);
+			GOTO(out, rc = -EINVAL);
+		}
+		switch (sign) {
 		case '-':
-			start++;
-			set = 0;
+			remove_mask |= policy;
 			break;
 		case '+':
-			start++;
-			set = 1;
+			add_mask |= policy;
 			break;
 		default:
-			set = 2;
-			break;
-		}
-		policy = hsm_policy_str2bit(start);
-		if (!policy)
-			break;
-
-		switch (set) {
-		case 0:
-			cdt->cdt_policy &= ~policy;
-			break;
-		case 1:
-			cdt->cdt_policy |= policy;
-			break;
-		case 2:
-			cdt->cdt_policy = policy;
+			set_mask |= policy;
 			break;
 		}
 
-		start = end + 1;
-	} while (end != NULL);
+	} while (start != NULL);
+
+	CDEBUG(D_HSM, "%s: new policy: rm="LPX64" add="LPX64" set="LPX64"\n",
+	       mdt_obd_name(mdt), remove_mask, add_mask, set_mask);
+
+	/* if no sign in all string, it is a clear and set
+	 * if some sign found, all unsigned are converted
+	 * to add
+	 * P1 P2 = set to P1 and P2
+	 * P1 -P2 = add P1 clear P2 same as +P1 -P2
+	 */
+	if (remove_mask == 0 && add_mask == 0) {
+		cdt->cdt_policy = set_mask;
+	} else {
+		cdt->cdt_policy |= set_mask | add_mask;
+		cdt->cdt_policy &= ~remove_mask;
+	}
+
+	GOTO(out, rc = count);
+
+out:
 	OBD_FREE(buf, count + 1);
-	RETURN(count);
+	RETURN(rc);
 }
 
 #define GENERATE_PROC_METHOD(VAR)					\

@@ -84,10 +84,12 @@ struct mdt_file_data {
 	struct mdt_object    *mfd_object; /* point to opened object */
 };
 
-#define CDT_NONBLOCKING_RESTORE		0x0000000000000001ULL
-#define CDT_NORETRY_ACTION		0x0000000000000002ULL
-#define CDT_POLICY_MASK			CDT_NONBLOCKING_RESTORE | \
-					CDT_NORETRY_ACTION
+#define CDT_NONBLOCKING_RESTORE		(1ULL << 0)
+#define CDT_NORETRY_ACTION		(1ULL << 1)
+#define CDT_POLICY_LAST			CDT_NORETRY_ACTION
+#define CDT_POLICY_SHIFT_COUNT		2
+#define CDT_POLICY_ALL			(CDT_NONBLOCKING_RESTORE | \
+					CDT_NORETRY_ACTION)
 
 /* when adding a new policy, do not forget to update
  * lustre/mdt/mdt_coordinator.c::hsm_policy_names[]
