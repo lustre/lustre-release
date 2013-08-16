@@ -1022,6 +1022,11 @@ static void ptlrpc_server_finish_request(struct ptlrpc_service_part *svcpt,
 {
 	ptlrpc_server_hpreq_fini(req);
 
+	if (req->rq_session.lc_thread != NULL) {
+		lu_context_exit(&req->rq_session);
+		lu_context_fini(&req->rq_session);
+	}
+
 	ptlrpc_server_drop_request(req);
 }
 
@@ -1898,11 +1903,25 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
                 goto err_req;
         }
 
-        req->rq_svc_thread = thread;
+	req->rq_svc_thread = thread;
+	if (thread != NULL) {
+		/* initialize request session, it is needed for request
+		 * processing by target */
+		rc = lu_context_init(&req->rq_session, LCT_SERVER_SESSION |
+						       LCT_NOREF);
+		if (rc) {
+			CERROR("%s: failure to initialize session: rc = %d\n",
+			       thread->t_name, rc);
+			goto err_req;
+		}
+		req->rq_session.lc_thread = thread;
+		lu_context_enter(&req->rq_session);
+		req->rq_svc_thread->t_env->le_ses = &req->rq_session;
+	}
 
-        ptlrpc_at_add_timed(req);
+	ptlrpc_at_add_timed(req);
 
-        /* Move it over to the request processing queue */
+	/* Move it over to the request processing queue */
 	rc = ptlrpc_server_request_add(svcpt, req);
 	if (rc)
 		GOTO(err_req, rc);
@@ -1924,14 +1943,14 @@ static int
 ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 			     struct ptlrpc_thread *thread)
 {
-	struct ptlrpc_service *svc = svcpt->scp_service;
-        struct ptlrpc_request *request;
-        struct timeval         work_start;
-        struct timeval         work_end;
-        long                   timediff;
-        int                    rc;
-        int                    fail_opc = 0;
-        ENTRY;
+	struct ptlrpc_service	*svc = svcpt->scp_service;
+	struct ptlrpc_request	*request;
+	struct timeval		 work_start;
+	struct timeval		 work_end;
+	long			 timediff;
+	int			 fail_opc = 0;
+
+	ENTRY;
 
 	request = ptlrpc_server_request_get(svcpt, false);
 	if (request == NULL)
@@ -1965,23 +1984,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 				    at_get(&svcpt->scp_at_estimate));
         }
 
-	rc = lu_context_init(&request->rq_session, LCT_SERVER_SESSION |
-						   LCT_NOREF);
-        if (rc) {
-                CERROR("Failure to initialize session: %d\n", rc);
-                goto out_req;
-        }
-        request->rq_session.lc_thread = thread;
-        request->rq_session.lc_cookie = 0x5;
-        lu_context_enter(&request->rq_session);
-
-        CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
-
-        request->rq_svc_thread = thread;
-        if (thread)
-                request->rq_svc_thread->t_env->le_ses = &request->rq_session;
-
-        if (likely(request->rq_export)) {
+	if (likely(request->rq_export)) {
 		if (unlikely(ptlrpc_check_req(request)))
 			goto put_conn;
                 ptlrpc_update_export_timer(request->rq_export, timediff >> 19);
@@ -2013,14 +2016,21 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
         if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
                 CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
 
-	rc = svc->srv_ops.so_req_handler(request);
+	CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
 
-        ptlrpc_rqphase_move(request, RQ_PHASE_COMPLETE);
+	/* re-assign request and sesson thread to the current one */
+	request->rq_svc_thread = thread;
+	if (thread != NULL) {
+		LASSERT(request->rq_session.lc_thread != NULL);
+		request->rq_session.lc_thread = thread;
+		request->rq_session.lc_cookie = 0x55;
+		thread->t_env->le_ses = &request->rq_session;
+	}
+	svc->srv_ops.so_req_handler(request);
+
+	ptlrpc_rqphase_move(request, RQ_PHASE_COMPLETE);
 
 put_conn:
-        lu_context_exit(&request->rq_session);
-        lu_context_fini(&request->rq_session);
-
 	if (unlikely(cfs_time_current_sec() > request->rq_deadline)) {
 		     DEBUG_REQ(D_WARNING, request, "Request took longer "
 			       "than estimated ("CFS_DURATION_T":"CFS_DURATION_T"s);"
@@ -2072,7 +2082,6 @@ put_conn:
                           request->rq_arrival_time.tv_sec));
         }
 
-out_req:
 	ptlrpc_server_finish_active_request(svcpt, request);
 
 	RETURN(1);
