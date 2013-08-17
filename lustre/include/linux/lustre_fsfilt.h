@@ -50,19 +50,44 @@
 #include <obd.h>
 #include <obd_class.h>
 
+typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd,
+                            void *data, int error);
+
 struct fsfilt_operations {
         cfs_list_t fs_list;
         cfs_module_t *fs_owner;
         char   *fs_type;
+        char   *(* fs_getlabel)(struct super_block *sb);
+        void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
+                             int logs);
+        int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
         int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
 				       int pages, unsigned long *blocks,
 				       int create, struct mutex *sem);
+        int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
+                                    int force_sync);
+        int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
+        int     (* fs_setup)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
 extern void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops);
 extern struct fsfilt_operations *fsfilt_get_ops(const char *type);
 extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
+
+static inline char *fsfilt_get_label(struct obd_device *obd,
+                                     struct super_block *sb)
+{
+        if (obd->obd_fsops->fs_getlabel == NULL)
+                return NULL;
+        if (obd->obd_fsops->fs_getlabel(sb)[0] == '\0')
+                return NULL;
+
+        return obd->obd_fsops->fs_getlabel(sb);
+}
+
+#define FSFILT_OP_UNLINK                1
+#define FSFILT_OP_CANCEL_UNLINK         10
 
 #define __fsfilt_check_slow(obd, start, msg)                              \
 do {                                                                      \
@@ -84,6 +109,64 @@ do {                                                    \
         __fsfilt_check_slow(obd, start, msg);           \
         start = jiffies;                                \
 } while (0)
+
+static inline void *fsfilt_start_log(struct obd_device *obd,
+                                     struct inode *inode, int op,
+                                     struct obd_trans_info *oti, int logs)
+{
+        unsigned long now = jiffies;
+        void *parent_handle = oti ? oti->oti_handle : NULL;
+        void *handle;
+
+        handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
+        CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
+
+        if (oti != NULL) {
+                if (parent_handle == NULL) {
+                        oti->oti_handle = handle;
+                } else if (handle != parent_handle) {
+                        CERROR("mismatch: parent %p, handle %p, oti %p\n",
+                               parent_handle, handle, oti);
+                        LBUG();
+                }
+        }
+        fsfilt_check_slow(obd, now, "journal start");
+        return handle;
+}
+
+static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
+                                void *handle, int force_sync)
+{
+        unsigned long now = jiffies;
+        int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
+        CDEBUG(D_INFO, "committing handle %p\n", handle);
+
+        fsfilt_check_slow(obd, now, "journal start");
+
+        return rc;
+}
+
+static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
+                                     void *buf, loff_t size, loff_t *offs)
+{
+        return obd->obd_fsops->fs_read_record(file, buf, size, offs);
+}
+
+static inline int fsfilt_write_record(struct obd_device *obd, struct file *file,
+                                      void *buf, loff_t size, loff_t *offs,
+                                      int force_sync)
+{
+        return obd->obd_fsops->fs_write_record(file, buf, size,offs,force_sync);
+}
+
+static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
+{
+        if (obd->obd_fsops->fs_setup)
+                return obd->obd_fsops->fs_setup(fs);
+        return 0;
+}
+
+
 
 #endif /* __KERNEL__ */
 

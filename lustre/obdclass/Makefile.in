@@ -8,6 +8,7 @@ default: all
 sources:
 
 obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o
+@LDISKFS_ENABLED_TRUE@ obdclass-all-objs += llog_lvfs.o
 obdclass-all-objs += class_obd.o debug.o genops.o uuid.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-all-objs += llog_osd.o local_storage.o

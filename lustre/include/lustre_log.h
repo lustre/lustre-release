@@ -317,6 +317,7 @@ struct llog_handle {
 	spinlock_t		 lgh_hdr_lock; /* protect lgh_hdr data */
 	struct llog_logid	 lgh_id; /* id of this log */
 	struct llog_log_hdr	*lgh_hdr;
+	struct file		*lgh_file;
 	struct dt_object	*lgh_obj;
 	int			 lgh_last_idx;
 	int			 lgh_cur_idx; /* used during llog_process */
@@ -331,6 +332,9 @@ struct llog_handle {
 	struct llog_operations	*lgh_logops;
 	cfs_atomic_t		 lgh_refcount;
 };
+
+/* llog_lvfs.c */
+extern struct llog_operations llog_lvfs_ops;
 
 /* llog_osd.c */
 extern struct llog_operations llog_osd_ops;
