@@ -751,6 +751,25 @@ test_10c() {
 }
 run_test 10c "Check forbidden archive"
 
+test_10d() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+	$LFS hsm_archive $f || error "cannot archive $f"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	local ar=$(get_hsm_archive_id $f)
+	local dflt=$(get_hsm_param archive_id)
+	[[ $ar == $dflt ]] ||
+		error "archived file is not on default archive: $ar != $dflt"
+
+	copytool_cleanup
+}
+run_test 10d "Archive a file on the default archive id"
+
 test_11() {
 	mkdir -p $DIR/$tdir $HSM_ARCHIVE/$tdir
 	cp /etc/hosts $HSM_ARCHIVE/$tdir/$tfile
@@ -2069,7 +2088,7 @@ test_90() {
 }
 run_test 90 "Archive/restore a file list"
 
-double_verify_reset_ham_param() {
+double_verify_reset_hsm_param() {
 	local p=$1
 	echo "Testing $HSM_PARAM.$p"
 	local val=$(get_hsm_param $p)
@@ -2092,10 +2111,11 @@ double_verify_reset_ham_param() {
 }
 
 test_100() {
-	double_verify_reset_ham_param loop_period
-	double_verify_reset_ham_param grace_delay
-	double_verify_reset_ham_param request_timeout
-	double_verify_reset_ham_param max_requests
+	double_verify_reset_hsm_param loop_period
+	double_verify_reset_hsm_param grace_delay
+	double_verify_reset_hsm_param request_timeout
+	double_verify_reset_hsm_param max_requests
+	double_verify_reset_hsm_param archive_id
 }
 run_test 100 "Set coordinator /proc tunables"
 

@@ -351,6 +351,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 
 		/* for cancel archive number is taken from canceled request
 		 * for other request, we take from lma if not specified,
+		 * or we use the default if none found in lma
 		 * this works also for archive because the default value is 0
 		 * /!\ there is a side effect: in case of restore on multiple
 		 * files which are in different backend, the initial compound
@@ -358,8 +359,12 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 		 * warranty an agent can serve any combinaison of archive
 		 * backend
 		 */
-		if (hai->hai_action != HSMA_CANCEL && archive_id == 0)
-			archive_id = mh.mh_arch_id;
+		if (hai->hai_action != HSMA_CANCEL && archive_id == 0) {
+			if (mh.mh_arch_id != 0)
+				archive_id = mh.mh_arch_id;
+			else
+				archive_id = cdt->cdt_archive_id;
+		}
 
 		/* if restore, take an exclusive lock on layout */
 		if (hai->hai_action == HSMA_RESTORE) {

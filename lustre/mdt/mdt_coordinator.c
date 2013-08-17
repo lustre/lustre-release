@@ -929,6 +929,7 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	cdt->cdt_delay = 60;
 	cdt->cdt_timeout = 3600;
 	cdt->cdt_max_request = 3;
+	cdt->cdt_archive_id = 1;
 	atomic_set(&cdt->cdt_request_count, 0);
 
 	/* to avoid deadlock when start is made through /proc
@@ -1897,6 +1898,7 @@ GENERATE_PROC_METHOD(cdt_loop_period)
 GENERATE_PROC_METHOD(cdt_delay)
 GENERATE_PROC_METHOD(cdt_timeout)
 GENERATE_PROC_METHOD(cdt_max_request)
+GENERATE_PROC_METHOD(cdt_archive_id)
 
 /*
  * procfs write method for MDT/hsm_control
@@ -1982,6 +1984,9 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ "agents",		NULL, NULL, NULL, &mdt_hsm_agent_fops, 0 },
 	{ "agent_actions",	NULL, NULL, NULL,
 				&mdt_agent_actions_fops, 0444 },
+	{ "archive_id",		lprocfs_rd_hsm_cdt_archive_id,
+				lprocfs_wr_hsm_cdt_archive_id,
+				NULL, NULL, 0 },
 	{ "grace_delay",	lprocfs_rd_hsm_cdt_delay,
 				lprocfs_wr_hsm_cdt_delay,
 				NULL, NULL, 0 },

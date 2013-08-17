@@ -125,6 +125,8 @@ struct coordinator {
 	cfs_time_t		 cdt_loop_period;   /**< llog scan period */
 	cfs_time_t		 cdt_delay;	    /**< request grace delay */
 	cfs_time_t		 cdt_timeout;	    /**< request timeout */
+	__u32			 cdt_archive_id;    /** archive id used when
+						     * none are specified */
 	__u64			 cdt_max_request;   /**< max count of started
 						     * requests */
 	atomic_t		 cdt_request_count; /**< current count of
