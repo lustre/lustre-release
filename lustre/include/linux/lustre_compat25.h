@@ -160,10 +160,6 @@ static inline struct file *ll_dentry_open(struct path *path, int flags,
 #define FS_HAS_FIEMAP			(0)
 #endif
 
-#ifndef HAVE_FS_RENAME_DOES_D_MOVE
-#define FS_RENAME_DOES_D_MOVE		FS_ODD_RENAME
-#endif
-
 /* add a lustre compatible layer for crypto API */
 #include <linux/crypto.h>
 #define ll_crypto_hash          crypto_hash

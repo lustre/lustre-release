@@ -380,26 +380,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.22
-
-#
-# 2.6.19 check for FS_RENAME_DOES_D_MOVE flag
-#
-AC_DEFUN([LC_FS_RENAME_DOES_D_MOVE],
-[AC_MSG_CHECKING([if kernel has FS_RENAME_DOES_D_MOVE flag])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        int v __attribute__ ((unused));
-        v = FS_RENAME_DOES_D_MOVE;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_FS_RENAME_DOES_D_MOVE, 1, [kernel has FS_RENAME_DOES_D_MOVE flag])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.24
 
 # 2.6.24 has bio_endio with 2 args
@@ -1424,9 +1404,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT
-
-	 # 2.6.22
-         LC_FS_RENAME_DOES_D_MOVE
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
