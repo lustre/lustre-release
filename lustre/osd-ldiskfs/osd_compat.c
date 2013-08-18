@@ -112,7 +112,7 @@ static struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
 		GOTO(out_up, dchild);
 	}
 
-	err = ll_vfs_mkdir(dir->d_inode, dchild, mnt, mode);
+	err = vfs_mkdir(dir->d_inode, dchild, mode);
 	if (err)
 		GOTO(out_err, err);
 
@@ -1124,7 +1124,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		/* If the src object has never been modified, then remove it. */
 		if (inode->i_size == 0 && inode->i_mode & S_ISUID &&
 		    inode->i_mode & S_ISGID)
-			ll_vfs_unlink(src_parent, src_child, osd->od_mnt);
+			vfs_unlink(src_parent, src_child);
 		GOTO(unlock_src, rc = 0);
 	}
 

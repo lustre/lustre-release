@@ -440,24 +440,6 @@ LB_LINUX_TRY_COMPILE([
 # 2.6.27
 #
 
-# LC_SECURITY_PLUG  # for SLES10 SP2 (2.6.27)
-# check security plug in sles10 sp2 kernel
-AC_DEFUN([LC_SECURITY_PLUG],
-[AC_MSG_CHECKING([If kernel has security plug support])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/stddef.h>
-],[
-        notify_change(NULL, NULL, NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SECURITY_PLUG, 1,
-                [SLES10 SP2 use extra parameter in vfs])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 AC_DEFUN([LC_INODE_PERMISION_2ARGS],
 [AC_MSG_CHECKING([inode_operations->permission has two args])
 LB_LINUX_TRY_COMPILE([
@@ -1451,7 +1433,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_PROCFS_DELETED
 
          # 2.6.27
-         LC_SECURITY_PLUG  # for SLES10 SP2
          LC_INODE_PERMISION_2ARGS
          LC_QUOTA_ON_5ARGS
          LC_QUOTA_OFF_3ARGS
