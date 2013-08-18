@@ -54,21 +54,13 @@ static inline void ll_remove_from_page_cache(struct page *page)
 
 	BUG_ON(!PageLocked(page));
 
-#ifdef HAVE_RW_TREE_LOCK
-	write_lock_irq(&mapping->tree_lock);
-#else
 	spin_lock_irq(&mapping->tree_lock);
-#endif
 	radix_tree_delete(&mapping->page_tree, page->index);
 	page->mapping = NULL;
 	mapping->nrpages--;
 	__dec_zone_page_state(page, NR_FILE_PAGES);
 
-#ifdef HAVE_RW_TREE_LOCK
-	write_unlock_irq(&mapping->tree_lock);
-#else
 	spin_unlock_irq(&mapping->tree_lock);
-#endif
 }
 #else /* HAVE_REMOVE_FROM_PAGE_CACHE */
 #define ll_remove_from_page_cache(page) remove_from_page_cache(page)

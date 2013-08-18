@@ -329,29 +329,6 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-# 2.6.12
-
-# ~2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
-# yet tree_lock is converted from rwlock to spin_lock since v2.6.26
-AC_DEFUN([LC_RW_TREE_LOCK],
-[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-	struct address_space a;
-
-	write_lock(&a.tree_lock);
-],[
-        AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 #2.6.18 + RHEL5 (fc6)
 
 # raid5-zerocopy patch
@@ -1402,9 +1379,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-
-         # 2.6.12
-         LC_RW_TREE_LOCK
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT
