@@ -344,6 +344,15 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
 		RETURN(-ENOENT);
 
+	/* Objects are created as locking anchors or place holders for objects
+	 * yet to be created. No need to osd_oi_lookup() at here because FID
+	 * shouldn't never be re-used, if it's really a duplicate FID from
+	 * unexpected reason, we should be able to detect it later by calling
+	 * do_create->osd_oi_insert()
+	 */
+	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+		GOTO(out, result = 0);
+
 	/* Search order: 1. per-thread cache. */
 	if (lu_fid_eq(fid, &oic->oic_fid)) {
 		id = &oic->oic_lid;
@@ -358,18 +367,18 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 			goto iget;
 	}
 
-	if (sf->sf_flags & SF_INCONSISTENT)
+	/* One corner case that if the OI_scrub file crashed or lost and we
+	 * regard it as upgrade, then we allow IGIF lookup to bypass OI files.
+	 *
+	 * The risk is that osd_fid_lookup() may found a wrong inode with the
+	 * given IGIF especially when the MDT has performed file-level backup
+	 * and restored after former upgrading from 1.8 to 2.x.
+	 *
+	 * To decrease the risk, we force the osd_fid_lookup() to verify the
+	 * inode for such case. */
+	if ((sf->sf_flags & SF_INCONSISTENT) ||
+	    (!dev->od_igif_inoi && fid_is_igif(fid)))
 		verify = true;
-
-	/*
-	 * Objects are created as locking anchors or place holders for objects
-	 * yet to be created. No need to osd_oi_lookup() at here because FID
-	 * shouldn't never be re-used, if it's really a duplicate FID from
-	 * unexpected reason, we should be able to detect it later by calling
-	 * do_create->osd_oi_insert()
-	 */
-	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
-		GOTO(out, result = 0);
 
 	/* Search order: 3. OI files. */
 	result = osd_oi_lookup(info, dev, fid, id, true);
@@ -397,7 +406,7 @@ iget:
 		if (result == -ENOENT || result == -ESTALE) {
 			if (!in_oi) {
 				fid_zero(&oic->oic_fid);
-				GOTO(out, result = 0);
+				GOTO(out, result = -ENOENT);
 			}
 
 			/* XXX: There are three possible cases:
@@ -415,10 +424,6 @@ iget:
 			if (result == 0)
 				/* It is the case 1 or 2. */
 				goto trigger;
-
-			if (result == -ENOENT)
-				/* It is the case 3. */
-				result = 0;
 		} else if (result == -EREMCHG) {
 
 trigger:
