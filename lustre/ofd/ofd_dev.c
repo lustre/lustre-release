@@ -1555,7 +1555,6 @@ out:
 	return rc;
 }
 
-
 static int ofd_quotactl(struct tgt_session_info *tsi)
 {
 	struct obd_quotactl	*oqctl, *repoqc;
@@ -1585,6 +1584,302 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
+/* High priority request handlers for OFD */
+
+/* prolong locks for the current service time of the corresponding
+ * portal (= OST_IO_PORTAL)
+ */
+static inline int prolong_timeout(struct ptlrpc_request *req)
+{
+	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
+
+	if (AT_OFF)
+		return obd_timeout / 2;
+
+	return max(at_est2timeout(at_get(&svcpt->scp_at_estimate)),
+		   ldlm_timeout);
+}
+
+static int ofd_prolong_one_lock(struct tgt_session_info *tsi,
+				struct ldlm_lock *lock,
+				struct ldlm_extent *extent, int timeout)
+{
+
+	if (lock->l_flags & LDLM_FL_DESTROYED) /* lock already cancelled */
+		return 0;
+
+	/* XXX: never try to grab resource lock here because we're inside
+	 * exp_bl_list_lock; in ldlm_lockd.c to handle waiting list we take
+	 * res lock and then exp_bl_list_lock. */
+
+	if (!(lock->l_flags & LDLM_FL_AST_SENT))
+		/* ignore locks not being cancelled */
+		return 0;
+
+	LDLM_DEBUG(lock, "refreshed for req x"LPU64" ext("LPU64"->"LPU64") "
+			 "to %ds.\n", tgt_ses_req(tsi)->rq_xid, extent->start,
+			 extent->end, timeout);
+
+	/* OK. this is a possible lock the user holds doing I/O
+	 * let's refresh eviction timer for it */
+	ldlm_refresh_waiting_lock(lock, timeout);
+	return 1;
+}
+
+static int ofd_prolong_extent_locks(struct tgt_session_info *tsi,
+				    __u64 start, __u64 end)
+{
+	struct obd_export	*exp = tsi->tsi_exp;
+	struct obdo		*oa  = &tsi->tsi_ost_body->oa;
+	struct ldlm_extent	 extent = {
+		.start = start,
+		.end = end
+	};
+	struct ldlm_lock	*lock;
+	int			 timeout = prolong_timeout(tgt_ses_req(tsi));
+	int			 lock_count = 0;
+
+	ENTRY;
+
+	if (oa->o_valid & OBD_MD_FLHANDLE) {
+		/* mostly a request should be covered by only one lock, try
+		 * fast path. */
+		lock = ldlm_handle2lock(&oa->o_handle);
+		if (lock != NULL) {
+			/* Fast path to check if the lock covers the whole IO
+			 * region exclusively. */
+			if (lock->l_granted_mode == LCK_PW &&
+			    ldlm_extent_contain(&lock->l_policy_data.l_extent,
+						&extent)) {
+				/* bingo */
+				LASSERT(lock->l_export == exp);
+				lock_count = ofd_prolong_one_lock(tsi, lock,
+							     &extent, timeout);
+				LDLM_LOCK_PUT(lock);
+				RETURN(lock_count);
+			}
+			LDLM_LOCK_PUT(lock);
+		}
+	}
+
+	spin_lock_bh(&exp->exp_bl_list_lock);
+	list_for_each_entry(lock, &exp->exp_bl_list, l_exp_list) {
+		LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
+		LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
+
+		if (!ldlm_res_eq(&tsi->tsi_resid, &lock->l_resource->lr_name))
+			continue;
+
+		if (!ldlm_extent_overlap(&lock->l_policy_data.l_extent,
+					 &extent))
+			continue;
+
+		lock_count += ofd_prolong_one_lock(tsi, lock, &extent, timeout);
+	}
+	spin_unlock_bh(&exp->exp_bl_list_lock);
+
+	RETURN(lock_count);
+}
+
+/**
+ * Returns 1 if the given PTLRPC matches the given LDLM lock, or 0 if it does
+ * not.
+ */
+static int ofd_rw_hpreq_lock_match(struct ptlrpc_request *req,
+				   struct ldlm_lock *lock)
+{
+	struct niobuf_remote	*rnb;
+	struct obd_ioobj	*ioo;
+	ldlm_mode_t		 mode;
+	struct ldlm_extent	 ext;
+	__u32			 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+	ENTRY;
+
+	ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+	LASSERT(ioo != NULL);
+
+	rnb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+	LASSERT(rnb != NULL);
+
+	ext.start = rnb->offset;
+	rnb += ioo->ioo_bufcnt - 1;
+	ext.end = rnb->offset + rnb->len - 1;
+
+	LASSERT(lock->l_resource != NULL);
+	if (!ostid_res_name_eq(&ioo->ioo_oid, &lock->l_resource->lr_name))
+		RETURN(0);
+
+	mode = LCK_PW;
+	if (opc == OST_READ)
+		mode |= LCK_PR;
+
+	if (!(lock->l_granted_mode & mode))
+		RETURN(0);
+
+	RETURN(ldlm_extent_overlap(&lock->l_policy_data.l_extent, &ext));
+}
+
+/**
+ * High-priority queue request check for whether the given PTLRPC request
+ * (\a req) is blocking an LDLM lock cancel.
+ *
+ * Returns 1 if the given given PTLRPC request (\a req) is blocking an LDLM lock
+ * cancel, 0 if it is not, and -EFAULT if the request is malformed.
+ *
+ * Only OST_READs, OST_WRITEs and OST_PUNCHes go on the h-p RPC queue.  This
+ * function looks only at OST_READs and OST_WRITEs.
+ */
+static int ofd_rw_hpreq_check(struct ptlrpc_request *req)
+{
+	struct tgt_session_info	*tsi;
+	struct obd_ioobj	*ioo;
+	struct niobuf_remote	*rnb;
+	__u64			 start, end;
+	int			 lock_count;
+
+	ENTRY;
+
+	/* Don't use tgt_ses_info() to get session info, because lock_match()
+	 * can be called while request has no processing thread yet. */
+	tsi = lu_context_key_get(&req->rq_session, &tgt_session_key);
+	LASSERT(tsi != NULL);
+
+	/*
+	 * Use LASSERT below because malformed RPCs should have
+	 * been filtered out in tgt_hpreq_handler().
+	 */
+	ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+	LASSERT(ioo != NULL);
+
+	rnb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+	LASSERT(rnb != NULL);
+	LASSERT(!(rnb->flags & OBD_BRW_SRVLOCK));
+
+	start = rnb->offset;
+	rnb += ioo->ioo_bufcnt - 1;
+	end = rnb->offset + rnb->len - 1;
+
+	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks: "DFID
+				   " ("LPU64"->"LPU64")\n",
+		  tgt_name(tsi->tsi_tgt), current->comm,
+		  PFID(&tsi->tsi_fid), start, end);
+
+	lock_count = ofd_prolong_extent_locks(tsi, start, end);
+
+	CDEBUG(D_DLMTRACE, "%s: refreshed %u locks timeout for req %p.\n",
+	       tgt_name(tsi->tsi_tgt), lock_count, req);
+
+	RETURN(lock_count > 0);
+}
+
+static void ofd_rw_hpreq_fini(struct ptlrpc_request *req)
+{
+	ofd_rw_hpreq_check(req);
+}
+
+/**
+ * Like tgt_rw_hpreq_lock_match(), but for OST_PUNCH RPCs.
+ */
+static int ofd_punch_hpreq_lock_match(struct ptlrpc_request *req,
+				      struct ldlm_lock *lock)
+{
+	struct tgt_session_info	*tsi;
+
+	/* Don't use tgt_ses_info() to get session info, because lock_match()
+	 * can be called while request has no processing thread yet. */
+	tsi = lu_context_key_get(&req->rq_session, &tgt_session_key);
+	LASSERT(tsi != NULL);
+
+	LASSERT(tsi->tsi_ost_body != NULL);
+	if (tsi->tsi_ost_body->oa.o_valid & OBD_MD_FLHANDLE &&
+	    tsi->tsi_ost_body->oa.o_handle.cookie == lock->l_handle.h_cookie)
+		return 1;
+
+	return 0;
+}
+
+/**
+ * Like ost_rw_hpreq_check(), but for OST_PUNCH RPCs.
+ */
+static int ofd_punch_hpreq_check(struct ptlrpc_request *req)
+{
+	struct tgt_session_info	*tsi;
+	struct obdo		*oa;
+	int			 lock_count;
+
+	ENTRY;
+
+	/* Don't use tgt_ses_info() to get session info, because lock_match()
+	 * can be called while request has no processing thread yet. */
+	tsi = lu_context_key_get(&req->rq_session, &tgt_session_key);
+	LASSERT(tsi != NULL);
+	oa = &tsi->tsi_ost_body->oa;
+
+	LASSERT(!(oa->o_valid & OBD_MD_FLFLAGS &&
+		  oa->o_flags & OBD_FL_SRVLOCK));
+
+	CDEBUG(D_DLMTRACE,
+	       "%s: refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+	       tgt_name(tsi->tsi_tgt), tsi->tsi_resid.name[0],
+	       tsi->tsi_resid.name[1], oa->o_size, oa->o_blocks);
+
+	lock_count = ofd_prolong_extent_locks(tsi, oa->o_size, oa->o_blocks);
+
+	CDEBUG(D_DLMTRACE, "%s: refreshed %u locks timeout for req %p.\n",
+	       tgt_name(tsi->tsi_tgt), lock_count, req);
+
+	RETURN(lock_count > 0);
+}
+
+static void ofd_punch_hpreq_fini(struct ptlrpc_request *req)
+{
+	ofd_punch_hpreq_check(req);
+}
+
+struct ptlrpc_hpreq_ops ofd_hpreq_rw = {
+	.hpreq_lock_match	= ofd_rw_hpreq_lock_match,
+	.hpreq_check		= ofd_rw_hpreq_check,
+	.hpreq_fini		= ofd_rw_hpreq_fini
+};
+
+struct ptlrpc_hpreq_ops ofd_hpreq_punch = {
+	.hpreq_lock_match	= ofd_punch_hpreq_lock_match,
+	.hpreq_check		= ofd_punch_hpreq_check,
+	.hpreq_fini		= ofd_punch_hpreq_fini
+};
+
+/** Assign high priority operations to the IO requests */
+static void ofd_hp_brw(struct tgt_session_info *tsi)
+{
+	struct niobuf_remote	*rnb;
+	struct obd_ioobj	*ioo;
+
+	ENTRY;
+
+	ioo = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_IOOBJ);
+	LASSERT(ioo != NULL); /* must exist after request preprocessing */
+	if (ioo->ioo_bufcnt > 0) {
+		rnb = req_capsule_client_get(tsi->tsi_pill, &RMF_NIOBUF_REMOTE);
+		LASSERT(rnb != NULL); /* must exist after request preprocessing */
+
+		/* no high priority if server lock is needed */
+		if (rnb->flags & OBD_BRW_SRVLOCK)
+			return;
+	}
+	tgt_ses_req(tsi)->rq_ops = &ofd_hpreq_rw;
+}
+
+static void ofd_hp_punch(struct tgt_session_info *tsi)
+{
+	LASSERT(tsi->tsi_ost_body != NULL); /* must exists if we are here */
+	/* no high-priority if server lock is needed */
+	if (tsi->tsi_ost_body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    tsi->tsi_ost_body->oa.o_flags & OBD_FL_SRVLOCK)
+		return;
+	tgt_ses_req(tsi)->rq_ops = &ofd_hpreq_punch;
+}
+
 #define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
 #define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
 #define OST_BRW_READ	OST_READ
@@ -1609,11 +1904,15 @@ TGT_OST_HDL(0		| HABEO_REFERO | MUTABOR,
 TGT_OST_HDL(0		| HABEO_REFERO | MUTABOR,
 					OST_DESTROY,	ofd_destroy_hdl),
 TGT_OST_HDL(0		| HABEO_REFERO,	OST_STATFS,	ofd_statfs_hdl),
-TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO,	OST_BRW_READ,	tgt_brw_read),
+TGT_OST_HDL_HP(HABEO_CORPUS| HABEO_REFERO,
+					OST_BRW_READ,	tgt_brw_read,
+							ofd_hp_brw),
 /* don't set CORPUS flag for brw_write because -ENOENT may be valid case */
-TGT_OST_HDL(MUTABOR,			OST_BRW_WRITE,	tgt_brw_write),
-TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR,
-					OST_PUNCH,	ofd_punch_hdl),
+TGT_OST_HDL_HP(HABEO_CORPUS| MUTABOR,	OST_BRW_WRITE,	tgt_brw_write,
+							ofd_hp_brw),
+TGT_OST_HDL_HP(HABEO_CORPUS| HABEO_REFERO | MUTABOR,
+					OST_PUNCH,	ofd_punch_hdl,
+							ofd_hp_punch),
 TGT_OST_HDL(HABEO_CORPUS| HABEO_REFERO,	OST_SYNC,	ofd_sync_hdl),
 TGT_OST_HDL(0		| HABEO_REFERO,	OST_QUOTACTL,	ofd_quotactl),
 };

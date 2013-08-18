@@ -117,6 +117,7 @@ struct tgt_session_info {
 	 * Additional fail id that can be set by handler.
 	 */
 	int			 tsi_reply_fail_id;
+	bool			 tsi_preprocessed;
 	/* request JobID */
 	char                    *tsi_jobid;
 };
@@ -207,9 +208,9 @@ struct tgt_handler {
 	/* Request version for this opcode */
 	int			 th_version;
 	/* Handler function */
-	int			(*th_act)(struct tgt_session_info *tti);
+	int			(*th_act)(struct tgt_session_info *tsi);
 	/* Handler function for high priority requests */
-	int			(*th_hp)(struct tgt_session_info *tti);
+	void			(*th_hp)(struct tgt_session_info *tsi);
 	/* Request format for this request */
 	const struct req_format	*th_fmt;
 };
@@ -296,6 +297,8 @@ struct tgt_commit_cb {
 	void     *tgt_cb_data;
 };
 
+int tgt_hpreq_handler(struct ptlrpc_request *req);
+
 /* target/tgt_main.c */
 void tgt_boot_epoch_update(struct lu_target *lut);
 int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
@@ -360,7 +363,7 @@ static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
 /*
  * Unified target generic handers macros and generic functions.
  */
-#define TGT_RPC_HANDLER(base, flags, opc, fn, fmt, version)		\
+#define TGT_RPC_HANDLER_HP(base, flags, opc, fn, hp, fmt, version)	\
 [opc - base] = {							\
 	.th_name	= #opc,						\
 	.th_fail_id	= OBD_FAIL_ ## opc ## _NET,			\
@@ -368,8 +371,11 @@ static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
 	.th_flags	= flags,					\
 	.th_act		= fn,						\
 	.th_fmt		= fmt,						\
-	.th_version	= version					\
+	.th_version	= version,					\
+	.th_hp		= hp,						\
 }
+#define TGT_RPC_HANDLER(base, flags, opc, fn, fmt, version)		\
+	TGT_RPC_HANDLER_HP(base, flags, opc, fn, NULL, fmt, version)
 
 /* MDT Request with a format known in advance */
 #define TGT_MDT_HDL(flags, name, fn)					\
@@ -380,10 +386,13 @@ static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
 	TGT_RPC_HANDLER(MDS_FIRST_OPC, flags, name, fn, NULL,		\
 			LUSTRE_MDS_VERSION)
 
-/* MDT Request with a format known in advance */
+/* OST Request with a format known in advance */
 #define TGT_OST_HDL(flags, name, fn)					\
 	TGT_RPC_HANDLER(OST_FIRST_OPC, flags, name, fn, &RQF_ ## name,	\
 			LUSTRE_OST_VERSION)
+#define TGT_OST_HDL_HP(flags, name, fn, hp)				\
+	TGT_RPC_HANDLER_HP(OST_FIRST_OPC, flags, name, fn, hp,		\
+			   &RQF_ ## name, LUSTRE_OST_VERSION)
 
 /* MGS request with a format known in advance */
 #define TGT_MGS_HDL(flags, name, fn)					\

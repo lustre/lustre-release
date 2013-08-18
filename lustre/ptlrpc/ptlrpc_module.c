@@ -56,111 +56,96 @@ extern struct mutex ptlrpcd_mutex;
 
 __init int ptlrpc_init(void)
 {
-        int rc, cleanup_phase = 0;
-        ENTRY;
+	int rc;
 
-        lustre_assert_wire_constants();
+	ENTRY;
+
+	lustre_assert_wire_constants();
 #if RS_DEBUG
 	spin_lock_init(&ptlrpc_rs_debug_lock);
 #endif
 	mutex_init(&ptlrpc_all_services_mutex);
 	mutex_init(&pinger_mutex);
 	mutex_init(&ptlrpcd_mutex);
-        ptlrpc_init_xid();
+	ptlrpc_init_xid();
 
 	rc = req_layout_init();
 	if (rc)
 		RETURN(rc);
 
+	rc = tgt_mod_init();
+	if (rc)
+		GOTO(err_layout, rc);
+
 	rc = ptlrpc_hr_init();
 	if (rc)
-		RETURN(rc);
+		GOTO(err_tgt, rc);
 
-	cleanup_phase = 1;
 	rc = ptlrpc_request_cache_init();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_hr, rc);
 
-	cleanup_phase = 2;
 	rc = ptlrpc_init_portals();
 	if (rc)
-		GOTO(cleanup, rc);
-
-	cleanup_phase = 3;
+		GOTO(err_cache, rc);
 
 	rc = ptlrpc_connection_init();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_portals, rc);
 
-	cleanup_phase = 4;
 	ptlrpc_put_connection_superhack = ptlrpc_connection_put;
 
 	rc = ptlrpc_start_pinger();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_conn, rc);
 
-	cleanup_phase = 5;
 	rc = ldlm_init();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_pinger, rc);
 
-	cleanup_phase = 6;
 	rc = sptlrpc_init();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_ldlm, rc);
 
-	cleanup_phase = 7;
 	rc = ptlrpc_nrs_init();
 	if (rc)
-		GOTO(cleanup, rc);
+		GOTO(err_sptlrpc, rc);
 
-#ifdef __KERNEL__
-	cleanup_phase = 8;
-	rc = tgt_mod_init();
-	if (rc)
-		GOTO(cleanup, rc);
-#endif
-        RETURN(0);
-
-cleanup:
-        switch(cleanup_phase) {
-#ifdef __KERNEL__
-	case 8:
-		ptlrpc_nrs_fini();
-#endif
-	case 7:
-		sptlrpc_fini();
-	case 6:
-		ldlm_exit();
-	case 5:
-		ptlrpc_stop_pinger();
-	case 4:
-		ptlrpc_connection_fini();
-	case 3:
-		ptlrpc_exit_portals();
-	case 2:
-		ptlrpc_request_cache_fini();
-        case 1:
-                ptlrpc_hr_fini();
-                req_layout_fini();
-        default: ;
-        }
-
-        return rc;
+	RETURN(0);
+err_sptlrpc:
+	sptlrpc_fini();
+err_ldlm:
+	ldlm_exit();
+err_pinger:
+	ptlrpc_stop_pinger();
+err_conn:
+	ptlrpc_connection_fini();
+err_portals:
+	ptlrpc_exit_portals();
+err_cache:
+	ptlrpc_request_cache_fini();
+err_hr:
+	ptlrpc_hr_fini();
+err_tgt:
+	tgt_mod_exit();
+err_layout:
+	req_layout_fini();
+	return rc;
 }
 
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
-	tgt_mod_exit();
 	ptlrpc_nrs_fini();
-        sptlrpc_fini();
-        ldlm_exit();
-        ptlrpc_stop_pinger();
-        ptlrpc_exit_portals();
+	sptlrpc_fini();
+	ldlm_exit();
+	ptlrpc_stop_pinger();
+	ptlrpc_exit_portals();
 	ptlrpc_request_cache_fini();
-        ptlrpc_hr_fini();
-        ptlrpc_connection_fini();
+	ptlrpc_hr_fini();
+	ptlrpc_connection_fini();
+	tgt_mod_exit();
+	req_layout_fini();
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

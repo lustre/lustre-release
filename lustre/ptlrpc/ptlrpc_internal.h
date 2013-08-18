@@ -289,7 +289,7 @@ static inline int ll_rpc_recoverable_error(int rc)
         return (rc == -ENOTCONN || rc == -ENODEV);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
 int tgt_mod_init(void);
 void tgt_mod_exit(void);
 #else

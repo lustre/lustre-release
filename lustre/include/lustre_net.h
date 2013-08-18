@@ -2033,7 +2033,6 @@ struct ptlrpc_request {
         struct ptlrpc_request_pool *rq_pool;
 
         struct lu_context           rq_session;
-        struct lu_context           rq_recov_session;
 
         /** request format description */
         struct req_capsule          rq_pill;

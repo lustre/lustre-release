@@ -1899,34 +1899,26 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                                struct ptlrpc_request *req,
                                svc_handler_t handler)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        /**
-         * export can be evicted during recovery, no need to handle replays for
-         * it after that, discard such request silently
-         */
-        if (req->rq_export->exp_disconnected)
-                GOTO(reqcopy_put, rc = 0);
+	ENTRY;
 
-        rc = lu_context_init(&req->rq_recov_session, LCT_SERVER_SESSION);
-        if (rc) {
-                CERROR("Failure to initialize session: %d\n", rc);
-                GOTO(reqcopy_put, rc);
-        }
+	/**
+	 * export can be evicted during recovery, no need to handle replays for
+	 * it after that, discard such request silently
+	 */
+	if (req->rq_export->exp_disconnected)
+		GOTO(reqcopy_put, rc = 0);
 
-        req->rq_recov_session.lc_thread = thread;
-        lu_context_enter(&req->rq_recov_session);
-        req->rq_svc_thread = thread;
-        req->rq_svc_thread->t_env->le_ses = &req->rq_recov_session;
+	req->rq_session.lc_thread = thread;
+	req->rq_svc_thread = thread;
+	req->rq_svc_thread->t_env->le_ses = &req->rq_session;
 
         /* thread context */
         lu_context_enter(&thread->t_env->le_ctx);
         (void)handler(req);
         lu_context_exit(&thread->t_env->le_ctx);
 
-        lu_context_exit(&req->rq_recov_session);
-        lu_context_fini(&req->rq_recov_session);
         /* don't reset timer for final stage */
         if (!exp_finished(req->rq_export)) {
                 int to = obd_timeout;
