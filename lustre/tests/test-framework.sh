@@ -1297,6 +1297,23 @@ lfs_df() {
 	$LFS df $* | sed -e 's/filesystem /filesystem_/'
 }
 
+# Get free inodes on the MDT specified by mdt index, free indoes on
+# the whole filesystem will be returned when index == -1.
+mdt_free_inodes() {
+	local index=$1
+	local free_inodes
+	local mdt_uuid
+
+	if [ $index -eq -1 ]; then
+		mdt_uuid="summary"
+	else
+		mdt_uuid=$(mdtuuid_from_index $index)
+	fi
+
+	free_inodes=$(lfs_df -i $MOUNT | grep $mdt_uuid | awk '{print $4}')
+	echo $free_inodes
+}
+
 setup_quota(){
 	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		setup_quota_old $1

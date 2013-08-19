@@ -488,7 +488,8 @@ test_2() {
 
 	[ "$SLOW" = "no" ] && LIMIT=1024 # 1k inodes
 
-	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $4}')
+	local FREE_INODES=$(mdt_free_inodes 0)
+	echo "$FREE_INODES free inodes on master MDT"
 	[ $FREE_INODES -lt $LIMIT ] &&
 		skip "not enough free inodes $FREE_INODES required $LIMIT" &&
 		return

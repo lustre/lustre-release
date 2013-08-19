@@ -37,7 +37,7 @@ adjust_inode() {
 
     require_inode=$((file_count * thrhi))
     # get available inode for mdt
-    avail_mdt_inode=$(lfs_df -i $MOUNT | grep "summary" | awk '{print $4}')
+    avail_mdt_inode=$(mdt_free_inodes 0)
     avail_mdt_inode=$((avail_mdt_inode * 9 / 10))
 
     # get available inode for ost

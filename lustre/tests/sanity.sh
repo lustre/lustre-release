@@ -990,7 +990,7 @@ max_pages_per_rpc() {
 
 test_24v() {
 	local NRFILES=100000
-	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $4}')
+	local FREE_INODES=$(mdt_free_inodes 0)
 	[ $FREE_INODES -lt $NRFILES ] && \
 		skip "not enough free inodes $FREE_INODES required $NRFILES" &&
 		return
