@@ -3663,7 +3663,13 @@ check_and_setup_lustre() {
     fi
 
 	if [ $(lower $OSD_TRACK_DECLARES_LBUG) == 'yes' ] ; then
-		local facets="$(get_facets OST),$(get_facets MDS),mgs"
+		local facets=""
+		[ "$(facet_fstype ost1)" = "ldiskfs" ] &&
+			facets="$(get_facets OST)"
+		[ "$(facet_fstype mds1)" = "ldiskfs" ] &&
+			facets="$facets,$(get_facets MDS)"
+		[ "$(facet_fstype mgs)" = "ldiskfs" ] &&
+			facets="$facets,mgs"
 		local nodes="$(facets_hosts ${facets})"
 		if [ -n "$nodes" ] ; then
 			do_nodes $nodes "$LCTL set_param \
