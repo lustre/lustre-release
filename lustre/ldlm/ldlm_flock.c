@@ -203,6 +203,9 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 		cfs_hash_put(bl_exp->exp_flock_hash, &lock->l_exp_flock_hash);
                 bl_exp = bl_exp_new;
 
+		if (bl_exp->exp_failed)
+			break;
+
                 if (bl_owner == req_owner && bl_exp == req_exp) {
                         class_export_put(bl_exp);
                         return 1;
