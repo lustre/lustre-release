@@ -1531,16 +1531,16 @@ out:
 
 static struct kuc_hdr *changelog_kuc_hdr(char *buf, int len, int flags)
 {
-        struct kuc_hdr *lh = (struct kuc_hdr *)buf;
+	struct kuc_hdr *lh = (struct kuc_hdr *)buf;
 
-        LASSERT(len <= CR_MAXSIZE);
+	LASSERT(len <= KUC_CHANGELOG_MSG_MAXSIZE);
 
-        lh->kuc_magic = KUC_MAGIC;
-        lh->kuc_transport = KUC_TRANSPORT_CHANGELOG;
-        lh->kuc_flags = flags;
-        lh->kuc_msgtype = CL_RECORD;
-        lh->kuc_msglen = len;
-        return lh;
+	lh->kuc_magic = KUC_MAGIC;
+	lh->kuc_transport = KUC_TRANSPORT_CHANGELOG;
+	lh->kuc_flags = flags;
+	lh->kuc_msgtype = CL_RECORD;
+	lh->kuc_msglen = len;
+	return lh;
 }
 
 #define D_CHANGELOG 0
@@ -1598,18 +1598,18 @@ static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
 
 static int mdc_changelog_send_thread(void *csdata)
 {
-        struct changelog_show *cs = csdata;
-        struct llog_ctxt *ctxt = NULL;
-        struct llog_handle *llh = NULL;
-        struct kuc_hdr *kuch;
-        int rc;
+	struct changelog_show *cs = csdata;
+	struct llog_ctxt *ctxt = NULL;
+	struct llog_handle *llh = NULL;
+	struct kuc_hdr *kuch;
+	int rc;
 
-        CDEBUG(D_CHANGELOG, "changelog to fp=%p start "LPU64"\n",
-               cs->cs_fp, cs->cs_startrec);
+	CDEBUG(D_CHANGELOG, "changelog to fp=%p start "LPU64"\n",
+	       cs->cs_fp, cs->cs_startrec);
 
-        OBD_ALLOC(cs->cs_buf, CR_MAXSIZE);
-        if (cs->cs_buf == NULL)
-                GOTO(out, rc = -ENOMEM);
+	OBD_ALLOC(cs->cs_buf, KUC_CHANGELOG_MSG_MAXSIZE);
+	if (cs->cs_buf == NULL)
+		GOTO(out, rc = -ENOMEM);
 
         /* Set up the remote catalog handle */
         ctxt = llog_get_context(cs->cs_obd, LLOG_CHANGELOG_REPL_CTXT);
@@ -1644,7 +1644,7 @@ out:
         if (ctxt)
                 llog_ctxt_put(ctxt);
 	if (cs->cs_buf)
-		OBD_FREE(cs->cs_buf, CR_MAXSIZE);
+		OBD_FREE(cs->cs_buf, KUC_CHANGELOG_MSG_MAXSIZE);
 	OBD_FREE_PTR(cs);
 	return rc;
 }

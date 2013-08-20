@@ -3945,24 +3945,24 @@ static inline int changelog_extend_rec(struct changelog_ext_rec *ext)
  */
 int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech)
 {
-        struct changelog_private *cp = (struct changelog_private *)priv;
-        struct kuc_hdr *kuch;
-        int rc = 0;
+	struct changelog_private *cp = (struct changelog_private *)priv;
+	struct kuc_hdr *kuch;
+	int rc = 0;
 
-        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
-                return -EINVAL;
-        if (rech == NULL)
-                return -EINVAL;
-        kuch = malloc(CR_MAXSIZE + sizeof(*kuch));
-        if (kuch == NULL)
-                return -ENOMEM;
+	if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
+		return -EINVAL;
+	if (rech == NULL)
+		return -EINVAL;
+	kuch = malloc(KUC_CHANGELOG_MSG_MAXSIZE);
+	if (kuch == NULL)
+		return -ENOMEM;
 
 repeat:
-        rc = libcfs_ukuc_msg_get(&cp->kuc, (char *)kuch,
-                                 CR_MAXSIZE + sizeof(*kuch),
-                                 KUC_TRANSPORT_CHANGELOG);
-        if (rc < 0)
-                goto out_free;
+	rc = libcfs_ukuc_msg_get(&cp->kuc, (char *)kuch,
+				 KUC_CHANGELOG_MSG_MAXSIZE,
+				 KUC_TRANSPORT_CHANGELOG);
+	if (rc < 0)
+		goto out_free;
 
         if ((kuch->kuc_transport != KUC_TRANSPORT_CHANGELOG) ||
             ((kuch->kuc_msgtype != CL_RECORD) &&
