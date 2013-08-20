@@ -157,14 +157,20 @@ static int lfsck_bookmark_init(const struct lu_env *env,
 int lfsck_bookmark_setup(const struct lu_env *env,
 			 struct lfsck_instance *lfsck)
 {
+	struct dt_object *root;
 	struct dt_object *obj;
 	int		  rc;
 	ENTRY;
 
-	obj = local_file_find_or_create(env, lfsck->li_los,
-					lfsck->li_local_root,
+	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
+	if (IS_ERR(root))
+		RETURN(PTR_ERR(root));
+
+	dt_try_as_dir(env, root);
+	obj = local_file_find_or_create(env, lfsck->li_los, root,
 					lfsck_bookmark_name,
 					S_IFREG | S_IRUGO | S_IWUSR);
+	lu_object_put(env, &root->do_lu);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 

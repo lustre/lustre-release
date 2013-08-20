@@ -206,11 +206,6 @@ static void lfsck_instance_cleanup(const struct lu_env *env,
 		lfsck->li_los = NULL;
 	}
 
-	if (lfsck->li_local_root != NULL) {
-		lu_object_put_nocache(env, &lfsck->li_local_root->do_lu);
-		lfsck->li_local_root = NULL;
-	}
-
 	OBD_FREE_PTR(lfsck);
 }
 
@@ -481,8 +476,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 		if (rc != 0)
 			return rc;
 
-		if (unlikely(lu_fid_eq(fid,
-				       lfsck_dto2fid(lfsck->li_local_root))))
+		if (unlikely(lu_fid_eq(fid, &lfsck->li_local_root_fid)))
 			return 0;
 
 		obj = lfsck_object_find(env, lfsck, fid);
@@ -1076,7 +1070,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 		   struct dt_device *next, bool master)
 {
 	struct lfsck_instance	*lfsck;
-	struct dt_object	*root;
+	struct dt_object	*root  = NULL;
 	struct dt_object	*obj;
 	struct lu_fid		*fid   = &lfsck_env_info(env)->lti_fid;
 	int			 rc;
@@ -1117,7 +1111,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	if (IS_ERR(root))
 		GOTO(out, rc = PTR_ERR(root));
 
-	lfsck->li_local_root = root;
+	lfsck->li_local_root_fid = *fid;
         dt_try_as_dir(env, root);
 	if (master) {
 		lfsck->li_master = 1;
@@ -1161,6 +1155,8 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 add:
 	rc = lfsck_instance_add(lfsck);
 out:
+	if (root != NULL && !IS_ERR(root))
+		lu_object_put(env, &root->do_lu);
 	if (rc != 0)
 		lfsck_instance_cleanup(env, lfsck);
 	return rc;

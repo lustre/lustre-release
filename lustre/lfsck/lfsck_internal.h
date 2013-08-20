@@ -293,7 +293,7 @@ struct lfsck_instance {
 	struct dt_device	 *li_bottom;
 	struct ldlm_namespace	 *li_namespace;
 	struct local_oid_storage *li_los;
-	struct dt_object	 *li_local_root; /* backend root "/" */
+	struct lu_fid		  li_local_root_fid;  /* backend root "/" */
 	struct lu_fid		  li_global_root_fid; /* /ROOT */
 	struct dt_object	 *li_bookmark_obj;
 	struct lfsck_bookmark	  li_bookmark_ram;

@@ -652,9 +652,16 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_namespace	*ns    =
 				(struct lfsck_namespace *)com->lc_file_ram;
+	struct dt_object	*root;
 	struct dt_object	*dto;
 	int			 rc;
 	ENTRY;
+
+	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
+	if (IS_ERR(root))
+		RETURN(PTR_ERR(root));
+
+	dt_try_as_dir(env, root);
 
 	down_write(&com->lc_sem);
 	if (init) {
@@ -670,14 +677,14 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
 
-	rc = local_object_unlink(env, lfsck->li_bottom, lfsck->li_local_root,
+	rc = local_object_unlink(env, lfsck->li_bottom, root,
 				 lfsck_namespace_name);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	lfsck_object_put(env, com->lc_obj);
 	com->lc_obj = NULL;
-	dto = local_index_find_or_create(env, lfsck->li_los, lfsck->li_local_root,
+	dto = local_index_find_or_create(env, lfsck->li_los, root,
 					 lfsck_namespace_name,
 					 S_IFREG | S_IRUGO | S_IWUSR,
 					 &dt_lfsck_features);
@@ -695,6 +702,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 
 out:
 	up_write(&com->lc_sem);
+	lu_object_put(env, &root->do_lu);
 	return rc;
 }
 
@@ -1524,6 +1532,7 @@ int lfsck_namespace_setup(const struct lu_env *env,
 {
 	struct lfsck_component	*com;
 	struct lfsck_namespace	*ns;
+	struct dt_object	*root = NULL;
 	struct dt_object	*obj;
 	int			 rc;
 	ENTRY;
@@ -1550,8 +1559,12 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	if (com->lc_file_disk == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	obj = local_index_find_or_create(env, lfsck->li_los,
-					 lfsck->li_local_root,
+	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
+	if (IS_ERR(root))
+		GOTO(out, rc = PTR_ERR(root));
+
+	dt_try_as_dir(env, root);
+	obj = local_index_find_or_create(env, lfsck->li_los, root,
 					 lfsck_namespace_name,
 					 S_IFREG | S_IRUGO | S_IWUSR,
 					 &dt_lfsck_features);
@@ -1600,6 +1613,8 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	GOTO(out, rc = 0);
 
 out:
+	if (root != NULL && !IS_ERR(root))
+		lu_object_put(env, &root->do_lu);
 	if (rc != 0)
 		lfsck_component_cleanup(env, com);
 	return rc;
