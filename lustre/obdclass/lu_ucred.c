@@ -53,7 +53,7 @@
 LU_KEY_INIT_FINI(lu_ucred, struct lu_ucred);
 
 static struct lu_context_key lu_ucred_key = {
-	.lct_tags = LCT_SESSION,
+	.lct_tags = LCT_SERVER_SESSION,
 	.lct_init = lu_ucred_key_init,
 	.lct_fini = lu_ucred_key_fini
 };

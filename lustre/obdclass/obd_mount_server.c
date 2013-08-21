@@ -514,7 +514,7 @@ static int lustre_lwp_connect(struct obd_device *lwp)
 	if (rc != 0)
 		RETURN(rc);
 
-	lu_context_init(&session_ctx, LCT_SESSION);
+	lu_context_init(&session_ctx, LCT_SERVER_SESSION);
 	session_ctx.lc_thread = NULL;
 	lu_context_enter(&session_ctx);
 	env.le_ses = &session_ctx;
@@ -1290,7 +1290,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 		if (rc == 0) {
 			struct lu_context  session_ctx;
 
-			lu_context_init(&session_ctx, LCT_SESSION);
+			lu_context_init(&session_ctx, LCT_SERVER_SESSION);
 			session_ctx.lc_thread = NULL;
 			lu_context_enter(&session_ctx);
 			env.le_ses = &session_ctx;
