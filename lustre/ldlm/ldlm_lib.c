@@ -1916,7 +1916,7 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         if (req->rq_export->exp_disconnected)
                 GOTO(reqcopy_put, rc = 0);
 
-        rc = lu_context_init(&req->rq_recov_session, LCT_SESSION);
+        rc = lu_context_init(&req->rq_recov_session, LCT_SERVER_SESSION);
         if (rc) {
                 CERROR("Failure to initialize session: %d\n", rc);
                 GOTO(reqcopy_put, rc);

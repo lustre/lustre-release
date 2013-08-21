@@ -132,7 +132,7 @@ LU_KEY_INIT_FINI(tgt_ses, struct tgt_session_info);
 
 /* context key: tgt_session_key */
 struct lu_context_key tgt_session_key = {
-	.lct_tags = LCT_SESSION,
+	.lct_tags = LCT_SERVER_SESSION,
 	.lct_init = tgt_ses_key_init,
 	.lct_fini = tgt_ses_key_fini,
 };

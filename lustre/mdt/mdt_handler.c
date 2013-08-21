@@ -5615,7 +5615,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	rc = lu_context_init(&ses, LCT_SESSION);
+	rc = lu_context_init(&ses, LCT_SERVER_SESSION);
 	if (rc)
 		RETURN(rc);
 
@@ -6103,7 +6103,7 @@ static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
 	int rc;
 	ENTRY;
 
-	rc = lu_context_init(&ioctl_session, LCT_SESSION);
+        rc = lu_context_init(&ioctl_session, LCT_SERVER_SESSION);
 	if (rc)
 		RETURN(rc);
 	ioctl_session.lc_thread = (struct ptlrpc_thread *)current;

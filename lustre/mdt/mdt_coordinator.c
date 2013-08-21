@@ -879,7 +879,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 		RETURN(rc);
 
 	/* for mdt_ucred(), lu_ucred stored in lu_ucred_key */
-	rc = lu_context_init(&cdt->cdt_session, LCT_SESSION);
+	rc = lu_context_init(&cdt->cdt_session, LCT_SERVER_SESSION);
 	if (rc == 0) {
 		lu_context_enter(&cdt->cdt_session);
 		cdt->cdt_env.le_ses = &cdt->cdt_session;

@@ -2124,7 +2124,7 @@ static void echo_ucred_fini(struct lu_env *env)
 }
 
 #define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
-#define ECHO_MD_SES_TAG (LCT_REMEMBER | LCT_SESSION)
+#define ECHO_MD_SES_TAG (LCT_REMEMBER | LCT_SESSION | LCT_SERVER_SESSION)
 static int echo_md_handler(struct echo_device *ed, int command,
 			   char *path, int path_len, __u64 id, int count,
 			   struct obd_ioctl_data *data)

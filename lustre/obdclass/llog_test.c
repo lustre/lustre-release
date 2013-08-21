@@ -1017,7 +1017,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc)
 		RETURN(rc);
 
-	rc = lu_context_init(&test_session, LCT_SESSION);
+	rc = lu_context_init(&test_session, LCT_SERVER_SESSION);
 	if (rc)
 		GOTO(cleanup_env, rc);
 	test_session.lc_thread = (struct ptlrpc_thread *)current;
