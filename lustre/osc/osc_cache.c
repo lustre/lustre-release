@@ -1551,13 +1551,24 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 		/* l_wait_event is interrupted by signal, or timed out */
 		if (rc < 0) {
-			if (rc == -ETIMEDOUT) {
+			switch (rc) {
+			case -ETIMEDOUT:
 				OSC_DUMP_GRANT(D_ERROR, cli,
 						"try to reserve %d.\n", bytes);
 				osc_extent_tree_dump(D_ERROR, osc);
 				rc = -EDQUOT;
+				break;
+			case -EINTR:
+				/* Ensures restartability - LU-3581 */
+				rc = -ERESTARTSYS;
+				break;
+			default:
+				CDEBUG(D_CACHE, "%s: event for cache space @"
+				       " %p never arrived due to %d\n",
+				       cli->cl_import->imp_obd->obd_name,
+				       &ocw, rc);
+				break;
 			}
-
 			cfs_list_del_init(&ocw.ocw_entry);
 			GOTO(out, rc);
 		}
