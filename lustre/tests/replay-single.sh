@@ -1393,6 +1393,11 @@ test_57() {
 }
 run_test 57 "test recovery from llog for setattr op"
 
+cleanup_58() {
+    zconf_umount `hostname` $MOUNT2
+    trap - EXIT
+}
+
 #recovery many mds-ost setattr from llog
 test_58a() {
     mkdir -p $DIR/$tdir
@@ -1413,6 +1418,8 @@ test_58b() {
     local orig
     local new
 
+    trap cleanup_58 EXIT
+
     large_xattr_enabled &&
         orig="$(generate_string $(max_xattr_size))" || orig="bar"
 
@@ -1426,7 +1433,7 @@ test_58b() {
     [[ "$new" = "$orig" ]] || return 1
     rm -f $DIR/$tdir/$tfile
     rmdir $DIR/$tdir
-    zconf_umount `hostname` $MOUNT2
+    cleanup_58
 }
 run_test 58b "test replay of setxattr op"
 
@@ -1434,6 +1441,8 @@ test_58c() { # bug 16570
     local orig
     local orig1
     local new
+
+    trap cleanup_58 EXIT
 
     if large_xattr_enabled; then
         local xattr_size=$(max_xattr_size)
@@ -1457,7 +1466,7 @@ test_58c() { # bug 16570
     [[ "$new" = "$orig1" ]] || return 4
     rm -f $DIR/$tdir/$tfile
     rmdir $DIR/$tdir
-    zconf_umount $HOSTNAME $MOUNT2
+    cleanup_58
 }
 run_test 58c "resend/reconstruct setxattr op"
 
