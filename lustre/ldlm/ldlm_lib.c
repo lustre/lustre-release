@@ -794,7 +794,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 	if (!target) {
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_ERROR_MSG(0x137, "%s: not available for connect "
-				   "from %s (no target)\n", str,
+				   "from %s (no target). If you are running "
+				   "an HA pair check that the target is "
+				   "mounted on the other server.\n", str,
 				   libcfs_nid2str(req->rq_peer.nid));
 		GOTO(out, rc = -ENODEV);
 	}
