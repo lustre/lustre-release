@@ -9479,15 +9479,19 @@ run_test 161b "link ea sanity under remote directory"
 
 test_161c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.1.5) ]] &&
+		skip "Need MDS version at least 2.1.5" && return
 
 	# define CLF_RENAME_LAST 0x0001
 	# rename overwrite a target having nlink = 1 (changelog flag 0x1)
 	local USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
 		changelog_register -n)
+	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/foo_161c
 	touch $DIR/$tdir/bar_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/bar_161c
+	$LFS changelog $MDT0 | grep RENME
 	local flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | \
 		cut -f5 -d' ')
 	$LFS changelog_clear $MDT0 $USER 0
@@ -9504,6 +9508,7 @@ test_161c() {
 	touch $DIR/$tdir/bar_161c
 	ln $DIR/$tdir/bar_161c $DIR/$tdir/foobar_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/bar_161c
+	$LFS changelog $MDT0 | grep RENME
 	flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | cut -f5 -d' ')
 	$LFS changelog_clear $MDT0 $USER 0
 	if [ x$flags != "x0x0" ]; then
@@ -9517,6 +9522,7 @@ test_161c() {
 	# rename doesn't overwrite a target (changelog flag 0x0)
 	touch $DIR/$tdir/foo_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/foo2_161c
+	$LFS changelog $MDT0 | grep RENME
 	flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | cut -f5 -d' ')
 	$LFS changelog_clear $MDT0 $USER 0
 	if [ x$flags != "x0x0" ]; then
@@ -9530,6 +9536,7 @@ test_161c() {
 	# define CLF_UNLINK_LAST 0x0001
 	# unlink a file having nlink = 1 (changelog flag 0x1)
 	rm -f $DIR/$tdir/foo2_161c
+	$LFS changelog $MDT0 | grep UNLNK
 	flags=$($LFS changelog $MDT0 | grep UNLNK | tail -1 | cut -f5 -d' ')
 	$LFS changelog_clear $MDT0 $USER 0
 	if [ x$flags != "x0x1" ]; then
@@ -9543,6 +9550,7 @@ test_161c() {
 	# unlink a file having nlink > 1 (changelog flag 0x0)
 	ln -f $DIR/$tdir/bar_161c $DIR/$tdir/foobar_161c
 	rm -f $DIR/$tdir/foobar_161c
+	$LFS changelog $MDT0 | grep UNLNK
 	flags=$($LFS changelog $MDT0 | grep UNLNK | tail -1 | cut -f5 -d' ')
 	$LFS changelog_clear $MDT0 $USER 0
 	if [ x$flags != "x0x0" ]; then
