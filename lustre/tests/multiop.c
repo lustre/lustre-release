@@ -150,6 +150,9 @@ struct flag_mapping {
 #ifdef O_DIRECT
 	{"O_DIRECT", O_DIRECT},
 #endif
+#ifdef O_NOATIME
+	{"O_NOATIME", O_NOATIME},
+#endif
 	{"O_LARGEFILE", O_LARGEFILE},
 	{"O_DIRECTORY", O_DIRECTORY},
 	{"O_NOFOLLOW", O_NOFOLLOW},

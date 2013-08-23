@@ -3093,6 +3093,37 @@ test_39m() {
 }
 run_test 39m "test atime and mtime before 1970"
 
+test_39n() { # LU-3832
+	local atime_diff=$(do_facet $SINGLEMDS \
+		lctl get_param -n mdd.*MDT0000*.atime_diff)
+	local atime0
+	local atime1
+	local atime2
+
+	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=1
+
+	rm -rf $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 status=noxfer
+	atime0=$(stat -c %X $DIR/$tfile)
+
+	sleep 5
+	$MULTIOP $DIR/$tfile oO_RDONLY:O_NOATIME:r4096c
+	atime1=$(stat -c %X $DIR/$tfile)
+
+	sleep 5
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	$MULTIOP $DIR/$tfile oO_RDONLY:O_NOATIME:r4096c
+	atime2=$(stat -c %X $DIR/$tfile)
+
+	do_facet $SINGLEMDS \
+		lctl set_param -n mdd.*MDT0000*.atime_diff=$atime_diff
+
+	[ "$atime0" -eq "$atime1" ] || error "atime0 $atime0 != atime1 $atime1"
+	[ "$atime1" -eq "$atime2" ] || error "atime0 $atime0 != atime1 $atime1"
+}
+run_test 39n "check that O_NOATIME is honored"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/$tfile &&
