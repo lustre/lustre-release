@@ -407,6 +407,14 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
 		RETURN(-ENOENT);
 
+	/* For the object is created as locking anchor, or for the object to
+	 * be created on disk. No need to osd_oi_lookup() at here because FID
+	 * shouldn't never be re-used, if it's really a duplicate FID from
+	 * unexpected reason, we should be able to detect it later by calling
+	 * do_create->osd_oi_insert(). */
+	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+		GOTO(out, result = 0);
+
 	/* Search order: 1. per-thread cache. */
 	if (lu_fid_eq(fid, &oic->oic_fid) &&
 	    likely(oic->oic_dev == dev)) {
@@ -421,16 +429,6 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		if (result == 0)
 			goto iget;
 	}
-
-	/*
-	 * Objects are created as locking anchors or place holders for objects
-	 * yet to be created. No need to osd_oi_lookup() at here because FID
-	 * shouldn't never be re-used, if it's really a duplicate FID from
-	 * unexpected reason, we should be able to detect it later by calling
-	 * do_create->osd_oi_insert()
-	 */
-	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
-		GOTO(out, result = 0);
 
 	/* Search order: 3. OI files. */
 	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
@@ -456,7 +454,7 @@ iget:
 		if (result == -ENOENT || result == -ESTALE) {
 			if (!in_oi) {
 				fid_zero(&oic->oic_fid);
-				GOTO(out, result = 0);
+				GOTO(out, result = -ENOENT);
 			}
 
 			/* XXX: There are three possible cases:
@@ -474,10 +472,6 @@ iget:
 			if (result == 0)
 				/* It is the case 1 or 2. */
 				goto trigger;
-
-			if (result == -ENOENT)
-				/* It is the case 3. */
-				result = 0;
 		} else if (result == -EREMCHG) {
 
 trigger:

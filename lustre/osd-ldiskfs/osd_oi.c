@@ -368,6 +368,20 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd)
 	/* if previous failed then try found single OI from old filesystem */
 	rc = osd_oi_open(info, osd, OSD_OI_NAME_BASE, &oi[0], false);
 	if (rc == 0) { /* found single OI from old filesystem */
+		if (sf->sf_success_count == 0)
+			/* XXX: There is one corner case that if the OI_scrub
+			 *	file crashed or lost and we regard it upgrade,
+			 *	then we allow IGIF lookup to bypass OI files.
+			 *
+			 *	The risk is that osd_fid_lookup() may found
+			 *	a wrong inode with the given IGIF especially
+			 *	when the MDT has performed file-level backup
+			 *	and restored after former upgrading from 1.8
+			 *	to 2.x. Fortunately, the osd_fid_lookup()can
+			 *	verify the inode to decrease the risk. */
+			osd_scrub_file_reset(scrub,
+					LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
+					SF_UPGRADE);
 		GOTO(out, rc = 1);
 	} else if (rc != -ENOENT) {
 		CERROR("%.16s: can't open %s: rc = %d\n",
@@ -408,7 +422,16 @@ out:
 		LASSERT((rc & (rc - 1)) == 0);
 		osd->od_oi_table = oi;
 		osd->od_oi_count = rc;
-		rc = 0;
+		if (sf->sf_oi_count != rc) {
+			sf->sf_oi_count = rc;
+			rc = osd_scrub_file_store(scrub);
+			if (rc < 0) {
+				osd_oi_table_put(info, oi, sf->sf_oi_count);
+				OBD_FREE(oi, sizeof(*oi) * OSD_OI_FID_NR_MAX);
+			}
+		} else {
+			rc = 0;
+		}
 	}
 
 	mutex_unlock(&oi_init_lock);
