@@ -91,13 +91,17 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 				     struct osd_device *dev,
 				     const struct lu_fid *fid,
 				     const struct osd_inode_id *id,
-				     int ops, enum oi_check_flags flags)
+				     int ops, bool force,
+				     enum oi_check_flags flags)
 {
 	const struct lu_env *env = info->oti_env;
 	struct thandle	    *th;
 	struct osd_thandle  *oh;
 	int		     rc;
 	ENTRY;
+
+	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN && !force)
+		RETURN(0);
 
 	th = dt_trans_create(env, &dev->od_dt_dev);
 	if (IS_ERR(th))
@@ -279,7 +283,6 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 	memcpy(sf->sf_uuid, uuid, 16);
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
-	sf->sf_param = 0;
 	sf->sf_run_time = 0;
 	sf->sf_time_latest_start = 0;
 	sf->sf_time_last_checkpoint = 0;
@@ -362,65 +365,6 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 	return rc;
 }
 
-/* OI scrub APIs */
-
-static int osd_scrub_prep(struct osd_device *dev)
-{
-	struct osd_scrub     *scrub  = &dev->od_scrub;
-	struct ptlrpc_thread *thread = &scrub->os_thread;
-	struct scrub_file    *sf     = &scrub->os_file;
-	__u32		      flags  = scrub->os_start_flags;
-	int		      rc;
-	ENTRY;
-
-	down_write(&scrub->os_rwsem);
-	if (flags & SS_SET_FAILOUT)
-		sf->sf_param |= SP_FAILOUT;
-
-	if (flags & SS_CLEAR_FAILOUT)
-		sf->sf_param &= ~SP_FAILOUT;
-
-	if (flags & SS_RESET)
-		osd_scrub_file_reset(scrub,
-			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
-
-	if (flags & SS_AUTO) {
-		scrub->os_full_speed = 1;
-		sf->sf_flags |= SF_AUTO;
-	} else {
-		scrub->os_full_speed = 0;
-	}
-
-	if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
-		scrub->os_full_speed = 1;
-
-	scrub->os_in_prior = 0;
-	spin_lock(&scrub->os_lock);
-	scrub->os_waiting = 0;
-	scrub->os_paused = 0;
-	spin_unlock(&scrub->os_lock);
-	scrub->os_new_checked = 0;
-	if (sf->sf_pos_last_checkpoint != 0)
-		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
-	else
-		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
-
-	scrub->os_pos_current = sf->sf_pos_latest_start;
-	sf->sf_status = SS_SCANNING;
-	sf->sf_time_latest_start = cfs_time_current_sec();
-	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
-	rc = osd_scrub_file_store(scrub);
-	if (rc == 0) {
-		spin_lock(&scrub->os_lock);
-		thread_set_flags(thread, SVC_RUNNING);
-		spin_unlock(&scrub->os_lock);
-		wake_up_all(&thread->t_ctl_waitq);
-	}
-	up_write(&scrub->os_rwsem);
-
-	RETURN(rc);
-}
-
 static int
 osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 		     struct inode *inode, const struct lu_fid *fid)
@@ -433,6 +377,9 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	bool			 removed = false;
 	bool			 reset   = true;
 	ENTRY;
+
+	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN)
+		RETURN(0);
 
 	/* We want the LMA to fit into the 256-byte OST inode, so operate
 	 * as following:
@@ -541,8 +488,6 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		sf->sf_internal_flags &= ~SIF_NO_HANDLE_OLD_FID;
 		dev->od_check_ff = 1;
 		rc = osd_scrub_convert_ff(info, dev, inode, fid);
-		rc = osd_ea_fid_set(info, inode, fid,
-				    LMAC_FID_ON_OST, 0);
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -581,9 +526,11 @@ iget:
 		switch (val) {
 		case SCRUB_NEXT_NOLMA:
 			sf->sf_flags |= SF_UPGRADE;
-			rc = osd_ea_fid_set(info, inode, fid, 0, 0);
-			if (rc != 0)
-				GOTO(out, rc);
+			if (!(sf->sf_param & SP_DRYRUN)) {
+				rc = osd_ea_fid_set(info, inode, fid, 0, 0);
+				if (rc != 0)
+					GOTO(out, rc);
+			}
 
 			if (!(sf->sf_flags & SF_INCONSISTENT))
 				dev->od_igif_inoi = 0;
@@ -622,7 +569,7 @@ iget:
 		dev->od_igif_inoi = 1;
 	}
 
-	rc = osd_scrub_refresh_mapping(info, dev, fid, lid, ops,
+	rc = osd_scrub_refresh_mapping(info, dev, fid, lid, ops, false,
 			(val == SCRUB_NEXT_OSTOBJ ||
 			 val == SCRUB_NEXT_OSTOBJ_OLD) ? OI_KNOWN_ON_OST : 0);
 	if (rc == 0) {
@@ -652,7 +599,7 @@ out:
 	if (ops == DTO_INDEX_INSERT && inode != NULL && !IS_ERR(inode) &&
 	    unlikely(inode->i_nlink == 0))
 		osd_scrub_refresh_mapping(info, dev, fid, lid,
-				DTO_INDEX_DELETE,
+				DTO_INDEX_DELETE, false,
 				(val == SCRUB_NEXT_OSTOBJ ||
 				 val == SCRUB_NEXT_OSTOBJ_OLD) ?
 				OI_KNOWN_ON_OST : 0);
@@ -670,6 +617,78 @@ out:
 		OBD_FREE_PTR(oii);
 	}
 	RETURN(sf->sf_param & SP_FAILOUT ? rc : 0);
+}
+
+/* OI scrub APIs */
+
+static int osd_scrub_prep(struct osd_device *dev)
+{
+	struct osd_scrub     *scrub  = &dev->od_scrub;
+	struct ptlrpc_thread *thread = &scrub->os_thread;
+	struct scrub_file    *sf     = &scrub->os_file;
+	__u32		      flags  = scrub->os_start_flags;
+	int		      rc;
+	bool		      drop_dryrun = false;
+	ENTRY;
+
+	down_write(&scrub->os_rwsem);
+	if (flags & SS_SET_FAILOUT)
+		sf->sf_param |= SP_FAILOUT;
+
+	if (flags & SS_CLEAR_FAILOUT)
+		sf->sf_param &= ~SP_FAILOUT;
+
+	if (flags & SS_SET_DRYRUN)
+		sf->sf_param |= SP_DRYRUN;
+
+	if (flags & SS_CLEAR_DRYRUN && sf->sf_param & SP_DRYRUN) {
+		sf->sf_param &= ~SP_DRYRUN;
+		drop_dryrun = true;
+	}
+
+	if (flags & SS_RESET)
+		osd_scrub_file_reset(scrub,
+			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
+
+	if (flags & SS_AUTO) {
+		scrub->os_full_speed = 1;
+		sf->sf_flags |= SF_AUTO;
+		/* For the case of OI scrub auto triggered, NOT dryrun. */
+		sf->sf_param &= ~SP_FAILOUT;
+	} else {
+		scrub->os_full_speed = 0;
+	}
+
+	if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
+		scrub->os_full_speed = 1;
+
+	scrub->os_in_prior = 0;
+	spin_lock(&scrub->os_lock);
+	scrub->os_waiting = 0;
+	scrub->os_paused = 0;
+	spin_unlock(&scrub->os_lock);
+	scrub->os_new_checked = 0;
+	if (drop_dryrun && sf->sf_pos_first_inconsistent != 0)
+		sf->sf_pos_latest_start = sf->sf_pos_first_inconsistent;
+	else if (sf->sf_pos_last_checkpoint != 0)
+		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
+	else
+		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
+
+	scrub->os_pos_current = sf->sf_pos_latest_start;
+	sf->sf_status = SS_SCANNING;
+	sf->sf_time_latest_start = cfs_time_current_sec();
+	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
+	rc = osd_scrub_file_store(scrub);
+	if (rc == 0) {
+		spin_lock(&scrub->os_lock);
+		thread_set_flags(thread, SVC_RUNNING);
+		spin_unlock(&scrub->os_lock);
+		wake_up_all(&thread->t_ctl_waitq);
+	}
+	up_write(&scrub->os_rwsem);
+
+	RETURN(rc);
 }
 
 static int osd_scrub_checkpoint(struct osd_scrub *scrub)
@@ -717,9 +736,11 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 		dev->od_igif_inoi = 1;
 		dev->od_check_ff = 0;
 		sf->sf_status = SS_COMPLETED;
-		memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
-		sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
-				  SF_UPGRADE | SF_AUTO);
+		if (!(sf->sf_param & SP_DRYRUN)) {
+			memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
+			sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
+					  SF_UPGRADE | SF_AUTO);
+		}
 		sf->sf_time_last_complete = sf->sf_time_last_checkpoint;
 		sf->sf_success_count++;
 	} else if (result == 0) {
@@ -789,7 +810,10 @@ static int osd_scrub_check_local_fldb(struct osd_thread_info *info,
 	 *	a small local FLDB according to the <seq>. If the given FID
 	 *	is in the local FLDB, then it is FID-on-OST; otherwise it's
 	 *	quite possible for FID-on-MDT. */
-	return 0;
+	if (dev->od_is_ost)
+		return SCRUB_NEXT_OSTOBJ_OLD;
+	else
+		return 0;
 }
 
 static int osd_scrub_get_fid(struct osd_thread_info *info,
@@ -1439,6 +1463,9 @@ osd_ios_lookup_one_len(const char *name, struct dentry *parent, int namelen)
 {
 	struct dentry *dentry;
 
+	CDEBUG(D_LFSCK, "init lookup one: parent = %.*s, name = %.*s\n",
+	       parent->d_name.len, parent->d_name.name, namelen, name);
+
 	dentry = ll_lookup_one_len(name, parent, namelen);
 	if (!IS_ERR(dentry) && dentry->d_inode == NULL) {
 		dput(dentry);
@@ -1453,17 +1480,19 @@ osd_ios_new_item(struct osd_device *dev, struct dentry *dentry,
 		 scandir_t scandir, filldir_t filldir)
 {
 	struct osd_ios_item *item;
+	ENTRY;
 
 	OBD_ALLOC_PTR(item);
 	if (item == NULL)
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 
 	CFS_INIT_LIST_HEAD(&item->oii_list);
 	item->oii_dentry = dget(dentry);
 	item->oii_scandir = scandir;
 	item->oii_filldir = filldir;
 	cfs_list_add_tail(&item->oii_list, &dev->od_ios_list);
-	return 0;
+
+	RETURN(0);
 }
 
 /**
@@ -1485,6 +1514,8 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	struct lu_fid		 tfid;
 	int			 rc;
 	ENTRY;
+
+	CDEBUG(D_LFSCK, "init scan one: ino = %ld\n", inode->i_ino);
 
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc != 0 && rc != -ENODATA)
@@ -1512,7 +1543,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 			RETURN(rc);
 
 		rc = osd_scrub_refresh_mapping(info, dev, &tfid, id,
-					       DTO_INDEX_INSERT, 0);
+					       DTO_INDEX_INSERT, true, 0);
 		if (rc > 0)
 			rc = 0;
 
@@ -1532,7 +1563,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	rc = osd_scrub_refresh_mapping(info, dev, &tfid, id,
-				       DTO_INDEX_UPDATE, 0);
+				       DTO_INDEX_UPDATE, true, 0);
 	if (rc > 0)
 		rc = 0;
 
@@ -1828,6 +1859,9 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 	int			 rc;
 	ENTRY;
 
+	/* Lookup IGIF in OI by force for initial OI scrub. */
+	dev->od_igif_inoi = 1;
+
 	while (1) {
 		rc = scandir(info, dev, dentry, filldir);
 		if (item != NULL) {
@@ -1880,7 +1914,8 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 			dput(child);
 		else if (PTR_ERR(child) == -ENOENT)
 			osd_scrub_refresh_mapping(info, dev, &map->olm_fid,
-						  NULL, DTO_INDEX_DELETE, 0);
+						  NULL, DTO_INDEX_DELETE,
+						  true, 0);
 		map++;
 	}
 
@@ -2099,7 +2134,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		    !(sf->sf_internal_flags & SIF_NO_HANDLE_OLD_FID ||
 		      sf->sf_success_count > 0)) {
 			dev->od_igif_inoi = 0;
-			dev->od_check_ff = 1;
+			dev->od_check_ff = dev->od_is_ost;
 		} else {
 			dev->od_igif_inoi = 1;
 			dev->od_check_ff = 0;
@@ -2190,6 +2225,13 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 			start |= SS_SET_FAILOUT;
 		else
 			start |= SS_CLEAR_FAILOUT;
+	}
+
+	if (valid & DOIV_DRYRUN) {
+		if (flags & DOIF_DRYRUN)
+			start |= SS_SET_DRYRUN;
+		else
+			start |= SS_CLEAR_DRYRUN;
 	}
 
 	rc = do_osd_scrub_start(dev, start);
@@ -2480,6 +2522,7 @@ static const char *scrub_flags_names[] = {
 
 static const char *scrub_param_names[] = {
 	"failout",
+	"dryrun",
 	NULL
 };
 

@@ -178,6 +178,46 @@ scrub_check_flags() {
 	done
 }
 
+scrub_check_params() {
+	local error_id=$1
+	local expected=$2
+	local actual
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		actual=$(do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			awk '/^param/ { print $2 }')
+		if [ "$actual" != "$expected" ]; then
+			error "($error_id) Expected '$expected' on mds$n, but" \
+			       "got '$actual'"
+		fi
+	done
+}
+
+scrub_check_repaired() {
+	local error_id=$1
+	local expected=$2
+	local actual
+	local n
+
+	for n in $(seq $MDSCOUNT); do
+		actual=$(do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			awk '/^updated/ { print $2 }')
+
+		if [ $expected -eq 0 -a $actual -ne 0 ]; then
+			error "($error_id) Expected no repaired on mds$n, but" \
+			       "got '$actual'"
+		fi
+
+		if [ $expected -ne 0 -a $actual -lt $expected ]; then
+			error "($error_id) Expected '$expected' on mds$n, but" \
+			       "got '$actual'"
+		fi
+	done
+}
+
 scrub_check_data() {
 	local error_id=$1
 	local n
@@ -957,6 +997,48 @@ test_14() {
 	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(5) ls should succeed"
 }
 run_test 14 "OI scrub can repair objects under lost+found"
+
+test_15() {
+	scrub_prep 20
+	scrub_backup_restore 1
+	echo "starting MDTs with OI scrub disabled"
+	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
+	scrub_check_status 3 init
+	scrub_check_flags 4 inconsistent
+
+	# run under dryrun mode
+	scrub_start 5 -n on
+	sleep 3
+	scrub_check_status 6 completed
+	scrub_check_flags 7 inconsistent
+	scrub_check_params 8 dryrun
+	scrub_check_repaired 9 20
+
+	# run under dryrun mode again
+	scrub_start 10 -n on
+	sleep 3
+	scrub_check_status 11 completed
+	scrub_check_flags 12 inconsistent
+	scrub_check_params 13 dryrun
+	scrub_check_repaired 14 20
+
+	# run under normal mode
+	scrub_start 15 -n off
+	sleep 3
+	scrub_check_status 16 completed
+	scrub_check_flags 17 ""
+	scrub_check_params 18 ""
+	scrub_check_repaired 19 20
+
+	# run under normal mode again
+	scrub_start 20 -n off
+	sleep 3
+	scrub_check_status 21 completed
+	scrub_check_flags 22 ""
+	scrub_check_params 23 ""
+	scrub_check_repaired 24 0
+}
+run_test 15 "Dryrun mode OI scrub"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}

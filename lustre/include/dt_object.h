@@ -622,6 +622,7 @@ struct dt_index_operations {
 
 enum dt_otable_it_valid {
 	DOIV_ERROR_HANDLE	= 0x0001,
+	DOIV_DRYRUN		= 0x0002,
 };
 
 enum dt_otable_it_flags {
@@ -633,6 +634,9 @@ enum dt_otable_it_flags {
 
 	/* There is up layer component uses the iteration. */
 	DOIF_OUTUSED	= 0x0004,
+
+	/* Check only without repairing. */
+	DOIF_DRYRUN	= 0x0008,
 };
 
 /* otable based iteration needs to use the common DT interation APIs.

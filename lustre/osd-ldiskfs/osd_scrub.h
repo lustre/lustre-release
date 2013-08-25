@@ -81,6 +81,9 @@ enum scrub_flags {
 enum scrub_param {
 	/* Exit when fail. */
 	SP_FAILOUT	= 0x0001,
+
+	/* Check only without repairing. */
+	SP_DRYRUN	= 0x0002,
 };
 
 enum scrub_start {
@@ -95,6 +98,12 @@ enum scrub_start {
 
 	/* Trigger scrub automatically. */
 	SS_AUTO			= 0x00000008,
+
+	/* Set dryrun flag. */
+	SS_SET_DRYRUN		= 0x00000010,
+
+	/* Clear dryrun flag. */
+	SS_CLEAR_DRYRUN 	= 0x00000020,
 };
 
 /* The flags here are only used inside OSD, NOT be visible by dump(). */

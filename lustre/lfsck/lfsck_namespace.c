@@ -1022,10 +1022,16 @@ out:
 		if (!(bk->lb_param & LPF_FAILOUT))
 			rc = 0;
 	} else {
-		if (repaired)
+		if (repaired) {
 			ns->ln_items_repaired++;
-		else
+			if (bk->lb_param & LPF_DRYRUN &&
+			    lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent))
+				lfsck_pos_fill(env, lfsck,
+					       &ns->ln_pos_first_inconsistent,
+					       false);
+		} else {
 			com->lc_journal = 0;
+		}
 		rc = 0;
 	}
 	up_write(&com->lc_sem);
