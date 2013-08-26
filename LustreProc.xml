@@ -1190,8 +1190,8 @@ write RPCs in flight: 0
         memory without the delay of network I/O.</para>
       <para condition="l22">In Lustre release 2.2.0, the directory statahead feature was improved to
         enhance directory traversal performance. The improvements primarily addressed two
-        issues:</para>
-      <orderedlist condition="l22">
+        issues:
+      <orderedlist>
         <listitem>
           <para>A race condition existed between the statahead thread and other VFS operations while
             processing asynchronous <literal>getattr</literal> RPC replies, causing duplicate
@@ -1204,6 +1204,7 @@ write RPCs in flight: 0
             OST(s).</para>
         </listitem>
       </orderedlist>
+		</para>
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail
