@@ -13,6 +13,7 @@ if [ !  -d $1 ]; then usage; fi
 NAME=$(basename "$0" .sh)
 ROOT_DIR="$1"
 FILELIST="$(dirname $ROOT_DIR)/$NAME.filelist"
+MIC_LIST="$(micctrl --status | grep "mic[0-9]*:" | sed -ne 's/\(mic[0-9]*\):.*$/\1/gp')"
 case "$2" in
 create)
 	EXCLUDE="\(share\|include\|src\)"
@@ -31,12 +32,11 @@ create)
 		#fi
 	done | sort -u > $FILELIST
 
-	mkdir -p /etc/sysconfig/mic/conf.d
-	echo "Overlay $(dirname $ROOT_DIR) $FILELIST" > /etc/sysconfig/mic/conf.d/$NAME.conf
+	micctrl --overlay=filelist --source=$(dirname $ROOT_DIR) --target=$FILELIST --state=on $MIC_LIST
 	;;
 remove)
+	micctrl --overlay=filelist --source=$(dirname $ROOT_DIR) --target=$FILELIST --state=delete $MIC_LIST
 	rm -f $FILELIST
-	rm -f /etc/sysconfig/mic/conf.d/$NAME.conf
 	;;
 *)
 	usage

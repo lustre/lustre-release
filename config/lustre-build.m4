@@ -539,10 +539,7 @@ AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
-AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
-AM_CONDITIONAL(ARCH_MIC, test x$target_cpu = "xx86_64" -a x$target_vendor = "xk1om")
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
-
 
 # Sanity check for PCLMULQDQ instruction availability
 # PCLMULQDQ instruction is a new instruction available beginning with

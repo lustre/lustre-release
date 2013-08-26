@@ -88,13 +88,10 @@ dist-hook:
 	  top_distdir="$(top_distdir)" distdir="$(distdir)" \
 	  module-dist-hook
 
-EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
-	build/Makefile 							\
-	build/Rules.in
-
-if ARCH_MIC
-EXTRA_DIST += build/gen_filelist.sh
-endif
+EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
+	build/Makefile 			\
+	build/Rules.in			\
+	build/gen_filelist.sh
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	@CONFIGURE_ARGS=""; \
@@ -127,11 +124,10 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 		RPMARGS="$$RPMARGS --define \"_mandir %{_prefix}/share/man\""; \
 		RPMARGS="$$RPMARGS --define \"_sysconfdir %{cross_path}/etc\""; \
 		RPMARGS="$$RPMARGS --define \"make_args @CROSS_VARS@\""; \
-		if [ -s @LINUX@/../../.ver.build ]; then \
-			MPSS_VERSION=$$(sed -ne 's/DRIVERS_\(.*\)-.*/\1/p' @LINUX@/../../.ver.build); \
-			if [ -n "$$MPSS_VERSION" ]; then \
-				RPMARGS="$$RPMARGS --define \"cross_requires intel-mic-gpl = 2.1.$$MPSS_VERSION\""; \
-			fi; \
+		if [ "@CC_TARGET_ARCH@" = "k1om-mpss-linux" ]; then \
+			RPMARGS="$$RPMARGS --define \"cross_requires mpss-bootimage\""; \
+		else \
+			RPMARGS="$$RPMARGS --define \"cross_requires intel-mic-gpl\""; \
 		fi; \
 	fi; \
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \

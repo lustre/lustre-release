@@ -89,11 +89,16 @@ Requires: %{name}-modules = %{version}
 %if %{with servers}
 Requires: lustre-osd
 %endif
+%if %{defined cross_requires}
+Requires: %{cross_requires}
+AutoReqProv: no
+%else
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
 Requires: libselinux
+%endif
 %endif
 
 %description
@@ -103,6 +108,7 @@ Userspace tools and files for the Lustre file system.
 Summary: Kernel Lustre modules for Linux %{kversion}
 %if %{defined cross_requires}
 Requires: %{cross_requires}
+AutoReqProv: no
 %else
 # for SLES11, we need nothing here
 # for SLES10, we need (where %{flavor} is, i.e. smp):

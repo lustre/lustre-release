@@ -312,22 +312,26 @@ CROSS_VARS=
 CROSS_PATH=
 AS_IF([test "x$cross_compiling" = xno], [AC_MSG_RESULT([no])],
 	[case $host_vendor in
-		# The K1OM architecture is an extension of the x86 architecture.
-		# So, the $host_arch is x86_64.
-		k1om)
+		# The K1OM architecture is an extension of the x86 architecture
+		# and in MPSS 2.1 it's defined in $host_vendor. But in MPSS 3.x
+		# it's defined in $host_arch. So, try to support both case.
+		k1om | mpss)
 			AC_MSG_RESULT([Intel(R) Xeon Phi(TM)])
 			CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
-			if test $CC_TARGET_ARCH != x86_64-$host_vendor-linux ; then
+			AC_SUBST(CC_TARGET_ARCH)
+			if test \( $CC_TARGET_ARCH != x86_64-k1om-linux \
+				-a $CC_TARGET_ARCH != k1om-mpss-linux \)
+			then
 				AC_MSG_ERROR([Cross compiler not found in PATH.])
 			fi
-			CROSS_VARS="ARCH=$host_vendor CROSS_COMPILE=x86_64-$host_vendor-linux-"
-			CROSS_PATH=${CROSS_PATH:=/opt/intel/mic/lustre/device-k1om}
+			CROSS_VARS="ARCH=k1om CROSS_COMPILE=${CC_TARGET_ARCH}-"
+			CROSS_PATH="${CROSS_PATH:=/opt/lustre/${VERSION}/${CC_TARGET_ARCH}}"
 			CCAS=$CC
 			# need to produce special section for debuginfo extraction
 			LDFLAGS="${LDFLAGS} -Wl,--build-id"
 			EXTRA_KLDFLAGS="${EXTRA_KLDFLAGS} -Wl,--build-id"
 			if test x$enable_server != xno ; then
-				AC_MSG_WARN([Disabling server (not supported for x86_64-$host_vendor-linux).])
+				AC_MSG_WARN([Disabling server (not supported for k1om architecture).])
 				enable_server='no'
 			fi
 			;;
@@ -367,7 +371,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-SUBARCH=$(echo $target_cpu | sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/')
+SUBARCH=$(echo $target_cpu | sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/')
 AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/$SUBARCH/include -I$LINUX/arch/$SUBARCH/include/generated -Iinclude -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -I$LINUX/include/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $CROSS_VARS $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST

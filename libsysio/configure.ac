@@ -29,11 +29,15 @@ AC_HEADER_TIME
 
 AS_IF([test "x$cross_compiling" = xyes],
 	[case $host_vendor in
-		# The K1OM architecture is an extension of the x86 architecture.
-		# So, the $host_arch is x86_64.
-		k1om)
+		# The K1OM architecture is an extension of the x86 architecture
+		# and in MPSS 2.1 it's defined in $host_vendor. But in MPSS 3.x
+		# it's defined in $host_arch. So, try to support both case.
+		k1om | mpss)
+			AC_MSG_RESULT([Intel(R) Xeon Phi(TM)])
 			CC_TARGET_ARCH=`$CC -v 2>&1 | grep Target: | sed -e 's/Target: //'`
-			if test $CC_TARGET_ARCH != x86_64-$host_vendor-linux ; then
+			if test \( $CC_TARGET_ARCH != x86_64-k1om-linux \
+				-a $CC_TARGET_ARCH != k1om-mpss-linux \)
+			then
 				AC_MSG_ERROR([Cross compiler not found in PATH.])
 			fi
 			CCAS=$CC
