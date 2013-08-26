@@ -190,11 +190,18 @@ When -N specified, add '/', '@' or '=' for directories, symlinks and writeable f
 .br
 lctl "get_param -NF" is equivalent to "list_param -F".
 .TP
-.BI set_param " [-n] <parameter=value ...>"
+.BI set_param " [-n] [-P] [-d] <parameter=value ...>"
 Set the value of Lustre or LNET parameter.
 .br
 .B -n
 Disable printing of the key name when printing values.
+.br
+.B -P
+Set the parameter permanently, filesystem-wide.
+This parameters are only visible to 2.5.0 and later clients, older clients will not see these parameters.
+.br
+.B -d
+Remove the permanent setting (only with -P option)
 .br
 .B Examples:
 .br
@@ -211,6 +218,10 @@ Disable printing of the key name when printing values.
   0
 .br
   20
+.br
+.B
+# lctl set_param -P osc.*.max_dirty_mb=32
+.br
 .TP
 .BI conf_param " [-d] <device|fsname>.<parameter>=<value>"
 Set a permanent configuration parameter for any device via the MGS.  This
