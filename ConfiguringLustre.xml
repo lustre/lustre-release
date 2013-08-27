@@ -43,11 +43,16 @@
     <para>For information about configuring LNET, see <xref linkend="configuringlnet"/>. For information about testing LNET, see <xref linkend="lnetselftest"/>.</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Run the benchmark script <literal>sgpdd_survey</literal> to determine baseline performance of your hardware.</emphasis>  Benchmarking your hardware will simplify debugging performance issues that are unrelated to Lustre and ensure you are getting the best possible performance with your installation. For information about running sgpdd_survey, see <xref linkend="benchmarkingtests"/>.</para>
+        <para><emphasis>Run the benchmark script <literal>sgpdd-survey</literal> to determine
+            baseline performance of your hardware.</emphasis> Benchmarking your hardware will
+          simplify debugging performance issues that are unrelated to Lustre and ensure you are
+          getting the best possible performance with your installation. For information about
+          running <literal>sgpdd-survey</literal>, see <xref linkend="benchmarkingtests"/>.</para>
       </listitem>
     </itemizedlist>
     <note>
-      <para>The <literal>sgpdd_survey</literal> script overwrites the device being tested so it must be run before the OSTs are configured.</para>
+      <para>The <literal>sgpdd-survey</literal> script overwrites the device being tested so it must
+        be run before the OSTs are configured.</para>
     </note>
     <para>To configure a simple Lustre file system, complete these steps:</para>
     <orderedlist>
@@ -111,10 +116,13 @@
         <para><emphasis>(Optional)</emphasis> Run benchmarking tools to validate the performance of hardware and software layers in the cluster. Available tools include:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>obdfilter_survey</literal>  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend="dbdoclet.50438212_26516"/>.</para>
+            <para><literal>obdfilter-survey</literal> - Characterizes the storage performance of a
+              Lustre file system. For details, see <xref linkend="dbdoclet.50438212_26516"/>.</para>
           </listitem>
           <listitem>
-            <para><literal>ost_survey</literal>  - Performs I/O against OSTs to detect anomalies between otherwise identical disk subsystems. For details, see <xref linkend="dbdoclet.50438212_85136"/>.</para>
+            <para><literal>ost-survey</literal> - Performs I/O against OSTs to detect anomalies
+              between otherwise identical disk subsystems. For details, see <xref
+                linkend="dbdoclet.50438212_85136"/>.</para>
           </listitem>
         </itemizedlist>
       </listitem>

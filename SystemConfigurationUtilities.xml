@@ -2618,24 +2618,33 @@ lr_reader</title>
         <para>The following utilities are part of the Lustre I/O kit. For more information, see <xref linkend="benchmarkingtests"/>.</para>
       </section>
       <section remap="h5">
-        <title><indexterm><primary>sgpdd_survey</primary></indexterm>
-sgpdd_survey</title>
-        <para>The sgpdd_survey utility tests &apos;bare metal&apos; performance, bypassing as much of the kernel as possible. The sgpdd_survey tool does not require Lustre, but it does require the sgp_dd package.</para>
+        <title><indexterm>
+            <primary>sgpdd-survey</primary>
+          </indexterm> sgpdd-survey</title>
+        <para>The <literal>sgpdd-survey</literal> utility tests &apos;bare metal&apos; performance,
+          bypassing as much of the kernel as possible. The <literal>sgpdd-survey</literal> tool does
+          not require Lustre, but it does require the sgp_dd package.</para>
         <caution>
-          <para>The sgpdd_survey utility erases all data on the device.</para>
+          <para>The <literal>sgpdd-survey</literal> utility erases all data on the device.</para>
         </caution>
       </section>
       <section remap="h5">
-        <title><indexterm><primary>obdfilter_survey</primary></indexterm>obdfilter_survey</title>
-        <para>The obdfilter_survey utility is a shell script that tests performance of isolated OSTS, the network via echo clients, and an end-to-end test.</para>
+        <title><indexterm>
+            <primary>obdfilter-survey</primary>
+          </indexterm>obdfilter-survey</title>
+        <para>The <literal>obdfilter-survey</literal> utility is a shell script that tests
+          performance of isolated OSTS, the network via echo clients, and an end-to-end test.</para>
       </section>
       <section remap="h5">
         <title><indexterm><primary>ior-survey</primary></indexterm>ior-survey</title>
         <para>The ior-survey utility is a script used to run the IOR benchmark. Lustre includes IOR version 2.8.6.</para>
       </section>
       <section remap="h5">
-        <title><indexterm><primary>ost_survey</primary></indexterm>ost_survey</title>
-        <para>The ost_survey utility is an OST performance survey that tests client-to-disk performance of the individual OSTs in a Lustre file system.</para>
+        <title><indexterm>
+            <primary>ost-survey</primary>
+          </indexterm>ost-survey</title>
+        <para>The <literal>ost-survey</literal> utility is an OST performance survey that tests
+          client-to-disk performance of the individual OSTs in a Lustre file system.</para>
       </section>
       <section remap="h5">
         <title><indexterm><primary>stats-collect</primary></indexterm>stats-collect</title>
