@@ -215,8 +215,8 @@ static int lcw_dispatch_main(void *data)
         while (1) {
                 int dumplog = 1;
 
-                cfs_wait_event_interruptible(lcw_event_waitq,
-                                             is_watchdog_fired(), rc);
+		rc = wait_event_interruptible(lcw_event_waitq,
+					      is_watchdog_fired());
                 CDEBUG(D_INFO, "Watchdog got woken up...\n");
 		if (test_bit(LCW_FLAG_STOP, &lcw_flags)) {
 			CDEBUG(D_INFO, "LCW_FLAG_STOP set, shutting down...\n");

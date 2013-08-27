@@ -187,7 +187,7 @@ union cfs_trace_data_union {
 };
 
 #define TCD_MAX_TYPES      8
-extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS];
+extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS];
 
 #define cfs_tcd_for_each(tcd, i, j)					  \
     for (i = 0; cfs_trace_data[i] != NULL; i++)				  \
@@ -276,7 +276,7 @@ extern void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
  * (see, for example, linux-tracefile.h).
  */
 
-extern char *cfs_trace_console_buffers[CFS_NR_CPUS][CFS_TCD_TYPE_MAX];
+extern char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 extern cfs_trace_buf_type_t cfs_trace_buf_idx_get(void);
 
 static inline char *cfs_trace_get_console_buffer(void)

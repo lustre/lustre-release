@@ -2119,7 +2119,7 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
 #endif
                 }
                 total += bd.bd_bucket->hsb_count;
-                dist[min(__cfs_fls(bd.bd_bucket->hsb_count/max(theta,1)),7)]++;
+                dist[min(fls(bd.bd_bucket->hsb_count/max(theta,1)),7)]++;
                 cfs_hash_bd_unlock(hs, &bd, 0);
         }
 

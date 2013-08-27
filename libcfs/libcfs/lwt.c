@@ -44,7 +44,7 @@
 
 #if !KLWT_SUPPORT
 int         lwt_enabled;
-lwt_cpu_t   lwt_cpus[CFS_NR_CPUS];
+lwt_cpu_t   lwt_cpus[NR_CPUS];
 #endif
 
 int         lwt_pages_per_cpu;

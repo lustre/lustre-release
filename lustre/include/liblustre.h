@@ -282,24 +282,23 @@ int cfs_curproc_is_in_groups(gid_t gid);
 
 #define cfs_set_current_state(foo) do { current->state = foo; } while (0)
 
-#define cfs_wait_event_interruptible(wq, condition, ret)                \
+#define wait_event_interruptible(wq, condition)                         \
 {                                                                       \
-        struct l_wait_info lwi;                                         \
-        int timeout = 100000000;/* for ever */                          \
-        int ret;                                                        \
-                                                                        \
-        lwi = LWI_TIMEOUT(timeout, NULL, NULL);                         \
-        ret = l_wait_event(NULL, condition, &lwi);                      \
-                                                                        \
-        ret;                                                            \
+	struct l_wait_info lwi;                                         \
+	int timeout = 100000000;/* forever */				\
+	int ret;                                                        \
+									\
+	lwi = LWI_TIMEOUT(timeout, NULL, NULL);                         \
+	ret = l_wait_event(NULL, condition, &lwi);                      \
+									\
+	ret;                                                            \
 }
 
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
 
-#define USERMODEHELPER(path, argv, envp) (0)
-#define SIGNAL_MASK_ASSERT()
+#define call_usermodehelper(path, argv, envp, wait) (0)
 #define CFS_KERN_INFO
 
 #if HZ != 1

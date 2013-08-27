@@ -772,14 +772,14 @@ do {                                                                           \
                                 ret = -EINTR;                                  \
                                 break;                                         \
                         }                                                      \
-                        /* We have to do this here because some signals */     \
-                        /* are not blockable - ie from strace(1).       */     \
-                        /* In these cases we want to schedule_timeout() */     \
-                        /* again, because we don't want that to return  */     \
-                        /* -EINTR when the RPC actually succeeded.      */     \
-                        /* the RECALC_SIGPENDING below will deliver the */     \
-                        /* signal properly.                             */     \
-                        cfs_clear_sigpending();                                \
+			/* We have to do this here because some signals */     \
+			/* are not blockable - ie from strace(1).       */     \
+			/* In these cases we want to schedule_timeout() */     \
+			/* again, because we don't want that to return  */     \
+			/* -EINTR when the RPC actually succeeded.      */     \
+			/* the recalc_sigpending() below will deliver the */   \
+			/* signal properly.                             */     \
+			cfs_clear_sigpending();                                \
                 }                                                              \
         }                                                                      \
                                                                                \

@@ -321,20 +321,19 @@ typedef struct kra_conn
 #define RANAL_CONN_CLOSING         1
 #define RANAL_CONN_CLOSED          2
 
-typedef struct kra_peer
-{
-        cfs_list_t          rap_list;         /* stash on global peer list */
-        cfs_list_t          rap_connd_list;   /* schedule on kra_connd_peers */
-        cfs_list_t          rap_conns;        /* all active connections */
-        cfs_list_t          rap_tx_queue;     /* msgs waiting for a conn */
-        lnet_nid_t          rap_nid;          /* who's on the other end(s) */
-        __u32               rap_ip;           /* IP address of peer */
-        int                 rap_port;         /* port on which peer listens */
-        cfs_atomic_t        rap_refcount;     /* # users */
-        int                 rap_persistence;  /* "known" peer refs */
-        int                 rap_connecting;   /* connection forming */
-        unsigned long       rap_reconnect_time; /* CURRENT_SECONDS when reconnect OK */
-        unsigned long       rap_reconnect_interval; /* exponential backoff */
+typedef struct kra_peer {
+	cfs_list_t          rap_list;         /* stash on global peer list */
+	cfs_list_t          rap_connd_list;   /* schedule on kra_connd_peers */
+	cfs_list_t          rap_conns;        /* all active connections */
+	cfs_list_t          rap_tx_queue;     /* msgs waiting for a conn */
+	lnet_nid_t          rap_nid;          /* who's on the other end(s) */
+	__u32               rap_ip;           /* IP address of peer */
+	int                 rap_port;         /* port on which peer listens */
+	cfs_atomic_t        rap_refcount;     /* # users */
+	int                 rap_persistence;  /* "known" peer refs */
+	int                 rap_connecting;   /* connection forming */
+	unsigned long       rap_reconnect_time; /* get_seconds() when reconnect OK */
+	unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
 
 extern kra_data_t      kranal_data;

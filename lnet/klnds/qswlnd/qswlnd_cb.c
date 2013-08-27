@@ -1755,15 +1755,15 @@ kqswnal_scheduler (void *arg)
                                          * when there's nothing left to do */
                                         break;
                                 }
-                                cfs_wait_event_interruptible_exclusive (
-                                        kqswnal_data.kqn_sched_waitq,
-                                        kqswnal_data.kqn_shuttingdown == 2 ||
-                                        !cfs_list_empty(&kqswnal_data. \
-                                                        kqn_readyrxds) ||
-                                        !cfs_list_empty(&kqswnal_data. \
-                                                        kqn_donetxds) ||
-                                        !cfs_list_empty(&kqswnal_data. \
-                                                        kqn_delayedtxds, rc));
+				rc = wait_event_interruptible_exclusive (
+					kqswnal_data.kqn_sched_waitq,
+					kqswnal_data.kqn_shuttingdown == 2 ||
+					!cfs_list_empty(&kqswnal_data. \
+							kqn_readyrxds) ||
+					!cfs_list_empty(&kqswnal_data. \
+							kqn_donetxds) ||
+					!cfs_list_empty(&kqswnal_data. \
+							kqn_delayedtxds));
                                 LASSERT (rc == 0);
                         } else if (need_resched())
                                 cfs_schedule ();

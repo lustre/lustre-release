@@ -1538,10 +1538,10 @@ int ksocknal_scheduler(void *arg)
                         nloops = 0;
 
                         if (!did_something) {   /* wait for something to do */
-                                cfs_wait_event_interruptible_exclusive(
-                                        sched->kss_waitq,
-                                        !ksocknal_sched_cansleep(sched), rc);
-                                LASSERT (rc == 0);
+				rc = wait_event_interruptible_exclusive(
+					sched->kss_waitq,
+					!ksocknal_sched_cansleep(sched));
+				LASSERT (rc == 0);
                         } else {
                                 cfs_cond_resched();
                         }

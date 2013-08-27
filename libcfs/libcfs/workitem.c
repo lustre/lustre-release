@@ -312,10 +312,10 @@ cfs_wi_scheduler (void *arg)
                         continue;
                 }
 
-                cfs_wi_sched_unlock(sched);
-                cfs_wait_event_interruptible_exclusive(sched->ws_waitq,
-                                !cfs_wi_sched_cansleep(sched), rc);
-                cfs_wi_sched_lock(sched);
+		cfs_wi_sched_unlock(sched);
+		rc = wait_event_interruptible_exclusive(sched->ws_waitq,
+				!cfs_wi_sched_cansleep(sched));
+		cfs_wi_sched_lock(sched);
         }
 
         cfs_wi_sched_unlock(sched);

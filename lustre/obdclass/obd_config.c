@@ -1071,7 +1071,7 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 	}
 
 	do_gettimeofday(&start);
-	rc = USERMODEHELPER(argv[0], argv, NULL);
+	rc = call_usermodehelper(argv[0], argv, NULL, 0);
 	do_gettimeofday(&end);
 
 	if (rc < 0) {

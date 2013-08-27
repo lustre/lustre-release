@@ -46,7 +46,7 @@ static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
         10   /* 10% pages for CFS_TCD_TYPE_DISPATCH */
 };
 
-char *cfs_trace_console_buffers[CFS_NR_CPUS][CFS_TCD_TYPE_MAX];
+char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 
 struct rw_semaphore cfs_tracefile_sem;
 
@@ -63,7 +63,7 @@ int cfs_tracefile_init_arch()
 	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
 		cfs_trace_data[i] =
 			kmalloc(sizeof(union cfs_trace_data_union) * \
-				  CFS_NR_CPUS, GFP_KERNEL);
+				  NR_CPUS, GFP_KERNEL);
 		if (cfs_trace_data[i] == NULL)
 			goto out;
 	}

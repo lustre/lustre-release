@@ -173,7 +173,6 @@ typedef struct uthread		cfs_task_t;
 #define CFS_PUSH_JOURNAL	do {;} while(0)
 #define CFS_POP_JOURNAL		do {;} while(0)
 
-#define THREAD_NAME(comm, fmt, a...)
 /*
  * Kernel thread:
  *
@@ -367,7 +366,6 @@ static inline void sleep_on(cfs_waitq_t *waitq)
  */
 typedef sigset_t	cfs_sigset_t;
 
-#define SIGNAL_MASK_ASSERT()
 /*
  * Timer
  */
@@ -418,7 +416,6 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 /* XXX smp_call_function is not supported in xnu */
 #define smp_call_function(f, a, n, w)		do {} while(0)
 int cfs_online_cpus(void);
-#define smp_num_cpus				cfs_online_cpus()
 
 /*
  * Misc
@@ -432,10 +429,10 @@ extern int is_suser(void);
 #define unlikely(exp) (exp)
 #endif
 
-#define lock_kernel()				do {} while(0)
-#define unlock_kernel()				do {} while(0)
+#define lock_kernel()					do {} while(0)
+#define unlock_kernel()					do {} while(0)
 
-#define USERMODEHELPER(path, argv, envp)	(0)
+#define call_usermodehelper(path, argv, envp, 1)	(0)
 
 #define cfs_module(name, version, init, fini)				\
 extern kern_return_t _start(kmod_info_t *ki, void *data);		\

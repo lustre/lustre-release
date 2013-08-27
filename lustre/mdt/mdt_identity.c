@@ -126,7 +126,7 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
         snprintf(keystr, sizeof(keystr), LPU64, entry->ue_key);
 
 	do_gettimeofday(&start);
-	rc = USERMODEHELPER(argv[0], argv, envp);
+	rc = call_usermodehelper(argv[0], argv, envp, 1);
 	do_gettimeofday(&end);
 	if (rc < 0) {
                 CERROR("%s: error invoking upcall %s %s %s: rc %d; "

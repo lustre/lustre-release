@@ -39,13 +39,11 @@
  * Signal
  */
 
-#define SIGNAL_MASK_ASSERT()                    do {} while(0)
 #define SIGNAL_MASK_LOCK(task, flags)           do {} while(0)
 #define SIGNAL_MASK_UNLOCK(task, flags)         do {} while(0)
-#define USERMODEHELPER(path, argv, envp)        do {} while(0)
-#define RECALC_SIGPENDING                       do {} while(0)
-#define CLEAR_SIGPENDING                        do {} while(0)
-#define CURRENT_SECONDS                         get_seconds()
+#define call_usermodehelper(path, argv, envp, 1)	do {} while(0)
+#define recalc_sigpending()				do {} while(0)
+#define clear_tsk_thread_flag(current, TIF_SIGPENDING)	do {} while(0)
 #endif
 
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \

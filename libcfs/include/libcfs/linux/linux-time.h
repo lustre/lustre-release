@@ -156,7 +156,7 @@ static inline cfs_time_t cfs_time_current(void)
 
 static inline time_t cfs_time_current_sec(void)
 {
-        return CURRENT_SECONDS;
+	return get_seconds();
 }
 
 static inline void cfs_fs_time_current(cfs_fs_time_t *t)

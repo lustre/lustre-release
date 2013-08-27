@@ -37,49 +37,8 @@
 #ifndef __LIBCFS_LINUX_PORTALS_COMPAT_H__
 #define __LIBCFS_LINUX_PORTALS_COMPAT_H__
 
-#include <net/sock.h>
-
-// XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
-#if defined(SPINLOCK_DEBUG) && SPINLOCK_DEBUG
-#  define SIGNAL_MASK_ASSERT() \
-   LASSERT(current->sighand->siglock.magic == SPINLOCK_MAGIC)
-#else
-# define SIGNAL_MASK_ASSERT()
-#endif
-// XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
-
-#define SIGNAL_MASK_LOCK(task, flags)                                  \
-	spin_lock_irqsave(&task->sighand->siglock, flags)
-#define SIGNAL_MASK_UNLOCK(task, flags)                                \
-	spin_unlock_irqrestore(&task->sighand->siglock, flags)
-#define USERMODEHELPER(path, argv, envp)                               \
-	call_usermodehelper(path, argv, envp, 1)
-#define RECALC_SIGPENDING         recalc_sigpending()
-#define CLEAR_SIGPENDING          clear_tsk_thread_flag(current,       \
-                                                        TIF_SIGPENDING)
-# define CURRENT_SECONDS           get_seconds()
-# define smp_num_cpus              num_online_cpus()
-
-#define cfs_wait_event_interruptible(wq, condition, ret)               \
-        ret = wait_event_interruptible(wq, condition)
-#define cfs_wait_event_interruptible_exclusive(wq, condition, ret)     \
-        ret = wait_event_interruptible_exclusive(wq, condition)
-
-#define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len, fmt, ## a)
-
-/* 2.6 alloc_page users can use page->lru */
-#define PAGE_LIST_ENTRY lru
-#define PAGE_LIST(page) ((page)->lru)
-
 #ifndef __user
 #define __user
-#endif
-
-#ifndef __fls
-#define __cfs_fls fls
-#else
-#define __cfs_fls __fls
 #endif
 
 #ifdef HAVE_5ARGS_SYSCTL_PROC_HANDLER

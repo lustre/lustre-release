@@ -47,7 +47,7 @@
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */
-union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS] __cacheline_aligned;
+union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
 
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;

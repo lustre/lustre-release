@@ -76,7 +76,7 @@ static inline int test_bit(int nr, const unsigned long *addr)
 }
 
 /* using binary seach */
-static __inline__ unsigned long __cfs_fls(long data)
+static __inline__ unsigned long fls(long data)
 {
 	int pos = 32;
 
@@ -147,8 +147,8 @@ static __inline__ unsigned long __cfs_ffs(long data)
         return pos;
 }
 
-#define __cfs_ffz(x)	__cfs_ffs(~(x))
-#define __cfs_flz(x)	__cfs_fls(~(x))
+#define ffz(x)		ffs(~(x))
+#define flz(x)		fls(~(x))
 
 unsigned long find_next_bit(unsigned long *addr,
 			    unsigned long size, unsigned long offset);

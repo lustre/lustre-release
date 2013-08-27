@@ -648,25 +648,26 @@ do {                                                            \
         cfs_waitq_del(&wq, &__wait);		                \
 } while(0)
 
-#define cfs_wait_event_interruptible(wq, condition, __ret)      \
-do {                                                            \
-        cfs_waitlink_t __wait;	                                \
-                                                                \
-        __ret = 0;                                              \
-        cfs_waitlink_init(&__wait);                             \
-        while (TRUE) {                                          \
-            cfs_waitq_add(&wq, &__wait);	                \
-            if (condition) {                                    \
-                break;                                          \
-            }                                                   \
-            cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);    \
-            cfs_waitq_del(&wq, &__wait);	                \
-        }                                                       \
-        cfs_waitq_del(&wq, &__wait);                            \
-} while(0)
+#define wait_event_interruptible(wq, condition)                 \
+{                                                               \
+	cfs_waitlink_t __wait;	                                \
+								\
+	__ret = 0;                                              \
+	cfs_waitlink_init(&__wait);                             \
+	while (TRUE) {                                          \
+		cfs_waitq_add(&wq, &__wait);	                \
+		if (condition) {                                \
+			break;                                  \
+		}                                               \
+		cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);\
+		cfs_waitq_del(&wq, &__wait);	                \
+	}                                                       \
+	cfs_waitq_del(&wq, &__wait);                            \
+	__ret;                                                  \
+}
 
-# define cfs_wait_event_interruptible_exclusive(wq, condition, rc)  \
-         cfs_wait_event_interruptible(wq, condition, rc)
+# define wait_event_interruptible_exclusive(wq, condition)  \
+	 wait_event_interruptible(wq, condition)
 
 /*
    retval == 0; condition met; we're good.
@@ -836,7 +837,7 @@ libcfs_arch_cleanup(void);
 
 
 #define SMP_CACHE_BYTES             128
-#define CFS_NR_CPUS                 (32)
+#define NR_CPUS                 (32)
 #define smp_num_cpus                ((CCHAR)KeNumberProcessors)
 #define num_possible_cpus()     smp_num_cpus
 #define num_online_cpus()       smp_num_cpus
@@ -880,8 +881,6 @@ libcfs_arch_cleanup(void);
 
 #define local_irq_save(x)
 #define local_irq_restore(x)
-
-#define THREAD_NAME
 
 #define va_copy(_d, _s)                 (_d = _s)
 

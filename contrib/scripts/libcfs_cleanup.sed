@@ -400,3 +400,14 @@ s/\bCFS_THREAD_SIZE\b/THREAD_SIZE/g
 /#[ \t]*define[ \t]*\bTHREAD_SIZE\b[ \t]*\bTHREAD_SIZE\b/d
 s/\bcfs_kernel_cap_t\b/kernel_cap_t/g
 /typedef[ \t]*\bkernel_cap_t\b[ \t]*\bkernel_cap_t\b/d
+
+################################################################################
+# macros in libcfs/include/libcfs/linux/portals_compat25.h
+s/\bRECALC_SIGPENDING\b/recalc_sigpending()/g
+/#[ \t]*define[ \t]*\brecalc_sigpending\b *( *)[ \t]*\brecalc_sigpending\b *( *)/d
+s/\bCLEAR_SIGPENDING\b/clear_tsk_thread_flag(current, TIF_SIGPENDING)/g
+/#[ \t]*define[ \t]*\bclear_tsk_thread_flag\b *( *\w* *, *\w* *)[ \t]*\bclear_tsk_thread_flag\b *( *\w* *, *\w* *)/d
+s/\bCURRENT_SECONDS\b/get_seconds()/g
+/#[ \t]*define[ \t]*\bget_seconds\b *( *)[ \t]*\bget_seconds\b *( *)/d
+s/\bCFS_NR_CPUS\b/NR_CPUS/g
+/#[ \t]*define[ \t]*\bNR_CPUS\b[ \t]*\bNR_CPUS\b/d
