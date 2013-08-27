@@ -199,27 +199,29 @@ Regenerating Lustre Configuration Logs</title>
     <section xml:id="dbdoclet.50438199_31353">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
 Changing a Server NID</title>
-      <para>If you need to change the NID on the MDT or an OST, run the <literal>writeconf</literal> command to erase Lustre configuration information (including server NIDs), and then re-generate the system configuration using updated server NIDs.</para>
+      <para>In Lustre 2.3 or earlier, the <literal>tunefs.lustre --writeconf</literal> command is used to rewrite all of the configuration files.</para>
+      <para condition="l24">If you need to change the NID on the MDT or OST, a new <literal>replace_nids</literal> command was added in Lustre 2.4 to simplify this process.
+      The <literal>replace_nids</literal> command differs from <literal>tunefs.lustre --writeconf</literal> in that it does not erase the entire configuration log, precluding the need the need to execute the <literal>writeconf</literal> command on all servers and re-specify all permanent parameter settings. However, the <literal>writeconf</literal> command can still be used if desired.</para>
       <para>Change a server NID in these situations:</para>
       <itemizedlist>
         <listitem>
-          <para>New server hardware is added to the file system, and the MDS or an OSS is being moved to the new machine</para>
+          <para>New server hardware is added to the file system, and the MDS or an OSS is being moved to the new machine.</para>
         </listitem>
         <listitem>
-          <para>New network card is installed in the server</para>
+          <para>New network card is installed in the server.</para>
         </listitem>
         <listitem>
-          <para>You want to reassign IP addresses</para>
+          <para>You want to reassign IP addresses.</para>
         </listitem>
       </itemizedlist>
       <para>To change a server NID:</para>
       <orderedlist>
         <listitem>
-          <para>Update the LNET configuration in the <literal>/etc/modprobe.d/lustre.conf</literal> file so the list of server NIDs (<literal>lctl list_nids</literal>) is correct.</para>
+		<para>Update the LNET configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs is correct. Use <literal>lctl list_nids</literal> to view the list of server NIDS.</para>
           <para>The <literal>lctl list_nids</literal> command indicates which network(s) are configured to work with Lustre.</para>
         </listitem>
         <listitem>
-          <para>Shut down the file system in this order.</para>
+          <para>Shut down the file system in this order:</para>
           <orderedlist>
             <listitem>
               <para>Unmount the clients.</para>
@@ -232,43 +234,22 @@ Changing a Server NID</title>
             </listitem>
           </orderedlist>
         </listitem>
+	<listitem>
+	  <para>If the MGS and MDS share a partition, start the MGS only:</para>
+          <screen>mount -t lustre <replaceable>MDT partition</replaceable> -o nosvc <replaceable>mount_point</replaceable></screen>
+	</listitem>
         <listitem>
-          <para>Run the writeconf command on all servers.</para>
-          <para>Run writeconf on the MDT first, and then the OSTs.</para>
-          <orderedlist>
-            <listitem>
-              <para>On the MDT, run:</para>
-              <screen>mdt# tunefs.lustre --writeconf <replaceable>/dev/mdt_device</replaceable>  </screen>
-            </listitem>
-            <listitem>
-              <para>On each OST, run:</para>
-              <screen>ost# tunefs.lustre --writeconf <replaceable>/dev/ost_device</replaceable></screen>
-            </listitem>
-            <listitem>
-              <para>If the NID on the MGS was changed, communicate the new MGS location to each server. Run:</para>
-              <screen>tunefs.lustre --erase-param --mgsnode=<replaceable>new_nid(s)</replaceable> --writeconf <replaceable>/dev/device</replaceable></screen>
-            </listitem>
-          </orderedlist>
+	  <para>Run the <literal>replace_nids</literal> command on the MGS:</para>
+	  <screen>lctl replace_nids <replaceable>devicename</replaceable> <replaceable>nid1</replaceable>[,nid2,nid3 ...]</screen>
+	  <para>where <replaceable>devicename</replaceable> is the Lustre target name, e.g. <literal>myfs-OST0013</literal></para>
         </listitem>
-        <listitem>
-          <para>Restart the file system in this order.</para>
-          <orderedlist>
-            <listitem>
-              <para>Mount the MGS (or the combined MGS/MDT).</para>
-            </listitem>
-            <listitem>
-              <para>Mount the MDT.</para>
-            </listitem>
-            <listitem>
-              <para>Mount the OSTs.</para>
-            </listitem>
-            <listitem>
-              <para>Mount the clients.</para>
-            </listitem>
-          </orderedlist>
-        </listitem>
+	<listitem>
+	  <para>If the MGS and MDS share a partition, stop the MGS:</para>
+	  <screen>umount <replaceable>mount_point</replaceable></screen>
+	</listitem>
       </orderedlist>
-      <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart, and server NIDs in the updated <literal>list_nids</literal> file are used.</para>
+      <note><para>The <literal>replace_nids</literal> command also cleans all old, invalidated records out of the configuration log, while preserving all other current settings.</para></note> 
+      <note><para>The previous configuration log is backed up on the MGS disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
     <section xml:id="dbdoclet.addingamdt" condition='l24'>
       <title><indexterm><primary>maintenance</primary><secondary>adding an MDT</secondary></indexterm>Adding a new MDT to a Lustre file system</title>
