@@ -1342,7 +1342,7 @@ ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 }
 
 static inline int
-ll_need_statahead(struct inode *dir, struct dentry *dentryp)
+d_need_statahead(struct inode *dir, struct dentry *dentryp)
 {
 	struct ll_inode_info  *lli;
 	struct ll_dentry_data *ldd;
@@ -1387,7 +1387,7 @@ ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
 {
 	int ret;
 
-	ret = ll_need_statahead(dir, *dentryp);
+	ret = d_need_statahead(dir, *dentryp);
 	if (ret <= 0)
 		return ret;
 
