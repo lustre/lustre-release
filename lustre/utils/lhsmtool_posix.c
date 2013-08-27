@@ -714,10 +714,12 @@ static int ct_copy_attr(const char *src, const char *dst, int src_fd,
 	times[1].tv_usec = 0;
 	if (fchmod(dst_fd, st.st_mode) < 0 ||
 	    fchown(dst_fd, st.st_uid, st.st_gid) < 0 ||
-	    futimes(dst_fd, times) < 0)
+	    futimes(dst_fd, times) < 0) {
 		CT_ERROR("'%s' fchmod fchown or futimes failed (%s)\n", src,
 			 strerror(errno));
 		return -errno;
+	}
+
 	return 0;
 }
 
