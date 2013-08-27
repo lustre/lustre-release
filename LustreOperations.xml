@@ -256,6 +256,22 @@ $ lctl conf_param testfs.sys.timeout=40 </screen>
           <para>Parameters specified with the <literal>lctl conf_param</literal> command are set permanently in the file system&apos;s configuration file on the MGS.</para>
         </caution>
       </section>
+      <section xml:id="dbdoclet.setparamp" condition='l25'>
+	<title>Setting Permanent Parameters with lctl set_param -P</title>
+	<para> Use the <literal>lctl set_param -P</literal> to set parameters permanently. This command must be issued on the MGS. The given parameter is set on every host using <literal>lctl</literal> upcall. Parameters map to items in <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The <literal>lctl set_param</literal> command uses this syntax:</para>
+	<screen>lctl set_param -P <replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable>=<replaceable>value</replaceable></screen>
+	<para>For example:</para>
+	<screen># lctl set_param -P osc.*.max_dirty_mb=1024
+osc.myth-OST0000-osc.max_dirty_mb=32
+osc.myth-OST0001-osc.max_dirty_mb=32
+osc.myth-OST0002-osc.max_dirty_mb=32
+osc.myth-OST0003-osc.max_dirty_mb=32
+osc.myth-OST0004-osc.max_dirty_mb=32 </screen>
+	<para>Use <literal>-d </literal>  (only with -P) option to delete permanent parameter. Syntax:</para>
+	<screen>lctl set_param -P -d<replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable></screen>
+	<para>For example:</para>
+	<screen># lctl set_param -P -d osc.*.max_dirty_mb </screen>
+      </section>
       <section xml:id="dbdoclet.50438194_88217">
         <title>Listing Parameters</title>
         <para>To list Lustre or LNET parameters that are available to set, use the <literal>lctl list_param</literal> command. For example:</para>

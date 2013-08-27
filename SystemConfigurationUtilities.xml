@@ -212,9 +212,12 @@ quit</screen>
       <title>Setting Parameters with lctl</title>
       <para>Lustre parameters are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set}_param .</para>
       <para>When the file system is running, use the <literal>lctl set_param</literal> command on the affected node(s) to <emphasis>temporarily</emphasis> set parameters (mapping to items in /proc/{fs,sys}/{lnet,lustre}). The <literal>lctl set_param</literal> command uses this syntax:</para>
-      <screen>lctl set_param [-n] <replaceable>obdtype.obdname.property</replaceable>=<replaceable>value</replaceable></screen>
+      <screen>lctl set_param [-n] [-P] [-d] <replaceable>obdtype.obdname.property</replaceable>=<replaceable>value</replaceable></screen>
       <para>For example:</para>
       <screen>mds# lctl set_param mdt.testfs-MDT0000.identity_upcall=NONE</screen>
+      <para condition='l25'>Use <literal>-P</literal> option to set parameters permanently. Option <literal>-d </literal>deletes permanent parameters. For example:
+	      <screen>mgs# lctl set_param -P mdt.testfs-MDT0000.identity_upcall=NONE
+mgs# lctl set_param -P -d mdt.testfs-MDT0000.identity_upcall</screen></para>
       <para>Many permanent parameters can be set with <literal>lctl conf_param</literal>. In general, <literal>lctl conf_param</literal> can be used to specify any OBD device parameter settable in a /proc/fs/lustre file. The <literal>lctl conf_param</literal> command must be run on the MGS node, and uses this syntax:</para>
       <screen><replaceable>obd|fsname</replaceable>.obdtype.property=<replaceable>value</replaceable>) </screen>
       <para>For example:</para>
