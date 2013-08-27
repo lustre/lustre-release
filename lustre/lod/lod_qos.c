@@ -1220,8 +1220,10 @@ static int lod_use_defined_striping(const struct lu_env *env,
 
 	magic = le32_to_cpu(v1->lmm_magic);
 	if (magic == LOV_MAGIC_V1_DEF) {
+		magic = LOV_MAGIC_V1;
 		objs = &v1->lmm_objects[0];
 	} else if (magic == LOV_MAGIC_V3_DEF) {
+		magic = LOV_MAGIC_V3;
 		objs = &v3->lmm_objects[0];
 		lod_object_set_pool(mo, v3->lmm_pool_name);
 	} else {
@@ -1232,13 +1234,14 @@ static int lod_use_defined_striping(const struct lu_env *env,
 	mo->ldo_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
 	mo->ldo_stripenr = le16_to_cpu(v1->lmm_stripe_count);
 	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
-	LASSERT(buf->lb_len >= lov_mds_md_size(mo->ldo_stripenr, magic));
 
 	/* fixup for released file before object initialization */
 	if (mo->ldo_pattern & LOV_PATTERN_F_RELEASED) {
 		mo->ldo_released_stripenr = mo->ldo_stripenr;
 		mo->ldo_stripenr = 0;
 	}
+
+	LASSERT(buf->lb_len >= lov_mds_md_size(mo->ldo_stripenr, magic));
 
 	if (mo->ldo_stripenr > 0)
 		rc = lod_initialize_objects(env, mo, objs);
