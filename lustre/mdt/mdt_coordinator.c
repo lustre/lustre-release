@@ -1368,8 +1368,9 @@ unlock:
 		/* just give back layout lock, we keep
 		 * the reference which is given back
 		 * later with the lock for HSM flags */
-		if (!IS_ERR(obj))
+		if (!IS_ERR(obj) && crh != NULL)
 			mdt_object_unlock(mti, obj, &crh->crh_lh, 1);
+
 		if (crh != NULL)
 			OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
 	}
