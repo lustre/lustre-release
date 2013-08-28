@@ -388,9 +388,17 @@ make_small() {
         path2fid $1 || error "cannot get fid on $1"
 }
 
+cleanup_large_files() {
+	local ratio=$(df $MOUNT |awk '{print $5}' |sed 's/%//g' |grep -v Use)
+	[ $ratio -gt 50 ] && find $MOUNT -size +10M -exec rm -f {} \;
+}
+
 make_large_for_striping() {
 	local file2=${1/$DIR/$DIR2}
 	local sz=$($LCTL get_param -n lov.*-clilov-*.stripesize | head -1)
+
+	cleanup_large_files
+
 	dd if=/dev/urandom of=$file2 count=5 bs=$sz conv=fsync ||
 		error "cannot create $file2"
 	path2fid $1 || error "cannot get fid on $1"
@@ -398,6 +406,9 @@ make_large_for_striping() {
 
 make_large_for_progress() {
 	local file2=${1/$DIR/$DIR2}
+
+	cleanup_large_files
+
 	# big file is large enough, so copy time is > 30s
 	# so copytool make 1 progress
 	# size is not a multiple of 1M to avoid stripe
@@ -409,6 +420,9 @@ make_large_for_progress() {
 
 make_large_for_progress_aligned() {
 	local file2=${1/$DIR/$DIR2}
+
+	cleanup_large_files
+
 	# big file is large enough, so copy time is > 30s
 	# so copytool make 1 progress
 	# size is a multiple of 1M to have stripe
@@ -420,6 +434,9 @@ make_large_for_progress_aligned() {
 
 make_large_for_cancel() {
 	local file2=${1/$DIR/$DIR2}
+
+	cleanup_large_files
+
 	# Copy timeout is 100s. 105MB => 105s
 	dd if=/dev/urandom of=$file2 count=103 bs=1M conv=fsync ||
 		error "cannot create $file2"
