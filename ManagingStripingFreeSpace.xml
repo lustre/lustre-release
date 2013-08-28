@@ -190,7 +190,15 @@
         <literal>start_ost</literal>
       </emphasis>
       </para>
-    <para>The start OST is the first OST to which files are written. The default value for <literal>start_ost</literal> is -1, which allows the MDS to choose the starting index. This setting is strongly recommended, as it allows space and load balancing to be done by the MDS as needed. Otherwise, the file starts on the specified OST index. The numbering of the OSTs starts at 0.</para>
+    <para>The start OST is the first OST to which files are written. The default value for
+        <literal>start_ost</literal> is -1, which allows the MDS to choose the starting index. This
+      setting is strongly recommended, as it allows space and load balancing to be done by the MDS
+      as needed. If the value of <literal>start_ost</literal> is set to a value other than -1, the
+      file starts on the specified OST index. OST index numbering starts at 0.</para>
+    <note>
+      <para>If the specified OST is inactive or in a degraded mode, the MDS will silently choose
+        another target.</para>
+    </note>
     <note>
       <para>If you pass a <literal>start_ost</literal> value of 0 and a
           <literal>stripe_count</literal> value of <emphasis>1</emphasis>, all files are written to
