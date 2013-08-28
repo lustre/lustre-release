@@ -156,7 +156,6 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	return &lsm->lsm_md_oinfo[stripe_index];
 }
 
-
 struct lmv_tgt_desc
 *lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
 		struct lu_fid *fid);

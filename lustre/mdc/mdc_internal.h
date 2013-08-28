@@ -38,7 +38,6 @@
 #define _MDC_INTERNAL_H
 
 #include <lustre_mdc.h>
-#include <lustre_mds.h>
 
 #ifdef LPROCFS
 extern struct lprocfs_seq_vars lprocfs_mdc_obd_vars[];

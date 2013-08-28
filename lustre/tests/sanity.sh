@@ -2563,9 +2563,9 @@ test_33b() {
         rm -fr $DIR/d33
         test_mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 && error "create" || true
+        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33
 }
-run_test 33b "test open file with malformed flags (No panic and return error)"
+run_test 33b "test open file with malformed flags (No panic)"
 
 test_33c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

@@ -671,6 +671,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	}
 	it->it_create_mode = (mode & S_IALLUGO) | S_IFREG;
 	it->it_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
+	it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
 	de = ll_lookup_it(dir, dentry, it, lookup_flags);
@@ -730,7 +731,7 @@ ll_convert_intent(struct open_intent *oit, int lookup_flags)
 {
 	struct lookup_intent *it;
 
-	OBD_ALLOC(it, sizeof(*it));
+	OBD_ALLOC_PTR(it);
 	if (!it)
 		return ERR_PTR(-ENOMEM);
 
@@ -740,6 +741,7 @@ ll_convert_intent(struct open_intent *oit, int lookup_flags)
 			it->it_op |= IT_CREAT;
 		it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
 		it->it_flags = ll_namei_to_lookup_intent_flag(oit->flags);
+		it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 	} else {
 		it->it_op = IT_GETATTR;
 	}

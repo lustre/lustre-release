@@ -73,9 +73,6 @@ static inline int md_should_create(__u64 flags)
                !(flags & MDS_OPEN_LEASE);
 }
 
-/* these are local flags, used only on the client, private */
-#define M_CHECK_STALE           0200000000
-
 /** @} mds */
 
 #endif
