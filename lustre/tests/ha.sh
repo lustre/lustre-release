@@ -280,8 +280,8 @@ ha_repeat_mpi_load()
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
 		{
 			ha_on ${ha_clients[0]} mkdir -p "$dir" &&	   \
-			mpirun -np ${#ha_clients[@]} ${MACHINEFILE_OPTION} \
-				"$ha_machine_file" $cmd &&		   \
+			mpirun ${MACHINEFILE_OPTION} "$ha_machine_file"    \
+				-np ${#ha_clients[@]} $cmd &&	           \
 			ha_on ${ha_clients[0]} rm -rf "$dir"
 		} >>"$log" 2>&1 || rc=$?
 
