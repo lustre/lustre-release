@@ -796,7 +796,7 @@ static int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_fsgid = 0;
 	uc->uc_suppgids[0] = -1;
 	uc->uc_suppgids[1] = -1;
-	uc->uc_cap = 0;
+	uc->uc_cap = CFS_CAP_FS_MASK;
 	uc->uc_umask = 0777;
 	uc->uc_ginfo = NULL;
 	uc->uc_identity = NULL;

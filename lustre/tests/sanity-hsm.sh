@@ -14,7 +14,8 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 # skip test cases failed before landing - Jinshan
-ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 24 30a 31a 34 35 36 58 59"
+
+ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 30a 31a 34 35 36 58 59"
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110a 200 201 221 222a 223a 223b 225"
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
@@ -1317,40 +1318,161 @@ test_23() {
 }
 run_test 23 "Release does not change a/mtime (utime)"
 
-test_24() {
+test_24a() {
+	local file=$DIR/$tdir/$tfile
+	local fid
+	local atime0
+	local atime1
+	local mtime0
+	local mtime1
+	local ctime0
+	local ctime1
+
 	# test needs a running copytool
 	copytool_setup
 
 	mkdir -p $DIR/$tdir
-
-	local f=$DIR/$tdir/test_mtime
+	rm -f $file
+	fid=$(make_small $file)
 
 	# Create a file and check its states
-	local fid=$(make_small $f)
-	check_hsm_flags $f "0x00000000"
+	check_hsm_flags $file "0x00000000"
 
-	# make mtime is different
+	# Ensure atime is less than mtime and ctime.
 	sleep 1
-	echo "append" >> $f
-	local MTIME=$(stat -c "%Y" $f)
-	local ATIME=$(stat -c "%X" $f)
+	echo >> $file
 
-	$LFS hsm_archive $f || error "could not archive file"
+	atime0=$(stat -c "%X" $file)
+	mtime0=$(stat -c "%Y" $file)
+	ctime0=$(stat -c "%Z" $file)
+
+	[ $atime0 -lt $mtime0 ] ||
+		error "atime $atime0 is not less than mtime $mtime0"
+
+	[ $atime0 -lt $ctime0 ] ||
+		error "atime $atime0 is not less than ctime $ctime0"
+
+	# Archive should not change any timestamps.
+	$LFS hsm_archive $file || error "cannot archive '$file'"
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	# Release and check states
-	$LFS hsm_release $f || error "could not release file"
-	check_hsm_flags $f "0x0000000d"
+	atime1=$(stat -c "%X" $file)
+	mtime1=$(stat -c "%Y" $file)
+	ctime1=$(stat -c "%Z" $file)
 
-	[ "$(stat -c "%Y" $f)" -eq "$MTIME" ] ||
-		error "mtime should be $MTIME"
+	[ $atime0 -eq $atime1 ] ||
+		error "archive changed atime from $atime0 to $atime1"
 
-	[ "$(stat -c "%X" $f)" -eq "$ATIME" ] ||
-		error "atime should be $ATIME"
+	[ $mtime0 -eq $mtime1 ] ||
+		error "archive changed mtime from $mtime0 to $mtime1"
+
+	[ $ctime0 -eq $ctime1 ] ||
+		error "archive changed ctime from $ctime0 to $ctime1"
+
+	# Release should not change any timestamps.
+	$LFS hsm_release $file || error "cannot release '$file'"
+	check_hsm_flags $file "0x0000000d"
+
+	atime1=$(stat -c "%X" $file)
+	mtime1=$(stat -c "%Y" $file)
+	ctime1=$(stat -c "%Z" $file)
+
+	[ $atime0 -eq $atime1 ] ||
+		error "release changed atime from $atime0 to $atime1"
+
+	[ $mtime0 -eq $mtime1 ] ||
+		error "release changed mtime from $mtime0 to $mtime1"
+
+	[ $ctime0 -eq $ctime1 ] ||
+		error "release changed ctime from $ctime0 to $ctime1"
+
+	# Restore should not change atime or mtime and should not
+	# decrease ctime.
+	$LFS hsm_restore $file
+	wait_request_state $fid RESTORE SUCCEED
+
+	atime1=$(stat -c "%X" $file)
+	mtime1=$(stat -c "%Y" $file)
+	ctime1=$(stat -c "%Z" $file)
+
+	[ $atime0 -eq $atime1 ] ||
+		error "restore changed atime from $atime0 to $atime1"
+
+	[ $mtime0 -eq $mtime1 ] ||
+		error "restore changed mtime from $mtime0 to $mtime1"
+
+	[ $ctime0 -le $ctime1 ] ||
+		error "restore changed ctime from $ctime0 to $ctime1"
+
+	copytool_cleanup
+
+	# Once more, after unmount and mount.
+	umount_client $MOUNT || error "cannot unmount '$MOUNT'"
+	mount_client $MOUNT || error "cannot mount '$MOUNT'"
+
+	atime1=$(stat -c "%X" $file)
+	mtime1=$(stat -c "%Y" $file)
+	ctime1=$(stat -c "%Z" $file)
+
+	[ $atime0 -eq $atime1 ] ||
+		error "remount changed atime from $atime0 to $atime1"
+
+	[ $mtime0 -eq $mtime1 ] ||
+		error "remount changed mtime from $mtime0 to $mtime1"
+
+	[ $ctime0 -le $ctime1 ] ||
+		error "remount changed ctime from $ctime0 to $ctime1"
+}
+run_test 24a "Archive, release, and restore does not change a/mtime (i/o)"
+
+test_24b() {
+	local file=$DIR/$tdir/$tfile
+	local fid
+	local sum0
+	local sum1
+	# LU-3811
+
+	# Test needs a running copytool.
+	copytool_setup
+	mkdir -p $DIR/$tdir
+
+	# Check that root can do HSM actions on a ordinary user's file.
+	rm -f $file
+	fid=$(make_small $file)
+	sum0=$(md5sum $file)
+
+	chown $RUNAS_ID:$RUNAS_GID $file ||
+		error "cannot chown '$file' to '$RUNAS_ID'"
+
+	chmod ugo-w $DIR/$tdir ||
+		error "cannot chmod '$DIR/$tdir'"
+
+	$LFS hsm_archive $file
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $file ||
+		check_hsm_flags $file "0x0000000d"
+
+	$LFS hsm_restore $file
+	wait_request_state $fid RESTORE SUCCEED
+
+	# Check that ordinary user can get HSM state.
+	$RUNAS $LFS hsm_state $file ||
+		error "user '$RUNAS_ID' cannot get HSM state of '$file'"
+
+	$LFS hsm_release $file ||
+		check_hsm_flags $file "0x0000000d"
+
+	# Check that ordinary user can accessed released file.
+	sum1=$($RUNAS md5sum $file) ||
+		error "user '$RUNAS_ID' cannot read '$file'"
+
+	[ "$sum0" == "$sum1" ] ||
+		error "md5sum mismatch for '$file'"
 
 	copytool_cleanup
 }
-run_test 24 "Release does not change a/mtime (i/o)"
+run_test 24b "root can archive, release, and restore user files"
 
 test_25a() {
 	# test needs a running copytool

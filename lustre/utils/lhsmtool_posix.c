@@ -92,9 +92,11 @@ struct options opt = {
 	.o_chunk_size = ONE_MB,
 };
 
-/* The LLAPI will hold an open FD on lustre for us. Additionally open one on
- * the archive FS root to make sure it doesn't drop out from under us (and
- * remind the admin to shutdown the copytool before unmounting). */
+/* hsm_copytool_private will hold an open FD on the lustre mount point
+ * for us. Additionally open one on the archive FS root to make sure
+ * it doesn't drop out from under us (and remind the admin to shutdown
+ * the copytool before unmounting). */
+
 static int arc_fd = -1;
 
 static int err_major;
@@ -680,16 +682,6 @@ out:
 		}
 	}
 
-	if (rc == 0) {
-		rc = fsync(dst_fd);
-		if (rc < 0) {
-			rc = -errno;
-			CT_ERROR("'%s' fsync failed (%s)\n", dst,
-				 strerror(-rc));
-			err_major++;
-		}
-	}
-
 	free(buf);
 
 	return rc;
@@ -814,18 +806,18 @@ static int ct_begin(struct hsm_copyaction_private **phcp,
 }
 
 static int ct_fini(struct hsm_copyaction_private **phcp,
-		   const struct hsm_action_item *hai, int flags, int ct_rc)
+		   const struct hsm_action_item *hai, int hp_flags, int ct_rc)
 {
 	char	lstr[PATH_MAX];
 	int	rc;
 
 	CT_TRACE("Action completed, notifying coordinator "
-		 "cookie="LPX64", FID="DFID", flags=%d err=%d\n",
+		 "cookie="LPX64", FID="DFID", hp_flags=%d err=%d\n",
 		 hai->hai_cookie, PFID(&hai->hai_fid),
-		 flags, -ct_rc);
+		 hp_flags, -ct_rc);
 
 	ct_path_lustre(lstr, sizeof(lstr), opt.o_mnt, &hai->hai_fid);
-	rc = llapi_hsm_action_end(phcp, &hai->hai_extent, flags, abs(ct_rc));
+	rc = llapi_hsm_action_end(phcp, &hai->hai_extent, hp_flags, abs(ct_rc));
 	if (rc == -ECANCELED)
 		CT_ERROR("'%s' completed action has been canceled: "
 			 "cookie="LPX64", FID="DFID"\n", lstr, hai->hai_cookie,
@@ -846,7 +838,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 	int				 rc;
 	int				 rcf = 0;
 	bool				 rename_needed = false;
-	int				 ct_flags = 0;
+	int				 hp_flags = 0;
 	int				 open_flags;
 	int				 src_fd = -1;
 	int				 dst_fd = -1;
@@ -870,7 +862,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		rename_needed = true;
 	}
 
-	CT_TRACE("'%s' archived to %s\n", src, dst);
+	CT_TRACE("'%s' archiving to %s\n", src, dst);
 
 	if (opt.o_dry_run) {
 		rc = 0;
@@ -883,8 +875,8 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		goto fini_major;
 	}
 
-	src_fd = open(src, O_RDONLY | O_NOATIME | O_NONBLOCK | O_NOFOLLOW);
-	if (src_fd == -1) {
+	src_fd = llapi_hsm_action_get_fd(hcp);
+	if (src_fd < 0) {
 		CT_ERROR("'%s' open read failed (%s)\n", src, strerror(errno));
 		rc = -errno;
 		goto fini_major;
@@ -911,6 +903,14 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 	if (rc < 0) {
 		CT_ERROR("'%s' data copy failed to '%s' (%s)\n",
 			 src, dst, strerror(-rc));
+		goto fini_major;
+	}
+
+	rc = fsync(dst_fd);
+	if (rc < 0) {
+		CT_ERROR("'%s' cannot synchronize archive file '%s' (%s)\n",
+			 src, dst, strerror(errno));
+		rc = -errno;
 		goto fini_major;
 	}
 
@@ -1053,7 +1053,7 @@ fini_major:
 
 	unlink(dst);
 	if (ct_is_retryable(rc))
-		ct_flags |= HP_FLAG_RETRY;
+		hp_flags |= HP_FLAG_RETRY;
 
 	rcf = rc;
 
@@ -1065,7 +1065,7 @@ out:
 		close(dst_fd);
 
 	if (hcp != NULL)
-		rc = ct_fini(&hcp, hai, ct_flags, rcf);
+		rc = ct_fini(&hcp, hai, hp_flags, rcf);
 
 	return rc;
 }
@@ -1078,14 +1078,13 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	char				 lov_buf[XATTR_SIZE_MAX];
 	size_t				 lov_size = sizeof(lov_buf);
 	int				 rc;
-	int				 flags = 0;
+	int				 hp_flags = 0;
 	int				 src_fd = -1;
 	int				 dst_fd = -1;
 	int				 mdt_index = -1; /* Not implemented */
 	int				 open_flags = 0;
 	bool				 set_lovea;
-	lustre_fid			 dfid;
-
+	struct lu_fid			 dfid;
 	/* we fill lustre so:
 	 * source = lustre FID in the backend
 	 * destination = data FID = volatile file
@@ -1156,7 +1155,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 			 strerror(-rc));
 		err_major++;
 		if (ct_is_retryable(rc))
-			flags |= HP_FLAG_RETRY;
+			hp_flags |= HP_FLAG_RETRY;
 		goto fini;
 	}
 
@@ -1164,7 +1163,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 
 fini:
 	if (hcp != NULL)
-		rc = ct_fini(&hcp, hai, flags, rc);
+		rc = ct_fini(&hcp, hai, hp_flags, rc);
 
 	/* object swaping is done by cdt at copy end, so close of volatile file
 	 * cannot be done before */
@@ -1814,7 +1813,7 @@ static int ct_setup(void)
 	/* set llapi message level */
 	llapi_msg_set_level(opt.o_verbose);
 
-	arc_fd = open(opt.o_hsm_root, O_DIRECTORY);
+	arc_fd = open(opt.o_hsm_root, O_RDONLY);
 	if (arc_fd < 0) {
 		CT_ERROR("cannot open archive at '%s': %s\n", opt.o_hsm_root,
 			 strerror(errno));

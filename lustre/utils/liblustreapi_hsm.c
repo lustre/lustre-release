@@ -59,12 +59,15 @@
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
+#define OPEN_BY_FID_PATH dot_lustre_name"/fid"
+
 /****** HSM Copytool API ********/
 #define CT_PRIV_MAGIC 0xC0BE2001
 struct hsm_copytool_private {
 	int			 magic;
 	char			*mnt;
 	int			 mnt_fd;
+	int			 open_by_fid_fd;
 	lustre_kernelcomm	 kuc;
 	__u32			 archives;
 };
@@ -75,6 +78,7 @@ struct hsm_copyaction_private {
 	__s32					 data_fd;
 	const struct hsm_copytool_private	*ct_priv;
 	struct hsm_copy				 copy;
+	struct stat				 stat;
 };
 
 #include <libcfs/libcfs.h>
@@ -103,11 +107,11 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	if (ct == NULL)
 		return -ENOMEM;
 
-	ct->mnt_fd = open(mnt, O_DIRECTORY | O_RDONLY | O_NONBLOCK);
-	if (ct->mnt_fd < 0) {
-		rc = -errno;
-		goto out_err;
-	}
+	ct->magic = CT_PRIV_MAGIC;
+	ct->mnt_fd = -1;
+	ct->open_by_fid_fd = -1;
+	ct->kuc.lk_rfd = LK_NOFD;
+	ct->kuc.lk_wfd = LK_NOFD;
 
 	ct->mnt = strdup(mnt);
 	if (ct->mnt == NULL) {
@@ -115,7 +119,17 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		goto out_err;
 	}
 
-	ct->magic = CT_PRIV_MAGIC;
+	ct->mnt_fd = open(ct->mnt, O_RDONLY);
+	if (ct->mnt_fd < 0) {
+		rc = -errno;
+		goto out_err;
+	}
+
+	ct->open_by_fid_fd = openat(ct->mnt_fd, OPEN_BY_FID_PATH, O_RDONLY);
+	if (ct->open_by_fid_fd < 0) {
+		rc = -errno;
+		goto out_err;
+	}
 
 	/* no archives specified means "match all". */
 	ct->archives = 0;
@@ -169,9 +183,15 @@ out_kuc:
 out_err:
 	if (!(ct->mnt_fd < 0))
 		close(ct->mnt_fd);
+
+	if (!(ct->open_by_fid_fd < 0))
+		close(ct->open_by_fid_fd);
+
 	if (ct->mnt != NULL)
 		free(ct->mnt);
+
 	free(ct);
+
 	return rc;
 }
 
@@ -198,6 +218,7 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	/* Shut down the kernelcomms */
 	libcfs_ukuc_stop(&ct->kuc);
 
+	close(ct->open_by_fid_fd);
 	close(ct->mnt_fd);
 	free(ct->mnt);
 	free(ct);
@@ -338,6 +359,27 @@ static int fid_parent(const char *mnt, const lustre_fid *fid, char *parent,
 	return rc;
 }
 
+static int ct_open_by_fid(const struct hsm_copytool_private *ct,
+			  const struct lu_fid *fid, int open_flags)
+{
+	char fid_name[FID_NOBRACE_LEN + 1];
+
+	snprintf(fid_name, sizeof(fid_name), DFID_NOBRACE, PFID(fid));
+
+	return openat(ct->open_by_fid_fd, fid_name, open_flags);
+}
+
+static int ct_stat_by_fid(const struct hsm_copytool_private *ct,
+			  const struct lu_fid *fid,
+			  struct stat *buf)
+{
+	char fid_name[FID_NOBRACE_LEN + 1];
+
+	snprintf(fid_name, sizeof(fid_name), DFID_NOBRACE, PFID(fid));
+
+	return fstatat(ct->open_by_fid_fd, fid_name, buf, 0);
+}
+
 /** Create the destination volatile file for a restore operation.
  *
  * \param hcp        Private copyaction handle.
@@ -346,7 +388,7 @@ static int fid_parent(const char *mnt, const lustre_fid *fid, char *parent,
  * \return 0 on success.
  */
 static int create_restore_volatile(struct hsm_copyaction_private *hcp,
-				   int mdt_index, int flags)
+				   int mdt_index, int open_flags)
 {
 	int			 rc;
 	int			 fd;
@@ -358,14 +400,18 @@ static int create_restore_volatile(struct hsm_copyaction_private *hcp,
 	if (rc < 0) {
 		/* fid_parent() failed, try to keep on going */
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot get parent path to restore "DFID
+			    "cannot get parent path to restore "DFID" "
 			    "using '%s'", PFID(&hai->hai_fid), mnt);
 		snprintf(parent, sizeof(parent), "%s", mnt);
 	}
 
-	fd = llapi_create_volatile_idx(parent, mdt_index, flags);
+	fd = llapi_create_volatile_idx(parent, mdt_index, open_flags);
 	if (fd < 0)
 		return fd;
+
+	rc = fchown(fd, hcp->stat.st_uid, hcp->stat.st_gid);
+	if (rc < 0)
+		goto err_cleanup;
 
 	rc = llapi_fd2fid(fd, &hai->hai_dfid);
 	if (rc < 0)
@@ -422,6 +468,10 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 		goto ok_out;
 
 	if (hai->hai_action == HSMA_RESTORE) {
+		rc = ct_stat_by_fid(hcp->ct_priv, &hai->hai_fid, &hcp->stat);
+		if (rc < 0)
+			goto err_out;
+
 		rc = create_restore_volatile(hcp, restore_mdt_index,
 					     restore_open_flags);
 		if (rc < 0)
@@ -459,7 +509,7 @@ err_out:
  * \return 0 on success.
  */
 int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
-			 const struct hsm_extent *he, int flags, int errval)
+			 const struct hsm_extent *he, int hp_flags, int errval)
 {
 	struct hsm_copyaction_private	*hcp;
 	struct hsm_action_item		*hai;
@@ -475,6 +525,27 @@ int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 
 	hai = &hcp->copy.hc_hai;
 
+	if (hai->hai_action == HSMA_RESTORE && errval == 0) {
+		struct timeval tv[2];
+
+		/* Set {a,m}time of volatile file to that of original. */
+		tv[0].tv_sec = hcp->stat.st_atime;
+		tv[0].tv_usec = 0;
+		tv[1].tv_sec = hcp->stat.st_mtime;
+		tv[1].tv_usec = 0;
+		if (futimes(hcp->data_fd, tv) < 0) {
+			errval = -errno;
+			goto end;
+		}
+
+		rc = fsync(hcp->data_fd);
+		if (rc < 0) {
+			errval = -errno;
+			goto end;
+		}
+	}
+
+end:
 	/* In some cases, like restore, 2 FIDs are used.
 	 * Set the right FID to use here. */
 	if (hai->hai_action == HSMA_ARCHIVE || hai->hai_action == HSMA_RESTORE)
@@ -482,7 +553,7 @@ int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 
 	/* Fill the last missing data that will be needed by
 	 * kernel to send a hsm_progress. */
-	hcp->copy.hc_flags  = flags;
+	hcp->copy.hc_flags  = hp_flags;
 	hcp->copy.hc_errval = abs(errval);
 
 	hcp->copy.hc_hai.hai_extent = *he;
@@ -573,10 +644,13 @@ int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 	if (hcp->magic != CP_PRIV_MAGIC)
 		return -EINVAL;
 
-	if (hai->hai_action != HSMA_RESTORE)
+	if (hai->hai_action == HSMA_ARCHIVE)
+		return ct_open_by_fid(hcp->ct_priv, &hai->hai_dfid,
+				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
+	else if (hai->hai_action == HSMA_RESTORE)
+		return dup(hcp->data_fd);
+	else
 		return -EINVAL;
-
-	return dup(hcp->data_fd);
 }
 
 /**

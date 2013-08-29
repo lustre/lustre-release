@@ -1377,7 +1377,7 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 /**
  * Check release is permitted for the current HSM flags.
  */
-static bool mdt_hsm_release_allow(struct md_attr *ma)
+static bool mdt_hsm_release_allow(const struct md_attr *ma)
 {
 	if (!(ma->ma_valid & MA_HSM))
 		return false;
@@ -1887,19 +1887,21 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 {
 	const struct lu_env *env = info->mti_env;
 	struct md_op_spec *spec = &info->mti_spec;
-	struct lu_fid *rootfid = &info->mti_tmp_fid1;
+	struct lu_fid *local_root_fid = &info->mti_tmp_fid1;
 	struct mdt_object *obj = NULL;
 	struct mdt_object *local_root;
 	static const char name[] = "i_am_nobody";
 	struct lu_name *lname;
+	struct lu_ucred *uc;
+	cfs_cap_t uc_cap_save;
 	int rc;
 	ENTRY;
 
-	rc = dt_root_get(env, mdt->mdt_bottom, rootfid);
+	rc = dt_root_get(env, mdt->mdt_bottom, local_root_fid);
 	if (rc != 0)
 		RETURN(ERR_PTR(rc));
 
-	local_root = mdt_object_find(env, mdt, rootfid);
+	local_root = mdt_object_find(env, mdt, local_root_fid);
 	if (IS_ERR(local_root))
 		RETURN(local_root);
 
@@ -1920,17 +1922,26 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 	}
 
 	lname = mdt_name(env, (char *)name, sizeof(name) - 1);
+
+	uc = lu_ucred(env);
+	uc_cap_save = uc->uc_cap;
+	uc->uc_cap |= 1 << CFS_CAP_DAC_OVERRIDE;
 	rc = mdo_create(env, mdt_object_child(local_root), lname,
 			mdt_object_child(obj), spec, attr);
-	if (rc == 0) {
-		rc = mo_open(env, mdt_object_child(obj), MDS_OPEN_CREATED);
-		if (rc < 0)
-			CERROR("%s: cannot open volatile file "DFID", orphan "
-			       "file will be left in PENDING directory until "
-			       "next reboot, rc = %d\n", mdt_obd_name(mdt),
-			       PFID(fid), rc);
+	uc->uc_cap = uc_cap_save;
+	if (rc < 0) {
+		CERROR("%s: cannot create volatile file "DFID": rc = %d\n",
+		       mdt_obd_name(mdt), PFID(fid), rc);
+		GOTO(out, rc);
 	}
-	EXIT;
+
+	rc = mo_open(env, mdt_object_child(obj), MDS_OPEN_CREATED);
+	if (rc < 0)
+		CERROR("%s: cannot open volatile file "DFID", orphan "
+		       "file will be left in PENDING directory until "
+		       "next reboot, rc = %d\n", mdt_obd_name(mdt),
+		       PFID(fid), rc);
+	GOTO(out, rc);
 
 out:
 	if (rc < 0) {
@@ -1993,7 +2004,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	/* ma_need was set before but it seems fine to change it in order to
 	 * avoid modifying the one from RPC */
-	ma->ma_need = MA_HSM | MA_LOV;
+	ma->ma_need = MA_HSM;
 	rc = mdt_attr_get_complex(info, o, ma);
 	if (rc != 0)
 		GOTO(out_unlock, rc);
@@ -2014,8 +2025,13 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	}
 
 	ma->ma_valid = MA_INODE;
-	ma->ma_attr.la_valid &= LA_SIZE | LA_MTIME | LA_ATIME;
+	ma->ma_attr.la_valid &= LA_ATIME | LA_MTIME | LA_CTIME | LA_SIZE;
 	rc = mo_attr_set(info->mti_env, mdt_object_child(o), ma);
+	if (rc < 0)
+		GOTO(out_unlock, rc);
+
+	ma->ma_need = MA_INODE | MA_LOV;
+	rc = mdt_attr_get_complex(info, o, ma);
 	if (rc < 0)
 		GOTO(out_unlock, rc);
 
@@ -2025,7 +2041,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 		ma->ma_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEF);
 		ma->ma_lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
 		ma->ma_lmm->lmm_stripe_size = cpu_to_le32(LOV_MIN_STRIPE_SIZE);
-		ma->ma_valid |= MA_LOV;
+		ma->ma_lmm_size = sizeof(*ma->ma_lmm);
 	} else {
 		/* Magic must be LOV_MAGIC_Vx_DEF otherwise LOD will interpret
 		 * ma_lmm as lov_user_md, then it will be confused by union of
@@ -2043,11 +2059,13 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	/* Hopefully it's not used in this call path */
 	orp_ma = &info->mti_u.som.attr;
-	orp_ma->ma_valid = MA_INODE | MA_LOV;
-	orp_ma->ma_attr.la_mode = S_IFREG;
-	orp_ma->ma_attr.la_valid = LA_MODE;
+	orp_ma->ma_attr.la_mode = S_IFREG | S_IWUSR;
+	orp_ma->ma_attr.la_uid = ma->ma_attr.la_uid;
+	orp_ma->ma_attr.la_gid = ma->ma_attr.la_gid;
+	orp_ma->ma_attr.la_valid = LA_MODE | LA_UID | LA_GID;
 	orp_ma->ma_lmm = ma->ma_lmm;
 	orp_ma->ma_lmm_size = ma->ma_lmm_size;
+	orp_ma->ma_valid = MA_INODE | MA_LOV;
 	orphan = mdt_orphan_open(info, info->mti_mdt, &data->cd_fid, orp_ma,
 				 FMODE_WRITE);
 	if (IS_ERR(orphan)) {
@@ -2106,6 +2124,7 @@ out_unlock:
 
 	ma->ma_valid = 0;
 	ma->ma_need = 0;
+
 	return rc;
 }
 
