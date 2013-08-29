@@ -220,7 +220,10 @@ int lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
         pd->cld_mode = parent_descr->cld_mode;
         pd->cld_gid  = parent_descr->cld_gid;
         lovsub_lock_descr_map(d, subobj->lso_super, subobj->lso_index, pd);
-        lov->lls_sub[idx].sub_got = *d;
+
+	/* LU-3027: only update extent of lock */
+        lov->lls_sub[idx].sub_got.cld_start = d->cld_start;
+        lov->lls_sub[idx].sub_got.cld_end = d->cld_end;
         /*
          * Notify top-lock about modification, if lock description changes
          * materially.
