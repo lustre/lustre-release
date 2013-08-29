@@ -30,7 +30,7 @@
     </note>
     <section remap="h3">
       <title>Synopsis</title>
-      <para>The MDS uses the utility <literal>lctl get_param
+      <para>The MDS uses the utility as specified by <literal>lctl get_param
           mdt.${FSNAME}-MDT{xxxx}.identity_upcall</literal> to look up the supplied UID in order to
         retrieve the user's supplementary group membership. The result is temporarily cached in the
         kernel (for five minutes, by default) to avoid the overhead of calling into userspace

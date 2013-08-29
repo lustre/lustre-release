@@ -23,23 +23,21 @@
       </indexterm><indexterm>
         <primary>upgrading</primary>
       </indexterm>Release Interoperability and Upgrade Requirements</title>
-    <para><emphasis role="italic"><emphasis role="bold">Lustre 2.x release (major)
+    <para><emphasis role="italic"><emphasis role="bold">Lustre software version 2.x release (major)
           upgrade:</emphasis></emphasis><itemizedlist>
         <listitem>
           <para>All servers must be upgraded at the same time, while some or all clients may be
             upgraded.</para>
         </listitem>
         <listitem>
-          <para>All servers must be be upgraded to Red Hat* Enterprise Linux* 6 (RHEL 6) or other
-            compatible Linux distribution. See the Linux Test Matrix at <xref
+          <para>All servers must be be upgraded to a Linux kernel supported by the Lustre software. See the Linux Test Matrix at <xref
               xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/> for a
-            list of tested Linux distros.</para>
+            list of tested Lustre distributions.</para>
         </listitem>
         <listitem>
-          <para>Clients to be upgraded to the Lustre 2.4 release or higher must be running RHEL 6 or
-            other compatible Linux distribution. See the Linux Test Matrix at <xref
+          <para>Clients to be upgraded to the Lustre 2.4 release or higher must be running a compatible Linux distribution. See the Linux Test Matrix at <xref
               xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/> for a
-            list of tested Linux distros.</para>
+            list of tested Linux distributions.</para>
         </listitem>
       </itemizedlist></para>
     <para><emphasis role="italic"><emphasis role="bold">Lustre 2.X.y release (minor)
@@ -82,11 +80,11 @@
         it:<screen>tune2fs -O large_xattr</screen>Once the wide striping feature is enabled and in
         use on the MDT, it is not possible to directly downgrade the MDT file system to an earlier
         version of the Lustre software that does not support wide striping. The only way to disable
-        wide striping is to delete <emphasis role="underline">all files with an extended attribute
-            (<literal>xattr</literal></emphasis>), unmount the MDT, and run the following command to
+        wide striping is to delete all files with a <literal>large_xattr</literal> extended attribute,
+	unmount the MDT, and run the following command to
         turn off the <literal>large-xattr</literal>
-        option:<screen>tune2fs -O ^large_xattr</screen></para>
-    </note>
+        option:<screen>tune2fs -O ^large_xattr</screen>
+	</para></note>
     <note condition="l24">
       <para>In Lustre release 2.4, a new feature allows using multiple MDTs, which can each serve
         one or more remote sub-directories in the file system. The <literal>root</literal> directory
@@ -128,8 +126,8 @@
         </orderedlist>
       </listitem>
       <listitem>
-        <para>Upgrade the Linux operating system on all servers to RHEL 6 or other compatible
-          (tested) distribution and reboot. See the Linux Test Matrix at <xref
+        <para>Upgrade the Linux operating system on all servers to a compatible
+          (tested) Linux distribution and reboot. See the Linux Test Matrix at <xref
             xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.</para>
       </listitem>
       <listitem>
@@ -158,7 +156,7 @@
           <listitem>
             <para>Verify the packages are installed correctly:</para>
             <para>
-              <screen>rpm -qa|egrep "lustre|wc"|sort</screen>
+              <screen>rpm -qa|egrep "lustre|wc"</screen>
             </para>
           </listitem>
           <listitem>
@@ -194,7 +192,7 @@
           <listitem>
             <para>Verify the packages were installed correctly:</para>
             <para>
-              <screen># rpm -qa|egrep "lustre|kernel"|sort</screen>
+              <screen># rpm -qa|egrep "lustre|kernel"</screen>
             </para>
           </listitem>
           <listitem>
@@ -227,7 +225,7 @@
       </listitem>
       <listitem>
         <para>(<?oxy_comment_start author="lbeberne" timestamp="20130815T140026-0700" comment="Have James test"?>Optional<?oxy_comment_end?>)
-          If you are upgrading to Lustre release 2.3, or a release previous to Lustre release 2.3,
+          If you are upgrading to Lustre software release 2.3 or higher from Lustre software version 2.2 or earlier
           and want to enable the quota feature, complete these steps: <orderedlist
             numeration="loweralpha">
             <listitem>
@@ -330,7 +328,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           <listitem>
             <para>Verify the packages are installed correctly:</para>
             <para>
-              <screen>rpm -qa|egrep "lustre|wc"|sort</screen>
+              <screen>rpm -qa|egrep "lustre|wc"</screen>
             </para>
           </listitem>
           <listitem>
@@ -364,7 +362,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           <listitem>
             <para>Verify the packages were installed correctly:</para>
             <para>
-              <screen># rpm -qa|egrep "lustre|kernel"|sort</screen>
+              <screen># rpm -qa|egrep "lustre|kernel"</screen>
             </para>
           </listitem>
           <listitem>

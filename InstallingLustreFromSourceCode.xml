@@ -14,17 +14,16 @@
       <para><xref linkend="dbdoclet.50438210_47529"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_g4d_yby_lk"/></para>
+      <para><xref linkend="section_g4d_yby_lk"/></para>
     </listitem>
   </itemizedlist>
   <note>
     <para>It is recommended that you install from prebuild RPMs of the Lustre software unless you
       need to customize the Lustre server kernel or will be using an Linux kernel that has not been
-      tested with the Lustre software. </para>
+      tested with the Lustre software. Instructions on installing pre-built RPMs are in <xref linkend='installinglustre.title'/></para>
     <para>For a list of supported Linux distributions and architectures, see <xref
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>. Prebuild RPMs
-      are available in the <link xmlns:xlink="http://www.w3.org/1999/xlink"
-        xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
+      are available in the <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
       repository. For information about installing Lustre RPMs, see <xref
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="installinglustre"/>.</para>
   </note>
@@ -35,19 +34,17 @@
     <para>To install Lustre from source code, the following are required:</para>
     <itemizedlist>
       <listitem>
-        <para>An x86_64 machine with a fresh installation of a CentOS (or Red Hat*) 6 Linux
-          operating system.</para>
+        <para>A x86_64 machine with a fresh installation of a Linux operating system.</para>
+		<note><para>This section of the Manual only describes the specific procedure against building on Red Hat* 6 Linux and derivatives. For a complete set of supported platforms please visit <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.The server kernel should be one of the supported kernel versions but it is not necessary to run a vendor distribution to build the Lustre software.</para></note>
       </listitem>
       <listitem>
-        <para>Access to the <link xmlns:xlink="http://www.w3.org/1999/xlink"
-            xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre
-            Releases</link> repository. This repository contains Lustre software patches and a test
-          suite.</para>
+		<para>Access to the Lustre software git repository at <link xl:href="http://git.hpdd.intel.com/">http://git.hpdd.intel.com/</link>.</para>
       </listitem>
       <listitem>
-        <para>Access to a recent version of <link xmlns:xlink="http://www.w3.org/1999/xlink"
+			<para>(Recommended) Access to a recent version of <link xmlns:xlink="http://www.w3.org/1999/xlink"
             xlink:href="http://fedoraproject.org/wiki/EPEL">EPEL</link> containing the
-            <code>quilt</code> utility used for managing a series of patches. </para>
+            <literal>quilt</literal> utility used for managing a series of patches. </para>
+			<note><para>The use of <literal>quilt</literal> is optional for building Lustre, and is detected at configure time if it is installed. Otherwise the <literal>patch</literal> utility is used to apply <literal>ldiskfs</literal> patches to the kernel source. Quilt is useful if you intend to modify the Lustre kernel patches.</para></note>
       </listitem>
       <listitem>
         <para><emphasis role="italic">(Recommended)</emphasis> At least 1 GB memory on the machine
@@ -82,14 +79,16 @@
       environment, including build tools, the Lustre source, and the Linux kernel source. It then
       describes how to apply Lustre patches to the Linux kernel.</para>
     <note>
-      <para>A patched Linux kernel is not required on Lustre clients.</para>
+      <para>A patched Linux kernel is <emphasis>NOT</emphasis> required in order to build the
+Lustre client code. The steps below for building the Linux kernel are only
+required if a new kernel is needed for a Lustre server.</para>
     </note>
     <section remap="h3">
       <title><indexterm>
           <primary>quilt</primary>
         </indexterm>Provisioning the Build Machine and Installing Dependencies</title>
       <note>
-        <para>This example procedure assumes a Red Hat* Enteprise Linux* 6 operating system has been
+        <para>This example is specific for building a modified Red Hat* Enteprise Linux* 6 kernel for the Lustre file system server. It is assumed that the operating system has been
           freshly installed on a machine with the hostname <literal>rhel6-master</literal>.</para>
       </note>
       <para>To provision the build machine and install dependencies, complete these steps.</para>
@@ -103,14 +102,7 @@
             <screen># yum -y groupinstall "Development Tools"</screen>
           </para>
           <note>
-            <para>If the Development Tools group is not available, you may need to install the
-              packages individually using:</para>
-            <para>
-              <screen># yum -y install automake xmlto asciidoc 
-   elfutils-libelf-devel zlib-devel binutils-devel 
-   newt-devel python-devel hmaccalc perl-ExtUtils-Embed 
-   rpm-build make gcc redhat-rpm-config patchutils git</screen>
-            </para>
+            <para>If the Development Tools group is not available, you will need to satisfy the dependencies for the build manually.</para>
           </note>
         </listitem>
         <listitem>
@@ -122,17 +114,17 @@
           </para>
         </listitem>
         <listitem>
-          <para>Install EPEL:</para>
+          <para>(Optional) Install EPEL:</para>
           <para>
             <screen># wget 
-     http://download.fedoraproject.org/pub/epel/5/x86_64/
-     epel-release-5-4.noarch.rpm
+     http://download.fedoraproject.org/pub/epel/6/x86_64/
+     epel-release-6-8.noarch.rpm
 # rpm -ivh ./epel-release-5-4.noarch.rpm
 </screen>
           </para>
         </listitem>
         <listitem>
-          <para>Install quilt:</para>
+          <para>(Optional) Install quilt:</para>
           <para>
             <screen># yum -y install quilt
 </screen>
@@ -171,18 +163,17 @@
           </para>
         </listitem>
         <listitem>
-          <para>Switch to the user called <systemitem>build</systemitem> and change the directory to
-            the <systemitem>$HOME/build</systemitem> directory:</para>
+          <para>Switch to the user called <systemitem>build</systemitem> and change the directory to the users home directory:</para>
           <para>
             <screen># su build
-# cd $HOME
+$ cd $HOME
 </screen>
           </para>
         </listitem>
         <listitem>
-          <para>Get the MASTER branch of the Lustre software from the Lustre repository:</para>
+          <para>Get the MASTER branch of the Lustre software from the Lustre software git repository:</para>
           <para>
-            <screen># git clone git://git.whamcloud.com/fs/lustre-release.git
+            <screen># git clone git://git.hpdd.intel.com/fs/lustre-release.git
 # cd lustre-release
 </screen>
           </para>
@@ -230,15 +221,15 @@ Running autoconf</screen>
           <para>Install the kernel source (enter on one line):</para>
           <para>
             <screen># rpm -ivh http://ftp.redhat.com/pub/redhat/linux/enterprise/
-    6Server/en/os/SRPMS/kernel-2.6.32-131.2.1.el6.src.rpm 
+    6Server/en/os/SRPMS/kernel-2.6.32-358.14.1.el6.src.rpm
     2&gt;&amp;1 | grep -v mockb</screen>
           </para>
           <note>
-            <para>It is intended that the Lustre software MASTER branch be kept up-to-date with the
+            <para>It is intended that the Lustre software master branch be kept up-to-date with the
               most recent kernel distributions. However, a delay may occur between a periodic update
-              to a kernel distribution and a corresponding update of the MASTER branch. The most
-              recent supported kernel in the MASTER branch can be found in the source directory in
-                <systemitem>lustre/kernel_patches/which_patch</systemitem>. If the MASTER branch is
+              to a kernel distribution and a corresponding update of the master branch. The most
+              recent supported kernel in the master branch can be found in the source directory in
+                <systemitem>lustre/kernel_patches/which_patch</systemitem>. If the master branch is
               not current with the latest  distribution, download the most recent kernel RPMs from
               the vendor's download site.</para>
           </note>
@@ -266,7 +257,7 @@ gpg: WARNING: unsafe permissions on homedir `.'
       </orderedlist>
       <para>The kernel source with the Red Hat Enterprise Linux patches applied is now residing in
         the directory
-          <systemitem>/home/build/kernel/rpmbuild/BUILD/kernel-2.6.32-131.2.1.el6/linux-2.6.32-131.2.1.el6.x86_64/</systemitem></para>
+          <systemitem>/home/build/kernel/rpmbuild/BUILD/kernel-2.6.32-358.14.1.el6.x86_64/</systemitem></para>
     </section>
     <section remap="h3">
       <title>Patching the Kernel Source with the Lustre Code</title>
@@ -275,8 +266,8 @@ gpg: WARNING: unsafe permissions on homedir `.'
         <listitem>
           <para>Go to the directory containing the kernel source:</para>
           <para>
-            <screen>#cd ~/kernel/rpmbuild/BUILD/kernel-2.6.32-131.2.1.el6/
-     linux-2.6.32-131.2.1.el6.x86_64/</screen>
+            <screen>#cd ~/kernel/rpmbuild/BUILD/kernel-2.6.32-358.14.1.el6/
+     linux-2.6.32-358.14.1.el6.x86_64/</screen>
           </para>
         </listitem>
         <listitem>
@@ -284,7 +275,7 @@ gpg: WARNING: unsafe permissions on homedir `.'
             id to be able to ascertain that the kernel is booted. Modify line 4 as shown
             below:</para>
           <para>
-            <screen>EXTRAVERSION = .lustremaster</screen>
+            <screen>EXTRAVERSION = -358.14.1.el6_lustre.x86_64</screen>
           </para>
         </listitem>
         <listitem>
@@ -315,6 +306,8 @@ patching file fs/jbd2/transaction.c
 Hunk #3succeeded at 1222(offset 3lines).
 Hunk #4succeeded at 1357(offset 3lines).
 Now at patch  patches/jbd2-jcberr-2.6-rhel6.patch</screen>
+		<note><para>If quilt is not installed, the following steps would be equivalent:
+<screen>for PATCH in $(cat series); do patch -p1 &lt; patches/$PATCH; done</screen></para></note>
         </listitem>
       </orderedlist>
     </section>
@@ -346,16 +339,16 @@ Now at patch  patches/jbd2-jcberr-2.6-rhel6.patch</screen>
           <screen>...
 ...
 Wrote: /home/build/kernel/rpmbuild/SRPMS/
-     kernel-2.6.32lustremaster-1.src.rpm
+     kernel-2.6.32-358.14.1.el6_lustre.x86_64-1.src.rpm
 Wrote: /home/build/kernel/rpmbuild/RPMS/x86_64/
-     kernel-2.6.32.lustremaster-1.x86_64.rpm
+     kernel-2.6.32-358.14.1.el6_lustre.x86_64-1.x86_64.rpm
 Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.f73m1V
 + umask 022+ cd /home/build/kernel/rpmbuild/BUILD
-+ cd kernel-2.6.32lustremaster
++ cd kernel-2.6.32-358.14.1.el6_lustre.x86_64
 + rm -rf /home/build/kernel/rpmbuild/BUILDROOT/
-     kernel-2.6.32.lustremaster-1.x86_64
+     kernel-2.6.32-358.14.1.el6_lustre.x86_64-1.x86_64
 + exit 0
-rm ../kernel-2.6.32lustremaster.tar.gz</screen>
+rm ../kernel-2.6.3-358.14.1.el6_lustre.x86_64.tar.gz</screen>
           <note>
             <para>If a request to generate more entropy appears, some disk or keyboard I/O needs to
               be generated. You can generate entropy by entering the following on another
@@ -364,7 +357,7 @@ rm ../kernel-2.6.32lustremaster.tar.gz</screen>
         </listitem>
       </orderedlist>
       <para>A fresh kernel RPM can now be found at
-          <systemitem>~/kernel/rpmbuild/RPMS/x86_64/kernel-2.6.32.lustremaster-1.x86_64.rpm</systemitem>.</para>
+          <systemitem>~/kernel/rpmbuild/RPMS/x86_64/kernel-2.6.32-358.14.1.el6_lustre.x86_64-1.x86_64.rpm</systemitem>.</para>
     </section>
     <section>
       <title>Configuring and Building Lustre RPMs</title>
@@ -374,7 +367,7 @@ rm ../kernel-2.6.32lustremaster.tar.gz</screen>
             <para>
               <screen># cd ~/lustre-release/
 # ./configure --with-linux=/home/build/kernel/rpmbuild/BUILD/
-     kernel-2.6.32.lustremaster/</screen>
+     kernel-2.6.32-358.14.1.el6_lustre.x86_64/</screen>
             </para>
             <para>Text similar to the following is displayed:</para>
             <para>
@@ -405,21 +398,21 @@ Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.TsLWpD
 + cd /home/build/kernel/rpmbuild/BUILD
 + cd lustre-2.0.61
 + rm -rf /home/build/kernel/rpmbuild/BUILDROOT/
-     lustre-2.0.61-2.6.32_lustremaster_g0533e7b.x86_64
+     lustre-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64
 + exit 0
 make[1]: Leaving directory `/home/build/lustre-release'</screen>
             </para>
           </listitem>
         </orderedlist></para>
       <para>The resulting RPMs are in
-        <systemitem>~build/kernel/rpmbuild/RPMS/x86_64/</systemitem>.<screen>kernel-2.6.32lustremaster-1.x86_64.rpm
-lustre-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-debuginfo-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-ldiskfs-3.3.0-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-ldiskfs-debuginfo-3.3.0-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-modules-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-source-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm
-lustre-tests-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm</screen></para>
+        <systemitem>~build/kernel/rpmbuild/RPMS/x86_64/</systemitem>.<screen>kernel-2.6.3-358.14.1.el6_lustre.x86_64-1.x86_64.rpm
+lustre-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-debuginfo-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-ldiskfs-3.3.0-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-ldiskfs-debuginfo-3.3.0-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-modules-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-source-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
+lustre-tests-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm</screen></para>
     </section>
     <section>
       <title>Installing the Lustre Kernel</title>
@@ -428,33 +421,15 @@ lustre-tests-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm</screen></para>
             <para>As <systemitem>root</systemitem>, install the kernel:</para>
             <para>
               <screen># rpm -ivh ~build/kernel/rpmbuild/RPMS/x86_64/
-     kernel-2.6.32.lustremaster-1.x86_64.rpm</screen>
+     kernel-2.6.32-358.14.1.el6_lustre.x86_64-1.x86_64.rpm</screen>
             </para>
           </listitem>
           <listitem>
             <para>Create <literal>initrd</literal> using <literal>dracut</literal>:</para>
             <para>
               <screen># /sbin/new-kernel-pkg --package kernel --mkinitrd --dracut 
-     --depmod --install 2.6.32.lustremaster</screen>
+     --depmod --install 2.6.32-358.14.1.el6_lustre.x86_64</screen>
             </para>
-          </listitem>
-          <listitem>
-            <para>(Optional) To mount the Lustre file system at boot, modify
-                <literal>/etc/fstab</literal> to add required entries.</para>
-            <para condition="l24">In Lustre Release 2.4, the script
-                <literal>/etc/init.d/lustre</literal> has been provided to allow the Lustre file
-              system to be enabled as a service. To enable the service, enter the command
-                <literal>chkconfig lustre on</literal>.</para>
-          </listitem>
-          <listitem>
-            <para>(Optional) Customize the LNET configuration:</para>
-            <para>
-              <screen># vi /etc/modprobe.d/lustre.conf</screen>
-            </para>
-            <para condition="l24">In Lustre Release 2.4, the script
-                <literal>/etc/init.d/lnet</literal> has been provided to allow LNET to be enabled as
-              a service (for example, on a router). To enable this service, enter the command
-                <literal>chkconfig lnet on</literal>.</para>
           </listitem>
           <listitem>
             <para>Reboot the system:</para>
@@ -463,7 +438,7 @@ lustre-tests-2.0.61-2.6.32.lustremaster_g0533e7b.x86_64.rpm</screen></para>
             </para>
             <para>A login prompt such as that shown below indicates
               success:<screen>Red Hat Enterprise Linux Server release 6.0(Santiago)
-Kernel 2.6.32lustremaster on an x86_64 
+Kernel 2.6.3-358.14.1.el6_lustre.x86_64 on an x86_64 
 
 client-10login:
 </screen></para>
@@ -477,7 +452,7 @@ client-10login:
       suite.</para>
     <section>
       <title>Installing <package>e2fsprogs</package></title>
-      <para>The <literal>e2fsprogs</literal> package is required to run the test suite. To download
+      <para>The <package>e2fsprogs</package> package is required on all Lustre file system server nodes. To download
         and install <literal>e2fsprogs</literal>, complete these steps.<orderedlist>
           <listitem>
             <para>Download <literal>e2fsprogs</literal> from the <link
@@ -489,8 +464,8 @@ client-10login:
             <para>Install the <literal>e2fsprogs</literal> package:</para>
             <para>
               <screen># rpm -Uvh
-     ./e2fsprogs-1.42.6.wc2-7.el6.x86_64.rpm 
-     ./e2fsprogs-libs-1.42.6.wc2-7.el6.x86_64.rpm
+     ./e2fsprogs-1.42.7.wc2-7.el6.x86_64.rpm 
+     ./e2fsprogs-libs-1.42.7.wc2-7.el6.x86_64.rpm
 
 </screen>
             </para>
@@ -510,9 +485,9 @@ client-10login:
           <listitem>
             <para>Install the RPMs:</para>
             <para>
-              <screen># rpm -ivh lustre-ldiskfs-3.3.0-2.6.32.lustremaster*
-# rpm -ivh lustre-modules-2.0.61-2.6.32.lustremaster*
-# rpm -ivh lustre-2.0.61-2.6.32.lustremaster_*
+              <screen># rpm -ivh lustre-ldiskfs-3.3.0-2.6.32-358.14.1.el6_lustre.x86_64*
+# rpm -ivh lustre-modules-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64*
+# rpm -ivh lustre-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_*
 # rpm -ivh lustre-tests-*</screen>
             </para>
           </listitem>
@@ -522,7 +497,7 @@ client-10login:
       <title>Running the Test Suite</title>
       <para>To test a single node Lustre file system installation, complete these steps.<orderedlist>
           <listitem>
-            <para>Run the test suite.</para>
+            <para>Mount the Lustre file system.</para>
             <para>
               <screen># /usr/lib64/lustre/tests/llmount.sh</screen>
             </para>
@@ -567,6 +542,7 @@ Using TIMEOUT=20
 disable quota as required</screen></para>
             <para>The Lustre file system is now available at
               <systemitem>/mnt/lustre</systemitem>.</para>
+			<warning><para>The Lustre file system available at <literal>/mnt/lustre</literal> is a test file system built from small loopback devices in <literal>/tmp</literal> and not for production use.</para></warning>
             <note>
               <para>If you see the error below, associate the IP address of a non-loopback interface
                 with the name of your machine in the file
