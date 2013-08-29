@@ -125,3 +125,16 @@ MACHINEFILE_OPTION=${MACHINEFILE_OPTION:-"-machinefile"}
 # running the tests, or in some cases between the servers (e.g. lfsck.sh).
 # It needs to be a non-lustre filesystem that is available on all the nodes.
 SHARED_DIRECTORY=${SHARED_DIRECTORY:-$TMP}	# bug 17839 comment 65
+
+#
+# In order to test multiple remote HSM agents, a new facet type named "AGT" and
+# the following associated variables are added:
+#
+# AGTCOUNT: number of agents
+# AGTDEV{N}: target HSM mount point (root path of the backend)
+# agt{N}_HOST: hostname of the agent agt{N}
+# SINGLEAGT: facet of the single agent
+#
+# Please refer to init_agt_vars() in sanity-hsm.sh for the default values of
+# these variables.
+#

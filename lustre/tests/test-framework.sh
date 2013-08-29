@@ -2334,14 +2334,32 @@ replay_barrier_nosync() {
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
+#
+# Get Lustre client uuid for a given Lustre mount point.
+#
+get_client_uuid() {
+	local mntpnt=${1:-$MOUNT}
+
+	local name=$($LFS getname $mntpnt | cut -d' ' -f1)
+	local uuid=$($LCTL get_param -n llite.$name.uuid)
+
+	echo -n $uuid
+}
+
 mds_evict_client() {
-    UUID=`lctl get_param -n mdc.${mds1_svc}-mdc-*.uuid`
-    do_facet mds1 "lctl set_param -n mdt.${mds1_svc}.evict_client $UUID"
+	local mntpnt=${1:-$MOUNT}
+	local uuid=$(get_client_uuid $mntpnt)
+
+	do_facet $SINGLEMDS \
+		"$LCTL set_param -n mdt.${mds1_svc}.evict_client $uuid"
 }
 
 ost_evict_client() {
-    UUID=`lctl get_param -n devices| grep ${ost1_svc}-osc- | egrep -v 'MDT' | awk '{print $5}'`
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.evict_client $UUID"
+	local mntpnt=${1:-$MOUNT}
+	local uuid=$(get_client_uuid $mntpnt)
+
+	do_facet ost1 \
+		"$LCTL set_param -n obdfilter.${ost1_svc}.evict_client $uuid"
 }
 
 fail() {
@@ -3726,10 +3744,11 @@ run_e2fsck() {
 # verify a directory is shared among nodes.
 check_shared_dir() {
 	local dir=$1
+	local list=${2:-$(comma_list $(nodes_list))}
 
 	[ -z "$dir" ] && return 1
-	do_rpc_nodes "$(comma_list $(nodes_list))" check_logdir $dir
-	check_write_access $dir || return 1
+	do_rpc_nodes "$list" check_logdir $dir
+	check_write_access $dir "$list" || return 1
 	return 0
 }
 
@@ -3964,7 +3983,7 @@ get_facets () {
 
         case $type in
                 MGS ) list="$list $name";;
-            MDS|OST ) local count=${type}COUNT
+            MDS|OST|AGT ) local count=${type}COUNT
                        for ((i=1; i<=${!count}; i++)) do
                           list="$list ${name}$i"
                       done;;
@@ -4753,6 +4772,11 @@ mdts_nodes () {
 # Get all of the active OSS nodes.
 osts_nodes () {
 	echo -n $(facets_nodes $(get_facets OST))
+}
+
+# Get all of the active AGT (HSM agent) nodes.
+agts_nodes () {
+	echo -n $(facets_nodes $(get_facets AGT))
 }
 
 # Get all of the client nodes and active server nodes.
@@ -6003,19 +6027,20 @@ check_logdir() {
 }
 
 check_write_access() {
-    local dir=$1
-    local node
-    local file
+	local dir=$1
+	local list=${2:-$(comma_list $(nodes_list))}
+	local node
+	local file
 
-    for node in $(nodes_list); do
-        file=$dir/check_file.$(short_hostname $node)
-        if [[ ! -f "$file" ]]; then
-            # Logdir not accessible/writable from this node.
-            return 1
-        fi
-        rm -f $file || return 1
-    done
-    return 0
+	for node in ${list//,/ }; do
+		file=$dir/check_file.$(short_hostname $node)
+		if [[ ! -f "$file" ]]; then
+			# Logdir not accessible/writable from this node.
+			return 1
+		fi
+		rm -f $file || return 1
+	done
+	return 0
 }
 
 init_logging() {
