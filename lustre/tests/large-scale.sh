@@ -83,8 +83,8 @@ test_3a() {
 
 			COMMAND="${MDSRATE} --create --nfiles $nfiles --dir
 				 $dir --filefmt 'f%%d'"
-			mpi_run -np $((num * nthreads)) ${MACHINEFILE_OPTION} \
-				$machinefile ${COMMAND} | tee ${LOG} &
+			mpi_run ${MACHINEFILE_OPTION} $machinefile \
+				-np $((num * nthreads)) ${COMMAND} | tee ${LOG}&
 
 			pid=$!
 			echo "pid=$pid"

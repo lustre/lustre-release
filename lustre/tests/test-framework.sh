@@ -5267,7 +5267,7 @@ get_mds_dir () {
 
 mdsrate_cleanup () {
 	if [ -d $4 ]; then
-		mpi_run -np $1 ${MACHINEFILE_OPTION} $2 ${MDSRATE} --unlink \
+		mpi_run ${MACHINEFILE_OPTION} $2 -np $1 ${MDSRATE} --unlink \
 			--nfiles $3 --dir $4 --filefmt $5 $6
 		rmdir $4
 	fi
@@ -5280,7 +5280,7 @@ delayed_recovery_enabled () {
 
 ########################
 
-convert_facet2label() { 
+convert_facet2label() {
     local facet=$1
 
     if [ x$facet = xost ]; then
@@ -5291,7 +5291,7 @@ convert_facet2label() {
 
     if [ -n ${!varsvc} ]; then
         echo ${!varsvc}
-    else  
+    else
         error "No lablel for $facet!"
     fi
 }

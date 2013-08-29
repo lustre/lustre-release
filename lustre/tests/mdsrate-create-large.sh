@@ -13,7 +13,7 @@ MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 BASEDIR=$MOUNT/mdsrate
 
 # Requirements
-# set NUM_FILES=0 to force TIME_PERIOD work  
+# set NUM_FILES=0 to force TIME_PERIOD work
 NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
 
@@ -28,7 +28,7 @@ NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
 
 [ ! -x ${MDSRATE} ] && error "${MDSRATE} not built."
 
-log "===== $0 ====== " 
+log "===== $0 ====== "
 
 check_and_setup_lustre
 
@@ -58,7 +58,7 @@ else
 	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
 		--nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
 	echo "+ ${COMMAND}"
-	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -71,7 +71,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
                 --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
-    mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+    mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
@@ -97,7 +97,7 @@ else
 	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
 		--nfiles $NUM_FILES --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
 	echo "+ ${COMMAND}"
-	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -110,7 +110,7 @@ else
 	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
 		--nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
 	echo "+ ${COMMAND}"
-	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then

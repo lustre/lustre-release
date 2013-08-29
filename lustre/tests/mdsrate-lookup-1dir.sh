@@ -4,7 +4,7 @@
 
 # Directory lookup retrieval rate single directory 10 million files
 # 5900 random lookups/sec per client node 62,000 random lookups/sec aggregate
-# 
+#
 # In a dir containing 10 million non-striped files the mdsrate Test Program will
 # perform lookups for 10 minutes. This test can be run from a single node for
 # #1 and from all nodes for #2 aggregate test to measure lookup performance.
@@ -33,7 +33,7 @@ rm -f $LOG
 
 [ ! -x ${MDSRATE} ] && error "${MDSRATE} not built."
 
-log "===== $0 ====== " 
+log "===== $0 ====== "
 
 check_and_setup_lustre
 
@@ -64,7 +64,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
 	echo "+" ${COMMAND}
-	mpi_run -np ${NUM_THREADS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_THREADS} \
 		${COMMAND} 2>&1
 
     # No lockup if error occurs on file creation, abort.
@@ -80,7 +80,7 @@ if [ -n "$NOSINGLE" ]; then
 else
 	log "===== $0 ### 1 NODE LOOKUPS ###"
 	echo "+" ${COMMAND}
-	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -96,7 +96,7 @@ if [ -n "$NOMULTI" ]; then
 else
 	log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
 	echo "+" ${COMMAND}
-	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then

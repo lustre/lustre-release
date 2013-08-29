@@ -348,8 +348,8 @@ run_metabench() {
 			-n $((num_clients * mbench_THREADS)) \
 			-p $SRUN_PARTITION -- $cmd
 	else
-		mpi_run -np $((num_clients * $mbench_THREADS)) \
-			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $((num_clients * $mbench_THREADS)) $cmd
 	fi
 
     local rc=$?
@@ -396,8 +396,8 @@ run_simul() {
 			-n $((num_clients * simul_THREADS)) -p $SRUN_PARTITION \
 			-- $cmd
 	else
-		mpi_run -np $((num_clients * simul_THREADS)) \
-			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $((num_clients * simul_THREADS)) $cmd
 	fi
 
     local rc=$?
@@ -452,8 +452,8 @@ run_mdtest() {
 			-n $((num_clients * mdtest_THREADS)) \
 			-p $SRUN_PARTITION -- $cmd
 	else
-		mpi_run -np $((num_clients * mdtest_THREADS)) \
-			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $((num_clients * mdtest_THREADS)) $cmd
 	fi
 
     local rc=$?
@@ -586,8 +586,8 @@ run_ior() {
 			-n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION \
 			-- $cmd
 	else
-		mpi_run -np $((num_clients * $ior_THREADS)) \
-			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $((num_clients * $ior_THREADS)) $cmd
 	fi
 
     local rc=$?
@@ -640,8 +640,8 @@ run_mib() {
 			-n $((num_clients * mib_THREADS)) -p $SRUN_PARTITION \
 			-- $cmd
 	else
-		mpi_run -np $((num_clients * mib_THREADS)) \
-			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $((num_clients * mib_THREADS)) $cmd
 	fi
 
     local rc=$?
@@ -682,8 +682,8 @@ run_cascading_rw() {
     local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
 
 	echo "+ $cmd"
-	mpi_run -np $((num_clients * $casc_THREADS)) ${MACHINEFILE_OPTION} \
-		${MACHINEFILE} $cmd
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		-np $((num_clients * $casc_THREADS)) $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -724,8 +724,8 @@ run_write_append_truncate() {
     local cmd="write_append_truncate -n $write_REP $file"
 
 	echo "+ $cmd"
-	mpi_run -np $((num_clients * $write_THREADS)) ${MACHINEFILE_OPTION} \
-		${MACHINEFILE} $cmd
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		-np $((num_clients * $write_THREADS)) $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -764,8 +764,8 @@ run_write_disjoint() {
     local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP"
 
 	echo "+ $cmd"
-	mpi_run -np $((num_clients * $wdisjoint_THREADS)) \
-		${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		-np $((num_clients * $wdisjoint_THREADS)) $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -806,8 +806,8 @@ run_parallel_grouplock() {
 		local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
 		echo "+ $cmd"
 
-		mpi_run -np $parallel_grouplock_MINTASKS ${MACHINEFILE_OPTION} \
-			${MACHINEFILE} $cmd
+		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+			-np $parallel_grouplock_MINTASKS $cmd
 		local rc=$?
 		if [ $rc != 0 ] ; then
 			error_noexit "parallel_grouplock subtests $subtest " \
@@ -883,8 +883,8 @@ run_statahead () {
     local cmd="$cmd1 $cmd2"
     echo "+ $cmd"
 
-	mpi_run -np $((num_clients * 32)) ${MACHINEFILE_OPTION} ${MACHINEFILE} \
-		$cmd
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		-np $((num_clients * 32)) $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then

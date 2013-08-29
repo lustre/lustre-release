@@ -35,7 +35,7 @@ rm -f $LOG
 
 [ ! -x ${MDSRATE} ] && error "${MDSRATE} not built."
 
-log "===== $0 ====== " 
+log "===== $0 ====== "
 
 check_and_setup_lustre
 
@@ -68,7 +68,7 @@ else
         NUM_THREADS=$NUM_CLIENTS
     fi
 
-	mpi_run -np ${NUM_THREADS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_THREADS} \
 		${COMMAND} 2>&1
 	[ ${PIPESTATUS[0]} != 0 ] &&
 		error "mdsrate file creation failed, aborting"
@@ -85,7 +85,7 @@ else
     log "===== $0 ### 1 NODE STAT ###"
     echo "+" ${COMMAND}
 
-	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -102,7 +102,7 @@ else
     log "===== $0 ### ${NUM_CLIENTS} NODES STAT ###"
     echo "+" ${COMMAND}
 
-	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then

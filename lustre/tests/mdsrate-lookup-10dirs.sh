@@ -4,7 +4,7 @@
 
 # Directory lookup retrieval rate 10 directories 1 million files each
 # 6000 random lookups/sec per client node 62,000 random lookups/sec aggregate
-# 
+#
 # In 10 dirs containing 1 million files each the mdsrate Test Program will
 # perform lookups for 10 minutes. This test is run from a single node for
 # #1 and from all nodes for #2 aggregate test to measure lookup performance.
@@ -34,7 +34,7 @@ rm -f $LOG
 
 [ ! -x ${MDSRATE} ] && error "${MDSRATE} not built."
 
-log "===== $0 ====== " 
+log "===== $0 ====== "
 
 check_and_setup_lustre
 
@@ -71,7 +71,7 @@ else
 	# This is just a test preparation, does not matter how many threads we
 	# use for files creation; we just should be aware that NUM_DIRS is less
 	# than or equal to the number of threads np
-	mpi_run -np ${NUM_DIRS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_DIRS} \
 		${COMMAND} 2>&1
 
     # No lookup if error occurs on file creation, abort.
@@ -88,7 +88,7 @@ if [ -n "$NOSINGLE" ]; then
 else
 	log "===== $0 ### 1 NODE LOOKUPS ###"
 	echo "+" ${COMMAND}
-	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -104,7 +104,7 @@ if [ -n "$NOMULTI" ]; then
 else
 	log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
 	echo "+" ${COMMAND}
-	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
