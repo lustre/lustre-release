@@ -635,6 +635,9 @@ AC_SUBST(O2IBLND)
 if test $ENABLEO2IB -ne 0; then
 	AC_MSG_CHECKING([if rdma_create_id wants four args])
 	LB_LINUX_TRY_COMPILE([
+		#if !defined(HAVE_OFED_BACKPORT_H) && defined(HAVE_SCSI_FC_COMPAT_H)
+	        #include <scsi/fc_compat.h>
+	        #endif
 		#include <rdma/rdma_cm.h>
 	],[
 		rdma_create_id(NULL, NULL, 0, 0);
