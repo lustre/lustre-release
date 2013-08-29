@@ -318,7 +318,7 @@ int lfsck_master_engine(void *args)
 	       lfsck->li_pos_current.lp_oit_cookie,
 	       lfsck->li_pos_current.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
-	       cfs_curproc_pid());
+	       current_pid());
 
 	spin_lock(&lfsck->li_lock);
 	thread_set_flags(thread, SVC_RUNNING);
@@ -337,7 +337,7 @@ int lfsck_master_engine(void *args)
 	       lfsck->li_pos_current.lp_oit_cookie,
 	       lfsck->li_pos_current.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
-	       cfs_curproc_pid(), rc);
+	       current_pid(), rc);
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
 		rc = lfsck_post(&env, lfsck, rc);

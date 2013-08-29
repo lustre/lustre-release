@@ -1999,15 +1999,15 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
                 goto put_conn;
         }
 
-        CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
-               (request->rq_export ?
-                (char *)request->rq_export->exp_client_uuid.uuid : "0"),
-               (request->rq_export ?
-                cfs_atomic_read(&request->rq_export->exp_refcount) : -99),
-               lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
-               libcfs_id2str(request->rq_peer),
-               lustre_msg_get_opc(request->rq_reqmsg));
+	CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
+	       "%s:%s+%d:%d:x"LPU64":%s:%d\n", current_comm(),
+	       (request->rq_export ?
+		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
+	       (request->rq_export ?
+		cfs_atomic_read(&request->rq_export->exp_refcount) : -99),
+	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
+	       libcfs_id2str(request->rq_peer),
+	       lustre_msg_get_opc(request->rq_reqmsg));
 
         if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
                 CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
@@ -2033,11 +2033,11 @@ put_conn:
 	do_gettimeofday(&work_end);
 	timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
 	CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-               "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
-               "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
-                cfs_curproc_comm(),
-                (request->rq_export ?
-                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
+	       "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
+	       "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
+		current_comm(),
+		(request->rq_export ?
+		 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                 (request->rq_export ?
                  cfs_atomic_read(&request->rq_export->exp_refcount) : -99),
                 lustre_msg_get_status(request->rq_reqmsg),
@@ -2398,7 +2398,7 @@ static int ptlrpc_main(void *arg)
         int counter = 0, rc = 0;
         ENTRY;
 
-        thread->t_pid = cfs_curproc_pid();
+	thread->t_pid = current_pid();
 	unshare_fs_struct();
 
 	/* NB: we will call cfs_cpt_bind() for all threads, because we

@@ -425,7 +425,7 @@ static int mdt_coordinator(void *data)
 	cfs_waitq_signal(&cdt->cdt_thread.t_ctl_waitq);
 
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
-	       mdt_obd_name(mdt), cfs_curproc_pid());
+	       mdt_obd_name(mdt), current_pid());
 
 	/*
 	 * create /proc entries for coordinator
@@ -657,11 +657,11 @@ out:
 
 	if (rc != 0)
 		CERROR("%s: coordinator thread exiting, process=%d, rc=%d\n",
-		       mdt_obd_name(mdt), cfs_curproc_pid(), rc);
+		       mdt_obd_name(mdt), current_pid(), rc);
 	else
 		CDEBUG(D_HSM, "%s: coordinator thread exiting, process=%d,"
 			      " no error\n",
-		       mdt_obd_name(mdt), cfs_curproc_pid());
+		       mdt_obd_name(mdt), current_pid());
 
 	return rc;
 }

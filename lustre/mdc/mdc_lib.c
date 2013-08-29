@@ -52,14 +52,14 @@
 
 static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
-        LASSERT (b != NULL);
+	LASSERT (b != NULL);
 
-        b->suppgid = suppgid;
-        b->uid = cfs_curproc_uid();
-        b->gid = cfs_curproc_gid();
-        b->fsuid = cfs_curproc_fsuid();
-        b->fsgid = cfs_curproc_fsgid();
-        b->capability = cfs_curproc_cap_pack();
+	b->suppgid = suppgid;
+	b->uid = current_uid();
+	b->gid = current_gid();
+	b->fsuid = current_fsuid();
+	b->fsgid = current_fsgid();
+	b->capability = cfs_curproc_cap_pack();
 }
 
 void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
@@ -171,7 +171,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		flags |= MDS_OPEN_VOLATILE;
 	set_mrc_cr_flags(rec, flags);
 	rec->cr_bias     = op_data->op_bias;
-	rec->cr_umask    = cfs_curproc_umask();
+	rec->cr_umask    = current_umask();
 
 	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
@@ -230,8 +230,8 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
 	/* XXX do something about time, uid, gid */
 	rec->cr_opcode   = REINT_OPEN;
-	rec->cr_fsuid   = cfs_curproc_fsuid();
-	rec->cr_fsgid   = cfs_curproc_fsgid();
+	rec->cr_fsuid   = current_fsuid();
+	rec->cr_fsgid   = current_fsgid();
 	rec->cr_cap      = cfs_curproc_cap_pack();
 	if (op_data != NULL) {
 		rec->cr_fid1 = op_data->op_fid1;
@@ -244,7 +244,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	rec->cr_suppgid1 = op_data->op_suppgids[0];
 	rec->cr_suppgid2 = op_data->op_suppgids[1];
 	rec->cr_bias     = op_data->op_bias;
-	rec->cr_umask    = cfs_curproc_umask();
+	rec->cr_umask    = current_umask();
 	rec->cr_old_handle = op_data->op_handle;
 
 	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
@@ -312,13 +312,13 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
 }
 
 static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
-                                 struct md_op_data *op_data)
+				 struct md_op_data *op_data)
 {
-        rec->sa_opcode  = REINT_SETATTR;
-        rec->sa_fsuid   = cfs_curproc_fsuid();
-        rec->sa_fsgid   = cfs_curproc_fsgid();
-        rec->sa_cap     = cfs_curproc_cap_pack();
-        rec->sa_suppgid = -1;
+	rec->sa_opcode  = REINT_SETATTR;
+	rec->sa_fsuid   = current_fsuid();
+	rec->sa_fsgid   = current_fsgid();
+	rec->sa_cap     = cfs_curproc_cap_pack();
+	rec->sa_suppgid = -1;
 
         rec->sa_fid    = op_data->op_fid1;
         rec->sa_valid  = attr_pack(op_data->op_attr.ia_valid);
@@ -331,11 +331,11 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
         rec->sa_mtime  = LTIME_S(op_data->op_attr.ia_mtime);
         rec->sa_ctime  = LTIME_S(op_data->op_attr.ia_ctime);
         rec->sa_attr_flags = ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags;
-        if ((op_data->op_attr.ia_valid & ATTR_GID) &&
-            cfs_curproc_is_in_groups(op_data->op_attr.ia_gid))
-                rec->sa_suppgid = op_data->op_attr.ia_gid;
-        else
-                rec->sa_suppgid = op_data->op_suppgids[0];
+	if ((op_data->op_attr.ia_valid & ATTR_GID) &&
+	    in_group_p(op_data->op_attr.ia_gid))
+		rec->sa_suppgid = op_data->op_attr.ia_gid;
+	else
+		rec->sa_suppgid = op_data->op_suppgids[0];
 
 	rec->sa_bias = op_data->op_bias;
 }

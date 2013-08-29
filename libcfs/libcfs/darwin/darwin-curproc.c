@@ -56,18 +56,18 @@ static inline struct ucred *curproc_ucred(void)
 #endif
 }
 
-uid_t  cfs_curproc_uid(void)
+uid_t  current_uid(void)
 {
         return curproc_ucred()->cr_uid;
 }
 
-gid_t  cfs_curproc_gid(void)
+gid_t  current_gid(void)
 {
         LASSERT(curproc_ucred()->cr_ngroups > 0);
         return curproc_ucred()->cr_groups[0];
 }
 
-uid_t  cfs_curproc_fsuid(void)
+uid_t  current_fsuid(void)
 {
 #ifdef __DARWIN8__
         return curproc_ucred()->cr_ruid;
@@ -76,7 +76,7 @@ uid_t  cfs_curproc_fsuid(void)
 #endif
 }
 
-gid_t  cfs_curproc_fsgid(void)
+gid_t  current_fsgid(void)
 {
 #ifdef __DARWIN8__
         return curproc_ucred()->cr_rgid;
@@ -85,7 +85,7 @@ gid_t  cfs_curproc_fsgid(void)
 #endif
 }
 
-pid_t  cfs_curproc_pid(void)
+pid_t  current_pid(void)
 {
 #ifdef __DARWIN8__
         /* no pid for each thread, return address of thread struct */
@@ -95,13 +95,7 @@ pid_t  cfs_curproc_pid(void)
 #endif
 }
 
-int    cfs_curproc_groups_nr(void)
-{
-        LASSERT(curproc_ucred()->cr_ngroups > 0);
-        return curproc_ucred()->cr_ngroups - 1;
-}
-
-int    cfs_curproc_is_in_groups(gid_t gid)
+int    in_group_p(gid_t gid)
 {
         int i;
         struct ucred *cr;
@@ -116,19 +110,7 @@ int    cfs_curproc_is_in_groups(gid_t gid)
         return 0;
 }
 
-void   cfs_curproc_groups_dump(gid_t *array, int size)
-{
-        struct ucred *cr;
-
-        cr = curproc_ucred();
-        LASSERT(cr != NULL);
-        CLASSERT(sizeof array[0] == sizeof (__u32));
-
-        size = min_t(int, size, cr->cr_ngroups);
-        memcpy(array, &cr->cr_groups[1], size * sizeof(gid_t));
-}
-
-mode_t cfs_curproc_umask(void)
+mode_t current_umask(void)
 {
 #ifdef __DARWIN8__
         /*
@@ -143,7 +125,7 @@ mode_t cfs_curproc_umask(void)
 #endif
 }
 
-char  *cfs_curproc_comm(void)
+char  *current_comm(void)
 {
 #ifdef __DARWIN8__
         /*

@@ -1722,12 +1722,12 @@ static int obd_zombie_is_idle(void)
  */
 void obd_zombie_barrier(void)
 {
-        struct l_wait_info lwi = { 0 };
+	struct l_wait_info lwi = { 0 };
 
-        if (obd_zombie_pid == cfs_curproc_pid())
-                /* don't wait for myself */
-                return;
-        l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
+	if (obd_zombie_pid == current_pid())
+		/* don't wait for myself */
+		return;
+	l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
 
@@ -1741,7 +1741,7 @@ static int obd_zombie_impexp_thread(void *unused)
 	unshare_fs_struct();
 	complete(&obd_zombie_start);
 
-	obd_zombie_pid = cfs_curproc_pid();
+	obd_zombie_pid = current_pid();
 
 	while (!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };

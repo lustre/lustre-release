@@ -266,7 +266,7 @@ void libcfs_debug_dumplog(void)
 	cfs_waitq_add(&debug_ctlwq, &wait);
 
 	dumper = kthread_run(libcfs_debug_dumplog_thread,
-			     (void *)(long)cfs_curproc_pid(),
+			     (void *)(long)current_pid(),
 			     "libcfs_debug_dumper");
 	if (IS_ERR(dumper))
 		printk(CFS_KERN_ERR "LustreError: cannot start log dump thread:"

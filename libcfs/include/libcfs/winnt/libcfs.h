@@ -112,4 +112,21 @@ static inline __u32 query_stack_size()
 #define EXIT_NESTING   do {} while (0)
 #define __current_nesting_level() (0)
 
+/*
+ * Portable API to access common characteristics of "current" UNIX process.
+ */
+uid_t  current_uid(void);
+gid_t  current_gid(void);
+uid_t  current_euid(void);
+gid_t  current_egid(void);
+uid_t  current_fsuid(void);
+gid_t  current_fsgid(void);
+pid_t  current_pid(void);
+int    in_group_p(gid_t group);
+mode_t current_umask(void);
+char  *current_comm(void);
+
+/* check if task is running in compat mode.*/
+int current_is_32bit(void);
+
 #endif /* _WINNT_LIBCFS_H */

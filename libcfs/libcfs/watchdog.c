@@ -350,12 +350,12 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
         }
 
 	spin_lock_init(&lcw->lcw_lock);
-        lcw->lcw_refcount = 1; /* refcount for owner */
-        lcw->lcw_task     = cfs_current();
-        lcw->lcw_pid      = cfs_curproc_pid();
-        lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
-        lcw->lcw_data     = data;
-        lcw->lcw_state    = LC_WATCHDOG_DISABLED;
+	lcw->lcw_refcount = 1; /* refcount for owner */
+	lcw->lcw_task     = cfs_current();
+	lcw->lcw_pid      = current_pid();
+	lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
+	lcw->lcw_data     = data;
+	lcw->lcw_state    = LC_WATCHDOG_DISABLED;
 
         CFS_INIT_LIST_HEAD(&lcw->lcw_list);
         cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);

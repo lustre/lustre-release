@@ -306,10 +306,10 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 __u32 ll_i2suppgid(struct inode *i)
 {
-        if (cfs_curproc_is_in_groups(i->i_gid))
-                return (__u32)i->i_gid;
-        else
-                return (__u32)(-1);
+	if (in_group_p(i->i_gid))
+		return (__u32)i->i_gid;
+	else
+		return (__u32)(-1);
 }
 
 /* Pack the required supplementary groups into the supplied groups array.
@@ -545,7 +545,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         /* enforce umask if acl disabled or MDS doesn't support umask */
         if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
-                it->it_create_mode &= ~cfs_curproc_umask();
+		it->it_create_mode &= ~current_umask();
 
         rc = md_intent_lock(ll_i2mdexp(parent), op_data, NULL, 0, it,
                             lookup_flags, &req, ll_md_blocking_ast, 0);
@@ -895,10 +895,10 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
         if (IS_ERR(op_data))
                 GOTO(err_exit, err = PTR_ERR(op_data));
 
-        err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
-                        cfs_curproc_fsuid(), cfs_curproc_fsgid(),
-                        cfs_curproc_cap_pack(), rdev, &request);
-        ll_finish_md_op_data(op_data);
+	err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
+			current_fsuid(), current_fsgid(),
+			cfs_curproc_cap_pack(), rdev, &request);
+	ll_finish_md_op_data(op_data);
         if (err)
                 GOTO(err_exit, err);
 
@@ -928,8 +928,8 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
                name->len, name->name, dir->i_ino, dir->i_generation, dir,
                mode, rdev);
 
-        if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
-                mode &= ~cfs_curproc_umask();
+	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
+		mode &= ~current_umask();
 
         switch (mode & S_IFMT) {
         case 0:
@@ -1082,10 +1082,10 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
-                mode &= ~cfs_curproc_umask();
-        mode = (mode & (S_IRWXUGO|S_ISVTX)) | S_IFDIR;
-        err = ll_new_node(dir, name, NULL, mode, 0, dchild, LUSTRE_OPC_MKDIR);
+	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
+		mode &= ~current_umask();
+	mode = (mode & (S_IRWXUGO|S_ISVTX)) | S_IFDIR;
+	err = ll_new_node(dir, name, NULL, mode, 0, dchild, LUSTRE_OPC_MKDIR);
 
         if (!err)
                 ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKDIR, 1);

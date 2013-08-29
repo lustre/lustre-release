@@ -245,22 +245,22 @@ void *kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 }
 #endif
 
-uid_t cfs_curproc_uid(void)
+uid_t current_uid(void)
 {
         return getuid();
 }
 
-gid_t cfs_curproc_gid(void)
+gid_t current_gid(void)
 {
         return getgid();
 }
 
-uid_t cfs_curproc_fsuid(void)
+uid_t current_fsuid(void)
 {
         return getuid();
 }
 
-gid_t cfs_curproc_fsgid(void)
+gid_t current_fsgid(void)
 {
         return getgid();
 }

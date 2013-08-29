@@ -152,10 +152,10 @@ void *kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...);
 #define kthread_run(f, a, n, ...) LBUG()
 #endif
 
-uid_t cfs_curproc_uid(void);
-gid_t cfs_curproc_gid(void);
-uid_t cfs_curproc_fsuid(void);
-gid_t cfs_curproc_fsgid(void);
+uid_t current_uid(void);
+gid_t current_gid(void);
+uid_t current_fsuid(void);
+gid_t current_fsgid(void);
 
 #ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
 size_t strlcpy(char *tgt, const char *src, size_t tgt_len);

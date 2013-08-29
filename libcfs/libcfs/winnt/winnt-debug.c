@@ -59,12 +59,12 @@ void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
 
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
-        libcfs_catastrophe = 1;
-        CEMERG("LBUG: pid: %u thread: %#x\n",
-               cfs_curproc_pid(), PsGetCurrentThread());
-        cfs_enter_debugger();
-        libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(msgdata);
+	libcfs_catastrophe = 1;
+	CEMERG("LBUG: pid: %u thread: %#x\n",
+	       current_pid(), PsGetCurrentThread());
+	cfs_enter_debugger();
+	libcfs_debug_dumplog();
+	libcfs_run_lbug_upcall(msgdata);
 }
 
 void cfs_enter_debugger(void)

@@ -139,21 +139,21 @@ int ll_setxattr_common(struct inode *inode, const char *name,
                 RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-            (xattr_type == XATTR_ACL_ACCESS_T ||
-            xattr_type == XATTR_ACL_DEFAULT_T)) {
-                rce = rct_search(&sbi->ll_rct, cfs_curproc_pid());
-                if (rce == NULL ||
-                    (rce->rce_ops != RMT_LSETFACL &&
-                    rce->rce_ops != RMT_RSETFACL))
-                        RETURN(-EOPNOTSUPP);
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
+	    (xattr_type == XATTR_ACL_ACCESS_T ||
+	    xattr_type == XATTR_ACL_DEFAULT_T)) {
+		rce = rct_search(&sbi->ll_rct, current_pid());
+		if (rce == NULL ||
+		    (rce->rce_ops != RMT_LSETFACL &&
+		    rce->rce_ops != RMT_RSETFACL))
+			RETURN(-EOPNOTSUPP);
 
-                if (rce->rce_ops == RMT_LSETFACL) {
-                        struct eacl_entry *ee;
+		if (rce->rce_ops == RMT_LSETFACL) {
+			struct eacl_entry *ee;
 
-                        ee = et_search_del(&sbi->ll_et, cfs_curproc_pid(),
-                                           ll_inode2fid(inode), xattr_type);
-                        LASSERT(ee != NULL);
+			ee = et_search_del(&sbi->ll_et, current_pid(),
+					   ll_inode2fid(inode), xattr_type);
+			LASSERT(ee != NULL);
                         if (valid & OBD_MD_FLXATTR) {
                                 acl = lustre_acl_xattr_merge2ext(
                                                 (posix_acl_xattr_header *)value,
@@ -322,17 +322,17 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-            (xattr_type == XATTR_ACL_ACCESS_T ||
-            xattr_type == XATTR_ACL_DEFAULT_T)) {
-                rce = rct_search(&sbi->ll_rct, cfs_curproc_pid());
-                if (rce == NULL ||
-                    (rce->rce_ops != RMT_LSETFACL &&
-                    rce->rce_ops != RMT_LGETFACL &&
-                    rce->rce_ops != RMT_RSETFACL &&
-                    rce->rce_ops != RMT_RGETFACL))
-                        RETURN(-EOPNOTSUPP);
-        }
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
+	    (xattr_type == XATTR_ACL_ACCESS_T ||
+	    xattr_type == XATTR_ACL_DEFAULT_T)) {
+		rce = rct_search(&sbi->ll_rct, current_pid());
+		if (rce == NULL ||
+		    (rce->rce_ops != RMT_LSETFACL &&
+		    rce->rce_ops != RMT_LGETFACL &&
+		    rce->rce_ops != RMT_RSETFACL &&
+		    rce->rce_ops != RMT_RGETFACL))
+			RETURN(-EOPNOTSUPP);
+	}
 
         /* posix acl is under protection of LOOKUP lock. when calling to this,
          * we just have path resolution to the target inode, so we have great
@@ -410,8 +410,8 @@ do_getxattr:
                 if (IS_ERR(acl))
                         GOTO(out, rc = PTR_ERR(acl));
 
-                rc = ee_add(&sbi->ll_et, cfs_curproc_pid(), ll_inode2fid(inode),
-                            xattr_type, acl);
+		rc = ee_add(&sbi->ll_et, current_pid(), ll_inode2fid(inode),
+			    xattr_type, acl);
                 if (unlikely(rc < 0)) {
                         lustre_ext_acl_xattr_free(acl);
                         GOTO(out, rc);

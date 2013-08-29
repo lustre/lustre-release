@@ -169,7 +169,7 @@ static void init_capability(__u32 *res)
 #endif
 }
 
-int cfs_curproc_is_in_groups(gid_t gid)
+int in_group_p(gid_t gid)
 {
         int i;
 

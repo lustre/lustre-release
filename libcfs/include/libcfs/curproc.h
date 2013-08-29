@@ -43,35 +43,6 @@
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
-#ifdef __KERNEL__
-/*
- * Portable API to access common characteristics of "current" UNIX process.
- *
- * Implemented in portals/include/libcfs/<os>/
- */
-uid_t  cfs_curproc_euid(void);
-gid_t  cfs_curproc_egid(void);
-pid_t  cfs_curproc_pid(void);
-int    cfs_curproc_groups_nr(void);
-int    cfs_curproc_is_in_groups(gid_t group);
-void   cfs_curproc_groups_dump(gid_t *array, int size);
-mode_t cfs_curproc_umask(void);
-char  *cfs_curproc_comm(void);
-
-/*
- * Plus, platform-specific constant
- *
- * CFS_CURPROC_COMM_MAX,
- *
- * and opaque scalar type
- *
- * kernel_cap_t
- */
-#endif
-uid_t  cfs_curproc_uid(void);
-gid_t  cfs_curproc_gid(void);
-uid_t  cfs_curproc_fsuid(void);
-gid_t  cfs_curproc_fsgid(void);
 int cfs_get_environ(const char *key, char *value, int *val_len);
 
 typedef __u32 cfs_cap_t;

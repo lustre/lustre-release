@@ -176,7 +176,7 @@ set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	header->ph_sec = (__u32)tv.tv_sec;
 	header->ph_usec = tv.tv_usec;
 	header->ph_stack = stack;
-	header->ph_pid = cfs_curproc_pid();
+	header->ph_pid = current_pid();
 	header->ph_line_num = line;
 	header->ph_extern_pid = (__u32)current_thread();
 }

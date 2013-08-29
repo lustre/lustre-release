@@ -411,3 +411,23 @@ s/\bCURRENT_SECONDS\b/get_seconds()/g
 /#[ \t]*define[ \t]*\bget_seconds\b *( *)[ \t]*\bget_seconds\b *( *)/d
 s/\bCFS_NR_CPUS\b/NR_CPUS/g
 /#[ \t]*define[ \t]*\bNR_CPUS\b[ \t]*\bNR_CPUS\b/d
+
+################################################################################
+# cfs_curproc_xxx macros
+s/\bcfs_curproc_uid\b/current_uid/g
+/#[ \t]*define[ \t]*\bcurrent_uid\b *( *)[ \t]*\bcurrent_uid\b *( *)/d
+s/\bcfs_curproc_gid\b/current_gid/g
+/#[ \t]*define[ \t]*\bcurrent_gid\b *( *)[ \t]*\bcurrent_gid\b *( *)/d
+s/\bcfs_curproc_euid\b/current_euid/g
+/#[ \t]*define[ \t]*\bcurrent_euid\b *( *)[ \t]*\bcurrent_euid\b *( *)/d
+s/\bcfs_curproc_egid\b/current_egid/g
+/#[ \t]*define[ \t]*\bcurrent_egid\b *( *)[ \t]*\bcurrent_egid\b *( *)/d
+s/\bcfs_curproc_fsuid\b/current_fsuid/g
+/#[ \t]*define[ \t]*\bcurrent_fsuid\b *( *)[ \t]*\bcurrent_fsuid\b *( *)/d
+s/\bcfs_curproc_fsgid\b/current_fsgid/g
+/#[ \t]*define[ \t]*\bcurrent_fsgid\b *( *)[ \t]*\bcurrent_fsgid\b *( *)/d
+s/\bcfs_curproc_pid\b/current_pid/g
+s/\bcfs_curproc_is_in_groups\b/in_group_p/g
+s/\bcfs_curproc_umask\b/current_umask/g
+s/\bcfs_curproc_comm\b/current_comm/g
+s/\bcfs_curproc_is_32bit\b/current_is_32bit/g

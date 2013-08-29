@@ -692,7 +692,7 @@ int ll_dir_setdirstripe(struct inode *dir, struct lmv_user_md *lump,
 
 	op_data->op_cli_flags |= CLI_SET_MEA;
 	err = md_create(sbi->ll_md_exp, op_data, lump, sizeof(*lump), mode,
-			cfs_curproc_fsuid(), cfs_curproc_fsgid(),
+			current_fsuid(), current_fsgid(),
 			cfs_curproc_cap_pack(), 0, &request);
 	ll_finish_md_op_data(op_data);
 	if (err)
@@ -1119,12 +1119,12 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                     sbi->ll_flags & LL_SBI_RMT_CLIENT)
                         RETURN(-EPERM);
                 break;
-        case Q_GETQUOTA:
-                if (((type == USRQUOTA && cfs_curproc_euid() != id) ||
-                     (type == GRPQUOTA && !in_egroup_p(id))) &&
-                    (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                     sbi->ll_flags & LL_SBI_RMT_CLIENT))
-                        RETURN(-EPERM);
+	case Q_GETQUOTA:
+		if (((type == USRQUOTA && current_euid() != id) ||
+		     (type == GRPQUOTA && !in_egroup_p(id))) &&
+		    (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
+		     sbi->ll_flags & LL_SBI_RMT_CLIENT))
+			RETURN(-EPERM);
                 break;
         case Q_GETINFO:
                 break;
@@ -1774,11 +1774,11 @@ out_rmdir:
                 inode == inode->i_sb->s_root->d_inode) {
                 struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 
-                LASSERT(fd != NULL);
-                rc = rct_add(&sbi->ll_rct, cfs_curproc_pid(), arg);
-                if (!rc)
-                        fd->fd_flags |= LL_FILE_RMTACL;
-                RETURN(rc);
+		LASSERT(fd != NULL);
+		rc = rct_add(&sbi->ll_rct, current_pid(), arg);
+		if (!rc)
+			fd->fd_flags |= LL_FILE_RMTACL;
+		RETURN(rc);
             } else
                 RETURN(0);
         }

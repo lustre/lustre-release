@@ -297,7 +297,7 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
 		while (kernel_locked())
 			unlock_kernel();
 # endif
-                libcfs_debug_dumplog_internal((void *)(long)cfs_curproc_pid());
+		libcfs_debug_dumplog_internal((void *)(long)current_pid());
         }
 #endif
         return 0;

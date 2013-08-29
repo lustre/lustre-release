@@ -345,10 +345,10 @@ kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 	if (th != THREAD_NULL) {
 		/*
 		 * FIXME: change child thread name...
-		 * cfs_curproc_comm() is already broken. So it is left as is...
+		 * current_comm() is already broken. So it is left as is...
 		va_list args;
 		va_start(args, namefmt);
-		snprintf(cfs_curproc_comm(), CFS_CURPROC_COMM_MAX,
+		snprintf(current_comm(), CFS_CURPROC_COMM_MAX,
 			 namefmt, args);
 		va_end(args);
 		 */

@@ -235,13 +235,13 @@ void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
                 oa->o_size = attr->ia_size;
                 oa->o_valid |= OBD_MD_FLSIZE;
         }
-        if (ia_valid & ATTR_MODE) {
-                oa->o_mode = attr->ia_mode;
-                oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                if (!cfs_curproc_is_in_groups(oa->o_gid) &&
-                    !cfs_capable(CFS_CAP_FSETID))
-                        oa->o_mode &= ~S_ISGID;
-        }
+	if (ia_valid & ATTR_MODE) {
+		oa->o_mode = attr->ia_mode;
+		oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
+		if (!in_group_p(oa->o_gid) &&
+		    !cfs_capable(CFS_CAP_FSETID))
+			oa->o_mode &= ~S_ISGID;
+	}
         if (ia_valid & ATTR_UID) {
                 oa->o_uid = attr->ia_uid;
                 oa->o_valid |= OBD_MD_FLUID;
@@ -285,11 +285,11 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
         }
 #endif
         if (valid & OBD_MD_FLMODE) {
-                attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
-                attr->ia_valid |= ATTR_MODE;
-                if (!cfs_curproc_is_in_groups(oa->o_gid) &&
-                    !cfs_capable(CFS_CAP_FSETID))
-                        attr->ia_mode &= ~S_ISGID;
+		attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
+		attr->ia_valid |= ATTR_MODE;
+		if (!in_group_p(oa->o_gid) &&
+		    !cfs_capable(CFS_CAP_FSETID))
+			attr->ia_mode &= ~S_ISGID;
         }
         if (valid & OBD_MD_FLUID) {
                 attr->ia_uid = oa->o_uid;

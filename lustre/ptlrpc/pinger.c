@@ -306,11 +306,11 @@ static int ptlrpc_pinger_main(void *arg)
                 }
         }
 
-        thread_set_flags(thread, SVC_STOPPED);
-        cfs_waitq_signal(&thread->t_ctl_waitq);
+	thread_set_flags(thread, SVC_STOPPED);
+	cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        CDEBUG(D_NET, "pinger thread exiting, process %d\n", cfs_curproc_pid());
-        return 0;
+	CDEBUG(D_NET, "pinger thread exiting, process %d\n", current_pid());
+	return 0;
 }
 
 static struct ptlrpc_thread pinger_thread;

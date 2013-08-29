@@ -1605,9 +1605,9 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         if (lock == NULL)
                 RETURN(NULL);
 
-        lock->l_req_mode = mode;
-        lock->l_ast_data = data;
-        lock->l_pid = cfs_curproc_pid();
+	lock->l_req_mode = mode;
+	lock->l_ast_data = data;
+	lock->l_pid = current_pid();
 	if (ns_is_server(ns))
 		lock->l_flags |= LDLM_FL_NS_SRV;
         if (cbs) {

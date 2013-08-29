@@ -1433,12 +1433,12 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
                 attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
         }
 
-        /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
+	/* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
 	if (attr->ia_valid & TIMES_SET_FLAGS) {
-                if (cfs_curproc_fsuid() != inode->i_uid &&
-                    !cfs_capable(CFS_CAP_FOWNER))
-                        RETURN(-EPERM);
-        }
+		if (current_fsuid() != inode->i_uid &&
+		    !cfs_capable(CFS_CAP_FOWNER))
+			RETURN(-EPERM);
+	}
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
         if (attr->ia_valid & ATTR_CTIME) {
@@ -2038,17 +2038,17 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 int ll_flush_ctx(struct inode *inode)
 {
-        struct ll_sb_info  *sbi = ll_i2sbi(inode);
+	struct ll_sb_info  *sbi = ll_i2sbi(inode);
 
-        CDEBUG(D_SEC, "flush context for user %d\n", cfs_curproc_uid());
+	CDEBUG(D_SEC, "flush context for user %d\n", current_uid());
 
-        obd_set_info_async(NULL, sbi->ll_md_exp,
-                           sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
-                           0, NULL, NULL);
-        obd_set_info_async(NULL, sbi->ll_dt_exp,
-                           sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
-                           0, NULL, NULL);
-        return 0;
+	obd_set_info_async(NULL, sbi->ll_md_exp,
+			   sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
+			   0, NULL, NULL);
+	obd_set_info_async(NULL, sbi->ll_dt_exp,
+			   sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
+			   0, NULL, NULL);
+	return 0;
 }
 
 /* umount -f client means force down, don't save state */
@@ -2317,8 +2317,8 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 	op_data->op_namelen = namelen;
 	op_data->op_mode = mode;
 	op_data->op_mod_time = cfs_time_current_sec();
-	op_data->op_fsuid = cfs_curproc_fsuid();
-	op_data->op_fsgid = cfs_curproc_fsgid();
+	op_data->op_fsuid = current_fsuid();
+	op_data->op_fsgid = current_fsgid();
 	op_data->op_cap = cfs_curproc_cap_pack();
 	op_data->op_bias = 0;
 	op_data->op_cli_flags = 0;

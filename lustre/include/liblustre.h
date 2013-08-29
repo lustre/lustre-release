@@ -271,14 +271,14 @@ struct task_struct {
 
 typedef struct task_struct cfs_task_t;
 #define cfs_current()           current
-#define cfs_curproc_pid()       (current->pid)
-#define cfs_curproc_comm()      (current->comm)
-#define cfs_curproc_fsuid()     (current->fsuid)
-#define cfs_curproc_fsgid()     (current->fsgid)
-#define cfs_curproc_umask()     ({ mode_t mask = umask(0); umask(mask); mask; })
+#define current_pid()       (current->pid)
+#define current_comm()      (current->comm)
+#define current_fsuid()     (current->fsuid)
+#define current_fsgid()     (current->fsgid)
+#define current_umask()     ({ mode_t mask = umask(0); umask(mask); mask; })
 
 extern struct task_struct *current;
-int cfs_curproc_is_in_groups(gid_t gid);
+int in_group_p(gid_t gid);
 
 #define cfs_set_current_state(foo) do { current->state = foo; } while (0)
 

@@ -379,16 +379,12 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 
                 CLASSERT(sizeof(struct mdt_rec_setxattr) ==
                          sizeof(struct mdt_rec_reint));
-                rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
-                rec->sx_opcode = REINT_SETXATTR;
-                /* TODO:
-                 *  cfs_curproc_fs{u,g}id() should replace
-                 *  current->fs{u,g}id for portability.
-                 */
-                rec->sx_fsuid  = cfs_curproc_fsuid();
-                rec->sx_fsgid  = cfs_curproc_fsgid();
-                rec->sx_cap    = cfs_curproc_cap_pack();
-                rec->sx_suppgid1 = suppgid;
+		rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+		rec->sx_opcode = REINT_SETXATTR;
+		rec->sx_fsuid  = current_fsuid();
+		rec->sx_fsgid  = current_fsgid();
+		rec->sx_cap    = cfs_curproc_cap_pack();
+		rec->sx_suppgid1 = suppgid;
                 rec->sx_suppgid2 = -1;
                 rec->sx_fid    = *fid;
                 rec->sx_valid  = valid | OBD_MD_FLCTIME;

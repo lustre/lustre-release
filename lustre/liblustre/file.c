@@ -57,22 +57,22 @@
  * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
 void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 {
-        LASSERT(i1 != NULL);
-        LASSERT(suppgids != NULL);
+	LASSERT(i1 != NULL);
+	LASSERT(suppgids != NULL);
 
-        if (cfs_curproc_is_in_groups(i1->i_stbuf.st_gid))
-                suppgids[0] = i1->i_stbuf.st_gid;
-        else
-                suppgids[0] = -1;
+	if (in_group_p(i1->i_stbuf.st_gid))
+		suppgids[0] = i1->i_stbuf.st_gid;
+	else
+		suppgids[0] = -1;
 
-        if (i2) {
-                if (cfs_curproc_is_in_groups(i2->i_stbuf.st_gid))
-                        suppgids[1] = i2->i_stbuf.st_gid;
-                else
-                        suppgids[1] = -1;
-        } else {
-                suppgids[1] = -1;
-        }
+	if (i2) {
+		if (in_group_p(i2->i_stbuf.st_gid))
+			suppgids[1] = i2->i_stbuf.st_gid;
+		else
+			suppgids[1] = -1;
+	} else {
+		suppgids[1] = -1;
+	}
 }
 
 void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,

@@ -1348,7 +1348,7 @@ static int ldlm_pools_thread_main(void *arg)
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_DLMTRACE, "%s: pool thread starting, process %d\n",
-	       "ldlm_poold", cfs_curproc_pid());
+	       "ldlm_poold", current_pid());
 
         while (1) {
                 struct l_wait_info lwi;
@@ -1380,7 +1380,7 @@ static int ldlm_pools_thread_main(void *arg)
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_DLMTRACE, "%s: pool thread exiting, process %d\n",
-		"ldlm_poold", cfs_curproc_pid());
+		"ldlm_poold", current_pid());
 
 	complete_and_exit(&ldlm_pools_comp, 0);
 }

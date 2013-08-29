@@ -69,10 +69,10 @@ static int ll_permission(struct inode *inode, int mask)
         struct intnl_stat *st = llu_i2stat(inode);
         mode_t mode = st->st_mode;
 
-        if (current->fsuid == st->st_uid)
-                mode >>= 6;
-        else if (cfs_curproc_is_in_groups(st->st_gid))
-                mode >>= 3;
+	if (current->fsuid == st->st_uid)
+		mode >>= 6;
+	else if (in_group_p(st->st_gid))
+		mode >>= 3;
 
         if ((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask)
                 return 0;
@@ -569,12 +569,12 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
                 st->st_mtime = attr->ia_mtime;
         if (ia_valid & ATTR_CTIME)
                 st->st_ctime = attr->ia_ctime;
-        if (ia_valid & ATTR_MODE) {
-                st->st_mode = attr->ia_mode;
-                if (!cfs_curproc_is_in_groups(st->st_gid) &&
-                    !cfs_capable(CFS_CAP_FSETID))
-                        st->st_mode &= ~S_ISGID;
-        }
+	if (ia_valid & ATTR_MODE) {
+		st->st_mode = attr->ia_mode;
+		if (!in_group_p(st->st_gid) &&
+		    !cfs_capable(CFS_CAP_FSETID))
+			st->st_mode &= ~S_ISGID;
+	}
         /* mark_inode_dirty(inode); */
         return error;
 }

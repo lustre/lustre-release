@@ -55,75 +55,6 @@
  * for Linux kernel.
  */
 
-uid_t  cfs_curproc_uid(void)
-{
-        return current_uid();
-}
-
-gid_t  cfs_curproc_gid(void)
-{
-        return current_gid();
-}
-
-uid_t  cfs_curproc_fsuid(void)
-{
-        return current_fsuid();
-}
-
-uid_t  cfs_curproc_euid(void)
-{
-        return current_euid();
-}
-
-uid_t  cfs_curproc_egid(void)
-{
-        return current_egid();
-}
-
-gid_t  cfs_curproc_fsgid(void)
-{
-        return current_fsgid();
-}
-
-pid_t  cfs_curproc_pid(void)
-{
-        return current->pid;
-}
-
-int    cfs_curproc_groups_nr(void)
-{
-        int nr;
-
-        task_lock(current);
-        nr = current_cred()->group_info->ngroups;
-        task_unlock(current);
-        return nr;
-}
-
-void   cfs_curproc_groups_dump(gid_t *array, int size)
-{
-        task_lock(current);
-        size = min_t(int, size, current_cred()->group_info->ngroups);
-        memcpy(array, current_cred()->group_info->blocks[0], size * sizeof(__u32));
-        task_unlock(current);
-}
-
-
-int    cfs_curproc_is_in_groups(gid_t gid)
-{
-        return in_group_p(gid);
-}
-
-mode_t cfs_curproc_umask(void)
-{
-        return current->fs->umask;
-}
-
-char  *cfs_curproc_comm(void)
-{
-        return current->comm;
-}
-
 /* Currently all the CFS_CAP_* defines match CAP_* ones. */
 #define cfs_cap_pack(cap) (cap)
 #define cfs_cap_unpack(cap) (cap)
@@ -350,18 +281,6 @@ out:
 }
 EXPORT_SYMBOL(cfs_get_environ);
 
-EXPORT_SYMBOL(cfs_curproc_uid);
-EXPORT_SYMBOL(cfs_curproc_pid);
-EXPORT_SYMBOL(cfs_curproc_euid);
-EXPORT_SYMBOL(cfs_curproc_gid);
-EXPORT_SYMBOL(cfs_curproc_egid);
-EXPORT_SYMBOL(cfs_curproc_fsuid);
-EXPORT_SYMBOL(cfs_curproc_fsgid);
-EXPORT_SYMBOL(cfs_curproc_umask);
-EXPORT_SYMBOL(cfs_curproc_comm);
-EXPORT_SYMBOL(cfs_curproc_groups_nr);
-EXPORT_SYMBOL(cfs_curproc_groups_dump);
-EXPORT_SYMBOL(cfs_curproc_is_in_groups);
 EXPORT_SYMBOL(cfs_cap_raise);
 EXPORT_SYMBOL(cfs_cap_lower);
 EXPORT_SYMBOL(cfs_cap_raised);

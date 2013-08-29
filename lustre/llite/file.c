@@ -344,17 +344,17 @@ int ll_file_release(struct inode *inode, struct file *file)
                inode->i_generation, inode);
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-            inode == inode->i_sb->s_root->d_inode) {
-                struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
+	    inode == inode->i_sb->s_root->d_inode) {
+		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 
-                LASSERT(fd != NULL);
-                if (unlikely(fd->fd_flags & LL_FILE_RMTACL)) {
-                        fd->fd_flags &= ~LL_FILE_RMTACL;
-                        rct_del(&sbi->ll_rct, cfs_curproc_pid());
-                        et_search_free(&sbi->ll_et, cfs_curproc_pid());
-                }
-        }
+		LASSERT(fd != NULL);
+		if (unlikely(fd->fd_flags & LL_FILE_RMTACL)) {
+			fd->fd_flags &= ~LL_FILE_RMTACL;
+			rct_del(&sbi->ll_rct, current_pid());
+			et_search_free(&sbi->ll_et, current_pid());
+		}
+	}
 #endif
 
         if (inode->i_sb->s_root != file->f_dentry)
@@ -562,7 +562,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 		if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
 		    lli->lli_opendir_pid == 0) {
 			lli->lli_opendir_key = fd;
-			lli->lli_opendir_pid = cfs_curproc_pid();
+			lli->lli_opendir_pid = current_pid();
 			opendir_set = 1;
 		}
 		spin_unlock(&lli->lli_sa_lock);

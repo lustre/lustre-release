@@ -1331,13 +1331,13 @@ static inline int ll_glimpse_size(struct inode *inode)
 static inline void
 ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 {
-        struct ll_inode_info     *lli = ll_i2info(dir);
-        struct ll_statahead_info *sai = lli->lli_sai;
-        struct ll_dentry_data    *ldd = ll_d2d(dentry);
+	struct ll_inode_info     *lli = ll_i2info(dir);
+	struct ll_statahead_info *sai = lli->lli_sai;
+	struct ll_dentry_data    *ldd = ll_d2d(dentry);
 
-        /* not the same process, don't mark */
-        if (lli->lli_opendir_pid != cfs_curproc_pid())
-                return;
+	/* not the same process, don't mark */
+	if (lli->lli_opendir_pid != current_pid())
+		return;
 
 	LASSERT(ldd != NULL);
 	if (sai != NULL)
@@ -1355,7 +1355,7 @@ ll_need_statahead(struct inode *dir, struct dentry *dentryp)
 
 	lli = ll_i2info(dir);
 	/* not the same process, don't statahead */
-	if (lli->lli_opendir_pid != cfs_curproc_pid())
+	if (lli->lli_opendir_pid != current_pid())
 		return -EAGAIN;
 
 	/* statahead has been stopped */

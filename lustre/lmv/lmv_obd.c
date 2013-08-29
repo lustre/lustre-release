@@ -1987,8 +1987,8 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 	       PFID(&op_data->op_fid2), op_data->op_namelen,
 	       op_data->op_name, PFID(&op_data->op_fid1));
 
-	op_data->op_fsuid = cfs_curproc_fsuid();
-	op_data->op_fsgid = cfs_curproc_fsgid();
+	op_data->op_fsuid = current_fsuid();
+	op_data->op_fsgid = current_fsgid();
 	op_data->op_cap = cfs_curproc_cap_pack();
 	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid2);
 	if (IS_ERR(tgt))
@@ -2029,8 +2029,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         if (rc)
                 RETURN(rc);
 
-	op_data->op_fsuid = cfs_curproc_fsuid();
-	op_data->op_fsgid = cfs_curproc_fsgid();
+	op_data->op_fsuid = current_fsuid();
+	op_data->op_fsgid = current_fsgid();
 	op_data->op_cap = cfs_curproc_cap_pack();
 	src_tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
 	if (IS_ERR(src_tgt))
@@ -2292,8 +2292,8 @@ retry:
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	op_data->op_fsuid = cfs_curproc_fsuid();
-	op_data->op_fsgid = cfs_curproc_fsgid();
+	op_data->op_fsuid = current_fsuid();
+	op_data->op_fsgid = current_fsgid();
 	op_data->op_cap = cfs_curproc_cap_pack();
 
 	/*

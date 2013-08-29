@@ -59,54 +59,37 @@ cfs_task_t this_task =
     };
 
 
-uid_t  cfs_curproc_uid(void)
+uid_t  current_uid(void)
 {
     return this_task.uid;
 }
 
-gid_t  cfs_curproc_gid(void)
+gid_t  current_gid(void)
 {
     return this_task.gid;
 }
 
-uid_t  cfs_curproc_fsuid(void)
+uid_t  current_fsuid(void)
 {
     return this_task.fsuid;
 }
 
-gid_t cfs_curproc_fsgid(void)
+gid_t current_fsgid(void)
 {
     return this_task.fsgid;
 }
 
-pid_t cfs_curproc_pid(void)
+pid_t current_pid(void)
 {
     return cfs_current()->pid;
 }
 
-int cfs_curproc_groups_nr(void)
-{
-    return this_task.ngroups;
-}
-
-void cfs_curproc_groups_dump(gid_t *array, int size)
-{
-    LASSERT(size <= NGROUPS);
-    size = min_t(int, size, this_task.ngroups);
-    memcpy(array, this_task.groups, size * sizeof(__u32));
-}
-
-int cfs_curproc_is_in_groups(gid_t gid)
-{
-    return in_group_p(gid);
-}
-
-mode_t cfs_curproc_umask(void)
+mode_t current_umask(void)
 {
     return this_task.umask;
 }
 
-char  *cfs_curproc_comm(void)
+char  *current_comm(void)
 {
     return this_task.comm;
 }
@@ -483,16 +466,13 @@ sleep_on(cfs_waitq_t *waitq)
 	cfs_waitq_del(waitq, &link);
 }
 
-EXPORT_SYMBOL(cfs_curproc_uid);
-EXPORT_SYMBOL(cfs_curproc_pid);
-EXPORT_SYMBOL(cfs_curproc_gid);
-EXPORT_SYMBOL(cfs_curproc_fsuid);
-EXPORT_SYMBOL(cfs_curproc_fsgid);
-EXPORT_SYMBOL(cfs_curproc_umask);
-EXPORT_SYMBOL(cfs_curproc_comm);
-EXPORT_SYMBOL(cfs_curproc_groups_nr);
-EXPORT_SYMBOL(cfs_curproc_groups_dump);
-EXPORT_SYMBOL(cfs_curproc_is_in_groups);
+EXPORT_SYMBOL(current_uid);
+EXPORT_SYMBOL(current_pid);
+EXPORT_SYMBOL(current_gid);
+EXPORT_SYMBOL(current_fsuid);
+EXPORT_SYMBOL(current_fsgid);
+EXPORT_SYMBOL(current_umask);
+EXPORT_SYMBOL(current_comm);
 EXPORT_SYMBOL(cfs_cap_raise);
 EXPORT_SYMBOL(cfs_cap_lower);
 EXPORT_SYMBOL(cfs_cap_raised);
