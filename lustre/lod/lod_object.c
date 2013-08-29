@@ -706,7 +706,8 @@ static void lod_ah_init(const struct lu_env *env,
 	 * can be called with local object existing
 	 */
 	if (!dt_object_exists(nextc) || dt_object_remote(nextc))
-		nextc->do_ops->do_ah_init(env, ah, nextp, nextc, child_mode);
+		nextc->do_ops->do_ah_init(env, ah, dt_object_remote(nextp) ?
+					  NULL : nextp, nextc, child_mode);
 
 	if (S_ISDIR(child_mode)) {
 		if (lp->ldo_striping_cached == 0) {

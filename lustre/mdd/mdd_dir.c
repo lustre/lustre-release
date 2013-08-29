@@ -1920,7 +1920,11 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
         }
 
 	if (!(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
-		rc = mdo_declare_attr_set(env, p, attr, handle);
+		struct lu_attr  *la = &mdd_env_info(env)->mti_la_for_fix;
+
+		*la = *attr;
+		la->la_valid = LA_CTIME | LA_MTIME;
+		rc = mdo_declare_attr_set(env, p, la, handle);
 		if (rc)
 			return rc;
 	}
