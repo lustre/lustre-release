@@ -1949,6 +1949,11 @@ static int echo_md_destroy_internal(const struct lu_env *env,
                 GOTO(out_put, rc = -EINVAL);
         }
 
+	if (lu_object_remote(child)) {
+		CERROR("Can not destroy remote object %s: rc = %d\n",
+		       lname->ln_name, -EPERM);
+		GOTO(out_put, rc = -EPERM);
+	}
         CDEBUG(D_RPCTRACE, "Start destroy object "DFID" %s %p\n",
                PFID(lu_object_fid(&parent->mo_lu)), lname->ln_name, parent);
 
@@ -2835,8 +2840,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		count = data->ioc_count;
 		cmd = data->ioc_command;
 
-		id = ostid_id(&data->ioc_obdo2.o_oi);
-
+		id = data->ioc_obdo2.o_oi.oi.oi_id;
 		dirlen = data->ioc_plen1;
 		OBD_ALLOC(dir, dirlen + 1);
 		if (dir == NULL)

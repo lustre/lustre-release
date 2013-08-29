@@ -752,12 +752,8 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	rc = osp_remote_sync(env, dt_dev, update, &req);
-	if (rc < 0) {
-		CERROR("%s: lookup "DFID" %s failed: rc = %d\n",
-		       dt_dev->dd_lu_dev.ld_obd->obd_name,
-		       PFID(lu_object_fid(&dt->do_lu)), (char *)key, rc);
+	if (rc < 0)
 		GOTO(out, rc);
-	}
 
 	reply = req_capsule_server_sized_get(&req->rq_pill, &RMF_UPDATE_REPLY,
 					     UPDATE_BUFFER_SIZE);

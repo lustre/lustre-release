@@ -920,8 +920,8 @@ static int mdd_prepare(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_los, rc);
 
+	lu_root_fid(&fid);
 	if (mdd_seq_site(mdd)->ss_node_id == 0) {
-		lu_root_fid(&fid);
 		rc = mdd_local_file_create(env, mdd, &mdd->mdd_local_root_fid,
 					   mdd_root_dir_name, S_IFDIR |
 					   S_IRUGO | S_IWUSR | S_IXUGO, &fid);
@@ -930,8 +930,8 @@ static int mdd_prepare(const struct lu_env *env,
 			       mdd2obd_dev(mdd)->obd_name, rc);
 			GOTO(out_los, rc);
 		}
-		mdd->mdd_root_fid = fid;
 
+		mdd->mdd_root_fid = fid;
 		rc = mdd_dot_lustre_setup(env, mdd);
 		if (rc != 0) {
 			CERROR("%s: initializing .lustre failed: rc = %d\n",
@@ -943,6 +943,10 @@ static int mdd_prepare(const struct lu_env *env,
 		if (rc)
 			GOTO(out_los, rc);
 
+	} else {
+		/* Normal client usually send root access to MDT0 directly,
+		 * the root FID on non-MDT0 will only be used by echo client. */
+		mdd->mdd_root_fid = fid;
 	}
 
 	rc = orph_index_init(env, mdd);
