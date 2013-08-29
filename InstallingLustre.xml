@@ -1,456 +1,445 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installinglustre">
-  <title xml:id="installinglustre.title">Installing the Lustre Software</title>
-  <para>This chapter describes how to install the Lustre software. It includes:</para>
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
+  xml:lang="en-US" xml:id="installinglustre">
+  <title xml:id="installinglustre.title">Installing the Lustre* Software</title>
+  <para>This chapter describes how to install the Lustre* software from RPM packages. It
+    includes:</para>
   <itemizedlist>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438261_99193"/>
-          </para>
+        <xref linkend="dbdoclet.50438261_99193"/>
+      </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50438261_41900"/>
-          </para>
+        <xref linkend="dbdoclet.50438261_41900"/>
+      </para>
     </listitem>
   </itemizedlist>
-  <para>For hardware/system requirements, see <xref linkend="settinguplustresystem"/>.</para>
+  <para>For hardware and system requirements and hardware configuration information, see <xref
+      linkend="settinguplustresystem"/>.</para>
   <section xml:id="dbdoclet.50438261_99193">
-      <title>
-          <indexterm><primary>installing</primary><secondary>preparation</secondary></indexterm>
-          Preparing to Install the Lustre Software</title>
-    <para>If you are using a supported Linux distribution and architecture, you can install Lustre from downloaded packages (RPMs). For a list of available packages, see the <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Releases">Lustre Downloads</link> page.</para>
-    <para>A list of available Lustre LNET drivers can be found in <xref linkend="understandinglustrenetworking"/>.</para>
-    <para>If you are not using a configuration with pre-built packages, you can install Lustre directly from the source code. For more information on this installation method, see <xref linkend="installinglustrefromsourcecode"/>.</para>
-    <section xml:id="dbdoclet.50438261_37079">
-      <title><indexterm><primary>installing</primary><secondary>requirements</secondary></indexterm>
-Required Software</title>
-      <para>To install Lustre, the following are required:</para>
-      <itemizedlist>
-        <listitem>
-          <para><emphasis>(On Linux servers only)</emphasis>  Linux kernel patched with Lustre-specific patches for your platform and architecture. A Linux patched kernel can be installed on a client if it is desireable to use the same kernel on all nodes, but this is not required.</para>
-        </listitem>
-        <listitem>
-          <para>Lustre modules compiled for the Linux kernel (see <xref linkend="installinglustre.tab.req"/> for which packages are required for servers and clients in your configuration).</para>
-        </listitem>
-        <listitem>
-          <para>Lustre utilities required for configuring Lustre (see <xref linkend="installinglustre.tab.req"/> for which packages are required for servers and clients in your configuration).</para>
-        </listitem>
-        <listitem>
-          <para><emphasis>(On Linux servers only) </emphasis><literal>e2fsprogs</literal>  package containing Lustre-specific tools (<literal>e2fsck</literal> and <literal>lfsck</literal>) used to repair a backing file system. This replaces the existing <literal>e2fsprogs</literal> package but provides complete <literal>e2fsprogs</literal> functionality</para>
-        </listitem>
-        <listitem>
-          <para><emphasis>(Optional)</emphasis>  Network-specific kernel modules and libraries such as the Lustre-specific OFED package required for an InfiniBand network interconnect.</para>
-        </listitem>
-      </itemizedlist>
-      <para>At least one Lustre RPM must be installed on each server and on each client in a Lustre file system. <xref linkend="installinglustre.tab.req"/> lists required Lustre packages and indicates where they are to be installed. Some Lustre packages are installed on Lustre servers (MGS, MDS, and OSSs), some are installed on Lustre clients, and some are installed on all Lustre nodes.</para>
-      <para>.</para>
-      <table xml:id="installinglustre.tab.req" frame="all">
-        <title>Lustre required packages, descriptions and installation guidance</title>
-        <tgroup cols="5">
-          <colspec colname="c1" colwidth="2*"/>
-          <colspec colname="c2" colwidth="12*"/>
-          <colspec colname="c3" colwidth="20*"/>
-          <colspec colname="c4" colwidth="6*"/>
-          <colspec colname="c5" colwidth="6*"/>
+    <title>
+      <indexterm>
+        <primary>installing</primary>
+        <secondary>preparation</secondary>
+      </indexterm> Preparing to Install the Lustre Software</title>
+    <para>You can install the Lustre software from downloaded packages (RPMs) or directly from the
+      source code. This chapter describes how to install the Lustre RPM packages. For information
+      about installing from source code, see <xref linkend="installinglustrefromsourcecode"
+      />.</para>
+    <para>The Lustre RPM packages have been tested on the Linux distributions listed in the table
+      below.</para>
+    <para>
+      <table frame="all" xml:id="LustreTestMatrixTable">
+        <title>Lustre Test Matrix</title>
+        <tgroup cols="3">
+          <colspec colname="c1" colnum="1" colwidth="1*"/>
+          <colspec colname="c2" colnum="2" colwidth="1.1*"/>
+          <colspec colname="c3" colnum="3" colwidth="1.46*"/>
           <thead>
             <row>
-              <entry nameend="c2" namest="c1">
-                <para><emphasis role="bold">Lustre Package</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Install on servers</emphasis>
-                        <footnote>
-                    <para>Installing a patched kernel on a client node is not required. However, if a client node will be used as both a client and a server, or if you want to install the same kernel on all nodes for any reason, install the server packages designated with an asterisk (*) on the client node.</para>
-                  </footnote></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Install on clients</emphasis></para>
-              </entry>
+              <entry>Lustre Version</entry>
+              <entry>Servers Tested<superscript>1</superscript></entry>
+              <entry>Clients Tested</entry>
             </row>
           </thead>
           <tbody>
             <row>
-              <entry nameend="c3" namest="c1">
-                <para> <emphasis role="bold"> Lustre patched kernel RPMs:</emphasis></para>
+              <entry>
+                <para>2.0</para>
               </entry>
               <entry>
-                <para> &#160;</para>
+                <para>RHEL 5, CentOS 5</para>
               </entry>
               <entry>
-                <para> &#160;</para>
+                <para>RHEL 5, CentOS 5, SLES 11 SP0</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>2.1.x</para>
               </entry>
               <entry>
-                <para>kernel-<replaceable>ver</replaceable>_lustre.<replaceable>arch</replaceable></para>
+                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6</para>
               </entry>
               <entry>
-                <para>Lustre patched server kernel.</para>
-              </entry>
-              <entry>
-                <para> X*</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para> <emphasis> Lustre module RPMs:</emphasis></para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
+                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6, SLES 11 SP1</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>2.2</para>
               </entry>
               <entry>
-                <para> lustre-modules-<replaceable>ver</replaceable></para>
+                <para>RHEL 6, CentOS 6</para>
               </entry>
               <entry>
-                <para> For Lustre-patched kernel.</para>
-              </entry>
-              <entry>
-                <para> X*</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
+                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6, SLES 11 SP1</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>2.3</para>
               </entry>
               <entry>
-                <para> lustre-client-modules-<replaceable>ver</replaceable></para>
+                <para>RHEL 6.3, CentOS 6.3</para>
               </entry>
               <entry>
-                <para> For clients.</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> X</para>
+                <para>RHEL 6.3, CentOS 6.3, RHEL 5.8, CentOS 5.8, SLES 11 SP1</para>
               </entry>
             </row>
             <row>
-              <entry nameend="c2" namest="c1">
-                <para> <emphasis> Lustre utilities:</emphasis></para>
+              <entry>2.4.x</entry>
+              <entry>
+                <para>RHEL 6.4, CentOS 6.4</para>
               </entry>
               <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> lustre-<replaceable>ver</replaceable></para>
-              </entry>
-              <entry>
-                <para> Lustre utilities package. This includes userspace utilities to configure and run Lustre.</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-                <para>&#160;</para>
-                <para>X*</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-                <para>&#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> lustre-client-<replaceable>ver</replaceable></para>
-              </entry>
-              <entry>
-                <para> Lustre utilities for clients.</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> X</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> lustre-ldiskfs-<replaceable>ver</replaceable></para>
-              </entry>
-              <entry>
-                <para> Lustre-patched backing file system kernel module package for the ldiskfs file system.</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-                <para>X</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> e2fsprogs-<replaceable>ver</replaceable></para>
-              </entry>
-              <entry>
-                <para> Utilities package used to maintain the ldiskfs backing file system.</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
-                <para>X</para>
-              </entry>
-              <entry>
-                <para> &#160;</para>
+                <para>RHEL 6.4, CentOS 6.4, SLES 11 SP2, FC18</para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </table>
-      <para>In all supported Lustre installations, a patched kernel must be run on each server, including the the MGS, the MDS, and all OSSs. Running a patched kernel on a Lustre client is only required if the client will be used for multiple purposes, such as running as both a client and an OST or if you want to use the same kernel on all nodes.</para>
-      <para>Lustre RPM packages are available on the <link xl:href="http://downloads.whamcloud.com">Intel download site</link>. They must be installed in the order described in the <xref linkend="dbdoclet.50438261_41900"/>.</para>
-      <section remap="h4">
-        <title><indexterm><primary>installing</primary><secondary>network</secondary></indexterm>
-Network-specific Kernel Modules and Libraries</title>
-        <para>Network-specific kernel modules and libraries may be needed such as the Lustre-specific OFED package required for an InfiniBand network interconnect.</para>
-      </section>
-      <section remap="h4">
-        <title><indexterm><primary>installing</primary><secondary>tools and utilities</secondary></indexterm>
-Lustre-Specific Tools and Utilities</title>
-        <para>Several third-party utilities must be installed on servers:</para>
-        <itemizedlist>
+    </para>
+    <para><superscript>1</superscript>Red Hat* Enterprise Edition*, CentOS Enterprise Linux
+      Distribution, SUSE Linux Enterprise Server, Fedora* F18 Linux kernel.</para>
+    <section xml:id="section_rqs_tjw_3k">
+      <title>Software Requirements</title>
+      <para>To install the Lustre software from RPMs, the following are required:<itemizedlist>
           <listitem>
-            <para><emphasis role="bold">e2fsprogs</emphasis> : Lustre requires a recent version of e2fsprogs that understands extents and large xattr. Use <literal>e2fsprogs-1.41.90.wc4</literal> or later, available at:</para>
-            <para><link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link></para>
-            <para>A quilt patchset of all changes to the vanilla e2fsprogs is available in <literal>e2fsprogs-{version}-patches.tgz</literal>.</para>
+            <para><emphasis role="bold"><emphasis role="italic">Lustre server
+                packages</emphasis></emphasis>. The required packages for Lustre servers are listed
+              in the table below, where <replaceable>ver</replaceable> refers to the Linux* kernel
+              distribution (e.g., 2.6.32-358.6.2.el6) and <replaceable>arch</replaceable> refers to
+              the processor architecture (e.g., x86_64). These packages are available in the <link
+                xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre
+                Releases</link> repository.</para>
+            <para>
+              <table frame="all" xml:id="table_cnh_5m3_gk">
+                <title>Packages Installed on Lustre Servers</title>
+                <tgroup cols="2">
+                  <colspec colname="c1" colnum="1" colwidth="1.18*"/>
+                  <colspec colname="c2" colnum="2" colwidth="1*"/>
+                  <thead>
+                    <row>
+                      <entry>Package Name*</entry>
+                      <entry>Description</entry>
+                    </row>
+                  </thead>
+                  <tbody>
+                    <row>
+                      <entry><code>kernel-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
+                      <entry>Linux kernel with Lustre patches (often referred to as "patched
+                        kernel")</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
+                      <entry>Lustre command line tools</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-modules-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
+                      <entry>Lustre-patched kernel modules</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-ldiskfs-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
+                      <entry>Lustre back-end file system tools</entry>
+                    </row>
+                    <row>
+                      <entry><code>e2fsprogs</code></entry>
+                      <entry>Utility to maintain Lustre back-end file system</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-tests-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
+                      <entry>Lustre I/O Kit benchmarking tools<emphasis role="italic"> (Included in
+                          Lustre software as of Version 2.2)</emphasis></entry>
+                    </row>
+                  </tbody>
+                </tgroup>
+              </table>
+            </para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold"><emphasis role="italic">Lustre client
+                packages</emphasis></emphasis>. The required packages for Lustre clients are listed
+              in the table below, where <replaceable>ver</replaceable> refers to the Linux
+              distribution (e.g., 2.6.18-348.1.1.el5). These packages are available in the <link
+                xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre
+                Releases</link> repository.</para>
+            <para>
+              <table frame="all" xml:id="table_j3r_ym3_gk">
+                <title>Packages Installed in Lustre Clients</title>
+                <tgroup cols="2">
+                  <colspec colname="c1" colnum="1" colwidth="1*"/>
+                  <colspec colname="c2" colnum="2" colwidth="1.02*"/>
+                  <thead>
+                    <row>
+                      <entry>Package Name</entry>
+                      <entry>Description</entry>
+                    </row>
+                  </thead>
+                  <tbody>
+                    <row>
+                      <entry><code>lustre-client-modules-</code><replaceable>ver</replaceable></entry>
+                      <entry>Patchless kernel modules for client</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-client-</code><replaceable>ver</replaceable><code>_lustre</code></entry>
+                      <entry>Client command line tools</entry>
+                    </row>
+                    <row>
+                      <entry><code>lustre-client-tests-</code><replaceable>ver</replaceable></entry>
+                      <entry>Lustre I/O Kit <emphasis role="italic">(Included in Lustre software as
+                          of Version 2.2)</emphasis>
+                      </entry>
+                    </row>
+                  </tbody>
+                </tgroup>
+              </table>
+            </para>
             <note>
-              <para>The Lustre-patched <literal>e2fsprogs</literal> utility is only required on machines that mount backend (<literal>ldiskfs</literal>) file systems, such as the OSS, MDS and MGS nodes. It does not need to be loaded on clients.</para>
+              <para>The version of the kernel running on a Lustre client must be the same as the
+                version of the <code>lustre-client-modules-</code><replaceable>ver</replaceable>
+                package being installed. If the kernel running on the client is not compatible, a
+                kernel that is compatible must be installed on the client before the Lustre file
+                system software is installed.</para>
             </note>
           </listitem>
           <listitem>
-            <para><emphasis role="bold">Perl</emphasis>  - Various userspace utilities are written in Perl. Any recent version of Perl will work with Lustre.</para>
+            <para><emphasis role="bold"><emphasis role="italic">Lustre LNET network driver
+                  (LND)</emphasis></emphasis>. The Lustre LNDs provided with the Lustre software are
+              listed in the table below. For more information about Lustre LNET, see <xref
+                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="understandinglustrenetworking"
+              />.</para>
+            <table frame="all" xml:id="table_bkx_dn3_gk">
+              <title>Network Types Supported by Lustre LNDs</title>
+              <tgroup cols="2">
+                <colspec colname="c1" colnum="1" colwidth="1*"/>
+                <colspec colname="newCol2" colnum="2" colwidth="1.95*"/>
+                <thead>
+                  <row>
+                    <entry>Supported Network Types</entry>
+                    <entry>Notes</entry>
+                  </row>
+                </thead>
+                <tbody>
+                  <row>
+                    <entry>TCP</entry>
+                    <entry>Any network carrying TCP traffic, including GigE, 10GigE, and
+                      IPoIB</entry>
+                  </row>
+                  <row>
+                    <entry>InfiniBand* network</entry>
+                    <entry>OpenFabrics OFED (o2ib)</entry>
+                  </row>
+                  <row>
+                    <entry>gni</entry>
+                    <entry>Gemini (Cray)</entry>
+                  </row>
+                  <row>
+                    <entry>Seastar</entry>
+                    <entry>Cray</entry>
+                  </row>
+                  <row>
+                    <entry>MX</entry>
+                    <entry>Myrinet* network</entry>
+                  </row>
+                  <row>
+                    <entry>ra</entry>
+                    <entry>RapidArray* interconnect</entry>
+                  </row>
+                  <row>
+                    <entry>Elan</entry>
+                    <entry>Quadrics</entry>
+                  </row>
+                </tbody>
+              </tgroup>
+            </table>
+          </listitem>
+        </itemizedlist></para>
+      <para>
+        <note>
+          <para>The InfiniBand* and TCP Lustre LNDs are routinely tested during release cycles. The
+            other LNDs are maintained by their respective owners</para>
+        </note>
+        <itemizedlist>
+          <listitem>
+            <para><emphasis role="bold"><emphasis role="italic"> High availability
+                  software</emphasis></emphasis>. If needed, install third party high-availability
+              software. For more information, see <xref linkend="dbdoclet.50438188_92688"/>.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold"><emphasis role="italic">Optional
+                packages.</emphasis></emphasis> Optional packages  provided in the <link
+                xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre
+                Releases</link> repository may include the following (depending on the operating
+              system and platform):<itemizedlist>
+                <listitem>
+                  <para><code>kernel-debuginfo</code>, <code>kernel-debuginfo-common</code>,
+                      <code>lustre-debuginfo</code>, <code>lustre-ldiskfs-debuginfo</code> -
+                    Versions of required packages with debugging symbols and other debugging options
+                    enabled for use in troubleshooting.</para>
+                </listitem>
+                <listitem>
+                  <para><code>kernel-devel</code>,  - Portions of the kernel tree needed to compile
+                    third party modules, such as network drivers.</para>
+                </listitem>
+                <listitem>
+                  <para><code>kernel-firmware</code> - Standard Red Hat Enterprise Linux package
+                    that has been recompiled to work with the Lustre kernel.</para>
+                </listitem>
+                <listitem>
+                  <para><code>kernel-headers</code> - Header files installed under /user/include and
+                    used when compiling user-space, kernel-related code.</para>
+                </listitem>
+                <listitem>
+                  <para><code>lustre-source</code> - Source code for Lustre.</para>
+                </listitem>
+                <listitem>
+                  <para><emphasis role="italic">(Recommended) </emphasis><code>perf</code>,
+                      <code>perf-debuginfo</code>, <code>python-perf</code>,
+                      <code>python-perf-debuginfo</code> -  Linux performance analysis tools that
+                    have been compiled to match the Lustre kernel version.</para>
+                </listitem>
+              </itemizedlist></para>
           </listitem>
         </itemizedlist>
-      </section>
-      <section remap="h4">
-        <title><indexterm><primary>installing</primary><secondary>high-availability</secondary></indexterm>
-(Optional) High-Availability Software</title>
-        <para>If you plan to enable failover server functionality with Lustre (either on an OSS or the MDS), you must add high-availability (HA) software to your cluster software. For more information, see <xref linkend="dbdoclet.50438188_92688"/>.</para>
-      </section>
-      <section remap="h4">
-        <title>(Optional) Debugging Tools and Other Optional Packages</title>
-        <para>A variety of optional packages are provided on the
-            <link xl:href="http://downloads.whamcloud.com">Intel download site</link>.
-          These include debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages.</para>
-        <para>For more information about debugging tools, see the topic
-            <link xl:href="http://wiki.lustre.org/index.php/Debugging_Lustre">Debugging Lustre</link>
-          on the Lustre wiki.</para>
-      </section>
+      </para>
     </section>
-    <section xml:id="dbdoclet.50438261_19503">
-      <title><indexterm><primary>installing</primary><secondary>environment</secondary></indexterm>
-Environmental Requirements</title>
-      <para>Make sure the following environmental requirements are met before installing Lustre:</para>
-      <itemizedlist>
-        <listitem>
-          <para><emphasis role="bold">
-              <emphasis role="italic">
-                <emphasis>(Required)</emphasis>
-              </emphasis>
-            </emphasis><emphasis role="bold"> Disable Security-Enhanced Linux (SELinux) on servers and clients</emphasis> . Lustre does not support SELinux. Therefore, disable the SELinux system extension on all Lustre nodes and make sure other security extensions, like Novell AppArmorand network packet filtering tools (such as iptables) do not interfere with Lustre. See <xref linkend="dbdoclet.50438261_88296"/> in <xref linkend="dbdoclet.50438261_41900"/> below.</para>
-        </listitem>
-        <listitem>
-          <para><emphasis role="bold">
-              <emphasis role="italic">
-                <emphasis>(Required)</emphasis>
-              </emphasis>
-            </emphasis><emphasis role="bold"> Maintain uniform user and group databases on all cluster nodes</emphasis> . Use the same user IDs (UID) and group IDs (GID) on all clients. If use of supplemental groups is required, verify that the identity_upcall requirements have been met. See <xref linkend="dbdoclet.50438291_32926"/>.</para>
-        </listitem>
-        <listitem>
-          <para><emphasis role="bold">
-              <emphasis role="italic">
-                <emphasis>(Recommended)</emphasis>
-              </emphasis>
-            </emphasis><emphasis role="bold"> Provide remote shell access to clients</emphasis> . Although not strictly required to run Lustre, we recommend that all cluster nodes have remote shell client access to facilitate the use of Lustre configuration and monitoring scripts. Parallel Distributed SHell (pdsh) is preferable, although Secure SHell (SSH) is acceptable.</para>
-        </listitem>
-        <listitem>
-          <para><emphasis role="bold">
-              <emphasis role="italic">
-                <emphasis>(Recommended)</emphasis>
-              </emphasis>
-            </emphasis><emphasis role="bold"> Ensure client clocks are synchronized</emphasis> . Lustre uses client clocks for timestamps. If clocks are out of sync between clients, files will appear with different time stamps when accessed by different clients. Drifting clocks can also cause problems, for example, by making it difficult to debug multi-node issues or correlate logs, which depend on timestamps. We recommend that you use Network Time Protocol (NTP) to keep client and server clocks in sync with each other. For more information about NTP, see: <link xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
-        </listitem>
-      </itemizedlist>
+    <section xml:id="section_rh2_d4w_gk">
+      <title>Environmental Requirements</title>
+      <para>Before installing the Lustre software, make sure the following environmental
+        requirements are met.<itemizedlist>
+          <listitem>
+            <para><emphasis role="italic">(Required)</emphasis>
+              <emphasis role="italic"><emphasis role="bold">Disable Security-Enhanced Linux
+                  (SELinux) on all Lustre servers and clients.</emphasis></emphasis> The Lustre
+              software does not support SELinux. Therefore, the SELinux system extension must be
+              disabled on all Lustre nodes. Also, make sure other security extensions (such as the
+              Novell AppArmor* security system) and network packet filtering tools (such as
+              iptables) do not interfere with the Lustre software.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="italic">(Required) </emphasis><emphasis role="italic"><emphasis
+                  role="bold">Use the same user IDs (UID) and group IDs (GID) on all
+                  clients.</emphasis></emphasis> If use of supplemental groups is required, see
+                <xref linkend="dbdoclet.50438291_32926"/> for information about supplementary user
+              and group cache upcall (<code>identity_upcall</code>).</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="italic">(Recommended) </emphasis><emphasis role="italic"><emphasis
+                  role="bold">Provide remote shell access to clients.</emphasis></emphasis> It is
+              recommended that all cluster nodes have remote shell client access to facilitate the
+              use of Lustre configuration and monitoring scripts. Parallel Distributed SHell (pdsh)
+              is preferable, although Secure SHell (SSH) is acceptable.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="italic">(Recommended) </emphasis><emphasis role="italic"><emphasis
+                  role="bold">Ensure client clocks are synchronized.</emphasis></emphasis> The
+              Lustre file system uses client clocks for timestamps. If clocks are out of sync
+              between clients, files will appear with different time stamps when accessed by
+              different clients. Drifting clocks can also cause problems by, for example, making it
+              difficult to debug multi-node issues or correlate logs, which depend on timestamps. We
+              recommend that you use Network Time Protocol (NTP) to keep client and server clocks in
+              sync with each other. For more information about NTP, see: <link
+                xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
+          </listitem>
+        </itemizedlist></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438261_41900">
     <title>Lustre Installation Procedure</title>
     <caution>
-      <para>Before installing Lustre, back up ALL data. Lustre contains kernel modifications which interact with storage devices and may introduce security issues and data loss if not installed, configured or administered properly.</para>
+      <para>Before installing the Lustre software, back up ALL data. The Lustre software contains
+        kernel modifications that interact with storage devices and may introduce security issues
+        and data loss if not installed, configured, or administered properly.</para>
     </caution>
-    <para>Use this procedure to install Lustre from RPMs.</para>
+    <para>To install the Lustre software from RPMs, complete the steps below.</para>
     <orderedlist>
       <listitem>
-        <para>Verify that all Lustre installation requirements have been met.</para>
-        <para>For more information on these prerequisites, see:</para>
+        <para>Verify that all Lustre installation requirements have been met. </para>
         <itemizedlist>
           <listitem>
-            <para> Hardware requirements in <xref linkend="settinguplustresystem"/></para>
+            <para>For hardware requirements, see <xref linkend="settinguplustresystem"/>.</para>
           </listitem>
           <listitem>
-            <para>Software and environmental requirements in <xref linkend="installinglustre"/></para>
+            <para>For software and environmental requirements, see the section <xref
+                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438261_99193"
+              />above.</para>
           </listitem>
         </itemizedlist>
       </listitem>
       <listitem>
-        <para>Download the Lustre RPMs.</para>
-        <orderedlist>
-          <listitem>
-            <para>On the <link xl:href="http://downloads.whamcloud.com/">Lustre download site</link>, select your platform.</para>
-            <para>The files required to install Lustre (kernels, modules and utilities RPMs) are listed for the selected platform.</para>
-          </listitem>
-          <listitem>
-            <para>Download the required files.</para>
-          </listitem>
-        </orderedlist>
+        <para>Download the Lustre server RPMs for your platform from the <link
+            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
+          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+            linkend="table_cnh_5m3_gk"/> for a list of required packages.</para>
       </listitem>
       <listitem xml:id="dbdoclet.50438261_88296">
-        <para>Install the Lustre packages on the servers.</para>
-        <orderedlist>
-          <listitem>
-            <para>Refer to <xref linkend="installinglustre.tab.req"/> to determine which Lustre packages are to be installed on servers for your platform and architecture.</para>
-            <para>Some Lustre packages are installed on the Lustre servers (MGS, MDS, and OSSs). Others are installed on Lustre clients.</para>
-            <para>Lustre packages must be installed in the order specified in the following steps.</para>
-          </listitem>
-          <listitem>
-            <para>Install the kernel, modules and <literal>ldiskfs</literal> packages.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the kernel, module and ldiskfs packages.</para>
-            <note>
-              <para>It is not recommended that you use the <literal>rpm -Uvh</literal> command to install a kernel, because this may leave you with an unbootable system if the new kernel doesn&apos;t work for some reason.</para>
-            </note>
-            <para>For example, the command in the following example would install required packages on a server with Infiniband networking</para>
-            <screen>$ rpm -ivh kernel-<replaceable>ver</replaceable>_lustre-<replaceable>ver</replaceable> kernel-ib-<replaceable>ver</replaceable> \
-lustre-modules-<replaceable>ver</replaceable> lustre-ldiskfs-<replaceable>ver</replaceable>
-</screen>
-          </listitem>
-          <listitem>
-            <para>Update the bootloader (<literal>grub.conf</literal> or <literal>lilo.conf</literal>) configuration file as needed.</para>
-            <orderedlist>
-              <listitem>
-                <para>Verify that the bootloader configuration file has been updated with an entry for the patched kernel.</para>
-                <para>Before you can boot to a new distribution or kernel, there must be an entry for it in the bootloader configuration file. Often this is added automatically when the kernel RPM is installed.</para>
-              </listitem>
-              <listitem>
-                <para>Disable security-enhanced (SE) Linux on servers and clients by including an entry in the bootloader configuration file as shown below:</para>
-                <screen>selinux=0 
-</screen>
-              </listitem>
-            </orderedlist>
-          </listitem>
-          <listitem>
-            <para>Install the utilities/userspace packages.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the utilities packages. For example:</para>
-            <screen>$ rpm -ivh lustre-<replaceable>ver</replaceable>
-</screen>
-          </listitem>
-          <listitem>
-            <para>Install the <literal>e2fsprogs</literal> package.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the <literal>e2fsprogs</literal> package. For example:</para>
-            <screen>$ rpm -ivh e2fsprogs-<replaceable>ver</replaceable>
- 
-</screen>
-            <para>If <literal>e2fsprogs</literal> is already installed on your Linux system, install the Lustre-specific <literal>e2fsprogs</literal> version by using <literal>rpm -Uvh</literal> to upgrade the existing <literal>e2fsprogs</literal> package. For example:</para>
-            <screen>$ rpm -Uvh e2fsprogs-<replaceable>ver</replaceable> </screen>
-            <note>
-              <para>The <literal>rpm</literal> command options <literal>--force</literal> or <literal>--nodeps</literal> should not be used to install or update the Lustre-specific <literal>e2fsprogs</literal> package. If errors are reported, file a bug (for instructions see the topic
-                  <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>
-                on the Lustre wiki).</para>
-            </note>
-          </listitem>
-          <listitem>
-            <para><emphasis role="italic">
-                <emphasis role="italic">(Optional)</emphasis>
-              </emphasis> To add optional packages to your Lustre file system, install them now.</para>
-            <para>Optional packages include file system creation and repair tools, debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages. A complete list of optional packages for your platform is provided on the <link xl:href="http://downloads.whamcloud.com/">Lustre Downloads</link> page.</para>
-          </listitem>
-        </orderedlist>
+        <para>Install the Lustre server packages on all Lustre servers (MGS, MDSs, and
+            OSSs).<orderedlist numeration="loweralpha">
+            <listitem>
+              <para>Log onto a Lustre server as the <literal>root</literal> user</para>
+            </listitem>
+            <listitem>
+              <para>Use the <literal>yum</literal> command to install the packages:</para>
+              <para>
+                <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+              </para>
+            </listitem>
+            <listitem>
+              <para>Verify the packages are installed correctly:</para>
+              <para>
+                <screen>rpm -qa|egrep "lustre|wc"|sort</screen>
+              </para>
+            </listitem>
+            <listitem>
+              <para>Reboot the server.</para>
+            </listitem>
+            <listitem>
+              <para>Repeat these steps on each Lustre server.</para>
+            </listitem>
+          </orderedlist></para>
       </listitem>
       <listitem>
-        <para>Install the Lustre packages on the clients.</para>
-        <orderedlist>
-          <listitem>
-            <para>Refer to <xref linkend="installinglustre.tab.req"/> to determine which Lustre packages are to be installed on clients for your platform and architecture.</para>
-          </listitem>
-          <listitem>
-            <para>Install the module packages for clients.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the lustre-client and <literal>lustre-client-modules-<replaceable>ver</replaceable></literal> packages. For example:</para>
-            <screen>$ rpm -ivh lustre-client-modules-<replaceable>ver</replaceable> kernel-ib-<replaceable>ver</replaceable></screen>
-          </listitem>
-          <listitem>
-            <para>Install the utilities/userspace packages for clients.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the utilities packages. For example:</para>
-            <screen>$ rpm -ivh lustre-client</screen>
-          </listitem>
-          <listitem>
-            <para>Update the bootloader (grub.conf or lilo.conf) configuration file as needed.</para>
-            <orderedlist>
-              <listitem>
-                <para>Verify that the bootloader configuration file has been updated with an entry for the patched kernel.</para>
-                <para>Before you can boot to a new distribution or kernel, there must be an entry for it in the bootloader configuration file. Often this is added automatically when the kernel RPM is installed.</para>
-              </listitem>
-              <listitem>
-                <para>Disable security-enhanced (SE) Linux on servers and clients by including an entry in the bootloader configuration file as shown below:</para>
-                <screen>selinux=0 </screen>
-              </listitem>
-            </orderedlist>
-          </listitem>
-        </orderedlist>
+        <para>Download the Lustre client RPMs for your platform from the <link
+            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
+          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+            linkend="table_j3r_ym3_gk"/> for a list of required packages.</para>
       </listitem>
       <listitem>
-        <para>Reboot the patched clients and the servers.</para>
-        <orderedlist>
+        <para>Install the Lustre client packages on all Lustre clients.<note>
+            <para>The version of the kernel running on a Lustre client must be the same as the
+              version of the <literal>lustre-client-modules-</literal><replaceable>ver</replaceable>
+              package being installed. If not, a compatible kernel must be installed on the client
+              before the Lustre client packages are installed.</para>
+          </note></para>
+        <orderedlist numeration="loweralpha">
           <listitem>
-            <para>If you applied the patched kernel to any clients, reboot them.</para>
-            <para>Unpatched clients do not need to be rebooted.</para>
+            <para>Log onto a Lustre client as the root user.</para>
           </listitem>
           <listitem>
-            <para>Reboot the servers.</para>
+            <para>Use the <literal>yum</literal> command to install the packages:</para>
+            <para>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Verify the packages were installed correctly:</para>
+            <para>
+              <screen># rpm -qa|egrep "lustre|kernel"|sort</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Reboot the client.</para>
+          </listitem>
+          <listitem>
+            <para>Repeat these steps on each Lustre client.</para>
           </listitem>
         </orderedlist>
-        <para>To configure LNET, go next to <xref linkend="configuringlnet"/>. If default settings will be used for LNET, go to <xref linkend="configuringlustre"/>.</para>
       </listitem>
     </orderedlist>
+    <para>To configure LNET, go  to <xref linkend="configuringlnet"/>. If default settings will be
+      used for LNET, go to <xref linkend="configuringlustre"/>.</para>
   </section>
 </chapter>

@@ -1,7 +1,8 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreprogramminginterfaces">
-  <title xml:id="lustreprogramminginterfaces.title">Lustre Programming Interfaces</title>
-  <para>This chapter describes public programming interfaces to control various aspects of Lustre from userspace. These interfaces are generally not guaranteed to remain unchanged over time, although we will make an effort to notify the user community well in advance of major changes. This chapter includes the following section:</para>
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreprogramminginterfaces">
+  <title xml:id="lustreprogramminginterfaces.title">Lustre* Programming Interfaces</title>
+  <para>This chapter describes public programming interfaces to that can be used to control various
+    aspects of a Lustre* file system from userspace. This chapter includes the following
+    sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438291_32926"/></para>
@@ -14,57 +15,109 @@
     <para>Lustre programming interface man pages are found in the <literal>lustre/doc</literal> folder.</para>
   </note>
   <section xml:id="dbdoclet.50438291_32926">
-    <title><indexterm><primary>programming</primary><secondary>upcall</secondary></indexterm>User/Group Cache Upcall</title>
-    <para>This section describes user and group upcall.</para>
+    <title><indexterm>
+        <primary>programming</primary>
+        <secondary>upcall</secondary>
+      </indexterm>User/Group Upcall</title>
+    <para>This section describes the supplementary user/group upcall, which allows the MDS to
+      retrieve and verify the supplementary groups to which a particular user is assigned. This
+      avoids the need to pass all the supplementary groups from the client to the MDS with every
+      RPC.</para>
     <note>
-      <para>For information on a universal UID/GID, see <xref linkend="dbdoclet.50438261_19503"/>.</para>
+      <para>For information about universal UID/GID requirements in a Lustre file system
+        ennvironment, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="section_rh2_d4w_gk"/>.</para>
     </note>
     <section remap="h3">
-      <title>Name</title>
-      <para>Use <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</literal> to look up a given user&apos;s group membership.</para>
+      <title>Synopsis</title>
+      <para>The MDS uses the utility <literal>lctl get_param
+          mdt.${FSNAME}-MDT{xxxx}.identity_upcall</literal> to look up the supplied UID in order to
+        retrieve the user's supplementary group membership. The result is temporarily cached in the
+        kernel (for five minutes, by default) to avoid the overhead of calling into userspace
+        repeatedly.</para>
     </section>
     <section remap="h3">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>The identity upcall file contains the path to an executable that is invoked to resolve a
+        numeric UID to a group membership list. This utility opens
+          <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> and fills in the
+        related <literal>identity_downcall_data</literal> data structure (see <xref
+          linkend="dbdoclet.50438291_33759"/>). The data is persisted with <literal>lctl set_param
+          mdt.${FSNAME}-MDT{xxxx}.identity_info</literal>.</para>
       <para>For a sample upcall program, see <literal>lustre/utils/l_getidentity.c</literal> in the Lustre source distribution.</para>
       <section remap="h4">
         <title>Primary and Secondary Groups</title>
         <para>The mechanism for the primary/secondary group is as follows:</para>
         <itemizedlist>
           <listitem>
-            <para>The MDS issues an upcall (set per MDS) to map the numeric UID to the supplementary group(s).</para>
+            <para>The MDS issues an upcall (set per MDS) to map the numeric UID to the supplementary
+              group(s).</para>
           </listitem>
           <listitem>
-            <para>If there is no upcall or if there is an upcall and it fails, supplementary groups will be added as supplied by the client (as they are now).</para>
+            <para>If there is no upcall or if there is an upcall and it fails, one supplementary
+              group at most will be added as supplied by the client.</para>
           </listitem>
           <listitem>
-            <para>The default upcall is <literal>/usr/sbin/l_getidentity</literal>, which can interact with the user/group database to obtain UID/GID/suppgid. The user/group database depends on authentication configuration, and can be local <literal>/etc/passwd</literal>, NIS, LDAP, etc. If necessary, the administrator can use a parse utility to set <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</literal>. If the upcall interface is set to NONE, then upcall is disabled. The MDS uses the UID/GID/suppgid supplied by the client.</para>
+            <para>The default upcall is <literal>/usr/sbin/l_getidentity</literal>, which can
+              interact with the user/group database to obtain UID/GID/suppgid. The user/group
+              database depends on how authentication is configured, such as local
+                <literal>/etc/passwd</literal>, Network Information Service (NIS), or Lightweight
+              Directory Access Protocol (LDAP). If necessary, the administrator can use a parse
+              utility to set
+                <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</literal>. If the
+              upcall interface is set to NONE, then upcall is disabled. The MDS uses the
+              UID/GID/suppgid supplied by the client.</para>
           </listitem>
           <listitem>
-              <para>The default group upcall is set by mkfs.lustre. Use <literal>tunefs.lustre --param</literal> or <literal>lctl set_param mdt.{mdtname}.identity_upcall={path}</literal></para>
-          </listitem>
-          <listitem>
-            <para>The Lustre administrator can specify permissions for a specific UID by configuring <literal>/etc/lustre/perm.conf</literal> on the MDS. As commented in <literal>lustre/utils/l_getidentity.c</literal></para>
+            <para>The default group upcall is set by <literal>mkfs.lustre</literal>. Use
+                <literal>tunefs.lustre --param</literal> or <literal>lctl set_param
+                mdt.${FSNAME}-MDT{xxxx}.identity_upcall={path}</literal></para>
           </listitem>
         </itemizedlist>
-        <screen>
-/*
-* permission file format is like this: 
-* {nid} {uid} {perms} 
-* 
-* &apos;*&apos; nid means any nid
-* &apos;*&apos; uid means any uid
-* the valid values for perms are:
-* setuid/setgid/setgrp/rmtacl -- enable corresponding perm
-* nosetuid/nosetgid/nosetgrp/normtacl -- disable corresponding perm
-* they can be listed together, separated by &apos;,&apos;,
-* when perm and noperm are in the same line (item), noperm is preferential,
-* when they are in different lines (items), the latter is preferential,
-* &apos;*&apos; nid is as default perm, and is not preferential.*/</screen>
-        <para>Currently, <literal>rmtacl/normtacl</literal> can be ignored (part of security functionality), and used for remote clients. The /usr/sbin/l_getidentity utility can parse <literal>/etc/lustre/perm.conf</literal> to obtain permission mask for specified UID.</para>
         <itemizedlist>
+          <para>A Lustre administrator can specify permissions for a specific UID by configuring
+              <literal>/etc/lustre/perm.conf</literal> on the MDS. The
+              <literal>/usr/sbin/l_getidentity</literal> utility parses
+              <literal>/etc/lustre/perm.conf</literal> to obtain the permission mask for a specified
+            UID.</para>
+          <para>The permission file format
+            is:<screen>{<replaceable>nid</replaceable>} {<replaceable>uid</replaceable>} {<replaceable>perms</replaceable>}</screen>An
+            asterisk (*) in the <replaceable>nid</replaceable> column or
+              <replaceable>uid</replaceable> column matches any NID or UID respectively. When '*' is
+            specified as the NID, it is used for the default permissions for all NIDS, unless
+            permissions are specified for a particular NID.  In this case the specified permissions
+            take precedence for that particular NID.  Valid values for
+              <replaceable>perms</replaceable> are:<itemizedlist>
+              <listitem>
+                <para><literal>setuid/setgid/setgrp/<replaceable>XXX</replaceable></literal> -
+                  enables the corresponding <replaceable>perm</replaceable></para>
+              </listitem>
+              <listitem>
+                <para><literal>nosetuid/nosetgid/nosetgrp/no<replaceable>XXX</replaceable></literal>
+                  - disables the corresponding <replaceable>perm</replaceable></para>
+              </listitem>
+            </itemizedlist>Permissions can be specified in a comma-separated list. When a
+              <replaceable>perm</replaceable> and a <replaceable>noperm</replaceable> permission are
+            listed in the same line, the <replaceable>noperm</replaceable> permission takes
+            precedence. When they are listed on separate lines, the permission that appears later
+            takes precedence.</para>
           <listitem>
-            <para> To avoid repeated upcalls, the MDS caches supplemental group information. Use <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_expire</literal> to set the cache time (default is 600 seconds). The kernel waits for the upcall to complete (at most, 5 seconds) and takes the &quot;failure&quot; behavior as described. Set the wait time in <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_acquire_expire</literal> (default is 15 seconds). Cached entries are flushed by writing to <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_flush</literal>.</para>
+            <?oxy_custom_start type="oxy_content_highlight" color="255,255,0"?>
+            <para><?oxy_custom_end?>The <literal>/usr/sbin/l_getidentity</literal> utility can parse
+                <literal>/etc/lustre/perm.conf</literal> to obtain the permission mask for the
+              specified UID.</para>
+          </listitem>
+          <listitem>
+            <para>To avoid repeated upcalls, the MDS caches supplemental group information. Use
+                <literal>lctl set_param mdt.*.identity_expire=&lt;seconds></literal> to set the
+              cache time. The default cache time is 600 seconds. The kernel waits for the upcall to
+              complete (at most, 5 seconds) and takes the &quot;failure&quot; behavior as described. </para>
+            <para>Set the wait time using <literal>lctl set_param
+                mdt.*.identity_acquire_expire=&lt;seconds></literal> to change the length of time
+              that the kernel waits for the upcall to finish. Note that the client process is
+              blocked during this time. The default wait time is 15 seconds.</para>
+            <para>Cached entries are flushed using <literal>lctl set_param
+                mdt.${FSNAME}-MDT{xxxx}.identity_flush=0</literal>.</para>
           </listitem>
         </itemizedlist>
       </section>
@@ -82,34 +135,45 @@
     </section>
     <section xml:id="dbdoclet.50438291_33759">
       <title>Data Structures</title>
-      <screen>struct identity_downcall_data {
-   __u32           idd_magic;
-   __u32           idd_err;
-   __u32           idd_uid;
-   __u32           idd_gid;
-   __u32           idd_nperms;
-   struct perm_downcall_data idd_perms[N_PERMS_MAX];
-   __u32           idd_ngroups;
-   __u32           idd_groups[0];
-};</screen>
+      <screen>struct perm_downcall_data{
+     __u64 pdd_nid;
+     __u32 pdd_perm;
+     __u32 pdd_padding;
+};
+
+struct identity_downcall_data{
+     __u32        idd_magic;
+     :         
+     :</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438291_73963">
     <title><indexterm><primary>programming</primary><secondary>l_getidentity</secondary></indexterm><literal>l_getidentity</literal> Utility</title>
-    <para>The <literal>l_getidentity</literal> utility handles Lustre user/group cache upcall.</para>
+    <para>The <literal>l_getidentity</literal> utility handles the Lustre supplementary group upcall
+      by default as described in the previous section.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>l_getidentity [-v] [-d|mdsname] uid]
-l_getidentity [-v] -s</screen>
+      <screen>l_getidentity ${FSNAME}-MDT{xxxx} {uid}</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> data structure (see <xref linkend='dbdoclet.50438291_33759'/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
-      <para>l_getidentity is the reference implementation of the user/group cache upcall.</para>
+      <para>The identity upcall file contains the path to an executable that is invoked to resolve a
+        numeric UID to a group membership list. This utility opens
+          <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal>, completes the
+          <literal>identity_downcall_data</literal> data structure (see <xref
+          linkend="dbdoclet.50438291_33759"/>) and writes the data to the
+          <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> pseudo file. The
+        data is persisted with <literal>lctl set_param
+          mdt.${FSNAME}-MDT{xxxx}.identity_info</literal>.</para>
+      <para><literal>l_getidentity</literal> is the reference implementation of the user/group cache
+        upcall.</para>
     </section>
     <section remap="h5">
       <title>Files</title>
-      <para><literal>/proc/fs/lustre/mdt/{mdt-name}/identity_upcall</literal></para>
+      <para>
+        <screen>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</screen>
+        <screen>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</screen>
+      </para>
     </section>
   </section>
 </chapter>
