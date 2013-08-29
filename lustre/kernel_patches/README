@@ -1,3 +1,4 @@
-The Linux kernel patches for Lustre.
-See http://manual.lustre.org/index.php?title=Main_Page for information on
-how to patch your kernel.
+The Linux kernel patches for Lustre.  See the Lustre file system Operations
+Manual 2.x from http://lustre.opensfs.org/documentation/ for information on how
+to patch your kernel.
+
