@@ -265,7 +265,13 @@ check_options() {
         usage 1 "Could not find Lustre source tarball '$LUSTRE'."
     fi
 
-    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
+    if [ -z "$DISTRO" ] ; then
+        DISTRO=$(autodetect_distro)
+        # remove minor version only for rhel and oel
+        [[ $DISTRO =~ "el-" ]] && DISTRO=${DISTRO%%.*}
+        # remove separator
+        DISTRO=${DISTRO/-/}
+    fi
 
     if [ -z "$LINUX" ]; then
         [ "$KERNELDIR" -o "$KERNELTREE" ] || \
@@ -562,6 +568,123 @@ download_ofed() {
 
 }
 
+parse_mpss_info() {
+    local file="$1"
+    local build="$2"
+    local distro="$3"
+
+    [ -r "$file" ] || fatal 1 "Could not find MPSS info file"
+
+    # convert to MPSS distro naming
+    distro=${distro/sles/suse}
+    distro_name=${distro%%-*}
+
+    # extract links from MPSS info file
+    local urls=$(cat "$file" | \
+        tr -d '\t\r\n' | sed -e 's?\(</[a-zA-Z]*>\)?\1\n?g' | \
+        grep '.intel.com/' | \
+        sed -e 's/^.*[hH][rR][eE][fF]="\([^>"]\+\)".*$/\1/g' | \
+        grep '.tar')
+    local res2=""
+    local res3=""
+    for url in $urls; do
+        # Try to match with MPSS 3.1 distro package
+        if [[ $url =~ mpss-[0-9].[0-9]-$distro.tar ]]; then
+            local bid=${url##*mpss-}
+            bid="${bid%%-$distro.tar}.0-0"
+            if [ -z "$build" ]; then
+                res3="$bid"
+            elif [ "$build" = "$bid" ]; then
+                res3="$res3 $url"
+            fi
+        # Try to match with MPSS 3.1 source package
+        elif [[ $url =~ mpss-src-[0-9].[0-9].tar ]]; then
+            local bid=${url##*mpss-src-}
+            bid="${bid%%.tar}.0-0"
+            if [ -z "$build" ]; then
+                res3="$bid"
+            elif [ "$build" = "$bid" ]; then
+                res3="$res3 $url"
+            fi
+        # Try to match with MPSS 3.1 cross compiler package
+        elif [[ $url =~ mpss-[0-9].[0-9]-k1om.tar ]]; then
+            local bid=${url##*mpss-}
+            bid="${bid%%-k1om.tar}.0-0"
+            if [ -z "$build" ]; then
+                res3="$bid"
+            elif [ "$build" = "$bid" ]; then
+                res3="$res3 $url"
+            fi
+        # Try to match with MPSS 2.1 source package
+        elif [[ $url =~ _src-[0-9].[0-9].[0-9]*-[0-9]*_$distro_name.tar ]]; then
+            local bid=${url##*_src-}
+            bid=${bid%%_$distro_name.tar}
+            if [ -z "$build" ]; then
+                res2="$bid"
+            elif [ "$build" = "$bid" ]; then
+                res2="$res2 $url"
+            fi
+        fi
+    done
+
+    if [ -z "$build" ]; then
+        # return a last version of MPSS
+        if [ -n "$res3" ]; then
+            echo "$res3"
+        else
+            echo "$res2"
+        fi
+    elif [ "${build%%.*}" = "3" ]; then
+        local ver=${build%.*}
+        local bid=${build%%-*}
+        bid=${bid##$ver.}
+        if [ $bid -eq 0 ]; then
+            # return URLs from MPSS info file
+            echo "$res3"
+        else
+            # return URLs from internal site with MPSS builds
+            # kernel sources:
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-src-$ver.tar"
+            # kernel configs:
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-$ver-k1om.tar"
+            # OFED headers:
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-$ver-$distro.tar"
+        fi
+    else
+        # return URLs from MPSS info file
+        echo "$res2"
+    fi
+}
+
+# Get public information about last releases of
+# Intel Manycore Platform Software Stack (MPSS)
+download_mpss_info() {
+    local file="$1"
+    local force="${2:-true}"
+    local url=${MPSS_URL:-"http://software.intel.com/en-us/articles/intel-manycore-platform-software-stack-mpss"}
+
+    download_file "$url" "$file" "$force"
+}
+
+download_mpss() {
+    local file="$1"
+    local force="${2:-false}"
+    local urls=$(parse_mpss_info "$file" ${MPSS_VERSION} ${MPSS_DISTRO})
+
+    [ -z "$urls" ] && fatal 1 "Could not determine the URLs of MPSS $MPSS_VERSION"
+
+    # force re-download if build number is zero
+    [[ $MPSS_VERSION = [0-9].[0-9].0-0 ]] && force=true
+
+    local url
+    local i=0
+    for url in $urls; do
+        file="$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part$i.tar"
+        download_file "$url" "$file" "$force"
+        i=$((i+1))
+    done
+}
+
 load_target() {
 
     EXTRA_VERSION_save="$EXTRA_VERSION"
@@ -711,6 +834,69 @@ unpack_lustre() {
 
 }
 
+unpack_mpss() {
+
+    [ -d mpss ] && return 0
+
+    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
+        local ver=${MPSS_VERSION%.*}
+        local file
+        local i
+        for i in $(seq 0 9); do
+            file="$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part$i.tar"
+            if [ -r "$file" ]; then
+                untar "$file" \
+                    "mpss-$ver/*/linux-*.tar.bz2" \
+                    "mpss-$ver/*/kernel-dev-*.rpm" \
+                    "mpss-$ver/*/ofed-driver-*-devel-*.rpm"
+            fi
+        done
+        # Extract kernel configs
+        file=$(find mpss-$ver -type f -path "*/kernel-dev-*.rpm")
+        if ! rpm2cpio "$file" | cpio -idm; then
+            echo "Error extracting MPSS kernel configs"
+            return 1
+        fi
+        # Unpack kernel sources
+        file=$(find mpss-$ver -type f -path "*/linux-*.tar.bz2")
+        if ! untar "$file"; then
+            echo "Error unpacking MPSS kernel sources"
+            return 1
+        fi
+        # Extract OFED headers
+        file=$(find mpss-$ver -type f -path "*/ofed-driver-*-devel-*.rpm")
+        if ! rpm2cpio "$file" | cpio -idm; then
+            echo "Error extracting MPSS OFED headers"
+            return 1
+        fi
+        # Remove unpacked archives to save space
+        rm -rf mpss-$ver
+        # Make link to MPSS kernel sources
+        ln -sf linux-* mpss
+    else
+        local dir="mpss-${MPSS_VERSION}-${MPSS_DISTRO%%-*}"
+
+        mkdir $dir || return 255
+        pushd $dir >/dev/null || return 255
+        if ! untar "$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part0.tar" "*/gpl/*full_src*"; then
+            popd >/dev/null
+            rm -rf $dir
+            echo "Error unpacking MPSS tarball 1"
+            return 1
+        fi
+        local file=$(find . -type f -path "*/gpl/*full_src*")
+        if ! untar "$file"; then
+            popd >/dev/null
+            rm -rf $dir
+            echo "Error unpacking MPSS tarball 2"
+            return 1
+        fi
+        popd >/dev/null
+        ln -sf $dir mpss
+    fi
+
+}
+
 do_patch_linux() {
 
     local do_patch=${1:-true}
@@ -785,23 +971,20 @@ build_lustre() {
         fi
     fi
 
-    # convert the $PATCHLESS boolean to an empty/not-empty boolean
-    # as silly as this seems, it makes the syntax of the rpmbuild command
-    # simpler and not need an eval to deal with the quotes in the quotes
-    local is_patchless=""
     if $PATCHLESS; then
-        is_patchless="yes"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --without servers"
+        if [ -n "$CROSS_SUFFIX" ]; then
+            RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"lustre_name lustre-client$CROSS_SUFFIX\""
+        fi
     fi
 
     # ditto for the lustre-tests boolean
-    local lustre_tests=""
     if ! $LUSTRE_TESTS; then
-        lustre_tests="no"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --without lustre_tests"
     fi
 
-    local lustre_iokit=""
     if ! $IOKITRPM; then
-        lustre_iokit="no"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --without lustre_iokit"
     fi
 
     local osd_zfs=""
@@ -814,32 +997,21 @@ build_lustre() {
         osd_ldiskfs="yes"
     fi
 
-    $RPMBUILD $targets $rpmbuildopt "$LUSTRE" \
-        ${is_patchless:+--without servers} \
-        ${lustre_tests:+--without lustre_tests} \
-        ${lustre_iokit:+--without lustre_iokit} \
+    RPMBUILD_DEFS="$RPMBUILD_DEFS ${FIND_REQUIRES:+--define \"__find_requires $FIND_REQUIRES\"}"
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"configure_args $confoptions ${CONFIGURE_FLAGS}\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"kdir $linux\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS ${linuxobj:+--define \"kobjdir $linuxobj\"}"
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_tmppath $TMPDIR\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_topdir $TOPDIR\""
+
+    eval $RPMBUILD $targets $rpmbuildopt "$LUSTRE" $RPMBUILD_DEFS \
         ${osd_zfs:+--with zfs} \
-        ${osd_ldiskfs:+--with ldiskfs} \
-        ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-        --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
-        --define "kdir $linux" \
-        ${linuxobj:+--define "kobjdir $linuxobj"} \
-        --define "_tmppath $TMPDIR" \
-        --define "_topdir $TOPDIR" 2>&1 || \
+        ${osd_ldiskfs:+--with ldiskfs} 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     if $DO_SRC; then
-        if ! $RPMBUILD -ts "$LUSTRE" \
-                 ${is_patchless:+--without servers} \
-                 ${lustre_tests:+--without lustre_tests} \
-                 ${lustre_iokit:+--without lustre_iokit} \
-                 ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
-                 --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
-                 --define "kdir $linux" \
-                 ${linuxobj:+--define "kobjdir $linuxobj"} \
-                 --define "_tmppath $TMPDIR" \
-                 --define "_topdir $TOPDIR" 2>&1; then
-            popd
+        if ! eval $RPMBUILD -ts "$LUSTRE" $RPMBUILD_DEFS 2>&1; then
+            popd >/dev/null
             return 255
         fi
     fi
@@ -979,6 +1151,34 @@ build_spl_zfs() {
     OSDZFSRPM=true
 
     return 0
+}
+
+prepare_mpss() {
+
+    pushd mpss >/dev/null || return 255
+    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
+        cp -f ../boot/config-* .config
+        if ! make ARCH=k1om silentoldconfig ; then
+            popd >/dev/null
+            return 1
+        fi
+        if ! make ARCH=k1om modules_prepare ; then
+            popd >/dev/null
+            return 1
+        fi
+        cp -f ../boot/Module.symvers-* Module.symvers
+    else
+        if ! make defconfig-miclinux; then
+            popd >/dev/null
+            return 1
+        fi
+        if ! make -C card/kernel ARCH=k1om modules_prepare ; then
+            popd >/dev/null
+            return 1
+        fi
+    fi
+    popd >/dev/null
+
 }
 
 stage() {
@@ -1744,7 +1944,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,mpss-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1850,6 +2050,10 @@ while [ "$1" ]; do
             OFED_VERSION="$2"
             shift 2
             ;;
+        --mpss-version)
+            MPSS_VERSION="$2"
+            shift 2
+            ;;
         --publish)
             shift
             ;;
@@ -1909,12 +2113,72 @@ unpack_lustre
 # XXX - should we _always_ get the buildid from the META file?  what are the
 # other (i.e. non-lustre-tarball use cases of lbuild)?
 BUILDID=$(sed -ne '/^BUILDID =/s/.*= *//p' lustre/META)
+VERSION=$(sed -ne '/^VERSION =/s/.*= *//p' lustre/META)
 
 load_target
 
 if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     download_ofed
     unpack_ofed || fatal 1 "Error unpacking OFED tarball"
+fi
+
+if [ -n "$MPSS_VERSION" ]; then
+    [ -z "$MPSS_DISTRO" ] && MPSS_DISTRO=$(autodetect_distro)
+
+    MPSS_INFO=$(mktemp -u mpss-info-XXXXXXXXXX.html)
+    download_mpss_info "$MPSS_INFO"
+
+    if [ "$MPSS_VERSION" = "last" ]; then
+        MPSS_VERSION=$(parse_mpss_info "$MPSS_INFO" "" ${MPSS_DISTRO})
+        [ -z "$MPSS_VERSION" ] && fatal 1 "Could not determine the last MPSS version"
+    elif [[ $MPSS_VERSION != [0-9].[0-9].[0-9]*-[0-9]* ]]; then
+        fatal 1 "Incorrect MPSS version $MPSS_VERSION"
+    fi
+
+    download_mpss "$MPSS_INFO"
+    [ -r "$MPSS_INFO" ] && rm -f "$MPSS_INFO"
+    echo "Building with MPSS $MPSS_VERSION"
+    unpack_mpss  || fatal 1 "Error unpacking MPSS tarballs"
+    prepare_mpss || fatal 1 "Error preparing MPSS for kernel modules build"
+
+    if [ -z "$MPSS_OFED" ]; then
+        MPSS_OFED=$(find $PWD -type f -path "*/ofed-driver-*/Module.symvers")
+        if [ -n "$MPSS_OFED" ]; then
+            MPSS_OFED="--with-o2ib=$(dirname $MPSS_OFED)"
+        else
+            MPSS_OFED="--without-o2ib"
+        fi
+    fi
+
+    # disable unsupported parts:
+    PATCHLESS=true
+    IOKITRPM=false
+    LDISKFSRPM=false
+    ZFSNOTSUPPORTED="yes"
+
+    # define variables for cross compilation:
+    CROSS_SUFFIX="-mic"
+    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
+        CC_TARGET_ARCH=k1om-mpss-linux
+        LINUX="$TOPDIR/mpss"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires mpss-bootimage\""
+    else
+        CC_TARGET_ARCH=x86_64-k1om-linux
+        LINUX="$TOPDIR/mpss/card/kernel"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires intel-mic-gpl = ${MPSS_VERSION%%-*}\""
+    fi
+    CONFIGURE_FLAGS="$CONFIGURE_FLAGS $MPSS_OFED --host=$CC_TARGET_ARCH --build=x86_64-pc-linux"
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"post_script build/gen_filelist.sh\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"make_args ARCH=k1om CROSS_COMPILE=${CC_TARGET_ARCH}-\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_path ${CROSS_PATH:=/opt/lustre/${VERSION}/${CC_TARGET_ARCH}}\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"rootdir %{cross_path}\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_prefix %{cross_path}/usr\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_mandir %{_prefix}/share/man\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_sysconfdir %{cross_path}/etc\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"kmoddir extra\""
+
+    # redefine CC for proper ./configure during rpmbuild
+    export CC=${CC_TARGET_ARCH}-gcc
 fi
 
 # make sure the RPM build environment is set up
