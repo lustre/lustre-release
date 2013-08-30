@@ -20,6 +20,10 @@ TOPDIR=$PWD
 KERNELRPMSDIR="$1"
 
 DISTRO=$(autodetect_distro)
+# remove minor version only for rhel and oel
+[[ $DISTRO =~ "el-" ]] && DISTRO=${DISTRO%%.*}
+# remove separator
+DISTRO=${DISTRO/-/}
 
 source $LBUILD_DIR/lbuild-$DISTRO
 

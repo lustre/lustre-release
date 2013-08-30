@@ -319,8 +319,6 @@ AC_DEFUN([LB_LINUX_SYMVERFILE],
 #
 AC_DEFUN([LB_LINUX_CROSS],
 	[AC_MSG_CHECKING([for cross compilation])
-CROSS_VARS=
-CROSS_PATH=
 AS_IF([test "x$cross_compiling" = xno], [AC_MSG_RESULT([no])],
 	[case $host_vendor in
 		# The K1OM architecture is an extension of the x86 architecture
