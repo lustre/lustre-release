@@ -365,6 +365,7 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 {
 	struct osd_seq	*osd_seq;
 	unsigned long	b;
+	obd_id		id;
 	int		rc;
 
 	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));
@@ -374,12 +375,18 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 		return PTR_ERR(osd_seq);
 	}
 
-	rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
-	LASSERT(rc == 0); /* we should not get here with IGIF */
-	b = ostid_id(&osd_oti_get(env)->oti_ostid) % OSD_OST_MAP_SIZE;
+	if (fid_is_last_id(fid)) {
+		id = 0;
+	} else {
+		rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
+		LASSERT(rc == 0); /* we should not get here with IGIF */
+		id = ostid_id(&osd_oti_get(env)->oti_ostid);
+	}
+
+	b = id % OSD_OST_MAP_SIZE;
 	LASSERT(osd_seq->os_compat_dirs[b]);
 
-	sprintf(buf, LPU64, ostid_id(&osd_oti_get(env)->oti_ostid));
+	sprintf(buf, LPU64, id);
 
 	return osd_seq->os_compat_dirs[b];
 }
