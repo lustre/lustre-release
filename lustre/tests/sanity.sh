@@ -1851,13 +1851,13 @@ test_27A() { # b=19102
         local restore_count=$($GETSTRIPE -c $MOUNT)
         local restore_offset=$($GETSTRIPE -i $MOUNT)
         $SETSTRIPE -c 0 -i -1 -S 0 $MOUNT
+        wait_update $HOSTNAME "$GETSTRIPE -c $MOUNT | sed 's/  *//g'" "1" 20 ||
+                error "stripe count $($GETSTRIPE -c $MOUNT) != 1"
         local default_size=$($GETSTRIPE -S $MOUNT)
-        local default_count=$($GETSTRIPE -c $MOUNT)
         local default_offset=$($GETSTRIPE -i $MOUNT)
         local dsize=$((1024 * 1024))
         [ $default_size -eq $dsize ] ||
                 error "stripe size $default_size != $dsize"
-        [ $default_count -eq 1 ] || error "stripe count $default_count != 1"
         [ $default_offset -eq -1 ] ||error "stripe offset $default_offset != -1"
         $SETSTRIPE -c $restore_count -i $restore_offset -S $restore_size $MOUNT
 }
