@@ -76,6 +76,6 @@ find_linux_rpm-rhel6() {
 
 kernel_srpm_location() {
 
-    echo "ftp://ftp.redhat.com/pub/redhat/linux/enterprise/6Server/en/os/SRPMS/"
+    echo "http://ftp.redhat.com/pub/redhat/linux/enterprise/6Server/en/os/SRPMS/"
 
 }
