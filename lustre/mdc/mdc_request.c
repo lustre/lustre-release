@@ -2460,21 +2460,23 @@ struct ldlm_valblock_ops inode_lvbo = {
 
 static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
-        struct client_obd *cli = &obd->u.cli;
-        struct lprocfs_static_vars lvars = { 0 };
-        int rc;
-        ENTRY;
+	struct client_obd		*cli = &obd->u.cli;
+	struct lprocfs_static_vars	lvars = { 0 };
+	int				rc;
+	ENTRY;
 
         OBD_ALLOC(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         if (!cli->cl_rpc_lock)
                 RETURN(-ENOMEM);
         mdc_init_rpc_lock(cli->cl_rpc_lock);
 
-        ptlrpcd_addref();
+	rc = ptlrpcd_addref();
+	if (rc < 0)
+		GOTO(err_rpc_lock, rc);
 
         OBD_ALLOC(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
         if (!cli->cl_close_lock)
-                GOTO(err_rpc_lock, rc = -ENOMEM);
+                GOTO(err_ptlrpcd_decref, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_close_lock);
 
         rc = client_obd_setup(obd, cfg);
@@ -2500,9 +2502,10 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
 err_close_lock:
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
+err_ptlrpcd_decref:
+        ptlrpcd_decref();
 err_rpc_lock:
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
-        ptlrpcd_decref();
         RETURN(rc);
 }
 

@@ -888,11 +888,13 @@ static int mgc_cleanup(struct obd_device *obd)
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        struct lprocfs_static_vars lvars;
-        int rc;
+	struct lprocfs_static_vars	lvars;
+	int				rc;
         ENTRY;
 
-        ptlrpcd_addref();
+	rc = ptlrpcd_addref();
+	if (rc < 0)
+		RETURN(rc);
 
         rc = client_obd_setup(obd, lcfg);
         if (rc)
