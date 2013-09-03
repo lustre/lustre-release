@@ -686,6 +686,9 @@ test_10a() {
 run_test 10a "non-stopped OI scrub should auto restarts after MDS remount (1)"
 
 test_10b() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.50) ]] &&
+		skip "Need MDS version less than 2.4.50" && return
+
 	scrub_prep 0
 	mds_backup_restore || error "(1) Fail to backup/restore!"
 
