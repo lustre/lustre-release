@@ -514,6 +514,38 @@ int lprocfs_osd_wr_readcache(struct file *file, const char *buffer,
 	return count;
 }
 
+static int lprocfs_osd_rd_lma_self_repair(char *page, char **start, off_t off,
+					  int count, int *eof, void *data)
+{
+	struct osd_device *dev = osd_dt_dev(data);
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	*eof = 1;
+	return snprintf(page, count, "%d\n", !!dev->od_lma_self_repair);
+}
+
+static int lprocfs_osd_wr_lma_self_repair(struct file *file, const char *buffer,
+					  unsigned long count, void *data)
+{
+	struct osd_device *dev = osd_dt_dev(data);
+	int		   val;
+	int		   rc;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	dev->od_lma_self_repair = !!val;
+	return count;
+}
+
 struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	{ "blocksize",		lprocfs_dt_rd_blksize,	0, 0 },
 	{ "kbytestotal",	lprocfs_dt_rd_kbytestotal,	0, 0 },
@@ -534,6 +566,8 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 					lprocfs_osd_wr_wcache, 0 },
 	{ "readcache_max_filesize",	lprocfs_osd_rd_readcache,
 					lprocfs_osd_wr_readcache, 0 },
+	{ "lma_self_repair",	lprocfs_osd_rd_lma_self_repair,
+				lprocfs_osd_wr_lma_self_repair, 0, 0 },
 	{ 0 }
 };
 

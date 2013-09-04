@@ -240,7 +240,8 @@ struct osd_device {
 				  od_dirent_journal:1,
 				  od_igif_inoi:1,
 				  od_check_ff:1,
-				  od_is_ost:1;
+				  od_is_ost:1,
+				  od_lma_self_repair:1;
 
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;

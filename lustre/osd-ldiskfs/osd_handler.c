@@ -319,6 +319,7 @@ int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 {
 	struct osd_thread_info	*info	= osd_oti_get(env);
+	struct osd_device	*osd	= osd_obj2dev(obj);
 	struct lustre_mdt_attrs	*lma	= &info->oti_mdt_attrs;
 	struct inode		*inode	= obj->oo_inode;
 	struct dentry		*dentry = &info->oti_obj_dentry;
@@ -333,11 +334,41 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA,
 			     info->oti_mdt_attrs_old, LMA_OLD_SIZE);
 	if (rc == -ENODATA && !fid_is_igif(lu_object_fid(&obj->oo_dt.do_lu)) &&
-	    osd_obj2dev(obj)->od_check_ff) {
+	    osd->od_check_ff) {
 		fid = &lma->lma_self_fid;
 		rc = osd_get_idif(info, inode, dentry, fid);
-		if (rc > 0)
+		if ((rc > 0) || (rc == -ENODATA && osd->od_lma_self_repair)) {
+			handle_t *jh;
+
+			/* For the given OST-object, if it has neither LMA nor
+			 * FID in XATTR_NAME_FID, then the given FID (which is
+			 * contained in the @obj, from client RPC for locating
+			 * the OST-object) is trusted. We use it to generate
+			 * the LMA. */
+
+			LASSERT(current->journal_info == NULL);
+
+			jh = ldiskfs_journal_start_sb(osd_sb(osd),
+					osd_dto_credits_noquota[DTO_XATTR_SET]);
+			if (IS_ERR(jh)) {
+				CWARN("%s: cannot start journal for "
+				      "lma_self_repair: rc = %ld\n",
+				      osd_name(osd), PTR_ERR(jh));
+				RETURN(0);
+			}
+
+			rc = osd_ea_fid_set(info, inode,
+				lu_object_fid(&obj->oo_dt.do_lu),
+				fid_is_on_ost(info, osd,
+					      lu_object_fid(&obj->oo_dt.do_lu),
+					      OI_CHECK_FLD) ?
+				LMAC_FID_ON_OST : 0, 0);
+			if (rc != 0)
+				CWARN("%s: cannot self repair the LMA: "
+				      "rc = %d\n", osd_name(osd), rc);
+			ldiskfs_journal_stop(jh);
 			RETURN(0);
+		}
 	}
 
 	if (unlikely(rc == -ENODATA))
@@ -352,8 +383,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
 			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-			      "fid = "DFID", ino = %lu\n",
-			      osd_obj2dev(obj)->od_svname,
+			      "fid = "DFID", ino = %lu\n", osd_name(osd),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
 			      PFID(lu_object_fid(&obj->oo_dt.do_lu)),
 			      inode->i_ino);
@@ -366,8 +396,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	if (fid != NULL &&
 	    unlikely(!lu_fid_eq(lu_object_fid(&obj->oo_dt.do_lu), fid))) {
 		CDEBUG(D_INODE, "%s: FID "DFID" != self_fid "DFID"\n",
-		       osd_obj2dev(obj)->od_svname,
-		       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
+		       osd_name(osd), PFID(lu_object_fid(&obj->oo_dt.do_lu)),
 		       PFID(&lma->lma_self_fid));
 		rc = -EREMCHG;
 	}
@@ -5581,6 +5610,9 @@ static int osd_device_init0(const struct lu_env *env,
 	rc = lu_site_init_finish(&o->od_site);
 	if (rc != 0)
 		GOTO(out_site, rc);
+
+	/* self-repair LMA by default */
+	o->od_lma_self_repair = 1;
 
 	CFS_INIT_LIST_HEAD(&o->od_ios_list);
 	/* setup scrub, including OI files initialization */
