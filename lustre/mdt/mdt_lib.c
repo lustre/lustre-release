@@ -1367,6 +1367,9 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         }
 
+	if (mdt_dlmreq_unpack(info) < 0)
+		RETURN(-EPROTO);
+
         RETURN(0);
 }
 

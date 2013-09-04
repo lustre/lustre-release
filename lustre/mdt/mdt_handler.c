@@ -1395,11 +1395,11 @@ relock:
                         if (unlikely(rc != 0))
                                 GOTO(out_child, rc);
 
-                        /* If the file has not been changed for some time, we
-                         * return not only a LOOKUP lock, but also an UPDATE
-                         * lock and this might save us RPC on later STAT. For
-                         * directories, it also let negative dentry starts
-                         * working for this dir. */
+			/* If the file has not been changed for some time, we
+			 * return not only a LOOKUP lock, but also an UPDATE
+			 * lock and this might save us RPC on later STAT. For
+			 * directories, it also let negative dentry cache start
+			 * working for this dir. */
                         if (ma->ma_valid & MA_INODE &&
                             ma->ma_attr.la_valid & LA_CTIME &&
                             info->mti_mdt->mdt_namespace->ns_ctime_age_limit +
@@ -4092,10 +4092,10 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 			rep->lock_policy_res2 =
 				ptlrpc_status_hton(rep->lock_policy_res2);
 		}
-        } else {
-                rc = -EOPNOTSUPP;
-        }
-        RETURN(rc);
+	} else {
+		rc = -EPROTO;
+	}
+	RETURN(rc);
 }
 
 static int mdt_intent_policy(struct ldlm_namespace *ns,
@@ -5199,7 +5199,6 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		mutex_init(&mo->mot_ioepoch_mutex);
 		mutex_init(&mo->mot_lov_mutex);
 		init_rwsem(&mo->mot_open_sem);
-		init_rwsem(&mo->mot_xattr_sem);
 		RETURN(o);
 	}
 	RETURN(NULL);

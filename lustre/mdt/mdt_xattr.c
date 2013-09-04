@@ -159,6 +159,65 @@ out:
 	return rc;
 }
 
+static int mdt_getxattr_all(struct mdt_thread_info *info,
+			    struct mdt_body *reqbody, struct mdt_body *repbody,
+			    struct lu_buf *buf, struct md_object *next)
+{
+	const struct lu_env *env = info->mti_env;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_export_data *med = mdt_req2med(req);
+	struct lu_ucred        *uc  = mdt_ucred(info);
+	char *v, *b, *eadatahead, *eadatatail;
+	__u32 *sizes;
+	int eadatasize, eavallen = 0, eavallens = 0, rc;
+
+	ENTRY;
+
+	/*
+	 * The format of the pill is the following:
+	 * EADATA:      attr1\0attr2\0...attrn\0
+	 * EAVALS:      val1val2...valn
+	 * EAVALS_LENS: 4,4,...4
+	 */
+
+	eadatahead = buf->lb_buf;
+
+	/* Fill out EADATA first */
+	eadatasize = mo_xattr_list(env, next, buf);
+	if (eadatasize < 0)
+		GOTO(out, rc = eadatasize);
+
+	eadatatail = eadatahead + eadatasize;
+
+	v = req_capsule_server_get(info->mti_pill, &RMF_EAVALS);
+	sizes = req_capsule_server_get(info->mti_pill, &RMF_EAVALS_LENS);
+
+	/* Fill out EAVALS and EAVALS_LENS */
+	for (b = eadatahead; b < eadatatail; b += strlen(b) + 1, v += rc) {
+		buf->lb_buf = v;
+		buf->lb_len = reqbody->eadatasize - eavallen;
+		rc = mdt_getxattr_one(info, b, next, buf, med, uc);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		sizes[eavallens] = rc;
+		eavallens++;
+		eavallen += rc;
+	}
+
+	repbody->aclsize = eavallen;
+	repbody->max_mdsize = eavallens;
+
+	req_capsule_shrink(info->mti_pill, &RMF_EAVALS, eavallen, RCL_SERVER);
+	req_capsule_shrink(info->mti_pill, &RMF_EAVALS_LENS,
+			   eavallens * sizeof(__u32), RCL_SERVER);
+	req_capsule_shrink(info->mti_pill, &RMF_EADATA, eadatasize, RCL_SERVER);
+
+	GOTO(out, rc = eadatasize);
+out:
+	return rc;
+}
+
 int mdt_getxattr(struct mdt_thread_info *info)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
@@ -186,8 +245,6 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	rc = mdt_init_ucred(info, reqbody);
         if (rc)
                 RETURN(err_serious(rc));
-
-	down_read(&info->mti_object->mot_xattr_sem);
 
         next = mdt_object_child(info->mti_object);
 
@@ -234,57 +291,13 @@ int mdt_getxattr(struct mdt_thread_info *info)
 		if (rc < 0)
 			CDEBUG(D_INFO, "listxattr failed: %d\n", rc);
 	} else if (valid == OBD_MD_FLXATTRALL) {
-		/*
-		 * The format of the pill is the following:
-		 * EADATA:      attr1\0attr2\0...attrn\0
-		 * EAVALS:      val1val2...valn
-		 * EAVALS_LENS: 4,4,...4
-		 */
-		char *v, *b;
-		__u32 *sizes;
-		int eadatasize, eavallen = 0, eavallens = 0;
-		struct lu_buf buf2 = { .lb_len = reqbody->eadatasize };
-
-		/* Fill out EADATA */
-		eadatasize = mo_xattr_list(info->mti_env, next, buf);
-		if (eadatasize < 0)
-			GOTO(out, rc = eadatasize);
-
-		v = req_capsule_server_get(info->mti_pill, &RMF_EAVALS);
-		sizes = req_capsule_server_get(info->mti_pill,
-						&RMF_EAVALS_LENS);
-
-		/* Fill out EAVALS and EAVALS_LENS */
-		for (b = buf->lb_buf;
-		     b < (char *)buf->lb_buf + eadatasize;
-		     b += strlen(b) + 1, v += rc) {
-			buf2.lb_buf = v;
-			rc = mdt_getxattr_one(info, b, next, &buf2, med, uc);
-			if (rc < 0)
-				GOTO(out, rc);
-			sizes[eavallens] = rc;
-			buf2.lb_len -= rc;
-			eavallens++;
-			eavallen += rc;
-		}
-
-		repbody->aclsize = eavallen;
-		repbody->max_mdsize = eavallens;
-
-		req_capsule_shrink(info->mti_pill, &RMF_EAVALS,
-					eavallen, RCL_SERVER);
-		req_capsule_shrink(info->mti_pill, &RMF_EAVALS_LENS,
-					eavallens * sizeof(__u32), RCL_SERVER);
-		req_capsule_shrink(info->mti_pill, &RMF_EADATA,
-					eadatasize, RCL_SERVER);
-		rc = eadatasize;
+		rc = mdt_getxattr_all(info, reqbody, repbody,
+				      buf, next);
 	} else
 		LBUG();
 
 	EXIT;
 out:
-	up_read(&info->mti_object->mot_xattr_sem);
-
 	if (rc >= 0) {
 		mdt_counter_incr(req, LPROC_MDT_GETXATTR);
 		repbody->eadatasize = rc;
@@ -366,6 +379,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
         CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
 
+	if (info->mti_dlm_req)
+		ldlm_request_cancel(req, info->mti_dlm_req, 0);
+
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
 
@@ -416,10 +432,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	/* We need revoke both LOOKUP|PERM lock here, see mdt_attr_set. */
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
 		lockpart |= MDS_INODELOCK_PERM | MDS_INODELOCK_LOOKUP;
-
 	/* We need to take the lock on behalf of old clients so that newer
 	 * clients flush their xattr caches */
-	if (!(valid & OBD_MD_FLXATTRLOCKED))
+	else
 		lockpart |= MDS_INODELOCK_XATTR;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -429,8 +444,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
-
-	down_write(&obj->mot_xattr_sem);
 
         info->mti_mos = obj;
         rc = mdt_version_get_check_save(info, obj, 0);
@@ -502,7 +515,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
         EXIT;
 out_unlock:
-	up_write(&obj->mot_xattr_sem);
         mdt_object_unlock_put(info, obj, lh, rc);
         if (unlikely(new_xattr != NULL))
                 lustre_posix_acl_xattr_free(new_xattr, xattr_len);
