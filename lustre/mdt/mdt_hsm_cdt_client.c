@@ -245,6 +245,43 @@ static bool hal_is_sane(struct hsm_action_list *hal)
 	RETURN(true);
 }
 
+static int
+hsm_action_permission(struct mdt_thread_info *mti,
+		      struct mdt_object *obj,
+		      enum hsm_copytool_action hsma)
+{
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
+	struct lu_ucred *uc = mdt_ucred(mti);
+	struct md_attr *ma = &mti->mti_attr;
+	const __u64 *mask;
+	int rc;
+	ENTRY;
+
+	if (hsma != HSMA_RESTORE &&
+	    exp_connect_flags(mti->mti_exp) & OBD_CONNECT_RDONLY)
+		RETURN(-EROFS);
+
+	if (md_capable(uc, CFS_CAP_SYS_ADMIN))
+		RETURN(0);
+
+	ma->ma_need = MA_INODE;
+	rc = mdt_attr_get_complex(mti, obj, ma);
+	if (rc < 0)
+		RETURN(rc);
+
+	if (uc->uc_fsuid == ma->ma_attr.la_uid)
+		mask = &cdt->cdt_user_request_mask;
+	else if (lustre_in_group_p(uc, ma->ma_attr.la_gid))
+		mask = &cdt->cdt_group_request_mask;
+	else
+		mask = &cdt->cdt_other_request_mask;
+
+	if (!(0 <= hsma && hsma < 8 * sizeof(*mask)))
+		RETURN(-EINVAL);
+
+	RETURN(*mask & (1UL << hsma) ? 0 : -EPERM);
+}
+
 /*
  * Coordinator external API
  */
@@ -321,22 +358,29 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 		 * if restore, we take the layout lock
 		 */
 
+		/* Get HSM attributes and check permissions. */
+		obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &mh);
+		if (IS_ERR(obj)) {
+			/* In case of REMOVE and CANCEL a Lustre file
+			 * is not mandatory, but restrict this
+			 * exception to admins. */
+			if (md_capable(mdt_ucred(mti), CFS_CAP_SYS_ADMIN) &&
+			    (hai->hai_action == HSMA_REMOVE ||
+			     hai->hai_action == HSMA_CANCEL))
+				goto record;
+			else
+				GOTO(out, rc = PTR_ERR(obj));
+		}
+
+		rc = hsm_action_permission(mti, obj, hai->hai_action);
+		mdt_object_put(mti->mti_env, obj);
+
+		if (rc < 0)
+			GOTO(out, rc);
+
 		/* if action is cancel, also no need to check */
 		if (hai->hai_action == HSMA_CANCEL)
 			goto record;
-
-		/* get HSM attributes */
-		obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &mh);
-		if (IS_ERR(obj) || obj == NULL) {
-			/* in case of archive remove, Lustre file
-			 * is not mandatory */
-			if (hai->hai_action == HSMA_REMOVE)
-				goto record;
-			if (obj == NULL)
-				GOTO(out, rc = -ENOENT);
-			GOTO(out, rc = PTR_ERR(obj));
-		}
-		mdt_object_put(mti->mti_env, obj);
 
 		/* Check if an action is needed, compare request
 		 * and HSM flags status */

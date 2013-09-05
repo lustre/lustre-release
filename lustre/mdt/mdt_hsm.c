@@ -77,6 +77,25 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 	RETURN(rc);
 }
 
+static inline bool mdt_hsm_is_admin(struct mdt_thread_info *info)
+{
+	bool is_admin;
+	int rc;
+
+	if (info->mti_body == NULL)
+		return false;
+
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		return false;
+
+	is_admin = md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN);
+
+	mdt_exit_ucred(info);
+
+	return is_admin;
+}
+
 /**
  * Extract information coming from a copytool and asks coordinator to update
  * a request status depending on the update content.
@@ -87,18 +106,17 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
  */
 int mdt_hsm_progress(struct mdt_thread_info *info)
 {
-	struct mdt_body			*body;
 	struct hsm_progress_kernel	*hpk;
 	int				 rc;
 	ENTRY;
 
-	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-	if (body == NULL)
+	hpk = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_PROGRESS);
+
+	if (info->mti_body == NULL || hpk == NULL)
 		RETURN(-EPROTO);
 
-	hpk = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_PROGRESS);
-	if (hpk == NULL)
-		RETURN(-EPROTO);
+	if (!mdt_hsm_is_admin(info))
+		RETURN(-EPERM);
 
 	hpk->hpk_errval = lustre_errno_ntoh(hpk->hpk_errval);
 
@@ -121,15 +139,13 @@ int mdt_hsm_progress(struct mdt_thread_info *info)
 
 int mdt_hsm_ct_register(struct mdt_thread_info *info)
 {
-	struct mdt_body		*body;
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	__u32			*archives;
 	int			 rc;
 	ENTRY;
 
-	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-	if (body == NULL)
-		RETURN(-EPROTO);
+	if (!mdt_hsm_is_admin(info))
+		RETURN(-EPERM);
 
 	archives = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_ARCHIVE);
 	if (archives == NULL)
@@ -144,14 +160,15 @@ int mdt_hsm_ct_register(struct mdt_thread_info *info)
 
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
 {
-	struct mdt_body		*body;
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	int			 rc;
 	ENTRY;
 
-	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-	if (body == NULL)
+	if (info->mti_body == NULL)
 		RETURN(-EPROTO);
+
+	if (!mdt_hsm_is_admin(info))
+		RETURN(-EPERM);
 
 	/* XXX: directly include this function here? */
 	rc = mdt_hsm_agent_unregister(info, &req->rq_export->exp_client_uuid);
@@ -176,23 +193,26 @@ int mdt_hsm_state_get(struct mdt_thread_info *info)
 	int			 rc;
 	ENTRY;
 
+	if (info->mti_body == NULL || obj == NULL)
+		RETURN(-EPROTO);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		RETURN(err_serious(rc));
+
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PR);
 	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP,
 			     MDT_LOCAL_LOCK);
-	if (rc)
-		RETURN(rc);
-
-	/* Only valid if client is remote */
-	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
-	if (rc)
-		GOTO(out_unlock, rc = err_serious(rc));
+	if (rc < 0)
+		GOTO(out_ucred, rc);
 
 	ma->ma_valid = 0;
 	ma->ma_need = MA_HSM;
 	rc = mdt_attr_get_complex(info, obj, ma);
 	if (rc)
-		GOTO(out_ucred, rc);
+		GOTO(out_unlock, rc);
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
@@ -200,17 +220,18 @@ int mdt_hsm_state_get(struct mdt_thread_info *info)
 
 	hus = req_capsule_server_get(info->mti_pill, &RMF_HSM_USER_STATE);
 	if (hus == NULL)
-		GOTO(out_ucred, rc = -EPROTO);
+		GOTO(out_unlock, rc = -EPROTO);
 
 	/* Current HSM flags */
 	hus->hus_states = ma->ma_hsm.mh_flags;
 	hus->hus_archive_id = ma->ma_hsm.mh_arch_id;
 
 	EXIT;
-out_ucred:
-	mdt_exit_ucred(info);
 out_unlock:
 	mdt_object_unlock(info, obj, lh, 1);
+out_ucred:
+	mdt_exit_ucred(info);
+
 	return rc;
 }
 
@@ -233,32 +254,39 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 	__u64			 flags;
 	ENTRY;
 
+	hss = req_capsule_client_get(info->mti_pill, &RMF_HSM_STATE_SET);
+
+	if (info->mti_body == NULL || obj == NULL || hss == NULL)
+		RETURN(-EPROTO);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		RETURN(err_serious(rc));
+
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PW);
 	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP |
 			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
-	if (rc)
-		RETURN(rc);
+	if (rc < 0)
+		GOTO(out_ucred, rc);
 
-	/* Only valid if client is remote */
-	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
-	if (rc)
-		GOTO(out_obj, rc = err_serious(rc));
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
+
+	/* Non-root users are forbidden to set or clear flags which are
+	 * NOT defined in HSM_USER_MASK. */
+	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
+	    !md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN))
+		GOTO(out_unlock, rc = -EPERM);
 
 	/* Read current HSM info */
 	ma->ma_valid = 0;
 	ma->ma_need = MA_HSM;
 	rc = mdt_attr_get_complex(info, obj, ma);
 	if (rc)
-		GOTO(out_ucred, rc);
-
-	hss = req_capsule_client_get(info->mti_pill, &RMF_HSM_STATE_SET);
-	if (hss == NULL)
-		GOTO(out_ucred, rc = -EPROTO);
-
-	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
-			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
+		GOTO(out_unlock, rc);
 
 	/* Change HSM flags depending on provided masks */
 	if (hss->hss_valid & HSS_SETMASK)
@@ -272,7 +300,7 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 			CDEBUG(D_HSM, "Could not set an archive number for "
 			       DFID "if HSM EXISTS flag is not set.\n",
 			       PFID(&info->mti_body->fid1));
-			GOTO(out_ucred, rc);
+			GOTO(out_unlock, rc);
 		}
 		ma->ma_hsm.mh_arch_id = hss->hss_archive_id;
 	}
@@ -297,14 +325,15 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 	/* Save the modified flags */
 	rc = mdt_hsm_attr_set(info, obj, &ma->ma_hsm);
 	if (rc)
-		GOTO(out_ucred, rc);
+		GOTO(out_unlock, rc);
 
 	EXIT;
 
+out_unlock:
+	mdt_object_unlock(info, obj, lh, 1);
 out_ucred:
 	mdt_exit_ucred(info);
-out_obj:
-	mdt_object_unlock(info, obj, lh, 1);
+
 	return rc;
 }
 
@@ -323,6 +352,12 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	int				 rc;
 	ENTRY;
 
+	hca = req_capsule_server_get(info->mti_pill,
+				     &RMF_MDS_HSM_CURRENT_ACTION);
+
+	if (info->mti_body == NULL || hca == NULL)
+		RETURN(-EPROTO);
+
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
@@ -332,11 +367,6 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
 				 req_capsule_client_get(info->mti_pill,
 							&RMF_CAPA1));
-
-	hca = req_capsule_server_get(info->mti_pill,
-				     &RMF_MDS_HSM_CURRENT_ACTION);
-	if (hca == NULL)
-		GOTO(out_ucred, rc = -EPROTO);
 
 	/* Coordinator information */
 	hal_size = sizeof(*hal) +
@@ -415,7 +445,6 @@ out_ucred:
 int mdt_hsm_request(struct mdt_thread_info *info)
 {
 	struct req_capsule		*pill = info->mti_pill;
-	struct mdt_body			*body;
 	struct hsm_request		*hr;
 	struct hsm_user_item		*hui;
 	struct hsm_action_list		*hal;
@@ -428,12 +457,11 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	int				 hal_size, i, rc;
 	ENTRY;
 
-	body = req_capsule_client_get(pill, &RMF_MDT_BODY);
 	hr = req_capsule_client_get(pill, &RMF_MDS_HSM_REQUEST);
 	hui = req_capsule_client_get(pill, &RMF_MDS_HSM_USER_ITEM);
 	data = req_capsule_client_get(pill, &RMF_GENERIC_DATA);
 
-	if (body == NULL || hr == NULL || hui == NULL || data == NULL)
+	if (info->mti_body == NULL || hr == NULL || hui == NULL || data == NULL)
 		RETURN(-EPROTO);
 
 	/* Sanity check. Nothing to do with an empty list */
@@ -450,7 +478,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 		RETURN(-EPROTO);
 
 	/* Only valid if client is remote */
-	rc = mdt_init_ucred(info, body);
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
 		RETURN(err_serious(rc));
 

@@ -961,6 +961,9 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	cdt->cdt_last_cookie = cfs_time_current_sec();
 
 	atomic_set(&cdt->cdt_request_count, 0);
+	cdt->cdt_user_request_mask = (1UL << HSMA_RESTORE);
+	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
+	cdt->cdt_other_request_mask = (1UL << HSMA_RESTORE);
 
 	/* to avoid deadlock when start is made through /proc
 	 * /proc entries are created by the coordinator thread */
@@ -2033,6 +2036,154 @@ int lprocfs_rd_hsm_cdt_control(char *page, char **start, off_t off,
 	RETURN(sz);
 }
 
+static int
+lprocfs_rd_hsm_request_mask(char *page, char **start, off_t off,
+			    int count, int *eof, __u64 mask)
+{
+	int i, rc = 0;
+	ENTRY;
+
+	for (i = 0; i < 8 * sizeof(mask); i++) {
+		if (mask & (1UL << i))
+			rc += snprintf(page + rc, count - rc, "%s%s",
+				       rc == 0 ? "" : " ",
+				       hsm_copytool_action2name(i));
+	}
+
+	rc += snprintf(page + rc, count - rc, "\n");
+
+	RETURN(rc);
+}
+
+static int
+lprocfs_rd_hsm_user_request_mask(char *page, char **start, off_t off,
+				 int count, int *eof, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
+					   cdt->cdt_user_request_mask);
+}
+
+static int
+lprocfs_rd_hsm_group_request_mask(char *page, char **start, off_t off,
+				  int count, int *eof, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
+					   cdt->cdt_group_request_mask);
+}
+
+static int
+lprocfs_rd_hsm_other_request_mask(char *page, char **start, off_t off,
+				  int count, int *eof, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
+					   cdt->cdt_other_request_mask);
+}
+
+static inline enum hsm_copytool_action
+hsm_copytool_name2action(const char *name)
+{
+	if (strcasecmp(name, "NOOP") == 0)
+		return HSMA_NONE;
+	else if (strcasecmp(name, "ARCHIVE") == 0)
+		return HSMA_ARCHIVE;
+	else if (strcasecmp(name, "RESTORE") == 0)
+		return HSMA_RESTORE;
+	else if (strcasecmp(name, "REMOVE") == 0)
+		return HSMA_REMOVE;
+	else if (strcasecmp(name, "CANCEL") == 0)
+		return HSMA_CANCEL;
+	else
+		return -1;
+}
+
+static int
+lprocfs_wr_hsm_request_mask(struct file *file, const char __user *user_buf,
+			    unsigned long user_count, __u64 *mask)
+{
+	char *buf, *pos, *name;
+	size_t buf_size;
+	__u64 new_mask = 0;
+	int rc;
+	ENTRY;
+
+	if (!(user_count < 4096))
+		RETURN(-ENOMEM);
+
+	buf_size = user_count + 1;
+
+	OBD_ALLOC(buf, buf_size);
+	if (buf == NULL)
+		RETURN(-ENOMEM);
+
+	if (copy_from_user(buf, user_buf, buf_size - 1))
+		GOTO(out, rc = -EFAULT);
+
+	buf[buf_size - 1] = '\0';
+
+	pos = buf;
+	while ((name = strsep(&pos, " \t\v\n")) != NULL) {
+		int action;
+
+		if (*name == '\0')
+			continue;
+
+		action = hsm_copytool_name2action(name);
+		if (action < 0)
+			GOTO(out, rc = -EINVAL);
+
+		new_mask |= (1UL << action);
+	}
+
+	*mask = new_mask;
+	rc = user_count;
+out:
+	OBD_FREE(buf, buf_size);
+
+	RETURN(rc);
+}
+
+static int
+lprocfs_wr_hsm_user_request_mask(struct file *file, const char __user *buf,
+				 unsigned long count, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_wr_hsm_request_mask(file, buf, count,
+					   &cdt->cdt_user_request_mask);
+}
+
+static int
+lprocfs_wr_hsm_group_request_mask(struct file *file, const char __user *buf,
+				  unsigned long count, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_wr_hsm_request_mask(file, buf, count,
+					   &cdt->cdt_group_request_mask);
+}
+
+static int
+lprocfs_wr_hsm_other_request_mask(struct file *file, const char __user *buf,
+				  unsigned long count, void *data)
+{
+	struct mdt_device *mdt = data;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	return lprocfs_wr_hsm_request_mask(file, buf, count,
+					   &cdt->cdt_other_request_mask);
+}
+
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ "agents",		NULL, NULL, NULL, &mdt_hsm_agent_fops, 0 },
 	{ "agent_actions",	NULL, NULL, NULL,
@@ -2055,5 +2206,11 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 				lprocfs_wr_hsm_cdt_timeout,
 				NULL, NULL, 0 },
 	{ "requests",		NULL, NULL, NULL, &mdt_hsm_request_fops, 0 },
-	{ 0 }
+	{ "user_request_mask", lprocfs_rd_hsm_user_request_mask,
+	  lprocfs_wr_hsm_user_request_mask, },
+	{ "group_request_mask", lprocfs_rd_hsm_group_request_mask,
+	  lprocfs_wr_hsm_group_request_mask, },
+	{ "other_request_mask", lprocfs_rd_hsm_other_request_mask,
+	  lprocfs_wr_hsm_other_request_mask, },
+	{ NULL }
 };

@@ -1975,6 +1975,9 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	int                     rc2;
 	ENTRY;
 
+	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
+		RETURN(-EROFS);
+
 	data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);
 	if (data == NULL)
 		RETURN(-EPROTO);

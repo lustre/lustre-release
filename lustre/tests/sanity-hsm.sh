@@ -1485,8 +1485,8 @@ test_24b() {
 	$LFS hsm_archive $file
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	$LFS hsm_release $file ||
-		check_hsm_flags $file "0x0000000d"
+	$LFS hsm_release $file
+	check_hsm_flags $file "0x0000000d"
 
 	$LFS hsm_restore $file
 	wait_request_state $fid RESTORE SUCCEED
@@ -1495,8 +1495,8 @@ test_24b() {
 	$RUNAS $LFS hsm_state $file ||
 		error "user '$RUNAS_ID' cannot get HSM state of '$file'"
 
-	$LFS hsm_release $file ||
-		check_hsm_flags $file "0x0000000d"
+	$LFS hsm_release $file
+	check_hsm_flags $file "0x0000000d"
 
 	# Check that ordinary user can accessed released file.
 	sum1=$($RUNAS md5sum $file) ||
@@ -1508,6 +1508,134 @@ test_24b() {
 	copytool_cleanup
 }
 run_test 24b "root can archive, release, and restore user files"
+
+cleanup_test_24c() {
+	trap 0
+	set_hsm_param user_request_mask RESTORE
+	set_hsm_param group_request_mask RESTORE
+	set_hsm_param other_request_mask RESTORE
+}
+
+test_24c() {
+	local file=$DIR/$tdir/$tfile
+	local action=archive
+	local user_save
+	local group_save
+	local other_save
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	# Save the default masks and check that cleanup_24c will
+	# restore the request masks correctly.
+	user_save=$(get_hsm_param user_request_mask)
+	group_save=$(get_hsm_param group_request_mask)
+	other_save=$(get_hsm_param other_request_mask)
+
+	[ "$user_save" == RESTORE ] ||
+		error "user_request_mask is '$user_save' expected 'RESTORE'"
+	[ "$group_save" == RESTORE ] ||
+		error "group_request_mask is '$group_save' expected 'RESTORE'"
+	[ "$other_save" == RESTORE ] ||
+		error "other_request_mask is '$other_save' expected 'RESTORE'"
+
+	trap cleanup_test_24c EXIT
+
+	# User.
+	rm -f $file
+	make_small $file
+	chown $RUNAS_ID:nobody $file ||
+		error "cannot chown '$file' to '$RUNAS_ID:nobody'"
+
+	set_hsm_param user_request_mask ""
+	$RUNAS $LFS hsm_$action $file &&
+		error "$action by user should fail"
+
+	set_hsm_param user_request_mask $action
+	$RUNAS $LFS hsm_$action $file ||
+		error "$action by user should succeed"
+
+	# Group.
+	rm -f $file
+	make_small $file
+	chown nobody:$RUNAS_GID $file ||
+		error "cannot chown '$file' to 'nobody:$RUNAS_GID'"
+
+	set_hsm_param group_request_mask ""
+	$RUNAS $LFS hsm_$action $file &&
+		error "$action by group should fail"
+
+	set_hsm_param group_request_mask $action
+	$RUNAS $LFS hsm_$action $file ||
+		error "$action by group should succeed"
+
+	# Other.
+	rm -f $file
+	make_small $file
+	chown nobody:nobody $file ||
+		error "cannot chown '$file' to 'nobody:nobody'"
+
+	set_hsm_param other_request_mask ""
+	$RUNAS $LFS hsm_$action $file &&
+		error "$action by other should fail"
+
+	set_hsm_param other_request_mask $action
+	$RUNAS $LFS hsm_$action $file ||
+		error "$action by other should succeed"
+
+	copytool_cleanup
+	cleanup_test_24c
+}
+run_test 24c "check that user,group,other request masks work"
+
+cleanup_test_24d() {
+	trap 0
+	mount -o remount,rw $MOUNT2
+}
+
+test_24d() {
+	local file1=$DIR/$tdir/$tfile
+	local file2=$DIR2/$tdir/$tfile
+	local fid1
+	local fid2
+
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	rm -f $file1
+	fid1=$(make_small $file1)
+
+	trap cleanup_test_24d EXIT
+
+	mount -o remount,ro $MOUNT2
+
+	fid2=$(path2fid $file2)
+	[ "$fid1" == "$fid2" ] ||
+		error "FID mismatch '$fid1' != '$fid2'"
+
+	$LFS hsm_archive $file2 &&
+		error "archive should fail on read-only mount"
+	check_hsm_flags $file1 "0x00000000"
+
+	$LFS hsm_archive $file1
+	wait_request_state $fid1 ARCHIVE SUCCEED
+
+	$LFS hsm_release $file1
+	$LFS hsm_restore $file2
+	wait_request_state $fid1 RESTORE SUCCEED
+
+	$LFS hsm_release $file1 || error "cannot release '$file1'"
+	dd if=$file2 of=/dev/null bs=1M || "cannot read '$file2'"
+
+	$LFS hsm_release $file2 &&
+		error "release should fail on read-only mount"
+
+	copytool_cleanup
+	cleanup_test_24d
+}
+run_test 24d "check that read-only mounts are respected"
 
 test_25a() {
 	# test needs a running copytool

@@ -1899,6 +1899,9 @@ out_rmdir:
 		RETURN(rc);
 	}
 	case LL_IOC_HSM_CT_START:
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+			RETURN(-EPERM);
+
 		rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
 				    sizeof(struct lustre_kernelcomm));
 		RETURN(rc);

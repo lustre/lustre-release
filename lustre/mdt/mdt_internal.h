@@ -145,6 +145,10 @@ struct coordinator {
 						       * agents */
 	struct list_head	 cdt_restore_hdl;     /**< list of restore lock
 						       * handles */
+	/* Bitmasks indexed by the HSMA_XXX constants. */
+	__u64			 cdt_user_request_mask;
+	__u64			 cdt_group_request_mask;
+	__u64			 cdt_other_request_mask;
 };
 
 /* mdt state flag bits */
