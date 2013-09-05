@@ -55,19 +55,21 @@ layer=${layer:-"mdd"}
 # leave the rest of this alone unless you know what you're doing...
 export LC_ALL=POSIX
 basedir="tests"
+mdtbasedir="MDT%04x-"
 
 create_directories () {
     local host=$1
     local devno=$2
     local ndir=$3
     local rfile=$4
+    local mdtidx=$5
     local idx
 
     for ((idx = 0; idx < $ndir; idx++)); do
         if (( idx == 0 )); then
-            dirname=${basedir}
+            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
         else
-            dirname=${basedir}${idx}
+            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
         fi
         remote_shell $host $lctl --device $devno test_mkdir /$dirname > $rfile 2>&1
         while read line; do
@@ -88,13 +90,14 @@ destroy_directories () {
     local devno=$2
     local ndir=$3
     local rfile=$4
+    local mdtidx=$5
     local idx
 
     for ((idx = 0; idx < $ndir; idx++)); do
         if (( idx == 0 )); then
-            dirname=${basedir}
+            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
         else
-            dirname=${basedir}${idx}
+            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
         fi
         remote_shell $host $lctl --device $devno test_rmdir /$dirname > $rfile 2>&1
     done
@@ -126,12 +129,13 @@ get_global_stats () {
          if (n == 1) { err = $1; ave = $2; min = $3; max = $4} \
          else                                                  \
          { if ($1 < err) err = $1;                             \
-           if ($2 < min) min = $2;                             \
-           if ($3 > max) max = $3;                             \
+           ave += $2;                                          \
+           if ($3 < min) min = $3;                             \
+           if ($4 > max) max = $4;                             \
          }                                                     \
     }                                                          \
     END { if (n == 0) err = 0;                                 \
-          printf "%d %f %f %f\n", err, ave, min, max}'
+          printf "%d %f %f %f\n", err, ave/n, min, max}'
 }
 
 print_summary () {
@@ -164,6 +168,7 @@ fi
 
 declare -a client_names
 declare -a host_names
+declare -a client_indexes
 if [ -z "$targets" ]; then
     targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
             \$3 == \"mdt\") {print \$4} }")
@@ -179,6 +184,8 @@ for trgt in $targets; do
     str=(`split_hostname $trgt`)
     host_names[$ndevs]=${str[0]}
     client_names[$ndevs]=${str[1]}
+    client_indexes[$ndevs]=0x$(echo ${str[1]} |
+            sed 's/.*MDT\([0-9a-f][0-9a-f][0-9a-f][0-9a-f]\).*/\1/')
     ndevs=$((ndevs+1))
 done
 
@@ -248,9 +255,10 @@ for ((idx = 0; idx < $ndevs; idx++)); do
     host=${host_names[$idx]}
     devno=${devnos[$idx]}
     client_name="${host}:${client_names[$idx]}"
+    mdtidx=${client_indexes[$idx]}
     echo "=============> Create $dir_count directories on $client_name" >> $workf
-    destroy_directories $host $devno $dir_count $tmpf
-    ret=`create_directories $host $devno $dir_count $tmpf`
+    destroy_directories $host $devno $dir_count $tmpf $mdtidx
+    ret=`create_directories $host $devno $dir_count $tmpf $mdtidx`
     cat $tmpf >> $workf
     rm $tmpf
     if [ $ret = "ERROR" ]; then
@@ -287,11 +295,12 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
         for ((idx = 0; idx < $ndevs; idx++)); do
             host=${host_names[$idx]}
             devno=${devnos[$idx]}
+            dirname="$(printf "${mdtbasedir}" ${client_indexes[$idx]})$basedir"
             tmpfi="${tmpf}_$idx"
-            [ $test = "create" ] && test="create -c $stripe_count"
+            [ "$test" = "create" ] && test="create -c $stripe_count"
             echo >> ${cmdsf}_${host}                                                     \
                 "$lctl > $tmpfi 2>&1                                                     \
-                 --threads $thr -$snap $devno test_$test -d /$basedir -D $dir_count      \
+                 --threads $thr -$snap $devno test_$test -d /$dirname -D $dir_count      \
                  -b $start_number -n $file_count_per_thread"
         done
         pidcount=0
@@ -338,7 +347,7 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
             str=`printf "%17s " ERROR`
             status=1
         else
-            str=`awk "BEGIN {printf \"%7.2f [%7.2f,%7.2f] \", \
+            str=`awk "BEGIN {printf \"%7.2f [ %7.2f, %7.2f] \", \
             ${stats[1]}, ${stats[2]}, ${stats[3]}; exit}"`
         fi
         print_summary -n "$str"
@@ -350,9 +359,10 @@ tmpf="${workf}_tmp"
 for ((idx = 0; idx < $ndevs; idx++)); do
     host=${host_names[$idx]}
     devno=${devnos[$idx]}
+    mdtidx=${client_indexes[$idx]}
     client_name="${host}:${client_names[$idx]}"
     echo "=============> Destroy $dir_count directories on $client_name" >> $workf
-    destroy_directories $host $devno $dir_count $tmpf
+    destroy_directories $host $devno $dir_count $tmpf $mdtidx
 done
 
 cleanup $status
