@@ -145,6 +145,7 @@ out:
 		lustre_cfg_free(lcfg);
 	if (rc)
 		client_obd_cleanup(lwp->lpd_obd);
+
 	RETURN(rc);
 }
 
@@ -320,8 +321,6 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 		ptlrpc_free_rq_pool(imp->imp_rq_pool);
 		imp->imp_rq_pool = NULL;
 	}
-
-	obd_cleanup_client_import(m->lpd_obd);
 
 	LASSERT(m->lpd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);

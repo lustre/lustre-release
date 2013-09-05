@@ -53,33 +53,33 @@
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	rc = ptlrpcd_addref();
 	if (rc < 0)
 		RETURN(rc);
 
-        rc = client_obd_setup(obd, lcfg);
-        if (rc)
-                GOTO(err_decref, rc);
+	rc = client_obd_setup(obd, lcfg);
+	if (rc)
+		GOTO(err_decref, rc);
 
-        /* liblustre only support null flavor to MGS */
-        obd->u.cli.cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_NULL;
+	/* liblustre only support null flavor to MGS */
+	obd->u.cli.cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_NULL;
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
-        if (rc) {
-                CERROR("failed to setup llogging subsystems\n");
-                GOTO(err_cleanup, rc);
-        }
+	rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
+	if (rc) {
+		CERROR("failed to setup llogging subsystems\n");
+		GOTO(err_cleanup, rc);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 
 err_cleanup:
-        client_obd_cleanup(obd);
+	client_obd_cleanup(obd);
 err_decref:
-        ptlrpcd_decref();
-        RETURN(rc);
+	ptlrpcd_decref();
+	RETURN(rc);
 }
 
 static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)

@@ -473,15 +473,16 @@ EXPORT_SYMBOL(client_obd_setup);
 
 int client_obd_cleanup(struct obd_device *obddev)
 {
-        ENTRY;
+	ENTRY;
 
-        ldlm_namespace_free_post(obddev->obd_namespace);
-        obddev->obd_namespace = NULL;
+	ldlm_namespace_free_post(obddev->obd_namespace);
+	obddev->obd_namespace = NULL;
 
-        LASSERT(obddev->u.cli.cl_import == NULL);
+	obd_cleanup_client_import(obddev);
+	LASSERT(obddev->u.cli.cl_import == NULL);
 
-        ldlm_put_ref();
-        RETURN(0);
+	ldlm_put_ref();
+	RETURN(0);
 }
 EXPORT_SYMBOL(client_obd_cleanup);
 

@@ -745,7 +745,6 @@ out_last_used:
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_obd_cleanup(obd);
-	obd_cleanup_client_import(obd);
 	if (m->opd_symlink)
 		lprocfs_remove(&m->opd_symlink);
 	client_obd_cleanup(obd);
@@ -824,8 +823,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 		ptlrpc_free_rq_pool(imp->imp_rq_pool);
 		imp->imp_rq_pool = NULL;
 	}
-
-	obd_cleanup_client_import(m->opd_obd);
 
 	if (m->opd_symlink)
 		lprocfs_remove(&m->opd_symlink);
