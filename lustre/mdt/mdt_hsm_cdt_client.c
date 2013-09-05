@@ -363,7 +363,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 			if (mh.mh_arch_id != 0)
 				archive_id = mh.mh_arch_id;
 			else
-				archive_id = cdt->cdt_archive_id;
+				archive_id = cdt->cdt_default_archive_id;
 		}
 
 		/* if restore, take an exclusive lock on layout */

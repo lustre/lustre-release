@@ -385,7 +385,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
  * \retval 0 success
  * \retval -ve failure
  */
-static int hsm_cdt_procfs_init(struct mdt_device *mdt)
+int hsm_cdt_procfs_init(struct mdt_device *mdt)
 {
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	int			 rc = 0;
@@ -404,6 +404,29 @@ static int hsm_cdt_procfs_init(struct mdt_device *mdt)
 	}
 
 	RETURN(0);
+}
+
+/**
+ * remove /proc entries for coordinator
+ * \param mdt [IN]
+ */
+void  hsm_cdt_procfs_fini(struct mdt_device *mdt)
+{
+	struct coordinator	*cdt = &mdt->mdt_coordinator;
+
+	LASSERT(cdt->cdt_state == CDT_STOPPED);
+	if (cdt->cdt_proc_dir != NULL)
+		lprocfs_remove(&cdt->cdt_proc_dir);
+}
+
+/**
+ * get vector of hsm cdt /proc vars
+ * \param none
+ * \retval var vector
+ */
+struct lprocfs_vars *hsm_cdt_get_proc_vars(void)
+{
+	return lprocfs_mdt_hsm_vars;
 }
 
 /**
@@ -427,10 +450,6 @@ static int mdt_coordinator(void *data)
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
 	       mdt_obd_name(mdt), current_pid());
 
-	/*
-	 * create /proc entries for coordinator
-	 */
-	hsm_cdt_procfs_init(mdt);
 	/* timeouted cookie vector initialization */
 	hsd.max_cookie = 0;
 	hsd.cookie_cnt = 0;
@@ -876,6 +895,15 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 
 	hsm_init_ucred(mdt_ucred(cdt_mti));
 
+	/* default values for /proc tunnables
+	 * can be override by MGS conf */
+	cdt->cdt_default_archive_id = 1;
+	cdt->cdt_delay = 60;
+	cdt->cdt_loop_period = 10;
+	cdt->cdt_max_request = 3;
+	cdt->cdt_policy = CDT_DEFAULT_POLICY;
+	cdt->cdt_timeout = 3600;
+
 	RETURN(0);
 }
 
@@ -924,17 +952,14 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 
 	CLASSERT(1 << (CDT_POLICY_SHIFT_COUNT - 1) == CDT_POLICY_LAST);
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
+
 	cdt->cdt_state = CDT_INIT;
 
 	atomic_set(&cdt->cdt_compound_id, cfs_time_current_sec());
 	/* just need to be larger than previous one */
 	/* cdt_last_cookie is protected by cdt_llog_lock */
 	cdt->cdt_last_cookie = cfs_time_current_sec();
-	cdt->cdt_loop_period = 10;
-	cdt->cdt_delay = 60;
-	cdt->cdt_timeout = 3600;
-	cdt->cdt_max_request = 3;
-	cdt->cdt_archive_id = 1;
+
 	atomic_set(&cdt->cdt_request_count, 0);
 
 	/* to avoid deadlock when start is made through /proc
@@ -987,10 +1012,6 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 		       mdt_obd_name(mdt));
 		RETURN(-EALREADY);
 	}
-
-	/* remove proc entries */
-	if (cdt->cdt_proc_dir != NULL)
-		lprocfs_remove(&cdt->cdt_proc_dir);
 
 	if (cdt->cdt_state != CDT_STOPPING) {
 		/* stop coordinator thread before cleaning */
@@ -1930,7 +1951,7 @@ GENERATE_PROC_METHOD(cdt_loop_period)
 GENERATE_PROC_METHOD(cdt_delay)
 GENERATE_PROC_METHOD(cdt_timeout)
 GENERATE_PROC_METHOD(cdt_max_request)
-GENERATE_PROC_METHOD(cdt_archive_id)
+GENERATE_PROC_METHOD(cdt_default_archive_id)
 
 /*
  * procfs write method for MDT/hsm_control
@@ -2016,8 +2037,8 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ "agents",		NULL, NULL, NULL, &mdt_hsm_agent_fops, 0 },
 	{ "agent_actions",	NULL, NULL, NULL,
 				&mdt_agent_actions_fops, 0444 },
-	{ "archive_id",		lprocfs_rd_hsm_cdt_archive_id,
-				lprocfs_wr_hsm_cdt_archive_id,
+	{ "default_archive_id",	lprocfs_rd_hsm_cdt_default_archive_id,
+				lprocfs_wr_hsm_cdt_default_archive_id,
 				NULL, NULL, 0 },
 	{ "grace_delay",	lprocfs_rd_hsm_cdt_delay,
 				lprocfs_wr_hsm_cdt_delay,

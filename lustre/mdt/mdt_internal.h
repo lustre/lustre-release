@@ -110,35 +110,41 @@ enum cdt_states { CDT_STOPPED = 0,
  * cdt_request_lock
  */
 struct coordinator {
-	struct ptlrpc_thread	 cdt_thread;	    /**< coordinator thread */
-	struct lu_env		 cdt_env;	    /**< coordinator lustre
-						     * env */
-	struct lu_context	 cdt_session;	    /** session for lu_ucred */
-	struct proc_dir_entry	*cdt_proc_dir;      /**< cdt /proc directory */
-	__u64			 cdt_policy;	    /**< flags to defined
-						     * policy */
-	enum cdt_states		 cdt_state;	    /**< state */
-	atomic_t		 cdt_compound_id;   /**< compound id counter */
-	__u64			 cdt_last_cookie;   /**< last cookie allocated */
-	struct mutex		 cdt_llog_lock;     /**< protect llog access */
-	struct rw_semaphore	 cdt_agent_lock;    /**< protect agent list */
-	struct rw_semaphore	 cdt_request_lock;  /**< protect request list */
-	struct mutex		 cdt_restore_lock;  /**< protect restore list */
-	cfs_time_t		 cdt_loop_period;   /**< llog scan period */
-	cfs_time_t		 cdt_delay;	    /**< request grace delay */
-	cfs_time_t		 cdt_timeout;	    /**< request timeout */
-	__u32			 cdt_archive_id;    /** archive id used when
-						     * none are specified */
-	__u64			 cdt_max_request;   /**< max count of started
-						     * requests */
-	atomic_t		 cdt_request_count; /**< current count of
-						     * started requests */
-	struct list_head	 cdt_requests;      /**< list of started
-						     * requests */
-	struct list_head	 cdt_agents;	    /**< list of register
-						     * agents */
-	struct list_head	 cdt_restore_hdl;   /**< list of restore lock
-						     * handles */
+	struct ptlrpc_thread	 cdt_thread;	     /**< coordinator thread */
+	struct lu_env		 cdt_env;	     /**< coordinator lustre
+						      * env */
+	struct lu_context	 cdt_session;	     /** session for lu_ucred */
+	struct proc_dir_entry	*cdt_proc_dir;	     /**< cdt /proc directory */
+	__u64			 cdt_policy;	     /**< policy flags */
+	enum cdt_states		 cdt_state;	      /**< state */
+	atomic_t		 cdt_compound_id;     /**< compound id
+						       * counter */
+	__u64			 cdt_last_cookie;     /**< last cookie
+						       * allocated */
+	struct mutex		 cdt_llog_lock;       /**< protect llog
+						       * access */
+	struct rw_semaphore	 cdt_agent_lock;      /**< protect agent list */
+	struct rw_semaphore	 cdt_request_lock;    /**< protect request
+						       * list */
+	struct mutex		 cdt_restore_lock;    /**< protect restore
+						       * list */
+	cfs_time_t		 cdt_loop_period;     /**< llog scan period */
+	cfs_time_t		 cdt_delay;	      /**< request grace
+						       * delay */
+	cfs_time_t		 cdt_timeout;	      /**< request timeout */
+	__u32			 cdt_default_archive_id; /** archive id used
+						       * when none are
+						       * specified */
+	__u64			 cdt_max_request;     /**< max count of started
+						       * requests */
+	atomic_t		 cdt_request_count;   /**< current count of
+						       * started requests */
+	struct list_head	 cdt_requests;	      /**< list of started
+						       * requests */
+	struct list_head	 cdt_agents;	      /**< list of register
+						       * agents */
+	struct list_head	 cdt_restore_hdl;     /**< list of restore lock
+						       * handles */
 };
 
 /* mdt state flag bits */
@@ -1012,6 +1018,9 @@ int lprocfs_wr_hsm_cdt_control(struct file *file, const char *buffer,
 			       unsigned long count, void *data);
 int lprocfs_rd_hsm_cdt_control(char *page, char **start, off_t off,
 			       int count, int *eof, void *data);
+int hsm_cdt_procfs_init(struct mdt_device *mdt);
+void hsm_cdt_procfs_fini(struct mdt_device *mdt);
+struct lprocfs_vars *hsm_cdt_get_proc_vars(void);
 /* md_hsm helpers */
 struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,

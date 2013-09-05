@@ -237,7 +237,11 @@ get_hsm_param() {
 set_hsm_param() {
 	local param=$1
 	local value=$2
-	do_facet $SINGLEMDS $LCTL set_param -n $HSM_PARAM.$param=$value
+	local opt=$3
+	if [[ "$value" != "" ]]; then
+		value="=$value"
+	fi
+	do_facet $SINGLEMDS $LCTL set_param $opt -n $HSM_PARAM.$param$value
 	return $?
 }
 
@@ -280,15 +284,11 @@ cdt_clear_non_blocking_restore() {
 }
 
 cdt_clear_mount_state() {
-	# /!\ conf_param and set_param syntax differ +> we cannot use
-	# $MDT_PARAM
-	do_facet $SINGLEMDS $LCTL conf_param -d $FSNAME-MDT0000.mdt.hsm_control
+	do_facet $SINGLEMDS $LCTL set_param -d -P $MDT_PARAM.hsm_control
 }
 
 cdt_set_mount_state() {
-	# /!\ conf_param and set_param syntax differ +> we cannot use
-	# $MDT_PARAM
-	do_facet $SINGLEMDS $LCTL conf_param $FSNAME-MDT0000.mdt.hsm_control=$1
+	do_facet $SINGLEMDS $LCTL set_param -P $MDT_PARAM.hsm_control=$1
 }
 
 cdt_check_state() {
@@ -337,8 +337,7 @@ get_hsm_flags() {
 	local f=$1
 	local u=$2
 
-	if [[ $u == "user" ]]
-	then
+	if [[ $u == "user" ]]; then
 		local st=$($RUNAS $LFS hsm_state $f)
 	else
 		local st=$($LFS hsm_state $f)
@@ -380,15 +379,13 @@ check_hsm_flags_user() {
 copy_file() {
 	local f=
 
-	if [[ -d $2 ]]
-	then
+	if [[ -d $2 ]]; then
 		f=$2/$(basename $1)
 	else
 		f=$2
 	fi
 
-	if [[ "$3" != 1 ]]
-	then
+	if [[ "$3" != 1 ]]; then
 		f=${f/$DIR/$DIR2}
 	fi
 	rm -f $f
@@ -797,7 +794,7 @@ test_10d() {
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	local ar=$(get_hsm_archive_id $f)
-	local dflt=$(get_hsm_param archive_id)
+	local dflt=$(get_hsm_param default_archive_id)
 	[[ $ar == $dflt ]] ||
 		error "archived file is not on default archive: $ar != $dflt"
 
@@ -1716,8 +1713,7 @@ restore_and_check_size() {
 		n=$(stat -c "%s" $f)
 		# we echo in both cases to show stat is not
 		# hang
-		if [[ $n != $s ]]
-		then
+		if [[ $n != $s ]]; then
 			echo "size seen is $n != $s"
 			err=1
 		else
@@ -1727,8 +1723,7 @@ restore_and_check_size() {
 		sleep 10
 		cpt=$((cpt + 1))
 	done
-	if [[ $cpt -lt 10 ]]
-	then
+	if [[ $cpt -lt 10 ]]; then
 		echo " restore is too long"
 	else
 		echo " "done
@@ -2251,8 +2246,7 @@ double_verify_reset_hsm_param() {
 	# restore value
 	set_hsm_param $p $save
 
-	if [[ $rc == 0 ]]
-	then
+	if [[ $rc == 0 ]]; then
 		error "we must not be able to set $HSM_PARAM.$p to 0"
 	fi
 }
@@ -2262,7 +2256,7 @@ test_100() {
 	double_verify_reset_hsm_param grace_delay
 	double_verify_reset_hsm_param request_timeout
 	double_verify_reset_hsm_param max_requests
-	double_verify_reset_hsm_param archive_id
+	double_verify_reset_hsm_param default_archive_id
 }
 run_test 100 "Set coordinator /proc tunables"
 
@@ -3046,6 +3040,43 @@ test_300() {
 	# we are back to original state (cdt started at mount)
 }
 run_test 300 "On disk coordinator state kept between MDT umount/mount"
+
+test_301() {
+	local ai=$(get_hsm_param default_archive_id)
+	local new=$((ai + 1))
+
+	set_hsm_param default_archive_id $new -P
+	fail $SINGLEMDS
+	local res=$(get_hsm_param default_archive_id)
+
+	# clear value
+	set_hsm_param default_archive_id "" "-P -d"
+
+	[[ $new == $res ]] || error "Value after MDS restart is $res != $new"
+}
+run_test 301 "HSM tunnable are persistent"
+
+test_302() {
+	local ai=$(get_hsm_param default_archive_id)
+	local new=$((ai + 1))
+
+	# stop coordinator
+	cdt_shutdown
+
+	set_hsm_param default_archive_id $new -P
+	fail $SINGLEMDS
+
+	# check cdt is on
+	cdt_check_state enabled
+
+	local res=$(get_hsm_param default_archive_id)
+
+	# clear value
+	set_hsm_param default_archive_id "" "-P -d"
+
+	[[ $new == $res ]] || error "Value after MDS restart is $res != $new"
+}
+run_test 302 "HSM tunnable are persistent when CDT is off"
 
 copytool_cleanup
 

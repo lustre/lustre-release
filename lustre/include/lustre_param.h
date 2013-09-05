@@ -100,21 +100,22 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_ID_UPCALL		"identity_upcall="  /* identity upcall */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
-#define PARAM_OST                  "ost."
-#define PARAM_OSC                  "osc."
-#define PARAM_MDT                  "mdt."
-#define PARAM_MDD                  "mdd."
-#define PARAM_MDC                  "mdc."
-#define PARAM_LLITE                "llite."
-#define PARAM_LOV                  "lov."
+#define PARAM_OST		"ost."
+#define PARAM_OSC		"osc."
+#define PARAM_MDT		"mdt."
+#define PARAM_HSM		"mdt.hsm."
+#define PARAM_MDD		"mdd."
+#define PARAM_MDC		"mdc."
+#define PARAM_LLITE		"llite."
+#define PARAM_LOV		"lov."
 #define PARAM_LOD		"lod."
 #define PARAM_OSP		"osp."
-#define PARAM_SYS                  "sys."              /* global */
-#define PARAM_SRPC                 "srpc."
-#define PARAM_SRPC_FLVR            "srpc.flavor."
-#define PARAM_SRPC_UDESC           "srpc.udesc.cli2mdt"
-#define PARAM_SEC                  "security."
-#define PARAM_QUOTA                "quota."            /* global */
+#define PARAM_SYS		"sys."		/* global */
+#define PARAM_SRPC		"srpc."
+#define PARAM_SRPC_FLVR		"srpc.flavor."
+#define PARAM_SRPC_UDESC	"srpc.udesc.cli2mdt"
+#define PARAM_SEC		"security."
+#define PARAM_QUOTA		"quota."	/* global */
 
 /** @} param */
 
