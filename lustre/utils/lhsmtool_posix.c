@@ -38,6 +38,8 @@
 #include <errno.h>
 #include <utime.h>
 #include <sys/xattr.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
@@ -108,14 +110,26 @@ static char fs_name[MAX_OBD_NAME + 1];
 static struct hsm_copytool_private *ctdata;
 
 
-#define CT_ERROR(format, ...) \
-	llapi_printf(LLAPI_MSG_ERROR, "%s: "format, cmd_name, ## __VA_ARGS__)
-#define CT_DEBUG(format, ...) \
-	llapi_printf(LLAPI_MSG_DEBUG, "%s: "format, cmd_name, ## __VA_ARGS__)
-#define CT_WARN(format, ...) \
-	llapi_printf(LLAPI_MSG_WARN, "%s: "format, cmd_name, ## __VA_ARGS__)
-#define CT_TRACE(format, ...) \
-	llapi_printf(LLAPI_MSG_INFO, "%s: "format, cmd_name, ## __VA_ARGS__)
+#define CT_ERROR(_rc, _format, ...) \
+	llapi_error(LLAPI_MSG_ERROR, _rc,				\
+		    "%s[%ld]: "_format,					\
+		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+#define CT_DEBUG(_format, ...) \
+	llapi_error(LLAPI_MSG_DEBUG | LLAPI_MSG_NO_ERRNO, 0,		\
+		    "%s[%ld]: "_format,					\
+		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+#define CT_WARN(_format, ...) \
+	llapi_error(LLAPI_MSG_WARN | LLAPI_MSG_NO_ERRNO, 0,		\
+		    "%s[%ld]: "_format,					\
+		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+#define CT_TRACE(_format, ...) \
+	llapi_error(LLAPI_MSG_INFO | LLAPI_MSG_NO_ERRNO, 0,		\
+		    "%s[%ld]: "_format,					\
+		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+#define CT_PRINTF(_format, ...) \
+	llapi_printf(LLAPI_MSG_NORMAL,					\
+		     "%s[%ld]: "_format,				\
+		     cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
 
 static void usage(const char *name, int rc)
 {
@@ -194,7 +208,7 @@ static int ct_parseopts(int argc, char * const *argv)
 		{"verbose",	   no_argument,	      NULL,		   'v'},
 		{0, 0, 0, 0}
 	};
-	int			 c;
+	int			 c, rc;
 	unsigned long long	 value;
 	unsigned long long	 unit;
 
@@ -205,9 +219,10 @@ static int ct_parseopts(int argc, char * const *argv)
 		case 'A':
 			if ((opt.o_archive_cnt >= MAX_ARCHIVE_CNT) ||
 			    (atoi(optarg) >= MAX_ARCHIVE_CNT)) {
-				CT_ERROR("archive number must be less"
-					 "than %zu\n", MAX_ARCHIVE_CNT);
-				return -E2BIG;
+				rc = -E2BIG;
+				CT_ERROR(rc, "archive number must be less"
+					 "than %zu", MAX_ARCHIVE_CNT);
+				return rc;
 			}
 			opt.o_archive_id[opt.o_archive_cnt] = atoi(optarg);
 			opt.o_archive_cnt++;
@@ -216,8 +231,10 @@ static int ct_parseopts(int argc, char * const *argv)
 		case 'c':
 			unit = ONE_MB;
 			if (llapi_parse_size(optarg, &value, &unit, 0) < 0) {
-				CT_ERROR("bad value for -%c '%s'\n", c, optarg);
-				return -EINVAL;
+				rc = -EINVAL;
+				CT_ERROR(rc, "bad value for -%c '%s'", c,
+					 optarg);
+				return rc;
 			}
 			if (c == 'c')
 				opt.o_chunk_size = value;
@@ -247,8 +264,6 @@ static int ct_parseopts(int argc, char * const *argv)
 		case 0:
 			break;
 		default:
-			CT_ERROR("unrecognized option '%s'\n",
-				 argv[optind - 1]);
 			return -EINVAL;
 		}
 	}
@@ -257,8 +272,9 @@ static int ct_parseopts(int argc, char * const *argv)
 	case CA_IMPORT:
 		/* src dst mount_point */
 		if (argc != optind + 3) {
-			CT_ERROR("--import requires 2 arguments\n");
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc, "--import requires 2 arguments");
+			return rc;
 		}
 		opt.o_src = argv[optind++];
 		opt.o_dst = argv[optind++];
@@ -272,8 +288,9 @@ static int ct_parseopts(int argc, char * const *argv)
 			opt.o_src = argv[optind++];
 			opt.o_dst = argv[optind++];
 		} else {
-			CT_ERROR("--rebind requires 1 or 2 arguments\n");
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc, "--rebind requires 1 or 2 arguments");
+			return rc;
 		}
 		break;
 	case CA_MAXSEQ:
@@ -283,29 +300,34 @@ static int ct_parseopts(int argc, char * const *argv)
 	}
 
 	if (argc != optind + 1) {
-		CT_ERROR("no mount point specified\n");
-		return -EINVAL;
+		rc = -EINVAL;
+		CT_ERROR(rc, "no mount point specified");
+		return rc;
 	}
 
 	opt.o_mnt = argv[optind];
 
-	CT_TRACE("action=%d src=%s dst=%s mount_point=%s\n",
+	CT_TRACE("action=%d src=%s dst=%s mount_point=%s",
 		 opt.o_action, opt.o_src, opt.o_dst, opt.o_mnt);
 
 	if (!opt.o_dry_run && opt.o_hsm_root == NULL) {
-		CT_ERROR("must specify a HSM root\n");
-		return -EINVAL;
+		rc = -EINVAL;
+		CT_ERROR(rc, "must specify a root directory for the backend");
+		return rc;
 	}
 
 	if (opt.o_action == CA_IMPORT) {
 		if (opt.o_src && opt.o_src[0] == '/') {
-			CT_ERROR("source path must be relative to HSM root.\n");
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc,
+				 "source path must be relative to HSM root");
+			return rc;
 		}
 
 		if (opt.o_dst && opt.o_dst[0] != '/') {
-			CT_ERROR("destination path must be absolute.\n");
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc, "destination path must be absolute");
+			return rc;
 		}
 	}
 
@@ -329,8 +351,7 @@ static int ct_mkdir_p(const char *path)
 		*ptr = '/';
 		if (rc < 0 && errno != EEXIST) {
 			rc = -errno;
-			CT_ERROR("'%s' mkdir failed (%s)\n", path,
-				 strerror(-rc));
+			CT_ERROR(rc, "cannot mkdir '%s'", path);
 			free(saved);
 			return rc;
 		}
@@ -352,14 +373,13 @@ static int ct_save_stripe(int src_fd, const char *src, const char *dst)
 	ssize_t			 xattr_size;
 
 	snprintf(lov_file, sizeof(lov_file), "%s.lov", dst);
-	CT_TRACE("saving stripe info of '%s' in %s\n", src, lov_file);
+	CT_TRACE("saving stripe info of '%s' in %s", src, lov_file);
 
 	xattr_size = fgetxattr(src_fd, XATTR_LUSTRE_LOV, lov_buf,
 			       sizeof(lov_buf));
 	if (xattr_size < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' cannot get stripe info on (%s)\n", src,
-			 strerror(-rc));
+		CT_ERROR(rc, "cannot get stripe info on '%s'", src);
 		return rc;
 	}
 
@@ -375,15 +395,15 @@ static int ct_save_stripe(int src_fd, const char *src, const char *dst)
 	fd = open(lov_file, O_TRUNC | O_CREAT | O_WRONLY, FILE_PERM);
 	if (fd < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' cannot open (%s)\n", lov_file, strerror(-rc));
+		CT_ERROR(rc, "cannot open '%s'", lov_file);
 		goto err_cleanup;
 	}
 
 	rc = write(fd, lum, xattr_size);
 	if (rc < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' cannot write %zd bytes (%s)\n",
-			 lov_file, xattr_size, strerror(-rc));
+		CT_ERROR(rc, "cannot write %zd bytes to '%s'",
+			 xattr_size, lov_file);
 		close(fd);
 		goto err_cleanup;
 	}
@@ -391,7 +411,7 @@ static int ct_save_stripe(int src_fd, const char *src, const char *dst)
 	rc = close(fd);
 	if (rc < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' cannot close (%s)\n", lov_file, strerror(-rc));
+		CT_ERROR(rc, "cannot close '%s'", lov_file);
 		goto err_cleanup;
 	}
 
@@ -410,18 +430,18 @@ static int ct_load_stripe(const char *src, void *lovea, size_t *lovea_size)
 	int	 fd;
 
 	snprintf(lov_file, sizeof(lov_file), "%s.lov", src);
-	CT_TRACE("reading stripe rules from '%s' for '%s'\n", lov_file, src);
+	CT_TRACE("reading stripe rules from '%s' for '%s'", lov_file, src);
 
 	fd = open(lov_file, O_RDONLY);
 	if (fd < 0) {
-		CT_ERROR("'%s' cannot open (%s)\n", lov_file, strerror(errno));
+		CT_ERROR(errno, "cannot open '%s'", lov_file);
 		return -ENODATA;
 	}
 
 	rc = read(fd, lovea, *lovea_size);
 	if (rc < 0) {
-		CT_ERROR("'%s' cannot read %zu bytes (%s)\n", lov_file,
-			 *lovea_size, strerror(errno));
+		CT_ERROR(errno, "cannot read %zu bytes from '%s'",
+			 *lovea_size, lov_file);
 		close(fd);
 		return -ENODATA;
 	}
@@ -440,8 +460,7 @@ static int ct_restore_stripe(const char *src, const char *dst, int dst_fd,
 	rc = fsetxattr(dst_fd, XATTR_LUSTRE_LOV, lovea, lovea_size,
 		       XATTR_CREATE);
 	if (rc < 0) {
-		CT_ERROR("'%s' cannot set striping (%s)\n",
-			 dst, strerror(errno));
+		CT_ERROR(errno, "cannot set lov EA on '%s'", dst);
 		rc = -errno;
 	}
 
@@ -506,47 +525,48 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	int			 bufoff = 0;
 	int			 rc = 0;
 
-	CT_TRACE("going to copy data from '%s' to %s\n", src, dst);
+	CT_TRACE("going to copy data from '%s' to '%s'", src, dst);
 
 	buf = malloc(opt.o_chunk_size);
 	if (buf == NULL)
 		return -ENOMEM;
 
 	if (fstat(src_fd, &src_st) < 0) {
-		CT_ERROR("'%s' stat failed (%s)\n", src, strerror(errno));
+		CT_ERROR(errno, "cannot stat '%s'", src);
 		return -errno;
 	}
 
 	if (!S_ISREG(src_st.st_mode)) {
-		CT_ERROR("'%s' not a regular file\n", src);
-		return -EINVAL;
+		rc = -EINVAL;
+		CT_ERROR(rc, "'%s' is not a regular file", src);
+		return rc;
 	}
 
 	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
 	if (rc < 0) {
-		CT_ERROR("'%s' seek to read to "LPU64" (len %jd)"
-			 " failed (%s)\n",
-			 src, hai->hai_extent.offset, (intmax_t)src_st.st_size,
-			 strerror(errno));
+		CT_ERROR(errno,
+			 "cannot seek for read to "LPU64" (len %jd) in '%s'",
+			 hai->hai_extent.offset, (intmax_t)src_st.st_size, src);
 		rc = -errno;
 		goto out;
 	}
 
 	if (fstat(dst_fd, &dst_st) < 0) {
-		CT_ERROR("'%s' stat failed (%s)\n", dst, strerror(errno));
+		CT_ERROR(errno, "cannot stat '%s'", dst);
 		return -errno;
 	}
 
 	if (!S_ISREG(dst_st.st_mode)) {
-		CT_ERROR("'%s' not a regular file\n", dst);
-		return -EINVAL;
+		rc = -EINVAL;
+		CT_ERROR(rc, "'%s' is not a regular file", dst);
+		return rc;
 	}
 
 	rc = lseek(dst_fd, hai->hai_extent.offset, SEEK_SET);
 	if (rc < 0) {
-		CT_ERROR("'%s' seek to write to "LPU64" failed (%s)\n", src,
-			 hai->hai_extent.offset, strerror(errno));
 		rc = -errno;
+		CT_ERROR(rc, "cannot seek for write to "LPU64" on '%s'",
+			 hai->hai_extent.offset, src);
 		goto out;
 	}
 
@@ -556,7 +576,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	if (rc < 0) {
 		/* Action has been canceled or something wrong
 		 * is happening. Stop copying data. */
-		CT_ERROR("%s->'%s' progress returned err %d\n", src, dst, rc);
+		CT_ERROR(rc, "progress ioctl for copy '%s'->'%s' failed",
+			 src, dst);
 		goto out;
 	}
 
@@ -589,9 +610,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			}
 
 			if (rsize < 0) {
-				CT_ERROR("'%s' read failed (%s)\n", src,
-					 strerror(-rsize));
 				rc = rsize;
+				CT_ERROR(rc, "cannot read from '%s'", src);
 				break;
 			}
 
@@ -605,9 +625,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			wsize = 0;
 
 		if (wsize < 0) {
-			CT_ERROR("'%s' write failed (%s)\n", dst,
-				 strerror(-wsize));
 			rc = wsize;
+			CT_ERROR(rc, "cannot write to '%s'", dst);
 			break;
 		}
 
@@ -635,7 +654,7 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			sleep_time = excess * 1000000 / opt.o_bandwidth;
 			if ((now - start_time) % 10 == 1)
 				CT_TRACE("bandwith control: excess=%E"
-					 " sleep for %dus\n",
+					 " sleep for %dus",
 					 excess, sleep_time);
 
 			if (excess > 0)
@@ -652,14 +671,13 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			if (rc < 0) {
 				/* Action has been canceled or something wrong
 				 * is happening. Stop copying data. */
-				CT_ERROR("%s->'%s' progress returned err %d\n",
-					 src, dst, rc);
+				CT_ERROR(rc, "progress ioctl for copy"
+					 " '%s'->'%s' failed", src, dst);
 				goto out;
 			}
 		}
 		rc = 0;
 	}
-	CT_TRACE("\n");
 
 out:
 	/*
@@ -676,8 +694,9 @@ out:
 		rc = ftruncate(dst_fd, src_st.st_size);
 		if (rc < 0) {
 			rc = -errno;
-			CT_ERROR("'%s' final truncate to %jd failed (%s)\n",
-				 dst, (intmax_t)src_st.st_size, strerror(-rc));
+			CT_ERROR(rc,
+				 "cannot truncate '%s' to size %jd",
+				 dst, (intmax_t)src_st.st_size);
 			err_major++;
 		}
 	}
@@ -693,11 +712,12 @@ static int ct_copy_attr(const char *src, const char *dst, int src_fd,
 {
 	struct stat	st;
 	struct timeval	times[2];
+	int		rc;
 
 	if (fstat(src_fd, &st) < 0) {
-		CT_ERROR("'%s' stat failed (%s)\n",
-		     src, strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot stat '%s'", src);
+		return rc;
 	}
 
 	times[0].tv_sec = st.st_atime;
@@ -707,9 +727,9 @@ static int ct_copy_attr(const char *src, const char *dst, int src_fd,
 	if (fchmod(dst_fd, st.st_mode) < 0 ||
 	    fchown(dst_fd, st.st_uid, st.st_gid) < 0 ||
 	    futimes(dst_fd, times) < 0) {
-		CT_ERROR("'%s' fchmod fchown or futimes failed (%s)\n", src,
-			 strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot set attributes of '%s'", src);
+		return rc;
 	}
 
 	return 0;
@@ -739,13 +759,15 @@ static int ct_copy_xattr(const char *src, const char *dst, int src_fd,
 		    (strncmp(XATTR_TRUSTED_PREFIX, name,
 			     sizeof(XATTR_TRUSTED_PREFIX) - 1) != 0)) {
 			rc = fsetxattr(dst_fd, name, value, rc, 0);
-			CT_TRACE("'%s' fsetxattr of '%s' rc=%d (%s)\n",
-				 dst, name, rc, strerror(errno));
+			CT_TRACE("fsetxattr of '%s' on '%s' rc=%d (%s)",
+				 name, dst, rc, strerror(errno));
 			/* lustre.* attrs aren't supported on other FS's */
 			if (rc < 0 && errno != EOPNOTSUPP) {
-				CT_ERROR("'%s' fsetxattr of '%s' failed (%s)\n",
-					 dst, name, strerror(errno));
-				return -errno;
+				rc = -errno;
+				CT_ERROR(rc, "cannot set extended attribute"
+					 " '%s' of '%s'",
+					 name, dst);
+				return rc;
 			}
 		}
 		name += strlen(name) + 1;
@@ -791,7 +813,7 @@ static int ct_begin_restore(struct hsm_copyaction_private **phcp,
 				    false);
 	if (rc < 0) {
 		ct_path_lustre(src, sizeof(src), opt.o_mnt, &hai->hai_fid);
-		CT_ERROR("'%s' copy start failed (%s)\n", src, strerror(-rc));
+		CT_ERROR(rc, "llapi_hsm_action_begin() on '%s' failed", src);
 	}
 
 	return rc;
@@ -812,20 +834,21 @@ static int ct_fini(struct hsm_copyaction_private **phcp,
 	int	rc;
 
 	CT_TRACE("Action completed, notifying coordinator "
-		 "cookie="LPX64", FID="DFID", hp_flags=%d err=%d\n",
+		 "cookie="LPX64", FID="DFID", hp_flags=%d err=%d",
 		 hai->hai_cookie, PFID(&hai->hai_fid),
 		 hp_flags, -ct_rc);
 
 	ct_path_lustre(lstr, sizeof(lstr), opt.o_mnt, &hai->hai_fid);
 	rc = llapi_hsm_action_end(phcp, &hai->hai_extent, hp_flags, abs(ct_rc));
 	if (rc == -ECANCELED)
-		CT_ERROR("'%s' completed action has been canceled: "
-			 "cookie="LPX64", FID="DFID"\n", lstr, hai->hai_cookie,
+		CT_ERROR(rc, "completed action on '%s' has been canceled: "
+			 "cookie="LPX64", FID="DFID, lstr, hai->hai_cookie,
 			 PFID(&hai->hai_fid));
 	else if (rc < 0)
-		CT_ERROR("'%s' copy end failed (%s)\n", lstr, strerror(-rc));
+		CT_ERROR(rc, "llapi_hsm_action_end() on '%s' failed", lstr);
 	else
-		CT_TRACE("'%s' copy end ok (rc=%d)\n", lstr, rc);
+		CT_TRACE("llapi_hsm_action_end() on '%s' ok (rc=%d)",
+			 lstr, rc);
 
 	return rc;
 }
@@ -862,7 +885,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		rename_needed = true;
 	}
 
-	CT_TRACE("'%s' archiving to %s\n", src, dst);
+	CT_TRACE("archiving '%s' to '%s'", src, dst);
 
 	if (opt.o_dry_run) {
 		rc = 0;
@@ -871,14 +894,14 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 
 	rc = ct_mkdir_p(dst);
 	if (rc < 0) {
-		CT_ERROR("'%s' mkdir_p failed (%s)\n", dst, strerror(-rc));
+		CT_ERROR(rc, "mkdir_p '%s' failed", dst);
 		goto fini_major;
 	}
 
 	src_fd = llapi_hsm_action_get_fd(hcp);
 	if (src_fd < 0) {
-		CT_ERROR("'%s' open read failed (%s)\n", src, strerror(errno));
 		rc = -errno;
+		CT_ERROR(rc, "cannot open '%s' for read", src);
 		goto fini_major;
 	}
 
@@ -888,44 +911,42 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 
 	dst_fd = open(dst, open_flags, FILE_PERM);
 	if (dst_fd == -1) {
-		CT_ERROR("'%s' open write failed (%s)\n", dst, strerror(errno));
 		rc = -errno;
+		CT_ERROR(rc, "cannot open '%s' for write", dst);
 		goto fini_major;
 	}
 
 	/* saving stripe is not critical */
 	rc = ct_save_stripe(src_fd, src, dst);
 	if (rc < 0)
-		CT_ERROR("'%s' cannot save file striping info in '%s' (%s)\n",
-			 src, dst, strerror(-rc));
+		CT_ERROR(rc, "cannot save file striping info of '%s' in '%s'",
+			 src, dst);
 
 	rc = ct_copy_data(hcp, src, dst, src_fd, dst_fd, hai, hal_flags);
 	if (rc < 0) {
-		CT_ERROR("'%s' data copy failed to '%s' (%s)\n",
-			 src, dst, strerror(-rc));
+		CT_ERROR(rc, "data copy failed from '%s' to '%s'", src, dst);
 		goto fini_major;
 	}
 
 	rc = fsync(dst_fd);
 	if (rc < 0) {
-		CT_ERROR("'%s' cannot synchronize archive file '%s' (%s)\n",
-			 src, dst, strerror(errno));
 		rc = -errno;
+		CT_ERROR(rc, "cannot flush '%s' archive file '%s'", src, dst);
 		goto fini_major;
 	}
 
-	CT_TRACE("'%s' data archived to '%s' done\n", src, dst);
+	CT_TRACE("data archiving for '%s' to '%s' done", src, dst);
 
 	/* attrs will remain on the MDS; no need to copy them, except possibly
 	  for disaster recovery */
 	if (opt.o_copy_attrs) {
 		rc = ct_copy_attr(src, dst, src_fd, dst_fd);
 		if (rc < 0) {
-			CT_ERROR("'%s' attr copy failed to '%s' (%s)\n",
-				 src, dst, strerror(-rc));
+			CT_ERROR(rc, "cannot copy attr of '%s' to '%s'",
+				 src, dst);
 			rcf = rc;
 		}
-		CT_TRACE("'%s' attr file copied to archive '%s'\n",
+		CT_TRACE("attr file for '%s' saved to archive '%s'",
 			 src, dst);
 	}
 
@@ -934,11 +955,11 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 	if (opt.o_copy_xattrs) {
 		rc = ct_copy_xattr(src, dst, src_fd, dst_fd, false);
 		if (rc < 0) {
-			CT_ERROR("'%s' xattr copy failed to '%s' (%s)\n",
-				 src, dst, strerror(-rc));
+			CT_ERROR(rc, "cannot copy xattr of '%s' to '%s'",
+				 src, dst);
 			rcf = rcf ? rcf : rc;
 		}
-		CT_ERROR("'%s' xattr file copied to archive '%s'\n",
+		CT_TRACE("xattr file for '%s' saved to archive '%s'",
 			 src, dst);
 	}
 
@@ -951,9 +972,8 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 				&hai->hai_fid);
 		rc = rename(dst, src);
 		if (rc < 0) {
-			CT_ERROR("'%s' renamed to '%s' failed (%s)\n", dst, src,
-				 strerror(errno));
 			rc = -errno;
+			CT_ERROR(rc, "cannot rename '%s' to '%s'", dst, src);
 			goto fini_major;
 		}
 		/* rename lov file */
@@ -961,8 +981,8 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		snprintf(tmp_dst, sizeof(tmp_dst), "%s.lov", dst);
 		rc = rename(tmp_dst, tmp_src);
 		if (rc < 0)
-			CT_ERROR("'%s' renamed to '%s' failed (%s)\n",
-				 tmp_dst, tmp_src, strerror(errno));
+			CT_ERROR(errno, "cannot rename '%s' to '%s'",
+				 tmp_dst, tmp_src);
 	}
 
 	if (opt.o_shadow_tree) {
@@ -989,8 +1009,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		rc = llapi_fid2path(opt.o_mnt, buf, src + strlen(src),
 				    sizeof(src) - strlen(src), &recno, &linkno);
 		if (rc < 0) {
-			CT_ERROR("'%s' fid2path failed (%s)\n", buf,
-				 strerror(-rc));
+			CT_ERROR(rc, "cannot get FID of '%s'", buf);
 			rcf = rcf ? rcf : rc;
 			goto fini_minor;
 		}
@@ -1006,8 +1025,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		ct_path_archive(dst, sizeof(dst), buf, &hai->hai_fid);
 
 		if (ct_mkdir_p(src)) {
-			CT_ERROR("'%s' mkdir_p failed (%s)\n", src,
-				 strerror(errno));
+			CT_ERROR(errno, "mkdir_p '%s' failed", src);
 			rcf = rcf ? rcf : -errno;
 			goto fini_minor;
 		}
@@ -1017,30 +1035,30 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 			buf[sz] = '\0';
 			if (sz == 0 || strncmp(buf, dst, sz) != 0) {
 				if (unlink(src) && errno != ENOENT) {
-					CT_ERROR("'%s' unlink symlink failed "
-						 "(%s)\n", src,
-						 strerror(errno));
+					CT_ERROR(errno,
+						 "cannot unlink symlink '%s'",
+						 src);
 					rcf = rcf ? rcf : -errno;
 					goto fini_minor;
 				/* unlink old symlink done */
-				CT_TRACE("'%s' remove old symlink pointing"
-					 " to '%s'\n", src, buf);
+				CT_TRACE("remove old symlink '%s' pointing"
+					 " to '%s'", src, buf);
 				}
 			} else {
 				/* symlink already ok */
-				CT_TRACE("'%s' symlink already pointing"
-					 " to '%s'\n", src, dst);
+				CT_TRACE("symlink '%s' already pointing"
+					 " to '%s'", src, dst);
 				rcf = 0;
 				goto fini_minor;
 			}
 		}
 		if (symlink(dst, src)) {
-			CT_ERROR("'%s' symlink to '%s' failed (%s)\n", src, dst,
-				 strerror(errno));
+			CT_ERROR(errno, "cannot symlink '%s' to '%s'",
+				 src, dst);
 			rcf = rcf ? rcf : -errno;
 			goto fini_minor;
 		}
-		CT_TRACE("'%s' symlink to '%s' done\n", src, dst);
+		CT_TRACE("symlink '%s' to '%s' done", src, dst);
 	}
 fini_minor:
 	if (rcf)
@@ -1097,7 +1115,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	 * dependency on the structure format. */
 	rc = ct_load_stripe(src, lov_buf, &lov_size);
 	if (rc < 0) {
-		CT_WARN("'%s' cannot get stripe rules (%s), use default\n",
+		CT_WARN("cannot get stripe rules for '%s' (%s), use default",
 			src, strerror(-rc));
 		set_lovea = false;
 	} else {
@@ -1112,15 +1130,16 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	/* get the FID of the volatile file */
 	rc = llapi_hsm_action_get_dfid(hcp, &dfid);
 	if (rc < 0) {
-		CT_ERROR("restoring "DFID", cannot get FID of created volatile"
-			 " file (%s)\n", PFID(&hai->hai_fid), strerror(-rc));
+		CT_ERROR(rc, "restoring "DFID
+			 ", cannot get FID of created volatile file",
+			 PFID(&hai->hai_fid));
 		goto fini;
 	}
 
 	/* build volatile "file name", for messages */
 	snprintf(dst, sizeof(dst), "{VOLATILE}="DFID, PFID(&dfid));
 
-	CT_TRACE("'%s' restore data to '%s'\n", src, dst);
+	CT_TRACE("restoring data from '%s' to '%s'", src, dst);
 
 	if (opt.o_dry_run) {
 		rc = 0;
@@ -1129,9 +1148,8 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 
 	src_fd = open(src, O_RDONLY | O_NOATIME | O_NONBLOCK | O_NOFOLLOW);
 	if (src_fd < 0) {
-		CT_ERROR("'%s' open for read failed (%s)\n", src,
-			 strerror(errno));
 		rc = -errno;
+		CT_ERROR(rc, "cannot open '%s' for read", src);
 		goto fini;
 	}
 
@@ -1142,8 +1160,8 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 		 * restore a layout */
 		rc = ct_restore_stripe(src, dst, dst_fd, lov_buf, lov_size);
 		if (rc < 0) {
-			CT_ERROR("'%s' cannot restore file striping info from "
-				 "'%s' (%s)\n", dst, src, strerror(-rc));
+			CT_ERROR(rc, "cannot restore file striping info"
+				 " for '%s' from '%s'", dst, src);
 			err_major++;
 			goto fini;
 		}
@@ -1151,15 +1169,15 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 
 	rc = ct_copy_data(hcp, src, dst, src_fd, dst_fd, hai, hal_flags);
 	if (rc < 0) {
-		CT_ERROR("'%s' data copy to '%s' failed (%s)\n", src, dst,
-			 strerror(-rc));
+		CT_ERROR(rc, "cannot copy data from '%s' to '%s'",
+			 src, dst);
 		err_major++;
 		if (ct_is_retryable(rc))
 			hp_flags |= HP_FLAG_RETRY;
 		goto fini;
 	}
 
-	CT_TRACE("'%s' data restore done to %s\n", src, dst);
+	CT_TRACE("data restore from '%s' to '%s' done", src, dst);
 
 fini:
 	if (hcp != NULL)
@@ -1188,7 +1206,7 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 
 	ct_path_archive(dst, sizeof(dst), opt.o_hsm_root, &hai->hai_fid);
 
-	CT_TRACE("'%s' removed file\n", dst);
+	CT_TRACE("removing file '%s'", dst);
 
 	if (opt.o_dry_run) {
 		rc = 0;
@@ -1198,7 +1216,7 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 	rc = unlink(dst);
 	if (rc < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' unlink failed (%s)\n", dst, strerror(-rc));
+		CT_ERROR(rc, "cannot unlink '%s'", dst);
 		err_minor++;
 		goto fini;
 	}
@@ -1207,7 +1225,7 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 	rc = unlink(dst);
 	if (rc < 0) {
 		rc = -errno;
-		CT_ERROR("'%s' unlink failed (%s)\n", dst, strerror(-rc));
+		CT_ERROR(rc, "cannot unlink '%s'", dst);
 		err_minor++;
 		goto fini;
 	}
@@ -1246,16 +1264,15 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 		int		linkno = 0;
 
 		sprintf(fid, DFID, PFID(&hai->hai_fid));
-		CT_TRACE("'%s' action %s reclen %d, cookie="LPX64"\n",
+		CT_TRACE("'%s' action %s reclen %d, cookie="LPX64,
 			 fid, hsm_copytool_action2name(hai->hai_action),
 			 hai->hai_len, hai->hai_cookie);
 		rc = llapi_fid2path(opt.o_mnt, fid, path,
 				    sizeof(path), &recno, &linkno);
 		if (rc < 0)
-			CT_ERROR("'%s' fid2path failed (%s)\n", fid,
-				 strerror(-rc));
+			CT_ERROR(rc, "cannot get path of FID %s", fid);
 		else
-			CT_TRACE("'%s' processing file\n", path);
+			CT_TRACE("processing file '%s'", path);
 	}
 
 	switch (hai->hai_action) {
@@ -1270,7 +1287,8 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 		rc = ct_remove(hai, hal_flags);
 		break;
 	case HSMA_CANCEL:
-		CT_TRACE("'%s' cancel not implemented\n", opt.o_mnt);
+		CT_TRACE("cancel not implemented for file system '%s'",
+			 opt.o_mnt);
 		/* Don't report progress to coordinator for this cookie:
 		 * the copy function will get ECANCELED when reporting
 		 * progress. */
@@ -1278,10 +1296,11 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 		return 0;
 		break;
 	default:
-		CT_ERROR("'%s' unknown action %d\n", opt.o_mnt,
-			 hai->hai_action);
+		rc = -EINVAL;
+		CT_ERROR(rc, "unknown action %d, on '%s'", hai->hai_action,
+			 opt.o_mnt);
 		err_minor++;
-		ct_report_error(hai, 0, -EINVAL);
+		ct_report_error(hai, 0, rc);
 	}
 
 	return 0;
@@ -1327,8 +1346,8 @@ static int ct_process_item_async(const struct hsm_action_item *hai,
 
 	rc = pthread_attr_init(&attr);
 	if (rc != 0) {
-		CT_ERROR("'%s' pthread_attr_init: %s\n", opt.o_mnt,
-			 strerror(rc));
+		CT_ERROR(rc, "pthread_attr_init failed for '%s' service",
+			 opt.o_mnt);
 		free(data->hai);
 		free(data);
 		return -rc;
@@ -1338,7 +1357,8 @@ static int ct_process_item_async(const struct hsm_action_item *hai,
 
 	rc = pthread_create(&thread, &attr, ct_thread, data);
 	if (rc != 0)
-		CT_ERROR("'%s' thread create: (%s)\n", opt.o_mnt, strerror(rc));
+		CT_ERROR(rc, "cannot create thread for '%s' service",
+			 opt.o_mnt);
 
 	pthread_attr_destroy(&attr);
 	return 0;
@@ -1351,11 +1371,12 @@ static int ct_import_one(const char *src, const char *dst)
 	struct stat	st;
 	int		rc;
 
-	CT_TRACE("'%s' importing from %s\n", dst, src);
+	CT_TRACE("importing '%s' from '%s'", dst, src);
 
 	if (stat(src, &st) < 0) {
-		CT_ERROR("'%s' stat failed (%s)\n", src, strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot stat '%s'", src);
+		return rc;
 	}
 
 	if (opt.o_dry_run)
@@ -1365,16 +1386,15 @@ static int ct_import_one(const char *src, const char *dst)
 			      opt.o_archive_cnt ? opt.o_archive_id[0] : 0,
 			      &st, 0, 0, 0, 0, NULL, &fid);
 	if (rc < 0) {
-		CT_ERROR("'%s' import from '%s' failed (%s)\n", dst, src,
-			 strerror(-rc));
-		return -rc;
+		CT_ERROR(rc, "cannot import '%s' from '%s'", dst, src);
+		return rc;
 	}
 
 	ct_path_archive(newarc, sizeof(newarc), opt.o_hsm_root, &fid);
 
 	rc = ct_mkdir_p(newarc);
 	if (rc < 0) {
-		CT_ERROR("'%s' mkdir_p failed (%s)\n", newarc, strerror(-rc));
+		CT_ERROR(rc, "mkdir_p '%s' failed", newarc);
 		err_major++;
 		return rc;
 
@@ -1383,12 +1403,12 @@ static int ct_import_one(const char *src, const char *dst)
 	/* Lots of choices now: mv, ln, ln -s ? */
 	rc = link(src, newarc); /* hardlink */
 	if (rc < 0) {
-		CT_ERROR("'%s' link to '%s' failed (%s)\n", newarc, src,
-			 strerror(errno));
+		rc = -errno;
+		CT_ERROR(rc, "cannot link '%s' to '%s'", newarc, src);
 		err_major++;
-		return -errno;
+		return rc;
 	}
-	CT_TRACE("'%s' imported from '%s'=='%s'\n", dst, newarc, src);
+	CT_TRACE("imported '%s' from '%s'=='%s'", dst, newarc, src);
 
 	return 0;
 }
@@ -1433,10 +1453,9 @@ static int ct_import_recurse(const char *relpath)
 			   final location. */
 			rc = ct_import_one(srcpath, opt.o_dst);
 		} else {
-			CT_ERROR("'%s' opendir failed (%s)\n", srcpath,
-				 strerror(errno));
-			err_major++;
 			rc = -errno;
+			CT_ERROR(rc, "cannot opendir '%s'", srcpath);
+			err_major++;
 		}
 		free(srcpath);
 		return rc;
@@ -1446,10 +1465,9 @@ static int ct_import_recurse(const char *relpath)
 	while (1) {
 		rc = readdir_r(dir, &ent, &cookie);
 		if (rc != 0) {
-			CT_ERROR("'%s' readdir_r failed (%s)\n", relpath,
-				 strerror(errno));
-			err_major++;
 			rc = -errno;
+			CT_ERROR(rc, "cannot readdir_r '%s'", relpath);
+			err_major++;
 			goto out;
 		} else if ((rc == 0) && (cookie == NULL)) {
 			/* end of directory */
@@ -1482,14 +1500,13 @@ static int ct_import_recurse(const char *relpath)
 				/* Import the file */
 				rc = ct_import_one(src, dst);
 			} else {
-				CT_ERROR("'%s' ct_mkdir_p failed (%s)\n", dst,
-					 strerror(-rc));
+				CT_ERROR(rc, "ct_mkdir_p '%s' failed", dst);
 				err_major++;
 			}
 		}
 
 		if (rc != 0) {
-			CT_ERROR("'%s' importing failed\n", newpath);
+			CT_ERROR(rc, "cannot import '%s'", newpath);
 			if (err_major && opt.o_abort_on_error) {
 				free(newpath);
 				goto out;
@@ -1506,10 +1523,11 @@ out:
 
 static int ct_rebind_one(const lustre_fid *old_fid, const lustre_fid *new_fid)
 {
-	char src[PATH_MAX];
-	char dst[PATH_MAX];
+	char	src[PATH_MAX];
+	char	dst[PATH_MAX];
+	int	rc;
 
-	CT_TRACE("rebind "DFID" to "DFID"\n", PFID(old_fid), PFID(new_fid));
+	CT_TRACE("rebind "DFID" to "DFID, PFID(old_fid), PFID(new_fid));
 
 	ct_path_archive(src, sizeof(src), opt.o_hsm_root, old_fid);
 	ct_path_archive(dst, sizeof(dst), opt.o_hsm_root, new_fid);
@@ -1517,16 +1535,15 @@ static int ct_rebind_one(const lustre_fid *old_fid, const lustre_fid *new_fid)
 	if (!opt.o_dry_run) {
 		ct_mkdir_p(dst);
 		if (rename(src, dst)) {
-			CT_ERROR("'%s' rename to '%s' failed (%s)\n", src, dst,
-				 strerror(errno));
+			rc = -errno;
+			CT_ERROR(rc, "cannot rename '%s' to '%s'", src, dst);
 			return -errno;
 		}
 		/* rename lov file */
 		strncat(src, ".lov", sizeof(src) - strlen(src) - 1);
 		strncat(dst, ".lov", sizeof(dst) - strlen(dst) - 1);
 		if (rename(src, dst))
-			CT_ERROR("'%s' rename to '%s' failed (%s)\n", src, dst,
-				 strerror(errno));
+			CT_ERROR(errno, "cannot '%s' rename to '%s'", src, dst);
 
 	}
 	return 0;
@@ -1565,8 +1582,9 @@ static int ct_rebind_list(const char *list)
 
 	filp = fopen(list, "r");
 	if (filp == NULL) {
-		CT_ERROR("'%s' open failed (%s)\n", list, strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot open '%s'", list);
+		return rc;
 	}
 
 	/* each line consists of 2 FID */
@@ -1583,7 +1601,8 @@ static int ct_rebind_list(const char *list)
 		rc = sscanf(line, SFID" "SFID, RFID(&old_fid), RFID(&new_fid));
 		if (rc != 6 || !fid_is_file(&old_fid) ||
 		    !fid_is_file(&new_fid)) {
-			CT_ERROR("'%s' FID expected near '%s', line %u\n",
+			CT_ERROR(EINVAL,
+				 "'%s' FID expected near '%s', line %u",
 				 list, line, nl);
 			err_major++;
 			continue;
@@ -1601,7 +1620,7 @@ static int ct_rebind_list(const char *list)
 		free(line);
 
 	/* return 0 if all rebinds were sucessful */
-	CT_TRACE("'%s' %u lines read, %u rebind successful\n", list, nl, ok);
+	CT_TRACE("%u lines read from '%s', %u rebind successful", nl, list, ok);
 
 	return ok == nl ? 0 : -1;
 }
@@ -1616,14 +1635,16 @@ static int ct_rebind(void)
 
 		if (sscanf(opt.o_src, SFID, RFID(&old_fid)) != 3 ||
 		    !fid_is_file(&old_fid)) {
-			CT_ERROR("'%s' invalid FID format\n", opt.o_src);
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc, "'%s' invalid FID format", opt.o_src);
+			return rc;
 		}
 
 		if (sscanf(opt.o_dst, SFID, RFID(&new_fid)) != 3 ||
 		    !fid_is_file(&new_fid)) {
-			CT_ERROR("'%s' invalid FID format\n", opt.o_dst);
-			return -EINVAL;
+			rc = -EINVAL;
+			CT_ERROR(rc, "'%s' invalid FID format", opt.o_dst);
+			return rc;
 		}
 
 		rc = ct_rebind_one(&old_fid, &new_fid);
@@ -1649,8 +1670,7 @@ static int ct_dir_level_max(const char *dirpath, __u16 *sub_seqmax)
 	dir = opendir(dirpath);
 	if (dir == NULL) {
 		rc = -errno;
-		CT_ERROR("'%s' failed to open directory (%s)\n", opt.o_hsm_root,
-			 strerror(-rc));
+		CT_ERROR(rc, "cannot open directory '%s'", opt.o_hsm_root);
 		return rc;
 	}
 
@@ -1664,15 +1684,15 @@ static int ct_dir_level_max(const char *dirpath, __u16 *sub_seqmax)
 			continue;
 
 		if (sscanf(ent.d_name, "%hx", &sub_seq) != 1) {
-			CT_TRACE("'%s' unexpected dirname format, "
-				 "skip entry.\n", ent.d_name);
+			CT_TRACE("'%s' has an unexpected dirname format, "
+				 "skip entry", ent.d_name);
 			continue;
 		}
 		if (sub_seq > *sub_seqmax)
 			*sub_seqmax = sub_seq;
 	}
 	rc = -errno;
-	CT_ERROR("'%s' readdir_r failed (%s)\n", dirpath, strerror(-rc));
+	CT_ERROR(rc, "cannot readdir_r '%s'", dirpath);
 
 out:
 	closedir(dir);
@@ -1722,17 +1742,16 @@ static int ct_run(void)
 	if (opt.o_daemonize) {
 		rc = daemon(1, 1);
 		if (rc < 0) {
-			CT_ERROR("%d: cannot start as daemon (%s)", getpid(),
-				 strerror(errno));
-			return -errno;
+			rc = -errno;
+			CT_ERROR(rc, "cannot daemonize");
+			return rc;
 		}
 	}
 
 	rc = llapi_hsm_copytool_register(&ctdata, opt.o_mnt, 0,
 					 opt.o_archive_cnt, opt.o_archive_id);
 	if (rc < 0) {
-		CT_ERROR("%d: cannot start copytool interface: %s\n", getpid(),
-			 strerror(-rc));
+		CT_ERROR(rc, "cannot start copytool interface");
 		return rc;
 	}
 
@@ -1745,16 +1764,16 @@ static int ct_run(void)
 		int			 msgsize;
 		int			 i = 0;
 
-		CT_TRACE("%d: waiting for message from kernel\n", getpid());
+		CT_TRACE("waiting for message from kernel");
 
 		rc = llapi_hsm_copytool_recv(ctdata, &hal, &msgsize);
 		if (rc == -ESHUTDOWN) {
-			CT_TRACE("%d: shutting down", getpid());
+			CT_TRACE("shutting down");
 			break;
 		} else if (rc == -EAGAIN) {
 			continue; /* msg not for us */
 		} else if (rc < 0) {
-			CT_WARN("%d: message receive: (%s)\n", getpid(),
+			CT_WARN("cannot receive action list: %s",
 				strerror(-rc));
 			err_major++;
 			if (opt.o_abort_on_error)
@@ -1763,12 +1782,11 @@ static int ct_run(void)
 				continue;
 		}
 
-		CT_TRACE("%d: copytool fs=%s archive#=%d item_count=%d\n",
-			 getpid(), hal->hal_fsname, hal->hal_archive_id,
-			 hal->hal_count);
+		CT_TRACE("copytool fs=%s archive#=%d item_count=%d",
+			 hal->hal_fsname, hal->hal_archive_id, hal->hal_count);
 
 		if (strcmp(hal->hal_fsname, fs_name) != 0) {
-			CT_ERROR("'%s' invalid fs name, expecting: %s\n",
+			CT_ERROR(EINVAL, "'%s' invalid fs name, expecting: %s",
 				 hal->hal_fsname, fs_name);
 			err_major++;
 			if (opt.o_abort_on_error)
@@ -1780,16 +1798,17 @@ static int ct_run(void)
 		hai = hai_first(hal);
 		while (++i <= hal->hal_count) {
 			if ((char *)hai - (char *)hal > msgsize) {
-				CT_ERROR("'%s' item %d past end of message!\n",
+				rc = -EPROTO;
+				CT_ERROR(rc,
+					 "'%s' item %d past end of message!",
 					 opt.o_mnt, i);
 				err_major++;
-				rc = -EPROTO;
 				break;
 			}
 			rc = ct_process_item_async(hai, hal->hal_flags);
 			if (rc < 0)
-				CT_ERROR("'%s' item %d process err: %s\n",
-					 opt.o_mnt, i, strerror(-rc));
+				CT_ERROR(rc, "'%s' item %d process",
+					 opt.o_mnt, i);
 			if (opt.o_abort_on_error && err_major)
 				break;
 			hai = hai_next(hai);
@@ -1815,14 +1834,14 @@ static int ct_setup(void)
 
 	arc_fd = open(opt.o_hsm_root, O_RDONLY);
 	if (arc_fd < 0) {
-		CT_ERROR("cannot open archive at '%s': %s\n", opt.o_hsm_root,
-			 strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot open archive at '%s'", opt.o_hsm_root);
+		return rc;
 	}
 
 	rc = llapi_search_fsname(opt.o_mnt, fs_name);
 	if (rc < 0) {
-		CT_ERROR("cannot find a Lustre filesystem mounted at: %s\n",
+		CT_ERROR(rc, "cannot find a Lustre filesystem mounted at '%s'",
 			 opt.o_mnt);
 		return -rc;
 	}
@@ -1832,12 +1851,15 @@ static int ct_setup(void)
 
 static int ct_cleanup(void)
 {
+	int	rc;
+
 	if (arc_fd < 0)
 		return 0;
 
 	if (close(arc_fd) < 0) {
-		CT_ERROR("cannot close archive: %s.\n", strerror(errno));
-		return -errno;
+		rc = -errno;
+		CT_ERROR(rc, "cannot close archive root directory");
+		return rc;
 	}
 
 	return 0;
@@ -1850,7 +1872,7 @@ int main(int argc, char **argv)
 	strncpy(cmd_name, basename(argv[0]), sizeof(cmd_name));
 	rc = ct_parseopts(argc, argv);
 	if (rc < 0) {
-		CT_ERROR("try '%s --help' for more information.\n", cmd_name);
+		CT_WARN("try '%s --help' for more information", cmd_name);
 		return -rc;
 	}
 
@@ -1872,9 +1894,9 @@ int main(int argc, char **argv)
 	}
 
 	if (opt.o_action != CA_MAXSEQ)
-		CT_TRACE("%s(%d) finished, errs: %d major, %d minor, "
-			 "rc=%d (%s)\n", argv[0], getpid(), err_major,
-			 err_minor, rc, strerror(-rc));
+		CT_TRACE("process finished, errs: %d major, %d minor,"
+			 " rc=%d (%s)", err_major, err_minor, rc,
+			 strerror(-rc));
 
 	ct_cleanup();
 
