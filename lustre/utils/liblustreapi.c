@@ -130,41 +130,90 @@ void llapi_msg_set_level(int level)
                 llapi_msg_level = level;
 }
 
-/* llapi_error will preserve errno */
-void llapi_error(int level, int _rc, const char *fmt, ...)
+static void error_callback_default(enum llapi_message_level level, int err,
+				   const char *fmt, va_list ap)
 {
-        va_list args;
-        int tmp_errno = errno;
-        /* to protect using errno as _rc argument */
-        int rc = abs(_rc);
+	vfprintf(stderr, fmt, ap);
+	if (level & LLAPI_MSG_NO_ERRNO)
+		fprintf(stderr, "\n");
+	else
+		fprintf(stderr, ": %s (%d)\n", strerror(err), err);
+}
 
-        if ((level & LLAPI_MSG_MASK) > llapi_msg_level)
-                return;
+static void info_callback_default(enum llapi_message_level level, int err,
+				  const char *fmt, va_list ap)
+{
+	vfprintf(stdout, fmt, ap);
+}
 
-        va_start(args, fmt);
-        vfprintf(stderr, fmt, args);
-        va_end(args);
+static llapi_log_callback_t llapi_error_callback = error_callback_default;
+static llapi_log_callback_t llapi_info_callback = info_callback_default;
 
-        if (level & LLAPI_MSG_NO_ERRNO)
-                fprintf(stderr, "\n");
-        else
-                fprintf(stderr, ": %s (%d)\n", strerror(rc), rc);
-        errno = tmp_errno;
+
+/* llapi_error will preserve errno */
+void llapi_error(enum llapi_message_level level, int err, const char *fmt, ...)
+{
+	va_list	 args;
+	int	 tmp_errno = errno;
+
+	if ((level & LLAPI_MSG_MASK) > llapi_msg_level)
+		return;
+
+	va_start(args, fmt);
+	llapi_error_callback(level, abs(err), fmt, args);
+	va_end(args);
+	errno = tmp_errno;
 }
 
 /* llapi_printf will preserve errno */
-void llapi_printf(int level, const char *fmt, ...)
+void llapi_printf(enum llapi_message_level level, const char *fmt, ...)
 {
-        va_list args;
-        int tmp_errno = errno;
+	va_list	 args;
+	int	 tmp_errno = errno;
 
-        if ((level & LLAPI_MSG_MASK) > llapi_msg_level)
-                return;
+	if ((level & LLAPI_MSG_MASK) > llapi_msg_level)
+		return;
 
-        va_start(args, fmt);
-        vfprintf(stdout, fmt, args);
-        va_end(args);
-        errno = tmp_errno;
+	va_start(args, fmt);
+	llapi_info_callback(level, 0, fmt, args);
+	va_end(args);
+	errno = tmp_errno;
+}
+
+/**
+ * Set a custom error logging function. Passing in NULL will reset the logging
+ * callback to its default value.
+ *
+ * This function returns the value of the old callback.
+ */
+llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb)
+{
+	llapi_log_callback_t	old = llapi_error_callback;
+
+	if (cb != NULL)
+		llapi_error_callback = cb;
+	else
+		llapi_error_callback = error_callback_default;
+
+	return old;
+}
+
+/**
+ * Set a custom info logging function. Passing in NULL will reset the logging
+ * callback to its default value.
+ *
+ * This function returns the value of the old callback.
+ */
+llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb)
+{
+	llapi_log_callback_t	old = llapi_info_callback;
+
+	if (cb != NULL)
+		llapi_info_callback = cb;
+	else
+		llapi_info_callback = info_callback_default;
+
+	return old;
 }
 
 /**
