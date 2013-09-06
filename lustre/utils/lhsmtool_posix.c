@@ -88,7 +88,7 @@ struct options {
 struct options opt = {
 	.o_copy_attrs = 1,
 	.o_shadow_tree = 1,
-	.o_verbose = LLAPI_MSG_WARN,
+	.o_verbose = LLAPI_MSG_INFO,
 	.o_copy_xattrs = 1,
 	.o_report_int = REPORT_INTERVAL_DEFAULT,
 	.o_chunk_size = ONE_MB,
@@ -583,8 +583,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 
 	errno = 0;
 	/* Don't read beyond a given extent */
-	rlen = (hai->hai_extent.length == -1LL) ?
-		src_st.st_size : hai->hai_extent.length;
+	rlen = min(hai->hai_extent.length, src_st.st_size);
+
+	CT_DEBUG("Going to copy "LPU64" bytes %s -> %s\n", rlen, src, dst);
 
 	while (wpos < rlen) {
 		int chunk = (rlen - wpos > opt.o_chunk_size) ?
@@ -1747,6 +1748,8 @@ static int ct_run(void)
 			return rc;
 		}
 	}
+
+	setbuf(stdout, NULL);
 
 	rc = llapi_hsm_copytool_register(&ctdata, opt.o_mnt, 0,
 					 opt.o_archive_cnt, opt.o_archive_id);

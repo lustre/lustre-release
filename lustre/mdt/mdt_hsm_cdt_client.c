@@ -368,38 +368,39 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 
 		/* if restore, take an exclusive lock on layout */
 		if (hai->hai_action == HSMA_RESTORE) {
-			struct cdt_restore_handle	*crh;
-			struct mdt_object		*child;
+			struct cdt_restore_handle *crh;
+
+			/* in V1 only whole file is supported. */
+			if (hai->hai_extent.offset != 0)
+				GOTO(out, rc = -EPROTO);
 
 			OBD_SLAB_ALLOC_PTR(crh, mdt_hsm_cdt_kmem);
 			if (crh == NULL)
 				GOTO(out, rc = -ENOMEM);
 
 			crh->crh_fid = hai->hai_fid;
-			/* in V1 only whole file is supported
-			crh->extent.start = hai->hai_extent.offset;
-			crh->extent.end = hai->hai_extent.offset +
-					    hai->hai_extent.length;
-			 */
+			/* in V1 only whole file is supported. However the
+			 * restore may be due to truncate. */
 			crh->crh_extent.start = 0;
-			crh->crh_extent.end = OBD_OBJECT_EOF;
+			crh->crh_extent.end = hai->hai_extent.length;
 
 			mdt_lock_reg_init(&crh->crh_lh, LCK_EX);
-			child = mdt_object_find_lock(mti, &crh->crh_fid,
-						     &crh->crh_lh,
-						     MDS_INODELOCK_LAYOUT);
-			if (IS_ERR(child)) {
-				rc = PTR_ERR(child);
+			obj = mdt_object_find_lock(mti, &crh->crh_fid,
+						   &crh->crh_lh,
+						   MDS_INODELOCK_LAYOUT);
+			if (IS_ERR(obj)) {
+				rc = PTR_ERR(obj);
 				CERROR("%s: cannot take layout lock for "
 				       DFID": rc = %d\n", mdt_obd_name(mdt),
 				       PFID(&crh->crh_fid), rc);
 				OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
 				GOTO(out, rc);
 			}
+
 			/* we choose to not keep a keep a reference
 			 * on the object during the restore time which can be
 			 * very long */
-			mdt_object_put(mti->mti_env, child);
+			mdt_object_put(mti->mti_env, obj);
 
 			mutex_lock(&cdt->cdt_restore_lock);
 			list_add_tail(&crh->crh_list, &cdt->cdt_restore_hdl);

@@ -11442,26 +11442,13 @@ test_229() { # LU-2482, LU-3448
 	[ $stripe_count -eq 2 ] || error "stripe count not 2 ($stripe_count)"
 	stat $DIR/$tfile || error "failed to stat released file"
 
-	$TRUNCATE $DIR/$tfile 200000 &&
-		error "truncate of released file should fail"
-
-	# Ensure that nothing happened anyway.
-	$CHECKSTAT -s 0 $DIR/$tfile ||
-		error "released file size should not change"
-
-	# Stripe count should be no change after truncate
-	stripe_count=$($GETSTRIPE -c $DIR/$tfile) || error "getstripe failed"
-	[ $stripe_count -eq 2 ] || error "after trunc: ($stripe_count)"
-
 	chown $RUNAS_ID $DIR/$tfile ||
 		error "chown $RUNAS_ID $DIR/$tfile failed"
 
 	chgrp $RUNAS_ID $DIR/$tfile ||
 		error "chgrp $RUNAS_ID $DIR/$tfile failed"
 
-	touch $DIR/$tfile ||
-		error "touch $DIR/$tfile failed"
-
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	rm $DIR/$tfile || error "failed to remove released file"
 }
 run_test 229 "getstripe/stat/rm/attr changes work on released files"

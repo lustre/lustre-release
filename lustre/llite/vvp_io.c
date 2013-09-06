@@ -121,8 +121,9 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = io->ci_obj;
 	struct ccc_io    *cio = cl2ccc_io(env, ios);
+	struct inode     *inode = ccc_object_inode(obj);
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
 			   "restore needed %d\n",
@@ -136,7 +137,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		/* file was detected release, we need to restore it
 		 * before finishing the io
 		 */
-		rc = ll_layout_restore(ccc_object_inode(obj));
+		rc = ll_layout_restore(inode, 0, OBD_OBJECT_EOF);
 		/* if restore registration failed, no restart,
 		 * we will return -ENODATA */
 		/* The layout will change after restore, so we need to
@@ -161,7 +162,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		__u32 gen = 0;
 
 		/* check layout version */
-		ll_layout_refresh(ccc_object_inode(obj), &gen);
+		ll_layout_refresh(inode, &gen);
 		io->ci_need_restart = cio->cui_layout_gen != gen;
 		if (io->ci_need_restart) {
 			CDEBUG(D_VFSTRACE,

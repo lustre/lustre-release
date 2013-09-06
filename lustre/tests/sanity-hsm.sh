@@ -15,7 +15,7 @@ ONLY=${ONLY:-"$*"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 # skip test cases failed before landing - Jinshan
 
-ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 30a 31a 34 35 36 58 59"
+ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 12a 12b 12n 13 30a 31a 34 35 36"
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 110a 200 201 221 222a 223a 223b 225"
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
@@ -2127,77 +2127,62 @@ test_57() {
 }
 run_test 57 "Archive a file with dirty cache on another node"
 
+truncate_released_file() {
+	local src_file=$1
+	local trunc_to=$2
+
+	local sz=$(stat -c %s $src_file)
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file $1 $f)
+	local ref=$f-ref
+	cp $f $f-ref
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
+		error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $f || error "could not release file"
+
+	$TRUNCATE $f $trunc_to || error "truncate failed"
+	sync
+
+	local sz1=$(stat -c %s $f)
+	[[ $sz1 == $trunc_to ]] ||
+		error "size after trunc: $sz1 expect $trunc_to, original $sz"
+
+	$LFS hsm_state $f
+	check_hsm_flags $f "0x0000000b"
+
+	local state=$(get_request_state $fid RESTORE)
+	[[ "$state" == "SUCCEED" ]] ||
+		error "truncate $sz does not trig restore, state = $state"
+
+	$TRUNCATE $ref $trunc_to
+	cmp $ref $f || error "file data wrong after truncate"
+
+	rm -f $f $f-ref
+}
+
 test_58() {
 	# test needs a running copytool
 	copytool_setup
 
 	mkdir -p $DIR/$tdir
-	local f=$DIR/$tdir/$tfile
-	local fid=$(make_small $f)
 
-	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
-		error "could not archive file"
-	wait_request_state $fid ARCHIVE SUCCEED
+	local sz=$(stat -c %s /etc/passwd)
 
-	$LFS hsm_release $f || error "could not release file"
+	echo "truncate up from $sz to $((sz*2))"
+	truncate_released_file /etc/passwd $((sz*2))
 
-	$TRUNCATE $f 0 || error "truncate failed"
-	sync
+	echo "truncate down from $sz to $((sz/2))"
+	truncate_released_file /etc/passwd $((sz/2))
 
-	local sz=$(stat -c %s $f)
-	[[ $sz == 0 ]] || error "size after truncate is $sz != 0"
-
-	$LFS hsm_state $f
-
-	check_hsm_flags $f "0x0000000b"
-
-	local state=$(get_request_state $fid RESTORE)
-	[[ "$state" == "" ]] ||
-		error "truncate 0 trigs a restore, state = $state"
+	echo "truncate to 0"
+	truncate_released_file /etc/passwd 0
 
 	copytool_cleanup
 }
-run_test 58 "Truncate 0 on a released file must not trigger restore"
-
-test_59() {
-	# test needs a running copytool
-	copytool_setup
-
-	mkdir -p $DIR/$tdir
-	local f=$DIR/$tdir/$tfile
-	local fid=$(copy_file /etc/passwd $f)
-	local ref=$f-ref
-	cp $f $ref
-	local sz=$(stat -c %s $ref)
-	sz=$((sz / 2))
-	$TRUNCATE $ref $sz
-
-	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
-		error "could not archive file"
-	wait_request_state $fid ARCHIVE SUCCEED
-
-	$LFS hsm_release $f || error "could not release file"
-
-	$TRUNCATE $f $sz || error "truncate failed"
-	sync
-
-	local sz1=$(stat -c %s $f)
-	[[ $sz1 == $sz ]] || error "size after truncate is $sz1 != $sz"
-
-	$LFS hsm_state $f
-
-	check_hsm_flags $f "0x0000000b"
-
-	local state=$(get_request_state $fid RESTORE)
-	[[ "$state" == "SUCCEED" ]] ||
-		error "truncate $sz does not trig a successfull restore,"\
-		      " state = $state"
-
-	cmp $ref $f || error "file data wrong after truncate"
-
-	copytool_cleanup
-}
-run_test 59 "Truncate != 0 on a released file"
+run_test 58 "Truncate a released file will trigger restore"
 
 test_90() {
 	file_count=57

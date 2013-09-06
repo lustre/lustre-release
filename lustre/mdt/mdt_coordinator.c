@@ -725,6 +725,10 @@ static int hsm_restore_cb(const struct lu_env *env,
 
 	larr = (struct llog_agent_req_rec *)hdr;
 	hai = &larr->arr_hai;
+	if (hai->hai_cookie > cdt->cdt_last_cookie)
+		/* update the cookie to avoid collision */
+		cdt->cdt_last_cookie = hai->hai_cookie + 1;
+
 	if (hai->hai_action != HSMA_RESTORE ||
 	    agent_req_in_final_state(larr->arr_status))
 		RETURN(0);
@@ -741,7 +745,7 @@ static int hsm_restore_cb(const struct lu_env *env,
 	crh->extent.end = hai->hai_extent.offset + hai->hai_extent.length;
 	*/
 	crh->crh_extent.start = 0;
-	crh->crh_extent.end = OBD_OBJECT_EOF;
+	crh->crh_extent.end = hai->hai_extent.length;
 	/* get the layout lock */
 	mdt_lock_reg_init(&crh->crh_lh, LCK_EX);
 	child = mdt_object_find_lock(mti, &crh->crh_fid, &crh->crh_lh,

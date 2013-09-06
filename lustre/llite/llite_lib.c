@@ -1461,14 +1461,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        cfs_time_current_sec());
 
-	/* If we are changing file size, file content is modified, flag it. */
-	if (attr->ia_valid & ATTR_SIZE) {
-		attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
-		spin_lock(&lli->lli_lock);
-		lli->lli_flags |= LLIF_DATA_MODIFIED;
-		spin_unlock(&lli->lli_lock);
-	}
-
         /* We always do an MDS RPC, even if we're only changing the size;
          * only the MDS knows whether truncate() should fail with -ETXTBUSY */
 
@@ -1483,13 +1475,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		down_write(&lli->lli_trunc_sem);
 	}
 
-        memcpy(&op_data->op_attr, attr, sizeof(*attr));
-
-        /* Open epoch for truncate. */
-        if (exp_connect_som(ll_i2mdexp(inode)) &&
-            (attr->ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
-                op_data->op_flags = MF_EPOCH_OPEN;
-
 	/* truncate on a released file must failed with -ENODATA,
 	 * so size must not be set on MDS for released file
 	 * but other attributes must be set
@@ -1503,26 +1488,37 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		if (lsm && lsm->lsm_pattern & LOV_PATTERN_F_RELEASED)
 			file_is_released = true;
 		ccc_inode_lsm_put(inode, lsm);
+
+		if (!hsm_import && attr->ia_valid & ATTR_SIZE) {
+			if (file_is_released) {
+				rc = ll_layout_restore(inode, 0, attr->ia_size);
+				if (rc < 0)
+					GOTO(out, rc);
+
+				file_is_released = false;
+				ll_layout_refresh(inode, &gen);
+			}
+
+			/* If we are changing file size, file content is
+			 * modified, flag it. */
+			attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+			spin_lock(&lli->lli_lock);
+			lli->lli_flags |= LLIF_DATA_MODIFIED;
+			spin_unlock(&lli->lli_lock);
+			op_data->op_bias |= MDS_DATA_MODIFIED;
+		}
 	}
 
-	/* if not in HSM import mode, clear size attr for released file
-	 * we clear the attribute send to MDT in op_data, not the original
-	 * received from caller in attr which is used later to
-	 * decide return code */
-	if (file_is_released && (attr->ia_valid & ATTR_SIZE) && !hsm_import)
-		op_data->op_attr.ia_valid &= ~ATTR_SIZE;
+	memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
-        rc = ll_md_setattr(dentry, op_data, &mod);
-        if (rc)
-                GOTO(out, rc);
+	/* Open epoch for truncate. */
+	if (exp_connect_som(ll_i2mdexp(inode)) && !hsm_import &&
+	    (attr->ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
+		op_data->op_flags = MF_EPOCH_OPEN;
 
-	/* truncate failed (only when non HSM import), others succeed */
-	if (file_is_released) {
-		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
-			GOTO(out, rc = -ENODATA);
-		else
-			GOTO(out, rc = 0);
-	}
+	rc = ll_md_setattr(dentry, op_data, &mod);
+	if (rc)
+		GOTO(out, rc);
 
 	/* RPC to MDT is sent, cancel data modification flag */
 	if (rc == 0 && (op_data->op_bias & MDS_DATA_MODIFIED)) {
@@ -1531,31 +1527,31 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		spin_unlock(&lli->lli_lock);
 	}
 
-        ll_ioepoch_open(lli, op_data->op_ioepoch);
-	if (!S_ISREG(inode->i_mode))
-                GOTO(out, rc = 0);
+	ll_ioepoch_open(lli, op_data->op_ioepoch);
+	if (!S_ISREG(inode->i_mode) || file_is_released)
+		GOTO(out, rc = 0);
 
 	if (attr->ia_valid & (ATTR_SIZE |
 			      ATTR_ATIME | ATTR_ATIME_SET |
 			      ATTR_MTIME | ATTR_MTIME_SET)) {
-                /* For truncate and utimes sending attributes to OSTs, setting
-                 * mtime/atime to the past will be performed under PW [0:EOF]
-                 * extent lock (new_size:EOF for truncate).  It may seem
-                 * excessive to send mtime/atime updates to OSTs when not
-                 * setting times to past, but it is necessary due to possible
-                 * time de-synchronization between MDT inode and OST objects */
-                rc = ll_setattr_ost(inode, attr);
+		/* For truncate and utimes sending attributes to OSTs, setting
+		 * mtime/atime to the past will be performed under PW [0:EOF]
+		 * extent lock (new_size:EOF for truncate).  It may seem
+		 * excessive to send mtime/atime updates to OSTs when not
+		 * setting times to past, but it is necessary due to possible
+		 * time de-synchronization between MDT inode and OST objects */
+		rc = ll_setattr_ost(inode, attr);
 	}
-        EXIT;
+	EXIT;
 out:
-        if (op_data) {
-                if (op_data->op_ioepoch) {
-                        rc1 = ll_setattr_done_writing(inode, op_data, mod);
-                        if (!rc)
-                                rc = rc1;
-                }
-                ll_finish_md_op_data(op_data);
-        }
+	if (op_data) {
+		if (op_data->op_ioepoch) {
+			rc1 = ll_setattr_done_writing(inode, op_data, mod);
+			if (!rc)
+				rc = rc1;
+		}
+		ll_finish_md_op_data(op_data);
+	}
 	if (!S_ISDIR(inode->i_mode)) {
 		up_write(&lli->lli_trunc_sem);
 		mutex_lock(&inode->i_mutex);
