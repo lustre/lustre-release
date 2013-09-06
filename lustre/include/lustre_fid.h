@@ -289,6 +289,11 @@ static inline int fid_is_quota(const struct lu_fid *fid)
 	       fid_seq(fid) == FID_SEQ_QUOTA_GLB;
 }
 
+static inline int fid_is_name_llog(const struct lu_fid *fid)
+{
+	return fid_seq(fid) == FID_SEQ_LLOG_NAME;
+}
+
 static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 {
 	const __u64 seq = fid_seq(fid);

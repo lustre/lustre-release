@@ -1295,7 +1295,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         } else if (rc != -EREMOTE && rc != -ENOENT) {
                 GOTO(out_unlock_old, rc);
         } else {
-                mdt_enoent_version_save(info, 3);
+		/* If mnew does not exist and mold are remote directory,
+		 * it only allows rename if they are under same directory */
+		if (mtgtdir != msrcdir && mdt_object_remote(mold)) {
+			CDEBUG(D_INFO, "Src child "DFID" is on another MDT\n",
+			       PFID(old_fid));
+			GOTO(out_unlock_old, rc = -EXDEV);
+		}
+		mdt_enoent_version_save(info, 3);
         }
 
         /* step 5: rename it */
