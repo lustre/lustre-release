@@ -1085,6 +1085,9 @@ test_24x() {
 	mkdir -p $remote_dir/tgt_dir
 	touch $remote_dir/tgt_file
 
+	mrename $remote_dir $DIR/ &&
+		error "rename dir cross MDT works!"
+
 	mrename $DIR/$tdir/src_dir $remote_dir/tgt_dir &&
 		error "rename dir cross MDT works!"
 
@@ -10634,14 +10637,15 @@ test_213() {
 run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
 
 test_214() { # for bug 20133
-	test_mkdir -p $DIR/d214p/d214c
+	mkdir -p $DIR/$tdir/d214c || error "mkdir $DIR/$tdir/d214c failed"
 	for (( i=0; i < 340; i++ )) ; do
-		touch $DIR/d214p/d214c/a$i
+		touch $DIR/$tdir/d214c/a$i
 	done
 
-	ls -l $DIR/d214p || error "ls -l $DIR/d214p failed"
-	mv $DIR/d214p/d214c $DIR/ || error "mv $DIR/d214p/d214c $DIR/ failed"
+	ls -l $DIR/$tdir || error "ls -l $DIR/d214p failed"
+	mv $DIR/$tdir/d214c $DIR/ || error "mv $DIR/d214p/d214c $DIR/ failed"
 	ls $DIR/d214c || error "ls $DIR/d214c failed"
+	rm -rf $DIR/$tdir || error "rm -rf $DIR/d214* failed"
 	rm -rf $DIR/d214* || error "rm -rf $DIR/d214* failed"
 }
 run_test 214 "hash-indexed directory test - bug 20133"

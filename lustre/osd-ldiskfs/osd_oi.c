@@ -468,7 +468,8 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 	ENTRY;
 
 	if (unlikely(fid_is_local_file(fid) || fid_is_igif(fid) ||
-		     fid_is_llog(fid)))
+		     fid_is_llog(fid)) || fid_is_name_llog(fid) ||
+		     fid_is_quota(fid))
 		RETURN(0);
 
 	if (fid_is_idif(fid) || fid_is_last_id(fid))
