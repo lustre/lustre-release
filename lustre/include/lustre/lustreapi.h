@@ -42,9 +42,11 @@
  * @{
  */
 
+#include <stdarg.h>
 #include <lustre/lustre_user.h>
 
-typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, void *args);
+typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid,
+			   void *args);
 
 /* lustreapi message severity level */
 enum llapi_message_level {
@@ -58,17 +60,23 @@ enum llapi_message_level {
         LLAPI_MSG_MAX
 };
 
+typedef void (*llapi_log_callback_t)(enum llapi_message_level level, int err,
+				     const char *fmt, va_list ap);
+
+
 /* the bottom three bits reserved for llapi_message_level */
 #define LLAPI_MSG_MASK          0x00000007
 #define LLAPI_MSG_NO_ERRNO      0x00000010
 
 extern void llapi_msg_set_level(int level);
+extern llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb);
+extern llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb);
 
-void llapi_error(int level, int rc, const char *fmt, ...)
+void llapi_error(enum llapi_message_level level, int err, const char *fmt, ...)
 	__attribute__((__format__(__printf__, 3, 4)));
 #define llapi_err_noerrno(level, fmt, a...)			\
 	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
-void llapi_printf(int level, const char *fmt, ...)
+void llapi_printf(enum llapi_message_level level, const char *fmt, ...)
 	__attribute__((__format__(__printf__, 2, 3)));
 
 extern int llapi_file_create(const char *name, unsigned long long stripe_size,
