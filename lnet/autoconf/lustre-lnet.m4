@@ -76,13 +76,13 @@ else
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/sched.h>
 	],[
-		struct task_struct t;
+		struct task_struct *t;
 		#if HAVE_CPUMASK_T
 		cpumask_t     m;
 	        #else
 	        unsigned long m;
 		#endif
-		set_cpus_allowed(&t, m);
+		set_cpus_allowed_ptr(t, &m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
 		AC_MSG_RESULT([yes])

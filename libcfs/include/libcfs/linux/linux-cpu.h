@@ -117,7 +117,6 @@ int cfs_cpu_ht_nsiblings(int cpu);
  * #define cfs_cpu_mask_first(mask)            first_cpu(mask)
  * #define cfs_cpu_mask_any_online(mask)      (any_online_cpu(mask) != NR_CPUS)
  * #define cfs_cpu_mask_for_each(i, mask)      for_each_cpu_mask(i, mask)
- * #define cfs_cpu_mask_bind(t, mask)          set_cpus_allowed(t, mask)
  *
  * #define cfs_cpu_mask_copy(dst, src)         cpumask_copy(dst, src)
  *
