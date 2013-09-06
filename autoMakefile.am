@@ -97,14 +97,18 @@ EXTRA_DIST += build/gen_filelist.sh
 endif
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
-	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | \
-		sed -re 's/--(en|dis)able-tests//'); \
-	if [ -n "@LINUX@" ]; then \
-		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
-			sed -re 's/--with-linux=[^ ][^ ]*//'); \
-		RPMARGS="--define \"kdir @LINUX@\""; \
-		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
-			sed -re 's/--with-linux-obj=[^ ][^ ]*//'); \
+	@CONFIGURE_ARGS=""; \
+	for arg in $(ac_configure_args); do \
+		case $$arg in \
+			--with-release=* ) ;; \
+			--enable-tests | --disable-tests ) ;; \
+			--with-linux=* | --with-linux-obj=* ) ;; \
+			* ) CONFIGURE_ARGS="$$CONFIGURE_ARGS '$$arg'" ;; \
+		esac; \
+	done; \
+	RPMARGS="--define \"configure_args $$CONFIGURE_ARGS\""; \
+	if [ -n "@LINUX@" ]; then  \
+		RPMARGS="$$RPMARGS --define \"kdir @LINUX@\""; \
 		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
 			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
 		fi; \
@@ -130,15 +134,12 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 			fi; \
 		fi; \
 	fi; \
-	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
-		sed -re 's/--with-release=[^ ][^ ]*//'); \
-	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="$$RPMARGS --without lustre_tests"; \
 	fi; \
 	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
 		RPMARGS="$$RPMARGS --without servers"; \
-		if [ -n "@CROSS_PATH@" ]; then \
+		if [ -n "$$CROSS_SUFFIX" ]; then \
 			RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
 		fi; \
 	fi; \
