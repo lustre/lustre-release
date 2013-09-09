@@ -419,20 +419,11 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
       <note>
         <para>The <literal>df -i</literal> and <literal>lfs df -i</literal> commands show the
             <emphasis role="italic">minimum</emphasis> number of inodes that can be created in the
-          file system at the current time. Depending on the current state of the file system and the
-          OSTs, it may be possible to create more inodes than currently reported by <literal>df
-            -i</literal>. As more files are created in the file system, <literal>df -i</literal>
-          will show the current estimated free inode count.</para>
-        <para>If the underlying file system has fewer free blocks than inodes, the total inode count
-          reported for the file system is only as many inodes as there are free blocks. This is
-          because the Lustre file system may need to store an external attribute for each new inode,
-          and it is better to report a free inode count that corresponds to the guaranteed minimum
-          number of inodes that can be created.</para>
-        <para>If the total number of objects available across all of the OSTs is smaller than those
-          available on the MDT(s), taking into account the default file striping, then <literal>df
-            -i</literal> will also report a smaller number of inodes than could be created. Running
-            <literal>lfs df -i</literal> will report the actual number of inodes that are free on
-          each target.</para>
+          file system at the current time. If the total number of objects available across all of
+          the OSTs is smaller than those available on the MDT(s), taking into account the default
+          file striping, then <literal>df -i</literal> will also report a smaller number of inodes
+          than could be created. Running <literal>lfs df -i</literal> will report the actual number
+          of inodes that are free on each target.</para>
         <para>For ZFS file systems, the number of inodes that can be created is dynamic and depends
           on the free space in the file system. The Free and Total inode counts reported for a ZFS
           file system are only an estimate based on the current usage for each target. The Used
