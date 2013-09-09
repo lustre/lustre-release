@@ -337,36 +337,48 @@ int lustre_start_mgc(struct super_block *sb)
         sprintf(niduuid, "%s_%x", mgcname, i);
 	if (IS_SERVER(lsi)) {
 		ptr = lsi->lsi_lmd->lmd_mgs;
+		CDEBUG(D_MOUNT, "mgs nids %s.\n", ptr);
 		if (IS_MGS(lsi)) {
-                        /* Use local nids (including LO) */
-                        lnet_process_id_t id;
-                        while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
-                                rc = do_lcfg(mgcname, id.nid,
-                                             LCFG_ADD_UUID, niduuid, 0,0,0);
-                        }
-                } else {
-                        /* Use mgsnode= nids */
+			/* Use local nids (including LO) */
+			lnet_process_id_t id;
+			while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
+				rc = do_lcfg(mgcname, id.nid, LCFG_ADD_UUID,
+					     niduuid, 0, 0, 0);
+			}
+		} else {
+			/* Use mgsnode= nids */
 			/* mount -o mgsnode=nid */
 			if (lsi->lsi_lmd->lmd_mgs) {
 				ptr = lsi->lsi_lmd->lmd_mgs;
 			} else if (class_find_param(ptr, PARAM_MGSNODE,
 						    &ptr) != 0) {
-                                CERROR("No MGS nids given.\n");
-                                GOTO(out_free, rc = -EINVAL);
-                        }
-                        while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-                                rc = do_lcfg(mgcname, nid,
-                                             LCFG_ADD_UUID, niduuid, 0,0,0);
-                                i++;
-                        }
-                }
+				CERROR("No MGS nids given.\n");
+				GOTO(out_free, rc = -EINVAL);
+			}
+			/*
+			 * LU-3829.
+			 * Here we only take the first mgsnid as its primary
+			 * serving mgs node, the rest mgsnid will be taken as
+			 * failover mgs node, otherwise they would be takens
+			 * as multiple nids of a single mgs node.
+			 */
+			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+				rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
+					     niduuid, 0, 0, 0);
+				if (rc == 0) {
+					i = 1;
+					break;
+				}
+			}
+		}
         } else { /* client */
                 /* Use nids from mount line: uml1,1@elan:uml2,2@elan:/lustre */
                 ptr = lsi->lsi_lmd->lmd_dev;
                 while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-                        rc = do_lcfg(mgcname, nid,
-                                     LCFG_ADD_UUID, niduuid, 0,0,0);
-                        i++;
+			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
+				     niduuid, 0, 0, 0);
+			if (rc == 0)
+				++i;
                         /* Stop at the first failover nid */
                         if (*ptr == ':')
                                 break;
@@ -395,20 +407,22 @@ int lustre_start_mgc(struct super_block *sb)
         i = 1;
 	while (ptr && ((*ptr == ':' ||
 	       class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0))) {
-                /* New failover node */
-                sprintf(niduuid, "%s_%x", mgcname, i);
-                j = 0;
+		/* New failover node */
+		sprintf(niduuid, "%s_%x", mgcname, i);
+		j = 0;
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
-                        j++;
-                        rc = do_lcfg(mgcname, nid,
-                                     LCFG_ADD_UUID, niduuid, 0,0,0);
-                        if (*ptr == ':')
-                                break;
-                }
-                if (j > 0) {
-                        rc = do_lcfg(mgcname, 0, LCFG_ADD_CONN,
-                                     niduuid, 0, 0, 0);
-                        i++;
+			rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
+				     niduuid, 0, 0, 0);
+			if (rc == 0)
+				++j;
+			if (*ptr == ':')
+				break;
+		}
+		if (j > 0) {
+			rc = do_lcfg(mgcname, 0, LCFG_ADD_CONN,
+				     niduuid, 0, 0, 0);
+			if (rc == 0)
+				++i;
                 } else {
                         /* at ":/fsname" */
                         break;
