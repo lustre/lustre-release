@@ -60,12 +60,6 @@
 /* ext_depth() */
 #include <ldiskfs/ldiskfs_extents.h>
 
-#ifndef HAVE_PAGE_CONSTANT
-#define mapping_cap_page_constant_write(mapping) 0
-#define SetPageConstant(page) do {} while (0)
-#define ClearPageConstant(page) do {} while (0)
-#endif
-
 static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 			    int rw, int line, int pages)
 {
@@ -190,18 +184,9 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                         if (likely(error == 0))
                                 SetPageUptodate(bvl->bv_page);
                         LASSERT(PageLocked(bvl->bv_page));
-                        ClearPageConstant(bvl->bv_page);
                 }
                 cfs_atomic_dec(&iobuf->dr_dev->od_r_in_flight);
         } else {
-                struct page *p = iobuf->dr_pages[0];
-                if (p->mapping) {
-                        if (mapping_cap_page_constant_write(p->mapping)) {
-                                bio_for_each_segment(bvl, bio, i) {
-                                        ClearPageConstant(bvl->bv_page);
-                                }
-                        }
-                }
                 cfs_atomic_dec(&iobuf->dr_dev->od_w_in_flight);
         }
 
@@ -331,15 +316,6 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                ((sector_t)blocks[block_idx + i + nblocks] <<
                                 sector_bits))
                                 nblocks++;
-
-                        /* I only set the page to be constant only if it
-                         * is mapped to a contiguous underlying disk block(s).
-                         * It will then make sure the corresponding device
-                         * cache of raid5 will be overwritten by this page.
-                         * - jay */
-                        if (iobuf->dr_rw && (nblocks == blocks_per_page) &&
-                            mapping_cap_page_constant_write(inode->i_mapping))
-                                SetPageConstant(page);
 
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&

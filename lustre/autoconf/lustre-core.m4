@@ -356,34 +356,6 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-#2.6.18 + RHEL5 (fc6)
-
-# raid5-zerocopy patch
-
-#
-# LC_PAGE_CONSTANT
-#
-# In order to support raid5 zerocopy patch, we have to patch the kernel to make
-# it support constant page, which means the page won't be modified during the
-# IO.
-#
-AC_DEFUN([LC_PAGE_CONSTANT],
-[AC_MSG_CHECKING([if kernel have PageConstant defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-        #include <linux/page-flags.h>
-],[
-        #ifndef PG_constant
-        #error "Have no raid5 zcopy patch"
-        #endif
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_PAGE_CONSTANT, 1, [kernel have PageConstant supported])
-],[
-        AC_MSG_RESULT(no);
-])
-])
-
 # 2.6.24
 
 # 2.6.24 has bio_endio with 2 args
@@ -1406,9 +1378,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-
-         # raid5-zerocopy patch
-         LC_PAGE_CONSTANT
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
