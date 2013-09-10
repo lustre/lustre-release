@@ -3827,7 +3827,7 @@ test_68() {
 
 	umount_client $MOUNT || error "umount client failed"
 
-	start_mds || error "MDT start failed"
+	start_mdt 1 || error "MDT start failed"
 	start_ost
 
 	# START-END - the sequences we'll be reserving
