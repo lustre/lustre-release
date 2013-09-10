@@ -270,7 +270,7 @@ static char *convert_hostnames(char *s1)
         return converted;
 }
 
-int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
+static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                char **mountopts)
 {
         static struct option long_opt[] = {
@@ -522,9 +522,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			"pool/dataset name not specified.\n");
 		return EINVAL;
 	} else {
-		/*  The device or pool/filesystem name */
-		strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
-
 		/* Followed by optional vdevs */
 		if (optind < argc - 1)
 			mop->mo_pool_vdevs = (char **) &argv[optind + 1];
@@ -556,12 +553,14 @@ int main(int argc, char *const argv[])
         memset(&mop, 0, sizeof(mop));
         set_defaults(&mop);
 
-        /* device is last arg */
-        strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
+	/* Try to get the real path to the device */
+	ret = get_realpath(argv[argc - 1], &mop.mo_device);
+	if (ret != 0)
+		return ret;
 
 	ret = osd_init();
 	if (ret)
-		return ret;
+		goto out;
 
 #ifdef TUNEFS
         /* For tunefs, we must read in the old values before parsing any
@@ -724,8 +723,12 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-	if (check_mtab_entry(mop.mo_device, mop.mo_device, NULL, NULL))
-		return(EEXIST);
+	ret = check_mtab_entry(mop.mo_device, mop.mo_device, NULL, NULL);
+	if (ret != 0) {
+		fprintf(stderr, "%s: %s is already mounted\n",
+			progname, mop.mo_device);
+		goto out;
+	}
 
         /* Create the loopback file */
         if (mop.mo_flags & MO_IS_LOOP) {
@@ -798,6 +801,7 @@ int main(int argc, char *const argv[])
 
 out:
         loop_cleanup(&mop);
+	free(mop.mo_device);
 	osd_fini();
 
         /* Fix any crazy return values from system() */

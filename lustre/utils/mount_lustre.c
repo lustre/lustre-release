@@ -324,7 +324,7 @@ static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
 	memset(&mkop, 0, sizeof(mkop));
 	mkop.mo_ldd = *ldd;
 	mkop.mo_ldd.ldd_flags &= ~LDD_F_UPDATE;
-	strcpy(mkop.mo_device, source);
+	mkop.mo_device = strdup(source);
 
 	ret = osd_prepare_lustre(&mkop,
 			default_mountopts, sizeof(default_mountopts),
@@ -500,10 +500,6 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		{"verbose", 0, 0, 'v'},
 		{0, 0, 0, 0}
 	};
-	char real_path[PATH_MAX] = {'\0'};
-	FILE *f;
-	char path[256], name[256];
-	size_t sz;
 	char *ptr;
 	int opt, rc;
 
@@ -544,30 +540,13 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		usage(stderr);
 	}
 
-	mop->mo_usource = argv[optind];
-	if (!mop->mo_usource) {
+	if (argv[optind] == NULL)
 		usage(stderr);
-	}
 
-	/**
-	 * Try to get the real path to the device, in case it is a
-	 * symbolic link for instance
-	 */
-	if (realpath(mop->mo_usource, real_path) != NULL) {
-		ptr = strrchr(real_path, '/');
-		if (ptr && strncmp(ptr, "/dm-", 4) == 0 && isdigit(*(ptr + 4))) {
-			snprintf(path, sizeof(path), "/sys/block/%s/dm/name", ptr+1);
-			if ((f = fopen(path, "r"))) {
-				/* read "<name>\n" from sysfs */
-				if (fgets(name, sizeof(name), f) && (sz = strlen(name)) > 1) {
-					name[sz - 1] = '\0';
-					snprintf(real_path, sizeof(real_path), "/dev/mapper/%s", name);
-				}
-				fclose(f);
-			}
-		}
-		mop->mo_usource = strdup(real_path);
-	}
+	/* Try to get the real path to the device */
+	rc = get_realpath(argv[optind], &mop->mo_usource);
+	if (rc != 0)
+		mop->mo_usource = argv[optind];
 
 	ptr = strstr(mop->mo_usource, ":/");
 	if (ptr != NULL) {

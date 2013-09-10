@@ -71,7 +71,7 @@ extern int failover;
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
 	struct lustre_disk_data	mo_ldd; /* to be written in MOUNT_DATA_FILE */
-	char	mo_device[128];   /* disk device name */
+	char	*mo_device;	  /* disk device name */
 	char	**mo_pool_vdevs;  /* list of pool vdevs */
 	char	mo_loopdev[128];  /* in case a loop dev is needed */
 	char	mo_mkfsopts[512]; /* options to the backing-store mkfs */
@@ -121,7 +121,8 @@ int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		      int flags, int freq, int pass);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts, int justwarn);
 void trim_mountfsoptions(char *s);
-__u64 get_device_size(char* device);
+__u64 get_device_size(char *device);
+int get_realpath(char *path, char **device);
 
 int is_block(char *devname);
 void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
