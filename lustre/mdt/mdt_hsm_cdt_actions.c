@@ -325,8 +325,7 @@ int mdt_agent_llog_update_rec(const struct lu_env *env,
  * multiple record in seq_file buffer in one show call.
  * op->start() sets the iterator up and returns the first element of sequence
  * op->stop() shuts it down.
- * op->next() returns the next element of sequence.
- * op->show() prints element into the buffer.
+ * op->show() iterate llog and print element into the buffer.
  * In case of error ->start() and ->next() return ERR_PTR(error)
  * In the end of sequence they return %NULL
  * op->show() returns 0 in case of success and negative number in case of error.
@@ -338,12 +337,12 @@ int mdt_agent_llog_update_rec(const struct lu_env *env,
 #define AGENT_ACTIONS_IT_MAGIC 0x19660426
 struct agent_action_iterator {
 	int			 aai_magic;	 /**< magic number */
+	bool			 aai_eof;	 /**< all done */
 	struct lu_env		 aai_env;	 /**< lustre env for llog */
 	struct obd_device	*aai_obd;	 /**< metadata device */
 	struct llog_ctxt	*aai_ctxt;	 /**< llog context */
-	int			 aai_index_done; /**< idx already shown */
-	int			 aai_index_cb;	 /**< current idx in loop cb */
-	int			 aai_eof;	 /**< all done */
+	int			 aai_cat_index;	 /**< cata idx already shown */
+	int			 aai_index;	 /**< idx in cata shown */
 };
 
 /**
@@ -368,36 +367,22 @@ static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
 	       *pos);
 	/* first call = rewind */
 	if (*pos == 0) {
-		aai->aai_index_done = 0;
-		aai->aai_eof = 0;
+		aai->aai_cat_index = 0;
+		aai->aai_index = 0;
+		aai->aai_eof = false;
 		*pos = 1;
 	}
-
-	RETURN(aai);
-}
-
-/**
- * seq_file method called to get next item
- * just returns NULL at eof
- * (seq_file buffer filling is done in llog_cat_process() callback)
- */
-static void *mdt_agent_actions_proc_next(struct seq_file *s, void *v,
-					 loff_t *pos)
-{
-	struct agent_action_iterator *aai = s->private;
-	ENTRY;
-
-	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
-		 aai->aai_magic);
-
-	CDEBUG(D_HSM, "set current="LPD64" to done=%d, eof=%d\n",
-	       *pos, aai->aai_index_done, aai->aai_eof);
-	(*pos) = aai->aai_index_done;
 
 	if (aai->aai_eof)
 		RETURN(NULL);
 
 	RETURN(aai);
+}
+
+static void *mdt_agent_actions_proc_next(struct seq_file *s, void *v,
+					 loff_t *pos)
+{
+	RETURN(NULL);
 }
 
 /**
@@ -412,6 +397,7 @@ static int agent_actions_show_cb(const struct lu_env *env,
 	struct seq_file		     *s = data;
 	struct agent_action_iterator *aai;
 	int			      rc, sz;
+	size_t			      count;
 	char			      buf[12];
 	ENTRY;
 
@@ -419,21 +405,25 @@ static int agent_actions_show_cb(const struct lu_env *env,
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
 		 aai->aai_magic);
 
-	aai->aai_index_cb++;
 	/* if rec already printed => skip */
-	if (aai->aai_index_cb <= aai->aai_index_done)
+	if (unlikely(llh->lgh_hdr->llh_cat_idx < aai->aai_cat_index))
 		RETURN(0);
 
+	if (unlikely(llh->lgh_hdr->llh_cat_idx == aai->aai_cat_index &&
+		     hdr->lrh_index <= aai->aai_index))
+		RETURN(0);
+
+	count = s->count;
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
-	rc = seq_printf(s, "lrh=[type=%X len=%d idx=%d] fid="DFID
+	rc = seq_printf(s, "lrh=[type=%X len=%d idx=%d/%d] fid="DFID
 			" dfid="DFID
 			" compound/cookie="LPX64"/"LPX64
 			" action=%s archive#=%d flags="LPX64
 			" extent="LPX64"-"LPX64
 			" gid="LPX64" datalen=%d status=%s"
 			" data=[%s]\n",
-			larr->arr_hdr.lrh_type,
-			larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
+			hdr->lrh_type, hdr->lrh_len,
+			llh->lgh_hdr->llh_cat_idx, hdr->lrh_index,
 			PFID(&larr->arr_hai.hai_fid),
 			PFID(&larr->arr_hai.hai_dfid),
 			larr->arr_compound_id, larr->arr_hai.hai_cookie,
@@ -445,12 +435,15 @@ static int agent_actions_show_cb(const struct lu_env *env,
 			larr->arr_hai.hai_gid, sz,
 			agent_req_status2name(larr->arr_status),
 			hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
-	if (rc >= 0) {
-		aai->aai_index_done++;
-		RETURN(0);
+	if (rc == 0) {
+		aai->aai_cat_index = llh->lgh_hdr->llh_cat_idx;
+		aai->aai_index = hdr->lrh_index;
+	} else {
+		if (s->count == s->size && count > 0) /* rewind the buffer */
+			s->count = count;
+		rc = LLOG_PROC_BREAK;
 	}
-	/* buffer is full, stop filling */
-	RETURN(LLOG_PROC_BREAK);
+	RETURN(rc);
 }
 
 /**
@@ -467,21 +460,18 @@ static int mdt_agent_actions_proc_show(struct seq_file *s, void *v)
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
 		 aai->aai_magic);
 
-	CDEBUG(D_HSM, "show from done=%d, eof=%d\n",
-	       aai->aai_index_done, aai->aai_eof);
+	CDEBUG(D_HSM, "show from cat %d index %d eof=%d\n",
+	       aai->aai_cat_index, aai->aai_index, aai->aai_eof);
 	if (aai->aai_eof)
 		RETURN(0);
 
-	aai->aai_index_cb = 0;
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
-			      agent_actions_show_cb, s, 0, 0);
-	/* was all llog parsed? */
-	if (rc == 0)
-		aai->aai_eof = 1;
-	/* not enough room in buffer? */
-	if (rc == LLOG_PROC_BREAK)
-		RETURN(0);
-	/* error */
+			      agent_actions_show_cb, s,
+			      aai->aai_cat_index, aai->aai_index + 1);
+	if (rc == 0) /* all llog parsed */
+		aai->aai_eof = true;
+	if (rc == LLOG_PROC_BREAK) /* buffer full */
+		rc = 0;
 	RETURN(rc);
 }
 
