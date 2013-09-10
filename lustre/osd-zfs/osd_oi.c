@@ -245,6 +245,10 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 	if (fid_is_idif(fid))
 		RETURN(1);
 
+	if (unlikely(fid_is_local_file(fid) || fid_is_llog(fid)) ||
+		     fid_is_name_llog(fid) || fid_is_quota(fid))
+		RETURN(0);
+
 	if (osd->od_is_ost)
 		RETURN(1);
 
