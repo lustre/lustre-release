@@ -184,7 +184,6 @@ void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 
 #ifdef __KERNEL__
 
-#ifdef HAVE_DUMP_TRACE
 #include <linux/nmi.h>
 #include <asm/stacktrace.h>
 
@@ -209,24 +208,16 @@ static int print_trace_stack(void *data, char *name)
 	return 0;
 }
 
-#ifdef HAVE_TRACE_ADDRESS_RELIABLE
-# define RELIABLE reliable
-# define DUMP_TRACE_CONST const
 static void print_trace_address(void *data, unsigned long addr, int reliable)
-#else
-/* before 2.6.24 there was no reliable arg */
-# define RELIABLE 1
-# define DUMP_TRACE_CONST
-static void print_trace_address(void *data, unsigned long addr)
-#endif
 {
-        char fmt[32];
+	char fmt[32];
+
 	touch_nmi_watchdog();
-        sprintf(fmt, " [<%016lx>] %s%%s\n", addr, RELIABLE ? "": "? ");
+	sprintf(fmt, " [<%016lx>] %s%%s\n", addr, reliable ? "": "? ");
 	__print_symbol(fmt, addr);
 }
 
-static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
+static const struct stacktrace_ops print_trace_ops = {
 #ifdef HAVE_STACKTRACE_WARNING
 	.warning = print_trace_warning,
 	.warning_symbol = print_trace_warning_symbol,
@@ -237,11 +228,9 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 	.walk_stack = print_context_stack,
 #endif
 };
-#endif
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
-#if defined(HAVE_DUMP_TRACE)
         /* dump_stack() */
         /* show_trace() */
         if (tsk == NULL)
@@ -255,20 +244,6 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 #endif /* HAVE_DUMP_TRACE_ADDRESS */
                    &print_trace_ops, NULL);
 	printk("\n");
-#elif defined(HAVE_SHOW_TASK)
-        /* this is exported by lustre kernel version 42 */
-        extern void show_task(struct task_struct *);
-
-        if (tsk == NULL)
-                tsk = current;
-        CWARN("showing stack for process %d\n", tsk->pid);
-        show_task(tsk);
-#else
-        if ((tsk == NULL) || (tsk == current))
-                dump_stack();
-        else
-                CWARN("can't show stack: kernel doesn't export show_task\n");
-#endif
 }
 
 struct task_struct *libcfs_current(void)
