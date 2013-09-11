@@ -212,18 +212,18 @@ cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
 
 /** free cpu-partition refcount */
 void
-cfs_percpt_atomic_free(cfs_atomic_t **refs)
+cfs_percpt_atomic_free(atomic_t **refs)
 {
 	cfs_percpt_free(refs);
 }
 EXPORT_SYMBOL(cfs_percpt_atomic_free);
 
 /** allocate cpu-partition refcount with initial value @init_val */
-cfs_atomic_t **
+atomic_t **
 cfs_percpt_atomic_alloc(struct cfs_cpt_table *cptab, int init_val)
 {
-	cfs_atomic_t	**refs;
-	cfs_atomic_t	*ref;
+	atomic_t	**refs;
+	atomic_t	*ref;
 	int		i;
 
 	refs = cfs_percpt_alloc(cptab, sizeof(*ref));
@@ -231,21 +231,21 @@ cfs_percpt_atomic_alloc(struct cfs_cpt_table *cptab, int init_val)
 		return NULL;
 
 	cfs_percpt_for_each(ref, i, refs)
-		cfs_atomic_set(ref, init_val);
+		atomic_set(ref, init_val);
 	return refs;
 }
 EXPORT_SYMBOL(cfs_percpt_atomic_alloc);
 
 /** return sum of cpu-partition refs */
 int
-cfs_percpt_atomic_summary(cfs_atomic_t **refs)
+cfs_percpt_atomic_summary(atomic_t **refs)
 {
-	cfs_atomic_t	*ref;
+	atomic_t	*ref;
 	int		i;
 	int		val = 0;
 
 	cfs_percpt_for_each(ref, i, refs)
-		val += cfs_atomic_read(ref);
+		val += atomic_read(ref);
 
 	return val;
 }

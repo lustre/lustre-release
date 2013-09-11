@@ -43,9 +43,9 @@
 #if defined(_X86_)
 
 void __declspec (naked) FASTCALL
-cfs_atomic_add(
+atomic_add(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
     )
 {
     // ECX = i
@@ -58,9 +58,9 @@ cfs_atomic_add(
 }
 
 void __declspec (naked) FASTCALL
-cfs_atomic_sub(
+atomic_sub(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
    ) 
 {
     // ECX = i
@@ -73,8 +73,8 @@ cfs_atomic_sub(
 }
 
 void __declspec (naked) FASTCALL
-cfs_atomic_inc(
-    cfs_atomic_t *v
+atomic_inc(
+    atomic_t *v
     )
 {
     //InterlockedIncrement((PULONG)(&((v)->counter)));
@@ -88,8 +88,8 @@ cfs_atomic_inc(
 }
 
 void __declspec (naked) FASTCALL
-cfs_atomic_dec(
-    cfs_atomic_t *v
+atomic_dec(
+    atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -101,9 +101,9 @@ cfs_atomic_dec(
 }
 
 int __declspec (naked) FASTCALL 
-cfs_atomic_sub_and_test(
+atomic_sub_and_test(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
     )
 {
 
@@ -119,8 +119,8 @@ cfs_atomic_sub_and_test(
 }
 
 int __declspec (naked) FASTCALL
-cfs_atomic_inc_and_test(
-    cfs_atomic_t *v
+atomic_inc_and_test(
+    atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -134,8 +134,8 @@ cfs_atomic_inc_and_test(
 }
 
 int __declspec (naked) FASTCALL
-cfs_atomic_dec_and_test(
-    cfs_atomic_t *v
+atomic_dec_and_test(
+    atomic_t *v
     )
 {
     // ECX = v ; [ECX][0] = v->counter
@@ -151,43 +151,43 @@ cfs_atomic_dec_and_test(
 #elif defined(_AMD64_)
 
 void FASTCALL
-cfs_atomic_add(
+atomic_add(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
     )
 {
     InterlockedExchangeAdd( (PULONG)(&((v)->counter)) , (LONG) (i));
 }
 
 void FASTCALL
-cfs_atomic_sub(
+atomic_sub(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
    ) 
 {
     InterlockedExchangeAdd( (PULONG)(&((v)->counter)) , (LONG) (-1*i));
 }
 
 void FASTCALL
-cfs_atomic_inc(
-    cfs_atomic_t *v
+atomic_inc(
+    atomic_t *v
     )
 {
    InterlockedIncrement((PULONG)(&((v)->counter)));
 }
 
 void FASTCALL
-cfs_atomic_dec(
-    cfs_atomic_t *v
+atomic_dec(
+    atomic_t *v
     )
 {
     InterlockedDecrement((PULONG)(&((v)->counter)));
 }
 
 int FASTCALL 
-cfs_atomic_sub_and_test(
+atomic_sub_and_test(
     int i,
-    cfs_atomic_t *v
+    atomic_t *v
     )
 {
     int counter, result;
@@ -206,8 +206,8 @@ cfs_atomic_sub_and_test(
 }
 
 int FASTCALL
-cfs_atomic_inc_and_test(
-    cfs_atomic_t *v
+atomic_inc_and_test(
+    atomic_t *v
     )
 {
     int counter, result;
@@ -226,8 +226,8 @@ cfs_atomic_inc_and_test(
 }
 
 int FASTCALL
-cfs_atomic_dec_and_test(
-    cfs_atomic_t *v
+atomic_dec_and_test(
+    atomic_t *v
     )
 {
     int counter, result;
@@ -258,7 +258,7 @@ cfs_atomic_dec_and_test(
  *
  * Atomically adds \a i to \a v and returns \a i + \a v
  */
-int FASTCALL cfs_atomic_add_return(int i, cfs_atomic_t *v)
+int FASTCALL atomic_add_return(int i, atomic_t *v)
 {
     int counter, result;
 
@@ -283,18 +283,18 @@ int FASTCALL cfs_atomic_add_return(int i, cfs_atomic_t *v)
  *
  * Atomically subtracts \a i from \a v and returns \a v - \a i
  */
-int FASTCALL cfs_atomic_sub_return(int i, cfs_atomic_t *v)
+int FASTCALL atomic_sub_return(int i, atomic_t *v)
 {
-	return cfs_atomic_add_return(-i, v);
+	return atomic_add_return(-i, v);
 }
 
-int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, spinlock_t *lock)
+int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
 {
-	if (cfs_atomic_read(v) != 1)
+	if (atomic_read(v) != 1)
 		return 0;
 
 	spin_lock(lock);
-	if (cfs_atomic_dec_and_test(v))
+	if (atomic_dec_and_test(v))
 		return 1;
 	spin_unlock(lock);
 	return 0;

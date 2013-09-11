@@ -107,7 +107,7 @@ CFS_MODULE_PARM(libcfs_panic_on_lbug, "i", uint, 0644,
                 "Lustre kernel panic on LBUG");
 EXPORT_SYMBOL(libcfs_panic_on_lbug);
 
-cfs_atomic_t libcfs_kmemory = CFS_ATOMIC_INIT(0);
+atomic_t libcfs_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
 
 static wait_queue_head_t debug_ctlwq;

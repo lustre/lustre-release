@@ -251,26 +251,26 @@ static inline void read_unlock_irqrestore(rwlock_t *l, unsigned long f)
 /*
  * Atomic for single-threaded user-space
  */
-typedef struct { volatile int counter; } cfs_atomic_t;
+typedef struct { volatile int counter; } atomic_t;
 
-#define CFS_ATOMIC_INIT(i) { (i) }
+#define ATOMIC_INIT(i) { (i) }
 
-#define cfs_atomic_read(a) ((a)->counter)
-#define cfs_atomic_set(a,b) do {(a)->counter = b; } while (0)
-#define cfs_atomic_dec_and_test(a) ((--((a)->counter)) == 0)
-#define cfs_atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
-#define cfs_atomic_inc(a)  (((a)->counter)++)
-#define cfs_atomic_dec(a)  do { (a)->counter--; } while (0)
-#define cfs_atomic_add(b,a)  do {(a)->counter += b;} while (0)
-#define cfs_atomic_add_return(n,a) ((a)->counter += n)
-#define cfs_atomic_inc_return(a) cfs_atomic_add_return(1,a)
-#define cfs_atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
-#define cfs_atomic_sub_return(n,a) ((a)->counter -= n)
-#define cfs_atomic_dec_return(a)  cfs_atomic_sub_return(1,a)
-#define cfs_atomic_add_unless(v, a, u) \
+#define atomic_read(a) ((a)->counter)
+#define atomic_set(a,b) do {(a)->counter = b; } while (0)
+#define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
+#define atomic_inc(a)  (((a)->counter)++)
+#define atomic_dec(a)  do { (a)->counter--; } while (0)
+#define atomic_add(b,a)  do {(a)->counter += b;} while (0)
+#define atomic_add_return(n,a) ((a)->counter += n)
+#define atomic_inc_return(a) atomic_add_return(1,a)
+#define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
+#define atomic_sub_return(n,a) ((a)->counter -= n)
+#define atomic_dec_return(a)  atomic_sub_return(1,a)
+#define atomic_add_unless(v, a, u) \
         ((v)->counter != u ? (v)->counter += a : 0)
-#define cfs_atomic_inc_not_zero(v) cfs_atomic_add_unless((v), 1, 0)
-#define cfs_atomic_cmpxchg(v, ov, nv) \
+#define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
+#define atomic_cmpxchg(v, ov, nv) \
 	((v)->counter == ov ? ((v)->counter = nv, ov) : (v)->counter)
 
 #ifdef HAVE_LIBPTHREAD

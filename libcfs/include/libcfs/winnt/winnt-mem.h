@@ -63,7 +63,7 @@
 
 struct page {
     void *          addr;
-    cfs_atomic_t    count;
+    atomic_t    count;
     void *          private;
     void *          mapping;
     __u32           index;
@@ -206,17 +206,17 @@ static inline void kunmap(struct page *page)
 
 static inline void get_page(struct page *page)
 {
-    cfs_atomic_inc(&page->count);
+    atomic_inc(&page->count);
 }
 
 static inline void cfs_put_page(struct page *page)
 {
-    cfs_atomic_dec(&page->count);
+    atomic_dec(&page->count);
 }
 
 static inline int page_count(struct page *page)
 {
-    return cfs_atomic_read(&page->count);
+    return atomic_read(&page->count);
 }
 
 #define page_index(p)       ((p)->index)

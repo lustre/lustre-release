@@ -412,7 +412,7 @@ struct cfs_waitlink {
     unsigned int            magic;
     int                     flags;
     event_t  *              event;
-    cfs_atomic_t *          hits;
+    atomic_t *          hits;
 
     cfs_waitlink_channel_t  waitq[CFS_WAITQ_CHANNELS];
 };
@@ -456,18 +456,18 @@ typedef struct _cfs_thread_context {
 #define NGROUPS_PER_BLOCK       ((int)(PAGE_SIZE / sizeof(gid_t)))
 struct group_info {
 	int ngroups;
-	cfs_atomic_t usage;
+	atomic_t usage;
 	gid_t small_block[NGROUPS_SMALL];
 	int nblocks;
 	gid_t *blocks[0];
 };
 
 #define get_group_info(group_info) do { \
-        cfs_atomic_inc(&(group_info)->usage); \
+	atomic_inc(&(group_info)->usage); \
 } while (0)
 
 #define put_group_info(group_info) do { \
-        if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
+	if (atomic_dec_and_test(&(group_info)->usage)) \
 		groups_free(group_info); \
 } while (0)
 
@@ -608,8 +608,8 @@ typedef struct _TASK_SLOT {
     HANDLE          Tid;        /* Thread id */
     PETHREAD        Tet;        /* Pointer to ethread */
 
-    cfs_atomic_t    count;      /* refer count */
-    cfs_atomic_t    hits;       /* times of waken event singaled */
+    atomic_t    count;      /* refer count */
+    atomic_t    hits;       /* times of waken event singaled */
 
     KIRQL           irql;       /* irql for rwlock ... */
 

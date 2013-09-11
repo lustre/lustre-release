@@ -55,7 +55,7 @@ static struct tracefiled_ctl trace_tctl;
 struct mutex cfs_trace_thread_mutex;
 static int thread_running = 0;
 
-cfs_atomic_t cfs_tage_allocated = CFS_ATOMIC_INIT(0);
+atomic_t cfs_tage_allocated = ATOMIC_INIT(0);
 
 static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
                                          struct cfs_trace_cpu_data *tcd);
@@ -91,7 +91,7 @@ static struct cfs_trace_page *cfs_tage_alloc(int gfp)
 	}
 
 	tage->page = page;
-	cfs_atomic_inc(&cfs_tage_allocated);
+	atomic_inc(&cfs_tage_allocated);
 	return tage;
 }
 
@@ -102,7 +102,7 @@ static void cfs_tage_free(struct cfs_trace_page *tage)
 
 	__free_page(tage->page);
 	kfree(tage);
-	cfs_atomic_dec(&cfs_tage_allocated);
+	atomic_dec(&cfs_tage_allocated);
 }
 
 static void cfs_tage_to_tail(struct cfs_trace_page *tage,
@@ -1072,17 +1072,17 @@ static int tracefiled(void *arg)
 				       "%d\n", ++i, tage->cpu);
 			printk(KERN_ERR "There are %d pages unwritten\n",
 			       i);
-                }
-                __LASSERT(cfs_list_empty(&pc.pc_pages));
+		}
+		__LASSERT(cfs_list_empty(&pc.pc_pages));
 end_loop:
-                if (cfs_atomic_read(&tctl->tctl_shutdown)) {
-                        if (last_loop == 0) {
-                                last_loop = 1;
-                                continue;
-                        } else {
-                                break;
-                        }
-                }
+		if (atomic_read(&tctl->tctl_shutdown)) {
+			if (last_loop == 0) {
+				last_loop = 1;
+				continue;
+			} else {
+				break;
+			}
+		}
 		init_waitqueue_entry_current(&__wait);
 		add_wait_queue(&tctl->tctl_waitq, &__wait);
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -1106,7 +1106,7 @@ int cfs_trace_start_thread(void)
 	init_completion(&tctl->tctl_start);
 	init_completion(&tctl->tctl_stop);
 	init_waitqueue_head(&tctl->tctl_waitq);
-	cfs_atomic_set(&tctl->tctl_shutdown, 0);
+	atomic_set(&tctl->tctl_shutdown, 0);
 
 	if (IS_ERR(kthread_run(tracefiled, tctl, "ktracefiled"))) {
 		rc = -ECHILD;
@@ -1128,7 +1128,7 @@ void cfs_trace_stop_thread(void)
 	if (thread_running) {
 		printk(KERN_INFO
 		       "Lustre: shutting down debug daemon thread...\n");
-		cfs_atomic_set(&tctl->tctl_shutdown, 1);
+		atomic_set(&tctl->tctl_shutdown, 1);
 		wait_for_completion(&tctl->tctl_stop);
 		thread_running = 0;
 	}

@@ -44,16 +44,16 @@
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
                                               __u64 key, void *args)
 {
-        struct upcall_cache_entry *entry;
+	struct upcall_cache_entry *entry;
 
-        LIBCFS_ALLOC(entry, sizeof(*entry));
-        if (!entry)
-                return NULL;
+	LIBCFS_ALLOC(entry, sizeof(*entry));
+	if (!entry)
+		return NULL;
 
 	UC_CACHE_SET_NEW(entry);
 	CFS_INIT_LIST_HEAD(&entry->ue_hash);
 	entry->ue_key = key;
-	cfs_atomic_set(&entry->ue_refcount, 0);
+	atomic_set(&entry->ue_refcount, 0);
 	init_waitqueue_head(&entry->ue_waitq);
 	if (cache->uc_ops->init_entry)
 		cache->uc_ops->init_entry(entry, args);
@@ -101,30 +101,30 @@ static inline int downcall_compare(struct upcall_cache *cache,
 
 static inline void get_entry(struct upcall_cache_entry *entry)
 {
-        cfs_atomic_inc(&entry->ue_refcount);
+	atomic_inc(&entry->ue_refcount);
 }
 
 static inline void put_entry(struct upcall_cache *cache,
-                             struct upcall_cache_entry *entry)
+			     struct upcall_cache_entry *entry)
 {
-        if (cfs_atomic_dec_and_test(&entry->ue_refcount) &&
-            (UC_CACHE_IS_INVALID(entry) || UC_CACHE_IS_EXPIRED(entry))) {
-                free_entry(cache, entry);
-        }
+	if (atomic_dec_and_test(&entry->ue_refcount) &&
+	    (UC_CACHE_IS_INVALID(entry) || UC_CACHE_IS_EXPIRED(entry))) {
+		free_entry(cache, entry);
+	}
 }
 
 static int check_unlink_entry(struct upcall_cache *cache,
-                              struct upcall_cache_entry *entry)
+			      struct upcall_cache_entry *entry)
 {
-        if (UC_CACHE_IS_VALID(entry) &&
-            cfs_time_before(cfs_time_current(), entry->ue_expire))
-                return 0;
+	if (UC_CACHE_IS_VALID(entry) &&
+	    cfs_time_before(cfs_time_current(), entry->ue_expire))
+		return 0;
 
-        if (UC_CACHE_IS_ACQUIRING(entry)) {
-                if (entry->ue_acquire_expire == 0 ||
-                    cfs_time_before(cfs_time_current(),
-                                    entry->ue_acquire_expire))
-                        return 0;
+	if (UC_CACHE_IS_ACQUIRING(entry)) {
+		if (entry->ue_acquire_expire == 0 ||
+		    cfs_time_before(cfs_time_current(),
+				    entry->ue_acquire_expire))
+			return 0;
 
 		UC_CACHE_SET_EXPIRED(entry);
 		wake_up_all(&entry->ue_waitq);
@@ -132,10 +132,10 @@ static int check_unlink_entry(struct upcall_cache *cache,
 		UC_CACHE_SET_EXPIRED(entry);
 	}
 
-        cfs_list_del_init(&entry->ue_hash);
-        if (!cfs_atomic_read(&entry->ue_refcount))
-                free_entry(cache, entry);
-        return 1;
+	cfs_list_del_init(&entry->ue_hash);
+	if (!atomic_read(&entry->ue_refcount))
+		free_entry(cache, entry);
+	return 1;
 }
 
 static inline int refresh_entry(struct upcall_cache *cache,
@@ -280,7 +280,7 @@ void upcall_cache_put_entry(struct upcall_cache *cache,
 		return;
 	}
 
-	LASSERT(cfs_atomic_read(&entry->ue_refcount) > 0);
+	LASSERT(atomic_read(&entry->ue_refcount) > 0);
 	spin_lock(&cache->uc_lock);
 	put_entry(cache, entry);
 	spin_unlock(&cache->uc_lock);
@@ -367,17 +367,17 @@ static void cache_flush(struct upcall_cache *cache, int force)
 	ENTRY;
 
 	spin_lock(&cache->uc_lock);
-        for (i = 0; i < UC_CACHE_HASH_SIZE; i++) {
-                cfs_list_for_each_entry_safe(entry, next,
-                                         &cache->uc_hashtable[i], ue_hash) {
-                        if (!force && cfs_atomic_read(&entry->ue_refcount)) {
-                                UC_CACHE_SET_EXPIRED(entry);
-                                continue;
-                        }
-                        LASSERT(!cfs_atomic_read(&entry->ue_refcount));
-                        free_entry(cache, entry);
-                }
-        }
+	for (i = 0; i < UC_CACHE_HASH_SIZE; i++) {
+		cfs_list_for_each_entry_safe(entry, next,
+					 &cache->uc_hashtable[i], ue_hash) {
+			if (!force && atomic_read(&entry->ue_refcount)) {
+				UC_CACHE_SET_EXPIRED(entry);
+				continue;
+			}
+			LASSERT(!atomic_read(&entry->ue_refcount));
+			free_entry(cache, entry);
+		}
+	}
 	spin_unlock(&cache->uc_lock);
 	EXIT;
 }
@@ -396,32 +396,32 @@ EXPORT_SYMBOL(upcall_cache_flush_all);
 
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 {
-        cfs_list_t *head;
-        struct upcall_cache_entry *entry;
-        int found = 0;
-        ENTRY;
+	cfs_list_t *head;
+	struct upcall_cache_entry *entry;
+	int found = 0;
+	ENTRY;
 
-        head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
+	head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
 
 	spin_lock(&cache->uc_lock);
-        cfs_list_for_each_entry(entry, head, ue_hash) {
-                if (upcall_compare(cache, entry, key, args) == 0) {
-                        found = 1;
-                        break;
-                }
-        }
+	cfs_list_for_each_entry(entry, head, ue_hash) {
+		if (upcall_compare(cache, entry, key, args) == 0) {
+			found = 1;
+			break;
+		}
+	}
 
-        if (found) {
-                CWARN("%s: flush entry %p: key "LPU64", ref %d, fl %x, "
-                      "cur %lu, ex %ld/%ld\n",
-                      cache->uc_name, entry, entry->ue_key,
-                      cfs_atomic_read(&entry->ue_refcount), entry->ue_flags,
-                      cfs_time_current_sec(), entry->ue_acquire_expire,
-                      entry->ue_expire);
-                UC_CACHE_SET_EXPIRED(entry);
-                if (!cfs_atomic_read(&entry->ue_refcount))
-                        free_entry(cache, entry);
-        }
+	if (found) {
+		CWARN("%s: flush entry %p: key "LPU64", ref %d, fl %x, "
+		      "cur %lu, ex %ld/%ld\n",
+		      cache->uc_name, entry, entry->ue_key,
+		      atomic_read(&entry->ue_refcount), entry->ue_flags,
+		      cfs_time_current_sec(), entry->ue_acquire_expire,
+		      entry->ue_expire);
+		UC_CACHE_SET_EXPIRED(entry);
+		if (!atomic_read(&entry->ue_refcount))
+			free_entry(cache, entry);
+	}
 	spin_unlock(&cache->uc_lock);
 }
 EXPORT_SYMBOL(upcall_cache_flush_one);

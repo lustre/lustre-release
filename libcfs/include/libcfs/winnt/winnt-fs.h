@@ -247,13 +247,13 @@ struct inode {
 #define I_FREEING       0x0001
 
 struct dentry {
-        cfs_atomic_t    d_count;
-        struct {
-            int         len;
-            char *      name;
-        } d_name;
-        struct inode *  d_inode;
-        struct dentry*  d_parent;
+	atomic_t    d_count;
+	struct {
+	    int         len;
+	    char *      name;
+	} d_name;
+	struct inode *  d_inode;
+	struct dentry*  d_parent;
 };
 
 extern struct dentry *dget(struct dentry *de);

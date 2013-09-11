@@ -671,18 +671,18 @@ int file_count(struct file *fp)
 
 struct dentry *dget(struct dentry *de)
 {
-    if (de) {
-        cfs_atomic_inc(&de->d_count);
-    }
-    return de;
+	if (de) {
+		atomic_inc(&de->d_count);
+	}
+	return de;
 }
 
 void dput(struct dentry *de)
 {
-    if (!de || cfs_atomic_read(&de->d_count) == 0) {
+    if (!de || atomic_read(&de->d_count) == 0) {
         return;
     }
-    if (cfs_atomic_dec_and_test(&de->d_count)) {
+    if (atomic_dec_and_test(&de->d_count)) {
 	kfree(de);
     }
 }

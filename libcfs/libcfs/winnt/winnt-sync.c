@@ -101,7 +101,7 @@ void init_waitqueue_entry_current(wait_queue_t *link)
     link->event = &(slot->Event);
     link->hits  = &(slot->hits);
 
-    cfs_atomic_inc(&slot->count);
+    atomic_inc(&slot->count);
 
     CFS_INIT_LIST_HEAD(&(link->waitq[0].link));
     CFS_INIT_LIST_HEAD(&(link->waitq[1].link));
@@ -141,7 +141,7 @@ void cfs_waitlink_fini(wait_queue_t *link)
     cfs_assert(link->waitq[0].waitq == NULL);
     cfs_assert(link->waitq[1].waitq == NULL);
 
-    cfs_atomic_dec(&slot->count);
+    atomic_dec(&slot->count);
 }
 
 
@@ -332,7 +332,7 @@ void wake_up_nr(wait_queue_head_t *waitq, int nr)
         LASSERT( result == FALSE || result == TRUE );
 
         if (result) {
-            cfs_atomic_inc(waitl->hits);
+	    atomic_inc(waitl->hits);
         }
 
         if ((waitl->flags & CFS_WAITQ_EXCLUSIVE) && --nr == 0)
@@ -404,9 +404,9 @@ void waitq_wait(wait_queue_t *link, long state)
     LASSERT(link != NULL);
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
 
-    if (cfs_atomic_read(link->hits) > 0) {
-        cfs_atomic_dec(link->hits);
-        LASSERT((__u32)cfs_atomic_read(link->hits) < (__u32)0xFFFFFF00);
+    if (atomic_read(link->hits) > 0) {
+	atomic_dec(link->hits);
+	LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
     } else {
         cfs_wait_event_internal(link->event, 0);
     }
@@ -434,9 +434,9 @@ int64_t waitq_timedwait( wait_queue_t *link,
                              int64_t timeout)
 { 
 
-    if (cfs_atomic_read(link->hits) > 0) {
-        cfs_atomic_dec(link->hits);
-        LASSERT((__u32)cfs_atomic_read(link->hits) < (__u32)0xFFFFFF00);
+    if (atomic_read(link->hits) > 0) {
+	atomic_dec(link->hits);
+	LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
         return (int64_t)TRUE;
     }
 

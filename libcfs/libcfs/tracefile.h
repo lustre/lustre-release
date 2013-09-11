@@ -227,7 +227,7 @@ struct tracefiled_ctl {
 	struct completion	tctl_stop;
 	wait_queue_head_t	tctl_waitq;
 	pid_t			tctl_pid;
-	cfs_atomic_t		tctl_shutdown;
+	atomic_t		tctl_shutdown;
 };
 
 /*

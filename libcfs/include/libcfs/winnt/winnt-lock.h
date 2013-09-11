@@ -64,31 +64,31 @@ typedef struct spin_lock spinlock_t;
 
 /* atomic */
 
-typedef struct { volatile int counter; } cfs_atomic_t;
+typedef struct { volatile int counter; } atomic_t;
 
-#define CFS_ATOMIC_INIT(i)	{ i }
+#define ATOMIC_INIT(i)	{ i }
 
-#define cfs_atomic_read(v)	((v)->counter)
-#define cfs_atomic_set(v,i)	(((v)->counter) = (i))
+#define atomic_read(v)	((v)->counter)
+#define atomic_set(v,i)	(((v)->counter) = (i))
 
-void FASTCALL cfs_atomic_add(int i, cfs_atomic_t *v);
-void FASTCALL cfs_atomic_sub(int i, cfs_atomic_t *v);
+void FASTCALL atomic_add(int i, atomic_t *v);
+void FASTCALL atomic_sub(int i, atomic_t *v);
 
-int FASTCALL cfs_atomic_sub_and_test(int i, cfs_atomic_t *v);
+int FASTCALL atomic_sub_and_test(int i, atomic_t *v);
 
-void FASTCALL cfs_atomic_inc(cfs_atomic_t *v);
-void FASTCALL cfs_atomic_dec(cfs_atomic_t *v);
+void FASTCALL atomic_inc(atomic_t *v);
+void FASTCALL atomic_dec(atomic_t *v);
 
-int FASTCALL cfs_atomic_dec_and_test(cfs_atomic_t *v);
-int FASTCALL cfs_atomic_inc_and_test(cfs_atomic_t *v);
+int FASTCALL atomic_dec_and_test(atomic_t *v);
+int FASTCALL atomic_inc_and_test(atomic_t *v);
 
-int FASTCALL cfs_atomic_add_return(int i, cfs_atomic_t *v);
-int FASTCALL cfs_atomic_sub_return(int i, cfs_atomic_t *v);
+int FASTCALL atomic_add_return(int i, atomic_t *v);
+int FASTCALL atomic_sub_return(int i, atomic_t *v);
 
-#define cfs_atomic_inc_return(v)  cfs_atomic_add_return(1, v)
-#define cfs_atomic_dec_return(v)  cfs_atomic_sub_return(1, v)
+#define atomic_inc_return(v)  atomic_add_return(1, v)
+#define atomic_dec_return(v)  atomic_sub_return(1, v)
 
-int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, spinlock_t *lock);
+int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock);
 
 /* event */
 

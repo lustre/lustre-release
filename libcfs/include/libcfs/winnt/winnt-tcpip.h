@@ -431,13 +431,13 @@ struct socket {
         ks_tconn_type_t             kstc_type;		 /* tdi connection Type */
         ks_tconn_state_t            kstc_state;      /* tdi connection state flag */
 
-        ks_unicode_name_t           kstc_dev;        /* tcp transport device name */
+	ks_unicode_name_t           kstc_dev;        /* tcp transport device name */
 
-        ks_tdi_addr_t               kstc_addr;       /* local address handlers / Objects */
+	ks_tdi_addr_t               kstc_addr;       /* local address handlers / Objects */
 
-        cfs_atomic_t                kstc_refcount;   /* reference count of ks_tconn_t */
+	atomic_t		    kstc_refcount;   /* reference count of ks_tconn_t */
 
-        cfs_list_t                  kstc_list;       /* linked to global ksocknal_data */
+	cfs_list_t                  kstc_list;       /* linked to global ksocknal_data */
 
         union {
 

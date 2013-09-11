@@ -55,7 +55,7 @@ struct page *virt_to_page(void *addr)
 	memset(pg, 0, sizeof(struct page));
 	pg->addr = (void *)((__u64)addr & (~((__u64)PAGE_SIZE-1)));
 	pg->mapping = addr;
-	cfs_atomic_set(&pg->count, 1);
+	atomic_set(&pg->count, 1);
 	set_bit(PG_virt, &(pg->flags));
 	cfs_enter_debugger();
 	return pg;
@@ -76,7 +76,7 @@ struct page *virt_to_page(void *addr)
  *   N/A
  */
 
-cfs_atomic_t libcfs_total_pages;
+atomic_t libcfs_total_pages;
 
 struct page *alloc_page(int flags)
 {
@@ -90,12 +90,12 @@ struct page *alloc_page(int flags)
 
 	memset(pg, 0, sizeof(struct page));
 	pg->addr = kmem_cache_alloc(cfs_page_p_slab, 0);
-	cfs_atomic_set(&pg->count, 1);
+	atomic_set(&pg->count, 1);
 
 	if (pg->addr) {
 		if (cfs_is_flag_set(flags, __GFP_ZERO))
 			memset(pg->addr, 0, PAGE_CACHE_SIZE);
-		cfs_atomic_inc(&libcfs_total_pages);
+		atomic_inc(&libcfs_total_pages);
 	} else {
 		cfs_enter_debugger();
 		kmem_cache_free(cfs_page_t_slab, pg);
@@ -122,11 +122,11 @@ void __free_page(struct page *pg)
 {
 	ASSERT(pg != NULL);
 	ASSERT(pg->addr  != NULL);
-	ASSERT(cfs_atomic_read(&pg->count) <= 1);
+	ASSERT(atomic_read(&pg->count) <= 1);
 
 	if (!test_bit(PG_virt, &pg->flags)) {
 		kmem_cache_free(cfs_page_p_slab, pg->addr);
-		cfs_atomic_dec(&libcfs_total_pages);
+		atomic_dec(&libcfs_total_pages);
 	} else {
 		cfs_enter_debugger();
 	}

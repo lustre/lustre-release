@@ -128,7 +128,7 @@ do {                                                                    \
         lbug_with_loc(&msgdata);                                        \
 } while(0)
 
-extern cfs_atomic_t libcfs_kmemory;
+extern atomic_t libcfs_kmemory;
 /*
  * Memory
  */
@@ -136,16 +136,16 @@ extern cfs_atomic_t libcfs_kmemory;
 
 # define libcfs_kmem_inc(ptr, size)		\
 do {						\
-	cfs_atomic_add(size, &libcfs_kmemory);	\
+	atomic_add(size, &libcfs_kmemory);	\
 } while (0)
 
 # define libcfs_kmem_dec(ptr, size)		\
 do {						\
-	cfs_atomic_sub(size, &libcfs_kmemory);	\
+	atomic_sub(size, &libcfs_kmemory);	\
 } while (0)
 
 # define libcfs_kmem_read()			\
-	cfs_atomic_read(&libcfs_kmemory)
+	atomic_read(&libcfs_kmemory)
 
 #else
 # define libcfs_kmem_inc(ptr, size) do {} while (0)
@@ -353,71 +353,71 @@ void  cfs_array_free(void *vars);
 /** assert value of @a is equal to @v */
 #define LASSERT_ATOMIC_EQ(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) == v,                       \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) == v,                       \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is unequal to @v */
 #define LASSERT_ATOMIC_NE(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) != v,                       \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) != v,                       \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is little than @v */
 #define LASSERT_ATOMIC_LT(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) < v,                        \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) < v,                        \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is little/equal to @v */
 #define LASSERT_ATOMIC_LE(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) <= v,                       \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) <= v,                       \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is great than @v */
 #define LASSERT_ATOMIC_GT(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) > v,                        \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) > v,                        \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is great/equal to @v */
 #define LASSERT_ATOMIC_GE(a, v)                                 \
 do {                                                            \
-        LASSERTF(cfs_atomic_read(a) >= v,                       \
-                 "value: %d\n", cfs_atomic_read((a)));          \
+	LASSERTF(atomic_read(a) >= v,                       \
+		 "value: %d\n", atomic_read((a)));          \
 } while (0)
 
 /** assert value of @a is great than @v1 and little than @v2 */
 #define LASSERT_ATOMIC_GT_LT(a, v1, v2)                         \
 do {                                                            \
-        int __v = cfs_atomic_read(a);                           \
-        LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);     \
+	int __v = atomic_read(a);                           \
+	LASSERTF(__v > v1 && __v < v2, "value: %d\n", __v);     \
 } while (0)
 
 /** assert value of @a is great than @v1 and little/equal to @v2 */
 #define LASSERT_ATOMIC_GT_LE(a, v1, v2)                         \
 do {                                                            \
-        int __v = cfs_atomic_read(a);                           \
-        LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);    \
+	int __v = atomic_read(a);                           \
+	LASSERTF(__v > v1 && __v <= v2, "value: %d\n", __v);    \
 } while (0)
 
 /** assert value of @a is great/equal to @v1 and little than @v2 */
 #define LASSERT_ATOMIC_GE_LT(a, v1, v2)                         \
 do {                                                            \
-        int __v = cfs_atomic_read(a);                           \
-        LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);    \
+	int __v = atomic_read(a);                           \
+	LASSERTF(__v >= v1 && __v < v2, "value: %d\n", __v);    \
 } while (0)
 
 /** assert value of @a is great/equal to @v1 and little/equal to @v2 */
 #define LASSERT_ATOMIC_GE_LE(a, v1, v2)                         \
 do {                                                            \
-        int __v = cfs_atomic_read(a);                           \
-        LASSERTF(__v >= v1 && __v <= v2, "value: %d\n", __v);   \
+	int __v = atomic_read(a);                           \
+	LASSERTF(__v >= v1 && __v <= v2, "value: %d\n", __v);   \
 } while (0)
 
 #else /* !LASSERT_ATOMIC_ENABLED */
@@ -513,11 +513,11 @@ void cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index);
 /* unlock private lock \a index of \a pcl */
 void cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index);
 /* create percpt (atomic) refcount based on @cptab */
-cfs_atomic_t **cfs_percpt_atomic_alloc(struct cfs_cpt_table *cptab, int val);
+atomic_t **cfs_percpt_atomic_alloc(struct cfs_cpt_table *cptab, int val);
 /* destroy percpt refcount */
-void cfs_percpt_atomic_free(cfs_atomic_t **refs);
+void cfs_percpt_atomic_free(atomic_t **refs);
 /* return sum of all percpu refs */
-int cfs_percpt_atomic_summary(cfs_atomic_t **refs);
+int cfs_percpt_atomic_summary(atomic_t **refs);
 
 
 /** Compile-time assertion.

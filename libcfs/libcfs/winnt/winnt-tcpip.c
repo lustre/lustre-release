@@ -4368,7 +4368,7 @@ ks_create_tconn()
 void
 ks_free_tconn(ks_tconn_t * tconn)
 {
-    LASSERT(cfs_atomic_read(&(tconn->kstc_refcount)) == 0);
+    LASSERT(atomic_read(&(tconn->kstc_refcount)) == 0);
 
 	spin_lock(&(ks_data.ksnd_tconn_lock));
 
@@ -4511,7 +4511,7 @@ ks_get_tconn(
     ks_tconn_t * tconn
     )
 {
-    cfs_atomic_inc(&(tconn->kstc_refcount));
+    atomic_inc(&(tconn->kstc_refcount));
 }
 
 /*
@@ -4534,7 +4534,7 @@ ks_put_tconn(
     ks_tconn_t *tconn
     )
 {
-    if (cfs_atomic_dec_and_test(&(tconn->kstc_refcount))) {
+    if (atomic_dec_and_test(&(tconn->kstc_refcount))) {
 
 	spin_lock(&(tconn->kstc_lock));
 

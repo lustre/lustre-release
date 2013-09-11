@@ -65,7 +65,6 @@
 #include <linux/sched.h> /* THREAD_SIZE */
 #include <linux/rbtree.h>
 
-
 #if !defined(__x86_64__)
 # ifdef  __ia64__
 #  define CDEBUG_STACK() (THREAD_SIZE -                                 \

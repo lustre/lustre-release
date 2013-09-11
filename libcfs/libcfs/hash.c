@@ -519,42 +519,42 @@ cfs_hash_bd_dep_record(cfs_hash_t *hs, cfs_hash_bd_t *bd, int dep_cur)
 
 void
 cfs_hash_bd_add_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                       cfs_hlist_node_t *hnode)
+		       cfs_hlist_node_t *hnode)
 {
-        int                rc;
+	int                rc;
 
-        rc = hs->hs_hops->hop_hnode_add(hs, bd, hnode);
-        cfs_hash_bd_dep_record(hs, bd, rc);
-        bd->bd_bucket->hsb_version++;
-        if (unlikely(bd->bd_bucket->hsb_version == 0))
-                bd->bd_bucket->hsb_version++;
-        bd->bd_bucket->hsb_count++;
+	rc = hs->hs_hops->hop_hnode_add(hs, bd, hnode);
+	cfs_hash_bd_dep_record(hs, bd, rc);
+	bd->bd_bucket->hsb_version++;
+	if (unlikely(bd->bd_bucket->hsb_version == 0))
+		bd->bd_bucket->hsb_version++;
+	bd->bd_bucket->hsb_count++;
 
-        if (cfs_hash_with_counter(hs))
-                cfs_atomic_inc(&hs->hs_count);
-        if (!cfs_hash_with_no_itemref(hs))
-                cfs_hash_get(hs, hnode);
+	if (cfs_hash_with_counter(hs))
+		atomic_inc(&hs->hs_count);
+	if (!cfs_hash_with_no_itemref(hs))
+		cfs_hash_get(hs, hnode);
 }
 EXPORT_SYMBOL(cfs_hash_bd_add_locked);
 
 void
 cfs_hash_bd_del_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                       cfs_hlist_node_t *hnode)
+		       cfs_hlist_node_t *hnode)
 {
-        hs->hs_hops->hop_hnode_del(hs, bd, hnode);
+	hs->hs_hops->hop_hnode_del(hs, bd, hnode);
 
-        LASSERT(bd->bd_bucket->hsb_count > 0);
-        bd->bd_bucket->hsb_count--;
-        bd->bd_bucket->hsb_version++;
-        if (unlikely(bd->bd_bucket->hsb_version == 0))
-                bd->bd_bucket->hsb_version++;
+	LASSERT(bd->bd_bucket->hsb_count > 0);
+	bd->bd_bucket->hsb_count--;
+	bd->bd_bucket->hsb_version++;
+	if (unlikely(bd->bd_bucket->hsb_version == 0))
+		bd->bd_bucket->hsb_version++;
 
-        if (cfs_hash_with_counter(hs)) {
-                LASSERT(cfs_atomic_read(&hs->hs_count) > 0);
-                cfs_atomic_dec(&hs->hs_count);
-        }
-        if (!cfs_hash_with_no_itemref(hs))
-                cfs_hash_put_locked(hs, hnode);
+	if (cfs_hash_with_counter(hs)) {
+		LASSERT(atomic_read(&hs->hs_count) > 0);
+		atomic_dec(&hs->hs_count);
+	}
+	if (!cfs_hash_with_no_itemref(hs))
+		cfs_hash_put_locked(hs, hnode);
 }
 EXPORT_SYMBOL(cfs_hash_bd_del_locked);
 
@@ -1056,15 +1056,15 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         if (hs == NULL)
                 RETURN(NULL);
 
-        strncpy(hs->hs_name, name, len);
-        hs->hs_name[len - 1] = '\0';
-        hs->hs_flags = flags;
+	strncpy(hs->hs_name, name, len);
+	hs->hs_name[len - 1] = '\0';
+	hs->hs_flags = flags;
 
-        cfs_atomic_set(&hs->hs_refcount, 1);
-        cfs_atomic_set(&hs->hs_count, 0);
+	atomic_set(&hs->hs_refcount, 1);
+	atomic_set(&hs->hs_count, 0);
 
-        cfs_hash_lock_setup(hs);
-        cfs_hash_hlist_setup(hs);
+	cfs_hash_lock_setup(hs);
+	cfs_hash_hlist_setup(hs);
 
         hs->hs_cur_bits = (__u8)cur_bits;
         hs->hs_min_bits = (__u8)cur_bits;
@@ -1144,29 +1144,29 @@ cfs_hash_destroy(cfs_hash_t *hs)
 		cond_resched();
 	}
 
-        LASSERT(cfs_atomic_read(&hs->hs_count) == 0);
+	LASSERT(atomic_read(&hs->hs_count) == 0);
 
-        cfs_hash_buckets_free(hs->hs_buckets, cfs_hash_bkt_size(hs),
-                              0, CFS_HASH_NBKT(hs));
-        i = cfs_hash_with_bigname(hs) ?
-            CFS_HASH_BIGNAME_LEN : CFS_HASH_NAME_LEN;
-        LIBCFS_FREE(hs, offsetof(cfs_hash_t, hs_name[i]));
+	cfs_hash_buckets_free(hs->hs_buckets, cfs_hash_bkt_size(hs),
+			      0, CFS_HASH_NBKT(hs));
+	i = cfs_hash_with_bigname(hs) ?
+	    CFS_HASH_BIGNAME_LEN : CFS_HASH_NAME_LEN;
+	LIBCFS_FREE(hs, offsetof(cfs_hash_t, hs_name[i]));
 
-        EXIT;
+	EXIT;
 }
 
 cfs_hash_t *cfs_hash_getref(cfs_hash_t *hs)
 {
-        if (cfs_atomic_inc_not_zero(&hs->hs_refcount))
-                return hs;
-        return NULL;
+	if (atomic_inc_not_zero(&hs->hs_refcount))
+		return hs;
+	return NULL;
 }
 EXPORT_SYMBOL(cfs_hash_getref);
 
 void cfs_hash_putref(cfs_hash_t *hs)
 {
-        if (cfs_atomic_dec_and_test(&hs->hs_refcount))
-                cfs_hash_destroy(hs);
+	if (atomic_dec_and_test(&hs->hs_refcount))
+		cfs_hash_destroy(hs);
 }
 EXPORT_SYMBOL(cfs_hash_putref);
 
@@ -1210,8 +1210,8 @@ cfs_hash_rehash_bits(cfs_hash_t *hs)
 static inline int
 cfs_hash_rehash_inline(cfs_hash_t *hs)
 {
-        return !cfs_hash_with_nblk_change(hs) &&
-               cfs_atomic_read(&hs->hs_count) < CFS_HASH_LOOP_HOG;
+	return !cfs_hash_with_nblk_change(hs) &&
+	       atomic_read(&hs->hs_count) < CFS_HASH_LOOP_HOG;
 }
 
 /**
@@ -1409,22 +1409,22 @@ cfs_hash_for_each_enter(cfs_hash_t *hs)
 static void
 cfs_hash_for_each_exit(cfs_hash_t *hs)
 {
-        int remained;
-        int bits;
+	int remained;
+	int bits;
 
-        if (!cfs_hash_with_rehash(hs))
-                return;
-        cfs_hash_lock(hs, 1);
-        remained = --hs->hs_iterators;
-        bits = cfs_hash_rehash_bits(hs);
-        cfs_hash_unlock(hs, 1);
-        /* NB: it's race on cfs_has_t::hs_iterating, see above */
-        if (remained == 0)
-                hs->hs_iterating = 0;
-        if (bits > 0) {
-                cfs_hash_rehash(hs, cfs_atomic_read(&hs->hs_count) <
-                                    CFS_HASH_LOOP_HOG);
-        }
+	if (!cfs_hash_with_rehash(hs))
+		return;
+	cfs_hash_lock(hs, 1);
+	remained = --hs->hs_iterators;
+	bits = cfs_hash_rehash_bits(hs);
+	cfs_hash_unlock(hs, 1);
+	/* NB: it's race on cfs_has_t::hs_iterating, see above */
+	if (remained == 0)
+		hs->hs_iterating = 0;
+	if (bits > 0) {
+		cfs_hash_rehash(hs, atomic_read(&hs->hs_count) <
+				    CFS_HASH_LOOP_HOG);
+	}
 }
 
 /**
@@ -1561,9 +1561,9 @@ EXPORT_SYMBOL(cfs_hash_is_empty);
 __u64
 cfs_hash_size_get(cfs_hash_t *hs)
 {
-        return cfs_hash_with_counter(hs) ?
-               cfs_atomic_read(&hs->hs_count) :
-               cfs_hash_for_each_tight(hs, NULL, NULL, 0);
+	return cfs_hash_with_counter(hs) ?
+	       atomic_read(&hs->hs_count) :
+	       cfs_hash_for_each_tight(hs, NULL, NULL, 0);
 }
 EXPORT_SYMBOL(cfs_hash_size_get);
 
