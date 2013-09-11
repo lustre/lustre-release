@@ -543,3 +543,28 @@ s/\bcfs_waitq_add_exclusive_head\b/add_wait_queue_exclusive_head/g
 s/\bcfs_schedule_timeout_and_set_state\b/schedule_timeout_and_set_state/g
 s/\bCFS_MAX_SCHEDULE_TIMEOUT\b/MAX_SCHEDULE_TIMEOUT/g
 s/\bcfs_task_state_t\b/long/g
+
+# Kernel thread
+s/\bcfs_kthread_run\b/kthread_run/g
+/#[ \t]*define[ \t]*\bkthread_run\b.*\bkthread_run\b/d
+#s/\bcfs_thread_t\b/thread_t/g
+s/\bCFS_DAEMON_FLAGS\b/DAEMON_FLAGS/g
+#s/\bcfs_create_thread\b/create_thread/g
+# Task struct
+s/\bcfs_task_t\b/struct task_struct/g
+s/\bcfs_current()/current/g
+/#[ \t]*define[ \t]*\bcurrent\b[ \t]*\bcurrent\b/d
+s/\bcfs_task_lock\b/task_lock/g
+/#[ \t]*define[ \t]*\btask_lock\b *( *\w* *)[ \t]*\btask_lock\b *( *\w* *)/d
+s/\bcfs_task_unlock\b/task_unlock/g
+/#[ \t]*define[ \t]*\btask_unlock\b *( *\w* *)[ \t]*\btask_unlock\b *( *\w* *)/d
+s/\bCFS_DECL_JOURNAL_DATA\b/DECL_JOURNAL_DATA/g
+s/\bCFS_PUSH_JOURNAL\b/PUSH_JOURNAL/g
+s/\bCFS_POP_JOURNAL\b/POP_JOURNAL/g
+# Signal
+s/\bcfs_sigset_t\b/sigset_t/g
+/typedef[ \t]*\bsigset_t\b[ \t]*\bsigset_t\b/d
+# Timer
+s/\bcfs_timer_t\b/struct timer_list/g
+s/\bCFS_MAX_SCHEDULE_TIMEOUT\b/MAX_SCHEDULE_TIMEOUT/g
+/#[ \t]*define[ \t]*\bMAX_SCHEDULE_TIMEOUT\b[ \t]*\bMAX_SCHEDULE_TIMEOUT\b/d

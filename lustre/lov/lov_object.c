@@ -587,13 +587,13 @@ enum lov_layout_type lov_type(struct lov_stripe_md *lsm)
 
 static inline void lov_conf_freeze(struct lov_object *lov)
 {
-	if (lov->lo_owner != cfs_current())
+	if (lov->lo_owner != current)
 		down_read(&lov->lo_type_guard);
 }
 
 static inline void lov_conf_thaw(struct lov_object *lov)
 {
-	if (lov->lo_owner != cfs_current())
+	if (lov->lo_owner != current)
 		up_read(&lov->lo_type_guard);
 }
 
@@ -631,10 +631,10 @@ do {                                                                    \
 
 static void lov_conf_lock(struct lov_object *lov)
 {
-	LASSERT(lov->lo_owner != cfs_current());
+	LASSERT(lov->lo_owner != current);
 	down_write(&lov->lo_type_guard);
 	LASSERT(lov->lo_owner == NULL);
-	lov->lo_owner = cfs_current();
+	lov->lo_owner = current;
 }
 
 static void lov_conf_unlock(struct lov_object *lov)
@@ -933,7 +933,7 @@ struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov)
 		lsm = lsm_addref(lov->lo_lsm);
 		CDEBUG(D_INODE, "lsm %p addref %d/%d by %p.\n",
 			lsm, cfs_atomic_read(&lsm->lsm_refc),
-			lov->lo_layout_invalid, cfs_current());
+			lov->lo_layout_invalid, current);
 	}
 	lov_conf_thaw(lov);
 	return lsm;
@@ -945,7 +945,7 @@ void lov_lsm_decref(struct lov_object *lov, struct lov_stripe_md *lsm)
 		return;
 
 	CDEBUG(D_INODE, "lsm %p decref %d by %p.\n",
-		lsm, cfs_atomic_read(&lsm->lsm_refc), cfs_current());
+		lsm, cfs_atomic_read(&lsm->lsm_refc), current);
 
 	lov_free_memmd(&lsm);
 }

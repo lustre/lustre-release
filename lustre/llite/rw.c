@@ -131,7 +131,7 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
 			 * page w/o holding inode mutex. This means we can
 			 * add dirty pages into cache during truncate */
 			CERROR("Proc %s is dirting page w/o inode lock, this"
-			       "will break truncate.\n", cfs_current()->comm);
+			       "will break truncate.\n", current->comm);
 			libcfs_debug_dumpstack(NULL);
 			LBUG();
 			return ERR_PTR(-EIO);
@@ -225,70 +225,70 @@ static struct ll_cl_context *ll_cl_get(void)
  * for every page during write.
  */
 int ll_prepare_write(struct file *file, struct page *vmpage, unsigned from,
-                     unsigned to)
+		     unsigned to)
 {
-        struct ll_cl_context *lcc;
-        int result;
-        ENTRY;
+	struct ll_cl_context *lcc;
+	int result;
+	ENTRY;
 
-        lcc = ll_cl_init(file, vmpage, 1);
-        if (!IS_ERR(lcc)) {
-                struct lu_env  *env = lcc->lcc_env;
-                struct cl_io   *io  = lcc->lcc_io;
-                struct cl_page *page = lcc->lcc_page;
+	lcc = ll_cl_init(file, vmpage, 1);
+	if (!IS_ERR(lcc)) {
+		struct lu_env  *env = lcc->lcc_env;
+		struct cl_io   *io  = lcc->lcc_io;
+		struct cl_page *page = lcc->lcc_page;
 
-                cl_page_assume(env, io, page);
-                
+		cl_page_assume(env, io, page);
+
 		result = cl_io_prepare_write(env, io, page, from, to);
-                if (result == 0) {
-                        /*
-                         * Add a reference, so that page is not evicted from
-                         * the cache until ->commit_write() is called.
-                         */
-                        cl_page_get(page);
-                        lu_ref_add(&page->cp_reference, "prepare_write",
-                                   cfs_current());
-                } else {
-                        cl_page_unassume(env, io, page);
-                        ll_cl_fini(lcc);
-                }
-                /* returning 0 in prepare assumes commit must be called
-                 * afterwards */
-        } else {
-                result = PTR_ERR(lcc);
-        }
-        RETURN(result);
+		if (result == 0) {
+			/*
+			 * Add a reference, so that page is not evicted from
+			 * the cache until ->commit_write() is called.
+			 */
+			cl_page_get(page);
+			lu_ref_add(&page->cp_reference, "prepare_write",
+				   current);
+		} else {
+			cl_page_unassume(env, io, page);
+			ll_cl_fini(lcc);
+		}
+		/* returning 0 in prepare assumes commit must be called
+		 * afterwards */
+	} else {
+		result = PTR_ERR(lcc);
+	}
+	RETURN(result);
 }
 
 int ll_commit_write(struct file *file, struct page *vmpage, unsigned from,
-                    unsigned to)
+		    unsigned to)
 {
-        struct ll_cl_context *lcc;
-        struct lu_env    *env;
-        struct cl_io     *io;
-        struct cl_page   *page;
-        int result = 0;
-        ENTRY;
+	struct ll_cl_context *lcc;
+	struct lu_env    *env;
+	struct cl_io     *io;
+	struct cl_page   *page;
+	int result = 0;
+	ENTRY;
 
-        lcc  = ll_cl_get();
-        env  = lcc->lcc_env;
-        page = lcc->lcc_page;
-        io   = lcc->lcc_io;
+	lcc  = ll_cl_get();
+	env  = lcc->lcc_env;
+	page = lcc->lcc_page;
+	io   = lcc->lcc_io;
 
-        LASSERT(cl_page_is_owned(page, io));
-        LASSERT(from <= to);
-        if (from != to) /* handle short write case. */
-                result = cl_io_commit_write(env, io, page, from, to);
-        if (cl_page_is_owned(page, io))
-                cl_page_unassume(env, io, page);
+	LASSERT(cl_page_is_owned(page, io));
+	LASSERT(from <= to);
+	if (from != to) /* handle short write case. */
+		result = cl_io_commit_write(env, io, page, from, to);
+	if (cl_page_is_owned(page, io))
+		cl_page_unassume(env, io, page);
 
-        /*
-         * Release reference acquired by ll_prepare_write().
-         */
-        lu_ref_del(&page->cp_reference, "prepare_write", cfs_current());
-        cl_page_put(env, page);
-        ll_cl_fini(lcc);
-        RETURN(result);
+	/*
+	 * Release reference acquired by ll_prepare_write().
+	 */
+	lu_ref_del(&page->cp_reference, "prepare_write", current);
+	cl_page_put(env, page);
+	ll_cl_fini(lcc);
+	RETURN(result);
 }
 
 struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt)
@@ -463,36 +463,36 @@ struct ll_ra_read *ll_ra_read_get(struct file *f)
 }
 
 static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
-                              struct cl_page_list *queue, struct cl_page *page,
-                              struct page *vmpage)
+			      struct cl_page_list *queue, struct cl_page *page,
+			      struct page *vmpage)
 {
-        struct ccc_page *cp;
-        int              rc;
+	struct ccc_page *cp;
+	int              rc;
 
-        ENTRY;
+	ENTRY;
 
-        rc = 0;
-        cl_page_assume(env, io, page);
-	lu_ref_add(&page->cp_reference, "ra", cfs_current());
+	rc = 0;
+	cl_page_assume(env, io, page);
+	lu_ref_add(&page->cp_reference, "ra", current);
 	cp = cl2ccc_page(cl_page_at(page, &vvp_device_type));
 	if (!cp->cpg_defer_uptodate && !PageUptodate(vmpage)) {
 		rc = cl_page_is_under_lock(env, io, page);
-                if (rc == -EBUSY) {
-                        cp->cpg_defer_uptodate = 1;
-                        cp->cpg_ra_used = 0;
-                        cl_page_list_add(queue, page);
-                        rc = 1;
-                } else {
-                        cl_page_delete(env, page);
-                        rc = -ENOLCK;
-                }
+		if (rc == -EBUSY) {
+			cp->cpg_defer_uptodate = 1;
+			cp->cpg_ra_used = 0;
+			cl_page_list_add(queue, page);
+			rc = 1;
+		} else {
+			cl_page_delete(env, page);
+			rc = -ENOLCK;
+		}
 	} else {
 		/* skip completed pages */
 		cl_page_unassume(env, io, page);
 	}
-        lu_ref_del(&page->cp_reference, "ra", cfs_current());
-        cl_page_put(env, page);
-        RETURN(rc);
+	lu_ref_del(&page->cp_reference, "ra", current);
+	cl_page_put(env, page);
+	RETURN(rc);
 }
 
 /**
@@ -1176,10 +1176,10 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         if (result == 0) {
                 page = cl_page_find(env, clob, vmpage->index,
                                     vmpage, CPT_CACHEABLE);
-                if (!IS_ERR(page)) {
-                        lu_ref_add(&page->cp_reference, "writepage",
-                                   cfs_current());
-                        cl_page_assume(env, io, page);
+		if (!IS_ERR(page)) {
+			lu_ref_add(&page->cp_reference, "writepage",
+				   current);
+			cl_page_assume(env, io, page);
 			result = cl_page_flush(env, io, page);
 			if (result != 0) {
 				/*
@@ -1195,9 +1195,9 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 			}
 			cl_page_disown(env, io, page);
 			unlocked = true;
-                        lu_ref_del(&page->cp_reference,
-                                   "writepage", cfs_current());
-                        cl_page_put(env, page);
+			lu_ref_del(&page->cp_reference,
+				   "writepage", current);
+			cl_page_put(env, page);
 		} else {
 			result = PTR_ERR(page);
 		}

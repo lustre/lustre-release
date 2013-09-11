@@ -964,7 +964,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 		cfs_list_del_init(&oap->oap_pending_item);
 
 		cl_page_get(page);
-		lu_ref_add(&page->cp_reference, "truncate", cfs_current());
+		lu_ref_add(&page->cp_reference, "truncate", current);
 
 		if (cl_page_own(env, io, page) == 0) {
 			cl_page_unmap(env, io, page);
@@ -975,7 +975,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 			LASSERT(0);
 		}
 
-		lu_ref_del(&page->cp_reference, "truncate", cfs_current());
+		lu_ref_del(&page->cp_reference, "truncate", current);
 		cl_page_put(env, page);
 
 		--ext->oe_nr_pages;
@@ -1832,7 +1832,7 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 		RETURN(0);
 
 	cfs_list_for_each_entry(tmp, rpclist, oe_link) {
-		EASSERT(tmp->oe_owner == cfs_current(), tmp);
+		EASSERT(tmp->oe_owner == current, tmp);
 #if 0
 		if (overlapped(tmp, ext)) {
 			OSC_EXTENT_DUMP(D_ERROR, tmp, "overlapped %p.\n", ext);
@@ -1850,7 +1850,7 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 
 	*pc += ext->oe_nr_pages;
 	cfs_list_move_tail(&ext->oe_link, rpclist);
-	ext->oe_owner = cfs_current();
+	ext->oe_owner = current;
 	RETURN(1);
 }
 
@@ -2103,7 +2103,7 @@ static void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli,
 		cl_object_get(obj);
 		client_obd_list_unlock(&cli->cl_loi_list_lock);
 		lu_object_ref_add_at(&obj->co_lu, &link, "check",
-				     cfs_current());
+				     current);
 
 		/* attempt some read/write balancing by alternating between
 		 * reads and writes in an object.  The makes_rpc checks here
@@ -2145,7 +2145,7 @@ static void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli,
 
 		osc_list_maint(cli, osc);
 		lu_object_ref_del_at(&obj->co_lu, &link, "check",
-				     cfs_current());
+				     current);
 		cl_object_put(env, obj);
 
 		client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -2879,7 +2879,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 				EASSERT(ext->oe_start >= start &&
 					ext->oe_max_end <= end, ext);
 				osc_extent_state_set(ext, OES_LOCKING);
-				ext->oe_owner = cfs_current();
+				ext->oe_owner = current;
 				cfs_list_move_tail(&ext->oe_link,
 						   &discard_list);
 				osc_update_pending(obj, OBD_BRW_WRITE,

@@ -545,7 +545,7 @@ struct vfsmount;
 
 #define NGROUPS 1
 #define CFS_CURPROC_COMM_MAX (16)
-typedef struct task_sruct{
+struct task_struct{
     mode_t                umask;
     sigset_t              blocked;
 
@@ -566,13 +566,13 @@ typedef struct task_sruct{
     char                  comm[CFS_CURPROC_COMM_MAX];
     void                 *journal_info;
     struct vfsmount      *fs;
-}  cfs_task_t;
+};
 
-static inline void task_lock(cfs_task_t *t)
+static inline void task_lock(struct task_struct *t)
 {
 }
 
-static inline void task_unlock(cfs_task_t *t)
+static inline void task_unlock(struct task_struct *t)
 {
 }
 
@@ -613,12 +613,11 @@ typedef struct _TASK_SLOT {
 
     KIRQL           irql;       /* irql for rwlock ... */
 
-    cfs_task_t      task;       /* linux task part */
+    struct task_struct      task;       /* linux task part */
 
 } TASK_SLOT, *PTASK_SLOT;
 
 
-#define current                      cfs_current()
 #define set_current_state(s)     do {;} while (0)
 
 #define wait_event(wq, condition)                           \
@@ -685,13 +684,13 @@ do {                                                            \
 
 int     init_task_manager();
 void    cleanup_task_manager();
-cfs_task_t * cfs_current();
-int     wake_up_process(cfs_task_t * task);
+struct task_struct * current;
+int     wake_up_process(struct task_struct * task);
 void sleep_on(wait_queue_head_t *waitq);
 #define cfs_might_sleep() do {} while(0)
-#define CFS_DECL_JOURNAL_DATA	
-#define CFS_PUSH_JOURNAL	    do {;} while(0)
-#define CFS_POP_JOURNAL		    do {;} while(0)
+#define DECL_JOURNAL_DATA
+#define PUSH_JOURNAL	    do {;} while(0)
+#define POP_JOURNAL		    do {;} while(0)
 
 
 /* module related definitions */
@@ -778,7 +777,7 @@ static inline u32 cfs_hash_long(u32 val, unsigned int bits)
 #define CFS_TIMER_FLAG_INITED   0x00000001  // Initialized already
 #define CFS_TIMER_FLAG_TIMERED  0x00000002  // KeSetTimer is called
 
-typedef struct cfs_timer {
+struct timer_list {
 
     KSPIN_LOCK      Lock;
 
@@ -792,7 +791,7 @@ typedef struct cfs_timer {
     void (*proc)(ulong_ptr_t);
     void *          arg;
 
-} cfs_timer_t;
+};
 
 /*
  *  libcfs globals initialization/cleanup
@@ -1081,7 +1080,6 @@ static inline void module_put(struct module *module)
  *  sigset_t routines 
  */
 
-typedef sigset_t cfs_sigset_t;
 #define sigaddset(what,sig) (*(what) |= (1<<(sig)), 0)
 #define sigdelset(what,sig) (*(what) &= ~(1<<(sig)), 0)
 #define sigemptyset(what)   (*(what) = 0, 0)
@@ -1089,11 +1087,11 @@ typedef sigset_t cfs_sigset_t;
 #define sigismember(what,sig) (((*(what)) & (1<<(sig))) != 0)
 
 static __inline int
-sigprocmask(int sig, cfs_sigset_t *w1, cfs_sigset_t *w2) {
+sigprocmask(int sig, sigset_t *w1, sigset_t *w2) {
     return 0;
 }
 static __inline int
-sigpending(cfs_sigset_t *what) {
+sigpending(sigset_t *what) {
     return 0;
 }
 

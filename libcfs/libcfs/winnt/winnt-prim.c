@@ -89,13 +89,13 @@ cfs_thread_proc(void *context)
  *   name:  thread name to create
  *
  * Return Value:
- *   cfs_task_t:   0 on success or error codes
+ *   struct task_struct:   0 on success or error codes
  *
  * Notes:
  *   N/A
  */
 
-cfs_task_t kthread_run(int (*func)(void *), void *arg, char *name)
+struct task_struct kthread_run(int (*func)(void *), void *arg, char *name)
 {
     cfs_handle_t  thread = NULL;
     NTSTATUS      status;
@@ -137,7 +137,7 @@ cfs_task_t kthread_run(int (*func)(void *), void *arg, char *name)
 
     ZwClose(thread);
 
-	return (cfs_task_t)0;
+	return (struct task_struct)0;
 }
 
 
@@ -351,10 +351,10 @@ cfs_timer_dpc_proc (
     IN PVOID SystemArgument1,
     IN PVOID SystemArgument2)
 {
-    cfs_timer_t *   timer;
+    struct timer_list *   timer;
     KIRQL           Irql;
 
-    timer = (cfs_timer_t *) DeferredContext;
+    timer = (struct timer_list *) DeferredContext;
 
     /* clear the flag */
     KeAcquireSpinLock(&(timer->Lock), &Irql);
@@ -365,14 +365,14 @@ cfs_timer_dpc_proc (
     timer->proc((long_ptr_t)timer->arg);
 }
 
-void cfs_init_timer(cfs_timer_t *timer)
+void cfs_init_timer(struct timer_list *timer)
 {
-    memset(timer, 0, sizeof(cfs_timer_t));
+    memset(timer, 0, sizeof(struct timer_list));
 }
 
 /*
  * cfs_timer_init
- *   To initialize the cfs_timer_t
+ *   To initialize the struct timer_list
  *
  * Arguments:
  *   timer:  the cfs_timer to be initialized
@@ -386,9 +386,9 @@ void cfs_init_timer(cfs_timer_t *timer)
  *   N/A
  */
 
-void cfs_timer_init(cfs_timer_t *timer, void (*func)(ulong_ptr_t), void *arg)
+void cfs_timer_init(struct timer_list *timer, void (*func)(ulong_ptr_t), void *arg)
 {
-    memset(timer, 0, sizeof(cfs_timer_t));
+    memset(timer, 0, sizeof(struct timer_list));
 
     timer->proc = func;
     timer->arg  = arg;
@@ -402,7 +402,7 @@ void cfs_timer_init(cfs_timer_t *timer, void (*func)(ulong_ptr_t), void *arg)
 
 /*
  * cfs_timer_done
- *   To finialize the cfs_timer_t (unused)
+ *   To finialize the struct timer_list (unused)
  *
  * Arguments:
  *   timer:  the cfs_timer to be cleaned up
@@ -414,7 +414,7 @@ void cfs_timer_init(cfs_timer_t *timer, void (*func)(ulong_ptr_t), void *arg)
  *   N/A
  */
 
-void cfs_timer_done(cfs_timer_t *timer)
+void cfs_timer_done(struct timer_list *timer)
 {
     return;
 }
@@ -434,7 +434,7 @@ void cfs_timer_done(cfs_timer_t *timer)
  *   N/A
  */
 
-void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
+void cfs_timer_arm(struct timer_list *timer, cfs_time_t deadline)
 {
     LARGE_INTEGER   timeout;
     KIRQL           Irql;
@@ -468,7 +468,7 @@ void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
  *   N/A
  */
 
-void cfs_timer_disarm(cfs_timer_t *timer)
+void cfs_timer_disarm(struct timer_list *timer)
 {
     KIRQL   Irql;
 
@@ -494,7 +494,7 @@ void cfs_timer_disarm(cfs_timer_t *timer)
  *   N/A
  */
 
-int cfs_timer_is_armed(cfs_timer_t *timer)
+int cfs_timer_is_armed(struct timer_list *timer)
 {
     int     rc = 0;
     KIRQL   Irql;
@@ -522,7 +522,7 @@ int cfs_timer_is_armed(cfs_timer_t *timer)
  *   N/A
  */
 
-cfs_time_t cfs_timer_deadline(cfs_timer_t * timer)
+cfs_time_t cfs_timer_deadline(struct timer_list * timer)
 {
     return timer->deadline;
 }
@@ -536,24 +536,24 @@ int unshare_fs_struct()
  *  routine related with sigals
  */
 
-cfs_sigset_t cfs_block_allsigs()
+sigset_t cfs_block_allsigs()
 {
         return 0;
 }
 
-cfs_sigset_t cfs_block_sigs(sigset_t bit)
+sigset_t cfs_block_sigs(sigset_t bit)
 {
         return 0;
 }
 
 /* Block all signals except for the @sigs. It's only used in
  * Linux kernel, just a dummy here. */
-cfs_sigset_t cfs_block_sigsinv(unsigned long sigs)
+sigset_t cfs_block_sigsinv(unsigned long sigs)
 {
         return 0;
 }
 
-void cfs_restore_sigs(cfs_sigset_t old)
+void cfs_restore_sigs(sigset_t old)
 {
 }
 

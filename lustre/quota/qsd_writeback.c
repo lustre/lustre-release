@@ -495,7 +495,7 @@ int qsd_start_upd_thread(struct qsd_instance *qsd)
 {
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
 	struct l_wait_info	 lwi = { 0 };
-	cfs_task_t		*task;
+	struct task_struct		*task;
 	ENTRY;
 
 	task = kthread_run(qsd_upd_thread, (void *)qsd,

@@ -265,42 +265,42 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        int rc = 0, i;
-        *eof = 1;
+	int rc = 0, i;
+	*eof = 1;
 
-        if (libcfs_catastrophe)
-                rc += snprintf(page + rc, count - rc, "LBUG\n");
+	if (libcfs_catastrophe)
+		rc += snprintf(page + rc, count - rc, "LBUG\n");
 
 	read_lock(&obd_dev_lock);
-        for (i = 0; i < class_devno_max(); i++) {
-                struct obd_device *obd;
+	for (i = 0; i < class_devno_max(); i++) {
+		struct obd_device *obd;
 
-                obd = class_num2obd(i);
-                if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
-                        continue;
+		obd = class_num2obd(i);
+		if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
+			continue;
 
-                LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-                if (obd->obd_stopping)
-                        continue;
+		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+		if (obd->obd_stopping)
+			continue;
 
-                class_incref(obd, __FUNCTION__, cfs_current());
+		class_incref(obd, __FUNCTION__, current);
 		read_unlock(&obd_dev_lock);
 
-                if (obd_health_check(NULL, obd)) {
-                        rc += snprintf(page + rc, count - rc,
-                                       "device %s reported unhealthy\n",
-                                       obd->obd_name);
-                }
-                class_decref(obd, __FUNCTION__, cfs_current());
+		if (obd_health_check(NULL, obd)) {
+			rc += snprintf(page + rc, count - rc,
+				       "device %s reported unhealthy\n",
+				       obd->obd_name);
+		}
+		class_decref(obd, __FUNCTION__, current);
 		read_lock(&obd_dev_lock);
-        }
+	}
 	read_unlock(&obd_dev_lock);
 
-        if (rc == 0)
-                return snprintf(page, count, "healthy\n");
+	if (rc == 0)
+		return snprintf(page, count, "healthy\n");
 
-        rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
-        return rc;
+	rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
+	return rc;
 }
 
 static int obd_proc_rd_jobid_var(char *page, char **start, off_t off,

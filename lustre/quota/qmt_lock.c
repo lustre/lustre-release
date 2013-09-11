@@ -764,7 +764,7 @@ int qmt_start_reba_thread(struct qmt_device *qmt)
 {
 	struct ptlrpc_thread	*thread = &qmt->qmt_reba_thread;
 	struct l_wait_info	 lwi    = { 0 };
-	cfs_task_t		*task;
+	struct task_struct		*task;
 	ENTRY;
 
 	task = kthread_run(qmt_reba_thread, (void *)qmt,

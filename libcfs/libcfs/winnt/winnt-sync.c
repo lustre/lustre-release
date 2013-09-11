@@ -81,7 +81,7 @@ void init_waitqueue_head(wait_queue_head_t *waitq)
 
 void init_waitqueue_entry_current(wait_queue_t *link)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
@@ -126,7 +126,7 @@ void init_waitqueue_entry_current(wait_queue_t *link)
 
 void cfs_waitlink_fini(wait_queue_t *link)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {

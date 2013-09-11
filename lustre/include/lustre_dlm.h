@@ -1217,7 +1217,7 @@ static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
 }
 
 #define LDLM_LOCK_REF_DEL(lock) \
-        lu_ref_del(&lock->l_reference, "handle", cfs_current())
+	lu_ref_del(&lock->l_reference, "handle", current)
 
 static inline struct ldlm_lock *
 ldlm_handle2lock_long(const struct lustre_handle *h, __u64 flags)
@@ -1358,11 +1358,11 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
                               const struct ldlm_res_id *);
 
 #define LDLM_RESOURCE_ADDREF(res) do {                                  \
-        lu_ref_add_atomic(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
+	lu_ref_add_atomic(&(res)->lr_reference, __FUNCTION__, current);  \
 } while (0)
 
 #define LDLM_RESOURCE_DELREF(res) do {                                  \
-        lu_ref_del(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
+	lu_ref_del(&(res)->lr_reference, __FUNCTION__, current);  \
 } while (0)
 
 /* ldlm_request.c */

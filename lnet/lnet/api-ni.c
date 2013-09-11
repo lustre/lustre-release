@@ -1888,14 +1888,14 @@ lnet_ping_target_init(void)
 void
 lnet_ping_target_fini(void)
 {
-        lnet_event_t    event;
-        int             rc;
-        int             which;
-        int             timeout_ms = 1000;
-        cfs_sigset_t    blocked = cfs_block_allsigs();
+	lnet_event_t    event;
+	int             rc;
+	int             which;
+	int             timeout_ms = 1000;
+	sigset_t    blocked = cfs_block_allsigs();
 
-        LNetMDUnlink(the_lnet.ln_ping_target_md);
-        /* NB md could be busy; this just starts the unlink */
+	LNetMDUnlink(the_lnet.ln_ping_target_md);
+	/* NB md could be busy; this just starts the unlink */
 
         for (;;) {
                 rc = LNetEQPoll(&the_lnet.ln_ping_target_eq, 1,
@@ -1925,28 +1925,28 @@ lnet_ping_target_fini(void)
 int
 lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_ids)
 {
-        lnet_handle_eq_t     eqh;
-        lnet_handle_md_t     mdh;
-        lnet_event_t         event;
-        lnet_md_t            md = {0};
-        int                  which;
-        int                  unlinked = 0;
-        int                  replied = 0;
-        const int            a_long_time = 60000; /* mS */
-        int                  infosz = offsetof(lnet_ping_info_t, pi_ni[n_ids]);
-        lnet_ping_info_t    *info;
-        lnet_process_id_t    tmpid;
-        int                  i;
-        int                  nob;
-        int                  rc;
-        int                  rc2;
-        cfs_sigset_t         blocked;
+	lnet_handle_eq_t     eqh;
+	lnet_handle_md_t     mdh;
+	lnet_event_t         event;
+	lnet_md_t            md = {0};
+	int                  which;
+	int                  unlinked = 0;
+	int                  replied = 0;
+	const int            a_long_time = 60000; /* mS */
+	int                  infosz = offsetof(lnet_ping_info_t, pi_ni[n_ids]);
+	lnet_ping_info_t    *info;
+	lnet_process_id_t    tmpid;
+	int                  i;
+	int                  nob;
+	int                  rc;
+	int                  rc2;
+	sigset_t         blocked;
 
-        if (n_ids <= 0 ||
-            id.nid == LNET_NID_ANY ||
-            timeout_ms > 500000 ||              /* arbitrary limit! */
-            n_ids > 20)                         /* arbitrary limit! */
-                return -EINVAL;
+	if (n_ids <= 0 ||
+	    id.nid == LNET_NID_ANY ||
+	    timeout_ms > 500000 ||              /* arbitrary limit! */
+	    n_ids > 20)                         /* arbitrary limit! */
+		return -EINVAL;
 
         if (id.pid == LNET_PID_ANY)
                 id.pid = LUSTRE_SRV_LNET_PID;

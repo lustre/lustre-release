@@ -194,15 +194,15 @@ struct mdt_device {
 	rwlock_t		   mdt_sptlrpc_lock;
         struct sptlrpc_rule_set    mdt_sptlrpc_rset;
 
-        /* capability keys */
-        unsigned long              mdt_capa_timeout;
-        __u32                      mdt_capa_alg;
-        struct dt_object          *mdt_ck_obj;
-        unsigned long              mdt_ck_timeout;
-        unsigned long              mdt_ck_expiry;
-        cfs_timer_t                mdt_ck_timer;
-        struct ptlrpc_thread       mdt_ck_thread;
-        struct lustre_capa_key     mdt_capa_keys[2];
+	/* capability keys */
+	unsigned long              mdt_capa_timeout;
+	__u32                      mdt_capa_alg;
+	struct dt_object          *mdt_ck_obj;
+	unsigned long              mdt_ck_timeout;
+	unsigned long              mdt_ck_expiry;
+	struct timer_list          mdt_ck_timer;
+	struct ptlrpc_thread       mdt_ck_thread;
+	struct lustre_capa_key     mdt_capa_keys[2];
 	unsigned int               mdt_capa_conf:1,
 				   mdt_som_conf:1,
 				   /* Enable remote dir on non-MDT0 */

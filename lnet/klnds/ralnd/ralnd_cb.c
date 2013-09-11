@@ -893,7 +893,7 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 int
 kranal_thread_start(int(*fn)(void *arg), void *arg, char *name)
 {
-	cfs_task_t *task = cfs_thread_run(fn, arg, name);
+	struct task_struct *task = cfs_thread_run(fn, arg, name);
 
 	if (!IS_ERR(task))
 		cfs_atomic_inc(&kranal_data.kra_nthreads);

@@ -383,14 +383,14 @@ struct osc_page {
 		 */
 		cfs_list_t            ops_inflight;
 	};
-        /**
-         * Thread that submitted this page for transfer. For debugging.
-         */
-        cfs_task_t           *ops_submitter;
-        /**
-         * Submit time - the time when the page is starting RPC. For debugging.
-         */
-        cfs_time_t            ops_submit_time;
+	/**
+	 * Thread that submitted this page for transfer. For debugging.
+	 */
+	struct task_struct           *ops_submitter;
+	/**
+	 * Submit time - the time when the page is starting RPC. For debugging.
+	 */
+	cfs_time_t            ops_submit_time;
 
         /**
          * A lock of which we hold a reference covers this page. Only used by
@@ -672,7 +672,7 @@ struct osc_extent {
 	/** lock covering this extent */
 	struct cl_lock    *oe_osclock;
 	/** terminator of this extent. Must be true if this extent is in IO. */
-	cfs_task_t        *oe_owner;
+	struct task_struct        *oe_owner;
 	/** return value of writeback. If somebody is waiting for this extent,
 	 * this value can be known by outside world. */
 	int                oe_rc;

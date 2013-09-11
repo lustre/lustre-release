@@ -1247,15 +1247,15 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
          * the session keyring is created upon upcall, and don't change all
          * the way until upcall finished, so rcu lock is not needed here.
          */
-	LASSERT(key_tgcred(cfs_current())->session_keyring);
+	LASSERT(key_tgcred(current)->session_keyring);
 
 	lockdep_off();
-	rc = key_link(key_tgcred(cfs_current())->session_keyring, key);
+	rc = key_link(key_tgcred(current)->session_keyring, key);
 	lockdep_on();
 	if (unlikely(rc)) {
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
 		       key->serial,
-		       key_tgcred(cfs_current())->session_keyring->serial, rc);
+		       key_tgcred(current)->session_keyring->serial, rc);
 		RETURN(rc);
 	}
 

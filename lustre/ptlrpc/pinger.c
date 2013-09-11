@@ -679,7 +679,7 @@ static int ping_evictor_main(void *arg)
 
 void ping_evictor_start(void)
 {
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	if (++pet_refcount > 1)
 		return;

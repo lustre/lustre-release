@@ -47,9 +47,9 @@
  * for Linux kernel.
  */
 
-cfs_task_t this_task =
+struct task_struct this_task =
     { /* umask */ 0,/* blocked*/0, /* pid */ 0, /* pgrp */ 0,
-      /* uid,euid,suid,fsuid */  0, 0, 0, 0, 
+      /* uid,euid,suid,fsuid */  0, 0, 0, 0,
       /* gid_t gid,egid,sgid,fsgid */ 0, 0, 0, 0,
       /* ngroups*/ 1, /*cgroups*/ 0, /*groups*/ 0,
       /* group_info */ NULL,
@@ -81,7 +81,7 @@ gid_t current_fsgid(void)
 
 pid_t current_pid(void)
 {
-    return cfs_current()->pid;
+    return current->pid;
 }
 
 mode_t current_umask(void)
@@ -177,7 +177,7 @@ task_manager_notify(
     IN BOOLEAN  Create
     )
 {
-    PLIST_ENTRY ListEntry = NULL; 
+    PLIST_ENTRY ListEntry = NULL;
     PTASK_SLOT  TaskSlot  = NULL;
 
 	spin_lock(&(cfs_win_task_manger.Lock));
@@ -248,7 +248,7 @@ init_task_manager()
 void
 cleanup_task_manager()
 {
-    PLIST_ENTRY ListEntry = NULL; 
+    PLIST_ENTRY ListEntry = NULL;
     PTASK_SLOT  TaskSlot  = NULL;
 
     /* remove ThreadNotifyRoutine: task_manager_notify */
@@ -285,14 +285,14 @@ cleanup_task_manager()
  */
 
 
-cfs_task_t *
-cfs_current()
+struct task_struct *
+current
 {
     HANDLE      Pid = PsGetCurrentProcessId();
     HANDLE      Tid = PsGetCurrentThreadId();
     PETHREAD    Tet = PsGetCurrentThread();
 
-    PLIST_ENTRY ListEntry = NULL; 
+    PLIST_ENTRY ListEntry = NULL;
     PTASK_SLOT  TaskSlot  = NULL;
 
 	spin_lock(&(cfs_win_task_manger.Lock));
@@ -367,7 +367,7 @@ cfs_current()
 
     {
         PTASK_SLOT  Prev = NULL, Curr = NULL;
-        
+
         ListEntry = cfs_win_task_manger.TaskList.Flink;
 
         while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
@@ -411,7 +411,7 @@ cfs_pause(cfs_duration_t ticks)
 void
 schedule_timeout_and_set_state(long state, int64_t time)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
@@ -437,7 +437,7 @@ schedule()
 
 int
 wake_up_process(
-    cfs_task_t * task
+    struct task_struct * task
     )
 {
     PTASK_SLOT   slot = NULL;
@@ -459,7 +459,7 @@ void
 sleep_on(wait_queue_head_t *waitq)
 {
 	wait_queue_t link;
-	
+
 	init_waitqueue_entry_current(&link);
 	add_wait_queue(waitq, &link);
 	waitq_wait(&link, TASK_INTERRUPTIBLE);

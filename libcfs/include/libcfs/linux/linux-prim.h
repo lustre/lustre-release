@@ -160,19 +160,12 @@ static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
 	schedule_timeout(ticks);					\
 }
 
-/*
- * Task struct
- */
-typedef struct task_struct              cfs_task_t;
-#define cfs_current()                   current
-#define cfs_task_lock(t)                task_lock(t)
-#define cfs_task_unlock(t)              task_unlock(t)
-#define CFS_DECL_JOURNAL_DATA           void *journal_info
-#define CFS_PUSH_JOURNAL                do {    \
+#define DECL_JOURNAL_DATA           void *journal_info
+#define PUSH_JOURNAL                do {    \
         journal_info = current->journal_info;   \
         current->journal_info = NULL;           \
         } while(0)
-#define CFS_POP_JOURNAL                 do {    \
+#define POP_JOURNAL                 do {    \
         current->journal_info = journal_info;   \
         } while(0)
 
@@ -180,16 +173,6 @@ typedef struct task_struct              cfs_task_t;
 #define cfs_module(name, version, init, fini) \
         module_init(init);                    \
         module_exit(fini)
-
-/*
- * Signal
- */
-typedef sigset_t                        cfs_sigset_t;
-
-/*
- * Timer
- */
-typedef struct timer_list cfs_timer_t;
 
 /*
  * atomic

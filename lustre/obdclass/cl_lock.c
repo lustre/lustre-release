@@ -423,19 +423,19 @@ static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
  * \see CLS_INTRANSIT
  */
 enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
-                                     struct cl_lock *lock)
+				     struct cl_lock *lock)
 {
-        enum cl_lock_state state = lock->cll_state;
+	enum cl_lock_state state = lock->cll_state;
 
-        LASSERT(cl_lock_is_mutexed(lock));
-        LASSERT(state != CLS_INTRANSIT);
-        LASSERTF(state >= CLS_ENQUEUED && state <= CLS_CACHED,
-                 "Malformed lock state %d.\n", state);
+	LASSERT(cl_lock_is_mutexed(lock));
+	LASSERT(state != CLS_INTRANSIT);
+	LASSERTF(state >= CLS_ENQUEUED && state <= CLS_CACHED,
+		 "Malformed lock state %d.\n", state);
 
-        cl_lock_state_set(env, lock, CLS_INTRANSIT);
-        lock->cll_intransit_owner = cfs_current();
-        cl_lock_hold_add(env, lock, "intransit", cfs_current());
-        return state;
+	cl_lock_state_set(env, lock, CLS_INTRANSIT);
+	lock->cll_intransit_owner = current;
+	cl_lock_hold_add(env, lock, "intransit", current);
+	return state;
 }
 EXPORT_SYMBOL(cl_lock_intransit);
 
@@ -443,16 +443,16 @@ EXPORT_SYMBOL(cl_lock_intransit);
  *  Exit the intransit state and restore the lock state to the original state
  */
 void cl_lock_extransit(const struct lu_env *env, struct cl_lock *lock,
-                       enum cl_lock_state state)
+		       enum cl_lock_state state)
 {
-        LASSERT(cl_lock_is_mutexed(lock));
-        LASSERT(lock->cll_state == CLS_INTRANSIT);
-        LASSERT(state != CLS_INTRANSIT);
-        LASSERT(lock->cll_intransit_owner == cfs_current());
+	LASSERT(cl_lock_is_mutexed(lock));
+	LASSERT(lock->cll_state == CLS_INTRANSIT);
+	LASSERT(state != CLS_INTRANSIT);
+	LASSERT(lock->cll_intransit_owner == current);
 
-        lock->cll_intransit_owner = NULL;
-        cl_lock_state_set(env, lock, state);
-        cl_lock_unhold(env, lock, "intransit", cfs_current());
+	lock->cll_intransit_owner = NULL;
+	cl_lock_state_set(env, lock, state);
+	cl_lock_unhold(env, lock, "intransit", current);
 }
 EXPORT_SYMBOL(cl_lock_extransit);
 
@@ -461,9 +461,9 @@ EXPORT_SYMBOL(cl_lock_extransit);
  */
 int cl_lock_is_intransit(struct cl_lock *lock)
 {
-        LASSERT(cl_lock_is_mutexed(lock));
-        return lock->cll_state == CLS_INTRANSIT &&
-               lock->cll_intransit_owner != cfs_current();
+	LASSERT(cl_lock_is_mutexed(lock));
+	return lock->cll_state == CLS_INTRANSIT &&
+	       lock->cll_intransit_owner != current;
 }
 EXPORT_SYMBOL(cl_lock_is_intransit);
 /**
@@ -674,29 +674,29 @@ static void cl_lock_mutex_tail(const struct lu_env *env, struct cl_lock *lock)
  */
 void cl_lock_mutex_get(const struct lu_env *env, struct cl_lock *lock)
 {
-        LINVRNT(cl_lock_invariant(env, lock));
+	LINVRNT(cl_lock_invariant(env, lock));
 
-        if (lock->cll_guarder == cfs_current()) {
-                LINVRNT(cl_lock_is_mutexed(lock));
-                LINVRNT(lock->cll_depth > 0);
-        } else {
-                struct cl_object_header *hdr;
-                struct cl_thread_info   *info;
-                int i;
+	if (lock->cll_guarder == current) {
+		LINVRNT(cl_lock_is_mutexed(lock));
+		LINVRNT(lock->cll_depth > 0);
+	} else {
+		struct cl_object_header *hdr;
+		struct cl_thread_info   *info;
+		int i;
 
-                LINVRNT(lock->cll_guarder != cfs_current());
-                hdr = cl_object_header(lock->cll_descr.cld_obj);
-                /*
-                 * Check that mutices are taken in the bottom-to-top order.
-                 */
-                info = cl_env_info(env);
-                for (i = 0; i < hdr->coh_nesting; ++i)
-                        LASSERT(info->clt_counters[i].ctc_nr_locks_locked == 0);
+		LINVRNT(lock->cll_guarder != current);
+		hdr = cl_object_header(lock->cll_descr.cld_obj);
+		/*
+		 * Check that mutices are taken in the bottom-to-top order.
+		 */
+		info = cl_env_info(env);
+		for (i = 0; i < hdr->coh_nesting; ++i)
+			LASSERT(info->clt_counters[i].ctc_nr_locks_locked == 0);
 		mutex_lock_nested(&lock->cll_guard, hdr->coh_nesting);
-                lock->cll_guarder = cfs_current();
-                LINVRNT(lock->cll_depth == 0);
-        }
-        cl_lock_mutex_tail(env, lock);
+		lock->cll_guarder = current;
+		LINVRNT(lock->cll_depth == 0);
+	}
+	cl_lock_mutex_tail(env, lock);
 }
 EXPORT_SYMBOL(cl_lock_mutex_get);
 
@@ -713,22 +713,22 @@ EXPORT_SYMBOL(cl_lock_mutex_get);
  */
 int cl_lock_mutex_try(const struct lu_env *env, struct cl_lock *lock)
 {
-        int result;
+	int result;
 
-        LINVRNT(cl_lock_invariant_trusted(env, lock));
-        ENTRY;
+	LINVRNT(cl_lock_invariant_trusted(env, lock));
+	ENTRY;
 
-        result = 0;
-        if (lock->cll_guarder == cfs_current()) {
-                LINVRNT(lock->cll_depth > 0);
-                cl_lock_mutex_tail(env, lock);
+	result = 0;
+	if (lock->cll_guarder == current) {
+		LINVRNT(lock->cll_depth > 0);
+		cl_lock_mutex_tail(env, lock);
 	} else if (mutex_trylock(&lock->cll_guard)) {
-                LINVRNT(lock->cll_depth == 0);
-                lock->cll_guarder = cfs_current();
-                cl_lock_mutex_tail(env, lock);
-        } else
-                result = -EBUSY;
-        RETURN(result);
+		LINVRNT(lock->cll_depth == 0);
+		lock->cll_guarder = current;
+		cl_lock_mutex_tail(env, lock);
+	} else
+		result = -EBUSY;
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_lock_mutex_try);
 
@@ -741,23 +741,23 @@ EXPORT_SYMBOL(cl_lock_mutex_try);
  */
 void cl_lock_mutex_put(const struct lu_env *env, struct cl_lock *lock)
 {
-        struct cl_thread_counters *counters;
+	struct cl_thread_counters *counters;
 
-        LINVRNT(cl_lock_invariant(env, lock));
-        LINVRNT(cl_lock_is_mutexed(lock));
-        LINVRNT(lock->cll_guarder == cfs_current());
-        LINVRNT(lock->cll_depth > 0);
+	LINVRNT(cl_lock_invariant(env, lock));
+	LINVRNT(cl_lock_is_mutexed(lock));
+	LINVRNT(lock->cll_guarder == current);
+	LINVRNT(lock->cll_depth > 0);
 
-        counters = cl_lock_counters(env, lock);
-        LINVRNT(counters->ctc_nr_locks_locked > 0);
+	counters = cl_lock_counters(env, lock);
+	LINVRNT(counters->ctc_nr_locks_locked > 0);
 
-        cl_lock_trace(D_TRACE, env, "put mutex", lock);
-        lu_ref_del(&counters->ctc_locks_locked, "cll_guard", lock);
-        counters->ctc_nr_locks_locked--;
-        if (--lock->cll_depth == 0) {
-                lock->cll_guarder = NULL;
+	cl_lock_trace(D_TRACE, env, "put mutex", lock);
+	lu_ref_del(&counters->ctc_locks_locked, "cll_guard", lock);
+	counters->ctc_nr_locks_locked--;
+	if (--lock->cll_depth == 0) {
+		lock->cll_guarder = NULL;
 		mutex_unlock(&lock->cll_guard);
-        }
+	}
 }
 EXPORT_SYMBOL(cl_lock_mutex_put);
 
@@ -766,7 +766,7 @@ EXPORT_SYMBOL(cl_lock_mutex_put);
  */
 int cl_lock_is_mutexed(struct cl_lock *lock)
 {
-        return lock->cll_guarder == cfs_current();
+	return lock->cll_guarder == current;
 }
 EXPORT_SYMBOL(cl_lock_is_mutexed);
 
@@ -947,7 +947,7 @@ EXPORT_SYMBOL(cl_lock_hold_release);
 int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
 {
 	wait_queue_t waiter;
-	cfs_sigset_t blocked;
+	sigset_t blocked;
 	int result;
 
 	ENTRY;
@@ -2026,17 +2026,17 @@ EXPORT_SYMBOL(cl_lock_discard_pages);
  */
 void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
 {
-        struct cl_object_header *head;
-        struct cl_lock          *lock;
+	struct cl_object_header *head;
+	struct cl_lock          *lock;
 
-        ENTRY;
-        head = cl_object_header(obj);
-        /*
-         * If locks are destroyed without cancellation, all pages must be
-         * already destroyed (as otherwise they will be left unprotected).
-         */
-        LASSERT(ergo(!cancel,
-                     head->coh_tree.rnode == NULL && head->coh_pages == 0));
+	ENTRY;
+	head = cl_object_header(obj);
+	/*
+	 * If locks are destroyed without cancellation, all pages must be
+	 * already destroyed (as otherwise they will be left unprotected).
+	 */
+	LASSERT(ergo(!cancel,
+		     head->coh_tree.rnode == NULL && head->coh_pages == 0));
 
 	spin_lock(&head->coh_lock_guard);
 	while (!cfs_list_empty(&head->coh_locks)) {
@@ -2044,29 +2044,29 @@ void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
 				    struct cl_lock, cll_linkage);
 		cl_lock_get_trust(lock);
 		spin_unlock(&head->coh_lock_guard);
-                lu_ref_add(&lock->cll_reference, "prune", cfs_current());
+		lu_ref_add(&lock->cll_reference, "prune", current);
 
 again:
-                cl_lock_mutex_get(env, lock);
-                if (lock->cll_state < CLS_FREEING) {
-                        LASSERT(lock->cll_users <= 1);
-                        if (unlikely(lock->cll_users == 1)) {
-                                struct l_wait_info lwi = { 0 };
+		cl_lock_mutex_get(env, lock);
+		if (lock->cll_state < CLS_FREEING) {
+			LASSERT(lock->cll_users <= 1);
+			if (unlikely(lock->cll_users == 1)) {
+				struct l_wait_info lwi = { 0 };
 
-                                cl_lock_mutex_put(env, lock);
-                                l_wait_event(lock->cll_wq,
-                                             lock->cll_users == 0,
-                                             &lwi);
-                                goto again;
-                        }
+				cl_lock_mutex_put(env, lock);
+				l_wait_event(lock->cll_wq,
+					     lock->cll_users == 0,
+					     &lwi);
+				goto again;
+			}
 
-                        if (cancel)
-                                cl_lock_cancel(env, lock);
-                        cl_lock_delete(env, lock);
-                }
-                cl_lock_mutex_put(env, lock);
-                lu_ref_del(&lock->cll_reference, "prune", cfs_current());
-                cl_lock_put(env, lock);
+			if (cancel)
+				cl_lock_cancel(env, lock);
+			cl_lock_delete(env, lock);
+		}
+		cl_lock_mutex_put(env, lock);
+		lu_ref_del(&lock->cll_reference, "prune", current);
+		cl_lock_put(env, lock);
 		spin_lock(&head->coh_lock_guard);
 	}
 	spin_unlock(&head->coh_lock_guard);

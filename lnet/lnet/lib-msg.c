@@ -500,7 +500,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 #ifdef __KERNEL__
 	my_slot = -1;
 	for (i = 0; i < container->msc_nfinalizers; i++) {
-		if (container->msc_finalizers[i] == cfs_current())
+		if (container->msc_finalizers[i] == current)
 			break;
 
 		if (my_slot < 0 && container->msc_finalizers[i] == NULL)
@@ -512,7 +512,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 		return;
 	}
 
-	container->msc_finalizers[my_slot] = cfs_current();
+	container->msc_finalizers[my_slot] = current;
 #else
 	LASSERT(container->msc_nfinalizers == 1);
 	if (container->msc_finalizers[0] != NULL) {

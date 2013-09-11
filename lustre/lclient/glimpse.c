@@ -136,48 +136,48 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                         if (agl)
                                 descr->cld_enq_flags |= CEF_AGL;
                         cio->cui_glimpse = 1;
-                        /*
-                         * CEF_ASYNC is used because glimpse sub-locks cannot
-                         * deadlock (because they never conflict with other
-                         * locks) and, hence, can be enqueued out-of-order.
-                         *
-                         * CEF_MUST protects glimpse lock from conversion into
-                         * a lockless mode.
-                         */
-                        lock = cl_lock_request(env, io, descr, "glimpse",
-                                               cfs_current());
-                        cio->cui_glimpse = 0;
+			/*
+			 * CEF_ASYNC is used because glimpse sub-locks cannot
+			 * deadlock (because they never conflict with other
+			 * locks) and, hence, can be enqueued out-of-order.
+			 *
+			 * CEF_MUST protects glimpse lock from conversion into
+			 * a lockless mode.
+			 */
+			lock = cl_lock_request(env, io, descr, "glimpse",
+					       current);
+			cio->cui_glimpse = 0;
 
-                        if (lock == NULL)
-                                RETURN(0);
+			if (lock == NULL)
+				RETURN(0);
 
-                        if (IS_ERR(lock))
-                                RETURN(PTR_ERR(lock));
+			if (IS_ERR(lock))
+				RETURN(PTR_ERR(lock));
 
-                        LASSERT(agl == 0);
-                        result = cl_wait(env, lock);
-                        if (result == 0) {
+			LASSERT(agl == 0);
+			result = cl_wait(env, lock);
+			if (result == 0) {
 				cl_merge_lvb(env, inode);
-                                if (cl_isize_read(inode) > 0 &&
-                                    inode->i_blocks == 0) {
-                                        /*
-                                         * LU-417: Add dirty pages block count
-                                         * lest i_blocks reports 0, some "cp" or
-                                         * "tar" may think it's a completely
-                                         * sparse file and skip it.
-                                         */
-                                        inode->i_blocks = dirty_cnt(inode);
-                                }
-                                cl_unuse(env, lock);
-                        }
-                        cl_lock_release(env, lock, "glimpse", cfs_current());
-                } else {
-                        CDEBUG(D_DLMTRACE, "No objects for inode\n");
+				if (cl_isize_read(inode) > 0 &&
+				    inode->i_blocks == 0) {
+					/*
+					 * LU-417: Add dirty pages block count
+					 * lest i_blocks reports 0, some "cp" or
+					 * "tar" may think it's a completely
+					 * sparse file and skip it.
+					 */
+					inode->i_blocks = dirty_cnt(inode);
+				}
+				cl_unuse(env, lock);
+			}
+			cl_lock_release(env, lock, "glimpse", current);
+		} else {
+			CDEBUG(D_DLMTRACE, "No objects for inode\n");
 			cl_merge_lvb(env, inode);
-                }
-        }
+		}
+	}
 
-        RETURN(result);
+	RETURN(result);
 }
 
 static int cl_io_get(struct inode *inode, struct lu_env **envout,
@@ -271,23 +271,23 @@ int cl_local_size(struct inode *inode)
         result = cl_io_init(env, io, CIT_MISC, clob);
         if (result > 0)
                 result = io->ci_result;
-        else if (result == 0) {
-                cti = ccc_env_info(env);
-                descr = &cti->cti_descr;
+	else if (result == 0) {
+		cti = ccc_env_info(env);
+		descr = &cti->cti_descr;
 
-                *descr = whole_file;
-                descr->cld_obj = clob;
-                lock = cl_lock_peek(env, io, descr, "localsize", cfs_current());
-                if (lock != NULL) {
+		*descr = whole_file;
+		descr->cld_obj = clob;
+		lock = cl_lock_peek(env, io, descr, "localsize", current);
+		if (lock != NULL) {
 			cl_merge_lvb(env, inode);
-                        cl_unuse(env, lock);
-                        cl_lock_release(env, lock, "localsize", cfs_current());
-                        result = 0;
-                } else
-                        result = -ENODATA;
-        }
-        cl_io_fini(env, io);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
+			cl_unuse(env, lock);
+			cl_lock_release(env, lock, "localsize", current);
+			result = 0;
+		} else
+			result = -ENODATA;
+	}
+	cl_io_fini(env, io);
+	cl_env_put(env, &refcheck);
+	RETURN(result);
 }
 

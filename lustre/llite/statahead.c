@@ -1034,7 +1034,7 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 	struct ptlrpc_thread *thread = &sai->sai_agl_thread;
 	struct l_wait_info    lwi    = { 0 };
 	struct ll_inode_info  *plli;
-	cfs_task_t	      *task;
+	struct task_struct	      *task;
 	ENTRY;
 
 	CDEBUG(D_READA, "start agl thread: [pid %d] [parent %.*s]\n",

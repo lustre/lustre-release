@@ -156,15 +156,15 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         descr->cld_gid = gid;
         descr->cld_mode = CLM_GROUP;
 
-        enqflags = CEF_MUST | (nonblock ? CEF_NONBLOCK : 0);
-        descr->cld_enq_flags = enqflags;
+	enqflags = CEF_MUST | (nonblock ? CEF_NONBLOCK : 0);
+	descr->cld_enq_flags = enqflags;
 
-        lock = cl_lock_request(env, io, descr, GROUPLOCK_SCOPE, cfs_current());
-        if (IS_ERR(lock)) {
-                cl_io_fini(env, io);
-                cl_env_put(env, &refcheck);
-                return PTR_ERR(lock);
-        }
+	lock = cl_lock_request(env, io, descr, GROUPLOCK_SCOPE, current);
+	if (IS_ERR(lock)) {
+		cl_io_fini(env, io);
+		cl_env_put(env, &refcheck);
+		return PTR_ERR(lock);
+	}
 
         cg->cg_env  = cl_env_get(&refcheck);
         cg->cg_io   = io;
@@ -178,20 +178,20 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 
 void cl_put_grouplock(struct ccc_grouplock *cg)
 {
-        struct lu_env  *env  = cg->cg_env;
-        struct cl_io   *io   = cg->cg_io;
-        struct cl_lock *lock = cg->cg_lock;
-        int             refcheck;
+	struct lu_env  *env  = cg->cg_env;
+	struct cl_io   *io   = cg->cg_io;
+	struct cl_lock *lock = cg->cg_lock;
+	int             refcheck;
 
-        LASSERT(cg->cg_env);
-        LASSERT(cg->cg_gid);
+	LASSERT(cg->cg_env);
+	LASSERT(cg->cg_gid);
 
-        cl_env_implant(env, &refcheck);
-        cl_env_put(env, &refcheck);
+	cl_env_implant(env, &refcheck);
+	cl_env_put(env, &refcheck);
 
-        cl_unuse(env, lock);
-        cl_lock_release(env, lock, GROUPLOCK_SCOPE, cfs_current());
-        cl_io_fini(env, io);
-        cl_env_put(env, NULL);
+	cl_unuse(env, lock);
+	cl_lock_release(env, lock, GROUPLOCK_SCOPE, current);
+	cl_io_fini(env, io);
+	cl_env_put(env, NULL);
 }
 

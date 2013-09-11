@@ -166,38 +166,38 @@ void cond_resched(void)
  * Timer
  */
 
-void cfs_init_timer(cfs_timer_t *t)
+void cfs_init_timer(struct timer_list *t)
 {
-        CFS_INIT_LIST_HEAD(&t->tl_list);
+	CFS_INIT_LIST_HEAD(&t->tl_list);
 }
 
-void cfs_timer_init(cfs_timer_t *l, cfs_timer_func_t *func, void *arg)
+void cfs_timer_init(struct timer_list *l, cfs_timer_func_t *func, void *arg)
 {
-        CFS_INIT_LIST_HEAD(&l->tl_list);
-        l->function = func;
-        l->data = (ulong_ptr_t)arg;
-        return;
+	CFS_INIT_LIST_HEAD(&l->tl_list);
+	l->function = func;
+	l->data = (ulong_ptr_t)arg;
+	return;
 }
 
-int cfs_timer_is_armed(cfs_timer_t *l)
+int cfs_timer_is_armed(struct timer_list *l)
 {
-        if (cfs_time_before(cfs_time_current(), l->expires))
-                return 1;
-        else
-                return 0;
+	if (cfs_time_before(cfs_time_current(), l->expires))
+		return 1;
+	else
+		return 0;
 }
 
-void cfs_timer_arm(cfs_timer_t *l, cfs_time_t deadline)
+void cfs_timer_arm(struct timer_list *l, cfs_time_t deadline)
 {
-        l->expires = deadline;
+	l->expires = deadline;
 }
 
-void cfs_timer_disarm(cfs_timer_t *l)
+void cfs_timer_disarm(struct timer_list *l)
 {
 }
-cfs_time_t cfs_timer_deadline(cfs_timer_t *l)
+cfs_time_t cfs_timer_deadline(struct timer_list *l)
 {
-        return l->expires;
+	return l->expires;
 }
 
 
@@ -320,10 +320,10 @@ int unshare_fs_struct()
 	return 0;
 }
 
-cfs_sigset_t cfs_block_allsigs(void)
+sigset_t cfs_block_allsigs(void)
 {
-	cfs_sigset_t   all;
-	cfs_sigset_t   old;
+	sigset_t   all;
+	sigset_t   old;
 	int            rc;
 
 	sigfillset(&all);
@@ -333,10 +333,10 @@ cfs_sigset_t cfs_block_allsigs(void)
 	return old;
 }
 
-cfs_sigset_t cfs_block_sigs(unsigned long sigs)
+sigset_t cfs_block_sigs(unsigned long sigs)
 {
-	cfs_sigset_t   old;
-	cfs_sigset_t   blocks = { { sigs } }; /* kludge */
+	sigset_t   old;
+	sigset_t   blocks = { { sigs } }; /* kludge */
 	int   rc;
 
 	rc = sigprocmask(SIG_BLOCK, &blocks, &old);
@@ -347,37 +347,37 @@ cfs_sigset_t cfs_block_sigs(unsigned long sigs)
 
 /* Block all signals except for the @sigs. It's only used in
  * Linux kernel, just a dummy here. */
-cfs_sigset_t cfs_block_sigsinv(unsigned long sigs)
+sigset_t cfs_block_sigsinv(unsigned long sigs)
 {
-        cfs_sigset_t old;
-        int rc;
+	sigset_t old;
+	int rc;
 
-        /* Return old blocked sigs */
-        rc = sigprocmask(SIG_SETMASK, NULL, &old);
-        LASSERT(rc == 0);
+	/* Return old blocked sigs */
+	rc = sigprocmask(SIG_SETMASK, NULL, &old);
+	LASSERT(rc == 0);
 
-        return old;
+	return old;
 }
 
-void cfs_restore_sigs(cfs_sigset_t old)
+void cfs_restore_sigs(sigset_t old)
 {
-        int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
+	int   rc = sigprocmask(SIG_SETMASK, &old, NULL);
 
-        LASSERT (rc == 0);
+	LASSERT (rc == 0);
 }
 
 int cfs_signal_pending(void)
 {
-        cfs_sigset_t    empty;
-        cfs_sigset_t    set;
-        int  rc;
+	sigset_t    empty;
+	sigset_t    set;
+	int  rc;
 
-        rc = sigpending(&set);
-        LASSERT (rc == 0);
+	rc = sigpending(&set);
+	LASSERT (rc == 0);
 
-        sigemptyset(&empty);
+	sigemptyset(&empty);
 
-        return !memcmp(&empty, &set, sizeof(set));
+	return !memcmp(&empty, &set, sizeof(set));
 }
 
 void cfs_clear_sigpending(void)

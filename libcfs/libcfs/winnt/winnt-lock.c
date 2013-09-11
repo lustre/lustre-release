@@ -321,7 +321,7 @@ cfs_rwlock_fini(rwlock_t *rwlock)
 void
 read_lock(rwlock_t *rwlock)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
@@ -349,7 +349,7 @@ read_lock(rwlock_t *rwlock)
 void
 read_unlock(rwlock_t *rwlock)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
@@ -374,7 +374,7 @@ read_unlock(rwlock_t *rwlock)
 void
 write_lock(rwlock_t *rwlock)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
@@ -402,7 +402,7 @@ write_lock(rwlock_t *rwlock)
 void
 write_unlock(rwlock_t *rwlock)
 {
-    cfs_task_t * task = cfs_current();
+    struct task_struct * task = current;
     PTASK_SLOT   slot = NULL;
 
     if (!task) {

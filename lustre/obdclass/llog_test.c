@@ -1020,7 +1020,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	rc = lu_context_init(&test_session, LCT_SESSION);
 	if (rc)
 		GOTO(cleanup_env, rc);
-	test_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
+	test_session.lc_thread = (struct ptlrpc_thread *)current;
 	lu_context_enter(&test_session);
 	env.le_ses = &test_session;
 

@@ -921,12 +921,12 @@ struct obd_device {
 	int                              obd_requests_queued_for_recovery;
 	wait_queue_head_t                obd_next_transno_waitq;
 	/* protected by obd_recovery_task_lock */
-	cfs_timer_t                      obd_recovery_timer;
-        time_t                           obd_recovery_start; /* seconds */
-        time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
-        int                              obd_recovery_time_hard;
-        int                              obd_recovery_timeout;
-        int                              obd_recovery_ir_factor;
+	struct timer_list                obd_recovery_timer;
+	time_t                           obd_recovery_start; /* seconds */
+	time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
+	int                              obd_recovery_time_hard;
+	int                              obd_recovery_timeout;
+	int                              obd_recovery_ir_factor;
 
         /* new recovery stuff from CMD2 */
         struct target_recovery_data      obd_recovery_data;

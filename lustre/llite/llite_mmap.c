@@ -183,7 +183,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	struct vvp_io           *vio;
 	struct cl_env_nest       nest;
 	int                      result;
-	cfs_sigset_t             set;
+	sigset_t		 set;
 	struct inode             *inode;
 	struct ll_inode_info     *lli;
 	ENTRY;
@@ -262,7 +262,7 @@ out_io:
 	cl_io_fini(env, io);
 	cl_env_nested_put(&nest, env);
 out:
-	CDEBUG(D_MMAP, "%s mkwrite with %d\n", cfs_current()->comm, result);
+	CDEBUG(D_MMAP, "%s mkwrite with %d\n", current->comm, result);
 	LASSERT(ergo(result == 0, PageLocked(vmpage)));
 
 	return result;
@@ -330,16 +330,16 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 			vmf->page = NULL;
 		}
         }
-        cl_io_fini(env, io);
-        cl_env_nested_put(&nest, env);
+	cl_io_fini(env, io);
+	cl_env_nested_put(&nest, env);
 
 	vma->vm_flags |= ra_flags;
 	if (result != 0 && !(fault_ret & VM_FAULT_RETRY))
 		fault_ret |= to_fault_error(result);
 
-        CDEBUG(D_MMAP, "%s fault %d/%d\n",
-               cfs_current()->comm, fault_ret, result);
-        RETURN(fault_ret);
+	CDEBUG(D_MMAP, "%s fault %d/%d\n",
+	       current->comm, fault_ret, result);
+	RETURN(fault_ret);
 }
 
 static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
@@ -347,7 +347,7 @@ static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	int count = 0;
 	bool printed = false;
 	int result;
-	cfs_sigset_t set;
+	sigset_t set;
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by

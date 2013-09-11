@@ -291,7 +291,7 @@ void ll_capa_timer_callback(unsigned long unused)
 
 int ll_capa_thread_start(void)
 {
-	cfs_task_t *task;
+	struct task_struct *task;
 	ENTRY;
 
 	init_waitqueue_head(&ll_capa_thread.t_ctl_waitq);

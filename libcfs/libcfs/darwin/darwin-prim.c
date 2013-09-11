@@ -333,7 +333,7 @@ cfs_thread_agent (void)
 
 extern thread_t kernel_thread(task_t task, void (*start)(void));
 
-cfs_task_t
+struct task_struct
 kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 {
 	int ret = 0;
@@ -355,7 +355,7 @@ kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 	} else {
                 ret = -1;
 	}
-	return (cfs_task_t)((long)ret);
+	return (struct task_struct)((long)ret);
 }
 
 /*
@@ -364,25 +364,25 @@ kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
  * without patching kernel.
  * Should we provide these functions in xnu?
  *
- * These signal functions almost do nothing now, we 
+ * These signal functions almost do nothing now, we
  * need to investigate more about signal in Darwin.
  */
 
 extern int block_procsigmask(struct proc *p,  int bit);
 
-cfs_sigset_t cfs_block_allsigs()
+sigset_t cfs_block_allsigs()
 {
-        cfs_sigset_t    old = 0;
+	sigset_t    old = 0;
 #ifdef __DARWIN8__
 #else
-        block_procsigmask(current_proc(), -1);
+	block_procsigmask(current_proc(), -1);
 #endif
-        return old;
+	return old;
 }
 
-cfs_sigset_t cfs_block_sigs(unsigned long sigs)
+sigset_t cfs_block_sigs(unsigned long sigs)
 {
-	cfs_sigset_t    old = 0;
+	sigset_t    old = 0;
 #ifdef __DARWIN8__
 #else
 	block_procsigmask(current_proc(), sigs);
@@ -392,13 +392,13 @@ cfs_sigset_t cfs_block_sigs(unsigned long sigs)
 
 /* Block all signals except for the @sigs. It's only used in
  * Linux kernel, just a dummy here. */
-cfs_sigset_t cfs_block_sigsinv(unsigned long sigs)
+sigset_t cfs_block_sigsinv(unsigned long sigs)
 {
-        cfs_sigset_t old = 0;
-        return old;
+	sigset_t old = 0;
+	return old;
 }
 
-void cfs_restore_sigs(cfs_sigset_t old)
+void cfs_restore_sigs(sigset_t old)
 {
 }
 
@@ -406,10 +406,10 @@ int cfs_signal_pending(void)
 
 {
 #ifdef __DARWIN8__
-        extern int thread_issignal(proc_t, thread_t, sigset_t);
-        return thread_issignal(current_proc(), current_thread(), (sigset_t)-1);
+	extern int thread_issignal(proc_t, thread_t, sigset_t);
+	return thread_issignal(current_proc(), current_thread(), (sigset_t)-1);
 #else
-        return SHOULDissignal(current_proc(), current_uthread())
+	return SHOULDissignal(current_proc(), current_uthread())
 #endif
 }
 
@@ -417,7 +417,7 @@ void cfs_clear_sigpending(void)
 {
 #ifdef __DARWIN8__
 #else
-        clear_procsiglist(current_proc(), -1);
+	clear_procsiglist(current_proc(), -1);
 #endif
 }
 
@@ -427,36 +427,36 @@ void cfs_clear_sigpending(void)
 
 void lustre_cone_in(boolean_t *state, funnel_t **cone)
 {
-        *cone = thread_funnel_get();
-        if (*cone == network_flock)
-                thread_funnel_switch(NETWORK_FUNNEL, KERNEL_FUNNEL);
-        else if (*cone == NULL)
-                *state = thread_funnel_set(kernel_flock, TRUE);
+	*cone = thread_funnel_get();
+	if (*cone == network_flock)
+		thread_funnel_switch(NETWORK_FUNNEL, KERNEL_FUNNEL);
+	else if (*cone == NULL)
+		*state = thread_funnel_set(kernel_flock, TRUE);
 }
 
 void lustre_cone_ex(boolean_t state, funnel_t *cone)
 {
-        if (cone == network_flock)
-                thread_funnel_switch(KERNEL_FUNNEL, NETWORK_FUNNEL);
-        else if (cone == NULL)
-                (void) thread_funnel_set(kernel_flock, state);
+	if (cone == network_flock)
+		thread_funnel_switch(KERNEL_FUNNEL, NETWORK_FUNNEL);
+	else if (cone == NULL)
+		(void) thread_funnel_set(kernel_flock, state);
 }
 
 void lustre_net_in(boolean_t *state, funnel_t **cone)
 {
-        *cone = thread_funnel_get();
-        if (*cone == kernel_flock)
-                thread_funnel_switch(KERNEL_FUNNEL, NETWORK_FUNNEL);
-        else if (*cone == NULL)
-                *state = thread_funnel_set(network_flock, TRUE);
+	*cone = thread_funnel_get();
+	if (*cone == kernel_flock)
+		thread_funnel_switch(KERNEL_FUNNEL, NETWORK_FUNNEL);
+	else if (*cone == NULL)
+		*state = thread_funnel_set(network_flock, TRUE);
 }
 
 void lustre_net_ex(boolean_t state, funnel_t *cone)
 {
-        if (cone == kernel_flock)
-                thread_funnel_switch(NETWORK_FUNNEL, KERNEL_FUNNEL);
-        else if (cone == NULL)
-                (void) thread_funnel_set(network_flock, state);
+	if (cone == kernel_flock)
+		thread_funnel_switch(NETWORK_FUNNEL, KERNEL_FUNNEL);
+	else if (cone == NULL)
+		(void) thread_funnel_set(network_flock, state);
 }
 #endif /* !__DARWIN8__ */
 
@@ -485,7 +485,7 @@ void add_wait_queue_exclusive(struct cfs_waitq *waitq,
 }
 
 void remove_wait_queue(struct cfs_waitq *waitq,
-                   struct cfs_waitlink *link)
+		   struct cfs_waitlink *link)
 {
 	ksleep_del(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
@@ -521,82 +521,82 @@ void waitq_wait(struct cfs_waitlink *link, long state)
 
 cfs_duration_t  waitq_timedwait(struct cfs_waitlink *link,
 				    long state,
-                                    cfs_duration_t timeout)
+				    cfs_duration_t timeout)
 {
-        return ksleep_timedwait(&link->wl_waitq->wq_ksleep_chan, 
-                                state, timeout);
+	return ksleep_timedwait(&link->wl_waitq->wq_ksleep_chan,
+				state, timeout);
 }
 
 typedef  void (*ktimer_func_t)(void *);
-void cfs_timer_init(cfs_timer_t *t, void (* func)(unsigned long), void *arg)
+void cfs_timer_init(struct timer_list *t, void (* func)(unsigned long), void *arg)
 {
-        ktimer_init(&t->t, (ktimer_func_t)func, arg);
+	ktimer_init(&t->t, (ktimer_func_t)func, arg);
 }
 
 void cfs_timer_done(struct cfs_timer *t)
 {
-        ktimer_done(&t->t);
+	ktimer_done(&t->t);
 }
 
 void cfs_timer_arm(struct cfs_timer *t, cfs_time_t deadline)
 {
-        ktimer_arm(&t->t, deadline);
+	ktimer_arm(&t->t, deadline);
 }
 
 void cfs_timer_disarm(struct cfs_timer *t)
 {
-        ktimer_disarm(&t->t);
+	ktimer_disarm(&t->t);
 }
 
 int  cfs_timer_is_armed(struct cfs_timer *t)
 {
-        return ktimer_is_armed(&t->t);
+	return ktimer_is_armed(&t->t);
 }
 
 cfs_time_t cfs_timer_deadline(struct cfs_timer *t)
 {
-        return ktimer_deadline(&t->t);
+	return ktimer_deadline(&t->t);
 }
 
 void cfs_enter_debugger(void)
 {
 #ifdef __DARWIN8__
-        extern void Debugger(const char * reason);
-        Debugger("CFS");
+	extern void Debugger(const char * reason);
+	Debugger("CFS");
 #else
-        extern void PE_enter_debugger(char *cause);
-        PE_enter_debugger("CFS");
+	extern void PE_enter_debugger(char *cause);
+	PE_enter_debugger("CFS");
 #endif
 }
 
 int cfs_online_cpus(void)
 {
-        int     activecpu;
-        size_t  size;
+	int     activecpu;
+	size_t  size;
 
-#ifdef __DARWIN8__ 
-        size = sizeof(int);
-        sysctlbyname("hw.activecpu", &activecpu, &size, NULL, 0);
-        return activecpu;
+#ifdef __DARWIN8__
+	size = sizeof(int);
+	sysctlbyname("hw.activecpu", &activecpu, &size, NULL, 0);
+	return activecpu;
 #else
-        host_basic_info_data_t hinfo;
-        kern_return_t kret;
-        int count = HOST_BASIC_INFO_COUNT;
+	host_basic_info_data_t hinfo;
+	kern_return_t kret;
+	int count = HOST_BASIC_INFO_COUNT;
 #define BSD_HOST 1
-        kret = host_info(BSD_HOST, HOST_BASIC_INFO, &hinfo, &count);
-        if (kret == KERN_SUCCESS) 
-                return (hinfo.avail_cpus);
-        return(-EINVAL);
+	kret = host_info(BSD_HOST, HOST_BASIC_INFO, &hinfo, &count);
+	if (kret == KERN_SUCCESS)
+		return (hinfo.avail_cpus);
+	return(-EINVAL);
 #endif
 }
 
 int cfs_ncpus(void)
 {
-        int     ncpu;
-        size_t  size;
+	int     ncpu;
+	size_t  size;
 
-        size = sizeof(int);
+	size = sizeof(int);
 
-        sysctlbyname("hw.ncpu", &ncpu, &size, NULL, 0);
-        return ncpu;
+	sysctlbyname("hw.ncpu", &ncpu, &size, NULL, 0);
+	return ncpu;
 }

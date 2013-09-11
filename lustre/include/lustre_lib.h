@@ -121,7 +121,7 @@ void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
 /* l_lock.c */
 struct lustre_lock {
 	int			l_depth;
-	cfs_task_t		*l_owner;
+	struct task_struct	*l_owner;
 	struct semaphore	l_sem;
 	spinlock_t		l_spin;
 };
@@ -710,7 +710,7 @@ struct l_wait_info {
 do {                                                                           \
 	wait_queue_t __wait;                                                   \
 	cfs_duration_t __timeout = info->lwi_timeout;                          \
-	cfs_sigset_t   __blocked;                                              \
+	sigset_t   __blocked;                                              \
 	int   __allow_intr = info->lwi_allow_intr;                             \
 									       \
 	ret = 0;                                                               \

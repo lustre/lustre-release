@@ -203,15 +203,15 @@ static inline char *llt2str(enum lov_layout_type llt)
  * function corresponding to the current layout type.
  */
 struct lov_object {
-        struct cl_object       lo_cl;
-        /**
-         * Serializes object operations with transitions between layout types.
-         *
-         * This semaphore is taken in shared mode by all object methods, and
-         * is taken in exclusive mode when object type is changed.
-         *
-         * \see lov_object::lo_type
-         */
+	struct cl_object       lo_cl;
+	/**
+	 * Serializes object operations with transitions between layout types.
+	 *
+	 * This semaphore is taken in shared mode by all object methods, and
+	 * is taken in exclusive mode when object type is changed.
+	 *
+	 * \see lov_object::lo_type
+	 */
 	struct rw_semaphore	lo_type_guard;
 	/**
 	 * Type of an object. Protected by lov_object::lo_type_guard.
@@ -236,9 +236,9 @@ struct lov_object {
 	 */
 	struct lov_stripe_md  *lo_lsm;
 
-        union lov_layout_state {
-                struct lov_layout_raid0 {
-                        unsigned               lo_nr;
+	union lov_layout_state {
+		struct lov_layout_raid0 {
+			unsigned               lo_nr;
 			/**
 			 * When this is true, lov_object::lo_attr contains
 			 * valid up to date attributes for a top-level
@@ -246,42 +246,42 @@ struct lov_object {
 			 * any sub-object change.
 			 */
 			int		       lo_attr_valid;
-                        /**
-                         * Array of sub-objects. Allocated when top-object is
-                         * created (lov_init_raid0()).
-                         *
-                         * Top-object is a strict master of its sub-objects:
-                         * it is created before them, and outlives its
-                         * children (this later is necessary so that basic
-                         * functions like cl_object_top() always
-                         * work). Top-object keeps a reference on every
-                         * sub-object.
-                         *
-                         * When top-object is destroyed (lov_delete_raid0())
-                         * it releases its reference to a sub-object and waits
-                         * until the latter is finally destroyed.
-                         */
-                        struct lovsub_object **lo_sub;
-                        /**
-                         * protect lo_sub
-                         */
+			/**
+			 * Array of sub-objects. Allocated when top-object is
+			 * created (lov_init_raid0()).
+			 *
+			 * Top-object is a strict master of its sub-objects:
+			 * it is created before them, and outlives its
+			 * children (this later is necessary so that basic
+			 * functions like cl_object_top() always
+			 * work). Top-object keeps a reference on every
+			 * sub-object.
+			 *
+			 * When top-object is destroyed (lov_delete_raid0())
+			 * it releases its reference to a sub-object and waits
+			 * until the latter is finally destroyed.
+			 */
+			struct lovsub_object **lo_sub;
+			/**
+			 * protect lo_sub
+			 */
 			spinlock_t		lo_sub_lock;
-                        /**
-                         * Cached object attribute, built from sub-object
-                         * attributes.
-                         */
-                        struct cl_attr         lo_attr;
-                } raid0;
-                struct lov_layout_state_empty {
-                } empty;
+			/**
+			 * Cached object attribute, built from sub-object
+			 * attributes.
+			 */
+			struct cl_attr         lo_attr;
+		} raid0;
+		struct lov_layout_state_empty {
+		} empty;
 		struct lov_layout_state_released {
 		} released;
-        } u;
-        /**
-         * Thread that acquired lov_object::lo_type_guard in an exclusive
-         * mode.
-         */
-        cfs_task_t            *lo_owner;
+	} u;
+	/**
+	 * Thread that acquired lov_object::lo_type_guard in an exclusive
+	 * mode.
+	 */
+	struct task_struct            *lo_owner;
 };
 
 /**

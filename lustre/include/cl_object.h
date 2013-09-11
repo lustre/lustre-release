@@ -760,7 +760,7 @@ struct cl_page {
         /**
          * Debug information, the task is owning the page.
          */
-        cfs_task_t              *cp_task;
+	struct task_struct      *cp_task;
         /**
          * Owning IO request in cl_page_state::CPS_PAGEOUT and
          * cl_page_state::CPS_PAGEIN states. This field is maintained only in
@@ -1578,13 +1578,13 @@ struct cl_lock {
 	 * \see osc_lock_enqueue_wait(), lov_lock_cancel(), lov_sublock_wait().
 	 */
 	struct mutex		cll_guard;
-        cfs_task_t           *cll_guarder;
+	struct task_struct    *cll_guarder;
         int                   cll_depth;
 
         /**
          * the owner for INTRANSIT state
          */
-        cfs_task_t           *cll_intransit_owner;
+	struct task_struct    *cll_intransit_owner;
         int                   cll_error;
         /**
          * Number of holds on a lock. A hold prevents a lock from being
@@ -1869,9 +1869,9 @@ do {                                                                    \
  * @{
  */
 struct cl_page_list {
-        unsigned             pl_nr;
-        cfs_list_t           pl_pages;
-        cfs_task_t          *pl_owner;
+	unsigned             pl_nr;
+	cfs_list_t           pl_pages;
+	struct task_struct   *pl_owner;
 };
 
 /** 

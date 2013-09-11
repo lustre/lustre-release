@@ -1788,7 +1788,7 @@ int obd_zombie_impexp_kill(void *arg)
 int obd_zombie_impexp_init(void)
 {
 #ifdef __KERNEL__
-	cfs_task_t *task;
+	struct task_struct *task;
 #endif
 
 	CFS_INIT_LIST_HEAD(&obd_zombie_imports);

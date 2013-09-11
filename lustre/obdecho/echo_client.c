@@ -1201,7 +1201,7 @@ static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
 			*cookie = el->el_cookie;
 			spin_unlock(&ec->ec_lock);
 		} else {
-			cl_lock_release(env, lck, "ec enqueue", cfs_current());
+			cl_lock_release(env, lck, "ec enqueue", current);
 		}
 	}
 	RETURN(rc);

@@ -125,18 +125,17 @@ typedef int (cfs_write_proc_t)(struct file *file, const char *buffer,
 /*
  * Signal
  */
-typedef sigset_t                        cfs_sigset_t;
 
 /*
  * Timer
  */
 
-typedef struct {
-        cfs_list_t tl_list;
-        void (*function)(ulong_ptr_t unused);
-        ulong_ptr_t data;
-        long expires;
-} cfs_timer_t;
+struct timer_list {
+	cfs_list_t tl_list;
+	void (*function)(ulong_ptr_t unused);
+	ulong_ptr_t data;
+	long expires;
+};
 
 
 #define cfs_in_interrupt()    (0)
@@ -156,10 +155,8 @@ static inline int misc_deregister(struct miscdevice *foo)
 
 #define cfs_sigfillset(l)               do {} while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
-/* Fine, crash, but stop giving me compile warnings */
-#define cfs_kthread_run(fn,d,fmt,...)   LBUG()
 
-#define CFS_DAEMON_FLAGS                0
+#define DAEMON_FLAGS                0
 
 #define L1_CACHE_ALIGN(x)		(x)
 

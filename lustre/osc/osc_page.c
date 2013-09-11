@@ -208,7 +208,7 @@ static void osc_page_transfer_add(const struct lu_env *env,
 
 	spin_lock(&obj->oo_seatbelt);
 	cfs_list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
-	opg->ops_submitter = cfs_current();
+	opg->ops_submitter = current;
 	spin_unlock(&obj->oo_seatbelt);
 }
 

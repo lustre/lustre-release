@@ -194,11 +194,11 @@ void cfs_enter_debugger(void);
  * Defined by platform
  */
 int unshare_fs_struct(void);
-cfs_sigset_t cfs_get_blocked_sigs(void);
-cfs_sigset_t cfs_block_allsigs(void);
-cfs_sigset_t cfs_block_sigs(unsigned long sigs);
-cfs_sigset_t cfs_block_sigsinv(unsigned long sigs);
-void cfs_restore_sigs(cfs_sigset_t);
+sigset_t cfs_get_blocked_sigs(void);
+sigset_t cfs_block_allsigs(void);
+sigset_t cfs_block_sigs(unsigned long sigs);
+sigset_t cfs_block_sigsinv(unsigned long sigs);
+void cfs_restore_sigs(sigset_t);
 int cfs_signal_pending(void);
 void cfs_clear_sigpending(void);
 

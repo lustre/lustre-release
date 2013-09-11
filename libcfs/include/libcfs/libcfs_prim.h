@@ -48,13 +48,13 @@
  */
 typedef  void (cfs_timer_func_t)(ulong_ptr_t);
 
-void cfs_init_timer(cfs_timer_t *t);
-void cfs_timer_init(cfs_timer_t *t, cfs_timer_func_t *func, void *arg);
-void cfs_timer_done(cfs_timer_t *t);
-void cfs_timer_arm(cfs_timer_t *t, cfs_time_t deadline);
-void cfs_timer_disarm(cfs_timer_t *t);
-int  cfs_timer_is_armed(cfs_timer_t *t);
-cfs_time_t cfs_timer_deadline(cfs_timer_t *t);
+void cfs_init_timer(struct timer_list *t);
+void cfs_timer_init(struct timer_list *t, cfs_timer_func_t *func, void *arg);
+void cfs_timer_done(struct timer_list *t);
+void cfs_timer_arm(struct timer_list *t, cfs_time_t deadline);
+void cfs_timer_disarm(struct timer_list *t);
+int  cfs_timer_is_armed(struct timer_list *t);
+cfs_time_t cfs_timer_deadline(struct timer_list *t);
 
 /*
  * Memory

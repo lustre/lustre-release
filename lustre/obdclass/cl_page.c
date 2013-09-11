@@ -223,39 +223,39 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                          */
                         PASSERT(env, page, slice != NULL);
 
-                        page = slice->cpl_page;
-                        /*
-                         * Can safely call cl_page_get_trust() under
-                         * radix-tree spin-lock.
-                         *
-                         * XXX not true, because @page is from object another
-                         * than @hdr and protected by different tree lock.
-                         */
-                        cl_page_get_trust(page);
-                        lu_ref_add_atomic(&page->cp_reference,
-                                          "gang_lookup", cfs_current());
-                        pvec[j++] = page;
-                }
+			page = slice->cpl_page;
+			/*
+			 * Can safely call cl_page_get_trust() under
+			 * radix-tree spin-lock.
+			 *
+			 * XXX not true, because @page is from object another
+			 * than @hdr and protected by different tree lock.
+			 */
+			cl_page_get_trust(page);
+			lu_ref_add_atomic(&page->cp_reference,
+					  "gang_lookup", current);
+			pvec[j++] = page;
+		}
 
-                /*
-                 * Here a delicate locking dance is performed. Current thread
-                 * holds a reference to a page, but has to own it before it
-                 * can be placed into queue. Owning implies waiting, so
-                 * radix-tree lock is to be released. After a wait one has to
-                 * check that pages weren't truncated (cl_page_own() returns
-                 * error in the latter case).
-                 */
+		/*
+		 * Here a delicate locking dance is performed. Current thread
+		 * holds a reference to a page, but has to own it before it
+		 * can be placed into queue. Owning implies waiting, so
+		 * radix-tree lock is to be released. After a wait one has to
+		 * check that pages weren't truncated (cl_page_own() returns
+		 * error in the latter case).
+		 */
 		spin_unlock(&hdr->coh_page_guard);
-                tree_lock = 0;
+		tree_lock = 0;
 
-                for (i = 0; i < j; ++i) {
-                        page = pvec[i];
-                        if (res == CLP_GANG_OKAY)
-                                res = (*cb)(env, io, page, cbdata);
-                        lu_ref_del(&page->cp_reference,
-                                   "gang_lookup", cfs_current());
-                        cl_page_put(env, page);
-                }
+		for (i = 0; i < j; ++i) {
+			page = pvec[i];
+			if (res == CLP_GANG_OKAY)
+				res = (*cb)(env, io, page, cbdata);
+			lu_ref_del(&page->cp_reference,
+				   "gang_lookup", current);
+			cl_page_put(env, page);
+		}
 		if (nr < CLT_PVEC_SIZE || end_of_region)
 			break;
 

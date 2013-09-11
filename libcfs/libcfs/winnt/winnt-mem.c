@@ -368,7 +368,7 @@ void kmem_cache_free(struct kmem_cache *kmc, void *buf)
 
 spinlock_t  shrinker_guard = {0};
 CFS_LIST_HEAD(shrinker_hdr);
-cfs_timer_t shrinker_timer = {0};
+struct timer_list shrinker_timer = {0};
 
 struct shrinker *set_shrinker(int seeks, shrink_callback cb)
 {

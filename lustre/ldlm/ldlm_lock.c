@@ -605,45 +605,45 @@ EXPORT_SYMBOL(ldlm_lock2handle);
 struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 				     __u64 flags)
 {
-        struct ldlm_lock *lock;
-        ENTRY;
+	struct ldlm_lock *lock;
+	ENTRY;
 
-        LASSERT(handle);
+	LASSERT(handle);
 
 	lock = class_handle2object(handle->cookie, NULL);
-        if (lock == NULL)
-                RETURN(NULL);
+	if (lock == NULL)
+		RETURN(NULL);
 
-        /* It's unlikely but possible that someone marked the lock as
-         * destroyed after we did handle2object on it */
+	/* It's unlikely but possible that someone marked the lock as
+	 * destroyed after we did handle2object on it */
 	if (flags == 0 && ((lock->l_flags & LDLM_FL_DESTROYED)== 0)) {
-                lu_ref_add(&lock->l_reference, "handle", cfs_current());
-                RETURN(lock);
-        }
+		lu_ref_add(&lock->l_reference, "handle", current);
+		RETURN(lock);
+	}
 
-        lock_res_and_lock(lock);
+	lock_res_and_lock(lock);
 
-        LASSERT(lock->l_resource != NULL);
+	LASSERT(lock->l_resource != NULL);
 
-        lu_ref_add_atomic(&lock->l_reference, "handle", cfs_current());
+	lu_ref_add_atomic(&lock->l_reference, "handle", current);
 	if (unlikely(lock->l_flags & LDLM_FL_DESTROYED)) {
-                unlock_res_and_lock(lock);
-                CDEBUG(D_INFO, "lock already destroyed: lock %p\n", lock);
-                LDLM_LOCK_PUT(lock);
-                RETURN(NULL);
-        }
+		unlock_res_and_lock(lock);
+		CDEBUG(D_INFO, "lock already destroyed: lock %p\n", lock);
+		LDLM_LOCK_PUT(lock);
+		RETURN(NULL);
+	}
 
-        if (flags && (lock->l_flags & flags)) {
-                unlock_res_and_lock(lock);
-                LDLM_LOCK_PUT(lock);
-                RETURN(NULL);
-        }
+	if (flags && (lock->l_flags & flags)) {
+		unlock_res_and_lock(lock);
+		LDLM_LOCK_PUT(lock);
+		RETURN(NULL);
+	}
 
-        if (flags)
-                lock->l_flags |= flags;
+	if (flags)
+		lock->l_flags |= flags;
 
-        unlock_res_and_lock(lock);
-        RETURN(lock);
+	unlock_res_and_lock(lock);
+	RETURN(lock);
 }
 EXPORT_SYMBOL(__ldlm_handle2lock);
 /** @} ldlm_handles */

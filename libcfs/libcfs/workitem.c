@@ -453,8 +453,8 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 
 #ifdef __KERNEL__
 	for (; nthrs > 0; nthrs--)  {
-		char		name[16];
-		cfs_task_t	*task;
+		char			name[16];
+		struct task_struct	*task;
 
 		spin_lock(&cfs_wi_data.wi_glock);
 		while (sched->ws_starting > 0) {

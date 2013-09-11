@@ -229,9 +229,9 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
  */
 void libcfs_debug_dumplog_internal(void *arg)
 {
-	CFS_DECL_JOURNAL_DATA;
+	DECL_JOURNAL_DATA;
 
-	CFS_PUSH_JOURNAL;
+	PUSH_JOURNAL;
 
 	if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0) {
 		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
@@ -242,7 +242,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 		cfs_tracefile_dump_all_pages(debug_file_name);
 		libcfs_run_debug_log_upcall(debug_file_name);
 	}
-	CFS_POP_JOURNAL;
+	POP_JOURNAL;
 }
 
 int libcfs_debug_dumplog_thread(void *arg)
@@ -255,7 +255,7 @@ int libcfs_debug_dumplog_thread(void *arg)
 void libcfs_debug_dumplog(void)
 {
 	wait_queue_t wait;
-	cfs_task_t    *dumper;
+	struct task_struct    *dumper;
 	ENTRY;
 
 	/* we're being careful to ensure that the kernel thread is

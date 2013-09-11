@@ -826,7 +826,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	/* Make sure the target isn't cleaned up while we're here. Yes,
 	 * there's still a race between the above check and our incref here.
 	 * Really, class_uuid2obd should take the ref. */
-        targref = class_incref(target, __FUNCTION__, cfs_current());
+	targref = class_incref(target, __FUNCTION__, current);
 
 	target->obd_conn_inprogress++;
 	spin_unlock(&target->obd_dev_lock);
@@ -1271,7 +1271,7 @@ out:
 		target->obd_conn_inprogress--;
 		spin_unlock(&target->obd_dev_lock);
 
-		class_decref(targref, __func__, cfs_current());
+		class_decref(targref, __func__, current);
 	}
 	if (rc)
 		req->rq_status = rc;

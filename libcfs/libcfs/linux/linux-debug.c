@@ -271,7 +271,7 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 #endif
 }
 
-cfs_task_t *libcfs_current(void)
+struct task_struct *libcfs_current(void)
 {
         CWARN("current task struct is %p\n", current);
         return current;

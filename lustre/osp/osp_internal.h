@@ -173,7 +173,7 @@ struct osp_device {
 	 */
 	struct obd_statfs		 opd_statfs;
 	cfs_time_t			 opd_statfs_fresh_till;
-	cfs_timer_t			 opd_statfs_timer;
+	struct timer_list			 opd_statfs_timer;
 	int				 opd_statfs_update_in_progress;
 	/* how often to update statfs data */
 	int				 opd_statfs_maxage;

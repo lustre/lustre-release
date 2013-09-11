@@ -45,21 +45,21 @@
 
 struct lc_watchdog {
 	spinlock_t  lcw_lock;     /* check or change lcw_list */
-        int             lcw_refcount; /* must hold lcw_pending_timers_lock */
-        cfs_timer_t     lcw_timer;    /* kernel timer */
-        cfs_list_t      lcw_list;     /* chain on pending list */
-        cfs_time_t      lcw_last_touched; /* last touched stamp */
-        cfs_task_t     *lcw_task;     /* owner task */
-        void          (*lcw_callback)(pid_t, void *);
-        void           *lcw_data;
+	int             lcw_refcount; /* must hold lcw_pending_timers_lock */
+	struct timer_list     lcw_timer;    /* kernel timer */
+	cfs_list_t      lcw_list;     /* chain on pending list */
+	cfs_time_t      lcw_last_touched; /* last touched stamp */
+	struct task_struct     *lcw_task;     /* owner task */
+	void          (*lcw_callback)(pid_t, void *);
+	void           *lcw_data;
 
-        pid_t           lcw_pid;
+	pid_t           lcw_pid;
 
-        enum {
-                LC_WATCHDOG_DISABLED,
-                LC_WATCHDOG_ENABLED,
-                LC_WATCHDOG_EXPIRED
-        } lcw_state;
+	enum {
+		LC_WATCHDOG_DISABLED,
+		LC_WATCHDOG_ENABLED,
+		LC_WATCHDOG_EXPIRED
+	} lcw_state;
 };
 
 #ifdef WITH_WATCHDOG
@@ -296,7 +296,7 @@ static int lcw_dispatch_main(void *data)
 
 static void lcw_dispatch_start(void)
 {
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	ENTRY;
 	LASSERT(lcw_refcount == 1);
@@ -351,7 +351,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 
 	spin_lock_init(&lcw->lcw_lock);
 	lcw->lcw_refcount = 1; /* refcount for owner */
-	lcw->lcw_task     = cfs_current();
+	lcw->lcw_task     = current;
 	lcw->lcw_pid      = current_pid();
 	lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
 	lcw->lcw_data     = data;

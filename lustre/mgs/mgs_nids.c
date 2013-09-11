@@ -470,7 +470,7 @@ static int mgs_ir_notify(void *arg)
 int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 		   struct fs_db *fsdb)
 {
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	if (!ir_timeout)
 		ir_timeout = OBD_IR_MGS_TIMEOUT;

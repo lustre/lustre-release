@@ -1080,11 +1080,11 @@ EXPORT_SYMBOL(cl_io_slice_add);
  */
 void cl_page_list_init(struct cl_page_list *plist)
 {
-        ENTRY;
-        plist->pl_nr = 0;
-        CFS_INIT_LIST_HEAD(&plist->pl_pages);
-        plist->pl_owner = cfs_current();
-        EXIT;
+	ENTRY;
+	plist->pl_nr = 0;
+	CFS_INIT_LIST_HEAD(&plist->pl_pages);
+	plist->pl_owner = current;
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_init);
 
@@ -1093,18 +1093,18 @@ EXPORT_SYMBOL(cl_page_list_init);
  */
 void cl_page_list_add(struct cl_page_list *plist, struct cl_page *page)
 {
-        ENTRY;
-        /* it would be better to check that page is owned by "current" io, but
-         * it is not passed here. */
-        LASSERT(page->cp_owner != NULL);
-        LINVRNT(plist->pl_owner == cfs_current());
+	ENTRY;
+	/* it would be better to check that page is owned by "current" io, but
+	 * it is not passed here. */
+	LASSERT(page->cp_owner != NULL);
+	LINVRNT(plist->pl_owner == current);
 
 	lockdep_off();
 	mutex_lock(&page->cp_mutex);
 	lockdep_on();
-        LASSERT(cfs_list_empty(&page->cp_batch));
-        cfs_list_add_tail(&page->cp_batch, &plist->pl_pages);
-        ++plist->pl_nr;
+	LASSERT(cfs_list_empty(&page->cp_batch));
+	cfs_list_add_tail(&page->cp_batch, &plist->pl_pages);
+	++plist->pl_nr;
 	lu_ref_add_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
 	cl_page_get(page);
 	EXIT;
@@ -1115,17 +1115,17 @@ EXPORT_SYMBOL(cl_page_list_add);
  * Removes a page from a page list.
  */
 void cl_page_list_del(const struct lu_env *env,
-                      struct cl_page_list *plist, struct cl_page *page)
+		      struct cl_page_list *plist, struct cl_page *page)
 {
-        LASSERT(plist->pl_nr > 0);
-        LINVRNT(plist->pl_owner == cfs_current());
+	LASSERT(plist->pl_nr > 0);
+	LINVRNT(plist->pl_owner == current);
 
-        ENTRY;
-        cfs_list_del_init(&page->cp_batch);
+	ENTRY;
+	cfs_list_del_init(&page->cp_batch);
 	lockdep_off();
 	mutex_unlock(&page->cp_mutex);
 	lockdep_on();
-        --plist->pl_nr;
+	--plist->pl_nr;
 	lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue", plist);
 	cl_page_put(env, page);
 	EXIT;
@@ -1136,16 +1136,16 @@ EXPORT_SYMBOL(cl_page_list_del);
  * Moves a page from one page list to another.
  */
 void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
-                       struct cl_page *page)
+		       struct cl_page *page)
 {
-        LASSERT(src->pl_nr > 0);
-        LINVRNT(dst->pl_owner == cfs_current());
-        LINVRNT(src->pl_owner == cfs_current());
+	LASSERT(src->pl_nr > 0);
+	LINVRNT(dst->pl_owner == current);
+	LINVRNT(src->pl_owner == current);
 
-        ENTRY;
-        cfs_list_move_tail(&page->cp_batch, &dst->pl_pages);
-        --src->pl_nr;
-        ++dst->pl_nr;
+	ENTRY;
+	cfs_list_move_tail(&page->cp_batch, &dst->pl_pages);
+	--src->pl_nr;
+	++dst->pl_nr;
 	lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref, "queue",
 		      src, dst);
 	EXIT;
@@ -1157,16 +1157,16 @@ EXPORT_SYMBOL(cl_page_list_move);
  */
 void cl_page_list_splice(struct cl_page_list *list, struct cl_page_list *head)
 {
-        struct cl_page *page;
-        struct cl_page *tmp;
+	struct cl_page *page;
+	struct cl_page *tmp;
 
-        LINVRNT(list->pl_owner == cfs_current());
-        LINVRNT(head->pl_owner == cfs_current());
+	LINVRNT(list->pl_owner == current);
+	LINVRNT(head->pl_owner == current);
 
-        ENTRY;
-        cl_page_list_for_each_safe(page, tmp, list)
-                cl_page_list_move(head, list, page);
-        EXIT;
+	ENTRY;
+	cl_page_list_for_each_safe(page, tmp, list)
+		cl_page_list_move(head, list, page);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_splice);
 
@@ -1177,36 +1177,36 @@ void cl_page_disown0(const struct lu_env *env,
  * Disowns pages in a queue.
  */
 void cl_page_list_disown(const struct lu_env *env,
-                         struct cl_io *io, struct cl_page_list *plist)
+			 struct cl_io *io, struct cl_page_list *plist)
 {
-        struct cl_page *page;
-        struct cl_page *temp;
+	struct cl_page *page;
+	struct cl_page *temp;
 
-        LINVRNT(plist->pl_owner == cfs_current());
+	LINVRNT(plist->pl_owner == current);
 
-        ENTRY;
-        cl_page_list_for_each_safe(page, temp, plist) {
-                LASSERT(plist->pl_nr > 0);
+	ENTRY;
+	cl_page_list_for_each_safe(page, temp, plist) {
+		LASSERT(plist->pl_nr > 0);
 
-                cfs_list_del_init(&page->cp_batch);
+		cfs_list_del_init(&page->cp_batch);
 		lockdep_off();
 		mutex_unlock(&page->cp_mutex);
 		lockdep_on();
-                --plist->pl_nr;
-                /*
-                 * cl_page_disown0 rather than usual cl_page_disown() is used,
-                 * because pages are possibly in CPS_FREEING state already due
-                 * to the call to cl_page_list_discard().
-                 */
-                /*
-                 * XXX cl_page_disown0() will fail if page is not locked.
-                 */
-                cl_page_disown0(env, io, page);
+		--plist->pl_nr;
+		/*
+		 * cl_page_disown0 rather than usual cl_page_disown() is used,
+		 * because pages are possibly in CPS_FREEING state already due
+		 * to the call to cl_page_list_discard().
+		 */
+		/*
+		 * XXX cl_page_disown0() will fail if page is not locked.
+		 */
+		cl_page_disown0(env, io, page);
 		lu_ref_del_at(&page->cp_reference, &page->cp_queue_ref, "queue",
 			      plist);
-                cl_page_put(env, page);
-        }
-        EXIT;
+		cl_page_put(env, page);
+	}
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_disown);
 
@@ -1215,16 +1215,16 @@ EXPORT_SYMBOL(cl_page_list_disown);
  */
 void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist)
 {
-        struct cl_page *page;
-        struct cl_page *temp;
+	struct cl_page *page;
+	struct cl_page *temp;
 
-        LINVRNT(plist->pl_owner == cfs_current());
+	LINVRNT(plist->pl_owner == current);
 
-        ENTRY;
-        cl_page_list_for_each_safe(page, temp, plist)
-                cl_page_list_del(env, plist, page);
-        LASSERT(plist->pl_nr == 0);
-        EXIT;
+	ENTRY;
+	cl_page_list_for_each_safe(page, temp, plist)
+		cl_page_list_del(env, plist, page);
+	LASSERT(plist->pl_nr == 0);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_fini);
 
@@ -1232,26 +1232,26 @@ EXPORT_SYMBOL(cl_page_list_fini);
  * Owns all pages in a queue.
  */
 int cl_page_list_own(const struct lu_env *env,
-                     struct cl_io *io, struct cl_page_list *plist)
+		     struct cl_io *io, struct cl_page_list *plist)
 {
-        struct cl_page *page;
-        struct cl_page *temp;
-        pgoff_t index = 0;
-        int result;
+	struct cl_page *page;
+	struct cl_page *temp;
+	pgoff_t index = 0;
+	int result;
 
-        LINVRNT(plist->pl_owner == cfs_current());
+	LINVRNT(plist->pl_owner == current);
 
-        ENTRY;
-        result = 0;
-        cl_page_list_for_each_safe(page, temp, plist) {
-                LASSERT(index <= page->cp_index);
-                index = page->cp_index;
-                if (cl_page_own(env, io, page) == 0)
-                        result = result ?: page->cp_error;
-                else
-                        cl_page_list_del(env, plist, page);
-        }
-        RETURN(result);
+	ENTRY;
+	result = 0;
+	cl_page_list_for_each_safe(page, temp, plist) {
+		LASSERT(index <= page->cp_index);
+		index = page->cp_index;
+		if (cl_page_own(env, io, page) == 0)
+			result = result ?: page->cp_error;
+		else
+			cl_page_list_del(env, plist, page);
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_page_list_own);
 
@@ -1259,14 +1259,14 @@ EXPORT_SYMBOL(cl_page_list_own);
  * Assumes all pages in a queue.
  */
 void cl_page_list_assume(const struct lu_env *env,
-                         struct cl_io *io, struct cl_page_list *plist)
+			 struct cl_io *io, struct cl_page_list *plist)
 {
-        struct cl_page *page;
+	struct cl_page *page;
 
-        LINVRNT(plist->pl_owner == cfs_current());
+	LINVRNT(plist->pl_owner == current);
 
-        cl_page_list_for_each(page, plist)
-                cl_page_assume(env, io, page);
+	cl_page_list_for_each(page, plist)
+		cl_page_assume(env, io, page);
 }
 EXPORT_SYMBOL(cl_page_list_assume);
 
@@ -1274,15 +1274,15 @@ EXPORT_SYMBOL(cl_page_list_assume);
  * Discards all pages in a queue.
  */
 void cl_page_list_discard(const struct lu_env *env, struct cl_io *io,
-                          struct cl_page_list *plist)
+			  struct cl_page_list *plist)
 {
-        struct cl_page *page;
+	struct cl_page *page;
 
-        LINVRNT(plist->pl_owner == cfs_current());
-        ENTRY;
-        cl_page_list_for_each(page, plist)
-                cl_page_discard(env, io, page);
-        EXIT;
+	LINVRNT(plist->pl_owner == current);
+	ENTRY;
+	cl_page_list_for_each(page, plist)
+		cl_page_discard(env, io, page);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_discard);
 
@@ -1290,20 +1290,20 @@ EXPORT_SYMBOL(cl_page_list_discard);
  * Unmaps all pages in a queue from user virtual memory.
  */
 int cl_page_list_unmap(const struct lu_env *env, struct cl_io *io,
-                        struct cl_page_list *plist)
+		       struct cl_page_list *plist)
 {
-        struct cl_page *page;
-        int result;
+	struct cl_page *page;
+	int result;
 
-        LINVRNT(plist->pl_owner == cfs_current());
-        ENTRY;
-        result = 0;
-        cl_page_list_for_each(page, plist) {
-                result = cl_page_unmap(env, io, page);
-                if (result != 0)
-                        break;
-        }
-        RETURN(result);
+	LINVRNT(plist->pl_owner == current);
+	ENTRY;
+	result = 0;
+	cl_page_list_for_each(page, plist) {
+		result = cl_page_unmap(env, io, page);
+		if (result != 0)
+			break;
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_page_list_unmap);
 

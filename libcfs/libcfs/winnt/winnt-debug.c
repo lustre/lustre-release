@@ -39,7 +39,7 @@
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
-void libcfs_debug_dumpstack(cfs_task_t *tsk)
+void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 	return;
 }
@@ -48,9 +48,9 @@ void libcfs_run_debug_log_upcall(char *file)
 {
 }
 
-cfs_task_t *libcfs_current(void)
+struct task_struct *libcfs_current(void)
 {
-	return cfs_current();
+	return current;
 }
 
 void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)

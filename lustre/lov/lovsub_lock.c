@@ -66,26 +66,26 @@ static void lovsub_lock_fini(const struct lu_env *env,
 
 static void lovsub_parent_lock(const struct lu_env *env, struct lov_lock *lov)
 {
-        struct cl_lock *parent;
+	struct cl_lock *parent;
 
-        ENTRY;
-        parent = lov->lls_cl.cls_lock;
-        cl_lock_get(parent);
-        lu_ref_add(&parent->cll_reference, "lovsub-parent", cfs_current());
-        cl_lock_mutex_get(env, parent);
-        EXIT;
+	ENTRY;
+	parent = lov->lls_cl.cls_lock;
+	cl_lock_get(parent);
+	lu_ref_add(&parent->cll_reference, "lovsub-parent", current);
+	cl_lock_mutex_get(env, parent);
+	EXIT;
 }
 
 static void lovsub_parent_unlock(const struct lu_env *env, struct lov_lock *lov)
 {
-        struct cl_lock *parent;
+	struct cl_lock *parent;
 
-        ENTRY;
-        parent = lov->lls_cl.cls_lock;
-        cl_lock_mutex_put(env, lov->lls_cl.cls_lock);
-        lu_ref_del(&parent->cll_reference, "lovsub-parent", cfs_current());
-        cl_lock_put(env, parent);
-        EXIT;
+	ENTRY;
+	parent = lov->lls_cl.cls_lock;
+	cl_lock_mutex_put(env, lov->lls_cl.cls_lock);
+	lu_ref_del(&parent->cll_reference, "lovsub-parent", current);
+	cl_lock_put(env, parent);
+	EXIT;
 }
 
 /**

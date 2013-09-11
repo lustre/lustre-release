@@ -653,7 +653,7 @@ kptllnd_thread_fini (void)
 int
 kptllnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	cfs_atomic_inc(&kptllnd_data.kptl_nthreads);
 

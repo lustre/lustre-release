@@ -291,7 +291,7 @@ static int mdt_ck_thread_main(void *args)
 int mdt_ck_thread_start(struct mdt_device *mdt)
 {
 	struct ptlrpc_thread *thread = &mdt->mdt_ck_thread;
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	init_waitqueue_head(&thread->t_ctl_waitq);
 	task = kthread_run(mdt_ck_thread_main, mdt, "mdt_ck");

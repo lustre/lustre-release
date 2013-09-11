@@ -1678,9 +1678,9 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                 if (&lock->l_lru == &ns->ns_unused_list)
                         break;
 
-                LDLM_LOCK_GET(lock);
+		LDLM_LOCK_GET(lock);
 		spin_unlock(&ns->ns_lock);
-                lu_ref_add(&lock->l_reference, __FUNCTION__, cfs_current());
+		lu_ref_add(&lock->l_reference, __FUNCTION__, current);
 
 		/* Pass the lock through the policy filter and see if it
 		 * should stay in LRU.
@@ -1695,64 +1695,64 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
 		 * old locks, but additionally choose them by
 		 * their weight. Big extent locks will stay in
 		 * the cache. */
-                result = pf(ns, lock, unused, added, count);
-                if (result == LDLM_POLICY_KEEP_LOCK) {
-                        lu_ref_del(&lock->l_reference,
-                                   __FUNCTION__, cfs_current());
-                        LDLM_LOCK_RELEASE(lock);
+		result = pf(ns, lock, unused, added, count);
+		if (result == LDLM_POLICY_KEEP_LOCK) {
+			lu_ref_del(&lock->l_reference,
+				   __FUNCTION__, current);
+			LDLM_LOCK_RELEASE(lock);
 			spin_lock(&ns->ns_lock);
 			break;
 		}
 		if (result == LDLM_POLICY_SKIP_LOCK) {
 			lu_ref_del(&lock->l_reference,
-				   __func__, cfs_current());
+				   __func__, current);
 			LDLM_LOCK_RELEASE(lock);
 			spin_lock(&ns->ns_lock);
-                        continue;
-                }
+			continue;
+		}
 
-                lock_res_and_lock(lock);
-                /* Check flags again under the lock. */
-                if ((lock->l_flags & LDLM_FL_CANCELING) ||
-                    (ldlm_lock_remove_from_lru(lock) == 0)) {
+		lock_res_and_lock(lock);
+		/* Check flags again under the lock. */
+		if ((lock->l_flags & LDLM_FL_CANCELING) ||
+		    (ldlm_lock_remove_from_lru(lock) == 0)) {
 			/* Another thread is removing lock from LRU, or
 			 * somebody is already doing CANCEL, or there
 			 * is a blocking request which will send cancel
 			 * by itself, or the lock is no longer unused. */
-                        unlock_res_and_lock(lock);
-                        lu_ref_del(&lock->l_reference,
-                                   __FUNCTION__, cfs_current());
-                        LDLM_LOCK_RELEASE(lock);
+			unlock_res_and_lock(lock);
+			lu_ref_del(&lock->l_reference,
+				   __FUNCTION__, current);
+			LDLM_LOCK_RELEASE(lock);
 			spin_lock(&ns->ns_lock);
-                        continue;
-                }
-                LASSERT(!lock->l_readers && !lock->l_writers);
+			continue;
+		}
+		LASSERT(!lock->l_readers && !lock->l_writers);
 
-                /* If we have chosen to cancel this lock voluntarily, we
-                 * better send cancel notification to server, so that it
-                 * frees appropriate state. This might lead to a race
-                 * where while we are doing cancel here, server is also
-                 * silently cancelling this lock. */
-                lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
+		/* If we have chosen to cancel this lock voluntarily, we
+		 * better send cancel notification to server, so that it
+		 * frees appropriate state. This might lead to a race
+		 * where while we are doing cancel here, server is also
+		 * silently cancelling this lock. */
+		lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
 
-                /* Setting the CBPENDING flag is a little misleading,
-                 * but prevents an important race; namely, once
-                 * CBPENDING is set, the lock can accumulate no more
-                 * readers/writers. Since readers and writers are
-                 * already zero here, ldlm_lock_decref() won't see
-                 * this flag and call l_blocking_ast */
-                lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING;
+		/* Setting the CBPENDING flag is a little misleading,
+		 * but prevents an important race; namely, once
+		 * CBPENDING is set, the lock can accumulate no more
+		 * readers/writers. Since readers and writers are
+		 * already zero here, ldlm_lock_decref() won't see
+		 * this flag and call l_blocking_ast */
+		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING;
 
-                /* We can't re-add to l_lru as it confuses the
-                 * refcounting in ldlm_lock_remove_from_lru() if an AST
-                 * arrives after we drop lr_lock below. We use l_bl_ast
-                 * and can't use l_pending_chain as it is used both on
-                 * server and client nevertheless bug 5666 says it is
-                 * used only on server */
-                LASSERT(cfs_list_empty(&lock->l_bl_ast));
-                cfs_list_add(&lock->l_bl_ast, cancels);
-                unlock_res_and_lock(lock);
-                lu_ref_del(&lock->l_reference, __FUNCTION__, cfs_current());
+		/* We can't re-add to l_lru as it confuses the
+		 * refcounting in ldlm_lock_remove_from_lru() if an AST
+		 * arrives after we drop lr_lock below. We use l_bl_ast
+		 * and can't use l_pending_chain as it is used both on
+		 * server and client nevertheless bug 5666 says it is
+		 * used only on server */
+		LASSERT(cfs_list_empty(&lock->l_bl_ast));
+		cfs_list_add(&lock->l_bl_ast, cancels);
+		unlock_res_and_lock(lock);
+		lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 		spin_lock(&ns->ns_lock);
 		added++;
 		unused--;

@@ -232,11 +232,11 @@ int cfs_cap_raised(cfs_cap_t cap)
 }
 
 cfs_cap_t cfs_curproc_cap_pack(void) {
-        return cfs_current()->cap_effective;
+	return current->cap_effective;
 }
 
 void cfs_curproc_cap_unpack(cfs_cap_t cap) {
-        cfs_current()->cap_effective = cap;
+	current->cap_effective = cap;
 }
 
 int cfs_capable(cfs_cap_t cap)

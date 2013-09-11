@@ -6064,26 +6064,26 @@ int mdt_get_info(struct mdt_thread_info *info)
 
 /* Pass the ioc down */
 static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
-                         unsigned int cmd, int len, void *data)
+			 unsigned int cmd, int len, void *data)
 {
-        struct lu_context ioctl_session;
-        struct md_device *next = mdt->mdt_child;
-        int rc;
-        ENTRY;
+	struct lu_context ioctl_session;
+	struct md_device *next = mdt->mdt_child;
+	int rc;
+	ENTRY;
 
-        rc = lu_context_init(&ioctl_session, LCT_SESSION);
-        if (rc)
-                RETURN(rc);
-        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
-        lu_context_enter(&ioctl_session);
-        env->le_ses = &ioctl_session;
+	rc = lu_context_init(&ioctl_session, LCT_SESSION);
+	if (rc)
+		RETURN(rc);
+	ioctl_session.lc_thread = (struct ptlrpc_thread *)current;
+	lu_context_enter(&ioctl_session);
+	env->le_ses = &ioctl_session;
 
-        LASSERT(next->md_ops->mdo_iocontrol);
-        rc = next->md_ops->mdo_iocontrol(env, next, cmd, len, data);
+	LASSERT(next->md_ops->mdo_iocontrol);
+	rc = next->md_ops->mdo_iocontrol(env, next, cmd, len, data);
 
-        lu_context_exit(&ioctl_session);
-        lu_context_fini(&ioctl_session);
-        RETURN(rc);
+	lu_context_exit(&ioctl_session);
+	lu_context_fini(&ioctl_session);
+	RETURN(rc);
 }
 
 static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)

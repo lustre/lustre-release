@@ -147,7 +147,7 @@ static spinlock_t waiting_locks_spinlock;   /* BH lock (timer) */
  * All access to it should be under waiting_locks_spinlock.
  */
 static cfs_list_t waiting_locks_list;
-static cfs_timer_t waiting_locks_timer;
+static struct timer_list waiting_locks_timer;
 
 static struct expired_lock_thread {
 	wait_queue_head_t	elt_waitq;
@@ -2522,7 +2522,7 @@ static int ldlm_bl_thread_main(void *arg);
 static int ldlm_bl_thread_start(struct ldlm_bl_pool *blp)
 {
 	struct ldlm_bl_thread_data bltd = { .bltd_blp = blp };
-	cfs_task_t *task;
+	struct task_struct *task;
 
 	init_completion(&bltd.bltd_comp);
 	bltd.bltd_num = cfs_atomic_read(&blp->blp_num_threads);
