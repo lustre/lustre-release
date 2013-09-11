@@ -191,23 +191,25 @@ EXPORT_SYMBOL(libcfs_kkuc_msg_put);
 /* Broadcast groups are global across all mounted filesystems;
  * i.e. registering for a group on 1 fs will get messages for that
  * group from any fs */
-/** A single group reigstration has a uid and a file pointer */
+/** A single group registration has a uid and a file pointer */
 struct kkuc_reg {
-	cfs_list_t	kr_chain;
-	int		kr_uid;
+	cfs_list_t	 kr_chain;
+	int		 kr_uid;
 	struct file	*kr_fp;
-	__u32		kr_data;
+	void		*kr_data;
 };
+
 static cfs_list_t kkuc_groups[KUC_GRP_MAX+1] = {};
 /* Protect message sending against remove and adds */
 static DECLARE_RWSEM(kg_sem);
 
 /** Add a receiver to a broadcast group
  * @param filp pipe to write into
- * @param uid identidier for this receiver
+ * @param uid identifier for this receiver
  * @param group group number
+ * @param data user data
  */
-int libcfs_kkuc_group_add(struct file *filp, int uid, int group, __u32 data)
+int libcfs_kkuc_group_add(struct file *filp, int uid, int group, void *data)
 {
         struct kkuc_reg *reg;
 
@@ -241,7 +243,7 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group, __u32 data)
 }
 EXPORT_SYMBOL(libcfs_kkuc_group_add);
 
-int libcfs_kkuc_group_rem(int uid, int group)
+int libcfs_kkuc_group_rem(int uid, int group, void **pdata)
 {
         struct kkuc_reg *reg, *next;
         ENTRY;
@@ -268,6 +270,8 @@ int libcfs_kkuc_group_rem(int uid, int group)
                                reg->kr_uid, reg->kr_fp, group);
                         if (reg->kr_fp != NULL)
 				fput(reg->kr_fp);
+			if (pdata != NULL)
+				*pdata = reg->kr_data;
 			kfree(reg);
 		}
 	}
@@ -311,14 +315,14 @@ EXPORT_SYMBOL(libcfs_kkuc_group_put);
  * Calls a callback function for each link of the given kuc group.
  * @param group the group to call the function on.
  * @param cb_func the function to be called.
- * @param cb_arg iextra argument to be passed to the callback function.
+ * @param cb_arg extra argument to be passed to the callback function.
  */
 int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
                               void *cb_arg)
 {
-        struct kkuc_reg *reg;
-        int rc = 0;
-        ENTRY;
+	struct kkuc_reg	*reg;
+	int		 rc = 0;
+	ENTRY;
 
         if (group > KUC_GRP_MAX) {
                 CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
