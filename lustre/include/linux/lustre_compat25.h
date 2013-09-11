@@ -301,11 +301,6 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #define DECLARE_LL_D_HLIST_NODE_PTR(name) /* nothing */
 #endif
 
-
-#ifndef HAVE_BI_HW_SEGMENTS
-#define bio_hw_segments(q, bio) 0
-#endif
-
 #ifndef QUOTA_OK
 # define QUOTA_OK 0
 #endif

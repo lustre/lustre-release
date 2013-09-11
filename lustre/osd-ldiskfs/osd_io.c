@@ -335,8 +335,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                        bio->bi_size >> 9, queue_max_sectors(q),
                                        bio_phys_segments(q, bio),
                                        queue_max_phys_segments(q),
-                                       bio_hw_segments(q, bio),
-                                       queue_max_hw_segments(q));
+				       0, queue_max_hw_segments(q));
 
                                 record_start_io(iobuf, bio->bi_size);
                                 osd_submit_bio(iobuf->dr_rw, bio);
