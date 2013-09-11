@@ -137,7 +137,6 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	fed->fed_group = data->ocd_group;
 
 	data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-	exp->exp_connect_data = *data;
 	data->ocd_version = LUSTRE_VERSION_CODE;
 
 	/* Kindly make sure the SKIP_ORPHAN flag is from MDS. */
@@ -156,7 +155,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		data->ocd_grant_extent = ofd->ofd_dt_conf.ddp_grant_frag >> 10;
 	}
 
-	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
+	if (data->ocd_connect_flags & OBD_CONNECT_GRANT)
 		data->ocd_grant = ofd_grant_connect(env, exp, data->ocd_grant,
 						    new_connection);
 

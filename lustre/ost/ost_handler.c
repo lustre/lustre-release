@@ -1559,14 +1559,11 @@ static int ost_llog_handle_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
-#define ost_init_sec_none(reply, exp)					\
+#define ost_init_sec_none(reply)					\
 do {									\
 	reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |		\
 				      OBD_CONNECT_RMT_CLIENT_FORCE |	\
 				      OBD_CONNECT_OSS_CAPA);		\
-	spin_lock(&exp->exp_lock);					\
-	*exp_connect_flags_ptr(exp) = reply->ocd_connect_flags;		\
-	spin_unlock(&exp->exp_lock);					\
 } while (0)
 
 static int ost_init_sec_level(struct ptlrpc_request *req)
@@ -1587,7 +1584,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
 
         /* connection from MDT is always trusted */
         if (req->rq_auth_usr_mdt) {
-                ost_init_sec_none(reply, exp);
+		ost_init_sec_none(reply);
                 RETURN(0);
         }
 
@@ -1599,7 +1596,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                               client, obd->obd_name, filter->fo_sec_level);
                         RETURN(-EACCES);
                 } else {
-                        ost_init_sec_none(reply, exp);
+			ost_init_sec_none(reply);
                         RETURN(0);
                 }
         }
@@ -1616,7 +1613,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                         CWARN("client %s -> target %s uses old version, "
                               "run under security level %d.\n",
                               client, obd->obd_name, filter->fo_sec_level);
-                        ost_init_sec_none(reply, exp);
+			ost_init_sec_none(reply);
                         RETURN(0);
                 }
         }
@@ -1644,7 +1641,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
         switch (filter->fo_sec_level) {
         case LUSTRE_SEC_NONE:
                 if (!remote) {
-                        ost_init_sec_none(reply, exp);
+			ost_init_sec_none(reply);
                         break;
                 } else {
                         CDEBUG(D_SEC, "client %s -> target %s is set as remote, "
@@ -1654,7 +1651,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                 }
         case LUSTRE_SEC_REMOTE:
                 if (!remote)
-                        ost_init_sec_none(reply, exp);
+			ost_init_sec_none(reply);
                 break;
         case LUSTRE_SEC_ALL:
                 if (!remote) {
@@ -1662,10 +1659,6 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                                                       OBD_CONNECT_RMT_CLIENT_FORCE);
                         if (!filter->fo_fl_oss_capa)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
-
-			spin_lock(&exp->exp_lock);
-			*exp_connect_flags_ptr(exp) = reply->ocd_connect_flags;
-			spin_unlock(&exp->exp_lock);
                 }
                 break;
         default:
@@ -2360,6 +2353,18 @@ int ost_handle(struct ptlrpc_request *req)
                         if (!rc)
                                 rc = ost_connect_check_sptlrpc(req);
                 }
+		if (rc == 0) {
+			struct obd_export *exp = req->rq_export;
+			struct obd_connect_data *reply;
+			/* Now that connection handling has completed
+			 * successfully, atomically update the connect flags
+			 * in the shared export data structure.*/
+			reply = req_capsule_server_get(&req->rq_pill,
+						       &RMF_CONNECT_DATA);
+			spin_lock(&exp->exp_lock);
+			exp->exp_connect_data = *reply;
+			spin_unlock(&exp->exp_lock);
+		}
                 break;
         }
         case OST_DISCONNECT:
