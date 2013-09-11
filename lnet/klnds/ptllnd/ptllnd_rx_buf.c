@@ -251,19 +251,19 @@ kptllnd_rx_buffer_pool_fini(kptl_rx_buffer_pool_t *rxbp)
 void
 kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
 {
-        int                     rc;
-        ptl_md_t                md;
-        ptl_handle_me_t         meh;
-        ptl_handle_md_t         mdh;
-        ptl_process_id_t        any;
-        kptl_rx_buffer_pool_t  *rxbp = rxb->rxb_pool;
-        unsigned long           flags;
+	int                     rc;
+	ptl_md_t                md;
+	ptl_handle_me_t         meh;
+	ptl_handle_md_t         mdh;
+	ptl_process_id_t        any;
+	kptl_rx_buffer_pool_t  *rxbp = rxb->rxb_pool;
+	unsigned long           flags;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (rxb->rxb_refcount == 0);
-        LASSERT (!rxb->rxb_idle);
-        LASSERT (!rxb->rxb_posted);
-        LASSERT (PtlHandleIsEqual(rxb->rxb_mdh, PTL_INVALID_HANDLE));
+	LASSERT (!in_interrupt());
+	LASSERT (rxb->rxb_refcount == 0);
+	LASSERT (!rxb->rxb_idle);
+	LASSERT (!rxb->rxb_posted);
+	LASSERT (PtlHandleIsEqual(rxb->rxb_mdh, PTL_INVALID_HANDLE));
 
         any.nid = PTL_NID_ANY;
         any.pid = PTL_PID_ANY;
@@ -560,16 +560,16 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_net_t             *net = NULL;
         kptl_peer_t            *peer;
-        cfs_list_t              txs;
-        unsigned long           flags;
-        lnet_process_id_t       srcid;
+	cfs_list_t              txs;
+	unsigned long           flags;
+	lnet_process_id_t       srcid;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (rx->rx_peer == NULL);
+	LASSERT (!in_interrupt());
+	LASSERT (rx->rx_peer == NULL);
 
-        CFS_INIT_LIST_HEAD(&txs);
+	CFS_INIT_LIST_HEAD(&txs);
 
-        if ((rx->rx_nob >= 4 &&
+	if ((rx->rx_nob >= 4 &&
              (msg->ptlm_magic == LNET_PROTO_MAGIC ||
               msg->ptlm_magic == __swab32(LNET_PROTO_MAGIC))) ||
             (rx->rx_nob >= 6 &&

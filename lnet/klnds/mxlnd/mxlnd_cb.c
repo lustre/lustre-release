@@ -345,8 +345,8 @@ mxlnd_connparams_alloc(kmx_connparams_t **cp, void *context,
 static inline void
 mxlnd_set_conn_status(kmx_conn_t *conn, int status)
 {
-        conn->mxk_status = status;
-        cfs_mb();
+	conn->mxk_status = status;
+	smp_mb();
 }
 
 /**

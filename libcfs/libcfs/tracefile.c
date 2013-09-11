@@ -72,7 +72,7 @@ static struct cfs_trace_page *cfs_tage_alloc(int gfp)
 	struct cfs_trace_page *tage;
 
 	/* My caller is trying to free memory */
-	if (!cfs_in_interrupt() && memory_pressure_get())
+	if (!in_interrupt() && memory_pressure_get())
 		return NULL;
 
 	/*
@@ -157,7 +157,7 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 			tage = cfs_tage_alloc(GFP_ATOMIC);
 			if (unlikely(tage == NULL)) {
 				if ((!memory_pressure_get() ||
-				     cfs_in_interrupt()) && printk_ratelimit())
+				     in_interrupt()) && printk_ratelimit())
 					printk(KERN_WARNING
 					       "cannot allocate a tage (%ld)\n",
 					       tcd->tcd_cur_pages);
@@ -488,7 +488,7 @@ cfs_trace_assertion_failed(const char *str,
 
 	libcfs_panic_in_progress = 1;
 	libcfs_catastrophe = 1;
-	cfs_mb();
+	smp_mb();
 
 	cfs_set_ptldebug_header(&hdr, msgdata, CDEBUG_STACK());
 

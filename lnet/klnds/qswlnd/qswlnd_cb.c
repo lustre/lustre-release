@@ -398,16 +398,16 @@ kqswnal_get_idle_tx (void)
 void
 kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
 {
-        lnet_msg_t    *lnetmsg0 = NULL;
-        lnet_msg_t    *lnetmsg1 = NULL;
-        int            status0  = 0;
-        int            status1  = 0;
-        kqswnal_rx_t  *krx;
+	lnet_msg_t    *lnetmsg0 = NULL;
+	lnet_msg_t    *lnetmsg1 = NULL;
+	int            status0  = 0;
+	int            status1  = 0;
+	kqswnal_rx_t  *krx;
 
-        LASSERT (!cfs_in_interrupt());
+	LASSERT (!in_interrupt());
 
-        if (ktx->ktx_status == -EHOSTDOWN)
-                kqswnal_notify_peer_down(ktx);
+	if (ktx->ktx_status == -EHOSTDOWN)
+		kqswnal_notify_peer_down(ktx);
 
         switch (ktx->ktx_state) {
         case KTX_RDMA_FETCH:                    /* optimized PUT/REPLY handled */
@@ -504,16 +504,16 @@ kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
 void
 kqswnal_tx_done (kqswnal_tx_t *ktx, int status)
 {
-        unsigned long      flags;
+	unsigned long      flags;
 
-        ktx->ktx_status = status;
+	ktx->ktx_status = status;
 
-        if (!cfs_in_interrupt()) {
-                kqswnal_tx_done_in_thread_context(ktx);
-                return;
-        }
+	if (!in_interrupt()) {
+		kqswnal_tx_done_in_thread_context(ktx);
+		return;
+	}
 
-        /* Complete the send in thread context */
+	/* Complete the send in thread context */
 	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
 	cfs_list_add_tail(&ktx->ktx_schedlist,
@@ -602,13 +602,13 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 int
 kqswnal_launch (kqswnal_tx_t *ktx)
 {
-        /* Don't block for transmit descriptor if we're in interrupt context */
-        int   attr = cfs_in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
-        int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
-        unsigned long flags;
-        int   rc;
+	/* Don't block for transmit descriptor if we're in interrupt context */
+	int   attr = in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
+	int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
+	unsigned long flags;
+	int   rc;
 
-        ktx->ktx_launchtime = cfs_time_current();
+	ktx->ktx_launchtime = cfs_time_current();
 
         if (kqswnal_data.kqn_shuttingdown)
                 return (-ESHUTDOWN);
@@ -1005,18 +1005,18 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         CDEBUG(D_NET, "sending %u bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
-        LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= LNET_MAX_IOV);
+	LASSERT (payload_nob == 0 || payload_niov > 0);
+	LASSERT (payload_niov <= LNET_MAX_IOV);
 
-        /* It must be OK to kmap() if required */
-        LASSERT (payload_kiov == NULL || !cfs_in_interrupt ());
-        /* payload is either all vaddrs or all pages */
-        LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
+	/* It must be OK to kmap() if required */
+	LASSERT (payload_kiov == NULL || !in_interrupt ());
+	/* payload is either all vaddrs or all pages */
+	LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
-        if (kqswnal_nid2elanid (target.nid) < 0) {
-                CERROR("%s not in my cluster\n", libcfs_nid2str(target.nid));
-                return -EIO;
-        }
+	if (kqswnal_nid2elanid (target.nid) < 0) {
+		CERROR("%s not in my cluster\n", libcfs_nid2str(target.nid));
+		return -EIO;
+	}
 
         /* I may not block for a transmit descriptor if I might block the
          * router, receiver, or an interrupt handler. */
@@ -1296,29 +1296,29 @@ kqswnal_rpc_complete (EP_RXD *rxd)
 void
 kqswnal_rx_done (kqswnal_rx_t *krx) 
 {
-        int           rc;
+	int           rc;
 
-        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
+	LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
 
-        if (krx->krx_rpc_reply_needed) {
-                /* We've not completed the peer's RPC yet... */
-                krx->krx_rpc_reply.msg.magic   = LNET_PROTO_QSW_MAGIC;
-                krx->krx_rpc_reply.msg.version = QSWLND_PROTO_VERSION;
+	if (krx->krx_rpc_reply_needed) {
+		/* We've not completed the peer's RPC yet... */
+		krx->krx_rpc_reply.msg.magic   = LNET_PROTO_QSW_MAGIC;
+		krx->krx_rpc_reply.msg.version = QSWLND_PROTO_VERSION;
 
-                LASSERT (!cfs_in_interrupt());
+		LASSERT (!in_interrupt());
 
-                rc = ep_complete_rpc(krx->krx_rxd, 
-                                     kqswnal_rpc_complete, krx,
-                                     &krx->krx_rpc_reply.ep_statusblk, 
-                                     NULL, NULL, 0);
-                if (rc == EP_SUCCESS)
-                        return;
+		rc = ep_complete_rpc(krx->krx_rxd,
+				     kqswnal_rpc_complete, krx,
+				     &krx->krx_rpc_reply.ep_statusblk,
+				     NULL, NULL, 0);
+		if (rc == EP_SUCCESS)
+			return;
 
-                CERROR("can't complete RPC: %d\n", rc);
-                krx->krx_rpc_reply_needed = 0;
-        }
+		CERROR("can't complete RPC: %d\n", rc);
+		krx->krx_rpc_reply_needed = 0;
+	}
 
-        kqswnal_requeue_rx(krx);
+	kqswnal_requeue_rx(krx);
 }
         
 void
@@ -1530,14 +1530,14 @@ kqswnal_rxhandler(EP_RXD *rxd)
                 else
                         CERROR("receive status failed with status %d nob %d\n",
                                ep_rxd_status(rxd), nob);
-                kqswnal_rx_decref(krx);
-                return;
-        }
+		kqswnal_rx_decref(krx);
+		return;
+	}
 
-        if (!cfs_in_interrupt()) {
-                kqswnal_parse(krx);
-                return;
-        }
+	if (!in_interrupt()) {
+		kqswnal_parse(krx);
+		return;
+	}
 
 	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
@@ -1559,17 +1559,17 @@ kqswnal_recv (lnet_ni_t     *ni,
               unsigned int   mlen,
               unsigned int   rlen)
 {
-        kqswnal_rx_t       *krx = (kqswnal_rx_t *)private;
-        lnet_nid_t          fromnid;
-        kqswnal_msg_t      *msg;
-        lnet_hdr_t         *hdr;
-        kqswnal_remotemd_t *rmd;
-        int                 msg_offset;
-        int                 rc;
+	kqswnal_rx_t       *krx = (kqswnal_rx_t *)private;
+	lnet_nid_t          fromnid;
+	kqswnal_msg_t      *msg;
+	lnet_hdr_t         *hdr;
+	kqswnal_remotemd_t *rmd;
+	int                 msg_offset;
+	int                 rc;
 
-        LASSERT (!cfs_in_interrupt ());             /* OK to map */
-        /* Either all pages or all vaddrs */
-        LASSERT (!(kiov != NULL && iov != NULL));
+	LASSERT (!in_interrupt ());             /* OK to map */
+	/* Either all pages or all vaddrs */
+	LASSERT (!(kiov != NULL && iov != NULL));
 
         fromnid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ep_rxd_node(krx->krx_rxd));
         msg = (kqswnal_msg_t *)page_address(krx->krx_kiov[0].kiov_page);

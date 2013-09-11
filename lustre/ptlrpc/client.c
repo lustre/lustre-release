@@ -2344,17 +2344,17 @@ EXPORT_SYMBOL(ptlrpc_req_xid);
  */
 int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 {
-        int                rc;
-        struct l_wait_info lwi;
+	int                rc;
+	struct l_wait_info lwi;
 
-        /*
-         * Might sleep.
-         */
-        LASSERT(!cfs_in_interrupt());
+	/*
+	 * Might sleep.
+	 */
+	LASSERT(!in_interrupt());
 
-        /*
-         * Let's setup deadline for reply unlink.
-         */
+	/*
+	 * Let's setup deadline for reply unlink.
+	 */
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             async && request->rq_reply_deadline == 0)
                 request->rq_reply_deadline = cfs_time_current_sec()+LONG_UNLINK;
@@ -2996,16 +2996,16 @@ static int work_interpreter(const struct lu_env *env,
  * Create a work for ptlrpc.
  */
 void *ptlrpcd_alloc_work(struct obd_import *imp,
-                         int (*cb)(const struct lu_env *, void *), void *cbdata)
+			 int (*cb)(const struct lu_env *, void *), void *cbdata)
 {
-        struct ptlrpc_request         *req = NULL;
-        struct ptlrpc_work_async_args *args;
-        ENTRY;
+	struct ptlrpc_request         *req = NULL;
+	struct ptlrpc_work_async_args *args;
+	ENTRY;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        if (cb == NULL)
-                RETURN(ERR_PTR(-EINVAL));
+	if (cb == NULL)
+		RETURN(ERR_PTR(-EINVAL));
 
         /* copy some code from deprecated fakereq. */
         req = ptlrpc_request_cache_alloc(__GFP_IO);

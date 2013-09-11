@@ -215,17 +215,17 @@ ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 if (rc > 0)                     /* sent something? */
                         conn->ksnc_tx_bufnob += rc; /* account it */
 
-                if (bufnob < conn->ksnc_tx_bufnob) {
-                        /* allocated send buffer bytes < computed; infer
-                         * something got ACKed */
-                        conn->ksnc_tx_deadline =
-                                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-                        conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
-                        conn->ksnc_tx_bufnob = bufnob;
-                        cfs_mb();
-                }
+		if (bufnob < conn->ksnc_tx_bufnob) {
+			/* allocated send buffer bytes < computed; infer
+			 * something got ACKed */
+			conn->ksnc_tx_deadline =
+				cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+			conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+			conn->ksnc_tx_bufnob = bufnob;
+			smp_mb();
+		}
 
-                if (rc <= 0) { /* Didn't write anything? */
+		if (rc <= 0) { /* Didn't write anything? */
 
                         if (rc == 0) /* some stacks return 0 instead of -EAGAIN */
                                 rc = -EAGAIN;
@@ -266,14 +266,14 @@ ksocknal_recv_iov (ksock_conn_t *conn)
         /* received something... */
         nob = rc;
 
-        conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
-        conn->ksnc_rx_deadline =
-                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-        cfs_mb();                       /* order with setting rx_started */
-        conn->ksnc_rx_started = 1;
+	conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+	conn->ksnc_rx_deadline =
+		cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+	smp_mb();                       /* order with setting rx_started */
+	conn->ksnc_rx_started = 1;
 
-        conn->ksnc_rx_nob_wanted -= nob;
-        conn->ksnc_rx_nob_left -= nob;
+	conn->ksnc_rx_nob_wanted -= nob;
+	conn->ksnc_rx_nob_left -= nob;
 
         do {
                 LASSERT (conn->ksnc_rx_niov > 0);
@@ -310,14 +310,14 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         /* received something... */
         nob = rc;
 
-        conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
-        conn->ksnc_rx_deadline =
-                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-        cfs_mb();                       /* order with setting rx_started */
-        conn->ksnc_rx_started = 1;
+	conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+	conn->ksnc_rx_deadline =
+		cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+	smp_mb();                       /* order with setting rx_started */
+	conn->ksnc_rx_started = 1;
 
-        conn->ksnc_rx_nob_wanted -= nob;
-        conn->ksnc_rx_nob_left -= nob;
+	conn->ksnc_rx_nob_wanted -= nob;
+	conn->ksnc_rx_nob_left -= nob;
 
         do {
                 LASSERT (conn->ksnc_rx_nkiov > 0);
@@ -731,19 +731,19 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
 	spin_lock_bh(&sched->kss_lock);
 
-        if (cfs_list_empty(&conn->ksnc_tx_queue) && bufnob == 0) {
-                /* First packet starts the timeout */
-                conn->ksnc_tx_deadline =
-                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
-                if (conn->ksnc_tx_bufnob > 0) /* something got ACKed */
-                        conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
-                conn->ksnc_tx_bufnob = 0;
-                cfs_mb(); /* order with adding to tx_queue */
-        }
+	if (cfs_list_empty(&conn->ksnc_tx_queue) && bufnob == 0) {
+		/* First packet starts the timeout */
+		conn->ksnc_tx_deadline =
+			cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+		if (conn->ksnc_tx_bufnob > 0) /* something got ACKed */
+			conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+		conn->ksnc_tx_bufnob = 0;
+		smp_mb(); /* order with adding to tx_queue */
+	}
 
-        if (msg->ksm_type == KSOCK_MSG_NOOP) {
-                /* The packet is noop ZC ACK, try to piggyback the ack_cookie
-                 * on a normal packet so I don't need to send it */
+	if (msg->ksm_type == KSOCK_MSG_NOOP) {
+		/* The packet is noop ZC ACK, try to piggyback the ack_cookie
+		 * on a normal packet so I don't need to send it */
                 LASSERT (msg->ksm_zc_cookies[1] != 0);
                 LASSERT (conn->ksnc_proto->pro_queue_tx_zcack != NULL);
 
@@ -946,18 +946,18 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         CDEBUG(D_NET, "sending %u bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
-        LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= LNET_MAX_IOV);
-        /* payload is either all vaddrs or all pages */
-        LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (payload_nob == 0 || payload_niov > 0);
+	LASSERT (payload_niov <= LNET_MAX_IOV);
+	/* payload is either all vaddrs or all pages */
+	LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
+	LASSERT (!in_interrupt ());
 
-        if (payload_iov != NULL)
-                desc_size = offsetof(ksock_tx_t,
-                                     tx_frags.virt.iov[1 + payload_niov]);
-        else
-                desc_size = offsetof(ksock_tx_t,
-                                     tx_frags.paged.kiov[payload_niov]);
+	if (payload_iov != NULL)
+		desc_size = offsetof(ksock_tx_t,
+				     tx_frags.virt.iov[1 + payload_niov]);
+	else
+		desc_size = offsetof(ksock_tx_t,
+				     tx_frags.paged.kiov[payload_niov]);
 
         if (lntmsg->msg_vmflush)
                 mpflag = cfs_memory_pressure_get_and_set();
@@ -1044,13 +1044,13 @@ ksocknal_new_packet (ksock_conn_t *conn, int nob_to_skip)
                 ksocknal_lib_eager_ack(conn);
         }
 
-        if (nob_to_skip == 0) {         /* right at next packet boundary now */
-                conn->ksnc_rx_started = 0;
-                cfs_mb();                       /* racing with timeout thread */
+	if (nob_to_skip == 0) {         /* right at next packet boundary now */
+		conn->ksnc_rx_started = 0;
+		smp_mb();                       /* racing with timeout thread */
 
-                switch (conn->ksnc_proto->pro_version) {
-                case  KSOCK_PROTO_V2:
-                case  KSOCK_PROTO_V3:
+		switch (conn->ksnc_proto->pro_version) {
+		case  KSOCK_PROTO_V2:
+		case  KSOCK_PROTO_V3:
                         conn->ksnc_rx_state = SOCKNAL_RX_KSM_HEADER;
                         conn->ksnc_rx_iov = (struct iovec *)&conn->ksnc_rx_iov_space;
                         conn->ksnc_rx_iov[0].iov_base = (char *)&conn->ksnc_msg;

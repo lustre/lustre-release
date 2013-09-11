@@ -159,7 +159,7 @@ do {						\
 
 #define LIBCFS_ALLOC_PRE(size, mask)					    \
 do {									    \
-	LASSERT(!cfs_in_interrupt() ||					    \
+	LASSERT(!in_interrupt() ||					    \
 		((size) <= LIBCFS_VMALLOC_SIZE &&			    \
 		 ((mask) & GFP_ATOMIC)) != 0);			    \
 } while (0)

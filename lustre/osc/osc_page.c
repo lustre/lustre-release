@@ -63,23 +63,23 @@ static int osc_page_is_dlocked(const struct lu_env *env,
                                const struct osc_page *opg,
                                enum cl_lock_mode mode, int pending, int unref)
 {
-        struct cl_page         *page;
-        struct osc_object      *obj;
-        struct osc_thread_info *info;
-        struct ldlm_res_id     *resname;
-        struct lustre_handle   *lockh;
-        ldlm_policy_data_t     *policy;
-        ldlm_mode_t             dlmmode;
-        int                     flags;
+	struct cl_page         *page;
+	struct osc_object      *obj;
+	struct osc_thread_info *info;
+	struct ldlm_res_id     *resname;
+	struct lustre_handle   *lockh;
+	ldlm_policy_data_t     *policy;
+	ldlm_mode_t             dlmmode;
+	int                     flags;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        info = osc_env_info(env);
-        resname = &info->oti_resname;
-        policy = &info->oti_policy;
-        lockh = &info->oti_handle;
-        page = opg->ops_cl.cpl_page;
-        obj = cl2osc(opg->ops_cl.cpl_obj);
+	info = osc_env_info(env);
+	resname = &info->oti_resname;
+	policy = &info->oti_policy;
+	lockh = &info->oti_handle;
+	page = opg->ops_cl.cpl_page;
+	obj = cl2osc(opg->ops_cl.cpl_obj);
 
         flags = LDLM_FL_TEST_LOCK | LDLM_FL_BLOCK_GRANTED;
         if (pending)

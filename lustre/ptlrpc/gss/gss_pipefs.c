@@ -425,14 +425,14 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_pf(struct ptlrpc_sec *sec,
         struct ptlrpc_cli_ctx  *ctx = NULL, *new = NULL;
         cfs_hlist_head_t       *hash_head;
         cfs_hlist_node_t       *pos, *next;
-        CFS_HLIST_HEAD(freelist);
-        unsigned int            hash, gc = 0, found = 0;
-        ENTRY;
+	CFS_HLIST_HEAD(freelist);
+	unsigned int            hash, gc = 0, found = 0;
+	ENTRY;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        gsec = container_of(sec, struct gss_sec, gs_base);
-        gsec_pf = container_of(gsec, struct gss_sec_pipefs, gsp_base);
+	gsec = container_of(sec, struct gss_sec, gs_base);
+	gsec_pf = container_of(gsec, struct gss_sec_pipefs, gsp_base);
 
         hash = ctx_hash_index(gsec_pf->gsp_chash_size,
                               (__u64) vcred->vc_uid);
@@ -546,15 +546,15 @@ int gss_sec_flush_ctx_cache_pf(struct ptlrpc_sec *sec,
         struct gss_sec          *gsec;
         struct gss_sec_pipefs   *gsec_pf;
         struct ptlrpc_cli_ctx   *ctx;
-        cfs_hlist_node_t        *pos, *next;
-        CFS_HLIST_HEAD(freelist);
-        int i, busy = 0;
-        ENTRY;
+	cfs_hlist_node_t        *pos, *next;
+	CFS_HLIST_HEAD(freelist);
+	int i, busy = 0;
+	ENTRY;
 
-        might_sleep_if(grace);
+	might_sleep_if(grace);
 
-        gsec = container_of(sec, struct gss_sec, gs_base);
-        gsec_pf = container_of(gsec, struct gss_sec_pipefs, gsp_base);
+	gsec = container_of(sec, struct gss_sec, gs_base);
+	gsec_pf = container_of(gsec, struct gss_sec_pipefs, gsp_base);
 
 	spin_lock(&sec->ps_lock);
         for (i = 0; i < gsec_pf->gsp_chash_size; i++) {
@@ -1041,17 +1041,17 @@ static struct rpc_pipe_ops gss_upcall_ops = {
 static
 int gss_ctx_refresh_pf(struct ptlrpc_cli_ctx *ctx)
 {
-        struct obd_import          *imp;
-        struct gss_sec             *gsec;
-        struct gss_upcall_msg      *gmsg;
-        int                         rc = 0;
-        ENTRY;
+	struct obd_import          *imp;
+	struct gss_sec             *gsec;
+	struct gss_upcall_msg      *gmsg;
+	int                         rc = 0;
+	ENTRY;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        LASSERT(ctx->cc_sec);
-        LASSERT(ctx->cc_sec->ps_import);
-        LASSERT(ctx->cc_sec->ps_import->imp_obd);
+	LASSERT(ctx->cc_sec);
+	LASSERT(ctx->cc_sec->ps_import);
+	LASSERT(ctx->cc_sec->ps_import->imp_obd);
 
         imp = ctx->cc_sec->ps_import;
         if (!imp->imp_connection) {

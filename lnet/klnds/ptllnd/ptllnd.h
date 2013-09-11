@@ -554,10 +554,10 @@ kptllnd_tx_addref(kptl_tx_t *tx)
 static inline void
 kptllnd_tx_decref(kptl_tx_t *tx)
 {
-        LASSERT (!cfs_in_interrupt());        /* Thread context only */
+	LASSERT (!in_interrupt());        /* Thread context only */
 
-        if (cfs_atomic_dec_and_test(&tx->tx_refcount))
-                kptllnd_tx_fini(tx);
+	if (cfs_atomic_dec_and_test(&tx->tx_refcount))
+		kptllnd_tx_fini(tx);
 }
 
 /*

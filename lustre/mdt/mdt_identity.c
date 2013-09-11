@@ -75,21 +75,21 @@ static void mdt_identity_entry_init(struct upcall_cache_entry *entry,
 }
 
 static void mdt_identity_entry_free(struct upcall_cache *cache,
-                                    struct upcall_cache_entry *entry)
+				    struct upcall_cache_entry *entry)
 {
-        struct md_identity *identity = &entry->u.identity;
+	struct md_identity *identity = &entry->u.identity;
 
-        if (identity->mi_ginfo) {
-                cfs_put_group_info(identity->mi_ginfo);
-                identity->mi_ginfo = NULL;
-        }
+	if (identity->mi_ginfo) {
+		put_group_info(identity->mi_ginfo);
+		identity->mi_ginfo = NULL;
+	}
 
-        if (identity->mi_nperms) {
-                LASSERT(identity->mi_perms);
-                OBD_FREE(identity->mi_perms,
-                         identity->mi_nperms * sizeof(struct md_perm));
-                identity->mi_nperms = 0;
-        }
+	if (identity->mi_nperms) {
+		LASSERT(identity->mi_perms);
+		OBD_FREE(identity->mi_perms,
+			 identity->mi_nperms * sizeof(struct md_perm));
+		identity->mi_nperms = 0;
+	}
 }
 
 static int mdt_identity_do_upcall(struct upcall_cache *cache,
@@ -147,59 +147,59 @@ out:
 }
 
 static int mdt_identity_parse_downcall(struct upcall_cache *cache,
-                                       struct upcall_cache_entry *entry,
-                                       void *args)
+				       struct upcall_cache_entry *entry,
+				       void *args)
 {
-        struct md_identity *identity = &entry->u.identity;
-        struct identity_downcall_data *data = args;
-        cfs_group_info_t *ginfo = NULL;
-        struct md_perm *perms = NULL;
-        int size, i;
-        ENTRY;
+	struct md_identity *identity = &entry->u.identity;
+	struct identity_downcall_data *data = args;
+	struct group_info *ginfo = NULL;
+	struct md_perm *perms = NULL;
+	int size, i;
+	ENTRY;
 
-        LASSERT(data);
-        if (data->idd_ngroups > NGROUPS_MAX)
-                RETURN(-E2BIG);
+	LASSERT(data);
+	if (data->idd_ngroups > NGROUPS_MAX)
+		RETURN(-E2BIG);
 
-        if (data->idd_ngroups > 0) {
-                ginfo = cfs_groups_alloc(data->idd_ngroups);
-                if (!ginfo) {
-                        CERROR("failed to alloc %d groups\n", data->idd_ngroups);
-                        RETURN(-ENOMEM);
-                }
+	if (data->idd_ngroups > 0) {
+		ginfo = groups_alloc(data->idd_ngroups);
+		if (!ginfo) {
+			CERROR("failed to alloc %d groups\n", data->idd_ngroups);
+			RETURN(-ENOMEM);
+		}
 
-                lustre_groups_from_list(ginfo, data->idd_groups);
-                lustre_groups_sort(ginfo);
-        }
+		lustre_groups_from_list(ginfo, data->idd_groups);
+		lustre_groups_sort(ginfo);
+	}
 
-        if (data->idd_nperms) {
-                size = data->idd_nperms * sizeof(*perms);
-                OBD_ALLOC(perms, size);
-                if (!perms) {
-                        CERROR("failed to alloc %d permissions\n",
-                               data->idd_nperms);
-                        if (ginfo != NULL)
-                                cfs_put_group_info(ginfo);
-                        RETURN(-ENOMEM);
-                }
+	if (data->idd_nperms) {
+		size = data->idd_nperms * sizeof(*perms);
+		OBD_ALLOC(perms, size);
+		if (!perms) {
+			CERROR("failed to alloc %d permissions\n",
+			       data->idd_nperms);
+			if (ginfo != NULL)
+				put_group_info(ginfo);
+			RETURN(-ENOMEM);
+		}
 
-                for (i = 0; i < data->idd_nperms; i++) {
-                        perms[i].mp_nid = data->idd_perms[i].pdd_nid;
-                        perms[i].mp_perm = data->idd_perms[i].pdd_perm;
-                }
-        }
+		for (i = 0; i < data->idd_nperms; i++) {
+			perms[i].mp_nid = data->idd_perms[i].pdd_nid;
+			perms[i].mp_perm = data->idd_perms[i].pdd_perm;
+		}
+	}
 
-        identity->mi_uid = data->idd_uid;
-        identity->mi_gid = data->idd_gid;
-        identity->mi_ginfo = ginfo;
-        identity->mi_nperms = data->idd_nperms;
-        identity->mi_perms = perms;
+	identity->mi_uid = data->idd_uid;
+	identity->mi_gid = data->idd_gid;
+	identity->mi_ginfo = ginfo;
+	identity->mi_nperms = data->idd_nperms;
+	identity->mi_perms = perms;
 
-        CDEBUG(D_OTHER, "parse mdt identity@%p: %d:%d, ngroups %u, nperms %u\n",
-               identity, identity->mi_uid, identity->mi_gid,
-               data->idd_ngroups, data->idd_nperms);
+	CDEBUG(D_OTHER, "parse mdt identity@%p: %d:%d, ngroups %u, nperms %u\n",
+	       identity, identity->mi_uid, identity->mi_gid,
+	       data->idd_ngroups, data->idd_nperms);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)

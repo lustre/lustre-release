@@ -141,7 +141,7 @@ cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
 void
 cfs_wi_exit(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 {
-	LASSERT(!cfs_in_interrupt()); /* because we use plain spinlock */
+	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
 
 	cfs_wi_sched_lock(sched);
@@ -174,7 +174,7 @@ cfs_wi_deschedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 {
 	int	rc;
 
-	LASSERT(!cfs_in_interrupt()); /* because we use plain spinlock */
+	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
 
         /*
@@ -213,7 +213,7 @@ EXPORT_SYMBOL(cfs_wi_deschedule);
 void
 cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 {
-	LASSERT(!cfs_in_interrupt()); /* because we use plain spinlock */
+	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
 
 	cfs_wi_sched_lock(sched);

@@ -890,17 +890,17 @@ void sptlrpc_request_out_callback(struct ptlrpc_request *req)
  */
 int sptlrpc_import_check_ctx(struct obd_import *imp)
 {
-        struct ptlrpc_sec     *sec;
-        struct ptlrpc_cli_ctx *ctx;
-        struct ptlrpc_request *req = NULL;
-        int rc;
-        ENTRY;
+	struct ptlrpc_sec     *sec;
+	struct ptlrpc_cli_ctx *ctx;
+	struct ptlrpc_request *req = NULL;
+	int rc;
+	ENTRY;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        sec = sptlrpc_import_sec_ref(imp);
-        ctx = get_my_ctx(sec);
-        sptlrpc_sec_put(sec);
+	sec = sptlrpc_import_sec_ref(imp);
+	ctx = get_my_ctx(sec);
+	sptlrpc_sec_put(sec);
 
         if (!ctx)
                 RETURN(-ENOMEM);
@@ -1405,20 +1405,20 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                              struct ptlrpc_svc_ctx *svc_ctx,
                              struct sptlrpc_flavor *flvr)
 {
-        struct ptlrpc_connection   *conn;
-        struct sptlrpc_flavor       sf;
-        struct ptlrpc_sec          *sec, *newsec;
-        enum lustre_sec_part        sp;
-        char                        str[24];
-        int                         rc = 0;
-        ENTRY;
+	struct ptlrpc_connection   *conn;
+	struct sptlrpc_flavor       sf;
+	struct ptlrpc_sec          *sec, *newsec;
+	enum lustre_sec_part        sp;
+	char                        str[24];
+	int                         rc = 0;
+	ENTRY;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        if (imp == NULL)
-                RETURN(0);
+	if (imp == NULL)
+		RETURN(0);
 
-        conn = imp->imp_connection;
+	conn = imp->imp_connection;
 
         if (svc_ctx == NULL) {
                 struct client_obd *cliobd = &imp->imp_obd->u.cli;

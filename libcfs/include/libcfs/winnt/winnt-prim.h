@@ -454,36 +454,36 @@ typedef struct _cfs_thread_context {
  */
 #define NGROUPS_SMALL           32
 #define NGROUPS_PER_BLOCK       ((int)(PAGE_SIZE / sizeof(gid_t)))
-typedef struct cfs_group_info {
-        int ngroups;
-        cfs_atomic_t usage;
-        gid_t small_block[NGROUPS_SMALL];
-        int nblocks;
-        gid_t *blocks[0];
-} cfs_group_info_t;
+struct group_info {
+	int ngroups;
+	cfs_atomic_t usage;
+	gid_t small_block[NGROUPS_SMALL];
+	int nblocks;
+	gid_t *blocks[0];
+};
 
-#define cfs_get_group_info(group_info) do { \
+#define get_group_info(group_info) do { \
         cfs_atomic_inc(&(group_info)->usage); \
 } while (0)
 
-#define cfs_put_group_info(group_info) do { \
+#define put_group_info(group_info) do { \
         if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
-                cfs_groups_free(group_info); \
+		groups_free(group_info); \
 } while (0)
 
-static __inline cfs_group_info_t *cfs_groups_alloc(int gidsetsize)
+static __inline struct group_info *groups_alloc(int gidsetsize)
 {
-    cfs_group_info_t * groupinfo;
+    struct group_info * groupinfo;
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__, __FUNCTION__));
-    groupinfo = kmalloc(sizeof(cfs_group_info_t), 0);
+    groupinfo = kmalloc(sizeof(struct group_info), 0);
 
     if (groupinfo) {
-        memset(groupinfo, 0, sizeof(cfs_group_info_t));
+	memset(groupinfo, 0, sizeof(struct group_info));
     }
     return groupinfo;
 }
 
-static __inline void cfs_groups_free(cfs_group_info_t *group_info)
+static __inline void groups_free(struct group_info *group_info)
 {
 	KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
 		__FUNCTION__));
@@ -491,14 +491,14 @@ static __inline void cfs_groups_free(cfs_group_info_t *group_info)
 }
 
 static __inline int
-cfs_set_current_groups(cfs_group_info_t *group_info)
+set_current_groups(struct group_info *group_info)
 {
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
              __FUNCTION__));
     return 0;
 }
 
-static __inline int groups_search(cfs_group_info_t *group_info,
+static __inline int groups_search(struct group_info *group_info,
                                   gid_t grp) {
     KdPrint(("%s(%d): %s NOT implemented.\n", __FILE__, __LINE__,
             __FUNCTION__));
@@ -558,7 +558,7 @@ struct task_struct{
     int                   ngroups;
     int                   cgroups;
     gid_t                 groups[NGROUPS];
-    cfs_group_info_t     *group_info;
+    struct group_info     *group_info;
     kernel_cap_t      cap_effective,
                           cap_inheritable,
                           cap_permitted;
@@ -687,7 +687,7 @@ void    cleanup_task_manager();
 struct task_struct * current;
 int     wake_up_process(struct task_struct * task);
 void sleep_on(wait_queue_head_t *waitq);
-#define cfs_might_sleep() do {} while(0)
+#define might_sleep() do {} while(0)
 #define DECL_JOURNAL_DATA
 #define PUSH_JOURNAL	    do {;} while(0)
 #define POP_JOURNAL		    do {;} while(0)
@@ -830,7 +830,7 @@ libcfs_arch_cleanup(void);
  */
 
 #define NR_IRQS                 512
-#define cfs_in_interrupt()          (0)
+#define in_interrupt()          (0)
 
 /*
  *  printk flags

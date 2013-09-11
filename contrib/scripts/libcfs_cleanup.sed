@@ -568,3 +568,28 @@ s/\bcfs_sigset_t\b/sigset_t/g
 s/\bcfs_timer_t\b/struct timer_list/g
 s/\bCFS_MAX_SCHEDULE_TIMEOUT\b/MAX_SCHEDULE_TIMEOUT/g
 /#[ \t]*define[ \t]*\bMAX_SCHEDULE_TIMEOUT\b[ \t]*\bMAX_SCHEDULE_TIMEOUT\b/d
+
+# membar
+s/\bcfs_mb\b/smp_mb/g
+/#[ \t]*define[ \t]*\bmb\b *( *)[ \t]*\bmb\b *( *)/d
+# interrupt
+s/\bcfs_in_interrupt\b/in_interrupt/g
+/#[ \t]*define[ \t]*\bin_interrupt\b *( *)[ \t]*\bin_interrupt\b *( *)/d
+# might_sleep
+s/\bcfs_might_sleep\b/might_sleep/g
+/#[ \t]*define[ \t]*\bmight_sleep\b *( *)[ \t]*\bmight_sleep\b *( *)/d
+# group_info
+s/\bcfs_group_info_t\b/struct group_info/g
+s/\bcfs_get_group_info\b/get_group_info/g
+/#[ \t]*define[ \t]*\bget_group_info\b *( *\w* *)[ \t]*\bget_group_info\b *( *\w* *)/d
+s/\bcfs_put_group_info\b/put_group_info/g
+/#[ \t]*define[ \t]*\bput_group_info\b *( *\w* *)[ \t]*\bput_group_info\b *( *\w* *)/d
+s/\bcfs_set_current_groups\b/set_current_groups/g
+/#[ \t]*define[ \t]*\bset_current_groups\b *( *\w* *)[ \t]*\bset_current_groups\b *( *\w* *)/d
+s/\bcfs_groups_free\b/groups_free/g
+/#[ \t]*define[ \t]*\bgroups_free\b *( *\w* *)[ \t]*\bgroups_free\b *( *\w* *)/d
+s/\bcfs_groups_alloc\b/groups_alloc/g
+/#[ \t]*define[ \t]*\bgroups_alloc\b *( *\w* *)[ \t]*\bgroups_alloc\b *( *\w* *)/d
+# Random bytes
+s/\bcfs_get_random_bytes_prim\b/get_random_bytes/g
+/#[ \t]*define[ \t]*\bget_random_bytes\b *( *\w* *, *\w* *)[ \t]*\bget_random_bytes\b *( *\w* *, *\w* *)/d

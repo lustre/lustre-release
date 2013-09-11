@@ -217,28 +217,28 @@ kptllnd_peer_allocate (kptl_net_t *net, lnet_process_id_t lpid, ptl_process_id_t
 void
 kptllnd_peer_destroy (kptl_peer_t *peer)
 {
-        unsigned long flags;
+	unsigned long flags;
 
-        CDEBUG(D_NET, "Peer=%p\n", peer);
+	CDEBUG(D_NET, "Peer=%p\n", peer);
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (cfs_atomic_read(&peer->peer_refcount) == 0);
-        LASSERT (peer->peer_state == PEER_STATE_ALLOCATED ||
-                 peer->peer_state == PEER_STATE_ZOMBIE);
-        LASSERT (cfs_list_empty(&peer->peer_noops));
-        LASSERT (cfs_list_empty(&peer->peer_sendq));
-        LASSERT (cfs_list_empty(&peer->peer_activeq));
+	LASSERT (!in_interrupt());
+	LASSERT (cfs_atomic_read(&peer->peer_refcount) == 0);
+	LASSERT (peer->peer_state == PEER_STATE_ALLOCATED ||
+		 peer->peer_state == PEER_STATE_ZOMBIE);
+	LASSERT (cfs_list_empty(&peer->peer_noops));
+	LASSERT (cfs_list_empty(&peer->peer_sendq));
+	LASSERT (cfs_list_empty(&peer->peer_activeq));
 
 	write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
 
-        if (peer->peer_state == PEER_STATE_ZOMBIE)
-                cfs_list_del(&peer->peer_list);
+	if (peer->peer_state == PEER_STATE_ZOMBIE)
+		cfs_list_del(&peer->peer_list);
 
-        kptllnd_data.kptl_npeers--;
+	kptllnd_data.kptl_npeers--;
 
 	write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
 
-        LIBCFS_FREE (peer, sizeof (*peer));
+	LIBCFS_FREE (peer, sizeof (*peer));
 }
 
 void
@@ -276,9 +276,9 @@ kptllnd_peer_cancel_txs(kptl_peer_t *peer, cfs_list_t *txs)
 void
 kptllnd_peer_alive (kptl_peer_t *peer)
 {
-        /* This is racy, but everyone's only writing cfs_time_current() */
-        peer->peer_last_alive = cfs_time_current();
-        cfs_mb();
+	/* This is racy, but everyone's only writing cfs_time_current() */
+	peer->peer_last_alive = cfs_time_current();
+	smp_mb();
 }
 
 void
@@ -666,17 +666,17 @@ kptllnd_peer_send_noop (kptl_peer_t *peer)
 void
 kptllnd_peer_check_sends (kptl_peer_t *peer)
 {
-        ptl_handle_me_t  meh;
-        kptl_tx_t       *tx;
-        int              rc;
-        int              msg_type;
-        unsigned long    flags;
+	ptl_handle_me_t  meh;
+	kptl_tx_t       *tx;
+	int              rc;
+	int              msg_type;
+	unsigned long    flags;
 
-        LASSERT(!cfs_in_interrupt());
+	LASSERT(!in_interrupt());
 
 	spin_lock_irqsave(&peer->peer_lock, flags);
 
-        peer->peer_retry_noop = 0;
+	peer->peer_retry_noop = 0;
 
         if (kptllnd_peer_send_noop(peer)) {
                 /* post a NOOP to return credits */

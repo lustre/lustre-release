@@ -51,58 +51,58 @@
 } while (0)
 
 #define lustre_put_group_info(group_info) do {             \
-        if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
-                cfs_groups_free(group_info);               \
+	if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
+		groups_free(group_info);               	   \
 } while (0)
 
 /*
  * groups_search() is copied from linux kernel!
  * A simple bsearch.
  */
-static int lustre_groups_search(cfs_group_info_t *group_info,
-                                gid_t grp)
+static int lustre_groups_search(struct group_info *group_info,
+				gid_t grp)
 {
-        int left, right;
+	int left, right;
 
-        if (!group_info)
-                return 0;
+	if (!group_info)
+		return 0;
 
-        left = 0;
-        right = group_info->ngroups;
-        while (left < right) {
-                int mid = (left + right) / 2;
-                int cmp = grp - CFS_GROUP_AT(group_info, mid);
+	left = 0;
+	right = group_info->ngroups;
+	while (left < right) {
+		int mid = (left + right) / 2;
+		int cmp = grp - CFS_GROUP_AT(group_info, mid);
 
-                if (cmp > 0)
-                        left = mid + 1;
-                else if (cmp < 0)
-                        right = mid;
-                else
-                        return 1;
-        }
-        return 0;
+		if (cmp > 0)
+			left = mid + 1;
+		else if (cmp < 0)
+			right = mid;
+		else
+			return 1;
+	}
+	return 0;
 }
 
-void lustre_groups_from_list(cfs_group_info_t *ginfo, gid_t *glist)
+void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
 {
-        int i;
-        int count = ginfo->ngroups;
+	int i;
+	int count = ginfo->ngroups;
 
-        /* fill group_info from gid array */
-        for (i = 0; i < ginfo->nblocks && count > 0; i++) {
-                int cp_count = min(CFS_NGROUPS_PER_BLOCK, count);
-                int off = i * CFS_NGROUPS_PER_BLOCK;
-                int len = cp_count * sizeof(*glist);
+	/* fill group_info from gid array */
+	for (i = 0; i < ginfo->nblocks && count > 0; i++) {
+		int cp_count = min(CFS_NGROUPS_PER_BLOCK, count);
+		int off = i * CFS_NGROUPS_PER_BLOCK;
+		int len = cp_count * sizeof(*glist);
 
-                memcpy(ginfo->blocks[i], glist + off, len);
-                count -= cp_count;
-        }
+		memcpy(ginfo->blocks[i], glist + off, len);
+		count -= cp_count;
+	}
 }
 EXPORT_SYMBOL(lustre_groups_from_list);
 
 /* groups_sort() is copied from linux kernel! */
 /* a simple shell-metzner sort */
-void lustre_groups_sort(cfs_group_info_t *group_info)
+void lustre_groups_sort(struct group_info *group_info)
 {
         int base, max, stride;
         int gidsetsize = group_info->ngroups;
@@ -137,7 +137,7 @@ int lustre_in_group_p(struct lu_ucred *mu, gid_t grp)
 	int rc = 1;
 
 	if (grp != mu->uc_fsgid) {
-		cfs_group_info_t *group_info = NULL;
+		struct group_info *group_info = NULL;
 
 		if (mu->uc_ginfo || !mu->uc_identity ||
 		    mu->uc_valid == UCRED_OLD)

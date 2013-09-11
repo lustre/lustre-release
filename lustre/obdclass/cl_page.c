@@ -284,16 +284,16 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
         PASSERT(env, page, page->cp_parent == NULL);
         PASSERT(env, page, page->cp_state == CPS_FREEING);
 
-        ENTRY;
-        cfs_might_sleep();
-        while (!cfs_list_empty(&page->cp_layers)) {
-                struct cl_page_slice *slice;
+	ENTRY;
+	might_sleep();
+	while (!cfs_list_empty(&page->cp_layers)) {
+		struct cl_page_slice *slice;
 
-                slice = cfs_list_entry(page->cp_layers.next,
-                                       struct cl_page_slice, cpl_linkage);
-                cfs_list_del_init(page->cp_layers.next);
-                slice->cpl_ops->cpo_fini(env, slice);
-        }
+		slice = cfs_list_entry(page->cp_layers.next,
+				       struct cl_page_slice, cpl_linkage);
+		cfs_list_del_init(page->cp_layers.next);
+		slice->cpl_ops->cpo_fini(env, slice);
+	}
 	CS_PAGE_DEC(obj, total);
 	CS_PAGESTATE_DEC(obj, page->cp_state);
 	lu_object_ref_del_at(&obj->co_lu, &page->cp_obj_ref, "cl_page", page);
@@ -383,17 +383,17 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                                      enum cl_page_type type,
                                      struct cl_page *parent)
 {
-        struct cl_page          *page = NULL;
-        struct cl_page          *ghost = NULL;
-        struct cl_object_header *hdr;
-        int err;
+	struct cl_page          *page = NULL;
+	struct cl_page          *ghost = NULL;
+	struct cl_object_header *hdr;
+	int err;
 
-        LASSERT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
-        cfs_might_sleep();
+	LASSERT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
+	might_sleep();
 
-        ENTRY;
+	ENTRY;
 
-        hdr = cl_object_header(o);
+	hdr = cl_object_header(o);
 	CS_PAGE_INC(o, lookup);
 
         CDEBUG(D_PAGE, "%lu@"DFID" %p %lx %d\n",

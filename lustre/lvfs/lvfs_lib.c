@@ -82,7 +82,7 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 		 * flag, because it needs accurate counting lest memory leak
 		 * check reports error.
 		 */
-		if (cfs_in_interrupt() &&
+		if (in_interrupt() &&
 		    (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
 			percpu_cntr->lc_sum_irq += amount;
 		else
@@ -132,7 +132,7 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 		 * flag, because it needs accurate counting lest memory leak
 		 * check reports error.
 		 */
-		if (cfs_in_interrupt() &&
+		if (in_interrupt() &&
 		    (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
 			percpu_cntr->lc_sum_irq -= amount;
 		else

@@ -59,7 +59,7 @@ char * ul2dstr(unsigned long address, char *buf, int len);
 #define set_bit(i, a)                           setbit(a, i)
 #define clear_bit(i, a)                         clrbit(a, i)
 
-#define cfs_get_random_bytes_prim(buf, len)     read_random(buf, len)
+#define get_random_bytes(buf, len)     read_random(buf, len)
 
 #endif  /* __KERNEL__ */
 

@@ -327,20 +327,20 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         int               nfrag;
         int               rc;
 
-        LASSERT (net->net_ni == ni);
-        LASSERT (!net->net_shutdown);
-        LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= LNET_MAX_IOV);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV); /* !!! */
-        LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
-        LASSERT (!cfs_in_interrupt());
+	LASSERT (net->net_ni == ni);
+	LASSERT (!net->net_shutdown);
+	LASSERT (payload_nob == 0 || payload_niov > 0);
+	LASSERT (payload_niov <= LNET_MAX_IOV);
+	LASSERT (payload_niov <= PTL_MD_MAX_IOV); /* !!! */
+	LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
+	LASSERT (!in_interrupt());
 
-        if (lntmsg->msg_vmflush)
-                mpflag = cfs_memory_pressure_get_and_set();
+	if (lntmsg->msg_vmflush)
+		mpflag = cfs_memory_pressure_get_and_set();
 
-        rc = kptllnd_find_target(net, target, &peer);
-        if (rc != 0)
-                goto out;
+	rc = kptllnd_find_target(net, target, &peer);
+	if (rc != 0)
+		goto out;
 
         /* NB peer->peer_id does NOT always equal target, be careful with
          * which one to use */
@@ -536,19 +536,19 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         int           nob;
         int           rc;
 
-        CDEBUG(D_NET, "%s niov=%d offset=%d mlen=%d rlen=%d\n",
-               kptllnd_msgtype2str(rxmsg->ptlm_type),
-               niov, offset, mlen, rlen);
+	CDEBUG(D_NET, "%s niov=%d offset=%d mlen=%d rlen=%d\n",
+	       kptllnd_msgtype2str(rxmsg->ptlm_type),
+	       niov, offset, mlen, rlen);
 
-        LASSERT (mlen <= rlen);
-        LASSERT (mlen >= 0);
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (!(kiov != NULL && iov != NULL)); /* never both */
-        LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
+	LASSERT (mlen <= rlen);
+	LASSERT (mlen >= 0);
+	LASSERT (!in_interrupt());
+	LASSERT (!(kiov != NULL && iov != NULL)); /* never both */
+	LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
-        switch(rxmsg->ptlm_type)
-        {
-        default:
+	switch(rxmsg->ptlm_type)
+	{
+	default:
                 LBUG();
                 rc = -EINVAL;
                 break;

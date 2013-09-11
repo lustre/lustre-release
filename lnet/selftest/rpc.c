@@ -1444,21 +1444,21 @@ void
 srpc_lnet_ev_handler(lnet_event_t *ev)
 {
 	struct srpc_service_cd	*scd;
-        srpc_event_t      *rpcev = ev->md.user_ptr;
-        srpc_client_rpc_t *crpc;
-        srpc_server_rpc_t *srpc;
-        srpc_buffer_t     *buffer;
-        srpc_service_t    *sv;
-        srpc_msg_t        *msg;
-        srpc_msg_type_t    type;
+	srpc_event_t      *rpcev = ev->md.user_ptr;
+	srpc_client_rpc_t *crpc;
+	srpc_server_rpc_t *srpc;
+	srpc_buffer_t     *buffer;
+	srpc_service_t    *sv;
+	srpc_msg_t        *msg;
+	srpc_msg_type_t    type;
 
-        LASSERT (!cfs_in_interrupt());
+	LASSERT (!in_interrupt());
 
-        if (ev->status != 0) {
+	if (ev->status != 0) {
 		spin_lock(&srpc_data.rpc_glock);
 		srpc_data.rpc_counters.errors++;
 		spin_unlock(&srpc_data.rpc_glock);
-        }
+	}
 
         rpcev->ev_lnet = ev->type;
 

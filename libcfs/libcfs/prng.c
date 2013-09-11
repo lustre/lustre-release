@@ -109,31 +109,31 @@ EXPORT_SYMBOL(cfs_srand);
  */
 void cfs_get_random_bytes(void *buf, int size)
 {
-        int *p = buf;
-        int rem, tmp;
+	int *p = buf;
+	int rem, tmp;
 
-        LASSERT(size >= 0);
+	LASSERT(size >= 0);
 
-        rem = min((int)((unsigned long)buf & (sizeof(int) - 1)), size);
-        if (rem) {
-                cfs_get_random_bytes_prim(&tmp, sizeof(tmp));
-                tmp ^= cfs_rand();
-                memcpy(buf, &tmp, rem);
-                p = buf + rem;
-                size -= rem;
-        }
+	rem = min((int)((unsigned long)buf & (sizeof(int) - 1)), size);
+	if (rem) {
+		get_random_bytes(&tmp, sizeof(tmp));
+		tmp ^= cfs_rand();
+		memcpy(buf, &tmp, rem);
+		p = buf + rem;
+		size -= rem;
+	}
 
-        while (size >= sizeof(int)) {
-                cfs_get_random_bytes_prim(&tmp, sizeof(tmp));
-                *p = cfs_rand() ^ tmp;
-                size -= sizeof(int);
-                p++;
-        }
-        buf = p;
-        if (size) {
-                cfs_get_random_bytes_prim(&tmp, sizeof(tmp));
-                tmp ^= cfs_rand();
-                memcpy(buf, &tmp, size);
-        }
+	while (size >= sizeof(int)) {
+		get_random_bytes(&tmp, sizeof(tmp));
+		*p = cfs_rand() ^ tmp;
+		size -= sizeof(int);
+		p++;
+	}
+	buf = p;
+	if (size) {
+		get_random_bytes(&tmp, sizeof(tmp));
+		tmp ^= cfs_rand();
+		memcpy(buf, &tmp, size);
+	}
 }
 EXPORT_SYMBOL(cfs_get_random_bytes);

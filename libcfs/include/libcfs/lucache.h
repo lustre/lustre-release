@@ -74,12 +74,12 @@ struct md_perm {
 };
 
 struct md_identity {
-        struct upcall_cache_entry *mi_uc_entry;
-        uid_t                      mi_uid;
-        gid_t                      mi_gid;
-        cfs_group_info_t          *mi_ginfo;
-        int                        mi_nperms;
-        struct md_perm            *mi_perms;
+	struct upcall_cache_entry *mi_uc_entry;
+	uid_t                      mi_uid;
+	gid_t                      mi_gid;
+	struct group_info          *mi_ginfo;
+	int                        mi_nperms;
+	struct md_perm            *mi_perms;
 };
 
 struct upcall_cache_entry {

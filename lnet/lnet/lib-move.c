@@ -337,17 +337,17 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
                      unsigned int nsiov, lnet_kiov_t *siov, unsigned int soffset,
                      unsigned int nob)
 {
-        /* NB diov, siov are READ-ONLY */
-        unsigned int    this_nob;
-        char           *daddr = NULL;
-        char           *saddr = NULL;
+	/* NB diov, siov are READ-ONLY */
+	unsigned int    this_nob;
+	char           *daddr = NULL;
+	char           *saddr = NULL;
 
-        if (nob == 0)
-                return;
+	if (nob == 0)
+		return;
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        LASSERT (ndiov > 0);
+	LASSERT (ndiov > 0);
         while (doffset >= diov->kiov_len) {
                 doffset -= diov->kiov_len;
                 diov++;
@@ -419,16 +419,16 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
                     unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffset,
                     unsigned int nob)
 {
-        /* NB iov, kiov are READ-ONLY */
-        unsigned int    this_nob;
-        char           *addr = NULL;
+	/* NB iov, kiov are READ-ONLY */
+	unsigned int    this_nob;
+	char           *addr = NULL;
 
-        if (nob == 0)
-                return;
+	if (nob == 0)
+		return;
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        LASSERT (niov > 0);
+	LASSERT (niov > 0);
         while (iovoffset >= iov->iov_len) {
                 iovoffset -= iov->iov_len;
                 iov++;
@@ -489,16 +489,16 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
                     unsigned int niov, struct iovec *iov, unsigned int iovoffset,
                     unsigned int nob)
 {
-        /* NB kiov, iov are READ-ONLY */
-        unsigned int    this_nob;
-        char           *addr = NULL;
+	/* NB kiov, iov are READ-ONLY */
+	unsigned int    this_nob;
+	char           *addr = NULL;
 
-        if (nob == 0)
-                return;
+	if (nob == 0)
+		return;
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        LASSERT (nkiov > 0);
+	LASSERT (nkiov > 0);
         while (kiovoffset >= kiov->kiov_len) {
                 kiovoffset -= kiov->kiov_len;
                 kiov++;
@@ -608,13 +608,13 @@ void
 lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
              unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
-        unsigned int  niov = 0;
-        struct iovec *iov = NULL;
-        lnet_kiov_t  *kiov = NULL;
-        int           rc;
+	unsigned int  niov = 0;
+	struct iovec *iov = NULL;
+	lnet_kiov_t  *kiov = NULL;
+	int           rc;
 
-        LASSERT (!cfs_in_interrupt ());
-        LASSERT (mlen == 0 || msg != NULL);
+	LASSERT (!in_interrupt ());
+	LASSERT (mlen == 0 || msg != NULL);
 
         if (msg != NULL) {
                 LASSERT(msg->msg_receiving);
@@ -685,16 +685,16 @@ lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
 void
 lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
 {
-        void   *priv = msg->msg_private;
-        int     rc;
+	void   *priv = msg->msg_private;
+	int     rc;
 
-        LASSERT (!cfs_in_interrupt ());
-        LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
-                 (msg->msg_txcredit && msg->msg_peertxcredit));
+	LASSERT (!in_interrupt ());
+	LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
+		 (msg->msg_txcredit && msg->msg_peertxcredit));
 
-        rc = (ni->ni_lnd->lnd_send)(ni, priv, msg);
-        if (rc < 0)
-                lnet_finalize(ni, msg, rc);
+	rc = (ni->ni_lnd->lnd_send)(ni, priv, msg);
+	if (rc < 0)
+		lnet_finalize(ni, msg, rc);
 }
 
 int
@@ -1779,16 +1779,16 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 	struct lnet_msg	*msg;
         lnet_pid_t     dest_pid;
         lnet_nid_t     dest_nid;
-        lnet_nid_t     src_nid;
-        __u32          payload_length;
-        __u32          type;
+	lnet_nid_t     src_nid;
+	__u32          payload_length;
+	__u32          type;
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        type = le32_to_cpu(hdr->type);
-        src_nid = le64_to_cpu(hdr->src_nid);
-        dest_nid = le64_to_cpu(hdr->dest_nid);
-        dest_pid = le32_to_cpu(hdr->dest_pid);
+	type = le32_to_cpu(hdr->type);
+	src_nid = le64_to_cpu(hdr->src_nid);
+	dest_nid = le64_to_cpu(hdr->dest_nid);
+	dest_pid = le32_to_cpu(hdr->dest_pid);
         payload_length = le32_to_cpu(hdr->payload_length);
 
         for_me = (ni->ni_nid == dest_nid);

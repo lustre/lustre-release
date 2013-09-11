@@ -386,20 +386,20 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
         LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
-        if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
-                CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
-                       "don't send destroy rpc\n", ctx,
-                       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
-                RETURN(0);
-        }
+	if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
+		CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
+		       "don't send destroy rpc\n", ctx,
+		       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+		RETURN(0);
+	}
 
-        cfs_might_sleep();
+	might_sleep();
 
-        CWARN("%s ctx %p idx "LPX64" (%u->%s)\n",
-              sec_is_reverse(ctx->cc_sec) ?
-              "server finishing reverse" : "client finishing forward",
-              ctx, gss_handle_to_u64(&gctx->gc_handle),
-              ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+	CWARN("%s ctx %p idx "LPX64" (%u->%s)\n",
+	      sec_is_reverse(ctx->cc_sec) ?
+	      "server finishing reverse" : "client finishing forward",
+	      ctx, gss_handle_to_u64(&gctx->gc_handle),
+	      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 

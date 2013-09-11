@@ -43,44 +43,44 @@
 void
 kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
 {
-        lnet_msg_t *lntmsg[2];
-        kib_net_t  *net = ni->ni_data;
-        int         rc;
-        int         i;
+	lnet_msg_t *lntmsg[2];
+	kib_net_t  *net = ni->ni_data;
+	int         rc;
+	int         i;
 
-        LASSERT (net != NULL);
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
-        LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
-        LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
-        LASSERT (tx->tx_pool != NULL);
+	LASSERT (net != NULL);
+	LASSERT (!in_interrupt());
+	LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
+	LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
+	LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
+	LASSERT (tx->tx_pool != NULL);
 
-        kiblnd_unmap_tx(ni, tx);
+	kiblnd_unmap_tx(ni, tx);
 
-        /* tx may have up to 2 lnet msgs to finalise */
-        lntmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
-        lntmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
-        rc = tx->tx_status;
+	/* tx may have up to 2 lnet msgs to finalise */
+	lntmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
+	lntmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
+	rc = tx->tx_status;
 
-        if (tx->tx_conn != NULL) {
-                LASSERT (ni == tx->tx_conn->ibc_peer->ibp_ni);
+	if (tx->tx_conn != NULL) {
+		LASSERT (ni == tx->tx_conn->ibc_peer->ibp_ni);
 
-                kiblnd_conn_decref(tx->tx_conn);
-                tx->tx_conn = NULL;
-        }
+		kiblnd_conn_decref(tx->tx_conn);
+		tx->tx_conn = NULL;
+	}
 
-        tx->tx_nwrq = 0;
-        tx->tx_status = 0;
+	tx->tx_nwrq = 0;
+	tx->tx_status = 0;
 
-        kiblnd_pool_free_node(&tx->tx_pool->tpo_pool, &tx->tx_list);
+	kiblnd_pool_free_node(&tx->tx_pool->tpo_pool, &tx->tx_list);
 
-        /* delay finalize until my descs have been freed */
-        for (i = 0; i < 2; i++) {
-                if (lntmsg[i] == NULL)
-                        continue;
+	/* delay finalize until my descs have been freed */
+	for (i = 0; i < 2; i++) {
+		if (lntmsg[i] == NULL)
+			continue;
 
-                lnet_finalize(ni, lntmsg[i], rc);
-        }
+		lnet_finalize(ni, lntmsg[i], rc);
+	}
 }
 
 void
@@ -145,20 +145,20 @@ kiblnd_drop_rx(kib_rx_t *rx)
 int
 kiblnd_post_rx (kib_rx_t *rx, int credit)
 {
-        kib_conn_t         *conn = rx->rx_conn;
-        kib_net_t          *net = conn->ibc_peer->ibp_ni->ni_data;
-        struct ib_recv_wr  *bad_wrq = NULL;
-        struct ib_mr       *mr;
-        int                 rc;
+	kib_conn_t         *conn = rx->rx_conn;
+	kib_net_t          *net = conn->ibc_peer->ibp_ni->ni_data;
+	struct ib_recv_wr  *bad_wrq = NULL;
+	struct ib_mr       *mr;
+	int                 rc;
 
-        LASSERT (net != NULL);
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (credit == IBLND_POSTRX_NO_CREDIT ||
-                 credit == IBLND_POSTRX_PEER_CREDIT ||
-                 credit == IBLND_POSTRX_RSRVD_CREDIT);
+	LASSERT (net != NULL);
+	LASSERT (!in_interrupt());
+	LASSERT (credit == IBLND_POSTRX_NO_CREDIT ||
+		 credit == IBLND_POSTRX_PEER_CREDIT ||
+		 credit == IBLND_POSTRX_RSRVD_CREDIT);
 
-        mr = kiblnd_find_dma_mr(conn->ibc_hdev, rx->rx_msgaddr, IBLND_MSG_SIZE);
-        LASSERT (mr != NULL);
+	mr = kiblnd_find_dma_mr(conn->ibc_hdev, rx->rx_msgaddr, IBLND_MSG_SIZE);
+	LASSERT (mr != NULL);
 
         rx->rx_sge.lkey   = mr->lkey;
         rx->rx_sge.addr   = rx->rx_msgaddr;
@@ -1084,23 +1084,23 @@ kiblnd_init_tx_msg (lnet_ni_t *ni, kib_tx_t *tx, int type, int body_nob)
 
 int
 kiblnd_init_rdma (kib_conn_t *conn, kib_tx_t *tx, int type,
-                  int resid, kib_rdma_desc_t *dstrd, __u64 dstcookie)
+		  int resid, kib_rdma_desc_t *dstrd, __u64 dstcookie)
 {
-        kib_msg_t         *ibmsg = tx->tx_msg;
-        kib_rdma_desc_t   *srcrd = tx->tx_rd;
-        struct ib_sge     *sge = &tx->tx_sge[0];
-        struct ib_send_wr *wrq = &tx->tx_wrq[0];
-        int                rc  = resid;
-        int                srcidx;
-        int                dstidx;
-        int                wrknob;
+	kib_msg_t         *ibmsg = tx->tx_msg;
+	kib_rdma_desc_t   *srcrd = tx->tx_rd;
+	struct ib_sge     *sge = &tx->tx_sge[0];
+	struct ib_send_wr *wrq = &tx->tx_wrq[0];
+	int                rc  = resid;
+	int                srcidx;
+	int                dstidx;
+	int                wrknob;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (tx->tx_nwrq == 0);
-        LASSERT (type == IBLND_MSG_GET_DONE ||
-                 type == IBLND_MSG_PUT_DONE);
+	LASSERT (!in_interrupt());
+	LASSERT (tx->tx_nwrq == 0);
+	LASSERT (type == IBLND_MSG_GET_DONE ||
+		 type == IBLND_MSG_PUT_DONE);
 
-        srcidx = dstidx = 0;
+	srcidx = dstidx = 0;
 
         while (resid > 0) {
                 if (srcidx >= srcrd->rd_nfrags) {
@@ -1481,18 +1481,18 @@ kiblnd_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
-        LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= LNET_MAX_IOV);
+	LASSERT (payload_nob == 0 || payload_niov > 0);
+	LASSERT (payload_niov <= LNET_MAX_IOV);
 
-        /* Thread context */
-        LASSERT (!cfs_in_interrupt());
-        /* payload is either all vaddrs or all pages */
-        LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
+	/* Thread context */
+	LASSERT (!in_interrupt());
+	/* payload is either all vaddrs or all pages */
+	LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
-        switch (type) {
-        default:
-                LBUG();
-                return (-EIO);
+	switch (type) {
+	default:
+		LBUG();
+		return (-EIO);
 
         case LNET_MSG_ACK:
                 LASSERT (payload_nob == 0);
@@ -1701,18 +1701,18 @@ kiblnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         kib_conn_t  *conn = rx->rx_conn;
         kib_tx_t    *tx;
         kib_msg_t   *txmsg;
-        int          nob;
-        int          post_credit = IBLND_POSTRX_PEER_CREDIT;
-        int          rc = 0;
+	int          nob;
+	int          post_credit = IBLND_POSTRX_PEER_CREDIT;
+	int          rc = 0;
 
-        LASSERT (mlen <= rlen);
-        LASSERT (!cfs_in_interrupt());
-        /* Either all pages or all vaddrs */
-        LASSERT (!(kiov != NULL && iov != NULL));
+	LASSERT (mlen <= rlen);
+	LASSERT (!in_interrupt());
+	/* Either all pages or all vaddrs */
+	LASSERT (!(kiov != NULL && iov != NULL));
 
-        switch (rxmsg->ibm_type) {
-        default:
-                LBUG();
+	switch (rxmsg->ibm_type) {
+	default:
+		LBUG();
 
         case IBLND_MSG_IMMEDIATE:
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[rlen]);
@@ -1825,9 +1825,9 @@ kiblnd_thread_fini (void)
 void
 kiblnd_peer_alive (kib_peer_t *peer)
 {
-        /* This is racy, but everyone's only writing cfs_time_current() */
-        peer->ibp_last_alive = cfs_time_current();
-        cfs_mb();
+	/* This is racy, but everyone's only writing cfs_time_current() */
+	peer->ibp_last_alive = cfs_time_current();
+	smp_mb();
 }
 
 void
@@ -1942,7 +1942,7 @@ kiblnd_handle_early_rxs(kib_conn_t *conn)
 	unsigned long    flags;
 	kib_rx_t        *rx;
 
-	LASSERT(!cfs_in_interrupt());
+	LASSERT(!in_interrupt());
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
@@ -1955,7 +1955,7 @@ kiblnd_handle_early_rxs(kib_conn_t *conn)
 		kiblnd_handle_rx(rx);
 
 		write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-        }
+	}
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 }
 
@@ -1998,48 +1998,48 @@ kiblnd_abort_txs(kib_conn_t *conn, cfs_list_t *txs)
 void
 kiblnd_finalise_conn (kib_conn_t *conn)
 {
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (conn->ibc_state > IBLND_CONN_INIT);
+	LASSERT (!in_interrupt());
+	LASSERT (conn->ibc_state > IBLND_CONN_INIT);
 
-        kiblnd_set_conn_state(conn, IBLND_CONN_DISCONNECTED);
+	kiblnd_set_conn_state(conn, IBLND_CONN_DISCONNECTED);
 
-        /* abort_receives moves QP state to IB_QPS_ERR.  This is only required
-         * for connections that didn't get as far as being connected, because
-         * rdma_disconnect() does this for free. */
-        kiblnd_abort_receives(conn);
+	/* abort_receives moves QP state to IB_QPS_ERR.  This is only required
+	 * for connections that didn't get as far as being connected, because
+	 * rdma_disconnect() does this for free. */
+	kiblnd_abort_receives(conn);
 
-        /* Complete all tx descs not waiting for sends to complete.
-         * NB we should be safe from RDMA now that the QP has changed state */
+	/* Complete all tx descs not waiting for sends to complete.
+	 * NB we should be safe from RDMA now that the QP has changed state */
 
-        kiblnd_abort_txs(conn, &conn->ibc_tx_noops);
-        kiblnd_abort_txs(conn, &conn->ibc_tx_queue);
-        kiblnd_abort_txs(conn, &conn->ibc_tx_queue_rsrvd);
-        kiblnd_abort_txs(conn, &conn->ibc_tx_queue_nocred);
-        kiblnd_abort_txs(conn, &conn->ibc_active_txs);
+	kiblnd_abort_txs(conn, &conn->ibc_tx_noops);
+	kiblnd_abort_txs(conn, &conn->ibc_tx_queue);
+	kiblnd_abort_txs(conn, &conn->ibc_tx_queue_rsrvd);
+	kiblnd_abort_txs(conn, &conn->ibc_tx_queue_nocred);
+	kiblnd_abort_txs(conn, &conn->ibc_active_txs);
 
-        kiblnd_handle_early_rxs(conn);
+	kiblnd_handle_early_rxs(conn);
 }
 
 void
 kiblnd_peer_connect_failed (kib_peer_t *peer, int active, int error)
 {
-        CFS_LIST_HEAD    (zombies);
-        unsigned long     flags;
+	CFS_LIST_HEAD    (zombies);
+	unsigned long     flags;
 
-        LASSERT (error != 0);
-        LASSERT (!cfs_in_interrupt());
+	LASSERT (error != 0);
+	LASSERT (!in_interrupt());
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        if (active) {
-                LASSERT (peer->ibp_connecting > 0);
-                peer->ibp_connecting--;
-        } else {
-                LASSERT (peer->ibp_accepting > 0);
-                peer->ibp_accepting--;
-        }
+	if (active) {
+		LASSERT (peer->ibp_connecting > 0);
+		peer->ibp_connecting--;
+	} else {
+		LASSERT (peer->ibp_accepting > 0);
+		peer->ibp_accepting--;
+	}
 
-        if (peer->ibp_connecting != 0 ||
+	if (peer->ibp_connecting != 0 ||
             peer->ibp_accepting != 0) {
                 /* another connection attempt under way... */
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock,
@@ -2085,15 +2085,15 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
         active = (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
 
-        CDEBUG(D_NET,"%s: active(%d), version(%x), status(%d)\n",
-               libcfs_nid2str(peer->ibp_nid), active,
-               conn->ibc_version, status);
+	CDEBUG(D_NET,"%s: active(%d), version(%x), status(%d)\n",
+	       libcfs_nid2str(peer->ibp_nid), active,
+	       conn->ibc_version, status);
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT ((conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT &&
-                  peer->ibp_connecting > 0) ||
-                 (conn->ibc_state == IBLND_CONN_PASSIVE_WAIT &&
-                  peer->ibp_accepting > 0));
+	LASSERT (!in_interrupt());
+	LASSERT ((conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT &&
+		  peer->ibp_connecting > 0) ||
+		 (conn->ibc_state == IBLND_CONN_PASSIVE_WAIT &&
+		  peer->ibp_accepting > 0));
 
         LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
         conn->ibc_connvars = NULL;
@@ -2195,15 +2195,15 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
         lnet_nid_t             nid;
         struct rdma_conn_param cp;
         kib_rej_t              rej;
-        int                    version = IBLND_MSG_VERSION;
-        unsigned long          flags;
-        int                    rc;
-        struct sockaddr_in    *peer_addr;
-        LASSERT (!cfs_in_interrupt());
+	int                    version = IBLND_MSG_VERSION;
+	unsigned long          flags;
+	int                    rc;
+	struct sockaddr_in    *peer_addr;
+	LASSERT (!in_interrupt());
 
-        /* cmid inherits 'context' from the corresponding listener id */
-        ibdev = (kib_dev_t *)cmid->context;
-        LASSERT (ibdev != NULL);
+	/* cmid inherits 'context' from the corresponding listener id */
+	ibdev = (kib_dev_t *)cmid->context;
+	LASSERT (ibdev != NULL);
 
         memset(&rej, 0, sizeof(rej));
         rej.ibr_magic                = IBLND_MSG_MAGIC;
@@ -2521,16 +2521,16 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
 void
 kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 {
-        kib_peer_t    *peer = conn->ibc_peer;
+	kib_peer_t    *peer = conn->ibc_peer;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
+	LASSERT (!in_interrupt());
+	LASSERT (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
 
-        switch (reason) {
-        case IB_CM_REJ_STALE_CONN:
-                kiblnd_reconnect(conn, IBLND_MSG_VERSION, 0,
-                                 IBLND_REJECT_CONN_STALE, NULL);
-                break;
+	switch (reason) {
+	case IB_CM_REJ_STALE_CONN:
+		kiblnd_reconnect(conn, IBLND_MSG_VERSION, 0,
+				 IBLND_REJECT_CONN_STALE, NULL);
+		break;
 
         case IB_CM_REJ_INVALID_SERVICE_ID:
                 CNETERR("%s rejected: no listener at %d\n",
@@ -3113,14 +3113,14 @@ kiblnd_check_conns (int idx)
 void
 kiblnd_disconnect_conn (kib_conn_t *conn)
 {
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (current == kiblnd_data.kib_connd);
-        LASSERT (conn->ibc_state == IBLND_CONN_CLOSING);
+	LASSERT (!in_interrupt());
+	LASSERT (current == kiblnd_data.kib_connd);
+	LASSERT (conn->ibc_state == IBLND_CONN_CLOSING);
 
-        rdma_disconnect(conn->ibc_cmid);
-        kiblnd_finalise_conn(conn);
+	rdma_disconnect(conn->ibc_cmid);
+	kiblnd_finalise_conn(conn);
 
-        kiblnd_peer_notify(conn->ibc_peer);
+	kiblnd_peer_notify(conn->ibc_peer);
 }
 
 int

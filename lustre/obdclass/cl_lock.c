@@ -265,17 +265,17 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
 
         LINVRNT(!cl_lock_is_mutexed(lock));
 
-        ENTRY;
-        cl_lock_trace(D_DLMTRACE, env, "free lock", lock);
-        cfs_might_sleep();
-        while (!cfs_list_empty(&lock->cll_layers)) {
-                struct cl_lock_slice *slice;
+	ENTRY;
+	cl_lock_trace(D_DLMTRACE, env, "free lock", lock);
+	might_sleep();
+	while (!cfs_list_empty(&lock->cll_layers)) {
+		struct cl_lock_slice *slice;
 
-                slice = cfs_list_entry(lock->cll_layers.next,
-                                       struct cl_lock_slice, cls_linkage);
-                cfs_list_del_init(lock->cll_layers.next);
-                slice->cls_ops->clo_fini(env, slice);
-        }
+		slice = cfs_list_entry(lock->cll_layers.next,
+				       struct cl_lock_slice, cls_linkage);
+		cfs_list_del_init(lock->cll_layers.next);
+		slice->cls_ops->clo_fini(env, slice);
+	}
 	CS_LOCK_DEC(obj, total);
 	CS_LOCKSTATE_DEC(obj, lock->cll_state);
 	lu_object_ref_del_at(&obj->co_lu, &lock->cll_obj_ref, "cl_lock", lock);

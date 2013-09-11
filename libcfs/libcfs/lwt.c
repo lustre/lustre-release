@@ -100,7 +100,7 @@ lwt_control (int enable, int clear)
 	if (!enable) {
 		LWT_EVENT(0,0,0,0);
 		lwt_enabled = 0;
-		cfs_mb();
+		smp_mb();
 		/* give people some time to stop adding traces */
 		schedule_timeout(10);
 	}
@@ -122,13 +122,13 @@ lwt_control (int enable, int clear)
                 }
         }
 
-        if (enable) {
-                lwt_enabled = 1;
-                cfs_mb();
-                LWT_EVENT(0,0,0,0);
-        }
+	if (enable) {
+		lwt_enabled = 1;
+		smp_mb();
+		LWT_EVENT(0,0,0,0);
+	}
 
-        return (0);
+	return (0);
 }
 
 int
@@ -218,12 +218,12 @@ int lwt_init ()
 			}
                 }
 
-        lwt_enabled = 1;
-        cfs_mb();
+	lwt_enabled = 1;
+	smp_mb();
 
-        LWT_EVENT(0,0,0,0);
+	LWT_EVENT(0,0,0,0);
 
-        return (0);
+	return (0);
 }
 
 void lwt_fini ()

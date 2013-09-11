@@ -257,23 +257,23 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
         int i = 0, rc;
         ENTRY;
 
-        do {
-                save = lli->lli_rmtperm_time;
-                rc = do_check_remote_perm(lli, mask);
-                if (!rc || (rc != -ENOENT && i))
-                        break;
+	do {
+		save = lli->lli_rmtperm_time;
+		rc = do_check_remote_perm(lli, mask);
+		if (!rc || (rc != -ENOENT && i))
+			break;
 
-                cfs_might_sleep();
+		might_sleep();
 
 		mutex_lock(&lli->lli_rmtperm_mutex);
-                /* check again */
-                if (save != lli->lli_rmtperm_time) {
-                        rc = do_check_remote_perm(lli, mask);
-                        if (!rc || (rc != -ENOENT && i)) {
+		/* check again */
+		if (save != lli->lli_rmtperm_time) {
+			rc = do_check_remote_perm(lli, mask);
+			if (!rc || (rc != -ENOENT && i)) {
 				mutex_unlock(&lli->lli_rmtperm_mutex);
-                                break;
-                        }
-                }
+				break;
+			}
+		}
 
                 if (i++ > 5) {
                         CERROR("check remote perm falls in dead loop!\n");

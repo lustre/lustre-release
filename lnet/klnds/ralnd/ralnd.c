@@ -294,14 +294,14 @@ kranal_set_conn_uniqueness (kra_conn_t *conn)
 int
 kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
 {
-        kra_conn_t    *conn;
-        RAP_RETURN     rrc;
+	kra_conn_t    *conn;
+	RAP_RETURN     rrc;
 
-        LASSERT (!cfs_in_interrupt());
-        LIBCFS_ALLOC(conn, sizeof(*conn));
+	LASSERT (!in_interrupt());
+	LIBCFS_ALLOC(conn, sizeof(*conn));
 
-        if (conn == NULL)
-                return -ENOMEM;
+	if (conn == NULL)
+		return -ENOMEM;
 
         memset(conn, 0, sizeof(*conn));
         cfs_atomic_set(&conn->rac_refcount, 1);
@@ -335,81 +335,81 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
 void
 kranal_destroy_conn(kra_conn_t *conn)
 {
-        RAP_RETURN         rrc;
+	RAP_RETURN         rrc;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (!conn->rac_scheduled);
-        LASSERT (cfs_list_empty(&conn->rac_list));
-        LASSERT (cfs_list_empty(&conn->rac_hashlist));
-        LASSERT (cfs_list_empty(&conn->rac_schedlist));
-        LASSERT (cfs_atomic_read(&conn->rac_refcount) == 0);
-        LASSERT (cfs_list_empty(&conn->rac_fmaq));
-        LASSERT (cfs_list_empty(&conn->rac_rdmaq));
-        LASSERT (cfs_list_empty(&conn->rac_replyq));
+	LASSERT (!in_interrupt());
+	LASSERT (!conn->rac_scheduled);
+	LASSERT (cfs_list_empty(&conn->rac_list));
+	LASSERT (cfs_list_empty(&conn->rac_hashlist));
+	LASSERT (cfs_list_empty(&conn->rac_schedlist));
+	LASSERT (cfs_atomic_read(&conn->rac_refcount) == 0);
+	LASSERT (cfs_list_empty(&conn->rac_fmaq));
+	LASSERT (cfs_list_empty(&conn->rac_rdmaq));
+	LASSERT (cfs_list_empty(&conn->rac_replyq));
 
-        rrc = RapkDestroyRi(conn->rac_device->rad_handle,
-                            conn->rac_rihandle);
-        LASSERT (rrc == RAP_SUCCESS);
+	rrc = RapkDestroyRi(conn->rac_device->rad_handle,
+			    conn->rac_rihandle);
+	LASSERT (rrc == RAP_SUCCESS);
 
-        if (conn->rac_peer != NULL)
-                kranal_peer_decref(conn->rac_peer);
+	if (conn->rac_peer != NULL)
+		kranal_peer_decref(conn->rac_peer);
 
-        LIBCFS_FREE(conn, sizeof(*conn));
-        cfs_atomic_dec(&kranal_data.kra_nconns);
+	LIBCFS_FREE(conn, sizeof(*conn));
+	cfs_atomic_dec(&kranal_data.kra_nconns);
 }
 
 void
 kranal_terminate_conn_locked (kra_conn_t *conn)
 {
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (conn->rac_state == RANAL_CONN_CLOSING);
-        LASSERT (!cfs_list_empty(&conn->rac_hashlist));
-        LASSERT (cfs_list_empty(&conn->rac_list));
+	LASSERT (!in_interrupt());
+	LASSERT (conn->rac_state == RANAL_CONN_CLOSING);
+	LASSERT (!cfs_list_empty(&conn->rac_hashlist));
+	LASSERT (cfs_list_empty(&conn->rac_list));
 
-        /* Remove from conn hash table: no new callbacks */
-        cfs_list_del_init(&conn->rac_hashlist);
-        kranal_conn_decref(conn);
+	/* Remove from conn hash table: no new callbacks */
+	cfs_list_del_init(&conn->rac_hashlist);
+	kranal_conn_decref(conn);
 
-        conn->rac_state = RANAL_CONN_CLOSED;
+	conn->rac_state = RANAL_CONN_CLOSED;
 
-        /* schedule to clear out all uncompleted comms in context of dev's
-         * scheduler */
-        kranal_schedule_conn(conn);
+	/* schedule to clear out all uncompleted comms in context of dev's
+	 * scheduler */
+	kranal_schedule_conn(conn);
 }
 
 void
 kranal_close_conn_locked (kra_conn_t *conn, int error)
 {
-        kra_peer_t        *peer = conn->rac_peer;
+	kra_peer_t        *peer = conn->rac_peer;
 
-        CDEBUG_LIMIT(error == 0 ? D_NET : D_NETERROR,
-                     "closing conn to %s: error %d\n",
-                     libcfs_nid2str(peer->rap_nid), error);
+	CDEBUG_LIMIT(error == 0 ? D_NET : D_NETERROR,
+		     "closing conn to %s: error %d\n",
+		     libcfs_nid2str(peer->rap_nid), error);
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (conn->rac_state == RANAL_CONN_ESTABLISHED);
-        LASSERT (!cfs_list_empty(&conn->rac_hashlist));
-        LASSERT (!cfs_list_empty(&conn->rac_list));
+	LASSERT (!in_interrupt());
+	LASSERT (conn->rac_state == RANAL_CONN_ESTABLISHED);
+	LASSERT (!cfs_list_empty(&conn->rac_hashlist));
+	LASSERT (!cfs_list_empty(&conn->rac_list));
 
-        cfs_list_del_init(&conn->rac_list);
+	cfs_list_del_init(&conn->rac_list);
 
-        if (cfs_list_empty(&peer->rap_conns) &&
-            peer->rap_persistence == 0) {
-                /* Non-persistent peer with no more conns... */
-                kranal_unlink_peer_locked(peer);
-        }
+	if (cfs_list_empty(&peer->rap_conns) &&
+	    peer->rap_persistence == 0) {
+		/* Non-persistent peer with no more conns... */
+		kranal_unlink_peer_locked(peer);
+	}
 
-        /* Reset RX timeout to ensure we wait for an incoming CLOSE for the
-         * full timeout.  If we get a CLOSE we know the peer has stopped all
-         * RDMA.  Otherwise if we wait for the full timeout we can also be sure
-         * all RDMA has stopped. */
-        conn->rac_last_rx = jiffies;
-        cfs_mb();
+	/* Reset RX timeout to ensure we wait for an incoming CLOSE for the
+	 * full timeout.  If we get a CLOSE we know the peer has stopped all
+	 * RDMA.  Otherwise if we wait for the full timeout we can also be sure
+	 * all RDMA has stopped. */
+	conn->rac_last_rx = jiffies;
+	smp_mb();
 
-        conn->rac_state = RANAL_CONN_CLOSING;
-        kranal_schedule_conn(conn);             /* schedule sending CLOSE */
+	conn->rac_state = RANAL_CONN_CLOSING;
+	kranal_schedule_conn(conn);             /* schedule sending CLOSE */
 
-        kranal_conn_decref(conn);               /* lose peer's ref */
+	kranal_conn_decref(conn);               /* lose peer's ref */
 }
 
 void

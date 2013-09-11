@@ -331,24 +331,24 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
 void
 kptllnd_tx_fini (kptl_tx_t *tx)
 {
-        lnet_msg_t     *replymsg = tx->tx_lnet_replymsg;
-        lnet_msg_t     *msg      = tx->tx_lnet_msg;
-        kptl_peer_t    *peer     = tx->tx_peer;
-        int             status   = tx->tx_status;
-        int             rc;
+	lnet_msg_t     *replymsg = tx->tx_lnet_replymsg;
+	lnet_msg_t     *msg      = tx->tx_lnet_msg;
+	kptl_peer_t    *peer     = tx->tx_peer;
+	int             status   = tx->tx_status;
+	int             rc;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (cfs_atomic_read(&tx->tx_refcount) == 0);
-        LASSERT (!tx->tx_idle);
-        LASSERT (!tx->tx_active);
+	LASSERT (!in_interrupt());
+	LASSERT (cfs_atomic_read(&tx->tx_refcount) == 0);
+	LASSERT (!tx->tx_idle);
+	LASSERT (!tx->tx_active);
 
-        /* TX has completed or failed */
+	/* TX has completed or failed */
 
-        if (peer != NULL) {
-                rc = kptllnd_tx_abort_netio(tx);
-                if (rc != 0)
-                        return;
-        }
+	if (peer != NULL) {
+		rc = kptllnd_tx_abort_netio(tx);
+		if (rc != 0)
+			return;
+	}
 
         LASSERT (PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE));
         LASSERT (PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));

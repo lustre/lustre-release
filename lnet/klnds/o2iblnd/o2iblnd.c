@@ -738,7 +738,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 	int			i;
 
 	LASSERT(net != NULL);
-	LASSERT(!cfs_in_interrupt());
+	LASSERT(!in_interrupt());
 
 	dev = net->ibn_dev;
 
@@ -926,69 +926,69 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 void
 kiblnd_destroy_conn (kib_conn_t *conn)
 {
-        struct rdma_cm_id *cmid = conn->ibc_cmid;
-        kib_peer_t        *peer = conn->ibc_peer;
-        int                rc;
+	struct rdma_cm_id *cmid = conn->ibc_cmid;
+	kib_peer_t        *peer = conn->ibc_peer;
+	int                rc;
 
-        LASSERT (!cfs_in_interrupt());
-        LASSERT (cfs_atomic_read(&conn->ibc_refcount) == 0);
-        LASSERT (cfs_list_empty(&conn->ibc_early_rxs));
-        LASSERT (cfs_list_empty(&conn->ibc_tx_noops));
-        LASSERT (cfs_list_empty(&conn->ibc_tx_queue));
-        LASSERT (cfs_list_empty(&conn->ibc_tx_queue_rsrvd));
-        LASSERT (cfs_list_empty(&conn->ibc_tx_queue_nocred));
-        LASSERT (cfs_list_empty(&conn->ibc_active_txs));
-        LASSERT (conn->ibc_noops_posted == 0);
-        LASSERT (conn->ibc_nsends_posted == 0);
+	LASSERT (!in_interrupt());
+	LASSERT (cfs_atomic_read(&conn->ibc_refcount) == 0);
+	LASSERT (cfs_list_empty(&conn->ibc_early_rxs));
+	LASSERT (cfs_list_empty(&conn->ibc_tx_noops));
+	LASSERT (cfs_list_empty(&conn->ibc_tx_queue));
+	LASSERT (cfs_list_empty(&conn->ibc_tx_queue_rsrvd));
+	LASSERT (cfs_list_empty(&conn->ibc_tx_queue_nocred));
+	LASSERT (cfs_list_empty(&conn->ibc_active_txs));
+	LASSERT (conn->ibc_noops_posted == 0);
+	LASSERT (conn->ibc_nsends_posted == 0);
 
-        switch (conn->ibc_state) {
-        default:
-                /* conn must be completely disengaged from the network */
-                LBUG();
+	switch (conn->ibc_state) {
+	default:
+		/* conn must be completely disengaged from the network */
+		LBUG();
 
-        case IBLND_CONN_DISCONNECTED:
-                /* connvars should have been freed already */
-                LASSERT (conn->ibc_connvars == NULL);
-                break;
+	case IBLND_CONN_DISCONNECTED:
+		/* connvars should have been freed already */
+		LASSERT (conn->ibc_connvars == NULL);
+		break;
 
-        case IBLND_CONN_INIT:
-                break;
-        }
+	case IBLND_CONN_INIT:
+		break;
+	}
 
-        /* conn->ibc_cmid might be destroyed by CM already */
-        if (cmid != NULL && cmid->qp != NULL)
-                rdma_destroy_qp(cmid);
+	/* conn->ibc_cmid might be destroyed by CM already */
+	if (cmid != NULL && cmid->qp != NULL)
+		rdma_destroy_qp(cmid);
 
-        if (conn->ibc_cq != NULL) {
-                rc = ib_destroy_cq(conn->ibc_cq);
-                if (rc != 0)
-                        CWARN("Error destroying CQ: %d\n", rc);
-        }
+	if (conn->ibc_cq != NULL) {
+		rc = ib_destroy_cq(conn->ibc_cq);
+		if (rc != 0)
+			CWARN("Error destroying CQ: %d\n", rc);
+	}
 
-        if (conn->ibc_rx_pages != NULL)
-                kiblnd_unmap_rx_descs(conn);
+	if (conn->ibc_rx_pages != NULL)
+		kiblnd_unmap_rx_descs(conn);
 
-        if (conn->ibc_rxs != NULL) {
-                LIBCFS_FREE(conn->ibc_rxs,
-                            IBLND_RX_MSGS(conn->ibc_version) * sizeof(kib_rx_t));
-        }
+	if (conn->ibc_rxs != NULL) {
+		LIBCFS_FREE(conn->ibc_rxs,
+			    IBLND_RX_MSGS(conn->ibc_version) * sizeof(kib_rx_t));
+	}
 
-        if (conn->ibc_connvars != NULL)
-                LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+	if (conn->ibc_connvars != NULL)
+		LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
 
-        if (conn->ibc_hdev != NULL)
-                kiblnd_hdev_decref(conn->ibc_hdev);
+	if (conn->ibc_hdev != NULL)
+		kiblnd_hdev_decref(conn->ibc_hdev);
 
-        /* See CAVEAT EMPTOR above in kiblnd_create_conn */
-        if (conn->ibc_state != IBLND_CONN_INIT) {
-                kib_net_t *net = peer->ibp_ni->ni_data;
+	/* See CAVEAT EMPTOR above in kiblnd_create_conn */
+	if (conn->ibc_state != IBLND_CONN_INIT) {
+		kib_net_t *net = peer->ibp_ni->ni_data;
 
-                kiblnd_peer_decref(peer);
-                rdma_destroy_id(cmid);
-                cfs_atomic_dec(&net->ibn_nconns);
-        }
+		kiblnd_peer_decref(peer);
+		rdma_destroy_id(cmid);
+		cfs_atomic_dec(&net->ibn_nconns);
+	}
 
-        LIBCFS_FREE(conn, sizeof(*conn));
+	LIBCFS_FREE(conn, sizeof(*conn));
 }
 
 int

@@ -67,7 +67,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 	if (uc->uc_valid != UCRED_INIT) {
 		uc->uc_suppgids[0] = uc->uc_suppgids[1] = -1;
 		if (uc->uc_ginfo) {
-			cfs_put_group_info(uc->uc_ginfo);
+			put_group_info(uc->uc_ginfo);
 			uc->uc_ginfo = NULL;
 		}
 		if (uc->uc_identity) {
@@ -250,7 +250,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	if (!remote && perm & CFS_SETGRP_PERM) {
 		if (pud->pud_ngroups) {
 			/* setgroups for local client */
-			ucred->uc_ginfo = cfs_groups_alloc(pud->pud_ngroups);
+			ucred->uc_ginfo = groups_alloc(pud->pud_ngroups);
 			if (!ucred->uc_ginfo) {
 				CERROR("failed to alloc %d groups\n",
 				       pud->pud_ngroups);
@@ -292,7 +292,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 out:
 	if (rc) {
 		if (ucred->uc_ginfo) {
-			cfs_put_group_info(ucred->uc_ginfo);
+			put_group_info(ucred->uc_ginfo);
 			ucred->uc_ginfo = NULL;
 		}
 		if (ucred->uc_identity) {

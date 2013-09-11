@@ -1571,12 +1571,12 @@ lnet_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 	cfs_time_t		now = cfs_time_current();
 	int			cpt = lnet_cpt_of_nid(nid);
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        CDEBUG (D_NET, "%s notifying %s: %s\n",
-                (ni == NULL) ? "userspace" : libcfs_nid2str(ni->ni_nid),
-                libcfs_nid2str(nid),
-                alive ? "up" : "down");
+	CDEBUG (D_NET, "%s notifying %s: %s\n",
+		(ni == NULL) ? "userspace" : libcfs_nid2str(ni->ni_nid),
+		libcfs_nid2str(nid),
+		alive ? "up" : "down");
 
         if (ni != NULL &&
             LNET_NIDNET(ni->ni_nid) != LNET_NIDNET(nid)) {

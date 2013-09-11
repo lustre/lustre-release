@@ -319,7 +319,7 @@ int in_group_p(gid_t gid);
 #define unlikely(exp) (exp)
 #endif
 
-#define cfs_might_sleep()
+#define might_sleep()
 #define might_sleep_if(c)
 #define smp_mb()
 

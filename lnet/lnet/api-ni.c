@@ -1126,13 +1126,13 @@ lnet_shutdown_lndnis (void)
 		ni->ni_lnd->lnd_refcount--;
 		lnet_net_unlock(LNET_LOCK_EX);
 
-                islo = ni->ni_lnd->lnd_type == LOLND;
+		islo = ni->ni_lnd->lnd_type == LOLND;
 
-                LASSERT (!cfs_in_interrupt ());
-                (ni->ni_lnd->lnd_shutdown)(ni);
+		LASSERT (!in_interrupt ());
+		(ni->ni_lnd->lnd_shutdown)(ni);
 
-                /* can't deref lnd anymore now; it might have unregistered
-                 * itself...  */
+		/* can't deref lnd anymore now; it might have unregistered
+		 * itself...  */
 
                 if (!islo)
                         CDEBUG(D_LNI, "Removed LNI %s\n",

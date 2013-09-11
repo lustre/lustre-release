@@ -443,10 +443,10 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 	int				rc;
 	int				i;
 
-        LASSERT (!cfs_in_interrupt ());
+	LASSERT (!in_interrupt ());
 
-        if (msg == NULL)
-                return;
+	if (msg == NULL)
+		return;
 #if 0
         CDEBUG(D_WARNING, "%s msg->%s Flags:%s%s%s%s%s%s%s%s%s%s%s txp %s rxp %s\n",
                lnet_msgtyp2str(msg->msg_type), libcfs_id2str(msg->msg_target),

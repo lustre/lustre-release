@@ -199,36 +199,4 @@ typedef atomic_t cfs_atomic_t;
 #define cfs_atomic_cmpxchg(atom, old, nv)    atomic_cmpxchg(atom, old, nv)
 #define CFS_ATOMIC_INIT(i)                   ATOMIC_INIT(i)
 
-/*
- * membar
- */
-
-#define cfs_mb() mb()
-
-/*
- * interrupt
- */
-
-#define cfs_in_interrupt() in_interrupt()
-
-/*
- * might_sleep
- */
-#define cfs_might_sleep() might_sleep()
-
-/*
- * group_info
- */
-typedef struct group_info cfs_group_info_t;
-
-#define cfs_get_group_info(group_info)     get_group_info(group_info)
-#define cfs_put_group_info(group_info)     put_group_info(group_info)
-#define cfs_set_current_groups(group_info) set_current_groups(group_info)
-#define cfs_groups_free(group_info)        groups_free(group_info)
-#define cfs_groups_alloc(gidsetsize)       groups_alloc(gidsetsize)
-
-/*
- * Random bytes
- */
-#define cfs_get_random_bytes_prim(buf, nbytes)  get_random_bytes(buf, nbytes)
 #endif

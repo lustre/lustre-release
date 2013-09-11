@@ -84,13 +84,13 @@ EXPORT_SYMBOL(sptlrpc_gc_add_sec);
 
 void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 {
-        if (cfs_list_empty(&sec->ps_gc_list))
-                return;
+	if (cfs_list_empty(&sec->ps_gc_list))
+		return;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        /* signal before list_del to make iteration in gc thread safe */
-        cfs_atomic_inc(&sec_gc_wait_del);
+	/* signal before list_del to make iteration in gc thread safe */
+	cfs_atomic_inc(&sec_gc_wait_del);
 
 	spin_lock(&sec_gc_list_lock);
 	cfs_list_del_init(&sec->ps_gc_list);

@@ -385,34 +385,34 @@ kranal_unmap_buffer (kra_tx_t *tx)
 void
 kranal_tx_done (kra_tx_t *tx, int completion)
 {
-        lnet_msg_t      *lnetmsg[2];
-        unsigned long    flags;
-        int              i;
+	lnet_msg_t      *lnetmsg[2];
+	unsigned long    flags;
+	int              i;
 
-        LASSERT (!cfs_in_interrupt());
+	LASSERT (!in_interrupt());
 
-        kranal_unmap_buffer(tx);
+	kranal_unmap_buffer(tx);
 
-        lnetmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
-        lnetmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
+	lnetmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
+	lnetmsg[1] = tx->tx_lntmsg[1]; tx->tx_lntmsg[1] = NULL;
 
-        tx->tx_buftype = RANAL_BUF_NONE;
-        tx->tx_msg.ram_type = RANAL_MSG_NONE;
-        tx->tx_conn = NULL;
+	tx->tx_buftype = RANAL_BUF_NONE;
+	tx->tx_msg.ram_type = RANAL_MSG_NONE;
+	tx->tx_conn = NULL;
 
 	spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
 
-        cfs_list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
+	cfs_list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
 
 	spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
 
-        /* finalize AFTER freeing lnet msgs */
-        for (i = 0; i < 2; i++) {
-                if (lnetmsg[i] == NULL)
-                        continue;
+	/* finalize AFTER freeing lnet msgs */
+	for (i = 0; i < 2; i++) {
+		if (lnetmsg[i] == NULL)
+			continue;
 
-                lnet_finalize(kranal_data.kra_ni, lnetmsg[i], completion);
-        }
+		lnet_finalize(kranal_data.kra_ni, lnetmsg[i], completion);
+	}
 }
 
 kra_conn_t *
@@ -622,20 +622,20 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
-               nob, niov, libcfs_id2str(target));
+	CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
+	       nob, niov, libcfs_id2str(target));
 
-        LASSERT (nob == 0 || niov > 0);
-        LASSERT (niov <= LNET_MAX_IOV);
+	LASSERT (nob == 0 || niov > 0);
+	LASSERT (niov <= LNET_MAX_IOV);
 
-        LASSERT (!cfs_in_interrupt());
-        /* payload is either all vaddrs or all pages */
-        LASSERT (!(kiov != NULL && iov != NULL));
+	LASSERT (!in_interrupt());
+	/* payload is either all vaddrs or all pages */
+	LASSERT (!(kiov != NULL && iov != NULL));
 
-        if (routing) {
-                CERROR ("Can't route\n");
-                return -EIO;
-        }
+	if (routing) {
+		CERROR ("Can't route\n");
+		return -EIO;
+	}
 
         switch(type) {
         default:
@@ -795,18 +795,18 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
              struct iovec *iov, lnet_kiov_t *kiov,
              unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
-        kra_conn_t  *conn = private;
-        kra_msg_t   *rxmsg = conn->rac_rxmsg;
-        kra_tx_t    *tx;
-        void        *buffer;
-        int          rc;
+	kra_conn_t  *conn = private;
+	kra_msg_t   *rxmsg = conn->rac_rxmsg;
+	kra_tx_t    *tx;
+	void        *buffer;
+	int          rc;
 
-        LASSERT (mlen <= rlen);
-        LASSERT (!cfs_in_interrupt());
-        /* Either all pages or all vaddrs */
-        LASSERT (!(kiov != NULL && iov != NULL));
+	LASSERT (mlen <= rlen);
+	LASSERT (!in_interrupt());
+	/* Either all pages or all vaddrs */
+	LASSERT (!(kiov != NULL && iov != NULL));
 
-        CDEBUG(D_NET, "conn %p, rxmsg %p, lntmsg %p\n", conn, rxmsg, lntmsg);
+	CDEBUG(D_NET, "conn %p, rxmsg %p, lntmsg %p\n", conn, rxmsg, lntmsg);
 
         switch(rxmsg->ram_type) {
         default:

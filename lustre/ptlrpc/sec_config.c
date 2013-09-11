@@ -264,15 +264,15 @@ EXPORT_SYMBOL(sptlrpc_rule_set_free);
  */
 int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset)
 {
-        struct sptlrpc_rule *rules;
-        int nslot;
+	struct sptlrpc_rule *rules;
+	int nslot;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        if (rset->srs_nrule < rset->srs_nslot)
-                return 0; 
+	if (rset->srs_nrule < rset->srs_nslot)
+		return 0;
 
-        nslot = rset->srs_nslot + 8;
+	nslot = rset->srs_nslot + 8;
 
         /* better use realloc() if available */
         OBD_ALLOC(rules, nslot * sizeof(*rset->srs_rules));
@@ -321,14 +321,14 @@ static inline int rule_match_net(struct sptlrpc_rule *r1,
 int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset, 
                            struct sptlrpc_rule *rule)
 {
-        struct sptlrpc_rule      *p = rset->srs_rules;
-        int                       spec_dir, spec_net;
-        int                       rc, n, match = 0;
+	struct sptlrpc_rule      *p = rset->srs_rules;
+	int                       spec_dir, spec_net;
+	int                       rc, n, match = 0;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        spec_net = rule_spec_net(rule);
-        spec_dir = rule_spec_dir(rule);
+	spec_net = rule_spec_net(rule);
+	spec_dir = rule_spec_dir(rule);
 
         for (n = 0; n < rset->srs_nrule; n++) {
                 p = &rset->srs_rules[n]; 
@@ -461,16 +461,16 @@ static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
                                     enum lustre_sec_part to,
                                     struct sptlrpc_rule_set *rset)
 {
-        struct sptlrpc_rule_set *src[2] = { gen, tgt };
-        struct sptlrpc_rule     *rule;
-        int                      i, n, rc;
+	struct sptlrpc_rule_set *src[2] = { gen, tgt };
+	struct sptlrpc_rule     *rule;
+	int                      i, n, rc;
 
-        cfs_might_sleep();
+	might_sleep();
 
-        /* merge general rules firstly, then target-specific rules */
-        for (i = 0; i < 2; i++) {
-                if (src[i] == NULL)
-                        continue;
+	/* merge general rules firstly, then target-specific rules */
+	for (i = 0; i < 2; i++) {
+		if (src[i] == NULL)
+			continue;
 
                 for (n = 0; n < src[i]->srs_nrule; n++) {
                         rule = &src[i]->srs_rules[n];

@@ -187,7 +187,7 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
 
 void lu_ref_add(struct lu_ref *ref, const char *scope, const void *source)
 {
-	cfs_might_sleep();
+	might_sleep();
 	lu_ref_add_context(ref, GFP_IOFS, scope, source);
 }
 EXPORT_SYMBOL(lu_ref_add);

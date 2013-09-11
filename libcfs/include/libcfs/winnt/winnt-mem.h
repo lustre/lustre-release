@@ -284,9 +284,9 @@ extern struct kmem_cache *cfs_page_p_slab;
 #define MMSPACE_CLOSE   do {} while (0)
 
 
-#define cfs_mb()     do {} while(0)
-#define rmb()        cfs_mb()
-#define wmb()        cfs_mb()
+#define smp_mb()     do {} while(0)
+#define rmb()        smp_mb()
+#define wmb()        smp_mb()
 
 /*
  * MM defintions from (linux/mm.h)

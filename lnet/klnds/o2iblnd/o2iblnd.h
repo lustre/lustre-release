@@ -860,8 +860,8 @@ kiblnd_wreqid2type (__u64 wreqid)
 static inline void
 kiblnd_set_conn_state (kib_conn_t *conn, int state)
 {
-        conn->ibc_state = state;
-        cfs_mb();
+	conn->ibc_state = state;
+	smp_mb();
 }
 
 static inline void

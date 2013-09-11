@@ -252,38 +252,38 @@ EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
  */
 void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
-        struct l_wait_info       lwi;
-        int                      rc;
+	struct l_wait_info       lwi;
+	int                      rc;
 
-        LASSERT(!cfs_in_interrupt());           /* might sleep */
+	LASSERT(!in_interrupt());           /* might sleep */
 
-        if (!ptlrpc_server_bulk_active(desc))   /* completed or */
-                return;                         /* never started */
+	if (!ptlrpc_server_bulk_active(desc))   /* completed or */
+		return;                         /* never started */
 
-        /* We used to poison the pages with 0xab here because we did not want to
-         * send any meaningful data over the wire for evicted clients (bug 9297)
-         * However, this is no longer safe now that we use the page cache on the
-         * OSS (bug 20560) */
+	/* We used to poison the pages with 0xab here because we did not want to
+	 * send any meaningful data over the wire for evicted clients (bug 9297)
+	 * However, this is no longer safe now that we use the page cache on the
+	 * OSS (bug 20560) */
 
-        /* The unlink ensures the callback happens ASAP and is the last
-         * one.  If it fails, it must be because completion just happened,
-         * but we must still l_wait_event() in this case, to give liblustre
-         * a chance to run server_bulk_callback()*/
+	/* The unlink ensures the callback happens ASAP and is the last
+	 * one.  If it fails, it must be because completion just happened,
+	 * but we must still l_wait_event() in this case, to give liblustre
+	 * a chance to run server_bulk_callback()*/
 	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_count);
 
-        for (;;) {
-                /* Network access will complete in finite time but the HUGE
-                 * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
-                                           cfs_time_seconds(1), NULL, NULL);
-                rc = l_wait_event(desc->bd_waitq,
-                                  !ptlrpc_server_bulk_active(desc), &lwi);
-                if (rc == 0)
-                        return;
+	for (;;) {
+		/* Network access will complete in finite time but the HUGE
+		 * timeout lets us CWARN for visibility of sluggish NALs */
+		lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
+					   cfs_time_seconds(1), NULL, NULL);
+		rc = l_wait_event(desc->bd_waitq,
+				  !ptlrpc_server_bulk_active(desc), &lwi);
+		if (rc == 0)
+			return;
 
-                LASSERT(rc == -ETIMEDOUT);
-                CWARN("Unexpectedly long timeout: desc %p\n", desc);
-        }
+		LASSERT(rc == -ETIMEDOUT);
+		CWARN("Unexpectedly long timeout: desc %p\n", desc);
+	}
 }
 EXPORT_SYMBOL(ptlrpc_abort_bulk);
 #endif /* HAVE_SERVER_SUPPORT */
@@ -424,17 +424,17 @@ EXPORT_SYMBOL(ptlrpc_register_bulk);
  */
 int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 {
-        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-        struct l_wait_info       lwi;
-        int                      rc;
-        ENTRY;
+	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+	struct l_wait_info       lwi;
+	int                      rc;
+	ENTRY;
 
-        LASSERT(!cfs_in_interrupt());     /* might sleep */
+	LASSERT(!in_interrupt());     /* might sleep */
 
-        /* Let's setup deadline for reply unlink. */
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
-            async && req->rq_bulk_deadline == 0)
-                req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
+	/* Let's setup deadline for reply unlink. */
+	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
+	    async && req->rq_bulk_deadline == 0)
+		req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
 
 	if (ptlrpc_client_bulk_active(req) == 0)	/* completed or */
 		RETURN(1);				/* never registered */

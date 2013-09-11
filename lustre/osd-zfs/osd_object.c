@@ -339,7 +339,7 @@ int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 	 */
 	obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_attr.la_mode & S_IFMT;
 
-	cfs_mb();
+	smp_mb();
 	obj->oo_dt.do_lu.lo_header->loh_attr |= LOHA_EXISTS;
 
 	RETURN(0);

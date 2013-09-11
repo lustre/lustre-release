@@ -2392,11 +2392,11 @@ static int ptlrpc_main(void *arg)
 	struct ptlrpc_service		*svc = svcpt->scp_service;
 	struct ptlrpc_reply_state	*rs;
 #ifdef WITH_GROUP_INFO
-        cfs_group_info_t *ginfo = NULL;
+	struct group_info *ginfo = NULL;
 #endif
-        struct lu_env *env;
-        int counter = 0, rc = 0;
-        ENTRY;
+	struct lu_env *env;
+	int counter = 0, rc = 0;
+	ENTRY;
 
 	thread->t_pid = current_pid();
 	unshare_fs_struct();
@@ -2411,14 +2411,14 @@ static int ptlrpc_main(void *arg)
 	}
 
 #ifdef WITH_GROUP_INFO
-        ginfo = cfs_groups_alloc(0);
-        if (!ginfo) {
-                rc = -ENOMEM;
-                goto out;
-        }
+	ginfo = groups_alloc(0);
+	if (!ginfo) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
-        cfs_set_current_groups(ginfo);
-        cfs_put_group_info(ginfo);
+	set_current_groups(ginfo);
+	put_group_info(ginfo);
 #endif
 
 	if (svc->srv_ops.so_thr_init != NULL) {
