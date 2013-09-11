@@ -119,9 +119,9 @@ struct osp_device {
 	/* dedicate precreate thread */
 	struct ptlrpc_thread		 opd_pre_thread;
 	/* thread waits for signals about pool going empty */
-	cfs_waitq_t			 opd_pre_waitq;
+	wait_queue_head_t		 opd_pre_waitq;
 	/* consumers (who needs new ids) wait here */
-	cfs_waitq_t			 opd_pre_user_waitq;
+	wait_queue_head_t		 opd_pre_user_waitq;
 	/* current precreation status: working, failed, stopping? */
 	int				 opd_pre_status;
 	/* how many to precreate next time */
@@ -145,7 +145,7 @@ struct osp_device {
 	int				 opd_syn_prev_done;
 	/* found records */
 	struct ptlrpc_thread		 opd_syn_thread;
-	cfs_waitq_t			 opd_syn_waitq;
+	wait_queue_head_t		 opd_syn_waitq;
 	/* list of remotely committed rpc */
 	cfs_list_t			 opd_syn_committed_there;
 	/* number of changes being under sync */

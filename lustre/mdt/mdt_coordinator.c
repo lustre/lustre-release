@@ -422,7 +422,7 @@ static int mdt_coordinator(void *data)
 	ENTRY;
 
 	cdt->cdt_thread.t_flags = SVC_RUNNING;
-	cfs_waitq_signal(&cdt->cdt_thread.t_ctl_waitq);
+	wake_up(&cdt->cdt_thread.t_ctl_waitq);
 
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
 	       mdt_obd_name(mdt), current_pid());
@@ -652,7 +652,7 @@ out:
 		 * and cdt cleaning will be done by event sender
 		 */
 		cdt->cdt_thread.t_flags = SVC_STOPPED;
-		cfs_waitq_signal(&cdt->cdt_thread.t_ctl_waitq);
+		wake_up(&cdt->cdt_thread.t_ctl_waitq);
 	}
 
 	if (rc != 0)
@@ -820,7 +820,7 @@ int mdt_hsm_cdt_wakeup(struct mdt_device *mdt)
 
 	/* wake up coordinator */
 	cdt->cdt_thread.t_flags = SVC_EVENT;
-	cfs_waitq_signal(&cdt->cdt_thread.t_ctl_waitq);
+	wake_up(&cdt->cdt_thread.t_ctl_waitq);
 
 	RETURN(0);
 }
@@ -840,7 +840,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 
 	cdt->cdt_state = CDT_STOPPED;
 
-	cfs_waitq_init(&cdt->cdt_thread.t_ctl_waitq);
+	init_waitqueue_head(&cdt->cdt_thread.t_ctl_waitq);
 	mutex_init(&cdt->cdt_llog_lock);
 	init_rwsem(&cdt->cdt_agent_lock);
 	init_rwsem(&cdt->cdt_request_lock);
@@ -956,7 +956,7 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		rc = 0;
 	}
 
-	cfs_wait_event(cdt->cdt_thread.t_ctl_waitq,
+	wait_event(cdt->cdt_thread.t_ctl_waitq,
 		       (cdt->cdt_thread.t_flags & SVC_RUNNING));
 
 	cdt->cdt_state = CDT_RUNNING;
@@ -990,9 +990,9 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	if (cdt->cdt_state != CDT_STOPPING) {
 		/* stop coordinator thread before cleaning */
 		cdt->cdt_thread.t_flags = SVC_STOPPING;
-		cfs_waitq_signal(&cdt->cdt_thread.t_ctl_waitq);
-		cfs_wait_event(cdt->cdt_thread.t_ctl_waitq,
-			       cdt->cdt_thread.t_flags & SVC_STOPPED);
+		wake_up(&cdt->cdt_thread.t_ctl_waitq);
+		wait_event(cdt->cdt_thread.t_ctl_waitq,
+			   cdt->cdt_thread.t_flags & SVC_STOPPED);
 	}
 	cdt->cdt_state = CDT_STOPPED;
 

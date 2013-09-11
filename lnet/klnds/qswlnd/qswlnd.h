@@ -254,41 +254,41 @@ typedef struct
 
 typedef struct
 {
-        char                 kqn_init;        /* what's been initialised */
-        char                 kqn_shuttingdown;/* I'm trying to shut down */
-        cfs_atomic_t         kqn_nthreads;    /* # threads running */
-        lnet_ni_t           *kqn_ni;          /* _the_ instance of me */
+	char                 kqn_init;        /* what's been initialised */
+	char                 kqn_shuttingdown;/* I'm trying to shut down */
+	cfs_atomic_t         kqn_nthreads;    /* # threads running */
+	lnet_ni_t           *kqn_ni;          /* _the_ instance of me */
 
-        kqswnal_rx_t        *kqn_rxds;        /* stack of all the receive descriptors */
-        kqswnal_tx_t        *kqn_txds;        /* stack of all the transmit descriptors */
+	kqswnal_rx_t        *kqn_rxds;        /* stack of all the receive descriptors */
+	kqswnal_tx_t        *kqn_txds;        /* stack of all the transmit descriptors */
 
-        cfs_list_t           kqn_idletxds;    /* transmit descriptors free to use */
-        cfs_list_t           kqn_activetxds;  /* transmit descriptors being used */
+	cfs_list_t           kqn_idletxds;    /* transmit descriptors free to use */
+	cfs_list_t           kqn_activetxds;  /* transmit descriptors being used */
 	spinlock_t	kqn_idletxd_lock;    /* serialise idle txd access */
 	cfs_atomic_t	kqn_pending_txs;     /* # transmits being prepped */
 
 	spinlock_t	kqn_sched_lock;      /* serialise packet schedulers */
-        cfs_waitq_t          kqn_sched_waitq;/* scheduler blocks here */
+	wait_queue_head_t    kqn_sched_waitq;/* scheduler blocks here */
 
-        cfs_list_t           kqn_readyrxds;  /* rxds full of data */
-        cfs_list_t           kqn_donetxds;   /* completed transmits */
-        cfs_list_t           kqn_delayedtxds;/* delayed transmits */
+	cfs_list_t           kqn_readyrxds;  /* rxds full of data */
+	cfs_list_t           kqn_donetxds;   /* completed transmits */
+	cfs_list_t           kqn_delayedtxds;/* delayed transmits */
 
-        EP_SYS              *kqn_ep;         /* elan system */
-        EP_NMH              *kqn_ep_tx_nmh;  /* elan reserved tx vaddrs */
-        EP_NMH              *kqn_ep_rx_nmh;  /* elan reserved rx vaddrs */
-        EP_XMTR             *kqn_eptx;       /* elan transmitter */
-        EP_RCVR             *kqn_eprx_small; /* elan receiver (small messages) */
-        EP_RCVR             *kqn_eprx_large; /* elan receiver (large messages) */
+	EP_SYS              *kqn_ep;         /* elan system */
+	EP_NMH              *kqn_ep_tx_nmh;  /* elan reserved tx vaddrs */
+	EP_NMH              *kqn_ep_rx_nmh;  /* elan reserved rx vaddrs */
+	EP_XMTR             *kqn_eptx;       /* elan transmitter */
+	EP_RCVR             *kqn_eprx_small; /* elan receiver (small messages) */
+	EP_RCVR             *kqn_eprx_large; /* elan receiver (large messages) */
 
-        int                  kqn_nnodes;     /* this cluster's size */
-        int                  kqn_elanid;     /* this nodes's elan ID */
+	int                  kqn_nnodes;     /* this cluster's size */
+	int                  kqn_elanid;     /* this nodes's elan ID */
 
-        EP_STATUSBLK         kqn_rpc_success;/* preset RPC reply status blocks */
-        EP_STATUSBLK         kqn_rpc_failed;
-        EP_STATUSBLK         kqn_rpc_version;/* reply to future version query */
-        EP_STATUSBLK         kqn_rpc_magic;  /* reply to future version query */
-}  kqswnal_data_t;
+	EP_STATUSBLK         kqn_rpc_success;/* preset RPC reply status blocks */
+	EP_STATUSBLK         kqn_rpc_failed;
+	EP_STATUSBLK         kqn_rpc_version;/* reply to future version query */
+	EP_STATUSBLK         kqn_rpc_magic;  /* reply to future version query */
+} kqswnal_data_t;
 
 /* kqn_init state */
 #define KQN_INIT_NOTHING        0               /* MUST BE ZERO so zeroed state is initialised OK */

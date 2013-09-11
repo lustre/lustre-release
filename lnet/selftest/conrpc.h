@@ -80,16 +80,16 @@ typedef struct lstcon_rpc {
 } lstcon_rpc_t;
 
 typedef struct lstcon_rpc_trans {
-        cfs_list_t            tas_olink;     /* link chain on owner list */
-        cfs_list_t            tas_link;      /* link chain on global list */
-        int                   tas_opc;       /* operation code of transaction */
+	cfs_list_t            tas_olink;     /* link chain on owner list */
+	cfs_list_t            tas_link;      /* link chain on global list */
+	int                   tas_opc;       /* operation code of transaction */
 	/* features mask is uptodate */
 	unsigned	      tas_feats_updated;
 	/* test features mask */
 	unsigned	      tas_features;
-        cfs_waitq_t           tas_waitq;     /* wait queue head */
-        cfs_atomic_t          tas_remaining; /* # of un-scheduled rpcs */
-        cfs_list_t            tas_rpcs_list; /* queued requests */
+	wait_queue_head_t     tas_waitq;     /* wait queue head */
+	cfs_atomic_t          tas_remaining; /* # of un-scheduled rpcs */
+	cfs_list_t            tas_rpcs_list; /* queued requests */
 } lstcon_rpc_trans_t;
 
 #define LST_TRANS_PRIVATE       0x1000

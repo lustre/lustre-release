@@ -1071,19 +1071,19 @@ EXPORT_SYMBOL(mdc_sendpage);
 #endif
 
 int mdc_readpage(struct obd_export *exp, struct md_op_data *op_data,
-                 struct page **pages, struct ptlrpc_request **request)
+		 struct page **pages, struct ptlrpc_request **request)
 {
-        struct ptlrpc_request   *req;
-        struct ptlrpc_bulk_desc *desc;
-        int                      i;
-        cfs_waitq_t              waitq;
-        int                      resends = 0;
-        struct l_wait_info       lwi;
-        int                      rc;
-        ENTRY;
+	struct ptlrpc_request   *req;
+	struct ptlrpc_bulk_desc *desc;
+	int                      i;
+	wait_queue_head_t        waitq;
+	int                      resends = 0;
+	struct l_wait_info       lwi;
+	int                      rc;
+	ENTRY;
 
-        *request = NULL;
-        cfs_waitq_init(&waitq);
+	*request = NULL;
+	init_waitqueue_head(&waitq);
 
 restart_bulk:
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_READPAGE);

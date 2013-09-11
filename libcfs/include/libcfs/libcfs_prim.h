@@ -41,35 +41,8 @@
 #define __LIBCFS_PRIM_H__
 
 /*
- * Schedule
- */
-void cfs_schedule_timeout_and_set_state(cfs_task_state_t state,
-                                        int64_t timeout);
-void cfs_schedule_timeout(int64_t timeout);
-void cfs_schedule(void);
-void cfs_pause(cfs_duration_t ticks);
-int  cfs_need_resched(void);
-void cfs_cond_resched(void);
-
-/*
  * Wait Queues
  */
-void cfs_waitq_init(cfs_waitq_t *waitq);
-void cfs_waitlink_init(cfs_waitlink_t *link);
-void cfs_waitq_add(cfs_waitq_t *waitq, cfs_waitlink_t *link);
-void cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
-                             cfs_waitlink_t *link);
-void cfs_waitq_add_exclusive_head(cfs_waitq_t *waitq,
-                                  cfs_waitlink_t *link);
-void cfs_waitq_del(cfs_waitq_t *waitq, cfs_waitlink_t *link);
-int  cfs_waitq_active(cfs_waitq_t *waitq);
-void cfs_waitq_signal(cfs_waitq_t *waitq);
-void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr);
-void cfs_waitq_broadcast(cfs_waitq_t *waitq);
-void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state);
-int64_t cfs_waitq_timedwait(cfs_waitlink_t *link, cfs_task_state_t state, 
-			    int64_t timeout);
-
 /*
  * Timer
  */

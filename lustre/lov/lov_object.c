@@ -285,13 +285,13 @@ static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
 }
 
 static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
-                               struct lovsub_object *los, int idx)
+			       struct lovsub_object *los, int idx)
 {
-        struct cl_object        *sub;
-        struct lov_layout_raid0 *r0;
-        struct lu_site          *site;
-        struct lu_site_bkt_data *bkt;
-        cfs_waitlink_t          *waiter;
+	struct cl_object        *sub;
+	struct lov_layout_raid0 *r0;
+	struct lu_site          *site;
+	struct lu_site_bkt_data *bkt;
+	wait_queue_t          *waiter;
 
         r0  = &lov->u.raid0;
         LASSERT(r0->lo_sub[idx] == los);
@@ -307,28 +307,28 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 
         /* ... wait until it is actually destroyed---sub-object clears its
          * ->lo_sub[] slot in lovsub_object_fini() */
-        if (r0->lo_sub[idx] == los) {
-                waiter = &lov_env_info(env)->lti_waiter;
-                cfs_waitlink_init(waiter);
-                cfs_waitq_add(&bkt->lsb_marche_funebre, waiter);
-                cfs_set_current_state(CFS_TASK_UNINT);
-                while (1) {
-                        /* this wait-queue is signaled at the end of
-                         * lu_object_free(). */
-                        cfs_set_current_state(CFS_TASK_UNINT);
+	if (r0->lo_sub[idx] == los) {
+		waiter = &lov_env_info(env)->lti_waiter;
+		init_waitqueue_entry_current(waiter);
+		add_wait_queue(&bkt->lsb_marche_funebre, waiter);
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		while (1) {
+			/* this wait-queue is signaled at the end of
+			 * lu_object_free(). */
+			set_current_state(TASK_UNINTERRUPTIBLE);
 			spin_lock(&r0->lo_sub_lock);
 			if (r0->lo_sub[idx] == los) {
 				spin_unlock(&r0->lo_sub_lock);
-				cfs_waitq_wait(waiter, CFS_TASK_UNINT);
+				waitq_wait(waiter, TASK_UNINTERRUPTIBLE);
 			} else {
 				spin_unlock(&r0->lo_sub_lock);
-                                cfs_set_current_state(CFS_TASK_RUNNING);
-                                break;
-                        }
-                }
-                cfs_waitq_del(&bkt->lsb_marche_funebre, waiter);
-        }
-        LASSERT(r0->lo_sub[idx] == NULL);
+				set_current_state(TASK_RUNNING);
+				break;
+			}
+		}
+		remove_wait_queue(&bkt->lsb_marche_funebre, waiter);
+	}
+	LASSERT(r0->lo_sub[idx] == NULL);
 }
 
 static int lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
@@ -736,7 +736,7 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
         ENTRY;
 	init_rwsem(&lov->lo_type_guard);
 	cfs_atomic_set(&lov->lo_active_ios, 0);
-	cfs_waitq_init(&lov->lo_waitq);
+	init_waitqueue_head(&lov->lo_waitq);
 
 	cl_object_page_init(lu2cl(obj), sizeof(struct lov_page));
 

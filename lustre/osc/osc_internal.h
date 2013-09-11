@@ -78,11 +78,11 @@ struct osc_async_page {
 #define oap_brw_flags   oap_brw_page.flag
 
 struct osc_cache_waiter {
-        cfs_list_t              ocw_entry;
-        cfs_waitq_t             ocw_waitq;
-        struct osc_async_page  *ocw_oap;
+	cfs_list_t              ocw_entry;
+	wait_queue_head_t             ocw_waitq;
+	struct osc_async_page  *ocw_oap;
 	int                     ocw_grant;
-        int                     ocw_rc;
+	int                     ocw_rc;
 };
 
 int osc_create(const struct lu_env *env, struct obd_export *exp,

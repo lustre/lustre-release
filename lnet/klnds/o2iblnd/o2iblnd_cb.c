@@ -1909,17 +1909,17 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
 
         kiblnd_set_conn_state(conn, IBLND_CONN_CLOSING);
 
-        if (error != 0 &&
-            kiblnd_dev_can_failover(dev)) {
-                cfs_list_add_tail(&dev->ibd_fail_list,
-                              &kiblnd_data.kib_failed_devs);
-                cfs_waitq_signal(&kiblnd_data.kib_failover_waitq);
-        }
+	if (error != 0 &&
+	    kiblnd_dev_can_failover(dev)) {
+		cfs_list_add_tail(&dev->ibd_fail_list,
+			      &kiblnd_data.kib_failed_devs);
+		wake_up(&kiblnd_data.kib_failover_waitq);
+	}
 
 	spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 
 	cfs_list_add_tail(&conn->ibc_list, &kiblnd_data.kib_connd_conns);
-	cfs_waitq_signal(&kiblnd_data.kib_connd_waitq);
+	wake_up(&kiblnd_data.kib_connd_waitq);
 
 	spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);
 }
@@ -3126,19 +3126,19 @@ kiblnd_disconnect_conn (kib_conn_t *conn)
 int
 kiblnd_connd (void *arg)
 {
-        cfs_waitlink_t     wait;
-        unsigned long      flags;
-        kib_conn_t        *conn;
-        int                timeout;
-        int                i;
-        int                dropped_lock;
-        int                peer_index = 0;
-        unsigned long      deadline = jiffies;
+	wait_queue_t     wait;
+	unsigned long      flags;
+	kib_conn_t        *conn;
+	int                timeout;
+	int                i;
+	int                dropped_lock;
+	int                peer_index = 0;
+	unsigned long      deadline = jiffies;
 
-        cfs_block_allsigs ();
+	cfs_block_allsigs ();
 
-        cfs_waitlink_init (&wait);
-        kiblnd_data.kib_connd = current;
+	init_waitqueue_entry_current (&wait);
+	kiblnd_data.kib_connd = current;
 
 	spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 
@@ -3214,14 +3214,14 @@ kiblnd_connd (void *arg)
 			continue;
 
 		/* Nothing to do for 'timeout'  */
-		cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-		cfs_waitq_add(&kiblnd_data.kib_connd_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&kiblnd_data.kib_connd_waitq, &wait);
 		spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);
 
-		cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE, timeout);
+		waitq_timedwait(&wait, TASK_INTERRUPTIBLE, timeout);
 
-		cfs_set_current_state(CFS_TASK_RUNNING);
-		cfs_waitq_del(&kiblnd_data.kib_connd_waitq, &wait);
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&kiblnd_data.kib_connd_waitq, &wait);
 		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 	}
 
@@ -3303,8 +3303,8 @@ kiblnd_cq_completion(struct ib_cq *cq, void *arg)
 		conn->ibc_scheduled = 1;
 		cfs_list_add_tail(&conn->ibc_sched_list, &sched->ibs_conns);
 
-		if (cfs_waitq_active(&sched->ibs_waitq))
-			cfs_waitq_signal(&sched->ibs_waitq);
+		if (waitqueue_active(&sched->ibs_waitq))
+			wake_up(&sched->ibs_waitq);
 	}
 
 	spin_unlock_irqrestore(&sched->ibs_lock, flags);
@@ -3325,7 +3325,7 @@ kiblnd_scheduler(void *arg)
 	long			id = (long)arg;
 	struct kib_sched_info	*sched;
 	kib_conn_t		*conn;
-	cfs_waitlink_t		wait;
+	wait_queue_t		wait;
 	unsigned long		flags;
 	struct ib_wc		wc;
 	int			did_something;
@@ -3334,7 +3334,7 @@ kiblnd_scheduler(void *arg)
 
 	cfs_block_allsigs();
 
-	cfs_waitlink_init(&wait);
+	init_waitqueue_entry_current(&wait);
 
 	sched = kiblnd_data.kib_scheds[KIB_THREAD_CPT(id)];
 
@@ -3352,7 +3352,7 @@ kiblnd_scheduler(void *arg)
 		if (busy_loops++ >= IBLND_RESCHED) {
 			spin_unlock_irqrestore(&sched->ibs_lock, flags);
 
-			cfs_cond_resched();
+			cond_resched();
 			busy_loops = 0;
 
 			spin_lock_irqsave(&sched->ibs_lock, flags);
@@ -3409,8 +3409,8 @@ kiblnd_scheduler(void *arg)
 				kiblnd_conn_addref(conn);
 				cfs_list_add_tail(&conn->ibc_sched_list,
 						  &sched->ibs_conns);
-				if (cfs_waitq_active(&sched->ibs_waitq))
-					cfs_waitq_signal(&sched->ibs_waitq);
+				if (waitqueue_active(&sched->ibs_waitq))
+					wake_up(&sched->ibs_waitq);
 			} else {
 				conn->ibc_scheduled = 0;
 			}
@@ -3429,15 +3429,15 @@ kiblnd_scheduler(void *arg)
                 if (did_something)
                         continue;
 
-		cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-		cfs_waitq_add_exclusive(&sched->ibs_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue_exclusive(&sched->ibs_waitq, &wait);
 		spin_unlock_irqrestore(&sched->ibs_lock, flags);
 
-		cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
+		waitq_wait(&wait, TASK_INTERRUPTIBLE);
 		busy_loops = 0;
 
-		cfs_waitq_del(&sched->ibs_waitq, &wait);
-		cfs_set_current_state(CFS_TASK_RUNNING);
+		remove_wait_queue(&sched->ibs_waitq, &wait);
+		set_current_state(TASK_RUNNING);
 		spin_lock_irqsave(&sched->ibs_lock, flags);
 	}
 
@@ -3451,16 +3451,16 @@ int
 kiblnd_failover_thread(void *arg)
 {
 	rwlock_t		*glock = &kiblnd_data.kib_global_lock;
-        kib_dev_t         *dev;
-        cfs_waitlink_t     wait;
-        unsigned long      flags;
-        int                rc;
+	kib_dev_t         *dev;
+	wait_queue_t     wait;
+	unsigned long      flags;
+	int                rc;
 
-        LASSERT (*kiblnd_tunables.kib_dev_failover != 0);
+	LASSERT (*kiblnd_tunables.kib_dev_failover != 0);
 
-        cfs_block_allsigs ();
+	cfs_block_allsigs ();
 
-        cfs_waitlink_init(&wait);
+	init_waitqueue_entry_current(&wait);
 	write_lock_irqsave(glock, flags);
 
         while (!kiblnd_data.kib_shutdown) {
@@ -3506,14 +3506,14 @@ kiblnd_failover_thread(void *arg)
                 /* long sleep if no more pending failover */
                 long_sleep = cfs_list_empty(&kiblnd_data.kib_failed_devs);
 
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_waitq_add(&kiblnd_data.kib_failover_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&kiblnd_data.kib_failover_waitq, &wait);
 		write_unlock_irqrestore(glock, flags);
 
 		rc = schedule_timeout(long_sleep ? cfs_time_seconds(10) :
 						   cfs_time_seconds(1));
-		cfs_set_current_state(CFS_TASK_RUNNING);
-		cfs_waitq_del(&kiblnd_data.kib_failover_waitq, &wait);
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&kiblnd_data.kib_failover_waitq, &wait);
 		write_lock_irqsave(glock, flags);
 
                 if (!long_sleep || rc != 0)

@@ -483,18 +483,18 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lock->l_resource = resource;
         lu_ref_add(&resource->lr_reference, "lock", lock);
 
-        cfs_atomic_set(&lock->l_refc, 2);
-        CFS_INIT_LIST_HEAD(&lock->l_res_link);
-        CFS_INIT_LIST_HEAD(&lock->l_lru);
-        CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
-        CFS_INIT_LIST_HEAD(&lock->l_bl_ast);
-        CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
-        CFS_INIT_LIST_HEAD(&lock->l_rk_ast);
-        cfs_waitq_init(&lock->l_waitq);
-        lock->l_blocking_lock = NULL;
-        CFS_INIT_LIST_HEAD(&lock->l_sl_mode);
-        CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
-        CFS_INIT_HLIST_NODE(&lock->l_exp_hash);
+	cfs_atomic_set(&lock->l_refc, 2);
+	CFS_INIT_LIST_HEAD(&lock->l_res_link);
+	CFS_INIT_LIST_HEAD(&lock->l_lru);
+	CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
+	CFS_INIT_LIST_HEAD(&lock->l_bl_ast);
+	CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
+	CFS_INIT_LIST_HEAD(&lock->l_rk_ast);
+	init_waitqueue_head(&lock->l_waitq);
+	lock->l_blocking_lock = NULL;
+	CFS_INIT_LIST_HEAD(&lock->l_sl_mode);
+	CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
+	CFS_INIT_HLIST_NODE(&lock->l_exp_hash);
 	CFS_INIT_HLIST_NODE(&lock->l_exp_flock_hash);
 
         lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
@@ -1252,7 +1252,7 @@ void ldlm_lock_fail_match_locked(struct ldlm_lock *lock)
 {
 	if ((lock->l_flags & LDLM_FL_FAIL_NOTIFIED) == 0) {
 		lock->l_flags |= LDLM_FL_FAIL_NOTIFIED;
-		cfs_waitq_broadcast(&lock->l_waitq);
+		wake_up_all(&lock->l_waitq);
 	}
 }
 EXPORT_SYMBOL(ldlm_lock_fail_match_locked);
@@ -1275,7 +1275,7 @@ EXPORT_SYMBOL(ldlm_lock_fail_match);
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock)
 {
 	lock->l_flags |= LDLM_FL_LVB_READY;
-	cfs_waitq_broadcast(&lock->l_waitq);
+	wake_up_all(&lock->l_waitq);
 }
 EXPORT_SYMBOL(ldlm_lock_allow_match_locked);
 

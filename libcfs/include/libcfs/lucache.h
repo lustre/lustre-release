@@ -83,16 +83,16 @@ struct md_identity {
 };
 
 struct upcall_cache_entry {
-        cfs_list_t              ue_hash;
-        __u64                   ue_key;
-        cfs_atomic_t            ue_refcount;
-        int                     ue_flags;
-        cfs_waitq_t             ue_waitq;
-        cfs_time_t              ue_acquire_expire;
-        cfs_time_t              ue_expire;
-        union {
-                struct md_identity     identity;
-        } u;
+	cfs_list_t              ue_hash;
+	__u64                   ue_key;
+	cfs_atomic_t		ue_refcount;
+	int                     ue_flags;
+	wait_queue_head_t	ue_waitq;
+	cfs_time_t              ue_acquire_expire;
+	cfs_time_t              ue_expire;
+	union {
+		struct md_identity     identity;
+	} u;
 };
 
 #define UC_CACHE_HASH_SIZE        (128)

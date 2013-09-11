@@ -1024,39 +1024,39 @@ static void init_imp_at(struct imp_at *at) {
 
 struct obd_import *class_new_import(struct obd_device *obd)
 {
-        struct obd_import *imp;
+	struct obd_import *imp;
 
-        OBD_ALLOC(imp, sizeof(*imp));
-        if (imp == NULL)
-                return NULL;
+	OBD_ALLOC(imp, sizeof(*imp));
+	if (imp == NULL)
+		return NULL;
 
 	CFS_INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        CFS_INIT_LIST_HEAD(&imp->imp_zombie_chain);
-        CFS_INIT_LIST_HEAD(&imp->imp_replay_list);
-        CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
-        CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
+	CFS_INIT_LIST_HEAD(&imp->imp_zombie_chain);
+	CFS_INIT_LIST_HEAD(&imp->imp_replay_list);
+	CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
+	CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
 	spin_lock_init(&imp->imp_lock);
 	imp->imp_last_success_conn = 0;
 	imp->imp_state = LUSTRE_IMP_NEW;
 	imp->imp_obd = class_incref(obd, "import", imp);
 	mutex_init(&imp->imp_sec_mutex);
-        cfs_waitq_init(&imp->imp_recovery_waitq);
+	init_waitqueue_head(&imp->imp_recovery_waitq);
 
-        cfs_atomic_set(&imp->imp_refcount, 2);
-        cfs_atomic_set(&imp->imp_unregistering, 0);
-        cfs_atomic_set(&imp->imp_inflight, 0);
-        cfs_atomic_set(&imp->imp_replay_inflight, 0);
-        cfs_atomic_set(&imp->imp_inval_count, 0);
-        CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
-        CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
+	cfs_atomic_set(&imp->imp_refcount, 2);
+	cfs_atomic_set(&imp->imp_unregistering, 0);
+	cfs_atomic_set(&imp->imp_inflight, 0);
+	cfs_atomic_set(&imp->imp_replay_inflight, 0);
+	cfs_atomic_set(&imp->imp_inval_count, 0);
+	CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
+	CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
 	class_handle_hash(&imp->imp_handle, &import_handle_ops);
-        init_imp_at(&imp->imp_at);
+	init_imp_at(&imp->imp_at);
 
-        /* the default magic is V2, will be used in connect RPC, and
-         * then adjusted according to the flags in request/reply. */
-        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
+	/* the default magic is V2, will be used in connect RPC, and
+	 * then adjusted according to the flags in request/reply. */
+	imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
 
-        return imp;
+	return imp;
 }
 EXPORT_SYMBOL(class_new_import);
 
@@ -1565,17 +1565,17 @@ void obd_exports_barrier(struct obd_device *obd)
 	spin_lock(&obd->obd_dev_lock);
 	while (!cfs_list_empty(&obd->obd_unlinked_exports)) {
 		spin_unlock(&obd->obd_dev_lock);
-                cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT,
-                                                   cfs_time_seconds(waited));
-                if (waited > 5 && IS_PO2(waited)) {
-                        LCONSOLE_WARN("%s is waiting for obd_unlinked_exports "
-                                      "more than %d seconds. "
-                                      "The obd refcount = %d. Is it stuck?\n",
-                                      obd->obd_name, waited,
-                                      cfs_atomic_read(&obd->obd_refcount));
-                        dump_exports(obd, 1);
-                }
-                waited *= 2;
+		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
+						   cfs_time_seconds(waited));
+		if (waited > 5 && IS_PO2(waited)) {
+			LCONSOLE_WARN("%s is waiting for obd_unlinked_exports "
+				      "more than %d seconds. "
+				      "The obd refcount = %d. Is it stuck?\n",
+				      obd->obd_name, waited,
+				      cfs_atomic_read(&obd->obd_refcount));
+			dump_exports(obd, 1);
+		}
+		waited *= 2;
 		spin_lock(&obd->obd_dev_lock);
 	}
 	spin_unlock(&obd->obd_dev_lock);
@@ -1629,7 +1629,7 @@ void obd_zombie_impexp_cull(void)
 			spin_unlock(&obd_zombie_impexp_lock);
 		}
 
-		cfs_cond_resched();
+		cond_resched();
 	} while (import != NULL || export != NULL);
 	EXIT;
 }
@@ -1637,7 +1637,7 @@ void obd_zombie_impexp_cull(void)
 static struct completion	obd_zombie_start;
 static struct completion	obd_zombie_stop;
 static unsigned long		obd_zombie_flags;
-static cfs_waitq_t		obd_zombie_waitq;
+static wait_queue_head_t	obd_zombie_waitq;
 static pid_t			obd_zombie_pid;
 
 enum {
@@ -1695,12 +1695,12 @@ static void obd_zombie_import_add(struct obd_import *imp) {
  */
 static void obd_zombie_impexp_notify(void)
 {
-        /*
-         * Make sure obd_zomebie_impexp_thread get this notification.
-         * It is possible this signal only get by obd_zombie_barrier, and
-         * barrier gulps this notification and sleeps away and hangs ensues
-         */
-        cfs_waitq_broadcast(&obd_zombie_waitq);
+	/*
+	 * Make sure obd_zomebie_impexp_thread get this notification.
+	 * It is possible this signal only get by obd_zombie_barrier, and
+	 * barrier gulps this notification and sleeps away and hangs ensues
+	 */
+	wake_up_all(&obd_zombie_waitq);
 }
 
 /**
@@ -1744,18 +1744,18 @@ static int obd_zombie_impexp_thread(void *unused)
 	obd_zombie_pid = current_pid();
 
 	while (!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
-                struct l_wait_info lwi = { 0 };
+		struct l_wait_info lwi = { 0 };
 
-                l_wait_event(obd_zombie_waitq,
-                             !obd_zombie_impexp_check(NULL), &lwi);
-                obd_zombie_impexp_cull();
+		l_wait_event(obd_zombie_waitq,
+			     !obd_zombie_impexp_check(NULL), &lwi);
+		obd_zombie_impexp_cull();
 
-                /*
-                 * Notify obd_zombie_barrier callers that queues
-                 * may be empty.
-                 */
-                cfs_waitq_signal(&obd_zombie_waitq);
-        }
+		/*
+		 * Notify obd_zombie_barrier callers that queues
+		 * may be empty.
+		 */
+		wake_up(&obd_zombie_waitq);
+	}
 
 	complete(&obd_zombie_stop);
 
@@ -1796,7 +1796,7 @@ int obd_zombie_impexp_init(void)
 	spin_lock_init(&obd_zombie_impexp_lock);
 	init_completion(&obd_zombie_start);
 	init_completion(&obd_zombie_stop);
-	cfs_waitq_init(&obd_zombie_waitq);
+	init_waitqueue_head(&obd_zombie_waitq);
 	obd_zombie_pid = 0;
 
 #ifdef __KERNEL__

@@ -172,7 +172,7 @@ retry:
 			"freed:%lu, repeat:%u\n", hash,
 			d.lid_inuse, d.lid_freed, repeat);
 		repeat++;
-		cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
+		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
 						cfs_time_seconds(1));
 		goto retry;
 	}

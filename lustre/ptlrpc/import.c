@@ -368,16 +368,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                   }
         } while (rc != 0);
 
-        /*
-         * Let's additionally check that no new rpcs added to import in
-         * "invalidate" state.
-         */
-        LASSERT(cfs_atomic_read(&imp->imp_inflight) == 0);
-        obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
-        sptlrpc_import_flush_all_ctx(imp);
+	/*
+	 * Let's additionally check that no new rpcs added to import in
+	 * "invalidate" state.
+	 */
+	LASSERT(cfs_atomic_read(&imp->imp_inflight) == 0);
+	obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+	sptlrpc_import_flush_all_ctx(imp);
 
-        cfs_atomic_dec(&imp->imp_inval_count);
-        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+	cfs_atomic_dec(&imp->imp_inval_count);
+	wake_up_all(&imp->imp_recovery_waitq);
 }
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 
@@ -1178,15 +1178,15 @@ out:
                         RETURN(-EPROTO);
                 }
 
-                ptlrpc_maybe_ping_import_soon(imp);
+		ptlrpc_maybe_ping_import_soon(imp);
 
-                CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
-                       obd2cli_tgt(imp->imp_obd),
-                       (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
-        }
+		CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
+		       obd2cli_tgt(imp->imp_obd),
+		       (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
+	}
 
-        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
-        RETURN(rc);
+	wake_up_all(&imp->imp_recovery_waitq);
+	RETURN(rc);
 }
 
 /**
@@ -1409,13 +1409,13 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                               libcfs_nid2str(imp->imp_connection->c_peer.nid));
         }
 
-        if (imp->imp_state == LUSTRE_IMP_FULL) {
-                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
-                ptlrpc_wake_delayed(imp);
-        }
+	if (imp->imp_state == LUSTRE_IMP_FULL) {
+		wake_up_all(&imp->imp_recovery_waitq);
+		ptlrpc_wake_delayed(imp);
+	}
 
 out:
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)

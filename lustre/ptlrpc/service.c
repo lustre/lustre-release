@@ -211,7 +211,7 @@ struct ptlrpc_hr_partition;
 struct ptlrpc_hr_thread {
 	int				hrt_id;		/* thread ID */
 	spinlock_t			hrt_lock;
-	cfs_waitq_t			hrt_waitq;
+	wait_queue_head_t		hrt_waitq;
 	cfs_list_t			hrt_queue;	/* RS queue */
 	struct ptlrpc_hr_partition	*hrt_partition;
 };
@@ -238,7 +238,7 @@ struct ptlrpc_hr_service {
 	/* CPU partition table, it's just cfs_cpt_table for now */
 	struct cfs_cpt_table		*hr_cpt_table;
 	/** controller sleep waitq */
-	cfs_waitq_t			hr_waitq;
+	wait_queue_head_t		hr_waitq;
         unsigned int			hr_stopping;
 	/** roundrobin rotor for non-affinity service */
 	unsigned int			hr_rotor;
@@ -313,7 +313,7 @@ static void rs_batch_dispatch(struct rs_batch *b)
 		cfs_list_splice_init(&b->rsb_replies, &hrt->hrt_queue);
 		spin_unlock(&hrt->hrt_lock);
 
-		cfs_waitq_signal(&hrt->hrt_waitq);
+		wake_up(&hrt->hrt_waitq);
 		b->rsb_n_replies = 0;
 	}
 }
@@ -392,7 +392,7 @@ void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
 	cfs_list_add_tail(&rs->rs_list, &hrt->hrt_queue);
 	spin_unlock(&hrt->hrt_lock);
 
-	cfs_waitq_signal(&hrt->hrt_waitq);
+	wake_up(&hrt->hrt_waitq);
 	EXIT;
 #else
 	cfs_list_add_tail(&rs->rs_list, &rs->rs_svcpt->scp_rep_queue);
@@ -504,7 +504,7 @@ static void ptlrpc_at_timer(unsigned long castmeharder)
 
 	svcpt->scp_at_check = 1;
 	svcpt->scp_at_checktime = cfs_time_current();
-	cfs_waitq_signal(&svcpt->scp_waitq);
+	wake_up(&svcpt->scp_waitq);
 }
 
 static void
@@ -631,7 +631,7 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 	CFS_INIT_LIST_HEAD(&svcpt->scp_rqbd_idle);
 	CFS_INIT_LIST_HEAD(&svcpt->scp_rqbd_posted);
 	CFS_INIT_LIST_HEAD(&svcpt->scp_req_incoming);
-	cfs_waitq_init(&svcpt->scp_waitq);
+	init_waitqueue_head(&svcpt->scp_waitq);
 	/* history request & rqbd list */
 	CFS_INIT_LIST_HEAD(&svcpt->scp_hist_reqs);
 	CFS_INIT_LIST_HEAD(&svcpt->scp_hist_rqbds);
@@ -646,7 +646,7 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 	CFS_INIT_LIST_HEAD(&svcpt->scp_rep_queue);
 #endif
 	CFS_INIT_LIST_HEAD(&svcpt->scp_rep_idle);
-	cfs_waitq_init(&svcpt->scp_rep_waitq);
+	init_waitqueue_head(&svcpt->scp_rep_waitq);
 	cfs_atomic_set(&svcpt->scp_nreps_difficult, 0);
 
 	/* adaptive timeout */
@@ -1907,7 +1907,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	if (rc)
 		GOTO(err_req, rc);
 
-	cfs_waitq_signal(&svcpt->scp_waitq);
+	wake_up(&svcpt->scp_waitq);
 	RETURN(1);
 
 err_req:
@@ -2173,7 +2173,7 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
                 ptlrpc_rs_decref (rs);
 		if (cfs_atomic_dec_and_test(&svcpt->scp_nreps_difficult) &&
 		    svc->srv_is_stopping)
-			cfs_waitq_broadcast(&svcpt->scp_waitq);
+			wake_up_all(&svcpt->scp_waitq);
 		RETURN(1);
 	}
 
@@ -2362,7 +2362,7 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 
 	lc_watchdog_disable(thread->t_watchdog);
 
-	cfs_cond_resched();
+	cond_resched();
 
 	l_wait_event_exclusive_head(svcpt->scp_waitq,
 				ptlrpc_thread_stopping(thread) ||
@@ -2476,14 +2476,14 @@ static int ptlrpc_main(void *arg)
 	spin_unlock(&svcpt->scp_lock);
 
 	/* wake up our creator in case he's still waiting. */
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	thread->t_watchdog = lc_watchdog_add(ptlrpc_server_get_timeout(svcpt),
 					     NULL, NULL);
 
 	spin_lock(&svcpt->scp_rep_lock);
 	cfs_list_add(&rs->rs_list, &svcpt->scp_rep_idle);
-	cfs_waitq_signal(&svcpt->scp_rep_waitq);
+	wake_up(&svcpt->scp_rep_waitq);
 	spin_unlock(&svcpt->scp_rep_lock);
 
 	CDEBUG(D_NET, "service thread %d (#%d) started\n", thread->t_id,
@@ -2564,7 +2564,7 @@ out:
 	thread->t_id = rc;
 	thread_add_flags(thread, SVC_STOPPED);
 
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	spin_unlock(&svcpt->scp_lock);
 
 	return rc;
@@ -2607,7 +2607,7 @@ static int ptlrpc_hr_main(void *arg)
 	}
 
 	cfs_atomic_inc(&hrp->hrp_nstarted);
-	cfs_waitq_signal(&ptlrpc_hr.hr_waitq);
+	wake_up(&ptlrpc_hr.hr_waitq);
 
 	while (!ptlrpc_hr.hr_stopping) {
 		l_wait_condition(hrt->hrt_waitq, hrt_dont_sleep(hrt, &replies));
@@ -2624,7 +2624,7 @@ static int ptlrpc_hr_main(void *arg)
         }
 
 	cfs_atomic_inc(&hrp->hrp_nstopped);
-	cfs_waitq_signal(&ptlrpc_hr.hr_waitq);
+	wake_up(&ptlrpc_hr.hr_waitq);
 
 	return 0;
 }
@@ -2641,13 +2641,13 @@ static void ptlrpc_stop_hr_threads(void)
 		if (hrp->hrp_thrs == NULL)
 			continue; /* uninitialized */
 		for (j = 0; j < hrp->hrp_nthrs; j++)
-			cfs_waitq_broadcast(&hrp->hrp_thrs[j].hrt_waitq);
+			wake_up_all(&hrp->hrp_thrs[j].hrt_waitq);
 	}
 
 	cfs_percpt_for_each(hrp, i, ptlrpc_hr.hr_partitions) {
 		if (hrp->hrp_thrs == NULL)
 			continue; /* uninitialized */
-		cfs_wait_event(ptlrpc_hr.hr_waitq,
+		wait_event(ptlrpc_hr.hr_waitq,
 			       cfs_atomic_read(&hrp->hrp_nstopped) ==
 			       cfs_atomic_read(&hrp->hrp_nstarted));
 	}
@@ -2673,7 +2673,7 @@ static int ptlrpc_start_hr_threads(void)
 			if (IS_ERR_VALUE(rc))
 				break;
 		}
-		cfs_wait_event(ptlrpc_hr.hr_waitq,
+		wait_event(ptlrpc_hr.hr_waitq,
 			       cfs_atomic_read(&hrp->hrp_nstarted) == j);
 		if (!IS_ERR_VALUE(rc))
 			continue;
@@ -2705,7 +2705,7 @@ static void ptlrpc_svcpt_stop_threads(struct ptlrpc_service_part *svcpt)
 		thread_add_flags(thread, SVC_STOPPING);
 	}
 
-	cfs_waitq_broadcast(&svcpt->scp_waitq);
+	wake_up_all(&svcpt->scp_waitq);
 
 	while (!cfs_list_empty(&svcpt->scp_threads)) {
 		thread = cfs_list_entry(svcpt->scp_threads.next,
@@ -2814,7 +2814,7 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 	OBD_CPT_ALLOC_PTR(thread, svc->srv_cptable, svcpt->scp_cpt);
 	if (thread == NULL)
 		RETURN(-ENOMEM);
-	cfs_waitq_init(&thread->t_ctl_waitq);
+	init_waitqueue_head(&thread->t_ctl_waitq);
 
 	spin_lock(&svcpt->scp_lock);
 	if (!ptlrpc_threads_increasable(svcpt)) {
@@ -2832,7 +2832,7 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 		if (wait) {
 			CDEBUG(D_INFO, "Waiting for creating thread %s #%d\n",
 			       svc->srv_thread_name, svcpt->scp_thr_nextid);
-			cfs_schedule();
+			schedule();
 			goto again;
 		}
 
@@ -2869,7 +2869,7 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 			 * by ptlrpc_svcpt_stop_threads now
 			 */
 			thread_add_flags(thread, SVC_STOPPED);
-			cfs_waitq_signal(&thread->t_ctl_waitq);
+			wake_up(&thread->t_ctl_waitq);
 			spin_unlock(&svcpt->scp_lock);
 		} else {
 			cfs_list_del(&thread->t_link);
@@ -2907,7 +2907,7 @@ int ptlrpc_hr_init(void)
 	if (ptlrpc_hr.hr_partitions == NULL)
 		RETURN(-ENOMEM);
 
-	cfs_waitq_init(&ptlrpc_hr.hr_waitq);
+	init_waitqueue_head(&ptlrpc_hr.hr_waitq);
 
 	cfs_percpt_for_each(hrp, i, ptlrpc_hr.hr_partitions) {
 		hrp->hrp_cpt = i;
@@ -2929,7 +2929,7 @@ int ptlrpc_hr_init(void)
 
 			hrt->hrt_id = j;
 			hrt->hrt_partition = hrp;
-			cfs_waitq_init(&hrt->hrt_waitq);
+			init_waitqueue_head(&hrt->hrt_waitq);
 			spin_lock_init(&hrt->hrt_lock);
 			CFS_INIT_LIST_HEAD(&hrt->hrt_queue);
 		}

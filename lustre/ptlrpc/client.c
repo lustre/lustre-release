@@ -112,7 +112,7 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned npages, unsigned max_brw,
 		return NULL;
 
 	spin_lock_init(&desc->bd_lock);
-	cfs_waitq_init(&desc->bd_waitq);
+	init_waitqueue_head(&desc->bd_waitq);
 	desc->bd_max_iov = npages;
 	desc->bd_iov_count = 0;
 	desc->bd_portal = portal;
@@ -620,26 +620,26 @@ static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
         ptlrpc_at_set_req_timeout(request);
 
 	spin_lock_init(&request->rq_lock);
-        CFS_INIT_LIST_HEAD(&request->rq_list);
-        CFS_INIT_LIST_HEAD(&request->rq_timed_list);
-        CFS_INIT_LIST_HEAD(&request->rq_replay_list);
-        CFS_INIT_LIST_HEAD(&request->rq_ctx_chain);
-        CFS_INIT_LIST_HEAD(&request->rq_set_chain);
-        CFS_INIT_LIST_HEAD(&request->rq_history_list);
-        CFS_INIT_LIST_HEAD(&request->rq_exp_list);
-        cfs_waitq_init(&request->rq_reply_waitq);
-        cfs_waitq_init(&request->rq_set_waitq);
-        request->rq_xid = ptlrpc_next_xid();
-        cfs_atomic_set(&request->rq_refcount, 1);
+	CFS_INIT_LIST_HEAD(&request->rq_list);
+	CFS_INIT_LIST_HEAD(&request->rq_timed_list);
+	CFS_INIT_LIST_HEAD(&request->rq_replay_list);
+	CFS_INIT_LIST_HEAD(&request->rq_ctx_chain);
+	CFS_INIT_LIST_HEAD(&request->rq_set_chain);
+	CFS_INIT_LIST_HEAD(&request->rq_history_list);
+	CFS_INIT_LIST_HEAD(&request->rq_exp_list);
+	init_waitqueue_head(&request->rq_reply_waitq);
+	init_waitqueue_head(&request->rq_set_waitq);
+	request->rq_xid = ptlrpc_next_xid();
+	cfs_atomic_set(&request->rq_refcount, 1);
 
-        lustre_msg_set_opc(request->rq_reqmsg, opcode);
+	lustre_msg_set_opc(request->rq_reqmsg, opcode);
 
-        RETURN(0);
+	RETURN(0);
 out_ctx:
-        sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
+	sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
 out_free:
-        class_import_put(imp);
-        return rc;
+	class_import_put(imp);
+	return rc;
 }
 
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
@@ -861,7 +861,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 		RETURN(NULL);
 	cfs_atomic_set(&set->set_refcount, 1);
 	CFS_INIT_LIST_HEAD(&set->set_requests);
-	cfs_waitq_init(&set->set_waitq);
+	init_waitqueue_head(&set->set_waitq);
 	cfs_atomic_set(&set->set_new_count, 0);
 	cfs_atomic_set(&set->set_remaining, 0);
 	spin_lock_init(&set->set_new_req_lock);
@@ -1033,16 +1033,16 @@ void ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
 	count = cfs_atomic_inc_return(&set->set_new_count);
 	spin_unlock(&set->set_new_req_lock);
 
-        /* Only need to call wakeup once for the first entry. */
-        if (count == 1) {
-                cfs_waitq_signal(&set->set_waitq);
+	/* Only need to call wakeup once for the first entry. */
+	if (count == 1) {
+		wake_up(&set->set_waitq);
 
-                /* XXX: It maybe unnecessary to wakeup all the partners. But to
-                 *      guarantee the async RPC can be processed ASAP, we have
-                 *      no other better choice. It maybe fixed in future. */
-                for (i = 0; i < pc->pc_npartners; i++)
-                        cfs_waitq_signal(&pc->pc_partners[i]->pc_set->set_waitq);
-        }
+		/* XXX: It maybe unnecessary to wakeup all the partners. But to
+		 *      guarantee the async RPC can be processed ASAP, we have
+		 *      no other better choice. It maybe fixed in future. */
+		for (i = 0; i < pc->pc_npartners; i++)
+			wake_up(&pc->pc_partners[i]->pc_set->set_waitq);
+	}
 }
 EXPORT_SYMBOL(ptlrpc_set_add_new_req);
 
@@ -1843,8 +1843,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		}
 		spin_unlock(&imp->imp_lock);
 
-                cfs_atomic_dec(&set->set_remaining);
-                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+		cfs_atomic_dec(&set->set_remaining);
+		wake_up_all(&imp->imp_recovery_waitq);
 
 		if (set->set_producer) {
 			/* produce a new request if possible */
@@ -2391,9 +2391,9 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
         for (;;) {
 #ifdef __KERNEL__
 		/* The wq argument is ignored by user-space wait_event macros */
-		cfs_waitq_t *wq = (request->rq_set != NULL) ?
-				  &request->rq_set->set_waitq :
-				  &request->rq_reply_waitq;
+		wait_queue_head_t *wq = (request->rq_set != NULL) ?
+					&request->rq_set->set_waitq :
+					&request->rq_reply_waitq;
 #endif
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
@@ -3024,22 +3024,22 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
         req->rq_no_delay = req->rq_no_resend = 1;
 
 	spin_lock_init(&req->rq_lock);
-        CFS_INIT_LIST_HEAD(&req->rq_list);
-        CFS_INIT_LIST_HEAD(&req->rq_replay_list);
-        CFS_INIT_LIST_HEAD(&req->rq_set_chain);
-        CFS_INIT_LIST_HEAD(&req->rq_history_list);
-        CFS_INIT_LIST_HEAD(&req->rq_exp_list);
-        cfs_waitq_init(&req->rq_reply_waitq);
-        cfs_waitq_init(&req->rq_set_waitq);
-        cfs_atomic_set(&req->rq_refcount, 1);
+	CFS_INIT_LIST_HEAD(&req->rq_list);
+	CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+	CFS_INIT_LIST_HEAD(&req->rq_set_chain);
+	CFS_INIT_LIST_HEAD(&req->rq_history_list);
+	CFS_INIT_LIST_HEAD(&req->rq_exp_list);
+	init_waitqueue_head(&req->rq_reply_waitq);
+	init_waitqueue_head(&req->rq_set_waitq);
+	cfs_atomic_set(&req->rq_refcount, 1);
 
-        CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
-        args = ptlrpc_req_async_args(req);
-        args->magic  = PTLRPC_WORK_MAGIC;
-        args->cb     = cb;
-        args->cbdata = cbdata;
+	CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
+	args = ptlrpc_req_async_args(req);
+	args->magic  = PTLRPC_WORK_MAGIC;
+	args->cb     = cb;
+	args->cbdata = cbdata;
 
-        RETURN(req);
+	RETURN(req);
 }
 EXPORT_SYMBOL(ptlrpcd_alloc_work);
 

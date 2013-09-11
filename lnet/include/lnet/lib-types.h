@@ -725,7 +725,7 @@ typedef struct
 	/* Event Queue container */
 	struct lnet_res_container	ln_eq_container;
 #ifdef __KERNEL__
-	cfs_waitq_t			ln_eq_waitq;
+	wait_queue_head_t			ln_eq_waitq;
 	spinlock_t			ln_eq_wait_lock;
 #else
 # ifndef HAVE_LIBPTHREAD

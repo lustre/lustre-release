@@ -496,3 +496,50 @@ s/\bcfs_module_t\b/struct module/g
 # s/\bcfs_module\b/declare_module/g
 s/\bcfs_request_module\b/request_module/g
 /#[ \t]*define[ \t]*\brequest_module\b[ \t]*\brequest_module\b/d
+# Wait Queue
+s/\bCFS_TASK_INTERRUPTIBLE\b/TASK_INTERRUPTIBLE/g
+/#[ \t]*define[ \t]*\bTASK_INTERRUPTIBLE\b[ \t]*\bTASK_INTERRUPTIBLE\b/d
+s/\bCFS_TASK_UNINT\b/TASK_UNINTERRUPTIBLE/g
+/#[ \t]*define[ \t]*\bTASK_UNINTERRUPTIBLE\b[ \t]*\bTASK_UNINTERRUPTIBLE\b/d
+s/\bCFS_TASK_RUNNING\b/TASK_RUNNING/g
+/#[ \t]*define[ \t]*\bTASK_RUNNING\b[ \t]*\bTASK_RUNNING\b/d
+s/\bcfs_set_current_state\b/set_current_state/g
+/#[ \t]*define[ \t]*\bset_current_state\b *( *\w* *)[ \t]*\bset_current_state\b *( *\w* *)/d
+s/\bcfs_wait_event\b/wait_event/g
+/#[ \t]*define[ \t]*\bwait_event\b *( *\w* *, *\w* *)[ \t]*\bwait_event\b *( *\w* *, *\w* *)/d
+s/\bcfs_waitlink_t\b/wait_queue_t/g
+/typedef[ \t]*\bwait_queue_t\b[ \t]*\bwait_queue_t\b/d
+s/\bcfs_waitq_t\b/wait_queue_head_t/g
+/typedef[ \t]*\bwait_queue_head_t\b[ \t]*\bwait_queue_head_t\b/d
+#s/\bcfs_task_state_t\b/task_state_t/g
+s/\bcfs_waitq_init\b/init_waitqueue_head/g
+/#[ \t]*define[ \t]*\binit_waitqueue_head\b *( *\w* *)[ \t]*\binit_waitqueue_head\b *( *\w* *)/d
+s/\bcfs_waitlink_init\b/init_waitqueue_entry_current/g
+s/\bcfs_waitq_add\b/add_wait_queue/g
+/#[ \t]*define[ \t]*\badd_wait_queue\b *( *\w* *, *\w* *)[ \t]*\badd_wait_queue\b *( *\w* *, *\w* *)/d
+s/\bcfs_waitq_add_exclusive\b/add_wait_queue_exclusive/g
+/#[ \t]*define[ \t]*\badd_wait_queue_exclusive\b *( *\w* *, *\w* *)[ \t]*\badd_wait_queue_exclusive\b *( *\w* *, *\w* *)/d
+s/\bcfs_waitq_del\b/remove_wait_queue/g
+/#[ \t]*define[ \t]*\bremove_wait_queue\b *( *\w* *, *\w* *)[ \t]*\bremove_wait_queue\b *( *\w* *, *\w* *)/d
+s/\bcfs_waitq_active\b/waitqueue_active/g
+/#[ \t]*define[ \t]*\bwaitqueue_active\b *( *\w* *)[ \t]*\bwaitqueue_active\b *( *\w* *)/d
+s/\bcfs_waitq_signal\b/wake_up/g
+/#[ \t]*define[ \t]*\bwake_up\b *( *\w* *)[ \t]*\bwake_up\b *( *\w* *)/d
+s/\bcfs_waitq_signal_nr\b/wake_up_nr/g
+/#[ \t]*define[ \t]*\bwake_up_nr\b *( *\w* *, *\w* *)[ \t]*\bwake_up_nr\b *( *\w* *, *\w* *)/d
+s/\bcfs_waitq_broadcast\b/wake_up_all/g
+/#[ \t]*define[ \t]*\bwake_up_all\b *( *\w* *)[ \t]*\bwake_up_all\b *( *\w* *)/d
+s/\bcfs_waitq_wait\b/waitq_wait/g
+s/\bcfs_waitq_timedwait\b/waitq_timedwait/g
+s/\bcfs_schedule_timeout\b/schedule_timeout/g
+/#[ \t]*define[ \t]*\bschedule_timeout\b *( *\w* *)[ \t]*\bschedule_timeout\b *( *\w* *)/d
+s/\bcfs_schedule\b/schedule/g
+/#[ \t]*define[ \t]*\bschedule\b *( *)[ \t]*\bschedule\b *( *)/d
+s/\bcfs_need_resched\b/need_resched/g
+/#[ \t]*define[ \t]*\bneed_resched\b *( *)[ \t]*\bneed_resched\b *( *)/d
+s/\bcfs_cond_resched\b/cond_resched/g
+/#[ \t]*define[ \t]*\bcond_resched\b *( *)[ \t]*\bcond_resched\b *( *)/d
+s/\bcfs_waitq_add_exclusive_head\b/add_wait_queue_exclusive_head/g
+s/\bcfs_schedule_timeout_and_set_state\b/schedule_timeout_and_set_state/g
+s/\bCFS_MAX_SCHEDULE_TIMEOUT\b/MAX_SCHEDULE_TIMEOUT/g
+s/\bcfs_task_state_t\b/long/g

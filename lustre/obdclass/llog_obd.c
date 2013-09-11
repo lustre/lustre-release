@@ -103,7 +103,7 @@ int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt)
 		rc = CTXTP(ctxt, cleanup)(env, ctxt);
 
 	llog_ctxt_destroy(ctxt);
-	cfs_waitq_signal(&olg->olg_waitq);
+	wake_up(&olg->olg_waitq);
 	return rc;
 }
 EXPORT_SYMBOL(__llog_ctxt_put);

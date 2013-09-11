@@ -929,7 +929,7 @@ extern struct inode_operations ll_fast_symlink_inode_operations;
 struct ll_close_queue {
 	spinlock_t		lcq_lock;
 	cfs_list_t		lcq_head;
-	cfs_waitq_t		lcq_waitq;
+	wait_queue_head_t	lcq_waitq;
 	struct completion	lcq_comp;
 	cfs_atomic_t		lcq_stop;
 };
@@ -1289,13 +1289,13 @@ struct ll_statahead_info {
         unsigned int            sai_miss_hidden;/* "ls -al", but first dentry
                                                  * is not a hidden one */
         unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
-        unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
-                                                 * hidden entries */
-                                sai_in_readpage:1,/* statahead is in readdir()*/
-                                sai_agl_valid:1;/* AGL is valid for the dir */
-        cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
-        struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
-        struct ptlrpc_thread    sai_agl_thread; /* AGL thread */
+	unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
+						 * hidden entries */
+				sai_in_readpage:1,/* statahead is in readdir()*/
+				sai_agl_valid:1;/* AGL is valid for the dir */
+	wait_queue_head_t       sai_waitq;      /* stat-ahead wait queue */
+	struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
+	struct ptlrpc_thread    sai_agl_thread; /* AGL thread */
 	cfs_list_t              sai_entries;    /* entry list */
         cfs_list_t              sai_entries_received; /* entries returned */
         cfs_list_t              sai_entries_stated;   /* entries stated */

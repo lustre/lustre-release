@@ -39,7 +39,7 @@
 extern unsigned long cfs_fail_loc;
 extern unsigned int cfs_fail_val;
 
-extern cfs_waitq_t cfs_race_waitq;
+extern wait_queue_head_t cfs_race_waitq;
 extern int cfs_race_state;
 
 int __cfs_fail_check_set(__u32 id, __u32 value, int set);
@@ -150,21 +150,20 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
  * the first and continues. */
 static inline void cfs_race(__u32 id)
 {
-
-        if (CFS_FAIL_PRECHECK(id)) {
-                if (unlikely(__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
-                        int rc;
-                        cfs_race_state = 0;
-                        CERROR("cfs_race id %x sleeping\n", id);
+	if (CFS_FAIL_PRECHECK(id)) {
+		if (unlikely(__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
+			int rc;
+			cfs_race_state = 0;
+			CERROR("cfs_race id %x sleeping\n", id);
 			rc = wait_event_interruptible(cfs_race_waitq,
 						      cfs_race_state != 0);
-                        CERROR("cfs_fail_race id %x awake, rc=%d\n", id, rc);
-                } else {
-                        CERROR("cfs_fail_race id %x waking\n", id);
-                        cfs_race_state = 1;
-                        cfs_waitq_signal(&cfs_race_waitq);
-                }
-        }
+			CERROR("cfs_fail_race id %x awake, rc=%d\n", id, rc);
+		} else {
+			CERROR("cfs_fail_race id %x waking\n", id);
+			cfs_race_state = 1;
+			wake_up(&cfs_race_waitq);
+		}
+	}
 }
 #define CFS_RACE(id) cfs_race(id)
 #else

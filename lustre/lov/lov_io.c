@@ -376,7 +376,7 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 
 	LASSERT(cfs_atomic_read(&lov->lo_active_ios) > 0);
 	if (cfs_atomic_dec_and_test(&lov->lo_active_ios))
-		cfs_waitq_broadcast(&lov->lo_waitq);
+		wake_up_all(&lov->lo_waitq);
 	EXIT;
 }
 
@@ -848,7 +848,7 @@ static void lov_empty_io_fini(const struct lu_env *env,
         ENTRY;
 
 	if (cfs_atomic_dec_and_test(&lov->lo_active_ios))
-		cfs_waitq_broadcast(&lov->lo_waitq);
+		wake_up_all(&lov->lo_waitq);
         EXIT;
 }
 

@@ -58,14 +58,14 @@
                                                     (STTIMER_NSLOTS - 1))])
 
 struct st_timer_data {
-	spinlock_t	 stt_lock;
-        /* start time of the slot processed previously */
-        cfs_time_t       stt_prev_slot;
-        cfs_list_t       stt_hash[STTIMER_NSLOTS];
-        int              stt_shuttingdown;
+	spinlock_t		stt_lock;
+	/* start time of the slot processed previously */
+	cfs_time_t		stt_prev_slot;
+	cfs_list_t		stt_hash[STTIMER_NSLOTS];
+	int			stt_shuttingdown;
 #ifdef __KERNEL__
-        cfs_waitq_t      stt_waitq;
-        int              stt_nthreads;
+	wait_queue_head_t	stt_waitq;
+	int			stt_nthreads;
 #endif
 } stt_data;
 
@@ -182,15 +182,13 @@ stt_timer_main (void *arg)
 
         cfs_block_allsigs();
 
-        while (!stt_data.stt_shuttingdown) {
-                stt_check_timers(&stt_data.stt_prev_slot);
+	while (!stt_data.stt_shuttingdown) {
+		stt_check_timers(&stt_data.stt_prev_slot);
 
-                cfs_waitq_wait_event_timeout(stt_data.stt_waitq,
-                                   stt_data.stt_shuttingdown,
-                                   cfs_time_seconds(STTIMER_SLOTTIME),
-                                   rc);
-                rc = 0; /* Discard jiffies remaining before timeout. */
-        }
+		rc = wait_event_timeout(stt_data.stt_waitq,
+					stt_data.stt_shuttingdown,
+					cfs_time_seconds(STTIMER_SLOTTIME));
+	}
 
 	spin_lock(&stt_data.stt_lock);
 	stt_data.stt_nthreads--;
@@ -245,11 +243,11 @@ stt_startup (void)
                 CFS_INIT_LIST_HEAD(&stt_data.stt_hash[i]);
 
 #ifdef __KERNEL__
-        stt_data.stt_nthreads = 0;
-        cfs_waitq_init(&stt_data.stt_waitq);
-        rc = stt_start_timer_thread();
-        if (rc != 0)
-                CERROR ("Can't spawn timer thread: %d\n", rc);
+	stt_data.stt_nthreads = 0;
+	init_waitqueue_head(&stt_data.stt_waitq);
+	rc = stt_start_timer_thread();
+	if (rc != 0)
+		CERROR ("Can't spawn timer thread: %d\n", rc);
 #endif
 
         return rc;
@@ -268,10 +266,10 @@ stt_shutdown (void)
         stt_data.stt_shuttingdown = 1;
 
 #ifdef __KERNEL__
-        cfs_waitq_signal(&stt_data.stt_waitq);
-        lst_wait_until(stt_data.stt_nthreads == 0, stt_data.stt_lock,
-                       "waiting for %d threads to terminate\n",
-                       stt_data.stt_nthreads);
+	wake_up(&stt_data.stt_waitq);
+	lst_wait_until(stt_data.stt_nthreads == 0, stt_data.stt_lock,
+		       "waiting for %d threads to terminate\n",
+		       stt_data.stt_nthreads);
 #endif
 
 	spin_unlock(&stt_data.stt_lock);

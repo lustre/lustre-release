@@ -478,14 +478,14 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                         rx->rx_treceived = jiffies;
                         /* Queue for attention */
 			spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
-                                              flags);
+					      flags);
 
-                        cfs_list_add_tail(&rx->rx_list,
-                                          &kptllnd_data.kptl_sched_rxq);
-                        cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
+			cfs_list_add_tail(&rx->rx_list,
+					  &kptllnd_data.kptl_sched_rxq);
+			wake_up(&kptllnd_data.kptl_sched_waitq);
 
 			spin_unlock_irqrestore(&kptllnd_data. \
-                                                   kptl_sched_lock, flags);
+						   kptl_sched_lock, flags);
                 }
         }
 

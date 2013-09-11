@@ -424,37 +424,37 @@ kptllnd_handle_closing_peers ()
 void
 kptllnd_peer_close_locked(kptl_peer_t *peer, int why)
 {
-        switch (peer->peer_state) {
-        default:
-                LBUG();
+	switch (peer->peer_state) {
+	default:
+		LBUG();
 
-        case PEER_STATE_WAITING_HELLO:
-        case PEER_STATE_ACTIVE:
-                /* Ensure new peers see a new incarnation of me */
-                LASSERT(peer->peer_myincarnation <= kptllnd_data.kptl_incarnation);
-                if (peer->peer_myincarnation == kptllnd_data.kptl_incarnation)
-                        kptllnd_data.kptl_incarnation++;
+	case PEER_STATE_WAITING_HELLO:
+	case PEER_STATE_ACTIVE:
+		/* Ensure new peers see a new incarnation of me */
+		LASSERT(peer->peer_myincarnation <= kptllnd_data.kptl_incarnation);
+		if (peer->peer_myincarnation == kptllnd_data.kptl_incarnation)
+			kptllnd_data.kptl_incarnation++;
 
-                /* Removing from peer table */
-                kptllnd_data.kptl_n_active_peers--;
-                LASSERT (kptllnd_data.kptl_n_active_peers >= 0);
+		/* Removing from peer table */
+		kptllnd_data.kptl_n_active_peers--;
+		LASSERT (kptllnd_data.kptl_n_active_peers >= 0);
 
-                cfs_list_del(&peer->peer_list);
-                kptllnd_peer_unreserve_buffers();
+		cfs_list_del(&peer->peer_list);
+		kptllnd_peer_unreserve_buffers();
 
-                peer->peer_error = why; /* stash 'why' only on first close */
-                peer->peer_state = PEER_STATE_CLOSING;
+		peer->peer_error = why; /* stash 'why' only on first close */
+		peer->peer_state = PEER_STATE_CLOSING;
 
-                /* Schedule for immediate attention, taking peer table's ref */
-                cfs_list_add_tail(&peer->peer_list,
-                                 &kptllnd_data.kptl_closing_peers);
-                cfs_waitq_signal(&kptllnd_data.kptl_watchdog_waitq);
-                break;
+		/* Schedule for immediate attention, taking peer table's ref */
+		cfs_list_add_tail(&peer->peer_list,
+				 &kptllnd_data.kptl_closing_peers);
+		wake_up(&kptllnd_data.kptl_watchdog_waitq);
+		break;
 
-        case PEER_STATE_ZOMBIE:
-        case PEER_STATE_CLOSING:
-                break;
-        }
+	case PEER_STATE_ZOMBIE:
+	case PEER_STATE_CLOSING:
+		break;
+	}
 }
 
 void

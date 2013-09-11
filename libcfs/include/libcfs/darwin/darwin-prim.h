@@ -214,34 +214,32 @@ extern cfs_task_t kthread_run(cfs_thread_t func, void *arg,
  */
 typedef struct cfs_waitq {
 	struct ksleep_chan wq_ksleep_chan;
-} cfs_waitq_t;
+} wait_queue_head_t;
 
 typedef struct cfs_waitlink {
 	struct cfs_waitq   *wl_waitq;
 	struct ksleep_link  wl_ksleep_link;
-} cfs_waitlink_t;
+} wait_queue_t;
 
-typedef int cfs_task_state_t;
+#define TASK_INTERRUPTIBLE	THREAD_ABORTSAFE
+#define TASK_UNINTERRUPTIBLE		THREAD_UNINT
 
-#define CFS_TASK_INTERRUPTIBLE	THREAD_ABORTSAFE
-#define CFS_TASK_UNINT		THREAD_UNINT
+void init_waitqueue_head(struct cfs_waitq *waitq);
+void init_waitqueue_entry_current(struct cfs_waitlink *link);
 
-void cfs_waitq_init(struct cfs_waitq *waitq);
-void cfs_waitlink_init(struct cfs_waitlink *link);
-
-void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
+void add_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+void add_wait_queue_exclusive(struct cfs_waitq *waitq,
 			     struct cfs_waitlink *link);
-void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
-int  cfs_waitq_active(struct cfs_waitq *waitq);
+void remove_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+int  waitqueue_active(struct cfs_waitq *waitq);
 
-void cfs_waitq_signal(struct cfs_waitq *waitq);
-void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr);
-void cfs_waitq_broadcast(struct cfs_waitq *waitq);
+void wake_up(struct cfs_waitq *waitq);
+void wake_up_nr(struct cfs_waitq *waitq, int nr);
+void wake_up_all(struct cfs_waitq *waitq);
 
-void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state);
-cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
-				   cfs_task_state_t state, 
+void waitq_wait(struct cfs_waitlink *link, long state);
+cfs_duration_t waitq_timedwait(struct cfs_waitlink *link,
+				   long state,
 				   cfs_duration_t timeout);
 
 /*
@@ -251,7 +249,7 @@ cfs_duration_t cfs_waitq_timedwait(struct cfs_waitlink *link,
 extern void thread_set_timer_deadline(__u64 deadline);
 extern void thread_cancel_timer(void);
 
-static inline int cfs_schedule_timeout(int state, int64_t timeout)
+static inline int schedule_timeout(int state, int64_t timeout)
 {
 	int          result;
 	
@@ -277,22 +275,22 @@ static inline int cfs_schedule_timeout(int state, int64_t timeout)
 	return result;
 }
 
-#define cfs_schedule()	cfs_schedule_timeout(CFS_TASK_UNINT, CFS_TICK)
-#define cfs_pause(tick)	cfs_schedule_timeout(CFS_TASK_UNINT, tick)
+#define schedule()	schedule_timeout(TASK_UNINTERRUPTIBLE, CFS_TICK)
+#define cfs_pause(tick)	schedule_timeout(TASK_UNINTERRUPTIBLE, tick)
 
 #define __wait_event(wq, condition)				\
 do {								\
 	struct cfs_waitlink __wait;				\
 								\
-	cfs_waitlink_init(&__wait);				\
+	init_waitqueue_entry_current(&__wait);			\
 	for (;;) {						\
-		cfs_waitq_add(&wq, &__wait);			\
+		add_wait_queue(&wq, &__wait);			\
 		if (condition)					\
 			break;					\
-		cfs_waitq_wait(&__wait, CFS_TASK_UNINT);	\
-		cfs_waitq_del(&wq, &__wait);			\
+		waitq_wait(&__wait, TASK_UNINTERRUPTIBLE);	\
+		remove_wait_queue(&wq, &__wait);		\
 	}							\
-	cfs_waitq_del(&wq, &__wait);				\
+	remove_wait_queue(&wq, &__wait);			\
 } while (0)
 
 #define wait_event(wq, condition) 				\
@@ -306,24 +304,24 @@ do {								\
 do {								\
 	struct cfs_waitlink __wait;				\
 								\
-	cfs_waitlink_init(&__wait);				\
+	init_waitqueue_entry_current(&__wait);			\
 	for (;;) {						\
 		if (ex == 0)					\
-			cfs_waitq_add(&wq, &__wait);		\
+			add_wait_queue(&wq, &__wait);		\
 		else						\
-			cfs_waitq_add_exclusive(&wq, &__wait);	\
+			add_wait_queue_exclusive(&wq, &__wait);	\
 		if (condition)					\
 			break;					\
 		if (!cfs_signal_pending()) {			\
-			cfs_waitq_wait(&__wait, 		\
-				       CFS_TASK_INTERRUPTIBLE);	\
-			cfs_waitq_del(&wq, &__wait);		\
+			waitq_wait(&__wait, 			\
+				       TASK_INTERRUPTIBLE);	\
+			remove_wait_queue(&wq, &__wait);	\
 			continue;				\
 		}						\
 		ret = -ERESTARTSYS;				\
 		break;						\
 	}							\
-	cfs_waitq_del(&wq, &__wait);				\
+	remove_wait_queue(&wq, &__wait);			\
 } while (0)
 
 #define wait_event_interruptible(wq, condition)			\
@@ -354,14 +352,14 @@ extern void	wakeup_one __P((void * chan));
 	} while (0)
 	
 /* used in couple of places */
-static inline void sleep_on(cfs_waitq_t *waitq)
+static inline void sleep_on(wait_queue_head_t *waitq)
 {
-	cfs_waitlink_t link;
+	wait_queue_t link;
 	
-	cfs_waitlink_init(&link);
-	cfs_waitq_add(waitq, &link);
-	cfs_waitq_wait(&link, CFS_TASK_UNINT);
-	cfs_waitq_del(waitq, &link);
+	init_waitqueue_entry_current(&link);
+	add_wait_queue(waitq, &link);
+	waitq_wait(&link, TASK_UNINTERRUPTIBLE);
+	remove_wait_queue(waitq, &link);
 }
 
 /*

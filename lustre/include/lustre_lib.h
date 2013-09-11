@@ -708,59 +708,59 @@ struct l_wait_info {
  */
 #define __l_wait_event(wq, condition, info, ret, l_add_wait)                   \
 do {                                                                           \
-        cfs_waitlink_t __wait;                                                 \
-        cfs_duration_t __timeout = info->lwi_timeout;                          \
-        cfs_sigset_t   __blocked;                                              \
-        int   __allow_intr = info->lwi_allow_intr;                             \
-                                                                               \
-        ret = 0;                                                               \
-        if (condition)                                                         \
-                break;                                                         \
-                                                                               \
-        cfs_waitlink_init(&__wait);                                            \
-        l_add_wait(&wq, &__wait);                                              \
-                                                                               \
-        /* Block all signals (just the non-fatal ones if no timeout). */       \
-        if (info->lwi_on_signal != NULL && (__timeout == 0 || __allow_intr))   \
-                __blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);              \
-        else                                                                   \
-                __blocked = cfs_block_sigsinv(0);                              \
-                                                                               \
-        for (;;) {                                                             \
-                unsigned       __wstate;                                       \
-                                                                               \
-                __wstate = info->lwi_on_signal != NULL &&                      \
-                           (__timeout == 0 || __allow_intr) ?                  \
-                        CFS_TASK_INTERRUPTIBLE : CFS_TASK_UNINT;               \
-                                                                               \
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);                 \
-                                                                               \
-                if (condition)                                                 \
-                        break;                                                 \
-                                                                               \
-                if (__timeout == 0) {                                          \
-                        cfs_waitq_wait(&__wait, __wstate);                     \
-                } else {                                                       \
-                        cfs_duration_t interval = info->lwi_interval?          \
-                                             min_t(cfs_duration_t,             \
-                                                 info->lwi_interval,__timeout):\
-                                             __timeout;                        \
-                        cfs_duration_t remaining = cfs_waitq_timedwait(&__wait,\
-                                                   __wstate,                   \
-                                                   interval);                  \
-                        __timeout = cfs_time_sub(__timeout,                    \
-                                            cfs_time_sub(interval, remaining));\
-                        if (__timeout == 0) {                                  \
-                                if (info->lwi_on_timeout == NULL ||            \
-                                    info->lwi_on_timeout(info->lwi_cb_data)) { \
-                                        ret = -ETIMEDOUT;                      \
-                                        break;                                 \
-                                }                                              \
-                                /* Take signals after the timeout expires. */  \
-                                if (info->lwi_on_signal != NULL)               \
-                                    (void)cfs_block_sigsinv(LUSTRE_FATAL_SIGS);\
-                        }                                                      \
-                }                                                              \
+	wait_queue_t __wait;                                                   \
+	cfs_duration_t __timeout = info->lwi_timeout;                          \
+	cfs_sigset_t   __blocked;                                              \
+	int   __allow_intr = info->lwi_allow_intr;                             \
+									       \
+	ret = 0;                                                               \
+	if (condition)                                                         \
+		break;                                                         \
+									       \
+	init_waitqueue_entry_current(&__wait);				       \
+	l_add_wait(&wq, &__wait);                                              \
+									       \
+	/* Block all signals (just the non-fatal ones if no timeout). */       \
+	if (info->lwi_on_signal != NULL && (__timeout == 0 || __allow_intr))   \
+		__blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);              \
+	else                                                                   \
+		__blocked = cfs_block_sigsinv(0);                              \
+									       \
+	for (;;) {                                                             \
+		unsigned       __wstate;                                       \
+									       \
+		__wstate = info->lwi_on_signal != NULL &&                      \
+			   (__timeout == 0 || __allow_intr) ?                  \
+			TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE;             \
+									       \
+		set_current_state(TASK_INTERRUPTIBLE);			       \
+									       \
+		if (condition)                                                 \
+			break;                                                 \
+									       \
+		if (__timeout == 0) {                                          \
+			waitq_wait(&__wait, __wstate);                         \
+		} else {                                                       \
+			cfs_duration_t interval = info->lwi_interval?          \
+					     min_t(cfs_duration_t,             \
+						 info->lwi_interval,__timeout):\
+					     __timeout;                        \
+			cfs_duration_t remaining = waitq_timedwait(&__wait,    \
+						   __wstate,                   \
+						   interval);                  \
+			__timeout = cfs_time_sub(__timeout,                    \
+					    cfs_time_sub(interval, remaining));\
+			if (__timeout == 0) {                                  \
+				if (info->lwi_on_timeout == NULL ||            \
+				    info->lwi_on_timeout(info->lwi_cb_data)) { \
+					ret = -ETIMEDOUT;                      \
+					break;                                 \
+				}                                              \
+				/* Take signals after the timeout expires. */  \
+				if (info->lwi_on_signal != NULL)               \
+				    (void)cfs_block_sigsinv(LUSTRE_FATAL_SIGS);\
+			}                                                      \
+		}                                                              \
                                                                                \
                 if (condition)                                                 \
                         break;                                                 \
@@ -785,8 +785,8 @@ do {                                                                           \
                                                                                \
 	cfs_restore_sigs(__blocked);                                           \
                                                                                \
-        cfs_set_current_state(CFS_TASK_RUNNING);                               \
-        cfs_waitq_del(&wq, &__wait);                                           \
+	set_current_state(TASK_RUNNING);                               	       \
+	remove_wait_queue(&wq, &__wait);                                       \
 } while (0)
 
 #else /* !__KERNEL__ */
@@ -840,32 +840,32 @@ do {                                                                    \
 
 #define l_wait_event(wq, condition, info)                       \
 ({                                                              \
-        int                 __ret;                              \
-        struct l_wait_info *__info = (info);                    \
-                                                                \
-        __l_wait_event(wq, condition, __info,                   \
-                       __ret, cfs_waitq_add);                   \
-        __ret;                                                  \
+	int                 __ret;                              \
+	struct l_wait_info *__info = (info);                    \
+								\
+	__l_wait_event(wq, condition, __info,                   \
+		       __ret, add_wait_queue);			\
+	__ret;                                                  \
 })
 
 #define l_wait_event_exclusive(wq, condition, info)             \
 ({                                                              \
-        int                 __ret;                              \
-        struct l_wait_info *__info = (info);                    \
-                                                                \
-        __l_wait_event(wq, condition, __info,                   \
-                       __ret, cfs_waitq_add_exclusive);         \
-        __ret;                                                  \
+	int                 __ret;                              \
+	struct l_wait_info *__info = (info);                    \
+								\
+	__l_wait_event(wq, condition, __info,                   \
+		       __ret, add_wait_queue_exclusive);        \
+	__ret;                                                  \
 })
 
 #define l_wait_event_exclusive_head(wq, condition, info)        \
 ({                                                              \
-        int                 __ret;                              \
-        struct l_wait_info *__info = (info);                    \
-                                                                \
-        __l_wait_event(wq, condition, __info,                   \
-                       __ret, cfs_waitq_add_exclusive_head);    \
-        __ret;                                                  \
+	int                 __ret;                              \
+	struct l_wait_info *__info = (info);                    \
+								\
+	__l_wait_event(wq, condition, __info,                   \
+		       __ret, add_wait_queue_exclusive_head);	\
+	__ret;                                                  \
 })
 
 #define l_wait_condition(wq, condition)                         \

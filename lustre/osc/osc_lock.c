@@ -1410,20 +1410,20 @@ static int osc_lock_has_pages(struct osc_lock *olck)
         io->ci_obj = cl_object_top(obj);
 	io->ci_ignore_layout = 1;
         cl_io_init(env, io, CIT_MISC, io->ci_obj);
-        do {
-                result = cl_page_gang_lookup(env, obj, io,
-                                             descr->cld_start, descr->cld_end,
-                                             check_cb, (void *)lock);
-                if (result == CLP_GANG_ABORT)
-                        break;
-                if (result == CLP_GANG_RESCHED)
-                        cfs_cond_resched();
-        } while (result != CLP_GANG_OKAY);
-        cl_io_fini(env, io);
+	do {
+		result = cl_page_gang_lookup(env, obj, io,
+					     descr->cld_start, descr->cld_end,
+					     check_cb, (void *)lock);
+		if (result == CLP_GANG_ABORT)
+			break;
+		if (result == CLP_GANG_RESCHED)
+			cond_resched();
+	} while (result != CLP_GANG_OKAY);
+	cl_io_fini(env, io);
 	mutex_unlock(&oob->oo_debug_mutex);
-        cl_env_nested_put(&nest, env);
+	cl_env_nested_put(&nest, env);
 
-        return (result == CLP_GANG_ABORT);
+	return (result == CLP_GANG_ABORT);
 }
 #else
 static int osc_lock_has_pages(struct osc_lock *olck)

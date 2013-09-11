@@ -121,13 +121,13 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 #define RSI_HASHMASK    (RSI_HASHMAX - 1)
 
 struct rsi {
-        struct cache_head       h;
-        __u32                   lustre_svc;
-        __u64                   nid;
-        cfs_waitq_t             waitq;
-        rawobj_t                in_handle, in_token;
-        rawobj_t                out_handle, out_token;
-        int                     major_status, minor_status;
+	struct cache_head       h;
+	__u32                   lustre_svc;
+	__u64                   nid;
+	wait_queue_head_t       waitq;
+	rawobj_t                in_handle, in_token;
+	rawobj_t                out_handle, out_token;
+	int                     major_status, minor_status;
 };
 
 static struct cache_head *rsi_table[RSI_HASHMAX];
@@ -184,17 +184,17 @@ static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
 
 static inline void __rsi_init(struct rsi *new, struct rsi *item)
 {
-        new->out_handle = RAWOBJ_EMPTY;
-        new->out_token = RAWOBJ_EMPTY;
+	new->out_handle = RAWOBJ_EMPTY;
+	new->out_token = RAWOBJ_EMPTY;
 
-        new->in_handle = item->in_handle;
-        item->in_handle = RAWOBJ_EMPTY;
-        new->in_token = item->in_token;
-        item->in_token = RAWOBJ_EMPTY;
+	new->in_handle = item->in_handle;
+	item->in_handle = RAWOBJ_EMPTY;
+	new->in_token = item->in_token;
+	item->in_token = RAWOBJ_EMPTY;
 
-        new->lustre_svc = item->lustre_svc;
-        new->nid = item->nid;
-        cfs_waitq_init(&new->waitq);
+	new->lustre_svc = item->lustre_svc;
+	new->nid = item->nid;
+	init_waitqueue_head(&new->waitq);
 }
 
 static inline void __rsi_update(struct rsi *new, struct rsi *item)
@@ -335,17 +335,17 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
         rsip = rsi_update(&rsii, rsip);
         status = 0;
 out:
-        rsi_free(&rsii);
-        if (rsip) {
-                cfs_waitq_broadcast(&rsip->waitq);
-                cache_put(&rsip->h, &rsi_cache);
-        } else {
-                status = -ENOMEM;
-        }
+	rsi_free(&rsii);
+	if (rsip) {
+		wake_up_all(&rsip->waitq);
+		cache_put(&rsip->h, &rsi_cache);
+	} else {
+		status = -ENOMEM;
+	}
 
-        if (status)
-                CERROR("rsi parse error %d\n", status);
-        RETURN(status);
+	if (status)
+		CERROR("rsi parse error %d\n", status);
+	RETURN(status);
 }
 
 static struct cache_detail rsi_cache = {
@@ -844,22 +844,22 @@ static struct cache_deferred_req* cache_upcall_defer(struct cache_req *req)
 static struct cache_req cache_upcall_chandle = { cache_upcall_defer };
 
 int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
-                               struct gss_svc_reqctx *grctx,
-                               struct gss_wire_ctx *gw,
-                               struct obd_device *target,
-                               __u32 lustre_svc,
-                               rawobj_t *rvs_hdl,
-                               rawobj_t *in_token)
+			       struct gss_svc_reqctx *grctx,
+			       struct gss_wire_ctx *gw,
+			       struct obd_device *target,
+			       __u32 lustre_svc,
+			       rawobj_t *rvs_hdl,
+			       rawobj_t *in_token)
 {
-        struct ptlrpc_reply_state *rs;
-        struct rsc                *rsci = NULL;
-        struct rsi                *rsip = NULL, rsikey;
-        cfs_waitlink_t             wait;
-        int                        replen = sizeof(struct ptlrpc_body);
-        struct gss_rep_header     *rephdr;
-        int                        first_check = 1;
-        int                        rc = SECSVC_DROP;
-        ENTRY;
+	struct ptlrpc_reply_state *rs;
+	struct rsc                *rsci = NULL;
+	struct rsi                *rsip = NULL, rsikey;
+	wait_queue_t             wait;
+	int                        replen = sizeof(struct ptlrpc_body);
+	struct gss_rep_header     *rephdr;
+	int                        first_check = 1;
+	int                        rc = SECSVC_DROP;
+	ENTRY;
 
         memset(&rsikey, 0, sizeof(rsikey));
         rsikey.lustre_svc = lustre_svc;
@@ -888,18 +888,18 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
                 GOTO(out, rc);
         }
 
-        cache_get(&rsip->h); /* take an extra ref */
-        cfs_waitq_init(&rsip->waitq);
-        cfs_waitlink_init(&wait);
-        cfs_waitq_add(&rsip->waitq, &wait);
+	cache_get(&rsip->h); /* take an extra ref */
+	init_waitqueue_head(&rsip->waitq);
+	init_waitqueue_entry_current(&wait);
+	add_wait_queue(&rsip->waitq, &wait);
 
 cache_check:
-        /* Note each time cache_check() will drop a reference if return
-         * non-zero. We hold an extra reference on initial rsip, but must
-         * take care of following calls. */
-        rc = cache_check(&rsi_cache, &rsip->h, &cache_upcall_chandle);
-        switch (rc) {
-        case -EAGAIN: {
+	/* Note each time cache_check() will drop a reference if return
+	 * non-zero. We hold an extra reference on initial rsip, but must
+	 * take care of following calls. */
+	rc = cache_check(&rsi_cache, &rsip->h, &cache_upcall_chandle);
+	switch (rc) {
+	case -EAGAIN: {
                 int valid;
 
                 if (first_check) {
@@ -908,11 +908,11 @@ cache_check:
                         read_lock(&rsi_cache.hash_lock);
 			valid = test_bit(CACHE_VALID, &rsip->h.flags);
                         if (valid == 0)
-                                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+				set_current_state(TASK_INTERRUPTIBLE);
                         read_unlock(&rsi_cache.hash_lock);
 
 			if (valid == 0)
-				cfs_schedule_timeout(GSS_SVC_UPCALL_TIMEOUT *
+				schedule_timeout(GSS_SVC_UPCALL_TIMEOUT *
 						     HZ);
 
 			cache_get(&rsip->h);
@@ -927,17 +927,17 @@ cache_check:
         case 0:
                 /* if not the first check, we have to release the extra
                  * reference we just added on it. */
-                if (!first_check)
-                        cache_put(&rsip->h, &rsi_cache);
-                CDEBUG(D_SEC, "cache_check is good\n");
-                break;
-        }
+		if (!first_check)
+			cache_put(&rsip->h, &rsi_cache);
+		CDEBUG(D_SEC, "cache_check is good\n");
+		break;
+	}
 
-        cfs_waitq_del(&rsip->waitq, &wait);
-        cache_put(&rsip->h, &rsi_cache);
+	remove_wait_queue(&rsip->waitq, &wait);
+	cache_put(&rsip->h, &rsi_cache);
 
-        if (rc)
-                GOTO(out, rc = SECSVC_DROP);
+	if (rc)
+		GOTO(out, rc = SECSVC_DROP);
 
         rc = SECSVC_DROP;
         rsci = gss_svc_searchbyctx(&rsip->out_handle);
@@ -1081,9 +1081,9 @@ int __init gss_init_svc_upcall(void)
 	for (i = 0; i < 6; i++) {
 		if (atomic_read(&rsi_cache.readers) > 0)
 			break;
-		cfs_set_current_state(TASK_UNINTERRUPTIBLE);
+		set_current_state(TASK_UNINTERRUPTIBLE);
 		LASSERT(HZ >= 4);
-		cfs_schedule_timeout(HZ / 4);
+		schedule_timeout(HZ / 4);
 	}
 
         if (atomic_read(&rsi_cache.readers) == 0)

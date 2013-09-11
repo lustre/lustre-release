@@ -414,7 +414,7 @@ static int osd_scrub_prep(struct osd_device *dev)
 		spin_lock(&scrub->os_lock);
 		thread_set_flags(thread, SVC_RUNNING);
 		spin_unlock(&scrub->os_lock);
-		cfs_waitq_broadcast(&thread->t_ctl_waitq);
+		wake_up_all(&thread->t_ctl_waitq);
 	}
 	up_write(&scrub->os_rwsem);
 
@@ -1078,7 +1078,7 @@ wait:
 	    ooc->ooc_pos_preload < scrub->os_pos_current) {
 		spin_lock(&scrub->os_lock);
 		it->ooi_waiting = 0;
-		cfs_waitq_broadcast(&thread->t_ctl_waitq);
+		wake_up_all(&thread->t_ctl_waitq);
 		spin_unlock(&scrub->os_lock);
 	}
 
@@ -1218,7 +1218,7 @@ static int osd_otable_it_preload(const struct lu_env *env,
 	if (scrub->os_waiting && osd_scrub_has_window(scrub, ooc)) {
 		spin_lock(&scrub->os_lock);
 		scrub->os_waiting = 0;
-		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);
+		wake_up_all(&scrub->os_thread.t_ctl_waitq);
 		spin_unlock(&scrub->os_lock);
 	}
 
@@ -1290,7 +1290,7 @@ out:
 noenv:
 	spin_lock(&scrub->os_lock);
 	thread_set_flags(thread, SVC_STOPPED);
-	cfs_waitq_broadcast(&thread->t_ctl_waitq);
+	wake_up_all(&thread->t_ctl_waitq);
 	spin_unlock(&scrub->os_lock);
 	return rc;
 }
@@ -1973,7 +1973,7 @@ static void do_osd_scrub_stop(struct osd_scrub *scrub)
 	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
 		spin_unlock(&scrub->os_lock);
-		cfs_waitq_broadcast(&thread->t_ctl_waitq);
+		wake_up_all(&thread->t_ctl_waitq);
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_stopped(thread),
 			     &lwi);
@@ -2019,7 +2019,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	ctxt->pwd = dev->od_mnt->mnt_root;
 	ctxt->fs = get_ds();
 
-	cfs_waitq_init(&scrub->os_thread.t_ctl_waitq);
+	init_waitqueue_head(&scrub->os_thread.t_ctl_waitq);
 	init_rwsem(&scrub->os_rwsem);
 	spin_lock_init(&scrub->os_lock);
 	CFS_INIT_LIST_HEAD(&scrub->os_inconsistent_items);
@@ -2282,7 +2282,7 @@ again:
 	if (scrub->os_waiting && osd_scrub_has_window(scrub, ooc)) {
 		spin_lock(&scrub->os_lock);
 		scrub->os_waiting = 0;
-		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);
+		wake_up_all(&scrub->os_thread.t_ctl_waitq);
 		spin_unlock(&scrub->os_lock);
 	}
 
@@ -2370,7 +2370,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 
 	it->ooi_user_ready = 1;
 	if (!scrub->os_full_speed)
-		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);
+		wake_up_all(&scrub->os_thread.t_ctl_waitq);
 
 	/* Unplug OSD layer iteration by the first next() call. */
 	rc = osd_otable_it_next(env, (struct dt_it *)it);
@@ -2432,7 +2432,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	spin_unlock(&scrub->os_lock);
 
 	if (wakeup != 0)
-		cfs_waitq_broadcast(&thread->t_ctl_waitq);
+		wake_up_all(&thread->t_ctl_waitq);
 
 	RETURN(0);
 }

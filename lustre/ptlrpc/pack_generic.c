@@ -324,7 +324,7 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 	spin_lock(&svcpt->scp_rep_lock);
 	cfs_list_add(&rs->rs_list, &svcpt->scp_rep_idle);
 	spin_unlock(&svcpt->scp_rep_lock);
-	cfs_waitq_signal(&svcpt->scp_rep_waitq);
+	wake_up(&svcpt->scp_rep_waitq);
 }
 
 int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,

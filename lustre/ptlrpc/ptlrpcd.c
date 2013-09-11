@@ -101,7 +101,7 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
 
         LASSERT(rq_set != NULL);
 
-        cfs_waitq_signal(&rq_set->set_waitq);
+	wake_up(&rq_set->set_waitq);
 }
 EXPORT_SYMBOL(ptlrpcd_wake);
 
@@ -189,15 +189,15 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 	count = cfs_atomic_add_return(i, &new->set_new_count);
 	cfs_atomic_set(&set->set_remaining, 0);
 	spin_unlock(&new->set_new_req_lock);
-        if (count == i) {
-                cfs_waitq_signal(&new->set_waitq);
+	if (count == i) {
+		wake_up(&new->set_waitq);
 
-                /* XXX: It maybe unnecessary to wakeup all the partners. But to
-                 *      guarantee the async RPC can be processed ASAP, we have
-                 *      no other better choice. It maybe fixed in future. */
-                for (i = 0; i < pc->pc_npartners; i++)
-                        cfs_waitq_signal(&pc->pc_partners[i]->pc_set->set_waitq);
-        }
+		/* XXX: It maybe unnecessary to wakeup all the partners. But to
+		 *      guarantee the async RPC can be processed ASAP, we have
+		 *      no other better choice. It maybe fixed in future. */
+		for (i = 0; i < pc->pc_npartners; i++)
+			wake_up(&pc->pc_partners[i]->pc_set->set_waitq);
+	}
 #endif
 }
 EXPORT_SYMBOL(ptlrpcd_add_rqset);
@@ -259,7 +259,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req, pdl_policy_t policy, int idx)
                 /* ptlrpc_check_set will decrease the count */
                 cfs_atomic_inc(&req->rq_set->set_remaining);
 		spin_unlock(&req->rq_lock);
-		cfs_waitq_signal(&req->rq_set->set_waitq);
+		wake_up(&req->rq_set->set_waitq);
 		return;
 	} else {
 		spin_unlock(&req->rq_lock);
@@ -759,7 +759,7 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 	set_bit(LIOD_STOP, &pc->pc_flags);
 	if (force)
 		set_bit(LIOD_FORCE, &pc->pc_flags);
-	cfs_waitq_signal(&pc->pc_set->set_waitq);
+	wake_up(&pc->pc_set->set_waitq);
 
 out:
 	EXIT;

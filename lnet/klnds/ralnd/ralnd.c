@@ -430,44 +430,44 @@ int
 kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
                        __u32 peer_ip, int peer_port)
 {
-        kra_device_t  *dev = conn->rac_device;
-        unsigned long  flags;
-        RAP_RETURN     rrc;
+	kra_device_t  *dev = conn->rac_device;
+	unsigned long  flags;
+	RAP_RETURN     rrc;
 
-        /* CAVEAT EMPTOR: we're really overloading rac_last_tx + rac_keepalive
-         * to do RapkCompleteSync() timekeeping (see kibnal_scheduler). */
-        conn->rac_last_tx = jiffies;
-        conn->rac_keepalive = 0;
+	/* CAVEAT EMPTOR: we're really overloading rac_last_tx + rac_keepalive
+	 * to do RapkCompleteSync() timekeeping (see kibnal_scheduler). */
+	conn->rac_last_tx = jiffies;
+	conn->rac_keepalive = 0;
 
-        rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
-        if (rrc != RAP_SUCCESS) {
-                CERROR("Error setting riparams from %u.%u.%u.%u/%d: %d\n",
-                       HIPQUAD(peer_ip), peer_port, rrc);
-                return -ECONNABORTED;
-        }
+	rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
+	if (rrc != RAP_SUCCESS) {
+		CERROR("Error setting riparams from %u.%u.%u.%u/%d: %d\n",
+		       HIPQUAD(peer_ip), peer_port, rrc);
+		return -ECONNABORTED;
+	}
 
-        /* Schedule conn on rad_new_conns */
-        kranal_conn_addref(conn);
+	/* Schedule conn on rad_new_conns */
+	kranal_conn_addref(conn);
 	spin_lock_irqsave(&dev->rad_lock, flags);
-        cfs_list_add_tail(&conn->rac_schedlist, &dev->rad_new_conns);
-        cfs_waitq_signal(&dev->rad_waitq);
+	cfs_list_add_tail(&conn->rac_schedlist, &dev->rad_new_conns);
+	wake_up(&dev->rad_waitq);
 	spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-        rrc = RapkWaitToConnect(conn->rac_rihandle);
-        if (rrc != RAP_SUCCESS) {
-                CERROR("Error waiting to connect to %u.%u.%u.%u/%d: %d\n",
-                       HIPQUAD(peer_ip), peer_port, rrc);
-                return -ECONNABORTED;
-        }
+	rrc = RapkWaitToConnect(conn->rac_rihandle);
+	if (rrc != RAP_SUCCESS) {
+		CERROR("Error waiting to connect to %u.%u.%u.%u/%d: %d\n",
+		       HIPQUAD(peer_ip), peer_port, rrc);
+		return -ECONNABORTED;
+	}
 
-        /* Scheduler doesn't touch conn apart from to deschedule and decref it
-         * after RapkCompleteSync() return success, so conn is all mine */
+	/* Scheduler doesn't touch conn apart from to deschedule and decref it
+	 * after RapkCompleteSync() return success, so conn is all mine */
 
-        conn->rac_peerstamp = connreq->racr_peerstamp;
-        conn->rac_peer_connstamp = connreq->racr_connstamp;
-        conn->rac_keepalive = RANAL_TIMEOUT2KEEPALIVE(connreq->racr_timeout);
-        kranal_update_reaper_timeout(conn->rac_keepalive);
-        return 0;
+	conn->rac_peerstamp = connreq->racr_peerstamp;
+	conn->rac_peer_connstamp = connreq->racr_connstamp;
+	conn->rac_keepalive = RANAL_TIMEOUT2KEEPALIVE(connreq->racr_timeout);
+	kranal_update_reaper_timeout(conn->rac_keepalive);
+	return 0;
 }
 
 int
@@ -871,31 +871,31 @@ kranal_free_acceptsock (kra_acceptsock_t *ras)
 int
 kranal_accept (lnet_ni_t *ni, struct socket *sock)
 {
-        kra_acceptsock_t  *ras;
-        int                rc;
-        __u32              peer_ip;
-        int                peer_port;
-        unsigned long      flags;
+	kra_acceptsock_t  *ras;
+	int                rc;
+	__u32              peer_ip;
+	int                peer_port;
+	unsigned long      flags;
 
-        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
-        LASSERT (rc == 0);                      /* we succeeded before */
+	rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
+	LASSERT (rc == 0);                      /* we succeeded before */
 
-        LIBCFS_ALLOC(ras, sizeof(*ras));
-        if (ras == NULL) {
-                CERROR("ENOMEM allocating connection request from "
-                       "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
-                return -ENOMEM;
-        }
+	LIBCFS_ALLOC(ras, sizeof(*ras));
+	if (ras == NULL) {
+		CERROR("ENOMEM allocating connection request from "
+		       "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+		return -ENOMEM;
+	}
 
-        ras->ras_sock = sock;
+	ras->ras_sock = sock;
 
 	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
-        cfs_list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
-        cfs_waitq_signal(&kranal_data.kra_connd_waitq);
+	cfs_list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
+	wake_up(&kranal_data.kra_connd_waitq);
 
 	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
-        return 0;
+	return 0;
 }
 
 int
@@ -1498,21 +1498,21 @@ kranal_shutdown (lnet_ni_t *ni)
         /* Flag threads to terminate */
         kranal_data.kra_shutdown = 1;
 
-        for (i = 0; i < kranal_data.kra_ndevs; i++) {
-                kra_device_t *dev = &kranal_data.kra_devices[i];
+	for (i = 0; i < kranal_data.kra_ndevs; i++) {
+		kra_device_t *dev = &kranal_data.kra_devices[i];
 
 		spin_lock_irqsave(&dev->rad_lock, flags);
-                cfs_waitq_signal(&dev->rad_waitq);
+		wake_up(&dev->rad_waitq);
 		spin_unlock_irqrestore(&dev->rad_lock, flags);
-        }
+	}
 
 	spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
-        cfs_waitq_broadcast(&kranal_data.kra_reaper_waitq);
+	wake_up_all(&kranal_data.kra_reaper_waitq);
 	spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 
-        LASSERT (cfs_list_empty(&kranal_data.kra_connd_peers));
+	LASSERT (cfs_list_empty(&kranal_data.kra_connd_peers));
 	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-        cfs_waitq_broadcast(&kranal_data.kra_connd_waitq);
+	wake_up_all(&kranal_data.kra_connd_waitq);
 	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
         /* Wait for threads to exit */
@@ -1607,23 +1607,23 @@ kranal_startup (lnet_ni_t *ni)
 
 	rwlock_init(&kranal_data.kra_global_lock);
 
-        for (i = 0; i < RANAL_MAXDEVS; i++ ) {
-                kra_device_t  *dev = &kranal_data.kra_devices[i];
+	for (i = 0; i < RANAL_MAXDEVS; i++ ) {
+		kra_device_t  *dev = &kranal_data.kra_devices[i];
 
-                dev->rad_idx = i;
-                CFS_INIT_LIST_HEAD(&dev->rad_ready_conns);
-                CFS_INIT_LIST_HEAD(&dev->rad_new_conns);
-                cfs_waitq_init(&dev->rad_waitq);
+		dev->rad_idx = i;
+		CFS_INIT_LIST_HEAD(&dev->rad_ready_conns);
+		CFS_INIT_LIST_HEAD(&dev->rad_new_conns);
+		init_waitqueue_head(&dev->rad_waitq);
 		spin_lock_init(&dev->rad_lock);
-        }
+	}
 
-        kranal_data.kra_new_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
-        cfs_waitq_init(&kranal_data.kra_reaper_waitq);
+	kranal_data.kra_new_min_timeout = MAX_SCHEDULE_TIMEOUT;
+	init_waitqueue_head(&kranal_data.kra_reaper_waitq);
 	spin_lock_init(&kranal_data.kra_reaper_lock);
 
-        CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_acceptq);
-        CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_peers);
-        cfs_waitq_init(&kranal_data.kra_connd_waitq);
+	CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_acceptq);
+	CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_peers);
+	init_waitqueue_head(&kranal_data.kra_connd_waitq);
 	spin_lock_init(&kranal_data.kra_connd_lock);
 
         CFS_INIT_LIST_HEAD(&kranal_data.kra_idle_txs);

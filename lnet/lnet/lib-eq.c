@@ -234,8 +234,8 @@ lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev)
 
 #ifdef __KERNEL__
 	/* Wake anyone waiting in LNetEQPoll() */
-	if (cfs_waitq_active(&the_lnet.ln_eq_waitq))
-		cfs_waitq_broadcast(&the_lnet.ln_eq_waitq);
+	if (waitqueue_active(&the_lnet.ln_eq_waitq))
+		wake_up_all(&the_lnet.ln_eq_waitq);
 #else
 # ifndef HAVE_LIBPTHREAD
 	/* LNetEQPoll() calls into _the_ LND to wait for action */
@@ -339,26 +339,26 @@ lnet_eq_wait_locked(int *timeout_ms)
 {
 	int		tms = *timeout_ms;
 	int		wait;
-	cfs_waitlink_t  wl;
+	wait_queue_t  wl;
 	cfs_time_t      now;
 
 	if (tms == 0)
 		return -1; /* don't want to wait and no new event */
 
-	cfs_waitlink_init(&wl);
-	cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-	cfs_waitq_add(&the_lnet.ln_eq_waitq, &wl);
+	init_waitqueue_entry_current(&wl);
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(&the_lnet.ln_eq_waitq, &wl);
 
 	lnet_eq_wait_unlock();
 
 	if (tms < 0) {
-		cfs_waitq_wait(&wl, CFS_TASK_INTERRUPTIBLE);
+		waitq_wait(&wl, TASK_INTERRUPTIBLE);
 
 	} else {
 		struct timeval tv;
 
 		now = cfs_time_current();
-		cfs_waitq_timedwait(&wl, CFS_TASK_INTERRUPTIBLE,
+		waitq_timedwait(&wl, TASK_INTERRUPTIBLE,
 				    cfs_time_seconds(tms) / 1000);
 		cfs_duration_usec(cfs_time_sub(cfs_time_current(), now), &tv);
 		tms -= (int)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
@@ -370,7 +370,7 @@ lnet_eq_wait_locked(int *timeout_ms)
 	*timeout_ms = tms;
 
 	lnet_eq_wait_lock();
-	cfs_waitq_del(&the_lnet.ln_eq_waitq, &wl);
+	remove_wait_queue(&the_lnet.ln_eq_waitq, &wl);
 
 	return wait;
 }

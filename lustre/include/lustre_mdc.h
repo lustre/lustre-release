@@ -133,7 +133,7 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
 	 * the common case when it isn't true. */
 	while (unlikely(lck->rpcl_it == MDC_FAKE_RPCL_IT)) {
 		mutex_unlock(&lck->rpcl_mutex);
-		cfs_schedule_timeout(cfs_time_seconds(1) / 4);
+		schedule_timeout(cfs_time_seconds(1) / 4);
 		goto again;
 	}
 
@@ -183,8 +183,8 @@ static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
 
 
 struct mdc_cache_waiter {
-        cfs_list_t              mcw_entry;
-        cfs_waitq_t             mcw_waitq;
+	cfs_list_t              mcw_entry;
+	wait_queue_head_t             mcw_waitq;
 };
 
 /* mdc/mdc_locks.c */

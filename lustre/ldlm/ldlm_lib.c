@@ -371,11 +371,11 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	CFS_INIT_LIST_HEAD(&cli->cl_lru_list);
 	client_obd_list_lock_init(&cli->cl_lru_list_lock);
 
-        cfs_waitq_init(&cli->cl_destroy_waitq);
-        cfs_atomic_set(&cli->cl_destroy_in_flight, 0);
+	init_waitqueue_head(&cli->cl_destroy_waitq);
+	cfs_atomic_set(&cli->cl_destroy_in_flight, 0);
 #ifdef ENABLE_CHECKSUM
-        /* Turn on checksumming by default. */
-        cli->cl_checksum = 1;
+	/* Turn on checksumming by default. */
+	cli->cl_checksum = 1;
         /*
          * The supported checksum types will be worked out at connect time
          * Set cl_chksum* to CRC32 for now to avoid returning screwed info
@@ -1193,12 +1193,12 @@ dont_check_exports:
 			spin_unlock(&target->obd_recovery_task_lock);
                 }
 
-                cfs_atomic_inc(&target->obd_req_replay_clients);
-                cfs_atomic_inc(&target->obd_lock_replay_clients);
-                if (cfs_atomic_inc_return(&target->obd_connected_clients) ==
-                    target->obd_max_recoverable_clients)
-                        cfs_waitq_signal(&target->obd_next_transno_waitq);
-        }
+		cfs_atomic_inc(&target->obd_req_replay_clients);
+		cfs_atomic_inc(&target->obd_lock_replay_clients);
+		if (cfs_atomic_inc_return(&target->obd_connected_clients) ==
+		    target->obd_max_recoverable_clients)
+			wake_up(&target->obd_next_transno_waitq);
+	}
 
         /* Tell the client we're in recovery, when client is involved in it. */
 	if (target->obd_recovering && !lw_client)
@@ -1787,36 +1787,36 @@ static int check_for_next_lock(struct obd_device *obd)
  * evict dead clients via health_check
  */
 static int target_recovery_overseer(struct obd_device *obd,
-                                    int (*check_routine)(struct obd_device *),
-                                    int (*health_check)(struct obd_export *))
+				    int (*check_routine)(struct obd_device *),
+				    int (*health_check)(struct obd_export *))
 {
 repeat:
-        cfs_wait_event(obd->obd_next_transno_waitq, check_routine(obd));
-        if (obd->obd_abort_recovery) {
-                CWARN("recovery is aborted, evict exports in recovery\n");
-                /** evict exports which didn't finish recovery yet */
-                class_disconnect_stale_exports(obd, exp_finished);
-                return 1;
-        } else if (obd->obd_recovery_expired) {
-                obd->obd_recovery_expired = 0;
-                /** If some clients died being recovered, evict them */
-                LCONSOLE_WARN("%s: recovery is timed out, "
-                              "evict stale exports\n", obd->obd_name);
-                /** evict cexports with no replay in queue, they are stalled */
-                class_disconnect_stale_exports(obd, health_check);
-                /** continue with VBR */
+	wait_event(obd->obd_next_transno_waitq, check_routine(obd));
+	if (obd->obd_abort_recovery) {
+		CWARN("recovery is aborted, evict exports in recovery\n");
+		/** evict exports which didn't finish recovery yet */
+		class_disconnect_stale_exports(obd, exp_finished);
+		return 1;
+	} else if (obd->obd_recovery_expired) {
+		obd->obd_recovery_expired = 0;
+		/** If some clients died being recovered, evict them */
+		LCONSOLE_WARN("%s: recovery is timed out, "
+			      "evict stale exports\n", obd->obd_name);
+		/** evict cexports with no replay in queue, they are stalled */
+		class_disconnect_stale_exports(obd, health_check);
+		/** continue with VBR */
 		spin_lock(&obd->obd_dev_lock);
 		obd->obd_version_recov = 1;
 		spin_unlock(&obd->obd_dev_lock);
-                /**
-                 * reset timer, recovery will proceed with versions now,
-                 * timeout is set just to handle reconnection delays
-                 */
-                extend_recovery_timer(obd, RECONNECT_DELAY_MAX, true);
-                /** Wait for recovery events again, after evicting bad clients */
-                goto repeat;
-        }
-        return 0;
+		/**
+		 * reset timer, recovery will proceed with versions now,
+		 * timeout is set just to handle reconnection delays
+		 */
+		extend_recovery_timer(obd, RECONNECT_DELAY_MAX, true);
+		/** Wait for recovery events again, after evicting bad clients */
+		goto repeat;
+	}
+	return 0;
 }
 
 static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
@@ -2126,7 +2126,7 @@ void target_stop_recovery_thread(struct obd_device *obd)
 		if (obd->obd_recovering) {
 			CERROR("%s: Aborting recovery\n", obd->obd_name);
 			obd->obd_abort_recovery = 1;
-			cfs_waitq_signal(&obd->obd_next_transno_waitq);
+			wake_up(&obd->obd_next_transno_waitq);
 		}
 		spin_unlock(&obd->obd_dev_lock);
 		wait_for_completion(&trd->trd_finishing);
@@ -2144,15 +2144,15 @@ EXPORT_SYMBOL(target_recovery_fini);
 
 static void target_recovery_expired(unsigned long castmeharder)
 {
-        struct obd_device *obd = (struct obd_device *)castmeharder;
-        CDEBUG(D_HA, "%s: recovery timed out; %d clients are still in recovery"
-               " after %lds (%d clients connected)\n",
-               obd->obd_name, cfs_atomic_read(&obd->obd_lock_replay_clients),
-               cfs_time_current_sec()- obd->obd_recovery_start,
-               cfs_atomic_read(&obd->obd_connected_clients));
+	struct obd_device *obd = (struct obd_device *)castmeharder;
+	CDEBUG(D_HA, "%s: recovery timed out; %d clients are still in recovery"
+	       " after %lds (%d clients connected)\n",
+	       obd->obd_name, cfs_atomic_read(&obd->obd_lock_replay_clients),
+	       cfs_time_current_sec()- obd->obd_recovery_start,
+	       cfs_atomic_read(&obd->obd_connected_clients));
 
-        obd->obd_recovery_expired = 1;
-        cfs_waitq_signal(&obd->obd_next_transno_waitq);
+	obd->obd_recovery_expired = 1;
+	wake_up(&obd->obd_next_transno_waitq);
 }
 
 void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
@@ -2232,9 +2232,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LOCK_REPLAY_DONE) {
                 /* client declares he's ready to complete recovery
                  * so, we put the request on th final queue */
-                target_request_copy_get(req);
-                DEBUG_REQ(D_HA, req, "queue final req");
-                cfs_waitq_signal(&obd->obd_next_transno_waitq);
+		target_request_copy_get(req);
+		DEBUG_REQ(D_HA, req, "queue final req");
+		wake_up(&obd->obd_next_transno_waitq);
 		spin_lock(&obd->obd_recovery_task_lock);
 		if (obd->obd_recovering) {
 			cfs_list_add_tail(&req->rq_list,
@@ -2251,7 +2251,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 		/* client declares he's ready to replay locks */
 		target_request_copy_get(req);
 		DEBUG_REQ(D_HA, req, "queue lock replay req");
-		cfs_waitq_signal(&obd->obd_next_transno_waitq);
+		wake_up(&obd->obd_next_transno_waitq);
 		spin_lock(&obd->obd_recovery_task_lock);
 		LASSERT(obd->obd_recovering);
 		/* usually due to recovery abort */
@@ -2343,7 +2343,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         obd->obd_requests_queued_for_recovery++;
 	spin_unlock(&obd->obd_recovery_task_lock);
-	cfs_waitq_signal(&obd->obd_next_transno_waitq);
+	wake_up(&obd->obd_next_transno_waitq);
 	RETURN(0);
 }
 EXPORT_SYMBOL(target_queue_recovery_request);

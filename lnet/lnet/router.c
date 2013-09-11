@@ -1276,12 +1276,12 @@ rescan:
 
 		lnet_prune_rc_data(0); /* don't wait for UNLINK */
 
-                /* Call cfs_pause() here always adds 1 to load average 
-                 * because kernel counts # active tasks as nr_running 
-                 * + nr_uninterruptible. */
-                cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
-                                                   cfs_time_seconds(1));
-        }
+		/* Call cfs_pause() here always adds 1 to load average
+		 * because kernel counts # active tasks as nr_running
+		 * + nr_uninterruptible. */
+		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
+						   cfs_time_seconds(1));
+	}
 
 	LASSERT(the_lnet.ln_rc_state == LNET_RC_STATE_STOPPING);
 

@@ -1167,7 +1167,7 @@ srpc_del_client_rpc_timer (srpc_client_rpc_t *rpc)
 	while (rpc->crpc_timeout != 0) {
 		spin_unlock(&rpc->crpc_lock);
 
-		cfs_schedule();
+		schedule();
 
 		spin_lock(&rpc->crpc_lock);
 	}

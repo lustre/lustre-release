@@ -107,18 +107,58 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 /*
  * Wait Queue
  */
-#define CFS_TASK_INTERRUPTIBLE          TASK_INTERRUPTIBLE
-#define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
-#define CFS_TASK_RUNNING                TASK_RUNNING
 
-#define cfs_set_current_state(state)    set_current_state(state)
-#define cfs_wait_event(wq, cond)        wait_event(wq, cond)
-
-typedef wait_queue_t			cfs_waitlink_t;
-typedef wait_queue_head_t		cfs_waitq_t;
-typedef long                            cfs_task_state_t;
 
 #define CFS_DECL_WAITQ(wq)		DECLARE_WAIT_QUEUE_HEAD(wq)
+
+#define LIBCFS_WQITQ_MACROS           1
+#define init_waitqueue_entry_current(w)          init_waitqueue_entry(w, current)
+#define waitq_wait(w, s)          schedule()
+#define waitq_timedwait(w, s, t)  schedule_timeout(t)
+
+#ifndef HAVE___ADD_WAIT_QUEUE_EXCLUSIVE
+static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
+					      wait_queue_t *wait)
+{
+	wait->flags |= WQ_FLAG_EXCLUSIVE;
+	__add_wait_queue(q, wait);
+}
+#endif /* HAVE___ADD_WAIT_QUEUE_EXCLUSIVE */
+
+/**
+ * wait_queue_t of Linux (version < 2.6.34) is a FIFO list for exclusively
+ * waiting threads, which is not always desirable because all threads will
+ * be waken up again and again, even user only needs a few of them to be
+ * active most time. This is not good for performance because cache can
+ * be polluted by different threads.
+ *
+ * LIFO list can resolve this problem because we always wakeup the most
+ * recent active thread by default.
+ *
+ * NB: please don't call non-exclusive & exclusive wait on the same
+ * waitq if add_wait_queue_exclusive_head is used.
+ */
+#define add_wait_queue_exclusive_head(waitq, link)			\
+{									\
+	unsigned long flags;						\
+									\
+	spin_lock_irqsave(&((waitq)->lock), flags);			\
+	__add_wait_queue_exclusive(waitq, link);			\
+	spin_unlock_irqrestore(&((waitq)->lock), flags);		\
+}
+
+#define schedule_timeout_and_set_state(state, timeout)			\
+{									\
+	set_current_state(state);					\
+	schedule_timeout(timeout);					\
+}
+
+/* deschedule for a bit... */
+#define cfs_pause(ticks)						\
+{									\
+	set_current_state(TASK_UNINTERRUPTIBLE);			\
+	schedule_timeout(ticks);					\
+}
 
 /*
  * Task struct
@@ -150,51 +190,6 @@ typedef sigset_t                        cfs_sigset_t;
  * Timer
  */
 typedef struct timer_list cfs_timer_t;
-
-#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
-
-#ifndef wait_event_timeout /* Only for RHEL3 2.4.21 kernel */
-#define __wait_event_timeout(wq, condition, timeout, ret)        \
-do {                                                             \
-	int __ret = 0;                                           \
-	if (!(condition)) {                                      \
-		wait_queue_t __wait;                             \
-		unsigned long expire;                            \
-                                                                 \
-		init_waitqueue_entry(&__wait, current);          \
-		expire = timeout + jiffies;                      \
-		add_wait_queue(&wq, &__wait);                    \
-		for (;;) {                                       \
-			set_current_state(TASK_UNINTERRUPTIBLE); \
-			if (condition)                           \
-				break;                           \
-			if (jiffies > expire) {                  \
-				ret = jiffies - expire;          \
-				break;                           \
-			}                                        \
-			schedule_timeout(timeout);               \
-		}                                                \
-		current->state = TASK_RUNNING;                   \
-		remove_wait_queue(&wq, &__wait);                 \
-	}                                                        \
-} while (0)
-/*
-   retval == 0; condition met; we're good.
-   retval > 0; timed out.
-*/
-#define cfs_waitq_wait_event_timeout(wq, condition, timeout, ret)    \
-do {                                                                 \
-	ret = 0;                                                     \
-	if (!(condition))                                            \
-		__wait_event_timeout(wq, condition, timeout, ret);   \
-} while (0)
-#else
-#define cfs_waitq_wait_event_timeout(wq, condition, timeout, ret)    \
-        ret = wait_event_timeout(wq, condition, timeout)
-#endif
-
-#define cfs_waitq_wait_event_interruptible_timeout(wq, c, timeout, ret) \
-        ret = wait_event_interruptible_timeout(wq, c, timeout)
 
 /*
  * atomic

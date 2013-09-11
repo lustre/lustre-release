@@ -72,7 +72,7 @@ typedef struct                                  /* per scheduler state */
 	cfs_list_t		kss_tx_conns;
 	/* zombie noop tx list */
 	cfs_list_t		kss_zombie_noop_txs;
-	cfs_waitq_t		kss_waitq;	/* where scheduler sleeps */
+	wait_queue_head_t	kss_waitq;	/* where scheduler sleeps */
 	/* # connections assigned to this scheduler */
 	int			kss_nconns;
 	struct ksock_sched_info	*kss_info;	/* owner of it */
@@ -183,31 +183,31 @@ typedef struct
 	/* schedulers information */
 	struct ksock_sched_info	**ksnd_sched_info;
 
-        cfs_atomic_t      ksnd_nactive_txs;    /* #active txs */
+	cfs_atomic_t      ksnd_nactive_txs;    /* #active txs */
 
-        cfs_list_t        ksnd_deathrow_conns; /* conns to close: reaper_lock*/
-        cfs_list_t        ksnd_zombie_conns;   /* conns to free: reaper_lock */
-        cfs_list_t        ksnd_enomem_conns;   /* conns to retry: reaper_lock*/
-        cfs_waitq_t       ksnd_reaper_waitq;   /* reaper sleeps here */
-        cfs_time_t        ksnd_reaper_waketime;/* when reaper will wake */
+	cfs_list_t        ksnd_deathrow_conns; /* conns to close: reaper_lock*/
+	cfs_list_t        ksnd_zombie_conns;   /* conns to free: reaper_lock */
+	cfs_list_t        ksnd_enomem_conns;   /* conns to retry: reaper_lock*/
+	wait_queue_head_t       ksnd_reaper_waitq;   /* reaper sleeps here */
+	cfs_time_t        ksnd_reaper_waketime;/* when reaper will wake */
 	spinlock_t	  ksnd_reaper_lock;	/* serialise */
 
-        int               ksnd_enomem_tx;      /* test ENOMEM sender */
-        int               ksnd_stall_tx;       /* test sluggish sender */
-        int               ksnd_stall_rx;       /* test sluggish receiver */
+	int               ksnd_enomem_tx;      /* test ENOMEM sender */
+	int               ksnd_stall_tx;       /* test sluggish sender */
+	int               ksnd_stall_rx;       /* test sluggish receiver */
 
-        cfs_list_t        ksnd_connd_connreqs; /* incoming connection requests */
-        cfs_list_t        ksnd_connd_routes;   /* routes waiting to be connected */
-        cfs_waitq_t       ksnd_connd_waitq;    /* connds sleep here */
-        int               ksnd_connd_connecting;/* # connds connecting */
-        /** time stamp of the last failed connecting attempt */
-        long              ksnd_connd_failed_stamp;
-        /** # starting connd */
-        unsigned          ksnd_connd_starting;
-        /** time stamp of the last starting connd */
-        long              ksnd_connd_starting_stamp;
-        /** # running connd */
-        unsigned          ksnd_connd_running;
+	cfs_list_t        ksnd_connd_connreqs; /* incoming connection requests */
+	cfs_list_t        ksnd_connd_routes;   /* routes waiting to be connected */
+	wait_queue_head_t       ksnd_connd_waitq;    /* connds sleep here */
+	int               ksnd_connd_connecting;/* # connds connecting */
+	/** time stamp of the last failed connecting attempt */
+	long              ksnd_connd_failed_stamp;
+	/** # starting connd */
+	unsigned          ksnd_connd_starting;
+	/** time stamp of the last starting connd */
+	long              ksnd_connd_starting_stamp;
+	/** # running connd */
+	unsigned          ksnd_connd_running;
 	spinlock_t	  ksnd_connd_lock;	/* serialise */
 
 	cfs_list_t	  ksnd_idle_noop_txs;	/* list head for freed noop tx */

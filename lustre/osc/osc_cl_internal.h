@@ -668,7 +668,7 @@ struct osc_extent {
 	pgoff_t            oe_max_end;
 	/** waitqueue - for those who want to be notified if this extent's
 	 * state has changed. */
-	cfs_waitq_t        oe_waitq;
+	wait_queue_head_t        oe_waitq;
 	/** lock covering this extent */
 	struct cl_lock    *oe_osclock;
 	/** terminator of this extent. Must be true if this extent is in IO. */

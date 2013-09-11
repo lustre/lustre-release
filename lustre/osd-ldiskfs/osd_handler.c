@@ -948,21 +948,21 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 OBD_FREE_PTR(oh);
         }
 
-        /* as we want IO to journal and data IO be concurrent, we don't block
-         * awaiting data IO completion in osd_do_bio(), instead we wait here
-         * once transaction is submitted to the journal. all reqular requests
-         * don't do direct IO (except read/write), thus this wait_event becomes
-         * no-op for them.
-         *
-         * IMPORTANT: we have to wait till any IO submited by the thread is
-         * completed otherwise iobuf may be corrupted by different request
-         */
-        cfs_wait_event(iobuf->dr_wait,
-                       cfs_atomic_read(&iobuf->dr_numreqs) == 0);
-        if (!rc)
-                rc = iobuf->dr_error;
+	/* as we want IO to journal and data IO be concurrent, we don't block
+	 * awaiting data IO completion in osd_do_bio(), instead we wait here
+	 * once transaction is submitted to the journal. all reqular requests
+	 * don't do direct IO (except read/write), thus this wait_event becomes
+	 * no-op for them.
+	 *
+	 * IMPORTANT: we have to wait till any IO submited by the thread is
+	 * completed otherwise iobuf may be corrupted by different request
+	 */
+	wait_event(iobuf->dr_wait,
+		       cfs_atomic_read(&iobuf->dr_numreqs) == 0);
+	if (!rc)
+		rc = iobuf->dr_error;
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)

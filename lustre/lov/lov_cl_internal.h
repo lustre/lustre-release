@@ -230,7 +230,7 @@ struct lov_object {
 	/**
 	 * Waitq - wait for no one else is using lo_lsm
 	 */
-	cfs_waitq_t	       lo_waitq;
+	wait_queue_head_t	lo_waitq;
 	/**
 	 * Layout metadata. NULL if empty layout.
 	 */
@@ -444,13 +444,13 @@ struct lovsub_page {
 
 
 struct lov_thread_info {
-        struct cl_object_conf   lti_stripe_conf;
-        struct lu_fid           lti_fid;
-        struct cl_lock_descr    lti_ldescr;
-        struct ost_lvb          lti_lvb;
-        struct cl_2queue        lti_cl2q;
-        struct cl_lock_closure  lti_closure;
-        cfs_waitlink_t          lti_waiter;
+	struct cl_object_conf   lti_stripe_conf;
+	struct lu_fid           lti_fid;
+	struct cl_lock_descr    lti_ldescr;
+	struct ost_lvb          lti_lvb;
+	struct cl_2queue        lti_cl2q;
+	struct cl_lock_closure  lti_closure;
+	wait_queue_t		lti_waiter;
 };
 
 /**

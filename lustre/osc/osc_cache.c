@@ -120,7 +120,7 @@ static const char *oes_strings[] = {
 		/* ----- part 2 ----- */				      \
 		__ext->oe_grants, __ext->oe_nr_pages,			      \
 		list_empty_marker(&__ext->oe_pages),			      \
-		cfs_waitq_active(&__ext->oe_waitq) ? '+' : '-',		      \
+		waitqueue_active(&__ext->oe_waitq) ? '+' : '-',		      \
 		__ext->oe_osclock, __ext->oe_mppr, __ext->oe_owner,	      \
 		/* ----- part 4 ----- */				      \
 		## __VA_ARGS__);					      \
@@ -302,7 +302,7 @@ static void osc_extent_state_set(struct osc_extent *ext, int state)
 
 	/* TODO: validate the state machine */
 	ext->oe_state = state;
-	cfs_waitq_broadcast(&ext->oe_waitq);
+	wake_up_all(&ext->oe_waitq);
 }
 
 static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
@@ -320,7 +320,7 @@ static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
 	CFS_INIT_LIST_HEAD(&ext->oe_link);
 	ext->oe_state = OES_INV;
 	CFS_INIT_LIST_HEAD(&ext->oe_pages);
-	cfs_waitq_init(&ext->oe_waitq);
+	init_waitqueue_head(&ext->oe_waitq);
 	ext->oe_osclock = NULL;
 
 	return ext;
@@ -1536,7 +1536,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	 * RPC size will be.
 	 * The exiting condition is no avail grants and no dirty pages caching,
 	 * that really means there is no space on the OST. */
-	cfs_waitq_init(&ocw.ocw_waitq);
+	init_waitqueue_head(&ocw.ocw_waitq);
 	ocw.ocw_oap   = oap;
 	ocw.ocw_grant = bytes;
 	while (cli->cl_dirty > 0 || cli->cl_w_in_flight > 0) {
@@ -1622,7 +1622,7 @@ wakeup:
 		CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant %ld, %d\n",
 		       ocw, ocw->ocw_oap, cli->cl_avail_grant, ocw->ocw_rc);
 
-		cfs_waitq_signal(&ocw->ocw_waitq);
+		wake_up(&ocw->ocw_waitq);
 	}
 
 	EXIT;

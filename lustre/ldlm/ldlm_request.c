@@ -185,23 +185,23 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
  */
 int ldlm_completion_ast_async(struct ldlm_lock *lock, __u64 flags, void *data)
 {
-        ENTRY;
+	ENTRY;
 
-        if (flags == LDLM_FL_WAIT_NOREPROC) {
-                LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
-                RETURN(0);
-        }
+	if (flags == LDLM_FL_WAIT_NOREPROC) {
+		LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
+		RETURN(0);
+	}
 
-        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                       LDLM_FL_BLOCK_CONV))) {
-                cfs_waitq_signal(&lock->l_waitq);
-                RETURN(ldlm_completion_tail(lock));
-        }
+	if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+		       LDLM_FL_BLOCK_CONV))) {
+		wake_up(&lock->l_waitq);
+		RETURN(ldlm_completion_tail(lock));
+	}
 
-        LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
-                   "going forward");
-        ldlm_reprocess_all(lock->l_resource);
-        RETURN(0);
+	LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
+		   "going forward");
+	ldlm_reprocess_all(lock->l_resource);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_completion_ast_async);
 
@@ -242,11 +242,11 @@ int ldlm_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
                 goto noreproc;
         }
 
-        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                       LDLM_FL_BLOCK_CONV))) {
-                cfs_waitq_signal(&lock->l_waitq);
-                RETURN(0);
-        }
+	if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+		       LDLM_FL_BLOCK_CONV))) {
+		wake_up(&lock->l_waitq);
+		RETURN(0);
+	}
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");

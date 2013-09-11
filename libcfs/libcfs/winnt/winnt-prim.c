@@ -732,12 +732,12 @@ errorout:
     return NT_SUCCESS(status);
 }
 
-int cfs_need_resched(void)
+int need_resched(void)
 {
         return 0;
 }
 
-void cfs_cond_resched(void)
+void cond_resched(void)
 {
 }
 

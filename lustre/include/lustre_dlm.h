@@ -467,7 +467,7 @@ struct ldlm_namespace {
 	 * Wait queue used by __ldlm_namespace_free. Gets woken up every time
 	 * a resource is removed.
 	 */
-	cfs_waitq_t		ns_waitq;
+	wait_queue_head_t	ns_waitq;
 	/** LDLM pool structure for this namespace */
 	struct ldlm_pool	ns_pool;
 	/** Definition of how eagerly unused locks will be released from LRU */
@@ -782,7 +782,7 @@ struct ldlm_lock {
 	 * it's no longer in use.  If the lock is not granted, a process sleeps
 	 * on this waitq to learn when it becomes granted.
 	 */
-	cfs_waitq_t		l_waitq;
+	wait_queue_head_t	l_waitq;
 
 	/**
 	 * Seconds. It will be updated if there is any activity related to

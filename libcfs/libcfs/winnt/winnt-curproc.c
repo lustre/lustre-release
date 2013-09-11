@@ -405,11 +405,11 @@ errorout:
 void
 cfs_pause(cfs_duration_t ticks)
 {
-    cfs_schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, ticks);
+    schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, ticks);
 }
 
 void
-cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t time)
+schedule_timeout_and_set_state(long state, int64_t time)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -422,7 +422,7 @@ cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t time)
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     cfs_assert(slot->Magic == TASKSLT_MAGIC);
 
-    if (time == CFS_MAX_SCHEDULE_TIMEOUT) {
+    if (time == MAX_SCHEDULE_TIMEOUT) {
         time = 0;
     }
 
@@ -430,9 +430,9 @@ cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t time)
 }
 
 void
-cfs_schedule()
+schedule()
 {
-    cfs_schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, 0);
+    schedule_timeout_and_set_state(CFS_TASK_UNINTERRUPTIBLE, 0);
 }
 
 int
@@ -456,14 +456,14 @@ wake_up_process(
 }
 
 void
-sleep_on(cfs_waitq_t *waitq)
+sleep_on(wait_queue_head_t *waitq)
 {
-	cfs_waitlink_t link;
+	wait_queue_t link;
 	
-	cfs_waitlink_init(&link);
-	cfs_waitq_add(waitq, &link);
-	cfs_waitq_wait(&link, CFS_TASK_INTERRUPTIBLE);
-	cfs_waitq_del(waitq, &link);
+	init_waitqueue_entry_current(&link);
+	add_wait_queue(waitq, &link);
+	waitq_wait(&link, TASK_INTERRUPTIBLE);
+	remove_wait_queue(waitq, &link);
 }
 
 EXPORT_SYMBOL(current_uid);

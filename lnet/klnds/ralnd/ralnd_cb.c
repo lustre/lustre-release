@@ -57,10 +57,10 @@ kranal_device_callback(RAP_INT32 devid, RAP_PVOID arg)
 
 		spin_lock_irqsave(&dev->rad_lock, flags);
 
-                if (!dev->rad_ready) {
-                        dev->rad_ready = 1;
-                        cfs_waitq_signal(&dev->rad_waitq);
-                }
+		if (!dev->rad_ready) {
+			dev->rad_ready = 1;
+			wake_up(&dev->rad_waitq);
+		}
 
 		spin_unlock_irqrestore(&dev->rad_lock, flags);
                 return;
@@ -77,12 +77,12 @@ kranal_schedule_conn(kra_conn_t *conn)
 
 	spin_lock_irqsave(&dev->rad_lock, flags);
 
-        if (!conn->rac_scheduled) {
-                kranal_conn_addref(conn);       /* +1 ref for scheduler */
-                conn->rac_scheduled = 1;
-                cfs_list_add_tail(&conn->rac_schedlist, &dev->rad_ready_conns);
-                cfs_waitq_signal(&dev->rad_waitq);
-        }
+	if (!conn->rac_scheduled) {
+		kranal_conn_addref(conn);       /* +1 ref for scheduler */
+		conn->rac_scheduled = 1;
+		cfs_list_add_tail(&conn->rac_schedlist, &dev->rad_ready_conns);
+		wake_up(&dev->rad_waitq);
+	}
 
 	spin_unlock_irqrestore(&dev->rad_lock, flags);
 }
@@ -523,9 +523,9 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
 
 		spin_lock(&kranal_data.kra_connd_lock);
 
-                cfs_list_add_tail(&peer->rap_connd_list,
-                              &kranal_data.kra_connd_peers);
-                cfs_waitq_signal(&kranal_data.kra_connd_waitq);
+		cfs_list_add_tail(&peer->rap_connd_list,
+			      &kranal_data.kra_connd_peers);
+		wake_up(&kranal_data.kra_connd_waitq);
 
 		spin_unlock(&kranal_data.kra_connd_lock);
         }
@@ -1051,78 +1051,78 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
 int
 kranal_connd (void *arg)
 {
-        long               id = (long)arg;
-        cfs_waitlink_t     wait;
-        unsigned long      flags;
-        kra_peer_t        *peer;
-        kra_acceptsock_t  *ras;
-        int                did_something;
+	long               id = (long)arg;
+	wait_queue_t     wait;
+	unsigned long      flags;
+	kra_peer_t        *peer;
+	kra_acceptsock_t  *ras;
+	int                did_something;
 
-        cfs_block_allsigs();
+	cfs_block_allsigs();
 
-        cfs_waitlink_init(&wait);
+	init_waitqueue_entry_current(&wait);
 
 	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
-        while (!kranal_data.kra_shutdown) {
-                did_something = 0;
+	while (!kranal_data.kra_shutdown) {
+		did_something = 0;
 
-                if (!cfs_list_empty(&kranal_data.kra_connd_acceptq)) {
-                        ras = cfs_list_entry(kranal_data.kra_connd_acceptq.next,
-                                             kra_acceptsock_t, ras_list);
-                        cfs_list_del(&ras->ras_list);
+		if (!cfs_list_empty(&kranal_data.kra_connd_acceptq)) {
+			ras = cfs_list_entry(kranal_data.kra_connd_acceptq.next,
+					     kra_acceptsock_t, ras_list);
+			cfs_list_del(&ras->ras_list);
 
 			spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
-                                                   flags);
+						   flags);
 
-                        CDEBUG(D_NET,"About to handshake someone\n");
+			CDEBUG(D_NET,"About to handshake someone\n");
 
-                        kranal_conn_handshake(ras->ras_sock, NULL);
-                        kranal_free_acceptsock(ras);
+			kranal_conn_handshake(ras->ras_sock, NULL);
+			kranal_free_acceptsock(ras);
 
-                        CDEBUG(D_NET,"Finished handshaking someone\n");
+			CDEBUG(D_NET,"Finished handshaking someone\n");
 
 			spin_lock_irqsave(&kranal_data.kra_connd_lock,
-                                              flags);
-                        did_something = 1;
-                }
+					      flags);
+			did_something = 1;
+		}
 
-                if (!cfs_list_empty(&kranal_data.kra_connd_peers)) {
-                        peer = cfs_list_entry(kranal_data.kra_connd_peers.next,
-                                              kra_peer_t, rap_connd_list);
+		if (!cfs_list_empty(&kranal_data.kra_connd_peers)) {
+			peer = cfs_list_entry(kranal_data.kra_connd_peers.next,
+					      kra_peer_t, rap_connd_list);
 
-                        cfs_list_del_init(&peer->rap_connd_list);
+			cfs_list_del_init(&peer->rap_connd_list);
 			spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
-                                                   flags);
+						   flags);
 
-                        kranal_connect(peer);
-                        kranal_peer_decref(peer);
+			kranal_connect(peer);
+			kranal_peer_decref(peer);
 
 			spin_lock_irqsave(&kranal_data.kra_connd_lock,
-                                              flags);
-                        did_something = 1;
-                }
+					      flags);
+			did_something = 1;
+		}
 
-                if (did_something)
-                        continue;
+		if (did_something)
+			continue;
 
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_waitq_add_exclusive(&kranal_data.kra_connd_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue_exclusive(&kranal_data.kra_connd_waitq, &wait);
 
 		spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
-                cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
+		waitq_wait(&wait, TASK_INTERRUPTIBLE);
 
-                cfs_set_current_state(CFS_TASK_RUNNING);
-                cfs_waitq_del(&kranal_data.kra_connd_waitq, &wait);
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&kranal_data.kra_connd_waitq, &wait);
 
 		spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-        }
+	}
 
 	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
-        kranal_thread_fini();
-        return 0;
+	kranal_thread_fini();
+	return 0;
 }
 
 void
@@ -1143,120 +1143,120 @@ kranal_update_reaper_timeout(long timeout)
 int
 kranal_reaper (void *arg)
 {
-        cfs_waitlink_t     wait;
-        unsigned long      flags;
-        long               timeout;
-        int                i;
-        int                conn_entries = kranal_data.kra_conn_hash_size;
-        int                conn_index = 0;
-        int                base_index = conn_entries - 1;
-        unsigned long      next_check_time = jiffies;
-        long               next_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
-        long               current_min_timeout = 1;
+	wait_queue_t     wait;
+	unsigned long      flags;
+	long               timeout;
+	int                i;
+	int                conn_entries = kranal_data.kra_conn_hash_size;
+	int                conn_index = 0;
+	int                base_index = conn_entries - 1;
+	unsigned long      next_check_time = jiffies;
+	long               next_min_timeout = MAX_SCHEDULE_TIMEOUT;
+	long               current_min_timeout = 1;
 
-        cfs_block_allsigs();
+	cfs_block_allsigs();
 
-        cfs_waitlink_init(&wait);
+	init_waitqueue_entry_current(&wait);
 
 	spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
-        while (!kranal_data.kra_shutdown) {
-                /* I wake up every 'p' seconds to check for timeouts on some
-                 * more peers.  I try to check every connection 'n' times
-                 * within the global minimum of all keepalive and timeout
-                 * intervals, to ensure I attend to every connection within
-                 * (n+1)/n times its timeout intervals. */
-                const int     p = 1;
-                const int     n = 3;
-                unsigned long min_timeout;
-                int           chunk;
+	while (!kranal_data.kra_shutdown) {
+		/* I wake up every 'p' seconds to check for timeouts on some
+		 * more peers.  I try to check every connection 'n' times
+		 * within the global minimum of all keepalive and timeout
+		 * intervals, to ensure I attend to every connection within
+		 * (n+1)/n times its timeout intervals. */
+		const int     p = 1;
+		const int     n = 3;
+		unsigned long min_timeout;
+		int           chunk;
 
-                /* careful with the jiffy wrap... */
-                timeout = (long)(next_check_time - jiffies);
-                if (timeout > 0) {
-                        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                        cfs_waitq_add(&kranal_data.kra_reaper_waitq, &wait);
+		/* careful with the jiffy wrap... */
+		timeout = (long)(next_check_time - jiffies);
+		if (timeout > 0) {
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue(&kranal_data.kra_reaper_waitq, &wait);
 
 			spin_unlock_irqrestore(&kranal_data.kra_reaper_lock,
-                                                   flags);
+						   flags);
 
-                        cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE,
-                                            timeout);
+			waitq_timedwait(&wait, TASK_INTERRUPTIBLE,
+					    timeout);
 
 			spin_lock_irqsave(&kranal_data.kra_reaper_lock,
-                                              flags);
+					      flags);
 
-                        cfs_set_current_state(CFS_TASK_RUNNING);
-                        cfs_waitq_del(&kranal_data.kra_reaper_waitq, &wait);
-                        continue;
-                }
+			set_current_state(TASK_RUNNING);
+			remove_wait_queue(&kranal_data.kra_reaper_waitq, &wait);
+			continue;
+		}
 
-                if (kranal_data.kra_new_min_timeout !=
-                    CFS_MAX_SCHEDULE_TIMEOUT) {
-                        /* new min timeout set: restart min timeout scan */
-                        next_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
-                        base_index = conn_index - 1;
-                        if (base_index < 0)
-                                base_index = conn_entries - 1;
+		if (kranal_data.kra_new_min_timeout !=
+		    MAX_SCHEDULE_TIMEOUT) {
+			/* new min timeout set: restart min timeout scan */
+			next_min_timeout = MAX_SCHEDULE_TIMEOUT;
+			base_index = conn_index - 1;
+			if (base_index < 0)
+				base_index = conn_entries - 1;
 
-                        if (kranal_data.kra_new_min_timeout <
-                            current_min_timeout) {
-                                current_min_timeout =
-                                        kranal_data.kra_new_min_timeout;
-                                CDEBUG(D_NET, "Set new min timeout %ld\n",
-                                       current_min_timeout);
-                        }
+			if (kranal_data.kra_new_min_timeout <
+			    current_min_timeout) {
+				current_min_timeout =
+					kranal_data.kra_new_min_timeout;
+				CDEBUG(D_NET, "Set new min timeout %ld\n",
+				       current_min_timeout);
+			}
 
-                        kranal_data.kra_new_min_timeout =
-                                CFS_MAX_SCHEDULE_TIMEOUT;
-                }
-                min_timeout = current_min_timeout;
+			kranal_data.kra_new_min_timeout =
+				MAX_SCHEDULE_TIMEOUT;
+		}
+		min_timeout = current_min_timeout;
 
 		spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 
-                LASSERT (min_timeout > 0);
+		LASSERT (min_timeout > 0);
 
-                /* Compute how many table entries to check now so I get round
-                 * the whole table fast enough given that I do this at fixed
-                 * intervals of 'p' seconds) */
-                chunk = conn_entries;
-                if (min_timeout > n * p)
-                        chunk = (chunk * n * p) / min_timeout;
-                if (chunk == 0)
-                        chunk = 1;
+		/* Compute how many table entries to check now so I get round
+		 * the whole table fast enough given that I do this at fixed
+		 * intervals of 'p' seconds) */
+		chunk = conn_entries;
+		if (min_timeout > n * p)
+			chunk = (chunk * n * p) / min_timeout;
+		if (chunk == 0)
+			chunk = 1;
 
-                for (i = 0; i < chunk; i++) {
-                        kranal_reaper_check(conn_index,
-                                            &next_min_timeout);
-                        conn_index = (conn_index + 1) % conn_entries;
-                }
+		for (i = 0; i < chunk; i++) {
+			kranal_reaper_check(conn_index,
+					    &next_min_timeout);
+			conn_index = (conn_index + 1) % conn_entries;
+		}
 
 		next_check_time += p * HZ;
 
 		spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
-                if (((conn_index - chunk <= base_index &&
-                      base_index < conn_index) ||
-                     (conn_index - conn_entries - chunk <= base_index &&
-                      base_index < conn_index - conn_entries))) {
+		if (((conn_index - chunk <= base_index &&
+		      base_index < conn_index) ||
+		     (conn_index - conn_entries - chunk <= base_index &&
+		      base_index < conn_index - conn_entries))) {
 
-                        /* Scanned all conns: set current_min_timeout... */
-                        if (current_min_timeout != next_min_timeout) {
-                                current_min_timeout = next_min_timeout;
-                                CDEBUG(D_NET, "Set new min timeout %ld\n",
-                                       current_min_timeout);
-                        }
+			/* Scanned all conns: set current_min_timeout... */
+			if (current_min_timeout != next_min_timeout) {
+				current_min_timeout = next_min_timeout;
+				CDEBUG(D_NET, "Set new min timeout %ld\n",
+				       current_min_timeout);
+			}
 
-                        /* ...and restart min timeout scan */
-                        next_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
-                        base_index = conn_index - 1;
-                        if (base_index < 0)
-                                base_index = conn_entries - 1;
-                }
-        }
+			/* ...and restart min timeout scan */
+			next_min_timeout = MAX_SCHEDULE_TIMEOUT;
+			base_index = conn_index - 1;
+			if (base_index < 0)
+				base_index = conn_entries - 1;
+		}
+	}
 
-        kranal_thread_fini();
-        return 0;
+	kranal_thread_fini();
+	return 0;
 }
 
 void
@@ -1923,9 +1923,9 @@ int kranal_process_new_conn (kra_conn_t *conn)
 int
 kranal_scheduler (void *arg)
 {
-        kra_device_t     *dev = (kra_device_t *)arg;
-        cfs_waitlink_t    wait;
-        kra_conn_t       *conn;
+	kra_device_t     *dev = (kra_device_t *)arg;
+	wait_queue_t    wait;
+	kra_conn_t       *conn;
         unsigned long     flags;
         unsigned long     deadline;
         unsigned long     soonest;
@@ -1939,8 +1939,8 @@ kranal_scheduler (void *arg)
 
         cfs_block_allsigs();
 
-        dev->rad_scheduler = current;
-        cfs_waitlink_init(&wait);
+	dev->rad_scheduler = current;
+	init_waitqueue_entry_current(&wait);
 
 	spin_lock_irqsave(&dev->rad_lock, flags);
 
@@ -1950,8 +1950,8 @@ kranal_scheduler (void *arg)
                 if (busy_loops++ >= RANAL_RESCHED) {
 			spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-                        cfs_cond_resched();
-                        busy_loops = 0;
+			cond_resched();
+			busy_loops = 0;
 
 			spin_lock_irqsave(&dev->rad_lock, flags);
                 }
@@ -2039,27 +2039,27 @@ kranal_scheduler (void *arg)
                 if (dropped_lock)               /* may sleep iff I didn't drop the lock */
                         continue;
 
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_waitq_add_exclusive(&dev->rad_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue_exclusive(&dev->rad_waitq, &wait);
 		spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-                if (nsoonest == 0) {
-                        busy_loops = 0;
-                        cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
-                } else {
-                        timeout = (long)(soonest - jiffies);
-                        if (timeout > 0) {
-                                busy_loops = 0;
-                                cfs_waitq_timedwait(&wait,
-                                                    CFS_TASK_INTERRUPTIBLE,
-                                                    timeout);
-                        }
-                }
+		if (nsoonest == 0) {
+			busy_loops = 0;
+			waitq_wait(&wait, TASK_INTERRUPTIBLE);
+		} else {
+			timeout = (long)(soonest - jiffies);
+			if (timeout > 0) {
+				busy_loops = 0;
+				waitq_timedwait(&wait,
+						    TASK_INTERRUPTIBLE,
+						    timeout);
+			}
+		}
 
-                cfs_waitq_del(&dev->rad_waitq, &wait);
-                cfs_set_current_state(CFS_TASK_RUNNING);
+		remove_wait_queue(&dev->rad_waitq, &wait);
+		set_current_state(TASK_RUNNING);
 		spin_lock_irqsave(&dev->rad_lock, flags);
-        }
+	}
 
 	spin_unlock_irqrestore(&dev->rad_lock, flags);
 

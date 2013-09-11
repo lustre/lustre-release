@@ -171,14 +171,14 @@ cfs_trace_get_tage_try(struct cfs_trace_cpu_data *tcd, unsigned long len)
 		cfs_list_add_tail(&tage->linkage, &tcd->tcd_pages);
 		tcd->tcd_cur_pages++;
 
-                if (tcd->tcd_cur_pages > 8 && thread_running) {
-                        struct tracefiled_ctl *tctl = &trace_tctl;
-                        /*
-                         * wake up tracefiled to process some pages.
-                         */
-                        cfs_waitq_signal(&tctl->tctl_waitq);
-                }
-                return tage;
+		if (tcd->tcd_cur_pages > 8 && thread_running) {
+			struct tracefiled_ctl *tctl = &trace_tctl;
+			/*
+			 * wake up tracefiled to process some pages.
+			 */
+			wake_up(&tctl->tctl_waitq);
+		}
+		return tage;
         }
         return NULL;
 }
@@ -996,8 +996,8 @@ static int tracefiled(void *arg)
 	spin_lock_init(&pc.pc_lock);
 	complete(&tctl->tctl_start);
 
-        while (1) {
-                cfs_waitlink_t __wait;
+	while (1) {
+		wait_queue_t __wait;
 
                 pc.pc_want_daemon_pages = 0;
                 collect_pages(&pc);
@@ -1083,12 +1083,12 @@ end_loop:
                                 break;
                         }
                 }
-                cfs_waitlink_init(&__wait);
-                cfs_waitq_add(&tctl->tctl_waitq, &__wait);
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE,
-                                    cfs_time_seconds(1));
-                cfs_waitq_del(&tctl->tctl_waitq, &__wait);
+		init_waitqueue_entry_current(&__wait);
+		add_wait_queue(&tctl->tctl_waitq, &__wait);
+		set_current_state(TASK_INTERRUPTIBLE);
+		waitq_timedwait(&__wait, TASK_INTERRUPTIBLE,
+				cfs_time_seconds(1));
+		remove_wait_queue(&tctl->tctl_waitq, &__wait);
         }
 	complete(&tctl->tctl_stop);
         return 0;
@@ -1105,7 +1105,7 @@ int cfs_trace_start_thread(void)
 
 	init_completion(&tctl->tctl_start);
 	init_completion(&tctl->tctl_stop);
-	cfs_waitq_init(&tctl->tctl_waitq);
+	init_waitqueue_head(&tctl->tctl_waitq);
 	cfs_atomic_set(&tctl->tctl_shutdown, 0);
 
 	if (IS_ERR(kthread_run(tracefiled, tctl, "ktracefiled"))) {

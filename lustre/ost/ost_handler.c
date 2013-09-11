@@ -959,18 +959,18 @@ out:
         }
         /* send a bulk after reply to simulate a network delay or reordering
          * by a router */
-        if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))) {
-                cfs_waitq_t              waitq;
-                struct l_wait_info       lwi1;
+	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))) {
+		wait_queue_head_t              waitq;
+		struct l_wait_info       lwi1;
 
-                CDEBUG(D_INFO, "reorder BULK\n");
-                cfs_waitq_init(&waitq);
+		CDEBUG(D_INFO, "reorder BULK\n");
+		init_waitqueue_head(&waitq);
 
-                lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
-                l_wait_event(waitq, 0, &lwi1);
-                rc = target_bulk_io(exp, desc, &lwi);
+		lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
+		l_wait_event(waitq, 0, &lwi1);
+		rc = target_bulk_io(exp, desc, &lwi);
 		ptlrpc_free_bulk_nopin(desc);
-        }
+	}
 
         RETURN(rc);
 }

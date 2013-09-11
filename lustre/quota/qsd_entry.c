@@ -47,7 +47,7 @@ static void qsd_lqe_init(struct lquota_entry *lqe, void *arg)
 	memset(&lqe->lqe_lockh, 0, sizeof(lqe->lqe_lockh));
 	lqe->lqe_pending_write = 0;
 	lqe->lqe_pending_req   = 0;
-	cfs_waitq_init(&lqe->lqe_waiters);
+	init_waitqueue_head(&lqe->lqe_waiters);
 	lqe->lqe_usage    = 0;
 	lqe->lqe_nopreacq = false;
 }

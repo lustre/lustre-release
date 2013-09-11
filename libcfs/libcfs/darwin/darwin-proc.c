@@ -144,21 +144,21 @@ static int sysctl_debug_mb SYSCTL_HANDLER_ARGS
 
 static int proc_fail_loc SYSCTL_HANDLER_ARGS
 {
-        int error = 0;
-        long old_fail_loc = cfs_fail_loc;
+	int error = 0;
+	long old_fail_loc = cfs_fail_loc;
 
-        error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req);
-        if (!error && req->newptr != USER_ADDR_NULL) {
-                if (old_fail_loc != cfs_fail_loc)
-                        cfs_waitq_signal(&cfs_race_waitq);
-        } else  if (req->newptr != USER_ADDR_NULL) {
-                /* Something was wrong with the write request */
-                printf ("sysctl fail loc fault: %d.\n", error);
-        } else {
-                /* Read request */
-                error = SYSCTL_OUT(req, &cfs_fail_loc, sizeof cfs_fail_loc);
-        }
-        return error;
+	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req);
+	if (!error && req->newptr != USER_ADDR_NULL) {
+		if (old_fail_loc != cfs_fail_loc)
+			wake_up(&cfs_race_waitq);
+	} else  if (req->newptr != USER_ADDR_NULL) {
+		/* Something was wrong with the write request */
+		printf ("sysctl fail loc fault: %d.\n", error);
+	} else {
+		/* Read request */
+		error = SYSCTL_OUT(req, &cfs_fail_loc, sizeof cfs_fail_loc);
+	}
+	return error;
 }
 
 /*

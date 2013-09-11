@@ -420,7 +420,7 @@ static int qsd_reint_main(void *args)
 	lu_ref_add(&qqi->qqi_reference, "reint_thread", thread);
 
 	thread_set_flags(thread, SVC_RUNNING);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	OBD_ALLOC_PTR(env);
 	if (env == NULL)
@@ -534,7 +534,7 @@ out:
 	lu_ref_del(&qqi->qqi_reference, "reint_thread", thread);
 
 	thread_set_flags(thread, SVC_STOPPED);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	return rc;
 }
 
@@ -545,7 +545,7 @@ void qsd_stop_reint_thread(struct qsd_qtype_info *qqi)
 
 	if (!thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
-		cfs_waitq_signal(&thread->t_ctl_waitq);
+		wake_up(&thread->t_ctl_waitq);
 
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_stopped(thread), &lwi);

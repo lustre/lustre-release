@@ -447,7 +447,7 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 	lqe_write_unlock(lqe);
 
 	if (wakeup)
-		cfs_waitq_broadcast(&lqe->lqe_waiters);
+		wake_up_all(&lqe->lqe_waiters);
 	lqe_putref(lqe);
 out:
 	req->rq_status = rc;

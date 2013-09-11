@@ -235,7 +235,7 @@ struct kernel_thread_arg cfs_thread_arg;
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
+		schedule();					\
 	} while(1);						\
 
 /*
@@ -257,7 +257,7 @@ struct kernel_thread_arg cfs_thread_arg;
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
+		schedule();					\
 	} while(1)
 
 /*
@@ -276,7 +276,7 @@ struct kernel_thread_arg cfs_thread_arg;
 			break;					\
 		}						\
 		spin_unlock(&(pta)->lock);			\
-		cfs_schedule();					\
+		schedule();					\
 	} while (1);						\
 
 /*
@@ -460,42 +460,42 @@ void lustre_net_ex(boolean_t state, funnel_t *cone)
 }
 #endif /* !__DARWIN8__ */
 
-void cfs_waitq_init(struct cfs_waitq *waitq)
+void init_waitqueue_head(struct cfs_waitq *waitq)
 {
 	ksleep_chan_init(&waitq->wq_ksleep_chan);
 }
 
-void cfs_waitlink_init(struct cfs_waitlink *link)
+void init_waitqueue_entry_current(struct cfs_waitlink *link)
 {
 	ksleep_link_init(&link->wl_ksleep_link);
 }
 
-void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+void add_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
-        link->wl_waitq = waitq;
+	link->wl_waitq = waitq;
 	ksleep_add(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
 
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
-                             struct cfs_waitlink *link)
+void add_wait_queue_exclusive(struct cfs_waitq *waitq,
+			      struct cfs_waitlink *link)
 {
-        link->wl_waitq = waitq;
+	link->wl_waitq = waitq;
 	link->wl_ksleep_link.flags |= KSLEEP_EXCLUSIVE;
 	ksleep_add(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
 
-void cfs_waitq_del(struct cfs_waitq *waitq,
+void remove_wait_queue(struct cfs_waitq *waitq,
                    struct cfs_waitlink *link)
 {
 	ksleep_del(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
 
-int cfs_waitq_active(struct cfs_waitq *waitq)
+int waitqueue_active(struct cfs_waitq *waitq)
 {
 	return (1);
 }
 
-void cfs_waitq_signal(struct cfs_waitq *waitq)
+void wake_up(struct cfs_waitq *waitq)
 {
 	/*
 	 * XXX nikita: do NOT call libcfs_debug_msg() (CDEBUG/ENTRY/EXIT)
@@ -504,23 +504,23 @@ void cfs_waitq_signal(struct cfs_waitq *waitq)
 	ksleep_wake(&waitq->wq_ksleep_chan);
 }
 
-void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr)
+void wake_up_nr(struct cfs_waitq *waitq, int nr)
 {
 	ksleep_wake_nr(&waitq->wq_ksleep_chan, nr);
 }
 
-void cfs_waitq_broadcast(struct cfs_waitq *waitq)
+void wake_up_all(struct cfs_waitq *waitq)
 {
 	ksleep_wake_all(&waitq->wq_ksleep_chan);
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
+void waitq_wait(struct cfs_waitlink *link, long state)
 {
-        ksleep_wait(&link->wl_waitq->wq_ksleep_chan, state);
+	ksleep_wait(&link->wl_waitq->wq_ksleep_chan, state);
 }
 
-cfs_duration_t  cfs_waitq_timedwait(struct cfs_waitlink *link,
-                                    cfs_task_state_t state,
+cfs_duration_t  waitq_timedwait(struct cfs_waitlink *link,
+				    long state,
                                     cfs_duration_t timeout)
 {
         return ksleep_timedwait(&link->wl_waitq->wq_ksleep_chan, 

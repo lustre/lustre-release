@@ -1003,7 +1003,7 @@ static void cfs_hash_depth_wi_cancel(cfs_hash_t *hs)
 	spin_lock(&hs->hs_dep_lock);
 	while (hs->hs_dep_bits != 0) {
 		spin_unlock(&hs->hs_dep_lock);
-		cfs_cond_resched();
+		cond_resched();
 		spin_lock(&hs->hs_dep_lock);
 	}
 	spin_unlock(&hs->hs_dep_lock);
@@ -1139,10 +1139,10 @@ cfs_hash_destroy(cfs_hash_t *hs)
                                 cfs_hash_exit(hs, hnode);
                         }
                 }
-                LASSERT(bd.bd_bucket->hsb_count == 0);
-                cfs_hash_bd_unlock(hs, &bd, 1);
-                cfs_cond_resched();
-        }
+		LASSERT(bd.bd_bucket->hsb_count == 0);
+		cfs_hash_bd_unlock(hs, &bd, 1);
+		cond_resched();
+	}
 
         LASSERT(cfs_atomic_read(&hs->hs_count) == 0);
 
@@ -1479,11 +1479,11 @@ cfs_hash_for_each_tight(cfs_hash_t *hs, cfs_hash_for_each_cb_t func,
                 cfs_hash_bd_unlock(hs, &bd, excl);
                 if (loop < CFS_HASH_LOOP_HOG)
                         continue;
-                loop = 0;
-                cfs_hash_unlock(hs, 0);
-                cfs_cond_resched();
-                cfs_hash_lock(hs, 0);
-        }
+		loop = 0;
+		cfs_hash_unlock(hs, 0);
+		cond_resched();
+		cfs_hash_lock(hs, 0);
+	}
  out:
         cfs_hash_unlock(hs, 0);
 
@@ -1614,11 +1614,11 @@ cfs_hash_for_each_relax(cfs_hash_t *hs, cfs_hash_for_each_cb_t func, void *data)
                                 cfs_hash_bd_unlock(hs, &bd, 0);
                                 cfs_hash_unlock(hs, 0);
 
-                                rc = func(hs, &bd, hnode, data);
-                                if (stop_on_change)
-                                        cfs_hash_put(hs, hnode);
-                                cfs_cond_resched();
-                                count++;
+				rc = func(hs, &bd, hnode, data);
+				if (stop_on_change)
+					cfs_hash_put(hs, hnode);
+				cond_resched();
+				count++;
 
                                 cfs_hash_lock(hs, 0);
                                 cfs_hash_bd_lock(hs, &bd, 0);
@@ -1798,14 +1798,14 @@ cfs_hash_rehash_cancel_locked(cfs_hash_t *hs)
         }
 
         for (i = 2; cfs_hash_is_rehashing(hs); i++) {
-                cfs_hash_unlock(hs, 1);
-                /* raise console warning while waiting too long */
-                CDEBUG(IS_PO2(i >> 3) ? D_WARNING : D_INFO,
-                       "hash %s is still rehashing, rescheded %d\n",
-                       hs->hs_name, i - 1);
-                cfs_cond_resched();
-                cfs_hash_lock(hs, 1);
-        }
+		cfs_hash_unlock(hs, 1);
+		/* raise console warning while waiting too long */
+		CDEBUG(IS_PO2(i >> 3) ? D_WARNING : D_INFO,
+		       "hash %s is still rehashing, rescheded %d\n",
+		       hs->hs_name, i - 1);
+		cond_resched();
+		cfs_hash_lock(hs, 1);
+	}
 }
 EXPORT_SYMBOL(cfs_hash_rehash_cancel_locked);
 
@@ -1951,11 +1951,11 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
                         continue;
                 }
 
-                count = 0;
-                cfs_hash_unlock(hs, 1);
-                cfs_cond_resched();
-                cfs_hash_lock(hs, 1);
-        }
+		count = 0;
+		cfs_hash_unlock(hs, 1);
+		cond_resched();
+		cfs_hash_lock(hs, 1);
+	}
 
         hs->hs_rehash_count++;
 

@@ -116,7 +116,7 @@ struct lquota_slv_entry {
 	rwlock_t		lse_lock;
 
 	/* waiter for pending request done */
-	cfs_waitq_t		lse_waiters;
+	wait_queue_head_t	lse_waiters;
 
 	/* hint on current on-disk usage, in inodes or kbytes */
 	__u64			lse_usage;

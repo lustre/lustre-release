@@ -688,7 +688,7 @@ void qmt_id_lock_notify(struct qmt_device *qmt, struct lquota_entry *lqe)
 	spin_unlock(&qmt->qmt_reba_lock);
 
 	if (added)
-		cfs_waitq_signal(&qmt->qmt_reba_thread.t_ctl_waitq);
+		wake_up(&qmt->qmt_reba_thread.t_ctl_waitq);
 	else
 		lqe_putref(lqe);
 	EXIT;
@@ -726,7 +726,7 @@ static int qmt_reba_thread(void *arg)
 	}
 
 	thread_set_flags(thread, SVC_RUNNING);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	while (1) {
 		l_wait_event(thread->t_ctl_waitq,
@@ -753,7 +753,7 @@ static int qmt_reba_thread(void *arg)
 	lu_env_fini(env);
 	OBD_FREE_PTR(env);
 	thread_set_flags(thread, SVC_STOPPED);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	RETURN(rc);
 }
 
@@ -794,7 +794,7 @@ void qmt_stop_reba_thread(struct qmt_device *qmt)
 		struct l_wait_info lwi = { 0 };
 
 		thread_set_flags(thread, SVC_STOPPING);
-		cfs_waitq_signal(&thread->t_ctl_waitq);
+		wake_up(&thread->t_ctl_waitq);
 
 		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
 			     &lwi);

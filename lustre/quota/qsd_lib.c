@@ -247,7 +247,7 @@ static int qsd_conn_callback(void *data)
 	 * step 3) will have to wait for qsd_start() to be called */
 	for (type = USRQUOTA; type < MAXQUOTAS; type++) {
 		struct qsd_qtype_info *qqi = qsd->qsd_type_array[type];
-		cfs_waitq_signal(&qqi->qqi_reint_thread.t_ctl_waitq);
+		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
 	}
 
 	RETURN(0);
@@ -352,7 +352,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	qqi->qqi_glb_uptodate = false;
 	qqi->qqi_slv_uptodate = false;
 	qqi->qqi_reint        = false;
-	cfs_waitq_init(&qqi->qqi_reint_thread.t_ctl_waitq);
+	init_waitqueue_head(&qqi->qqi_reint_thread.t_ctl_waitq);
 	thread_set_flags(&qqi->qqi_reint_thread, SVC_STOPPED);
 	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
 	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
@@ -546,7 +546,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	rwlock_init(&qsd->qsd_lock);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_link);
 	thread_set_flags(&qsd->qsd_upd_thread, SVC_STOPPED);
-	cfs_waitq_init(&qsd->qsd_upd_thread.t_ctl_waitq);
+	init_waitqueue_head(&qsd->qsd_upd_thread.t_ctl_waitq);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_upd_list);
 	spin_lock_init(&qsd->qsd_adjust_lock);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_adjust_list);
@@ -762,7 +762,7 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 	 * up to usage; If usage < granted, release down to usage.  */
 	for (type = USRQUOTA; type < MAXQUOTAS; type++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[type];
-		cfs_waitq_signal(&qqi->qqi_reint_thread.t_ctl_waitq);
+		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
 	}
 
 	RETURN(rc);

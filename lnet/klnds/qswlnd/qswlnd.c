@@ -174,7 +174,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	/**********************************************************************/
 	/* flag threads to terminate, wake them and wait for them to die */
 	kqswnal_data.kqn_shuttingdown = 2;
-	cfs_waitq_broadcast (&kqswnal_data.kqn_sched_waitq);
+	wake_up_all (&kqswnal_data.kqn_sched_waitq);
 
 	while (cfs_atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
 		CDEBUG(D_NET, "waiting for %d threads to terminate\n",
@@ -307,7 +307,7 @@ kqswnal_startup (lnet_ni_t *ni)
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
 
 	spin_lock_init(&kqswnal_data.kqn_sched_lock);
-	cfs_waitq_init (&kqswnal_data.kqn_sched_waitq);
+	init_waitqueue_head (&kqswnal_data.kqn_sched_waitq);
 
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;

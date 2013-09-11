@@ -107,15 +107,15 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                        inode->i_ino, inode->i_generation);
                 cfs_list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
 
-                /* Avoid a concurrent insertion into the close thread queue:
-                 * an inode is already in the close thread, open(), write(),
-                 * close() happen, epoch is closed as the inode is marked as
-                 * LLIF_EPOCH_PENDING. When pages are written inode should not
-                 * be inserted into the queue again, clear this flag to avoid
-                 * it. */
-                lli->lli_flags &= ~LLIF_DONE_WRITING;
+		/* Avoid a concurrent insertion into the close thread queue:
+		 * an inode is already in the close thread, open(), write(),
+		 * close() happen, epoch is closed as the inode is marked as
+		 * LLIF_EPOCH_PENDING. When pages are written inode should not
+		 * be inserted into the queue again, clear this flag to avoid
+		 * it. */
+		lli->lli_flags &= ~LLIF_DONE_WRITING;
 
-                cfs_waitq_signal(&lcq->lcq_waitq);
+		wake_up(&lcq->lcq_waitq);
 		spin_unlock(&lcq->lcq_lock);
 	}
 	spin_unlock(&lli->lli_lock);
@@ -388,7 +388,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 
 	spin_lock_init(&lcq->lcq_lock);
 	CFS_INIT_LIST_HEAD(&lcq->lcq_head);
-	cfs_waitq_init(&lcq->lcq_waitq);
+	init_waitqueue_head(&lcq->lcq_waitq);
 	init_completion(&lcq->lcq_comp);
 
 	task = kthread_run(ll_close_thread, lcq, "ll_close");
@@ -406,7 +406,7 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq)
 {
 	init_completion(&lcq->lcq_comp);
 	cfs_atomic_inc(&lcq->lcq_stop);
-	cfs_waitq_signal(&lcq->lcq_waitq);
+	wake_up(&lcq->lcq_waitq);
 	wait_for_completion(&lcq->lcq_comp);
 	OBD_FREE(lcq, sizeof(*lcq));
 }

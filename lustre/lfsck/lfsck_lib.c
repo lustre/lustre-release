@@ -1061,7 +1061,7 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key, bool pause)
 	thread_set_flags(thread, SVC_STOPPING);
 	spin_unlock(&lfsck->li_lock);
 
-	cfs_waitq_broadcast(&thread->t_ctl_waitq);
+	wake_up_all(&thread->t_ctl_waitq);
 	l_wait_event(thread->t_ctl_waitq,
 		     thread_is_stopped(thread),
 		     &lwi);
@@ -1098,7 +1098,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	CFS_INIT_LIST_HEAD(&lfsck->li_list_double_scan);
 	CFS_INIT_LIST_HEAD(&lfsck->li_list_idle);
 	atomic_set(&lfsck->li_ref, 1);
-	cfs_waitq_init(&lfsck->li_thread.t_ctl_waitq);
+	init_waitqueue_head(&lfsck->li_thread.t_ctl_waitq);
 	lfsck->li_next = next;
 	lfsck->li_bottom = key;
 

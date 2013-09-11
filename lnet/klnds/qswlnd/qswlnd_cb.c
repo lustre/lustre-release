@@ -518,7 +518,7 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int status)
 
 	cfs_list_add_tail(&ktx->ktx_schedlist,
 			   &kqswnal_data.kqn_donetxds);
-	cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
+	wake_up(&kqswnal_data.kqn_sched_waitq);
 
 	spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
@@ -669,7 +669,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 
 		cfs_list_add_tail(&ktx->ktx_schedlist,
 				  &kqswnal_data.kqn_delayedtxds);
-		cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
+		wake_up(&kqswnal_data.kqn_sched_waitq);
 
 		spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                             flags);
@@ -1542,7 +1542,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
 	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
 	cfs_list_add_tail(&krx->krx_list, &kqswnal_data.kqn_readyrxds);
-	cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
+	wake_up(&kqswnal_data.kqn_sched_waitq);
 
 	spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
@@ -1764,15 +1764,15 @@ kqswnal_scheduler (void *arg)
 							kqn_donetxds) ||
 					!cfs_list_empty(&kqswnal_data. \
 							kqn_delayedtxds));
-                                LASSERT (rc == 0);
-                        } else if (need_resched())
-                                cfs_schedule ();
+				LASSERT (rc == 0);
+			} else if (need_resched())
+				schedule ();
 
 			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
-                                               flags);
-                }
-        }
+					       flags);
+		}
+	}
 
-        kqswnal_thread_fini ();
-        return (0);
+	kqswnal_thread_fini ();
+	return 0;
 }

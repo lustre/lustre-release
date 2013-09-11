@@ -753,7 +753,7 @@ static void add_hit(struct ksleep_chan *chan, event_t event)
 	}
 }
 
-void ksleep_wait(struct ksleep_chan *chan, cfs_task_state_t state)
+void ksleep_wait(struct ksleep_chan *chan, long state)
 {
 	event_t event;
 	int     result;
@@ -783,8 +783,8 @@ void ksleep_wait(struct ksleep_chan *chan, cfs_task_state_t state)
  * implemented), or waitq was already in the "signalled" state).
  */
 int64_t ksleep_timedwait(struct ksleep_chan *chan, 
-                         cfs_task_state_t state,
-                         __u64 timeout)
+			 long state,
+			 __u64 timeout)
 {
 	event_t event;
 

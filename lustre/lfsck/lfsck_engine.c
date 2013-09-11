@@ -323,7 +323,7 @@ int lfsck_master_engine(void *args)
 	spin_lock(&lfsck->li_lock);
 	thread_set_flags(thread, SVC_RUNNING);
 	spin_unlock(&lfsck->li_lock);
-	cfs_waitq_broadcast(&thread->t_ctl_waitq);
+	wake_up_all(&thread->t_ctl_waitq);
 
 	if (!cfs_list_empty(&lfsck->li_list_scan) ||
 	    cfs_list_empty(&lfsck->li_list_double_scan))
@@ -362,7 +362,7 @@ fini_env:
 noenv:
 	spin_lock(&lfsck->li_lock);
 	thread_set_flags(thread, SVC_STOPPED);
-	cfs_waitq_broadcast(&thread->t_ctl_waitq);
+	wake_up_all(&thread->t_ctl_waitq);
 	spin_unlock(&lfsck->li_lock);
 	return rc;
 }

@@ -459,7 +459,7 @@ struct osd_it_quota {
 #define MAX_BLOCKS_PER_PAGE (PAGE_CACHE_SIZE / 512)
 
 struct osd_iobuf {
-	cfs_waitq_t        dr_wait;
+	wait_queue_head_t  dr_wait;
 	cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
 	int                dr_max_pages;
 	int                dr_npages;

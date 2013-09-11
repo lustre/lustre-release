@@ -66,25 +66,25 @@ lstcon_rpc_done(srpc_client_rpc_t *rpc)
 		 * I'm just a poor body and nobody loves me */
 		spin_unlock(&rpc->crpc_lock);
 
-                /* release it */
-                lstcon_rpc_put(crpc);
-                return;
-        }
+		/* release it */
+		lstcon_rpc_put(crpc);
+		return;
+	}
 
-        /* not an orphan RPC */
-        crpc->crp_finished = 1;
+	/* not an orphan RPC */
+	crpc->crp_finished = 1;
 
-        if (crpc->crp_stamp == 0) {
-                /* not aborted */
-                LASSERT (crpc->crp_status == 0);
+	if (crpc->crp_stamp == 0) {
+		/* not aborted */
+		LASSERT (crpc->crp_status == 0);
 
-                crpc->crp_stamp  = cfs_time_current();
-                crpc->crp_status = rpc->crpc_status;
-        }
+		crpc->crp_stamp  = cfs_time_current();
+		crpc->crp_status = rpc->crpc_status;
+	}
 
-        /* wakeup (transaction)thread if I'm the last RPC in the transaction */
-        if (cfs_atomic_dec_and_test(&crpc->crp_trans->tas_remaining))
-                cfs_waitq_signal(&crpc->crp_trans->tas_waitq);
+	/* wakeup (transaction)thread if I'm the last RPC in the transaction */
+	if (cfs_atomic_dec_and_test(&crpc->crp_trans->tas_remaining))
+		wake_up(&crpc->crp_trans->tas_waitq);
 
 	spin_unlock(&rpc->crpc_lock);
 }
@@ -265,9 +265,9 @@ lstcon_rpc_trans_prep(cfs_list_t *translist,
 
         cfs_list_add_tail(&trans->tas_link, &console_session.ses_trans_list);
 
-        CFS_INIT_LIST_HEAD(&trans->tas_rpcs_list);
-        cfs_atomic_set(&trans->tas_remaining, 0);
-        cfs_waitq_init(&trans->tas_waitq);
+	CFS_INIT_LIST_HEAD(&trans->tas_rpcs_list);
+	cfs_atomic_set(&trans->tas_remaining, 0);
+	init_waitqueue_head(&trans->tas_waitq);
 
 	spin_lock(&console_session.ses_rpc_lock);
 	trans->tas_features = console_session.ses_features;
@@ -361,9 +361,9 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
 
 	mutex_unlock(&console_session.ses_mutex);
 
-        cfs_waitq_wait_event_interruptible_timeout(trans->tas_waitq,
-                                              lstcon_rpc_trans_check(trans),
-                                              cfs_time_seconds(timeout), rc);
+	rc = wait_event_interruptible_timeout(trans->tas_waitq,
+					      lstcon_rpc_trans_check(trans),
+					      cfs_time_seconds(timeout));
 
         rc = (rc > 0)? 0: ((rc < 0)? -EINTR: -ETIMEDOUT);
 
@@ -1354,11 +1354,11 @@ lstcon_rpc_cleanup_wait(void)
                         trans = cfs_list_entry(pacer, lstcon_rpc_trans_t,
                                                tas_link);
 
-                        CDEBUG(D_NET, "Session closed, wakeup transaction %s\n",
-                               lstcon_rpc_trans_name(trans->tas_opc));
+			CDEBUG(D_NET, "Session closed, wakeup transaction %s\n",
+			       lstcon_rpc_trans_name(trans->tas_opc));
 
-                        cfs_waitq_signal(&trans->tas_waitq);
-                }
+			wake_up(&trans->tas_waitq);
+		}
 
 		mutex_unlock(&console_session.ses_mutex);
 

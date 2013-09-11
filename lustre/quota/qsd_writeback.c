@@ -87,7 +87,7 @@ static void qsd_upd_add(struct qsd_instance *qsd, struct qsd_upd_rec *upd)
 	if (!qsd->qsd_stopping) {
 		list_add_tail(&upd->qur_link, &qsd->qsd_upd_list);
 		/* wake up the upd thread */
-		cfs_waitq_signal(&qsd->qsd_upd_thread.t_ctl_waitq);
+		wake_up(&qsd->qsd_upd_thread.t_ctl_waitq);
 	} else {
 		CWARN("%s: discard update.\n", qsd->qsd_svname);
 		if (upd->qur_lqe)
@@ -352,7 +352,7 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 	spin_unlock(&qsd->qsd_adjust_lock);
 
 	if (added)
-		cfs_waitq_signal(&qsd->qsd_upd_thread.t_ctl_waitq);
+		wake_up(&qsd->qsd_upd_thread.t_ctl_waitq);
 	else
 		lqe_putref(lqe);
 }
@@ -435,7 +435,7 @@ static int qsd_upd_thread(void *arg)
 	}
 
 	thread_set_flags(thread, SVC_RUNNING);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	CFS_INIT_LIST_HEAD(&queue);
 	lwi = LWI_TIMEOUT(cfs_time_seconds(QSD_WB_INTERVAL), NULL, NULL);
@@ -487,7 +487,7 @@ static int qsd_upd_thread(void *arg)
 	lu_env_fini(env);
 	OBD_FREE_PTR(env);
 	thread_set_flags(thread, SVC_STOPPED);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 	RETURN(rc);
 }
 
@@ -568,7 +568,7 @@ void qsd_stop_upd_thread(struct qsd_instance *qsd)
 
 	if (!thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
-		cfs_waitq_signal(&thread->t_ctl_waitq);
+		wake_up(&thread->t_ctl_waitq);
 
 		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
 			     &lwi);

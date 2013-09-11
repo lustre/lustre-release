@@ -179,8 +179,8 @@ EXPORT_SYMBOL(cl_page_lookup);
  * Return at least one page in @queue unless there is no covered page.
  */
 int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_io *io, pgoff_t start, pgoff_t end,
-                        cl_page_gang_cb_t cb, void *cbdata)
+			struct cl_io *io, pgoff_t start, pgoff_t end,
+			cl_page_gang_cb_t cb, void *cbdata)
 {
         struct cl_object_header *hdr;
         struct cl_page          *page;
@@ -256,13 +256,13 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                                    "gang_lookup", cfs_current());
                         cl_page_put(env, page);
                 }
-                if (nr < CLT_PVEC_SIZE || end_of_region)
-                        break;
+		if (nr < CLT_PVEC_SIZE || end_of_region)
+			break;
 
-                if (res == CLP_GANG_OKAY && cfs_need_resched())
-                        res = CLP_GANG_RESCHED;
-                if (res != CLP_GANG_OKAY)
-                        break;
+		if (res == CLP_GANG_OKAY && need_resched())
+			res = CLP_GANG_RESCHED;
+		if (res != CLP_GANG_OKAY)
+			break;
 
 		spin_lock(&hdr->coh_page_guard);
 		tree_lock = 1;
@@ -1475,36 +1475,36 @@ static int page_prune_cb(const struct lu_env *env, struct cl_io *io,
  */
 int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
 {
-        struct cl_thread_info   *info;
-        struct cl_object        *obj = cl_object_top(clobj);
-        struct cl_io            *io;
-        int                      result;
+	struct cl_thread_info   *info;
+	struct cl_object        *obj = cl_object_top(clobj);
+	struct cl_io            *io;
+	int                      result;
 
-        ENTRY;
-        info  = cl_env_info(env);
-        io    = &info->clt_io;
+	ENTRY;
+	info  = cl_env_info(env);
+	io    = &info->clt_io;
 
-        /*
-         * initialize the io. This is ugly since we never do IO in this
-         * function, we just make cl_page_list functions happy. -jay
-         */
-        io->ci_obj = obj;
+	/*
+	 * initialize the io. This is ugly since we never do IO in this
+	 * function, we just make cl_page_list functions happy. -jay
+	 */
+	io->ci_obj = obj;
 	io->ci_ignore_layout = 1;
-        result = cl_io_init(env, io, CIT_MISC, obj);
-        if (result != 0) {
-                cl_io_fini(env, io);
-                RETURN(io->ci_result);
-        }
+	result = cl_io_init(env, io, CIT_MISC, obj);
+	if (result != 0) {
+		cl_io_fini(env, io);
+		RETURN(io->ci_result);
+	}
 
-        do {
-                result = cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF,
-                                             page_prune_cb, NULL);
-                if (result == CLP_GANG_RESCHED)
-                        cfs_cond_resched();
-        } while (result != CLP_GANG_OKAY);
+	do {
+		result = cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF,
+					     page_prune_cb, NULL);
+		if (result == CLP_GANG_RESCHED)
+			cond_resched();
+	} while (result != CLP_GANG_OKAY);
 
-        cl_io_fini(env, io);
-        RETURN(result);
+	cl_io_fini(env, io);
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_pages_prune);
 

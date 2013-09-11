@@ -1681,7 +1681,7 @@ EXPORT_SYMBOL(cl_req_attr_set);
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages)
 {
 	ENTRY;
-	cfs_waitq_init(&anchor->csi_waitq);
+	init_waitqueue_head(&anchor->csi_waitq);
 	cfs_atomic_set(&anchor->csi_sync_nr, nrpages);
 	cfs_atomic_set(&anchor->csi_barrier, nrpages > 0);
 	anchor->csi_sync_rc = 0;
@@ -1751,7 +1751,7 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret)
          */
         LASSERT(cfs_atomic_read(&anchor->csi_sync_nr) > 0);
 	if (cfs_atomic_dec_and_test(&anchor->csi_sync_nr)) {
-		cfs_waitq_broadcast(&anchor->csi_waitq);
+		wake_up_all(&anchor->csi_waitq);
 		/* it's safe to nuke or reuse anchor now */
 		cfs_atomic_set(&anchor->csi_barrier, 0);
 	}

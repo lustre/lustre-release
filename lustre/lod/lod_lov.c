@@ -1063,7 +1063,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	OBD_ALLOC_PTR(lod->lod_qos.lq_statfs_data);
 	if (NULL == lod->lod_qos.lq_statfs_data)
 		RETURN(-ENOMEM);
-	cfs_waitq_init(&lod->lod_qos.lq_statfs_waitq);
+	init_waitqueue_head(&lod->lod_qos.lq_statfs_waitq);
 
 	/* Set up OST pool environment */
 	lod->lod_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,

@@ -342,13 +342,13 @@ int LL_PROC_PROTO(libcfs_force_lbug)
 
 int LL_PROC_PROTO(proc_fail_loc)
 {
-        int rc;
-        long old_fail_loc = cfs_fail_loc;
+	int rc;
+	long old_fail_loc = cfs_fail_loc;
 
-        rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
-        if (old_fail_loc != cfs_fail_loc)
-                cfs_waitq_signal(&cfs_race_waitq);
-        return rc;
+	rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
+	if (old_fail_loc != cfs_fail_loc)
+		wake_up(&cfs_race_waitq);
+	return rc;
 }
 
 static int __proc_cpt_table(void *data, int write,

@@ -103,17 +103,17 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
         cfs_hash_bd_get(site->ls_obj_hash, &top->loh_fid, &bd);
         bkt = cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
 
-        if (!cfs_hash_bd_dec_and_lock(site->ls_obj_hash, &bd, &top->loh_ref)) {
-                if (lu_object_is_dying(top)) {
+	if (!cfs_hash_bd_dec_and_lock(site->ls_obj_hash, &bd, &top->loh_ref)) {
+		if (lu_object_is_dying(top)) {
 
-                        /*
-                         * somebody may be waiting for this, currently only
-                         * used for cl_object, see cl_object_put_last().
-                         */
-                        cfs_waitq_broadcast(&bkt->lsb_marche_funebre);
-                }
-                return;
-        }
+			/*
+			 * somebody may be waiting for this, currently only
+			 * used for cl_object, see cl_object_put_last().
+			 */
+			wake_up_all(&bkt->lsb_marche_funebre);
+		}
+		return;
+	}
 
         LASSERT(bkt->lsb_busy > 0);
         bkt->lsb_busy--;
@@ -291,20 +291,20 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
          */
         CFS_INIT_LIST_HEAD(&splice);
         cfs_list_splice_init(layers, &splice);
-        while (!cfs_list_empty(&splice)) {
-                /*
-                 * Free layers in bottom-to-top order, so that object header
-                 * lives as long as possible and ->loo_object_free() methods
-                 * can look at its contents.
-                 */
-                o = container_of0(splice.prev, struct lu_object, lo_linkage);
-                cfs_list_del_init(&o->lo_linkage);
-                LASSERT(o->lo_ops->loo_object_free != NULL);
-                o->lo_ops->loo_object_free(env, o);
-        }
+	while (!cfs_list_empty(&splice)) {
+		/*
+		 * Free layers in bottom-to-top order, so that object header
+		 * lives as long as possible and ->loo_object_free() methods
+		 * can look at its contents.
+		 */
+		o = container_of0(splice.prev, struct lu_object, lo_linkage);
+		cfs_list_del_init(&o->lo_linkage);
+		LASSERT(o->lo_ops->loo_object_free != NULL);
+		o->lo_ops->loo_object_free(env, o);
+	}
 
-        if (cfs_waitq_active(&bkt->lsb_marche_funebre))
-                cfs_waitq_broadcast(&bkt->lsb_marche_funebre);
+	if (waitqueue_active(&bkt->lsb_marche_funebre))
+		wake_up_all(&bkt->lsb_marche_funebre);
 }
 
 /**
@@ -361,13 +361,13 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                         if (count > 0 && --count == 0)
                                 break;
 
-                }
-                cfs_hash_bd_unlock(s->ls_obj_hash, &bd, 1);
-                cfs_cond_resched();
-                /*
-                 * Free everything on the dispose list. This is safe against
-                 * races due to the reasons described in lu_object_put().
-                 */
+		}
+		cfs_hash_bd_unlock(s->ls_obj_hash, &bd, 1);
+		cond_resched();
+		/*
+		 * Free everything on the dispose list. This is safe against
+		 * races due to the reasons described in lu_object_put().
+		 */
                 while (!cfs_list_empty(&dispose)) {
                         h = container_of0(dispose.next,
                                           struct lu_object_header, loh_lru);
@@ -537,10 +537,10 @@ int lu_object_invariant(const struct lu_object *o)
 EXPORT_SYMBOL(lu_object_invariant);
 
 static struct lu_object *htable_lookup(struct lu_site *s,
-                                       cfs_hash_bd_t *bd,
-                                       const struct lu_fid *f,
-                                       cfs_waitlink_t *waiter,
-                                       __u64 *version)
+				       cfs_hash_bd_t *bd,
+				       const struct lu_fid *f,
+				       wait_queue_t *waiter,
+				       __u64 *version)
 {
         struct lu_site_bkt_data *bkt;
         struct lu_object_header *h;
@@ -574,11 +574,11 @@ static struct lu_object *htable_lookup(struct lu_site *s,
          * drained), and moreover, lookup has to wait until object is freed.
          */
 
-        cfs_waitlink_init(waiter);
-        cfs_waitq_add(&bkt->lsb_marche_funebre, waiter);
-        cfs_set_current_state(CFS_TASK_UNINT);
-        lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
-        return ERR_PTR(-EAGAIN);
+	init_waitqueue_entry_current(waiter);
+	add_wait_queue(&bkt->lsb_marche_funebre, waiter);
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
+	return ERR_PTR(-EAGAIN);
 }
 
 static struct lu_object *htable_lookup_nowait(struct lu_site *s,
@@ -646,17 +646,17 @@ static struct lu_object *lu_object_new(const struct lu_env *env,
  * Core logic of lu_object_find*() functions.
  */
 static struct lu_object *lu_object_find_try(const struct lu_env *env,
-                                            struct lu_device *dev,
-                                            const struct lu_fid *f,
-                                            const struct lu_object_conf *conf,
-                                            cfs_waitlink_t *waiter)
+					    struct lu_device *dev,
+					    const struct lu_fid *f,
+					    const struct lu_object_conf *conf,
+					    wait_queue_t *waiter)
 {
-        struct lu_object      *o;
-        struct lu_object      *shadow;
-        struct lu_site        *s;
-        cfs_hash_t            *hs;
-        cfs_hash_bd_t          bd;
-        __u64                  version = 0;
+	struct lu_object      *o;
+	struct lu_object      *shadow;
+	struct lu_site        *s;
+	cfs_hash_t            *hs;
+	cfs_hash_bd_t          bd;
+	__u64                  version = 0;
 
         /*
          * This uses standard index maintenance protocol:
@@ -724,26 +724,26 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
  * objects of different "stacking" to be created within the same site.
  */
 struct lu_object *lu_object_find_at(const struct lu_env *env,
-                                    struct lu_device *dev,
-                                    const struct lu_fid *f,
-                                    const struct lu_object_conf *conf)
+				    struct lu_device *dev,
+				    const struct lu_fid *f,
+				    const struct lu_object_conf *conf)
 {
-        struct lu_site_bkt_data *bkt;
-        struct lu_object        *obj;
-        cfs_waitlink_t           wait;
+	struct lu_site_bkt_data *bkt;
+	struct lu_object        *obj;
+	wait_queue_t           wait;
 
-        while (1) {
-                obj = lu_object_find_try(env, dev, f, conf, &wait);
-                if (obj != ERR_PTR(-EAGAIN))
-                        return obj;
-                /*
-                 * lu_object_find_try() already added waiter into the
-                 * wait queue.
-                 */
-                cfs_waitq_wait(&wait, CFS_TASK_UNINT);
-                bkt = lu_site_bkt_from_fid(dev->ld_site, (void *)f);
-                cfs_waitq_del(&bkt->lsb_marche_funebre, &wait);
-        }
+	while (1) {
+		obj = lu_object_find_try(env, dev, f, conf, &wait);
+		if (obj != ERR_PTR(-EAGAIN))
+			return obj;
+		/*
+		 * lu_object_find_try() already added waiter into the
+		 * wait queue.
+		 */
+		waitq_wait(&wait, TASK_UNINTERRUPTIBLE);
+		bkt = lu_site_bkt_from_fid(dev->ld_site, (void *)f);
+		remove_wait_queue(&bkt->lsb_marche_funebre, &wait);
+	}
 }
 EXPORT_SYMBOL(lu_object_find_at);
 
@@ -1063,11 +1063,11 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
                 return -ENOMEM;
         }
 
-        cfs_hash_for_each_bucket(s->ls_obj_hash, &bd, i) {
-                bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, &bd);
-                CFS_INIT_LIST_HEAD(&bkt->lsb_lru);
-                cfs_waitq_init(&bkt->lsb_marche_funebre);
-        }
+	cfs_hash_for_each_bucket(s->ls_obj_hash, &bd, i) {
+		bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, &bd);
+		CFS_INIT_LIST_HEAD(&bkt->lsb_lru);
+		init_waitqueue_head(&bkt->lsb_marche_funebre);
+	}
 
         s->ls_stats = lprocfs_alloc_stats(LU_SS_LAST_STAT, 0);
         if (s->ls_stats == NULL) {
@@ -2159,7 +2159,7 @@ void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
 	struct lu_fid		*old = &o->lo_header->loh_fid;
 	struct lu_site_bkt_data	*bkt;
 	struct lu_object	*shadow;
-	cfs_waitlink_t		 waiter;
+	wait_queue_t		 waiter;
 	cfs_hash_t		*hs;
 	cfs_hash_bd_t		 bd;
 	__u64			 version = 0;

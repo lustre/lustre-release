@@ -78,25 +78,39 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 typedef struct cfs_waitlink {
         cfs_list_t sleeping;
         void *process;
-} cfs_waitlink_t;
+} wait_queue_t;
 
 typedef struct cfs_waitq {
         cfs_list_t sleepers;
-} cfs_waitq_t;
+} wait_queue_head_t;
 
-#define CFS_DECL_WAITQ(wq) cfs_waitq_t wq
+#define CFS_DECL_WAITQ(wq) wait_queue_head_t wq
+void init_waitqueue_head(struct cfs_waitq *waitq);
+void init_waitqueue_entry_current(struct cfs_waitlink *link);
+void add_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+void add_wait_queue_exclusive(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+void add_wait_queue_exclusive_head(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+void remove_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link);
+int waitqueue_active(struct cfs_waitq *waitq);
+void wake_up(struct cfs_waitq *waitq);
+void wake_up_nr(struct cfs_waitq *waitq, int nr);
+void wake_up_all(struct cfs_waitq *waitq);
+void waitq_wait(struct cfs_waitlink *link, long state);
+int64_t waitq_timedwait(struct cfs_waitlink *link, long state, int64_t timeout);
+void schedule_timeout_and_set_state(long state, int64_t timeout);
+void cfs_pause(cfs_duration_t d);
+int need_resched(void);
+void cond_resched(void);
 
 /*
  * Task states
  */
-typedef long cfs_task_state_t;
+#define TASK_INTERRUPTIBLE  (0)
+#define TASK_UNINTERRUPTIBLE          (1)
+#define TASK_RUNNING        (2)
 
-#define CFS_TASK_INTERRUPTIBLE  (0)
-#define CFS_TASK_UNINT          (1)
-#define CFS_TASK_RUNNING        (2)
-
-static inline void cfs_schedule(void)			{}
-static inline void cfs_schedule_timeout(int64_t t)	{}
+static inline void schedule(void)			{}
+static inline void schedule_timeout(int64_t t)	{}
 
 /*
  * Lproc

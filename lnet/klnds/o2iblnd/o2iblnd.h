@@ -378,7 +378,7 @@ struct kib_sched_info {
 	/* serialise */
 	spinlock_t		ibs_lock;
 	/* schedulers sleep here */
-	cfs_waitq_t		ibs_waitq;
+	wait_queue_head_t		ibs_waitq;
 	/* conns to check for rx completions */
 	cfs_list_t		ibs_conns;
 	/* number of scheduler threads */
@@ -396,7 +396,7 @@ typedef struct
 	/* list head of failed devices */
 	cfs_list_t		kib_failed_devs;
 	/* schedulers sleep here */
-	cfs_waitq_t		kib_failover_waitq;
+	wait_queue_head_t		kib_failover_waitq;
 	cfs_atomic_t		kib_nthreads;	/* # live threads */
 	/* stabilize net/dev/peer/conn ops */
 	rwlock_t		kib_global_lock;
@@ -411,7 +411,7 @@ typedef struct
 	/* connections with zero refcount */
 	cfs_list_t		kib_connd_zombies;
 	/* connection daemon sleeps here */
-	cfs_waitq_t		kib_connd_waitq;
+	wait_queue_head_t		kib_connd_waitq;
 	spinlock_t		kib_connd_lock;	/* serialise */
 	struct ib_qp_attr	kib_error_qpa;	/* QP->ERROR */
 	/* percpt data for schedulers */
@@ -713,7 +713,7 @@ do {									\
 		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);	\
 		cfs_list_add_tail(&(conn)->ibc_list,			\
 				  &kiblnd_data.kib_connd_zombies);	\
-		cfs_waitq_signal(&kiblnd_data.kib_connd_waitq);		\
+		wake_up(&kiblnd_data.kib_connd_waitq);		\
 		spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);\
 	}								\
 } while (0)

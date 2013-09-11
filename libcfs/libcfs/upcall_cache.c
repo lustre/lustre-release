@@ -50,14 +50,14 @@ static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
         if (!entry)
                 return NULL;
 
-        UC_CACHE_SET_NEW(entry);
-        CFS_INIT_LIST_HEAD(&entry->ue_hash);
-        entry->ue_key = key;
-        cfs_atomic_set(&entry->ue_refcount, 0);
-        cfs_waitq_init(&entry->ue_waitq);
-        if (cache->uc_ops->init_entry)
-                cache->uc_ops->init_entry(entry, args);
-        return entry;
+	UC_CACHE_SET_NEW(entry);
+	CFS_INIT_LIST_HEAD(&entry->ue_hash);
+	entry->ue_key = key;
+	cfs_atomic_set(&entry->ue_refcount, 0);
+	init_waitqueue_head(&entry->ue_waitq);
+	if (cache->uc_ops->init_entry)
+		cache->uc_ops->init_entry(entry, args);
+	return entry;
 }
 
 /* protected by cache lock */
@@ -126,11 +126,11 @@ static int check_unlink_entry(struct upcall_cache *cache,
                                     entry->ue_acquire_expire))
                         return 0;
 
-                UC_CACHE_SET_EXPIRED(entry);
-                cfs_waitq_broadcast(&entry->ue_waitq);
-        } else if (!UC_CACHE_IS_INVALID(entry)) {
-                UC_CACHE_SET_EXPIRED(entry);
-        }
+		UC_CACHE_SET_EXPIRED(entry);
+		wake_up_all(&entry->ue_waitq);
+	} else if (!UC_CACHE_IS_INVALID(entry)) {
+		UC_CACHE_SET_EXPIRED(entry);
+	}
 
         cfs_list_del_init(&entry->ue_hash);
         if (!cfs_atomic_read(&entry->ue_refcount))
@@ -148,11 +148,11 @@ static inline int refresh_entry(struct upcall_cache *cache,
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
                                                   __u64 key, void *args)
 {
-        struct upcall_cache_entry *entry = NULL, *new = NULL, *next;
-        cfs_list_t *head;
-        cfs_waitlink_t wait;
-        int rc, found;
-        ENTRY;
+	struct upcall_cache_entry *entry = NULL, *new = NULL, *next;
+	cfs_list_t *head;
+	wait_queue_t wait;
+	int rc, found;
+	ENTRY;
 
         LASSERT(cache);
 
@@ -202,13 +202,13 @@ find_again:
                 entry->ue_acquire_expire =
                         cfs_time_shift(cache->uc_acquire_expire);
                 if (rc < 0) {
-                        UC_CACHE_CLEAR_ACQUIRING(entry);
-                        UC_CACHE_SET_INVALID(entry);
-                        cfs_waitq_broadcast(&entry->ue_waitq);
-                        if (unlikely(rc == -EREMCHG)) {
-                                put_entry(cache, entry);
-                                GOTO(out, entry = ERR_PTR(rc));
-                        }
+			UC_CACHE_CLEAR_ACQUIRING(entry);
+			UC_CACHE_SET_INVALID(entry);
+			wake_up_all(&entry->ue_waitq);
+			if (unlikely(rc == -EREMCHG)) {
+				put_entry(cache, entry);
+				GOTO(out, entry = ERR_PTR(rc));
+			}
                 }
         }
         /* someone (and only one) is doing upcall upon this item,
@@ -216,27 +216,27 @@ find_again:
         if (UC_CACHE_IS_ACQUIRING(entry)) {
                 long expiry = (entry == new) ?
                               cfs_time_seconds(cache->uc_acquire_expire) :
-                              CFS_MAX_SCHEDULE_TIMEOUT;
-                long left;
+			      MAX_SCHEDULE_TIMEOUT;
+		long left;
 
-                cfs_waitlink_init(&wait);
-                cfs_waitq_add(&entry->ue_waitq, &wait);
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+		init_waitqueue_entry_current(&wait);
+		add_wait_queue(&entry->ue_waitq, &wait);
+		set_current_state(TASK_INTERRUPTIBLE);
 		spin_unlock(&cache->uc_lock);
 
-		left = cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE,
+		left = waitq_timedwait(&wait, TASK_INTERRUPTIBLE,
 					   expiry);
 
 		spin_lock(&cache->uc_lock);
-                cfs_waitq_del(&entry->ue_waitq, &wait);
-                if (UC_CACHE_IS_ACQUIRING(entry)) {
-                        /* we're interrupted or upcall failed in the middle */
-                        rc = left > 0 ? -EINTR : -ETIMEDOUT;
-                        CERROR("acquire for key "LPU64": error %d\n",
-                               entry->ue_key, rc);
-                        put_entry(cache, entry);
-                        GOTO(out, entry = ERR_PTR(rc));
-                }
+		remove_wait_queue(&entry->ue_waitq, &wait);
+		if (UC_CACHE_IS_ACQUIRING(entry)) {
+			/* we're interrupted or upcall failed in the middle */
+			rc = left > 0 ? -EINTR : -ETIMEDOUT;
+			CERROR("acquire for key "LPU64": error %d\n",
+			       entry->ue_key, rc);
+			put_entry(cache, entry);
+			GOTO(out, entry = ERR_PTR(rc));
+		}
         }
 
         /* invalid means error, don't need to try again */
@@ -353,7 +353,7 @@ out:
         }
         UC_CACHE_CLEAR_ACQUIRING(entry);
 	spin_unlock(&cache->uc_lock);
-	cfs_waitq_broadcast(&entry->ue_waitq);
+	wake_up_all(&entry->ue_waitq);
 	put_entry(cache, entry);
 
 	RETURN(rc);

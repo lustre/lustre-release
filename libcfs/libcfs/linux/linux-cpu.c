@@ -630,7 +630,7 @@ cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 		rc = set_cpus_allowed_ptr(cfs_current(), cpumask);
 		set_mems_allowed(*nodemask);
 		if (rc == 0)
-			cfs_schedule(); /* switch to allowed CPU */
+			schedule(); /* switch to allowed CPU */
 
 		return rc;
 	}

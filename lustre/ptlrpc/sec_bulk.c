@@ -80,13 +80,13 @@ static struct ptlrpc_enc_page_pool {
         unsigned long    epp_max_pages;   /* maximum pages can hold, const */
         unsigned int     epp_max_pools;   /* number of pools, const */
 
-        /*
-         * wait queue in case of not enough free pages.
-         */
-        cfs_waitq_t      epp_waitq;       /* waiting threads */
-        unsigned int     epp_waitqlen;    /* wait queue length */
-        unsigned long    epp_pages_short; /* # of pages wanted of in-q users */
-        unsigned int     epp_growing:1;   /* during adding pages */
+	/*
+	 * wait queue in case of not enough free pages.
+	 */
+	wait_queue_head_t    epp_waitq;       /* waiting threads */
+	unsigned int     epp_waitqlen;    /* wait queue length */
+	unsigned long    epp_pages_short; /* # of pages wanted of in-q users */
+	unsigned int     epp_growing:1;   /* during adding pages */
 
         /*
          * indicating how idle the pools are, from 0 to MAX_IDLE_IDX
@@ -452,8 +452,8 @@ static inline void enc_pools_wakeup(void)
 	LASSERT(spin_is_locked(&page_pools.epp_lock));
 
 	if (unlikely(page_pools.epp_waitqlen)) {
-		LASSERT(cfs_waitq_active(&page_pools.epp_waitq));
-		cfs_waitq_broadcast(&page_pools.epp_waitq);
+		LASSERT(waitqueue_active(&page_pools.epp_waitq));
+		wake_up_all(&page_pools.epp_waitq);
 	}
 }
 
@@ -494,72 +494,72 @@ static int enc_pools_should_grow(int page_needed, long now)
  */
 int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
 {
-        cfs_waitlink_t  waitlink;
-        unsigned long   this_idle = -1;
-        cfs_time_t      tick = 0;
-        long            now;
-        int             p_idx, g_idx;
-        int             i;
+	wait_queue_t  waitlink;
+	unsigned long   this_idle = -1;
+	cfs_time_t      tick = 0;
+	long            now;
+	int             p_idx, g_idx;
+	int             i;
 
-        LASSERT(desc->bd_iov_count > 0);
-        LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
+	LASSERT(desc->bd_iov_count > 0);
+	LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
 
-        /* resent bulk, enc iov might have been allocated previously */
-        if (desc->bd_enc_iov != NULL)
-                return 0;
+	/* resent bulk, enc iov might have been allocated previously */
+	if (desc->bd_enc_iov != NULL)
+		return 0;
 
-        OBD_ALLOC(desc->bd_enc_iov,
-                  desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
-        if (desc->bd_enc_iov == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(desc->bd_enc_iov,
+		  desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
+	if (desc->bd_enc_iov == NULL)
+		return -ENOMEM;
 
 	spin_lock(&page_pools.epp_lock);
 
-        page_pools.epp_st_access++;
+	page_pools.epp_st_access++;
 again:
-        if (unlikely(page_pools.epp_free_pages < desc->bd_iov_count)) {
-                if (tick == 0)
-                        tick = cfs_time_current();
+	if (unlikely(page_pools.epp_free_pages < desc->bd_iov_count)) {
+		if (tick == 0)
+			tick = cfs_time_current();
 
-                now = cfs_time_current_sec();
+		now = cfs_time_current_sec();
 
-                page_pools.epp_st_missings++;
-                page_pools.epp_pages_short += desc->bd_iov_count;
+		page_pools.epp_st_missings++;
+		page_pools.epp_pages_short += desc->bd_iov_count;
 
-                if (enc_pools_should_grow(desc->bd_iov_count, now)) {
-                        page_pools.epp_growing = 1;
+		if (enc_pools_should_grow(desc->bd_iov_count, now)) {
+			page_pools.epp_growing = 1;
 
 			spin_unlock(&page_pools.epp_lock);
 			enc_pools_add_pages(page_pools.epp_pages_short / 2);
 			spin_lock(&page_pools.epp_lock);
 
-                        page_pools.epp_growing = 0;
+			page_pools.epp_growing = 0;
 
-                        enc_pools_wakeup();
-                } else {
-                        if (++page_pools.epp_waitqlen >
-                            page_pools.epp_st_max_wqlen)
-                                page_pools.epp_st_max_wqlen =
-                                                page_pools.epp_waitqlen;
+			enc_pools_wakeup();
+		} else {
+			if (++page_pools.epp_waitqlen >
+			    page_pools.epp_st_max_wqlen)
+				page_pools.epp_st_max_wqlen =
+						page_pools.epp_waitqlen;
 
-                        cfs_set_current_state(CFS_TASK_UNINT);
-                        cfs_waitlink_init(&waitlink);
-                        cfs_waitq_add(&page_pools.epp_waitq, &waitlink);
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			init_waitqueue_entry_current(&waitlink);
+			add_wait_queue(&page_pools.epp_waitq, &waitlink);
 
 			spin_unlock(&page_pools.epp_lock);
-			cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
-			cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
+			waitq_wait(&waitlink, TASK_UNINTERRUPTIBLE);
+			remove_wait_queue(&page_pools.epp_waitq, &waitlink);
 			LASSERT(page_pools.epp_waitqlen > 0);
 			spin_lock(&page_pools.epp_lock);
-                        page_pools.epp_waitqlen--;
-                }
+			page_pools.epp_waitqlen--;
+		}
 
-                LASSERT(page_pools.epp_pages_short >= desc->bd_iov_count);
-                page_pools.epp_pages_short -= desc->bd_iov_count;
+		LASSERT(page_pools.epp_pages_short >= desc->bd_iov_count);
+		page_pools.epp_pages_short -= desc->bd_iov_count;
 
-                this_idle = 0;
-                goto again;
-        }
+		this_idle = 0;
+		goto again;
+	}
 
         /* record max wait time */
         if (unlikely(tick != 0)) {
@@ -707,16 +707,16 @@ static inline void enc_pools_free(void)
 
 int sptlrpc_enc_pool_init(void)
 {
-        /*
-         * maximum capacity is 1/8 of total physical memory.
-         * is the 1/8 a good number?
-         */
+	/*
+	 * maximum capacity is 1/8 of total physical memory.
+	 * is the 1/8 a good number?
+	 */
 	page_pools.epp_max_pages = num_physpages / 8;
-        page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);
+	page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);
 
-        cfs_waitq_init(&page_pools.epp_waitq);
-        page_pools.epp_waitqlen = 0;
-        page_pools.epp_pages_short = 0;
+	init_waitqueue_head(&page_pools.epp_waitq);
+	page_pools.epp_waitqlen = 0;
+	page_pools.epp_pages_short = 0;
 
         page_pools.epp_growing = 0;
 

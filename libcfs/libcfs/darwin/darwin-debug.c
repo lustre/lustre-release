@@ -50,13 +50,13 @@ void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
 
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
-        libcfs_catastrophe = 1;
-        CEMERG("LBUG: pid: %u thread: %#x\n",
+	libcfs_catastrophe = 1;
+	CEMERG("LBUG: pid: %u thread: %#x\n",
 	       (unsigned)current_pid(), (unsigned)current_thread());
-        libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(msgdata);
-        while (1)
-                cfs_schedule();
+	libcfs_debug_dumplog();
+	libcfs_run_lbug_upcall(msgdata);
+	while (1)
+		schedule();
 
 	/* panic("lbug_with_loc(%s, %s, %d)", file, func, line) */
 }

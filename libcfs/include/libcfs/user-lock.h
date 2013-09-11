@@ -157,7 +157,7 @@ struct completion {
 
 struct completion {
 	unsigned int	done;
-	cfs_waitq_t	wait;
+	wait_queue_head_t	wait;
 };
 #endif /* HAVE_LIBPTHREAD */
 

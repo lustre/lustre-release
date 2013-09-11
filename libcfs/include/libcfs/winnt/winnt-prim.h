@@ -374,12 +374,10 @@ size_t lustre_write_file(struct file *fh, loff_t off, size_t size, char *buf);
  */
 
 
-typedef int cfs_task_state_t;
-
-#define CFS_TASK_INTERRUPTIBLE	 0x00000001
-#define CFS_TASK_UNINT	         0x00000002
-#define CFS_TASK_RUNNING         0x00000003
-#define CFS_TASK_UNINTERRUPTIBLE CFS_TASK_UNINT
+#define TASK_INTERRUPTIBLE	 0x00000001
+#define TASK_UNINTERRUPTIBLE	         0x00000002
+#define TASK_RUNNING         0x00000003
+#define CFS_TASK_UNINTERRUPTIBLE TASK_UNINTERRUPTIBLE
 
 #define CFS_WAITQ_MAGIC     'CWQM'
 #define CFS_WAITLINK_MAGIC  'CWLM'
@@ -391,10 +389,10 @@ typedef struct cfs_waitq {
 	spinlock_t		guard;
 	cfs_list_t		waiters;
 
-} cfs_waitq_t;
+} wait_queue_head_t;
 
 
-typedef struct cfs_waitlink cfs_waitlink_t;
+typedef struct cfs_waitlink wait_queue_t;
 
 #define CFS_WAITQ_CHANNELS     (2)
 
@@ -405,8 +403,8 @@ typedef struct cfs_waitlink cfs_waitlink_t;
 
 typedef struct cfs_waitlink_channel {
     cfs_list_t              link;
-    cfs_waitq_t *           waitq;
-    cfs_waitlink_t *        waitl;
+    wait_queue_head_t *           waitq;
+    wait_queue_t *        waitl;
 } cfs_waitlink_channel_t;
 
 struct cfs_waitlink {
@@ -423,7 +421,7 @@ enum {
 	CFS_WAITQ_EXCLUSIVE = 1
 };
 
-#define CFS_DECL_WAITQ(name) cfs_waitq_t name
+#define CFS_DECL_WAITQ(name) wait_queue_head_t name
 
 /* Kernel thread */
 
@@ -540,8 +538,8 @@ typedef __u32 kernel_cap_t;
  * Task struct
  */
 
-#define CFS_MAX_SCHEDULE_TIMEOUT     ((long_ptr_t)(~0UL>>12))
-#define cfs_schedule_timeout(t)      cfs_schedule_timeout_and_set_state(0, t)
+#define MAX_SCHEDULE_TIMEOUT     ((long_ptr_t)(~0UL>>12))
+#define schedule_timeout(t)      schedule_timeout_and_set_state(0, t)
 
 struct vfsmount;
 
@@ -621,40 +619,39 @@ typedef struct _TASK_SLOT {
 
 
 #define current                      cfs_current()
-#define cfs_set_current_state(s)     do {;} while (0)
-#define cfs_set_current_state(state) cfs_set_current_state(state)
+#define set_current_state(s)     do {;} while (0)
 
-#define cfs_wait_event(wq, condition)                           \
+#define wait_event(wq, condition)                           \
 do {                                                            \
-        cfs_waitlink_t __wait;                                  \
-                                                                \
-        cfs_waitlink_init(&__wait);                             \
-        while (TRUE) {                                          \
-            cfs_waitq_add(&wq, &__wait);                        \
-            if (condition) {                                    \
-                break;                                          \
-            }                                                   \
-            cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);    \
-            cfs_waitq_del(&wq, &__wait);	                \
-        }					                \
-        cfs_waitq_del(&wq, &__wait);		                \
+	wait_queue_t __wait;                                    \
+								\
+	init_waitqueue_entry_current(&__wait);                  \
+	while (TRUE) {                                          \
+	    add_wait_queue(&wq, &__wait);                        \
+	    if (condition) {                                    \
+		break;                                          \
+	    }                                                   \
+	    waitq_wait(&__wait, TASK_INTERRUPTIBLE);    	\
+	    remove_wait_queue(&wq, &__wait);	                \
+	}					                \
+	remove_wait_queue(&wq, &__wait);		        \
 } while(0)
 
 #define wait_event_interruptible(wq, condition)                 \
 {                                                               \
-	cfs_waitlink_t __wait;	                                \
+	wait_queue_t __wait;	                                \
 								\
 	__ret = 0;                                              \
-	cfs_waitlink_init(&__wait);                             \
+	init_waitqueue_entry_current(&__wait);                             \
 	while (TRUE) {                                          \
-		cfs_waitq_add(&wq, &__wait);	                \
+		add_wait_queue(&wq, &__wait);	                \
 		if (condition) {                                \
 			break;                                  \
 		}                                               \
-		cfs_waitq_wait(&__wait, CFS_TASK_INTERRUPTIBLE);\
-		cfs_waitq_del(&wq, &__wait);	                \
+		waitq_wait(&__wait, TASK_INTERRUPTIBLE);\
+		remove_wait_queue(&wq, &__wait);	                \
 	}                                                       \
-	cfs_waitq_del(&wq, &__wait);                            \
+	remove_wait_queue(&wq, &__wait);                            \
 	__ret;                                                  \
 }
 
@@ -667,37 +664,30 @@ do {                                                            \
    retval > 0; timed out.
 */
 
-#define cfs_waitq_wait_event_interruptible_timeout(             \
-                        wq, condition, timeout, rc)             \
+#define wait_event_interruptible_timeout(wq, condition, timeout)\
 do {                                                            \
-        cfs_waitlink_t __wait;                                  \
-                                                                \
-        rc = 0;                                                 \
-        cfs_waitlink_init(&__wait);	                        \
-        while (TRUE) {                                          \
-            cfs_waitq_add(&wq, &__wait);                        \
-            if (condition) {                                    \
-                break;                                          \
-            }                                                   \
-            if (cfs_waitq_timedwait(&__wait,                    \
-                CFS_TASK_INTERRUPTIBLE, timeout) == 0) {        \
-                rc = TRUE;                                      \
-                break;                                          \
-            }                                                   \
-            cfs_waitq_del(&wq, &__wait);	                \
-        }					                \
-        cfs_waitq_del(&wq, &__wait);		                \
+	wait_queue_t __wait;                                    \
+								\
+	init_waitqueue_entry_current(&__wait);	                \
+	while (TRUE) {                                          \
+	    add_wait_queue(&wq, &__wait);                       \
+	    if (condition) {                                    \
+		break;                                          \
+	    }                                                   \
+	    if (waitq_timedwait(&__wait,                    	\
+		TASK_INTERRUPTIBLE, timeout) == 0) {        	\
+		break;                                          \
+	    }                                                   \
+	    remove_wait_queue(&wq, &__wait);	                \
+	}					                \
+	remove_wait_queue(&wq, &__wait);		        \
 } while(0)
-
-
-#define cfs_waitq_wait_event_timeout                            \
-        cfs_waitq_wait_event_interruptible_timeout
 
 int     init_task_manager();
 void    cleanup_task_manager();
 cfs_task_t * cfs_current();
 int     wake_up_process(cfs_task_t * task);
-void sleep_on(cfs_waitq_t *waitq);
+void sleep_on(wait_queue_head_t *waitq);
 #define cfs_might_sleep() do {} while(0)
 #define CFS_DECL_JOURNAL_DATA	
 #define CFS_PUSH_JOURNAL	    do {;} while(0)

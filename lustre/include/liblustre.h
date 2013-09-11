@@ -280,7 +280,7 @@ typedef struct task_struct cfs_task_t;
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
 
-#define cfs_set_current_state(foo) do { current->state = foo; } while (0)
+#define set_current_state(foo) do { current->state = foo; } while (0)
 
 #define wait_event_interruptible(wq, condition)                         \
 {                                                                       \
@@ -378,10 +378,10 @@ struct file_lock {
         struct file_lock *fl_next;  /* singly linked list for this inode  */
         cfs_list_t fl_link;   /* doubly linked list of all locks */
         cfs_list_t fl_block;  /* circular list of blocked processes */
-        void *fl_owner;
-        unsigned int fl_pid;
-        cfs_waitq_t fl_wait;
-        struct file *fl_file;
+	void *fl_owner;
+	unsigned int fl_pid;
+	wait_queue_head_t fl_wait;
+	struct file *fl_file;
         unsigned char fl_flags;
         unsigned char fl_type;
         loff_t fl_start;

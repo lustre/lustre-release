@@ -460,9 +460,9 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
         for (;;) {
 #ifdef __KERNEL__
 		/* The wq argument is ignored by user-space wait_event macros */
-		cfs_waitq_t *wq = (req->rq_set != NULL) ?
-				  &req->rq_set->set_waitq :
-				  &req->rq_reply_waitq;
+		wait_queue_head_t *wq = (req->rq_set != NULL) ?
+					&req->rq_set->set_waitq :
+					&req->rq_reply_waitq;
 #endif
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */

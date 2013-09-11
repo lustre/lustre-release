@@ -238,45 +238,45 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 }
 
 static int seq_fid_alloc_prep(struct lu_client_seq *seq,
-                              cfs_waitlink_t *link)
+			      wait_queue_t *link)
 {
-        if (seq->lcs_update) {
-                cfs_waitq_add(&seq->lcs_waitq, link);
-                cfs_set_current_state(CFS_TASK_UNINT);
+	if (seq->lcs_update) {
+		add_wait_queue(&seq->lcs_waitq, link);
+		set_current_state(TASK_UNINTERRUPTIBLE);
 		mutex_unlock(&seq->lcs_mutex);
 
-                cfs_waitq_wait(link, CFS_TASK_UNINT);
+		waitq_wait(link, TASK_UNINTERRUPTIBLE);
 
 		mutex_lock(&seq->lcs_mutex);
-                cfs_waitq_del(&seq->lcs_waitq, link);
-                cfs_set_current_state(CFS_TASK_RUNNING);
-                return -EAGAIN;
-        }
-        ++seq->lcs_update;
+		remove_wait_queue(&seq->lcs_waitq, link);
+		set_current_state(TASK_RUNNING);
+		return -EAGAIN;
+	}
+	++seq->lcs_update;
 	mutex_unlock(&seq->lcs_mutex);
-        return 0;
+	return 0;
 }
 
 static void seq_fid_alloc_fini(struct lu_client_seq *seq)
 {
-        LASSERT(seq->lcs_update == 1);
+	LASSERT(seq->lcs_update == 1);
 	mutex_lock(&seq->lcs_mutex);
-        --seq->lcs_update;
-        cfs_waitq_signal(&seq->lcs_waitq);
+	--seq->lcs_update;
+	wake_up(&seq->lcs_waitq);
 }
 
 /**
  * Allocate the whole seq to the caller.
  **/
 int seq_client_get_seq(const struct lu_env *env,
-                       struct lu_client_seq *seq, seqno_t *seqnr)
+		       struct lu_client_seq *seq, seqno_t *seqnr)
 {
-        cfs_waitlink_t link;
-        int rc;
+	wait_queue_t link;
+	int rc;
 
-        LASSERT(seqnr != NULL);
+	LASSERT(seqnr != NULL);
 	mutex_lock(&seq->lcs_mutex);
-        cfs_waitlink_init(&link);
+	init_waitqueue_entry_current(&link);
 
         while (1) {
                 rc = seq_fid_alloc_prep(seq, &link);
@@ -318,16 +318,16 @@ EXPORT_SYMBOL(seq_client_get_seq);
 
 /* Allocate new fid on passed client @seq and save it to @fid. */
 int seq_client_alloc_fid(const struct lu_env *env,
-                         struct lu_client_seq *seq, struct lu_fid *fid)
+			 struct lu_client_seq *seq, struct lu_fid *fid)
 {
-        cfs_waitlink_t link;
-        int rc;
-        ENTRY;
+	wait_queue_t link;
+	int rc;
+	ENTRY;
 
-        LASSERT(seq != NULL);
-        LASSERT(fid != NULL);
+	LASSERT(seq != NULL);
+	LASSERT(fid != NULL);
 
-        cfs_waitlink_init(&link);
+	init_waitqueue_entry_current(&link);
 	mutex_lock(&seq->lcs_mutex);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_EXHAUST))
@@ -388,23 +388,23 @@ EXPORT_SYMBOL(seq_client_alloc_fid);
  */
 void seq_client_flush(struct lu_client_seq *seq)
 {
-        cfs_waitlink_t link;
+	wait_queue_t link;
 
-        LASSERT(seq != NULL);
-        cfs_waitlink_init(&link);
+	LASSERT(seq != NULL);
+	init_waitqueue_entry_current(&link);
 	mutex_lock(&seq->lcs_mutex);
 
-        while (seq->lcs_update) {
-                cfs_waitq_add(&seq->lcs_waitq, &link);
-                cfs_set_current_state(CFS_TASK_UNINT);
+	while (seq->lcs_update) {
+		add_wait_queue(&seq->lcs_waitq, &link);
+		set_current_state(TASK_UNINTERRUPTIBLE);
 		mutex_unlock(&seq->lcs_mutex);
 
-                cfs_waitq_wait(&link, CFS_TASK_UNINT);
+		waitq_wait(&link, TASK_UNINTERRUPTIBLE);
 
 		mutex_lock(&seq->lcs_mutex);
-                cfs_waitq_del(&seq->lcs_waitq, &link);
-                cfs_set_current_state(CFS_TASK_RUNNING);
-        }
+		remove_wait_queue(&seq->lcs_waitq, &link);
+		set_current_state(TASK_RUNNING);
+	}
 
         fid_zero(&seq->lcs_fid);
         /**
@@ -489,7 +489,7 @@ int seq_client_init(struct lu_client_seq *seq,
 	else
 		seq->lcs_width = LUSTRE_DATA_SEQ_MAX_WIDTH;
 
-	cfs_waitq_init(&seq->lcs_waitq);
+	init_waitqueue_head(&seq->lcs_waitq);
 	/* Make sure that things are clear before work is started. */
 	seq_client_flush(seq);
 

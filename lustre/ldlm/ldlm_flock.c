@@ -644,29 +644,29 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
          * references being held, so that it can go away. No point in
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
-            (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
-                if (lock->l_req_mode == lock->l_granted_mode &&
-                    lock->l_granted_mode != LCK_NL &&
-                    NULL == data)
-                        ldlm_lock_decref_internal(lock, lock->l_req_mode);
+	if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
+	    (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
+		if (lock->l_req_mode == lock->l_granted_mode &&
+		    lock->l_granted_mode != LCK_NL &&
+		    NULL == data)
+			ldlm_lock_decref_internal(lock, lock->l_req_mode);
 
-                /* Need to wake up the waiter if we were evicted */
-                cfs_waitq_signal(&lock->l_waitq);
-                RETURN(0);
-        }
+		/* Need to wake up the waiter if we were evicted */
+		wake_up(&lock->l_waitq);
+		RETURN(0);
+	}
 
-        LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
+	LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
-        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                       LDLM_FL_BLOCK_CONV))) {
-                if (NULL == data)
-                        /* mds granted the lock in the reply */
-                        goto granted;
-                /* CP AST RPC: lock get granted, wake it up */
-                cfs_waitq_signal(&lock->l_waitq);
-                RETURN(0);
-        }
+	if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+		       LDLM_FL_BLOCK_CONV))) {
+		if (NULL == data)
+			/* mds granted the lock in the reply */
+			goto granted;
+		/* CP AST RPC: lock get granted, wake it up */
+		wake_up(&lock->l_waitq);
+		RETURN(0);
+	}
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");

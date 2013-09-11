@@ -97,13 +97,13 @@ lwt_control (int enable, int clear)
         if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 return (-EPERM);
 
-        if (!enable) {
-                LWT_EVENT(0,0,0,0);
-                lwt_enabled = 0;
-                cfs_mb();
-                /* give people some time to stop adding traces */
-                cfs_schedule_timeout(10);
-        }
+	if (!enable) {
+		LWT_EVENT(0,0,0,0);
+		lwt_enabled = 0;
+		cfs_mb();
+		/* give people some time to stop adding traces */
+		schedule_timeout(10);
+	}
 
 	for (i = 0; i < num_online_cpus(); i++) {
 		p = lwt_cpus[i].lwtc_current_page;

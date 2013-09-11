@@ -580,8 +580,8 @@ struct ptlrpc_request_set {
 	/** number of uncompleted requests */
 	cfs_atomic_t          set_remaining;
 	/** wait queue to wait on for request events */
-	cfs_waitq_t           set_waitq;
-	cfs_waitq_t          *set_wakeup_ptr;
+	wait_queue_head_t           set_waitq;
+	wait_queue_head_t          *set_wakeup_ptr;
 	/** List of requests in the set */
 	cfs_list_t            set_requests;
 	/**
@@ -1966,10 +1966,10 @@ struct ptlrpc_request {
         /** incoming request buffer */
         struct ptlrpc_request_buffer_desc *rq_rqbd;
 
-        /** client-only incoming reply */
-        lnet_handle_md_t     rq_reply_md_h;
-        cfs_waitq_t          rq_reply_waitq;
-        struct ptlrpc_cb_id  rq_reply_cbid;
+	/** client-only incoming reply */
+	lnet_handle_md_t     rq_reply_md_h;
+	wait_queue_head_t    rq_reply_waitq;
+	struct ptlrpc_cb_id  rq_reply_cbid;
 
         /** our LNet NID */
         lnet_nid_t           rq_self;
@@ -2017,7 +2017,7 @@ struct ptlrpc_request {
 
         /** Multi-rpc bits */
         /** Per-request waitq introduced by bug 21938 for recovery waiting */
-        cfs_waitq_t rq_set_waitq;
+	wait_queue_head_t rq_set_waitq;
 	/** Link item for request set lists */
 	cfs_list_t  rq_set_chain;
         /** Link back to the request set */
@@ -2276,7 +2276,7 @@ struct ptlrpc_bulk_desc {
 	struct obd_import *bd_import;
 	/** Back pointer to the request */
 	struct ptlrpc_request *bd_req;
-	cfs_waitq_t            bd_waitq;        /* server side only WQ */
+	wait_queue_head_t      bd_waitq;        /* server side only WQ */
 	int                    bd_iov_count;    /* # entries in bd_iov */
 	int                    bd_max_iov;      /* allocated size of bd_iov */
 	int                    bd_nob;          /* # bytes covered */
@@ -2342,7 +2342,7 @@ struct ptlrpc_thread {
          * the svc this thread belonged to b=18582
          */
 	struct ptlrpc_service_part	*t_svcpt;
-	cfs_waitq_t			t_ctl_waitq;
+	wait_queue_head_t		t_ctl_waitq;
 	struct lu_env			*t_env;
 	char				t_name[PTLRPC_THR_NAME_LEN];
 };
@@ -2601,7 +2601,7 @@ struct ptlrpc_service_part {
 	 * all threads sleep on this. This wait-queue is signalled when new
 	 * incoming request arrives and when difficult reply has to be handled.
 	 */
-	cfs_waitq_t			scp_waitq;
+	wait_queue_head_t		scp_waitq;
 
 	/** request history */
 	cfs_list_t			scp_hist_reqs;
@@ -2666,7 +2666,7 @@ struct ptlrpc_service_part {
 	/** List of free reply_states */
 	cfs_list_t			scp_rep_idle;
 	/** waitq to run, when adding stuff to srv_free_rs_list */
-	cfs_waitq_t			scp_rep_waitq;
+	wait_queue_head_t		scp_rep_waitq;
 	/** # 'difficult' replies */
 	cfs_atomic_t			scp_nreps_difficult;
 };
@@ -3336,10 +3336,10 @@ ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
 static inline void
 ptlrpc_client_wake_req(struct ptlrpc_request *req)
 {
-        if (req->rq_set == NULL)
-                cfs_waitq_signal(&req->rq_reply_waitq);
-        else
-                cfs_waitq_signal(&req->rq_set->set_waitq);
+	if (req->rq_set == NULL)
+		wake_up(&req->rq_reply_waitq);
+	else
+		wake_up(&req->rq_set->set_waitq);
 }
 
 static inline void

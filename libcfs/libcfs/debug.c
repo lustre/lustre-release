@@ -110,7 +110,7 @@ EXPORT_SYMBOL(libcfs_panic_on_lbug);
 cfs_atomic_t libcfs_kmemory = CFS_ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
 
-static cfs_waitq_t debug_ctlwq;
+static wait_queue_head_t debug_ctlwq;
 
 char libcfs_debug_file_path_arr[PATH_MAX] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
 
@@ -247,23 +247,23 @@ void libcfs_debug_dumplog_internal(void *arg)
 
 int libcfs_debug_dumplog_thread(void *arg)
 {
-        libcfs_debug_dumplog_internal(arg);
-        cfs_waitq_signal(&debug_ctlwq);
-        return 0;
+	libcfs_debug_dumplog_internal(arg);
+	wake_up(&debug_ctlwq);
+	return 0;
 }
 
 void libcfs_debug_dumplog(void)
 {
-        cfs_waitlink_t wait;
-        cfs_task_t    *dumper;
-        ENTRY;
+	wait_queue_t wait;
+	cfs_task_t    *dumper;
+	ENTRY;
 
-        /* we're being careful to ensure that the kernel thread is
-         * able to set our state to running as it exits before we
-         * get to schedule() */
-	cfs_waitlink_init(&wait);
-	cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-	cfs_waitq_add(&debug_ctlwq, &wait);
+	/* we're being careful to ensure that the kernel thread is
+	 * able to set our state to running as it exits before we
+	 * get to schedule() */
+	init_waitqueue_entry_current(&wait);
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(&debug_ctlwq, &wait);
 
 	dumper = kthread_run(libcfs_debug_dumplog_thread,
 			     (void *)(long)current_pid(),
@@ -271,28 +271,28 @@ void libcfs_debug_dumplog(void)
 	if (IS_ERR(dumper))
 		printk(KERN_ERR "LustreError: cannot start log dump thread:"
 		       " %ld\n", PTR_ERR(dumper));
-        else
-                cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
+	else
+		waitq_wait(&wait, TASK_INTERRUPTIBLE);
 
-        /* be sure to teardown if cfs_create_thread() failed */
-        cfs_waitq_del(&debug_ctlwq, &wait);
-        cfs_set_current_state(CFS_TASK_RUNNING);
+	/* be sure to teardown if cfs_create_thread() failed */
+	remove_wait_queue(&debug_ctlwq, &wait);
+	set_current_state(TASK_RUNNING);
 }
 EXPORT_SYMBOL(libcfs_debug_dumplog);
 
 int libcfs_debug_init(unsigned long bufsize)
 {
-        int    rc = 0;
-        unsigned int max = libcfs_debug_mb;
+	int    rc = 0;
+	unsigned int max = libcfs_debug_mb;
 
-        cfs_waitq_init(&debug_ctlwq);
+	init_waitqueue_head(&debug_ctlwq);
 
-        if (libcfs_console_max_delay <= 0 || /* not set by user or */
-            libcfs_console_min_delay <= 0 || /* set to invalid values */
-            libcfs_console_min_delay >= libcfs_console_max_delay) {
-                libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
-                libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
-        }
+	if (libcfs_console_max_delay <= 0 || /* not set by user or */
+	    libcfs_console_min_delay <= 0 || /* set to invalid values */
+	    libcfs_console_min_delay >= libcfs_console_max_delay) {
+		libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+		libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
+	}
 
         if (libcfs_debug_file_path != NULL) {
                 memset(libcfs_debug_file_path_arr, 0, PATH_MAX);

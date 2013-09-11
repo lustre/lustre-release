@@ -95,25 +95,25 @@ static inline unsigned int ldlm_get_rq_timeout(void)
 struct ldlm_bl_pool {
 	spinlock_t		blp_lock;
 
-        /*
-         * blp_prio_list is used for callbacks that should be handled
-         * as a priority. It is used for LDLM_FL_DISCARD_DATA requests.
-         * see bug 13843
-         */
-        cfs_list_t              blp_prio_list;
+	/*
+	 * blp_prio_list is used for callbacks that should be handled
+	 * as a priority. It is used for LDLM_FL_DISCARD_DATA requests.
+	 * see bug 13843
+	 */
+	cfs_list_t              blp_prio_list;
 
-        /*
-         * blp_list is used for all other callbacks which are likely
-         * to take longer to process.
-         */
-        cfs_list_t              blp_list;
+	/*
+	 * blp_list is used for all other callbacks which are likely
+	 * to take longer to process.
+	 */
+	cfs_list_t              blp_list;
 
-        cfs_waitq_t             blp_waitq;
-	struct completion        blp_comp;
-        cfs_atomic_t            blp_num_threads;
-        cfs_atomic_t            blp_busy_threads;
-        int                     blp_min_threads;
-        int                     blp_max_threads;
+	wait_queue_head_t       blp_waitq;
+	struct completion       blp_comp;
+	cfs_atomic_t            blp_num_threads;
+	cfs_atomic_t            blp_busy_threads;
+	int                     blp_min_threads;
+	int                     blp_max_threads;
 };
 
 struct ldlm_bl_work_item {
@@ -150,7 +150,7 @@ static cfs_list_t waiting_locks_list;
 static cfs_timer_t waiting_locks_timer;
 
 static struct expired_lock_thread {
-	cfs_waitq_t		elt_waitq;
+	wait_queue_head_t	elt_waitq;
 	int			elt_state;
 	int			elt_dump;
 	cfs_list_t		elt_expired_locks;
@@ -173,20 +173,20 @@ static inline int have_expired_locks(void)
  */
 static int expired_lock_main(void *arg)
 {
-        cfs_list_t *expired = &expired_lock_thread.elt_expired_locks;
-        struct l_wait_info lwi = { 0 };
-        int do_dump;
+	cfs_list_t *expired = &expired_lock_thread.elt_expired_locks;
+	struct l_wait_info lwi = { 0 };
+	int do_dump;
 
-        ENTRY;
+	ENTRY;
 
-        expired_lock_thread.elt_state = ELT_READY;
-        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+	expired_lock_thread.elt_state = ELT_READY;
+	wake_up(&expired_lock_thread.elt_waitq);
 
-        while (1) {
-                l_wait_event(expired_lock_thread.elt_waitq,
-                             have_expired_locks() ||
-                             expired_lock_thread.elt_state == ELT_TERMINATE,
-                             &lwi);
+	while (1) {
+		l_wait_event(expired_lock_thread.elt_waitq,
+			     have_expired_locks() ||
+			     expired_lock_thread.elt_state == ELT_TERMINATE,
+			     &lwi);
 
 		spin_lock_bh(&waiting_locks_spinlock);
 		if (expired_lock_thread.elt_dump) {
@@ -201,17 +201,17 @@ static int expired_lock_main(void *arg)
 			libcfs_run_lbug_upcall(&msgdata);
 
 			spin_lock_bh(&waiting_locks_spinlock);
-                        expired_lock_thread.elt_dump = 0;
-                }
+			expired_lock_thread.elt_dump = 0;
+		}
 
-                do_dump = 0;
+		do_dump = 0;
 
-                while (!cfs_list_empty(expired)) {
-                        struct obd_export *export;
-                        struct ldlm_lock *lock;
+		while (!cfs_list_empty(expired)) {
+			struct obd_export *export;
+			struct ldlm_lock *lock;
 
-                        lock = cfs_list_entry(expired->next, struct ldlm_lock,
-                                          l_pending_chain);
+			lock = cfs_list_entry(expired->next, struct ldlm_lock,
+					  l_pending_chain);
 			if ((void *)lock < LP_POISON + PAGE_CACHE_SIZE &&
 			    (void *)lock >= LP_POISON) {
 				spin_unlock_bh(&waiting_locks_spinlock);
@@ -221,17 +221,17 @@ static int expired_lock_main(void *arg)
 			cfs_list_del_init(&lock->l_pending_chain);
 			if ((void *)lock->l_export <
 			     LP_POISON + PAGE_CACHE_SIZE &&
-                            (void *)lock->l_export >= LP_POISON) {
-                                CERROR("lock with free export on elt list %p\n",
-                                       lock->l_export);
-                                lock->l_export = NULL;
-                                LDLM_ERROR(lock, "free export");
-                                /* release extra ref grabbed by
-                                 * ldlm_add_waiting_lock() or
-                                 * ldlm_failed_ast() */
-                                LDLM_LOCK_RELEASE(lock);
-                                continue;
-                        }
+			    (void *)lock->l_export >= LP_POISON) {
+				CERROR("lock with free export on elt list %p\n",
+				       lock->l_export);
+				lock->l_export = NULL;
+				LDLM_ERROR(lock, "free export");
+				/* release extra ref grabbed by
+				 * ldlm_add_waiting_lock() or
+				 * ldlm_failed_ast() */
+				LDLM_LOCK_RELEASE(lock);
+				continue;
+			}
 
 			if (lock->l_flags & LDLM_FL_DESTROYED) {
 				/* release the lock refcount where
@@ -254,18 +254,18 @@ static int expired_lock_main(void *arg)
 		}
 		spin_unlock_bh(&waiting_locks_spinlock);
 
-                if (do_dump && obd_dump_on_eviction) {
-                        CERROR("dump the log upon eviction\n");
-                        libcfs_debug_dumplog();
-                }
+		if (do_dump && obd_dump_on_eviction) {
+			CERROR("dump the log upon eviction\n");
+			libcfs_debug_dumplog();
+		}
 
-                if (expired_lock_thread.elt_state == ELT_TERMINATE)
-                        break;
-        }
+		if (expired_lock_thread.elt_state == ELT_TERMINATE)
+			break;
+	}
 
-        expired_lock_thread.elt_state = ELT_STOPPED;
-        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
-        RETURN(0);
+	expired_lock_thread.elt_state = ELT_STOPPED;
+	wake_up(&expired_lock_thread.elt_waitq);
+	RETURN(0);
 }
 
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock);
@@ -356,7 +356,7 @@ static void waiting_locks_callback(unsigned long unused)
 		if (obd_dump_on_timeout && need_dump)
 			expired_lock_thread.elt_dump = __LINE__;
 
-		cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+		wake_up(&expired_lock_thread.elt_waitq);
 	}
 
         /*
@@ -603,7 +603,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 		LDLM_LOCK_GET(lock);
 	cfs_list_add(&lock->l_pending_chain,
 		     &expired_lock_thread.elt_expired_locks);
-	cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+	wake_up(&expired_lock_thread.elt_waitq);
 	spin_unlock_bh(&waiting_locks_spinlock);
 #else
 	class_fail_export(lock->l_export);
@@ -1699,8 +1699,8 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
 		int to = cfs_time_seconds(1);
 		while (to > 0) {
-			cfs_schedule_timeout_and_set_state(
-				CFS_TASK_INTERRUPTIBLE, to);
+			schedule_timeout_and_set_state(
+				TASK_INTERRUPTIBLE, to);
 			if (lock->l_granted_mode == lock->l_req_mode ||
 			    lock->l_flags & LDLM_FL_DESTROYED)
 				break;
@@ -1818,7 +1818,7 @@ out:
 		lock_res_and_lock(lock);
 		lock->l_flags |= LDLM_FL_FAILED;
 		unlock_res_and_lock(lock);
-		cfs_waitq_signal(&lock->l_waitq);
+		wake_up(&lock->l_waitq);
 	}
 	LDLM_LOCK_RELEASE(lock);
 }
@@ -1900,7 +1900,7 @@ static int __ldlm_bl_to_thread(struct ldlm_bl_work_item *blwi,
 	}
 	spin_unlock(&blp->blp_lock);
 
-	cfs_waitq_signal(&blp->blp_waitq);
+	wake_up(&blp->blp_waitq);
 
 	/* can not check blwi->blwi_flags as blwi could be already freed in
 	   LCF_ASYNC mode */
@@ -2883,11 +2883,11 @@ static int ldlm_setup(void)
 	ldlm_state->ldlm_bl_pool = blp;
 
 	spin_lock_init(&blp->blp_lock);
-        CFS_INIT_LIST_HEAD(&blp->blp_list);
-        CFS_INIT_LIST_HEAD(&blp->blp_prio_list);
-        cfs_waitq_init(&blp->blp_waitq);
-        cfs_atomic_set(&blp->blp_num_threads, 0);
-        cfs_atomic_set(&blp->blp_busy_threads, 0);
+	CFS_INIT_LIST_HEAD(&blp->blp_list);
+	CFS_INIT_LIST_HEAD(&blp->blp_prio_list);
+	init_waitqueue_head(&blp->blp_waitq);
+	cfs_atomic_set(&blp->blp_num_threads, 0);
+	cfs_atomic_set(&blp->blp_busy_threads, 0);
 
 #ifdef __KERNEL__
 	if (ldlm_num_threads == 0) {
@@ -2908,7 +2908,7 @@ static int ldlm_setup(void)
 # ifdef HAVE_SERVER_SUPPORT
 	CFS_INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
 	expired_lock_thread.elt_state = ELT_STOPPED;
-	cfs_waitq_init(&expired_lock_thread.elt_waitq);
+	init_waitqueue_head(&expired_lock_thread.elt_waitq);
 
 	CFS_INIT_LIST_HEAD(&waiting_locks_list);
 	spin_lock_init(&waiting_locks_spinlock);
@@ -2920,7 +2920,7 @@ static int ldlm_setup(void)
 		GOTO(out, rc);
 	}
 
-	cfs_wait_event(expired_lock_thread.elt_waitq,
+	wait_event(expired_lock_thread.elt_waitq,
 		       expired_lock_thread.elt_state == ELT_READY);
 # endif /* HAVE_SERVER_SUPPORT */
 
@@ -2962,7 +2962,7 @@ static int ldlm_cleanup(void)
 
 			spin_lock(&blp->blp_lock);
 			cfs_list_add_tail(&blwi.blwi_entry, &blp->blp_list);
-			cfs_waitq_signal(&blp->blp_waitq);
+			wake_up(&blp->blp_waitq);
 			spin_unlock(&blp->blp_lock);
 
 			wait_for_completion(&blp->blp_comp);
@@ -2985,8 +2985,8 @@ static int ldlm_cleanup(void)
 # ifdef HAVE_SERVER_SUPPORT
 	if (expired_lock_thread.elt_state != ELT_STOPPED) {
 		expired_lock_thread.elt_state = ELT_TERMINATE;
-		cfs_waitq_signal(&expired_lock_thread.elt_waitq);
-		cfs_wait_event(expired_lock_thread.elt_waitq,
+		wake_up(&expired_lock_thread.elt_waitq);
+		wait_event(expired_lock_thread.elt_waitq,
 			       expired_lock_thread.elt_state == ELT_STOPPED);
 	}
 # endif

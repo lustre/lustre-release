@@ -1221,30 +1221,30 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
  */
 static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 {
-        struct lu_object_header *header = obj->co_lu.lo_header;
-        cfs_waitlink_t           waiter;
+	struct lu_object_header *header = obj->co_lu.lo_header;
+	wait_queue_t           waiter;
 
-        if (unlikely(cfs_atomic_read(&header->loh_ref) != 1)) {
-                struct lu_site *site = obj->co_lu.lo_dev->ld_site;
-                struct lu_site_bkt_data *bkt;
+	if (unlikely(cfs_atomic_read(&header->loh_ref) != 1)) {
+		struct lu_site *site = obj->co_lu.lo_dev->ld_site;
+		struct lu_site_bkt_data *bkt;
 
-                bkt = lu_site_bkt_from_fid(site, &header->loh_fid);
+		bkt = lu_site_bkt_from_fid(site, &header->loh_fid);
 
-                cfs_waitlink_init(&waiter);
-                cfs_waitq_add(&bkt->lsb_marche_funebre, &waiter);
+		init_waitqueue_entry_current(&waiter);
+		add_wait_queue(&bkt->lsb_marche_funebre, &waiter);
 
-                while (1) {
-                        cfs_set_current_state(CFS_TASK_UNINT);
-                        if (cfs_atomic_read(&header->loh_ref) == 1)
-                                break;
-                        cfs_waitq_wait(&waiter, CFS_TASK_UNINT);
-                }
+		while (1) {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			if (cfs_atomic_read(&header->loh_ref) == 1)
+				break;
+			waitq_wait(&waiter, TASK_UNINTERRUPTIBLE);
+		}
 
-                cfs_set_current_state(CFS_TASK_RUNNING);
-                cfs_waitq_del(&bkt->lsb_marche_funebre, &waiter);
-        }
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&bkt->lsb_marche_funebre, &waiter);
+	}
 
-        cl_object_put(env, obj);
+	cl_object_put(env, obj);
 }
 
 void cl_inode_fini(struct inode *inode)

@@ -41,7 +41,7 @@
 
 unsigned long cfs_fail_loc = 0;
 unsigned int cfs_fail_val = 0;
-cfs_waitq_t cfs_race_waitq;
+wait_queue_head_t cfs_race_waitq;
 int cfs_race_state;
 
 EXPORT_SYMBOL(cfs_fail_loc);
@@ -125,17 +125,17 @@ EXPORT_SYMBOL(__cfs_fail_check_set);
 
 int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 {
-        int ret = 0;
+	int ret = 0;
 
-        ret = __cfs_fail_check_set(id, value, set);
-        if (ret) {
-                CERROR("cfs_fail_timeout id %x sleeping for %dms\n",
-                       id, ms);
-                cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT,
-                                                   cfs_time_seconds(ms) / 1000);
-                cfs_set_current_state(CFS_TASK_RUNNING);
-                CERROR("cfs_fail_timeout id %x awake\n", id);
-        }
-        return ret;
+	ret = __cfs_fail_check_set(id, value, set);
+	if (ret) {
+		CERROR("cfs_fail_timeout id %x sleeping for %dms\n",
+		       id, ms);
+		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
+						   cfs_time_seconds(ms) / 1000);
+		set_current_state(TASK_RUNNING);
+		CERROR("cfs_fail_timeout id %x awake\n", id);
+	}
+	return ret;
 }
 EXPORT_SYMBOL(__cfs_fail_timeout_set);

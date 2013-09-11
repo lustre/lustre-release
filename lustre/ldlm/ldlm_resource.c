@@ -655,15 +655,15 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ns->ns_appetite = apt;
         ns->ns_client   = client;
 
-        CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
-        CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
+	CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
+	CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
 	spin_lock_init(&ns->ns_lock);
-        cfs_atomic_set(&ns->ns_bref, 0);
-        cfs_waitq_init(&ns->ns_waitq);
+	cfs_atomic_set(&ns->ns_bref, 0);
+	init_waitqueue_head(&ns->ns_waitq);
 
-        ns->ns_max_nolock_size    = NS_DEFAULT_MAX_NOLOCK_BYTES;
-        ns->ns_contention_time    = NS_DEFAULT_CONTENTION_SECONDS;
-        ns->ns_contended_locks    = NS_DEFAULT_CONTENDED_LOCKS;
+	ns->ns_max_nolock_size    = NS_DEFAULT_MAX_NOLOCK_BYTES;
+	ns->ns_contention_time    = NS_DEFAULT_CONTENTION_SECONDS;
+	ns->ns_contended_locks    = NS_DEFAULT_CONTENDED_LOCKS;
 
         ns->ns_max_parallel_ast   = LDLM_DEFAULT_PARALLEL_AST_LIMIT;
         ns->ns_nr_unused          = 0;
@@ -999,7 +999,7 @@ int ldlm_namespace_get_return(struct ldlm_namespace *ns)
 void ldlm_namespace_put(struct ldlm_namespace *ns)
 {
 	if (cfs_atomic_dec_and_lock(&ns->ns_bref, &ns->ns_lock)) {
-		cfs_waitq_signal(&ns->ns_waitq);
+		wake_up(&ns->ns_waitq);
 		spin_unlock(&ns->ns_lock);
 	}
 }

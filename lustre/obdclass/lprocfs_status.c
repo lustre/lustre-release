@@ -272,13 +272,13 @@ int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 
 int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 {
-        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
-        struct obd_device *obd = dp->data;
+	struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
+	struct obd_device *obd = dp->data;
 
-        cfs_atomic_dec(&obd->obd_evict_inprogress);
-        cfs_waitq_signal(&obd->obd_evict_inprogress_waitq);
+	cfs_atomic_dec(&obd->obd_evict_inprogress);
+	wake_up(&obd->obd_evict_inprogress_waitq);
 
-        return 0;
+	return 0;
 }
 
 struct file_operations lprocfs_evict_client_fops = {

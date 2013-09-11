@@ -44,11 +44,11 @@
  */
 
 /*
- * cfs_waitq_init
+ * init_waitqueue_head
  *   To initialize the wait queue
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
  *
  * Return Value:
  *   N/A
@@ -57,7 +57,7 @@
  *   N/A
  */
 
-void cfs_waitq_init(cfs_waitq_t *waitq)
+void init_waitqueue_head(wait_queue_head_t *waitq)
 {
     waitq->magic = CFS_WAITQ_MAGIC;
     waitq->flags = 0;
@@ -66,11 +66,11 @@ void cfs_waitq_init(cfs_waitq_t *waitq)
 }
 
 /*
- * cfs_waitlink_init
+ * init_waitqueue_entry_current
  *   To initialize the wake link node
  *
  * Arguments:
- *   link:  pointer to the cfs_waitlink_t structure
+ *   link:  pointer to the wait_queue_t structure
  *
  * Return Value:
  *   N/A
@@ -79,7 +79,7 @@ void cfs_waitq_init(cfs_waitq_t *waitq)
  *   N/A
  */
 
-void cfs_waitlink_init(cfs_waitlink_t *link)
+void init_waitqueue_entry_current(wait_queue_t *link)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -93,7 +93,7 @@ void cfs_waitlink_init(cfs_waitlink_t *link)
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     cfs_assert(slot->Magic == TASKSLT_MAGIC);
 
-    memset(link, 0, sizeof(cfs_waitlink_t));
+    memset(link, 0, sizeof(wait_queue_t));
 
     link->magic = CFS_WAITLINK_MAGIC;
     link->flags = 0;
@@ -115,7 +115,7 @@ void cfs_waitlink_init(cfs_waitlink_t *link)
  *   To finilize the wake link node
  *
  * Arguments:
- *   link:  pointer to the cfs_waitlink_t structure
+ *   link:  pointer to the wait_queue_t structure
  *
  * Return Value:
  *   N/A
@@ -124,7 +124,7 @@ void cfs_waitlink_init(cfs_waitlink_t *link)
  *   N/A
  */
 
-void cfs_waitlink_fini(cfs_waitlink_t *link)
+void cfs_waitlink_fini(wait_queue_t *link)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -150,8 +150,8 @@ void cfs_waitlink_fini(cfs_waitlink_t *link)
  *   To queue the wait link node to the wait queue
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
- *   link:   pointer to the cfs_waitlink_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
+ *   link:   pointer to the wait_queue_t structure
  *   int:    queue no (Normal or Forward waitq)
  *
  * Return Value:
@@ -161,8 +161,8 @@ void cfs_waitlink_fini(cfs_waitlink_t *link)
  *   N/A
  */
 
-void cfs_waitq_add_internal(cfs_waitq_t *waitq,
-                            cfs_waitlink_t *link,
+void cfs_waitq_add_internal(wait_queue_head_t *waitq,
+			    wait_queue_t *link,
                             __u32 waitqid )
 { 
     LASSERT(waitq != NULL);
@@ -182,12 +182,12 @@ void cfs_waitq_add_internal(cfs_waitq_t *waitq,
 	spin_unlock(&(waitq->guard));
 }
 /*
- * cfs_waitq_add
+ * add_wait_queue
  *   To queue the wait link node to the wait queue
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
- *   link:  pointer to the cfs_waitlink_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
+ *   link:  pointer to the wait_queue_t structure
  *
  * Return Value:
  *   N/A
@@ -196,19 +196,19 @@ void cfs_waitq_add_internal(cfs_waitq_t *waitq,
  *   N/A
  */
 
-void cfs_waitq_add(cfs_waitq_t *waitq,
-                   cfs_waitlink_t *link)
+void add_wait_queue(wait_queue_head_t *waitq,
+		   wait_queue_t *link)
 { 
     cfs_waitq_add_internal(waitq, link, CFS_WAITQ_CHAN_NORMAL);
 }
 
 /*
- * cfs_waitq_add_exclusive
+ * add_wait_queue_exclusive
  *   To set the wait link node to exclusive mode
  *   and queue it to the wait queue
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
  *   link:  pointer to the cfs_wait_link structure
  *
  * Return Value:
@@ -218,8 +218,8 @@ void cfs_waitq_add(cfs_waitq_t *waitq,
  *   N/A
  */
 
-void cfs_waitq_add_exclusive( cfs_waitq_t *waitq,
-                              cfs_waitlink_t *link)
+void add_wait_queue_exclusive( wait_queue_head_t *waitq,
+			      wait_queue_t *link)
 {
     LASSERT(waitq != NULL);
     LASSERT(link != NULL);
@@ -227,16 +227,16 @@ void cfs_waitq_add_exclusive( cfs_waitq_t *waitq,
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
 
 	link->flags |= CFS_WAITQ_EXCLUSIVE;
-    cfs_waitq_add(waitq, link);
+    add_wait_queue(waitq, link);
 }
 
 /*
- * cfs_waitq_del
+ * remove_wait_queue
  *   To remove the wait link node from the waitq
  *
  * Arguments:
  *   waitq:  pointer to the cfs_ waitq_t structure
- *   link:  pointer to the cfs_waitlink_t structure
+ *   link:  pointer to the wait_queue_t structure
  *
  * Return Value:
  *   N/A
@@ -245,8 +245,8 @@ void cfs_waitq_add_exclusive( cfs_waitq_t *waitq,
  *   N/A
  */
 
-void cfs_waitq_del( cfs_waitq_t *waitq,
-                    cfs_waitlink_t *link)
+void remove_wait_queue( wait_queue_head_t *waitq,
+		    wait_queue_t *link)
 {
     int i = 0;
 
@@ -274,7 +274,7 @@ void cfs_waitq_del( cfs_waitq_t *waitq,
 }
 
 /*
- * cfs_waitq_active
+ * waitqueue_active
  *   Is the waitq active (not empty) ?
  *
  * Arguments:
@@ -288,7 +288,7 @@ void cfs_waitq_del( cfs_waitq_t *waitq,
  *   We always returns TRUE here, the same to Darwin.
  */
 
-int cfs_waitq_active(cfs_waitq_t *waitq)
+int waitqueue_active(wait_queue_head_t *waitq)
 {
     LASSERT(waitq != NULL);
     LASSERT(waitq->magic == CFS_WAITQ_MAGIC);
@@ -297,12 +297,12 @@ int cfs_waitq_active(cfs_waitq_t *waitq)
 }
 
 /*
- * cfs_waitq_signal_nr
+ * wake_up_nr
  *   To wake up all the non-exclusive tasks plus nr exclusive
  *   ones in the waitq
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
  *   nr:    number of exclusive tasks to be woken up
  *
  * Return Value:
@@ -313,7 +313,7 @@ int cfs_waitq_active(cfs_waitq_t *waitq)
  */
 
 
-void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
+void wake_up_nr(wait_queue_head_t *waitq, int nr)
 {
     int     result;
     cfs_waitlink_channel_t * scan;
@@ -326,7 +326,7 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
                             cfs_waitlink_channel_t,
                             link) {
 
-        cfs_waitlink_t *waitl = scan->waitl;
+	wait_queue_t *waitl = scan->waitl;
 
         result = cfs_wake_event(waitl->event);
         LASSERT( result == FALSE || result == TRUE );
@@ -344,11 +344,11 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
 }
 
 /*
- * cfs_waitq_signal
+ * wake_up
  *   To wake up all the non-exclusive tasks and 1 exclusive
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
  *
  * Return Value:
  *   N/A
@@ -357,18 +357,18 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
  *   N/A
  */
 
-void cfs_waitq_signal(cfs_waitq_t *waitq)
+void wake_up(wait_queue_head_t *waitq)
 {
-    cfs_waitq_signal_nr(waitq, 1);
+    wake_up_nr(waitq, 1);
 }
 
 
 /*
- * cfs_waitq_broadcast
+ * wake_up_all
  *   To wake up all the tasks in the waitq
  *
  * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
+ *   waitq:  pointer to the wait_queue_head_t structure
  *
  * Return Value:
  *   N/A
@@ -377,20 +377,20 @@ void cfs_waitq_signal(cfs_waitq_t *waitq)
  *   N/A
  */
 
-void cfs_waitq_broadcast(cfs_waitq_t *waitq)
+void wake_up_all(wait_queue_head_t *waitq)
 {
     LASSERT(waitq != NULL);
     LASSERT(waitq->magic ==CFS_WAITQ_MAGIC);
 
-	cfs_waitq_signal_nr(waitq, 0);
+	wake_up_nr(waitq, 0);
 }
 
 /*
- * cfs_waitq_wait
+ * waitq_wait
  *   To wait on the link node until it is signaled.
  *
  * Arguments:
- *   link:  pointer to the cfs_waitlink_t structure
+ *   link:  pointer to the wait_queue_t structure
  *
  * Return Value:
  *   N/A
@@ -399,7 +399,7 @@ void cfs_waitq_broadcast(cfs_waitq_t *waitq)
  *   N/A
  */
 
-void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
+void waitq_wait(wait_queue_t *link, long state)
 { 
     LASSERT(link != NULL);
     LASSERT(link->magic == CFS_WAITLINK_MAGIC);
@@ -413,11 +413,11 @@ void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
 }
 
 /*
- * cfs_waitq_timedwait
+ * waitq_timedwait
  *   To wait the link node to be signaled with a timeout limit
  *
  * Arguments:
- *   link:   pointer to the cfs_waitlink_t structure
+ *   link:   pointer to the wait_queue_t structure
  *   timeout: the timeout limitation
  *
  * Return Value:
@@ -429,8 +429,8 @@ void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
  *   What if it happens to be woken up at the just timeout time !?
  */
 
-int64_t cfs_waitq_timedwait( cfs_waitlink_t *link,
-                             cfs_task_state_t state,
+int64_t waitq_timedwait( wait_queue_t *link,
+			     long state,
                              int64_t timeout)
 { 
 

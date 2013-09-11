@@ -404,12 +404,12 @@ int class_attach(struct lustre_cfg *lcfg)
 	/* recovery data */
 	cfs_init_timer(&obd->obd_recovery_timer);
 	spin_lock_init(&obd->obd_recovery_task_lock);
-        cfs_waitq_init(&obd->obd_next_transno_waitq);
-        cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
-        CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
-        CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
-        CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
-        CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
+	init_waitqueue_head(&obd->obd_next_transno_waitq);
+	init_waitqueue_head(&obd->obd_evict_inprogress_waitq);
+	CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
+	CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
+	CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
+	CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
         llog_group_init(&obd->obd_olg, FID_SEQ_LLOG);
 
@@ -633,7 +633,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	while (obd->obd_conn_inprogress > 0) {
 		spin_unlock(&obd->obd_dev_lock);
 
-		cfs_cond_resched();
+		cond_resched();
 
 		spin_lock(&obd->obd_dev_lock);
 	}

@@ -781,7 +781,7 @@ static void osc_lru_add(struct client_obd *cli, struct osc_page *opg)
 
 	if (wakeup) {
 		osc_lru_shrink(cli, osc_cache_too_much(cli));
-		cfs_waitq_broadcast(&osc_lru_waitq);
+		wake_up_all(&osc_lru_waitq);
 	}
 }
 
@@ -812,7 +812,7 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg, bool del)
 			if (cfs_atomic_read(&cli->cl_lru_shrinkers) == 0 &&
 			    !memory_pressure_get())
 				osc_lru_shrink(cli, osc_cache_too_much(cli));
-			cfs_waitq_signal(&osc_lru_waitq);
+			wake_up(&osc_lru_waitq);
 		}
 	} else {
 		LASSERT(cfs_list_empty(&opg->ops_lru));
@@ -900,7 +900,7 @@ static int osc_lru_reserve(const struct lu_env *env, struct osc_object *obj,
 		if (rc > 0)
 			continue;
 
-		cfs_cond_resched();
+		cond_resched();
 
 		/* slowest case, all of caching pages are busy, notifying
 		 * other OSCs that we're lack of LRU slots. */

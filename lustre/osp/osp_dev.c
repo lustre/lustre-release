@@ -422,7 +422,7 @@ static int osp_recovery_complete(const struct lu_env *env,
 	ENTRY;
 	osp->opd_recovery_completed = 1;
 	if (!osp->opd_connect_mdt)
-		cfs_waitq_signal(&osp->opd_pre_waitq);
+		wake_up(&osp->opd_pre_waitq);
 	RETURN(rc);
 }
 
@@ -1027,7 +1027,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (d->opd_connect_mdt)
 			break;
 		osp_pre_update_status(d, -ENODEV);
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 		CDEBUG(D_HA, "got disconnected\n");
 		break;
 	case IMP_EVENT_INACTIVE:
@@ -1035,7 +1035,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (d->opd_connect_mdt)
 			break;
 		osp_pre_update_status(d, -ENODEV);
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 		CDEBUG(D_HA, "got inactive\n");
 		break;
 	case IMP_EVENT_ACTIVE:
@@ -1046,7 +1046,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_imp_seen_connected = 1;
 		if (d->opd_connect_mdt)
 			break;
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 		__osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");
 		break;

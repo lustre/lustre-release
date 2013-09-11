@@ -606,26 +606,26 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 static int echo_cleanup(struct obd_device *obd)
 {
-        int leaked;
-        ENTRY;
+	int leaked;
+	ENTRY;
 
-        lprocfs_obd_cleanup(obd);
-        lprocfs_free_obd_stats(obd);
+	lprocfs_obd_cleanup(obd);
+	lprocfs_free_obd_stats(obd);
 
-        ldlm_lock_decref(&obd->u.echo.eo_nl_lock, LCK_NL);
+	ldlm_lock_decref(&obd->u.echo.eo_nl_lock, LCK_NL);
 
-        /* XXX Bug 3413; wait for a bit to ensure the BL callback has
-         * happened before calling ldlm_namespace_free() */
-        cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT, cfs_time_seconds(1));
+	/* XXX Bug 3413; wait for a bit to ensure the BL callback has
+	 * happened before calling ldlm_namespace_free() */
+	schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE, cfs_time_seconds(1));
 
-        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
-        obd->obd_namespace = NULL;
+	ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+	obd->obd_namespace = NULL;
 
-        leaked = cfs_atomic_read(&obd->u.echo.eo_prep);
-        if (leaked != 0)
-                CERROR("%d prep/commitrw pages leaked\n", leaked);
+	leaked = cfs_atomic_read(&obd->u.echo.eo_prep);
+	if (leaked != 0)
+		CERROR("%d prep/commitrw pages leaked\n", leaked);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 struct obd_ops echo_obd_ops = {

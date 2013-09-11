@@ -53,112 +53,112 @@
  * Wait queue. No-op implementation.
  */
 
-void cfs_waitq_init(struct cfs_waitq *waitq)
+void init_waitqueue_head(struct cfs_waitq *waitq)
 {
-        LASSERT(waitq != NULL);
-        (void)waitq;
+	LASSERT(waitq != NULL);
+	(void)waitq;
 }
 
-void cfs_waitlink_init(struct cfs_waitlink *link)
+void init_waitqueue_entry_current(struct cfs_waitlink *link)
 {
-        LASSERT(link != NULL);
-        (void)link;
+	LASSERT(link != NULL);
+	(void)link;
 }
 
-void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+void add_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
-        LASSERT(waitq != NULL);
-        LASSERT(link != NULL);
-        (void)waitq;
-        (void)link;
+	LASSERT(waitq != NULL);
+	LASSERT(link != NULL);
+	(void)waitq;
+	(void)link;
 }
 
-void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+void add_wait_queue_exclusive(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
-        LASSERT(waitq != NULL);
-        LASSERT(link != NULL);
-        (void)waitq;
-        (void)link;
+	LASSERT(waitq != NULL);
+	LASSERT(link != NULL);
+	(void)waitq;
+	(void)link;
 }
 
-void cfs_waitq_add_exclusive_head(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+void add_wait_queue_exclusive_head(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
-        cfs_waitq_add_exclusive(waitq, link);
+	add_wait_queue_exclusive(waitq, link);
 }
 
-void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link)
+void remove_wait_queue(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 {
-        LASSERT(waitq != NULL);
-        LASSERT(link != NULL);
-        (void)waitq;
-        (void)link;
+	LASSERT(waitq != NULL);
+	LASSERT(link != NULL);
+	(void)waitq;
+	(void)link;
 }
 
-int cfs_waitq_active(struct cfs_waitq *waitq)
+int waitqueue_active(struct cfs_waitq *waitq)
 {
-        LASSERT(waitq != NULL);
-        (void)waitq;
-        return 0;
+	LASSERT(waitq != NULL);
+	(void)waitq;
+	return 0;
 }
 
-void cfs_waitq_signal(struct cfs_waitq *waitq)
+void wake_up(struct cfs_waitq *waitq)
 {
-        LASSERT(waitq != NULL);
-        (void)waitq;
+	LASSERT(waitq != NULL);
+	(void)waitq;
 }
 
-void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr)
+void wake_up_nr(struct cfs_waitq *waitq, int nr)
 {
-        LASSERT(waitq != NULL);
-        (void)waitq;
+	LASSERT(waitq != NULL);
+	(void)waitq;
 }
 
-void cfs_waitq_broadcast(struct cfs_waitq *waitq)
+void wake_up_all(struct cfs_waitq *waitq)
 {
-        LASSERT(waitq != NULL);
-        (void)waitq;
+	LASSERT(waitq != NULL);
+	(void)waitq;
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
+void waitq_wait(struct cfs_waitlink *link, long state)
 {
-        LASSERT(link != NULL);
-        (void)link;
+	LASSERT(link != NULL);
+	(void)link;
 
-        /* well, wait for something to happen */
+	/* well, wait for something to happen */
 	call_wait_handler(0);
 }
 
-int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state,
-                            int64_t timeout)
+int64_t waitq_timedwait(struct cfs_waitlink *link, long state,
+			int64_t timeout)
 {
-        LASSERT(link != NULL);
-        (void)link;
+	LASSERT(link != NULL);
+	(void)link;
 	call_wait_handler(timeout);
-        return 0;
+	return 0;
 }
 
-void cfs_schedule_timeout_and_set_state(cfs_task_state_t state, int64_t timeout)
+void schedule_timeout_and_set_state(long state, int64_t timeout)
 {
-        cfs_waitlink_t    l;
-        /* sleep(timeout) here instead? */
-        cfs_waitq_timedwait(&l, state, timeout);
+	wait_queue_t    l;
+	/* sleep(timeout) here instead? */
+	waitq_timedwait(&l, state, timeout);
 }
 
 void
 cfs_pause(cfs_duration_t d)
 {
-        struct timespec s;
+	struct timespec s;
 
-        cfs_duration_nsec(d, &s);
-        nanosleep(&s, NULL);
+	cfs_duration_nsec(d, &s);
+	nanosleep(&s, NULL);
 }
 
-int cfs_need_resched(void)
+int need_resched(void)
 {
-        return 0;
+	return 0;
 }
 
-void cfs_cond_resched(void)
+void cond_resched(void)
 {
 }
 

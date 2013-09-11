@@ -1561,22 +1561,22 @@ struct cl_lock {
          */
         struct cl_lock_descr  cll_descr;
         /** Protected by cl_lock::cll_guard. */
-        enum cl_lock_state    cll_state;
-        /** signals state changes. */
-        cfs_waitq_t           cll_wq;
-        /**
-         * Recursive lock, most fields in cl_lock{} are protected by this.
-         *
-         * Locking rules: this mutex is never held across network
-         * communication, except when lock is being canceled.
-         *
-         * Lock ordering: a mutex of a sub-lock is taken first, then a mutex
-         * on a top-lock. Other direction is implemented through a
-         * try-lock-repeat loop. Mutices of unrelated locks can be taken only
-         * by try-locking.
-         *
-         * \see osc_lock_enqueue_wait(), lov_lock_cancel(), lov_sublock_wait().
-         */
+	enum cl_lock_state    cll_state;
+	/** signals state changes. */
+	wait_queue_head_t     cll_wq;
+	/**
+	 * Recursive lock, most fields in cl_lock{} are protected by this.
+	 *
+	 * Locking rules: this mutex is never held across network
+	 * communication, except when lock is being canceled.
+	 *
+	 * Lock ordering: a mutex of a sub-lock is taken first, then a mutex
+	 * on a top-lock. Other direction is implemented through a
+	 * try-lock-repeat loop. Mutices of unrelated locks can be taken only
+	 * by try-locking.
+	 *
+	 * \see osc_lock_enqueue_wait(), lov_lock_cancel(), lov_sublock_wait().
+	 */
 	struct mutex		cll_guard;
         cfs_task_t           *cll_guarder;
         int                   cll_depth;
@@ -3206,7 +3206,7 @@ struct cl_sync_io {
 	/** barrier of destroy this structure */
 	cfs_atomic_t		csi_barrier;
 	/** completion to be signaled when transfer is complete. */
-	cfs_waitq_t		csi_waitq;
+	wait_queue_head_t	csi_waitq;
 };
 
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages);

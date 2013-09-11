@@ -386,21 +386,21 @@ static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
                 cl_object_get(obj);
 		lu_object_ref_add_at(&obj->co_lu, &lock->cll_obj_ref, "cl_lock",
 				     lock);
-                CFS_INIT_LIST_HEAD(&lock->cll_layers);
-                CFS_INIT_LIST_HEAD(&lock->cll_linkage);
-                CFS_INIT_LIST_HEAD(&lock->cll_inclosure);
-                lu_ref_init(&lock->cll_reference);
-                lu_ref_init(&lock->cll_holders);
+		CFS_INIT_LIST_HEAD(&lock->cll_layers);
+		CFS_INIT_LIST_HEAD(&lock->cll_linkage);
+		CFS_INIT_LIST_HEAD(&lock->cll_inclosure);
+		lu_ref_init(&lock->cll_reference);
+		lu_ref_init(&lock->cll_holders);
 		mutex_init(&lock->cll_guard);
 		lockdep_set_class(&lock->cll_guard, &cl_lock_guard_class);
-                cfs_waitq_init(&lock->cll_wq);
-                head = obj->co_lu.lo_header;
+		init_waitqueue_head(&lock->cll_wq);
+		head = obj->co_lu.lo_header;
 		CS_LOCKSTATE_INC(obj, CLS_NEW);
 		CS_LOCK_INC(obj, total);
 		CS_LOCK_INC(obj, create);
-                cl_lock_lockdep_init(lock);
-                cfs_list_for_each_entry(obj, &head->loh_layers,
-                                        co_lu.lo_linkage) {
+		cl_lock_lockdep_init(lock);
+		cfs_list_for_each_entry(obj, &head->loh_layers,
+					co_lu.lo_linkage) {
                         int err;
 
                         err = obj->co_ops->coo_lock_init(env, obj, lock, io);
@@ -946,65 +946,65 @@ EXPORT_SYMBOL(cl_lock_hold_release);
  */
 int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
 {
-        cfs_waitlink_t waiter;
-        cfs_sigset_t blocked;
-        int result;
+	wait_queue_t waiter;
+	cfs_sigset_t blocked;
+	int result;
 
-        ENTRY;
-        LINVRNT(cl_lock_is_mutexed(lock));
-        LINVRNT(cl_lock_invariant(env, lock));
-        LASSERT(lock->cll_depth == 1);
-        LASSERT(lock->cll_state != CLS_FREEING); /* too late to wait */
+	ENTRY;
+	LINVRNT(cl_lock_is_mutexed(lock));
+	LINVRNT(cl_lock_invariant(env, lock));
+	LASSERT(lock->cll_depth == 1);
+	LASSERT(lock->cll_state != CLS_FREEING); /* too late to wait */
 
-        cl_lock_trace(D_DLMTRACE, env, "state wait lock", lock);
-        result = lock->cll_error;
-        if (result == 0) {
-                /* To avoid being interrupted by the 'non-fatal' signals
-                 * (SIGCHLD, for instance), we'd block them temporarily.
-                 * LU-305 */
-                blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
+	cl_lock_trace(D_DLMTRACE, env, "state wait lock", lock);
+	result = lock->cll_error;
+	if (result == 0) {
+		/* To avoid being interrupted by the 'non-fatal' signals
+		 * (SIGCHLD, for instance), we'd block them temporarily.
+		 * LU-305 */
+		blocked = cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
 
-                cfs_waitlink_init(&waiter);
-                cfs_waitq_add(&lock->cll_wq, &waiter);
-                cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cl_lock_mutex_put(env, lock);
+		init_waitqueue_entry_current(&waiter);
+		add_wait_queue(&lock->cll_wq, &waiter);
+		set_current_state(TASK_INTERRUPTIBLE);
+		cl_lock_mutex_put(env, lock);
 
-                LASSERT(cl_lock_nr_mutexed(env) == 0);
+		LASSERT(cl_lock_nr_mutexed(env) == 0);
 
 		/* Returning ERESTARTSYS instead of EINTR so syscalls
 		 * can be restarted if signals are pending here */
 		result = -ERESTARTSYS;
 		if (likely(!OBD_FAIL_CHECK(OBD_FAIL_LOCK_STATE_WAIT_INTR))) {
-			cfs_waitq_wait(&waiter, CFS_TASK_INTERRUPTIBLE);
+			waitq_wait(&waiter, TASK_INTERRUPTIBLE);
 			if (!cfs_signal_pending())
 				result = 0;
 		}
 
-                cl_lock_mutex_get(env, lock);
-                cfs_set_current_state(CFS_TASK_RUNNING);
-                cfs_waitq_del(&lock->cll_wq, &waiter);
+		cl_lock_mutex_get(env, lock);
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&lock->cll_wq, &waiter);
 
-                /* Restore old blocked signals */
-                cfs_restore_sigs(blocked);
-        }
-        RETURN(result);
+		/* Restore old blocked signals */
+		cfs_restore_sigs(blocked);
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_lock_state_wait);
 
 static void cl_lock_state_signal(const struct lu_env *env, struct cl_lock *lock,
-                                 enum cl_lock_state state)
+				 enum cl_lock_state state)
 {
-        const struct cl_lock_slice *slice;
+	const struct cl_lock_slice *slice;
 
-        ENTRY;
-        LINVRNT(cl_lock_is_mutexed(lock));
-        LINVRNT(cl_lock_invariant(env, lock));
+	ENTRY;
+	LINVRNT(cl_lock_is_mutexed(lock));
+	LINVRNT(cl_lock_invariant(env, lock));
 
-        cfs_list_for_each_entry(slice, &lock->cll_layers, cls_linkage)
-                if (slice->cls_ops->clo_state != NULL)
-                        slice->cls_ops->clo_state(env, slice, state);
-        cfs_waitq_broadcast(&lock->cll_wq);
-        EXIT;
+	cfs_list_for_each_entry(slice, &lock->cll_layers, cls_linkage)
+		if (slice->cls_ops->clo_state != NULL)
+			slice->cls_ops->clo_state(env, slice, state);
+	wake_up_all(&lock->cll_wq);
+	EXIT;
 }
 
 /**
@@ -2007,12 +2007,12 @@ int cl_lock_discard_pages(const struct lu_env *env, struct cl_lock *lock)
                 if (info->clt_next_index > descr->cld_end)
                         break;
 
-                if (res == CLP_GANG_RESCHED)
-                        cfs_cond_resched();
-        } while (res != CLP_GANG_OKAY);
+		if (res == CLP_GANG_RESCHED)
+			cond_resched();
+	} while (res != CLP_GANG_OKAY);
 out:
-        cl_io_fini(env, io);
-        RETURN(result);
+	cl_io_fini(env, io);
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_lock_discard_pages);
 
@@ -2237,15 +2237,15 @@ EXPORT_SYMBOL(cl_lock_user_add);
 
 void cl_lock_user_del(const struct lu_env *env, struct cl_lock *lock)
 {
-        LINVRNT(cl_lock_is_mutexed(lock));
-        LINVRNT(cl_lock_invariant(env, lock));
-        LASSERT(lock->cll_users > 0);
+	LINVRNT(cl_lock_is_mutexed(lock));
+	LINVRNT(cl_lock_invariant(env, lock));
+	LASSERT(lock->cll_users > 0);
 
-        ENTRY;
-        cl_lock_used_mod(env, lock, -1);
-        if (lock->cll_users == 0)
-                cfs_waitq_broadcast(&lock->cll_wq);
-        EXIT;
+	ENTRY;
+	cl_lock_used_mod(env, lock, -1);
+	if (lock->cll_users == 0)
+		wake_up_all(&lock->cll_wq);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_lock_user_del);
 

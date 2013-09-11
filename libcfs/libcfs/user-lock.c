@@ -172,7 +172,7 @@ void init_completion(struct completion *c)
 {
 	LASSERT(c != NULL);
 	c->done = 0;
-	cfs_waitq_init(&c->wait);
+	init_waitqueue_head(&c->wait);
 }
 
 void fini_completion(struct completion *c)
@@ -183,7 +183,7 @@ void complete(struct completion *c)
 {
 	LASSERT(c != NULL);
 	c->done  = 1;
-	cfs_waitq_signal(&c->wait);
+	wake_up(&c->wait);
 }
 
 void wait_for_completion(struct completion *c)

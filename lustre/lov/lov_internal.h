@@ -83,7 +83,7 @@ struct lov_request_set {
 	struct brw_page			*set_pga;
 	struct lov_lock_handles		*set_lockh;
 	cfs_list_t			set_list;
-	cfs_waitq_t			set_waitq;
+	wait_queue_head_t		set_waitq;
 	spinlock_t			set_lock;
 };
 

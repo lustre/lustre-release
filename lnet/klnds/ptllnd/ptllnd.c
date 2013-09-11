@@ -571,18 +571,18 @@ kptllnd_base_shutdown (void)
                 kptllnd_data.kptl_shutdown = 2;
                 cfs_mb();
 
-                i = 2;
-                while (cfs_atomic_read (&kptllnd_data.kptl_nthreads) != 0) {
-                        /* Wake up all threads*/
-                        cfs_waitq_broadcast(&kptllnd_data.kptl_sched_waitq);
-                        cfs_waitq_broadcast(&kptllnd_data.kptl_watchdog_waitq);
+		i = 2;
+		while (cfs_atomic_read (&kptllnd_data.kptl_nthreads) != 0) {
+			/* Wake up all threads*/
+			wake_up_all(&kptllnd_data.kptl_sched_waitq);
+			wake_up_all(&kptllnd_data.kptl_watchdog_waitq);
 
-                        i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-                               "Waiting for %d threads to terminate\n",
-                               cfs_atomic_read(&kptllnd_data.kptl_nthreads));
-                        cfs_pause(cfs_time_seconds(1));
-                }
+			i++;
+			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+			       "Waiting for %d threads to terminate\n",
+			       cfs_atomic_read(&kptllnd_data.kptl_nthreads));
+			cfs_pause(cfs_time_seconds(1));
+		}
 
                 CDEBUG(D_NET, "All Threads stopped\n");
                 LASSERT(cfs_list_empty(&kptllnd_data.kptl_sched_txq));
@@ -678,12 +678,12 @@ kptllnd_base_startup (void)
 	rwlock_init(&kptllnd_data.kptl_net_rw_lock);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_nets);
 
-        /* Setup the sched locks/lists/waitq */
+	/* Setup the sched locks/lists/waitq */
 	spin_lock_init(&kptllnd_data.kptl_sched_lock);
-        cfs_waitq_init(&kptllnd_data.kptl_sched_waitq);
-        CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_txq);
-        CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxq);
-        CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxbq);
+	init_waitqueue_head(&kptllnd_data.kptl_sched_waitq);
+	CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_txq);
+	CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxq);
+	CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxbq);
 
         /* Init kptl_ptlid2str_lock before any call to kptllnd_ptlid2str */
 	spin_lock_init(&kptllnd_data.kptl_ptlid2str_lock);
@@ -775,9 +775,9 @@ kptllnd_base_startup (void)
         kptllnd_data.kptl_nak_msg->ptlm_srcstamp = kptllnd_data.kptl_incarnation;
 
 	rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
-        cfs_waitq_init(&kptllnd_data.kptl_watchdog_waitq);
-        CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
-        CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
+	init_waitqueue_head(&kptllnd_data.kptl_watchdog_waitq);
+	CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
+	CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
 
         /* Allocate and setup the peer hash table */
         kptllnd_data.kptl_peer_hash_size =

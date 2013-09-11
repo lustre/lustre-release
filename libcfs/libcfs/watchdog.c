@@ -70,7 +70,7 @@ struct lc_watchdog {
  */
 static struct completion lcw_start_completion;
 static struct completion  lcw_stop_completion;
-static cfs_waitq_t lcw_event_waitq;
+static wait_queue_head_t lcw_event_waitq;
 
 /*
  * Set this and wake lcw_event_waitq to stop the dispatcher.
@@ -135,7 +135,7 @@ static void lcw_cb(ulong_ptr_t data)
 	spin_lock_bh(&lcw_pending_timers_lock);
 	lcw->lcw_refcount++; /* +1 for pending list */
 	cfs_list_add(&lcw->lcw_list, &lcw_pending_timers);
-	cfs_waitq_signal(&lcw_event_waitq);
+	wake_up(&lcw_event_waitq);
 
 	spin_unlock_bh(&lcw_pending_timers_lock);
 	spin_unlock_bh(&lcw->lcw_lock);
@@ -303,7 +303,7 @@ static void lcw_dispatch_start(void)
 
 	init_completion(&lcw_stop_completion);
 	init_completion(&lcw_start_completion);
-        cfs_waitq_init(&lcw_event_waitq);
+	init_waitqueue_head(&lcw_event_waitq);
 
 	CDEBUG(D_INFO, "starting dispatch thread\n");
 	task = kthread_run(lcw_dispatch_main, NULL, "lc_watchdogd");
@@ -327,7 +327,7 @@ static void lcw_dispatch_stop(void)
 	CDEBUG(D_INFO, "trying to stop watchdog dispatcher.\n");
 
 	set_bit(LCW_FLAG_STOP, &lcw_flags);
-	cfs_waitq_signal(&lcw_event_waitq);
+	wake_up(&lcw_event_waitq);
 
 	wait_for_completion(&lcw_stop_completion);
 

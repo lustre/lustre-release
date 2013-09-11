@@ -2091,12 +2091,12 @@ void ll_umount_begin(struct super_block *sb)
 		OBD_FREE_PTR(ioc_data);
 	}
 
-        /* Really, we'd like to wait until there are no requests outstanding,
-         * and then continue.  For now, we just invalidate the requests,
-         * schedule() and sleep one second if needed, and hope.
-         */
-        cfs_schedule();
-        EXIT;
+	/* Really, we'd like to wait until there are no requests outstanding,
+	 * and then continue.  For now, we just invalidate the requests,
+	 * schedule() and sleep one second if needed, and hope.
+	 */
+	schedule();
+	EXIT;
 }
 
 int ll_remount_fs(struct super_block *sb, int *flags, char *data)

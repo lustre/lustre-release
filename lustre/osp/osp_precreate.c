@@ -70,7 +70,7 @@ static void osp_statfs_timer_cb(unsigned long _d)
 	struct osp_device *d = (struct osp_device *) _d;
 
 	LASSERT(d);
-	cfs_waitq_signal(&d->opd_pre_waitq);
+	wake_up(&d->opd_pre_waitq);
 }
 
 static int osp_statfs_interpret(const struct lu_env *env,
@@ -108,7 +108,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	RETURN(0);
 out:
 	/* couldn't update statfs, try again as soon as possible */
-	cfs_waitq_signal(&d->opd_pre_waitq);
+	wake_up(&d->opd_pre_waitq);
 	if (req->rq_import_generation == imp->imp_generation)
 		CDEBUG(D_CACHE, "%s: couldn't update statfs: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
@@ -174,7 +174,7 @@ void osp_statfs_need_now(struct osp_device *d)
 		 */
 		d->opd_statfs_fresh_till = cfs_time_shift(-1);
 		cfs_timer_disarm(&d->opd_statfs_timer);
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 	}
 }
 
@@ -459,7 +459,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 			osp_pre_update_status(d, -ENOSPC);
 			rc = -ENOSPC;
 		}
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 		GOTO(out_req, rc);
 	}
 
@@ -516,7 +516,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
-	cfs_waitq_signal(&d->opd_pre_user_waitq);
+	wake_up(&d->opd_pre_user_waitq);
 
 	ptlrpc_req_finished(req);
 	RETURN(rc);
@@ -741,7 +741,7 @@ out:
 			 * this OSP isn't quite functional yet */
 			osp_pre_update_status(d, rc);
 		} else {
-			cfs_waitq_signal(&d->opd_pre_user_waitq);
+			wake_up(&d->opd_pre_user_waitq);
 		}
 	}
 
@@ -801,7 +801,7 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 			d->opd_pre_grow_slow = 0;
 			d->opd_pre_grow_count = OST_MIN_PRECREATE;
 			spin_unlock(&d->opd_pre_lock);
-			cfs_waitq_signal(&d->opd_pre_waitq);
+			wake_up(&d->opd_pre_waitq);
 			CDEBUG(D_INFO, "%s: no space: "LPU64" blocks, "LPU64
 			       " free, "LPU64" used, "LPU64" avail -> %d: "
 			       "rc = %d\n", d->opd_obd->obd_name,
@@ -811,7 +811,7 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 	}
 
 out:
-	cfs_waitq_signal(&d->opd_pre_user_waitq);
+	wake_up(&d->opd_pre_user_waitq);
 }
 
 static int osp_init_pre_fid(struct osp_device *osp)
@@ -888,7 +888,7 @@ static int osp_precreate_thread(void *_arg)
 	spin_lock(&d->opd_pre_lock);
 	thread->t_flags = SVC_RUNNING;
 	spin_unlock(&d->opd_pre_lock);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	while (osp_precreate_running(d)) {
 		/*
@@ -990,7 +990,7 @@ static int osp_precreate_thread(void *_arg)
 
 	thread->t_flags = SVC_STOPPED;
 	lu_env_fini(&env);
-	cfs_waitq_signal(&thread->t_ctl_waitq);
+	wake_up(&thread->t_ctl_waitq);
 
 	RETURN(0);
 }
@@ -1086,7 +1086,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 			/* XXX: don't wake up if precreation is in progress */
 			if (osp_precreate_near_empty_nolock(env, d) &&
 			   !osp_precreate_end_seq_nolock(env, d))
-				cfs_waitq_signal(&d->opd_pre_waitq);
+				wake_up(&d->opd_pre_waitq);
 
 			break;
 		}
@@ -1115,7 +1115,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		}
 
 		/* XXX: don't wake up if precreation is in progress */
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 
 		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
 				osp_precreate_timeout_condition, d);
@@ -1162,7 +1162,7 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 	 * osp_precreate_thread() just before orphan cleanup
 	 */
 	if (unlikely(d->opd_pre_reserved == 0 && d->opd_pre_status))
-		cfs_waitq_signal(&d->opd_pre_waitq);
+		wake_up(&d->opd_pre_waitq);
 
 	return 0;
 }
@@ -1258,9 +1258,9 @@ int osp_init_precreate(struct osp_device *d)
 	d->opd_pre_max_grow_count = OST_MAX_PRECREATE;
 
 	spin_lock_init(&d->opd_pre_lock);
-	cfs_waitq_init(&d->opd_pre_waitq);
-	cfs_waitq_init(&d->opd_pre_user_waitq);
-	cfs_waitq_init(&d->opd_pre_thread.t_ctl_waitq);
+	init_waitqueue_head(&d->opd_pre_waitq);
+	init_waitqueue_head(&d->opd_pre_user_waitq);
+	init_waitqueue_head(&d->opd_pre_thread.t_ctl_waitq);
 
 	/*
 	 * Initialize statfs-related things
@@ -1298,9 +1298,9 @@ void osp_precreate_fini(struct osp_device *d)
 	cfs_timer_disarm(&d->opd_statfs_timer);
 
 	thread->t_flags = SVC_STOPPING;
-	cfs_waitq_signal(&d->opd_pre_waitq);
+	wake_up(&d->opd_pre_waitq);
 
-	cfs_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+	wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 
 	EXIT;
 }

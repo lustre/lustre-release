@@ -262,14 +262,14 @@ struct kptl_data
 	cfs_list_t		kptl_nets;		/* kptl_net instance*/
 
 	spinlock_t		kptl_sched_lock;	/* serialise... */
-        cfs_waitq_t             kptl_sched_waitq;      /* schedulers sleep here */
-        cfs_list_t              kptl_sched_txq;        /* tx requiring attention */
-        cfs_list_t              kptl_sched_rxq;        /* rx requiring attention */
-        cfs_list_t              kptl_sched_rxbq;       /* rxb requiring reposting */
+	wait_queue_head_t       kptl_sched_waitq;      /* schedulers sleep here */
+	cfs_list_t              kptl_sched_txq;        /* tx requiring attention */
+	cfs_list_t              kptl_sched_rxq;        /* rx requiring attention */
+	cfs_list_t              kptl_sched_rxbq;       /* rxb requiring reposting */
 
-        cfs_waitq_t             kptl_watchdog_waitq;   /* watchdog sleeps here */
+	wait_queue_head_t       kptl_watchdog_waitq;   /* watchdog sleeps here */
 
-        kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
+	kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
 	struct kmem_cache	*kptl_rx_cache;         /* rx descripter cache */
 
         cfs_atomic_t            kptl_ntx;              /* # tx descs allocated */
@@ -399,7 +399,7 @@ kptllnd_rx_buffer_decref_locked(kptl_rx_buffer_t *rxb)
 
 		cfs_list_add_tail(&rxb->rxb_repost_list,
 				  &kptllnd_data.kptl_sched_rxbq);
-		cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
+		wake_up(&kptllnd_data.kptl_sched_waitq);
 
 		spin_unlock(&kptllnd_data.kptl_sched_lock);
 	}

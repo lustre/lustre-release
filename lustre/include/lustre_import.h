@@ -192,8 +192,8 @@ struct obd_import {
         cfs_time_t                imp_sec_expire;
         /** @} */
 
-        /** Wait queue for those who need to wait for recovery completion */
-        cfs_waitq_t               imp_recovery_waitq;
+	/** Wait queue for those who need to wait for recovery completion */
+	wait_queue_head_t         imp_recovery_waitq;
 
         /** Number of requests currently in-flight */
         cfs_atomic_t              imp_inflight;

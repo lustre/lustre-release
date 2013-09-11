@@ -993,8 +993,8 @@ ksocknal_accept (lnet_ni_t *ni, cfs_socket_t *sock)
 
 	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 
-        cfs_list_add_tail(&cr->ksncr_list, &ksocknal_data.ksnd_connd_connreqs);
-        cfs_waitq_signal(&ksocknal_data.ksnd_connd_waitq);
+	cfs_list_add_tail(&cr->ksncr_list, &ksocknal_data.ksnd_connd_connreqs);
+	wake_up(&ksocknal_data.ksnd_connd_waitq);
 
 	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
         return 0;
@@ -1484,7 +1484,7 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 
 	cfs_list_add_tail(&conn->ksnc_list,
 			  &ksocknal_data.ksnd_deathrow_conns);
-	cfs_waitq_signal(&ksocknal_data.ksnd_reaper_waitq);
+	wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 	spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 }
@@ -1578,10 +1578,10 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
                                &sched->kss_tx_conns);
                 conn->ksnc_tx_scheduled = 1;
                 /* extra ref for scheduler */
-                ksocknal_conn_addref(conn);
+		ksocknal_conn_addref(conn);
 
-                cfs_waitq_signal (&sched->kss_waitq);
-        }
+		wake_up (&sched->kss_waitq);
+	}
 
 	spin_unlock_bh(&sched->kss_lock);
 
@@ -1623,7 +1623,7 @@ ksocknal_queue_zombie_conn (ksock_conn_t *conn)
 	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
 	cfs_list_add_tail(&conn->ksnc_list, &ksocknal_data.ksnd_zombie_conns);
-	cfs_waitq_signal(&ksocknal_data.ksnd_reaper_waitq);
+	wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 	spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 }
@@ -2311,8 +2311,8 @@ ksocknal_base_shutdown(void)
 
 		/* flag threads to terminate; wake and wait for them to die */
 		ksocknal_data.ksnd_shuttingdown = 1;
-		cfs_waitq_broadcast(&ksocknal_data.ksnd_connd_waitq);
-		cfs_waitq_broadcast(&ksocknal_data.ksnd_reaper_waitq);
+		wake_up_all(&ksocknal_data.ksnd_connd_waitq);
+		wake_up_all(&ksocknal_data.ksnd_reaper_waitq);
 
 		if (ksocknal_data.ksnd_sched_info != NULL) {
 			cfs_percpt_for_each(info, i,
@@ -2322,7 +2322,7 @@ ksocknal_base_shutdown(void)
 
 				for (j = 0; j < info->ksi_nthreads_max; j++) {
 					sched = &info->ksi_scheds[j];
-					cfs_waitq_broadcast(&sched->kss_waitq);
+					wake_up_all(&sched->kss_waitq);
 				}
 			}
 		}
@@ -2392,15 +2392,15 @@ ksocknal_base_startup(void)
 	CFS_INIT_LIST_HEAD(&ksocknal_data.ksnd_nets);
 
 	spin_lock_init(&ksocknal_data.ksnd_reaper_lock);
-        CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_enomem_conns);
-        CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_zombie_conns);
-        CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_deathrow_conns);
-        cfs_waitq_init(&ksocknal_data.ksnd_reaper_waitq);
+	CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_enomem_conns);
+	CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_zombie_conns);
+	CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_deathrow_conns);
+	init_waitqueue_head(&ksocknal_data.ksnd_reaper_waitq);
 
 	spin_lock_init(&ksocknal_data.ksnd_connd_lock);
-        CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_connd_connreqs);
-        CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_connd_routes);
-        cfs_waitq_init(&ksocknal_data.ksnd_connd_waitq);
+	CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_connd_connreqs);
+	CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_connd_routes);
+	init_waitqueue_head(&ksocknal_data.ksnd_connd_waitq);
 
 	spin_lock_init(&ksocknal_data.ksnd_tx_lock);
         CFS_INIT_LIST_HEAD (&ksocknal_data.ksnd_idle_noop_txs);
@@ -2445,7 +2445,7 @@ ksocknal_base_startup(void)
 			CFS_INIT_LIST_HEAD(&sched->kss_rx_conns);
 			CFS_INIT_LIST_HEAD(&sched->kss_tx_conns);
 			CFS_INIT_LIST_HEAD(&sched->kss_zombie_noop_txs);
-			cfs_waitq_init(&sched->kss_waitq);
+			init_waitqueue_head(&sched->kss_waitq);
 		}
         }
 

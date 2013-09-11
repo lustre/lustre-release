@@ -472,20 +472,20 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 {
 	cfs_task_t *task;
 
-        if (!ir_timeout)
-                ir_timeout = OBD_IR_MGS_TIMEOUT;
+	if (!ir_timeout)
+		ir_timeout = OBD_IR_MGS_TIMEOUT;
 
-        fsdb->fsdb_ir_state = IR_FULL;
-        if (cfs_time_before(cfs_time_current_sec(),
-                            mgs->mgs_start_time + ir_timeout))
-                fsdb->fsdb_ir_state = IR_STARTUP;
-        fsdb->fsdb_nonir_clients = 0;
-        CFS_INIT_LIST_HEAD(&fsdb->fsdb_clients);
+	fsdb->fsdb_ir_state = IR_FULL;
+	if (cfs_time_before(cfs_time_current_sec(),
+			    mgs->mgs_start_time + ir_timeout))
+		fsdb->fsdb_ir_state = IR_STARTUP;
+	fsdb->fsdb_nonir_clients = 0;
+	CFS_INIT_LIST_HEAD(&fsdb->fsdb_clients);
 
-        /* start notify thread */
+	/* start notify thread */
 	fsdb->fsdb_mgs = mgs;
-        cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
-        cfs_waitq_init(&fsdb->fsdb_notify_waitq);
+	cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
+	init_waitqueue_head(&fsdb->fsdb_notify_waitq);
 	init_completion(&fsdb->fsdb_notify_comp);
 
 	task = kthread_run(mgs_ir_notify, fsdb,
@@ -496,22 +496,22 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 		CERROR("Start notify thread error %ld\n", PTR_ERR(task));
 
 	mgs_nidtbl_init_fs(env, fsdb);
-        return 0;
+	return 0;
 }
 
 void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 {
 	if (test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags))
-                return;
+		return;
 
-        mgs_fsc_cleanup_by_fsdb(fsdb);
+	mgs_fsc_cleanup_by_fsdb(fsdb);
 
-        mgs_nidtbl_fini_fs(fsdb);
+	mgs_nidtbl_fini_fs(fsdb);
 
-        LASSERT(cfs_list_empty(&fsdb->fsdb_clients));
+	LASSERT(cfs_list_empty(&fsdb->fsdb_clients));
 
-        fsdb->fsdb_notify_stop = 1;
-        cfs_waitq_signal(&fsdb->fsdb_notify_waitq);
+	fsdb->fsdb_notify_stop = 1;
+	wake_up(&fsdb->fsdb_notify_waitq);
 	wait_for_completion(&fsdb->fsdb_notify_comp);
 }
 
@@ -563,14 +563,14 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
         }
 	mutex_unlock(&fsdb->fsdb_mutex);
 
-        LASSERT(ergo(mti->mti_flags & LDD_F_IR_CAPABLE, notify));
-        if (notify) {
-                CDEBUG(D_MGS, "Try to revoke recover lock of %s\n",
-                       fsdb->fsdb_name);
-                cfs_atomic_inc(&fsdb->fsdb_notify_phase);
-                cfs_waitq_signal(&fsdb->fsdb_notify_waitq);
-        }
-        return 0;
+	LASSERT(ergo(mti->mti_flags & LDD_F_IR_CAPABLE, notify));
+	if (notify) {
+		CDEBUG(D_MGS, "Try to revoke recover lock of %s\n",
+		       fsdb->fsdb_name);
+		cfs_atomic_inc(&fsdb->fsdb_notify_phase);
+		wake_up(&fsdb->fsdb_notify_waitq);
+	}
+	return 0;
 }
 
 /* NID table can be cached by two entities: Clients and MDTs */

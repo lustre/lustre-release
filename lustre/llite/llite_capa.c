@@ -167,20 +167,20 @@ static void ll_delete_capa(struct obd_capa *ocapa)
  */
 static int capa_thread_main(void *unused)
 {
-        struct obd_capa *ocapa, *tmp, *next;
-        struct inode *inode = NULL;
-        struct l_wait_info lwi = { 0 };
-        int rc;
-        ENTRY;
+	struct obd_capa *ocapa, *tmp, *next;
+	struct inode *inode = NULL;
+	struct l_wait_info lwi = { 0 };
+	int rc;
+	ENTRY;
 
-        thread_set_flags(&ll_capa_thread, SVC_RUNNING);
-        cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
+	thread_set_flags(&ll_capa_thread, SVC_RUNNING);
+	wake_up(&ll_capa_thread.t_ctl_waitq);
 
-        while (1) {
-                l_wait_event(ll_capa_thread.t_ctl_waitq,
-                             !thread_is_running(&ll_capa_thread) ||
-                             have_expired_capa(),
-                             &lwi);
+	while (1) {
+		l_wait_event(ll_capa_thread.t_ctl_waitq,
+			     !thread_is_running(&ll_capa_thread) ||
+			     have_expired_capa(),
+			     &lwi);
 
                 if (!thread_is_running(&ll_capa_thread))
                         break;
@@ -280,13 +280,13 @@ static int capa_thread_main(void *unused)
 	}
 
 	thread_set_flags(&ll_capa_thread, SVC_STOPPED);
-	cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
+	wake_up(&ll_capa_thread.t_ctl_waitq);
 	RETURN(0);
 }
 
 void ll_capa_timer_callback(unsigned long unused)
 {
-        cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
+	wake_up(&ll_capa_thread.t_ctl_waitq);
 }
 
 int ll_capa_thread_start(void)
@@ -294,7 +294,7 @@ int ll_capa_thread_start(void)
 	cfs_task_t *task;
 	ENTRY;
 
-	cfs_waitq_init(&ll_capa_thread.t_ctl_waitq);
+	init_waitqueue_head(&ll_capa_thread.t_ctl_waitq);
 
 	task = kthread_run(capa_thread_main, NULL, "ll_capa");
 	if (IS_ERR(task)) {
@@ -302,7 +302,7 @@ int ll_capa_thread_start(void)
 			PTR_ERR(task));
 		RETURN(PTR_ERR(task));
 	}
-	cfs_wait_event(ll_capa_thread.t_ctl_waitq,
+	wait_event(ll_capa_thread.t_ctl_waitq,
 		       thread_is_running(&ll_capa_thread));
 
 	RETURN(0);
@@ -310,10 +310,10 @@ int ll_capa_thread_start(void)
 
 void ll_capa_thread_stop(void)
 {
-        thread_set_flags(&ll_capa_thread, SVC_STOPPING);
-        cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
-        cfs_wait_event(ll_capa_thread.t_ctl_waitq,
-                       thread_is_stopped(&ll_capa_thread));
+	thread_set_flags(&ll_capa_thread, SVC_STOPPING);
+	wake_up(&ll_capa_thread.t_ctl_waitq);
+	wait_event(ll_capa_thread.t_ctl_waitq,
+		       thread_is_stopped(&ll_capa_thread));
 }
 
 struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)

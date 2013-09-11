@@ -555,28 +555,28 @@ struct lu_object_header {
 struct fld;
 
 struct lu_site_bkt_data {
-        /**
-         * number of busy object on this bucket
-         */
-        long                      lsb_busy;
-        /**
-         * LRU list, updated on each access to object. Protected by
-         * bucket lock of lu_site::ls_obj_hash.
-         *
-         * "Cold" end of LRU is lu_site::ls_lru.next. Accessed object are
-         * moved to the lu_site::ls_lru.prev (this is due to the non-existence
-         * of list_for_each_entry_safe_reverse()).
-         */
-        cfs_list_t                lsb_lru;
-        /**
-         * Wait-queue signaled when an object in this site is ultimately
-         * destroyed (lu_object_free()). It is used by lu_object_find() to
-         * wait before re-trying when object in the process of destruction is
-         * found in the hash table.
-         *
-         * \see htable_lookup().
-         */
-        cfs_waitq_t               lsb_marche_funebre;
+	/**
+	 * number of busy object on this bucket
+	 */
+	long                      lsb_busy;
+	/**
+	 * LRU list, updated on each access to object. Protected by
+	 * bucket lock of lu_site::ls_obj_hash.
+	 *
+	 * "Cold" end of LRU is lu_site::ls_lru.next. Accessed object are
+	 * moved to the lu_site::ls_lru.prev (this is due to the non-existence
+	 * of list_for_each_entry_safe_reverse()).
+	 */
+	cfs_list_t                lsb_lru;
+	/**
+	 * Wait-queue signaled when an object in this site is ultimately
+	 * destroyed (lu_object_free()). It is used by lu_object_find() to
+	 * wait before re-trying when object in the process of destruction is
+	 * found in the hash table.
+	 *
+	 * \see htable_lookup().
+	 */
+	wait_queue_head_t               lsb_marche_funebre;
 };
 
 enum {

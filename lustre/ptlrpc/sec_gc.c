@@ -117,7 +117,7 @@ void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx)
 	spin_unlock(&sec_gc_ctx_list_lock);
 
 	thread_add_flags(&sec_gc_thread, SVC_SIGNAL);
-	cfs_waitq_signal(&sec_gc_thread.t_ctl_waitq);
+	wake_up(&sec_gc_thread.t_ctl_waitq);
 }
 EXPORT_SYMBOL(sptlrpc_gc_add_ctx);
 
@@ -166,39 +166,39 @@ static void sec_do_gc(struct ptlrpc_sec *sec)
 
 static int sec_gc_main(void *arg)
 {
-        struct ptlrpc_thread *thread = (struct ptlrpc_thread *) arg;
-        struct l_wait_info    lwi;
+	struct ptlrpc_thread *thread = (struct ptlrpc_thread *) arg;
+	struct l_wait_info    lwi;
 
 	unshare_fs_struct();
 
-        /* Record that the thread is running */
-        thread_set_flags(thread, SVC_RUNNING);
-        cfs_waitq_signal(&thread->t_ctl_waitq);
+	/* Record that the thread is running */
+	thread_set_flags(thread, SVC_RUNNING);
+	wake_up(&thread->t_ctl_waitq);
 
-        while (1) {
-                struct ptlrpc_sec *sec;
+	while (1) {
+		struct ptlrpc_sec *sec;
 
-                thread_clear_flags(thread, SVC_SIGNAL);
-                sec_process_ctx_list();
+		thread_clear_flags(thread, SVC_SIGNAL);
+		sec_process_ctx_list();
 again:
-                /* go through sec list do gc.
-                 * FIXME here we iterate through the whole list each time which
-                 * is not optimal. we perhaps want to use balanced binary tree
-                 * to trace each sec as order of expiry time.
-                 * another issue here is we wakeup as fixed interval instead of
-                 * according to each sec's expiry time */
+		/* go through sec list do gc.
+		 * FIXME here we iterate through the whole list each time which
+		 * is not optimal. we perhaps want to use balanced binary tree
+		 * to trace each sec as order of expiry time.
+		 * another issue here is we wakeup as fixed interval instead of
+		 * according to each sec's expiry time */
 		mutex_lock(&sec_gc_mutex);
-                cfs_list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
-                        /* if someone is waiting to be deleted, let it
-                         * proceed as soon as possible. */
-                        if (cfs_atomic_read(&sec_gc_wait_del)) {
-                                CDEBUG(D_SEC, "deletion pending, start over\n");
+		cfs_list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
+			/* if someone is waiting to be deleted, let it
+			 * proceed as soon as possible. */
+			if (cfs_atomic_read(&sec_gc_wait_del)) {
+				CDEBUG(D_SEC, "deletion pending, start over\n");
 				mutex_unlock(&sec_gc_mutex);
-                                goto again;
-                        }
+				goto again;
+			}
 
-                        sec_do_gc(sec);
-                }
+			sec_do_gc(sec);
+		}
 		mutex_unlock(&sec_gc_mutex);
 
 		/* check ctx list again before sleep */
@@ -210,13 +210,13 @@ again:
 			     thread_is_signal(thread),
 			     &lwi);
 
-                if (thread_test_and_clear_flags(thread, SVC_STOPPING))
-                        break;
-        }
+		if (thread_test_and_clear_flags(thread, SVC_STOPPING))
+			break;
+	}
 
-        thread_set_flags(thread, SVC_STOPPED);
-        cfs_waitq_signal(&thread->t_ctl_waitq);
-        return 0;
+	thread_set_flags(thread, SVC_STOPPED);
+	wake_up(&thread->t_ctl_waitq);
+	return 0;
 }
 
 int sptlrpc_gc_init(void)
@@ -228,30 +228,30 @@ int sptlrpc_gc_init(void)
 	spin_lock_init(&sec_gc_list_lock);
 	spin_lock_init(&sec_gc_ctx_list_lock);
 
-        /* initialize thread control */
-        memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));
-        cfs_waitq_init(&sec_gc_thread.t_ctl_waitq);
+	/* initialize thread control */
+	memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));
+	init_waitqueue_head(&sec_gc_thread.t_ctl_waitq);
 
 	task = kthread_run(sec_gc_main, &sec_gc_thread, "sptlrpc_gc");
 	if (IS_ERR(task)) {
 		CERROR("can't start gc thread: %ld\n", PTR_ERR(task));
 		return PTR_ERR(task);
-        }
+	}
 
-        l_wait_event(sec_gc_thread.t_ctl_waitq,
-                     thread_is_running(&sec_gc_thread), &lwi);
-        return 0;
+	l_wait_event(sec_gc_thread.t_ctl_waitq,
+		     thread_is_running(&sec_gc_thread), &lwi);
+	return 0;
 }
 
 void sptlrpc_gc_fini(void)
 {
-        struct l_wait_info lwi = { 0 };
+	struct l_wait_info lwi = { 0 };
 
-        thread_set_flags(&sec_gc_thread, SVC_STOPPING);
-        cfs_waitq_signal(&sec_gc_thread.t_ctl_waitq);
+	thread_set_flags(&sec_gc_thread, SVC_STOPPING);
+	wake_up(&sec_gc_thread.t_ctl_waitq);
 
-        l_wait_event(sec_gc_thread.t_ctl_waitq,
-                     thread_is_stopped(&sec_gc_thread), &lwi);
+	l_wait_event(sec_gc_thread.t_ctl_waitq,
+		     thread_is_stopped(&sec_gc_thread), &lwi);
 }
 
 #else /* !__KERNEL__ */
