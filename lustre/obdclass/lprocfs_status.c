@@ -1969,6 +1969,13 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (!nid || *nid == LNET_NID_ANY)
                 RETURN(0);
 
+	spin_lock(&exp->exp_lock);
+	if (exp->exp_nid_stats != NULL) {
+		spin_unlock(&exp->exp_lock);
+		RETURN(-EALREADY);
+	}
+	spin_unlock(&exp->exp_lock);
+
         obd = exp->exp_obd;
 
         CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash);
@@ -1988,19 +1995,12 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                old_stat, libcfs_nid2str(*nid),
                cfs_atomic_read(&new_stat->nid_exp_ref_count));
 
-        /* We need to release old stats because lprocfs_exp_cleanup() hasn't
-         * been and will never be called. */
-        if (exp->exp_nid_stats) {
-                nidstat_putref(exp->exp_nid_stats);
-                exp->exp_nid_stats = NULL;
-        }
-
-        /* Return -EALREADY here so that we know that the /proc
-         * entry already has been created */
-        if (old_stat != new_stat) {
-                exp->exp_nid_stats = old_stat;
-                GOTO(destroy_new, rc = -EALREADY);
-        }
+	/* Return -EALREADY here so that we know that the /proc
+	 * entry already has been created */
+	if (old_stat != new_stat) {
+		nidstat_putref(old_stat);
+		GOTO(destroy_new, rc = -EALREADY);
+	}
         /* not found - create */
         OBD_ALLOC(buffer, LNET_NIDSTR_SIZE);
         if (buffer == NULL)
@@ -2036,7 +2036,9 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new_ns, rc);
         }
 
-        exp->exp_nid_stats = new_stat;
+	spin_lock(&exp->exp_lock);
+	exp->exp_nid_stats = new_stat;
+	spin_unlock(&exp->exp_lock);
         *newnid = 1;
         /* protect competitive add to list, not need locking on destroy */
 	spin_lock(&obd->obd_nid_lock);
