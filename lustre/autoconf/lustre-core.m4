@@ -418,42 +418,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.27 use 5th parameter in quota_on for remount.
-AC_DEFUN([LC_QUOTA_ON_5ARGS],
-[AC_MSG_CHECKING([quota_on needs 5 parameters])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/quota.h>
-],[
-        struct quotactl_ops *qop = NULL;
-        qop->quota_on(NULL, 0, 0, NULL, 0);
-],[
-        AC_DEFINE(HAVE_QUOTA_ON_5ARGS, 1,
-                [quota_on needs 5 paramters])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.27 use 3th parameter in quota_off for remount.
-AC_DEFUN([LC_QUOTA_OFF_3ARGS],
-[AC_MSG_CHECKING([quota_off needs 3 parameters])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/quota.h>
-],[
-        struct quotactl_ops *qop = NULL;
-        qop->quota_off(NULL, 0, 0);
-],[
-        AC_DEFINE(HAVE_QUOTA_OFF_3ARGS, 1,
-                [quota_off needs 3 paramters])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.34 has quotactl_ops->[sg]et_dqblk that take struct fs_disk_quota
 AC_DEFUN([LC_HAVE_DQUOT_FS_DISK_QUOTA],
 tmp_flags="$EXTRA_KCFLAGS"
@@ -756,28 +720,6 @@ AC_DEFINE(HAVE_BLKDEV_GET_BY_DEV, 1,
             [blkdev_get_by_dev is exported by the kernel])
 ],[
 ])
-])
-
-#
-# 2.6.38 use path as 4th parameter in quota_on.
-#
-AC_DEFUN([LC_QUOTA_ON_USE_PATH],
-[AC_MSG_CHECKING([quota_on use path as parameter])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/quota.h>
-],[
-        ((struct quotactl_ops *)0)->quota_on(NULL, 0, 0, ((struct path*)0));
-],[
-        AC_DEFINE(HAVE_QUOTA_ON_USE_PATH, 1,
-                [quota_on use path as 4th paramter])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -1383,10 +1325,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BIO_ENDIO_2ARG
          LC_PROCFS_DELETED
 
-         # 2.6.27
-         LC_QUOTA_ON_5ARGS
-         LC_QUOTA_OFF_3ARGS
-
          # 2.6.27.15-2 sles11
          LC_BI_HW_SEGMENTS
          LC_HAVE_QUOTAIO_H
@@ -1413,7 +1351,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.38
          LC_BLKDEV_GET_BY_DEV
          LC_GENERIC_PERMISSION
-         LC_QUOTA_ON_USE_PATH
          LC_DCACHE_LOCK
 	 LC_INODE_I_RCU
          LC_D_COMPARE_7ARGS

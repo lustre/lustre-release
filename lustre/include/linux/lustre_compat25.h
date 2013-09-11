@@ -241,51 +241,6 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #define SLAB_DESTROY_BY_RCU 0
 #endif
 
-static inline int
-ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
-{
-        int rc;
-
-        if (sb->s_qcop->quota_on) {
-#ifdef HAVE_QUOTA_ON_USE_PATH
-                struct path path;
-
-                rc = kern_path(name, LOOKUP_FOLLOW, &path);
-                if (!rc)
-                        return rc;
-#endif
-                rc = sb->s_qcop->quota_on(sb, off, ver
-#ifdef HAVE_QUOTA_ON_USE_PATH
-                                            , &path
-#else
-                                            , name
-#endif
-#ifdef HAVE_QUOTA_ON_5ARGS
-                                            , remount
-#endif
-                                           );
-#ifdef HAVE_QUOTA_ON_USE_PATH
-                path_put(&path);
-#endif
-                return rc;
-        }
-        else
-                return -ENOSYS;
-}
-
-static inline int ll_quota_off(struct super_block *sb, int off, int remount)
-{
-        if (sb->s_qcop->quota_off) {
-                return sb->s_qcop->quota_off(sb, off
-#ifdef HAVE_QUOTA_OFF_3ARGS
-                                             , remount
-#endif
-                                            );
-        }
-        else
-                return -ENOSYS;
-}
-
 #ifndef HAVE_DQUOT_SUSPEND
 # define ll_vfs_dq_init             vfs_dq_init
 # define ll_vfs_dq_drop             vfs_dq_drop
