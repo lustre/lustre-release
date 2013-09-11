@@ -51,6 +51,10 @@
  * liblustre is single-threaded, so most "synchronization" APIs are trivial.
  */
 
+#ifndef EXPORT_SYMBOL
+# define EXPORT_SYMBOL(s)
+#endif
+
 #ifndef __KERNEL__
 
 typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
@@ -123,16 +127,17 @@ typedef struct {
 
 #define cfs_in_interrupt()    (0)
 
-typedef void cfs_psdev_t;
+struct miscdevice{
+};
 
-static inline int cfs_psdev_register(cfs_psdev_t *foo)
+static inline int misc_register(struct miscdevice *foo)
 {
-        return 0;
+	return 0;
 }
 
-static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
+static inline int misc_deregister(struct miscdevice *foo)
 {
-        return 0;
+	return 0;
 }
 
 #define cfs_sigfillset(l)               do {} while (0)
@@ -142,7 +147,7 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 
 #define CFS_DAEMON_FLAGS                0
 
-#define CFS_L1_CACHE_ALIGN(x)		(x)
+#define L1_CACHE_ALIGN(x)		(x)
 
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);

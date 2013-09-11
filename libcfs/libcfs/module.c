@@ -153,35 +153,35 @@ kportal_memhog_alloc (struct libcfs_device_userstate *ldu, int npages, int flags
 /* called when opening /dev/device */
 static int libcfs_psdev_open(unsigned long flags, void *args)
 {
-        struct libcfs_device_userstate *ldu;
-        ENTRY;
+	struct libcfs_device_userstate *ldu;
+	ENTRY;
 
-        PORTAL_MODULE_USE;
+	try_module_get(THIS_MODULE);
 
-        LIBCFS_ALLOC(ldu, sizeof(*ldu));
-        if (ldu != NULL) {
-                ldu->ldu_memhog_pages = 0;
-                ldu->ldu_memhog_root_page = NULL;
-        }
-        *(struct libcfs_device_userstate **)args = ldu;
+	LIBCFS_ALLOC(ldu, sizeof(*ldu));
+	if (ldu != NULL) {
+		ldu->ldu_memhog_pages = 0;
+		ldu->ldu_memhog_root_page = NULL;
+	}
+	*(struct libcfs_device_userstate **)args = ldu;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /* called when closing /dev/device */
 static int libcfs_psdev_release(unsigned long flags, void *args)
 {
-        struct libcfs_device_userstate *ldu;
-        ENTRY;
+	struct libcfs_device_userstate *ldu;
+	ENTRY;
 
-        ldu = (struct libcfs_device_userstate *)args;
-        if (ldu != NULL) {
-                kportal_memhog_free(ldu);
-                LIBCFS_FREE(ldu, sizeof(*ldu));
-        }
+	ldu = (struct libcfs_device_userstate *)args;
+	if (ldu != NULL) {
+		kportal_memhog_free(ldu);
+		LIBCFS_FREE(ldu, sizeof(*ldu));
+	}
 
-        PORTAL_MODULE_UNUSE;
-        RETURN(0);
+	module_put(THIS_MODULE);
+	RETURN(0);
 }
 
 static struct rw_semaphore ioctl_list_sem;
@@ -287,21 +287,21 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
                 break;
 
         case IOC_LIBCFS_PING_TEST: {
-                extern void (kping_client)(struct libcfs_ioctl_data *);
-                void (*ping)(struct libcfs_ioctl_data *);
+		extern void (kping_client)(struct libcfs_ioctl_data *);
+		void (*ping)(struct libcfs_ioctl_data *);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid %s (%s)\n",
-                       data->ioc_count, libcfs_nid2str(data->ioc_nid),
-                       libcfs_nid2str(data->ioc_nid));
-                ping = PORTAL_SYMBOL_GET(kping_client);
-                if (!ping)
-                        CERROR("PORTAL_SYMBOL_GET failed\n");
-                else {
-                        ping(data);
-                        PORTAL_SYMBOL_PUT(kping_client);
-                }
-                RETURN(0);
-        }
+		CDEBUG(D_IOCTL, "doing %d pings to nid %s (%s)\n",
+		       data->ioc_count, libcfs_nid2str(data->ioc_nid),
+		       libcfs_nid2str(data->ioc_nid));
+		ping = symbol_get(kping_client);
+		if (!ping) {
+			CERROR("symbol_get failed\n");
+		} else {
+			ping(data);
+			symbol_put(kping_client);
+		}
+		RETURN(0);
+	}
 
         default: {
                 struct libcfs_ioctl_handler *hand;
@@ -366,7 +366,7 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
-extern cfs_psdev_t libcfs_dev;
+extern struct miscdevice libcfs_dev;
 extern struct rw_semaphore cfs_tracefile_sem;
 extern struct mutex cfs_trace_thread_mutex;
 extern struct cfs_wi_sched *cfs_sched_rehash;
@@ -389,7 +389,7 @@ static int init_libcfs_module(void)
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
-		printk(CFS_KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
+		printk(KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
 		return (rc);
 	}
 
@@ -404,7 +404,7 @@ static int init_libcfs_module(void)
 		goto cleanup_debug;
 	}
 #endif
-	rc = cfs_psdev_register(&libcfs_dev);
+	rc = misc_register(&libcfs_dev);
 	if (rc) {
 		CERROR("misc_register: error %d\n", rc);
 		goto cleanup_lwt;
@@ -445,7 +445,7 @@ static int init_libcfs_module(void)
  cleanup_wi:
 	cfs_wi_shutdown();
  cleanup_deregister:
-	cfs_psdev_deregister(&libcfs_dev);
+	misc_deregister(&libcfs_dev);
  cleanup_lwt:
 #if LWT_SUPPORT
 	lwt_fini();
@@ -472,7 +472,7 @@ static void exit_libcfs_module(void)
 	cfs_crypto_unregister();
 	cfs_wi_shutdown();
 
-	rc = cfs_psdev_deregister(&libcfs_dev);
+	rc = misc_deregister(&libcfs_dev);
 	if (rc)
 		CERROR("misc_deregister error %d\n", rc);
 
@@ -487,7 +487,7 @@ static void exit_libcfs_module(void)
 
 	rc = libcfs_debug_cleanup();
 	if (rc)
-		printk(CFS_KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
+		printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
 		       rc);
 
 	fini_rwsem(&ioctl_list_sem);

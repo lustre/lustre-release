@@ -89,7 +89,7 @@ int cfs_tracefile_init_arch()
 
 out:
 	cfs_tracefile_fini_arch();
-	printk(CFS_KERN_ERR "lnet: Not enough memory\n");
+	printk(KERN_ERR "lnet: Not enough memory\n");
 	return -ENOMEM;
 
 }
@@ -194,16 +194,16 @@ void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 
 	if ((mask & D_EMERG) != 0) {
 		prefix = "LustreError";
-		ptype = CFS_KERN_EMERG;
+		ptype = KERN_EMERG;
 	} else if ((mask & D_ERROR) != 0) {
 		prefix = "LustreError";
-		ptype = CFS_KERN_ERR;
+		ptype = KERN_ERR;
 	} else if ((mask & D_WARNING) != 0) {
 		prefix = "Lustre";
-		ptype = CFS_KERN_WARNING;
+		ptype = KERN_WARNING;
 	} else if ((mask & (D_CONSOLE | libcfs_printk)) != 0) {
 		prefix = "Lustre";
-		ptype = CFS_KERN_INFO;
+		ptype = KERN_INFO;
 	}
 
 	if ((mask & D_CONSOLE) != 0) {

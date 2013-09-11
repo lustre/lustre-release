@@ -487,7 +487,7 @@ lprocfs_stats_counter_size(struct lprocfs_stats *stats)
 		percpusize += stats->ls_num * sizeof(__s64);
 
 	if ((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0)
-		percpusize = CFS_L1_CACHE_ALIGN(percpusize);
+		percpusize = L1_CACHE_ALIGN(percpusize);
 
 	return percpusize;
 }

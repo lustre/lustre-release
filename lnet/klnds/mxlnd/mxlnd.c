@@ -515,9 +515,9 @@ mxlnd_shutdown (lnet_ni_t *ni)
                          "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
-        kmxlnd_data.kmx_init = MXLND_INIT_NOTHING;
-        PORTAL_MODULE_UNUSE;
-        return;
+	kmxlnd_data.kmx_init = MXLND_INIT_NOTHING;
+	module_put(THIS_MODULE);
+	return;
 }
 
 /**
@@ -551,8 +551,8 @@ mxlnd_startup (lnet_ni_t *ni)
         if (ni->ni_maxtxcredits < ni->ni_peertxcredits)
                 ni->ni_maxtxcredits = ni->ni_peertxcredits;
 
-        PORTAL_MODULE_USE;
-        memset (&kmxlnd_data, 0, sizeof (kmxlnd_data));
+	try_module_get(THIS_MODULE);
+	memset (&kmxlnd_data, 0, sizeof (kmxlnd_data));
 
         kmxlnd_data.kmx_ni = ni;
         ni->ni_data = &kmxlnd_data;

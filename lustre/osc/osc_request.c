@@ -2943,10 +2943,10 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int err = 0;
         ENTRY;
 
-        if (!cfs_try_module_get(THIS_MODULE)) {
-                CERROR("Can't get module. Is it alive?");
-                return -EINVAL;
-        }
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
                 char *buf;
@@ -3017,7 +3017,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, err = -ENOTTY);
 	}
 out:
-	cfs_module_put(THIS_MODULE);
+	module_put(THIS_MODULE);
 	return err;
 }
 

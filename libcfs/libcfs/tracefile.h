@@ -183,7 +183,7 @@ union cfs_trace_data_union {
 		/* The factors to share debug memory. */
 		unsigned short          tcd_pages_factor;
 	} tcd;
-	char __pad[CFS_L1_CACHE_ALIGN(sizeof(struct cfs_trace_cpu_data))];
+	char __pad[L1_CACHE_ALIGN(sizeof(struct cfs_trace_cpu_data))];
 };
 
 #define TCD_MAX_TYPES      8

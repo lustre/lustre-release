@@ -30,7 +30,7 @@
 /* This is really lnet_proc.c. You might need to update sanity test 215
  * if any file format is changed. */
 
-static cfs_sysctl_table_header_t *lnet_table_header = NULL;
+static struct ctl_table_header *lnet_table_header = NULL;
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
 #define CTL_LNET         (0x100)
@@ -862,7 +862,7 @@ out:
 }
 DECLARE_PROC_HANDLER(proc_lnet_portal_rotor);
 
-static cfs_sysctl_table_t lnet_table[] = {
+static struct ctl_table lnet_table[] = {
         /*
          * NB No .strategy entries have been provided since sysctl(8) prefers
          * to go via /proc for portability.
@@ -914,7 +914,7 @@ static cfs_sysctl_table_t lnet_table[] = {
 	}
 };
 
-static cfs_sysctl_table_t top_table[] = {
+static struct ctl_table top_table[] = {
         {
                 INIT_CTL_NAME(CTL_LNET)
                 .procname = "lnet",
@@ -932,8 +932,8 @@ void
 lnet_proc_init(void)
 {
 #ifdef CONFIG_SYSCTL
-        if (lnet_table_header == NULL)
-                lnet_table_header = cfs_register_sysctl_table(top_table, 0);
+	if (lnet_table_header == NULL)
+		lnet_table_header = register_sysctl_table(top_table);
 #endif
 }
 
@@ -941,10 +941,10 @@ void
 lnet_proc_fini(void)
 {
 #ifdef CONFIG_SYSCTL
-        if (lnet_table_header != NULL)
-                cfs_unregister_sysctl_table(lnet_table_header);
+	if (lnet_table_header != NULL)
+		unregister_sysctl_table(lnet_table_header);
 
-        lnet_table_header = NULL;
+	lnet_table_header = NULL;
 #endif
 }
 

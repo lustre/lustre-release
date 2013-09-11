@@ -229,20 +229,20 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
  */
 void libcfs_debug_dumplog_internal(void *arg)
 {
-        CFS_DECL_JOURNAL_DATA;
+	CFS_DECL_JOURNAL_DATA;
 
-        CFS_PUSH_JOURNAL;
+	CFS_PUSH_JOURNAL;
 
-        if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0) {
-                snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s.%ld." LPLD, libcfs_debug_file_path_arr,
-                         cfs_time_current_sec(), (long_ptr_t)arg);
-                printk(CFS_KERN_ALERT "LustreError: dumping log to %s\n",
-                       debug_file_name);
-                cfs_tracefile_dump_all_pages(debug_file_name);
-                libcfs_run_debug_log_upcall(debug_file_name);
-        }
-        CFS_POP_JOURNAL;
+	if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0) {
+		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
+			 "%s.%ld." LPLD, libcfs_debug_file_path_arr,
+			 cfs_time_current_sec(), (long_ptr_t)arg);
+		printk(KERN_ALERT "LustreError: dumping log to %s\n",
+		       debug_file_name);
+		cfs_tracefile_dump_all_pages(debug_file_name);
+		libcfs_run_debug_log_upcall(debug_file_name);
+	}
+	CFS_POP_JOURNAL;
 }
 
 int libcfs_debug_dumplog_thread(void *arg)
@@ -269,7 +269,7 @@ void libcfs_debug_dumplog(void)
 			     (void *)(long)current_pid(),
 			     "libcfs_debug_dumper");
 	if (IS_ERR(dumper))
-		printk(CFS_KERN_ERR "LustreError: cannot start log dump thread:"
+		printk(KERN_ERR "LustreError: cannot start log dump thread:"
 		       " %ld\n", PTR_ERR(dumper));
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
@@ -346,9 +346,9 @@ int libcfs_debug_mark_buffer(const char *text)
 
 void libcfs_debug_set_level(unsigned int debug_level)
 {
-        printk(CFS_KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
-               debug_level);
-        libcfs_debug = debug_level;
+	printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
+	       debug_level);
+	libcfs_debug = debug_level;
 }
 
 EXPORT_SYMBOL(libcfs_debug_set_level);

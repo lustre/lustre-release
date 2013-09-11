@@ -49,9 +49,9 @@
         proc_doulongvec_minmax(table, write, buffer, lenp, ppos);
 #define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
         proc_dostring(table, write, buffer, lenp, ppos);
-#define LL_PROC_PROTO(name)                                             \
-        name(cfs_sysctl_table_t *table, int write,                      \
-             void __user *buffer, size_t *lenp, loff_t *ppos)
+#define LL_PROC_PROTO(name)						\
+	name(struct ctl_table *table, int write,			\
+	     void __user *buffer, size_t *lenp, loff_t *ppos)
 #else
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
         proc_dointvec(table, write, filp, buffer, lenp, ppos);
@@ -60,9 +60,9 @@
         proc_doulongvec_minmax(table, write, filp, buffer, lenp, ppos);
 #define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
         proc_dostring(table, write, filp, buffer, lenp, ppos);
-#define LL_PROC_PROTO(name)                                             \
-        name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
-             void __user *buffer, size_t *lenp, loff_t *ppos)
+#define LL_PROC_PROTO(name)						\
+	name(struct ctl_table *table, int write, struct file *filp,	\
+	     void __user *buffer, size_t *lenp, loff_t *ppos)
 #endif
 #define DECLARE_LL_PROC_PPOS_DECL
 

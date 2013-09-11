@@ -70,10 +70,10 @@ int fsfilt_register_ops(struct fsfilt_operations *fs_ops)
                         /* unlock fsfilt_types list */
                         RETURN(-EEXIST);
                 }
-        } else {
-                PORTAL_MODULE_USE;
-                cfs_list_add(&fs_ops->fs_list, &fsfilt_types);
-        }
+	} else {
+		try_module_get(THIS_MODULE);
+		cfs_list_add(&fs_ops->fs_list, &fsfilt_types);
+	}
 
         /* unlock fsfilt_types list */
         return 0;
@@ -88,12 +88,12 @@ void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
         cfs_list_for_each(p, &fsfilt_types) {
                 struct fsfilt_operations *found;
 
-                found = cfs_list_entry(p, typeof(*found), fs_list);
-                if (found == fs_ops) {
-                        cfs_list_del(p);
-                        PORTAL_MODULE_UNUSE;
-                        break;
-                }
+		found = cfs_list_entry(p, typeof(*found), fs_list);
+		if (found == fs_ops) {
+			cfs_list_del(p);
+			module_put(THIS_MODULE);
+			break;
+		}
         }
         /* unlock fsfilt_types list */
 }
@@ -101,38 +101,38 @@ EXPORT_SYMBOL(fsfilt_unregister_ops);
 
 struct fsfilt_operations *fsfilt_get_ops(const char *type)
 {
-        struct fsfilt_operations *fs_ops;
+	struct fsfilt_operations *fs_ops;
 
-        /* lock fsfilt_types list */
-        if (!(fs_ops = fsfilt_search_type(type))) {
-                char name[32];
-                int rc;
+	/* lock fsfilt_types list */
+	if (!(fs_ops = fsfilt_search_type(type))) {
+		char name[32];
+		int rc;
 
-                snprintf(name, sizeof(name) - 1, "fsfilt_%s", type);
-                name[sizeof(name) - 1] = '\0';
+		snprintf(name, sizeof(name) - 1, "fsfilt_%s", type);
+		name[sizeof(name) - 1] = '\0';
 
-                if (!(rc = cfs_request_module("%s", name))) {
-                        fs_ops = fsfilt_search_type(type);
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", name);
-                        if (!fs_ops)
-                                rc = -ENOENT;
-                }
+		if (!(rc = request_module("%s", name))) {
+			fs_ops = fsfilt_search_type(type);
+			CDEBUG(D_INFO, "Loaded module '%s'\n", name);
+			if (!fs_ops)
+				rc = -ENOENT;
+		}
 
-                if (rc) {
-                        CERROR("Can't find %s interface\n", name);
-                        RETURN(ERR_PTR(rc < 0 ? rc : -rc));
-                        /* unlock fsfilt_types list */
-                }
-        }
-        cfs_try_module_get(fs_ops->fs_owner);
-        /* unlock fsfilt_types list */
+		if (rc) {
+			CERROR("Can't find %s interface\n", name);
+			RETURN(ERR_PTR(rc < 0 ? rc : -rc));
+			/* unlock fsfilt_types list */
+		}
+	}
+	try_module_get(fs_ops->fs_owner);
+	/* unlock fsfilt_types list */
 
-        return fs_ops;
+	return fs_ops;
 }
 EXPORT_SYMBOL(fsfilt_get_ops);
 
 void fsfilt_put_ops(struct fsfilt_operations *fs_ops)
 {
-        cfs_module_put(fs_ops->fs_owner);
+	module_put(fs_ops->fs_owner);
 }
 EXPORT_SYMBOL(fsfilt_put_ops);

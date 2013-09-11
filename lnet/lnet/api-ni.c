@@ -1194,10 +1194,10 @@ lnet_startup_lndnis (void)
 
 #ifdef __KERNEL__
                 if (lnd == NULL) {
-                        LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
-                        rc = cfs_request_module("%s",
-                                                libcfs_lnd2modname(lnd_type));
-                        LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+			rc = request_module("%s",
+						libcfs_lnd2modname(lnd_type));
+			LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
 
                         lnd = lnet_find_lnd_by_type(lnd_type);
                         if (lnd == NULL) {

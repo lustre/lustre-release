@@ -98,7 +98,7 @@ enum {
 #define SOCKLND_ZERO_COPY_RECV_MIN_NFRAGS CTL_UNNUMBERED
 #endif
 
-static cfs_sysctl_table_t ksocknal_ctl_table[] = {
+static struct ctl_table ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_TIMEOUT,
                 .procname = "timeout",
@@ -344,7 +344,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
 };
 
 
-cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
+struct ctl_table ksocknal_top_ctl_table[] = {
         {
                 .ctl_name = CTL_SOCKLND,
                 .procname = "socknal",
@@ -359,37 +359,37 @@ cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
 int
 ksocknal_lib_tunables_init ()
 {
-        if (!*ksocknal_tunables.ksnd_typed_conns) {
-                int rc = -EINVAL;
+	if (!*ksocknal_tunables.ksnd_typed_conns) {
+		int rc = -EINVAL;
 #if SOCKNAL_VERSION_DEBUG
-                if (*ksocknal_tunables.ksnd_protocol < 3)
-                        rc = 0;
+		if (*ksocknal_tunables.ksnd_protocol < 3)
+			rc = 0;
 #endif
-                if (rc != 0) {
-                        CERROR("Protocol V3.x MUST have typed connections\n");
-                        return rc;
-                }
-        }
+		if (rc != 0) {
+			CERROR("Protocol V3.x MUST have typed connections\n");
+			return rc;
+		}
+	}
 
-        if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags < 2)
-                *ksocknal_tunables.ksnd_zc_recv_min_nfrags = 2;
-        if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags > LNET_MAX_IOV)
-                *ksocknal_tunables.ksnd_zc_recv_min_nfrags = LNET_MAX_IOV;
+	if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags < 2)
+		*ksocknal_tunables.ksnd_zc_recv_min_nfrags = 2;
+	if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags > LNET_MAX_IOV)
+		*ksocknal_tunables.ksnd_zc_recv_min_nfrags = LNET_MAX_IOV;
 
-        ksocknal_tunables.ksnd_sysctl =
-                cfs_register_sysctl_table(ksocknal_top_ctl_table, 0);
+	ksocknal_tunables.ksnd_sysctl =
+		register_sysctl_table(ksocknal_top_ctl_table);
 
-        if (ksocknal_tunables.ksnd_sysctl == NULL)
-                CWARN("Can't setup /proc tunables\n");
+	if (ksocknal_tunables.ksnd_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
 
-        return 0;
+	return 0;
 }
 
 void
 ksocknal_lib_tunables_fini ()
 {
-        if (ksocknal_tunables.ksnd_sysctl != NULL)
-                cfs_unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
+	if (ksocknal_tunables.ksnd_sysctl != NULL)
+		unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
 }
 #else
 int

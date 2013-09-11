@@ -56,8 +56,8 @@
 #endif
 
 # define CFS_MODULE_PARM(name, t, type, perm, desc)
-#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
-#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
+#define symbol_get(x) inter_module_get(#x)
+#define symbol_put(x) inter_module_put(#x)
 
 
 #ifdef __CYGWIN__

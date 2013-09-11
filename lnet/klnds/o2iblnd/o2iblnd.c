@@ -2870,8 +2870,8 @@ kiblnd_base_shutdown(void)
         CDEBUG(D_MALLOC, "after LND base cleanup: kmem %d\n",
                cfs_atomic_read(&libcfs_kmemory));
 
-        kiblnd_data.kib_init = IBLND_INIT_NOTHING;
-        PORTAL_MODULE_UNUSE;
+	kiblnd_data.kib_init = IBLND_INIT_NOTHING;
+	module_put(THIS_MODULE);
 }
 
 void
@@ -2956,8 +2956,8 @@ kiblnd_base_startup(void)
 
         LASSERT (kiblnd_data.kib_init == IBLND_INIT_NOTHING);
 
-        PORTAL_MODULE_USE;
-        memset(&kiblnd_data, 0, sizeof(kiblnd_data)); /* zero pointers, flags etc */
+	try_module_get(THIS_MODULE);
+	memset(&kiblnd_data, 0, sizeof(kiblnd_data)); /* zero pointers, flags etc */
 
 	rwlock_init(&kiblnd_data.kib_global_lock);
 

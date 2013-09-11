@@ -435,3 +435,64 @@ s/\bcfs_curproc_is_in_groups\b/in_group_p/g
 s/\bcfs_curproc_umask\b/current_umask/g
 s/\bcfs_curproc_comm\b/current_comm/g
 s/\bcfs_curproc_is_32bit\b/current_is_32bit/g
+
+################################################################################
+# linux primitives (linux-prim.h)
+# debug level
+s/\bCFS_KERN_EMERG\b/KERN_EMERG/g
+/#[ \t]*define[ \t]*\bKERN_EMERG\b[ \t]*\bKERN_EMERG\b/d
+s/\bCFS_KERN_ALERT\b/KERN_ALERT/g
+/#[ \t]*define[ \t]*\bKERN_ALERT\b[ \t]*\bKERN_ALERT\b/d
+s/\bCFS_KERN_CRIT\b/KERN_CRIT/g
+/#[ \t]*define[ \t]*\bKERN_CRIT\b[ \t]*\bKERN_CRIT\b/d
+s/\bCFS_KERN_ERR\b/KERN_ERR/g
+/#[ \t]*define[ \t]*\bKERN_ERR\b[ \t]*\bKERN_ERR\b/d
+s/\bCFS_KERN_WARNING\b/KERN_WARNING/g
+/#[ \t]*define[ \t]*\bKERN_WARNING\b[ \t]*\bKERN_WARNING\b/d
+s/\bCFS_KERN_NOTICE\b/KERN_NOTICE/g
+/#[ \t]*define[ \t]*\bKERN_NOTICE\b[ \t]*\bKERN_NOTICE\b/d
+s/\bCFS_KERN_INFO\b/KERN_INFO/g
+/#[ \t]*define[ \t]*\bKERN_INFO\b[ \t]*\bKERN_INFO\b/d
+s/\bCFS_KERN_DEBUG\b/KERN_DEBUG/g
+/#[ \t]*define[ \t]*\bKERN_DEBUG\b[ \t]*\bKERN_DEBUG\b/d
+# cache
+s/\bCFS_L1_CACHE_ALIGN\b/L1_CACHE_ALIGN/g
+/#[ \t]*define[ \t]*\bL1_CACHE_ALIGN\b *( *\w* *)[ \t]*\bL1_CACHE_ALIGN\b *( *\w* *)/d
+# IRQs
+s/\bCFS_NR_IRQS\b/NR_IRQS/g
+/#[ \t]*define[ \t]*\bNR_IRQS\b[ \t]*\bNR_IRQS\b/d
+s/\bCFS_EXPORT_SYMBOL\b/EXPORT_SYMBOL/g
+/#[ \t]*define[ \t]*\bEXPORT_SYMBOL\b *( *\w* *)[ \t]*\bEXPORT_SYMBOL\b *( *\w* *)/d
+# Pseudo device register
+s/\bcfs_psdev_t\b/struct miscdevice/g
+s/\bcfs_psdev_register\b/misc_register/g
+/#[ \t]*define[ \t]*\bmisc_register\b *( *\w* *)[ \t]*\bmisc_register\b *( *\w* *)/d
+s/\bcfs_psdev_deregister\b/misc_deregister/g
+/#[ \t]*define[ \t]*\bmisc_deregister\b *( *\w* *)[ \t]*\bmisc_deregister\b *( *\w* *)/d
+# Sysctl register
+s/\bcfs_sysctl_table_t\b/struct ctl_table/g
+s/\bcfs_sysctl_table_header_t\b/struct ctl_table_header/g
+# Symbol register
+s/\bcfs_register_sysctl_table\b/register_sysctl_table/g
+s/\bcfs_unregister_sysctl_table\b/unregister_sysctl_table/g
+/#[ \t]*define[ \t]*\bunregister_sysctl_table\b *( *\w* *)[ \t]*\bunregister_sysctl_table\b *( *\w* *)/d
+s/\bPORTAL_SYMBOL_PUT\b/symbol_put/g
+/#[ \t]*define[ \t]*\bsymbol_put\b *( *\w* *)[ \t]*\bsymbol_put\b *( *\w* *)/d
+s/\bPORTAL_SYMBOL_GET\b/symbol_get/g
+/#[ \t]*define[ \t]*\bsymbol_get\b *( *\w* *)[ \t]*\bsymbol_get\b *( *\w* *)/d
+# Module interfaces
+s/\bPORTAL_MODULE_USE\b/cfs_module_get()/g
+s/\bcfs_module_get()/try_module_get(THIS_MODULE)/g
+s/\bcfs_try_module_get\b/try_module_get/g
+/#[ \t]*define[ \t]*\btry_module_get\b.*\btry_module_get\b/d
+s/\bPORTAL_MODULE_UNUSE\b/cfs_module_put(THIS_MODULE)/g
+s/\bcfs_module_put\b/module_put/g
+/#[ \t]*define[ \t]*\bmodule_put\b *( *\w* *)[ \t]*\bmodule_put\b *( *\w* *)/d
+s/\b__cfs_module_get\b/__module_get/g
+/#[ \t]*define[ \t]*\b__module_get\b *( *\w* *)[ \t]*\b__module_get\b *( *\w* *)/d
+s/\bcfs_module_refcount\b/module_refcount/g
+/#[ \t]*define[ \t]*\bmodule_refcount\b *( *\w* *)[ \t]*\bmodule_refcount\b *( *\w* *)/d
+s/\bcfs_module_t\b/struct module/g
+# s/\bcfs_module\b/declare_module/g
+s/\bcfs_request_module\b/request_module/g
+/#[ \t]*define[ \t]*\brequest_module\b[ \t]*\brequest_module\b/d

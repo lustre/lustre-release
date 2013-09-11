@@ -54,20 +54,20 @@ typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd,
                             void *data, int error);
 
 struct fsfilt_operations {
-        cfs_list_t fs_list;
-        cfs_module_t *fs_owner;
-        char   *fs_type;
-        char   *(* fs_getlabel)(struct super_block *sb);
-        void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
-                             int logs);
-        int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
-        int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
+	cfs_list_t fs_list;
+	struct module *fs_owner;
+	char   *fs_type;
+	char   *(* fs_getlabel)(struct super_block *sb);
+	void   *(* fs_start)(struct inode *inode, int op, void *desc_private,
+			     int logs);
+	int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
+	int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
 				       int pages, unsigned long *blocks,
 				       int create, struct mutex *sem);
-        int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
-                                    int force_sync);
-        int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
-        int     (* fs_setup)(struct super_block *sb);
+	int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
+				    int force_sync);
+	int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
+	int     (* fs_setup)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);

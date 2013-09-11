@@ -174,19 +174,19 @@ EXPORT_SYMBOL(obd_ioctl_popdata);
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
-        ENTRY;
+	ENTRY;
 
-        PORTAL_MODULE_USE;
-        RETURN(0);
+	try_module_get(THIS_MODULE);
+	RETURN(0);
 }
 
 /*  closing /dev/obd */
 static int obd_class_release(struct inode * inode, struct file * file)
 {
-        ENTRY;
+	ENTRY;
 
-        PORTAL_MODULE_UNUSE;
-        RETURN(0);
+	module_put(THIS_MODULE);
+	RETURN(0);
 }
 
 /* to control /dev/obd */
@@ -216,7 +216,7 @@ static struct file_operations obd_psdev_fops = {
 };
 
 /* modules setup */
-cfs_psdev_t obd_psdev = {
+struct miscdevice obd_psdev = {
         .minor = OBD_DEV_MINOR,
         .name  = OBD_DEV_NAME,
         .fops  = &obd_psdev_fops,

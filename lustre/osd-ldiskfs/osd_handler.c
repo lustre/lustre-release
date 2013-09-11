@@ -5452,7 +5452,7 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	o->od_mnt = vfs_kern_mount(type, s_flags, dev, options);
-	cfs_module_put(type->owner);
+	module_put(type->owner);
 
 	if (IS_ERR(o->od_mnt)) {
 		rc = PTR_ERR(o->od_mnt);

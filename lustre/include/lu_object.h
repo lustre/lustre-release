@@ -1111,14 +1111,14 @@ struct lu_context_key {
          * key.
          */
         cfs_atomic_t lct_used;
-        /**
-         * Internal implementation detail: module for this key.
-         */
-        cfs_module_t *lct_owner;
-        /**
-         * References to this key. For debugging.
-         */
-        struct lu_ref  lct_reference;
+	/**
+	 * Internal implementation detail: module for this key.
+	 */
+	struct module *lct_owner;
+	/**
+	 * References to this key. For debugging.
+	 */
+	struct lu_ref  lct_reference;
 };
 
 #define LU_KEY_INIT(mod, type)                                    \

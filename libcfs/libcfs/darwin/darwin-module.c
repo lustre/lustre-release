@@ -177,7 +177,7 @@ static struct cdevsw libcfs_devsw =
 	.d_type     = 0
 };
 
-cfs_psdev_t libcfs_dev = {
+struct miscdevice libcfs_dev = {
 	-1,
 	NULL,
 	"lnet",

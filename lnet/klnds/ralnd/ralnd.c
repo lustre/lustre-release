@@ -1553,8 +1553,8 @@ kranal_shutdown (lnet_ni_t *ni)
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                cfs_atomic_read(&libcfs_kmemory));
 
-        kranal_data.kra_init = RANAL_INIT_NOTHING;
-        PORTAL_MODULE_UNUSE;
+	kranal_data.kra_init = RANAL_INIT_NOTHING;
+	module_put(THIS_MODULE);
 }
 
 int
@@ -1629,9 +1629,9 @@ kranal_startup (lnet_ni_t *ni)
         CFS_INIT_LIST_HEAD(&kranal_data.kra_idle_txs);
 	spin_lock_init(&kranal_data.kra_tx_lock);
 
-        /* OK to call kranal_api_shutdown() to cleanup now */
-        kranal_data.kra_init = RANAL_INIT_DATA;
-        PORTAL_MODULE_USE;
+	/* OK to call kranal_api_shutdown() to cleanup now */
+	kranal_data.kra_init = RANAL_INIT_DATA;
+	try_module_get(THIS_MODULE);
 
         kranal_data.kra_peer_hash_size = RANAL_PEER_HASH_SIZE;
         LIBCFS_ALLOC(kranal_data.kra_peers,

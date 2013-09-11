@@ -299,7 +299,7 @@ int in_group_p(gid_t gid);
 #define recalc_sigpending(l) do {} while (0)
 
 #define call_usermodehelper(path, argv, envp, wait) (0)
-#define CFS_KERN_INFO
+#define KERN_INFO
 
 #if HZ != 1
 #error "liblustre's jiffies currently expects HZ to be 1"

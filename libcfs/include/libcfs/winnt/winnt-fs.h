@@ -91,7 +91,7 @@
 
 struct file_operations
 {
-    cfs_module_t *owner;
+    struct module *owner;
     loff_t (*llseek)(struct file * file, loff_t offset, int origin);
     ssize_t (*read) (struct file * file, char * buf, size_t nbytes, loff_t *ppos);
     ssize_t (*write)(struct file * file, const char * buffer,

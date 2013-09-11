@@ -117,7 +117,7 @@ static void nrs_policy_stop0(struct ptlrpc_nrs_policy *policy)
 	policy->pol_state = NRS_POL_STATE_STOPPED;
 
 	if (cfs_atomic_dec_and_test(&policy->pol_desc->pd_refs))
-		cfs_module_put(policy->pol_desc->pd_owner);
+		module_put(policy->pol_desc->pd_owner);
 
 	EXIT;
 }
@@ -259,7 +259,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy)
 	 * modules.
 	 */
 	if (cfs_atomic_inc_return(&policy->pol_desc->pd_refs) == 1 &&
-	    !cfs_try_module_get(policy->pol_desc->pd_owner)) {
+	    !try_module_get(policy->pol_desc->pd_owner)) {
 		cfs_atomic_dec(&policy->pol_desc->pd_refs);
 		CERROR("NRS: cannot get module for policy %s; is it alive?\n",
 		       policy->pol_desc->pd_name);
@@ -281,7 +281,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy)
 		spin_lock(&nrs->nrs_lock);
 		if (rc != 0) {
 			if (cfs_atomic_dec_and_test(&policy->pol_desc->pd_refs))
-				cfs_module_put(policy->pol_desc->pd_owner);
+				module_put(policy->pol_desc->pd_owner);
 
 			policy->pol_state = NRS_POL_STATE_STOPPED;
 			GOTO(out, rc);

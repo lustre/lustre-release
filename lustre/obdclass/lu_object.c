@@ -1411,8 +1411,8 @@ static void key_fini(struct lu_context *ctx, int index)
 
 		LASSERT(key->lct_owner != NULL);
 		if ((ctx->lc_tags & LCT_NOREF) == 0) {
-			LINVRNT(cfs_module_refcount(key->lct_owner) > 0);
-			cfs_module_put(key->lct_owner);
+			LINVRNT(module_refcount(key->lct_owner) > 0);
+			module_put(key->lct_owner);
 		}
 		ctx->lc_value[index] = NULL;
 	}
@@ -1615,11 +1615,11 @@ static int keys_fill(struct lu_context *ctx)
                         if (unlikely(IS_ERR(value)))
                                 return PTR_ERR(value);
 
-                        LASSERT(key->lct_owner != NULL);
-                        if (!(ctx->lc_tags & LCT_NOREF))
-                                cfs_try_module_get(key->lct_owner);
-                        lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
-                        cfs_atomic_inc(&key->lct_used);
+			LASSERT(key->lct_owner != NULL);
+			if (!(ctx->lc_tags & LCT_NOREF))
+				try_module_get(key->lct_owner);
+			lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
+			cfs_atomic_inc(&key->lct_used);
                         /*
                          * This is the only place in the code, where an
                          * element of ctx->lc_value[] array is set to non-NULL

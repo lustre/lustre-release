@@ -161,9 +161,9 @@ void lc_watchdog_dumplog(pid_t pid, void *data);
 /*
  * libcfs pseudo device operations
  *
- * struct cfs_psdev_t and
- * cfs_psdev_register() and
- * cfs_psdev_deregister() are declared in
+ * struct struct miscdevice and
+ * misc_register() and
+ * misc_deregister() are declared in
  * libcfs/<os>/<os>-prim.h
  *
  * It's just draft now.

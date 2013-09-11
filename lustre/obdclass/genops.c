@@ -131,9 +131,9 @@ struct obd_type *class_get_type(const char *name)
 		if (!strncmp(modname, LUSTRE_MDS_NAME, strlen(LUSTRE_MDS_NAME)))
 			modname = LUSTRE_MDT_NAME;
 
-                if (!cfs_request_module("%s", modname)) {
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
-                        type = class_search_type(name);
+		if (!request_module("%s", modname)) {
+			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
+			type = class_search_type(name);
                 } else {
                         LCONSOLE_ERROR_MSG(0x158, "Can't load module '%s'\n",
                                            modname);
@@ -143,7 +143,7 @@ struct obd_type *class_get_type(const char *name)
         if (type) {
 		spin_lock(&type->obd_type_lock);
 		type->typ_refcnt++;
-		cfs_try_module_get(type->typ_dt_ops->o_owner);
+		try_module_get(type->typ_dt_ops->o_owner);
 		spin_unlock(&type->obd_type_lock);
 	}
 	return type;
@@ -155,7 +155,7 @@ void class_put_type(struct obd_type *type)
 	LASSERT(type);
 	spin_lock(&type->obd_type_lock);
 	type->typ_refcnt--;
-	cfs_module_put(type->typ_dt_ops->o_owner);
+	module_put(type->typ_dt_ops->o_owner);
 	spin_unlock(&type->obd_type_lock);
 }
 EXPORT_SYMBOL(class_put_type);

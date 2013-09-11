@@ -54,7 +54,7 @@
 #include <lprocfs_status.h>
 
 #ifdef CONFIG_SYSCTL
-cfs_sysctl_table_header_t *obd_table_header = NULL;
+struct ctl_table_header *obd_table_header = NULL;
 #endif
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
@@ -310,7 +310,7 @@ int LL_PROC_PROTO(proc_at_history)
 }
 
 #ifdef CONFIG_SYSCTL
-static cfs_sysctl_table_t obd_table[] = {
+static struct ctl_table obd_table[] = {
         {
                 INIT_CTL_NAME(OBD_TIMEOUT)
                 .procname = "timeout",
@@ -444,7 +444,7 @@ static cfs_sysctl_table_t obd_table[] = {
         {       INIT_CTL_NAME(0)    }
 };
 
-static cfs_sysctl_table_t parent_table[] = {
+static struct ctl_table parent_table[] = {
         {
                 INIT_CTL_NAME(OBD_SYSCTL)
                 .procname = "lustre",
@@ -460,16 +460,16 @@ static cfs_sysctl_table_t parent_table[] = {
 void obd_sysctl_init (void)
 {
 #ifdef CONFIG_SYSCTL
-        if ( !obd_table_header )
-                obd_table_header = cfs_register_sysctl_table(parent_table, 0);
+	if ( !obd_table_header )
+		obd_table_header = register_sysctl_table(parent_table);
 #endif
 }
 
 void obd_sysctl_clean (void)
 {
 #ifdef CONFIG_SYSCTL
-        if ( obd_table_header )
-                cfs_unregister_sysctl_table(obd_table_header);
-        obd_table_header = NULL;
+	if ( obd_table_header )
+		unregister_sysctl_table(obd_table_header);
+	obd_table_header = NULL;
 #endif
 }

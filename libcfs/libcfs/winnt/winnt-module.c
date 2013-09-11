@@ -174,7 +174,7 @@ static struct file_operations libcfs_fops = {
     /* release:*/ libcfs_psdev_release
 };
 
-cfs_psdev_t libcfs_dev = { 
+struct miscdevice libcfs_dev = {
 	LIBCFS_MINOR, 
 	"lnet", 
 	&libcfs_fops

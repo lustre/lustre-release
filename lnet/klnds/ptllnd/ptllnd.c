@@ -629,9 +629,9 @@ kptllnd_base_shutdown (void)
                 LIBCFS_FREE(kptllnd_data.kptl_nak_msg,
                             offsetof(kptl_msg_t, ptlm_u));
 
-        memset(&kptllnd_data, 0, sizeof(kptllnd_data));
-        PORTAL_MODULE_UNUSE;
-        return;
+	memset(&kptllnd_data, 0, sizeof(kptllnd_data));
+	module_put(THIS_MODULE);
+	return;
 }
 
 int
@@ -693,12 +693,12 @@ kptllnd_base_startup (void)
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_idle_txs);
         cfs_atomic_set(&kptllnd_data.kptl_ntx, 0);
 
-        /* Uptick the module reference count */
-        PORTAL_MODULE_USE;
+	/* Uptick the module reference count */
+	try_module_get(THIS_MODULE);
 
-        kptllnd_data.kptl_expected_peers =
-                *kptllnd_tunables.kptl_max_nodes *
-                *kptllnd_tunables.kptl_max_procs_per_node;
+	kptllnd_data.kptl_expected_peers =
+		*kptllnd_tunables.kptl_max_nodes *
+		*kptllnd_tunables.kptl_max_procs_per_node;
 
         /*
          * Initialize the Network interface instance

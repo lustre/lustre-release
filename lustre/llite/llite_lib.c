@@ -1003,15 +1003,15 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         if (cfg == NULL)
                 RETURN(-ENOMEM);
 
-        cfs_module_get();
+	try_module_get(THIS_MODULE);
 
-        /* client additional sb info */
-        lsi->lsi_llsbi = sbi = ll_init_sbi();
-        if (!sbi) {
-                cfs_module_put(THIS_MODULE);
-                OBD_FREE_PTR(cfg);
-                RETURN(-ENOMEM);
-        }
+	/* client additional sb info */
+	lsi->lsi_llsbi = sbi = ll_init_sbi();
+	if (!sbi) {
+		module_put(THIS_MODULE);
+		OBD_FREE_PTR(cfg);
+		RETURN(-ENOMEM);
+	}
 
         err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
         if (err)
@@ -1146,11 +1146,11 @@ void ll_put_super(struct super_block *sb)
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
 
-        lustre_common_put_super(sb);
+	lustre_common_put_super(sb);
 
-        cfs_module_put(THIS_MODULE);
+	module_put(THIS_MODULE);
 
-        EXIT;
+	EXIT;
 } /* client_put_super */
 
 struct inode *ll_inode_from_resource_lock(struct ldlm_lock *lock)

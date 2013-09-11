@@ -1836,10 +1836,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc;
         ENTRY;
 
-        if (!cfs_try_module_get(THIS_MODULE)) {
-                CERROR("Can't get module. Is it alive?");
-                return -EINVAL;
-        }
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
         switch (cmd) {
         case OBD_IOC_CHANGELOG_SEND:
                 rc = mdc_ioc_changelog_send(obd, karg);
@@ -1972,7 +1972,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc = -ENOTTY);
 	}
 out:
-	cfs_module_put(THIS_MODULE);
+	module_put(THIS_MODULE);
 
 	return rc;
 }

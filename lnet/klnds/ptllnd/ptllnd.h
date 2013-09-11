@@ -89,28 +89,28 @@
 
 typedef struct
 {
-        int             *kptl_ntx;              /* # tx descs to pre-allocate */
-        int             *kptl_max_nodes;        /* max # nodes all talking to me */
-        int             *kptl_max_procs_per_node; /* max # processes per node */
-        int             *kptl_checksum;         /* checksum kptl_msg_t? */
-        int             *kptl_timeout;          /* comms timeout (seconds) */
-        int             *kptl_portal;           /* portal number */
-        int             *kptl_pid;              /* portals PID (self + kernel peers) */
-        int             *kptl_rxb_npages;       /* number of pages for rx buffer */
-        int             *kptl_rxb_nspare;       /* number of spare rx buffers */
-        int             *kptl_credits;          /* number of credits */
-        int             *kptl_peertxcredits;    /* number of peer tx credits */
-        int             *kptl_peerrtrcredits;   /* number of peer router credits */
-        int             *kptl_max_msg_size;     /* max immd message size*/
-        int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
-        int             *kptl_reschedule_loops; /* scheduler yield loops */
-        int             *kptl_ack_puts;         /* make portals ack PUTs */
+	int             *kptl_ntx;              /* # tx descs to pre-allocate */
+	int             *kptl_max_nodes;        /* max # nodes all talking to me */
+	int             *kptl_max_procs_per_node; /* max # processes per node */
+	int             *kptl_checksum;         /* checksum kptl_msg_t? */
+	int             *kptl_timeout;          /* comms timeout (seconds) */
+	int             *kptl_portal;           /* portal number */
+	int             *kptl_pid;              /* portals PID (self + kernel peers) */
+	int             *kptl_rxb_npages;       /* number of pages for rx buffer */
+	int             *kptl_rxb_nspare;       /* number of spare rx buffers */
+	int             *kptl_credits;          /* number of credits */
+	int             *kptl_peertxcredits;    /* number of peer tx credits */
+	int             *kptl_peerrtrcredits;   /* number of peer router credits */
+	int             *kptl_max_msg_size;     /* max immd message size*/
+	int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
+	int             *kptl_reschedule_loops; /* scheduler yield loops */
+	int             *kptl_ack_puts;         /* make portals ack PUTs */
 #ifdef PJK_DEBUGGING
-        int             *kptl_simulation_bitmap;/* simulation bitmap */
+	int             *kptl_simulation_bitmap;/* simulation bitmap */
 #endif
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-        cfs_sysctl_table_header_t *kptl_sysctl; /* sysctl interface */
+	struct ctl_table_header *kptl_sysctl; /* sysctl interface */
 #endif
 } kptl_tunables_t;
 

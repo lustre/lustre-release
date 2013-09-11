@@ -231,7 +231,7 @@ enum {
 
 #endif
 
-static cfs_sysctl_table_t kiblnd_ctl_table[] = {
+static struct ctl_table kiblnd_ctl_table[] = {
         {
                 .ctl_name = O2IBLND_SERVICE,
                 .procname = "service",
@@ -404,7 +404,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
         {0}
 };
 
-static cfs_sysctl_table_t kiblnd_top_ctl_table[] = {
+static struct ctl_table kiblnd_top_ctl_table[] = {
         {
                 .ctl_name = CTL_O2IBLND,
                 .procname = "o2iblnd",
@@ -426,21 +426,21 @@ kiblnd_initstrtunable(char *space, char *str, int size)
 void
 kiblnd_sysctl_init (void)
 {
-        kiblnd_initstrtunable(ipif_basename_space, ipif_name,
-                              sizeof(ipif_basename_space));
+	kiblnd_initstrtunable(ipif_basename_space, ipif_name,
+			      sizeof(ipif_basename_space));
 
-        kiblnd_tunables.kib_sysctl =
-                cfs_register_sysctl_table(kiblnd_top_ctl_table, 0);
+	kiblnd_tunables.kib_sysctl =
+		register_sysctl_table(kiblnd_top_ctl_table);
 
-        if (kiblnd_tunables.kib_sysctl == NULL)
-                CWARN("Can't setup /proc tunables\n");
+	if (kiblnd_tunables.kib_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
 }
 
 void
 kiblnd_sysctl_fini (void)
 {
-        if (kiblnd_tunables.kib_sysctl != NULL)
-                cfs_unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
+	if (kiblnd_tunables.kib_sysctl != NULL)
+		unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
 }
 
 #else

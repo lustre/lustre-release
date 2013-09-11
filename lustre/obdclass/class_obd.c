@@ -448,9 +448,9 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 } /* class_handle_ioctl */
 
 #ifdef __KERNEL__
-extern cfs_psdev_t obd_psdev;
+extern struct miscdevice obd_psdev;
 #else
-void *obd_psdev = NULL;
+struct miscdevice obd_psdev;
 #endif
 
 #define OBD_INIT_CHECK
@@ -575,11 +575,11 @@ int init_obdclass(void)
 
         CFS_INIT_LIST_HEAD(&obd_types);
 
-        err = cfs_psdev_register(&obd_psdev);
-        if (err) {
-                CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
-                return err;
-        }
+	err = misc_register(&obd_psdev);
+	if (err) {
+		CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
+		return err;
+	}
 
         /* This struct is already zeroed for us (static global) */
         for (i = 0; i < class_devno_max(); i++)
@@ -690,16 +690,16 @@ static void cleanup_obdclass(void)
 
         lustre_unregister_fs();
 
-        cfs_psdev_deregister(&obd_psdev);
-        for (i = 0; i < class_devno_max(); i++) {
-                struct obd_device *obd = class_num2obd(i);
-                if (obd && obd->obd_set_up &&
-                    OBT(obd) && OBP(obd, detach)) {
-                        /* XXX should this call generic detach otherwise? */
-                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-                        OBP(obd, detach)(obd);
-                }
-        }
+	misc_deregister(&obd_psdev);
+	for (i = 0; i < class_devno_max(); i++) {
+		struct obd_device *obd = class_num2obd(i);
+		if (obd && obd->obd_set_up &&
+		    OBT(obd) && OBP(obd, detach)) {
+			/* XXX should this call generic detach otherwise? */
+			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+			OBP(obd, detach)(obd);
+		}
+	}
 	llog_info_fini();
 #ifdef HAVE_SERVER_SUPPORT
 	lu_ucred_global_fini();

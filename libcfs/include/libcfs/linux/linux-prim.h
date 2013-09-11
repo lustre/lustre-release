@@ -69,14 +69,6 @@
 
 #include <libcfs/linux/linux-time.h>
 
-#define CFS_KERN_EMERG   KERN_EMERG
-#define CFS_KERN_ALERT   KERN_ALERT
-#define CFS_KERN_CRIT    KERN_CRIT
-#define CFS_KERN_ERR     KERN_ERR
-#define CFS_KERN_WARNING KERN_WARNING
-#define CFS_KERN_NOTICE  KERN_NOTICE
-#define CFS_KERN_INFO    KERN_INFO
-#define CFS_KERN_DEBUG   KERN_DEBUG
 
 /*
  * CPU
@@ -91,34 +83,6 @@
 #define NR_CPUS				1
 #endif
 
-/*
- * cache
- */
-#define CFS_L1_CACHE_ALIGN(x)           L1_CACHE_ALIGN(x)
-
-/*
- * IRQs
- */
-#define CFS_NR_IRQS                     NR_IRQS
-
-#define CFS_EXPORT_SYMBOL(s)            EXPORT_SYMBOL(s)
-
-/*
- * Pseudo device register
- */
-typedef struct miscdevice		cfs_psdev_t;
-#define cfs_psdev_register(dev)		misc_register(dev)
-#define cfs_psdev_deregister(dev)	misc_deregister(dev)
-
-/*
- * Sysctl register
- */
-typedef struct ctl_table		cfs_sysctl_table_t;
-typedef struct ctl_table_header		cfs_sysctl_table_header_t;
-
-#define cfs_register_sysctl_table(t, a) register_sysctl_table(t)
-#define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t)
-
 #define DECLARE_PROC_HANDLER(name)                      \
 static int                                              \
 LL_PROC_PROTO(name)                                     \
@@ -129,21 +93,6 @@ LL_PROC_PROTO(name)                                     \
                                  ppos, buffer, lenp,    \
                                  __##name);             \
 }
-
-/*
- * Symbol register
- */
-#define cfs_symbol_register(s, p)       do {} while(0)
-#define cfs_symbol_unregister(s)        do {} while(0)
-#define cfs_symbol_get(s)               symbol_get(s)
-#define cfs_symbol_put(s)               symbol_put(s)
-#define cfs_module_get()                try_module_get(THIS_MODULE)
-#define cfs_try_module_get(m)           try_module_get(m)
-#define __cfs_module_get(m)             __module_get(m)
-#define cfs_module_put(m)               module_put(m)
-#define cfs_module_refcount(m)          module_refcount(m)
-
-typedef struct module cfs_module_t;
 
 /*
  * Proc file system APIs
@@ -191,7 +140,6 @@ typedef struct task_struct              cfs_task_t;
 #define cfs_module(name, version, init, fini) \
         module_init(init);                    \
         module_exit(fini)
-#define cfs_request_module              request_module
 
 /*
  * Signal

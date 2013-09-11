@@ -59,11 +59,11 @@ void libcfs_unregister_panic_notifier();
 #define PORTAL_SYMBOL_REGISTER(x)               cfs_symbol_register(#x, &x)
 #define PORTAL_SYMBOL_UNREGISTER(x)             cfs_symbol_unregister(#x)
 
-#define PORTAL_SYMBOL_GET(x)                    (cfs_symbol_get(#x))
-#define PORTAL_SYMBOL_PUT(x)                    cfs_symbol_put(#x)
+#define symbol_get(x)                    (cfs_symbol_get(#x))
+#define symbol_put(x)                    cfs_symbol_put(#x)
 
-#define PORTAL_MODULE_USE                       do{}while(0)
-#define PORTAL_MODULE_UNUSE                     do{}while(0)
+#define try_module_get(THIS_MODULE)                       do{}while(0)
+#define module_put(THIS_MODULE)                     do{}while(0)
 
 #define printk                                  DbgPrint
 #define ptintf                                  DbgPrint

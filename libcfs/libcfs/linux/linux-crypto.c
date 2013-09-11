@@ -270,7 +270,7 @@ static int crc32pclmul;
 
 int cfs_crypto_register(void)
 {
-	cfs_request_module("crc32c");
+	request_module("crc32c");
 
 	crc32 = cfs_crypto_crc32_register();
 	adler32 = cfs_crypto_adler32_register();

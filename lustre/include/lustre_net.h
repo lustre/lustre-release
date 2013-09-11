@@ -1146,7 +1146,7 @@ struct ptlrpc_nrs_pol_conf {
 	 * different module to the one the NRS framework is held within
 	 * (currently ptlrpc), should set this field to THIS_MODULE.
 	 */
-	cfs_module_t			  *nc_owner;
+	struct module			  *nc_owner;
 	/**
 	 * Policy registration flags; a bitmast of \e nrs_policy_flags
 	 */
@@ -1221,7 +1221,7 @@ struct ptlrpc_nrs_pol_desc {
 	 *   then unregistration and lprocfs operations will be properly
 	 *   serialized.
 	 */
-	cfs_module_t			       *pd_owner;
+	struct module			       *pd_owner;
 	/**
 	 * Bitmask of \e nrs_policy_flags
 	 */

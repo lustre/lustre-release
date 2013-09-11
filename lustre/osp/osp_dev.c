@@ -1080,7 +1080,7 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	d = lu2osp_dev(obd->obd_lu_dev);
 	LASSERT(d->opd_dt_dev.dd_ops == &osp_dt_ops);
 
-	if (!cfs_try_module_get(THIS_MODULE)) {
+	if (!try_module_get(THIS_MODULE)) {
 		CERROR("%s: can't get module. Is it alive?", obd->obd_name);
 		return -EINVAL;
 	}
@@ -1104,7 +1104,7 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		       cmd, current_comm());
 		rc = -ENOTTY;
 	}
-	cfs_module_put(THIS_MODULE);
+	module_put(THIS_MODULE);
 	return rc;
 }
 

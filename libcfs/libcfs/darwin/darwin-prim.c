@@ -60,7 +60,7 @@
  */
 #define KLNET_MAJOR  -1
 
-kern_return_t  cfs_psdev_register(cfs_psdev_t *dev) {
+kern_return_t  misc_register(struct miscdevice *dev) {
 	dev->index = cdevsw_add(KLNET_MAJOR, dev->devsw);
 	if (dev->index < 0) {
 		printf("libcfs_init: failed to allocate a major number!\n");
@@ -72,7 +72,7 @@ kern_return_t  cfs_psdev_register(cfs_psdev_t *dev) {
 	return KERN_SUCCESS;
 }
 
-kern_return_t  cfs_psdev_deregister(cfs_psdev_t *dev) {
+kern_return_t  misc_deregister(struct miscdevice *dev) {
 	devfs_remove(dev->handle);
 	cdevsw_remove(dev->index, dev->devsw);
 	return KERN_SUCCESS;

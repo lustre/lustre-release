@@ -254,7 +254,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 	CDEBUG (D_MALLOC, "done kmem %d\n", cfs_atomic_read(&libcfs_kmemory));
 
-	PORTAL_MODULE_UNUSE;
+	module_put(THIS_MODULE);
 }
 
 int
@@ -311,7 +311,7 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;
-	PORTAL_MODULE_USE;
+	try_module_get(THIS_MODULE);
 	
 	kqswnal_data.kqn_ep = ep_system();
 	if (kqswnal_data.kqn_ep == NULL) {

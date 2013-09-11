@@ -54,7 +54,7 @@ static struct libcfs_sysctl_sprite {
         struct sysctl_oid_list  *ss_link;
 } libcfs_sysctl_sprite = { 0, NULL };
 
-static cfs_sysctl_table_header_t *libcfs_table_header = NULL;
+static struct ctl_table_header *libcfs_table_header = NULL;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_subsystem_debug;
 extern unsigned int libcfs_printk;
@@ -204,7 +204,7 @@ SYSCTL_PROC(_lnet,                      OID_AUTO,       fail_loc,
              CTLTYPE_INT | CTLFLAG_RW ,                 &cfs_fail_loc,
              0,         &proc_fail_loc,                 "I",    "cfs_fail_loc");
 
-static cfs_sysctl_table_t	top_table[] = {
+static struct ctl_table	top_table[] = {
 	&sysctl__lnet,
 	&sysctl__lnet_debug,
 	&sysctl__lnet_subsystem_debug,
@@ -223,28 +223,28 @@ static cfs_sysctl_table_t	top_table[] = {
 /*
  * Register sysctl table
  */
-cfs_sysctl_table_header_t *
-cfs_register_sysctl_table (cfs_sysctl_table_t *table, int arg)
+struct ctl_table_header *
+register_sysctl_table(struct ctl_table *table, int arg)
 {
-        cfs_sysctl_table_t      item;
-        int i = 0;
+	struct ctl_table      item;
+	int i = 0;
 
-        while ((item = table[i++]) != NULL) 
-                sysctl_register_oid(item);
-        return table;
+	while ((item = table[i++]) != NULL)
+		sysctl_register_oid(item);
+	return table;
 }
 
 /*
  * Unregister sysctl table
  */
-void
-cfs_unregister_sysctl_table (cfs_sysctl_table_header_t *table) {
-        int i = 0;
-        cfs_sysctl_table_t      item;
+void unregister_sysctl_table(struct ctl_table_header *table)
+{
+	int i = 0;
+	struct ctl_table      item;
 
-        while ((item = table[i++]) != NULL) 
-                sysctl_unregister_oid(item);
-        return;
+	while ((item = table[i++]) != NULL)
+		sysctl_unregister_oid(item);
+	return;
 }
 
 /*
@@ -413,8 +413,8 @@ int
 insert_proc(void)
 {
 #if 1
-        if (!libcfs_table_header) 
-                libcfs_table_header = cfs_register_sysctl_table(top_table, 0);
+	if (!libcfs_table_header)
+		libcfs_table_header = register_sysctl_table(top_table);
 #endif
 	return 0;
 }
@@ -423,9 +423,9 @@ void
 remove_proc(void)
 {
 #if 1
-        if (libcfs_table_header != NULL) 
-                cfs_unregister_sysctl_table(libcfs_table_header); 
-        libcfs_table_header = NULL;
+	if (libcfs_table_header != NULL)
+		unregister_sysctl_table(libcfs_table_header);
+	libcfs_table_header = NULL;
 #endif
 	return;
 }

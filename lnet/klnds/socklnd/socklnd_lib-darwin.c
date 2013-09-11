@@ -101,7 +101,7 @@ SYSCTL_INT(_lnet_ksocknal,    OID_AUTO,         keepalive_intvl,
            CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_keepalive_intvl, 
            0,                                   "keepalive_intvl");
 
-cfs_sysctl_table_t      ksocknal_top_ctl_table [] = {
+struct ctl_table      ksocknal_top_ctl_table [] = {
         &sysctl__lnet_ksocknal,
         &sysctl__lnet_ksocknal_timeout,
         &sysctl__lnet_ksocknal_credits,
@@ -125,7 +125,7 @@ int
 ksocknal_lib_tunables_init ()
 {
         ksocknal_tunables.ksnd_sysctl =
-                cfs_register_sysctl_table (ksocknal_top_ctl_table, 0);
+		register_sysctl_table (ksocknal_top_ctl_table);
 
         if (ksocknal_tunables.ksnd_sysctl == NULL)
 		return -ENOMEM;
@@ -136,8 +136,8 @@ ksocknal_lib_tunables_init ()
 void
 ksocknal_lib_tunables_fini ()
 {
-        if (ksocknal_tunables.ksnd_sysctl != NULL)
-                cfs_unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);	
+	if (ksocknal_tunables.ksnd_sysctl != NULL)
+		unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);
 }
 #else
 int

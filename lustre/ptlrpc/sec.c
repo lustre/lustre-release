@@ -128,11 +128,11 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 
         while (1) {
 		read_lock(&policy_lock);
-                policy = policies[number];
-                if (policy && !cfs_try_module_get(policy->sp_owner))
-                        policy = NULL;
-                if (policy == NULL)
-                        flag = cfs_atomic_read(&loaded);
+		policy = policies[number];
+		if (policy && !try_module_get(policy->sp_owner))
+			policy = NULL;
+		if (policy == NULL)
+			flag = cfs_atomic_read(&loaded);
 		read_unlock(&policy_lock);
 
                 if (policy != NULL || flag != 0 ||
@@ -141,10 +141,10 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 
                 /* try to load gss module, once */
 		mutex_lock(&load_mutex);
-                if (cfs_atomic_read(&loaded) == 0) {
-                        if (cfs_request_module("ptlrpc_gss") == 0)
-                                CDEBUG(D_SEC,
-                                       "module ptlrpc_gss loaded on demand\n");
+		if (cfs_atomic_read(&loaded) == 0) {
+			if (request_module("ptlrpc_gss") == 0)
+				CDEBUG(D_SEC,
+				       "module ptlrpc_gss loaded on demand\n");
                         else
                                 CERROR("Unable to load module ptlrpc_gss\n");
 

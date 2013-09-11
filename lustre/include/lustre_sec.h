@@ -796,11 +796,11 @@ struct ptlrpc_sec_sops {
 };
 
 struct ptlrpc_sec_policy {
-        cfs_module_t                   *sp_owner;
-        char                           *sp_name;
-        __u16                           sp_policy; /* policy number */
-        struct ptlrpc_sec_cops         *sp_cops;   /* client ops */
-        struct ptlrpc_sec_sops         *sp_sops;   /* server ops */
+	struct module                  *sp_owner;
+	char                           *sp_name;
+	__u16                           sp_policy; /* policy number */
+	struct ptlrpc_sec_cops         *sp_cops;   /* client ops */
+	struct ptlrpc_sec_sops         *sp_sops;   /* server ops */
 };
 
 #define PTLRPC_SEC_FL_REVERSE           0x0001 /* reverse sec */
@@ -943,17 +943,17 @@ char *sptlrpc_flavor2name_bulk(struct sptlrpc_flavor *sf,
 char *sptlrpc_flavor2name(struct sptlrpc_flavor *sf, char *buf, int bufsize);
 char *sptlrpc_secflags2str(__u32 flags, char *buf, int bufsize);
 
-static inline
-struct ptlrpc_sec_policy *sptlrpc_policy_get(struct ptlrpc_sec_policy *policy)
+static inline struct ptlrpc_sec_policy *
+sptlrpc_policy_get(struct ptlrpc_sec_policy *policy)
 {
-        __cfs_module_get(policy->sp_owner);
-        return policy;
+	__module_get(policy->sp_owner);
+	return policy;
 }
 
-static inline
-void sptlrpc_policy_put(struct ptlrpc_sec_policy *policy)
+static inline void
+sptlrpc_policy_put(struct ptlrpc_sec_policy *policy)
 {
-        cfs_module_put(policy->sp_owner);
+	module_put(policy->sp_owner);
 }
 
 /*

@@ -2346,10 +2346,10 @@ ksocknal_base_shutdown(void)
                 break;
         }
 
-        CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               cfs_atomic_read (&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
+	       cfs_atomic_read (&libcfs_kmemory));
 
-        PORTAL_MODULE_UNUSE;
+	module_put(THIS_MODULE);
 }
 
 __u64 ksocknal_new_incarnation (void)
@@ -2409,7 +2409,7 @@ ksocknal_base_startup(void)
 
 	/* flag lists/ptrs/locks initialised */
 	ksocknal_data.ksnd_init = SOCKNAL_INIT_DATA;
-	PORTAL_MODULE_USE;
+	try_module_get(THIS_MODULE);
 
 	ksocknal_data.ksnd_sched_info = cfs_percpt_alloc(lnet_cpt_table(),
 							 sizeof(*info));

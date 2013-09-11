@@ -55,13 +55,6 @@
 #error libcfs_unregister_panic_notifier() missing
 
 /* --------------------------------------------------------------------- */
-
-#define PORTAL_SYMBOL_GET(x)                    ((typeof(&x))cfs_symbol_get(#x))
-#define PORTAL_SYMBOL_PUT(x)                    cfs_symbol_put(#x)
-
-#define PORTAL_MODULE_USE                       do{int i = 0; i++;}while(0)
-#define PORTAL_MODULE_UNUSE                     do{int i = 0; i--;}while(0)
-
 #define num_online_cpus()                       cfs_online_cpus()
 
 /******************************************************************************/

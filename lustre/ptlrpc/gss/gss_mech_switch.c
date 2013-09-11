@@ -88,8 +88,8 @@ void lgss_mech_unregister(struct gss_api_mech *gm)
 
 struct gss_api_mech *lgss_mech_get(struct gss_api_mech *gm)
 {
-        __cfs_module_get(gm->gm_owner);
-        return gm;
+	__module_get(gm->gm_owner);
+	return gm;
 }
 
 struct gss_api_mech *lgss_name_to_mech(char *name)
@@ -99,7 +99,7 @@ struct gss_api_mech *lgss_name_to_mech(char *name)
 	spin_lock(&registered_mechs_lock);
 	cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
 		if (0 == strcmp(name, pos->gm_name)) {
-			if (!cfs_try_module_get(pos->gm_owner))
+			if (!try_module_get(pos->gm_owner))
 				continue;
 			gm = pos;
 			break;
@@ -127,23 +127,23 @@ struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
 	struct gss_api_mech *pos, *gm = NULL;
 
 	spin_lock(&registered_mechs_lock);
-        cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
-                if (!cfs_try_module_get(pos->gm_owner))
-                        continue;
-                if (!mech_supports_subflavor(pos, subflavor)) {
-                        cfs_module_put(pos->gm_owner);
-                        continue;
-                }
-                gm = pos;
-                break;
-        }
+	cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
+		if (!try_module_get(pos->gm_owner))
+			continue;
+		if (!mech_supports_subflavor(pos, subflavor)) {
+			module_put(pos->gm_owner);
+			continue;
+		}
+		gm = pos;
+		break;
+	}
 	spin_unlock(&registered_mechs_lock);
 	return gm;
 }
 
 void lgss_mech_put(struct gss_api_mech *gm)
 {
-        cfs_module_put(gm->gm_owner);
+	module_put(gm->gm_owner);
 }
 
 /* The mech could probably be determined from the token instead, but it's just

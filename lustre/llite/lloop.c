@@ -489,8 +489,8 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         int                   error;
         loff_t                size;
 
-        if (!cfs_try_module_get(THIS_MODULE))
-                return -ENODEV;
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
 
         error = -EBUSY;
         if (lo->lo_state != LLOOP_UNBOUND)
@@ -557,9 +557,9 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 	return 0;
 
 out:
-        /* This is safe: open() is still holding a reference. */
-        cfs_module_put(THIS_MODULE);
-        return error;
+	/* This is safe: open() is still holding a reference. */
+	module_put(THIS_MODULE);
+	return error;
 }
 
 static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
@@ -594,10 +594,10 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         bd_set_size(bdev, 0);
         mapping_set_gfp_mask(filp->f_mapping, gfp);
         lo->lo_state = LLOOP_UNBOUND;
-        fput(filp);
-        /* This is safe: open() is still holding a reference. */
-        cfs_module_put(THIS_MODULE);
-        return 0;
+	fput(filp);
+	/* This is safe: open() is still holding a reference. */
+	module_put(THIS_MODULE);
+	return 0;
 }
 
 static int lo_open(struct block_device *bdev, fmode_t mode)

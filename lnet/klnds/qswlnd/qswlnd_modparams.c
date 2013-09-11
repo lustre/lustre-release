@@ -117,7 +117,7 @@ enum
 
 #endif
 
-static cfs_sysctl_table_t kqswnal_ctl_table[] = {
+static struct ctl_table kqswnal_ctl_table[] = {
         {
                 .ctl_name = KQSWNAL_TX_MAXCONTIG,
                 .procname = "tx_maxcontig",
@@ -211,7 +211,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
         {0}
 };
 
-static cfs_sysctl_table_t kqswnal_top_ctl_table[] = {
+static struct ctl_table kqswnal_top_ctl_table[] = {
         {
                 .ctl_name = CTL_KQSWNAL,
                 .procname = "qswnal",
@@ -226,20 +226,19 @@ static cfs_sysctl_table_t kqswnal_top_ctl_table[] = {
 int
 kqswnal_tunables_init ()
 {
-        kqswnal_tunables.kqn_sysctl =
-                cfs_register_sysctl_table(kqswnal_top_ctl_table, 0);
+	kqswnal_tunables.kqn_sysctl =
+		register_sysctl_table(kqswnal_top_ctl_table);
 
-        if (kqswnal_tunables.kqn_sysctl == NULL)
-                CWARN("Can't setup /proc tunables\n");
+	if (kqswnal_tunables.kqn_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
 
-        return 0;
+	return 0;
 }
 
-void
-kqswnal_tunables_fini ()
+void kqswnal_tunables_fini()
 {
-        if (kqswnal_tunables.kqn_sysctl != NULL)
-                cfs_unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
+	if (kqswnal_tunables.kqn_sysctl != NULL)
+		unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
 }
 #else
 int

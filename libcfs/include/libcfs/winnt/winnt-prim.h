@@ -45,6 +45,10 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#ifndef EXPORT_SYMBOL
+# define EXPORT_SYMBOL(s)
+#endif
+
 /*
  * libcfs proc device object
  */
@@ -114,15 +118,14 @@ typedef struct file_operations cfs_file_operations_t;
  * Pseudo device register
  */
 
-typedef struct
-{
+typedef struct miscdevice{
     int                     minor;
     const char *            name;
     cfs_file_operations_t * fops;
-} cfs_psdev_t;
+};
 
-int cfs_psdev_register(cfs_psdev_t * psdev);
-int cfs_psdev_deregister(cfs_psdev_t * psdev);
+int misc_register(struct miscdevice *psdev);
+int misc_deregister(struct miscdevice *psdev);
 
 
 /*
@@ -187,31 +190,24 @@ struct proc_dir_entry *PDE(const struct inode *inode);
 /*
  * Sysctl register
  */
+typedef int ctl_handler(struct ctl_table *table,
+			int *name,  int nlen,
+			void *oldval, size_t *oldlenp,
+			void *newval, size_t newlen,
+			void **context);
 
-typedef struct ctl_table                cfs_sysctl_table_t;
-typedef struct ctl_table_header         cfs_sysctl_table_header_t;
-
-
-typedef int ctl_handler (
-            cfs_sysctl_table_t *table,
-            int *name,  int nlen,
-            void *oldval, size_t *oldlenp,
-            void *newval, size_t newlen, 
-            void **context );
-
-typedef int proc_handler (
-            cfs_sysctl_table_t *ctl,
-            int write, struct file * filp,
-            void *buffer, size_t *lenp );
+typedef int proc_handler (struct ctl_table *ctl,
+			  int write, struct file *filp,
+			  void *buffer, size_t *lenp);
 
 
-int proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *filp,
+int proc_dointvec(struct ctl_table *table, int write, struct file *filp,
 		     void *buffer, size_t *lenp);
 
-int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
+int proc_dostring(struct ctl_table *table, int write, struct file *filp,
 		  void *buffer, size_t *lenp);
 
-int sysctl_string(cfs_sysctl_table_t *table, int *name, int nlen,
+int sysctl_string(struct ctl_table *table, int *name, int nlen,
 		  void *oldval, size_t *oldlenp,
 		  void *newval, size_t newlen, void **context);
 
@@ -246,7 +242,7 @@ struct ctl_table
 	void *data;
 	int maxlen;
 	mode_t mode;
-	cfs_sysctl_table_t *child;
+	struct ctl_table *child;
 	proc_handler *proc_handler;	/* text formatting callback */
 	ctl_handler *strategy;		/* read / write callback functions */
 	cfs_proc_entry_t *de;	/* proc entry block */
@@ -258,7 +254,7 @@ struct ctl_table
 /* the mantaner of the cfs_sysctl_table trees */
 struct ctl_table_header
 {
-	cfs_sysctl_table_t *    ctl_table;
+	struct ctl_table *    ctl_table;
 	cfs_list_t              ctl_entry;
 };
 
@@ -285,12 +281,8 @@ cfs_proc_entry_t *proc_mkdir(const char *name,
 #define cfs_free_proc_entry   proc_free_entry
 #define cfs_remove_proc_entry remove_proc_entry
 
-struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table,
-                                               int insert_at_head);
-void unregister_sysctl_table(struct ctl_table_header * header);
-
-#define cfs_register_sysctl_table(t, a)   register_sysctl_table(t, a)
-#define cfs_unregister_sysctl_table(t)    unregister_sysctl_table(t)
+struct ctl_table_header *register_sysctl_table(struct ctl_table *table);
+void unregister_sysctl_table(struct ctl_table_header *header);
 
 /*
  * seq device (linux/seq_file.h)
@@ -721,15 +713,14 @@ void sleep_on(cfs_waitq_t *waitq);
 #define __init
 #endif
 
-typedef struct cfs_module {
+struct module{
     const char *name;
-} cfs_module_t;
+};
 
-extern cfs_module_t libcfs_global_module;
+extern struct module libcfs_global_module;
 #define THIS_MODULE  &libcfs_global_module
 
-#define cfs_request_module(x, y) (0)
-#define EXPORT_SYMBOL(s)
+#define request_module(x, y) (0)
 #define MODULE_AUTHOR(s)
 #define MODULE_DESCRIPTION(s)
 #define MODULE_LICENSE(s)
@@ -753,7 +744,7 @@ extern cfs_module_t libcfs_global_module;
 #define cfs_module(name, version, init, fini) \
         module_init(init);                    \
         module_exit(fini)
-#define cfs_module_refcount(x) (1)
+#define module_refcount(x) (1)
 
 /*
  * typecheck
@@ -827,7 +818,7 @@ libcfs_arch_cleanup(void);
  *  cache alignment size
  */
 
-#define CFS_L1_CACHE_ALIGN(x) (x)
+#define L1_CACHE_ALIGN(x) (x)
 
 #define __cacheline_aligned
 
@@ -849,21 +840,21 @@ libcfs_arch_cleanup(void);
  *  Irp related
  */
 
-#define CFS_NR_IRQS                 512
+#define NR_IRQS                 512
 #define cfs_in_interrupt()          (0)
 
 /*
  *  printk flags
  */
 
-#define CFS_KERN_EMERG      "<0>"   /* system is unusable                   */
-#define CFS_KERN_ALERT      "<1>"   /* action must be taken immediately     */
-#define CFS_KERN_CRIT       "<2>"   /* critical conditions                  */
-#define CFS_KERN_ERR        "<3>"   /* error conditions                     */
-#define CFS_KERN_WARNING    "<4>"   /* warning conditions                   */
-#define CFS_KERN_NOTICE     "<5>"   /* normal but significant condition     */
-#define CFS_KERN_INFO       "<6>"   /* informational                        */
-#define CFS_KERN_DEBUG      "<7>"   /* debug-level messages                 */
+#define KERN_EMERG      "<0>"   /* system is unusable                   */
+#define KERN_ALERT      "<1>"   /* action must be taken immediately     */
+#define KERN_CRIT       "<2>"   /* critical conditions                  */
+#define KERN_ERR        "<3>"   /* error conditions                     */
+#define KERN_WARNING    "<4>"   /* warning conditions                   */
+#define KERN_NOTICE     "<5>"   /* normal but significant condition     */
+#define KERN_INFO       "<6>"   /* informational                        */
+#define KERN_DEBUG      "<7>"   /* debug-level messages                 */
 
 /*
  * Misc
@@ -1083,16 +1074,16 @@ void globfree(glob_t *__pglog);
  *  module routines
  */
 
-static inline void __cfs_module_get(cfs_module_t *module)
+static inline void __module_get(struct module *module)
 {
 }
 
-static inline int cfs_try_module_get(cfs_module_t *module)
+static inline int try_module_get(struct module *module)
 {
-    return 1;
+	return 1;
 }
 
-static inline void cfs_module_put(cfs_module_t *module)
+static inline void module_put(struct module *module)
 {
 }
 

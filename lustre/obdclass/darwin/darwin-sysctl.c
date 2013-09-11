@@ -49,7 +49,7 @@
 #define BUILD_VERSION		"Unknown"
 #endif
 
-cfs_sysctl_table_header_t *obd_table_header = NULL;
+struct ctl_table_header *obd_table_header = NULL;
 
 int proc_obd_timeout SYSCTL_HANDLER_ARGS;
 extern unsigned int obd_dump_on_timeout;
@@ -81,7 +81,7 @@ SYSCTL_INT(_lustre,		OID_AUTO,	ldlm_timeout,
 	   CTLTYPE_INT | CTLFLAG_RW,		&ldlm_timeout,
 	   0,		"ldlm_timeout");
 
-static cfs_sysctl_table_t      parent_table[] = {
+static struct ctl_table      parent_table[] = {
 	&sysctl__lustre,
 	&sysctl__lustre_timeout,
 	&sysctl__lustre_dump_on_timeout,
@@ -126,7 +126,7 @@ void obd_sysctl_init (void)
 {
 #if 1 
 	if ( !obd_table_header ) 
-		obd_table_header = cfs_register_sysctl_table(parent_table, 0);
+		obd_table_header = register_sysctl_table(parent_table);
 #endif
 }
                                                                                                                                                                      
@@ -134,7 +134,7 @@ void obd_sysctl_clean (void)
 {
 #if 1 
 	if ( obd_table_header ) 
-		cfs_unregister_sysctl_table(obd_table_header); 
+		unregister_sysctl_table(obd_table_header);
 	obd_table_header = NULL;
 #endif
 }

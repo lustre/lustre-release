@@ -289,11 +289,11 @@ static struct lvar_leaf_entry *n_cur(const struct iam_leaf *l)
 
 void n_print(const struct iam_leaf *l)
 {
-        struct lvar_leaf_entry *scan;
+	struct lvar_leaf_entry *scan;
 
-        printk(CFS_KERN_EMERG "used: %d\n", h_used(n_head(l)));
-        for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
-                e_print(scan);
+	printk(KERN_EMERG "used: %d\n", h_used(n_head(l)));
+	for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
+		e_print(scan);
 }
 
 #if LDISKFS_CORRECTNESS_ON

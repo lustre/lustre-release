@@ -241,31 +241,31 @@ static char *hex(char ch, char *area)
 
 static void l_print(struct iam_leaf *leaf, struct iam_lentry *entry)
 {
-        int i;
-        char *area;
-        char h[3];
+	int i;
+	char *area;
+	char h[3];
 
-        area = (char *)entry;
-        printk(CFS_KERN_EMERG "[");
-        for (i = iam_lfix_key_size(leaf); i > 0; --i, ++area)
-                printk("%s", hex(*area, h));
-        printk("]-(");
-        for (i = iam_leaf_descr(leaf)->id_rec_size; i > 0; --i, ++area)
-                printk("%s", hex(*area, h));
-        printk(")\n");
+	area = (char *)entry;
+	printk(KERN_EMERG "[");
+	for (i = iam_lfix_key_size(leaf); i > 0; --i, ++area)
+		printk("%s", hex(*area, h));
+	printk("]-(");
+	for (i = iam_leaf_descr(leaf)->id_rec_size; i > 0; --i, ++area)
+		printk("%s", hex(*area, h));
+	printk(")\n");
 }
 
 static void lfix_print(struct iam_leaf *leaf)
 {
-        struct iam_lentry *entry;
-        int count;
-        int i;
+	struct iam_lentry *entry;
+	int count;
+	int i;
 
-        entry = leaf->il_entries;
-        count = lentry_count_get(leaf);
-        printk(CFS_KERN_EMERG "lfix: %p %p %d\n", leaf, leaf->il_at, count);
-        for (i = 0; i < count; ++i, entry = iam_lfix_shift(leaf, entry, 1))
-                l_print(leaf, entry);
+	entry = leaf->il_entries;
+	count = lentry_count_get(leaf);
+	printk(KERN_EMERG "lfix: %p %p %d\n", leaf, leaf->il_at, count);
+	for (i = 0; i < count; ++i, entry = iam_lfix_shift(leaf, entry, 1))
+		l_print(leaf, entry);
 }
 
 static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)

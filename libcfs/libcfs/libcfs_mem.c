@@ -87,7 +87,7 @@ cfs_percpt_alloc(struct cfs_cpt_table *cptab, unsigned int size)
 	if (arr == NULL)
 		return NULL;
 
-	arr->va_size	= size = CFS_L1_CACHE_ALIGN(size);
+	arr->va_size	= size = L1_CACHE_ALIGN(size);
 	arr->va_count	= count;
 	arr->va_cptab	= cptab;
 

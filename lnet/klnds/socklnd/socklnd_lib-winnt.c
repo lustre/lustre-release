@@ -41,9 +41,9 @@
 #include "socklnd.h"
 
 # if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-static cfs_sysctl_table_t ksocknal_ctl_table[21];
+static struct ctl_table ksocknal_ctl_table[21];
 
-cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
+struct ctl_table ksocknal_top_ctl_table[] = {
         {
                 /* ctl_name */  200,
                 /* procname */  "socknal",
@@ -248,7 +248,7 @@ ksocknal_lib_tunables_init ()
         LASSERT (i <= sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
 
         ksocknal_tunables.ksnd_sysctl =
-                cfs_register_sysctl_table(ksocknal_top_ctl_table, 0);
+		register_sysctl_table(ksocknal_top_ctl_table);
 
         if (ksocknal_tunables.ksnd_sysctl == NULL)
                 CWARN("Can't setup /proc tunables\n");
@@ -259,8 +259,8 @@ ksocknal_lib_tunables_init ()
 void
 ksocknal_lib_tunables_fini ()
 {
-        if (ksocknal_tunables.ksnd_sysctl != NULL)
-                cfs_unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
+	if (ksocknal_tunables.ksnd_sysctl != NULL)
+		unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);
 }
 #else
 int

@@ -248,7 +248,7 @@ typedef struct
 #endif
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-        cfs_sysctl_table_header_t *kqn_sysctl;  /* sysctl interface */
+	struct ctl_table_header *kqn_sysctl;  /* sysctl interface */
 #endif
 } kqswnal_tunables_t;
 

@@ -186,7 +186,7 @@ int libcfs_kkuc_msg_put(struct file *filp, void *payload)
 
         return rc;
 }
-CFS_EXPORT_SYMBOL(libcfs_kkuc_msg_put);
+EXPORT_SYMBOL(libcfs_kkuc_msg_put);
 
 /* Broadcast groups are global across all mounted filesystems;
  * i.e. registering for a group on 1 fs will get messages for that
@@ -239,7 +239,7 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group, __u32 data)
 
 	return 0;
 }
-CFS_EXPORT_SYMBOL(libcfs_kkuc_group_add);
+EXPORT_SYMBOL(libcfs_kkuc_group_add);
 
 int libcfs_kkuc_group_rem(int uid, int group)
 {
@@ -275,7 +275,7 @@ int libcfs_kkuc_group_rem(int uid, int group)
 
         RETURN(0);
 }
-CFS_EXPORT_SYMBOL(libcfs_kkuc_group_rem);
+EXPORT_SYMBOL(libcfs_kkuc_group_rem);
 
 int libcfs_kkuc_group_put(int group, void *payload)
 {
@@ -305,7 +305,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
 
 	RETURN(rc);
 }
-CFS_EXPORT_SYMBOL(libcfs_kkuc_group_put);
+EXPORT_SYMBOL(libcfs_kkuc_group_put);
 
 /**
  * Calls a callback function for each link of the given kuc group.
@@ -339,7 +339,7 @@ int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
 
         RETURN(rc);
 }
-CFS_EXPORT_SYMBOL(libcfs_kkuc_group_foreach);
+EXPORT_SYMBOL(libcfs_kkuc_group_foreach);
 
 #endif /* LUSTRE_UTILS */
 

@@ -67,7 +67,7 @@ cfs_proc_entry_t *              cfs_proc_dev = NULL;
 struct kmem_cache *proc_entry_cache;
 
 /* root node for sysctl table */
-cfs_sysctl_table_header_t       root_table_header;
+struct ctl_table_header       root_table_header;
 
 /* The global lock to protect all the access */
 
@@ -899,7 +899,7 @@ struct file_operations proc_sys_file_operations = {
 
 
 /* Scan the sysctl entries in table and add them all into /proc */
-void register_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t * root)
+void register_proc_table(struct ctl_table * table, cfs_proc_entry_t * root)
 {
     cfs_proc_entry_t * de;
     int len;
@@ -909,12 +909,12 @@ void register_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t * root)
         /* Can't do anything without a proc name. */
         if (!table->procname)
             continue;
-        /* Maybe we can't do anything with it... */
-        if (!table->proc_handler && !table->child) {
-            printk(CFS_KERN_WARNING "SYSCTL: Can't register %s\n",
-                table->procname);
-            continue;
-        }
+	/* Maybe we can't do anything with it... */
+	if (!table->proc_handler && !table->child) {
+	    printk(KERN_WARNING "SYSCTL: Can't register %s\n",
+		table->procname);
+	    continue;
+	}
 
         len = strlen(table->procname);
         mode = table->mode;
@@ -950,17 +950,17 @@ void register_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t * root)
 /*
  * Unregister a /proc sysctl table and any subdirectories.
  */
-void unregister_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t *root)
+void unregister_proc_table(struct ctl_table * table, cfs_proc_entry_t *root)
 {
     cfs_proc_entry_t *de;
     for (; table->ctl_name; table++) {
         if (!(de = table->de))
             continue;
         if (de->mode & S_IFDIR) {
-            if (!table->child) {
-                printk (CFS_KERN_ALERT "Help- malformed sysctl tree on free\n");
-                continue;
-            }
+	    if (!table->child) {
+		printk (KERN_ALERT "Help- malformed sysctl tree on free\n");
+		continue;
+	    }
             unregister_proc_table(table->child, de);
 
             /* Don't unregister directories which still have entries.. */
@@ -978,7 +978,7 @@ void unregister_proc_table(cfs_sysctl_table_t * table, cfs_proc_entry_t *root)
 }
 
 /* The generic string strategy routine: */
-int sysctl_string(cfs_sysctl_table_t *table, int *name, int nlen,
+int sysctl_string(struct ctl_table *table, int *name, int nlen,
           void *oldval, size_t *oldlenp,
           void *newval, size_t newlen, void **context)
 {
@@ -1055,7 +1055,7 @@ unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base)
 #define OP_MIN  4
 
 
-static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *filp,
+static int do_proc_dointvec(struct ctl_table *table, int write, struct file *filp,
           void *buffer, size_t *lenp, int conv, int op)
 {
     int *i, vleft, first=1, neg, val;
@@ -1180,7 +1180,7 @@ static int do_proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *f
  *
  * Returns 0 on success.
  */
-int proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *filp,
+int proc_dointvec(struct ctl_table *table, int write, struct file *filp,
              void *buffer, size_t *lenp)
 {
     return do_proc_dointvec(table,write,filp,buffer,lenp,1,OP_SET);
@@ -1204,7 +1204,7 @@ int proc_dointvec(cfs_sysctl_table_t *table, int write, struct file *filp,
  *
  * Returns 0 on success.
  */
-int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
+int proc_dostring(struct ctl_table *table, int write, struct file *filp,
           void *buffer, size_t *lenp)
 {
     size_t len;
@@ -1253,10 +1253,9 @@ int proc_dostring(cfs_sysctl_table_t *table, int write, struct file *filp,
 }
 
 /* Perform the actual read/write of a sysctl table entry. */
-int do_sysctl_strategy (cfs_sysctl_table_t *table, 
-            int *name, int nlen,
-            void *oldval, size_t *oldlenp,
-            void *newval, size_t newlen, void **context)
+int do_sysctl_strategy(struct ctl_table *table, int *name, int nlen,
+		       void *oldval, size_t *oldlenp, void *newval,
+		       size_t newlen, void **context)
 {
     int op = 0, rc;
     size_t len;
@@ -1301,9 +1300,9 @@ int do_sysctl_strategy (cfs_sysctl_table_t *table,
 }
 
 static int parse_table(int *name, int nlen,
-               void *oldval, size_t *oldlenp,
-               void *newval, size_t newlen,
-               cfs_sysctl_table_t *table, void **context)
+	       void *oldval, size_t *oldlenp,
+	       void *newval, size_t newlen,
+	       struct ctl_table *table, void **context)
 {
     int n;
 
@@ -1441,24 +1440,21 @@ int do_sysctl(int *name, int nlen, void *oldval, size_t *oldlenp,
  * This routine returns %NULL on a failure to register, and a pointer
  * to the table header on success.
  */
-struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table, 
-                           int insert_at_head)
+struct ctl_table_header *
+register_sysctl_table(struct ctl_table *table)
 {
-    struct ctl_table_header *tmp;
-    tmp = kmalloc(sizeof(struct ctl_table_header), 0);
-    if (!tmp)
-        return NULL;
-    tmp->ctl_table = table;
+	struct ctl_table_header *tmp;
+	tmp = kmalloc(sizeof(struct ctl_table_header), 0);
+	if (!tmp)
+		return NULL;
+	tmp->ctl_table = table;
 
-    CFS_INIT_LIST_HEAD(&tmp->ctl_entry);
-    if (insert_at_head)
-        cfs_list_add(&tmp->ctl_entry, &root_table_header.ctl_entry);
-    else
-        cfs_list_add_tail(&tmp->ctl_entry, &root_table_header.ctl_entry);
+	CFS_INIT_LIST_HEAD(&tmp->ctl_entry);
+	cfs_list_add_tail(&tmp->ctl_entry, &root_table_header.ctl_entry);
 #ifdef CONFIG_PROC_FS
-    register_proc_table(table, cfs_proc_sys);
+	register_proc_table(table, cfs_proc_sys);
 #endif
-    return tmp;
+	return tmp;
 }
 
 /**
@@ -1478,7 +1474,7 @@ void unregister_sysctl_table(struct ctl_table_header * header)
 }
 
 
-int cfs_psdev_register(cfs_psdev_t * psdev)
+int misc_register(struct miscdevice * psdev)
 {
     cfs_proc_entry_t *  entry;
 
@@ -1500,7 +1496,7 @@ int cfs_psdev_register(cfs_psdev_t * psdev)
     return 0;
 }
 
-int cfs_psdev_deregister(cfs_psdev_t * psdev)
+int misc_deregister(struct miscdevice * psdev)
 {
     cfs_proc_entry_t *  entry;
 

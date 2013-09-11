@@ -193,7 +193,7 @@ static struct cdevsw obd_psdevsw = {
 	NULL,
 };
 
-cfs_psdev_t obd_psdev = {
+struct miscdevice obd_psdev = {
 	-1,
 	NULL,
 	"obd",

@@ -226,10 +226,10 @@ typedef __u32 kernel_cap_t;
 /**
  * Module support (probably shouldn't be used in generic code?)
  */
-typedef struct cfs_module {
+struct module {
         int count;
         char *name;
-} cfs_module_t;
+};
 
 static inline void MODULE_AUTHOR(char *name)
 {
@@ -242,30 +242,28 @@ static inline void MODULE_AUTHOR(char *name)
 #define __init
 #define __exit
 
-#define EXPORT_SYMBOL(symbol)
-
-static inline int cfs_request_module(const char *name, ...)
+static inline int request_module(const char *name, ...)
 {
-        return (-EINVAL);
+	return (-EINVAL);
 }
 
-static inline void __cfs_module_get(cfs_module_t *module)
-{
-}
-
-static inline int cfs_try_module_get(cfs_module_t *module)
-{
-        return 1;
-}
-
-static inline void cfs_module_put(cfs_module_t *module)
+static inline void __module_get(struct module *module)
 {
 }
 
-
-static inline int cfs_module_refcount(cfs_module_t *m)
+static inline int try_module_get(struct module *module)
 {
-        return 1;
+	return 1;
+}
+
+static inline void module_put(struct module *module)
+{
+}
+
+
+static inline int module_refcount(struct module *m)
+{
+	return 1;
 }
 
 /***************************************************************************

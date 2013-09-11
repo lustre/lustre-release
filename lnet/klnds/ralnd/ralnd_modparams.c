@@ -113,7 +113,7 @@ enum {
 #define KRENAL_IMMEDIATE_MAX    CTL_UNNUMBERED
 #endif
 
-static cfs_sysctl_table_t kranal_ctl_table[] = {
+static struct ctl_table kranal_ctl_table[] = {
         {
                 .ctl_name = KRANAL_N_CONND,
                 .procname = "n_connd",
@@ -189,7 +189,7 @@ static cfs_sysctl_table_t kranal_ctl_table[] = {
         {0}
 };
 
-static cfs_sysctl_table_t kranal_top_ctl_table[] = {
+static struct ctl_table kranal_top_ctl_table[] = {
         {
                 .ctl_name = CTL_KRANAL,
                 .procname = "ranal",
@@ -204,20 +204,19 @@ static cfs_sysctl_table_t kranal_top_ctl_table[] = {
 int
 kranal_tunables_init ()
 {
-        kranal_tunables.kra_sysctl =
-                cfs_register_sysctl_table(kranal_top_ctl_table, 0);
+	kranal_tunables.kra_sysctl =
+		register_sysctl_table(kranal_top_ctl_table);
 
-        if (kranal_tunables.kra_sysctl == NULL)
-                CWARN("Can't setup /proc tunables\n");
+	if (kranal_tunables.kra_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
 
-        return 0;
+	return 0;
 }
 
-void
-kranal_tunables_fini ()
+void kranal_tunables_fini()
 {
-        if (kranal_tunables.kra_sysctl != NULL)
-                cfs_unregister_sysctl_table(kranal_tunables.kra_sysctl);
+	if (kranal_tunables.kra_sysctl != NULL)
+		unregister_sysctl_table(kranal_tunables.kra_sysctl);
 }
 
 #else
@@ -225,7 +224,7 @@ kranal_tunables_fini ()
 int
 kranal_tunables_init ()
 {
-        return 0;
+	return 0;
 }
 
 void

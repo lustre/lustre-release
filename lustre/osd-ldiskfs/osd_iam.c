@@ -456,33 +456,33 @@ static int iam_path_check(struct iam_path *p)
 
 static int iam_leaf_load(struct iam_path *path)
 {
-        iam_ptr_t block;
-        int err;
-        struct iam_container *c;
-        struct buffer_head   *bh;
-        struct iam_leaf      *leaf;
-        struct iam_descr     *descr;
+	iam_ptr_t block;
+	int err;
+	struct iam_container *c;
+	struct buffer_head   *bh;
+	struct iam_leaf      *leaf;
+	struct iam_descr     *descr;
 
-        c     = path->ip_container;
-        leaf  = &path->ip_leaf;
-        descr = iam_path_descr(path);
-        block = path->ip_frame->leaf;
-        if (block == 0) {
-                /* XXX bug 11027 */
-                printk(CFS_KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
-                       (long unsigned)path->ip_frame->leaf,
-                       dx_get_count(dx_node_get_entries(path, path->ip_frame)),
-                       path->ip_frames[0].bh, path->ip_frames[1].bh,
-                       path->ip_frames[2].bh);
-        }
-        err   = descr->id_ops->id_node_read(c, block, NULL, &bh);
-        if (err == 0) {
-                leaf->il_bh = bh;
-                leaf->il_curidx = block;
-                err = iam_leaf_ops(leaf)->init(leaf);
-                assert_inv(ergo(err == 0, iam_leaf_check(leaf)));
-        }
-        return err;
+	c     = path->ip_container;
+	leaf  = &path->ip_leaf;
+	descr = iam_path_descr(path);
+	block = path->ip_frame->leaf;
+	if (block == 0) {
+		/* XXX bug 11027 */
+		printk(KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
+		       (long unsigned)path->ip_frame->leaf,
+		       dx_get_count(dx_node_get_entries(path, path->ip_frame)),
+		       path->ip_frames[0].bh, path->ip_frames[1].bh,
+		       path->ip_frames[2].bh);
+	}
+	err = descr->id_ops->id_node_read(c, block, NULL, &bh);
+	if (err == 0) {
+		leaf->il_bh = bh;
+		leaf->il_curidx = block;
+		err = iam_leaf_ops(leaf)->init(leaf);
+		assert_inv(ergo(err == 0, iam_leaf_check(leaf)));
+	}
+	return err;
 }
 
 static void iam_unlock_htree(struct iam_container *ic,

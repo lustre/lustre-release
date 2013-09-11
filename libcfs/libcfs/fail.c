@@ -44,10 +44,10 @@ unsigned int cfs_fail_val = 0;
 cfs_waitq_t cfs_race_waitq;
 int cfs_race_state;
 
-CFS_EXPORT_SYMBOL(cfs_fail_loc);
-CFS_EXPORT_SYMBOL(cfs_fail_val);
-CFS_EXPORT_SYMBOL(cfs_race_waitq);
-CFS_EXPORT_SYMBOL(cfs_race_state);
+EXPORT_SYMBOL(cfs_fail_loc);
+EXPORT_SYMBOL(cfs_fail_val);
+EXPORT_SYMBOL(cfs_race_waitq);
+EXPORT_SYMBOL(cfs_race_state);
 
 int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 {
@@ -121,7 +121,7 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 
         return 1;
 }
-CFS_EXPORT_SYMBOL(__cfs_fail_check_set);
+EXPORT_SYMBOL(__cfs_fail_check_set);
 
 int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 {
@@ -138,4 +138,4 @@ int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
         }
         return ret;
 }
-CFS_EXPORT_SYMBOL(__cfs_fail_timeout_set);
+EXPORT_SYMBOL(__cfs_fail_timeout_set);

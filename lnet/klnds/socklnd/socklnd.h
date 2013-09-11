@@ -147,7 +147,7 @@ typedef struct
         int              *ksnd_protocol;        /* protocol version */
 #endif
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-        cfs_sysctl_table_header_t *ksnd_sysctl;   /* sysctl interface */
+	struct ctl_table_header *ksnd_sysctl;   /* sysctl interface */
 #endif
 } ksock_tunables_t;
 

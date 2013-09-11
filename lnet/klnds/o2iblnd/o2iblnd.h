@@ -90,35 +90,35 @@
 
 typedef struct
 {
-        int              *kib_dev_failover;     /* HCA failover */
-        unsigned int     *kib_service;          /* IB service number */
-        int              *kib_min_reconnect_interval; /* first failed connection retry... */
-        int              *kib_max_reconnect_interval; /* ...exponentially increasing to this */
-        int              *kib_cksum;            /* checksum kib_msg_t? */
-        int              *kib_timeout;          /* comms timeout (seconds) */
-        int              *kib_keepalive;        /* keepalive timeout (seconds) */
-        int              *kib_ntx;              /* # tx descs */
-        int              *kib_credits;          /* # concurrent sends */
-        int              *kib_peertxcredits;    /* # concurrent sends to 1 peer */
-        int              *kib_peerrtrcredits;   /* # per-peer router buffer credits */
-        int              *kib_peercredits_hiw;  /* # when eagerly to return credits */
-        int              *kib_peertimeout;      /* seconds to consider peer dead */
-        char            **kib_default_ipif;     /* default IPoIB interface */
-        int              *kib_retry_count;
-        int              *kib_rnr_retry_count;
-        int              *kib_concurrent_sends; /* send work queue sizing */
-        int		 *kib_ib_mtu;		/* IB MTU */
-        int              *kib_map_on_demand;    /* map-on-demand if RD has more fragments
-                                                 * than this value, 0 disable map-on-demand */
-        int              *kib_pmr_pool_size;    /* # physical MR in pool */
-        int              *kib_fmr_pool_size;    /* # FMRs in pool */
-        int              *kib_fmr_flush_trigger; /* When to trigger FMR flush */
-        int              *kib_fmr_cache;        /* enable FMR pool cache? */
+	int              *kib_dev_failover;     /* HCA failover */
+	unsigned int     *kib_service;          /* IB service number */
+	int              *kib_min_reconnect_interval; /* first failed connection retry... */
+	int              *kib_max_reconnect_interval; /* ...exponentially increasing to this */
+	int              *kib_cksum;            /* checksum kib_msg_t? */
+	int              *kib_timeout;          /* comms timeout (seconds) */
+	int              *kib_keepalive;        /* keepalive timeout (seconds) */
+	int              *kib_ntx;              /* # tx descs */
+	int              *kib_credits;          /* # concurrent sends */
+	int              *kib_peertxcredits;    /* # concurrent sends to 1 peer */
+	int              *kib_peerrtrcredits;   /* # per-peer router buffer credits */
+	int              *kib_peercredits_hiw;  /* # when eagerly to return credits */
+	int              *kib_peertimeout;      /* seconds to consider peer dead */
+	char            **kib_default_ipif;     /* default IPoIB interface */
+	int              *kib_retry_count;
+	int              *kib_rnr_retry_count;
+	int              *kib_concurrent_sends; /* send work queue sizing */
+	int		 *kib_ib_mtu;		/* IB MTU */
+	int              *kib_map_on_demand;    /* map-on-demand if RD has more fragments
+						 * than this value, 0 disable map-on-demand */
+	int              *kib_pmr_pool_size;    /* # physical MR in pool */
+	int              *kib_fmr_pool_size;    /* # FMRs in pool */
+	int              *kib_fmr_flush_trigger; /* When to trigger FMR flush */
+	int              *kib_fmr_cache;        /* enable FMR pool cache? */
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-        cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
+	struct ctl_table_header *kib_sysctl;  /* sysctl interface */
 #endif
-        int              *kib_require_priv_port;/* accept only privileged ports */
-        int              *kib_use_priv_port;    /* use privileged port for active connect */
+	int              *kib_require_priv_port;/* accept only privileged ports */
+	int              *kib_use_priv_port;    /* use privileged port for active connect */
 	/* # threads on each CPT */
 	int		 *kib_nscheds;
 } kib_tunables_t;
