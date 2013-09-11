@@ -1986,8 +1986,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	/* try to hold open_sem so that nobody else can open the file */
 	if (!down_write_trylock(&o->mot_open_sem)) {
 		ldlm_lock_cancel(lease);
-		LDLM_LOCK_PUT(lease);
-		RETURN(-EBUSY);
+		GOTO(out_reprocess, rc = -EBUSY);
 	}
 
 	/* Check if the lease open lease has already canceled */
@@ -2002,7 +2001,6 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	 * have been cancelled. It's okay to cancel it now as we've
 	 * held mot_open_sem. */
 	ldlm_lock_cancel(lease);
-	LDLM_LOCK_PUT(lease);
 
 	if (lease_broken) /* don't perform release task */
 		GOTO(out_unlock, rc = -ESTALE);
@@ -2129,6 +2127,10 @@ out_unlock:
 		LASSERT(repbody != NULL);
 		repbody->valid |= OBD_MD_FLRELEASED;
 	}
+
+out_reprocess:
+	ldlm_reprocess_all(lease->l_resource);
+	LDLM_LOCK_PUT(lease);
 
 	ma->ma_valid = 0;
 	ma->ma_need = 0;

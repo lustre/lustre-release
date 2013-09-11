@@ -2097,6 +2097,7 @@ restart:
 #endif
         EXIT;
 }
+EXPORT_SYMBOL(ldlm_reprocess_all);
 
 /**
  * Helper function to call blocking AST for LDLM lock \a lock in a
