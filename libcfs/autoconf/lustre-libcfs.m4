@@ -100,22 +100,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.27 have second argument to sock_map_fd
-AC_DEFUN([LIBCFS_SOCK_MAP_FD_2ARG],
-[AC_MSG_CHECKING([sock_map_fd have second argument])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/net.h>
-],[
-        sock_map_fd(NULL, 0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SOCK_MAP_FD_2ARG, 1,
-                  [sock_map_fd have second argument])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
 #
 # LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 #
@@ -318,8 +302,6 @@ LIBCFS_U64_LONG_LONG_LINUX
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_HAVE_KEYTYPE_H
-# 2.6.30
-LIBCFS_SOCK_MAP_FD_2ARG
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR
