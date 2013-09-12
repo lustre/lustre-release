@@ -859,7 +859,7 @@ static struct mod_paths {
 	{ "mdc", "lustre/mdc" },
 	{ "lustre", "lustre/llite" },
 	{ "llite_lloop", "lustre/llite" },
-	{ "ldiskfs", "ldiskfs/ldiskfs" },
+	{ "ldiskfs", "ldiskfs" },
 	{ "obdecho", "lustre/obdecho" },
 	{ "ldlm", "lustre/ldlm" },
 	{ "obdfilter", "lustre/obdfilter" },
