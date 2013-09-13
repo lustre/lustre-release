@@ -68,10 +68,6 @@ struct lvfs_ucred {
 	struct md_identity	*luc_identity;
 };
 
-struct lvfs_callback_ops {
-        struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr, void *data);
-};
-
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct lvfs_run_ctxt {
@@ -80,7 +76,6 @@ struct lvfs_run_ctxt {
         mm_segment_t             fs;
         struct lvfs_ucred        luc;
         int                      ngroups;
-        struct lvfs_callback_ops cb_ops;
         struct group_info       *group_info;
 	struct dt_device	*dt;
 #ifdef OBD_CTXT_DEBUG

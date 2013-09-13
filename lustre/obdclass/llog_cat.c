@@ -457,31 +457,23 @@ int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 	LASSERT(ctxt);
 	LASSERT(ctxt->loc_exp);
 
-	if (cathandle->lgh_obj != NULL) {
-		dt = ctxt->loc_exp->exp_obd->obd_lvfs_ctxt.dt;
-		LASSERT(dt);
+	LASSERT(cathandle->lgh_obj != NULL);
+	dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
 
-		th = dt_trans_create(env, dt);
-		if (IS_ERR(th))
-			RETURN(PTR_ERR(th));
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
 
-		rc = llog_cat_declare_add_rec(env, cathandle, rec, th);
-		if (rc)
-			GOTO(out_trans, rc);
+	rc = llog_cat_declare_add_rec(env, cathandle, rec, th);
+	if (rc)
+		GOTO(out_trans, rc);
 
-		rc = dt_trans_start_local(env, dt, th);
-		if (rc)
-			GOTO(out_trans, rc);
-		rc = llog_cat_add_rec(env, cathandle, rec, reccookie, buf, th);
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc)
+		GOTO(out_trans, rc);
+	rc = llog_cat_add_rec(env, cathandle, rec, reccookie, buf, th);
 out_trans:
-		dt_trans_stop(env, dt, th);
-	} else { /* lvfs compat code */
-		LASSERT(cathandle->lgh_file != NULL);
-		rc = llog_cat_declare_add_rec(env, cathandle, rec, th);
-		if (rc == 0)
-			rc = llog_cat_add_rec(env, cathandle, rec, reccookie,
-					      buf, th);
-	}
+	dt_trans_stop(env, dt, th);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_add);

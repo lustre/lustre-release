@@ -6,7 +6,6 @@ obdclass-linux-objs := $(addprefix linux/,$(obdclass-linux-objs))
 default: all
 
 obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o
-@LDISKFS_ENABLED_TRUE@ obdclass-all-objs += llog_lvfs.o
 obdclass-all-objs += class_obd.o debug.o genops.o uuid.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-all-objs += llog_osd.o local_storage.o
@@ -26,7 +25,6 @@ EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
 EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
-@LDISKFS_ENABLED_FALSE@EXTRA_DIST += llog_lvfs.c
 @SERVER_FALSE@EXTRA_DIST += lprocfs_jobstats.c
 @SERVER_FALSE@EXTRA_DIST += obd_mount_server.c
 
