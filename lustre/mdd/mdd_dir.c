@@ -375,7 +375,7 @@ static inline int mdd_is_sticky(const struct lu_env *env,
 	if (tmp_la->la_uid == uc->uc_fsuid)
 		return 0;
 
-	return !md_capable(uc, CFS_CAP_FOWNER);
+	return !md_capable(uc, CAP_FOWNER);
 }
 
 static int mdd_may_delete_entry(const struct lu_env *env,

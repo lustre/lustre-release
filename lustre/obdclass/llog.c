@@ -620,12 +620,12 @@ int llog_declare_create(const struct lu_env *env,
 	if (lop->lop_declare_create == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lop->lop_declare_create(env, loghandle, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_declare_create);
@@ -644,12 +644,12 @@ int llog_create(const struct lu_env *env, struct llog_handle *handle,
 	if (lop->lop_create == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lop->lop_create(env, handle, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_create);
@@ -671,12 +671,12 @@ int llog_declare_write_rec(const struct lu_env *env,
 	if (lop->lop_declare_write_rec == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lop->lop_declare_write_rec(env, handle, rec, idx, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_declare_write_rec);
@@ -705,13 +705,13 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		buflen = rec->lrh_len;
 	LASSERT(cfs_size_round(buflen) == buflen);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lop->lop_write_rec(env, handle, rec, logcookies, numcookies,
 				buf, idx, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_write_rec);
@@ -727,12 +727,12 @@ int llog_add(const struct lu_env *env, struct llog_handle *lgh,
 	if (lgh->lgh_logops->lop_add == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lgh->lgh_logops->lop_add(env, lgh, rec, logcookies, buf, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
@@ -747,12 +747,12 @@ int llog_declare_add(const struct lu_env *env, struct llog_handle *lgh,
 	if (lgh->lgh_logops->lop_declare_add == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = lgh->lgh_logops->lop_declare_add(env, lgh, rec, th);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_declare_add);
@@ -896,12 +896,12 @@ int llog_open(const struct lu_env *env, struct llog_ctxt *ctxt,
 	(*lgh)->lgh_ctxt = ctxt;
 	(*lgh)->lgh_logops = ctxt->loc_logops;
 
-	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
 	if (!raised)
-		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_raise(CAP_SYS_RESOURCE);
 	rc = ctxt->loc_logops->lop_open(env, *lgh, logid, name, open_param);
 	if (!raised)
-		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+		cfs_cap_lower(CAP_SYS_RESOURCE);
 	if (rc) {
 		llog_free_handle(*lgh);
 		*lgh = NULL;

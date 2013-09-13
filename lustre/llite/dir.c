@@ -1107,25 +1107,25 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
         int rc = 0;
         ENTRY;
 
-        switch (cmd) {
-        case LUSTRE_Q_INVALIDATE:
-        case LUSTRE_Q_FINVALIDATE:
-        case Q_QUOTAON:
-        case Q_QUOTAOFF:
-        case Q_SETQUOTA:
-        case Q_SETINFO:
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
-                break;
+	switch (cmd) {
+	case LUSTRE_Q_INVALIDATE:
+	case LUSTRE_Q_FINVALIDATE:
+	case Q_QUOTAON:
+	case Q_QUOTAOFF:
+	case Q_SETQUOTA:
+	case Q_SETINFO:
+		if (!cfs_capable(CAP_SYS_ADMIN) ||
+		    sbi->ll_flags & LL_SBI_RMT_CLIENT)
+			RETURN(-EPERM);
+		break;
 	case Q_GETQUOTA:
 		if (((type == USRQUOTA && current_euid() != id) ||
 		     (type == GRPQUOTA && !in_egroup_p(id))) &&
-		    (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
+		    (!cfs_capable(CAP_SYS_ADMIN) ||
 		     sbi->ll_flags & LL_SBI_RMT_CLIENT))
 			RETURN(-EPERM);
-                break;
-        case Q_GETINFO:
+		break;
+	case Q_GETINFO:
                 break;
         default:
                 CERROR("unsupported quotactl op: %#x\n", cmd);
@@ -1630,13 +1630,13 @@ out_rmdir:
         case OBD_IOC_LLOG_CATINFO: {
 		RETURN(-EOPNOTSUPP);
         }
-        case OBD_IOC_QUOTACHECK: {
-                struct obd_quotactl *oqctl;
-                int error = 0;
+	case OBD_IOC_QUOTACHECK: {
+		struct obd_quotactl *oqctl;
+		int error = 0;
 
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
+		if (!cfs_capable(CAP_SYS_ADMIN) ||
+		    sbi->ll_flags & LL_SBI_RMT_CLIENT)
+			RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(oqctl);
                 if (!oqctl)
@@ -1655,12 +1655,12 @@ out_rmdir:
                 OBD_FREE_PTR(oqctl);
                 return error ?: rc;
         }
-        case OBD_IOC_POLL_QUOTACHECK: {
-                struct if_quotacheck *check;
+	case OBD_IOC_POLL_QUOTACHECK: {
+		struct if_quotacheck *check;
 
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
+		if (!cfs_capable(CAP_SYS_ADMIN) ||
+		    sbi->ll_flags & LL_SBI_RMT_CLIENT)
+			RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(check);
                 if (!check)

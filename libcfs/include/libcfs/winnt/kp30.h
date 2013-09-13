@@ -42,6 +42,15 @@
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 
+#define CAP_CHOWN                   0
+#define CAP_DAC_OVERRIDE            1
+#define CAP_DAC_READ_SEARCH         2
+#define CAP_FOWNER                  3
+#define CAP_FSETID                  4
+#define CAP_LINUX_IMMUTABLE         9
+#define CAP_SYS_ADMIN              21
+#define CAP_SYS_BOOT               23
+#define CAP_SYS_RESOURCE           24
 
 /* winnt panic */
 void libcfs_panic(char *msg);

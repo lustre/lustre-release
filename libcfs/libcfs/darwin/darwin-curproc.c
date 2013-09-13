@@ -160,7 +160,7 @@ void cfs_curproc_cap_unpack(cfs_cap_t cap) {
 
 int cfs_capable(cfs_cap_t cap)
 {
-        return cap == CFS_CAP_SYS_BOOT ? is_suser(): is_suser1();
+	return cap == CAP_SYS_BOOT ? is_suser(): is_suser1();
 }
 
 /*

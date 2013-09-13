@@ -1138,8 +1138,8 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset);
 int sptlrpc_unpack_user_desc(struct lustre_msg *req, int offset, int swabbed);
 
 
-#define CFS_CAP_CHOWN_MASK (1 << CFS_CAP_CHOWN)
-#define CFS_CAP_SYS_RESOURCE_MASK (1 << CFS_CAP_SYS_RESOURCE)
+#define CFS_CAP_CHOWN_MASK (1 << CAP_CHOWN)
+#define CFS_CAP_SYS_RESOURCE_MASK (1 << CAP_SYS_RESOURCE)
 
 enum {
         LUSTRE_SEC_NONE         = 0,

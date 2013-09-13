@@ -299,10 +299,10 @@ static int osc_io_commit_write(const struct lu_env *env,
          * cl_page_touch() method, that generic cl_io_commit_write() and page
          * fault code calls.
          */
-        osc_page_touch(env, cl2osc_page(slice), to);
-        if (!client_is_remote(osc_export(obj)) &&
-            cfs_capable(CFS_CAP_SYS_RESOURCE))
-                oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
+	osc_page_touch(env, cl2osc_page(slice), to);
+	if (!client_is_remote(osc_export(obj)) &&
+	    cfs_capable(CAP_SYS_RESOURCE))
+		oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
 
         if (oio->oi_lockless)
                 /* see osc_io_prepare_write() for lockless io handling. */

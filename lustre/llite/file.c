@@ -1441,7 +1441,7 @@ static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 	struct ost_id		oi;
 	ENTRY;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!cfs_capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	if (copy_from_user(&ucreat, (struct ll_recreate_obj *)arg,
@@ -1460,7 +1460,7 @@ static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 	obd_count	ost_idx;
         ENTRY;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!cfs_capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	if (copy_from_user(&fid, (struct lu_fid *)arg, sizeof(fid)))
@@ -1602,7 +1602,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 	int			 rc;
 	ENTRY;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!cfs_capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	OBD_ALLOC_LARGE(lump, lum_size);
@@ -1859,7 +1859,7 @@ int ll_fid2path(struct inode *inode, void *arg)
 	int			 outsize, rc;
 	ENTRY;
 
-	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
+	if (!cfs_capable(CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 
@@ -2208,7 +2208,7 @@ static int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
 	/* Non-root users are forbidden to set or clear flags which are
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
-	    !cfs_capable(CFS_CAP_SYS_ADMIN))
+	    !cfs_capable(CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
 	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
