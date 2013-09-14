@@ -1276,11 +1276,12 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		result = 0;
 	 }
 
-	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0)) {
-		if (end == OBD_OBJECT_EOF)
-			end = i_size_read(inode);
-		mapping->writeback_index = (end >> CFS_PAGE_SHIFT) + 1;
-	}
+        if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0)) {
+                if (end == OBD_OBJECT_EOF)
+			mapping->writeback_index = 0;
+		else
+			mapping->writeback_index = (end >> PAGE_CACHE_SHIFT) +1;
+        }
 	RETURN(result);
 }
 
