@@ -437,6 +437,20 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		return rc;
 	}
 
+	/* Ensure xattr doesn't exist in ZAP */
+	if (obj->oo_xattr != ZFS_NO_OBJECT) {
+		udmu_objset_t     *uos = &osd_obj2dev(obj)->od_objset;
+		uint64_t           xa_data_obj;
+		rc = -zap_lookup(uos->os, obj->oo_xattr,
+				 name, 8, 1, &xa_data_obj);
+		if (rc == 0) {
+			rc = __osd_object_free(uos, xa_data_obj, oh->ot_tx);
+			if (rc == 0)
+				zap_remove(uos->os, obj->oo_xattr,
+					   name, oh->ot_tx);
+		}
+	}
+
 	rc = -nvlist_add_byte_array(obj->oo_sa_xattr, name,
 				    (uchar_t *)buf->lb_buf, buf->lb_len);
 	if (rc)
