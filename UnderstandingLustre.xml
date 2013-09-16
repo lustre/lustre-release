@@ -56,7 +56,7 @@
           <secondary>features</secondary>
         </indexterm>Lustre Features</title>
       <para>Lustre file systems run on a variety of vendor&apos;s kernels. For more details, see the
-          <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix">Lustre Support
+          <link xl:href="http://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix">Lustre Support
           Matrix</link> on the Intel Lustre community wiki.</para>
       <para>A Lustre installation can be scaled up or down with respect to the number of client
         nodes, disk storage and bandwidth. Scalability and performance are dependent on available
