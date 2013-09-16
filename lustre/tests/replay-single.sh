@@ -424,27 +424,30 @@ test_20a() {	# was test_20
 run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_20b() { # bug 10480
-    BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+	local wait_timeout=$((TIMEOUT * 4))
+	local BEFOREUSED
+	local AFTERUSED
 
-    dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
-    pid=$!
-    while [ ! -e $DIR/$tfile ] ; do
-        usleep 60                           # give dd a chance to start
-    done
+	BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
+	pid=$!
+	while [ ! -e $DIR/$tfile ] ; do
+	usleep 60                           # give dd a chance to start
+	done
 
-    $GETSTRIPE $DIR/$tfile || return 1
-    rm -f $DIR/$tfile || return 2       # make it an orphan
-    mds_evict_client
-    client_up || client_up || true    # reconnect
+	$GETSTRIPE $DIR/$tfile || return 1
+	rm -f $DIR/$tfile || return 2       # make it an orphan
+	mds_evict_client
+	client_up || client_up || true    # reconnect
 
-    fail $SINGLEMDS                            # start orphan recovery
-    wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
-    wait_mds_ost_sync || return 3
-    AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
-    log "before $BEFOREUSED, after $AFTERUSED"
-    (( $AFTERUSED > $BEFOREUSED + $(fs_log_size) )) &&
-        error "after $AFTERUSED > before $BEFOREUSED"
-    return 0
+	fail $SINGLEMDS                            # start orphan recovery
+	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
+	wait_delete_completed_mds $wait_timeout || return 3
+	AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	log "before $BEFOREUSED, after $AFTERUSED"
+	(( $AFTERUSED > $BEFOREUSED + $(fs_log_size) )) &&
+		error "after $AFTERUSED > before $BEFOREUSED"
+	return 0
 }
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
