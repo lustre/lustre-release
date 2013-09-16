@@ -2654,18 +2654,29 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
 static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
                               struct thandle *th)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct inode      *inode = obj->oo_inode;
+	struct osd_object	*obj = osd_dt_obj(dt);
+	struct inode		*inode = obj->oo_inode;
+	struct osd_device	*osd = osd_dev(dt->do_lu.lo_dev);
 
-        LINVRNT(osd_invariant(obj));
+	LINVRNT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(osd_write_locked(env, obj));
-        LASSERT(th != NULL);
+	LASSERT(osd_write_locked(env, obj));
+	LASSERT(th != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_DEL);
 
 	spin_lock(&obj->oo_guard);
-	LASSERT(inode->i_nlink > 0);
+	/* That can be result of upgrade from old Lustre version and
+	 * applied only to local files.  Just skip this ref_del call.
+	 * ext4_unlink() only treats this as a warning, don't LASSERT here.*/
+	if (inode->i_nlink == 0) {
+		CDEBUG_LIMIT(fid_is_norm(lu_object_fid(&dt->do_lu)) ?
+			     D_ERROR : D_INODE, "%s: nlink == 0 on "DFID
+			     ", maybe an upgraded file? (LU-3915)\n",
+			     osd_name(osd), PFID(lu_object_fid(&dt->do_lu)));
+		spin_unlock(&obj->oo_guard);
+		return 0;
+	}
 
 	/* This based on ldiskfs_dec_count(), which is not exported.
 	 *
@@ -2674,7 +2685,7 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 	 * threads not holding oo_guard seeing i_nlink == 0 in rare cases.
 	 *
 	 * nlink == 1 means the directory has/had > EXT4_LINK_MAX subdirs.
-	 * */
+	 */
 	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 1) {
 		drop_nlink(inode);
 
