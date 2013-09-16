@@ -123,13 +123,8 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
              );                                                         \
 }
 
-#ifdef HAVE_STRUCT_CRED		/* Since 2.6.29 */
 #define key_cred(tsk)   ((tsk)->cred)
 #define key_tgcred(tsk) ((tsk)->cred->tgcred)
-#else
-#define key_cred(tsk)    (tsk)
-#define key_tgcred(tsk) ((tsk)->signal)
-#endif
 
 static inline void keyring_upcall_lock(struct gss_sec_keyring *gsec_kr)
 {
