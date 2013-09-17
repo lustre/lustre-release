@@ -301,6 +301,7 @@ if test x$enable_modules = xyes ; then
 			LB_PROG_LINUX
 			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
+			LB_EXT4_SRC_DIR
 			LC_PROG_LINUX
 			;;
 		darwin*)

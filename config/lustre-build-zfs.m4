@@ -291,7 +291,7 @@ AC_DEFUN([LB_ZFS_USER], [
 	dnl #
 	AC_MSG_CHECKING([zfs devel headers])
 	AS_IF([test -z "${zfslib}"], [
-        	AS_IF([test -e $zfssrc/include/libzfs.h && test -e $zfssrc/lib/libspl/include], [
+        	AS_IF([test -e "${zfssrc}/include/libzfs.h" && test -e "${zfssrc}/lib/libspl/include"], [
                 	zfslib="-I $zfssrc/lib/libspl/include -I $zfssrc/include"
 		], [test -d /usr/include/libzfs && test -d /usr/include/libspl], [
 			zfslib="-I /usr/include/libspl -I /usr/include/libzfs"
