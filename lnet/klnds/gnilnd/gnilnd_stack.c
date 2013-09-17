@@ -366,7 +366,6 @@ kgnilnd_ruhroh_thread(void *arg)
 	int                i = 1;
 	DEFINE_WAIT(wait);
 
-	cfs_daemonize("kgnilnd_rr");
 	cfs_block_allsigs();
 	set_user_nice(current, *kgnilnd_tunables.kgn_nice);
 	kgnilnd_data.kgn_ruhroh_running = 1;
@@ -592,7 +591,6 @@ kgnilnd_rca(void *arg)
 	rs_event_t event;
 	lnet_nid_t nid;
 
-	cfs_daemonize("kgnilnd_rca");
 	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */
@@ -651,7 +649,7 @@ subscribe_retry:
 		if (krca_get_message(&rca_krt, &event) == 0) {
 			int node_down = GNILND_RCA_NODE_UNKNOWN;
 			rs_state_t state;
-			CFS_LIST_HEAD(zombies);
+			LIST_HEAD(zombies);
 
 			/* Compute nodes don't care about other compute nodes
 			 * so we don't need to create a peer.

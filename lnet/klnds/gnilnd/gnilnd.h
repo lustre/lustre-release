@@ -754,7 +754,7 @@ typedef struct kgn_peer {
 	unsigned long       gnp_last_alive;             /* last time I had valid comms */
 	int                 gnp_last_dgram_errno;       /* last error dgrams saw */
 	unsigned long       gnp_last_dgram_time;        /* last time I tried to connect */
-	unsigned long       gnp_reconnect_time;         /* CURRENT_SECONDS when reconnect OK */
+	unsigned long       gnp_reconnect_time;         /* get_seconds() when reconnect OK */
 	unsigned long       gnp_reconnect_interval;     /* exponential backoff */
 	atomic_t            gnp_dirty_eps;              /* # of old but yet to be destroyed EPs from conns */
 	int                 gnp_down;                   /* rca says peer down */
@@ -821,11 +821,11 @@ typedef struct kgn_data {
 	wait_queue_head_t       kgn_reaper_waitq;     /* reaper sleeps here */
 	spinlock_t              kgn_reaper_lock;      /* serialise */
 
-	cfs_mem_cache_t        *kgn_rx_cache;         /* rx descriptor space */
-	cfs_mem_cache_t        *kgn_tx_cache;         /* tx descriptor memory */
-	cfs_mem_cache_t        *kgn_tx_phys_cache;    /* tx phys descriptor memory */
+	struct kmem_cache        *kgn_rx_cache;         /* rx descriptor space */
+	struct kmem_cache        *kgn_tx_cache;         /* tx descriptor memory */
+	struct kmem_cache        *kgn_tx_phys_cache;    /* tx phys descriptor memory */
 	atomic_t                kgn_ntx;              /* # tx in use */
-	cfs_mem_cache_t        *kgn_dgram_cache;      /* outgoing datagrams */
+	struct kmem_cache        *kgn_dgram_cache;      /* outgoing datagrams */
 
 	struct page          ***kgn_cksum_map_pages;  /* page arrays for mapping pages on checksum */
 	__u64			kgn_cksum_npages;     /* Number of pages allocated for checksumming */
@@ -1029,19 +1029,18 @@ do {                                                                            
 	(atomic_read(&kgnilnd_data.kgn_nquiesce) ==                             \
 		atomic_read(&kgnilnd_data.kgn_nthreads))
 
-#define KGNILND_SPIN_QUIESCE                                                 \
-do {                                                                         \
-	/* E.T phone home */                                                 \
-	atomic_inc(&kgnilnd_data.kgn_nquiesce);                              \
-	CDEBUG(D_NET, "Waiting for thread pause to be over...\n");           \
-	while (kgnilnd_data.kgn_quiesce_trigger) {                           \
-		set_current_state(TASK_INTERRUPTIBLE);                       \
-		cfs_schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,       \
-			cfs_time_seconds(1));                                \
-	}                                                                    \
-	/* Mom, my homework is done */                                       \
-	CDEBUG(D_NET, "Waking up from thread pause\n");                      \
-	atomic_dec(&kgnilnd_data.kgn_nquiesce);                              \
+#define KGNILND_SPIN_QUIESCE						\
+do {									\
+	/* E.T phone home */						\
+	atomic_inc(&kgnilnd_data.kgn_nquiesce);				\
+	CDEBUG(D_NET, "Waiting for thread pause to be over...\n");	\
+	while (kgnilnd_data.kgn_quiesce_trigger) {			\
+		set_current_state(TASK_INTERRUPTIBLE);			\
+		schedule_timeout(HZ);					\
+	}								\
+	/* Mom, my homework is done */					\
+	CDEBUG(D_NET, "Waking up from thread pause\n");			\
+	atomic_dec(&kgnilnd_data.kgn_nquiesce);				\
 } while(0)
 
 /* use macros for addref/decref to get the calling function name in the CDEBUG */

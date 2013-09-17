@@ -53,8 +53,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 	for (i = 0; i < LNET_MAX_IOV; i++) {
 		src[i].kiov_offset = 0;
-		src[i].kiov_len = CFS_PAGE_SIZE;
-		src[i].kiov_page = cfs_alloc_page(CFS_ALLOC_STD|CFS_ALLOC_ZERO);
+		src[i].kiov_len = PAGE_SIZE;
+		src[i].kiov_page = alloc_page(__GFP_IO | __GFP_FS | __GFP_ZERO);
 
 		if (src[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
@@ -62,8 +62,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 		}
 
 		dest[i].kiov_offset = 0;
-		dest[i].kiov_len = CFS_PAGE_SIZE;
-		dest[i].kiov_page = cfs_alloc_page(CFS_ALLOC_STD|CFS_ALLOC_ZERO);
+		dest[i].kiov_len = PAGE_SIZE;
+		dest[i].kiov_page = alloc_page(__GFP_IO | __GFP_FS | __GFP_ZERO);
 
 		if (dest[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
@@ -114,8 +114,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	for (n = 0; n < nloops; n++) {
 		CDEBUG(D_BUFFS, "case %d loop %d src %d dest %d nob %d niov %d\n",
 		       caseno, n, src[0].kiov_offset, dest[0].kiov_offset, nob, niov);
-		cksum = kgnilnd_cksum_kiov(niov, src, 0, nob - n, 1);
-		cksum2 = kgnilnd_cksum_kiov(niov, dest, 0, nob - n, 1);
+		cksum = kgnilnd_cksum_kiov(niov, src, 0, nob - (n % nob), 1);
+		cksum2 = kgnilnd_cksum_kiov(niov, dest, 0, nob - (n % nob), 1);
 
 		if (cksum != cksum2) {
 			CERROR("case %d loop %d different checksums %x expected %x\n",
@@ -137,10 +137,10 @@ unwind:
 	CDEBUG(D_NET, "freeing %d pages\n", i);
 	for (i -= 1; i >= 0; i--) {
 		if (src[i].kiov_page != NULL) {
-			cfs_free_page(src[i].kiov_page);
+			__free_page(src[i].kiov_page);
 		}
 		if (dest[i].kiov_page != NULL) {
-			cfs_free_page(dest[i].kiov_page);
+			__free_page(dest[i].kiov_page);
 		}
 	}
 

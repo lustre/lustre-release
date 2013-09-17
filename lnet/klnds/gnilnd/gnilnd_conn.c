@@ -125,7 +125,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	 * as reallocating them is tough if there is memory fragmentation */
 
 	if (use_phys) {
-		fma_blk->gnm_block = cfs_mem_cache_alloc(kgnilnd_data.kgn_mbox_cache, CFS_ALLOC_ATOMIC);
+		fma_blk->gnm_block = kmem_cache_alloc(kgnilnd_data.kgn_mbox_cache, GFP_ATOMIC);
 		if (fma_blk->gnm_block == NULL) {
 			CNETERR("could not allocate physical SMSG mailbox memory\n");
 			rc = -ENOMEM;
@@ -215,7 +215,7 @@ free_blk:
 	if (fma_blk->gnm_state == GNILND_FMABLK_VIRT) {
 		LIBCFS_FREE(fma_blk->gnm_block, fma_blk->gnm_blk_size);
 	} else {
-		cfs_mem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
+		kmem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
 	}
 free_desc:
 	LIBCFS_FREE(fma_blk, sizeof(kgn_fma_memblock_t));
@@ -310,7 +310,7 @@ kgnilnd_free_fmablk_locked(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 		fma_blk, fma_blk->gnm_block, fma_blk->gnm_mbox_size);
 
 	if (fma_blk->gnm_state == GNILND_FMABLK_PHYS) {
-		cfs_mem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
+		kmem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
 	} else {
 		LIBCFS_FREE(fma_blk->gnm_block, fma_blk->gnm_blk_size);
 	}
@@ -925,8 +925,7 @@ kgnilnd_alloc_dgram(kgn_dgram_t **dgramp, kgn_device_t *dev, kgn_dgram_type_t ty
 {
 	kgn_dgram_t         *dgram;
 
-	dgram = cfs_mem_cache_alloc(kgnilnd_data.kgn_dgram_cache,
-					CFS_ALLOC_ATOMIC);
+	dgram = kmem_cache_alloc(kgnilnd_data.kgn_dgram_cache, GFP_ATOMIC);
 	if (dgram == NULL)
 		return -ENOMEM;
 
@@ -1152,7 +1151,7 @@ kgnilnd_free_dgram(kgn_device_t *dev, kgn_dgram_t *dgram)
 	dgram->gndg_magic = 0x6f5a6b5f;
 	atomic_dec(&dev->gnd_ndgrams);
 
-	cfs_mem_cache_free(kgnilnd_data.kgn_dgram_cache, dgram);
+	kmem_cache_free(kgnilnd_data.kgn_dgram_cache, dgram);
 	CDEBUG(D_MALLOC|D_NETTRACE, "slab-freed 'dgram': %lu at %p.\n",
 	       sizeof(*dgram), dgram);
 }
@@ -2167,13 +2166,10 @@ int
 kgnilnd_dgram_waitq(void *arg)
 {
 	kgn_device_t     *dev = (kgn_device_t *) arg;
-	char              name[16];
 	gni_return_t      grc;
 	__u64             readyid;
 	DEFINE_WAIT(mover_done);
 
-	snprintf(name, sizeof(name), "kgnilnd_dgn_%02d", dev->gnd_id);
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */
@@ -2345,7 +2341,6 @@ int
 kgnilnd_dgram_mover(void *arg)
 {
 	kgn_device_t            *dev = (kgn_device_t *)arg;
-	char                     name[16];
 	int                      rc, did_something;
 	unsigned long            next_purge_check = jiffies - 1;
 	unsigned long            timeout;
@@ -2353,8 +2348,6 @@ kgnilnd_dgram_mover(void *arg)
 	unsigned long		 deadline = 0;
 	DEFINE_WAIT(wait);
 
-	snprintf(name, sizeof(name), "kgnilnd_dg_%02d", dev->gnd_id);
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 	/* all gnilnd threads need to run fairly urgently */
 	set_user_nice(current, *kgnilnd_tunables.kgn_nice);

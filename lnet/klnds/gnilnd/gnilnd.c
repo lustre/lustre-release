@@ -1650,7 +1650,7 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 {
 	int         rc;
 	kgn_peer_t  *peer, *new_peer;
-	CFS_LIST_HEAD(zombies);
+	LIST_HEAD(zombies);
 
 	write_lock(&kgnilnd_data.kgn_peer_conn_lock);
 	peer = kgnilnd_find_peer_locked(nid);
@@ -2228,7 +2228,7 @@ int kgnilnd_base_startup(void)
 
 	/* OK to call kgnilnd_api_shutdown() to cleanup now */
 	kgnilnd_data.kgn_init = GNILND_INIT_DATA;
-	PORTAL_MODULE_USE;
+	try_module_get(THIS_MODULE);
 
 	rwlock_init(&kgnilnd_data.kgn_peer_conn_lock);
 
@@ -2269,10 +2269,8 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_mbox_cache =
-		cfs_mem_cache_create("kgn_mbox_block",
-				     KMALLOC_MAX_SIZE,
-				     0,    /* offset */
-				     SLAB_HWCACHE_ALIGN);   /* flags */
+		kmem_cache_create("kgn_mbox_block", KMALLOC_MAX_SIZE, 0,
+				  SLAB_HWCACHE_ALIGN, NULL);
 	if (kgnilnd_data.kgn_mbox_cache == NULL) {
 		CERROR("Can't create slab for physical mbox blocks\n");
 		rc = -ENOMEM;
@@ -2280,10 +2278,7 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_rx_cache =
-		cfs_mem_cache_create("kgn_rx_t",
-				     sizeof(kgn_rx_t),
-				     0,    /* offset */
-				     0);   /* flags */
+		kmem_cache_create("kgn_rx_t", sizeof(kgn_rx_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_rx_cache == NULL) {
 		CERROR("Can't create slab for kgn_rx_t descriptors\n");
 		rc = -ENOMEM;
@@ -2291,10 +2286,7 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_tx_cache =
-		cfs_mem_cache_create("kgn_tx_t",
-				     sizeof(kgn_tx_t),
-				     0,    /* offset */
-				     0);   /* flags */
+		kmem_cache_create("kgn_tx_t", sizeof(kgn_tx_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_tx_cache == NULL) {
 		CERROR("Can't create slab for kgn_tx_t\n");
 		rc = -ENOMEM;
@@ -2302,10 +2294,9 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_tx_phys_cache =
-		cfs_mem_cache_create("kgn_tx_phys",
-				     LNET_MAX_IOV * sizeof(gni_mem_segment_t),
-				     0,    /* offset */
-				     0);   /* flags */
+		kmem_cache_create("kgn_tx_phys",
+				   LNET_MAX_IOV * sizeof(gni_mem_segment_t),
+				   0, 0, NULL);
 	if (kgnilnd_data.kgn_tx_phys_cache == NULL) {
 		CERROR("Can't create slab for kgn_tx_phys\n");
 		rc = -ENOMEM;
@@ -2313,10 +2304,7 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_dgram_cache =
-		cfs_mem_cache_create("kgn_dgram_t",
-				     sizeof(kgn_dgram_t),
-				     0,    /* offset */
-				     0);   /* flags */
+		kmem_cache_create("kgn_dgram_t", sizeof(kgn_dgram_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_dgram_cache == NULL) {
 		CERROR("Can't create slab for outgoing datagrams\n");
 		rc = -ENOMEM;
@@ -2569,30 +2557,20 @@ kgnilnd_base_shutdown(void)
 		kgnilnd_free_phys_fmablk(dev);
 	}
 
-	if (kgnilnd_data.kgn_mbox_cache != NULL) {
-		i = cfs_mem_cache_destroy(kgnilnd_data.kgn_mbox_cache);
-		LASSERTF(i == 0, "rc %d destroying kgn_mbox_cache\n", i);
-	}
+	if (kgnilnd_data.kgn_mbox_cache != NULL)
+		kmem_cache_destroy(kgnilnd_data.kgn_mbox_cache);
 
-	if (kgnilnd_data.kgn_rx_cache != NULL) {
-		i = cfs_mem_cache_destroy(kgnilnd_data.kgn_rx_cache);
-		LASSERTF(i == 0, "rc %d destroying kgn_rx_cache\n", i);
-	}
+	if (kgnilnd_data.kgn_rx_cache != NULL)
+		kmem_cache_destroy(kgnilnd_data.kgn_rx_cache);
 
-	if (kgnilnd_data.kgn_tx_cache != NULL) {
-		i = cfs_mem_cache_destroy(kgnilnd_data.kgn_tx_cache);
-		LASSERTF(i == 0, "rc %d destroying kgn_tx_cache\n", i);
-	}
+	if (kgnilnd_data.kgn_tx_cache != NULL)
+		kmem_cache_destroy(kgnilnd_data.kgn_tx_cache);
 
-	if (kgnilnd_data.kgn_tx_phys_cache != NULL) {
-		i = cfs_mem_cache_destroy(kgnilnd_data.kgn_tx_phys_cache);
-		LASSERTF(i == 0, "rc %d destroying kgn_tx_phys_cache\n", i);
-	}
+	if (kgnilnd_data.kgn_tx_phys_cache != NULL)
+		kmem_cache_destroy(kgnilnd_data.kgn_tx_phys_cache);
 
-	if (kgnilnd_data.kgn_dgram_cache != NULL) {
-		i = cfs_mem_cache_destroy(kgnilnd_data.kgn_dgram_cache);
-		LASSERTF(i == 0, "rc %d destroying kgn_dgram_cache\n", i);
-	}
+	if (kgnilnd_data.kgn_dgram_cache != NULL)
+		kmem_cache_destroy(kgnilnd_data.kgn_dgram_cache);
 
 	if (kgnilnd_data.kgn_cksum_map_pages != NULL) {
 		for (i = 0; i < kgnilnd_data.kgn_cksum_npages; i++) {
@@ -2607,7 +2585,7 @@ kgnilnd_base_shutdown(void)
 	       atomic_read(&libcfs_kmemory));
 
 	kgnilnd_data.kgn_init = GNILND_INIT_NOTHING;
-	PORTAL_MODULE_UNUSE;
+	module_put(THIS_MODULE);
 
 	EXIT;
 }

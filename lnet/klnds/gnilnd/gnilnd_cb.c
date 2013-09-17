@@ -228,7 +228,7 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 
 	/* we only allocate this if we need to */
 	if (tx->tx_phys != NULL) {
-		cfs_mem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
+		kmem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
 		CDEBUG(D_MALLOC, "slab-freed 'tx_phys': %lu at %p.\n",
 		       LNET_MAX_IOV * sizeof(gni_mem_segment_t), tx->tx_phys);
 	}
@@ -242,7 +242,7 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 #if 0
 	KGNILND_POISON(tx, 0x5a, sizeof(kgn_tx_t));
 #endif
-	cfs_mem_cache_free(kgnilnd_data.kgn_tx_cache, tx);
+	kmem_cache_free(kgnilnd_data.kgn_tx_cache, tx);
 	CDEBUG(D_MALLOC, "slab-freed 'tx': %lu at %p.\n",
 	       sizeof(*tx), tx);
 }
@@ -255,7 +255,7 @@ kgnilnd_alloc_tx (void)
 	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_ALLOC_TX))
 		return tx;
 
-	tx = cfs_mem_cache_alloc(kgnilnd_data.kgn_tx_cache, CFS_ALLOC_ATOMIC);
+	tx = kmem_cache_alloc(kgnilnd_data.kgn_tx_cache, GFP_ATOMIC);
 	if (tx == NULL) {
 		CERROR("failed to allocate tx\n");
 		return NULL;
@@ -522,7 +522,7 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov, struct iovec *io
 			 * than kiov_len, we will also have a whole at the end of that page
 			 * which isn't allowed */
 			if ((kiov[i].kiov_offset != 0 && i > 0) ||
-			    (kiov[i].kiov_offset + kiov[i].kiov_len != CFS_PAGE_SIZE && i < niov - 1)) {
+			    (kiov[i].kiov_offset + kiov[i].kiov_len != PAGE_SIZE && i < niov - 1)) {
 				CNETERR("Can't make payload contiguous in I/O VM:"
 				       "page %d, offset %u, nob %u, kiov_offset %u kiov_len %u \n",
 				       i, offset, nob, kiov->kiov_offset, kiov->kiov_len);
@@ -640,8 +640,8 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 	LASSERT(tx->tx_buftype == GNILND_BUF_NONE);
 
 	/* only allocate this if we are going to use it */
-	tx->tx_phys = cfs_mem_cache_alloc(kgnilnd_data.kgn_tx_phys_cache,
-					      CFS_ALLOC_ATOMIC);
+	tx->tx_phys = kmem_cache_alloc(kgnilnd_data.kgn_tx_phys_cache,
+					      GFP_ATOMIC);
 	if (tx->tx_phys == NULL) {
 		CERROR("failed to allocate tx_phys\n");
 		rc = -ENOMEM;
@@ -729,7 +729,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 
 error:
 	if (tx->tx_phys != NULL) {
-		cfs_mem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
+		kmem_cache_free(kgnilnd_data.kgn_tx_phys_cache, tx->tx_phys);
 		CDEBUG(D_MALLOC, "slab-freed 'tx_phys': %lu at %p.\n",
 		       sizeof(*tx->tx_phys), tx->tx_phys);
 		tx->tx_phys = NULL;
@@ -1990,7 +1990,7 @@ kgnilnd_alloc_rx(void)
 {
 	kgn_rx_t	*rx;
 
-	rx = cfs_mem_cache_alloc(kgnilnd_data.kgn_rx_cache, CFS_ALLOC_ATOMIC);
+	rx = kmem_cache_alloc(kgnilnd_data.kgn_rx_cache, GFP_ATOMIC);
 	if (rx == NULL) {
 		CERROR("failed to allocate rx\n");
 		return NULL;
@@ -2045,7 +2045,7 @@ kgnilnd_consume_rx(kgn_rx_t *rx)
 		kgnilnd_release_msg(conn);
 	}
 
-	cfs_mem_cache_free(kgnilnd_data.kgn_rx_cache, rx);
+	kmem_cache_free(kgnilnd_data.kgn_rx_cache, rx);
 	CDEBUG(D_MALLOC, "slab-freed 'rx': %lu at %p.\n",
 	       sizeof(*rx), rx);
 
@@ -2946,7 +2946,6 @@ kgnilnd_reaper(void *arg)
 	struct timer_list  timer;
 	DEFINE_WAIT(wait);
 
-	cfs_daemonize("kgnilnd_rpr");
 	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */
@@ -4850,15 +4849,11 @@ kgnilnd_scheduler(void *arg)
 {
 	int               threadno = (long)arg;
 	kgn_device_t		*dev;
-	char			name[16];
 	int			busy_loops = 0;
 	unsigned long	  deadline = 0;
 	DEFINE_WAIT(wait);
 
 	dev = &kgnilnd_data.kgn_devices[(threadno + 1) % kgnilnd_data.kgn_ndevs];
-
-	snprintf(name, sizeof(name), "kgnilnd_sd_%02d", threadno);
-	cfs_daemonize(name);
 	cfs_block_allsigs();
 
 	/* all gnilnd threads need to run fairly urgently */

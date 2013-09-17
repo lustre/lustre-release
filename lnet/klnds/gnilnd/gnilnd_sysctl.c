@@ -38,7 +38,7 @@ static kgn_sysctl_data_t        kgnilnd_sysctl;
 
 #if defined(CONFIG_SYSCTL)
 
-static cfs_sysctl_table_header_t *kgnilnd_table_header = NULL;
+static struct ctl_table_header *kgnilnd_table_header = NULL;
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
 enum {
@@ -64,7 +64,7 @@ static int LL_PROC_PROTO(proc_toggle_thread_pause)
 	int  rc = 0;
 	ENTRY;
 
-	rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+	rc = proc_dointvec(table, write, buffer, lenp, ppos);
 	if (!write) {
 		/* read */
 		RETURN(rc);
@@ -92,7 +92,7 @@ static int LL_PROC_PROTO(proc_hw_quiesce)
 	kgn_device_t    *dev;
 	ENTRY;
 
-	rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+	rc = proc_dointvec(table, write, buffer, lenp, ppos);
 	if (!write) {
 		/* read */
 		RETURN(rc);
@@ -124,7 +124,7 @@ int LL_PROC_PROTO(proc_trigger_stack_reset)
 
 	if (!write) {
 		/* read */
-		rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+		rc = proc_dointvec(table, write, buffer, lenp, ppos);
 		RETURN(rc);
 	}
 
@@ -153,7 +153,7 @@ static int LL_PROC_PROTO(proc_toggle_rdmaq_override)
 	int  rc = 0;
 	ENTRY;
 
-	rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+	rc = proc_dointvec(table, write, buffer, lenp, ppos);
 	if (!write) {
 		/* read */
 		RETURN(rc);
@@ -187,7 +187,7 @@ static int LL_PROC_PROTO(proc_rca_inject)
 	char            command[10];
 	ENTRY;
 
-	rc = ll_proc_dostring(table, write, filp, buffer, lenp, ppos);
+	rc = proc_dostring(table, write, buffer, lenp, ppos);
 
 	if (!write) {
 		/* read */
@@ -233,7 +233,7 @@ static int LL_PROC_PROTO(proc_rca_inject)
 	RETURN(rc);
 }
 
-static cfs_sysctl_table_t kgnilnd_table[] = {
+static struct ctl_table kgnilnd_table[] = {
 	/*
 	 * NB No .strategy entries have been provided since sysctl(8) prefers
 	 * to go via /proc for portability.
@@ -289,7 +289,7 @@ static cfs_sysctl_table_t kgnilnd_table[] = {
 	{       INIT_CTL_NAME(0)   }
 };
 
-static cfs_sysctl_table_t kgnilnd_top_table[2] = {
+static struct ctl_table kgnilnd_top_table[2] = {
 	{
 		INIT_CTL_NAME(CTL_GNILND)
 		.procname = "kgnilnd",
@@ -304,13 +304,13 @@ static cfs_sysctl_table_t kgnilnd_top_table[2] = {
 void kgnilnd_insert_sysctl(void)
 {
 	if (kgnilnd_table_header == NULL)
-		kgnilnd_table_header = cfs_register_sysctl_table(kgnilnd_top_table, 0);
+		kgnilnd_table_header = register_sysctl_table(kgnilnd_top_table);
 }
 
 void kgnilnd_remove_sysctl(void)
 {
 	if (kgnilnd_table_header != NULL)
-		cfs_unregister_sysctl_table(kgnilnd_table_header);
+		unregister_sysctl_table(kgnilnd_table_header);
 
 	kgnilnd_table_header = NULL;
 }
