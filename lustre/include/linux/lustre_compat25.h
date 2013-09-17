@@ -154,38 +154,7 @@ static inline struct file *ll_dentry_open(struct path *path, int flags,
 
 /* add a lustre compatible layer for crypto API */
 #include <linux/crypto.h>
-#define ll_crypto_hash          crypto_hash
-#define ll_crypto_cipher        crypto_blkcipher
-#define ll_crypto_alloc_hash(name, type, mask)  crypto_alloc_hash(name, type, mask)
-#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_hash_setkey(tfm, key, keylen)
-#define ll_crypto_hash_init(desc)               crypto_hash_init(desc)
-#define ll_crypto_hash_update(desc, sl, bytes)  crypto_hash_update(desc, sl, bytes)
-#define ll_crypto_hash_final(desc, out)         crypto_hash_final(desc, out)
-#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
-                crypto_blkcipher_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
-                crypto_blkcipher_set_iv(tfm, src, len)
-#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
-                crypto_blkcipher_get_iv(tfm, dst, len)
-#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
-                crypto_blkcipher_encrypt(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
-                crypto_blkcipher_decrypt(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
-                crypto_blkcipher_encrypt_iv(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
-                crypto_blkcipher_decrypt_iv(desc, dst, src, bytes)
-
-static inline
-struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char *name,
-						   u32 type, u32 mask)
-{
-	struct ll_crypto_cipher *rtn = crypto_alloc_blkcipher(name, type, mask);
-
-	return (rtn == NULL ? ERR_PTR(-ENOMEM) : rtn);
-}
-
-static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
+static inline int ll_crypto_hmac(struct crypto_hash *tfm,
                                  u8 *key, unsigned int *keylen,
                                  struct scatterlist *sg,
                                  unsigned int size, u8 *result)
@@ -201,23 +170,12 @@ static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
         }
         return crypto_hash_digest(&desc, sg, size, result);
 }
-static inline
-unsigned int ll_crypto_tfm_alg_max_keysize(struct crypto_blkcipher *tfm)
-{
-        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.max_keysize;
-}
+
 static inline
 unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 {
         return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
 }
-
-#define ll_crypto_hash_blocksize(tfm)       crypto_hash_blocksize(tfm)
-#define ll_crypto_hash_digestsize(tfm)      crypto_hash_digestsize(tfm)
-#define ll_crypto_blkcipher_ivsize(tfm)     crypto_blkcipher_ivsize(tfm)
-#define ll_crypto_blkcipher_blocksize(tfm)  crypto_blkcipher_blocksize(tfm)
-#define ll_crypto_free_hash(tfm)            crypto_free_hash(tfm)
-#define ll_crypto_free_blkcipher(tfm)       crypto_free_blkcipher(tfm)
 
 #ifdef for_each_possible_cpu
 #define cfs_for_each_possible_cpu(cpu) for_each_possible_cpu(cpu)
