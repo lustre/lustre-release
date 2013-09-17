@@ -41,30 +41,9 @@
 #define __user
 #endif
 
-#ifdef HAVE_5ARGS_SYSCTL_PROC_HANDLER
-#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_dointvec(table, write, buffer, lenp, ppos);
-
-#define ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_doulongvec_minmax(table, write, buffer, lenp, ppos);
-#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
-        proc_dostring(table, write, buffer, lenp, ppos);
-#define LL_PROC_PROTO(name)						\
-	name(struct ctl_table *table, int write,			\
-	     void __user *buffer, size_t *lenp, loff_t *ppos)
-#else
-#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_dointvec(table, write, filp, buffer, lenp, ppos);
-
-#define ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_doulongvec_minmax(table, write, filp, buffer, lenp, ppos);
-#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
-        proc_dostring(table, write, filp, buffer, lenp, ppos);
-#define LL_PROC_PROTO(name)						\
-	name(struct ctl_table *table, int write, struct file *filp,	\
-	     void __user *buffer, size_t *lenp, loff_t *ppos)
-#endif
-#define DECLARE_LL_PROC_PPOS_DECL
+#define LL_PROC_PROTO(name)					\
+	name(struct ctl_table *table, int write,		\
+		void __user *buffer, size_t *lenp, loff_t *ppos)
 
 /* helper for sysctl handlers */
 int proc_call_handler(void *data, int write,

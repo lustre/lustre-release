@@ -46,13 +46,8 @@
 #define clear_tsk_thread_flag(current, TIF_SIGPENDING)	do {} while(0)
 #endif
 
-#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_dointvec(table, write, filp, buffer, lenp)
-#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
-        proc_dostring(table, write, filp, buffer, lenp)
 #define LL_PROC_PROTO(name)						\
 	name(struct ctl_table *table, int write, struct file *filp,	\
 	     void __user *buffer, size_t *lenp)
-#define DECLARE_LL_PROC_PPOS_DECL  loff_t *ppos = &filp->f_pos
 
 #endif /* _PORTALS_COMPAT_H */

@@ -1055,7 +1055,7 @@ unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base)
 #define OP_MIN  4
 
 
-static int do_proc_dointvec(struct ctl_table *table, int write, struct file *filp,
+static int do_proc_dointvec(struct ctl_table *table, int write,
           void *buffer, size_t *lenp, int conv, int op)
 {
     int *i, vleft, first=1, neg, val;
@@ -1162,8 +1162,6 @@ static int do_proc_dointvec(struct ctl_table *table, int write, struct file *fil
     if (write && first)
         return -EINVAL;
     *lenp -= left;
-    memset(&(filp->f_pos) , 0, sizeof(loff_t));
-    filp->f_pos += (loff_t)(*lenp);
     return 0;
 }
 
@@ -1171,7 +1169,6 @@ static int do_proc_dointvec(struct ctl_table *table, int write, struct file *fil
  * proc_dointvec - read a vector of integers
  * @table: the sysctl table
  * @write: %TRUE if this is a write to the sysctl file
- * @filp: the file structure
  * @buffer: the user buffer
  * @lenp: the size of the user buffer
  *
@@ -1180,10 +1177,10 @@ static int do_proc_dointvec(struct ctl_table *table, int write, struct file *fil
  *
  * Returns 0 on success.
  */
-int proc_dointvec(struct ctl_table *table, int write, struct file *filp,
+int proc_dointvec(struct ctl_table *table, int write,
              void *buffer, size_t *lenp)
 {
-    return do_proc_dointvec(table,write,filp,buffer,lenp,1,OP_SET);
+    return do_proc_dointvec(table,write,buffer,lenp,1,OP_SET);
 }
 
 
@@ -1191,7 +1188,6 @@ int proc_dointvec(struct ctl_table *table, int write, struct file *filp,
  * proc_dostring - read a string sysctl
  * @table: the sysctl table
  * @write: %TRUE if this is a write to the sysctl file
- * @filp: the file structure
  * @buffer: the user buffer
  * @lenp: the size of the user buffer
  *
@@ -1204,14 +1200,14 @@ int proc_dointvec(struct ctl_table *table, int write, struct file *filp,
  *
  * Returns 0 on success.
  */
-int proc_dostring(struct ctl_table *table, int write, struct file *filp,
+int proc_dostring(struct ctl_table *table, int write,
           void *buffer, size_t *lenp)
 {
     size_t len;
     char *p, c;
     
     if (!table->data || !table->maxlen || !*lenp ||
-        (filp->f_pos && !write)) {
+	(!write)) {
         *lenp = 0;
         return 0;
     }
@@ -1231,7 +1227,6 @@ int proc_dostring(struct ctl_table *table, int write, struct file *filp,
 	if (copy_from_user(table->data, buffer, len))
             return -EFAULT;
         ((char *) table->data)[len] = 0;
-        filp->f_pos += *lenp;
     } else {
         len = (size_t)strlen(table->data);
         if (len > (size_t)table->maxlen)
@@ -1247,7 +1242,6 @@ int proc_dostring(struct ctl_table *table, int write, struct file *filp,
             len++;
         }
         *lenp = len;
-        filp->f_pos += len;
     }
     return 0;
 }
