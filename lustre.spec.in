@@ -56,12 +56,6 @@
 # of %kversion
 %define krequires %(bash -c "echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
 
-%define sles10 %(bash -c "if [ "%sles_version" = "10" ]; then echo -n '1'; else echo -n '0'; fi")
-
-%if %sles10
-%define flavor %(bash -c "echo %{kversion} | sed -e 's/^.*-//'")
-%endif
-
 # Set the package name prefix
 %if %{undefined lustre_name}
     %if %{with servers}
@@ -112,15 +106,10 @@ Requires: %{cross_requires}
 AutoReqProv: no
 %else
 # for SLES11, we need nothing here
-# for SLES10, we need (where %{flavor} is, i.e. smp):
-%if %sles10
-Requires: kernel-%{flavor}
-%else
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 # for RHEL we need to require the specific kernel still since weak-modules
 # support on RH is, well, weak, to be punny about it
 Requires: kernel = %{krequires}
-%endif
 %endif
 %endif
 Group: Development/Kernel
