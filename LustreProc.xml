@@ -2078,7 +2078,7 @@ nid                    refs   peer    max   tx    min
           </row>
           <row>
             <entry>
-              <literal> mdt.MDS.mds </literal>
+              <literal> mds.MDS.mdt </literal>
             </entry>
             <entry>
               <para>Main metadata operations service</para>
@@ -2086,7 +2086,7 @@ nid                    refs   peer    max   tx    min
           </row>
           <row>
             <entry>
-              <literal> mdt.MDS.mds_readpage </literal>
+              <literal> mds.MDS.mdt_readpage </literal>
             </entry>
             <entry>
               <para>Metadata <literal>readdir</literal> service</para>
@@ -2094,7 +2094,7 @@ nid                    refs   peer    max   tx    min
           </row>
           <row>
             <entry>
-              <literal> mdt.MDS.mds_setattr </literal>
+              <literal> mds.MDS.mdt_setattr </literal>
             </entry>
             <entry>
               <para>Metadata <literal>setattr/close</literal> operations service </para>
@@ -2144,14 +2144,22 @@ nid                    refs   peer    max   tx    min
       </tgroup>
     </informaltable>
     <para>For each service, an entry as shown below is
-      created:<screen>/proc/fs/lustre/<replaceable>{service}</replaceable>/*/thread_<replaceable>{min,max,started}</replaceable></screen></para>
-    <para>To temporarily set this tunable, run:</para>
-    <screen># lctl <replaceable>{get,set}</replaceable>_param <replaceable>{service}</replaceable>.thread_<replaceable>{min,max,started}</replaceable> </screen>
-    <para>To permanently set this tunable, run:</para>
-    <screen># lctl conf_param <replaceable>{service}</replaceable>.thread_<replaceable>{min,max,started}</replaceable> </screen>
-    <para>The following examples show how to set thread counts and get the number of running threads
-      for the service <literal>ost_io</literal>  using the tunable
-        <literal>{service}.thread_{min,max,started}</literal>.</para>
+      created:<screen>/proc/fs/lustre/<replaceable>service</replaceable>/*/threads_<replaceable>min|max|started</replaceable></screen></para>
+    <itemizedlist>
+      <listitem>
+        <para>To temporarily set this tunable, run:</para>
+        <screen># lctl <replaceable>get|set</replaceable>_param <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
+	</listitem>
+      <listitem>
+        <para>To permanently set this tunable, run:</para>
+	<screen># lctl conf_param <replaceable>obdname|fsname.obdtype</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
+	<para condition='l25'>For version 2.5 or later, run:
+		<screen># lctl set_param -P <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></screen></para>
+      </listitem>
+    </itemizedlist>
+      <para>The following examples show how to set thread counts and get the number of running threads
+        for the service <literal>ost_io</literal>  using the tunable
+	<literal><replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable></literal>.</para>
     <itemizedlist>
       <listitem>
         <para>To get the number of running threads, run:</para>
@@ -2168,6 +2176,13 @@ ost.OSS.ost_io.threads_max=512</screen>
           storage or for an array with requests), run:</para>
         <screen># lctl set_param ost.OSS.ost_io.threads_max=256
 ost.OSS.ost_io.threads_max=256</screen>
+      </listitem>
+      <listitem>
+        <para>To set the maximum thread count to 256 instead of 512 permanently, run:</para>
+        <screen># lctl conf_param testfs.ost.ost_io.threads_max=256</screen>
+	<para condition='l25'>For version 2.5 or later, run:
+	<screen># lctl set_param -P ost.OSS.ost_io.threads_max=256
+ost.OSS.ost_io.threads_max=256 </screen> </para>
       </listitem>
       <listitem>
         <para> To check if the <literal>threads_max</literal> setting is active, run:</para>
