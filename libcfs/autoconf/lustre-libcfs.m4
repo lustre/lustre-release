@@ -82,21 +82,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# check cpumask_size (2.6.28)
-AC_DEFUN([LIBCFS_CPUMASK_SIZE],
-[AC_MSG_CHECKING([whether have cpumask_size()])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/cpumask.h>
-],[
-	int size = cpumask_size();
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_CPUMASK_SIZE, 1, [have cpumask_size()])
-],[
-	AC_MSG_RESULT(NO)
-])
-])
-
 # 2.6.24 request not use real numbers for ctl_name
 AC_DEFUN([LIBCFS_SYSCTL_UNNUMBERED],
 [AC_MSG_CHECKING([for CTL_UNNUMBERED])
