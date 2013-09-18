@@ -1857,7 +1857,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_device *obd = exp->exp_obd;
         struct obd_ioctl_data *data = karg;
         struct obd_import *imp = obd->u.cli.cl_import;
-        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -1910,22 +1909,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case IOC_OSC_SET_ACTIVE:
                 rc = ptlrpc_set_import_active(imp, data->ioc_offset);
                 GOTO(out, rc);
-        case OBD_IOC_PARSE: {
-                ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-		rc = class_config_parse_llog(NULL, ctxt, data->ioc_inlbuf1,
-					     NULL);
-                llog_ctxt_put(ctxt);
-                GOTO(out, rc);
-        }
-#ifdef __KERNEL__
-        case OBD_IOC_LLOG_INFO:
-        case OBD_IOC_LLOG_PRINT: {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-		rc = llog_ioctl(NULL, ctxt, cmd, data);
-                llog_ctxt_put(ctxt);
-                GOTO(out, rc);
-        }
-#endif
         case OBD_IOC_POLL_QUOTACHECK:
                 rc = mdc_quota_poll_check(exp, (struct if_quotacheck *)karg);
                 GOTO(out, rc);

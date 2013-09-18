@@ -3688,6 +3688,43 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsnam
         RETURN(rc);
 }
 
+/* list all logs for the given fs */
+int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
+		  struct obd_ioctl_data *data)
+{
+	cfs_list_t		 list;
+	struct mgs_direntry	*dirent, *n;
+	char			*out, *suffix;
+	int			 l, remains, rc;
+
+	ENTRY;
+
+	/* Find all the logs in the CONFIGS directory */
+	rc = class_dentry_readdir(env, mgs, &list);
+	if (rc) {
+		CERROR("%s: can't read %s dir = %d\n",
+		       mgs->mgs_obd->obd_name, MOUNT_CONFIGS_DIR, rc);
+		RETURN(rc);
+	}
+
+	out = data->ioc_bulk;
+	remains = data->ioc_inllen1;
+	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
+		cfs_list_del(&dirent->list);
+		suffix = strrchr(dirent->name, '-');
+		if (suffix != NULL) {
+			l = snprintf(out, remains, "config log: $%s\n",
+				     dirent->name);
+			out += l;
+			remains -= l;
+		}
+		mgs_direntry_free(dirent);
+		if (remains <= 0)
+			break;
+	}
+	RETURN(rc);
+}
+
 /* from llog_swab */
 static void print_lustre_cfg(struct lustre_cfg *lcfg)
 {

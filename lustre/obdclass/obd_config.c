@@ -1637,6 +1637,114 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
+struct lcfg_type_data {
+	__u32	 ltd_type;
+	char	*ltd_name;
+	char	*ltd_bufs[4];
+} lcfg_data_table[] = {
+	{ LCFG_ATTACH, "attach", { "type", "UUID", "3", "4" } },
+	{ LCFG_DETACH, "detach", { "1", "2", "3", "4" } },
+	{ LCFG_SETUP, "setup", { "UUID", "node", "options", "failout" } },
+	{ LCFG_CLEANUP, "cleanup", { "1", "2", "3", "4" } },
+	{ LCFG_ADD_UUID, "add_uuid", { "node", "2", "3", "4" }  },
+	{ LCFG_DEL_UUID, "del_uuid", { "1", "2", "3", "4" }  },
+	{ LCFG_MOUNTOPT, "new_profile", { "name", "lov", "lmv", "4" }  },
+	{ LCFG_DEL_MOUNTOPT, "del_mountopt", { "1", "2", "3", "4" } , },
+	{ LCFG_SET_TIMEOUT, "set_timeout", { "parameter", "2", "3", "4" }  },
+	{ LCFG_SET_UPCALL, "set_upcall", { "1", "2", "3", "4" }  },
+	{ LCFG_ADD_CONN, "add_conn", { "node", "2", "3", "4" }  },
+	{ LCFG_DEL_CONN, "del_conn", { "1", "2", "3", "4" }  },
+	{ LCFG_LOV_ADD_OBD, "add_osc", { "ost", "index", "gen", "UUID" } },
+	{ LCFG_LOV_DEL_OBD, "del_osc", { "1", "2", "3", "4" } },
+	{ LCFG_PARAM, "set_param", { "parameter", "value", "3", "4" } },
+	{ LCFG_MARKER, "marker", { "1", "2", "3", "4" } },
+	{ LCFG_LOG_START, "log_start", { "1", "2", "3", "4" } },
+	{ LCFG_LOG_END, "log_end", { "1", "2", "3", "4" } },
+	{ LCFG_LOV_ADD_INA, "add_osc_inactive", { "1", "2", "3", "4" }  },
+	{ LCFG_ADD_MDC, "add_mdc", { "mdt", "index", "gen", "UUID" } },
+	{ LCFG_DEL_MDC, "del_mdc", { "1", "2", "3", "4" } },
+	{ LCFG_SPTLRPC_CONF, "security", { "parameter", "2", "3", "4" } },
+	{ LCFG_POOL_NEW, "new_pool", { "fsname", "pool", "3", "4" }  },
+	{ LCFG_POOL_ADD, "add_pool", { "fsname", "pool", "ost", "4" } },
+	{ LCFG_POOL_REM, "remove_pool", { "fsname", "pool", "ost", "4" } },
+	{ LCFG_POOL_DEL, "del_pool", { "fsname", "pool", "3", "4" } },
+	{ LCFG_SET_LDLM_TIMEOUT, "set_ldlm_timeout",
+	  { "parameter", "2", "3", "4" } },
+	{ 0, NULL, { NULL, NULL, NULL, NULL } }
+};
+
+static struct lcfg_type_data *lcfg_cmd2data(__u32 cmd)
+{
+	int i = 0;
+
+	while (lcfg_data_table[i].ltd_type != 0) {
+		if (lcfg_data_table[i].ltd_type == cmd)
+			return &lcfg_data_table[i];
+		i++;
+	}
+	return NULL;
+}
+
+/**
+ * parse config record and output dump in supplied buffer.
+ * This is separated from class_config_dump_handler() to use
+ * for ioctl needs as well
+ *
+ * Sample Output:
+ * - { event: attach, device: lustrewt-clilov, type: lov, UUID:
+ *     lustrewt-clilov_UUID }
+ */
+int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
+{
+	struct lustre_cfg	*lcfg = (struct lustre_cfg *)(rec + 1);
+	char			*ptr = buf;
+	char			*end = buf + size;
+	int			 rc = 0, i;
+	struct lcfg_type_data	*ldata;
+
+	LASSERT(rec->lrh_type == OBD_CFG_REC);
+	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
+	if (rc < 0)
+		return rc;
+
+	ldata = lcfg_cmd2data(lcfg->lcfg_command);
+	if (ldata == NULL)
+		return -ENOTTY;
+
+	if (lcfg->lcfg_command == LCFG_MARKER)
+		return 0;
+
+	/* form YAML entity */
+	ptr += snprintf(ptr, end - ptr, "- { event: %s", ldata->ltd_name);
+
+	if (lcfg->lcfg_flags)
+		ptr += snprintf(ptr, end - ptr, ", flags: %#08x",
+				lcfg->lcfg_flags);
+	if (lcfg->lcfg_num)
+		ptr += snprintf(ptr, end - ptr, ", num: %#08x",
+				lcfg->lcfg_num);
+	if (lcfg->lcfg_nid)
+		ptr += snprintf(ptr, end - ptr, ", nid: %s("LPX64")",
+				libcfs_nid2str(lcfg->lcfg_nid),
+				lcfg->lcfg_nid);
+
+	if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
+		ptr += snprintf(ptr, end - ptr, ", device: %s",
+				lustre_cfg_string(lcfg, 0));
+
+	for (i = 1; i < lcfg->lcfg_bufcount; i++) {
+		if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
+			ptr += snprintf(ptr, end - ptr, ", %s: %s",
+					ldata->ltd_bufs[i - 1],
+					lustre_cfg_string(lcfg, i));
+	}
+
+	ptr += snprintf(ptr, end - ptr, " }\n");
+	/* return consumed bytes */
+	rc = ptr - buf;
+	return rc;
+}
+
 /**
  * parse config record and output dump in supplied buffer.
  * This is separated from class_config_dump_handler() to use
@@ -1683,6 +1791,7 @@ int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 					lustre_cfg_string(lcfg, i));
 		}
 	}
+	ptr += snprintf(ptr, end - ptr, "\n");
 	/* return consumed bytes */
 	rc = ptr - buf;
 	RETURN(rc);
@@ -1703,7 +1812,7 @@ int class_config_dump_handler(const struct lu_env *env,
 
 	if (rec->lrh_type == OBD_CFG_REC) {
 		class_config_parse_rec(rec, outstr, 256);
-		LCONSOLE(D_WARNING, "   %s\n", outstr);
+		LCONSOLE(D_WARNING, "   %s", outstr);
 	} else {
 		LCONSOLE(D_WARNING, "unhandled lrh_type: %#x\n", rec->lrh_type);
 		rc = -EINVAL;

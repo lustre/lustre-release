@@ -366,58 +366,63 @@ command_t cmdlist[] = {
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
 	 "usage: lfsck_stop <-M | --device [MDT,OST]_device> [-h | --help]"},
 
-        {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
-        /* some test scripts still use these */
-        {"cfg_device", jt_obd_device, 0,
-         "set current device to <name>\n"
-         "usage: device <name>"},
-        {"recover", jt_obd_recover, 0,
-         "try to restore a lost connection immediately\n"
-         "usage: recover [MDC/OSC device]"},
-        /* saving for sanity 44a */
-        {"lov_getconfig", jt_obd_lov_getconfig, 0,
-         "read lov configuration from an mds device\n"
-         "usage: lov_getconfig <mountpoint>"},
-        /* Llog operations */
-        {"llog_catlist", jt_llog_catlist, 0,
-         "list all catalog logs on current device.\n"
-         "usage: llog_catlist"},
-        {"llog_info", jt_llog_info, 0,
-         "print log header information.\n"
-         "usage: llog_info <$logname|#oid#ogr#ogen>\n"
-         "       oid, ogr and ogen are hexadecimal."},
-        {"llog_print", jt_llog_print, 0,
-         "print log content information.\n"
-         "usage: llog_print <$logname|#oid#ogr#ogen> [from] [to]\n"
-         "       oid, ogr and ogen are hexadecimal.\n"
-         "       print all records from index 1 by default."},
-        {"llog_check", jt_llog_check, 0,
-         "print log content information.\n"
-         "usage: llog_check <$logname|#oid#ogr#ogen> [from] [to]\n"
-         "       oid, ogr and ogen are hexadecimal.\n"
-         "       check all records from index 1 by default."},
-         {"llog_cancel", jt_llog_cancel, 0,
-         "cancel one record in log.\n"
-         "usage: llog_cancel <catalog id|catalog name> <log id> <index>"},
-        {"llog_remove", jt_llog_remove, 0,
-         "remove one log from catalog, erase it from disk.\n"
-         "usage: llog_remove <catalog id|catalog name> <log id>"},
-        /* network operations */
-        {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
-         "usage: add_interface ip [netmask]"},
-        {"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
-         "usage: del_interface [ip]"},
-        {"add_route", jt_ptl_add_route, 0,
-         "add an entry to the portals routing table\n"
+	{"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
+	/* some test scripts still use these */
+	{"cfg_device", jt_obd_device, 0,
+	 "set current device to <name>\n"
+	 "usage: device <name>"},
+	{"recover", jt_obd_recover, 0,
+	 "try to restore a lost connection immediately\n"
+	 "usage: recover [MDC/OSC device]"},
+	/* saving for sanity 44a */
+	{"lov_getconfig", jt_obd_lov_getconfig, 0,
+	 "read lov configuration from an mds device\n"
+	 "usage: lov_getconfig <mountpoint>"},
+	/* Llog operations */
+	{"llog_catlist", jt_llog_catlist, 0,
+	 "list all catalog logs on current device.\n"
+	 "usage: llog_catlist"},
+	{"llog_info", jt_llog_info, 0,
+	 "print log header information.\n"
+	 "usage: llog_info <$logname|#oid#ogr#ogen>\n"
+	 "       oid, ogr and ogen are hexadecimal."},
+	{"llog_print", jt_llog_print, 0,
+	 "print log content information.\n"
+	 "usage: llog_print <$logname|#oid#ogr#ogen> [from] [to]\n"
+	 "       oid, ogr and ogen are hexadecimal.\n"
+	 "       print all records from index 1 by default."},
+	{"llog_check", jt_llog_check, 0,
+	 "print log content information.\n"
+	 "usage: llog_check <$logname|#oid#ogr#ogen> [from] [to]\n"
+	 "       oid, ogr and ogen are hexadecimal.\n"
+	 "       check all records from index 1 by default."},
+	 {"llog_cancel", jt_llog_cancel, 0,
+	 "cancel one record in log.\n"
+	 "This command supports both positional and optional arguments\n"
+	 "usage (positional args): "
+	 "llog_cancel <catalog id|catalog name> [log id] <index>\n"
+	 "usage (optional args): "
+	 "llog_cancel --catalog <catalog id|catalog name> --log_id <log_id> "
+	 "--log_idx <index>"},
+	{"llog_remove", jt_llog_remove, 0,
+	 "remove one log from catalog or plain log, erase it from disk.\n"
+	 "usage: llog_remove <catalog id|catalog name> <log id>"},
+	/* network operations */
+	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
+	 "usage: add_interface ip [netmask]"},
+	{"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
+	 "usage: del_interface [ip]"},
+	{"add_route", jt_ptl_add_route, 0,
+	 "add an entry to the portals routing table\n"
 	 "usage: add_route <gateway> [<hops> [<priority>]]"},
-        {"del_route", jt_ptl_del_route, 0,
-         "delete route via gateway to targets from the portals routing table\n"
-         "usage: del_route <gateway> [<target>] [<target>]"},
-        {"set_route", jt_ptl_notify_router, 0,
-         "enable/disable routes via gateway in the portals routing table\n"
-         "usage: set_route <gateway> <up/down> [<time>]"},
+	{"del_route", jt_ptl_del_route, 0,
+	 "delete route via gateway to targets from the portals routing table\n"
+	 "usage: del_route <gateway> [<target>] [<target>]"},
+	{"set_route", jt_ptl_notify_router, 0,
+	 "enable/disable routes via gateway in the portals routing table\n"
+	 "usage: set_route <gateway> <up/down> [<time>]"},
 
-        { 0, 0, 0, NULL }
+	{ 0, 0, 0, NULL }
 };
 
 int lctl_main(int argc, char **argv)

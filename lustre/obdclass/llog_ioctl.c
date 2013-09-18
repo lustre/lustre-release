@@ -222,7 +222,7 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 	} else if (rec->lrh_type == OBD_CFG_REC) {
 		int rc;
 
-		rc = class_config_parse_rec(rec, out, remains);
+		rc = class_config_yaml_output(rec, out, remains);
 		if (rc < 0)
 			RETURN(rc);
 		l = rc;
@@ -368,7 +368,7 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 			GOTO(out_close, rc = -EINVAL);
 
 		if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
-			rc = llog_cancel_rec(NULL, handle, cookie.lgc_index);
+			rc = llog_cancel_rec(env, handle, cookie.lgc_index);
 			GOTO(out_close, rc);
 		} else if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) {
 			GOTO(out_close, rc = -EINVAL);
@@ -427,3 +427,50 @@ out_close:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_ioctl);
+
+int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
+		      int count, struct obd_ioctl_data *data)
+{
+	int			 size, i;
+	struct llog_catid	*idarray;
+	struct llog_logid	*id;
+	char			*out;
+	int			 l, remains, rc = 0;
+
+	ENTRY;
+
+	if (count == 0) { /* get total number of logs */
+		rc = llog_osd_get_cat_list(env, d, 0, 0, NULL);
+		if (rc < 0)
+			RETURN(rc);
+		count = rc;
+	}
+
+	size = sizeof(*idarray) * count;
+
+	OBD_ALLOC_LARGE(idarray, size);
+	if (!idarray)
+		RETURN(-ENOMEM);
+
+	rc = llog_osd_get_cat_list(env, d, 0, count, idarray);
+	if (rc)
+		GOTO(out, rc);
+
+	out = data->ioc_bulk;
+	remains = data->ioc_inllen1;
+	for (i = 0; i < count; i++) {
+		id = &idarray[i].lci_logid;
+		l = snprintf(out, remains,
+			     "catalog log: #"DOSTID"#%08x\n",
+			     POSTID(&id->lgl_oi),
+			     id->lgl_ogen);
+		out += l;
+		remains -= l;
+		if (remains <= 0)
+			break;
+	}
+out:
+	OBD_FREE_LARGE(idarray, size);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_catalog_list);

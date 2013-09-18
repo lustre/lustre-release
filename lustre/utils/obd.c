@@ -2706,41 +2706,118 @@ int jt_llog_print(int argc, char **argv)
         return rc;
 }
 
+static int llog_cancel_parse_optional(int argc, char **argv,
+				      struct obd_ioctl_data *data)
+{
+	int cOpt;
+	const char *const short_options = "c:l:i:h";
+	const struct option long_options[] = {
+		{"catalog", required_argument, NULL, 'c'},
+		{"log_id", required_argument, NULL, 'l'},
+		{"log_idx", required_argument, NULL, 'i'},
+		{"help", no_argument, NULL, 'h'},
+		{NULL, 0, NULL, 0}
+	};
+
+	/* sanity check */
+	if (!data || argc <= 1) {
+		return -1;
+	}
+
+	/*now process command line arguments*/
+	while ((cOpt = getopt_long(argc, argv, short_options,
+					long_options, NULL)) != -1) {
+		switch (cOpt) {
+		case 'c':
+			data->ioc_inllen1 = strlen(optarg) + 1;
+			data->ioc_inlbuf1 = optarg;
+			break;
+
+		case 'l':
+			data->ioc_inllen2 = strlen(optarg) + 1;
+			data->ioc_inlbuf2 = optarg;
+			break;
+
+		case 'i':
+			data->ioc_inllen3 = strlen(optarg) + 1;
+			data->ioc_inlbuf3 = optarg;
+			break;
+
+		case 'h':
+		default:
+			return -1;
+		}
+	}
+
+	if ((data->ioc_inlbuf1 == NULL) || (data->ioc_inlbuf3 == NULL)) {
+		/* missing mandatory parameters */
+		return -1;
+	}
+
+	return 0;
+}
+
 int jt_llog_cancel(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc, i;
 
-        if (argc != 4)
-                return CMD_HELP;
+	/* check that the arguments provided are either all
+	 * optional or all positional.  No mixing allowed
+	 *
+	 * if argc is 4 or 3 then check all arguments to ensure that none
+	 * of them start with a '-'.  If so then this is invalid.
+	 * Otherwise if arg is > 4 then assume that this is optional
+	 * arguments, and parse as such ignoring any thing that's not
+	 * optional.  The result is that user must use optional arguments
+	 * for all mandatory parameters.  Code will ignore all other args
+	 *
+	 * The positional arguments option should eventually be phased out.
+	 */
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = strlen(argv[2]) + 1;
-        data.ioc_inlbuf2 = argv[2];
-        data.ioc_inllen3 = strlen(argv[3]) + 1;
-        data.ioc_inlbuf3 = argv[3];
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	if (argc == 3 || argc == 4) {
+		for (i = 1; i < argc; i++) {
+			if (argv[i][0] == '-')
+				return CMD_HELP;
+		}
+		data.ioc_inllen1 = strlen(argv[1]) + 1;
+		data.ioc_inlbuf1 = argv[1];
+		if (argc == 4) {
+			data.ioc_inllen2 = strlen(argv[2]) + 1;
+			data.ioc_inlbuf2 = argv[2];
+			data.ioc_inllen3 = strlen(argv[3]) + 1;
+			data.ioc_inlbuf3 = argv[3];
+		} else {
+			data.ioc_inllen3 = strlen(argv[2]) + 1;
+			data.ioc_inlbuf3 = argv[2];
+		}
+	} else {
+		if (llog_cancel_parse_optional(argc, argv, &data) != 0)
+			return CMD_HELP;
+	}
 
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CANCEL, buf);
-        if (rc == 0)
-                fprintf(stdout, "index %s be canceled.\n", argv[3]);
-        else
-                fprintf(stderr, "OBD_IOC_LLOG_CANCEL failed: %s\n",
-                        strerror(errno));
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
 
-        return rc;
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CANCEL, buf);
+	if (rc == 0)
+		fprintf(stdout, "index %s was canceled.\n",
+			argc == 4 ? argv[3] : argv[2]);
+	else
+		fprintf(stderr, "OBD_IOC_LLOG_CANCEL failed: %s\n",
+			strerror(errno));
 
+	return rc;
 }
+
 int jt_llog_check(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2814,10 +2891,11 @@ int jt_llog_remove(int argc, char **argv)
 
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_REMOVE, buf);
         if (rc == 0) {
-                if (argc == 3)
-                        fprintf(stdout, "log %s are removed.\n", argv[2]);
-                else
-                        fprintf(stdout, "the log in catalog %s are removed. \n", argv[1]);
+                if (argc == 2)
+			fprintf(stdout, "log %s is removed.\n", argv[1]);
+		else
+			fprintf(stdout, "the log in catalog %s is removed. \n",
+				argv[1]);
         } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));

@@ -5455,6 +5455,9 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = mdt_ioc_version_get(mti, karg);
                 break;
         }
+	case OBD_IOC_CATLOGLIST:
+		rc = llog_catalog_list(&env, mdt->mdt_bottom, 0, karg);
+		break;
 	default:
 		rc = -EOPNOTSUPP;
 		CERROR("%s: Not supported cmd = %d, rc = %d\n",

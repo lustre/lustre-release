@@ -803,6 +803,9 @@ out_free:
 		break;
         }
 
+	case OBD_IOC_CATLOGLIST:
+		rc = mgs_list_logs(&env, mgs, data);
+		break;
 	case OBD_IOC_LLOG_CANCEL:
 	case OBD_IOC_LLOG_REMOVE:
         case OBD_IOC_LLOG_CHECK:
