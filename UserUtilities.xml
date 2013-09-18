@@ -660,7 +660,7 @@ lfs help
     <para>The <literal>lfs_migrate</literal> utility is a simple tool to migrate files between Lustre OSTs.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>lfs_migrate [-c|-s] [-h] [-l] [-n] [-y] [file|directory ...]</screen>
+      <screen>lfs_migrate [-c <replaceable>stripecount</replaceable>] [-h] [-l] [-n] [-q] [-R] [-s] [-y] [file|directory ...]</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
@@ -689,26 +689,21 @@ lfs help
           <tbody>
             <row>
               <entry>
-                <para> <literal>-c</literal></para>
+                <para>
+                  <literal>-c <replaceable>stripecount</replaceable></literal></para>
               </entry>
               <entry>
-                <para>Compares file data after migrate (default value, use <literal>-s</literal> to disable).</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-s</literal></para>
-              </entry>
-              <entry>
-                <para>Skips file data comparison after migrate (use <literal>-c</literal> to enable).</para>
+                <para>Restripe file using the specified stripe count. This option may not be
+                  specified at the same time as the <literal>-R</literal> option.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>-h</literal></para>
+                <para>
+                  <literal>-h</literal></para>
               </entry>
               <entry>
-                <para>Displays help information.</para>
+                <para>Display help information.</para>
               </entry>
             </row>
             <row>
@@ -716,7 +711,9 @@ lfs help
                 <literal>-l</literal>
               </entry>
               <entry>
-                <para>Migrates files with hard links (skips, by default). Files with multiple hard links are split into multiple separate files by <literal>lfs_migrate</literal>, so they are skipped, by default, to avoid breaking the hard links.</para>
+                <para>Migrate files with hard links (skips, by default). Files with multiple hard
+                  links are split into multiple separate files by <literal>lfs_migrate</literal>, so
+                  they are skipped, by default, to avoid breaking the hard links.</para>
               </entry>
             </row>
             <row>
@@ -724,7 +721,7 @@ lfs help
                 <literal>-n</literal>
               </entry>
               <entry>
-                <para>Only prints the names of files to be migrated.</para>
+                <para>Only print the names of files to be migrated.</para>
               </entry>
             </row>
             <row>
@@ -732,15 +729,29 @@ lfs help
                 <para> <literal>-q</literal></para>
               </entry>
               <entry>
-                <para>Runs quietly (does not print filenames or status).</para>
+                <para>Run quietly (does not print filenames or status).</para>
               </entry>
             </row>
             <row>
+              <entry><literal>-R</literal></entry>
+              <entry>Restripe file using default directory striping instead of keeping striping.
+                This option may not be specified at the same time as the <literal>-c</literal>
+                option.</entry>
+            </row>
+            <row>
               <entry>
-                <para> <literal>--y</literal></para>
+                <literal>-s</literal></entry>
+              <entry>Skip file data comparison after migrate. Default is to compare migrated file
+                against original to verify correctness.</entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>-y</literal></para>
               </entry>
               <entry>
-                <para>Answers &apos;<literal>y</literal>&apos; to usage warning without prompting (for scripts).</para>
+                <para>Answer &apos;<literal>y</literal>&apos; to usage warning without prompting
+                  (for scripts, use with caution).</para>
               </entry>
             </row>
           </tbody>

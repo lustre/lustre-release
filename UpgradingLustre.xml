@@ -73,18 +73,34 @@
     <note>
       <para condition="l22">In Lustre release 2.2, a feature has been added that allows striping
         across up to 2000 OSTs. By default, this "wide striping" feature is disabled. It is
-        activated by setting the <literal>large-xattr</literal> option on the MDT using either
+        activated by setting the <literal>large_xattr</literal> option on the MDT using either
           <literal>mkfs.lustre</literal> or <literal>tune2fs</literal>. For example after upgrading
         an existing file system to Lustre release 2.2 or later, wide striping can be enabled by
         running the following command on the MDT device before mounting
         it:<screen>tune2fs -O large_xattr</screen>Once the wide striping feature is enabled and in
         use on the MDT, it is not possible to directly downgrade the MDT file system to an earlier
-        version of the Lustre software that does not support wide striping. The only way to disable
-        wide striping is to delete all files with a <literal>large_xattr</literal> extended attribute,
-	unmount the MDT, and run the following command to
-        turn off the <literal>large-xattr</literal>
-        option:<screen>tune2fs -O ^large_xattr</screen>
-	</para></note>
+        version of the Lustre software that does not support wide striping. To disable wide striping:<orderedlist>
+          <listitem>
+            <para>Delete all wide-striped files. </para>
+            <para>OR </para>
+            <para>Use <literal>lfs_migrate</literal> with the option <literal>-c</literal>
+              <replaceable>stripe_count</replaceable> (set <replaceable>stripe_count</replaceable>
+              to 160) to move the files to another location.</para>
+          </listitem>
+          <listitem>
+            <para>Unmount the MDT.</para>
+          </listitem>
+          <listitem>
+            <para>Run the following command to turn off the <literal>large_xattr</literal>
+              option:<screen>tune2fs -O ^large_xattr</screen></para>
+          </listitem>
+        </orderedlist>
+      </para></note>
+    <note condition="l23">
+      <para>To generate a list of all files with more than 160 stripes use <literal>lfs
+          find</literal> with the <literal>--stripe-count</literal>
+        option:<screen>lfs find ${mountpoint} --stripe-count=+160</screen></para>
+    </note>
     <note condition="l24">
       <para>In Lustre release 2.4, a new feature allows using multiple MDTs, which can each serve
         one or more remote sub-directories in the file system. The <literal>root</literal> directory
