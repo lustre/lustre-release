@@ -300,14 +300,6 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # hack to avoid changing the libsysio code for "make install"
 rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 
-# hack to include the llog_test module in lustre-tests
-llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
-if [ -e ${llog_base}.ko ]; then
-  cp ${llog_base}.ko $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre
-elif [ -e ${llog_base}.o ]; then
-  cp ${llog_base}.o $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre
-fi
-
 # The .ha_v2 extension identifies the heartbeat resource agent as using
 # legacy syntax. Install a compatibility symlink to avoid conflicts when
 # newer-style agents are added.

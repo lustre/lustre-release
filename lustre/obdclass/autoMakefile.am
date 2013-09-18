@@ -23,7 +23,9 @@ if MODULES
 
 if LINUX
 modulefs_DATA = obdclass$(KMODEXT)
-noinst_DATA = llog_test$(KMODEXT)
+if TESTS
+modulefs_DATA += llog_test$(KMODEXT)
+endif # TESTS
 endif # LINUX
 
 if DARWIN
