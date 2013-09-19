@@ -160,10 +160,11 @@ routes (&quot;&quot;)</title>
         <para>This is a string that lists networks and the NIDs of routers that forward to them.</para>
         <para>It has the following syntax (<literal>&lt;w&gt;</literal> is one or more whitespace characters):</para>
         <screen>&lt;routes&gt; :== &lt;route&gt;{ ; &lt;route&gt; }
-&lt;route&gt; :== [&lt;net&gt;[&lt;w&gt;&lt;hopcount&gt;]&lt;w&gt;&lt;nid&gt;{&lt;w&gt;&lt;nid&gt;}</screen>
+&lt;route&gt; :== [&lt;net&gt;[&lt;w&gt;&lt;hopcount&gt;]&lt;w&gt;&lt;nid&gt;[:&lt;priority&gt;]{&lt;w&gt;&lt;nid&gt;[:&lt;priority&gt;]}</screen>
+        <para>Note: the priority parameter was added in release 2.5.</para>
         <para>So a node on the network <literal>tcp1</literal> that needs to go through a router to get to the Elan network:</para>
         <screen>options lnet networks=tcp1 routes=&quot;elan 1 192.168.2.2@tcpA&quot;</screen>
-        <para>The hopcount is used to help choose the best path between multiply-routed configurations.</para>
+        <para>The hopcount and priority numbers are used to help choose the best path between multiply-routed configurations.</para>
         <para>A simple but powerful expansion syntax is provided, both for target networks and router NIDs as follows.</para>
         <screen>&lt;expansion&gt; :== &quot;[&quot; &lt;entry&gt; { &quot;,&quot; &lt;entry&gt; } &quot;]&quot;
 &lt;entry&gt; :== &lt;numeric range&gt; | &lt;non-numeric item&gt;
@@ -171,7 +172,8 @@ routes (&quot;&quot;)</title>
         <para>The expansion is a list enclosed in square brackets. Numeric items in the list may be a single number, a contiguous range of numbers, or a strided range of numbers. For example, <literal>routes=&quot;elan 192.168.1.[22-24]@tcp&quot;</literal> says that network <literal>elan0</literal> is adjacent (hopcount defaults to 1); and is accessible via 3 routers on the <literal>tcp0</literal> network (<literal>192.168.1.22@tcp</literal>, <literal>192.168.1.23@tcp</literal> and <literal>192.168.1.24@tcp</literal>).</para>
         <para><literal>routes=&quot;[tcp,vib] 2 [8-14/2]@elan&quot;</literal> says that 2 networks (<literal>tcp0</literal> and <literal>vib0</literal>) are accessible through 4 routers (<literal>8@elan</literal>, <literal>10@elan</literal>, <literal>12@elan</literal> and <literal>14@elan</literal>). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
         <para>Duplicate entries, entries that route to a local network, and entries that specify routers on a non-local network are ignored.</para>
-        <para>Equivalent entries are resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
+        <para>Prior to release 2.5, a conflict between equivalent entries was resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent)..</para>
+        <para condition='125'>Since 2.5, equivalent entries are resolved in favor of the route with the lowest priority number or shorter hopcount if the priorities are equal. The priority, if omitted, defaults to 0.  The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
         <para>It is an error to specify routes to the same destination with routers on different local networks.</para>
         <para>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
       </section>

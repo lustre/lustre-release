@@ -90,7 +90,8 @@
     <screen>options lnet networks=tcp0(eth1)</screen>
     <para>Depending on the network design, it may be necessary to specify explicit interfaces. To explicitly specify that interface <literal>eth2</literal> be used for network <literal>tcp0</literal> and <literal>eth3</literal> be used for <literal>tcp1</literal> , use this entry:</para>
     <screen>options lnet networks=tcp0(eth2),tcp1(eth3)</screen>
-    <para>When more than one interface is available during the network setup, Lustre chooses the best route based on the hop count. Once the network connection is established, Lustre expects the network to stay connected. In a Lustre network, connections do not fail over to another interface, even if multiple interfaces are available on the same node.</para>
+    <para>When more than one interface is available during the network setup, Lustre chooses the best route based on the hopcount. Once the network connection is established, Lustre expects the network to stay connected. In a Lustre network, connections do not fail over to another interface, even if multiple interfaces are available on the same node.</para>
+    <para condition='l25'>Since version 2.5 of the Lustre software, the route priority is also used to decide which interface to use. The priority has precendence over hopcount so the route with the lower priority number will be selected regardless of what the hopcounts are.</para>
     <note>
       <para>LNET lines in <literal>lustre.conf</literal> are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
     </note>

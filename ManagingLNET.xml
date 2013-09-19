@@ -99,6 +99,9 @@ To remove all Lustre modules, run:</para>
       <listitem>
         <para>A Lustre node always uses the same local NID to communicate with a given peer NID. The criteria used to determine the local NID are:</para>
         <itemizedlist>
+	   <listitem>
+	     <para condition='125'>Lowest route priority number (lower number, higher priority).</para>
+	   </listitem>
           <listitem>
             <para>Fewest hops (to minimize routing), and</para>
           </listitem>
