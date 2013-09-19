@@ -38,10 +38,17 @@
     <para>Lustre must be combined with high-availability (HA) software to enable a complete Lustre failover solution. Lustre can be used with several HA packages including:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Red Hat Cluster Manager</emphasis>  - For more information about setting up Lustre failover with Red Hat Cluster Manager, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link>.</para>
+        <para><emphasis>Red Hat Cluster Manager</emphasis> - For more information about  Red Hat
+          Cluster Manager, see <link
+            xlink:href="http://www.redhat.com/software/rha/cluster/manager/"
+            xmlns:xlink="http://www.w3.org/1999/xlink"
+            >http://www.redhat.com/software/rha/cluster/manager/</link>.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Pacemaker</emphasis>  - For more information about setting up Lustre failover with Pacemaker, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.</para>
+        <para><emphasis>Pacemaker</emphasis> - For more information about Pacemaker, see <link
+            xlink:href="http://clusterlabs.org/doc/en-US/Pacemaker/1.0/html/Pacemaker_Explained/index.html"
+            xmlns:xlink="http://www.w3.org/1999/xlink"
+            >http://clusterlabs.org/doc/en-US/Pacemaker/1.0/html/Pacemaker_Explained/index.html</link>.</para>
       </listitem>
     </itemizedlist>
   </section>

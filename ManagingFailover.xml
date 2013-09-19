@@ -8,7 +8,20 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para>For information about high availability(HA) management software, see the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Red_Hat_Cluster_Manager_with_Lustre">Using Red Hat Cluster Manager with Lustre</link> or the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Using_Pacemaker_with_Lustre">Using Pacemaker with Lustre</link>.</para>
+    <para>For information about high availability(HA) management software, see the documentation for:<itemizedlist>
+        <listitem>
+          <para>Red Hat Cluster Manager at <link
+              xlink:href="http://www.redhat.com/software/rha/cluster/manager/"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              >http://www.redhat.com/software/rha/cluster/manager/</link></para>
+        </listitem>
+        <listitem>
+          <para>Pacemaker at <link
+              xlink:href="http://clusterlabs.org/doc/en-US/Pacemaker/1.0/html/Pacemaker_Explained/index.html"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              >http://clusterlabs.org/doc/en-US/Pacemaker/1.0/html/Pacemaker_Explained/index.html</link></para>
+        </listitem>
+      </itemizedlist></para>
   </note>
   <section xml:id="dbdoclet.50438213_13563">
       <title>
