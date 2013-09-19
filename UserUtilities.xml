@@ -33,7 +33,7 @@
 lfs changelog [--follow] <replaceable>mdt_name</replaceable> [startrec [endrec]]
 lfs changelog_clear <replaceable>mdt_name id endrec</replaceable>
 lfs check <replaceable>mds|osts|servers</replaceable>
-lfs df [-i] [-h] [--pool]-p <replaceable>fsname</replaceable>[.<replaceable>pool</replaceable>] [<replaceable>path</replaceable>]
+lfs df [-i] [-h] [--pool]-p <replaceable>fsname</replaceable>[.<replaceable>pool</replaceable>] [<replaceable>path</replaceable>] [--lazy]
 lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
          [[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n <replaceable>pattern</replaceable>]
          [--print|-p] [--print0|-P] [[!] --obd|-O <replaceable>ost_name</replaceable>[,<replaceable>ost_name...</replaceable>]]
@@ -97,9 +97,9 @@ lfs help
       <para>The various <literal>lfs</literal> options are listed and described below. For a complete list of available options, type help at the <literal>lf</literal>s prompt.</para>
       <informaltable frame="all">
         <tgroup cols="3">
-          <colspec colname="c1" colwidth="33*"/>
-          <colspec colname="c2" colwidth="33*"/>
-          <colspec colname="c3" colwidth="33*"/>
+          <colspec colname="c1" colwidth="20*"/>
+          <colspec colname="c2" colwidth="30*"/>
+          <colspec colname="c3" colwidth="50*"/>
           <thead>
             <row>
               <entry nameend="c2" namest="c1">
@@ -137,10 +137,28 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <literal> df [-i] [-h] [--pool|-p <replaceable>fsname</replaceable>[.<replaceable>pool</replaceable>] [<replaceable>path</replaceable>] </literal>
+                <literal> df [-i] [-h] [--pool|-p
+                    <replaceable>fsname</replaceable>[.<replaceable>pool</replaceable>]
+                    [<replaceable>path</replaceable>] [--lazy]</literal>
               </entry>
               <entry>
-                <para>Report file system disk space usage or inode usage (with <literal>-i</literal>) of each MDT/OST or a subset of OSTs if a pool is specified with <literal>-p</literal>. By default, prints the usage of all mounted Lustre file systems. Otherwise, if path is specified, prints only the usage of that file system. If <literal>-h</literal> is given, the output is printed in human-readable format, using SI base-2 suffixes for <emphasis role="bold">M</emphasis>ega-, <emphasis role="bold">G</emphasis>iga-, <emphasis role="bold">T</emphasis>era-, <emphasis role="bold">P</emphasis>eta-, or <emphasis role="bold">E</emphasis>xabytes.</para>
+                <para>Use <literal>-i</literal> to report file system disk space usage or inode
+                  usage of each MDT or OST or, if a pool is specified with the <literal>-p</literal>
+                  option, a subset of OSTs.</para>
+                <para>By default, the usage of all mounted Lustre file systems is reported. If the
+                    <literal>path</literal> option is included, only the usage for the specified
+                  file system is reported. If the <literal>-h</literal> option is included, the
+                  output is printed in human-readable format, using SI base-2 suffixes for <emphasis
+                    role="bold">M</emphasis>ega-, <emphasis role="bold">G</emphasis>iga-, <emphasis
+                    role="bold">T</emphasis>era-, <emphasis role="bold">P</emphasis>eta-, or
+                    <emphasis role="bold">E</emphasis>xabytes.</para>
+                <para>If the <literal>--lazy</literal> option is specified, any OST that is
+                  currently disconnected from the client will be skipped. Using the
+                    <literal>--lazy</literal> option prevents the <literal>df</literal> output from
+                  being blocked when  an OST is offline. Only the space on the OSTs that can
+                  currently be accessed are returned. The <literal>llite.*.lazystatfs</literal>
+                  tunable can be enabled to make this the default behaviour for all
+                    <literal>statfs()</literal> operations.</para>
               </entry>
             </row>
             <row>
