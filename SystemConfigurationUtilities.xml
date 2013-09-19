@@ -137,11 +137,16 @@ l_getidentity</title>
     <para>The l_getidentity utility handles Lustre user / group cache upcall.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>l_getidentity {mdtname} {uid}</screen>
+      <screen>l_getidentity ${FSNAME}-MDT{xxxx} {uid}</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable file that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> structure (see <xref linkend='dbdoclet.50438291_33759'/>.) The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>The group upcall file contains the path to an executable file that is invoked to resolve
+        a numeric UID to a group membership list. This utility opens
+          <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> and writes the
+        related <literal>identity_downcall_data</literal> structure (see <xref
+          linkend="dbdoclet.50438291_33759"/>.) The data is persisted with <literal>lctl set_param
+          mdt.${FSNAME}-MDT{xxxx}.identity_info</literal>.</para>
       <para>The l_getidentity utility is the reference implementation of the user or group cache upcall.</para>
     </section>
     <section remap="h5">
@@ -163,7 +168,8 @@ l_getidentity</title>
           <tbody>
             <row>
               <entry>
-                <para> <literal>mdtname</literal></para>
+                <para>
+                  <literal>${FSNAME}-MDT{xxxx}</literal></para>
               </entry>
               <entry>
                 <para> Metadata server target name</para>
