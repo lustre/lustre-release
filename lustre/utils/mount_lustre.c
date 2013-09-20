@@ -685,7 +685,18 @@ int main(int argc, char *const argv[])
                 for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
 				   flags, (void *)options);
-                        if (rc) {
+			if (rc == 0) {
+				/* change label from <fsname>:<index> to
+				 * <fsname>-<index> to indicate the device has
+				 *  been registered. only if the label is
+				 *  supposed to be changed and target service
+				 *  is supposed to start */
+				if (mop.mo_ldd.ldd_flags &
+				   (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+					if (mop.mo_nosvc == 0)
+						(void)osd_label_lustre(&mop);
+				}
+			} else {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
                                                 "failed: %s retries left: "
@@ -771,16 +782,7 @@ int main(int argc, char *const argv[])
 	} else if (!mop.mo_nomtab) {
 		rc = update_mtab_entry(mop.mo_usource, mop.mo_target, "lustre",
 				       mop.mo_orig_options, 0,0,0);
-
-		/* change label from <fsname>:<index> to <fsname>-<index>
-		 * to indicate the device has been registered.
-		 * only if the label is supposed to be changed and
-		 * target service is supposed to start */
-		if (mop.mo_ldd.ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
-			if (mop.mo_nosvc == 0 )
-				(void) osd_label_lustre(&mop);
-		}
-        }
+	}
 
 	free(options);
 	/* mo_usource should be freed, but we can rely on the kernel */
