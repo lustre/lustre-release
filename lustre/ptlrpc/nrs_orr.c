@@ -554,9 +554,9 @@ static int orr_req_compare(cfs_binheap_node_t *e1, cfs_binheap_node_t *e2)
 	 * backend-fs object (for ORR policy instances) or OST (for TRR policy
 	 * instances).
 	 */
-	if (nrq1->nr_u.orr.or_sequence < nrq2->nr_u.crr.cr_sequence)
+	if (nrq1->nr_u.orr.or_sequence < nrq2->nr_u.orr.or_sequence)
 		return 1;
-	else if (nrq1->nr_u.orr.or_sequence > nrq2->nr_u.crr.cr_sequence)
+	else if (nrq1->nr_u.orr.or_sequence > nrq2->nr_u.orr.or_sequence)
 		return 0;
 
 	/**
@@ -1086,8 +1086,8 @@ static int nrs_orr_req_add(struct ptlrpc_nrs_policy *policy,
 		orro->oo_quantum = orrd->od_quantum;
 	}
 
-	nrq->nr_u.crr.cr_round = orro->oo_round;
-	nrq->nr_u.crr.cr_sequence = orro->oo_sequence;
+	nrq->nr_u.orr.or_round = orro->oo_round;
+	nrq->nr_u.orr.or_sequence = orro->oo_sequence;
 
 	rc = cfs_binheap_insert(orrd->od_binheap, &nrq->nr_node);
 	if (rc == 0) {
