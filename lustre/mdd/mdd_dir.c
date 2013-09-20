@@ -57,25 +57,52 @@ static struct lu_name lname_dotdot = {
         sizeof(dotdot) - 1
 };
 
-static int __mdd_lookup(const struct lu_env *, struct md_object *,
-			const struct lu_name *, struct lu_fid*, int);
-
+/* Get FID from name and parent */
 static int
-__mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
-                    const struct lu_name *lname, struct lu_fid* fid, int mask)
+__mdd_lookup(const struct lu_env *env, struct md_object *pobj,
+	     const struct lu_name *lname, struct lu_fid* fid, int mask)
 {
-        const char *name = lname->ln_name;
-        struct mdd_object *mdd_obj = md2mdd_obj(pobj);
-        struct dynlock_handle *dlh;
+	const char *name		= lname->ln_name;
+	const struct dt_key *key	= (const struct dt_key *)name;
+	struct mdd_object *mdd_obj	= md2mdd_obj(pobj);
+	struct mdd_device *m		= mdo2mdd(pobj);
+	struct dt_object *dir		= mdd_object_child(mdd_obj);
         int rc;
+	ENTRY;
 
-        dlh = mdd_pdo_read_lock(env, mdd_obj, name, MOR_TGT_PARENT);
-        if (unlikely(dlh == NULL))
-                return -ENOMEM;
-        rc = __mdd_lookup(env, pobj, lname, fid, mask);
-        mdd_pdo_read_unlock(env, mdd_obj, dlh);
+	if (unlikely(mdd_is_dead_obj(mdd_obj)))
+		RETURN(-ESTALE);
 
-        return rc;
+	if (mdd_object_remote(mdd_obj)) {
+		CDEBUG(D_INFO, "%s: Object "DFID" locates on remote server\n",
+		       mdd2obd_dev(m)->obd_name, PFID(mdo2fid(mdd_obj)));
+	} else if (!mdd_object_exists(mdd_obj)) {
+		RETURN(-ESTALE);
+	}
+
+	/* The common filename length check. */
+	if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
+		RETURN(-ENAMETOOLONG);
+
+	rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask,
+					    MOR_TGT_PARENT);
+	if (rc)
+		RETURN(rc);
+
+	if (likely(S_ISDIR(mdd_object_type(mdd_obj)) &&
+		   dt_try_as_dir(env, dir))) {
+
+		rc = dir->do_index_ops->dio_lookup(env, dir,
+						 (struct dt_rec *)fid, key,
+						 mdd_object_capa(env, mdd_obj));
+		if (rc > 0)
+			rc = 0;
+		else if (rc == 0)
+			rc = -ENOENT;
+	} else
+		rc = -ENOTDIR;
+
+	RETURN(rc);
 }
 
 int mdd_lookup(const struct lu_env *env,
@@ -84,14 +111,14 @@ int mdd_lookup(const struct lu_env *env,
 {
         int rc;
         ENTRY;
-        rc = __mdd_lookup_locked(env, pobj, lname, fid, MAY_EXEC);
+	rc = __mdd_lookup(env, pobj, lname, fid, MAY_EXEC);
         RETURN(rc);
 }
 
 int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
 		   struct lu_fid *fid)
 {
-        return __mdd_lookup_locked(env, &obj->mod_obj, &lname_dotdot, fid, 0);
+	return __mdd_lookup(env, &obj->mod_obj, &lname_dotdot, fid, 0);
 }
 
 /*
@@ -1183,7 +1210,6 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
         struct mdd_device *mdd = mdo2mdd(src_obj);
-        struct dynlock_handle *dlh;
         struct thandle *handle;
 	struct linkea_data *ldata = &mdd_env_info(env)->mti_link_data;
         int rc;
@@ -1207,11 +1233,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (rc)
                 GOTO(stop, rc);
 
-        dlh = mdd_pdo_write_lock(env, mdd_tobj, name, MOR_TGT_CHILD);
-        if (dlh == NULL)
-                GOTO(out_trans, rc = -ENOMEM);
         mdd_write_lock(env, mdd_sobj, MOR_TGT_CHILD);
-
         rc = mdd_link_sanity_check(env, mdd_tobj, lname, mdd_sobj);
         if (rc)
                 GOTO(out_unlock, rc);
@@ -1250,8 +1272,6 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         EXIT;
 out_unlock:
         mdd_write_unlock(env, mdd_sobj);
-        mdd_pdo_write_unlock(env, mdd_tobj, dlh);
-out_trans:
         if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
 					    mdd_tobj, lname, handle);
@@ -1437,7 +1457,6 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_object *mdd_cobj = NULL;
 	struct mdd_device *mdd = mdo2mdd(pobj);
-	struct dynlock_handle *dlh;
 	struct thandle    *handle;
 	int rc, is_dir = 0;
 	ENTRY;
@@ -1464,10 +1483,6 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
 		GOTO(stop, rc);
-
-	dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
-	if (dlh == NULL)
-		GOTO(stop, rc = -ENOMEM);
 
 	if (likely(mdd_cobj != NULL)) {
 		mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
@@ -1523,10 +1538,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		GOTO(cleanup, rc);
 
 	/* Enough for only unlink the entry */
-	if (unlikely(mdd_cobj == NULL)) {
-		mdd_pdo_write_unlock(env, mdd_pobj, dlh);
+	if (unlikely(mdd_cobj == NULL))
 		GOTO(stop, rc);
-	}
 
 	if (cattr->la_nlink > 0 || mdd_cobj->mod_count > 0) {
 		/* update ctime of an unlinked file only if it is still
@@ -1559,7 +1572,6 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	EXIT;
 cleanup:
 	mdd_write_unlock(env, mdd_cobj);
-	mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 	if (rc == 0) {
 		int cl_flags = 0;
 
@@ -1677,54 +1689,6 @@ out_free:
 	RETURN(rc);
 }
 
-/* Get fid from name and parent */
-static int
-__mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-             const struct lu_name *lname, struct lu_fid* fid, int mask)
-{
-        const char          *name = lname->ln_name;
-        const struct dt_key *key = (const struct dt_key *)name;
-        struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
-        struct mdd_device   *m = mdo2mdd(pobj);
-        struct dt_object    *dir = mdd_object_child(mdd_obj);
-        int rc;
-        ENTRY;
-
-        if (unlikely(mdd_is_dead_obj(mdd_obj)))
-                RETURN(-ESTALE);
-
-	if (mdd_object_remote(mdd_obj)) {
-		CDEBUG(D_INFO, "%s: Object "DFID" locates on remote server\n",
-		       mdd2obd_dev(m)->obd_name, PFID(mdo2fid(mdd_obj)));
-	} else if (!mdd_object_exists(mdd_obj)) {
-		RETURN(-ESTALE);
-	}
-
-        /* The common filename length check. */
-        if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
-                RETURN(-ENAMETOOLONG);
-
-        rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask,
-                                            MOR_TGT_PARENT);
-        if (rc)
-                RETURN(rc);
-
-        if (likely(S_ISDIR(mdd_object_type(mdd_obj)) &&
-                   dt_try_as_dir(env, dir))) {
-
-                rc = dir->do_index_ops->dio_lookup(env, dir,
-                                                 (struct dt_rec *)fid, key,
-                                                 mdd_object_capa(env, mdd_obj));
-                if (rc > 0)
-                        rc = 0;
-                else if (rc == 0)
-                        rc = -ENOENT;
-        } else
-                rc = -ENOTDIR;
-
-        RETURN(rc);
-}
-
 static int mdd_declare_object_initialize(const struct lu_env *env,
 					 struct mdd_object *parent,
 					 struct mdd_object *child,
@@ -1831,8 +1795,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                  * _index_insert also, for avoiding rolling back if exists
                  * _index_insert.
                  */
-                rc = __mdd_lookup_locked(env, pobj, lname, fid,
-                                         MAY_WRITE | MAY_EXEC);
+		rc = __mdd_lookup(env, pobj, lname, fid, MAY_WRITE | MAY_EXEC);
                 if (rc != -ENOENT)
                         RETURN(rc ? : -EEXIST);
         } else {
@@ -2030,7 +1993,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_buf		acl_buf;
 	struct lu_buf		def_acl_buf;
 	struct linkea_data	*ldata = &info->mti_link_data;
-	struct dynlock_handle	*dlh;
 	const char		*name = lname->ln_name;
 	int			 rc, created = 0, initialized = 0, inserted = 0;
 	ENTRY;
@@ -2109,10 +2071,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
         rc = mdd_trans_start(env, mdd, handle);
         if (rc)
                 GOTO(out_stop, rc);
-
-	dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
-	if (dlh == NULL)
-		GOTO(out_trans, rc = -ENOMEM);
 
 	mdd_write_lock(env, son, MOR_TGT_CHILD);
 	rc = mdd_object_create_internal(env, NULL, son, attr, handle, spec);
@@ -2257,8 +2215,6 @@ cleanup:
 		mdd_write_unlock(env, son);
         }
 
-        mdd_pdo_write_unlock(env, mdd_pobj, dlh);
-out_trans:
 	if (rc == 0 && fid_is_namespace_visible(mdo2fid(son)))
 		rc = mdd_changelog_ns_store(env, mdd,
 			S_ISDIR(attr->la_mode) ? CL_MKDIR :
@@ -2502,7 +2458,6 @@ static int mdd_rename(const struct lu_env *env,
 	struct mdd_device *mdd = mdo2mdd(src_pobj);
 	struct mdd_object *mdd_sobj = NULL;                  /* source object */
 	struct mdd_object *mdd_tobj = NULL;
-	struct dynlock_handle *sdlh = NULL, *tdlh = NULL;
 	struct thandle *handle;
 	struct linkea_data  *ldata = &mdd_env_info(env)->mti_link_data;
 	const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
@@ -2556,26 +2511,6 @@ static int mdd_rename(const struct lu_env *env,
         rc = mdd_rename_order(env, mdd, mdd_spobj, mdd_tpobj);
         if (rc < 0)
                 GOTO(cleanup_unlocked, rc);
-
-        /* Get locks in determined order */
-        if (rc == MDD_RN_SAME) {
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj,
-                                          sname, MOR_SRC_PARENT);
-                /* check hashes to determine do we need one lock or two */
-                if (mdd_name2hash(sname) != mdd_name2hash(tname))
-                        tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,
-                                MOR_TGT_PARENT);
-                else
-                        tdlh = sdlh;
-        } else if (rc == MDD_RN_SRCTGT) {
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname,MOR_SRC_PARENT);
-                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,MOR_TGT_PARENT);
-        } else {
-                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,MOR_SRC_PARENT);
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname,MOR_TGT_PARENT);
-        }
-        if (sdlh == NULL || tdlh == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
 
 	is_dir = S_ISDIR(so_attr->la_mode);
 
@@ -2785,10 +2720,6 @@ fixup_spobj2:
 cleanup:
 	if (tobj_locked)
 		mdd_write_unlock(env, mdd_tobj);
-        if (likely(tdlh) && sdlh != tdlh)
-                mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
-        if (likely(sdlh))
-                mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
 cleanup_unlocked:
         if (rc == 0)
 		rc = mdd_changelog_ext_ns_store(env, mdd, CL_RENAME, cl_flags,

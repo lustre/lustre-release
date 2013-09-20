@@ -27,7 +27,6 @@ rhel6.3/ext4-alloc-policy-2.6.patch
 sles11sp2/ext4-force_over_128tb.patch
 rhel6.3/ext4-pdir-fix.patch
 sles11sp2/ext4-osd-iop-common.patch
-sles11sp2/ext4-dynlocks-common.patch
 rhel6.3/ext4-osd-iam-exports.patch
 rhel6.3/ext4-hash-indexed-dir-dotdot-update.patch
 sles11sp2/ext4-kill-dx_root.patch

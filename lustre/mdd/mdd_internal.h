@@ -52,10 +52,6 @@
 #include <lustre_log.h>
 #include <lustre_linkea.h>
 
-/* PDO lock is unnecessary for current MDT stack because operations
- * are already protected by ldlm lock */
-#define MDD_DISABLE_PDO_LOCK    1
-
 /* Changelog flags */
 /** changelog is recording */
 #define CLM_ON    0x00001
@@ -125,9 +121,6 @@ struct mdd_object {
         __u32             mod_valid;
         __u64             mod_cltime;
         unsigned long     mod_flags;
-#ifndef MDD_DISABLE_PDO_LOCK
-        struct dynlock    mod_pdlock;
-#endif
 #ifdef CONFIG_LOCKDEP
         /* "dep_map" name is assumed by lockdep.h macros. */
         struct lockdep_map dep_map;
@@ -256,16 +249,11 @@ void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
 int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 
-void mdd_pdlock_init(struct mdd_object *obj);
 unsigned long mdd_name2hash(const char *name);
 void *mdd_pdo_write_lock(const struct lu_env *env, struct mdd_object *obj,
                          const char *name, enum mdd_object_role role);
-void *mdd_pdo_read_lock(const struct lu_env *env, struct mdd_object *obj,
-                        const char *name, enum mdd_object_role role);
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
                           void *dlh);
-void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
-                         void *dlh);
 /* mdd_dir.c */
 int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
 		   struct lu_fid *fid);

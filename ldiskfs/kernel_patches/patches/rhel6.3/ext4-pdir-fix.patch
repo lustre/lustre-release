@@ -2,14 +2,6 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h	2012-08-07 11:52:38.994200699 -0700
 +++ linux-stage/fs/ext4/ext4.h	2012-08-07 12:28:19.497442862 -0700
-@@ -16,6 +16,7 @@
- #ifndef _EXT4_H
- #define _EXT4_H
- 
-+#include <linux/dynlocks.h>
- #include <linux/types.h>
- #include <linux/blkdev.h>
- #include <linux/magic.h>
 @@ -706,6 +707,9 @@
  	__u32	i_dtime;
  	ext4_fsblk_t	i_file_acl;

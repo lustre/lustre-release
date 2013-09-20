@@ -45,9 +45,10 @@
 
 #include <linux/module.h>
 #include <asm/unaligned.h>
-#include <linux/dynlocks.h>
+
+#include "osd_dynlocks.h"
 /*
- *  linux/include/linux/osd_iam.h
+ *  osd_iam.h
  */
 #ifndef CLASSERT
 #define CLASSERT(cond) do {switch(42) {case (cond): case 0: break;}} while (0)

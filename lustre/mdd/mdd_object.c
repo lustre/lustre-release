@@ -173,7 +173,6 @@ static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
         mdd_obj->mod_cltime = 0;
         under = &d->mdd_child->dd_lu_dev;
         below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
-        mdd_pdlock_init(mdd_obj);
 	if (IS_ERR(below))
 		RETURN(PTR_ERR(below));
 

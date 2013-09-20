@@ -64,6 +64,7 @@
 #include <lustre_fid.h>
 
 #include "osd_internal.h"
+#include "osd_dynlocks.h"
 
 /* llo_* api support */
 #include <md_object.h>
@@ -76,6 +77,20 @@ CFS_MODULE_PARM(ldiskfs_pdo, "i", int, 0644,
 int ldiskfs_track_declares_assert;
 CFS_MODULE_PARM(ldiskfs_track_declares_assert, "i", int, 0644,
 		"LBUG during tracking of declares");
+
+/* Slab to allocate dynlocks */
+struct kmem_cache *dynlock_cachep;
+
+static struct lu_kmem_descr ldiskfs_caches[] = {
+	{
+		.ckd_cache = &dynlock_cachep,
+		.ckd_name  = "dynlock_cache",
+		.ckd_size  = sizeof(struct dynlock_handle)
+	},
+	{
+		.ckd_cache = NULL
+	}
+};
 
 static const char dot[] = ".";
 static const char dotdot[] = "..";
@@ -5828,16 +5843,26 @@ static struct obd_ops osd_obd_device_ops = {
 static int __init osd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
+	int rc;
 
-        osd_oi_mod_init();
-        lprocfs_osd_init_vars(&lvars);
-        return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
-				   LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
+	osd_oi_mod_init();
+	lprocfs_osd_init_vars(&lvars);
+
+	rc = lu_kmem_init(ldiskfs_caches);
+	if (rc)
+		return rc;
+
+	rc = class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
+				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
+	if (rc)
+		lu_kmem_fini(ldiskfs_caches);
+	return rc;
 }
 
 static void __exit osd_mod_exit(void)
 {
 	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);
+	lu_kmem_fini(ldiskfs_caches);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
