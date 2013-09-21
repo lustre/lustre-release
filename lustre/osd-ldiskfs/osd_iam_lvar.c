@@ -1010,15 +1010,15 @@ int iam_lvar_create(struct inode *obj,
         struct super_block *sb;
 
         u32 blknr;
-        int result;
+        int result = 0;
         unsigned long bsize;
 
         assert_corr(obj->i_size == 0);
 
         sb = obj->i_sb;
         bsize = sb->s_blocksize;
-        root_node = ldiskfs_append(handle, obj, &blknr, &result);
-        leaf_node = ldiskfs_append(handle, obj, &blknr, &result);
+        root_node = osd_ldiskfs_append(handle, obj, &blknr, &result);
+        leaf_node = osd_ldiskfs_append(handle, obj, &blknr, &result);
         if (root_node != NULL && leaf_node != NULL) {
                 lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
                 lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
