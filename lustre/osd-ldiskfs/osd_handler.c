@@ -3030,6 +3030,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
 	file->f_dentry = dentry;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
+	set_file_inode(file, inode);
 #ifndef HAVE_FILE_FSYNC_4ARGS
 	mutex_lock(&inode->i_mutex);
 #endif
@@ -4577,6 +4578,8 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	file->f_dentry		= obj_dentry;
 	file->f_mapping 	= obj->oo_inode->i_mapping;
 	file->f_op		= obj->oo_inode->i_fop;
+	set_file_inode(file, obj->oo_inode);
+
 	lu_object_get(lo);
 	RETURN((struct dt_it *) it);
 }

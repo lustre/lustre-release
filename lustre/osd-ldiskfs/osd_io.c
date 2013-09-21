@@ -1594,6 +1594,7 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
         file->f_dentry = dentry;
         file->f_mapping = inode->i_mapping;
         file->f_op = inode->i_fop;
+	set_file_inode(file, inode);
 
         saved_fs = get_fs();
         set_fs(get_ds());

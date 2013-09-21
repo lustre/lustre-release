@@ -393,4 +393,10 @@ static inline struct dentry *d_make_root(struct inode *root)
 # define ll_dirty_inode(inode, flag)	(inode)->i_sb->s_op->dirty_inode((inode))
 #endif
 
+#ifdef HAVE_FILE_F_INODE
+# define set_file_inode(file, inode)	(file)->f_inode = inode
+#else
+# define set_file_inode(file, inode)
+#endif
+
 #endif /* _COMPAT25_H */
