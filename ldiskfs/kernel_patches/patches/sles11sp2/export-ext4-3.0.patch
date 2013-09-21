@@ -10,18 +10,22 @@
  fs/ext4/super.c        |    9 +++++++++
  9 files changed, 46 insertions(+), 8 deletions(-)
 
---- a/fs/ext4/balloc.c
-+++ b/fs/ext4/balloc.c
+Index: linux-stage/fs/ext4/balloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/balloc.c
++++ linux-stage/fs/ext4/balloc.c
 @@ -231,6 +231,7 @@ struct ext4_group_desc * ext4_get_group_
  		*bh = sbi->s_group_desc[group_desc];
  	return desc;
  }
 +EXPORT_SYMBOL(ext4_get_group_desc);
-
+ 
  static int ext4_valid_block_bitmap(struct super_block *sb,
  					struct ext4_group_desc *desc,
---- a/fs/ext4/ext4.h
-+++ b/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
 @@ -1783,6 +1783,8 @@ extern struct inode * ext4_orphan_get(st
  extern unsigned long ext4_count_free_inodes(struct super_block *);
  extern unsigned long ext4_count_dirs(struct super_block *);
@@ -31,8 +35,10 @@
  extern void ext4_mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
  extern int ext4_init_inode_table(struct super_block *sb,
  				 ext4_group_t group, int barrier);
---- a/fs/ext4/ext4_extents.h
-+++ b/fs/ext4/ext4_extents.h
+Index: linux-stage/fs/ext4/ext4_extents.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_extents.h
++++ linux-stage/fs/ext4/ext4_extents.h
 @@ -290,5 +290,14 @@ extern struct ext4_ext_path *ext4_ext_fi
  							struct ext4_ext_path *);
  extern void ext4_ext_drop_refs(struct ext4_ext_path *);
@@ -47,15 +53,17 @@
 +				ext4_lblk_t num, ext_prepare_callback func,
 +				void *cbdata);
  #endif /* _EXT4_EXTENTS */
-
---- a/fs/ext4/ext4_jbd2.c
-+++ b/fs/ext4/ext4_jbd2.c
+ 
+Index: linux-stage/fs/ext4/ext4_jbd2.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c
++++ linux-stage/fs/ext4/ext4_jbd2.c
 @@ -19,6 +19,7 @@ int __ext4_journal_get_write_access(cons
  	}
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
-
+ 
  /*
   * The ext4 forget function must perform a revoke if we are freeing data
 @@ -150,3 +151,4 @@ int __ext4_handle_dirty_super(const char
@@ -63,9 +71,11 @@
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
---- a/fs/ext4/extents.c
-+++ b/fs/ext4/extents.c
-@@ -1236,9 +1236,9 @@ out:
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -1233,9 +1233,9 @@ out:
   * returns 0 at @phys
   * return value contains 0 (success) or error code
   */
@@ -78,7 +88,7 @@
  {
  	struct ext4_extent_idx *ix;
  	struct ext4_extent *ex;
-@@ -1301,9 +1301,9 @@ static int ext4_ext_search_left(struct i
+@@ -1298,9 +1298,9 @@ static int ext4_ext_search_left(struct i
   * returns 0 at @phys
   * return value contains 0 (success) or error code
   */
@@ -91,17 +101,17 @@
  {
  	struct buffer_head *bh = NULL;
  	struct ext4_extent_header *eh;
-@@ -1878,7 +1878,7 @@ cleanup:
+@@ -1875,7 +1875,7 @@ cleanup:
  	return err;
  }
-
+ 
 -static int ext4_ext_walk_space(struct inode *inode, ext4_lblk_t block,
 +extern int ext4_ext_walk_space(struct inode *inode, ext4_lblk_t block,
  			       ext4_lblk_t num, ext_prepare_callback func,
  			       void *cbdata)
  {
-@@ -4397,3 +4397,12 @@ int ext4_fiemap(struct inode *inode, str
-
+@@ -4380,3 +4380,12 @@ int ext4_fiemap(struct inode *inode, str
+ 
  	return error;
  }
 +
@@ -113,9 +123,11 @@
 +EXPORT_SYMBOL(ext4_ext_walk_space);
 +EXPORT_SYMBOL(ext4_ext_find_extent);
 +EXPORT_SYMBOL(ext4_ext_drop_refs);
---- a/fs/ext4/ialloc.c
-+++ b/fs/ext4/ialloc.c
-@@ -98,7 +98,7 @@ static unsigned ext4_init_inode_bitmap(s
+Index: linux-stage/fs/ext4/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -99,7 +99,7 @@ static unsigned ext4_init_inode_bitmap(s
   *
   * Return buffer_head of bitmap on success or NULL.
   */
@@ -124,71 +136,85 @@
  ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
  {
  	struct ext4_group_desc *desc;
-@@ -163,6 +163,7 @@ ext4_read_inode_bitmap(struct super_bloc
+@@ -164,6 +164,7 @@ ext4_read_inode_bitmap(struct super_bloc
  	}
  	return bh;
  }
 +EXPORT_SYMBOL(ext4_read_inode_bitmap);
-
+ 
  /*
   * NOTE! When we get the inode, we're the only people
---- a/fs/ext4/inode.c
-+++ b/fs/ext4/inode.c
-@@ -5096,6 +5096,7 @@ bad_inode:
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -4685,6 +4685,7 @@ out_stop:
+ 	ext4_journal_stop(handle);
+ 	trace_ext4_truncate_exit(inode);
+ }
++EXPORT_SYMBOL(ext4_truncate);
+ 
+ /*
+  * ext4_get_inode_loc returns with an extra refcount against the inode's
+@@ -5098,6 +5099,7 @@ bad_inode:
  	iget_failed(inode);
  	return ERR_PTR(ret);
  }
 +EXPORT_SYMBOL(ext4_iget);
-
+ 
  static int ext4_inode_blocks_set(handle_t *handle,
  				struct ext4_inode *raw_inode,
---- a/fs/ext4/mballoc.c
-+++ b/fs/ext4/mballoc.c
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
 @@ -3852,6 +3852,7 @@ repeat:
  		call_rcu(&(pa)->u.pa_rcu, ext4_mb_pa_callback);
  	}
  }
 +EXPORT_SYMBOL(ext4_discard_preallocations);
-
+ 
  #ifdef CONFIG_EXT4_DEBUG
  static void ext4_mb_show_ac(struct ext4_allocation_context *ac)
 @@ -4972,3 +4973,6 @@ int ext4_trim_fs(struct super_block *sb,
-
+ 
  	return ret;
  }
 +
 +EXPORT_SYMBOL(ext4_free_blocks);
 +
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
 @@ -194,6 +194,7 @@ __u32 ext4_itable_unused_count(struct su
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		 (__u32)le16_to_cpu(bg->bg_itable_unused_hi) << 16 : 0);
  }
 +EXPORT_SYMBOL(ext4_itable_unused_count);
-
+ 
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
 @@ -378,6 +379,7 @@ void ext4_journal_abort_handle(const cha
-
+ 
  	jbd2_journal_abort_handle(handle);
  }
 +EXPORT_SYMBOL(ext4_journal_abort_handle);
-
+ 
  static void __save_error_info(struct super_block *sb, const char *func,
  			    unsigned int line)
-@@ -4272,6 +4274,7 @@ int ext4_force_commit(struct super_block
-
+@@ -4270,6 +4272,7 @@ int ext4_force_commit(struct super_block
+ 
  	return ret;
  }
 +EXPORT_SYMBOL(ext4_force_commit);
-
+ 
  static void ext4_write_super(struct super_block *sb)
  {
-@@ -5208,6 +5211,12 @@ static void __exit ext4_exit_fs(void)
+@@ -5198,6 +5201,12 @@ static void __exit ext4_exit_fs(void)
  	ext4_exit_pageio();
  }
-
+ 
 +EXPORT_SYMBOL(ext4_xattr_get);
 +EXPORT_SYMBOL(ext4_xattr_set_handle);
 +EXPORT_SYMBOL(ext4_bread);

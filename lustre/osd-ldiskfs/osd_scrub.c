@@ -342,7 +342,7 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 	dev = container_of0(scrub, struct osd_device, od_scrub);
 	credits = osd_dto_credits_noquota[DTO_WRITE_BASE] +
 		  osd_dto_credits_noquota[DTO_WRITE_BLOCK];
-	jh = ldiskfs_journal_start_sb(osd_sb(dev), credits);
+	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC, credits);
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);
 		CERROR("%.16s: fail to start trans for scrub store, rc = %d\n",
@@ -391,7 +391,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	 * Making the LMA to fit into the 256-byte OST inode can save time for
 	 * normal osd_check_lma() and for other OI scrub scanning in future.
 	 * So it is worth to make some slow conversion here. */
-	jh = ldiskfs_journal_start_sb(osd_sb(dev),
+	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC,
 				osd_dto_credits_noquota[DTO_XATTR_SET] * 3);
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);

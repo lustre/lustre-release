@@ -998,7 +998,7 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
          * XXX temporary stuff. Some abstraction layer should
          * be used.
          */
-        jh = ldiskfs_journal_start_sb(osd_sb(dev), oh->ot_credits);
+        jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC, oh->ot_credits);
         osd_th_started(oh);
         if (!IS_ERR(jh)) {
                 oh->ot_handle = jh;
@@ -2401,7 +2401,8 @@ static int osd_object_destroy(const struct lu_env *env,
 		RETURN(-EPERM);
 
 	if (S_ISDIR(inode->i_mode)) {
-		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1);
+		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1 ||
+			inode->i_nlink == 2);
 		/* it will check/delete the inode from remote parent,
 		 * how to optimize it? unlink performance impaction XXX */
 		result = osd_delete_from_remote_parent(env, osd, obj, oh);
@@ -2698,20 +2699,22 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
 static int osd_object_ref_add(const struct lu_env *env,
                               struct dt_object *dt, struct thandle *th)
 {
-	struct osd_object *obj = osd_dt_obj(dt);
-	struct inode      *inode = obj->oo_inode;
-	bool		   need_dirty = false;
-	int		   rc = 0;
+	struct osd_object  *obj = osd_dt_obj(dt);
+	struct inode       *inode = obj->oo_inode;
+	struct osd_thandle *oh;
+	int		    rc = 0;
 
         LINVRNT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle != NULL);
+
 	osd_trans_exec_op(env, th, OSD_OT_REF_ADD);
 
-	/* This based on ldiskfs_inc_count(), which is not exported.
-	 *
+	/*
 	 * The DIR_NLINK feature allows directories to exceed LDISKFS_LINK_MAX
 	 * (65000) subdirectories by storing "1" in i_nlink if the link count
 	 * would otherwise overflow. Directory tranversal tools understand
@@ -2723,28 +2726,11 @@ static int osd_object_ref_add(const struct lu_env *env,
 	 * in case they are being linked into the PENDING directory
 	 */
 	spin_lock(&obj->oo_guard);
-	if (unlikely(!S_ISDIR(inode->i_mode) &&
-		     inode->i_nlink >= LDISKFS_LINK_MAX)) {
-		/* MDD should have checked this, but good to be safe */
-		rc = -EMLINK;
-	} else if (unlikely(inode->i_nlink == 0 ||
-			    (S_ISDIR(inode->i_mode) &&
-			     inode->i_nlink >= LDISKFS_LINK_MAX))) {
-		/* inc_nlink from 0 may cause WARN_ON */
-		set_nlink(inode, 1);
-		need_dirty = true;
-	} else if (!S_ISDIR(inode->i_mode) ||
-		   (S_ISDIR(inode->i_mode) && inode->i_nlink >= 2)) {
-		inc_nlink(inode);
-		need_dirty = true;
-	} /* else (S_ISDIR(inode->i_mode) && inode->i_nlink == 1) { ; } */
-
+	ldiskfs_inc_count(oh->ot_handle, inode);
 	LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
 	spin_unlock(&obj->oo_guard);
 
-	if (need_dirty)
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 	LINVRNT(osd_invariant(obj));
 
 	return rc;
@@ -2777,11 +2763,15 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct inode		*inode = obj->oo_inode;
 	struct osd_device	*osd = osd_dev(dt->do_lu.lo_dev);
+	struct osd_thandle      *oh;
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
 	LASSERT(osd_write_locked(env, obj));
 	LASSERT(th != NULL);
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_DEL);
 
@@ -2798,23 +2788,11 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 		return 0;
 	}
 
-	/* This based on ldiskfs_dec_count(), which is not exported.
-	 *
-	 * If a directory already has nlink == 1, then do not drop the nlink
-	 * count to 0, even temporarily, to avoid race conditions with other
-	 * threads not holding oo_guard seeing i_nlink == 0 in rare cases.
-	 *
-	 * nlink == 1 means the directory has/had > EXT4_LINK_MAX subdirs.
-	 */
-	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 1) {
-		drop_nlink(inode);
+	ldiskfs_dec_count(oh->ot_handle, inode);
+	spin_unlock(&obj->oo_guard);
 
-		spin_unlock(&obj->oo_guard);
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-		LINVRNT(osd_invariant(obj));
-	} else {
-		spin_unlock(&obj->oo_guard);
-	}
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+	LINVRNT(osd_invariant(obj));
 
 	return 0;
 }
@@ -3547,7 +3525,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		down_write(&obj->oo_ext_idx_sem);
         }
 
-        bh = ldiskfs_find_entry(dir, &dentry->d_name, &de, hlock);
+        bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
         if (bh) {
 		__u32 ino = 0;
 
@@ -4068,7 +4046,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		down_read(&obj->oo_ext_idx_sem);
         }
 
-        bh = osd_ldiskfs_find_entry(dir, dentry, &de, hlock);
+        bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
         if (bh) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		struct osd_inode_id *id = &oti->oti_id;
@@ -5068,7 +5046,7 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 
 again:
 	if (dev->od_dirent_journal) {
-		jh = ldiskfs_journal_start_sb(sb, credits);
+		jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, credits);
 		if (IS_ERR(jh)) {
 			rc = PTR_ERR(jh);
 			CERROR("%.16s: fail to start trans for dirent "
@@ -5098,7 +5076,7 @@ again:
 		}
 	}
 
-	bh = osd_ldiskfs_find_entry(dir, dentry, &de, hlock);
+	bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
 	/* For dot/dotdot entry, if there is not enough space to hold the
 	 * FID-in-dirent, just keep them there. It only happens when the
 	 * device upgraded from 1.8 or restored from MDT file-level backup.

@@ -117,7 +117,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 	int				 rc;
 
 	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
-	bh = osd_ldiskfs_find_entry(dir, dentry, &de, NULL);
+	bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, NULL);
 	if (bh) {
 		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
 		brelse(bh);
@@ -129,7 +129,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 		return PTR_ERR(inode);
 	}
 
-	jh = ldiskfs_journal_start_sb(sb, 100);
+	jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, 100);
 	if (IS_ERR(jh))
 		return PTR_ERR(jh);
 

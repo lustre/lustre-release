@@ -975,8 +975,6 @@ int dx_index_is_compat(struct iam_path *path);
 int ldiskfs_htree_next_block(struct inode *dir, __u32 hash,
                           struct iam_path *path, __u32 *start_hash);
 
-struct buffer_head *ldiskfs_append(handle_t *handle, struct inode *inode,
-                                u32 *block, int *err);
 int split_index_node(handle_t *handle, struct iam_path *path,
                      struct dynlock_handle **lh);
 struct ldiskfs_dir_entry_2 *split_entry(struct inode *dir,

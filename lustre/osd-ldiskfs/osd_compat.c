@@ -259,10 +259,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 				   NULL);
 	CDEBUG(D_INODE, "%s: add %s:%lu to remote parent %lu.\n", osd_name(osd),
 	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
-	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
-		 osd_name(osd), parent->d_inode->i_ino,
-		 parent->d_inode->i_nlink);
-	parent->d_inode->i_nlink++;
+	ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
 	RETURN(rc);
@@ -296,7 +293,8 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
 					   name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
-	bh = osd_ldiskfs_find_entry(parent->d_inode, dentry, &de, NULL);
+	bh = osd_ldiskfs_find_entry(parent->d_inode, &dentry->d_name, &de,
+				    NULL, NULL);
 	if (bh == NULL) {
 		mutex_unlock(&parent->d_inode->i_mutex);
 		RETURN(-ENOENT);
@@ -304,10 +302,7 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	CDEBUG(D_INODE, "%s: el %s:%lu to remote parent %lu.\n", osd_name(osd),
 	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
 	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
-	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
-		 osd_name(osd), parent->d_inode->i_ino,
-		 parent->d_inode->i_nlink);
-	parent->d_inode->i_nlink--;
+	ldiskfs_dec_count(oh->ot_handle, parent->d_inode);
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
 	brelse(bh);
@@ -339,7 +334,8 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 	dentry = osd_child_dentry_by_inode(oti->oti_env, parent->d_inode,
 					   name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
-	bh = osd_ldiskfs_find_entry(parent->d_inode, dentry, &de, NULL);
+	bh = osd_ldiskfs_find_entry(parent->d_inode, &dentry->d_name, &de,
+				    NULL, NULL);
 	if (bh == NULL) {
 		rc = -ENOENT;
 	} else {
@@ -561,7 +557,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 
 	ll_vfs_dq_init(parent);
 	mutex_lock(&parent->i_mutex);
-	bh = osd_ldiskfs_find_entry(parent, child, &de, NULL);
+	bh = osd_ldiskfs_find_entry(parent, &child->d_name, &de, NULL, NULL);
 	if (bh == NULL)
 		GOTO(out, rc = -ENOENT);
 
@@ -655,7 +651,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	ll_vfs_dq_init(dir);
 	mutex_lock(&dir->i_mutex);
 	rc = -ENOENT;
-	bh = osd_ldiskfs_find_entry(dir, child, &de, NULL);
+	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
 	if (bh) {
 		rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
 		brelse(bh);
@@ -918,7 +914,7 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 
 	dir = d_seq->d_inode;
 	mutex_lock(&dir->i_mutex);
-	bh = osd_ldiskfs_find_entry(dir, child, &de, NULL);
+	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
 	mutex_unlock(&dir->i_mutex);
 
 	if (bh == NULL)
@@ -1088,7 +1084,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	tgt_child->d_inode = inode;
 
 	/* The non-initialized src_child may be destroyed. */
-	jh = ldiskfs_journal_start_sb(osd_sb(osd),
+	jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC,
 				osd_dto_credits_noquota[DTO_INDEX_DELETE] +
 				osd_dto_credits_noquota[DTO_INDEX_INSERT] +
 				osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
@@ -1100,7 +1096,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 
 	mutex_lock(&src_parent->i_mutex);
 	mutex_lock(&dir->i_mutex);
-	bh = osd_ldiskfs_find_entry(dir, tgt_child, &de, NULL);
+	bh = osd_ldiskfs_find_entry(dir, &tgt_child->d_name, &de, NULL, NULL);
 	if (bh != NULL) {
 		/* XXX: If some other object occupied the same slot. And If such
 		 * 	inode is zero-sized and with SUID+SGID, then means it is
@@ -1126,8 +1122,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		/* If the src object has never been modified, then remove it. */
 		if (inode->i_size == 0 && inode->i_mode & S_ISUID &&
 		    inode->i_mode & S_ISGID) {
-			bh = osd_ldiskfs_find_entry(src_parent, src_child, &de,
-						    NULL);
+			bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name,
+						    &de, NULL, NULL);
 			if (unlikely(bh == NULL)) {
 				mutex_unlock(&src_parent->i_mutex);
 				ldiskfs_journal_stop(jh);
@@ -1146,7 +1142,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		RETURN(rc);
 	}
 
-	bh = osd_ldiskfs_find_entry(src_parent, src_child, &de, NULL);
+	bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name, &de,
+				    NULL, NULL);
 	if (unlikely(bh == NULL))
 		GOTO(unlock, rc = -ENOENT);
 

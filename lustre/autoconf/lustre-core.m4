@@ -427,14 +427,26 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/quota.h>
 ],[
-	struct quotactl_ops qops = {};
-	struct fs_disk_quota fdq;
-	qops.set_dqblk(NULL, 0, 0, &fdq);
+	((struct quotactl_ops *)0)->set_dqblk(NULL, 0, 0, (struct fs_disk_quota*)0);
 ],[
 	AC_DEFINE(HAVE_DQUOT_FS_DISK_QUOTA, 1, [quotactl_ops.set_dqblk takes struct fs_disk_quota])
 	AC_MSG_RESULT([yes])
 ],[
 	AC_MSG_RESULT([no])
+	AC_MSG_CHECKING([if quotactl_ops.set_dqblk takes struct kqid & fs_disk_quota])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/fs.h>
+		#include <linux/quota.h>
+	],[
+		((struct quotactl_ops *)0)->set_dqblk((struct super_block*)0, *((struct kqid*)0), (struct fs_disk_quota*)0);
+	],[
+		AC_DEFINE(HAVE_DQUOT_FS_DISK_QUOTA, 1, [quotactl_ops.set_dqblk takes struct fs_disk_quota])
+		AC_DEFINE(HAVE_DQUOT_KQID, 1, [quotactl_ops.set_dqblk takes struct kqid])
+		AC_MSG_RESULT([yes])
+	],[
+		AC_MSG_RESULT([no])
+		AC_MSG_CHECKING([if quotactl_ops.set_dqblk takes struct kqid&fs_disk_quota])
+	])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -712,6 +724,24 @@ AC_DEFUN([LC_EXPORT_SIMPLE_SETATTR],
 AC_DEFINE(HAVE_SIMPLE_SETATTR, 1,
             [simple_setattr is exported by the kernel])
 ],[
+])
+])
+
+#
+# truncate callback removed since 2.6.39
+#
+AC_DEFUN([LC_IOP_TRUNCATE],
+[AC_MSG_CHECKING([inode_operations has .truncate member function])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        ((struct inode_operations *)0)->truncate(NULL);
+],[
+        AC_DEFINE(HAVE_INODEOPS_TRUNCATE, 1,
+                  [inode_operations has .truncate member function])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
 ])
 ])
 
@@ -1339,6 +1369,7 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN
 	 LC_HAVE_FSTYPE_MOUNT
+	 LC_IOP_TRUNCATE
 
 	 # 3.0
 	 LC_DIRTY_INODE_WITH_FLAG
