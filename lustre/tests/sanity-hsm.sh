@@ -306,9 +306,10 @@ cdt_restart() {
 	cdt_set_sanity_policy
 }
 
-need2clients() {
-	if [[ $CLIENTCOUNT -lt 2 ]]; then
-		skip "Need two or more clients, have $CLIENTCOUNT"
+needclients() {
+	local clnt_count=$1
+	if [[ $CLIENTCOUNT -lt $clnt_count ]]; then
+		skip "Need $clnt_count or more clients, have $CLIENTCOUNT"
 		return 1
 	fi
 	return 0
@@ -677,8 +678,7 @@ test_9() {
 run_test 9 "Use of explict archive number, with dedicated copytool"
 
 test_9a() {
-	[[ $CLIENTCOUNT -ge 3 ]] ||
-		{ skip "Need three or more clients"; return 0; }
+	needclients 3 || return 0
 
 	local n
 	local file
@@ -700,7 +700,7 @@ test_9a() {
 
 		$LFS hsm_archive $file || error "could not archive file $file"
 		wait_request_state $fid ARCHIVE SUCCEED
-		check_hsm_flags $file "0x00000001"
+		check_hsm_flags $file "0x00000009"
 	done
 
 	trap - EXIT
@@ -985,7 +985,7 @@ test_12g() {
 run_test 12g "Restore a released file implicitly"
 
 test_12h() {
-	need2clients || return 0
+	needclients 2 || return 0
 
 	# test needs a running copytool
 	copytool_setup
@@ -1619,7 +1619,7 @@ run_test 28 "Concurrent archive/file remove"
 test_30a() {
 	# restore at exec cannot work on agent node (because of Linux kernel
 	# protection of executables)
-	need2clients || return 0
+	needclients 2 || return 0
 
 	# test needs a running copytool
 	copytool_setup
@@ -1650,7 +1650,7 @@ run_test 30a "Restore at exec (import case)"
 test_30b() {
 	# restore at exec cannot work on agent node (because of Linux kernel
 	# protection of executables)
-	need2clients || return 0
+	needclients 2 || return 0
 
 	# test needs a running copytool
 	copytool_setup
@@ -2098,7 +2098,7 @@ run_test 56 "Setattr during an archive is ok"
 
 test_57() {
 	# Need one client for I/O, one for request
-	need2clients || return 0
+	needclients 2 || return 0
 
 	# test needs a running copytool
 	copytool_setup
