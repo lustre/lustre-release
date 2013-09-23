@@ -302,6 +302,11 @@
         </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
           <primary>xattr</primary>
           <secondary><emphasis role="italic">See</emphasis> wide striping</secondary>
+        </indexterm><indexterm>
+          <primary>large_xattr</primary>
+        </indexterm><indexterm>
+          <primary>wide striping</primary>
+          <secondary>large_xattr</secondary>
         </indexterm>File and File System Limits</title>
       <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits.
         These limits are imposed by either the Lustre architecture or the Linux virtual file system

@@ -62,6 +62,11 @@
       </indexterm><indexterm>
         <primary>MDT</primary>
         <secondary>multiple MDSx</secondary>
+      </indexterm><indexterm>
+        <primary>large_xattr</primary>
+      </indexterm><indexterm>
+        <primary>wide striping</primary>
+        <secondary>large_xattr</secondary>
       </indexterm>Upgrading to Lustre Release 2.x (Major Release)</title>
     <para> The procedure for upgrading a Lustre release 2.x file system to a more recent 2.x release
       of the Lustre software is described in this section. </para>
@@ -227,7 +232,8 @@
             <listitem>
               <para>Determine the index used for the first MDT (each MDT must have unique index).
                 Enter:<screen>client$ lctl dl | grep mdc
-36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5</screen></para>
+36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 
+      4c8be054-144f-9359-b063-8477566eb84e 5</screen></para>
               <para>In this example, the next available index is 1.</para>
             </listitem>
             <listitem>
