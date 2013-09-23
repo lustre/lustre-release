@@ -297,6 +297,37 @@ testfs-MDT0000</screen></para>
         </tbody>
       </tgroup>
     </informaltable>
+    <para>Buddy group cache information found in
+          <literal>/proc/fs/ldiskfs/<replaceable>disk_device</replaceable>/mb_groups</literal> may
+      be useful for assessing on-disk fragmentation. For
+      example:<screen>cat /proc/fs/ldiskfs/loop0/mb_groups 
+#group: free free frags first pa [ 2^0 2^1 2^2 2^3 2^4 2^5 2^6 2^7 2^8 2^9 
+     2^10 2^11 2^12 2^13] 
+#0    : 2936 2936 1     42    0  [ 0   0   0   1   1   1   1   2   0   1 
+     2    0    0    0   ]</screen></para>
+    <para>In this example, the columns show:<itemizedlist>
+        <listitem>
+          <para>#group number</para>
+        </listitem>
+        <listitem>
+          <para>Available blocks in the group</para>
+        </listitem>
+        <listitem>
+          <para>Blocks free on a disk</para>
+        </listitem>
+        <listitem>
+          <para>Number of free fragments</para>
+        </listitem>
+        <listitem>
+          <para>First free block in the group</para>
+        </listitem>
+        <listitem>
+          <para>Number of preallocated chunks (not blocks)</para>
+        </listitem>
+        <listitem>
+          <para>A series of available chunks of different sizes</para>
+        </listitem>
+      </itemizedlist></para>
   </section>
   <section>
     <title>Monitoring Lustre File System  I/O</title>
