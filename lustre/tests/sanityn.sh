@@ -489,7 +489,8 @@ test_21() { # Bug 5907
 run_test 21 " Try to remove mountpoint on another dir ===="
 
 test_23() { # Bug 5972
-	local at_diff=$(do_facet $SINGLEMDS $LCTL get_param -n mdd.*.atime_diff)
+	local at_diff=$(do_facet $SINGLEMDS \
+		$LCTL get_param -n mdd.*MDT0000*.atime_diff | head -1)
 	echo "atime should be updated while another read" > $DIR1/$tfile
 
 	# clear the lock(mode: LCK_PW) gotten from creating operation
