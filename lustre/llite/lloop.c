@@ -540,9 +540,6 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 #endif
 
 	/* queue parameters */
-	CLASSERT(PAGE_CACHE_SIZE < (1 << (sizeof(unsigned short) * 8)));
-	blk_queue_logical_block_size(lo->lo_queue,
-				     (unsigned short)PAGE_CACHE_SIZE);
 	blk_queue_max_hw_sectors(lo->lo_queue,
 				 LLOOP_MAX_SEGMENTS << (PAGE_CACHE_SHIFT - 9));
 	blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
