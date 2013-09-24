@@ -576,15 +576,16 @@ static int mdt_hsm_agent_proc_show(struct seq_file *s, void *v)
 		RETURN(0);
 
 	ha = list_entry(pos, struct hsm_agent, ha_list);
-	seq_printf(s, "uuid=%s archive#=%d (", ha->ha_uuid.uuid,
-		   ha->ha_archive_cnt);
-	if (ha->ha_archive_cnt == 0)
-		seq_printf(s, "all");
-	else
-		for (i = 0; i < ha->ha_archive_cnt; i++)
-			seq_printf(s, "%d ", ha->ha_archive_id[i]);
+	seq_printf(s, "uuid=%s archive_id=", ha->ha_uuid.uuid);
+	if (ha->ha_archive_cnt == 0) {
+		seq_printf(s, "ANY");
+	} else {
+		seq_printf(s, "%d", ha->ha_archive_id[0]);
+		for (i = 1; i < ha->ha_archive_cnt; i++)
+			seq_printf(s, ",%d", ha->ha_archive_id[i]);
+	}
 
-	seq_printf(s, ") r=%d s=%d f=%d\n",
+	seq_printf(s, " requests=[current:%d ok:%d errors:%d]\n",
 		   atomic_read(&ha->ha_requests),
 		   atomic_read(&ha->ha_success),
 		   atomic_read(&ha->ha_failure));
