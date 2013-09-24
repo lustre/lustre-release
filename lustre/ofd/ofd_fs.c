@@ -72,37 +72,101 @@ int ofd_precreate_batch(struct ofd_device *ofd, int batch)
 {
 	int count;
 
-	spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_batch_lock);
 	count = min(ofd->ofd_precreate_batch, batch);
-	spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_batch_lock);
 
 	return count;
 }
 
-obd_id ofd_last_id(struct ofd_device *ofd, obd_seq group)
+struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq)
+{
+	struct ofd_seq *oseq;
+
+	read_lock(&ofd->ofd_seq_list_lock);
+	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
+		if (oseq->os_seq == seq) {
+			cfs_atomic_inc(&oseq->os_refc);
+			read_unlock(&ofd->ofd_seq_list_lock);
+			return oseq;
+		}
+	}
+	read_unlock(&ofd->ofd_seq_list_lock);
+	return NULL;
+}
+
+static void ofd_seq_destroy(const struct lu_env *env,
+			    struct ofd_seq *oseq)
+{
+	LASSERT(cfs_list_empty(&oseq->os_list));
+	LASSERT(oseq->os_lastid_obj != NULL);
+	lu_object_put(env, &oseq->os_lastid_obj->do_lu);
+	OBD_FREE_PTR(oseq);
+}
+
+void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq)
+{
+	if (cfs_atomic_dec_and_test(&oseq->os_refc))
+		ofd_seq_destroy(env, oseq);
+}
+
+static void ofd_seq_delete(const struct lu_env *env, struct ofd_seq *oseq)
+{
+	cfs_list_del_init(&oseq->os_list);
+	ofd_seq_put(env, oseq);
+}
+
+/**
+ * Add a new sequence to the OFD device.
+ *
+ * \param ofd OFD device
+ * \param new_seq new sequence to be added
+ *
+ * \retval the seq to be added or the existing seq
+ **/
+static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
+				   struct ofd_device *ofd,
+				   struct ofd_seq *new_seq)
+{
+	struct ofd_seq *os = NULL;
+
+	write_lock(&ofd->ofd_seq_list_lock);
+	cfs_list_for_each_entry(os, &ofd->ofd_seq_list, os_list) {
+		if (os->os_seq == new_seq->os_seq) {
+			cfs_atomic_inc(&os->os_refc);
+			write_unlock(&ofd->ofd_seq_list_lock);
+			/* The seq has not been added to the list */
+			ofd_seq_put(env, new_seq);
+			return os;
+		}
+	}
+	cfs_atomic_inc(&new_seq->os_refc);
+	cfs_list_add_tail(&new_seq->os_list, &ofd->ofd_seq_list);
+	write_unlock(&ofd->ofd_seq_list_lock);
+	return new_seq;
+}
+
+obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
 {
 	obd_id id;
 
-	LASSERT(group <= ofd->ofd_max_group);
-
-	spin_lock(&ofd->ofd_objid_lock);
-	id = ofd->ofd_last_objids[group];
-	spin_unlock(&ofd->ofd_objid_lock);
+	spin_lock(&oseq->os_last_oid_lock);
+	id = oseq->os_last_oid;
+	spin_unlock(&oseq->os_last_oid_lock);
 
 	return id;
 }
 
-void ofd_last_id_set(struct ofd_device *ofd, obd_id id, obd_seq group)
+void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id)
 {
-	LASSERT(group <= ofd->ofd_max_group);
-	spin_lock(&ofd->ofd_objid_lock);
-	if (ofd->ofd_last_objids[group] < id)
-		ofd->ofd_last_objids[group] = id;
-	spin_unlock(&ofd->ofd_objid_lock);
+	spin_lock(&oseq->os_last_oid_lock);
+	if (likely(oseq->os_last_oid < id))
+		oseq->os_last_oid = id;
+	spin_unlock(&oseq->os_last_oid_lock);
 }
 
-int ofd_last_id_write(const struct lu_env *env, struct ofd_device *ofd,
-		      obd_seq group)
+int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
+			   struct ofd_seq *oseq)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	obd_id			 tmp;
@@ -114,17 +178,17 @@ int ofd_last_id_write(const struct lu_env *env, struct ofd_device *ofd,
 	info->fti_buf.lb_len = sizeof(tmp);
 	info->fti_off = 0;
 
-	CDEBUG(D_INODE, "%s: write last_objid for group "LPU64": "LPU64"\n",
-	       ofd_obd(ofd)->obd_name, group, ofd_last_id(ofd, group));
+	CDEBUG(D_INODE, "%s: write last_objid for seq "LPX64" : "LPX64"\n",
+	       ofd_name(ofd), oseq->os_seq, ofd_seq_last_oid(oseq));
 
-	tmp = cpu_to_le64(ofd_last_id(ofd, group));
+	tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
 
-	rc = ofd_record_write(env, ofd, ofd->ofd_lastid_obj[group],
-			      &info->fti_buf, &info->fti_off);
+	rc = ofd_record_write(env, ofd, oseq->os_lastid_obj, &info->fti_buf,
+			      &info->fti_off);
 	RETURN(rc);
 }
 
-int ofd_last_group_write(const struct lu_env *env, struct ofd_device *ofd)
+static int ofd_seq_count_write(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	obd_seq			 tmp;
@@ -136,50 +200,80 @@ int ofd_last_group_write(const struct lu_env *env, struct ofd_device *ofd)
 	info->fti_buf.lb_len = sizeof(tmp);
 	info->fti_off = 0;
 
-	tmp = cpu_to_le32(ofd->ofd_max_group);
+	tmp = cpu_to_le32(ofd->ofd_seq_count);
 
-	rc = ofd_record_write(env, ofd, ofd->ofd_last_group_file,
+	rc = ofd_record_write(env, ofd, ofd->ofd_seq_count_file,
 			      &info->fti_buf, &info->fti_off);
 
 	RETURN(rc);
 }
 
-void ofd_group_fini(const struct lu_env *env, struct ofd_device *ofd,
-		    int group)
+void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 {
-	LASSERT(ofd->ofd_lastid_obj[group]);
-	lu_object_put(env, &ofd->ofd_lastid_obj[group]->do_lu);
-	ofd->ofd_lastid_obj[group] = NULL;
+	struct ofd_seq  *oseq;
+	struct ofd_seq  *tmp;
+	cfs_list_t       dispose;
+
+	CFS_INIT_LIST_HEAD(&dispose);
+	write_lock(&ofd->ofd_seq_list_lock);
+	cfs_list_for_each_entry_safe(oseq, tmp, &ofd->ofd_seq_list, os_list) {
+		cfs_list_move(&oseq->os_list, &dispose);
+	}
+	write_unlock(&ofd->ofd_seq_list_lock);
+
+	while (!cfs_list_empty(&dispose)) {
+		oseq = container_of0(dispose.next, struct ofd_seq, os_list);
+		ofd_seq_delete(env, oseq);
+	}
+
+	LASSERT(cfs_list_empty(&ofd->ofd_seq_list));
+	return;
 }
 
-int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int group)
+struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
+			     obd_seq seq)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
+	struct ofd_seq		*oseq = NULL;
 	struct dt_object	*dob;
 	obd_id			 lastid;
 	int			 rc;
 
 	ENTRY;
 
-	/* if group is already initialized */
-	if (ofd->ofd_lastid_obj[group])
-		RETURN(0);
+	/* if seq is already initialized */
+	oseq = ofd_seq_get(ofd, seq);
+	if (oseq != NULL)
+		RETURN(oseq);
 
-	lu_local_obj_fid(&info->fti_fid, OFD_GROUP0_LAST_OID + group);
+	OBD_ALLOC_PTR(oseq);
+	if (oseq == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	lu_local_obj_fid(&info->fti_fid, OFD_GROUP0_LAST_OID + seq);
+
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
 	info->fti_attr.la_valid = LA_MODE;
 	info->fti_attr.la_mode = S_IFREG |  S_IRUGO | S_IWUSR;
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
-	/* create object tracking per-group last created
+	/* create object tracking per-seq last created
 	 * id to be used by orphan recovery mechanism */
 	dob = dt_find_or_create(env, ofd->ofd_osd, &info->fti_fid,
 				&info->fti_dof, &info->fti_attr);
-	if (IS_ERR(dob))
-		RETURN(PTR_ERR(dob));
+	if (IS_ERR(dob)) {
+		OBD_FREE_PTR(oseq);
+		RETURN((void *)dob);
+	}
 
-	ofd->ofd_lastid_obj[group] = dob;
-	mutex_init(&ofd->ofd_create_locks[group]);
+	oseq->os_lastid_obj = dob;
+
+	CFS_INIT_LIST_HEAD(&oseq->os_list);
+	mutex_init(&oseq->os_create_lock);
+	spin_lock_init(&oseq->os_last_oid_lock);
+	oseq->os_seq = seq;
+
+	cfs_atomic_set(&oseq->os_refc, 1);
 
 	rc = dt_attr_get(env, dob, &info->fti_attr, BYPASS_CAPA);
 	if (rc)
@@ -187,10 +281,9 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int group)
 
 	if (info->fti_attr.la_size == 0) {
 		/* object is just created, initialize last id */
-		ofd->ofd_last_objids[group] = OFD_INIT_OBJID;
-		ofd_last_id_set(ofd, OFD_INIT_OBJID, group);
-		ofd_last_id_write(env, ofd, group);
-		ofd_last_group_write(env, ofd);
+		oseq->os_last_oid = OFD_INIT_OBJID;
+		ofd_seq_last_oid_write(env, ofd, oseq);
+		ofd_seq_count_write(env, ofd);
 	} else if (info->fti_attr.la_size == sizeof(lastid)) {
 		info->fti_off = 0;
 		info->fti_buf.lb_buf = &lastid;
@@ -198,76 +291,84 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int group)
 
 		rc = dt_record_read(env, dob, &info->fti_buf, &info->fti_off);
 		if (rc) {
-			CERROR("can't read last_id: %d\n", rc);
+			CERROR("%s: can't read last_id: rc = %d\n",
+				ofd_name(ofd), rc);
 			GOTO(cleanup, rc);
 		}
-		ofd->ofd_last_objids[group] = le64_to_cpu(lastid);
+		oseq->os_last_oid = le64_to_cpu(lastid);
 	} else {
-		CERROR("corrupted size %Lu LAST_ID of group %u\n",
-		       (unsigned long long)info->fti_attr.la_size, group);
-		rc = -EINVAL;
+		CERROR("%s: corrupted size "LPU64" LAST_ID of seq "LPX64"\n",
+			ofd_name(ofd), (__u64)info->fti_attr.la_size, seq);
+		GOTO(cleanup, rc = -EINVAL);
 	}
 
-	RETURN(0);
+	oseq = ofd_seq_add(env, ofd, oseq);
+	RETURN(oseq);
 cleanup:
-	ofd_group_fini(env, ofd, group);
-	RETURN(rc);
+	ofd_seq_put(env, oseq);
+	return ERR_PTR(rc);
 }
 
-/* ofd groups managements */
-int ofd_groups_init(const struct lu_env *env, struct ofd_device *ofd)
+/* object sequence management */
+int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
-	unsigned long		 groups_size;
-	obd_seq			 last_group;
-	int			 rc = 0;
-	int			 i;
+	unsigned long		seq_count_size;
+	obd_seq			seq_count;
+	int			rc = 0;
+	int			i;
 
 	ENTRY;
 
-	spin_lock_init(&ofd->ofd_objid_lock);
+	rwlock_init(&ofd->ofd_seq_list_lock);
+	CFS_INIT_LIST_HEAD(&ofd->ofd_seq_list);
 
-	rc = dt_attr_get(env, ofd->ofd_last_group_file,
+	rc = dt_attr_get(env, ofd->ofd_seq_count_file,
 			 &info->fti_attr, BYPASS_CAPA);
 	if (rc)
 		GOTO(cleanup, rc);
 
-	groups_size = (unsigned long)info->fti_attr.la_size;
+	seq_count_size = (unsigned long)info->fti_attr.la_size;
 
-	if (groups_size == sizeof(last_group)) {
+	if (seq_count_size == sizeof(seq_count)) {
 		info->fti_off = 0;
-		info->fti_buf.lb_buf = &last_group;
-		info->fti_buf.lb_len = sizeof(last_group);
+		info->fti_buf.lb_buf = &seq_count;
+		info->fti_buf.lb_len = sizeof(seq_count);
 
-		rc = dt_record_read(env, ofd->ofd_last_group_file,
+		rc = dt_record_read(env, ofd->ofd_seq_count_file,
 				    &info->fti_buf, &info->fti_off);
 		if (rc) {
-			CERROR("can't read LAST_GROUP: %d\n", rc);
+			CERROR("%s: can't read LAST_GROUP: rc = %d\n",
+			       ofd_name(ofd), rc);
 			GOTO(cleanup, rc);
 		}
 
-		ofd->ofd_max_group = le32_to_cpu(last_group);
-		LASSERT(ofd->ofd_max_group <= OFD_MAX_GROUPS);
-	} else if (groups_size == 0) {
-		ofd->ofd_max_group = 0;
+		ofd->ofd_seq_count = le64_to_cpu(seq_count);
+	} else if (seq_count_size == 0) {
+		ofd->ofd_seq_count = 0;
 	} else {
-		CERROR("groups file is corrupted? size = %lu\n", groups_size);
+		CERROR("%s: seqs file is corrupted? size = %lu\n",
+		       ofd_name(ofd), seq_count_size);
 		GOTO(cleanup, rc = -EIO);
 	}
 
-	for (i = 0; i <= ofd->ofd_max_group; i++) {
-		rc = ofd_group_load(env, ofd, i);
-		if (rc) {
-			CERROR("can't load group %d: %d\n", i, rc);
-			/* Clean all previously set groups */
-			while (i > 0)
-				ofd_group_fini(env, ofd, --i);
+	for (i = 0; i <= ofd->ofd_seq_count; i++) {
+		struct ofd_seq *oseq;
+
+		oseq = ofd_seq_load(env, ofd, i);
+		if (IS_ERR(oseq)) {
+			CERROR("%s: can't load seq %d: rc = %d\n",
+			       ofd_name(ofd), i, rc);
+			/* Clean all previously set seqs */
+			ofd_seqs_fini(env, ofd);
 			GOTO(cleanup, rc);
+		} else {
+			ofd_seq_put(env, oseq);
 		}
 	}
 
-	CDEBUG(D_OTHER, "%s: %u groups initialized\n",
-	      ofd_obd(ofd)->obd_name, ofd->ofd_max_group + 1);
+	CDEBUG(D_OTHER, "%s: %u seqs initialized\n", ofd_name(ofd),
+	       ofd->ofd_seq_count + 1);
 cleanup:
 	RETURN(rc);
 }
@@ -300,8 +401,9 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		off = lsd->lsd_client_start + cl_idx * lsd->lsd_client_size;
 		rc = tgt_client_data_read(env, &ofd->ofd_lut, lcd, &off, cl_idx);
 		if (rc) {
-			CERROR("error reading FILT %s idx %d off %llu: rc %d\n",
-			       LAST_RCVD, cl_idx, off, rc);
+			CERROR("%s: error reading FILT %s idx %d off %llu: "
+			       "rc = %d\n", ofd_name(ofd), LAST_RCVD, cl_idx,
+			       off, rc);
 			rc = 0;
 			break; /* read error shouldn't cause startup to fail */
 		}
@@ -326,7 +428,8 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		if (IS_ERR(exp)) {
 			if (PTR_ERR(exp) == -EALREADY) {
 				/* export already exists, zero out this one */
-				CERROR("Duplicate export %s!\n", lcd->lcd_uuid);
+				CERROR("%s: Duplicate export %s!\n",
+				       ofd_name(ofd), lcd->lcd_uuid);
 				continue;
 			}
 			GOTO(err_out, rc = PTR_ERR(exp));
@@ -517,15 +620,15 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	if (IS_ERR(fo))
 		GOTO(out_hc, rc = PTR_ERR(fo));
 
-	ofd->ofd_last_group_file = fo;
+	ofd->ofd_seq_count_file = fo;
 
-	rc = ofd_groups_init(env, ofd);
+	rc = ofd_seqs_init(env, ofd);
 	if (rc)
 		GOTO(out_lg, rc);
 
 	RETURN(0);
 out_lg:
-	lu_object_put(env, &ofd->ofd_last_group_file->do_lu);
+	lu_object_put(env, &ofd->ofd_seq_count_file->do_lu);
 out_hc:
 	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
 out:
@@ -541,12 +644,7 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 
 	ofd_info_init(env, NULL);
 
-	for (i = 0; i <= ofd->ofd_max_group; i++) {
-		if (ofd->ofd_lastid_obj[i]) {
-			ofd_last_id_write(env, ofd, i);
-			ofd_group_fini(env, ofd, i);
-		}
-	}
+	ofd_seqs_fini(env, ofd);
 
 	i = dt_sync(env, ofd->ofd_osd);
 	if (i)
@@ -555,9 +653,9 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 	/* Remove transaction callback */
 	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 
-	if (ofd->ofd_last_group_file) {
-		lu_object_put(env, &ofd->ofd_last_group_file->do_lu);
-		ofd->ofd_last_group_file = NULL;
+	if (ofd->ofd_seq_count_file) {
+		lu_object_put(env, &ofd->ofd_seq_count_file->do_lu);
+		ofd->ofd_seq_count_file = NULL;
 	}
 
 	if (ofd->ofd_health_check_file) {

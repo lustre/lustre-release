@@ -146,7 +146,7 @@ void ofd_object_put(const struct lu_env *env, struct ofd_object *fo)
 }
 
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  obd_id id, obd_seq seq, int nr)
+			  obd_id id, struct ofd_seq *oseq, int nr)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_object	*fo = NULL;
@@ -162,14 +162,14 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	ENTRY;
 
 	/* Don't create objects beyond the valid range for this SEQ */
-	if (unlikely(fid_seq_is_mdt0(seq) && (id + nr) >= IDIF_MAX_OID)) {
+	if (unlikely(fid_seq_is_mdt0(oseq->os_seq) && (id + nr) >= IDIF_MAX_OID)) {
 		CERROR("%s:"POSTID" hit the IDIF_MAX_OID (1<<48)!\n",
-		       ofd_name(ofd), id, seq);
+		       ofd_name(ofd), id, oseq->os_seq);
 		RETURN(rc = -ENOSPC);
-	} else if (unlikely(!fid_seq_is_mdt0(seq) &&
-		   (id + nr) >= OBIF_MAX_OID)) {
+	} else if (unlikely(!fid_seq_is_mdt0(oseq->os_seq) &&
+			    (id + nr) >= OBIF_MAX_OID)) {
 		CERROR("%s:"POSTID" hit the OBIF_MAX_OID (1<<32)!\n",
-		       ofd_name(ofd), id, seq);
+		       ofd_name(ofd), id, oseq->os_seq);
 		RETURN(rc = -ENOSPC);
 	}
 
@@ -197,7 +197,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	/* prepare objects */
 	for (i = 0; i < nr; i++) {
 		info->fti_ostid.oi_id = id + i;
-		info->fti_ostid.oi_seq = seq;
+		info->fti_ostid.oi_seq = oseq->os_seq;
 
 		rc = fid_ostid_unpack(&info->fti_fid, &info->fti_ostid, 0);
 		if (rc) {
@@ -228,8 +228,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	rc = dt_declare_record_write(env, ofd->ofd_lastid_obj[seq],
-				     sizeof(tmp), info->fti_off, th);
+	rc = dt_declare_record_write(env, oseq->os_lastid_obj, sizeof(tmp),
+				     info->fti_off, th);
 	if (rc)
 		GOTO(trans_stop, rc);
 
@@ -239,8 +239,9 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 		if (unlikely(ofd_object_exists(fo))) {
 			/* object may exist being re-created by write replay */
-			CDEBUG(D_INODE, "object "LPD64"/"LPD64" exists: "
-			       DFID"\n", seq, id, PFID(&info->fti_fid));
+			CDEBUG(D_INODE, "object "LPX64"/"LPX64" exists: "
+			       DFID"\n", oseq->os_seq, id,
+			       PFID(&info->fti_fid));
 			continue;
 		}
 
@@ -275,13 +276,13 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 				break;
 			LASSERT(ofd_object_exists(fo));
 		}
-		ofd_last_id_set(ofd, id + i, seq);
+		ofd_seq_last_oid_set(oseq, id + i);
 	}
 
 	objects = i;
 	if (objects > 0) {
-		tmp = cpu_to_le64(ofd_last_id(ofd, seq));
-		rc = dt_record_write(env, ofd->ofd_lastid_obj[seq],
+		tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
+		rc = dt_record_write(env, oseq->os_lastid_obj,
 				     &info->fti_buf, &info->fti_off, th);
 	}
 trans_stop:

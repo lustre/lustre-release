@@ -273,8 +273,8 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	struct obd_export	*exp;
 	struct ofd_device	*ofd;
 	struct lustre_handle	 conn = { 0 };
-	int			 rc, group;
-
+	int			 rc;
+	obd_seq			seq;
 	ENTRY;
 
 	if (_exp == NULL || obd == NULL || cluuid == NULL)
@@ -301,7 +301,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	if (rc)
 		GOTO(out, rc);
 
-	group = data->ocd_group;
+	seq = data->ocd_group;
 	if (obd->obd_replayable) {
 		struct tg_export_data *ted = &exp->exp_target_data;
 
@@ -312,14 +312,24 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 			GOTO(out, rc);
 		ofd_export_stats_init(ofd, exp, localdata);
 	}
-	if (group == 0)
+	if (seq == 0)
 		GOTO(out, rc = 0);
 
-	/* init new group */
-	if (group > ofd->ofd_max_group) {
-		ofd->ofd_max_group = group;
-		rc = ofd_group_load(env, ofd, group);
+	/* init new seq */
+	if (seq > ofd->ofd_seq_count) {
+		struct ofd_seq *oseq;
+
+		ofd->ofd_seq_count = seq;
+		oseq = ofd_seq_load(env, ofd, seq);
+		if (IS_ERR(oseq)) {
+			CERROR("%s: load oseq "LPX64" error: rc = %ld\n",
+			       ofd_name(ofd), oseq->os_seq, PTR_ERR(oseq));
+			GOTO(out, rc = PTR_ERR(oseq));
+		} else {
+			ofd_seq_put(env, oseq);
+		}
 	}
+
 out:
 	if (rc != 0) {
 		class_disconnect(exp);
@@ -558,12 +568,18 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		*vallen = sizeof(*blocksize_bits);
 	} else if (KEY_IS(KEY_LAST_ID)) {
 		obd_id *last_id = val;
+		struct ofd_seq *oseq;
+
+		oseq = ofd_seq_get(ofd, exp->exp_filter_data.fed_group);
+		LASSERT(oseq != NULL);
 		if (last_id) {
-			if (*vallen < sizeof(*last_id))
+			if (*vallen < sizeof(*last_id)) {
+				ofd_seq_put(env, oseq);
 				RETURN(-EOVERFLOW);
-			*last_id = ofd_last_id(ofd,
-					       exp->exp_filter_data.fed_group);
+			}
+			*last_id = ofd_seq_last_oid(oseq);
 		}
+		ofd_seq_put(env, oseq);
 		*vallen = sizeof(*last_id);
 	} else if (KEY_IS(KEY_FIEMAP)) {
 		struct ofd_thread_info		*info;
@@ -1059,15 +1075,24 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	int			 skip_orphan;
 	int			 rc = 0;
 	struct ost_id		 oi = oa->o_oi;
+	struct ofd_seq		*oseq;
 
 	ENTRY;
+
+	oseq = ofd_seq_get(ofd, oa->o_seq);
+	if (oseq == NULL) {
+		CERROR("%s: Can not find seq for "LPU64":"LPU64"\n",
+		       ofd_name(ofd), oa->o_seq, oa->o_id);
+		RETURN(-EINVAL);
+	}
 
 	LASSERT(exp != NULL);
 	skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
 
-	last = ofd_last_id(ofd, oa->o_seq);
-	LCONSOLE_INFO("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
-		      ofd_obd(ofd)->obd_name, oa->o_id + 1, last);
+	last = ofd_seq_last_oid(oseq);
+	LCONSOLE_INFO("%s: deleting orphan objects from "LPX64":"LPU64
+		      " to "LPU64"\n", ofd_name(ofd), oa->o_seq,
+		      oa->o_id + 1, last);
 
 	for (oi.oi_id = last; oi.oi_id > oa->o_id; oi.oi_id--) {
 		fid_ostid_unpack(&info->fti_fid, &oi, 0);
@@ -1076,23 +1101,24 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 			CEMERG("error destroying precreated id "LPU64": %d\n",
 			       oi.oi_id, rc);
 		if (!skip_orphan) {
-			ofd_last_id_set(ofd, oi.oi_id - 1, oa->o_seq);
+			ofd_seq_last_oid_set(oseq, oi.oi_id - 1);
 			/* update last_id on disk periodically so that if we
 			 * restart * we don't need to re-scan all of the just
 			 * deleted objects. */
 			if ((oi.oi_id & 511) == 0)
-				ofd_last_id_write(env, ofd, oa->o_seq);
+				ofd_seq_last_oid_write(env, ofd, oseq);
 		}
 	}
 	CDEBUG(D_HA, "%s: after destroy: set last_objids["LPU64"] = "LPU64"\n",
 	       ofd_obd(ofd)->obd_name, oa->o_seq, oa->o_id);
 	if (!skip_orphan) {
-		rc = ofd_last_id_write(env, ofd, oa->o_seq);
+		rc = ofd_seq_last_oid_write(env, ofd, oseq);
 	} else {
 		/* don't reuse orphan object, return last used objid */
 		oa->o_id = last;
 		rc = 0;
 	}
+	ofd_seq_put(env, oseq);
 	RETURN(rc);
 }
 
@@ -1102,6 +1128,8 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
+	obd_seq			seq = oa->o_seq;
+	struct ofd_seq		*oseq;
 	int			 rc = 0, diff;
 
 	ENTRY;
@@ -1113,14 +1141,20 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
 	CDEBUG(D_INFO, "ofd_create(oa->o_seq="LPU64",oa->o_id="LPU64")\n",
-	       oa->o_seq, oa->o_id);
+	       seq, oa->o_id);
+
+	oseq = ofd_seq_get(ofd, seq);
+	if (oseq == NULL) {
+		CERROR("%s: Can't find oseq "LPX64"\n", ofd_name(ofd), seq);
+		RETURN(-EINVAL);
+	}
 
 	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
 	    (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
 		if (!ofd_obd(ofd)->obd_recovering ||
-		    oa->o_id > ofd_last_id(ofd, oa->o_seq)) {
+		    oa->o_id > ofd_seq_last_oid(oseq)) {
 			CERROR("recreate objid "LPU64" > last id "LPU64"\n",
-					oa->o_id, ofd_last_id(ofd, oa->o_seq));
+					oa->o_id, ofd_seq_last_oid(oseq));
 			GOTO(out_nolock, rc = -EINVAL);
 		}
 		/* do nothing because we create objects during first write */
@@ -1132,42 +1166,42 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 		/* destroy orphans */
 		if (oti->oti_conn_cnt < exp->exp_conn_cnt) {
 			CERROR("%s: dropping old orphan cleanup request\n",
-			       ofd_obd(ofd)->obd_name);
+			       ofd_name(ofd));
 			GOTO(out_nolock, rc = 0);
 		}
 		/* This causes inflight precreates to abort and drop lock */
-		set_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
-		mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
-		if (!test_bit(oa->o_seq, &ofd->ofd_destroys_in_progress)) {
+		oseq->os_destroys_in_progress = 1;
+		mutex_lock(&oseq->os_create_lock);
+		if (!oseq->os_destroys_in_progress) {
 			CERROR("%s:["LPU64"] destroys_in_progress already cleared\n",
 			       exp->exp_obd->obd_name, oa->o_seq);
 			GOTO(out, rc = 0);
 		}
-		diff = oa->o_id - ofd_last_id(ofd, oa->o_seq);
+		diff = oa->o_id - ofd_seq_last_oid(oseq);
 		CDEBUG(D_HA, "ofd_last_id() = "LPU64" -> diff = %d\n",
-		       ofd_last_id(ofd, oa->o_seq), diff);
+			ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
 			/* FIXME: should reset precreate_next_id on MDS */
 			rc = 0;
 		} else if (diff < 0) {
 			rc = ofd_orphans_destroy(env, exp, ofd, oa);
-			clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
+			oseq->os_destroys_in_progress = 0;
 		} else {
 			/* XXX: Used by MDS for the first time! */
-			clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
+			oseq->os_destroys_in_progress = 0;
 		}
 	} else {
-		mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
+		mutex_lock(&oseq->os_create_lock);
 		if (oti->oti_conn_cnt < exp->exp_conn_cnt) {
 			CERROR("%s: dropping old precreate request\n",
-			       ofd_obd(ofd)->obd_name);
+				ofd_obd(ofd)->obd_name);
 			GOTO(out, rc = 0);
 		}
-		/* only precreate if group == 0 and o_id is specfied */
+		/* only precreate if seq == 0 and o_id is specfied */
 		if (!fid_seq_is_mdt(oa->o_seq) || oa->o_id == 0) {
 			diff = 1; /* shouldn't we create this right now? */
 		} else {
-			diff = oa->o_id - ofd_last_id(ofd, oa->o_seq);
+			diff = oa->o_id - ofd_seq_last_oid(oseq);
 		}
 	}
 	if (diff > 0) {
@@ -1185,13 +1219,13 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 			if (rc) {
 				CDEBUG(D_HA, "%s: failed to acquire grant space"
 				       "for precreate (%d)\n",
-				       ofd_obd(ofd)->obd_name, diff);
+				       ofd_name(ofd), diff);
 				diff = 0;
 			}
 		}
 
 		while (diff > 0) {
-			next_id = ofd_last_id(ofd, oa->o_seq) + 1;
+			next_id = ofd_seq_last_oid(oseq) + 1;
 			count = ofd_precreate_batch(ofd, diff);
 
 			CDEBUG(D_HA, "%s: reserve %d objects in group "LPU64
@@ -1208,7 +1242,7 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 			}
 
 			rc = ofd_precreate_objects(env, ofd, next_id,
-						   oa->o_seq, count);
+						   oseq, count);
 			if (rc > 0) {
 				created += rc;
 				diff -= rc;
@@ -1216,16 +1250,14 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 				break;
 			}
 		}
-		if (created > 0) {
+		if (created > 0)
 			/* some objects got created, we can return
 			 * them, even if last creation failed */
-			oa->o_id = ofd_last_id(ofd, oa->o_seq);
 			rc = 0;
-		} else {
+		else
 			CERROR("unable to precreate: %d\n", rc);
-			oa->o_id = ofd_last_id(ofd, oa->o_seq);
-		}
 
+		oa->o_id = ofd_seq_last_oid(oseq);
 		oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
 
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
@@ -1236,14 +1268,15 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_info2oti(info, oti);
 out:
-	mutex_unlock(&ofd->ofd_create_locks[oa->o_seq]);
+	mutex_unlock(&oseq->os_create_lock);
 out_nolock:
 	if (rc == 0 && ea != NULL) {
 		struct lov_stripe_md *lsm = *ea;
 
 		lsm->lsm_object_id = oa->o_id;
 	}
-	return rc;
+	ofd_seq_put(env, oseq);
+	RETURN(rc);
 }
 
 int ofd_getattr(const struct lu_env *env, struct obd_export *exp,

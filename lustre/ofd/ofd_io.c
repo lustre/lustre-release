@@ -214,15 +214,28 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 	struct ofd_thread_info	*info;
 	int			 rc = 0;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT) &&
-	    ofd->ofd_destroys_in_progress == 0) {
-		/* don't fail lookups for orphan recovery, it causes
-		 * later LBUGs when objects still exist during precreate */
-		CDEBUG(D_INFO, "*** obd_fail_loc=%x ***\n",OBD_FAIL_OST_ENOENT);
-		RETURN(-ENOENT);
-	}
-
+	rc = lu_env_refill((struct lu_env *)env);
+	LASSERT(rc == 0);
 	info = ofd_info_init(env, exp);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
+		struct ofd_seq		*oseq;
+		oseq = ofd_seq_load(env, ofd, oa->o_seq);
+		if (oseq == NULL) {
+			CERROR("%s: Can not find seq for "LPU64":"LPU64"\n",
+				ofd_name(ofd), oa->o_seq, oa->o_id);
+			RETURN(-EINVAL);
+		}
+
+		if (oseq->os_destroys_in_progress == 0) {
+			/* don't fail lookups for orphan recovery, it causes
+			 * later LBUGs when objects still exist during
+			 * precreate */
+			ofd_seq_put(env, oseq);
+			RETURN(-ENOENT);
+		}
+		ofd_seq_put(env, oseq);
+	}
 
 	LASSERT(objcount == 1);
 	LASSERT(obj->ioo_bufcnt > 0);

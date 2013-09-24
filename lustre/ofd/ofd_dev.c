@@ -523,8 +523,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_tot_dirty = 0;
 	m->ofd_tot_granted = 0;
 	m->ofd_tot_pending = 0;
-	m->ofd_max_group = 0;
+	m->ofd_seq_count = 0;
 
+	spin_lock_init(&m->ofd_batch_lock);
 	rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
 	sptlrpc_rule_set_init(&obd->u.filter.fo_sptlrpc_rset);
 

@@ -46,14 +46,14 @@
 
 #ifdef LPROCFS
 
-static int lprocfs_ofd_rd_groups(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
+static int lprocfs_ofd_rd_seqs(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
 	*eof = 1;
-	return snprintf(page, count, "%u\n", ofd->ofd_max_group);
+	return snprintf(page, count, "%u\n", ofd->ofd_seq_count);
 }
 
 static int lprocfs_ofd_rd_tot_dirty(char *page, char **start, off_t off,
@@ -166,9 +166,9 @@ static int lprocfs_ofd_wr_precreate_batch(struct file *file, const char *buffer,
 	if (val < 1)
 		return -EINVAL;
 
-	spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_batch_lock);
 	ofd->ofd_precreate_batch = val;
-	spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_batch_lock);
 	return count;
 }
 
@@ -177,13 +177,16 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 {
 	struct obd_device	*obd = data;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 retval = 0, rc, i;
+	struct ofd_seq		*oseq = NULL;
+	int			retval = 0, rc;
 
 	if (obd == NULL)
 		return 0;
 
-	for (i = FID_SEQ_OST_MDT0; i <= ofd->ofd_max_group; i++) {
-		rc = snprintf(page, count, LPU64"\n", ofd_last_id(ofd, i));
+	read_lock(&ofd->ofd_seq_list_lock);
+	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
+		rc = snprintf(page, count, LPX64": "LPX64"\n",
+			      oseq->os_seq, ofd_seq_last_oid(oseq));
 		if (rc < 0) {
 			retval = rc;
 			break;
@@ -192,6 +195,7 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 		count -= rc;
 		retval += rc;
 	}
+	read_unlock(&ofd->ofd_seq_list_lock);
 	return retval;
 }
 
@@ -460,7 +464,7 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "kbytesavail",	 lprocfs_rd_kbytesavail, 0, 0 },
 	{ "filestotal",		 lprocfs_rd_filestotal, 0, 0 },
 	{ "filesfree",		 lprocfs_rd_filesfree, 0, 0 },
-	{ "filegroups",		 lprocfs_ofd_rd_groups, 0, 0 },
+	{ "seqs_allocated",	 lprocfs_ofd_rd_seqs, 0, 0 },
 	{ "fstype",		 lprocfs_ofd_rd_fstype, 0, 0 },
 	{ "last_id",		 lprocfs_ofd_rd_last_id, 0, 0 },
 	{ "tot_dirty",		 lprocfs_ofd_rd_tot_dirty,   0, 0 },
