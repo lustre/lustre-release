@@ -4461,7 +4461,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 
 	rc = osd_shutdown(env, osd_dev(d));
 
-        osd_compat_fini(osd_dev(d));
+	osd_obj_map_fini(osd_dev(d));
 
         shrink_dcache_sb(osd_sb(osd_dev(d)));
         osd_sync(env, lu2dt_dev(d));
@@ -4522,7 +4522,7 @@ static int osd_device_init0(const struct lu_env *env,
 	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname) - 1);
 
-	rc = osd_compat_init(o);
+	rc = osd_obj_map_init(o);
 	if (rc != 0)
 		GOTO(out_scrub, rc);
 
@@ -4559,7 +4559,7 @@ out_procfs:
 out_site:
 	lu_site_fini(&o->od_site);
 out_compat:
-	osd_compat_fini(o);
+	osd_obj_map_fini(o);
 out_scrub:
 	osd_scrub_cleanup(env, o);
 out_mnt:

@@ -140,6 +140,23 @@ struct osd_object {
 #endif
 };
 
+struct osd_obj_seq {
+	/* protects on-fly initialization */
+	int		 oos_subdir_count; /* subdir count for each seq */
+	struct dentry	 *oos_root;	   /* O/<seq> */
+	struct dentry	 **oos_dirs;	   /* O/<seq>/d0-dXX */
+	obd_seq		 oos_seq;	   /* seq number */
+	cfs_list_t	 oos_seq_list;     /* list to seq_list */
+};
+
+struct osd_obj_map {
+	struct dentry	 *om_root;	  /* dentry for /O */
+	rwlock_t	 om_seq_list_lock; /* lock for seq_list */
+	cfs_list_t	 om_seq_list;      /* list head for seq */
+	int		 om_subdir_count;
+	struct semaphore om_dir_init_sem;
+};
+
 #ifdef HAVE_LDISKFS_PDO
 
 #define osd_ldiskfs_find_entry(dir, dentry, de, lock)   \
@@ -277,10 +294,7 @@ struct osd_device {
 	int			  od_connects;
 	struct lu_site		  od_site;
 
-        /*
-         * mapping for legacy OST objids
-         */
-        struct osd_compat_objid  *od_ost_map;
+	struct osd_obj_map	*od_ost_map;
 
         unsigned long long        od_readcache_max_filesize;
         int                       od_read_cache;
@@ -651,25 +665,20 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 			   struct osd_inode_id *id, struct lu_fid *fid);
 
-int osd_compat_init(struct osd_device *dev);
-void osd_compat_fini(struct osd_device *dev);
-int osd_compat_objid_lookup(struct osd_thread_info *info,
-                            struct osd_device *osd,
-                            const struct lu_fid *fid, struct osd_inode_id *id);
-int osd_compat_objid_insert(struct osd_thread_info *info,
-                            struct osd_device *osd,
-                            const struct lu_fid *fid,
-                            const struct osd_inode_id *id, struct thandle *th);
-int osd_compat_objid_delete(struct osd_thread_info *info,
-                            struct osd_device *osd,
-                            const struct lu_fid *fid, struct thandle *th);
-int osd_compat_spec_lookup(struct osd_thread_info *info,
-                           struct osd_device *osd,
-                           const struct lu_fid *fid, struct osd_inode_id *id);
-int osd_compat_spec_insert(struct osd_thread_info *info,
-                           struct osd_device *osd,
-                           const struct lu_fid *fid,
-                           const struct osd_inode_id *id, struct thandle *th);
+int osd_obj_map_init(struct osd_device *osd);
+void osd_obj_map_fini(struct osd_device *dev);
+int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *osd,
+			const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_obj_map_insert(struct osd_thread_info *info, struct osd_device *osd,
+		       const struct lu_fid *fid, const struct osd_inode_id *id,
+		       struct thandle *th);
+int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
+			const struct lu_fid *fid, struct thandle *th);
+int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
+			const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
+			const struct lu_fid *fid, const struct osd_inode_id *id,
+			struct thandle *th);
 
 void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags);
 int osd_scrub_file_store(struct osd_scrub *scrub);
@@ -815,6 +824,17 @@ static inline journal_t *osd_journal(const struct osd_device *dev)
 {
         return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
+
+static inline struct md_site *osd_md_site(struct osd_device *osd)
+{
+	return osd->od_dt_dev.dd_lu_dev.ld_site->ld_md_site;
+}
+
+static inline char *osd_name(struct osd_device *osd)
+{
+	return osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name;
+}
+
 
 extern const struct dt_body_operations osd_body_ops;
 extern struct lu_context_key osd_key;
