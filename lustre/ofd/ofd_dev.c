@@ -44,6 +44,7 @@
 
 #include <obd_class.h>
 #include <lustre_param.h>
+#include <lustre_fid.h>
 
 #include "ofd_internal.h"
 
@@ -478,6 +479,82 @@ static int ofd_procfs_fini(struct ofd_device *ofd)
 }
 
 extern int ost_handle(struct ptlrpc_request *req);
+
+int ofd_fid_fini(const struct lu_env *env, struct ofd_device *ofd)
+{
+	return seq_site_fini(env, &ofd->ofd_seq_site);
+}
+
+int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
+{
+	struct seq_server_site	*ss = &ofd->ofd_seq_site;
+	struct lu_device	*lu = &ofd->ofd_dt_dev.dd_lu_dev;
+	char			*obd_name = ofd_name(ofd);
+	char			*name = NULL;
+	int			rc = 0;
+
+	ss = &ofd->ofd_seq_site;
+	lu->ld_site->ld_seq_site = ss;
+	ss->ss_lu = lu->ld_site;
+	ss->ss_node_id = ofd->ofd_lut.lut_lsd.lsd_osd_index;
+
+	OBD_ALLOC_PTR(ss->ss_server_seq);
+	if (ss->ss_server_seq == NULL)
+		GOTO(out_free, rc = -ENOMEM);
+
+	OBD_ALLOC(name, strlen(obd_name) + 10);
+	if (!name) {
+		OBD_FREE_PTR(ss->ss_server_seq);
+		ss->ss_server_seq = NULL;
+		GOTO(out_free, rc = -ENOMEM);
+	}
+
+	rc = seq_server_init(ss->ss_server_seq, ofd->ofd_osd, obd_name,
+			     LUSTRE_SEQ_SERVER, ss, env);
+	if (rc) {
+		CERROR("%s : seq server init error %d\n", obd_name, rc);
+		GOTO(out_free, rc);
+	}
+	ss->ss_server_seq->lss_space.lsr_index = ss->ss_node_id;
+
+	OBD_ALLOC_PTR(ss->ss_client_seq);
+	if (ss->ss_client_seq == NULL)
+		GOTO(out_free, -ENOMEM);
+
+	snprintf(name, strlen(obd_name) + 6, "%p-super", obd_name);
+	rc = seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,
+			     name, NULL);
+	if (rc) {
+		CERROR("%s : seq client init error %d\n", obd_name, rc);
+		GOTO(out_free, rc);
+	}
+	OBD_FREE(name, strlen(obd_name) + 10);
+	name = NULL;
+
+	rc = seq_server_set_cli(ss->ss_server_seq, ss->ss_client_seq, env);
+
+out_free:
+	if (rc) {
+		if (ss->ss_server_seq) {
+			seq_server_fini(ss->ss_server_seq, env);
+			OBD_FREE_PTR(ss->ss_server_seq);
+			ss->ss_server_seq = NULL;
+		}
+
+		if (ss->ss_client_seq) {
+			seq_client_fini(ss->ss_client_seq);
+			OBD_FREE_PTR(ss->ss_client_seq);
+			ss->ss_client_seq = NULL;
+		}
+
+		if (name) {
+			OBD_FREE(name, strlen(obd_name) + 10);
+			name = NULL;
+		}
+	}
+
+	return rc;
+}
 
 static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)

@@ -169,26 +169,31 @@ extern const struct lu_fid LU_OBF_FID;
 extern const struct lu_fid LU_DOT_LUSTRE_FID;
 
 enum {
-        /*
-         * This is how may FIDs may be allocated in one sequence(128k)
-         */
-        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
+	/*
+	 * This is how may metadata FIDs may be allocated in one sequence(128k)
+	 */
+	LUSTRE_METADATA_SEQ_MAX_WIDTH = 0x0000000000020000ULL,
 
-        /*
-         * How many sequences to allocate to a client at once.
-         */
-        LUSTRE_SEQ_META_WIDTH = 0x0000000000000001ULL,
+	/*
+	 * This is how many data FIDs could be allocated in one sequence(4B - 1)
+	 */
+	LUSTRE_DATA_SEQ_MAX_WIDTH = 0x00000000FFFFFFFFULL,
 
-         /*
-          * seq allocation pool size.
-          */
-        LUSTRE_SEQ_BATCH_WIDTH = LUSTRE_SEQ_META_WIDTH * 1000,
+	/*
+	 * How many sequences to allocate to a client at once.
+	 */
+	LUSTRE_SEQ_META_WIDTH = 0x0000000000000001ULL,
 
-        /*
-         * This is how many sequences may be in one super-sequence allocated to
-         * MDTs.
-         */
-        LUSTRE_SEQ_SUPER_WIDTH = ((1ULL << 30ULL) * LUSTRE_SEQ_META_WIDTH)
+	/*
+	 * seq allocation pool size.
+	 */
+	LUSTRE_SEQ_BATCH_WIDTH = LUSTRE_SEQ_META_WIDTH * 1000,
+
+	/*
+	 * This is how many sequences may be in one super-sequence allocated to
+	 * MDTs.
+	 */
+	LUSTRE_SEQ_SUPER_WIDTH = ((1ULL << 30ULL) * LUSTRE_SEQ_META_WIDTH)
 };
 
 enum {
@@ -427,6 +432,7 @@ int seq_client_alloc_fid(const struct lu_env *env, struct lu_client_seq *seq,
 int seq_client_get_seq(const struct lu_env *env, struct lu_client_seq *seq,
                        seqno_t *seqnr);
 
+int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss);
 /* Fids common stuff */
 int fid_is_local(const struct lu_env *env,
                  struct lu_site *site, const struct lu_fid *fid);

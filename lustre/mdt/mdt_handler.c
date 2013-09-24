@@ -3753,31 +3753,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 static int mdt_seq_fini(const struct lu_env *env,
                         struct mdt_device *m)
 {
-	struct seq_server_site *ss = mdt_seq_site(m);
-	ENTRY;
-
-	if (ss == NULL)
-		RETURN(0);
-
-	if (ss->ss_server_seq) {
-		seq_server_fini(ss->ss_server_seq, env);
-		OBD_FREE_PTR(ss->ss_server_seq);
-		ss->ss_server_seq = NULL;
-	}
-
-	if (ss->ss_control_seq) {
-		seq_server_fini(ss->ss_control_seq, env);
-		OBD_FREE_PTR(ss->ss_control_seq);
-		ss->ss_control_seq = NULL;
-	}
-
-	if (ss->ss_client_seq) {
-		seq_client_fini(ss->ss_client_seq);
-		OBD_FREE_PTR(ss->ss_client_seq);
-		ss->ss_client_seq = NULL;
-	}
-
-	RETURN(0);
+	return seq_site_fini(env, mdt_seq_site(m));
 }
 
 static int mdt_seq_init(const struct lu_env *env,

@@ -275,14 +275,14 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
                 RETURN(rc);
         }
 
-        if (val <= LUSTRE_SEQ_MAX_WIDTH && val > 0) {
-                seq->lcs_width = val;
+	if (val <= LUSTRE_METADATA_SEQ_MAX_WIDTH && val > 0) {
+		seq->lcs_width = val;
 
-                if (rc == 0) {
-                        CDEBUG(D_INFO, "%s: Sequence size: "LPU64"\n",
-                               seq->lcs_name, seq->lcs_width);
-                }
-        }
+		if (rc == 0) {
+			CDEBUG(D_INFO, "%s: Sequence size: "LPU64"\n",
+			       seq->lcs_name, seq->lcs_width);
+		}
+	}
 
 	mutex_unlock(&seq->lcs_mutex);
 

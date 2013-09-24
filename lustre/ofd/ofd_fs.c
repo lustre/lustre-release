@@ -189,11 +189,28 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 	RETURN(rc);
 }
 
+static void ofd_deregister_seq_exp(struct ofd_device *ofd)
+{
+	struct seq_server_site	*ss = &ofd->ofd_seq_site;
+
+	if (ss->ss_client_seq != NULL) {
+		lustre_deregister_osp_item(&ss->ss_client_seq->lcs_exp);
+		ss->ss_client_seq->lcs_exp = NULL;
+	}
+}
+
 void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct ofd_seq  *oseq;
 	struct ofd_seq  *tmp;
 	cfs_list_t       dispose;
+	int		rc;
+
+	ofd_deregister_seq_exp(ofd);
+
+	rc = ofd_fid_fini(env, ofd);
+	if (rc != 0)
+		CERROR("%s: fid fini error: rc = %d\n", ofd_name(ofd), rc);
 
 	CFS_INIT_LIST_HEAD(&dispose);
 	write_lock(&ofd->ofd_seq_list_lock);
@@ -288,13 +305,50 @@ cleanup:
 	return ERR_PTR(rc);
 }
 
+static int ofd_register_seq_exp(struct ofd_device *ofd)
+{
+	struct seq_server_site	*ss = &ofd->ofd_seq_site;
+	char			*osp_name = NULL;
+	int			rc;
+
+	OBD_ALLOC(osp_name, MAX_OBD_NAME);
+	if (osp_name == NULL)
+		GOTO(out_free, rc = -ENOMEM);
+
+	rc = tgt_name2ospname(ofd_name(ofd), osp_name);
+	if (rc != 0)
+		GOTO(out_free, rc);
+
+	rc = lustre_register_osp_item(osp_name, &ss->ss_client_seq->lcs_exp,
+				      NULL, NULL);
+out_free:
+	if (osp_name != NULL)
+		OBD_FREE(osp_name, MAX_OBD_NAME);
+
+	return rc;
+}
+
 /* object sequence management */
 int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 {
+	int rc;
+
+	rc = ofd_fid_init(env, ofd);
+	if (rc != 0) {
+		CERROR("%s: fid init error: rc = %d\n", ofd_name(ofd), rc);
+		return rc;
+	}
+
+	rc = ofd_register_seq_exp(ofd);
+	if (rc) {
+		CERROR("%s: Can't init seq exp, rc %d\n", ofd_name(ofd), rc);
+		return rc;
+	}
+
 	rwlock_init(&ofd->ofd_seq_list_lock);
 	CFS_INIT_LIST_HEAD(&ofd->ofd_seq_list);
 	ofd->ofd_seq_count = 0;
-	return 0;
+	return rc;
 }
 
 int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,

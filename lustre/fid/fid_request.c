@@ -278,11 +278,11 @@ int seq_client_get_seq(const struct lu_env *env,
         CDEBUG(D_INFO, "%s: allocate sequence "
                "[0x%16.16"LPF64"x]\n", seq->lcs_name, *seqnr);
 
-        /*Since the caller require the whole seq,
-         *so marked this seq to be used*/
-        seq->lcs_fid.f_oid = LUSTRE_SEQ_MAX_WIDTH;
-        seq->lcs_fid.f_seq = *seqnr;
-        seq->lcs_fid.f_ver = 0;
+	/*Since the caller require the whole seq,
+	 *so marked this seq to be used*/
+	seq->lcs_fid.f_oid = LUSTRE_METADATA_SEQ_MAX_WIDTH;
+	seq->lcs_fid.f_seq = *seqnr;
+	seq->lcs_fid.f_ver = 0;
 
         /*
          * Inform caller that sequence switch is performed to allow it
@@ -460,36 +460,37 @@ int seq_client_init(struct lu_client_seq *seq,
                     const char *prefix,
                     struct lu_server_seq *srv)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        LASSERT(seq != NULL);
-        LASSERT(prefix != NULL);
+	LASSERT(seq != NULL);
+	LASSERT(prefix != NULL);
 
-        seq->lcs_exp = exp;
-        seq->lcs_srv = srv;
-        seq->lcs_type = type;
+	seq->lcs_srv = srv;
+	seq->lcs_type = type;
+
 	mutex_init(&seq->lcs_mutex);
-        seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
-        cfs_waitq_init(&seq->lcs_waitq);
+	if (type == LUSTRE_SEQ_METADATA)
+		seq->lcs_width = LUSTRE_METADATA_SEQ_MAX_WIDTH;
+	else
+		seq->lcs_width = LUSTRE_DATA_SEQ_MAX_WIDTH;
 
-        /* Make sure that things are clear before work is started. */
-        seq_client_flush(seq);
+	cfs_waitq_init(&seq->lcs_waitq);
+	/* Make sure that things are clear before work is started. */
+	seq_client_flush(seq);
 
-        if (exp == NULL) {
-                LASSERT(seq->lcs_srv != NULL);
-        } else {
-                LASSERT(seq->lcs_exp != NULL);
-                seq->lcs_exp = class_export_get(seq->lcs_exp);
-        }
+	if (exp != NULL)
+		seq->lcs_exp = class_export_get(exp);
+	else if (type == LUSTRE_SEQ_METADATA)
+		LASSERT(seq->lcs_srv != NULL);
 
-        snprintf(seq->lcs_name, sizeof(seq->lcs_name),
-                 "cli-%s", prefix);
+	snprintf(seq->lcs_name, sizeof(seq->lcs_name),
+		 "cli-%s", prefix);
 
-        rc = seq_client_proc_init(seq);
-        if (rc)
-                seq_client_fini(seq);
-        RETURN(rc);
+	rc = seq_client_proc_init(seq);
+	if (rc)
+		seq_client_fini(seq);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(seq_client_init);
 

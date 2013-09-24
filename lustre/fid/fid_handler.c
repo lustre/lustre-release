@@ -80,11 +80,11 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 GOTO(out_up, rc = 0);
         }
 
-        if (seq->lss_cli != NULL) {
-                CERROR("%s: Sequence controller is already "
-                       "assigned\n", seq->lss_name);
-                GOTO(out_up, rc = -EINVAL);
-        }
+	if (seq->lss_cli != NULL) {
+		CDEBUG(D_HA, "%s: Sequence controller is already "
+		       "assigned\n", seq->lss_name);
+		GOTO(out_up, rc = -EEXIST);
+	}
 
         CDEBUG(D_INFO, "%s: Attached sequence controller %s\n",
                seq->lss_name, cli->lcs_name);
@@ -365,7 +365,7 @@ static int seq_req_handle(struct ptlrpc_request *req,
 LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 
 /* context key: seq_thread_key */
-LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD);
+LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD | LCT_DT_THREAD);
 
 static void seq_thread_info_init(struct ptlrpc_request *req,
                                  struct seq_thread_info *info)
@@ -556,6 +556,33 @@ void seq_server_fini(struct lu_server_seq *seq,
         EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
+
+int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss)
+{
+	if (ss == NULL)
+		RETURN(0);
+
+	if (ss->ss_server_seq) {
+		seq_server_fini(ss->ss_server_seq, env);
+		OBD_FREE_PTR(ss->ss_server_seq);
+		ss->ss_server_seq = NULL;
+	}
+
+	if (ss->ss_control_seq) {
+		seq_server_fini(ss->ss_control_seq, env);
+		OBD_FREE_PTR(ss->ss_control_seq);
+		ss->ss_control_seq = NULL;
+	}
+
+	if (ss->ss_client_seq) {
+		seq_client_fini(ss->ss_client_seq);
+		OBD_FREE_PTR(ss->ss_client_seq);
+		ss->ss_client_seq = NULL;
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(seq_site_fini);
 
 cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
 

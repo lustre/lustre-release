@@ -1186,8 +1186,11 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 				ofd_obd(ofd)->obd_name);
 			GOTO(out, rc = 0);
 		}
-		/* only precreate if seq == 0 and o_id is specfied */
-		if (!fid_seq_is_mdt(oa->o_seq) || oa->o_id == 0) {
+		/* only precreate if seq is 0, IDIF or normal and also o_id
+		 * must be specfied */
+		if ((!fid_seq_is_mdt(oa->o_seq) &&
+		     !fid_seq_is_norm(oa->o_seq) &&
+		     !fid_seq_is_idif(oa->o_seq)) || oa->o_id == 0) {
 			diff = 1; /* shouldn't we create this right now? */
 		} else {
 			diff = oa->o_id - ofd_seq_last_oid(oseq);
