@@ -466,7 +466,7 @@ wait_request_state() {
 	local request=$2
 	local state=$3
 
-	local cmd="$LCTL get_param -n $HSM_PARAM.agent_actions"
+	local cmd="$LCTL get_param -n $HSM_PARAM.actions"
 	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 
 	wait_result $SINGLEMDS "$cmd" $state 100 ||
@@ -477,7 +477,7 @@ get_request_state() {
 	local fid=$1
 	local request=$2
 
-	do_facet $SINGLEMDS "$LCTL get_param -n $HSM_PARAM.agent_actions |"\
+	do_facet $SINGLEMDS "$LCTL get_param -n $HSM_PARAM.actions |"\
 		"awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 }
 
@@ -485,14 +485,14 @@ get_request_count() {
 	local fid=$1
 	local request=$2
 
-	do_facet $SINGLEMDS "$LCTL get_param -n $HSM_PARAM.agent_actions |"\
+	do_facet $SINGLEMDS "$LCTL get_param -n $HSM_PARAM.actions |"\
 		"awk -vn=0 '/'$fid'.*action='$request'/ {n++}; END {print n}'"
 }
 
 wait_all_done() {
 	local timeout=$1
 
-	local cmd="$LCTL get_param -n $HSM_PARAM.agent_actions"
+	local cmd="$LCTL get_param -n $HSM_PARAM.actions"
 	cmd+=" | egrep 'WAITING|STARTED'"
 
 	wait_result $SINGLEMDS "$cmd" "" $timeout ||
@@ -2382,7 +2382,7 @@ double_verify_reset_hsm_param() {
 test_100() {
 	double_verify_reset_hsm_param loop_period
 	double_verify_reset_hsm_param grace_delay
-	double_verify_reset_hsm_param request_timeout
+	double_verify_reset_hsm_param active_request_timeout
 	double_verify_reset_hsm_param max_requests
 	double_verify_reset_hsm_param default_archive_id
 }
@@ -2412,7 +2412,7 @@ test_103() {
 
 	echo "Current requests"
 	local res=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep -v CANCELED | grep -v SUCCEED | grep -v FAILED")
 
 	[[ -z "$res" ]] || error "Some request have not been canceled"
@@ -2434,7 +2434,7 @@ test_104() {
 	cdt_disable
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER --data $DATA $f
 	local data1=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep $fid | cut -f16 -d=")
 	cdt_enable
 
@@ -2455,12 +2455,12 @@ test_105() {
 		$LFS hsm_archive $DIR/$tdir/$i
 	done
 	local reqcnt1=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep WAITING | wc -l")
 	cdt_restart
 	cdt_disable
 	local reqcnt2=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep WAITING | wc -l")
 	cdt_enable
 	cdt_purge
@@ -3133,12 +3133,12 @@ test_250() {
 	while [[ $cnt != 0 || $wt != 0 ]]; do
 		sleep 1
 		cnt=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep STARTED | grep -v CANCEL | wc -l")
 		[[ $cnt -le $maxrequest ]] ||
 			error "$cnt > $maxrequest too many started requests"
 		wt=$(do_facet $SINGLEMDS "$LCTL get_param\
-			$HSM_PARAM.agent_actions |\
+			$HSM_PARAM.actions |\
 			grep WAITING | wc -l")
 		echo "max=$maxrequest started=$cnt waiting=$wt"
 	done
@@ -3157,8 +3157,8 @@ test_251() {
 
 	cdt_disable
 	# to have a short test
-	local old_to=$(get_hsm_param request_timeout)
-	set_hsm_param request_timeout 4
+	local old_to=$(get_hsm_param active_request_timeout)
+	set_hsm_param active_request_timeout 4
 	# to be sure the cdt will wake up frequently so
 	# it will be able to cancel the "old" request
 	local old_loop=$(get_hsm_param loop_period)
@@ -3170,7 +3170,7 @@ test_251() {
 	sleep 5
 	wait_request_state $fid ARCHIVE CANCELED
 
-	set_hsm_param request_timeout $old_to
+	set_hsm_param active_request_timeout $old_to
 	set_hsm_param loop_period $old_loop
 
 	copytool_cleanup

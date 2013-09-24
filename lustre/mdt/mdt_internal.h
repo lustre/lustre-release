@@ -129,13 +129,13 @@ struct coordinator {
 	struct mutex		 cdt_restore_lock;    /**< protect restore
 						       * list */
 	cfs_time_t		 cdt_loop_period;     /**< llog scan period */
-	cfs_time_t		 cdt_delay;	      /**< request grace
+	cfs_time_t		 cdt_grace_delay;     /**< request grace
 						       * delay */
-	cfs_time_t		 cdt_timeout;	      /**< request timeout */
-	__u32			 cdt_default_archive_id; /** archive id used
+	cfs_time_t		 cdt_active_req_timeout; /**< request timeout */
+	__u32			 cdt_default_archive_id; /**< archive id used
 						       * when none are
 						       * specified */
-	__u64			 cdt_max_request;     /**< max count of started
+	__u64			 cdt_max_requests;    /**< max count of started
 						       * requests */
 	atomic_t		 cdt_request_count;   /**< current count of
 						       * started requests */
@@ -947,7 +947,7 @@ int mdt_hsm_ct_register(struct mdt_thread_info *info);
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
 int mdt_hsm_request(struct mdt_thread_info *info);
 /* mdt/mdt_hsm_cdt_actions.c */
-extern const struct file_operations mdt_agent_actions_fops;
+extern const struct file_operations mdt_hsm_actions_fops;
 void dump_llog_agent_req_rec(const char *prefix,
 			     const struct llog_agent_req_rec *larr);
 int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
@@ -991,7 +991,7 @@ int mdt_hsm_get_running(struct mdt_thread_info *mti,
 bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 				const struct lu_fid *fid);
 /* mdt/mdt_hsm_cdt_requests.c */
-extern const struct file_operations mdt_hsm_request_fops;
+extern const struct file_operations mdt_hsm_active_requests_fops;
 void dump_requests(char *prefix, struct coordinator *cdt);
 struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 					    __u64 flags, struct obd_uuid *uuid,

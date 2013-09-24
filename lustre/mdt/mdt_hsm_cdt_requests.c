@@ -451,7 +451,7 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 /**
  * seq_file method called to start access to /proc file
  */
-static void *mdt_hsm_request_proc_start(struct seq_file *s, loff_t *p)
+static void *mdt_hsm_active_requests_proc_start(struct seq_file *s, loff_t *p)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -480,7 +480,8 @@ static void *mdt_hsm_request_proc_start(struct seq_file *s, loff_t *p)
  * seq_file method called to get next item
  * just returns NULL at eof
  */
-static void *mdt_hsm_request_proc_next(struct seq_file *s, void *v, loff_t *p)
+static void *mdt_hsm_active_requests_proc_next(struct seq_file *s, void *v,
+					       loff_t *p)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -502,7 +503,7 @@ static void *mdt_hsm_request_proc_next(struct seq_file *s, void *v, loff_t *p)
 /**
  * display request data
  */
-static int mdt_hsm_request_proc_show(struct seq_file *s, void *v)
+static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 {
 	struct list_head	*pos = v;
 	struct cdt_agent_req	*car;
@@ -538,7 +539,7 @@ static int mdt_hsm_request_proc_show(struct seq_file *s, void *v)
 /**
  * seq_file method called to stop access to /proc file
  */
-static void mdt_hsm_request_proc_stop(struct seq_file *s, void *v)
+static void mdt_hsm_active_requests_proc_stop(struct seq_file *s, void *v)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -550,18 +551,19 @@ static void mdt_hsm_request_proc_stop(struct seq_file *s, void *v)
 }
 
 /* hsm agent list proc functions */
-static const struct seq_operations mdt_hsm_request_proc_ops = {
-	.start		= mdt_hsm_request_proc_start,
-	.next		= mdt_hsm_request_proc_next,
-	.show		= mdt_hsm_request_proc_show,
-	.stop		= mdt_hsm_request_proc_stop,
+static const struct seq_operations mdt_hsm_active_requests_proc_ops = {
+	.start		= mdt_hsm_active_requests_proc_start,
+	.next		= mdt_hsm_active_requests_proc_next,
+	.show		= mdt_hsm_active_requests_proc_show,
+	.stop		= mdt_hsm_active_requests_proc_stop,
 };
 
 /**
  * public function called at open of /proc file to get
  * list of agents
  */
-static int lprocfs_open_hsm_request(struct inode *inode, struct file *file)
+static int lprocfs_open_hsm_active_requests(struct inode *inode,
+					    struct file *file)
 {
 	struct seq_file	*s;
 	int		 rc;
@@ -570,7 +572,7 @@ static int lprocfs_open_hsm_request(struct inode *inode, struct file *file)
 	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
 		RETURN(-ENOENT);
 
-	rc = seq_open(file, &mdt_hsm_request_proc_ops);
+	rc = seq_open(file, &mdt_hsm_active_requests_proc_ops);
 	if (rc) {
 		RETURN(rc);
 	}
@@ -581,9 +583,9 @@ static int lprocfs_open_hsm_request(struct inode *inode, struct file *file)
 }
 
 /* methods to access hsm request list */
-const struct file_operations mdt_hsm_request_fops = {
+const struct file_operations mdt_hsm_active_requests_fops = {
 	.owner		= THIS_MODULE,
-	.open		= lprocfs_open_hsm_request,
+	.open		= lprocfs_open_hsm_active_requests,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
 	.release	= lprocfs_seq_release,

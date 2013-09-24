@@ -25,7 +25,7 @@
  *
  */
 /*
- * lustre/mdt/mdt_agent_actions.c
+ * lustre/mdt/mdt_hsm_cdt_actions.c
  *
  * Lustre HSM
  *
@@ -349,7 +349,7 @@ struct agent_action_iterator {
  * seq_file method called to start access to /proc file
  * get llog context + llog handle
  */
-static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
+static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 {
 	struct agent_action_iterator	*aai = s->private;
 	ENTRY;
@@ -379,7 +379,7 @@ static void *mdt_agent_actions_proc_start(struct seq_file *s, loff_t *pos)
 	RETURN(aai);
 }
 
-static void *mdt_agent_actions_proc_next(struct seq_file *s, void *v,
+static void *mdt_hsm_actions_proc_next(struct seq_file *s, void *v,
 					 loff_t *pos)
 {
 	RETURN(NULL);
@@ -388,7 +388,7 @@ static void *mdt_agent_actions_proc_next(struct seq_file *s, void *v,
 /**
  *  llog_cat_process() callback, used to fill a seq_file buffer
  */
-static int agent_actions_show_cb(const struct lu_env *env,
+static int hsm_actions_show_cb(const struct lu_env *env,
 				 struct llog_handle *llh,
 				 struct llog_rec_hdr *hdr,
 				 void *data)
@@ -447,11 +447,11 @@ static int agent_actions_show_cb(const struct lu_env *env,
 }
 
 /**
- * mdt_agent_actions_proc_show() is called at for each seq record
+ * mdt_hsm_actions_proc_show() is called at for each seq record
  * process the llog, with a cb which fill the file_seq buffer
  * to be faster, one show will fill multiple records
  */
-static int mdt_agent_actions_proc_show(struct seq_file *s, void *v)
+static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator	*aai = s->private;
 	int				 rc;
@@ -466,7 +466,7 @@ static int mdt_agent_actions_proc_show(struct seq_file *s, void *v)
 		RETURN(0);
 
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
-			      agent_actions_show_cb, s,
+			      hsm_actions_show_cb, s,
 			      aai->aai_cat_index, aai->aai_index + 1);
 	if (rc == 0) /* all llog parsed */
 		aai->aai_eof = true;
@@ -479,7 +479,7 @@ static int mdt_agent_actions_proc_show(struct seq_file *s, void *v)
  * seq_file method called to stop access to /proc file
  * clean + put llog context
  */
-static void mdt_agent_actions_proc_stop(struct seq_file *s, void *v)
+static void mdt_hsm_actions_proc_stop(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator *aai = s->private;
 	ENTRY;
@@ -494,14 +494,14 @@ static void mdt_agent_actions_proc_stop(struct seq_file *s, void *v)
 	return;
 }
 
-static const struct seq_operations mdt_agent_actions_proc_ops = {
-	.start	= mdt_agent_actions_proc_start,
-	.next	= mdt_agent_actions_proc_next,
-	.show	= mdt_agent_actions_proc_show,
-	.stop	= mdt_agent_actions_proc_stop,
+static const struct seq_operations mdt_hsm_actions_proc_ops = {
+	.start	= mdt_hsm_actions_proc_start,
+	.next	= mdt_hsm_actions_proc_next,
+	.show	= mdt_hsm_actions_proc_show,
+	.stop	= mdt_hsm_actions_proc_stop,
 };
 
-static int lprocfs_open_agent_actions(struct inode *inode, struct file *file)
+static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 {
 	struct agent_action_iterator	*aai;
 	struct seq_file			*s;
@@ -512,7 +512,7 @@ static int lprocfs_open_agent_actions(struct inode *inode, struct file *file)
 	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
 		RETURN(-ENOENT);
 
-	rc = seq_open(file, &mdt_agent_actions_proc_ops);
+	rc = seq_open(file, &mdt_hsm_actions_proc_ops);
 	if (rc)
 		RETURN(rc);
 
@@ -546,10 +546,10 @@ out:
 }
 
 /**
- * lprocfs_release_agent_actions() is called at end of /proc access
- * free alloacted ressources and call cleanup lprocfs methods
+ * lprocfs_release_hsm_actions() is called at end of /proc access.
+ * It frees allocated ressources and calls cleanup lprocfs methods.
  */
-static int lprocfs_release_agent_actions(struct inode *inode, struct file *file)
+static int lprocfs_release_hsm_actions(struct inode *inode, struct file *file)
 {
 	struct seq_file			*seq = file->private_data;
 	struct agent_action_iterator	*aai = seq->private;
@@ -562,12 +562,12 @@ static int lprocfs_release_agent_actions(struct inode *inode, struct file *file)
 	return lprocfs_seq_release(inode, file);
 }
 
-/* methods to access agent actions llog through /proc */
-const struct file_operations mdt_agent_actions_fops = {
+/* Methods to access HSM action list LLOG through /proc */
+const struct file_operations mdt_hsm_actions_fops = {
 	.owner		= THIS_MODULE,
-	.open		= lprocfs_open_agent_actions,
+	.open		= lprocfs_open_hsm_actions,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= lprocfs_release_agent_actions,
+	.release	= lprocfs_release_hsm_actions,
 };
 

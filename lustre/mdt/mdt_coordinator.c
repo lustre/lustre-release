@@ -133,7 +133,7 @@ struct hsm_scan_data {
 	char				 fs_name[MTI_NAME_MAXLEN+1];
 	/* request to be send to agents */
 	int				 request_sz;	/** allocated size */
-	int				 max_request;	/** vector size */
+	int				 max_requests;	/** vector size */
 	int				 request_cnt;	/** used count */
 	struct {
 		int			 hal_sz;
@@ -182,14 +182,14 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 
 		/* Are agents full? */
 		if (atomic_read(&cdt->cdt_request_count) ==
-		    cdt->cdt_max_request)
+		    cdt->cdt_max_requests)
 			break;
 
 		/* first search if the request if known in the list we have
 		 * build and if there is room in the request vector */
 		empty_slot = -1;
 		found = -1;
-		for (i = 0; i < hsd->max_request &&
+		for (i = 0; i < hsd->max_requests &&
 			    (empty_slot == -1 || found == -1); i++) {
 			if (hsd->request[i].hal == NULL) {
 				empty_slot = i;
@@ -308,7 +308,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 
 		/* test if request too long, if yes cancel it
 		 * the same way the copy tool acknowledge a cancel request */
-		if ((last + cdt->cdt_timeout) < cfs_time_current_sec()) {
+		if ((last + cdt->cdt_active_req_timeout)
+		     < cfs_time_current_sec()) {
 			struct hsm_progress_kernel pgs;
 
 			dump_llog_agent_req_rec("mdt_coordinator_cb(): "
@@ -371,7 +372,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	case ARS_FAILED:
 	case ARS_CANCELED:
 	case ARS_SUCCEED:
-		if ((larr->arr_req_change + cdt->cdt_delay) <
+		if ((larr->arr_req_change + cdt->cdt_grace_delay) <
 		    cfs_time_current_sec())
 			RETURN(LLOG_DEL_RECORD);
 		break;
@@ -454,12 +455,12 @@ static int mdt_coordinator(void *data)
 	hsd.max_cookie = 0;
 	hsd.cookie_cnt = 0;
 	hsd.cookies = NULL;
-	/* we use a copy of cdt_max_request in the cb, so if cdt_max_request
+	/* we use a copy of cdt_max_requests in the cb, so if cdt_max_requests
 	 * increases due to a change from /proc we do not overflow the
 	 * hsd.request[] vector
 	 */
-	hsd.max_request = cdt->cdt_max_request;
-	hsd.request_sz = hsd.max_request * sizeof(*hsd.request);
+	hsd.max_requests = cdt->cdt_max_requests;
+	hsd.request_sz = hsd.max_requests * sizeof(*hsd.request);
 	OBD_ALLOC(hsd.request, hsd.request_sz);
 	if (!hsd.request)
 		GOTO(out, rc = -ENOMEM);
@@ -499,14 +500,14 @@ static int mdt_coordinator(void *data)
 
 		CDEBUG(D_HSM, "coordinator starts reading llog\n");
 
-		if (hsd.max_request != cdt->cdt_max_request) {
-			/* cdt_max_request has changed,
+		if (hsd.max_requests != cdt->cdt_max_requests) {
+			/* cdt_max_requests has changed,
 			 * we need to allocate a new buffer
 			 */
 			OBD_FREE(hsd.request, hsd.request_sz);
-			hsd.max_request = cdt->cdt_max_request;
+			hsd.max_requests = cdt->cdt_max_requests;
 			hsd.request_sz =
-				   hsd.max_request * sizeof(*hsd.request);
+				   hsd.max_requests * sizeof(*hsd.request);
 			OBD_ALLOC(hsd.request, hsd.request_sz);
 			if (!hsd.request) {
 				rc = -ENOMEM;
@@ -556,7 +557,7 @@ static int mdt_coordinator(void *data)
 		}
 
 		/* here hsd contains a list of requests to be started */
-		for (i = 0; i < hsd.max_request; i++) {
+		for (i = 0; i < hsd.max_requests; i++) {
 			struct hsm_action_list	*hal;
 			struct hsm_action_item	*hai;
 			__u64			*cookies;
@@ -565,7 +566,7 @@ static int mdt_coordinator(void *data)
 
 			/* still room for work ? */
 			if (atomic_read(&cdt->cdt_request_count) ==
-			    cdt->cdt_max_request)
+			    cdt->cdt_max_requests)
 				break;
 
 			if (hsd.request[i].hal == NULL)
@@ -638,7 +639,7 @@ clean_cb_alloc:
 		}
 
 		/* free hal allocated by callback */
-		for (i = 0; i < hsd.max_request; i++) {
+		for (i = 0; i < hsd.max_requests; i++) {
 			if (hsd.request[i].hal) {
 				OBD_FREE(hsd.request[i].hal,
 					 hsd.request[i].hal_sz);
@@ -898,11 +899,11 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	/* default values for /proc tunnables
 	 * can be override by MGS conf */
 	cdt->cdt_default_archive_id = 1;
-	cdt->cdt_delay = 60;
+	cdt->cdt_grace_delay = 60;
 	cdt->cdt_loop_period = 10;
-	cdt->cdt_max_request = 3;
+	cdt->cdt_max_requests = 3;
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
-	cdt->cdt_timeout = 3600;
+	cdt->cdt_active_req_timeout = 3600;
 
 	RETURN(0);
 }
@@ -959,7 +960,6 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	/* just need to be larger than previous one */
 	/* cdt_last_cookie is protected by cdt_llog_lock */
 	cdt->cdt_last_cookie = cfs_time_current_sec();
-
 	atomic_set(&cdt->cdt_request_count, 0);
 	cdt->cdt_user_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
@@ -1951,9 +1951,9 @@ static int lprocfs_wr_hsm_##VAR(struct file *file, const char *buffer,	\
 }
 
 GENERATE_PROC_METHOD(cdt_loop_period)
-GENERATE_PROC_METHOD(cdt_delay)
-GENERATE_PROC_METHOD(cdt_timeout)
-GENERATE_PROC_METHOD(cdt_max_request)
+GENERATE_PROC_METHOD(cdt_grace_delay)
+GENERATE_PROC_METHOD(cdt_active_req_timeout)
+GENERATE_PROC_METHOD(cdt_max_requests)
 GENERATE_PROC_METHOD(cdt_default_archive_id)
 
 /*
@@ -2185,32 +2185,35 @@ lprocfs_wr_hsm_other_request_mask(struct file *file, const char __user *buf,
 }
 
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
-	{ "agents",		NULL, NULL, NULL, &mdt_hsm_agent_fops, 0 },
-	{ "agent_actions",	NULL, NULL, NULL,
-				&mdt_agent_actions_fops, 0444 },
-	{ "default_archive_id",	lprocfs_rd_hsm_cdt_default_archive_id,
-				lprocfs_wr_hsm_cdt_default_archive_id,
-				NULL, NULL, 0 },
-	{ "grace_delay",	lprocfs_rd_hsm_cdt_delay,
-				lprocfs_wr_hsm_cdt_delay,
-				NULL, NULL, 0 },
-	{ "loop_period",	lprocfs_rd_hsm_cdt_loop_period,
-				lprocfs_wr_hsm_cdt_loop_period,
-				NULL, NULL, 0 },
-	{ "max_requests",	lprocfs_rd_hsm_cdt_max_request,
-				lprocfs_wr_hsm_cdt_max_request,
-				NULL, NULL, 0 },
-	{ "policy",		lprocfs_rd_hsm_policy, lprocfs_wr_hsm_policy,
-				NULL, NULL, 0 },
-	{ "request_timeout",	lprocfs_rd_hsm_cdt_timeout,
-				lprocfs_wr_hsm_cdt_timeout,
-				NULL, NULL, 0 },
-	{ "requests",		NULL, NULL, NULL, &mdt_hsm_request_fops, 0 },
-	{ "user_request_mask", lprocfs_rd_hsm_user_request_mask,
-	  lprocfs_wr_hsm_user_request_mask, },
-	{ "group_request_mask", lprocfs_rd_hsm_group_request_mask,
-	  lprocfs_wr_hsm_group_request_mask, },
-	{ "other_request_mask", lprocfs_rd_hsm_other_request_mask,
-	  lprocfs_wr_hsm_other_request_mask, },
-	{ NULL }
+	{ "agents",			NULL, NULL, NULL, &mdt_hsm_agent_fops,
+					0 },
+	{ "actions",			NULL, NULL, NULL, &mdt_hsm_actions_fops,
+					0444 },
+	{ "default_archive_id",		lprocfs_rd_hsm_cdt_default_archive_id,
+					lprocfs_wr_hsm_cdt_default_archive_id,
+					NULL, NULL, 0 },
+	{ "grace_delay",		lprocfs_rd_hsm_cdt_grace_delay,
+					lprocfs_wr_hsm_cdt_grace_delay,
+					NULL, NULL, 0 },
+	{ "loop_period",		lprocfs_rd_hsm_cdt_loop_period,
+					lprocfs_wr_hsm_cdt_loop_period,
+					NULL, NULL, 0 },
+	{ "max_requests",		lprocfs_rd_hsm_cdt_max_requests,
+					lprocfs_wr_hsm_cdt_max_requests,
+					NULL, NULL, 0 },
+	{ "policy",			lprocfs_rd_hsm_policy,
+					lprocfs_wr_hsm_policy,
+					NULL, NULL, 0 },
+	{ "active_request_timeout",	lprocfs_rd_hsm_cdt_active_req_timeout,
+					lprocfs_wr_hsm_cdt_active_req_timeout,
+					NULL, NULL, 0 },
+	{ "active_requests",		NULL, NULL, NULL,
+					&mdt_hsm_active_requests_fops, 0 },
+	{ "user_request_mask",		lprocfs_rd_hsm_user_request_mask,
+					lprocfs_wr_hsm_user_request_mask, },
+	{ "group_request_mask", 	lprocfs_rd_hsm_group_request_mask,
+					lprocfs_wr_hsm_group_request_mask, },
+	{ "other_request_mask",		lprocfs_rd_hsm_other_request_mask,
+					lprocfs_wr_hsm_other_request_mask, },
+	{ 0 }
 };
