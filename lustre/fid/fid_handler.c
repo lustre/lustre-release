@@ -431,7 +431,7 @@ static void seq_thread_info_fini(struct seq_thread_info *info)
         req_capsule_fini(info->sti_pill);
 }
 
-static int seq_handle(struct ptlrpc_request *req)
+int seq_handle(struct ptlrpc_request *req)
 {
         const struct lu_env *env;
         struct seq_thread_info *info;
@@ -452,6 +452,7 @@ static int seq_handle(struct ptlrpc_request *req)
 
         return rc;
 }
+EXPORT_SYMBOL(seq_handle);
 
 /*
  * Entry point for handling FLD RPCs called from MDT.
