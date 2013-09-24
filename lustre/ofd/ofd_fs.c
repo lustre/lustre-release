@@ -142,6 +142,7 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 	}
 	cfs_atomic_inc(&new_seq->os_refc);
 	cfs_list_add_tail(&new_seq->os_list, &ofd->ofd_seq_list);
+	ofd->ofd_seq_count++;
 	write_unlock(&ofd->ofd_seq_list_lock);
 	return new_seq;
 }
@@ -185,26 +186,6 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 
 	rc = ofd_record_write(env, ofd, oseq->os_lastid_obj, &info->fti_buf,
 			      &info->fti_off);
-	RETURN(rc);
-}
-
-static int ofd_seq_count_write(const struct lu_env *env, struct ofd_device *ofd)
-{
-	struct ofd_thread_info	*info = ofd_info(env);
-	obd_seq			 tmp;
-	int			 rc;
-
-	ENTRY;
-
-	info->fti_buf.lb_buf = &tmp;
-	info->fti_buf.lb_len = sizeof(tmp);
-	info->fti_off = 0;
-
-	tmp = cpu_to_le32(ofd->ofd_seq_count);
-
-	rc = ofd_record_write(env, ofd, ofd->ofd_seq_count_file,
-			      &info->fti_buf, &info->fti_off);
-
 	RETURN(rc);
 }
 
@@ -282,7 +263,6 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 		/* object is just created, initialize last id */
 		oseq->os_last_oid = OFD_INIT_OBJID;
 		ofd_seq_last_oid_write(env, ofd, oseq);
-		ofd_seq_count_write(env, ofd);
 	} else if (info->fti_attr.la_size == sizeof(lastid)) {
 		info->fti_off = 0;
 		info->fti_buf.lb_buf = &lastid;
@@ -311,65 +291,10 @@ cleanup:
 /* object sequence management */
 int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	unsigned long		seq_count_size;
-	obd_seq			seq_count;
-	int			rc = 0;
-	int			i;
-
-	ENTRY;
-
 	rwlock_init(&ofd->ofd_seq_list_lock);
 	CFS_INIT_LIST_HEAD(&ofd->ofd_seq_list);
-
-	rc = dt_attr_get(env, ofd->ofd_seq_count_file,
-			 &info->fti_attr, BYPASS_CAPA);
-	if (rc)
-		GOTO(cleanup, rc);
-
-	seq_count_size = (unsigned long)info->fti_attr.la_size;
-
-	if (seq_count_size == sizeof(seq_count)) {
-		info->fti_off = 0;
-		info->fti_buf.lb_buf = &seq_count;
-		info->fti_buf.lb_len = sizeof(seq_count);
-
-		rc = dt_record_read(env, ofd->ofd_seq_count_file,
-				    &info->fti_buf, &info->fti_off);
-		if (rc) {
-			CERROR("%s: can't read LAST_GROUP: rc = %d\n",
-			       ofd_name(ofd), rc);
-			GOTO(cleanup, rc);
-		}
-
-		ofd->ofd_seq_count = le64_to_cpu(seq_count);
-	} else if (seq_count_size == 0) {
-		ofd->ofd_seq_count = 0;
-	} else {
-		CERROR("%s: seqs file is corrupted? size = %lu\n",
-		       ofd_name(ofd), seq_count_size);
-		GOTO(cleanup, rc = -EIO);
-	}
-
-	for (i = 0; i <= ofd->ofd_seq_count; i++) {
-		struct ofd_seq *oseq;
-
-		oseq = ofd_seq_load(env, ofd, i);
-		if (IS_ERR(oseq)) {
-			CERROR("%s: can't load seq %d: rc = %d\n",
-			       ofd_name(ofd), i, rc);
-			/* Clean all previously set seqs */
-			ofd_seqs_fini(env, ofd);
-			GOTO(cleanup, rc);
-		} else {
-			ofd_seq_put(env, oseq);
-		}
-	}
-
-	CDEBUG(D_OTHER, "%s: %u seqs initialized\n", ofd_name(ofd),
-	       ofd->ofd_seq_count + 1);
-cleanup:
-	RETURN(rc);
+	ofd->ofd_seq_count = 0;
+	return 0;
 }
 
 int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
@@ -608,26 +533,11 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 
 	ofd->ofd_health_check_file = fo;
 
-	lu_local_obj_fid(&info->fti_fid, OFD_LAST_GROUP_OID);
-	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
-	info->fti_attr.la_valid = LA_MODE;
-	info->fti_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
-
-	fo = dt_find_or_create(env, ofd->ofd_osd, &info->fti_fid,
-			       &info->fti_dof, &info->fti_attr);
-	if (IS_ERR(fo))
-		GOTO(out_hc, rc = PTR_ERR(fo));
-
-	ofd->ofd_seq_count_file = fo;
-
 	rc = ofd_seqs_init(env, ofd);
 	if (rc)
-		GOTO(out_lg, rc);
+		GOTO(out_hc, rc);
 
 	RETURN(0);
-out_lg:
-	lu_object_put(env, &ofd->ofd_seq_count_file->do_lu);
 out_hc:
 	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
 out:
@@ -651,11 +561,6 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 
 	/* Remove transaction callback */
 	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
-
-	if (ofd->ofd_seq_count_file) {
-		lu_object_put(env, &ofd->ofd_seq_count_file->do_lu);
-		ofd->ofd_seq_count_file = NULL;
-	}
 
 	if (ofd->ofd_health_check_file) {
 		lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
