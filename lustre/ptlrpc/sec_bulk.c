@@ -163,7 +163,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       "max waitqueue depth:     %u\n"
                       "max wait time:           "CFS_TIME_T"/%u\n"
                       ,
-		      num_physpages,
+		      totalram_pages,
                       PAGES_PER_POOL,
                       page_pools.epp_max_pages,
                       page_pools.epp_max_pools,
@@ -711,7 +711,7 @@ int sptlrpc_enc_pool_init(void)
 	 * maximum capacity is 1/8 of total physical memory.
 	 * is the 1/8 a good number?
 	 */
-	page_pools.epp_max_pages = num_physpages / 8;
+	page_pools.epp_max_pages = totalram_pages / 8;
 	page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);
 
 	init_waitqueue_head(&page_pools.epp_waitq);

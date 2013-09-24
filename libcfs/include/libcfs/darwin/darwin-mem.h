@@ -263,9 +263,9 @@ void kmem_cache_free(struct kmem_cache *, void *);
 /*
  * Misc
  */
-/* XXX Liang: num_physpages... fix me */
-#define num_physpages			(64 * 1024)
-#define NUM_CACHEPAGES		num_physpages
+/* XXX Liang: totalram_pages... fix me */
+#define totalram_pages			(64 * 1024)
+#define NUM_CACHEPAGES		totalram_pages
 
 #define DECL_MMSPACE
 #define MMSPACE_OPEN		do {} while (0)

@@ -310,7 +310,7 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
          * far. */
 	bufpages = (svc->srv_buf_size + PAGE_CACHE_SIZE - 1) >>
 							PAGE_CACHE_SHIFT;
-	if (val > num_physpages/(2 * bufpages))
+	if (val > totalram_pages/(2 * bufpages))
                 return -ERANGE;
 
 	spin_lock(&svc->srv_lock);
