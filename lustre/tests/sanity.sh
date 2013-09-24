@@ -9353,7 +9353,7 @@ changelog_extract_field() {
 		tail -1
 }
 
-test_160() {
+test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
@@ -9449,7 +9449,38 @@ test_160() {
 		echo "$USERS other changelog users; can't verify off"
 	fi
 }
-run_test 160 "changelog sanity"
+run_test 160a "changelog sanity"
+
+test_160b() { # LU-3587
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
+		{ skip "Need MDS version at least 2.2.0"; return; }
+
+	local CL_USERS="mdd.$MDT0.changelog_users"
+	local GET_CL_USERS="do_facet $SINGLEMDS $LCTL get_param -n $CL_USERS"
+	USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_register -n)
+	echo "Registered as changelog user $USER"
+	$GET_CL_USERS | grep -q $USER ||
+		error "User $USER not found in changelog_users"
+
+	local LONGNAME1=$(str_repeat a 255)
+	local LONGNAME2=$(str_repeat b 255)
+
+	cd $DIR
+	echo "creating very long named file"
+	touch $LONGNAME1 || error "create of $LONGNAME1 failed"
+	echo "moving very long named file"
+	mv $LONGNAME1 $LONGNAME2
+
+	$LFS changelog $MDT0 | grep RENME
+
+	echo "deregistering $USER"
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $USER
+
+	rm -f $LONGNAME2
+}
+run_test 160b "Verify that very long rename doesn't crash in changelog"
 
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
