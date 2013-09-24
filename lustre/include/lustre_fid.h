@@ -200,30 +200,32 @@ enum {
 
 /** special OID for local objects */
 enum local_oid {
-        /** \see fld_mod_init */
-        FLD_INDEX_OID           = 3UL,
-        /** \see fid_mod_init */
-        FID_SEQ_CTL_OID         = 4UL,
-        FID_SEQ_SRV_OID         = 5UL,
-        /** \see mdd_mod_init */
-        MDD_ROOT_INDEX_OID      = 6UL,
-        MDD_ORPHAN_OID          = 7UL,
-        MDD_LOV_OBJ_OID         = 8UL,
-        MDD_CAPA_KEYS_OID       = 9UL,
-        /** \see mdt_mod_init */
-        MDT_LAST_RECV_OID       = 11UL,
-        OSD_FS_ROOT_OID         = 13UL,
-        ACCT_USER_OID           = 15UL,
-        ACCT_GROUP_OID          = 16UL,
+	/** \see fld_mod_init */
+	FLD_INDEX_OID		= 3UL,
+	/** \see fid_mod_init */
+	FID_SEQ_CTL_OID		= 4UL,
+	FID_SEQ_SRV_OID		= 5UL,
+	/** \see mdd_mod_init */
+	MDD_ROOT_INDEX_OID	= 6UL,
+	MDD_ORPHAN_OID		= 7UL,
+	MDD_LOV_OBJ_OID		= 8UL,
+	MDD_CAPA_KEYS_OID	= 9UL,
+	/** \see mdt_mod_init */
+	MDT_LAST_RECV_OID	= 11UL,
+	OSD_FS_ROOT_OID		= 13UL,
+	ACCT_USER_OID		= 15UL,
+	ACCT_GROUP_OID		= 16UL,
 	LFSCK_BOOKMARK_OID	= 17UL,
 	OTABLE_IT_OID		= 18UL,
-        OFD_LAST_RECV_OID       = 19UL,
-        OFD_GROUP0_LAST_OID     = 20UL,
-        OFD_GROUP4K_LAST_OID    = 20UL+4096,
-        OFD_LAST_GROUP_OID      = 4117UL,
-        LLOG_CATALOGS_OID       = 4118UL,
-        MGS_CONFIGS_OID         = 4119UL,
-        OFD_HEALTH_CHECK_OID    = 4120UL,
+	OFD_LAST_RECV_OID	= 19UL,
+	/* These two definitions are obsolete
+	 * OFD_GROUP0_LAST_OID     = 20UL,
+	 * OFD_GROUP4K_LAST_OID    = 20UL+4096,
+	 */
+	OFD_LAST_GROUP_OID	= 4117UL,
+	LLOG_CATALOGS_OID	= 4118UL,
+	MGS_CONFIGS_OID		= 4119UL,
+	OFD_HEALTH_CHECK_OID	= 4120UL,
 	MDD_LOV_OBJ_OSEQ	= 4121UL,
 };
 
@@ -258,6 +260,20 @@ static inline int fid_is_quota(const struct lu_fid *fid)
 {
 	return fid_seq(fid) == FID_SEQ_QUOTA ||
 	       fid_seq(fid) == FID_SEQ_QUOTA_GLB;
+}
+
+static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq)
+{
+	if (fid_seq_is_mdt0(seq)) {
+		fid->f_seq = fid_idif_seq(0, 0);
+	} else {
+		LASSERTF(fid_seq_is_norm(seq) || fid_seq_is_echo(seq) ||
+			 fid_seq_is_llog(seq) || fid_seq_is_idif(seq),
+			 LPX64"\n", seq);
+		fid->f_seq = seq;
+	}
+	fid->f_oid = 0;
+	fid->f_ver = 0;
 }
 
 enum lu_mgr_type {

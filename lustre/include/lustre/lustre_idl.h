@@ -466,6 +466,26 @@ static inline int fid_seq_is_mdt(const __u64 seq)
                (seq >= FID_SEQ_OST_MDT1 && seq <= FID_SEQ_OST_MAX);
 };
 
+static inline int fid_seq_is_echo(obd_seq seq)
+{
+	return (seq == FID_SEQ_ECHO);
+}
+
+static inline int fid_is_echo(const struct lu_fid *fid)
+{
+	return fid_seq_is_echo(fid_seq(fid));
+}
+
+static inline int fid_seq_is_llog(obd_seq seq)
+{
+	return (seq == FID_SEQ_LLOG);
+}
+
+static inline int fid_is_llog(const struct lu_fid *fid)
+{
+	return fid_seq_is_llog(fid_seq(fid));
+}
+
 static inline int fid_seq_is_rsvd(const __u64 seq)
 {
         return (seq > FID_SEQ_OST_MDT0 && seq <= FID_SEQ_RSVD);
@@ -679,6 +699,13 @@ static inline obd_id ostid_id(struct ost_id *ostid)
         return ostid->oi_id;
 }
 
+/* Check whether the fid is for LAST_ID */
+static inline int fid_is_last_id(const struct lu_fid *fid)
+{
+	return (fid_is_idif(fid) || fid_is_norm(fid) || fid_is_echo(fid)) &&
+		fid_oid(fid) == 0;
+}
+
 /**
  * Get inode number from a igif.
  * \param fid a igif to get inode number from.
@@ -768,11 +795,10 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
-        return
-                fid != NULL &&
-                ((fid_seq(fid) >= FID_SEQ_START && fid_oid(fid) != 0
-                                                && fid_ver(fid) == 0) ||
-                fid_is_igif(fid) || fid_seq_is_rsvd(fid_seq(fid)));
+	return fid != NULL &&
+	       ((fid_seq(fid) >= FID_SEQ_START && fid_ver(fid) == 0) ||
+	       fid_is_igif(fid) || fid_is_idif(fid) ||
+	       fid_seq_is_rsvd(fid_seq(fid)));
 }
 
 static inline int fid_is_zero(const struct lu_fid *fid)

@@ -763,6 +763,7 @@ static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
                                         const struct lu_fid *fid)
 {
 	LASSERTF(!fid_is_idif(fid), DFID"\n", PFID(fid));
+	LASSERTF(!fid_is_last_id(fid), DFID"\n", PFID(fid));
 	LASSERTF(!fid_is_igif(fid), DFID"\n", PFID(fid));
 	LASSERT(osd->od_oi_table != NULL && osd->od_oi_count >= 1);
 	/* It can work even od_oi_count equals to 1 although it's unexpected,

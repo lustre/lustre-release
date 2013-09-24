@@ -636,9 +636,9 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 	int			rc = 0;
 	ENTRY;
 
-        if (fid_oid(fid) >= OFD_GROUP0_LAST_OID &&
-            fid_oid(fid) < OFD_GROUP4K_LAST_OID) {
+	if (fid_is_last_id(fid)) {
 		struct osd_obj_seq	*osd_seq;
+
 		/* on creation of LAST_ID we create O/<seq> hierarchy */
 		LASSERT(map);
 		osd_seq = osd_seq_load(osd, fid_seq(fid));
@@ -667,8 +667,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	int	       rc = -ENOENT;
 	ENTRY;
 
-	if (fid_oid(fid) >= OFD_GROUP0_LAST_OID &&
-	    fid_oid(fid) < OFD_GROUP4K_LAST_OID) {
+	if (fid_is_last_id(fid)) {
 		struct osd_obj_seq *osd_seq;
 
 		osd_seq = osd_seq_load(osd, fid_seq(fid));

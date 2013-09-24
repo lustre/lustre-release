@@ -100,7 +100,6 @@ static const struct named_oid oids[] = {
 	{ MDD_LOV_OBJ_OID,		LOV_OBJID },
 	{ MDT_LAST_RECV_OID,		LAST_RCVD },
 	{ OFD_HEALTH_CHECK_OID,		HEALTH_CHECK },
-	{ OFD_GROUP0_LAST_OID,		"LAST_ID" },
 	{ ACCT_USER_OID,		"acct_usr_inode" },
 	{ ACCT_GROUP_OID,		"acct_grp_inode" },
 	{ MDD_ROOT_INDEX_OID,		NULL },
@@ -177,6 +176,8 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 
 	if (fid_is_idif(fid)) {
 		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf);
+	} else if (fid_is_last_id(fid)) {
+		zapid = osd->od_ost_compat_grp0;
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* special objects with fixed known fids get their name */
 		char *name = oid2name(fid_oid(fid));
@@ -184,9 +185,7 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 		if (name) {
 			zapid = osd->od_root;
 			strcpy(buf, name);
-			if (fid_oid(fid) == OFD_GROUP0_LAST_OID)
-				zapid = osd->od_ost_compat_grp0;
-			else if (fid_is_acct(fid))
+			if (fid_is_acct(fid))
 				zapid = MASTER_NODE_OBJ;
 		} else {
 			zapid = osd_get_idx_for_fid(osd, fid, buf);
