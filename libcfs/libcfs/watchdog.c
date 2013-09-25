@@ -281,13 +281,13 @@ static int lcw_dispatch_main(void *data)
 		}
 		spin_unlock_bh(&lcw_pending_timers_lock);
 
-                while (!cfs_list_empty(&zombies)) {
-                        lcw = cfs_list_entry(lcw_pending_timers.next,
-                                         struct lc_watchdog, lcw_list);
-                        cfs_list_del(&lcw->lcw_list);
-                        LIBCFS_FREE(lcw, sizeof(*lcw));
-                }
-        }
+		while (!cfs_list_empty(&zombies)) {
+			lcw = cfs_list_entry(zombies.next,
+					     struct lc_watchdog, lcw_list);
+			cfs_list_del_init(&lcw->lcw_list);
+			LIBCFS_FREE(lcw, sizeof(*lcw));
+		}
+	}
 
 	complete(&lcw_stop_completion);
 
