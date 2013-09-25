@@ -508,105 +508,6 @@ offset          rpcs   % cum % |       rpcs   % cum %
       <para>For information about optimizing the client I/O RPC stream, see <xref
           xmlns:xlink="http://www.w3.org/1999/xlink" linkend="TuningClientIORPCStream"/>.</para>
     </section>
-    <section remap="h3">
-      <title><indexterm>
-          <primary>proc</primary>
-          <secondary>read/write survey</secondary>
-        </indexterm>Monitoring Client Read-Write Offset Statistics</title>
-      <para>The <literal>offset_stats</literal> parameter maintains statistics for occurrences of a
-        series of read or write calls from a process that did not access the next sequential
-        location. The <literal>OFFSET</literal> field is reset to 0 (zero) whenever a different file
-        is read or written.</para>
-      <para>Read/write offset statistics are "off" by default. The statistics can be activated by
-        writing anything into the <literal>offset_stats</literal> file.</para>
-      <para>The <literal>offset_stats</literal> file can be cleared by
-        entering:<screen>lctl set_param llite.*.offset_stats=0</screen></para>
-      <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
-      <screen># lctl get_param llite.testfs-f57dee0.offset_stats
-snapshot_time: 1155748884.591028 (secs.usecs)
-             RANGE   RANGE    SMALLEST   LARGEST   
-R/W   PID    START   END      EXTENT     EXTENT    OFFSET
-R     8385   0       128      128        128       0
-R     8385   0       224      224        224       -128
-W     8385   0       250      50         100       0
-W     8385   100     1110     10         500       -150
-W     8384   0       5233     5233       5233      0
-R     8385   500     600      100        100       -610</screen>
-      <para>In this example, <literal>snapshot_time</literal> is the UNIX epoch instant the file was
-        read. The tabular data is described in the table below.</para>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Field</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para>R/W</para>
-              </entry>
-              <entry>
-                <para>Indicates if the non-sequential call was a read or write</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>PID </para>
-              </entry>
-              <entry>
-                <para>Process ID of the process that made the read/write call.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>RANGE START/RANGE END</para>
-              </entry>
-              <entry>
-                <para>Range in which the read/write calls were sequential.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>SMALLEST EXTENT </para>
-              </entry>
-              <entry>
-                <para>Smallest single read/write in the corresponding range (in bytes).</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>LARGEST EXTENT </para>
-              </entry>
-              <entry>
-                <para>Largest single read/write in the corresponding range (in bytes).</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>OFFSET </para>
-              </entry>
-              <entry>
-                <para>Difference between the previous range end and the current range start.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para><emphasis role="italic"><emphasis role="bold">Analysis:</emphasis></emphasis></para>
-      <para>This data provides an indication of how contiguous or fragmented the data is. For
-        example, the fourth entry in the example above shows the writes for this RPC were sequential
-        in the range 100 to 1110 with the minimum write 10 bytes and the maximum write 500 bytes.
-        The range started with an offset of -150 from the <literal>RANGE END</literal> of the
-        previous entry in the example.</para>
-    </section>
     <section xml:id="lustreproc.clientstats" remap="h3">
       <title><indexterm>
           <primary>proc</primary>
@@ -615,9 +516,7 @@ R     8385   500     600      100        100       -610</screen>
       <para>The <literal>stats</literal> file maintains statistics accumulate during typical
         operation of a client across the VFS interface of the Lustre file system. Only non-zero
         parameters are displayed in the file. </para>
-      <para>Client statistics are enabled by default. The statistics can be cleared by echoing an
-        empty string into the <literal>stats</literal> file or by using the command:
-        <screen>lctl set_param llite.*.stats=0</screen></para>
+      <para>Client statistics are enabled by default.</para>
       <note>
         <para>Statistics for all mounted file systems can be discovered by
           entering:<screen>lctl get_param llite.*.stats</screen></para>
@@ -639,6 +538,9 @@ truncate               9073 samples [regs]
 setxattr               19059 samples [regs]
 getxattr               61169 samples [regs]
 </screen>
+      <para> The statistics can be cleared by echoing an empty string into the
+          <literal>stats</literal> file or by using the command:
+        <screen>lctl set_param llite.*.stats=0</screen></para>
       <para>The statistics displayed are described in the table below.</para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -870,16 +772,126 @@ getxattr               61169 samples [regs]
       <title><indexterm>
           <primary>proc</primary>
           <secondary>read/write survey</secondary>
+        </indexterm>Monitoring Client Read-Write Offset Statistics</title>
+      <para>When the <literal>offset_stats</literal> parameter is set, statistics are maintained for
+        occurrences of a series of read or write calls from a process that did not access the next
+        sequential location. The <literal>OFFSET</literal> field is reset to 0 (zero) whenever a
+        different file is read or written.</para>
+      <note>
+        <para>By default, statistics are not collected in the <literal>offset_stats</literal>,
+            <literal>extents_stats</literal>, and <literal>extents_stats_per_process</literal> files
+          to reduce monitoring overhead when this information is not needed.  The collection of
+          statistics in all three of these files is activated by writing anything into any one of
+          the files.</para>
+      </note>
+      <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
+      <screen># lctl get_param llite.testfs-f57dee0.offset_stats
+snapshot_time: 1155748884.591028 (secs.usecs)
+             RANGE   RANGE    SMALLEST   LARGEST   
+R/W   PID    START   END      EXTENT     EXTENT    OFFSET
+R     8385   0       128      128        128       0
+R     8385   0       224      224        224       -128
+W     8385   0       250      50         100       0
+W     8385   100     1110     10         500       -150
+W     8384   0       5233     5233       5233      0
+R     8385   500     600      100        100       -610</screen>
+      <para>In this example, <literal>snapshot_time</literal> is the UNIX epoch instant the file was
+        read. The tabular data is described in the table below.</para>
+      <para>The <literal>offset_stats</literal> file can be cleared by
+        entering:<screen>lctl set_param llite.*.offset_stats=0</screen></para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Field</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para>R/W</para>
+              </entry>
+              <entry>
+                <para>Indicates if the non-sequential call was a read or write</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>PID </para>
+              </entry>
+              <entry>
+                <para>Process ID of the process that made the read/write call.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>RANGE START/RANGE END</para>
+              </entry>
+              <entry>
+                <para>Range in which the read/write calls were sequential.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>SMALLEST EXTENT </para>
+              </entry>
+              <entry>
+                <para>Smallest single read/write in the corresponding range (in bytes).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>LARGEST EXTENT </para>
+              </entry>
+              <entry>
+                <para>Largest single read/write in the corresponding range (in bytes).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>OFFSET </para>
+              </entry>
+              <entry>
+                <para>Difference between the previous range end and the current range start.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="italic"><emphasis role="bold">Analysis:</emphasis></emphasis></para>
+      <para>This data provides an indication of how contiguous or fragmented the data is. For
+        example, the fourth entry in the example above shows the writes for this RPC were sequential
+        in the range 100 to 1110 with the minimum write 10 bytes and the maximum write 500 bytes.
+        The range started with an offset of -150 from the <literal>RANGE END</literal> of the
+        previous entry in the example.</para>
+    </section>
+    <section remap="h3">
+      <title><indexterm>
+          <primary>proc</primary>
+          <secondary>read/write survey</secondary>
         </indexterm>Monitoring Client Read-Write Extent Statistics</title>
       <para>For in-depth troubleshooting, client read-write extent statistics can be accessed to
         obtain more detail about read/write I/O extents for the file system or for a particular
         process.</para>
+      <note>
+        <para>By default, statistics are not collected in the <literal>offset_stats</literal>,
+            <literal>extents_stats</literal>, and <literal>extents_stats_per_process</literal> files
+          to reduce monitoring overhead when this information is not needed.  The collection of
+          statistics in all three of these files is activated by writing anything into any one of
+          the files.</para>
+      </note>
       <section remap="h3">
         <title>Client-Based I/O Extent Size Survey</title>
-        <para>The <literal>rw_extent_stats</literal> histogram in the <literal>llite</literal>
-          directory shows the statistics for the sizes of the read?write I/O extents. This file does
-          not maintain the per-process statistics. The file can be cleared by issuing the following
-          command:<screen># lctl set_param llite.testfs-*.extents_stats=0</screen></para>
+        <para>The <literal>extent_stats</literal> histogram in the <literal>llite</literal>
+          directory shows the statistics for the sizes of the read/write I/O extents. This file does
+          not maintain the per-process statistics.</para>
         <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
         <screen># lctl get_param llite.testfs-*.extents_stats
 snapshot_time:                     1213828728.348516 (secs.usecs)
@@ -902,6 +914,8 @@ extents          calls  %      cum%   |     calls  %     cum%
           for reads and writes respectively (<literal>calls</literal>), the relative percentage of
           total calls (<literal>%</literal>), and the cumulative percentage to that point in the
           table of calls (<literal>cum %</literal>). </para>
+        <para> The file can be cleared by issuing the following
+          command:<screen># lctl set_param llite.testfs-*.extents_stats=0</screen></para>
       </section>
       <section>
         <title>Per-Process Client I/O Statistics</title>
