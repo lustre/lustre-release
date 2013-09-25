@@ -92,15 +92,6 @@ int udmu_objset_root(udmu_objset_t *uos, dmu_buf_t **dbp, void *tag);
 uint64_t udmu_get_txg(udmu_objset_t *uos, dmu_tx_t *tx);
 int udmu_blk_insert_cost(void);
 
-/* buf must have at least MAXNAMELEN bytes */
-void udmu_objset_name_get(udmu_objset_t *uos, char *buf);
-
-/* get/set ZFS user properties */
-int udmu_userprop_set_str(udmu_objset_t *uos, const char *prop_name,
-			  const char *val);
-int udmu_userprop_get_str(udmu_objset_t *uos, const char *prop_name, char *buf,
-			  size_t buf_size);
-
 /* zap cursor apis */
 int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos,
 		uint64_t zapobj, uint64_t hash);
