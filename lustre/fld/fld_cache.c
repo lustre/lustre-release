@@ -131,13 +131,13 @@ void fld_cache_fini(struct fld_cache *cache)
 /**
  * delete given node from list.
  */
-static inline void fld_cache_entry_delete(struct fld_cache *cache,
-                                          struct fld_cache_entry *node)
+void fld_cache_entry_delete(struct fld_cache *cache,
+			    struct fld_cache_entry *node)
 {
-        cfs_list_del(&node->fce_list);
-        cfs_list_del(&node->fce_lru);
-        cache->fci_cache_count--;
-        OBD_FREE_PTR(node);
+	cfs_list_del(&node->fce_list);
+	cfs_list_del(&node->fce_lru);
+	cache->fci_cache_count--;
+	OBD_FREE_PTR(node);
 }
 
 /**
@@ -316,9 +316,9 @@ void fld_cache_punch_hole(struct fld_cache *cache,
 /**
  * handle range overlap in fld cache.
  */
-void fld_cache_overlap_handle(struct fld_cache *cache,
-                              struct fld_cache_entry *f_curr,
-                              struct fld_cache_entry *f_new)
+static void fld_cache_overlap_handle(struct fld_cache *cache,
+				struct fld_cache_entry *f_curr,
+				struct fld_cache_entry *f_new)
 {
         const struct lu_seq_range *range = &f_new->fce_range;
         const seqno_t new_start  = range->lsr_start;
@@ -377,71 +377,164 @@ void fld_cache_overlap_handle(struct fld_cache *cache,
                        PRANGE(range),PRANGE(&f_curr->fce_range));
 }
 
+struct fld_cache_entry
+*fld_cache_entry_create(const struct lu_seq_range *range)
+{
+	struct fld_cache_entry *f_new;
+
+	LASSERT(range_is_sane(range));
+
+	OBD_ALLOC_PTR(f_new);
+	if (!f_new)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	f_new->fce_range = *range;
+	RETURN(f_new);
+}
+
 /**
  * Insert FLD entry in FLD cache.
  *
  * This function handles all cases of merging and breaking up of
  * ranges.
  */
-void fld_cache_insert(struct fld_cache *cache,
-                      const struct lu_seq_range *range)
+int fld_cache_insert_nolock(struct fld_cache *cache,
+			    struct fld_cache_entry *f_new)
 {
-        struct fld_cache_entry *f_new;
-        struct fld_cache_entry *f_curr;
-        struct fld_cache_entry *n;
-        cfs_list_t *head;
-        cfs_list_t *prev = NULL;
-        const seqno_t new_start  = range->lsr_start;
-        const seqno_t new_end  = range->lsr_end;
-        __u32 new_flags  = range->lsr_flags;
-        ENTRY;
+	struct fld_cache_entry *f_curr;
+	struct fld_cache_entry *n;
+	cfs_list_t *head;
+	cfs_list_t *prev = NULL;
+	const seqno_t new_start  = f_new->fce_range.lsr_start;
+	const seqno_t new_end  = f_new->fce_range.lsr_end;
+	__u32 new_flags  = f_new->fce_range.lsr_flags;
+	ENTRY;
 
-        LASSERT(range_is_sane(range));
+	LASSERT_SPIN_LOCKED(&cache->fci_lock);
 
-        /* Allocate new entry. */
-        OBD_ALLOC_PTR(f_new);
-        if (!f_new) {
-                EXIT;
-                return;
-        }
+	/*
+	 * Duplicate entries are eliminated in insert op.
+	 * So we don't need to search new entry before starting
+	 * insertion loop.
+	 */
 
-        f_new->fce_range = *range;
+	if (!cache->fci_no_shrink)
+		fld_cache_shrink(cache);
 
-        /*
-         * Duplicate entries are eliminated in inset op.
-         * So we don't need to search new entry before starting insertion loop.
-         */
+	head = &cache->fci_entries_head;
+
+	cfs_list_for_each_entry_safe(f_curr, n, head, fce_list) {
+		/* add list if next is end of list */
+		if (new_end < f_curr->fce_range.lsr_start ||
+		   (new_end == f_curr->fce_range.lsr_start &&
+		    new_flags != f_curr->fce_range.lsr_flags))
+			break;
+
+		prev = &f_curr->fce_list;
+		/* check if this range is to left of new range. */
+		if (new_start < f_curr->fce_range.lsr_end &&
+		    new_flags == f_curr->fce_range.lsr_flags) {
+			fld_cache_overlap_handle(cache, f_curr, f_new);
+			goto out;
+		}
+	}
+
+	if (prev == NULL)
+		prev = head;
+
+	CDEBUG(D_INFO, "insert range "DRANGE"\n", PRANGE(&f_new->fce_range));
+	/* Add new entry to cache and lru list. */
+	fld_cache_entry_add(cache, f_new, prev);
+out:
+	RETURN(0);
+}
+
+int fld_cache_insert(struct fld_cache *cache,
+		     const struct lu_seq_range *range)
+{
+	struct fld_cache_entry	*flde;
+	int rc;
+
+	flde = fld_cache_entry_create(range);
+	if (IS_ERR(flde))
+		RETURN(PTR_ERR(flde));
 
 	spin_lock(&cache->fci_lock);
-        fld_cache_shrink(cache);
-
-        head = &cache->fci_entries_head;
-
-        cfs_list_for_each_entry_safe(f_curr, n, head, fce_list) {
-                /* add list if next is end of list */
-                if (new_end < f_curr->fce_range.lsr_start ||
-                   (new_end == f_curr->fce_range.lsr_start &&
-                    new_flags != f_curr->fce_range.lsr_flags))
-                        break;
-
-                prev = &f_curr->fce_list;
-                /* check if this range is to left of new range. */
-                if (new_start < f_curr->fce_range.lsr_end &&
-                    new_flags == f_curr->fce_range.lsr_flags) {
-                        fld_cache_overlap_handle(cache, f_curr, f_new);
-                        goto out;
-                }
-        }
-
-        if (prev == NULL)
-                prev = head;
-
-        CDEBUG(D_INFO, "insert range "DRANGE"\n", PRANGE(&f_new->fce_range));
-        /* Add new entry to cache and lru list. */
-        fld_cache_entry_add(cache, f_new, prev);
-out:
+	rc = fld_cache_insert_nolock(cache, flde);
 	spin_unlock(&cache->fci_lock);
-	EXIT;
+	if (rc)
+		OBD_FREE_PTR(flde);
+
+	RETURN(rc);
+}
+
+void fld_cache_delete_nolock(struct fld_cache *cache,
+		      const struct lu_seq_range *range)
+{
+	struct fld_cache_entry *flde;
+	struct fld_cache_entry *tmp;
+	cfs_list_t *head;
+
+	LASSERT_SPIN_LOCKED(&cache->fci_lock);
+	head = &cache->fci_entries_head;
+	cfs_list_for_each_entry_safe(flde, tmp, head, fce_list) {
+		/* add list if next is end of list */
+		if (range->lsr_start == flde->fce_range.lsr_start ||
+		   (range->lsr_end == flde->fce_range.lsr_end &&
+		    range->lsr_flags == flde->fce_range.lsr_flags)) {
+			fld_cache_entry_delete(cache, flde);
+			break;
+		}
+	}
+}
+
+/**
+ * Delete FLD entry in FLD cache.
+ *
+ */
+void fld_cache_delete(struct fld_cache *cache,
+		      const struct lu_seq_range *range)
+{
+	spin_lock(&cache->fci_lock);
+	fld_cache_delete_nolock(cache, range);
+	spin_unlock(&cache->fci_lock);
+}
+
+struct fld_cache_entry
+*fld_cache_entry_lookup_nolock(struct fld_cache *cache,
+			      struct lu_seq_range *range)
+{
+	struct fld_cache_entry *flde;
+	struct fld_cache_entry *got = NULL;
+	cfs_list_t *head;
+
+	LASSERT_SPIN_LOCKED(&cache->fci_lock);
+	head = &cache->fci_entries_head;
+	cfs_list_for_each_entry(flde, head, fce_list) {
+		if (range->lsr_start == flde->fce_range.lsr_start ||
+		   (range->lsr_end == flde->fce_range.lsr_end &&
+		    range->lsr_flags == flde->fce_range.lsr_flags)) {
+			got = flde;
+			break;
+		}
+	}
+
+	RETURN(got);
+}
+
+/**
+ * lookup \a seq sequence for range in fld cache.
+ */
+struct fld_cache_entry
+*fld_cache_entry_lookup(struct fld_cache *cache, struct lu_seq_range *range)
+{
+	struct fld_cache_entry *got = NULL;
+	ENTRY;
+
+	spin_lock(&cache->fci_lock);
+	got = fld_cache_entry_lookup_nolock(cache, range);
+	spin_unlock(&cache->fci_lock);
+	RETURN(got);
 }
 
 /**
@@ -451,17 +544,22 @@ int fld_cache_lookup(struct fld_cache *cache,
 		     const seqno_t seq, struct lu_seq_range *range)
 {
 	struct fld_cache_entry *flde;
+	struct fld_cache_entry *prev = NULL;
 	cfs_list_t *head;
 	ENTRY;
 
 	spin_lock(&cache->fci_lock);
-        head = &cache->fci_entries_head;
+	head = &cache->fci_entries_head;
 
-        cache->fci_stat.fst_count++;
-        cfs_list_for_each_entry(flde, head, fce_list) {
-                if (flde->fce_range.lsr_start > seq)
-                        break;
+	cache->fci_stat.fst_count++;
+	cfs_list_for_each_entry(flde, head, fce_list) {
+		if (flde->fce_range.lsr_start > seq) {
+			if (prev != NULL)
+				memcpy(range, prev, sizeof(*range));
+			break;
+		}
 
+		prev = flde;
                 if (range_within(&flde->fce_range, seq)) {
                         *range = flde->fce_range;
 
@@ -475,3 +573,4 @@ int fld_cache_lookup(struct fld_cache *cache,
 	spin_unlock(&cache->fci_lock);
 	RETURN(-ENOENT);
 }
+

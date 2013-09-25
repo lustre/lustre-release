@@ -488,9 +488,8 @@ int fld_client_lookup(struct lu_client_fld *fld, seqno_t seq, mdsno_t *mds,
         res.lsr_flags = flags;
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(env != NULL);
-                rc = fld_server_lookup(target->ft_srv,
-                                       env, seq, &res);
+		LASSERT(env != NULL);
+		rc = fld_server_lookup(env, target->ft_srv, seq, &res);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
@@ -502,7 +501,7 @@ int fld_client_lookup(struct lu_client_fld *fld, seqno_t seq, mdsno_t *mds,
         if (rc == 0) {
                 *mds = res.lsr_index;
 
-                fld_cache_insert(fld->lcf_cache, &res);
+		fld_cache_insert(fld->lcf_cache, &res);
         }
         RETURN(rc);
 }

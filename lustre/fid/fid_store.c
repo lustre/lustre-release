@@ -132,47 +132,48 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 
 	rc = dt_declare_record_write(env, seq->lss_obj,
 				     sizeof(struct lu_seq_range), 0, th);
-        if (rc)
-                GOTO(exit, rc);
+	if (rc)
+		GOTO(exit, rc);
 
-        if (out != NULL) {
-                rc = fld_declare_server_create(seq->lss_site->ms_server_fld,
-                                               env, th);
-                if (rc)
-                        GOTO(exit, rc);
-        }
+	if (out != NULL) {
+		rc = fld_declare_server_create(env,
+					       seq->lss_site->ms_server_fld,
+					       out, th);
+		if (rc)
+			GOTO(exit, rc);
+	}
 
 	rc = dt_trans_start_local(env, dt_dev, th);
-        if (rc)
-                GOTO(exit, rc);
+	if (rc)
+		GOTO(exit, rc);
 
 	/* Store ranges in le format. */
 	range_cpu_to_le(&info->sti_space, &seq->lss_space);
 
 	rc = dt_record_write(env, seq->lss_obj, seq_store_buf(info), &pos, th);
-        if (rc) {
-                CERROR("%s: Can't write space data, rc %d\n",
-                       seq->lss_name, rc);
+	if (rc) {
+		CERROR("%s: Can't write space data, rc %d\n",
+		       seq->lss_name, rc);
 		GOTO(exit, rc);
-        } else if (out != NULL) {
-                rc = fld_server_create(seq->lss_site->ms_server_fld,
-                                       env, out, th);
-                if (rc) {
-                        CERROR("%s: Can't Update fld database, rc %d\n",
-                               seq->lss_name, rc);
+	} else if (out != NULL) {
+		rc = fld_server_create(env, seq->lss_site->ms_server_fld, out,
+				       th);
+		if (rc) {
+			CERROR("%s: Can't Update fld database, rc %d\n",
+				seq->lss_name, rc);
 			GOTO(exit, rc);
-                }
-        }
-        /* next sequence update will need sync until this update is committed
-         * in case of sync operation this is not needed obviously */
-        if (!sync)
-                /* if callback can't be added then sync always */
-                sync = !!seq_update_cb_add(th, seq);
+		}
+	}
+	/* next sequence update will need sync until this update is committed
+	 * in case of sync operation this is not needed obviously */
+	if (!sync)
+		/* if callback can't be added then sync always */
+		sync = !!seq_update_cb_add(th, seq);
 
-        th->th_sync |= sync;
+	th->th_sync |= sync;
 exit:
-        dt_trans_stop(env, dt_dev, th);
-        return rc;
+	dt_trans_stop(env, dt_dev, th);
+	return rc;
 }
 
 /*

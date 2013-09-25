@@ -72,62 +72,69 @@ static const struct lu_seq_range IGIF_FLD_RANGE = {
 };
 
 const struct dt_index_features fld_index_features = {
-	.dif_flags       = DT_IND_UPDATE | DT_IND_RANGE,
-        .dif_keysize_min = sizeof(seqno_t),
-        .dif_keysize_max = sizeof(seqno_t),
-        .dif_recsize_min = sizeof(struct lu_seq_range),
-        .dif_recsize_max = sizeof(struct lu_seq_range),
-        .dif_ptrsize     = 4
+	.dif_flags       = DT_IND_UPDATE,
+	.dif_keysize_min = sizeof(seqno_t),
+	.dif_keysize_max = sizeof(seqno_t),
+	.dif_recsize_min = sizeof(struct lu_seq_range),
+	.dif_recsize_max = sizeof(struct lu_seq_range),
+	.dif_ptrsize     = 4
 };
 
 extern struct lu_context_key fld_thread_key;
 
-static struct dt_key *fld_key(const struct lu_env *env, const seqno_t seq)
+int fld_declare_index_create(const struct lu_env *env,
+			     struct lu_server_fld *fld,
+			     const struct lu_seq_range *new_range,
+			     struct thandle *th)
 {
-        struct fld_thread_info *info;
-        ENTRY;
+	struct lu_seq_range	*tmp;
+	struct lu_seq_range	*range;
+	struct fld_thread_info	*info;
+	int			rc = 0;
 
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        LASSERT(info != NULL);
+	ENTRY;
 
-        info->fti_key = cpu_to_be64(seq);
-        RETURN((void *)&info->fti_key);
-}
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	range = &info->fti_lrange;
+	tmp = &info->fti_irange;
+	memset(range, 0, sizeof(*range));
 
-static struct dt_rec *fld_rec(const struct lu_env *env,
-                              const struct lu_seq_range *range)
-{
-        struct fld_thread_info *info;
-        struct lu_seq_range *rec;
-        ENTRY;
-
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        LASSERT(info != NULL);
-        rec = &info->fti_rec;
-
-        range_cpu_to_be(rec, range);
-        RETURN((void *)rec);
-}
-
-int fld_declare_index_create(struct lu_server_fld *fld,
-                             const struct lu_env *env,
-                             const struct lu_seq_range *range,
-                             struct thandle *th)
-{
-        int rc;
-
-        ENTRY;
-
-	if (fld->lsf_no_range_lookup) {
-		/* Stub for underlying FS which can't lookup ranges */
-		return 0;
+	rc = fld_index_lookup(env, fld, new_range->lsr_start, range);
+	if (rc == 0) {
+		/* In case of duplicate entry, the location must be same */
+		LASSERT((range_compare_loc(new_range, range) == 0));
+		GOTO(out, rc = -EEXIST);
 	}
 
-        LASSERT(range_is_sane(range));
+	if (rc != -ENOENT) {
+		CERROR("%s: lookup range "DRANGE" error: rc = %d\n",
+			fld->lsf_name, PRANGE(range), rc);
+		GOTO(out, rc);
+	}
 
-	rc = dt_declare_insert(env, fld->lsf_obj, fld_rec(env, range),
-			      fld_key(env, range->lsr_start), th);
-        RETURN(rc);
+	/* Check for merge case, since the fld entry can only be increamental,
+	 * so we will only check whether it can be merged from the left. */
+	if (new_range->lsr_start == range->lsr_end && range->lsr_end != 0 &&
+	    range_compare_loc(new_range, range) == 0) {
+		range_cpu_to_be(tmp, range);
+		rc = dt_declare_delete(env, fld->lsf_obj,
+				       (struct dt_key *)&tmp->lsr_start, th);
+		if (rc) {
+			CERROR("%s: declare record "DRANGE" failed: rc = %d\n",
+			       fld->lsf_name, PRANGE(range), rc);
+			GOTO(out, rc);
+		}
+		memcpy(tmp, new_range, sizeof(*new_range));
+		tmp->lsr_start = range->lsr_start;
+	} else {
+		memcpy(tmp, new_range, sizeof(*new_range));
+	}
+
+	range_cpu_to_be(tmp, tmp);
+	rc = dt_declare_insert(env, fld->lsf_obj, (struct dt_rec *)tmp,
+			       (struct dt_key *)&tmp->lsr_start, th);
+out:
+	RETURN(rc);
 }
 
 /**
@@ -139,59 +146,75 @@ int fld_declare_index_create(struct lu_server_fld *fld,
  *
  *      \retval  0  success
  *      \retval  -ve error
- */
-int fld_index_create(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     const struct lu_seq_range *range,
-                     struct thandle *th)
+ *
+ * The whole fld index insertion is protected by seq->lss_mutex (see
+ * seq_server_alloc_super), i.e. only one thread will access fldb each
+ * time, so we do not need worry the fld file and cache will being
+ * changed between declare and create.
+ * Because the fld entry can only be increamental, so we will only check
+ * whether it can be merged from the left.
+ **/
+int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
+		     const struct lu_seq_range *new_range, struct thandle *th)
 {
-        int rc;
+	struct lu_seq_range	*range;
+	struct lu_seq_range	*tmp;
+	struct fld_thread_info	*info;
+	int			rc = 0;
+	int			deleted = 0;
+	struct fld_cache_entry	*flde;
+	ENTRY;
 
-        ENTRY;
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
 
-	if (fld->lsf_no_range_lookup) {
-		/* Stub for underlying FS which can't lookup ranges */
-		if (range->lsr_index != 0) {
-			CERROR("%s: FLD backend does not support range"
-			       "lookups, so DNE and FIDs-on-OST are not"
-			       "supported in this configuration\n",
-			       fld->lsf_name);
-			return -EINVAL;
-		}
+	LASSERT_MUTEX_LOCKED(&fld->lsf_lock);
+
+	range = &info->fti_lrange;
+	memset(range, 0, sizeof(*range));
+	tmp = &info->fti_irange;
+	rc = fld_index_lookup(env, fld, new_range->lsr_start, range);
+	if (rc != -ENOENT) {
+		rc = rc == 0 ? -EEXIST : rc;
+		GOTO(out, rc);
 	}
 
-        LASSERT(range_is_sane(range));
+	if (new_range->lsr_start == range->lsr_end && range->lsr_end != 0 &&
+	    range_compare_loc(new_range, range) == 0) {
+		range_cpu_to_be(tmp, range);
+		rc = dt_delete(env, fld->lsf_obj,
+			       (struct dt_key *)&tmp->lsr_start, th,
+				BYPASS_CAPA);
+		if (rc != 0)
+			GOTO(out, rc);
+		memcpy(tmp, new_range, sizeof(*new_range));
+		tmp->lsr_start = range->lsr_start;
+		deleted = 1;
+	} else {
+		memcpy(tmp, new_range, sizeof(*new_range));
+	}
 
-	rc = dt_insert(env, fld->lsf_obj, fld_rec(env, range),
-		       fld_key(env, range->lsr_start), th, BYPASS_CAPA, 1);
-        CDEBUG(D_INFO, "%s: insert given range : "DRANGE" rc = %d\n",
-               fld->lsf_name, PRANGE(range), rc);
-        RETURN(rc);
-}
+	range_cpu_to_be(tmp, tmp);
+	rc = dt_insert(env, fld->lsf_obj, (struct dt_rec *)tmp,
+		       (struct dt_key *)&tmp->lsr_start, th, BYPASS_CAPA, 1);
+	if (rc != 0) {
+		CERROR("%s: insert range "DRANGE" failed: rc = %d\n",
+		       fld->lsf_name, PRANGE(new_range), rc);
+		GOTO(out, rc);
+	}
 
-/**
- * delete range in fld store.
- *
- *      \param  range range to be deleted
- *      \param  th     transaction
- *
- *      \retval  0  success
- *      \retval  -ve error
- */
-int fld_index_delete(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     struct lu_seq_range *range,
-                     struct thandle   *th)
-{
-        int rc;
+	flde = fld_cache_entry_create(new_range);
+	if (IS_ERR(flde))
+		GOTO(out, rc = PTR_ERR(flde));
 
-        ENTRY;
-
-	rc = dt_delete(env, fld->lsf_obj, fld_key(env, range->lsr_start), th,
-		       BYPASS_CAPA);
-        CDEBUG(D_INFO, "%s: delete given range : "DRANGE" rc = %d\n",
-               fld->lsf_name, PRANGE(range), rc);
-        RETURN(rc);
+	spin_lock(&fld->lsf_cache->fci_lock);
+	if (deleted)
+		fld_cache_delete_nolock(fld->lsf_cache, new_range);
+	rc = fld_cache_insert_nolock(fld->lsf_cache, flde);
+	spin_unlock(&fld->lsf_cache->fci_lock);
+	if (rc)
+		OBD_FREE_PTR(flde);
+out:
+	RETURN(rc);
 }
 
 /**
@@ -205,40 +228,20 @@ int fld_index_delete(struct lu_server_fld *fld,
  * \retval -ENOENT      not found, \a range is the left-side range;
  * \retval  -ve         other error;
  */
-
-int fld_index_lookup(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     seqno_t seq,
-                     struct lu_seq_range *range)
+int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
+		     seqno_t seq, struct lu_seq_range *range)
 {
-        struct dt_object        *dt_obj = fld->lsf_obj;
         struct lu_seq_range     *fld_rec;
-        struct dt_key           *key = fld_key(env, seq);
         struct fld_thread_info  *info;
         int rc;
 
         ENTRY;
 
-	if (fld->lsf_no_range_lookup) {
-		/* Stub for underlying FS which can't lookup ranges */
-		range->lsr_start = 0;
-		range->lsr_end = ~0;
-		range->lsr_index = 0;
-		range->lsr_flags = LU_SEQ_RANGE_MDT;
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	fld_rec = &info->fti_rec;
 
-		range_cpu_to_be(range, range);
-		return 0;
-	}
-
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        fld_rec = &info->fti_rec;
-
-        rc = dt_obj->do_index_ops->dio_lookup(env, dt_obj,
-                                              (struct dt_rec*) fld_rec,
-                                              key, BYPASS_CAPA);
-
-        if (rc >= 0) {
-                range_be_to_cpu(fld_rec, fld_rec);
+	rc = fld_cache_lookup(fld->lsf_cache, seq, fld_rec);
+	if (rc == 0) {
                 *range = *fld_rec;
                 if (range_within(range, seq))
                         rc = 0;
@@ -253,25 +256,29 @@ int fld_index_lookup(struct lu_server_fld *fld,
 }
 
 static int fld_insert_igif_fld(struct lu_server_fld *fld,
-                               const struct lu_env *env)
+			       const struct lu_env *env)
 {
-        struct thandle *th;
-        int rc;
-        ENTRY;
+	struct thandle *th;
+	int rc;
+	ENTRY;
 
 	th = dt_trans_create(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev));
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
-	rc = fld_declare_index_create(fld, env, &IGIF_FLD_RANGE, th);
-	if (rc)
+
+	rc = fld_declare_index_create(env, fld, &IGIF_FLD_RANGE, th);
+	if (rc != 0) {
+		if (rc == -EEXIST)
+			rc = 0;
 		GOTO(out, rc);
+	}
 
 	rc = dt_trans_start_local(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev),
 				  th);
 	if (rc)
 		GOTO(out, rc);
 
-	rc = fld_index_create(fld, env, &IGIF_FLD_RANGE, th);
+	rc = fld_index_create(env, fld, &IGIF_FLD_RANGE, th);
 	if (rc == -EEXIST)
 		rc = 0;
 out:
@@ -279,73 +286,107 @@ out:
 	RETURN(rc);
 }
 
-int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_env *env,
-                   struct dt_device *dt)
+int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
+		   struct dt_device *dt)
 {
-        struct dt_object *dt_obj;
-        struct lu_fid fid;
-	struct lu_attr attr;
-	struct dt_object_format dof;
-        int rc;
-        ENTRY;
+	struct dt_object	*dt_obj = NULL;
+	struct lu_fid		fid;
+	struct lu_attr		*attr = NULL;
+	struct lu_seq_range	*range = NULL;
+	struct fld_thread_info	*info;
+	struct dt_object_format	dof;
+	struct dt_it		*it;
+	const struct dt_it_ops	*iops;
+	int			rc;
+	ENTRY;
+
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	LASSERT(info != NULL);
 
 	lu_local_obj_fid(&fid, FLD_INDEX_OID);
+	OBD_ALLOC_PTR(attr);
+	if (attr == NULL)
+		RETURN(-ENOMEM);
 
-	memset(&attr, 0, sizeof(attr));
-	attr.la_valid = LA_MODE;
-	attr.la_mode = S_IFREG | 0666;
+	memset(attr, 0, sizeof(attr));
+	attr->la_valid = LA_MODE;
+	attr->la_mode = S_IFREG | 0666;
 	dof.dof_type = DFT_INDEX;
 	dof.u.dof_idx.di_feat = &fld_index_features;
 
-	dt_obj = dt_find_or_create(env, dt, &fid, &dof, &attr);
-        if (!IS_ERR(dt_obj)) {
-                fld->lsf_obj = dt_obj;
-                rc = dt_obj->do_ops->do_index_try(env, dt_obj,
-                                                  &fld_index_features);
-                if (rc == 0) {
-                        LASSERT(dt_obj->do_index_ops != NULL);
-                        rc = fld_insert_igif_fld(fld, env);
+	dt_obj = dt_find_or_create(env, dt, &fid, &dof, attr);
+	if (IS_ERR(dt_obj)) {
+		rc = PTR_ERR(dt_obj);
+		CERROR("%s: Can't find \"%s\" obj %d\n", fld->lsf_name,
+			fld_index_name, rc);
+		dt_obj = NULL;
+		GOTO(out, rc);
+	}
 
-                        if (rc != 0) {
-                                CERROR("insert igif in fld! = %d\n", rc);
-                                lu_object_put(env, &dt_obj->do_lu);
-                                fld->lsf_obj = NULL;
-                        }
-		} else if (rc == -ERANGE) {
-			CWARN("%s: File \"%s\" doesn't support range lookup, "
-			      "using stub. DNE and FIDs on OST will not work "
-			      "with this backend\n",
-			      fld->lsf_name, fld_index_name);
-
-			LASSERT(dt_obj->do_index_ops == NULL);
-			fld->lsf_no_range_lookup = 1;
-			rc = 0;
-		} else {
-			CERROR("%s: File \"%s\" is not index, rc %d!\n",
-			       fld->lsf_name, fld_index_name, rc);
-			lu_object_put(env, &fld->lsf_obj->do_lu);
-			fld->lsf_obj = NULL;
+	fld->lsf_obj = dt_obj;
+	rc = dt_obj->do_ops->do_index_try(env, dt_obj, &fld_index_features);
+	if (rc == 0) {
+		LASSERT(dt_obj->do_index_ops != NULL);
+		mutex_lock(&fld->lsf_lock);
+		rc = fld_insert_igif_fld(fld, env);
+		mutex_unlock(&fld->lsf_lock);
+		if (rc != 0) {
+			CERROR("insert igif in fld! = %d\n", rc);
+			GOTO(out, rc);
 		}
+	} else {
+		CERROR("%s: File \"%s\" is not an index: rc = %d!\n",
+		       fld->lsf_name, fld_index_name, rc);
+		GOTO(out, rc);
+	}
 
+	range = &info->fti_rec;
+	/* Load fld entry to cache */
+	iops = &dt_obj->do_index_ops->dio_it;
+	it = iops->init(env, dt_obj, 0, NULL);
+	if (IS_ERR(it))
+		GOTO(out, rc = PTR_ERR(it));
 
-        } else {
-                CERROR("%s: Can't find \"%s\" obj %d\n",
-                       fld->lsf_name, fld_index_name, (int)PTR_ERR(dt_obj));
-                rc = PTR_ERR(dt_obj);
-        }
+	rc = iops->load(env, it, 0);
+	if (rc < 0)
+		GOTO(out_it_fini, rc);
 
-        RETURN(rc);
+	do {
+		rc = iops->rec(env, it, (struct dt_rec *)range, 0);
+		if (rc != 0)
+			GOTO(out_it_fini, rc);
+
+		LASSERT(range != NULL);
+		range_be_to_cpu(range, range);
+		rc = fld_cache_insert(fld->lsf_cache, range);
+		if (rc != 0)
+			GOTO(out_it_fini, rc);
+		rc = iops->next(env, it);
+
+	} while (rc == 0);
+	rc = 0;
+
+out_it_fini:
+	iops->fini(env, it);
+out:
+	if (attr != NULL)
+		OBD_FREE_PTR(attr);
+
+	if (rc != 0) {
+		if (dt_obj != NULL)
+			lu_object_put(env, &dt_obj->do_lu);
+		fld->lsf_obj = NULL;
+	}
+	RETURN(rc);
 }
 
-void fld_index_fini(struct lu_server_fld *fld,
-                    const struct lu_env *env)
+void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld)
 {
-        ENTRY;
-        if (fld->lsf_obj != NULL) {
-                if (!IS_ERR(fld->lsf_obj))
-                        lu_object_put(env, &fld->lsf_obj->do_lu);
-                fld->lsf_obj = NULL;
-        }
-        EXIT;
+	ENTRY;
+	if (fld->lsf_obj != NULL) {
+		if (!IS_ERR(fld->lsf_obj))
+			lu_object_put(env, &fld->lsf_obj->do_lu);
+		fld->lsf_obj = NULL;
+	}
+	EXIT;
 }

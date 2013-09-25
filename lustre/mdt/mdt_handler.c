@@ -4123,7 +4123,7 @@ static int mdt_fld_fini(const struct lu_env *env,
         ENTRY;
 
         if (ms && ms->ms_server_fld) {
-                fld_server_fini(ms->ms_server_fld, env);
+		fld_server_fini(env, ms->ms_server_fld);
                 OBD_FREE_PTR(ms->ms_server_fld);
                 ms->ms_server_fld = NULL;
         }
@@ -4145,9 +4145,8 @@ static int mdt_fld_init(const struct lu_env *env,
         if (ms->ms_server_fld == NULL)
                 RETURN(rc = -ENOMEM);
 
-        rc = fld_server_init(ms->ms_server_fld,
-                             m->mdt_bottom, uuid,
-                             env, ms->ms_node_id);
+	rc = fld_server_init(env, ms->ms_server_fld, m->mdt_bottom, uuid,
+			     ms->ms_node_id);
         if (rc) {
                 OBD_FREE_PTR(ms->ms_server_fld);
                 ms->ms_server_fld = NULL;

@@ -63,7 +63,17 @@ int lmv_fld_lookup(struct lmv_obd *lmv,
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds,
+
+	/* FIXME: Because ZFS still use LOCAL fid sequence for root,
+	 * and root will always be in MDT0, for local fid, it will
+	 * return 0 directly. And it should be removed once the root
+	 * FID has been assigned with special sequence */
+	if (fid_seq(fid) == FID_SEQ_LOCAL_FILE) {
+		*mds = 0;
+		RETURN(0);
+	}
+
+	rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds,
                                LU_SEQ_RANGE_MDT, NULL);
         if (rc) {
                 CERROR("Error while looking for mds number. Seq "LPX64

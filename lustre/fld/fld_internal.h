@@ -112,6 +112,7 @@ struct fld_cache {
         /**
          * Cache name used for debug and messages. */
         char                     fci_name[80];
+	int			fci_no_shrink:1;
 };
 
 enum fld_op {
@@ -150,26 +151,21 @@ struct fld_thread_info {
 
 extern struct lu_context_key fld_thread_key;
 
-int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_env *env,
-                   struct dt_device *dt);
+int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
+		   struct dt_device *dt);
 
-void fld_index_fini(struct lu_server_fld *fld,
-                    const struct lu_env *env);
+void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld);
 
-int fld_index_create(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     const struct lu_seq_range *range,
-                     struct thandle *th);
+int fld_declare_index_create(const struct lu_env *env,
+			     struct lu_server_fld *fld,
+			     const struct lu_seq_range *new,
+			     struct thandle *th);
 
-int fld_index_delete(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     struct lu_seq_range *range,
-                     struct thandle *th);
+int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
+		     const struct lu_seq_range *new, struct thandle *th);
 
-int fld_index_lookup(struct lu_server_fld *fld,
-                     const struct lu_env *env,
-                     seqno_t seq, struct lu_seq_range *range);
+int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
+		     seqno_t seq, struct lu_seq_range *range);
 
 int fld_client_rpc(struct obd_export *exp,
                    struct lu_seq_range *range, __u32 fld_op);
@@ -188,14 +184,32 @@ void fld_cache_fini(struct fld_cache *cache);
 
 void fld_cache_flush(struct fld_cache *cache);
 
-void fld_cache_insert(struct fld_cache *cache,
-                      const struct lu_seq_range *range);
+int fld_cache_insert(struct fld_cache *cache,
+		     const struct lu_seq_range *range);
 
+struct fld_cache_entry
+*fld_cache_entry_create(const struct lu_seq_range *range);
+
+int fld_cache_insert_nolock(struct fld_cache *cache,
+			    struct fld_cache_entry *f_new);
 void fld_cache_delete(struct fld_cache *cache,
                       const struct lu_seq_range *range);
-
+void fld_cache_delete_nolock(struct fld_cache *cache,
+			     const struct lu_seq_range *range);
 int fld_cache_lookup(struct fld_cache *cache,
                      const seqno_t seq, struct lu_seq_range *range);
+
+struct fld_cache_entry*
+fld_cache_entry_lookup(struct fld_cache *cache, struct lu_seq_range *range);
+void fld_cache_entry_delete(struct fld_cache *cache,
+			    struct fld_cache_entry *node);
+void fld_dump_cache_entries(struct fld_cache *cache);
+
+struct fld_cache_entry
+*fld_cache_entry_lookup_nolock(struct fld_cache *cache,
+			      struct lu_seq_range *range);
+int fld_write_range(const struct lu_env *env, struct dt_object *dt,
+		    const struct lu_seq_range *range, struct thandle *th);
 
 static inline const char *
 fld_target_name(struct lu_fld_target *tar)
