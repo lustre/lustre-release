@@ -406,12 +406,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 RETURN(rc);
         }
 
-        /*
-         * Init fid sequence client for this mdc and add new fld target.
-         */
-	rc = obd_fid_init(mdc_exp, LUSTRE_SEQ_METADATA);
-        if (rc)
-                RETURN(rc);
+	/*
+	 * Init fid sequence client for this mdc and add new fld target.
+	 */
+	rc = obd_fid_init(mdc_obd, mdc_exp, LUSTRE_SEQ_METADATA);
+	if (rc)
+		RETURN(rc);
 
         target.ft_srv = NULL;
         target.ft_exp = mdc_exp;
@@ -634,9 +634,9 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 }
         }
 #endif
-        rc = obd_fid_fini(tgt->ltd_exp);
-        if (rc)
-                CERROR("Can't finanize fids factory\n");
+	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
+	if (rc)
+		CERROR("Can't finanize fids factory\n");
 
         CDEBUG(D_INFO, "Disconnected from %s(%s) successfully\n",
                tgt->ltd_exp->exp_obd->obd_name,

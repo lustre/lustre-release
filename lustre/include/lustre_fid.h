@@ -434,8 +434,9 @@ int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss);
 int fid_is_local(const struct lu_env *env,
                  struct lu_site *site, const struct lu_fid *fid);
 
-int client_fid_init(struct obd_export *exp, enum lu_cli_type type);
-int client_fid_fini(struct obd_export *exp);
+int client_fid_init(struct obd_device *obd, struct obd_export *exp,
+		    enum lu_cli_type type);
+int client_fid_fini(struct obd_device *obd);
 
 /* fid locking */
 

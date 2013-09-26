@@ -77,7 +77,8 @@ struct lod_device {
 	cfs_proc_dir_entry_t *lod_proc_entry;
 	struct lprocfs_stats *lod_stats;
 	int		      lod_connects;
-	int		      lod_recovery_completed;
+	unsigned int	      lod_recovery_completed:1,
+			      lod_initialized:1;
 
 	/* lov settings descriptor storing static information */
 	struct lov_desc	      lod_desc;
@@ -247,6 +248,9 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 	if ((__dev)->lod_osts_size > 0)	\
 		cfs_foreach_bit((__dev)->lod_ost_bitmap, (index))
 
+/* lod_dev.c */
+int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
+		   const struct lu_fid *fid, mdsno_t *tgt, int flags);
 /* lod_lov.c */
 void lod_getref(struct lod_device *lod);
 void lod_putref(struct lod_device *lod);

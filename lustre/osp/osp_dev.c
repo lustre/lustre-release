@@ -248,6 +248,8 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	/* stop sync thread */
 	osp_sync_fini(d);
 
+	obd_fid_fini(d->opd_obd);
+
 	RETURN(rc);
 }
 
@@ -512,6 +514,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	if (rc)
 		GOTO(out_precreat, rc);
 
+	rc = obd_fid_init(m->opd_obd, NULL, LUSTRE_SEQ_DATA);
+	if (rc) {
+		CERROR("%s: fid init error: rc = %d\n",
+		       m->opd_obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
 	/*
 	 * Initiate connect to OST
 	 */
@@ -663,8 +672,7 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 		RETURN(rc);
 
 	*exp = class_conn2export(&conn);
-	if (is_osp_on_ost(obd->obd_name))
-		osp->opd_exp = *exp;
+	osp->opd_exp = *exp;
 
 	/* Why should there ever be more than 1 connect? */
 	osp->opd_connects++;
@@ -834,6 +842,9 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_imp_seen_connected = 1;
 		if (is_osp_on_ost(d->opd_obd->obd_name))
 			break;
+		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
+			d->opd_obd->u.cli.cl_seq->lcs_exp =
+					class_export_get(d->opd_exp);
 		cfs_waitq_signal(&d->opd_pre_waitq);
 		__osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");
@@ -970,6 +981,8 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_import_event	= osp_import_event,
 	.o_iocontrol	= osp_iocontrol,
 	.o_statfs	= osp_obd_statfs,
+	.o_fid_init	= client_fid_init,
+	.o_fid_fini	= client_fid_fini,
 };
 
 struct llog_operations osp_mds_ost_orig_logops;

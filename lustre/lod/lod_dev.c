@@ -48,6 +48,51 @@
 
 #include "lod_internal.h"
 
+/**
+ * Lookup MDT/OST index \a tgt by FID \a fid.
+ *
+ * \param lod LOD to be lookup at.
+ * \param fid FID of object to find MDT/OST.
+ * \param tgt MDT/OST index to return.
+ * \param flags indidcate the FID is on MDS or OST.
+ **/
+int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
+		   const struct lu_fid *fid, __u32 *tgt, int flags)
+{
+	struct lu_seq_range	range;
+	struct lu_server_fld	*server_fld;
+	int rc = 0;
+	ENTRY;
+
+	LASSERTF(fid_is_sane(fid), "Invalid FID "DFID"\n", PFID(fid));
+	if (fid_is_idif(fid)) {
+		*tgt = fid_idif_ost_idx(fid);
+		RETURN(rc);
+	}
+
+	if (!lod->lod_initialized || !fid_is_norm(fid)) {
+		LASSERT(lu_site2seq(lod2lu_dev(lod)->ld_site) != NULL);
+		*tgt = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
+		RETURN(rc);
+	}
+
+	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
+	range.lsr_flags = flags;
+	rc = fld_server_lookup(env, server_fld, fid_seq(fid), &range);
+	if (rc) {
+		CERROR("%s: Can't find tgt by seq "LPX64", rc %d\n",
+		       lod2obd(lod)->obd_name, fid_seq(fid), rc);
+		RETURN(rc);
+	}
+
+	*tgt = range.lsr_index;
+
+	CDEBUG(D_INFO, "LOD: got tgt %x for sequence: "
+	       LPX64"\n", *tgt, fid_seq(fid));
+
+	RETURN(rc);
+}
+
 extern struct lu_object_operations lod_lu_obj_ops;
 extern struct dt_object_operations lod_obj_ops;
 
@@ -214,6 +259,13 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	ENTRY;
 
 	rc = next->ld_ops->ldo_prepare(env, pdev, next);
+	if (rc != 0) {
+		CERROR("%s: prepare bottom error: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		RETURN(rc);
+	}
+
+	lod->lod_initialized = 1;
 
 	RETURN(rc);
 }

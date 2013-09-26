@@ -58,9 +58,10 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-int client_fid_init(struct obd_export *exp, enum lu_cli_type type)
+int client_fid_init(struct obd_device *obd,
+		    struct obd_export *exp, enum lu_cli_type type)
 {
-	struct client_obd *cli = &exp->exp_obd->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 	char *prefix;
 	int rc;
 	ENTRY;
@@ -73,8 +74,7 @@ int client_fid_init(struct obd_export *exp, enum lu_cli_type type)
 	if (prefix == NULL)
 		GOTO(out_free_seq, rc = -ENOMEM);
 
-	snprintf(prefix, MAX_OBD_NAME + 5, "cli-%s",
-		 exp->exp_obd->obd_name);
+	snprintf(prefix, MAX_OBD_NAME + 5, "cli-%s", obd->obd_name);
 
 	/* Init client side sequence-manager */
 	rc = seq_client_init(cli->cl_seq, exp, type, prefix, NULL);
@@ -90,9 +90,9 @@ out_free_seq:
 }
 EXPORT_SYMBOL(client_fid_init);
 
-int client_fid_fini(struct obd_export *exp)
+int client_fid_fini(struct obd_device *obd)
 {
-	struct client_obd *cli = &exp->exp_obd->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 	ENTRY;
 
 	if (cli->cl_seq != NULL) {

@@ -104,6 +104,7 @@ void lod_putref(struct lod_device *lod)
 				CERROR("%s: qos_del_tgt(%s) failed: rc = %d\n",
 				       lod2obd(lod)->obd_name,
 				       obd_uuid2str(&ost_desc->ltd_uuid), rc);
+
 			rc = obd_disconnect(ost_desc->ltd_exp);
 			if (rc)
 				CERROR("%s: failed to disconnect %s: rc = %d\n",
@@ -449,19 +450,27 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	}
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		const struct lu_fid *fid;
+		const struct lu_fid	*fid;
+		struct lod_device	*lod;
+		__u32			index;
 
+		lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 		LASSERT(lo->ldo_stripe[i]);
 		fid = lu_object_fid(&lo->ldo_stripe[i]->do_lu);
 
 		rc = fid_ostid_pack(fid, &info->lti_ostid);
 		LASSERT(rc == 0);
-		LASSERT(info->lti_ostid.oi_seq == FID_SEQ_OST_MDT0);
 
 		objs[i].l_object_id  = cpu_to_le64(info->lti_ostid.oi_id);
 		objs[i].l_object_seq = cpu_to_le64(info->lti_ostid.oi_seq);
 		objs[i].l_ost_gen    = cpu_to_le32(0);
-		objs[i].l_ost_idx    = cpu_to_le32(fid_idif_ost_idx(fid));
+		rc = lod_fld_lookup(env, lod, fid, &index, LU_SEQ_RANGE_OST);
+		if (rc < 0) {
+			CERROR("%s: Can not locate "DFID": rc = %d\n",
+			       lod2obd(lod)->obd_name, PFID(fid), rc);
+			RETURN(rc);
+		}
+		objs[i].l_ost_idx = cpu_to_le32(index);
 	}
 
 	info->lti_buf.lb_buf = lmm;
@@ -590,13 +599,12 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	lo->ldo_stripes_allocated = lo->ldo_stripenr;
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-
 		info->lti_ostid.oi_id = le64_to_cpu(objs[i].l_object_id);
-		/* XXX: support for DNE? */
 		info->lti_ostid.oi_seq = le64_to_cpu(objs[i].l_object_seq);
 		idx = le64_to_cpu(objs[i].l_ost_idx);
 		fid_ostid_unpack(&info->lti_fid, &info->lti_ostid, idx);
-
+		LASSERTF(fid_is_sane(&info->lti_fid), ""DFID" insane!\n",
+			 PFID(&info->lti_fid));
 		/*
 		 * XXX: assertion is left for testing, to make
 		 * sure we never process requests till configuration
