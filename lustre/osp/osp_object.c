@@ -48,23 +48,18 @@
 
 #include "osp_internal.h"
 
-static __u64 osp_object_assign_id(const struct lu_env *env,
-				  struct osp_device *d, struct osp_object *o)
+static void osp_object_assign_fid(const struct lu_env *env,
+				 struct osp_device *d, struct osp_object *o)
 {
-	struct osp_thread_info	*osi = osp_env_info(env);
-	const struct lu_fid	*f = lu_object_fid(&o->opo_obj.do_lu);
+	struct osp_thread_info *osi = osp_env_info(env);
 
-	LASSERT(fid_is_zero(f));
+	LASSERT(fid_is_zero(lu_object_fid(&o->opo_obj.do_lu)));
 	LASSERT(o->opo_reserved);
 	o->opo_reserved = 0;
 
-	/* assign fid to anonymous object */
-	osi->osi_oi.oi_id = osp_precreate_get_id(d);
-	osi->osi_oi.oi_seq = FID_SEQ_OST_MDT0;
-	fid_ostid_unpack(&osi->osi_fid, &osi->osi_oi, d->opd_index);
-	lu_object_assign_fid(env, &o->opo_obj.do_lu, &osi->osi_fid);
+	osp_precreate_get_fid(env, d, &osi->osi_fid);
 
-	return osi->osi_oi.oi_id;
+	lu_object_assign_fid(env, &o->opo_obj.do_lu, &osi->osi_fid);
 }
 
 static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
@@ -101,7 +96,7 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	if (attr->la_valid & LA_SIZE && attr->la_size > 0) {
 		LASSERT(!dt_object_exists(dt));
-		osp_object_assign_id(env, d, o);
+		osp_object_assign_fid(env, d, o);
 		rc = osp_object_truncate(env, dt, attr->la_size);
 		if (rc)
 			RETURN(rc);
@@ -177,7 +172,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL) && d->opd_index == 1)
 		RETURN(-ENOSPC);
 
-	LASSERT(d->opd_last_used_file);
+	LASSERT(d->opd_last_used_oid_file);
 	fid = lu_object_fid(&dt->do_lu);
 
 	/*
@@ -191,7 +186,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 	if (unlikely(!fid_is_zero(fid))) {
 		/* replay case: caller knows fid */
 		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
-		rc = dt_declare_record_write(env, d->opd_last_used_file,
+		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
 					     sizeof(osi->osi_id), osi->osi_off,
 					     th);
 		RETURN(rc);
@@ -215,7 +210,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 		/* common for all OSPs file hystorically */
 		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
-		rc = dt_declare_record_write(env, d->opd_last_used_file,
+		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
 					     sizeof(osi->osi_id), osi->osi_off,
 					     th);
 	} else {
@@ -234,25 +229,29 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object	*o = dt2osp_obj(dt);
-	int			 rc = 0;
-
+	int			rc = 0;
+	struct lu_fid		*fid = &osi->osi_fid;
 	ENTRY;
 
 	if (o->opo_reserved) {
-		/* regular case, id is assigned holding transaction open */
-		osi->osi_id = osp_object_assign_id(env, d, o);
-	} else {
+		/* regular case, fid is assigned holding trunsaction open */
+		 osp_object_assign_fid(env, d, o);
+	}
+
+	memcpy(fid, lu_object_fid(&dt->do_lu), sizeof(*fid));
+
+	LASSERTF(fid_is_sane(fid), "fid for osp_obj %p is insane"DFID"!\n",
+		 osp_obj, PFID(fid));
+
+	if (!o->opo_reserved) {
 		/* special case, id was assigned outside of transaction
 		 * see comments in osp_declare_attr_set */
-		rc = fid_ostid_pack(lu_object_fid(&dt->do_lu), &osi->osi_oi);
-		LASSERT(rc == 0);
-		osi->osi_id = ostid_id(&osi->osi_oi);
 		spin_lock(&d->opd_pre_lock);
-		osp_update_last_id(d, osi->osi_id);
+		osp_update_last_fid(d, fid);
 		spin_unlock(&d->opd_pre_lock);
 	}
 
-	LASSERT(osi->osi_id);
+	CDEBUG(D_INODE, "fid for osp_obj %p is "DFID"!\n", osp_obj, PFID(fid));
 
 	/*
 	 * it's OK if the import is inactive by this moment - id was created
@@ -266,13 +265,12 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 		spin_lock(&d->opd_pre_lock);
 		if (d->opd_gap_count > 0) {
 			int count = d->opd_gap_count;
-
-			osi->osi_oi.oi_id = d->opd_gap_start;
+			osi->osi_oi.oi_id = fid_oid(&d->opd_gap_start_fid);
 			d->opd_gap_count = 0;
 			spin_unlock(&d->opd_pre_lock);
 
-			CDEBUG(D_HA, "Found gap "LPU64"+%d in objids\n",
-			       d->opd_gap_start, count);
+			CDEBUG(D_HA, "Writting gap "DFID"+%d in llog\n",
+			       PFID(&d->opd_gap_start_fid), count);
 			/* real gap handling is disabled intil ORI-692 will be
 			 * fixed, now we only report gaps */
 		} else {
@@ -284,12 +282,16 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	 * initializing attributes needs no logging */
 	o->opo_new = 1;
 
-	osp_objid_buf_prep(osi, d, d->opd_index);
-	rc = dt_record_write(env, d->opd_last_used_file, &osi->osi_lb,
+	/* Only need update last_used oid file, seq file will only be update
+	 * during seq rollover */
+	osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off,
+			   &d->opd_last_used_fid.f_oid, d->opd_index);
+
+	rc = dt_record_write(env, d->opd_last_used_oid_file, &osi->osi_lb,
 			     &osi->osi_off, th);
 
-	CDEBUG(D_HA, "%s: Wrote last used ID: "LPU64": %d\n",
-	       d->opd_obd->obd_name, le64_to_cpu(d->opd_last_used_id), rc);
+	CDEBUG(D_HA, "%s: Wrote last used FID: "DFID", index %d: %d\n",
+	       d->opd_obd->obd_name, PFID(fid), d->opd_index, rc);
 
 	RETURN(rc);
 }

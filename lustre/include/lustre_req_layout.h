@@ -203,6 +203,8 @@ extern struct req_format RQF_OST_STATFS;
 extern struct req_format RQF_OST_SET_GRANT_INFO;
 extern struct req_format RQF_OST_GET_INFO_GENERIC;
 extern struct req_format RQF_OST_GET_INFO_LAST_ID;
+extern struct req_format RQF_OST_GET_INFO_LAST_FID;
+extern struct req_format RQF_OST_SET_INFO_LAST_FID;
 extern struct req_format RQF_OST_GET_INFO_FIEMAP;
 
 /* LDLM req_format */
@@ -274,6 +276,7 @@ extern struct req_msg_field RMF_STRING;
 /* seq-mgr fields */
 extern struct req_msg_field RMF_SEQ_OPC;
 extern struct req_msg_field RMF_SEQ_RANGE;
+extern struct req_msg_field RMF_FID_SPACE;
 
 /* FLD fields */
 extern struct req_msg_field RMF_FLD_OPC;
@@ -289,6 +292,7 @@ extern struct req_msg_field RMF_MGS_SEND_PARAM;
 extern struct req_msg_field RMF_OST_BODY;
 extern struct req_msg_field RMF_OBD_IOOBJ;
 extern struct req_msg_field RMF_OBD_ID;
+extern struct req_msg_field RMF_FID;
 extern struct req_msg_field RMF_NIOBUF_REMOTE;
 extern struct req_msg_field RMF_RCS;
 extern struct req_msg_field RMF_FIEMAP_KEY;

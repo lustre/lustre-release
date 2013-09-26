@@ -428,7 +428,6 @@ int seq_client_alloc_fid(const struct lu_env *env, struct lu_client_seq *seq,
                          struct lu_fid *fid);
 int seq_client_get_seq(const struct lu_env *env, struct lu_client_seq *seq,
                        seqno_t *seqnr);
-
 int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss);
 /* Fids common stuff */
 int fid_is_local(const struct lu_env *env,
@@ -580,6 +579,18 @@ static inline __u32 fid_flatten32(const struct lu_fid *fid)
                (fid_oid(fid) & 0xff000fff) + ((fid_oid(fid) & 0x00fff000) << 8);
 
         RETURN(ino ? ino : fid_oid(fid));
+}
+
+static inline int lu_fid_diff(struct lu_fid *fid1, struct lu_fid *fid2)
+{
+	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID", fid2:"DFID"\n",
+		 PFID(fid1), PFID(fid2));
+
+	if (fid_is_idif(fid1) && fid_is_idif(fid2))
+		return fid_idif_id(fid1->f_seq, fid1->f_oid, fid1->f_ver) -
+		       fid_idif_id(fid2->f_seq, fid2->f_oid, fid2->f_ver);
+
+	return fid_oid(fid1) - fid_oid(fid2);
 }
 
 #define LUSTRE_SEQ_SRV_NAME "seq_srv"

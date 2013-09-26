@@ -291,7 +291,8 @@ static int osp_rd_prealloc_next_id(char *page, char **start, off_t off,
 	if (osp == NULL)
 		return 0;
 
-	return snprintf(page, count, LPU64"\n", osp->opd_pre_used_id + 1);
+	return snprintf(page, count, "%u\n",
+			fid_oid(&osp->opd_pre_used_fid) + 1);
 }
 
 static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,
@@ -303,7 +304,34 @@ static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,
 	if (osp == NULL)
 		return 0;
 
-	return snprintf(page, count, LPU64"\n", osp->opd_pre_last_created);
+	return snprintf(page, count, "%u\n",
+			fid_oid(&osp->opd_pre_last_created_fid));
+}
+
+static int osp_rd_prealloc_next_seq(char *page, char **start, off_t off,
+				    int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, LPX64"\n",
+			fid_seq(&osp->opd_pre_used_fid));
+}
+
+static int osp_rd_prealloc_last_seq(char *page, char **start, off_t off,
+				    int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, LPX64"\n",
+			fid_seq(&osp->opd_pre_last_created_fid));
 }
 
 static int osp_rd_prealloc_reserved(char *page, char **start, off_t off,
@@ -414,7 +442,9 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ "max_create_count",	osp_rd_max_create_count,
 				osp_wr_max_create_count, 0 },
 	{ "prealloc_next_id",	osp_rd_prealloc_next_id, 0, 0 },
-	{ "prealloc_last_id",	osp_rd_prealloc_last_id, 0, 0 },
+	{ "prealloc_next_seq",  osp_rd_prealloc_next_seq, 0, 0 },
+	{ "prealloc_last_id",   osp_rd_prealloc_last_id,  0, 0 },
+	{ "prealloc_last_seq",  osp_rd_prealloc_last_seq, 0, 0 },
 	{ "prealloc_reserved",	osp_rd_prealloc_reserved, 0, 0 },
 	{ "timeouts",		lprocfs_rd_timeouts, 0, 0 },
 	{ "import",		lprocfs_rd_import, lprocfs_wr_import, 0 },

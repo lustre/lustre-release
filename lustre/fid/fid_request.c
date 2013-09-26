@@ -268,8 +268,7 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq)
 }
 
 /**
- * Allocate the whole seq to the caller, currently it would be
- * only used by echo client to access MDT
+ * Allocate the whole seq to the caller.
  **/
 int seq_client_get_seq(const struct lu_env *env,
                        struct lu_client_seq *seq, seqno_t *seqnr)
@@ -301,11 +300,13 @@ int seq_client_get_seq(const struct lu_env *env,
 
 	/* Since the caller require the whole seq,
 	 * so marked this seq to be used */
-	LASSERT(seq->lcs_type == LUSTRE_SEQ_METADATA);
-	seq->lcs_fid.f_oid = LUSTRE_METADATA_SEQ_MAX_WIDTH;
+	if (seq->lcs_type == LUSTRE_SEQ_METADATA)
+		seq->lcs_fid.f_oid = LUSTRE_METADATA_SEQ_MAX_WIDTH;
+	else
+		seq->lcs_fid.f_oid = LUSTRE_DATA_SEQ_MAX_WIDTH;
+
 	seq->lcs_fid.f_seq = *seqnr;
 	seq->lcs_fid.f_ver = 0;
-
         /*
          * Inform caller that sequence switch is performed to allow it
          * to setup FLD for it.

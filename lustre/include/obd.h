@@ -1235,6 +1235,7 @@ enum obd_cleanup_stage {
 #define KEY_INIT_RECOV          "initial_recov"
 #define KEY_INTERMDS            "inter_mds"
 #define KEY_LAST_ID             "last_id"
+#define KEY_LAST_FID		"last_fid"
 #define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
 #define KEY_LOVDESC             "lovdesc"
 #define KEY_LOV_IDX             "lov_idx"

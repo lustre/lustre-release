@@ -1683,8 +1683,13 @@ check_seq_oid()
                 #       { error "mounting $dev as $FSTYPE failed"; return 3; }
                 #local obj_file=$(do_facet ost$ost find $dir/O/$seq -name $oid)
                 #local ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID $obj_file)
-
-                local obj_file="O/$seq/d$((oid %32))/$oid"
+		seq=$(echo $seq | sed -e "s/^0x//g")
+		if [ $seq == 0 ]; then
+			oid_hex=$(echo $oid)
+		else
+			oid_hex=$(echo $hex | sed -e "s/^0x//g")
+		fi
+                local obj_file="O/$seq/d$((oid %32))/$oid_hex"
                 local ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
                            $dev 2>/dev/null" | grep "parent=")
 

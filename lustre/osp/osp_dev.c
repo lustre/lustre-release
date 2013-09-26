@@ -39,6 +39,7 @@
  *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  * Author: Mikhail Pershin <mike.pershin@intel.com>
+ * Author: Di Wang <di.wang@intel.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -94,102 +95,211 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 	}
 }
 
-/* Update opd_last_used_id along with checking for gap in objid sequence */
-void osp_update_last_id(struct osp_device *d, obd_id objid)
+static struct dt_object
+*osp_find_or_create(const struct lu_env *env, struct osp_device *osp,
+		    struct lu_attr *attr, __u32 reg_id)
 {
-	/*
-	 * we might have lost precreated objects due to VBR and precreate
-	 * orphans, the gap in objid can be calculated properly only here
-	 */
-	if (objid > le64_to_cpu(d->opd_last_used_id)) {
-		if (objid - le64_to_cpu(d->opd_last_used_id) > 1) {
-			d->opd_gap_start = le64_to_cpu(d->opd_last_used_id) + 1;
-			d->opd_gap_count = objid - d->opd_gap_start;
-			CDEBUG(D_HA, "Gap in objids: %d, start = %llu\n",
-			       d->opd_gap_count, d->opd_gap_start);
-		}
-		d->opd_last_used_id = cpu_to_le64(objid);
-	}
-}
-
-static int osp_last_used_init(const struct lu_env *env, struct osp_device *m)
-{
-	struct osp_thread_info	*osi = osp_env_info(env);
-	struct dt_object_format	 dof = { 0 };
-	struct dt_object	*o;
-	int			 rc;
-
+	struct osp_thread_info *osi = osp_env_info(env);
+	struct dt_object_format dof = { 0 };
+	struct dt_object       *dto;
+	int		     rc;
 	ENTRY;
 
-	osi->osi_attr.la_valid = LA_MODE;
-	osi->osi_attr.la_mode = S_IFREG | 0644;
-	lu_local_obj_fid(&osi->osi_fid, MDD_LOV_OBJ_OID);
+	lu_local_obj_fid(&osi->osi_fid, reg_id);
+	attr->la_valid = LA_MODE;
+	attr->la_mode = S_IFREG | 0644;
 	dof.dof_type = DFT_REGULAR;
-	o = dt_find_or_create(env, m->opd_storage, &osi->osi_fid, &dof,
-			      &osi->osi_attr);
-	if (IS_ERR(o))
-		RETURN(PTR_ERR(o));
+	dto = dt_find_or_create(env, osp->opd_storage, &osi->osi_fid,
+				&dof, attr);
+	if (IS_ERR(dto))
+		RETURN(dto);
 
-	rc = dt_attr_get(env, o, &osi->osi_attr, NULL);
+	rc = dt_attr_get(env, dto, attr, NULL);
+	if (rc) {
+		CERROR("%s: can't be initialized: rc = %d\n",
+		       osp->opd_obd->obd_name, rc);
+		lu_object_put(env, &dto->do_lu);
+		RETURN(ERR_PTR(rc));
+	}
+	RETURN(dto);
+}
+
+static int osp_write_local_file(const struct lu_env *env,
+				struct osp_device *osp,
+				struct dt_object *dt_obj,
+				struct lu_buf *buf,
+				loff_t offset)
+{
+	struct thandle *th;
+	int rc;
+
+	th = dt_trans_create(env, osp->opd_storage);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_record_write(env, dt_obj, buf->lb_len, offset, th);
+	if (rc)
+		GOTO(out, rc);
+	rc = dt_trans_start_local(env, osp->opd_storage, th);
 	if (rc)
 		GOTO(out, rc);
 
-	/* object will be released in device cleanup path */
-	m->opd_last_used_file = o;
+	rc = dt_record_write(env, dt_obj, buf, &offset, th);
+out:
+	dt_trans_stop(env, osp->opd_storage, th);
+	RETURN(rc);
+}
 
-	if (osi->osi_attr.la_size >= sizeof(osi->osi_id) *
-				     (m->opd_index + 1)) {
-		osp_objid_buf_prep(osi, m, m->opd_index);
-		rc = dt_record_read(env, o, &osi->osi_lb, &osi->osi_off);
+static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
+{
+	struct osp_thread_info	*osi = osp_env_info(env);
+	struct lu_fid		*fid = &osp->opd_last_used_fid;
+	struct dt_object	*dto;
+	int			rc;
+	ENTRY;
+
+	dto = osp_find_or_create(env, osp, &osi->osi_attr, MDD_LOV_OBJ_OID);
+	if (IS_ERR(dto))
+		RETURN(PTR_ERR(dto));
+	/* object will be released in device cleanup path */
+	if (osi->osi_attr.la_size >=
+	    sizeof(osi->osi_id) * (osp->opd_index + 1)) {
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
+				   osp->opd_index);
+		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
 		if (rc != 0)
 			GOTO(out, rc);
 	} else {
-		/* reset value to 0, just to make sure and change file's size */
-		struct thandle *th;
-
-		m->opd_last_used_id = 0;
-		osp_objid_buf_prep(osi, m, m->opd_index);
-
-		th = dt_trans_create(env, m->opd_storage);
-		if (IS_ERR(th))
-			GOTO(out, rc = PTR_ERR(th));
-
-		rc = dt_declare_record_write(env, m->opd_last_used_file,
-					     osi->osi_lb.lb_len, osi->osi_off,
-					     th);
-		if (rc) {
-			dt_trans_stop(env, m->opd_storage, th);
-			GOTO(out, rc);
-		}
-
-		rc = dt_trans_start_local(env, m->opd_storage, th);
-		if (rc) {
-			dt_trans_stop(env, m->opd_storage, th);
-			GOTO(out, rc);
-		}
-
-		rc = dt_record_write(env, m->opd_last_used_file, &osi->osi_lb,
-				     &osi->osi_off, th);
-		dt_trans_stop(env, m->opd_storage, th);
-		if (rc)
-			GOTO(out, rc);
+		fid->f_oid = 0;
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
+				   osp->opd_index);
+		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
+					  osi->osi_off);
 	}
-	CDEBUG(D_HA, "%s: Read last used ID: "LPU64"\n", m->opd_obd->obd_name,
-	       le64_to_cpu(m->opd_last_used_id));
+	osp->opd_last_used_oid_file = dto;
 	RETURN(0);
 out:
-	CERROR("%s: can't initialize lov_objid: %d\n",
-	       m->opd_obd->obd_name, rc);
-	lu_object_put(env, &o->do_lu);
-	m->opd_last_used_file = NULL;
-	return rc;
+	/* object will be released in device cleanup path */
+	CERROR("%s: can't initialize lov_objid: rc = %d\n",
+	       osp->opd_obd->obd_name, rc);
+	lu_object_put(env, &dto->do_lu);
+	osp->opd_last_used_oid_file = NULL;
+	RETURN(rc);
+}
+
+static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
+{
+	struct osp_thread_info	*osi = osp_env_info(env);
+	struct lu_fid		*fid = &osp->opd_last_used_fid;
+	struct dt_object	*dto;
+	int			rc;
+	ENTRY;
+
+	dto = osp_find_or_create(env, osp, &osi->osi_attr, MDD_LOV_OBJ_OSEQ);
+	if (IS_ERR(dto))
+		RETURN(PTR_ERR(dto));
+
+	/* object will be released in device cleanup path */
+	if (osi->osi_attr.la_size >=
+	    sizeof(osi->osi_id) * (osp->opd_index + 1)) {
+		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
+				   osp->opd_index);
+		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
+		if (rc != 0)
+			GOTO(out, rc);
+	} else {
+		fid->f_seq = 0;
+		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
+				    osp->opd_index);
+		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
+					  osi->osi_off);
+	}
+	osp->opd_last_used_seq_file = dto;
+	RETURN(0);
+out:
+	/* object will be released in device cleanup path */
+	CERROR("%s: can't initialize lov_seq: rc = %d\n",
+	       osp->opd_obd->obd_name, rc);
+	lu_object_put(env, &dto->do_lu);
+	osp->opd_last_used_seq_file = NULL;
+	RETURN(rc);
+}
+
+static int osp_last_used_init(const struct lu_env *env, struct osp_device *osp)
+{
+	struct osp_thread_info *osi = osp_env_info(env);
+	int		     rc;
+	ENTRY;
+
+	fid_zero(&osp->opd_last_used_fid);
+	rc = osp_init_last_objid(env, osp);
+	if (rc < 0) {
+		CERROR("%s: Can not get ids %d from old objid!\n",
+		       osp->opd_obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	rc = osp_init_last_seq(env, osp);
+	if (rc < 0) {
+		CERROR("%s: Can not get ids %d from old objid!\n",
+		       osp->opd_obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	if (fid_oid(&osp->opd_last_used_fid) != 0 &&
+	    fid_seq(&osp->opd_last_used_fid) == 0) {
+		/* Just upgrade from the old version,
+		 * set the seq to be IDIF */
+		osp->opd_last_used_fid.f_seq =
+		   fid_idif_seq(fid_oid(&osp->opd_last_used_fid),
+				osp->opd_index);
+		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off,
+				    &osp->opd_last_used_fid.f_seq,
+				    osp->opd_index);
+		rc = osp_write_local_file(env, osp, osp->opd_last_used_seq_file,
+					  &osi->osi_lb, osi->osi_off);
+		if (rc) {
+			CERROR("%s : Can not write seq file: rc = %d\n",
+			       osp->opd_obd->obd_name, rc);
+			GOTO(out, rc);
+		}
+	}
+
+	if (!fid_is_zero(&osp->opd_last_used_fid) &&
+		 !fid_is_sane(&osp->opd_last_used_fid)) {
+		CERROR("%s: Got invalid FID "DFID"\n", osp->opd_obd->obd_name,
+			PFID(&osp->opd_last_used_fid));
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CDEBUG(D_INFO, "%s: Init last used fid "DFID"\n",
+	       osp->opd_obd->obd_name, PFID(&osp->opd_last_used_fid));
+out:
+	if (rc != 0) {
+		if (osp->opd_last_used_oid_file != NULL) {
+			lu_object_put(env, &osp->opd_last_used_oid_file->do_lu);
+			osp->opd_last_used_oid_file = NULL;
+		}
+		if (osp->opd_last_used_seq_file != NULL) {
+			lu_object_put(env, &osp->opd_last_used_seq_file->do_lu);
+			osp->opd_last_used_seq_file = NULL;
+		}
+	}
+
+	RETURN(rc);
 }
 
 static void osp_last_used_fini(const struct lu_env *env, struct osp_device *d)
 {
-	if (d->opd_last_used_file != NULL) {
-		lu_object_put(env, &d->opd_last_used_file->do_lu);
-		d->opd_last_used_file = NULL;
+	/* release last_used file */
+	if (d->opd_last_used_oid_file != NULL) {
+		lu_object_put(env, &d->opd_last_used_oid_file->do_lu);
+		d->opd_last_used_oid_file = NULL;
+	}
+
+	if (d->opd_last_used_seq_file != NULL) {
+		lu_object_put(env, &d->opd_last_used_seq_file->do_lu);
+		d->opd_last_used_seq_file = NULL;
 	}
 }
 
@@ -341,8 +451,15 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * layer above osp (usually lod) can use ffree to estimate
 	 * how many objects are available for immediate creation
 	 */
+
 	spin_lock(&d->opd_pre_lock);
-	sfs->os_fprecreated = d->opd_pre_last_created - d->opd_pre_used_id;
+	LASSERTF(fid_seq(&d->opd_pre_last_created_fid) ==
+		 fid_seq(&d->opd_pre_used_fid),
+		 "last_created "DFID", next_fid "DFID"\n",
+		 PFID(&d->opd_pre_last_created_fid),
+		 PFID(&d->opd_pre_used_fid));
+	sfs->os_fprecreated = fid_oid(&d->opd_pre_last_created_fid) -
+			      fid_oid(&d->opd_pre_used_fid);
 	sfs->os_fprecreated -= d->opd_pre_reserved;
 	spin_unlock(&d->opd_pre_lock);
 
@@ -781,9 +898,8 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	ptlrpc_pinger_add_import(imp);
 
-	/* set seq controller export for MDC0 if exists */
-	if (osp->opd_connect_mdt && !is_osp_for_connection(obd->obd_name) &&
-	    data->ocd_index == 0) {
+	if (osp->opd_connect_mdt && data->ocd_index == 0 &&
+	    !is_osp_for_connection(obd->obd_name)) {
 		struct seq_server_site *ss;
 
 		ss = lu_site2seq(osp2lu_dev(osp)->ld_site);
@@ -921,9 +1037,6 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_imp_seen_connected = 1;
 		if (d->opd_connect_mdt)
 			break;
-		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
-			d->opd_obd->u.cli.cl_seq->lcs_exp =
-					class_export_get(d->opd_exp);
 		cfs_waitq_signal(&d->opd_pre_waitq);
 		__osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");

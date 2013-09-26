@@ -128,10 +128,11 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		RETURN(0);
 
 	CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
-	       " ocd_version: %x ocd_grant: %d ocd_index: %u\n",
+	       " ocd_version: %x ocd_grant: %d ocd_index: %u"
+	       " ocd_group %u\n",
 	       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
 	       data->ocd_connect_flags, data->ocd_version,
-	       data->ocd_grant, data->ocd_index);
+	       data->ocd_grant, data->ocd_index, data->ocd_group);
 
 	if (fed->fed_group != 0 && fed->fed_group != data->ocd_group) {
 		CWARN("!!! This export (nid %s) used object group %d "
@@ -618,6 +619,38 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 	} else if (KEY_IS(KEY_SYNC_LOCK_CANCEL)) {
 		*((__u32 *) val) = ofd->ofd_sync_lock_cancel;
 		*vallen = sizeof(__u32);
+	} else if (KEY_IS(KEY_LAST_FID)) {
+		struct lu_env      env;
+		struct ofd_device *ofd = ofd_exp(exp);
+		struct ofd_seq    *oseq;
+		struct lu_fid     *last_fid = val;
+		int		rc;
+
+		if (last_fid == NULL) {
+			*vallen = sizeof(struct lu_fid);
+			RETURN(0);
+		}
+
+		if (*vallen < sizeof(*last_fid))
+			RETURN(-EOVERFLOW);
+
+		rc = lu_env_init(&env, LCT_DT_THREAD);
+		if (rc != 0)
+			RETURN(rc);
+		ofd_info_init(&env, exp);
+		fid_le_to_cpu(last_fid, last_fid);
+		oseq = ofd_seq_load(&env, ofd, fid_seq(last_fid));
+		if (IS_ERR(oseq))
+			GOTO(out_fid, rc = PTR_ERR(oseq));
+
+		last_fid->f_seq = oseq->os_seq;
+		last_fid->f_oid = oseq->os_last_oid;
+		fid_cpu_to_le(last_fid, last_fid);
+
+		*vallen = sizeof(*last_fid);
+		ofd_seq_put(&env, oseq);
+out_fid:
+		lu_env_fini(&env);
 	} else {
 		CERROR("Not supported key %s\n", (char*)key);
 		rc = -EOPNOTSUPP;

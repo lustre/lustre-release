@@ -2010,17 +2010,24 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
         if (!is_dir && (header & VERBOSE_OBJID)) {
                 if (obdstripe == 1)
                         llapi_printf(LLAPI_MSG_NORMAL,
-                                     "\tobdidx\t\t objid\t\tobjid\t\t group\n");
+				   "\tobdidx\t\t objid\t\t objid\t\t group\n");
 
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         int idx = objects[i].l_ost_idx;
                         long long oid = objects[i].l_object_id;
                         long long gr = objects[i].l_object_seq;
-                        if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
-                                llapi_printf(LLAPI_MSG_NORMAL,
-                                           "\t%6u\t%14llu\t%#13llx\t%14llu%s\n",
-                                           idx, oid, oid, gr,
-                                           obdindex == idx ? " *" : "");
+			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx)) {
+				char fmt[48];
+				sprintf(fmt, "%s%s%s\n",
+					"\t%6u\t%14llu\t%#13llx\t",
+					(fid_seq_is_rsvd(gr) ||
+					 fid_seq_is_mdt0(gr)) ?
+					 "%14llu" : "%#14llx", "%s");
+				llapi_printf(LLAPI_MSG_NORMAL, fmt, idx, oid,
+					     oid, gr,
+					     obdindex == idx ? " *" : "");
+			}
+
                 }
                 llapi_printf(LLAPI_MSG_NORMAL, "\n");
         }
