@@ -4324,7 +4324,11 @@ error_noexit() {
 	if [ -z "$*" ]; then
 		echo "error() without useful message, please fix" > $LOGDIR/err
 	else
-		echo "$@" > $LOGDIR/err
+		if [[ `echo $TYPE | grep ^IGNORE` ]]; then
+			echo "$@" > $LOGDIR/ignore
+		else
+			echo "$@" > $LOGDIR/err
+		fi
 	fi
 }
 
@@ -4603,6 +4607,7 @@ run_one_logged() {
 	local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
 	local test_log=$LOGDIR/$name
 	rm -rf $LOGDIR/err
+	rm -rf $LOGDIR/ignore
 	rm -rf $LOGDIR/skip
 	local SAVE_UMASK=`umask`
 	umask 0022
@@ -4612,7 +4617,7 @@ run_one_logged() {
 	(run_one $1 "$2") 2>&1 | tee -i $test_log
 	local RC=${PIPESTATUS[0]}
 
-	[ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
+	[ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] &&
 		echo "test_$1 returned $RC" | tee $LOGDIR/err
 
 	duration=$((`date +%s` - $BEFORE))
@@ -4620,6 +4625,8 @@ run_one_logged() {
 
 	if [[ -f $LOGDIR/err ]]; then
 		TEST_ERROR=$(cat $LOGDIR/err)
+	elif [[ -f $LOGDIR/ignore ]]; then
+		TEST_ERROR=$(cat $LOGDIR/ignore)
 	elif [[ -f $LOGDIR/skip ]]; then
 		TEST_ERROR=$(cat $LOGDIR/skip)
 	fi
