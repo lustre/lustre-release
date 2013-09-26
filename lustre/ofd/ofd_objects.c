@@ -146,7 +146,7 @@ void ofd_object_put(const struct lu_env *env, struct ofd_object *fo)
 }
 
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  obd_id id, struct ofd_seq *oseq, int nr)
+			  obd_id id, struct ofd_seq *oseq, int nr, int sync)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_object	*fo = NULL;
@@ -227,6 +227,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	th = ofd_trans_create(env, ofd);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
+
+	th->th_sync |= sync;
 
 	rc = dt_declare_record_write(env, oseq->os_lastid_obj, sizeof(tmp),
 				     info->fti_off, th);

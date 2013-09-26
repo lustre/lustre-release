@@ -405,7 +405,7 @@ struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
 					     struct lu_attr *attr);
 int ofd_object_ff_check(const struct lu_env *env, struct ofd_object *fo);
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  obd_id id, struct ofd_seq *oseq, int nr);
+			  obd_id id, struct ofd_seq *oseq, int nr, int sync);
 
 void ofd_object_put(const struct lu_env *env, struct ofd_object *fo);
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,

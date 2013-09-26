@@ -335,6 +335,38 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 	}
 }
 
+static int osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid)
+{
+	if (fid_is_idif(fid)) {
+		struct osp_thread_info *info = osp_env_info(env);
+		struct ost_id *oi = &info->osi_oi;
+
+		fid_ostid_pack(fid, oi);
+		return oi->oi_id == IDIF_MAX_OID;
+	} else {
+		return fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH;
+	}
+}
+
+static inline int osp_precreate_end_seq_nolock(const struct lu_env *env,
+					       struct osp_device *osp)
+{
+	struct lu_fid *fid = &osp->opd_pre_last_created_fid;
+
+	return osp_fid_end_seq(env, fid);
+}
+
+static inline int osp_precreate_end_seq(const struct lu_env *env,
+					struct osp_device *osp)
+{
+	int rc;
+
+	spin_lock(&osp->opd_pre_lock);
+	rc = osp_precreate_end_seq_nolock(env, osp);
+	spin_unlock(&osp->opd_pre_lock);
+	return rc;
+}
+
 static inline int osp_is_fid_client(struct osp_device *osp)
 {
 	struct obd_import *imp = osp->opd_obd->u.cli.cl_import;
