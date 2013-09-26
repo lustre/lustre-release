@@ -58,6 +58,7 @@
 #include <lustre_log.h>
 #include <lustre_debug.h>
 #include <lustre_param.h>
+#include <lustre_fid.h>
 #include "osc_internal.h"
 #include "osc_cl_internal.h"
 
@@ -671,10 +672,10 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
 	if (exp_connect_cancelset(exp) && !ns_connect_cancelset(ns))
 		RETURN(0);
 
-        osc_build_res_name(oa->o_id, oa->o_seq, &res_id);
-        res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
-        if (res == NULL)
-                RETURN(0);
+	ostid_build_res_name(&oa->o_oi, &res_id);
+	res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
+	if (res == NULL)
+		RETURN(0);
 
         LDLM_RESOURCE_ADDREF(res);
         count = ldlm_cancel_resource_local(res, cancels, NULL, mode,
@@ -2295,7 +2296,7 @@ static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct ldlm_res_id res_id;
         struct obd_device *obd = class_exp2obd(exp);
 
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_seq, &res_id);
+	ostid_build_res_name(&lsm->lsm_object_oid, &res_id);
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
 }
@@ -2311,7 +2312,7 @@ static int osc_find_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_device *obd = class_exp2obd(exp);
         int rc = 0;
 
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_seq, &res_id);
+	ostid_build_res_name(&lsm->lsm_object_oid, &res_id);
         rc = ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         if (rc == LDLM_ITER_STOP)
                 return(1);
@@ -2621,9 +2622,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
-        osc_build_res_name(oinfo->oi_md->lsm_object_id,
-                           oinfo->oi_md->lsm_object_seq, &res_id);
-
+	ostid_build_res_name(&oinfo->oi_md->lsm_object_oid, &res_id);
         rc = osc_enqueue_base(exp, &res_id, &oinfo->oi_flags, &oinfo->oi_policy,
                               &oinfo->oi_md->lsm_oinfo[0]->loi_lvb,
                               oinfo->oi_md->lsm_oinfo[0]->loi_kms_valid,
@@ -2703,10 +2702,10 @@ static int osc_cancel_unused(struct obd_export *exp,
         struct obd_device *obd = class_exp2obd(exp);
         struct ldlm_res_id res_id, *resp = NULL;
 
-        if (lsm != NULL) {
-                resp = osc_build_res_name(lsm->lsm_object_id,
-                                          lsm->lsm_object_seq, &res_id);
-        }
+	if (lsm != NULL) {
+		ostid_build_res_name(&lsm->lsm_object_oid, &res_id);
+		resp = &res_id;
+	}
 
         return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
 }

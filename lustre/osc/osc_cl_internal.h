@@ -429,8 +429,6 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_page *page, cfs_page_t *vmpage);
 
-void osc_lock_build_res(const struct lu_env *env, const struct osc_object *obj,
-                        struct ldlm_res_id *resname);
 void osc_index2policy  (ldlm_policy_data_t *policy, const struct cl_object *obj,
                         pgoff_t start, pgoff_t end);
 int  osc_lvb_print     (const struct lu_env *env, void *cookie,

@@ -244,26 +244,6 @@ static void osc_lock_fini(const struct lu_env *env,
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }
 
-void osc_lock_build_res(const struct lu_env *env, const struct osc_object *obj,
-                        struct ldlm_res_id *resname)
-{
-        const struct lu_fid *fid = lu_object_fid(&obj->oo_cl.co_lu);
-        if (0) {
-                /*
-                 * In the perfect world of the future, where ost servers talk
-                 * idif-fids...
-                 */
-                fid_build_reg_res_name(fid, resname);
-        } else {
-                /*
-                 * In reality, where ost server expects ->lsm_object_id and
-                 * ->lsm_object_seq in rename.
-                 */
-                osc_build_res_name(obj->oo_oinfo->loi_id, obj->oo_oinfo->loi_seq,
-                                   resname);
-        }
-}
-
 static void osc_lock_build_policy(const struct lu_env *env,
                                   const struct cl_lock *lock,
                                   ldlm_policy_data_t *policy)
@@ -1208,7 +1188,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
                          * ldlm_lock_match(LDLM_FL_LVB_READY) waits for
                          * LDLM_CP_CALLBACK.
                          */
-                        osc_lock_build_res(env, obj, resname);
+			ostid_build_res_name(&obj->oo_oinfo->loi_oi, resname);
                         osc_lock_build_policy(env, lock, policy);
                         result = osc_enqueue_base(osc_export(obj), resname,
                                           &ols->ols_flags, policy,

@@ -1581,11 +1581,13 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {
-        obd_id               ioo_id;
-        obd_seq              ioo_seq;
-        __u32                ioo_type;
-        __u32                ioo_bufcnt;
+	struct ost_id	ioo_oid;
+	__u32		ioo_type;
+	__u32		ioo_bufcnt;
 };
+
+#define ioo_id	ioo_oid.oi_id
+#define ioo_seq	ioo_oid.oi_seq
 
 extern void lustre_swab_obd_ioobj (struct obd_ioobj *ioo);
 

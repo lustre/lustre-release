@@ -53,6 +53,8 @@
 #include <linux/init.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
+#include <lustre_quota.h>
+#include <lustre_fid.h>
 #include "ost_internal.h"
 #include <lustre_fid.h>
 
@@ -234,7 +236,7 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
             !(oa->o_flags & OBD_FL_SRVLOCK))
                 RETURN(0);
 
-        osc_build_res_name(oa->o_id, oa->o_seq, &res_id);
+	ostid_build_res_name(&oa->o_oi, &res_id);
         CDEBUG(D_INODE, "OST-side extent lock.\n");
 
         policy.l_extent.start = start & CFS_PAGE_MASK;
@@ -628,7 +630,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         int i;
         ENTRY;
 
-        osc_build_res_name(obj->ioo_id, obj->ioo_seq, &res_id);
+	ostid_build_res_name(&obj->ioo_oid, &res_id);
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT(!lustre_handle_is_used(lh));
 
@@ -1616,8 +1618,8 @@ int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			OBD_FREE_PTR(oinfo);
 			GOTO(out_env, rc = -ENOMEM);
 		}
-		oa->o_id = lock->l_resource->lr_name.name[0];
-		oa->o_seq = lock->l_resource->lr_name.name[1];
+
+		ostid_res_name_to_id(&oa->o_oi, &lock->l_resource->lr_name);
 		oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
 		oinfo->oi_oa = oa;
 		oinfo->oi_capa = BYPASS_CAPA;
@@ -1869,10 +1871,9 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
         nb += ioo->ioo_bufcnt - 1;
         ext.end = nb->offset + nb->len - 1;
 
-        LASSERT(lock->l_resource != NULL);
-        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_seq,
-                             &lock->l_resource->lr_name))
-                RETURN(0);
+	LASSERT(lock->l_resource != NULL);
+	if (!ostid_res_name_eq(&ioo->ioo_oid, &lock->l_resource->lr_name))
+		RETURN(0);
 
         mode = LCK_PW;
         if (opc == OST_READ)
@@ -1920,7 +1921,7 @@ static int ost_rw_hpreq_check(struct ptlrpc_request *req)
         LASSERT(nb != NULL);
         LASSERT(!(nb->flags & OBD_BRW_SRVLOCK));
 
-        osc_build_res_name(ioo->ioo_id, ioo->ioo_seq, &opd.opd_resid);
+	ostid_build_res_name(&ioo->ioo_oid, &opd.opd_resid);
 
         opd.opd_req = req;
         mode = LCK_PW;
@@ -2004,7 +2005,7 @@ static int ost_punch_hpreq_check(struct ptlrpc_request *req)
                 opd.opd_extent.end = OBD_OBJECT_EOF;
         opd.opd_timeout = prolong_timeout(req);
 
-        osc_build_res_name(oa->o_id, oa->o_seq, &opd.opd_resid);
+	ostid_build_res_name(&oa->o_oi, &opd.opd_resid);
 
         CDEBUG(D_DLMTRACE,
                "%s: refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",

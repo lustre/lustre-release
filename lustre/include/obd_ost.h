@@ -94,24 +94,5 @@ int osc_extent_blocking_cb(struct ldlm_lock *lock,
 #endif
 
 #define POSTID LPU64":"LPU64
-/** 
- * Build DLM resource name from object id & group for osc-ost extent lock.
- */
-static inline struct ldlm_res_id *osc_build_res_name(__u64 id, __u64 gr,
-                                                     struct ldlm_res_id *name)
-{
-        memset(name, 0, sizeof *name);
-        name->name[0] = id;
-        name->name[1] = gr;
-        return name;
-}
-
-/**
- * Return true if the resource is for the object identified by this id & group.
- */
-static inline int osc_res_name_eq(__u64 id, __u64 gr, struct ldlm_res_id *name)
-{
-        return name->name[0] == id && name->name[1] == gr;
-}
 
 #endif

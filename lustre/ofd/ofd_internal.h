@@ -537,33 +537,28 @@ static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
 static inline void ofd_build_resid(const struct lu_fid *fid,
 				   struct ldlm_res_id *resname)
 {
+	struct ost_id oid;
+
 	if (fid_is_idif(fid)) {
-		/* get id/seq like ostid_idif_pack() does */
-		osc_build_res_name(fid_idif_id(fid_seq(fid), fid_oid(fid),
-					       fid_ver(fid)),
-				   FID_SEQ_OST_MDT0, resname);
+		oid.oi_id = fid_idif_id(fid_seq(fid), fid_oid(fid),
+					fid_ver(fid));
+		oid.oi_seq = FID_SEQ_OST_MDT0;
 	} else {
-		/* In the future, where OSTs have FID sequences allocated. */
-		fid_build_reg_res_name(fid, resname);
+		oid.oi_id = fid_oid(fid);
+		oid.oi_seq = fid_seq(fid);
 	}
+	ostid_build_res_name(&oid, resname);
 }
 
 static inline void ofd_fid_from_resid(struct lu_fid *fid,
 				      const struct ldlm_res_id *name)
 {
-	/* if seq is FID_SEQ_OST_MDT0 then we have IDIF and resid was built
-	 * using osc_build_res_name function. */
-	if (fid_seq_is_mdt0(name->name[LUSTRE_RES_ID_VER_OID_OFF])) {
-		struct ost_id ostid;
+	/* To keep compatiblity, res[0] = oi_id, res[1] = oi_seq. */
+	struct ost_id ostid;
 
-		ostid.oi_id = name->name[LUSTRE_RES_ID_SEQ_OFF];
-		ostid.oi_seq = name->name[LUSTRE_RES_ID_VER_OID_OFF];
-		fid_ostid_unpack(fid, &ostid, 0);
-	} else {
-		fid->f_seq = name->name[LUSTRE_RES_ID_SEQ_OFF];
-		fid->f_oid = (__u32)name->name[LUSTRE_RES_ID_VER_OID_OFF];
-		fid->f_ver = name->name[LUSTRE_RES_ID_VER_OID_OFF] >> 32;
-	}
+	ostid.oi_id = name->name[LUSTRE_RES_ID_SEQ_OFF];
+	ostid.oi_seq = name->name[LUSTRE_RES_ID_VER_OID_OFF];
+	fid_ostid_unpack(fid, &ostid, 0);
 }
 
 static inline void ofd_oti2info(struct ofd_thread_info *info,

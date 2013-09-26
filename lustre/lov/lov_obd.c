@@ -64,6 +64,7 @@
 #include <lclient.h> /* for cl_client_lru */
 #include <lustre/ll_fiemap.h>
 #include <lustre_log.h>
+#include <lustre_fid.h>
 
 #include "lov_internal.h"
 
@@ -2480,12 +2481,12 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
                         loi = lsm->lsm_oinfo[i];
                         if (!lov->lov_tgts[loi->loi_ost_idx])
                                 continue;
-                        if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
-                            data->lock->l_conn_export &&
-                            osc_res_name_eq(loi->loi_id, loi->loi_seq, res_id)) {
-                                *stripe = i;
-                                GOTO(out, rc = 0);
-                        }
+			if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
+			    data->lock->l_conn_export &&
+			    ostid_res_name_eq(&loi->loi_oi, res_id)) {
+				*stripe = i;
+				GOTO(out, rc = 0);
+			}
                 }
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, lsm);
