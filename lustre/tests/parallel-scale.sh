@@ -11,6 +11,17 @@ init_logging
 #              bug 20670
 ALWAYS_EXCEPT="parallel_grouplock $PARALLEL_SCALE_EXCEPT"
 
+if [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ]; then
+	ZFSSLOW=$SLOW
+	SLOW=no
+
+	cbench_IDIRS=1
+	cbench_RUNS=1
+
+	mdtest_nFiles=10000
+	statahead_NUMFILES=100000
+fi
+
 # common setup
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 clients=${CLIENTS:-$HOSTNAME}
@@ -20,8 +31,8 @@ num_clients=$(get_node_count ${clients//,/ })
 
 # compilbench
 if [ "$SLOW" = "no" ]; then
-    cbench_IDIRS=2
-    cbench_RUNS=2
+	cbench_IDIRS=${cbench_IDIRS:-2}
+	cbench_RUNS=${cbench_RUNS:-2}
 fi
 
 # metabench
@@ -123,6 +134,9 @@ test_statahead () {
     run_statahead
 }
 run_test statahead "statahead test, multiple clients"
+
+[ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs] &&
+	SLOW=$ZFSSLOW
 
 complete $SECONDS
 check_and_cleanup_lustre
