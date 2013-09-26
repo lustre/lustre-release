@@ -597,6 +597,7 @@ struct osd_thread_info {
 	struct lquota_trans	oti_quota_trans;
 	union lquota_rec	oti_quota_rec;
 	__u64			oti_quota_id;
+	struct lu_seq_range	oti_seq_range;
 };
 
 extern int ldiskfs_pdo;
@@ -644,6 +645,8 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
 int osd_scrub_dump(struct osd_device *dev, char *buf, int len);
 
+int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid, struct lu_seq_range *range);
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
                       int type, uint blk, int depth, uint index,

@@ -1914,6 +1914,44 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 	return osd_oi_insert(info, osd, fid, id, th);
 }
 
+int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid, struct lu_seq_range *range)
+{
+	struct seq_server_site	*ss = osd_seq_site(osd);
+	int			rc;
+
+	if (fid_is_igif(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_MDT;
+		range->lsr_index = 0;
+		return 0;
+	}
+
+	if (fid_is_idif(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_OST;
+		range->lsr_index = fid_idif_ost_idx(fid);
+		return 0;
+	}
+
+	if (!fid_is_norm(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_MDT;
+		if (ss != NULL)
+			/* FIXME: If ss is NULL, it suppose not get lsr_index
+			 * at all */
+			range->lsr_index = ss->ss_node_id;
+		return 0;
+	}
+
+	LASSERT(ss != NULL);
+	range->lsr_flags = -1;
+	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
+	if (rc != 0) {
+		CERROR("%s can not find "DFID": rc = %d\n",
+		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid), rc);
+	}
+	return rc;
+}
+
+
 static int osd_declare_object_create(const struct lu_env *env,
 				     struct dt_object *dt,
 				     struct lu_attr *attr,
@@ -1921,6 +1959,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 				     struct dt_object_format *dof,
 				     struct thandle *handle)
 {
+	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct osd_thandle	*oh;
 	int			 rc;
 	ENTRY;
@@ -1933,7 +1972,9 @@ static int osd_declare_object_create(const struct lu_env *env,
 	OSD_DECLARE_OP(oh, create, osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
 	/* XXX: So far, only normal fid needs be inserted into the oi,
 	 *      things could be changed later. Revise following code then. */
-	if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
+	if (fid_is_norm(lu_object_fid(&dt->do_lu)) &&
+	    !fid_is_on_ost(osd_oti_get(env), osd_dt_dev(handle->th_dev),
+			   lu_object_fid(&dt->do_lu))) {
 		/* Reuse idle OI block may cause additional one OI block
 		 * to be changed. */
 		OSD_DECLARE_OP(oh, insert,
@@ -1955,6 +1996,19 @@ static int osd_declare_object_create(const struct lu_env *env,
 
 	rc = osd_declare_inode_qid(env, attr->la_uid, attr->la_gid, 1, oh,
 				   false, false, NULL, false);
+	if (rc != 0)
+		RETURN(rc);
+
+	/* It does fld look up inside declare, and the result will be
+	 * added to fld cache, so the following fld lookup inside insert
+	 * does not need send RPC anymore, so avoid send rpc with holding
+	 * transaction */
+	if (fid_is_norm(lu_object_fid(&dt->do_lu)) &&
+		!fid_is_last_id(lu_object_fid(&dt->do_lu)))
+		osd_fld_lookup(env, osd_dt_dev(handle->th_dev),
+			       lu_object_fid(&dt->do_lu), range);
+
+
 	RETURN(rc);
 }
 
@@ -2209,7 +2263,9 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
         /* objects under osd root shld have igif fid, so dont add fid EA */
-        if (result == 0 && fid_seq(fid) >= FID_SEQ_NORMAL)
+	/* For ost object, the fid will be stored during first write */
+	if (result == 0 && fid_seq(fid) >= FID_SEQ_NORMAL &&
+	    !fid_is_on_ost(info, osd_dt_dev(th->th_dev), fid))
                 result = osd_ea_fid_set(env, dt, fid);
 
         if (result == 0)
@@ -2224,7 +2280,7 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
                                       struct dt_object *dt,
                                       struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle       *oh;
 
         /* it's possible that object doesn't exist yet */
         LASSERT(handle != NULL);
@@ -3516,9 +3572,10 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 				       const struct dt_key *key,
 				       struct thandle *handle)
 {
-	struct osd_thandle *oh;
-	struct inode	   *inode;
-	int		    rc;
+	struct osd_thandle	*oh;
+	struct inode		*inode;
+	struct lu_fid		*fid = (struct lu_fid *)rec;
+	int			rc;
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -3537,6 +3594,17 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 	 * insert */
 	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
 				   true, true, NULL, false);
+	if (fid == NULL)
+		RETURN(0);
+
+	/* It does fld look up inside declare, and the result will be
+	* added to fld cache, so the following fld lookup inside insert
+	* does not need send RPC anymore, so avoid send rpc with holding
+	* transaction */
+	LASSERTF(fid_is_sane(fid), "fid is insane"DFID"\n", PFID(fid));
+	osd_fld_lookup(env, osd_dt_dev(handle->th_dev), fid,
+			&osd_oti_get(env)->oti_seq_range);
+
 	RETURN(rc);
 }
 

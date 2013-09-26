@@ -4036,7 +4036,7 @@ static int mdt_fld_init(const struct lu_env *env,
 		RETURN(rc = -ENOMEM);
 
 	rc = fld_server_init(env, ss->ss_server_fld, m->mdt_bottom, uuid,
-			     ss->ss_node_id);
+			     ss->ss_node_id, LU_SEQ_RANGE_MDT);
 	if (rc) {
 		OBD_FREE_PTR(ss->ss_server_fld);
 		ss->ss_server_fld = NULL;
@@ -5059,7 +5059,9 @@ static int mdt_connect_internal(struct obd_export *exp,
 	}
 
 	if (mdt->mdt_som_conf &&
-	    !(data->ocd_connect_flags & (OBD_CONNECT_MDS_MDS|OBD_CONNECT_SOM))){
+	    !(data->ocd_connect_flags & (OBD_CONNECT_LIGHTWEIGHT |
+					 OBD_CONNECT_MDS_MDS |
+					 OBD_CONNECT_SOM))) {
 		CWARN("%s: MDS has SOM enabled, but client does not support "
 		      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
 		return -EBADE;

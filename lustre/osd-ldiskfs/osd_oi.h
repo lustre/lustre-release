@@ -139,5 +139,7 @@ int  osd_oi_delete(struct osd_thread_info *info,
 		   struct osd_device *osd, const struct lu_fid *fid,
 		   struct thandle *th);
 
+int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
+		  const struct lu_fid *fid);
 #endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

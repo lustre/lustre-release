@@ -83,7 +83,7 @@ struct fld_cache {
 	 * Cache guard, protects fci_hash mostly because others immutable after
 	 * init is finished.
 	 */
-	spinlock_t		 fci_lock;
+	rwlock_t		 fci_lock;
 
         /**
          * Cache shrink threshold */

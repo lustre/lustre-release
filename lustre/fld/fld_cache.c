@@ -85,7 +85,7 @@ struct fld_cache *fld_cache_init(const char *name,
         CFS_INIT_LIST_HEAD(&cache->fci_lru);
 
         cache->fci_cache_count = 0;
-	spin_lock_init(&cache->fci_lock);
+	rwlock_init(&cache->fci_lock);
 
         strncpy(cache->fci_name, name,
                 sizeof(cache->fci_name));
@@ -263,10 +263,10 @@ void fld_cache_flush(struct fld_cache *cache)
 {
 	ENTRY;
 
-	spin_lock(&cache->fci_lock);
+	write_lock(&cache->fci_lock);
 	cache->fci_cache_size = 0;
 	fld_cache_shrink(cache);
-	spin_unlock(&cache->fci_lock);
+	write_unlock(&cache->fci_lock);
 
 	EXIT;
 }
@@ -412,8 +412,6 @@ int fld_cache_insert_nolock(struct fld_cache *cache,
 	__u32 new_flags  = f_new->fce_range.lsr_flags;
 	ENTRY;
 
-	LASSERT_SPIN_LOCKED(&cache->fci_lock);
-
 	/*
 	 * Duplicate entries are eliminated in insert op.
 	 * So we don't need to search new entry before starting
@@ -461,9 +459,9 @@ int fld_cache_insert(struct fld_cache *cache,
 	if (IS_ERR(flde))
 		RETURN(PTR_ERR(flde));
 
-	spin_lock(&cache->fci_lock);
+	write_lock(&cache->fci_lock);
 	rc = fld_cache_insert_nolock(cache, flde);
-	spin_unlock(&cache->fci_lock);
+	write_unlock(&cache->fci_lock);
 	if (rc)
 		OBD_FREE_PTR(flde);
 
@@ -477,7 +475,6 @@ void fld_cache_delete_nolock(struct fld_cache *cache,
 	struct fld_cache_entry *tmp;
 	cfs_list_t *head;
 
-	LASSERT_SPIN_LOCKED(&cache->fci_lock);
 	head = &cache->fci_entries_head;
 	cfs_list_for_each_entry_safe(flde, tmp, head, fce_list) {
 		/* add list if next is end of list */
@@ -497,9 +494,9 @@ void fld_cache_delete_nolock(struct fld_cache *cache,
 void fld_cache_delete(struct fld_cache *cache,
 		      const struct lu_seq_range *range)
 {
-	spin_lock(&cache->fci_lock);
+	write_lock(&cache->fci_lock);
 	fld_cache_delete_nolock(cache, range);
-	spin_unlock(&cache->fci_lock);
+	write_unlock(&cache->fci_lock);
 }
 
 struct fld_cache_entry
@@ -510,7 +507,6 @@ struct fld_cache_entry
 	struct fld_cache_entry *got = NULL;
 	cfs_list_t *head;
 
-	LASSERT_SPIN_LOCKED(&cache->fci_lock);
 	head = &cache->fci_entries_head;
 	cfs_list_for_each_entry(flde, head, fce_list) {
 		if (range->lsr_start == flde->fce_range.lsr_start ||
@@ -533,9 +529,9 @@ struct fld_cache_entry
 	struct fld_cache_entry *got = NULL;
 	ENTRY;
 
-	spin_lock(&cache->fci_lock);
+	read_lock(&cache->fci_lock);
 	got = fld_cache_entry_lookup_nolock(cache, range);
-	spin_unlock(&cache->fci_lock);
+	read_unlock(&cache->fci_lock);
 	RETURN(got);
 }
 
@@ -550,7 +546,7 @@ int fld_cache_lookup(struct fld_cache *cache,
 	cfs_list_t *head;
 	ENTRY;
 
-	spin_lock(&cache->fci_lock);
+	read_lock(&cache->fci_lock);
 	head = &cache->fci_entries_head;
 
 	cache->fci_stat.fst_count++;
@@ -565,14 +561,12 @@ int fld_cache_lookup(struct fld_cache *cache,
                 if (range_within(&flde->fce_range, seq)) {
                         *range = flde->fce_range;
 
-                        /* update position of this entry in lru list. */
-                        cfs_list_move(&flde->fce_lru, &cache->fci_lru);
                         cache->fci_stat.fst_cache++;
-			spin_unlock(&cache->fci_lock);
+			read_unlock(&cache->fci_lock);
 			RETURN(0);
 		}
 	}
-	spin_unlock(&cache->fci_lock);
+	read_unlock(&cache->fci_lock);
 	RETURN(-ENOENT);
 }
 

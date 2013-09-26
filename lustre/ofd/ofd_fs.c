@@ -197,6 +197,26 @@ static void ofd_deregister_seq_exp(struct ofd_device *ofd)
 		lustre_deregister_osp_item(&ss->ss_client_seq->lcs_exp);
 		ss->ss_client_seq->lcs_exp = NULL;
 	}
+
+	if (ss->ss_server_fld != NULL) {
+		lustre_deregister_osp_item(&ss->ss_server_fld->lsf_control_exp);
+		ss->ss_server_fld->lsf_control_exp = NULL;
+	}
+}
+
+static int ofd_fld_fini(const struct lu_env *env,
+			struct ofd_device *ofd)
+{
+	struct seq_server_site *ss = &ofd->ofd_seq_site;
+	ENTRY;
+
+	if (ss && ss->ss_server_fld) {
+		fld_server_fini(env, ss->ss_server_fld);
+		OBD_FREE_PTR(ss->ss_server_fld);
+		ss->ss_server_fld = NULL;
+	}
+
+	RETURN(0);
 }
 
 void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
@@ -211,6 +231,10 @@ void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 	rc = ofd_fid_fini(env, ofd);
 	if (rc != 0)
 		CERROR("%s: fid fini error: rc = %d\n", ofd_name(ofd), rc);
+
+	rc = ofd_fld_fini(env, ofd);
+	if (rc != 0)
+		CERROR("%s: fld fini error: rc = %d\n", ofd_name(ofd), rc);
 
 	CFS_INIT_LIST_HEAD(&dispose);
 	write_lock(&ofd->ofd_seq_list_lock);
@@ -305,6 +329,27 @@ cleanup:
 	return ERR_PTR(rc);
 }
 
+static int ofd_fld_init(const struct lu_env *env, const char *uuid,
+			struct ofd_device *ofd)
+{
+	struct seq_server_site *ss = &ofd->ofd_seq_site;
+	int rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(ss->ss_server_fld);
+	if (ss->ss_server_fld == NULL)
+		RETURN(rc = -ENOMEM);
+
+	rc = fld_server_init(env, ss->ss_server_fld, ofd->ofd_osd, uuid,
+			     ss->ss_node_id, LU_SEQ_RANGE_OST);
+	if (rc) {
+		OBD_FREE_PTR(ss->ss_server_fld);
+		ss->ss_server_fld = NULL;
+		RETURN(rc);
+	}
+	RETURN(0);
+}
+
 static int ofd_register_seq_exp(struct ofd_device *ofd)
 {
 	struct seq_server_site	*ss = &ofd->ofd_seq_site;
@@ -321,6 +366,17 @@ static int ofd_register_seq_exp(struct ofd_device *ofd)
 
 	rc = lustre_register_osp_item(osp_name, &ss->ss_client_seq->lcs_exp,
 				      NULL, NULL);
+	if (rc != 0)
+		GOTO(out_free, rc);
+
+	rc = lustre_register_osp_item(osp_name,
+				      &ss->ss_server_fld->lsf_control_exp,
+				      NULL, NULL);
+	if (rc != 0) {
+		lustre_deregister_osp_item(&ss->ss_client_seq->lcs_exp);
+		ss->ss_client_seq->lcs_exp = NULL;
+		GOTO(out_free, rc);
+	}
 out_free:
 	if (osp_name != NULL)
 		OBD_FREE(osp_name, MAX_OBD_NAME);
@@ -336,6 +392,12 @@ int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 	rc = ofd_fid_init(env, ofd);
 	if (rc != 0) {
 		CERROR("%s: fid init error: rc = %d\n", ofd_name(ofd), rc);
+		return rc;
+	}
+
+	rc = ofd_fld_init(env, ofd_name(ofd), ofd);
+	if (rc) {
+		CERROR("%s: Can't init fld, rc %d\n", ofd_name(ofd), rc);
 		return rc;
 	}
 

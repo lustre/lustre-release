@@ -206,11 +206,11 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 	if (IS_ERR(flde))
 		GOTO(out, rc = PTR_ERR(flde));
 
-	spin_lock(&fld->lsf_cache->fci_lock);
+	write_lock(&fld->lsf_cache->fci_lock);
 	if (deleted)
 		fld_cache_delete_nolock(fld->lsf_cache, new_range);
 	rc = fld_cache_insert_nolock(fld->lsf_cache, flde);
-	spin_unlock(&fld->lsf_cache->fci_lock);
+	write_unlock(&fld->lsf_cache->fci_lock);
 	if (rc)
 		OBD_FREE_PTR(flde);
 out:

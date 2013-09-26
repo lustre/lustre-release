@@ -151,7 +151,8 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
         /* Lookup it in the cache. */
         rc = fld_cache_lookup(fld->lsf_cache, seq, erange);
         if (rc == 0) {
-                if (unlikely(erange->lsr_flags != range->lsr_flags)) {
+		if (unlikely(erange->lsr_flags != range->lsr_flags) &&
+		    range->lsr_flags != -1) {
                         CERROR("FLD cache found a range "DRANGE" doesn't "
                                "match the requested flag %x\n",
                                PRANGE(erange), range->lsr_flags);
@@ -173,6 +174,7 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		 * This is temporary solution, long term solution is fld
 		 * replication on all mdt servers.
 		 */
+		range->lsr_start = seq;
 		rc = fld_client_rpc(fld->lsf_control_exp,
 				    range, FLD_LOOKUP);
 		if (rc == 0)
@@ -236,12 +238,15 @@ static int fld_req_handle(struct ptlrpc_request *req,
                         RETURN(err_serious(-EPROTO));
                 *out = *in;
 
-                /* For old 2.0 client, the 'lsr_flags' is uninitialized.
-                 * Set it as 'LU_SEQ_RANGE_MDT' by default.
-                 * Old 2.0 liblustre client cannot talk with new 2.1 server. */
-                if (!(exp->exp_connect_flags & OBD_CONNECT_64BITHASH) &&
-                    !exp->exp_libclient)
-                        out->lsr_flags = LU_SEQ_RANGE_MDT;
+		/* For old 2.0 client, the 'lsr_flags' is uninitialized.
+		 * Set it as 'LU_SEQ_RANGE_MDT' by default.
+		 * Old 2.0 liblustre client cannot talk with new 2.1 server. */
+		if (!(exp->exp_connect_flags & OBD_CONNECT_64BITHASH) &&
+		    !((exp->exp_connect_flags & OBD_CONNECT_MDS) &&
+		      (exp->exp_connect_flags & OBD_CONNECT_FID)) &&
+		    !(exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) &&
+		    !exp->exp_libclient)
+			out->lsr_flags = LU_SEQ_RANGE_MDT;
 
 		rc = fld_server_handle(lu_site2seq(site)->ss_server_fld,
 				       req->rq_svc_thread->t_env,
@@ -377,7 +382,8 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 #endif
 
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
-		    struct dt_device *dt, const char *prefix, int mds_node_id)
+		    struct dt_device *dt, const char *prefix, int mds_node_id,
+		    __u32 lsr_flags)
 {
         int cache_size, cache_threshold;
         struct lu_seq_range range;
@@ -402,7 +408,7 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
                 GOTO(out, rc);
         }
 
-        if (!mds_node_id) {
+	if (!mds_node_id && lsr_flags == LU_SEQ_RANGE_MDT) {
 		rc = fld_index_init(env, fld, dt);
                 if (rc)
                         GOTO(out, rc);
@@ -416,12 +422,13 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
         fld->lsf_control_exp = NULL;
 
         /* Insert reserved sequence number of ".lustre" into fld cache. */
-        range.lsr_start = FID_SEQ_DOT_LUSTRE;
-        range.lsr_end = FID_SEQ_DOT_LUSTRE + 1;
-        range.lsr_index = 0;
-        range.lsr_flags = LU_SEQ_RANGE_MDT;
-	fld_cache_insert(fld->lsf_cache, &range);
-
+	if (lsr_flags == LU_SEQ_RANGE_MDT) {
+		range.lsr_start = FID_SEQ_DOT_LUSTRE;
+		range.lsr_end = FID_SEQ_DOT_LUSTRE + 1;
+		range.lsr_index = 0;
+		range.lsr_flags = lsr_flags;
+		fld_cache_insert(fld->lsf_cache, &range);
+	}
         EXIT;
 out:
 	if (rc)
