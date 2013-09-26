@@ -1987,53 +1987,6 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
-static int mdc_fid_init(struct obd_export *exp)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        char *prefix;
-        int rc;
-        ENTRY;
-
-        OBD_ALLOC_PTR(cli->cl_seq);
-        if (cli->cl_seq == NULL)
-                RETURN(-ENOMEM);
-
-        OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
-        if (prefix == NULL)
-                GOTO(out_free_seq, rc = -ENOMEM);
-
-        snprintf(prefix, MAX_OBD_NAME + 5, "srv-%s",
-                 exp->exp_obd->obd_name);
-
-        /* Init client side sequence-manager */
-        rc = seq_client_init(cli->cl_seq, exp,
-                             LUSTRE_SEQ_METADATA,
-                             prefix, NULL);
-        OBD_FREE(prefix, MAX_OBD_NAME + 5);
-        if (rc)
-                GOTO(out_free_seq, rc);
-
-        RETURN(rc);
-out_free_seq:
-        OBD_FREE_PTR(cli->cl_seq);
-        cli->cl_seq = NULL;
-        return rc;
-}
-
-static int mdc_fid_fini(struct obd_export *exp)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        ENTRY;
-
-        if (cli->cl_seq != NULL) {
-                seq_client_fini(cli->cl_seq);
-                OBD_FREE_PTR(cli->cl_seq);
-                cli->cl_seq = NULL;
-        }
-
-        RETURN(0);
-}
-
 int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                   struct md_op_data *op_data)
 {
@@ -2356,8 +2309,8 @@ struct obd_ops mdc_obd_ops = {
         .o_statfs           = mdc_statfs,
         .o_pin              = mdc_pin,
         .o_unpin            = mdc_unpin,
-        .o_fid_init         = mdc_fid_init,
-        .o_fid_fini         = mdc_fid_fini,
+	.o_fid_init	    = client_fid_init,
+	.o_fid_fini	    = client_fid_fini,
         .o_fid_alloc        = mdc_fid_alloc,
         .o_import_event     = mdc_import_event,
         .o_llog_init        = mdc_llog_init,

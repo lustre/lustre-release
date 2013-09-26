@@ -455,15 +455,9 @@ static inline int fid_seq_is_mdt0(obd_seq seq)
         return (seq == FID_SEQ_OST_MDT0);
 }
 
-static inline int fid_seq_is_cmd(const __u64 seq)
-{
-        return (seq >= FID_SEQ_OST_MDT1 && seq <= FID_SEQ_OST_MAX);
-};
-
 static inline int fid_seq_is_mdt(const __u64 seq)
 {
-        return seq == FID_SEQ_OST_MDT0 ||
-               (seq >= FID_SEQ_OST_MDT1 && seq <= FID_SEQ_OST_MAX);
+	return seq == FID_SEQ_OST_MDT0 || seq >= FID_SEQ_NORMAL;
 };
 
 static inline int fid_seq_is_echo(obd_seq seq)

@@ -156,6 +156,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
 #include <lustre_mdt.h>
+#include <obd.h>
 
 
 struct lu_site;
@@ -283,11 +284,6 @@ static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq)
 enum lu_mgr_type {
         LUSTRE_SEQ_SERVER,
         LUSTRE_SEQ_CONTROLLER
-};
-
-enum lu_cli_type {
-        LUSTRE_SEQ_METADATA,
-        LUSTRE_SEQ_DATA
 };
 
 struct lu_server_seq;
@@ -436,6 +432,9 @@ int seq_site_fini(const struct lu_env *env, struct seq_server_site *ss);
 /* Fids common stuff */
 int fid_is_local(const struct lu_env *env,
                  struct lu_site *site, const struct lu_fid *fid);
+
+int client_fid_init(struct obd_export *exp, enum lu_cli_type type);
+int client_fid_fini(struct obd_export *exp);
 
 /* fid locking */
 

@@ -1272,6 +1272,12 @@ typedef int (* md_enqueue_cb_t)(struct ptlrpc_request *req,
                                 struct md_enqueue_info *minfo,
                                 int rc);
 
+/* seq client type */
+enum lu_cli_type {
+	LUSTRE_SEQ_METADATA = 1,
+	LUSTRE_SEQ_DATA
+};
+
 struct md_enqueue_info {
         struct md_op_data       mi_data;
         struct lookup_intent    mi_it;
@@ -1321,7 +1327,7 @@ struct obd_ops {
         int (*o_disconnect)(struct obd_export *exp);
 
         /* Initialize/finalize fids infrastructure. */
-        int (*o_fid_init)(struct obd_export *exp);
+	int (*o_fid_init)(struct obd_export *exp, enum lu_cli_type type);
         int (*o_fid_fini)(struct obd_export *exp);
 
         /* Allocate new fid according to passed @hint. */

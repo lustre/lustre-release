@@ -1039,7 +1039,7 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-static inline int obd_fid_init(struct obd_export *exp)
+static inline int obd_fid_init(struct obd_export *exp, enum lu_cli_type type)
 {
         int rc;
         ENTRY;
@@ -1047,8 +1047,8 @@ static inline int obd_fid_init(struct obd_export *exp)
         OBD_CHECK_DT_OP(exp->exp_obd, fid_init, 0);
         EXP_COUNTER_INCREMENT(exp, fid_init);
 
-        rc = OBP(exp->exp_obd, fid_init)(exp);
-        RETURN(rc);
+	rc = OBP(exp->exp_obd, fid_init)(exp, type);
+	RETURN(rc);
 }
 
 static inline int obd_fid_fini(struct obd_export *exp)

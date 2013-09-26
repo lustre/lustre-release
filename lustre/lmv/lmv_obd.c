@@ -413,7 +413,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         /*
          * Init fid sequence client for this mdc and add new fld target.
          */
-        rc = obd_fid_init(mdc_exp);
+	rc = obd_fid_init(mdc_exp, LUSTRE_SEQ_METADATA);
         if (rc)
                 RETURN(rc);
 

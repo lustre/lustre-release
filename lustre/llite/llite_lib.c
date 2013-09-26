@@ -282,49 +282,43 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out, err);
         }
 
-        err = obd_fid_init(sbi->ll_md_exp);
-        if (err) {
-                CERROR("Can't init metadata layer FID infrastructure, "
-                       "rc %d\n", err);
-                GOTO(out_md, err);
-        }
+	err = obd_statfs(NULL, sbi->ll_md_exp, osfs,
+			 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
+	if (err)
+		GOTO(out_md, err);
 
-        err = obd_statfs(NULL, sbi->ll_md_exp, osfs,
-                         cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
-        if (err)
-                GOTO(out_md_fid, err);
+	/* This needs to be after statfs to ensure connect has finished.
+	 * Note that "data" does NOT contain the valid connect reply.
+	 * If connecting to a 1.8 server there will be no LMV device, so
+	 * we can access the MDC export directly and exp_connect_flags will
+	 * be non-zero, but if accessing an upgraded 2.1 server it will
+	 * have the correct flags filled in.
+	 * XXX: fill in the LMV exp_connect_flags from MDC(s). */
+	valid = sbi->ll_md_exp->exp_connect_flags & CLIENT_CONNECT_MDT_REQD;
+	if (sbi->ll_md_exp->exp_connect_flags != 0 &&
+	    valid != CLIENT_CONNECT_MDT_REQD) {
+		char *buf;
 
-        /* This needs to be after statfs to ensure connect has finished.
-         * Note that "data" does NOT contain the valid connect reply.
-         * If connecting to a 1.8 server there will be no LMV device, so
-         * we can access the MDC export directly and exp_connect_flags will
-         * be non-zero, but if accessing an upgraded 2.1 server it will
-         * have the correct flags filled in.
-         * XXX: fill in the LMV exp_connect_flags from MDC(s). */
-        valid = sbi->ll_md_exp->exp_connect_flags & CLIENT_CONNECT_MDT_REQD;
-        if (sbi->ll_md_exp->exp_connect_flags != 0 &&
-            valid != CLIENT_CONNECT_MDT_REQD) {
-                char *buf;
+		OBD_ALLOC_WAIT(buf, CFS_PAGE_SIZE);
+		obd_connect_flags2str(buf, CFS_PAGE_SIZE,
+				      valid ^ CLIENT_CONNECT_MDT_REQD, ",");
+		LCONSOLE_ERROR_MSG(0x170, "Server %s does not support "
+				   "feature(s) needed for correct operation "
+				   "of this client (%s). Please upgrade "
+				   "server or downgrade client.\n",
+				   sbi->ll_md_exp->exp_obd->obd_name, buf);
+		OBD_FREE(buf, CFS_PAGE_SIZE);
+		GOTO(out_md, err = -EPROTO);
+	}
 
-                OBD_ALLOC_WAIT(buf, CFS_PAGE_SIZE);
-                obd_connect_flags2str(buf, CFS_PAGE_SIZE,
-                                      valid ^ CLIENT_CONNECT_MDT_REQD, ",");
-                LCONSOLE_ERROR_MSG(0x170, "Server %s does not support "
-                                   "feature(s) needed for correct operation "
-                                   "of this client (%s). Please upgrade "
-                                   "server or downgrade client.\n",
-                                   sbi->ll_md_exp->exp_obd->obd_name, buf);
-                OBD_FREE(buf, CFS_PAGE_SIZE);
-                GOTO(out_md, err = -EPROTO);
-        }
-
-        size = sizeof(*data);
-        err = obd_get_info(NULL, sbi->ll_md_exp, sizeof(KEY_CONN_DATA),
-                           KEY_CONN_DATA,  &size, data, NULL);
-        if (err) {
-                CERROR("Get connect data failed: %d \n", err);
-                GOTO(out_md, err);
-        }
+	size = sizeof(*data);
+	err = obd_get_info(NULL, sbi->ll_md_exp, sizeof(KEY_CONN_DATA),
+			   KEY_CONN_DATA,  &size, data, NULL);
+	if (err) {
+		CERROR("%s: Get connect data failed: rc = %d\n",
+		       sbi->ll_md_exp->exp_obd->obd_name, err);
+		GOTO(out_md, err);
+	}
 
         LASSERT(osfs->os_bsize);
         sb->s_blocksize = osfs->os_bsize;
@@ -390,11 +384,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		sbi->ll_flags |= LL_SBI_LAYOUT_LOCK;
 	}
 
-        obd = class_name2obd(dt);
-        if (!obd) {
-                CERROR("DT %s: not setup or attached\n", dt);
-                GOTO(out_md_fid, err = -ENODEV);
-        }
+	obd = class_name2obd(dt);
+	if (!obd) {
+		CERROR("DT %s: not setup or attached\n", dt);
+		GOTO(out_md, err = -ENODEV);
+	}
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT     | OBD_CONNECT_VERSION  |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
@@ -439,80 +433,79 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
         data->ocd_brw_size = PTLRPC_MAX_BRW_SIZE;
 
-        err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data, NULL);
-        if (err == -EBUSY) {
-                LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
-                                   "recovery, of which this client is not a "
-                                   "part.  Please wait for recovery to "
-                                   "complete, abort, or time out.\n", dt);
-                GOTO(out_md_fid, err);
-        } else if (err) {
-                CERROR("Cannot connect to %s: rc = %d\n", dt, err);
-                GOTO(out_md_fid, err);
-        }
-
-        err = obd_fid_init(sbi->ll_dt_exp);
-        if (err) {
-                CERROR("Can't init data layer FID infrastructure, "
-                       "rc %d\n", err);
-                GOTO(out_dt, err);
-        }
+	err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data,
+			  NULL);
+	if (err == -EBUSY) {
+		LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
+				   "recovery, of which this client is not a "
+				   "part.  Please wait for recovery to "
+				   "complete, abort, or time out.\n", dt);
+		GOTO(out_md, err);
+	} else if (err) {
+		CERROR("%s: Cannot connect to %s: rc = %d\n",
+		       sbi->ll_dt_exp->exp_obd->obd_name, dt, err);
+		GOTO(out_md, err);
+	}
 
 	mutex_lock(&sbi->ll_lco.lco_lock);
-        sbi->ll_lco.lco_flags = data->ocd_connect_flags;
-        sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
-        sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
+	sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+	sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
+	sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
 	mutex_unlock(&sbi->ll_lco.lco_lock);
 
-        fid_zero(&sbi->ll_root_fid);
-        err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
-        if (err) {
-                CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
-        }
-        if (!fid_is_sane(&sbi->ll_root_fid)) {
-                CERROR("Invalid root fid during mount\n");
-                GOTO(out_lock_cn_cb, err = -EINVAL);
-        }
-        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
+	fid_zero(&sbi->ll_root_fid);
+	err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
+	if (err) {
+		CERROR("cannot mds_connect: rc = %d\n", err);
+		GOTO(out_dt, err);
+	}
+	if (!fid_is_sane(&sbi->ll_root_fid)) {
+		CERROR("%s: Invalid root fid "DFID" during mount\n",
+		       sbi->ll_md_exp->exp_obd->obd_name,
+		       PFID(&sbi->ll_root_fid));
+		GOTO(out_dt, err = -EINVAL);
+	}
+	CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
-        sb->s_op = &lustre_super_operations;
+	sb->s_op = &lustre_super_operations;
 #if THREAD_SIZE >= 8192 /*b=17630*/
         sb->s_export_op = &lustre_export_operations;
 #endif
 
-        /* make root inode
-         * XXX: move this to after cbd setup? */
-        valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA;
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                valid |= OBD_MD_FLRMTPERM;
-        else if (sbi->ll_flags & LL_SBI_ACL)
-                valid |= OBD_MD_FLACL;
+	/* make root inode
+	 * XXX: move this to after cbd setup? */
+	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA;
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+		valid |= OBD_MD_FLRMTPERM;
+	else if (sbi->ll_flags & LL_SBI_ACL)
+		valid |= OBD_MD_FLACL;
 
-        OBD_ALLOC_PTR(op_data);
-        if (op_data == NULL)
-                GOTO(out_lock_cn_cb, err = -ENOMEM);
+	OBD_ALLOC_PTR(op_data);
+	if (op_data == NULL)
+		GOTO(out_dt, err = -ENOMEM);
 
-        op_data->op_fid1 = sbi->ll_root_fid;
-        op_data->op_mode = 0;
-        op_data->op_capa1 = oc;
-        op_data->op_valid = valid;
+	op_data->op_fid1 = sbi->ll_root_fid;
+	op_data->op_mode = 0;
+	op_data->op_capa1 = oc;
+	op_data->op_valid = valid;
 
-        err = md_getattr(sbi->ll_md_exp, op_data, &request);
-        if (oc)
-                capa_put(oc);
-        OBD_FREE_PTR(op_data);
-        if (err) {
-                CERROR("md_getattr failed for root: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
-        }
-        err = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
-                               sbi->ll_md_exp, &lmd);
-        if (err) {
-                CERROR("failed to understand root inode md: rc = %d\n", err);
-                ptlrpc_req_finished (request);
-                GOTO(out_lock_cn_cb, err);
-        }
+	err = md_getattr(sbi->ll_md_exp, op_data, &request);
+	if (oc)
+		capa_put(oc);
+	OBD_FREE_PTR(op_data);
+	if (err) {
+		CERROR("%s: md_getattr failed for root: rc = %d\n",
+		       sbi->ll_md_exp->exp_obd->obd_name, err);
+		GOTO(out_dt, err);
+	}
+
+	err = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
+			       sbi->ll_md_exp, &lmd);
+	if (err) {
+		CERROR("failed to understand root inode md: rc = %d\n", err);
+		ptlrpc_req_finished(request);
+		GOTO(out_dt, err);
+	}
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
         root = ll_iget(sb, cl_fid_build_ino(&sbi->ll_root_fid, 0), &lmd);
@@ -561,7 +554,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (sb->s_root == NULL) {
 		CERROR("%s: can't make root dentry\n",
 			ll_get_fsname(sb, NULL, 0));
-		GOTO(out_lock_cn_cb, err = -ENOMEM);
+		GOTO(out_root, err = -ENOMEM);
 	}
 
 #ifdef HAVE_DCACHE_LOCK
@@ -592,15 +585,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 out_root:
         if (root)
                 iput(root);
-out_lock_cn_cb:
-        obd_fid_fini(sbi->ll_dt_exp);
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 	/* Make sure all OScs are gone, since cl_cache is accessing sbi. */
 	obd_zombie_barrier();
-out_md_fid:
-        obd_fid_fini(sbi->ll_md_exp);
 out_md:
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
@@ -688,7 +677,6 @@ void client_common_put_super(struct super_block *sb)
 
         cfs_list_del(&sbi->ll_conn_chain);
 
-        obd_fid_fini(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 	/* wait till all OSCs are gone, since cl_cache is accessing sbi.
@@ -697,7 +685,6 @@ void client_common_put_super(struct super_block *sb)
 
         lprocfs_unregister_mountpoint(sbi);
 
-        obd_fid_fini(sbi->ll_md_exp);
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 
