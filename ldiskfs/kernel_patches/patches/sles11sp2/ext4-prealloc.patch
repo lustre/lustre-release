@@ -1,8 +1,9 @@
-diff -u -r linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
---- linux-stage.orig/fs/ext4/ext4.h	2012-12-31 11:12:36.000000000 -0500
-+++ linux-stage/fs/ext4/ext4.h	2012-12-31 11:12:48.000000000 -0500
-@@ -1170,11 +1170,14 @@
-
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1173,11 +1173,14 @@ struct ext4_sb_info {
+ 
  	/* tunables */
  	unsigned long s_stripe;
 -	unsigned int s_mb_stream_request;
@@ -17,13 +18,14 @@ diff -u -r linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_max_writeback_mb_bump;
  	/* where last allocation was done - for stream allocation */
-diff -u -r linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
---- linux-stage.orig/fs/ext4/inode.c	2012-12-31 11:12:36.000000000 -0500
-+++ linux-stage/fs/ext4/inode.c	2012-12-31 11:12:48.000000000 -0500
-@@ -2937,6 +2937,11 @@
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -2948,6 +2948,11 @@ static int ext4_da_writepages(struct add
  	if (unlikely(sbi->s_mount_flags & EXT4_MF_FS_ABORTED))
  		return -EROFS;
-
+ 
 +	if (wbc->nr_to_write < sbi->s_mb_small_req) {
 +		nr_to_writebump = sbi->s_mb_small_req - wbc->nr_to_write;
 +		wbc->nr_to_write = sbi->s_mb_small_req;
@@ -31,40 +33,42 @@ diff -u -r linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
 +
  	if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
  		range_whole = 1;
-
-diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
---- linux-stage.orig/fs/ext4/mballoc.c	2012-12-31 11:12:36.000000000 -0500
-+++ linux-stage/fs/ext4/mballoc.c	2012-12-31 11:20:51.000000000 -0500
-@@ -1799,6 +1799,25 @@
+ 
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -1802,6 +1802,26 @@ void ext4_mb_simple_scan_group(struct ex
  	}
  }
-
-+static void ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
+ 
++static int ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
 +{
 +	int i;
 +
 +	if (value > (sbi->s_blocks_per_group - 1 - 1 - sbi->s_itb_per_group))
-+		return;
++		return -1;
 +
 +	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++) {
 +		if (sbi->s_mb_prealloc_table[i] == 0) {
 +			sbi->s_mb_prealloc_table[i] = value;
-+			return;
++			return 0;
 +		}
 +
 +		/* they should add values in order */
 +		if (value <= sbi->s_mb_prealloc_table[i])
-+			return;
++			return -1;
 +	}
++	return -1;
 +}
 +
  /*
   * The routine scans the group and measures all found extents.
   * In order to optimize scanning, caller must pass number of
-@@ -2172,6 +2191,80 @@
+@@ -2179,6 +2199,82 @@ static const struct seq_operations ext4_
  	.show   = ext4_mb_seq_groups_show,
  };
-
+ 
 +#define EXT4_MB_PREALLOC_TABLE          "prealloc_table"
 +
 +static int ext4_mb_prealloc_table_proc_read(char *page, char **start, off_t off,
@@ -132,9 +136,11 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 +	while (cur < end && i < num) {
 +	while ((cur < end) && (*cur == ' ')) cur++;
 +		value = simple_strtol(cur, &cur, 0);
-+		ext4_mb_prealloc_table_add(sbi, value);
-+		i++;
++		if (ext4_mb_prealloc_table_add(sbi, value) == 0)
++			i++;
 +	}
++	if (i != num)
++		sbi->s_mb_prealloc_table_size = i;
 +
 +	return cnt;
 +}
@@ -142,7 +148,16 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  static int ext4_mb_seq_groups_open(struct inode *inode, struct file *file)
  {
  	struct super_block *sb = PDE(inode)->data;
-@@ -2469,9 +2562,52 @@
+@@ -2425,7 +2521,7 @@ static int ext4_groupinfo_create_slab(si
+ int ext4_mb_init(struct super_block *sb, int needs_recovery)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+-	unsigned i, j;
++	unsigned i, j, k, l;
+ 	unsigned offset;
+ 	unsigned max;
+ 	int ret;
+@@ -2476,9 +2572,51 @@ int ext4_mb_init(struct super_block *sb,
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
@@ -161,16 +176,12 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 +		}
 +		memset(sbi->s_mb_prealloc_table, 0, i);
 +
-+		ext4_mb_prealloc_table_add(sbi, 4);
-+		ext4_mb_prealloc_table_add(sbi, 8);
-+		ext4_mb_prealloc_table_add(sbi, 16);
-+		ext4_mb_prealloc_table_add(sbi, 32);
-+		ext4_mb_prealloc_table_add(sbi, 64);
-+		ext4_mb_prealloc_table_add(sbi, 128);
-+		ext4_mb_prealloc_table_add(sbi, 256);
-+		ext4_mb_prealloc_table_add(sbi, 512);
-+		ext4_mb_prealloc_table_add(sbi, 1024);
-+		ext4_mb_prealloc_table_add(sbi, 2048);
++		for (k = 0, l = 4; k <= 9; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
 +
 +		sbi->s_mb_small_req = 256;
 +		sbi->s_mb_large_req = 1024;
@@ -186,21 +197,24 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 +		}
 +		memset(sbi->s_mb_prealloc_table, 0, i);
 +
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe);
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe * 2);
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe * 4);
++		for (k = 0, l = sbi->s_stripe; k <= 2; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
 +
 +		sbi->s_mb_small_req = sbi->s_stripe;
 +		sbi->s_mb_large_req = sbi->s_stripe * 8;
 +		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
 +	}
-
+ 
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
  	if (sbi->s_locality_groups == NULL) {
-@@ -2487,12 +2623,22 @@
+@@ -2494,12 +2632,22 @@ int ext4_mb_init(struct super_block *sb,
  		spin_lock_init(&lg->lg_prealloc_lock);
  	}
-
+ 
 -	if (sbi->s_proc)
 +	if (sbi->s_proc) {
 +		struct proc_dir_entry *p;
@@ -214,26 +228,26 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 +			p->write_proc = ext4_mb_prealloc_table_proc_write;
 +		}
 +	}
-
+ 
  out:
  	if (ret) {
 +		kfree(sbi->s_mb_prealloc_table);
  		kfree(sbi->s_mb_offsets);
  		kfree(sbi->s_mb_maxs);
  	}
-@@ -2528,8 +2674,10 @@
+@@ -2533,8 +2681,10 @@ int ext4_mb_release(struct super_block *
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
  	struct kmem_cache *cachep = get_groupinfo_cache(sb->s_blocksize_bits);
-
+ 
 -	if (sbi->s_proc)
 +	if (sbi->s_proc) {
  		remove_proc_entry("mb_groups", sbi->s_proc);
 +		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
 +	}
-
+ 
  	if (sbi->s_group_info) {
  		for (i = 0; i < ngroups; i++) {
-@@ -2859,11 +3007,12 @@
+@@ -2870,11 +3020,12 @@ static noinline_for_stack void
  ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
@@ -246,18 +260,18 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  	struct ext4_inode_info *ei = EXT4_I(ac->ac_inode);
 +	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
  	struct ext4_prealloc_space *pa;
-
+ 
  	/* do normalize only data requests, metadata requests
-@@ -2894,49 +3043,34 @@
+@@ -2905,49 +3056,34 @@ ext4_mb_normalize_request(struct ext4_al
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
  	orig_size = size;
 +	size = (size + ac->ac_sb->s_blocksize - 1) >> bsbits;
-
+ 
 -	/* max size of free chunks */
 -	max = 2 << bsbits;
 +	start = wind = 0;
-
+ 
 -#define NRL_CHECK_SIZE(req, size, max, chunk_size)	\
 -		(req <= (size) || max <= (chunk_size))
 +	/* let's choose preallocation window depending on file size */
@@ -268,7 +282,7 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 +		}
 +	}
 +	size = wind;
-
+ 
 -	/* first, try to predict filesize */
 -	/* XXX: should this table be tunable? */
 -	start_off = 0;
@@ -319,19 +333,19 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
 -	size = size >> bsbits;
 -	start = start_off >> bsbits;
 +	orig_size = size;
-
+ 
  	/* don't cover already allocated blocks in selected range */
  	if (ar->pleft && start <= ar->lleft) {
-@@ -3008,7 +3143,6 @@
+@@ -3020,7 +3156,6 @@ ext4_mb_normalize_request(struct ext4_al
  	}
  	BUG_ON(start + size <= ac->ac_o_ex.fe_logical &&
  			start > ac->ac_o_ex.fe_logical);
 -	BUG_ON(size <= 0 || size > EXT4_BLOCKS_PER_GROUP(ac->ac_sb));
-
+ 
  	/* now prepare goal request */
-
-@@ -3940,11 +4074,19 @@
-
+ 
+@@ -3956,11 +4091,19 @@ static void ext4_mb_group_or_file(struct
+ 
  	/* don't use group allocation for large files */
  	size = max(size, isize);
 -	if (size > sbi->s_mb_stream_request) {
@@ -340,7 +354,7 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  		ac->ac_flags |= EXT4_MB_STREAM_ALLOC;
  		return;
  	}
-
+ 
 +	/*
 +	 * request is so large that we don't care about
 +	 * streaming - it overweights any possible seek
@@ -351,10 +365,11 @@ diff -u -r linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  	BUG_ON(ac->ac_lg != NULL);
  	/*
  	 * locality group prealloc space are per cpu. The reason for having
-diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
---- linux-stage.orig/fs/ext4/super.c	2012-12-31 11:12:36.000000000 -0500
-+++ linux-stage/fs/ext4/super.c	2012-12-31 11:12:48.000000000 -0500
-@@ -2531,7 +2531,8 @@
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -2595,7 +2595,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats
  EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_order2_req, s_mb_order2_reqs);
@@ -363,8 +378,8 @@ diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
 +EXT4_RW_ATTR_SBI_UI(mb_large_req, s_mb_large_req);
  EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
  EXT4_RW_ATTR_SBI_UI(max_writeback_mb_bump, s_max_writeback_mb_bump);
-
-@@ -2548,7 +2549,8 @@
+ 
+@@ -2611,7 +2612,8 @@ static struct attribute *ext4_attrs[] =
  	ATTR_LIST(mb_max_to_scan),
  	ATTR_LIST(mb_min_to_scan),
  	ATTR_LIST(mb_order2_req),
