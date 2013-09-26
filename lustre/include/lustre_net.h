@@ -150,17 +150,17 @@
  *
  * Examples
  *
- * #define MDT_NTHRS_INIT	2
- * #define MDT_NTHRS_BASE	64
- * #define MDT_NTHRS_FACTOR	8
- * #define MDT_NTHRS_MAX	1024
+ * #define MDS_NTHRS_INIT	2
+ * #define MDS_NTHRS_BASE	64
+ * #define MDS_NTHRS_FACTOR	8
+ * #define MDS_NTHRS_MAX	1024
  *
  * Example 1):
  * ---------------------------------------------------------------------
  * Server(A) has 16 cores, user configured it to 4 partitions so each
  * partition has 4 cores, then actual number of service threads on each
  * partition is:
- *     MDT_NTHRS_BASE(64) + cores(4) * MDT_NTHRS_FACTOR(8) = 96
+ *     MDS_NTHRS_BASE(64) + cores(4) * MDS_NTHRS_FACTOR(8) = 96
  *
  * Total number of threads for the service is:
  *     96 * partitions(4) = 384
@@ -170,7 +170,7 @@
  * Server(B) has 32 cores, user configured it to 4 partitions so each
  * partition has 8 cores, then actual number of service threads on each
  * partition is:
- *     MDT_NTHRS_BASE(64) + cores(8) * MDT_NTHRS_FACTOR(8) = 128
+ *     MDS_NTHRS_BASE(64) + cores(8) * MDS_NTHRS_FACTOR(8) = 128
  *
  * Total number of threads for the service is:
  *     128 * partitions(4) = 512
@@ -180,22 +180,22 @@
  * Server(B) has 96 cores, user configured it to 8 partitions so each
  * partition has 12 cores, then actual number of service threads on each
  * partition is:
- *     MDT_NTHRS_BASE(64) + cores(12) * MDT_NTHRS_FACTOR(8) = 160
+ *     MDS_NTHRS_BASE(64) + cores(12) * MDS_NTHRS_FACTOR(8) = 160
  *
  * Total number of threads for the service is:
  *     160 * partitions(8) = 1280
  *
- * However, it's above the soft limit MDT_NTHRS_MAX, so we choose this number
+ * However, it's above the soft limit MDS_NTHRS_MAX, so we choose this number
  * as upper limit of threads number for each partition:
- *     MDT_NTHRS_MAX(1024) / partitions(8) = 128
+ *     MDS_NTHRS_MAX(1024) / partitions(8) = 128
  *
  * Example 4):
  * ---------------------------------------------------------------------
  * Server(C) have a thousand of cores and user configured it to 32 partitions
- *     MDT_NTHRS_BASE(64) * 32 = 2048
+ *     MDS_NTHRS_BASE(64) * 32 = 2048
  *
- * which is already above soft limit MDT_NTHRS_MAX(1024), but we still need
- * to guarantee that each partition has at least MDT_NTHRS_BASE(64) threads
+ * which is already above soft limit MDS_NTHRS_MAX(1024), but we still need
+ * to guarantee that each partition has at least MDS_NTHRS_BASE(64) threads
  * to keep service healthy, so total number of threads will just be 2048.
  *
  * NB: we don't suggest to choose server with that many cores because backend
@@ -252,39 +252,39 @@
   * Please see examples in "Thread Constants", MDS threads number will be at
   * the comparable level of old versions, unless the server has many cores.
   */
-#ifndef MDT_MAX_THREADS
-#define MDT_MAX_THREADS		1024
-#define MDT_MAX_OTHR_THREADS	256
+#ifndef MDS_MAX_THREADS
+#define MDS_MAX_THREADS		1024
+#define MDS_MAX_OTHR_THREADS	256
 
-#else /* MDT_MAX_THREADS */
-#if MDT_MAX_THREADS < PTLRPC_NTHRS_INIT
-#undef MDT_MAX_THREADS
-#define MDT_MAX_THREADS	PTLRPC_NTHRS_INIT
+#else /* MDS_MAX_THREADS */
+#if MDS_MAX_THREADS < PTLRPC_NTHRS_INIT
+#undef MDS_MAX_THREADS
+#define MDS_MAX_THREADS	PTLRPC_NTHRS_INIT
 #endif
-#define MDT_MAX_OTHR_THREADS	max(PTLRPC_NTHRS_INIT, MDT_MAX_THREADS / 2)
+#define MDS_MAX_OTHR_THREADS	max(PTLRPC_NTHRS_INIT, MDS_MAX_THREADS / 2)
 #endif
 
 /* default service */
-#define MDT_THR_FACTOR		8
-#define MDT_NTHRS_INIT		PTLRPC_NTHRS_INIT
-#define MDT_NTHRS_MAX		MDT_MAX_THREADS
-#define MDT_NTHRS_BASE		min(64, MDT_NTHRS_MAX)
+#define MDS_THR_FACTOR		8
+#define MDS_NTHRS_INIT		PTLRPC_NTHRS_INIT
+#define MDS_NTHRS_MAX		MDS_MAX_THREADS
+#define MDS_NTHRS_BASE		min(64, MDS_NTHRS_MAX)
 
 /* read-page service */
-#define MDT_RDPG_THR_FACTOR	4
-#define MDT_RDPG_NTHRS_INIT	PTLRPC_NTHRS_INIT
-#define MDT_RDPG_NTHRS_MAX	MDT_MAX_OTHR_THREADS
-#define MDT_RDPG_NTHRS_BASE	min(48, MDT_RDPG_NTHRS_MAX)
+#define MDS_RDPG_THR_FACTOR	4
+#define MDS_RDPG_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDS_RDPG_NTHRS_MAX	MDS_MAX_OTHR_THREADS
+#define MDS_RDPG_NTHRS_BASE	min(48, MDS_RDPG_NTHRS_MAX)
 
 /* these should be removed when we remove setattr service in the future */
-#define MDT_SETA_THR_FACTOR	4
-#define MDT_SETA_NTHRS_INIT	PTLRPC_NTHRS_INIT
-#define MDT_SETA_NTHRS_MAX	MDT_MAX_OTHR_THREADS
-#define MDT_SETA_NTHRS_BASE	min(48, MDT_SETA_NTHRS_MAX)
+#define MDS_SETA_THR_FACTOR	4
+#define MDS_SETA_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDS_SETA_NTHRS_MAX	MDS_MAX_OTHR_THREADS
+#define MDS_SETA_NTHRS_BASE	min(48, MDS_SETA_NTHRS_MAX)
 
 /* non-affinity threads */
-#define MDT_OTHR_NTHRS_INIT	PTLRPC_NTHRS_INIT
-#define MDT_OTHR_NTHRS_MAX	MDT_MAX_OTHR_THREADS
+#define MDS_OTHR_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDS_OTHR_NTHRS_MAX	MDS_MAX_OTHR_THREADS
 
 #define MDS_NBUFS		(64 * cfs_num_online_cpus())
 /**

@@ -2966,7 +2966,6 @@ thread_sanity() {
 	local nthrs
         shift 4
 
-        setup
         check_mount || return 41
 
         # We need to expand $parampat, but it may match multiple parameters, so
@@ -3040,18 +3039,28 @@ thread_sanity() {
 
         load_modules
         setup
-        cleanup
 }
 
 test_53a() {
+	setup
 	thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads' '16'
+	cleanup
 }
 run_test 53a "check OSS thread count params"
 
 test_53b() {
-	thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads' '16'
+	setup
+	local mds=$(do_facet $SINGLEMDS "lctl get_param -N mds.*.*.threads_max \
+		    2>/dev/null")
+	if [ -z "$mds" ]; then
+		#running this on an old MDT
+		thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads' 16
+	else
+		thread_sanity MDT $SINGLEMDS 'mds.*.*.' 'mds_num_threads' 16
+	fi
+	cleanup
 }
-run_test 53b "check MDT thread count params"
+run_test 53b "check MDS thread count params"
 
 test_54a() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then

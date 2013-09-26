@@ -1030,9 +1030,19 @@ static struct lprocfs_vars lprocfs_mdt_module_vars[] = {
 
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars)
 {
-    lvars->module_vars  = lprocfs_mdt_module_vars;
-    lvars->obd_vars     = lprocfs_mdt_obd_vars;
+	lvars->module_vars  = lprocfs_mdt_module_vars;
+	lvars->obd_vars     = lprocfs_mdt_obd_vars;
 }
+
+struct lprocfs_vars lprocfs_mds_obd_vars[] = {
+	{ "uuid",	 lprocfs_rd_uuid,	0, 0 },
+	{ 0 }
+};
+
+struct lprocfs_vars lprocfs_mds_module_vars[] = {
+	{ "num_refs",     lprocfs_rd_numrefs,     0, 0 },
+	{ 0 }
+};
 
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 {
