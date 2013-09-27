@@ -998,17 +998,17 @@ test_18() {
     # is / should be
     max=30
     diff=$((($files1 - $files2) * 100 / $files1))
-    echo  "No pool / wide pool: $diff %."
-    [ $diff -gt $max ] &&
-        error_ignore 23408 "Degradation with wide pool is $diff% > $max%"
+	echo  "No pool / wide pool: $diff %."
+	[ $diff -gt $max ] &&
+		error_ignore bz23408 "Degradation with wide pool is $diff% > $max%"
 
-    max=30
-    diff=$((($files1 - $files3) * 100 / $files1))
-    echo  "No pool / missing pool: $diff %."
-    [ $diff -gt $max ] &&
-        error_ignore 23408 "Degradation with wide pool is $diff% > $max%"
+	max=30
+	diff=$((($files1 - $files3) * 100 / $files1))
+	echo  "No pool / missing pool: $diff %."
+	[ $diff -gt $max ] &&
+		error_ignore bz23408 "Degradation with wide pool is $diff% > $max%"
 
-    return 0
+	return 0
 }
 run_test 18 "File create in a directory which references a deleted pool"
 

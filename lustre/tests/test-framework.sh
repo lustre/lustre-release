@@ -4302,9 +4302,10 @@ error_exit() {
 
 # use only if we are ignoring failures for this test, bugno required.
 # (like ALWAYS_EXCEPT, but run the test and ignore the results.)
-# e.g. error_ignore 5494 "your message"
+# e.g. error_ignore bz5494 "your message" or
+# error_ignore LU-5494 "your message"
 error_ignore() {
-	local TYPE="IGNORE (bz$1)"
+	local TYPE="IGNORE ($1)"
 	shift
 	error_noexit "$@"
 }

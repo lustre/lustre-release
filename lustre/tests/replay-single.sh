@@ -1769,8 +1769,9 @@ test_67a() #bug 3055
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
     echo "$ATTEMPTS osc reconnect attempts on gradual slow"
-    [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
-    return 0
+	[ $ATTEMPTS -gt 0 ] &&
+		error_ignore bz13721 "AT should have prevented reconnect"
+	return 0
 }
 run_test 67a "AT: verify slow request processing doesn't induce reconnects"
 

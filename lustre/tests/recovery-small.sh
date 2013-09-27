@@ -767,7 +767,8 @@ test_24a() { # bug 11710 details correct fsync() behavior
 	rc=$?
 	lctl set_param fail_loc=0x0
 	client_reconnect
-	[ $rc -eq 0 ] && error_ignore 5494 "multiop didn't fail fsync: rc $rc" || true
+	[ $rc -eq 0 ] &&
+		error_ignore bz5494 "multiop didn't fail fsync: rc $rc" || true
 }
 run_test 24a "fsync error (should return error)"
 
@@ -807,10 +808,10 @@ test_24b() {
 	lctl set_param fail_loc=0x0
 	client_reconnect
 	[ $rc1 -eq 0 -o $rc2 -eq 0 ] &&
-	error_ignore 5494 "multiop didn't fail fsync: $rc1 or close: $rc2" ||
+	error_ignore bz5494 "multiop didn't fail fsync: $rc1 or close: $rc2" ||
 		true
 
-	dmesg | grep "dirty page discard:" || \
+	dmesg | grep "dirty page discard:" ||
 		error "no discarded dirty page found!"
 }
 run_test 24b "test dirty page discard due to client eviction"
@@ -959,7 +960,8 @@ test_50() {
 	rc=$?
 	echo writemany returned $rc
 	#these may fail because of eviction due to slow AST response.
-	[ $rc -eq 0 ] || error_ignore 13652 "writemany returned rc $rc" || true
+	[ $rc -eq 0 ] ||
+		error_ignore bz13652 "writemany returned rc $rc" || true
 }
 run_test 50 "failover MDS under load"
 
@@ -988,10 +990,11 @@ test_51() {
 	# and recovery was interrupted
 	sleep $TIMEOUT
         kill -USR1 $CLIENT_PID
-	wait $CLIENT_PID 
+	wait $CLIENT_PID
 	rc=$?
 	echo writemany returned $rc
-	[ $rc -eq 0 ] || error_ignore 13652 "writemany returned rc $rc" || true
+	[ $rc -eq 0 ] ||
+		error_ignore bz13652 "writemany returned rc $rc" || true
 }
 run_test 51 "failover MDS during recovery"
 
@@ -1185,12 +1188,12 @@ test_59() { # bug 10589
 run_test 59 "Read cancel race on client eviction"
 
 err17935 () {
-    # we assume that all md changes are in the MDT0 changelog
-    if [ $MDSCOUNT -gt 1 ]; then
-	error_ignore 17935 $*
-    else
-	error $*
-    fi
+	# we assume that all md changes are in the MDT0 changelog
+	if [ $MDSCOUNT -gt 1 ]; then
+		error_ignore bz17935 $*
+	else
+		error $*
+	fi
 }
 
 test_60() {
