@@ -6775,7 +6775,7 @@ test_117() # bug 10891
         echo "Truncate succeeded."
 	rm -f $DIR/$tfile
 }
-run_test 117 "verify fsfilt_extend =========="
+run_test 117 "verify osd extend =========="
 
 NO_SLOW_RESENDCOUNT=4
 export OLD_RESENDCOUNT=""

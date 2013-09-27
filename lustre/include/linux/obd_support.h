@@ -61,7 +61,6 @@
 #ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/blkdev.h>
-# include <lvfs.h>
 #else /* !__KERNEL__ */
 # define LTIME_S(time) (time)
 /* for obd_class.h */

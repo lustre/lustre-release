@@ -47,7 +47,6 @@
 #define PRINT_MASK (D_SUPER | D_CONFIG)
 
 #include <obd.h>
-#include <lvfs.h>
 #include <obd_class.h>
 #include <lustre/lustre_user.h>
 #include <linux/version.h>
@@ -1355,7 +1354,7 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		strcpy(lsi->lsi_osd_type, LUSTRE_OSD_LDISKFS_NAME);
 	}
 
-	/* XXX: a temp. solution for components using fsfilt
+	/* XXX: a temp. solution for components using ldiskfs
 	 *      to be removed in one of the subsequent patches */
 	if (!strcmp(lsi->lsi_lmd->lmd_osd_type, "osd-ldiskfs"))
 		strcpy(lsi->lsi_fstype, "ldiskfs");

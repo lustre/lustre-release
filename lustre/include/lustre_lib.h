@@ -67,7 +67,6 @@ struct lu_target;
 struct l_wait_info;
 #include <lustre_ha.h>
 #include <lustre_net.h>
-#include <lvfs.h>
 
 #ifdef HAVE_SERVER_SUPPORT
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,

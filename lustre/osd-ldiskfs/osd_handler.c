@@ -5395,11 +5395,6 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
 
-	if (o->od_fsops) {
-		fsfilt_put_ops(o->od_fsops);
-		o->od_fsops = NULL;
-	}
-
 	if (o->od_mnt != NULL) {
 		shrink_dcache_sb(osd_sb(o));
 		osd_sync(env, &o->od_dt_dev);
@@ -5434,13 +5429,6 @@ static int osd_mount(const struct lu_env *env,
 	if (strlen(dev) >= sizeof(o->od_mntdev))
 		RETURN(-E2BIG);
 	strcpy(o->od_mntdev, dev);
-
-	o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
-	if (IS_ERR(o->od_fsops)) {
-		CERROR("%s: Can't find fsfilt_ldiskfs\n", name);
-		o->od_fsops = NULL;
-		RETURN(-ENOTSUPP);
-	}
 
 	OBD_PAGE_ALLOC(__page, GFP_IOFS);
 	if (__page == NULL)
@@ -5516,8 +5504,6 @@ out_mnt:
 out:
 	if (__page)
 		OBD_PAGE_FREE(__page);
-	if (rc)
-		fsfilt_put_ops(o->od_fsops);
 
 	return rc;
 }

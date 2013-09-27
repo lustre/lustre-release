@@ -182,8 +182,6 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 
 	omm = dev->od_mdt_map;
 
-	LASSERT(dev->od_fsops);
-
 	parent = osd_sb(dev)->s_root;
 	osd_push_ctxt(dev, &new, &save);
 
@@ -393,7 +391,6 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	rwlock_init(&dev->od_ost_map->om_seq_list_lock);
 	sema_init(&dev->od_ost_map->om_dir_init_sem, 1);
 
-        LASSERT(dev->od_fsops);
         osd_push_ctxt(dev, &new, &save);
 
 	d = ll_lookup_one_len("O", rootd, strlen("O"));

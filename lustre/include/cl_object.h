@@ -98,7 +98,6 @@
  * super-class definitions.
  */
 #include <lu_object.h>
-#include <lvfs.h>
 #ifdef __KERNEL__
 #        include <linux/mutex.h>
 #        include <linux/radix-tree.h>

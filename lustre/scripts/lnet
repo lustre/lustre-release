@@ -37,7 +37,6 @@ declare -r BOTTOM_MODULES=(	\
 	ksocklnd		\
 	kqswlnd			\
 	ko2iblnd		\
-	fsfilt_ldiskfs		\
 	obdclass		\
 	lnet			\
 	lvfs			\

@@ -112,6 +112,11 @@ EXPORT_SYMBOL(obd_dirty_transit_pages);
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
 EXPORT_SYMBOL(obd_jobid_var);
 
+#ifdef LPROCFS
+struct lprocfs_stats *obd_memory = NULL;
+EXPORT_SYMBOL(obd_memory);
+#endif
+
 /* Get jobid of current process by reading the environment variable
  * stored in between the "env_start" & "env_end" of task struct.
  *

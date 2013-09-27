@@ -9,7 +9,7 @@ noinst_LIBRARIES = liblustreclass.a
 liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c mea.c uuid.c
 liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c
-liblustreclass_a_SOURCES += llog_swab.c capa.c
+liblustreclass_a_SOURCES += llog_swab.c capa.c lprocfs_counters.c
 liblustreclass_a_SOURCES += lu_object.c cl_object.c lu_ref.c
 liblustreclass_a_SOURCES += cl_page.c cl_lock.c cl_io.c
 liblustreclass_a_SOURCES += #llog_ioctl.c rbtree.c
@@ -35,7 +35,8 @@ obdclass_SOURCES =						\
 	lustre_handles.c lustre_peer.c obd_config.c		\
 	obdo.c debug.c llog_ioctl.c uuid.c			\
 	llog_swab.c llog_obd.c llog.c llog_cat.c		\
-	mea.c lu_object.c dt_object.c lu_ref.c
+	mea.c lu_object.c dt_object.c lu_ref.c			\
+	lprocfs_counters.c
 
 obdclass_CFLAGS := $(EXTRA_KCFLAGS)
 obdclass_LDFLAGS := $(EXTRA_KLDFLAGS)

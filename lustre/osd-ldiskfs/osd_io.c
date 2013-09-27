@@ -517,6 +517,344 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
         RETURN(0);
 }
 
+#ifdef HAVE_EXT_PBLOCK /* Name changed to ext4_ext_pblock for kernel 2.6.35 */
+#define ldiskfs_ext_pblock(ex) ext_pblock((ex))
+#endif
+
+struct bpointers {
+	unsigned long *blocks;
+	unsigned long start;
+	int num;
+	int init_num;
+	int create;
+};
+
+static long ldiskfs_ext_find_goal(struct inode *inode,
+				  struct ldiskfs_ext_path *path,
+				  unsigned long block, int *aflags)
+{
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	unsigned long bg_start;
+	unsigned long colour;
+	int depth;
+
+	if (path) {
+		struct ldiskfs_extent *ex;
+		depth = path->p_depth;
+
+		/* try to predict block placement */
+		if ((ex = path[depth].p_ext))
+			return ldiskfs_ext_pblock(ex) +
+				(block - le32_to_cpu(ex->ee_block));
+
+		/* it looks index is empty
+		 * try to find starting from index itself */
+		if (path[depth].p_bh)
+			return path[depth].p_bh->b_blocknr;
+	}
+
+	/* OK. use inode's group */
+	bg_start = (ei->i_block_group * LDISKFS_BLOCKS_PER_GROUP(inode->i_sb)) +
+		le32_to_cpu(LDISKFS_SB(inode->i_sb)->s_es->s_first_data_block);
+	colour = (current->pid % 16) *
+		(LDISKFS_BLOCKS_PER_GROUP(inode->i_sb) / 16);
+	return bg_start + colour + block;
+}
+
+static unsigned long new_blocks(handle_t *handle, struct inode *inode,
+				struct ldiskfs_ext_path *path,
+				unsigned long block, unsigned long *count,
+				int *err)
+{
+	struct ldiskfs_allocation_request ar;
+	unsigned long pblock;
+	int aflags;
+
+	/* find neighbour allocated blocks */
+	ar.lleft = block;
+	*err = ldiskfs_ext_search_left(inode, path, &ar.lleft, &ar.pleft);
+	if (*err)
+		return 0;
+	ar.lright = block;
+	*err = ldiskfs_ext_search_right(inode, path, &ar.lright, &ar.pright);
+	if (*err)
+		return 0;
+
+	/* allocate new block */
+	ar.goal = ldiskfs_ext_find_goal(inode, path, block, &aflags);
+	ar.inode = inode;
+	ar.logical = block;
+	ar.len = *count;
+	ar.flags = LDISKFS_MB_HINT_DATA;
+	pblock = ldiskfs_mb_new_blocks(handle, &ar, err);
+	*count = ar.len;
+	return pblock;
+}
+
+static int ldiskfs_ext_new_extent_cb(struct inode *inode,
+				     struct ldiskfs_ext_path *path,
+				     struct ldiskfs_ext_cache *cex,
+#ifdef HAVE_EXT_PREPARE_CB_EXTENT
+				     struct ldiskfs_extent *ex,
+#endif
+				     void *cbdata)
+{
+	struct bpointers *bp = cbdata;
+	struct ldiskfs_extent nex;
+	unsigned long pblock;
+	unsigned long tgen;
+	int err, i;
+	unsigned long count;
+	handle_t *handle;
+
+#ifdef LDISKFS_EXT_CACHE_EXTENT /* until kernel 2.6.37 */
+	if (cex->ec_type == LDISKFS_EXT_CACHE_EXTENT) {
+#else
+	if ((cex->ec_len != 0) && (cex->ec_start != 0)) {
+#endif
+		err = EXT_CONTINUE;
+		goto map;
+	}
+
+	if (bp->create == 0) {
+		i = 0;
+		if (cex->ec_block < bp->start)
+			i = bp->start - cex->ec_block;
+		if (i >= cex->ec_len)
+			CERROR("nothing to do?! i = %d, e_num = %u\n",
+					i, cex->ec_len);
+		for (; i < cex->ec_len && bp->num; i++) {
+			*(bp->blocks) = 0;
+			bp->blocks++;
+			bp->num--;
+			bp->start++;
+		}
+
+		return EXT_CONTINUE;
+	}
+
+	tgen = LDISKFS_I(inode)->i_ext_generation;
+	count = ldiskfs_ext_calc_credits_for_insert(inode, path);
+
+	handle = ldiskfs_journal_start(inode, count + LDISKFS_ALLOC_NEEDED + 1);
+	if (IS_ERR(handle)) {
+		return PTR_ERR(handle);
+	}
+
+	if (tgen != LDISKFS_I(inode)->i_ext_generation) {
+		/* the tree has changed. so path can be invalid at moment */
+		ldiskfs_journal_stop(handle);
+		return EXT_REPEAT;
+	}
+
+	/* In 2.6.32 kernel, ldiskfs_ext_walk_space()'s callback func is not
+	 * protected by i_data_sem as whole. so we patch it to store
+	 * generation to path and now verify the tree hasn't changed */
+	down_write((&LDISKFS_I(inode)->i_data_sem));
+
+	/* validate extent, make sure the extent tree does not changed */
+	if (LDISKFS_I(inode)->i_ext_generation != path[0].p_generation) {
+		/* cex is invalid, try again */
+		up_write(&LDISKFS_I(inode)->i_data_sem);
+		ldiskfs_journal_stop(handle);
+		return EXT_REPEAT;
+	}
+
+	count = cex->ec_len;
+	pblock = new_blocks(handle, inode, path, cex->ec_block, &count, &err);
+	if (!pblock)
+		goto out;
+	BUG_ON(count > cex->ec_len);
+
+	/* insert new extent */
+	nex.ee_block = cpu_to_le32(cex->ec_block);
+	ldiskfs_ext_store_pblock(&nex, pblock);
+	nex.ee_len = cpu_to_le16(count);
+	err = ldiskfs_ext_insert_extent(handle, inode, path, &nex, 0);
+	if (err) {
+		/* free data blocks we just allocated */
+		/* not a good idea to call discard here directly,
+		 * but otherwise we'd need to call it every free() */
+		ldiskfs_discard_preallocations(inode);
+#ifdef HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD /* Introduced in 2.6.32-rc7 */
+		ldiskfs_free_blocks(handle, inode, NULL, ldiskfs_ext_pblock(&nex),
+				    cpu_to_le16(nex.ee_len), 0);
+#else
+		ldiskfs_free_blocks(handle, inode, ldiskfs_ext_pblock(&nex),
+				    cpu_to_le16(nex.ee_len), 0);
+#endif
+		goto out;
+	}
+
+	/*
+	 * Putting len of the actual extent we just inserted,
+	 * we are asking ldiskfs_ext_walk_space() to continue
+	 * scaning after that block
+	 */
+	cex->ec_len = le16_to_cpu(nex.ee_len);
+	cex->ec_start = ldiskfs_ext_pblock(&nex);
+	BUG_ON(le16_to_cpu(nex.ee_len) == 0);
+	BUG_ON(le32_to_cpu(nex.ee_block) != cex->ec_block);
+
+out:
+	up_write((&LDISKFS_I(inode)->i_data_sem));
+	ldiskfs_journal_stop(handle);
+map:
+	if (err >= 0) {
+		/* map blocks */
+		if (bp->num == 0) {
+			CERROR("hmm. why do we find this extent?\n");
+			CERROR("initial space: %lu:%u\n",
+				bp->start, bp->init_num);
+#ifdef LDISKFS_EXT_CACHE_EXTENT /* until kernel 2.6.37 */
+			CERROR("current extent: %u/%u/%llu %d\n",
+				cex->ec_block, cex->ec_len,
+				(unsigned long long)cex->ec_start,
+				cex->ec_type);
+#else
+			CERROR("current extent: %u/%u/%llu\n",
+				cex->ec_block, cex->ec_len,
+				(unsigned long long)cex->ec_start);
+#endif
+		}
+		i = 0;
+		if (cex->ec_block < bp->start)
+			i = bp->start - cex->ec_block;
+		if (i >= cex->ec_len)
+			CERROR("nothing to do?! i = %d, e_num = %u\n",
+					i, cex->ec_len);
+		for (; i < cex->ec_len && bp->num; i++) {
+			*(bp->blocks) = cex->ec_start + i;
+#ifdef LDISKFS_EXT_CACHE_EXTENT /* until kernel 2.6.37 */
+			if (cex->ec_type != LDISKFS_EXT_CACHE_EXTENT) {
+#else
+			if ((cex->ec_len == 0) || (cex->ec_start == 0)) {
+#endif
+				/* unmap any possible underlying metadata from
+				 * the block device mapping.  bug 6998. */
+				unmap_underlying_metadata(inode->i_sb->s_bdev,
+							  *(bp->blocks));
+			}
+			bp->blocks++;
+			bp->num--;
+			bp->start++;
+		}
+	}
+	return err;
+}
+
+int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
+			    unsigned long num, unsigned long *blocks,
+			    int create)
+{
+	struct bpointers bp;
+	int err;
+
+	CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
+	       block, block + num - 1, (unsigned) inode->i_ino);
+
+	bp.blocks = blocks;
+	bp.start = block;
+	bp.init_num = bp.num = num;
+	bp.create = create;
+
+	err = ldiskfs_ext_walk_space(inode, block, num,
+					 ldiskfs_ext_new_extent_cb, &bp);
+	ldiskfs_ext_invalidate_cache(inode);
+
+	return err;
+}
+
+int osd_ldiskfs_map_ext_inode_pages(struct inode *inode, struct page **page,
+				    int pages, unsigned long *blocks,
+				    int create)
+{
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int rc = 0, i = 0;
+	struct page *fp = NULL;
+	int clen = 0;
+
+	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
+		inode->i_ino, pages, (*page)->index);
+
+	/* pages are sorted already. so, we just have to find
+	 * contig. space and process them properly */
+	while (i < pages) {
+		if (fp == NULL) {
+			/* start new extent */
+			fp = *page++;
+			clen = 1;
+			i++;
+			continue;
+		} else if (fp->index + clen == (*page)->index) {
+			/* continue the extent */
+			page++;
+			clen++;
+			i++;
+			continue;
+		}
+
+		/* process found extent */
+		rc = osd_ldiskfs_map_nblocks(inode, fp->index * blocks_per_page,
+					     clen * blocks_per_page, blocks,
+					     create);
+		if (rc)
+			GOTO(cleanup, rc);
+
+		/* look for next extent */
+		fp = NULL;
+		blocks += blocks_per_page * clen;
+	}
+
+	if (fp)
+		rc = osd_ldiskfs_map_nblocks(inode, fp->index * blocks_per_page,
+					     clen * blocks_per_page, blocks,
+					     create);
+cleanup:
+	return rc;
+}
+
+int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
+				   int pages, unsigned long *blocks,
+				   int create)
+{
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	unsigned long *b;
+	int rc = 0, i;
+
+	for (i = 0, b = blocks; i < pages; i++, page++) {
+		rc = ldiskfs_map_inode_page(inode, *page, b, create);
+		if (rc) {
+			CERROR("ino %lu, blk %lu create %d: rc %d\n",
+			       inode->i_ino, *b, create, rc);
+			break;
+		}
+
+		b += blocks_per_page;
+	}
+	return rc;
+}
+
+static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
+				       int pages, unsigned long *blocks,
+				       int create, struct mutex *optional_mutex)
+{
+	int rc;
+
+	if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
+		rc = osd_ldiskfs_map_ext_inode_pages(inode, page, pages,
+						     blocks, create);
+		return rc;
+	}
+	if (optional_mutex != NULL)
+		mutex_lock(optional_mutex);
+	rc = osd_ldiskfs_map_bm_inode_pages(inode, page, pages, blocks, create);
+	if (optional_mutex != NULL)
+		mutex_unlock(optional_mutex);
+
+	return rc;
+}
+
 static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
                           struct niobuf_local *lnb, int npages)
 {
@@ -585,10 +923,10 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
-		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-						       iobuf->dr_npages,
-						       iobuf->dr_blocks,
-						       0, NULL);
+		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
+						 iobuf->dr_npages,
+						 iobuf->dr_blocks,
+						 0, NULL);
                 if (likely(rc == 0)) {
                         rc = osd_do_bio(osd, inode, iobuf);
                         /* do IO stats for preparation reads */
@@ -789,10 +1127,10 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
                 rc = -ENOSPC;
         } else if (iobuf->dr_npages > 0) {
-                rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-						       iobuf->dr_npages,
-						       iobuf->dr_blocks,
-						       1, NULL);
+		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
+						 iobuf->dr_npages,
+						 iobuf->dr_blocks,
+						 1, NULL);
         } else {
                 /* no pages to write, no transno is needed */
                 thandle->th_local = 1;
@@ -877,10 +1215,10 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
-		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-						       iobuf->dr_npages,
-						       iobuf->dr_blocks,
-						       0, NULL);
+		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
+						 iobuf->dr_npages,
+						 iobuf->dr_blocks,
+						 0, NULL);
                 rc = osd_do_bio(osd, inode, iobuf);
 
                 /* IO stats will be done in osd_bufs_put() */

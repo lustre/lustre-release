@@ -39,7 +39,7 @@
 AUTOMAKE_OPTIONS = foreign
 
 # also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
-ALWAYS_SUBDIRS = include lvfs obdclass ldlm ptlrpc obdecho \
+ALWAYS_SUBDIRS = include obdclass ldlm ptlrpc obdecho \
 	mgc fid fld doc utils tests scripts autoconf contrib conf
 
 SERVER_SUBDIRS = ost mgs mdt mdd ofd osd-zfs osd-ldiskfs \
@@ -72,10 +72,7 @@ DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
 
 EXTRA_DIST = BUGS FDL kernel_patches BUILDING
 
-lvfs-sources:
-	$(MAKE) sources -C lvfs
-
-sources: $(LDISKFS) lvfs-sources lustre_build_version
+sources: $(LDISKFS) lustre_build_version
 
 all-recursive: lustre_build_version
 

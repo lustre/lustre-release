@@ -475,7 +475,6 @@ load_modules_local() {
     load_module ../lnet/lnet/lnet
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
     load_module ../lnet/klnds/$LNETLND
-    load_module lvfs/lvfs
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
@@ -498,19 +497,14 @@ load_modules_local() {
 			modprobe zfs
 			load_module osd-zfs/osd_zfs
 		fi
-		load_module mgs/mgs
-		load_module mdd/mdd
 		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
-			#
-			# This block shall be moved up beside osd-zfs as soon
-			# as osd-ldiskfs stops using mdd symbols.
-			#
 			grep -q exportfs_decode_fh $SYMLIST ||
 				{ modprobe exportfs 2> /dev/null || true; }
 			load_module ../ldiskfs/ldiskfs
-			load_module lvfs/fsfilt_ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi
+		load_module mgs/mgs
+		load_module mdd/mdd
 		load_module mdt/mdt
 		load_module ost/ost
 		load_module lod/lod

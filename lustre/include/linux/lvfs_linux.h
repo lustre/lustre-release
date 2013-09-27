@@ -49,8 +49,6 @@
 #define l_filp_open filp_open
 
 struct lvfs_run_ctxt;
-struct l_file *l_dentry_open(struct lvfs_run_ctxt *, struct l_dentry *,
-                             int flags);
 
 struct l_linux_dirent {
         cfs_list_t      lld_list;

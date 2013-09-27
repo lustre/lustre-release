@@ -5,10 +5,10 @@ obdclass-linux-objs := $(addprefix linux/,$(obdclass-linux-objs))
 
 default: all
 
-obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o
+obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o llog_osd.o
 obdclass-all-objs += class_obd.o debug.o genops.o uuid.o llog_ioctl.o
-obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
-obdclass-all-objs += llog_osd.o local_storage.o
+obdclass-all-objs += lprocfs_status.o lprocfs_counters.o
+obdclass-all-objs += lustre_handles.o lustre_peer.o local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o mea.o
 obdclass-all-objs += lu_object.o dt_object.o capa.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o

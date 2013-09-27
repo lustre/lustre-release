@@ -61,7 +61,6 @@ EXTRA_DIST = \
 	lustre_export.h \
 	lustre_fid.h \
 	lustre_fld.h \
-	lustre_fsfilt.h \
 	lustre_ha.h \
 	lustre_handles.h \
 	lustre_idmap.h \

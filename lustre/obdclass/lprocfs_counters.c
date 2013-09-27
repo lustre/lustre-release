@@ -15,11 +15,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -33,11 +30,11 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/lvfs/lvfs_lib.c
+ * lustre/obdclass/lprocfs_counters.c
  *
- * Lustre filesystem abstraction routines
+ * Lustre lprocfs counter routines
  *
- * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Andreas Dilger <andreas.dilger@intel.com>
  */
 #ifdef __KERNEL__
 #include <linux/module.h>
@@ -141,43 +138,4 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);
-
-int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
-{
-	struct lprocfs_counter	*cntr;
-	unsigned int		percpusize;
-	int			rc = -ENOMEM;
-	unsigned long		flags = 0;
-	int			i;
-
-	LASSERT(stats->ls_percpu[cpuid] == NULL);
-	LASSERT((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0);
-
-	percpusize = lprocfs_stats_counter_size(stats);
-	LIBCFS_ALLOC_ATOMIC(stats->ls_percpu[cpuid], percpusize);
-	if (stats->ls_percpu[cpuid] != NULL) {
-		rc = 0;
-		if (unlikely(stats->ls_biggest_alloc_num <= cpuid)) {
-			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-				spin_lock_irqsave(&stats->ls_lock, flags);
-			else
-				spin_lock(&stats->ls_lock);
-			if (stats->ls_biggest_alloc_num <= cpuid)
-				stats->ls_biggest_alloc_num = cpuid + 1;
-			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
-				spin_unlock_irqrestore(&stats->ls_lock, flags);
-			} else {
-				spin_unlock(&stats->ls_lock);
-			}
-		}
-		/* initialize the ls_percpu[cpuid] non-zero counter */
-		for (i = 0; i < stats->ls_num; ++i) {
-			cntr = lprocfs_stats_counter_get(stats, cpuid, i);
-			cntr->lc_min = LC_MIN_INIT;
-		}
-	}
-
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_stats_alloc_one);
 #endif  /* LPROCFS */

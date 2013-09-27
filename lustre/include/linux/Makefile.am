@@ -44,6 +44,6 @@ endif
 
 EXTRA_DIST = lprocfs_status.h lustre_acl.h lustre_debug.h lustre_lib.h \
 	lustre_dlm.h  lustre_handles.h lustre_net.h obd_class.h obd_support.h \
-	lustre_log.h lustre_compat25.h lustre_fsfilt.h \
+	lustre_log.h lustre_compat25.h \
 	obd.h lvfs.h lvfs_linux.h lustre_lite.h lustre_quota.h \
 	lustre_user.h lustre_patchless_compat.h lustre_intent.h lustre_common.h

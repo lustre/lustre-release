@@ -441,7 +441,7 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		__u64			 last_rcvd;
 
 		/* Don't assume off is incremented properly by
-		 * fsfilt_read_record(), in case sizeof(*lcd)
+		 * read_record(), in case sizeof(*lcd)
 		 * isn't the same as fsd->lsd_client_size.  */
 		off = lsd->lsd_client_start + cl_idx * lsd->lsd_client_size;
 		rc = tgt_client_data_read(env, &ofd->ofd_lut, lcd, &off, cl_idx);

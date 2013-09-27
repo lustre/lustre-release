@@ -73,7 +73,6 @@ build_obj_list ../fld libfld.a
 build_obj_list ../mgc libmgc.a
 build_obj_list ../ptlrpc libptlrpc.a
 build_obj_list ../obdclass liblustreclass.a
-build_obj_list ../lvfs liblvfs.a
 
 # lnet components libs
 build_obj_list ../../lnet/utils libuptlctl.a
