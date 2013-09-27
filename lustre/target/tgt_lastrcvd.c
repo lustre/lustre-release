@@ -788,7 +788,7 @@ int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 		ted->ted_lcd->lcd_last_close_result = th->th_result;
 	} else {
 		/* VBR: save versions in last_rcvd for reconstruct. */
-		__u64 *pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
+		__u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
 
 		if (pre_versions) {
 			ted->ted_lcd->lcd_pre_versions[0] = pre_versions[0];
