@@ -404,7 +404,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 	LASSERT(mti);
 
 	if (mti->mti_mos != NULL &&
-	    mdt_object_remote(mti->mti_mos)) {
+	    !mdt_object_remote(mti->mti_mos)) {
 		obj = mdt_obj2dt(mti->mti_mos);
 	}
 
