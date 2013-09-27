@@ -94,7 +94,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Rules.in			\
 	build/gen_filelist.sh
 
-rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
+rpms: @PACKAGE_TARNAME@.spec dist Makefile
 	@CONFIGURE_ARGS=""; \
 	for arg in $(ac_configure_args); do \
 		case $$arg in \
@@ -152,7 +152,7 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
-srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
+srpm: @PACKAGE_TARNAME@.spec dist Makefile
 	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="--without lustre_tests"; \
 	fi; \
@@ -160,18 +160,6 @@ srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
                 RPMARGS="$$RPMARGS --without lustre_iokit"; \
         fi; \
 	eval rpmbuild $$RPMARGS -ts $(distdir).tar.gz
-
-rpms:
-if BUILD_LUSTREIOKIT
-	$(MAKE) -C @LUSTREIOKIT_SUBDIR@ $(AM_MAKEFLAGS) $@
-endif
-	$(MAKE) $(AM_MAKEFLAGS) rpms-real
-
-srpm:
-if BUILD_LUSTREIOKIT
-	$(MAKE) -C @LUSTREIOKIT_SUBDIR@ $(AM_MAKEFLAGS) $@
-endif
-	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 
 # In the debs target, first make sure what's in the changelog reflects
 # the software version.  Here's how we could dig the version out of the
