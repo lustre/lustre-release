@@ -754,7 +754,7 @@ LU_TYPE_INIT_FINI(echo, &echo_thread_key, &echo_session_key);
 
 #define ECHO_SEQ_WIDTH 0xffffffff
 static int echo_fid_init(struct echo_device *ed, char *obd_name,
-                         struct md_site *ms)
+			 struct seq_server_site *ss)
 {
         char *prefix;
         int rc;
@@ -770,10 +770,10 @@ static int echo_fid_init(struct echo_device *ed, char *obd_name,
 
         snprintf(prefix, MAX_OBD_NAME + 5, "srv-%s", obd_name);
 
-        /* Init client side sequence-manager */
-        rc = seq_client_init(ed->ed_cl_seq, NULL,
-                             LUSTRE_SEQ_METADATA,
-                             prefix, ms->ms_server_seq);
+	/* Init client side sequence-manager */
+	rc = seq_client_init(ed->ed_cl_seq, NULL,
+			     LUSTRE_SEQ_METADATA,
+			     prefix, ss->ss_server_seq);
         ed->ed_cl_seq->lcs_width = ECHO_SEQ_WIDTH;
         OBD_FREE(prefix, MAX_OBD_NAME + 5);
         if (rc)
@@ -900,11 +900,11 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
                 ed->ed_site_myself.cs_lu = *ls;
                 ed->ed_site = &ed->ed_site_myself;
                 ed->ed_cl.cd_lu_dev.ld_site = &ed->ed_site_myself.cs_lu;
-                rc = echo_fid_init(ed, obd->obd_name, lu_site2md(ls));
-                if (rc) {
-                        CERROR("echo fid init error %d\n", rc);
-                        GOTO(out, rc);
-                }
+		rc = echo_fid_init(ed, obd->obd_name, lu_site2seq(ls));
+		if (rc) {
+			CERROR("echo fid init error %d\n", rc);
+			GOTO(out, rc);
+		}
         } else {
                  /* if echo client is to be stacked upon ost device, the next is
                   * NULL since ost is not a clio device so far */

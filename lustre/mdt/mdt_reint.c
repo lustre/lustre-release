@@ -881,17 +881,17 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         ldlm_policy_data_t    *policy = &info->mti_policy;
         struct ldlm_res_id    *res_id = &info->mti_res_id;
 	__u64                  flags = 0;
-        struct md_site        *ms;
+	struct seq_server_site	*ss;
         int rc;
         ENTRY;
 
-        ms = mdt_md_site(info->mti_mdt);
-        fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
+	ss = mdt_seq_site(info->mti_mdt);
+	fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
 
         memset(policy, 0, sizeof *policy);
         policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
-        if (ms->ms_control_exp == NULL) {
+	if (ss->ss_control_exp == NULL) {
 		flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
 
                 /*
@@ -907,11 +907,12 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         } else {
                 struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_EX,
                      ldlm_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
-                /*
-                 * This is the case mdt0 is remote node, issue DLM lock like
-                 * other clients.
-                 */
-                rc = ldlm_cli_enqueue(ms->ms_control_exp, NULL, &einfo, res_id,
+
+		/*
+		 * This is the case mdt0 is remote node, issue DLM lock like
+		 * other clients.
+		 */
+		rc = ldlm_cli_enqueue(ss->ss_control_exp, NULL, &einfo, res_id,
 				      policy, &flags, NULL, 0, LVB_T_NONE, lh,
 				      0);
         }

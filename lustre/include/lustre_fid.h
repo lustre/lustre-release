@@ -379,21 +379,22 @@ struct lu_server_seq {
 
         /* sync is needed for update operation */
         __u32                   lss_need_sync;
-        /**
-         * Pointer to site object, required to access site fld.
-         */
-        struct md_site         *lss_site;
+
+	/**
+	 * Pointer to site object, required to access site fld.
+	 */
+	struct seq_server_site  *lss_site;
 };
 
 int seq_query(struct com_thread_info *info);
 
 /* Server methods */
 int seq_server_init(struct lu_server_seq *seq,
-                    struct dt_device *dev,
-                    const char *prefix,
-                    enum lu_mgr_type type,
-                    struct md_site *ls,
-                    const struct lu_env *env);
+		    struct dt_device *dev,
+		    const char *prefix,
+		    enum lu_mgr_type type,
+		    struct seq_server_site *ss,
+		    const struct lu_env *env);
 
 void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_env *env);

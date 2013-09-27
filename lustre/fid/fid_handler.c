@@ -89,9 +89,9 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         CDEBUG(D_INFO, "%s: Attached sequence controller %s\n",
                seq->lss_name, cli->lcs_name);
 
-        seq->lss_cli = cli;
-        cli->lcs_space.lsr_index = seq->lss_site->ms_node_id;
-        EXIT;
+	seq->lss_cli = cli;
+	cli->lcs_space.lsr_index = seq->lss_site->ss_node_id;
+	EXIT;
 out_up:
 	mutex_unlock(&seq->lss_mutex);
         return rc;
@@ -203,7 +203,7 @@ static int range_alloc_set(const struct lu_env *env,
 
         if (range_is_exhausted(loset)) {
                 /* reached high water mark. */
-		struct lu_device *dev = seq->lss_site->ms_lu->ls_top_dev;
+		struct lu_device *dev = seq->lss_site->ss_lu->ls_top_dev;
                 int obd_num_clients = dev->ld_obd->obd_num_exports;
                 __u64 set_sz;
 
@@ -293,34 +293,34 @@ static int seq_server_handle(struct lu_site *site,
                              const struct lu_env *env,
                              __u32 opc, struct lu_seq_range *out)
 {
-        int rc;
-        struct md_site *mite;
-        ENTRY;
+	int rc;
+	struct seq_server_site *ss_site;
+	ENTRY;
 
-        mite = lu_site2md(site);
-        switch (opc) {
-        case SEQ_ALLOC_META:
-                if (!mite->ms_server_seq) {
-                        CERROR("Sequence server is not "
-                               "initialized\n");
-                        RETURN(-EINVAL);
-                }
-                rc = seq_server_alloc_meta(mite->ms_server_seq, out, env);
-                break;
-        case SEQ_ALLOC_SUPER:
-                if (!mite->ms_control_seq) {
-                        CERROR("Sequence controller is not "
-                               "initialized\n");
-                        RETURN(-EINVAL);
-                }
-                rc = seq_server_alloc_super(mite->ms_control_seq, out, env);
-                break;
-        default:
-                rc = -EINVAL;
-                break;
-        }
+	ss_site = lu_site2seq(site);
+	switch (opc) {
+	case SEQ_ALLOC_META:
+		if (!ss_site->ss_server_seq) {
+			CERROR("Sequence server is not "
+			       "initialized\n");
+			RETURN(-EINVAL);
+		}
+		rc = seq_server_alloc_meta(ss_site->ss_server_seq, out, env);
+		break;
+	case SEQ_ALLOC_SUPER:
+		if (!ss_site->ss_control_seq) {
+			CERROR("Sequence controller is not "
+			       "initialized\n");
+			RETURN(-EINVAL);
+		}
+		rc = seq_server_alloc_super(ss_site->ss_control_seq, out, env);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int seq_req_handle(struct ptlrpc_request *req,
@@ -467,24 +467,24 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 
 
 int seq_server_init(struct lu_server_seq *seq,
-                    struct dt_device *dev,
-                    const char *prefix,
-                    enum lu_mgr_type type,
-                    struct md_site *ms,
-                    const struct lu_env *env)
+		    struct dt_device *dev,
+		    const char *prefix,
+		    enum lu_mgr_type type,
+		    struct seq_server_site *ss,
+		    const struct lu_env *env)
 {
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         ENTRY;
 
         LASSERT(dev != NULL);
         LASSERT(prefix != NULL);
-	LASSERT(ms != NULL);
-	LASSERT(ms->ms_lu != NULL);
+	LASSERT(ss != NULL);
+	LASSERT(ss->ss_lu != NULL);
 
-        seq->lss_cli = NULL;
-        seq->lss_type = type;
-        seq->lss_site = ms;
-        range_init(&seq->lss_space);
+	seq->lss_cli = NULL;
+	seq->lss_type = type;
+	seq->lss_site = ss;
+	range_init(&seq->lss_space);
 
         range_init(&seq->lss_lowater_set);
         range_init(&seq->lss_hiwater_set);
@@ -510,7 +510,7 @@ int seq_server_init(struct lu_server_seq *seq,
                         LUSTRE_SEQ_ZERO_RANGE:
                         LUSTRE_SEQ_SPACE_RANGE;
 
-                seq->lss_space.lsr_index = ms->ms_node_id;
+		seq->lss_space.lsr_index = ss->ss_node_id;
 		LCONSOLE_INFO("%s: No data found "
 			      "on store. Initialize space\n",
 			      seq->lss_name);

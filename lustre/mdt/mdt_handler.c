@@ -3753,119 +3753,120 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 static int mdt_seq_fini(const struct lu_env *env,
                         struct mdt_device *m)
 {
-        struct md_site *ms = mdt_md_site(m);
-        ENTRY;
+	struct seq_server_site *ss = mdt_seq_site(m);
+	ENTRY;
 
-        if (ms != NULL) {
-                if (ms->ms_server_seq) {
-                        seq_server_fini(ms->ms_server_seq, env);
-                        OBD_FREE_PTR(ms->ms_server_seq);
-                        ms->ms_server_seq = NULL;
-        }
+	if (ss == NULL)
+		RETURN(0);
 
-                if (ms->ms_control_seq) {
-                        seq_server_fini(ms->ms_control_seq, env);
-                        OBD_FREE_PTR(ms->ms_control_seq);
-                        ms->ms_control_seq = NULL;
-        }
+	if (ss->ss_server_seq) {
+		seq_server_fini(ss->ss_server_seq, env);
+		OBD_FREE_PTR(ss->ss_server_seq);
+		ss->ss_server_seq = NULL;
+	}
 
-                if (ms->ms_client_seq) {
-                        seq_client_fini(ms->ms_client_seq);
-                        OBD_FREE_PTR(ms->ms_client_seq);
-                        ms->ms_client_seq = NULL;
-                }
-        }
+	if (ss->ss_control_seq) {
+		seq_server_fini(ss->ss_control_seq, env);
+		OBD_FREE_PTR(ss->ss_control_seq);
+		ss->ss_control_seq = NULL;
+	}
 
-        RETURN(0);
+	if (ss->ss_client_seq) {
+		seq_client_fini(ss->ss_client_seq);
+		OBD_FREE_PTR(ss->ss_client_seq);
+		ss->ss_client_seq = NULL;
+	}
+
+	RETURN(0);
 }
 
 static int mdt_seq_init(const struct lu_env *env,
                         const char *uuid,
                         struct mdt_device *m)
 {
-        struct md_site *ms;
-        char *prefix;
-        int rc;
-        ENTRY;
+	struct seq_server_site *ss;
+	char *prefix;
+	int rc;
+	ENTRY;
 
-        ms = mdt_md_site(m);
+	ss = mdt_seq_site(m);
 
-        /*
-         * This is sequence-controller node. Init seq-controller server on local
-         * MDT.
-         */
-        if (ms->ms_node_id == 0) {
-                LASSERT(ms->ms_control_seq == NULL);
+	/*
+	 * This is sequence-controller node. Init seq-controller server on local
+	 * MDT.
+	 */
+	if (ss->ss_node_id == 0) {
+		LASSERT(ss->ss_control_seq == NULL);
 
-                OBD_ALLOC_PTR(ms->ms_control_seq);
-                if (ms->ms_control_seq == NULL)
-                        RETURN(-ENOMEM);
+		OBD_ALLOC_PTR(ss->ss_control_seq);
+		if (ss->ss_control_seq == NULL)
+			RETURN(-ENOMEM);
 
-                rc = seq_server_init(ms->ms_control_seq,
-                                     m->mdt_bottom, uuid,
-                                     LUSTRE_SEQ_CONTROLLER,
-                                     ms,
-                                     env);
+		rc = seq_server_init(ss->ss_control_seq,
+				     m->mdt_bottom, uuid,
+				     LUSTRE_SEQ_CONTROLLER,
+				     ss,
+				     env);
 
-                if (rc)
-                        GOTO(out_seq_fini, rc);
+		if (rc)
+			GOTO(out_seq_fini, rc);
 
-                OBD_ALLOC_PTR(ms->ms_client_seq);
-                if (ms->ms_client_seq == NULL)
-                        GOTO(out_seq_fini, rc = -ENOMEM);
+		OBD_ALLOC_PTR(ss->ss_client_seq);
+		if (ss->ss_client_seq == NULL)
+			GOTO(out_seq_fini, rc = -ENOMEM);
 
-                OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
-                if (prefix == NULL) {
-                        OBD_FREE_PTR(ms->ms_client_seq);
-                        GOTO(out_seq_fini, rc = -ENOMEM);
-                }
+		OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
+		if (prefix == NULL) {
+			OBD_FREE_PTR(ss->ss_client_seq);
+			GOTO(out_seq_fini, rc = -ENOMEM);
+		}
 
-                snprintf(prefix, MAX_OBD_NAME + 5, "ctl-%s",
-                         uuid);
+		snprintf(prefix, MAX_OBD_NAME + 5, "ctl-%s",
+			 uuid);
 
-                /*
-                 * Init seq-controller client after seq-controller server is
-                 * ready. Pass ms->ms_control_seq to it for direct talking.
-                 */
-                rc = seq_client_init(ms->ms_client_seq, NULL,
-                                     LUSTRE_SEQ_METADATA, prefix,
-                                     ms->ms_control_seq);
-                OBD_FREE(prefix, MAX_OBD_NAME + 5);
+		/*
+		 * Init seq-controller client after seq-controller server is
+		 * ready. Pass ss->ss_control_seq to it for direct talking.
+		 */
+		rc = seq_client_init(ss->ss_client_seq, NULL,
+				     LUSTRE_SEQ_METADATA, prefix,
+				     ss->ss_control_seq);
+		OBD_FREE(prefix, MAX_OBD_NAME + 5);
 
-                if (rc)
-                        GOTO(out_seq_fini, rc);
-        }
+		if (rc)
+			GOTO(out_seq_fini, rc);
+	}
 
-        /* Init seq-server on local MDT */
-        LASSERT(ms->ms_server_seq == NULL);
+	/* Init seq-server on local MDT */
+	LASSERT(ss->ss_server_seq == NULL);
 
-        OBD_ALLOC_PTR(ms->ms_server_seq);
-        if (ms->ms_server_seq == NULL)
-                GOTO(out_seq_fini, rc = -ENOMEM);
+	OBD_ALLOC_PTR(ss->ss_server_seq);
+	if (ss->ss_server_seq == NULL)
+		GOTO(out_seq_fini, rc = -ENOMEM);
 
-        rc = seq_server_init(ms->ms_server_seq,
-                             m->mdt_bottom, uuid,
-                             LUSTRE_SEQ_SERVER,
-                             ms,
-                             env);
-        if (rc)
-                GOTO(out_seq_fini, rc = -ENOMEM);
+	rc = seq_server_init(ss->ss_server_seq,
+			     m->mdt_bottom, uuid,
+			     LUSTRE_SEQ_SERVER,
+			     ss,
+			     env);
+	if (rc)
+		GOTO(out_seq_fini, rc = -ENOMEM);
 
-        /* Assign seq-controller client to local seq-server. */
-        if (ms->ms_node_id == 0) {
-                LASSERT(ms->ms_client_seq != NULL);
+	/* Assign seq-controller client to local seq-server. */
+	if (ss->ss_node_id == 0) {
+		LASSERT(ss->ss_client_seq != NULL);
 
-                rc = seq_server_set_cli(ms->ms_server_seq,
-                                        ms->ms_client_seq,
-                                        env);
-        }
+		rc = seq_server_set_cli(ss->ss_server_seq,
+					ss->ss_client_seq,
+					env);
+	}
 
-        EXIT;
+	EXIT;
 out_seq_fini:
-        if (rc)
-                mdt_seq_fini(env, m);
+	if (rc)
+		mdt_seq_fini(env, m);
 
-        return rc;
+	return rc;
 }
 /*
  * Init client sequence manager which is used by local MDS to talk to sequence
@@ -3875,7 +3876,7 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                             struct mdt_device *m,
                             struct lustre_cfg *cfg)
 {
-        struct md_site    *ms = mdt_md_site(m);
+	struct seq_server_site	*ss = mdt_seq_site(m);
         struct obd_device *mdc;
         struct obd_uuid   *uuidp, *mdcuuidp;
         char              *uuid_str, *mdc_uuid_str;
@@ -3897,10 +3898,10 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                 RETURN(-EINVAL);
         }
 
-        /* check if this is adding the first MDC and controller is not yet
-         * initialized. */
-        if (index != 0 || ms->ms_client_seq)
-                RETURN(0);
+	/* check if this is adding the first MDC and controller is not yet
+	 * initialized. */
+	if (index != 0 || ss->ss_client_seq)
+		RETURN(0);
 
         uuid_str = lustre_cfg_string(cfg, 1);
         mdc_uuid_str = lustre_cfg_string(cfg, 4);
@@ -3916,32 +3917,32 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                 CERROR("target %s not set up\n", mdc->obd_name);
                 rc = -EINVAL;
         } else {
-                LASSERT(ms->ms_control_exp);
-                OBD_ALLOC_PTR(ms->ms_client_seq);
-                if (ms->ms_client_seq != NULL) {
-                        char *prefix;
+		LASSERT(ss->ss_control_exp);
+		OBD_ALLOC_PTR(ss->ss_client_seq);
+		if (ss->ss_client_seq != NULL) {
+			char *prefix;
 
-                        OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
-                        if (!prefix)
-                                RETURN(-ENOMEM);
+			OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
+			if (!prefix)
+				RETURN(-ENOMEM);
 
-                        snprintf(prefix, MAX_OBD_NAME + 5, "ctl-%s",
-                                 mdc->obd_name);
+			snprintf(prefix, MAX_OBD_NAME + 5, "ctl-%s",
+				 mdc->obd_name);
 
-                        rc = seq_client_init(ms->ms_client_seq,
-                                             ms->ms_control_exp,
-                                             LUSTRE_SEQ_METADATA,
-                                             prefix, NULL);
-                        OBD_FREE(prefix, MAX_OBD_NAME + 5);
-                } else
-                        rc = -ENOMEM;
+			rc = seq_client_init(ss->ss_client_seq,
+					     ss->ss_control_exp,
+					     LUSTRE_SEQ_METADATA,
+					     prefix, NULL);
+			OBD_FREE(prefix, MAX_OBD_NAME + 5);
+		} else
+			rc = -ENOMEM;
 
-                if (rc)
-                        RETURN(rc);
+		if (rc)
+			RETURN(rc);
 
-                LASSERT(ms->ms_server_seq != NULL);
-                rc = seq_server_set_cli(ms->ms_server_seq, ms->ms_client_seq,
-                                        env);
+		LASSERT(ss->ss_server_seq != NULL);
+		rc = seq_server_set_cli(ss->ss_server_seq, ss->ss_client_seq,
+					env);
         }
 
         RETURN(rc);
@@ -3949,23 +3950,24 @@ static int mdt_seq_init_cli(const struct lu_env *env,
 
 static void mdt_seq_fini_cli(struct mdt_device *m)
 {
-        struct md_site *ms;
+	struct seq_server_site *ss;
 
-        ENTRY;
+	ENTRY;
 
-        ms = mdt_md_site(m);
+	ss = mdt_seq_site(m);
 
-        if (ms != NULL) {
-                if (ms->ms_server_seq)
-                        seq_server_set_cli(ms->ms_server_seq,
-                                   NULL, NULL);
+	if (ss == NULL)
+		RETURN_EXIT;
 
-                if (ms->ms_control_exp) {
-                        class_export_put(ms->ms_control_exp);
-                        ms->ms_control_exp = NULL;
-                }
-        }
-        EXIT;
+	if (ss->ss_server_seq)
+		seq_server_set_cli(ss->ss_server_seq, NULL, NULL);
+
+	if (ss->ss_control_exp) {
+		class_export_put(ss->ss_control_exp);
+		ss->ss_control_exp = NULL;
+	}
+
+	EXIT;
 }
 
 /*
@@ -3974,41 +3976,41 @@ static void mdt_seq_fini_cli(struct mdt_device *m)
 static int mdt_fld_fini(const struct lu_env *env,
                         struct mdt_device *m)
 {
-        struct md_site *ms = mdt_md_site(m);
-        ENTRY;
+	struct seq_server_site *ss = mdt_seq_site(m);
+	ENTRY;
 
-        if (ms && ms->ms_server_fld) {
-		fld_server_fini(env, ms->ms_server_fld);
-                OBD_FREE_PTR(ms->ms_server_fld);
-                ms->ms_server_fld = NULL;
-        }
+	if (ss && ss->ss_server_fld) {
+		fld_server_fini(env, ss->ss_server_fld);
+		OBD_FREE_PTR(ss->ss_server_fld);
+		ss->ss_server_fld = NULL;
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mdt_fld_init(const struct lu_env *env,
                         const char *uuid,
                         struct mdt_device *m)
 {
-        struct md_site *ms;
-        int rc;
-        ENTRY;
+	struct seq_server_site *ss;
+	int rc;
+	ENTRY;
 
-        ms = mdt_md_site(m);
+	ss = mdt_seq_site(m);
 
-        OBD_ALLOC_PTR(ms->ms_server_fld);
-        if (ms->ms_server_fld == NULL)
-                RETURN(rc = -ENOMEM);
+	OBD_ALLOC_PTR(ss->ss_server_fld);
+	if (ss->ss_server_fld == NULL)
+		RETURN(rc = -ENOMEM);
 
-	rc = fld_server_init(env, ms->ms_server_fld, m->mdt_bottom, uuid,
-			     ms->ms_node_id);
-        if (rc) {
-                OBD_FREE_PTR(ms->ms_server_fld);
-                ms->ms_server_fld = NULL;
-                RETURN(rc);
-        }
+	rc = fld_server_init(env, ss->ss_server_fld, m->mdt_bottom, uuid,
+			     ss->ss_node_id);
+	if (rc) {
+		OBD_FREE_PTR(ss->ss_server_fld);
+		ss->ss_server_fld = NULL;
+		RETURN(rc);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static void mdt_stack_fini(const struct lu_env *env,
@@ -4254,7 +4256,7 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 	LASSERT(mdt->mdt_qmt_dev == NULL);
 
 	/* quota master is on MDT0 only for now */
-	if (mdt->mdt_mite.ms_node_id != 0)
+	if (mdt->mdt_seq_site.ss_node_id != 0)
 		RETURN(0);
 
 	/* MGS generates config commands which look as follows:
@@ -4478,7 +4480,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         struct lustre_mount_info  *lmi = NULL;
         struct lustre_sb_info     *lsi;
         struct lu_site            *s;
-        struct md_site            *mite;
+	struct seq_server_site	  *ss_site;
         const char                *identity_upcall = "NONE";
         struct md_device          *next;
         int                        rc;
@@ -4554,17 +4556,17 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	}
 
 	s = m->mdt_md_dev.md_lu_dev.ld_site;
-	mite = &m->mdt_mite;
-	s->ld_md_site = mite;
-	mite->ms_lu = s;
+	ss_site = &m->mdt_seq_site;
+	s->ld_seq_site = ss_site;
+	ss_site->ss_lu = s;
 
         /* set server index */
-	mite->ms_node_id = node_id;
+	ss_site->ss_node_id = node_id;
 
-        /* failover is the default
-         * FIXME: we do not failout mds0/mgs, which may cause some problems.
-         * assumed whose ms_node_id == 0 XXX
-         * */
+	/* failover is the default
+	 * FIXME: we do not failout mds0/mgs, which may cause some problems.
+	 * assumed whose ss_node_id == 0 XXX
+	 * */
         obd->obd_replayable = 1;
         /* No connection accepted until configurations will finish */
         obd->obd_no_conn = 1;

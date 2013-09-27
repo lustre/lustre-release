@@ -826,9 +826,9 @@ static inline journal_t *osd_journal(const struct osd_device *dev)
         return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
 
-static inline struct md_site *osd_md_site(struct osd_device *osd)
+static inline struct seq_server_site *osd_seq_site(struct osd_device *osd)
 {
-	return osd->od_dt_dev.dd_lu_dev.ld_site->ld_md_site;
+	return osd->od_dt_dev.dd_lu_dev.ld_site->ld_seq_site;
 }
 
 static inline char *osd_name(struct osd_device *osd)

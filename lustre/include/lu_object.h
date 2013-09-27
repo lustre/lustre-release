@@ -651,7 +651,7 @@ struct lu_site {
 	/**
 	 * XXX: a hack! fld has to find md_site via site, remove when possible
 	 */
-	struct md_site		*ld_md_site;
+	struct seq_server_site	*ld_seq_site;
 };
 
 static inline struct lu_site_bkt_data *

@@ -154,7 +154,7 @@ int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt)
         int                      rc;
         ENTRY;
 
-        mdsnum = mdt_md_site(mdt)->ms_node_id;
+	mdsnum = mdt_seq_site(mdt)->ss_node_id;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
@@ -235,8 +235,8 @@ static int mdt_ck_thread_main(void *args)
         info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
-        tmp = &info->mti_capa_key;
-        mdsnum = mdt_md_site(mdt)->ms_node_id;
+	tmp = &info->mti_capa_key;
+	mdsnum = mdt_seq_site(mdt)->ss_node_id;
         while (1) {
                 l_wait_event(thread->t_ctl_waitq,
                              thread_is_stopping(thread) ||

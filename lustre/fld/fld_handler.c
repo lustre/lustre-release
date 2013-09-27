@@ -243,9 +243,9 @@ static int fld_req_handle(struct ptlrpc_request *req,
                     !exp->exp_libclient)
                         out->lsr_flags = LU_SEQ_RANGE_MDT;
 
-                rc = fld_server_handle(lu_site2md(site)->ms_server_fld,
-                                       req->rq_svc_thread->t_env,
-                                       *opc, out, info);
+		rc = fld_server_handle(lu_site2seq(site)->ss_server_fld,
+				       req->rq_svc_thread->t_env,
+				       *opc, out, info);
         } else
                 rc = err_serious(-EPROTO);
 
@@ -305,26 +305,26 @@ EXPORT_SYMBOL(fld_query);
 int fid_is_local(const struct lu_env *env,
                  struct lu_site *site, const struct lu_fid *fid)
 {
-        int result;
-        struct md_site *msite;
-        struct lu_seq_range *range;
-        struct fld_thread_info *info;
-        ENTRY;
+	int result;
+	struct seq_server_site *ss_site;
+	struct lu_seq_range *range;
+	struct fld_thread_info *info;
+	ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        range = &info->fti_lrange;
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	range = &info->fti_lrange;
 
-        result = 1; /* conservatively assume fid is local */
-        msite = lu_site2md(site);
-        if (msite->ms_client_fld != NULL) {
-                int rc;
+	result = 1; /* conservatively assume fid is local */
+	ss_site = lu_site2seq(site);
+	if (ss_site->ss_client_fld != NULL) {
+		int rc;
 
-                rc = fld_cache_lookup(msite->ms_client_fld->lcf_cache,
-                                      fid_seq(fid), range);
-                if (rc == 0)
-                        result = (range->lsr_index == msite->ms_node_id);
-        }
-        return result;
+		rc = fld_cache_lookup(ss_site->ss_client_fld->lcf_cache,
+				      fid_seq(fid), range);
+		if (rc == 0)
+			result = (range->lsr_index == ss_site->ss_node_id);
+	}
+	return result;
 }
 EXPORT_SYMBOL(fid_is_local);
 
