@@ -2813,14 +2813,14 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (rc)
                 GOTO(out, rc = -ENOMEM);
 
-	switch (cmd) {
-	case OBD_IOC_CREATE:                    /* may create echo object */
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        switch (cmd) {
+        case OBD_IOC_CREATE:                    /* may create echo object */
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
-		rc = echo_create_object(env, ed, 1, oa, data->ioc_pbuf1,
-					data->ioc_plen1, &dummy_oti);
-		GOTO(out, rc);
+                rc = echo_create_object(env, ed, 1, oa, data->ioc_pbuf1,
+                                        data->ioc_plen1, &dummy_oti);
+                GOTO(out, rc);
 
 	case OBD_IOC_ECHO_MD: {
 		int count;
@@ -2829,7 +2829,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		int dirlen;
 		__u64 id;
 
-		if (!cfs_capable(CAP_SYS_ADMIN))
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
 		count = data->ioc_count;
@@ -2852,16 +2852,16 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 	}
         case OBD_IOC_ECHO_ALLOC_SEQ: {
-		struct lu_env   *cl_env;
-		int              refcheck;
-		__u64            seq;
-		int              max_count;
+                struct lu_env   *cl_env;
+                int              refcheck;
+                __u64            seq;
+                int              max_count;
 
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO(out, rc = -EPERM);
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO(out, rc = -EPERM);
 
-		cl_env = cl_env_get(&refcheck);
-		if (IS_ERR(cl_env))
+                cl_env = cl_env_get(&refcheck);
+                if (IS_ERR(cl_env))
                         GOTO(out, rc = PTR_ERR(cl_env));
 
                 rc = lu_env_refill_by_tags(cl_env, ECHO_MD_CTX_TAG,
@@ -2888,11 +2888,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			return -EFAULT;
 		GOTO(out, rc);
         }
-	case OBD_IOC_DESTROY:
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        case OBD_IOC_DESTROY:
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
-		rc = echo_get_object(&eco, ed, oa);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         rc = obd_destroy(env, ec->ec_exp, oa, eco->eo_lsm,
                                          &dummy_oti, NULL, NULL);
@@ -2913,11 +2913,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
                 GOTO(out, rc);
 
-	case OBD_IOC_SETATTR:
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        case OBD_IOC_SETATTR:
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
-		rc = echo_get_object(&eco, ed, oa);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
                         oinfo.oi_oa = oa;
@@ -2928,12 +2928,12 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
                 GOTO(out, rc);
 
-	case OBD_IOC_BRW_WRITE:
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        case OBD_IOC_BRW_WRITE:
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
-		rw = OBD_BRW_WRITE;
-		/* fall through */
+                rw = OBD_BRW_WRITE;
+                /* fall through */
         case OBD_IOC_BRW_READ:
 		rc = echo_client_brw_ioctl(env, rw, exp, data, &dummy_oti);
                 GOTO(out, rc);
@@ -2947,9 +2947,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
                 GOTO(out, rc);
 
-	case ECHO_IOC_SET_STRIPE:
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        case ECHO_IOC_SET_STRIPE:
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
                 if (data->ioc_pbuf1 == NULL) {  /* unset */
                         rc = echo_get_object(&eco, ed, oa);
@@ -2964,9 +2964,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
                 GOTO (out, rc);
 
-	case ECHO_IOC_ENQUEUE:
-		if (!cfs_capable(CAP_SYS_ADMIN))
-			GOTO (out, rc = -EPERM);
+        case ECHO_IOC_ENQUEUE:
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+                        GOTO (out, rc = -EPERM);
 
                 rc = echo_client_enqueue(exp, oa,
                                          data->ioc_conn1, /* lock mode */

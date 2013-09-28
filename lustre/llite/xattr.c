@@ -88,19 +88,19 @@ int get_xattr_type(const char *name)
 static
 int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 {
-	if ((xattr_type == XATTR_ACL_ACCESS_T ||
-	     xattr_type == XATTR_ACL_DEFAULT_T) &&
-	   !(sbi->ll_flags & LL_SBI_ACL))
-		return -EOPNOTSUPP;
+        if ((xattr_type == XATTR_ACL_ACCESS_T ||
+             xattr_type == XATTR_ACL_DEFAULT_T) &&
+           !(sbi->ll_flags & LL_SBI_ACL))
+                return -EOPNOTSUPP;
 
-	if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
-		return -EOPNOTSUPP;
-	if (xattr_type == XATTR_TRUSTED_T && !cfs_capable(CAP_SYS_ADMIN))
-		return -EPERM;
-	if (xattr_type == XATTR_OTHER_T)
-		return -EOPNOTSUPP;
+        if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
+                return -EOPNOTSUPP;
+        if (xattr_type == XATTR_TRUSTED_T && !cfs_capable(CFS_CAP_SYS_ADMIN))
+                return -EPERM;
+        if (xattr_type == XATTR_OTHER_T)
+                return -EOPNOTSUPP;
 
-	return 0;
+        return 0;
 }
 
 static

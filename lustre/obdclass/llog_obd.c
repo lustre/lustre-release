@@ -248,14 +248,14 @@ int llog_obd_add(const struct lu_env *env, struct llog_ctxt *ctxt,
                 RETURN(-ENXIO);
 
 	CTXT_CHECK_OP(ctxt, obd_add, -EOPNOTSUPP);
-	raised = cfs_cap_raised(CAP_SYS_RESOURCE);
-	if (!raised)
-		cfs_cap_raise(CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
 	rc = CTXTP(ctxt, obd_add)(env, ctxt, rec, lsm, logcookies,
 				  numcookies);
-	if (!raised)
-		cfs_cap_lower(CAP_SYS_RESOURCE);
-	RETURN(rc);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_add);
 

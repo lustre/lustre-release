@@ -310,7 +310,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
 			struct seq_server_site *ss;
 			struct lu_ucred *uc  = mdt_ucred(info);
 
-			if (!md_capable(uc, CAP_SYS_ADMIN)) {
+			if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
 				if (uc->uc_gid !=
 				    mdt->mdt_enable_remote_dir_gid &&
 				    mdt->mdt_enable_remote_dir_gid != -1) {
@@ -794,7 +794,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		if (info->mti_spec.sp_rm_entry) {
 			struct lu_ucred *uc  = mdt_ucred(info);
 
-			if (!md_capable(uc, CAP_SYS_ADMIN)) {
+			if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
 				CERROR("%s: unlink remote entry is only "
 				       "permitted for administrator: rc = %d\n",
 					mdt_obd_name(info->mti_mdt),

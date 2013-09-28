@@ -193,18 +193,18 @@ static int obd_class_release(struct inode * inode, struct file * file)
 static long obd_class_ioctl(struct file *filp, unsigned int cmd,
 			    unsigned long arg)
 {
-	int err = 0;
-	ENTRY;
+        int err = 0;
+        ENTRY;
 
-	/* Allow non-root access for OBD_IOC_PING_TARGET - used by lfs check */
-	if (!cfs_capable(CAP_SYS_ADMIN) && (cmd != OBD_IOC_PING_TARGET))
-		RETURN(err = -EACCES);
-	if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
-		RETURN(err = -ENOTTY);
+        /* Allow non-root access for OBD_IOC_PING_TARGET - used by lfs check */
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN) && (cmd != OBD_IOC_PING_TARGET))
+                RETURN(err = -EACCES);
+        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
+                RETURN(err = -ENOTTY);
 
-	err = class_handle_ioctl(cmd, (unsigned long)arg);
+        err = class_handle_ioctl(cmd, (unsigned long)arg);
 
-	RETURN(err);
+        RETURN(err);
 }
 
 /* declare character device */

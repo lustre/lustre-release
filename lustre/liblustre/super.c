@@ -77,18 +77,18 @@ static int ll_permission(struct inode *inode, int mask)
         if ((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask)
                 return 0;
 
-	if ((mask & (MAY_READ|MAY_WRITE)) ||
-	    (st->st_mode & S_IXUGO))
-		if (cfs_capable(CAP_DAC_OVERRIDE))
-			return 0;
+        if ((mask & (MAY_READ|MAY_WRITE)) ||
+            (st->st_mode & S_IXUGO))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
+                        return 0;
 
-	if (mask == MAY_READ ||
-	    (S_ISDIR(st->st_mode) && !(mask & MAY_WRITE))) {
-		if (cfs_capable(CAP_DAC_READ_SEARCH))
-			return 0;
-	}
+        if (mask == MAY_READ ||
+            (S_ISDIR(st->st_mode) && !(mask & MAY_WRITE))) {
+                if (cfs_capable(CFS_CAP_DAC_READ_SEARCH))
+                        return 0;
+        }
 
-	return -EACCES;
+        return -EACCES;
 }
 
 static void llu_fsop_gone(struct filesys *fs)
@@ -572,7 +572,7 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
 	if (ia_valid & ATTR_MODE) {
 		st->st_mode = attr->ia_mode;
 		if (!in_group_p(st->st_gid) &&
-		    !cfs_capable(CAP_FSETID))
+		    !cfs_capable(CFS_CAP_FSETID))
 			st->st_mode &= ~S_ISGID;
 	}
         /* mark_inode_dirty(inode); */
@@ -743,13 +743,13 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                                 if (current->fsuid != st->st_uid &&
                                     (rc = ll_permission(inode, MAY_WRITE)) != 0)
                                         RETURN(rc);
-			} else {
-				/* from inode_change_ok() */
-				if (current->fsuid != st->st_uid &&
-				    !cfs_capable(CAP_FOWNER))
-					RETURN(-EPERM);
-			}
-		}
+                        } else {
+                                /* from inode_change_ok() */
+                                if (current->fsuid != st->st_uid &&
+                                    !cfs_capable(CFS_CAP_FOWNER))
+                                        RETURN(-EPERM);
+                        }
+                }
 
 
                 /* Won't invoke llu_vmtruncate(), as we already cleared
