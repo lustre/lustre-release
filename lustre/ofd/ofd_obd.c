@@ -887,12 +887,6 @@ int ofd_setattr(const struct lu_env *env, struct obd_export *exp,
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
-	if (res != NULL) {
-		ldlm_res_lvbo_update(res, NULL, 0);
-		ldlm_resource_putref(res);
-	}
-
 	ofd_info2oti(info, oti);
 
 	ofd_counter_incr(exp, LPROC_OFD_STATS_SETATTR, oti->oti_jobid, 1);
@@ -900,6 +894,19 @@ int ofd_setattr(const struct lu_env *env, struct obd_export *exp,
 out_unlock:
 	ofd_object_put(env, fo);
 out:
+	if (rc == 0) {
+		/* we do not call this before to avoid lu_object_find() in
+		 *  ->lvbo_update() holding another reference on the object.
+		 * otherwise concurrent destroy can make the object unavailable
+		 * for 2nd lu_object_find() waiting for the first reference
+		 * to go... deadlock! */
+		res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
+		if (res != NULL) {
+			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_resource_putref(res);
+		}
+	}
+
 	return rc;
 }
 
