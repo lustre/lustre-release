@@ -1919,13 +1919,13 @@ static inline int md_done_writing(struct obd_export *exp,
 }
 
 static inline int md_enqueue(struct obd_export *exp,
-                             struct ldlm_enqueue_info *einfo,
-                             struct lookup_intent *it,
-                             struct md_op_data *op_data,
-                             struct lustre_handle *lockh,
-                             void *lmm, int lmmsize,
-                             struct ptlrpc_request **req,
-                             int extra_lock_flags)
+			     struct ldlm_enqueue_info *einfo,
+			     struct lookup_intent *it,
+			     struct md_op_data *op_data,
+			     struct lustre_handle *lockh,
+			     void *lmm, int lmmsize,
+			     struct ptlrpc_request **req,
+			     __u64 extra_lock_flags)
 {
         int rc;
         ENTRY;
