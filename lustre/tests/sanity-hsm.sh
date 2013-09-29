@@ -1256,7 +1256,7 @@ test_21() {
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	[ $(stat -c "%b" $f) -ne "0" ] || error "wrong block number"
+	[ $(stat -c "%b" $f) -ne "1" ] || error "wrong block number"
 	local sz=$(stat -c "%s" $f)
 	[ $sz -ne "0" ] || error "file size should not be zero"
 
@@ -1264,7 +1264,7 @@ test_21() {
 	$LFS hsm_release $f || error "could not release file"
 	check_hsm_flags $f "0x0000000d"
 
-	[ $(stat -c "%b" $f) -eq "0" ] || error "wrong block number"
+	[ $(stat -c "%b" $f) -eq "1" ] || error "wrong block number"
 	[ $(stat -c "%s" $f) -eq $sz ] || error "wrong file size"
 
 	# Check we can release an file without stripe info

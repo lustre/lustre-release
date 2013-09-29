@@ -414,7 +414,13 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL &&
 		   ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) {
 		/* A released file stores its size on MDS. */
-		b->blocks = 0;
+		/* But return 1 block for released file, unless tools like tar
+		 * will consider it fully sparse. (LU-3864)
+		 */
+		if (unlikely(b->size == 0))
+			b->blocks = 0;
+		else
+			b->blocks = 1;
 		b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 	}
 
