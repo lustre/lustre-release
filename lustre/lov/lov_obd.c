@@ -2276,8 +2276,29 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
         int cur_stripe = 0, cur_stripe_wrap = 0, stripe_count;
         unsigned int buffer_size = FIEMAP_BUFFER_SIZE;
 
-	if (!lsm_has_objects(lsm))
-                GOTO(out, rc = 0);
+	if (!lsm_has_objects(lsm)) {
+		if (lsm && lsm_is_released(lsm) && (fm_key->fiemap.fm_start <
+		    fm_key->oa.o_size)) {
+			/* released file, return a minimal FIEMAP if
+			 * request fits in file-size.
+			 */
+			fiemap->fm_mapped_extents = 1;
+			fiemap->fm_extents[0].fe_logical =
+						fm_key->fiemap.fm_start;
+			if (fm_key->fiemap.fm_start + fm_key->fiemap.fm_length <
+			    fm_key->oa.o_size)
+				fiemap->fm_extents[0].fe_length =
+						fm_key->fiemap.fm_length;
+			else
+				fiemap->fm_extents[0].fe_length =
+						fm_key->oa.o_size -
+						fm_key->fiemap.fm_start;
+			fiemap->fm_extents[0].fe_flags |=
+						(FIEMAP_EXTENT_UNKNOWN |
+						 FIEMAP_EXTENT_LAST);
+		}
+		GOTO(out, rc = 0);
+	}
 
         if (fiemap_count_to_size(fm_key->fiemap.fm_extent_count) < buffer_size)
                 buffer_size = fiemap_count_to_size(fm_key->fiemap.fm_extent_count);
@@ -2475,7 +2496,8 @@ skip_last_device_calc:
         fiemap->fm_mapped_extents = current_extent;
 
 out:
-        OBD_FREE_LARGE(fm_local, buffer_size);
+	if (fm_local)
+		OBD_FREE_LARGE(fm_local, buffer_size);
         return rc;
 }
 
