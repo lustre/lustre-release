@@ -3233,7 +3233,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		int nr = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
 		int target = *(int *)val;
 
-		nr = osc_lru_shrink(cli, min(nr, target));
+		nr = osc_lru_shrink(cli, min(nr, target), true);
 		*(int *)val -= nr;
 		RETURN(0);
 	}

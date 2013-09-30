@@ -195,7 +195,7 @@ static int osc_wr_cached_mb(struct file *file, const char *buffer,
 
 	rc = cfs_atomic_read(&cli->cl_lru_in_list) - pages_number;
 	if (rc > 0)
-		(void)osc_lru_shrink(cli, rc);
+		(void)osc_lru_shrink(cli, rc, true);
 
 	return count;
 }

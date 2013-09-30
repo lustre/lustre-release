@@ -46,6 +46,7 @@ typedef struct list_head cfs_list_t;
 
 #define __cfs_list_splice(list, head)        __list_splice(list, head)
 #define cfs_list_splice(list, head)          list_splice(list, head)
+#define cfs_list_splice_tail(list, head)     list_splice_tail(list, head)
 
 #define cfs_list_splice_init(list, head)     list_splice_init(list, head)
 
@@ -303,6 +304,12 @@ static inline void cfs_list_splice(cfs_list_t *list,
 {
 	if (!cfs_list_empty(list))
 		__cfs_list_splice(list, head);
+}
+
+static inline void cfs_list_splice_tail(cfs_list_t *list, cfs_list_t *head)
+{
+	if (!cfs_list_empty(list))
+		__cfs_list_splice(list, head->prev);
 }
 
 /**
