@@ -741,8 +741,6 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de);
 int ll_rmdir_entry(struct inode *dir, char *name, int namelen);
 
 /* llite/rw.c */
-int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
-int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_writepage(struct page *page, struct writeback_control *wbc);
 int ll_writepages(struct address_space *, struct writeback_control *wbc);
 void ll_removepage(struct page *page);
@@ -755,6 +753,9 @@ int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 int ll_readahead(const struct lu_env *env, struct cl_io *io,
                  struct ll_readahead_state *ras, struct address_space *mapping,
                  struct cl_page_list *queue, int flags);
+int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
+struct ll_cl_context *ll_cl_init(struct file *file, struct page *vmpage);
+void ll_cl_fini(struct ll_cl_context *lcc);
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
@@ -1659,5 +1660,8 @@ int ll_layout_restore(struct inode *inode, loff_t start, __u64 length);
 
 int ll_xattr_init(void);
 void ll_xattr_fini(void);
+
+int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,
+		    struct cl_page *page, enum cl_req_type crt);
 
 #endif /* LLITE_INTERNAL_H */

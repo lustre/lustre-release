@@ -101,11 +101,17 @@ struct ccc_io {
                 struct {
                         enum ccc_setattr_lock_type cui_local_lock;
                 } setattr;
-        } u;
-        /**
-         * True iff io is processing glimpse right now.
-         */
-        int                  cui_glimpse;
+		struct {
+			struct cl_page_list cui_queue;
+			unsigned long cui_written;
+			int cui_from;
+			int cui_to;
+		} write;
+	} u;
+	/**
+	 * True iff io is processing glimpse right now.
+	 */
+	int                  cui_glimpse;
 	/**
 	 * Layout version when this IO is initialized
 	 */

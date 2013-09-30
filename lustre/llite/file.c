@@ -1127,9 +1127,12 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 {
 	struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
 	struct ll_file_data  *fd  = LUSTRE_FPRIVATE(file);
-        struct cl_io         *io;
-        ssize_t               result;
-        ENTRY;
+	struct cl_io         *io;
+	ssize_t               result;
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zd\n",
+		file->f_dentry->d_name.name, iot, *ppos, count);
 
 restart:
         io = ccc_env_thread_io(env);
@@ -1152,12 +1155,11 @@ restart:
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 				if (mutex_lock_interruptible(&lli->
-                                                               lli_write_mutex))
-                                        GOTO(out, result = -ERESTARTSYS);
-                                write_mutex_locked = 1;
-                        } else if (iot == CIT_READ) {
-				down_read(&lli->lli_trunc_sem);
-                        }
+							lli_write_mutex))
+					GOTO(out, result = -ERESTARTSYS);
+				write_mutex_locked = 1;
+			}
+			down_read(&lli->lli_trunc_sem);
                         break;
                 case IO_SENDFILE:
                         vio->u.sendfile.cui_actor = args->u.sendfile.via_actor;
@@ -1172,10 +1174,10 @@ restart:
                         LBUG();
                 }
                 result = cl_io_loop(env, io);
-                if (write_mutex_locked)
-			mutex_unlock(&lli->lli_write_mutex);
-                else if (args->via_io_subtype == IO_NORMAL && iot == CIT_READ)
+		if (args->via_io_subtype == IO_NORMAL)
 			up_read(&lli->lli_trunc_sem);
+		if (write_mutex_locked)
+			mutex_unlock(&lli->lli_write_mutex);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
@@ -1211,6 +1213,7 @@ out:
 			fd->fd_write_failed = true;
 		}
 	}
+	CDEBUG(D_VFSTRACE, "iot: %d, result: %zd\n", iot, result);
 
 	return result;
 }

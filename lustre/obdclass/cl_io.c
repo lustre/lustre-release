@@ -813,79 +813,30 @@ int cl_io_read_page(const struct lu_env *env, struct cl_io *io,
 EXPORT_SYMBOL(cl_io_read_page);
 
 /**
- * Called by write io to prepare page to receive data from user buffer.
+ * Commit a list of contiguous pages into writeback cache.
  *
- * \see cl_io_operations::cio_prepare_write()
+ * \returns 0 if all pages committed, or errcode if error occurred.
+ * \see cl_io_operations::cio_commit_async()
  */
-int cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,
-                        struct cl_page *page, unsigned from, unsigned to)
+int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
+			struct cl_page_list *queue, int from, int to,
+			cl_commit_cbt cb)
 {
-        const struct cl_io_slice *scan;
-        int result = 0;
+	const struct cl_io_slice *scan;
+	int result = 0;
+	ENTRY;
 
-        LINVRNT(io->ci_type == CIT_WRITE);
-        LINVRNT(cl_page_is_owned(page, io));
-        LINVRNT(io->ci_state == CIS_IO_GOING || io->ci_state == CIS_LOCKED);
-        LINVRNT(cl_io_invariant(io));
-        LASSERT(cl_page_in_io(page, io));
-        ENTRY;
-
-        cl_io_for_each_reverse(scan, io) {
-                if (scan->cis_iop->cio_prepare_write != NULL) {
-                        const struct cl_page_slice *slice;
-
-                        slice = cl_io_slice_page(scan, page);
-                        result = scan->cis_iop->cio_prepare_write(env, scan,
-                                                                  slice,
-                                                                  from, to);
-                        if (result != 0)
-                                break;
-                }
-        }
-        RETURN(result);
+	cl_io_for_each(scan, io) {
+		if (scan->cis_iop->cio_commit_async == NULL)
+			continue;
+		result = scan->cis_iop->cio_commit_async(env, scan, queue,
+							 from, to, cb);
+		if (result != 0)
+			break;
+	}
+	RETURN(result);
 }
-EXPORT_SYMBOL(cl_io_prepare_write);
-
-/**
- * Called by write io after user data were copied into a page.
- *
- * \see cl_io_operations::cio_commit_write()
- */
-int cl_io_commit_write(const struct lu_env *env, struct cl_io *io,
-                       struct cl_page *page, unsigned from, unsigned to)
-{
-        const struct cl_io_slice *scan;
-        int result = 0;
-
-        LINVRNT(io->ci_type == CIT_WRITE);
-        LINVRNT(io->ci_state == CIS_IO_GOING || io->ci_state == CIS_LOCKED);
-        LINVRNT(cl_io_invariant(io));
-        /*
-         * XXX Uh... not nice. Top level cl_io_commit_write() call (vvp->lov)
-         * already called cl_page_cache_add(), moving page into CPS_CACHED
-         * state. Better (and more general) way of dealing with such situation
-         * is needed.
-         */
-        LASSERT(cl_page_is_owned(page, io) || page->cp_parent != NULL);
-        LASSERT(cl_page_in_io(page, io));
-        ENTRY;
-
-        cl_io_for_each(scan, io) {
-                if (scan->cis_iop->cio_commit_write != NULL) {
-                        const struct cl_page_slice *slice;
-
-                        slice = cl_io_slice_page(scan, page);
-                        result = scan->cis_iop->cio_commit_write(env, scan,
-                                                                 slice,
-                                                                 from, to);
-                        if (result != 0)
-                                break;
-                }
-        }
-        LINVRNT(result <= 0);
-        RETURN(result);
-}
-EXPORT_SYMBOL(cl_io_commit_write);
+EXPORT_SYMBOL(cl_io_commit_async);
 
 /**
  * Submits a list of pages for immediate io.
@@ -900,25 +851,22 @@ EXPORT_SYMBOL(cl_io_commit_write);
 int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
 		    enum cl_req_type crt, struct cl_2queue *queue)
 {
-        const struct cl_io_slice *scan;
-        int result = 0;
+	const struct cl_io_slice *scan;
+	int result = 0;
+	ENTRY;
 
-        LINVRNT(crt < ARRAY_SIZE(scan->cis_iop->req_op));
-        ENTRY;
-
-        cl_io_for_each(scan, io) {
-                if (scan->cis_iop->req_op[crt].cio_submit == NULL)
-                        continue;
-                result = scan->cis_iop->req_op[crt].cio_submit(env, scan, crt,
-							       queue);
-                if (result != 0)
-                        break;
-        }
-        /*
-         * If ->cio_submit() failed, no pages were sent.
-         */
-        LASSERT(ergo(result != 0, cfs_list_empty(&queue->c2_qout.pl_pages)));
-        RETURN(result);
+	cl_io_for_each(scan, io) {
+		if (scan->cis_iop->cio_submit == NULL)
+			continue;
+		result = scan->cis_iop->cio_submit(env, scan, crt, queue);
+		if (result != 0)
+			break;
+	}
+	/*
+	 * If ->cio_submit() failed, no pages were sent.
+	 */
+	LASSERT(ergo(result != 0, cfs_list_empty(&queue->c2_qout.pl_pages)));
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_submit_rw);
 
@@ -1152,6 +1100,26 @@ void cl_page_list_move(struct cl_page_list *dst, struct cl_page_list *src,
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_list_move);
+
+/**
+ * Moves a page from one page list to the head of another list.
+ */
+void cl_page_list_move_head(struct cl_page_list *dst, struct cl_page_list *src,
+			    struct cl_page *page)
+{
+	LASSERT(src->pl_nr > 0);
+	LINVRNT(dst->pl_owner == current);
+	LINVRNT(src->pl_owner == current);
+
+	ENTRY;
+	cfs_list_move(&page->cp_batch, &dst->pl_pages);
+	--src->pl_nr;
+	++dst->pl_nr;
+	lu_ref_set_at(&page->cp_reference, &page->cp_queue_ref, "queue",
+			src, dst);
+	EXIT;
+}
+EXPORT_SYMBOL(cl_page_list_move_head);
 
 /**
  * splice the cl_page_list, just as list head does

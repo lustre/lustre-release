@@ -496,58 +496,207 @@ out:
 		mutex_unlock(&inode->i_mutex);
 
         if (tot_bytes > 0) {
-                if (rw == WRITE) {
-			struct lov_stripe_md *lsm;
+		struct ccc_io *cio = ccc_env_io(env);
 
-			lsm = ccc_inode_lsm_get(inode);
-			LASSERT(lsm != NULL);
-			lov_stripe_lock(lsm);
-			obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset, 0);
-			lov_stripe_unlock(lsm);
-			ccc_inode_lsm_put(inode, lsm);
-		}
+		/* no commit async for direct IO */
+		cio->u.write.cui_written += tot_bytes;
 	}
 
 	cl_env_put(env, &refcheck);
 	RETURN(tot_bytes ? tot_bytes : result);
 }
 
-static int ll_write_begin(struct file *file, struct address_space *mapping,
-                         loff_t pos, unsigned len, unsigned flags,
-                         struct page **pagep, void **fsdata)
+/**
+ * Prepare partially written-to page for a write.
+ */
+static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
+				   struct cl_page *pg)
 {
-        pgoff_t index = pos >> PAGE_CACHE_SHIFT;
-        struct page *page;
-        int rc;
-        unsigned from = pos & (PAGE_CACHE_SIZE - 1);
-        ENTRY;
+	struct cl_object *obj  = io->ci_obj;
+	struct cl_attr *attr   = ccc_env_thread_attr(env);
+	loff_t          offset = cl_offset(obj, pg->cp_index);
+	int             result;
 
-        page = grab_cache_page_write_begin(mapping, index, flags);
-        if (!page)
-                RETURN(-ENOMEM);
+	cl_object_attr_lock(obj);
+	result = cl_object_attr_get(env, obj, attr);
+	cl_object_attr_unlock(obj);
+	if (result == 0) {
+		struct ccc_page *cp;
 
-        *pagep = page;
+		cp = cl2ccc_page(cl_page_at(pg, &vvp_device_type));
 
-        rc = ll_prepare_write(file, page, from, from + len);
-        if (rc) {
-                unlock_page(page);
-                page_cache_release(page);
-        }
-        RETURN(rc);
+		/*
+		 * If are writing to a new page, no need to read old data.
+		 * The extent locking will have updated the KMS, and for our
+		 * purposes here we can treat it like i_size.
+		 */
+		if (attr->cat_kms <= offset) {
+			char *kaddr = ll_kmap_atomic(cp->cpg_page, KM_USER0);
+
+			memset(kaddr, 0, cl_page_size(obj));
+			ll_kunmap_atomic(kaddr, KM_USER0);
+		} else if (cp->cpg_defer_uptodate)
+			cp->cpg_ra_used = 1;
+		else
+			result = ll_page_sync_io(env, io, pg, CRT_READ);
+	}
+	return result;
+}
+
+static int ll_write_begin(struct file *file, struct address_space *mapping,
+			  loff_t pos, unsigned len, unsigned flags,
+			  struct page **pagep, void **fsdata)
+{
+	struct ll_cl_context *lcc;
+	struct lu_env  *env;
+	struct cl_io   *io;
+	struct cl_page *page;
+
+	struct cl_object *clob = ll_i2info(mapping->host)->lli_clob;
+	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
+	struct page *vmpage = NULL;
+	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+	unsigned to = from + len;
+	int result = 0;
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "Writing %lu of %d to %d bytes\n", index, from, len);
+
+	lcc = ll_cl_init(file, NULL);
+	if (IS_ERR(lcc))
+		GOTO(out, result = PTR_ERR(lcc));
+
+	env = lcc->lcc_env;
+	io  = lcc->lcc_io;
+
+	/* To avoid deadlock, try to lock page first. */
+	vmpage = grab_cache_page_nowait(mapping, index);
+	if (unlikely(vmpage == NULL || PageDirty(vmpage))) {
+		struct ccc_io *cio = ccc_env_io(env);
+		struct cl_page_list *plist = &cio->u.write.cui_queue;
+
+                /* if the page is already in dirty cache, we have to commit
+		 * the pages right now; otherwise, it may cause deadlock
+		 * because it holds page lock of a dirty page and request for
+		 * more grants. It's okay for the dirty page to be the first
+		 * one in commit page list, though. */
+		if (vmpage != NULL && PageDirty(vmpage) && plist->pl_nr > 0) {
+			unlock_page(vmpage);
+			page_cache_release(vmpage);
+			vmpage = NULL;
+		}
+
+		/* commit pages and then wait for page lock */
+		result = vvp_io_write_commit(env, io);
+		if (result < 0)
+			GOTO(out, result);
+
+		if (vmpage == NULL) {
+			vmpage = grab_cache_page_write_begin(mapping, index,
+							     flags);
+			if (vmpage == NULL)
+				GOTO(out, result = -ENOMEM);
+		}
+	}
+
+	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);
+	if (IS_ERR(page))
+		GOTO(out, result = PTR_ERR(page));
+
+	lcc->lcc_page = page;
+	lu_ref_add(&page->cp_reference, "cl_io", io);
+
+	cl_page_assume(env, io, page);
+	if (!PageUptodate(vmpage)) {
+		/*
+		 * We're completely overwriting an existing page,
+		 * so _don't_ set it up to date until commit_write
+		 */
+		if (from == 0 && to == PAGE_SIZE) {
+			CL_PAGE_HEADER(D_PAGE, env, page, "full page write\n");
+			POISON_PAGE(vmpage, 0x11);
+		} else {
+			/* TODO: can be optimized at OSC layer to check if it
+			 * is a lockless IO. In that case, it's not necessary
+			 * to read the data. */
+			result = ll_prepare_partial_page(env, io, page);
+			if (result == 0)
+				SetPageUptodate(vmpage);
+		}
+	}
+	if (result < 0)
+		cl_page_unassume(env, io, page);
+	EXIT;
+out:
+	if (result < 0) {
+		if (vmpage != NULL) {
+			unlock_page(vmpage);
+			page_cache_release(vmpage);
+		}
+		if (!IS_ERR(lcc))
+			ll_cl_fini(lcc);
+	} else {
+		*pagep = vmpage;
+		*fsdata = lcc;
+	}
+	RETURN(result);
 }
 
 static int ll_write_end(struct file *file, struct address_space *mapping,
-                        loff_t pos, unsigned len, unsigned copied,
-                        struct page *page, void *fsdata)
+			loff_t pos, unsigned len, unsigned copied,
+			struct page *vmpage, void *fsdata)
 {
-        unsigned from = pos & (PAGE_CACHE_SIZE - 1);
-        int rc;
+	struct ll_cl_context *lcc = fsdata;
+	struct lu_env *env;
+	struct cl_io *io;
+	struct ccc_io *cio;
+	struct cl_page *page;
+	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+	bool unplug = false;
+	int result = 0;
+	ENTRY;
 
-        rc = ll_commit_write(file, page, from, from + copied);
-        unlock_page(page);
-        page_cache_release(page);
+	page_cache_release(vmpage);
 
-        return rc ?: copied;
+	LASSERT(lcc != NULL);
+	env  = lcc->lcc_env;
+	page = lcc->lcc_page;
+	io   = lcc->lcc_io;
+	cio  = ccc_env_io(env);
+
+	LASSERT(cl_page_is_owned(page, io));
+	if (copied > 0) {
+		struct cl_page_list *plist = &cio->u.write.cui_queue;
+
+		lcc->lcc_page = NULL; /* page will be queued */
+
+		/* Add it into write queue */
+		cl_page_list_add(plist, page);
+		if (plist->pl_nr == 1) /* first page */
+			cio->u.write.cui_from = from;
+		else
+			LASSERT(from == 0);
+		cio->u.write.cui_to = from + copied;
+
+		/* We may have one full RPC, commit it soon */
+		if (plist->pl_nr >= PTLRPC_MAX_BRW_PAGES)
+			unplug = true;
+
+		CL_PAGE_DEBUG(D_VFSTRACE, env, page,
+			      "queued page: %d.\n", plist->pl_nr);
+	} else {
+		cl_page_disown(env, io, page);
+
+		/* page list is not contiguous now, commit it now */
+		unplug = true;
+	}
+
+	if (unplug ||
+	    file->f_flags & O_SYNC || IS_SYNC(file->f_dentry->d_inode))
+		result = vvp_io_write_commit(env, io);
+
+	ll_cl_fini(lcc);
+	RETURN(result >= 0 ? copied : result);
 }
 
 #ifdef CONFIG_MIGRATION
@@ -582,21 +731,18 @@ struct address_space_operations ll_aops = {
 };
 #else
 struct address_space_operations_ext ll_aops = {
-        .orig_aops.readpage       = ll_readpage,
-//        .orig_aops.readpages      = ll_readpages,
-        .orig_aops.direct_IO      = ll_direct_IO_26,
-        .orig_aops.writepage      = ll_writepage,
-	.orig_aops.writepages     = ll_writepages,
-        .orig_aops.set_page_dirty = ll_set_page_dirty,
-        .orig_aops.prepare_write  = ll_prepare_write,
-        .orig_aops.commit_write   = ll_commit_write,
-        .orig_aops.invalidatepage = ll_invalidatepage,
-        .orig_aops.releasepage    = ll_releasepage,
+	.orig_aops.readpage		= ll_readpage,
+	.orig_aops.direct_IO		= ll_direct_IO_26,
+	.orig_aops.writepage		= ll_writepage,
+	.orig_aops.writepages		= ll_writepages,
+	.orig_aops.set_page_dirty	= ll_set_page_dirty,
+	.orig_aops.invalidatepage	= ll_invalidatepage,
+	.orig_aops.releasepage		= ll_releasepage,
 #ifdef CONFIG_MIGRATION
-        .orig_aops.migratepage    = ll_migratepage,
+	.orig_aops.migratepage		= ll_migratepage,
 #endif
-        .orig_aops.bmap           = NULL,
-        .write_begin    = ll_write_begin,
-        .write_end      = ll_write_end
+	.orig_aops.bmap			= NULL,
+	.write_begin			= ll_write_begin,
+	.write_end			= ll_write_end
 };
 #endif
