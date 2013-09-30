@@ -792,5 +792,6 @@ int cl_sb_fini(struct llu_sb_info *sbi)
          * automatically when last device is destroyed).
          */
         lu_types_stop();
+        cl_env_cache_purge(~0);
         RETURN(0);
 }
