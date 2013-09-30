@@ -428,6 +428,8 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 	struct super_block *sb = data;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct cl_client_cache *cache = &sbi->ll_cache;
+	struct lu_env *env;
+	int refcheck;
 	int mult, rc, pages_number;
 	int diff = 0;
 	int nrpages = 0;
@@ -459,6 +461,10 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 		GOTO(out, rc = 0);
 	}
 
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(rc);
+
 	diff = -diff;
 	while (diff > 0) {
 		int tmp;
@@ -485,13 +491,14 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 
 		/* difficult - have to ask OSCs to drop LRU slots. */
 		tmp = diff << 1;
-		rc = obd_set_info_async(NULL, sbi->ll_dt_exp,
+		rc = obd_set_info_async(env, sbi->ll_dt_exp,
 				sizeof(KEY_CACHE_LRU_SHRINK),
 				KEY_CACHE_LRU_SHRINK,
 				sizeof(tmp), &tmp, NULL);
 		if (rc < 0)
 			break;
 	}
+	cl_env_put(env, &refcheck);
 
 out:
 	if (rc >= 0) {

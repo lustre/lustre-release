@@ -3233,7 +3233,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		int nr = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
 		int target = *(int *)val;
 
-		nr = osc_lru_shrink(cli, min(nr, target), true);
+		nr = osc_lru_shrink(env, cli, min(nr, target), true);
 		*(int *)val -= nr;
 		RETURN(0);
 	}
@@ -3526,6 +3526,11 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out_client_setup, rc = PTR_ERR(handler));
 	cli->cl_writeback_work = handler;
 
+	handler = ptlrpcd_alloc_work(cli->cl_import, lru_queue_work, cli);
+	if (IS_ERR(handler))
+		GOTO(out_ptlrpcd_work, rc = PTR_ERR(handler));
+	cli->cl_lru_work = handler;
+
 	rc = osc_quota_setup(obd);
 	if (rc)
 		GOTO(out_ptlrpcd_work, rc);
@@ -3553,7 +3558,14 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	RETURN(rc);
 
 out_ptlrpcd_work:
-	ptlrpcd_destroy_work(handler);
+	if (cli->cl_writeback_work != NULL) {
+		ptlrpcd_destroy_work(cli->cl_writeback_work);
+		cli->cl_writeback_work = NULL;
+	}
+	if (cli->cl_lru_work != NULL) {
+		ptlrpcd_destroy_work(cli->cl_lru_work);
+		cli->cl_lru_work = NULL;
+	}
 out_client_setup:
 	client_obd_cleanup(obd);
 out_ptlrpcd:
@@ -3594,6 +3606,10 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         ptlrpcd_destroy_work(cli->cl_writeback_work);
                         cli->cl_writeback_work = NULL;
                 }
+		if (cli->cl_lru_work) {
+			ptlrpcd_destroy_work(cli->cl_lru_work);
+			cli->cl_lru_work = NULL;
+		}
                 obd_cleanup_client_import(obd);
                 ptlrpc_lprocfs_unregister_obd(obd);
                 lprocfs_obd_cleanup(obd);
