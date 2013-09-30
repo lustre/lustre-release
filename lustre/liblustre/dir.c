@@ -146,8 +146,8 @@ static void *(*memmover)(void *, const void *, size_t) = memmove;
 static int filldir(char *buf, int buflen, const char *name, int namelen,
 		   loff_t offset, ino_t ino, unsigned int d_type, int *filled)
 {
-	struct dirent64 *dirent = (struct dirent64 *)(buf + *filled);
-	struct dirent64  holder;
+	struct intnl_dirent *dirent = (struct intnl_dirent *)(buf + *filled);
+	struct intnl_dirent holder;
 	int reclen = ROUND_UP64(NAME_OFFSET(dirent) + namelen + 1);
 
         /*

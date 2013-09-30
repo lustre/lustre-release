@@ -2256,7 +2256,7 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
                 if (!tgt->ltd_active || tgt->ltd_reap) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA &&
                             lov->lov_tgts[i]->ltd_activate) {
-                                rc = -EREMOTEIO;
+				rc = -ENETDOWN;
                                 CERROR("ost %d is inactive\n", i);
                         } else {
                                 CDEBUG(D_HA, "ost %d is inactive\n", i);

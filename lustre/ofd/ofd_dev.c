@@ -2192,7 +2192,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 				obd->obd_name, osfs->os_bsize);
 		GOTO(err_fini_stack, rc = -EPROTO);
 	}
-	m->ofd_blockbits = fls(osfs->os_bsize) - 1;
+	m->ofd_blockbits = __fls(osfs->os_bsize) - 1;
 
 	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
 	if (osfs->os_bsize * osfs->os_blocks < OFD_PRECREATE_SMALL_FS)

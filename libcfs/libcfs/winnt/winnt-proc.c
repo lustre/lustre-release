@@ -83,8 +83,8 @@ spinlock_t			proc_fs_lock;
 struct mutex				proc_fs_lock;
 
 #define INIT_PROCFS_LOCK()      cfs_init_mutex(&proc_fs_lock)
-#define LOCK_PROCFS()           cfs_mutex_down(&proc_fs_lock)
-#define UNLOCK_PROCFS()         cfs_mutex_up(&proc_fs_lock)
+#define LOCK_PROCFS()           mutex_lock(&proc_fs_lock)
+#define UNLOCK_PROCFS()         mutex_unlock(&proc_fs_lock)
 
 #endif
 

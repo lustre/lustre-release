@@ -36,3 +36,6 @@
 
 SUBDIRS = lnet klnds ulnds selftest doc utils include	\
 	autoconf
+
+DIST_SUBDIRS = lnet klnds ulnds selftest doc utils include \
+	autoconf

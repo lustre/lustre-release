@@ -37,10 +37,6 @@
 #ifndef __LIBCFS_LINUX_PORTALS_COMPAT_H__
 #define __LIBCFS_LINUX_PORTALS_COMPAT_H__
 
-#ifndef __user
-#define __user
-#endif
-
 #define LL_PROC_PROTO(name)					\
 	name(struct ctl_table *table, int write,		\
 		void __user *buffer, size_t *lenp, loff_t *ppos)

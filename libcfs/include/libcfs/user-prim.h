@@ -55,8 +55,6 @@
 # define EXPORT_SYMBOL(s)
 #endif
 
-#ifndef __KERNEL__
-
 typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 
 /*
@@ -166,7 +164,6 @@ static inline int misc_deregister(struct miscdevice *foo)
 	return 0;
 }
 
-#define cfs_sigfillset(l)               do {} while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 
 #define DAEMON_FLAGS                0
@@ -264,8 +261,6 @@ static inline void libcfs_arch_cleanup(void) {
 /* !__WINNT__ */
 #endif
 
-/* !__KERNEL__ */
-#endif
 
 /* __LIBCFS_USER_PRIM_H__ */
 #endif

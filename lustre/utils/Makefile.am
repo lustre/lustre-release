@@ -15,9 +15,10 @@ LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
 sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup
 
+EXTRA_PROGRAMS = wirecheck
+
 if UTILS
 noinst_PROGRAMS = obdio obdbarrier
-EXTRA_PROGRAMS = wirecheck
 
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
@@ -39,6 +40,7 @@ if LDISKFS_ENABLED
 lib_LIBRARIES += libiam.a
 endif
 noinst_LIBRARIES = liblustreapitmp.a
+endif # UTILS
 
 lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
@@ -166,16 +168,15 @@ l_getidentity_LDADD := $(LIBPTLCTL)
 l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
 
 ltrack_stats_SOURCES = ltrack_stats.c
-endif # UTILS
+
+lhsmtool_posix_SOURCES = lhsmtool_posix.c
+lhsmtool_posix_LDADD := liblustreapi.a $(PTHREAD_LIBS)
+lhsmtool_posix_DEPENDENCIES := liblustreapi.a
 
 wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
 
 wiretest_SOURCES = wiretest.c
-
-lhsmtool_posix_SOURCES = lhsmtool_posix.c
-lhsmtool_posix_LDADD := liblustreapi.a $(PTHREAD_LIBS)
-lhsmtool_posix_DEPENDENCIES := liblustreapi.a
 
 EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 

@@ -42,7 +42,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
-#include <asm/div64.h>
+#include <linux/math64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
 #else

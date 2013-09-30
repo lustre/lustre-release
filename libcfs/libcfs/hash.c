@@ -2131,7 +2131,7 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
 #endif
                 }
                 total += bd.bd_bucket->hsb_count;
-                dist[min(fls(bd.bd_bucket->hsb_count/max(theta,1)),7)]++;
+		dist[min(__fls(bd.bd_bucket->hsb_count/max(theta,1)),7UL)]++;
                 cfs_hash_bd_unlock(hs, &bd, 0);
         }
 
@@ -2200,7 +2200,7 @@ int cfs_hash_debug_str_seq(cfs_hash_t *hs, struct seq_file *m)
 #endif
 		}
 		total += bd.bd_bucket->hsb_count;
-		dist[min(fls(bd.bd_bucket->hsb_count/max(theta,1)),7)]++;
+		dist[min(__fls(bd.bd_bucket->hsb_count/max(theta,1)),7UL)]++;
 		cfs_hash_bd_unlock(hs, &bd, 0);
 	}
 

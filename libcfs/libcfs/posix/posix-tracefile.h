@@ -15,26 +15,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.htm
  *
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
- * Use is subject to license terms.
+ * libcfs/libcfs/posix/posix-tracefile.h
  *
- * Copyright (c) 2012, Intel Corporation.
+ * Userspace debugging-tracing
  */
-/*
- * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
- *
- * libcfs/include/libcfs/linux/linux-bitops.h
+
+#ifndef __LIBCFS_POSIX_TRACEFILE_H__
+#define __LIBCFS_POSIX_TRACEFILE_H__
+
+/**
+ * three types of trace_data in linux
+ * posix need to max of available types to have 
+ * type checking happy.
  */
-#include <linux/bitops.h>
+typedef enum {
+	CFS_TCD_TYPE_PROC = 0,
+	CFS_TCD_TYPE_SOFTIRQ,
+	CFS_TCD_TYPE_IRQ,
+	CFS_TCD_TYPE_MAX
+} cfs_trace_buf_type_t;
 
-
+#endif

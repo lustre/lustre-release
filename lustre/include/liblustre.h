@@ -134,10 +134,7 @@ extern int mgc_init(void);
         ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
-/* registering symbols */
-#ifndef ERESTARTSYS
-#define ERESTARTSYS ERESTART
-#endif
+#define simple_strtol strtol
 
 #ifdef HZ
 #undef HZ

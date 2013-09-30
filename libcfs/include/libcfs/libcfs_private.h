@@ -534,7 +534,7 @@ int cfs_percpt_atomic_summary(atomic_t **refs);
  *       value  after  conversion...
  *
  */
-#define CLASSERT(cond) do {switch(42) {case (cond): case 0: break;}} while (0)
+#define CLASSERT(cond) do {switch (1) {case (cond): case 0: break; } } while (0)
 
 /* support decl needed both by kernel and liblustre */
 int		 libcfs_isknown_lnd(int type);

@@ -580,8 +580,8 @@ static inline int down_trylock(struct semaphore *s)
  *
  * - init_mutex(x)
  * - init_mutex_locked(x)
- * - mutex_up(x)
- * - mutex_down(x)
+ * - mutex_unlock(x)
+ * - mutex_lock(x)
  */
 
 #define mutex semaphore

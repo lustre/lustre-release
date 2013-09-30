@@ -39,7 +39,7 @@ rm -f liblustre.so
 ALL_OBJS=
 
 build_obj_list() {
-  _objs=`$AR -t $1/$2`
+	_objs=`$AR -t $1/$2 | grep -v SYMDEF | grep -v SORTED`
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$1/$_lib ";
   done;
@@ -51,7 +51,7 @@ build_obj_list() {
 sysio_tmp=$CWD/sysio_tmp_`date +%s`
 rm -rf $sysio_tmp
 build_sysio_obj_list() {
-  _objs=`$AR -t $1`
+  _objs=`$AR -t $1 | grep -v SYMDEF | grep -v SORTED`
   mkdir -p $sysio_tmp
   cd $sysio_tmp
   $AR -x $1

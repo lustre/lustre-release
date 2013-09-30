@@ -1,7 +1,7 @@
 ## Liblustre excecutables & libraries Makefile
 SUBDIRS = . tests
 
-AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 \
+AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include \
               $(LLCPPFLAGS) -I$(top_srcdir)/lnet/ulnds
 AM_CFLAGS = $(LLCFLAGS)
 

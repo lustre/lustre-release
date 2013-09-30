@@ -40,6 +40,12 @@
 #define __LVFS_H__
 
 #include <libcfs/libcfs.h>
+
+struct lvfs_callback_ops {
+	struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr,
+				       void *data);
+};
+
 #if defined(__linux__)
 #include <linux/lvfs.h>
 #elif defined(__APPLE__)
@@ -53,4 +59,5 @@
 /* ptlrpc_sec_ctx.c */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx);
+
 #endif

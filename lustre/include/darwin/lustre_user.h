@@ -41,7 +41,6 @@
 
 #ifndef __KERNEL__
 /* for llmount */
-# define _GNU_SOURCE
 # include <getopt.h>
 # include <sys/utsname.h>
 # include <sys/stat.h>

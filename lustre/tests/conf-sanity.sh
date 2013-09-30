@@ -2320,7 +2320,7 @@ test_36() { # 12743
 	#     different one than the default value here.
 	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --mgsnode=$MGSNID \
 		--fsname=${FSNAME2} --reformat $fs2ostdev $fs2ostvdev || exit 10
-	add fs3ost $(mkfs_opts ost1 ${fs3ostdev}) --mgsnode=$MGSNID \
+	add fs3ost $(mkfs_opts ost2 ${fs3ostdev}) --mgsnode=$MGSNID \
 		--fsname=${FSNAME2} --reformat $fs3ostdev $fs3ostvdev || exit 10
 
         start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
