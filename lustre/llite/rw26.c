@@ -101,11 +101,7 @@ static void ll_invalidatepage(struct page *vmpage, unsigned long offset)
                         if (obj != NULL) {
                                 page = cl_vmpage_page(vmpage, obj);
                                 if (page != NULL) {
-                                        lu_ref_add(&page->cp_reference,
-                                                   "delete", vmpage);
                                         cl_page_delete(env, page);
-                                        lu_ref_del(&page->cp_reference,
-                                                   "delete", vmpage);
                                         cl_page_put(env, page);
                                 }
                         } else

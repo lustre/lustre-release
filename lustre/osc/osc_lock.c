@@ -36,6 +36,7 @@
  * Implementation of cl_lock for OSC layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_OSC
@@ -910,11 +911,8 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 static unsigned long osc_lock_weigh(const struct lu_env *env,
                                     const struct cl_lock_slice *slice)
 {
-        /*
-         * don't need to grab coh_page_guard since we don't care the exact #
-         * of pages..
-         */
-        return cl_object_header(slice->cls_obj)->coh_pages;
+	/* TODO: check how many pages are covered by this lock */
+	return cl2osc(slice->cls_obj)->oo_npages;
 }
 
 static void osc_lock_build_einfo(const struct lu_env *env,
@@ -1290,7 +1288,7 @@ static int osc_lock_flush(struct osc_lock *ols, int discard)
 				result = 0;
 		}
 
-		rc = cl_lock_discard_pages(env, lock);
+		rc = osc_lock_discard_pages(env, ols);
 		if (result == 0 && rc < 0)
 			result = rc;
 
@@ -1360,23 +1358,23 @@ static void osc_lock_cancel(const struct lu_env *env,
 
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 static int check_cb(const struct lu_env *env, struct cl_io *io,
-                    struct cl_page *page, void *cbdata)
+		    struct osc_page *ops, void *cbdata)
 {
-        struct cl_lock *lock = cbdata;
+	struct cl_lock *lock = cbdata;
 
-        if (lock->cll_descr.cld_mode == CLM_READ) {
-                struct cl_lock *tmp;
-                tmp = cl_lock_at_page(env, lock->cll_descr.cld_obj,
-                                     page, lock, 1, 0);
-                if (tmp != NULL) {
-                        cl_lock_put(env, tmp);
-                        return CLP_GANG_OKAY;
-                }
-        }
+	if (lock->cll_descr.cld_mode == CLM_READ) {
+		struct cl_lock *tmp;
+		tmp = cl_lock_at_pgoff(env, lock->cll_descr.cld_obj,
+				       osc_index(ops), lock, 1, 0);
+		if (tmp != NULL) {
+			cl_lock_put(env, tmp);
+			return CLP_GANG_OKAY;
+		}
+	}
 
-        CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");
-        CL_PAGE_DEBUG(D_ERROR, env, page, "\n");
-        return CLP_GANG_ABORT;
+	CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");
+	CL_PAGE_DEBUG(D_ERROR, env, ops->ops_cl.cpl_page, "\n");
+	return CLP_GANG_ABORT;
 }
 
 /**
@@ -1410,9 +1408,9 @@ static int osc_lock_has_pages(struct osc_lock *olck)
 	io->ci_ignore_layout = 1;
         cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	do {
-		result = cl_page_gang_lookup(env, obj, io,
-					     descr->cld_start, descr->cld_end,
-					     check_cb, (void *)lock);
+		result = osc_page_gang_lookup(env, oob, io,
+					      descr->cld_start, descr->cld_end,
+					      check_cb, (void *)lock);
 		if (result == CLP_GANG_ABORT)
 			break;
 		if (result == CLP_GANG_RESCHED)

@@ -36,6 +36,7 @@
  * Implementation of cl_page for OSC layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_OSC
@@ -435,6 +436,18 @@ static void osc_page_delete(const struct lu_env *env,
 
 	osc_lru_del(osc_cli(obj), opg);
 
+	if (slice->cpl_page->cp_type == CPT_CACHEABLE) {
+		void *value;
+
+		spin_lock(&obj->oo_tree_lock);
+		value = radix_tree_delete(&obj->oo_tree, osc_index(opg));
+		if (value != NULL)
+			--obj->oo_npages;
+		spin_unlock(&obj->oo_tree_lock);
+
+		LASSERT(ergo(value != NULL, value == opg));
+	}
+
 	EXIT;
 }
 
@@ -503,7 +516,7 @@ static const struct cl_page_operations osc_page_ops = {
 };
 
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
-		struct cl_page *page, struct page *vmpage)
+		  struct cl_page *page, struct page *vmpage)
 {
 	struct osc_object *osc = cl2osc(obj);
 	struct osc_page   *opg = cl_object_page_slice(obj, page);
@@ -533,8 +546,18 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 	CFS_INIT_LIST_HEAD(&opg->ops_lru);
 
 	/* reserve an LRU space for this page */
-	if (page->cp_type == CPT_CACHEABLE && result == 0)
+	if (page->cp_type == CPT_CACHEABLE && result == 0) {
 		result = osc_lru_reserve(env, osc, opg);
+		if (result == 0) {
+			spin_lock(&osc->oo_tree_lock);
+			result = radix_tree_insert(&osc->oo_tree,
+						   page->cp_index, opg);
+			if (result == 0)
+				++osc->oo_npages;
+			spin_unlock(&osc->oo_tree_lock);
+			LASSERT(result == 0);
+		}
+	}
 
 	return result;
 }
@@ -744,7 +767,6 @@ static void discard_pagevec(const struct lu_env *env, struct cl_io *io,
                 struct cl_page *page = pvec[i];
 
 		LASSERT(cl_page_is_owned(page, io));
-		cl_page_unmap(env, io, page);
 		cl_page_discard(env, io, page);
 		cl_page_disown(env, io, page);
                 cl_page_put(env, page);
@@ -785,7 +807,7 @@ int osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		cfs_atomic_inc(&cli->cl_lru_shrinkers);
 	}
 
-	pvec = osc_env_info(env)->oti_pvec;
+	pvec = (struct cl_page **)osc_env_info(env)->oti_pvec;
 	io = &osc_env_info(env)->oti_io;
 
 	client_obd_list_lock(&cli->cl_lru_list_lock);

@@ -398,18 +398,13 @@ static int osc_async_upcall(void *a, int rc)
  * Checks that there are no pages being written in the extent being truncated.
  */
 static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
-			  struct cl_page *page, void *cbdata)
+			  struct osc_page *ops , void *cbdata)
 {
-	const struct cl_page_slice *slice;
-	struct osc_page *ops;
+	struct cl_page *page = ops->ops_cl.cpl_page;
 	struct osc_async_page *oap;
 	__u64 start = *(__u64 *)cbdata;
 
-	slice = cl_page_at(page, &osc_device_type);
-	LASSERT(slice != NULL);
-	ops = cl2osc_page(slice);
 	oap = &ops->ops_oap;
-
 	if (oap->oap_cmd & OBD_BRW_WRITE &&
 	    !cfs_list_empty(&oap->oap_pending_item))
 		CL_PAGE_DEBUG(D_ERROR, env, page, "exists " LPU64 "/%s.\n",
@@ -442,8 +437,9 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
         /*
          * Complain if there are pages in the truncated region.
          */
-	cl_page_gang_lookup(env, clob, io, start + partial, CL_PAGE_EOF,
-			    trunc_check_cb, (void *)&size);
+	osc_page_gang_lookup(env, io, cl2osc(clob),
+				start + partial, CL_PAGE_EOF,
+				trunc_check_cb, (void *)&size);
 }
 #else /* __KERNEL__ */
 static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,

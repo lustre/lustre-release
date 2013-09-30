@@ -36,6 +36,7 @@
  * Implementation of cl_page for LOV layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
@@ -178,38 +179,28 @@ int lov_page_init_raid0(const struct lu_env *env, struct cl_object *obj,
 	stripe = lov_stripe_number(loo->lo_lsm, offset);
 	LASSERT(stripe < r0->lo_nr);
 	rc = lov_stripe_offset(loo->lo_lsm, offset, stripe,
-                                   &suboff);
-        LASSERT(rc == 0);
+			       &suboff);
+	LASSERT(rc == 0);
 
-        lpg->lps_invalid = 1;
-        cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_page_ops);
+	lpg->lps_invalid = 1;
+	cl_page_slice_add(page, &lpg->lps_cl, obj, &lov_page_ops);
 
-        sub = lov_sub_get(env, lio, stripe);
-        if (IS_ERR(sub))
-                GOTO(out, rc = PTR_ERR(sub));
+	sub = lov_sub_get(env, lio, stripe);
+	if (IS_ERR(sub))
+		RETURN(PTR_ERR(sub));
 
-        subobj = lovsub2cl(r0->lo_sub[stripe]);
-        subpage = cl_page_find_sub(sub->sub_env, subobj,
-                                   cl_index(subobj, suboff), vmpage, page);
-        lov_sub_put(sub);
-        if (IS_ERR(subpage))
-                GOTO(out, rc = PTR_ERR(subpage));
-
-        if (likely(subpage->cp_parent == page)) {
-                lu_ref_add(&subpage->cp_reference, "lov", page);
-                lpg->lps_invalid = 0;
-		rc = 0;
-        } else {
-                CL_PAGE_DEBUG(D_ERROR, env, page, "parent page\n");
-                CL_PAGE_DEBUG(D_ERROR, env, subpage, "child page\n");
-                LASSERT(0);
-        }
-
-        EXIT;
-out:
-        return rc;
+	subobj = lovsub2cl(r0->lo_sub[stripe]);
+	subpage = cl_page_alloc(sub->sub_env, subobj, cl_index(subobj, suboff),
+				vmpage, page->cp_type);
+	if (!IS_ERR(subpage)) {
+		subpage->cp_parent = page;
+		page->cp_child = subpage;
+		lpg->lps_invalid = 0;
+	} else
+		rc = PTR_ERR(subpage);
+	lov_sub_put(sub);
+	RETURN(rc);
 }
-
 
 static const struct cl_page_operations lov_empty_page_ops = {
         .cpo_fini   = lov_empty_page_fini,

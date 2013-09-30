@@ -284,7 +284,7 @@ static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
 
 	lov_layout_wait(env, lov);
 
-	cl_object_prune(env, &lov->lo_cl);
+	cl_locks_prune(env, &lov->lo_cl, 0);
 	return 0;
 }
 
@@ -359,9 +359,9 @@ static int lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
                                  */
                                 lov_subobject_kill(env, lov, los, i);
 			}
-                }
-        }
-	cl_object_prune(env, &lov->lo_cl);
+		}
+	}
+	cl_locks_prune(env, &lov->lo_cl, 0);
 	RETURN(0);
 }
 
@@ -669,7 +669,6 @@ static int lov_layout_change(const struct lu_env *unused,
 	const struct lov_layout_operations *old_ops;
 	const struct lov_layout_operations *new_ops;
 
-	struct cl_object_header *hdr = cl_object_header(&lov->lo_cl);
 	void *cookie;
 	struct lu_env *env;
 	int refcheck;
@@ -695,13 +694,13 @@ static int lov_layout_change(const struct lu_env *unused,
 	old_ops = &lov_dispatch[lov->lo_type];
 	new_ops = &lov_dispatch[llt];
 
+	cl_object_prune(env, &lov->lo_cl);
+
 	result = old_ops->llo_delete(env, lov, &lov->u);
 	if (result == 0) {
 		old_ops->llo_fini(env, lov, &lov->u);
 
 		LASSERT(cfs_atomic_read(&lov->lo_active_ios) == 0);
-		LASSERT(hdr->coh_tree.rnode == NULL);
-		LASSERT(hdr->coh_pages == 0);
 
 		lov->lo_type = LLT_EMPTY;
 		result = new_ops->llo_init(env,
