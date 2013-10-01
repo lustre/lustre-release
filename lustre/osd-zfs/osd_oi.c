@@ -40,6 +40,7 @@
  *
  * Author: Alex Zhuravlev <bzzz@whamcloud.com>
  * Author: Mike Pershin <tappro@whamcloud.com>
+ * Author: Di Wang <di.wang@intel.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -117,123 +118,6 @@ static char *oid2name(const unsigned long oid)
 		i++;
 	}
 	return NULL;
-}
-
-/*
- * objects w/o a natural reference (unlike a file on a MDS)
- * are put under a special hierarchy /O/<seq>/d0..dXX
- * this function returns a directory specific fid belongs to
- */
-static uint64_t
-osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
-			const struct lu_fid *fid, char *buf)
-{
-	unsigned long	b;
-	int		rc;
-
-	rc = fid_ostid_pack(fid, &osd_oti_get(env)->oti_ostid);
-	LASSERT(rc == 0); /* we should not get here with IGIF */
-	b = osd_oti_get(env)->oti_ostid.oi_id % OSD_OST_MAP_SIZE;
-	LASSERT(osd->od_ost_compat_dirs[b]);
-
-	sprintf(buf, LPU64, osd_oti_get(env)->oti_ostid.oi_id);
-
-	return osd->od_ost_compat_dirs[b];
-}
-
-/* XXX: f_ver is not counted, but may differ too */
-static void osd_fid2str(char *buf, const struct lu_fid *fid)
-{
-	sprintf(buf, DFID_NOBRACE, PFID(fid));
-}
-
-/*
- * Determine the zap object id which is being used as the OI for the
- * given fid.  The lowest N bits in the sequence ID are used as the
- * index key.  On failure 0 is returned which zfs treats internally
- * as an invalid object id.
- */
-static uint64_t
-osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
-		    char *buf)
-{
-	struct osd_oi *oi;
-
-	LASSERT(osd->od_oi_table != NULL);
-	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
-	osd_fid2str(buf, fid);
-
-	return oi->oi_zapid;
-}
-
-uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
-			    const struct lu_fid *fid, char *buf)
-{
-	uint64_t zapid;
-
-	LASSERT(fid);
-	LASSERT(buf);
-
-	if (fid_is_idif(fid)) {
-		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf);
-	} else if (fid_is_last_id(fid)) {
-		zapid = osd->od_ost_compat_grp0;
-	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
-		/* special objects with fixed known fids get their name */
-		char *name = oid2name(fid_oid(fid));
-
-		if (name) {
-			zapid = osd->od_root;
-			strcpy(buf, name);
-			if (fid_is_acct(fid))
-				zapid = MASTER_NODE_OBJ;
-		} else {
-			zapid = osd_get_idx_for_fid(osd, fid, buf);
-		}
-	} else {
-		zapid = osd_get_idx_for_fid(osd, fid, buf);
-	}
-
-	return zapid;
-}
-
-static inline int fid_is_fs_root(const struct lu_fid *fid)
-{
-	/* Map root inode to special local object FID */
-	return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-		fid_oid(fid) == OSD_FS_ROOT_OID;
-}
-
-int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
-		   const struct lu_fid *fid, uint64_t *oid)
-{
-	struct osd_thread_info	*info = osd_oti_get(env);
-	char			*buf = info->oti_buf;
-	uint64_t		zapid;
-	int			rc = 0;
-	ENTRY;
-
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
-		RETURN(-ENOENT);
-
-	if (unlikely(fid_is_acct(fid))) {
-		if (fid_oid(fid) == ACCT_USER_OID)
-			*oid = dev->od_iusr_oid;
-		else
-			*oid = dev->od_igrp_oid;
-	} else if (unlikely(fid_is_fs_root(fid))) {
-		*oid = dev->od_root;
-	} else {
-		zapid = osd_get_name_n_idx(env, dev, fid, buf);
-
-		rc = -zap_lookup(dev->od_objset.os, zapid, buf,
-				8, 1, &info->oti_zde);
-		if (rc)
-			RETURN(rc);
-		*oid = info->oti_zde.lzd_reg.zde_dnode;
-	}
-
-	RETURN(rc);
 }
 
 /**
@@ -318,13 +202,302 @@ osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
 	int		rc;
 
 	rc = osd_oi_lookup(env, o, parent, name, &oi);
-	if (rc == 0) {
+	if (rc == 0)
 		*child = oi.oi_zapid;
-	} else if (rc == -ENOENT) {
+	else if (rc == -ENOENT)
 		rc = osd_oi_create(env, o, parent, name, child);
-	}
 
 	return rc;
+}
+
+/**
+ * Lookup the target index/flags of the fid, so it will know where
+ * the object is located (tgt index) and it is MDT or OST object.
+ */
+int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid, struct lu_seq_range *range)
+{
+	struct seq_server_site	*ss = osd_seq_site(osd);
+	int			rc;
+
+	if (fid_is_idif(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_OST;
+		range->lsr_index = fid_idif_ost_idx(fid);
+		return 0;
+	}
+
+	if (!fid_is_norm(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_MDT;
+		if (ss != NULL)
+			range->lsr_index = ss->ss_node_id;
+		return 0;
+	}
+
+	LASSERT(ss != NULL);
+	range->lsr_flags = -1;
+	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
+	if (rc != 0) {
+		CERROR("%s can not find "DFID": rc = %d\n",
+		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid), rc);
+	}
+	return rc;
+}
+
+int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
+		  const struct lu_fid *fid)
+{
+	struct lu_seq_range *range = &osd_oti_get(env)->oti_seq_range;
+	int rc;
+	ENTRY;
+
+	if (fid_is_idif(fid))
+		RETURN(1);
+
+	rc = osd_fld_lookup(env, osd, fid, range);
+	if (rc != 0) {
+		CERROR("%s: Can not lookup fld for "DFID"\n",
+		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid));
+		RETURN(rc);
+	}
+
+	CDEBUG(D_INFO, "fid "DFID" range "DRANGE"\n", PFID(fid),
+	       PRANGE(range));
+
+	if (range->lsr_flags == LU_SEQ_RANGE_OST)
+		RETURN(1);
+
+	RETURN(0);
+}
+
+static struct osd_seq *osd_seq_find_locked(struct osd_seq_list *seq_list,
+					   obd_seq seq)
+{
+	struct osd_seq *osd_seq;
+
+	cfs_list_for_each_entry(osd_seq, &seq_list->osl_seq_list, os_seq_list) {
+		if (osd_seq->os_seq == seq)
+			return osd_seq;
+	}
+	return NULL;
+}
+
+static struct osd_seq *osd_seq_find(struct osd_seq_list *seq_list,
+				    obd_seq seq)
+{
+	struct osd_seq *osd_seq;
+
+	read_lock(&seq_list->osl_seq_list_lock);
+	osd_seq = osd_seq_find_locked(seq_list, seq);
+	read_unlock(&seq_list->osl_seq_list_lock);
+
+	return osd_seq;
+}
+
+static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
+					   struct osd_device *osd, obd_seq seq)
+{
+	struct osd_seq_list	*seq_list = &osd->od_seq_list;
+	struct osd_seq		*osd_seq;
+	char			*key = osd_oti_get(env)->oti_buf;
+	char			*seq_name = osd_oti_get(env)->oti_str;
+	struct osd_oi		oi;
+	uint64_t		sdb, odb;
+	int			i;
+	int			rc = 0;
+	ENTRY;
+
+	osd_seq = osd_seq_find(seq_list, seq);
+	if (osd_seq != NULL)
+		RETURN(osd_seq);
+
+	down(&seq_list->osl_seq_init_sem);
+	/* Check again, in case some one else already add it
+	 * to the list */
+	osd_seq = osd_seq_find(seq_list, seq);
+	if (osd_seq != NULL)
+		GOTO(out, rc = 0);
+
+	OBD_ALLOC_PTR(osd_seq);
+	if (osd_seq == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	CFS_INIT_LIST_HEAD(&osd_seq->os_seq_list);
+	osd_seq->os_seq = seq;
+
+	/* Init subdir count to be 32, but each seq can have
+	 * different subdir count */
+	osd_seq->os_subdir_count = OSD_OST_MAP_SIZE;
+	OBD_ALLOC(osd_seq->os_compat_dirs,
+		  sizeof(uint64_t) * osd_seq->os_subdir_count);
+	if (osd_seq->os_compat_dirs == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = osd_oi_lookup(env, osd, osd->od_root, "O", &oi);
+	if (rc != 0) {
+		CERROR("%s: Can not find O: rc = %d\n", osd_name(osd), rc);
+		GOTO(out, rc);
+	}
+
+	sprintf(seq_name, (fid_seq_is_rsvd(seq) ||
+		fid_seq_is_mdt0(seq)) ?  LPU64 : LPX64i,
+		fid_seq_is_idif(seq) ? 0 : seq);
+
+	rc = osd_oi_create(env, osd, oi.oi_zapid, seq_name, &odb);
+	if (rc != 0) {
+		CERROR("%s: Can not create %s : rc = %d\n",
+		       osd_name(osd), seq_name, rc);
+		GOTO(out, rc);
+	}
+
+	if (seq == 0)
+		osd->od_ost_compat_grp0 = odb;
+
+	for (i = 0; i < OSD_OST_MAP_SIZE; i++) {
+		sprintf(key, "d%d", i);
+		rc = osd_oi_find_or_create(env, osd, odb, key, &sdb);
+		if (rc)
+			GOTO(out, osd_seq = ERR_PTR(rc));
+		osd_seq->os_compat_dirs[i] = sdb;
+	}
+
+	write_lock(&seq_list->osl_seq_list_lock);
+	cfs_list_add(&osd_seq->os_seq_list, &seq_list->osl_seq_list);
+	write_unlock(&seq_list->osl_seq_list_lock);
+out:
+	up(&seq_list->osl_seq_init_sem);
+	if (rc != 0) {
+		if (osd_seq != NULL && osd_seq->os_compat_dirs != NULL)
+			OBD_FREE(osd_seq->os_compat_dirs,
+				 sizeof(uint64_t) * osd_seq->os_subdir_count);
+		if (osd_seq != NULL)
+			OBD_FREE_PTR(osd_seq);
+		osd_seq = ERR_PTR(rc);
+	}
+	RETURN(osd_seq);
+}
+
+/*
+ * objects w/o a natural reference (unlike a file on a MDS)
+ * are put under a special hierarchy /O/<seq>/d0..dXX
+ * this function returns a directory specific fid belongs to
+ */
+static uint64_t
+osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
+			const struct lu_fid *fid, char *buf)
+{
+	struct osd_seq	*osd_seq;
+	unsigned long	b;
+	int		rc;
+
+	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));
+	if (IS_ERR(osd_seq)) {
+		CERROR("%s: Can not find seq group "DFID"\n", osd_name(osd),
+		       PFID(fid));
+		return PTR_ERR(osd_seq);
+	}
+	rc = fid_ostid_pack(fid, &osd_oti_get(env)->oti_ostid);
+	LASSERT(rc == 0); /* we should not get here with IGIF */
+	b = osd_oti_get(env)->oti_ostid.oi_id % OSD_OST_MAP_SIZE;
+	LASSERT(osd_seq->os_compat_dirs[b]);
+
+	sprintf(buf, LPU64, osd_oti_get(env)->oti_ostid.oi_id);
+
+	return osd_seq->os_compat_dirs[b];
+}
+
+/* XXX: f_ver is not counted, but may differ too */
+static void osd_fid2str(char *buf, const struct lu_fid *fid)
+{
+	sprintf(buf, DFID_NOBRACE, PFID(fid));
+}
+
+/*
+ * Determine the zap object id which is being used as the OI for the
+ * given fid.  The lowest N bits in the sequence ID are used as the
+ * index key.  On failure 0 is returned which zfs treats internally
+ * as an invalid object id.
+ */
+static uint64_t
+osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
+		    char *buf)
+{
+	struct osd_oi *oi;
+
+	LASSERT(osd->od_oi_table != NULL);
+	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
+	osd_fid2str(buf, fid);
+
+	return oi->oi_zapid;
+}
+
+uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
+			    const struct lu_fid *fid, char *buf)
+{
+	uint64_t zapid;
+
+	LASSERT(fid);
+	LASSERT(buf);
+
+	if (fid_is_on_ost(env, osd, fid) == 1) {
+		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf);
+	} else if (fid_is_last_id(fid)) {
+		zapid = osd->od_ost_compat_grp0;
+	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
+		/* special objects with fixed known fids get their name */
+		char *name = oid2name(fid_oid(fid));
+
+		if (name) {
+			zapid = osd->od_root;
+			strcpy(buf, name);
+			if (fid_is_acct(fid))
+				zapid = MASTER_NODE_OBJ;
+		} else {
+			zapid = osd_get_idx_for_fid(osd, fid, buf);
+		}
+	} else {
+		zapid = osd_get_idx_for_fid(osd, fid, buf);
+	}
+
+	return zapid;
+}
+
+static inline int fid_is_fs_root(const struct lu_fid *fid)
+{
+	/* Map root inode to special local object FID */
+	return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+		fid_oid(fid) == OSD_FS_ROOT_OID;
+}
+
+int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
+		   const struct lu_fid *fid, uint64_t *oid)
+{
+	struct osd_thread_info	*info = osd_oti_get(env);
+	char			*buf = info->oti_buf;
+	uint64_t		zapid;
+	int			rc = 0;
+	ENTRY;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
+		RETURN(-ENOENT);
+
+	if (unlikely(fid_is_acct(fid))) {
+		if (fid_oid(fid) == ACCT_USER_OID)
+			*oid = dev->od_iusr_oid;
+		else
+			*oid = dev->od_igrp_oid;
+	} else if (unlikely(fid_is_fs_root(fid))) {
+		*oid = dev->od_root;
+	} else {
+		zapid = osd_get_name_n_idx(env, dev, fid, buf);
+
+		rc = -zap_lookup(dev->od_objset.os, zapid, buf,
+				8, 1, &info->oti_zde);
+		if (rc)
+			RETURN(rc);
+		*oid = info->oti_zde.lzd_reg.zde_dnode;
+	}
+
+	RETURN(rc);
 }
 
 /**
@@ -451,37 +624,48 @@ osd_oi_probe(const struct lu_env *env, struct osd_device *o, int *count)
 	RETURN(0);
 }
 
+static void osd_ost_seq_init(const struct lu_env *env, struct osd_device *osd)
+{
+	struct osd_seq_list *osl = &osd->od_seq_list;
+
+	CFS_INIT_LIST_HEAD(&osl->osl_seq_list);
+	rwlock_init(&osl->osl_seq_list_lock);
+	sema_init(&osl->osl_seq_init_sem, 1);
+}
+
+static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
+{
+	struct osd_seq_list	*osl = &osd->od_seq_list;
+	struct osd_seq		*osd_seq, *tmp;
+
+	write_lock(&osl->osl_seq_list_lock);
+	cfs_list_for_each_entry_safe(osd_seq, tmp, &osl->osl_seq_list,
+				     os_seq_list) {
+		cfs_list_del(&osd_seq->os_seq_list);
+		OBD_FREE(osd_seq->os_compat_dirs,
+			 sizeof(uint64_t) * osd_seq->os_subdir_count);
+		OBD_FREE(osd_seq, sizeof(*osd_seq));
+	}
+	write_unlock(&osl->osl_seq_list_lock);
+
+	return;
+}
+
 /**
  * Create /O subdirectory to map legacy OST objects for compatibility.
  */
 static int
 osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 {
-	char		*key = osd_oti_get(env)->oti_buf;
 	uint64_t	 odb, sdb;
-	int		 i, rc;
+	int		 rc;
 	ENTRY;
 
 	rc = osd_oi_find_or_create(env, o, o->od_root, "O", &sdb);
 	if (rc)
 		RETURN(rc);
 
-	/* create /O/0 subdirectory to map legacy OST objects */
-	rc = osd_oi_find_or_create(env, o, sdb, "0", &odb);
-	if (rc)
-		RETURN(rc);
-
-	o->od_ost_compat_grp0 = odb;
-
-	for (i = 0; i < OSD_OST_MAP_SIZE; i++) {
-		sprintf(key, "d%d", i);
-		rc = osd_oi_find_or_create(env, o, odb, key, &sdb);
-		if (rc)
-			RETURN(rc);
-
-		o->od_ost_compat_dirs[i] = sdb;
-	}
-
+	osd_ost_seq_init(env, o);
 	/* Create on-disk indexes to maintain per-UID/GID inode usage.
 	 * Those new indexes are created in the top-level ZAP outside the
 	 * namespace in order not to confuse ZPL which might interpret those
@@ -550,6 +734,8 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 void osd_oi_fini(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
+
+	osd_ost_seq_fini(env, o);
 
 	if (o->od_oi_table != NULL) {
 		(void) osd_oi_close_table(env, o);

@@ -156,6 +156,7 @@ struct osd_thread_info {
 	struct luz_direntry	 oti_zde;
 
 	struct lquota_id_info	 oti_qi;
+	struct lu_seq_range	 oti_seq_range;
 };
 
 extern struct lu_context_key osd_key;
@@ -186,6 +187,19 @@ struct osd_oi {
 	uint64_t		oi_zapid;
 };
 
+struct osd_seq {
+	uint64_t	 *os_compat_dirs;
+	int		 os_subdir_count; /* subdir count for each seq */
+	obd_seq		 os_seq;	  /* seq number */
+	cfs_list_t	 os_seq_list;     /* list to seq_list */
+};
+
+struct osd_seq_list {
+	rwlock_t	 osl_seq_list_lock;     /* lock for seq_list */
+	cfs_list_t	 osl_seq_list;      /* list head for seq */
+	struct semaphore osl_seq_init_sem;
+};
+
 #define OSD_OST_MAP_SIZE	32
 
 /*
@@ -212,8 +226,8 @@ struct osd_device {
 	uint64_t		 od_root;
 	struct osd_oi		**od_oi_table;
 	unsigned int		 od_oi_count;
-	uint64_t		 od_ost_compat_dirs[OSD_OST_MAP_SIZE];
-	uint64_t		 od_ost_compat_grp0;
+	uint64_t		od_ost_compat_grp0;
+	struct osd_seq_list	od_seq_list;
 
 	unsigned int		 od_rdonly:1,
 				 od_xattr_in_sa:1,
@@ -334,6 +348,15 @@ static inline int osd_object_invariant(const struct lu_object *l)
 	return osd_invariant(osd_obj(l));
 }
 
+static inline struct seq_server_site *osd_seq_site(struct osd_device *osd)
+{
+	return osd->od_dt_dev.dd_lu_dev.ld_site->ld_seq_site;
+}
+
+static inline char *osd_name(struct osd_device *osd)
+{
+	return osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name;
+}
 
 #ifdef LPROCFS
 enum {
