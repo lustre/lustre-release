@@ -301,7 +301,9 @@ if test x$enable_modules = xyes ; then
 			LB_PROG_LINUX
 			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
-			LB_EXT4_SRC_DIR
+			if test x$enable_server != xno; then
+				LB_EXT4_SRC_DIR
+			fi
 			LC_PROG_LINUX
 			;;
 		darwin*)
