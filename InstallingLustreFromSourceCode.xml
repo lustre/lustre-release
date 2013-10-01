@@ -1,6 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installinglustrefromsourcecode">
-  <title xml:id="installinglustrefromsourcecode.title">Installing a Lustre* File System from Source
-    Code</title>
+  <title xml:id="installinglustrefromsourcecode.title"><indexterm
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+      <primary>installing</primary>
+      <secondary>from source code</secondary>
+    </indexterm> Installing a Lustre* File System from Source Code</title>
   <para>This chapter describes how to create a customized Lustre* server kernel from source code.
     Sections included are:</para>
   <itemizedlist>
@@ -28,9 +31,11 @@
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="installinglustre"/>.</para>
   </note>
   <section xml:id="dbdoclet.50438210_69313">
-      <title>
-          <indexterm><primary>installing</primary><secondary>from source</secondary></indexterm>
-          Overview and Prerequisites</title>
+      <title><indexterm>
+        <primary>installing</primary>
+        <secondary>from source</secondary>
+        <tertiary>prerequisites</tertiary>
+      </indexterm>Overview and Prerequisites</title>
     <para>To install Lustre from source code, the following are required:</para>
     <itemizedlist>
       <listitem>
@@ -150,7 +155,7 @@ required if a new kernel is needed for a Lustre server.</para>
         </listitem>
       </orderedlist>
     </section>
-    <section remap="h3">
+    <section remap="h3" xml:id="PreparingLustreSource">
       <title>Preparing the Lustre Source</title>
       <para>To prepare the Lustre source, complete these steps.</para>
       <orderedlist>
@@ -163,7 +168,8 @@ required if a new kernel is needed for a Lustre server.</para>
           </para>
         </listitem>
         <listitem>
-          <para>Switch to the user called <systemitem>build</systemitem> and change the directory to the users home directory:</para>
+          <para>Switch to the user called <systemitem>build</systemitem> and change the directory to
+            the users home directory:</para>
           <para>
             <screen># su build
 $ cd $HOME
@@ -171,7 +177,8 @@ $ cd $HOME
           </para>
         </listitem>
         <listitem>
-          <para>Get the MASTER branch of the Lustre software from the Lustre software git repository:</para>
+          <para>Get the MASTER branch of the Lustre software from the Lustre software git
+            repository:</para>
           <para>
             <screen># git clone git://git.hpdd.intel.com/fs/lustre-release.git
 # cd lustre-release
@@ -317,7 +324,7 @@ Now at patch  patches/jbd2-jcberr-2.6-rhel6.patch</screen>
       <indexterm>
         <primary>installing</primary>
         <secondary>from source</secondary>
-        <tertiary>packaging</tertiary>
+        <tertiary>installing Lustre RPMs</tertiary>
       </indexterm> Building the Lustre RPMs</title>
     <para>This section describes how to configure the patched kernel to work with the Lustre
       software and how to create and install the Lustre packages (RPMs).</para>
@@ -414,8 +421,12 @@ lustre-modules-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
 lustre-source-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm
 lustre-tests-2.0.61-2.6.32-358.14.1.el6_lustre.x86_64_g0533e7b.x86_64.rpm</screen></para>
     </section>
-    <section>
-      <title>Installing the Lustre Kernel</title>
+    <section xml:id="InstallingLustreKernel">
+      <title><indexterm>
+          <primary>installing</primary>
+          <secondary>from source</secondary>
+          <tertiary>installing the Lustre kernel</tertiary>
+        </indexterm>Installing the Lustre Kernel</title>
       <para>To install the Lustre kernel, complete these steps.<orderedlist>
           <listitem>
             <para>As <systemitem>root</systemitem>, install the kernel:</para>
@@ -445,9 +456,62 @@ client-10login:
           </listitem>
         </orderedlist></para>
     </section>
+    <section>
+      <title><indexterm>
+          <primary>installing</primary>
+          <secondary>from source</secondary>
+          <tertiary>building Lustre with OFED</tertiary>
+        </indexterm>Building a Lustre File System with a Third-party Network Stack on OFED
+        (Optional)</title>
+      <para>When using third-party network hardware, you must follow a specific process to install
+        and recompile the Lustre software. This section provides an installation example that shows
+        how to build Lustre release 2.4.x when using the OpenFabrics Enterprise Distribution (OFED*)
+        version 3.5-1 open-source software. The same process can be used for other third-party
+        network stacks by replacing the OFED installation procedure and using the appropriate
+          <literal>--with</literal> option when configuring the Lustre source code.<orderedlist>
+          <listitem>
+            <para>Install the Lustre kernel (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                linkend="InstallingLustreKernel"/>).</para>
+          </listitem>
+          <listitem>
+            <para>Compile and install the OFED stack. As root, enter:</para>
+            <screen># cd /usr/src
+# tar –zxvf OFED-3.5-1.tgz
+# cd OFED-3.5-1
+# ./install.pl</screen>
+            <para>A directory <literal>/usr/src/compat-rdma</literal> is created.</para>
+          </listitem>
+          <listitem>
+            <para>Configure and build Lustre source code:</para>
+            <orderedlist numeration="loweralpha">
+              <listitem>
+                <para>Install the Lustre source. This can be done via RPM or git (see <xref
+                    xmlns:xlink="http://www.w3.org/1999/xlink" linkend="PreparingLustreSource"
+                  />).</para>
+              </listitem>
+              <listitem>
+                <para>Configure and build the Lustre source code</para>
+                <screen>$ cd ~/lustre-release
+$ sh ./autogen.sh</screen>
+              </listitem>
+            </orderedlist>
+          </listitem>
+        </orderedlist></para>
+      <para>The <literal>./configure --help</literal> command shows a list of all the
+          <literal>--with</literal> options. All third-party network stacks are built in this
+        manner.<screen>$ ./configure --with-linux=/usr/src/kernels/$(uname –r) --with-o2ib=/usr/src/compat-rdma
+$ make
+$ make rpms</screen></para>
+      <para>The <literal>make rpms</literal> command output shows the location of the generated
+        RPMs.</para>
+    </section>
   </section>
   <section xml:id="section_g4d_yby_lk">
-    <title>Installing and Testing a Lustre File System</title>
+    <title><indexterm>
+        <primary>installing</primary>
+        <secondary>from source</secondary>
+        <tertiary>testing a Lustre file system</tertiary>
+      </indexterm>Installing and Testing a Lustre File System</title>
     <para>This section describes how to install the Lustre RPMs and run the Lustre test
       suite.</para>
     <section>
