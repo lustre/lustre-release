@@ -834,31 +834,25 @@ int lu_object_invariant(const struct lu_object *o);
 
 
 /**
- * \retval  1 iff object \a o exists on stable storage,
- * \retval  0 iff object \a o not exists on stable storage.
- * \retval -1 iff object \a o is on remote server.
+ * Check whether object exists, no matter on local or remote storage.
+ * Note: LOHA_EXISTS will be set once some one created the object,
+ * and it does not needs to be committed to storage.
  */
-static inline int lu_object_exists(const struct lu_object *o)
-{
-        __u32 attr;
+#define lu_object_exists(o) ((o)->lo_header->loh_attr & LOHA_EXISTS)
 
-        attr = o->lo_header->loh_attr;
-        if (attr & LOHA_REMOTE)
-                return -1;
-        else if (attr & LOHA_EXISTS)
-                return +1;
-        else
-                return 0;
-}
+/**
+ * Check whether object on the remote storage.
+ */
+#define lu_object_remote(o) unlikely((o)->lo_header->loh_attr & LOHA_REMOTE)
 
 static inline int lu_object_assert_exists(const struct lu_object *o)
 {
-        return lu_object_exists(o) != 0;
+	return lu_object_exists(o);
 }
 
 static inline int lu_object_assert_not_exists(const struct lu_object *o)
 {
-        return lu_object_exists(o) <= 0;
+	return !lu_object_exists(o);
 }
 
 /**

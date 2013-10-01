@@ -689,7 +689,7 @@ static void lod_ah_init(const struct lu_env *env,
 	 * in case of late striping creation, ->ah_init()
 	 * can be called with local object existing
 	 */
-	if (!dt_object_exists(nextc))
+	if (!dt_object_exists(nextc) || dt_object_remote(nextc))
 		nextc->do_ops->do_ah_init(env, ah, nextp, nextc, child_mode);
 
 	if (S_ISDIR(child_mode)) {
@@ -876,7 +876,6 @@ static int lod_declare_object_create(const struct lu_env *env,
 	LASSERT(dof);
 	LASSERT(attr);
 	LASSERT(th);
-	LASSERT(!dt_object_exists(next));
 
 	/*
 	 * first of all, we declare creation of local object

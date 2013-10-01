@@ -711,6 +711,11 @@ static inline int dt_object_exists(const struct dt_object *dt)
         return lu_object_exists(&dt->do_lu);
 }
 
+static inline int dt_object_remote(const struct dt_object *dt)
+{
+	return lu_object_remote(&dt->do_lu);
+}
+
 static inline struct dt_object *lu2dt_obj(struct lu_object *o)
 {
 	LASSERT(ergo(o != NULL, lu_device_is_dt(o->lo_dev)));

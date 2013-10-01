@@ -169,7 +169,7 @@ static int mdd_is_parent(const struct lu_env *env,
 		parent = mdd_object_find(env, mdd, pfid);
 		if (IS_ERR(parent)) {
 			GOTO(out, rc = PTR_ERR(parent));
-		} else if (mdd_object_exists(parent) < 0) {
+		} else if (mdd_object_remote(parent)) {
 			/*FIXME: Because of the restriction of rename in Phase I.
 			 * If the parent is remote, we just assumed lf is not the
 			 * parent of P1 for now */
@@ -297,7 +297,7 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
         int rc = 0;
         ENTRY;
 
-        if (cobj && mdd_object_exists(cobj))
+	if (cobj && mdd_object_exists(cobj))
                 RETURN(-EEXIST);
 
         if (mdd_is_dead_obj(pobj))
@@ -1416,14 +1416,12 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         if (unlikely(mdd_is_dead_obj(mdd_obj)))
                 RETURN(-ESTALE);
 
-        rc = mdd_object_exists(mdd_obj);
-        if (unlikely(rc == 0))
-                RETURN(-ESTALE);
-        else if (unlikely(rc < 0)) {
-                CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdo2fid(mdd_obj)));
-                RETURN(-EINVAL);
-        }
+	if (mdd_object_remote(mdd_obj)) {
+		CDEBUG(D_INFO, "%s: Object "DFID" locates on remote server\n",
+		       mdd2obd_dev(m)->obd_name, PFID(mdo2fid(mdd_obj)));
+	} else if (!mdd_object_exists(mdd_obj)) {
+		RETURN(-ESTALE);
+	}
 
         /* The common filename length check. */
         if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
@@ -1450,12 +1448,14 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         RETURN(rc);
 }
 
-int mdd_declare_object_initialize(const struct lu_env *env,
-				  struct mdd_object *child,
-				  struct lu_attr *attr,
-				  struct thandle *handle)
+static int mdd_declare_object_initialize(const struct lu_env *env,
+					 struct mdd_object *parent,
+					 struct mdd_object *child,
+					 struct lu_attr *attr,
+					 struct thandle *handle)
 {
         int rc;
+	ENTRY;
 
 	/*
 	 * inode mode has been set in creation time, and it's based on umask,
@@ -1472,12 +1472,15 @@ int mdd_declare_object_initialize(const struct lu_env *env,
 					      dot, handle);
                 if (rc == 0)
                         rc = mdo_declare_ref_add(env, child, handle);
+
+		rc = mdo_declare_index_insert(env, child, mdo2fid(parent),
+					      dotdot, handle);
         }
 
         if (rc == 0)
                 mdd_declare_links_add(env, child, handle);
 
-        return rc;
+	RETURN(rc);
 }
 
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
@@ -1652,7 +1655,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			GOTO(out, rc);
         }
 
-	rc = mdd_declare_object_initialize(env, c, attr, handle);
+	rc = mdd_declare_object_initialize(env, p, c, attr, handle);
 	if (rc)
 		GOTO(out, rc);
 

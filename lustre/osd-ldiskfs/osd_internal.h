@@ -658,10 +658,10 @@ struct dentry *osd_agent_lookup(struct osd_mdobj_map *omm, int index);
 struct dentry *osd_agent_load(const struct osd_device *osd, int mdt_index,
 			      int create);
 
-int osd_delete_agent_inode(const struct lu_env *env, struct osd_device *osd,
-			   struct osd_object *obj, struct osd_thandle *oh);
-int osd_create_agent_inode(const struct lu_env *env, struct osd_device *osd,
-			   struct osd_object *obj, struct osd_thandle *oh);
+int osd_delete_from_agent(const struct lu_env *env, struct osd_device *osd,
+			  struct osd_object *obj, struct osd_thandle *oh);
+int osd_add_to_agent(const struct lu_env *env, struct osd_device *osd,
+		     struct osd_object *obj, struct osd_thandle *oh);
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,

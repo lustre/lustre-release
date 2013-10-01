@@ -140,7 +140,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
-	if (mdt_object_exists(obj) <= 0)
+	if (!mdt_object_exists(obj) || mdt_object_remote(obj))
 		GOTO(out, rc = -ENOENT);
 
 	child = mdt_object_child(obj);

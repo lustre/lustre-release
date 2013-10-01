@@ -598,6 +598,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 			RETURN(-EINVAL);
 		}
 		m->opd_index = idx;
+		m->opd_group = 0;
 		idx = tgt - src;
 	} else {
 		/* New OSC name fsname-OSTXXXX-osc-MDTXXXX */
@@ -608,8 +609,18 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 			RETURN(-EINVAL);
 		}
 
+		idx = simple_strtol(tgt + 4, &mdt, 16);
+		if (*mdt != '\0' || idx > INT_MAX || idx < 0) {
+			CERROR("%s: invalid OST index in '%s'\n",
+			       m->opd_obd->obd_name, src);
+			RETURN(-EINVAL);
+		}
+
+		/* Get MDT index from the name and set it to opd_group,
+		 * which will be used by OSP to connect with OST */
+		m->opd_group = idx;
 		if (tgt - src <= 12) {
-			CERROR("%s: invalid target name %s\n",
+			CERROR("%s: invalid mdt index retrieve from %s\n",
 			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
 			RETURN(-EINVAL);
 		}

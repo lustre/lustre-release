@@ -1989,7 +1989,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	struct lmv_obd          *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc     *tgt = NULL;
 	struct mdt_body		*body;
-	int                      rc;
+	int                     rc;
 	ENTRY;
 
 	rc = lmv_check_connect(obd);
@@ -2036,14 +2036,37 @@ retry:
 	body = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);
 	if (body == NULL)
 		RETURN(-EPROTO);
-	/*
-	 * Not cross-ref case, just get out of here.
-	 */
+
+	/* Not cross-ref case, just get out of here. */
 	if (likely(!(body->valid & OBD_MD_MDS)))
 		RETURN(0);
 
-	/* Clearly this is a remote object, try remote MDT */
+	CDEBUG(D_INODE, "%s: try unlink to another MDT for "DFID"\n",
+	       exp->exp_obd->obd_name, PFID(&body->fid1));
+
+	/* This is a remote object, try remote MDT, Note: it may
+	 * try more than 1 time here, Considering following case
+	 * /mnt/lustre is root on MDT0, remote1 is on MDT1
+	 * 1. Initially A does not know where remote1 is, it send
+	 *    unlink RPC to MDT0, MDT0 return -EREMOTE, it will
+	 *    resend unlink RPC to MDT1 (retry 1st time).
+	 *
+	 * 2. During the unlink RPC in flight,
+	 *    client B mv /mnt/lustre/remote1 /mnt/lustre/remote2
+	 *    and create new remote1, but on MDT0
+	 *
+	 * 3. MDT1 get unlink RPC(from A), then do remote lock on
+	 *    /mnt/lustre, then lookup get fid of remote1, and find
+	 *    it is remote dir again, and replay -EREMOTE again.
+	 *
+	 * 4. Then A will resend unlink RPC to MDT0. (retry 2nd times).
+	 *
+	 * In theory, it might try unlimited time here, but it should
+	 * be very rare case.  */
 	op_data->op_fid2 = body->fid1;
+	ptlrpc_req_finished(*request);
+	*request = NULL;
+
 	goto retry;
 }
 

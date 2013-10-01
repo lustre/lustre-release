@@ -543,6 +543,11 @@ static inline int mdd_object_exists(struct mdd_object *obj)
         return lu_object_exists(mdd2lu_obj(obj));
 }
 
+static inline int mdd_object_remote(struct mdd_object *obj)
+{
+	return lu_object_remote(mdd2lu_obj(obj));
+}
+
 static inline const struct lu_fid *mdd_object_fid(struct mdd_object *obj)
 {
         return lu_object_fid(mdd2lu_obj(obj));
@@ -734,7 +739,13 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
          * if the object doesn't exist yet, then it's supposed to be created
          * and declaration of the creation should be enough to insert ./..
          */
-        if (mdd_object_exists(obj)) {
+	 /* FIXME: remote object should not be awared by MDD layer, but local
+	  * creation does not declare insert ./.. (comments above), which
+	  * is required by remote directory creation.
+	  * This remote check should be removed when mdd_object_exists check is
+	  * removed.
+	  */
+	 if (mdd_object_exists(obj) || mdd_object_remote(obj)) {
                 rc = -ENOTDIR;
                 if (dt_try_as_dir(env, next))
                         rc = dt_declare_insert(env, next,

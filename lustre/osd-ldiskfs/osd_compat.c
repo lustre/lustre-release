@@ -176,33 +176,32 @@ static void osd_mdt_fini(struct osd_device *osd)
 	osd->od_ost_map = NULL;
 }
 
-int osd_create_agent_inode(const struct lu_env *env, struct osd_device *osd,
-			   struct osd_object *obj, struct osd_thandle *oh)
+int osd_add_to_agent(const struct lu_env *env, struct osd_device *osd,
+		     struct osd_object *obj, struct osd_thandle *oh)
 {
 	struct osd_mdobj_map	*omm = osd->od_mdt_map;
 	struct osd_thread_info	*oti = osd_oti_get(env);
-	char			*name_buf = oti->oti_name;
+	char			*name = oti->oti_name;
 	struct dentry		*agent;
 	struct dentry		*parent;
 	int			rc;
 
 	parent = omm->omm_agent_dentry;
-	sprintf(name_buf, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 	agent = osd_child_dentry_by_inode(env, parent->d_inode,
-					  name_buf, strlen(name_buf));
+					  name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
 	rc = osd_ldiskfs_add_entry(oh->ot_handle, agent, obj->oo_inode, NULL);
+	LASSERTF(parent->d_inode->i_nlink > 1, "%s: agent inode nlink %d",
+		 osd_name(osd), parent->d_inode->i_nlink);
 	parent->d_inode->i_nlink++;
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
-	if (rc != 0)
-		CERROR("%s: "DFID" add agent error: rc = %d\n", osd_name(osd),
-		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), rc);
 	RETURN(rc);
 }
 
-int osd_delete_agent_inode(const struct lu_env *env, struct osd_device *osd,
-			   struct osd_object *obj, struct osd_thandle *oh)
+int osd_delete_from_agent(const struct lu_env *env, struct osd_device *osd,
+			  struct osd_object *obj, struct osd_thandle *oh)
 {
 	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
 	struct osd_thread_info	   *oti = osd_oti_get(env);
@@ -214,7 +213,7 @@ int osd_delete_agent_inode(const struct lu_env *env, struct osd_device *osd,
 	int			   rc;
 
 	parent = omm->omm_agent_dentry;
-	sprintf(name, DFID, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 	agent = osd_child_dentry_by_inode(env, parent->d_inode,
 					  name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
@@ -224,6 +223,8 @@ int osd_delete_agent_inode(const struct lu_env *env, struct osd_device *osd,
 		RETURN(-ENOENT);
 	}
 	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
+	LASSERTF(parent->d_inode->i_nlink > 1, "%s: agent inode nlink %d",
+		 osd_name(osd), parent->d_inode->i_nlink);
 	parent->d_inode->i_nlink--;
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
@@ -752,10 +753,10 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id)
 {
 	struct dentry	*root;
-	struct dentry *dentry;
-	struct inode  *inode;
-	char	      *name;
-	int	       rc = -ENOENT;
+	struct dentry	*dentry;
+	struct inode	*inode;
+	char		*name;
+	int		rc = -ENOENT;
 	ENTRY;
 
 	if (fid_is_last_id(fid)) {

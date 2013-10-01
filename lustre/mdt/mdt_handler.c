@@ -684,13 +684,12 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
         ma->ma_valid = 0;
 
-        rc = mdt_object_exists(o);
-        if (rc < 0) {
-                /* This object is located on remote node.*/
-                repbody->fid1 = *mdt_object_fid(o);
-                repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
-                GOTO(out, rc = 0);
-        }
+	if (mdt_object_remote(o)) {
+		/* This object is located on remote node.*/
+		repbody->fid1 = *mdt_object_fid(o);
+		repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
+		GOTO(out, rc = 0);
+	}
 
 	buffer->lb_len = reqbody->eadatasize;
 	if (buffer->lb_len > 0)
@@ -993,18 +992,18 @@ int mdt_is_subdir(struct mdt_thread_info *info)
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
-        /*
-         * We save last checked parent fid to @repbody->fid1 for remote
-         * directory case.
-         */
-        LASSERT(fid_is_sane(&body->fid2));
-        LASSERT(mdt_object_exists(o) > 0);
-        rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
-                           &body->fid2, &repbody->fid1);
-        if (rc == 0 || rc == -EREMOTE)
-                repbody->valid |= OBD_MD_FLID;
+	/*
+	 * We save last checked parent fid to @repbody->fid1 for remote
+	 * directory case.
+	 */
+	LASSERT(fid_is_sane(&body->fid2));
+	LASSERT(mdt_object_exists(o) && !mdt_object_remote(o));
+	rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
+			   &body->fid2, &repbody->fid1);
+	if (rc == 0 || rc == -EREMOTE)
+		repbody->valid |= OBD_MD_FLID;
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdt_raw_lookup(struct mdt_thread_info *info,
@@ -1117,14 +1116,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
-	rc = mdt_object_exists(parent);
-	if (unlikely(rc == 0)) {
+	if (unlikely(!mdt_object_exists(parent))) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj.mo_lu,
 				"Parent doesn't exist!\n");
 		RETURN(-ESTALE);
 	} else if (!info->mti_cross_ref) {
-		LASSERTF(rc > 0, "Parent "DFID" is on remote server\n",
+		LASSERTF(!mdt_object_remote(parent),
+			 "Parent "DFID" is on remote server\n",
 			 PFID(mdt_object_fid(parent)));
 	}
         if (lname) {
@@ -1248,15 +1247,15 @@ relock:
                 mdt_lock_handle_init(lhc);
 		mdt_lock_reg_init(lhc, LCK_PR);
 
-                if (mdt_object_exists(child) == 0) {
-                        LU_OBJECT_DEBUG(D_INODE, info->mti_env,
-                                        &child->mot_obj.mo_lu,
-                                        "Object doesn't exist!\n");
-                        GOTO(out_child, rc = -ENOENT);
-                }
+		if (!mdt_object_exists(child)) {
+			LU_OBJECT_DEBUG(D_INODE, info->mti_env,
+					&child->mot_obj.mo_lu,
+					"Object doesn't exist!\n");
+			GOTO(out_child, rc = -ENOENT);
+		}
 
 		if (!(child_bits & MDS_INODELOCK_UPDATE) &&
-		      mdt_object_exists(child) > 0) {
+		      mdt_object_exists(child) && !mdt_object_remote(child)) {
                         struct md_attr *ma = &info->mti_attr;
 
                         ma->ma_valid = 0;
@@ -1333,7 +1332,7 @@ relock:
                          (unsigned long)res_id->name[1],
                          (unsigned long)res_id->name[2],
                          PFID(mdt_object_fid(child)));
-		if (mdt_object_exists(child) > 0)
+		if (mdt_object_exists(child) && !mdt_object_remote(child))
 			mdt_pack_size2body(info, child);
         }
         if (lock)
@@ -2415,7 +2414,7 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 	int rc = 0;
 	ENTRY;
 
-	LASSERT(mdt_object_exists(o) < 0);
+	LASSERT(mdt_object_remote(o));
 
 	LASSERT((ibits & MDS_INODELOCK_UPDATE));
 
@@ -2449,7 +2448,7 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
         LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
         LASSERT(lh->mlh_type != MDT_NUL_LOCK);
 
-        if (mdt_object_exists(o) < 0) {
+	if (mdt_object_remote(o)) {
                 if (locality == MDT_CROSS_LOCK) {
                         ibits &= ~MDS_INODELOCK_UPDATE;
                         ibits |= MDS_INODELOCK_LOOKUP;
@@ -2461,7 +2460,7 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
                 LASSERT(lh->mlh_type != MDT_PDO_LOCK);
         }
 
-        if (lh->mlh_type == MDT_PDO_LOCK) {
+	if (lh->mlh_type == MDT_PDO_LOCK) {
                 /* check for exists after object is locked */
                 if (mdt_object_exists(o) == 0) {
                         /* Non-existent object shouldn't have PDO lock */
@@ -5513,24 +5512,23 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
-        rc = mdt_object_exists(obj);
-        if (rc < 0) {
-                rc = -EREMOTE;
-                /**
-                 * before calling version get the correct MDS should be
-                 * fid, this is error to find remote object here
-                 */
-                CERROR("nonlocal object "DFID"\n", PFID(fid));
-        } else if (rc == 0) {
-                *(__u64 *)data->ioc_inlbuf2 = ENOENT_VERSION;
-                rc = -ENOENT;
-        } else {
-                version = dt_version_get(mti->mti_env, mdt_obj2dt(obj));
-               *(__u64 *)data->ioc_inlbuf2 = version;
-                rc = 0;
-        }
-        mdt_object_unlock_put(mti, obj, lh, 1);
-        RETURN(rc);
+	if (mdt_object_remote(obj)) {
+		rc = -EREMOTE;
+		/**
+		 * before calling version get the correct MDS should be
+		 * fid, this is error to find remote object here
+		 */
+		CERROR("nonlocal object "DFID"\n", PFID(fid));
+	} else if (!mdt_object_exists(obj)) {
+		*(__u64 *)data->ioc_inlbuf2 = ENOENT_VERSION;
+		rc = -ENOENT;
+	} else {
+		version = dt_version_get(mti->mti_env, mdt_obj2dt(obj));
+	       *(__u64 *)data->ioc_inlbuf2 = version;
+		rc = 0;
+	}
+	mdt_object_unlock_put(mti, obj, lh, 1);
+	RETURN(rc);
 }
 
 /* ioctls on obd dev */

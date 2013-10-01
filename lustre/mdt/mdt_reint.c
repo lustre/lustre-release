@@ -91,7 +91,8 @@ static void mdt_obj_version_get(struct mdt_thread_info *info,
                                 struct mdt_object *o, __u64 *version)
 {
         LASSERT(o);
-	if (mdt_object_exists(o) > 0 && !mdt_object_obf(o))
+	if (mdt_object_exists(o) && !mdt_object_remote(o) &&
+	    !mdt_object_obf(o))
                 *version = dt_version_get(info->mti_env, mdt_obj2dt(o));
         else
                 *version = ENOENT_VERSION;
@@ -305,7 +306,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (likely(!IS_ERR(child))) {
                 struct md_object *next = mdt_object_child(parent);
 
-		if (mdt_object_exists(child) < 0) {
+		if (mdt_object_remote(child)) {
 			struct seq_server_site *ss;
 			struct lu_ucred *uc  = mdt_ucred(info);
 
@@ -385,8 +386,8 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
         int rc;
         ENTRY;
 
-        /* attr shouldn't be set on remote object */
-        LASSERT(mdt_object_exists(mo) >= 0);
+	/* attr shouldn't be set on remote object */
+	LASSERT(!mdt_object_remote(mo));
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_reg_init(lh, LCK_PW);
@@ -691,7 +692,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	parent_lh = &info->mti_lh[MDT_LH_PARENT];
 	lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
-	if (mdt_object_exists(mp) < 0) {
+	if (mdt_object_remote(mp)) {
 		mdt_lock_reg_init(parent_lh, LCK_EX);
 		rc = mdt_remote_object_lock(info, mp, &parent_lh->mlh_rreg_lh,
 					    parent_lh->mlh_rreg_mode,
@@ -728,7 +729,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         child_lh = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(child_lh, LCK_EX);
-	if (mdt_object_exists(mc) < 0) {
+	if (mdt_object_remote(mc)) {
 		struct mdt_body	 *repbody;
 
 		if (!fid_is_zero(rr->rr_fid2)) {
@@ -892,7 +893,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (IS_ERR(ms))
                 GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
-	if (mdt_object_exists(ms) < 0) {
+	if (mdt_object_remote(ms)) {
 		mdt_object_put(info->mti_env, ms);
 		CERROR("Target directory "DFID" is on another MDT\n",
 			PFID(rr->rr_fid1));
@@ -1136,25 +1137,26 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 if (rc)
                         GOTO(out_put_target, rc);
 
-                rc = mdt_object_exists(mtgtdir);
-                if (rc == 0) {
-                        GOTO(out_put_target, rc = -ESTALE);
-                } else if (rc > 0) {
-                        /* we lock the target dir if it is local */
-                        rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
-                                             MDS_INODELOCK_UPDATE,
-                                             MDT_LOCAL_LOCK);
-                        if (rc != 0)
-                                GOTO(out_put_target, rc);
-                        /* get and save correct version after locking */
-                        mdt_version_get_save(info, mtgtdir, 1);
-		} else if (rc < 0) {
-			CERROR("Source dir "DFID" target dir "DFID
+		if (unlikely(mdt_object_remote(mtgtdir))) {
+			CDEBUG(D_INFO, "Source dir "DFID" target dir "DFID
 			       "on different MDTs\n", PFID(rr->rr_fid1),
 			       PFID(rr->rr_fid2));
 			GOTO(out_put_target, rc = -EXDEV);
+		} else {
+			if (likely(mdt_object_exists(mtgtdir))) {
+				/* we lock the target dir if it is local */
+				rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
+						     MDS_INODELOCK_UPDATE,
+						     MDT_LOCAL_LOCK);
+				if (rc != 0)
+					GOTO(out_put_target, rc);
+				/* get and save correct version after locking */
+				mdt_version_get_save(info, mtgtdir, 1);
+			} else {
+				GOTO(out_put_target, rc = -ESTALE);
+			}
 		}
-        }
+	}
 
         /* step 3: find & lock the old object. */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
@@ -1170,9 +1172,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	mold = mdt_object_find(info->mti_env, info->mti_mdt, old_fid);
 	if (IS_ERR(mold))
 		GOTO(out_unlock_target, rc = PTR_ERR(mold));
-	if (mdt_object_exists(mold) < 0) {
+	if (mdt_object_remote(mold)) {
 		mdt_object_put(info->mti_env, mold);
-		CERROR("Source child "DFID" is on another MDT\n", PFID(old_fid));
+		CDEBUG(D_INFO, "Source child "DFID" is on another MDT\n",
+		       PFID(old_fid));
 		GOTO(out_unlock_target, rc = -EXDEV);
 	}
 
@@ -1220,9 +1223,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 			GOTO(out_unlock_old, rc = -EPERM);
 		}
 
-		if (mdt_object_exists(mnew) < 0) {
+		if (mdt_object_remote(mnew)) {
 			mdt_object_put(info->mti_env, mnew);
-			CERROR("Source child "DFID" is on another MDT\n",
+			CDEBUG(D_INFO, "src child "DFID" is on another MDT\n",
 			       PFID(new_fid));
 			GOTO(out_unlock_old, rc = -EXDEV);
 		}

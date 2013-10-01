@@ -1048,25 +1048,29 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                         mdt_export_evict(exp);
                         RETURN_EXIT;
                 }
-                rc = mdt_object_exists(child);
-                if (rc > 0) {
 
-                        mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
-			rc = mdt_attr_get_complex(info, child, ma);
-                        if (rc == 0)
-                              rc = mdt_finish_open(info, parent, child,
-                                                   flags, 1, ldlm_rep);
-                } else if (rc < 0) {
-                        /* the child object was created on remote server */
-                        repbody->fid1 = *rr->rr_fid2;
-                        repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
-                        rc = 0;
-                } else if (rc == 0) {
-                        /* the child does not exist, we should do regular open */
-                        mdt_object_put(env, parent);
-                        mdt_object_put(env, child);
-                        GOTO(regular_open, 0);
-                }
+		if (unlikely(mdt_object_remote(child))) {
+			/* the child object was created on remote server */
+			repbody->fid1 = *rr->rr_fid2;
+			repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
+			rc = 0;
+		} else {
+			if (mdt_object_exists(child)) {
+				mdt_set_capainfo(info, 1, rr->rr_fid2,
+						 BYPASS_CAPA);
+				rc = mdt_attr_get_complex(info, child, ma);
+				if (rc == 0)
+					rc = mdt_finish_open(info, parent,
+							     child, flags,
+							     1, ldlm_rep);
+			} else {
+				/* the child does not exist, we should do
+				 * regular open */
+				mdt_object_put(env, parent);
+				mdt_object_put(env, child);
+				GOTO(regular_open, 0);
+			}
+		}
                 mdt_object_put(env, parent);
                 mdt_object_put(env, child);
                 GOTO(out, rc);
@@ -1097,25 +1101,27 @@ int mdt_open_by_fid(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        rc = mdt_object_exists(o);
-        if (rc > 0) {
-                mdt_set_disposition(info, rep, (DISP_IT_EXECD |
-                                                DISP_LOOKUP_EXECD |
-                                                DISP_LOOKUP_POS));
-
-		rc = mdt_attr_get_complex(info, o, ma);
-                if (rc == 0)
-                        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
-        } else if (rc == 0) {
-                rc = -ENOENT;
-        } else  {
+	if (unlikely(mdt_object_remote(o))) {
                 /* the child object was created on remote server */
                 struct mdt_body *repbody;
                 repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
                 repbody->fid1 = *rr->rr_fid2;
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                 rc = 0;
-        }
+	} else {
+		if (mdt_object_exists(o)) {
+			mdt_set_disposition(info, rep, (DISP_IT_EXECD |
+							DISP_LOOKUP_EXECD |
+							DISP_LOOKUP_POS));
+
+			rc = mdt_attr_get_complex(info, o, ma);
+			if (rc == 0)
+				rc = mdt_finish_open(info, NULL, o, flags, 0,
+						     rep);
+		} else {
+			rc = -ENOENT;
+		}
+	}
 
         mdt_object_put(info->mti_env, o);
         RETURN(rc);
@@ -1268,17 +1274,18 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        rc = mdt_object_exists(o);
-        if (rc == 0) {
-                mdt_set_disposition(info, rep, (DISP_LOOKUP_EXECD |
-                                    DISP_LOOKUP_NEG));
-                GOTO(out, rc = -ENOENT);
-        } else if (rc < 0) {
-                CERROR("NFS remote open shouldn't happen.\n");
-                GOTO(out, rc);
-        }
-        mdt_set_disposition(info, rep, (DISP_IT_EXECD |
-					DISP_LOOKUP_EXECD));
+	if (mdt_object_remote(o)) {
+		CDEBUG(D_INFO, "%s: "DFID" is on remote MDT.\n",
+		       info->mti_mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
+		       PFID(rr->rr_fid2));
+		GOTO(out, rc = -EREMOTE);
+	} else if (!mdt_object_exists(o)) {
+		mdt_set_disposition(info, rep, (DISP_LOOKUP_EXECD |
+				    DISP_LOOKUP_NEG));
+		GOTO(out, rc = -ENOENT);
+	}
+
+	mdt_set_disposition(info, rep, (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
 	rc = mdt_attr_get_complex(info, o, ma);
         if (rc)
@@ -1335,35 +1342,38 @@ int mdt_cross_open(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        rc = mdt_object_exists(o);
-        if (rc > 0) {
-                /* Do permission check for cross-open. */
-                rc = mo_permission(info->mti_env, NULL, mdt_object_child(o),
-                                   NULL, flags | MDS_OPEN_CROSS);
-                if (rc)
-                        goto out;
-
-                mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
-		rc = mdt_attr_get_complex(info, o, ma);
-                if (rc == 0)
-                        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
-        } else if (rc == 0) {
-                /*
-                 * Something is wrong here. lookup was positive but there is
-                 * no object!
-                 */
-                CERROR("Cross-ref object doesn't exist!\n");
+	if (mdt_object_remote(o)) {
+		/* Something is wrong here, the object is on another MDS! */
+		CERROR("%s: "DFID" isn't on this server!: rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), PFID(fid), -EFAULT);
+		LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
+				&o->mot_obj.mo_lu,
+				"Object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
-        } else  {
-                /* Something is wrong here, the object is on another MDS! */
-                CERROR("The object isn't on this server! FLD error?\n");
-                LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
-                                &o->mot_obj.mo_lu,
-                                "Object isn't on this server! FLD error?\n");
+	} else {
+		if (mdt_object_exists(o)) {
+			/* Do permission check for cross-open. */
+			rc = mo_permission(info->mti_env, NULL,
+					   mdt_object_child(o),
+					   NULL, flags | MDS_OPEN_CROSS);
+			if (rc)
+				goto out;
 
-                rc = -EFAULT;
+			mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
+			rc = mdt_attr_get_complex(info, o, ma);
+			if (rc == 0)
+				rc = mdt_finish_open(info, NULL, o, flags, 0,
+						     rep);
+		} else {
+			/*
+			 * Something is wrong here. lookup was positive but
+			 * there is no object!
+			 */
+			CERROR("%s: "DFID" doesn't exist!: rc = %d\n",
+			      mdt_obd_name(info->mti_mdt), PFID(fid), -EFAULT);
+			rc = -EFAULT;
+		}
         }
-
 out:
         mdt_object_put(info->mti_env, o);
         RETURN(rc);
@@ -1574,13 +1584,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 }
                 created = 1;
         } else {
-		/* We have to get attr & LOV EA, HSM bits for this object */
-		ma->ma_need |= MA_HSM;
-		result = mdt_attr_get_complex(info, child, ma);
                 /*
                  * The object is on remote node, return its FID for remote open.
                  */
-                if (result == -EREMOTE) {
+		if (mdt_object_remote(child)) {
                         /*
                          * Check if this lock already was sent to client and
                          * this is resent case. For resent case do not take lock
@@ -1618,7 +1625,17 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 			else
 				result = -EREMOTE;
                         GOTO(out_child, result);
-                }
+		} else {
+			if (mdt_object_exists(child)) {
+				/* We have to get attr & LOV EA & HSM for this
+				 * object */
+				ma->ma_need |= MA_HSM;
+				result = mdt_attr_get_complex(info, child, ma);
+			} else {
+				/*object non-exist!!!*/
+				LBUG();
+			}
+		}
         }
 
         LASSERT(!lustre_handle_is_used(&lhc->mlh_reg_lh));

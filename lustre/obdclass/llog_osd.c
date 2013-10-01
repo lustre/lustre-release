@@ -1152,6 +1152,7 @@ int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 	lgi->lgi_off = idx *  sizeof(*idarray);
 
 	lu_local_obj_fid(&lgi->lgi_fid, LLOG_CATALOGS_OID);
+
 	o = dt_locate(env, d, &lgi->lgi_fid);
 	if (IS_ERR(o))
 		RETURN(PTR_ERR(o));
@@ -1246,6 +1247,7 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	lgi->lgi_off = idx * sizeof(*idarray);
 
 	lu_local_obj_fid(&lgi->lgi_fid, LLOG_CATALOGS_OID);
+
 	o = dt_locate(env, d, &lgi->lgi_fid);
 	if (IS_ERR(o))
 		RETURN(PTR_ERR(o));
