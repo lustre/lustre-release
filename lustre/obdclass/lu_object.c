@@ -183,13 +183,15 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
         int result;
         ENTRY;
 
-        /*
-         * Create top-level object slice. This will also create
-         * lu_object_header.
-         */
-        top = dev->ld_ops->ldo_object_alloc(env, NULL, dev);
-        if (top == NULL)
-                RETURN(ERR_PTR(-ENOMEM));
+	/*
+	 * Create top-level object slice. This will also create
+	 * lu_object_header.
+	 */
+	top = dev->ld_ops->ldo_object_alloc(env, NULL, dev);
+	if (top == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+	if (IS_ERR(top))
+		RETURN(top);
         /*
          * This is the only place where object fid is assigned. It's constant
          * after this point.

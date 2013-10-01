@@ -72,20 +72,28 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *d)
 {
-	struct lu_object_header	*h;
+	struct lu_object_header	*h = NULL;
 	struct osp_object	*o;
 	struct lu_object	*l;
-
-	LASSERT(hdr == NULL);
 
 	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, CFS_ALLOC_IO);
 	if (o != NULL) {
 		l = &o->opo_obj.do_lu;
-		h = &o->opo_header;
 
-		lu_object_header_init(h);
-		dt_object_init(&o->opo_obj, h, d);
-		lu_object_add_top(h, l);
+		/* For data object, OSP obj would always be the top
+		 * object, i.e. hdr is always NULL, see lu_object_alloc.
+		 * But for metadata object, we always build the object
+		 * stack from MDT. i.e. mdt_object will be the top object
+		 * i.e.  hdr != NULL */
+		if (hdr == NULL) {
+			/* object for OST */
+			h = &o->opo_header;
+			lu_object_header_init(h);
+			dt_object_init(&o->opo_obj, h, d);
+			lu_object_add_top(h, l);
+		} else {
+			dt_object_init(&o->opo_obj, h, d);
+		}
 
 		l->lo_ops = &osp_lu_obj_ops;
 

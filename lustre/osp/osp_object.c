@@ -348,14 +348,24 @@ struct dt_object_operations osp_obj_ops = {
 	.do_destroy		= osp_object_destroy,
 };
 
+static int is_ost_obj(struct lu_object *lo)
+{
+	struct osp_device  *osp  = lu2osp_dev(lo->lo_dev);
+
+	return !osp->opd_connect_mdt;
+}
+
 static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 			   const struct lu_object_conf *unused)
 {
-	struct osp_object *po = lu2osp_obj(o);
+	struct osp_object	*po = lu2osp_obj(o);
+	int			rc = 0;
+	ENTRY;
 
-	po->opo_obj.do_ops = &osp_obj_ops;
+	if (is_ost_obj(o))
+		po->opo_obj.do_ops = &osp_obj_ops;
 
-	return 0;
+	RETURN(rc);
 }
 
 static void osp_object_free(const struct lu_env *env, struct lu_object *o)

@@ -1225,3 +1225,51 @@ struct lu_object_operations lod_lu_obj_ops = {
 	.loo_object_release	= lod_object_release,
 	.loo_object_print	= lod_object_print,
 };
+
+/**
+ * Init remote lod object
+ */
+static int lod_robject_init(const struct lu_env *env, struct lu_object *lo,
+			    const struct lu_object_conf *conf)
+{
+	struct lod_device *lod = lu2lod_dev(lo->lo_dev);
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lu_device  *c_dev = NULL;
+	struct lu_object  *c_obj;
+	int i;
+	ENTRY;
+
+	lod_getref(ltd);
+	if (ltd->ltd_tgts_size > 0) {
+		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+			struct lod_tgt_desc *tgt;
+			tgt = LTD_TGT(ltd, i);
+			LASSERT(tgt && tgt->ltd_tgt);
+			if (tgt->ltd_index ==
+			    lu2lod_obj(lo)->ldo_mds_num) {
+				c_dev = &(tgt->ltd_tgt->dd_lu_dev);
+				break;
+			}
+		}
+	}
+	lod_putref(lod, ltd);
+
+	if (unlikely(c_dev == NULL))
+		RETURN(-ENOENT);
+
+	c_obj = c_dev->ld_ops->ldo_object_alloc(env, lo->lo_header, c_dev);
+	if (unlikely(c_obj == NULL))
+		RETURN(-ENOMEM);
+
+	lu_object_add(lo, c_obj);
+
+	RETURN(0);
+}
+
+struct lu_object_operations lod_lu_robj_ops = {
+	.loo_object_init      = lod_robject_init,
+	.loo_object_start     = lod_object_start,
+	.loo_object_free      = lod_object_free,
+	.loo_object_release   = lod_object_release,
+	.loo_object_print     = lod_object_print,
+};

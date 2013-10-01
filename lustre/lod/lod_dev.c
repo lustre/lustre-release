@@ -94,6 +94,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 }
 
 extern struct lu_object_operations lod_lu_obj_ops;
+extern struct lu_object_operations lod_lu_robj_ops;
 extern struct dt_object_operations lod_obj_ops;
 
 /* Slab for OSD object allocation */
@@ -117,19 +118,32 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *dev)
 {
-	struct lu_object  *lu_obj;
-	struct lod_object *lo;
+	struct lod_object	*lod_obj;
+	struct lu_object	*lu_obj;
+	const struct lu_fid	*fid = &hdr->loh_fid;
+	mdsno_t			mds;
+	int			rc = 0;
+	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(lo, lod_object_kmem, CFS_ALLOC_IO);
-	if (lo == NULL)
-		return NULL;
+	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, CFS_ALLOC_IO);
+	if (lod_obj == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
 
-	lu_obj = lod2lu_obj(lo);
-	dt_object_init(&lo->ldo_obj, NULL, dev);
-	lo->ldo_obj.do_ops = &lod_obj_ops;
-	lu_obj->lo_ops = &lod_lu_obj_ops;
+	rc = lod_fld_lookup(env, lu2lod_dev(dev), fid, &mds, LU_SEQ_RANGE_MDT);
+	if (rc) {
+		OBD_SLAB_FREE_PTR(lod_obj, lod_object_kmem);
+		RETURN(ERR_PTR(rc));
+	}
 
-	return lu_obj;
+	lod_obj->ldo_mds_num = mds;
+	lu_obj = lod2lu_obj(lod_obj);
+	dt_object_init(&lod_obj->ldo_obj, NULL, dev);
+	lod_obj->ldo_obj.do_ops = &lod_obj_ops;
+	if (likely(mds == lu_site2seq(dev->ld_site)->ss_node_id))
+		lu_obj->lo_ops = &lod_lu_obj_ops;
+	else
+		lu_obj->lo_ops = &lod_lu_robj_ops;
+	RETURN(lu_obj);
 }
 
 static int lod_cleanup_desc_tgts(const struct lu_env *env,

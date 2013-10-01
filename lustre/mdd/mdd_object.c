@@ -214,8 +214,8 @@ static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
         under = &d->mdd_child->dd_lu_dev;
         below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
         mdd_pdlock_init(mdd_obj);
-        if (below == NULL)
-                RETURN(-ENOMEM);
+	if (IS_ERR(below))
+		RETURN(PTR_ERR(below));
 
         lu_object_add(o, below);
 
