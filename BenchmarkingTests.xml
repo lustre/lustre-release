@@ -602,7 +602,9 @@
       write speeds. The <literal>ost-survey</literal> tool is used to detect anomalies between
       otherwise identical disk subsystems.</para>
     <note>
-      <para>We have frequently discovered wide performance variations across all LUNs in a cluster. This may be caused by faulty disks, RAID parity reconstruction during the test, or faulty network hardware.</para>
+      <para>We have frequently discovered wide performance variations across all LUNs in a cluster.
+        This may be caused by faulty disks, RAID parity reconstruction during the test, or faulty
+        network hardware.</para>
     </note>
     <para>To run the <literal>ost-survey</literal> script, supply a file size (in KB) and the Lustre
       mount point. For example, run:</para>
@@ -665,40 +667,46 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
           <para>The script must be customized according to the components under test and where it should keep its working files. Customization variables are described as followed:</para>
           <itemizedlist>
             <listitem>
-              <para>thrlo - threads to start testing. skipped if less than dir_count</para>
+              <para><literal>thrlo</literal> - threads to start testing. skipped if less than
+                <literal>dir_count</literal></para>
             </listitem>
             <listitem>
-              <para>thrhi - maximum number of threads to test</para>
+              <para><literal>thrhi</literal> - maximum number of threads to test</para>
             </listitem>
             <listitem>
-              <para>targets - MDT instance</para>
+              <para><literal>targets</literal> - MDT instance</para>
             </listitem>
             <listitem>
-              <para>file_count - number of files per thread to test</para>
+              <para><literal>file_count</literal> - number of files per thread to test</para>
             </listitem>
             <listitem>
-              <para>dir_count - total number of directories to test. Must be less than or equal to <literal>thrhi</literal></para>
+              <para><literal>dir_count</literal> - total number of directories to test. Must be less
+              than or equal to <literal>thrhi</literal></para>
             </listitem>
             <listitem>
-              <para>stripe_count - number stripe on OST objects</para>
+              <para><literal>stripe_count </literal>- number stripe on OST objects</para>
             </listitem>
             <listitem>
-              <para>tests_str - test operations. Must have at least "create" and "destroy"</para>
+              <para><literal>tests_str</literal> - test operations. Must have at least "create" and
+              "destroy"</para>
             </listitem>
             <listitem>
-              <para>start_number - base number for each thread to prevent name collisions</para>
+              <para><literal>start_number</literal> - base number for each thread to prevent name
+              collisions</para>
             </listitem>
             <listitem>
-              <para>layer - MDS stack's layer to be tested</para>
+              <para><literal>layer</literal> - MDS stack's layer to be tested</para>
             </listitem>
           </itemizedlist>
           <para>Run without OST objects creation:</para>
           <para>Setup the Lustre MDS without OST mounted. Then invoke the <literal>mds-survey</literal> script</para>
           <screen>$ thrhi=64 file_count=200000 sh mds-survey</screen>
           <para>Run with OST objects creation:</para>
-          <para>Setup the Lustre MDS with at least one OST mounted. Then invoke the <literal>mds-survey</literal> script with stripe_count parameter</para>
+          <para>Setup the Lustre MDS with at least one OST mounted. Then invoke the
+            <literal>mds-survey</literal> script with <literal>stripe_count</literal>
+          parameter</para>
           <screen>$ thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
-          <para>Note: a specific mdt instance can be specified using targets variable.</para>
+          <para>Note: a specific MDT instance can be specified using targets variable.</para>
           <screen>$ targets=lustre-MDT0000 thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
         </listitem>
       </orderedlist>
@@ -880,7 +888,7 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
           <para><literal>SERVICE</literal>  - Lustre OST and MDT RPC service statistics</para>
         </listitem>
         <listitem>
-          <para><literal>BRW</literal>  - OST block read/write statistics (brw_stats)</para>
+          <para><literal>BRW</literal> - OST bulk read/write statistics (brw_stats)</para>
         </listitem>
         <listitem>
           <para><literal>SDIO</literal>  - SCSI disk IO statistics (sd_iostats)</para>
