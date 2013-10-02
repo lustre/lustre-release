@@ -3959,6 +3959,43 @@ static int mdt_fld_init(const struct lu_env *env,
 	RETURN(0);
 }
 
+static void mdt_stack_pre_fini(const struct lu_env *env,
+			   struct mdt_device *m, struct lu_device *top)
+{
+	struct obd_device       *obd = mdt2obd_dev(m);
+	struct lustre_cfg_bufs  *bufs;
+	struct lustre_cfg       *lcfg;
+	struct mdt_thread_info  *info;
+	ENTRY;
+
+	LASSERT(top);
+
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	LASSERT(info != NULL);
+
+	bufs = &info->mti_u.bufs;
+
+	LASSERT(m->mdt_child_exp);
+	LASSERT(m->mdt_child_exp->exp_obd);
+	obd = m->mdt_child_exp->exp_obd;
+
+	/* process cleanup, pass mdt obd name to get obd umount flags */
+	/* XXX: this is needed because all layers are referenced by
+	 * objects (some of them are pinned by osd, for example *
+	 * the proper solution should be a model where object used
+	 * by osd only doesn't have mdt/mdd slices -bzzz */
+	lustre_cfg_bufs_reset(bufs, obd->obd_name);
+	lustre_cfg_bufs_set_string(bufs, 1, NULL);
+	lcfg = lustre_cfg_new(LCFG_PRE_CLEANUP, bufs);
+	if (!lcfg) {
+		CERROR("%s:Cannot alloc lcfg!\n", mdt_obd_name(m));
+		return;
+	}
+	top->ld_ops->ldo_process_config(env, top, lcfg);
+	lustre_cfg_free(lcfg);
+	EXIT;
+}
+
 static void mdt_stack_fini(const struct lu_env *env,
                            struct mdt_device *m, struct lu_device *top)
 {
@@ -4343,6 +4380,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         ping_evictor_stop();
 
+
+	mdt_stack_pre_fini(env, m, md2lu_dev(m->mdt_child));
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         obd_exports_barrier(obd);
         obd_zombie_barrier();

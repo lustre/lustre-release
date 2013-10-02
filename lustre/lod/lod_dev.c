@@ -405,11 +405,15 @@ static int lod_process_config(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 	case LCFG_CLEANUP:
+	case LCFG_PRE_CLEANUP: {
 		lu_dev_del_linkage(dev->ld_site, dev);
 		lod_cleanup_desc_tgts(env, lod, &lod->lod_mdt_descs, lcfg);
 		lod_cleanup_desc_tgts(env, lod, &lod->lod_ost_descs, lcfg);
 
 		lod_seq_fini_cli(lod);
+
+		if (lcfg->lcfg_command == LCFG_PRE_CLEANUP)
+			break;
 		/*
 		 * do cleanup on underlying storage only when
 		 * all OSPs are cleaned up, as they use that OSD as well
@@ -424,7 +428,7 @@ static int lod_process_config(const struct lu_env *env,
 		if (rc)
 			CERROR("error in disconnect from storage: %d\n", rc);
 		break;
-
+	}
 	default:
 	       CERROR("%s: unknown command %u\n", lod2obd(lod)->obd_name,
 		      lcfg->lcfg_command);

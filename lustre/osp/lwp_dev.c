@@ -191,6 +191,7 @@ static int lwp_process_config(const struct lu_env *env,
 	ENTRY;
 
 	switch (lcfg->lcfg_command) {
+	case LCFG_PRE_CLEANUP:
 	case LCFG_CLEANUP:
 		rc = lwp_disconnect(d);
 		break;

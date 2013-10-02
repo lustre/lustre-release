@@ -380,6 +380,9 @@ static int osp_process_config(const struct lu_env *env,
 	ENTRY;
 
 	switch (lcfg->lcfg_command) {
+	case LCFG_PRE_CLEANUP:
+		rc = osp_disconnect(d);
+		break;
 	case LCFG_CLEANUP:
 		lu_dev_del_linkage(dev->ld_site, dev);
 		rc = osp_shutdown(env, d);
