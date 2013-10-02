@@ -532,17 +532,13 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	__u64			 offset = hai->hai_extent.offset;
 	struct stat		 src_st;
 	struct stat		 dst_st;
-	char			*buf;
+	char			*buf = NULL;
 	__u64			 write_total = 0;
 	__u64			 length;
 	time_t			 last_print_time = time(NULL);
 	int			 rc = 0;
 
 	CT_TRACE("going to copy data from '%s' to '%s'", src, dst);
-
-	buf = malloc(opt.o_chunk_size);
-	if (buf == NULL)
-		return -ENOMEM;
 
 	if (fstat(src_fd, &src_st) < 0) {
 		rc = -errno;
@@ -570,11 +566,11 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 
 	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
 	if (rc < 0) {
-		CT_ERROR(errno,
+		rc = -errno;
+		CT_ERROR(rc,
 			 "cannot seek for read to "LPU64" (len %jd) in '%s'",
 			 hai->hai_extent.offset, (intmax_t)src_st.st_size, src);
-		rc = -errno;
-		goto out;
+		return rc;
 	}
 
 	/* Don't read beyond a given extent */
@@ -592,6 +588,12 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	}
 
 	errno = 0;
+
+	buf = malloc(opt.o_chunk_size);
+	if (buf == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
 	CT_DEBUG("Going to copy "LPU64" bytes %s -> %s\n", length, src, dst);
 
@@ -657,14 +659,14 @@ out:
 		rc = ftruncate(dst_fd, src_st.st_size);
 		if (rc < 0) {
 			rc = -errno;
-			CT_ERROR(rc,
-				 "cannot truncate '%s' to size %jd",
+			CT_ERROR(rc, "cannot truncate '%s' to size %jd",
 				 dst, (intmax_t)src_st.st_size);
 			err_major++;
 		}
 	}
 
-	free(buf);
+	if (buf != NULL)
+		free(buf);
 
 	return rc;
 }
