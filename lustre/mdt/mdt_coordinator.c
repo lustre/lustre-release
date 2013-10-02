@@ -1846,7 +1846,8 @@ static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
 		RETURN(-ENOMEM);
 
 	if (copy_from_user(buf, buffer, count))
-		RETURN(-EFAULT);
+		GOTO(out, rc = -EFAULT);
+
 	buf[count] = '\0';
 
 	start = buf;
@@ -1871,7 +1872,7 @@ static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
 			sz = PAGE_SIZE;
 			OBD_ALLOC(msg, sz);
 			if (!msg)
-				RETURN(-ENOMEM);
+				GOTO(out, rc = -ENOMEM);
 
 			hsm_policy_bit2str(0, false, msg, sz);
 			CWARN("%s: '%s' is unknown, "

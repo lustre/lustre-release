@@ -696,11 +696,11 @@ static int mgs_modify(const struct lu_env *env, struct mgs_device *mgs,
 	if (strlcpy(mml->mml_marker.cm_comment, comment,
 		    sizeof(mml->mml_marker.cm_comment)) >=
 	    sizeof(mml->mml_marker.cm_comment))
-		GOTO(out_close, rc = -E2BIG);
+		GOTO(out_free, rc = -E2BIG);
 	if (strlcpy(mml->mml_marker.cm_tgtname, devname,
 		    sizeof(mml->mml_marker.cm_tgtname)) >=
 	    sizeof(mml->mml_marker.cm_tgtname))
-		GOTO(out_close, rc = -E2BIG);
+		GOTO(out_free, rc = -E2BIG);
         /* Modify mostly means cancel */
         mml->mml_marker.cm_flags = flags;
         mml->mml_marker.cm_canceltime = flags ? cfs_time_current_sec() : 0;
@@ -709,6 +709,8 @@ static int mgs_modify(const struct lu_env *env, struct mgs_device *mgs,
 			  NULL);
 	if (!rc && !mml->mml_modified)
 		rc = 1;
+
+out_free:
         OBD_FREE_PTR(mml);
 
 out_close:
