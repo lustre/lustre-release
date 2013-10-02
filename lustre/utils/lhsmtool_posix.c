@@ -542,15 +542,6 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		return rc;
 	}
 
-	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
-	if (rc < 0) {
-		CT_ERROR(errno,
-			 "cannot seek for read to "LPU64" (len %jd) in '%s'",
-			 hai->hai_extent.offset, (intmax_t)src_st.st_size, src);
-		rc = -errno;
-		goto out;
-	}
-
 	if (fstat(dst_fd, &dst_st) < 0) {
 		CT_ERROR(errno, "cannot stat '%s'", dst);
 		return -errno;
@@ -560,6 +551,15 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		rc = -EINVAL;
 		CT_ERROR(rc, "'%s' is not a regular file", dst);
 		return rc;
+	}
+
+	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
+	if (rc < 0) {
+		CT_ERROR(errno,
+			 "cannot seek for read to "LPU64" (len %jd) in '%s'",
+			 hai->hai_extent.offset, (intmax_t)src_st.st_size, src);
+		rc = -errno;
+		goto out;
 	}
 
 	rc = lseek(dst_fd, hai->hai_extent.offset, SEEK_SET);
@@ -858,7 +858,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 {
 	struct hsm_copyaction_private	*hcp = NULL;
 	char				 src[PATH_MAX];
-	char				 dst[PATH_MAX];
+	char				 dst[PATH_MAX] = "";
 	int				 rc;
 	int				 rcf = 0;
 	bool				 rename_needed = false;

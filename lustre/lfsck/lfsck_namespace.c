@@ -1368,7 +1368,7 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 	struct dt_key		*key;
 	struct lu_fid		 fid;
 	int			 rc;
-	__u8			 flags;
+	__u8			 flags = 0;
 	ENTRY;
 
 	lfsck->li_new_scanned = 0;
