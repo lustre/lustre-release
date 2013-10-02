@@ -126,9 +126,7 @@ static void qsd_add_deferred(struct qsd_instance *qsd, cfs_list_t *list,
 				     "with ver:"LPU64"", tmp->qur_ver);
 			cfs_list_del_init(&tmp->qur_link);
 			qsd_upd_free(tmp);
-		}
-
-		if (upd->qur_ver < tmp->qur_ver) {
+		} else if (upd->qur_ver < tmp->qur_ver) {
 			continue;
 		} else {
 			cfs_list_add_tail(&upd->qur_link, &tmp->qur_link);

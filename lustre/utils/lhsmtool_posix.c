@@ -934,7 +934,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		int		 linkno = 0;
 		char		*ptr;
 		int		 depth = 0;
-		int		 sz;
+		ssize_t		 sz;
 
 		sprintf(buf, DFID, PFID(&hai->hai_fid));
 		sprintf(src, "%s/shadow/", opt.o_hsm_root);
@@ -968,6 +968,12 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		}
 		/* symlink already exists ? */
 		sz = readlink(src, buf, sizeof(buf));
+		/* detect truncation */
+		if (sz == sizeof(buf)) {
+			rcf = rcf ? rcf : -E2BIG;
+			CT_ERROR(rcf, "readlink '%s' truncated", src);
+			goto fini_minor;
+		}
 		if (sz >= 0) {
 			buf[sz] = '\0';
 			if (sz == 0 || strncmp(buf, dst, sz) != 0) {
