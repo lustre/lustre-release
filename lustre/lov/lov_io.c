@@ -1110,6 +1110,8 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	switch (io->ci_type) {
 	default:
 		LASSERTF(0, "invalid type %d\n", io->ci_type);
+		result = -EOPNOTSUPP;
+		break;
 	case CIT_MISC:
 	case CIT_FSYNC:
 	case CIT_LADVISE:
@@ -1135,6 +1137,7 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 		result = -ENODATA;
 		break;
 	}
+
 	if (result == 0) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
 		atomic_inc(&lov->lo_active_ios);
