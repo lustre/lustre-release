@@ -11,8 +11,8 @@ SRCDIR=$(dirname $0)
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin:/usr/sbin
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:    3815     3939
-ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 34 35 36 40"
+# bug number for skipped test:    3815
+ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 34 35 36"
 # bug number for skipped test:4178         4176
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 200 221 223b 31a"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -144,7 +144,7 @@ copytool_setup() {
 	local facet=${1:-$SINGLEAGT}
 	local lustre_mntpnt=${2:-$MOUNT}
 	local arc_id=$3
-	local hsm_root=$(copytool_device $facet)
+	local hsm_root=${4:-$(copytool_device $facet)}
 	local agent=$(facet_active_host $facet)
 
 	if [[ -z "$arc_id" ]] &&
@@ -2234,7 +2234,13 @@ test_40() {
 			fid=$(copy_file /etc/hosts $f.$p.$i)
 		done
 	done
-	copytool_setup
+	# force copytool to use a local/temp archive dir to ensure best
+	# performance vs remote/NFS mounts used in auto-tests
+	if df --local $HSM_ARCHIVE >/dev/null 2>&1 ; then
+		copytool_setup
+	else
+		copytool_setup $SINGLEAGT $MOUNT $HSM_ARCHIVE_NUMBER $TMP/$tdir
+	fi
 	# to be sure wait_all_done will not be mislead by previous tests
 	cdt_purge
 	wait_for_grace_delay
