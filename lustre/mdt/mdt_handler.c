@@ -3914,100 +3914,6 @@ out_seq_fini:
 }
 
 /*
- * Init client sequence manager which is used by local MDS to talk to sequence
- * controller on remote node.
- */
-static int mdt_seq_init_cli(const struct lu_env *env,
-                            struct mdt_device *m,
-                            struct lustre_cfg *cfg)
-{
-	struct seq_server_site	*ss = mdt_seq_site(m);
-	struct obd_device *mdc;
-	int                rc;
-	int                index;
-	struct mdt_thread_info *info;
-	char *p, *index_string = lustre_cfg_string(cfg, 2);
-	ENTRY;
-
-	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-
-	LASSERT(index_string);
-	index = simple_strtol(index_string, &p, 10);
-	if (*p) {
-		CERROR("%s: Invalid index in lustre_cgf, offset 2\n",
-		      mdt2obd_dev(m)->obd_name);
-		RETURN(-EINVAL);
-	}
-
-	/* check if this is adding the first MDC and controller is not yet
-	 * initialized. */
-	if (index != 0 || ss->ss_client_seq)
-		RETURN(0);
-
-	mdc = class_name2obd(lustre_cfg_string(cfg, 1));
-	if (!mdc) {
-		CERROR("%s: can't find %s device\n",
-		       mdt2obd_dev(m)->obd_name, lustre_cfg_string(cfg, 1));
-		rc = -ENOENT;
-	} else if (!mdc->obd_set_up) {
-		CERROR("%s: target %s not set up\n",
-		       mdt2obd_dev(m)->obd_name, mdc->obd_name);
-		rc = -EINVAL;
-	} else {
-		LASSERT(ss->ss_control_exp);
-		OBD_ALLOC_PTR(ss->ss_client_seq);
-		if (ss->ss_client_seq != NULL) {
-			char *prefix;
-
-			OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
-			if (!prefix)
-				RETURN(-ENOMEM);
-
-			snprintf(prefix, MAX_OBD_NAME + 5, "ctl-%s",
-				 mdc->obd_name);
-
-			rc = seq_client_init(ss->ss_client_seq,
-					     ss->ss_control_exp,
-					     LUSTRE_SEQ_METADATA,
-					     prefix, NULL);
-			OBD_FREE(prefix, MAX_OBD_NAME + 5);
-		} else
-			rc = -ENOMEM;
-
-		if (rc)
-			RETURN(rc);
-
-		LASSERT(ss->ss_server_seq != NULL);
-		rc = seq_server_set_cli(ss->ss_server_seq, ss->ss_client_seq,
-					env);
-	}
-
-	RETURN(rc);
-}
-
-static void mdt_seq_fini_cli(struct mdt_device *m)
-{
-	struct seq_server_site *ss;
-
-	ENTRY;
-
-	ss = mdt_seq_site(m);
-
-	if (ss == NULL)
-		RETURN_EXIT;
-
-	if (ss->ss_server_seq)
-		seq_server_set_cli(ss->ss_server_seq, NULL, NULL);
-
-	if (ss->ss_control_exp) {
-		class_export_put(ss->ss_control_exp);
-		ss->ss_control_exp = NULL;
-	}
-
-	EXIT;
-}
-
-/*
  * FLD wrappers
  */
 static int mdt_fld_fini(const struct lu_env *env,
@@ -4461,7 +4367,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         }
 
         mdt_seq_fini(env, m);
-        mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
         sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
 
@@ -4620,6 +4525,14 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_fini_stack, rc);
 
+	rc = mdt_fld_init(env, obd->obd_name, m);
+	if (rc)
+		GOTO(err_lut, rc);
+
+	rc = mdt_seq_init(env, obd->obd_name, m);
+	if (rc)
+		GOTO(err_fini_fld, rc);
+
         snprintf(info->mti_u.ns_name, sizeof info->mti_u.ns_name,
                  LUSTRE_MDT_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(obd, info->mti_u.ns_name,
@@ -4723,9 +4636,11 @@ err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, NULL, 0);
         obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:
-        mdt_seq_fini(env, m);
-        mdt_fld_fini(env, m);
-        tgt_fini(env, &m->mdt_lut);
+	mdt_seq_fini(env, m);
+err_fini_fld:
+	mdt_fld_fini(env, m);
+err_lut:
+	tgt_fini(env, &m->mdt_lut);
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_lmi:
@@ -4805,17 +4720,6 @@ static int mdt_process_config(const struct lu_env *env,
 
 		break;
 	}
-        case LCFG_ADD_MDC:
-                /*
-                 * Add mdc hook to get first MDT uuid and connect it to
-                 * ls->controller to use for seq manager.
-                 */
-                rc = next->ld_ops->ldo_process_config(env, next, cfg);
-                if (rc)
-                        CERROR("Can't add mdc, rc %d\n", rc);
-                else
-                        rc = mdt_seq_init_cli(env, mdt_dev(d), cfg);
-                break;
         default:
                 /* others are passed further */
                 rc = next->ld_ops->ldo_process_config(env, next, cfg);
@@ -4917,14 +4821,6 @@ static int mdt_prepare(const struct lu_env *env,
 		RETURN(rc);
 
 	rc = mdt_llog_ctxt_clone(env, mdt, LLOG_CHANGELOG_ORIG_CTXT);
-	if (rc)
-		RETURN(rc);
-
-	rc = mdt_fld_init(env, obd->obd_name, mdt);
-	if (rc)
-		RETURN(rc);
-
-	rc = mdt_seq_init(env, obd->obd_name, mdt);
 	if (rc)
 		RETURN(rc);
 
