@@ -372,9 +372,11 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 if (rc)
                         RETURN(rc);
                 magic = le32_to_cpu(lmm->lmm_magic);
+		pattern = le32_to_cpu(lmm->lmm_pattern);
         } else {
                 magic = LOV_MAGIC;
                 stripe_count = lov_get_stripecnt(lov, magic, 0);
+		pattern = LOV_PATTERN_RAID0;
         }
 
         /* If we aren't passed an lsmp struct, we just want the size */
@@ -389,7 +391,6 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 RETURN(0);
         }
 
-	pattern = le32_to_cpu(lmm->lmm_pattern);
         lsm_size = lov_alloc_memmd(lsmp, stripe_count, pattern, magic);
         if (lsm_size < 0)
                 RETURN(lsm_size);

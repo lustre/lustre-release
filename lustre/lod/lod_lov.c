@@ -695,7 +695,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 			   struct lov_ost_data_v1 *objs)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
-	struct lod_device	*md = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_device	*md;
 	struct lu_object	*o, *n;
 	struct lu_device	*nd;
 	struct dt_object       **stripe;
@@ -704,6 +704,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	ENTRY;
 
 	LASSERT(lo != NULL);
+	md = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	LASSERT(lo->ldo_stripe == NULL);
 	LASSERT(lo->ldo_stripenr > 0);
 	LASSERT(lo->ldo_stripe_size > 0);

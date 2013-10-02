@@ -420,7 +420,6 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 	iops = &obj->do_index_ops->dio_it;
 
 	LASSERT(iops != NULL);
-	LASSERT(obj != NULL);
 	LASSERT(param->fsp_it != NULL);
 	iops->fini(&param->fsp_env, param->fsp_it);
 	lu_env_fini(&param->fsp_env);
