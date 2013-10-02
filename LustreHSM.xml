@@ -1,0 +1,477 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustrehsm" condition='l25'>
+  <title xml:id="lustrehsm.title">Hierarchical Storage Management (HSM)</title>
+  <para>This chapter describes how to bind Lustre to a Hierarchical Storage Management (HSM) solution.</para>
+  <section xml:id="hsm_introduction">
+      <title>
+          <indexterm><primary>Hierarchical Storage Management (HSM)</primary><secondary>introduction</secondary></indexterm>Introduction</title>
+	<para>The Lustre file system can bind to a Hierarchical Storage Management (HSM)
+solution using a specific set of functions. These functions enable connecting
+a Lustre file system to one or more external storage systems, typically HSMs.
+With a Lustre file system bound to a HSM solution, the Lustre file system acts
+as a high speed cache in front of these slower HSM storage systems. </para>
+
+	<para>The Lustre file system integration with HSM provides a mechanism for
+files to simultaneously exist in a HSM solution and have a metadata entry in
+the Lustre file system that can be examined. Reading, writing or truncating the
+file will trigger the file data to be fetched from the HSM storage back into
+the Lustre file system.</para>
+
+	<para>The process of copying a file into the HSM storage is known as
+<emphasis>archive</emphasis>. Once the archive is complete, the Lustre file
+data can be delete (know as <emphasis>release</emphasis>.) The process of
+returning data from the HSM storage to the Lustre file system is called
+<emphasis>restore</emphasis>.  The archive and restore operations require a
+Lustre file system component called an <emphasis>Agent</emphasis>. </para>
+
+	<para>An Agent is a specially designed Lustre client node that mounts the
+Lustre file system in question. On an Agent, a user space program called a
+copytool is run to coordinate the archive and restore of files between the
+Lustre file system and the HSM solution.</para>
+
+	<para>Requests to restore a given file are registered and dispatched by a
+facet on the MDT called the Coordinator.
+
+	<figure xml:id='hsmcopytoolfig'>
+		<title>Overview of the Lustre file system HSM</title>
+		<mediaobject>
+			<imageobject>
+				<imagedata fileref='figures/HSM_copytool.svg' format='svg'/>
+			</imageobject>
+		</mediaobject>
+	</figure>
+</para>
+  </section>
+
+  <section xml:id="hsmsetup">
+	<title>
+          <indexterm><primary>HSM</primary><secondary>setup</secondary></indexterm>Setup</title>
+
+	<section xml:id='hsmrequirements'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>requirements</secondary></indexterm>Requirements
+		</title>
+	<para>To setup a Lustre/HSM configuration you need:</para>
+      <itemizedlist>
+        <listitem>
+			<para>a standard Lustre file system (version 2.5.0 and above)</para>
+        </listitem>
+        <listitem>
+			<para>a minimum of 2 clients, 1 used for your chosen computation task that generates
+			useful data, and 1 used as agent.</para>
+		</listitem>
+      </itemizedlist>
+	<para>Multiple agents can be employed. All the agents need to share access
+	to their backend storage. For the POSIX copytool, a POSIX namespace like NFS or
+	another Lustre file system is suitable.</para>
+	</section>
+
+	<section xml:id='hsmcoordinator'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>coordinator</secondary></indexterm>Coordinator
+		</title>
+
+			<para>To bind a Lustre file system to a HSM system a coordinator
+			must be activated on each of your filesystem MDTs. This can be achieved with the command:</para>
+<screen>$ lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm_control=enabled
+mdt.lustre-MDT0000.hsm_control=enabled</screen>
+			<para>To verify if the coordinator is running correctly</para>
+
+<screen>$ lctl get_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm_control
+mdt.lustre-MDT0000.hsm_control=enabled</screen>
+	</section>
+
+	<section xml:id='hsmagents'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>agents</secondary></indexterm>Agents
+		</title>
+
+	<para>Once a coordinator is started launch the copytool on each agent node to connect to your HSM storage. If your HSM storage has POSIX access this command will be of the form:</para>
+	<screen>lhsmtool_posix --daemon --hsm-root <replaceable>$HSMPATH</replaceable> --archive=1 <replaceable>$LUSTREPATH</replaceable></screen>
+	<para>POSIX copytool must be stopped sending it a TERM signal.</para>
+	</section>
+
+	</section>
+
+  <section xml:id="hsmagentsandcopytool">
+	<title>
+          <indexterm><primary>HSM</primary><secondary>agents and copytools</secondary></indexterm>Agents and copytool</title>
+	<para>
+
+Agents are Lustre file system clients running copytool. copytool is a userspace
+daemon that transfers data between Lustre and a HSM solution. Because different
+HSM solutions use different APIs, copytools can typically only work with a
+specific HSM. Only one copytool could be run by agent node.</para>
+
+<para>The following rule applies regarding copytool instances: a Lustre file
+system only supports a single  copytool process, per ARCHIVE ID (see below),
+per client node.  Due to a Lustre software limitation, this constraint is
+irrespective of the number of Lustre file systems mounted by the Agent.</para>
+
+<para>Bundled with Lustre tools, the POSIX copytool can work with any HSM or
+external storage that exports a POSIX API.  </para>
+
+	<section xml:id='hsmarchivebackends'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>archiveID backends</secondary></indexterm>Archive ID, multiple backends
+		</title>
+
+<para>A Lustre file system can be bound to several different HSM solutions.
+Each bound HSM solution is identified by a number referred to as ARCHIVE ID. A
+unique value of ARCHIVE ID must be chosen for each bound HSM solution. ARCHIVE
+ID must be in the range 1 to 32.</para>
+
+<para>A Lustre file system supports an unlimited number of copytool instances.
+You need, at least, one copytool per ARCHIVE ID. When using the POSIX copytool,
+this ID is defined using <literal>--archive</literal> switch.</para>
+
+<para>For example: if a single Lustre file system is bound to 2 different HSMs (A and B,) ARCHIVE ID “1” can be chosen for HSM A and ARCHIVE ID “2” for HSM B. If you start 3 copytool instances for ARCHIVE ID 1, all of them will use Archive ID “1”. Same rule applies for copytool instances dealing with the HSM B, using Archive ID “2”. </para>
+
+<para>When issuing HSM requests, you can use <literal>--archive</literal> switch
+to choose the backend you want to use. In this example, file <literal>foo</literal> will be
+archived into backend ARCHIVE ID “5”:</para>
+
+	<screen>$ lfs hsm_archive --archive=5 /mnt/lustre/foo</screen>
+
+<para>A default ARCHIVE ID can be defined when this switch is not specified:</para>
+
+	<screen>$ lctl set_param -P mdt.<replaceable>lustre-MDT0000</replaceable>.hsm.default_archive_id=5</screen>
+
+<para>The ARCHIVE ID of archived files can be checked using <literal>lfs
+hsm_state</literal> command:</para>
+
+	<screen>$ lfs hsm_state /mnt/lustre/foo
+/mnt/lustre/foo: (0x00000009) exists archived, archive_id:5</screen>
+
+	</section>
+
+	<section xml:id='hsmregisteredagents'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>registered agents</secondary></indexterm>Registered agents
+		</title>
+
+	<para>A Lustre file system allocates a unique UUID per client mount point, for each
+filesystem. Only one copytool can be registered for each Lustre mount point.
+As a consequence the UUID uniquely identifies a copytool, per filesystem.</para>
+
+<para>The currently registered copytool instances (agents UUID) can be retrieved running the following command, per MDT, on MDS nodes:</para>
+
+<screen>$ lctl get_param -n mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm.agents
+uuid=a19b2416-0930-fc1f-8c58-c985ba5127ad archive_id=1 requests=[current:0 ok:0 errors:0]</screen>
+
+<para>The returned fields have the following meaning:</para>
+      <itemizedlist>
+        <listitem>
+		<para><literal>UUID</literal> the client mount used by the corresponding copytool.</para>
+        </listitem>
+        <listitem>
+		<para><literal>archive_id</literal> comma-separated list of ARCHIVE ID accessible by this copytool.</para>
+        </listitem>
+        <listitem>
+		<para><literal>requests</literal> various statistics of number of processed requests by this copytool.</para>
+        </listitem>
+      </itemizedlist>
+
+	</section>
+
+	<section xml:id='hsmtimeout'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>timeout</secondary></indexterm>Timeout
+		</title>
+
+		<para>One or more copytool instances may experience conditions that
+cause them to become unresponsive. To avoid blocking access to the related
+files a timeout value is defined for request processing. A copytool must be
+able to fully complete a request within this time. The default is 3600 seconds.
+		</para>
+<screen>$ lctl set_param -n mdt.<replaceable>lustre-MDT0000</replaceable>.hsm.active_request_timeout
+</screen>
+
+	</section>
+
+	</section>
+
+	<section xml:id='hsmrequests'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>requests</secondary></indexterm>Requests
+		</title>
+
+	<para>Data management between a Lustre file system and HSM solutions is driven by requests. There are tfive types:</para>
+
+      <itemizedlist>
+        <listitem>
+		<para><literal>ARCHIVE</literal> Copy data from a Lustre file system file into the HSM solution.</para>
+        </listitem>
+        <listitem>
+		<para><literal>RELEASE</literal> Remove file data from the Lustre file system.</para>
+        </listitem>
+        <listitem>
+		<para><literal>RESTORE</literal> Copy back data from the HSM solution into the corresponding Lustre file system file.</para>
+        </listitem>
+        <listitem>
+		<para><literal>REMOVE</literal> Delete the copy of the data from the HSM solution.</para>
+        </listitem>
+        <listitem>
+		<para><literal>CANCEL</literal> Cancel an undergoing or pending request.</para>
+        </listitem>
+      </itemizedlist>
+
+	<para>Only the <literal>RELEASE</literal> is performed synchronously and
+does not involve the coordinator. Other requests are handled by Coordinators.
+Each MDT coordinator is resiliently managing them.</para>
+
+	<section xml:id='hsmcommands'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>commands</secondary></indexterm>Commands
+		</title>
+
+	<para>Requests are submitted using <literal>lfs</literal> command:</para>
+		<screen>$ lfs hsm_archive [--archive=<replaceable>ID</replaceable>] <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]
+$ lfs hsm_release <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]
+$ lfs hsm_restore <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]
+$ lfs hsm_remove  <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]
+</screen>
+
+	<para>Requests are sent by default to the default ARCHIVE ID or the specified one (See <xref linkend="hsmarchivebackends"/>.)</para>
+	</section>
+
+	<section xml:id='hsmautorestore'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>automatic restore</secondary></indexterm>Automatic restore
+		</title>
+
+		<para>Released files are automatically restored when a process tries to read or modify them. The corresponding I/O will block waiting for the file to be restored.  This is transparent to the process. For example, the following command automatically restores the file if released.</para>
+<screen>$ cat <replaceable>/mnt/lustre/released_file</replaceable></screen>
+	</section>
+
+	<section xml:id='hsmrequestmonitoring'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>request monitoring</secondary></indexterm>Request monitoring
+		</title>
+
+	<para>The list of registered requests and their status can be monitored, per MDT, with the following command:</para>
+
+	<screen>$ lctl get_param -n mdt.<replaceable>lustre-MDT0000</replaceable>.hsm.actions</screen>
+
+	<para>The list of request currently being processed by a copytool is available with:</para>
+
+<screen>$ lctl get_param -n mdt.<replaceable>lustre-MDT0000</replaceable>.hsm.active_requests</screen>
+
+	</section>
+	</section>
+
+	<section xml:id='hsmfilestates'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>file states</secondary></indexterm>File states
+		</title>
+
+		<para>When files are archived or released, their state in the Lustre file system changes. This state can be read using the following <literal>lfs</literal> command:</para>
+
+<screen>$ lfs hsm_state <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]</screen>
+
+<para>There is also a list of specific policy flags which could be set to have a per-file specific policy:
+</para>
+
+      <itemizedlist>
+        <listitem>
+		<para><literal>NOARCHIVE</literal> This file will never be archived.</para>
+        </listitem>
+        <listitem>
+		<para><literal>NORELEASE</literal> This file will never be released. This value cannot be set if the flag is currently set to <literal>RELEASED</literal></para>
+        </listitem>
+        <listitem>
+		<para><literal>DIRTY</literal> This file has been modified since a copy of it was made in the HSM solution. <literal>DIRTY</literal> files should be archived again. The <literal>DIRTY</literal> flag can only be set if <literal>EXIST</literal> is set.</para>
+        </listitem>
+		</itemizedlist>
+
+<para>The following options can only be set by root user.</para>
+
+      <itemizedlist>
+        <listitem>
+
+		<para><literal>LOST</literal> This file previously archived but the
+copy was lost on the HSM solution for some reasons in the backend (for example,
+by a corrupted tape), and could not be restored. If the file is not in the
+state of <literal>RELEASE</literal> it needs to be archived again. If the file
+state is in <literal>RELEASE</literal>, file data is lost.</para>
+
+        </listitem>
+      </itemizedlist>
+
+	<para>Some flags can be manually set or cleared using the following commands:</para>
+
+<screen>$ lfs hsm_set [<replaceable>FLAGS</replaceable>] <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]
+$ lfs hsm_clear [<replaceable>FLAGS</replaceable>] <replaceable>FILE1</replaceable> [<replaceable>FILE2</replaceable>...]</screen>
+
+	</section>
+
+	<section xml:id='hsmtuning'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>tuning</secondary></indexterm>Tuning
+		</title>
+
+	<section xml:id='hsmhsm_control'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>hsm_control</secondary></indexterm><literal>hsm_controlpolicy</literal>
+		</title>
+
+		<para><literal>hsm_control</literal> controls coordinator activity and can also purge the action list.</para>
+
+		<screen>$ lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm_control=purge</screen>
+
+		<para>Possible values are:</para>
+
+      <itemizedlist>
+        <listitem>
+		<para><literal>enabled</literal> Start coordinator thread. Requests are dispatched on available copytool instances.</para>
+        </listitem>
+        <listitem>
+		<para><literal>disabled</literal> Pause coordinator activity. No new request will be scheduled. No timeout will be handled. New requests will be registered but will be handled only when the coordinator is enabled again.</para>
+        </listitem>
+        <listitem>
+		<para><literal>shutdown</literal> Stop coordinator thread. No request could be submitted.</para>
+        </listitem>
+        <listitem>
+		<para><literal>purge</literal> Clear all recorded requests. Do not change coordinator state.</para>
+        </listitem>
+      </itemizedlist>
+
+	</section>
+
+	<section xml:id='hsmmax_requests'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>max_requests</secondary></indexterm><literal>max_requests</literal>
+		</title>
+
+		<para><literal>max_requests</literal> is the maximum number of active
+requests at the same time. This is a per coordinator value, and independent of
+the number of agents.</para>
+
+<para>For example, if 2 MDT and 4 agents are present, the agents will never have to handle more than 2 x <literal>max_requests</literal>.</para>
+
+<screen>$ lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm.max_requests=10</screen>
+
+	</section>
+
+	<section xml:id='hsmpolicy'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>policy</secondary></indexterm><literal>policy</literal>
+		</title>
+
+	<para>Change system behavior. Value could be combined or removed prefixing them by '+' or '-'.</para>
+
+	<screen>$ lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm.policy=+NRA</screen>
+
+	<para>Possible values are a combination of:</para>
+
+      <itemizedlist>
+        <listitem>
+		<para><literal>NRA</literal> No Retry Action. If a restore fails, do not reschedule it automatically.</para>
+        </listitem>
+        <listitem>
+		<para><literal>NBR</literal> Non Blocking Restore. No automatic restore is triggered. Access to a released file returns <literal>ENODATA</literal>.</para>
+        </listitem>
+      </itemizedlist>
+	</section>
+
+	<section xml:id='hsmgrace_delay'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>grace_delay</secondary></indexterm><literal>grace_delay</literal>
+		</title>
+
+	<para><literal>grace_delay</literal> is the delay, expressed in seconds,
+before a successful or failed request is cleared from the whole request
+list.</para>
+
+		<screen>$ lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm.grace_delay=10</screen>
+
+	</section>
+	</section>
+
+	<section xml:id='hsmchangelogs'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>changelogs</secondary></indexterm>change logs
+		</title>
+
+		<para>A changelog record type “HSM“ was added for Lustre file system
+logs that relate to HSM events.</para>
+<screen>16HSM   13:49:47.469433938 2013.10.01 0x280 t=[0x200000400:0x1:0x0]</screen>
+
+		<para>Two items of information are available for each HSM record: the
+FID of the modified file and a bit mask.  The bit mask codes the following
+information (lowest bits first):</para>
+
+      <itemizedlist>
+        <listitem>
+			<para>Error code, if any (7 bits)</para>
+        </listitem>
+        <listitem>
+			<para>HSM event (3 bits)</para>
+		  <itemizedlist>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 0</literal> File has been archived.</para>
+			</listitem>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 1</literal> File has been restored.</para>
+			</listitem>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 2</literal> A request for this file has been canceled.</para>
+			</listitem>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 3</literal> File has been released.</para>
+			</listitem>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 4</literal> A remove request has been executed automatically.</para>
+			</listitem>
+			<listitem>
+				<para><literal>HE_ARCHIVE = 5</literal> File flags have changed.</para>
+			</listitem>
+		  </itemizedlist>
+        </listitem>
+        <listitem>
+			<para>HSM flags (3 bits)</para>
+		  <itemizedlist>
+			<listitem>
+				<para><literal>CLF_HSM_DIRTY=0x1</literal></para>
+			</listitem>
+		  </itemizedlist>
+        </listitem>
+      </itemizedlist>
+	<para>In the above example, <literal>0x280</literal> means error code is 0 and event is HE_STATE.</para>
+
+	<para>When using <literal>liblustreapi</literal>, there is a list of helper functions to easily extract the different values from this bitmask, like: <literal>hsm_get_cl_event()</literal>, <literal>hsm_get_cl_flags()</literal>, <literal>hsm_get_cl_error()</literal></para>
+
+	</section>
+
+	<section xml:id='hsmpolicyengine'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>policy engine</secondary></indexterm>Policy engine
+		</title>
+
+		<para>A Lustre file system does not have an internal component responsible for automatically scheduling archive requests and release requests under any conditions (like low space). Automatically scheduling archive operations is the role of the policy engine.</para>
+
+	<para>It is recommended that the Policy Engine runs on a dedicated client, similar to an agent node, with a Lustre version 2.5+.</para>
+
+	<para>A policy engine is a userspace program using the Lustre file system HSM specific API to monitor the file system and schedule requests.</para>
+
+	<para>Robinhood is the recommended policy engine.</para>
+
+
+	<section xml:id='hsmrobinhood'>
+		<title>
+          <indexterm><primary>HSM</primary><secondary>robinhood</secondary></indexterm>Robinhood
+		</title>
+
+	<para>Robinhood is a Policy engine and reporting tool for large file
+systems. It maintains a replicate of file system medatada in a database that
+can be queried at will. Robinhood makes it possible to schedule mass action on
+file system entries by defining attribute-based policies, provides fast find
+and <literal>du</literal> enhanced clones, gives to administrators an overall
+view of file system content through a web user interface and command line tools.</para>
+
+<para>Robinhood can be used for various configuration. Robinhood is an external project and further information can be found on the website: <link xl:href='https://sourceforge.net/apps/trac/robinhood/wiki/Doc'>https://sourceforge.net/apps/trac/robinhood/wiki/Doc</link>.</para>
+
+	</section>
+	</section>
+
+</chapter>

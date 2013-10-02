@@ -43,50 +43,130 @@
 	</fo:block-container>
 </xsl:template>
 
+
+<!-- mychapter definition This has been copied from xsl-ns-stylesheets/fo/component.xsl 
+	and modified to provide highlight regions of text for an entire chapter. 
+	This is consistent with the high-lighting provided by textdecoration_1 !-->
+<xsl:template name="mychapter">
+	<xsl:param name='version'/>
+	<xsl:param name='chunkid'/>
+  <xsl:variable name="id">
+    <xsl:call-template name="object.id"/>
+  </xsl:variable>
+
+  <xsl:variable name="master-reference">
+    <xsl:call-template name="select.pagemaster"/>
+  </xsl:variable>
+
+  <fo:page-sequence hyphenate="{$hyphenate}"
+                    master-reference="{$master-reference}">
+    <xsl:attribute name="language">
+      <xsl:call-template name="l10n.language"/>
+    </xsl:attribute>
+    <xsl:attribute name="format">
+      <xsl:call-template name="page.number.format">
+        <xsl:with-param name="master-reference" select="$master-reference"/>
+      </xsl:call-template>
+    </xsl:attribute>
+    <xsl:attribute name="initial-page-number">
+      <xsl:call-template name="initial.page.number">
+        <xsl:with-param name="master-reference" select="$master-reference"/>
+      </xsl:call-template>
+    </xsl:attribute>
+
+    <xsl:attribute name="force-page-count">
+      <xsl:call-template name="force.page.count">
+        <xsl:with-param name="master-reference" select="$master-reference"/>
+      </xsl:call-template>
+    </xsl:attribute>
+
+    <xsl:attribute name="hyphenation-character">
+      <xsl:call-template name="gentext">
+        <xsl:with-param name="key" select="'hyphenation-character'"/>
+      </xsl:call-template>
+    </xsl:attribute>
+    <xsl:attribute name="hyphenation-push-character-count">
+      <xsl:call-template name="gentext">
+        <xsl:with-param name="key" select="'hyphenation-push-character-count'"/>
+      </xsl:call-template>
+    </xsl:attribute>
+    <xsl:attribute name="hyphenation-remain-character-count">
+      <xsl:call-template name="gentext">
+        <xsl:with-param name="key" select="'hyphenation-remain-character-count'"/>
+      </xsl:call-template>
+    </xsl:attribute>
+
+    <xsl:apply-templates select="." mode="running.head.mode">
+      <xsl:with-param name="master-reference" select="$master-reference"/>
+    </xsl:apply-templates>
+
+    <xsl:apply-templates select="." mode="running.foot.mode">
+      <xsl:with-param name="master-reference" select="$master-reference"/>
+    </xsl:apply-templates>
+
+    <fo:flow flow-name="xsl-region-body">
+      <xsl:call-template name="set.flow.properties">
+        <xsl:with-param name="element" select="local-name(.)"/>
+        <xsl:with-param name="master-reference" select="$master-reference"/>
+      </xsl:call-template>
+
+	<fo:block-container id='${chunkid}'
+			padding='5pt'
+			border-color='gray'
+			border-style='solid'
+			border-width='1pt'>
+			<fo:block-container float='left' text-indent='3px' start-indent='-20px'>
+				<fo:block background-color="gray">
+					<xsl:value-of select='$version'/>
+				</fo:block>
+			</fo:block-container>
+		  <fo:block id="{$id}"
+					xsl:use-attribute-sets="component.titlepage.properties">
+			<xsl:call-template name="chapter.titlepage"/>
+		  </fo:block>
+
+		  <xsl:call-template name="make.component.tocs"/>
+
+		  <xsl:apply-templates/>
+      </fo:block-container>
+    </fo:flow>
+  </fo:page-sequence>
+</xsl:template>
+
+
 <!-- conditional matching template: this calls text decoration
           template with the correct variables. -->
 <xsl:template match="*[@condition]">
     <xsl:variable name="id">
         <xsl:call-template name="object.id"/>
     </xsl:variable>
-    <xsl:call-template name='section.titlepage'/>
+	<xsl:variable name="versionstr">
+		<xsl:choose>
+			<xsl:when test="@condition = 'l21'">Introduced in Lustre 2.1</xsl:when>
+			<xsl:when test="@condition = 'l22'">Introduced in Lustre 2.2</xsl:when>
+			<xsl:when test="@condition = 'l23'">Introduced in Lustre 2.3</xsl:when>
+			<xsl:when test="@condition = 'l24'">Introduced in Lustre 2.4</xsl:when>
+			<xsl:when test="@condition = 'l25'">Introduced in Lustre 2.5</xsl:when>
+			<xsl:when test="@condition = 'l26'">Introduced in Lustre 2.6</xsl:when>
+			<xsl:when test="@condition = 'l27'">Introduced in Lustre 2.7</xsl:when>
+			<xsl:when test="@condition = 'l28'">Introduced in Lustre 2.8</xsl:when>
+			<xsl:when test="@condition = 'l29'">Introduced in Lustre 2.9</xsl:when>
+			<xsl:otherwise>Documentation Error: unrecognised condition attribute</xsl:otherwise>
+		</xsl:choose>
+	</xsl:variable>
     <xsl:choose>
-        <xsl:when test="@condition = 'l21'">
-            <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'introduced in Lustre 2.1'"/>
+        <xsl:when test="name(..) = 'part'">
+    		<xsl:call-template name='mychapter'>
+                <xsl:with-param name='version' select="$versionstr"/>
                 <xsl:with-param name='chunkid' select="$id"/>
             </xsl:call-template>
-        </xsl:when>
-        <xsl:when test="@condition = 'l22'">
+		</xsl:when>
+		<xsl:otherwise>
             <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'introduced in Lustre 2.2'"/>
+                <xsl:with-param name='version' select="$versionstr"/>
                 <xsl:with-param name='chunkid' select="$id"/>
             </xsl:call-template>
-        </xsl:when>
-        <xsl:when test="@condition = 'l23'">
-            <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'introduced in Lustre 2.3'"/>
-                <xsl:with-param name='chunkid' select="$id"/>
-            </xsl:call-template>
-        </xsl:when>
-        <xsl:when test="@condition = 'l24'">
-            <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'introduced in Lustre 2.4'"/>
-                <xsl:with-param name='chunkid' select="$id"/>
-            </xsl:call-template>
-        </xsl:when>
-        <xsl:when test="@condition = 'l25'">
-            <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'introduced in Lustre 2.5'"/>
-                <xsl:with-param name='chunkid' select="$id"/>
-            </xsl:call-template>
-        </xsl:when>
-        <xsl:otherwise>
-            <xsl:call-template name='textdecoration_1'>
-                <xsl:with-param name='version' select="'unrecognised Lustre version'"/>
-                <xsl:with-param name='chunkid' select="$id"/>
-            </xsl:call-template>
-        </xsl:otherwise>
+		</xsl:otherwise>
     </xsl:choose>
 </xsl:template>
 
