@@ -99,12 +99,15 @@ static struct ll_sb_info *ll_init_sbi(void)
 		lru_page_max = (pages / 4) * 3;
 	}
 
-	/* initialize lru data */
+	/* initialize ll_cache data */
 	cfs_atomic_set(&sbi->ll_cache.ccc_users, 0);
 	sbi->ll_cache.ccc_lru_max = lru_page_max;
 	cfs_atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
 	spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
 	CFS_INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
+
+	cfs_atomic_set(&sbi->ll_cache.ccc_unstable_nr, 0);
+	init_waitqueue_head(&sbi->ll_cache.ccc_unstable_waitq);
 
         sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
@@ -1095,7 +1098,7 @@ void ll_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
-        int force = 1, next;
+	int ccc_count, next, force = 1, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
@@ -1113,6 +1116,19 @@ void ll_put_super(struct super_block *sb)
                 if (obd)
                         force = obd->obd_force;
         }
+
+	/* Wait for unstable pages to be committed to stable storage */
+	if (force == 0) {
+		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+		rc = l_wait_event(sbi->ll_cache.ccc_unstable_waitq,
+			cfs_atomic_read(&sbi->ll_cache.ccc_unstable_nr) == 0,
+			&lwi);
+	}
+
+	ccc_count = cfs_atomic_read(&sbi->ll_cache.ccc_unstable_nr);
+	if (force == 0 && rc != -EINTR)
+		LASSERTF(ccc_count == 0, "count: %i\n", ccc_count);
+
 
         /* We need to set force before the lov_disconnect in
            lustre_common_put_super, since l_d cleans up osc's as well. */

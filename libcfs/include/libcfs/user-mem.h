@@ -70,6 +70,9 @@ void kunmap(struct page *pg);
 #define page_cache_get(page) do { } while (0)
 #define page_cache_release(page) do { } while (0)
 
+#define inc_zone_page_state(page, state) do {} while (0)
+#define dec_zone_page_state(page, state) do {} while (0)
+
 /*
  * Memory allocator
  * Inline function, so utils can use them without linking of libcfs

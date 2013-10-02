@@ -776,6 +776,23 @@ static int ll_rd_sbi_flags(char *page, char **start, off_t off,
 	return rc;
 }
 
+static int ll_rd_unstable_stats(char *page, char **start, off_t off,
+			      int count, int *eof, void *data)
+{
+	struct super_block	*sb    = data;
+	struct ll_sb_info	*sbi   = ll_s2sbi(sb);
+	struct cl_client_cache	*cache = &sbi->ll_cache;
+	int pages, mb, rc;
+
+	pages = cfs_atomic_read(&cache->ccc_unstable_nr);
+	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
+
+	rc = snprintf(page, count, "unstable_pages: %8d\n"
+				   "unstable_mb:    %8d\n", pages, mb);
+
+	return rc;
+}
+
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -808,6 +825,7 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "max_easize",       ll_rd_maxea_size, 0, 0 },
 	{ "sbi_flags",        ll_rd_sbi_flags, 0, 0 },
 	{ "xattr_cache",      ll_rd_xattr_cache, ll_wr_xattr_cache, 0 },
+	{ "unstable_stats",   ll_rd_unstable_stats, 0, 0},
         { 0 }
 };
 
