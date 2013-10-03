@@ -557,11 +557,10 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
 		RETURN(rc);
 	}
 
-        if (rec->lrh_index < d->lpd_startcat)
-                /* Skip processing of the logs until startcat */
-                RETURN(0);
-
-        if (d->lpd_startidx > 0) {
+	if (rec->lrh_index < d->lpd_startcat) {
+		/* Skip processing of the logs until startcat */
+		rc = 0;
+	} else if (d->lpd_startidx > 0) {
                 struct llog_process_cat_data cd;
 
                 cd.lpcd_first_idx = d->lpd_startidx;
@@ -574,6 +573,7 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
 					  NULL, false);
 	}
+
 	llog_handle_put(llh);
 
 	RETURN(rc);
