@@ -246,10 +246,9 @@
           </orderedlist></para>
       </listitem>
       <listitem>
-        <para>(<?oxy_comment_start author="lbeberne" timestamp="20130815T140026-0700" comment="Have James test"?>Optional<?oxy_comment_end?>)
-          If you are upgrading to Lustre software release 2.3 or higher from Lustre software version 2.2 or earlier
-          and want to enable the quota feature, complete these steps: <orderedlist
-            numeration="loweralpha">
+        <para>(Optional) If you are upgrading to Lustre software release 2.3 or higher from Lustre
+          software version 2.2 or earlier and want to enable the quota feature, complete these
+          steps: <orderedlist numeration="loweralpha">
             <listitem>
               <para>Before setting up the file system, enter on both the MDS and
                 OSTs:<screen>tunefs.lustre --quota</screen></para>
@@ -260,6 +259,20 @@
 conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
             </listitem>
           </orderedlist></para>
+      </listitem>
+      <listitem>
+        <para>(Optional) If you are upgrading from Lustre release 1.8, you must manually enable the
+          FID-in-dirent feature. On the MDS,
+          enter:<screen>tune2fs –O dirdata /dev/<replaceable>mdtdev</replaceable></screen></para>
+        <warning>
+          <para>This step is not reversible. Do not complete this step until you are sure you will
+            not be downgrading the Lustre software.</para>
+        </warning>
+        <para>This step only enables FID-in-dirent for newly created files. If you are upgrading to
+          Lustre release 2.4, you can use LFSCK 1.5 to enable FID-in-dirent for existing files. For
+          more information about FID-in-dirent and related functionalities in LFSCK 1.5, see <xref
+            xmlns:xlink="http://www.w3.org/1999/xlink" linkend="understandinglustre.storageio"
+          />.</para>
       </listitem>
       <listitem>
         <para>Start the Lustre file system by starting the components in the order shown in the

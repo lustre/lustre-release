@@ -534,47 +534,82 @@
         <primary>Lustre</primary>
         <secondary>I/O</secondary>
       </indexterm> Lustre Storage and I/O</title>
-    <para>In a Lustre file system, a file stored on the MDT points to one or more objects associated
-      with a data file, as shown in <xref linkend="understandinglustre.fig.mdtost"/>. Each object
-      contains data and is stored on an OST. If the MDT file points to one object, all the file data
-      is stored in that object. If the file points to more than one object, the file data is
-      &apos;striped&apos; across the objects (using RAID 0) and each object is stored on a different
-      OST. (For more information about how striping is implemented in a Lustre file system, see
-        <xref linkend="dbdoclet.50438250_89922"/>)</para>
-    <para>In <xref linkend="understandinglustre.fig.mdtost"/>, each filename points to an inode. The
-      inode contains all of the file attributes, such as owner, access permissions, Lustre striping
-      layout, access time, and access control. Multiple filenames may point to the same
-      inode.</para>
-    <figure>
-      <title xml:id="understandinglustre.fig.mdtost">MDT file points to objects on OSTs containing
-        file data</title>
+    <para>In Lustre release 2.0, Lustre file identifiers (FIDs) were introduced to replace UNIX
+      inode numbers for identifying files or objects. A FID is a 128-bit identifier that contains a
+      unique 64-bit sequence number, a 32-bit object ID (OID), and a 32-bit version number. The
+      sequence number is unique across all Lustre targets in a file system (OSTs and MDTs). This
+      change enabled future support for multiple MDTs (introduced in Lustre release 2.3) and ZFS
+      (introduced in Lustre release 2.4).</para>
+    <para>Also introduced in 2.0 is a feature call <emphasis role="italic">FID-in-dirent</emphasis>
+      (also known as <emphasis role="italic">dirdata</emphasis>) in which the FID is stored as part
+      of the name of the file in the parent directory. This feature significantly improves
+      performance for <literal>ls</literal> command executions by reducing disk I/O. The
+      FID-in-dirent is generated at the time the file is created.</para>
+    <note>
+      <para>The FID-in-dirent feature is not compatible with the Lustre release 1.8 format.
+        Therefore, when an upgrade from Lustre release 1.8 to a Lustre release 2.x is performed, the
+        FID-in-dirent feature is not automatically enabled. For upgrades from Lustre release 1.8 to
+        Lustre releases 2.0 through 2.3, FID-in-dirent can be enabled manually but only takes effect
+        for new files. </para>
+      <para>For more information about upgrading from Lustre release 1.8 and enabling FID-in-dirent
+        for existing files, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="upgradinglustre"/>Chapter 16 “Upgrading a Lustre File System”.</para>
+    </note>
+    <para condition="l24">The LFSCK 1.5 file system administration tool released with Lustre release
+      2.4 provides functionality that enables FID-in-dirent for existing files. It includes the
+      following functionality:<itemizedlist>
+        <listitem>
+          <para>Generates IGIF mode FIDs for existing release 1.8 files.</para>
+        </listitem>
+        <listitem>
+          <para>Verifies the FID-in-dirent for each file to determine when it doesn’t exist or is
+            invalid and then regenerates the FID-in-dirent if needed.</para>
+        </listitem>
+        <listitem>
+          <para>Verifies the linkEA entry for each file to determine when it is missing or invalid
+            and then regenerates the linkEA if needed. The <emphasis role="italic">linkEA</emphasis>
+            consists of the file name plus its parent FID and is stored as an extended attribute in
+            the file itself. Thus, the linkEA can be used to parse out the full path name of a file
+            from root.</para>
+        </listitem>
+      </itemizedlist></para>
+    <para>Information about where file data is located on the OST(s) is stored as an extended
+      attribute called layout EA in an MDT object identified by the FID for the file (see <xref
+        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="Fig1.3_LayoutEAonMDT"/>). If the file is
+      a data file (not a directory or symbol link), the MDT object points to 1-to-N OST object(s) on
+      the OST(s) that contain the file data. If the MDT file points to one object, all the file data
+      is stored in that object. If the MDT file points to more than one object, the file data is
+        <emphasis role="italic">striped</emphasis> across the objects using RAID 0, and each object
+      is stored on a different OST. (For more information about how striping is implemented in a
+      Lustre file system, see <xref linkend="dbdoclet.50438250_89922"/>.</para>
+    <figure xml:id="Fig1.3_LayoutEAonMDT">
+      <title>Layout EA on MDT pointing to file data on OSTs</title>
       <mediaobject>
         <imageobject>
-          <imagedata scalefit="1" width="100%" fileref="./figures/Metadata_File.png"/>
+          <imagedata scalefit="1" width="80%" fileref="./figures/Metadata_File.png"/>
         </imageobject>
         <textobject>
-          <phrase> MDT file points to objects on OSTs containing file data </phrase>
+          <phrase> Layout EA on MDT pointing to file data on OSTs </phrase>
         </textobject>
       </mediaobject>
     </figure>
-    <para>When a client opens a file, the <literal>fileopen</literal> operation transfers the file
-      layout from the MDS to the client. The client then uses this information to perform I/O on the
-      file, directly interacting with the OSS nodes where the objects are stored. This process is
-      illustrated in <xref linkend="understandinglustre.fig.fileio"/>.</para>
-    <figure>
-      <title xml:id="understandinglustre.fig.fileio">File open and file I/O in Lustre*</title>
+    <para>When a client wants to read from or write to a file, it first fetches the layout EA from
+      the MDT object for the file. The client then uses this information to perform I/O on the file,
+      directly interacting with the OSS nodes where the objects are stored.
+      <?oxy_custom_start type="oxy_content_highlight" color="255,255,0"?>This process is illustrated
+      in <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="Fig1.4_ClientReqstgData"
+      /><?oxy_custom_end?>.</para>
+    <figure xml:id="Fig1.4_ClientReqstgData">
+      <title>Lustre* client requesting file data</title>
       <mediaobject>
         <imageobject>
-          <imagedata scalefit="1" width="100%" fileref="./figures/File_Write.png"/>
+          <imagedata scalefit="1" width="75%" fileref="./figures/File_Write.png"/>
         </imageobject>
         <textobject>
-          <phrase> File open and file I/O in Lustre* </phrase>
+          <phrase> Lustre* client requesting file data </phrase>
         </textobject>
       </mediaobject>
     </figure>
-    <para>Each file on the MDT contains the layout of the associated data file, including the OST
-      number and object identifier. Clients request the file layout from the MDS and then perform
-      file I/O operations by communicating directly with the OSSs that manage that file data.</para>
     <para>The available bandwidth of a Lustre file system is determined as follows:</para>
     <itemizedlist>
       <listitem>
