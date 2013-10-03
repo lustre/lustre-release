@@ -221,7 +221,11 @@ int lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
         pd->cld_gid  = parent_descr->cld_gid;
         lovsub_lock_descr_map(d, subobj->lso_super, subobj->lso_index, pd);
 
-	/* LU-3027: only update extent of lock */
+	/* LU-3027: only update extent of lock, plus the change in
+	 * lovsub_lock_delete() that lock extent is modified after a sublock
+	 * is canceled, we can make sure that the lock extent won't be updated
+	 * any more. Therefore, lov_lock_fits_into() will always find feasible
+	 * locks */
         lov->lls_sub[idx].sub_got.cld_start = d->cld_start;
         lov->lls_sub[idx].sub_got.cld_end = d->cld_end;
         /*
@@ -300,6 +304,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                 RETURN(0);
 
         result = 0;
+	lov->lls_ever_canceled = 1;
         switch (parent->cll_state) {
 	case CLS_ENQUEUED:
 		/* See LU-1355 for the case that a glimpse lock is
@@ -418,15 +423,12 @@ static void lovsub_lock_delete(const struct lu_env *env,
                 struct lov_lock      *lov;
                 struct lov_lock_link *scan;
                 struct lov_lock_link *temp;
-                struct lov_lock_sub  *subdata;
 
                 restart = 0;
                 cfs_list_for_each_entry_safe(scan, temp,
                                              &sub->lss_parents, lll_list) {
                         lov     = scan->lll_super;
-                        subdata = &lov->lls_sub[scan->lll_idx];
                         lovsub_parent_lock(env, lov);
-                        subdata->sub_got = subdata->sub_descr;
                         lov_lock_unlink(env, scan, sub);
                         restart = lovsub_lock_delete_one(env, child, lov);
                         lovsub_parent_unlock(env, lov);
