@@ -229,13 +229,13 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 		       mdt_obd_name(mdt), rc);
 		return rc;
 	}
+
 	rc = hsm_cdt_procfs_init(mdt);
 	if (rc) {
 		CERROR("%s: cannot create hsm proc entries: rc = %d\n",
 		       mdt_obd_name(mdt), rc);
 		return rc;
 	}
-	ptlrpc_lprocfs_register_obd(obd);
 
 	obd->obd_proc_exports_entry = proc_mkdir("exports",
 						 obd->obd_proc_entry);
@@ -263,14 +263,14 @@ void mdt_procfs_fini(struct mdt_device *mdt)
 {
 	struct obd_device *obd = mdt2obd_dev(mdt);
 
-	if (obd->obd_proc_exports_entry) {
+	if (obd->obd_proc_exports_entry != NULL) {
 		lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 		obd->obd_proc_exports_entry = NULL;
 	}
+
 	lprocfs_free_per_client_stats(obd);
-	lprocfs_obd_cleanup(obd);
 	hsm_cdt_procfs_fini(mdt);
-	ptlrpc_lprocfs_unregister_obd(obd);
+	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
 	lprocfs_free_obd_stats(obd);
 	lprocfs_job_stats_fini(obd);

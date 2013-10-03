@@ -74,7 +74,8 @@ else
 	echo "without GSS support"
 fi
 
-MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*.stats 2>/dev/null | cut -d"." -f2" || true`"
+MDT=$(do_facet $SINGLEMDS lctl get_param -N "mdt.\*MDT0000" |
+	cut -d. -f2 || true)
 [ -z "$MDT" ] && error "fail to get MDT device" && exit 1
 do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 IDENTITY_FLUSH=mdt.$MDT.identity_flush
