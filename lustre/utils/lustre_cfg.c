@@ -554,7 +554,7 @@ static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
 			int rc2 = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
 			if (rc2 != 0) {
 				fprintf(stderr, "error: executing %s: %s\n",
-					jt_cmdname(argv[0]), strerror(rc2));
+					jt_cmdname(argv[0]), strerror(errno));
 				if (rc == 0)
 					rc = rc2;
 			}

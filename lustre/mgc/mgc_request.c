@@ -501,6 +501,7 @@ static DECLARE_COMPLETION(rq_exit);
 
 static void do_requeue(struct config_llog_data *cld)
 {
+	int rc = 0;
         ENTRY;
         LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
 
@@ -508,13 +509,15 @@ static void do_requeue(struct config_llog_data *cld)
            export which is being disconnected. Take the client
            semaphore to make the check non-racy. */
 	down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
-        if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
-                CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
-                mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
-        } else {
-                CDEBUG(D_MGC, "disconnecting, won't update log %s\n",
-                       cld->cld_logname);
-        }
+	if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
+		CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
+		rc = mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
+		if (rc && rc != -ENOENT)
+			CERROR("failed processing log: %d\n", rc);
+	} else {
+		CDEBUG(D_MGC, "disconnecting, won't update log %s\n",
+		       cld->cld_logname);
+	}
 	up_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
 
         EXIT;
