@@ -1023,6 +1023,9 @@ static int lov_lock_fits_into(const struct lu_env *env,
 	if (need->cld_enq_flags != lov->lls_orig.cld_enq_flags)
 		return 0;
 
+	if (lov->lls_ever_canceled)
+		return 0;
+
         if (need->cld_mode == CLM_GROUP)
                 /*
                  * always allow to match group lock.
