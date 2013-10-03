@@ -424,9 +424,6 @@ static const struct cl_page_operations vvp_page_ops = {
 
 static void vvp_transient_page_verify(const struct cl_page *page)
 {
-	struct inode *inode = ccc_object_inode(page->cp_obj);
-
-	LASSERT(!mutex_trylock(&inode->i_mutex));
 }
 
 static int vvp_transient_page_own(const struct lu_env *env,
@@ -500,7 +497,6 @@ static void vvp_transient_page_fini(const struct lu_env *env,
 	struct ccc_object *clobj = cl2ccc(clp->cp_obj);
 
 	vvp_page_fini_common(cp);
-	LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
 	clobj->cob_transient_pages--;
 }
 
@@ -548,7 +544,6 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	} else {
 		struct ccc_object *clobj = cl2ccc(obj);
 
-		LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
 		cl_page_slice_add(page, &cpg->cpg_cl, obj, index,
 				&vvp_transient_page_ops);
 		clobj->cob_transient_pages++;

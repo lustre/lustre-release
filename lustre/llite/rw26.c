@@ -412,13 +412,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         io = ccc_env_io(env)->cui_cl.cis_io;
         LASSERT(io != NULL);
 
-	/* 0. Need locking between buffered and direct access. and race with
-	 *    size changing by concurrent truncates and writes.
-	 * 1. Need inode mutex to operate transient pages.
-	 */
-	if (rw == READ)
-		mutex_lock(&inode->i_mutex);
-
         LASSERT(obj->cob_transient_pages == 0);
         for (seg = 0; seg < nr_segs; seg++) {
                 long iov_left = iov[seg].iov_len;
@@ -480,8 +473,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         }
 out:
 	LASSERT(obj->cob_transient_pages == 0);
-	if (rw == READ)
-		mutex_unlock(&inode->i_mutex);
 
         if (tot_bytes > 0) {
 		struct ccc_io *cio = ccc_env_io(env);

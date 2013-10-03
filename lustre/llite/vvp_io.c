@@ -800,14 +800,33 @@ static int vvp_io_write_start(const struct lu_env *env,
 		LASSERT(cio->cui_iocb->ki_pos == pos);
 	}
 
-        CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
+	CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
 
-        if (cio->cui_iov == NULL) /* from a temp io in ll_cl_init(). */
-                result = 0;
-        else
-		result = generic_file_aio_write(cio->cui_iocb,
-						cio->cui_iov, cio->cui_nrsegs,
-						cio->cui_iocb->ki_pos);
+	if (cio->cui_iov == NULL) {
+		/* from a temp io in ll_cl_init(). */
+		result = 0;
+	} else {
+		/*
+		 * When using the locked AIO function (generic_file_aio_write())
+		 * testing has shown the inode mutex to be a limiting factor
+		 * with multi-threaded single shared file performance. To get
+		 * around this, we now use the lockless version. To maintain
+		 * consistency, proper locking to protect against writes,
+		 * trucates, etc. is handled in the higher layers of lustre.
+		 */
+		result = __generic_file_aio_write(cio->cui_iocb,
+						  cio->cui_iov, cio->cui_nrsegs,
+						  &cio->cui_iocb->ki_pos);
+		if (result > 0 || result == -EIOCBQUEUED) {
+			ssize_t err;
+
+			err = generic_write_sync(cio->cui_iocb->ki_filp,
+						 pos, result);
+			if (err < 0 && result > 0)
+				result = err;
+		}
+
+	}
 	if (result > 0) {
 		result = vvp_io_write_commit(env, io);
 		if (cio->u.write.cui_written > 0) {
