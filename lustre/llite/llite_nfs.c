@@ -101,8 +101,10 @@ struct inode *search_inode_for_lustre(struct super_block *sb,
         rc = md_getattr(sbi->ll_md_exp, op_data, &req);
         OBD_FREE_PTR(op_data);
         if (rc) {
-                CERROR("can't get object attrs, fid "DFID", rc %d\n",
-                       PFID(fid), rc);
+		/* Suppress erroneous/confusing messages when NFS
+		 * is out of sync and requests old data. */
+		CDEBUG(D_INFO, "can't get object attrs, fid "DFID", rc %d\n",
+				PFID(fid), rc);
                 RETURN(ERR_PTR(rc));
         }
         rc = ll_prep_inode(&inode, req, sb, NULL);
