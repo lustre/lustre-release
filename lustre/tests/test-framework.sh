@@ -291,13 +291,13 @@ init_test_env() {
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
-    if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mdt.ko -a \
-        ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mdt.ko -a \
-        ! -f `dirname $0`/../mdt/mdt.ko ]; then
-        export CLIENTMODSONLY=yes
-    fi
+	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mdt.ko -a \
+	     ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mdt.ko -a \
+	     ! -f $LUSTRE/mdt/mdt.ko ]; then
+	    export CLIENTMODSONLY=yes
+	fi
 
-    export SHUTDOWN_ATTEMPTS=${SHUTDOWN_ATTEMPTS:-3}
+	export SHUTDOWN_ATTEMPTS=${SHUTDOWN_ATTEMPTS:-3}
 	export OSD_TRACK_DECLARES_LBUG=${OSD_TRACK_DECLARES_LBUG:-"yes"}
 
     # command line
