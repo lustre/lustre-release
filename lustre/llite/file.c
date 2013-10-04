@@ -2950,7 +2950,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-	CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#llx, mode=%u, "
+	CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags="LPX64", mode=%u, "
 	       "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
 	       flags, einfo.ei_mode, flock.l_flock.start, flock.l_flock.end);
 
