@@ -812,7 +812,7 @@ test_11() {
 	check_hsm_flags $f "0x0000000d"
 
 	local LSZ=$(stat -c "%s" $f)
-	local ASZ=$(stat -c "%s" $HSM_ARCHIVE/$tdir/$tfile)
+	local ASZ=$(do_facet $SINGLEAGT stat -c "%s" $HSM_ARCHIVE/$tdir/$tfile)
 
 	echo "Verifying imported size $LSZ=$ASZ"
 	[[ $LSZ -eq $ASZ ]] || error "Incorrect size $LSZ != $ASZ"
