@@ -418,16 +418,18 @@ EXPORT_SYMBOL(fld_client_fini);
 int fld_client_rpc(struct obd_export *exp,
                    struct lu_seq_range *range, __u32 fld_op)
 {
-        struct ptlrpc_request *req;
-        struct lu_seq_range      *prange;
-        __u32                 *op;
-        int                    rc;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct lu_seq_range   *prange;
+	__u32                 *op;
+	int                    rc;
+	struct obd_import     *imp;
+	ENTRY;
 
-        LASSERT(exp != NULL);
+	LASSERT(exp != NULL);
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_FLD_QUERY,
-                                        LUSTRE_MDS_VERSION, FLD_QUERY);
+	imp = class_exp2cliimp(exp);
+	req = ptlrpc_request_alloc_pack(imp, &RQF_FLD_QUERY, LUSTRE_MDS_VERSION,
+					FLD_QUERY);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -440,6 +442,10 @@ int fld_client_rpc(struct obd_export *exp,
         ptlrpc_request_set_replen(req);
         req->rq_request_portal = FLD_REQUEST_PORTAL;
         ptlrpc_at_set_req_timeout(req);
+
+	if (fld_op == FLD_LOOKUP &&
+	    imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS)
+		req->rq_allow_replay = 1;
 
         if (fld_op != FLD_LOOKUP)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);

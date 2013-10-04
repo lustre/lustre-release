@@ -1063,12 +1063,18 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                         *status = -EIO;
                 } else if (imp->imp_dlm_fake || req->rq_no_delay) {
                         *status = -EWOULDBLOCK;
-                } else {
-                        delay = 1;
-                }
-        }
+		} else if (req->rq_allow_replay &&
+			  (imp->imp_state == LUSTRE_IMP_REPLAY ||
+			   imp->imp_state == LUSTRE_IMP_REPLAY_LOCKS ||
+			   imp->imp_state == LUSTRE_IMP_REPLAY_WAIT ||
+			   imp->imp_state == LUSTRE_IMP_RECOVER)) {
+			DEBUG_REQ(D_HA, req, "allow during recovery.\n");
+		} else {
+			delay = 1;
+		}
+	}
 
-        RETURN(delay);
+	RETURN(delay);
 }
 
 /**

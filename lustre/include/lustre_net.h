@@ -719,7 +719,10 @@ struct ptlrpc_request {
                 rq_invalid_rqset:1,
 		rq_generation_set:1,
 		/* do not resend request on -EINPROGRESS */
-		rq_no_retry_einprogress:1;
+		rq_no_retry_einprogress:1,
+		/* allow the req to be sent if the import is in recovery
+		 * status */
+		rq_allow_replay:1;
 
 	unsigned int rq_nr_resend;
 
