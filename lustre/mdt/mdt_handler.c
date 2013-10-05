@@ -5142,7 +5142,8 @@ static int mdt_obd_connect(const struct lu_env *env,
 	 * XXX: probably not very appropriate method is used now
 	 *      at some point we should find a better one
 	 */
-	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state)) {
+	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) &&
+	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
 		rc = obd_health_check(env, mdt->mdt_child_exp->exp_obd);
 		if (rc)
 			RETURN(-EAGAIN);
