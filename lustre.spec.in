@@ -332,8 +332,6 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_bindir}/llobdstat
 %attr(-, root, root) %{_bindir}/llstat
 %attr(-, root, root) %{_bindir}/lustre_req_history
-%attr(-, root, root) %{_bindir}/mcreate
-%attr(-, root, root) %{_bindir}/munlink
 %attr(-, root, root) %{_bindir}/plot-llstat
 %attr(-, root, root) %{_bindir}/req_layout
 %attr(-, root, root) %{_libdir}/libptlctl.a
@@ -385,6 +383,8 @@ fi
 
 %if %{with lustre_tests}
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
+echo '%attr(-, root, root) %{_bindir}/mcreate' >>lustre-tests.files
+echo '%attr(-, root, root) %{_bindir}/munlink' >>lustre-tests.files
 echo '%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
   echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
