@@ -273,7 +273,9 @@ static inline int module_refcount(struct module *m)
  ***************************************************************************/
 
 struct shrinker {
-        ;
+#ifndef __INTEL_COMPILER
+	;
+#endif
 };
 
 #define DEFAULT_SEEKS (0)
