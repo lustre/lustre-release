@@ -998,6 +998,9 @@ test_24v() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	trap simple_cleanup_common EXIT
 
+	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
+	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && NRFILES=10000
+
 	mkdir -p $DIR/$tdir
 	createmany -m $DIR/$tdir/$tfile $NRFILES
 
