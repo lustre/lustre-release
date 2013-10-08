@@ -196,6 +196,12 @@ struct lu_seq_range {
 	__u32 lsr_flags;
 };
 
+struct lu_seq_range_array {
+	__u32 lsra_count;
+	__u32 lsra_padding;
+	struct lu_seq_range lsra_lsr[0];
+};
+
 #define LU_SEQ_RANGE_MDT	0x0
 #define LU_SEQ_RANGE_OST	0x1
 #define LU_SEQ_RANGE_ANY	0x3
@@ -2622,6 +2628,7 @@ struct mdt_rec_reint {
 
 extern void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
 
+/* lmv structures */
 struct lmv_desc {
         __u32 ld_tgt_count;                /* how many MDS's */
         __u32 ld_active_tgt_count;         /* how many active */
@@ -2650,7 +2657,6 @@ struct lmv_stripe_md {
 
 extern void lustre_swab_lmv_stripe_md(struct lmv_stripe_md *mea);
 
-/* lmv structures */
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
@@ -2660,9 +2666,10 @@ extern void lustre_swab_lmv_stripe_md(struct lmv_stripe_md *mea);
 #define MAX_HASH_HIGHEST_BIT     0x1000000000000000ULL
 
 enum fld_rpc_opc {
-        FLD_QUERY                       = 900,
-        FLD_LAST_OPC,
-        FLD_FIRST_OPC                   = FLD_QUERY
+	FLD_QUERY	= 900,
+	FLD_READ	= 901,
+	FLD_LAST_OPC,
+	FLD_FIRST_OPC   = FLD_QUERY
 };
 
 enum seq_rpc_opc {
@@ -2674,6 +2681,12 @@ enum seq_rpc_opc {
 enum seq_op {
         SEQ_ALLOC_SUPER = 0,
         SEQ_ALLOC_META = 1
+};
+
+enum fld_op {
+	FLD_CREATE = 0,
+	FLD_DELETE = 1,
+	FLD_LOOKUP = 2,
 };
 
 /*

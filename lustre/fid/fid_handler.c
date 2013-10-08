@@ -56,9 +56,8 @@
 static void seq_server_proc_fini(struct lu_server_seq *seq);
 
 /* Assigns client to sequence controller node. */
-int seq_server_set_cli(struct lu_server_seq *seq,
-                       struct lu_client_seq *cli,
-                       const struct lu_env *env)
+int seq_server_set_cli(const struct lu_env *env, struct lu_server_seq *seq,
+		       struct lu_client_seq *cli)
 {
         int rc = 0;
         ENTRY;
@@ -218,8 +217,8 @@ static int __seq_set_init(const struct lu_env *env,
  * flaged as sync write op.
  */
 static int range_alloc_set(const struct lu_env *env,
-                            struct lu_seq_range *out,
-                            struct lu_server_seq *seq)
+                           struct lu_seq_range *out,
+                           struct lu_server_seq *seq)
 {
         struct lu_seq_range *space = &seq->lss_space;
         struct lu_seq_range *loset = &seq->lss_lowater_set;
@@ -290,6 +289,15 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 		/* Saving new range to allocation space. */
 		*space = seq->lss_cli->lcs_space;
 		LASSERT(range_is_sane(space));
+		if (seq->lss_cli->lcs_srv == NULL) {
+			struct lu_server_fld *fld;
+
+			/* Insert it to the local FLDB */
+			fld = seq->lss_site->ss_server_fld;
+			mutex_lock(&fld->lsf_lock);
+			rc = fld_insert_entry(env, fld, space);
+			mutex_unlock(&fld->lsf_lock);
+		}
 	}
 
 	rc = range_alloc_set(env, out, seq);
@@ -458,12 +466,12 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 #endif /* LPROCFS */
 }
 
-int seq_server_init(struct lu_server_seq *seq,
+int seq_server_init(const struct lu_env *env,
+		    struct lu_server_seq *seq,
 		    struct dt_device *dev,
 		    const char *prefix,
 		    enum lu_mgr_type type,
-		    struct seq_server_site *ss,
-		    const struct lu_env *env)
+		    struct seq_server_site *ss)
 {
 	int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
 	ENTRY;

@@ -106,14 +106,102 @@ int fld_server_create(const struct lu_env *env, struct lu_server_fld *fld,
 EXPORT_SYMBOL(fld_server_create);
 
 /**
- *  Lookup mds by seq, returns a range for given seq.
- *
- *  If that entry is not cached in fld cache, request is sent to super
- *  sequence controller node (MDT0). All other MDT[1...N] and client
- *  cache fld entries, but this cache is not persistent.
- */
-int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
-		      seqno_t seq, struct lu_seq_range *range)
+ * Extract index information from fld name like srv-fsname-MDT0000
+ **/
+int fld_name_to_index(const char *name, __u32 *index)
+{
+	char *dash;
+	int rc;
+	ENTRY;
+
+	CDEBUG(D_INFO, "get index from %s\n", name);
+	dash = strrchr(name, '-');
+	if (dash == NULL)
+		RETURN(-EINVAL);
+	dash++;
+	rc = target_name2index(dash, index, NULL);
+	RETURN(rc);
+}
+
+/**
+ * Retrieve fldb entry from MDT0 and add to local FLDB and cache.
+ **/
+int fld_update_from_controller(const struct lu_env *env,
+			       struct lu_server_fld *fld)
+{
+	struct fld_thread_info	  *info;
+	struct lu_seq_range	  *range;
+	struct lu_seq_range_array *lsra;
+	__u32			  index;
+	struct ptlrpc_request	  *req;
+	int			  rc;
+	int			  i;
+	ENTRY;
+
+	/* Update only happens during initalization, i.e. local FLDB
+	 * does not exist yet */
+	if (!fld->lsf_new)
+		RETURN(0);
+
+	rc = fld_name_to_index(fld->lsf_name, &index);
+	if (rc < 0)
+		RETURN(rc);
+
+	/* No need update fldb for MDT0 */
+	if (index == 0)
+		RETURN(0);
+
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	LASSERT(info != NULL);
+	range = &info->fti_lrange;
+	memset(range, 0, sizeof(*range));
+	range->lsr_index = index;
+	fld_range_set_mdt(range);
+
+	do {
+		rc = fld_client_rpc(fld->lsf_control_exp, range, FLD_READ,
+				    &req);
+		if (rc != 0 && rc != -EAGAIN)
+			GOTO(out, rc);
+
+		LASSERT(req != NULL);
+		lsra = (struct lu_seq_range_array *)req_capsule_server_get(
+					  &req->rq_pill, &RMF_GENERIC_DATA);
+		if (lsra == NULL)
+			GOTO(out, rc = -EPROTO);
+
+		range_array_le_to_cpu(lsra, lsra);
+		for (i = 0; i < lsra->lsra_count; i++) {
+			int rc1;
+
+			if (lsra->lsra_lsr[i].lsr_flags != LU_SEQ_RANGE_MDT)
+				GOTO(out, rc = -EINVAL);
+
+			if (lsra->lsra_lsr[i].lsr_index != index)
+				GOTO(out, rc = -EINVAL);
+
+			rc1 = fld_insert_entry(env, fld, &lsra->lsra_lsr[i]);
+			if (rc1 != 0)
+				GOTO(out, rc = rc1);
+		}
+		if (rc == -EAGAIN)
+			*range = lsra->lsra_lsr[lsra->lsra_count - 1];
+	} while (rc == -EAGAIN);
+
+	fld->lsf_new = 1;
+out:
+	if (req != NULL)
+		ptlrpc_req_finished(req);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(fld_update_from_controller);
+
+/**
+ * Lookup sequece in local cache/fldb.
+ **/
+int fld_local_lookup(const struct lu_env *env, struct lu_server_fld *fld,
+		     seqno_t seq, struct lu_seq_range *range)
 {
 	struct lu_seq_range *erange;
 	struct fld_thread_info *info;
@@ -137,8 +225,35 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		*range = *erange;
 		RETURN(0);
 	}
+	RETURN(rc);
+}
+EXPORT_SYMBOL(fld_local_lookup);
 
-	if (fld->lsf_obj) {
+/**
+ *  Lookup MDT/OST by seq, returns a range for given seq.
+ *
+ *  If that entry is not cached in fld cache, request is sent to super
+ *  sequence controller node (MDT0). All other MDT[1...N] and client
+ *  cache fld entries, but this cache is not persistent.
+ */
+int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
+		      seqno_t seq, struct lu_seq_range *range)
+{
+	__u32 index;
+	int rc;
+	ENTRY;
+
+	rc = fld_local_lookup(env, fld, seq, range);
+	if (likely(rc == 0))
+		RETURN(rc);
+
+	rc = fld_name_to_index(fld->lsf_name, &index);
+	if (rc < 0)
+		RETURN(rc);
+	else
+		rc = 0;
+
+	if (index == 0) {
 		/* On server side, all entries should be in cache.
 		 * If we can not find it in cache, just return error */
 		CERROR("%s: Cannot find sequence "LPX64": rc = %d\n",
@@ -156,7 +271,7 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		 */
 		range->lsr_start = seq;
 		rc = fld_client_rpc(fld->lsf_control_exp,
-				    range, FLD_LOOKUP);
+				    range, FLD_QUERY, NULL);
 		if (rc == 0)
 			fld_cache_insert(fld->lsf_cache, range);
 	}
@@ -168,63 +283,79 @@ EXPORT_SYMBOL(fld_server_lookup);
  * All MDT server handle fld lookup operation. But only MDT0 has fld index.
  * if entry is not found in cache we need to forward lookup request to MDT0
  */
-static int fld_server_handle(struct lu_server_fld *fld,
-			     const struct lu_env *env,
-			     __u32 opc, struct lu_seq_range *range)
+static int fld_handle_lookup(struct tgt_session_info *tsi)
 {
-	int rc;
+	struct obd_export	*exp = tsi->tsi_exp;
+	struct lu_site		*site = exp->exp_obd->obd_lu_dev->ld_site;
+	struct lu_server_fld	*fld;
+	struct lu_seq_range	*in;
+	struct lu_seq_range	*out;
+	int			rc;
 
 	ENTRY;
 
-	switch (opc) {
-	case FLD_LOOKUP:
-		rc = fld_server_lookup(env, fld, range->lsr_start, range);
-		break;
-	default:
-		rc = -EINVAL;
-		break;
-	}
+	in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
+	if (in == NULL)
+		RETURN(err_serious(-EPROTO));
 
-	CDEBUG(D_INFO, "%s: FLD req handle: error %d (opc: %d, range: "
-	       DRANGE"\n", fld->lsf_name, rc, opc, PRANGE(range));
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (unlikely(rc != 0))
+		RETURN(err_serious(rc));
+
+	out = req_capsule_server_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
+	if (out == NULL)
+		RETURN(err_serious(-EPROTO));
+	*out = *in;
+
+	fld = lu_site2seq(site)->ss_server_fld;
+
+	rc = fld_server_lookup(tsi->tsi_env, fld, in->lsr_start, out);
+
+	CDEBUG(D_INFO, "%s: FLD req handle: error %d (range: "DRANGE")\n",
+	       fld->lsf_name, rc, PRANGE(out));
 
 	RETURN(rc);
 }
 
-static int fld_handler(struct tgt_session_info *tsi)
+static int fld_handle_read(struct tgt_session_info *tsi)
 {
 	struct obd_export	*exp = tsi->tsi_exp;
 	struct lu_site		*site = exp->exp_obd->obd_lu_dev->ld_site;
 	struct lu_seq_range	*in;
-	struct lu_seq_range	*out;
-	int			 rc;
-	__u32			*opc;
+	void			*data;
+	int			rc;
 
 	ENTRY;
 
-	opc = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_OPC);
-	if (opc != NULL) {
-		in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
-		if (in == NULL)
-			RETURN(err_serious(-EPROTO));
-		out = req_capsule_server_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
-		if (out == NULL)
-			RETURN(err_serious(-EPROTO));
-		*out = *in;
+	req_capsule_set(tsi->tsi_pill, &RQF_FLD_READ);
 
-		/* For old 2.0 client, the 'lsr_flags' is uninitialized.
-		 * Set it as 'LU_SEQ_RANGE_MDT' by default. */
-		if (!(exp_connect_flags(exp) & OBD_CONNECT_64BITHASH) &&
-		    !(exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
-		    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT) &&
-		    !exp->exp_libclient)
-			fld_range_set_mdt(out);
+	in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
+	if (in == NULL)
+		RETURN(err_serious(-EPROTO));
 
-		rc = fld_server_handle(lu_site2seq(site)->ss_server_fld,
-				       tsi->tsi_env, *opc, out);
-	} else {
-		rc = err_serious(-EPROTO);
-	}
+	req_capsule_set_size(tsi->tsi_pill, &RMF_GENERIC_DATA, RCL_SERVER,
+			     PAGE_CACHE_SIZE);
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (unlikely(rc != 0))
+		RETURN(err_serious(rc));
+
+	data = req_capsule_server_get(tsi->tsi_pill, &RMF_GENERIC_DATA);
+
+	rc = fld_server_read(tsi->tsi_env, lu_site2seq(site)->ss_server_fld,
+			     in, data, PAGE_CACHE_SIZE);
+	RETURN(rc);
+}
+
+static int fld_handle_query(struct tgt_session_info *tsi)
+{
+	int	rc;
+
+	ENTRY;
+
+	req_capsule_set(tsi->tsi_pill, &RQF_FLD_QUERY);
+
+	rc = fld_handle_lookup(tsi);
 
 	RETURN(rc);
 }
@@ -312,16 +443,14 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 #endif
 
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
-		    struct dt_device *dt, const char *prefix, int mds_node_id,
-		    int type)
+		    struct dt_device *dt, const char *prefix, int type)
 {
 	int cache_size, cache_threshold;
 	int rc;
 
 	ENTRY;
 
-	snprintf(fld->lsf_name, sizeof(fld->lsf_name),
-		 "srv-%s", prefix);
+	snprintf(fld->lsf_name, sizeof(fld->lsf_name), "srv-%s", prefix);
 
 	cache_size = FLD_SERVER_CACHE_SIZE / sizeof(struct fld_cache_entry);
 
@@ -336,13 +465,9 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		RETURN(rc);
 	}
 
-	if (!mds_node_id && type == LU_SEQ_RANGE_MDT) {
-		rc = fld_index_init(env, fld, dt);
-		if (rc)
-			GOTO(out_cache, rc);
-	} else {
-		fld->lsf_obj = NULL;
-	}
+	rc = fld_index_init(env, fld, dt);
+	if (rc)
+		GOTO(out_cache, rc);
 
 	rc = fld_server_proc_init(fld);
 	if (rc)
@@ -377,6 +502,7 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld)
 EXPORT_SYMBOL(fld_server_fini);
 
 struct tgt_handler fld_handlers[] = {
-TGT_FLD_HDL(HABEO_REFERO,	FLD_QUERY,	fld_handler),
+TGT_FLD_HDL_VAR(0,	FLD_QUERY,	fld_handle_query),
+TGT_FLD_HDL_VAR(0,	FLD_READ,	fld_handle_read),
 };
 EXPORT_SYMBOL(fld_handlers);

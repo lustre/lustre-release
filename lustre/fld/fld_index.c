@@ -324,6 +324,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	struct dt_it		*it;
 	const struct dt_it_ops	*iops;
 	int			rc;
+	__u32			index;
 	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
@@ -340,13 +341,25 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	dof.dof_type = DFT_INDEX;
 	dof.u.dof_idx.di_feat = &fld_index_features;
 
-	dt_obj = dt_find_or_create(env, dt, &fid, &dof, attr);
+	dt_obj = dt_locate(env, dt, &fid);
 	if (IS_ERR(dt_obj)) {
 		rc = PTR_ERR(dt_obj);
-		CERROR("%s: Can't find \"%s\" obj %d\n", fld->lsf_name,
-			fld_index_name, rc);
 		dt_obj = NULL;
 		GOTO(out, rc);
+	}
+
+	LASSERT(dt_obj != NULL);
+	if (!dt_object_exists(dt_obj)) {
+		lu_object_put(env, &dt_obj->do_lu);
+		dt_obj = dt_find_or_create(env, dt, &fid, &dof, attr);
+		fld->lsf_new = 1;
+		if (IS_ERR(dt_obj)) {
+			rc = PTR_ERR(dt_obj);
+			CERROR("%s: Can't find \"%s\" obj %d\n", fld->lsf_name,
+				fld_index_name, rc);
+			dt_obj = NULL;
+			GOTO(out, rc);
+		}
 	}
 
 	fld->lsf_obj = dt_obj;
@@ -381,19 +394,28 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 				GOTO(out_it_put, rc);
 			rc = iops->next(env, it);
 		} while (rc == 0);
+	} else {
+		fld->lsf_new = 1;
 	}
 
-	/* Note: fld_insert_entry will detect whether these
-	 * special entries already exist inside FLDB */
-	mutex_lock(&fld->lsf_lock);
-	rc = fld_insert_special_entries(env, fld);
-	mutex_unlock(&fld->lsf_lock);
-	if (rc != 0) {
-		CERROR("%s: insert special entries failed!: rc = %d\n",
-		       fld->lsf_name, rc);
+	rc = fld_name_to_index(fld->lsf_name, &index);
+	if (rc < 0)
 		GOTO(out_it_put, rc);
-	}
+	else
+		rc = 0;
 
+	if (index == 0) {
+		/* Note: fld_insert_entry will detect whether these
+		 * special entries already exist inside FLDB */
+		mutex_lock(&fld->lsf_lock);
+		rc = fld_insert_special_entries(env, fld);
+		mutex_unlock(&fld->lsf_lock);
+		if (rc != 0) {
+			CERROR("%s: insert special entries failed!: rc = %d\n",
+			       fld->lsf_name, rc);
+			GOTO(out_it_put, rc);
+		}
+	}
 out_it_put:
 	iops->put(env, it);
 out_it_fini:
@@ -402,7 +424,7 @@ out:
 	if (attr != NULL)
 		OBD_FREE_PTR(attr);
 
-	if (rc != 0) {
+	if (rc < 0) {
 		if (dt_obj != NULL)
 			lu_object_put(env, &dt_obj->do_lu);
 		fld->lsf_obj = NULL;
@@ -419,4 +441,61 @@ void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld)
 		fld->lsf_obj = NULL;
 	}
 	EXIT;
+}
+
+int fld_server_read(const struct lu_env *env, struct lu_server_fld *fld,
+		    struct lu_seq_range *range, void *data, int data_len)
+{
+	struct lu_seq_range_array *lsra = data;
+	struct fld_thread_info	  *info;
+	struct dt_object	  *dt_obj = fld->lsf_obj;
+	struct lu_seq_range	  *entry;
+	struct dt_it		  *it;
+	const struct dt_it_ops	  *iops;
+	int			  rc;
+
+	ENTRY;
+
+	lsra->lsra_count = 0;
+	iops = &dt_obj->do_index_ops->dio_it;
+	it = iops->init(env, dt_obj, 0, NULL);
+	if (IS_ERR(it))
+		RETURN(PTR_ERR(it));
+
+	rc = iops->load(env, it, range->lsr_end);
+	if (rc <= 0)
+		GOTO(out_it_fini, rc);
+
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	LASSERT(info != NULL);
+	entry = &info->fti_rec;
+	do {
+		rc = iops->rec(env, it, (struct dt_rec *)entry, 0);
+		if (rc != 0)
+			GOTO(out_it_put, rc);
+
+		if (offsetof(typeof(*lsra), lsra_lsr[lsra->lsra_count + 1]) >
+		    data_len)
+			GOTO(out, rc = -EAGAIN);
+
+		range_be_to_cpu(entry, entry);
+		if (entry->lsr_index == range->lsr_index &&
+		    entry->lsr_flags == range->lsr_flags &&
+		    entry->lsr_start > range->lsr_start) {
+			lsra->lsra_lsr[lsra->lsra_count] = *entry;
+			lsra->lsra_count++;
+		}
+
+		rc = iops->next(env, it);
+	} while (rc == 0);
+	if (rc > 0)
+		rc = 0;
+out:
+	range_array_cpu_to_le(lsra, lsra);
+out_it_put:
+	iops->put(env, it);
+out_it_fini:
+	iops->fini(env, it);
+
+	RETURN(rc);
 }

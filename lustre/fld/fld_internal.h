@@ -112,12 +112,6 @@ struct fld_cache {
 	unsigned int		 fci_no_shrink:1;
 };
 
-enum fld_op {
-        FLD_CREATE = 0,
-        FLD_DELETE = 1,
-        FLD_LOOKUP = 2
-};
-
 enum {
         /* 4M of FLD cache will not hurt client a lot. */
         FLD_SERVER_CACHE_SIZE      = (4 * 0x100000),
@@ -169,10 +163,13 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		     seqno_t seq, struct lu_seq_range *range);
 
+int fld_name_to_index(const char *name, __u32 *index);
 int fld_server_mod_init(void);
 
 void fld_server_mod_exit(void);
 
+int fld_server_read(const struct lu_env *env, struct lu_server_fld *fld,
+		    struct lu_seq_range *range, void *data, int data_len);
 # ifdef LPROCFS
 extern const struct file_operations fld_proc_seq_fops;
 extern struct lprocfs_vars fld_server_proc_list[];
@@ -181,8 +178,8 @@ extern struct lprocfs_vars fld_server_proc_list[];
 # endif /* HAVE_SERVER_SUPPORT */
 
 int fld_client_rpc(struct obd_export *exp,
-		   struct lu_seq_range *range, __u32 fld_op);
-
+                   struct lu_seq_range *range, __u32 fld_op,
+		   struct ptlrpc_request **reqp);
 #endif /* __KERNEL__ */
 
 struct fld_cache *fld_cache_init(const char *name,

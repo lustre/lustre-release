@@ -346,13 +346,45 @@ static int ofd_fld_init(const struct lu_env *env, const char *uuid,
 		RETURN(rc = -ENOMEM);
 
 	rc = fld_server_init(env, ss->ss_server_fld, ofd->ofd_osd, uuid,
-			     ss->ss_node_id, LU_SEQ_RANGE_OST);
+			     LU_SEQ_RANGE_OST);
 	if (rc) {
 		OBD_FREE_PTR(ss->ss_server_fld);
 		ss->ss_server_fld = NULL;
 		RETURN(rc);
 	}
 	RETURN(0);
+}
+
+/**
+ * It will retrieve its FLDB entries from MDT0, and it only happens
+ * when upgrading existent FS to 2.6.
+ **/
+static int ofd_register_lwp_callback(void *data)
+{
+	struct lu_env		env;
+	struct ofd_device	*ofd = data;
+	struct lu_server_fld	*fld = ofd->ofd_seq_site.ss_server_fld;
+	int			rc;
+	ENTRY;
+
+	if (!likely(fld->lsf_new))
+		RETURN(0);
+
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc) {
+		CERROR("%s: cannot init env: rc = %d\n", ofd_name(ofd), rc);
+		RETURN(rc);
+	}
+
+	rc = fld_update_from_controller(&env, fld);
+	if (rc != 0) {
+		CERROR("%s: cannot update controller: rc = %d\n",
+		       ofd_name(ofd), rc);
+		GOTO(out, rc);
+	}
+out:
+	lu_env_fini(&env);
+	RETURN(rc);
 }
 
 static int ofd_register_seq_exp(struct ofd_device *ofd)
@@ -376,7 +408,7 @@ static int ofd_register_seq_exp(struct ofd_device *ofd)
 
 	rc = lustre_register_lwp_item(lwp_name,
 				      &ss->ss_server_fld->lsf_control_exp,
-				      NULL, NULL);
+				      ofd_register_lwp_callback, ofd);
 	if (rc != 0) {
 		lustre_deregister_lwp_item(&ss->ss_client_seq->lcs_exp);
 		ss->ss_client_seq->lcs_exp = NULL;

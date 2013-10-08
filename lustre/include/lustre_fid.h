@@ -438,12 +438,12 @@ struct lu_server_seq {
 
 /* Server methods */
 
-int seq_server_init(struct lu_server_seq *seq,
+int seq_server_init(const struct lu_env *env,
+		    struct lu_server_seq *seq,
 		    struct dt_device *dev,
 		    const char *prefix,
 		    enum lu_mgr_type type,
-		    struct seq_server_site *ss,
-		    const struct lu_env *env);
+		    struct seq_server_site *ss);
 
 void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_env *env);
@@ -456,9 +456,9 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
                           struct lu_seq_range *out,
                           const struct lu_env *env);
 
-int seq_server_set_cli(struct lu_server_seq *seq,
-                       struct lu_client_seq *cli,
-                       const struct lu_env *env);
+int seq_server_set_cli(const struct lu_env *env,
+		       struct lu_server_seq *seq,
+		       struct lu_client_seq *cli);
 
 /* Client methods */
 int seq_client_init(struct lu_client_seq *seq,
@@ -765,6 +765,27 @@ static inline void range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq
         dst->lsr_end = be64_to_cpu(src->lsr_end);
         dst->lsr_index = be32_to_cpu(src->lsr_index);
         dst->lsr_flags = be32_to_cpu(src->lsr_flags);
+}
+
+static inline void range_array_cpu_to_le(struct lu_seq_range_array *dst,
+					 const struct lu_seq_range_array *src)
+{
+	int i;
+
+	for (i = 0; i < src->lsra_count; i++)
+		range_cpu_to_le(&dst->lsra_lsr[i], &src->lsra_lsr[i]);
+
+	dst->lsra_count = cpu_to_le32(src->lsra_count);
+}
+
+static inline void range_array_le_to_cpu(struct lu_seq_range_array *dst,
+					 const struct lu_seq_range_array *src)
+{
+	int i;
+
+	dst->lsra_count = le32_to_cpu(src->lsra_count);
+	for (i = 0; i < dst->lsra_count; i++)
+		range_le_to_cpu(&dst->lsra_lsr[i], &src->lsra_lsr[i]);
 }
 
 /** @} fid */

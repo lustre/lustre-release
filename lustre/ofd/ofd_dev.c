@@ -567,8 +567,8 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 		GOTO(out_free, rc = -ENOMEM);
 	}
 
-	rc = seq_server_init(ss->ss_server_seq, ofd->ofd_osd, obd_name,
-			     LUSTRE_SEQ_SERVER, ss, env);
+	rc = seq_server_init(env, ss->ss_server_seq, ofd->ofd_osd, obd_name,
+			     LUSTRE_SEQ_SERVER, ss);
 	if (rc) {
 		CERROR("%s : seq server init error %d\n", obd_name, rc);
 		GOTO(out_free, rc);
@@ -589,7 +589,7 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 	OBD_FREE(name, strlen(obd_name) + 10);
 	name = NULL;
 
-	rc = seq_server_set_cli(ss->ss_server_seq, ss->ss_client_seq, env);
+	rc = seq_server_set_cli(env, ss->ss_server_seq, ss->ss_client_seq);
 
 out_free:
 	if (rc) {

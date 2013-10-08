@@ -905,15 +905,6 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	}
 
 	ptlrpc_pinger_add_import(imp);
-
-	if (osp->opd_connect_mdt && data->ocd_index == 0) {
-		/* set seq controller export for MDC0 if exists */
-		struct seq_server_site *ss;
-
-		ss = lu_site2seq(osp2lu_dev(osp)->ld_site);
-		ss->ss_control_exp = class_export_get(*exp);
-		ss->ss_server_fld->lsf_control_exp = *exp;
-	}
 out:
 	RETURN(rc);
 }

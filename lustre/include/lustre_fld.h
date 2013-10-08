@@ -95,6 +95,13 @@ struct lu_server_fld {
          * Fld service name in form "fld-srv-lustre-MDTXXX" */
         char                     lsf_name[80];
 
+	/**
+	 * Just reformated or upgraded, and this flag is being
+	 * used to check whether the local FLDB is needs to be
+	 * synced with global FLDB(in MDT0), and it is only needed
+	 * if the MDT is upgraded from < 2.6 to 2.6, i.e. when the
+	 * local FLDB is being invited */
+	unsigned int		 lsf_new:1;
 };
 
 struct lu_client_fld {
@@ -131,8 +138,7 @@ struct lu_client_fld {
 
 /* Server methods */
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
-		    struct dt_device *dt, const char *prefix, int mds_node_id,
-		    int type);
+		    struct dt_device *dt, const char *prefix, int type);
 
 void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld);
 
@@ -152,6 +158,12 @@ int fld_insert_entry(const struct lu_env *env,
 
 int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		      seqno_t seq, struct lu_seq_range *range);
+
+int fld_local_lookup(const struct lu_env *env, struct lu_server_fld *fld,
+		     seqno_t seq, struct lu_seq_range *range);
+
+int fld_update_from_controller(const struct lu_env *env,
+			       struct lu_server_fld *fld);
 
 /* Client methods */
 int fld_client_init(struct lu_client_fld *fld,

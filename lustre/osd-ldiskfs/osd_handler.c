@@ -937,6 +937,28 @@ out:
         RETURN(rc);
 }
 
+static int osd_seq_exists(const struct lu_env *env,
+			      struct osd_device *osd, obd_seq seq)
+{
+	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
+	struct seq_server_site	*ss = osd_seq_site(osd);
+	int			rc;
+	ENTRY;
+
+	if (ss == NULL)
+		RETURN(1);
+
+	rc = osd_fld_lookup(env, osd, seq, range);
+	if (rc != 0) {
+		if (rc != -ENOENT)
+			CERROR("%s: can't lookup FLD sequence "LPX64
+			       ": rc = %d\n", osd_name(osd), seq, rc);
+		RETURN(0);
+	}
+
+	RETURN(ss->ss_node_id == range->lsr_index);
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -2137,7 +2159,6 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   obd_seq seq, struct lu_seq_range *range)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
-	int			rc;
 
 	if (fid_seq_is_idif(seq)) {
 		fld_range_set_ost(range);
@@ -2156,12 +2177,8 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 
 	LASSERT(ss != NULL);
 	fld_range_set_any(range);
-	rc = fld_server_lookup(env, ss->ss_server_fld, seq, range);
-	if (rc != 0) {
-		CERROR("%s: cannot find FLD range for "LPX64": rc = %d\n",
-		       osd_name(osd), seq, rc);
-	}
-	return rc;
+	/* OSD will only do local fld lookup */
+	return fld_local_lookup(env, ss->ss_server_fld, seq, range);
 }
 
 /*
@@ -2174,7 +2191,6 @@ static int osd_declare_object_create(const struct lu_env *env,
 				     struct dt_object_format *dof,
 				     struct thandle *handle)
 {
-	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct osd_thandle	*oh;
 	int			 rc;
 	ENTRY;
@@ -2211,16 +2227,6 @@ static int osd_declare_object_create(const struct lu_env *env,
 				   false, false, NULL, false);
 	if (rc != 0)
 		RETURN(rc);
-
-	/* It does fld look up inside declare, and the result will be
-	 * added to fld cache, so the following fld lookup inside insert
-	 * does not need send RPC anymore, so avoid send rpc with holding
-	 * transaction */
-	if (fid_is_norm(lu_object_fid(&dt->do_lu)) &&
-		!fid_is_last_id(lu_object_fid(&dt->do_lu)))
-		osd_fld_lookup(env, osd_dt_dev(handle->th_dev),
-			       fid_seq(lu_object_fid(&dt->do_lu)), range);
-
 
 	RETURN(rc);
 }
@@ -3350,31 +3356,6 @@ static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
 	return rc;
 }
 
-static int osd_mdt_seq_exists(const struct lu_env *env,
-			      struct osd_device *osd, obd_seq seq)
-{
-	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
-	struct seq_server_site	*ss = osd_seq_site(osd);
-	int			rc;
-	ENTRY;
-
-	if (ss == NULL)
-		RETURN(1);
-
-	/* XXX: currently, each MDT only store avaible sequence on disk, and no
-	 * allocated sequences information on disk, so we have to lookup FLDB,
-	 * but it probably makes more sense also store allocated sequence
-	 * locally, so we do not need do remote FLDB lookup in OSD */
-	rc = osd_fld_lookup(env, osd, seq, range);
-	if (rc != 0) {
-		CERROR("%s: Can not lookup fld for "LPX64"\n",
-		       osd_name(osd), seq);
-		RETURN(0);
-	}
-
-	RETURN(ss->ss_node_id == range->lsr_index);
-}
-
 static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 			  struct lu_fid *fid)
 {
@@ -3384,8 +3365,7 @@ static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 	if (unlikely(!fid_seq_in_fldb(fid_seq(fid))))
 		RETURN(0);
 
-	/* Currently only check this for FID on MDT */
-	if (osd_mdt_seq_exists(env, osd, fid_seq(fid)))
+	if (osd_seq_exists(env, osd, fid_seq(fid)))
 		RETURN(0);
 
 	RETURN(1);

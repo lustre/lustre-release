@@ -136,6 +136,7 @@ struct ll_rpc_opcode {
         { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
         { SEC_CTX_FINI,     "sec_ctx_fini" },
 	{ FLD_QUERY,        "fld_query" },
+	{ FLD_READ,	    "fld_read" },
 	{ UPDATE_OBJ,	    "update_obj" },
 };
 

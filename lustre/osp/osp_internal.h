@@ -325,6 +325,11 @@ static inline struct dt_object *osp_object_child(struct osp_object *o)
                              struct dt_object, do_lu);
 }
 
+static inline struct seq_server_site *osp_seq_site(struct osp_device *osp)
+{
+	return osp->opd_dt_dev.dd_lu_dev.ld_site->ld_seq_site;
+}
+
 #define osp_init_rpc_lock(lck) mdc_init_rpc_lock(lck)
 #define osp_get_rpc_lock(lck, it)  mdc_get_rpc_lock(lck, it)
 #define osp_put_rpc_lock(lck, it) mdc_put_rpc_lock(lck, it)

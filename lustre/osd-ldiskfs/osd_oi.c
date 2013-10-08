@@ -493,6 +493,8 @@ static int osd_oi_iam_lookup(struct osd_thread_info *oti,
 int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, enum oi_check_flags flags)
 {
+	struct lu_seq_range	*range = &info->oti_seq_range;
+	int			rc;
 	ENTRY;
 
 	if (flags & OI_KNOWN_ON_OST)
@@ -509,7 +511,14 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 	if (!(flags & OI_CHECK_FLD))
 		RETURN(0);
 
-	if (osd->od_is_ost)
+	rc = osd_fld_lookup(info->oti_env, osd, fid_seq(fid), range);
+	if (rc != 0) {
+		CERROR("%s: "DFID" lookup failed: rc = %d\n", osd_name(osd),
+		       PFID(fid), rc);
+		RETURN(rc);
+	}
+
+	if (fld_range_is_ost(range))
 		RETURN(1);
 
 	RETURN(0);

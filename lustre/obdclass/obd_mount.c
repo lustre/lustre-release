@@ -750,22 +750,15 @@ int server_name_is_ost(const char *svname)
 }
 EXPORT_SYMBOL(server_name_is_ost);
 
-/* Get the index from the obd name.
-   rc = server type, or
-   rc < 0  on error
-   if endptr isn't NULL it is set to end of name */
-int server_name2index(const char *svname, __u32 *idx, const char **endptr)
+/**
+ * Get the index from the target name MDTXXXX/OSTXXXX
+ * rc = server type, or rc < 0  on error
+ **/
+int target_name2index(const char *tgtname, __u32 *idx, const char **endptr)
 {
+	const char *dash = tgtname;
 	unsigned long index;
 	int rc;
-	const char *dash;
-
-	/* We use server_name2fsname() just for parsing */
-	rc = server_name2fsname(svname, NULL, &dash);
-	if (rc != 0)
-		return rc;
-
-	dash++;
 
 	if (strncmp(dash, "MDT", 3) == 0)
 		rc = LDD_F_SV_TYPE_MDT;
@@ -785,6 +778,28 @@ int server_name2index(const char *svname, __u32 *idx, const char **endptr)
 	index = simple_strtoul(dash, (char **)endptr, 16);
 	if (idx != NULL)
 		*idx = index;
+	return rc;
+}
+EXPORT_SYMBOL(target_name2index);
+
+/* Get the index from the obd name.
+   rc = server type, or
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of name */
+int server_name2index(const char *svname, __u32 *idx, const char **endptr)
+{
+	const char *dash;
+	int rc;
+
+	/* We use server_name2fsname() just for parsing */
+	rc = server_name2fsname(svname, NULL, &dash);
+	if (rc != 0)
+		return rc;
+
+	dash++;
+	rc = target_name2index(dash, idx, endptr);
+	if (rc < 0)
+		return rc;
 
 	/* Account for -mdc after index that is possible when specifying mdt */
 	if (endptr != NULL && strncmp(LUSTRE_MDC_NAME, *endptr + 1,
