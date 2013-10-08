@@ -84,7 +84,8 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 	if (likely(!IS_ERR(o)))
 		fo = ofd_obj(o);
 	else
-		fo = (struct ofd_object *)o; /* return error */
+		fo = ERR_CAST(o); /* return error */
+
 	RETURN(fo);
 }
 
@@ -103,7 +104,7 @@ struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
 
 	dto = dt_find_or_create(env, ofd->ofd_osd, fid, &info->fti_dof, attr);
 	if (IS_ERR(dto))
-		RETURN((struct ofd_object *)dto);
+		RETURN(ERR_CAST(dto));
 
 	fo_obj = lu_object_locate(dto->do_lu.lo_header,
 				  ofd->ofd_dt_dev.dd_lu_dev.ld_type);
@@ -200,7 +201,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		rc = ostid_to_fid(&info->fti_fid, &info->fti_ostid, 0);
 		if (rc) {
 			if (i == 0)
-				GOTO(out, rc = PTR_ERR(fo));
+				GOTO(out, rc);
 
 			nr = i;
 			break;
