@@ -7564,20 +7564,24 @@ run_test 115 "verify dynamic thread creation===================="
 free_min_max () {
 	wait_delete_completed
 	AVAIL=($(lctl get_param -n osc.*[oO][sS][cC]-[^M]*.kbytesavail))
-	echo OST kbytes available: ${AVAIL[@]}
-	MAXI=0; MAXV=${AVAIL[0]}
-	MINI=0; MINV=${AVAIL[0]}
+	echo "OST kbytes available: ${AVAIL[@]}"
+	MAXV=${AVAIL[0]}
+	MAXI=0
+	MINV=${AVAIL[0]}
+	MINI=0
 	for ((i = 0; i < ${#AVAIL[@]}; i++)); do
 		#echo OST $i: ${AVAIL[i]}kb
 		if [[ ${AVAIL[i]} -gt $MAXV ]]; then
-			MAXV=${AVAIL[i]}; MAXI=$i
+			MAXV=${AVAIL[i]}
+			MAXI=$i
 		fi
 		if [[ ${AVAIL[i]} -lt $MINV ]]; then
-			MINV=${AVAIL[i]}; MINI=$i
+			MINV=${AVAIL[i]}
+			MINI=$i
 		fi
 	done
-	echo Min free space: OST $MINI: $MINV
-	echo Max free space: OST $MAXI: $MAXV
+	echo "Min free space: OST $MINI: $MINV"
+	echo "Max free space: OST $MAXI: $MAXV"
 }
 
 test_116a() { # was previously test_116()
@@ -7600,9 +7604,9 @@ test_116a() { # was previously test_116()
 
 	# Check if we need to generate uneven OSTs
 	test_mkdir -p $DIR/$tdir/OST${MINI}
-	local FILL=$(($MINV / 4))
-	local DIFF=$(($MAXV - $MINV))
-	local DIFF2=$(($DIFF * 100 / $MINV))
+	local FILL=$((MINV / 4))
+	local DIFF=$((MAXV - MINV))
+	local DIFF2=$((DIFF * 100 / MINV))
 
 	local threshold=$(do_facet $SINGLEMDS \
 		lctl get_param -n *.*MDT0000-mdtlov.qos_threshold_rr | head -n1)
@@ -7616,15 +7620,15 @@ test_116a() { # was previously test_116()
 	else
 		# generate uneven OSTs. Write 2% over the QOS threshold value
 		echo "no"
-		DIFF=$(($threshold - $DIFF2 + 2))
-		DIFF2=$(( ($MINV * $DIFF)/100 ))
-		echo "Fill ${DIFF}% remaining space in OST${MINI} with ${DIFF2}KB"
+		DIFF=$((threshold - DIFF2 + 2))
+		DIFF2=$((MINV * DIFF / 100))
+		echo "Fill $DIFF% remaining space in OST$MINI with ${DIFF2}KB"
 		$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI} ||
 			error "setstripe failed"
-		DIFF=$(($DIFF2 / 2048))
+		DIFF=$((DIFF2 / 2048))
 		i=0
 		while [ $i -lt $DIFF ]; do
-			i=$(($i + 1))
+			i=$((i + 1))
 			dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i \
 				bs=2M count=1 2>/dev/null
 			echo -n .
@@ -7635,10 +7639,10 @@ test_116a() { # was previously test_116()
 		free_min_max
 	fi
 
-	DIFF=$(($MAXV - $MINV))
-	DIFF2=$(($DIFF * 100 / $MINV))
-	echo -n "diff=${DIFF}=${DIFF2}% must be > ${threshold}% for QOS mode..."
-	if [[ $DIFF2 -gt $threshold ]]; then
+	DIFF=$((MAXV - MINV))
+	DIFF2=$((DIFF * 100 / MINV))
+	echo -n "diff=$DIFF=$DIFF2% must be > $threshold% for QOS mode..."
+	if [ $DIFF2 -gt $threshold ]; then
 		echo "ok"
 	else
 		echo "failed - QOS mode won't be used"
@@ -7647,12 +7651,14 @@ test_116a() { # was previously test_116()
 		return
 	fi
 
-	MINI1=$MINI; MINV1=$MINV
-	MAXI1=$MAXI; MAXV1=$MAXV
+	MINI1=$MINI
+	MINV1=$MINV
+	MAXI1=$MAXI
+	MAXV1=$MAXV
 
 	# now fill using QOS
 	$SETSTRIPE -c 1 $DIR/$tdir
-	FILL=$(($FILL / 200))
+	FILL=$((FILL / 200))
 	if [ $FILL -gt 600 ]; then
 		FILL=600
 	fi
@@ -7670,31 +7676,31 @@ test_116a() { # was previously test_116()
 
 	echo "Note: free space may not be updated, so measurements might be off"
 	free_min_max
-	DIFF2=$(($MAXV - $MINV))
+	DIFF2=$((MAXV - MINV))
 	echo "free space delta: orig $DIFF final $DIFF2"
 	[ $DIFF2 -gt $DIFF ] && echo "delta got worse!"
-	DIFF=$(($MINV1 - ${AVAIL[$MINI1]}))
+	DIFF=$((MINV1 - ${AVAIL[$MINI1]}))
 	echo "Wrote ${DIFF}KB to smaller OST $MINI1"
-	DIFF2=$(($MAXV1 - ${AVAIL[$MAXI1]}))
+	DIFF2=$((MAXV1 - ${AVAIL[$MAXI1]}))
 	echo "Wrote ${DIFF2}KB to larger OST $MAXI1"
 	if [[ $DIFF -gt 0 ]]; then
-		FILL=$(($DIFF2 * 100 / $DIFF - 100))
+		FILL=$((DIFF2 * 100 / DIFF - 100))
 		echo "Wrote ${FILL}% more data to larger OST $MAXI1"
 	fi
 
 	# Figure out which files were written where
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-		  awk '/'$MINI1': / {print $2; exit}')
+	       awk '/'$MINI1': / {print $2; exit}')
 	echo $UUID
 	MINC=$($GETSTRIPE --ost $UUID $DIR/$tdir | grep $DIR | wc -l)
 	echo "$MINC files created on smaller OST $MINI1"
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
-		  awk '/'$MAXI1': / {print $2; exit}')
+	       awk '/'$MAXI1': / {print $2; exit}')
 	echo $UUID
 	MAXC=$($GETSTRIPE --ost $UUID $DIR/$tdir | grep $DIR | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
 	if [[ $MINC -gt 0 ]]; then
-		FILL=$(($MAXC * 100 / $MINC - 100))
+		FILL=$((MAXC * 100 / MINC - 100))
 		echo "Wrote ${FILL}% more files to larger OST $MAXI1"
 	fi
 	[[ $MAXC -gt $MINC ]] ||
