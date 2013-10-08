@@ -38,19 +38,18 @@
 
 #ifdef __KERNEL__
 # include <linux/module.h>
-# include <linux/pagemap.h>
-# include <linux/miscdevice.h>
-# include <linux/init.h>
+# include <linux/lustre_intent.h>
 #else
 # include <liblustre.h>
 #endif
 
-#include <lustre_acl.h>
+#include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
-/* fid_res_name_eq() */
-#include <lustre_fid.h>
-#include <lprocfs_status.h>
+#include <lustre_fid.h> /* fid_res_name_eq() */
+#include <lustre_mdc.h>
+#include <lustre_net.h>
+#include <lustre_req_layout.h>
 #include "mdc_internal.h"
 
 struct mdc_getattr_args {
@@ -347,11 +346,11 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
                              max(lmmsize, obddev->u.cli.cl_default_mds_easize));
 
-        rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                return NULL;
-        }
+	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(ERR_PTR(rc));
+	}
 
 	spin_lock(&req->rq_lock);
 	req->rq_replay = req->rq_import->imp_replayable;
@@ -1300,10 +1299,10 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 		op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
 		ldlm_it2str(it->it_op), it->it_flags);
 
-        fid_build_reg_res_name(&op_data->op_fid1, &res_id);
-        req = mdc_intent_getattr_pack(exp, it, op_data);
-        if (!req)
-                RETURN(-ENOMEM);
+	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
+	req = mdc_intent_getattr_pack(exp, it, op_data);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
         rc = mdc_enter_request(&obddev->u.cli);
         if (rc != 0) {
