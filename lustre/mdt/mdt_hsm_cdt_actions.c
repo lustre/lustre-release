@@ -339,7 +339,7 @@ struct agent_action_iterator {
 	int			 aai_magic;	 /**< magic number */
 	bool			 aai_eof;	 /**< all done */
 	struct lu_env		 aai_env;	 /**< lustre env for llog */
-	struct obd_device	*aai_obd;	 /**< metadata device */
+	struct mdt_device	*aai_mdt;	 /**< metadata device */
 	struct llog_ctxt	*aai_ctxt;	 /**< llog context */
 	int			 aai_cat_index;	 /**< cata idx already shown */
 	int			 aai_index;	 /**< idx in cata shown */
@@ -357,7 +357,8 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
 		 aai->aai_magic);
 
-	aai->aai_ctxt = llog_get_context(aai->aai_obd, LLOG_AGENT_ORIG_CTXT);
+	aai->aai_ctxt = llog_get_context(mdt2obd_dev(aai->aai_mdt),
+					 LLOG_AGENT_ORIG_CTXT);
 	if (aai->aai_ctxt == NULL || aai->aai_ctxt->loc_handle == NULL) {
 		CERROR("llog_get_context() failed\n");
 		RETURN(ERR_PTR(-ENOENT));
@@ -368,7 +369,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 	/* first call = rewind */
 	if (*pos == 0) {
 		aai->aai_cat_index = 0;
-		aai->aai_index = 0;
+		aai->aai_index = -1;
 		aai->aai_eof = false;
 		*pos = 1;
 	}
@@ -454,6 +455,7 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator	*aai = s->private;
+	struct coordinator		*cdt = &aai->aai_mdt->mdt_coordinator;
 	int				 rc;
 	ENTRY;
 
@@ -465,9 +467,11 @@ static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 	if (aai->aai_eof)
 		RETURN(0);
 
+	mutex_lock(&cdt->cdt_llog_lock);
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
 			      hsm_actions_show_cb, s,
 			      aai->aai_cat_index, aai->aai_index + 1);
+	mutex_unlock(&cdt->cdt_llog_lock);
 	if (rc == 0) /* all llog parsed */
 		aai->aai_eof = true;
 	if (rc == LLOG_PROC_BREAK) /* buffer full */
@@ -529,7 +533,7 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	 * mdt_coordinator_procfs_init() calling lprocfs_register()
 	 */
 	mdt = (struct mdt_device *)PDE(inode)->data;
-	aai->aai_obd = mdt2obd_dev(mdt);
+	aai->aai_mdt = mdt;
 	s = file->private_data;
 	s->private = aai;
 
