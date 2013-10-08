@@ -1079,8 +1079,8 @@ test_13() {
 			CURR_FILE="$CURR_DIR/$tfile.$f"
 			# write file-specific data
 			do_facet $SINGLEAGT \
-				echo "d=$d, f=$f, dir=$CURR_DIR, "\
-				     "file=$CURR_FILE" > $CURR_FILE
+				"echo d=$d, f=$f, dir=$CURR_DIR, "\
+					"file=$CURR_FILE > $CURR_FILE"
 		done
 	done
 	# import to Lustre
