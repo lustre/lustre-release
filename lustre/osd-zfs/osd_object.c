@@ -1491,7 +1491,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	db = osd_create_type_f(dof->dof_type)(env, osd, attr, zapid, oh);
 	if (IS_ERR(db))
-		GOTO(out, rc = PTR_ERR(th));
+		GOTO(out, rc = PTR_ERR(db));
 
 	zde->zde_pad = 0;
 	zde->zde_dnode = db->db_object;
