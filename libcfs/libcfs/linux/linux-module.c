@@ -40,53 +40,52 @@
 
 #define LNET_MINOR 240
 
-int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
+int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
 {
-        struct libcfs_ioctl_hdr   *hdr;
-        struct libcfs_ioctl_data  *data;
-        int err;
-        ENTRY;
+	if (libcfs_ioctl_is_invalid(data)) {
+		CERROR("LNET: ioctl not correctly formatted\n");
+		RETURN(-EINVAL);
+	}
 
-        hdr = (struct libcfs_ioctl_hdr *)buf;
-        data = (struct libcfs_ioctl_data *)buf;
+	if (data->ioc_inllen1 != 0)
+		data->ioc_inlbuf1 = &data->ioc_bulk[0];
 
-        err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
-        if (err)
-                RETURN(err);
+	if (data->ioc_inllen2 != 0)
+		data->ioc_inlbuf2 = &data->ioc_bulk[0] +
+			cfs_size_round(data->ioc_inllen1);
 
-        if (hdr->ioc_version != LIBCFS_IOCTL_VERSION) {
-                CERROR("PORTALS: version mismatch kernel vs application\n");
-                RETURN(-EINVAL);
-        }
+	RETURN(0);
+}
 
-        if (hdr->ioc_len + buf >= end) {
-                CERROR("PORTALS: user buffer exceeds kernel buffer\n");
-                RETURN(-EINVAL);
-        }
+int libcfs_ioctl_getdata_len(const struct libcfs_ioctl_hdr __user *arg,
+			     __u32 *len)
+{
+	struct libcfs_ioctl_hdr hdr;
+	ENTRY;
 
+	if (copy_from_user(&hdr, arg, sizeof(hdr)))
+		RETURN(-EFAULT);
 
-        if (hdr->ioc_len < sizeof(struct libcfs_ioctl_data)) {
-                CERROR("PORTALS: user buffer too small for ioctl\n");
-                RETURN(-EINVAL);
-        }
+	if (hdr.ioc_version != LIBCFS_IOCTL_VERSION) {
+		CERROR("LNET: version mismatch expected %#x, got %#x\n",
+		       LIBCFS_IOCTL_VERSION, hdr.ioc_version);
+		RETURN(-EINVAL);
+	}
 
-        err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
-        if (err)
-                RETURN(err);
+	*len = hdr.ioc_len;
 
-        if (libcfs_ioctl_is_invalid(data)) {
-                CERROR("PORTALS: ioctl not correctly formatted\n");
-                RETURN(-EINVAL);
-        }
+	RETURN(0);
+}
 
-        if (data->ioc_inllen1)
-                data->ioc_inlbuf1 = &data->ioc_bulk[0];
+int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr *buf, __u32 buf_len,
+			 const void __user *arg)
+{
+	ENTRY;
 
-        if (data->ioc_inllen2)
-                data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-                        cfs_size_round(data->ioc_inllen1);
+	if (copy_from_user(buf, arg, buf_len))
+		RETURN(-EINVAL);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 int libcfs_ioctl_popdata(void *arg, void *data, int size)

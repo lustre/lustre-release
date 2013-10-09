@@ -84,28 +84,28 @@ lnet_unconfigure (void)
 }
 
 int
-lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
+lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 {
-        int   rc;
+	int   rc;
 
-        switch (cmd) {
-        case IOC_LIBCFS_CONFIGURE:
-                return lnet_configure(NULL);
+	switch (cmd) {
+	case IOC_LIBCFS_CONFIGURE:
+		return lnet_configure(NULL);
 
-        case IOC_LIBCFS_UNCONFIGURE:
-                return lnet_unconfigure();
-                
-        default:
-                /* Passing LNET_PID_ANY only gives me a ref if the net is up
-                 * already; I'll need it to ensure the net can't go down while
-                 * I'm called into it */
-                rc = LNetNIInit(LNET_PID_ANY);
-                if (rc >= 0) {
-                        rc = LNetCtl(cmd, data);
-                        LNetNIFini();
-                }
-                return rc;
-        }
+	case IOC_LIBCFS_UNCONFIGURE:
+		return lnet_unconfigure();
+
+	default:
+		/* Passing LNET_PID_ANY only gives me a ref if the net is up
+		 * already; I'll need it to ensure the net can't go down while
+		 * I'm called into it */
+		rc = LNetNIInit(LNET_PID_ANY);
+		if (rc >= 0) {
+			rc = LNetCtl(cmd, hdr);
+			LNetNIFini();
+		}
+		return rc;
+	}
 }
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);

@@ -35,7 +35,7 @@
  *
  * lnet/selftest/conctl.c
  *
- * IOC handle in kernel 
+ * IOC handle in kernel
  *
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
@@ -810,14 +810,19 @@ out:
 }
 
 int
-lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data)
+lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 {
 	char   *buf;
-	int     opc = data->ioc_u32[0];
+	struct libcfs_ioctl_data *data;
+	int     opc;
 	int     rc;
 
 	if (cmd != IOC_LIBCFS_LNETST)
 		return -EINVAL;
+
+	data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
+
+	opc = data->ioc_u32[0];
 
 	if (data->ioc_plen1 > PAGE_CACHE_SIZE)
 		return -EINVAL;
@@ -834,83 +839,83 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data)
 
 	mutex_lock(&console_session.ses_mutex);
 
-        console_session.ses_laststamp = cfs_time_current_sec();
+	console_session.ses_laststamp = cfs_time_current_sec();
 
-        if (console_session.ses_shutdown) {
-                rc = -ESHUTDOWN;
-                goto out;
-        }
+	if (console_session.ses_shutdown) {
+		rc = -ESHUTDOWN;
+		goto out;
+	}
 
-        if (console_session.ses_expired)
-                lstcon_session_end();
+	if (console_session.ses_expired)
+		lstcon_session_end();
 
-        if (opc != LSTIO_SESSION_NEW &&
-            console_session.ses_state == LST_SESSION_NONE) {
-                CDEBUG(D_NET, "LST no active session\n");
-                rc = -ESRCH;
-                goto out;
-        }
+	if (opc != LSTIO_SESSION_NEW &&
+	    console_session.ses_state == LST_SESSION_NONE) {
+		CDEBUG(D_NET, "LST no active session\n");
+		rc = -ESRCH;
+		goto out;
+	}
 
-        memset(&console_session.ses_trans_stat, 0, sizeof(lstcon_trans_stat_t));
+	memset(&console_session.ses_trans_stat, 0, sizeof(lstcon_trans_stat_t));
 
-        switch (opc) {
-                case LSTIO_SESSION_NEW:
-                        rc = lst_session_new_ioctl((lstio_session_new_args_t *)buf);
-                        break;
-                case LSTIO_SESSION_END:
-                        rc = lst_session_end_ioctl((lstio_session_end_args_t *)buf);
-                        break;
-                case LSTIO_SESSION_INFO:
-                        rc = lst_session_info_ioctl((lstio_session_info_args_t *)buf);
-                        break;
-                case LSTIO_DEBUG:
-                        rc = lst_debug_ioctl((lstio_debug_args_t *)buf);
-                        break;
-                case LSTIO_GROUP_ADD:
-                        rc = lst_group_add_ioctl((lstio_group_add_args_t *)buf);
-                        break;
-                case LSTIO_GROUP_DEL:
-                        rc = lst_group_del_ioctl((lstio_group_del_args_t *)buf);
-                        break;
-                case LSTIO_GROUP_UPDATE:
-                        rc = lst_group_update_ioctl((lstio_group_update_args_t *)buf);
-                        break;
-                case LSTIO_NODES_ADD:
-                        rc = lst_nodes_add_ioctl((lstio_group_nodes_args_t *)buf);
-                        break;
-                case LSTIO_GROUP_LIST:
-                        rc = lst_group_list_ioctl((lstio_group_list_args_t *)buf);
-                        break;
-                case LSTIO_GROUP_INFO:
-                        rc = lst_group_info_ioctl((lstio_group_info_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_ADD:
-                        rc = lst_batch_add_ioctl((lstio_batch_add_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_START:
-                        rc = lst_batch_run_ioctl((lstio_batch_run_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_STOP:
-                        rc = lst_batch_stop_ioctl((lstio_batch_stop_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_QUERY:
-                        rc = lst_batch_query_ioctl((lstio_batch_query_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_LIST:
-                        rc = lst_batch_list_ioctl((lstio_batch_list_args_t *)buf);
-                        break;
-                case LSTIO_BATCH_INFO:
-                        rc = lst_batch_info_ioctl((lstio_batch_info_args_t *)buf);
-                        break;
-                case LSTIO_TEST_ADD:
-                        rc = lst_test_add_ioctl((lstio_test_args_t *)buf);
-                        break;
-                case LSTIO_STAT_QUERY:
-                        rc = lst_stat_query_ioctl((lstio_stat_args_t *)buf);
-                        break;
-                default:
-                        rc = -EINVAL;
-        }
+	switch (opc) {
+	case LSTIO_SESSION_NEW:
+		rc = lst_session_new_ioctl((lstio_session_new_args_t *)buf);
+		break;
+	case LSTIO_SESSION_END:
+		rc = lst_session_end_ioctl((lstio_session_end_args_t *)buf);
+		break;
+	case LSTIO_SESSION_INFO:
+		rc = lst_session_info_ioctl((lstio_session_info_args_t *)buf);
+		break;
+	case LSTIO_DEBUG:
+		rc = lst_debug_ioctl((lstio_debug_args_t *)buf);
+		break;
+	case LSTIO_GROUP_ADD:
+		rc = lst_group_add_ioctl((lstio_group_add_args_t *)buf);
+		break;
+	case LSTIO_GROUP_DEL:
+		rc = lst_group_del_ioctl((lstio_group_del_args_t *)buf);
+		break;
+	case LSTIO_GROUP_UPDATE:
+		rc = lst_group_update_ioctl((lstio_group_update_args_t *)buf);
+		break;
+	case LSTIO_NODES_ADD:
+		rc = lst_nodes_add_ioctl((lstio_group_nodes_args_t *)buf);
+		break;
+	case LSTIO_GROUP_LIST:
+		rc = lst_group_list_ioctl((lstio_group_list_args_t *)buf);
+		break;
+	case LSTIO_GROUP_INFO:
+		rc = lst_group_info_ioctl((lstio_group_info_args_t *)buf);
+		break;
+	case LSTIO_BATCH_ADD:
+		rc = lst_batch_add_ioctl((lstio_batch_add_args_t *)buf);
+		break;
+	case LSTIO_BATCH_START:
+		rc = lst_batch_run_ioctl((lstio_batch_run_args_t *)buf);
+		break;
+	case LSTIO_BATCH_STOP:
+		rc = lst_batch_stop_ioctl((lstio_batch_stop_args_t *)buf);
+		break;
+	case LSTIO_BATCH_QUERY:
+		rc = lst_batch_query_ioctl((lstio_batch_query_args_t *)buf);
+		break;
+	case LSTIO_BATCH_LIST:
+		rc = lst_batch_list_ioctl((lstio_batch_list_args_t *)buf);
+		break;
+	case LSTIO_BATCH_INFO:
+		rc = lst_batch_info_ioctl((lstio_batch_info_args_t *)buf);
+		break;
+	case LSTIO_TEST_ADD:
+		rc = lst_test_add_ioctl((lstio_test_args_t *)buf);
+		break;
+	case LSTIO_STAT_QUERY:
+		rc = lst_stat_query_ioctl((lstio_stat_args_t *)buf);
+		break;
+	default:
+		rc = -EINVAL;
+	}
 
 	if (copy_to_user(data->ioc_pbuf2, &console_session.ses_trans_stat,
 			 sizeof(lstcon_trans_stat_t)))

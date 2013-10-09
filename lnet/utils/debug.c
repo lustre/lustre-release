@@ -752,18 +752,19 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 
 	data.ioc_inllen1 = strlen(text) + 1;
 	data.ioc_inlbuf1 = text;
-        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
-                return -1;
-        }
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_MARK_DEBUG, buf);
-        if (rc) {
-                fprintf(stderr, "IOC_LIBCFS_MARK_DEBUG failed: %s\n",
-                        strerror(errno));
-                return -1;
-        }
-        return 0;
+	if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+		fprintf(stderr, "libcfs_ioctl_pack failed.\n");
+		return -1;
+	}
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_MARK_DEBUG, buf);
+	if (rc) {
+		fprintf(stderr, "IOC_LIBCFS_MARK_DEBUG failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+	return 0;
 }
 
 static struct mod_paths {

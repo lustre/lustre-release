@@ -316,29 +316,28 @@ jt_ioc_dump(int argc, char **argv)
 int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
                                     int max)
 {
-        char *ptr;
-        struct libcfs_ioctl_data *overlay;
-        data->ioc_len = libcfs_ioctl_packlen(data);
-        data->ioc_version = LIBCFS_IOCTL_VERSION;
+	char *ptr;
+	struct libcfs_ioctl_data *overlay;
+	data->ioc_hdr.ioc_len = libcfs_ioctl_packlen(data);
+	data->ioc_hdr.ioc_version = LIBCFS_IOCTL_VERSION;
 
-        if (*pbuf && libcfs_ioctl_packlen(data) > max)
-                return 1;
-        if (*pbuf == NULL) {
-                *pbuf = malloc(data->ioc_len);
-        }
-        if (!*pbuf)
-                return 1;
-        overlay = (struct libcfs_ioctl_data *)*pbuf;
-        memcpy(*pbuf, data, sizeof(*data));
+	if (*pbuf != NULL && libcfs_ioctl_packlen(data) > max)
+		return 1;
+	if (*pbuf == NULL)
+		*pbuf = malloc(data->ioc_hdr.ioc_len);
+	if (*pbuf == NULL)
+		return 1;
+	overlay = (struct libcfs_ioctl_data *)*pbuf;
+	memcpy(*pbuf, data, sizeof(*data));
 
-        ptr = overlay->ioc_bulk;
-        if (data->ioc_inlbuf1)
-                LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
-        if (data->ioc_inlbuf2)
-                LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
-        if (libcfs_ioctl_is_invalid(overlay))
-                return 1;
+	ptr = overlay->ioc_bulk;
+	if (data->ioc_inlbuf1 != NULL)
+		LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+	if (data->ioc_inlbuf2 != NULL)
+		LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+	if (libcfs_ioctl_is_invalid(overlay))
+		return 1;
 
-        return 0;
+	return 0;
 }
 
