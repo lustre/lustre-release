@@ -760,16 +760,15 @@ struct niobuf_local {
 #define LUSTRE_FLD_NAME         "fld"
 #define LUSTRE_SEQ_NAME         "seq"
 
-#define LUSTRE_CMM_NAME         "cmm"
 #define LUSTRE_MDD_NAME         "mdd"
 #define LUSTRE_OSD_LDISKFS_NAME	"osd-ldiskfs"
 #define LUSTRE_OSD_ZFS_NAME     "osd-zfs"
 #define LUSTRE_VVP_NAME         "vvp"
 #define LUSTRE_LMV_NAME         "lmv"
-#define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
 #define LUSTRE_SLP_NAME         "slp"
 #define LUSTRE_LOD_NAME		"lod"
 #define LUSTRE_OSP_NAME		"osp"
+#define LUSTRE_LWP_NAME		"lwp"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
@@ -783,7 +782,6 @@ struct niobuf_local {
 #define LUSTRE_MGS_NAME         "mgs"
 #define LUSTRE_MGC_NAME         "mgc"
 
-#define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"
 #define LUSTRE_ECHO_CLIENT_NAME "echo_client"
 #define LUSTRE_QMT_NAME         "qmt"
@@ -825,70 +823,6 @@ static inline int is_osp_on_mdt(char *name)
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
-
-/* Currently the connection osp is only for connecting MDT0, the
- * name would either be
- * fsname-MDT0000-osp-OSTxxxx or fsname-MDT0000-osp-MDT0000 */
-static inline int is_osp_for_connection(char *name)
-{
-	char	*ptr;
-	int	osp_on_mdt0 = 0;
-	char	*endptr;
-
-	ptr = strrchr(name, '-');
-	if (ptr == NULL) {
-		CERROR("%s is not a obdname\n", name);
-		return 0;
-	}
-
-	if (strncmp(ptr + 1, "OST", 3) != 0 && strncmp(ptr + 1, "MDT", 3) != 0)
-		return 0;
-
-	if (strncmp(ptr + 1, "MDT", 3) == 0) {
-		int index;
-
-#ifdef __KERNEL__
-		index = simple_strtoul(ptr + 4, &endptr, 16);
-#else
-		index = strtoul(ptr + 4, &endptr, 16);
-#endif
-		if (index != 0)
-			return 0;
-		osp_on_mdt0 = 1;
-	}
-
-	/* match the "-osp" */
-	if (ptr - name < strlen(LUSTRE_OSP_NAME) + 1)
-		return 0;
-
-	ptr -= (strlen(LUSTRE_OSP_NAME) + 1);
-	if (*ptr != '-')
-		return 0;
-
-	if (strncmp(ptr + 1, LUSTRE_OSP_NAME, strlen(LUSTRE_OSP_NAME)) != 0)
-		return 0;
-
-	if (osp_on_mdt0) {
-		int index = 0;
-		while (*(--ptr) != '-' && ptr != name);
-
-		if (ptr == name) {
-			CERROR("%s is not a valid osp name\n", name);
-			return 0;
-		}
-
-		if (strncmp(ptr + 1, "MDT", 3) != 0)
-			return 0;
-#ifdef __KERNEL__
-		index = simple_strtoul(ptr + 4, &endptr, 16);
-#else
-		index = strtoul(ptr + 4, &endptr, 16);
-#endif
-		if (index != 0)
-			return 0;
-	}
-	return 1;
-}
 
 struct obd_trans_info {
         __u64                    oti_transno;

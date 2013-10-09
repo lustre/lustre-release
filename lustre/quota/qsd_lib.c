@@ -487,7 +487,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* deregister connection to the quota master */
 	qsd->qsd_exp_valid = false;
-	lustre_deregister_osp_item(&qsd->qsd_exp);
+	lustre_deregister_lwp_item(&qsd->qsd_exp);
 
 	/* release per-filesystem information */
 	if (qsd->qsd_fsinfo != NULL) {
@@ -709,7 +709,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	}
 
 	/* generate osp name */
-	rc = tgt_name2ospname((char *)qsd->qsd_svname, qti->qti_buf);
+	rc = tgt_name2lwpname((char *)qsd->qsd_svname, qti->qti_buf);
 	if (rc) {
 		CERROR("%s: failed to generate ospname (%d)\n",
 		       qsd->qsd_svname, rc);
@@ -718,7 +718,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* the connection callback will start the reintegration
 	 * procedure if quota is enabled */
-	rc = lustre_register_osp_item(qti->qti_buf, &qsd->qsd_exp,
+	rc = lustre_register_lwp_item(qti->qti_buf, &qsd->qsd_exp,
 				      qsd_conn_callback, (void *)qsd);
 	if (rc) {
 		CERROR("%s: fail to get connection to master (%d)\n",

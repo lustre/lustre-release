@@ -242,8 +242,7 @@ static int fld_req_handle(struct ptlrpc_request *req,
 		 * Set it as 'LU_SEQ_RANGE_MDT' by default.
 		 * Old 2.0 liblustre client cannot talk with new 2.1 server. */
 		if (!(exp->exp_connect_flags & OBD_CONNECT_64BITHASH) &&
-		    !((exp->exp_connect_flags & OBD_CONNECT_MDS) &&
-		      (exp->exp_connect_flags & OBD_CONNECT_FID)) &&
+		    !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS) &&
 		    !(exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) &&
 		    !exp->exp_libclient)
 			out->lsr_flags = LU_SEQ_RANGE_MDT;

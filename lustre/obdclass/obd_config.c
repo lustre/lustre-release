@@ -784,6 +784,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
             strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) &&
+	    strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) &&
             strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
                 CERROR("can't add connection on non-client dev\n");
                 RETURN(-EINVAL);

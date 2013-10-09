@@ -194,12 +194,12 @@ static void ofd_deregister_seq_exp(struct ofd_device *ofd)
 	struct seq_server_site	*ss = &ofd->ofd_seq_site;
 
 	if (ss->ss_client_seq != NULL) {
-		lustre_deregister_osp_item(&ss->ss_client_seq->lcs_exp);
+		lustre_deregister_lwp_item(&ss->ss_client_seq->lcs_exp);
 		ss->ss_client_seq->lcs_exp = NULL;
 	}
 
 	if (ss->ss_server_fld != NULL) {
-		lustre_deregister_osp_item(&ss->ss_server_fld->lsf_control_exp);
+		lustre_deregister_lwp_item(&ss->ss_server_fld->lsf_control_exp);
 		ss->ss_server_fld->lsf_control_exp = NULL;
 	}
 }
@@ -353,33 +353,33 @@ static int ofd_fld_init(const struct lu_env *env, const char *uuid,
 static int ofd_register_seq_exp(struct ofd_device *ofd)
 {
 	struct seq_server_site	*ss = &ofd->ofd_seq_site;
-	char			*osp_name = NULL;
+	char			*lwp_name = NULL;
 	int			rc;
 
-	OBD_ALLOC(osp_name, MAX_OBD_NAME);
-	if (osp_name == NULL)
+	OBD_ALLOC(lwp_name, MAX_OBD_NAME);
+	if (lwp_name == NULL)
 		GOTO(out_free, rc = -ENOMEM);
 
-	rc = tgt_name2ospname(ofd_name(ofd), osp_name);
+	rc = tgt_name2lwpname(ofd_name(ofd), lwp_name);
 	if (rc != 0)
 		GOTO(out_free, rc);
 
-	rc = lustre_register_osp_item(osp_name, &ss->ss_client_seq->lcs_exp,
+	rc = lustre_register_lwp_item(lwp_name, &ss->ss_client_seq->lcs_exp,
 				      NULL, NULL);
 	if (rc != 0)
 		GOTO(out_free, rc);
 
-	rc = lustre_register_osp_item(osp_name,
+	rc = lustre_register_lwp_item(lwp_name,
 				      &ss->ss_server_fld->lsf_control_exp,
 				      NULL, NULL);
 	if (rc != 0) {
-		lustre_deregister_osp_item(&ss->ss_client_seq->lcs_exp);
+		lustre_deregister_lwp_item(&ss->ss_client_seq->lcs_exp);
 		ss->ss_client_seq->lcs_exp = NULL;
 		GOTO(out_free, rc);
 	}
 out_free:
-	if (osp_name != NULL)
-		OBD_FREE(osp_name, MAX_OBD_NAME);
+	if (lwp_name != NULL)
+		OBD_FREE(lwp_name, MAX_OBD_NAME);
 
 	return rc;
 }

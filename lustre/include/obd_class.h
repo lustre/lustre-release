@@ -2262,14 +2262,14 @@ static inline void fid2obdo(struct lu_fid *fid, struct obdo *oa)
         /* something here */
 }
 
-typedef int (*register_osp_cb)(void *data);
+typedef int (*register_lwp_cb)(void *data);
 
-struct osp_register_item {
-	struct obd_export **ori_exp;
-	register_osp_cb	    ori_cb_func;
-	void		   *ori_cb_data;
-	cfs_list_t	    ori_list;
-	char		    ori_name[MTI_NAME_MAXLEN];
+struct lwp_register_item {
+	struct obd_export **lri_exp;
+	register_lwp_cb	    lri_cb_func;
+	void		   *lri_cb_data;
+	cfs_list_t	    lri_list;
+	char		    lri_name[MTI_NAME_MAXLEN];
 };
 
 /* I'm as embarrassed about this as you are.
@@ -2280,10 +2280,10 @@ extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
 /* obd_mount.c */
 int server_name2fsname(char *svname, char *fsname, char **endptr);
-int lustre_register_osp_item(char *ospname, struct obd_export **exp,
-			     register_osp_cb cb_func, void *cb_data);
-void lustre_deregister_osp_item(struct obd_export **exp);
-int tgt_name2ospname(char *ost_name, char *osp_name);
+int lustre_register_lwp_item(char *lwpname, struct obd_export **exp,
+			     register_lwp_cb cb_func, void *cb_data);
+void lustre_deregister_lwp_item(struct obd_export **exp);
+int tgt_name2lwpname(char *tgt_name, char *lwp_name);
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);

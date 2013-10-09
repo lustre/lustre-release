@@ -1469,8 +1469,8 @@ run_test 12b "Inode quota rebalancing"
 
 test_13(){
 	local TESTFILE=$DIR/$tdir/$tfile
-	# the name of osp on ost1 name is MDT0000-osp-OST0000
-	local procf="ldlm.namespaces.*MDT0000-osp-OST0000.lru_size"
+	# the name of lwp on ost1 name is MDT0000-lwp-OST0000
+	local procf="ldlm.namespaces.*MDT0000-lwp-OST0000.lru_size"
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT

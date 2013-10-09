@@ -287,10 +287,10 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 cli->cl_sp_to = LUSTRE_SP_OST;
                 ns_type = LDLM_NS_TYPE_OSC;
 	} else if (!strcmp(name, LUSTRE_MDC_NAME) ||
+		   !strcmp(name, LUSTRE_LWP_NAME) ||
 		   (!strcmp(name, LUSTRE_OSP_NAME) &&
-		    (is_osp_for_connection(cli_name) ||
 		    (is_osp_on_mdt(cli_name) &&
-		     strstr(lustre_cfg_buf(lcfg, 1), "OST") == NULL)))) {
+		     strstr(lustre_cfg_buf(lcfg, 1), "OST") == NULL))) {
 		/* MDC or OSP_on_MDT for other MDTs */
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
