@@ -841,16 +841,21 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
         /* save version when object is locked */
         mdt_version_get_save(info, mc, 1);
-        /*
-         * Now we can only make sure we need MA_INODE, in mdd layer, will check
-         * whether need MA_LOV and MA_COOKIE.
-         */
-        ma->ma_need = MA_INODE;
-        ma->ma_valid = 0;
-        mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
+	/*
+	 * Now we can only make sure we need MA_INODE, in mdd layer, will check
+	 * whether need MA_LOV and MA_COOKIE.
+	 */
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
+	mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
+
+	mutex_lock(&mc->mot_lov_mutex);
 
 	rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
 			mdt_object_child(mc), lname, ma, no_name);
+
+	mutex_unlock(&mc->mot_lov_mutex);
+
 	if (rc == 0 && !lu_object_is_dying(&mc->mot_header))
 		rc = mdt_attr_get_complex(info, mc, ma);
 	if (rc == 0)
@@ -1334,22 +1339,27 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
+	/* Check if @dst is subdir of @src. */
+	rc = mdt_rename_sanity(info, old_fid);
+	if (rc)
+		GOTO(out_unlock_new, rc);
 
-        /* Check if @dst is subdir of @src. */
-        rc = mdt_rename_sanity(info, old_fid);
-        if (rc)
-                GOTO(out_unlock_new, rc);
+	if (mnew != NULL)
+		mutex_lock(&mnew->mot_lov_mutex);
 
-        rc = mdo_rename(info->mti_env, mdt_object_child(msrcdir),
-                        mdt_object_child(mtgtdir), old_fid, &slname,
-                        (mnew ? mdt_object_child(mnew) : NULL),
-                        lname, ma);
+	rc = mdo_rename(info->mti_env, mdt_object_child(msrcdir),
+			mdt_object_child(mtgtdir), old_fid, &slname,
+			(mnew ? mdt_object_child(mnew) : NULL),
+			lname, ma);
 
-        /* handle last link of tgt object */
-        if (rc == 0) {
+	if (mnew != NULL)
+		mutex_unlock(&mnew->mot_lov_mutex);
+
+	/* handle last link of tgt object */
+	if (rc == 0) {
 		mdt_counter_incr(req, LPROC_MDT_RENAME);
-                if (mnew)
-                        mdt_handle_last_unlink(info, mnew, ma);
+		if (mnew)
+			mdt_handle_last_unlink(info, mnew, ma);
 
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
                                          msrcdir, mtgtdir);
