@@ -1008,6 +1008,7 @@ finish:
 			RETURN(0);
 		}
 	} else {
+		static bool warned;
 
 		spin_lock(&imp->imp_lock);
 		cfs_list_del(&imp->imp_conn_current->oic_item);
@@ -1018,38 +1019,39 @@ finish:
 
 		spin_unlock(&imp->imp_lock);
 
-                if (!ocd->ocd_ibits_known &&
-                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
-                        CERROR("Inodebits aware server returned zero compatible"
-                               " bits?\n");
+		if (!ocd->ocd_ibits_known &&
+		    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
+			CERROR("Inodebits aware server returned zero compatible"
+			       " bits?\n");
 
-                if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
-                    (ocd->ocd_version > LUSTRE_VERSION_CODE +
-                                        LUSTRE_VERSION_OFFSET_WARN ||
-                     ocd->ocd_version < LUSTRE_VERSION_CODE -
-                                        LUSTRE_VERSION_OFFSET_WARN)) {
-                        /* Sigh, some compilers do not like #ifdef in the middle
-                           of macro arguments */
+		if (!warned && (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
+		    (ocd->ocd_version > LUSTRE_VERSION_CODE +
+					LUSTRE_VERSION_OFFSET_WARN ||
+		     ocd->ocd_version < LUSTRE_VERSION_CODE -
+					LUSTRE_VERSION_OFFSET_WARN)) {
+			/* Sigh, some compilers do not like #ifdef in the middle
+			   of macro arguments */
+			const char *older = "older than client. "
+					    "Consider upgrading server";
 #ifdef __KERNEL__
-                        const char *older = "older. Consider upgrading server "
-                                            "or downgrading client";
+			const char *newer = "newer than client. "
+					    "Consider recompiling application";
 #else
-                        const char *older = "older. Consider recompiling this "
-                                            "application";
+			const char *newer = "newer than client. "
+					    "Consider upgrading client";
 #endif
-                        const char *newer = "newer than client version. "
-                                            "Consider upgrading client";
 
-                        LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
-                                      "is much %s (%s)\n",
-                                      obd2cli_tgt(imp->imp_obd),
-                                      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
-                                      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
-                                      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
-                                      OBD_OCD_VERSION_FIX(ocd->ocd_version),
-                                      ocd->ocd_version > LUSTRE_VERSION_CODE ?
-                                      newer : older, LUSTRE_VERSION_STRING);
-                }
+			LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
+				      "is much %s (%s)\n",
+				      obd2cli_tgt(imp->imp_obd),
+				      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+				      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+				      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+				      OBD_OCD_VERSION_FIX(ocd->ocd_version),
+				      ocd->ocd_version > LUSTRE_VERSION_CODE ?
+				      newer : older, LUSTRE_VERSION_STRING);
+			warned = true;
+		}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 50, 0)
 		/* Check if server has LU-1252 fix applied to not always swab
