@@ -1255,7 +1255,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
-	if (unlikely(!mdt_object_exists(parent))) {
+	if (unlikely(!mdt_object_exists(parent)) && lname) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj,
 				"Parent doesn't exist!\n");
