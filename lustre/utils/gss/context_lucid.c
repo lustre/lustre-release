@@ -208,15 +208,6 @@ extern void krb5int_enc_arcfour;
 extern void krb5int_enc_des3;
 extern void krb5int_enc_aes128;
 extern void krb5int_enc_aes256;
-#if HAVE_KRB5INT_DERIVE_KEY
-/* Taken from crypto_int.h */
-enum deriv_alg {
-	DERIVE_RFC3961,		/* RFC 3961 section 5.1 */
-#ifdef CAMELLIA
-	DERIVE_SP800_108_CMAC,	/* NIST SP 800-108 with CMAC as PRF */
-#endif
-};
-#endif  /* HAVE_KRB5INT_DERIVE_KEY */
 
 static void
 key_lucid_to_krb5(const gss_krb5_lucid_key_t *lin, krb5_keyblock *kout)
