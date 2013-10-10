@@ -66,7 +66,8 @@ int libcfs_ioctl_getdata_len(const struct libcfs_ioctl_hdr __user *arg,
 	if (copy_from_user(&hdr, arg, sizeof(hdr)))
 		RETURN(-EFAULT);
 
-	if (hdr.ioc_version != LIBCFS_IOCTL_VERSION) {
+	if (hdr.ioc_version != LIBCFS_IOCTL_VERSION &&
+	    hdr.ioc_version != LIBCFS_IOCTL_VERSION2) {
 		CERROR("LNET: version mismatch expected %#x, got %#x\n",
 		       LIBCFS_IOCTL_VERSION, hdr.ioc_version);
 		RETURN(-EINVAL);
@@ -139,9 +140,9 @@ static long libcfs_ioctl(struct file *file,
 	if (!capable(CAP_SYS_ADMIN))
 		return -EACCES;
 
-	if ( _IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
-	     _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  ||
-	     _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR ) {
+	if (_IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
+	    _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR ||
+	    _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR) {
 		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
 		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
 		return (-EINVAL);

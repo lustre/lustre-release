@@ -36,6 +36,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
+#include <lnet/lib-dlc.h>
 
 static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
@@ -94,6 +95,9 @@ lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 
 	case IOC_LIBCFS_UNCONFIGURE:
 		return lnet_unconfigure();
+
+	case IOC_LIBCFS_ADD_NET:
+		return LNetCtl(cmd, hdr);
 
 	default:
 		/* Passing LNET_PID_ANY only gives me a ref if the net is up
