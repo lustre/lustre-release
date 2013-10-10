@@ -127,7 +127,7 @@
       <title>
           <indexterm><primary>LNET</primary><secondary>tuning</secondary>
       </indexterm><indexterm><primary>tuning</primary><secondary>LNET</secondary></indexterm>Tuning LNET Parameters</title>
-    <para>This section describes LNET tunables. that may be necessary on some systems to improve performance. To test the performance of your Lustre network, see <link xl:href="LNETSelfTest.html#50438223_71556">Chapter 23</link>: <link xl:href="LNETSelfTest.html#50438223_21832">Testing Lustre Network Performance (LNET Self-Test)</link>.</para>
+    <para>This section describes LNET tunables. that may be necessary on some systems to improve performance. To test the performance of your Lustre network, see <xref linkend='lnetselftest'/>.</para>
     <section remap="h3">
       <title>Transmit and Receive Buffer Size</title>
       <para>The kernel allocates buffers for sending and receiving messages on a network.</para>
@@ -145,7 +145,7 @@
       <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
-	<para>Luster 2.3 and beyond provide enhanced network interface control. The enhancement means that an administrator can bind an interface to one or more CPU Partitions. Bindings are specified as options to the lnet modules. For more information on specifying module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
+	<para condition='l23'>Luster 2.3 and beyond provide enhanced network interface control. The enhancement means that an administrator can bind an interface to one or more CPU Partitions. Bindings are specified as options to the lnet modules. For more information on specifying module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
 <para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for <literal>o2ib0</literal> will be handled by LND threads executing on <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be: <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by threads on <literal>CPT0</literal>.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface credits</secondary></indexterm>Network Interface Credits</title>
@@ -154,14 +154,14 @@
 	<screen>ksocklnd credits=256</screen>
 	<para>applies 256 credits to TCP connections. Applying 256 credits to IB connections can be achieved with:</para>
 	<screen>ko2iblnd credits=256</screen>
-	<note><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the NI Credits and the administrator's request do not persist.</para></note>
+	<note condition='l23'><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the NI Credits and the administrator's request do not persist.</para></note>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>router buffers</secondary></indexterm>Router Buffers</title>
 	<para>Router buffers are shared by all CPU partitions. For a machine with a large number of CPTs, the router buffer number may need to be specified manually for best performance. A low number of router buffers risks starving the CPU Partitions of resources.</para>
 	<para>The default setting for router buffers will typically perform well. LNet automatically sets a default value to reduce the likelihood of resource starvation</para>
 	<para>An administrator may modify router buffers using the <literal>large_router_buffers</literal> parameter. For example:</para>
 	<screen>lnet large_router_buffers=8192</screen>
-	<note><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the router buffer setting and the administrator's request do not persist.</para></note>
+	<note condition='l23'><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the router buffer setting and the administrator's request do not persist.</para></note>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>portal round-robin</secondary></indexterm>Portal Round-Robin</title>
 	<para>Portal round-robin defines the policy LNet applies to deliver events and messages to the upper layers. The upper layers are ptlrpc service or LNet selftest.</para>
