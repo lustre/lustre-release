@@ -140,10 +140,6 @@ EXPORT_SYMBOL(tgt_session_key);
 
 LU_KEY_INIT_GENERIC(tgt_ses);
 
-struct lprocfs_vars lprocfs_srv_module_vars[] = {
-	{ 0 },
-};
-
 int tgt_mod_init(void)
 {
 	ENTRY;
