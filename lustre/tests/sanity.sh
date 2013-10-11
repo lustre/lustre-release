@@ -3138,7 +3138,7 @@ run_test 39n "check that O_NOATIME is honored"
 test_39o() {
 	TESTDIR=$DIR/$tdir/$tfile
 	[ -e $TESTDIR ] && rm -rf $TESTDIR
-	mkdir -p $TESTDIR
+	test_mkdir -p $TESTDIR
 	cd $TESTDIR
 	links1=2
 	ls
@@ -3154,6 +3154,30 @@ test_39o() {
 	return 0
 }
 run_test 39o "directory cached attributes updated after create ========"
+
+test_39p() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	TESTDIR=$DIR/$tdir/$tfile
+	[ -e $TESTDIR ] && rm -rf $TESTDIR
+	test_mkdir -p $TESTDIR
+	cd $TESTDIR
+	links1=2
+	ls
+	$LFS mkdir -i $MDTIDX $TESTDIR/remote_dir1
+	$LFS mkdir -i $MDTIDX $TESTDIR/remote_dir2
+	ls
+	links2=$(stat -c %h .)
+	[ $(($links1 + 2)) != $links2 ] &&
+		error "wrong links count $(($links1 + 2)) != $links2"
+	rmdir remote_dir2
+	links3=$(stat -c %h .)
+	[ $(($links1 + 1)) != $links3 ] &&
+		error "wrong links count $links1 != $links3"
+	return 0
+}
+run_test 39p "remote directory cached attributes updated after create ========"
+
 
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
