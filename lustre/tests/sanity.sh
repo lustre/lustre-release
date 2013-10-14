@@ -6421,6 +6421,75 @@ run_test 102m "Ensure listxattr fails on small bufffer ========"
 
 cleanup_test102
 
+getxattr() { # getxattr path name
+	# Return the base64 encoding of the value of xattr name on path.
+	local path=$1
+	local name=$2
+
+	# # getfattr --absolute-names --encoding=base64 --name=trusted.lov $path
+	# file: $path
+	# trusted.lov=0s0AvRCwEAAAAGAAAAAAAAAAAEAAACAAAAAAAQAAEAA...AAAAAAAAA=
+	#
+	# We print just 0s0AvRCwEAAAAGAAAAAAAAAAAEAAACAAAAAAAQAAEAA...AAAAAAAAA=
+
+	getfattr --absolute-names --encoding=base64 --name=$name $path |
+		awk -F= -v name=$name '$1 == name {
+			print substr($0, index($0, "=") + 1);
+	}'
+}
+
+test_102n() { # LU-4101 mdt: protect internal xattrs
+	local file0=$DIR/$tfile.0
+	local file1=$DIR/$tfile.1
+	local xattr0=$TMP/$tfile.0
+	local xattr1=$TMP/$tfile.1
+	local name
+	local value
+
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.50) ]
+	then
+		skip "MDT < 2.5.50 allows setxattr on internal trusted xattrs"
+		return
+	fi
+
+	rm -rf $file0 $file1 $xattr0 $xattr1
+	touch $file0 $file1
+
+	# Get 'before' xattrs of $file1.
+	getfattr --absolute-names --dump --match=- $file1 > $xattr0
+
+	for name in lov lma lmv link fid version som hsm lfsck_namespace; do
+		# Try to copy xattr from $file0 to $file1.
+		value=$(getxattr $file0 trusted.$name 2> /dev/null)
+
+		setfattr --name=trusted.$name --value="$value" $file1 ||
+			error "setxattr 'trusted.$name' failed"
+
+		# Try to set a garbage xattr.
+		value=0sVGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIGl0c2VsZi4=
+
+		setfattr --name=trusted.$name --value="$value" $file1 ||
+			error "setxattr 'trusted.$name' failed"
+
+		# Try to remove the xattr from $file1. We don't care if this
+		# appears to succeed or fail, we just don't want there to be
+		# any changes or crashes.
+		setfattr --remove=$trusted.$name $file1 2> /dev/null
+	done
+
+	# Get 'after' xattrs of file1.
+	getfattr --absolute-names --dump --match=- $file1 > $xattr1
+
+	if ! diff $xattr0 $xattr1; then
+		error "before and after xattrs of '$file1' differ"
+	fi
+
+	rm -rf $file0 $file1 $xattr0 $xattr1
+
+	return 0
+}
+run_test 102n "silently ignore setxattr on internal trusted xattrs"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test

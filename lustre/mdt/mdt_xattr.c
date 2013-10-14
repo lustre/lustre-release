@@ -398,29 +398,39 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
 		perm = mdt_identity_get_perm(uc->uc_identity, remote,
 					     req->rq_peer.nid);
-                if (!(perm & CFS_RMTACL_PERM))
-                        GOTO(out, rc = err_serious(-EPERM));
-        }
+		if (!(perm & CFS_RMTACL_PERM))
+			GOTO(out, rc = err_serious(-EPERM));
+	}
 
-        if (strncmp(xattr_name, XATTR_USER_PREFIX,
-                    sizeof(XATTR_USER_PREFIX) - 1) == 0) {
+	if (strncmp(xattr_name, XATTR_USER_PREFIX,
+		    sizeof(XATTR_USER_PREFIX) - 1) == 0) {
 		if (!(exp_connect_flags(req->rq_export) & OBD_CONNECT_XATTR))
 			GOTO(out, rc = -EOPNOTSUPP);
-                if (strcmp(xattr_name, XATTR_NAME_LOV) == 0)
-                        GOTO(out, rc = -EACCES);
-                if (strcmp(xattr_name, XATTR_NAME_LMA) == 0)
-                        GOTO(out, rc = 0);
-                if (strcmp(xattr_name, XATTR_NAME_LINK) == 0)
-                        GOTO(out, rc = 0);
-        } else if ((valid & OBD_MD_FLXATTR) &&
-                   (strncmp(xattr_name, XATTR_NAME_ACL_ACCESS,
-                            sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0 ||
-                    strncmp(xattr_name, XATTR_NAME_ACL_DEFAULT,
-                            sizeof(XATTR_NAME_ACL_DEFAULT) - 1) == 0)) {
-                /* currently lustre limit acl access size */
-                if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
-                        GOTO(out, -ERANGE);
-        }
+	} else if (strncmp(xattr_name, XATTR_TRUSTED_PREFIX,
+		    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0) {
+
+		if (!md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN))
+			GOTO(out, rc = -EPERM);
+
+		if (strcmp(xattr_name, XATTR_NAME_LOV) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_LMA) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_LMV) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_LINK) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_FID) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_VERSION) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_SOM) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_HSM) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_LFSCK_NAMESPACE) == 0)
+			GOTO(out, rc = 0);
+	} else if ((valid & OBD_MD_FLXATTR) &&
+		   (strncmp(xattr_name, XATTR_NAME_ACL_ACCESS,
+			    sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0 ||
+		    strncmp(xattr_name, XATTR_NAME_ACL_DEFAULT,
+			    sizeof(XATTR_NAME_ACL_DEFAULT) - 1) == 0)) {
+		/* currently lustre limit acl access size */
+		if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
+			GOTO(out, rc = -ERANGE);
+	}
 
         lockpart = MDS_INODELOCK_UPDATE;
         /* Revoke all clients' lookup lock, since the access
