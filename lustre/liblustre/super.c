@@ -1345,7 +1345,7 @@ static int llu_file_flock(struct inode *ino,
                 if (lmv->desc.ld_tgt_count < 1)
                         RETURN(rc = -ENODEV);
 
-		if (lmv->tgts[0] && lmv->tgts[0]->ltd_exp != NULL)
+		if (lmv->tgts[0] != NULL && lmv->tgts[0]->ltd_exp != NULL)
 			rc = ldlm_cli_enqueue(lmv->tgts[0]->ltd_exp, NULL,
 					      &einfo, &res_id, &flock, &flags,
 					      NULL, 0, LVB_T_NONE, &lockh, 0);
