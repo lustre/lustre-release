@@ -5,6 +5,7 @@ trap 'print_summary && touch $TF_FAIL && \
 set -e
 #set -x
 
+export LANG=en_US
 export EJOURNAL=${EJOURNAL:-""}
 export REFORMAT=${REFORMAT:-""}
 export WRITECONF=${WRITECONF:-""}
