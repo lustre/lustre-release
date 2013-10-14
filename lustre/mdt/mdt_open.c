@@ -717,13 +717,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         repbody->ioepoch = o->mot_ioepoch;
                 }
         } else if (flags & MDS_FMODE_EXEC) {
-		/* if file is released, we can't deny write because we must
-		 * restore (write) it to access it.*/
-		if ((ma->ma_valid & MA_HSM) &&
-		    (ma->ma_hsm.mh_flags & HS_RELEASED))
-			rc = 0;
-		else
-			rc = mdt_write_deny(o);
+		rc = mdt_write_deny(o);
         }
         if (rc)
                 RETURN(rc);
@@ -1226,11 +1220,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		if (open_flags & MDS_OPEN_LOCK) {
 			if (open_flags & FMODE_WRITE)
 				lm = LCK_CW;
-			/* if file is released, we can't deny write because we must
-			 * restore (write) it to access it. */
-			else if ((open_flags & MDS_FMODE_EXEC) &&
-				 !((ma->ma_valid & MA_HSM) &&
-				   (ma->ma_hsm.mh_flags & HS_RELEASED)))
+			else if (open_flags & MDS_FMODE_EXEC)
 				lm = LCK_PR;
 			else
 				lm = LCK_CR;

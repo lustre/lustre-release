@@ -1827,6 +1827,41 @@ test_30b() {
 }
 run_test 30b "Restore at exec (release case)"
 
+test_30c() {
+	needclients 2 || return 0
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/SLEEP
+	local fid=$(copy_file /bin/sleep $f)
+	chmod 755 $f
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f
+	check_hsm_flags $f "0x0000000d"
+	# set no retry action mode
+	cdt_set_no_retry
+	do_node $CLIENT2 "$f 10" &
+	local pid=$!
+	sleep 3
+	echo 'Hi!' > $f
+	[[ $? == 0 ]] && error "Update during exec of released file must fail"
+	wait $pid
+	[[ $? == 0 ]] || error "Execution failed during run"
+	cmp /bin/sleep $f
+	[[ $? == 0 ]] || error "Binary overwritten during exec"
+
+	# cleanup
+	# remove no try action mode
+	cdt_clear_no_retry
+	check_hsm_flags $f "0x00000009"
+
+	copytool_cleanup
+}
+run_test 30c "Update during exec of released file must fail"
+
 restore_and_check_size() {
 	local f=$1
 	local fid=$2
