@@ -1589,7 +1589,8 @@ mkfs.lustre</title>
                 <para> <literal>--servicenode=<replaceable>nid,...</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets the NID(s) of all service node, including failover partner as well as primary node service nids. This option can be repeated as needed.</para>
+                <para>Sets the NID(s) of all service node, including failover partner as well as
+                  primary node service nids. This option can be repeated as needed.</para>
                 <warning><para>This cannot be used with <literal>--failnode</literal>.</para></warning>
               </entry>
             </row>
@@ -1598,19 +1599,19 @@ mkfs.lustre</title>
                 <para> <literal>--fsname=<replaceable>filesystem_name</replaceable></literal></para>
               </entry>
               <entry>
-                <para> The Lustre file system of which this service/node will be a part. The default file system name is &apos;lustreâ€.</para>
-                <para>&#160;</para>
-                <note>
-                  <para>The file system name is limited to 8 characters.</para>
-                </note>
+                <para>The name of the Lustre file system to which this node belongs. The file system
+                  name is limited to 8 characters. The default file system name is
+                    <literal>lustre</literal>.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>--index=<replaceable>index</replaceable></literal></para>
+                <para>
+                  <literal>--index=<replaceable>index_number</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  Specifies the OST or MDT number.  This should always be used when formatting OSTs, in order to ensure that there is a simple mapping between the OST index and the OSS node and device it is located on.</para>
+                <para>Specifies the OST or MDT number (0...N). This allows mapping between the OSS
+                  and MDS node and the device on which the OST or MDT is located.</para>
               </entry>
             </row>
             <row>
@@ -2292,7 +2293,8 @@ tunefs.lustre</title>
                 <para> <literal>--fsname=<replaceable>filesystem_name</replaceable></literal></para>
               </entry>
               <entry>
-                <para> The Lustre file system of which this service will be a part. The default file system name is &apos;lustreâ€.</para>
+                <para> The Lustre file system of which this service will be a part. The default file
+                  system name is <literal>lustre</literal>.</para>
               </entry>
             </row>
             <row>
