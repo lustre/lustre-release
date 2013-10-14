@@ -289,6 +289,34 @@ LB_CHECK_SYMBOL_EXPORT([sock_alloc_file], [net/socket.c],[
 ])
 ])
 
+AC_DEFUN([LIBCFS_HAVE_CRC32],
+[LB_LINUX_CONFIG_IM([CRC32],
+	[have_crc32=true],[have_crc32=false])
+if test x$have_crc32 = xtrue; then
+	AC_DEFINE(HAVE_CRC32, 1, [kernel compiled with CRC32 functions])
+fi
+])
+
+AC_DEFUN([LIBCFS_ENABLE_CRC32_ACCEL],
+[LB_LINUX_CONFIG_IM([CRYPTO_CRC32_PCLMUL],
+	[enable_crc32_crypto=false],[enable_crc32_crypto=true])
+if test x$have_crc32 = xtrue -a x$enable_crc32_crypto = xtrue; then
+	AC_DEFINE(NEED_CRC32_ACCEL, 1, [need pclmulqdq based crc32])
+	AC_MSG_WARN([No crc32 pclmulqdq crypto api found,
+		    enable internal pclmulqdq based crc32])
+fi
+])
+
+AC_DEFUN([LIBCFS_ENABLE_CRC32C_ACCEL],
+[LB_LINUX_CONFIG_IM([CRYPTO_CRC32C_INTEL],
+	[enable_crc32c_crypto=false],[enable_crc32c_crypto=true])
+if test x$enable_crc32c_crypto = xtrue; then
+	AC_DEFINE(NEED_CRC32C_ACCEL, 1, [need pclmulqdq based crc32c])
+	AC_MSG_WARN([No crc32c pclmulqdq crypto api found,
+		    enable internal pclmulqdq based crc32c])
+fi
+])
+
 #
 # LIBCFS_PROG_LINUX
 #
@@ -319,6 +347,11 @@ LC_SHRINK_CONTROL
 LIBCFS_STACKTRACE_WARNING
 # 3.7
 LIBCFS_SOCK_ALLOC_FILE
+# 3.8
+LIBCFS_HAVE_CRC32
+LIBCFS_ENABLE_CRC32_ACCEL
+# 3.10
+LIBCFS_ENABLE_CRC32C_ACCEL
 ])
 
 #
@@ -488,6 +521,9 @@ AC_SUBST(ENABLE_LIBPTHREAD)
 #
 AC_DEFUN([LIBCFS_CONDITIONALS],
 [
+AM_CONDITIONAL(HAVE_CRC32, test x$have_crc32 = xtrue)
+AM_CONDITIONAL(NEED_PCLMULQDQ_CRC32,  test x$have_crc32 = xtrue -a x$enable_crc32_crypto = xtrue)
+AM_CONDITIONAL(NEED_PCLMULQDQ_CRC32C, test x$enable_crc32c_crypto = xtrue)
 ])
 
 #

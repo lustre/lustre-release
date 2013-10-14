@@ -173,12 +173,11 @@ static struct shash_alg alg = {
 };
 
 #ifndef X86_FEATURE_PCLMULQDQ
-#define X86_FEATURE_PCLMULQDQ	(4 * 32 + 1)	/* PCLMULQDQ instruction */
+#define X86_FEATURE_PCLMULQDQ	(4*32+1)	/* PCLMULQDQ instruction */
 #endif
 
 int cfs_crypto_crc32_pclmul_register(void)
 {
-
 	if (!boot_cpu_has(X86_FEATURE_PCLMULQDQ)) {
 		CDEBUG(D_INFO, "PCLMULQDQ-NI instructions are not "
 		       "detected.\n");

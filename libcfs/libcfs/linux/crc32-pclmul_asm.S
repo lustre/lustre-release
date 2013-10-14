@@ -37,123 +37,8 @@
  *	      Alexander Boyko <Alexander_Boyko@xyratex.com>
  */
 
-/* gcc 4.1.2 does not support pclmulqdq instruction
- * Use macro defenition from linux kernel 2.6.38  */
-
-#define REG_NUM_INVALID	100
-	.macro R32_NUM opd r32
-	\opd = REG_NUM_INVALID
-	.ifc \r32,%eax
-	\opd = 0
-	.endif
-	.ifc \r32,%ecx
-	\opd = 1
-	.endif
-	.ifc \r32,%edx
-	\opd = 2
-	.endif
-	.ifc \r32,%ebx
-	\opd = 3
-	.endif
-	.ifc \r32,%esp
-	\opd = 4
-	.endif
-	.ifc \r32,%ebp
-	\opd = 5
-	.endif
-	.ifc \r32,%esi
-	\opd = 6
-	.endif
-	.ifc \r32,%edi
-	\opd = 7
-	.endif
-	.endm
-
-	.macro XMM_NUM opd xmm
-	\opd = REG_NUM_INVALID
-	.ifc \xmm,%xmm0
-	\opd = 0
-	.endif
-	.ifc \xmm,%xmm1
-	\opd = 1
-	.endif
-	.ifc \xmm,%xmm2
-	\opd = 2
-	.endif
-	.ifc \xmm,%xmm3
-	\opd = 3
-	.endif
-	.ifc \xmm,%xmm4
-	\opd = 4
-	.endif
-	.ifc \xmm,%xmm5
-	\opd = 5
-	.endif
-	.ifc \xmm,%xmm6
-	\opd = 6
-	.endif
-	.ifc \xmm,%xmm7
-	\opd = 7
-	.endif
-	.ifc \xmm,%xmm8
-	\opd = 8
-	.endif
-	.ifc \xmm,%xmm9
-	\opd = 9
-	.endif
-	.ifc \xmm,%xmm10
-	\opd = 10
-	.endif
-	.ifc \xmm,%xmm11
-	\opd = 11
-	.endif
-	.ifc \xmm,%xmm12
-	\opd = 12
-	.endif
-	.ifc \xmm,%xmm13
-	\opd = 13
-	.endif
-	.ifc \xmm,%xmm14
-	\opd = 14
-	.endif
-	.ifc \xmm,%xmm15
-	\opd = 15
-	.endif
-	.endm
-
-	.macro PFX_OPD_SIZE
-	.byte 0x66
-	.endm
-
-	.macro PFX_REX opd1 opd2 W=0
-	.if ((\opd1 | \opd2) & 8) || \W
-	.byte 0x40 | ((\opd1 & 8) >> 3) | ((\opd2 & 8) >> 1) | (\W << 3)
-	.endif
-	.endm
-
-	.macro MODRM mod opd1 opd2
-	.byte \mod | (\opd1 & 7) | ((\opd2 & 7) << 3)
-	.endm
-
-	.macro PCLMULQDQ imm8 xmm1 xmm2
-	XMM_NUM clmul_opd1 \xmm1
-	XMM_NUM clmul_opd2 \xmm2
-	PFX_OPD_SIZE
-	PFX_REX clmul_opd1 clmul_opd2
-	.byte 0x0f, 0x3a, 0x44
-	MODRM 0xc0 clmul_opd1 clmul_opd2
-	.byte \imm8
-	.endm
-
-	.macro PEXTRD imm8 xmm1 reg1
-	XMM_NUM extrd_opd2 \xmm1
-	R32_NUM extrd_opd1 \reg1
-	PFX_OPD_SIZE
-	PFX_REX extrd_opd1 extrd_opd2
-	.byte 0x0f, 0x3a, 0x16
-	MODRM 0xc0 extrd_opd1 extrd_opd2
-	.byte \imm8
-	.endm
+#define __ASSEMBLY__ 1
+#include "inst.h"
 
 .align 16
 /*
@@ -202,8 +87,6 @@
 #define LEN     %edx
 #define CRC     %ecx
 #endif
-
-
 
 .text
 /**
