@@ -2,16 +2,17 @@
 
 DIR=$1
 MAX=$2
-MAX_MB=256
+MAX_MB=${RACER_MAX_MB:-8}
 
 OSTCOUNT=${OSTCOUNT:-$(lfs df $DIR 2> /dev/null | grep -c OST)}
 
 while /bin/true ; do 
 	file=$((RANDOM % MAX))
-	SIZE=$((RANDOM * MAX_MB / 32))
-	echo "file_create: FILE=$DIR/$file SIZE=$SIZE"
+	# $RANDOM is between 0 and 32767, and we want $blockcount in 64kB units
+	blockcount=$((RANDOM * MAX_MB / 32 / 64))
+	stripecount=$((RANDOM % (OSTCOUNT + 1)))
 	[ $OSTCOUNT -gt 0 ] &&
-		lfs setstripe -c $((RANDOM % OSTCOUNT)) $DIR/$file 2> /dev/null
-	dd if=/dev/zero of=$DIR/$file bs=1k count=$SIZE 2> /dev/null
+		lfs setstripe -c $stripecount $DIR/$file 2> /dev/null
+	dd if=/dev/zero of=$DIR/$file bs=64k count=$blockcount 2> /dev/null
 done
 
