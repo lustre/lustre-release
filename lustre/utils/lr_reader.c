@@ -153,75 +153,72 @@ int main(int argc, char *const argv[])
                         goto out_close;
         }
 
-        #if 0
-        __u8  lsd_uuid[40];        /* server UUID */
-        __u64 lsd_last_transno;    /* last completed transaction ID */
-        __u64 lsd_compat14;        /* reserved - compat with old last_rcvd */
-        __u64 lsd_mount_count;     /* incarnation number */
-        __u32 lsd_feature_compat;  /* compatible feature flags */
-        __u32 lsd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 lsd_feature_incompat;/* incompatible feature flags */
-        __u32 lsd_server_size;     /* size of server data area */
-        __u32 lsd_client_start;    /* start of per-client data area */
-        __u16 lsd_client_size;     /* size of per-client data area */
-        __u16 lsd_subdir_count;    /* number of subdirectories for objects */
-        __u64 lsd_catalog_oid;     /* recovery catalog object id */
-        __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 lsd_ost_index;       /* index number of OST in LOV */
-        __u32 lsd_mdt_index;       /* index number of MDT in LMV */
-        __u8  lsd_padding[LR_SERVER_SIZE - 148];
-        #endif
+#if 0
+	__u8  lsd_uuid[40];        /* server UUID */
+	__u64 lsd_last_transno;    /* last completed transaction ID */
+	__u64 lsd_compat14;        /* reserved - compat with old last_rcvd */
+	__u64 lsd_mount_count;     /* incarnation number */
+	__u32 lsd_feature_compat;  /* compatible feature flags */
+	__u32 lsd_feature_rocompat;/* read-only compatible feature flags */
+	__u32 lsd_feature_incompat;/* incompatible feature flags */
+	__u32 lsd_server_size;     /* size of server data area */
+	__u32 lsd_client_start;    /* start of per-client data area */
+	__u16 lsd_client_size;     /* size of per-client data area */
+	__u16 lsd_subdir_count;    /* number of subdirectories for objects */
+	__u64 lsd_catalog_oid;     /* recovery catalog object id */
+	__u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
+	__u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
+	__u32 lsd_osd_index;       /* index number of OST/MDT in LOV/LMV */
+	__u8  lsd_padding[LR_SERVER_SIZE - 148];
+#endif
 
-        printf("UUID %s\n", lsd.lsd_uuid);
-        printf("Feature compat=%#x\n", lsd.lsd_feature_compat);
-        printf("Feature incompat=%#x\n", lsd.lsd_feature_incompat);
-        printf("Feature rocompat=%#x\n", lsd.lsd_feature_rocompat);
-        printf("Last transaction %llu\n", (long long)lsd.lsd_last_transno);
-        printf("ost index %u\n", lsd.lsd_ost_index);
-        printf("mdt index %u\n", lsd.lsd_mdt_index);
+	printf("UUID %s\n", lsd.lsd_uuid);
+	printf("Feature compat=%#x\n", lsd.lsd_feature_compat);
+	printf("Feature incompat=%#x\n", lsd.lsd_feature_incompat);
+	printf("Feature rocompat=%#x\n", lsd.lsd_feature_rocompat);
+	printf("Last transaction %llu\n", (long long)lsd.lsd_last_transno);
+	printf("target index %u\n", lsd.lsd_osd_index);
 
-        if ((lsd.lsd_feature_compat & OBD_COMPAT_OST) ||
-            (lsd.lsd_feature_incompat & OBD_INCOMPAT_OST)) {
-                printf("OST, index %d\n", lsd.lsd_ost_index);
-        } else if ((lsd.lsd_feature_compat & OBD_COMPAT_MDT) ||
-                   (lsd.lsd_feature_incompat & OBD_INCOMPAT_MDT)) {
-                /* We must co-locate so mgs can see old logs.
-                   If user doesn't want this, they can copy the old
-                   logs manually and re-tunefs. */
-                printf("MDS, index %d\n", lsd.lsd_mdt_index);
-        } else  {
-                /* If neither is set, we're pre-1.4.6, make a guess. */
-                /* Construct debugfs command line. */
-                memset(cmd, 0, sizeof(cmd));
-                sprintf(cmd,
-                        "%s -c -R 'rdump /%s %s' %s",
-                        DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
+	if ((lsd.lsd_feature_compat & OBD_COMPAT_OST) ||
+	    (lsd.lsd_feature_incompat & OBD_INCOMPAT_OST)) {
+		printf("OST, index %d\n", lsd.lsd_osd_index);
+	} else if ((lsd.lsd_feature_compat & OBD_COMPAT_MDT) ||
+		   (lsd.lsd_feature_incompat & OBD_INCOMPAT_MDT)) {
+		/* We must co-locate so mgs can see old logs.
+		   If user doesn't want this, they can copy the old
+		   logs manually and re-tunefs. */
+		printf("MDS, index %d\n", lsd.lsd_osd_index);
+	} else  {
+		/* If neither is set, we're pre-1.4.6, make a guess. */
+		/* Construct debugfs command line. */
+		memset(cmd, 0, sizeof(cmd));
+		sprintf(cmd, "%s -c -R 'rdump /%s %s' %s",
+			DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
 
-                run_command(cmd);
+		run_command(cmd);
 
-                sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
-                if (lsd.lsd_ost_index > 0) {
-                        printf("non-flagged OST, index %d\n", 
-                               lsd.lsd_ost_index);
-                } else {
-                        /* If there's a LOGS dir, it's an MDT */
-                        if ((ret = access(filepnm, F_OK)) == 0) {
-                                /* Old MDT's are always index 0 
-                                   (pre CMD) */
-                                printf("non-flagged MDS, index 0\n");
-                        } else {
-                                printf("non-flagged OST, index unknown\n");
-                        }
-                }
-        }
-        
+		sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
+		if (lsd.lsd_osd_index > 0) {
+			printf("non-flagged OST, index %d\n",
+			       lsd.lsd_osd_index);
+		} else {
+			/* If there's a LOGS dir, it's an MDT */
+			if ((ret = access(filepnm, F_OK)) == 0) {
+				/* Old MDT's are always index 0
+				   (pre CMD) */
+				printf("non-flagged MDS, index 0\n");
+			} else {
+				printf("non-flagged OST, index unknown\n");
+			}
+		}
+	}
+
 out_close:        
-        fclose(filep);
+	fclose(filep);
 
 out_rmdir:
-        memset(cmd, 0, sizeof(cmd));
-        sprintf(cmd, "rm -rf %s", tmpdir);
-        run_command(cmd);
-        return ret;
+	memset(cmd, 0, sizeof(cmd));
+	sprintf(cmd, "rm -rf %s", tmpdir);
+	run_command(cmd);
+	return ret;
 }

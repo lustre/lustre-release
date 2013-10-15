@@ -183,6 +183,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         struct dt_object       *obj;
         struct lu_attr         *la;
         unsigned long last_rcvd_size;
+	__u32			index;
         __u64 mount_count;
         int rc;
         ENTRY;
@@ -192,6 +193,13 @@ static int mdt_server_data_init(const struct lu_env *env,
                 sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
         CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
                 sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
+
+	rc = server_name2index(obd->obd_name, &index, NULL);
+	if (rc < 0) {
+		CERROR("%s: Can not get index from obd_name: rc = %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
@@ -219,8 +227,9 @@ static int mdt_server_data_init(const struct lu_env *env,
 		lsd->lsd_feature_incompat = OBD_INCOMPAT_MDT |
 					    OBD_INCOMPAT_COMMON_LR |
 					    OBD_INCOMPAT_MULTI_OI;
-        } else {
-                LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
+		lsd->lsd_osd_index = index;
+	} else {
+		LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
 		rc = tgt_server_data_read(env, &mdt->mdt_lut);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
@@ -236,7 +245,15 @@ static int mdt_server_data_init(const struct lu_env *env,
                 lsd->lsd_feature_compat |= OBD_COMPAT_MDT;
                 lsd->lsd_feature_incompat |= OBD_INCOMPAT_MDT |
                                              OBD_INCOMPAT_COMMON_LR;
-        }
+		if (lsd->lsd_osd_index != index) {
+			LCONSOLE_ERROR_MSG(0x157, "%s: index %d in last rcvd is"
+					   "different with the index %d in"
+					   "config log, It might be disk"
+					   "corruption!\n", obd->obd_name,
+					   lsd->lsd_osd_index, index);
+			GOTO(out, rc = -EINVAL);
+		}
+	}
         mount_count = lsd->lsd_mount_count;
 
         if (lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP) {

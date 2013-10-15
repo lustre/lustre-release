@@ -327,8 +327,8 @@ struct lr_server_data {
         __u64 lsd_catalog_oid;     /* recovery catalog object id */
         __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 lsd_ost_index;       /* index number of OST in LOV */
-        __u32 lsd_mdt_index;       /* index number of MDT in LMV */
+	__u32 lsd_osd_index;       /* index number of OST in LOV */
+	__u32 lsd_padding1;        /* was lsd_mdt_index, unused in 2.4.0 */
         __u32 lsd_start_epoch;     /* VBR: start epoch from last boot */
         /** transaction values since lsd_trans_table_time */
         __u64 lsd_trans_table[LR_EXPIRE_INTERVALS];
@@ -376,55 +376,55 @@ static inline void check_lcd(char *obd_name, int index,
 static inline void lsd_le_to_cpu(struct lr_server_data *buf,
                                  struct lr_server_data *lsd)
 {
-        int i;
-        memcpy(lsd->lsd_uuid, buf->lsd_uuid, sizeof (lsd->lsd_uuid));
-        lsd->lsd_last_transno     = le64_to_cpu(buf->lsd_last_transno);
-        lsd->lsd_compat14         = le64_to_cpu(buf->lsd_compat14);
-        lsd->lsd_mount_count      = le64_to_cpu(buf->lsd_mount_count);
-        lsd->lsd_feature_compat   = le32_to_cpu(buf->lsd_feature_compat);
-        lsd->lsd_feature_rocompat = le32_to_cpu(buf->lsd_feature_rocompat);
-        lsd->lsd_feature_incompat = le32_to_cpu(buf->lsd_feature_incompat);
-        lsd->lsd_server_size      = le32_to_cpu(buf->lsd_server_size);
-        lsd->lsd_client_start     = le32_to_cpu(buf->lsd_client_start);
-        lsd->lsd_client_size      = le16_to_cpu(buf->lsd_client_size);
-        lsd->lsd_subdir_count     = le16_to_cpu(buf->lsd_subdir_count);
-        lsd->lsd_catalog_oid      = le64_to_cpu(buf->lsd_catalog_oid);
-        lsd->lsd_catalog_ogen     = le32_to_cpu(buf->lsd_catalog_ogen);
-        memcpy(lsd->lsd_peeruuid, buf->lsd_peeruuid, sizeof(lsd->lsd_peeruuid));
-        lsd->lsd_ost_index        = le32_to_cpu(buf->lsd_ost_index);
-        lsd->lsd_mdt_index        = le32_to_cpu(buf->lsd_mdt_index);
-        lsd->lsd_start_epoch      = le32_to_cpu(buf->lsd_start_epoch);
-        for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
-                lsd->lsd_trans_table[i] = le64_to_cpu(buf->lsd_trans_table[i]);
-        lsd->lsd_trans_table_time = le32_to_cpu(buf->lsd_trans_table_time);
-        lsd->lsd_expire_intervals = le32_to_cpu(buf->lsd_expire_intervals);
+	int i;
+	memcpy(lsd->lsd_uuid, buf->lsd_uuid, sizeof(lsd->lsd_uuid));
+	lsd->lsd_last_transno     = le64_to_cpu(buf->lsd_last_transno);
+	lsd->lsd_compat14         = le64_to_cpu(buf->lsd_compat14);
+	lsd->lsd_mount_count      = le64_to_cpu(buf->lsd_mount_count);
+	lsd->lsd_feature_compat   = le32_to_cpu(buf->lsd_feature_compat);
+	lsd->lsd_feature_rocompat = le32_to_cpu(buf->lsd_feature_rocompat);
+	lsd->lsd_feature_incompat = le32_to_cpu(buf->lsd_feature_incompat);
+	lsd->lsd_server_size      = le32_to_cpu(buf->lsd_server_size);
+	lsd->lsd_client_start     = le32_to_cpu(buf->lsd_client_start);
+	lsd->lsd_client_size      = le16_to_cpu(buf->lsd_client_size);
+	lsd->lsd_subdir_count     = le16_to_cpu(buf->lsd_subdir_count);
+	lsd->lsd_catalog_oid      = le64_to_cpu(buf->lsd_catalog_oid);
+	lsd->lsd_catalog_ogen     = le32_to_cpu(buf->lsd_catalog_ogen);
+	memcpy(lsd->lsd_peeruuid, buf->lsd_peeruuid, sizeof(lsd->lsd_peeruuid));
+	lsd->lsd_osd_index        = le32_to_cpu(buf->lsd_osd_index);
+	lsd->lsd_padding1        = le32_to_cpu(buf->lsd_padding1);
+	lsd->lsd_start_epoch      = le32_to_cpu(buf->lsd_start_epoch);
+	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
+		lsd->lsd_trans_table[i] = le64_to_cpu(buf->lsd_trans_table[i]);
+	lsd->lsd_trans_table_time = le32_to_cpu(buf->lsd_trans_table_time);
+	lsd->lsd_expire_intervals = le32_to_cpu(buf->lsd_expire_intervals);
 }
 
 static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
                                  struct lr_server_data *buf)
 {
-        int i;
-        memcpy(buf->lsd_uuid, lsd->lsd_uuid, sizeof (buf->lsd_uuid));
-        buf->lsd_last_transno     = cpu_to_le64(lsd->lsd_last_transno);
-        buf->lsd_compat14         = cpu_to_le64(lsd->lsd_compat14);
-        buf->lsd_mount_count      = cpu_to_le64(lsd->lsd_mount_count);
-        buf->lsd_feature_compat   = cpu_to_le32(lsd->lsd_feature_compat);
-        buf->lsd_feature_rocompat = cpu_to_le32(lsd->lsd_feature_rocompat);
-        buf->lsd_feature_incompat = cpu_to_le32(lsd->lsd_feature_incompat);
-        buf->lsd_server_size      = cpu_to_le32(lsd->lsd_server_size);
-        buf->lsd_client_start     = cpu_to_le32(lsd->lsd_client_start);
-        buf->lsd_client_size      = cpu_to_le16(lsd->lsd_client_size);
-        buf->lsd_subdir_count     = cpu_to_le16(lsd->lsd_subdir_count);
-        buf->lsd_catalog_oid      = cpu_to_le64(lsd->lsd_catalog_oid);
-        buf->lsd_catalog_ogen     = cpu_to_le32(lsd->lsd_catalog_ogen);
-        memcpy(buf->lsd_peeruuid, lsd->lsd_peeruuid, sizeof(buf->lsd_peeruuid));
-        buf->lsd_ost_index        = cpu_to_le32(lsd->lsd_ost_index);
-        buf->lsd_mdt_index        = cpu_to_le32(lsd->lsd_mdt_index);
-        buf->lsd_start_epoch      = cpu_to_le32(lsd->lsd_start_epoch);
-        for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
-                buf->lsd_trans_table[i] = cpu_to_le64(lsd->lsd_trans_table[i]);
-        buf->lsd_trans_table_time = cpu_to_le32(lsd->lsd_trans_table_time);
-        buf->lsd_expire_intervals = cpu_to_le32(lsd->lsd_expire_intervals);
+	int i;
+	memcpy(buf->lsd_uuid, lsd->lsd_uuid, sizeof(buf->lsd_uuid));
+	buf->lsd_last_transno     = cpu_to_le64(lsd->lsd_last_transno);
+	buf->lsd_compat14         = cpu_to_le64(lsd->lsd_compat14);
+	buf->lsd_mount_count      = cpu_to_le64(lsd->lsd_mount_count);
+	buf->lsd_feature_compat   = cpu_to_le32(lsd->lsd_feature_compat);
+	buf->lsd_feature_rocompat = cpu_to_le32(lsd->lsd_feature_rocompat);
+	buf->lsd_feature_incompat = cpu_to_le32(lsd->lsd_feature_incompat);
+	buf->lsd_server_size      = cpu_to_le32(lsd->lsd_server_size);
+	buf->lsd_client_start     = cpu_to_le32(lsd->lsd_client_start);
+	buf->lsd_client_size      = cpu_to_le16(lsd->lsd_client_size);
+	buf->lsd_subdir_count     = cpu_to_le16(lsd->lsd_subdir_count);
+	buf->lsd_catalog_oid      = cpu_to_le64(lsd->lsd_catalog_oid);
+	buf->lsd_catalog_ogen     = cpu_to_le32(lsd->lsd_catalog_ogen);
+	memcpy(buf->lsd_peeruuid, lsd->lsd_peeruuid, sizeof(buf->lsd_peeruuid));
+	buf->lsd_osd_index	  = cpu_to_le32(lsd->lsd_osd_index);
+	buf->lsd_padding1	  = cpu_to_le32(lsd->lsd_padding1);
+	buf->lsd_start_epoch      = cpu_to_le32(lsd->lsd_start_epoch);
+	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
+		buf->lsd_trans_table[i] = cpu_to_le64(lsd->lsd_trans_table[i]);
+	buf->lsd_trans_table_time = cpu_to_le32(lsd->lsd_trans_table_time);
+	buf->lsd_expire_intervals = cpu_to_le32(lsd->lsd_expire_intervals);
 }
 
 static inline void lcd_le_to_cpu(struct lsd_client_data *buf,

@@ -393,8 +393,9 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct lr_server_data	*lsd = &ofd->ofd_lut.lut_lsd;
 	struct obd_device	*obd = ofd_obd(ofd);
-	unsigned long		 last_rcvd_size;
-	int			 rc;
+	unsigned long		last_rcvd_size;
+	__u32			index;
+	int			rc;
 
 	rc = dt_attr_get(env, ofd->ofd_lut.lut_last_rcvd, &info->fti_attr,
 			 BYPASS_CAPA);
@@ -406,6 +407,13 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 	/* ensure padding in the struct is the correct size */
 	CLASSERT (offsetof(struct lr_server_data, lsd_padding) +
 		  sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
+
+	rc = server_name2index(obd->obd_name, &index, NULL);
+	if (rc < 0) {
+		CERROR("%s: Can not get index from obd_name: rc = %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
 
 	if (last_rcvd_size == 0) {
 		LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
@@ -419,6 +427,7 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 		lsd->lsd_client_size = LR_CLIENT_SIZE;
 		lsd->lsd_subdir_count = FILTER_SUBDIR_COUNT;
 		lsd->lsd_feature_incompat = OBD_INCOMPAT_OST;
+		lsd->lsd_osd_index = index;
 	} else {
 		rc = tgt_server_data_read(env, &ofd->ofd_lut);
 		if (rc) {
@@ -432,6 +441,17 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 				       " disk %s. Were the /dev/ assignments "
 				       "rearranged?\n",
 				       obd->obd_uuid.uuid, lsd->lsd_uuid);
+			GOTO(err_fsd, rc = -EINVAL);
+		}
+
+		if (lsd->lsd_osd_index == 0) {
+			lsd->lsd_osd_index = index;
+		} else if (lsd->lsd_osd_index != index) {
+			LCONSOLE_ERROR("%s: index %d in last rcvd is different"
+				       " with the index %d in config log."
+				       " It might be disk corruption!\n",
+				       obd->obd_name, lsd->lsd_osd_index,
+				       index);
 			GOTO(err_fsd, rc = -EINVAL);
 		}
 	}
