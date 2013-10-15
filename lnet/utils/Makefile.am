@@ -40,11 +40,17 @@ if BUILD_DLC
 SUBDIRS = lnetconfig
 endif
 
+AM_LDFLAGS := -L$(top_builddir)/lnet/utils/lnetconfig
+
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
 if UTILS
 sbin_PROGRAMS = routerstat lst
+
+if BUILD_DLC
+sbin_PROGRAMS += lnetctl
+endif
 
 routerstat_SOURCES = routerstat.c
 
@@ -61,6 +67,12 @@ endif
 lib_LIBRARIES = libptlctl.a
 
 libptlctl_a_SOURCES = portals.c debug.c
+
+CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c
+lnetctl_SOURCES = lnetctl.c $(CYAML)
+lnetctl_LDADD = -L. -lm -lyaml -llnetconfig \
+		$(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
+lnetctl_DEPENDENCIES = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.so
 endif # UTILS
 
 LND_LIBS =
