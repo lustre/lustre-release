@@ -139,6 +139,36 @@ AC_SUBST(USOCKLND)
 ]) # LN_CONFIG_USOCKLND
 
 #
+# LN_CONFIG_DLC
+#
+# Configure dlc if enabled
+#
+# if libyaml is set (IE libyaml installed) and enable_dlc = yes then build
+# dlc other wise (IE if libyaml is not set or enable_dlc = no) then don't
+# build dlc.
+#
+AC_DEFUN([LN_CONFIG_DLC], [
+	AC_CHECK_LIB([yaml],  [yaml_parser_initialize],[
+		LIBYAML="libyaml"],[
+		LIBYAML=""],[-lm])
+	AC_MSG_CHECKING([whether to enable dlc])
+	AC_ARG_ENABLE([dlc],
+		AC_HELP_STRING([--disable-dlc],
+			[disable building dlc]),
+			[], [enable_dlc="yes"])
+	AC_MSG_RESULT([$enable_dlc])
+	USE_DLC=""
+	AS_IF([test "x$enable_dlc" = xyes],
+	      [AS_IF([test "x$LIBYAML" = xlibyaml], [
+			USE_DLC="yes"
+		], [
+			AC_MSG_RESULT([no (libyaml not present)])
+		])
+	])
+	AC_SUBST(USE_DLC)
+])
+
+#
 # LN_CONFIG_QUADRICS
 #
 # check if quadrics support is in this kernel
@@ -667,6 +697,7 @@ AC_SUBST(LIBWRAP)
 
 LN_CONFIG_MAX_PAYLOAD
 LN_CONFIG_USOCKLND
+LN_CONFIG_DLC
 ]) # LN_CONFIGURE
 
 #
@@ -682,6 +713,7 @@ AM_CONDITIONAL(BUILD_RALND,      test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND = "xgnilnd")
 AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
 AM_CONDITIONAL(BUILD_USOCKLND,   test x$USOCKLND = "xusocklnd")
+AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
 ]) # LN_CONDITIONALS
 
 #
@@ -721,5 +753,6 @@ lnet/ulnds/Makefile
 lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
 lnet/utils/Makefile
+lnet/utils/lnetconfig/Makefile
 ])
 ]) # LN_CONFIG_FILES

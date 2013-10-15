@@ -8,6 +8,7 @@
 %bcond_without lustre_utils
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
+%bcond_with lnet_dlc
 
 %if %{without servers}
     # --without servers overrides --with {ldiskfs|zfs}
@@ -134,6 +135,10 @@ AutoReqProv: no
 # for RHEL we need to require the specific kernel still since weak-modules
 # support on RH is, well, weak, to be punny about it
 Requires: kernel = %{krequires}
+%if %{with lnet_dlc}
+Requires: libyaml
+BuildRequires: libyaml-devel
+%endif
 %endif
 %endif
 Group: Development/Kernel
@@ -372,6 +377,16 @@ make distdir distdir=lustre-source/lustre-%{version}
 chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
+
+if [ -f $RPM_BUILD_ROOT%{_libdir}/liblnetconfig.a ] ; then
+  echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
+  echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
+fi
+
+if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
+  echo '%{_libdir}/liblustre.a' >>lustre.files
+  echo '%{_libdir}/liblustre.so' >>lustre.files
+fi
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
   echo '%{_libdir}/libiam.a' >>lustre.files

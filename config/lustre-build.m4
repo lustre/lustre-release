@@ -599,6 +599,10 @@ if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
 	RPMSRCARGS="$RPMSRCARGS --without lustre_iokit"
 fi
+if test x$BUILD_DLC != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without lnet_dlc"
+	RPMSRCARGS="$RPMSRCARGS --without lnet_dlc"
+fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS
 RPMBUILD_SOURCE_ARGS=$RPMSRCARGS
