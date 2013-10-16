@@ -368,7 +368,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         struct mdt_object       *obj;
         struct md_object        *child;
         __u64                    valid = attr->la_valid;
-        const char              *xattr_name = rr->rr_name;
+	const char		*xattr_name = rr->rr_name.ln_name;
         int                      xattr_len = rr->rr_eadatalen;
         __u64                    lockpart;
         int                      rc;

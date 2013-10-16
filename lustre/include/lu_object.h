@@ -1289,6 +1289,19 @@ struct lu_name {
         int            ln_namelen;
 };
 
+static inline bool lu_name_is_valid(const struct lu_name *ln)
+{
+	return ln->ln_name != NULL &&
+	       ln->ln_namelen > 0 &&
+	       ln->ln_name[0] != '\0' &&
+	       ln->ln_name[ln->ln_namelen] == '\0';
+}
+
+#define DNAME "%.*s"
+#define PNAME(ln)					\
+	(lu_name_is_valid(ln) ? (ln)->ln_namelen : 0),	\
+	(lu_name_is_valid(ln) ? (ln)->ln_name : "")
+
 /**
  * Common buffer structure to be passed around for various xattr_{s,g}et()
  * methods.

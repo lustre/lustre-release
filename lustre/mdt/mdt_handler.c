@@ -164,27 +164,28 @@ void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
         lh->mlh_type = MDT_REG_LOCK;
 }
 
-void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
-                       const char *name, int namelen)
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lock_mode,
+		       const struct lu_name *lname)
 {
-        lh->mlh_reg_mode = lm;
-	lh->mlh_rreg_mode = lm;
-        lh->mlh_type = MDT_PDO_LOCK;
+	lh->mlh_reg_mode = lock_mode;
+	lh->mlh_rreg_mode = lock_mode;
+	lh->mlh_type = MDT_PDO_LOCK;
 
-        if (name != NULL && (name[0] != '\0')) {
-                LASSERT(namelen > 0);
-                lh->mlh_pdo_hash = full_name_hash(name, namelen);
+	if (lu_name_is_valid(lname)) {
+		lh->mlh_pdo_hash = full_name_hash(lname->ln_name,
+						  lname->ln_namelen);
 		/* XXX Workaround for LU-2856
-		 * Zero is a valid return value of full_name_hash, but several
-		 * users of mlh_pdo_hash assume a non-zero hash value. We
-		 * therefore map zero onto an arbitrary, but consistent
-		 * value (1) to avoid problems further down the road. */
-		if (unlikely(!lh->mlh_pdo_hash))
+		 *
+		 * Zero is a valid return value of full_name_hash, but
+		 * several users of mlh_pdo_hash assume a non-zero
+		 * hash value. We therefore map zero onto an
+		 * arbitrary, but consistent value (1) to avoid
+		 * problems further down the road. */
+		if (unlikely(lh->mlh_pdo_hash == 0))
 			lh->mlh_pdo_hash = 1;
-        } else {
-                LASSERT(namelen == 0);
-                lh->mlh_pdo_hash = 0ull;
-        }
+	} else {
+		lh->mlh_pdo_hash = 0;
+	}
 }
 
 static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o,
@@ -1221,8 +1222,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct md_object       *next      = mdt_object_child(parent);
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         struct lu_name         *lname     = NULL;
-        const char             *name      = NULL;
-        int                     namelen   = 0;
         struct mdt_lock_handle *lhp       = NULL;
         struct ldlm_lock       *lock;
         struct ldlm_res_id     *res_id;
@@ -1237,43 +1236,40 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                      lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT));
 
         LASSERT(parent != NULL);
-        name = req_capsule_client_get(info->mti_pill, &RMF_NAME);
-        if (name == NULL)
-                RETURN(err_serious(-EFAULT));
 
-        namelen = req_capsule_get_size(info->mti_pill, &RMF_NAME,
-                                       RCL_CLIENT) - 1;
-        if (!info->mti_cross_ref) {
-                /*
-                 * XXX: Check for "namelen == 0" is for getattr by fid
-                 * (OBD_CONNECT_ATTRFID), otherwise do not allow empty name,
-                 * that is the name must contain at least one character and
-                 * the terminating '\0'
-                 */
-                if (namelen == 0) {
-                        reqbody = req_capsule_client_get(info->mti_pill,
-                                                         &RMF_MDT_BODY);
-                        if (unlikely(reqbody == NULL))
-                                RETURN(err_serious(-EFAULT));
+	lname = &info->mti_name;
+	mdt_name_unpack(info->mti_pill, &RMF_NAME, lname, MNF_FIX_ANON);
 
-                        if (unlikely(!fid_is_sane(&reqbody->fid2)))
-                                RETURN(err_serious(-EINVAL));
+	if (!info->mti_cross_ref) {
+		/*
+		 * XXX: Check for anonymous name is for getattr by fid
+		 * (OBD_CONNECT_ATTRFID), otherwise do not allow empty name,
+		 * that is the name must contain at least one character and
+		 * the terminating '\0'.
+		 */
+		if (!lu_name_is_valid(lname)) {
+			reqbody = req_capsule_client_get(info->mti_pill,
+							 &RMF_MDT_BODY);
+			if (unlikely(reqbody == NULL))
+				RETURN(err_serious(-EFAULT));
 
-                        name = NULL;
-                        CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
-                               "ldlm_rep = %p\n",
-                               PFID(mdt_object_fid(parent)),
-                               PFID(&reqbody->fid2), ldlm_rep);
-                } else {
-                        lname = mdt_name(info->mti_env, (char *)name, namelen);
-                        CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, "
-                               "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)),
-                               name, ldlm_rep);
-                }
-        }
+			if (unlikely(!fid_is_sane(&reqbody->fid2)))
+				RETURN(err_serious(-EINVAL));
+
+			CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
+			       "ldlm_rep = %p\n",
+			       PFID(mdt_object_fid(parent)),
+			       PFID(&reqbody->fid2), ldlm_rep);
+		} else {
+			CDEBUG(D_INODE, "getattr with lock for "DFID"/"DNAME", "
+			       "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)),
+			       PNAME(lname), ldlm_rep);
+		}
+	}
+
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
-	if (unlikely(!mdt_object_exists(parent)) && lname) {
+	if (unlikely(!mdt_object_exists(parent)) && lu_name_is_valid(lname)) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj,
 				"Parent doesn't exist!\n");
@@ -1283,7 +1279,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 "Parent "DFID" is on remote server\n",
 			 PFID(mdt_object_fid(parent)));
 	}
-        if (lname) {
+
+	if (lu_name_is_valid(lname)) {
                 rc = mdt_raw_lookup(info, parent, lname, ldlm_rep);
                 if (rc != 0) {
                         if (rc > 0)
@@ -1342,11 +1339,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        if (lname) {
-                /* step 1: lock parent only if parent is a directory */
+	if (lu_name_is_valid(lname)) {
+		/* step 1: lock parent only if parent is a directory */
 		if (S_ISDIR(lu_object_attr(&parent->mot_obj))) {
-                        lhp = &info->mti_lh[MDT_LH_PARENT];
-                        mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
+			lhp = &info->mti_lh[MDT_LH_PARENT];
+			mdt_lock_pdo_init(lhp, LCK_PR, lname);
                         rc = mdt_object_lock(info, parent, lhp,
                                              MDS_INODELOCK_UPDATE,
                                              MDT_LOCAL_LOCK);
