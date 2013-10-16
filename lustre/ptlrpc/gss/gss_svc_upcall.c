@@ -899,6 +899,7 @@ cache_check:
 	 * take care of following calls. */
 	rc = cache_check(&rsi_cache, &rsip->h, &cache_upcall_chandle);
 	switch (rc) {
+	case -ETIMEDOUT:
 	case -EAGAIN: {
                 int valid;
 
