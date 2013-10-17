@@ -1812,14 +1812,14 @@ kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 	if (IS_ERR(task))
 		return PTR_ERR(task);
 
-	cfs_atomic_inc(&kiblnd_data.kib_nthreads);
+	atomic_inc(&kiblnd_data.kib_nthreads);
 	return 0;
 }
 
 void
 kiblnd_thread_fini (void)
 {
-        cfs_atomic_dec (&kiblnd_data.kib_nthreads);
+	atomic_dec (&kiblnd_data.kib_nthreads);
 }
 
 void

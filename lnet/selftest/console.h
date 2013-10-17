@@ -163,8 +163,8 @@ typedef struct {
         cfs_list_t             *ses_ndl_hash;   /* hash table of nodes */
 
 	spinlock_t          ses_rpc_lock;   /* serialize */
-        cfs_atomic_t            ses_rpc_counter;/* # of initialized RPCs */
-        cfs_list_t              ses_rpc_freelist; /* idle console rpc */
+	atomic_t            ses_rpc_counter;/* # of initialized RPCs */
+	cfs_list_t              ses_rpc_freelist; /* idle console rpc */
 } lstcon_session_t;                             /*** session descriptor */
 
 extern lstcon_session_t         console_session;

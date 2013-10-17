@@ -88,7 +88,7 @@ typedef struct lstcon_rpc_trans {
 	/* test features mask */
 	unsigned	      tas_features;
 	wait_queue_head_t     tas_waitq;     /* wait queue head */
-	cfs_atomic_t          tas_remaining; /* # of un-scheduled rpcs */
+	atomic_t          tas_remaining; /* # of un-scheduled rpcs */
 	cfs_list_t            tas_rpcs_list; /* queued requests */
 } lstcon_rpc_trans_t;
 

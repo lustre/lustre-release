@@ -144,9 +144,9 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 	/**********************************************************************/
 	/* wait for sends that have allocated a tx desc to launch or give up */
-	while (cfs_atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
+	while (atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
 		CDEBUG(D_NET, "waiting for %d pending sends\n",
-		       cfs_atomic_read (&kqswnal_data.kqn_pending_txs));
+		       atomic_read (&kqswnal_data.kqn_pending_txs));
 		cfs_pause(cfs_time_seconds(1));
 	}
 
@@ -176,9 +176,9 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	kqswnal_data.kqn_shuttingdown = 2;
 	wake_up_all (&kqswnal_data.kqn_sched_waitq);
 
-	while (cfs_atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
+	while (atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
 		CDEBUG(D_NET, "waiting for %d threads to terminate\n",
-		       cfs_atomic_read (&kqswnal_data.kqn_nthreads));
+		       atomic_read (&kqswnal_data.kqn_nthreads));
 		cfs_pause(cfs_time_seconds(1));
 	}
 
@@ -252,7 +252,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	/* resets flags, pointers to NULL etc */
 	memset(&kqswnal_data, 0, sizeof (kqswnal_data));
 
-	CDEBUG (D_MALLOC, "done kmem %d\n", cfs_atomic_read(&libcfs_kmemory));
+	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&libcfs_kmemory));
 
 	module_put(THIS_MODULE);
 }
@@ -288,7 +288,7 @@ kqswnal_startup (lnet_ni_t *ni)
 				   *kqswnal_tunables.kqn_credits);
 	}
         
-	CDEBUG (D_MALLOC, "start kmem %d\n", cfs_atomic_read(&libcfs_kmemory));
+	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&libcfs_kmemory));
 	
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));

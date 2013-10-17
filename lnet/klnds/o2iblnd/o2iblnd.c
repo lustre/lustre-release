@@ -346,7 +346,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
         peer->ibp_nid = nid;
         peer->ibp_error = 0;
         peer->ibp_last_alive = 0;
-        cfs_atomic_set(&peer->ibp_refcount, 1);  /* 1 ref for caller */
+	atomic_set(&peer->ibp_refcount, 1);  /* 1 ref for caller */
 
         CFS_INIT_LIST_HEAD(&peer->ibp_list);     /* not in the peer table yet */
         CFS_INIT_LIST_HEAD(&peer->ibp_conns);
@@ -358,7 +358,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
         LASSERT (net->ibn_shutdown == 0);
 
         /* npeers only grows with the global lock held */
-        cfs_atomic_inc(&net->ibn_npeers);
+	atomic_inc(&net->ibn_npeers);
 
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
@@ -372,7 +372,7 @@ kiblnd_destroy_peer (kib_peer_t *peer)
         kib_net_t *net = peer->ibp_ni->ni_data;
 
         LASSERT (net != NULL);
-        LASSERT (cfs_atomic_read(&peer->ibp_refcount) == 0);
+	LASSERT (atomic_read(&peer->ibp_refcount) == 0);
         LASSERT (!kiblnd_peer_active(peer));
         LASSERT (peer->ibp_connecting == 0);
         LASSERT (peer->ibp_accepting == 0);
@@ -385,7 +385,7 @@ kiblnd_destroy_peer (kib_peer_t *peer)
          * they are destroyed, so we can be assured that _all_ state to do
          * with this peer has been cleaned up when its refcount drops to
          * zero. */
-        cfs_atomic_dec(&net->ibn_npeers);
+	atomic_dec(&net->ibn_npeers);
 }
 
 kib_peer_t *
@@ -410,7 +410,7 @@ kiblnd_find_peer_locked (lnet_nid_t nid)
 
                 CDEBUG(D_NET, "got peer [%p] -> %s (%d) version: %x\n",
                        peer, libcfs_nid2str(nid),
-                       cfs_atomic_read(&peer->ibp_refcount),
+		       atomic_read(&peer->ibp_refcount),
                        peer->ibp_version);
                 return peer;
         }
@@ -455,7 +455,7 @@ kiblnd_get_peer_info (lnet_ni_t *ni, int index,
                                 continue;
 
                         *nidp = peer->ibp_nid;
-                        *count = cfs_atomic_read(&peer->ibp_refcount);
+			*count = atomic_read(&peer->ibp_refcount);
 
 			read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					       flags);
@@ -612,7 +612,7 @@ kiblnd_debug_conn (kib_conn_t *conn)
 	spin_lock(&conn->ibc_lock);
 
         CDEBUG(D_CONSOLE, "conn[%d] %p [version %x] -> %s: \n",
-               cfs_atomic_read(&conn->ibc_refcount), conn,
+	       atomic_read(&conn->ibc_refcount), conn,
                conn->ibc_version, libcfs_nid2str(conn->ibc_peer->ibp_nid));
         CDEBUG(D_CONSOLE, "   state %d nposted %d/%d cred %d o_cred %d r_cred %d\n",
                conn->ibc_state, conn->ibc_noops_posted,
@@ -873,7 +873,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
 
         /* 1 ref for caller and each rxmsg */
-        cfs_atomic_set(&conn->ibc_refcount, 1 + IBLND_RX_MSGS(version));
+	atomic_set(&conn->ibc_refcount, 1 + IBLND_RX_MSGS(version));
         conn->ibc_nrx = IBLND_RX_MSGS(version);
 
         /* post receives */
@@ -912,7 +912,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         conn->ibc_state = state;
 
         /* 1 more conn */
-        cfs_atomic_inc(&net->ibn_nconns);
+	atomic_inc(&net->ibn_nconns);
         return conn;
 
  failed_2:
@@ -931,7 +931,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 	int                rc;
 
 	LASSERT (!in_interrupt());
-	LASSERT (cfs_atomic_read(&conn->ibc_refcount) == 0);
+	LASSERT (atomic_read(&conn->ibc_refcount) == 0);
 	LASSERT (cfs_list_empty(&conn->ibc_early_rxs));
 	LASSERT (cfs_list_empty(&conn->ibc_tx_noops));
 	LASSERT (cfs_list_empty(&conn->ibc_tx_queue));
@@ -985,7 +985,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 
 		kiblnd_peer_decref(peer);
 		rdma_destroy_id(cmid);
-		cfs_atomic_dec(&net->ibn_nconns);
+		atomic_dec(&net->ibn_nconns);
 	}
 
 	LIBCFS_FREE(conn, sizeof(*conn));
@@ -2816,7 +2816,7 @@ kiblnd_base_shutdown(void)
         LASSERT (cfs_list_empty(&kiblnd_data.kib_devs));
 
         CDEBUG(D_MALLOC, "before LND base cleanup: kmem %d\n",
-               cfs_atomic_read(&libcfs_kmemory));
+	       atomic_read(&libcfs_kmemory));
 
         switch (kiblnd_data.kib_init) {
         default:
@@ -2844,11 +2844,11 @@ kiblnd_base_shutdown(void)
 		wake_up_all(&kiblnd_data.kib_failover_waitq);
 
 		i = 2;
-		while (cfs_atomic_read(&kiblnd_data.kib_nthreads) != 0) {
+		while (atomic_read(&kiblnd_data.kib_nthreads) != 0) {
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                "Waiting for %d threads to terminate\n",
-                               cfs_atomic_read(&kiblnd_data.kib_nthreads));
+			       atomic_read(&kiblnd_data.kib_nthreads));
                         cfs_pause(cfs_time_seconds(1));
                 }
 
@@ -2868,7 +2868,7 @@ kiblnd_base_shutdown(void)
 		cfs_percpt_free(kiblnd_data.kib_scheds);
 
         CDEBUG(D_MALLOC, "after LND base cleanup: kmem %d\n",
-               cfs_atomic_read(&libcfs_kmemory));
+	       atomic_read(&libcfs_kmemory));
 
 	kiblnd_data.kib_init = IBLND_INIT_NOTHING;
 	module_put(THIS_MODULE);
@@ -2888,7 +2888,7 @@ kiblnd_shutdown (lnet_ni_t *ni)
                 goto out;
 
         CDEBUG(D_MALLOC, "before LND net cleanup: kmem %d\n",
-               cfs_atomic_read(&libcfs_kmemory));
+	       atomic_read(&libcfs_kmemory));
 
 	write_lock_irqsave(g_lock, flags);
 	net->ibn_shutdown = 1;
@@ -2904,12 +2904,12 @@ kiblnd_shutdown (lnet_ni_t *ni)
 
                 /* Wait for all peer state to clean up */
                 i = 2;
-                while (cfs_atomic_read(&net->ibn_npeers) != 0) {
+		while (atomic_read(&net->ibn_npeers) != 0) {
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n? */
                                "%s: waiting for %d peers to disconnect\n",
                                libcfs_nid2str(ni->ni_nid),
-                               cfs_atomic_read(&net->ibn_npeers));
+			       atomic_read(&net->ibn_npeers));
                         cfs_pause(cfs_time_seconds(1));
                 }
 
@@ -2924,7 +2924,7 @@ kiblnd_shutdown (lnet_ni_t *ni)
                 /* fall through */
 
         case IBLND_INIT_NOTHING:
-                LASSERT (cfs_atomic_read(&net->ibn_nconns) == 0);
+		LASSERT (atomic_read(&net->ibn_nconns) == 0);
 
                 if (net->ibn_dev != NULL &&
                     net->ibn_dev->ibd_nnets == 0)
@@ -2934,7 +2934,7 @@ kiblnd_shutdown (lnet_ni_t *ni)
         }
 
         CDEBUG(D_MALLOC, "after LND net cleanup: kmem %d\n",
-               cfs_atomic_read(&libcfs_kmemory));
+	       atomic_read(&libcfs_kmemory));
 
         net->ibn_init = IBLND_INIT_NOTHING;
         ni->ni_data = NULL;

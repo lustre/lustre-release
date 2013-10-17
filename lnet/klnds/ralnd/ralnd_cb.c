@@ -896,14 +896,14 @@ kranal_thread_start(int(*fn)(void *arg), void *arg, char *name)
 	struct task_struct *task = cfs_thread_run(fn, arg, name);
 
 	if (!IS_ERR(task))
-		cfs_atomic_inc(&kranal_data.kra_nthreads);
+		atomic_inc(&kranal_data.kra_nthreads);
 	return PTR_ERR(task);
 }
 
 void
 kranal_thread_fini (void)
 {
-        cfs_atomic_dec(&kranal_data.kra_nthreads);
+	atomic_dec(&kranal_data.kra_nthreads);
 }
 
 int

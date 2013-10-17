@@ -219,9 +219,9 @@ typedef struct
 /* global interface state */
 typedef struct kmx_data
 {
-        int                 kmx_init;           /* initialization state */
-        cfs_atomic_t        kmx_shutdown;       /* shutting down? */
-        cfs_atomic_t        kmx_nthreads;       /* number of threads */
+	int                 kmx_init;           /* initialization state */
+	atomic_t            kmx_shutdown;       /* shutting down? */
+	atomic_t            kmx_nthreads;       /* number of threads */
 	struct completion   *kmx_completions;   /* array of completion struct */
 	lnet_ni_t	    *kmx_ni;		/* the LND instance */
 	u64		    kmx_incarnation;	/* my incarnation value */
@@ -235,17 +235,17 @@ typedef struct kmx_data
 	cfs_list_t	    kmx_conn_reqs;	/* list of connection reqs */
 	spinlock_t	    kmx_conn_lock;	/* connection list lock */
 	struct semaphore    kmx_conn_sem;	/* connection request list */
-        cfs_list_t          kmx_conn_zombies;   /* list of zombie connections */
-        cfs_list_t          kmx_orphan_msgs;    /* list of txs to cancel */
+	cfs_list_t          kmx_conn_zombies;   /* list of zombie connections */
+	cfs_list_t          kmx_orphan_msgs;    /* list of txs to cancel */
 
-                                                /* list of all known peers */
-        cfs_list_t          kmx_peers[MXLND_HASH_SIZE];
-        cfs_atomic_t        kmx_npeers;         /* number of peers */
+						/* list of all known peers */
+	cfs_list_t          kmx_peers[MXLND_HASH_SIZE];
+	atomic_t            kmx_npeers;         /* number of peers */
 
-        kmx_pages_t        *kmx_tx_pages;       /* tx msg pages */
+	kmx_pages_t        *kmx_tx_pages;       /* tx msg pages */
 
-        struct kmx_ctx     *kmx_txs;            /* all tx descriptors */
-        cfs_list_t          kmx_tx_idle;        /* list of idle tx */
+	struct kmx_ctx     *kmx_txs;            /* all tx descriptors */
+	cfs_list_t          kmx_tx_idle;        /* list of idle tx */
 	spinlock_t	    kmx_tx_idle_lock;	/* lock for idle tx list */
 	s32		    kmx_tx_used;	/* txs in use */
 	u64		    kmx_tx_next_cookie;	/* unique id for tx */
@@ -406,7 +406,7 @@ typedef struct kmx_conn
         cfs_list_t          mxk_zombie;         /* for placing on zombies list */
         u64                 mxk_incarnation;    /* connections's incarnation value */
         u32                 mxk_sid;            /* peer's MX session id */
-        cfs_atomic_t        mxk_refcount;       /* reference counting */
+	atomic_t        mxk_refcount;       /* reference counting */
         int                 mxk_status;         /* can we send messages? MXLND_CONN_* */
 
         mx_endpoint_addr_t  mxk_epa;            /* peer's endpoint address */
@@ -439,7 +439,7 @@ typedef struct kmx_peer
         cfs_list_t          mxp_list;           /* for placing on kmx_peers */
         lnet_nid_t          mxp_nid;            /* peer's LNET NID */
         lnet_ni_t          *mxp_ni;             /* LNET interface */
-        cfs_atomic_t        mxp_refcount;       /* reference counts */
+	atomic_t        mxp_refcount;       /* reference counts */
 
         cfs_list_t          mxp_conns;          /* list of connections */
         kmx_conn_t         *mxp_conn;           /* current connection */
@@ -511,32 +511,32 @@ mxlnd_nid_to_hash(lnet_nid_t nid)
 
 #define mxlnd_peer_addref(peer)                                 \
 do {                                                            \
-        LASSERT(peer != NULL);                                  \
-        LASSERT(cfs_atomic_read(&(peer)->mxp_refcount) > 0);    \
-        cfs_atomic_inc(&(peer)->mxp_refcount);                  \
+	LASSERT(peer != NULL);                                  \
+	LASSERT(atomic_read(&(peer)->mxp_refcount) > 0);    	\
+	atomic_inc(&(peer)->mxp_refcount);                  	\
 } while (0)
 
 
 #define mxlnd_peer_decref(peer)                                 \
 do {                                                            \
-        LASSERT(cfs_atomic_read(&(peer)->mxp_refcount) > 0);    \
-        if (cfs_atomic_dec_and_test(&(peer)->mxp_refcount))     \
-                mxlnd_peer_free(peer);                          \
+	LASSERT(atomic_read(&(peer)->mxp_refcount) > 0);    	\
+	if (atomic_dec_and_test(&(peer)->mxp_refcount))     	\
+		mxlnd_peer_free(peer);                          \
 } while (0)
 
 #define mxlnd_conn_addref(conn)                                 \
 do {                                                            \
-        LASSERT(conn != NULL);                                  \
-        LASSERT(cfs_atomic_read(&(conn)->mxk_refcount) > 0);    \
-        cfs_atomic_inc(&(conn)->mxk_refcount);                  \
+	LASSERT(conn != NULL);                                  \
+	LASSERT(atomic_read(&(conn)->mxk_refcount) > 0);    	\
+	atomic_inc(&(conn)->mxk_refcount);                  	\
 } while (0)
 
 
 #define mxlnd_conn_decref(conn)						\
 do {									\
 	LASSERT(conn != NULL);						\
-	LASSERT(cfs_atomic_read(&(conn)->mxk_refcount) > 0);		\
-	if (cfs_atomic_dec_and_test(&(conn)->mxk_refcount)) {		\
+	LASSERT(atomic_read(&(conn)->mxk_refcount) > 0);		\
+	if (atomic_dec_and_test(&(conn)->mxk_refcount)) {		\
 		spin_lock(&kmxlnd_data.kmx_conn_lock);			\
 		LASSERT((conn)->mxk_status == MXLND_CONN_DISCONNECT);	\
 		CDEBUG(D_NET, "adding conn %p to zombies\n", (conn));	\

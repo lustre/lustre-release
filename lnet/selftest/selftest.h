@@ -218,7 +218,7 @@ typedef struct srpc_client_rpc {
 	cfs_list_t		crpc_list;	/* chain on user's lists */
 	spinlock_t		crpc_lock;	/* serialize */
         int                  crpc_service;
-        cfs_atomic_t         crpc_refcount;
+	atomic_t         crpc_refcount;
         int                  crpc_timeout; /* # seconds to wait for reply */
         stt_timer_t          crpc_timer;
         swi_workitem_t       crpc_wi;
@@ -253,18 +253,18 @@ offsetof(srpc_client_rpc_t, crpc_bulk.bk_iovs[(rpc)->crpc_bulk.bk_niov])
 do {                                                                    \
         CDEBUG(D_NET, "RPC[%p] -> %s (%d)++\n",                         \
                (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-               cfs_atomic_read(&(rpc)->crpc_refcount));                 \
-        LASSERT(cfs_atomic_read(&(rpc)->crpc_refcount) > 0);            \
-        cfs_atomic_inc(&(rpc)->crpc_refcount);                          \
+	       atomic_read(&(rpc)->crpc_refcount));                 \
+	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);            \
+	atomic_inc(&(rpc)->crpc_refcount);                          \
 } while (0)
 
 #define srpc_client_rpc_decref(rpc)                                     \
 do {                                                                    \
         CDEBUG(D_NET, "RPC[%p] -> %s (%d)--\n",                         \
                (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-               cfs_atomic_read(&(rpc)->crpc_refcount));                 \
-        LASSERT(cfs_atomic_read(&(rpc)->crpc_refcount) > 0);            \
-        if (cfs_atomic_dec_and_test(&(rpc)->crpc_refcount))             \
+	       atomic_read(&(rpc)->crpc_refcount));                 \
+	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);            \
+	if (atomic_dec_and_test(&(rpc)->crpc_refcount))             \
                 srpc_destroy_client_rpc(rpc);                           \
 } while (0)
 
@@ -344,9 +344,9 @@ typedef struct {
         stt_timer_t       sn_timer;
         cfs_list_t        sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
-        cfs_atomic_t      sn_refcount;
-        cfs_atomic_t      sn_brw_errors;
-        cfs_atomic_t      sn_ping_errors;
+	atomic_t      sn_refcount;
+	atomic_t      sn_brw_errors;
+	atomic_t      sn_ping_errors;
         cfs_time_t        sn_started;
 } sfw_session_t;
 
@@ -358,7 +358,7 @@ typedef struct {
         lst_bid_t         bat_id;        /* batch id */
         int               bat_error;     /* error code of batch */
         sfw_session_t    *bat_session;   /* batch's session */
-        cfs_atomic_t      bat_nactive;   /* # of active tests */
+	atomic_t      bat_nactive;   /* # of active tests */
         cfs_list_t        bat_tests;     /* test instances */
 } sfw_batch_t;
 
@@ -387,10 +387,10 @@ typedef struct sfw_test_instance {
 	/* status of test instance */
 	spinlock_t		tsi_lock;	  /* serialize */
 	unsigned int		tsi_stopping:1;   /* test is stopping */
-        cfs_atomic_t            tsi_nactive;      /* # of active test unit */
-        cfs_list_t              tsi_units;        /* test units */
-        cfs_list_t              tsi_free_rpcs;    /* free rpcs */
-        cfs_list_t              tsi_active_rpcs;  /* active rpcs */
+	atomic_t            tsi_nactive;      /* # of active test unit */
+	cfs_list_t              tsi_units;        /* test units */
+	cfs_list_t              tsi_free_rpcs;    /* free rpcs */
+	cfs_list_t              tsi_active_rpcs;  /* active rpcs */
 
 	union {
 		test_ping_req_t		ping;	  /* ping parameter */
@@ -521,20 +521,20 @@ void srpc_shutdown(void);
 static inline void
 srpc_destroy_client_rpc (srpc_client_rpc_t *rpc)
 {
-        LASSERT (rpc != NULL);
-        LASSERT (!srpc_event_pending(rpc));
-        LASSERT (cfs_atomic_read(&rpc->crpc_refcount) == 0);
+	LASSERT (rpc != NULL);
+	LASSERT (!srpc_event_pending(rpc));
+	LASSERT (atomic_read(&rpc->crpc_refcount) == 0);
 #ifndef __KERNEL__
-        LASSERT (rpc->crpc_bulk.bk_pages == NULL);
+	LASSERT (rpc->crpc_bulk.bk_pages == NULL);
 #endif
 
-        if (rpc->crpc_fini == NULL) {
-                LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
-        } else {
-                (*rpc->crpc_fini) (rpc);
-        }
+	if (rpc->crpc_fini == NULL) {
+		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
+	} else {
+		(*rpc->crpc_fini) (rpc);
+	}
 
-        return;
+	return;
 }
 
 static inline void
@@ -552,10 +552,10 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
 	swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc,
 			  lst_sched_test[lnet_cpt_of_nid(peer.nid)]);
 	spin_lock_init(&rpc->crpc_lock);
-        cfs_atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
+	atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 
-        rpc->crpc_dest         = peer;
-        rpc->crpc_priv         = priv;
+	rpc->crpc_dest         = peer;
+	rpc->crpc_priv         = priv;
         rpc->crpc_service      = service;
         rpc->crpc_bulk.bk_len  = bulklen;
         rpc->crpc_bulk.bk_niov = nbulkiov;

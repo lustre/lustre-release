@@ -83,7 +83,7 @@ lstcon_rpc_done(srpc_client_rpc_t *rpc)
 	}
 
 	/* wakeup (transaction)thread if I'm the last RPC in the transaction */
-	if (cfs_atomic_dec_and_test(&crpc->crp_trans->tas_remaining))
+	if (atomic_dec_and_test(&crpc->crp_trans->tas_remaining))
 		wake_up(&crpc->crp_trans->tas_waitq);
 
 	spin_unlock(&rpc->crpc_lock);
@@ -109,7 +109,7 @@ lstcon_rpc_init(lstcon_node_t *nd, int service, unsigned feats,
 	crpc->crp_embedded = embedded;
         CFS_INIT_LIST_HEAD(&crpc->crp_link);
 
-        cfs_atomic_inc(&console_session.ses_rpc_counter);
+	atomic_inc(&console_session.ses_rpc_counter);
 
         return 0;
 }
@@ -180,7 +180,7 @@ lstcon_rpc_put(lstcon_rpc_t *crpc)
 	}
 
 	/* RPC is not alive now */
-	cfs_atomic_dec(&console_session.ses_rpc_counter);
+	atomic_dec(&console_session.ses_rpc_counter);
 }
 
 void
@@ -190,7 +190,7 @@ lstcon_rpc_post(lstcon_rpc_t *crpc)
 
         LASSERT (trans != NULL);
 
-        cfs_atomic_inc(&trans->tas_remaining);
+	atomic_inc(&trans->tas_remaining);
         crpc->crp_posted = 1;
 
         sfw_post_rpc(crpc->crp_rpc);
@@ -266,7 +266,7 @@ lstcon_rpc_trans_prep(cfs_list_t *translist,
         cfs_list_add_tail(&trans->tas_link, &console_session.ses_trans_list);
 
 	CFS_INIT_LIST_HEAD(&trans->tas_rpcs_list);
-	cfs_atomic_set(&trans->tas_remaining, 0);
+	atomic_set(&trans->tas_remaining, 0);
 	init_waitqueue_head(&trans->tas_waitq);
 
 	spin_lock(&console_session.ses_rpc_lock);
@@ -333,7 +333,7 @@ lstcon_rpc_trans_check(lstcon_rpc_trans_t *trans)
             !cfs_list_empty(&trans->tas_olink)) /* Not an end session RPC */
                 return 1;
 
-        return (cfs_atomic_read(&trans->tas_remaining) == 0) ? 1: 0;
+	return (atomic_read(&trans->tas_remaining) == 0) ? 1: 0;
 }
 
 int
@@ -586,10 +586,10 @@ lstcon_rpc_trans_destroy(lstcon_rpc_trans_t *trans)
 
 		spin_unlock(&rpc->crpc_lock);
 
-                cfs_atomic_dec(&trans->tas_remaining);
+		atomic_dec(&trans->tas_remaining);
         }
 
-        LASSERT (cfs_atomic_read(&trans->tas_remaining) == 0);
+	LASSERT (atomic_read(&trans->tas_remaining) == 0);
 
         cfs_list_del(&trans->tas_link);
         if (!cfs_list_empty(&trans->tas_olink))
@@ -1304,7 +1304,7 @@ lstcon_rpc_pinger_start(void)
         int             rc;
 
         LASSERT (cfs_list_empty(&console_session.ses_rpc_freelist));
-        LASSERT (cfs_atomic_read(&console_session.ses_rpc_counter) == 0);
+	LASSERT (atomic_read(&console_session.ses_rpc_counter) == 0);
 
         rc = lstcon_rpc_trans_prep(NULL, LST_TRANS_SESPING,
                                    &console_session.ses_ping);
@@ -1371,11 +1371,11 @@ lstcon_rpc_cleanup_wait(void)
 
 	spin_lock(&console_session.ses_rpc_lock);
 
-        lst_wait_until((cfs_atomic_read(&console_session.ses_rpc_counter) == 0),
+	lst_wait_until((atomic_read(&console_session.ses_rpc_counter) == 0),
                        console_session.ses_rpc_lock,
                        "Network is not accessable or target is down, "
                        "waiting for %d console RPCs to being recycled\n",
-                       cfs_atomic_read(&console_session.ses_rpc_counter));
+		       atomic_read(&console_session.ses_rpc_counter));
 
         cfs_list_add(&zlist, &console_session.ses_rpc_freelist);
         cfs_list_del_init(&console_session.ses_rpc_freelist);
@@ -1400,7 +1400,7 @@ lstcon_rpc_module_init(void)
         console_session.ses_ping = NULL;
 
 	spin_lock_init(&console_session.ses_rpc_lock);
-	cfs_atomic_set(&console_session.ses_rpc_counter, 0);
+	atomic_set(&console_session.ses_rpc_counter, 0);
 	CFS_INIT_LIST_HEAD(&console_session.ses_rpc_freelist);
 
 	return 0;
@@ -1410,7 +1410,7 @@ void
 lstcon_rpc_module_fini(void)
 {
         LASSERT (cfs_list_empty(&console_session.ses_rpc_freelist));
-        LASSERT (cfs_atomic_read(&console_session.ses_rpc_counter) == 0);
+	LASSERT (atomic_read(&console_session.ses_rpc_counter) == 0);
 }
 
 #endif

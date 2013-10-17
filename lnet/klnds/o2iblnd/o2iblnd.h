@@ -221,18 +221,18 @@ typedef struct
 
 typedef struct kib_hca_dev
 {
-        struct rdma_cm_id   *ibh_cmid;          /* listener cmid */
-        struct ib_device    *ibh_ibdev;         /* IB device */
-        int                  ibh_page_shift;    /* page shift of current HCA */
-        int                  ibh_page_size;     /* page size of current HCA */
-        __u64                ibh_page_mask;     /* page mask of current HCA */
-        int                  ibh_mr_shift;      /* bits shift of max MR size */
-        __u64                ibh_mr_size;       /* size of MR */
-        int                  ibh_nmrs;          /* # of global MRs */
-        struct ib_mr       **ibh_mrs;           /* global MR */
-        struct ib_pd        *ibh_pd;            /* PD */
-        kib_dev_t           *ibh_dev;           /* owner */
-        cfs_atomic_t         ibh_ref;           /* refcount */
+	struct rdma_cm_id   *ibh_cmid;          /* listener cmid */
+	struct ib_device    *ibh_ibdev;         /* IB device */
+	int                  ibh_page_shift;    /* page shift of current HCA */
+	int                  ibh_page_size;     /* page size of current HCA */
+	__u64                ibh_page_mask;     /* page mask of current HCA */
+	int                  ibh_mr_shift;      /* bits shift of max MR size */
+	__u64                ibh_mr_size;       /* size of MR */
+	int                  ibh_nmrs;          /* # of global MRs */
+	struct ib_mr       **ibh_mrs;           /* global MR */
+	struct ib_pd        *ibh_pd;            /* PD */
+	kib_dev_t           *ibh_dev;           /* owner */
+	atomic_t             ibh_ref;           /* refcount */
 } kib_hca_dev_t;
 
 /** # of seconds to keep pool alive */
@@ -354,13 +354,13 @@ typedef struct {
 
 typedef struct kib_net
 {
-        cfs_list_t           ibn_list;          /* chain on kib_dev_t::ibd_nets */
-        __u64                ibn_incarnation;   /* my epoch */
-        int                  ibn_init;          /* initialisation state */
-        int                  ibn_shutdown;      /* shutting down? */
+	cfs_list_t           ibn_list;          /* chain on kib_dev_t::ibd_nets */
+	__u64                ibn_incarnation;   /* my epoch */
+	int                  ibn_init;          /* initialisation state */
+	int                  ibn_shutdown;      /* shutting down? */
 
-	cfs_atomic_t		ibn_npeers;	/* # peers extant */
-	cfs_atomic_t		ibn_nconns;	/* # connections extant */
+	atomic_t		ibn_npeers;	/* # peers extant */
+	atomic_t		ibn_nconns;	/* # connections extant */
 
 	kib_tx_poolset_t	**ibn_tx_ps;	/* tx pool-set */
 	kib_fmr_poolset_t	**ibn_fmr_ps;	/* fmr pool-set */
@@ -397,7 +397,7 @@ typedef struct
 	cfs_list_t		kib_failed_devs;
 	/* schedulers sleep here */
 	wait_queue_head_t		kib_failover_waitq;
-	cfs_atomic_t		kib_nthreads;	/* # live threads */
+	atomic_t		kib_nthreads;	/* # live threads */
 	/* stabilize net/dev/peer/conn ops */
 	rwlock_t		kib_global_lock;
 	/* hash table of all my known peers */
@@ -605,7 +605,7 @@ typedef struct kib_conn
         cfs_list_t           ibc_sched_list;    /* schedule for attention */
         __u16                ibc_version;       /* version of connection */
         __u64                ibc_incarnation;   /* which instance of the peer */
-        cfs_atomic_t         ibc_refcount;      /* # users */
+	atomic_t	     ibc_refcount;      /* # users */
         int                  ibc_state;         /* what's happening */
         int                  ibc_nsends_posted; /* # uncompleted sends */
         int                  ibc_noops_posted;  /* # uncompleted NOOPs */
@@ -650,7 +650,7 @@ typedef struct kib_peer
         cfs_list_t           ibp_list;           /* stash on global peer list */
         lnet_nid_t           ibp_nid;            /* who's on the other end(s) */
         lnet_ni_t           *ibp_ni;             /* LNet interface */
-        cfs_atomic_t         ibp_refcount;       /* # users */
+	atomic_t         ibp_refcount;       /* # users */
         cfs_list_t           ibp_conns;          /* all active connections */
         cfs_list_t           ibp_tx_queue;       /* msgs waiting for a conn */
         __u16                ibp_version;        /* version of peer */
@@ -668,16 +668,16 @@ extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
 static inline void
 kiblnd_hdev_addref_locked(kib_hca_dev_t *hdev)
 {
-        LASSERT (cfs_atomic_read(&hdev->ibh_ref) > 0);
-        cfs_atomic_inc(&hdev->ibh_ref);
+	LASSERT (atomic_read(&hdev->ibh_ref) > 0);
+	atomic_inc(&hdev->ibh_ref);
 }
 
 static inline void
 kiblnd_hdev_decref(kib_hca_dev_t *hdev)
 {
-        LASSERT (cfs_atomic_read(&hdev->ibh_ref) > 0);
-        if (cfs_atomic_dec_and_test(&hdev->ibh_ref))
-                kiblnd_hdev_destroy(hdev);
+	LASSERT (atomic_read(&hdev->ibh_ref) > 0);
+	if (atomic_dec_and_test(&hdev->ibh_ref))
+		kiblnd_hdev_destroy(hdev);
 }
 
 static inline int
@@ -698,8 +698,8 @@ kiblnd_dev_can_failover(kib_dev_t *dev)
 #define kiblnd_conn_addref(conn)                                \
 do {                                                            \
         CDEBUG(D_NET, "conn[%p] (%d)++\n",                      \
-               (conn), cfs_atomic_read(&(conn)->ibc_refcount)); \
-        cfs_atomic_inc(&(conn)->ibc_refcount);                  \
+	       (conn), atomic_read(&(conn)->ibc_refcount)); \
+	atomic_inc(&(conn)->ibc_refcount);                  \
 } while (0)
 
 #define kiblnd_conn_decref(conn)					\
@@ -707,9 +707,9 @@ do {									\
 	unsigned long flags;						\
 									\
 	CDEBUG(D_NET, "conn[%p] (%d)--\n",				\
-	       (conn), cfs_atomic_read(&(conn)->ibc_refcount));		\
+	       (conn), atomic_read(&(conn)->ibc_refcount));		\
 	LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);			\
-	if (cfs_atomic_dec_and_test(&(conn)->ibc_refcount)) {		\
+	if (atomic_dec_and_test(&(conn)->ibc_refcount)) {		\
 		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);	\
 		cfs_list_add_tail(&(conn)->ibc_list,			\
 				  &kiblnd_data.kib_connd_zombies);	\
@@ -720,20 +720,20 @@ do {									\
 
 #define kiblnd_peer_addref(peer)                                \
 do {                                                            \
-        CDEBUG(D_NET, "peer[%p] -> %s (%d)++\n",                \
-               (peer), libcfs_nid2str((peer)->ibp_nid),         \
-               cfs_atomic_read (&(peer)->ibp_refcount));        \
-        cfs_atomic_inc(&(peer)->ibp_refcount);                  \
+	CDEBUG(D_NET, "peer[%p] -> %s (%d)++\n",                \
+	       (peer), libcfs_nid2str((peer)->ibp_nid),         \
+	       atomic_read (&(peer)->ibp_refcount));        	\
+	atomic_inc(&(peer)->ibp_refcount);                  	\
 } while (0)
 
 #define kiblnd_peer_decref(peer)                                \
 do {                                                            \
-        CDEBUG(D_NET, "peer[%p] -> %s (%d)--\n",                \
-               (peer), libcfs_nid2str((peer)->ibp_nid),         \
-               cfs_atomic_read (&(peer)->ibp_refcount));        \
-        LASSERT_ATOMIC_POS(&(peer)->ibp_refcount);              \
-        if (cfs_atomic_dec_and_test(&(peer)->ibp_refcount))     \
-                kiblnd_destroy_peer(peer);                      \
+	CDEBUG(D_NET, "peer[%p] -> %s (%d)--\n",                \
+	       (peer), libcfs_nid2str((peer)->ibp_nid),         \
+	       atomic_read (&(peer)->ibp_refcount));        	\
+	LASSERT_ATOMIC_POS(&(peer)->ibp_refcount);              \
+	if (atomic_dec_and_test(&(peer)->ibp_refcount))     	\
+		kiblnd_destroy_peer(peer);                      \
 } while (0)
 
 static inline cfs_list_t *

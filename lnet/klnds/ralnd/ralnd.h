@@ -125,7 +125,7 @@ typedef struct
 {
 	int               kra_init;            /* initialisation state */
 	int               kra_shutdown;        /* shut down? */
-	cfs_atomic_t      kra_nthreads;        /* # live threads */
+	atomic_t      kra_nthreads;        /* # live threads */
 	lnet_ni_t        *kra_ni;              /* _the_ nal instance */
 
 	kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq */
@@ -135,7 +135,7 @@ typedef struct
 
 	cfs_list_t       *kra_peers;           /* hash table of all my known peers */
 	int               kra_peer_hash_size;  /* size of kra_peers */
-	cfs_atomic_t      kra_npeers;          /* # peers extant */
+	atomic_t      kra_npeers;          /* # peers extant */
 	int               kra_nonewpeers;      /* prevent new peers */
 
 	cfs_list_t       *kra_conns;           /* conns hashed by cqid */
@@ -143,7 +143,7 @@ typedef struct
 	__u64             kra_peerstamp;       /* when I started up */
 	__u64             kra_connstamp;       /* conn stamp generator */
 	int               kra_next_cqid;       /* cqid generator */
-	cfs_atomic_t      kra_nconns;          /* # connections extant */
+	atomic_t      kra_nconns;          /* # connections extant */
 
 	long              kra_new_min_timeout; /* minimum timeout on any new conn */
 	wait_queue_head_t       kra_reaper_waitq;    /* reaper sleeps here */
@@ -305,7 +305,7 @@ typedef struct kra_conn
         __u32               rac_cqid;          /* my completion callback id (non-unique) */
         __u32               rac_tx_seq;        /* tx msg sequence number */
         __u32               rac_rx_seq;        /* rx msg sequence number */
-        cfs_atomic_t        rac_refcount;      /* # users */
+	atomic_t        rac_refcount;      /* # users */
         unsigned int        rac_close_sent;    /* I've sent CLOSE */
         unsigned int        rac_close_recvd;   /* I've received CLOSE */
         unsigned int        rac_state;         /* connection state */
@@ -329,7 +329,7 @@ typedef struct kra_peer {
 	lnet_nid_t          rap_nid;          /* who's on the other end(s) */
 	__u32               rap_ip;           /* IP address of peer */
 	int                 rap_port;         /* port on which peer listens */
-	cfs_atomic_t        rap_refcount;     /* # users */
+	atomic_t        rap_refcount;     /* # users */
 	int                 rap_persistence;  /* "known" peer refs */
 	int                 rap_connecting;   /* connection forming */
 	unsigned long       rap_reconnect_time; /* get_seconds() when reconnect OK */
@@ -346,16 +346,16 @@ static inline void
 kranal_peer_addref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
-        LASSERT(cfs_atomic_read(&peer->rap_refcount) > 0);
-        cfs_atomic_inc(&peer->rap_refcount);
+	LASSERT(atomic_read(&peer->rap_refcount) > 0);
+	atomic_inc(&peer->rap_refcount);
 }
 
 static inline void
 kranal_peer_decref(kra_peer_t *peer)
 {
         CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
-        LASSERT(cfs_atomic_read(&peer->rap_refcount) > 0);
-        if (cfs_atomic_dec_and_test(&peer->rap_refcount))
+	LASSERT(atomic_read(&peer->rap_refcount) > 0);
+	if (atomic_dec_and_test(&peer->rap_refcount))
                 kranal_destroy_peer(peer);
 }
 
@@ -379,8 +379,8 @@ kranal_conn_addref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->%s\n", conn, 
                libcfs_nid2str(conn->rac_peer->rap_nid));
-        LASSERT(cfs_atomic_read(&conn->rac_refcount) > 0);
-        cfs_atomic_inc(&conn->rac_refcount);
+	LASSERT(atomic_read(&conn->rac_refcount) > 0);
+	atomic_inc(&conn->rac_refcount);
 }
 
 static inline void
@@ -388,8 +388,8 @@ kranal_conn_decref(kra_conn_t *conn)
 {
         CDEBUG(D_NET, "%p->%s\n", conn,
                libcfs_nid2str(conn->rac_peer->rap_nid));
-        LASSERT(cfs_atomic_read(&conn->rac_refcount) > 0);
-        if (cfs_atomic_dec_and_test(&conn->rac_refcount))
+	LASSERT(atomic_read(&conn->rac_refcount) > 0);
+	if (atomic_dec_and_test(&conn->rac_refcount))
                 kranal_destroy_conn(conn);
 }
 

@@ -386,7 +386,7 @@ kqswnal_get_idle_tx (void)
 
         cfs_list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
         ktx->ktx_launcher = current->pid;
-        cfs_atomic_inc(&kqswnal_data.kqn_pending_txs);
+	atomic_inc(&kqswnal_data.kqn_pending_txs);
 
 	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 
@@ -899,9 +899,9 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg,
         ktx->ktx_args[0] = krx;
         ktx->ktx_args[1] = lntmsg;
 
-        LASSERT (cfs_atomic_read(&krx->krx_refcount) > 0);
+	LASSERT (atomic_read(&krx->krx_refcount) > 0);
         /* Take an extra ref for the completion callback */
-        cfs_atomic_inc(&krx->krx_refcount);
+	atomic_inc(&krx->krx_refcount);
 
         /* Map on the rail the RPC prefers */
         ktx->ktx_rail = ep_rcvr_prefrail(krx->krx_eprx,
@@ -978,7 +978,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg,
                 kqswnal_put_idle_tx (ktx);
         }
 
-        cfs_atomic_dec(&kqswnal_data.kqn_pending_txs);
+	atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc);
 }
 
@@ -1254,14 +1254,14 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 
         }
         
-        cfs_atomic_dec(&kqswnal_data.kqn_pending_txs);
+	atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc == 0 ? 0 : -EIO);
 }
 
 void
 kqswnal_requeue_rx (kqswnal_rx_t *krx)
 {
-        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
+	LASSERT (atomic_read(&krx->krx_refcount) == 0);
         LASSERT (!krx->krx_rpc_reply_needed);
 
         krx->krx_state = KRX_POSTED;
@@ -1298,7 +1298,7 @@ kqswnal_rx_done (kqswnal_rx_t *krx)
 {
 	int           rc;
 
-	LASSERT (cfs_atomic_read(&krx->krx_refcount) == 0);
+	LASSERT (atomic_read(&krx->krx_refcount) == 0);
 
 	if (krx->krx_rpc_reply_needed) {
 		/* We've not completed the peer's RPC yet... */
@@ -1333,7 +1333,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
         int             nob;
         int             rc;
 
-        LASSERT (cfs_atomic_read(&krx->krx_refcount) == 1);
+	LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
         if (krx->krx_nob < offsetof(kqswnal_msg_t, kqm_u)) {
                 CERROR("Short message %d received from %s\n",
@@ -1521,7 +1521,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
 
         /* Default to failure if an RPC reply is requested but not handled */
         krx->krx_rpc_reply.msg.status = -EPROTO;
-        cfs_atomic_set (&krx->krx_refcount, 1);
+	atomic_set (&krx->krx_refcount, 1);
 
         if (status != EP_SUCCESS) {
                 /* receives complete with failure when receiver is removed */
@@ -1662,14 +1662,14 @@ kqswnal_thread_start(int (*fn)(void *arg), void *arg, char *name)
 	if (IS_ERR(task))
 		return PTR_ERR(task);
 
-	cfs_atomic_inc(&kqswnal_data.kqn_nthreads);
+	atomic_inc(&kqswnal_data.kqn_nthreads);
 	return 0;
 }
 
 void
 kqswnal_thread_fini (void)
 {
-        cfs_atomic_dec (&kqswnal_data.kqn_nthreads);
+	atomic_dec (&kqswnal_data.kqn_nthreads);
 }
 
 int
@@ -1735,7 +1735,7 @@ kqswnal_scheduler (void *arg)
                                        libcfs_nid2str(ktx->ktx_nid), rc);
                                 kqswnal_tx_done (ktx, rc);
                         }
-                        cfs_atomic_dec (&kqswnal_data.kqn_pending_txs);
+			atomic_dec (&kqswnal_data.kqn_pending_txs);
 
                         did_something = 1;
 			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,

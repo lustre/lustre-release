@@ -545,8 +545,8 @@ mxlnd_conn_disconnect(kmx_conn_t *conn, int mx_dis, int send_bye)
                 mxlnd_sleep(msecs_to_jiffies(20));
         }
 
-        if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown) != 1) {
-                unsigned long   last_msg        = 0;
+	if (atomic_read(&kmxlnd_data.kmx_shutdown) != 1) {
+		unsigned long   last_msg        = 0;
 
                 /* notify LNET that we are giving up on this peer */
                 if (cfs_time_after(conn->mxk_last_rx, conn->mxk_last_tx))
@@ -614,13 +614,13 @@ mxlnd_conn_alloc_locked(kmx_conn_t **connp, kmx_peer_t *peer)
 
         memset(conn->mxk_rxs, 0, MXLND_RX_MSGS() * sizeof(kmx_ctx_t));
 
-        conn->mxk_peer = peer;
-        CFS_INIT_LIST_HEAD(&conn->mxk_list);
-        CFS_INIT_LIST_HEAD(&conn->mxk_zombie);
-        cfs_atomic_set(&conn->mxk_refcount, 2); /* ref for owning peer
-                                                   and one for the caller */
-        if (peer->mxp_nid == kmxlnd_data.kmx_ni->ni_nid) {
-                u64     nic_id  = 0ULL;
+	conn->mxk_peer = peer;
+	CFS_INIT_LIST_HEAD(&conn->mxk_list);
+	CFS_INIT_LIST_HEAD(&conn->mxk_zombie);
+	atomic_set(&conn->mxk_refcount, 2); /* ref for owning peer
+						   and one for the caller */
+	if (peer->mxp_nid == kmxlnd_data.kmx_ni->ni_nid) {
+		u64     nic_id  = 0ULL;
                 u32     ep_id   = 0;
 
                 /* this is localhost, set the epa and status as up */
@@ -771,18 +771,18 @@ mxlnd_deq_pending_ctx(kmx_ctx_t *ctx)
 void
 mxlnd_peer_free(kmx_peer_t *peer)
 {
-        CDEBUG(D_NET, "freeing peer 0x%p %s\n", peer, libcfs_nid2str(peer->mxp_nid));
+	CDEBUG(D_NET, "freeing peer 0x%p %s\n", peer, libcfs_nid2str(peer->mxp_nid));
 
-        LASSERT (cfs_atomic_read(&peer->mxp_refcount) == 0);
+	LASSERT (atomic_read(&peer->mxp_refcount) == 0);
 
-        if (!cfs_list_empty(&peer->mxp_list)) {
-                /* assume we are locked */
-                cfs_list_del_init(&peer->mxp_list);
-        }
+	if (!cfs_list_empty(&peer->mxp_list)) {
+		/* assume we are locked */
+		cfs_list_del_init(&peer->mxp_list);
+	}
 
-        MXLND_FREE(peer, sizeof (*peer));
-        cfs_atomic_dec(&kmxlnd_data.kmx_npeers);
-        return;
+	MXLND_FREE(peer, sizeof (*peer));
+	atomic_dec(&kmxlnd_data.kmx_npeers);
+	return;
 }
 
 static int
@@ -889,10 +889,10 @@ mxlnd_peer_alloc(kmx_peer_t **peerp, lnet_nid_t nid, u32 board, u32 ep_id, u64 n
 
         memset(peer, 0, sizeof(*peer));
 
-        CFS_INIT_LIST_HEAD(&peer->mxp_list);
-        peer->mxp_nid = nid;
-        /* peer->mxp_ni unused - may be used for multi-rail */
-        cfs_atomic_set(&peer->mxp_refcount, 1);     /* ref for kmx_peers list */
+	CFS_INIT_LIST_HEAD(&peer->mxp_list);
+	peer->mxp_nid = nid;
+	/* peer->mxp_ni unused - may be used for multi-rail */
+	atomic_set(&peer->mxp_refcount, 1);     /* ref for kmx_peers list */
 
         peer->mxp_board = board;
         peer->mxp_ep_id = ep_id;
@@ -1008,12 +1008,12 @@ mxlnd_find_peer_by_nid(lnet_nid_t nid, int create)
                 mxlnd_peer_decref(peer);
                 peer = old;
         } else {
-                /* no other peer, use this one */
-                cfs_list_add_tail(&peer->mxp_list,
-                                  &kmxlnd_data.kmx_peers[hash]);
-                cfs_atomic_inc(&kmxlnd_data.kmx_npeers);
-                mxlnd_peer_addref(peer);
-                mxlnd_conn_decref(peer->mxp_conn); /* drop ref from peer_alloc */
+		/* no other peer, use this one */
+		cfs_list_add_tail(&peer->mxp_list,
+				  &kmxlnd_data.kmx_peers[hash]);
+		atomic_inc(&kmxlnd_data.kmx_npeers);
+		mxlnd_peer_addref(peer);
+		mxlnd_conn_decref(peer->mxp_conn); /* drop ref from peer_alloc */
         }
 
 	write_unlock(g_lock);
@@ -1481,12 +1481,12 @@ mxlnd_get_peer_info(int index, lnet_nid_t *nidp, int *count)
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 cfs_list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i],
                                         mxp_list) {
-                        if (index-- == 0) {
-                                *nidp = peer->mxp_nid;
-                                *count = cfs_atomic_read(&peer->mxp_refcount);
-                                ret = 0;
-                                break;
-                        }
+			if (index-- == 0) {
+				*nidp = peer->mxp_nid;
+				*count = atomic_read(&peer->mxp_refcount);
+				ret = 0;
+				break;
+			}
                 }
         }
 	read_unlock(&kmxlnd_data.kmx_global_lock);
@@ -2554,9 +2554,9 @@ mxlnd_tx_queued(void *arg)
 	spinlock_t		*tx_q_lock = &kmxlnd_data.kmx_tx_queue_lock;
 	rwlock_t		*g_lock  = &kmxlnd_data.kmx_global_lock;
 
-	while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
+	while (!(atomic_read(&kmxlnd_data.kmx_shutdown))) {
 		ret = down_interruptible(&kmxlnd_data.kmx_tx_queue_sem);
-		if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
+		if (atomic_read(&kmxlnd_data.kmx_shutdown))
 			break;
 		if (ret != 0) /* Should we check for -EINTR? */
 			continue;
@@ -2635,11 +2635,11 @@ mxlnd_tx_queued(void *arg)
                                 }
                         }
 
-                        if (found == 0) {
-                                cfs_list_add_tail(&peer->mxp_list,
-                                                  &kmxlnd_data.kmx_peers[hash]);
-                                cfs_atomic_inc(&kmxlnd_data.kmx_npeers);
-                        } else {
+			if (found == 0) {
+				cfs_list_add_tail(&peer->mxp_list,
+						  &kmxlnd_data.kmx_peers[hash]);
+				atomic_inc(&kmxlnd_data.kmx_npeers);
+			} else {
                                 tx->mxc_peer = old;
                                 tx->mxc_conn = old->mxp_conn;
                                 LASSERT(old->mxp_conn != NULL);
@@ -3498,8 +3498,8 @@ mxlnd_request_waitd(void *arg)
 
         CDEBUG(D_NET, "%s starting\n", name);
 
-        while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
-                u8      msg_type        = 0;
+	while (!(atomic_read(&kmxlnd_data.kmx_shutdown))) {
+		u8      msg_type        = 0;
 
                 mxret = MX_SUCCESS;
                 result = 0;
@@ -3516,8 +3516,8 @@ mxlnd_request_waitd(void *arg)
                 mxret = mx_wait_any(kmxlnd_data.kmx_endpt, MXLND_WAIT_TIMEOUT,
                                     0ULL, 0ULL, &status, &result);
 #endif
-                if (unlikely(cfs_atomic_read(&kmxlnd_data.kmx_shutdown)))
-                        break;
+		if (unlikely(atomic_read(&kmxlnd_data.kmx_shutdown)))
+			break;
 
                 if (result != 1) {
                         /* nothing completed... */
@@ -3604,10 +3604,10 @@ mxlnd_check_timeouts(unsigned long now)
 		cfs_list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i],
 					mxp_list) {
 
-			if (unlikely(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
+			if (unlikely(atomic_read(&kmxlnd_data.kmx_shutdown))) {
 				read_unlock(g_lock);
-                                return next;
-                        }
+				return next;
+			}
 
                         conn = peer->mxp_conn;
                         if (conn) {
@@ -3732,11 +3732,11 @@ mxlnd_passive_connect(kmx_connparams_t *cp)
                                 peer = existing_peer;
                                 mxlnd_conn_addref(peer->mxp_conn);
                                 conn = peer->mxp_conn;
-                        } else {
-                                cfs_list_add_tail(&peer->mxp_list,
-                                                  &kmxlnd_data.kmx_peers[hash]);
-                                cfs_atomic_inc(&kmxlnd_data.kmx_npeers);
-                        }
+			} else {
+				cfs_list_add_tail(&peer->mxp_list,
+						  &kmxlnd_data.kmx_peers[hash]);
+				atomic_inc(&kmxlnd_data.kmx_npeers);
+			}
 			write_unlock(g_lock);
                 } else {
                         ret = mxlnd_conn_alloc(&conn, peer); /* adds 2nd ref */
@@ -3956,20 +3956,20 @@ mxlnd_free_conn_zombies(void)
 int
 mxlnd_connd(void *arg)
 {
-        long                    id              = (long) arg;
+	long                    id              = (long) arg;
 
-        CDEBUG(D_NET, "connd starting\n");
+	CDEBUG(D_NET, "connd starting\n");
 
-        while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
-                int                ret             = 0;
-                kmx_connparams_t  *cp              = NULL;
+	while (!(atomic_read(&kmxlnd_data.kmx_shutdown))) {
+		int                ret             = 0;
+		kmx_connparams_t  *cp              = NULL;
 		spinlock_t	  *g_conn_lock	= &kmxlnd_data.kmx_conn_lock;
 		cfs_list_t	  *conn_reqs	= &kmxlnd_data.kmx_conn_reqs;
 
 		ret = down_interruptible(&kmxlnd_data.kmx_conn_sem);
 
-                if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
-                        break;
+		if (atomic_read(&kmxlnd_data.kmx_shutdown))
+			break;
 
                 if (ret != 0)
                         continue;
@@ -4033,7 +4033,7 @@ mxlnd_timeoutd(void *arg)
 
         CDEBUG(D_NET, "timeoutd starting\n");
 
-        while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
+	while (!(atomic_read(&kmxlnd_data.kmx_shutdown))) {
 
                 now = jiffies;
                 /* if the next timeout has not arrived, go back to sleep */
@@ -4050,7 +4050,7 @@ mxlnd_timeoutd(void *arg)
                          * not against the removal of temp */
                         cfs_list_for_each_entry_safe(peer, temp, peers,
                                                      mxp_list) {
-                                if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
+				if (atomic_read(&kmxlnd_data.kmx_shutdown))
                                         break;
                                 mxlnd_peer_addref(peer); /* add ref... */
                                 conn = peer->mxp_conn;

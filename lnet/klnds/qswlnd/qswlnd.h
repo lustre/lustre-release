@@ -182,7 +182,7 @@ typedef struct kqswnal_rx
         int                  krx_nob;       /* Number Of Bytes received into buffer */
         int                  krx_rpc_reply_needed:1; /* peer waiting for EKC RPC reply */
         int                  krx_state;     /* what this RX is doing */
-        cfs_atomic_t         krx_refcount;  /* how to tell when rpc is done */
+	atomic_t         krx_refcount;  /* how to tell when rpc is done */
 #if KQSW_CKSUM
         __u32                krx_cksum;     /* checksum */
 #endif
@@ -256,7 +256,7 @@ typedef struct
 {
 	char                 kqn_init;        /* what's been initialised */
 	char                 kqn_shuttingdown;/* I'm trying to shut down */
-	cfs_atomic_t         kqn_nthreads;    /* # threads running */
+	atomic_t	kqn_nthreads;    /* # threads running */
 	lnet_ni_t           *kqn_ni;          /* _the_ instance of me */
 
 	kqswnal_rx_t        *kqn_rxds;        /* stack of all the receive descriptors */
@@ -265,7 +265,7 @@ typedef struct
 	cfs_list_t           kqn_idletxds;    /* transmit descriptors free to use */
 	cfs_list_t           kqn_activetxds;  /* transmit descriptors being used */
 	spinlock_t	kqn_idletxd_lock;    /* serialise idle txd access */
-	cfs_atomic_t	kqn_pending_txs;     /* # transmits being prepped */
+	atomic_t	kqn_pending_txs;     /* # transmits being prepped */
 
 	spinlock_t	kqn_sched_lock;      /* serialise packet schedulers */
 	wait_queue_head_t    kqn_sched_waitq;/* scheduler blocks here */
@@ -336,8 +336,8 @@ kqswnal_pages_spanned (void *base, int nob)
 
 static inline void kqswnal_rx_decref (kqswnal_rx_t *krx)
 {
-        LASSERT (cfs_atomic_read (&krx->krx_refcount) > 0);
-        if (cfs_atomic_dec_and_test (&krx->krx_refcount))
+	LASSERT (atomic_read (&krx->krx_refcount) > 0);
+	if (atomic_dec_and_test (&krx->krx_refcount))
                 kqswnal_rx_done(krx);
 }
 

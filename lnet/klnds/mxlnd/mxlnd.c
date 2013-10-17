@@ -393,15 +393,15 @@ int
 mxlnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 {
 	cfs_task *task;
-        int     i   = (int) ((long) arg);
+	int     i   = (int) ((long) arg);
 
-        cfs_atomic_inc(&kmxlnd_data.kmx_nthreads);
+	atomic_inc(&kmxlnd_data.kmx_nthreads);
 	init_completion(&kmxlnd_data.kmx_completions[i]);
 
 	task = kthread_run(fn, arg, name);
 	if (IS_ERR(task)) {
 		CERROR("cfs_create_thread() failed with %d\n", PTR_ERR(task));
-		cfs_atomic_dec(&kmxlnd_data.kmx_nthreads);
+		atomic_dec(&kmxlnd_data.kmx_nthreads);
 	}
 	return PTR_ERR(task);
 }
@@ -415,8 +415,8 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg, char *name)
 void
 mxlnd_thread_stop(long id)
 {
-        int     i       = (int) id;
-        cfs_atomic_dec (&kmxlnd_data.kmx_nthreads);
+	int     i       = (int) id;
+	atomic_dec (&kmxlnd_data.kmx_nthreads);
 	complete(&kmxlnd_data.kmx_completions[i]);
 }
 
@@ -429,23 +429,22 @@ mxlnd_thread_stop(long id)
 void
 mxlnd_shutdown (lnet_ni_t *ni)
 {
-        int                     i               = 0;
-        int                     nthreads        = MXLND_NDAEMONS
-                                                  + *kmxlnd_tunables.kmx_n_waitd;
+	int     i               = 0;
+	int     nthreads        = MXLND_NDAEMONS + *kmxlnd_tunables.kmx_n_waitd;
 
-        LASSERT (ni == kmxlnd_data.kmx_ni);
-        LASSERT (ni->ni_data == &kmxlnd_data);
-        CDEBUG(D_NET, "in shutdown()\n");
+	LASSERT (ni == kmxlnd_data.kmx_ni);
+	LASSERT (ni->ni_data == &kmxlnd_data);
+	CDEBUG(D_NET, "in shutdown()\n");
 
-        CDEBUG(D_MALLOC, "before MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
-                         kmxlnd_data.kmx_mem_used);
+	CDEBUG(D_MALLOC, "before MXLND cleanup: libcfs_kmemory %d "
+			 "kmx_mem_used %ld\n", atomic_read(&libcfs_kmemory),
+			 kmxlnd_data.kmx_mem_used);
 
 
-        CDEBUG(D_NET, "setting shutdown = 1\n");
-        cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+	CDEBUG(D_NET, "setting shutdown = 1\n");
+	atomic_set(&kmxlnd_data.kmx_shutdown, 1);
 
-        switch (kmxlnd_data.kmx_init) {
+	switch (kmxlnd_data.kmx_init) {
 
         case MXLND_INIT_ALL:
 
@@ -462,12 +461,12 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
         case MXLND_INIT_THREADS:
 
-                CDEBUG(D_NET, "waiting on threads\n");
-                /* wait for threads to complete */
-                for (i = 0; i < nthreads; i++) {
+		CDEBUG(D_NET, "waiting on threads\n");
+		/* wait for threads to complete */
+		for (i = 0; i < nthreads; i++) {
 			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                }
-                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+		}
+		LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
 
                 CDEBUG(D_NET, "freeing completions\n");
                 MXLND_FREE(kmxlnd_data.kmx_completions,
@@ -511,9 +510,9 @@ mxlnd_shutdown (lnet_ni_t *ni)
         }
         CDEBUG(D_NET, "shutdown complete\n");
 
-        CDEBUG(D_MALLOC, "after MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
-                         kmxlnd_data.kmx_mem_used);
+	CDEBUG(D_MALLOC, "after MXLND cleanup: libcfs_kmemory %d "
+			 "kmx_mem_used %ld\n", atomic_read(&libcfs_kmemory),
+			 kmxlnd_data.kmx_mem_used);
 
 	kmxlnd_data.kmx_init = MXLND_INIT_NOTHING;
 	module_put(THIS_MODULE);
@@ -542,9 +541,9 @@ mxlnd_startup (lnet_ni_t *ni)
                 CERROR("Only 1 instance supported\n");
                 return -EPERM;
         }
-        CDEBUG(D_MALLOC, "before MXLND startup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", cfs_atomic_read(&libcfs_kmemory),
-                         kmxlnd_data.kmx_mem_used);
+	CDEBUG(D_MALLOC, "before MXLND startup: libcfs_kmemory %d "
+			 "kmx_mem_used %ld\n", atomic_read(&libcfs_kmemory),
+			 kmxlnd_data.kmx_mem_used);
 
         ni->ni_maxtxcredits = MXLND_TX_MSGS();
         ni->ni_peertxcredits = *kmxlnd_tunables.kmx_peercredits;
@@ -624,62 +623,62 @@ mxlnd_startup (lnet_ni_t *ni)
 		if (ret < 0) {
 			CERROR("Starting mxlnd_request_waitd[%d] "
 				"failed with %d\n", i, ret);
-                        cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
-                        mx_wakeup(kmxlnd_data.kmx_endpt);
-                        for (--i; i >= 0; i--) {
+			atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+			mx_wakeup(kmxlnd_data.kmx_endpt);
+			for (--i; i >= 0; i--) {
 				wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                        }
-                        LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                        MXLND_FREE(kmxlnd_data.kmx_completions,
+			}
+			LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+			MXLND_FREE(kmxlnd_data.kmx_completions,
 				nthreads * sizeof(struct completion));
 
-                        goto failed;
-                }
-        }
+			goto failed;
+		}
+	}
 	ret = mxlnd_thread_start(mxlnd_tx_queued, (void *)((long)i++),
 				 "mxlnd_tx_queued");
-        if (ret < 0) {
-                CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
-                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
-                mx_wakeup(kmxlnd_data.kmx_endpt);
-                for (--i; i >= 0; i--) {
+	if (ret < 0) {
+		CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
+		atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+		mx_wakeup(kmxlnd_data.kmx_endpt);
+		for (--i; i >= 0; i--) {
 			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                }
-                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                MXLND_FREE(kmxlnd_data.kmx_completions,
+		}
+		LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+		MXLND_FREE(kmxlnd_data.kmx_completions,
 			nthreads * sizeof(struct completion));
-                goto failed;
-        }
+		goto failed;
+	}
 	ret = mxlnd_thread_start(mxlnd_timeoutd, (void *)((long)i++),
 				 "mxlnd_timeoutd");
-        if (ret < 0) {
-                CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
-                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
-                mx_wakeup(kmxlnd_data.kmx_endpt);
+	if (ret < 0) {
+		CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
+		atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+		mx_wakeup(kmxlnd_data.kmx_endpt);
 		up(&kmxlnd_data.kmx_tx_queue_sem);
-                for (--i; i >= 0; i--) {
+		for (--i; i >= 0; i--) {
 			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                }
-                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                MXLND_FREE(kmxlnd_data.kmx_completions,
+		}
+		LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+		MXLND_FREE(kmxlnd_data.kmx_completions,
 			nthreads * sizeof(struct completion));
-                goto failed;
-        }
+		goto failed;
+	}
 	ret = mxlnd_thread_start(mxlnd_connd, (void *)((long)i++),
 				 "mxlnd_connd");
-        if (ret < 0) {
-                CERROR("Starting mxlnd_connd failed with %d\n", ret);
-                cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
-                mx_wakeup(kmxlnd_data.kmx_endpt);
+	if (ret < 0) {
+		CERROR("Starting mxlnd_connd failed with %d\n", ret);
+		atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+		mx_wakeup(kmxlnd_data.kmx_endpt);
 		up(&kmxlnd_data.kmx_tx_queue_sem);
-                for (--i; i >= 0; i--) {
+		for (--i; i >= 0; i--) {
 			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                }
-                LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                MXLND_FREE(kmxlnd_data.kmx_completions,
+		}
+		LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+		MXLND_FREE(kmxlnd_data.kmx_completions,
 			nthreads * sizeof(struct completion));
-                goto failed;
-        }
+		goto failed;
+	}
 
         kmxlnd_data.kmx_init = MXLND_INIT_THREADS;
         /*****************************************************/

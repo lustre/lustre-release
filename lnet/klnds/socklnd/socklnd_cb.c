@@ -53,15 +53,15 @@ ksocknal_alloc_tx(int type, int size)
         if (tx == NULL)
                 return NULL;
 
-        cfs_atomic_set(&tx->tx_refcount, 1);
-        tx->tx_zc_aborted = 0;
-        tx->tx_zc_capable = 0;
-        tx->tx_zc_checked = 0;
-        tx->tx_desc_size  = size;
+	atomic_set(&tx->tx_refcount, 1);
+	tx->tx_zc_aborted = 0;
+	tx->tx_zc_capable = 0;
+	tx->tx_zc_checked = 0;
+	tx->tx_desc_size  = size;
 
-        cfs_atomic_inc(&ksocknal_data.ksnd_nactive_txs);
+	atomic_inc(&ksocknal_data.ksnd_nactive_txs);
 
-        return tx;
+	return tx;
 }
 
 ksock_tx_t *
@@ -93,7 +93,7 @@ ksocknal_alloc_tx_noop(__u64 cookie, int nonblk)
 void
 ksocknal_free_tx (ksock_tx_t *tx)
 {
-	cfs_atomic_dec(&ksocknal_data.ksnd_nactive_txs);
+	atomic_dec(&ksocknal_data.ksnd_nactive_txs);
 
 	if (tx->tx_lnetmsg == NULL && tx->tx_desc_size == KSOCK_NOOP_TX_SIZE) {
 		/* it's a noop tx */
@@ -238,7 +238,7 @@ ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 }
 
                 /* socket's wmem_queued now includes 'rc' bytes */
-                cfs_atomic_sub (rc, &conn->ksnc_tx_nob);
+		atomic_sub (rc, &conn->ksnc_tx_nob);
                 rc = 0;
 
         } while (tx->tx_resid != 0);
@@ -426,7 +426,7 @@ ksocknal_txlist_done (lnet_ni_t *ni, cfs_list_t *txlist, int error)
 
                 cfs_list_del (&tx->tx_list);
 
-                LASSERT (cfs_atomic_read(&tx->tx_refcount) == 1);
+		LASSERT (atomic_read(&tx->tx_refcount) == 1);
                 ksocknal_tx_done (ni, tx);
         }
 }
@@ -529,7 +529,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 counter++;   /* exponential backoff warnings */
                 if ((counter & (-counter)) == counter)
                         CWARN("%u ENOMEM tx %p (%u allocated)\n",
-                              counter, conn, cfs_atomic_read(&libcfs_kmemory));
+			      counter, conn, atomic_read(&libcfs_kmemory));
 
                 /* Queue on ksnd_enomem_conns for retry after a timeout */
 		spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
@@ -631,7 +631,7 @@ ksocknal_find_conn_locked(ksock_peer_t *peer, ksock_tx_t *tx, int nonblk)
 
         cfs_list_for_each (tmp, &peer->ksnp_conns) {
                 ksock_conn_t *c  = cfs_list_entry(tmp, ksock_conn_t, ksnc_list);
-                int           nob = cfs_atomic_read(&c->ksnc_tx_nob) +
+		int           nob = atomic_read(&c->ksnc_tx_nob) +
                                     libcfs_sock_wmem_queued(c->ksnc_sock);
                 int           rc;
 
@@ -681,7 +681,7 @@ ksocknal_tx_prep(ksock_conn_t *conn, ksock_tx_t *tx)
 {
         conn->ksnc_proto->pro_pack(tx);
 
-        cfs_atomic_add (tx->tx_nob, &conn->ksnc_tx_nob);
+	atomic_add (tx->tx_nob, &conn->ksnc_tx_nob);
         ksocknal_conn_addref(conn); /* +1 ref for tx */
         tx->tx_conn = conn;
 }
@@ -761,7 +761,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         }
 
         if (ztx != NULL) {
-                cfs_atomic_sub (ztx->tx_nob, &conn->ksnc_tx_nob);
+		atomic_sub (ztx->tx_nob, &conn->ksnc_tx_nob);
                 cfs_list_add_tail(&ztx->tx_list, &sched->kss_zombie_noop_txs);
         }
 
@@ -1117,7 +1117,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
         lnet_process_id_t *id;
         int                rc;
 
-        LASSERT (cfs_atomic_read(&conn->ksnc_conn_refcount) > 0);
+	LASSERT (atomic_read(&conn->ksnc_conn_refcount) > 0);
 
         /* NB: sched lock NOT held */
         /* SOCKNAL_RX_LNET_HEADER is here for backward compatability */
