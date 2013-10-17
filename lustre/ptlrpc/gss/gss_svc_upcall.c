@@ -1059,26 +1059,32 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
 
 int __init gss_init_svc_upcall(void)
 {
-	int     i;
+	int	i, rc;
 
 	spin_lock_init(&__ctx_index_lock);
-        /*
-         * this helps reducing context index confliction. after server reboot,
-         * conflicting request from clients might be filtered out by initial
-         * sequence number checking, thus no chance to sent error notification
-         * back to clients.
-         */
-        cfs_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
+	/*
+	 * this helps reducing context index confliction. after server reboot,
+	 * conflicting request from clients might be filtered out by initial
+	 * sequence number checking, thus no chance to sent error notification
+	 * back to clients.
+	 */
+	cfs_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
+	rc = cache_register_net(&rsi_cache, &init_net);
+	if (rc != 0)
+		return rc;
 
-        cache_register(&rsi_cache);
-        cache_register(&rsc_cache);
+	rc = cache_register_net(&rsc_cache, &init_net);
+	if (rc != 0) {
+		cache_unregister_net(&rsi_cache, &init_net);
+		return rc;
+	}
 
-        /* FIXME this looks stupid. we intend to give lsvcgssd a chance to open
-         * the init upcall channel, otherwise there's big chance that the first
-         * upcall issued before the channel be opened thus nfsv4 cache code will
-         * drop the request direclty, thus lead to unnecessary recovery time.
-         * here we wait at miximum 1.5 seconds. */
+	/* FIXME this looks stupid. we intend to give lsvcgssd a chance to open
+	 * the init upcall channel, otherwise there's big chance that the first
+	 * upcall issued before the channel be opened thus nfsv4 cache code will
+	 * drop the request direclty, thus lead to unnecessary recovery time.
+	 * here we wait at miximum 1.5 seconds. */
 	for (i = 0; i < 6; i++) {
 		if (atomic_read(&rsi_cache.readers) > 0)
 			break;
@@ -1087,18 +1093,18 @@ int __init gss_init_svc_upcall(void)
 		schedule_timeout(HZ / 4);
 	}
 
-        if (atomic_read(&rsi_cache.readers) == 0)
-                CWARN("Init channel is not opened by lsvcgssd, following "
-                      "request might be dropped until lsvcgssd is active\n");
+	if (atomic_read(&rsi_cache.readers) == 0)
+		CWARN("Init channel is not opened by lsvcgssd, following "
+		      "request might be dropped until lsvcgssd is active\n");
 
-        return 0;
+	return 0;
 }
 
 void __exit gss_exit_svc_upcall(void)
 {
-        cache_purge(&rsi_cache);
-        cache_unregister(&rsi_cache);
+	cache_purge(&rsi_cache);
+	cache_unregister_net(&rsi_cache, &init_net);
 
-        cache_purge(&rsc_cache);
-        cache_unregister(&rsc_cache);
+	cache_purge(&rsc_cache);
+	cache_unregister_net(&rsc_cache, &init_net);
 }
