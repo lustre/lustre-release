@@ -226,7 +226,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		if (inode == NULL)
 			break;
 
-		LASSERT(lock->l_flags & LDLM_FL_CANCELING);
+		LASSERT(ldlm_is_canceling(lock));
 
 		if (bits & MDS_INODELOCK_XATTR)
 			ll_xattr_cache_destroy(inode);

@@ -9,8 +9,10 @@ flag[ 0] = {
 flag[ 1] = {
     f-name  = block_granted;
     f-mask  = on_wire, blocked;
-    f-desc  = 'Server placed lock on granted list, or a recovering client wants '
-              'the lock added to the granted list, no questions asked.';
+    f-desc  = <<- _EOF_
+	Server placed lock on granted list, or a recovering client wants
+	the lock added to the granted list, no questions asked.
+	_EOF_;
 };
 
 flag[ 2] = {
@@ -132,7 +134,7 @@ flag[31] = {
 
 flag[32] = {
     f-name  = fail_loc;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	Used for marking lock as a target for -EINTR while cp_ast sleep
 	emulation + race with upcoming bl_ast.
@@ -141,7 +143,7 @@ flag[32] = {
 
 flag[33] = {
     f-name  = skipped;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	Used while processing the unused list to know that we have already
 	handled this lock and decided to skip it.
@@ -151,49 +153,49 @@ flag[33] = {
 
 flag[34] = {
     f-name  = cbpending;
-    f-mask  = local_only, hide_lock;
+    f-mask  = off_wire /* , hide_lock */;
     f-desc  = 'this lock is being destroyed';
 };
 
 flag[35] = {
     f-name  = wait_noreproc;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'not a real flag, not saved in lock';
 };
 
 flag[36] = {
     f-name  = cancel;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'cancellation callback already run';
 };
 
 flag[37] = {
     f-name  = local_only;
-    f-mask  = local_only, hide_lock;
-    f-desc  = 'whatever it might mean';
+    f-mask  = off_wire /* , hide_lock */;
+    f-desc  = 'whatever it might mean -- never transmitted?';
 };
 
 flag[38] = {
     f-name  = failed;
-    f-mask  = local_only, gone, hide_lock;
+    f-mask  = off_wire, gone /* , hide_lock */;
     f-desc  = "don't run the cancel callback under ldlm_cli_cancel_unused";
 };
 
 flag[39] = {
     f-name  = canceling;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'lock cancel has already been sent';
 };
 
 flag[40] = {
     f-name  = local;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'local lock (ie, no srv/cli split)';
 };
 
 flag[41] = {
     f-name  = lvb_ready;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	XXX FIXME: This is being added to b_size as a low-risk fix to the
 	fact that the LVB filling happens _after_ the lock has been granted,
@@ -211,7 +213,7 @@ flag[41] = {
 
 flag[42] = {
     f-name  = kms_ignore;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	A lock contributes to the known minimum size (KMS) calculation until
 	it has finished the part of its cancelation that performs write back
@@ -224,19 +226,19 @@ flag[42] = {
 
 flag[43] = {
     f-name  = cp_reqd;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'completion AST to be executed';
 };
 
 flag[44] = {
     f-name  = cleaned;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'cleanup_resource has already handled the lock';
 };
 
 flag[45] = {
     f-name  = atomic_cb;
-    f-mask  = local_only, hide_lock;
+    f-mask  = off_wire /* , hide_lock */;
     f-desc  = <<- _EOF_
 	optimization hint: LDLM can run blocking callback from current context
 	w/o involving separate thread. in order to decrease cs rate
@@ -245,7 +247,7 @@ flag[45] = {
 
 flag[46] = {
     f-name  = bl_ast;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	It may happen that a client initiates two operations, e.g. unlink
 	and mkdir, such that the server sends a blocking AST for conflicting
@@ -254,23 +256,23 @@ flag[46] = {
 	is taken by the first operation. LDLM_FL_BL_AST is set by
 	ldlm_callback_handler() in the lock to prevent the Early Lock Cancel
 	(ELC) code from cancelling it.
-
-	LDLM_FL_BL_DONE is to be set by ldlm_cancel_callback() when lock
-	cache is dropped to let ldlm_callback_handler() return EINVAL to the
-	server. It is used when ELC RPC is already prepared and is waiting
-	for rpc_lock, too late to send a separate CANCEL RPC.
 	_EOF_;
 };
 
 flag[47] = {
     f-name  = bl_done;
-    f-mask  = local_only;
-    f-desc  = 'whatever it might mean';
+    f-mask  = off_wire;
+    f-desc  = <<- _EOF_
+	Set by ldlm_cancel_callback() when lock cache is dropped to let
+	ldlm_callback_handler() return EINVAL to the server. It is used when
+	ELC RPC is already prepared and is waiting for rpc_lock, too late to
+	send a separate CANCEL RPC.
+	_EOF_;
 };
 
 flag[48] = {
     f-name  = no_lru;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	Don't put lock into the LRU list, so that it is not canceled due to
 	aging.  Used by MGC locks, they are cancelled only at unmount or by
@@ -280,7 +282,7 @@ flag[48] = {
 
 flag[49] = {
     f-name  = fail_notified;
-    f-mask  = local_only, gone;
+    f-mask  = off_wire, gone;
     f-desc  = <<- _EOF_
 	Set for locks that failed and where the server has been notified.
 
@@ -290,7 +292,7 @@ flag[49] = {
 
 flag[50] = {
     f-name  = destroyed;
-    f-mask  = local_only, gone;
+    f-mask  = off_wire, gone;
     f-desc  = <<- _EOF_
 	Set for locks that were removed from class hash table and will be
 	destroyed when last reference to them is released. Set by
@@ -302,13 +304,13 @@ flag[50] = {
 
 flag[51] = {
     f-name  = server_lock;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'flag whether this is a server namespace lock';
 };
 
 flag[52] = {
     f-name  = res_locked;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	It's set in lock_res_and_lock() and unset in unlock_res_and_lock().
 
@@ -321,7 +323,7 @@ flag[52] = {
 
 flag[53] = {
     f-name  = waited;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = <<- _EOF_
 	It's set once we call ldlm_add_waiting_lock_res_locked()
 	to start the lock-timeout timer and it will never be reset.
@@ -332,12 +334,12 @@ flag[53] = {
 
 flag[54] = {
     f-name  = ns_srv;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'Flag whether this is a server namespace lock.';
 };
 
 flag[55] = {
     f-name  = excl;
-    f-mask  = local_only;
+    f-mask  = off_wire;
     f-desc  = 'Flag whether this lock can be reused. Used by exclusive open.';
 };

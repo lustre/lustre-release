@@ -131,11 +131,8 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 
 static inline int return_if_equal(struct ldlm_lock *lock, void *data)
 {
-        if ((lock->l_flags &
-             (LDLM_FL_CANCELING | LDLM_FL_DISCARD_DATA)) ==
-            (LDLM_FL_CANCELING | LDLM_FL_DISCARD_DATA))
-                return LDLM_ITER_CONTINUE;
-        return LDLM_ITER_STOP;
+	return (ldlm_is_canceling(lock) && ldlm_is_discard_data(lock)) ?
+		LDLM_ITER_CONTINUE : LDLM_ITER_STOP;
 }
 
 /* find any ldlm lock of the inode in mdc and lov

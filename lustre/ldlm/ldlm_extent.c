@@ -502,27 +502,28 @@ ldlm_extent_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                                       req->l_policy_data.l_extent.start) &&
                                      (lock->l_policy_data.l_extent.end >=
                                       req->l_policy_data.l_extent.end))) {
-                                        /* If we met a PR lock just like us or wider,
-                                           and nobody down the list conflicted with
-                                           it, that means we can skip processing of
-                                           the rest of the list and safely place
-                                           ourselves at the end of the list, or grant
-                                           (dependent if we met an conflicting locks
-                                           before in the list).
-                                           In case of 1st enqueue only we continue
-                                           traversing if there is something conflicting
-                                           down the list because we need to make sure
-                                           that something is marked as AST_SENT as well,
-                                           in cse of empy worklist we would exit on
-                                           first conflict met. */
-                                        /* There IS a case where such flag is
-                                           not set for a lock, yet it blocks
-                                           something. Luckily for us this is
-                                           only during destroy, so lock is
-                                           exclusive. So here we are safe */
-                                        if (!(lock->l_flags & LDLM_FL_AST_SENT)) {
-                                                RETURN(compat);
-                                        }
+					/* If we met a PR lock just like us or
+					   wider, and nobody down the list
+					   conflicted with it, that means we
+					   can skip processing of the rest of
+					   the list and safely place ourselves
+					   at the end of the list, or grant
+					   (dependent if we met an conflicting
+					   locks before in the list).  In case
+					   of 1st enqueue only we continue
+					   traversing if there is something
+					   conflicting down the list because
+					   we need to make sure that something
+					   is marked as AST_SENT as well, in
+					   cse of empy worklist we would exit
+					   on first conflict met. */
+					/* There IS a case where such flag is
+					   not set for a lock, yet it blocks
+					   something. Luckily for us this is
+					   only during destroy, so lock is
+					   exclusive. So here we are safe */
+					if (!ldlm_is_ast_sent(lock))
+						RETURN(compat);
                                 }
 
                                 /* non-group locks are compatible, overlap doesn't
@@ -656,8 +657,8 @@ static void discard_bl_list(cfs_list_t *bl_list)
                         cfs_list_entry(pos, struct ldlm_lock, l_bl_ast);
 
                 cfs_list_del_init(&lock->l_bl_ast);
-                LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
-                lock->l_flags &= ~LDLM_FL_AST_SENT;
+		LASSERT(ldlm_is_ast_sent(lock));
+		ldlm_clear_ast_sent(lock);
                 LASSERT(lock->l_bl_ast_run == 0);
                 LASSERT(lock->l_blocking_lock);
                 LDLM_LOCK_RELEASE(lock->l_blocking_lock);
@@ -694,7 +695,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 
         LASSERT(cfs_list_empty(&res->lr_converting));
         LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
-		!(lock->l_flags & LDLM_FL_AST_DISCARD_DATA));
+		!ldlm_is_ast_discard_data(lock));
         check_res_locked(res);
         *err = ELDLM_OK;
 
@@ -766,7 +767,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 			 * in ldlm_lock_destroy. Anyway, this always happens
 			 * when a client is being evicted. So it would be
 			 * ok to return an error. -jay */
-			if (lock->l_flags & LDLM_FL_DESTROYED) {
+			if (ldlm_is_destroyed(lock)) {
 				*err = -EAGAIN;
 				GOTO(out, rc = -EAGAIN);
 			}
@@ -794,7 +795,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 	RETURN(0);
 out:
 	if (!cfs_list_empty(&rpc_list)) {
-		LASSERT(!(lock->l_flags & LDLM_FL_AST_DISCARD_DATA));
+		LASSERT(!ldlm_is_ast_discard_data(lock));
 		discard_bl_list(&rpc_list);
 	}
 	RETURN(rc);
@@ -817,12 +818,12 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
         /* don't let another thread in ldlm_extent_shift_kms race in
          * just after we finish and take our lock into account in its
          * calculation of the kms */
-        lock->l_flags |= LDLM_FL_KMS_IGNORE;
+	ldlm_set_kms_ignore(lock);
 
         cfs_list_for_each(tmp, &res->lr_granted) {
                 lck = cfs_list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lck->l_flags & LDLM_FL_KMS_IGNORE)
+		if (ldlm_is_kms_ignore(lck))
                         continue;
 
                 if (lck->l_policy_data.l_extent.end >= old_kms)

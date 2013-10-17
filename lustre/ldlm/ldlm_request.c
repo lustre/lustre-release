@@ -161,7 +161,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
 	long delay;
 	int  result;
 
-	if (lock->l_flags & (LDLM_FL_DESTROYED | LDLM_FL_FAILED)) {
+	if (ldlm_is_destroyed(lock) || ldlm_is_failed(lock)) {
 		LDLM_DEBUG(lock, "client-side enqueue: destroyed");
 		result = -EIO;
 	} else {
@@ -267,7 +267,7 @@ noreproc:
 
         lwd.lwd_lock = lock;
 
-        if (lock->l_flags & LDLM_FL_NO_TIMEOUT) {
+	if (ldlm_is_no_timeout(lock)) {
                 LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
                 lwi = LWI_INTR(interrupted_completion_wait, &lwd);
         } else {
@@ -285,7 +285,7 @@ noreproc:
         if (ns_is_client(ldlm_lock_to_ns(lock)) &&
             OBD_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
                                  OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE)) {
-                lock->l_flags |= LDLM_FL_FAIL_LOC;
+		ldlm_set_fail_loc(lock);
                 rc = -EINTR;
         } else {
                 /* Go to sleep until the lock is granted or cancelled. */
@@ -319,7 +319,7 @@ int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock)
         int do_ast;
         ENTRY;
 
-        lock->l_flags |= LDLM_FL_CBPENDING;
+	ldlm_set_cbpending(lock);
         do_ast = (!lock->l_readers && !lock->l_writers);
         unlock_res_and_lock(lock);
 
@@ -443,9 +443,9 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         /* NB: we don't have any lock now (lock_res_and_lock)
          * because it's a new lock */
         ldlm_lock_addref_internal_nolock(lock, mode);
-        lock->l_flags |= LDLM_FL_LOCAL;
+	ldlm_set_local(lock);
         if (*flags & LDLM_FL_ATOMIC_CB)
-                lock->l_flags |= LDLM_FL_ATOMIC_CB;
+		ldlm_set_atomic_cb(lock);
 
         if (policy != NULL)
                 lock->l_policy_data = *policy;
@@ -487,13 +487,13 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
         lock_res_and_lock(lock);
         /* Check that lock is not granted or failed, we might race. */
         if ((lock->l_req_mode != lock->l_granted_mode) &&
-            !(lock->l_flags & LDLM_FL_FAILED)) {
-                /* Make sure that this lock will not be found by raced
-                 * bl_ast and -EINVAL reply is sent to server anyways.
-                 * bug 17645 */
-                lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED |
-                                 LDLM_FL_ATOMIC_CB | LDLM_FL_CBPENDING;
-                need_cancel = 1;
+	    !ldlm_is_failed(lock)) {
+		/* Make sure that this lock will not be found by raced
+		 * bl_ast and -EINVAL reply is sent to server anyways.
+		 * b=17645*/
+		lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED |
+				 LDLM_FL_ATOMIC_CB | LDLM_FL_CBPENDING;
+		need_cancel = 1;
         }
         unlock_res_and_lock(lock);
 
@@ -604,7 +604,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
 	*flags = ldlm_flags_from_wire(reply->lock_flags);
 	lock->l_flags |= ldlm_flags_from_wire(reply->lock_flags &
-					      LDLM_INHERIT_FLAGS);
+					      LDLM_FL_INHERIT_MASK);
         /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
          * to wait with no timeout as well */
 	lock->l_flags |= ldlm_flags_from_wire(reply->lock_flags &
@@ -657,7 +657,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
              * bug 7311). */
             (LIBLUSTRE_CLIENT && type == LDLM_EXTENT)) {
                 lock_res_and_lock(lock);
-                lock->l_flags |= LDLM_FL_CBPENDING |  LDLM_FL_BL_AST;
+		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
                 unlock_res_and_lock(lock);
                 LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
         }
@@ -1127,13 +1127,13 @@ static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
                 lock_res_and_lock(lock);
-                lock->l_flags |= LDLM_FL_CBPENDING;
+		ldlm_set_cbpending(lock);
 		local_only = !!(lock->l_flags &
 				(LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
-                ldlm_cancel_callback(lock);
-                rc = (lock->l_flags & LDLM_FL_BL_AST) ?
-                        LDLM_FL_BL_AST : LDLM_FL_CANCELING;
-                unlock_res_and_lock(lock);
+		ldlm_cancel_callback(lock);
+		rc = (ldlm_is_bl_ast(lock)) ?
+			LDLM_FL_BL_AST : LDLM_FL_CANCELING;
+		unlock_res_and_lock(lock);
 
                 if (local_only) {
                         CDEBUG(D_DLMTRACE, "not sending request (at caller's "
@@ -1461,7 +1461,7 @@ static ldlm_policy_res_t ldlm_cancel_no_wait_policy(struct ldlm_namespace *ns,
                                 break;
                 default:
                         result = LDLM_POLICY_SKIP_LOCK;
-                        lock->l_flags |= LDLM_FL_SKIPPED;
+			ldlm_set_skipped(lock);
                         break;
         }
 
@@ -1661,16 +1661,16 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                 cfs_list_for_each_entry_safe(lock, next, &ns->ns_unused_list,
 					     l_lru) {
                         /* No locks which got blocking requests. */
-                        LASSERT(!(lock->l_flags & LDLM_FL_BL_AST));
+			LASSERT(!ldlm_is_bl_ast(lock));
 
                         if (flags & LDLM_CANCEL_NO_WAIT &&
-                            lock->l_flags & LDLM_FL_SKIPPED)
+			    ldlm_is_skipped(lock))
                                 /* already processed */
                                 continue;
 
 			/* Somebody is already doing CANCEL. No need for this
 			 * lock in LRU, do not traverse it again. */
-                        if (!(lock->l_flags & LDLM_FL_CANCELING))
+			if (!ldlm_is_canceling(lock))
                                 break;
 
                         ldlm_lock_remove_from_lru_nolock(lock);
@@ -1713,15 +1713,14 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
 
 		lock_res_and_lock(lock);
 		/* Check flags again under the lock. */
-		if ((lock->l_flags & LDLM_FL_CANCELING) ||
+		if (ldlm_is_canceling(lock) ||
 		    (ldlm_lock_remove_from_lru(lock) == 0)) {
 			/* Another thread is removing lock from LRU, or
 			 * somebody is already doing CANCEL, or there
 			 * is a blocking request which will send cancel
 			 * by itself, or the lock is no longer unused. */
 			unlock_res_and_lock(lock);
-			lu_ref_del(&lock->l_reference,
-				   __FUNCTION__, current);
+			lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 			LDLM_LOCK_RELEASE(lock);
 			spin_lock(&ns->ns_lock);
 			continue;
@@ -1733,7 +1732,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
 		 * frees appropriate state. This might lead to a race
 		 * where while we are doing cancel here, server is also
 		 * silently cancelling this lock. */
-		lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
+		ldlm_clear_cancel_on_block(lock);
 
 		/* Setting the CBPENDING flag is a little misleading,
 		 * but prevents an important race; namely, once
@@ -1830,9 +1829,8 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 
 		/* If somebody is already doing CANCEL, or blocking AST came,
 		 * skip this lock. */
-                if (lock->l_flags & LDLM_FL_BL_AST ||
-                    lock->l_flags & LDLM_FL_CANCELING)
-                        continue;
+		if (ldlm_is_bl_ast(lock) || ldlm_is_canceling(lock))
+			continue;
 
                 if (lockmode_compat(lock->l_granted_mode, mode))
                         continue;
@@ -1844,9 +1842,9 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                       policy->l_inodebits.bits))
                         continue;
 
-                /* See CBPENDING comment in ldlm_cancel_lru */
-                lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
-                                 lock_flags;
+		/* See CBPENDING comment in ldlm_cancel_lru */
+		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
+				 lock_flags;
 
                 LASSERT(cfs_list_empty(&lock->l_bl_ast));
                 cfs_list_add(&lock->l_bl_ast, cancels);
@@ -2194,7 +2192,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
 
         /* Bug 11974: Do not replay a lock which is actively being canceled */
-        if (lock->l_flags & LDLM_FL_CANCELING) {
+	if (ldlm_is_canceling(lock)) {
                 LDLM_DEBUG(lock, "Not replaying canceled lock:");
                 RETURN(0);
         }
@@ -2202,7 +2200,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         /* If this is reply-less callback lock, we cannot replay it, since
          * server might have long dropped it, but notification of that event was
          * lost by network. (and server granted conflicting lock already) */
-        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) {
+	if (ldlm_is_cancel_on_block(lock)) {
                 LDLM_DEBUG(lock, "Not replaying reply-less lock:");
                 ldlm_lock_cancel(lock);
                 RETURN(0);

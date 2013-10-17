@@ -127,7 +127,7 @@ static int osc_lock_invariant(struct osc_lock *ols)
 	 * ast.
 	 */
 	if (! ergo(olock != NULL && ols->ols_state < OLS_CANCELLED,
-		   ((olock->l_flags & LDLM_FL_DESTROYED) == 0)))
+		   !ldlm_is_destroyed(olock)))
 		return 0;
 
 	if (! ergo(ols->ols_state == OLS_GRANTED,
@@ -1321,42 +1321,41 @@ static int osc_lock_flush(struct osc_lock *ols, int discard)
 static void osc_lock_cancel(const struct lu_env *env,
                             const struct cl_lock_slice *slice)
 {
-        struct cl_lock   *lock    = slice->cls_lock;
-        struct osc_lock  *olck    = cl2osc_lock(slice);
-        struct ldlm_lock *dlmlock = olck->ols_lock;
-        int               result  = 0;
-        int               discard;
+	struct cl_lock   *lock    = slice->cls_lock;
+	struct osc_lock  *olck    = cl2osc_lock(slice);
+	struct ldlm_lock *dlmlock = olck->ols_lock;
 
-        LASSERT(cl_lock_is_mutexed(lock));
-        LINVRNT(osc_lock_invariant(olck));
+	LASSERT(cl_lock_is_mutexed(lock));
+	LINVRNT(osc_lock_invariant(olck));
 
-        if (dlmlock != NULL) {
-                int do_cancel;
+	if (dlmlock != NULL) {
+		bool do_cancel;
+		int  result = 0;
 
-                discard = !!(dlmlock->l_flags & LDLM_FL_DISCARD_DATA);
 		if (olck->ols_state >= OLS_GRANTED)
-			result = osc_lock_flush(olck, discard);
-                osc_lock_unhold(olck);
+			result = osc_lock_flush(olck,
+				ldlm_is_discard_data(dlmlock));
+		osc_lock_unhold(olck);
 
-                lock_res_and_lock(dlmlock);
-                /* Now that we're the only user of dlm read/write reference,
-                 * mostly the ->l_readers + ->l_writers should be zero.
-                 * However, there is a corner case.
-                 * See bug 18829 for details.*/
-                do_cancel = (dlmlock->l_readers == 0 &&
-                             dlmlock->l_writers == 0);
-                dlmlock->l_flags |= LDLM_FL_CBPENDING;
-                unlock_res_and_lock(dlmlock);
-                if (do_cancel)
+		lock_res_and_lock(dlmlock);
+		/* Now that we're the only user of dlm read/write reference,
+		 * mostly the ->l_readers + ->l_writers should be zero.
+		 * However, there is a corner case.
+		 * See b=18829 for details.*/
+		do_cancel = (dlmlock->l_readers == 0 &&
+			     dlmlock->l_writers == 0);
+		ldlm_set_cbpending(dlmlock);
+		unlock_res_and_lock(dlmlock);
+		if (do_cancel)
 			result = ldlm_cli_cancel(&olck->ols_handle, LCF_ASYNC);
-                if (result < 0)
-                        CL_LOCK_DEBUG(D_ERROR, env, lock,
-                                      "lock %p cancel failure with error(%d)\n",
-                                      lock, result);
-        }
-        olck->ols_state = OLS_CANCELLED;
-        olck->ols_flags &= ~LDLM_FL_LVB_READY;
-        osc_lock_detach(env, olck);
+		if (result < 0)
+			CL_LOCK_DEBUG(D_ERROR, env, lock,
+				      "lock %p cancel failure with error(%d)\n",
+				      lock, result);
+	}
+	olck->ols_state = OLS_CANCELLED;
+	olck->ols_flags &= ~LDLM_FL_LVB_READY;
+	osc_lock_detach(env, olck);
 }
 
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK

@@ -692,10 +692,10 @@ dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 
 	guint64 match;
 	guint32 msg_type;
-
+/*
 	lnet_request_val_t* conversation_val ;
 
-
+*/
 	if (check_col(pinfo->cinfo, COL_PROTOCOL)) {
 		col_set_str(pinfo->cinfo, COL_PROTOCOL, "Lnet");
 	}
@@ -805,8 +805,12 @@ dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 		}
 
 
-		conversation_val = get_lnet_conv(pinfo , lnet_request_hash, match );
-		/*	proto_tree_add_text(tree, tvb, 0 , 0, "match = %" G_GINT64_MODIFIER "u parent = %d", conversation_val -> match_bits , conversation_val -> packet_num_parent); */
+		/* conversation_val = */
+                get_lnet_conv(pinfo , lnet_request_hash, match );
+		/*	proto_tree_add_text(tree, tvb, 0 , 0, "match = %"
+                        G_GINT64_MODIFIER "u parent = %d",
+                        conversation_val -> match_bits ,
+                        conversation_val -> packet_num_parent); */
 
 
 		/* padding */

@@ -14,6 +14,8 @@ $(targ) : $(src)
 		rm -f $(top_builddir)/lustre/include/$@ ; \
 		sed '/It has been AutoGen-ed/s/-ed.*/-ed/;s/ *$$//' \
 			$@ > $(top_builddir)/lustre/include/$@ ; \
+		cp -fp lustre_dlm_flags_wshark.c \
+			$(top_builddir)/lustre/contrib/wireshark/. ; \
 	else cp $(top_builddir)/lustre/include/$@ . ; fi
 
 install : $(targ) install.sh

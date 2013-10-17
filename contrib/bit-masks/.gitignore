@@ -1,2 +1,2 @@
-lustre_dlm_flags.[ch]
+lustre_dlm_flags*.[ch]
 !Makefile

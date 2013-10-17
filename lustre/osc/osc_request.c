@@ -2539,7 +2539,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         if (mode) {
                 struct ldlm_lock *matched = ldlm_handle2lock(lockh);
 
-                if ((agl != 0) && !(matched->l_flags & LDLM_FL_LVB_READY)) {
+		if ((agl != 0) && !ldlm_is_lvb_ready(matched)) {
                         /* For AGL, if enqueue RPC is sent but the lock is not
                          * granted, then skip to process this strpe.
                          * Return -ECANCELED to tell the caller. */

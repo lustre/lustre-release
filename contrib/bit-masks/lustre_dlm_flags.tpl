@@ -34,7 +34,7 @@ fmt='#define LDLM_FL_%-16s        0x%016XULL // bit  %2u
 #define ldlm_clear_%-20s LDLM_CLEAR_FLAG((_l), 1ULL << %2u)\n'
 acc_fmt=''
 tmpfile=[=(base-name)=]-$$.tmp
-exec 8>&1 1> $tmpfile
+exec 7>&1 1> $tmpfile
 [=
 
 FOR flag
@@ -73,7 +73,7 @@ mask_[= f-mask =]=$(( ${mask_[= f-mask =]:-0} + bitval ))[=
 ENDFOR flag
 
 =]
-exec 1>&8 8>&-
+exec 1>&7 7>&-
 fmt='\n/** l_flags bits marked as "%s" bits */
 #define LDLM_FL_%-22s  0x%016XULL\n'
 printf "$fmt" all_flags ALL_FLAGS_MASK $allbits
@@ -97,39 +97,120 @@ rm -f $tmpfile script.sh[=
 =]
 
 /** test for ldlm_lock flag bit set */
-#define LDLM_TEST_FLAG(_l, _b)        (((_l)->l_flags & (_b)) != 0)
+#define LDLM_TEST_FLAG(_l, _b)    (((_l)->l_flags & (_b)) != 0)
+
+/** multi-bit test: are any of mask bits set? */
+#define LDLM_HAVE_MASK(_l, _m)    (((_l)->l_flags & LDLM_FL_##_m##_MASK) != 0)
 
 /** set a ldlm_lock flag bit */
-#define LDLM_SET_FLAG(_l, _b)         (((_l)->l_flags |= (_b))
+#define LDLM_SET_FLAG(_l, _b)     ((_l)->l_flags |= (_b))
 
 /** clear a ldlm_lock flag bit */
-#define LDLM_CLEAR_FLAG(_l, _b)       (((_l)->l_flags &= ~(_b))
-
-/** Mask of flags inherited from parent lock when doing intents. */
-#define LDLM_INHERIT_FLAGS            LDLM_FL_INHERIT_MASK
-
-/** Mask of Flags sent in AST lock_flags to map into the receiving lock. */
-#define LDLM_AST_FLAGS                LDLM_FL_AST_MASK
+#define LDLM_CLEAR_FLAG(_l, _b)   ((_l)->l_flags &= ~(_b))
 
 /** @} subgroup */
 /** @} group */
-#ifdef WIRESHARK_COMPILE[=
+#endif /* LDLM_ALL_FLAGS_MASK */
+[=
+(out-push-new (string-append (base-name) "_wshark.c"))
+(define flags-vals "")
+(define dissect    "")
+(define init-text  "")
+
+(define up-name    "")
+(define down-name  "")
+
+(define dissect-fmt
+    "  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_%s);\n")
+(out-push-new)     \=]
+  {
+    /* p_id    */ &hf_lustre_ldlm_fl_%1$s,
+    /* hfinfo  */ {
+      /* name    */ "LDLM_FL_%2$s",
+      /* abbrev  */ "lustre.ldlm_fl_%1$s",
+      /* type    */ FT_BOOLEAN,
+      /* display */ 32,
+      /* strings */ TFS(&lnet_flags_set_truth),
+      /* bitmask */ LDLM_FL_%2$s,
+      /* blurb   */ %3$s,
+      /* id      */ HFILL
+    }
+  },
+[= (define init-fmt (out-pop #t)) \=]
+/**
+ * \file [=(out-name)=]
+ *
+ * wireshark definitions.  This file contains the ldlm lock flag bits
+ * that can be transmitted over the wire.  There are many other bits,
+ * but they are not transmitted and not handled here.
+ */
+#ifdef WSHARK_HEAD
+[=
+
 FOR flag                       =][=
-  (sprintf "\nstatic int hf_lustre_ldlm_fl_%-20s= -1;"
-           (string-downcase! (get "f-name")) ) =][=
+
+  (if (match-value? = "f-mask" "on_wire") (begin
+      (set! temp-txt  (get "f-name"))
+      (set! up-name   (string-upcase (string->c-name! temp-txt)))
+      (set! down-name (string-downcase temp-txt))
+
+      (set! flags-vals (string-append flags-vals (sprintf
+            "\n  {LDLM_FL_%-20s \"LDLM_FL_%s\"},"
+            (string-append up-name ",") up-name )))
+
+      (set! dissect (string-append dissect (sprintf dissect-fmt
+            down-name)))
+
+      (set! init-text (string-append init-text (sprintf init-fmt
+            down-name up-name (c-string (get "f-desc")) )))
+
+      (ag-fprintf 0 "\nstatic int hf_lustre_ldlm_fl_%-20s= -1;"
+           down-name)
+  )  )                         =][=
 ENDFOR flag                    =]
 
-const value_string lustre_ldlm_flags_vals[] = {[=
-
-FOR flag                       =][=
-   (define up-name (string-upcase! (string->c-name! (get "f-name"))))
-   (sprintf "\n  {LDLM_FL_%-20s \"LDLM_FL_%s\"}," (string-append up-name ",")
-            up-name)           =][=
-ENDFOR flag                    =]
+const value_string lustre_ldlm_flags_vals[] = {[= (. flags-vals) =]
   { 0, NULL }
 };
-#endif /*  WIRESHARK_COMPILE */
-[= #
+
+/* IDL: struct ldlm_reply { */
+/* IDL: 	uint32 lock_flags; */
+/* IDL: 	uint32 lock_padding; */
+/* IDL: 	struct ldlm_lock_desc { */
+/* IDL: } lock_desc; */
+/* IDL: 	struct lustre_handle { */
+/* IDL: } lock_handle; */
+/* IDL: 	uint64 lock_policy_res1; */
+/* IDL: 	uint64 lock_policy_res2; */
+/* IDL: } */
+
+static int
+lustre_dissect_element_ldlm_lock_flags(
+	tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_,
+	proto_tree *parent_tree _U_, int hf_index _U_)
+{
+  proto_item *item = NULL;
+  proto_tree *tree = NULL;
+
+  if (parent_tree) {
+    item = proto_tree_add_item(parent_tree,hf_index, tvb, offset, 4, TRUE);
+    tree = proto_item_add_subtree(item, ett_lustre_ldlm_lock_flags);
+  }
+[= (shell
+"sed '$s/^/  /;$i\\
+  return' <<- \\_EOF_\n" dissect "_EOF_"
+) =]
+}
+#endif /* WSHARK_HEAD */
+
+#ifdef WSHARK_INIT_DATA
+[=
+
+(emit init-text
+"\n#endif /* WSHARK_INIT_DATA */\n")
+(out-pop)
+
+=][= #
 
 // TEST CODE                    =][=
 IF  (getenv "TESTING")          =][=
@@ -317,5 +398,4 @@ ENDIF TESTING
  * indent-tabs-mode: t
  * End:
 
-\=]
-#endif /* LDLM_ALL_FLAGS_MASK */
+=]

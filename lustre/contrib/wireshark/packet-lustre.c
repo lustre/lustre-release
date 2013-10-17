@@ -37,6 +37,7 @@
 #include <epan/packet.h>
 
 #include <epan/dissectors/packet-windows-common.h>
+#include "lustre_dlm_flags.h"
 
 const true_false_string lnet_flags_set_truth = { "Set", "Unset" };
 
@@ -278,9 +279,6 @@ enum fld_rpc_opc {
   FLD_LAST_OPC,
   FLD_FIRST_OPC    = FLD_QUERY
 };
-
-#define  WIRESHARK_COMPILE
-#include "lustre_dlm_flags.h"
 
 #define LDLM_ENQUEUE (101)
 #define LDLM_CONVERT (102)
@@ -1030,11 +1028,17 @@ static int hf_lustre_llog_hdr_llh_flag_is_play = -1;
 /* proto declaration */
 static gint proto_lustre = -1;
 
+typedef int (dissect_func)(
+    tvbuff_t *tvb, gint offset, packet_info *pinfo _U_, proto_tree *tree,
+    int hfindex);
 
+static dissect_func dissect_uint64, dissect_uint32, dissect_uint16, dissect_uint8;
 
+#define  WSHARK_HEAD
+#include "lustre_dlm_flags_wshark.c"
+#undef   WSHARK_HEAD
 
 static int ldlm_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree * tree _U_, guint64 intent_opc _U_) ;
-static int lustre_dissect_element_ldlm_lock_flags(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_);
 static int add_extra_padding(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree * tree _U_) ;
 
 
@@ -5666,62 +5670,6 @@ lustre_dissect_struct_ldlm_request(tvbuff_t *tvb _U_, int offset _U_, packet_inf
 
   proto_item_set_len(item, offset-old_offset);
 
-  return offset;
-}
-
-
-/* IDL: struct ldlm_reply { */
-/* IDL: 	uint32 lock_flags; */
-/* IDL: 	uint32 lock_padding; */
-/* IDL: 	struct ldlm_lock_desc { */
-/* IDL: } lock_desc; */
-/* IDL: 	struct lustre_handle { */
-/* IDL: } lock_handle; */
-/* IDL: 	uint64 lock_policy_res1; */
-/* IDL: 	uint64 lock_policy_res2; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_ldlm_lock_flags(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree,hf_index, tvb, offset, 4, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_ldlm_lock_flags);
-  }
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_discard_data);
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_deny_on_contention);
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_bl_done           );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_bl_ast            );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_atomic_cb         );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cleaned           );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cp_reqd           );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cancel_on_block   );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_no_lru            );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_kms_ignore        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_lvb_ready         );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_test_lock         );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_nowait      );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_no_timeout        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_discard_data      );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_warn              );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_local             );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_canceling         );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_has_intent        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_failed            );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_local_only        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_intent_only       );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_replay            );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cancel            );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_wait_noreproc     );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_sent          );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cbpending         );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_wait        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_conv        );
-  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_granted     );
-  offset=dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_lock_changed      );
   return offset;
 }
 
@@ -10478,37 +10426,9 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ldlm_reply_lock_flags,
       { "Lock Flags", "lustre.ldlm_reply.lock_flags", FT_UINT32,BASE_HEX, NULL, 0, "", HFILL }},
 
-    {&hf_lustre_ldlm_fl_lock_changed, {"LDLM_FL_LOCK_CHANGED", "lustre.ldlm_fl_lock_changed", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCK_CHANGED, "", HFILL } },
-    {&hf_lustre_ldlm_fl_block_granted, {"LDLM_FL_BLOCK_GRANTED", "lustre.ldlm_fl_block_granted", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_GRANTED, "", HFILL } },
-    {&hf_lustre_ldlm_fl_block_conv, {"LDLM_FL_BLOCK_CONV", "lustre.ldlm_fl_block_conv", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_CONV, "", HFILL } },
-    {&hf_lustre_ldlm_fl_block_wait, {"LDLM_FL_BLOCK_WAIT", "lustre.ldlm_fl_block_wait", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_WAIT, "", HFILL } },
-    {&hf_lustre_ldlm_fl_cbpending, {"LDLM_FL_CBPENDING", "lustre.ldlm_fl_cbpending", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CBPENDING, "", HFILL } },
-    {&hf_lustre_ldlm_fl_ast_sent, {"LDLM_FL_AST_SENT", "lustre.ldlm_fl_ast_sent", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_AST_SENT, "", HFILL } },
-    {&hf_lustre_ldlm_fl_wait_noreproc, {"LDLM_FL_WAIT_NOREPROC", "lustre.ldlm_fl_wait_noreproc", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_WAIT_NOREPROC, "", HFILL } },
-    {&hf_lustre_ldlm_fl_cancel, {"LDLM_FL_CANCEL", "lustre.ldlm_fl_cancel", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCEL, "", HFILL } },
-    {&hf_lustre_ldlm_fl_replay, {"LDLM_FL_REPLAY", "lustre.ldlm_fl_replay", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_REPLAY, "", HFILL } },
-    {&hf_lustre_ldlm_fl_intent_only, {"LDLM_FL_INTENT_ONLY", "lustre.ldlm_fl_intent_only", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_INTENT_ONLY, "", HFILL } },
-    {&hf_lustre_ldlm_fl_local_only, {"LDLM_FL_LOCAL_ONLY", "lustre.ldlm_fl_local_only", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCAL_ONLY, "", HFILL } },
-    {&hf_lustre_ldlm_fl_failed, {"LDLM_FL_FAILED", "lustre.ldlm_fl_failed", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_FAILED, "", HFILL } },
-    {&hf_lustre_ldlm_fl_has_intent, {"LDLM_FL_HAS_INTENT", "lustre.ldlm_fl_has_intent", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_HAS_INTENT, "", HFILL } },
-    {&hf_lustre_ldlm_fl_canceling, {"LDLM_FL_CANCELING", "lustre.ldlm_fl_canceling", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCELING, "", HFILL } },
-    {&hf_lustre_ldlm_fl_local, {"LDLM_FL_LOCAL", "lustre.ldlm_fl_local", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCAL, "", HFILL } },
-    {&hf_lustre_ldlm_fl_warn, {"LDLM_FL_WARN", "lustre.ldlm_fl_warn", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_WARN, "", HFILL } },
-    {&hf_lustre_ldlm_fl_discard_data, {"LDLM_FL_DISCARD_DATA", "lustre.ldlm_fl_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_DISCARD_DATA, "", HFILL } },
-    {&hf_lustre_ldlm_fl_no_timeout, {"LDLM_FL_NO_TIMEOUT", "lustre.ldlm_fl_no_timeout", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_NO_TIMEOUT, "", HFILL } },
-    {&hf_lustre_ldlm_fl_block_nowait, {"LDLM_FL_BLOCK_NOWAIT", "lustre.ldlm_fl_block_nowait", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_NOWAIT, "", HFILL } },
-    {&hf_lustre_ldlm_fl_test_lock, {"LDLM_FL_TEST_LOCK", "lustre.ldlm_fl_test_lock", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_TEST_LOCK, "", HFILL } },
-    {&hf_lustre_ldlm_fl_lvb_ready, {"LDLM_FL_LVB_READY", "lustre.ldlm_fl_lvb_ready", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LVB_READY, "", HFILL } },
-    {&hf_lustre_ldlm_fl_kms_ignore, {"LDLM_FL_KMS_IGNORE", "lustre.ldlm_fl_kms_ignore", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_KMS_IGNORE, "", HFILL } },
-    {&hf_lustre_ldlm_fl_no_lru, {"LDLM_FL_NO_LRU", "lustre.ldlm_fl_no_lru", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_NO_LRU, "", HFILL } },
-    {&hf_lustre_ldlm_fl_cancel_on_block, {"LDLM_FL_CANCEL_ON_BLOCK", "lustre.ldlm_fl_cancel_on_block", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCEL_ON_BLOCK, "", HFILL } },
-    {&hf_lustre_ldlm_fl_cp_reqd, {"LDLM_FL_CP_REQD", "lustre.ldlm_fl_cp_reqd", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CP_REQD, "", HFILL } },
-    {&hf_lustre_ldlm_fl_cleaned, {"LDLM_FL_CLEANED", "lustre.ldlm_fl_cleaned", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CLEANED, "", HFILL } },
-    {&hf_lustre_ldlm_fl_atomic_cb, {"LDLM_FL_ATOMIC_CB", "lustre.ldlm_fl_atomic_cb", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_ATOMIC_CB, "", HFILL } },
-    {&hf_lustre_ldlm_fl_bl_ast, {"LDLM_FL_BL_AST", "lustre.ldlm_fl_bl_ast", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_AST, "", HFILL } },
-    {&hf_lustre_ldlm_fl_bl_done, {"LDLM_FL_BL_DONE", "lustre.ldlm_fl_bl_done", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_DONE, "", HFILL } },
-    {&hf_lustre_ldlm_fl_deny_on_contention, {"LDLM_FL_DENY_ON_CONTENTION", "lustre.ldlm_fl_deny_on_contention", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_DENY_ON_CONTENTION, "", HFILL } },
-    {&hf_lustre_ldlm_fl_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_AST_DISCARD_DATA, "", HFILL } },
+#define  WSHARK_INIT_DATA
+#include "lustre_dlm_flags_wshark.c"
+#undef   WSHARK_INIT_DATA
 
     { &hf_lustre_obdo_o_misc,
       { "O Misc", "lustre.obdo.o_misc", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},

@@ -213,7 +213,7 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 		/* kick off reintegration thread if not running already, if
 		 * it's just local cancel (for stack clean up or eviction),
 		 * don't re-trigger the reintegration. */
-		if ((lock->l_flags & LDLM_FL_LOCAL_ONLY) == 0)
+		if (!ldlm_is_local_only(lock))
 			qsd_start_reint_thread(qqi);
 
 		lu_ref_del(&qqi->qqi_reference, "ast_data_get", lock);
@@ -321,7 +321,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 
 		/* just local cancel (for stack clean up or eviction), don't
 		 * release quota space in this case */
-		if ((lock->l_flags & LDLM_FL_LOCAL_ONLY) != 0) {
+		if (ldlm_is_local_only(lock)) {
 			lqe_putref(lqe);
 			break;
 		}

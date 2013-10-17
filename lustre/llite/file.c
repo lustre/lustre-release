@@ -3579,10 +3579,10 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	ENTRY;
 
 	CDEBUG(D_INODE, DFID" LVB_READY=%d l_lvb_data=%p l_lvb_len=%d\n",
-	       PFID(ll_inode2fid(inode)), !!(lock->l_flags & LDLM_FL_LVB_READY),
+	       PFID(ll_inode2fid(inode)), ldlm_is_lvb_ready(lock),
 	       lock->l_lvb_data, lock->l_lvb_len);
 
-	if ((lock->l_lvb_data != NULL) && (lock->l_flags & LDLM_FL_LVB_READY))
+	if ((lock->l_lvb_data != NULL) && ldlm_is_lvb_ready(lock))
 		RETURN(0);
 
 	/* if layout lock was granted right away, the layout is returned
@@ -3662,7 +3662,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	md_set_lock_data(sbi->ll_md_exp, &lockh->cookie, inode, NULL);
 
 	lock_res_and_lock(lock);
-	lvb_ready = !!(lock->l_flags & LDLM_FL_LVB_READY);
+	lvb_ready = ldlm_is_lvb_ready(lock);
 	unlock_res_and_lock(lock);
 	/* checking lvb_ready is racy but this is okay. The worst case is
 	 * that multi processes may configure the file on the same time. */

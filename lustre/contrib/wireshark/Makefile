@@ -32,20 +32,25 @@ WS_HOME =
 #    Note: When using the cbuild script leave the macro undefined
 #    (default: /usr/lib/wireshark/plugins/$(WS_VERSION))
 #
-#    For non-root and  non-rpmbuilds you might want to set the value to ${HOME}/.wireshark/plugins
+#    For non-root and  non-rpmbuilds you might want to set the value to
+#        ${HOME}/.wireshark/plugins
 PLUGIN_DIR =
 
-CFLAGS = -DINET6 -D_U_=__attribute__\(\(unused\)\) -Wall -Wpointer-arith -g -DXTHREADS -D_REENTRANT -DXUSE_MTSAFE_API -fPIC -DPIC
+CFLAGS = -DINET6 -D_U_=__attribute__\(\(unused\)\) -Wall -Wpointer-arith -g \
+	-DXTHREADS -D_REENTRANT -DXUSE_MTSAFE_API -fPIC -DPIC
 
 ifdef WS_HOME
-#INCS = $(shell echo "-I${WS_HOME} `pkg-config --libs --cflags glib-2.0`")
-INCS = $(shell echo "-I${WS_HOME} $(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H 
+#INCS = $(shell echo "-I${WS_HOME} `./wsconfig.sh --libs --cflags glib-2.0`")
+INCS := $(shell echo "-I${WS_HOME} $(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H 
 
 else
-INCS = $(shell pkg-config --libs --cflags wireshark) $(shell echo "$(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H
-WS_VERSION = $(shell pkg-config --modversion wireshark)
-LIBDIR = $(shell pkg-config --variable=libdir wireshark)
-CHECK=pkg-config --atleast-version=${MIN_WIRESHARK_VERSION} wireshark
+INCS := $(shell ./wsconfig.sh --libs --cflags wireshark) \
+	$(shell ./wsconfig.sh --libs --cflags glib-2.0) \
+	-I../../include \
+	$(shell echo "$(PLUGIN_COMPILE_FLAGS)") -DHAVE_CONFIG_H
+WS_VERSION := $(shell ./wsconfig.sh --modversion wireshark)
+LIBDIR := $(shell ./wsconfig.sh --variable=libdir wireshark)
+CHECK=./wsconfig.sh --atleast-version=${MIN_WIRESHARK_VERSION} wireshark
 endif
 
 CFLAGS += $(INCS)
@@ -55,8 +60,8 @@ SRCS_LUSTRE = packet-lustre.c
 
 CC   = gcc
 
-OBJS_LNET = $(foreach src, $(SRCS_LNET), $(src:.c=.o))
-OBJS_LUSTRE = $(foreach src, $(SRCS_LUSTRE), $(src:.c=.o))
+OBJS_LNET := $(foreach src, $(SRCS_LNET), $(src:.c=.o))
+OBJS_LUSTRE := $(foreach src, $(SRCS_LUSTRE), $(src:.c=.o))
 
 PLUGINS=lnet.so lustre.so
 
@@ -89,7 +94,12 @@ ifndef PLUGIN_DIR
 endif
 
 
-all: check $(PLUGINS)
+all: check $(PLUGINS) lustre_dlm_flags_wshark.c
+
+lustre_dlm_flags_wshark.c :
+	cd ../../../contrib/bit-masks ; \
+	make
+	test -f lustre_dlm_flags_wshark.c
 
 check:
 	@if ! ${CHECK}; then\
