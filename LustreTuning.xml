@@ -154,14 +154,28 @@
 	<screen>ksocklnd credits=256</screen>
 	<para>applies 256 credits to TCP connections. Applying 256 credits to IB connections can be achieved with:</para>
 	<screen>ko2iblnd credits=256</screen>
-	<note condition='l23'><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the NI Credits and the administrator's request do not persist.</para></note>
+	<note condition='l23'><para>In Lustre 2.3 and beyond, LNET may revalidate the NI Credits so that the administrator's
+          request does not persist.</para></note>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>router buffers</secondary></indexterm>Router Buffers</title>
-	<para>Router buffers are shared by all CPU partitions. For a machine with a large number of CPTs, the router buffer number may need to be specified manually for best performance. A low number of router buffers risks starving the CPU Partitions of resources.</para>
-	<para>The default setting for router buffers will typically perform well. LNet automatically sets a default value to reduce the likelihood of resource starvation</para>
-	<para>An administrator may modify router buffers using the <literal>large_router_buffers</literal> parameter. For example:</para>
+      <para>When a node is set up as an LNET router, three pools of buffers are allocated: tiny,
+        small and large. These pools are allocated per CPU partition and are used to buffer messages
+        that arrive at the router to be forwarded to the next hop. The three different buffer sizes
+        accommodate different size messages. If a message arrives that can fit in a tiny buffer then
+        a tiny buffer is used, if a message doesn’t fit in a tiny buffer, but fits in a small
+        buffer, then a small buffer is used. Finally if a message doesn’t fit in either a tiny
+        buffer or a small buffer, a large buffer is used.</para>
+	<para>Router buffers are shared by all CPU partitions. For a machine with a large number of CPTs,
+        the router buffer number may need to be specified manually for best performance. A low
+        number of router buffers risks starving the CPU partitions of resources.</para>
+	<para>The default setting for router buffers typically results in acceptable performance. LNET
+        automatically sets a default value to reduce the likelihood of resource starvation. The size
+        of a router buffer can be modified as shown in the example below. In this example, the size
+        of the large buffer is modified using the <literal>large_router_buffers</literal>
+        parameter.</para>
 	<screen>lnet large_router_buffers=8192</screen>
-	<note condition='l23'><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the router buffer setting and the administrator's request do not persist.</para></note>
+	<note condition='l23'><para>In Lustre 2.3 and beyond, LNET may revalidate the NI Credits so that the administrator's
+          request does not persist.</para></note>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>portal round-robin</secondary></indexterm>Portal Round-Robin</title>
 	<para>Portal round-robin defines the policy LNet applies to deliver events and messages to the upper layers. The upper layers are ptlrpc service or LNet selftest.</para>
