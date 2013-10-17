@@ -1414,11 +1414,22 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         }
 
-        /*
-         *step 3: find the child object by fid & lock it.
-         *        regardless if it is local or remote.
-         */
-        child = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
+	/*
+	 *step 3: find the child object by fid & lock it.
+	 *        regardless if it is local or remote.
+	 *
+	 *Note: LU-3240 (commit 762f2114d282a98ebfa4dbbeea9298a8088ad24e)
+	 *	set parent dir fid the same as child fid in getattr by fid case
+	 *	we should not lu_object_find() the object again, could lead
+	 *	to hung if there is a concurrent unlink destroyed the object.
+	 */
+	if (lu_fid_eq(mdt_object_fid(parent), child_fid)) {
+		mdt_object_get(info->mti_env, parent);
+		child = parent;
+	} else {
+		child = mdt_object_find(info->mti_env, info->mti_mdt,
+					child_fid);
+	}
 
 	if (unlikely(IS_ERR(child)))
 		GOTO(out_parent, rc = PTR_ERR(child));
