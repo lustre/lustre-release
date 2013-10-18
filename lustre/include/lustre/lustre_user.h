@@ -49,6 +49,7 @@
 #ifndef __KERNEL__
 #include <stdio.h>
 #include <libcfs/posix/posix-types.h>
+#include <stdio.h>
 #endif
 #include <lustre/ll_fiemap.h>
 #if defined(__linux__)
@@ -59,6 +60,12 @@
 #include <winnt/lustre_user.h>
 #else
 #error Unsupported operating system.
+#endif
+
+#ifdef __cplusplus
+#define LUSTRE_ANONYMOUS_UNION_NAME u
+#else
+#define LUSTRE_ANONYMOUS_UNION_NAME
 #endif
 
 /* for statfs() */
@@ -188,7 +195,7 @@ struct ost_id {
 			__u64	oi_seq;
 		} oi;
 		struct lu_fid oi_fid;
-	};
+	} LUSTRE_ANONYMOUS_UNION_NAME;
 };
 
 #define DOSTID LPX64":"LPU64
@@ -753,7 +760,8 @@ enum hsm_event {
 
 static inline enum hsm_event hsm_get_cl_event(__u16 flags)
 {
-        return CLF_GET_BITS(flags, CLF_HSM_EVENT_H, CLF_HSM_EVENT_L);
+	return (enum hsm_event)CLF_GET_BITS(flags, CLF_HSM_EVENT_H,
+					    CLF_HSM_EVENT_L);
 }
 
 static inline void hsm_set_cl_event(int *flags, enum hsm_event he)
@@ -868,7 +876,7 @@ struct ioc_data_version {
 #define LL_DV_WR_FLUSH (1 << 1) /* Flush all caching pages from clients */
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
+#define offsetof(typ, memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define dot_lustre_name ".lustre"
@@ -911,7 +919,7 @@ enum hsm_progress_states {
 };
 #define HPS_NONE	0
 
-static inline char *hsm_progress_state2name(enum hsm_progress_states s)
+static inline const char *hsm_progress_state2name(enum hsm_progress_states s)
 {
 	switch  (s) {
 	case HPS_WAITING:	return "waiting";
@@ -973,7 +981,7 @@ enum hsm_user_action {
         HUA_CANCEL  = 14  /* cancel a request */
 };
 
-static inline char *hsm_user_action2name(enum hsm_user_action  a)
+static inline const char *hsm_user_action2name(enum hsm_user_action  a)
 {
         switch  (a) {
         case HUA_NONE:    return "NOOP";
@@ -1027,8 +1035,8 @@ static inline void *hur_data(struct hsm_user_request *hur)
 /** Compute the current length of the provided hsm_user_request. */
 static inline int hur_len(struct hsm_user_request *hur)
 {
-	return offsetof(struct hsm_user_request,
-			hur_user_item[hur->hur_request.hr_itemcount]) +
+	return offsetof(struct hsm_user_request, hur_user_item[0]) +
+		hur->hur_request.hr_itemcount * sizeof(hur->hur_user_item[0]) +
 		hur->hur_request.hr_data_len;
 }
 
@@ -1047,7 +1055,7 @@ enum hsm_copytool_action {
         HSMA_CANCEL  = 23
 };
 
-static inline char *hsm_copytool_action2name(enum hsm_copytool_action  a)
+static inline const char *hsm_copytool_action2name(enum hsm_copytool_action  a)
 {
         switch  (a) {
         case HSMA_NONE:    return "NOOP";
@@ -1139,14 +1147,15 @@ static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 }
 
 /* Return size of an hsm_action_list */
-static inline int hal_size(struct hsm_action_list *hal)
+static inline size_t hal_size(struct hsm_action_list *hal)
 {
-	int i, sz;
+	__u32 i;
+	size_t sz;
 	struct hsm_action_item *hai;
 
 	sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
 	hai = hai_first(hal);
-	for (i = 0 ; i < hal->hal_count ; i++, hai = hai_next(hai))
+	for (i = 0; i < hal->hal_count ; i++, hai = hai_next(hai))
 		sz += cfs_size_round(hai->hai_len);
 
 	return sz;
