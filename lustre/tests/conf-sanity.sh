@@ -54,21 +54,19 @@ export MULTIOP=${MULTIOP:-multiop}
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default jouranl size
+# STORED_MDSSIZE is used in test_18
+STORED_MDSSIZE=$MDSSIZE
+STORED_OSTSIZE=$OSTSIZE
 MDSSIZE=200000
 OSTSIZE=200000
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 if ! combined_mgs_mds; then
     # bug number for skipped test:    23954
     ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
-fi
-
-# STORED_MDSSIZE is used in test_18
-if [ -n "$MDSSIZE" ]; then
-    STORED_MDSSIZE=$MDSSIZE
 fi
 
 # pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
@@ -896,7 +894,7 @@ MDSDEV1_2=$fs2mds_DEV
 OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
-cleanup_24a() {
+cleanup_fs2() {
 	trap 0
 	echo "umount $MOUNT2 ..."
 	umount $MOUNT2 || true
@@ -931,7 +929,7 @@ test_24a() {
 		--reformat $fs2ostdev $fs2ostvdev || exit 10
 
 	setup
-	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2
 	mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
@@ -956,7 +954,7 @@ test_24a() {
 	stop_mds
 	MDS=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	[ -z "$MDS" ] && error "No MDT" && return 8
-	cleanup_24a
+	cleanup_fs2
 	cleanup_nocli || return 6
 }
 run_test 24a "Multiple MDTs on a single node"
@@ -1963,7 +1961,7 @@ test_33a() { # bug 12333, was test_33
 		--fsname=${FSNAME2} --index=8191 --reformat $fs2ostdev \
 		$fs2ostvdev || exit 10
 
-        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
+        start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
         do_facet $SINGLEMDS "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
@@ -4322,7 +4320,7 @@ test_77() { # LU-3445
 
 	add fs2mds $(mkfs_opts mds1 $fs2mdsdev) --mgs --fsname=$fsname \
 		--reformat $fs2mdsdev $fs2mdsvdev || error "add fs2mds failed"
-	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT ||
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT ||
 		error "start fs2mds failed"
 
 	mgsnid=$(do_facet fs2mds $LCTL list_nids | xargs | tr ' ' ,)
@@ -4337,15 +4335,162 @@ test_77() { # LU-3445
 	mkdir -p $MOUNT2
 	mount -t lustre $mgsnid:/$fsname $MOUNT2 || error "mount $MOUNT2 failed"
 	DIR=$MOUNT2 MOUNT=$MOUNT2 check_mount || error "check $MOUNT2 failed"
-	cleanup_24a
+	cleanup_fs2
 }
 run_test 77 "comma-separated MGS NIDs and failover node NIDs"
+
+test_78() {
+	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ||
+	   $(facet_fstype ost1) != ldiskfs ]] &&
+		skip "only applicable to ldiskfs-based MDTs and OSTs" && return
+
+	# reformat the Lustre filesystem with a smaller size
+	local saved_MDSSIZE=$MDSSIZE
+	local saved_OSTSIZE=$OSTSIZE
+	MDSSIZE=$((MDSSIZE - 20000))
+	OSTSIZE=$((OSTSIZE - 20000))
+	reformat || error "(1) reformat Lustre filesystem failed"
+	MDSSIZE=$saved_MDSSIZE
+	OSTSIZE=$saved_OSTSIZE
+
+	# mount the Lustre filesystem
+	setup_noconfig || error "(2) setup Lustre filesystem failed"
+
+	# create some files
+	log "create test files"
+	local i
+	local file
+	local num_files=100
+	mkdir -p $MOUNT/$tdir || error "(3) mkdir $MOUNT/$tdir failed"
+	for i in $(seq $num_files); do
+		file=$MOUNT/$tdir/$tfile-$i
+		dd if=/dev/urandom of=$file count=1 bs=1M ||
+			error "(4) create $file failed"
+	done
+
+	# unmount the Lustre filesystem
+	cleanup || error "(5) cleanup Lustre filesystem failed"
+
+	# run e2fsck on the MDT and OST devices
+	local mds_host=$(facet_active_host $SINGLEMDS)
+	local ost_host=$(facet_active_host ost1)
+	local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+	local ost_dev=$(ostdevname 1)
+
+	run_e2fsck $mds_host $mds_dev "-y"
+	run_e2fsck $ost_host $ost_dev "-y"
+
+	# get the original block count of the MDT and OST filesystems
+	local mds_orig_blks=$(get_block_count $SINGLEMDS $mds_dev)
+	local ost_orig_blks=$(get_block_count ost1 $ost_dev)
+
+	# expand the MDT and OST filesystems to the device size
+	run_resize2fs $SINGLEMDS $mds_dev "" || error "expand $SINGLEMDS failed"
+	run_resize2fs ost1 $ost_dev "" || error "expand ost1 failed"
+
+	# run e2fsck on the MDT and OST devices again
+	run_e2fsck $mds_host $mds_dev "-y"
+	run_e2fsck $ost_host $ost_dev "-y"
+
+	# mount the Lustre filesystem
+	setup
+
+	# check the files
+	log "check files after expanding the MDT and OST filesystems"
+	for i in $(seq $num_files); do
+		file=$MOUNT/$tdir/$tfile-$i
+		$CHECKSTAT -t file -s 1048576 $file ||
+			error "(6) checkstat $file failed"
+	done
+
+	# create more files
+	log "create more files after expanding the MDT and OST filesystems"
+	for i in $(seq $((num_files + 1)) $((num_files + 10))); do
+		file=$MOUNT/$tdir/$tfile-$i
+		dd if=/dev/urandom of=$file count=1 bs=1M ||
+			error "(7) create $file failed"
+	done
+
+	# unmount the Lustre filesystem
+	cleanup || error "(8) cleanup Lustre filesystem failed"
+
+	# run e2fsck on the MDT and OST devices
+	run_e2fsck $mds_host $mds_dev "-y"
+	run_e2fsck $ost_host $ost_dev "-y"
+
+	# get the maximum block count of the MDT and OST filesystems
+	local mds_max_blks=$(get_block_count $SINGLEMDS $mds_dev)
+	local ost_max_blks=$(get_block_count ost1 $ost_dev)
+
+	# get the minimum block count of the MDT and OST filesystems
+	local mds_min_blks=$(run_resize2fs $SINGLEMDS $mds_dev "" "-P" 2>&1 |
+				grep minimum | sed -e 's/^.*filesystem: //g')
+	local ost_min_blks=$(run_resize2fs ost1 $ost_dev "" "-P" 2>&1 |
+				grep minimum | sed -e 's/^.*filesystem: //g')
+
+	# shrink the MDT and OST filesystems to a smaller size
+	local shrunk=false
+	local new_blks
+	local base_blks
+	if [[ $mds_max_blks -gt $mds_min_blks &&
+	      $mds_max_blks -gt $mds_orig_blks ]]; then
+		[[ $mds_orig_blks -gt $mds_min_blks ]] &&
+			base_blks=$mds_orig_blks || base_blks=$mds_min_blks
+		new_blks=$(( (mds_max_blks - base_blks) / 2 + base_blks ))
+		run_resize2fs $SINGLEMDS $mds_dev $new_blks ||
+			error "shrink $SINGLEMDS to $new_blks failed"
+		shrunk=true
+	fi
+
+	if [[ $ost_max_blks -gt $ost_min_blks &&
+	      $ost_max_blks -gt $ost_orig_blks ]]; then
+		[[ $ost_orig_blks -gt $ost_min_blks ]] &&
+			base_blks=$ost_orig_blks || base_blks=$ost_min_blks
+		new_blks=$(( (ost_max_blks - base_blks) / 2 + base_blks ))
+		run_resize2fs ost1 $ost_dev $new_blks ||
+			error "shrink ost1 to $new_blks failed"
+		shrunk=true
+	fi
+
+	# check whether the MDT or OST filesystem was shrunk or not
+	if ! $shrunk; then
+		combined_mgs_mds || stop_mgs || error "(9) stop mgs failed"
+		reformat || error "(10) reformat Lustre filesystem failed"
+		return 0
+	fi
+
+	# run e2fsck on the MDT and OST devices again
+	run_e2fsck $mds_host $mds_dev "-y"
+	run_e2fsck $ost_host $ost_dev "-y"
+
+	# mount the Lustre filesystem again
+	setup
+
+	# check the files
+	log "check files after shrinking the MDT and OST filesystems"
+	for i in $(seq $((num_files + 10))); do
+		file=$MOUNT/$tdir/$tfile-$i
+		$CHECKSTAT -t file -s 1048576 $file ||
+			error "(11) checkstat $file failed"
+	done
+
+	# unmount and reformat the Lustre filesystem
+	cleanup || error "(12) cleanup Lustre filesystem failed"
+	combined_mgs_mds || stop_mgs || error "(13) stop mgs failed"
+	reformat || error "(14) reformat Lustre filesystem failed"
+}
+run_test 78 "run resize2fs on MDT and OST filesystems"
 
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
 
 cleanup_gss
+
+# restore the values of MDSSIZE and OSTSIZE
+MDSSIZE=$STORED_MDSSIZE
+OSTSIZE=$STORED_OSTSIZE
+reformat
 
 complete $SECONDS
 exit_status
