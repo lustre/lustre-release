@@ -514,6 +514,7 @@ static int lmv_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 {
         struct lmv_obd      *lmv = &obd->u.lmv;
         struct lmv_tgt_desc *tgt;
+	int		     orig_tgt_count = 0;
         int                  rc = 0;
         ENTRY;
 
@@ -585,14 +586,17 @@ static int lmv_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 	tgt->ltd_uuid = *uuidp;
 	tgt->ltd_active = 0;
 	lmv->tgts[index] = tgt;
-	if (index >= lmv->desc.ld_tgt_count)
+	if (index >= lmv->desc.ld_tgt_count) {
+		orig_tgt_count = lmv->desc.ld_tgt_count;
 		lmv->desc.ld_tgt_count = index + 1;
+	}
 
 	if (lmv->connected) {
 		rc = lmv_connect_mdc(obd, tgt);
-		if (rc) {
+		if (rc != 0) {
 			spin_lock(&lmv->lmv_lock);
-			lmv->desc.ld_tgt_count--;
+			if (lmv->desc.ld_tgt_count == index + 1)
+				lmv->desc.ld_tgt_count = orig_tgt_count;
 			memset(tgt, 0, sizeof(*tgt));
 			spin_unlock(&lmv->lmv_lock);
 		} else {
@@ -1353,7 +1357,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 	int			 rc;
 	ENTRY;
 
-	tgt = lmv_get_target(lmv, mds);
+	tgt = lmv_get_target(lmv, mds, NULL);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
@@ -1700,27 +1704,39 @@ static int lmv_null_inode(struct obd_export *exp, const struct lu_fid *fid)
 static int lmv_find_cbdata(struct obd_export *exp, const struct lu_fid *fid,
                            ldlm_iterator_t it, void *data)
 {
-        struct obd_device   *obd = exp->exp_obd;
-        struct lmv_obd      *lmv = &obd->u.lmv;
-	__u32                i;
-        int                  rc;
-        ENTRY;
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	int			i;
+	int			tgt;
+	int			rc;
+	ENTRY;
 
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
+	rc = lmv_check_connect(obd);
+	if (rc)
+		RETURN(rc);
 
-        CDEBUG(D_INODE, "CBDATA for "DFID"\n", PFID(fid));
+	CDEBUG(D_INODE, "CBDATA for "DFID"\n", PFID(fid));
 
 	/*
 	 * With DNE every object can have two locks in different namespaces:
 	 * lookup lock in space of MDT storing direntry and update/open lock in
-	 * space of MDT storing inode.
+	 * space of MDT storing inode.  Try the MDT that the FID maps to first,
+	 * since this can be easily found, and only try others if that fails.
 	 */
-	for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-		if (lmv->tgts[i] == NULL || lmv->tgts[i]->ltd_exp == NULL)
+	for (i = 0, tgt = lmv_find_target_index(lmv, fid);
+	     i < lmv->desc.ld_tgt_count;
+	     i++, tgt = (tgt + 1) % lmv->desc.ld_tgt_count) {
+		if (tgt < 0) {
+			CDEBUG(D_HA, "%s: "DFID" is inaccessible: rc = %d\n",
+			       obd->obd_name, PFID(fid), tgt);
+			tgt = 0;
+		}
+
+		if (lmv->tgts[tgt] == NULL ||
+		    lmv->tgts[tgt]->ltd_exp == NULL)
 			continue;
-		rc = md_find_cbdata(lmv->tgts[i]->ltd_exp, fid, it, data);
+
+		rc = md_find_cbdata(lmv->tgts[tgt]->ltd_exp, fid, it, data);
 		if (rc)
 			RETURN(rc);
 	}
@@ -1770,7 +1786,7 @@ lmv_locate_target_for_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
 		RETURN((void *)oinfo);
 	*fid = oinfo->lmo_fid;
 	*mds = oinfo->lmo_mds;
-	tgt = lmv_get_target(lmv, *mds);
+	tgt = lmv_get_target(lmv, *mds, NULL);
 
 	CDEBUG(D_INFO, "locate on mds %u "DFID"\n", *mds, PFID(fid));
 	return tgt;
@@ -2403,7 +2419,7 @@ static int lmv_read_striped_entry(struct obd_export *exp,
 	for (i = 0; i < stripe_count; i++) {
 		struct page *page = NULL;
 
-		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
+		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds, NULL);
 		if (IS_ERR(tgt))
 			GOTO(out, rc = PTR_ERR(tgt));
 
@@ -3087,33 +3103,42 @@ ldlm_mode_t lmv_lock_match(struct obd_export *exp, __u64 flags,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh)
 {
-        struct obd_device       *obd = exp->exp_obd;
-        struct lmv_obd          *lmv = &obd->u.lmv;
-        ldlm_mode_t              rc;
-	__u32                    i;
-        ENTRY;
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	ldlm_mode_t		rc;
+	int			tgt;
+	int			i;
+	ENTRY;
 
-        CDEBUG(D_INODE, "Lock match for "DFID"\n", PFID(fid));
+	CDEBUG(D_INODE, "Lock match for "DFID"\n", PFID(fid));
 
         /*
-         * With CMD every object can have two locks in different namespaces:
-         * lookup lock in space of mds storing direntry and update/open lock in
-         * space of mds storing inode. Thus we check all targets, not only that
-         * one fid was created in.
-         */
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-		struct lmv_tgt_desc *tgt = lmv->tgts[i];
+	 * With DNE every object can have two locks in different namespaces:
+	 * lookup lock in space of MDT storing direntry and update/open lock in
+	 * space of MDT storing inode.  Try the MDT that the FID maps to first,
+	 * since this can be easily found, and only try others if that fails.
+	 */
+	for (i = 0, tgt = lmv_find_target_index(lmv, fid);
+	     i < lmv->desc.ld_tgt_count;
+	     i++, tgt = (tgt + 1) % lmv->desc.ld_tgt_count) {
+		if (tgt < 0) {
+			CDEBUG(D_HA, "%s: "DFID" is inaccessible: rc = %d\n",
+			       obd->obd_name, PFID(fid), tgt);
+			tgt = 0;
+		}
 
-		if (tgt == NULL || tgt->ltd_exp == NULL || !tgt->ltd_active)
+		if (lmv->tgts[tgt] == NULL ||
+		    lmv->tgts[tgt]->ltd_exp == NULL ||
+		    lmv->tgts[tgt]->ltd_active == 0)
 			continue;
 
-		rc = md_lock_match(tgt->ltd_exp, flags, fid, type, policy, mode,
-				   lockh);
-                if (rc)
-                        RETURN(rc);
-        }
+		rc = md_lock_match(lmv->tgts[tgt]->ltd_exp, flags, fid,
+				   type, policy, mode, lockh);
+		if (rc)
+			RETURN(rc);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
