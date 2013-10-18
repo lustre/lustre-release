@@ -2186,7 +2186,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                                      int raw, char *pool_name)
 {
         char *prefix = is_dir ? "" : "lmm_";
-        char nl = is_dir ? ' ' : '\n';
+	char *seperator = "";
         int rc;
 
 	if (is_dir && lmm_oi_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
@@ -2218,25 +2218,27 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                                                               &scount, NULL,
                                                               NULL);
                                 if (rc == 0)
-                                        llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
-                                                     scount, nl);
+					llapi_printf(LLAPI_MSG_NORMAL, "%d",
+						     scount);
                                 else
                                         llapi_error(LLAPI_MSG_ERROR, rc,
                                                     "Cannot determine default"
                                                     " stripe count.");
                         } else {
-                                llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
+				llapi_printf(LLAPI_MSG_NORMAL, "%d",
                                              lum->lmm_stripe_count ==
                                              (typeof(lum->lmm_stripe_count))(-1)
-                                             ? -1 : lum->lmm_stripe_count, nl);
+					     ? -1 : lum->lmm_stripe_count);
                         }
                 } else {
-                        llapi_printf(LLAPI_MSG_NORMAL, "%hd%c",
-                                     (__s16)lum->lmm_stripe_count, nl);
+			llapi_printf(LLAPI_MSG_NORMAL, "%hd",
+				     (__s16)lum->lmm_stripe_count);
                 }
+		seperator = is_dir ? " " : "\n";
         }
 
         if (verbose & VERBOSE_SIZE) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
                 if (verbose & ~VERBOSE_SIZE)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
                                      prefix);
@@ -2245,55 +2247,62 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                         rc = sattr_cache_get_defaults(NULL, path, NULL, &ssize,
                                                       NULL);
                         if (rc == 0)
-                                llapi_printf(LLAPI_MSG_NORMAL, "%u%c", ssize,
-                                             nl);
+				llapi_printf(LLAPI_MSG_NORMAL, "%u", ssize);
                         else
                                 llapi_error(LLAPI_MSG_ERROR, rc,
                                             "Cannot determine default"
                                             " stripe size.");
                 } else {
-                        llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                                     lum->lmm_stripe_size, nl);
+			llapi_printf(LLAPI_MSG_NORMAL, "%u",
+				     lum->lmm_stripe_size);
                 }
+		seperator = is_dir ? " " : "\n";
         }
 
 	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
 		if (verbose & ~VERBOSE_LAYOUT)
 			llapi_printf(LLAPI_MSG_NORMAL, "%spattern:        ",
 				     prefix);
-		llapi_printf(LLAPI_MSG_NORMAL, "%.x%c", lum->lmm_pattern, nl);
+		llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
+		seperator = "\n";
 	}
 
         if ((verbose & VERBOSE_GENERATION) && !is_dir) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
                 if (verbose & ~VERBOSE_GENERATION)
                         llapi_printf(LLAPI_MSG_NORMAL, "%slayout_gen:     ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-				(int)lum->lmm_layout_gen, nl);
+		llapi_printf(LLAPI_MSG_NORMAL, "%u",
+			     (int)lum->lmm_layout_gen);
+		seperator = "\n";
         }
 
         if (verbose & VERBOSE_OFFSET) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
                 if (verbose & ~VERBOSE_OFFSET)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
                                      prefix);
                 if (is_dir)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
+			llapi_printf(LLAPI_MSG_NORMAL, "%d",
                                      lum->lmm_stripe_offset ==
                                      (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
-                                     lum->lmm_stripe_offset, nl);
+				     lum->lmm_stripe_offset);
                 else
-                        llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                                     objects[0].l_ost_idx, nl);
+			llapi_printf(LLAPI_MSG_NORMAL, "%u",
+				     objects[0].l_ost_idx);
+		seperator = is_dir ? " " : "\n";
         }
 
         if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
                 if (verbose & ~VERBOSE_POOL)
                         llapi_printf(LLAPI_MSG_NORMAL, "%spool:           ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%s%c", pool_name, nl);
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", pool_name);
         }
 
-        if (is_dir && (verbose != VERBOSE_OBJID))
+        if (!is_dir || (is_dir && (verbose != VERBOSE_OBJID)))
                 llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
