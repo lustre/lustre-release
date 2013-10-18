@@ -389,38 +389,41 @@ lnet_debug_peer(lnet_nid_t nid)
 	lnet_net_unlock(cpt);
 }
 
-int lnet_get_peers(int count, __u64 *nid, char *aliveness,
-		   int *ncpt, int *refcount,
-		   int *ni_peer_tx_credits, int *peer_tx_credits,
-		   int *peer_rtr_credits, int *peer_min_rtr_credits,
-		   int *peer_tx_qnob)
+int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
+		       char aliveness[LNET_MAX_STR_LEN],
+		       __u32 *cpt_iter, __u32 *refcount,
+		       __u32 *ni_peer_tx_credits, __u32 *peer_tx_credits,
+		       __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credits,
+		       __u32 *peer_tx_qnob)
 {
 	struct lnet_peer_table	*peer_table;
 	lnet_peer_t		*lp;
 	int			j;
-	int			lncpt, found = 0;
+	int			lncpt;
+	bool			found = false;
 
 	/* get the number of CPTs */
 	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
+
 	/* if the cpt number to be examined is >= the number of cpts in
 	 * the system then indicate that there are no more cpts to examin
 	 */
-	if (*ncpt > lncpt)
-		return -1;
+	if (*cpt_iter > lncpt)
+		return -ENOENT;
 
 	/* get the current table */
-	peer_table = the_lnet.ln_peer_tables[*ncpt];
+	peer_table = the_lnet.ln_peer_tables[*cpt_iter];
 	/* if the ptable is NULL then there are no more cpts to examine */
 	if (peer_table == NULL)
-		return -1;
+		return -ENOENT;
 
-	lnet_net_lock(*ncpt);
+	lnet_net_lock(*cpt_iter);
 
 	for (j = 0; j < LNET_PEER_HASH_SIZE && !found; j++) {
 		struct list_head *peers = &peer_table->pt_hash[j];
 
 		list_for_each_entry(lp, peers, lp_hashlist) {
-			if (count-- > 0)
+			if (peer_index-- > 0)
 				continue;
 
 			snprintf(aliveness, LNET_MAX_STR_LEN, "NA");
@@ -437,13 +440,13 @@ int lnet_get_peers(int count, __u64 *nid, char *aliveness,
 			*peer_min_rtr_credits = lp->lp_mintxcredits;
 			*peer_tx_qnob = lp->lp_txqnob;
 
-			found = 1;
+			found = true;
 		}
 
 	}
-	lnet_net_unlock(*ncpt);
+	lnet_net_unlock(*cpt_iter);
 
-	*ncpt = lncpt;
+	*cpt_iter = lncpt;
 
 	return found ? 0 : -ENOENT;
 }
