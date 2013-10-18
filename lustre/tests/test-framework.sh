@@ -303,6 +303,7 @@ init_test_env() {
     export I_MOUNTED=${I_MOUNTED:-"no"}
 	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mdt.ko -a \
 	     ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mdt.ko -a \
+	     ! -f /lib/modules/$(uname -r)/extra/kernel/fs/lustre/mdt.ko -a \
 	     ! -f $LUSTRE/mdt/mdt.ko ]; then
 	    export CLIENTMODSONLY=yes
 	fi

@@ -83,27 +83,17 @@ AC_DEFUN([LB_LINUX_RELEASE],
 [
 LB_LINUX_UTSRELEASE
 
-moduledir='$(CROSS_PATH)/lib/modules/$(LINUXRELEASE)/updates/kernel'
-AC_SUBST(moduledir)
-
-modulefsdir='$(moduledir)/fs/$(PACKAGE)'
-AC_SUBST(modulefsdir)
-
-modulenetdir='$(moduledir)/net/$(PACKAGE)'
-AC_SUBST(modulenetdir)
-
 # ------------ RELEASE --------------------------------
 AC_MSG_CHECKING([for Lustre release])
-AC_ARG_WITH([release],[
+AC_ARG_WITH([release],
 	AC_HELP_STRING([--with-release=string],
 		       [set the release string (default=$kvers_YYYYMMDDhhmm)]),
-	[RELEASE=$withval],
+	[RELEASE=$withval],[
 	RELEASE=""
 	if test -n "$DOWNSTREAM_RELEASE"; then
 		RELEASE="${DOWNSTREAM_RELEASE}_"
 	fi
-	RELEASE="$RELEASE`echo ${LINUXRELEASE} | tr '-' '_'`_$BUILDID"
-])
+	RELEASE="$RELEASE`echo ${LINUXRELEASE} | tr '-' '_'`_$BUILDID"])
 AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
 
@@ -121,6 +111,27 @@ AC_MSG_CHECKING([for RedHat kernel version])
 		AC_MSG_RESULT([not found])
 		LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
 	])
+
+AC_MSG_CHECKING([for kernel module package directory])
+AC_ARG_WITH([kmp-moddir],
+	AC_HELP_STRING([--with-kmp-moddir=string],
+		       [set the kmod updates or extra directory]),
+	[KMP_MODDIR=$withval],[
+	AS_IF([test x$RHEL_KERNEL = xyes], [KMP_MODDIR="extra"],
+	      [test x$SUSE_KERNEL = xyes], [KMP_MODDIR="updates"])])
+
+AC_MSG_RESULT($KMP_MODDIR)
+AC_SUBST(KMP_MODDIR)
+
+moduledir='$(CROSS_PATH)/lib/modules/$(LINUXRELEASE)/$(KMP_MODDIR)/kernel'
+AC_SUBST(moduledir)
+
+modulefsdir='$(moduledir)/fs/$(PACKAGE)'
+AC_SUBST(modulefsdir)
+
+modulenetdir='$(moduledir)/net/$(PACKAGE)'
+AC_SUBST(modulenetdir)
+
 ])
 
 # LB_ARG_REPLACE_PATH(PACKAGE, PATH)

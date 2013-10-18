@@ -99,6 +99,7 @@ rpms: @PACKAGE_TARNAME@.spec dist Makefile
 	for arg in $(ac_configure_args); do \
 		case $$arg in \
 			--with-release=* ) ;; \
+			--with-kmp-moddir=* ) ;; \
 			--enable-tests | --disable-tests ) ;; \
 			--with-linux=* | --with-linux-obj=* ) ;; \
 			* ) CONFIGURE_ARGS="$$CONFIGURE_ARGS '$$arg'" ;; \
@@ -110,6 +111,9 @@ rpms: @PACKAGE_TARNAME@.spec dist Makefile
 		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
 			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
 		fi; \
+	fi; \
+	if [ -n "@KMP_MODDIR@" ]; then \
+		RPMARGS="$$RPMARGS --define \"kmoddir @KMP_MODDIR@\""; \
 	fi; \
 	if [ -n "@CROSS_PATH@" ]; then \
 		if [[ "X$(BUILD_SERVER)" = Xtrue ]]; then \

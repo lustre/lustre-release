@@ -65,6 +65,18 @@
     %endif
 %endif
 
+%if %{undefined kmoddir}
+    %if %{defined kernel_module_package_moddir}
+        %global kmoddir %{kernel_module_package_moddir}
+    %else
+        %if %{defined suse_kernel_module_package}
+            %global kmoddir updates
+        %else
+            %global kmoddir extra
+        %endif
+    %endif
+%endif
+
 %if %{defined cross_path} && %{defined post_script}
 %define rpm_post_base %(echo $(dirname %{cross_path})/%{lustre_name})
 %endif
@@ -281,6 +293,9 @@ fi
 if [ -n "%kobjdir" ]; then
 	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux-obj=[^ ][^ ]* \?//')
 fi
+# remove --with-kmp-moddir from configure arguments,
+# it will be set --with-kmp-moddir=%%kmoddir
+CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]* \?//')
 
 # we need to eval "configure" because $CONFIGURE_ARGS could have a quoted
 # string in it which we don't want word splitted by the shell
@@ -290,7 +305,7 @@ fi
 
 %eval_configure \
 	%{?kdir: --with-linux=%kdir} %{?kobjdir: --with-linux-obj=%kobjdir} \
-	$CONFIGURE_ARGS
+	$CONFIGURE_ARGS --with-kmp-moddir=%{kmoddir}
 make -j $RPM_BUILD_NCPUS -s %{?make_args}
 
 %install
@@ -375,7 +390,7 @@ fi
 echo '%{_libdir}/lustre/tests/*' >lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
-echo '%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko' >>lustre-tests.files
+echo '%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
   echo '%{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
 fi
@@ -402,7 +417,7 @@ fi
 %endif
 %else
 # mark modules executable for find-debuginfo.sh
-find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -type f | \
+find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" -type f | \
 	xargs --no-run-if-empty chmod u+x
 %endif
 
@@ -411,16 +426,16 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %files modules
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/updates/*
+%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/*
 %if %{with lustre_tests}
-%exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko
+%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko
 %endif
 %if %{with ldiskfs}
-%exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
-%exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
+%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
+%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
 %endif
 %if %{with zfs}
-%exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
+%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
 %endif
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-modules.sh
@@ -432,8 +447,8 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %if %{with ldiskfs}
 %files osd-ldiskfs
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
-%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
+%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
+%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
 %endif
@@ -442,7 +457,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %if %{with zfs}
 %files osd-zfs
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
+%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
 %endif
