@@ -38,7 +38,12 @@
           <indexterm><primary>tuning</primary></indexterm>
 <indexterm><primary>tuning</primary><secondary>service threads</secondary></indexterm>
           Optimizing the Number of Service Threads</title>
-    <para>An OSS can have a minimum of 2 service threads and a maximum of 512 service threads. The number of service threads is a function of how much RAM and how many CPUs are on each OSS node (1 thread / 128MB * num_cpus). If the load on the OSS node is high, new service threads will be started in order to process more requests concurrently, up to 4x the initial number of threads (subject to the maximum of 512). For a 2GB 2-CPU system, the default thread count is 32 and the maximum thread count is 128.</para>
+    <para>An OSS can have a minimum of two service threads and a maximum of 512 service threads. The
+      number of service threads is a function of how much RAM and how many CPUs are on each OSS node
+      (1 thread / 128MB * num_cpus). If the load on the OSS node is high, new service threads will
+      be started in order to process more requests concurrently, up to 4x the initial number of
+      threads (subject to the maximum of 512). For a 2GB 2-CPU system, the default thread count is
+      32 and the maximum thread count is 128.</para>
     <para>Increasing the size of the thread pool may help when:</para>
     <itemizedlist>
       <listitem>
@@ -124,9 +129,15 @@
   </section>
   <section xml:id="dbdoclet.50438272_73839">
       <title>
-          <indexterm><primary>LNET</primary><secondary>tuning</secondary>
-      </indexterm><indexterm><primary>tuning</primary><secondary>LNET</secondary></indexterm>Tuning LNET Parameters</title>
-    <para>This section describes LNET tunables. that may be necessary on some systems to improve performance. To test the performance of your Lustre network, see <xref linkend='lnetselftest'/>.</para>
+      <indexterm>
+        <primary>LNet</primary>
+        <secondary>tuning</secondary>
+      </indexterm><indexterm>
+        <primary>tuning</primary>
+        <secondary>LNet</secondary>
+      </indexterm>Tuning LNET Parameters</title>
+    <para>This section describes LNET tunables, the use of which may be necessary on some systems to
+      improve performance. To test the performance of your Lustre network, see <xref linkend='lnetselftest'/>.</para>
     <section remap="h3">
       <title>Transmit and Receive Buffer Size</title>
       <para>The kernel allocates buffers for sending and receiving messages on a network.</para>
@@ -144,45 +155,75 @@
       <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
-	<para condition="l23">Lustre 2.3 and beyond provide enhanced network interface control. The
-        enhancement means that an administrator can bind an interface to one or more CPU Partitions.
-        Bindings are specified as options to the lnet modules. For more information on specifying
-        module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
-<para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for <literal>o2ib0</literal> will be handled by LND threads executing on <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be: <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by threads on <literal>CPT0</literal>.</para>
+	<para condition="l23">Lustre 2.3 and beyond provide enhanced network interface control. The enhancement means that
+        an administrator can bind an interface to one or more CPU partitions. Bindings are specified
+        as options to the LNET modules. For more information on specifying module options, see <xref
+          linkend="dbdoclet.50438293_15350"/></para>
+<para condition="l23">For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages
+        for <literal>o2ib0</literal> will be handled by LND threads executing on
+          <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be:
+          <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by
+        threads on <literal>CPT0</literal>.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface credits</secondary></indexterm>Network Interface Credits</title>
-	<para>Network interface (NI) credits are shared across all CPU partitions (CPT). For example, a machine has 4 CPTs and NI credits is 512, then each partition will has 128 credits. If a large number of CPTs exist on the system,  LNet will check and validate the NI credits value for each CPT to ensure each CPT has workable number of credits. For example, a machine has 16 CPTs and NI credits is set to 256, then each partition only has 16 credits. 16 NI credits is low and could negatively impact performance. As a result, LNet will automatically make an adjustment to 8*peer_credits (peer_credits is 8 by default), so credits for each partition is still 64.</para>
-	<para>Modifying the NI Credit count can be performed by an administrator using <literal>ksoclnd</literal> or <literal>ko2iblnd</literal>. For example:</para>
+	<para>Network interface (NI) credits are shared across all CPU partitions (CPT). For example, a
+        machine has 4 CPTs and NI credits is 512, then each partition will has 128 credits. If a
+        large number of CPTs exist on the system, LNET will check and validate the NI credits value
+        for each CPT to ensure each CPT has workable number of credits. For example, a machine has
+        16 CPTs and NI credits is set to 256, then each partition only has 16 credits. 16 NI credits
+        is low and could negatively impact performance. As a result, LNET will automatically make an
+        adjustment to 8*peer_credits (peer_credits is 8 by default), so credits for each partition
+        is still 64.</para>
+	<para>Modifying the NI credit count can be performed by an administrator using
+          <literal>ksoclnd</literal> or <literal>ko2iblnd</literal>. For example:</para>
 	<screen>ksocklnd credits=256</screen>
-	<para>applies 256 credits to TCP connections. Applying 256 credits to IB connections can be achieved with:</para>
+	<para>In this example, 256 credits are applied to TCP connections. Applying 256 credits to IB
+        connections can be achieved with:</para>
 	<screen>ko2iblnd credits=256</screen>
-	<note condition='l23'><para>In Lustre 2.3 and beyond, LNET may revalidate the NI Credits so that the administrator's
-          request does not persist.</para></note>
+	<note><para condition="l23">From Lustre 2.3 and beyond, it is possible that LNET may
+          revalidate the NI Credits so that the administrator's request does not persist.</para></note>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>router buffers</secondary></indexterm>Router Buffers</title>
-      <para>When a node is set up as an LNET router, three pools of buffers are allocated: tiny,
-        small and large. These pools are allocated per CPU partition and are used to buffer messages
-        that arrive at the router to be forwarded to the next hop. The three different buffer sizes
-        accommodate different size messages. If a message arrives that can fit in a tiny buffer then
-        a tiny buffer is used, if a message doesn’t fit in a tiny buffer, but fits in a small
-        buffer, then a small buffer is used. Finally if a message doesn’t fit in either a tiny
-        buffer or a small buffer, a large buffer is used.</para>
-	<para>Router buffers are shared by all CPU partitions. For a machine with a large number of CPTs,
-        the router buffer number may need to be specified manually for best performance. A low
-        number of router buffers risks starving the CPU partitions of resources.</para>
-	<para>The default setting for router buffers typically results in acceptable performance. LNET
-        automatically sets a default value to reduce the likelihood of resource starvation. The size
-        of a router buffer can be modified as shown in the example below. In this example, the size
-        of the large buffer is modified using the <literal>large_router_buffers</literal>
-        parameter.</para>
-	<screen>lnet large_router_buffers=8192</screen>
-	<note condition='l23'><para>In Lustre 2.3 and beyond, LNET may revalidate the NI Credits so that the administrator's
-          request does not persist.</para></note>
+	<para>Router buffers are shared by all CPU partitions and the client nodes accessing the router.
+        For a machine with a large number of CPTs, the router buffer number may need to be specified
+        manually for best performance. A low number of router buffers risks starving the CPU
+        partitions of resources.</para>
+	<para>The default setting for router buffers will typically perform well. LNET automatically sets a
+        default value to reduce the likelihood of resource starvation</para>
+	<para>An administrator may modify router buffers using the required parameter.</para>
+	<para>There are three different kinds of router buffer parameters:</para>
+	<itemizedlist>
+		<listitem>
+		<para><literal>tiny_router_buffers</literal>: Zero payload buffers which are used for signals and acknowledgements.</para>
+		</listitem>
+		<listitem>
+		<para><literal>small_router_buffers</literal>: 4KB payload buffers for small messages</para>
+		</listitem>
+		<listitem>
+		<para><literal>large_router_buffers</literal>: 1MB maximum payload buffers. This corresponds to the recommended size of 1MB for an RPC.</para>
+		</listitem>
+	</itemizedlist>
+	<para>These can be set using this syntax:</para>
+	<screen>options lnet large_router_buffers=8192</screen>
+	<note><para condition="&quot;l23&quot;">From Lustre 2.3 and beyond, it is possible that LNET may
+          revalidate the router buffer setting and the administrator's request do not
+          persist.</para></note>
+	<para>The purpose of the router buffers is to create a system of quotas where no single client can overwhelm the router. Router buffers are allotted to the clients.</para>
+	<para>So if increasing the router buffer parameters increases the total number of router buffers
+        available, the parameter <literal>peer_buffer_credit</literal> denotes the number of buffers
+        allotted to each client individually.</para>
+	<para>It can be set in a similar manner.</para>
+	<screen>options lnet peer_buffer_credits=256</screen>
 	</section>
 	<section><title><indexterm><primary>tuning</primary><secondary>portal round-robin</secondary></indexterm>Portal Round-Robin</title>
-	<para>Portal round-robin defines the policy LNet applies to deliver events and messages to the upper layers. The upper layers are ptlrpc service or LNet selftest.</para>
-	<para>If portal round-robin is disabled, LNet will deliver messages to CPTs based on a hash of the source NID. Hence, all messages from a specific peer will be handled by the same CPT. This can reduce data traffic between CPUs. However, for some workloads, this behavior may result in poorly balancing loads across the CPU.</para>
-	<para>If portal round-robin is enabled, LNet will round-robin incoming events across all CPTs. This may balance load better across the CPU but can incur a cross CPU overhead.</para>
+	<para>Portal round-robin defines the policy LNET applies to deliver events and messages to the
+        upper layers. The upper layers are PLRPC service or LNET selftest.</para>
+	<para>If portal round-robin is disabled, LNET will deliver messages to CPTs based on a hash of the
+        source NID. Hence, all messages from a specific peer will be handled by the same CPT. This
+        can reduce data traffic between CPUs. However, for some workloads, this behavior may result
+        in poorly balancing loads across the CPU.</para>
+	<para>If portal round-robin is enabled, LNET will round-robin incoming events across all CPTs. This
+        may balance load better across the CPU but can incur a cross CPU overhead.</para>
 	<para>The current policy can be changed by an administrator with <literal>echo <replaceable>value</replaceable> &gt; /proc/sys/lnet/portal_rotor</literal>. There are four options for <literal><replaceable>value</replaceable></literal>:</para>
     <itemizedlist>
       <listitem>
@@ -357,7 +398,8 @@ ldlm.services.ldlm_cbd.nrs_policies=crrn
       </screen>
       <para>For PTLRPC services that support high-priority RPCs, you can also supply an optional <replaceable>reg|hp</replaceable> token, in order to enable an NRS policy for handling only regular or high-priority RPCs on a given PTLRPC service, by running:</para>
       <screen>lctl set_param {service}.nrs_policies="<replaceable>policy_name</replaceable> <replaceable>reg|hp</replaceable>"</screen>
-      <para>For example, to enable the TRR policy for handling only regular, but not high-priority RPCs on the ost_io service, run:</para>
+      <para>For example, to enable the TRR policy for handling only regular, but not high-priority
+      RPCs on the <literal>ost_io</literal> service, run:</para>
       <screen>$ lctl set_param ost.OSS.ost_io.nrs_policies="trr reg"
 ost.OSS.ost_io.nrs_policies="trr reg"
       </screen>
