@@ -222,13 +222,15 @@
         </orderedlist>
       </listitem>
       <listitem>
-        <para condition="l22">(Optional) For upgrades to Lustre release 2.2 or higher, to enable
-          wide striping on an existing MDT, run the following command on the MDT
+        <para>(Optional) For upgrades to Lustre release 2.2 or higher, to enable wide striping on an
+          existing MDT, run the following command on the MDT
           :<screen>mdt# tune2fs -O large_xattr <replaceable>device</replaceable></screen></para>
+        <para>For more information about wide striping, see <xref
+            xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_syy_gcl_qk"/>.</para>
       </listitem>
       <listitem>
-        <para condition="l24">(Optional) For upgrades to Lustre release 2.4 or higher, to format an
-          additional MDT, complete these steps:<orderedlist numeration="loweralpha">
+        <para>(Optional) For upgrades to Lustre release 2.4 or higher, to format an additional MDT,
+          complete these steps:<orderedlist numeration="loweralpha">
             <listitem>
               <para>Determine the index used for the first MDT (each MDT must have unique index).
                 Enter:<screen>client$ lctl dl | grep mdc
@@ -315,7 +317,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
     <title><indexterm>
         <primary>upgrading</primary>
         <secondary>2.X.y to 2.X.y (minor release)</secondary>
-      </indexterm><indexterm/>Upgrading to a Lustre Release 2.X.y (Minor Release)</title>
+      </indexterm>Upgrading to a Lustre Release 2.X.y (Minor Release)</title>
     <para>Rolling upgrades are supported for upgrading from any Lustre release 2.X.y to a more
       recent 2.X.y release. This allows the Lustre file system to continue to run while individual
       servers (or their failover partners) and clients are upgraded one at a time. The procedure for
