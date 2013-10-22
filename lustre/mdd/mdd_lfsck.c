@@ -2718,6 +2718,10 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 	}
 
 	if (start->ls_valid & LSV_DRYRUN) {
+		valid |= DOIV_DRYRUN;
+		if (start->ls_flags & LPF_DRYRUN)
+			flags |= DOIF_DRYRUN;
+
 		if ((start->ls_flags & LPF_DRYRUN) &&
 		    !(bk->lb_param & LPF_DRYRUN)) {
 			bk->lb_param |= LPF_DRYRUN;
@@ -2790,8 +2794,11 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 
 trigger:
 	lfsck->ml_args_dir = LUDA_64BITHASH | LUDA_VERIFY;
-	if (bk->lb_param & LPF_DRYRUN)
+	if (bk->lb_param & LPF_DRYRUN) {
 		lfsck->ml_args_dir |= LUDA_VERIFY_DRYRUN;
+		valid |= DOIV_DRYRUN;
+		flags |= DOIF_DRYRUN;
+	}
 
 	if (bk->lb_param & LPF_FAILOUT) {
 		valid |= DOIV_ERROR_HANDLE;

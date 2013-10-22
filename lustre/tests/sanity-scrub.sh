@@ -39,6 +39,9 @@ check_and_setup_lustre
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.90) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 1a"
 
+[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.1) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 15"
+
 build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
@@ -800,6 +803,100 @@ test_11() {
 	rm -rf $MOUNT/$tname > /dev/null
 }
 run_test 11 "OI scrub skips the new created objects only once"
+
+test_15() {
+	scrub_prep 20
+	mds_backup_restore || error "(1) Fail to backup/restore!"
+
+	echo "starting MDTs with OI scrub disabled"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(2) Fail to start MDS!"
+
+	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent" ] ||
+		error "(4) Expect 'inconsistent', but got '$FLAGS'"
+
+	# run under dryrun mode
+	$START_SCRUB -n on || error "(5) Fail to start OI scrub!"
+	sleep 3
+
+	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(6) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent" ] ||
+		error "(7) Expect 'inconsistent', but got '$FLAGS'"
+
+	local PARAMS=$($SHOW_SCRUB | awk '/^param/ { print $2 }')
+	[ "$PARAMS" == "dryrun" ] ||
+		error "(8) Expect 'dryrun', but got '$PARAMS'"
+
+	local REPAIRED=$($SHOW_SCRUB | awk '/^updated/ { print $2 }')
+	[ $REPAIRED -lt 20 ] &&
+		error "(9) Expect at least 20 updated, but got '$REPAIRED'"
+
+	# run under dryrun mode again
+	$START_SCRUB -n on || error "(10) Fail to start OI scrub!"
+	sleep 3
+
+	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(11) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent" ] ||
+		error "(12) Expect 'inconsistent', but got '$FLAGS'"
+
+	PARAMS=$($SHOW_SCRUB | awk '/^param/ { print $2 }')
+	[ "$PARAMS" == "dryrun" ] ||
+		error "(13) Expect 'dryrun', but got '$PARAMS'"
+
+	REPAIRED=$($SHOW_SCRUB | awk '/^updated/ { print $2 }')
+	[ $REPAIRED -lt 20 ] &&
+		error "(14) Expect at least 20 updated, but got '$REPAIRED'"
+
+	# run under normal mode
+	$START_SCRUB -n off || error "(15) Fail to start OI scrub!"
+	sleep 3
+
+	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(16) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(17) Expect empty flags, but got '$FLAGS'"
+
+	PARAMS=$($SHOW_SCRUB | awk '/^param/ { print $2 }')
+	[ -z "$PARAMS" ] || error "(18) Expect empty param, but got '$PARAMS'"
+
+	REPAIRED=$($SHOW_SCRUB | awk '/^updated/ { print $2 }')
+	[ $REPAIRED -lt 20 ] &&
+		error "(19) Expect at least 20 updated, but got '$REPAIRED'"
+
+	# run under normal mode again
+	$START_SCRUB -n off || error "(20) Fail to start OI scrub!"
+	sleep 3
+
+	STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(21) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(22) Expect empty flags, but got '$FLAGS'"
+
+	PARAMS=$($SHOW_SCRUB | awk '/^param/ { print $2 }')
+	[ -z "$PARAMS" ] || error "(23) Expect empty param, but got '$PARAMS'"
+
+	REPAIRED=$($SHOW_SCRUB | awk '/^updated/ { print $2 }')
+	[ $REPAIRED -eq 0 ] ||
+		error "(24) Expect 0 updated, but got '$REPAIRED'"
+}
+run_test 15 "Dryrun mode OI scrub"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
