@@ -2735,15 +2735,21 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 
                         LASSERTF(lock != NULL, "no lock for cookie "LPX64"\n",
                                  h->cookie);
-                        CDEBUG(D_HA, "request = %p reply state = %p"
-                               " transno = "LPD64"\n",
-                               req, req->rq_reply_state, req->rq_transno);
-                        if (mdt_cos_is_enabled(mdt)) {
-                                no_ack = 1;
-                                ldlm_lock_downgrade(lock, LCK_COS);
-                                mode = LCK_COS;
-                        }
-                        ptlrpc_save_lock(req, h, mode, no_ack);
+			/* there is no request if mdt_object_unlock() is called
+			 * from mdt_export_cleanup()->mdt_add_dirty_flag() */
+			if (likely(req != NULL)) {
+				CDEBUG(D_HA, "request = %p reply state = %p"
+				       " transno = "LPD64"\n", req,
+				       req->rq_reply_state, req->rq_transno);
+				if (mdt_cos_is_enabled(mdt)) {
+					no_ack = 1;
+					ldlm_lock_downgrade(lock, LCK_COS);
+					mode = LCK_COS;
+				}
+				ptlrpc_save_lock(req, h, mode, no_ack);
+			} else {
+				ldlm_lock_decref(h, mode);
+			}
                         if (mdt_is_lock_sync(lock)) {
                                 CDEBUG(D_HA, "found sync-lock,"
                                        " async commit started\n");

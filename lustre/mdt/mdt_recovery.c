@@ -410,6 +410,13 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
 	rc = tgt_last_rcvd_update(env, tgt, obj, mti->mti_opdata, txn,
 				  mdt_info_req(mti));
+
+	/* This callback should notify MDT that transaction was
+	 * done for mdt_save_lock() */
+	if (mti->mti_has_trans)
+		CDEBUG(D_INFO, "More than one transaction\n");
+	else
+		mti->mti_has_trans = 1;
 	return rc;
 }
 
