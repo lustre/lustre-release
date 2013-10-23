@@ -264,6 +264,7 @@ test_16() {
 	sleep $TIMEOUT
 	do_facet client "cmp $TMP/$tfile $DIR/$tfile" || return 2
 	start_read_ahead
+	rm -f $TMP/$tfile
 }
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
@@ -332,7 +333,7 @@ test_18a() {
     rc=0
     pgcache_empty || rc=2
     $LCTL --device $osc2dev activate
-    rm -f $f
+    rm -f $f $TMP/$tfile
     return $rc
 }
 run_test 18a "manual ost invalidate clears page cache immediately"
@@ -365,7 +366,7 @@ test_18b() {
     # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
-    rm -f $f
+    rm -f $f $TMP/$tfile
     return $rc
 }
 run_test 18b "eviction and reconnect clears page cache (2766)"
@@ -404,7 +405,7 @@ test_18c() {
     # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
-    rm -f $f
+    rm -f $f $TMP/$tfile
     return $rc
 }
 run_test 18c "Dropped connect reply after eviction handing (14755)"

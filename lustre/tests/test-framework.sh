@@ -3249,6 +3249,12 @@ mkfs_opts() {
 		opts+=${L_GETIDENTITY:+" --param=mdt.identity_upcall=$L_GETIDENTITY"}
 
 		if [ $fstype == ldiskfs ]; then
+			# Check for wide striping
+			if [ $OSTCOUNT -gt 160 ]; then
+				MDSJOURNALSIZE=${MDSJOURNALSIZE:-4096}
+				fs_mkfs_opts+="-O large_xattr"
+			fi
+
 			fs_mkfs_opts+=${MDSJOURNALSIZE:+" -J size=$MDSJOURNALSIZE"}
 			if [ ! -z $EJOURNAL ]; then
 				fs_mkfs_opts+=${MDSJOURNALSIZE:+" device=$EJOURNAL"}
