@@ -1158,9 +1158,9 @@ static lnet_peer_t *
 lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 {
 	lnet_remotenet_t	*rnet;
-	lnet_route_t		*rtr;
-	lnet_route_t		*rtr_best;
-	lnet_route_t		*rtr_last;
+	lnet_route_t		*route;
+	lnet_route_t		*best_route;
+	lnet_route_t		*last_route;
 	struct lnet_peer	*lp_best;
 	struct lnet_peer	*lp;
 	int			rc;
@@ -1173,13 +1173,11 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 		return NULL;
 
 	lp_best = NULL;
-	rtr_best = rtr_last = NULL;
-	cfs_list_for_each_entry(rtr, &rnet->lrn_routes, lr_list) {
-		lp = rtr->lr_gateway;
+	best_route = last_route = NULL;
+	cfs_list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
+		lp = route->lr_gateway;
 
-		if (!lp->lp_alive || /* gateway is down */
-		    ((lp->lp_ping_feats & LNET_PING_FEAT_NI_STATUS) != 0 &&
-		     rtr->lr_downis != 0)) /* NI to target is down */
+		if (!lnet_is_route_alive(route))
 			continue;
 
 		if (ni != NULL && lp->lp_ni != ni)
@@ -1189,28 +1187,28 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 			return lp;
 
 		if (lp_best == NULL) {
-			rtr_best = rtr_last = rtr;
+			best_route = last_route = route;
 			lp_best = lp;
 			continue;
 		}
 
 		/* no protection on below fields, but it's harmless */
-		if (rtr_last->lr_seq - rtr->lr_seq < 0)
-			rtr_last = rtr;
+		if (last_route->lr_seq - route->lr_seq < 0)
+			last_route = route;
 
-		rc = lnet_compare_routes(rtr, rtr_best);
+		rc = lnet_compare_routes(route, best_route);
 		if (rc < 0)
 			continue;
 
-		rtr_best = rtr;
+		best_route = route;
 		lp_best = lp;
 	}
 
 	/* set sequence number on the best router to the latest sequence + 1
 	 * so we can round-robin all routers, it's race and inaccurate but
 	 * harmless and functional  */
-	if (rtr_best != NULL)
-		rtr_best->lr_seq = rtr_last->lr_seq + 1;
+	if (best_route != NULL)
+		best_route->lr_seq = last_route->lr_seq + 1;
 	return lp_best;
 }
 
