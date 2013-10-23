@@ -244,7 +244,7 @@ int LL_PROC_PROTO(proc_lnet_routes)
 			unsigned int hops	= route->lr_hops;
 			unsigned int priority	= route->lr_priority;
 			lnet_nid_t   nid	= route->lr_gateway->lp_nid;
-			int          alive	= route->lr_gateway->lp_alive;
+			int          alive	= lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
 				      "%-8s %4u %8u %7s %s\n",
