@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settingupbonding">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settingupbonding">
   <title xml:id="settingupbonding.title">Setting Up Network Interface Bonding</title>
   <para>This chapter describes how to use multiple network interfaces in parallel to increase bandwidth and/or redundancy. Topics include:</para>
   <itemizedlist>
@@ -40,7 +39,8 @@
   <section xml:id="dbdoclet.50438258_95824">
     <title>Network Interface Bonding Overview</title>
     <para>Bonding, also known as link aggregation, trunking and port trunking, is a method of aggregating multiple physical network links into a single logical link for increased bandwidth.</para>
-    <para>Several different types of bonding are available in Linux. All these types are referred to as &apos;modes&apos;, and use the bonding kernel module.</para>
+    <para>Several different types of bonding are available in the Linux distribution. All these
+      types are referred to as &apos;modes&apos;, and use the bonding kernel module.</para>
     <para>Modes 0 to 3 allow load balancing and fault tolerance by using multiple interfaces. Mode 4 aggregates a group of interfaces into a single virtual interface where all members of the group share the same speed and duplex settings. This mode is described under IEEE spec 802.3ad, and it is referred to as either &apos;mode 4&apos; or &apos;802.3ad.&apos;</para>
   </section>
   <section xml:id="dbdoclet.50438258_29107">
@@ -181,7 +181,11 @@ options bond0 mode=balance-alb miimon=100
         <note>
           <para>You must <literal>modprobe</literal> the bonding module for each bonded interface. If you wish to create bond0 and bond1, two entries in <literal>bond.conf</literal> file are required.</para>
         </note>
-        <para>The examples below are from RedHat systems. For setup use: <literal>/etc/sysconfig/networking-scripts/ifcfg-*</literal> The website referenced below includes detailed instructions for other configuration methods, instructions to use DHCP with bonding, and other setup details. We strongly recommend you use this website.</para>
+        <para>The examples below are from systems running Red Hat Enterprise Linux. For setup use:
+            <literal>/etc/sysconfig/networking-scripts/ifcfg-*</literal> The website referenced
+          below includes detailed instructions for other configuration methods, instructions to use
+          DHCP with bonding, and other setup details. We strongly recommend you use this
+          website.</para>
         <para><link xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding">http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link></para>
       </listitem>
       <listitem>

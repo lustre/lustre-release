@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <section xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <title>Revisions</title>
-    <para>Note that the <emphasis role="italic">Lustre* Operations Manual 2.x</emphasis>  is
-        intended to be relevant for all 2.x releases of the Lustre software. Most of the manual
-        content is relevant to all of the releases. However, any features and content that are added
-        for new versions of the Lustre software are clearly marked with the version in which this
-        functionality is added. Similarly, features that are no longer available  are marked with
-        the version in which they were deprecated or removed. <revhistory>
+    <para>Note that the <emphasis role="italic">Lustre Operations Manual 2.x</emphasis> is intended
+        to be relevant for all 2.x releases of the Lustre software. Most of the manual content is
+        relevant to all of the releases. However, any features and content that are added for new
+        versions of the Lustre software are clearly marked with the version in which this
+        functionality is added. Similarly, features that are no longer available are marked with the
+        version in which they were deprecated or removed. <revhistory>
             <revision>
                 <revnumber>2.3</revnumber>
                 <date>November 2012</date>

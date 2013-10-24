@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustredebugging">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustredebugging">
   <title xml:id="lustredebugging.title">Lustre Debugging</title>
   <para>This chapter describes tips and information to debug Lustre, and includes the following sections:</para>
   <itemizedlist>
@@ -76,7 +75,8 @@ Diagnostic and Debugging Tools</title>
       <para>The tools described in this section are provided in the Linux kernel or are available at an external website. For information about using some of these tools for Lustre debugging, see <xref linkend="dbdoclet.50438274_23607"/> and <xref linkend="dbdoclet.50438274_80443"/>.</para>
       <section remap="h4">
         <title><indexterm><primary>debugging</primary><secondary>admin tools</secondary></indexterm>Tools for Administrators and Developers</title>
-        <para>Some general debugging tools provided as a part of the standard Linux distro are:</para>
+        <para>Some general debugging tools provided as a part of the standard Linux distribution
+          are:</para>
         <itemizedlist>
           <listitem>
             <para><emphasis role="bold">
@@ -112,7 +112,12 @@ Diagnostic and Debugging Tools</title>
           <listitem>
             <para><emphasis role="bold">
                 <literal>netdump</literal>
-              </emphasis>. A crash dump utility from Red Hat that allows memory images to be dumped over a network to a central server for analysis. The <literal>netdump</literal> utility was replaced by <literal>kdump</literal> in RHEL 5. For more information about <literal>netdump</literal>, see <link xl:href="http://www.redhat.com/support/wpapers/redhat/netdump/">Red Hat, Inc.&apos;s Network Console and Crash Dump Facility</link>.</para>
+              </emphasis>. A crash dump utility from Red Hat that allows memory images to be dumped
+              over a network to a central server for analysis. The <literal>netdump</literal>
+              utility was replaced by <literal>kdump</literal> in Red Hat Enterprise Linux 5. For
+              more information about <literal>netdump</literal>, see <link
+                xl:href="http://www.redhat.com/support/wpapers/redhat/netdump/">Red Hat, Inc.&apos;s
+                Network Console and Crash Dump Facility</link>.</para>
           </listitem>
 	  <listitem>
 	    <para><emphasis><literal>wireshark</literal> </emphasis> . A network

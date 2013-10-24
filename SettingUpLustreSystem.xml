@@ -2,7 +2,7 @@
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="settinguplustresystem">
   <title xml:id="settinguplustresystem.title">Determining Hardware Configuration Requirements and
     Formatting Options</title>
-  <para>This chapter describes hardware configuration requirements for a Lustre* file system
+  <para>This chapter describes hardware configuration requirements for a Lustre file system
     including:</para>
   <itemizedlist>
     <listitem>
@@ -101,8 +101,8 @@
         nearly 1 PB. If each OST uses ten 1 TB SATA disks (8 data disks plus 2 parity disks in a
         RAID 6 configuration), it may be possible to get 50 MB/sec from each drive, providing up to
         400 MB/sec of disk bandwidth per OST. If this system is used as storage backend with a
-        system network, such as the InfiniBand* network, that provides a similar bandwidth, then
-        each OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural
+        system network, such as the InfiniBand network, that provides a similar bandwidth, then each
+        OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural
         constraints described here are simple, in practice it takes careful hardware selection,
         benchmarking and integration to obtain such results.)</para>
     </section>
@@ -213,7 +213,7 @@
     <para>To override the default formatting options, use arguments to
         <literal>mkfs.lustre</literal> to pass formatting options to the backing file system:</para>
     <screen>--mkfsoptions=&apos;backing fs options&apos;</screen>
-    <para>For other <literal>mkfs.lustre</literal> options, see the Linux* man page for
+    <para>For other <literal>mkfs.lustre</literal> options, see the Linux man page for
         <literal>mke2fs(8)</literal>.</para>
     <section xml:id="dbdoclet.50438256_pgfId-1293228">
       <title><indexterm>
@@ -643,7 +643,10 @@
           <para><emphasis role="bold">Service threads</emphasis> : The service threads on the OSS node pre-allocate a 4 MB I/O buffer for each ost_io service thread, so these buffers do not need to be allocated and freed for each I/O request.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">OSS read cache</emphasis> : OSS read cache provides read-only caching of data on an OSS, using the regular Linux page cache to store the data. Just like caching from a regular file system in Linux, OSS read cache uses as much physical memory as is available.</para>
+          <para><emphasis role="bold">OSS read cache</emphasis> : OSS read cache provides read-only
+            caching of data on an OSS, using the regular Linux page cache to store the data. Just
+            like caching from a regular file system in the Linux operating system, OSS read cache
+            uses as much physical memory as is available.</para>
         </listitem>
       </itemizedlist>
       <para>The same calculation applies to files accessed from the OSS as for the MDS, but the load is distributed over many more OSSs nodes, so the amount of memory required for locks, inode cache, etc. listed under MDS is spread out over the OSS nodes.</para>

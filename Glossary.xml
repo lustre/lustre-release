@@ -32,7 +32,7 @@
       <glossterm>configlog </glossterm>
       <glossdef>
         <para>An llog file used in a node, or retrieved from a management server over the network
-          with configuration instructions for the Lustre* file system at startup time.</para>
+          with configuration instructions for the Lustre file system at startup time.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="configlock">
@@ -304,7 +304,7 @@
         </glossterm>
       <glossdef>
         <para>Lustre network driver. A code module that enables LNET support over particular
-          transports, such as TCP and various kinds of InfiniBand* networks.</para>
+          transports, such as TCP and various kinds of InfiniBand networks.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="lnet">

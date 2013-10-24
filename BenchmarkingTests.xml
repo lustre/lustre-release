@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="benchmarkingtests">
   <title xml:id="benchmarkingtests.title">Benchmarking Lustre Performance (Lustre I/O Kit)</title>
-  <para>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a Lustre cluster, and PIOS, a parallel I/O simulator for Linux and Solaris. It includes:</para>
+  <para>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a
+    Lustre cluster, and PIOS, a parallel I/O simulator for Linux and
+      Solaris<superscript>*</superscript> operating systems. It includes:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438212_44437"/></para>
@@ -128,7 +130,7 @@
     <note>
       <para>If you need to create raw devices to use the <literal>sgpdd-survey</literal> tool, note
         that raw device 0 cannot be used due to a bug in certain versions of the &quot;raw&quot;
-        utility (including that shipped with RHEL4U4.)</para>
+        utility (including the version shipped with Red Hat Enterprise Linux 4U4.)</para>
     </note>
     <section remap="h3">
       <title><indexterm><primary>benchmarking</primary><secondary>tuning storage</secondary></indexterm>Tuning Linux Storage Devices</title>

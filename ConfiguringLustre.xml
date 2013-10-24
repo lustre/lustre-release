@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlustre">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlustre">
   <title xml:id="configuringlustre.title">Configuring Lustre</title>
   <para>This chapter shows how to configure a simple Lustre system comprised of a combined MGS/MDT, an OST and a client. It includes:</para>
   <itemizedlist>
@@ -37,7 +36,12 @@
         <para><emphasis>Set up network interface bonding on Ethernet interfaces.</emphasis>  For information about setting up network interface bonding, see <xref linkend="settingupbonding"/>.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Set</emphasis> lnet <emphasis>module parameters to specify how Lustre Networking (LNET) is to be configured to work with Lustre and test the LNET configuration.</emphasis>  LNET will, by default, use the first TCP/IP interface it discovers on a system. If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+        <para><emphasis>Set</emphasis> lnet <emphasis>module parameters to specify how Lustre
+            Networking (LNET) is to be configured to work with Lustre and test the LNET
+            configuration.</emphasis> LNET will, by default, use the first TCP/IP interface it
+          discovers on a system. If this network configuration is sufficient, you do not need to
+          configure LNET. LNET configuration is required if you are using InfiniBand or multiple
+          Ethernet interfaces.</para>
       </listitem>
     </itemizedlist>
     <para>For information about configuring LNET, see <xref linkend="configuringlnet"/>. For information about testing LNET, see <xref linkend="lnetselftest"/>.</para>
@@ -87,7 +91,12 @@
         <para>You should specify the OST index number at format time in order to simplify translating the OST number in error messages or file striping to the OSS node and block device later on.</para>
         <para>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend="managingfailover"/>.</para>
         <note>
-          <para>Lustre currently supports block devices up to 128 TB on RHEL 5/6 (up to 8 TB on other distributions). If the device size is only slightly larger that 16 TB, it is recommended that you limit the file system size to 16 TB at format time.  We recommend that you not place DOS partitions on top of RAID 5/6 block devices due to negative impacts on performance, but instead format the whole disk for the filesystem.</para>
+          <para>Lustre currently supports block devices up to 128 TB on Red Hat Enterprise Linux 5
+            and 6 (up to 8 TB on other distributions). If the device size is only slightly larger
+            that 16 TB, it is recommended that you limit the file system size to 16 TB at format
+            time. We recommend that you not place DOS partitions on top of RAID 5/6 block devices
+            due to negative impacts on performance, but instead format the whole disk for the file
+            system.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1293955">

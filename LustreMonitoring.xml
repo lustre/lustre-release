@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremonitoring">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremonitoring">
   <title xml:id="lustremonitoring.title">Lustre Monitoring</title>
   <para>This chapter provides information on monitoring Lustre and includes the following sections:</para>
   <itemizedlist>
@@ -331,7 +330,10 @@ $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
 <indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 
 Lustre Jobstats</title>
-    <para>The Lustre Jobstats feature is available starting in Lustre version 2.3. It collects filesystem operation statistics for the jobs running on Lustre clients, and exposes them via procfs on the server. Job schedulers known to be able to work with jobstats include: SLURM, SGE, LSF, Loadleveler, PBS and Maui/MOAB.</para>
+    <para>The Lustre Jobstats feature is available starting in Lustre version 2.3. It collects file
+      system operation statistics for the jobs running on Lustre clients, and exposes them via
+      procfs on the server. Job schedulers known to be able to work with jobstats include: SLURM,
+      SGE, LSF, Loadleveler, PBS and Maui/MOAB.</para>
     <para>Since Jobstats is implemented in a scheduler-agnostic manner, it is likely that it will be able to work with other schedulers also.</para>
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
@@ -341,7 +343,12 @@ Enable/Disable Jobstats</title>
 $ lctl get_param jobid_var
 jobid_var=disable
       </screen>
-      <para>The Lustre Jobstats code extracts the job identifier from an environment variable set by the scheduler when the job is started. To enable jobstats, specify the <literal>jobid_var</literal> to name the environment variable set by the scheduler. For example, SLURM sets the <literal>SLURM_JOB_ID</literal> environment variable with the unique job ID on each client. To permanently enable Jobstats on the <literal>testfs</literal> filesystem:</para>
+      <para>The Lustre Jobstats code extracts the job identifier from an environment variable set by
+        the scheduler when the job is started. To enable jobstats, specify the
+          <literal>jobid_var</literal> to name the environment variable set by the scheduler. For
+        example, SLURM sets the <literal>SLURM_JOB_ID</literal> environment variable with the unique
+        job ID on each client. To permanently enable Jobstats on the <literal>testfs</literal> file
+        system:</para>
       <screen>$ lctl conf_param testfs.sys.jobid_var=SLURM_JOB_ID</screen>
       <para>The value of <literal>jobid_var</literal> can be:</para>
     <informaltable frame="all">

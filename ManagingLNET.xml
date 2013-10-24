@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managinglnet">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managinglnet">
   <title xml:id="managinglnet.title">Managing Lustre Networking (LNET)</title>
   <para>This chapter describes some tools for managing Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist>
@@ -113,8 +112,13 @@ To remove all Lustre modules, run:</para>
     </itemizedlist>
   </section>
   <section xml:id="dbdoclet.50438203_78227">
-    <title><indexterm><primary>LNET</primary><secondary>Infiniband load balancing</secondary></indexterm>Load Balancing with InfiniBand</title>
-    <para>A Lustre file system contains OSSs with two InfiniBand HCAs. Lustre clients have only one InfiniBand HCA using OFED Infiniband &apos;&apos;o2ib&apos;&apos; drivers. Load balancing between the HCAs on the OSS is accomplished through LNET.</para>
+    <title><indexterm>
+        <primary>LNET</primary>
+        <secondary>InfiniBand load balancing</secondary>
+      </indexterm>Load Balancing with an InfiniBand<superscript>*</superscript> Network</title>
+    <para>A Lustre file system contains OSSs with two InfiniBand HCAs. Lustre clients have only one
+      InfiniBand HCA using OFED-based Infiniband &apos;&apos;o2ib&apos;&apos; drivers. Load
+      balancing between the HCAs on the OSS is accomplished through LNET.</para>
     <section remap="h3">
       <title><indexterm><primary>LNET</primary><secondary>lustre.conf</secondary></indexterm>Setting Up <literal>lustre.conf</literal> for Load Balancing</title>
       <para>To configure LNET for load balancing on clients and servers:</para>
@@ -168,7 +172,8 @@ oss# mount -t lustre mgs@o2ib0:/lustre /mnt/ost0</screen>
 192.168.10.101@o2ib0,192.168.10.102@o2ib1:/mds/client /mnt/lustre</screen>
         </listitem>
       </orderedlist>
-      <para>As an example, consider a two-rail IB cluster running the OFA stack (OFED) with these IPoIB address assignments.</para>
+      <para>As an example, consider a two-rail IB cluster running the OFED stack with these IPoIB
+        address assignments.</para>
       <screen>             ib0                             ib1
 Servers            192.168.0.*                     192.168.1.*
 Clients            192.168.[2-127].*               192.168.[128-253].*</screen>

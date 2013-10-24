@@ -1,5 +1,4 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. -->
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="systemconfigurationutilities">
   <title xml:id="systemconfigurationutilities.title">System Configuration Utilities</title>
   <para>This chapter includes system configuration utilities and includes the following sections:</para>
@@ -1800,7 +1799,12 @@ mount.lustre</title>
                 <para>&#160;</para>
               </entry>
               <entry>
-                <para> Mounts the Lustre file system named <literal>fsname</literal> on the client by contacting the Management Service at <literal>mgsspec</literal> on the pathname given by <literal>directory</literal>. The format for <literal>mgsspec</literal> is defined below. A mounted client file system appears in fstab(5) and is usable, like any local file system, and provides a full POSIX-compliant interface.</para>
+                <para> Mounts the Lustre file system named <literal>fsname</literal> on the client
+                  by contacting the Management Service at <literal>mgsspec</literal> on the pathname
+                  given by <literal>directory</literal>. The format for <literal>mgsspec</literal>
+                  is defined below. A mounted client file system appears in fstab(5) and is usable,
+                  like any local file system, and provides a full POSIX standard-compliant
+                  interface.</para>
               </entry>
             </row>
             <row>
@@ -2365,14 +2369,30 @@ tunefs.lustre</title>
                 <para> <literal>--writeconf</literal></para>
               </entry>
               <entry>
-                <para> Erases all configuration logs for the file system to which this MDT belongs, and regenerates them. This is dangerous operation. All clients must be unmounted and servers for this file system should be stopped. All targets (OSTs/MDTs) must then be restarted to regenerate the logs. No clients should be started until all targets have restarted.</para>
-                <para>&#160;</para>
+                <para> Erases all configuration logs for the file system to which this MDT belongs,
+                  and regenerates them. This is dangerous operation. All clients must be unmounted
+                  and servers for this file system should be stopped. All targets (OSTs/MDTs) must
+                  then be restarted to regenerate the logs. No clients should be started until all
+                  targets have restarted.</para>
                 <para>The correct order of operations is:</para>
-                <para>* Unmount all clients on the file system</para>
-                <para>* Unmount the MDT and all OSTs on the file system</para>
-                <para>* Run <literal>tunefs.lustre --writeconf <replaceable>device</replaceable></literal> on every server</para>
-                <para>* Mount the MDT and OSTs</para>
-                <para>* Mount the clients</para>
+                <orderedlist>
+                  <listitem>
+                    <para>Unmount all clients on the file system</para>
+                  </listitem>
+                  <listitem>
+                    <para>Unmount the MDT and all OSTs on the file system</para>
+                  </listitem>
+                  <listitem>
+                    <para>Run <literal>tunefs.lustre --writeconf
+                        <replaceable>device</replaceable></literal> on every server</para>
+                  </listitem>
+                  <listitem>
+                    <para>Mount the MDT and OSTs</para>
+                  </listitem>
+                  <listitem>
+                    <para>Mount the clients</para>
+                  </listitem>
+                </orderedlist>
               </entry>
             </row>
           </tbody>

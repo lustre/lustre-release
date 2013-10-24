@@ -39,8 +39,8 @@
       <indexterm>
         <primary>space</primary>
         <secondary>striping</secondary>
-      </indexterm>How Lustre* File System Striping Works</title>
-    <para>In a Lustre* file system, the MDS allocates objects to OSTs using either a round-robin
+      </indexterm>How Lustre File System Striping Works</title>
+    <para>In a Lustre file system, the MDS allocates objects to OSTs using either a round-robin
       algorithm or a weighted algorithm. When the amount of free space is well balanced (i.e., by
       default, when the free space across OSTs differs by less than 17%), the round-robin algorithm
       is used to select the next OST to which a stripe is to be written. Periodically, the MDS

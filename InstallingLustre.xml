@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
   xml:lang="en-US" xml:id="installinglustre">
-  <title xml:id="installinglustre.title">Installing the Lustre* Software</title>
-  <para>This chapter describes how to install the Lustre* software from RPM packages. It
+  <title xml:id="installinglustre.title">Installing the Lustre Software</title>
+  <para>This chapter describes how to install the Lustre software from RPM packages. It
     includes:</para>
   <itemizedlist>
     <listitem>
@@ -102,15 +102,16 @@
         </tgroup>
       </table>
     </para>
-    <para><superscript>1</superscript>Red Hat* Enterprise Edition*, CentOS Enterprise Linux
-      Distribution, SUSE Linux Enterprise Server, Fedora* F18 Linux kernel.</para>
+    <para><superscript>1</superscript>Red Hat Enterprise Edition (RHEL), CentOS Enterprise Linux
+      Distribution (CentOS), SUSE Linux Enterprise Server (SLES), Fedora<superscript>*</superscript>
+      F18 Linux kernel (FC18).</para>
     <section xml:id="section_rqs_tjw_3k">
       <title>Software Requirements</title>
       <para>To install the Lustre software from RPMs, the following are required:<itemizedlist>
           <listitem>
             <para><emphasis role="bold"><emphasis role="italic">Lustre server
                 packages</emphasis></emphasis>. The required packages for Lustre servers are listed
-              in the table below, where <replaceable>ver</replaceable> refers to the Linux* kernel
+              in the table below, where <replaceable>ver</replaceable> refers to the Linux kernel
               distribution (e.g., 2.6.32-358.6.2.el6) and <replaceable>arch</replaceable> refers to
               the processor architecture (e.g., x86_64). These packages are available in the <link
                 xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre
@@ -123,7 +124,7 @@
                   <colspec colname="c2" colnum="2" colwidth="1*"/>
                   <thead>
                     <row>
-                      <entry>Package Name*</entry>
+                      <entry>Package Name</entry>
                       <entry>Description</entry>
                     </row>
                   </thead>
@@ -229,7 +230,7 @@
                       IPoIB</entry>
                   </row>
                   <row>
-                    <entry>InfiniBand* network</entry>
+                    <entry>InfiniBand network</entry>
                     <entry>OpenFabrics OFED (o2ib)</entry>
                   </row>
                   <row>
@@ -242,11 +243,11 @@
                   </row>
                   <row>
                     <entry>MX</entry>
-                    <entry>Myrinet* network</entry>
+                    <entry>Myrinet network</entry>
                   </row>
                   <row>
                     <entry>ra</entry>
-                    <entry>RapidArray* interconnect</entry>
+                    <entry>RapidArray<superscript>*</superscript> interconnect</entry>
                   </row>
                   <row>
                     <entry>Elan</entry>
@@ -259,7 +260,7 @@
         </itemizedlist></para>
       <para>
         <note>
-          <para>The InfiniBand* and TCP Lustre LNDs are routinely tested during release cycles. The
+          <para>The InfiniBand and TCP Lustre LNDs are routinely tested during release cycles. The
             other LNDs are maintained by their respective owners</para>
         </note>
         <itemizedlist>
@@ -285,8 +286,8 @@
                     third party modules, such as network drivers.</para>
                 </listitem>
                 <listitem>
-                  <para><code>kernel-firmware</code> - Standard Red Hat Enterprise Linux package
-                    that has been recompiled to work with the Lustre kernel.</para>
+                  <para><code>kernel-firmware</code> - Standard Red Hat Enterprise Linux
+                    distribution that has been recompiled to work with the Lustre kernel.</para>
                 </listitem>
                 <listitem>
                   <para><code>kernel-headers</code> - Header files installed under /user/include and
@@ -312,12 +313,13 @@
         requirements are met.<itemizedlist>
           <listitem>
             <para><emphasis role="italic">(Required)</emphasis>
-              <emphasis role="italic"><emphasis role="bold">Disable Security-Enhanced Linux
-                  (SELinux) on all Lustre servers and clients.</emphasis></emphasis> The Lustre
-              software does not support SELinux. Therefore, the SELinux system extension must be
-              disabled on all Lustre nodes. Also, make sure other security extensions (such as the
-              Novell AppArmor* security system) and network packet filtering tools (such as
-              iptables) do not interfere with the Lustre software.</para>
+              <emphasis role="italic"><emphasis role="bold">Disable Security-Enhanced
+                    Linux<superscript>*</superscript> (SELinux) on all Lustre servers and
+                  clients.</emphasis></emphasis> The Lustre software does not support SELinux.
+              Therefore, the SELinux system extension must be disabled on all Lustre nodes. Also,
+              make sure other security extensions (such as the Novell
+                AppArmor<superscript>*</superscript> security system) and network packet filtering
+              tools (such as iptables) do not interfere with the Lustre software.</para>
           </listitem>
           <listitem>
             <para><emphasis role="italic">(Required) </emphasis><emphasis role="italic"><emphasis

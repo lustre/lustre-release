@@ -1,10 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installinglustrefromsourcecode">
-  <title xml:id="installinglustrefromsourcecode.title"><indexterm
-      xmlns:xi="http://www.w3.org/2001/XInclude">
-      <primary>installing</primary>
-      <secondary>from source code</secondary>
-    </indexterm> Installing a Lustre* File System from Source Code</title>
-  <para>This chapter describes how to create a customized Lustre* server kernel from source code.
+  <title xml:id="installinglustrefromsourcecode.title">Installing a Lustre File System from Source
+    Code</title>
+  <para>This chapter describes how to create a customized Lustre server kernel from source code.
     Sections included are:</para>
   <itemizedlist>
     <listitem>
@@ -40,7 +37,11 @@
     <itemizedlist>
       <listitem>
         <para>A x86_64 machine with a fresh installation of a Linux operating system.</para>
-		<note><para>This section of the Manual only describes the specific procedure against building on Red Hat* 6 Linux and derivatives. For a complete set of supported platforms please visit <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.The server kernel should be one of the supported kernel versions but it is not necessary to run a vendor distribution to build the Lustre software.</para></note>
+		<note><para>This section of the Manual only describes the specific procedure against building on Red Hat
+            Enterprise Linux 6 and derivatives. For a complete set of supported platforms please
+            visit <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"
+            />.The server kernel should be one of the supported kernel versions but it is not
+            necessary to run a vendor distribution to build the Lustre software.</para></note>
       </listitem>
       <listitem>
 		<para>Access to the Lustre software git repository at <link xl:href="http://git.hpdd.intel.com/">http://git.hpdd.intel.com/</link>.</para>
@@ -93,8 +94,9 @@ required if a new kernel is needed for a Lustre server.</para>
           <primary>quilt</primary>
         </indexterm>Provisioning the Build Machine and Installing Dependencies</title>
       <note>
-        <para>This example is specific for building a modified Red Hat* Enteprise Linux* 6 kernel for the Lustre file system server. It is assumed that the operating system has been
-          freshly installed on a machine with the hostname <literal>rhel6-master</literal>.</para>
+        <para>This example is specific for building a modified Red Hat Enteprise Linux 6 kernel for
+          the Lustre file system server. It is assumed that the operating system has been freshly
+          installed on a machine with the hostname <literal>rhel6-master</literal>.</para>
       </note>
       <para>To provision the build machine and install dependencies, complete these steps.</para>
       <orderedlist>
@@ -136,14 +138,15 @@ required if a new kernel is needed for a Lustre server.</para>
           </para>
           <note>
             <para>
-              <package>newt-devel</package> may not be available for RHEL6. One option is to
-              download the <link xmlns:xlink="http://www.w3.org/1999/xlink"
+              <package>newt-devel</package> may not be available for Red Hat Enterprise Linux 6. One
+              option is to download the <link xmlns:xlink="http://www.w3.org/1999/xlink"
                 xlink:href="http://mirror.centos.org/centos/6/os/x86_64/Packages/newt-devel-0.52.11-3.el6.x86_64.rpm"
                 >newt-devel</link>, <link xmlns:xlink="http://www.w3.org/1999/xlink"
                 xlink:href="http://mirror.centos.org/centos/6/os/x86_64/Packages/slang-devel-2.2.1-1.el6.x86_64.rpm"
                 >slang-devel</link>, and <link xmlns:xlink="http://www.w3.org/1999/xlink"
                 xlink:href="http://mirror.centos.org/centos/6/os/i386/Packages/asciidoc-8.4.5-4.1.el6.noarch.rpm"
-                >asciidoc</link> RPMs from CentOS and install using:</para>
+                >asciidoc</link> RPMs from the CentOS Enterprise Linux Distribution and install
+              using:</para>
             <para>
               <screen>yum --nogpgcheck localinstall
    ./newt-devel-0.52.11-3.el6.x86_64.rpm

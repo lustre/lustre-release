@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installoverview">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="installoverview">
   <title xml:id="installoverview.title">Installation Overview</title>
   <para>This chapter provides on overview of the procedures required to set up, install and configure a Lustre file system.</para>
   <note>
@@ -30,7 +29,10 @@
       </listitem>
       <listitem>
         <para><emphasis>(Optional)</emphasis> <emphasis role="bold">Configure Lustre Networking (LNET).</emphasis></para>
-        <para>See <xref linkend="configuringlnet"/> - Describes how to configure LNET if the default configuration is not sufficient. By default, LNET will use the first TCP/IP interface it discovers on a system. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+        <para>See <xref linkend="configuringlnet"/> - Describes how to configure LNET if the default
+          configuration is not sufficient. By default, LNET will use the first TCP/IP interface it
+          discovers on a system. LNET configuration is required if you are using InfiniBand or
+          multiple Ethernet interfaces.</para>
       </listitem>
       <listitem>
         <para><emphasis>(Required)</emphasis> <emphasis role="bold">Configure Lustre.</emphasis></para>

@@ -420,7 +420,7 @@ offset          rpcs   % cum % |       rpcs   % cum %
       <para>The header information includes:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>snapshot_time</literal> - UNIX* epoch instant the file was read.</para>
+          <para><literal>snapshot_time</literal> - UNIX epoch instant the file was read.</para>
         </listitem>
         <listitem>
           <para><literal>read RPCs in flight</literal> - Number of read RPCs issued by the OSC, but

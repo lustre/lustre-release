@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
   <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNET)</title>
   <para>This chapter introduces Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist>
@@ -40,10 +39,12 @@
     <para>Key features of LNET include:</para>
     <itemizedlist>
       <listitem>
-        <para>RDMA, when supported by underlying networks such as InfiniBand or Myrinet MX</para>
+        <para>RDMA, when supported by underlying networks such as InfiniBand or
+            Myrinet<superscript>*</superscript> MX networks</para>
       </listitem>
       <listitem>
-        <para>Support for many commonly-used network types such as InfiniBand and TCP/IP</para>
+        <para>Support for many commonly-used network types such as InfiniBand and TCP/IP
+          networks</para>
       </listitem>
       <listitem>
         <para>High availability and recovery features enabling transparent recovery in conjunction with failover servers</para>

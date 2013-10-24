@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="userutilities">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="userutilities">
   <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities and includes the following sections:</para>
   <itemizedlist>
@@ -232,7 +231,8 @@ lfs help
                 <para> <literal>--type</literal></para>
               </entry>
               <entry>
-                <para>File has the type (block, character, directory, pipe, file, symlink, socket or Door [Solaris]).</para>
+                <para>File has the type  - block, character, directory, pipe, file, symlink, socket
+                  or door (used in Solaris operating system).</para>
               </entry>
             </row>
             <row>

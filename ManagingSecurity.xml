@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingsecurity">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingsecurity">
   <title xml:id="managingsecurity.title">Managing Lustre Security</title>
   <para>This chapter describes Lustre security and includes the following sections:</para>
   <itemizedlist>
@@ -15,7 +14,12 @@
     <para>An access control list (ACL), is a set of data that informs an operating system about permissions or access rights that each user or group has to specific system objects, such as directories or files. Each object has a unique security attribute that identifies users who have access to it. The ACL lists each object and user access privileges such as read, write or execute.</para>
     <section remap="h3">
         <title><indexterm><primary>Access Control List (ACL)</primary><secondary>how they work</secondary></indexterm>How ACLs Work</title>
-      <para>Implementing ACLs varies between operating systems. Systems that support the Portable Operating System Interface (POSIX) family of standards share a simple yet powerful file system permission model, which should be well-known to the Linux/Unix administrator. ACLs add finer-grained permissions to this model, allowing for more complicated permission schemes. For a detailed explanation of ACLs on Linux, refer to the SuSE Labs article, <emphasis>Posix Access Control Lists on Linux</emphasis>:</para>
+      <para>Implementing ACLs varies between operating systems. Systems that support the Portable
+        Operating System Interface (POSIX) family of standards share a simple yet powerful file
+        system permission model, which should be well-known to the Linux/UNIX administrator. ACLs
+        add finer-grained permissions to this model, allowing for more complicated permission
+        schemes. For a detailed explanation of ACLs on a Linux operating system, refer to the SUSE
+        Labs article, <emphasis>Posix Access Control Lists on Linux</emphasis>:</para>
       <para><link xl:href="http://www.suse.de/~agruen/acl/linux-acls/online/">http://www.suse.de/~agruen/acl/linux-acls/online/</link></para>
       <para>We have implemented ACLs according to this model. Lustre works with the standard Linux ACL tools, setfacl, getfacl, and the historical chacl, normally installed with the ACL package.</para>
       <note>

@@ -2,7 +2,6 @@
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
   xml:lang="en-US" xml:id="understandinglustre">
   <title xml:id="understandinglustre.title">Understanding  Lustre Architecture</title>
-  <info/>
   <para>This chapter describes the Lustre architecture and features of Lustre. It includes the
     following sections:</para>
   <itemizedlist>
@@ -28,7 +27,8 @@
       </indexterm>What a Lustre File System Is (and What It Isn&apos;t)</title>
     <para>The Lustre architecture is a storage architecture for clusters. The central component of
       the Lustre architecture is the Lustre file system, which is supported on the Linux operating
-      system and provides a POSIX-compliant UNIX file system interface.</para>
+      system and provides a POSIX<superscript>*</superscript> standard-compliant UNIX file system
+      interface.</para>
     <para>The Lustre storage architecture is used for many different kinds of clusters. It is best
       known for powering many of the largest high-performance computing (HPC) clusters worldwide,
       with tens of thousands of client systems, petabytes (PB) of storage and hundreds of gigabytes
@@ -56,8 +56,8 @@
           <secondary>features</secondary>
         </indexterm>Lustre Features</title>
       <para>Lustre file systems run on a variety of vendor&apos;s kernels. For more details, see the
-          <link xl:href="http://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix">Lustre Support
-          Matrix</link> on the Intel Lustre community wiki.</para>
+        Lustre Test Matrix <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="dbdoclet.50438261_99193"/>.</para>
       <para>A Lustre installation can be scaled up or down with respect to the number of client
         nodes, disk storage and bandwidth. Scalability and performance are dependent on available
         disk and network bandwidth and the processing power of the servers in the system. A Lustre
@@ -176,7 +176,7 @@
                 <para>
                   <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
-                <para condition="l24">Since Lustre* Release 2.4: up to 4096 MDSs and up to 4096
+                <para condition="l24">Since Lustre release 2.4: up to 4096 MDSs and up to 4096
                   MDTs.</para>
               </entry>
               <entry>
@@ -237,18 +237,19 @@
             provide additional functionality needed by the Lustre file system.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">POSIX* compliance:</emphasis> The full POSIX test suite passes
-            in an identical manner to a local ext4 filesystem, with limited exceptions on Lustre
-            clients. In a cluster, most operations are atomic so that clients never see stale data
-            or metadata. The Lustre software supports mmap() file I/O.</para>
+          <para><emphasis role="bold">POSIX standard compliance:</emphasis> The full POSIX test
+            suite passes in an identical manner to a local ext4 file system, with limited exceptions
+            on Lustre clients. In a cluster, most operations are atomic so that clients never see
+            stale data or metadata. The Lustre software supports mmap() file I/O.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">High-performance heterogeneous networking:</emphasis> The
             Lustre software supports a variety of high performance, low latency networks and permits
-            Remote Direct Memory Access (RDMA) for Infiniband* (OFED) and other advanced networks
-            for fast and efficient network transport. Multiple RDMA networks can be bridged using
-            Lustre routing for maximum performance. The Lustre software also includes integrated
-            network diagnostics.</para>
+            Remote Direct Memory Access (RDMA) for InfiniBand<superscript>*</superscript> (utilizing
+            OpenFabrics Enterprise Distribution (OFED<superscript>*</superscript>) and other
+            advanced networks for fast and efficient network transport. Multiple RDMA networks can
+            be bridged using Lustre routing for maximum performance. The Lustre software also
+            includes integrated network diagnostics.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">High-availability:</emphasis> The Lustre file system supports
@@ -317,7 +318,11 @@
             architecture.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">NFS and CIFS export:</emphasis>  Lustre files can be re-exported using NFS (via Linux knfsd) or CIFS (via Samba) enabling them to be shared with non-Linux clients, such as Microsoft* Windows* and Apple* Mac OS X*.</para>
+          <para><emphasis role="bold">NFS and CIFS export:</emphasis> Lustre files can be
+            re-exported using NFS (via Linux knfsd) or CIFS (via Samba) enabling them to be shared
+            with non-Linux clients, such as Microsoft<superscript>*</superscript>
+              Windows<superscript>*</superscript> and Apple<superscript>*</superscript> Mac OS
+              X<superscript>*</superscript>.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Disaster recovery tool:</emphasis> The Lustre file system
@@ -332,7 +337,7 @@
         </listitem>
         <listitem>
           <para><emphasis role="bold">Open source:</emphasis> The Lustre software is licensed under
-            the GPL 2.0 license for use with Linux.</para>
+            the GPL 2.0 license for use with the Linux operating system.</para>
         </listitem>
       </itemizedlist>
     </section>
@@ -347,13 +352,13 @@
     <para>A basic configuration of Lustre components is shown in <xref
         linkend="understandinglustre.fig.cluster"/>.</para>
     <figure>
-      <title xml:id="understandinglustre.fig.cluster">Lustre* components in a basic cluster </title>
+      <title xml:id="understandinglustre.fig.cluster">Lustre components in a basic cluster </title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%" fileref="./figures/Basic_Cluster.png"/>
         </imageobject>
         <textobject>
-          <phrase> Lustre* components in a basic cluster </phrase>
+          <phrase> Lustre components in a basic cluster </phrase>
         </textobject>
       </mediaobject>
     </figure>
@@ -428,7 +433,7 @@
         <title xml:id="understandinglustre.tab.storagerequire"><indexterm>
             <primary>Lustre</primary>
             <secondary>requirements</secondary>
-          </indexterm>Storage and hardware requirements for Lustre* components</title>
+          </indexterm>Storage and hardware requirements for Lustre components</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
           <colspec colname="c2" colwidth="3*"/>
@@ -513,13 +518,13 @@
         <title xml:id="understandinglustre.fig.lustrescale"><indexterm>
             <primary>Lustre</primary>
             <secondary>at scale</secondary>
-          </indexterm>Lustre* cluster at scale</title>
+          </indexterm>Lustre cluster at scale</title>
         <mediaobject>
           <imageobject>
             <imagedata scalefit="1" width="100%" fileref="./figures/Scaled_Cluster.png"/>
           </imageobject>
           <textobject>
-            <phrase> Lustre* clustre at scale </phrase>
+            <phrase> Lustre cluster at scale </phrase>
           </textobject>
         </mediaobject>
       </figure>
@@ -600,13 +605,13 @@
       in <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="Fig1.4_ClientReqstgData"
       /><?oxy_custom_end?>.</para>
     <figure xml:id="Fig1.4_ClientReqstgData">
-      <title>Lustre* client requesting file data</title>
+      <title>Lustre client requesting file data</title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="75%" fileref="./figures/File_Write.png"/>
         </imageobject>
         <textobject>
-          <phrase> Lustre* client requesting file data </phrase>
+          <phrase> Lustre client requesting file data </phrase>
         </textobject>
       </mediaobject>
     </figure>
@@ -668,7 +673,7 @@
       <para>No space is reserved on the OST for unwritten data. File A in <xref
           linkend="understandinglustre.fig.filestripe"/>.</para>
       <figure>
-        <title xml:id="understandinglustre.fig.filestripe">File striping on a Lustre* file
+        <title xml:id="understandinglustre.fig.filestripe">File striping on a Lustre file
           system</title>
         <mediaobject>
           <imageobject>

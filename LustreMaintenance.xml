@@ -1,5 +1,4 @@
-﻿<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
+﻿<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
   <title xml:id="lustremaintenance.title">Lustre Maintenance</title>
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
   <itemizedlist>
@@ -265,7 +264,10 @@ Changing a Server NID</title>
     </section>
     <section xml:id="dbdoclet.addingamdt" condition='l24'>
       <title><indexterm><primary>maintenance</primary><secondary>adding an MDT</secondary></indexterm>Adding a new MDT to a Lustre file system</title>
-        <para>Additional MDTs can be added to serve one or more remote sub-directories within the filesystem. It is possible to have multiple remote sub-directories reference the same MDT. However, the root directory will always be located on MDT0. To add a new MDT into the file system:</para>
+        <para>Additional MDTs can be added to serve one or more remote sub-directories within the
+      file system. It is possible to have multiple remote sub-directories reference the same MDT.
+      However, the root directory will always be located on MDT0. To add a new MDT into the file
+      system:</para>
       <orderedlist>
         <listitem>
 			<para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
@@ -309,7 +311,8 @@ oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
           <para>Files existing prior to the expansion can optionally be rebalanced with an in-place copy, which can be done with a simple script. The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
           <para>For example, to rebalance all files within <literal>/mnt/lustre/dir</literal>, enter:</para>
           <screen>client# lfs_migrate /mnt/lustre/file</screen>
-          <para>To migrate files within the <literal>/test</literal> filesystem on <literal>OST0004</literal> that are larger than 4GB in size, enter:</para>
+          <para>To migrate files within the <literal>/test</literal> file system on
+            <literal>OST0004</literal> that are larger than 4GB in size, enter:</para>
           <screen>client# lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y</screen>
           <para>See <xref linkend="dbdoclet.50438206_42260"/>  for more details.</para>
         </listitem>
@@ -460,7 +463,7 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
         corruption), an effort should be made to preserve these files. </para>
       <orderedlist>
         <listitem>
-          <para>Mount the OST filesystem.
+          <para>Mount the OST file system.
             <screen>oss# mkdir -p /mnt/ost
 [oss]# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</screen>
           </para>
@@ -472,7 +475,7 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           </para>
         </listitem>
         <listitem>
-          <para> Unmount the OST filesystem. <screen>oss# umount /mnt/ost</screen>
+          <para> Unmount the OST file system. <screen>oss# umount /mnt/ost</screen>
           </para>
         </listitem>
       </orderedlist>
@@ -503,7 +506,7 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           </para>
         </listitem>
         <listitem>
-          <para> Mount the OST filesystem.
+          <para> Mount the OST file system.
             <screen>oss# mkdir /mnt/ost
 oss# mount -t ldiskfs <replaceable>/dev/new_ost_dev</replaceable> <replaceable>/mnt/ost</replaceable></screen>
           </para>
@@ -526,7 +529,7 @@ oss1# scp /tmp/ldd oss0:/tmp/ldd
 oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 conv=notrunc</screen></para>
         </listitem>
         <listitem>
-          <para> Unmount the OST filesystem. <screen>oss# umount /mnt/ost</screen>
+          <para> Unmount the OST file system. <screen>oss# umount /mnt/ost</screen>
           </para>
         </listitem>
       </orderedlist>
@@ -600,7 +603,7 @@ Separate a combined MGS/MDT</title>
         <listitem>
           <para>Start the MGS.</para>
 	      <screen>mgs# mount -t lustre <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable></screen>
-          <para>Check to make sure it knows about all your filesystem</para>
+          <para>Check to make sure it knows about all your file system</para>
 	      <screen>cat /proc/fs/lustre/mgs/MGS/filesystems</screen>
         </listitem>
         <listitem>

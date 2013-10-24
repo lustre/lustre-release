@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringfailover">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringfailover">
   <title xml:id="configuringfailover.title">Configuring Lustre Failover</title>
   <para>This chapter describes how to configure Lustre failover using the Heartbeat cluster infrastructure daemon. It includes:</para>
   <itemizedlist>
@@ -38,8 +37,8 @@
     <para>Lustre must be combined with high-availability (HA) software to enable a complete Lustre failover solution. Lustre can be used with several HA packages including:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Red Hat Cluster Manager</emphasis> - For more information about  Red Hat
-          Cluster Manager, see <link
+        <para><emphasis>Red Hat<superscript>*</superscript>Cluster Manager</emphasis> - For more
+          information about Red Hat Cluster Manager, see <link
             xlink:href="http://www.redhat.com/software/rha/cluster/manager/"
             xmlns:xlink="http://www.w3.org/1999/xlink"
             >http://www.redhat.com/software/rha/cluster/manager/</link>.</para>

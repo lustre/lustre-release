@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xml:id='part.intro'>
-    <title>Introducing the Lustre* File System</title>
+    <title>Introducing the Lustre<superscript>*</superscript> File System</title>
     <partintro>
-        <para>Part I provides background information to help you understand the Lustre* file system
+        <para>Part I provides background information to help you understand the Lustre file system
             architecture and how the major components fit together. You will find information in
             this section about: </para>
 

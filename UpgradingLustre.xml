@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="upgradinglustre">
-  <title xml:id="upgradinglustre.title">Upgrading a Lustre* File System</title>
-  <para>This chapter describes interoperability between Lustre* software releases. It also provides
+  <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
+  <para>This chapter describes interoperability between Lustre software releases. It also provides
     procedures for upgrading from a Lustre 1.8 release to a Lustre 2.x release, from a Lustre 2.x
     release to a more recent Lustre 2.x release (major release upgrade), and from a Lustre 2.X.y
     release to 2.X.y (minor release upgrade). It includes the following sections:</para>
@@ -152,8 +152,8 @@
             xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.</para>
       </listitem>
       <listitem>
-        <para>Upgrade the Linux operating system on all clients to RHEL 6 or other compatible
-          (tested) distribution and reboot.  See the Linux Test Matrix at <xref
+        <para>Upgrade the Linux operating system on all clients to Red Hat Enterprise Linux 6 or
+          other compatible (tested) distribution and reboot. See the Linux Test Matrix at <xref
             xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.</para>
       </listitem>
       <listitem>

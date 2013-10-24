@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreoperations">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreoperations">
   <title xml:id="lustreoperations.title">Lustre Operations</title>
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre administration tasks:</para>
   <itemizedlist>
@@ -93,7 +92,12 @@ Mounting by Label</title>
     <para>In this example, the MDT, an OST (ost0) and file system (testfs) are mounted.</para>
     <screen>LABEL=testfs-MDT0000 /mnt/test/mdt lustre defaults,_netdev,noauto 0 0
 LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
-    <para>In general, it is wise to specify noauto and let your high-availability (HA) package manage when to mount the device. If you are not using failover, make sure that networking has been started before mounting a Lustre server. RedHat, SuSE, Debian (and perhaps others) use the <literal>_netdev</literal> flag to ensure that these disks are mounted after the network is up.</para>
+    <para>In general, it is wise to specify noauto and let your high-availability (HA) package
+      manage when to mount the device. If you are not using failover, make sure that networking has
+      been started before mounting a Lustre server. If you are running Red Hat Enterprise Linux,
+      SUSE Linux Enterprise Server, Debian operating system (and perhaps others), use the
+        <literal>_netdev</literal> flag to ensure that these disks are mounted after the network is
+      up.</para>
     <para>We are mounting by disk label here. The label of a device can be read with <literal>e2label</literal>. The label of a newly-formatted Lustre server may end in <literal>FFFF</literal> if the <literal>--index</literal> option is not specified to <literal>mkfs.lustre</literal>, meaning that it has yet to be assigned. The assignment takes place when the server is first started, and the disk label is updated.  It is recommended that the <literal>--index</literal> option always be used, which will also ensure that the label is set at format time.</para>
     <caution>
       <para>Do not do this when the client and OSS are on the same node, as memory pressure between the client and OSS can lead to deadlocks.</para>
@@ -158,7 +162,11 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
     <para>By default, the <literal>mkfs.lustre</literal> command creates a file system named <literal>lustre</literal>. To specify a different file system name (limited to 8 characters) at format time, use the <literal>--fsname</literal> option:</para>
     <para><screen>mkfs.lustre --fsname=<replaceable>file_system_name</replaceable></screen></para>
     <note>
-      <para>The MDT, OSTs and clients in the new file system must use the same filesystem name (prepended to the device name). For example, for a new file system named <literal>foo</literal>, the MDT and two OSTs would be named <literal>foo-MDT0000</literal>, <literal>foo-OST0000</literal>, and <literal>foo-OST0001</literal>.</para>
+      <para>The MDT, OSTs and clients in the new file system must use the same file system name
+        (prepended to the device name). For example, for a new file system named
+          <literal>foo</literal>, the MDT and two OSTs would be named
+        <literal>foo-MDT0000</literal>, <literal>foo-OST0000</literal>, and
+          <literal>foo-OST0001</literal>.</para>
     </note>
     <para>To mount a client on the file system, run:</para>
     <screen>client# mount -t lustre <replaceable>mgsnode</replaceable>:<replaceable>/new_fsname</replaceable> <replaceable>/mount_point</replaceable></screen>
@@ -213,7 +221,9 @@ ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev
     </section>
     <section xml:id="dbdoclet.50438194_55253">
       <title>Setting Parameters with <literal>tunefs.lustre</literal></title>
-      <para>If a server (OSS or MDS) is stopped, parameters can be added to an existing filesystem using the <literal>--param</literal> option to the <literal>tunefs.lustre</literal> command. For example:</para>
+      <para>If a server (OSS or MDS) is stopped, parameters can be added to an existing file system
+        using the <literal>--param</literal> option to the <literal>tunefs.lustre</literal> command.
+        For example:</para>
       <screen>oss# tunefs.lustre --param=failover.node=192.168.0.13@tcp0 /dev/sda</screen>
       <para>With <literal>tunefs.lustre</literal>, parameters are <emphasis>additive</emphasis> -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old <literal>tunefs.lustre</literal> parameters and just use newly-specified parameters, run:</para>
       <screen>mds# tunefs.lustre --erase-params --param=<replaceable>new_parameters</replaceable> </screen>
@@ -333,8 +343,8 @@ mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   </section>
   <section xml:id="dbdoclet.50438194_70905">
     <title><indexterm><primary>operations</primary><secondary>erasing a file system</secondary></indexterm>Erasing a File System</title>
-    <para>If you want to erase a file system and permanently delete all the
-    data in the filesystem, run this command on your targets:</para>
+    <para>If you want to erase a file system and permanently delete all the data in the file system,
+      run this command on your targets:</para>
     <screen>$ &quot;mkfs.lustre --reformat&quot;</screen>
     <para>If you are using a separate MGS and want to keep other file systems defined on that MGS, then set the <literal>writeconf</literal> flag on the MDT for that file system. The <literal>writeconf</literal> flag causes the configuration logs to be erased; they are regenerated the next time the servers start.</para>
     <para>To set the <literal>writeconf</literal> flag on the MDT:</para>
@@ -359,19 +369,17 @@ mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   </section>
   <section xml:id="dbdoclet.50438194_16954">
     <title><indexterm><primary>operations</primary><secondary>reclaiming space</secondary></indexterm>Reclaiming Reserved Disk Space</title>
-    <para>All current Lustre installations run the ldiskfs file system
-    internally on service nodes. By default, ldiskfs reserves 5% of the disk
-    space to avoid filesystem fragmentation. In order to reclaim this space,
-    run the following command on your OSS for each OST in the filesystem:</para>
+    <para>All current Lustre installations run the ldiskfs file system internally on service nodes.
+      By default, ldiskfs reserves 5% of the disk space to avoid file system fragmentation. In order
+      to reclaim this space, run the following command on your OSS for each OST in the file
+      system:</para>
     <screen>tune2fs [-m reserved_blocks_percent] /dev/<emphasis>{ostdev}</emphasis></screen>
     <para>You do not need to shut down Lustre before running this command or restart it afterwards.</para>
     <warning>
-      <para>Reducing the space reservation can cause severe performance
-      degradation as the OST filesystem becomes more than 95% full, due to
-      difficulty in locating large areas of contiguous free space.  This
-      performance degradation may persist even if the space usage drops
-      below 95% again.  It is recommended NOT to reduce the reserved disk
-      space below 5%.</para>
+      <para>Reducing the space reservation can cause severe performance degradation as the OST file
+        system becomes more than 95% full, due to difficulty in locating large areas of contiguous
+        free space. This performance degradation may persist even if the space usage drops below 95%
+        again. It is recommended NOT to reduce the reserved disk space below 5%.</para>
     </warning>
   </section>
   <section xml:id="dbdoclet.50438194_69998">

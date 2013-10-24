@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="troubleshootingrecovery">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="troubleshootingrecovery">
     <title xml:id="troubleshootingrecovery.title">Troubleshooting Recovery</title>
     <para>This chapter describes what to do if something goes wrong during recovery. It describes:</para>
     <itemizedlist>

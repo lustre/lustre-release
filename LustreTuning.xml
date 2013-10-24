@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
   <title xml:id="lustretuning.title">Lustre Tuning</title>
   <para>This chapter contains information about tuning Lustre for better performance and includes the following sections:</para>
   <itemizedlist>
@@ -145,7 +144,10 @@
       <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
-	<para condition='l23'>Luster 2.3 and beyond provide enhanced network interface control. The enhancement means that an administrator can bind an interface to one or more CPU Partitions. Bindings are specified as options to the lnet modules. For more information on specifying module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
+	<para condition="l23">Lustre 2.3 and beyond provide enhanced network interface control. The
+        enhancement means that an administrator can bind an interface to one or more CPU Partitions.
+        Bindings are specified as options to the lnet modules. For more information on specifying
+        module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
 <para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for <literal>o2ib0</literal> will be handled by LND threads executing on <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be: <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by threads on <literal>CPT0</literal>.</para>
     </section>
 	<section><title><indexterm><primary>tuning</primary><secondary>Network interface credits</secondary></indexterm>Network Interface Credits</title>

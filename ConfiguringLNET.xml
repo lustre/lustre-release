@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
   <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNET)</title>
   <para>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
   <itemizedlist>
@@ -34,14 +33,25 @@
   </itemizedlist>
   <note>
     <para>Configuring LNET is optional.</para>
-    <para>LNET will, by default, use the first TCP/IP interface it discovers on a system (<literal>eth0</literal>). If this network configuration is sufficient, you do not need to configure LNET. LNET configuration is required if you are using Infiniband or multiple Ethernet interfaces.</para>
+    <para>LNET will, by default, use the first TCP/IP interface it discovers on a system
+        (<literal>eth0</literal>). If this network configuration is sufficient, you do not need to
+      configure LNET. LNET configuration is required if you are using InfiniBand or multiple
+      Ethernet interfaces.</para>
   </note>
   <section xml:id="dbdoclet.50438216_33148">
       <title><indexterm><primary>LNET</primary></indexterm>
           
           Overview of LNET Module Parameters</title>
-    <para>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with Lustre, including which NICs will be configured to work with Lustre and the routing to be used with Lustre.</para>
-    <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal> file.  In some cases the parameters may have been stored in <literal>/etc/modprobe.conf</literal>, but this has been deprecated since before RHEL5 and SLES10, and having a separate <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and distribution of the Lustre networking configuration.  This file contains one or more entries with the syntax:</para>
+    <para>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with the
+      Lustre file system, including which NICs will be configured to work with Lustre file system
+      and the routing to be used with Lustre file system.</para>
+    <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal>
+      file. In some cases the parameters may have been stored in
+        <literal>/etc/modprobe.conf</literal>, but this has been deprecated since before Red Hat
+      Enterprise Linux 5 and SUSE Linux Enterprise Server 10 were released. A separate
+        <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and
+      distribution of the Lustre networking configuration. This file contains one or more entries
+      with the syntax:</para>
     <screen>options lnet <replaceable>parameter</replaceable>=<replaceable>value</replaceable></screen>
     <para>To specify the network interfaces that are to be used for Lustre, set either the <literal>networks</literal> parameter or the <literal>ip2nets</literal> parameter (only one of these parameters can be used at a time):</para>
     <itemizedlist>
@@ -109,7 +119,8 @@
           <para> TCP clients, each with a single TCP interface.</para>
         </listitem>
         <listitem>
-          <para> InfiniBand clients, each with a single Infiniband interface and a TCP/IP interface for administration.</para>
+          <para> InfiniBand clients, each with a single InfiniBand interface and a TCP/IP interface
+            for administration.</para>
         </listitem>
       </itemizedlist>
       <para>To set the <literal>networks</literal> option for this example:</para>
@@ -132,7 +143,11 @@
         <para>By default, Lustre ignores the loopback (<literal>lo0</literal>) interface. Lustre does not ignore IP addresses aliased to the loopback. If you alias IP addresses to the loopback interface, you must specify all Lustre networks using the LNET networks parameter.</para>
       </note>
       <note>
-        <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <xref linkend="settingupbonding"/>.</para>
+        <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send
+          all traffic using the first configured interface. This is a limitation of the Linux
+          kernel, not the Lustre software. In this case, network interface bonding should be used.
+          For more information about network interface bonding, see <xref linkend="settingupbonding"
+          />.</para>
       </note>
     </section>
   </section>
@@ -143,16 +158,19 @@
     <para>For the example below, the nodes in the network have these IP addresses:</para>
     <itemizedlist>
       <listitem>
-        <para> Server svr1: <literal>eth0</literal> IP address <literal>192.168.0.2</literal>, IP over Infiniband (<literal>o2ib</literal>) address <literal>132.6.1.2</literal>.</para>
+        <para> Server svr1: <literal>eth0</literal> IP address <literal>192.168.0.2</literal>, IP
+          over InfiniBand (<literal>o2ib</literal>) address <literal>132.6.1.2</literal>.</para>
       </listitem>
       <listitem>
-        <para> Server svr2: <literal>eth0</literal> IP address <literal>192.168.0.4</literal>, IP over Infiniband (<literal>o2ib</literal>) address <literal>132.6.1.4</literal>.</para>
+        <para> Server svr2: <literal>eth0</literal> IP address <literal>192.168.0.4</literal>, IP
+          over InfiniBand (<literal>o2ib</literal>) address <literal>132.6.1.4</literal>.</para>
       </listitem>
       <listitem>
         <para> TCP clients have IP addresses <literal>192.168.0.5-255.</literal></para>
       </listitem>
       <listitem>
-        <para> Infiniband clients have IP over Infiniband (<literal>o2ib</literal>) addresses <literal>132.6.[2-3].2, .4, .6, .8</literal>.</para>
+        <para> InfiniBand clients have IP over InfiniBand (<literal>o2ib</literal>) addresses
+            <literal>132.6.[2-3].2, .4, .6, .8</literal>.</para>
       </listitem>
     </itemizedlist>
     <para>The following entry is placed in the <literal>lustre.conf</literal> file on each server and client:</para>
@@ -193,7 +211,11 @@ lctl network configure</screen>
   </section>
   <section xml:id="dbdoclet.50438216_35668">
     <title><indexterm><primary>LNET</primary><secondary>route checker</secondary></indexterm>Configuring the Router Checker</title>
-    <para>In a Lustre configuration in which different types of networks, such as a TCP/IP network and an Infiniband network, are connected by routers, a router checker can be run on the clients and servers in the routed configuration to monitor the status of the routers. In a multi-hop routing configuration, router checkers can be configured on routers to monitor the health of their next-hop routers.</para>
+    <para>In a Lustre configuration in which different types of networks, such as a TCP/IP network
+      and an InfiniBand network, are connected by routers, a router checker can be run on the
+      clients and servers in the routed configuration to monitor the status of the routers. In a
+      multi-hop routing configuration, router checkers can be configured on routers to monitor the
+      health of their next-hop routers.</para>
     <para>A router checker is configured by setting lnet parameters in <literal>lustre.conf</literal> by including an entry in this form:</para>
     <screen>options lnet <replaceable>router_checker_parameter</replaceable>=<replaceable>value</replaceable></screen>
     <para>The router checker parameters are:</para>

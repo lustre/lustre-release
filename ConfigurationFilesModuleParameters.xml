@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configurationfilesmoduleparameters">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configurationfilesmoduleparameters">
     <title xml:id="configurationfilesmoduleparameters.title">Configuration Files and Module Parameters</title>
   <para>This section describes configuration files and module parameters and includes the following sections:</para>
   <itemizedlist>
@@ -421,7 +420,10 @@ forwarding (&quot;&quot;)</title>
       </informaltable>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>configuring</primary><secondary>portals</secondary></indexterm>Portals LND (Linux)</title>
+      <title><indexterm>
+          <primary>configuring</primary>
+          <secondary>portals</secondary>
+        </indexterm>Portals LND Linux (ptllnd)</title>
       <para>The Portals LND Linux (<literal>ptllnd</literal>) can be used as a interface layer to communicate with Sandia Portals networking devices. This version is intended to work on Cray XT3 Linux nodes that use Cray Portals as a network transport.</para>
       <para><emphasis role="bold">Message Buffers</emphasis></para>
       <para>When <literal>ptllnd</literal> starts up, it allocates and posts sufficient message buffers to allow all expected peers (set by concurrent_peers) to send one unsolicited message. The first message that a peer actually sends is (so-called) &quot;<literal>HELLO</literal>&quot; message, used to negotiate how much additional buffering to setup (typically 8 messages). If 10000 peers actually exist, then enough buffers are posted for 80000 messages.</para>

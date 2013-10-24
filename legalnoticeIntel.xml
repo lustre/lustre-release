@@ -16,7 +16,8 @@
 
     <para>Intel and the Intel logo are trademarks of Intel Corporation in the U.S. and/or other countries. Lustre is a registered trademark of Oracle Corporation.</para>
 
-    <para>* Other names and brands may be claimed as the property of others.</para>
+    <para><superscript>*</superscript>Other names and brands may be claimed as the property of
+        others.</para>
 
     <para>THE ORIGINAL LUSTRE 2.x FILESYSTEM: OPERATIONS MANUAL HAS BEEN MODIFIED: THIS OPERATIONS MANUAL IS A MODIFIED VERSION OF, AND IS DERIVED FROM, THE LUSTRE 2.0 FILESYSTEM: OPERATIONS MANUAL PUBLISHED BY ORACLE AND AVAILABLE AT [http://www.lustre.org/].  MODIFICATIONS (collectively, the “Modifications”) HAVE BEEN MADE BY INTEL CORPORATION (“Intel”).  ORACLE AND ITS AFFILIATES HAVE NOT REVIEWED, APPROVED, SPONSORED, OR ENDORSED THIS MODIFIED OPERATIONS MANUAL, OR ENDORSED INTEL, AND ORACLE AND ITS AFFILIATES ARE NOT RESPONSIBLE OR LIABLE FOR ANY MODIFICATIONS THAT INTEL HAS MADE TO THE ORIGINAL OPERATIONS MANUAL.</para>
 

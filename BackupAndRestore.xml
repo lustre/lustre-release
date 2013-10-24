@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
   <title xml:id="backupandrestore.title">Backing Up and Restoring a File System</title>
-  <para>This chapter describes how to backup and restore on Lustre, at the filesystem-level, device-level and file-level. Each backup approach is described in the the following sections:</para>
+  <para>This chapter describes how to backup and restore on Lustre, at the file system-level,
+    device-level and file-level. Each backup approach is described in the the following
+    sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438207_56395"/></para>
@@ -26,13 +28,25 @@
           <indexterm><primary>LVM</primary><see>backup</see></indexterm>
           <indexterm><primary>rsync</primary><see>backup</see></indexterm>
           Backing up a File System</title>
-    <para>Backing up a complete file system gives you full control over the files to back up, and allows restoration of individual files as needed. Filesystem-level backups are also the easiest to integrate into existing backup solutions.</para>
+    <para>Backing up a complete file system gives you full control over the files to back up, and
+      allows restoration of individual files as needed. File system-level backups are also the
+      easiest to integrate into existing backup solutions.</para>
     <para>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
     <para>However, due to the large size of most Lustre file systems, it is not always possible to get a complete backup. We recommend that you back up subsets of a file system. This includes subdirectories of the entire file system, filesets for a single user, files incremented by date, and so on.</para>
     <note>
-      <para>In order to allow Lustre to scale the filesystem namespace for future applications, Lustre 2.x internally uses a 128-bit file identifier for all files. To interface with user applications, Lustre presents 64-bit inode numbers for the <literal>stat()</literal>, <literal>fstat()</literal>, and <literal>readdir()</literal> system calls on 64-bit applications, and 32-bit inode numbers to 32-bit applications.</para>
+      <para>In order to allow Lustre to scale the file system namespace for future applications,
+        Lustre 2.x internally uses a 128-bit file identifier for all files. To interface with user
+        applications, Lustre presents 64-bit inode numbers for the <literal>stat()</literal>,
+          <literal>fstat()</literal>, and <literal>readdir()</literal> system calls on 64-bit
+        applications, and 32-bit inode numbers to 32-bit applications.</para>
       <para>Some 32-bit applications accessing Lustre filesystems (on both 32-bit and 64-bit CPUs) may experience problems with the <literal>stat()</literal>, <literal>fstat()</literal> or<literal> readdir()</literal> system calls under certain circumstances, though the Lustre client should return 32-bit inode numbers to these applications.</para>
-      <para>In particular, if the Lustre filesystem is exported from a 64-bit client via NFS to a 32-bit client, the Linux NFS server will export 64-bit inode numbers to applications running on the NFS client. If the 32-bit applications are not compiled with Large File Support (LFS), then they return <literal>EOVERFLOW</literal> errors when accessing the Lustre files. To avoid this problem, Linux NFS clients can use the kernel command-line option &quot;<literal>nfs.enable_ino64=0</literal>&quot; in order to force the NFS client to export 32-bit inode numbers to the client.</para>
+      <para>In particular, if the Lustre file system is exported from a 64-bit client via NFS to a
+        32-bit client, the Linux NFS server will export 64-bit inode numbers to applications running
+        on the NFS client. If the 32-bit applications are not compiled with Large File Support
+        (LFS), then they return <literal>EOVERFLOW</literal> errors when accessing the Lustre files.
+        To avoid this problem, Linux NFS clients can use the kernel command-line option
+          &quot;<literal>nfs.enable_ino64=0</literal>&quot; in order to force the NFS client to
+        export 32-bit inode numbers to the client.</para>
       <para><emphasis role="bold">Workaround</emphasis>: We very strongly recommend that backups using <literal>tar(1)</literal> and other utilities that depend on the inode number to uniquely identify an inode to be run on 64-bit clients. The 128-bit Lustre file identifiers cannot be uniquely mapped to a 32-bit inode number, and as a result these utilities may operate incorrectly on 32-bit clients.</para>
     </note>
     <section remap="h3">
@@ -266,14 +280,14 @@ trusted.fid= \
         <para><emphasis role="bold">Back up all file system data.</emphasis></para>
         <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] --sparse .</screen>
         <note>
-            <para>The tar <literal>--sparse</literal> option is vital for
-	    backing up an MDT. In order to have <literal>--sparse</literal>
-	    behave correctly, and complete the backup of and MDT in finite
-	    time, the version of tar must be specified. Correctly functioning
-	    versions of tar include the Lustre-enhanced tar
-	    <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>,
-	    Red Hat tar from RHEL 6.3 onwards and GNU tar version 1.25 or
-	    more recent.</para>
+            <para>The tar <literal>--sparse</literal> option is vital for backing up an MDT. In
+            order to have <literal>--sparse</literal> behave correctly, and complete the backup of
+            and MDT in finite time, the version of tar must be specified. Correctly functioning
+            versions of tar include the Lustre software enhanced version of tar at <link
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Tools#LustreTools-lustre-tar"
+            />, the tar from a Red Hat Enterprise Linux distribution (version 6.3 or more recent)
+            and the GNU tar version 1.25 or more recent.</para>
         </note>
         <warning>
             <para>The tar <literal>--xattrs</literal> option is only available
