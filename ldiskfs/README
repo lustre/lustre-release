@@ -1,4 +1,6 @@
 This directory contains the patches needed to convert ext4 into ldiskfs.
+They are applied automatically during the ldiskfs build process and
+should not be applied to the core kernel directly.
 
 We need to be able to create a version of ldiskfs from the ext4 source
 code found in multiple versions of the kernel.  That ext4 source code can
@@ -10,9 +12,9 @@ Where to put a new patch
 ------------------------
 
 Therefore, we split the patches into multiple subdirectories in the
-"patches" directory.  These subdirecotories are named after the
-version of the Linux distribution against which they were developed.
-For instance, "patches/rhel6.3" and "patches/sles11sp1".
+"kernel_patches/patches" directory.  These subdirecotories are named
+after the version of the Linux distribution against which they were
+developed.  For instance, "patches/rhel6.3" and "patches/sles11sp1".
 
 When creating a new patch, put it in the subdirectory for the
 distribution for which it was first created.
@@ -35,15 +37,15 @@ needed by the sles11sp1 ext4 code, the sles11sp1 series file should
 directly list "patches/rhel6.3/foo.patch".  A copy of the same patch
 should only be made when the patch will not apply without changes.
 
-Refreshing patches for a new kernel/distribution
+Updating patches for a new kernel/distribution
 ------------------------------------------------
 
 When adding support for a new OS distribution release and its new
 version of the kernel, it is common to begin by copying the patch
 series file from a similar OS release.  For instance, when beginning
 to add support for the RHEL 6.4 kernel, one might copy the
-series/ldiskfs-2.6-rhel6.3.series file to the new name
-series/ldiskfs-2.6-rhel6.4.series.
+kernel_patches/series/ldiskfs-2.6-rhel6.3.series file to the new name
+kernel_patches/series/ldiskfs-2.6-rhel6.4.series.
 
 When applying that series, some patches are likely to succeed and others
 to fail to apply.  When a patch fails to apply, a copy of it should be
@@ -61,3 +63,11 @@ would copy the patch to:
 The next step would be to edit series/ldiskfs-2.6-rhel6.4.series to point
 to the new patch.  Finally, the developer may edit files and "quilt refresh"
 the new patch.
+
+Detecting which patch series to apply
+-------------------------------------
+
+If a new kernel/distro is being added, in order for these patches to be
+applied during the build process, the kernel version needs to map to a
+specific series.  This is done in config/lustre-build-ldiskfs.m4 in the
+LDISKFS_LINUX_SERIES check.
