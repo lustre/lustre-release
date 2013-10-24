@@ -3291,7 +3291,13 @@ test_52() {
 	do_node $ost1node 'mv '$objects' '${ost1mnt}'/lost+found'
 	[ $? -eq 0 ] || { error "Unable to move objects"; return 14; }
 
+	# recover objects dry-run
+	echo "ll_recover_lost_found_objs dry_run"
+	do_node $ost1node "ll_recover_lost_found_objs -n -d $ost1mnt/O"
+	[ $? -eq 0 ] || { error "ll_recover_lost_found_objs failed"; return 15; }
+
 	# recover objects
+	echo "ll_recover_lost_found_objs fix run"
 	do_node $ost1node "ll_recover_lost_found_objs -d $ost1mnt/lost+found"
 	[ $? -eq 0 ] || { error "ll_recover_lost_found_objs failed"; return 15; }
 

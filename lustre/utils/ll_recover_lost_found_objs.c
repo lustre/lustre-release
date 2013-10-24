@@ -62,7 +62,8 @@
 
 #define MAX_GROUPS 64
 
-int verbose = 0;
+int verbose;
+bool dry_run;
 
 struct obd_group_info {
 	__u64		grp_last_id;
@@ -84,12 +85,15 @@ static void grp_info_list_destroy(cfs_list_t *list)
 
 static void usage(char *progname)
 {
-        fprintf(stderr, "Usage: %s [-hv] -d lost+found_directory\n", progname);
-        fprintf(stderr, "You need to mount the corrupted OST filesystem and "
-                "provide the path for the lost+found directory as the -d "
-                "option, for example:\n"
-                "ll_recover_lost_found_objs -d /mnt/ost/lost+found\n");
-        exit(1);
+	fprintf(stderr, "Usage: %s [-hnv] -d directory\n"
+		"Recover Lustre OST objects put in lost+found by e2fsck.\n"
+		"\t-d: Check directory, usually '/lost+found' (required).\n"
+		"\t    Alternately, verify object directories under '/O'.\n"
+		"\t-n: Do not modify filesystem, only report changes.\n"
+		"\t-h: Print help message.\n"
+		"\t-v: Print changes verbosely.\n",
+		progname);
+	exit(1);
 }
 
 static int _ll_sprintf(char *buf, size_t size, const char *func, int line,
@@ -115,56 +119,74 @@ static int _ll_sprintf(char *buf, size_t size, const char *func, int line,
 #define ll_sprintf(buf, size, format, ...) \
         _ll_sprintf(buf, size, __FUNCTION__, __LINE__, format, ## __VA_ARGS__)
 
-static int mkdir_p(const char *dest_path, const char *mount)
+static int mkdir_p(const char *dest_path, mode_t mode)
 {
-        struct stat stat_buf;
-        int retval;
-        mode_t mode = 0700;
+	struct stat stat_buf;
+	int rc;
 
-        if (stat(dest_path, &stat_buf) == 0)
-                return 0;
+	rc = stat(dest_path, &stat_buf);
+	if (rc == 0) {
+		if (S_ISDIR(stat_buf.st_mode))
+			goto out;
+		if (!S_ISDIR(stat_buf.st_mode)) {
+			fprintf(stderr, "error: '%s' is not a directory (%o)\n",
+				dest_path, stat_buf.st_mode);
+			rc = -ENOTDIR;
+			goto out;
+		}
+	} else if (errno != ENOENT) {
+		rc = -errno;
+		fprintf(stderr, "error: error checking directory '%s': %s\n",
+			dest_path, strerror(errno));
+		goto out;
+	}
 
-        retval = mkdir(dest_path, mode);
-        if (retval < 0) {
-                fprintf(stderr, "error: creating directory %s: "
-                        "%s\n", dest_path, strerror(errno));
-                return 1;
-        }
+	if (dry_run) {
+		fprintf(stderr, "dry_run: not creating directory '%s'\n",
+			dest_path);
+		rc = 0;
+		goto out;
+	}
 
-        return 0;
+	rc = mkdir(dest_path, mode);
+	if (rc != 0)
+		fprintf(stderr, "error: creating directory '%s': %s\n",
+			dest_path, strerror(errno));
+out:
+	return rc;
 }
 
 /* This is returning 0 for an error */
 static __u64 read_last_id(char *file_path)
 {
-        __u64 last_id;
-        int fd;
-        int count;
+	__u64 last_id;
+	int fd;
+	int count;
 
-        fd = open(file_path, O_RDONLY);
-        if (fd < 0) {
-                if (errno != ENOENT)
-                        fprintf(stderr, "error: opening %s: %s\n",
-                                        file_path, strerror(errno));
-                return 0;
-        }
+	fd = open(file_path, O_RDONLY);
+	if (fd < 0) {
+		if (errno != ENOENT)
+			fprintf(stderr, "error: opening '%s': %s\n",
+				file_path, strerror(errno));
+		return 0;
+	}
 
-        count = read(fd, &last_id, sizeof(last_id));
-        if (count < 0) {
-                fprintf(stderr, "error: reading file %s: %s\n", file_path,
-                        strerror(errno));
-                close(fd);
-                return 0;
-        }
-        if (count != sizeof(last_id)) {
-                fprintf(stderr, "error: Could not read full last_id from %s\n",
-                        file_path);
-                close(fd);
-                return 0;
-        }
+	count = read(fd, &last_id, sizeof(last_id));
+	if (count < 0) {
+		fprintf(stderr, "error: reading file '%s': %s\n",
+			file_path, strerror(errno));
+		close(fd);
+		return 0;
+	}
+	if (count != sizeof(last_id)) {
+		fprintf(stderr, "error: only read %d bytes from '%s'\n",
+			count, file_path);
+		close(fd);
+		return 0;
+	}
 
-        close(fd);
-        return le64_to_cpu(last_id);
+	close(fd);
+	return le64_to_cpu(last_id);
 }
 
 struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
@@ -174,7 +196,6 @@ struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
 	cfs_list_t		*entry;
 	char			tmp_path[PATH_MAX];
 	char			seq_name[32];
-	struct stat		stat_buf;
 	int			retval;
 	__u64			tmp_last_id;
 
@@ -200,14 +221,12 @@ struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
 		return NULL;
 	}
 
-	if (stat(tmp_path, &stat_buf) != 0) {
-		retval = mkdir(tmp_path, 0700);
-		if (retval < 0) {
-			free(grp);
-			fprintf(stderr, "error: creating directory %s: "
-				"%s\n", tmp_path, strerror(errno));
-			return NULL;
-		}
+	retval = mkdir_p(tmp_path, 0700);
+	if (retval < 0) {
+		free(grp);
+		fprintf(stderr, "error: creating directory %s: %s\n",
+			tmp_path, strerror(errno));
+		return NULL;
 	}
 
 	if (ll_sprintf(tmp_path, PATH_MAX, "%s/O/%s/LAST_ID",
@@ -219,7 +238,7 @@ struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
 	/*
 	 * Object ID needs to be verified against last_id.
 	 * LAST_ID file may not be present in the group directory
-	 * due to corruption. In case of any error tyr to recover
+	 * due to corruption. In case of any error try to recover
 	 * as many objects as possible by setting last_id to ~0ULL.
 	 */
 	tmp_last_id = read_last_id(tmp_path);
@@ -311,8 +330,8 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
                 }
                 break;
 
-                case DT_REG:
-                file_path = src_dir;
+		case DT_REG:
+		file_path = src_dir;
 		xattr_len = getxattr(file_path, "trusted.lma",
 				     (void *)&lma, sizeof(lma));
 		if (xattr_len == -1 || xattr_len < sizeof(lma)) {
@@ -321,16 +340,20 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 			/* try old filter_fid EA */
 			xattr_len = getxattr(file_path, "trusted.fid",
 					     (void *)&ff, sizeof(ff));
-			if (xattr_len == -1 || xattr_len < sizeof(ff)) {
-				/*
-				 * Its very much possible that we dont find fid
-				 * on precreated files, LAST_ID
-				 */
+			/* It's very much possible that we don't find any
+			 * FID on precreated or unused objects or LAST_ID.
+			 * The xattr needs to hold the full filter_fid_old
+			 * with the OID/parent to be useful. */
+			if (xattr_len == -1 || xattr_len < sizeof(ff))
 				continue;
-			}
+
 			ff_seq = le64_to_cpu(ff.ff_seq);
 			ff_objid = le64_to_cpu(ff.ff_objid);
+			if (verbose)
+				printf(DOSTID": ", ff_seq, ff_objid);
 		} else {
+			if (verbose)
+				printf(DFID": ", PFID(&lma.lma_self_fid));
 			ff_seq = le64_to_cpu(lma.lma_self_fid.f_seq);
 			ff_objid = le32_to_cpu(lma.lma_self_fid.f_oid);
 		}
@@ -339,6 +362,12 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 				   fid_seq_is_mdt0(ff_seq)) ? LPU64 : LPX64i,
 			fid_seq_is_idif(ff_seq) ? 0 : ff_seq);
 
+		/* LAST_ID uses OID = 0.  It will be regenerated later. */
+		if (ff_objid == 0) {
+			if (verbose)
+				printf("'%s': LAST_ID\n", file_path);
+			continue;
+		}
 
 		sprintf(obj_name, (fid_seq_is_rsvd(ff_seq) ||
 				   fid_seq_is_mdt0(ff_seq) ||
@@ -352,16 +381,16 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 			return 1;
 		}
 
-                /* might need to create the parent directories for
-                   this object */
+		/* Might need to create the parent directory for this object */
 		if (ll_sprintf(dest_path, PATH_MAX, "%s/O/%s/d"LPU64,
 				mount_path, seq_name, ff_objid % 32)) {
 			closedir(dir_ptr);
 			return 1;
 		}
 
-		ret = mkdir_p(dest_path, mount_path);
-		if (ret) {
+		/* The O/{seq} directory was created in find_or_create_grp() */
+		ret = mkdir_p(dest_path, 0700);
+		if (ret < 0) {
 			closedir(dir_ptr);
 			return ret;
 		}
@@ -375,49 +404,60 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
 			continue;
 		}
 
-                /* move file from lost+found to proper object
-                   directory */
-                if (ll_sprintf(dest_path, PATH_MAX,
+		/* move file from lost+found to proper object directory */
+		if (ll_sprintf(dest_path, PATH_MAX,
 				"%s/O/%s/d"LPU64"/%s", mount_path,
 				seq_name, ff_objid % 32, obj_name)) {
-                        closedir(dir_ptr);
-                        return 1;
-                }
+			closedir(dir_ptr);
+			return 1;
+		}
 
-                obj_exists = 1;
-                ret = stat(dest_path, &st);
-                if (ret == 0) {
-                        if (st.st_size == 0)
-                                obj_exists = 0;
-                } else {
-                        if (errno != ENOENT)
-                                fprintf(stderr,
-                                        "warning: stat for %s: %s\n",
-                                        dest_path, strerror(errno));
-                        obj_exists = 0;
-                }
+		/* Source and destination are the same file, do nothing. */
+		if (strcmp(file_path, dest_path) == 0) {
+			if (verbose)
+				printf("'%s': OK\n", file_path);
+			continue;
+		}
 
-                if (obj_exists) {
-                        fprintf(stderr, "error: target object %s already "
-                                "exists and will not be replaced.\n",dest_path);
-                        continue;
-                }
+		obj_exists = 1;
+		ret = stat(dest_path, &st);
+		if (ret == 0) {
+			if (st.st_size == 0)
+				obj_exists = 0;
+		} else {
+			if (errno != ENOENT)
+				fprintf(stderr, "warning: stat for %s: %s\n",
+					dest_path, strerror(errno));
+			obj_exists = 0;
+		}
 
-                if (rename(file_path, dest_path) < 0) {
-                        fprintf(stderr, "error: rename failed for file %s: %s\n",
-                                file_path, strerror(errno));
-                        error++;
-                        continue;
-                }
+		if (obj_exists) {
+			fprintf(dry_run ? stdout : stderr,
+				"%s: '%s' exists, will not replace with '%s'\n",
+				dry_run ? "dry_run" : "error",
+				dest_path, file_path);
+			continue;
+		}
+		if (dry_run) {
+			printf("dry_run: not renaming '%s' to '%s'\n",
+			       file_path, dest_path);
+			continue;
+		}
+		if (rename(file_path, dest_path) < 0) {
+			fprintf(stderr, "error: rename failed for '%s': %s\n",
+				file_path, strerror(errno));
+			error++;
+			continue;
+		}
 
-                printf("Object %s restored.\n", dest_path);
-                break;
-                }
-        }
+		printf("object '%s' restored.\n", dest_path);
+		break;
+		}
+	}
 
-        closedir(dir_ptr);
+	closedir(dir_ptr);
 
-        return error;
+	return error;
 }
 
 /*
@@ -496,41 +536,47 @@ static int check_last_id(const char *mount_path)
                 }
                 closedir(groupdir);
 
-                fd = open(lastid_path, O_RDWR | O_CREAT, 0700);
-                if (fd < 0) {
-                        fprintf(stderr, "error: open \"%s\" failed: %s\n",
-                                lastid_path, strerror(errno));
-                        return 1;
-                }
+		if (dry_run) {
+			fprintf(stderr, "dry_run: not updating '%s' to "
+				LPU64"\n", lastid_path, max_objid);
+			return 0;
+		}
+		fd = open(lastid_path, O_RDWR | O_CREAT, 0700);
+		if (fd < 0) {
+			fprintf(stderr, "error: open '%s' failed: %s\n",
+				lastid_path, strerror(errno));
+			return 1;
+		}
 
-                max_objid = cpu_to_le64(max_objid);
-                ret = write(fd, &max_objid, sizeof(__u64));
-                if (ret < sizeof(__u64)) {
-                        fprintf(stderr, "error: write \"%s\" failed: %s\n",
-                                lastid_path, strerror(errno));
-                        close(fd);
-                        return 1;
-                }
+		max_objid = cpu_to_le64(max_objid);
+		ret = write(fd, &max_objid, sizeof(__u64));
+		if (ret < sizeof(__u64)) {
+			fprintf(stderr, "error: write '%s' failed: %s\n",
+				lastid_path, strerror(errno));
+			close(fd);
+			return 1;
+		}
 
-                close(fd);
-        }
+		close(fd);
+	}
 
-        return 0;
+	return 0;
 }
 
 int main(int argc, char **argv)
 {
-        char *progname;
-        struct stat stat_buf;
-        char src_dir[PATH_MAX] = "";
-        char mount_path[PATH_MAX];
-        char tmp_path[PATH_MAX];
-        int c;
-        int retval;
+	char *progname;
+	char src_dir[PATH_MAX] = "";
+	char mount_path[PATH_MAX];
+	char tmp_path[PATH_MAX];
+	int rc;
+	int c;
 
-	progname = argv[0];
+	progname = strrchr(argv[0], '/');
+	if (progname++ == NULL)
+		progname = argv[0];
 
-        while ((c = getopt(argc, argv, "d:hv")) != EOF) {
+	while ((c = getopt(argc, argv, "d:hnv")) != EOF) {
                 switch (c) {
                 case 'd':
                         if (chdir(optarg)) {
@@ -560,12 +606,15 @@ int main(int argc, char **argv)
                                         "error: root directory is detected\n");
                                 return 1;
                         }
-                        fprintf(stdout, "\"lost+found\" directory path: %s\n",
-                                src_dir);
-                        break;
-                case 'v':
-                        verbose = 1;
-                        break;
+			fprintf(stdout, "%s: %sscan directory path: %s\n",
+				progname, dry_run ? "read_only " : "", src_dir);
+			break;
+		case 'n':
+			dry_run = true;
+			break;
+		case 'v':
+			verbose = true;
+			break;
                 case 'h':
                         usage(progname);
                 default:
@@ -582,28 +631,28 @@ int main(int argc, char **argv)
         if (ll_sprintf(tmp_path, PATH_MAX, "%s/O",  mount_path))
                 return 1;
 
-        if (stat(tmp_path, &stat_buf) != 0) {
-                retval = mkdir(tmp_path, 0700);
-                if (retval == -1) {
-                        fprintf(stderr, "error: creating objects directory %s:"
-                                " %s\n", tmp_path, strerror(errno));
-                        return 1;
-                }
+	rc = mkdir_p(tmp_path, 0700);
+	if (rc == -1) {
+		fprintf(stderr, "error: creating objects directory %s:"
+			" %s\n", tmp_path, strerror(errno));
+		return 1;
         }
 
 	CFS_INIT_LIST_HEAD(&grp_info_list);
-        retval = traverse_lost_found(src_dir, mount_path);
-        if (retval) {
-                fprintf(stderr, "error: traversing lost+found looking for "
-                        "orphan objects.\n");
+	rc = traverse_lost_found(src_dir, mount_path);
+	if (rc) {
+		fprintf(stderr, "error: traversing lost+found looking for "
+			"orphan objects.\n");
 		goto grp_destory;
 	}
 
-        retval = check_last_id(mount_path);
-        if (retval)
-                fprintf(stderr, "error: while checking/restoring LAST_ID.\n");
+	rc = check_last_id(mount_path);
+	if (rc)
+		fprintf(stderr, "error: while checking/restoring LAST_ID.\n");
 
 grp_destory:
 	grp_info_list_destroy(&grp_info_list);
-        return retval;
+
+	printf("%s: scan finished: rc = %d\n", progname, rc);
+	return rc;
 }
