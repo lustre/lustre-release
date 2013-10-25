@@ -316,70 +316,70 @@ chmod -R go-w lustre-source/lustre-%{version}
 find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
 
 cat >lustre.files <<EOF
-%attr(-, root, root) %{?rootdir}/sbin/mount.lustre
-%attr(-, root, root) %{_sbindir}/*
-%attr(-, root, root) %{_bindir}/lfs
-%attr(-, root, root) %{_bindir}/lfs_migrate
-%attr(-, root, root) %{_bindir}/llbackup
-%attr(-, root, root) %{_bindir}/llobdstat
-%attr(-, root, root) %{_bindir}/llstat
-%attr(-, root, root) %{_bindir}/lustre_req_history
-%attr(-, root, root) %{_bindir}/plot-llstat
-%attr(-, root, root) %{_bindir}/req_layout
-%attr(-, root, root) %{_libdir}/libptlctl.a
-%attr(-, root, root) %{_libdir}/liblustreapi.a
-%attr(-, root, root) %{_libdir}/liblustreapi.so
-%attr(-, root, root) %{_mandir}/man?/*
-%attr(-, root, root) %{_datadir}/lustre
-%attr(-, root, root) %{_includedir}/lustre
-%attr(-, root, root) %{_includedir}/libcfs
-%attr(-, root, root) %{_libexecdir}/lustre/lc_common
-%attr(-, root, root) %{_sysconfdir}/udev/rules.d/99-lustre.rules
-%attr(-, root, root) %{_sysconfdir}/init.d/lnet
-%attr(-, root, root) %{_sysconfdir}/init.d/lustre
-%attr(-, root, root) %config(noreplace) %{_sysconfdir}/ldev.conf
-%attr(-, root, root) %{_sysconfdir}/sysconfig/lustre
-%attr(-, root, root) %{_libexecdir}/lustre/haconfig
-%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
-%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre
+%{?rootdir}/sbin/mount.lustre
+%{_sbindir}/*
+%{_bindir}/lfs
+%{_bindir}/lfs_migrate
+%{_bindir}/llbackup
+%{_bindir}/llobdstat
+%{_bindir}/llstat
+%{_bindir}/lustre_req_history
+%{_bindir}/plot-llstat
+%{_bindir}/req_layout
+%{_libdir}/libptlctl.a
+%{_libdir}/liblustreapi.a
+%{_libdir}/liblustreapi.so
+%{_mandir}/man?/*
+%{_datadir}/lustre
+%{_includedir}/lustre
+%{_includedir}/libcfs
+%{_libexecdir}/lustre/lc_common
+%{_sysconfdir}/udev/rules.d/99-lustre.rules
+%{_sysconfdir}/init.d/lnet
+%{_sysconfdir}/init.d/lustre
+%config(noreplace) %{_sysconfdir}/ldev.conf
+%{_sysconfdir}/sysconfig/lustre
+%{_libexecdir}/lustre/haconfig
+%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
+%{_sysconfdir}/ha.d/resource.d/Lustre
 EOF
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then
-  echo '%attr(-, root, root) %{_libdir}/libcfsutil.a' >>lustre.files
+  echo '%{_libdir}/libcfsutil.a' >>lustre.files
 fi
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
-  echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
-  echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
+  echo '%{_libdir}/liblustre.a' >>lustre.files
+  echo '%{_libdir}/liblustre.so' >>lustre.files
 fi
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
-  echo '%attr(-, root, root) %{_libdir}/libiam.a' >>lustre.files
+  echo '%{_libdir}/libiam.a' >>lustre.files
 fi
 
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
-  echo '%attr(-, root, root) %{_libdir}/lustre/snmp' >>lustre.files
-  echo '%attr(-, root, root) %{_datadir}/lustre/snmp/mibs' >>lustre.files
+  echo '%{_libdir}/lustre/snmp' >>lustre.files
+  echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
 # Have universal lustre headers
 if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre/lustre_idl.h ] ; then
-  echo '%attr(-, root, root) %{_includedir}/linux/lustre_user.h' >>lustre.files
+  echo '%{_includedir}/linux/lustre_user.h' >>lustre.files
 else
-  echo '%attr(-, root, root) %{_includedir}/linux/lustre_idl.h' >>lustre.files
+  echo '%{_includedir}/linux/lustre_idl.h' >>lustre.files
 fi
 
 if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ; then
-  echo '%attr(-, root, root) %{_includedir}/linux/lustre_types.h' >>lustre.files
+  echo '%{_includedir}/linux/lustre_types.h' >>lustre.files
 fi
 
 %if %{with lustre_tests}
-echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
-echo '%attr(-, root, root) %{_bindir}/mcreate' >>lustre-tests.files
-echo '%attr(-, root, root) %{_bindir}/munlink' >>lustre-tests.files
-echo '%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.*' >>lustre-tests.files
+echo '%{_libdir}/lustre/tests/*' >lustre-tests.files
+echo '%{_bindir}/mcreate' >>lustre-tests.files
+echo '%{_bindir}/munlink' >>lustre-tests.files
+echo '%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko' >>lustre-tests.files
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
-  echo '%attr(-, root, root) %{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
+  echo '%{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
 fi
 %endif
 
@@ -409,9 +409,11 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %endif
 
 %files -f lustre.files
+%defattr(-,root,root)
 
 %files modules
-%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/*
+%defattr(-,root,root)
+%{?rootdir}/lib/modules/%{kversion}/updates/*
 %if %{with lustre_tests}
 %exclude %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/llog_test.ko
 %endif
@@ -425,14 +427,15 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-modules.sh
 %endif
-%attr(-, root, root) %doc COPYING
-%attr(-, root, root) %doc ChangeLog-lustre
-%attr(-, root, root) %doc ChangeLog-lnet
+%doc COPYING
+%doc ChangeLog-lustre
+%doc ChangeLog-lnet
 
 %if %{with ldiskfs}
 %files osd-ldiskfs
-%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
-%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
+%defattr(-,root,root)
+%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/ldiskfs.ko
+%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_ldiskfs.ko
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
 %endif
@@ -440,14 +443,16 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %if %{with zfs}
 %files osd-zfs
-%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
+%defattr(-,root,root)
+%{?rootdir}/lib/modules/%{kversion}/updates/kernel/fs/lustre/osd_zfs.ko
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
 %endif
 %endif
 
 %files source
-%attr(-, root, root) %{_prefix}/src/lustre-%{version}
+%defattr(-,root,root)
+%{_prefix}/src/lustre-%{version}
 
 # uncomment these lines to enable deps packages
 # %files deps-sles
@@ -455,23 +460,25 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/updates -name "*.ko" -ty
 
 %if %{with lustre_tests}
 %files tests -f lustre-tests.files
+%defattr(-,root,root)
 %endif
 
 %if %{with lustre_iokit}
 %files -n lustre-iokit
-%attr(-, root, root) %{_bindir}/ior-survey
-%attr(-, root, root) %{_bindir}/parse-ior
-%attr(-, root, root) %{_bindir}/libecho
-%attr(-, root, root) %{_bindir}/obdfilter-survey
-%attr(-, root, root) %{_bindir}/plot-obdfilter
-%attr(-, root, root) %{_bindir}/plot-ost
-%attr(-, root, root) %{_bindir}/ost-survey
-%attr(-, root, root) %{_bindir}/sgpdd-survey
-%attr(-, root, root) %{_bindir}/plot-sgpdd
-%attr(-, root, root) %{_bindir}/lstats.sh
-%attr(-, root, root) %{_bindir}/gather_stats_everywhere.sh
-%attr(-, root, root) %{_bindir}/config.sh
-%attr(-, root, root) %{_bindir}/mds-survey
+%defattr(-, root, root)
+%{_bindir}/ior-survey
+%{_bindir}/parse-ior
+%{_bindir}/libecho
+%{_bindir}/obdfilter-survey
+%{_bindir}/plot-obdfilter
+%{_bindir}/plot-ost
+%{_bindir}/ost-survey
+%{_bindir}/sgpdd-survey
+%{_bindir}/plot-sgpdd
+%{_bindir}/lstats.sh
+%{_bindir}/gather_stats_everywhere.sh
+%{_bindir}/config.sh
+%{_bindir}/mds-survey
 %doc lustre-iokit/obdfilter-survey/README.obdfilter-survey
 %doc lustre-iokit/ior-survey/README.ior-survey
 %doc lustre-iokit/ost-survey/README.ost-survey
