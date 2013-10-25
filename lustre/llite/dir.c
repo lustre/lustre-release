@@ -143,99 +143,102 @@
 /* returns the page unlocked, but with a reference */
 static int ll_dir_filler(void *_hash, struct page *page0)
 {
-        struct inode *inode = page0->mapping->host;
-        int hash64 = ll_i2sbi(inode)->ll_flags & LL_SBI_64BIT_HASH;
-        struct obd_export *exp = ll_i2sbi(inode)->ll_md_exp;
-        struct ptlrpc_request *request;
-        struct mdt_body *body;
-        struct md_op_data *op_data;
+	struct inode *inode = page0->mapping->host;
+	int hash64 = ll_i2sbi(inode)->ll_flags & LL_SBI_64BIT_HASH;
+	struct obd_export *exp = ll_i2sbi(inode)->ll_md_exp;
+	struct ptlrpc_request *request;
+	struct mdt_body *body;
+	struct md_op_data *op_data;
 	__u64 hash = *((__u64 *)_hash);
-        struct page **page_pool;
-        struct page *page;
-        struct lu_dirpage *dp;
+	struct page **page_pool;
+	struct page *page;
+	struct lu_dirpage *dp;
 	int max_pages = ll_i2sbi(inode)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
-        int nrdpgs = 0; /* number of pages read actually */
-        int npages;
-        int i;
-        int rc;
-        ENTRY;
+	int nrdpgs = 0; /* number of pages read actually */
+	int npages;
+	int i;
+	int rc;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) hash "LPU64"\n",
 	       PFID(ll_inode2fid(inode)), inode, hash);
 
 	LASSERT(max_pages > 0 && max_pages <= MD_MAX_BRW_PAGES);
 
-        OBD_ALLOC(page_pool, sizeof(page) * max_pages);
-        if (page_pool != NULL) {
-                page_pool[0] = page0;
-        } else {
-                page_pool = &page0;
-                max_pages = 1;
-        }
-        for (npages = 1; npages < max_pages; npages++) {
-                page = page_cache_alloc_cold(inode->i_mapping);
-                if (!page)
-                        break;
-                page_pool[npages] = page;
-        }
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
 
-        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY, NULL);
-        op_data->op_npages = npages;
-        op_data->op_offset = hash;
-        rc = md_readpage(exp, op_data, page_pool, &request);
-        ll_finish_md_op_data(op_data);
-        if (rc == 0) {
-                body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-                /* Checked by mdc_readpage() */
-                LASSERT(body != NULL);
+	OBD_ALLOC(page_pool, sizeof(page) * max_pages);
+	if (page_pool != NULL) {
+		page_pool[0] = page0;
+	} else {
+		page_pool = &page0;
+		max_pages = 1;
+	}
+	for (npages = 1; npages < max_pages; npages++) {
+		page = page_cache_alloc_cold(inode->i_mapping);
+		if (!page)
+			break;
+		page_pool[npages] = page;
+	}
 
-                if (body->valid & OBD_MD_FLSIZE)
-                        cl_isize_write(inode, body->size);
+	op_data->op_npages = npages;
+	op_data->op_offset = hash;
+	rc = md_readpage(exp, op_data, page_pool, &request);
+	ll_finish_md_op_data(op_data);
+	if (rc == 0) {
+		body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
+		/* Checked by mdc_readpage() */
+		LASSERT(body != NULL);
+
+		if (body->valid & OBD_MD_FLSIZE)
+			cl_isize_write(inode, body->size);
 
 		nrdpgs = (request->rq_bulk->bd_nob_transferred +
 			  PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-                SetPageUptodate(page0);
-        }
-        unlock_page(page0);
-        ptlrpc_req_finished(request);
+		SetPageUptodate(page0);
+	}
+	unlock_page(page0);
+	ptlrpc_req_finished(request);
 
-        CDEBUG(D_VFSTRACE, "read %d/%d pages\n", nrdpgs, npages);
+	CDEBUG(D_VFSTRACE, "read %d/%d pages\n", nrdpgs, npages);
 
-        for (i = 1; i < npages; i++) {
-                unsigned long offset;
-                int ret;
+	for (i = 1; i < npages; i++) {
+		unsigned long offset;
+		int ret;
 
-                page = page_pool[i];
+		page = page_pool[i];
 
-                if (rc < 0 || i >= nrdpgs) {
-                        page_cache_release(page);
-                        continue;
-                }
+		if (rc < 0 || i >= nrdpgs) {
+			page_cache_release(page);
+			continue;
+		}
 
-                SetPageUptodate(page);
+		SetPageUptodate(page);
 
 		dp = kmap(page);
 		hash = le64_to_cpu(dp->ldp_hash_start);
 		kunmap(page);
 
-                offset = hash_x_index(hash, hash64);
+		offset = hash_x_index(hash, hash64);
 
 		prefetchw(&page->flags);
 		ret = add_to_page_cache_lru(page, inode->i_mapping, offset,
 					    GFP_KERNEL);
 		if (ret == 0)
-                        unlock_page(page);
+			unlock_page(page);
 		else
-                        CDEBUG(D_VFSTRACE, "page %lu add to page cache failed:"
-                               " %d\n", offset, ret);
-                page_cache_release(page);
-        }
+			CDEBUG(D_VFSTRACE, "page %lu add to page cache failed:"
+			       " %d\n", offset, ret);
+		page_cache_release(page);
+	}
 
-        if (page_pool != &page0)
-                OBD_FREE(page_pool, sizeof(struct page *) * max_pages);
-        EXIT;
-        return rc;
+	if (page_pool != &page0)
+		OBD_FREE(page_pool, sizeof(struct page *) * max_pages);
+
+	RETURN(rc);
 }
 
 static void ll_check_page(struct inode *dir, struct page *page)
@@ -361,7 +364,7 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
 		struct md_op_data *op_data;
 
 		op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
-		LUSTRE_OPC_ANY, NULL);
+					     LUSTRE_OPC_ANY, NULL);
 		if (IS_ERR(op_data))
 			return (void *)op_data;
 

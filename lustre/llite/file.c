@@ -3815,7 +3815,7 @@ again:
 	}
 
 	op_data = ll_prep_md_op_data(NULL, inode, inode, NULL,
-			0, 0, LUSTRE_OPC_ANY, NULL);
+				     0, 0, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data)) {
 		mutex_unlock(&lli->lli_layout_mutex);
 		RETURN(PTR_ERR(op_data));
