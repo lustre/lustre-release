@@ -1984,10 +1984,24 @@ int lprocfs_wr_hsm_cdt_control(struct file *file, const char *buffer,
 			rc = mdt_hsm_cdt_start(mdt);
 		}
 	} else if (strncmp(buffer, CDT_STOP_CMD, strlen(CDT_STOP_CMD)) == 0) {
-		cdt->cdt_state = CDT_STOPPING;
+		if ((cdt->cdt_state == CDT_STOPPING) ||
+		    (cdt->cdt_state == CDT_STOPPED)) {
+			CERROR("%s: Coordinator already stopped\n",
+			       mdt_obd_name(mdt));
+			rc = -EALREADY;
+		} else {
+			cdt->cdt_state = CDT_STOPPING;
+		}
 	} else if (strncmp(buffer, CDT_DISABLE_CMD,
 			   strlen(CDT_DISABLE_CMD)) == 0) {
-		cdt->cdt_state = CDT_DISABLE;
+		if ((cdt->cdt_state == CDT_STOPPING) ||
+		    (cdt->cdt_state == CDT_STOPPED)) {
+			CERROR("%s: Coordinator is stopped\n",
+			       mdt_obd_name(mdt));
+			rc = -EINVAL;
+		} else {
+			cdt->cdt_state = CDT_DISABLE;
+		}
 	} else if (strncmp(buffer, CDT_PURGE_CMD, strlen(CDT_PURGE_CMD)) == 0) {
 		rc = hsm_cancel_all_actions(mdt);
 	} else if (strncmp(buffer, CDT_HELP_CMD, strlen(CDT_HELP_CMD)) == 0) {
