@@ -35,6 +35,9 @@ check_and_setup_lustre
 	skip "Need MDS version at least 2.3.60" && check_and_cleanup_lustre &&
 	exit 0
 
+[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
+
 build_test_filter
 
 $LCTL set_param debug=+lfsck > /dev/null || true
