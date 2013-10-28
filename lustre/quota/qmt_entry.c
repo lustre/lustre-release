@@ -427,21 +427,31 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 			/* the qmt still has available space */
 			RETURN_EXIT;
 
-		if (lqe->lqe_qunit != pool->qpi_least_qunit)
-			/* we haven't reached the minimal qunit yet, so there is
-			 * still hope that the rebalancing process might free up
-			 * some quota space */
-			RETURN_EXIT;
+		/* See comment in qmt_adjust_qunit(). LU-4139 */
+		if (qmt_hard_exhausted(lqe) ||
+		    pool->qpi_key >> 16 == LQUOTA_RES_MD) {
+			/* we haven't reached the minimal qunit yet so there is
+			 * still hope that the rebalancing process might free
+			 * up some quota space */
+			if (lqe->lqe_qunit != pool->qpi_least_qunit)
+				RETURN_EXIT;
 
-		if (lqe->lqe_revoke_time == 0)
 			/* least qunit value not sent to all slaves yet */
-			RETURN_EXIT;
+			if (lqe->lqe_revoke_time == 0)
+				RETURN_EXIT;
 
-		if (lqe->lqe_may_rel != 0 &&
-		    cfs_time_before_64(cfs_time_shift_64(-QMT_REBA_TIMEOUT),
-				       lqe->lqe_revoke_time))
 			/* Let's give more time to slave to release space */
-			RETURN_EXIT;
+			if (lqe->lqe_may_rel != 0 &&
+			    cfs_time_before_64(cfs_time_shift_64(
+					    		-QMT_REBA_TIMEOUT),
+				    	       lqe->lqe_revoke_time))
+				RETURN_EXIT;
+		} else {
+			/* When exceeding softlimit, block qunit will be shrunk
+			 * to (4 * least_qunit) finally. */
+			if (lqe->lqe_qunit > (pool->qpi_least_qunit << 2))
+				RETURN_EXIT;
+		}
 
 		/* set edquot flag */
 		lqe->lqe_edquot = true;
@@ -472,6 +482,31 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 	EXIT;
 }
 
+/* Using least_qunit when over block softlimit will seriously impact the
+ * write performance, we need to do some special tweaking on that. */
+static __u64 qmt_calc_softlimit(struct lquota_entry *lqe, bool *oversoft)
+{
+	struct qmt_pool_info *pool = lqe2qpi(lqe);
+
+	LASSERT(lqe->lqe_softlimit != 0);
+	*oversoft = false;
+	/* No need to do special tweaking for inode limit */
+	if (pool->qpi_key >> 16 == LQUOTA_RES_MD)
+		return lqe->lqe_softlimit;
+
+	/* Added (least_qunit * 4) as margin */
+	if (lqe->lqe_granted <= lqe->lqe_softlimit +
+				(pool->qpi_least_qunit << 2)) {
+		return lqe->lqe_softlimit;
+	} else if (lqe->lqe_hardlimit != 0) {
+		*oversoft = true;
+		return lqe->lqe_hardlimit;
+	} else {
+		*oversoft = true;
+		return 0;
+	}
+}
+
 /*
  * Try to grant more quota space back to slave.
  *
@@ -494,10 +529,16 @@ __u64 qmt_alloc_expand(struct lquota_entry *lqe, __u64 granted, __u64 spare)
 	slv_cnt = lqe2qpi(lqe)->qpi_slv_nr[lqe->lqe_site->lqs_qtype];
 	qunit   = lqe->lqe_qunit;
 
-	if (lqe->lqe_softlimit != 0)
-		remaining = lqe->lqe_softlimit;
-	else
+	/* See comment in qmt_adjust_qunit(). LU-4139. */
+	if (lqe->lqe_softlimit != 0) {
+		bool oversoft;
+		remaining = qmt_calc_softlimit(lqe, &oversoft);
+		if (remaining == 0)
+			remaining = lqe->lqe_granted +
+				    (pool->qpi_least_qunit << 2);
+	} else {
 		remaining = lqe->lqe_hardlimit;
+	}
 
 	if (lqe->lqe_granted >= remaining)
 		RETURN(0);
@@ -540,7 +581,7 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 {
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
 	int			 slv_cnt;
-	__u64			 qunit, limit;
+	__u64			 qunit, limit, qunit2 = 0;
 	ENTRY;
 
 	LASSERT(lqe_is_locked(lqe));
@@ -560,7 +601,15 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 	 * beyond the soft limit. This will impact performance, but that's the
 	 * price of an accurate grace time management. */
 	if (lqe->lqe_softlimit != 0) {
-		limit = lqe->lqe_softlimit;
+		bool oversoft;
+		/* As a compromise of write performance and the grace time
+		 * accuracy, the block qunit size will be shrunk to
+		 * (4 * least_qunit) when over softlimit. LU-4139. */
+		limit = qmt_calc_softlimit(lqe, &oversoft);
+		if (oversoft)
+			qunit2 = pool->qpi_least_qunit << 2;
+		if (limit == 0)
+			GOTO(done, qunit = qunit2);
 	} else if (lqe->lqe_hardlimit != 0) {
 		limit = lqe->lqe_hardlimit;
 	} else {
@@ -605,6 +654,9 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 			qunit >>= 2;
 	}
 
+	if (qunit2 && qunit > qunit2)
+		qunit = qunit2;
+done:
 	if (lqe->lqe_qunit == qunit)
 		/* keep current qunit */
 		RETURN_EXIT;
