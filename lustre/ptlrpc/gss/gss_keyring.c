@@ -48,9 +48,7 @@
 #include <linux/crypto.h>
 #include <linux/key.h>
 #include <linux/keyctl.h>
-#ifdef HAVE_LINUX_KEYTYPE_H
 #include <linux/key-type.h>
-#endif
 #include <linux/mutex.h>
 #include <asm/atomic.h>
 #else
