@@ -576,7 +576,7 @@ dissect_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 }
 
 static int
-dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void*data)
 {
 	/* We can tell if this is an LNet payload by looking at the first
 	 * 32-bit word for our magic number. */
@@ -833,7 +833,7 @@ dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 
 			next_tvb = tvb_new_subset (tvb, offset, payload_length, payload_length);
 			if(msg_type==LNET_MSG_PUT)
-				dissector_try_port(subdissector_table, tvb_get_letohl(tvb,LNET_PTL_INDEX_OFFSET_PUT), next_tvb, pinfo, tree);
+				dissector_try_uint(subdissector_table, tvb_get_letohl(tvb,LNET_PTL_INDEX_OFFSET_PUT), next_tvb, pinfo, tree);
 
 		}
 
@@ -999,9 +999,9 @@ proto_reg_handoff_lnet(void)
 		lnet_prefs_initialized = TRUE;
 	}
 	else
-		dissector_delete("tcp.port",global_lnet_tcp_port, lnet_handle);
+		dissector_delete_uint("tcp.port", global_lnet_tcp_port, lnet_handle);
 
 	lnet_tcp_port = global_lnet_tcp_port;
 
-	dissector_add("tcp.port", lnet_tcp_port, lnet_handle);
+	dissector_add_uint("tcp.port", lnet_tcp_port, lnet_handle);
 }

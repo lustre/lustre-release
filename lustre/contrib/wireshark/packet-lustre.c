@@ -11045,26 +11045,26 @@ void proto_reg_handoff_lustre(void)
   lustre_handle=create_dissector_handle(dissect_lustre, proto_lustre);
   /* we use Lustre only if we get ptl_index = One of this code (we have removed the bulk code) */
   /* in LNET we test if the message is a put or not before adding an lnet.ptl_index value */
-  dissector_add("lnet.ptl_index", MDC_REPLY_PORTAL          , lustre_handle);
-  dissector_add("lnet.ptl_index", CONNMGR_REQUEST_PORTAL    , lustre_handle);
-  dissector_add("lnet.ptl_index", CONNMGR_REPLY_PORTAL      , lustre_handle);
-  dissector_add("lnet.ptl_index", OSC_REPLY_PORTAL          , lustre_handle);
-  dissector_add("lnet.ptl_index", OST_IO_PORTAL             , lustre_handle);
-  dissector_add("lnet.ptl_index", OST_CREATE_PORTAL         , lustre_handle);
-  dissector_add("lnet.ptl_index", MDC_REPLY_PORTAL          , lustre_handle);
-  dissector_add("lnet.ptl_index", MDS_REQUEST_PORTAL        , lustre_handle);
-  dissector_add("lnet.ptl_index", LDLM_CB_REQUEST_PORTAL    , lustre_handle);
-  dissector_add("lnet.ptl_index", LDLM_CB_REPLY_PORTAL      , lustre_handle);
-  dissector_add("lnet.ptl_index", LDLM_CANCEL_REQUEST_PORTAL, lustre_handle);
-  dissector_add("lnet.ptl_index", LDLM_CANCEL_REPLY_PORTAL  , lustre_handle);
-  dissector_add("lnet.ptl_index", MDS_SETATTR_PORTAL        , lustre_handle);
-  dissector_add("lnet.ptl_index", MDS_READPAGE_PORTAL       , lustre_handle);
-  dissector_add("lnet.ptl_index", MGC_REPLY_PORTAL          , lustre_handle);
-  dissector_add("lnet.ptl_index", MGS_REQUEST_PORTAL        , lustre_handle);
-  dissector_add("lnet.ptl_index", MGS_REPLY_PORTAL          , lustre_handle);
-  dissector_add("lnet.ptl_index", OST_REQUEST_PORTAL        , lustre_handle);
-  dissector_add("lnet.ptl_index", FLD_REQUEST_PORTAL, lustre_handle);
-  dissector_add("lnet.ptl_index", SEQ_METADATA_PORTAL, lustre_handle);
-  dissector_add("lnet.ptl_index", SEQ_DATA_PORTAL, lustre_handle);
-  dissector_add("lnet.ptl_index", SEQ_CONTROLLER_PORTAL, lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MDC_REPLY_PORTAL          , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", CONNMGR_REQUEST_PORTAL    , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", CONNMGR_REPLY_PORTAL      , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", OSC_REPLY_PORTAL          , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", OST_IO_PORTAL             , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", OST_CREATE_PORTAL         , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MDC_REPLY_PORTAL          , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MDS_REQUEST_PORTAL        , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", LDLM_CB_REQUEST_PORTAL    , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", LDLM_CB_REPLY_PORTAL      , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", LDLM_CANCEL_REQUEST_PORTAL, lustre_handle);
+  dissector_add_uint("lnet.ptl_index", LDLM_CANCEL_REPLY_PORTAL  , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MDS_SETATTR_PORTAL        , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MDS_READPAGE_PORTAL       , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MGC_REPLY_PORTAL          , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MGS_REQUEST_PORTAL        , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", MGS_REPLY_PORTAL          , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", OST_REQUEST_PORTAL        , lustre_handle);
+  dissector_add_uint("lnet.ptl_index", FLD_REQUEST_PORTAL, lustre_handle);
+  dissector_add_uint("lnet.ptl_index", SEQ_METADATA_PORTAL, lustre_handle);
+  dissector_add_uint("lnet.ptl_index", SEQ_DATA_PORTAL, lustre_handle);
+  dissector_add_uint("lnet.ptl_index", SEQ_CONTROLLER_PORTAL, lustre_handle);
 }
