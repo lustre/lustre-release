@@ -374,28 +374,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.24 removes long aged procfs entry -> deleted member
-AC_DEFUN([LC_PROCFS_DELETED],
-[AC_MSG_CHECKING([if kernel has deleted member in procfs entry struct])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/proc_fs.h>
-],[
-        struct proc_dir_entry pde;
-
-        pde.deleted = sizeof(pde);
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_PROCFS_DELETED, 1,
-                [kernel has deleted member in procfs entry struct])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# 2.6.27
-#
-
 # up to v2.6.27 had a 3 arg version (inode, mask, nameidata)
 # v2.6.27->v2.6.37 had a 2 arg version (inode, mask)
 # v2.6.37->v3.0 had a 3 arg version (inode, mask, nameidata)
@@ -1302,7 +1280,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
-         LC_PROCFS_DELETED
 
          # 2.6.27.15-2 sles11
          LC_HAVE_QUOTAIO_H
