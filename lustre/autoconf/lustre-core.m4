@@ -432,26 +432,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-#
-# 2.6.27 sles11 move the quotaio_v1{2}.h from include/linux to fs
-# 2.6.32 move the quotaio_v1{2}.h from fs to fs/quota
-AC_DEFUN([LC_HAVE_QUOTAIO_H],
-[LB_CHECK_FILE([$LINUX/include/linux/quotaio_v2.h],[
-        AC_DEFINE(HAVE_QUOTAIO_H, 1,
-                [kernel has include/linux/quotaio_v2.h])
-],[LB_CHECK_FILE([$LINUX/fs/quotaio_v2.h],[
-               AC_DEFINE(HAVE_FS_QUOTAIO_H, 1,
-                [kernel has fs/quotaio_v1.h])
-],[LB_CHECK_FILE([$LINUX/fs/quota/quotaio_v2.h],[
-               AC_DEFINE(HAVE_FS_QUOTA_QUOTAIO_H, 1,
-                [kernel has fs/quota/quotaio_v2.h])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-])
-])
-
 # 2.6.32
 
 # 2.6.32 replaces 2 functions blk_queue_max_phys_segments and blk_queue_max_hw_segments by blk_queue_max_segments
@@ -1280,9 +1260,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.24
          LC_BIO_ENDIO_2ARG
-
-         # 2.6.27.15-2 sles11
-         LC_HAVE_QUOTAIO_H
 
          # 2.6.32
          LC_BLK_QUEUE_MAX_SEGMENTS
