@@ -287,7 +287,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		lock = ldlm_handle2lock(&qti->qti_lockh);
 		if (lock == NULL) {
 			ptlrpc_req_finished(req);
-			GOTO(out, -ENOLCK);
+			GOTO(out, rc = -ENOLCK);
 		}
 		lu_ref_add(&qqi->qqi_reference, "glb_lock", lock);
 		LDLM_LOCK_PUT(lock);

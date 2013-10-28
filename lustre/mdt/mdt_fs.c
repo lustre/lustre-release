@@ -66,7 +66,7 @@ int mdt_export_stats_init(struct obd_device *obd,
 		tmp->nid_stats = lprocfs_alloc_stats(LPROC_MDT_LAST,
 						LPROCFS_STATS_FLAG_NOPERCPU);
 		if (tmp->nid_stats == NULL)
-			return -ENOMEM;
+			RETURN(-ENOMEM);
                 mdt_stats_counter_init(tmp->nid_stats);
                 rc = lprocfs_register_stats(tmp->nid_proc, "stats",
                                             tmp->nid_stats);

@@ -1208,7 +1208,7 @@ int class_process_config(struct lustre_cfg *lcfg)
 	}
 	case LCFG_SET_PARAM: {
 		err = process_param2_config(lcfg);
-		GOTO(out, 0);
+		GOTO(out, err = 0);
 	}
 	}
         /* Commands that require a device */

@@ -188,7 +188,7 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
 	rc = lprocfs_write_helper(buffer, count, &val);
 	if (rc != 0) {
 		CERROR("%s: invalid width.\n", seq->lss_name);
-		GOTO(out_unlock, rc);
+		GOTO(out_unlock, count = rc);
 	}
 
 	seq->lss_width = val;
@@ -361,7 +361,7 @@ static int fldb_seq_open(struct inode *inode, struct file *file)
 	LPROCFS_ENTRY_CHECK(dp);
 	rc = seq_open(file, &fldb_sops);
 	if (rc)
-		GOTO(out, rc);
+		return rc;
 
 	obj = fld->lsf_obj;
 	if (obj == NULL) {

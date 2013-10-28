@@ -600,8 +600,8 @@ restart:
                                 rc = ldlm_run_ast_work(ns, &rpc_list,
                                                        LDLM_WORK_CP_AST);
                                 lock_res_and_lock(req);
-                                if (rc == -ERESTART)
-                                        GOTO(restart, -ERESTART);
+				if (rc == -ERESTART)
+					GOTO(restart, rc);
                        }
                 } else {
                         LASSERT(req->l_completion_ast);

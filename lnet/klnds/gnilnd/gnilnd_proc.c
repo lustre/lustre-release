@@ -39,6 +39,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	lnet_kiov_t              *src, *dest;
 	struct timespec          begin, end, diff;
 	int                      niov;
+	int                      rc = 0;
 	int                      i = 0, j = 0, n;
 	__u16                    cksum, cksum2;
 	__u64                    mbytes;
@@ -48,7 +49,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 	if (src == NULL || dest == NULL) {
 		CERROR("couldn't allocate iovs\n");
-		GOTO(unwind, -ENOMEM);
+		GOTO(unwind, rc = -ENOMEM);
 	}
 
 	for (i = 0; i < LNET_MAX_IOV; i++) {
@@ -58,7 +59,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 		if (src[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
-			GOTO(unwind, -ENOMEM);
+			GOTO(unwind, rc = -ENOMEM);
 		}
 
 		dest[i].kiov_offset = 0;
@@ -67,7 +68,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 		if (dest[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
-			GOTO(unwind, -ENOMEM);
+			GOTO(unwind, rc = -ENOMEM);
 		}
 	}
 
@@ -76,7 +77,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	if (niov > LNET_MAX_IOV) {
 		CERROR("bytes %d too large, requires niov %d > %d\n",
 			nob, niov, LNET_MAX_IOV);
-		GOTO(unwind, -E2BIG);
+		GOTO(unwind, rc = -E2BIG);
 	}
 
 	/* setup real data */
@@ -120,7 +121,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 		if (cksum != cksum2) {
 			CERROR("case %d loop %d different checksums %x expected %x\n",
 			       j, n, cksum2, cksum);
-			GOTO(unwind, -ENOKEY);
+			GOTO(unwind, rc = -ENOKEY);
 		}
 	}
 
@@ -148,7 +149,7 @@ unwind:
 		LIBCFS_FREE(src, LNET_MAX_IOV * sizeof(lnet_kiov_t));
 	if (dest != NULL)
 		LIBCFS_FREE(dest, LNET_MAX_IOV * sizeof(lnet_kiov_t));
-	return 0;
+	return rc;
 }
 
 static int
@@ -158,17 +159,18 @@ kgnilnd_proc_cksum_test_write(struct file *file, const char *ubuffer,
 	char                    dummy[256 + 1] = { '\0' };
 	int                     testno, nloops, nbytes;
 	int                     rc;
+	ENTRY;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
 		CERROR("can't run cksum test, kgnilnd is not initialized yet\n");
-		return -ENOSYS;
+		RETURN(-ENOSYS);
 	}
 
 	if (count >= sizeof(dummy) || count == 0)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
 	if (copy_from_user(dummy, ubuffer, count))
-		return -EFAULT;
+		RETURN(-EFAULT);
 
 	if (sscanf(dummy, "%d:%d:%d", &testno, &nloops, &nbytes) == 3) {
 		rc = _kgnilnd_proc_run_cksum_test(testno, nloops, nbytes);
@@ -1292,8 +1294,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_CKSUM_TEST, 0200, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_CKSUM_TEST);
-		rc = -ENOENT;
-		GOTO(remove_dir, rc);
+		GOTO(remove_dir, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1303,8 +1304,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_STATS, 0644, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_STATS);
-		rc = -ENOENT;
-		GOTO(remove_test, rc);
+		GOTO(remove_test, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1315,8 +1315,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_MDD, 0444, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_MDD);
-		rc = -ENOENT;
-		GOTO(remove_stats, rc);
+		GOTO(remove_stats, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1326,8 +1325,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_SMSG, 0444, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_SMSG);
-		rc = -ENOENT;
-		GOTO(remove_mdd, rc);
+		GOTO(remove_mdd, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1337,8 +1335,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_CONN, 0444, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_CONN);
-		rc = -ENOENT;
-		GOTO(remove_smsg, rc);
+		GOTO(remove_smsg, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1348,8 +1345,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_PEER_CONNS, 0644, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER_CONNS);
-		rc = -ENOENT;
-		GOTO(remove_conn, rc);
+		GOTO(remove_conn, rc = -ENOENT);
 	}
 
 	pde->data = NULL;
@@ -1360,8 +1356,7 @@ kgnilnd_proc_init(void)
 	pde = create_proc_entry(GNILND_PROC_PEER, 0444, kgn_proc_root);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER);
-		rc = -ENOENT;
-		GOTO(remove_pc, rc);
+		GOTO(remove_pc, rc = -ENOENT);
 	}
 
 	pde->data = NULL;

@@ -1703,7 +1703,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                  * need to do anything else. */
                 *flags &= ~(LDLM_FL_BLOCK_GRANTED |
                             LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_WAIT);
-                GOTO(out, ELDLM_OK);
+		GOTO(out, rc = ELDLM_OK);
         }
 
         ldlm_resource_unlink_lock(lock);
@@ -1741,18 +1741,18 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 else
                         ldlm_grant_lock(lock, NULL);
-                GOTO(out, ELDLM_OK);
+		GOTO(out, rc = ELDLM_OK);
 #ifdef HAVE_SERVER_SUPPORT
         } else if (*flags & LDLM_FL_REPLAY) {
                 if (*flags & LDLM_FL_BLOCK_CONV) {
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);
-                        GOTO(out, ELDLM_OK);
+			GOTO(out, rc = ELDLM_OK);
                 } else if (*flags & LDLM_FL_BLOCK_WAIT) {
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
-                        GOTO(out, ELDLM_OK);
+			GOTO(out, rc = ELDLM_OK);
                 } else if (*flags & LDLM_FL_BLOCK_GRANTED) {
                         ldlm_grant_lock(lock, NULL);
-                        GOTO(out, ELDLM_OK);
+			GOTO(out, rc = ELDLM_OK);
                 }
                 /* If no flags, fall through to normal enqueue path. */
         }

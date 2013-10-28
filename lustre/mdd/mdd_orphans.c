@@ -215,7 +215,7 @@ static int orph_index_insert(const struct lu_env *env,
 
         mdo_ref_add(env, obj, th);
         if (!S_ISDIR(mdd_object_type(obj)))
-                goto out;
+		GOTO(out, rc = 0);
 
         mdo_ref_add(env, obj, th);
         mdd_orphan_ref_add(env, mdd, th);
@@ -223,7 +223,7 @@ static int orph_index_insert(const struct lu_env *env,
         /* try best to fixup directory, dont return errors
          * from here */
         if (!dt_try_as_dir(env, next))
-                goto out;
+		GOTO(out, rc = 0);
         next->do_index_ops->dio_delete(env, next,
                                        (const struct dt_key *)dotdot,
                                        th, BYPASS_CAPA);

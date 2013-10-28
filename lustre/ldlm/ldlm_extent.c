@@ -784,7 +784,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 				GOTO(out, rc = 0);
 			}
 
-			GOTO(restart, -ERESTART);
+			GOTO(restart, rc);
 		}
 
 		/* this way we force client to wait for the lock

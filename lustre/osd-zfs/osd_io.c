@@ -328,7 +328,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	int                plen, off_in_block, sz_in_block;
-	int                i = 0, npages = 0;
+	int                rc, i = 0, npages = 0;
 	arc_buf_t         *abuf;
 	uint32_t           bs;
 	uint64_t           dummy;
@@ -351,7 +351,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 
 			abuf = dmu_request_arcbuf(obj->oo_db, bs);
 			if (unlikely(abuf == NULL))
-				GOTO(out_err, -ENOMEM);
+				GOTO(out_err, rc = -ENOMEM);
 
 			cfs_atomic_inc(&osd->od_zerocopy_loan);
 
@@ -402,7 +402,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 
 				lnb[i].page = alloc_page(OSD_GFP_IO);
 				if (unlikely(lnb[i].page == NULL))
-					GOTO(out_err, -ENOMEM);
+					GOTO(out_err, rc = -ENOMEM);
 
 				LASSERT(lnb[i].page->mapping == NULL);
 				lnb[i].page->mapping = (void *)obj;
@@ -424,7 +424,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 
 out_err:
 	osd_bufs_put(env, &obj->oo_dt, lnb, npages);
-	RETURN(-ENOMEM);
+	RETURN(rc);
 }
 
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,

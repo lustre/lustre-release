@@ -1478,7 +1478,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_FULL)
-		GOTO(out, 0);
+		GOTO(out, rc);
 
 	spin_unlock(&imp->imp_lock);
 

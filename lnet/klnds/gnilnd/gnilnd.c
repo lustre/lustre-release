@@ -199,8 +199,7 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	LIBCFS_ALLOC(conn->gnc_tx_ref_table, GNILND_MAX_MSG_ID * sizeof(void *));
 	if (conn->gnc_tx_ref_table == NULL) {
 		CERROR("Can't allocate conn tx_ref_table\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	atomic_set(&conn->gnc_refcount, 1);
@@ -231,8 +230,7 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 
 	if (conn->gnc_cqid == 0) {
 		CERROR("Could not allocate unique CQ ID for conn 0x%p\n", conn);
-		rc = -E2BIG;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -E2BIG);
 	}
 
 	CDEBUG(D_NET, "alloc cqid %u for conn 0x%p\n",
@@ -251,10 +249,8 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	rrc = kgnilnd_ep_create(dev->gnd_handle, dev->gnd_snd_fma_cqh,
 				&conn->gnc_ephandle);
 	mutex_unlock(&dev->gnd_cq_mutex);
-	if (rrc != GNI_RC_SUCCESS) {
-		rc = -ENETDOWN;
-		GOTO(failed, rc);
-	}
+	if (rrc != GNI_RC_SUCCESS)
+		GOTO(failed, rc = -ENETDOWN);
 
 	CDEBUG(D_NET, "created conn 0x%p ep_hndl 0x%p\n",
 	       conn, conn->gnc_ephandle);
@@ -1949,8 +1945,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 				 &dev->gnd_domain);
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't create CDM %d (%d)\n", dev->gnd_id, rrc);
-		rc = -ENODEV;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENODEV);
 	}
 
 	rrc = kgnilnd_cdm_attach(dev->gnd_domain, dev->gnd_id,
@@ -1958,17 +1953,14 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't attach CDM to device %d (%d)\n",
 			dev->gnd_id, rrc);
-		rc = -ENODEV;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENODEV);
 	}
 
 	/* a bit gross, but not much we can do - Aries Sim doesn't have
 	 * hardcoded NIC/NID that we can use */
 	rc = kgnilnd_setup_nic_translation(dev->gnd_host_id);
-	if (rc != 0) {
-		rc = -ENODEV;
-		GOTO(failed, rc);
-	}
+	if (rc != 0)
+		GOTO(failed, rc = -ENODEV);
 
 	/* only dev 0 gets the errors - no need to reset the stack twice
 	 * - this works because we have a single PTAG, if we had more
@@ -1982,8 +1974,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 		if (rrc != GNI_RC_SUCCESS) {
 			CERROR("Can't subscribe for errors on device %d: rc %d\n",
 				dev->gnd_id, rrc);
-			rc = -ENODEV;
-			GOTO(failed, rc);
+			GOTO(failed, rc = -ENODEV);
 		}
 
 		rc = kgnilnd_set_quiesce_callback(dev->gnd_handle,
@@ -1991,8 +1982,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 		if (rc != GNI_RC_SUCCESS) {
 			CERROR("Can't subscribe for quiesce callback on device %d: rc %d\n",
 				dev->gnd_id, rrc);
-			rc = -ENODEV;
-			GOTO(failed, rc);
+			GOTO(failed, rc = -ENODEV);
 		}
 	}
 
@@ -2003,8 +1993,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 			CERROR("couldn't translate host_id 0x%x to nid. rc %d\n",
 				dev->gnd_host_id, rc);
 		}
-		rc = -ESRCH;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ESRCH);
 	}
 	CDEBUG(D_NET, "NIC %x -> NID %d\n", dev->gnd_host_id, dev->gnd_nid);
 
@@ -2014,8 +2003,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't create rdma send cq size %u for device "
 		       "%d (%d)\n", cq_size, dev->gnd_id, rrc);
-		rc = -EINVAL;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -EINVAL);
 	}
 
 	rrc = kgnilnd_cq_create(dev->gnd_handle, cq_size,
@@ -2024,8 +2012,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't create fma send cq size %u for device %d (%d)\n",
 		       cq_size, dev->gnd_id, rrc);
-		rc = -EINVAL;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -EINVAL);
 	}
 
 	/* This one we size differently - overflows are possible and it needs to be
@@ -2037,8 +2024,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't create fma cq size %d for device %d (%d)\n",
 		       *kgnilnd_tunables.kgn_fma_cq_size, dev->gnd_id, rrc);
-		rc = -EINVAL;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -EINVAL);
 	}
 
 	RETURN(0);
@@ -2190,10 +2176,8 @@ int kgnilnd_base_startup(void)
 		LIBCFS_ALLOC(dev->gnd_dgrams,
 			    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
 
-		if (dev->gnd_dgrams == NULL) {
-			rc = -ENOMEM;
-			GOTO(failed, rc);
-		}
+		if (dev->gnd_dgrams == NULL)
+			GOTO(failed, rc = -ENOMEM);
 
 		for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++) {
 			INIT_LIST_HEAD(&dev->gnd_dgrams[i]);
@@ -2235,10 +2219,8 @@ int kgnilnd_base_startup(void)
 	LIBCFS_ALLOC(kgnilnd_data.kgn_peers,
 		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
 
-	if (kgnilnd_data.kgn_peers == NULL) {
-		rc = -ENOMEM;
-		GOTO(failed, rc);
-	}
+	if (kgnilnd_data.kgn_peers == NULL)
+		GOTO(failed, rc = -ENOMEM);
 
 	for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++) {
 		INIT_LIST_HEAD(&kgnilnd_data.kgn_peers[i]);
@@ -2247,10 +2229,8 @@ int kgnilnd_base_startup(void)
 	LIBCFS_ALLOC(kgnilnd_data.kgn_conns,
 		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
 
-	if (kgnilnd_data.kgn_conns == NULL) {
-		rc = -ENOMEM;
-		GOTO(failed, rc);
-	}
+	if (kgnilnd_data.kgn_conns == NULL)
+		GOTO(failed, rc = -ENOMEM);
 
 	for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++) {
 		INIT_LIST_HEAD(&kgnilnd_data.kgn_conns[i]);
@@ -2259,10 +2239,8 @@ int kgnilnd_base_startup(void)
 	LIBCFS_ALLOC(kgnilnd_data.kgn_nets,
 		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_net_hash_size);
 
-	if (kgnilnd_data.kgn_nets == NULL) {
-		rc = -ENOMEM;
-		GOTO(failed, rc);
-	}
+	if (kgnilnd_data.kgn_nets == NULL)
+		GOTO(failed, rc = -ENOMEM);
 
 	for (i = 0; i < *kgnilnd_tunables.kgn_net_hash_size; i++) {
 		INIT_LIST_HEAD(&kgnilnd_data.kgn_nets[i]);
@@ -2273,24 +2251,21 @@ int kgnilnd_base_startup(void)
 				  SLAB_HWCACHE_ALIGN, NULL);
 	if (kgnilnd_data.kgn_mbox_cache == NULL) {
 		CERROR("Can't create slab for physical mbox blocks\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	kgnilnd_data.kgn_rx_cache =
 		kmem_cache_create("kgn_rx_t", sizeof(kgn_rx_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_rx_cache == NULL) {
 		CERROR("Can't create slab for kgn_rx_t descriptors\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	kgnilnd_data.kgn_tx_cache =
 		kmem_cache_create("kgn_tx_t", sizeof(kgn_tx_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_tx_cache == NULL) {
 		CERROR("Can't create slab for kgn_tx_t\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	kgnilnd_data.kgn_tx_phys_cache =
@@ -2299,16 +2274,14 @@ int kgnilnd_base_startup(void)
 				   0, 0, NULL);
 	if (kgnilnd_data.kgn_tx_phys_cache == NULL) {
 		CERROR("Can't create slab for kgn_tx_phys\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	kgnilnd_data.kgn_dgram_cache =
 		kmem_cache_create("kgn_dgram_t", sizeof(kgn_dgram_t), 0, 0, NULL);
 	if (kgnilnd_data.kgn_dgram_cache == NULL) {
 		CERROR("Can't create slab for outgoing datagrams\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 
 	/* allocate a MAX_IOV array of page pointers for each cpu */
@@ -2316,8 +2289,7 @@ int kgnilnd_base_startup(void)
 						   GFP_KERNEL);
 	if (kgnilnd_data.kgn_cksum_map_pages == NULL) {
 		CERROR("Can't allocate vmap cksum pages\n");
-		rc = -ENOMEM;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 	kgnilnd_data.kgn_cksum_npages = num_possible_cpus();
 	memset(kgnilnd_data.kgn_cksum_map_pages, 0,
@@ -2328,8 +2300,7 @@ int kgnilnd_base_startup(void)
 							      GFP_KERNEL);
 		if (kgnilnd_data.kgn_cksum_map_pages[i] == NULL) {
 			CERROR("Can't allocate vmap cksum pages for cpu %d\n", i);
-			rc = -ENOMEM;
-			GOTO(failed, rc);
+			GOTO(failed, rc = -ENOMEM);
 		}
 	}
 
@@ -2345,16 +2316,14 @@ int kgnilnd_base_startup(void)
 			kgnilnd_data.kgn_ndevs++;
 
 			rc = kgnilnd_allocate_phys_fmablk(dev);
-			if (rc) {
+			if (rc)
 				GOTO(failed, rc);
-			}
 		}
 	}
 
 	if (kgnilnd_data.kgn_ndevs == 0) {
 		CERROR("Can't initialise any GNI devices\n");
-		rc = -ENODEV;
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENODEV);
 	}
 
 	rc = kgnilnd_thread_start(kgnilnd_reaper, NULL, "kgnilnd_rpr", 0);
@@ -2613,9 +2582,8 @@ kgnilnd_startup(lnet_ni_t *ni)
 	LIBCFS_ALLOC(net, sizeof(*net));
 	if (net == NULL) {
 		CERROR("could not allocate net for new interface instance\n");
-		rc = -ENOMEM;
 		/* no need to cleanup the CDM... */
-		GOTO(failed, rc);
+		GOTO(failed, rc = -ENOMEM);
 	}
 	INIT_LIST_HEAD(&net->gnn_list);
 	ni->ni_data = net;
@@ -2639,8 +2607,7 @@ kgnilnd_startup(lnet_ni_t *ni)
 					timeout);
 			ni->ni_data = NULL;
 			LIBCFS_FREE(net, sizeof(*net));
-			rc = -EINVAL;
-			GOTO(failed, rc);
+			GOTO(failed, rc = -EINVAL);
 		} else
 			ni->ni_peertimeout = timeout;
 
@@ -2705,8 +2672,7 @@ kgnilnd_shutdown(lnet_ni_t *ni)
 
 	if (net == NULL) {
 		CERROR("got NULL net for ni %p\n", ni);
-		rc = -EINVAL;
-		GOTO(out, rc);
+		GOTO(out, rc = -EINVAL);
 	}
 
 	LASSERTF(ni == net->gnn_ni,
@@ -2785,7 +2751,6 @@ out:
 
 	up(&kgnilnd_data.kgn_quiesce_sem);
 	EXIT;
-	return;
 }
 
 void __exit

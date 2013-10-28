@@ -183,8 +183,8 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
                 rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
                                        LDLM_WORK_BL_AST);
                 lock_res(res);
-                if (rc == -ERESTART)
-                        GOTO(restart, -ERESTART);
+		if (rc == -ERESTART)
+			GOTO(restart, rc);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         } else {
                 ldlm_resource_unlink_lock(lock);

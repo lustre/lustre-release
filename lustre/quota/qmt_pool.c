@@ -680,7 +680,7 @@ struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *env,
 		 * entry since we keep a reference on ID 0 all the time */
 		lqe = pool->qpi_grace_lqe[qtype];
 		lqe_getref(lqe);
-		GOTO(out, 0);
+		GOTO(out, lqe);
 	}
 
 	/* now that we have the pool, let's look-up the quota entry in the

@@ -509,7 +509,7 @@ out:
 	}
 
 	cl_env_put(env, &refcheck);
-	RETURN(tot_bytes ? : result);
+	RETURN(tot_bytes ? tot_bytes : result);
 }
 
 static int ll_write_begin(struct file *file, struct address_space *mapping,
