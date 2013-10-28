@@ -1,4 +1,5 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
   <title xml:id="lustretuning.title">Lustre Tuning</title>
   <para>This chapter contains information about tuning Lustre for better performance and includes the following sections:</para>
   <itemizedlist>
@@ -154,12 +155,12 @@
       <screen>options ksocklnd enable_irq_affinity=0</screen>
       <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
     </section>
-	<section><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
-	<para condition="l23">Lustre 2.3 and beyond provide enhanced network interface control. The enhancement means that
+	<section condition='l23'><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
+	<para>Lustre 2.3 and beyond provide enhanced network interface control. The enhancement means that
         an administrator can bind an interface to one or more CPU partitions. Bindings are specified
         as options to the LNET modules. For more information on specifying module options, see <xref
           linkend="dbdoclet.50438293_15350"/></para>
-<para condition="l23">For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages
+	<para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages
         for <literal>o2ib0</literal> will be handled by LND threads executing on
           <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be:
           <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by
@@ -205,7 +206,7 @@
 	</itemizedlist>
 	<para>These can be set using this syntax:</para>
 	<screen>options lnet large_router_buffers=8192</screen>
-	<note><para condition="&quot;l23&quot;">From Lustre 2.3 and beyond, it is possible that LNET may
+	<note><para condition="l23">From Lustre 2.3 and beyond, it is possible that LNET may
           revalidate the router buffer setting and the administrator's request do not
           persist.</para></note>
 	<para>The purpose of the router buffers is to create a system of quotas where no single client can overwhelm the router. Router buffers are allotted to the clients.</para>
