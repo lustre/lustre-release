@@ -178,7 +178,7 @@ copytool_suspend() {
 
 copytool_remove_backend() {
 	local fid=$1
-	local be=$(find $HSM_ARCHIVE -name $fid)
+	local be=$(do_facet $SINGLEAGT find $HSM_ARCHIVE -name $fid)
 	echo "Remove from backend: $fid = $be"
 	do_facet $SINGLEAGT rm -f $be
 }
