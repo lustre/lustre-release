@@ -254,6 +254,19 @@ short_hostname() {
   echo $(sed 's/\..*//' <<< $1)
 }
 
+###
+# short_nodename
+#
+# Find remote nodename, stripped of any domain, etc.
+# 'hostname -s' is easy, but not implemented on all systems
+short_nodename() {
+	local rname=$(do_node $1 "uname -n" || echo -1)
+	if [[ "$rname" = "-1" ]]; then
+		rname=$1
+	fi
+	echo $(short_hostname $rname)
+}
+
 print_opts () {
     local var
 
