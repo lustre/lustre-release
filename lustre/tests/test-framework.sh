@@ -6167,7 +6167,7 @@ check_write_access() {
 	local file
 
 	for node in ${list//,/ }; do
-		file=$dir/check_file.$(short_hostname $node)
+		file=$dir/check_file.$(short_nodename $node)
 		if [[ ! -f "$file" ]]; then
 			# Logdir not accessible/writable from this node.
 			return 1
