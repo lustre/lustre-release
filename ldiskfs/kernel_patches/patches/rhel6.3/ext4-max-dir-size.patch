@@ -1,12 +1,13 @@
-Index: linux-2.6.32-el6-beta/fs/ext4/namei.c
+Index: linux-stage/fs/ext4/namei.c
 ===================================================================
---- linux-2.6.32-el6-beta/fs/ext4/namei.c
-+++ linux-2.6.32-el6-beta/fs/ext4/namei.c
-@@ -59,6 +59,14 @@ static struct buffer_head *ext4_append(h
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
+@@ -60,6 +60,15 @@ struct buffer_head *ext4_append(handle_t
  	* have to be serialized -bzzz */
  	down(&ei->i_append_sem);
  
-+	if (unlikely(EXT4_SB(inode->i_sb)->s_max_dir_size &&
++	if (unlikely(S_ISDIR(inode->i_mode) &&
++		     EXT4_SB(inode->i_sb)->s_max_dir_size &&
 +		     (inode->i_size >=
 +		     EXT4_SB(inode->i_sb)->s_max_dir_size))) {
 +		*err = -ENOSPC;
