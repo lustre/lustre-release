@@ -2,8 +2,8 @@
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
   xml:lang="en-US" xml:id="understandinglustre">
   <title xml:id="understandinglustre.title">Understanding  Lustre Architecture</title>
-  <para>This chapter describes the Lustre architecture and features of Lustre. It includes the
-    following sections:</para>
+  <para>This chapter describes the Lustre architecture and features of the Lustre file system. It
+    includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para>
@@ -47,9 +47,9 @@
       coherency.</para>
     <para>A Lustre file system is currently not particularly well suited for
       &quot;peer-to-peer&quot; usage models where clients and servers are running on the same node,
-      each sharing a small amount of storage, due to the lack of Lustre-level data replication. In
-      such uses, if one client/server fails, then the data stored on that node will not be
-      accessible until the node is restarted.</para>
+      each sharing a small amount of storage, due to the lack of data replication at the Lustre
+      software level. In such uses, if one client/server fails, then the data stored on that node
+      will not be accessible until the node is restarted.</para>
     <section remap="h3">
       <title><indexterm>
           <primary>Lustre</primary>
@@ -67,7 +67,8 @@
         performance characteristics of a Lustre file system and some test results in production
         systems.</para>
       <table frame="all">
-        <title xml:id="understandinglustre.tab1">Lustre Scalability and Performance</title>
+        <title xml:id="understandinglustre.tab1">Lustre File System Scalability and
+          Performance</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
           <colspec colname="c2" colwidth="2*"/>
@@ -176,8 +177,9 @@
                 <para>
                   <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
-                <para condition="l24">Since Lustre release 2.4: up to 4096 MDSs and up to 4096
-                  MDTs.</para>
+                <para condition="l24"><emphasis role="italic">Since Lustre software release 2.4:
+                  </emphasis></para>
+                <para condition="l24">Up to 4096 MDSs and up to 4096 MDTs</para>
               </entry>
               <entry>
                 <para>
@@ -227,7 +229,7 @@
           </tbody>
         </tgroup>
       </table>
-      <para>Other Lustre features are:</para>
+      <para>Other Lustre software features are:</para>
       <itemizedlist>
         <listitem>
           <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis> The Lustre
@@ -254,10 +256,10 @@
         <listitem>
           <para><emphasis role="bold">High-availability:</emphasis> The Lustre file system supports
             active/active failover using shared storage partitions for OSS targets (OSTs). Lustre
-            Release 2.3 and earlier releases offer active/passive failover using a shared storage
-            partition for the MDS target (MDT).</para>
-          <para condition="l24">With Lustre Release 2.4 or later servers and clients it is possible
-            to configure active/active failover of multiple MDTs. This allows application
+            software release 2.3 and earlier releases offer active/passive failover using a shared
+            storage partition for the MDS target (MDT).</para>
+          <para condition="l24">With Lustre software release 2.4 or later servers and clients it is
+            possible to configure active/active failover of multiple MDTs. This allows application
             transparent recovery. The Lustre file system can work with a variety of high
             availability (HA) managers to allow automated failover and has no single point of
             failure (NSPF). Multiple mount protection (MMP) provides integrated protection from
@@ -349,16 +351,17 @@
       </indexterm>Lustre Components</title>
     <para>An installation of the Lustre software includes a management server (MGS) and one or more
       Lustre file systems interconnected with Lustre networking (LNET).</para>
-    <para>A basic configuration of Lustre components is shown in <xref
+    <para>A basic configuration of Lustre file system components is shown in <xref
         linkend="understandinglustre.fig.cluster"/>.</para>
     <figure>
-      <title xml:id="understandinglustre.fig.cluster">Lustre components in a basic cluster </title>
+      <title xml:id="understandinglustre.fig.cluster">Lustre file system components in a basic
+        cluster </title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%" fileref="./figures/Basic_Cluster.png"/>
         </imageobject>
         <textobject>
-          <phrase> Lustre components in a basic cluster </phrase>
+          <phrase> Lustre file system components in a basic cluster </phrase>
         </textobject>
       </mediaobject>
     </figure>
@@ -386,15 +389,15 @@
             or more local MDTs.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Metadata Target (MDT</emphasis> ) - For Lustre Release 2.3 and
-            earlier, each file system has one MDT. The MDT stores metadata (such as filenames,
-            directories, permissions and file layout) on storage attached to an MDS. Each file
-            system has one MDT. An MDT on a shared storage target can be available to multiple MDSs,
-            although only one can access it at a time. If an active MDS fails, a standby MDS can
-            serve the MDT and make it available to clients. This is referred to as MDS
+          <para><emphasis role="bold">Metadata Target (MDT</emphasis> ) - For Lustre software
+            release 2.3 and earlier, each file system has one MDT. The MDT stores metadata (such as
+            filenames, directories, permissions and file layout) on storage attached to an MDS. Each
+            file system has one MDT. An MDT on a shared storage target can be available to multiple
+            MDSs, although only one can access it at a time. If an active MDS fails, a standby MDS
+            can serve the MDT and make it available to clients. This is referred to as MDS
             failover.</para>
-          <para condition="l24">Since Lustre Release 2.4, multiple MDTs are supported. Each file
-            system has at least one MDT. An MDT on a shared storage target can be available via
+          <para condition="l24">Since Lustre software release 2.4, multiple MDTs are supported. Each
+            file system has at least one MDT. An MDT on a shared storage target can be available via
             multiple MDSs, although only one MDS can export the MDT to the clients at one time. Two
             MDS machines share storage for two or more MDTs. After the failure of one MDS, the
             remaining MDS begins serving the MDT(s) of the failed MDS.</para>
@@ -433,7 +436,7 @@
         <title xml:id="understandinglustre.tab.storagerequire"><indexterm>
             <primary>Lustre</primary>
             <secondary>requirements</secondary>
-          </indexterm>Storage and hardware requirements for Lustre components</title>
+          </indexterm>Storage and hardware requirements for Lustre file system components</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*"/>
           <colspec colname="c2" colwidth="3*"/>
@@ -510,10 +513,11 @@
           <primary>Lustre</primary>
           <secondary>cluster</secondary>
         </indexterm>Lustre Cluster</title>
-      <para>At scale, the Lustre cluster can include hundreds of OSSs and thousands of clients (see
-          <xref linkend="understandinglustre.fig.lustrescale"/>). More than one type of network can
-        be used in a Lustre cluster. Shared storage between OSSs enables failover capability. For
-        more details about OSS failover, see <xref linkend="understandingfailover"/>.</para>
+      <para>At scale, a Lustre file system cluster can include hundreds of OSSs and thousands of
+        clients (see <xref linkend="understandinglustre.fig.lustrescale"/>). More than one type of
+        network can be used in a Lustre cluster. Shared storage between OSSs enables failover
+        capability. For more details about OSS failover, see <xref linkend="understandingfailover"
+        />.</para>
       <figure>
         <title xml:id="understandinglustre.fig.lustrescale"><indexterm>
             <primary>Lustre</primary>
@@ -524,7 +528,7 @@
             <imagedata scalefit="1" width="100%" fileref="./figures/Scaled_Cluster.png"/>
           </imageobject>
           <textobject>
-            <phrase> Lustre cluster at scale </phrase>
+            <phrase> Lustre file system cluster at scale </phrase>
           </textobject>
         </mediaobject>
       </figure>
@@ -538,31 +542,31 @@
       <indexterm>
         <primary>Lustre</primary>
         <secondary>I/O</secondary>
-      </indexterm> Lustre Storage and I/O</title>
-    <para>In Lustre release 2.0, Lustre file identifiers (FIDs) were introduced to replace UNIX
-      inode numbers for identifying files or objects. A FID is a 128-bit identifier that contains a
-      unique 64-bit sequence number, a 32-bit object ID (OID), and a 32-bit version number. The
-      sequence number is unique across all Lustre targets in a file system (OSTs and MDTs). This
-      change enabled future support for multiple MDTs (introduced in Lustre release 2.3) and ZFS
-      (introduced in Lustre release 2.4).</para>
-    <para>Also introduced in 2.0 is a feature call <emphasis role="italic">FID-in-dirent</emphasis>
-      (also known as <emphasis role="italic">dirdata</emphasis>) in which the FID is stored as part
-      of the name of the file in the parent directory. This feature significantly improves
-      performance for <literal>ls</literal> command executions by reducing disk I/O. The
-      FID-in-dirent is generated at the time the file is created.</para>
+      </indexterm> Lustre File System Storage and I/O</title>
+    <para>In Lustre software release 2.0, Lustre file identifiers (FIDs) were introduced to replace
+      UNIX inode numbers for identifying files or objects. A FID is a 128-bit identifier that
+      contains a unique 64-bit sequence number, a 32-bit object ID (OID), and a 32-bit version
+      number. The sequence number is unique across all Lustre targets in a file system (OSTs and
+      MDTs). This change enabled future support for multiple MDTs (introduced in Lustre software
+      release 2.3) and ZFS (introduced in Lustre software release 2.4).</para>
+    <para>Also introduced in release 2.0 is a feature call <emphasis role="italic"
+        >FID-in-dirent</emphasis> (also known as <emphasis role="italic">dirdata</emphasis>) in
+      which the FID is stored as part of the name of the file in the parent directory. This feature
+      significantly improves performance for <literal>ls</literal> command executions by reducing
+      disk I/O. The FID-in-dirent is generated at the time the file is created.</para>
     <note>
-      <para>The FID-in-dirent feature is not compatible with the Lustre release 1.8 format.
-        Therefore, when an upgrade from Lustre release 1.8 to a Lustre release 2.x is performed, the
-        FID-in-dirent feature is not automatically enabled. For upgrades from Lustre release 1.8 to
-        Lustre releases 2.0 through 2.3, FID-in-dirent can be enabled manually but only takes effect
-        for new files. </para>
-      <para>For more information about upgrading from Lustre release 1.8 and enabling FID-in-dirent
-        for existing files, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+      <para>The FID-in-dirent feature is not compatible with the Lustre software release 1.8 format.
+        Therefore, when an upgrade from Lustre software release 1.8 to a Lustre software release 2.x
+        is performed, the FID-in-dirent feature is not automatically enabled. For upgrades from
+        Lustre software release 1.8 to Lustre software releases 2.0 through 2.3, FID-in-dirent can
+        be enabled manually but only takes effect for new files. </para>
+      <para>For more information about upgrading from Lustre software release 1.8 and enabling
+        FID-in-dirent for existing files, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="upgradinglustre"/>Chapter 16 “Upgrading a Lustre File System”.</para>
     </note>
-    <para condition="l24">The LFSCK 1.5 file system administration tool released with Lustre release
-      2.4 provides functionality that enables FID-in-dirent for existing files. It includes the
-      following functionality:<itemizedlist>
+    <para condition="l24">The LFSCK 1.5 file system administration tool released with Lustre
+      software release 2.4 provides functionality that enables FID-in-dirent for existing files. It
+      includes the following functionality:<itemizedlist>
         <listitem>
           <para>Generates IGIF mode FIDs for existing release 1.8 files.</para>
         </listitem>

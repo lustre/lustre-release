@@ -176,7 +176,13 @@ lfs help
               </entry>
               <entry>
                 <para>File was last accessed N*24 hours ago. (There is no guarantee that <literal>atime</literal> is kept coherent across the cluster.)</para>
-                <para>OSTs store a transient <literal>atime</literal> that is updated when clients do read requests. Permanent <literal>atime</literal> is written to the MDS when the file is closed. However, on-disk atime is only updated if it is more than 60 seconds old (<literal>/proc/fs/lustre/mds/*/max_atime_diff</literal>). Lustre considers the latest <literal>atime</literal> from all OSTs. If a <literal>setattr</literal> is set by user, then it is updated on both the MDS and OST, allowing the <literal>atime</literal> to go backward.</para>
+                <para>OSTs store a transient <literal>atime</literal> that is updated when clients
+                  do read requests. Permanent <literal>atime</literal> is written to the MDS when
+                  the file is closed. However, on-disk atime is only updated if it is more than 60
+                  seconds old (<literal>/proc/fs/lustre/mds/*/max_atime_diff</literal>). The Lustre
+                  software considers the latest <literal>atime</literal> from all OSTs. If a
+                    <literal>setattr</literal> is set by user, then it is updated on both the MDS
+                  and OST, allowing the <literal>atime</literal> to go backward.</para>
               </entry>
             </row>
             <row>
@@ -306,7 +312,9 @@ lfs help
                 <para> <literal>osts [path]</literal></para>
               </entry>
               <entry>
-                <para>Lists all OSTs for the file system. If a path located on a Lustre-mounted file system is specified, then only OSTs belonging to this file system are displayed.</para>
+                <para>Lists all OSTs for the file system. If a path located on a mounted Lustre file
+                  system is specified, then only OSTs belonging to this file system are
+                  displayed.</para>
               </entry>
             </row>
             <row>
@@ -314,8 +322,10 @@ lfs help
                 <para> <literal>getname [path...]</literal></para>
               </entry>
               <entry>
-                  <para>List each Lustre instance associated with each Lustre mount point.
-                      If no path is specified, all Lustre mounts points are interrogated. If a list of paths is provided, the instance of each path is provided. If the path is not a Lustre instance 'No such device' is returned.</para>
+                  <para>List each Lustre file system instance associated with each Lustre mount
+                  point. If no path is specified, all Lustre mount points are interrogated. If a
+                  list of paths is provided, the instance of each path is provided. If the path is
+                  not a Lustre instance 'No such device' is returned.</para>
               </entry>
             </row>
             <row>
@@ -325,7 +335,10 @@ lfs help
               <entry>
                 <para>Lists striping information for a given filename or directory. By default, the stripe count, stripe size and offset are returned.</para>
                 <para>If you only want specific striping information, then the options of <literal>--count</literal>,<literal>--size</literal>,<literal>--index</literal> or <literal>--offset</literal> plus various combinations of these options can be used to retrieve specific information.</para>
-                <para>If the <literal>--raw</literal> option is specified, the stripe information is printed without substituting the filesystem's default values for unspecified fields. If the striping EA is not set, 0, 0, and -1 will be printed for the stripe count, size, and offset respectively.</para>
+                <para>If the <literal>--raw</literal> option is specified, the stripe information is
+                  printed without substituting the file system default values for unspecified
+                  fields. If the striping EA is not set, 0, 0, and -1 will be printed for the stripe
+                  count, size, and offset respectively.</para>
 				<para condition='l24'>The <literal>-M</literal> prints the index of the MDT for a given directory. See <xref linkend='dbdoclet.rmremotedir'/>.</para>
               </entry>
             </row>
@@ -577,7 +590,8 @@ lfs help
               </entry>
               <entry>
                 <para>Sets file system quotas for users or groups. Limits can be specified with <literal>--{block|inode}-{softlimit|hardlimit}</literal> or their short equivalents <literal>-b</literal>, <literal>-B</literal>, <literal>-i</literal>, <literal>-I</literal>. Users can set 1, 2, 3 or 4 limits.<footnote>
-                    <para>The old <literal>setquota</literal> interface is supported, but it may be removed in a future Lustre release.</para>
+                    <para>The old <literal>setquota</literal> interface is supported, but it may be
+                      removed in a future Lustre software release.</para>
                   </footnote>Also, limits can be specified with special suffixes, -b, -k, -m, -g, -t, and -p to indicate units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50, respectively. By default, the block limits unit is 1 kilobyte (1,024), and block limits are always kilobyte-grained (even if specified in bytes). See <xref linkend="dbdoclet.50438206_11903"/>.</para>
               </entry>
             </row>
@@ -617,7 +631,7 @@ lfs help
       <screen>$ lfs setstripe -d /mnt/lustre/dir</screen>
       <para>Lists the detailed object allocation of a given file.</para>
       <screen>$ lfs getstripe -v /mnt/lustre/file1</screen>
-      <para>List all the mounted lustre filesystems and corresponding Lustre instances.</para>
+      <para>List all the mounted Lustre file systems and corresponding Lustre instances.</para>
       <screen>$ lfs getname</screen>
       <para>Efficiently lists all files in a given directory and its subdirectories.</para>
       <screen>$ lfs find /mnt/lustre</screen>
@@ -635,7 +649,7 @@ lfs help
       <screen>$ lfs df --pool <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>] | <replaceable>pathname</replaceable></screen>
       <para>List quotas of user &apos;bob&apos;.</para>
       <screen>$ lfs quota -u bob /mnt/lustre</screen>
-      <para>Show grace times for user quotas on /mnt/lustre.</para>
+      <para>Show grace times for user quotas on <literal>/mnt/lustre</literal>.</para>
       <screen>$ lfs quota -t -u /mnt/lustre</screen>
       <para>Changes file owner and group.</para>
       <screen>$ lfs quotachown -i /mnt/lustre</screen>
@@ -792,7 +806,13 @@ lfs help
     <title><indexterm><primary>lfsck</primary></indexterm>
        <literal>lfsck</literal>
     </title>
-    <para><literal>lfsck</literal> ensures that objects are not referenced by multiple MDS files, that there are no orphan objects on the OSTs (objects that do not have any file on the MDS which references them), and that all of the objects referenced by the MDS exist. Under normal circumstances, Lustre maintains such coherency by distributed logging mechanisms, but under exceptional circumstances that may fail (e.g. disk failure, file system corruption leading to e2fsck repair). To avoid lengthy downtime, you can also run <literal>lfsck</literal> once Lustre is already started.</para>
+    <para><literal>lfsck</literal> ensures that objects are not referenced by multiple MDS files,
+      that there are no orphan objects on the OSTs (objects that do not have any file on the MDS
+      which references them), and that all of the objects referenced by the MDS exist. Under normal
+      circumstances, the Lustre software maintains such coherency by distributed logging mechanisms,
+      but under exceptional circumstances that may fail (e.g. disk failure, file system corruption
+      leading to e2fsck repair). To avoid lengthy downtime, you can also run
+        <literal>lfsck</literal> once the Lustre file system is already started.</para>
     <para>The <literal>e2fsck</literal> utility is run on each of the local MDS and OST device file systems and verifies that the underlying <literal>ldiskfs</literal> is consistent. After <literal>e2fsck</literal> is run, <literal>lfsck</literal> does distributed coherency checking for the Lustre file system. In most cases, <literal>e2fsck</literal> is sufficient to repair any file system issues and <literal>lfsck</literal> is not required.</para>
     <section remap="h5">
       <title>Synopsis</title>
@@ -912,11 +932,15 @@ lfs help
       <title>Description</title>
       <para>The <literal>filefrag</literal> utility reports the extent of fragmentation in a given file. Initially, <literal>filefrag</literal> attempts to obtain extent information using <literal>FIEMAP ioctl</literal>, which is efficient and fast. If <literal>FIEMAP</literal> is not supported, then <literal>filefrag</literal> uses <literal>FIBMAP</literal>.</para>
       <note>
-        <para>Lustre only supports <literal>FIEMAP ioctl</literal>. <literal>FIBMAP ioctl</literal> is not supported.</para>
+        <para>The Lustre software only supports <literal>FIEMAP ioctl</literal>. <literal>FIBMAP
+            ioctl</literal> is not supported.</para>
       </note>
       <para>In default mode <footnote>
           <para>The default mode is faster than the verbose/extent mode.</para>
-        </footnote>, <literal>filefrag</literal> returns the number of physically discontiguous extents in the file. In extent or verbose mode, each extent is printed with details. For Lustre, the extents are printed in device offset order, not logical offset order.</para>
+        </footnote>, <literal>filefrag</literal> returns the number of physically discontiguous
+        extents in the file. In extent or verbose mode, each extent is printed with details. For a
+        Lustre file system, the extents are printed in device offset order, not logical offset
+        order.</para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -941,7 +965,8 @@ lfs help
                 <para> <literal>-b</literal></para>
               </entry>
               <entry>
-                <para>Uses the 1024-byte blocksize for the output. By default, this blocksize is used by Lustre, since OSTs may use different block sizes.</para>
+                <para>Uses the 1024-byte blocksize for the output. By default, this blocksize is
+                  used by the Lustre file system, since OSTs may use different block sizes.</para>
               </entry>
             </row>
             <row>
@@ -1005,7 +1030,10 @@ ext:       device_logical:         start..end              physical:            
     <title><indexterm><primary>mount</primary></indexterm>
       <literal>mount</literal>
     </title>
-    <para>Lustre uses the standard <literal>mount(8)</literal> Linux command. When mounting a Lustre file system, mount(8) executes the <literal>/sbin/mount.lustre</literal> command to complete the mount. The mount command supports these Lustre-specific options:</para>
+    <para>The standard <literal>mount(8)</literal> Linux command is used to mount a Lustre file
+      system. When mounting a Lustre file system, mount(8) executes the
+        <literal>/sbin/mount.lustre</literal> command to complete the mount. The mount command
+      supports these options specific to a Lustre file system:</para>
     <informaltable frame="all">
       <tgroup cols="2">
         <colspec colname="c1" colwidth="50*"/>

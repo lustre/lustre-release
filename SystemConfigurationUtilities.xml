@@ -784,7 +784,10 @@ ll_decode_filter_fid</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The ll_decode_filter_fid utility decodes and prints the Lustre OST object ID, MDT FID, stripe index for the specified OST object(s), which is stored in the &quot;trusted.fid&quot; attribute on each OST object. This is accessible to ll_decode_filter_fid when the OST filesystem is mounted locally as type ldiskfs for maintenance.</para>
+      <para>The ll_decode_filter_fid utility decodes and prints the Lustre OST object ID, MDT FID,
+        stripe index for the specified OST object(s), which is stored in the &quot;trusted.fid&quot;
+        attribute on each OST object. This is accessible to <literal>ll_decode_filter_fid</literal>
+        when the OST file system is mounted locally as type ldiskfs for maintenance.</para>
       <para>The &quot;trusted.fid&quot; extended attribute is stored on each OST object when it is first modified (data written or attributes set), and is not accessed or modified by Lustre after that time.</para>
       <para>The OST object ID (objid) is useful in case of OST directory corruption, though normally the ll_recover_lost_found_objs(8) utility is able to reconstruct the entire OST object directory hierarchy. The MDS FID can be useful to determine which MDS inode an OST object is (or was) used by. The stripe index can be used in conjunction with other OST objects to reconstruct the layout of a file even if the MDT inode was lost.</para>
     </section>
@@ -1124,7 +1127,9 @@ llverdev</title>
                 <para> <literal>-t <replaceable>timestamp</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets the test start time as printed at the start of a previously-interrupted test to ensure that validation data is the same across the entire filesystem (default value is the current time()).</para>
+                <para> Sets the test start time as printed at the start of a previously-interrupted
+                  test to ensure that validation data is the same across the entire file system
+                  (default value is the current time()).</para>
               </entry>
             </row>
             <row>

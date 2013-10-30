@@ -54,11 +54,11 @@
       objects on OSTs with more free space. (This can reduce I/O performance until space usage is
       rebalanced again.) For a more detailed description of how striping is allocated, see <xref
         linkend="dbdoclet.50438209_10424"/>.</para>
-    <para condition="l22">Files can only be striped over a finite number of OSTs. Prior to the
-      Lustre 2.2 release, the maximum number of OSTs that a file could be striped across was limited
-      to 160. As of the Lustre 2.2 release, the maximum number of OSTs is 2000. For more
-      information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_syy_gcl_qk"
-      />.</para>
+    <para condition="l22">Files can only be striped over a finite number of OSTs. Prior to Lustre
+      software release 2.2, the maximum number of OSTs that a file could be striped across was
+      limited to 160. As of Lustre software release 2.2, the maximum number of OSTs is 2000. For
+      more information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="section_syy_gcl_qk"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438209_48033">
       <title><indexterm>
@@ -345,9 +345,9 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
           <primary>striping</primary>
           <secondary>remote directories</secondary>
         </indexterm>Locating the MDT for a remote directory</title>
-      <para condition="l24">Lustre  release 2.4 can be configured with multiple MDTs in the same
-        file system. Each sub-directory can have a different MDT. To identify on which MDT a given
-        subdirectory is located, pass the <literal>getstripe -M</literal> parameters to
+      <para condition="l24">Lustre software release 2.4 can be configured with multiple MDTs in the
+        same file system. Each sub-directory can have a different MDT. To identify on which MDT a
+        given subdirectory is located, pass the <literal>getstripe -M</literal> parameters to
           <literal>lfs</literal>. An example of this command is provided in the section <xref
           linkend="dbdoclet.rmremotedir"/>.</para>
     </section>
@@ -574,16 +574,17 @@ File 4: OST6, OST7, OST0</screen>
       </indexterm><indexterm>
         <primary>wide striping</primary>
       </indexterm>Lustre Striping Internals</title>
-    <para>For Lustre releases prior to Lustre release 2.2, files can be striped across a maximum of
-      160 OSTs. Lustre inodes use an extended attribute to record the location of each object (the
-      object ID and the number of the OST on which it is stored). The size of the extended attribute
-      limits the maximum stripe count to 160 objects.</para>
-    <para condition="l22">In Lustre release 2.2 and subsequent releases, the maximum number of OSTs
-      over which files can be striped has been raised to 2000 by allocating a new block on which to
-      store the extended attribute that holds the object information. This feature, known as "wide
-      striping," only allocates the additional extended attribute data block if the file is striped
-      with a stripe count greater than 160. The file layout (object ID, OST number) is stored on the
-      new data block with a pointer to this block stored in the original Lustre inode for the file.
-      For files smaller than 160 objects, the Lustre inode is used to store the file layout.</para>
+    <para>For Lustre releases prior to Lustre software release 2.2, files can be striped across a
+      maximum of 160 OSTs. Lustre inodes use an extended attribute to record the location of each
+      object (the object ID and the number of the OST on which it is stored). The size of the
+      extended attribute limits the maximum stripe count to 160 objects.</para>
+    <para condition="l22">In Lustre software release 2.2 and subsequent releases, the maximum number
+      of OSTs over which files can be striped has been raised to 2000 by allocating a new block on
+      which to store the extended attribute that holds the object information. This feature, known
+      as "wide striping," only allocates the additional extended attribute data block if the file is
+      striped with a stripe count greater than 160. The file layout (object ID, OST number) is
+      stored on the new data block with a pointer to this block stored in the original Lustre inode
+      for the file. For files smaller than 160 objects, the Lustre inode is used to store the file
+      layout.</para>
   </section>
 </chapter>

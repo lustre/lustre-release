@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
   <title xml:id="backupandrestore.title">Backing Up and Restoring a File System</title>
-  <para>This chapter describes how to backup and restore on Lustre, at the file system-level,
-    device-level and file-level. Each backup approach is described in the the following
+  <para>This chapter describes how to backup and restore at the file system-level, device-level and
+    file-level in a Lustre file system. Each backup approach is described in the the following
     sections:</para>
   <itemizedlist>
     <listitem>
@@ -34,12 +34,15 @@
     <para>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
     <para>However, due to the large size of most Lustre file systems, it is not always possible to get a complete backup. We recommend that you back up subsets of a file system. This includes subdirectories of the entire file system, filesets for a single user, files incremented by date, and so on.</para>
     <note>
-      <para>In order to allow Lustre to scale the file system namespace for future applications,
-        Lustre 2.x internally uses a 128-bit file identifier for all files. To interface with user
-        applications, Lustre presents 64-bit inode numbers for the <literal>stat()</literal>,
-          <literal>fstat()</literal>, and <literal>readdir()</literal> system calls on 64-bit
-        applications, and 32-bit inode numbers to 32-bit applications.</para>
-      <para>Some 32-bit applications accessing Lustre filesystems (on both 32-bit and 64-bit CPUs) may experience problems with the <literal>stat()</literal>, <literal>fstat()</literal> or<literal> readdir()</literal> system calls under certain circumstances, though the Lustre client should return 32-bit inode numbers to these applications.</para>
+      <para>In order to allow the file system namespace to scale for future applications, Lustre
+        software release 2.x internally uses a 128-bit file identifier for all files. To interface
+        with user applications, the Lustre software presents 64-bit inode numbers for the
+          <literal>stat()</literal>, <literal>fstat()</literal>, and <literal>readdir()</literal>
+        system calls on 64-bit applications, and 32-bit inode numbers to 32-bit applications.</para>
+      <para>Some 32-bit applications accessing Lustre file systems (on both 32-bit and 64-bit CPUs)
+        may experience problems with the <literal>stat()</literal>, <literal>fstat()</literal>
+          or<literal> readdir()</literal> system calls under certain circumstances, though the
+        Lustre client should return 32-bit inode numbers to these applications.</para>
       <para>In particular, if the Lustre file system is exported from a 64-bit client via NFS to a
         32-bit client, the Linux NFS server will export 64-bit inode numbers to applications running
         on the NFS client. If the 32-bit applications are not compiled with Large File Support
@@ -166,14 +169,14 @@
       <section remap="h4">
           <title><indexterm><primary>backup</primary><secondary>rsync</secondary><tertiary>examples</tertiary></indexterm><literal>lustre_rsync</literal> Examples</title>
         <para>Sample <literal>lustre_rsync</literal> commands are listed below.</para>
-        <para>Register a changelog user for an MDT (e.g. <literal>lustre-MDT0000</literal>).</para>
-        <screen># lctl --device lustre-MDT0000 changelog_register lustre-MDT0000
+        <para>Register a changelog user for an MDT (e.g. <literal>testfs-MDT0000</literal>).</para>
+        <screen># lctl --device testfs-MDT0000 changelog_register testfs-MDT0000
 Registered changelog userid &apos;cl1&apos;</screen>
         <para>Synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to a target file system (<literal>/mnt/target</literal>).</para>
         <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \
-           --mdt=lustre-MDT0000 --user=cl1 --statuslog sync.log  --verbose 
-Lustre filesystem: lustre 
-MDT device: lustre-MDT0000 
+           --mdt=testfs-MDT0000 --user=cl1 --statuslog sync.log  --verbose 
+Lustre filesystem: testfs 
+MDT device: testfs-MDT0000 
 Source: /mnt/lustre 
 Target: /mnt/target 
 Statuslog: sync.log 
@@ -184,8 +187,8 @@ lustre_rsync took 1 seconds
 Changelog records consumed: 22</screen>
         <para>After the file system undergoes changes, synchronize the changes onto the target file system. Only the <literal>statuslog</literal> name needs to be specified, as it has all the parameters passed earlier.</para>
         <screen>$ lustre_rsync --statuslog sync.log --verbose 
-Replicating Lustre filesystem: lustre 
-MDT device: lustre-MDT0000 
+Replicating Lustre filesystem: testfs 
+MDT device: testfs-MDT0000 
 Source: /mnt/lustre 
 Target: /mnt/target 
 Statuslog: sync.log 
@@ -196,7 +199,7 @@ lustre_rsync took 2 seconds
 Changelog records consumed: 42</screen>
         <para>To synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to two target file systems (<literal>/mnt/target1</literal> and <literal>/mnt/target2</literal>).</para>
         <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target1 \
-           --target=/mnt/target2 --mdt=lustre-MDT0000 --user=cl1  \
+           --target=/mnt/target2 --mdt=testfs-MDT0000 --user=cl1  \
            --statuslog sync.log</screen>
       </section>
     </section>
@@ -208,16 +211,14 @@ Changelog records consumed: 42</screen>
       <para>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para>
     </note>
     <warning condition='l23'>
-        <para>In Lustre 2.0 through 2.2, the only successful way to backup and
-	restore an MDT is to do a device-level backup as is described in this
-	section. File-level restore of an MDT is not possible before Lustre 2.3,
-	as the Object Index (OI) file cannot be rebuilt after restore without
-	the OI Scrub functionality.
-	<emphasis role='bold'>Since Lustre 2.3</emphasis>, Object Index files
-	are automatically rebuilt at first mount after a restore is detected
-	(see <link xl:href='http://jira.hpdd.intel.com/browse/LU-957'>LU-957</link>),
-	and file-level backup is supported
-	(see <xref linkend='dbdoclet.50438207_21638'/>).</para>
+        <para>In Lustre software release 2.0 through 2.2, the only successful way to backup and
+        restore an MDT is to do a device-level backup as is described in this section. File-level
+        restore of an MDT is not possible before Lustre software release 2.3, as the Object Index
+        (OI) file cannot be rebuilt after restore without the OI Scrub functionality. <emphasis
+          role="bold">Since Lustre software release 2.3</emphasis>, Object Index files are
+        automatically rebuilt at first mount after a restore is detected (see <link
+          xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>), and file-level backup
+        is supported (see <xref linkend="dbdoclet.50438207_21638"/>).</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
     <screen>dd if=/dev/{original} of=/dev/{newdev} bs=1M</screen>
@@ -234,18 +235,18 @@ Changelog records consumed: 42</screen>
       <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
     <para>This procedure provides an alternative to backup or migrate the data of an OST or MDT at the file level. At the file-level, unused space is omitted from the backed up and the process may be completed quicker with smaller total backup size. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT and additional file stripes that may be on other OSTs. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
     <note>
-        <para>Prior to Lustre 2.3, the only successful way to perform an MDT
-	backup and restore is to do a device-level backup as is described in
-	<xref linkend='dbdoclet.50438207_71633'/>. The ability to do MDT
-	file-level backups is not available for Lustre 2.0 thru 2.2, because
-	restoration of the Object Index (OI) file does not return the MDT to
-	a functioning state. <emphasis role='bold'>Since Lustre 2.3</emphasis>,
-	Object Index files are automatically rebuilt at first mount after a
-	restore is detected (see
-	<link xl:href='http://jira.hpdd.intel.com/browse/LU-957'>LU-957</link>),
-	so file-level MDT restore is supported.</para>
+        <para>Prior to Lustre software release 2.3, the only successful way to perform an MDT backup
+        and restore is to do a device-level backup as is described in <xref
+          linkend="dbdoclet.50438207_71633"/>. The ability to do MDT file-level backups is not
+        available for Lustre software release 2.0 through 2.2, because restoration of the Object
+        Index (OI) file does not return the MDT to a functioning state. <emphasis role="bold">Since
+          Lustre software release 2.3</emphasis>, Object Index files are automatically rebuilt at
+        first mount after a restore is detected (see <link
+          xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>), so file-level MDT
+        restore is supported.</para>
     </note>
-    <para>For Lustre 2.3 and newer with MDT file-level backup support, substitute <literal>mdt</literal> for <literal>ost</literal> in the instructions below.</para>
+    <para>For Lustre software release 2.3 and newer with MDT file-level backup support, substitute
+        <literal>mdt</literal> for <literal>ost</literal> in the instructions below.</para>
     <orderedlist>
       <listitem>
         <para><emphasis role="bold">Make a mountpoint for the file system.</emphasis></para>
@@ -355,7 +356,10 @@ trusted.fid= \
     <para>If the file system was used between the time the backup was made and when it was restored, then the <literal>lfsck</literal> tool (part of Lustre <literal>e2fsprogs</literal>) can optionally be run to ensure the file system is coherent. If all of the device file systems were backed up at the same time after the entire Lustre file system was stopped, this is not necessary. In either case, the file system should be immediately usable even if <literal>lfsck</literal> is not run, though there may be I/O errors reading from files that are present on the MDT but not the OSTs, and files that were created after the MDT backup will not be accessible/visible.</para>
   </section>
   <section xml:id="dbdoclet.50438207_31553">
-    <title><indexterm><primary>backup</primary><secondary>using LVM</secondary></indexterm>Using LVM Snapshots with Lustre</title>
+    <title><indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+      </indexterm>Using LVM Snapshots with the Lustre File System</title>
     <para>If you want to perform disk-based backups (because, for example, access to the backup system needs to be as fast as to the primary Lustre file system), you can use the Linux LVM snapshot tool to maintain multiple, incremental file system backups.</para>
     <para>Because LVM snapshots cost CPU cycles as new files are written, taking snapshots of the main Lustre file system will probably result in unacceptable performance losses. You should create a new, backup Lustre file system and periodically (e.g., nightly) back up new/changed files to it. Periodic snapshots can be taken of this backup file system to create a series of &quot;full&quot; backups.</para>
     <note>
@@ -382,7 +386,8 @@ cfs21:~# lvscan
         </listitem>
         <listitem>
           <para>Format the LVM volumes as Lustre targets.</para>
-          <para>In this example, the backup file system is called &apos;main&apos; and designates the current, most up-to-date backup.</para>
+          <para>In this example, the backup file system is called <literal>main</literal> and
+            designates the current, most up-to-date backup.</para>
           <screen>cfs21:~# mkfs.lustre --fsname=main --mdt --index=0 /dev/vgmain/MDT0
  No management node specified, adding MGS to this MDT.
     Permanent disk data:
@@ -509,7 +514,8 @@ Permanent disk data:
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
 Writing CONFIGS/mountdata</screen>
-        <para>When renaming an FS, we must also erase the last_rcvd file from the snapshots</para>
+        <para>When renaming a file system, we must also erase the last_rcvd file from the
+            snapshots</para>
           <screen>cfs21:~# mount -t ldiskfs /dev/vgmain/MDT0.b1 /mnt/mdtback
 cfs21:~# rm /mnt/mdtback/last_rcvd
 cfs21:~# umount /mnt/mdtback

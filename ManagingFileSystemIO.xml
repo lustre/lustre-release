@@ -241,7 +241,9 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
         </listitem>
       </itemizedlist>
       <para>If the leading <literal><replaceable>fsname</replaceable></literal> and/or ending <literal>_UUID</literal> are missing, they are automatically added.</para>
-      <para> For example, to add even-numbered OSTs to pool1 on file system <literal>lustre</literal>, run a single command (add) to add many OSTs to the pool at one time:</para>
+      <para> For example, to add even-numbered OSTs to <literal>pool1</literal> on file system
+          <literal>lustre</literal>, run a single command (<literal>pool_add</literal>) to add many
+        OSTs to the pool at one time:</para>
       <para><screen>lctl pool_add lustre.pool1 OST[0-10/2]</screen></para>
       <note>
         <para>Each time an OST is added to a pool, a new <literal>llog</literal> configuration record is created. For convenience, you can run a single command.</para>
@@ -324,11 +326,13 @@ oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
         </itemizedlist>
       </listitem>
     </orderedlist>
-    <para>If a Lustre administrator wants to explore this approach further, per-OST disk-usage statistics can be found under <literal>/proc/fs/lustre/osc/*/rpc_stats</literal></para>
+    <para>If a Lustre file system administrator wants to explore this approach further, per-OST
+      disk-usage statistics can be found under
+      <literal>/proc/fs/lustre/osc/*/rpc_stats</literal></para>
   </section>
   <section xml:id="dbdoclet.50438211_80295">
     <title><indexterm><primary>I/O</primary><secondary>direct</secondary></indexterm>Performing Direct I/O</title>
-    <para>Lustre supports the <literal>O_DIRECT</literal> flag to open.</para>
+    <para>The Lustre software supports the <literal>O_DIRECT</literal> flag to open.</para>
     <para>Applications using the <literal>read()</literal> and <literal>write()</literal> calls must supply buffers aligned on a page boundary (usually 4 K). If the alignment is not correct, the call returns <literal>-EINVAL</literal>. Direct I/O may help performance in cases where the client is doing a large amount of I/O and is CPU-bound (CPU utilization 100%).</para>
     <section remap="h3">
       <title>Making File System Objects Immutable</title>
@@ -356,15 +360,22 @@ from 192.168.1.1@tcp inum 8991479/2386814769 object 1127239/0 extent [10240\
       <screen>lctl get_param osc.*.checksums</screen>
       <section remap="h4">
         <title>Changing Checksum Algorithms</title>
-        <para>By default, Lustre uses the adler32 checksum algorithm, because it is robust and has a lower impact on performance than crc32. The Lustre administrator can change the checksum algorithm via <literal>lctl get_param</literal>, depending on what is supported in the kernel.</para>
-        <para>To check which checksum algorithm is being used by Lustre, run:</para>
+        <para>By default, the Lustre software uses the adler32 checksum algorithm, because it is
+          robust and has a lower impact on performance than crc32. The Lustre file system
+          administrator can change the checksum algorithm via <literal>lctl get_param</literal>,
+          depending on what is supported in the kernel.</para>
+        <para>To check which checksum algorithm is being used by the Lustre software, run:</para>
         <screen>$ lctl get_param osc.*.checksum_type</screen>
-        <para>To change the wire checksum algorithm used by Lustre, run:</para>
+        <para>To change the wire checksum algorithm, run:</para>
         <screen>$ lctl set_param osc.*.checksum_type=<replaceable>algorithm</replaceable></screen>
         <note>
           <para>The in-memory checksum always uses the adler32 algorithm, if available, and only falls back to crc32 if adler32 cannot be used.</para>
         </note>
-        <para>In the following example, the <literal>lctl get_param</literal> command is used to determine that Lustre is using the adler32 checksum algorithm. Then the <literal>lctl set_param</literal> command is used to change the checksum algorithm to crc32. A second <literal>lctl get_param</literal> command confirms that the crc32 checksum algorithm is now in use.</para>
+        <para>In the following example, the <literal>lctl get_param</literal> command is used to
+          determine that the Lustre software is using the adler32 checksum algorithm. Then the
+            <literal>lctl set_param</literal> command is used to change the checksum algorithm to
+          crc32. A second <literal>lctl get_param</literal> command confirms that the crc32 checksum
+          algorithm is now in use.</para>
         <screen>$ lctl get_param osc.*.checksum_type
 osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32 [adler]
 $ lctl set_param osc.*.checksum_type=crc32
@@ -375,8 +386,16 @@ osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler</screen>
 </section>
 <section remap="h3">
 <title>Ptlrpc Thread Pool </title>
-<para>Releases prior to Lustre 2.2 used two portal RPC daemons for each client/server pair.  One daemon handled all synchronous IO requests, and the second daemon handled all asynchronous (non-IO) RPCs.  The increasing use of large SMP nodes for Lustre servers exposed some scaling issues.   The lack of threads for large SMP nodes resulted in cases where a single CPU would be 100% utilized and other CPUs would be relativity idle.  This is especially noticeable when a single client traverses a large directory. </para>
-<para>Lustre 2.2.x implements a ptlrpc thread pool, so that multiple threads can be created to serve asynchronous RPC requests. The number of threads spawned is controlled at module load time using module options. By default one thread is spawned per CPU,  with a minimum of 2 threads spawned irrespective of module options. </para>
+<para>Releases prior to Lustre software release 2.2 used two portal RPC daemons for each
+        client/server pair. One daemon handled all synchronous IO requests, and the second daemon
+        handled all asynchronous (non-IO) RPCs. The increasing use of large SMP nodes for Lustre
+        servers exposed some scaling issues. The lack of threads for large SMP nodes resulted in
+        cases where a single CPU would be 100% utilized and other CPUs would be relativity idle.
+        This is especially noticeable when a single client traverses a large directory. </para>
+<para>Lustre software release 2.2.x implements a ptlrpc thread pool, so that multiple threads can be
+        created to serve asynchronous RPC requests. The number of threads spawned is controlled at
+        module load time using module options. By default one thread is spawned per CPU, with a
+        minimum of 2 threads spawned irrespective of module options. </para>
 <para>One of the issues with thread operations is the cost of moving a thread context from one CPU to another with the resulting loss of CPU cache warmth. To reduce this cost, ptlrpc threads can be bound to a CPU. However, if the CPUs are busy, a bound thread may not be able to respond quickly, as the bound CPU may be busy with other tasks and the thread must wait to schedule. </para>
       <para>Because of these considerations, the pool of ptlrpc threads can be a mixture of bound and unbound threads.   The system operator can balance the thread mixture based on system size and workload. </para>
 <section>

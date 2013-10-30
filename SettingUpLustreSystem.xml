@@ -55,8 +55,9 @@
     <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are
       typically used for testing to match expected customer usage and avoid limitations due to the 4
       GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs.
-      Also, due to kernel API limitations, performing backups of Lustre 2.x. file systems on 32-bit
-      clients may cause backup tools to confuse files that have the same 32-bit inode number.</para>
+      Also, due to kernel API limitations, performing backups of Lustre software release 2.x. file
+      systems on 32-bit clients may cause backup tools to confuse files that have the same 32-bit
+      inode number.</para>
     <para>The storage attached to the servers typically uses RAID to provide fault tolerance and can
       optionally be organized with logical volume management (LVM), which is then formatted as a
       Lustre file system. Lustre OSS and MDS servers read, write and modify data in the format
@@ -91,7 +92,7 @@
           Subsequent directories may also be configured to have their own MDT. If an MDT serving a
           subdirectory becomes unavailable this subdirectory and all directories beneath it will
           also become unavailable. Configuring multiple levels of MDTs is an experimental feature
-          for the Lustre 2.4 release.</para></note>
+          for the Lustre software release 2.4.</para></note>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
@@ -137,7 +138,7 @@
           <secondary>determining MGT requirements</secondary>
         </indexterm> Determining MGT Space Requirements</title>
       <para>Less than 100 MB of space is required for the MGT. The size is determined by the number
-        of servers in the Lustre cluster(s) that are managed by the MGS.</para>
+        of servers in the Lustre file system cluster(s) that are managed by the MGS.</para>
     </section>
     <section xml:id="dbdoclet.50438256_87676">
         <title><indexterm>
@@ -148,7 +149,11 @@
           <primary>space</primary>
           <secondary>determining MDT requirements</secondary>
         </indexterm> Determining MDT Space Requirements</title>
-      <para>When calculating the MDT size, the important factor to consider is the number of files to be stored in the file system. This determines the number of inodes needed, which drives the MDT sizing. To be on the safe side, plan for 2 KB per inode on the MDT, which is the default value. Attached storage required for Lustre metadata is typically 1-2 percent of the file system capacity depending upon file size.</para>
+      <para>When calculating the MDT size, the important factor to consider is the number of files
+        to be stored in the file system. This determines the number of inodes needed, which drives
+        the MDT sizing. To be on the safe side, plan for 2 KB per inode on the MDT, which is the
+        default value. Attached storage required for Lustre file system metadata is typically 1-2
+        percent of the file system capacity depending upon file size.</para>
       <para>For example, if the average file size is 5 MB and you have 100 TB of usable OST space, then you can calculate the minimum number of inodes as follows:</para>
       <informalexample>
         <para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para>
@@ -378,12 +383,12 @@
                 <para condition='l24'>4096</para>
               </entry>
               <entry>
-                <para>The Lustre 2.3 release and earlier allows a maximum of 1 MDT per file system,
-                  but a single MDS can host multiple MDTs, each one for a separate file
+                <para>The Lustre software release 2.3 and earlier allows a maximum of 1 MDT per file
+                  system, but a single MDS can host multiple MDTs, each one for a separate file
                   system.</para>
-                <para condition="l24">The Lustre 2.4 release and later requires one MDT for the
-                  root. Upto 4095 additional MDTs can be added to the file system and attached into
-                  the namespace with remote directories.</para>
+                <para condition="l24">The Lustre software release 2.4 and later requires one MDT for
+                  the root. Upto 4095 additional MDTs can be added to the file system and attached
+                  into the namespace with remote directories.</para>
               </entry>
             </row>
             <row>
@@ -567,13 +572,13 @@
       </table>
       <para>&#160;</para>
       <note>
-        <para condition="l22">In Lustre releases prior to 2.2, the maximum stripe count for a single
-          file was limited to 160 OSTs. In Lustre release 2.2, the large <literal>xattr</literal>
-          feature ("wide striping") was added to support up to 2000 OSTs. This feature is disabled
-          by default at <literal>mkfs.lustre</literal> time. In order to enable this feature, set
-          the "<literal>-O large_xattr</literal>" option on the MDT either by using
-            <literal>--mkfsoptions</literal> at format time or by using
-          <literal>tune2fs</literal>.</para>
+        <para condition="l22">In Lustre software releases prior to release 2.2, the maximum stripe
+          count for a single file was limited to 160 OSTs. In Lustre software release 2.2, the large
+            <literal>xattr</literal> feature ("wide striping") was added to support up to 2000 OSTs.
+          This feature is disabled by default at <literal>mkfs.lustre</literal> time. In order to
+          enable this feature, set the "<literal>-O large_xattr</literal>" option on the MDT either
+          by using <literal>--mkfsoptions</literal> at format time or by using
+            <literal>tune2fs</literal>.</para>
       </note>
     </section>
   </section>

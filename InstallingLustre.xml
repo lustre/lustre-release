@@ -39,7 +39,7 @@
           <colspec colname="c3" colnum="3" colwidth="1.46*"/>
           <thead>
             <row>
-              <entry>Lustre Version</entry>
+              <entry>Lustre Release</entry>
               <entry>Servers Tested<superscript>1</superscript></entry>
               <entry>Clients Tested</entry>
             </row>
@@ -131,12 +131,12 @@
                   <tbody>
                     <row>
                       <entry><code>kernel-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
-                      <entry>Linux kernel with Lustre patches (often referred to as "patched
-                        kernel")</entry>
+                      <entry>Linux kernel with Lustre software patches (often referred to as
+                        "patched kernel")</entry>
                     </row>
                     <row>
                       <entry><code>lustre-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
-                      <entry>Lustre command line tools</entry>
+                      <entry>Lustre software command line tools</entry>
                     </row>
                     <row>
                       <entry><code>lustre-modules-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
@@ -153,7 +153,7 @@
                     <row>
                       <entry><code>lustre-tests-</code><replaceable>ver</replaceable><code>_lustre.</code><replaceable>arch</replaceable></entry>
                       <entry>Lustre I/O Kit benchmarking tools<emphasis role="italic"> (Included in
-                          Lustre software as of Version 2.2)</emphasis></entry>
+                          Lustre software as of release 2.2)</emphasis></entry>
                     </row>
                   </tbody>
                 </tgroup>
@@ -169,7 +169,7 @@
                 Releases</link> repository.</para>
             <para>
               <table frame="all" xml:id="table_j3r_ym3_gk">
-                <title>Packages Installed in Lustre Clients</title>
+                <title>Packages Installed on Lustre Clients</title>
                 <tgroup cols="2">
                   <colspec colname="c1" colnum="1" colwidth="1*"/>
                   <colspec colname="c2" colnum="2" colwidth="1.02*"/>
@@ -191,7 +191,7 @@
                     <row>
                       <entry><code>lustre-client-tests-</code><replaceable>ver</replaceable></entry>
                       <entry>Lustre I/O Kit <emphasis role="italic">(Included in Lustre software as
-                          of Version 2.2)</emphasis>
+                          of release 2.2)</emphasis>
                       </entry>
                     </row>
                   </tbody>
@@ -294,7 +294,7 @@
                     used when compiling user-space, kernel-related code.</para>
                 </listitem>
                 <listitem>
-                  <para><code>lustre-source</code> - Source code for Lustre.</para>
+                  <para><code>lustre-source</code> - Lustre software source code.</para>
                 </listitem>
                 <listitem>
                   <para><emphasis role="italic">(Recommended) </emphasis><code>perf</code>,
@@ -350,7 +350,7 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438261_41900">
-    <title>Lustre Installation Procedure</title>
+    <title>Lustre Software Installation Procedure</title>
     <caution>
       <para>Before installing the Lustre software, back up ALL data. The Lustre software contains
         kernel modifications that interact with storage devices and may introduce security issues

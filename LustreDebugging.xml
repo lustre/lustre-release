@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustredebugging">
-  <title xml:id="lustredebugging.title">Lustre Debugging</title>
-  <para>This chapter describes tips and information to debug Lustre, and includes the following sections:</para>
+  <title xml:id="lustredebugging.title">Debugging a Lustre File System</title>
+  <para>This chapter describes tips and information to debug a Lustre file system, and includes the
+    following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438274_15874"/></para>
@@ -54,8 +55,8 @@ Diagnostic and Debugging Tools</title>
               linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
-          <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes
-            Lustre to dump the debug log to the file
+          <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes the
+            Lustre file system to dump the debug log to the file
                 <literal>/tmp/lustre-log.<replaceable>timestamp</replaceable></literal> where it can
             be retrieved after a reboot. For more information, see <xref
               linkend="dbdoclet.50438198_40669"/>.</para>
@@ -89,7 +90,9 @@ Diagnostic and Debugging Tools</title>
               </emphasis> . <literal>syslogd</literal> prints fatal or serious messages at this log.</para>
           </listitem>
           <listitem>
-            <para><emphasis role="bold">Crash dumps</emphasis> . On crash-dump enabled kernels, sysrq c produces a crash dump. Lustre enhances this crash dump with a log dump (the last 64 KB of the log) to the console.</para>
+            <para><emphasis role="bold">Crash dumps</emphasis> . On crash-dump enabled kernels,
+              sysrq c produces a crash dump. The Lustre software enhances this crash dump with a log
+              dump (the last 64 KB of the log) to the console.</para>
           </listitem>
           <listitem>
             <para><emphasis role="bold">
@@ -136,13 +139,15 @@ Diagnostic and Debugging Tools</title>
       </section>
       <section remap="h4">
         <title><indexterm><primary>debugging</primary><secondary>developer tools</secondary></indexterm>Tools for Developers</title>
-        <para>The tools described in this section may be useful for debugging Lustre in a development environment.</para>
+        <para>The tools described in this section may be useful for debugging a Lustre file system
+          in a development environment.</para>
         <para>Of general interest is:</para>
         <itemizedlist>
           <listitem>
             <para><literal>
                 <replaceable>leak_finder.pl</replaceable>
-              </literal> . This program provided with Lustre is useful for finding memory leaks in the code.</para>
+              </literal> . This program provided with the Lustre software is useful for finding
+              memory leaks in the code.</para>
           </listitem>
         </itemizedlist>
         <para>A virtual machine is often used to create an isolated development and test environment. Some commonly-used virtual machines are:</para>
@@ -194,12 +199,16 @@ Diagnostic and Debugging Tools</title>
       <title><indexterm><primary>debugging</primary><secondary>message format</secondary></indexterm>Understanding the Lustre Debug Messaging Format</title>
       <para>Lustre debug messages are categorized by originating subsystem, message type, and location in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
       <note>
-        <para>For a current list of subsystems and debug message types, see <literal>libcfs/include/libcfs/libcfs_debug.h</literal> in the Lustre tree</para>
+        <para>For a current list of subsystems and debug message types, see
+            <literal>libcfs/include/libcfs/libcfs_debug.h</literal> in the Lustre software
+          tree</para>
       </note>
       <para>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.50438274_57177"/> Format of Lustre Debug Messages.</para>
       <section xml:id="dbdoclet.50438274_57603">
         <title>Lustre Debug Messages</title>
-        <para>Each Lustre debug message has the tag of the subsystem it originated in, the message type, and the location in the source code. The subsystems and debug types used in Lustre are as follows:</para>
+        <para>Each Lustre debug message has the tag of the subsystem it originated in, the message
+          type, and the location in the source code. The subsystems and debug types used are as
+          follows:</para>
         <itemizedlist>
           <listitem>
             <para>  Standard Subsystems:</para>
@@ -403,7 +412,11 @@ Diagnostic and Debugging Tools</title>
       </section>
       <section xml:id="dbdoclet.50438274_57177">
         <title>Format of Lustre Debug Messages</title>
-        <para>Lustre uses the <literal>CDEBUG()</literal> and <literal>CERROR()</literal> macros to print the debug or error messages. To print the message, the <literal>CDEBUG()</literal> macro uses the function <literal>libcfs_debug_msg()</literal> (<literal>libcfs/libcfs/tracefile.c</literal>). The message format is described below, along with an example.</para>
+        <para>The Lustre software uses the <literal>CDEBUG()</literal> and
+            <literal>CERROR()</literal> macros to print the debug or error messages. To print the
+          message, the <literal>CDEBUG()</literal> macro uses the function
+            <literal>libcfs_debug_msg()</literal> (<literal>libcfs/libcfs/tracefile.c</literal>).
+          The message format is described below, along with an example.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
@@ -625,8 +638,15 @@ Debug log: 324 lines, 258 kept, 66 dropped.
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>disk contents</secondary></indexterm>Looking at Disk Content</title>
-      <para>In Lustre, the inodes on the metadata server contain extended attributes (EAs) that store information about file striping. EAs contain a list of all object IDs and their locations (that is, the OST that stores them). The <literal>lfs</literal> tool can be used to obtain this information for a given file using the <literal>getstripe</literal> subcommand. Use a corresponding <literal>lfs setstripe</literal> command to specify striping attributes for a new file or directory.</para>
-      <para>The <literal>lfs getstripe</literal> command takes a Lustre filename as input and lists all the objects that form a part of this file. To obtain this information for the file <literal>/mnt/lustre/frog</literal> in Lustre file system, run:</para>
+      <para>In a Lustre file system, the inodes on the metadata server contain extended attributes
+        (EAs) that store information about file striping. EAs contain a list of all object IDs and
+        their locations (that is, the OST that stores them). The <literal>lfs</literal> tool can be
+        used to obtain this information for a given file using the <literal>getstripe</literal>
+        subcommand. Use a corresponding <literal>lfs setstripe</literal> command to specify striping
+        attributes for a new file or directory.</para>
+      <para>The <literal>lfs getstripe</literal> command takes a Lustre filename as input and lists
+        all the objects that form a part of this file. To obtain this information for the file
+          <literal>/mnt/lustre/frog</literal> in a Lustre file system, run:</para>
       <screen>$ lfs getstripe /mnt/lustre/frog
 lmm_stripe_count:   2
 lmm_stripe_size:    1048576
@@ -635,7 +655,14 @@ lmm_stripe_offset:  2
              2          818855        0xc7ea7               0
              0          873123        0xd52a3               0
         </screen>
-      <para>The <literal>debugfs</literal> tool is provided in the <literal>e2fsprogs</literal> package. It can be used for interactive debugging of an <literal>ldiskfs</literal> file system. The <literal>debugfs</literal> tool can either be used to check status or modify information in the file system. In Lustre, all objects that belong to a file are stored in an underlying <literal>ldiskfs</literal> file system on the OSTs. The file system uses the object IDs as the file names. Once the object IDs are known, use the <literal>debugfs</literal> tool to obtain the attributes of all objects from different OSTs.</para>
+      <para>The <literal>debugfs</literal> tool is provided in the <literal>e2fsprogs</literal>
+        package. It can be used for interactive debugging of an <literal>ldiskfs</literal> file
+        system. The <literal>debugfs</literal> tool can either be used to check status or modify
+        information in the file system. In a Lustre file system, all objects that belong to a file
+        are stored in an underlying <literal>ldiskfs</literal> file system on the OSTs. The file
+        system uses the object IDs as the file names. Once the object IDs are known, use the
+          <literal>debugfs</literal> tool to obtain the attributes of all objects from different
+        OSTs.</para>
       <para>A sample run for the <literal>/mnt/lustre/frog</literal> file used in the above example is shown here:</para>
       <screen>$ debugfs -c -R "stat O/0/d$((818855 % 32))/818855" /dev/vgmyth/lvmythost2
 
@@ -667,7 +694,8 @@ EXTENTS:
 strings /tmp/last_rcvd | head -1
 myth-OST0004_UUID
       </screen>
-      <para>It is also possible (and easier) to extract this from the filesystem label using the <literal>dumpe2fs</literal> command:</para>
+      <para>It is also possible (and easier) to extract this from the file system label using the
+          <literal>dumpe2fs</literal> command:</para>
       <screen>dumpe2fs -h /dev/sdc | grep volume
 dumpe2fs 1.41.90.wc3 (28-May-2011)
 Filesystem volume name:   myth-OST0004
@@ -683,7 +711,8 @@ Filesystem volume name:   myth-OST0004
     </section>
     <section remap="h3">
       <title>Tracing Lock Traffic</title>
-      <para>Lustre has a specific debug type category for tracing lock traffic. Use:</para>
+      <para>The Lustre software provides a specific debug type category for tracing lock traffic.
+        Use:</para>
       <screen>lctl&gt; filter all_types 
 lctl&gt; show dlmtrace 
 lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
@@ -691,7 +720,8 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
   </section>
   <section xml:id="dbdoclet.50438274_80443">
     <title><indexterm><primary>debugging</primary><secondary>developers tools</secondary></indexterm>Lustre Debugging for Developers</title>
-    <para>The procedures in this section may be useful to developers debugging Lustre code.</para>
+    <para>The procedures in this section may be useful to developers debugging Lustre source
+      code.</para>
     <section remap="h3">
       <title>Adding Debugging to the Lustre Source Code</title>
       <para>The debugging infrastructure provides a number of macros that can be used in Lustre source code to aid in debugging or reporting serious errors.</para>
@@ -720,7 +750,11 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>A panic-style assertion in the kernel which causes Lustre to dump its circular log to the <literal>/tmp/lustre-log</literal> file. This file can be retrieved after a reboot. <literal>LBUG()</literal> freezes the thread to allow capture of the panic stack. A system reboot is needed to clear the thread.</para>
+                <para>A panic-style assertion in the kernel which causes the Lustre file system to
+                  dump its circular log to the <literal>/tmp/lustre-log</literal> file. This file
+                  can be retrieved after a reboot. <literal>LBUG()</literal> freezes the thread to
+                  allow capture of the panic stack. A system reboot is needed to clear the
+                  thread.</para>
               </entry>
             </row>
             <row>
@@ -867,7 +901,12 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>Allows insertion of failure points into the Lustre code. This is useful to generate regression tests that can hit a very specific sequence of events. This works in conjunction with &quot;<literal>lctl set_param fail_loc=<replaceable>fail_loc</replaceable></literal>&quot; to set a specific failure point for which a given <literal>OBD_FAIL_CHECK()</literal> will test.</para>
+                <para>Allows insertion of failure points into the Lustre source code. This is useful
+                  to generate regression tests that can hit a very specific sequence of events. This
+                  works in conjunction with &quot;<literal>lctl set_param
+                      fail_loc=<replaceable>fail_loc</replaceable></literal>&quot; to set a specific
+                  failure point for which a given <literal>OBD_FAIL_CHECK()</literal> will
+                  test.</para>
               </entry>
             </row>
             <row>

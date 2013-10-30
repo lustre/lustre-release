@@ -1233,23 +1233,23 @@ write RPCs in flight: 0
         statahead reads metadata into memory. When readahead and statahead work well, a process that
         accesses data finds that the information it needs is available immediately when requested in
         memory without the delay of network I/O.</para>
-      <para condition="l22">In Lustre release 2.2.0, the directory statahead feature was improved to
-        enhance directory traversal performance. The improvements primarily addressed two
-        issues:
-      <orderedlist>
-        <listitem>
-          <para>A race condition existed between the statahead thread and other VFS operations while
-            processing asynchronous <literal>getattr</literal> RPC replies, causing duplicate
-            entries in dcache. This issue was resolved by using statahead local dcache. </para>
-        </listitem>
-        <listitem>
-          <para>File size/block attributes pre-fetching was not supported, so the traversing thread
-            had to send synchronous glimpse size RPCs to OST(s). This issue was resolved by using
-            asynchronous glimpse lock (AGL) RPCs to pre-fetch file size/block attributes from
-            OST(s).</para>
-        </listitem>
-      </orderedlist>
-		</para>
+      <para condition="l22">In Lustre software release 2.2.0, the directory statahead feature was
+        improved to enhance directory traversal performance. The improvements primarily addressed
+        two issues: <orderedlist>
+          <listitem>
+            <para>A race condition existed between the statahead thread and other VFS operations
+              while processing asynchronous <literal>getattr</literal> RPC replies, causing
+              duplicate entries in dcache. This issue was resolved by using statahead local dcache.
+            </para>
+          </listitem>
+          <listitem>
+            <para>File size/block attributes pre-fetching was not supported, so the traversing
+              thread had to send synchronous glimpse size RPCs to OST(s). This issue was resolved by
+              using asynchronous glimpse lock (AGL) RPCs to pre-fetch file size/block attributes
+              from OST(s).</para>
+          </listitem>
+        </orderedlist>
+      </para>
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail

@@ -33,7 +33,7 @@
         <secondary>from source</secondary>
         <tertiary>prerequisites</tertiary>
       </indexterm>Overview and Prerequisites</title>
-    <para>To install Lustre from source code, the following are required:</para>
+    <para>To install the Lustre software from source code, the following are required:</para>
     <itemizedlist>
       <listitem>
         <para>A x86_64 machine with a fresh installation of a Linux operating system.</para>
@@ -50,7 +50,10 @@
 			<para>(Recommended) Access to a recent version of <link xmlns:xlink="http://www.w3.org/1999/xlink"
             xlink:href="http://fedoraproject.org/wiki/EPEL">EPEL</link> containing the
             <literal>quilt</literal> utility used for managing a series of patches. </para>
-			<note><para>The use of <literal>quilt</literal> is optional for building Lustre, and is detected at configure time if it is installed. Otherwise the <literal>patch</literal> utility is used to apply <literal>ldiskfs</literal> patches to the kernel source. Quilt is useful if you intend to modify the Lustre kernel patches.</para></note>
+			<note><para>The use of <literal>quilt</literal> is optional for building the Lustre software, and is
+            detected at configure time if it is installed. Otherwise the <literal>patch</literal>
+            utility is used to apply <literal>ldiskfs</literal> patches to the kernel source. Quilt
+            is useful if you intend to modify the Lustre kernel patches.</para></note>
       </listitem>
       <listitem>
         <para><emphasis role="italic">(Recommended)</emphasis> At least 1 GB memory on the machine
@@ -468,10 +471,10 @@ client-10login:
         (Optional)</title>
       <para>When using third-party network hardware, you must follow a specific process to install
         and recompile the Lustre software. This section provides an installation example that shows
-        how to build Lustre release 2.4.x when using the OpenFabrics Enterprise Distribution (OFED*)
-        version 3.5-1 open-source software. The same process can be used for other third-party
-        network stacks by replacing the OFED installation procedure and using the appropriate
-          <literal>--with</literal> option when configuring the Lustre source code.<orderedlist>
+        how to build Lustre software release 2.4.x when using the OpenFabrics Enterprise
+        Distribution (OFED*) version 3.5-1 open-source software. The same process can be used for
+        other third-party network stacks by replacing the OFED installation procedure and using the
+        appropriate <literal>--with</literal> option when configuring the Lustre source code.<orderedlist>
           <listitem>
             <para>Install the Lustre kernel (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
                 linkend="InstallingLustreKernel"/>).</para>

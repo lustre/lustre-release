@@ -1,6 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetselftest">
   <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNET Self-Test)</title>
-  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET self-test, which is used by site administrators to confirm that Lustre Networking (LNET) has been properly installed and configured, and that underlying network software and hardware are performing according to expectations. The chapter includes:</para>
+  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET
+    self-test, which is used by site administrators to confirm that Lustre networking (LNET) has
+    been properly installed and configured, and that underlying network software and hardware are
+    performing according to expectations. The chapter includes:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438223_91742"/></para>
@@ -29,7 +32,8 @@ LNET Self-Test Overview</title>
     </itemizedlist>
     <para>After you have obtained performance results for your Lustre network, refer to <xref linkend="lustretuning"/> for information about parameters that can be used to tune LNET for optimum performance.</para>
     <note>
-      <para>Apart from the performance impact, LNET self-test is invisible to Lustre.</para>
+      <para>Apart from the performance impact, LNET self-test is invisible to the Lustre file
+        system.</para>
     </note>
     <para>An LNET self-test cluster includes two types of nodes:</para>
     <itemizedlist>
@@ -119,9 +123,16 @@ lst add_group writers 192.168.1.[2-254/2]@o2ib</screen>
     </section>
     <section xml:id="dbdoclet.50438223_42848">
       <title>Defining and Running the Tests</title>
-      <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a source group identified using the <literal>--from</literal> parameter and a target group identified using the <literal>--to</literal> parameter. When a test is running, each node in the <literal>--from <replaceable>group</replaceable></literal> simulates a client by sending requests to nodes in the <literal>--to <replaceable>group</replaceable></literal>, which are simulating a set of servers, and then receives responses in return. This activity is designed to mimic Lustre RPC traffic.</para>
+      <para>A <emphasis>test</emphasis> generates a network load between two groups of nodes, a
+        source group identified using the <literal>--from</literal> parameter and a target group
+        identified using the <literal>--to</literal> parameter. When a test is running, each node in
+        the <literal>--from <replaceable>group</replaceable></literal> simulates a client by sending
+        requests to nodes in the <literal>--to <replaceable>group</replaceable></literal>, which are
+        simulating a set of servers, and then receives responses in return. This activity is
+        designed to mimic Lustre file system RPC traffic.</para>
       <para>A <emphasis>batch</emphasis> is a collection of tests that are started and stopped together and run in parallel. A test must always be run as part of a batch, even if it is just a single test. Users can only run or stop a test batch, not individual tests.</para>
-      <para>Tests in a batch are non-destructive to the file system, and can be run in a normal Lustre environment (provided the performance impact is acceptable).</para>
+      <para>Tests in a batch are non-destructive to the file system, and can be run in a normal
+        Lustre file system environment (provided the performance impact is acceptable).</para>
       <para>A simple batch might contain a single test, for example, to determine whether the network bandwidth presents an I/O bottleneck. In this example, the <literal>--to <replaceable>group</replaceable></literal> could be comprised of Lustre OSSs and <literal>--from <replaceable>group</replaceable></literal> the compute nodes. A second test could be added to perform pings from a login node to the MDS to see how checkpointing affects the <literal>ls -l</literal> process.</para>
       <para>Two types of tests are available:</para>
       <itemizedlist>

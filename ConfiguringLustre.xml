@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlustre">
-  <title xml:id="configuringlustre.title">Configuring Lustre</title>
-  <para>This chapter shows how to configure a simple Lustre system comprised of a combined MGS/MDT, an OST and a client. It includes:</para>
+  <title xml:id="configuringlustre.title">Configuring a Lustre File System</title>
+  <para>This chapter shows how to configure a simple Lustre file system comprised of a combined
+    MGS/MDT, an OST and a client. It includes:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438267_50692"/>
@@ -15,7 +16,11 @@
       <title>
           <indexterm><primary>Lustre</primary><secondary>configuring</secondary></indexterm>
           Configuring a Simple Lustre File System</title>
-    <para>A Lustre system can be set up in a variety of configurations by using the administrative utilities provided with Lustre. The procedure below shows how to configure a simple Lustre file system consisting of a combined MGS/MDS, one OSS with two OSTs, and a client. For an overview of the entire Lustre installation procedure, see <xref linkend="installoverview"/>.</para>
+    <para>A Lustre file system can be set up in a variety of configurations by using the
+      administrative utilities provided with the Lustre software. The procedure below shows how to
+      configure a simple Lustre file system consisting of a combined MGS/MDS, one OSS with two OSTs,
+      and a client. For an overview of the entire Lustre installation procedure, see <xref
+        linkend="installoverview"/>.</para>
     <para>This configuration procedure assumes you have completed the following:</para>
     <itemizedlist>
       <listitem>
@@ -37,8 +42,8 @@
       </listitem>
       <listitem>
         <para><emphasis>Set</emphasis> lnet <emphasis>module parameters to specify how Lustre
-            Networking (LNET) is to be configured to work with Lustre and test the LNET
-            configuration.</emphasis> LNET will, by default, use the first TCP/IP interface it
+            Networking (LNET) is to be configured to work with a Lustre file system and test the
+            LNET configuration.</emphasis> LNET will, by default, use the first TCP/IP interface it
           discovers on a system. If this network configuration is sufficient, you do not need to
           configure LNET. LNET configuration is required if you are using InfiniBand or multiple
           Ethernet interfaces.</para>
@@ -49,9 +54,10 @@
       <listitem>
         <para><emphasis>Run the benchmark script <literal>sgpdd-survey</literal> to determine
             baseline performance of your hardware.</emphasis> Benchmarking your hardware will
-          simplify debugging performance issues that are unrelated to Lustre and ensure you are
-          getting the best possible performance with your installation. For information about
-          running <literal>sgpdd-survey</literal>, see <xref linkend="benchmarkingtests"/>.</para>
+          simplify debugging performance issues that are unrelated to the Lustre software and ensure
+          you are getting the best possible performance with your installation. For information
+          about running <literal>sgpdd-survey</literal>, see <xref linkend="benchmarkingtests"
+          />.</para>
       </listitem>
     </itemizedlist>
     <note>
@@ -71,7 +77,7 @@
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.addmdtindex">
-		<para>Optional for Lustre 2.4 and later. Add in additional MDTs.</para>
+		<para>Optional for Lustre software release 2.4 and later. Add in additional MDTs.</para>
         <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>nid</replaceable> --mdt --index=1 <replaceable>/dev/block_device</replaceable></screen>
 		<note><para>Up to 4095 additional MDTs can be added.</para></note>
       </listitem>
@@ -91,12 +97,12 @@
         <para>You should specify the OST index number at format time in order to simplify translating the OST number in error messages or file striping to the OSS node and block device later on.</para>
         <para>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend="managingfailover"/>.</para>
         <note>
-          <para>Lustre currently supports block devices up to 128 TB on Red Hat Enterprise Linux 5
-            and 6 (up to 8 TB on other distributions). If the device size is only slightly larger
-            that 16 TB, it is recommended that you limit the file system size to 16 TB at format
-            time. We recommend that you not place DOS partitions on top of RAID 5/6 block devices
-            due to negative impacts on performance, but instead format the whole disk for the file
-            system.</para>
+          <para>The Lustre software currently supports block devices up to 128 TB on Red Hat
+            Enterprise Linux 5 and 6 (up to 8 TB on other distributions). If the device size is only
+            slightly larger that 16 TB, it is recommended that you limit the file system size to 16
+            TB at format time. We recommend that you not place DOS partitions on top of RAID 5/6
+            block devices due to negative impacts on performance, but instead format the whole disk
+            for the file system.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
@@ -140,7 +146,11 @@
         <title>
             <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>simple example</tertiary></indexterm>
             Simple Lustre Configuration Example</title>
-      <para>To see the steps in a simple Lustre configuration, follow this example in which a combined MGS/MDT and two OSTs are created. Three block devices are used, one for the combined MGS/MDS node and one for each OSS node. Common parameters used in the example are listed below, along with individual node parameters.</para>
+      <para>To see the steps to complete for a simple Lustre file system configuration, follow this
+        example in which a combined MGS/MDT and two OSTs are created to form a file system called
+          <literal>temp</literal>. Three block devices are used, one for the combined MGS/MDS node
+        and one for each OSS node. Common parameters used in the example are listed below, along
+        with individual node parameters.</para>
       <informaltable frame="all">
         <tgroup cols="4">
           <colspec colname="c1" colwidth="2*"/>
@@ -200,7 +210,7 @@
                 <para> <literal>TCP/IP</literal></para>
               </entry>
               <entry>
-                <para>Network type used for Lustre file system temp</para>
+                <para>Network type used for Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
           </tbody>
@@ -242,7 +252,7 @@
                 <para> <literal>mdt0</literal></para>
               </entry>
               <entry>
-                <para>MDS in Lustre file system temp</para>
+                <para>MDS in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -289,7 +299,7 @@
                 <para><literal> oss0</literal></para>
               </entry>
               <entry>
-                <para>First OSS node in Lustre file system temp</para>
+                <para>First OSS node in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -303,7 +313,7 @@
                 <para><literal>ost0</literal></para>
               </entry>
               <entry>
-                <para>First OST in Lustre file system temp</para>
+                <para>First OST in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -350,7 +360,7 @@
                 <para><literal>oss1</literal></para>
               </entry>
               <entry>
-                <para>Second OSS node in Lustre file system temp</para>
+                <para>Second OSS node in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -364,7 +374,7 @@
                 <para> <literal>ost1</literal></para>
               </entry>
               <entry>
-                <para>Second OST in Lustre file system temp</para>
+                <para>Second OST in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -409,7 +419,7 @@
                 <para> <literal>client1</literal></para>
               </entry>
               <entry>
-                <para>Client in Lustre file system temp</para>
+                <para>Client in Lustre file system <literal>temp</literal></para>
               </entry>
             </row>
             <row>
@@ -423,7 +433,8 @@
                 <para> <literal>/lustre</literal></para>
               </entry>
               <entry>
-                <para>Mount point for Lustre file system temp on the <literal>client1</literal> node</para>
+                <para>Mount point for Lustre file system <literal>temp</literal> on the
+                    <literal>client1</literal> node</para>
               </entry>
             </row>
           </tbody>
@@ -697,7 +708,9 @@ filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
           <para><literal>tunefs.lustre</literal>  - Use to modify configuration information on a Lustre target disk.</para>
         </listitem>
         <listitem>
-          <para><literal>lctl</literal>  - Use to directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
+          <para><literal>lctl</literal> - Use to directly control Lustre features via an
+              <literal>ioctl</literal> interface, allowing various configuration, maintenance and
+            debugging features to be accessed.</para>
         </listitem>
         <listitem>
           <para><literal>mount.lustre</literal>  - Use to start a Lustre client or target service.</para>
@@ -706,7 +719,10 @@ filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
       <para>For examples using these utilities, see the topic <xref linkend="systemconfigurationutilities"/></para>
       <para>The <literal>lfs</literal> utility is useful for configuring and querying a variety of options related to files. For more information, see <xref linkend="userutilities"/>.</para>
       <note>
-        <para>Some sample scripts are included in the directory where Lustre is installed. If you have installed the Lustre source code, the scripts are located in the <literal>lustre/tests</literal> sub-directory. These scripts enable quick setup of some simple standard Lustre configurations.</para>
+        <para>Some sample scripts are included in the directory where the Lustre software is
+          installed. If you have installed the Lustre source code, the scripts are located in the
+            <literal>lustre/tests</literal> sub-directory. These scripts enable quick setup of some
+          simple standard Lustre configurations.</para>
       </note>
     </section>
   </section>

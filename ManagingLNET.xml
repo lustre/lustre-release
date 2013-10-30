@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managinglnet">
   <title xml:id="managinglnet.title">Managing Lustre Networking (LNET)</title>
-  <para>This chapter describes some tools for managing Lustre Networking (LNET) and includes the following sections:</para>
+  <para>This chapter describes some tools for managing Lustre networking (LNET) and includes the
+    following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438203_51732"/></para>
@@ -45,7 +46,9 @@
   </section>
   <section xml:id="dbdoclet.50438203_48703">
       <title><indexterm><primary>LNET</primary><secondary>starting/stopping</secondary></indexterm>Starting and Stopping LNET</title>
-    <para>Lustre automatically starts and stops LNET, but it can also be manually started in a standalone manner. This is particularly useful to verify that your networking setup is working correctly before you attempt to start Lustre.</para>
+    <para>The Lustre software automatically starts and stops LNET, but it can also be manually
+      started in a standalone manner. This is particularly useful to verify that your networking
+      setup is working correctly before you attempt to start the Lustre file system.</para>
     <section remap="h3">
       <title>Starting LNET</title>
       <para>To start LNET, run:</para>
@@ -53,7 +56,8 @@
 $ lctl network up</screen>
       <para>To see the list of local NIDs, run:</para>
       <screen>$ lctl list_nids</screen>
-      <para>This command tells you the network(s) configured to work with Lustre</para>
+      <para>This command tells you the network(s) configured to work with the Lustre file
+        system.</para>
       <para>If the networks are not correctly setup, see the <literal>modules.conf</literal> &quot;<literal>networks=</literal>&quot; line and make sure the network layer modules are correctly installed and configured.</para>
       <para>To get the best remote NID, run:</para>
       <screen>$ lctl which_nid <replaceable>NIDs</replaceable></screen>
@@ -69,10 +73,15 @@ $ lctl network up</screen>
     </section>
     <section remap="h3">
       <title>Stopping LNET</title>
-      <para>Before the LNET modules can be removed, LNET references must be removed. In general, these references are removed automatically when Lustre is shut down, but for standalone routers, an explicit step is needed to stop LNET. Run:</para>
+      <para>Before the LNET modules can be removed, LNET references must be removed. In general,
+        these references are removed automatically when the Lustre file system is shut down, but for
+        standalone routers, an explicit step is needed to stop LNET. Run:</para>
       <screen>lctl network unconfigure</screen>
       <note>
-        <para>Attempting to remove Lustre modules prior to stopping the network may result in a crash or an LNET hang. if this occurs, the node must be rebooted (in most cases). Make sure that the Lustre network and Lustre are stopped prior to unloading the modules. Be extremely careful using rmmod -f.</para>
+        <para>Attempting to remove Lustre modules prior to stopping the network may result in a
+          crash or an LNET hang. If this occurs, the node must be rebooted (in most cases). Make
+          sure that the Lustre network and Lustre file system are stopped prior to unloading the
+          modules. Be extremely careful using <literal>rmmod -f</literal>.</para>
       </note>
       <para>To unconfigure the LNET network, run:</para>
       <screen>modprobe -r <replaceable>lnd_and_lnet_modules</replaceable></screen>
@@ -93,7 +102,8 @@ To remove all Lustre modules, run:</para>
         <para>LNET can work with multiple rails, however, it does not load balance across them. The actual rail used for any communication is determined by the peer NID.</para>
       </listitem>
       <listitem>
-        <para>Multi-rail LNET configurations do not provide an additional level of network fault tolerance. The configurations described below are for bandwidth aggregation only. Network interface failover is planned as an upcoming Lustre feature.</para>
+        <para>Multi-rail LNET configurations do not provide an additional level of network fault
+          tolerance. The configurations described below are for bandwidth aggregation only. </para>
       </listitem>
       <listitem>
         <para>A Lustre node always uses the same local NID to communicate with a given peer NID. The criteria used to determine the local NID are:</para>
@@ -215,7 +225,13 @@ ents&quot;</screen>
 #even clients;\
            o2ib1(ib0),o2ib2(ib1)           192.168.[2-253].[1-253/2)       \
 #odd clients&quot;</screen>
-      <para>This configuration includes two additional proxy o2ib networks to work around Lustre&apos;s simplistic NID selection algorithm. It connects &quot;even&quot; clients to &quot;even&quot; servers with <literal>o2ib0</literal> on <literal>rail0</literal>, and &quot;odd&quot; servers with <literal>o2ib3</literal> on <literal>rail1</literal>. Similarly, it connects &quot;odd&quot; clients to &quot;odd&quot; servers with <literal>o2ib1</literal> on <literal>rail0</literal>, and &quot;even&quot; servers with <literal>o2ib2</literal> on <literal>rail1</literal>.</para>
+      <para>This configuration includes two additional proxy o2ib networks to work around the
+        simplistic NID selection algorithm in the Lustre software. It connects &quot;even&quot;
+        clients to &quot;even&quot; servers with <literal>o2ib0</literal> on
+          <literal>rail0</literal>, and &quot;odd&quot; servers with <literal>o2ib3</literal> on
+          <literal>rail1</literal>. Similarly, it connects &quot;odd&quot; clients to
+        &quot;odd&quot; servers with <literal>o2ib1</literal> on <literal>rail0</literal>, and
+        &quot;even&quot; servers with <literal>o2ib2</literal> on <literal>rail1</literal>.</para>
     </section>
   </section>
   <section xml:id="managinglnet.configuringroutes" condition='l24'>

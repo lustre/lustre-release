@@ -39,7 +39,9 @@
         <para>A separate <literal>lustre.conf</literal> file makes distributing the configuration much easier.</para>
       </listitem>
       <listitem>
-        <para>If you set <literal>config_on_load=1</literal>, LNET starts at <literal>modprobe</literal> time rather than waiting for Lustre to start. This ensures routers start working at module load time.</para>
+        <para>If you set <literal>config_on_load=1</literal>, LNET starts at
+            <literal>modprobe</literal> time rather than waiting for the Lustre file system to
+          start. This ensures routers start working at module load time.</para>
       </listitem>
     </itemizedlist>
     <screen># lctl 
@@ -101,7 +103,9 @@ Network Topology</title>
           </tgroup>
         </informaltable>
         <note>
-          <para>Lustre ignores the loopback interface (<literal>lo0</literal>), but Lustre use any IP addresses aliased to the loopback (by default). When in doubt, explicitly specify networks.</para>
+          <para>The Lustre software ignores the loopback interface (<literal>lo0</literal>), but the
+            Lustre file system uses any IP addresses aliased to the loopback (by default). When in
+            doubt, explicitly specify networks.</para>
         </note>
         <para><literal>ip2nets</literal> (&quot;&quot;) is a string that lists globally-available networks, each with a set of IP address ranges. LNET determines the locally-available networks from this list by matching the IP address ranges with the local IPs of a node. The purpose of this option is to be able to use the same <literal>modules.conf</literal> file across a variety of nodes on different networks. The string has the following syntax.</para>
         <screen>&lt;ip2nets&gt; :== &lt;net-match&gt; [ &lt;comment&gt; ] { &lt;net-sep&gt; &lt;net-match&gt; }
@@ -654,7 +658,10 @@ forwarding (&quot;&quot;)</title>
       <para><literal>n_waitd(1)</literal> sets the number of threads that process completed MX requests (sends and receives).</para>
       <para><literal>max_peers(1024)</literal> tells MXLND the upper limit of machines that it will need to communicate with. This affects how many receives it will pre-post and each receive will use one page of memory. Ideally, on clients, this value will be equal to the total number of Lustre servers (MDS and OSS). On servers, it needs to equal the total number of machines in the storage system. cksum (0) turns on small message checksums. It can be used to aid in troubleshooting. MX also provides an optional checksumming feature which can check all messages (large and small). For details, see the MX README.</para>
       <para><literal>ntx(256)</literal> is the number of total sends in flight from this machine. In actuality, MXLND reserves half of them for connect messages so make this value twice as large as you want for the total number of sends in flight.</para>
-      <para><literal>credits(8)</literal> is the number of in-flight messages for a specific peer. This is part of the flow-control system in Lustre. Increasing this value may improve performance but it requires more memory because each message requires at least one page.</para>
+      <para><literal>credits(8)</literal> is the number of in-flight messages for a specific peer.
+        This is part of the flow-control system in provided by the Lustre software. Increasing this
+        value may improve performance but it requires more memory because each message requires at
+        least one page.</para>
       <para><literal>board(0)</literal> is the index of the Myricom NIC. Hosts can have multiple Myricom NICs and this identifies which one MXLND should use. This value must match the board value in your MXLND hosts file for this host.</para>
       <para><literal>ep_id(3)</literal> is the MX endpoint ID. Each process that uses MX is required to have at least one MX endpoint to access the MX library and NIC. The ID is a simple index starting at zero (0). This value must match the endpoint ID value in your MXLND hosts file for this host.</para>
       <para><literal>polling(0)</literal> determines whether this host will poll or block for MX request completions. A value of 0 blocks and any positive value will poll that many times before blocking. Since polling increases CPU usage, we suggest that you set this to zero (0) on the client and experiment with different values for servers.</para>

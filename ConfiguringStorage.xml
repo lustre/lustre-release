@@ -29,7 +29,9 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para><emphasis role="bold">It is strongly recommended that hardware RAID be used with Lustre.</emphasis> Lustre currently does not support any redundancy at the file system level and RAID is required to protect against disk failure.</para>
+    <para><emphasis role="bold">It is strongly recommended that storage used in a Lustre file system
+        be configured with hardware RAID.</emphasis> The Lustre software does not support redundancy
+      at the file system level and RAID is required to protect against disk failure.</para>
   </note>
   <section xml:id="dbdoclet.50438208_60972">
       <title>
@@ -66,7 +68,11 @@
   </section>
   <section xml:id="dbdoclet.50438208_51921">
     <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>RAID options</tertiary></indexterm>Formatting Options for RAID Devices</title>
-    <para>When formatting a file system on a RAID device, it is beneficial to ensure that I/O requests are aligned with the underlying RAID geometry. This ensures that the Lustre RPCs do not generate unnecessary disk operations which may reduce performance dramatically. Use the <literal>--mkfsoptions</literal> parameter to specify additional parameters when formatting the OST or MDT.</para>
+    <para>When formatting a file system on a RAID device, it is beneficial to ensure that I/O
+      requests are aligned with the underlying RAID geometry. This ensures that Lustre RPCs do not
+      generate unnecessary disk operations which may reduce performance dramatically. Use the
+        <literal>--mkfsoptions</literal> parameter to specify additional parameters when formatting
+      the OST or MDT.</para>
     <para>For RAID 5, RAID 6, or RAID 1+0 storage, specifying the following option to the <literal>--mkfsoptions</literal> parameter option improves the layout of the file system metadata, ensuring that no single disk contains all of the allocation bitmaps:</para>
     <screen>-E stride = <replaceable>chunk_blocks</replaceable> </screen>
     <para>The <literal><replaceable>chunk_blocks</replaceable></literal> variable is in units of 4096-byte blocks and represents the amount of contiguous data written to a single disk before moving to the next disk. This is alternately referred to as the RAID stripe size. This is applicable to both MDT and OST file systems.</para>
@@ -103,7 +109,10 @@
     <section remap="h3">
       <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>external journal</tertiary></indexterm>Choosing Parameters for an External Journal</title>
       <para>If you have configured a RAID array and use it directly as an OST, it contains both data and metadata. For better performance, we recommend putting the OST journal on a separate device, by creating a small RAID 1 array and using it as an external journal for the OST.</para>
-      <para>Lustre&apos;s default journal size is 400 MB. A journal size of up to 1 GB has shown increased performance but diminishing returns are seen for larger journals. Additionally, a copy of the journal is kept in RAM. Therefore, make sure you have enough memory available to hold copies of all the journals.</para>
+      <para>In a Lustre file system, the default journal size is 400 MB. A journal size of up to 1
+        GB has shown increased performance but diminishing returns are seen for larger journals.
+        Additionally, a copy of the journal is kept in RAM. Therefore, make sure you have enough
+        memory available to hold copies of all the journals.</para>
       <para>The file system journal options are specified to <literal>mkfs.lustre</literal> using
         the <literal>--mkfsoptions</literal> parameter. For example:</para>
       <screen>--mkfsoptions &quot;<replaceable>other_options</replaceable> -j -J device=/dev/mdJ&quot; </screen>
@@ -137,10 +146,14 @@
     <para>Depending on your cluster size and workload, you may want to connect a SAN to a Lustre file system. Before making this connection, consider the following:</para>
     <itemizedlist>
       <listitem>
-        <para>In many SAN file systems without Lustre, clients allocate and lock blocks or inodes individually as they are updated. The Lustre design avoids the high contention that some of these blocks and inodes may have.</para>
+        <para>In many SAN file systems, clients allocate and lock blocks or inodes individually as
+          they are updated. The design of the Lustre file system avoids the high contention that
+          some of these blocks and inodes may have.</para>
       </listitem>
       <listitem>
-        <para>Lustre is highly scalable and can have a very large number of clients. SAN switches do not scale to a large number of nodes, and the cost per port of a SAN is generally higher than other networking.</para>
+        <para>The Lustre file system is highly scalable and can have a very large number of clients.
+          SAN switches do not scale to a large number of nodes, and the cost per port of a SAN is
+          generally higher than other networking.</para>
       </listitem>
       <listitem>
         <para>File systems that allow direct-to-SAN access from the clients have a security risk because clients can potentially read any data on the SAN disks, and misbehaving clients can corrupt the file system for many reasons like improper file system, network, or other kernel software, bad cabling, bad memory, and so on. The risk increases with increase in the number of clients directly accessing the storage.</para>

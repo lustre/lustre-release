@@ -82,23 +82,26 @@ Finding Nodes in the Lustre File System</title>
         <para>This command must be run on the MGS.
                 </para>
       </note>
-      <para>In this example, file system lustre has three nodes, <literal>lustre-MDT0000</literal>, <literal>lustre-OST0000</literal>, and <literal>lustre-OST0001</literal>.</para>
+      <para>In this example, file system <literal>testfs</literal> has three nodes,
+        <literal>testfs-MDT0000</literal>, <literal>testfs-OST0000</literal>, and
+        <literal>testfs-OST0001</literal>.</para>
       <screen>cfs21:/tmp# cat /proc/fs/lustre/mgs/MGS/live/* 
-                fsname: lustre 
+                fsname: testfs 
                 flags: 0x0     gen: 26 
-                lustre-MDT0000 
-                lustre-OST0000 
-                lustre-OST0001 </screen>
+                testfs-MDT0000 
+                testfs-OST0000 
+                testfs-OST0001 </screen>
       <para>To get the names of all OSTs, run this command on the MDS:</para>
       <screen># cat /proc/fs/lustre/lov/<replaceable>fsname</replaceable>-mdtlov/target_obd </screen>
       <note>
         <para>This command must be run on the MDS.
                 </para>
       </note>
-      <para>In this example, there are two OSTs, lustre-OST0000 and lustre-OST0001, which are both active.</para>
-      <screen>cfs21:/tmp# cat /proc/fs/lustre/lov/lustre-mdtlov/target_obd 
-0: lustre-OST0000_UUID ACTIVE 
-1: lustre-OST0001_UUID ACTIVE </screen>
+      <para>In this example, there are two OSTs, testfs-OST0000 and testfs-OST0001, which are both
+      active.</para>
+      <screen>cfs21:/tmp# cat /proc/fs/lustre/lov/testfs-mdtlov/target_obd 
+0: testfs-OST0000_UUID ACTIVE 
+1: testfs-OST0001_UUID ACTIVE </screen>
     </section>
     <section xml:id="dbdoclet.50438199_26070">
       <title><indexterm><primary>maintenance</primary><secondary>mounting a server</secondary></indexterm>
@@ -112,7 +115,10 @@ Mounting a Server Without Lustre Service</title>
     <section xml:id="dbdoclet.50438199_54623">
       <title><indexterm><primary>maintenance</primary><secondary>regenerating config logs</secondary></indexterm>
 Regenerating Lustre Configuration Logs</title>
-      <para>If the Lustre system&apos;s configuration logs are in a state where the file system cannot be started, use the <literal>writeconf</literal> command to erase them. After the <literal>writeconf</literal> command is run and the servers restart, the configuration logs are re-generated and stored on the MGS (as in a new file system).</para>
+      <para>If the Lustre file system configuration logs are in a state where the file system cannot
+      be started, use the <literal>writeconf</literal> command to erase them. After the
+        <literal>writeconf</literal> command is run and the servers restart, the configuration logs
+      are re-generated and stored on the MGS (as in a new file system).</para>
       <para>You should only use the <literal>writeconf</literal> command if:</para>
       <itemizedlist>
         <listitem>
@@ -151,7 +157,7 @@ Regenerating Lustre Configuration Logs</title>
       <caution>
         <para>The OST pools feature enables a group of OSTs to be named for file striping purposes. If you use OST pools, be aware that running the <literal>writeconf</literal> command erases <emphasis role="bold">all</emphasis> pools information (as well as any other parameters set via <literal>lctl conf_param</literal>). We recommend that the pools definitions (and <literal>conf_param</literal> settings) be executed via a script, so they can be reproduced easily after a <literal>writeconf</literal> is performed.</para>
       </caution>
-      <para>To regenerate Lustre&apos;s system configuration logs:</para>
+      <para>To regenerate Lustre file system configuration logs:</para>
       <orderedlist>
         <listitem>
           <para>Shut down the file system in this order.</para>
@@ -210,9 +216,15 @@ Regenerating Lustre Configuration Logs</title>
     <section xml:id="dbdoclet.50438199_31353">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
 Changing a Server NID</title>
-      <para>In Lustre 2.3 or earlier, the <literal>tunefs.lustre --writeconf</literal> command is used to rewrite all of the configuration files.</para>
-      <para condition="l24">If you need to change the NID on the MDT or OST, a new <literal>replace_nids</literal> command was added in Lustre 2.4 to simplify this process.
-      The <literal>replace_nids</literal> command differs from <literal>tunefs.lustre --writeconf</literal> in that it does not erase the entire configuration log, precluding the need the need to execute the <literal>writeconf</literal> command on all servers and re-specify all permanent parameter settings. However, the <literal>writeconf</literal> command can still be used if desired.</para>
+      <para>In Lustre software release 2.3 or earlier, the <literal>tunefs.lustre
+        --writeconf</literal> command is used to rewrite all of the configuration files.</para>
+      <para condition="l24">If you need to change the NID on the MDT or OST, a new
+        <literal>replace_nids</literal> command was added in Lustre software release 2.4 to simplify
+      this process. The <literal>replace_nids</literal> command differs from <literal>tunefs.lustre
+        --writeconf</literal> in that it does not erase the entire configuration log, precluding the
+      need the need to execute the <literal>writeconf</literal> command on all servers and
+      re-specify all permanent parameter settings. However, the <literal>writeconf</literal> command
+      can still be used if desired.</para>
       <para>Change a server NID in these situations:</para>
       <itemizedlist>
         <listitem>
@@ -229,7 +241,8 @@ Changing a Server NID</title>
       <orderedlist>
         <listitem>
 		<para>Update the LNET configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs is correct. Use <literal>lctl list_nids</literal> to view the list of server NIDS.</para>
-          <para>The <literal>lctl list_nids</literal> command indicates which network(s) are configured to work with Lustre.</para>
+          <para>The <literal>lctl list_nids</literal> command indicates which network(s) are
+          configured to work with the Lustre file system.</para>
         </listitem>
         <listitem>
           <para>Shut down the file system in this order:</para>
@@ -252,7 +265,8 @@ Changing a Server NID</title>
         <listitem>
 	  <para>Run the <literal>replace_nids</literal> command on the MGS:</para>
 	  <screen>lctl replace_nids <replaceable>devicename</replaceable> <replaceable>nid1</replaceable>[,nid2,nid3 ...]</screen>
-	  <para>where <replaceable>devicename</replaceable> is the Lustre target name, e.g. <literal>myfs-OST0013</literal></para>
+	  <para>where <replaceable>devicename</replaceable> is the Lustre target name, e.g.
+            <literal>testfs-OST0013</literal></para>
         </listitem>
 	<listitem>
 	  <para>If the MGS and MDS share a partition, stop the MGS:</para>
@@ -263,7 +277,10 @@ Changing a Server NID</title>
       <note><para>The previous configuration log is backed up on the MGS disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
     <section xml:id="dbdoclet.addingamdt" condition='l24'>
-      <title><indexterm><primary>maintenance</primary><secondary>adding an MDT</secondary></indexterm>Adding a new MDT to a Lustre file system</title>
+      <title><indexterm>
+        <primary>maintenance</primary>
+        <secondary>adding an MDT</secondary>
+      </indexterm>Adding a New MDT to a Lustre File System</title>
         <para>Additional MDTs can be added to serve one or more remote sub-directories within the
       file system. It is possible to have multiple remote sub-directories reference the same MDT.
       However, the root directory will always be located on MDT0. To add a new MDT into the file
@@ -273,10 +290,10 @@ Changing a Server NID</title>
 			<para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
 		<screen>
 client$ lctl dl | grep mdc
-36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
-37 UP mdc lustre-MDT0001-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
-38 UP mdc lustre-MDT0002-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
-39 UP mdc lustre-MDT0003-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+36 UP mdc testfs-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+37 UP mdc testfs-MDT0001-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+38 UP mdc testfs-MDT0002-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+39 UP mdc testfs-MDT0003-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
 		</screen>
         </listitem>
         <listitem>
@@ -322,7 +339,9 @@ oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
       <title><indexterm><primary>maintenance</primary><secondary>restoring a OST</secondary></indexterm>
       <indexterm><primary>maintenance</primary><secondary>removing a OST</secondary></indexterm>
 Removing and Restoring OSTs</title>
-      <para>OSTs can be removed from and restored to a Lustre file system. Currently in Lustre, removing a OST means the OST is &apos;deactivated&apos; in the file system, not permanently removed.</para>
+      <para>OSTs can be removed from and restored to a Lustre file system. Removing a OST means the
+      OST is <emphasis role="italic">deactivated</emphasis> in the file system, not permanently
+      removed.</para>
   	  	<note><para>A removed OST still appears in the file system; do not create a new OST with the same name.</para></note>
       <para>You may want to remove (deactivate) an OST and prevent new files from being written to it in several situations:</para>
       <itemizedlist>
@@ -374,10 +393,10 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
               <para>List all OSCs on the node, along with their device numbers. Run:</para>
               <screen>lctl dl | grep osc</screen>
               <para>For example: <literal>lctl dl | grep</literal></para>
-              <screen>11 UP osc lustre-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
-12 UP osc lustre-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
-13 IN osc lustre-OST-0000-osc lustre-MDT0000-mdtlov_UUID 5
-14 UP osc lustre-OST-0001-osc lustre-MDT0000-mdtlov_UUID 5</screen>
+              <screen>11 UP osc testfs-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
+12 UP osc testfs-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
+13 IN osc testfs-OST-0000-osc testfs-MDT0000-mdtlov_UUID 5
+14 UP osc testfs-OST-0001-osc testfs-MDT0000-mdtlov_UUID 5</screen>
             </listitem>
             <listitem>
               <para>Determine the device number of the OSC that corresponds to the OST to be
@@ -493,8 +512,8 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
         procedure given in either <xref linkend="dbdoclet.50438207_71633"/>, or <xref
           linkend="dbdoclet.50438207_21638"/> and <xref linkend="dbdoclet.50438207_22325"/>. </para>
       <para>To replace an OST that was removed from service due to corruption or hardware failure,
-        the file system needs to be formatted for Lustre, and the Lustre configuration should be
-        restored, if available. </para>
+        the file system needs to be formatted using <literal>mkfs.lustre</literal>, and the Lustre
+        file system configuration should be restored, if available. </para>
       <para>If the OST configuration files were not backed up, due to the OST file system being
         completely inaccessible, it is still possible to replace the failed OST with a new one at
         the same OST index. </para>
@@ -559,13 +578,23 @@ Aborting Recovery</title>
     <section xml:id="dbdoclet.50438199_12607">
       <title><indexterm><primary>maintenance</primary><secondary>identifying OST host</secondary></indexterm>
 Determining Which Machine is Serving an OST </title>
-      <para>In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the NID that is serving a specific OST, run one of the following commands on a client (you do not need to be a root user): <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>*.ost_conn_uuid</screen>For example: <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
-osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen>- OR - <screen>client$ lctl get_param osc.*.ost_conn_uuid 
-osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-osc.lustre-OST0001-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-osc.lustre-OST0002-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-osc.lustre-OST0003-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
-osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
+      <para>In the course of administering a Lustre file system, you may need to determine which
+      machine is serving a specific OST. It is not as simple as identifying the machine’s IP
+      address, as IP is only one of several networking protocols that the Lustre software uses and,
+      as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the
+      NID that is serving a specific OST, run one of the following commands on a client (you do not
+      need to be a root user):
+      <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>*.ost_conn_uuid</screen>For
+      example:
+      <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
+osc.testfs-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen>-
+      OR -
+      <screen>client$ lctl get_param osc.*.ost_conn_uuid 
+osc.testfs-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
+osc.testfs-OST0001-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
+osc.testfs-OST0002-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
+osc.testfs-OST0003-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
+osc.testfs-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
     </section>
     <section xml:id="dbdoclet.50438199_62333">
       <title><indexterm><primary>maintenance</primary><secondary>changing failover node address</secondary></indexterm>

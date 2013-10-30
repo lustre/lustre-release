@@ -418,9 +418,10 @@ EXTENTS:
 </screen></para>
       </listitem>
       <listitem>
-        <para>For Lustre 2.x filesystems, the parent FID will be of the form [0x200000400:0x122:0x0]
-          and can be resolved directly using the <literal>lfs fid2path [0x200000404:0x122:0x0]
-            /mnt/lustre</literal> command on any Lustre client, and the process is complete.</para>
+        <para>For Lustre software release 2.x file systems, the parent FID will be of the form
+          [0x200000400:0x122:0x0] and can be resolved directly using the <literal>lfs fid2path
+            [0x200000404:0x122:0x0] /mnt/lustre</literal> command on any Lustre client, and the
+          process is complete.</para>
       </listitem>
       <listitem>
         <para>In this example the parent inode FID is an upgraded 1.x inode

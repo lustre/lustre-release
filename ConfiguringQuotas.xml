@@ -34,41 +34,44 @@
         <para>Quotas are administered via the <literal>lfs</literal> and <literal>lctl</literal> commands (post-mount).</para>
       </listitem>
       <listitem>
-        <para>Quotas are distributed (as Lustre is a distributed file system), which has several ramifications.</para>
+        <para>Quotas are distributed (as the Lustre file system is a distributed file system), which
+          has several ramifications.</para>
       </listitem>
       <listitem>
         <para>Quotas are allocated and consumed in a quantized fashion.</para>
       </listitem>
       <listitem>
       <para>Client does not set the <literal>usrquota</literal> or <literal>grpquota</literal>
-          options to mount. As of Lustre 2.4, space accounting is always enabled by default and
-          quota enforcement can be enabled/disabled on a per-file system basis with <literal>lctl
-            conf_param</literal>. It is worth noting that both <literal>lfs quotaon</literal> and
-            <literal>quota_type</literal> are deprecated as of Lustre 2.4.0.</para>
+          options to mount. As of Lustre software release 2.4, space accounting is always enabled by
+          default and quota enforcement can be enabled/disabled on a per-file system basis with
+            <literal>lctl conf_param</literal>. It is worth noting that both <literal>lfs
+            quotaon</literal> and <literal>quota_type</literal> are deprecated as of Lustre software
+          release 2.4.0.</para>
       </listitem>
     </itemizedlist>
     <caution>
-      <para>Although quotas are available in Lustre, root quotas are NOT enforced.</para>
+      <para>Although a quota feature is available in the Lustre software, root quotas are NOT
+        enforced.</para>
       <para><literal>lfs setquota -u root</literal> (limits are not enforced)</para>
       <para><literal>lfs quota -u root</literal> (usage includes internal Lustre data that is dynamic in size and does not accurately reflect mount point visible block and inode usage).</para>
     </caution>
   </section>
   <section xml:id="enabling_disk_quotas">
     <title><indexterm><primary>Quotas</primary><secondary>enabling disk</secondary></indexterm>Enabling Disk Quotas</title>
-    <para>Prior to Lustre 2.4.0, enabling quota involved a full file system scan via <literal>lfs
-        quotacheck</literal>. All file systems formatted with Lustre 2.4.0 or newer no longer
-      require quotacheck to be run since up-to-date accounting information are now always maintained
-      by the OSD layer, regardless of the quota enforcement status. </para>
+    <para>Prior to Lustre software release 2.4.0, enabling quota involved a full file system scan
+      via <literal>lfs quotacheck</literal>. All file systems formatted with Lustre software release
+      2.4.0 or newer no longer require quotacheck to be run since up-to-date accounting information
+      are now always maintained by the OSD layer, regardless of the quota enforcement status. </para>
     <section remap="h3" condition="l24">
-      <title>Enabling Disk Quotas (Lustre Release 2.4 and later)</title>
-      <para>Although quota enforcement is managed by Lustre itself, each OSD implementation relies
-        on the backend file system to maintain per-user/group block and inode usage:</para>
+      <title>Enabling Disk Quotas (Lustre Software Release 2.4 and later)</title>
+      <para>Although quota enforcement is managed by the Lustre software, each OSD implementation
+        relies on the backend file system to maintain per-user/group block and inode usage:</para>
       <itemizedlist>
         <listitem>
-          <para>For ldiskfs backend, mkfs.lustre now creates empty quota files and enables the QUOTA
-            feature flag in the superblock which turns quota accounting on at mount time
-            automatically. e2fsck was also modified to fix the quota files when the QUOTA feature
-            flag is present.</para>
+          <para>For ldiskfs backend, <literal>mkfs.lustre</literal> now creates empty quota files
+            and enables the QUOTA feature flag in the superblock which turns quota accounting on at
+            mount time automatically. e2fsck was also modified to fix the quota files when the QUOTA
+            feature flag is present.</para>
         </listitem>
         <listitem>
           <para>For ZFS backend, accounting ZAPs are created and maintained by the ZFS file system
@@ -91,26 +94,28 @@
         </listitem>
       </itemizedlist>
       <para>As a result, <literal>lfs quotacheck</literal> is now deprecated and not required any
-        more when running Lustre 2.4 on the servers.</para>
-      <para>Lustre filesystems formatted with a Lustre version prior to 2.4.0 can be still safely
-        upgraded to 2.4.0, but won't have functional space usage report until <literal>tunefs.lustre
-          --quota</literal> is run against all targets. This command sets the QUOTA feature flag in
-        the superblock and runs e2fsck (as a result, the target must be offline) to build the
-        per-UID/GID disk usage database. </para>
+        more when running Lustre software release 2.4 on the servers.</para>
+      <para>Lustre file systems formatted with a Lustre release prior to 2.4.0 can be still safely
+        upgraded to release 2.4.0, but won't have functional space usage report until
+          <literal>tunefs.lustre --quota</literal> is run against all targets. This command sets the
+        QUOTA feature flag in the superblock and runs e2fsck (as a result, the target must be
+        offline) to build the per-UID/GID disk usage database. </para>
       <caution>
-        <para>Lustre 2.4 and beyond requires a version of e2fsprogs that supports quota (i.e. newer
-          or equal to 1.42.3.wc1) to be installed on the server nodes using ldiskfs backend
-          (e2fsprogs isn't needed with ZFS backend). In general, we recommend to use the latest
-          e2fsprogs version available on <link xl:href="http://downloads.hpdd.intel.com/e2fsprogs/">http://downloads.hpdd.intel.com/public/e2fsprogs/</link>.</para>
+        <para>Lustre software release 2.4 and beyond requires a version of e2fsprogs that supports
+          quota (i.e. newer or equal to 1.42.3.wc1) to be installed on the server nodes using
+          ldiskfs backend (e2fsprogs isn't needed with ZFS backend). In general, we recommend to use
+          the latest e2fsprogs version available on <link
+            xl:href="http://downloads.hpdd.intel.com/e2fsprogs/"
+            >http://downloads.hpdd.intel.com/public/e2fsprogs/</link>.</para>
       
         <para>The ldiskfs OSD relies on the standard Linux quota to maintain accounting information
           on disk. As a consequence, the Linux kernel running on the Lustre servers using ldiskfs
           backend must have <literal>CONFIG_QUOTA</literal>, <literal>CONFIG_QUOTACTL</literal> and
             <literal>CONFIG_QFMT_V2</literal> enabled.</para>
       </caution>
-      <para>As of Lustre 2.4.0, quota enforcement is thus turned on/off independently of space
-        accounting which is always enabled. <literal>lfs
-          quota<replaceable>on|off</replaceable></literal> as well as the per-target
+      <para>As of Lustre software release 2.4.0, quota enforcement is thus turned on/off
+        independently of space accounting which is always enabled. <literal>lfs
+            quota<replaceable>on|off</replaceable></literal> as well as the per-target
           <literal>quota_type</literal> parameter are deprecated in favor of a single per-file
         system quota parameter controlling inode/block quota enforcement. Like all permanent
         parameters, this quota parameter can be set via <literal>lctl conf_param</literal> on the
@@ -163,32 +168,32 @@ conn to master: setup
 user uptodate:  glb[1],slv[1],reint[0]
 group uptodate: glb[1],slv[1],reint[0]</screen>
       <caution>
-        <para>Lustre 2.4 comes with a new quota protocol and a new on-disk format, be sure to check
-          the Interoperability section below (see <xref linkend="quota_interoperability"/>.) when
-          migrating to 2.4</para>
+        <para>Lustre software release 2.4 comes with a new quota protocol and a new on-disk format,
+          be sure to check the Interoperability section below (see <xref
+            linkend="quota_interoperability"/>.) when migrating to release 2.4</para>
       </caution>
     </section>
     <section remap="h3">
       <title>Enabling Disk Quotas (Lustre Releases Previous to Release 2.4 )</title>
       <para><note>
           <?oxy_custom_start type="oxy_content_highlight" color="255,64,0"?>
-          <para><?oxy_custom_end?>In Lustre software releases previous to Release 2.4, when new OSTs
+          <para><?oxy_custom_end?>In Lustre software releases previous to release 2.4, when new OSTs
             are added to the file system, quotas are not automatically propagated to the new OSTs.
             As a workaround, clear and then reset quotas for each user or group using the
               <literal>lfs setquota</literal> command. In the example below, quotas are cleared and
             reset for user <literal>bob</literal> on file system <literal>testfs</literal>:
             <screen>$ lfs setquota -u bob -b 0 -B 0 -i 0 -I 0 /mnt/testfs 
 $ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen></para>
-        </note>For Lustre versions older than 2.4, <literal>lfs quotacheck</literal> must be first
-        run from a client node to create quota files on the Lustre targets (i.e. the MDT and OSTs).
-          <literal>lfs quotacheck</literal> requires the file system to be quiescent (i.e. no
-        modifying operations like write, truncate, create or delete should run concurrently).
-        Failure to follow this caution may result in inaccurate user/group disk usage. Operations
-        that do not change Lustre files (such as read or mount) are okay to run. <literal>lfs
-          quotacheck</literal> performs a scan on all the Lustre targets to calculates the
-        block/inode usage for each user/group. If the Lustre file system has many files,
-          <literal>quotacheck</literal> may take a long time to complete. Several options can be
-        passed to <literal>lfs quotacheck</literal>:</para>
+        </note>For Lustre software releases older than release 2.4, <literal>lfs
+          quotacheck</literal> must be first run from a client node to create quota files on the
+        Lustre targets (i.e. the MDT and OSTs). <literal>lfs quotacheck</literal> requires the file
+        system to be quiescent (i.e. no modifying operations like write, truncate, create or delete
+        should run concurrently). Failure to follow this caution may result in inaccurate user/group
+        disk usage. Operations that do not change Lustre files (such as read or mount) are okay to
+        run. <literal>lfs quotacheck</literal> performs a scan on all the Lustre targets to
+        calculates the block/inode usage for each user/group. If the Lustre file system has many
+        files, <literal>quotacheck</literal> may take a long time to complete. Several options can
+        be passed to <literal>lfs quotacheck</literal>:</para>
       <screen># lfs quotacheck -ug /mnt/testfs</screen>
       <itemizedlist>
         <listitem>
@@ -202,7 +207,7 @@ $ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen>
         this setting isn't persistent and quota will have to be enabled again (via <literal>lfs
           quotaon</literal>) if one of the Lustre targets is restarted. <literal>lfs
           quotaoff</literal> is used to turn off quota.</para>
-      <para>To enable quota permanently with a Lustre version older than 2.4, the
+      <para>To enable quota permanently with a Lustre software release older than release 2.4, the
           <literal>quota_type</literal> parameter must be used. This requires setting
           <literal>mdd.quota_type</literal> and <literal>ost.quota_type</literal>, respectively, on
         the MDT and OSTs. <literal>quota_type</literal> can be set to the string
@@ -239,7 +244,10 @@ $ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen>
     <para>The grace period applies to all users. The user block soft limit is for all users who are using a blocks quota.</para>
     <para><emphasis role="bold">Soft limit</emphasis> -- The grace timer is started once the soft limit is exceeded. At this point, the user/group can still allocate block/inode. When the grace time expires and if the user is still above the soft limit, the soft limit becomes a hard limit and the user/group can't allocate any new block/inode any more. The user/group should then delete files to be under the soft limit. The soft limit MUST be smaller than the hard limit. If the soft limit is not needed, it should be set to zero (0).</para>
       <para><emphasis role="bold">Hard limit</emphasis> -- Block or inode allocation will fail with <literal>EDQUOT</literal> (i.e. quota exceeded) when the hard limit is reached. The hard limit is the absolute limit. When a grace period is set, one can exceed the soft limit within the grace period if under the hard limit.</para>
-    <para>Due to the distributed nature of Lustre and the need to mainain performance under load, those quota parameters may not be 100% accurate. The quota settings can be manipulated via the <literal>lfs</literal> command which includes several options to work with quotas:</para>
+    <para>Due to the distributed nature of a Lustre file system and the need to mainain performance
+      under load, those quota parameters may not be 100% accurate. The quota settings can be
+      manipulated via the <literal>lfs</literal> command which includes several options to work with
+      quotas:</para>
     <itemizedlist>
       <listitem>
         <para><varname>quota</varname>     -- displays general quota information (disk usage and limits)</para>
@@ -284,7 +292,11 @@ testfs-OST0001_UUID 0      -     16384 -     0     -     0     -</screen>
   </section>
   <section xml:id="quota_allocation">
     <title><indexterm><primary>Quotas</primary><secondary>allocating</secondary></indexterm>Quota Allocation</title>
-    <para>In Lustre, quota must be properly allocated or users may experience unnecessary failures. The file system block quota is divided up among the OSTs within the file system. Each OST requests an allocation which is increased up to the quota limit. The quota allocation is then <emphasis role="italic">quantized</emphasis> to reduce the number of quota-related request traffic.</para>
+    <para>In a Lustre file system, quota must be properly allocated or users may experience
+      unnecessary failures. The file system block quota is divided up among the OSTs within the file
+      system. Each OST requests an allocation which is increased up to the quota limit. The quota
+      allocation is then <emphasis role="italic">quantized</emphasis> to reduce the number of
+      quota-related request traffic.</para>
     <para>The Lustre quota system distributes quotas from the Quota Master Target (aka QMT). Only one QMT instance is supported for now and only runs on the same node as MDT0000. All OSTs and MDTs set up a Quota Slave Device (aka QSD) which connects to the QMT to allocate/release quota space. The QSD is setup directly from the OSD layer.</para>
     <para>To reduce quota requests, quota space is initially allocated to QSDs in very large chunks. How much unused quota space can be hold by a target is controlled by the qunit size. When quota space for a given ID is close to exhaustion on the QMT, the qunit size is reduced and QSDs are notified of the new qunit size value via a glimpse callback. Slaves are then responsible for releasing quota space above the new qunit value. The qunit size isn't shrunk indefinitely and there is a minimal value of 1MB for blocks and 1,024 for inodes. This means that the quota space rebalancing process will stop when this mininum value is reached. As a result, quota exceeded can be returned while many slaves still have 1MB or 1,024 inodes of spare quota space.</para>
     <para>If we look at the <literal>setquota</literal> example again, running this <literal>lfs quota</literal> command:</para>
@@ -305,39 +317,50 @@ testfs-OST0001_UUID 30720* -     29896 -           -      -     -</screen>
       <para>Setting the quota limit below the minimal qunit size may prevent the user/group from all file creation. It is thus recommended to use soft/hard limits which are a multiple of the number of OSTs * the minimal qunit size.</para>
     </note>
     <para> To determine the total number of inodes, use <literal>lfs df -i</literal> (and also <literal>lctl get_param *.*.filestotal</literal>). For more information on using the <literal>lfs df -i</literal> command and the command output, see <xref linkend="dbdoclet.50438209_35838"/>.</para>
-    <para>Unfortunately, the <literal>statfs</literal> interface does not report the free inode count directly, but instead reports the total inode and used inode counts. The free inode count is calculated for <literal>df</literal> from (total inodes - used inodes). It is not critical to know a file system&apos;s total inode count. Instead, you should know (accurately), the free inode count and the used inode count for a file system. Lustre manipulates the total inode count in order to accurately report the other two values.</para>
+    <para>Unfortunately, the <literal>statfs</literal> interface does not report the free inode
+      count directly, but instead reports the total inode and used inode counts. The free inode
+      count is calculated for <literal>df</literal> from (total inodes - used inodes). It is not
+      critical to know the total inode count for a file system. Instead, you should know
+      (accurately), the free inode count and the used inode count for a file system. The Lustre
+      software manipulates the total inode count in order to accurately report the other two
+      values.</para>
   </section>
   <section xml:id="quota_interoperability">
     <title><indexterm><primary>Quotas</primary><secondary>Interoperability</secondary></indexterm>Interoperability</title>
-    <para>The new quota protocol introduced in Lustre 2.4.0 <emphasis role="bold">isn't
-        compatible</emphasis> with the old one. As a consequence, <emphasis role="bold">all Lustre
-        servers must be upgraded to 2.4.0 for quota to be functional</emphasis>. Quota limits set on
-      the Lustre file system prior to the upgrade will be automatically migrated to the new quota
-      index format. As for accounting information with ldiskfs backend, they will be regenerated by
-      running <literal>tunefs.lustre --quota</literal> against all targets. It is worth noting that
-      running <literal>tunefs.lustre --quota</literal> is <emphasis role="bold">mandatory</emphasis>
-      for all targets formatted with a Lustre version older than 2.4.0, otherwise quota enforcement
-      as well as accounting won't be functional.</para>
-    <para>Besides, the 2.4 quota protocol takes for granted that the Lustre client supports the <literal>OBD_CONNECT_EINPROGRESS</literal> connect flag. Clients supporting this flag will retry indefinitely when the server returns <literal>EINPROGRESS</literal> in a reply. Here is the list of Lustre client version which are compatible with 2.4:</para>
+    <para>The new quota protocol introduced in Lustre software release 2.4.0 <emphasis role="bold"
+        >isn't compatible</emphasis> with the old one. As a consequence, <emphasis role="bold">all
+        Lustre servers must be upgraded to release 2.4.0 for quota to be functional</emphasis>.
+      Quota limits set on the Lustre file system prior to the upgrade will be automatically migrated
+      to the new quota index format. As for accounting information with ldiskfs backend, they will
+      be regenerated by running <literal>tunefs.lustre --quota</literal> against all targets. It is
+      worth noting that running <literal>tunefs.lustre --quota</literal> is <emphasis role="bold"
+        >mandatory</emphasis> for all targets formatted with a Lustre software release older than
+      release 2.4.0, otherwise quota enforcement as well as accounting won't be functional.</para>
+    <para>Besides, the quota protocol in release 2.4 takes for granted that the Lustre client
+      supports the <literal>OBD_CONNECT_EINPROGRESS</literal> connect flag. Clients supporting this
+      flag will retry indefinitely when the server returns <literal>EINPROGRESS</literal> in a
+      reply. Here is the list of Lustre client version which are compatible with release 2.4:</para>
     <itemizedlist>
       <listitem>
-        <para>2.3-based clients and beyond</para>
+        <para>Release 2.3-based clients and beyond</para>
       </listitem>
       <listitem>
-        <para>1.8 clients newer or equal to 1.8.9-wc1</para>
+        <para>Release 1.8 clients newer or equal to release 1.8.9-wc1</para>
       </listitem>
       <listitem>
-        <para>2.1 clients newer or equal to 2.1.4</para>
+        <para>Release 2.1 clients newer or equal to release 2.1.4</para>
       </listitem>
   </itemizedlist>
   </section>
   <section xml:id="granted_cache_and_quota_limits">
     <title><indexterm><primary>Quotas</primary><secondary>known issues</secondary></indexterm>Granted Cache and Quota Limits</title>
-    <para>In Lustre, granted cache does not respect quota limits. In this situation, OSTs grant cache to Lustre client to accelerate I/O. Granting cache causes writes to be successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
+    <para>In a Lustre file system, granted cache does not respect quota limits. In this situation,
+      OSTs grant cache to a Lustre client to accelerate I/O. Granting cache causes writes to be
+      successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
     <para>The sequence is:</para>
     <orderedlist>
       <listitem>
-        <para>A user writes files to Lustre.</para>
+        <para>A user writes files to the Lustre file system.</para>
       </listitem>
       <listitem>
         <para>If the Lustre client has enough granted cache, then it returns &apos;success&apos; to users and arranges the writes to the OSTs.</para>
@@ -358,7 +381,9 @@ testfs-OST0001_UUID 30720* -     29896 -           -      -     -</screen>
   </section>
   <section xml:id="lustre_quota_statistics">
     <title><indexterm><primary>Quotas</primary><secondary>statistics</secondary></indexterm>Lustre Quota Statistics</title>
-    <para>Lustre includes statistics that monitor quota activity, such as the kinds of quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These statistics are useful to measure performance of a Lustre file system.</para>
+    <para>The Lustre software includes statistics that monitor quota activity, such as the kinds of
+      quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These
+      statistics are useful to measure performance of a Lustre file system.</para>
     <para>Each quota statistic consists of a quota event and <literal>min_time</literal>, <literal>max_time</literal> and <literal>sum_time</literal> values for the event.</para>
     <informaltable frame="all">
       <tgroup cols="2">
@@ -492,7 +517,9 @@ testfs-OST0001_UUID 30720* -     29896 -           -      -     -</screen>
     </informaltable>
     <section remap="h3">
       <title>Interpreting Quota Statistics</title>
-      <para>Quota statistics are an important measure of a Lustre file system&apos;s performance. Interpreting these statistics correctly can help you diagnose problems with quotas, and may indicate adjustments to improve system performance.</para>
+      <para>Quota statistics are an important measure of the performance of a Lustre file system.
+        Interpreting these statistics correctly can help you diagnose problems with quotas, and may
+        indicate adjustments to improve system performance.</para>
       <para>For example, if you run this command on the OSTs:</para>
       <screen>lctl get_param lquota.testfs-OST0000.stats</screen>
       <para>You will get a result similar to this:</para>

@@ -17,22 +17,36 @@
     </itemizedlist>
     <section xml:id="dbdoclet.50438225_71141">
         <title><indexterm><primary>recovery</primary><secondary>corruption of backing file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing File System</title>
-        <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. <literal>ldiskfs</literal> journaling ensures that the file system remains consistent over a system crash. The backing file systems are never accessed directly from the client, so client crashes are not relevant for server filesystem consistency.</para>
+        <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the
+            file system. <literal>ldiskfs</literal> journaling ensures that the file system remains
+            consistent over a system crash. The backing file systems are never accessed directly
+            from the client, so client crashes are not relevant for server file system
+            consistency.</para>
         <para>The only time it is REQUIRED that <literal>e2fsck</literal> be run on a device is when an event causes problems that ldiskfs journaling is unable to handle, such as a hardware device failure or I/O error. If the ldiskfs kernel code detects corruption on the disk, it mounts the file system as read-only to prevent further corruption, but still allows read access to the device. This appears as error &quot;-30&quot; (<literal>EROFS</literal>) in the syslogs on the server, e.g.:</para>
         <screen>Dec 29 14:11:32 mookie kernel: LDISKFS-fs error (device sdz):
-            ldiskfs_lookup: unlinked inode 5384166 in dir #145170469</screen>
-        <para>Dec 29 14:11:32 mookie kernel: Remounting filesystem read-only</para>
+            ldiskfs_lookup: unlinked inode 5384166 in dir #145170469
+Dec 29 14:11:32 mookie kernel: Remounting filesystem read-only</screen>
         <para>In such a situation, it is normally required that e2fsck only be run on the bad device before placing the device back into service.</para>
-        <para>In the vast majority of cases, Lustre can cope with any inconsistencies it finds on the disk and between other devices in the file system.</para>
+        <para>In the vast majority of cases, the Lustre software can cope with any inconsistencies
+            found on the disk and between other devices in the file system.</para>
         <note>
-            <para>The offline LFSCK tool included with e2fsprogs is rarely required for Lustre operation.</para>
+            <para>The offline LFSCK tool included with e2fsprogs is rarely required for Lustre file
+                system operation.</para>
         </note>
         <para>For problem analysis, it is strongly recommended that <literal>e2fsck</literal> be run under a logger, like script, to record all of the output and changes that are made to the file system in case this information is needed later.</para>
         <para>If time permits, it is also a good idea to first run <literal>e2fsck</literal> in non-fixing mode (-n option) to assess the type and extent of damage to the file system. The drawback is that in this mode, <literal>e2fsck</literal> does not recover the file system journal, so there may appear to be file system corruption when none really exists.</para>
-        <para>To address concern about whether corruption is real or only due to the journal not being replayed, you can briefly mount and unmount the <literal>ldiskfs</literal> filesystem directly on the node with Lustre stopped (NOT via Lustre), using a command similar to:</para>
+        <para>To address concern about whether corruption is real or only due to the journal not
+            being replayed, you can briefly mount and unmount the <literal>ldiskfs</literal> file
+            system directly on the node with the Lustre file system stopped, using a command similar
+            to:</para>
         <screen>mount -t ldiskfs /dev/{ostdev} /mnt/ost; umount /mnt/ost</screen>
         <para>This causes the journal to be recovered.</para>
-        <para>The <literal>e2fsck</literal> utility works well when fixing file system corruption (better than similar file system recovery tools and a primary reason why <literal>ldiskfs</literal> was chosen over other file systems for Lustre). However, it is often useful to identify the type of damage that has occurred so an <literal>ldiskfs</literal> expert can make intelligent decisions about what needs fixing, in place of <literal>e2fsck</literal>.</para>
+        <para>The <literal>e2fsck</literal> utility works well when fixing file system corruption
+            (better than similar file system recovery tools and a primary reason why
+                <literal>ldiskfs</literal> was chosen over other file systems). However, it is often
+            useful to identify the type of damage that has occurred so an <literal>ldiskfs</literal>
+            expert can make intelligent decisions about what needs fixing, in place of
+                <literal>e2fsck</literal>.</para>
         <screen>root# {stop lustre services for this device, if running}
 root# script /tmp/e2fsck.sda
 Script started, file is /tmp/e2fsck.sda
@@ -44,7 +58,12 @@ root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corrupt
 :
 root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)
         </screen>
-        <para>In addition, the <literal>e2fsprogs</literal> package contains the LFSCK tool, which does distributed coherency checking for the Lustre file system after <literal>e2fsck</literal> has been run. Running LFSCK is NOT required in a large majority of cases, at a small risk of having some leaked space in the file system. To avoid a lengthy downtime, it can be run (with care) after Lustre is started.</para>
+        <para>In addition, the <literal>e2fsprogs</literal> package contains the LFSCK tool, which
+            does distributed coherency checking for the Lustre file system after
+                <literal>e2fsck</literal> has been run. Running LFSCK is NOT required in a large
+            majority of cases, at a small risk of having some leaked space in the file system. To
+            avoid a lengthy downtime, it can be run (with care) after the Lustre file system is
+            started.</para>
     </section>
     <section xml:id="dbdoclet.50438225_37365">
         <title><indexterm><primary>recovery</primary><secondary>corruption of Lustre file system</secondary></indexterm>Recovering from Corruption in the Lustre File System</title>
@@ -212,7 +231,14 @@ lfsck: fixed 0 errors</screen>
     </section>
     <section xml:id="dbdoclet.50438225_12316">
         <title><indexterm><primary>recovery</primary><secondary>unavailable OST</secondary></indexterm>Recovering from an Unavailable OST</title>
-        <para>One of the most common problems encountered in a Lustre environment is when an OST becomes unavailable, because of a network partition, OSS node crash, etc. When this happens, the OST&apos;s clients pause and wait for the OST to become available again, either on the primary OSS or a failover OSS. When the OST comes back online, Lustre starts a recovery process to enable clients to reconnect to the OST. Lustre servers put a limit on the time they will wait in recovery for clients to reconnect. The timeout length is determined by the <literal>obd_timeout</literal> parameter.</para>
+        <para>One of the most common problems encountered in a Lustre file system environment is
+            when an OST becomes unavailable due to a network partition, OSS node crash, etc. When
+            this happens, the OST&apos;s clients pause and wait for the OST to become available
+            again, either on the primary OSS or a failover OSS. When the OST comes back online, the
+            Lustre file system starts a recovery process to enable clients to reconnect to the OST.
+            Lustre servers put a limit on the time they will wait in recovery for clients to
+            reconnect. The timeout length is determined by the <literal>obd_timeout</literal>
+            parameter.</para>
         <para>During recovery, clients reconnect and replay their requests serially, in the same order they were done originally. Until a client receives a confirmation that a given transaction has been written to stable storage, the client holds on to the transaction, in case it needs to be replayed. Periodically, a progress message prints to the log, stating how_many/expected clients have reconnected. If the recovery is aborted, this log shows how many clients managed to reconnect. When all clients have completed recovery, or if the recovery timeout is reached, the recovery period ends and the OST resumes normal request processing.</para>
         <para>If some clients fail to replay their requests during the recovery period, this will not stop the recovery from completing. You may have a situation where the OST recovers, but some clients are not able to participate in recovery (e.g. network problems or client failure), so they are evicted and their requests are not replayed. This would result in any operations on the evicted clients failing, including in-progress writes, which would cause cached writes to be lost. This is a normal outcome; the recovery cannot wait indefinitely, or the file system would be hung any time a client failed. The lost transactions are an unfortunate result of the recovery process.</para>
         <note>
@@ -221,9 +247,23 @@ lfsck: fixed 0 errors</screen>
     </section>
     <section xml:id="dbdoclet.lfsckadmin" condition='l23'>
         <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the file system with LFSCK</title>
-        <para>LFSCK is an administrative tool introduced in Lustre 2.3 for checking and repair of the Lustre-specific attributes of a mounted Lustre filesystem.  It is similar in concept to the offline LFSCK Lustre repair tool that is included with the Lustre <literal>e2fsprogs</literal> package (see <xref linkend='dbdoclet.50438225_37365'/>), but LFSCK is implemented to run as part of Lustre while the filesystem is mounted and in use.  This allows Lustre consistency checking and repair without unnecessary downtime, and can be run on the largest Lustre filesystems.</para>
-        <para>In Lustre 2.3, LFSCK can verify and repair the Object Index (OI) table that is used internally to map Lustre File Identifiers (FIDs) to MDT internal inode numbers, through a process called OI Scrub.  An OI Scrub is required after restoring from a file-level MDT backup (<xref linkend='dbdoclet.50438207_71633'/>), or in case the OI table is otherwise corrupted.  Later phases of LFSCK will add further checks to the Lustre distributed filesystem state.</para>
-	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc filesystem</literal> interfaces.  LFSCK supports three types of interface: switch interfaces, status interfaces and adjustments interfaces. These interfaces are detailed below.</para>
+        <para>LFSCK is an administrative tool introduced in Lustre software release 2.3 for checking
+            and repair of the attributes specific to a mounted Lustre file system. It is similar in
+            concept to the offline LFSCK Lustre repair tool that is included with the Lustre
+                <literal>e2fsprogs</literal> package (see <xref linkend="dbdoclet.50438225_37365"
+            />), but LFSCK is implemented to run as part of the Lustre file system while the file
+            system is mounted and in use. This allows consistency of checking and repair by the
+            Lustre software without unnecessary downtime, and can be run on the largest Lustre file
+            systems.</para>
+        <para>In Lustre software release 2.3, LFSCK can verify and repair the Object Index (OI)
+            table that is used internally to map Lustre File Identifiers (FIDs) to MDT internal
+            inode numbers, through a process called OI Scrub. An OI Scrub is required after
+            restoring from a file-level MDT backup (<xref linkend="dbdoclet.50438207_71633"/>), or
+            in case the OI table is otherwise corrupted. Later phases of LFSCK will add further
+            checks to the Lustre distributed file system state.</para>
+	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc</literal> file system
+            interfaces. LFSCK supports three types of interface: switch interfaces, status
+            interfaces and adjustments interfaces. These interfaces are detailed below.</para>
     <section>
         <title>LFSCK switch interface</title>
         <section>
@@ -425,7 +465,12 @@ lfsck: fixed 0 errors</screen>
                                         <listitem><para>OI scrub magic id (an identifier unique to OI scrub).</para></listitem>
                                         <listitem><para>OI files count.</para></listitem>
                                         <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
-                                        <listitem><para>Flags: including - <literal>recreated</literal> (OI file(s) is/are removed/recreated), <literal>inconsistent</literal> (restored from file-level backup), <literal>auto</literal> (triggered by non-UI mechanism), and <literal>upgrade</literal> (from Lustre 1.8 IGIF format.)</para></listitem>
+                                        <listitem><para>Flags: including - <literal>recreated</literal> (OI file(s) is/are removed/recreated),
+                                                  <literal>inconsistent</literal> (restored from
+                                                  file-level backup), <literal>auto</literal>
+                                                  (triggered by non-UI mechanism), and
+                                                  <literal>upgrade</literal> (from Lustre software
+                                                  release 1.8 IGIF format.)</para></listitem>
                                         <listitem><para>Parameters: OI scrub parameters, like <literal>failout</literal>.</para></listitem>
                                         <listitem><para>Time Since Last Completed.</para></listitem>
                                         <listitem><para>Time Since Latest Start.</para></listitem>
@@ -499,7 +544,12 @@ lfsck: fixed 0 errors</screen>
                                         <listitem><para>LFSCK namespace magic.</para></listitem>
                                         <listitem><para>LFSCK namespace version..</para></listitem>
                                         <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
-                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been completed), <literal>inconsistent</literal> (one or more inconsistent FID-in-Dirent or LinkEA entries have been discovered), <literal>upgrade</literal> (from Lustre 1.8 IGIF format.)</para></listitem>
+                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been
+                                                  completed), <literal>inconsistent</literal> (one
+                                                  or more inconsistent FID-in-Dirent or LinkEA
+                                                  entries have been discovered),
+                                                  <literal>upgrade</literal> (from Lustre software
+                                                  release 1.8 IGIF format.)</para></listitem>
                                         <listitem><para>Parameters: including <literal>dryrun</literal> and <literal>failout</literal>.</para></listitem>
                                         <listitem><para>Time Since Last Completed.</para></listitem>
                                         <listitem><para>Time Since Latest Start.</para></listitem>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <part version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink">
   <info>
-    <title>Tuning Lustre for Performance</title>
+    <title>Tuning a Lustre File System for Performance</title>
   </info>
   <partintro>
   <para>Part IV describes tools and procedures used to tune a Lustre file system for optimum performance. You will find information in this section about:</para>

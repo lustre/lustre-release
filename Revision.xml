@@ -1,19 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <section xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <title>Revisions</title>
-    <para>Note that the <emphasis role="italic">Lustre Operations Manual 2.x</emphasis> is intended
-        to be relevant for all 2.x releases of the Lustre software. Most of the manual content is
-        relevant to all of the releases. However, any features and content that are added for new
-        versions of the Lustre software are clearly marked with the version in which this
-        functionality is added. Similarly, features that are no longer available are marked with the
-        version in which they were deprecated or removed. <revhistory>
+    <para>The <emphasis role="italic">Lustre Software Release 2.x Operations Manual</emphasis>
+        contains content relevant for all 2.x releases of the Lustre software. <note>
+            <para>Updates to the manual are made as the changes become available.  When features are
+                added with new releases of the Lustre software, they are clearly marked with the
+                version of the release in which the functionality was added. Features that are
+                deprecated by a release or removed from the software are also marked with the
+                version of the release in which they became deprecated or were removed.</para>
+        </note></para>
+    <para>
+        <revhistory>
+            <revision>
+                <revnumber>2.x</revnumber>
+                <date>Ongoing (see note above)</date>
+                <author>
+                    <orgname>Intel Corporation</orgname>
+                </author>
+                <revremark>Release of manual for Lustre software release 2.x</revremark>
+            </revision>
             <revision>
                 <revnumber>2.3</revnumber>
                 <date>November 2012</date>
                 <author>
                     <orgname>Intel Corporation</orgname>
                 </author>
-                <revremark>Release of Lustre 2.3 manual</revremark>
+                <revremark>Release of manual for Lustre software release 2.3</revremark>
             </revision>
             <revision>
                 <revnumber>2.1</revnumber>
@@ -21,7 +33,7 @@
                 <author>
                     <orgname>Whamcloud, Inc</orgname>
                 </author>
-                <revremark>First release of Lustre 2.1 manual</revremark>
+                <revremark>First release of manual with Lustre software release 2.1</revremark>
             </revision>
         </revhistory>
     </para>

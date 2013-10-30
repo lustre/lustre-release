@@ -246,8 +246,8 @@
       <glossterm>lfs
         </glossterm>
       <glossdef>
-        <para>The Lustre File System command-line utility that allows end users to interact with
-          Lustre-specific features, such as setting or checking file striping or per-target free
+        <para>The Lustre file system command-line utility that allows end users to interact with
+          Lustre software features, such as setting or checking file striping or per-target free
           space. For more details, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
             linkend="dbdoclet.50438206_94597"/>.</para>
       </glossdef>
@@ -311,7 +311,8 @@
       <glossterm>LNET
         </glossterm>
       <glossdef>
-        <para>Lustre Networking. A message passing network protocol capable of running and routing through various physical layers. LNET forms the underpinning of LNETrpc.</para>
+        <para>Lustre networking. A message passing network protocol capable of running and routing
+          through various physical layers. LNET forms the underpinning of LNETrpc.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="lockclient">
@@ -409,9 +410,9 @@
       <glossterm>MDT0
         </glossterm>
       <glossdef>
-        <para>The metadata target for the file system root. Since Lustre release 2.4, multiple
-          metadata targets are possible in the same file system. MDT0 is the root of the file
-          system, which must be available for the file system to be accessible.</para>
+        <para>The metadata target for the file system root. Since Lustre software release 2.4,
+          multiple metadata targets are possible in the same file system. MDT0 is the root of the
+          file system, which must be available for the file system to be accessible.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="mgs">
@@ -507,7 +508,8 @@
       <glossterm>Obdfilter </glossterm>
       <glossdef>
         <para>An older name for the OBD API data object operation device driver that sits between
-          the OST and the OSD. In Lustre 2.4 this device has been renamed OFD."</para>
+          the OST and the OSD. In Lustre software release 2.4 this device has been renamed
+          OFD."</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="objectstorage">
@@ -516,9 +518,9 @@
         <para>Refers to a storage-device API or protocol involving storage objects. The two most
           well known instances of object storage are the T10 iSCSI storage object protocol and the
           Lustre object storage protocol (a network implementation of the Lustre object API). The
-          principal difference between the Lustre and T10 protocols is that the Lustre protocol
-          includes locking and recovery control in the protocol and is not tied to a SCSI transport
-          layer.</para>
+          principal difference between the Lustre protocol and T10 protocol is that the Lustre
+          protocol includes locking and recovery control in the protocol and is not tied to a SCSI
+          transport layer.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="opencache">

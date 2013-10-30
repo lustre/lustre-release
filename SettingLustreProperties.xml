@@ -35,7 +35,9 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset, int strip
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The <literal>llapi_file_create()</literal> function sets a file descriptor&apos;s Lustre striping information. The file descriptor is then accessed with <literal>open()</literal>.</para>
+      <para>The <literal>llapi_file_create()</literal> function sets a file descriptor&apos;s Lustre
+        file system striping information. The file descriptor is then accessed with
+          <literal>open()</literal>.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -187,7 +189,8 @@ struct lov_user_ost_data_v1 lmm_objects[0];
                 <para> <literal>lmm_pattern</literal></para>
               </entry>
               <entry>
-                <para>Holds the striping pattern. Only <literal>LOV_PATTERN_RAID0</literal> is possible in this Lustre version.</para>
+                <para>Holds the striping pattern. Only <literal>LOV_PATTERN_RAID0</literal> is
+                  possible in this Lustre software release.</para>
               </entry>
             </row>
             <row>
@@ -412,7 +415,8 @@ cleanup:
     <title>
       <literal>llapi_file_open</literal>
     </title>
-    <para>The <literal>llapi_file_open</literal> command opens (or creates) a file or device on a Lustre filesystem.</para>
+    <para>The <literal>llapi_file_open</literal> command opens (or creates) a file or device on a
+      Lustre file system.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>#include &lt;lustre/lustreapi.h&gt;
@@ -427,7 +431,8 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
     <section remap="h5">
       <title>Description</title>
       <para>The <literal>llapi_file_create()</literal> call is equivalent to the <literal>llapi_file_open</literal> call with <emphasis>flags</emphasis> equal to <literal>O_CREAT|O_WRONLY</literal> and <emphasis>mode</emphasis> equal to <literal>0644</literal>, followed by file close.</para>
-      <para><literal>llapi_file_open()</literal> opens a file with a given name on a Lustre filesystem.</para>
+      <para><literal>llapi_file_open()</literal> opens a file with a given name on a Lustre file
+        system.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -488,7 +493,9 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
                 <para> <literal>stripe_pattern</literal></para>
               </entry>
               <entry>
-                <para>Specifies the striping pattern. In this version of Lustre, only <literal>LOV_PATTERN_RAID0</literal> is available. The default value is 0.</para>
+                <para>Specifies the striping pattern. In this release of the Lustre software, only
+                    <literal>LOV_PATTERN_RAID0</literal> is available. The default value is
+                  0.</para>
               </entry>
             </row>
           </tbody>
@@ -547,7 +554,8 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
                 <para> <literal>ENOTTY</literal></para>
               </entry>
               <entry>
-                <para> <literal>name</literal> may not point to a Lustre filesystem.</para>
+                <para>
+                  <literal>name</literal> may not point to a Lustre file system.</para>
               </entry>
             </row>
           </tbody>
@@ -642,7 +650,14 @@ struct obd_uuid {
                 <para> <literal>LUSTRE_Q_QUOTAON</literal></para>
               </entry>
               <entry>
-                <para>Turns on quotas for a Lustre file system. Deprecated as of 2.4.0. <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>, <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group quota). The quota files must exist. They are normally created with the <literal>llapi_quotacheck</literal> call. This call is restricted to the super user privilege. As of 2.4.0, quota is now enabled on a per-filesystem basis via <literal>lctl conf_param</literal> (see <xref linkend="enabling_disk_quotas"/>) on the MGS node and quotacheck isn't needed any more.</para>
+                <para>Turns on quotas for a Lustre file system. Deprecated as of 2.4.0.
+                    <emphasis>qc_type</emphasis> is <literal>USRQUOTA</literal>,
+                    <literal>GRPQUOTA</literal> or <literal>UGQUOTA</literal> (both user and group
+                  quota). The quota files must exist. They are normally created with the
+                    <literal>llapi_quotacheck</literal> call. This call is restricted to the super
+                  user privilege. As of 2.4.0, quota is now enabled on a per file system basis via
+                    <literal>lctl conf_param</literal> (see <xref linkend="enabling_disk_quotas"/>)
+                  on the MGS node and quotacheck isn't needed any more.</para>
               </entry>
             </row>
             <row>
@@ -674,7 +689,12 @@ struct obd_uuid {
                 <para> <literal>LUSTRE_Q_GETINFO</literal></para>
               </entry>
               <entry>
-                <para>Gets information about quotas. <emphasis>qc_type</emphasis> is either <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. On return, <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version.</para>
+                <para>Gets information about quotas. <emphasis>qc_type</emphasis> is either
+                    <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. On return,
+                    <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds),
+                    <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds),
+                    <emphasis>dqi_flags</emphasis> is not used by the current release of the Lustre
+                  software.</para>
               </entry>
             </row>
             <row>
@@ -682,7 +702,12 @@ struct obd_uuid {
                 <para> <literal>LUSTRE_Q_SETINFO</literal></para>
               </entry>
               <entry>
-                <para>Sets quota information (like grace times). <emphasis>qc_type</emphasis> is either <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>. <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds), <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds), <emphasis>dqi_flags</emphasis> is not used by the current Lustre version and must be zeroed.</para>
+                <para>Sets quota information (like grace times). <emphasis>qc_type</emphasis> is
+                  either <literal>USRQUOTA</literal> or <literal>GRPQUOTA</literal>.
+                    <emphasis>dqi_igrace</emphasis> is inode grace time (in seconds),
+                    <emphasis>dqi_bgrace</emphasis> is block grace time (in seconds),
+                    <emphasis>dqi_flags</emphasis> is not used by the current release of the Lustre
+                  software and must be zeroed.</para>
               </entry>
             </row>
           </tbody>
@@ -806,7 +831,9 @@ int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid
   </section>
   <section xml:id="dbdoclet.50438215_marker-1297700">
     <title>Example Using the <literal>llapi</literal> Library</title>
-    <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
+    <para>Use <literal>llapi_file_create</literal> to set Lustre software properties for a new file.
+      For a synopsis and description of <literal>llapi_file_create</literal> and examples of how to
+      use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
     <para>You can set striping from inside programs like <literal>ioctl</literal>. To compile the sample program, you need to install the Lustre client source RPM.</para>
     <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
     <programlisting>

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <book xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude" version="5.0" xml:lang="en-US">
   <info>
-    <title>Lustre<superscript>*</superscript> File System Release 2.x</title>
+    <title>Lustre<superscript>*</superscript> Software Release 2.x</title>
     <subtitle>Operations Manual</subtitle>
     <copyright>
       <year>2010</year>

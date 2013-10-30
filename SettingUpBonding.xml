@@ -100,9 +100,16 @@ Settings for eth1:
   <section xml:id="dbdoclet.50438258_25353">
     <title>Bonding Module Parameters</title>
     <para>Bonding module parameters control various aspects of bonding.</para>
-    <para>Outgoing traffic is mapped across the slave interfaces according to the transmit hash policy. For Lustre, we recommend that you set the <literal>xmit_hash_policy</literal> option to the layer3+4 option for bonding. This policy uses upper layer protocol information if available to generate the hash. This allows traffic to a particular network peer to span multiple slaves, although a single connection does not span multiple slaves.</para>
+    <para>Outgoing traffic is mapped across the slave interfaces according to the transmit hash
+      policy. We recommend that you set the <literal>xmit_hash_policy</literal> option to the
+      layer3+4 option for bonding. This policy uses upper layer protocol information if available to
+      generate the hash. This allows traffic to a particular network peer to span multiple slaves,
+      although a single connection does not span multiple slaves.</para>
     <screen>$ xmit_hash_policy=layer3+4</screen>
-    <para>The miimon option enables users to monitor the link status. (The parameter is a time interval in milliseconds.) It makes an interface failure transparent to avoid serious network degradation during link failures. A reasonable default setting is 100 milliseconds; run:</para>
+    <para>The <literal>miimon</literal> option enables users to monitor the link status. (The
+      parameter is a time interval in milliseconds.) It makes an interface failure transparent to
+      avoid serious network degradation during link failures. A reasonable default setting is 100
+      milliseconds; run:</para>
     <screen>$ miimon=100</screen>
     <para>For a busy network, increase the timeout.</para>
   </section>
@@ -303,8 +310,11 @@ Interrupt:9 Base address:0x1400</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438258_54769">
-    <title>Configuring Lustre with Bonding</title>
-    <para>Lustre uses the IP address of the bonded interfaces and requires no special configuration. It treats the bonded interface as a regular TCP/IP interface. If needed, specify bond0 using the Lustre networks parameter in /etc/modprobe.</para>
+    <title>Configuring a Lustre File System with Bonding</title>
+    <para>The Lustre software uses the IP address of the bonded interfaces and requires no special
+      configuration. The bonded interface is treated as a regular TCP/IP interface. If needed,
+      specify <literal>bond0</literal> using the Lustre <literal>networks</literal> parameter in
+        <literal>/etc/modprobe</literal>.</para>
     <screen>options lnet networks=tcp(bond0)</screen>
   </section>
   <section xml:id="dbdoclet.50438258_92244">
@@ -312,18 +322,24 @@ Interrupt:9 Base address:0x1400</screen>
     <para>We recommend the following bonding references:</para>
     <itemizedlist>
       <listitem>
-        <para>In the Linux kernel source tree, see documentation/networking/bonding.txt</para>
+        <para>In the Linux kernel source tree, see
+            <literal>documentation/networking/bonding.txt</literal></para>
       </listitem>
       <listitem>
-        <para><link xl:href="http://linux-ip.net/html/ether-bonding.html">http://linux-ip.net/html/ether-bonding.html</link></para>
+        <para><link xl:href="http://linux-ip.net/html/ether-bonding.html"
+            >http://linux-ip.net/html/ether-bonding.html</link>.</para>
       </listitem>
       <listitem>
-        <para><link xl:href="http://www.sourceforge.net/projects/bonding">http://www.sourceforge.net/projects/bonding</link></para>
+        <para><link xl:href="http://www.sourceforge.net/projects/bonding"
+            >http://www.sourceforge.net/projects/bonding</link>.</para>
       </listitem>
       <listitem>
-        <para>Linux Foundation bonding website: <link xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding">http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link></para>
+        <para>Linux Foundation bonding website: <link
+            xl:href="http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding"
+            >http://www.linuxfoundation.org/collaborate/workgroups/networking/bonding</link>. This
+          is the most extensive reference and we highly recommend it. This website includes
+          explanations of more complicated setups, including the use of DHCP with bonding.</para>
       </listitem>
     </itemizedlist>
-    <para>This is the most extensive reference and we highly recommend it. This website includes explanations of more complicated setups, including the use of DHCP with bonding.</para>
   </section>
 </chapter>

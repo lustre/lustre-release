@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="benchmarkingtests">
-  <title xml:id="benchmarkingtests.title">Benchmarking Lustre Performance (Lustre I/O Kit)</title>
+  <title xml:id="benchmarkingtests.title">Benchmarking Lustre File System Performance (Lustre I/O
+    Kit)</title>
   <para>This chapter describes the Lustre I/O kit, a collection of I/O benchmarking tools for a
     Lustre cluster, and PIOS, a parallel I/O simulator for Linux and
       Solaris<superscript>*</superscript> operating systems. It includes:</para>
@@ -31,11 +32,15 @@
           <indexterm><primary>performance</primary><see>benchmarking</see></indexterm>
           
           Using Lustre I/O Kit Tools</title>
-    <para>The tools in the Lustre I/O Kit are used to benchmark Lustre hardware and validate that it is working as expected before you install the Lustre software. It can also be used to to validate the performance of the various hardware and software layers in the cluster and also to find and troubleshoot I/O issues.</para>
+    <para>The tools in the Lustre I/O Kit are used to benchmark Lustre file system hardware and
+      validate that it is working as expected before you install the Lustre software. It can also be
+      used to to validate the performance of the various hardware and software layers in the cluster
+      and also to find and troubleshoot I/O issues.</para>
     <para>Typically, performance is measured starting with single raw devices and then proceeding to groups of devices. Once raw performance has been established, other software layers are then added incrementally and tested.</para>
     <section remap="h3">
       <title>Contents of the Lustre I/O Kit</title>
-      <para>The I/O kit contains three tests, each of which tests a progressively higher layer in the Lustre stack:</para>
+      <para>The I/O kit contains three tests, each of which tests a progressively higher layer in
+        the Lustre software stack:</para>
       <itemizedlist>
         <listitem>
           <para><literal>sgpdd-survey</literal> - Measure basic &apos;bare metal&apos; performance
@@ -52,7 +57,8 @@
             issues.</para>
         </listitem>
       </itemizedlist>
-      <para>Typically with these tests, Lustre should deliver 85-90% of the raw device performance.</para>
+      <para>Typically with these tests, a Lustre file system should deliver 85-90% of the raw device
+        performance.</para>
       <para>A utility <literal>stats-collect</literal> is also provided to collect application profiling information from Lustre clients and servers. See <xref linkend="dbdoclet.50438212_58201"/> for more information.</para>
     </section>
     <section remap="h3">
@@ -63,7 +69,8 @@
           <para>Password-free remote access to nodes in the system (provided by <literal>ssh</literal> or <literal>rsh</literal>).</para>
         </listitem>
         <listitem>
-          <para>LNET self-test completed to test that Lustre Networking has been properly installed and configured. See <xref linkend="lnetselftest"/>.</para>
+          <para>LNET self-test completed to test that Lustre networking has been properly installed
+            and configured. See <xref linkend="lnetselftest"/>.</para>
         </listitem>
         <listitem>
           <para>Lustre file system software installed.</para>
@@ -276,8 +283,8 @@
       <para>The <literal>plot-obdfilter</literal> script generates from the output of the
           <literal>obdfilter-survey</literal> a CSV file and parameters for importing into a
         spreadsheet or gnuplot to visualize the data.</para>
-      <para>To run the <literal>obdfilter-survey</literal> script, create a standard Lustre
-        configuration; no special setup is needed.</para>
+      <para>To run the <literal>obdfilter-survey</literal> script, create a standard Lustre file
+        system configuration; no special setup is needed.</para>
       <para><emphasis role="bold">To perform an automatic run:</emphasis></para>
       <orderedlist>
         <listitem>
@@ -332,7 +339,8 @@
       <title><indexterm><primary>benchmarking</primary><secondary>network</secondary></indexterm>Testing Network Performance</title>
       <para>The <literal>obdfilter-survey</literal> script can only be run automatically against a
         network; no manual test is provided.</para>
-      <para>To run the network test, a specific Lustre setup is needed. Make sure that these configuration requirements have been met.</para>
+      <para>To run the network test, a specific Lustre file system setup is needed. Make sure that
+        these configuration requirements have been met.</para>
       <para><emphasis role="bold">To perform an automatic run:</emphasis></para>
       <orderedlist>
         <listitem>
@@ -609,7 +617,7 @@
         network hardware.</para>
     </note>
     <para>To run the <literal>ost-survey</literal> script, supply a file size (in KB) and the Lustre
-      mount point. For example, run:</para>
+      file system mount point. For example, run:</para>
     <screen>$ ./ost-survey.sh 10 /mnt/lustre
 </screen>
     <para>Typical output is:</para>
@@ -632,7 +640,10 @@ Ost index 2 Read time                0.14         Write time      0.16
   <section xml:id="mds_survey_ref">
     <title><indexterm><primary>benchmarking</primary><secondary>MDS
 performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey</literal>)</title>
-	<para><literal>mds-survey</literal> is available in Lustre 2.2 and beyond.  The <literal>mds-survey</literal> script tests the local metadata performance using the echo_client to drive different layers of the MDS stack: mdd, mdt, osd (current lustre version only supports mdd stack). It can be used with the following classes of operations:</para>
+	<para><literal>mds-survey</literal> is available in Lustre software release 2.2 and beyond. The
+        <literal>mds-survey</literal> script tests the local metadata performance using the
+      echo_client to drive different layers of the MDS stack: mdd, mdt, osd (the Lustre software
+      only supports mdd stack). It can be used with the following classes of operations:</para>
 
     <itemizedlist>
       <listitem>
@@ -871,7 +882,7 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
     <para>The <literal>stats-collect</literal> utility requires:</para>
     <itemizedlist>
       <listitem>
-        <para>Lustre to be installed and set up on your cluster</para>
+        <para>Lustre software to be installed and set up on your cluster</para>
       </listitem>
       <listitem>
         <para>SSH and SCP access to these nodes without requiring a password</para>
