@@ -369,7 +369,7 @@ loop_make_request(struct request_queue *q, struct bio *old_bio)
         loop_add_bio(lo, old_bio);
 	LL_MRF_RETURN(0);
 err:
-	cfs_bio_io_error(old_bio, old_bio->bi_size);
+	bio_io_error(old_bio);
 	LL_MRF_RETURN(0);
 }
 
@@ -393,7 +393,7 @@ static inline void loop_handle_bio(struct lloop_device *lo, struct bio *bio)
         while (bio) {
                 struct bio *tmp = bio->bi_next;
                 bio->bi_next = NULL;
-                cfs_bio_endio(bio, bio->bi_size, ret);
+		bio_endio(bio, ret);
                 bio = tmp;
         }
 }

@@ -356,24 +356,6 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-# 2.6.24
-
-# 2.6.24 has bio_endio with 2 args
-AC_DEFUN([LC_BIO_ENDIO_2ARG],
-[AC_MSG_CHECKING([if kernel has bio_endio with 2 args])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/bio.h>
-],[
-        bio_endio(NULL, 0);
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_BIO_ENDIO_2ARG, 1,
-                [kernel has bio_endio with 2 args])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # up to v2.6.27 had a 3 arg version (inode, mask, nameidata)
 # v2.6.27->v2.6.37 had a 2 arg version (inode, mask)
 # v2.6.37->v3.0 had a 3 arg version (inode, mask, nameidata)
@@ -1257,9 +1239,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-
-         # 2.6.24
-         LC_BIO_ENDIO_2ARG
 
          # 2.6.32
          LC_BLK_QUEUE_MAX_SEGMENTS

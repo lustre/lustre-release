@@ -145,13 +145,7 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 #define __REQ_WRITE BIO_RW
 #endif
 
-#ifdef HAVE_BIO_ENDIO_2ARG
-#define DIO_RETURN(a)
 static void dio_complete_routine(struct bio *bio, int error)
-#else
-#define DIO_RETURN(a)   return(a)
-static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
-#endif
 {
         struct osd_iobuf *iobuf = bio->bi_private;
         struct bio_vec *bvl;
@@ -175,7 +169,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, cfs_atomic_read(&bio->bi_cnt),
                        bio->bi_private);
-                DIO_RETURN(0);
+		return;
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
@@ -214,7 +208,6 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
          * deadlocking the OST.  The bios are now released as soon as complete
          * so the pool cannot be exhausted while IOs are competing. bug 10076 */
         bio_put(bio);
-        DIO_RETURN(0);
 }
 
 static void record_start_io(struct osd_iobuf *iobuf, int size)
