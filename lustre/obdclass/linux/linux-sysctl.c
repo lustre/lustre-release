@@ -57,56 +57,6 @@
 struct ctl_table_header *obd_table_header = NULL;
 #endif
 
-#ifndef HAVE_SYSCTL_UNNUMBERED
-
-#define OBD_SYSCTL 300
-
-enum {
-        OBD_TIMEOUT = 3,        /* RPC timeout before recovery/intr */
-        OBD_DUMP_ON_TIMEOUT,    /* dump kernel debug log upon eviction */
-        OBD_MEMUSED,            /* bytes currently OBD_ALLOCated */
-        OBD_PAGESUSED,          /* pages currently OBD_PAGE_ALLOCated */
-        OBD_MAXMEMUSED,         /* maximum bytes OBD_ALLOCated concurrently */
-        OBD_MAXPAGESUSED,       /* maximum pages OBD_PAGE_ALLOCated concurrently */
-        OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
-        OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
-        OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
-        OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
-        OBD_ALLOC_FAIL_RATE,    /* memory allocation random failure rate */
-        OBD_MAX_DIRTY_PAGES,    /* maximum dirty pages */
-        OBD_AT_MIN,             /* Adaptive timeouts params */
-        OBD_AT_MAX,
-        OBD_AT_EXTRA,
-        OBD_AT_EARLY_MARGIN,
-        OBD_AT_HISTORY,
-};
-
-#else
-
-#define OBD_SYSCTL              CTL_UNNUMBERED
-
-#define OBD_FAIL_LOC            CTL_UNNUMBERED
-#define OBD_FAIL_VAL            CTL_UNNUMBERED
-#define OBD_TIMEOUT             CTL_UNNUMBERED
-#define OBD_DUMP_ON_TIMEOUT     CTL_UNNUMBERED
-#define OBD_MEMUSED             CTL_UNNUMBERED
-#define OBD_PAGESUSED           CTL_UNNUMBERED
-#define OBD_MAXMEMUSED          CTL_UNNUMBERED
-#define OBD_MAXPAGESUSED        CTL_UNNUMBERED
-#define OBD_SYNCFILTER          CTL_UNNUMBERED
-#define OBD_LDLM_TIMEOUT        CTL_UNNUMBERED
-#define OBD_DUMP_ON_EVICTION    CTL_UNNUMBERED
-#define OBD_DEBUG_PEER_ON_TIMEOUT CTL_UNNUMBERED
-#define OBD_ALLOC_FAIL_RATE     CTL_UNNUMBERED
-#define OBD_MAX_DIRTY_PAGES     CTL_UNNUMBERED
-#define OBD_AT_MIN              CTL_UNNUMBERED
-#define OBD_AT_MAX              CTL_UNNUMBERED
-#define OBD_AT_EXTRA            CTL_UNNUMBERED
-#define OBD_AT_EARLY_MARGIN     CTL_UNNUMBERED
-#define OBD_AT_HISTORY          CTL_UNNUMBERED
-
-#endif
-
 int LL_PROC_PROTO(proc_set_timeout)
 {
         int rc;
@@ -306,149 +256,149 @@ int LL_PROC_PROTO(proc_at_history)
 
 #ifdef CONFIG_SYSCTL
 static struct ctl_table obd_table[] = {
-        {
-                INIT_CTL_NAME(OBD_TIMEOUT)
-                .procname = "timeout",
-                .data     = &obd_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_set_timeout
-        },
-        {
-                INIT_CTL_NAME(OBD_DEBUG_PEER_ON_TIMEOUT)
-                .procname = "debug_peer_on_timeout",
-                .data     = &obd_debug_peer_on_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                INIT_CTL_NAME(OBD_DUMP_ON_TIMEOUT)
-                .procname = "dump_on_timeout",
-                .data     = &obd_dump_on_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                INIT_CTL_NAME(OBD_DUMP_ON_EVICTION)
-                .procname = "dump_on_eviction",
-                .data     = &obd_dump_on_eviction,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                INIT_CTL_NAME(OBD_MEMUSED)
-                .procname = "memused",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0444,
-                .proc_handler = &proc_memory_alloc
-        },
-        {
-                INIT_CTL_NAME(OBD_PAGESUSED)
-                .procname = "pagesused",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0444,
-                .proc_handler = &proc_pages_alloc
-        },
-        {
-                INIT_CTL_NAME(OBD_MAXMEMUSED)
-                .procname = "memused_max",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0444,
-                .proc_handler = &proc_mem_max
-        },
-        {
-                INIT_CTL_NAME(OBD_MAXPAGESUSED)
-                .procname = "pagesused_max",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0444,
-                .proc_handler = &proc_pages_max
-        },
-        {
-                INIT_CTL_NAME(OBD_LDLM_TIMEOUT)
-                .procname = "ldlm_timeout",
-                .data     = &ldlm_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_set_timeout
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "timeout",
+		.data		= &obd_timeout,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_set_timeout
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "debug_peer_on_timeout",
+		.data		= &obd_debug_peer_on_timeout,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "dump_on_timeout",
+		.data		= &obd_dump_on_timeout,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "dump_on_eviction",
+		.data		= &obd_dump_on_eviction,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "memused",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0444,
+		.proc_handler	= &proc_memory_alloc
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "pagesused",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0444,
+		.proc_handler	= &proc_pages_alloc
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "memused_max",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0444,
+		.proc_handler	= &proc_mem_max
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "pagesused_max",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0444,
+		.proc_handler	= &proc_pages_max
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "ldlm_timeout",
+		.data		= &ldlm_timeout,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_set_timeout
+	},
 #ifdef RANDOM_FAIL_ALLOC
-        {
-                INIT_CTL_NAME(OBD_ALLOC_FAIL_RATE)
-                .procname = "alloc_fail_rate",
-                .data     = &obd_alloc_fail_rate,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_alloc_fail_rate
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "alloc_fail_rate",
+		.data		= &obd_alloc_fail_rate,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_alloc_fail_rate
+	},
 #endif
-        {
-                INIT_CTL_NAME(OBD_MAX_DIRTY_PAGES)
-                .procname = "max_dirty_mb",
-                .data     = &obd_max_dirty_pages,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_max_dirty_pages_in_mb
-        },
-        {
-                INIT_CTL_NAME(OBD_AT_MIN)
-                .procname = "at_min",
-                .data     = &at_min,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_at_min
-        },
-        {
-                INIT_CTL_NAME(OBD_AT_MAX)
-                .procname = "at_max",
-                .data     = &at_max,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_at_max
-        },
-        {
-                INIT_CTL_NAME(OBD_AT_EXTRA)
-                .procname = "at_extra",
-                .data     = &at_extra,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_at_extra
-        },
-        {
-                INIT_CTL_NAME(OBD_AT_EARLY_MARGIN)
-                .procname = "at_early_margin",
-                .data     = &at_early_margin,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_at_early_margin
-        },
-        {
-                INIT_CTL_NAME(OBD_AT_HISTORY)
-                .procname = "at_history",
-                .data     = &at_history,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_at_history
-        },
-        {       INIT_CTL_NAME(0)    }
+	{
+		INIT_CTL_NAME
+		.procname	= "max_dirty_mb",
+		.data		= &obd_max_dirty_pages,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_max_dirty_pages_in_mb
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "at_min",
+		.data		= &at_min,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_at_min
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "at_max",
+		.data		= &at_max,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_at_max
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "at_extra",
+		.data		= &at_extra,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_at_extra
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "at_early_margin",
+		.data		= &at_early_margin,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_at_early_margin
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "at_history",
+		.data		= &at_history,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_at_history
+	},
+	{ 0 }
 };
 
 static struct ctl_table parent_table[] = {
-        {
-                INIT_CTL_NAME(OBD_SYSCTL)
-                .procname = "lustre",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0555,
-                .child    = obd_table
-        },
-        {       INIT_CTL_NAME(0)   }
+	{
+		INIT_CTL_NAME
+		.procname	= "lustre",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0555,
+		.child		= obd_table
+	},
+	{ 0 }
 };
 #endif
 

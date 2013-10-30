@@ -88,117 +88,92 @@ kra_tunables_t kranal_tunables = {
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 
-#ifndef HAVE_SYSCTL_UNNUMBERED
-enum {
-        KRANAL_N_CONND = 1,
-        KRANAL_RECONNECT_MIN,
-        KRANAL_RECONNECT_MAX,
-        KRANAL_NTX,
-        KRANAL_CREDITS,
-        KRANAL_PEERCREDITS,
-        KRANAL_FMA_CQ_SIZE,
-        KRANAL_TIMEOUT,
-        KRANAL_IMMEDIATE_MAX
-};
-#else
-
-#define KRANAL_N_CONND          CTL_UNNUMBERED
-#define KRANAL_RECONNECT_MIN    CTL_UNNUMBERED
-#define KRANAL_RECONNECT_MAX    CTL_UNNUMBERED
-#define KRANAL_NTX              CTL_UNNUMBERED
-#define KRANAL_CREDITS          CTL_UNNUMBERED
-#define KRANAL_PEERCREDITS      CTL_UNNUMBERED
-#define KRANAL_FMA_CQ_SIZE      CTL_UNNUMBERED
-#define KRANAL_TIMEOUT          CTL_UNNUMBERED
-#define KRENAL_IMMEDIATE_MAX    CTL_UNNUMBERED
-#endif
-
 static struct ctl_table kranal_ctl_table[] = {
-        {
-                .ctl_name = KRANAL_N_CONND,
-                .procname = "n_connd",
-                .data     = &n_connd,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_RECONNECT_MIN,
-                .procname = "min_reconnect_interval",
-                .data     = &min_reconnect_interval,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_RECONNECT_MAX,
-                .procname = "max_reconnect_interval",
-                .data     = &max_reconnect_interval,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_NTX,
-                .procname = "ntx",
-                .data     = &ntx,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_CREDITS,
-                .procname = "credits",
-                .data     = &credits,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_PEERCREDITS,
-                .procname = "peer_credits",
-                .data     = &peer_credits,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_FMA_CQ_SIZE,
-                .procname = "fma_cq_size",
-                .data     = &fma_cq_size,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_TIMEOUT,
-                .procname = "timeout",
-                .data     = &timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KRANAL_IMMEDIATE_MAX,
-                .procname = "max_immediate",
-                .data     = &max_immediate,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {0}
+	{
+		INIT_CTL_NAME
+		.procname	= "n_connd",
+		.data		= &n_connd,
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "min_reconnect_interval",
+		.data		= &min_reconnect_interval,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "max_reconnect_interval",
+		.data		= &max_reconnect_interval,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "ntx",
+		.data		= &ntx,
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "credits",
+		.data		= &credits,
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "peer_credits",
+		.data		= &peer_credits,
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "fma_cq_size",
+		.data		= &fma_cq_size,
+		.maxlen		= sizeof(int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "timeout",
+		.data		= &timeout,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "max_immediate",
+		.data		= &max_immediate,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec
+	},
+	{ 0 }
 };
 
 static struct ctl_table kranal_top_ctl_table[] = {
-        {
-                .ctl_name = CTL_KRANAL,
-                .procname = "ranal",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0555,
-                .child    = kranal_ctl_table
-        },
-        {0}
+	{
+		INIT_CTL_NAME
+		.procname	= "ranal",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0555,
+		.child		= kranal_ctl_table
+	},
+	{ 0 }
 };
 
 int

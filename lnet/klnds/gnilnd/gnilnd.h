@@ -64,7 +64,6 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
-#include <lnet/lnet-sysctl.h>
 
 #include <gni_pub.h>
 #include "gnilnd_version.h"

@@ -38,322 +38,260 @@
 
 # if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
-#ifndef HAVE_SYSCTL_UNNUMBERED
-
-enum {
-        SOCKLND_TIMEOUT = 1,
-        SOCKLND_CREDITS,
-        SOCKLND_PEER_TXCREDITS,
-        SOCKLND_PEER_RTRCREDITS,
-        SOCKLND_PEER_TIMEOUT,
-        SOCKLND_NCONNDS,
-        SOCKLND_RECONNECTS_MIN,
-        SOCKLND_RECONNECTS_MAX,
-        SOCKLND_EAGER_ACK,
-        SOCKLND_ZERO_COPY,
-        SOCKLND_TYPED,
-        SOCKLND_BULK_MIN,
-        SOCKLND_RX_BUFFER_SIZE,
-        SOCKLND_TX_BUFFER_SIZE,
-        SOCKLND_NAGLE,
-        SOCKLND_IRQ_AFFINITY,
-        SOCKLND_ROUND_ROBIN,
-        SOCKLND_KEEPALIVE,
-        SOCKLND_KEEPALIVE_IDLE,
-        SOCKLND_KEEPALIVE_COUNT,
-        SOCKLND_KEEPALIVE_INTVL,
-        SOCKLND_BACKOFF_INIT,
-        SOCKLND_BACKOFF_MAX,
-        SOCKLND_PROTOCOL,
-        SOCKLND_ZERO_COPY_RECV,
-        SOCKLND_ZERO_COPY_RECV_MIN_NFRAGS
-};
-#else
-
-#define SOCKLND_TIMEOUT         CTL_UNNUMBERED
-#define SOCKLND_CREDITS         CTL_UNNUMBERED
-#define SOCKLND_PEER_TXCREDITS  CTL_UNNUMBERED
-#define SOCKLND_PEER_RTRCREDITS  CTL_UNNUMBERED
-#define SOCKLND_PEER_TIMEOUT    CTL_UNNUMBERED
-#define SOCKLND_NCONNDS         CTL_UNNUMBERED
-#define SOCKLND_RECONNECTS_MIN  CTL_UNNUMBERED
-#define SOCKLND_RECONNECTS_MAX  CTL_UNNUMBERED
-#define SOCKLND_EAGER_ACK       CTL_UNNUMBERED
-#define SOCKLND_ZERO_COPY       CTL_UNNUMBERED
-#define SOCKLND_TYPED           CTL_UNNUMBERED
-#define SOCKLND_BULK_MIN        CTL_UNNUMBERED
-#define SOCKLND_RX_BUFFER_SIZE  CTL_UNNUMBERED
-#define SOCKLND_TX_BUFFER_SIZE  CTL_UNNUMBERED
-#define SOCKLND_NAGLE           CTL_UNNUMBERED
-#define SOCKLND_IRQ_AFFINITY    CTL_UNNUMBERED
-#define SOCKLND_ROUND_ROBIN     CTL_UNNUMBERED
-#define SOCKLND_KEEPALIVE       CTL_UNNUMBERED
-#define SOCKLND_KEEPALIVE_IDLE  CTL_UNNUMBERED
-#define SOCKLND_KEEPALIVE_COUNT CTL_UNNUMBERED
-#define SOCKLND_KEEPALIVE_INTVL CTL_UNNUMBERED
-#define SOCKLND_BACKOFF_INIT    CTL_UNNUMBERED
-#define SOCKLND_BACKOFF_MAX     CTL_UNNUMBERED
-#define SOCKLND_PROTOCOL        CTL_UNNUMBERED
-#define SOCKLND_ZERO_COPY_RECV  CTL_UNNUMBERED
-#define SOCKLND_ZERO_COPY_RECV_MIN_NFRAGS CTL_UNNUMBERED
-#endif
-
 static struct ctl_table ksocknal_ctl_table[] = {
-        {
-                .ctl_name = SOCKLND_TIMEOUT,
-                .procname = "timeout",
-                .data     = &ksocknal_tunables.ksnd_timeout,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_CREDITS,
-                .procname = "credits",
-                .data     = &ksocknal_tunables.ksnd_credits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-         {
-                .ctl_name = SOCKLND_PEER_TXCREDITS,
-                .procname = "peer_credits",
-                .data     = &ksocknal_tunables.ksnd_peertxcredits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-         {
-                .ctl_name = SOCKLND_PEER_RTRCREDITS,
-                .procname = "peer_buffer_credits",
-                .data     = &ksocknal_tunables.ksnd_peerrtrcredits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_PEER_TIMEOUT,
-                .procname = "peer_timeout",
-                .data     = &ksocknal_tunables.ksnd_peertimeout,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_NCONNDS,
-                .procname = "nconnds",
-                .data     = &ksocknal_tunables.ksnd_nconnds,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_RECONNECTS_MIN,
-                .procname = "min_reconnectms",
-                .data     = &ksocknal_tunables.ksnd_min_reconnectms,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_RECONNECTS_MAX,
-                .procname = "max_reconnectms",
-                .data     = &ksocknal_tunables.ksnd_max_reconnectms,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_EAGER_ACK,
-                .procname = "eager_ack",
-                .data     = &ksocknal_tunables.ksnd_eager_ack,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_ZERO_COPY,
-                .procname = "zero_copy",
-                .data     = &ksocknal_tunables.ksnd_zc_min_payload,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_ZERO_COPY_RECV,
-                .procname = "zero_copy_recv",
-                .data     = &ksocknal_tunables.ksnd_zc_recv,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-
-        {
-                .ctl_name = SOCKLND_ZERO_COPY_RECV_MIN_NFRAGS,
-                .procname = "zero_copy_recv",
-                .data     = &ksocknal_tunables.ksnd_zc_recv_min_nfrags,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_TYPED,
-                .procname = "typed",
-                .data     = &ksocknal_tunables.ksnd_typed_conns,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_BULK_MIN,
-                .procname = "min_bulk",
-                .data     = &ksocknal_tunables.ksnd_min_bulk,
-                .maxlen   = sizeof (int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_RX_BUFFER_SIZE,
-                .procname = "rx_buffer_size",
-                .data     = &ksocknal_tunables.ksnd_rx_buffer_size,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_TX_BUFFER_SIZE,
-                .procname = "tx_buffer_size",
-                .data     = &ksocknal_tunables.ksnd_tx_buffer_size,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_NAGLE,
-                .procname = "nagle",
-                .data     = &ksocknal_tunables.ksnd_nagle,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "timeout",
+		.data		= &ksocknal_tunables.ksnd_timeout,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "credits",
+		.data		= &ksocknal_tunables.ksnd_credits,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "peer_credits",
+		.data		= &ksocknal_tunables.ksnd_peertxcredits,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "peer_buffer_credits",
+		.data		= &ksocknal_tunables.ksnd_peerrtrcredits,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "peer_timeout",
+		.data		= &ksocknal_tunables.ksnd_peertimeout,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "nconnds",
+		.data		= &ksocknal_tunables.ksnd_nconnds,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "min_reconnectms",
+		.data		= &ksocknal_tunables.ksnd_min_reconnectms,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "max_reconnectms",
+		.data		= &ksocknal_tunables.ksnd_max_reconnectms,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "eager_ack",
+		.data		= &ksocknal_tunables.ksnd_eager_ack,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "zero_copy",
+		.data		= &ksocknal_tunables.ksnd_zc_min_payload,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "zero_copy_recv",
+		.data		= &ksocknal_tunables.ksnd_zc_recv,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "zero_copy_recv",
+		.data		= &ksocknal_tunables.ksnd_zc_recv_min_nfrags,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "typed",
+		.data		= &ksocknal_tunables.ksnd_typed_conns,
+		.maxlen		= sizeof (int),
+		.mode		= 0444,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "min_bulk",
+		.data		= &ksocknal_tunables.ksnd_min_bulk,
+		.maxlen		= sizeof (int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "rx_buffer_size",
+		.data		= &ksocknal_tunables.ksnd_rx_buffer_size,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "tx_buffer_size",
+		.data		= &ksocknal_tunables.ksnd_tx_buffer_size,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "nagle",
+		.data		= &ksocknal_tunables.ksnd_nagle,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
 #ifdef CPU_AFFINITY
-        {
-                .ctl_name = SOCKLND_IRQ_AFFINITY,
-                .procname = "irq_affinity",
-                .data     = &ksocknal_tunables.ksnd_irq_affinity,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "irq_affinity",
+		.data		= &ksocknal_tunables.ksnd_irq_affinity,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
 #endif
-        {
-                .ctl_name = SOCKLND_ROUND_ROBIN,
-                .procname = "round_robin",
-                .data     = &ksocknal_tunables.ksnd_round_robin,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_KEEPALIVE,
-                .procname = "keepalive",
-                .data     = &ksocknal_tunables.ksnd_keepalive,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_KEEPALIVE_IDLE,
-                .procname = "keepalive_idle",
-                .data     = &ksocknal_tunables.ksnd_keepalive_idle,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_KEEPALIVE_COUNT,
-                .procname = "keepalive_count",
-                .data     = &ksocknal_tunables.ksnd_keepalive_count,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_KEEPALIVE_INTVL,
-                .procname = "keepalive_intvl",
-                .data     = &ksocknal_tunables.ksnd_keepalive_intvl,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "round_robin",
+		.data		= &ksocknal_tunables.ksnd_round_robin,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "keepalive",
+		.data		= &ksocknal_tunables.ksnd_keepalive,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "keepalive_idle",
+		.data		= &ksocknal_tunables.ksnd_keepalive_idle,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "keepalive_count",
+		.data		= &ksocknal_tunables.ksnd_keepalive_count,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "keepalive_intvl",
+		.data		= &ksocknal_tunables.ksnd_keepalive_intvl,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
 #ifdef SOCKNAL_BACKOFF
-        {
-                .ctl_name = SOCKLND_BACKOFF_INIT,
-                .procname = "backoff_init",
-                .data     = &ksocknal_tunables.ksnd_backoff_init,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_BACKOFF_MAX,
-                .procname = "backoff_max",
-                .data     = &ksocknal_tunables.ksnd_backoff_max,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "backoff_init",
+		.data		= &ksocknal_tunables.ksnd_backoff_init,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "backoff_max",
+		.data		= &ksocknal_tunables.ksnd_backoff_max,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
 #endif
 #if SOCKNAL_VERSION_DEBUG
-        {
-                .ctl_name = SOCKLND_PROTOCOL,
-                .procname = "protocol",
-                .data     = &ksocknal_tunables.ksnd_protocol,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
+	{
+		INIT_CTL_NAME
+		.procname	= "protocol",
+		.data		= &ksocknal_tunables.ksnd_protocol,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
+		INIT_STRATEGY
+	},
 #endif
-        {0}
+	{ 0 }
 };
 
-
 struct ctl_table ksocknal_top_ctl_table[] = {
-        {
-                .ctl_name = CTL_SOCKLND,
-                .procname = "socknal",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0555,
-                .child    = ksocknal_ctl_table
-        },
-        { 0 }
+	{
+		INIT_CTL_NAME
+		.procname	= "socknal",
+		.data		= NULL,
+		.maxlen		= 0,
+		.mode		= 0555,
+		.child		= ksocknal_ctl_table
+	},
+	{ 0 }
 };
 
 int

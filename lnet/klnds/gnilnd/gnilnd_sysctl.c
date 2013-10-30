@@ -39,24 +39,6 @@ static kgn_sysctl_data_t        kgnilnd_sysctl;
 #if defined(CONFIG_SYSCTL)
 
 static struct ctl_table_header *kgnilnd_table_header = NULL;
-#ifndef HAVE_SYSCTL_UNNUMBERED
-
-enum {
-	GNILND_VERSION = 1,
-	GNILND_THREAD_PAUSE,
-	GNILND_HW_QUIESCE,
-	GNILND_STACK_RESET,
-	GNILND_RDMAQ_OVERRIDE,
-	GNILND_RCA_INJECT,
-};
-#else
-#define GNILND_VERSION             CTL_UNNUMBERED
-#define GNILND_THREAD_PAUSE        CTL_UNNUMBERED
-#define GNILND_HW_QUIESCE          CTL_UNNUMBERED
-#define GNILND_STACK_RESET         CTL_UNNUMBERED
-#define GNILND_RDMAQ_OVERRIDE      CTL_UNNUMBERED
-#define GNILND_RCA_INJECT          CTL_UNNUMBERED
-#endif
 
 static int LL_PROC_PROTO(proc_toggle_thread_pause)
 {
@@ -239,7 +221,7 @@ static struct ctl_table kgnilnd_table[] = {
 	 * to go via /proc for portability.
 	 */
 	{
-		INIT_CTL_NAME(GNILND_VERSION)
+		INIT_CTL_NAME
 		.procname = "version",
 		.data     = KGNILND_BUILD_REV,
 		.maxlen   = sizeof(KGNILND_BUILD_REV),
@@ -247,7 +229,7 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_dostring
 	},
 	{
-		INIT_CTL_NAME(GNILND_THREAD_PAUSE)
+		INIT_CTL_NAME
 		.procname = "thread_pause",
 		.data     = &kgnilnd_sysctl.ksd_pause_trigger,
 		.maxlen   = sizeof(int),
@@ -255,7 +237,7 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_toggle_thread_pause,
 	},
 	{
-		INIT_CTL_NAME(GNILND_HW_QUIESCE)
+		INIT_CTL_NAME
 		.procname = "hw_quiesce",
 		.data     = &kgnilnd_sysctl.ksd_quiesce_secs,
 		.maxlen   = sizeof(__u32),
@@ -263,7 +245,7 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_hw_quiesce,
 	},
 	{
-		INIT_CTL_NAME(GNILND_STACK_RESET)
+		INIT_CTL_NAME
 		.procname = "stack_reset",
 		.data     = NULL,
 		.maxlen   = sizeof(int),
@@ -271,7 +253,7 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_trigger_stack_reset,
 	},
 	{
-		INIT_CTL_NAME(GNILND_RDMAQ_OVERRIDE)
+		INIT_CTL_NAME
 		.procname = "rdmaq_override",
 		.data     = &kgnilnd_sysctl.ksd_rdmaq_override,
 		.maxlen   = sizeof(int),
@@ -279,26 +261,26 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_toggle_rdmaq_override,
 	},
 	{
-		INIT_CTL_NAME(GNILND_RCA_INJECT)
+		INIT_CTL_NAME
 		.procname = "rca_inject",
 		.data     = kgnilnd_sysctl.ksd_rca_inject,
 		.maxlen   = GNILND_RCA_INJ_STRLEN,
 		.mode     = 0644,
 		.proc_handler = &proc_rca_inject,
 	},
-	{       INIT_CTL_NAME(0)   }
+	{ 0 }
 };
 
 static struct ctl_table kgnilnd_top_table[2] = {
 	{
-		INIT_CTL_NAME(CTL_GNILND)
+		INIT_CTL_NAME
 		.procname = "kgnilnd",
 		.data     = NULL,
 		.maxlen   = 0,
 		.mode     = 0555,
 		.child    = kgnilnd_table
 	},
-	{       INIT_CTL_NAME(0)   }
+	{ 0 }
 };
 
 void kgnilnd_insert_sysctl(void)

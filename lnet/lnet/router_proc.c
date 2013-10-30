@@ -32,28 +32,6 @@
 
 static struct ctl_table_header *lnet_table_header = NULL;
 
-#ifndef HAVE_SYSCTL_UNNUMBERED
-#define CTL_LNET         (0x100)
-enum {
-        PSDEV_LNET_STATS = 100,
-        PSDEV_LNET_ROUTES,
-        PSDEV_LNET_ROUTERS,
-        PSDEV_LNET_PEERS,
-        PSDEV_LNET_BUFFERS,
-        PSDEV_LNET_NIS,
-	PSDEV_LNET_PTL_ROTOR,
-};
-#else
-#define CTL_LNET           CTL_UNNUMBERED
-#define PSDEV_LNET_STATS   CTL_UNNUMBERED
-#define PSDEV_LNET_ROUTES  CTL_UNNUMBERED
-#define PSDEV_LNET_ROUTERS CTL_UNNUMBERED
-#define PSDEV_LNET_PEERS   CTL_UNNUMBERED
-#define PSDEV_LNET_BUFFERS CTL_UNNUMBERED
-#define PSDEV_LNET_NIS     CTL_UNNUMBERED
-#define PSDEV_LNET_PTL_ROTOR	CTL_UNNUMBERED
-#endif
-
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)
 /*
  * NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system
@@ -857,69 +835,65 @@ out:
 DECLARE_PROC_HANDLER(proc_lnet_portal_rotor);
 
 static struct ctl_table lnet_table[] = {
-        /*
-         * NB No .strategy entries have been provided since sysctl(8) prefers
-         * to go via /proc for portability.
-         */
-        {
-                INIT_CTL_NAME(PSDEV_LNET_STATS)
-                .procname = "stats",
-                .mode     = 0644,
-                .proc_handler = &proc_lnet_stats,
-        },
-        {
-                INIT_CTL_NAME(PSDEV_LNET_ROUTES)
-                .procname = "routes",
-                .mode     = 0444,
-                .proc_handler = &proc_lnet_routes,
-        },
-        {
-                INIT_CTL_NAME(PSDEV_LNET_ROUTERS)
-                .procname = "routers",
-                .mode     = 0444,
-                .proc_handler = &proc_lnet_routers,
-        },
-        {
-                INIT_CTL_NAME(PSDEV_LNET_PEERS)
-                .procname = "peers",
-                .mode     = 0444,
-                .proc_handler = &proc_lnet_peers,
-        },
-        {
-                INIT_CTL_NAME(PSDEV_LNET_PEERS)
-                .procname = "buffers",
-                .mode     = 0444,
-                .proc_handler = &proc_lnet_buffers,
-        },
-        {
-                INIT_CTL_NAME(PSDEV_LNET_NIS)
-                .procname = "nis",
-                .mode     = 0444,
-                .proc_handler = &proc_lnet_nis,
-        },
-        {
-		INIT_CTL_NAME(PSDEV_LNET_PTL_ROTOR)
-		.procname = "portal_rotor",
-		.mode     = 0644,
-		.proc_handler = &proc_lnet_portal_rotor,
+	/*
+	 * NB No .strategy entries have been provided since sysctl(8) prefers
+	 * to go via /proc for portability.
+	 */
+	{
+		INIT_CTL_NAME
+		.procname	= "stats",
+		.mode		= 0644,
+		.proc_handler	= &proc_lnet_stats,
 	},
 	{
-		INIT_CTL_NAME(0)
-	}
+		INIT_CTL_NAME
+		.procname	= "routes",
+		.mode		= 0444,
+		.proc_handler	= &proc_lnet_routes,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "routers",
+		.mode		= 0444,
+		.proc_handler	= &proc_lnet_routers,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "peers",
+		.mode		= 0444,
+		.proc_handler	= &proc_lnet_peers,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "buffers",
+		.mode		= 0444,
+		.proc_handler	= &proc_lnet_buffers,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "nis",
+		.mode		= 0444,
+		.proc_handler	= &proc_lnet_nis,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "portal_rotor",
+		.mode		= 0644,
+		.proc_handler	= &proc_lnet_portal_rotor,
+	},
+	{ 0 }
 };
 
 static struct ctl_table top_table[] = {
-        {
-                INIT_CTL_NAME(CTL_LNET)
-                .procname = "lnet",
-                .mode     = 0555,
-                .data     = NULL,
-                .maxlen   = 0,
-                .child    = lnet_table,
-        },
-        {
-                INIT_CTL_NAME(0)
-        }
+	{
+		INIT_CTL_NAME
+		.procname	= "lnet",
+		.mode		= 0555,
+		.data		= NULL,
+		.maxlen		= 0,
+		.child		= lnet_table,
+	},
+	{ 0 }
 };
 
 void

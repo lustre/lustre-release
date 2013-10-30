@@ -269,11 +269,11 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 #undef _LWORDSIZE
 
 #ifdef HAVE_SYSCTL_CTLNAME
-#define INIT_CTL_NAME(a) .ctl_name = a,
-#define INIT_STRATEGY(a) .strategy = a,
+#define INIT_CTL_NAME	.ctl_name = CTL_UNNUMBERED,
+#define INIT_STRATEGY	.strategy = &sysctl_intvec,
 #else
-#define INIT_CTL_NAME(a)
-#define INIT_STRATEGY(a)
+#define INIT_CTL_NAME
+#define INIT_STRATEGY
 #endif
 
 #endif
