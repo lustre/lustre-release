@@ -433,25 +433,27 @@ run_test 17 "fail OST during recovery (3571)"
 export NOW=0
 
 test_18() { # bug 3822 - evicting client with enqueued lock
-    #set -vx
-    mkdir -p $MOUNT1/$tdir
-    touch $MOUNT1/$tdir/f0
-#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
-    statmany -s $MOUNT1/$tdir/f 1 500 &
-    OPENPID=$!
-    NOW=`date +%s`
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x8000030b  # hold enqueue
-    sleep 1
-#define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
-    do_facet client lctl set_param fail_loc=0x80000305  # drop cb, evict
-    cancel_lru_locks mdc
-    usleep 500 # wait to ensure first client is one that will be evicted
-    openfile -f O_RDONLY $MOUNT2/$tdir/f0
-    wait $OPENPID
-    dmesg | grep "entering recovery in server" && \
-        error "client not evicted" || true
-    do_facet client "lctl set_param fail_loc=0"
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#set -vx
+	local DLMTRACE=$(do_facet $SINGLEMDS lctl get_param debug)
+	do_facet $SINGLEMDS lctl set_param debug=+dlmtrace
+	mkdir -p $MOUNT1/$tdir || error "mkdir $MOUNT1/$tdir failed"
+	touch $MOUNT1/$tdir/$tfile
+	#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
+	statmany -s $MOUNT1/$tdir/f 1 500 &
+	OPENPID=$!
+	NOW=$(date +%s)
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x8000030b  # hold enqueue
+	sleep 1
+	#define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
+	do_facet client lctl set_param fail_loc=0x80000305  # drop cb, evict
+	cancel_lru_locks mdc
+	usleep 500 # wait to ensure first client is one that will be evicted
+	openfile -f O_RDONLY $MOUNT2/$tdir/$tfile
+	wait $OPENPID
+	do_facet $SINGLEMDS lctl debug_kernel |
+		grep "not entering recovery" && error "client not evicted"
+	do_facet client "lctl set_param fail_loc=0"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 }
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
