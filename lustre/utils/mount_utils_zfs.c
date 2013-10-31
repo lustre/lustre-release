@@ -471,7 +471,7 @@ static int zfs_create_vdev(struct mkfs_opts *mop, char *vdev)
 
 	/*
 	 * Verify a file exists at the provided absolute path.  If it doesn't
-	 * and mo_device_sz is set attempt to create a file vdev to be used.
+	 * and mo_device_kb is set attempt to create a file vdev to be used.
 	 * Relative paths will be passed directly to 'zpool create' which
 	 * will check multiple multiple locations under /dev/.
 	 */
@@ -488,14 +488,14 @@ static int zfs_create_vdev(struct mkfs_opts *mop, char *vdev)
 			return ret;
 		}
 
-		if (mop->mo_device_sz == 0) {
+		if (mop->mo_device_kb == 0) {
 			fatal();
 			fprintf(stderr, "Unable to create vdev due to "
 				"missing --device-size=#N(KB) parameter\n");
 			return EINVAL;
 		}
 
-		ret = file_create(vdev, mop->mo_device_sz);
+		ret = file_create(vdev, mop->mo_device_kb);
 		if (ret) {
 			fatal();
 			fprintf(stderr, "Unable to create vdev %s (%d)\n",

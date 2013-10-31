@@ -350,9 +350,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         //FIXME
                         printf("Configdev not implemented\n");
                         return 1;
-                case 'd':
-                        mop->mo_device_sz = atol(optarg);
-                        break;
+		case 'd':
+			mop->mo_device_kb = atol(optarg);
+			break;
                 case 'e':
                         mop->mo_ldd.ldd_params[0] = '\0';
                         /* Must update the mgs logs */

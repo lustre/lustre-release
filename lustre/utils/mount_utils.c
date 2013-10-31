@@ -392,7 +392,7 @@ int loop_format(struct mkfs_opts *mop)
 {
 	int fd;
 
-	if (mop->mo_device_sz == 0) {
+	if (mop->mo_device_kb == 0) {
 		fatal();
 		fprintf(stderr, "loop device requires a --device-size= "
 			"param\n");
@@ -407,7 +407,7 @@ int loop_format(struct mkfs_opts *mop)
 		return errno;
 	}
 
-	if (ftruncate(fd, mop->mo_device_sz * 1024) != 0) {
+	if (ftruncate(fd, mop->mo_device_kb * 1024) != 0) {
 		close(fd);
 		fatal();
 		fprintf(stderr, "%s: Unable to truncate backing store: %s\n",
