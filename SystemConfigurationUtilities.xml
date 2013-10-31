@@ -1472,7 +1472,7 @@ Changelog records consumed: 42</screen>
   <section xml:id="dbdoclet.50438219_75432">
     <title><indexterm><primary>mkfs.lustre</primary></indexterm>
 mkfs.lustre</title>
-    <para>The mkfs.lustre utility formats a disk for a Lustre service.</para>
+    <para>The <literal>mkfs.lustre</literal> utility formats a disk for a Lustre service.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>mkfs.lustre <replaceable>target_type</replaceable> [options] <replaceable>device</replaceable></screen>
@@ -1497,7 +1497,7 @@ mkfs.lustre</title>
                 <para> <literal>--ost</literal></para>
               </entry>
               <entry>
-                <para> Object Storage Target (OST)</para>
+                <para> Object storage target (OST)</para>
               </entry>
             </row>
             <row>
@@ -1505,7 +1505,7 @@ mkfs.lustre</title>
                 <para> <literal>--mdt</literal></para>
               </entry>
               <entry>
-                <para> Metadata Storage Target (MDT)</para>
+                <para> Metadata storage target (MDT)</para>
               </entry>
             </row>
             <row>
@@ -1521,7 +1521,9 @@ mkfs.lustre</title>
                 <para> <literal>--mgs</literal></para>
               </entry>
               <entry>
-                <para> Configuration Management Service (MGS), one per site. This service can be combined with one <literal>--mdt</literal> service by specifying both types.</para>
+                <para> Configuration management service (MGS), one per site. This service can be
+                  combined with one <literal>--mdt</literal> service by specifying both
+                  types.</para>
               </entry>
             </row>
           </tbody>
@@ -1530,13 +1532,17 @@ mkfs.lustre</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>mkfs.lustre is used to format a disk device for use as part of a Lustre file system. After formatting, a disk can be mounted to start the Lustre service defined by this command.</para>
-      <para>When the file system is created, parameters can simply be added as a --param option to the mkfs.lustre command. See <xref linkend="dbdoclet.50438194_17237"/>.</para>
+      <para><literal>mkfs.lustre</literal> is used to format a disk device for use as part of a
+        Lustre file system. After formatting, a disk can be mounted to start the Lustre service
+        defined by this command.</para>
+      <para>When the file system is created, parameters can simply be added as a
+          <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. See <xref
+          linkend="dbdoclet.50438194_17237"/>.</para>
       <informaltable frame="all">
         <tgroup cols="3">
-          <colspec colname="c1" colwidth="33*"/>
-          <colspec colname="c2" colwidth="33*"/>
-          <colspec colname="c3" colwidth="33*"/>
+          <colspec colname="c1" colwidth="1*"/>
+          <colspec colname="c2" colwidth="1*"/>
+          <colspec colname="c3" colwidth="3*"/>
           <thead>
             <row>
               <entry nameend="c2" namest="c1">
@@ -1561,7 +1567,7 @@ mkfs.lustre</title>
                 <para> <literal>--comment=<replaceable>comment</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets a user comment about this disk, ignored by Lustre.</para>
+                <para> Sets a user comment about this disk, ignored by the Lustre software.</para>
               </entry>
             </row>
             <row>
@@ -1569,7 +1575,7 @@ mkfs.lustre</title>
                 <para> <literal>--device-size=<replaceable>#</replaceable>>KB</literal></para>
               </entry>
               <entry>
-                <para> Sets the device size for loop devices.</para>
+                <para>Sets the device size for loop devices.</para>
               </entry>
             </row>
             <row>
@@ -1577,26 +1583,32 @@ mkfs.lustre</title>
                 <para> <literal>--dryrun</literal></para>
               </entry>
               <entry>
-                <para> Only prints what would be done; it does not affect the disk.</para>
+                <para>Only prints what would be done; it does not affect the disk.</para>
               </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1"
+                    ><literal>--servicenode=<replaceable>nid,...</replaceable></literal></entry>
+              <entry>Sets the NID(s) of all service nodes, including primary and failover partner
+                service nodes. The <literal>--servicenode</literal> option cannot be used with
+                  <literal>--failnode</literal> option. See <xref
+                  xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/> for
+                more details.</entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
                 <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets the NID(s) of a failover partner. This option can be repeated as needed.</para>
-                <warning><para>This cannot be used with <literal>--servicenode</literal>.</para></warning>
-              </entry>
-            </row>
-            <row>
-              <entry nameend="c2" namest="c1">
-                <para> <literal>--servicenode=<replaceable>nid,...</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para>Sets the NID(s) of all service node, including failover partner as well as
-                  primary node service nids. This option can be repeated as needed.</para>
-                <warning><para>This cannot be used with <literal>--failnode</literal>.</para></warning>
+                <para>Sets the NID(s) of a failover service node for a primary server for a target.
+                  The <literal>--failnode</literal> option cannot be used with
+                    <literal>--servicenode</literal> option. See <xref
+                    xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/>
+                  for more details.<note>
+                    <para>When the <literal>--failnode</literal> option is used, certain
+                      restrictions apply (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                        linkend="dbdoclet.50438188_92688"/>).</para>
+                  </note></para>
               </entry>
             </row>
             <row>
@@ -1604,9 +1616,12 @@ mkfs.lustre</title>
                 <para> <literal>--fsname=<replaceable>filesystem_name</replaceable></literal></para>
               </entry>
               <entry>
-                <para>The name of the Lustre file system to which this node belongs. The file system
-                  name is limited to 8 characters. The default file system name is
-                    <literal>lustre</literal>.</para>
+                <para> The Lustre file system of which this service/node will be a part. The default
+                  file system name is <literal>lustre</literal>.</para>
+                <para>&#160;</para>
+                <note>
+                  <para>The file system name is limited to 8 characters.</para>
+                </note>
               </entry>
             </row>
             <row>
@@ -1633,11 +1648,13 @@ mkfs.lustre</title>
               </entry>
               <entry>
                 <para>  Sets the mount options used when the backing file system is mounted.</para>
-                <warning><para>Unlike earlier versions of mkfs.lustre, this version completely replaces the default mount options with those specified on the command line, and issues a warning on stderr if any default mount options are omitted.</para></warning>
+                <warning><para>Unlike earlier versions of <literal>mkfs.lustre</literal>, this version completely replaces
+                    the default mount options with those specified on the command line, and issues a
+                    warning on stderr if any default mount options are omitted.</para></warning>
                 <para>The defaults for ldiskfs are:</para>
                 <para>OST: <literal>errors=remount-ro</literal>;</para>
                 <para>MGS/MDT: <literal>errors=remount-ro,iopen_nopriv,user_xattr</literal></para>
-                <para>Do not alter the default mount options unless you know what you are doing.</para>
+                <para>Use care when altering the default mount options.</para>
               </entry>
             </row>
             <row>
@@ -1749,7 +1766,8 @@ mkfs.lustre</title>
       <title>Examples</title>
       <para>Creates a combined MGS and MDT for file system <literal>testfs</literal> on, e.g., node <literal>cfs21</literal>:</para>
       <screen>mkfs.lustre --fsname=testfs --mdt --mgs /dev/sda1</screen>
-      <para>Creates an OST for file system <literal>testfs</literal> on any node (using the above MGS):</para>
+      <para>Creates an OST for file system <literal>testfs</literal> on any node (using the above
+        MGS):</para>
       <screen>mkfs.lustre --fsname=testfs --mgsnode=cfs21@tcp0 --ost --index=0 /dev/sdb</screen>
       <para>Creates a standalone MGS on, e.g., node <literal>cfs22</literal>:</para>
       <screen>mkfs.lustre --mgs /dev/sda1</screen>
@@ -2277,20 +2295,27 @@ tunefs.lustre</title>
             </row>
             <row>
               <entry>
-                <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para> Sets the NID(s) of a failover partner. This option can be repeated as needed.</para>
-                <warning><para>Cannot be used with <literal>--servicenode</literal>.</para></warning>
-              </entry>
+                <literal>--servicenode=<replaceable>nid,...</replaceable></literal></entry>
+              <entry>Sets the NID(s) of all service nodes, including primary and failover partner
+                service nodes. The <literal>--servicenode</literal> option cannot be used with
+                  <literal>--failnode</literal> option. See <xref
+                  xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/> for
+                more details.</entry>
             </row>
             <row>
               <entry>
-                <para> <literal>--servicenode=<replaceable>nid,...</replaceable></literal></para>
+                <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets the NID(s) of all service node, including failover partner as well as local service nids. This option can be repeated as needed.</para>
-                <warning><para>: Cannot be used with <literal>--failnode</literal>.</para></warning>
+                <para>Sets the NID(s) of a failover service node for a primary server for a target.
+                  The <literal>--failnode</literal> option cannot be used with
+                    <literal>--servicenode</literal> option. See <xref
+                    xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438188_92688"/>
+                  for more details.<note>
+                    <para>When the <literal>--failnode</literal> option is used, certain
+                      restrictions apply (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                        linkend="dbdoclet.50438188_92688"/>).</para>
+                  </note></para>
               </entry>
             </row>
             <row>

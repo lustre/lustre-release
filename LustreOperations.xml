@@ -119,24 +119,37 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
   </section>
   <section xml:id="dbdoclet.50438194_57420">
     <title><indexterm><primary>operations</primary><secondary>failover</secondary></indexterm>Specifying Failout/Failover Mode for OSTs</title>
-    <para>Lustre uses two modes, failout and failover, to handle an OST that has become unreachable because it fails, is taken off the network, is unmounted, etc.</para>
+    <para>In a Lustre file system, an OST that has become unreachable because it fails, is taken off
+      the network, or is unmounted can be handled in one of two ways:</para>
     <itemizedlist>
       <listitem>
-        <para> In <emphasis>failout</emphasis> mode, Lustre clients immediately receive errors (EIOs) after a timeout, instead of waiting for the OST to recover.</para>
+        <para> In <literal>failout</literal> mode, Lustre clients immediately receive errors (EIOs)
+          after a timeout, instead of waiting for the OST to recover.</para>
       </listitem>
       <listitem>
-        <para> In <emphasis>failover</emphasis> mode, Lustre clients wait for the OST to recover.</para>
+        <para> In <literal>failover</literal> mode, Lustre clients wait for the OST to
+          recover.</para>
       </listitem>
     </itemizedlist>
-    <para>By default, the Lustre file system uses failover mode for OSTs. To specify failout mode instead, use the <literal>--param=&quot;failover.mode=failout&quot;</literal> option:</para>
-    <screen>oss# mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>mgs_NID</replaceable> --param=failover.mode=failout --ost --index=<replaceable>ost_index</replaceable> <replaceable>/dev/ost_block_device</replaceable></screen>
-    <para>In this example, failout mode is specified for the OSTs on MGS <literal>mds0</literal>, file system <literal>testfs</literal>.</para>
-    <screen>oss# mkfs.lustre --fsname=testfs --mgsnode=mds0 --param=failover.mode=failout --ost --index=3 /dev/sdb </screen>
+    <para>By default, the Lustre file system uses <literal>failover</literal> mode for OSTs. To
+      specify <literal>failout</literal> mode instead, use the
+        <literal>--param=&quot;failover.mode=failout&quot;</literal> option as shown below (entered
+      on one line):</para>
+    <screen>oss# mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>mgs_NID</replaceable> --param=failover.mode=failout 
+      --ost --index=<replaceable>ost_index</replaceable> <replaceable>/dev/ost_block_device</replaceable></screen>
+    <para>In the example below, <literal>failout</literal> mode is specified for the OSTs on the MGS
+        <literal>mds0</literal> in the file system <literal>testfs</literal> (entered on one
+      line).</para>
+    <screen>oss# mkfs.lustre --fsname=testfs --mgsnode=mds0 --param=failover.mode=failout 
+      --ost --index=3 /dev/sdb </screen>
     <caution>
-      <para>Before running this command, unmount all OSTs that will be affected by the change in the failover/failout mode.</para>
+      <para>Before running this command, unmount all OSTs that will be affected by a change in
+          <literal>failover</literal> / <literal>failout</literal> mode.</para>
     </caution>
     <note>
-      <para>After initial file system configuration, use the tunefs.lustre utility to change the failover/failout mode. For example, to set the failout mode, run:</para>
+      <para>After initial file system configuration, use the <literal>tunefs.lustre</literal>
+        utility to change the mode. For example, to set the <literal>failout</literal> mode,
+        run:</para>
       <para><screen>$ tunefs.lustre --param failover.mode=failout <replaceable>/dev/ost_device</replaceable></screen></para>
     </note>
   </section>
@@ -311,35 +324,52 @@ osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384</screen>
   </section>
   <section xml:id="dbdoclet.50438194_41817">
     <title><indexterm><primary>operations</primary><secondary>failover</secondary></indexterm>Specifying NIDs and Failover</title>
-    <para>If a node has multiple network interfaces, it may have multiple NIDs. When a node is specified, all of its NIDs must be listed, delimited by commas (<literal>,</literal>) so other nodes can choose the NID that is appropriate for their network interfaces. When failover nodes are specified, they are delimited by a colon (<literal>:</literal>) or by repeating a keyword (<literal>--mgsnode=</literal> or <literal>--failnode=</literal> or <literal>--servicenode=</literal>). To obtain all NIDs from a node (while LNET is running), run:</para>
+    <para>If a node has multiple network interfaces, it may have multiple NIDs, which must all be
+      identified so other nodes can choose the NID that is appropriate for their network interfaces.
+      Typically, NIDs are specified in a list delimited by commas (<literal>,</literal>). However,
+      when failover nodes are specified, the NIDs are delimited by a colon (<literal>:</literal>) or
+      by repeating a keyword such as <literal>--mgsnode=</literal> or
+        <literal>--servicenode=</literal>). </para>
+    <para>To display the NIDs of all servers in networks configured to work with the Lustre file
+      system, run (while LNET is running):</para>
     <screen>lctl list_nids</screen>
-    <para>This displays the server&apos;s NIDs (networks configured to work with Lustre).</para>
-    <para>This example has a combined MGS/MDT failover pair on mds0 and mds1, and a OST failover pair on oss0 and oss1. There are corresponding Elan addresses on mds0 and mds1.</para>
-    <screen>mds0# mkfs.lustre --fsname=testfs --mdt --mgs --failnode=mds1,2@elan /dev/sda1
+    <para>In the example below,  <literal>mds0</literal> and <literal>mds1</literal> are configured
+      as a combined MGS/MDT failover pair and <literal>oss0</literal> and <literal>oss1</literal>
+      are configured as an OST failover pair. The Ethernet address for <literal>mds0</literal> is
+      192.168.10.1, and for <literal>mds1</literal> is 192.168.10.2. The Ethernet addresses for
+        <literal>oss0</literal> and <literal>oss1</literal>  are 192.168.10.20 and 192.168.10.21
+      respectively.</para>
+    <screen>mds0# mkfs.lustre --fsname=testfs --mdt --mgs \
+        --servicenode=192.168.10.2@tcp0 \
+        -–servicenode=192.168.10.1@tcp0 /dev/sda1
 mds0# mount -t lustre /dev/sda1 /mnt/test/mdt
-oss0# mkfs.lustre --fsname=testfs --failnode=oss1 --ost --index=0 \
-    --mgsnode=mds0,1@elan --mgsnode=mds1,2@elan /dev/sdb
+oss0# mkfs.lustre --fsname=testfs --servicenode=192.168.10.20@tcp0 \
+        --servicenode=192.168.10.21 --ost --index=0 \
+        --mgsnode=192.168.10.1@tcp0 --mgsnode=192.168.10.2@tcp0 \
+        /dev/sdb
 oss0# mount -t lustre /dev/sdb /mnt/test/ost0
-client# mount -t lustre mds0,1@elan:mds1,2@elan:/testfs /mnt/testfs
+client# mount -t lustre 192.168.10.1@tcp0:192.168.10.2@tcp0:/testfs \
+        /mnt/testfs
 mds0# umount /mnt/mdt
 mds1# mount -t lustre /dev/sda1 /mnt/test/mdt
 mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
-    <para>Where multiple NIDs are specified, comma-separation (for example, <literal>mds1,2@elan</literal>) means that the two NIDs refer to the same host, and that Lustre needs to choose the <emphasis>best</emphasis> one for communication. Colon-separation (for example, <literal>mds0:mds1</literal>) means that the two NIDs refer to two different hosts, and should be treated as failover locations (Lustre tries the first one, and if that fails, it tries the second one.)</para>
-    <para>Two options exist to specify failover nodes. <literal>--failnode</literal> and <literal>--servicenode</literal>. <literal>--failnode</literal> specifies the NIDs of failover nodes. <literal>--servicenode</literal> specifies all service NIDs, including those of the primary node and of failover nodes.  Option <literal>--servicenode</literal> makes the MDT or OST treat all its service nodes equally. The first service node to load the target device becomes the primary service node. Other node NIDs will become failover locations for the target device.</para>
-    <note>
-      <para>If you have an MGS or MDT configured for failover, perform these steps:</para>
-      <orderedlist>
-        <listitem>
-          <para>On the oss0 node, list the NIDs of all MGS nodes at <literal>mkfs</literal> time.</para>
-          <screen>oss0# mkfs.lustre --fsname sunfs --mgsnode=10.0.0.1 \
-  --mgsnode=10.0.0.2 --ost --index=0 /dev/sdb</screen>
-        </listitem>
-        <listitem>
-          <para>On the client, mount the file system.</para>
-          <para><screen>client# mount -t lustre 10.0.0.1:10.0.0.2:/sunfs /cfs/client/</screen></para>
-        </listitem>
-      </orderedlist>
-    </note>
+    <para>Where multiple NIDs are specified separated by commas  (for example,
+        <literal>10.67.73.200@tcp,192.168.10.1@tcp</literal>), the two NIDs refer to the same host,
+      and the Lustre software chooses the <emphasis>best</emphasis> one for communication. When a
+      pair of NIDs is separated by a colon (for example,
+        <literal>10.67.73.200@tcp:10.67.73.201@tcp</literal>), the two NIDs refer to two different
+      hosts and are treated as a failover pair (the Lustre software tries the first one, and if that
+      fails, it tries the second one.)</para>
+    <para>Two options to <literal>mkfs.lustre</literal> can be used to specify failover nodes.
+      Introduced in Lustre software release 2.0, the <literal>--servicenode</literal> option is used
+      to specify all service NIDs, including those for primary nodes and failover nodes. When the
+        <literal>--servicenode</literal>option is used, the first service node to load the target
+      device becomes the primary service node, while nodes corresponding to the other specified NIDs
+      become failover locations for the target device. An older option,
+        <literal>--failnode</literal>, specifies just the NIDS of failover nodes. For more
+      information about the <literal>--servicenode</literal> and <literal>--failnode</literal>
+      options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="configuringfailover"
+      />.</para>
   </section>
   <section xml:id="dbdoclet.50438194_70905">
     <title><indexterm><primary>operations</primary><secondary>erasing a file system</secondary></indexterm>Erasing a File System</title>

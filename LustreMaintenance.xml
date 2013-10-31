@@ -599,11 +599,15 @@ osc.testfs-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
     <section xml:id="dbdoclet.50438199_62333">
       <title><indexterm><primary>maintenance</primary><secondary>changing failover node address</secondary></indexterm>
 Changing the Address of a Failover Node</title>
-      <para>To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition:
-	      <screen>oss# tunefs.lustre --erase-params --failnode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
-	      or
-	      <screen>oss# tunefs.lustre --erase-params --servicenode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
-      </para>
+      <para>To change the address of a failover node (e.g, to use node X instead of node Y), run
+      this command on the OSS/OST partition (depending on which option was used to originally
+      identify the NID):
+      <screen>oss# tunefs.lustre --erase-params --servicenode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
+      or
+      <screen>oss# tunefs.lustre --erase-params --failnode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
+      For more information about the <literal>--servicenode</literal> and
+        <literal>--failnode</literal> options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="configuringfailover"/>.</para>
     </section>
     <section xml:id="dbdoclet.50438199_62545">
       <title><indexterm><primary>maintenance</primary><secondary>separate a combined MGS/MDT</secondary></indexterm>
