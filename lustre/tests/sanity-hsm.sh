@@ -422,7 +422,8 @@ make_small() {
 }
 
 cleanup_large_files() {
-	local ratio=$(df $MOUNT |awk '{print $5}' |sed 's/%//g' |grep -v Use)
+	local ratio=$(df -P $MOUNT | tail -1 | awk '{print $5}' |
+		      sed 's/%//g')
 	[ $ratio -gt 50 ] && find $MOUNT -size +10M -exec rm -f {} \;
 }
 
