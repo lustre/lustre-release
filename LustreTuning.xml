@@ -1,5 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
   <title xml:id="lustretuning.title">Lustre Tuning</title>
   <para>This chapter contains information about tuning Lustre for better performance and includes the following sections:</para>
   <itemizedlist>
@@ -245,6 +244,68 @@
       </listitem>
     </itemizedlist>
 
+    </section>
+    <section>
+      <title>LNET Peer Health</title>
+      <para>Two options are available to help determine peer health:<itemizedlist>
+          <listitem>
+            <para><literal>peer_timeout</literal> - The timeout (in seconds) before an aliveness
+              query is sent to a peer. For example, if <literal>peer_timeout</literal> is set to
+                <literal>180sec</literal>, an aliveness query is sent to the peer every 180 seconds.
+              This feature only takes effect if the node is configured as an LNET router.</para>
+            <para>In a routed environment, the <literal>peer_timeout</literal> feature should always
+              be on (set to a value in seconds) on routers. If the router checker has been enabled,
+              the feature should be turned off by setting it to 0 on clients and servers.</para>
+            <para>For a non-routed scenario, enabling the <literal>peer_timeout</literal> option
+              provides health information such as whether a peer is alive or not. For example, a
+              client is able to determine if an MGS or OST is up when it sends it a message. If a
+              response is received, the peer is alive; otherwise a timeout occurs when the request
+              is made.</para>
+            <para>In general, <literal>peer_timeout</literal> should be set to no less than the LND
+              timeout setting. For more information about LND timeouts, see <xref
+                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_c24_nt5_dl"/>.</para>
+            <para>When the <literal>o2iblnd</literal> (IB) driver is used,
+                <literal>peer_timeout</literal> should be at least twice the value of the
+                <literal>ko2iblnd</literal> keepalive option. for more information about keepalive
+              options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                linkend="section_ngq_qhy_zl"/>.</para>
+          </listitem>
+          <listitem>
+            <para><literal>avoid_asym_router_failure</literal> – When set to 1, the router checker
+              running on the client or a server periodically pings all the routers corresponding to
+              the NIDs identified in the routes parameter setting on the node to determine the
+              status of each router interface. The default setting is 1. (For more information about
+              the LNET routes parameter, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                linkend="dbdoclet.50438216_71227"/></para>
+            <para>A router is considered down if any of its NIDs are down. For example, router X has
+              three NIDs: <literal>Xnid1</literal>, <literal>Xnid2</literal>, and
+                <literal>Xnid3</literal>. A client is connected to the router via
+                <literal>Xnid1</literal>. The client has router checker enabled. The router checker
+              periodically sends a ping to the router via <literal>Xnid1</literal>. The router
+              responds to the ping with the status of each of its NIDs. In this case, it responds
+              with <literal>Xnid1=up</literal>, <literal>Xnid2=up</literal>,
+                <literal>Xnid3=down</literal>. If <literal>avoid_asym_router_failure==1</literal>,
+              the router is considered down if any of its NIDs are down, so router X is considered
+              down and will not be used for routing messages. If
+                <literal>avoid_asym_router_failure==0</literal>, router X will continue to be used
+              for routing messages.</para>
+          </listitem>
+        </itemizedlist></para>
+      <para>The following router checker parameters must be set to the maximum value of the
+        corresponding setting for this option on any client or server:<itemizedlist>
+          <listitem>
+            <para><literal>dead_router_check_interval</literal></para>
+          </listitem>
+          <listitem>
+            <para>
+              <literal>live_router_check_interval</literal></para>
+          </listitem>
+          <listitem>
+            <para><literal>router_ping_timeout</literal></para>
+          </listitem>
+        </itemizedlist></para>
+      <para>For example, the <literal>dead_router_check_interval</literal> parameter on any router
+        must be MAX.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.libcfstuning">

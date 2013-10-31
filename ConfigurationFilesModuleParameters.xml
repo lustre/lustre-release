@@ -267,12 +267,27 @@ forwarding (&quot;&quot;)</title>
         <para condition='123'><literal>rnet_htable_size</literal> is an integer that indicates how many remote networks the internal LNet hash table is configured to handle. <literal>rnet_htable_size</literal> is used for optimizing the hash table size and does not put a limit on how many remote networks you can have.  The default hash table size when this parameter is not specified is: 128.</para>
       </section>
     </section>
-    <section remap="h3">
-        <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>SOCKLND</tertiary></indexterm>
-<literal>SOCKLND</literal> Kernel TCP/IP LND</title>
-      <para>The <literal>SOCKLND</literal> kernel TCP/IP LND (<literal>socklnd</literal>) is connection-based and uses the acceptor to establish communications via sockets with its peers.</para>
-      <para>It supports multiple instances and load balances dynamically over multiple interfaces. If no interfaces are specified by the <literal>ip2nets</literal> or networks module parameter, all non-loopback IP interfaces are used. The address-within-network is determined by the address of the first IP interface an instance of the <literal>socklnd</literal> encounters.</para>
-      <para>Consider a node on the &apos;edge&apos; of an InfiniBand network, with a low-bandwidth management Ethernet (<literal>eth0</literal>), IP over IB configured (<literal>ipoib0</literal>), and a pair of GigE NICs (<literal>eth1</literal>,<literal>eth2</literal>) providing off-cluster connectivity. This node should be configured with &apos;<literal>networks=vib,tcp(eth1,eth2)</literal>&apos; to ensure that the <literal>socklnd</literal> ignores the management Ethernet and IPoIB.</para>
+    <section remap="h3" xml:id="section_ngq_qhy_zl">
+      <title><indexterm>
+          <primary>configuring</primary>
+          <secondary>network</secondary>
+          <tertiary>SOCKLND</tertiary>
+        </indexterm>
+        <literal>SOCKLND</literal> Kernel TCP/IP LND</title>
+      <para>The <literal>SOCKLND</literal> kernel TCP/IP LND (<literal>socklnd</literal>) is
+        connection-based and uses the acceptor to establish communications via sockets with its
+        peers.</para>
+      <para>It supports multiple instances and load balances dynamically over multiple interfaces.
+        If no interfaces are specified by the <literal>ip2nets</literal> or networks module
+        parameter, all non-loopback IP interfaces are used. The address-within-network is determined
+        by the address of the first IP interface an instance of the <literal>socklnd</literal>
+        encounters.</para>
+      <para>Consider a node on the &apos;edge&apos; of an InfiniBand network, with a low-bandwidth
+        management Ethernet (<literal>eth0</literal>), IP over IB configured
+          (<literal>ipoib0</literal>), and a pair of GigE NICs
+          (<literal>eth1</literal>,<literal>eth2</literal>) providing off-cluster connectivity. This
+        node should be configured with &apos;<literal>networks=vib,tcp(eth1,eth2)</literal>&apos; to
+        ensure that the <literal>socklnd</literal> ignores the management Ethernet and IPoIB.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -290,17 +305,22 @@ forwarding (&quot;&quot;)</title>
           <tbody>
             <row>
               <entry>
-                <para> <literal>timeout</literal></para>
-                <para> <literal>(50,W)</literal></para>
+                <para>
+                  <literal>timeout</literal></para>
+                <para>
+                  <literal>(50,W)</literal></para>
               </entry>
               <entry>
-                <para>Time (in seconds) that communications may be stalled before the LND completes them with failure.</para>
+                <para>Time (in seconds) that communications may be stalled before the LND completes
+                  them with failure.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>nconnds</literal></para>
-                <para> <literal>(4)</literal></para>
+                <para>
+                  <literal>nconnds</literal></para>
+                <para>
+                  <literal>(4)</literal></para>
               </entry>
               <entry>
                 <para>Sets the number of connection daemons.</para>
@@ -308,17 +328,24 @@ forwarding (&quot;&quot;)</title>
             </row>
             <row>
               <entry>
-                <para> <literal>min_reconnectms</literal></para>
-                <para> <literal>(1000,W)</literal></para>
+                <para>
+                  <literal>min_reconnectms</literal></para>
+                <para>
+                  <literal>(1000,W)</literal></para>
               </entry>
               <entry>
-                <para>Minimum connection retry interval (in milliseconds). After a failed connection attempt, this is the time that must elapse before the first retry. As connections attempts fail, this time is doubled on each successive retry up to a maximum of &apos;<literal>max_reconnectms</literal>&apos;.</para>
+                <para>Minimum connection retry interval (in milliseconds). After a failed connection
+                  attempt, this is the time that must elapse before the first retry. As connections
+                  attempts fail, this time is doubled on each successive retry up to a maximum of
+                    &apos;<literal>max_reconnectms</literal>&apos;.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>max_reconnectms</literal></para>
-                <para> <literal>(6000,W)</literal></para>
+                <para>
+                  <literal>max_reconnectms</literal></para>
+                <para>
+                  <literal>(6000,W)</literal></para>
               </entry>
               <entry>
                 <para>Maximum connection retry interval (in milliseconds).</para>
@@ -326,27 +353,38 @@ forwarding (&quot;&quot;)</title>
             </row>
             <row>
               <entry>
-                <para> <literal>eager_ack</literal></para>
-                <para> <literal>(0 on linux,</literal></para>
-                <para> <literal>1 on darwin,W)</literal></para>
+                <para>
+                  <literal>eager_ack</literal></para>
+                <para>
+                  <literal>(0 on linux,</literal></para>
+                <para>
+                  <literal>1 on darwin,W)</literal></para>
               </entry>
               <entry>
-                <para>Boolean that determines whether the <literal>socklnd</literal> should attempt to flush sends on message boundaries.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>typed_conns</literal></para>
-                <para> <literal>(1,Wc)</literal></para>
-              </entry>
-              <entry>
-                <para>Boolean that determines whether the <literal>socklnd</literal> should use different sockets for different types of messages. When clear, all communication with a particular peer takes place on the same socket. Otherwise, separate sockets are used for bulk sends, bulk receives and everything else.</para>
+                <para>Boolean that determines whether the <literal>socklnd</literal> should attempt
+                  to flush sends on message boundaries.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>min_bulk</literal></para>
-                <para> <literal>(1024,W)</literal></para>
+                <para>
+                  <literal>typed_conns</literal></para>
+                <para>
+                  <literal>(1,Wc)</literal></para>
+              </entry>
+              <entry>
+                <para>Boolean that determines whether the <literal>socklnd</literal> should use
+                  different sockets for different types of messages. When clear, all communication
+                  with a particular peer takes place on the same socket. Otherwise, separate sockets
+                  are used for bulk sends, bulk receives and everything else.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>min_bulk</literal></para>
+                <para>
+                  <literal>(1024,W)</literal></para>
               </entry>
               <entry>
                 <para>Determines when a message is considered &quot;bulk&quot;.</para>
@@ -354,69 +392,98 @@ forwarding (&quot;&quot;)</title>
             </row>
             <row>
               <entry>
-                <para> <literal>tx_buffer_size, rx_buffer_size</literal></para>
-                <para> <literal>(8388608,Wc)</literal></para>
+                <para>
+                  <literal>tx_buffer_size, rx_buffer_size</literal></para>
+                <para>
+                  <literal>(8388608,Wc)</literal></para>
               </entry>
               <entry>
-                <para>Socket buffer sizes. Setting this option to zero (0), allows the system to auto-tune buffer sizes. </para>
+                <para>Socket buffer sizes. Setting this option to zero (0), allows the system to
+                  auto-tune buffer sizes. </para>
                 <warning>
-                  <para>Be very careful changing this value as improper sizing can harm performance.</para>
+                  <para>Be very careful changing this value as improper sizing can harm
+                    performance.</para>
                 </warning>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>nagle</literal></para>
-                <para> <literal>(0,Wc)</literal></para>
+                <para>
+                  <literal>nagle</literal></para>
+                <para>
+                  <literal>(0,Wc)</literal></para>
               </entry>
               <entry>
-                <para>Boolean that determines if <literal>nagle</literal> should be enabled. It should never be set in production systems.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>keepalive_idle</literal></para>
-                <para> <literal>(30,Wc)</literal></para>
-              </entry>
-              <entry>
-                <para>Time (in seconds) that a socket can remain idle before a keepalive probe is sent. Setting this value to zero (0) disables keepalives.</para>
+                <para>Boolean that determines if <literal>nagle</literal> should be enabled. It
+                  should never be set in production systems.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>keepalive_intvl</literal></para>
-                <para> <literal>(2,Wc)</literal></para>
+                <para>
+                  <literal>keepalive_idle</literal></para>
+                <para>
+                  <literal>(30,Wc)</literal></para>
               </entry>
               <entry>
-                <para>Time (in seconds) to repeat unanswered keepalive probes. Setting this value to zero (0) disables keepalives.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>keepalive_count</literal></para>
-                <para> <literal>(10,Wc)</literal></para>
-              </entry>
-              <entry>
-                <para>Number of unanswered keepalive probes before pronouncing socket (hence peer) death.</para>
+                <para>Time (in seconds) that a socket can remain idle before a keepalive probe is
+                  sent. Setting this value to zero (0) disables keepalives.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>enable_irq_affinity</literal></para>
-                <para> <literal>(0,Wc)</literal></para>
+                <para>
+                  <literal>keepalive_intvl</literal></para>
+                <para>
+                  <literal>(2,Wc)</literal></para>
               </entry>
               <entry>
-                <para>Boolean that determines whether to enable IRQ affinity. The default is zero (0).</para>
-                <para>When set, <literal>socklnd</literal> attempts to maximize performance by handling device interrupts and data movement for particular (hardware) interfaces on particular CPUs. This option is not available on all platforms. This option requires an SMP system to exist and produces best performance with multiple NICs. Systems with multiple CPUs and a single NIC may see increase in the performance with this parameter disabled.</para>
+                <para>Time (in seconds) to repeat unanswered keepalive probes. Setting this value to
+                  zero (0) disables keepalives.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>zc_min_frag</literal></para>
-                <para> <literal>(2048,W)</literal></para>
+                <para>
+                  <literal>keepalive_count</literal></para>
+                <para>
+                  <literal>(10,Wc)</literal></para>
               </entry>
               <entry>
-                <para>Determines the minimum message fragment that should be considered for zero-copy sends. Increasing it above the platform&apos;s <literal>PAGE_SIZE </literal>disables all zero copy sends. This option is not available on all platforms.</para>
+                <para>Number of unanswered keepalive probes before pronouncing socket (hence peer)
+                  death.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>enable_irq_affinity</literal></para>
+                <para>
+                  <literal>(0,Wc)</literal></para>
+              </entry>
+              <entry>
+                <para>Boolean that determines whether to enable IRQ affinity. The default is zero
+                  (0).</para>
+                <para>When set, <literal>socklnd</literal> attempts to maximize performance by
+                  handling device interrupts and data movement for particular (hardware) interfaces
+                  on particular CPUs. This option is not available on all platforms. This option
+                  requires an SMP system to exist and produces best performance with multiple NICs.
+                  Systems with multiple CPUs and a single NIC may see increase in the performance
+                  with this parameter disabled.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>zc_min_frag</literal></para>
+                <para>
+                  <literal>(2048,W)</literal></para>
+              </entry>
+              <entry>
+                <para>Determines the minimum message fragment that should be considered for
+                  zero-copy sends. Increasing it above the platform&apos;s <literal>PAGE_SIZE
+                  </literal>disables all zero copy sends. This option is not available on all
+                  platforms.</para>
               </entry>
             </row>
           </tbody>
