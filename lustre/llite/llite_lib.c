@@ -2292,17 +2292,17 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
                 op_data->op_capa2 = NULL;
         }
 
-        op_data->op_name = name;
-        op_data->op_namelen = namelen;
-        op_data->op_mode = mode;
-        op_data->op_mod_time = cfs_time_current_sec();
-        op_data->op_fsuid = cfs_curproc_fsuid();
-        op_data->op_fsgid = cfs_curproc_fsgid();
-        op_data->op_cap = cfs_curproc_cap_pack();
-        op_data->op_bias = MDS_CHECK_SPLIT;
-        op_data->op_opc = opc;
-        op_data->op_mds = 0;
-        op_data->op_data = data;
+	op_data->op_name = name;
+	op_data->op_namelen = namelen;
+	op_data->op_mode = mode;
+	op_data->op_mod_time = cfs_time_current_sec();
+	op_data->op_fsuid = cfs_curproc_fsuid();
+	op_data->op_fsgid = cfs_curproc_fsgid();
+	op_data->op_cap = cfs_curproc_cap_pack();
+	op_data->op_bias = 0;
+	op_data->op_opc = opc;
+	op_data->op_mds = 0;
+	op_data->op_data = data;
 
         /* If the file is being opened after mknod() (normally due to NFS)
          * try to use the default stripe data from parent directory for

@@ -36,7 +36,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblmv.a
-liblmv_a_SOURCES = lmv_obd.c lmv_intent.c lmv_object.c lmv_fld.c
+liblmv_a_SOURCES = lmv_obd.c lmv_intent.c lmv_fld.c
 liblmv_a_CPPFLAGS = $(LLCPPFLAGS)
 liblmv_a_CFLAGS = $(LLCFLAGS)
 endif

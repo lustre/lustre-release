@@ -48,109 +48,6 @@
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
 
-struct lmv_stripe {
-        /**
-         * Dir stripe fid.
-         */
-        struct lu_fid           ls_fid;
-        /**
-         * Cached home mds number for \a li_fid.
-         */
-        mdsno_t                 ls_mds;
-        /**
-         * Stripe object size.
-         */
-        unsigned long           ls_size;
-        /**
-         * Stripe flags.
-         */
-        int                     ls_flags;
-};
-
-#define O_FREEING               (1 << 0)
-
-struct lmv_object {
-        /**
-         * Link to global objects list.
-         */
-        cfs_list_t              lo_list;
-        /**
-         * Sema for protecting fields.
-         */
-	struct mutex		lo_guard;
-        /**
-         * Object state like O_FREEING.
-         */
-        int                     lo_state;
-        /**
-         * Object ref counter.
-         */
-        cfs_atomic_t            lo_count;
-        /**
-         * Object master fid.
-         */
-        struct lu_fid           lo_fid;
-        /**
-         * Object hash type to find stripe by name.
-         */
-        __u32		        lo_hashtype;
-        /**
-         * Number of stripes.
-         */
-        int                     lo_objcount;
-        /**
-         * Array of sub-objs.
-         */
-        struct lmv_stripe      *lo_stripes;
-        /**
-         * Pointer to LMV obd.
-         */
-        struct obd_device      *lo_obd;
-};
-
-int lmv_object_setup(struct obd_device *obd);
-void lmv_object_cleanup(struct obd_device *obd);
-
-static inline void
-lmv_object_lock(struct lmv_object *obj)
-{
-        LASSERT(obj);
-	mutex_lock(&obj->lo_guard);
-}
-
-static inline void
-lmv_object_unlock(struct lmv_object *obj)
-{
-        LASSERT(obj);
-	mutex_unlock(&obj->lo_guard);
-}
-
-void lmv_object_add(struct lmv_object *obj);
-void lmv_object_del(struct lmv_object *obj);
-
-void lmv_object_put(struct lmv_object *obj);
-void lmv_object_put_unlock(struct lmv_object *obj);
-void lmv_object_free(struct lmv_object *obj);
-
-struct lmv_object *lmv_object_get(struct lmv_object *obj);
-
-struct lmv_object *lmv_object_find(struct obd_device *obd,
-                                   const struct lu_fid *fid);
-
-struct lmv_object *lmv_object_find_lock(struct obd_device *obd,
-			                const struct lu_fid *fid);
-
-struct lmv_object *lmv_object_alloc(struct obd_device *obd,
-			            const struct lu_fid *fid,
-			            struct lmv_stripe_md *mea);
-
-struct lmv_object *lmv_object_create(struct obd_export *exp,
-			             const struct lu_fid *fid,
-			             struct lmv_stripe_md *mea);
-
-int lmv_object_delete(struct obd_export *exp,
-                      const struct lu_fid *fid);
-
 int lmv_check_connect(struct obd_device *obd);
 
 int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
@@ -171,15 +68,6 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
                     ldlm_blocking_callback cb_blocking,
 		    __u64 extra_lock_flags);
 
-int lmv_allocate_slaves(struct obd_device *obd, struct lu_fid *pid,
-                        struct md_op_data *op, struct lu_fid *fid);
-
-int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
-                          const struct lu_fid *, struct lookup_intent *, int,
-			  ldlm_blocking_callback cb_blocking,
-			  __u64 extra_lock_flags);
-
-int lmv_handle_split(struct obd_export *, const struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
 int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
@@ -243,6 +131,9 @@ lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
         return lmv_get_target(lmv, mds);
 }
 
+struct lmv_tgt_desc
+*lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
+		struct lu_fid *fid);
 /* lproc_lmv.c */
 #ifdef LPROCFS
 void lprocfs_lmv_init_vars(struct lprocfs_static_vars *lvars);
