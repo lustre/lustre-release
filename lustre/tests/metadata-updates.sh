@@ -32,8 +32,8 @@ NEW_MODE=0222
 NEW_ATIME="2001-01-01 GMT"
 NEW_MTIME="2005-05-05 GMT"
 
-test_UID=$(id -u)
-test_GID=$(id -g)
+test_USER=$(id -u -n)
+test_GROUP=$(id -g -n)
 
 SUMFILE=$TESTDIR/mdsum
 
@@ -99,21 +99,21 @@ $TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]}
 
 # check st_uid, st_gid, st_size, st_mode
 get_stat () {
-    local attr="$test_UID $test_GID $FILE_SIZE $CURRENT_MODE"
+	local attr="$test_USER $test_GROUP $FILE_SIZE $CURRENT_MODE"
 
-    echo "Checking file(s) attributes ... "
+	echo "Checking file(s) attributes ... "
 
     do_nodesv $NODES_TO_USE "set $TRACE;
 for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
-    tmp=\\\$(stat -c \\\"%u %g %s 0%a\\\" \\\$TESTFILE);
+    tmp=\\\$(stat -c \\\"%U %G %s 0%a\\\" \\\$TESTFILE);
     echo \\\"\\\$TESTFILE [ uid gid size mode ] expected : $attr ;  got : \\\$tmp \\\";
     if [ x\\\"\\\$tmp\\\" != x\\\"$attr\\\" ] ; then
         echo \\\"Wrong file attributes\\\";
         exit 56;
     fi;
 done " || return ${PIPESTATUS[0]}
-    return 0 
+	return 0
 }
 
 do_chmod () {
