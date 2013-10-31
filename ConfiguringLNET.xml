@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
   <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNET) </title>
-  <para>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
+  <para>This chapter describes how to configure Lustre networking (LNET). It includes the following
+    sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438216_33148"/>
@@ -35,16 +36,15 @@
   <section xml:id="dbdoclet.50438216_33148">
       <title><indexterm><primary>LNet</primary></indexterm>
           Overview of <literal>lnet</literal> Module Parameters</title>
-    <para>The <literal>lnet</literal> kernel module parameters specify how LNET is to be configured
-      to work with a Lustre file system, including details on which NICs are to be configured and
-      how routing among LNET routers will take place.</para>
-    <para>Parameters for <literal>lnet</literal> can be specified in the
-        <literal>/etc/modprobe.d/lustre.conf</literal> file. The file need not be named
-        <literal>lustre.conf</literal>. However, this convention will be used in this manual. For
-      distributions previous to Red Hat Enterprise Edition 5 and SUSE Linux Enterprise Server 10,
-        <literal>lnet</literal> parameters may have been stored in
-        <literal>/etc/modprobe.conf</literal>, but this method of specifying <literal>lnet</literal>
-      parameters is now deprecated. Storing LNET parameters in a separate
+    <para>The LNET kernel module parameters specify how LNET is to be configured to work with a
+      Lustre file system, including details on which NICs are to be configured and how routing among
+      LNET routers will take place.</para>
+    <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal>
+      file. The file need not be named <literal>lustre.conf</literal>. However, this convention will
+      be used in this manual. For distributions previous to Red Hat Enterprise Edition 5 and SUSE
+      Linux Enterprise Server 10, LNET parameters may have been stored in
+        <literal>/etc/modprobe.conf</literal>, but this method of specifying LNET parameters is now
+      deprecated. Storing LNET parameters in a separate
         <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and
       distribution of the Lustre networking configuration. This file contains one or more entries
       with the syntax:</para>
@@ -77,10 +77,21 @@
     <para>To map the LNET <literal>tcp0</literal> to the Ethernet interface
       <literal>eth1</literal>:</para>
     <screen>options lnet networks=tcp0(eth1)</screen>
+    <para>To map the LNET <literal>o2ib</literal> to the InfiniBand interface
+      <literal>ib0</literal>:</para>
+    <screen>options lnet networks=o2ib(ib0)</screen>
+    <para>Omitting a network number in an LNET specification results in a network number of
+      0.</para>
     <para>Depending on the network design, it may be necessary to specify explicit interfaces. To explicitly specify that interface <literal>eth2</literal> be used for network <literal>tcp0</literal> and <literal>eth3</literal> be used for <literal>tcp1</literal> , use this entry:</para>
     <screen>options lnet networks=tcp0(eth2),tcp1(eth3)</screen>
-    <para>When more than one interface is available during the network setup, Lustre chooses the best route based on the hopcount. Once the network connection is established, Lustre expects the network to stay connected. In a Lustre network, connections do not fail over to another interface, even if multiple interfaces are available on the same node.</para>
-    <para condition='l25'>Since version 2.5 of the Lustre software, the route priority is also used to decide which interface to use. The priority has precendence over hopcount so the route with the lower priority number will be selected regardless of what the hopcounts are.</para>
+    <para>When more than one interface is available during the network setup, the Lustre software
+      chooses the best route based on the hopcount. Once the network connection is established, the
+      Lustre software expects the network to stay connected. In a Lustre network, connections do not
+      fail over to another interface, even if multiple interfaces are available on the same
+      node.</para>
+    <para condition="l25">Since Lustre software release 2.5, the route priority is also used to
+      decide which interface to use. The priority has precendence over hopcount so the route with
+      the lower priority number will be selected regardless of  the hopcount.</para>
     <note>
       <para>LNET lines in <literal>lustre.conf</literal> are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
     </note>
@@ -276,100 +287,109 @@ lctl network configure</screen>
 	<listitem>
 	<para><emphasis role="italic">Creating classes of routers.</emphasis></para>
 	<screen>options lnet networks=&quot;tcp0(eth0)&quot; routes=&quot;o2ib0 1 192.168.1.2@tcp0;
- 	o2ib0 1 192.168.1.3@tcp0;o2ib0 2 192.168.1.4@tcp0;o2ib0 2 192.168.1.5@tcp0&quot;</screen>
+ 	o2ib0 1 192.168.1.3@tcp0;o2ib0 2 192.168.1.4@tcp0;
+ 	o2ib0 2 192.168.1.5@tcp0&quot;</screen>
 	<para>This example creates two classes of routers load balanced between themselves. In this case, the node will only use the routers with priority 2 only if both the routers with priority 1 are not running.</para>
     	</listitem>
 	</itemizedlist>
     </section>
-  </section>
-  <section xml:id="dbdoclet.50438216_10523">
-    <title><indexterm><primary>LNET</primary><secondary>testing</secondary></indexterm>Testing the LNET Configuration</title>
-    <para>After configuring Lustre Networking, it is highly recommended that you test your LNET configuration using the LNET Self-Test provided with the Lustre software. For more information about using LNET Self-Test, see <xref linkend="lnetselftest"/>.</para>
-  </section>
-  <section xml:id="dbdoclet.50438216_35668">
-    <title><indexterm><primary>LNET</primary><secondary>route checker</secondary></indexterm>Configuring the Router Checker</title>
-    <para>In a Lustre configuration in which different types of networks, such as a TCP/IP network
-      and an InfiniBand network, are connected by routers, a router checker can be run on the
-      clients and servers in the routed configuration to monitor the status of the routers. In a
-      multi-hop routing configuration, router checkers can be configured on routers to monitor the
-      health of their next-hop routers.</para>
-    <para>A router checker is configured by setting lnet parameters in <literal>lustre.conf</literal> by including an entry in this form:</para>
-    <screen>options lnet <replaceable>router_checker_parameter</replaceable>=<replaceable>value</replaceable></screen>
-    <para>The router checker parameters are:</para>
-    <itemizedlist>
-    	<listitem>
-        <para><literal>auto_down</literal>  - Enables/disables (1/0) the automatic marking of router state as up or down. The default value is 1. To disable router marking, enter:</para>
-    	<screen>options lnet auto_down=0</screen>
-      	</listitem>
-	<listitem>
-	<para><literal>avoid_asym_router_failure</literal> - Specifies that if even one interface of a
-            router is down for some reason, the entire router is marked as down. This is important
-            because if nodes are not aware that the interface on one side is down, they will still
-            keep pushing data to the other side presuming that the router is healthy, when it really
-            is not. To turn it on, enter:</para>
-	<screen>options lnet avoid_asym_router_failure=1</screen>
-	</listitem>
-	<listitem>
-	<para><literal>live_router_check_interval</literal> - Specifies a time interval in seconds after
-            which the router checker will ping the live routers. The default value is 60. To set the
-            value to 50, enter:</para> 
-	<screen>options lnet live_router_check_interval=50</screen>
-	</listitem>
-	<listitem>
-        <para><literal>dead_router_check_interval</literal> - Specifies a time interval in seconds
+    <section remap="h3">
+      <title><indexterm>
+          <primary>LNet></primary>
+          <secondary>Kernel Parameters</secondary>
+        </indexterm>Kernel Configuration Parameters</title>
+      <para>In a Lustre configuration in which different types of LNET networks are connected by
+        routers, several kernel module parameters can be set to monitor and improve routing
+        performance. </para>
+      <para>The routing related parameters are:</para>
+      <itemizedlist>
+        <listitem>
+          <para><literal>auto_down</literal> - Enables/disables (1/0) the automatic marking of
+            router state as up or down. The default value is 1. To disable router marking,
+            enter:</para>
+          <screen>options lnet auto_down=0</screen>
+        </listitem>
+        <listitem>
+          <para><literal>avoid_asym_router_failure</literal> - Specifies that if even one interface
+            of a router is down for some reason, the entire router is marked as down. This is
+            important because if nodes are not aware that the interface on one side is down, they
+            will still keep pushing data to the other side presuming that the router is healthy,
+            when it really is not. To turn it on, enter:</para>
+          <screen>options lnet avoid_asym_router_failure=1</screen>
+        </listitem>
+        <listitem>
+          <para><literal>live_router_check_interval</literal> - Specifies a time interval in seconds
+            after which the router checker will ping the live routers. The default value is 60. To
+            set the value to 50, enter:</para>
+          <screen>options lnet live_router_check_interval=50</screen>
+        </listitem>
+        <listitem>
+          <para><literal>dead_router_check_interval</literal> - Specifies a time interval in seconds
             after which the router checker will check the dead routers. The default value is 60. To
             set the value to 50, enter:</para>
-    	<screen>options lnet dead_router_check_interval=50</screen>
-	<note>
-	<para>A kernel process called <literal>router_checker</literal> is started when either of the two
-              options above are set (thus, the <literal>router_checker</literal> is enabled by
-              default). It otians a list of next-hops from the routes entered and checks whether
-              next-hops are alive. In a multi-hop router configuration, these parameters can be set
-              on the routers as well, or on other node types. If no routes are entered, no checking
-              is done.</para>
-	</note>
-      	</listitem>	
-      	<listitem>
-        <para><literal>router_ping_timeout</literal> - Specifies a timeout for the router checker
+          <screen>options lnet dead_router_check_interval=50</screen>
+          <note>
+            <para>A kernel process called <literal>router_checker</literal> is started when either
+              of the two options above are set (thus, the <literal>router_checker</literal> is
+              enabled by default). It otians a list of next-hops from the routes entered and checks
+              whether next-hops are alive. In a multi-hop router configuration, these parameters can
+              be set on the routers as well, or on other node types. If no routes are entered, no
+              checking is done.</para>
+          </note>
+        </listitem>
+        <listitem>
+          <para><literal>router_ping_timeout</literal> - Specifies a timeout for the router checker
             when it checks live or dead routers. The router checker sends a ping message to each
             dead or live router once every <literal>dead_router_check_interval</literal> or
               <literal>live_router_check_interval</literal> respectively. The default value is 50.
             To set the value to 60, enter:</para>
-    	<screen>options lnet router_ping_timeout=60</screen>
-    	<note>
-        <para>The <literal>router_ping_timeout</literal> is consistent with the default LND timeouts. You may have to increase it on very large clusters if the LND timeout is also increased. For larger clusters, we suggest increasing the check interval.</para>
-    	</note>
-      	</listitem>
-      	<listitem>
-        <para><literal>check_routers_before_use</literal> - Specifies that routers are to be checked
-            before use. Set to off by default. If this parameter is set to on, the
+          <screen>options lnet router_ping_timeout=60</screen>
+          <note>
+            <para>The <literal>router_ping_timeout</literal> is consistent with the default LND
+              timeouts. You may have to increase it on very large clusters if the LND timeout is
+              also increased. For larger clusters, we suggest increasing the check interval.</para>
+          </note>
+        </listitem>
+        <listitem>
+          <para><literal>check_routers_before_use</literal> - Specifies that routers are to be
+            checked before use. Set to off by default. If this parameter is set to on, the
               <literal>dead_router_check_interval</literal> parameter must be given a positive
             integer value.</para>
-    	<screen>options lnet check_routers_before_use=on</screen>
-      	</listitem>
-	</itemizedlist>
-    <para>The <literal>router_checker</literal> obtains the following information from each router:</para>
-    <itemizedlist>
+          <screen>options lnet check_routers_before_use=on</screen>
+        </listitem>
+      </itemizedlist>
+      <para>The <literal>router_checker</literal> obtains the following information from each
+        router:</para>
+      <itemizedlist>
         <listitem>
-        <para> Time the router was disabled</para>
+          <para> Time the router was disabled</para>
         </listitem>
         <listitem>
-        <para> Elapsed disable time</para>
+          <para> Elapsed disable time</para>
         </listitem>
-    </itemizedlist>
-    <para>If the <literal>router_checker</literal> does not get a reply message from the router within <literal>router_ping_timeout</literal> seconds, it considers the router to be down.</para>
-    <para>When a router in a priority class goes down, the traffic stops intermittently until LNET
+      </itemizedlist>
+      <para>If the <literal>router_checker</literal> does not get a reply message from the router
+        within <literal>router_ping_timeout</literal> seconds, it considers the router to be
+        down.</para>
+      <para>When a router in a priority class goes down, the traffic stops intermittently until LNET
         safely marks the router which is down as 'down' and then proceeds on again, depending either
         on other routers of the same or a different priority class. The time it takes for LNET to
         recover is roughly based on the values for the <literal>live/dead_router_checker</literal>
         parameters provided.</para>
-    <para>If a router that is marked 'up' responds to a ping, the timeout is reset. If 100 packets
+      <para>If a router that is marked 'up' responds to a ping, the timeout is reset. If 100 packets
         have been sent successfully through a router, the sent-packets counter for that router will
         have a value of 100. The ping response also provides the status of the NIDs of the node
         being pinged. In this way, the pinging node knows whether to keep using this node as a
         next-hop or not. If one of the NIDs of the router is down and the
           <literal>avoid_asym_router_failure = 1</literal> is set, then that router is no longer
         used.</para>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.50438216_10523">
+    <title><indexterm><primary>LNET</primary><secondary>testing</secondary></indexterm>Testing the LNET Configuration</title>
+    <para>After configuring Lustre networking, it is highly recommended that you test your LNET
+      configuration using the LNET Self-Test provided with the Lustre software. For more information
+      about using LNET Self-Test, see <xref linkend="lnetselftest"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438216_15200">
     <title><indexterm>
@@ -383,7 +403,11 @@ lctl network configure</screen>
           <secondary>escaping commas with quotes</secondary>
         </indexterm>Escaping commas with quotes</title> 
       <para>It is recommended that you use network addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
-      <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all traffic using the first configured interface. This is a limitation of Linux, not Lustre. In this case, network interface bonding should be used. For more information about network interface bonding, see <xref linkend="settingupbonding"/>.</para>
+      <para>If the server has multiple interfaces on the same subnet, the Linux kernel will send all
+        traffic using the first configured interface. This is a limitation in the Linux
+        distribution, not the Lustre software. In this case, network interface bonding should be
+        used. For more information about network interface bonding, see <xref
+          linkend="settingupbonding"/>.</para>
       <para>Depending on the Linux distribution, commas may need to be escaped using single or double quotes. In the extreme case, the <literal>options</literal> entry would look like this:</para>
       <para><screen>options lnet&apos;networks=&quot;tcp0,elan0&quot;&apos; &apos;routes=&quot;tcp [2,10]@elan0&quot;&apos;</screen></para>
       <para>Added quotes may confuse some distributions. Messages such as the following may indicate an issue related to added quotes:</para>
