@@ -127,10 +127,16 @@ int ldlm_proc_setup(void)
                 GOTO(err_ns, rc);
         }
 
-        rc = lprocfs_add_vars(ldlm_type_proc_dir, list, NULL);
+	rc = lprocfs_add_vars(ldlm_type_proc_dir, list, NULL);
+	if (rc != 0) {
+		CERROR("LProcFS failed in ldlm-init\n");
+		GOTO(err_svc, rc);
+	}
 
-        RETURN(0);
+	RETURN(0);
 
+err_svc:
+	lprocfs_remove(&ldlm_svc_proc_dir);
 err_ns:
         lprocfs_remove(&ldlm_ns_proc_dir);
 err_type:
