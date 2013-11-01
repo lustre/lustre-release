@@ -68,7 +68,8 @@
                                          * interpret routine to be called.
                                          * lov_statfs_fini() must thus be called
                                          * by the request interpret routine */
-
+#define OBD_STATFS_FOR_MDT0	0x0008	/* The statfs is only for retrieving
+					 * information from MDT0. */
 #define OBD_FL_PUNCH    0x00000001      /* To indicate it is punch operation */
 
 /* OBD Device Declarations */

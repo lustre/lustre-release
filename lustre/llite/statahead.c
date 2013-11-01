@@ -688,7 +688,7 @@ static void do_statahead_interpret(struct ll_statahead_info *sai,
         }
 
         it->d.lustre.it_lock_handle = entry->se_handle;
-        rc = md_revalidate_lock(ll_i2mdexp(dir), it, NULL, NULL);
+	rc = md_revalidate_lock(ll_i2mdexp(dir), it, ll_inode2fid(dir), NULL);
         if (rc != 1)
                 GOTO(out, rc = -EAGAIN);
 

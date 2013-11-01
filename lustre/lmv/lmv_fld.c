@@ -61,10 +61,10 @@ int lmv_fld_lookup(struct lmv_obd *lmv,
                    const struct lu_fid *fid,
                    mdsno_t *mds)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        LASSERT(fid_is_sane(fid));
+	LASSERTF(fid_is_sane(fid), DFID" is insane!\n", PFID(fid));
 
 	/* FIXME: Because ZFS still use LOCAL fid sequence for root,
 	 * and root will always be in MDT0, for local fid, it will

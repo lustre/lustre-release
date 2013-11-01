@@ -282,8 +282,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out, err);
         }
 
+	/* For mount, we only need fs info from MDT0, and also in DNE, it
+	 * can make sure the client can be mounted as long as MDT0 is
+	 * avaible */
 	err = obd_statfs(NULL, sbi->ll_md_exp, osfs,
-			 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
+			cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+			OBD_STATFS_FOR_MDT0);
 	if (err)
 		GOTO(out_md, err);
 
@@ -320,7 +324,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		GOTO(out_md, err);
 	}
 
-        LASSERT(osfs->os_bsize);
+	LASSERT(osfs->os_bsize);
         sb->s_blocksize = osfs->os_bsize;
         sb->s_blocksize_bits = log2(osfs->os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;

@@ -816,7 +816,17 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                 rc = obd_iocontrol(cmd, lmv->tgts[0].ltd_exp, len, karg, uarg);
                 break;
         }
+	case OBD_IOC_FID2PATH: {
+		struct getinfo_fid2path *gf;
+		struct lmv_tgt_desc     *tgt;
 
+		gf = (struct getinfo_fid2path *)karg;
+		tgt = lmv_find_target(lmv, &gf->gf_fid);
+		if (IS_ERR(tgt))
+			RETURN(PTR_ERR(tgt));
+		rc = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
+		break;
+	}
         default : {
                 for (i = 0; i < count; i++) {
                         int err;
@@ -1118,8 +1128,17 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
                                rc);
                         GOTO(out_free_temp, rc);
                 }
-                if (i == 0) {
-                        *osfs = *temp;
+
+		if (i == 0) {
+			*osfs = *temp;
+			/* If the statfs is from mount, it will needs
+			 * retrieve necessary information from MDT0.
+			 * i.e. mount does not need the merged osfs
+			 * from all of MDT.
+			 * And also clients can be mounted as long as
+			 * MDT0 is in service*/
+			if (flags & OBD_STATFS_FOR_MDT0)
+				GOTO(out_free_temp, rc);
                 } else {
                         osfs->os_bavail += temp->os_bavail;
                         osfs->os_blocks += temp->os_blocks;
