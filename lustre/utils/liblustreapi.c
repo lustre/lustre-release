@@ -4322,7 +4322,7 @@ int llapi_create_volatile_idx(char *directory, int idx, int mode)
 			 LUSTRE_VOLATILE_HDR"::%.4X", random);
 	else
 		snprintf(filename, sizeof(filename),
-			 LUSTRE_VOLATILE_IDX"%.4X", 0, random);
+			 LUSTRE_VOLATILE_HDR":%.4X:%.4X", idx, random);
 
 	rc = snprintf(file_path, sizeof(file_path),
 		      "%s/%s", directory, filename);

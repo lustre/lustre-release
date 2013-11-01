@@ -1590,7 +1590,7 @@ static inline bool filename_is_volatile(const char *name, int namelen, int *idx)
 	}
 	/* we have an idx, read it */
 	start = name + LUSTRE_VOLATILE_HDR_LEN + 1;
-	*idx = strtoul(start, &end, 0);
+	*idx = strtoul(start, &end, 16);
 	/* error cases:
 	 * no digit, no trailing :, negative value
 	 */

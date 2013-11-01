@@ -598,8 +598,6 @@ enum {
  */
 #define LUSTRE_VOLATILE_HDR	".\x0c\x13\x14\x12:VOLATILE"
 #define LUSTRE_VOLATILE_HDR_LEN	14
-/* hdr + MDT index */
-#define LUSTRE_VOLATILE_IDX	LUSTRE_VOLATILE_HDR":%.4X:"
 
 typedef enum lustre_quota_version {
         LUSTRE_QUOTA_V2 = 1
