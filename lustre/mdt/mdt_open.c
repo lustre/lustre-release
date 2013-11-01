@@ -1212,7 +1212,8 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 		mdt_object_unlock(info, obj, ll, 1);
 	}
 
-	if (ibits == 0)
+	/* Cross-ref case, the lock should be returned to the client */
+	if (ibits == 0 || rc == -EREMOTE)
 		return;
 
 	if (!(open_flags & MDS_OPEN_LOCK) && !(ibits & MDS_INODELOCK_LAYOUT)) {
@@ -1603,6 +1604,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                         if (rc != 0)
                                 result = rc;
+			else
+				result = -EREMOTE;
                         GOTO(out_child, result);
                 }
         }
@@ -1643,8 +1646,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
         EXIT;
 out_child:
-	mdt_object_open_unlock(info, child, lhc, ibits,
-				result == -EREMOTE ? 0 : result);
+	mdt_object_open_unlock(info, child, lhc, ibits, result);
         mdt_object_put(info->mti_env, child);
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result || !created);
