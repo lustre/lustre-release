@@ -570,13 +570,11 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                         oldsize = lov->lov_tgt_size;
                 }
 
-                lov->lov_tgts = newtgts;
-                lov->lov_tgt_size = newsize;
-#ifdef __KERNEL__
-                smp_rmb();
-#endif
-                if (old)
-                        OBD_FREE(old, sizeof(*old) * oldsize);
+		lov->lov_tgts = newtgts;
+		lov->lov_tgt_size = newsize;
+		smp_rmb();
+		if (old)
+			OBD_FREE(old, sizeof(*old) * oldsize);
 
                 CDEBUG(D_CONFIG, "tgts: %p size: %d\n",
                        lov->lov_tgts, lov->lov_tgt_size);

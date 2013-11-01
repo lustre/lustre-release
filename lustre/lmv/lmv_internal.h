@@ -113,7 +113,7 @@ static inline int lmv_get_easize(struct lmv_obd *lmv)
 static inline struct lmv_tgt_desc *
 lmv_get_target(struct lmv_obd *lmv, mdsno_t mds)
 {
-        return &lmv->tgts[mds];
+	return lmv->tgts[mds];
 }
 
 static inline struct lmv_tgt_desc *

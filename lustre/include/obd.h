@@ -708,11 +708,11 @@ struct lov_obd {
 };
 
 struct lmv_tgt_desc {
-        struct obd_uuid         ltd_uuid;
-        struct obd_export      *ltd_exp;
-        int                     ltd_active; /* is this target up for requests */
-        int                     ltd_idx;
+	struct obd_uuid		ltd_uuid;
+	struct obd_export	*ltd_exp;
+	int			ltd_idx;
 	struct mutex		ltd_fid_mutex;
+	unsigned long		ltd_active:1; /* target up for requests */
 };
 
 enum placement_policy {
@@ -728,25 +728,22 @@ struct lmv_obd {
 	int			refcount;
 	struct lu_client_fld	lmv_fld;
 	spinlock_t		lmv_lock;
-        placement_policy_t      lmv_placement;
-        struct lmv_desc         desc;
-        struct obd_uuid         cluuid;
-        struct obd_export       *exp;
+	placement_policy_t	lmv_placement;
+	struct lmv_desc		desc;
+	struct obd_uuid		cluuid;
+	struct obd_export	*exp;
 
-        int                     connected;
-        int                     max_easize;
-        int                     max_def_easize;
-        int                     max_cookiesize;
-        int                     server_timeout;
 	struct mutex		init_mutex;
+	int			connected;
+	int			max_easize;
+	int			max_def_easize;
+	int			max_cookiesize;
+	int			server_timeout;
 
-        struct lmv_tgt_desc     *tgts;
-        int                     tgts_size;
+	int			tgts_size; /* size of tgts array */
+	struct lmv_tgt_desc	**tgts;
 
-        struct obd_connect_data *datas;
-        int                     datas_size;
-
-        struct obd_connect_data conn_data;
+	struct obd_connect_data	conn_data;
 };
 
 struct niobuf_local {

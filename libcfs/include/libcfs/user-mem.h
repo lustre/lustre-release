@@ -121,6 +121,8 @@ int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 #define cfs_mem_cache_cpt_alloc(cache, cptab, cpt, gfp)	\
 	cfs_mem_cache_alloc(cache, gfp)
 
+#define smp_rmb()	do {} while (0)
+
 /*
  * Copy to/from user
  */
