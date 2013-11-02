@@ -527,10 +527,9 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 				struct dentry *dir, const char *name,
 				const struct lu_fid *fid,
 				const struct osd_inode_id *id,
-				struct thandle *th)
+				handle_t *th)
 {
 	struct inode		   *parent = dir->d_inode;
-	struct osd_thandle	   *oh;
 	struct dentry		   *child;
 	struct ldiskfs_dir_entry_2 *de;
 	struct buffer_head	   *bh;
@@ -542,9 +541,8 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	int			    rc;
 	ENTRY;
 
-	oh = container_of(th, struct osd_thandle, ot_super);
-	LASSERT(oh->ot_handle != NULL);
-	LASSERT(oh->ot_handle->h_transaction != NULL);
+	LASSERT(th != NULL);
+	LASSERT(th->h_transaction != NULL);
 
 	child = &info->oti_child_dentry;
 	child->d_parent = dir;
@@ -605,12 +603,12 @@ update:
 	 * is still valid. Since it was referenced by an invalid entry,
 	 * making it as invisible temporary may be not worse. OI scrub
 	 * will process it later. */
-	rc = ldiskfs_journal_get_write_access(oh->ot_handle, bh);
+	rc = ldiskfs_journal_get_write_access(th, bh);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	de->inode = cpu_to_le32(id->oii_ino);
-	rc = ldiskfs_journal_dirty_metadata(oh->ot_handle, bh);
+	rc = ldiskfs_journal_dirty_metadata(th, bh);
 
 	GOTO(out, rc);
 
@@ -623,19 +621,17 @@ out:
 static int osd_obj_del_entry(struct osd_thread_info *info,
 			     struct osd_device *osd,
 			     struct dentry *dird, char *name,
-			     struct thandle *th)
+			     handle_t *th)
 {
 	struct ldiskfs_dir_entry_2 *de;
 	struct buffer_head         *bh;
-	struct osd_thandle         *oh;
 	struct dentry              *child;
 	struct inode               *dir = dird->d_inode;
 	int                         rc;
 	ENTRY;
 
-	oh = container_of(th, struct osd_thandle, ot_super);
-	LASSERT(oh->ot_handle != NULL);
-	LASSERT(oh->ot_handle->h_transaction != NULL);
+	LASSERT(th != NULL);
+	LASSERT(th->h_transaction != NULL);
 
 
 	child = &info->oti_child_dentry;
@@ -650,7 +646,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	rc = -ENOENT;
 	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
 	if (bh) {
-		rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
+		rc = ldiskfs_delete_entry(th, dir, de, bh);
 		brelse(bh);
 	}
 	mutex_unlock(&dir->i_mutex);
@@ -662,9 +658,8 @@ int osd_obj_add_entry(struct osd_thread_info *info,
 		      struct osd_device *osd,
 		      struct dentry *dir, char *name,
 		      const struct osd_inode_id *id,
-		      struct thandle *th)
+		      handle_t *th)
 {
-	struct osd_thandle *oh;
 	struct dentry *child;
 	struct inode *inode;
 	int rc;
@@ -674,9 +669,8 @@ int osd_obj_add_entry(struct osd_thread_info *info,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY))
 		RETURN(0);
 
-	oh = container_of(th, struct osd_thandle, ot_super);
-	LASSERT(oh->ot_handle != NULL);
-	LASSERT(oh->ot_handle->h_transaction != NULL);
+	LASSERT(th != NULL);
+	LASSERT(th->h_transaction != NULL);
 
 	inode = &info->oti_inode;
 	inode->i_sb = osd_sb(osd);
@@ -695,7 +689,7 @@ int osd_obj_add_entry(struct osd_thread_info *info,
 
 	ll_vfs_dq_init(dir->d_inode);
 	mutex_lock(&dir->d_inode->i_mutex);
-	rc = osd_ldiskfs_add_entry(oh->ot_handle, child, inode, NULL);
+	rc = osd_ldiskfs_add_entry(th, child, inode, NULL);
 	mutex_unlock(&dir->d_inode->i_mutex);
 
 	RETURN(rc);
@@ -932,7 +926,7 @@ int osd_obj_map_insert(struct osd_thread_info *info,
 		       struct osd_device *osd,
 		       const struct lu_fid *fid,
 		       const struct osd_inode_id *id,
-		       struct thandle *th)
+		       handle_t *th)
 {
 	struct osd_obj_map	*map;
 	struct osd_obj_seq	*osd_seq;
@@ -975,7 +969,7 @@ again:
 }
 
 int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
-		       const struct lu_fid *fid, struct thandle *th)
+		       const struct lu_fid *fid, handle_t *th)
 {
 	struct osd_obj_map	*map;
 	struct osd_obj_seq	*osd_seq;
@@ -1009,7 +1003,7 @@ int osd_obj_map_update(struct osd_thread_info *info,
 		       struct osd_device *osd,
 		       const struct lu_fid *fid,
 		       const struct osd_inode_id *id,
-		       struct thandle *th)
+		       handle_t *th)
 {
 	struct osd_obj_seq	*osd_seq;
 	struct dentry		*d;
@@ -1114,28 +1108,17 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		 * 	So keep it there before we have suitable solution. */
 		brelse(bh);
 		mutex_unlock(&dir->i_mutex);
+		mutex_unlock(&src_parent->i_mutex);
+		ldiskfs_journal_stop(jh);
 
 		rc = -EEXIST;
 		/* If the src object has never been modified, then remove it. */
 		if (inode->i_size == 0 && inode->i_mode & S_ISUID &&
 		    inode->i_mode & S_ISGID) {
-			bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name,
-						    &de, NULL, NULL);
-			if (unlikely(bh == NULL)) {
-				mutex_unlock(&src_parent->i_mutex);
-				ldiskfs_journal_stop(jh);
-				RETURN(0);
-			}
-
-			rc = ldiskfs_delete_entry(jh, src_parent, de, bh);
-			brelse(bh);
-			if (rc == 0) {
-				drop_nlink(inode);
-				ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-			}
+			rc = vfs_unlink(src_parent, src_child);
+			if (unlikely(rc == -ENOENT))
+				rc = 0;
 		}
-		mutex_unlock(&src_parent->i_mutex);
-		ldiskfs_journal_stop(jh);
 		RETURN(rc);
 	}
 
@@ -1189,7 +1172,7 @@ osd_object_spec_find(struct osd_thread_info *info, struct osd_device *osd,
 
 int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
-			struct thandle *th)
+			handle_t *th)
 {
 	struct dentry	*root;
 	char		*name;
@@ -1210,7 +1193,7 @@ int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 
 int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
-			struct thandle *th)
+			handle_t *th)
 {
 	struct dentry	*root;
 	char		*name;

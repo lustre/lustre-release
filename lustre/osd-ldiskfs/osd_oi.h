@@ -53,6 +53,7 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
+#include <linux/jbd2.h>
 #include <lustre_fid.h>
 #include <lu_object.h>
 #include <md_object.h>
@@ -65,7 +66,6 @@
 struct lu_fid;
 struct osd_thread_info;
 struct lu_site;
-struct thandle;
 
 struct dt_device;
 struct osd_device;
@@ -145,13 +145,13 @@ int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		   enum oi_check_flags flags);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, const struct osd_inode_id *id,
-		   struct thandle *th, enum oi_check_flags flags);
+		   handle_t *th, enum oi_check_flags flags);
 int  osd_oi_delete(struct osd_thread_info *info,
 		   struct osd_device *osd, const struct lu_fid *fid,
-		   struct thandle *th, enum oi_check_flags flags);
+		   handle_t *th, enum oi_check_flags flags);
 int  osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, const struct osd_inode_id *id,
-		   struct thandle *th, enum oi_check_flags flags);
+		   handle_t *th, enum oi_check_flags flags);
 
 int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, enum oi_check_flags flags);

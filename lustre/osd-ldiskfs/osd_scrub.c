@@ -94,30 +94,26 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 				     int ops, bool force,
 				     enum oi_check_flags flags)
 {
-	const struct lu_env *env = info->oti_env;
-	struct thandle	    *th;
-	struct osd_thandle  *oh;
-	int		     rc;
+	handle_t *th;
+	int	  rc;
 	ENTRY;
 
 	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN && !force)
 		RETURN(0);
 
-	th = dt_trans_create(env, &dev->od_dt_dev);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
-
-	oh = container_of0(th, struct osd_thandle, ot_super);
-	LASSERT(oh->ot_handle == NULL);
+	/* DTO_INDEX_INSERT is enough for other two ops:
+	 * delete/update, but save stack. */
+	th = ldiskfs_journal_start_sb(osd_sb(dev),
+				osd_dto_credits_noquota[DTO_INDEX_INSERT]);
+	if (IS_ERR(th)) {
+		rc = PTR_ERR(th);
+		CERROR("%s: fail to start trans for scrub %d: rc = %d\n",
+		       osd_name(dev), ops, rc);
+		RETURN(rc);
+	}
 
 	switch (ops) {
 	case DTO_INDEX_UPDATE:
-		osd_trans_declare_op(env, oh, OSD_OT_UPDATE,
-				     osd_dto_credits_noquota[DTO_INDEX_UPDATE]);
-		rc = dt_trans_start_local(env, &dev->od_dt_dev, th);
-		if (rc != 0)
-			GOTO(stop, rc);
-
 		rc = osd_oi_update(info, dev, fid, id, th, flags);
 		if (unlikely(rc == -ENOENT)) {
 			/* Some unlink thread may removed the OI mapping. */
@@ -125,12 +121,6 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		}
 		break;
 	case DTO_INDEX_INSERT:
-		osd_trans_declare_op(env, oh, OSD_OT_INSERT,
-				     osd_dto_credits_noquota[DTO_INDEX_INSERT]);
-		rc = dt_trans_start_local(env, &dev->od_dt_dev, th);
-		if (rc != 0)
-			GOTO(stop, rc);
-
 		rc = osd_oi_insert(info, dev, fid, id, th, flags);
 		if (unlikely(rc == -EEXIST)) {
 			rc = 1;
@@ -168,12 +158,6 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		}
 		break;
 	case DTO_INDEX_DELETE:
-		osd_trans_declare_op(env, oh, OSD_OT_DELETE,
-				     osd_dto_credits_noquota[DTO_INDEX_DELETE]);
-		rc = dt_trans_start_local(env, &dev->od_dt_dev, th);
-		if (rc != 0)
-			GOTO(stop, rc);
-
 		rc = osd_oi_delete(info, dev, fid, th, flags);
 		if (rc == -ENOENT) {
 			/* It is normal that the unlink thread has removed the
@@ -186,10 +170,7 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		break;
 	}
 
-	GOTO(stop, rc);
-
-stop:
-	dt_trans_stop(env, &dev->od_dt_dev, th);
+	ldiskfs_journal_stop(th);
 	return rc;
 }
 

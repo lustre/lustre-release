@@ -2143,16 +2143,20 @@ static int __osd_object_create(struct osd_thread_info *info,
  * \retval 0, on success
  */
 static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
-                           const struct lu_fid *fid, struct thandle *th)
+			   const struct lu_fid *fid, struct thandle *th)
 {
-        struct osd_thread_info *info = osd_oti_get(env);
-        struct osd_inode_id    *id   = &info->oti_id;
-        struct osd_device      *osd  = osd_obj2dev(obj);
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_inode_id    *id   = &info->oti_id;
+	struct osd_device      *osd  = osd_obj2dev(obj);
+	struct osd_thandle     *oh;
 
-        LASSERT(obj->oo_inode != NULL);
+	LASSERT(obj->oo_inode != NULL);
+
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle);
 
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
-	return osd_oi_insert(info, osd, fid, id, th, OI_CHECK_FLD);
+	return osd_oi_insert(info, osd, fid, id, oh->ot_handle, OI_CHECK_FLD);
 }
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
@@ -2342,7 +2346,8 @@ static int osd_object_destroy(const struct lu_env *env,
 
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
 
-        result = osd_oi_delete(osd_oti_get(env), osd, fid, th, OI_CHECK_FLD);
+	result = osd_oi_delete(osd_oti_get(env), osd, fid, oh->ot_handle,
+			       OI_CHECK_FLD);
 
         /* XXX: add to ext3 orphan list */
         /* rc = ext3_orphan_add(handle_t *handle, struct inode *inode) */
