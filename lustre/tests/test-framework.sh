@@ -2613,7 +2613,11 @@ facet_host() {
 	varname=${facet}_HOST
 	if [ -z "${!varname}" ]; then
 		if [ "${facet:0:3}" == "ost" ]; then
-			eval export ${facet}_HOST=${ost_HOST}
+			local fh=${facet%failover}_HOST
+			eval export ${facet}_HOST=${!fh}
+			if [ -z "${!varname}" ]; then
+				eval export ${facet}_HOST=${ost_HOST}
+			fi
 		elif [ "${facet:0:3}" == "mdt" -o \
 			"${facet:0:3}" == "mds" -o \
 			"${facet:0:3}" == "mgs" ]; then
