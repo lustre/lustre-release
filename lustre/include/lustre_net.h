@@ -822,10 +822,12 @@ struct ptlrpc_nrs_pol_ops {
 	 * initialize their resources here; this operation is optional.
 	 *
 	 * \param[in,out] policy The policy being started
+	 * \param[in,out] arg A generic char buffer
 	 *
 	 * \see nrs_policy_start_locked()
 	 */
-	int	(*op_policy_start) (struct ptlrpc_nrs_policy *policy);
+	int	(*op_policy_start) (struct ptlrpc_nrs_policy *policy,
+				    char *arg);
 	/**
 	 * Called when deactivating a policy via lprocfs; policies deallocate
 	 * their resources here; this operation is optional
@@ -1103,6 +1105,10 @@ struct ptlrpc_nrs {
 	 * unregistration
 	 */
 	unsigned			nrs_stopping:1;
+	/**
+	 * NRS policy is throttling reqeust
+	 */
+	unsigned			nrs_throttling:1;
 };
 
 #define NRS_POL_NAME_MAX		16
@@ -1694,6 +1700,8 @@ struct nrs_orr_req {
 
 /** @} ORR/TRR */
 
+#include <lustre_nrs_tbf.h>
+
 /**
  * NRS request
  *
@@ -1735,6 +1743,10 @@ struct ptlrpc_nrs_request {
 		struct nrs_crrn_req	crr;
 		/** ORR and TRR share the same request definition */
 		struct nrs_orr_req	orr;
+		/**
+		 * TBF request definition
+		 */
+		struct nrs_tbf_req	tbf;
 	} nr_u;
 	/**
 	 * Externally-registering policies may want to use this to allocate

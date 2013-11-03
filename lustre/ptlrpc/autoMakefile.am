@@ -96,6 +96,7 @@ ptlrpc_SOURCES =	\
 	nrs_fifo.c	\
 	nrs_crr.c	\
 	nrs_orr.c	\
+	nrs_tbf.c       \
 	wiretest.c	\
 	sec.c		\
 	sec_bulk.c	\

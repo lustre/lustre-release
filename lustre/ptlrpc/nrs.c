@@ -200,7 +200,7 @@ static void nrs_policy_stop_primary(struct ptlrpc_nrs *nrs)
  * references on the policy to ptlrpc_nrs_pol_stae::NRS_POL_STATE_STOPPED. In
  * this case, the fallback policy is only left active in the NRS head.
  */
-static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy)
+static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct ptlrpc_nrs      *nrs = policy->pol_nrs;
 	int			rc = 0;
@@ -270,7 +270,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy)
 	if (policy->pol_desc->pd_ops->op_policy_start) {
 		spin_unlock(&nrs->nrs_lock);
 
-		rc = policy->pol_desc->pd_ops->op_policy_start(policy);
+		rc = policy->pol_desc->pd_ops->op_policy_start(policy, arg);
 
 		spin_lock(&nrs->nrs_lock);
 		if (rc != 0) {
@@ -666,7 +666,7 @@ static int nrs_policy_ctl(struct ptlrpc_nrs *nrs, char *name,
 		 * Start \e policy
 		 */
 	case PTLRPC_NRS_CTL_START:
-		rc = nrs_policy_start_locked(policy);
+		rc = nrs_policy_start_locked(policy, arg);
 		break;
 	}
 out:
@@ -801,7 +801,7 @@ static int nrs_policy_register(struct ptlrpc_nrs *nrs,
 	nrs->nrs_num_pols++;
 
 	if (policy->pol_flags & PTLRPC_NRS_FL_REG_START)
-		rc = nrs_policy_start_locked(policy);
+		rc = nrs_policy_start_locked(policy, NULL);
 
 	spin_unlock(&nrs->nrs_lock);
 
@@ -948,6 +948,7 @@ static int nrs_svcpt_setup_locked0(struct ptlrpc_nrs *nrs,
 	spin_lock_init(&nrs->nrs_lock);
 	CFS_INIT_LIST_HEAD(&nrs->nrs_policy_list);
 	CFS_INIT_LIST_HEAD(&nrs->nrs_policy_queued);
+	nrs->nrs_throttling = 0;
 
 	rc = nrs_register_policies_locked(nrs);
 
@@ -1625,6 +1626,24 @@ bool ptlrpc_nrs_req_pending_nolock(struct ptlrpc_service_part *svcpt, bool hp)
 };
 
 /**
+ * Returns whether NRS policy is throttling reqeust
+ *
+ * \param[in] svcpt the service partition to enquire.
+ * \param[in] hp    whether the regular or high-priority NRS head is to be
+ *		    enquired.
+ *
+ * \retval false the indicated NRS head has no enqueued requests.
+ * \retval true	 the indicated NRS head has some enqueued requests.
+ */
+bool ptlrpc_nrs_req_throttling_nolock(struct ptlrpc_service_part *svcpt,
+				      bool hp)
+{
+	struct ptlrpc_nrs *nrs = nrs_svcpt2nrs(svcpt, hp);
+
+	return !!nrs->nrs_throttling;
+};
+
+/**
  * Moves request \a req from the regular to the high-priority NRS head.
  *
  * \param[in] req the request to move
@@ -1745,6 +1764,7 @@ extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
 /* ptlrpc/nrs_orr.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
 #endif
 
 /**
@@ -1776,6 +1796,9 @@ int ptlrpc_nrs_init(void)
 		GOTO(fail, rc);
 
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_trr);
+	if (rc != 0)
+		GOTO(fail, rc);
+	rc = ptlrpc_nrs_policy_register(&nrs_conf_tbf);
 	if (rc != 0)
 		GOTO(fail, rc);
 #endif

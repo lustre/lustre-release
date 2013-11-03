@@ -624,11 +624,14 @@ out:
 	RETURN(rc);
 }
 
+
+#define LPROCFS_NRS_WR_MAX_ARG (1024)
 /**
  * The longest valid command string is the maxium policy name size, plus the
- * length of the " reg" substring
+ * length of the " reg" substring, plus the lenght of argument
  */
-#define LPROCFS_NRS_WR_MAX_CMD	(NRS_POL_NAME_MAX + sizeof(" reg") - 1)
+#define LPROCFS_NRS_WR_MAX_CMD	(NRS_POL_NAME_MAX + sizeof(" reg") - 1 \
+				 + LPROCFS_NRS_WR_MAX_ARG)
 
 /**
  * Starts and stops a given policy on a PTLRPC service.
@@ -646,7 +649,8 @@ ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char *buffer,
 	enum ptlrpc_nrs_queue_type	queue = PTLRPC_NRS_QUEUE_BOTH;
 	char			       *cmd;
 	char			       *cmd_copy = NULL;
-	char			       *token;
+	char			       *policy_name;
+	char			       *queue_name;
 	int				rc = 0;
 	ENTRY;
 
@@ -666,9 +670,9 @@ ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char *buffer,
 
 	cmd[count] = '\0';
 
-	token = strsep(&cmd, " ");
+	policy_name = strsep(&cmd, " ");
 
-	if (strlen(token) > NRS_POL_NAME_MAX - 1)
+	if (strlen(policy_name) > NRS_POL_NAME_MAX - 1)
 		GOTO(out, rc = -EINVAL);
 
 	/**
@@ -677,15 +681,20 @@ ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char *buffer,
 	if (cmd == NULL)
 		goto default_queue;
 
+	queue_name = strsep(&cmd, " ");
 	/**
-	 * The second token is either NULL, or an optional [reg|hp] string
+	 * The second token is either an optional [reg|hp] string,
+	 * or arguments
 	 */
-	if (strcmp(cmd, "reg") == 0)
+	if (strcmp(queue_name, "reg") == 0)
 		queue = PTLRPC_NRS_QUEUE_REG;
-	else if (strcmp(cmd, "hp") == 0)
+	else if (strcmp(queue_name, "hp") == 0)
 		queue = PTLRPC_NRS_QUEUE_HP;
-	else
-		GOTO(out, rc = -EINVAL);
+	else {
+		if (cmd != NULL)
+			*(cmd - 1) = ' ';
+		cmd = queue_name;
+	}
 
 default_queue:
 
@@ -700,8 +709,9 @@ default_queue:
 	 */
 	mutex_lock(&nrs_core.nrs_mutex);
 
-	rc = ptlrpc_nrs_policy_control(svc, queue, token, PTLRPC_NRS_CTL_START,
-				       false, NULL);
+	rc = ptlrpc_nrs_policy_control(svc, queue, policy_name,
+				       PTLRPC_NRS_CTL_START,
+				       false, cmd);
 
 	mutex_unlock(&nrs_core.nrs_mutex);
 out:

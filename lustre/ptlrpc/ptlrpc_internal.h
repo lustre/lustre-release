@@ -139,6 +139,8 @@ ptlrpc_nrs_req_peek_nolock(struct ptlrpc_service_part *svcpt, bool hp)
 
 void ptlrpc_nrs_req_del_nolock(struct ptlrpc_request *req);
 bool ptlrpc_nrs_req_pending_nolock(struct ptlrpc_service_part *svcpt, bool hp);
+bool ptlrpc_nrs_req_throttling_nolock(struct ptlrpc_service_part *svcpt,
+				      bool hp);
 
 int ptlrpc_nrs_policy_control(const struct ptlrpc_service *svc,
 			      enum ptlrpc_nrs_queue_type queue, char *name,

@@ -609,7 +609,7 @@ static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
  * \retval -ENOMEM OOM error
  * \retval 0	   success
  */
-static int nrs_orr_start(struct ptlrpc_nrs_policy *policy)
+static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_orr_data    *orrd;
 	cfs_hash_ops_t	       *ops;

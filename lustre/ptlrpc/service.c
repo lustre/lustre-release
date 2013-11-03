@@ -1704,6 +1704,9 @@ static bool ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
 	if (force)
 		return true;
 
+	if (ptlrpc_nrs_req_throttling_nolock(svcpt, true))
+		return false;
+
 	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
 		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
 		/* leave just 1 thread for normal RPCs */
@@ -1754,8 +1757,13 @@ static bool ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
 			running += 1;
 	}
 
-	if (force ||
-	    svcpt->scp_nreqs_active < running - 2)
+	if (force)
+		return true;
+
+	if (ptlrpc_nrs_req_throttling_nolock(svcpt, false))
+		return false;
+
+	if (svcpt->scp_nreqs_active < running - 2)
 		return true;
 
 	if (svcpt->scp_nreqs_active >= running - 1)

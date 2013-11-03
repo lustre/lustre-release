@@ -181,7 +181,7 @@ static cfs_hash_ops_t nrs_crrn_hash_ops = {
  * \retval -ENOMEM OOM error
  * \retval 0	   success
  */
-static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy)
+static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_crrn_net    *net;
 	int			rc = 0;

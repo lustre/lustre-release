@@ -79,7 +79,7 @@
  * \see nrs_policy_register()
  * \see nrs_policy_ctl()
  */
-static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy)
+static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_fifo_head *head;
 
