@@ -1911,11 +1911,11 @@ restore_and_check_size() {
 		cpt=$((cpt + 1))
 	done
 	if [[ $cpt -lt 10 ]]; then
-		echo " restore is too long"
-	else
 		echo " "done
+	else
+		echo " restore is too long"
+		wait_request_state $fid RESTORE SUCCEED
 	fi
-	wait_request_state $fid RESTORE SUCCEED
 	return $err
 }
 
