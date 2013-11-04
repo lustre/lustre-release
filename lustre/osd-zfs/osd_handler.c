@@ -512,10 +512,11 @@ static void osd_xattr_changed_cb(void *arg, uint64_t newval)
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
-	struct dsl_dataset *ds;
-	char	  *dev  = lustre_cfg_string(cfg, 1);
-	dmu_buf_t *rootdb;
-	int	   rc;
+	struct dsl_dataset	*ds;
+	char			*dev  = lustre_cfg_string(cfg, 1);
+	dmu_buf_t		*rootdb;
+	dsl_pool_t		*dp;
+	int			 rc;
 	ENTRY;
 
 	if (o->od_objset.os != NULL)
@@ -538,8 +539,12 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	ds = dmu_objset_ds(o->od_objset.os);
+	dp = dmu_objset_pool(o->od_objset.os);
 	LASSERT(ds);
+	LASSERT(dp);
+	dsl_pool_config_enter(dp, FTAG);
 	rc = dsl_prop_register(ds, "xattr", osd_xattr_changed_cb, o);
+	dsl_pool_config_exit(dp, FTAG);
 	if (rc)
 		CERROR("%s: cat not register xattr callback, ignore: %d\n",
 		       o->od_svname, rc);
