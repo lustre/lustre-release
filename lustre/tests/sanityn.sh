@@ -40,9 +40,12 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 # bug number for skipped test:        LU-2840 LU-2189 LU-2776
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21      36      51a"
+# LU-2829 / LU-2887 - make allowances for ZFS slowness
+	TEST33_NFILES=${TEST33_NFILES:-5000}
+fi
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="33a"
 
