@@ -1636,7 +1636,7 @@ struct nrs_orr_object {
 	 * scheduling RPCs
 	 */
 	struct nrs_orr_key		oo_key;
-	cfs_atomic_t			oo_ref;
+	long				oo_ref;
 	/**
 	 * Round Robin quantum; the maximum number of RPCs that are allowed to
 	 * be scheduled for the object or OST in a single batch of each round.
