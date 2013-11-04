@@ -77,7 +77,6 @@
 char *progname;
 int verbose = 1;
 static int print_only = 0;
-static int upgrade_to_18 = 0;
 
 #ifdef HAVE_LDISKFS_OSD
 #define FSLIST_LDISKFS "ldiskfs"
@@ -152,6 +151,7 @@ void usage(FILE *out)
 		"\t\t--device-size=#N(KB): device size for loop devices\n"
 		"\t\t--mkfsoptions=<opts>: format options\n"
 		"\t\t--reformat: overwrite an existing disk\n"
+		"\t\t--replace: replace an old target with the same index\n"
 		"\t\t--stripe-count-hint=#N: for optimizing MDT inode size\n"
 #else
 		"\t\t--erase-params: erase all old parameter settings\n"
@@ -273,44 +273,45 @@ static char *convert_hostnames(char *s1)
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                char **mountopts)
 {
-        static struct option long_opt[] = {
-                {"backfstype", 1, 0, 'b'},
-                {"stripe-count-hint", 1, 0, 'c'},
-                {"comment", 1, 0, 'u'},
-                {"configdev", 1, 0, 'C'},
-                {"device-size", 1, 0, 'd'},
-                {"dryrun", 0, 0, 'n'},
-                {"erase-params", 0, 0, 'e'},
-                {"failnode", 1, 0, 'f'},
-                {"failover", 1, 0, 'f'},
-                {"mgs", 0, 0, 'G'},
-                {"help", 0, 0, 'h'},
-                {"index", 1, 0, 'i'},
-                {"mkfsoptions", 1, 0, 'k'},
-                {"mgsnode", 1, 0, 'm'},
-                {"mgsnid", 1, 0, 'm'},
-                {"mdt", 0, 0, 'M'},
-                {"fsname",1, 0, 'L'},
-                {"noformat", 0, 0, 'n'},
-                {"nomgs", 0, 0, 'N'},
-                {"mountfsoptions", 1, 0, 'o'},
-                {"ost", 0, 0, 'O'},
-                {"param", 1, 0, 'p'},
-                {"print", 0, 0, 'n'},
-                {"quiet", 0, 0, 'q'},
-                {"reformat", 0, 0, 'r'},
-                {"servicenode", 1, 0, 's'},
-                {"verbose", 0, 0, 'v'},
-                {"writeconf", 0, 0, 'w'},
-                {"upgrade_to_18", 0, 0, 'U'},
-                {"network", 1, 0, 't'},
-		{"quota", 0, 0, 'Q'},
-                {0, 0, 0, 0}
-        };
-        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqrs:t:Uu:vw";
-        int opt;
-        int rc, longidx;
-        int failnode_set = 0, servicenode_set = 0;
+	static struct option long_opt[] = {
+		{ "backfstype",		required_argument,	NULL, 'b' },
+		{ "stripe-count-hint",	required_argument,	NULL, 'c' },
+		{ "comment",		required_argument,	NULL, 'u' },
+		{ "configdev",		required_argument,	NULL, 'C' },
+		{ "device-size",	required_argument,	NULL, 'd' },
+		{ "dryrun",		no_argument,		NULL, 'n' },
+		{ "erase-params",	no_argument,		NULL, 'e' },
+		{ "failnode",		required_argument,	NULL, 'f' },
+		{ "failover",		required_argument,	NULL, 'f' },
+		{ "mgs",		no_argument,		NULL, 'G' },
+		{ "help",		no_argument,		NULL, 'h' },
+		{ "index",		required_argument,	NULL, 'i' },
+		{ "mkfsoptions",	required_argument,	NULL, 'k' },
+		{ "mgsnode",		required_argument,	NULL, 'm' },
+		{ "mgsnid",		required_argument,	NULL, 'm' },
+		{ "mdt",		no_argument,		NULL, 'M' },
+		{ "fsname",		required_argument,	NULL, 'L' },
+		{ "noformat",		no_argument,		NULL, 'n' },
+		{ "nomgs",		no_argument,		NULL, 'N' },
+		{ "mountfsoptions",	required_argument,	NULL, 'o' },
+		{ "ost",		no_argument,		NULL, 'O' },
+		{ "param",		required_argument,	NULL, 'p' },
+		{ "print",		no_argument,		NULL, 'n' },
+		{ "quiet",		no_argument,		NULL, 'q' },
+		{ "quota",		no_argument,		NULL, 'Q' },
+		{ "reformat",		no_argument,		NULL, 'r' },
+		{ "replace",		no_argument,		NULL, 'R' },
+		{ "servicenode",	required_argument,	NULL, 's' },
+		{ "network",		required_argument,	NULL, 't' },
+		{ "verbose",		no_argument,		NULL, 'v' },
+		{ "writeconf",		no_argument,		NULL, 'w' },
+		{ 0,			0,			NULL,  0  }
+	};
+	char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:PqrRs:t:Uu:vw";
+	int opt;
+	int rc, longidx;
+	int failnode_set = 0, servicenode_set = 0;
+	int replace = 0;
 
         while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
@@ -474,6 +475,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'r':
                         mop->mo_flags |= MO_FORCEFORMAT;
                         break;
+		case 'R':
+			replace = 1;
+			break;
                 case 't':
                         if (!IS_MDT(&mop->mo_ldd) && !IS_OST(&mop->mo_ldd)) {
                                 badopt(long_opt[longidx].name, "MDT,OST");
@@ -500,9 +504,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'w':
                         mop->mo_ldd.ldd_flags |= LDD_F_WRITECONF;
                         break;
-                case 'U':
-                        upgrade_to_18 = 1;
-                        break;
 		case 'Q':
 			mop->mo_flags |= MO_QUOTA;
 			break;
@@ -514,6 +515,10 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         return EINVAL;
                 }
         }//while
+
+	/* Need to clear this flag after parsing 'L' and 'i' options. */
+	if (replace)
+		mop->mo_ldd.ldd_flags &= ~LDD_F_VIRGIN;
 
 	if (optind == argc) {
 		/* The user didn't specify device name */

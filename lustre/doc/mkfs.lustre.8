@@ -111,7 +111,14 @@ Return errors instead of waiting for recovery
 Print less information.
 .TP
 .BI \--reformat 
-Reformat an existing Lustre disk
+Reformat an existing Lustre disk as a new target
+.TP
+.BI \--replace
+Used to initialize a target with the same
+.I --index
+as a previously used target if the old target was permanently lost for
+some reason (e.g. multiple disk failure or massive corruption).  This
+avoids having the target try to register as a new target with the MGS.
 .TP
 .BI \--stripe-count-hint= stripes
 Used for optizing MDT inode size
