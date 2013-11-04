@@ -84,7 +84,7 @@ init_logging
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 #
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="30a 31 45"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="30a 31 45 69"
 
 
 assert_DIR
@@ -3874,27 +3874,29 @@ test_69() {
 	# not, then the OST will refuse to allow the MDS connect
 	# because the LAST_ID value is too different from the MDS
 	#define OST_MAX_PRECREATE=20000
-	local num_create=$((20000 * 3/2 - $last_id + 100))
+	local num_create=$((20000 * 5))
 
-	mkdir $DIR/$tdir
+	mkdir -p $DIR/$tdir
 	$LFS setstripe -i 0 $DIR/$tdir
-	createmany $DIR/$tdir/$tfile- $num_create
+	createmany -o $DIR/$tdir/$tfile- $num_create
 	# delete all of the files with objects on OST0 so the
 	# filesystem is not inconsistent later on
-	$LFS find $MOUNT --index 0 -print0 | xargs -0 unlink
+	$LFS find $MOUNT --ost 0 | xargs rm
 
 	stop_ost || error "OST0 stop failure"
-	add ost1 $(mkfs_opts ost1 $ostdev) --reformat --replace $ostdev ||
+	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --reformat --replace \
+		$(ostdevname 1) $(ostvdevname 1) ||
 		error "reformat and replace $ostdev failed"
 	start_ost || error "OST0 restart failure"
+	wait_osc_import_state mds ost FULL
 
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
-	local idx=$($LFS getstripe -c $DIR/$tdir/$tfile-last)
+	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
 
 	cleanup
 }
-run_test 68 "replace an OST with the same index"
+run_test 69 "replace an OST with the same index"
 
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
