@@ -402,13 +402,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                         " a registered target\n", progname);
                                 return 1;
                         }
-                        if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd)) {
-                                mop->mo_ldd.ldd_svindex = atol(optarg);
-                                mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
-                        } else {
-                                badopt(long_opt[longidx].name, "MDT,OST");
-                                return 1;
-                        }
+			/* LU-2374: check whether it is OST/MDT later */
+			mop->mo_ldd.ldd_svindex = atol(optarg);
+			mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
                         break;
                 case 'k':
                         strscpy(mop->mo_mkfsopts, optarg,
@@ -629,8 +625,14 @@ int main(int argc, char *const argv[])
         }
 
 	/* Stand alone MGS doesn't need a index */
-	if (!IS_MDT(ldd) && IS_MGS(ldd))
+	if (!IS_MDT(ldd) && IS_MGS(ldd)) {
+		/* But if --index was specified flag an error */
+		if (!(mop.mo_ldd.ldd_flags & LDD_F_NEED_INDEX)) {
+			badopt("--index", "MDT,OST");
+			goto out;
+		}
 		mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
+	}
 
         if ((mop.mo_ldd.ldd_flags & (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) ==
             (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) {
