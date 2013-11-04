@@ -4713,7 +4713,7 @@ test_57b() {
 	local MDSFREE2=$(do_facet $mymds \
 		lctl get_param -n osd*.*MDT000$((num -1)).kbytesfree)
 	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
-	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
+	if [ "$MDCFREE2" -lt "$((MDCFREE - 16))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
 		else
