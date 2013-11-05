@@ -295,26 +295,31 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
 
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
 				     strlen(dotdot), lmmsize,
-                                     LUSTRE_OPC_ANY, NULL);
-        if (IS_ERR(op_data))
-                RETURN((void *)op_data);
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN((void *)op_data);
 
-        rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
-        ll_finish_md_op_data(op_data);
-        if (rc) {
-                CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
-                RETURN(ERR_PTR(rc));
-        }
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        LASSERT(body->valid & OBD_MD_FLID);
+	rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
+	ll_finish_md_op_data(op_data);
+	if (rc) {
+		CERROR("%s: failure inode "DFID" get parent: rc = %d\n",
+		       ll_get_fsname(dir->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(dir)), rc);
+		RETURN(ERR_PTR(rc));
+	}
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	/*
+	 * LU-3952: MDT may lost the FID of its parent, we should not crash
+	 * the NFS server, ll_iget_for_nfs() will handle the error.
+	 */
+	if (body->valid & OBD_MD_FLID) {
+		CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n",
+		       PFID(ll_inode2fid(dir)), PFID(&body->fid1));
+	}
+	result = ll_iget_for_nfs(dir->i_sb, &body->fid1, NULL);
 
-        CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n",
-                PFID(ll_inode2fid(dir)), PFID(&body->fid1));
-
-        result = ll_iget_for_nfs(dir->i_sb, &body->fid1, NULL);
-
-        ptlrpc_req_finished(req);
-        RETURN(result);
+	ptlrpc_req_finished(req);
+	RETURN(result);
 }
 
 struct export_operations lustre_export_operations = {
