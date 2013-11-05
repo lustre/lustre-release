@@ -158,7 +158,6 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
         PASSERT(env, page, page->cp_state == CPS_FREEING);
 
 	ENTRY;
-	might_sleep();
 	while (!cfs_list_empty(&page->cp_layers)) {
 		struct cl_page_slice *slice;
 
