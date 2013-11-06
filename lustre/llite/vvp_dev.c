@@ -397,7 +397,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
 } while(0)
 
 static void vvp_pgcache_page_show(const struct lu_env *env,
-                                  struct seq_file *seq, struct cl_page *page)
+				  struct seq_file *seq, struct cl_page *page)
 {
 	struct ccc_page *cpg;
 	struct page      *vmpage;
@@ -416,14 +416,14 @@ static void vvp_pgcache_page_show(const struct lu_env *env,
 		   PFID(ll_inode2fid(vmpage->mapping->host)),
 		   vmpage->mapping->host, vmpage->index,
 		   page_count(vmpage));
-        has_flags = 0;
-        seq_page_flag(seq, vmpage, locked, has_flags);
-        seq_page_flag(seq, vmpage, error, has_flags);
-        seq_page_flag(seq, vmpage, referenced, has_flags);
-        seq_page_flag(seq, vmpage, uptodate, has_flags);
-        seq_page_flag(seq, vmpage, dirty, has_flags);
-        seq_page_flag(seq, vmpage, writeback, has_flags);
-        seq_printf(seq, "%s]\n", has_flags ? "" : "-");
+	has_flags = 0;
+	seq_page_flag(seq, vmpage, locked, has_flags);
+	seq_page_flag(seq, vmpage, error, has_flags);
+	seq_page_flag(seq, vmpage, referenced, has_flags);
+	seq_page_flag(seq, vmpage, uptodate, has_flags);
+	seq_page_flag(seq, vmpage, dirty, has_flags);
+	seq_page_flag(seq, vmpage, writeback, has_flags);
+	seq_printf(seq, "%s]\n", has_flags ? "" : "-");
 }
 
 static int vvp_pgcache_show(struct seq_file *f, void *v)

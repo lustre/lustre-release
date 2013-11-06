@@ -321,7 +321,7 @@ struct cl_object_operations {
          *         to be used instead of newly created.
          */
 	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
-				struct cl_page *page, struct page *vmpage);
+				struct cl_page *page, pgoff_t index);
         /**
          * Initialize lock slice for this layer. Called top-to-bottom through
          * every object layer when a new cl_lock is instantiated. Layer
@@ -457,10 +457,6 @@ struct cl_object_header {
                                         &(obj)->co_lu.lo_header->loh_layers, \
                                         co_lu.lo_linkage)
 /** @} cl_object */
-
-#ifndef pgoff_t
-#define pgoff_t unsigned long
-#endif
 
 #define CL_PAGE_EOF ((pgoff_t)~0ull)
 
@@ -722,20 +718,14 @@ struct cl_page {
         cfs_atomic_t             cp_ref;
         /** An object this page is a part of. Immutable after creation. */
         struct cl_object        *cp_obj;
-        /** Logical page index within the object. Immutable after creation. */
-        pgoff_t                  cp_index;
         /** List of slices. Immutable after creation. */
         cfs_list_t               cp_layers;
-        /** Parent page, NULL for top-level page. Immutable after creation. */
-        struct cl_page          *cp_parent;
-        /** Lower-layer page. NULL for bottommost page. Immutable after
-         * creation. */
-        struct cl_page          *cp_child;
-        /**
-         * Page state. This field is const to avoid accidental update, it is
-         * modified only internally within cl_page.c. Protected by a VM lock.
-         */
-        const enum cl_page_state cp_state;
+	struct page             *cp_vmpage;
+	/**
+	 * Page state. This field is const to avoid accidental update, it is
+	 * modified only internally within cl_page.c. Protected by a VM lock.
+	 */
+	const enum cl_page_state cp_state;
 	/** Linkage of pages within group. Protected by cl_page::cp_mutex. */
 	cfs_list_t		cp_batch;
 	/** Mutex serializing membership of a page in a batch. */
@@ -785,6 +775,7 @@ struct cl_page {
  */
 struct cl_page_slice {
         struct cl_page                  *cpl_page;
+	pgoff_t				 cpl_index;
         /**
          * Object slice corresponding to this page slice. Immutable after
          * creation.
@@ -839,11 +830,6 @@ struct cl_page_operations {
          * provided by the topmost layer, see cl_page_disown0() as an example.
          */
 
-        /**
-         * \return the underlying VM page. Optional.
-         */
-	struct page *(*cpo_vmpage)(const struct lu_env *env,
-                                  const struct cl_page_slice *slice);
         /**
          * Called when \a io acquires this page into the exclusive
          * ownership. When this method returns, it is guaranteed that the is
@@ -1092,6 +1078,12 @@ static inline int __page_in_use(const struct cl_page *page, int refc)
 }
 #define cl_page_in_use(pg)       __page_in_use(pg, 1)
 #define cl_page_in_use_noref(pg) __page_in_use(pg, 0)
+
+static inline struct page *cl_page_vmpage(struct cl_page *page)
+{
+	LASSERT(page->cp_vmpage != NULL);
+	return page->cp_vmpage;
+}
 
 /** @} cl_page */
 
@@ -2722,7 +2714,7 @@ static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
 static inline void cl_object_page_init(struct cl_object *clob, int size)
 {
 	clob->co_slice_off = cl_object_header(clob)->coh_page_bufsize;
-	cl_object_header(clob)->coh_page_bufsize += ALIGN(size, 8);
+	cl_object_header(clob)->coh_page_bufsize += cfs_size_round(size);
 }
 
 static inline void *cl_object_page_slice(struct cl_object *clob,
@@ -2769,8 +2761,6 @@ void            cl_page_print       (const struct lu_env *env, void *cookie,
 void            cl_page_header_print(const struct lu_env *env, void *cookie,
                                      lu_printer_t printer,
                                      const struct cl_page *pg);
-struct page     *cl_page_vmpage      (const struct lu_env *env,
-                                     struct cl_page *page);
 struct cl_page *cl_vmpage_page      (struct page *vmpage, struct cl_object *obj);
 struct cl_page *cl_page_top         (struct cl_page *page);
 
@@ -2866,17 +2856,6 @@ struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env,
 				 struct cl_object *obj, pgoff_t index,
 				 struct cl_lock *except, int pending,
 				 int canceld);
-static inline struct cl_lock *cl_lock_at_page(const struct lu_env *env,
-					      struct cl_object *obj,
-					      struct cl_page *page,
-					      struct cl_lock *except,
-					      int pending, int canceld)
-{
-	LASSERT(cl_object_header(obj) == cl_object_header(page->cp_obj));
-	return cl_lock_at_pgoff(env, obj, page->cp_index, except,
-				pending, canceld);
-}
-
 const struct cl_lock_slice *cl_lock_at(const struct cl_lock *lock,
                                        const struct lu_device_type *dtype);
 

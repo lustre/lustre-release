@@ -241,7 +241,7 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 
 	page_count = 0;
 	cfs_list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
-		pgoff_t index = oap2cl_page(oap)->cp_index;
+		pgoff_t index = osc_index(oap2osc(oap));
 		++page_count;
 		if (index > ext->oe_end || index < ext->oe_start)
 			GOTO(out, rc = 110);
@@ -947,18 +947,18 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	/* discard all pages with index greater then trunc_index */
 	cfs_list_for_each_entry_safe(oap, tmp, &ext->oe_pages,
 				     oap_pending_item) {
-		struct cl_page  *sub  = oap2cl_page(oap);
-		struct cl_page  *page = cl_page_top(sub);
+		pgoff_t index = osc_index(oap2osc(oap));
+		struct cl_page  *page = oap2cl_page(oap);
 
 		LASSERT(cfs_list_empty(&oap->oap_rpc_item));
 
 		/* only discard the pages with their index greater than
 		 * trunc_index, and ... */
-		if (sub->cp_index < trunc_index ||
-		    (sub->cp_index == trunc_index && partial)) {
+		if (index < trunc_index ||
+		    (index == trunc_index && partial)) {
 			/* accounting how many pages remaining in the chunk
 			 * so that we can calculate grants correctly. */
-			if (sub->cp_index >> ppc_bits == trunc_chunk)
+			if (index >> ppc_bits == trunc_chunk)
 				++pages_in_chunk;
 			continue;
 		}
@@ -1208,7 +1208,7 @@ static int osc_make_ready(const struct lu_env *env, struct osc_async_page *oap,
 			  int cmd)
 {
 	struct osc_page *opg  = oap2osc_page(oap);
-	struct cl_page  *page = cl_page_top(oap2cl_page(oap));
+	struct cl_page  *page = oap2cl_page(oap);
 	int result;
 
 	LASSERT(cmd == OBD_BRW_WRITE); /* no cached reads */
@@ -1224,7 +1224,7 @@ static int osc_refresh_count(const struct lu_env *env,
 			     struct osc_async_page *oap, int cmd)
 {
 	struct osc_page  *opg = oap2osc_page(oap);
-	struct cl_page   *page = oap2cl_page(oap);
+	pgoff_t index = osc_index(oap2osc(oap));
 	struct cl_object *obj;
 	struct cl_attr   *attr = &osc_env_info(env)->oti_attr;
 
@@ -1242,10 +1242,10 @@ static int osc_refresh_count(const struct lu_env *env,
 	if (result < 0)
 		return result;
 	kms = attr->cat_kms;
-	if (cl_offset(obj, page->cp_index) >= kms)
+	if (cl_offset(obj, index) >= kms)
 		/* catch race with truncate */
 		return 0;
-	else if (cl_offset(obj, page->cp_index + 1) > kms)
+	else if (cl_offset(obj, index + 1) > kms)
 		/* catch sub-page write at end of file */
 		return kms % PAGE_CACHE_SIZE;
 	else
@@ -1256,7 +1256,7 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 			  int cmd, int rc)
 {
 	struct osc_page   *opg  = oap2osc_page(oap);
-	struct cl_page    *page = cl_page_top(oap2cl_page(oap));
+	struct cl_page    *page = oap2cl_page(oap);
 	struct osc_object *obj  = cl2osc(opg->ops_cl.cpl_obj);
 	enum cl_req_type   crt;
 	int srvlock;
@@ -2380,7 +2380,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	OSC_IO_DEBUG(osc, "oap %p page %p added for cmd %d\n",
 		     oap, oap->oap_page, oap->oap_cmd & OBD_BRW_RWMASK);
 
-	index = oap2cl_page(oap)->cp_index;
+	index = osc_index(oap2osc(oap));
 
 	/* Add this page into extent by the following steps:
 	 * 1. if there exists an active extent for this IO, mostly this page
@@ -2490,20 +2490,20 @@ int osc_teardown_async_page(const struct lu_env *env,
 	LASSERT(oap->oap_magic == OAP_MAGIC);
 
 	CDEBUG(D_INFO, "teardown oap %p page %p at index %lu.\n",
-	       oap, ops, oap2cl_page(oap)->cp_index);
+	       oap, ops, osc_index(oap2osc(oap)));
 
 	osc_object_lock(obj);
 	if (!cfs_list_empty(&oap->oap_rpc_item)) {
 		CDEBUG(D_CACHE, "oap %p is not in cache.\n", oap);
 		rc = -EBUSY;
 	} else if (!cfs_list_empty(&oap->oap_pending_item)) {
-		ext = osc_extent_lookup(obj, oap2cl_page(oap)->cp_index);
+		ext = osc_extent_lookup(obj, osc_index(oap2osc(oap)));
 		/* only truncated pages are allowed to be taken out.
 		 * See osc_extent_truncate() and osc_cache_truncate_start()
 		 * for details. */
 		if (ext != NULL && ext->oe_state != OES_TRUNC) {
 			OSC_EXTENT_DUMP(D_ERROR, ext, "trunc at %lu.\n",
-					oap2cl_page(oap)->cp_index);
+					osc_index(oap2osc(oap)));
 			rc = -EBUSY;
 		}
 	}
@@ -2526,7 +2526,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 	struct osc_extent *ext   = NULL;
 	struct osc_object *obj   = cl2osc(ops->ops_cl.cpl_obj);
 	struct cl_page    *cp    = ops->ops_cl.cpl_page;
-	pgoff_t            index = cp->cp_index;
+	pgoff_t            index = osc_index(ops);
 	struct osc_async_page *oap = &ops->ops_oap;
 	bool unplug = false;
 	int rc = 0;
@@ -2542,8 +2542,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 	switch (ext->oe_state) {
 	case OES_RPC:
 	case OES_LOCK_DONE:
-		CL_PAGE_DEBUG(D_ERROR, env, cl_page_top(cp),
-			      "flush an in-rpc page?\n");
+		CL_PAGE_DEBUG(D_ERROR, env, cp, "flush an in-rpc page?\n");
 		LASSERT(0);
 		break;
 	case OES_LOCKING:
@@ -2566,7 +2565,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 		break;
 	}
 
-	rc = cl_page_prep(env, io, cl_page_top(cp), CRT_WRITE);
+	rc = cl_page_prep(env, io, cp, CRT_WRITE);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2611,7 +2610,7 @@ int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops)
 	struct osc_extent     *ext;
 	struct osc_extent     *found = NULL;
 	cfs_list_t            *plist;
-	pgoff_t index = oap2cl_page(oap)->cp_index;
+	pgoff_t index = osc_index(ops);
 	int     rc = -EBUSY;
 	int     cmd;
 	ENTRY;
@@ -2674,11 +2673,11 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 	ENTRY;
 
 	cfs_list_for_each_entry(oap, list, oap_pending_item) {
-		struct cl_page *cp = oap2cl_page(oap);
-		if (cp->cp_index > end)
-			end = cp->cp_index;
-		if (cp->cp_index < start)
-			start = cp->cp_index;
+		pgoff_t index = osc_index(oap2osc(oap));
+		if (index > end)
+			end = index;
+		if (index < start)
+			start = index;
 		++page_count;
 		mppr <<= (page_count > mppr);
 	}
@@ -3089,7 +3088,7 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 				break;
 			}
 
-			page = cl_page_top(ops->ops_cl.cpl_page);
+			page = ops->ops_cl.cpl_page;
 			LASSERT(page->cp_type == CPT_CACHEABLE);
 			if (page->cp_state == CPS_FREEING)
 				continue;
@@ -3117,7 +3116,7 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 			if (res == CLP_GANG_OKAY)
 				res = (*cb)(env, io, ops, cbdata);
 
-			page = cl_page_top(ops->ops_cl.cpl_page);
+			page = ops->ops_cl.cpl_page;
 			lu_ref_del(&page->cp_reference, "gang_lookup", current);
 			cl_page_put(env, page);
 		}
@@ -3150,7 +3149,7 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 	index = osc_index(ops);
 	if (index >= info->oti_fn_index) {
 		struct cl_lock *tmp;
-		struct cl_page *page = cl_page_top(ops->ops_cl.cpl_page);
+		struct cl_page *page = ops->ops_cl.cpl_page;
 
 		/* refresh non-overlapped index */
 		tmp = cl_lock_at_pgoff(env, lock->cll_descr.cld_obj, index,
@@ -3182,7 +3181,7 @@ static int discard_cb(const struct lu_env *env, struct cl_io *io,
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_lock *lock = cbdata;
-	struct cl_page *page = cl_page_top(ops->ops_cl.cpl_page);
+	struct cl_page *page = ops->ops_cl.cpl_page;
 
 	LASSERT(lock->cll_descr.cld_mode >= CLM_WRITE);
 
@@ -3190,7 +3189,7 @@ static int discard_cb(const struct lu_env *env, struct cl_io *io,
 	info->oti_next_index = osc_index(ops) + 1;
 	if (cl_page_own(env, io, page) == 0) {
 		KLASSERT(ergo(page->cp_type == CPT_CACHEABLE,
-			      !PageDirty(cl_page_vmpage(env, page))));
+			      !PageDirty(cl_page_vmpage(page))));
 
 		/* discard the page */
 		cl_page_discard(env, io, page);

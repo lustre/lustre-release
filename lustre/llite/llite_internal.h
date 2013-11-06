@@ -1115,15 +1115,19 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
 
 static inline void ll_invalidate_page(struct page *vmpage)
 {
-        struct address_space *mapping = vmpage->mapping;
-        loff_t offset = vmpage->index << PAGE_CACHE_SHIFT;
+	struct address_space *mapping = vmpage->mapping;
+	loff_t offset = vmpage->index << PAGE_CACHE_SHIFT;
 
-        LASSERT(PageLocked(vmpage));
-        if (mapping == NULL)
-                return;
+	LASSERT(PageLocked(vmpage));
+	if (mapping == NULL)
+		return;
 
+	/*
+	 * truncate_complete_page() calls
+	 * a_ops->invalidatepage()->cl_page_delete()->vvp_page_delete().
+	 */
 	ll_teardown_mmaps(mapping, offset, offset + PAGE_CACHE_SIZE);
-        truncate_complete_page(mapping, vmpage);
+	truncate_complete_page(mapping, vmpage);
 }
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)

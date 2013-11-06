@@ -724,41 +724,6 @@ cl_io_slice_page(const struct cl_io_slice *ios, struct cl_page *page)
 }
 
 /**
- * True iff \a page is within \a io range.
- */
-static int cl_page_in_io(const struct cl_page *page, const struct cl_io *io)
-{
-        int     result = 1;
-        loff_t  start;
-        loff_t  end;
-        pgoff_t idx;
-
-        idx = page->cp_index;
-        switch (io->ci_type) {
-        case CIT_READ:
-        case CIT_WRITE:
-                /*
-                 * check that [start, end) and [pos, pos + count) extents
-                 * overlap.
-                 */
-                if (!cl_io_is_append(io)) {
-                        const struct cl_io_rw_common *crw = &(io->u.ci_rw);
-                        start = cl_offset(page->cp_obj, idx);
-                        end   = cl_offset(page->cp_obj, idx + 1);
-                        result = crw->crw_pos < end &&
-                                 start < crw->crw_pos + crw->crw_count;
-                }
-                break;
-        case CIT_FAULT:
-                result = io->u.ci_fault.ft_index == idx;
-                break;
-        default:
-                LBUG();
-        }
-        return result;
-}
-
-/**
  * Called by read io, when page has to be read from the server.
  *
  * \see cl_io_operations::cio_read_page()
@@ -773,7 +738,6 @@ int cl_io_read_page(const struct lu_env *env, struct cl_io *io,
         LINVRNT(io->ci_type == CIT_READ || io->ci_type == CIT_FAULT);
         LINVRNT(cl_page_is_owned(page, io));
         LINVRNT(io->ci_state == CIS_IO_GOING || io->ci_state == CIS_LOCKED);
-        LINVRNT(cl_page_in_io(page, io));
         LINVRNT(cl_io_invariant(io));
         ENTRY;
 
@@ -926,7 +890,6 @@ int cl_io_cancel(const struct lu_env *env, struct cl_io *io,
         cl_page_list_for_each(page, queue) {
                 int rc;
 
-                LINVRNT(cl_page_in_io(page, io));
                 rc = cl_page_cancel(env, page);
                 result = result ?: rc;
         }
@@ -1205,7 +1168,6 @@ int cl_page_list_own(const struct lu_env *env,
 {
 	struct cl_page *page;
 	struct cl_page *temp;
-	pgoff_t index = 0;
 	int result;
 
 	LINVRNT(plist->pl_owner == current);
@@ -1213,8 +1175,6 @@ int cl_page_list_own(const struct lu_env *env,
 	ENTRY;
 	result = 0;
 	cl_page_list_for_each_safe(page, temp, plist) {
-		LASSERT(index <= page->cp_index);
-		index = page->cp_index;
 		if (cl_page_own(env, io, page) == 0)
 			result = result ?: page->cp_error;
 		else
@@ -1342,7 +1302,7 @@ EXPORT_SYMBOL(cl_2queue_init_page);
 /**
  * Returns top-level io.
  *
- * \see cl_object_top(), cl_page_top().
+ * \see cl_object_top()
  */
 struct cl_io *cl_io_top(struct cl_io *io)
 {
@@ -1412,26 +1372,22 @@ static void cl_req_free(const struct lu_env *env, struct cl_req *req)
 static int cl_req_init(const struct lu_env *env, struct cl_req *req,
                        struct cl_page *page)
 {
-        struct cl_device     *dev;
-        struct cl_page_slice *slice;
-        int result;
+	struct cl_device     *dev;
+	struct cl_page_slice *slice;
+	int result;
 
-        ENTRY;
-        result = 0;
-        page = cl_page_top(page);
-        do {
-                cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
-                        dev = lu2cl_dev(slice->cpl_obj->co_lu.lo_dev);
-                        if (dev->cd_ops->cdo_req_init != NULL) {
-                                result = dev->cd_ops->cdo_req_init(env,
-                                                                   dev, req);
-                                if (result != 0)
-                                        break;
-                        }
-                }
-                page = page->cp_child;
-        } while (page != NULL && result == 0);
-        RETURN(result);
+	ENTRY;
+	result = 0;
+	cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
+		dev = lu2cl_dev(slice->cpl_obj->co_lu.lo_dev);
+		if (dev->cd_ops->cdo_req_init != NULL) {
+			result = dev->cd_ops->cdo_req_init(env,
+					dev, req);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
 }
 
 /**
@@ -1498,12 +1454,11 @@ EXPORT_SYMBOL(cl_req_alloc);
 void cl_req_page_add(const struct lu_env *env,
                      struct cl_req *req, struct cl_page *page)
 {
-        struct cl_object  *obj;
-        struct cl_req_obj *rqo;
-        int i;
+	struct cl_object  *obj;
+	struct cl_req_obj *rqo;
+	int i;
 
-        ENTRY;
-        page = cl_page_top(page);
+	ENTRY;
 
         LASSERT(cfs_list_empty(&page->cp_flight));
         LASSERT(page->cp_req == NULL);
@@ -1521,11 +1476,11 @@ void cl_req_page_add(const struct lu_env *env,
                         cl_object_get(obj);
 			lu_object_ref_add_at(&obj->co_lu, &rqo->ro_obj_ref,
 					     "cl_req", req);
-                        break;
-                }
-        }
-        LASSERT(i < req->crq_nrobjs);
-        EXIT;
+			break;
+		}
+	}
+	LASSERT(i < req->crq_nrobjs);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_req_page_add);
 
@@ -1534,18 +1489,17 @@ EXPORT_SYMBOL(cl_req_page_add);
  */
 void cl_req_page_done(const struct lu_env *env, struct cl_page *page)
 {
-        struct cl_req *req = page->cp_req;
+	struct cl_req *req = page->cp_req;
 
-        ENTRY;
-        page = cl_page_top(page);
+	ENTRY;
 
-        LASSERT(!cfs_list_empty(&page->cp_flight));
-        LASSERT(req->crq_nrpages > 0);
+	LASSERT(!cfs_list_empty(&page->cp_flight));
+	LASSERT(req->crq_nrpages > 0);
 
-        cfs_list_del_init(&page->cp_flight);
-        --req->crq_nrpages;
-        page->cp_req = NULL;
-        EXIT;
+	cfs_list_del_init(&page->cp_flight);
+	--req->crq_nrpages;
+	page->cp_req = NULL;
+	EXIT;
 }
 EXPORT_SYMBOL(cl_req_page_done);
 

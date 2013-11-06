@@ -58,7 +58,7 @@ static int   slp_type_init     (struct lu_device_type *t);
 static void  slp_type_fini     (struct lu_device_type *t);
 
 static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
-			 struct cl_page *page, struct page *vmpage);
+			 struct cl_page *page, pgoff_t index);
 static int   slp_attr_get     (const struct lu_env *env, struct cl_object *obj,
                                struct cl_attr *attr);
 
@@ -224,13 +224,13 @@ void slp_global_fini(void)
  */
 
 static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, struct page *vmpage)
+			struct cl_page *page, pgoff_t index)
 {
-        struct ccc_page *cpg = cl_object_page_slice(obj, page);
+	struct ccc_page *cpg = cl_object_page_slice(obj, page);
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	cpg->cpg_page = vmpage;
+	cpg->cpg_page = page->cp_vmpage;
 
 	if (page->cp_type == CPT_CACHEABLE) {
 		LBUG();
@@ -242,7 +242,7 @@ static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
 		clobj->cob_transient_pages++;
 	}
 
-        return 0;
+	return 0;
 }
 
 static int slp_io_init(const struct lu_env *env, struct cl_object *obj,
@@ -359,7 +359,6 @@ static const struct cl_page_operations slp_transient_page_ops = {
         .cpo_unassume      = ccc_transient_page_unassume,
         .cpo_disown        = ccc_transient_page_disown,
         .cpo_discard       = ccc_transient_page_discard,
-        .cpo_vmpage        = ccc_page_vmpage,
         .cpo_is_vmlocked   = slp_page_is_vmlocked,
         .cpo_fini          = slp_transient_page_fini,
         .cpo_is_under_lock = ccc_page_is_under_lock,

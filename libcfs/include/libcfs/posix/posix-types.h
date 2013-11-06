@@ -115,4 +115,6 @@ typedef long long_ptr_t;
 #define __release(x) ((void)0)
 #define __cond_lock(x, c) (c)
 
+typedef unsigned long pgoff_t;
+
 #endif

@@ -88,9 +88,8 @@ struct echo_object_conf {
 };
 
 struct echo_page {
-        struct cl_page_slice   ep_cl;
+	struct cl_page_slice	ep_cl;
 	struct mutex		ep_lock;
-	struct page            *ep_vmpage;
 };
 
 struct echo_lock {
@@ -243,12 +242,6 @@ static struct lu_kmem_descr echo_caches[] = {
  *
  * @{
  */
-static struct page *echo_page_vmpage(const struct lu_env *env,
-                                    const struct cl_page_slice *slice)
-{
-        return cl2echo_page(slice)->ep_vmpage;
-}
-
 static int echo_page_own(const struct lu_env *env,
                          const struct cl_page_slice *slice,
                          struct cl_io *io, int nonblock)
@@ -301,7 +294,7 @@ static void echo_page_fini(const struct lu_env *env,
 	ENTRY;
 
 	cfs_atomic_dec(&eco->eo_npages);
-	page_cache_release(cl2echo_page(slice)->ep_vmpage);
+	page_cache_release(slice->cpl_page->cp_vmpage);
 	EXIT;
 }
 
@@ -316,18 +309,18 @@ static int echo_page_print(const struct lu_env *env,
                            const struct cl_page_slice *slice,
                            void *cookie, lu_printer_t printer)
 {
-        struct echo_page *ep = cl2echo_page(slice);
+	struct echo_page *ep = cl2echo_page(slice);
 
-        (*printer)(env, cookie, LUSTRE_ECHO_CLIENT_NAME"-page@%p %d vm@%p\n",
-		   ep, mutex_is_locked(&ep->ep_lock), ep->ep_vmpage);
-        return 0;
+	(*printer)(env, cookie, LUSTRE_ECHO_CLIENT_NAME"-page@%p %d vm@%p\n",
+		   ep, mutex_is_locked(&ep->ep_lock),
+		   slice->cpl_page->cp_vmpage);
+	return 0;
 }
 
 static const struct cl_page_operations echo_page_ops = {
         .cpo_own           = echo_page_own,
         .cpo_disown        = echo_page_disown,
         .cpo_discard       = echo_page_discard,
-        .cpo_vmpage        = echo_page_vmpage,
         .cpo_fini          = echo_page_fini,
         .cpo_print         = echo_page_print,
         .cpo_is_vmlocked   = echo_page_is_vmlocked,
@@ -390,18 +383,17 @@ static struct cl_lock_operations echo_lock_ops = {
  * @{
  */
 static int echo_page_init(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, struct page *vmpage)
+			  struct cl_page *page, pgoff_t index)
 {
-        struct echo_page *ep = cl_object_page_slice(obj, page);
+	struct echo_page *ep = cl_object_page_slice(obj, page);
 	struct echo_object *eco = cl2echo_obj(obj);
-        ENTRY;
+	ENTRY;
 
-	ep->ep_vmpage = vmpage;
-	page_cache_get(vmpage);
+	page_cache_get(page->cp_vmpage);
 	mutex_init(&ep->ep_lock);
 	cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
 	cfs_atomic_inc(&eco->eo_npages);
-        RETURN(0);
+	RETURN(0);
 }
 
 static int echo_io_init(const struct lu_env *env, struct cl_object *obj,
@@ -602,6 +594,8 @@ static struct lu_object *echo_object_alloc(const struct lu_env *env,
 
                 obj = &echo_obj2cl(eco)->co_lu;
                 cl_object_header_init(hdr);
+		hdr->coh_page_bufsize = cfs_size_round(sizeof(struct cl_page));
+
                 lu_object_init(obj, &hdr->coh_lu, dev);
                 lu_object_add_top(&hdr->coh_lu, obj);
 

@@ -75,19 +75,19 @@ extern __u32 lu_session_tags_default;
  */
 int cl_object_header_init(struct cl_object_header *h)
 {
-        int result;
+	int result;
 
-        ENTRY;
-        result = lu_object_header_init(&h->coh_lu);
-        if (result == 0) {
+	ENTRY;
+	result = lu_object_header_init(&h->coh_lu);
+	if (result == 0) {
 		spin_lock_init(&h->coh_lock_guard);
 		spin_lock_init(&h->coh_attr_guard);
 		lockdep_set_class(&h->coh_lock_guard, &cl_lock_guard_class);
 		lockdep_set_class(&h->coh_attr_guard, &cl_attr_guard_class);
-                CFS_INIT_LIST_HEAD(&h->coh_locks);
-		h->coh_page_bufsize = ALIGN(sizeof(struct cl_page), 8);
-        }
-        RETURN(result);
+		CFS_INIT_LIST_HEAD(&h->coh_locks);
+		h->coh_page_bufsize = 0;
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_object_header_init);
 
@@ -149,7 +149,7 @@ EXPORT_SYMBOL(cl_object_get);
 /**
  * Returns the top-object for a given \a o.
  *
- * \see cl_page_top(), cl_io_top()
+ * \see cl_io_top()
  */
 struct cl_object *cl_object_top(struct cl_object *o)
 {

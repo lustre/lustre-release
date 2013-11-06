@@ -67,14 +67,18 @@ static struct osc_io *cl2osc_io(const struct lu_env *env,
         return oio;
 }
 
-static struct osc_page *osc_cl_page_osc(struct cl_page *page)
+static struct osc_page *osc_cl_page_osc(struct cl_page *page,
+					struct osc_object *osc)
 {
-        const struct cl_page_slice *slice;
+	const struct cl_page_slice *slice;
 
-        slice = cl_page_at(page, &osc_device_type);
-        LASSERT(slice != NULL);
+	if (osc != NULL)
+		slice = cl_object_page_slice(&osc->oo_cl, page);
+	else
+		slice = cl_page_at(page, &osc_device_type);
+	LASSERT(slice != NULL);
 
-        return cl2osc_page(slice);
+	return cl2osc_page(slice);
 }
 
 
@@ -137,8 +141,8 @@ static int osc_io_submit(const struct lu_env *env,
                 io = page->cp_owner;
                 LASSERT(io != NULL);
 
-                opg = osc_cl_page_osc(page);
-                oap = &opg->ops_oap;
+		opg = osc_cl_page_osc(page, osc);
+		oap = &opg->ops_oap;
 		LASSERT(osc == oap->oap_obj);
 
 		if (!cfs_list_empty(&oap->oap_pending_item) ||
@@ -261,15 +265,11 @@ static int osc_io_commit_async(const struct lu_env *env,
 		}
 	}
 
-	/*
-	 * NOTE: here @page is a top-level page. This is done to avoid
-	 * creation of sub-page-list.
-	 */
 	while (qin->pl_nr > 0) {
 		struct osc_async_page *oap;
 
 		page = cl_page_list_first(qin);
-		opg = osc_cl_page_osc(page);
+		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
 
 		if (!cfs_list_empty(&oap->oap_rpc_item)) {
@@ -286,8 +286,7 @@ static int osc_io_commit_async(const struct lu_env *env,
 				break;
 		}
 
-		osc_page_touch_at(env, osc2cl(osc),
-				  opg->ops_cl.cpl_page->cp_index,
+		osc_page_touch_at(env, osc2cl(osc), osc_index(opg),
 				  page == last_page ? to : PAGE_SIZE);
 
 		cl_page_list_del(env, qin, page);
@@ -409,13 +408,9 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 				start, current->comm);
 
 #ifdef __linux__
-	{
-		struct page *vmpage = cl_page_vmpage(env, page);
-		if (PageLocked(vmpage))
-			CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
-			       ops, page->cp_index,
-			       (oap->oap_cmd & OBD_BRW_RWMASK));
-	}
+	if (PageLocked(page->cp_vmpage))
+		CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
+		       ops, osc_index(ops), oap->oap_cmd & OBD_BRW_RWMASK);
 #endif
 
 	return CLP_GANG_OKAY;
@@ -814,18 +809,21 @@ static void osc_req_attr_set(const struct lu_env *env,
 		oa->o_valid |= OBD_MD_FLID;
 	}
 	if (flags & OBD_MD_FLHANDLE) {
-                clerq = slice->crs_req;
-                LASSERT(!cfs_list_empty(&clerq->crq_pages));
-                apage = container_of(clerq->crq_pages.next,
-                                     struct cl_page, cp_flight);
-                opg = osc_cl_page_osc(apage);
-                apage = opg->ops_cl.cpl_page; /* now apage is a sub-page */
-                lock = cl_lock_at_page(env, apage->cp_obj, apage, NULL, 1, 1);
-                if (lock == NULL) {
-                        struct cl_object_header *head;
-                        struct cl_lock          *scan;
+		struct cl_object *subobj;
 
-                        head = cl_object_header(apage->cp_obj);
+		clerq = slice->crs_req;
+		LASSERT(!cfs_list_empty(&clerq->crq_pages));
+		apage = container_of(clerq->crq_pages.next,
+				     struct cl_page, cp_flight);
+		opg = osc_cl_page_osc(apage, NULL);
+		subobj = opg->ops_cl.cpl_obj;
+		lock = cl_lock_at_pgoff(env, subobj, osc_index(opg),
+					NULL, 1, 1);
+		if (lock == NULL) {
+			struct cl_object_header *head;
+			struct cl_lock          *scan;
+
+			head = cl_object_header(subobj);
                         cfs_list_for_each_entry(scan, &head->coh_locks,
                                                 cll_linkage)
                                 CL_LOCK_DEBUG(D_ERROR, env, scan,
