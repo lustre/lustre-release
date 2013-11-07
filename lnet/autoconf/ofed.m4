@@ -40,6 +40,9 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
+		#ifdef HAVE_COMPAT_RDMA
+		#include <linux/compat-2.6.h>
+		#endif
 		#include <rdma/rdma_cm.h>
 	],[
 		return (RDMA_CM_EVENT_ADDR_CHANGE == 0);
@@ -56,6 +59,9 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
+		#ifdef HAVE_COMPAT_RDMA
+		#include <linux/compat-2.6.h>
+		#endif
 		#include <rdma/rdma_cm.h>
 	],[
 		return (RDMA_CM_EVENT_TIMEWAIT_EXIT == 0);
@@ -72,6 +78,9 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
+		#ifdef HAVE_COMPAT_RDMA
+		#include <linux/compat-2.6.h>
+		#endif
 		#include <rdma/rdma_cm.h>
 	],[
 		rdma_set_reuseaddr(NULL, 1);
