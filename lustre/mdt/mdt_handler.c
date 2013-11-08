@@ -3908,6 +3908,7 @@ out_seq_fini:
 
 	return rc;
 }
+
 /*
  * Init client sequence manager which is used by local MDS to talk to sequence
  * controller on remote node.
@@ -3917,46 +3918,38 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                             struct lustre_cfg *cfg)
 {
 	struct seq_server_site	*ss = mdt_seq_site(m);
-        struct obd_device *mdc;
-        struct obd_uuid   *uuidp, *mdcuuidp;
-        char              *uuid_str, *mdc_uuid_str;
-        int                rc;
-        int                index;
-        struct mdt_thread_info *info;
-        char *p, *index_string = lustre_cfg_string(cfg, 2);
-        ENTRY;
+	struct obd_device *mdc;
+	int                rc;
+	int                index;
+	struct mdt_thread_info *info;
+	char *p, *index_string = lustre_cfg_string(cfg, 2);
+	ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        uuidp = &info->mti_u.uuid[0];
-        mdcuuidp = &info->mti_u.uuid[1];
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-        LASSERT(index_string);
-
-        index = simple_strtol(index_string, &p, 10);
-        if (*p) {
-                CERROR("Invalid index in lustre_cgf, offset 2\n");
-                RETURN(-EINVAL);
-        }
+	LASSERT(index_string);
+	index = simple_strtol(index_string, &p, 10);
+	if (*p) {
+		CERROR("%s: Invalid index in lustre_cgf, offset 2\n",
+		      mdt2obd_dev(m)->obd_name);
+		RETURN(-EINVAL);
+	}
 
 	/* check if this is adding the first MDC and controller is not yet
 	 * initialized. */
 	if (index != 0 || ss->ss_client_seq)
 		RETURN(0);
 
-        uuid_str = lustre_cfg_string(cfg, 1);
-        mdc_uuid_str = lustre_cfg_string(cfg, 4);
-        obd_str2uuid(uuidp, uuid_str);
-        obd_str2uuid(mdcuuidp, mdc_uuid_str);
-
-        mdc = class_find_client_obd(uuidp, LUSTRE_MDC_NAME, mdcuuidp);
-        if (!mdc) {
-                CERROR("can't find controller MDC by uuid %s\n",
-                       uuid_str);
-                rc = -ENOENT;
-        } else if (!mdc->obd_set_up) {
-                CERROR("target %s not set up\n", mdc->obd_name);
-                rc = -EINVAL;
-        } else {
+	mdc = class_name2obd(lustre_cfg_string(cfg, 1));
+	if (!mdc) {
+		CERROR("%s: can't find %s device\n",
+		       mdt2obd_dev(m)->obd_name, lustre_cfg_string(cfg, 1));
+		rc = -ENOENT;
+	} else if (!mdc->obd_set_up) {
+		CERROR("%s: target %s not set up\n",
+		       mdt2obd_dev(m)->obd_name, mdc->obd_name);
+		rc = -EINVAL;
+	} else {
 		LASSERT(ss->ss_control_exp);
 		OBD_ALLOC_PTR(ss->ss_client_seq);
 		if (ss->ss_client_seq != NULL) {
@@ -3983,9 +3976,9 @@ static int mdt_seq_init_cli(const struct lu_env *env,
 		LASSERT(ss->ss_server_seq != NULL);
 		rc = seq_server_set_cli(ss->ss_server_seq, ss->ss_client_seq,
 					env);
-        }
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static void mdt_seq_fini_cli(struct mdt_device *m)

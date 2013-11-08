@@ -4585,6 +4585,9 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 
 	rc = dt_device_init(&o->od_dt_dev, t);
 	if (rc == 0) {
+		/* Because the ctx might be revived in dt_device_init,
+		 * refill the env here */
+		lu_env_refill((struct lu_env *)env);
 		rc = osd_device_init0(env, o, cfg);
 		if (rc)
 			dt_device_fini(&o->od_dt_dev);

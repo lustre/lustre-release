@@ -272,8 +272,9 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 /* lod_lov.c */
 void lod_getref(struct lod_tgt_descs *ltd);
 void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd);
-int lod_add_device(const struct lu_env *env, struct lod_device *m,
-		   char *osp, unsigned index, unsigned gen, int active);
+int lod_add_device(const struct lu_env *env, struct lod_device *lod,
+		   char *osp, unsigned index, unsigned gen, int mdt_index,
+		   char *type, int active);
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
 		   unsigned gen);

@@ -479,22 +479,24 @@ void osp_lprocfs_init(struct osp_device *osp)
 	ptlrpc_lprocfs_register_obd(obd);
 
 	/* for compatibility we link old procfs's OSC entries to osp ones */
-	osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
-	if (osc_proc_dir) {
-		cfs_proc_dir_entry_t	*symlink = NULL;
-		char			*name;
+	if (!osp->opd_connect_mdt) {
+		osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
+		if (osc_proc_dir) {
+			cfs_proc_dir_entry_t	*symlink = NULL;
+			char			*name;
 
-		OBD_ALLOC(name, strlen(obd->obd_name) + 1);
-		if (name == NULL)
-			return;
+			OBD_ALLOC(name, strlen(obd->obd_name) + 1);
+			if (name == NULL)
+				return;
 
-		strcpy(name, obd->obd_name);
-		if (strstr(name, "osc"))
-			symlink = lprocfs_add_symlink(name, osc_proc_dir,
-						      "../osp/%s",
-						      obd->obd_name);
-		OBD_FREE(name, strlen(obd->obd_name) + 1);
-		osp->opd_symlink = symlink;
+			strcpy(name, obd->obd_name);
+			if (strstr(name, "osc"))
+				symlink = lprocfs_add_symlink(name,
+						osc_proc_dir, "../osp/%s",
+						obd->obd_name);
+			OBD_FREE(name, strlen(obd->obd_name) + 1);
+			osp->opd_symlink = symlink;
+		}
 	}
 }
 

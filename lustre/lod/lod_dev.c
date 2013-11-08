@@ -165,6 +165,40 @@ static int lod_cleanup_desc_tgts(const struct lu_env *env,
 	return rc;
 }
 
+static int lodname2mdt_index(char *lodname, int *index)
+{
+	char *ptr, *tmp;
+
+	/* The lodname suppose to be fsname-MDTxxxx-mdtlov */
+	ptr = strrchr(lodname, '-');
+	if (ptr == NULL) {
+		CERROR("invalid MDT index in '%s'\n", lodname);
+		return -EINVAL;
+	}
+
+	if (strncmp(ptr, "-mdtlov", 7) != 0) {
+		CERROR("invalid MDT index in '%s'\n", lodname);
+		return -EINVAL;
+	}
+
+	if ((unsigned long)ptr - (unsigned long)lodname <= 8) {
+		CERROR("invalid MDT index in '%s'\n", lodname);
+		return -EINVAL;
+	}
+
+	if (strncmp(ptr - 8, "-MDT", 4) != 0) {
+		CERROR("invalid MDT index in '%s'\n", lodname);
+		return -EINVAL;
+	}
+
+	*index = simple_strtol(ptr - 4, &tmp, 16);
+	if (*tmp != '-' || *index > INT_MAX || *index < 0) {
+		CERROR("invalid MDT index in '%s'\n", lodname);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int lod_process_config(const struct lu_env *env,
 			      struct lu_device *dev,
 			      struct lustre_cfg *lcfg)
@@ -172,16 +206,21 @@ static int lod_process_config(const struct lu_env *env,
 	struct lod_device *lod = lu2lod_dev(dev);
 	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
 	char		  *arg1;
-	int		   rc;
+	int		   rc = 0;
 	ENTRY;
 
 	switch(lcfg->lcfg_command) {
 	case LCFG_LOV_DEL_OBD:
 	case LCFG_LOV_ADD_INA:
-	case LCFG_LOV_ADD_OBD: {
+	case LCFG_LOV_ADD_OBD:
+	case LCFG_ADD_MDC: {
 		__u32 index;
+		__u32 mdt_index;
 		int gen;
-		/* lov_modify_tgts add  0:lov_mdsA  1:osp  2:0  3:1 */
+		/* lov_modify_tgts add  0:lov_mdsA  1:osp  2:0  3:1
+		 * modify_mdc_tgts add  0:lustre-MDT0001
+		 *		      1:lustre-MDT0001-mdc0002
+		 *		      2:2  3:1*/
 		arg1 = lustre_cfg_string(lcfg, 1);
 
 		if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
@@ -189,14 +228,34 @@ static int lod_process_config(const struct lu_env *env,
 		if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", &gen) != 1)
 			GOTO(out, rc = -EINVAL);
 
-		if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD)
-			rc = lod_add_device(env, lod, arg1, index, gen, 1);
-		else if (lcfg->lcfg_command == LCFG_LOV_ADD_INA)
-			rc = lod_add_device(env, lod, arg1, index, gen, 0);
-		else
+		if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
+			char *mdt;
+			mdt = strstr(lustre_cfg_string(lcfg, 0), "-MDT");
+			/* 1.8 configs don't have "-MDT0000" at the end */
+			if (mdt == NULL) {
+				mdt_index = 0;
+			} else {
+				rc = lodname2mdt_index(
+					lustre_cfg_string(lcfg, 0), &mdt_index);
+				if (rc != 0)
+					GOTO(out, rc);
+			}
+			rc = lod_add_device(env, lod, arg1, index, gen,
+					    mdt_index, LUSTRE_OSC_NAME, 1);
+		} else if (lcfg->lcfg_command == LCFG_ADD_MDC) {
+			mdt_index = index;
+			rc = lod_add_device(env, lod, arg1, index, gen,
+					    mdt_index, LUSTRE_MDC_NAME, 1);
+		} else if (lcfg->lcfg_command == LCFG_LOV_ADD_INA) {
+			/*FIXME: Add mdt_index for LCFG_LOV_ADD_INA*/
+			mdt_index = 0;
+			rc = lod_add_device(env, lod, arg1, index, gen,
+					    mdt_index, LUSTRE_OSC_NAME, 0);
+		} else {
 			rc = lod_del_device(env, lod,
 					    &lod->lod_ost_descs,
 					    arg1, index, gen);
+		}
 
 		break;
 	}

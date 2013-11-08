@@ -270,30 +270,34 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         char *name = obddev->obd_type->typ_name;
         ldlm_ns_type_t ns_type = LDLM_NS_TYPE_UNKNOWN;
         int rc;
+	char	*cli_name = lustre_cfg_buf(lcfg, 0);
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
          * obd_type and just use the values from there. */
 	if (!strcmp(name, LUSTRE_OSC_NAME) ||
-	    (!strcmp(name, LUSTRE_OSP_NAME) &&
-	     !is_osp_on_ost(lustre_cfg_buf(lcfg, 0)))) {
+	    (!(strcmp(name, LUSTRE_OSP_NAME)) &&
+	     (is_osp_on_mdt(cli_name) &&
+	       strstr(lustre_cfg_buf(lcfg, 1), "OST") != NULL))) {
+		/* OSC or OSP_on_MDT for OSTs */
                 rq_portal = OST_REQUEST_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
                 cli->cl_sp_me = LUSTRE_SP_CLI;
                 cli->cl_sp_to = LUSTRE_SP_OST;
                 ns_type = LDLM_NS_TYPE_OSC;
-
 	} else if (!strcmp(name, LUSTRE_MDC_NAME) ||
 		   (!strcmp(name, LUSTRE_OSP_NAME) &&
-		    is_osp_on_ost(lustre_cfg_buf(lcfg, 0)))) {
+		    (is_osp_for_connection(cli_name) ||
+		    (is_osp_on_mdt(cli_name) &&
+		     strstr(lustre_cfg_buf(lcfg, 1), "OST") == NULL)))) {
+		/* MDC or OSP_on_MDT for other MDTs */
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
                 cli->cl_sp_me = LUSTRE_SP_CLI;
                 cli->cl_sp_to = LUSTRE_SP_MDT;
                 ns_type = LDLM_NS_TYPE_MDC;
-
         } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
                 rq_portal = MGS_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
@@ -302,16 +306,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 cli->cl_sp_to = LUSTRE_SP_MGS;
                 cli->cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_INVALID;
                 ns_type = LDLM_NS_TYPE_MGC;
-
-	} else if (!strcmp(name, LUSTRE_OSP_NAME)) {
-		rq_portal = OST_REQUEST_PORTAL;
-		rp_portal = OSC_REPLY_PORTAL;
-		connect_op = OST_CONNECT;
-		cli->cl_sp_me = LUSTRE_SP_CLI;
-		cli->cl_sp_to = LUSTRE_SP_OST;
-		ns_type = LDLM_NS_TYPE_OSC;
-
-        } else {
+	} else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
                 RETURN(-EINVAL);

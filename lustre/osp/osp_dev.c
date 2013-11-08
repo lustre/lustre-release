@@ -49,6 +49,7 @@
 #include <obd_class.h>
 #include <lustre_param.h>
 #include <lustre_log.h>
+#include <lustre_mdc.h>
 
 #include "osp_internal.h"
 
@@ -231,22 +232,25 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	int			 rc = 0;
 	ENTRY;
 
-	if (is_osp_on_ost(d->opd_obd->obd_name)) {
+	if (is_osp_for_connection(d->opd_obd->obd_name)) {
 		rc = osp_disconnect(d);
 		RETURN(rc);
 	}
 
 	LASSERT(env);
 	/* release last_used file */
-	osp_last_used_fini(env, d);
+	if (!d->opd_connect_mdt)
+		osp_last_used_fini(env, d);
 
 	rc = osp_disconnect(d);
 
-	/* stop precreate thread */
-	osp_precreate_fini(d);
+	if (!d->opd_connect_mdt) {
+		/* stop precreate thread */
+		osp_precreate_fini(d);
 
-	/* stop sync thread */
-	osp_sync_fini(d);
+		/* stop sync thread */
+		osp_sync_fini(d);
+	}
 
 	obd_fid_fini(d->opd_obd);
 
@@ -264,7 +268,7 @@ static int osp_process_config(const struct lu_env *env,
 
 	switch (lcfg->lcfg_command) {
 	case LCFG_CLEANUP:
-		if (!is_osp_on_ost(d->opd_obd->obd_name))
+		if (!is_osp_for_connection(d->opd_obd->obd_name))
 			lu_dev_del_linkage(dev->ld_site, dev);
 		rc = osp_shutdown(env, d);
 		break;
@@ -305,7 +309,8 @@ static int osp_recovery_complete(const struct lu_env *env,
 
 	ENTRY;
 	osp->opd_recovery_completed = 1;
-	cfs_waitq_signal(&osp->opd_pre_waitq);
+	if (!osp->opd_connect_mdt)
+		cfs_waitq_signal(&osp->opd_pre_waitq);
 	RETURN(rc);
 }
 
@@ -409,11 +414,11 @@ out:
 static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-	struct obd_device		*obd;
-	struct obd_import		*imp;
-	class_uuid_t			 uuid;
-	char				*src, *ost, *mdt, *osdname = NULL;
-	int				 rc, idx;
+	struct obd_device	*obd;
+	struct obd_import	*imp;
+	class_uuid_t		uuid;
+	char			*src, *tgt, *mdt, *osdname = NULL;
+	int			rc, idx;
 
 	ENTRY;
 
@@ -439,27 +444,75 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	if (src == NULL)
 		RETURN(-EINVAL);
 
-	ost = strstr(src, "-OST");
-	if (ost == NULL)
+	tgt = strrchr(src, '-');
+	if (tgt == NULL) {
+		CERROR("%s: invalid target name %s\n",
+		       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
 		RETURN(-EINVAL);
-
-	idx = simple_strtol(ost + 4, &mdt, 16);
-	if (mdt[0] != '-' || idx > INT_MAX || idx < 0) {
-		CERROR("%s: invalid OST index in '%s'\n", obd->obd_name, src);
-		GOTO(out_fini, rc = -EINVAL);
 	}
-	m->opd_index = idx;
 
-	idx = ost - src;
+	if (strncmp(tgt, "-osc", 4) == 0) {
+		/* Old OSC name fsname-OSTXXXX-osc */
+		for (tgt--; tgt > src && *tgt != '-'; tgt--)
+			;
+		if (tgt == src) {
+			CERROR("%s: invalid target name %s\n",
+			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
+			RETURN(-EINVAL);
+		}
+
+		if (strncmp(tgt, "-OST", 4) != 0) {
+			CERROR("%s: invalid target name %s\n",
+			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
+			RETURN(-EINVAL);
+		}
+
+		idx = simple_strtol(tgt + 4, &mdt, 16);
+		if (mdt[0] != '-' || idx > INT_MAX || idx < 0) {
+			CERROR("%s: invalid OST index in '%s'\n",
+			       m->opd_obd->obd_name, src);
+			RETURN(-EINVAL);
+		}
+		m->opd_index = idx;
+		idx = tgt - src;
+	} else {
+		/* New OSC name fsname-OSTXXXX-osc-MDTXXXX */
+		if (strncmp(tgt, "-MDT", 4) != 0 &&
+			 strncmp(tgt, "-OST", 4) != 0) {
+			CERROR("%s: invalid target name %s\n",
+			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
+			RETURN(-EINVAL);
+		}
+
+		if (tgt - src <= 12) {
+			CERROR("%s: invalid target name %s\n",
+			       m->opd_obd->obd_name, lustre_cfg_string(cfg, 0));
+			RETURN(-EINVAL);
+		}
+
+		if (strncmp(tgt - 12, "-MDT", 4) == 0)
+			m->opd_connect_mdt = 1;
+
+		idx = simple_strtol(tgt - 8, &mdt, 16);
+		if (mdt[0] != '-' || idx > INT_MAX || idx < 0) {
+			CERROR("%s: invalid OST index in '%s'\n",
+			       m->opd_obd->obd_name, src);
+			RETURN(-EINVAL);
+		}
+
+		m->opd_index = idx;
+		idx = tgt - src - 12;
+	}
 	/* check the fsname length, and after this everything else will fit */
 	if (idx > MTI_NAME_MAXLEN) {
-		CERROR("%s: fsname too long in '%s'\n", obd->obd_name, src);
-		GOTO(out_fini, rc = -EINVAL);
+		CERROR("%s: fsname too long in '%s'\n",
+		       m->opd_obd->obd_name, src);
+		RETURN(-EINVAL);
 	}
 
 	OBD_ALLOC(osdname, MAX_OBD_NAME);
 	if (osdname == NULL)
-		GOTO(out_fini, rc = -ENOMEM);
+		RETURN(-ENOMEM);
 
 	memcpy(osdname, src, idx); /* copy just the fsname part */
 	osdname[idx] = '\0';
@@ -471,6 +524,15 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		strcat(osdname, mdt);
 	strcat(osdname, "-osd");
 	CDEBUG(D_HA, "%s: connect to %s (%s)\n", obd->obd_name, osdname, src);
+
+	if (m->opd_connect_mdt) {
+		struct client_obd *cli = &m->opd_obd->u.cli;
+
+		OBD_ALLOC(cli->cl_rpc_lock, sizeof(*cli->cl_rpc_lock));
+		if (!cli->cl_rpc_lock)
+			RETURN(-ENOMEM);
+		osp_init_rpc_lock(cli->cl_rpc_lock);
+	}
 
 	m->opd_dt_dev.dd_lu_dev.ld_ops = &osp_lu_ops;
 	m->opd_dt_dev.dd_ops = &osp_dt_ops;
@@ -492,35 +554,33 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 
 	osp_lprocfs_init(m);
 
-	/*
-	 * Initialize last id from the storage - will be used in orphan cleanup
-	 */
-	rc = osp_last_used_init(env, m);
-	if (rc)
-		GOTO(out_proc, rc);
+	if (!m->opd_connect_mdt) {
+		/* Initialize last id from the storage - will be
+		 * used in orphan cleanup. */
+		rc = osp_last_used_init(env, m);
+		if (rc)
+			GOTO(out_proc, rc);
+		/* Initialize precreation thread, it handles new
+		 * connections as well. */
+		rc = osp_init_precreate(m);
+		if (rc)
+			GOTO(out_last_used, rc);
+		/*
+		 * Initialize synhronization mechanism taking
+		 * care of propogating changes to OST in near
+		 * transactional manner.
+		 */
+		rc = osp_sync_init(env, m);
+		if (rc)
+			GOTO(out_precreat, rc);
 
-	/*
-	 * Initialize precreation thread, it handles new connections as well
-	 */
-	rc = osp_init_precreate(m);
-	if (rc)
-		GOTO(out_last_used, rc);
-
-	/*
-	 * Initialize synhronization mechanism taking care of propogating
-	 * changes to OST in near transactional manner
-	 */
-	rc = osp_sync_init(env, m);
-	if (rc)
-		GOTO(out_precreat, rc);
-
-	rc = obd_fid_init(m->opd_obd, NULL, LUSTRE_SEQ_DATA);
-	if (rc) {
-		CERROR("%s: fid init error: rc = %d\n",
-		       m->opd_obd->obd_name, rc);
-		GOTO(out, rc);
+		rc = obd_fid_init(m->opd_obd, NULL, LUSTRE_SEQ_DATA);
+		if (rc) {
+			CERROR("%s: fid init error: rc = %d\n",
+			       m->opd_obd->obd_name, rc);
+			GOTO(out, rc);
+		}
 	}
-
 	/*
 	 * Initiate connect to OST
 	 */
@@ -537,11 +597,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	RETURN(0);
 
 out:
-	/* stop sync thread */
-	osp_sync_fini(m);
+	if (!m->opd_connect_mdt)
+		/* stop sync thread */
+		osp_sync_fini(m);
 out_precreat:
 	/* stop precreate thread */
-	osp_precreate_fini(m);
+	if (!m->opd_connect_mdt)
+		osp_precreate_fini(m);
 out_last_used:
 	osp_last_used_fini(env, m);
 out_proc:
@@ -552,6 +614,13 @@ out_proc:
 out_ref:
 	ptlrpcd_decref();
 out_disconnect:
+	if (m->opd_connect_mdt) {
+		struct client_obd *cli = &m->opd_obd->u.cli;
+		if (cli->cl_rpc_lock != NULL) {
+			OBD_FREE_PTR(cli->cl_rpc_lock);
+			cli->cl_rpc_lock = NULL;
+		}
+	}
 	obd_disconnect(m->opd_storage_exp);
 out_fini:
 	if (osdname)
@@ -590,7 +659,7 @@ static struct lu_device *osp_device_alloc(const struct lu_env *env,
 
 		l = osp2lu_dev(m);
 		dt_device_init(&m->opd_dt_dev, t);
-		if (is_osp_on_ost(lustre_cfg_string(lcfg, 0)))
+		if (is_osp_for_connection(lustre_cfg_string(lcfg, 0)))
 			rc = osp_init_for_ost(env, m, t, lcfg);
 		else
 			rc = osp_init0(env, m, t, lcfg);
@@ -614,7 +683,7 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	if (m->opd_storage_exp)
 		obd_disconnect(m->opd_storage_exp);
 
-	if (is_osp_on_ost(m->opd_obd->obd_name))
+	if (is_osp_for_connection(m->opd_obd->obd_name))
 		osp_fini_for_ost(m);
 
 	imp = m->opd_obd->u.cli.cl_import;
@@ -632,6 +701,14 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	LASSERT(m->opd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->opd_obd);
 	lprocfs_obd_cleanup(m->opd_obd);
+
+	if (m->opd_connect_mdt) {
+		struct client_obd *cli = &m->opd_obd->u.cli;
+		if (cli->cl_rpc_lock != NULL) {
+			OBD_FREE_PTR(cli->cl_rpc_lock);
+			cli->cl_rpc_lock = NULL;
+		}
+	}
 
 	rc = client_obd_cleanup(m->opd_obd);
 	LASSERTF(rc == 0, "error %d\n", rc);
@@ -678,29 +755,21 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	osp->opd_connects++;
 	LASSERT(osp->opd_connects == 1);
 
+	osp->opd_exp = *exp;
+
 	imp = osp->opd_obd->u.cli.cl_import;
 	imp->imp_dlm_handle = conn;
 
+	LASSERT(data != NULL);
+	LASSERT(data->ocd_connect_flags & OBD_CONNECT_INDEX);
 	ocd = &imp->imp_connect_data;
-	ocd->ocd_connect_flags = OBD_CONNECT_AT |
-				 OBD_CONNECT_FULL20 |
-				 OBD_CONNECT_INDEX |
-#ifdef HAVE_LRU_RESIZE_SUPPORT
-				 OBD_CONNECT_LRU_RESIZE |
-#endif
-				 OBD_CONNECT_MDS |
-				 OBD_CONNECT_OSS_CAPA |
-				 OBD_CONNECT_REQPORTAL |
-				 OBD_CONNECT_SKIP_ORPHAN |
-				 OBD_CONNECT_VERSION |
-				 OBD_CONNECT_FID |
-				 OBD_CONNECT_LVB_TYPE;
-
-	if (is_osp_on_ost(osp->opd_obd->obd_name))
+	*ocd = *data;
+	if (is_osp_for_connection(osp->opd_obd->obd_name))
 		ocd->ocd_connect_flags |= OBD_CONNECT_LIGHTWEIGHT;
 
+	imp->imp_connect_flags_orig = ocd->ocd_connect_flags;
+
 	ocd->ocd_version = LUSTRE_VERSION_CODE;
-	LASSERT(data->ocd_connect_flags & OBD_CONNECT_INDEX);
 	ocd->ocd_index = data->ocd_index;
 	imp->imp_connect_flags_orig = ocd->ocd_connect_flags;
 
@@ -711,6 +780,16 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	}
 
 	ptlrpc_pinger_add_import(imp);
+
+	/* set seq controller export for MDC0 if exists */
+	if (osp->opd_connect_mdt && !is_osp_for_connection(obd->obd_name) &&
+	    data->ocd_index == 0) {
+		struct seq_server_site *ss;
+
+		ss = lu_site2seq(osp2lu_dev(osp)->ld_site);
+		ss->ss_control_exp = class_export_get(*exp);
+		ss->ss_server_fld->lsf_control_exp = *exp;
+	}
 
 out:
 	RETURN(rc);
@@ -739,7 +818,7 @@ static int osp_obd_disconnect(struct obd_export *exp)
 	}
 
 	/* destroy the device */
-	if (!is_osp_on_ost(obd->obd_name))
+	if (!is_osp_for_connection(obd->obd_name))
 		class_manual_cleanup(obd);
 
 	RETURN(rc);
@@ -820,7 +899,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 	case IMP_EVENT_DISCON:
 		d->opd_got_disconnected = 1;
 		d->opd_imp_connected = 0;
-		if (is_osp_on_ost(d->opd_obd->obd_name))
+		if (d->opd_connect_mdt)
 			break;
 		osp_pre_update_status(d, -ENODEV);
 		cfs_waitq_signal(&d->opd_pre_waitq);
@@ -828,7 +907,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		break;
 	case IMP_EVENT_INACTIVE:
 		d->opd_imp_active = 0;
-		if (is_osp_on_ost(d->opd_obd->obd_name))
+		if (d->opd_connect_mdt)
 			break;
 		osp_pre_update_status(d, -ENODEV);
 		cfs_waitq_signal(&d->opd_pre_waitq);
@@ -840,7 +919,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 			d->opd_new_connection = 1;
 		d->opd_imp_connected = 1;
 		d->opd_imp_seen_connected = 1;
-		if (is_osp_on_ost(d->opd_obd->obd_name))
+		if (d->opd_connect_mdt)
 			break;
 		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
 			d->opd_obd->u.cli.cl_seq->lcs_exp =

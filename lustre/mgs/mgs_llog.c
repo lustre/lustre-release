@@ -548,11 +548,6 @@ static int mgs_set_index(const struct lu_env *env,
                 imap = fsdb->fsdb_ost_index_map;
         } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 imap = fsdb->fsdb_mdt_index_map;
-                if (fsdb->fsdb_mdt_count >= MAX_MDT_COUNT) {
-                        LCONSOLE_ERROR_MSG(0x13f, "The max mdt count"
-                                           "is %d\n", (int)MAX_MDT_COUNT);
-			GOTO(out_up, rc = -ERANGE);
-                }
         } else {
 		GOTO(out_up, rc = -EINVAL);
         }
@@ -1383,7 +1378,7 @@ static inline int record_lov_add(const struct lu_env *env,
                                  char *index, char *gen)
 {
 	return record_base(env,llh,lov_name,0,LCFG_LOV_ADD_OBD,
-                           ost_uuid,index,gen,0);
+			   ost_uuid, index, gen, 0);
 }
 
 static inline int record_mount_opt(const struct lu_env *env,
@@ -1607,16 +1602,16 @@ next:
         RETURN(rc);
 }
 
-static int mgs_write_log_mdc_to_mdt(const struct lu_env *env,
+static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 				    struct mgs_device *mgs,
 				    struct fs_db *fsdb,
 				    struct mgs_target_info *mti,
-				    char *logname);
+				    int index, char *logname);
 static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 				    struct mgs_device *mgs,
 				    struct fs_db *fsdb,
                                     struct mgs_target_info *mti,
-                                    char *logname, char *suffix, char *lovname,
+				    char *logname, char *suffix, char *lovname,
                                     enum lustre_sec_part sec_part, int flags);
 static int name_create_mdt_and_lov(char **logname, char **lovname,
 				   struct fs_db *fsdb, int i);
@@ -1685,7 +1680,8 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
                 struct cfg_marker *marker;
                 marker = lustre_cfg_buf(lcfg, 1);
                 if (!strncmp(marker->cm_comment,"add osc",7) &&
-                    (marker->cm_flags & CM_START)){
+		    (marker->cm_flags & CM_START) &&
+		     !(marker->cm_flags & CM_SKIP)) {
                         got_an_osc_or_mdc = 1;
                         strncpy(tmti->mti_svname, marker->cm_tgtname,
                                 sizeof(tmti->mti_svname));
@@ -1700,7 +1696,8 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
                         RETURN(rc);
                 }
                 if (!strncmp(marker->cm_comment,"add osc",7) &&
-                    (marker->cm_flags & CM_END)){
+		    (marker->cm_flags & CM_END) &&
+		     !(marker->cm_flags & CM_SKIP)) {
                         LASSERT(last_step == marker->cm_step);
                         last_step = -1;
                         got_an_osc_or_mdc = 0;
@@ -1714,7 +1711,8 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
                         RETURN(rc);
                 }
                 if (!strncmp(marker->cm_comment,"add mdc",7) &&
-                    (marker->cm_flags & CM_START)){
+		    (marker->cm_flags & CM_START) &&
+		     !(marker->cm_flags & CM_SKIP)) {
                         got_an_osc_or_mdc = 2;
                         last_step = marker->cm_step;
                         memcpy(tmti->mti_svname, marker->cm_tgtname,
@@ -1723,7 +1721,8 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
                         RETURN(rc);
                 }
                 if (!strncmp(marker->cm_comment,"add mdc",7) &&
-                    (marker->cm_flags & CM_END)){
+		    (marker->cm_flags & CM_END) &&
+		     !(marker->cm_flags & CM_SKIP)) {
                         LASSERT(last_step == marker->cm_step);
                         last_step = -1;
                         got_an_osc_or_mdc = 0;
@@ -1774,7 +1773,8 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
                        strlen(mti->mti_fsname));
                 tmti->mti_stripe_index = index;
 
-		rc = mgs_write_log_mdc_to_mdt(env, mgs, fsdb, tmti,
+		rc = mgs_write_log_osp_to_mdt(env, mgs, fsdb, tmti,
+					      mti->mti_stripe_index,
 					      mti->mti_svname);
                 memset(tmti, 0, sizeof(*tmti));
                 RETURN(rc);
@@ -2087,83 +2087,158 @@ out_free:
         RETURN(rc);
 }
 
+static inline int name_create_lov(char **lovname, char *mdtname,
+				  struct fs_db *fsdb, int index)
+{
+	/* COMPAT_180 */
+	if (index == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+		return name_create(lovname, fsdb->fsdb_name, "-mdtlov");
+	else
+		return name_create(lovname, mdtname, "-mdtlov");
+}
+
+static int name_create_mdt_and_lov(char **logname, char **lovname,
+				   struct fs_db *fsdb, int i)
+{
+	int rc;
+
+	rc = name_create_mdt(logname, fsdb->fsdb_name, i);
+	if (rc)
+		return rc;
+	/* COMPAT_180 */
+	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+		rc = name_create(lovname, fsdb->fsdb_name, "-mdtlov");
+	else
+		rc = name_create(lovname, *logname, "-mdtlov");
+	if (rc) {
+		name_destroy(logname);
+		*logname = NULL;
+	}
+	return rc;
+}
+
+static inline int name_create_mdt_osc(char **oscname, char *ostname,
+				      struct fs_db *fsdb, int i)
+{
+	char suffix[16];
+
+	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+		sprintf(suffix, "-osc");
+	else
+		sprintf(suffix, "-osc-MDT%04x", i);
+	return name_create(oscname, ostname, suffix);
+}
+
 /* add new mdc to already existent MDS */
-static int mgs_write_log_mdc_to_mdt(const struct lu_env *env,
+static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 				    struct mgs_device *mgs,
 				    struct fs_db *fsdb,
 				    struct mgs_target_info *mti,
-				    char *logname)
+				    int mdt_index, char *logname)
 {
-        struct llog_handle *llh = NULL;
-	char *nodeuuid = NULL;
-	char *mdcname = NULL;
-	char *mdcuuid = NULL;
-	char *mdtuuid = NULL;
-        int idx = mti->mti_stripe_index;
-        char index[9];
-        int i, rc;
+	struct llog_handle	*llh = NULL;
+	char	*nodeuuid = NULL;
+	char	*ospname = NULL;
+	char	*lovuuid = NULL;
+	char	*mdtuuid = NULL;
+	char	*svname = NULL;
+	char	*mdtname = NULL;
+	char	*lovname = NULL;
+	char	index_str[16];
+	int	i, rc;
 
-        ENTRY;
-	if (mgs_log_is_empty(env, mgs, logname)) {
+	ENTRY;
+	if (mgs_log_is_empty(env, mgs, mti->mti_svname)) {
                 CERROR("log is empty! Logical error\n");
                 RETURN (-EINVAL);
         }
 
-        CDEBUG(D_MGS, "adding mdc index %d to %s\n", idx, logname);
+	CDEBUG(D_MGS, "adding osp index %d to %s\n", mti->mti_stripe_index,
+	       logname);
+
+	rc = name_create_mdt(&mdtname, fsdb->fsdb_name, mti->mti_stripe_index);
+	if (rc)
+		RETURN(rc);
 
 	rc = name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
 	if (rc)
-		RETURN(rc);
-	snprintf(index, sizeof(index), "-mdc%04x", idx);
-	rc = name_create(&mdcname, logname, index);
+		GOTO(out_destory, rc);
+
+	rc = name_create(&svname, mdtname, "-osp");
 	if (rc)
-		GOTO(out_free, rc);
-	rc = name_create(&mdcuuid, mdcname, "_UUID");
+		GOTO(out_destory, rc);
+
+	sprintf(index_str, "-MDT%04x", mdt_index);
+	rc = name_create(&ospname, svname, index_str);
 	if (rc)
-		GOTO(out_free, rc);
-	rc = name_create(&mdtuuid, logname, "_UUID");
+		GOTO(out_destory, rc);
+
+	rc = name_create_lov(&lovname, logname, fsdb, mdt_index);
 	if (rc)
-		GOTO(out_free, rc);
+		GOTO(out_destory, rc);
+
+	rc = name_create(&lovuuid, lovname, "_UUID");
+	if (rc)
+		GOTO(out_destory, rc);
+
+	rc = name_create(&mdtuuid, mdtname, "_UUID");
+	if (rc)
+		GOTO(out_destory, rc);
 
 	rc = record_start_log(env, mgs, &llh, logname);
 	if (rc)
-		GOTO(out_free, rc);
-	rc = record_marker(env, llh, fsdb, CM_START, mti->mti_svname, "add mdc");
+		GOTO(out_destory, rc);
+
+	rc = record_marker(env, llh, fsdb, CM_START, mti->mti_svname,
+			   "add osp");
 	if (rc)
-		GOTO(out_end, rc);
-        for (i = 0; i < mti->mti_nid_count; i++) {
-                CDEBUG(D_MGS, "add nid %s for mdt\n",
-                       libcfs_nid2str(mti->mti_nids[i]));
+		GOTO(out_destory, rc);
+
+	for (i = 0; i < mti->mti_nid_count; i++) {
+		CDEBUG(D_MGS, "add nid %s for mdt\n",
+		       libcfs_nid2str(mti->mti_nids[i]));
 		rc = record_add_uuid(env, llh, mti->mti_nids[i], nodeuuid);
 		if (rc)
 			GOTO(out_end, rc);
         }
-	rc = record_attach(env, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
-	if (rc)
-		GOTO(out_end, rc);
-	rc = record_setup(env, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
-	if (rc)
-		GOTO(out_end, rc);
-	rc = mgs_write_log_failnids(env, mti, llh, mdcname);
-	if (rc)
-		GOTO(out_end, rc);
-        snprintf(index, sizeof(index), "%d", idx);
 
-	rc = record_mdc_add(env, llh, logname, mdcuuid, mti->mti_uuid,
-                            index, "1");
+	rc = record_attach(env, llh, ospname, LUSTRE_OSP_NAME, lovuuid);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_marker(env, llh, fsdb, CM_END, mti->mti_svname, "add mdc");
+
+	rc = record_setup(env, llh, ospname, mti->mti_uuid, nodeuuid,
+			  NULL, NULL);
 	if (rc)
 		GOTO(out_end, rc);
+
+	rc = mgs_write_log_failnids(env, mti, llh, ospname);
+	if (rc)
+		GOTO(out_end, rc);
+
+	/* Add mdc(osp) to lod */
+	snprintf(index_str, sizeof(mti->mti_stripe_index), "%d",
+		 mti->mti_stripe_index);
+	rc = record_base(env, llh, lovname, 0, LCFG_ADD_MDC, mti->mti_uuid,
+			 index_str, "1", NULL);
+	if (rc)
+		GOTO(out_end, rc);
+
+	rc = record_marker(env, llh, fsdb, CM_END, mti->mti_svname, "add osp");
+	if (rc)
+		GOTO(out_end, rc);
+
 out_end:
 	record_end_log(env, &llh);
-out_free:
+
+out_destory:
 	name_destroy(&mdtuuid);
-        name_destroy(&mdcuuid);
-        name_destroy(&mdcname);
+	name_destroy(&lovuuid);
+	name_destroy(&lovname);
+	name_destroy(&ospname);
+	name_destroy(&svname);
         name_destroy(&nodeuuid);
-        RETURN(rc);
+	name_destroy(&mdtname);
+	RETURN(rc);
 }
 
 static int mgs_write_log_mdt0(const struct lu_env *env,
@@ -2228,38 +2303,6 @@ out_lod:
 out_free:
         OBD_FREE(uuid, sizeof(struct obd_uuid));
         RETURN(rc);
-}
-
-static int name_create_mdt_and_lov(char **logname, char **lovname,
-                                   struct fs_db *fsdb, int i)
-{
-	int rc;
-
-	rc = name_create_mdt(logname, fsdb->fsdb_name, i);
-	if (rc)
-		return rc;
-        /* COMPAT_180 */
-	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
-		rc = name_create(lovname, fsdb->fsdb_name, "-mdtlov");
-        else
-		rc = name_create(lovname, *logname, "-mdtlov");
-	if (rc) {
-		name_destroy(logname);
-		*logname = NULL;
-	}
-	return rc;
-}
-
-static inline int name_create_mdt_osc(char **oscname, char *ostname,
-                                       struct fs_db *fsdb, int i)
-{
-        char suffix[16];
-
-	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
-                sprintf(suffix, "-osc");
-        else
-                sprintf(suffix, "-osc-MDT%04x", i);
-	return name_create(oscname, ostname, suffix);
 }
 
 /* envelope method for all layers log */
@@ -2343,20 +2386,24 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 
 	if (rc)
 		GOTO(out_end, rc);
+
 	/* for_all_existing_mdt except current one */
-        for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                char *mdtname;
-                if (i !=  mti->mti_stripe_index &&
-		    test_bit(i,  fsdb->fsdb_mdt_index_map)) {
-			rc = name_create_mdt(&mdtname, mti->mti_fsname, i);
+	for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+		if (i !=  mti->mti_stripe_index &&
+		    test_bit(i, fsdb->fsdb_mdt_index_map)) {
+			char *logname;
+
+			rc = name_create_mdt(&logname, fsdb->fsdb_name, i);
 			if (rc)
 				GOTO(out_end, rc);
-			rc = mgs_write_log_mdc_to_mdt(env, mgs, fsdb, mti, mdtname);
-                        name_destroy(&mdtname);
+
+			rc = mgs_write_log_osp_to_mdt(env, mgs, fsdb, mti,
+						      i, logname);
+			name_destroy(&logname);
 			if (rc)
 				GOTO(out_end, rc);
-                }
-        }
+		}
+	}
 out_end:
 	record_end_log(env, &llh);
 out_free:
@@ -2395,6 +2442,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	rc = name_create(&svname, mti->mti_svname, "-osc");
 	if (rc)
 		GOTO(out_free, rc);
+
 	/* for the system upgraded from old 1.8, keep using the old osc naming
 	 * style for mdt, see name_create_mdt_osc(). LU-1257 */
 	if (test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
@@ -2403,12 +2451,14 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 		rc = name_create(&oscname, svname, suffix);
 	if (rc)
 		GOTO(out_free, rc);
+
 	rc = name_create(&oscuuid, oscname, "_UUID");
 	if (rc)
 		GOTO(out_free, rc);
 	rc = name_create(&lovuuid, lovname, "_UUID");
 	if (rc)
 		GOTO(out_free, rc);
+
 
         /*
         #03 L add_uuid nid=uml1@tcp(0x20000c0a80201) 0:  1:uml1_UUID
@@ -2452,7 +2502,9 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	rc = mgs_write_log_failnids(env, mti, llh, oscname);
 	if (rc)
 		GOTO(out_end, rc);
-        snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
+
+	snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
+
 	rc = record_lov_add(env, llh, lovname, mti->mti_uuid, index, "1");
 	if (rc)
 		GOTO(out_end, rc);
@@ -2863,7 +2915,7 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 				      mti->mti_fsname, quota, 1);
 	*ptr = sep;
 	lustre_cfg_free(lcfg);
-	return rc;
+	return rc < 0 ? rc : 0;
 }
 
 static int mgs_srpc_set_param_disk(const struct lu_env *env,

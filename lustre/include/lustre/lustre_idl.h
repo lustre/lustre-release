@@ -354,13 +354,6 @@ struct hsm_attrs {
 };
 extern void lustre_hsm_swab(struct hsm_attrs *attrs);
 
-/* This is the maximum number of MDTs allowed in CMD testing until such
- * a time that FID-on-OST is implemented.  This is due to the limitations
- * of packing non-0-MDT numbers into the FID SEQ namespace.  Once FID-on-OST
- * is implemented this limit will be virtually unlimited. */
-#define MAX_MDT_COUNT 8
-
-
 /**
  * fid constants
  */
