@@ -490,10 +490,10 @@ struct lu_object {
          * Depth. Top level layer depth is 0.
          */
         int                                lo_depth;
-        /**
-         * Flags from enum lu_object_flags.
-         */
-        unsigned long                      lo_flags;
+	/**
+	 * Flags from enum lu_object_flags.
+	 */
+	__u32					lo_flags;
         /**
          * Link to the device, for debugging.
          */

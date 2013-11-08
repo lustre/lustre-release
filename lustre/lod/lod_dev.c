@@ -132,6 +132,39 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 	return lu_obj;
 }
 
+static int lod_cleanup_desc_tgts(const struct lu_env *env,
+				 struct lod_device *lod,
+				 struct lod_tgt_descs *ltd,
+				 struct lustre_cfg *lcfg)
+{
+	struct lu_device  *next;
+	int rc = 0;
+	int i;
+
+	lod_getref(ltd);
+	if (ltd->ltd_tgts_size <= 0) {
+		lod_putref(lod, ltd);
+		return 0;
+	}
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		struct lod_tgt_desc *tgt;
+		int rc1;
+
+		tgt = LTD_TGT(ltd, i);
+		LASSERT(tgt && tgt->ltd_tgt);
+		next = &tgt->ltd_tgt->dd_lu_dev;
+		rc1 = next->ld_ops->ldo_process_config(env, next, lcfg);
+		if (rc1) {
+			CERROR("%s: error cleaning up LOD index %u: cmd %#x"
+			       ": rc = %d\n", lod2obd(lod)->obd_name, i,
+			       lcfg->lcfg_command, rc1);
+			rc = rc1;
+		}
+	}
+	lod_putref(lod, ltd);
+	return rc;
+}
+
 static int lod_process_config(const struct lu_env *env,
 			      struct lu_device *dev,
 			      struct lustre_cfg *lcfg)
@@ -139,11 +172,10 @@ static int lod_process_config(const struct lu_env *env,
 	struct lod_device *lod = lu2lod_dev(dev);
 	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
 	char		  *arg1;
-	int		   rc, i;
+	int		   rc;
 	ENTRY;
 
 	switch(lcfg->lcfg_command) {
-
 	case LCFG_LOV_DEL_OBD:
 	case LCFG_LOV_ADD_INA:
 	case LCFG_LOV_ADD_OBD: {
@@ -162,7 +194,9 @@ static int lod_process_config(const struct lu_env *env,
 		else if (lcfg->lcfg_command == LCFG_LOV_ADD_INA)
 			rc = lod_add_device(env, lod, arg1, index, gen, 0);
 		else
-			rc = lod_del_device(env, lod, arg1, index, gen);
+			rc = lod_del_device(env, lod,
+					    &lod->lod_ost_descs,
+					    arg1, index, gen);
 
 		break;
 	}
@@ -177,24 +211,11 @@ static int lod_process_config(const struct lu_env *env,
 		if (rc > 0)
 			rc = 0;
 		GOTO(out, rc);
-	 }
-
+	}
 	case LCFG_CLEANUP:
 		lu_dev_del_linkage(dev->ld_site, dev);
-		lod_getref(lod);
-		lod_foreach_ost(lod, i) {
-			struct lod_ost_desc *ost;
-			ost = OST_TGT(lod, i);
-			LASSERT(ost && ost->ltd_ost);
-			next = &ost->ltd_ost->dd_lu_dev;
-			rc = next->ld_ops->ldo_process_config(env, next, lcfg);
-			if (rc)
-				CERROR("%s: can't process %u: %d\n",
-				       lod2obd(lod)->obd_name,
-				       lcfg->lcfg_command, rc);
-		}
-		lod_putref(lod);
-
+		lod_cleanup_desc_tgts(env, lod, &lod->lod_mdt_descs, lcfg);
+		lod_cleanup_desc_tgts(env, lod, &lod->lod_ost_descs, lcfg);
 		/*
 		 * do cleanup on underlying storage only when
 		 * all OSPs are cleaned up, as they use that OSD as well
@@ -226,7 +247,6 @@ static int lod_recovery_complete(const struct lu_env *env,
 {
 	struct lod_device   *lod = lu2lod_dev(dev);
 	struct lu_device    *next = &lod->lod_child->dd_lu_dev;
-	struct lod_ost_desc *ost;
 	int		     i, rc;
 	ENTRY;
 
@@ -235,18 +255,20 @@ static int lod_recovery_complete(const struct lu_env *env,
 
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 
-	lod_getref(lod);
-	lod_foreach_ost(lod, i) {
-		ost = OST_TGT(lod, i);
-		LASSERT(ost && ost->ltd_ost);
-		next = &ost->ltd_ost->dd_lu_dev;
-		rc = next->ld_ops->ldo_recovery_complete(env, next);
-		if (rc)
-			CERROR("%s: can't complete recovery on #%d: %d\n",
-			       lod2obd(lod)->obd_name, i, rc);
+	lod_getref(&lod->lod_ost_descs);
+	if (lod->lod_osts_size > 0) {
+		cfs_foreach_bit(lod->lod_ost_bitmap, i) {
+			struct lod_tgt_desc *tgt;
+			tgt = OST_TGT(lod, i);
+			LASSERT(tgt && tgt->ltd_tgt);
+			next = &tgt->ltd_ost->dd_lu_dev;
+			rc = next->ld_ops->ldo_recovery_complete(env, next);
+			if (rc)
+				CERROR("%s: can't complete recovery on #%d:"
+					"%d\n", lod2obd(lod)->obd_name, i, rc);
+		}
 	}
-	lod_putref(lod);
-
+	lod_putref(lod, &lod->lod_ost_descs);
 	RETURN(rc);
 }
 
@@ -321,7 +343,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 	int                  rc = 0, i;
 	ENTRY;
 
-	lod_getref(lod);
+	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, i) {
 		ost = OST_TGT(lod, i);
 		LASSERT(ost && ost->ltd_ost);
@@ -332,7 +354,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 			break;
 		}
 	}
-	lod_putref(lod);
+	lod_putref(lod, &lod->lod_ost_descs);
 	if (rc == 0)
 		rc = dt_sync(env, lod->lod_child);
 
@@ -454,6 +476,25 @@ out:
 	RETURN(rc);
 }
 
+static int lod_tgt_desc_init(struct lod_tgt_descs *ltd)
+{
+	mutex_init(&ltd->ltd_mutex);
+	init_rwsem(&ltd->ltd_rw_sem);
+
+	/* the OST array and bitmap are allocated/grown dynamically as OSTs are
+	 * added to the LOD, see lod_add_device() */
+	ltd->ltd_tgt_bitmap = CFS_ALLOCATE_BITMAP(32);
+	if (ltd->ltd_tgt_bitmap == NULL)
+		RETURN(-ENOMEM);
+
+	ltd->ltd_tgts_size  = 32;
+	ltd->ltd_tgtnr      = 0;
+
+	ltd->ltd_death_row = 0;
+	ltd->ltd_refcount  = 0;
+	return 0;
+}
+
 static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -490,9 +531,10 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_pools, rc);
 
-	mutex_init(&lod->lod_mutex);
-	init_rwsem(&lod->lod_rw_sem);
 	spin_lock_init(&lod->lod_desc_lock);
+	spin_lock_init(&lod->lod_connects_lock);
+	lod_tgt_desc_init(&lod->lod_mdt_descs);
+	lod_tgt_desc_init(&lod->lod_ost_descs);
 
 	RETURN(0);
 
@@ -545,11 +587,22 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct lod_device *lod = lu2lod_dev(d);
+	int		   rc;
 	ENTRY;
 
 	lod_pools_fini(lod);
 
 	lod_procfs_fini(lod);
+
+	rc = lod_fini_tgt(lod, &lod->lod_ost_descs);
+	if (rc)
+		CERROR("%s:can not fini ost descs %d\n",
+			lod2obd(lod)->obd_name, rc);
+
+	rc = lod_fini_tgt(lod, &lod->lod_mdt_descs);
+	if (rc)
+		CERROR("%s:can not fini mdt descs %d\n",
+			lod2obd(lod)->obd_name, rc);
 
 	RETURN(NULL);
 }
@@ -574,11 +627,11 @@ static int lod_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	*exp = class_conn2export(&conn);
 
-	mutex_lock(&lod->lod_mutex);
+	spin_lock(&lod->lod_connects_lock);
 	lod->lod_connects++;
 	/* at the moment we expect the only user */
 	LASSERT(lod->lod_connects == 1);
-	mutex_unlock(&lod->lod_mutex);
+	spin_unlock(&lod->lod_connects_lock);
 
 	RETURN(0);
 }
@@ -595,16 +648,16 @@ static int lod_obd_disconnect(struct obd_export *exp)
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
-	mutex_lock(&lod->lod_mutex);
+	spin_lock(&lod->lod_connects_lock);
 	lod->lod_connects--;
 	if (lod->lod_connects != 0) {
 		/* why should there be more than 1 connect? */
-		mutex_unlock(&lod->lod_mutex);
+		spin_unlock(&lod->lod_connects_lock);
 		CERROR("%s: disconnect #%d\n", exp->exp_obd->obd_name,
 		       lod->lod_connects);
 		goto out;
 	}
-	mutex_unlock(&lod->lod_mutex);
+	spin_unlock(&lod->lod_connects_lock);
 
 	/* the last user of lod has gone, let's release the device */
 	release = 1;
@@ -669,7 +722,7 @@ static int lod_obd_health_check(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(d);
-	lod_getref(d);
+	lod_getref(&d->lod_ost_descs);
 	lod_foreach_ost(d, i) {
 		ost = OST_TGT(d, i);
 		LASSERT(ost && ost->ltd_ost);
@@ -678,7 +731,7 @@ static int lod_obd_health_check(const struct lu_env *env,
 		if (rc == 0)
 			break;
 	}
-	lod_putref(d);
+	lod_putref(d, &d->lod_ost_descs);
 	RETURN(rc);
 }
 

@@ -315,14 +315,14 @@ static int lod_wr_qos_maxage(struct file *file, const char *buffer,
 	sprintf(str, "%smaxage=%d", PARAM_OSP, val);
 	lustre_cfg_bufs_set_string(&bufs, 1, str);
 	lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-	lod_getref(lod);
+	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, i) {
 		next = &OST_TGT(lod,i)->ltd_ost->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(NULL, next, lcfg);
 		if (rc)
 			CERROR("can't set maxage on #%d: %d\n", i, rc);
 	}
-	lod_putref(lod);
+	lod_putref(lod, &lod->lod_ost_descs);
 	lustre_cfg_free(lcfg);
 
 	return count;
@@ -336,7 +336,7 @@ static void *lod_osts_seq_start(struct seq_file *p, loff_t *pos)
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 
-	lod_getref(lod); /* released in lod_osts_seq_stop */
+	lod_getref(&lod->lod_ost_descs); /* released in lod_osts_seq_stop */
 	if (*pos >= lod->lod_ost_bitmap->size)
 		return NULL;
 
@@ -355,7 +355,7 @@ static void lod_osts_seq_stop(struct seq_file *p, void *v)
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
-	lod_putref(lod);
+	lod_putref(lod, &lod->lod_ost_descs);
 }
 
 static void *lod_osts_seq_next(struct seq_file *p, void *v, loff_t *pos)

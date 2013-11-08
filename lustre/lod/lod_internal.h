@@ -45,8 +45,8 @@
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 
-struct lod_ost_desc {
-	struct dt_device  *ltd_ost;
+struct lod_tgt_desc {
+	struct dt_device  *ltd_tgt;
 	struct list_head   ltd_kill;
 	struct obd_export *ltd_exp;
 	struct obd_uuid    ltd_uuid;
@@ -59,16 +59,36 @@ struct lod_ost_desc {
 			   ltd_reap:1;  /* should this target be deleted */
 };
 
-#define OST_PTRS                256     /* number of pointers at 1st level */
-#define OST_PTRS_PER_BLOCK      256     /* number of pointers at 2nd level */
+#define TGT_PTRS		256     /* number of pointers at 1st level */
+#define TGT_PTRS_PER_BLOCK      256     /* number of pointers at 2nd level */
 
-struct lod_ost_desc_idx {
-	struct lod_ost_desc *ldi_ost[OST_PTRS_PER_BLOCK];
+struct lod_tgt_desc_idx {
+	struct lod_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
 };
 
-#define OST_TGT(dev,index)      \
-	((dev)->lod_ost_idx[(index) / \
-	OST_PTRS_PER_BLOCK]->ldi_ost[(index)%OST_PTRS_PER_BLOCK])
+#define LTD_TGT(ltd, index)      \
+	 ((ltd)->ltd_tgt_idx[(index) / \
+	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK])
+
+#define OST_TGT(lod, index)   LTD_TGT(&lod->lod_ost_descs, index)
+struct lod_tgt_descs {
+	/* list of known TGTs */
+	struct lod_tgt_desc_idx	*ltd_tgt_idx[TGT_PTRS];
+	/* Size of the lod_tgts array, granted to be a power of 2 */
+	__u32			ltd_tgts_size;
+	/* number of registered TGTs */
+	int			ltd_tgtnr;
+	/* bitmap of TGTs available */
+	cfs_bitmap_t		*ltd_tgt_bitmap;
+	/* TGTs scheduled to be deleted */
+	__u32			ltd_death_row;
+	/* Table refcount used for delayed deletion */
+	int			ltd_refcount;
+	/* mutex to serialize concurrent updates to the tgt table */
+	struct mutex		ltd_mutex;
+	/* read/write semaphore used for array relocation */
+	struct rw_semaphore	ltd_rw_sem;
+};
 
 struct lod_device {
 	struct dt_device      lod_dt_dev;
@@ -76,6 +96,7 @@ struct lod_device {
 	struct dt_device     *lod_child;
 	cfs_proc_dir_entry_t *lod_proc_entry;
 	struct lprocfs_stats *lod_stats;
+	spinlock_t	      lod_connects_lock;
 	int		      lod_connects;
 	unsigned int	      lod_recovery_completed:1,
 			      lod_initialized:1;
@@ -86,28 +107,17 @@ struct lod_device {
 	/* use to protect ld_active_tgt_count and all ltd_active */
 	spinlock_t	     lod_desc_lock;
 
-	/* list of known OSTs */
-	struct lod_ost_desc_idx *lod_ost_idx[OST_PTRS];
-
-	/* Size of the lod_osts array, granted to be a power of 2 */
-	__u32		      lod_osts_size;
-	/* number of registered OSTs */
-	int		      lod_ostnr;
-	/* OSTs scheduled to be deleted */
-	__u32		      lod_death_row;
-	/* bitmap of OSTs available */
-	cfs_bitmap_t	     *lod_ost_bitmap;
+	/* Description of OST */
+	struct lod_tgt_descs  lod_ost_descs;
+	/* Description of MDT */
+	struct lod_tgt_descs  lod_mdt_descs;
 
 	/* maximum EA size underlied OSD may have */
 	unsigned int	      lod_osd_max_easize;
 
-	/* Table refcount used for delayed deletion */
-	int		      lod_refcount;
-	/* mutex to serialize concurrent updates to the ost table */
-	struct mutex	      lod_mutex;
-	/* read/write semaphore used for array relocation */
-	struct rw_semaphore	lod_rw_sem;
-
+	/*FIXME: When QOS and pool is implemented for MDT, probably these
+	 * structure should be moved to lod_tgt_descs as well.
+	 */
 	/* QoS info per LOD */
 	struct lov_qos	      lod_qos; /* qos info per lod */
 
@@ -122,6 +132,13 @@ struct lod_device {
 
 	cfs_proc_dir_entry_t *lod_symlink;
 };
+
+#define lod_osts	lod_ost_descs.ltd_tgts
+#define lod_ost_bitmap	lod_ost_descs.ltd_tgt_bitmap
+#define lod_ostnr	lod_ost_descs.ltd_tgtnr
+#define lod_osts_size	lod_ost_descs.ltd_tgts_size
+#define ltd_ost		ltd_tgt
+#define lod_ost_desc	lod_tgt_desc
 
 /*
  * XXX: shrink this structure, currently it's 72bytes on 32bit arch,
@@ -140,11 +157,12 @@ struct lod_object {
 	int		   ldo_stripes_allocated;
 	/* default striping for directory represented by this object
 	 * is cached in stripenr/stripe_size */
-	int		   ldo_striping_cached:1;
-	int		   ldo_def_striping_set:1;
+	int		   ldo_striping_cached:1,
+			   ldo_def_striping_set:1;
 	__u32		   ldo_def_stripe_size;
 	__u16		   ldo_def_stripenr;
 	__u16		   ldo_def_stripe_offset;
+	mdsno_t		   ldo_mds_num;
 };
 
 
@@ -252,12 +270,14 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 		   const struct lu_fid *fid, mdsno_t *tgt, int flags);
 /* lod_lov.c */
-void lod_getref(struct lod_device *lod);
-void lod_putref(struct lod_device *lod);
+void lod_getref(struct lod_tgt_descs *ltd);
+void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd);
 int lod_add_device(const struct lu_env *env, struct lod_device *m,
 		   char *osp, unsigned index, unsigned gen, int active);
-int lod_del_device(const struct lu_env *env, struct lod_device *m,
-		   char *osp, unsigned index, unsigned gen);
+int lod_del_device(const struct lu_env *env, struct lod_device *lod,
+		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
+		   unsigned gen);
+int lod_fini_tgt(struct lod_device *lod, struct lod_tgt_descs *ltd);
 int lod_load_striping(const struct lu_env *env, struct lod_object *mo);
 int lod_get_lov_ea(const struct lu_env *env, struct lod_object *mo);
 void lod_fix_desc(struct lov_desc *desc);
@@ -296,8 +316,8 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, const struct lu_buf *buf,
 			struct thandle *th);
-int qos_add_tgt(struct lod_device*, struct lod_ost_desc *);
-int qos_del_tgt(struct lod_device *, struct lod_ost_desc *);
+int qos_add_tgt(struct lod_device*, struct lod_tgt_desc *);
+int qos_del_tgt(struct lod_device *, struct lod_tgt_desc *);
 
 /* lproc_lod.c */
 void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);

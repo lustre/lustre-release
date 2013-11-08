@@ -254,7 +254,7 @@ static void pool_proc_stop(struct seq_file *s, void *v)
 static int pool_proc_show(struct seq_file *s, void *v)
 {
 	struct pool_iterator *iter = (struct pool_iterator *)v;
-	struct lod_ost_desc  *osc_desc;
+	struct lod_tgt_desc  *osc_desc;
 
 	LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X", iter->magic);
 	LASSERT(iter->pool != NULL);
@@ -549,7 +549,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	obd_str2uuid(&ost_uuid, ostname);
 
 	/* search ost in lod array */
-	lod_getref(lod);
+	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, idx) {
 		if (obd_uuid_equals(&ost_uuid, &OST_TGT(lod, idx)->ltd_uuid)) {
 			rc = 0;
@@ -571,7 +571,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
 	EXIT;
 out:
-	lod_putref(lod);
+	lod_putref(lod, &lod->lod_ost_descs);
 	lod_pool_putref(pool);
 	return rc;
 }
@@ -591,7 +591,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
 	obd_str2uuid(&ost_uuid, ostname);
 
-	lod_getref(lod);
+	lod_getref(&lod->lod_ost_descs);
 	/* search ost in lod array, to get index */
 	cfs_foreach_bit(lod->lod_ost_bitmap, idx) {
 		if (obd_uuid_equals(&ost_uuid, &OST_TGT(lod, idx)->ltd_uuid)) {
@@ -613,7 +613,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
 	EXIT;
 out:
-	lod_putref(lod);
+	lod_putref(lod, &lod->lod_ost_descs);
 	lod_pool_putref(pool);
 	return rc;
 }

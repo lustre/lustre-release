@@ -59,7 +59,7 @@
 #define TGT_BAVAIL(i) (OST_TGT(lod,i)->ltd_statfs.os_bavail * \
 		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
 
-int qos_add_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
+int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 {
 	struct lov_qos_oss *oss = NULL, *temposs;
 	struct obd_export  *exp = ost_desc->ltd_exp;
@@ -118,7 +118,7 @@ out:
 	RETURN(rc);
 }
 
-int qos_del_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
+int qos_del_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 {
 	struct lov_qos_oss *oss;
 	int                 rc = 0;
@@ -148,7 +148,7 @@ out:
 static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 				int index, struct obd_statfs *sfs)
 {
-	struct lod_ost_desc *ost;
+	struct lod_tgt_desc *ost;
 	int		     rc;
 
 	LASSERT(d);
@@ -363,7 +363,7 @@ static int lod_qos_calc_weight(struct lod_device *lod, int i)
 static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 			__u32 index, __u64 *total_wt)
 {
-	struct lod_ost_desc *ost;
+	struct lod_tgt_desc *ost;
 	struct lov_qos_oss  *oss;
 	int j;
 	ENTRY;
@@ -443,7 +443,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 			   struct lov_qos_rr *lqr)
 {
 	struct lov_qos_oss  *oss;
-	struct lod_ost_desc *ost;
+	struct lod_tgt_desc *ost;
 	unsigned placed, real_count;
 	int i, rc;
 	ENTRY;
@@ -549,7 +549,7 @@ static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 						   int ost_idx,
 						   struct thandle *th)
 {
-	struct lod_ost_desc *ost;
+	struct lod_tgt_desc *ost;
 	struct lu_object *o, *n;
 	struct lu_device *nd;
 	struct dt_object *dt;
@@ -975,7 +975,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_device   *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs   *sfs = &lod_env_info(env)->lti_osfs;
-	struct lod_ost_desc *ost;
+	struct lod_tgt_desc *ost;
 	struct dt_object    *o;
 	__u64		     total_weight = 0;
 	int		     nfound, good_osts, i, rc = 0;
@@ -1382,7 +1382,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out, rc = -ENOMEM);
 		lo->ldo_stripes_allocated = lo->ldo_stripenr;
 
-		lod_getref(d);
+		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
 		if (lo->ldo_def_stripe_offset >= d->lod_desc.ld_tgt_count) {
 			lod_qos_statfs_update(env, d);
@@ -1391,7 +1391,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 				rc = lod_alloc_rr(env, lo, flag, th);
 		} else
 			rc = lod_alloc_specific(env, lo, flag, th);
-		lod_putref(d);
+		lod_putref(d, &d->lod_ost_descs);
 	} else {
 		/*
 		 * lod_qos_parse_config() found supplied buf as a predefined
