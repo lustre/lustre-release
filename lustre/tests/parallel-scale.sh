@@ -15,11 +15,11 @@ if [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ]; then
 	ZFSSLOW=$SLOW
 	SLOW=no
 
-	cbench_IDIRS=1
-	cbench_RUNS=1
+	cbench_IDIRS=${cbench_IDIRS:-1}
+	cbench_RUNS=${cbench_RUNS:-1}
 
-	mdtest_nFiles=10000
-	statahead_NUMFILES=100000
+	mdtest_nFiles=${mdtest_nFiles:-"10000"}
+	statahead_NUMFILES=${statahead_NUMFILES:-100000}
 fi
 
 # common setup
@@ -36,25 +36,25 @@ if [ "$SLOW" = "no" ]; then
 fi
 
 # metabench
-[ "$SLOW" = "no" ] && mbench_NFILES=10000
+[ "$SLOW" = "no" ] && mbench_NFILES=${mbench_NFILES:-10000}
 
 # simul
-[ "$SLOW" = "no" ] && simul_REP=2
+[ "$SLOW" = "no" ] && simul_REP=${simul_REP:-2}
 
 # connectathon
-[ "$SLOW" = "no" ] && cnt_NRUN=2
+[ "$SLOW" = "no" ] && cnt_NRUN=${cnt_NRUN:-2}
 
 # cascading rw
-[ "$SLOW" = "no" ] && casc_REP=10
+[ "$SLOW" = "no" ] && casc_REP=${casc_REP:-10}
 
 # IOR
-[ "$SLOW" = "no" ] && ior_DURATION=5
+[ "$SLOW" = "no" ] && ior_DURATION=${ior_DURATION:-5}
 
 # write_append_truncate
-[ "$SLOW" = "no" ] && write_REP=100
+[ "$SLOW" = "no" ] && write_REP=${write_REP:-100}
 
 # write_disjoint
-[ "$SLOW" = "no" ] && wdisjoint_REP=100
+[ "$SLOW" = "no" ] && wdisjoint_REP=${wdisjoint_REP:-100}
 
 . $LUSTRE/tests/functions.sh
 
@@ -135,7 +135,7 @@ test_statahead () {
 }
 run_test statahead "statahead test, multiple clients"
 
-[ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs] &&
+[ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ] &&
 	SLOW=$ZFSSLOW
 
 complete $SECONDS
