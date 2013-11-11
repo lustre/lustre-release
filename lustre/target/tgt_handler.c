@@ -1493,7 +1493,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
 		RETURN(-EIO);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, (obd_timeout + 1) / 4);
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
+			 cfs_fail_val : (obd_timeout + 1) / 4);
 
 	/* Check if there is eviction in progress, and if so, wait for it to
 	 * finish */

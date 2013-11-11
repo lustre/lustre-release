@@ -232,9 +232,6 @@ struct obd_export {
                                   exp_flvr_changed:1,
                                   exp_flvr_adapt:1,
                                   exp_libclient:1, /* liblustre client? */
-                                  /* client timed out and tried to reconnect,
-                                   * but couldn't because of active rpcs */
-				  exp_abort_active_req:1,
 				  /* if to swap nidtbl entries for 2.2 clients.
 				   * Only used by the MGS to fix LU-1644. */
 				  exp_need_mne_swab:1;
@@ -247,6 +244,7 @@ struct obd_export {
         /** protects exp_hp_rpcs */
 	spinlock_t		  exp_rpc_lock;
 	cfs_list_t		  exp_hp_rpcs;	/* (potential) HP RPCs */
+	cfs_list_t		  exp_reg_rpcs;  /* RPC being handled */
 
         /** blocking dlm lock list, protected by exp_bl_list_lock */
         cfs_list_t                exp_bl_list;
