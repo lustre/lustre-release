@@ -2850,6 +2850,15 @@ test_33f() {
 }
 run_test 33f "nonroot user can create, access, and remove a striped directory"
 
+test_33g() {
+	mkdir -p $DIR/$tdir/dir2
+
+	local err=$($RUNAS mkdir $DIR/$tdir/dir2 2>&1)
+	echo $err
+	[[ $err =~ "exists" ]] || error "Not exists error"
+}
+run_test 33g "nonroot user create already existing root created file"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
