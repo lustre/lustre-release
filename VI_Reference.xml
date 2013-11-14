@@ -58,7 +58,7 @@
   <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
   <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
+  <xi:include href="LNetConfigurationApi.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
 
 
 </part>
