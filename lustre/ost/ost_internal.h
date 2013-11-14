@@ -39,13 +39,4 @@
 
 #define OSS_SERVICE_WATCHDOG_FACTOR 2
 
-#ifdef LPROCFS
-void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars);
-#else
-static void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-#endif
-
 #endif /* OST_INTERNAL_H */
