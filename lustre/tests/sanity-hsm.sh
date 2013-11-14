@@ -1018,16 +1018,16 @@ test_12a() {
 
 	local f=$DIR/$tdir/$tfile
 	import_file $tdir/$tfile $f
-	local f=$DIR2/$tdir/$tfile
+	local f2=$DIR2/$tdir/$tfile
 	echo "Verifying released state: "
-	check_hsm_flags $f "0x0000000d"
+	check_hsm_flags $f2 "0x0000000d"
 
-	local fid=$(path2fid $f)
-	$LFS hsm_restore $f
+	local fid=$(path2fid $f2)
+	$LFS hsm_restore $f2
 	wait_request_state $fid RESTORE SUCCEED
 
 	echo "Verifying file state: "
-	check_hsm_flags $f "0x00000009"
+	check_hsm_flags $f2 "0x00000009"
 
 	do_facet $SINGLEAGT diff -q $HSM_ARCHIVE/$tdir/$tfile $f
 
