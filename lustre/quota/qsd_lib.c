@@ -73,10 +73,9 @@ LU_CONTEXT_KEY_DEFINE(qsd, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
 LU_KEY_INIT_GENERIC(qsd);
 
 /* some procfs helpers */
-static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int qsd_state_seq_show(struct seq_file *m, void *data)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	struct qsd_instance	*qsd = m->private;
 	char			 enabled[5];
 	int			 rc;
 
@@ -90,15 +89,14 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
-	rc = snprintf(page, count,
-		      "target name:    %s\n"
-		      "pool ID:        %d\n"
-		      "type:           %s\n"
-		      "quota enabled:  %s\n"
-		      "conn to master: %s\n",
-		      qsd->qsd_svname, qsd->qsd_pool_id,
-		      qsd->qsd_is_md ? "md" : "dt", enabled,
-		      qsd->qsd_exp_valid ? "setup" : "not setup yet");
+	rc = seq_printf(m, "target name:    %s\n"
+			"pool ID:        %d\n"
+			"type:           %s\n"
+			"quota enabled:  %s\n"
+			"conn to master: %s\n",
+			qsd->qsd_svname, qsd->qsd_pool_id,
+			qsd->qsd_is_md ? "md" : "dt", enabled,
+			qsd->qsd_exp_valid ? "setup" : "not setup yet");
 
 	if (qsd->qsd_prepared) {
 		memset(enabled, 0, sizeof(enabled));
@@ -108,8 +106,7 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 			strcat(enabled, "g");
 		if (strlen(enabled) == 0)
 			strcat(enabled, "none");
-		rc +=  snprintf(page + rc, count - rc,
-				"space acct:     %s\n"
+		rc += seq_printf(m, "space acct:     %s\n"
 				"user uptodate:  glb[%d],slv[%d],reint[%d]\n"
 				"group uptodate: glb[%d],slv[%d],reint[%d]\n",
 				enabled,
@@ -122,11 +119,11 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+LPROC_SEQ_FOPS_RO(qsd_state);
 
-static int lprocfs_qsd_rd_enabled(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	struct qsd_instance	*qsd = m->private;
 	char			 enabled[5];
 
 	LASSERT(qsd != NULL);
@@ -139,16 +136,18 @@ static int lprocfs_qsd_rd_enabled(char *page, char **start, off_t off,
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
-	return snprintf(page, count, "%s\n", enabled);
+	return seq_printf(m, "%s\n", enabled);
 }
+LPROC_SEQ_FOPS_RO(qsd_enabled);
 
 /* force reintegration procedure to be executed.
  * Used for test/debugging purpose */
-static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
-				      unsigned long count, void *data)
+static ssize_t
+lprocfs_force_reint_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)data;
-	int			 rc = 0, qtype;
+	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
+	int		     rc = 0, qtype;
 
 	LASSERT(qsd != NULL);
 
@@ -179,21 +178,22 @@ static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
 	}
 	return rc == 0 ? count : rc;
 }
+LPROC_SEQ_FOPS_WO_TYPE(qsd, force_reint);
 
-static int lprocfs_qsd_rd_timeout(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+static int qsd_timeout_seq_show(struct seq_file *m, void *data)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	struct qsd_instance *qsd = m->private;
 	LASSERT(qsd != NULL);
 
-	return snprintf(page, count, "%d\n", qsd_wait_timeout(qsd));
+	return seq_printf(m, "%d\n", qsd_wait_timeout(qsd));
 }
 
-static int lprocfs_qsd_wr_timeout(struct file *file, const char *buffer,
-				  unsigned long count, void *data)
+static ssize_t
+qsd_timeout_seq_write(struct file *file, const char *buffer,
+			size_t count, loff_t *off)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)data;
-	int			 timeout, rc;
+	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
+	int		     timeout, rc;
 	LASSERT(qsd != NULL);
 
 	rc = lprocfs_write_helper(buffer, count, &timeout);
@@ -205,12 +205,13 @@ static int lprocfs_qsd_wr_timeout(struct file *file, const char *buffer,
 	qsd->qsd_timeout = timeout;
 	return count;
 }
+LPROC_SEQ_FOPS(qsd_timeout);
 
-static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
-	{ "info", lprocfs_qsd_rd_state, 0, 0},
-	{ "enabled", lprocfs_qsd_rd_enabled, 0, 0},
-	{ "force_reint", 0, lprocfs_qsd_wr_force_reint, 0},
-	{ "timeout", lprocfs_qsd_rd_timeout, lprocfs_qsd_wr_timeout, 0},
+static struct lprocfs_seq_vars lprocfs_quota_qsd_vars[] = {
+	{ "info",		&qsd_state_fops		},
+	{ "enabled",		&qsd_enabled_fops	},
+	{ "force_reint",	&qsd_force_reint_fops	},
+	{ "timeout",		&qsd_timeout_fops	},
 	{ NULL }
 };
 
@@ -588,8 +589,8 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	up(&qsd->qsd_fsinfo->qfs_sem);
 
 	/* register procfs directory */
-	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,
-					 lprocfs_quota_qsd_vars, qsd);
+	qsd->qsd_proc = lprocfs_seq_register(QSD_DIR, osd_proc,
+						lprocfs_quota_qsd_vars, qsd);
 	if (IS_ERR(qsd->qsd_proc)) {
 		rc = PTR_ERR(qsd->qsd_proc);
 		qsd->qsd_proc = NULL;

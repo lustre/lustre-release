@@ -141,40 +141,37 @@ static cfs_hash_ops_t qpi_hash_ops = {
 };
 
 /* some procfs helpers */
-static int lprocfs_qpi_rd_state(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int qpi_state_seq_show(struct seq_file *m, void *data)
 {
-	struct qmt_pool_info	*pool = (struct qmt_pool_info *)data;
-	int			 type, i = 0;
+	struct qmt_pool_info	*pool = m->private;
+	int			 type;
 
 	LASSERT(pool != NULL);
 
-	i = snprintf(page, count,
-		     "pool:\n"
-		     "    id: %u\n"
-		     "    type: %s\n"
-		     "    ref: %d\n"
-		     "    least qunit: %lu\n",
-		     pool->qpi_key & 0x0000ffff,
-		     RES_NAME(pool->qpi_key >> 16),
-		     cfs_atomic_read(&pool->qpi_ref),
-		     pool->qpi_least_qunit);
-
+	seq_printf(m, "pool:\n"
+		   "    id: %u\n"
+		   "    type: %s\n"
+		   "    ref: %d\n"
+		   "    least qunit: %lu\n",
+		   pool->qpi_key & 0x0000ffff,
+		   RES_NAME(pool->qpi_key >> 16),
+		   cfs_atomic_read(&pool->qpi_ref),
+		   pool->qpi_least_qunit);
 
 	for (type = 0; type < MAXQUOTAS; type++)
-		i += snprintf(page + i, count - i,
-			      "    %s:\n"
-			      "        #slv: %d\n"
-			      "        #lqe: %d\n",
-			      QTYPE_NAME(type),
-			      pool->qpi_slv_nr[type],
+		seq_printf(m, "    %s:\n"
+			   "        #slv: %d\n"
+			   "        #lqe: %d\n",
+			   QTYPE_NAME(type),
+			   pool->qpi_slv_nr[type],
 		    cfs_atomic_read(&pool->qpi_site[type]->lqs_hash->hs_count));
 
-	return i;
+	return 0;
 }
+LPROC_SEQ_FOPS_RO(qpi_state);
 
-static struct lprocfs_vars lprocfs_quota_qpi_vars[] = {
-	{ "info", lprocfs_qpi_rd_state, 0, 0},
+static struct lprocfs_seq_vars lprocfs_quota_qpi_vars[] = {
+	{ "info",	&qpi_state_fops	},
 	{ NULL }
 };
 
@@ -215,8 +212,8 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 
 	/* create pool proc directory */
 	sprintf(qti->qti_buf, "%s-0x%x", RES_NAME(pool_type), pool_id);
-	pool->qpi_proc = lprocfs_register(qti->qti_buf, qmt->qmt_proc,
-					  lprocfs_quota_qpi_vars, pool);
+	pool->qpi_proc = lprocfs_seq_register(qti->qti_buf, qmt->qmt_proc,
+						lprocfs_quota_qpi_vars, pool);
 	if (IS_ERR(pool->qpi_proc)) {
 		rc = PTR_ERR(pool->qpi_proc);
 		CERROR("%s: failed to create proc entry for pool %s (%d)\n",
