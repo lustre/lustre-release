@@ -63,12 +63,14 @@
         <primary>wide striping</primary>
       </indexterm><indexterm>
         <primary>MDT</primary>
-        <secondary>multiple MDSx</secondary>
+        <secondary>multiple MDSs</secondary>
       </indexterm><indexterm>
         <primary>large_xattr</primary>
+        <secondary>ea_inode</secondary>
       </indexterm><indexterm>
         <primary>wide striping</primary>
         <secondary>large_xattr</secondary>
+        <tertiary>ea_inode</tertiary>
       </indexterm>Upgrading to Lustre Software Release 2.x (Major Release)</title>
     <para> The procedure for upgrading from a Lustre software release 2.x to a more recent 2.x
       release of the Lustre software is described in this section. </para>
@@ -80,7 +82,8 @@
     <note>
       <para condition="l22">In Lustre software release 2.2, a feature has been added that allows
         striping across up to 2000 OSTs. By default, this "wide striping" feature is disabled. It is
-        activated by setting the <literal>large_xattr</literal> option on the MDT using either
+        activated by setting the <literal>large_xattr</literal> or <literal>ea_inode</literal>
+        option on the MDT using either
           <literal>mkfs.lustre</literal> or <literal>tune2fs</literal>. For example after upgrading
         an existing file system to Lustre software release 2.2 or later, wide striping can be
         enabled by running the following command on the MDT device before mounting
@@ -102,6 +105,9 @@
               option:<screen>tune2fs -O ^large_xattr</screen></para>
           </listitem>
         </orderedlist>
+        Using either <literal>mkfs.lustre</literal> or <literal>tune2fs</literal> with 
+          <literal>large_xattr</literal> or <literal>ea_inode</literal> option reseults in 
+          <literal>ea_inode</literal> in the file system feature list.
       </para></note>
     <note condition="l23">
       <para>To generate a list of all files with more than 160 stripes use <literal>lfs

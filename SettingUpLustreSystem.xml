@@ -344,9 +344,11 @@
           <secondary><emphasis role="italic">See</emphasis> wide striping</secondary>
         </indexterm><indexterm>
           <primary>large_xattr</primary>
+          <secondary>ea_inode</secondary>
         </indexterm><indexterm>
           <primary>wide striping</primary>
           <secondary>large_xattr</secondary>
+          <tertiary>ea_inode</tertiary>
         </indexterm>File and File System Limits</title>
       <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits.
         These limits are imposed by either the Lustre architecture or the Linux virtual file system
@@ -576,9 +578,10 @@
           count for a single file was limited to 160 OSTs. In Lustre software release 2.2, the large
             <literal>xattr</literal> feature ("wide striping") was added to support up to 2000 OSTs.
           This feature is disabled by default at <literal>mkfs.lustre</literal> time. In order to
-          enable this feature, set the "<literal>-O large_xattr</literal>" option on the MDT either
-          by using <literal>--mkfsoptions</literal> at format time or by using
-            <literal>tune2fs</literal>.</para>
+          enable this feature, set the "<literal>-O large_xattr</literal>" or "<literal>-O ea_inode</literal>"
+          option on the MDT either by using <literal>--mkfsoptions</literal> at format time or by using
+            <literal>tune2fs</literal>. Using either "<literal>large_xattr</literal>" or "<literal>ea_inode</literal>"
+          results in "<literal>ea_inode</literal>" in the file system feature list.</para>
       </note>
     </section>
   </section>
