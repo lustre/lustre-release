@@ -1558,7 +1558,7 @@ t32_test() {
 			$r mount -t lustre -o loop,nosvc $tmp/mdt $tmp/mnt/mdt
 			$r lctl replace_nids $fsname-OST0000 $ostnid
 			$r lctl replace_nids $fsname-MDT0000 $nid
-			$r umount $tmp/mnt/mdt
+			$r umount -d $tmp/mnt/mdt
 		fi
 
 		mopts=loop,exclude=$fsname-OST0000
@@ -3449,7 +3449,7 @@ test_58() { # bug 22658
 	# remove all files from the OBJECTS dir
 	do_facet $SINGLEMDS "mount -t ldiskfs $opts $devname $MNTDIR"
 	do_facet $SINGLEMDS "find $MNTDIR/O/1/d* -type f -delete"
-	do_facet $SINGLEMDS "umount $MNTDIR"
+	do_facet $SINGLEMDS "umount -d $MNTDIR"
 	# restart MDS with missing llog files
 	start_mds
 	do_facet mds "lctl set_param fail_loc=0"
@@ -3675,7 +3675,7 @@ test_65() { # LU-2237
 	do_facet $SINGLEMDS \
 		"mount -t $(facet_fstype $SINGLEMDS) $opts $devname $brpt"
 	do_facet $SINGLEMDS "rm -f ${brpt}/last_rcvd"
-	do_facet $SINGLEMDS "umount $brpt"
+	do_facet $SINGLEMDS "umount -d $brpt"
 
 	# restart MDS, the "last_rcvd" file should be recreated.
 	start_mds || error "fail to restart the MDS"

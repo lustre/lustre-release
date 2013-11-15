@@ -2160,7 +2160,7 @@ run_test 31o "duplicate hard links with same filename"
 
 cleanup_test32_mount() {
 	trap 0
-	$UMOUNT $DIR/$tdir/ext2-mountpoint
+	$UMOUNT -d $DIR/$tdir/ext2-mountpoint
 }
 
 test_32a() {
@@ -2368,7 +2368,7 @@ run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
 
 cleanup_testdir_mount() {
 	trap 0
-	$UMOUNT $DIR/$tdir
+	$UMOUNT -d $DIR/$tdir
 }
 
 test_32q() {
@@ -3984,7 +3984,7 @@ test_54c() {
 	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
 	df $tdir
 	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	$UMOUNT $tdir
+	$UMOUNT -d $tdir
 	losetup -d $loopdev
 	rm $loopdev
 }
