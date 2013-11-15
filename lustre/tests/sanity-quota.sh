@@ -2261,7 +2261,7 @@ test_36() {
 	do_node $mdt0_node mkdir $mntpt/OBJECTS
 	do_node $mdt0_node cp $LUSTRE/tests/admin_quotafile_v2.usr $mntpt/OBJECTS
 	do_node $mdt0_node cp $LUSTRE/tests/admin_quotafile_v2.grp $mntpt/OBJECTS
-	do_node $mdt0_node umount -f $mntpt
+	do_node $mdt0_node umount -d -f $mntpt
 
 	echo "Setup all..."
 	setupall
