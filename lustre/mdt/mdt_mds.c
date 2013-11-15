@@ -531,8 +531,6 @@ static struct obd_ops mds_obd_device_ops = {
 
 int mds_mod_init(void)
 {
-	int rc;
-
 	if (mdt_num_threads != 0 && mds_num_threads == 0) {
 		LCONSOLE_INFO("mdt_num_threads module parameter is deprecated, "
 			      "use mds_num_threads instead or unset both for "
@@ -540,10 +538,11 @@ int mds_mod_init(void)
 		mds_num_threads = mdt_num_threads;
 	}
 
-	rc = class_register_type(&mds_obd_device_ops, NULL,
-				 lprocfs_mds_module_vars, LUSTRE_MDS_NAME,
-				 &mds_device_type);
-	return rc;
+	return class_register_type(&mds_obd_device_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+					lprocfs_mds_module_vars,
+#endif
+					LUSTRE_MDS_NAME, &mds_device_type);
 }
 
 void mds_mod_exit(void)

@@ -2929,8 +2929,11 @@ int __init lov_init(void)
         }
         lprocfs_lov_init_vars(&lvars);
 
-        rc = class_register_type(&lov_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_LOV_NAME, &lov_device_type);
+	rc = class_register_type(&lov_obd_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				lvars.module_vars,
+#endif
+				LUSTRE_LOV_NAME, &lov_device_type);
 
         if (rc) {
 		kmem_cache_destroy(lov_oinfo_slab);

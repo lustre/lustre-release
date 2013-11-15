@@ -1012,8 +1012,11 @@ static int __init lod_mod_init(void)
 
 	lprocfs_lod_init_vars(&lvars);
 
-	rc = class_register_type(&lod_obd_device_ops, NULL, lvars.module_vars,
-				 LUSTRE_LOD_NAME, &lod_device_type);
+	rc = class_register_type(&lod_obd_device_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				lvars.module_vars,
+#endif
+				LUSTRE_LOD_NAME, &lod_device_type);
 	if (rc) {
 		lu_kmem_fini(lod_caches);
 		return rc;

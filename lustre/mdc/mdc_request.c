@@ -2797,13 +2797,14 @@ struct md_ops mdc_md_ops = {
 
 int __init mdc_init(void)
 {
-        int rc;
         struct lprocfs_static_vars lvars = { 0 };
         lprocfs_mdc_init_vars(&lvars);
 
-        rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, lvars.module_vars,
-                                 LUSTRE_MDC_NAME, NULL);
-        RETURN(rc);
+	return class_register_type(&mdc_obd_ops, &mdc_md_ops, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+					lvars.module_vars,
+#endif
+					LUSTRE_MDC_NAME, NULL);
 }
 
 #ifdef __KERNEL__

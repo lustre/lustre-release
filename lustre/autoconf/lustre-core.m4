@@ -1221,6 +1221,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.10+ only supports procfs seq_files handling
+#
+AC_DEFUN([LC_HAVE_ONLY_PROCFS_SEQ],
+[AC_MSG_CHECKING([if procfs only supports using seq_files])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/proc_fs.h>
+],[
+	struct inode *inode = NULL;
+	PDE_DATA(inode);
+],[
+	AC_DEFINE(HAVE_ONLY_PROCFS_SEQ, 1, [only seq_files supported])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -1313,6 +1331,9 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.9
 	 LC_HAVE_HLIST_FOR_EACH_3ARG
 	 LC_HAVE_F_PATH_MNT
+
+	 # 3.10
+	 LC_HAVE_ONLY_PROCFS_SEQ
 
 	 #
 	 if test x$enable_server != xno ; then

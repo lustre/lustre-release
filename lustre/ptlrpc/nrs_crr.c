@@ -718,7 +718,7 @@ static int ptlrpc_lprocfs_wr_nrs_crrn_quantum(struct file *file,
 	long			     quantum_reg;
 	long			     quantum_hp;
 	/** lprocfs_find_named_value() modifies its argument, so keep a copy */
-	unsigned long		     count_copy;
+	size_t			     count_copy;
 	int			     rc = 0;
 	int			     rc2 = 0;
 

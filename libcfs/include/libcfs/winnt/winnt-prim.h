@@ -132,9 +132,9 @@ int misc_deregister(struct miscdevice *psdev);
  * Proc emulator file system APIs
  */
 
-typedef int cfs_read_proc_t(char *page, char **start, off_t off,
+typedef int read_proc_t(char *page, char **start, off_t off,
                             int count, int *eof, void *data);
-typedef int cfs_write_proc_t(struct file *file, const char *buffer,
+typedef int write_proc_t(struct file *file, const char *buffer,
                              unsigned long count, void *data);
 
 #define CFS_PROC_ENTRY_MAGIC 'CPEM'
@@ -155,8 +155,8 @@ typedef struct cfs_proc_entry
     struct cfs_proc_entry  *parent;
 
     struct _file_entry {                // proc file / leaf entry
-	    cfs_read_proc_t  *  read_proc;
-	    cfs_write_proc_t *  write_proc;
+	    read_proc_t  *  read_proc;
+	    write_proc_t *  write_proc;
     };
 
     mode_t                  mode;
@@ -331,9 +331,6 @@ int seq_release(struct inode *, struct file *);
 int seq_escape(struct seq_file *, const char *, const char *);
 int seq_putc(struct seq_file *m, char c);
 int seq_puts(struct seq_file *m, const char *s);
-
-int seq_printf(struct seq_file *, const char *, ...)
-	__attribute__ ((format (printf,2,3)));
 
 int seq_path(struct seq_file *, struct path *, char *);
 

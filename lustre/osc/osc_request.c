@@ -3733,8 +3733,11 @@ int __init osc_init(void)
 
         lprocfs_osc_init_vars(&lvars);
 
-        rc = class_register_type(&osc_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_OSC_NAME, &osc_device_type);
+	rc = class_register_type(&osc_obd_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				lvars.module_vars,
+#endif
+				LUSTRE_OSC_NAME, &osc_device_type);
         if (rc) {
                 lu_kmem_fini(osc_caches);
                 RETURN(rc);

@@ -128,11 +128,11 @@ static inline void schedule_timeout(int64_t t)	{}
 /*
  * Lproc
  */
-typedef int (cfs_read_proc_t)(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
+typedef int (read_proc_t)(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
 
 struct file; /* forward ref */
-typedef int (cfs_write_proc_t)(struct file *file, const char *buffer,
+typedef int (write_proc_t)(struct file *file, const char *buffer,
                                unsigned long count, void *data);
 
 /*

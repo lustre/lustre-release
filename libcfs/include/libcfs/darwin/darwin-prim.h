@@ -123,9 +123,9 @@ cfs_proc_dir_entry_t * cfs_create_proc_entry(char *name, int mod,
 void cfs_free_proc_entry(cfs_proc_dir_entry_t *de);
 void cfs_remove_proc_entry(char *name, cfs_proc_dir_entry_t *entry);
 
-typedef int (cfs_read_proc_t)(char *page, char **start, off_t off,
+typedef int (read_proc_t)(char *page, char **start, off_t off,
 			  int count, int *eof, void *data);
-typedef int (cfs_write_proc_t)(struct file *file, const char *buffer,
+typedef int (write_proc_t)(struct file *file, const char *buffer,
 			   unsigned long count, void *data);
 
 /*

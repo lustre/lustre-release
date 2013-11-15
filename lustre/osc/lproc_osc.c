@@ -178,11 +178,12 @@ static int osc_rd_cached_mb(char *page, char **start, off_t off, int count,
 
 /* shrink the number of caching pages to a specific number */
 static int osc_wr_cached_mb(struct file *file, const char *buffer,
-			    unsigned long count, void *data)
+			    unsigned long nob, void *data)
 {
 	struct obd_device *dev = data;
 	struct client_obd *cli = &dev->u.cli;
 	int pages_number, mult, rc;
+	size_t count = nob;
 
 	mult = 1 << (20 - PAGE_CACHE_SHIFT);
 	buffer = lprocfs_find_named_value(buffer, "used_mb:", &count);

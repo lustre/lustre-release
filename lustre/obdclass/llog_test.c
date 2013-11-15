@@ -1070,8 +1070,11 @@ static int __init llog_test_init(void)
 	struct lprocfs_static_vars lvars;
 
 	lprocfs_llog_test_init_vars(&lvars);
-	return class_register_type(&llog_obd_ops, NULL,
-				   lvars.module_vars, "llog_test", NULL);
+	return class_register_type(&llog_obd_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+					lvars.module_vars,
+#endif
+					"llog_test", NULL);
 }
 
 static void __exit llog_test_exit(void)

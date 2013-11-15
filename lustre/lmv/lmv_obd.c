@@ -2983,13 +2983,14 @@ struct md_ops lmv_md_ops = {
 int __init lmv_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int                        rc;
 
         lprocfs_lmv_init_vars(&lvars);
 
-        rc = class_register_type(&lmv_obd_ops, &lmv_md_ops,
-                                 lvars.module_vars, LUSTRE_LMV_NAME, NULL);
-        return rc;
+	return class_register_type(&lmv_obd_ops, &lmv_md_ops, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+					lvars.module_vars,
+#endif
+					LUSTRE_LMV_NAME, NULL);
 }
 
 #ifdef __KERNEL__

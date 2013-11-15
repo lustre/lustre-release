@@ -1291,7 +1291,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_quantum(struct file *file,
 	long			     quantum_reg;
 	long			     quantum_hp;
 	/** lprocfs_find_named_value() modifies its argument, so keep a copy */
-	unsigned long		     count_copy;
+	size_t			     count_copy;
 	int			     rc = 0;
 	int			     rc2 = 0;
 
@@ -1510,7 +1510,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_offset_type(struct file *file,
 	char			    *val_hp;
 	bool			     physical_reg;
 	bool			     physical_hp;
-	unsigned long		     count_copy;
+	size_t			     count_copy;
 	int			     rc = 0;
 	int			     rc2 = 0;
 
@@ -1772,7 +1772,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_supported(struct file *file,
 	char			    *val_hp;
 	enum nrs_orr_supp	     supp_reg;
 	enum nrs_orr_supp	     supp_hp;
-	unsigned long		     count_copy;
+	size_t			     count_copy;
 	int			     rc = 0;
 	int			     rc2 = 0;
 

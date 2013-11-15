@@ -95,8 +95,6 @@ LL_PROC_PROTO(name)                                     \
 /*
  * Proc file system APIs
  */
-typedef read_proc_t                     cfs_read_proc_t;
-typedef write_proc_t                    cfs_write_proc_t;
 typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 #define cfs_create_proc_entry(n, m, p)  create_proc_entry(n, m, p)
 #define cfs_free_proc_entry(e)          free_proc_entry(e)

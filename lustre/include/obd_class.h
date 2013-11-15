@@ -87,8 +87,12 @@ struct lu_device_type;
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
 int class_register_type(struct obd_ops *, struct md_ops *,
-                        struct lprocfs_vars *, const char *nm,
-                        struct lu_device_type *ldt);
+			struct lprocfs_seq_vars *module_vars,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+			struct lprocfs_vars *,
+#endif
+			const char *nm,
+			struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 
 struct obd_device *class_newdev(const char *type_name, const char *name);
@@ -134,8 +138,12 @@ typedef int (*llog_cb_t)(const struct lu_env *, struct llog_handle *,
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 int class_process_config(struct lustre_cfg *lcfg);
+#ifndef HAVE_ONLY_PROCFS_SEQ
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                              struct lustre_cfg *lcfg, void *data);
+#endif
+int class_process_proc_seq_param(char *prefix, struct lprocfs_seq_vars *lvars,
+				 struct lustre_cfg *lcfg, void *data);
 int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -152,6 +160,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_add_uuid(const char *uuid, __u64 nid);
 
 /*obdecho*/
+#ifndef HAVE_ONLY_PROCFS_SEQ
 #ifdef LPROCFS
 extern void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars);
 #else
@@ -159,6 +168,7 @@ static inline void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars)
 {
         memset(lvars, 0, sizeof(*lvars));
 }
+#endif
 #endif
 
 #define CFG_F_START     0x01   /* Set when we start updating from a log */

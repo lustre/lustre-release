@@ -1197,8 +1197,11 @@ static int __init osp_mod_init(void)
 
 	lprocfs_osp_init_vars(&lvars);
 
-	rc = class_register_type(&osp_obd_device_ops, NULL, lvars.module_vars,
-				 LUSTRE_OSP_NAME, &osp_device_type);
+	rc = class_register_type(&osp_obd_device_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				lvars.module_vars,
+#endif
+				LUSTRE_OSP_NAME, &osp_device_type);
 
 	/* create "osc" entry in procfs for compatibility purposes */
 	if (rc != 0) {
@@ -1208,8 +1211,11 @@ static int __init osp_mod_init(void)
 
 	lprocfs_lwp_init_vars(&lvars);
 
-	rc = class_register_type(&lwp_obd_device_ops, NULL, lvars.module_vars,
-				 LUSTRE_LWP_NAME, &lwp_device_type);
+	rc = class_register_type(&lwp_obd_device_ops, NULL, NULL,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				lvars.module_vars,
+#endif
+				LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
 		class_unregister_type(LUSTRE_OSP_NAME);
 		lu_kmem_fini(osp_caches);
