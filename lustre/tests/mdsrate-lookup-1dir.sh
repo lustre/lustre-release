@@ -67,8 +67,13 @@ else
 	mpi_run -np ${NUM_THREADS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		${COMMAND} 2>&1
 
-    # No lockup if error occurs on file creation, abort.
-    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
+	# No lockup if error occurs on file creation, abort.
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error_noexit "mdsrate file creation failed, aborting"
+		mdsrate_cleanup $NUM_THREADS $MACHINEFILE $NUM_FILES \
+				$TESTDIR 'f%%d' --ignore
+		exit 1
+	fi
 fi
 
 COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --lookup --time ${TIME_PERIOD} ${SEED_OPTION}
@@ -83,10 +88,13 @@ else
 	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
 		tee ${LOG}
 
-    if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on a single client failed, aborting"
-    fi
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate lookup on single client failed, aborting"
+		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
+				$TESTDIR 'f%%d' --ignore
+		exit 1
+	fi
 fi
 
 # 2
@@ -99,10 +107,13 @@ else
 	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		${COMMAND} | tee ${LOG}
 
-    if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on multiple nodes failed, aborting"
-    fi
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate lookup on multiple nodes failed, aborting"
+		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
+				$TESTDIR 'f%%d' --ignore
+		exit 1
+	fi
 fi
 
 complete $SECONDS
