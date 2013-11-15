@@ -360,8 +360,6 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_inodespace = OSD_DNODE_EST_COUNT;
 	/* per-fragment overhead to be used by the client code */
 	param->ddp_grant_frag = udmu_blk_insert_cost();
-
-	param->ddp_mnt = NULL;
 }
 
 /*

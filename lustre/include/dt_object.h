@@ -80,7 +80,6 @@ struct dt_device_param {
         unsigned           ddp_block_shift;
         mntopt_t           ddp_mntopts;
         unsigned           ddp_max_ea_size;
-        void              *ddp_mnt; /* XXX: old code can retrieve mnt -bzzz */
         int                ddp_mount_type;
         unsigned long long ddp_maxbytes;
         /* percentage of available space to reserve for grant error margin */

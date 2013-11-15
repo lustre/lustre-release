@@ -1820,7 +1820,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	ofd_stack_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
 	ofd_procfs_fini(m);
 	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
-	server_put_mount(obd->obd_name, NULL);
+	server_put_mount(obd->obd_name);
 	EXIT;
 }
 

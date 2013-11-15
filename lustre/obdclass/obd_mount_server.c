@@ -83,8 +83,7 @@ static struct lustre_mount_info *server_find_mount(const char *name)
 /* we must register an obd for a mount before we call the setup routine.
  *_setup will call lustre_get_mount to get the mnt struct
  by obd_name, since we can't pass the pointer to setup. */
-static int server_register_mount(const char *name, struct super_block *sb,
-				 struct vfsmount *mnt)
+static int server_register_mount(const char *name, struct super_block *sb)
 {
 	struct lustre_mount_info *lmi;
 	char *name_cp;
@@ -113,12 +112,11 @@ static int server_register_mount(const char *name, struct super_block *sb,
 	}
 	lmi->lmi_name = name_cp;
 	lmi->lmi_sb = sb;
-	lmi->lmi_mnt = mnt;
 	cfs_list_add(&lmi->lmi_list_chain, &server_mount_info_list);
 
 	mutex_unlock(&lustre_mount_info_lock);
 
-	CDEBUG(D_MOUNT, "reg_mnt %p from %s\n", lmi->lmi_mnt, name);
+	CDEBUG(D_MOUNT, "register mount %p from %s\n", sb, name);
 
 	RETURN(0);
 }
@@ -137,7 +135,7 @@ static int server_deregister_mount(const char *name)
 		RETURN(-ENOENT);
 	}
 
-	CDEBUG(D_MOUNT, "dereg_mnt %p from %s\n", lmi->lmi_mnt, name);
+	CDEBUG(D_MOUNT, "deregister mount %p from %s\n", lmi->lmi_sb, name);
 
 	OBD_FREE(lmi->lmi_name, strlen(lmi->lmi_name) + 1);
 	cfs_list_del(&lmi->lmi_list_chain);
@@ -167,7 +165,7 @@ struct lustre_mount_info *server_get_mount(const char *name)
 
 	cfs_atomic_inc(&lsi->lsi_mounts);
 
-	CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d\n", lmi->lmi_mnt,
+	CDEBUG(D_MOUNT, "get mount %p from %s, refs=%d\n", lmi->lmi_sb,
 	       name, cfs_atomic_read(&lsi->lsi_mounts));
 
 	RETURN(lmi);
@@ -195,7 +193,7 @@ struct lustre_mount_info *server_get_mount_2(const char *name)
 EXPORT_SYMBOL(server_get_mount_2);
 
 /* to be called from obd_cleanup methods */
-int server_put_mount(const char *name, struct vfsmount *mnt)
+int server_put_mount(const char *name)
 {
 	struct lustre_mount_info *lmi;
 	struct lustre_sb_info *lsi;
@@ -210,12 +208,12 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
 	}
 	lsi = s2lsi(lmi->lmi_sb);
 
-	CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d\n",
-	       lmi->lmi_mnt, name, cfs_atomic_read(&lsi->lsi_mounts));
+	CDEBUG(D_MOUNT, "put mount %p from %s, refs=%d\n",
+	       lmi->lmi_sb, name, cfs_atomic_read(&lsi->lsi_mounts));
 
 	if (lustre_put_lsi(lmi->lmi_sb))
-		CDEBUG(D_MOUNT, "Last put of mnt %p from %s\n",
-		       lmi->lmi_mnt, name);
+		CDEBUG(D_MOUNT, "Last put of mount %p from %s\n",
+		       lmi->lmi_sb, name);
 
 	/* this obd should never need the mount again */
 	server_deregister_mount(name);
@@ -236,7 +234,6 @@ EXPORT_SYMBOL(server_put_mount_2);
 static int server_start_mgs(struct super_block *sb)
 {
 	struct lustre_sb_info    *lsi = s2lsi(sb);
-	struct vfsmount	  *mnt = lsi->lsi_srv_mnt;
 	struct lustre_mount_info *lmi;
 	int    rc = 0;
 	ENTRY;
@@ -253,7 +250,7 @@ static int server_start_mgs(struct super_block *sb)
 
 	CDEBUG(D_CONFIG, "Start MGS service %s\n", LUSTRE_MGS_OBDNAME);
 
-	rc = server_register_mount(LUSTRE_MGS_OBDNAME, sb, mnt);
+	rc = server_register_mount(LUSTRE_MGS_OBDNAME, sb);
 
 	if (!rc) {
 		rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
@@ -1179,7 +1176,7 @@ out:
 
 /** Start server targets: MDTs and OSTs
  */
-static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
+static int server_start_targets(struct super_block *sb)
 {
 	struct obd_device *obd;
 	struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1230,11 +1227,9 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 	/* Set the mgc fs to our server disk.  This allows the MGC to
 	 * read and write configs locally, in case it can't talk to the MGS. */
-	if (lsi->lsi_srv_mnt) {
-		rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
-		if (rc)
-			GOTO(out_stop_service, rc);
-	}
+	rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
+	if (rc)
+		GOTO(out_stop_service, rc);
 
 	/* Register with MGS */
 	rc = server_register_target(lsi);
@@ -1243,7 +1238,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 	/* Let the target look up the mount using the target's name
 	   (we can't pass the sb or mnt through class_process_config.) */
-	rc = server_register_mount(lsi->lsi_svname, sb, mnt);
+	rc = server_register_mount(lsi->lsi_svname, sb);
 	if (rc)
 		GOTO(out_mgc, rc);
 
@@ -1313,8 +1308,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 out_mgc:
 	/* Release the mgc fs for others to use */
-	if (lsi->lsi_srv_mnt)
-		server_mgc_clear_fs(lsi->lsi_mgc);
+	server_mgc_clear_fs(lsi->lsi_mgc);
 
 out_stop_service:
 	if (rc != 0)
@@ -1668,9 +1662,6 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	obd->obd_lvfs_ctxt.dt = lsi->lsi_dt_dev;
 
 	dt_conf_get(NULL, lsi->lsi_dt_dev, &p);
-
-	lsi->lsi_srv_mnt = p.ddp_mnt;
-
 out:
 	RETURN(rc);
 }
@@ -1726,7 +1717,7 @@ int server_fill_super(struct super_block *sb)
 	/* Set up all obd devices for service */
 	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
 	    (IS_OST(lsi) || IS_MDT(lsi))) {
-		rc = server_start_targets(sb, lsi->lsi_srv_mnt);
+		rc = server_start_targets(sb);
 		if (rc < 0) {
 			CERROR("Unable to start targets: %d\n", rc);
 			GOTO(out_mnt, rc);
