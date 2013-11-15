@@ -491,7 +491,6 @@ struct lustre_sb_info {
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
 	struct dt_device	 *lsi_dt_dev;  /* dt device to access disk fs*/
-        struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
 	char			  lsi_svname[MTI_NAME_MAXLEN];
 	char			  lsi_osd_obdname[64];
@@ -520,7 +519,6 @@ struct lustre_sb_info {
 struct lustre_mount_info {
         char                 *lmi_name;
         struct super_block   *lmi_sb;
-        struct vfsmount      *lmi_mnt;
         cfs_list_t            lmi_list_chain;
 };
 
@@ -548,7 +546,7 @@ int lustre_common_put_super(struct super_block *sb);
 int server_fill_super(struct super_block *sb);
 struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name, struct vfsmount *mnt);
+int server_put_mount(const char *name);
 int server_put_mount_2(const char *name, struct vfsmount *mnt);
 struct mgs_target_info;
 int server_mti_print(const char *title, struct mgs_target_info *mti);

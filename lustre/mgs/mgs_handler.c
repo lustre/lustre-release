@@ -1068,7 +1068,7 @@ err_ops:
 	obd_disconnect(mgs->mgs_bottom_exp);
 err_lmi:
 	if (lmi)
-		server_put_mount(lustre_cfg_string(lcfg, 0), lmi->lmi_mnt);
+		server_put_mount(lustre_cfg_string(lcfg, 0));
 	RETURN(rc);
 }
 
@@ -1239,7 +1239,7 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 	LASSERT(mgs->mgs_bottom_exp);
 	obd_disconnect(mgs->mgs_bottom_exp);
 
-	server_put_mount(obd->obd_name, NULL);
+	server_put_mount(obd->obd_name);
 
 	RETURN(NULL);
 }
