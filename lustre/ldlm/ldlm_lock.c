@@ -234,7 +234,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 }
 
                 if (lock->l_lvb_data != NULL)
-                        OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
+                        OBD_FREE_LARGE(lock->l_lvb_data, lock->l_lvb_len);
 
                 ldlm_interval_free(ldlm_interval_detach(lock));
                 lu_ref_fini(&lock->l_reference);
@@ -1623,7 +1623,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
         if (lvb_len) {
                 lock->l_lvb_len = lvb_len;
-                OBD_ALLOC(lock->l_lvb_data, lvb_len);
+                OBD_ALLOC_LARGE(lock->l_lvb_data, lvb_len);
                 if (lock->l_lvb_data == NULL)
                         GOTO(out, 0);
         }
