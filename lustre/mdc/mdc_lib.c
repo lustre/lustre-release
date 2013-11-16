@@ -371,14 +371,15 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
-        struct mdt_rec_unlink *rec;
-        char *tmp;
- 
-        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_unlink));
-        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
-        LASSERT (rec != NULL);
+	struct mdt_rec_unlink *rec;
+	char *tmp;
 
-        rec->ul_opcode  = REINT_UNLINK;
+	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_unlink));
+	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+	LASSERT(rec != NULL);
+
+	rec->ul_opcode  = op_data->op_cli_flags & CLI_RM_ENTRY ?
+					REINT_RMENTRY : REINT_UNLINK;
         rec->ul_fsuid   = op_data->op_fsuid;
         rec->ul_fsgid   = op_data->op_fsgid;
         rec->ul_cap     = op_data->op_cap;

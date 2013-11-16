@@ -1138,6 +1138,35 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         RETURN(rc);
 }
 
+/**
+ * Remove dir entry
+ **/
+int ll_rmdir_entry(struct inode *dir, char *name, int namelen)
+{
+	struct ptlrpc_request *request = NULL;
+	struct md_op_data *op_data;
+	int rc;
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
+	       namelen, name, dir->i_ino, dir->i_generation, dir);
+
+	op_data = ll_prep_md_op_data(NULL, dir, NULL, name, strlen(name),
+				     S_IFDIR, LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
+	op_data->op_cli_flags |= CLI_RM_ENTRY;
+	rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
+	ll_finish_md_op_data(op_data);
+	if (rc == 0) {
+		ll_update_times(request, dir);
+		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_RMDIR, 1);
+	}
+
+	ptlrpc_req_finished(request);
+	RETURN(rc);
+}
+
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 {
         struct mdt_body *body;

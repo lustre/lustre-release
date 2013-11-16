@@ -661,6 +661,36 @@ int ll_send_mgc_param(struct obd_export *mgc, char *string)
         return rc;
 }
 
+int ll_dir_setdirstripe(struct inode *dir, struct lmv_user_md *lump,
+			char *filename)
+{
+	struct ptlrpc_request *request = NULL;
+	struct md_op_data *op_data;
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	int mode;
+	int err;
+
+	ENTRY;
+
+	mode = (0755 & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
+	op_data = ll_prep_md_op_data(NULL, dir, NULL, filename,
+				     strlen(filename), mode, LUSTRE_OPC_MKDIR,
+				     lump);
+	if (IS_ERR(op_data))
+		GOTO(err_exit, err = PTR_ERR(op_data));
+
+	op_data->op_cli_flags |= CLI_SET_MEA;
+	err = md_create(sbi->ll_md_exp, op_data, lump, sizeof(*lump), mode,
+			cfs_curproc_fsuid(), cfs_curproc_fsgid(),
+			cfs_curproc_cap_pack(), 0, &request);
+	ll_finish_md_op_data(op_data);
+	if (err)
+		GOTO(err_exit, err);
+err_exit:
+	ptlrpc_req_finished(request);
+	return err;
+}
+
 int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default)
 {
@@ -685,22 +715,22 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                                 lustre_swab_lov_user_md_v1(lump);
                         lum_size = sizeof(struct lov_user_md_v1);
                         break;
-                        }
+                }
                 case LOV_USER_MAGIC_V3: {
                         if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
                                 lustre_swab_lov_user_md_v3(
                                         (struct lov_user_md_v3 *)lump);
                         lum_size = sizeof(struct lov_user_md_v3);
                         break;
-                        }
+                }
                 default: {
                         CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
                                         " %#08x != %#08x nor %#08x\n",
                                         lump->lmm_magic, LOV_USER_MAGIC_V1,
                                         LOV_USER_MAGIC_V3);
                         RETURN(-EINVAL);
-                        }
-               }
+                }
+                }
         } else {
                 lum_size = sizeof(struct lov_user_md_v1);
         }
@@ -709,6 +739,9 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                                      LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
+
+	if (lump != NULL && lump->lmm_magic == cpu_to_le32(LMV_USER_MAGIC))
+		op_data->op_cli_flags |= CLI_SET_MEA;
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = md_setattr(sbi->ll_md_exp, op_data, lump, lum_size,
@@ -1262,6 +1295,51 @@ out_free:
                 obd_ioctl_freedata(buf, len);
                 return rc;
         }
+	case LL_IOC_LMV_SETSTRIPE: {
+		struct lmv_user_md  *lum;
+		char		*buf = NULL;
+		char		*filename;
+		int		 namelen = 0;
+		int		 lumlen = 0;
+		int		 len;
+		int		 rc;
+
+		rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
+		if (rc)
+			RETURN(rc);
+
+		data = (void *)buf;
+		if (data->ioc_inlbuf1 == NULL || data->ioc_inlbuf2 == NULL ||
+		    data->ioc_inllen1 == 0 || data->ioc_inllen2 == 0)
+			GOTO(lmv_out_free, rc = -EINVAL);
+
+		filename = data->ioc_inlbuf1;
+		namelen = data->ioc_inllen1;
+
+		if (namelen < 1) {
+			CDEBUG(D_INFO, "IOC_MDC_LOOKUP missing filename\n");
+			GOTO(lmv_out_free, rc = -EINVAL);
+		}
+		lum = (struct lmv_user_md *)data->ioc_inlbuf2;
+		lumlen = data->ioc_inllen2;
+
+		if (lum->lum_magic != LMV_USER_MAGIC ||
+		    lumlen != sizeof(*lum)) {
+			CERROR("%s: wrong lum magic %x or size %d: rc = %d\n",
+			       filename, lum->lum_magic, lumlen, -EFAULT);
+			GOTO(lmv_out_free, rc = -EINVAL);
+		}
+
+		/**
+		 * ll_dir_setdirstripe will be used to set dir stripe
+		 *  mdc_create--->mdt_reint_create (with dirstripe)
+		 */
+		rc = ll_dir_setdirstripe(inode, lum, filename);
+lmv_out_free:
+		obd_ioctl_freedata(buf, len);
+		RETURN(rc);
+
+	}
         case LL_IOC_LOV_SETSTRIPE: {
                 struct lov_user_md_v3 lumv3;
                 struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
@@ -1277,7 +1355,7 @@ out_free:
                 if (cfs_copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
                         RETURN(-EFAULT);
 
-                if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
+                if ((lumv1->lmm_magic == LOV_USER_MAGIC_V3) ) {
                         if (cfs_copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
                                 RETURN(-EFAULT);
                 }
@@ -1290,6 +1368,70 @@ out_free:
 
                 RETURN(rc);
         }
+	case LL_IOC_LMV_GETSTRIPE: {
+		struct lmv_user_md *lump = (struct lmv_user_md *)arg;
+		struct lmv_user_md lum;
+		struct lmv_user_md *tmp;
+		int lum_size;
+		int rc = 0;
+		int mdtindex;
+
+		if (copy_from_user(&lum, lump, sizeof(struct lmv_user_md)))
+			RETURN(-EFAULT);
+
+		if (lum.lum_magic != LMV_MAGIC_V1)
+			RETURN(-EINVAL);
+
+		lum_size = lmv_user_md_size(1, LMV_MAGIC_V1);
+		OBD_ALLOC(tmp, lum_size);
+		if (tmp == NULL)
+			GOTO(free_lmv, rc = -ENOMEM);
+
+		memcpy(tmp, &lum, sizeof(lum));
+		tmp->lum_type = LMV_STRIPE_TYPE;
+		tmp->lum_stripe_count = 1;
+		mdtindex = ll_get_mdt_idx(inode);
+		if (mdtindex < 0)
+			GOTO(free_lmv, rc = -ENOMEM);
+
+		tmp->lum_stripe_offset = mdtindex;
+		tmp->lum_objects[0].lum_mds = mdtindex;
+		memcpy(&tmp->lum_objects[0].lum_fid, ll_inode2fid(inode),
+		       sizeof(struct lu_fid));
+		if (copy_to_user((void *)arg, tmp, lum_size))
+			GOTO(free_lmv, rc = -EFAULT);
+free_lmv:
+		if (tmp)
+			OBD_FREE(tmp, lum_size);
+		RETURN(rc);
+	}
+	case LL_IOC_REMOVE_ENTRY: {
+		char		*filename = NULL;
+		int		 namelen = 0;
+		int		 rc;
+
+		/* Here is a little hack to avoid sending REINT_RMENTRY to
+		 * unsupported server, which might crash the server(LU-2730),
+		 * Because both LVB_TYPE and REINT_RMENTRY will be supported
+		 * on 2.4, we use OBD_CONNECT_LVB_TYPE to detect whether the
+		 * server will support REINT_RMENTRY XXX*/
+		if (!(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_LVB_TYPE))
+			return -ENOTSUPP;
+
+		filename = getname((const char *)arg);
+		if (IS_ERR(filename))
+			RETURN(PTR_ERR(filename));
+
+		namelen = strlen(filename);
+		if (namelen < 1)
+			GOTO(out_rmdir, rc = -EINVAL);
+
+		rc = ll_rmdir_entry(inode, filename, namelen);
+out_rmdir:
+                if (filename)
+                        putname(filename);
+		RETURN(rc);
+	}
         case LL_IOC_OBD_STATFS:
                 RETURN(ll_obd_statfs(inode, (void *)arg));
         case LL_IOC_LOV_GETSTRIPE:
@@ -1727,7 +1869,6 @@ out_free:
 		OBD_FREE_PTR(copy);
 		RETURN(rc);
 	}
-
 	default:
 		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL,
 				     (void *)arg));

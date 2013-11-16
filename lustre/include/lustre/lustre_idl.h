@@ -1878,14 +1878,14 @@ typedef enum {
  */
 
 typedef enum {
-        REINT_SETATTR  = 1,
-        REINT_CREATE   = 2,
-        REINT_LINK     = 3,
-        REINT_UNLINK   = 4,
-        REINT_RENAME   = 5,
-        REINT_OPEN     = 6,
-        REINT_SETXATTR = 7,
-//      REINT_CLOSE    = 8,
+	REINT_SETATTR  = 1,
+	REINT_CREATE   = 2,
+	REINT_LINK     = 3,
+	REINT_UNLINK   = 4,
+	REINT_RENAME   = 5,
+	REINT_OPEN     = 6,
+	REINT_SETXATTR = 7,
+	REINT_RMENTRY  = 8,
 //      REINT_WRITE    = 9,
         REINT_MAX
 } mds_reint_t, mdt_reint_t;

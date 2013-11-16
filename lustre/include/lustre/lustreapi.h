@@ -163,10 +163,13 @@ struct find_param {
         int                    *mdtindexes;
         int                     file_mdtindex;
 
-        int     lumlen;
-        struct  lov_user_mds_data *lmd;
+	int	lumlen;
+	struct  lov_user_mds_data *lmd;
 
         char poolname[LOV_MAXPOOLNAME + 1];
+
+	int			fp_lmv_count;
+	struct lmv_user_md	*fp_lmv_md;
 
         unsigned long long stripesize;
         unsigned long long stripesize_units;
@@ -186,6 +189,10 @@ extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 
 extern int llapi_file_fget_mdtidx(int fd, int *mdtidx);
+extern int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
+				 int stripe_count, int stripe_pattern,
+				 char *poolname);
+int llapi_direntry_remove(char *dname);
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,
                      struct obd_uuid *uuid_buf);

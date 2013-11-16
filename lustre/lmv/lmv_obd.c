@@ -962,13 +962,41 @@ static int lmv_placement_policy(struct obd_device *obd,
                                 struct md_op_data *op_data,
                                 mdsno_t *mds)
 {
+	struct lmv_obd          *lmv = &obd->u.lmv;
+	ENTRY;
+
 	LASSERT(mds != NULL);
 
-	/* Allocate new fid on target according to to different
-	 * QOS policy. In DNE phase I, llite should always tell
-	 * which MDT where the dir will be located */
-	*mds = op_data->op_mds;
+	if (lmv->desc.ld_tgt_count == 1) {
+		*mds = 0;
+		RETURN(0);
+	}
 
+	/**
+	 * If stripe_offset is provided during setdirstripe
+	 * (setdirstripe -i xx), xx MDS will be choosen.
+	 */
+	if (op_data->op_cli_flags & CLI_SET_MEA) {
+		struct lmv_user_md *lum;
+
+		lum = (struct lmv_user_md *)op_data->op_data;
+		if (lum->lum_type == LMV_STRIPE_TYPE &&
+		    lum->lum_stripe_offset != -1) {
+			if (lum->lum_stripe_offset >= lmv->desc.ld_tgt_count) {
+				CERROR("%s: Stripe_offset %d > MDT count %d:"
+				       " rc = %d\n", obd->obd_name,
+				       lum->lum_stripe_offset,
+				       lmv->desc.ld_tgt_count, -ERANGE);
+				RETURN(-ERANGE);
+			}
+			*mds = lum->lum_stripe_offset;
+			RETURN(0);
+		}
+	}
+
+	/* Allocate new fid on target according to operation type and parent
+	 * home mds. */
+	*mds = op_data->op_mds;
 	RETURN(0);
 }
 

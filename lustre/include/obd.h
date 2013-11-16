@@ -1248,21 +1248,32 @@ struct md_op_data {
 
         /* Size-on-MDS epoch and flags. */
         __u64                   op_ioepoch;
-        __u32                   op_flags;
+	__u32                   op_flags;
 
         /* Capa fields */
         struct obd_capa        *op_capa1;
         struct obd_capa        *op_capa2;
 
         /* Various operation flags. */
-        __u32                   op_bias;
+	__u32                   op_bias;
 
         /* Operation type */
-        __u32                   op_opc;
+	__u32                   op_opc;
 
         /* Used by readdir */
-        __u32                   op_npages;
-        __u64                   op_offset;
+	__u64                   op_offset;
+
+	/* Used by readdir */
+	__u32                   op_npages;
+
+	/* used to transfer info between the stacks of MD client
+	 * see enum op_cli_flags */
+	__u32			op_cli_flags;
+};
+
+enum op_cli_flags {
+	CLI_SET_MEA	= 1 << 0,
+	CLI_RM_ENTRY	= 1 << 1,
 };
 
 struct md_enqueue_info;

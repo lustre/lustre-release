@@ -97,6 +97,7 @@
 #define dump_obdo NULL
 #define dump_ost_body NULL
 #define dump_rcs NULL
+#define lustre_swab_lmv_user_md NULL
 
 /*
  * Yes, include .c file.
