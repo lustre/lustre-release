@@ -180,14 +180,21 @@ extern cfs_mem_cache_t *osp_object_kmem;
 
 /* this is a top object */
 struct osp_object {
-	struct lu_object_header	 opo_header;
-	struct dt_object	 opo_obj;
-	int			 opo_reserved:1,
-				 opo_new:1;
+	struct lu_object_header	opo_header;
+	struct dt_object	opo_obj;
+	int			opo_reserved:1,
+				opo_new:1,
+				opo_empty:1;
+
+	/* read/write lock for md osp object */
+	struct rw_semaphore	opo_sem;
+	const struct lu_env	*opo_owner;
 };
 
 extern struct lu_object_operations osp_lu_obj_ops;
 extern const struct dt_device_operations osp_dt_ops;
+extern struct dt_object_operations osp_md_obj_ops;
+extern struct dt_lock_operations osp_md_lock_ops;
 
 struct osp_thread_info {
 	struct lu_buf		 osi_lb;
@@ -207,6 +214,8 @@ struct osp_thread_info {
 	struct llog_cookie	 osi_cookie;
 	struct llog_catid	 osi_cid;
 	struct lu_seq_range	 osi_seq;
+	struct ldlm_res_id	 osi_resid;
+	struct obdo		 osi_obdo;
 };
 
 static inline void osp_objid_buf_prep(struct lu_buf *buf, loff_t *off,
@@ -378,6 +387,10 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 void osp_update_last_id(struct osp_device *d, obd_id objid);
 extern struct llog_operations osp_mds_ost_orig_logops;
 
+/* osp_md_object.c */
+int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
+		    struct thandle *th);
+int osp_trans_stop(const struct lu_env *env, struct thandle *th);
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d);

@@ -954,8 +954,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         attr->la_ctime = rec->cr_time;
         attr->la_mtime = rec->cr_time;
         attr->la_atime = rec->cr_time;
-        attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
-                         LA_CTIME | LA_MTIME | LA_ATIME;
+	attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID | LA_TYPE |
+			 LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&sp->u, 0, sizeof(sp->u));
         sp->sp_cr_flags = get_mrc_cr_flags(rec);
 

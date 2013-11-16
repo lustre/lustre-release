@@ -2544,3 +2544,21 @@ void lustre_swab_hsm_request(struct hsm_request *hr)
 }
 EXPORT_SYMBOL(lustre_swab_hsm_request);
 
+void lustre_swab_update_buf(struct update_buf *ub)
+{
+	__swab32s(&ub->ub_magic);
+	__swab32s(&ub->ub_count);
+}
+EXPORT_SYMBOL(lustre_swab_update_buf);
+
+void lustre_swab_update_reply_buf(struct update_reply *ur)
+{
+	int i;
+
+	__swab32s(&ur->ur_version);
+	__swab32s(&ur->ur_count);
+	for (i = 0; i < ur->ur_count; i++)
+		__swab32s(&ur->ur_lens[i]);
+}
+EXPORT_SYMBOL(lustre_swab_update_reply_buf);
+

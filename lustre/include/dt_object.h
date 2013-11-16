@@ -703,6 +703,12 @@ static inline int dt_object_exists(const struct dt_object *dt)
         return lu_object_exists(&dt->do_lu);
 }
 
+static inline struct dt_object *lu2dt_obj(struct lu_object *o)
+{
+	LASSERT(ergo(o != NULL, lu_device_is_dt(o->lo_dev)));
+	return container_of0(o, struct dt_object, do_lu);
+}
+
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
@@ -718,24 +724,32 @@ static inline int dt_object_exists(const struct dt_object *dt)
  *      No RPC request should be issued inside transaction.
  */
 struct thandle {
-        /** the dt device on which the transactions are executed */
-        struct dt_device *th_dev;
+	/** the dt device on which the transactions are executed */
+	struct dt_device *th_dev;
 
-        /** additional tags (layers can add in declare) */
-        __u32             th_tags;
+	/** context for this transaction, tag is LCT_TX_HANDLE */
+	struct lu_context th_ctx;
 
-        /** context for this transaction, tag is LCT_TX_HANDLE */
-        struct lu_context th_ctx;
+	/** additional tags (layers can add in declare) */
+	__u32             th_tags;
 
-        /** the last operation result in this transaction.
-         * this value is used in recovery */
-        __s32             th_result;
+	/** the last operation result in this transaction.
+	 * this value is used in recovery */
+	__s32             th_result;
 
-        /** whether we need sync commit */
-        int               th_sync:1;
+	/** whether we need sync commit */
+	int               th_sync:1;
 
-        /* local transation, no need to inform other layers */
-        int               th_local:1;
+	/* local transation, no need to inform other layers */
+	int               th_local:1;
+
+	/* In DNE, one transaction can be disassemblied into
+	 * updates on several different MDTs, and these updates
+	 * will be attached to th_remote_update_list per target.
+	 * Only single thread will access the list, no need lock
+	 */
+	cfs_list_t		th_remote_update_list;
+	struct update_request	*th_current_request;
 };
 
 /**

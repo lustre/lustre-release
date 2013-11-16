@@ -1397,7 +1397,16 @@ int mdd_declare_object_initialize(const struct lu_env *env,
 {
         int rc;
 
+	/*
+	 * inode mode has been set in creation time, and it's based on umask,
+	 * la_mode and acl, don't set here again! (which will go wrong
+	 * because below function doesn't consider umask).
+	 * I'd suggest set all object attributes in creation time, see above.
+	 */
+	LASSERT(attr->la_valid & (LA_MODE | LA_TYPE));
+	attr->la_valid &= ~(LA_MODE | LA_TYPE);
 	rc = mdo_declare_attr_set(env, child, attr, handle);
+	attr->la_valid |= LA_MODE | LA_TYPE;
 	if (rc == 0 && S_ISDIR(attr->la_mode)) {
 		rc = mdo_declare_index_insert(env, child, mdo2fid(child),
 					      dot, handle);
@@ -1433,11 +1442,11 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 	 * because below function doesn't consider umask).
 	 * I'd suggest set all object attributes in creation time, see above.
 	 */
-	LASSERT(attr->la_valid & LA_MODE);
-	attr->la_valid &= ~LA_MODE;
+	LASSERT(attr->la_valid & (LA_MODE | LA_TYPE));
+	attr->la_valid &= ~(LA_MODE | LA_TYPE);
 	rc = mdd_attr_set_internal(env, child, attr, handle, 0);
 	/* arguments are supposed to stay the same */
-	attr->la_valid |= LA_MODE;
+	attr->la_valid |= LA_MODE | LA_TYPE;
 	if (rc != 0)
 		RETURN(rc);
 

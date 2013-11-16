@@ -46,6 +46,7 @@
 #include <obd_class.h>
 #include <lustre_fid.h>
 #include <lustre_param.h>
+#include <lustre_update.h>
 
 #include "lod_internal.h"
 
@@ -507,19 +508,77 @@ static int lod_statfs(const struct lu_env *env,
 static struct thandle *lod_trans_create(const struct lu_env *env,
 					struct dt_device *dev)
 {
-	return dt_trans_create(env, dt2lod_dev(dev)->lod_child);
+	struct thandle *th;
+
+	th = dt_trans_create(env, dt2lod_dev(dev)->lod_child);
+	if (IS_ERR(th))
+		return th;
+
+	CFS_INIT_LIST_HEAD(&th->th_remote_update_list);
+	return th;
+}
+
+static int lod_remote_sync(const struct lu_env *env, struct dt_device *dev,
+			   struct thandle *th)
+{
+	struct update_request *update;
+	int    rc = 0;
+	ENTRY;
+
+	if (cfs_list_empty(&th->th_remote_update_list))
+		RETURN(0);
+
+	cfs_list_for_each_entry(update, &th->th_remote_update_list,
+				ur_list) {
+		/* In DNE phase I, there should be only one OSP
+		 * here, so we will do send/receive one by one,
+		 * instead of sending them parallel, will fix this
+		 * in Phase II */
+		th->th_current_request = update;
+		rc = dt_trans_start(env, update->ur_dt, th);
+		if (rc != 0) {
+			/* FIXME how to revert the partial results
+			 * once error happened? Resolved by 2 Phase commit */
+			update->ur_rc = rc;
+			break;
+		}
+	}
+
+	RETURN(rc);
 }
 
 static int lod_trans_start(const struct lu_env *env, struct dt_device *dev,
 			   struct thandle *th)
 {
-	return dt_trans_start(env, dt2lod_dev(dev)->lod_child, th);
+	struct lod_device *lod = dt2lod_dev((struct dt_device *) dev);
+	int rc;
+
+	rc = lod_remote_sync(env, dev, th);
+	if (rc)
+		return rc;
+
+	return dt_trans_start(env, lod->lod_child, th);
 }
 
 static int lod_trans_stop(const struct lu_env *env, struct thandle *th)
 {
-	/* XXX: we don't know next device, will be fixed with DNE */
-	return dt_trans_stop(env, th->th_dev, th);
+	struct update_request *update;
+	struct update_request *tmp;
+	int rc = 0;
+	int rc2 = 0;
+
+	cfs_list_for_each_entry_safe(update, tmp,
+				     &th->th_remote_update_list,
+				     ur_list) {
+		th->th_current_request = update;
+		rc2 = dt_trans_stop(env, update->ur_dt, th);
+		if (unlikely(rc2 != 0 && rc == 0))
+			rc = rc2;
+	}
+
+	rc2 = dt_trans_stop(env, th->th_dev, th);
+
+	return rc2 != 0 ? rc2 : rc;
 }
 
 static void lod_conf_get(const struct lu_env *env,

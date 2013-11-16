@@ -488,6 +488,8 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 const struct dt_device_operations osp_dt_ops = {
 	.dt_statfs	= osp_statfs,
 	.dt_sync	= osp_sync,
+	.dt_trans_start = osp_trans_start,
+	.dt_trans_stop  = osp_trans_stop,
 };
 
 static int osp_connect_to_osd(const struct lu_env *env, struct osp_device *m,

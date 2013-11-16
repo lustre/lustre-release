@@ -1999,8 +1999,36 @@ check_hsm_user_request(void)
 	CHECK_MEMBER(hsm_user_request, hur_user_item);
 }
 
-static void
-system_string (char *cmdline, char *str, int len)
+static void check_update_buf(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_buf);
+	CHECK_MEMBER(update_buf, ub_magic);
+	CHECK_MEMBER(update_buf, ub_count);
+	CHECK_MEMBER(update_buf, ub_bufs);
+}
+
+static void check_update_reply(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_reply);
+	CHECK_MEMBER(update_reply, ur_version);
+	CHECK_MEMBER(update_reply, ur_count);
+	CHECK_MEMBER(update_reply, ur_lens);
+}
+
+static void check_update(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update);
+	CHECK_MEMBER(update, u_type);
+	CHECK_MEMBER(update, u_padding);
+	CHECK_MEMBER(update, u_fid);
+	CHECK_MEMBER(update, u_lens);
+	CHECK_MEMBER(update, u_bufs);
+}
+
+static void system_string(char *cmdline, char *str, int len)
 {
 	int   fds[2];
 	int   rc;
@@ -2233,6 +2261,9 @@ main(int argc, char **argv)
 	CHECK_CVALUE(LUSTRE_RES_ID_SEQ_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_VER_OID_OFF);
 	/* CHECK_CVALUE(LUSTRE_RES_ID_WAS_VER_OFF); packed with OID */
+
+	CHECK_VALUE(UPDATE_OBJ);
+	CHECK_VALUE(UPDATE_LAST_OPC);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_SEQ_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_QUOTA_VER_OID_OFF);
 	CHECK_CVALUE(LUSTRE_RES_ID_HSH_OFF);
@@ -2271,6 +2302,20 @@ main(int argc, char **argv)
 	CHECK_STRUCT(obd_uuid);
 	check_lu_seq_range();
 	check_lustre_mdt_attrs();
+
+	CHECK_VALUE(OBJ_CREATE);
+	CHECK_VALUE(OBJ_DESTROY);
+	CHECK_VALUE(OBJ_REF_ADD);
+	CHECK_VALUE(OBJ_REF_DEL);
+	CHECK_VALUE(OBJ_ATTR_SET);
+	CHECK_VALUE(OBJ_ATTR_GET);
+	CHECK_VALUE(OBJ_XATTR_SET);
+	CHECK_VALUE(OBJ_XATTR_GET);
+	CHECK_VALUE(OBJ_INDEX_LOOKUP);
+	CHECK_VALUE(OBJ_INDEX_LOOKUP);
+	CHECK_VALUE(OBJ_INDEX_INSERT);
+	CHECK_VALUE(OBJ_INDEX_DELETE);
+
 	check_som_attrs();
 	check_hsm_attrs();
 	check_ost_id();
@@ -2369,6 +2414,10 @@ main(int argc, char **argv)
 	check_hsm_current_action();
 	check_hsm_request();
 	check_hsm_user_request();
+
+	check_update_buf();
+	check_update_reply();
+	check_update();
 
 	printf("}\n\n");
 
