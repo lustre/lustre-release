@@ -115,6 +115,123 @@ out:
 }
 
 /*
+ * directory structure on legacy MDT:
+ *
+ * REM_OBJ_DIR/ per mdt
+ * AGENT_OBJ_DIR/ per mdt
+ *
+ */
+static const char remote_obj_dir[] = "REM_OBJ_DIR";
+static const char agent_obj_dir[] = "AGENT_OBJ_DIR";
+int osd_mdt_init(struct osd_device *dev)
+{
+	struct lvfs_run_ctxt  new;
+	struct lvfs_run_ctxt  save;
+	struct dentry	*parent;
+	struct osd_mdobj_map *omm;
+	struct dentry	*d;
+	int		   rc = 0;
+	ENTRY;
+
+	OBD_ALLOC_PTR(dev->od_mdt_map);
+	if (dev->od_mdt_map == NULL)
+		RETURN(-ENOMEM);
+
+	omm = dev->od_mdt_map;
+
+	LASSERT(dev->od_fsops);
+
+	parent = osd_sb(dev)->s_root;
+	osd_push_ctxt(dev, &new, &save);
+
+	d = simple_mkdir(parent, dev->od_mnt, agent_obj_dir,
+			 0755, 1);
+	if (IS_ERR(d))
+		GOTO(cleanup, rc = PTR_ERR(d));
+
+	omm->omm_agent_dentry = d;
+
+cleanup:
+	pop_ctxt(&save, &new, NULL);
+	if (rc) {
+		if (omm->omm_agent_dentry != NULL)
+			dput(omm->omm_agent_dentry);
+		OBD_FREE_PTR(omm);
+		dev->od_mdt_map = NULL;
+	}
+	RETURN(rc);
+}
+
+static void osd_mdt_fini(struct osd_device *osd)
+{
+	struct osd_mdobj_map *omm = osd->od_mdt_map;
+
+	if (omm == NULL)
+		return;
+
+	if (omm->omm_agent_dentry)
+		dput(omm->omm_agent_dentry);
+
+	OBD_FREE_PTR(omm);
+	osd->od_ost_map = NULL;
+}
+
+int osd_create_agent_inode(const struct lu_env *env, struct osd_device *osd,
+			   struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_mdobj_map	*omm = osd->od_mdt_map;
+	struct osd_thread_info	*oti = osd_oti_get(env);
+	char			*name_buf = oti->oti_name;
+	struct dentry		*agent;
+	struct dentry		*parent;
+	int			rc;
+
+	parent = omm->omm_agent_dentry;
+	sprintf(name_buf, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+	agent = osd_child_dentry_by_inode(env, parent->d_inode,
+					  name_buf, strlen(name_buf));
+	mutex_lock(&parent->d_inode->i_mutex);
+	rc = osd_ldiskfs_add_entry(oh->ot_handle, agent, obj->oo_inode, NULL);
+	parent->d_inode->i_nlink++;
+	mark_inode_dirty(parent->d_inode);
+	mutex_unlock(&parent->d_inode->i_mutex);
+	if (rc != 0)
+		CERROR("%s: "DFID" add agent error: rc = %d\n", osd_name(osd),
+		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), rc);
+	RETURN(rc);
+}
+
+int osd_delete_agent_inode(const struct lu_env *env, struct osd_device *osd,
+			   struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
+	struct osd_thread_info	   *oti = osd_oti_get(env);
+	char			   *name = oti->oti_name;
+	struct dentry		   *agent;
+	struct dentry		   *parent;
+	struct ldiskfs_dir_entry_2 *de;
+	struct buffer_head	   *bh;
+	int			   rc;
+
+	parent = omm->omm_agent_dentry;
+	sprintf(name, DFID, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+	agent = osd_child_dentry_by_inode(env, parent->d_inode,
+					  name, strlen(name));
+	mutex_lock(&parent->d_inode->i_mutex);
+	bh = osd_ldiskfs_find_entry(parent->d_inode, agent, &de, NULL);
+	if (bh == NULL) {
+		mutex_unlock(&parent->d_inode->i_mutex);
+		RETURN(-ENOENT);
+	}
+	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
+	parent->d_inode->i_nlink--;
+	mark_inode_dirty(parent->d_inode);
+	mutex_unlock(&parent->d_inode->i_mutex);
+	brelse(bh);
+	RETURN(rc);
+}
+
+/*
  * directory structure on legacy OST:
  *
  * O/<seq>/d0-31/<objid>
@@ -193,6 +310,30 @@ static void osd_seq_free(struct osd_obj_map *map,
 	OBD_FREE_PTR(osd_seq);
 }
 
+static void osd_ost_fini(struct osd_device *osd)
+{
+	struct osd_obj_seq    *osd_seq;
+	struct osd_obj_seq    *tmp;
+	struct osd_obj_map    *map = osd->od_ost_map;
+	ENTRY;
+
+	if (map == NULL)
+		return;
+
+	write_lock(&map->om_seq_list_lock);
+	cfs_list_for_each_entry_safe(osd_seq, tmp,
+				     &map->om_seq_list,
+				     oos_seq_list) {
+		osd_seq_free(map, osd_seq);
+	}
+	write_unlock(&map->om_seq_list_lock);
+	if (map->om_root)
+		dput(map->om_root);
+	OBD_FREE_PTR(map);
+	osd->od_ost_map = NULL;
+	EXIT;
+}
+
 int osd_obj_map_init(struct osd_device *dev)
 {
 	int rc;
@@ -200,8 +341,11 @@ int osd_obj_map_init(struct osd_device *dev)
 
 	/* prepare structures for OST */
 	rc = osd_ost_init(dev);
+	if (rc)
+		RETURN(rc);
 
 	/* prepare structures for MDS */
+	rc = osd_mdt_init(dev);
 
         RETURN(rc);
 }
@@ -229,27 +373,8 @@ struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, obd_seq seq)
 
 void osd_obj_map_fini(struct osd_device *dev)
 {
-	struct osd_obj_seq    *osd_seq;
-	struct osd_obj_seq    *tmp;
-	struct osd_obj_map    *map = dev->od_ost_map;
-	ENTRY;
-
-	map = dev->od_ost_map;
-	if (map == NULL)
-		return;
-
-	write_lock(&dev->od_ost_map->om_seq_list_lock);
-	cfs_list_for_each_entry_safe(osd_seq, tmp,
-				     &dev->od_ost_map->om_seq_list,
-				     oos_seq_list) {
-		osd_seq_free(map, osd_seq);
-	}
-	write_unlock(&dev->od_ost_map->om_seq_list_lock);
-	if (map->om_root)
-		dput(map->om_root);
-	OBD_FREE_PTR(dev->od_ost_map);
-	dev->od_ost_map = NULL;
-	EXIT;
+	osd_ost_fini(dev);
+	osd_mdt_fini(dev);
 }
 
 static int osd_obj_del_entry(struct osd_thread_info *info,
@@ -257,26 +382,25 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 			     struct dentry *dird, char *name,
 			     struct thandle *th)
 {
-        struct ldiskfs_dir_entry_2 *de;
-        struct buffer_head         *bh;
-        struct osd_thandle         *oh;
-        struct dentry              *child;
-        struct inode               *dir = dird->d_inode;
-        int                         rc;
+	struct ldiskfs_dir_entry_2 *de;
+	struct buffer_head         *bh;
+	struct osd_thandle         *oh;
+	struct dentry              *child;
+	struct inode               *dir = dird->d_inode;
+	int                         rc;
+	ENTRY;
 
-        ENTRY;
-
-        oh = container_of(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
-        LASSERT(oh->ot_handle->h_transaction != NULL);
+	oh = container_of(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
 
 
-        child = &info->oti_child_dentry;
-        child->d_name.hash = 0;
-        child->d_name.name = name;
-        child->d_name.len = strlen(name);
-        child->d_parent = dird;
-        child->d_inode = NULL;
+	child = &info->oti_child_dentry;
+	child->d_name.hash = 0;
+	child->d_name.name = name;
+	child->d_name.len = strlen(name);
+	child->d_parent = dird;
+	child->d_inode = NULL;
 
 	ll_vfs_dq_init(dir);
 	mutex_lock(&dir->i_mutex);
