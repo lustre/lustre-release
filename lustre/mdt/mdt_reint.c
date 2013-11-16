@@ -986,12 +986,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                   PFID(rr->rr_fid1), rr->rr_name,
                   PFID(rr->rr_fid2), rr->rr_tgt);
 
-	if (!lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
-		rc = mdt_rename_lock(info, &rename_lh);
-		if (rc) {
-			CERROR("Can't lock FS for rename, rc %d\n", rc);
-			RETURN(rc);
-		}
+	rc = mdt_rename_lock(info, &rename_lh);
+	if (rc) {
+		CERROR("Can't lock FS for rename, rc %d\n", rc);
+		RETURN(rc);
 	}
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
