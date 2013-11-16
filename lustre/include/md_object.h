@@ -840,6 +840,17 @@ static inline int mdo_rename_tgt(const struct lu_env *env,
         }
 }
 
+/**
+ * Used in MDD/OUT layer for object lock rule
+ **/
+enum mdd_object_role {
+	MOR_SRC_PARENT,
+	MOR_SRC_CHILD,
+	MOR_TGT_PARENT,
+	MOR_TGT_CHILD,
+	MOR_TGT_ORPHAN
+};
+
 struct dt_device;
 /**
  * Structure to hold object information. This is used to create object

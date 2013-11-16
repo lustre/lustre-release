@@ -255,7 +255,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x185
 #define OBD_FAIL_MDS_GET_INFO_NET        0x186
 #define OBD_FAIL_MDS_DQACQ_NET           0x187
-#define OBD_FAIL_MDS_OBJ_UPDATE_NET      0x188
 
 /* OI scrub */
 #define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
@@ -461,6 +460,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LOV_INIT			    0x1403
 #define OBD_FAIL_GLIMPSE_DELAY			    0x1404
 
+#define OBD_FAIL_UPDATE_OBJ_NET			    0x1500
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)

@@ -102,7 +102,7 @@ struct mdt_device {
 	struct seq_server_site	   mdt_seq_site;
         struct ptlrpc_service     *mdt_regular_service;
         struct ptlrpc_service     *mdt_readpage_service;
-        struct ptlrpc_service     *mdt_xmds_service;
+	struct ptlrpc_service     *mdt_out_service;
         struct ptlrpc_service     *mdt_setattr_service;
         struct ptlrpc_service     *mdt_mdsc_service;
         struct ptlrpc_service     *mdt_mdss_service;
@@ -274,6 +274,57 @@ enum mdt_reint_flag {
         MRF_OPEN_TRUNC = 1 << 0,
 };
 
+struct mdt_thread_info;
+struct tx_arg;
+typedef int (*tx_exec_func_t)(struct mdt_thread_info *, struct thandle *,
+			      struct tx_arg *);
+
+struct tx_arg {
+	tx_exec_func_t		exec_fn;
+	tx_exec_func_t		undo_fn;
+	struct dt_object	*object;
+	char			*file;
+	int			line;
+	struct update_reply	*reply;
+	int			index;
+	union {
+		struct {
+			const struct dt_rec	*rec;
+			const struct dt_key	*key;
+		} insert;
+		struct {
+		} ref;
+		struct {
+			struct lu_attr	attr;
+		} attr_set;
+		struct {
+			struct lu_buf	buf;
+			const char	*name;
+			int		flags;
+			__u32		csum;
+		} xattr_set;
+		struct {
+			struct lu_attr			attr;
+			struct dt_allocation_hint	hint;
+			struct dt_object_format		dof;
+			struct lu_fid			fid;
+		} create;
+		struct {
+			struct lu_buf	buf;
+			loff_t		pos;
+		} write;
+	} u;
+};
+
+#define TX_MAX_OPS	  10
+struct thandle_exec_args {
+	struct thandle		*ta_handle;
+	struct dt_device	*ta_dev;
+	int			ta_err;
+	struct tx_arg		ta_args[TX_MAX_OPS];
+	int			ta_argno;   /* used args */
+};
+
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -393,6 +444,14 @@ struct mdt_thread_info {
                         struct md_attr attr;
                         struct md_som_data data;
                 } som;
+		struct {
+			struct dt_object_format	mti_update_dof;
+			struct update_reply	*mti_update_reply;
+			struct update		*mti_update;
+			int			mti_update_reply_index;
+			struct obdo		mti_obdo;
+			struct dt_object	*mti_dt_object;
+		} update;
         } mti_u;
 
         /* IO epoch related stuff. */
@@ -412,6 +471,8 @@ struct mdt_thread_info {
 	int			   mti_big_lmm_used;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
+	struct thandle_exec_args   mti_handle;
+	struct ldlm_enqueue_info   mti_einfo;
 };
 
 /* ptlrpc request handler for MDT. All handlers are
@@ -728,6 +789,8 @@ extern struct lprocfs_vars lprocfs_mds_obd_vars[];
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     struct md_hsm *mh);
 
+struct mdt_handler *mdt_handler_find(__u32 opc,
+				     struct mdt_opc_slice *supported);
 /* mdt_idmap.c */
 int mdt_init_sec_level(struct mdt_thread_info *);
 int mdt_init_idmap(struct mdt_thread_info *);
@@ -1009,6 +1072,36 @@ static inline char *mdt_obd_name(struct mdt_device *mdt)
 
 int mds_mod_init(void);
 void mds_mod_exit(void);
+
+/* Update handlers */
+int out_handle(struct mdt_thread_info *info);
+
+#define out_tx_create(info, obj, attr, fid, dof, th, reply, idx) \
+	__out_tx_create(info, obj, attr, fid, dof, th, reply, idx, \
+			__FILE__, __LINE__)
+
+#define out_tx_attr_set(info, obj, attr, th, reply, idx) \
+	__out_tx_attr_set(info, obj, attr, th, reply, idx, \
+			  __FILE__, __LINE__)
+
+#define out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx)	\
+	__out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx,	\
+			   __FILE__, __LINE__)
+
+#define out_tx_ref_add(info, obj, th, reply, idx) \
+	__out_tx_ref_add(info, obj, th, reply, idx, __FILE__, __LINE__)
+
+#define out_tx_ref_del(info, obj, th, reply, idx) \
+	__out_tx_ref_del(info, obj, th, reply, idx, __FILE__, __LINE__)
+
+#define out_tx_index_insert(info, obj, th, name, fid, reply, idx) \
+	__out_tx_index_insert(info, obj, th, name, fid, reply, idx, \
+			      __FILE__, __LINE__)
+
+#define out_tx_index_delete(info, obj, th, name, reply, idx) \
+	__out_tx_index_delete(info, obj, th, name, reply, idx, \
+			      __FILE__, __LINE__)
+
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

@@ -142,14 +142,6 @@ enum mod_flags {
         ORPHAN_OBJ = 1 << 3,
 };
 
-enum mdd_object_role {
-        MOR_SRC_PARENT,
-        MOR_SRC_CHILD,
-        MOR_TGT_PARENT,
-        MOR_TGT_CHILD,
-        MOR_TGT_ORPHAN
-};
-
 struct mdd_object {
         struct md_object   mod_obj;
         /* open count */

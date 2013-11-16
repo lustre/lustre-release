@@ -63,6 +63,7 @@ struct mds_device {
 	struct md_device	   mds_md_dev;
 	struct ptlrpc_service     *mds_regular_service;
 	struct ptlrpc_service     *mds_readpage_service;
+	struct ptlrpc_service     *mds_out_service;
 	struct ptlrpc_service     *mds_setattr_service;
 	struct ptlrpc_service     *mds_mdsc_service;
 	struct ptlrpc_service     *mds_mdss_service;
@@ -308,6 +309,46 @@ struct mdt_opc_slice mdt_fld_handlers[] = {
 	}
 };
 
+/* Request with a format known in advance */
+#define DEF_UPDATE_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(UPDATE_OBJ, flags, name, fn, &RQF_ ## name)
+
+#define target_handler mdt_handler
+static struct target_handler out_ops[] = {
+	DEF_UPDATE_HDL(MUTABOR,		UPDATE_OBJ,	out_handle),
+};
+
+static struct mdt_opc_slice update_handlers[] = {
+	{
+		.mos_opc_start = MDS_GETATTR,
+		.mos_opc_end   = MDS_LAST_OPC,
+		.mos_hs        = mdt_mds_ops
+	},
+	{
+		.mos_opc_start = OBD_PING,
+		.mos_opc_end   = OBD_LAST_OPC,
+		.mos_hs        = mdt_obd_ops
+	},
+	{
+		.mos_opc_start = LDLM_ENQUEUE,
+		.mos_opc_end   = LDLM_LAST_OPC,
+		.mos_hs        = mdt_dlm_ops
+	},
+	{
+		.mos_opc_start = SEC_CTX_INIT,
+		.mos_opc_end   = SEC_LAST_OPC,
+		.mos_hs        = mdt_sec_ctx_ops
+	},
+	{
+		.mos_opc_start = UPDATE_OBJ,
+		.mos_opc_end   = UPDATE_LAST_OPC,
+		.mos_hs        = out_ops
+	},
+	{
+		.mos_hs        = NULL
+	}
+};
+
 static int mds_regular_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_regular_handlers);
@@ -321,6 +362,11 @@ static int mds_readpage_handle(struct ptlrpc_request *req)
 static int mds_mdsc_handle(struct ptlrpc_request *req)
 {
 	return mdt_handle_common(req, mdt_seq_handlers);
+}
+
+static int mdt_out_handle(struct ptlrpc_request *req)
+{
+	return mdt_handle_common(req, update_handlers);
 }
 
 static int mds_mdss_handle(struct ptlrpc_request *req)
@@ -344,6 +390,10 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 	if (m->mds_readpage_service != NULL) {
 		ptlrpc_unregister_service(m->mds_readpage_service);
 		m->mds_readpage_service = NULL;
+	}
+	if (m->mds_out_service != NULL) {
+		ptlrpc_unregister_service(m->mds_out_service);
+		m->mds_out_service = NULL;
 	}
 	if (m->mds_setattr_service != NULL) {
 		ptlrpc_unregister_service(m->mds_setattr_service);
@@ -505,6 +555,49 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		CERROR("failed to start setattr service: %d\n", rc);
 		m->mds_setattr_service = NULL;
 
+		GOTO(err_mds_svc, rc);
+	}
+
+	/* Object update service */
+	conf = (typeof(conf)) {
+		.psc_name		= LUSTRE_MDT_NAME "_out",
+		.psc_watchdog_factor	= MDT_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= MDS_NBUFS,
+			.bc_buf_size		= MDS_BUFSIZE,
+			.bc_req_max_size	= MDS_MAXREQSIZE,
+			.bc_rep_max_size	= MDS_MAXREPSIZE,
+			.bc_req_portal		= MDS_MDS_PORTAL,
+			.bc_rep_portal		= MDC_REPLY_PORTAL,
+		},
+		/*
+		 * We'd like to have a mechanism to set this on a per-device
+		 * basis, but alas...
+		 */
+		.psc_thr		= {
+			.tc_thr_name		= LUSTRE_MDT_NAME "_out",
+			.tc_thr_factor		= MDS_THR_FACTOR,
+			.tc_nthrs_init		= MDS_NTHRS_INIT,
+			.tc_nthrs_base		= MDS_NTHRS_BASE,
+			.tc_nthrs_max		= MDS_NTHRS_MAX,
+			.tc_nthrs_user		= mds_num_threads,
+			.tc_cpu_affinity	= 1,
+			.tc_ctx_tags		= LCT_MD_THREAD,
+		},
+		.psc_cpt		= {
+			.cc_pattern		= mds_num_cpts,
+		},
+		.psc_ops		= {
+			.so_req_handler		= mdt_out_handle,
+			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
+		},
+	};
+	m->mds_out_service = ptlrpc_register_service(&conf, procfs_entry);
+	if (IS_ERR(m->mds_out_service)) {
+		rc = PTR_ERR(m->mds_out_service);
+		CERROR("failed to start out service: %d\n", rc);
+		m->mds_out_service = NULL;
 		GOTO(err_mds_svc, rc);
 	}
 
