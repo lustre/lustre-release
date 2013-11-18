@@ -253,7 +253,6 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_heap.h>
 #include <libcfs/libcfs_fail.h>
 #include <libcfs/params_tree.h>
-#include <libcfs/libcfs_crypto.h>
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(const void *ptr, unsigned long shift)

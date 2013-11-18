@@ -1636,10 +1636,8 @@ static __u32 tgt_checksum_bulk(struct lu_target *tgt,
 		}
 	}
 
-	bufsize = 4;
+	bufsize = sizeof(cksum);
 	err = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
-	if (err)
-		cfs_crypto_hash_final(hdesc, NULL, NULL);
 
 	return cksum;
 }

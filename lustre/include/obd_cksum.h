@@ -35,6 +35,7 @@
 #ifndef __OBD_CKSUM
 #define __OBD_CKSUM
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_crypto.h>
 #include <lustre/lustre_idl.h>
 
 static inline unsigned char cksum_obd2cfs(cksum_type_t cksum_type)

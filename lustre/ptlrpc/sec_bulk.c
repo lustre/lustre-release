@@ -41,12 +41,6 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/libcfs.h>
-#ifndef __KERNEL__
-#include <liblustre.h>
-#include <libcfs/list.h>
-#else
-#include <linux/crypto.h>
-#endif
 
 #include <obd.h>
 #include <obd_cksum.h>
@@ -899,12 +893,17 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed)
 }
 EXPORT_SYMBOL(bulk_sec_desc_unpack);
 
+/*
+ * Compute the checksum of an RPC buffer payload.  If the return \a buflen
+ * is not large enough, truncate the result to fit so that it is possible
+ * to use a hash function with a large hash space, but only use a part of
+ * the resulting hash.
+ */
 int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 			      void *buf, int buflen)
 {
 	struct cfs_crypto_hash_desc	*hdesc;
 	int				hashsize;
-	char				hashbuf[64];
 	unsigned int			bufsize;
 	int				i, err;
 
@@ -930,19 +929,20 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 				  desc->bd_iov[i].iov_len);
 #endif
 	}
+
 	if (hashsize > buflen) {
+		unsigned char hashbuf[CFS_CRYPTO_HASH_DIGESTSIZE_MAX];
+
 		bufsize = sizeof(hashbuf);
-		err = cfs_crypto_hash_final(hdesc, (unsigned char *)hashbuf,
-					    &bufsize);
+		LASSERTF(bufsize >= hashsize, "bufsize = %u < hashsize %u\n",
+			 bufsize, hashsize);
+		err = cfs_crypto_hash_final(hdesc, hashbuf, &bufsize);
 		memcpy(buf, hashbuf, buflen);
 	} else {
 		bufsize = buflen;
-		err = cfs_crypto_hash_final(hdesc, (unsigned char *)buf,
-					    &bufsize);
+		err = cfs_crypto_hash_final(hdesc, buf, &bufsize);
 	}
 
-	if (err)
-		cfs_crypto_hash_final(hdesc, NULL, NULL);
 	return err;
 }
 EXPORT_SYMBOL(sptlrpc_get_bulk_checksum);

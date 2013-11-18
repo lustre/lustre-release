@@ -1195,12 +1195,13 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 		    OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
 			unsigned char *ptr = kmap(pga[i]->pg);
 			int off = pga[i]->off & ~CFS_PAGE_MASK;
+
 			memcpy(ptr + off, "bad1", min(4, nob));
 			kunmap(pga[i]->pg);
 		}
 		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
-				  pga[i]->off & ~CFS_PAGE_MASK,
-				  count);
+					    pga[i]->off & ~CFS_PAGE_MASK,
+					    count);
 		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d\n",
 			       (int)(pga[i]->off & ~CFS_PAGE_MASK));
 
@@ -1209,11 +1210,8 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 		i++;
 	}
 
-	bufsize = 4;
+	bufsize = sizeof(cksum);
 	err = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
-
-	if (err)
-		cfs_crypto_hash_final(hdesc, NULL, NULL);
 
 	/* For sending we only compute the wrong checksum instead
 	 * of corrupting the data so it is still correct on a redo */

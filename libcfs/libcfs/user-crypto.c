@@ -30,9 +30,13 @@
  */
 
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_crypto.h>
 #include <libcfs/posix/posix-crypto.h>
 #include <libcfs/user-crypto.h>
 
+/**
+ *  Array of hash algorithm speed in MByte per second
+ */
 static int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
 
 struct __hash_alg {
@@ -170,19 +174,20 @@ static struct __hash_alg crypto_hash[] = {
 					};
 
 /**
- * Go through hashes to find the hash with  max priority
- * for the alg_id algorithm. This is done for different  implementation
- * of the same algorithm. Priotity is staticaly defined by developer, and
- * can be zeroed if initialization of algo is unsuccessfull.
+ * Go through hashes to find the hash with max priority for the hash_alg
+ * algorithm. This is done for different implementation of the same
+ * algorithm. Priority is staticaly defined by developer, and can be zeroed
+ * if initialization of algo is unsuccessful.
  */
-static const struct __hash_alg *cfs_crypto_hash_best_alg(unsigned char alg_id)
+static const struct __hash_alg
+*cfs_crypto_hash_best_alg(enum cfs_crypto_hash_alg hash_alg)
 {
 	int max_priority = 0;
 	const struct __hash_alg *alg = NULL;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(crypto_hash); i++) {
-		if (alg_id == crypto_hash[i].ha_id &&
+		if (hash_alg == crypto_hash[i].ha_id &&
 		    max_priority < crypto_hash[i].ha_priority) {
 			max_priority = crypto_hash[i].ha_priority;
 			alg = &crypto_hash[i];
@@ -193,22 +198,22 @@ static const struct __hash_alg *cfs_crypto_hash_best_alg(unsigned char alg_id)
 }
 
 struct cfs_crypto_hash_desc
-	*cfs_crypto_hash_init(unsigned char alg,
-			      unsigned char *key, unsigned int key_len)
+*cfs_crypto_hash_init(enum cfs_crypto_hash_alg hash_alg,
+		      unsigned char *key, unsigned int key_len)
 {
 	struct hash_desc			*hdesc = NULL;
 	const struct cfs_crypto_hash_type	*type;
 	const struct __hash_alg			*ha = NULL;
 	int					err;
 
-	type = cfs_crypto_hash_type(alg);
+	type = cfs_crypto_hash_type(hash_alg);
 	if (type == NULL) {
 		CWARN("Unsupported hash algorithm id = %d, max id is %d\n",
-		      alg, CFS_HASH_ALG_MAX);
+		      hash_alg, CFS_HASH_ALG_MAX);
 		return ERR_PTR(-EINVAL);
 	}
 
-	ha = cfs_crypto_hash_best_alg(alg);
+	ha = cfs_crypto_hash_best_alg(hash_alg);
 	if (ha == NULL) {
 		CERROR("Failed to get hash algorithm\n");
 		return ERR_PTR(-ENODEV);
@@ -268,45 +273,43 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 	size = type->cht_size;
 
 	if (hash_len == NULL) {
-		kfree(d);
-		return 0;
+		err = 0;
+		goto free;
 	}
 	if (hash == NULL || *hash_len < size) {
-		*hash_len = d->hd_hash->ha_ctx_size;
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto free;
 	}
 
 	LASSERT(d->hd_hash->final != NULL);
 	err = d->hd_hash->final(d->hd_ctx, hash, *hash_len);
-	if (err == 0) {
-		/* If get final digest success free hash descriptor */
-		kfree(d);
-	}
+free:
+	kfree(d);
 
 	return err;
 }
 
-int cfs_crypto_hash_digest(unsigned char alg,
+int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 			   const void *buf, unsigned int buf_len,
 			   unsigned char *key, unsigned int key_len,
 			   unsigned char *hash, unsigned int *hash_len)
 {
 	struct cfs_crypto_hash_desc      *desc;
-	int			     err;
+	int			     err, err2;
 
-	desc = cfs_crypto_hash_init(alg, key, key_len);
+	desc = cfs_crypto_hash_init(hash_alg, key, key_len);
 
 	if (IS_ERR(desc))
 		return PTR_ERR(desc);
 
 	err = cfs_crypto_hash_update(desc, buf, buf_len);
-	if (err) {
-		cfs_crypto_hash_final(desc, NULL, NULL);
-		return err;
-	}
-	err = cfs_crypto_hash_final(desc, hash, hash_len);
 	if (err != 0)
-		cfs_crypto_hash_final(desc, NULL, NULL);
+		hash_len = NULL;
+
+	err2 = cfs_crypto_hash_final(desc, hash, hash_len);
+	if (err2 != 0 && err == 0)
+		err = err2;
+
 	return err;
 }
 
@@ -327,7 +330,7 @@ static long cfs_crypto_get_sec(struct timeval *start)
 	return cfs_timeval_sub(&end, start, NULL);
 }
 
-static void cfs_crypto_performance_test(unsigned char alg_id,
+static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg,
 					const unsigned char *buf,
 					unsigned int buf_len)
 {
@@ -339,7 +342,7 @@ static void cfs_crypto_performance_test(unsigned char alg_id,
 
 	cfs_crypto_start_timer(&start);
 	for (bcount = 0; bcount < iteration; bcount++) {
-		err = cfs_crypto_hash_digest(alg_id, buf, buf_len, NULL, 0,
+		err = cfs_crypto_hash_digest(hash_alg, buf, buf_len, NULL, 0,
 					     hash, &hash_len);
 		if (err)
 			break;
@@ -348,18 +351,19 @@ static void cfs_crypto_performance_test(unsigned char alg_id,
 
 	msec = (int)(cfs_crypto_get_sec(&start) / 1000.0);
 	if (err) {
-		cfs_crypto_hash_speeds[alg_id] =  -1;
+		cfs_crypto_hash_speeds[hash_alg] =  -1;
 		CDEBUG(D_INFO, "Crypto hash algorithm err = %d\n", err);
 	} else {
 		long tmp;
 		tmp =  ((bcount * buf_len / msec) * 1000) / (1024 * 1024);
-		cfs_crypto_hash_speeds[alg_id] = (int)tmp;
+		cfs_crypto_hash_speeds[hash_alg] = (int)tmp;
 	}
-	CDEBUG(D_INFO, "Crypto hash algorithm %s speed = %d MB/s\n",
-	       cfs_crypto_hash_name(alg_id), cfs_crypto_hash_speeds[alg_id]);
+	CDEBUG(D_CONFIG, "Crypto hash algorithm %s speed = %d MB/s\n",
+	       cfs_crypto_hash_name(hash_alg),
+	       cfs_crypto_hash_speeds[hash_alg]);
 }
 
-int cfs_crypto_hash_speed(unsigned char hash_alg)
+int cfs_crypto_hash_speed(enum cfs_crypto_hash_alg hash_alg)
 {
 	if (hash_alg < CFS_HASH_ALG_MAX)
 		return cfs_crypto_hash_speeds[hash_alg];
