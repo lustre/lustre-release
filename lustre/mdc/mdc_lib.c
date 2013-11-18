@@ -191,29 +191,29 @@ static __u64 mds_pack_open_flags(__u64 flags, __u32 mode)
 				   MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |
 				   MDS_OPEN_BY_FID | MDS_OPEN_LEASE |
 				   MDS_OPEN_RELEASE));
-        if (flags & O_CREAT)
-                cr_flags |= MDS_OPEN_CREAT;
-        if (flags & O_EXCL)
-                cr_flags |= MDS_OPEN_EXCL;
-        if (flags & O_TRUNC)
-                cr_flags |= MDS_OPEN_TRUNC;
-        if (flags & O_APPEND)
-                cr_flags |= MDS_OPEN_APPEND;
-        if (flags & O_SYNC)
-                cr_flags |= MDS_OPEN_SYNC;
-        if (flags & O_DIRECTORY)
-                cr_flags |= MDS_OPEN_DIRECTORY;
+	if (flags & O_CREAT)
+		cr_flags |= MDS_OPEN_CREAT;
+	if (flags & O_EXCL)
+		cr_flags |= MDS_OPEN_EXCL;
+	if (flags & O_TRUNC)
+		cr_flags |= MDS_OPEN_TRUNC;
+	if (flags & O_APPEND)
+		cr_flags |= MDS_OPEN_APPEND;
+	if (flags & O_SYNC)
+		cr_flags |= MDS_OPEN_SYNC;
+	if (flags & O_DIRECTORY)
+		cr_flags |= MDS_OPEN_DIRECTORY;
 #ifdef FMODE_EXEC
-        if (flags & FMODE_EXEC)
-                cr_flags |= MDS_FMODE_EXEC;
+	if (flags & FMODE_EXEC)
+		cr_flags |= MDS_FMODE_EXEC;
 #endif
-        if (flags & O_LOV_DELAY_CREATE)
-                cr_flags |= MDS_OPEN_DELAY_CREATE;
+	if (cl_is_lov_delay_create(flags))
+		cr_flags |= MDS_OPEN_DELAY_CREATE;
 
-        if ((flags & O_NOACCESS) || (flags & O_NONBLOCK))
-                cr_flags |= MDS_OPEN_NORESTORE;
+	if ((flags & O_NOACCESS) || (flags & O_NONBLOCK))
+		cr_flags |= MDS_OPEN_NORESTORE;
 
-        return cr_flags;
+	return cr_flags;
 }
 
 /* packing of MDS records */

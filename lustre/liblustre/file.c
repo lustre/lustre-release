@@ -212,10 +212,15 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         if (!S_ISREG(st->st_mode))
                 GOTO(out_release, rc = 0);
 
-	if (lli->lli_has_smd)
-                flags &= ~O_LOV_DELAY_CREATE;
-        /*XXX: open_flags are overwritten and the previous ones are lost */
-        lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
+	if (lli->lli_has_smd && cl_is_lov_delay_create(flags)) {
+		/* a bit ugly, but better than changing the open() API */
+		unsigned int tmp_flags = flags;
+
+		cl_lov_delay_create_clear(&tmp_flags);
+		flags = tmp_flags;
+	}
+	/*XXX: open_flags are overwritten and the previous ones are lost */
+	lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
 
  out_release:
         request = it->d.lustre.it_data;

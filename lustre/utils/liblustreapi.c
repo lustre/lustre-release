@@ -680,12 +680,11 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 }
 
 int llapi_file_open_pool(const char *name, int flags, int mode,
-                         unsigned long long stripe_size, int stripe_offset,
-                         int stripe_count, int stripe_pattern, char *pool_name)
+			 unsigned long long stripe_size, int stripe_offset,
+			 int stripe_count, int stripe_pattern, char *pool_name)
 {
-        struct lov_user_md_v3 lum = { 0 };
-        int fd, rc = 0;
-        int isdir = 0;
+	struct lov_user_md_v3 lum = { 0 };
+	int fd, rc = 0;
 
         /* Make sure we have a good pool */
         if (pool_name != NULL) {
@@ -724,11 +723,14 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
                 }
         }
 
-        fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
-        if (fd < 0 && errno == EISDIR) {
-                fd = open(name, O_DIRECTORY | O_RDONLY);
-                isdir++;
-        }
+retry_open:
+	fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
+	if (fd < 0) {
+		if (errno == EISDIR && !(flags & O_DIRECTORY)) {
+			flags = O_DIRECTORY | O_RDONLY;
+			goto retry_open;
+		}
+	}
 
         if (fd < 0) {
                 rc = -errno;
@@ -4304,12 +4306,12 @@ int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
  * - file modes are rw-------, if user wants another one it must use fchmod()
  * \param	directory	Directory where the file is created
  * \param	idx		MDT index on which the file is created
- * \param	flags		Std open flags
+ * \param	open_flags	Standard open flags
  *
  * \retval	0 on success.
  * \retval	-errno on error.
  */
-int llapi_create_volatile_idx(char *directory, int idx, int mode)
+int llapi_create_volatile_idx(char *directory, int idx, int open_flags)
 {
 	char	file_path[PATH_MAX];
 	char	filename[PATH_MAX];
@@ -4343,7 +4345,7 @@ int llapi_create_volatile_idx(char *directory, int idx, int mode)
 	if (rc >= sizeof(file_path))
 		return -E2BIG;
 
-	fd = open(file_path, (O_RDWR | O_CREAT | mode), (S_IRUSR | S_IWUSR));
+	fd = open(file_path, O_RDWR | O_CREAT | open_flags, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "Cannot create volatile file %s in %s\n",
@@ -4388,28 +4390,29 @@ int llapi_swap_layouts(const char *path1, const char *path2,
 
 	fd1 = open(path1, O_WRONLY | O_LOV_DELAY_CREATE);
 	if (fd1 < 0) {
-		llapi_error(LLAPI_MSG_ERROR, -errno,
-				"error: cannot open for write %s",
-				path1);
-		return -errno;
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: cannot open '%s' for write", path1);
+		goto out;
 	}
 
 	fd2 = open(path2, O_WRONLY | O_LOV_DELAY_CREATE);
 	if (fd2 < 0) {
-		llapi_error(LLAPI_MSG_ERROR, -errno,
-				"error: cannot open for write %s",
-				path2);
-		close(fd1);
-		return -errno;
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: cannot open '%s' for write", path2);
+		goto out_close;
 	}
 
 	rc = llapi_fswap_layouts(fd1, fd2, dv1, dv2, flags);
 	if (rc < 0)
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			"error: cannot swap layouts between %s and %s\n",
-			path1, path2);
+			    "error: cannot swap layout between '%s' and '%s'\n",
+			    path1, path2);
 
-	close(fd1);
 	close(fd2);
+out_close:
+	close(fd1);
+out:
 	return rc;
 }

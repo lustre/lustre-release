@@ -197,6 +197,23 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
                  const struct page *page, int offset);
 #endif
 
+static inline bool cl_is_lov_delay_create(unsigned int flags)
+{
+	return  (flags & O_LOV_DELAY_CREATE_1_8) != 0 ||
+	        (flags & O_LOV_DELAY_CREATE_2_4) != 0 ||
+		(flags & O_LOV_DELAY_CREATE_MASK) == O_LOV_DELAY_CREATE_MASK;
+}
+
+static inline void cl_lov_delay_create_clear(unsigned int *flags)
+{
+	if ((*flags & O_LOV_DELAY_CREATE_1_8) != 0)
+		*flags &= ~O_LOV_DELAY_CREATE_1_8;
+	if ((*flags & O_LOV_DELAY_CREATE_2_4) != 0)
+		*flags &= ~O_LOV_DELAY_CREATE_2_4;
+	if ((*flags & O_LOV_DELAY_CREATE_MASK) == O_LOV_DELAY_CREATE_MASK)
+		*flags &= ~O_LOV_DELAY_CREATE_MASK;
+}
+
 /** @} mdc */
 
 #endif
