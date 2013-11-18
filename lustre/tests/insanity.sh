@@ -609,6 +609,9 @@ run_test 9 "Ninth Failure Mode: CLIENT/CLIENT `date`"
 test_10() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
+
 	shutdown_facet mds1
 	reboot_facet mds1
 
