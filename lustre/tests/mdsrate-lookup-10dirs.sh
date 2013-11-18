@@ -52,13 +52,22 @@ generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate mach
 
 DIRfmt="${BASEDIR}/lookup-%d"
 
+#
+# Unlink the files created in the directories under $BASEDIR.
+# FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
+#
+mdsrate_cleanup_all() {
+	local i
+	for i in $(seq 0 $NUM_DIRS); do
+		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
+				$BASEDIR/lookup-$i 'f%%d' --ignore
+	done
+}
+
 if [ -n "$NOCREATE" ]; then
     echo "NOCREATE=$NOCREATE  => no file creation."
 else
-    # FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
-    for i in $(seq 0 $NUM_DIRS); do
-        mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $BASEDIR/lookup-$i 'f%%d' --ignore
-    done
+	mdsrate_cleanup_all
 
     log "===== $0 Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
 
@@ -74,8 +83,12 @@ else
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_DIRS} \
 		${COMMAND} 2>&1
 
-    # No lookup if error occurs on file creation, abort.
-    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
+	# No lookup if error occurs on file creation, abort.
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error_noexit "mdsrate file creation failed, aborting"
+		mdsrate_cleanup_all
+		exit 1
+	fi
 fi
 
 COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --lookup --time ${TIME_PERIOD} ${SEED_OPTION}
@@ -91,10 +104,12 @@ else
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
-    if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on a single client failed, aborting"
-    fi
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate lookup on single client failed, aborting"
+		mdsrate_cleanup_all
+		exit 1
+	fi
 fi
 
 # 2
@@ -107,19 +122,16 @@ else
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np ${NUM_CLIENTS} \
 		${COMMAND} | tee ${LOG}
 
-    if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-        error "mdsrate lookups on multiple nodes failed, aborting"
-    fi
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate lookup on multiple nodes failed, aborting"
+		mdsrate_cleanup_all
+		exit 1
+	fi
 fi
 
 complete $SECONDS
-# FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
-for i in $(seq 0 $NUM_DIRS); do
-	mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
-		$BASEDIR/lookup-$i 'f%%d' --ignore
-done
-
+mdsrate_cleanup_all
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE
 check_and_cleanup_lustre
