@@ -69,10 +69,13 @@ else
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} -np 1 ${COMMAND} |
 		tee ${LOG}
 
-        if [ ${PIPESTATUS[0]} != 0 ]; then
-            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-            error "mdsrate create for a single client failed, aborting"
-        fi
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate create on single client failed, aborting"
+		mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
+				$TESTDIR_SINGLE 'f%%d' --ignore
+		exit 1
+	fi
     fi
 
     if [ -n "$NOUNLINK" ]; then
@@ -116,10 +119,15 @@ else
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((NUM_CLIENTS * THREADS_PER_CLIENT)) ${COMMAND} |
 		tee ${LOG}
-        if [ ${PIPESTATUS[0]} != 0 ]; then
-            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
-            error "mdsrate create on multiple nodes failed, aborting"
-        fi
+
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		[ -f $LOG ] && sed -e "s/^/log: /" $LOG
+		error_noexit "mdsrate create on multiple nodes failed, aborting"
+		mdsrate_cleanup $((NUM_CLIENTS * THREADS_PER_CLIENT)) \
+				$MACHINEFILE $NUM_FILES \
+				$TESTDIR_MULTI 'f%%d' --ignore
+		exit 1
+	fi
     fi
 
     if [ -n "$NOUNLINK" ]; then
