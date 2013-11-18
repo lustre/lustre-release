@@ -553,14 +553,23 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	if (fid_is_on_ost(info, osd, fid, flags) || fid_is_llog(fid))
 		return osd_obj_map_lookup(info, osd, fid, id);
 
-	if (fid_is_fs_root(fid)) {
-		osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
-			   osd_sb(osd)->s_root->d_inode->i_generation);
-		return 0;
-	}
 
-	if (unlikely(fid_is_acct(fid)))
-		return osd_acct_obj_lookup(info, osd, fid, id);
+	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
+		int rc;
+		if (fid_is_fs_root(fid)) {
+			osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
+				   osd_sb(osd)->s_root->d_inode->i_generation);
+			return 0;
+		}
+		if (unlikely(fid_is_acct(fid)))
+			return osd_acct_obj_lookup(info, osd, fid, id);
+
+		/* For other special FIDs, try OI first, then do spec lookup */
+		rc = __osd_oi_lookup(info, osd, fid, id);
+		if (rc == -ENOENT)
+			return osd_obj_spec_lookup(info, osd, fid, id);
+		return rc;
+	}
 
 	if (!osd->od_igif_inoi && fid_is_igif(fid)) {
 		osd_id_gen(id, lu_igif_ino(fid), lu_igif_gen(fid));
