@@ -695,15 +695,14 @@ restart:
 
         ll_capa_open(inode);
 
-	if (!lli->lli_has_smd) {
-                if (file->f_flags & O_LOV_DELAY_CREATE ||
-                    !(file->f_mode & FMODE_WRITE)) {
-                        CDEBUG(D_INODE, "object creation was delayed\n");
-                        GOTO(out_och_free, rc);
-                }
-        }
-        file->f_flags &= ~O_LOV_DELAY_CREATE;
-        GOTO(out_och_free, rc);
+	if (!lli->lli_has_smd &&
+	    (cl_is_lov_delay_create(file->f_flags) ||
+	     (file->f_mode & FMODE_WRITE) == 0)) {
+		CDEBUG(D_INODE, "object creation was delayed\n");
+		GOTO(out_och_free, rc);
+	}
+	cl_lov_delay_create_clear(&file->f_flags);
+	GOTO(out_och_free, rc);
 
 out_och_free:
         if (rc) {
@@ -1503,23 +1502,25 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 		ccc_inode_lsm_put(inode, lsm);
 		CDEBUG(D_IOCTL, "stripe already exists for inode "DFID"\n",
 		       PFID(ll_inode2fid(inode)));
-		RETURN(-EEXIST);
+		GOTO(out, rc = -EEXIST);
 	}
 
 	ll_inode_size_lock(inode);
-        rc = ll_intent_file_open(file, lum, lum_size, &oit);
-        if (rc)
-                GOTO(out, rc);
-        rc = oit.d.lustre.it_status;
-        if (rc < 0)
-                GOTO(out_req_free, rc);
+	rc = ll_intent_file_open(file, lum, lum_size, &oit);
+	if (rc)
+		GOTO(out_unlock, rc);
+	rc = oit.d.lustre.it_status;
+	if (rc < 0)
+		GOTO(out_req_free, rc);
 
-        ll_release_openhandle(file->f_dentry, &oit);
+	ll_release_openhandle(file->f_dentry, &oit);
 
- out:
+out_unlock:
 	ll_inode_size_unlock(inode);
 	ll_intent_release(&oit);
 	ccc_inode_lsm_put(inode, lsm);
+out:
+	cl_lov_delay_create_clear(&file->f_flags);
 	RETURN(rc);
 out_req_free:
 	ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);

@@ -81,9 +81,9 @@
  * Kernel file descriptor
  */
 struct file {
-        int             f_flags;
-        vnode_t         f_vp;
-        vfs_context_t   f_ctxt;
+	unsigned	f_flags;
+	vnode_t		f_vp;
+	vfs_context_t	f_ctxt;
 };
 #endif
 
