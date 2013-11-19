@@ -583,6 +583,11 @@ static inline const struct lu_fid *mdd_object_fid(struct mdd_object *obj)
         return lu_object_fid(mdd2lu_obj(obj));
 }
 
+static inline struct seq_server_site *mdd_seq_site(struct mdd_device *mdd)
+{
+	return mdd2lu_dev(mdd)->ld_site->ld_seq_site;
+}
+
 static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,
                                                   const struct mdd_object *obj)
 {

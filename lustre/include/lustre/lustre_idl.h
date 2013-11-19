@@ -399,29 +399,34 @@ static inline obd_id fid_ver_oid(const struct lu_fid *fid)
  * http://arch.lustre.org/index.php?title=Interoperability_fids_zfs#NEW.0
  */
 enum fid_seq {
-        FID_SEQ_OST_MDT0   = 0,
-        FID_SEQ_LLOG       = 1,
-        FID_SEQ_ECHO       = 2,
-        FID_SEQ_OST_MDT1   = 3,
-        FID_SEQ_OST_MAX    = 9, /* Max MDT count before OST_on_FID */
-        FID_SEQ_RSVD       = 11,
-        FID_SEQ_IGIF       = 12,
-        FID_SEQ_IGIF_MAX   = 0x0ffffffffULL,
-        FID_SEQ_IDIF       = 0x100000000ULL,
-        FID_SEQ_IDIF_MAX   = 0x1ffffffffULL,
-        /* Normal FID sequence starts from this value, i.e. 1<<33 */
-        FID_SEQ_START      = 0x200000000ULL,
+	FID_SEQ_OST_MDT0	= 0,
+	FID_SEQ_LLOG		= 1,
+	FID_SEQ_ECHO		= 2,
+	FID_SEQ_OST_MDT1	= 3,
+	FID_SEQ_OST_MAX		= 9, /* Max MDT count before OST_on_FID */
+	FID_SEQ_RSVD		= 11,
+	FID_SEQ_IGIF		= 12,
+	FID_SEQ_IGIF_MAX	= 0x0ffffffffULL,
+	FID_SEQ_IDIF		= 0x100000000ULL,
+	FID_SEQ_IDIF_MAX	= 0x1ffffffffULL,
+	/* Normal FID sequence starts from this value, i.e. 1<<33 */
+	FID_SEQ_START		= 0x200000000ULL,
 	/* sequence for local pre-defined FIDs listed in local_oid */
-        FID_SEQ_LOCAL_FILE = 0x200000001ULL,
-        FID_SEQ_DOT_LUSTRE = 0x200000002ULL,
+	FID_SEQ_LOCAL_FILE	= 0x200000001ULL,
+	FID_SEQ_DOT_LUSTRE	= 0x200000002ULL,
 	/* sequence is used for local named objects FIDs generated
 	 * by local_object_storage library */
-	FID_SEQ_LOCAL_NAME = 0x200000003ULL,
-        FID_SEQ_SPECIAL    = 0x200000004ULL,
-        FID_SEQ_QUOTA      = 0x200000005ULL,
-        FID_SEQ_QUOTA_GLB  = 0x200000006ULL,
-        FID_SEQ_NORMAL     = 0x200000400ULL,
-        FID_SEQ_LOV_DEFAULT= 0xffffffffffffffffULL
+	FID_SEQ_LOCAL_NAME	= 0x200000003ULL,
+	/* Because current FLD will only cache the fid sequence, instead
+	 * of oid on the client side, if the FID needs to be exposed to
+	 * clients sides, it needs to make sure all of fids under one
+	 * sequence will be located in one MDT. */
+	FID_SEQ_SPECIAL		= 0x200000004ULL,
+	FID_SEQ_QUOTA		= 0x200000005ULL,
+	FID_SEQ_QUOTA_GLB	= 0x200000006ULL,
+	FID_SEQ_ROOT		= 0x200000007ULL,  /* Located on MDT0 */
+	FID_SEQ_NORMAL		= 0x200000400ULL,
+	FID_SEQ_LOV_DEFAULT	= 0xffffffffffffffffULL
 };
 
 #define OBIF_OID_MAX_BITS           32
@@ -478,9 +483,26 @@ static inline int fid_seq_is_rsvd(const __u64 seq)
         return (seq > FID_SEQ_OST_MDT0 && seq <= FID_SEQ_RSVD);
 };
 
+static inline int fid_seq_is_special(const __u64 seq)
+{
+	return seq == FID_SEQ_SPECIAL;
+};
+
+static inline int fid_seq_is_local_file(const __u64 seq)
+{
+	return seq == FID_SEQ_LOCAL_FILE;
+};
+
 static inline int fid_is_mdt0(const struct lu_fid *fid)
 {
         return fid_seq_is_mdt0(fid_seq(fid));
+}
+
+static inline void lu_root_fid(struct lu_fid *fid)
+{
+	fid->f_seq = FID_SEQ_ROOT;
+	fid->f_oid = 1;
+	fid->f_ver = 0;
 }
 
 /**
@@ -517,6 +539,11 @@ struct ost_id {
         obd_id                 oi_id;
         obd_seq                oi_seq;
 };
+
+static inline int fid_is_local_file(const struct lu_fid *fid)
+{
+	return fid_seq_is_local_file(fid_seq(fid));
+}
 
 static inline int fid_seq_is_norm(const __u64 seq)
 {

@@ -1161,46 +1161,83 @@ static int mdd_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int mdd_find_or_create_root(const struct lu_env *env,
+				   struct mdd_device *mdd)
+{
+	struct dt_object	*root;
+	struct md_object	*mroot;
+	struct lu_fid		*fid = &mdd_env_info(env)->mti_fid;
+	int			rc = 0;
+
+	ENTRY;
+
+	/* Check if the "ROOT" entry exists already */
+	root = dt_store_open(env, mdd->mdd_child, "", mdd_root_dir_name,
+		             fid);
+	if (!IS_ERR(root)) {
+		lu_object_put(env, &root->do_lu);
+		GOTO(out, rc = 0);
+	}
+
+	lu_root_fid(fid);
+	/* New Filesystem, create /ROOT */
+	mroot = llo_store_create_index(env, &mdd->mdd_md_dev, mdd->mdd_bottom,
+				       "", mdd_root_dir_name, fid,
+				       &dt_directory_features);
+	if (IS_ERR(mroot))
+		GOTO(out, rc = PTR_ERR(mroot));
+
+	lu_object_put(env, &mroot->mo_lu);
+out:
+	if (rc == 0)
+		mdd->mdd_root_fid = *fid;
+
+	RETURN(rc);
+}
+
 static int mdd_prepare(const struct lu_env *env,
                        struct lu_device *pdev,
                        struct lu_device *cdev)
 {
-        struct mdd_device *mdd = lu2mdd_dev(cdev);
-        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
-        struct dt_object *root;
-        struct lu_fid     fid;
-        int rc;
+	struct mdd_device	*mdd = lu2mdd_dev(cdev);
+	struct lu_device	*next = &mdd->mdd_child->dd_lu_dev;
+	struct dt_object	*root;
+	struct lu_fid		*fid = &mdd_env_info(env)->mti_fid;
+	int			rc;
 
         ENTRY;
-        rc = next->ld_ops->ldo_prepare(env, cdev, next);
-        if (rc)
-                GOTO(out, rc);
+
+	rc = next->ld_ops->ldo_prepare(env, cdev, next);
+	if (rc)
+		GOTO(out, rc);
 
 	rc = dt_root_get(env, mdd->mdd_child, &mdd->mdd_local_root_fid);
 	if (rc != 0)
 		GOTO(out, rc);
 
-        root = dt_store_open(env, mdd->mdd_child, "", mdd_root_dir_name,
-                             &mdd->mdd_root_fid);
-        if (!IS_ERR(root)) {
-                LASSERT(root != NULL);
-                lu_object_put(env, &root->do_lu);
-                rc = orph_index_init(env, mdd);
-        } else {
-                rc = PTR_ERR(root);
-        }
-        if (rc)
-                GOTO(out, rc);
+	if (mdd_seq_site(mdd)->ss_node_id == 0) {
+		rc = mdd_find_or_create_root(env, mdd);
+		if (rc != 0) {
+			CERROR("%s: create root fid failed: rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, rc);
+			GOTO(out, rc);
+		}
 
-        rc = mdd_dot_lustre_setup(env, mdd);
-        if (rc) {
-                CERROR("Error(%d) initializing .lustre objects\n", rc);
+		rc = mdd_dot_lustre_setup(env, mdd);
+		if (rc != 0) {
+			CERROR("%s: initializing .lustre failed: rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, rc);
+			GOTO(out, rc);
+		}
+	}
+
+	rc = orph_index_init(env, mdd);
+	if (rc != 0)
                 GOTO(out, rc);
-        }
 
         /* we use capa file to declare llog changes,
          * will be fixed with new llog in 2.3 */
-        root = dt_store_open(env, mdd->mdd_child, "", CAPA_KEYS, &fid);
+        root = dt_store_open(env, mdd->mdd_child, "", CAPA_KEYS, fid);
 	if (IS_ERR(root))
 		GOTO(out, rc = PTR_ERR(root));
 
@@ -1214,9 +1251,6 @@ static int mdd_prepare(const struct lu_env *env,
 	if (rc != 0)
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);
-
-	GOTO(out, rc);
-
 out:
 	return rc;
 }
@@ -1733,13 +1767,6 @@ static struct lu_local_obj_desc llod_mdd_orphan = {
         .llod_feat      = &dt_directory_features,
 };
 
-static struct lu_local_obj_desc llod_mdd_root = {
-        .llod_name      = mdd_root_dir_name,
-        .llod_oid       = MDD_ROOT_INDEX_OID,
-        .llod_is_index  = 1,
-        .llod_feat      = &dt_directory_features,
-};
-
 static struct lu_local_obj_desc llod_lfsck_bookmark = {
 	.llod_name      = lfsck_bookmark_name,
 	.llod_oid       = LFSCK_BOOKMARK_OID,
@@ -1771,7 +1798,6 @@ static int __init mdd_mod_init(void)
 
 	llo_local_obj_register(&llod_capa_key);
 	llo_local_obj_register(&llod_mdd_orphan);
-	llo_local_obj_register(&llod_mdd_root);
 	llo_local_obj_register(&llod_lfsck_bookmark);
 	llo_local_obj_register(&llod_lfsck_namespace);
 
@@ -1786,7 +1812,6 @@ static void __exit mdd_mod_exit(void)
 {
 	llo_local_obj_unregister(&llod_capa_key);
 	llo_local_obj_unregister(&llod_mdd_orphan);
-	llo_local_obj_unregister(&llod_mdd_root);
 	llo_local_obj_unregister(&llod_lfsck_bookmark);
 	llo_local_obj_unregister(&llod_lfsck_namespace);
 

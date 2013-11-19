@@ -72,7 +72,7 @@
 LU_KEY_INIT_FINI(fld, struct fld_thread_info);
 
 /* context key: fld_thread_key */
-LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD|LCT_DT_THREAD);
+LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD);
 
 cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
 
@@ -145,8 +145,9 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
-        erange = &info->fti_lrange;
+	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
+	LASSERT(info != NULL);
+	erange = &info->fti_lrange;
 
         /* Lookup it in the cache. */
         rc = fld_cache_lookup(fld->lsf_cache, seq, erange);

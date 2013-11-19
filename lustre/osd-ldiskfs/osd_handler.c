@@ -1363,7 +1363,8 @@ static void osd_inode_getattr(const struct lu_env *env,
 {
         attr->la_valid      |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
                                LA_SIZE | LA_BLOCKS | LA_UID | LA_GID |
-                               LA_FLAGS | LA_NLINK | LA_RDEV | LA_BLKSIZE;
+                               LA_FLAGS | LA_NLINK | LA_RDEV | LA_BLKSIZE |
+			       LA_TYPE;
 
         attr->la_atime      = LTIME_S(inode->i_atime);
         attr->la_mtime      = LTIME_S(inode->i_mtime);
@@ -1973,19 +1974,13 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 
-	if (fid_is_igif(fid)) {
-		range->lsr_flags = LU_SEQ_RANGE_MDT;
-		range->lsr_index = 0;
-		return 0;
-	}
-
 	if (fid_is_idif(fid)) {
 		range->lsr_flags = LU_SEQ_RANGE_OST;
 		range->lsr_index = fid_idif_ost_idx(fid);
 		return 0;
 	}
 
-	if (!fid_is_norm(fid)) {
+	if (!fid_seq_in_fldb(fid_seq(fid))) {
 		range->lsr_flags = LU_SEQ_RANGE_MDT;
 		if (ss != NULL)
 			/* FIXME: If ss is NULL, it suppose not get lsr_index
@@ -3166,7 +3161,8 @@ static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 	int			rc;
 	ENTRY;
 
-	if ((!fid_is_norm(fid) && !fid_is_igif(fid)) || ss == NULL)
+	/* Those FID seqs, which are not in FLDB, must be local seq */
+	if (unlikely(!fid_seq_in_fldb(fid_seq(fid)) || ss == NULL))
 		RETURN(0);
 
 	rc = osd_fld_lookup(env, osd, fid, range);

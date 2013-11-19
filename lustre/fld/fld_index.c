@@ -71,6 +71,13 @@ static const struct lu_seq_range IGIF_FLD_RANGE = {
 	.lsr_flags = LU_SEQ_RANGE_MDT
 };
 
+static const struct lu_seq_range ROOT_FLD_RANGE = {
+	.lsr_start = FID_SEQ_ROOT,
+	.lsr_end   = FID_SEQ_ROOT + 1,
+	.lsr_index = 0,
+	.lsr_flags = LU_SEQ_RANGE_MDT
+};
+
 const struct dt_index_features fld_index_features = {
 	.dif_flags       = DT_IND_UPDATE,
 	.dif_keysize_min = sizeof(seqno_t),
@@ -255,8 +262,9 @@ int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
         RETURN(rc);
 }
 
-static int fld_insert_igif_fld(struct lu_server_fld *fld,
-			       const struct lu_env *env)
+static int fld_insert_entry(const struct lu_env *env,
+			    struct lu_server_fld *fld,
+			    const struct lu_seq_range *range)
 {
 	struct thandle *th;
 	int rc;
@@ -266,7 +274,7 @@ static int fld_insert_igif_fld(struct lu_server_fld *fld,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = fld_declare_index_create(env, fld, &IGIF_FLD_RANGE, th);
+	rc = fld_declare_index_create(env, fld, range, th);
 	if (rc != 0) {
 		if (rc == -EEXIST)
 			rc = 0;
@@ -278,11 +286,25 @@ static int fld_insert_igif_fld(struct lu_server_fld *fld,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = fld_index_create(env, fld, &IGIF_FLD_RANGE, th);
+	rc = fld_index_create(env, fld, range, th);
 	if (rc == -EEXIST)
 		rc = 0;
 out:
 	dt_trans_stop(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev), th);
+	RETURN(rc);
+}
+
+static int fld_insert_special_entries(const struct lu_env *env,
+				      struct lu_server_fld *fld)
+{
+	int rc;
+
+	rc = fld_insert_entry(env, fld, &IGIF_FLD_RANGE);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = fld_insert_entry(env, fld, &ROOT_FLD_RANGE);
+
 	RETURN(rc);
 }
 
@@ -325,16 +347,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 
 	fld->lsf_obj = dt_obj;
 	rc = dt_obj->do_ops->do_index_try(env, dt_obj, &fld_index_features);
-	if (rc == 0) {
-		LASSERT(dt_obj->do_index_ops != NULL);
-		mutex_lock(&fld->lsf_lock);
-		rc = fld_insert_igif_fld(fld, env);
-		mutex_unlock(&fld->lsf_lock);
-		if (rc != 0) {
-			CERROR("insert igif in fld! = %d\n", rc);
-			GOTO(out, rc);
-		}
-	} else {
+	if (rc != 0) {
 		CERROR("%s: File \"%s\" is not an index: rc = %d!\n",
 		       fld->lsf_name, fld_index_name, rc);
 		GOTO(out, rc);
@@ -351,21 +364,34 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	if (rc < 0)
 		GOTO(out_it_fini, rc);
 
-	do {
-		rc = iops->rec(env, it, (struct dt_rec *)range, 0);
-		if (rc != 0)
-			GOTO(out_it_fini, rc);
+	if (rc > 0) {
+		/* Load FLD entry into server cache */
+		do {
+			rc = iops->rec(env, it, (struct dt_rec *)range, 0);
+			if (rc != 0)
+				GOTO(out_it_put, rc);
+			LASSERT(range != NULL);
+			range_be_to_cpu(range, range);
+			rc = fld_cache_insert(fld->lsf_cache, range);
+			if (rc != 0)
+				GOTO(out_it_put, rc);
+			rc = iops->next(env, it);
+		} while (rc == 0);
+	}
 
-		LASSERT(range != NULL);
-		range_be_to_cpu(range, range);
-		rc = fld_cache_insert(fld->lsf_cache, range);
-		if (rc != 0)
-			GOTO(out_it_fini, rc);
-		rc = iops->next(env, it);
+	/* Note: fld_insert_entry will detect whether these
+	 * special entries already exist inside FLDB */
+	mutex_lock(&fld->lsf_lock);
+	rc = fld_insert_special_entries(env, fld);
+	mutex_unlock(&fld->lsf_lock);
+	if (rc != 0) {
+		CERROR("%s: insert special entries failed!: rc = %d\n",
+		       fld->lsf_name, rc);
+		GOTO(out_it_put, rc);
+	}
 
-	} while (rc == 0);
-	rc = 0;
-
+out_it_put:
+	iops->put(env, it);
 out_it_fini:
 	iops->fini(env, it);
 out:
