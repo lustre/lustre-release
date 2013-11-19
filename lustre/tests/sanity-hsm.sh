@@ -178,9 +178,9 @@ copytool_cleanup() {
 		idx=$(($mdtno - 1))
 		mdt_hsmctrl="mdt.$FSNAME-MDT000${idx}.hsm_control"
 		oldstate=$(do_facet mds${mdtno} "$LCTL get_param -n " \
-				   "$MDT_HSMCTRL")
+				   "$mdt_hsmctrl")
 		# skip already stop[ed,ing] CDTs
-		echo $oldstate | grep stop || continue
+		echo $oldstate | grep stop && continue
 
 		do_facet mds${mdtno} "$LCTL set_param $mdt_hsmctrl=shutdown"
 		wait_result mds${mdtno} "$LCTL get_param -n $mdt_hsmctrl" \
