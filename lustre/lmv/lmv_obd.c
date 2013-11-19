@@ -1988,14 +1988,19 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	struct obd_device       *obd = exp->exp_obd;
 	struct lmv_obd          *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc     *tgt = NULL;
+	struct mdt_body		*body;
 	int                      rc;
 	ENTRY;
 
 	rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
-
-	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
+retry:
+	/* Send unlink requests to the MDT where the child is located */
+	if (likely(!fid_is_zero(&op_data->op_fid2)))
+		tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid2);
+	else
+		tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
@@ -2021,9 +2026,25 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = md_unlink(tgt->ltd_exp, op_data, request);
+	CDEBUG(D_INODE, "unlink with fid="DFID"/"DFID" -> mds #%d\n",
+	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2), tgt->ltd_idx);
 
-	RETURN(rc);
+	rc = md_unlink(tgt->ltd_exp, op_data, request);
+	if (rc != 0 && rc != -EREMOTE)
+		RETURN(rc);
+
+	body = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		RETURN(-EPROTO);
+	/*
+	 * Not cross-ref case, just get out of here.
+	 */
+	if (likely(!(body->valid & OBD_MD_MDS)))
+		RETURN(0);
+
+	/* Clearly this is a remote object, try remote MDT */
+	op_data->op_fid2 = body->fid1;
+	goto retry;
 }
 
 static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)

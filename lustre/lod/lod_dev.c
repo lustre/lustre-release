@@ -98,6 +98,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 extern struct lu_object_operations lod_lu_obj_ops;
 extern struct lu_object_operations lod_lu_robj_ops;
 extern struct dt_object_operations lod_obj_ops;
+extern struct dt_lock_operations   lod_lock_ops;
 
 /* Slab for OSD object allocation */
 cfs_mem_cache_t *lod_object_kmem;
@@ -141,6 +142,7 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 	lu_obj = lod2lu_obj(lod_obj);
 	dt_object_init(&lod_obj->ldo_obj, NULL, dev);
 	lod_obj->ldo_obj.do_ops = &lod_obj_ops;
+	lod_obj->ldo_obj.do_lock_ops = &lod_lock_ops;
 	if (likely(mds == lu_site2seq(dev->ld_site)->ss_node_id))
 		lu_obj->lo_ops = &lod_lu_obj_ops;
 	else

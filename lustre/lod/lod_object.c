@@ -1131,6 +1131,26 @@ struct dt_object_operations lod_obj_ops = {
 	.do_object_sync		= lod_object_sync,
 };
 
+static int lod_object_lock(const struct lu_env *env,
+			   struct dt_object *dt, struct lustre_handle *lh,
+			   struct ldlm_enqueue_info *einfo,
+			   void *policy)
+{
+	struct dt_object   *next = dt_object_child(dt);
+	int		 rc;
+	ENTRY;
+
+	/*
+	 * declare setattr on the local object
+	 */
+	rc = dt_object_lock(env, next, lh, einfo, policy);
+
+	RETURN(rc);
+}
+
+struct dt_lock_operations lod_lock_ops = {
+	.do_object_lock       = lod_object_lock,
+};
 static ssize_t lod_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos,
 			struct lustre_capa *capa)

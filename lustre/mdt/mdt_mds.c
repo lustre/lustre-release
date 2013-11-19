@@ -51,9 +51,7 @@
 #include <lustre_mds.h>
 #include <lustre_mdt.h>
 #include "mdt_internal.h"
-#ifdef HAVE_QUOTA_SUPPORT
-# include <lustre_quota.h>
-#endif
+#include <lustre_quota.h>
 #include <lustre_acl.h>
 #include <lustre_param.h>
 #include <lustre_fsfilt.h>

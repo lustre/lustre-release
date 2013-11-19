@@ -67,6 +67,7 @@ struct dt_object;
 struct dt_index_features;
 struct niobuf_local;
 struct niobuf_remote;
+struct ldlm_enqueue_info;
 
 typedef enum {
         MNTOPT_USERXATTR        = 0x00000001,
@@ -524,6 +525,12 @@ struct dt_body_operations {
                           struct lustre_capa *capa);
 };
 
+struct dt_lock_operations {
+	int (*do_object_lock)(const struct lu_env *env, struct dt_object *dt,
+			      struct lustre_handle *lh,
+			      struct ldlm_enqueue_info *einfo,
+			      void *policy);
+};
 /**
  * Incomplete type of index record.
  */
@@ -667,6 +674,7 @@ struct dt_object {
         const struct dt_object_operations *do_ops;
         const struct dt_body_operations   *do_body_ops;
         const struct dt_index_operations  *do_index_ops;
+	const struct dt_lock_operations   *do_lock_ops;
 };
 
 /*
@@ -864,6 +872,17 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 				    struct dt_object *parent,
 				    const char *name, __u32 mode,
 				    const struct dt_index_features *ft);
+
+static inline int dt_object_lock(const struct lu_env *env,
+				 struct dt_object *o, struct lustre_handle *lh,
+				 struct ldlm_enqueue_info *einfo,
+				 void *policy)
+{
+	LASSERT(o);
+	LASSERT(o->do_lock_ops);
+	LASSERT(o->do_lock_ops->do_object_lock);
+	return o->do_lock_ops->do_object_lock(env, o, lh, einfo, policy);
+}
 
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
 		  const char *name, struct lu_fid *fid);

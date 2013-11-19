@@ -3795,11 +3795,11 @@ drop_reint_reply() {
 }
 
 drop_update_reply() {
-# OBD_FAIL_MDS_OBJ_UPDATE_NET
+# OBD_FAIL_UPDATE_OBJ_NET
 	local index=$1
 	shift 1
 	RC=0
-	do_facet mds${index} lctl set_param fail_loc=0x188
+	do_facet mds${index} lctl set_param fail_loc=0x1500
 	do_facet client "$@" || RC=$?
 	do_facet mds${index} lctl set_param fail_loc=0
 	return $RC

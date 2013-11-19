@@ -1588,6 +1588,11 @@ int ldlm_prep_elc_req(struct obd_export *exp,
                       struct ptlrpc_request *req,
                       int version, int opc, int canceloff,
                       cfs_list_t *cancels, int count);
+
+struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp, int lvb_len);
+int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
+			 const struct ldlm_request *dlm_req,
+			 const struct ldlm_callback_suite *cbs);
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
 			  __u64 *flags, void *lvb, __u32 lvb_len,

@@ -2309,15 +2309,9 @@ static struct inode *osd_create_remote_inode(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-#ifdef HAVE_QUOTA_SUPPORT
-	osd_push_ctxt(info->oti_env, save);
-#endif
 	/* FIXME: Insert index api needs to know the mode of
 	 * the remote object. Just use S_IFDIR for now */
 	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, S_IFDIR);
-#ifdef HAVE_QUOTA_SUPPORT
-	osd_pop_ctxt(info->oti_env, save);
-#endif
 	if (IS_ERR(local)) {
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));
@@ -3793,11 +3787,8 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 	if (rc <= 0)
 		RETURN(rc);
 
-#ifdef OSD_DECLARE_OP
-#define OSD_OT_CREATE create
-#define OSD_OT_INSERT insert
-#define osd_trans_declare_op(env, oh, op, cred) OSD_DECLARE_OP(oh, op, cred)
-#endif
+	rc = 0;
+
 	osd_trans_declare_op(env, oh, OSD_OT_CREATE,
 			     osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
 	osd_trans_declare_op(env, oh, OSD_OT_INSERT,

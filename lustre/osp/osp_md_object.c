@@ -128,7 +128,7 @@ static struct update_request
 	if (!update)
 		return ERR_PTR(-ENOMEM);
 
-	OBD_ALLOC(update->ur_buf, UPDATE_BUFFER_SIZE);
+	OBD_ALLOC_LARGE(update->ur_buf, UPDATE_BUFFER_SIZE);
 	if (update->ur_buf == NULL) {
 		OBD_FREE_PTR(update);
 		return ERR_PTR(-ENOMEM);
@@ -150,7 +150,7 @@ static void osp_destroy_update_req(struct update_request *update)
 
 	cfs_list_del(&update->ur_list);
 	if (update->ur_buf != NULL)
-		OBD_FREE(update->ur_buf, UPDATE_BUFFER_SIZE);
+		OBD_FREE_LARGE(update->ur_buf, UPDATE_BUFFER_SIZE);
 
 	OBD_FREE_PTR(update);
 	return;
@@ -1067,5 +1067,47 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_xattr_set         = osp_md_xattr_set,
 	.do_xattr_get         = osp_md_xattr_get,
 	.do_index_try         = osp_md_index_try,
+};
+
+static int osp_md_object_lock(const struct lu_env *env,
+			      struct dt_object *dt,
+			      struct lustre_handle *lh,
+			      struct ldlm_enqueue_info *einfo,
+			      void *policy)
+{
+	struct osp_thread_info *info = osp_env_info(env);
+	struct ldlm_res_id     *res_id = &info->osi_resid;
+	struct dt_device       *dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
+	struct osp_device      *osp = dt2osp_dev(dt_dev);
+	struct ptlrpc_request  *req = NULL;
+	int                     rc = 0;
+	__u64                   flags = 0;
+	ldlm_mode_t             mode;
+
+	fid_build_reg_res_name(lu_object_fid(&dt->do_lu), res_id);
+
+	mode = ldlm_lock_match(osp->opd_obd->obd_namespace,
+			       LDLM_FL_BLOCK_GRANTED, res_id,
+			       einfo->ei_type,
+			       (ldlm_policy_data_t *)policy,
+			       einfo->ei_mode, lh, 0);
+	if (mode > 0)
+		return ELDLM_OK;
+
+	req = ldlm_enqueue_pack(osp->opd_exp, 0);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
+
+	rc = ldlm_cli_enqueue(osp->opd_exp, &req, einfo, res_id,
+			      (const ldlm_policy_data_t *)policy,
+			      &flags, NULL, 0, LVB_T_NONE, lh, 0);
+
+	ptlrpc_req_finished(req);
+
+	return rc == ELDLM_OK ? 0 : -EIO;
+}
+
+struct dt_lock_operations osp_md_lock_ops = {
+	.do_object_lock       = osp_md_object_lock,
 };
 

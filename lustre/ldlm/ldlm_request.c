@@ -828,6 +828,28 @@ int ldlm_prep_enqueue_req(struct obd_export *exp, struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ldlm_prep_enqueue_req);
 
+struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp, int lvb_len)
+{
+	struct ptlrpc_request *req;
+	int rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_LDLM_ENQUEUE);
+	if (req == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(ERR_PTR(rc));
+	}
+
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, lvb_len);
+	ptlrpc_request_set_replen(req);
+	RETURN(req);
+}
+EXPORT_SYMBOL(ldlm_enqueue_pack);
+
 /**
  * Client-side lock enqueue.
  *

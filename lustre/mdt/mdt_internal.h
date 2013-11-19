@@ -238,6 +238,10 @@ struct mdt_lock_handle {
         struct lustre_handle    mlh_pdo_lh;
         ldlm_mode_t             mlh_pdo_mode;
         unsigned int            mlh_pdo_hash;
+
+	/* Remote regular lock */
+	struct lustre_handle    mlh_rreg_lh;
+	ldlm_mode_t	     mlh_rreg_mode;
 };
 
 enum {
@@ -314,6 +318,9 @@ struct tx_arg {
 			struct lu_buf	buf;
 			loff_t		pos;
 		} write;
+		struct {
+			struct ost_body	    *body;
+		} destroy;
 	} u;
 };
 
@@ -657,6 +664,9 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
 
 void mdt_client_compatibility(struct mdt_thread_info *info);
 
+int mdt_remote_object_lock(struct mdt_thread_info *mti,
+			   struct mdt_object *o, struct lustre_handle *lh,
+			   ldlm_mode_t mode, __u64 ibits);
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);

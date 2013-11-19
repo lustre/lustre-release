@@ -729,11 +729,14 @@ out_precreat:
 	if (!m->opd_connect_mdt)
 		osp_precreate_fini(m);
 out_last_used:
-	osp_last_used_fini(env, m);
+	if (!m->opd_connect_mdt)
+		osp_last_used_fini(env, m);
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_obd_cleanup(obd);
 	obd_cleanup_client_import(obd);
+	if (m->opd_symlink)
+		lprocfs_remove(&m->opd_symlink);
 	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();

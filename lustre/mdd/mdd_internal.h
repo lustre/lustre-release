@@ -433,21 +433,6 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *d);
 
-/* mdd_permission.c */
-#define mdd_cap_t(x) (x)
-
-#define MDD_CAP_TO_MASK(x) (1 << (x))
-
-#define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
-
-/* capable() is copied from linux kernel! */
-static inline int mdd_capable(struct lu_ucred *uc, cfs_cap_t cap)
-{
-	if (mdd_cap_raised(uc->uc_cap, cap))
-		return 1;
-	return 0;
-}
-
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                   struct thandle *handle);
 int __mdd_declare_acl_init(const struct lu_env *env, struct mdd_object *obj,

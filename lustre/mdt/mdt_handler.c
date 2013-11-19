@@ -91,7 +91,6 @@ ldlm_mode_t mdt_dlm_lock_modes[] = {
         [MDL_GROUP]   = LCK_GROUP
 };
 
-
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
@@ -142,6 +141,7 @@ void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
 {
         lh->mlh_pdo_hash = 0;
         lh->mlh_reg_mode = lm;
+	lh->mlh_rreg_mode = lm;
         lh->mlh_type = MDT_REG_LOCK;
 }
 
@@ -149,6 +149,7 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
                        const char *name, int namelen)
 {
         lh->mlh_reg_mode = lm;
+	lh->mlh_rreg_mode = lm;
         lh->mlh_type = MDT_PDO_LOCK;
 
         if (name != NULL && (name[0] != '\0')) {
@@ -1254,7 +1255,8 @@ relock:
                         GOTO(out_child, rc = -ENOENT);
                 }
 
-                if (!(child_bits & MDS_INODELOCK_UPDATE)) {
+		if (!(child_bits & MDS_INODELOCK_UPDATE) &&
+		      mdt_object_exists(child) > 0) {
                         struct md_attr *ma = &info->mti_attr;
 
                         ma->ma_valid = 0;
@@ -1331,7 +1333,8 @@ relock:
                          (unsigned long)res_id->name[1],
                          (unsigned long)res_id->name[2],
                          PFID(mdt_object_fid(child)));
-                mdt_pack_size2body(info, child);
+		if (mdt_object_exists(child) > 0)
+			mdt_pack_size2body(info, child);
         }
         if (lock)
                 LDLM_LOCK_PUT(lock);
@@ -1697,18 +1700,19 @@ static long mdt_reint_opcode(struct mdt_thread_info *info,
 
 int mdt_reint(struct mdt_thread_info *info)
 {
-        long opc;
-        int  rc;
+	long opc;
+	int  rc;
 
-        static const struct req_format *reint_fmts[REINT_MAX] = {
-                [REINT_SETATTR]  = &RQF_MDS_REINT_SETATTR,
-                [REINT_CREATE]   = &RQF_MDS_REINT_CREATE,
-                [REINT_LINK]     = &RQF_MDS_REINT_LINK,
-                [REINT_UNLINK]   = &RQF_MDS_REINT_UNLINK,
-                [REINT_RENAME]   = &RQF_MDS_REINT_RENAME,
-                [REINT_OPEN]     = &RQF_MDS_REINT_OPEN,
-                [REINT_SETXATTR] = &RQF_MDS_REINT_SETXATTR
-        };
+	static const struct req_format *reint_fmts[REINT_MAX] = {
+		[REINT_SETATTR]  = &RQF_MDS_REINT_SETATTR,
+		[REINT_CREATE]   = &RQF_MDS_REINT_CREATE,
+		[REINT_LINK]     = &RQF_MDS_REINT_LINK,
+		[REINT_UNLINK]   = &RQF_MDS_REINT_UNLINK,
+		[REINT_RENAME]   = &RQF_MDS_REINT_RENAME,
+		[REINT_OPEN]     = &RQF_MDS_REINT_OPEN,
+		[REINT_SETXATTR] = &RQF_MDS_REINT_SETXATTR,
+		[REINT_RMENTRY] = &RQF_MDS_REINT_UNLINK
+	};
 
         ENTRY;
 
@@ -2378,6 +2382,57 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(rc);
 }
 
+int mdt_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+			void *data, int flag)
+{
+	struct lustre_handle lockh;
+	int		  rc;
+
+	switch (flag) {
+	case LDLM_CB_BLOCKING:
+		ldlm_lock2handle(lock, &lockh);
+		rc = ldlm_cli_cancel(&lockh);
+		if (rc < 0) {
+			CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+			RETURN(rc);
+		}
+		break;
+	case LDLM_CB_CANCELING:
+		LDLM_DEBUG(lock, "Revoke remote lock\n");
+		break;
+	default:
+		LBUG();
+	}
+	RETURN(0);
+}
+
+int mdt_remote_object_lock(struct mdt_thread_info *mti,
+			   struct mdt_object *o, struct lustre_handle *lh,
+			   ldlm_mode_t mode, __u64 ibits)
+{
+	struct ldlm_enqueue_info *einfo = &mti->mti_einfo;
+	ldlm_policy_data_t *policy = &mti->mti_policy;
+	int rc = 0;
+	ENTRY;
+
+	LASSERT(mdt_object_exists(o) < 0);
+
+	LASSERT((ibits & MDS_INODELOCK_UPDATE));
+
+	memset(einfo, 0, sizeof(*einfo));
+	einfo->ei_type = LDLM_IBITS;
+	einfo->ei_mode = mode;
+	einfo->ei_cb_bl = mdt_md_blocking_ast;
+	einfo->ei_cb_cp = ldlm_completion_ast;
+
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+
+	rc = mo_object_lock(mti->mti_env, mdt_object_child(o), lh, einfo,
+			    policy);
+	RETURN(rc);
+}
+
 static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
 			    struct mdt_lock_handle *lh, __u64 ibits,
 			    bool nonblock, int locality)
@@ -2396,7 +2451,6 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
 
         if (mdt_object_exists(o) < 0) {
                 if (locality == MDT_CROSS_LOCK) {
-                        /* cross-ref object fix */
                         ibits &= ~MDS_INODELOCK_UPDATE;
                         ibits |= MDS_INODELOCK_LOOKUP;
                 } else {
@@ -2567,6 +2621,9 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 
         mdt_save_lock(info, &lh->mlh_pdo_lh, lh->mlh_pdo_mode, decref);
         mdt_save_lock(info, &lh->mlh_reg_lh, lh->mlh_reg_mode, decref);
+
+	if (lustre_handle_is_used(&lh->mlh_rreg_lh))
+		ldlm_lock_decref(&lh->mlh_rreg_lh, lh->mlh_rreg_mode);
 
         EXIT;
 }
@@ -2882,6 +2939,8 @@ void mdt_lock_handle_init(struct mdt_lock_handle *lh)
         lh->mlh_reg_mode = LCK_MINMODE;
         lh->mlh_pdo_lh.cookie = 0ull;
         lh->mlh_pdo_mode = LCK_MINMODE;
+	lh->mlh_rreg_lh.cookie = 0ull;
+	lh->mlh_rreg_mode = LCK_MINMODE;
 }
 
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh)

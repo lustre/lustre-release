@@ -771,18 +771,18 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                                 (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 
 		if ((uc->uc_fsuid != tmp_la->la_uid) &&
-		    !mdd_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
-                /* XXX: the IMMUTABLE and APPEND_ONLY flags can
-                 * only be changed by the relevant capability. */
-                if (mdd_is_immutable(obj))
-                        oldflags |= LUSTRE_IMMUTABLE_FL;
-                if (mdd_is_append(obj))
-                        oldflags |= LUSTRE_APPEND_FL;
-                if ((oldflags ^ newflags) &&
-                    !mdd_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
-                        RETURN(-EPERM);
+		/* XXX: the IMMUTABLE and APPEND_ONLY flags can
+		 * only be changed by the relevant capability. */
+		if (mdd_is_immutable(obj))
+			oldflags |= LUSTRE_IMMUTABLE_FL;
+		if (mdd_is_append(obj))
+			oldflags |= LUSTRE_APPEND_FL;
+		if ((oldflags ^ newflags) &&
+		    !md_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
+			RETURN(-EPERM);
 
                 if (!S_ISDIR(tmp_la->la_mode))
                         la->la_flags &= ~LUSTRE_DIRSYNC_FL;
@@ -797,7 +797,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
 	    !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
 		if ((uc->uc_fsuid != tmp_la->la_uid) &&
-		    !mdd_capable(uc, CFS_CAP_FOWNER)) {
+		    !md_capable(uc, CFS_CAP_FOWNER)) {
 			rc = mdd_permission_internal(env, obj, tmp_la,
 						     MAY_WRITE);
 			if (rc)
@@ -830,7 +830,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         if (la->la_valid & LA_MODE) {
 		if (!(flags & MDS_PERM_BYPASS) &&
 		    (uc->uc_fsuid != tmp_la->la_uid) &&
-		    !mdd_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
                 if (la->la_mode == (cfs_umode_t) -1)
@@ -839,14 +839,14 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_mode = (la->la_mode & S_IALLUGO) |
                                       (tmp_la->la_mode & ~S_IALLUGO);
 
-                /* Also check the setgid bit! */
-                if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ?
-                                       la->la_gid : tmp_la->la_gid) &&
-                    !mdd_capable(uc, CFS_CAP_FSETID))
-                        la->la_mode &= ~S_ISGID;
-        } else {
-               la->la_mode = tmp_la->la_mode;
-        }
+		/* Also check the setgid bit! */
+		if (!lustre_in_group_p(uc, (la->la_valid & LA_GID) ?
+				       la->la_gid : tmp_la->la_gid) &&
+		    !md_capable(uc, CFS_CAP_FSETID))
+			la->la_mode &= ~S_ISGID;
+	} else {
+	       la->la_mode = tmp_la->la_mode;
+	}
 
         /* Make sure a caller can chown. */
         if (la->la_valid & LA_UID) {
@@ -854,7 +854,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_uid = tmp_la->la_uid;
 		if (((uc->uc_fsuid != tmp_la->la_uid) ||
 		     (la->la_uid != tmp_la->la_uid)) &&
-		    !mdd_capable(uc, CFS_CAP_CHOWN))
+		    !md_capable(uc, CFS_CAP_CHOWN))
 			RETURN(-EPERM);
 
                 /* If the user or group of a non-directory has been
@@ -880,7 +880,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		if (((uc->uc_fsuid != tmp_la->la_uid) ||
 		     ((la->la_gid != tmp_la->la_gid) &&
 		      !lustre_in_group_p(uc, la->la_gid))) &&
-		    !mdd_capable(uc, CFS_CAP_CHOWN))
+		    !md_capable(uc, CFS_CAP_CHOWN))
 			RETURN(-EPERM);
 
                 /* Likewise, if the user or group of a non-directory
@@ -1176,7 +1176,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 		RETURN(rc);
 
 	if ((uc->uc_fsuid != tmp_la->la_uid) &&
-	    !mdd_capable(uc, CFS_CAP_FOWNER))
+	    !md_capable(uc, CFS_CAP_FOWNER))
 		RETURN(-EPERM);
 
 	RETURN(rc);
@@ -1802,7 +1802,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 		if (uc && ((uc->uc_valid == UCRED_OLD) ||
 			   (uc->uc_valid == UCRED_NEW)) &&
 		    (uc->uc_fsuid != tmp_la->la_uid) &&
-		    !mdd_capable(uc, CFS_CAP_FOWNER))
+		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
         }
 #endif
@@ -2167,6 +2167,18 @@ static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
         return dt_object_sync(env, mdd_object_child(mdd_obj));
 }
 
+static int mdd_object_lock(const struct lu_env *env,
+			   struct md_object *obj,
+			   struct lustre_handle *lh,
+			   struct ldlm_enqueue_info *einfo,
+			   void *policy)
+{
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	LASSERT(mdd_object_exists(mdd_obj));
+	return dt_object_lock(env, mdd_object_child(mdd_obj), lh,
+			      einfo, policy);
+}
+
 const struct md_object_operations mdd_obj_ops = {
 	.moo_permission		= mdd_permission,
 	.moo_attr_get		= mdd_attr_get,
@@ -2184,4 +2196,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_capa_get		= mdd_capa_get,
 	.moo_object_sync	= mdd_object_sync,
 	.moo_path		= mdd_path,
+	.moo_object_lock	= mdd_object_lock,
 };

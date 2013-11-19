@@ -1081,10 +1081,16 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
 
-        info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
+	info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
+}
+
+static int mdt_rmentry_unpack(struct mdt_thread_info *info)
+{
+	info->mti_spec.sp_rm_entry = 1;
+	return mdt_unlink_unpack(info);
 }
 
 static int mdt_rename_unpack(struct mdt_thread_info *info)
@@ -1329,13 +1335,14 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 typedef int (*reint_unpacker)(struct mdt_thread_info *info);
 
 static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
-        [REINT_SETATTR]  = mdt_setattr_unpack,
-        [REINT_CREATE]   = mdt_create_unpack,
-        [REINT_LINK]     = mdt_link_unpack,
-        [REINT_UNLINK]   = mdt_unlink_unpack,
-        [REINT_RENAME]   = mdt_rename_unpack,
-        [REINT_OPEN]     = mdt_open_unpack,
-        [REINT_SETXATTR] = mdt_setxattr_unpack
+	[REINT_SETATTR]  = mdt_setattr_unpack,
+	[REINT_CREATE]   = mdt_create_unpack,
+	[REINT_LINK]     = mdt_link_unpack,
+	[REINT_UNLINK]   = mdt_unlink_unpack,
+	[REINT_RENAME]   = mdt_rename_unpack,
+	[REINT_OPEN]     = mdt_open_unpack,
+	[REINT_SETXATTR] = mdt_setxattr_unpack,
+	[REINT_RMENTRY]  = mdt_rmentry_unpack,
 };
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)

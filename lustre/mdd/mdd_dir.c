@@ -369,7 +369,34 @@ static inline int mdd_is_sticky(const struct lu_env *env,
 	if (tmp_la->la_uid == uc->uc_fsuid)
 		return 0;
 
-	return !mdd_capable(uc, CFS_CAP_FOWNER);
+	return !md_capable(uc, CFS_CAP_FOWNER);
+}
+
+static int mdd_may_delete_entry(const struct lu_env *env,
+				struct mdd_object *pobj, int check_perm)
+{
+	ENTRY;
+
+	LASSERT(pobj != NULL);
+	if (!mdd_object_exists(pobj))
+		RETURN(-ENOENT);
+
+	if (mdd_is_dead_obj(pobj))
+		RETURN(-ENOENT);
+
+	if (check_perm) {
+		int rc;
+		rc = mdd_permission_internal_locked(env, pobj, NULL,
+					    MAY_WRITE | MAY_EXEC,
+					    MOR_TGT_PARENT);
+		if (rc)
+			RETURN(rc);
+	}
+
+	if (mdd_is_append(pobj))
+		RETURN(-EPERM);
+
+	RETURN(0);
 }
 
 /*
@@ -383,31 +410,21 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *pobj,
         int rc = 0;
         ENTRY;
 
-        LASSERT(cobj);
+	if (pobj) {
+		rc = mdd_may_delete_entry(env, pobj, check_perm);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	if (cobj == NULL)
+		RETURN(0);
+
         if (!mdd_object_exists(cobj))
                 RETURN(-ENOENT);
 
         if (mdd_is_dead_obj(cobj))
                 RETURN(-ESTALE);
 
-        if (pobj) {
-                if (!mdd_object_exists(pobj))
-                        RETURN(-ENOENT);
-
-                if (mdd_is_dead_obj(pobj))
-                        RETURN(-ENOENT);
-
-                if (check_perm) {
-                        rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                                    MAY_WRITE | MAY_EXEC,
-                                                    MOR_TGT_PARENT);
-                        if (rc)
-                                RETURN(rc);
-                }
-
-                if (mdd_is_append(pobj))
-                        RETURN(-EPERM);
-        }
 
 	if (mdd_is_sticky(env, pobj, cobj))
                 RETURN(-EPERM);
@@ -1095,6 +1112,7 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
                               const struct lu_name *name, struct md_attr *ma,
                               struct thandle *handle)
 {
+	struct lu_attr     *la = &mdd_env_info(env)->mti_la_for_fix;
         int rc;
 
         rc = mdo_declare_index_delete(env, p, name->ln_name, handle);
@@ -1105,31 +1123,37 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
         if (rc)
                 return rc;
 
-        rc = mdo_declare_ref_del(env, c, handle);
-        if (rc)
-                return rc;
-
-        rc = mdo_declare_ref_del(env, c, handle);
-        if (rc)
-                return rc;
-
-        rc = mdo_declare_attr_set(env, p, NULL, handle);
-        if (rc)
-                return rc;
-
-        rc = mdo_declare_attr_set(env, c, NULL, handle);
-        if (rc)
-                return rc;
-
-        rc = mdd_declare_finish_unlink(env, c, ma, handle);
-        if (rc)
-                return rc;
-
-	rc = mdd_declare_links_del(env, c, handle);
-	if (rc != 0)
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdo_declare_attr_set(env, p, la, handle);
+	if (rc)
 		return rc;
 
-	rc = mdd_declare_changelog_store(env, mdd, name, handle);
+	if (c != NULL) {
+		rc = mdo_declare_ref_del(env, c, handle);
+		if (rc)
+			return rc;
+
+		rc = mdo_declare_ref_del(env, c, handle);
+		if (rc)
+			return rc;
+
+		rc = mdo_declare_attr_set(env, c, NULL, handle);
+		if (rc)
+			return rc;
+
+		rc = mdd_declare_finish_unlink(env, c, ma, handle);
+		if (rc)
+			return rc;
+
+		rc = mdd_declare_links_del(env, c, handle);
+		if (rc != 0)
+			return rc;
+
+		/* FIXME: need changelog for remove entry */
+		rc = mdd_declare_changelog_store(env, mdd, name, handle);
+	}
 
 	return rc;
 }
@@ -1142,74 +1166,96 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	struct lu_attr     *cattr = &mdd_env_info(env)->mti_cattr;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
-        struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
+	struct mdd_object *mdd_cobj = NULL;
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct dynlock_handle *dlh;
         struct thandle    *handle;
-	int rc, is_dir;
+	int rc, is_dir = 0;
         ENTRY;
 
-        if (mdd_object_exists(mdd_cobj) <= 0)
-                RETURN(-ENOENT);
+	/* cobj == NULL means only delete name entry */
+	if (likely(cobj != NULL)) {
+		mdd_cobj = md2mdd_obj(cobj);
+		if (mdd_object_exists(mdd_cobj) == 0)
+			RETURN(-ENOENT);
+		/* currently it is assume, it could only delete
+		 * name entry of remote directory */
+		is_dir = 1;
+	}
 
-        handle = mdd_trans_create(env, mdd);
+	handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = mdd_declare_unlink(env, mdd, mdd_pobj, mdd_cobj,
-                                lname, ma, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_declare_unlink(env, mdd, mdd_pobj, mdd_cobj,
+				lname, ma, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-        rc = mdd_trans_start(env, mdd, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-        dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
-        if (dlh == NULL)
+	dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
+	if (dlh == NULL)
 		GOTO(stop, rc = -ENOMEM);
-        mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
 
-	/* fetch cattr */
-	rc = mdd_la_get(env, mdd_cobj, cattr, mdd_object_capa(env, mdd_cobj));
-        if (rc)
-                GOTO(cleanup, rc);
+	if (likely(mdd_cobj != NULL)) {
+		mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
 
-	is_dir = S_ISDIR(cattr->la_mode);
+		/* fetch cattr */
+		rc = mdd_la_get(env, mdd_cobj, cattr,
+				mdd_object_capa(env, mdd_cobj));
+		if (rc)
+			GOTO(cleanup, rc);
+
+		is_dir = S_ISDIR(cattr->la_mode);
+
+	}
 
 	rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, cattr);
-        if (rc)
-                GOTO(cleanup, rc);
+	if (rc)
+		GOTO(cleanup, rc);
 
 	rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
 				mdd_object_capa(env, mdd_pobj));
 	if (rc)
 		GOTO(cleanup, rc);
 
-	rc = mdo_ref_del(env, mdd_cobj, handle);
-	if (rc != 0) {
-		__mdd_index_insert_only(env, mdd_pobj, mdo2fid(mdd_cobj),
-					name, handle,
-					mdd_object_capa(env, mdd_pobj));
-		GOTO(cleanup, rc);
+	if (likely(mdd_cobj != NULL)) {
+		rc = mdo_ref_del(env, mdd_cobj, handle);
+		if (rc != 0) {
+			__mdd_index_insert_only(env, mdd_pobj,
+						mdo2fid(mdd_cobj),
+						name, handle,
+						mdd_object_capa(env, mdd_pobj));
+			GOTO(cleanup, rc);
+		}
+
+		if (is_dir)
+			/* unlink dot */
+			mdo_ref_del(env, mdd_cobj, handle);
+
+		/* fetch updated nlink */
+		rc = mdd_la_get(env, mdd_cobj, cattr,
+				mdd_object_capa(env, mdd_cobj));
+		if (rc)
+			GOTO(cleanup, rc);
 	}
 
-        if (is_dir)
-                /* unlink dot */
-                mdo_ref_del(env, mdd_cobj, handle);
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
-	/* fetch updated nlink */
-	rc = mdd_la_get(env, mdd_cobj, cattr, mdd_object_capa(env, mdd_cobj));
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdd_attr_check_set_internal(env, mdd_pobj, la, handle, 0);
 	if (rc)
 		GOTO(cleanup, rc);
 
-        LASSERT(ma->ma_attr.la_valid & LA_CTIME);
-        la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
-
-        la->la_valid = LA_CTIME | LA_MTIME;
-	rc = mdd_attr_check_set_internal(env, mdd_pobj, la, handle, 0);
-        if (rc)
-                GOTO(cleanup, rc);
+	/* Enough for only unlink the entry */
+	if (unlikely(mdd_cobj == NULL)) {
+		mdd_pdo_write_unlock(env, mdd_pobj, dlh);
+		GOTO(stop, rc);
+	}
 
 	if (cattr->la_nlink > 0 || mdd_cobj->mod_count > 0) {
                 /* update ctime of an unlinked file only if it is still
@@ -1650,7 +1696,6 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 out:
         return rc;
 }
-
 
 /*
  * Create object and insert it into namespace.
