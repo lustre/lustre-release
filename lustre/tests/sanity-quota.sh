@@ -43,9 +43,10 @@ if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 	exec $LUSTRE/tests/sanity-quota-old.sh
 fi
 
-# if e2fsprogs support quota feature?
-if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] && \
-	! $DEBUGFS -c -R supported_features | grep -q 'quota'; then
+# Does e2fsprogs support quota feature?
+if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
+	do_facet $SINGLEMDS "! $DEBUGFS -c -R supported_features |
+		grep -q 'quota'"; then
 	skip "e2fsprogs doesn't support quota" && exit 0
 fi
 
