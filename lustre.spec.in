@@ -259,16 +259,6 @@ ln lustre/ChangeLog ChangeLog-lustre
 ln lnet/ChangeLog ChangeLog-lnet
 
 %build
-# if RPM_BUILD_NCPUS unset, set it
-if [ -z "$RPM_BUILD_NCPUS" ] ; then
-    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat 2>/dev/null || echo 0 :)
-    if [ $RPM_BUILD_NCPUS -eq 0 ] ; then
-        RPM_BUILD_NCPUS=1
-    fi
-    if [ $RPM_BUILD_NCPUS -gt 8 ] ; then
-        RPM_BUILD_NCPUS=8
-    fi
-fi
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
@@ -306,7 +296,7 @@ CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]*
 %eval_configure \
 	%{?kdir: --with-linux=%kdir} %{?kobjdir: --with-linux-obj=%kobjdir} \
 	$CONFIGURE_ARGS --with-kmp-moddir=%{kmoddir}
-make -j $RPM_BUILD_NCPUS -s %{?make_args}
+make %{?_smp_mflags} -s %{?make_args}
 
 %install
 make install DESTDIR=$RPM_BUILD_ROOT
