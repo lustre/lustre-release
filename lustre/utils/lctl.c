@@ -343,10 +343,6 @@ command_t cmdlist[] = {
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
-        {"lwt", jt_ptl_lwt, 0,
-         "light-weight tracing\n"
-         "usage: lwt start\n"
-         "       lwt stop [file]"},
         {"memhog", jt_ptl_memhog, 0,
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},

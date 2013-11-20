@@ -75,24 +75,6 @@
 #endif
 
 #define BITS_PER_LONG   LONG_BIT
-/******************************************************************************/
-/* Light-weight trace
- * Support for temporary event tracing with minimal Heisenberg effect. */
-#define LWT_SUPPORT  0
-
-typedef struct {
-        long long   lwte_when;
-        char       *lwte_where;
-        void       *lwte_task;
-        long        lwte_p1;
-        long        lwte_p2;
-        long        lwte_p3;
-        long        lwte_p4;
-} lwt_event_t;
-
-# define LWT_EVENT(p1,p2,p3,p4)     /* no lwt implementation yet */
-
-/* -------------------------------------------------------------------------- */
 
 #define IOCTL_LIBCFS_TYPE struct libcfs_ioctl_data
 

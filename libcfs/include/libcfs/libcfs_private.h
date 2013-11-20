@@ -578,12 +578,6 @@ int		 cfs_match_nid(lnet_nid_t nid, struct list_head *list);
 # define CFS_CURRENT_TIME time(0)
 #endif
 
-/* --------------------------------------------------------------------
- * Light-weight trace
- * Support for temporary event tracing with minimal Heisenberg effect.
- * All stuff about lwt are put in arch/kp30.h
- * -------------------------------------------------------------------- */
-
 struct libcfs_device_userstate
 {
 	int		ldu_memhog_pages;

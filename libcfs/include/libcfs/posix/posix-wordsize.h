@@ -43,8 +43,6 @@
 #ifndef __LIBCFS_LINUX_KP30_H__
 #define __LIBCFS_LINUX_KP30_H__
 
-
-
 #if defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
 #endif
@@ -59,7 +57,6 @@
 #define symbol_get(x) inter_module_get(#x)
 #define symbol_put(x) inter_module_put(#x)
 
-
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
 #  if (~0UL) == 0xffffffffUL
@@ -72,35 +69,7 @@
 #  define BITS_PER_LONG __WORDSIZE
 #endif
 
-
-/******************************************************************************/
-/* Light-weight trace
- * Support for temporary event tracing with minimal Heisenberg effect. */
-#define LWT_SUPPORT  0
-
-#define LWT_MEMORY   (16<<20)
-
-typedef struct {
-        long long   lwte_when;
-        char       *lwte_where;
-        void       *lwte_task;
-        long        lwte_p1;
-        long        lwte_p2;
-        long        lwte_p3;
-        long        lwte_p4;
-# if BITS_PER_LONG > 32
-        long        lwte_pad;
-# endif
-} lwt_event_t;
-
-#if LWT_SUPPORT
-#define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
-#endif /* LWT_SUPPORT */
-
-/* ------------------------------------------------------------------ */
-
 #define IOCTL_LIBCFS_TYPE long
-
 
 #if BITS_PER_LONG > 32
 # define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)

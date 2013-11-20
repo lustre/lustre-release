@@ -92,31 +92,6 @@ void libcfs_unregister_panic_notifier();
 
 #endif /* End of !__KERNEL__ */
 
-/******************************************************************************/
-/* Light-weight trace
- * Support for temporary event tracing with minimal Heisenberg effect. */
-#define LWT_SUPPORT  0
-
-/* kernel hasn't defined this? */
-typedef struct {
-        __s64      lwte_when;
-        char       *lwte_where;
-        void       *lwte_task;
-        long_ptr_t        lwte_p1;
-        long_ptr_t        lwte_p2;
-        long_ptr_t        lwte_p3;
-        long_ptr_t        lwte_p4;
-# if BITS_PER_LONG > 32
-        long_ptr_t        lwte_pad;
-# endif
-} lwt_event_t;
-
-
-# define LWT_EVENT(p1,p2,p3,p4)
-
-
-/* ------------------------------------------------------------------ */
-
 #define IOCTL_LIBCFS_TYPE long_ptr_t
 
 #ifdef __CYGWIN__

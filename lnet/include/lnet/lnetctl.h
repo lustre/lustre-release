@@ -61,7 +61,6 @@ int jt_ptl_del_route (int argc, char **argv);
 int jt_ptl_notify_router (int argc, char **argv);
 int jt_ptl_print_routes (int argc, char **argv);
 int jt_ptl_fail_nid (int argc, char **argv);
-int jt_ptl_lwt(int argc, char **argv);
 int jt_ptl_testprotocompat(int argc, char **argv);
 int jt_ptl_memhog(int argc, char **argv);
 

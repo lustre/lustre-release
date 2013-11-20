@@ -117,9 +117,6 @@ struct libcfs_ioctl_handler {
 #define IOC_LIBCFS_PANIC                   _IOWR('e', 30, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_CLEAR_DEBUG             _IOWR('e', 31, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_MARK_DEBUG              _IOWR('e', 32, IOCTL_LIBCFS_TYPE)
-#define IOC_LIBCFS_LWT_CONTROL             _IOWR('e', 33, IOCTL_LIBCFS_TYPE)
-#define IOC_LIBCFS_LWT_SNAPSHOT            _IOWR('e', 34, IOCTL_LIBCFS_TYPE)
-#define IOC_LIBCFS_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_MEMHOG                  _IOWR('e', 36, IOCTL_LIBCFS_TYPE)
 #define IOC_LIBCFS_PING_TEST               _IOWR('e', 37, IOCTL_LIBCFS_TYPE)
 /* lnet ioctls */
