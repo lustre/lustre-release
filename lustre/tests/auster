@@ -14,7 +14,7 @@ export TF_FAIL=/tmp/tf.fail
 
 usage() {
     less -F <<EOF
-Usage ${0##*/} [options]  suite [suite optoins] [suite [suite options]]
+Usage ${0##*/} [options]  suite [suite options] [suite [suite options]]
 Run Lustre regression tests suites.
       -c CONFIG Test environment config file
       -d LOGDIR Top level directory for logs
@@ -82,7 +82,7 @@ do
         f) NAME=$OPTARG;;
         R) do_reset=:;;
         r) reformat=:;;
-        s) SLOW=yes;;
+	s) export SLOW=yes;;
         l) upload_logs=true;;
         h|\?) usage;;
     esac
