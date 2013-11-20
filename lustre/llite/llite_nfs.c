@@ -125,9 +125,10 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
         struct dentry *result;
         ENTRY;
 
-        CDEBUG(D_INFO, "Get dentry for fid: "DFID"\n", PFID(fid));
         if (!fid_is_sane(fid))
                 RETURN(ERR_PTR(-ESTALE));
+
+	CDEBUG(D_INFO, "Get dentry for fid: "DFID"\n", PFID(fid));
 
         inode = search_inode_for_lustre(sb, fid);
         if (IS_ERR(inode))
@@ -144,7 +145,7 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
          * We have to find the parent to tell MDS how to init lov objects.
          */
 	if (S_ISREG(inode->i_mode) && !ll_i2info(inode)->lli_has_smd &&
-	    parent != NULL) {
+	    parent != NULL && !fid_is_zero(parent)) {
 		struct ll_inode_info *lli = ll_i2info(inode);
 
 		spin_lock(&lli->lli_lock);
@@ -161,7 +162,12 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
         RETURN(result);
 }
 
-#define LUSTRE_NFS_FID          0x97
+#ifndef FILEID_INVALID
+#define FILEID_INVALID 0xff
+#endif
+#ifndef FILEID_LUSTRE
+#define FILEID_LUSTRE  0x97
+#endif
 
 /**
  * \a connectable - is nfsd will connect himself or this should be done
@@ -183,21 +189,27 @@ static int ll_encode_fh(struct inode *inode, __u32 *fh, int *plen,
 			struct inode *parent)
 {
 #endif
+	int fileid_len = sizeof(struct lustre_nfs_fid) / 4;
 	struct lustre_nfs_fid *nfs_fid = (void *)fh;
 	ENTRY;
 
-	CDEBUG(D_INFO, "encoding for (%lu,"DFID") maxlen=%d minlen=%d\n",
-	      inode->i_ino, PFID(ll_inode2fid(inode)), *plen,
-	      (int)sizeof(struct lustre_nfs_fid));
+	CDEBUG(D_INFO, "%s: encoding for ("DFID") maxlen=%d minlen=%d\n",
+	       ll_get_fsname(inode->i_sb, NULL, 0),
+	       PFID(ll_inode2fid(inode)), *plen, fileid_len);
 
-	if (*plen < sizeof(struct lustre_nfs_fid) / 4)
-		RETURN(255);
+	if (*plen < fileid_len) {
+		*plen = fileid_len;
+		RETURN(FILEID_INVALID);
+	}
 
 	nfs_fid->lnf_child = *ll_inode2fid(inode);
-	nfs_fid->lnf_parent = *ll_inode2fid(parent);
-	*plen = sizeof(struct lustre_nfs_fid) / 4;
+	if (parent != NULL)
+		nfs_fid->lnf_parent = *ll_inode2fid(parent);
+	else
+		fid_zero(&nfs_fid->lnf_parent);
+	*plen = fileid_len;
 
-	RETURN(LUSTRE_NFS_FID);
+	RETURN(FILEID_LUSTRE);
 }
 
 static int ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,
@@ -253,8 +265,8 @@ static struct dentry *ll_fh_to_dentry(struct super_block *sb, struct fid *fid,
 {
         struct lustre_nfs_fid *nfs_fid = (struct lustre_nfs_fid *)fid;
 
-        if (fh_type != LUSTRE_NFS_FID)
-                RETURN(ERR_PTR(-EPROTO));
+	if (fh_type != FILEID_LUSTRE)
+		RETURN(ERR_PTR(-EPROTO));
 
         RETURN(ll_iget_for_nfs(sb, &nfs_fid->lnf_child, &nfs_fid->lnf_parent));
 }
@@ -264,11 +276,12 @@ static struct dentry *ll_fh_to_parent(struct super_block *sb, struct fid *fid,
 {
         struct lustre_nfs_fid *nfs_fid = (struct lustre_nfs_fid *)fid;
 
-        if (fh_type != LUSTRE_NFS_FID)
-                RETURN(ERR_PTR(-EPROTO));
+	if (fh_type != FILEID_LUSTRE)
+		RETURN(ERR_PTR(-EPROTO));
 
         RETURN(ll_iget_for_nfs(sb, &nfs_fid->lnf_parent, NULL));
 }
+
 static struct dentry *ll_get_parent(struct dentry *dchild)
 {
         struct ptlrpc_request *req = NULL;
