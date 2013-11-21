@@ -2015,6 +2015,19 @@ static inline int md_readpage(struct obd_export *exp, struct md_op_data *opdata,
         RETURN(rc);
 }
 
+static inline int md_read_entry(struct obd_export *exp,
+				struct md_op_data *op_data,
+				struct md_callback *cb_op,
+				struct lu_dirent **ld)
+{
+	int rc;
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, read_entry);
+	EXP_MD_COUNTER_INCREMENT(exp, read_entry);
+	rc = MDP(exp->exp_obd, read_entry)(exp, op_data, cb_op, ld);
+	RETURN(rc);
+}
+
 static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
                             struct ptlrpc_request **request)
 {

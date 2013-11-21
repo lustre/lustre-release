@@ -457,4 +457,12 @@ struct cl_client_cache {
 	wait_queue_head_t	ccc_unstable_waitq; /* Signaled on BRW commit */
 };
 
+enum op_cli_flags {
+	CLI_SET_MEA	= 1 << 0,
+	CLI_RM_ENTRY	= 1 << 1,
+	CLI_HASH64	= 1 << 2,
+	CLI_API32	= 1 << 3,
+	CLI_READENT_END	= 1 << 4,
+};
+
 #endif /*LCLIENT_H */

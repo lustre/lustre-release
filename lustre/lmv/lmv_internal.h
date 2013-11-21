@@ -39,6 +39,7 @@
 
 #include <lustre/lustre_idl.h>
 #include <obd.h>
+#include <lustre_lmv.h>
 
 #define LMV_MAX_TGT_COUNT 128
 
@@ -77,39 +78,6 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                   struct md_op_data *op_data);
 
-static inline struct lmv_stripe_md *lmv_get_mea(struct ptlrpc_request *req)
-{
-        struct mdt_body         *body;
-        struct lmv_stripe_md    *mea;
-
-        LASSERT(req != NULL);
-
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-
-        if (!body || !S_ISDIR(body->mode) || !body->eadatasize)
-                return NULL;
-
-        mea = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
-                                           body->eadatasize);
-        LASSERT(mea != NULL);
-
-        if (mea->mea_count == 0)
-                return NULL;
-        if( mea->mea_magic != MEA_MAGIC_LAST_CHAR &&
-                mea->mea_magic != MEA_MAGIC_ALL_CHARS &&
-                mea->mea_magic != MEA_MAGIC_HASH_SEGMENT)
-                return NULL;
-
-        return mea;
-}
-
-static inline int lmv_get_easize(struct lmv_obd *lmv)
-{
-        return sizeof(struct lmv_stripe_md) +
-                lmv->desc.ld_tgt_count *
-                sizeof(struct lu_fid);
-}
-
 static inline struct lmv_tgt_desc *
 lmv_get_target(struct lmv_obd *lmv, mdsno_t mds)
 {
@@ -141,6 +109,42 @@ lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
 
         return lmv_get_target(lmv, mds);
 }
+
+static inline unsigned int
+mea_last_char_hash(unsigned int count, const char *name, int namelen)
+{
+	unsigned int c;
+
+	c = name[namelen - 1];
+	if (c == 0)
+		CWARN("invalid name %.*s\n", namelen, name);
+
+	c = c % count;
+
+	return c;
+}
+
+static inline unsigned int
+mea_all_chars_hash(unsigned int count, const char *name, int namelen)
+{
+	unsigned int c = 0;
+
+	while (--namelen >= 0)
+		c += name[namelen];
+
+	c = c % count;
+
+	return c;
+}
+
+static inline int lmv_stripe_md_size(int stripe_count)
+{
+	struct lmv_stripe_md *lsm;
+
+	return sizeof(*lsm) + stripe_count * sizeof(lsm->lsm_md_oinfo[0]);
+}
+
+int raw_name2idx(int hashtype, int count, const char *name, int namelen);
 
 struct lmv_tgt_desc
 *lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,

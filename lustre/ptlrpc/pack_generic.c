@@ -2119,14 +2119,6 @@ void lustre_swab_lmv_desc (struct lmv_desc *ld)
         /* uuid endian insensitive */
 }
 
-void lustre_swab_lmv_stripe_md (struct lmv_stripe_md *mea)
-{
-        __swab32s(&mea->mea_magic);
-        __swab32s(&mea->mea_count);
-        __swab32s(&mea->mea_master);
-        CLASSERT(offsetof(typeof(*mea), mea_padding) != 0);
-}
-
 void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 {
 	int i;

@@ -235,11 +235,11 @@ static int ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,
 static int ll_get_name(struct dentry *dentry, char *name,
                        struct dentry *child)
 {
-        struct inode *dir = dentry->d_inode;
-        struct ll_getname_data lgd;
-	__u64 offset = 0;
-        int rc;
-        ENTRY;
+	struct inode *dir = dentry->d_inode;
+	struct ll_getname_data lgd;
+	struct md_op_data *op_data;
+	int rc;
+	ENTRY;
 
         if (!dir || !S_ISDIR(dir->i_mode))
                 GOTO(out, rc = -ENOTDIR);
@@ -251,15 +251,23 @@ static int ll_get_name(struct dentry *dentry, char *name,
         lgd.lgd_fid = ll_i2info(child->d_inode)->lli_fid;
         lgd.lgd_found = 0;
 
-	mutex_lock(&dir->i_mutex);
-	rc = ll_dir_read(dir, &offset, &lgd, ll_nfs_get_name_filldir);
-	mutex_unlock(&dir->i_mutex);
-        if (!rc && !lgd.lgd_found)
-                rc = -ENOENT;
-        EXIT;
+	op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, dir);
+	if (IS_ERR(op_data))
+		GOTO(out, rc = PTR_ERR(op_data));
 
+	op_data->op_hash_offset = 0;
+	op_data->op_max_pages =
+		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+	mutex_lock(&dir->i_mutex);
+	rc = ll_dir_read(dir, op_data, &lgd, ll_nfs_get_name_filldir);
+	mutex_unlock(&dir->i_mutex);
+	ll_finish_md_op_data(op_data);
+	if (!rc && !lgd.lgd_found)
+		rc = -ENOENT;
+	EXIT;
 out:
-        return rc;
+	return rc;
 }
 
 static struct dentry *ll_fh_to_dentry(struct super_block *sb, struct fid *fid,

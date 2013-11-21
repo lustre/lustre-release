@@ -1207,20 +1207,6 @@ check_lmv_desc(void)
 }
 
 static void
-check_lmv_stripe_md(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(lmv_stripe_md);
-	CHECK_MEMBER(lmv_stripe_md, mea_magic);
-	CHECK_MEMBER(lmv_stripe_md, mea_count);
-	CHECK_MEMBER(lmv_stripe_md, mea_master);
-	CHECK_MEMBER(lmv_stripe_md, mea_padding);
-	CHECK_CVALUE(LOV_MAXPOOLNAME);
-	CHECK_MEMBER(lmv_stripe_md, mea_pool_name[LOV_MAXPOOLNAME]);
-	CHECK_MEMBER(lmv_stripe_md, mea_ids[0]);
-}
-
-static void
 check_lov_desc(void)
 {
 	BLANK_LINE();
@@ -2365,7 +2351,6 @@ main(int argc, char **argv)
 	check_mdt_rec_setxattr();
 	check_mdt_rec_reint();
 	check_lmv_desc();
-	check_lmv_stripe_md();
 	check_lov_desc();
 	check_ldlm_res_id();
 	check_ldlm_extent();

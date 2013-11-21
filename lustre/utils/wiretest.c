@@ -66,7 +66,6 @@ void lustre_assert_wire_constants(void)
 	  * running on Linux testnode 2.6.32 #3 SMP Thu Sep 13 12:42:57 PDT 2012 x86_64 x86_64 x86_64 
 	  * with gcc version 4.4.6 20120305 (Red Hat 4.4.6-4) (GCC)  */
 
-
 	/* Constants... */
 	LASSERTF(PTL_RPC_MSG_REQUEST == 4711, "found %lld\n",
 		 (long long)PTL_RPC_MSG_REQUEST);
@@ -2906,35 +2905,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lmv_desc, ld_uuid));
 	LASSERTF((int)sizeof(((struct lmv_desc *)0)->ld_uuid) == 40, "found %lld\n",
 		 (long long)(int)sizeof(((struct lmv_desc *)0)->ld_uuid));
-
-	/* Checks for struct lmv_stripe_md */
-	LASSERTF((int)sizeof(struct lmv_stripe_md) == 32, "found %lld\n",
-		 (long long)(int)sizeof(struct lmv_stripe_md));
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_magic) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_magic));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_magic) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_magic));
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_count) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_count));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_count) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_count));
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_master) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_master));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_master) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_master));
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_padding) == 12, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_padding));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_padding));
-	CLASSERT(LOV_MAXPOOLNAME == 16);
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_pool_name[16]) == 32, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_pool_name[16]));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_pool_name[16]) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_pool_name[16]));
-	LASSERTF((int)offsetof(struct lmv_stripe_md, mea_ids[0]) == 32, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_stripe_md, mea_ids[0]));
-	LASSERTF((int)sizeof(((struct lmv_stripe_md *)0)->mea_ids[0]) == 16, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_stripe_md *)0)->mea_ids[0]));
 
 	/* Checks for struct lov_desc */
 	LASSERTF((int)sizeof(struct lov_desc) == 88, "found %lld\n",

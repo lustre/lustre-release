@@ -173,4 +173,17 @@ static inline int mdc_prep_elc_req(struct obd_export *exp,
 				 count);
 }
 
+static inline unsigned long hash_x_index(__u64 hash, int hash64)
+{
+#ifdef __KERNEL__
+	if (BITS_PER_LONG == 32 && hash64)
+		hash >>= 32;
+#endif
+	/* save hash 0 as index 0 because otherwise we'll save it at
+	 * page index end (~0UL) and it causes truncate_inode_pages_range()
+	 * to loop forever.
+	 */
+	return ~0UL - (hash + !hash);
+}
+
 #endif

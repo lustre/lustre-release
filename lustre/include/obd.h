@@ -917,19 +917,21 @@ struct lu_context;
 
 static inline int it_to_lock_mode(struct lookup_intent *it)
 {
-        /* CREAT needs to be tested before open (both could be set) */
-        if (it->it_op & IT_CREAT)
-                return LCK_CW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP |
-                              IT_LAYOUT))
-                return LCK_CR;
+	/* CREAT needs to be tested before open (both could be set) */
+	if (it->it_op & IT_CREAT)
+		return LCK_CW;
+	else if (it->it_op & (IT_GETATTR | IT_OPEN | IT_LOOKUP |
+			      IT_LAYOUT))
+		return LCK_CR;
+	else if (it->it_op &  IT_READDIR)
+		return LCK_PR;
 	else if (it->it_op &  IT_GETXATTR)
 		return LCK_PR;
 	else if (it->it_op &  IT_SETXATTR)
 		return LCK_PW;
 
-        LASSERTF(0, "Invalid it_op: %d\n", it->it_op);
-        return -EINVAL;
+	LASSERTF(0, "Invalid it_op: %d\n", it->it_op);
+	return -EINVAL;
 }
 
 struct md_op_data {
@@ -974,7 +976,7 @@ struct md_op_data {
 	__u32                   op_opc;
 
 	/* Used by readdir */
-	__u64                   op_offset;
+	__u64                   op_hash_offset;
 
 	/* Used by readdir */
 	__u32                   op_npages;
@@ -988,9 +990,13 @@ struct md_op_data {
 	struct lustre_handle	op_lease_handle;
 };
 
-enum op_cli_flags {
-	CLI_SET_MEA	= 1 << 0,
-	CLI_RM_ENTRY	= 1 << 1,
+#define op_stripe_offset	op_ioepoch
+#define op_max_pages		op_valid
+
+struct md_callback {
+	int (*md_blocking_ast)(struct ldlm_lock *lock,
+			       struct ldlm_lock_desc *desc,
+			       void *data, int flag);
 };
 
 struct md_enqueue_info;
@@ -1201,15 +1207,16 @@ enum {
 #define MAX_HASH_HIGHEST_BIT     0x1000000000000000ULL
 
 struct lustre_md {
-        struct mdt_body         *body;
-        struct lov_stripe_md    *lsm;
-        struct lmv_stripe_md    *mea;
+	struct mdt_body         *body;
+	struct lov_stripe_md    *lsm;
+	struct lmv_stripe_md    *lmv;
 #ifdef CONFIG_FS_POSIX_ACL
-        struct posix_acl        *posix_acl;
+	struct posix_acl        *posix_acl;
 #endif
-        struct mdt_remote_perm  *remote_perm;
-        struct obd_capa         *mds_capa;
-        struct obd_capa         *oss_capa;
+	struct mdt_remote_perm  *remote_perm;
+	struct obd_capa         *mds_capa;
+	struct obd_capa         *oss_capa;
+	__u64			lm_flags;
 };
 
 struct md_open_data {
@@ -1271,6 +1278,9 @@ struct md_ops {
 
 	int (*m_readpage)(struct obd_export *, struct md_op_data *,
 			  struct page **, struct ptlrpc_request **);
+
+	int (*m_read_entry)(struct obd_export *, struct md_op_data *,
+			    struct md_callback *cb_op, struct lu_dirent **ld);
 
 	int (*m_unlink)(struct obd_export *, struct md_op_data *,
 			struct ptlrpc_request **);

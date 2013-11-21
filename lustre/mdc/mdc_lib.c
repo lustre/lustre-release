@@ -41,6 +41,9 @@
 #endif
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
+#include <obd.h>
+#include <cl_object.h>
+#include <lclient.h>
 #include "mdc_internal.h"
 
 #ifndef __KERNEL__

@@ -61,7 +61,6 @@
 #include <dirent.h>
 
 /* (new) readdir implementation overview can be found in lustre/llite/dir.c */
-
 static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
@@ -101,7 +100,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        op_data.op_offset = (__u64)hash_x_index(page->index, 0);
+        op_data.op_hash_offset = hash_x_index(page->index, 0);
         op_data.op_npages = 1;
         rc = md_readpage(sbi->ll_md_exp, &op_data, &page, &request);
         if (!rc) {

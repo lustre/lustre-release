@@ -971,6 +971,9 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
         LASSERT(request != LP_POISON);
         LASSERT(request->rq_repmsg != LP_POISON);
 
+	if (it->it_op & IT_READDIR)
+		RETURN(0);
+
         if (!it_disposition(it, DISP_IT_EXECD)) {
                 /* The server failed before it even started executing the
                  * intent, i.e. because it couldn't unpack the request. */
@@ -1101,6 +1104,9 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
 						  MDS_INODELOCK_LOOKUP |
 						  MDS_INODELOCK_PERM;
 			break;
+		case IT_READDIR:
+			policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+			break;
                 case IT_LAYOUT:
                         policy.l_inodebits.bits = MDS_INODELOCK_LAYOUT;
                         break;
@@ -1176,19 +1182,19 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
 		it->it_flags);
 
-        lockh.cookie = 0;
-        if (fid_is_sane(&op_data->op_fid2) &&
-            (it->it_op & (IT_LOOKUP | IT_GETATTR))) {
-                /* We could just return 1 immediately, but since we should only
-                 * be called in revalidate_it if we already have a lock, let's
-                 * verify that. */
-                it->d.lustre.it_lock_handle = 0;
-                rc = mdc_revalidate_lock(exp, it, &op_data->op_fid2, NULL);
-                /* Only return failure if it was not GETATTR by cfid
-                   (from inode_revalidate) */
-                if (rc || op_data->op_namelen != 0)
-                        RETURN(rc);
-        }
+	lockh.cookie = 0;
+	if (fid_is_sane(&op_data->op_fid2) &&
+	    (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_READDIR))) {
+		/* We could just return 1 immediately, but since we should only
+		 * be called in revalidate_it if we already have a lock, let's
+		 * verify that. */
+		it->d.lustre.it_lock_handle = 0;
+		rc = mdc_revalidate_lock(exp, it, &op_data->op_fid2, NULL);
+		/* Only return failure if it was not GETATTR by cfid
+		   (from inode_revalidate) */
+		if (rc || op_data->op_namelen != 0)
+			RETURN(rc);
+	}
 
 	/* For case if upper layer did not alloc fid, do it now. */
 	if (!fid_is_sane(&op_data->op_fid2) && it->it_op & IT_CREAT) {
