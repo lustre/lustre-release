@@ -159,6 +159,10 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	if (rc && rc != -ENOTCONN)
 		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
 
+	/* If the OST is readonly then we can't allocate objects there */
+	if (sfs->os_state & OS_STATE_READONLY)
+		rc = -EROFS;
+
 	/* check whether device has changed state (active, inactive) */
 	if (rc != 0 && ost->ltd_active) {
 		/* turned inactive? */
@@ -771,7 +775,7 @@ repeat_find:
 		/*
 		 * try to use another OSP if this one is degraded
 		 */
-		if (sfs->os_state == OS_STATE_DEGRADED && speed < 2) {
+		if (sfs->os_state & OS_STATE_DEGRADED && speed < 2) {
 			QOS_DEBUG("#%d: degraded\n", ost_idx);
 			continue;
 		}
