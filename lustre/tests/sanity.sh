@@ -3163,7 +3163,7 @@ test_39p() {
 	local MDTIDX=1
 	TESTDIR=$DIR/$tdir/$tfile
 	[ -e $TESTDIR ] && rm -rf $TESTDIR
-	test_mkdir -p $TESTDIR
+	mkdir -p $TESTDIR
 	cd $TESTDIR
 	links1=2
 	ls
