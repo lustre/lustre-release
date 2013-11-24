@@ -87,7 +87,8 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	res->lr_lvb_len = sizeof(*lvb);
 
 	info = ofd_info_init(&env, NULL);
-	ost_fid_from_resid(&info->fti_fid, &res->lr_name);
+	ost_fid_from_resid(&info->fti_fid, &res->lr_name,
+			   ofd->ofd_lut.lut_lsd.lsd_osd_index);
 	fo = ofd_object_find(&env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
 		GOTO(out_lvb, rc = PTR_ERR(fo));
@@ -224,7 +225,8 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 
 disk_update:
 	/* Update the LVB from the disk inode */
-	ost_fid_from_resid(&info->fti_fid, &res->lr_name);
+	ost_fid_from_resid(&info->fti_fid, &res->lr_name,
+			   ofd->ofd_lut.lut_lsd.lsd_osd_index);
 	fo = ofd_object_find(&env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
 		GOTO(out_env, rc = PTR_ERR(fo));

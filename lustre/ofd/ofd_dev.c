@@ -872,6 +872,10 @@ int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (rc)
 			RETURN(err_serious(rc));
 
+		*fid = fm_key->oa.o_oi.oi_fid;
+
+		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
+
 		replylen = fiemap_count_to_size(fm_key->fiemap.fm_extent_count);
 		req_capsule_set_size(tsi->tsi_pill, &RMF_FIEMAP_VAL,
 				     RCL_SERVER, replylen);
@@ -883,12 +887,6 @@ int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		fiemap = req_capsule_server_get(tsi->tsi_pill, &RMF_FIEMAP_VAL);
 		if (fiemap == NULL)
 			RETURN(-ENOMEM);
-
-		rc = ostid_to_fid(fid, &fm_key->oa.o_oi, 0);
-		if (rc != 0)
-			RETURN(rc);
-
-		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
 
 		*fiemap = fm_key->fiemap;
 		rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid, fiemap);
@@ -1319,6 +1317,8 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 	struct ost_body		*repbody;
 	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
 	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
+	struct lu_fid		*fid = &fti->fti_fid;
+	obd_id			 oid;
 	obd_count		 count;
 	int			 rc = 0;
 
@@ -1339,8 +1339,11 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 		ldlm_request_cancel(tgt_ses_req(tsi), dlm, 0);
 	}
 
+	*fid = body->oa.o_oi.oi_fid;
+	oid = ostid_id(&body->oa.o_oi);
+	LASSERT(oid != 0);
+
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
-	repbody->oa.o_oi = body->oa.o_oi;
 
 	/* check that o_misc makes sense */
 	if (body->oa.o_valid & OBD_MD_FLOBJCOUNT)
@@ -1350,37 +1353,39 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 
 	CDEBUG(D_HA, "%s: Destroy object "DOSTID" count %d\n", ofd_name(ofd),
 	       POSTID(&body->oa.o_oi), count);
+
 	while (count > 0) {
 		int lrc;
 
-		lrc = ostid_to_fid(&fti->fti_fid, &repbody->oa.o_oi, 0);
-		if (lrc != 0) {
-			if (rc == 0)
-				rc = lrc;
-			GOTO(out, rc);
-		}
-		lrc = ofd_destroy_by_fid(tsi->tsi_env, ofd, &fti->fti_fid, 0);
+		lrc = ofd_destroy_by_fid(tsi->tsi_env, ofd, fid, 0);
 		if (lrc == -ENOENT) {
 			CDEBUG(D_INODE,
 			       "%s: destroying non-existent object "DFID"\n",
-			       ofd_name(ofd), PFID(&fti->fti_fid));
+			       ofd_name(ofd), PFID(fid));
 			/* rewrite rc with -ENOENT only if it is 0 */
 			if (rc == 0)
 				rc = lrc;
 		} else if (lrc != 0) {
 			CERROR("%s: error destroying object "DFID": %d\n",
-			       ofd_name(ofd), PFID(&fti->fti_fid),
-			       rc);
+			       ofd_name(ofd), PFID(fid), lrc);
 			rc = lrc;
 		}
+
 		count--;
-		ostid_inc_id(&repbody->oa.o_oi);
+		oid++;
+		lrc = fid_set_id(fid, oid);
+		if (unlikely(lrc != 0 && count > 0))
+			GOTO(out, rc = lrc);
 	}
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_DESTROY,
 			 tsi->tsi_jobid, 1);
+
+	GOTO(out, rc);
+
 out:
-	RETURN(rc);
+	fid_to_ostid(fid, &repbody->oa.o_oi);
+	return rc;
 }
 
 static int ofd_statfs_hdl(struct tgt_session_info *tsi)

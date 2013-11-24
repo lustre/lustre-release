@@ -277,7 +277,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	if (oseq == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	lu_last_id_fid(&info->fti_fid, seq);
+	lu_last_id_fid(&info->fti_fid, seq, ofd->ofd_lut.lut_lsd.lsd_osd_index);
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
 	info->fti_attr.la_valid = LA_MODE;
 	info->fti_attr.la_mode = S_IFREG |  S_IRUGO | S_IWUSR;

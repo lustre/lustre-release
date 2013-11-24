@@ -85,11 +85,6 @@ const char *lfsck_param_names[] = {
 	NULL
 };
 
-static inline mdsno_t lfsck_dev_idx(struct dt_device *dev)
-{
-	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
-}
-
 static inline void lfsck_component_get(struct lfsck_component *com)
 {
 	atomic_inc(&com->lc_ref);

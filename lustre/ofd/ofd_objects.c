@@ -152,6 +152,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	struct dt_object	*next;
 	struct thandle		*th;
 	struct ofd_object	**batch;
+	struct lu_fid		*fid = &info->fti_fid;
 	obd_id			 tmp;
 	int			 rc;
 	int			 i;
@@ -194,12 +195,13 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	info->fti_attr.la_mtime = 0;
 	info->fti_attr.la_ctime = 0;
 
+	LASSERT(id != 0);
+
 	/* prepare objects */
-	ostid_set_seq(&info->fti_ostid, ostid_seq(&oseq->os_oi));
+	*fid = *lu_object_fid(&oseq->os_lastid_obj->do_lu);
 	for (i = 0; i < nr; i++) {
-		ostid_set_id(&info->fti_ostid, id + i);
-		rc = ostid_to_fid(&info->fti_fid, &info->fti_ostid, 0);
-		if (rc) {
+		rc = fid_set_id(fid, id + i);
+		if (rc != 0) {
 			if (i == 0)
 				GOTO(out, rc);
 
@@ -207,7 +209,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			break;
 		}
 
-		fo = ofd_object_find(env, ofd, &info->fti_fid);
+		fo = ofd_object_find(env, ofd, fid);
 		if (IS_ERR(fo)) {
 			if (i == 0)
 				GOTO(out, rc = PTR_ERR(fo));
@@ -242,7 +244,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			/* object may exist being re-created by write replay */
 			CDEBUG(D_INODE, "object "LPX64"/"LPX64" exists: "
 			       DFID"\n", ostid_seq(&oseq->os_oi), id,
-			       PFID(&info->fti_fid));
+			       PFID(lu_object_fid(&fo->ofo_obj.do_lu)));
 			continue;
 		}
 
@@ -262,7 +264,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		GOTO(trans_stop, rc);
 
 	CDEBUG(D_OTHER, "%s: create new object "DFID" nr %d\n",
-	       ofd_name(ofd), PFID(&info->fti_fid), nr);
+	       ofd_name(ofd), PFID(fid), nr);
 
 	for (i = 0; i < nr; i++) {
 		fo = batch[i];

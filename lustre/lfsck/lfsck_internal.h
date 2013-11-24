@@ -42,6 +42,7 @@
 #include <lustre_net.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
+#include <md_object.h>
 
 #define HALF_SEC			(HZ >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
@@ -352,6 +353,12 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid;
 	struct lu_fid		lti_fid2;
 	struct lu_attr		lti_la;
+	struct ost_id		lti_oi;
+	union {
+		struct lustre_mdt_attrs lti_lma;
+		/* old LMA for compatibility */
+		char			lti_lma_old[LMA_OLD_SIZE];
+	};
 	/* lti_ent and lti_key must be conjoint,
 	 * then lti_ent::lde_name will be lti_key. */
 	struct lu_dirent	lti_ent;
@@ -542,6 +549,11 @@ static inline void lfsck_object_put(const struct lu_env *env,
 				    struct dt_object *obj)
 {
 	lu_object_put(env, &obj->do_lu);
+}
+
+static inline mdsno_t lfsck_dev_idx(struct dt_device *dev)
+{
+	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
 }
 
 #endif /* _LFSCK_INTERNAL_H */

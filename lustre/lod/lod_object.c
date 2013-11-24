@@ -391,6 +391,7 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		} else if (buf->lb_len >= sizeof(*lum)) {
 			lum->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V1);
 			lmm_oi_set_seq(&lum->lmm_oi, FID_SEQ_LOV_DEFAULT);
+			lmm_oi_set_id(&lum->lmm_oi, 0);
 			lmm_oi_cpu_to_le(&lum->lmm_oi, &lum->lmm_oi);
 			lum->lmm_pattern = cpu_to_le32(desc->ld_pattern);
 			lum->lmm_stripe_size = cpu_to_le32(

@@ -717,7 +717,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
 		ostid_le_to_cpu(&objs[i].l_ost_oi, &info->lti_ostid);
-		idx = le64_to_cpu(objs[i].l_ost_idx);
+		idx = le32_to_cpu(objs[i].l_ost_idx);
 		rc = ostid_to_fid(&info->lti_fid, &info->lti_ostid, idx);
 		if (rc != 0)
 			GOTO(out, rc);

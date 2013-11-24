@@ -318,6 +318,32 @@ int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 	return rc;
 }
 
+static int osd_lma_self_repair(struct osd_thread_info *info,
+			       struct osd_device *osd, struct inode *inode,
+			       const struct lu_fid *fid, __u32 compat)
+{
+	handle_t *jh;
+	int	  rc;
+
+	LASSERT(current->journal_info == NULL);
+
+	jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC,
+				  osd_dto_credits_noquota[DTO_XATTR_SET]);
+	if (IS_ERR(jh)) {
+		rc = PTR_ERR(jh);
+		CWARN("%s: cannot start journal for lma_self_repair: rc = %d\n",
+		      osd_name(osd), rc);
+		return rc;
+	}
+
+	rc = osd_ea_fid_set(info, inode, fid, compat, 0);
+	if (rc != 0)
+		CWARN("%s: cannot self repair the LMA: rc = %d\n",
+		      osd_name(osd), rc);
+	ldiskfs_journal_stop(jh);
+	return rc;
+}
+
 static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 {
 	struct osd_thread_info	*info	= osd_oti_get(env);
@@ -326,6 +352,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	struct inode		*inode	= obj->oo_inode;
 	struct dentry		*dentry = &info->oti_obj_dentry;
 	struct lu_fid		*fid	= NULL;
+	const struct lu_fid	*rfid	= lu_object_fid(&obj->oo_dt.do_lu);
 	int			 rc;
 	ENTRY;
 
@@ -335,40 +362,18 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	CLASSERT(LMA_OLD_SIZE >= sizeof(*lma));
 	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA,
 			     info->oti_mdt_attrs_old, LMA_OLD_SIZE);
-	if (rc == -ENODATA && !fid_is_igif(lu_object_fid(&obj->oo_dt.do_lu)) &&
-	    osd->od_check_ff) {
+	if (rc == -ENODATA && !fid_is_igif(rfid) && osd->od_check_ff) {
 		fid = &lma->lma_self_fid;
 		rc = osd_get_idif(info, inode, dentry, fid);
 		if ((rc > 0) || (rc == -ENODATA && osd->od_lma_self_repair)) {
-			handle_t *jh;
-
 			/* For the given OST-object, if it has neither LMA nor
 			 * FID in XATTR_NAME_FID, then the given FID (which is
 			 * contained in the @obj, from client RPC for locating
 			 * the OST-object) is trusted. We use it to generate
 			 * the LMA. */
-
-			LASSERT(current->journal_info == NULL);
-
-			jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC,
-					osd_dto_credits_noquota[DTO_XATTR_SET]);
-			if (IS_ERR(jh)) {
-				CWARN("%s: cannot start journal for "
-				      "lma_self_repair: rc = %ld\n",
-				      osd_name(osd), PTR_ERR(jh));
-				RETURN(0);
-			}
-
-			rc = osd_ea_fid_set(info, inode,
-				lu_object_fid(&obj->oo_dt.do_lu),
-				fid_is_on_ost(info, osd,
-					      lu_object_fid(&obj->oo_dt.do_lu),
-					      OI_CHECK_FLD) ?
-				LMAC_FID_ON_OST : 0, 0);
-			if (rc != 0)
-				CWARN("%s: cannot self repair the LMA: "
-				      "rc = %d\n", osd_name(osd), rc);
-			ldiskfs_journal_stop(jh);
+			osd_lma_self_repair(info, osd, inode, rfid,
+				fid_is_on_ost(info, osd, fid, OI_CHECK_FLD) ?
+				LMAC_FID_ON_OST : 0);
 			RETURN(0);
 		}
 	}
@@ -387,19 +392,39 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
 			      "fid = "DFID", ino = %lu\n", osd_name(osd),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(lu_object_fid(&obj->oo_dt.do_lu)),
-			      inode->i_ino);
+			      PFID(rfid), inode->i_ino);
 			rc = -EOPNOTSUPP;
 		} else if (!(lma->lma_compat & LMAC_NOT_IN_OI)) {
 			fid = &lma->lma_self_fid;
 		}
 	}
 
-	if (fid != NULL &&
-	    unlikely(!lu_fid_eq(lu_object_fid(&obj->oo_dt.do_lu), fid))) {
+	if (fid != NULL && unlikely(!lu_fid_eq(rfid, fid))) {
+		if (fid_is_idif(rfid) && fid_is_idif(fid)) {
+			struct ost_id	*oi   = &info->oti_ostid;
+			struct lu_fid	*fid1 = &info->oti_fid3;
+			__u32		 idx  = fid_idif_ost_idx(rfid);
+
+			/* For old IDIF, the OST index is not part of the IDIF,
+			 * Means that different OSTs may have the same IDIFs.
+			 * Under such case, we need to make some compatible
+			 * check to make sure to trigger OI scrub properly. */
+			if (idx != 0 && fid_idif_ost_idx(fid) == 0) {
+				/* Given @rfid is new, LMA is old. */
+				fid_to_ostid(fid, oi);
+				ostid_to_fid(fid1, oi, idx);
+				if (lu_fid_eq(fid1, rfid)) {
+					if (osd->od_lma_self_repair)
+						osd_lma_self_repair(info, osd,
+							inode, rfid,
+							LMAC_FID_ON_OST);
+					RETURN(0);
+				}
+			}
+		}
+
 		CDEBUG(D_INODE, "%s: FID "DFID" != self_fid "DFID"\n",
-		       osd_name(osd), PFID(lu_object_fid(&obj->oo_dt.do_lu)),
-		       PFID(&lma->lma_self_fid));
+		       osd_name(osd), PFID(rfid), PFID(fid));
 		rc = -EREMCHG;
 	}
 

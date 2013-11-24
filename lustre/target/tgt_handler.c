@@ -37,6 +37,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_cksum.h>
+#include <md_object.h>
 
 #include "tgt_internal.h"
 
@@ -130,43 +131,53 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
  */
 int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 {
-	int rc;
-
+	struct ost_id	*oi	= &oa->o_oi;
+	obd_seq 	 seq	= ostid_seq(oi);
+	obd_id		 id	= ostid_id(oi);
+	int		 rc;
 	ENTRY;
 
 	if (unlikely(!(exp_connect_flags(tsi->tsi_exp) & OBD_CONNECT_FID) &&
-		     fid_seq_is_echo(oa->o_oi.oi.oi_seq))) {
+		     fid_seq_is_echo(seq))) {
 		/* Sigh 2.[123] client still sends echo req with oi_id = 0
 		 * during create, and we will reset this to 1, since this
 		 * oi_id is basically useless in the following create process,
 		 * but oi_id == 0 will make it difficult to tell whether it is
 		 * real FID or ost_id. */
-		oa->o_oi.oi_fid.f_oid = oa->o_oi.oi.oi_id ?: 1;
-		oa->o_oi.oi_fid.f_seq = FID_SEQ_ECHO;
-		oa->o_oi.oi_fid.f_ver = 0;
+		oi->oi_fid.f_seq = FID_SEQ_ECHO;
+		oi->oi_fid.f_oid = id ?: 1;
+		oi->oi_fid.f_ver = 0;
 	} else {
-		if (unlikely((oa->o_valid & OBD_MD_FLID &&
-			      ostid_id(&oa->o_oi) == 0)))
+		struct lu_fid *fid = &tsi->tsi_fid2;
+
+		if (unlikely((oa->o_valid & OBD_MD_FLID) && id == 0))
 			GOTO(out, rc = -EPROTO);
 
 		/* Note: this check might be forced in 2.5 or 2.6, i.e.
 		 * all of the requests are required to setup FLGROUP */
 		if (unlikely(!(oa->o_valid & OBD_MD_FLGROUP))) {
-			ostid_set_seq_mdt0(&oa->o_oi);
+			ostid_set_seq_mdt0(oi);
 			oa->o_valid |= OBD_MD_FLGROUP;
+			seq = ostid_seq(oi);
 		}
 
-		if (unlikely(!(fid_seq_is_idif(ostid_seq(&oa->o_oi)) ||
-			       fid_seq_is_mdt0(ostid_seq(&oa->o_oi)) ||
-			       fid_seq_is_norm(ostid_seq(&oa->o_oi)) ||
-			       fid_seq_is_echo(ostid_seq(&oa->o_oi)))))
+		if (unlikely(!(fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq) ||
+			       fid_seq_is_norm(seq) || fid_seq_is_echo(seq))))
 			GOTO(out, rc = -EPROTO);
+
+		rc = ostid_to_fid(fid, oi, tsi->tsi_tgt->lut_lsd.lsd_osd_index);
+		if (unlikely(rc != 0))
+			GOTO(out, rc);
+
+		oi->oi_fid = *fid;
 	}
+
 	RETURN(0);
+
 out:
 	CERROR("%s: client %s sent bad object "DOSTID": rc = %d\n",
 	       tgt_name(tsi->tsi_tgt), obd_export_nid2str(tsi->tsi_exp),
-	       ostid_seq(&oa->o_oi), ostid_id(&oa->o_oi), rc);
+	       seq, id, rc);
 	return rc;
 }
 EXPORT_SYMBOL(tgt_validate_obdo);
@@ -251,6 +262,7 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	}
 
 	tsi->tsi_ost_body = body;
+	tsi->tsi_fid = body->oa.o_oi.oi_fid;
 
 	if (req_capsule_has_field(pill, &RMF_OBD_IOOBJ, RCL_CLIENT)) {
 		rc = tgt_io_data_unpack(tsi, &body->oa.o_oi);
@@ -267,16 +279,6 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 		} else {
 			RETURN(0);
 		}
-	}
-
-	rc = ostid_to_fid(&tsi->tsi_fid, &body->oa.o_oi, 0);
-	if (rc != 0)
-		RETURN(rc);
-
-	if (!fid_is_sane(&tsi->tsi_fid)) {
-		CERROR("%s: invalid FID: "DFID"\n", tgt_name(tsi->tsi_tgt),
-		       PFID(&tsi->tsi_fid));
-		RETURN(-EINVAL);
 	}
 
 	ost_fid_build_resid(&tsi->tsi_fid, &tsi->tsi_resid);
@@ -1167,7 +1169,8 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		if (unlikely(rc != 0))
 			RETURN(rc);
 
-		ost_fid_from_resid(&fid, &lock->l_resource->lr_name);
+		ost_fid_from_resid(&fid, &lock->l_resource->lr_name,
+				   tgt->lut_lsd.lsd_osd_index);
 		obj = dt_locate(&env, tgt->lut_bottom, &fid);
 		if (IS_ERR(obj))
 			GOTO(err_env, rc = PTR_ERR(obj));

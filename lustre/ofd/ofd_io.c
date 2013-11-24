@@ -253,10 +253,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	LASSERT(objcount == 1);
 	LASSERT(obj->ioo_bufcnt > 0);
 
-	rc = ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
-	if (unlikely(rc != 0))
-		RETURN(rc);
-
+	info->fti_fid = oa->o_oi.oi_fid;
 	if (cmd == OBD_BRW_WRITE) {
 		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
 				   capa, CAPA_OPC_OSS_WRITE);
@@ -584,9 +581,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	LASSERT(npages > 0);
 
-	rc = ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
-	if (unlikely(rc != 0))
-		RETURN(rc);
+	info->fti_fid = oa->o_oi.oi_fid;
 	if (cmd == OBD_BRW_WRITE) {
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */

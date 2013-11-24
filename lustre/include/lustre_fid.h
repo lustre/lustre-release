@@ -311,10 +311,10 @@ static inline int fid_seq_in_fldb(__u64 seq)
 	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
 }
 
-static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq)
+static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
 {
 	if (fid_seq_is_mdt0(seq)) {
-		fid->f_seq = fid_idif_seq(0, 0);
+		fid->f_seq = fid_idif_seq(0, ost_idx);
 	} else {
 		LASSERTF(fid_seq_is_norm(seq) || fid_seq_is_echo(seq) ||
 			 fid_seq_is_idif(seq), LPX64"\n", seq);
@@ -598,19 +598,6 @@ static inline void ostid_build_res_name(struct ost_id *oi,
 	}
 }
 
-static inline void ostid_res_name_to_id(struct ost_id *oi,
-					struct ldlm_res_id *name)
-{
-	if (fid_seq_is_mdt0(name->name[LUSTRE_RES_ID_SEQ_OFF])) {
-		/* old resid */
-		ostid_set_seq(oi, name->name[LUSTRE_RES_ID_VER_OID_OFF]);
-		ostid_set_id(oi, name->name[LUSTRE_RES_ID_SEQ_OFF]);
-	} else {
-		/* new resid */
-		fid_extract_from_res_name(&oi->oi_fid, name);
-	}
-}
-
 /**
  * Return true if the resource is for the object identified by this id & group.
  */
@@ -644,14 +631,15 @@ static inline void ost_fid_build_resid(const struct lu_fid *fid,
 }
 
 static inline void ost_fid_from_resid(struct lu_fid *fid,
-				      const struct ldlm_res_id *name)
+				      const struct ldlm_res_id *name,
+				      int ost_idx)
 {
 	if (fid_seq_is_mdt0(name->name[LUSTRE_RES_ID_VER_OID_OFF])) {
 		/* old resid */
 		struct ost_id oi;
 		ostid_set_seq(&oi, name->name[LUSTRE_RES_ID_VER_OID_OFF]);
 		ostid_set_id(&oi, name->name[LUSTRE_RES_ID_SEQ_OFF]);
-		ostid_to_fid(fid, &oi, 0);
+		ostid_to_fid(fid, &oi, ost_idx);
 	} else {
 		/* new resid */
 		fid_extract_from_res_name(fid, name);
