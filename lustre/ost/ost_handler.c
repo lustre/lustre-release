@@ -768,7 +768,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_create_threads,
 			.tc_cpu_affinity	= 1,
-			.tc_ctx_tags		= LCT_DT_THREAD,
+			.tc_ctx_tags		= LCT_MD_THREAD |
+						  LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= oss_cpts,

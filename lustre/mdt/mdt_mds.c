@@ -288,7 +288,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.bc_req_max_size	= OUT_MAXREQSIZE,
 			.bc_rep_max_size	= OUT_MAXREPSIZE,
 			.bc_req_portal		= OUT_PORTAL,
-			.bc_rep_portal		= MDC_REPLY_PORTAL,
+			.bc_rep_portal		= OSC_REPLY_PORTAL,
 		},
 		/*
 		 * We'd like to have a mechanism to set this on a per-device
@@ -302,7 +302,8 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_max		= MDS_NTHRS_MAX,
 			.tc_nthrs_user		= mds_num_threads,
 			.tc_cpu_affinity	= 1,
-			.tc_ctx_tags		= LCT_MD_THREAD,
+			.tc_ctx_tags		= LCT_MD_THREAD |
+						  LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_num_cpts,
