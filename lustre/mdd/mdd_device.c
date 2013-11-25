@@ -927,16 +927,18 @@ static int mdd_root_get(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
-                      struct obd_statfs *sfs)
+		      struct obd_statfs *sfs)
 {
-        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc;
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        rc = mdd_child_ops(mdd)->dt_statfs(env, mdd->mdd_child, sfs);
+	rc = mdd_child_ops(mdd)->dt_statfs(env, mdd->mdd_child, sfs);
 
-        RETURN(rc);
+	sfs->os_namelen = min_t(__u32, sfs->os_namelen, NAME_MAX);
+
+	RETURN(rc);
 }
 
 /*
