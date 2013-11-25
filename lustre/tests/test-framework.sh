@@ -6245,6 +6245,32 @@ min_ost_size () {
     $LCTL get_param -n osc.*.kbytesavail | sort -n | head -n1
 }
 
+#
+# Get the available size (KB) of a given obd target.
+#
+get_obd_size() {
+	local facet=$1
+	local obd=$2
+	local size
+
+	[[ $facet != client ]] || return 0
+
+	size=$(do_facet $facet $LCTL get_param -n *.$obd.kbytesavail | head -n1)
+	echo -n $size
+}
+
+#
+# Get the page size (bytes) on a given facet node.
+#
+get_page_size() {
+	local facet=$1
+	local size
+
+	size=$(do_facet $facet getconf PAGE_SIZE)
+	[[ ${PIPESTATUS[0]} = 0 && -n "$size" ]] || size=4096
+	echo -n $size
+}
+
 # Get the block size of the filesystem.
 get_block_size() {
     local facet=$1
