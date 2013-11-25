@@ -4749,6 +4749,10 @@ run_one_logged() {
 	fi
 	log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
+	if [[ "$TEST_STATUS" != "SKIP" ]] && [[ -f $TF_SKIP ]]; then
+		rm -f $TF_SKIP
+	fi
+
 	if [ -f $LOGDIR/err ]; then
 		$FAIL_ON_ERROR && exit $RC
 	fi

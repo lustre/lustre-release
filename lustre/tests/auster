@@ -11,6 +11,7 @@
 set -e
 
 export TF_FAIL=/tmp/tf.fail
+export TF_SKIP=/tmp/tf.skip
 
 usage() {
     less -F <<EOF
@@ -192,24 +193,28 @@ doit() {
 
 
 run_suite() {
-    suite_name=$1
-    suite_script=$2
-    title $suite_name
-    log_test $suite_name
+	local suite_name=$1
+	local suite_script=$2
+	title $suite_name
+	log_test $suite_name
 
-    rm -f $TF_FAIL
-    local start_ts=$(date +%s)
-    doit bash $suite_script
-    rc=$?
-    duration=$(($(date +%s) - $start_ts))
-    if [ -f $TF_FAIL -o $rc -ne 0 ]; then
-        status="FAIL"
-    else
-        status="PASS"
-    fi
-    log_test_status $duration $status
+	rm -f $TF_FAIL
+	touch $TF_SKIP
+	local start_ts=$(date +%s)
+	doit bash $suite_script
+	local rc=$?
+	local duration=$(($(date +%s) - $start_ts))
 
-    reset_lustre
+	local status="PASS"
+	if [[ $rc -ne 0 || -f $TF_FAIL ]]; then
+		status="FAIL"
+	elif [[ -f $TF_SKIP ]]; then
+		status="SKIP"
+	fi
+	log_test_status $duration $status
+	[[ ! -f $TF_SKIP ]] || rm -f $TF_SKIP
+
+	reset_lustre
 }
 
 run_suite_logged() {
