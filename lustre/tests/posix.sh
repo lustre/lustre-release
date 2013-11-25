@@ -8,15 +8,24 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-build_test_filter
-check_and_setup_lustre
-
 POSIX_DIR=${POSIX_DIR:-"$LUSTRE/tests/posix"}
 POSIX_SRC=${POSIX_SRC:-"/usr/src/posix"}
 BASELINE_FS=${BASELINE_FS:-"ext4"}
 
 # SLES does not support read-write access to an ext4 file system by default
 [[ -e /etc/SuSE-release ]] && BASELINE_FS=ext3
+
+if [[ $(facet_fstype $SINGLEMDS) = zfs ]]; then
+	BASELINE_FS=zfs
+	! which $ZFS $ZPOOL >/dev/null 2>&1 &&
+		skip_env "need $ZFS and $ZPOOL commands" && exit 0
+
+	POSIX_ZPOOL=$FSNAME-posix
+	POSIX_ZFS=$POSIX_ZPOOL/${POSIX_ZPOOL##$FSNAME-}
+fi
+
+check_and_setup_lustre
+build_test_filter
 
 cleanup_loop_dev() {
     local mnt=$1
@@ -34,6 +43,8 @@ cleanup_loop_dev() {
         losetup -d $dev && rm -rf $mnt
         rm -f $file
     fi
+
+	[[ $BASELINE_FS != zfs ]] || destroy_zpool client $POSIX_ZPOOL
 }
 
 setup_loop_dev() {
@@ -49,7 +60,13 @@ setup_loop_dev() {
 		echo "can't set up $dev for $file"
 		return $rc
 	fi
-	if ! eval mkfs.$BASELINE_FS $dev; then
+
+	if [[ $BASELINE_FS = zfs ]]; then
+		create_zpool client $POSIX_ZPOOL $dev || return ${PIPESTATUS[0]}
+		create_zfs client $POSIX_ZFS || return ${PIPESTATUS[0]}
+		dev=$POSIX_ZFS
+
+	elif ! eval mkfs.$BASELINE_FS $dev; then
 		rc=$?
 		echo "mkfs.$BASELINE_FS on $dev failed"
 		return $rc
