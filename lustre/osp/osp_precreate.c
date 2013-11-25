@@ -454,6 +454,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
 
+	*fid = d->opd_pre_last_created_fid;
 	rc = osp_precreate_fids(env, d, fid, &grow);
 	if (rc == 1) {
 		/* Current seq has been used up*/
@@ -472,7 +473,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		fid->f_seq = 0;
 	}
 
-	ostid_fid_pack(fid, &body->oa.o_oi);
+	fid_ostid_pack(fid, &body->oa.o_oi);
 	body->oa.o_valid = OBD_MD_FLGROUP;
 
 	ptlrpc_request_set_replen(req);
@@ -526,8 +527,10 @@ out_req:
 	RETURN(rc);
 }
 
-static int osp_get_lastfid_from_ost(struct osp_device *d)
+static int osp_get_lastfid_from_ost(const struct lu_env *env,
+				    struct osp_device *d)
 {
+	struct ost_id		*oi = &osp_env_info(env)->osi_oi;
 	struct ptlrpc_request	*req = NULL;
 	struct obd_import	*imp;
 	struct lu_fid		*last_fid = &d->opd_last_used_fid;
@@ -542,11 +545,11 @@ static int osp_get_lastfid_from_ost(struct osp_device *d)
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
-	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
-			     RCL_CLIENT, sizeof(KEY_LAST_FID));
+	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY, RCL_CLIENT,
+			     sizeof(KEY_LAST_FID));
 
-	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
-			     RCL_CLIENT, sizeof(*last_fid));
+	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL, RCL_CLIENT,
+			     sizeof(*oi));
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GET_INFO);
 	if (rc) {
@@ -558,9 +561,10 @@ static int osp_get_lastfid_from_ost(struct osp_device *d)
 	memcpy(tmp, KEY_LAST_FID, sizeof(KEY_LAST_FID));
 
 	req->rq_no_delay = req->rq_no_resend = 1;
-	fid_cpu_to_le(last_fid, last_fid);
+	fid_ostid_pack(last_fid, oi);
+	ostid_cpu_to_le(oi, oi);
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
-	memcpy(tmp, last_fid, sizeof(*last_fid));
+	memcpy(tmp, oi, sizeof(*oi));
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);
@@ -574,8 +578,14 @@ static int osp_get_lastfid_from_ost(struct osp_device *d)
 		GOTO(out, rc);
 	}
 
-	last_fid = req_capsule_server_get(&req->rq_pill, &RMF_FID);
-	if (last_fid == NULL || !fid_is_sane(last_fid)) {
+	oi = req_capsule_server_get(&req->rq_pill, &RMF_OST_ID);
+	if (oi == NULL) {
+		CERROR("%s: Got last_fid failed.\n", d->opd_obd->obd_name);
+		GOTO(out, rc = -EPROTO);
+	}
+
+	rc = fid_ostid_unpack(last_fid, oi, d->opd_index);
+	if (rc != 0 || !fid_is_sane(last_fid)) {
 		CERROR("%s: Got insane last_fid "DFID"\n",
 		       d->opd_obd->obd_name, PFID(last_fid));
 		GOTO(out, rc = -EPROTO);
@@ -586,7 +596,7 @@ static int osp_get_lastfid_from_ost(struct osp_device *d)
 	if (fid_oid(last_fid) > 0)
 		d->opd_last_used_fid = *last_fid;
 
-	CDEBUG(D_HA, "%s: Got insane last_fid "DFID"\n", d->opd_obd->obd_name,
+	CDEBUG(D_HA, "%s: Got last_fid "DFID"\n", d->opd_obd->obd_name,
 	       PFID(last_fid));
 
 out:
@@ -646,7 +656,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	LASSERT(!fid_is_zero(last_fid));
 	if (fid_oid(&d->opd_last_used_fid) < 2) {
 		/* lastfid looks strange... ask OST */
-		rc = osp_get_lastfid_from_ost(d);
+		rc = osp_get_lastfid_from_ost(env, d);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -671,12 +681,8 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 
 	body->oa.o_flags = OBD_FL_DELORPHAN;
 	body->oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
-	if (osp_is_fid_client(d))
-		body->oa.o_seq = fid_seq(&d->opd_last_used_fid);
-	else
-		body->oa.o_seq = 0;
-	/* remove from NEXT after used one */
-	body->oa.o_id = fid_oid(&d->opd_last_used_fid);
+
+	fid_ostid_pack(&d->opd_last_used_fid, &body->oa.o_oi);
 
 	ptlrpc_request_set_replen(req);
 
@@ -840,7 +846,7 @@ static int osp_init_pre_fid(struct osp_device *osp)
 	last_fid = &osi->osi_fid;
 	fid_zero(last_fid);
 	/* For a freshed fs, it will allocate a new sequence first */
-	if (osp_is_fid_client(osp)) {
+	if (osp_is_fid_client(osp) && osp->opd_group != 0) {
 		cli_seq = osp->opd_obd->u.cli.cl_seq;
 		rc = seq_client_get_seq(&env, cli_seq, &last_fid->f_seq);
 		if (rc != 0) {
@@ -849,7 +855,7 @@ static int osp_init_pre_fid(struct osp_device *osp)
 			GOTO(out, rc);
 		}
 	} else {
-		last_fid->f_seq = fid_idif_seq(1, osp->opd_index);
+		last_fid->f_seq = fid_idif_seq(0, osp->opd_index);
 	}
 	last_fid->f_oid = 1;
 	last_fid->f_ver = 0;

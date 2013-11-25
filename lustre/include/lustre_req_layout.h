@@ -317,6 +317,7 @@ extern struct req_msg_field RMF_NIOBUF_REMOTE;
 extern struct req_msg_field RMF_RCS;
 extern struct req_msg_field RMF_FIEMAP_KEY;
 extern struct req_msg_field RMF_FIEMAP_VAL;
+extern struct req_msg_field RMF_OST_ID;
 
 /* MGS config read message format */
 extern struct req_msg_field RMF_MGS_CONFIG_BODY;

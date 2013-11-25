@@ -1565,6 +1565,15 @@ t32_test() {
 			popd
 		fi
 
+		dd if=/dev/zero of=$tmp/mnt/lustre/tmp_file bs=10k count=10 || {
+			error_noexit "dd failed"
+			return 1
+		}
+		rm -rf $tmp/mnt/lustre/tmp_file || {
+			error_noexit "rm failed"
+			return 1
+		}
+
 		if $r test -f $tmp/sha1sums; then
 			# LU-2393 - do both sorts on same node to ensure locale
 			# is identical

@@ -354,6 +354,27 @@ struct hsm_attrs {
 };
 extern void lustre_hsm_swab(struct hsm_attrs *attrs);
 
+struct ost_id {
+	obd_id	oi_id;
+	obd_seq	oi_seq;
+};
+
+static inline void ostid_cpu_to_le(struct ost_id *src_oi,
+				   struct ost_id *dst_oi)
+{
+	dst_oi->oi_id = cpu_to_le64(src_oi->oi_id);
+	dst_oi->oi_seq = cpu_to_le64(src_oi->oi_seq);
+}
+
+static inline void ostid_le_to_cpu(struct ost_id *src_oi,
+				   struct ost_id *dst_oi)
+{
+	dst_oi->oi_id = le64_to_cpu(src_oi->oi_id);
+	dst_oi->oi_seq = le64_to_cpu(src_oi->oi_seq);
+}
+
+extern void lustre_swab_ost_id(struct ost_id *oid);
+
 /**
  * fid constants
  */
@@ -535,11 +556,6 @@ static inline int fid_is_idif(const struct lu_fid *fid)
         return fid_seq_is_idif(fid_seq(fid));
 }
 
-struct ost_id {
-        obd_id                 oi_id;
-        obd_seq                oi_seq;
-};
-
 static inline int fid_is_local_file(const struct lu_fid *fid)
 {
 	return fid_seq_is_local_file(fid_seq(fid));
@@ -661,7 +677,7 @@ static inline void ostid_idif_pack(const struct lu_fid *fid,
 }
 
 /* pack a non-IDIF FID into an ostid (id/seq) for the wire/disk */
-static inline void ostid_fid_pack(const struct lu_fid *fid,
+static inline void ostid_normal_fid_pack(const struct lu_fid *fid,
                                   struct ost_id *ostid)
 {
         ostid->oi_seq = fid_seq(fid);
@@ -672,17 +688,17 @@ static inline void ostid_fid_pack(const struct lu_fid *fid,
 static inline int fid_ostid_pack(const struct lu_fid *fid,
                                  struct ost_id *ostid)
 {
-        if (unlikely(fid_seq_is_igif(fid->f_seq))) {
-                CERROR("bad IGIF, "DFID"\n", PFID(fid));
-                return -EBADF;
-        }
+	if (unlikely(fid_seq_is_igif(fid->f_seq))) {
+		CERROR("bad IGIF, "DFID"\n", PFID(fid));
+		return -EBADF;
+	}
 
-        if (fid_is_idif(fid))
-                ostid_idif_pack(fid, ostid);
-        else
-                ostid_fid_pack(fid, ostid);
+	if (fid_is_idif(fid))
+		ostid_idif_pack(fid, ostid);
+	else
+		ostid_normal_fid_pack(fid, ostid);
 
-        return 0;
+	return 0;
 }
 
 /* extract OST sequence (group) from a wire ost_id (id/seq) pair */

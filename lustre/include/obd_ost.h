@@ -93,6 +93,6 @@ int osc_extent_blocking_cb(struct ldlm_lock *lock,
                            int flag);
 #endif
 
-#define POSTID LPU64":"LPU64
+#define POSTID LPU64":"LPX64
 
 #endif

@@ -1726,11 +1726,17 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         CLASSERT(offsetof(typeof(*ocd), paddingF) != 0);
 }
 
+void lustre_swab_ost_id(struct ost_id *oid)
+{
+	__swab64s(&oid->oi_id);
+	__swab64s(&oid->oi_seq);
+}
+EXPORT_SYMBOL(lustre_swab_ost_id);
+
 void lustre_swab_obdo (struct obdo  *o)
 {
         __swab64s (&o->o_valid);
-        __swab64s (&o->o_id);
-        __swab64s (&o->o_seq);
+	lustre_swab_ost_id(&o->o_oi);
         __swab64s (&o->o_parent_seq);
         __swab64s (&o->o_size);
         __swab64s (&o->o_mtime);

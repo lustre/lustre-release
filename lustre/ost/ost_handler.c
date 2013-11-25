@@ -133,7 +133,7 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 			       oa->o_id, oa->o_seq);
 			return -EPROTO;
 		}
-                ioobj_from_obdo(ioobj, oa);
+		ioobj_from_obdo(ioobj, oa);
 	}
 	return 0;
 }

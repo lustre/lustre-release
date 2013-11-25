@@ -592,7 +592,7 @@ static const struct req_msg_field *ost_get_last_id_server[] = {
 
 static const struct req_msg_field *ost_get_last_fid_server[] = {
 	&RMF_PTLRPC_BODY,
-	&RMF_FID
+	&RMF_OST_ID
 };
 
 static const struct req_msg_field *ost_get_fiemap_client[] = {
@@ -1053,6 +1053,11 @@ struct req_msg_field RMF_FID =
 	DEFINE_MSGF("fid", 0,
 		    sizeof(struct lu_fid), lustre_swab_lu_fid, NULL);
 EXPORT_SYMBOL(RMF_FID);
+
+struct req_msg_field RMF_OST_ID =
+	DEFINE_MSGF("ost_id", 0,
+		    sizeof(struct ost_id), lustre_swab_ost_id, NULL);
+EXPORT_SYMBOL(RMF_OST_ID);
 
 struct req_msg_field RMF_FIEMAP_KEY =
         DEFINE_MSGF("fiemap", 0, sizeof(struct ll_fiemap_info_key),

@@ -630,36 +630,39 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		*((__u32 *) val) = ofd->ofd_sync_lock_cancel;
 		*vallen = sizeof(__u32);
 	} else if (KEY_IS(KEY_LAST_FID)) {
-		struct lu_env      env;
-		struct ofd_device *ofd = ofd_exp(exp);
-		struct ofd_seq    *oseq;
-		struct lu_fid     *last_fid = val;
-		int		rc;
+		struct lu_env		env;
+		struct ofd_device	*ofd = ofd_exp(exp);
+		struct ofd_seq		*oseq;
+		struct ost_id		*oid = val;
+		int			rc;
 
-		if (last_fid == NULL) {
-			*vallen = sizeof(struct lu_fid);
+		if (oid == NULL) {
+			*vallen = sizeof(struct ost_id);
 			RETURN(0);
 		}
 
-		if (*vallen < sizeof(*last_fid))
+		if (*vallen < sizeof(*oid))
 			RETURN(-EOVERFLOW);
 
 		rc = lu_env_init(&env, LCT_DT_THREAD);
 		if (rc != 0)
 			RETURN(rc);
 		ofd_info_init(&env, exp);
-		fid_le_to_cpu(last_fid, last_fid);
-		oseq = ofd_seq_load(&env, ofd, fid_seq(last_fid));
+
+		ostid_le_to_cpu(oid, oid);
+		CDEBUG(D_HA, "Get LAST FID for seq "LPX64"\n", oid->oi_seq);
+
+		oseq = ofd_seq_load(&env, ofd, oid->oi_seq);
 		if (IS_ERR(oseq))
-			GOTO(out_fid, rc = PTR_ERR(oseq));
+			GOTO(out_fini, rc = PTR_ERR(oseq));
 
-		last_fid->f_seq = oseq->os_seq;
-		last_fid->f_oid = oseq->os_last_oid;
-		fid_cpu_to_le(last_fid, last_fid);
+		CDEBUG(D_HA, "LAST FID is "POSTID"\n", oseq->os_last_oid,
+		       oseq->os_seq);
 
-		*vallen = sizeof(*last_fid);
+		*oid = oseq->os_oi;
+		*vallen = sizeof(*oid);
 		ofd_seq_put(&env, oseq);
-out_fid:
+out_fini:
 		lu_env_fini(&env);
 	} else {
 		CERROR("Not supported key %s\n", (char*)key);
