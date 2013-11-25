@@ -204,10 +204,10 @@ enum seal_alg {
  * We don't have "legal" access to these MIT-only
  * structures located in libk5crypto
  */
-extern void krb5int_enc_arcfour;
-extern void krb5int_enc_des3;
-extern void krb5int_enc_aes128;
-extern void krb5int_enc_aes256;
+extern void *krb5int_enc_arcfour;
+extern void *krb5int_enc_des3;
+extern void *krb5int_enc_aes128;
+extern void *krb5int_enc_aes256;
 
 static void
 key_lucid_to_krb5(const gss_krb5_lucid_key_t *lin, krb5_keyblock *kout)

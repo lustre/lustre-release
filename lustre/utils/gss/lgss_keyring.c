@@ -195,9 +195,9 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
         memcpy(gr->gr_token.value, p, gr->gr_token.length);
         p += (((gr->gr_token.length + 3) & ~3) / 4);
 
-        logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %d, token len %d\n",
-               gr->gr_ctx.length, gr->gr_token.length);
-        return 0;
+	logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %d, token len %d, " \
+	       "res %d\n", gr->gr_ctx.length, gr->gr_token.length, res);
+	return 0;
 }
 
 /*
