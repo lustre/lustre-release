@@ -24,7 +24,7 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
 
 check_and_setup_lustre
-
+test_1() {
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 USED=`expr $USED + 16`	# Some space for the status file
@@ -126,6 +126,8 @@ NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 fi
+}
+run_test 1 "All Runtests"
 
 complete $SECONDS
 rm -f $FILES
