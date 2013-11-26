@@ -72,7 +72,7 @@ DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
 
 EXTRA_DIST = BUGS FDL kernel_patches BUILDING
 
-sources: $(LDISKFS) lustre_build_version
+sources: lustre_build_version
 
 all-recursive: lustre_build_version
 
