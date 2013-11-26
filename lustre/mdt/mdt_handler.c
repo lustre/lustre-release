@@ -1309,19 +1309,20 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         LDLM_LOCK_PUT(lock);
                         rc = 0;
                 } else {
-                        mdt_lock_handle_init(lhc);
-                        mdt_lock_reg_init(lhc, LCK_PR);
+			mdt_lock_handle_init(lhc);
+			mdt_lock_reg_init(lhc, LCK_PR);
 
-                        /*
-                         * Object's name is on another MDS, no lookup lock is
-                         * needed here but update is.
-                         */
-                        child_bits &= ~MDS_INODELOCK_LOOKUP;
+			/*
+			 * Object's name is on another MDS, no lookup or layout
+			 * lock is needed here but update lock is.
+			 */
+			child_bits &= ~(MDS_INODELOCK_LOOKUP |
+					MDS_INODELOCK_LAYOUT);
 			child_bits |= MDS_INODELOCK_PERM | MDS_INODELOCK_UPDATE;
 
 			rc = mdt_object_lock(info, child, lhc, child_bits,
-                                             MDT_LOCAL_LOCK);
-                }
+					     MDT_LOCAL_LOCK);
+		}
                 if (rc == 0) {
                         /* Finally, we can get attr for child. */
                         mdt_set_capainfo(info, 0, mdt_object_fid(child),
@@ -1448,7 +1449,7 @@ relock:
 		if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
 		    exp_connect_layout(info->mti_exp) &&
 		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
-		    ldlm_rep != NULL) {
+		    !mdt_object_remote(child) && ldlm_rep != NULL) {
 			/* try to grant layout lock for regular file. */
 			try_layout = true;
 		}
@@ -2280,11 +2281,13 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
 
 	if (mdt_object_remote(o)) {
                 if (locality == MDT_CROSS_LOCK) {
-			ibits &= ~(MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM);
+			ibits &= ~(MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM |
+				   MDS_INODELOCK_LAYOUT);
                         ibits |= MDS_INODELOCK_LOOKUP;
                 } else {
 			LASSERTF(!(ibits &
-				  (MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM)),
+				 (MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM |
+				  MDS_INODELOCK_LAYOUT)),
 				"%s: wrong bit "LPX64" for remote obj "DFID"\n",
 				mdt_obd_name(info->mti_mdt), ibits,
 				PFID(mdt_object_fid(o)));
