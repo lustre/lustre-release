@@ -52,7 +52,7 @@ lfs setstripe [--size|-s stripe_size] [--count|-c <replaceable>stripe_count</rep
 lfs setstripe -d <replaceable>dir</replaceable>
 lfs osts [path]
 lfs poollist <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>]|<replaceable>pathname</replaceable>
-lfs quota [-q] [-v] [-o <replaceable>obd_uuid</replaceable>|-I <replaceable>ost_idx</replaceable>|-i <replaceable>mdt_idx</replaceable>]
+lfs quota [-q] [-v] [-h] [-o <replaceable>obd_uuid</replaceable>|-I <replaceable>ost_idx</replaceable>|-i <replaceable>mdt_idx</replaceable>]
           [-u <replaceable>username|uid|-g</replaceable> <replaceable>group|gid</replaceable>]
           <replaceable>/mount_point</replaceable>
 lfs quota -t -u|-g <replaceable>/mount_point</replaceable>

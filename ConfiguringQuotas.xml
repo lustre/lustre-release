@@ -257,7 +257,7 @@ $ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen>
       </listitem>
     </itemizedlist>
     <para> Usage:</para>
-    <screen>lfs quota [-q] [-v] [-o obd_uuid] [-u|-g <replaceable>uname|uid|gname|gid</replaceable>]  <replaceable>/mount_point</replaceable>
+    <screen>lfs quota [-q] [-v] [-h] [-o obd_uuid] [-u|-g <replaceable>uname|uid|gname|gid</replaceable>]  <replaceable>/mount_point</replaceable>
 lfs quota -t <replaceable>-u|-g</replaceable> <replaceable>/mount_point</replaceable>
 lfs setquota <replaceable>-u|--user|-g|--group</replaceable> <replaceable>username|groupname</replaceable> [-b <replaceable>block-softlimit</replaceable>] \
              [-B <replaceable>block_hardlimit</replaceable>] [-i <replaceable>inode_softlimit</replaceable>] \
@@ -281,9 +281,10 @@ lfs setquota <replaceable>-u|--user|-g|--group</replaceable> <replaceable>userna
     <screen>Disk quotas for user bob (uid 6000):
 Filesystem          kbytes quota limit grace files quota limit grace
 /mnt/testfs         0      30720 30920 -     0     10000 11000 -
-testfs-MDT0000_UUID 0      -     16384 -     0     -     2560  -
-testfs-OST0000_UUID 0      -     16384 -     0     -     0     -
-testfs-OST0001_UUID 0      -     16384 -     0     -     0     -</screen>
+testfs-MDT0000_UUID 0      -      8192 -     0     -     2560  -
+testfs-OST0000_UUID 0      -      8192 -     0     -     0     -
+testfs-OST0001_UUID 0      -      8192 -     0     -     0     -
+Total allocated inode limit: 2560, total allocated block limit: 24576</screen>
   <para>Global quota limits are stored in dedicated index files (there is one such index per quota type) on the quota master target (aka QMT). The QMT runs on MDT0000 and exports the global indexes via /proc. The global indexes can thus be dumped via the following command: <screen># lctl get_param qmt.testfs-QMT0000.*.glb-*</screen> The format of global indexes depends on the OSD type. The ldiskfs OSD uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
   <para>Each slave also stores a copy of this global index locally. When the global index is modified on the master, a glimpse callback is issued on the global quota lock to notify all slaves that the global index has been modified. This glimpse callback includes information about the identifier subject to the change. If the global index on the QMT is modified while a slave is disconnected, the index version is used to determine whether the slave copy of the global index isn't uptodate any more. If so, the slave fetches the whole index again and updates the local copy. The slave copy of the global index is also exported via /proc and can be accessed via the following command: <screen>lctl get_param osd-*.*.quota_slave.limit*</screen></para>
   <note>
@@ -308,7 +309,8 @@ Filesystem          kbytes quota limit grace       files  quota limit grace
 /mnt/testfs         30720* 30720 30920 6d23h56m44s 10101* 10000 11000 6d23h59m50s
 testfs-MDT0000_UUID 0      -     0     -           10101  -     10240
 testfs-OST0000_UUID 0      -     1024  -           -      -     -
-testfs-OST0001_UUID 30720* -     29896 -           -      -     -</screen>
+testfs-OST0001_UUID 30720* -     29896 -           -      -     -
+Total allocated inode limit: 10240, total allocated block limit: 30920</screen>
     <para>The total quota limit of 30,920 is allocated to user bob, which is further distributed to two OSTs.</para>
     <para>Values appended with &apos;<literal>*</literal>&apos; show that the quota limit has been exceeded, causing the following error when trying to write or create a file:</para>
     <para><screen>$ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.</screen></para>
