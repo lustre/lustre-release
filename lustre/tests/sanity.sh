@@ -11973,7 +11973,7 @@ test_232() {
 }
 run_test 232 "failed lock should not block umount"
 
-test_233() {
+test_233a() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.64) ] ||
 	{ skip "Need MDS version at least 2.3.64"; return; }
 
@@ -11981,7 +11981,21 @@ test_233() {
 	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
 		error "cannot access $MOUNT using its FID '$fid'"
 }
-run_test 233 "checking that OBF of the FS root succeeds"
+run_test 233a "checking that OBF of the FS root succeeds"
+
+test_233b() {
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.90) ] ||
+	{ skip "Need MDS version at least 2.5.90"; return; }
+
+	local fid=$($LFS path2fid $MOUNT/.lustre)
+	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
+		error "cannot access $MOUNT/.lustre using its FID '$fid'"
+
+	fid=$($LFS path2fid $MOUNT/.lustre/fid)
+	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
+		error "cannot access $MOUNT/.lustre/fid using its FID '$fid'"
+}
+run_test 233b "checking that OBF of the FS .lustre succeeds"
 
 test_234() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
