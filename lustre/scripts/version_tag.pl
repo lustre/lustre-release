@@ -114,8 +114,12 @@ my $path = $0;
 $path =~ s/(.+)\/.*/\1/;
 push(@INC, $cwd . "/" . $path);
 
-my $is_git = 0;
-my $is_cvs = 0;
+# The _first_ argument on the command line may be --make_META
+# Remove it from ARGV if found
+if ($ARGV[0] eq "--make_META") {
+    shift @ARGV;
+    $make_meta = 1;
+}
 
 # ARGV[0] = srcdir
 # ARGV[1] = builddir
@@ -126,14 +130,10 @@ if ($ARGV[0]) {
 }
 
 if (-d ".git") {
-    $is_git = 1;
     require "version_tag-git.pl";
-} elsif (-d "CVS") {
-    $is_cvs = 1;
-    require "version_tag-cvs.pl";
 } else {
     die("a tree status can only be determined in an source code control system checkout\n")
-        if ($progname eq "make_META.pl");
+        if ($make_meta);
     require "version_tag-none.pl";
 }
 
@@ -144,7 +144,7 @@ my $tag = get_tag();
 my $pristine = is_pristine();
 my $buildid = get_buildid();
 
-if ($progname eq "version_tag.pl") {
+if (!$make_meta) {
     my $kernver = "";
     $kernver = get_kernver($am_linuxdir, $am_linuxobjdir)
         if ($am_linuxdir ne "");
@@ -152,7 +152,7 @@ if ($progname eq "version_tag.pl") {
     my $linuxdir =~ s/\//\./g;
     generate_ver($tag, $local_version, $buildid, $linuxdir, $pristine, $kernver,
                  $ENV{LUSTRE_VERS});
-} elsif ($progname eq "make_META.pl") {
+} else {
     print "TAG = $tag\n";
     print "VERSION = $am_version\n";
     print "BUILDID = $buildid\n";

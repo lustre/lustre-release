@@ -256,8 +256,8 @@ checkstack-clean:
 	rm -f ${CSTK} ${CSTKO}
 
 module-dist-hook:
-	if [ -d CVS -o -d .git ]; then \
-		perl lustre/scripts/make_META.pl > $(distdir)/META; \
+	if [ -d .git ]; then \
+		perl lustre/scripts/version_tag.pl --make_META > $(distdir)/META; \
 	elif [ -f META ]; then \
 		cp META $(distdir)/META; \
 	else \

@@ -51,9 +51,9 @@ sbin_SCRIPTS = $(genscripts) $(sbinscripts)
 bin_SCRIPTS = lustre_req_history lfs_migrate
 
 EXTRA_DIST = license-status version_tag.pl version_tag-git.pl \
-	     version_tag-cvs.pl version_tag-none.pl lc_common \
+	     version_tag-none.pl lc_common \
 	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
-	     $(bin_SCRIPTS) make_META.pl lustre lnet lhbadm \
+	     $(bin_SCRIPTS) lustre lnet lhbadm \
 	     haconfig ldev Lustre.ha_v2
 
 scriptlibdir = @libexecdir@/@PACKAGE@
@@ -65,6 +65,3 @@ CLEANFILES = $(genscripts)
 $(genscripts): %: %.in
 	sed -e 's#@scriptlibdir@#$(scriptlibdir)#' < $< > $@
 	chmod +x $@
-
-make_META.pl: version_tag.pl
-	ln -f $< $@
