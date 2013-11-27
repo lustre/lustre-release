@@ -1962,6 +1962,7 @@ wait_update () {
 	local sleep=1
 	local print=10
 
+	PREV_RESULT=$(do_node $node "$TEST")
 	while [ true ]; do
 		RESULT=$(do_node $node "$TEST")
 		if [[ "$RESULT" == "$FINAL" ]]; then
