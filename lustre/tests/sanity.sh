@@ -5812,6 +5812,7 @@ cleanup_101a() {
 
 test_101a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return #LU-4322
 	local s
 	local discard
 	local nreads=10000
