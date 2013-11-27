@@ -661,7 +661,7 @@ void ksleep_chan_init(struct ksleep_chan *chan)
 	SLASSERT(chan != NULL);
 
 	kspin_init(&chan->guard);
-	CFS_INIT_LIST_HEAD(&chan->waiters);
+	INIT_LIST_HEAD(&chan->waiters);
 	ON_SYNC_DEBUG(chan->magic = KSLEEP_CHAN_MAGIC);
 }
 
@@ -677,7 +677,7 @@ void ksleep_link_init(struct ksleep_link *link)
 {
 	SLASSERT(link != NULL);
 
-	CFS_INIT_LIST_HEAD(&link->linkage);
+	INIT_LIST_HEAD(&link->linkage);
 	link->flags = 0;
 	link->event = current_thread();
 	link->hits  = 0;

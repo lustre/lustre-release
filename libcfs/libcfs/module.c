@@ -185,35 +185,35 @@ static int libcfs_psdev_release(unsigned long flags, void *args)
 }
 
 static struct rw_semaphore ioctl_list_sem;
-static cfs_list_t ioctl_list;
+static struct list_head ioctl_list;
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand)
 {
-        int rc = 0;
+	int rc = 0;
 
 	down_write(&ioctl_list_sem);
-        if (!cfs_list_empty(&hand->item))
-                rc = -EBUSY;
-        else
-                cfs_list_add_tail(&hand->item, &ioctl_list);
+	if (!list_empty(&hand->item))
+		rc = -EBUSY;
+	else
+		list_add_tail(&hand->item, &ioctl_list);
 	up_write(&ioctl_list_sem);
 
-        return rc;
+	return rc;
 }
 EXPORT_SYMBOL(libcfs_register_ioctl);
 
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 {
-        int rc = 0;
+	int rc = 0;
 
 	down_write(&ioctl_list_sem);
-        if (cfs_list_empty(&hand->item))
-                rc = -ENOENT;
-        else
-                cfs_list_del_init(&hand->item);
+	if (list_empty(&hand->item))
+		rc = -ENOENT;
+	else
+		list_del_init(&hand->item);
 	up_write(&ioctl_list_sem);
 
-        return rc;
+	return rc;
 }
 EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
@@ -304,25 +304,25 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
 	}
 
         default: {
-                struct libcfs_ioctl_handler *hand;
-                err = -EINVAL;
-		down_read(&ioctl_list_sem);
-                cfs_list_for_each_entry_typed(hand, &ioctl_list,
-                        struct libcfs_ioctl_handler, item) {
-                        err = hand->handle_ioctl(cmd, data);
-                        if (err != -EINVAL) {
-                                if (err == 0)
-                                        err = libcfs_ioctl_popdata(arg, 
-                                                        data, sizeof (*data));
-                                break;
-                        }
-                }
-		up_read(&ioctl_list_sem);
-                break;
-        }
-        }
+		struct libcfs_ioctl_handler *hand;
 
-        RETURN(err);
+		err = -EINVAL;
+		down_read(&ioctl_list_sem);
+		list_for_each_entry(hand, &ioctl_list, item) {
+			err = hand->handle_ioctl(cmd, data);
+			if (err != -EINVAL) {
+				if (err == 0)
+					err = libcfs_ioctl_popdata(arg,
+							data, sizeof (*data));
+				break;
+			}
+		}
+		up_read(&ioctl_list_sem);
+		break;
+	}
+	}
+
+	RETURN(err);
 }
 
 static int libcfs_ioctl(struct cfs_psdev_file *pfile,
@@ -384,7 +384,7 @@ static int init_libcfs_module(void)
 	init_rwsem(&cfs_tracefile_sem);
 	mutex_init(&cfs_trace_thread_mutex);
 	init_rwsem(&ioctl_list_sem);
-	CFS_INIT_LIST_HEAD(&ioctl_list);
+	INIT_LIST_HEAD(&ioctl_list);
 	init_waitqueue_head(&cfs_race_waitq);
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);

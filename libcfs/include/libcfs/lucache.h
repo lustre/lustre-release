@@ -83,15 +83,15 @@ struct md_identity {
 };
 
 struct upcall_cache_entry {
-	cfs_list_t              ue_hash;
-	__u64                   ue_key;
+	struct list_head	ue_hash;
+	__u64			ue_key;
 	atomic_t		ue_refcount;
-	int                     ue_flags;
+	int			ue_flags;
 	wait_queue_head_t	ue_waitq;
-	cfs_time_t              ue_acquire_expire;
-	cfs_time_t              ue_expire;
+	cfs_time_t		ue_acquire_expire;
+	cfs_time_t		ue_expire;
 	union {
-		struct md_identity     identity;
+		struct md_identity	identity;
 	} u;
 };
 
@@ -118,7 +118,7 @@ struct upcall_cache_ops {
 };
 
 struct upcall_cache {
-	cfs_list_t		uc_hashtable[UC_CACHE_HASH_SIZE];
+	struct list_head	uc_hashtable[UC_CACHE_HASH_SIZE];
 	spinlock_t		uc_lock;
 	rwlock_t		uc_upcall_rwlock;
 

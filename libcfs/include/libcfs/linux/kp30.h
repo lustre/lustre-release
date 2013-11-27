@@ -137,9 +137,9 @@ typedef struct {
 #  if !KLWT_SUPPORT
 
 typedef struct _lwt_page {
-        cfs_list_t               lwtp_list;
-        struct page             *lwtp_page;
-        lwt_event_t             *lwtp_events;
+	struct list_head	lwtp_list;
+	struct page		*lwtp_page;
+	lwt_event_t		*lwtp_events;
 } lwt_page_t;
 
 typedef struct {
@@ -172,12 +172,12 @@ do {                                                                    \
                 p = cpu->lwtc_current_page;                             \
                 e = &p->lwtp_events[cpu->lwtc_current_index++];         \
                                                                         \
-                if (cpu->lwtc_current_index >= LWT_EVENTS_PER_PAGE) {   \
-                        cpu->lwtc_current_page =                        \
-                                cfs_list_entry (p->lwtp_list.next,      \
-                                                lwt_page_t, lwtp_list); \
-                        cpu->lwtc_current_index = 0;                    \
-                }                                                       \
+		if (cpu->lwtc_current_index >= LWT_EVENTS_PER_PAGE) {	\
+			cpu->lwtc_current_page =			\
+				list_entry (p->lwtp_list.next,		\
+						lwt_page_t, lwtp_list);	\
+			cpu->lwtc_current_index = 0;			\
+		}							\
                                                                         \
                 e->lwte_when  = get_cycles();                           \
                 e->lwte_where = LWTWHERE(__FILE__,__LINE__);            \

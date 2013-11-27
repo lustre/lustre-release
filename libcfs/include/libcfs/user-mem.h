@@ -38,18 +38,18 @@
 #define LIBLUSTRE_HANDLE_UNALIGNED_PAGE
 
 struct page {
-        void   *addr;
-        unsigned long index;
-        cfs_list_t list;
-        unsigned long private;
+	void			*addr;
+	unsigned long		index;
+	struct list_head	list;
+	unsigned long		private;
 
-        /* internally used by liblustre file i/o */
-        int     _offset;
-        int     _count;
+	/* internally used by liblustre file i/o */
+	int	_offset;
+	int	_count;
 #ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-        int     _managed;
+	int	_managed;
 #endif
-        cfs_list_t _node;
+	struct list_head _node;
 };
 
 

@@ -303,88 +303,87 @@ static inline void remove_shrinker(struct shrinker *shrinker)
  ***************************************************************************/
 
 struct radix_tree_root {
-        cfs_list_t list;
-        void *rnode;
+	struct list_head list;
+	void *rnode;
 };
 
 struct radix_tree_node {
-        cfs_list_t _node;
-        unsigned long index;
-        void *item;
+	struct list_head _node;
+	unsigned long index;
+	void *item;
 };
 
-#define RADIX_TREE_INIT(mask)   {               \
-                NOT_IMPLEMENTED                 \
+#define RADIX_TREE_INIT(mask)   {	\
+		NOT_IMPLEMENTED		\
 }
 
 #define RADIX_TREE(name, mask) \
         struct radix_tree_root name = RADIX_TREE_INIT(mask)
 
 
-#define INIT_RADIX_TREE(root, mask)                                     \
-do {                                                                    \
-        CFS_INIT_LIST_HEAD(&((struct radix_tree_root *)root)->list);    \
-        ((struct radix_tree_root *)root)->rnode = NULL;                 \
+#define INIT_RADIX_TREE(root, mask)					\
+do {									\
+	INIT_LIST_HEAD(&((struct radix_tree_root *)root)->list);	\
+	((struct radix_tree_root *)root)->rnode = NULL;			\
 } while (0)
 
 static inline int radix_tree_insert(struct radix_tree_root *root,
-                        unsigned long idx, void *item)
+					unsigned long idx, void *item)
 {
-        struct radix_tree_node *node;
-        node = malloc(sizeof(*node));
-        if (!node)
-                return -ENOMEM;
+	struct radix_tree_node *node;
+	node = malloc(sizeof(*node));
+	if (!node)
+		return -ENOMEM;
 
-        CFS_INIT_LIST_HEAD(&node->_node);
-        node->index = idx;
-        node->item = item;
-        cfs_list_add_tail(&node->_node, &root->list);
-        root->rnode = (void *)1001;
-        return 0;
+	INIT_LIST_HEAD(&node->_node);
+	node->index = idx;
+	node->item = item;
+	list_add_tail(&node->_node, &root->list);
+	root->rnode = (void *)1001;
+	return 0;
 }
 
-static inline struct radix_tree_node *radix_tree_lookup0(struct radix_tree_root *root,
-                                      unsigned long idx)
+static inline struct radix_tree_node *
+radix_tree_lookup0(struct radix_tree_root *root, unsigned long idx)
 {
-        struct radix_tree_node *node;
+	struct radix_tree_node *node;
 
-        if (cfs_list_empty(&root->list))
-                return NULL;
+	if (list_empty(&root->list))
+		return NULL;
 
-        cfs_list_for_each_entry_typed(node, &root->list,
-                                      struct radix_tree_node, _node)
-                if (node->index == idx)
-                        return node;
+	list_for_each_entry(node, &root->list, _node)
+		if (node->index == idx)
+			return node;
 
-        return NULL;
+	return NULL;
 }
 
 static inline void *radix_tree_lookup(struct radix_tree_root *root,
-                                      unsigned long idx)
+					unsigned long idx)
 {
-        struct radix_tree_node *node = radix_tree_lookup0(root, idx);
+	struct radix_tree_node *node = radix_tree_lookup0(root, idx);
 
-        if (node)
-                return node->item;
-        return node;
+	if (node)
+		return node->item;
+	return node;
 }
 
 static inline void *radix_tree_delete(struct radix_tree_root *root,
-                                      unsigned long idx)
+					unsigned long idx)
 {
-        struct radix_tree_node *p = radix_tree_lookup0(root, idx);
-        void *item;
+	struct radix_tree_node *p = radix_tree_lookup0(root, idx);
+	void *item;
 
-        if (p == NULL)
-                return NULL;
+	if (p == NULL)
+		return NULL;
 
-        cfs_list_del_init(&p->_node);
-        item = p->item;
-        free(p);
-        if (cfs_list_empty(&root->list))
-                root->rnode = NULL;
+	list_del_init(&p->_node);
+	item = p->item;
+	free(p);
+	if (list_empty(&root->list))
+		root->rnode = NULL;
 
-        return item;
+	return item;
 }
 
 static inline unsigned int

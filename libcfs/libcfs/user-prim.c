@@ -168,12 +168,12 @@ void cond_resched(void)
 
 void cfs_init_timer(struct timer_list *t)
 {
-	CFS_INIT_LIST_HEAD(&t->tl_list);
+	INIT_LIST_HEAD(&t->tl_list);
 }
 
 void cfs_timer_init(struct timer_list *l, cfs_timer_func_t *func, void *arg)
 {
-	CFS_INIT_LIST_HEAD(&l->tl_list);
+	INIT_LIST_HEAD(&l->tl_list);
 	l->function = func;
 	l->data = (ulong_ptr_t)arg;
 	return;

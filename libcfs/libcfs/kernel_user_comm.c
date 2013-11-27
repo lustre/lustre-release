@@ -193,13 +193,13 @@ EXPORT_SYMBOL(libcfs_kkuc_msg_put);
  * group from any fs */
 /** A single group registration has a uid and a file pointer */
 struct kkuc_reg {
-	cfs_list_t	 kr_chain;
+	struct list_head kr_chain;
 	int		 kr_uid;
 	struct file	*kr_fp;
 	void		*kr_data;
 };
 
-static cfs_list_t kkuc_groups[KUC_GRP_MAX+1] = {};
+static struct list_head kkuc_groups[KUC_GRP_MAX+1] = {};
 /* Protect message sending against remove and adds */
 static DECLARE_RWSEM(kg_sem);
 
@@ -233,8 +233,8 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group, void *data)
 
 	down_write(&kg_sem);
 	if (kkuc_groups[group].next == NULL)
-		CFS_INIT_LIST_HEAD(&kkuc_groups[group]);
-	cfs_list_add(&reg->kr_chain, &kkuc_groups[group]);
+		INIT_LIST_HEAD(&kkuc_groups[group]);
+	list_add(&reg->kr_chain, &kkuc_groups[group]);
 	up_write(&kg_sem);
 
 	CDEBUG(D_KUC, "Added uid=%d fp=%p to group %d\n", uid, filp, group);
@@ -263,12 +263,12 @@ int libcfs_kkuc_group_rem(int uid, int group, void **pdata)
         }
 
 	down_write(&kg_sem);
-        cfs_list_for_each_entry_safe(reg, next, &kkuc_groups[group], kr_chain) {
-                if ((uid == 0) || (uid == reg->kr_uid)) {
-                        cfs_list_del(&reg->kr_chain);
-                        CDEBUG(D_KUC, "Removed uid=%d fp=%p from group %d\n",
-                               reg->kr_uid, reg->kr_fp, group);
-                        if (reg->kr_fp != NULL)
+	list_for_each_entry_safe(reg, next, &kkuc_groups[group], kr_chain) {
+		if ((uid == 0) || (uid == reg->kr_uid)) {
+			list_del(&reg->kr_chain);
+			CDEBUG(D_KUC, "Removed uid=%d fp=%p from group %d\n",
+				reg->kr_uid, reg->kr_fp, group);
+			if (reg->kr_fp != NULL)
 				fput(reg->kr_fp);
 			if (pdata != NULL)
 				*pdata = reg->kr_data;
@@ -277,7 +277,7 @@ int libcfs_kkuc_group_rem(int uid, int group, void **pdata)
 	}
 	up_write(&kg_sem);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(libcfs_kkuc_group_rem);
 
@@ -289,7 +289,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
 	ENTRY;
 
 	down_read(&kg_sem);
-	cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
+	list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
 		if (reg->kr_fp != NULL) {
 			rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
 			if (rc == 0)
@@ -324,24 +324,24 @@ int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
 	int		 rc = 0;
 	ENTRY;
 
-        if (group > KUC_GRP_MAX) {
-                CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
-                RETURN(-EINVAL);
-        }
+	if (group > KUC_GRP_MAX) {
+		CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
+		RETURN(-EINVAL);
+	}
 
-        /* no link for this group */
-        if (kkuc_groups[group].next == NULL)
-                RETURN(0);
+	/* no link for this group */
+	if (kkuc_groups[group].next == NULL)
+		RETURN(0);
 
 	down_read(&kg_sem);
-        cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
-                if (reg->kr_fp != NULL) {
-                        rc = cb_func(reg->kr_data, cb_arg);
-                }
-        }
+	list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
+		if (reg->kr_fp != NULL) {
+			rc = cb_func(reg->kr_data, cb_arg);
+		}
+	}
 	up_read(&kg_sem);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(libcfs_kkuc_group_foreach);
 

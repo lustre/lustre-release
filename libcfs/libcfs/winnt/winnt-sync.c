@@ -61,7 +61,7 @@ void init_waitqueue_head(wait_queue_head_t *waitq)
 {
     waitq->magic = CFS_WAITQ_MAGIC;
     waitq->flags = 0;
-    CFS_INIT_LIST_HEAD(&(waitq->waiters));
+    INIT_LIST_HEAD(&(waitq->waiters));
 	spin_lock_init(&(waitq->guard));
 }
 
@@ -103,8 +103,8 @@ void init_waitqueue_entry_current(wait_queue_t *link)
 
     atomic_inc(&slot->count);
 
-    CFS_INIT_LIST_HEAD(&(link->waitq[0].link));
-    CFS_INIT_LIST_HEAD(&(link->waitq[1].link));
+    INIT_LIST_HEAD(&(link->waitq[0].link));
+    INIT_LIST_HEAD(&(link->waitq[1].link));
 
     link->waitq[0].waitl = link->waitq[1].waitl = link;
 }
@@ -175,9 +175,9 @@ void cfs_waitq_add_internal(wait_queue_head_t *waitq,
     LASSERT(link->waitq[waitqid].waitq == NULL);
     link->waitq[waitqid].waitq = waitq;
     if (link->flags & CFS_WAITQ_EXCLUSIVE) {
-        cfs_list_add_tail(&link->waitq[waitqid].link, &waitq->waiters);
+	list_add_tail(&link->waitq[waitqid].link, &waitq->waiters);
     } else {
-        cfs_list_add(&link->waitq[waitqid].link, &waitq->waiters);
+	list_add(&link->waitq[waitqid].link, &waitq->waiters);
     }
 	spin_unlock(&(waitq->guard));
 }
@@ -265,7 +265,7 @@ void remove_wait_queue( wait_queue_head_t *waitq,
 
     if (i < CFS_WAITQ_CHANNELS) {
         link->waitq[i].waitq = NULL;
-        cfs_list_del_init(&link->waitq[i].link);
+	list_del_init(&link->waitq[i].link);
     } else {
         cfs_enter_debugger();
     }
@@ -322,8 +322,7 @@ void wake_up_nr(wait_queue_head_t *waitq, int nr)
     LASSERT(waitq->magic == CFS_WAITQ_MAGIC);
 
 	spin_lock(&waitq->guard);
-    cfs_list_for_each_entry_typed(scan, &waitq->waiters, 
-                            cfs_waitlink_channel_t,
+    list_for_each_entry(scan, &waitq->waiters,
                             link) {
 
 	wait_queue_t *waitl = scan->waitl;

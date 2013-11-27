@@ -402,7 +402,7 @@ cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list)
 {
 	struct cfs_range_expr	*expr;
 
-	cfs_list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		if (value >= expr->re_lo && value <= expr->re_hi &&
 		    ((value - expr->re_lo) % expr->re_stride) == 0)
 			return 1;
@@ -427,7 +427,7 @@ cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
 	int			count = 0;
 	int			i;
 
-	cfs_list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		for (i = expr->re_lo; i <= expr->re_hi; i++) {
 			if (((i - expr->re_lo) % expr->re_stride) == 0)
 				count++;
@@ -448,7 +448,7 @@ cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
 		return -ENOMEM;
 
 	count = 0;
-	cfs_list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		for (i = expr->re_lo; i <= expr->re_hi; i++) {
 			if (((i - expr->re_lo) % expr->re_stride) == 0)
 				val[count++] = i;
@@ -468,12 +468,12 @@ EXPORT_SYMBOL(cfs_expr_list_values);
 void
 cfs_expr_list_free(struct cfs_expr_list *expr_list)
 {
-	while (!cfs_list_empty(&expr_list->el_exprs)) {
+	while (!list_empty(&expr_list->el_exprs)) {
 		struct cfs_range_expr *expr;
 
-		expr = cfs_list_entry(expr_list->el_exprs.next,
+		expr = list_entry(expr_list->el_exprs.next,
 				      struct cfs_range_expr, re_link),
-		cfs_list_del(&expr->re_link);
+		list_del(&expr->re_link);
 		LIBCFS_FREE(expr, sizeof(*expr));
 	}
 
@@ -486,7 +486,7 @@ cfs_expr_list_print(struct cfs_expr_list *expr_list)
 {
 	struct cfs_range_expr *expr;
 
-	cfs_list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		CDEBUG(D_WARNING, "%d-%d/%d\n",
 		       expr->re_lo, expr->re_hi, expr->re_stride);
 	}
@@ -515,7 +515,7 @@ cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 	src.ls_str = str;
 	src.ls_len = len;
 
-	CFS_INIT_LIST_HEAD(&expr_list->el_exprs);
+	INIT_LIST_HEAD(&expr_list->el_exprs);
 
 	if (src.ls_str[0] == '[' &&
 	    src.ls_str[src.ls_len - 1] == ']') {
@@ -535,13 +535,13 @@ cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 			if (rc != 0)
 				break;
 
-			cfs_list_add_tail(&expr->re_link,
+			list_add_tail(&expr->re_link,
 					  &expr_list->el_exprs);
 		}
 	} else {
 		rc = cfs_range_expr_parse(&src, min, max, 0, &expr);
 		if (rc == 0) {
-			cfs_list_add_tail(&expr->re_link,
+			list_add_tail(&expr->re_link,
 					  &expr_list->el_exprs);
 		}
 	}
@@ -564,21 +564,21 @@ EXPORT_SYMBOL(cfs_expr_list_parse);
  * \retval none
  */
 void
-cfs_expr_list_free_list(cfs_list_t *list)
+cfs_expr_list_free_list(struct list_head *list)
 {
 	struct cfs_expr_list *el;
 
-	while (!cfs_list_empty(list)) {
-		el = cfs_list_entry(list->next,
+	while (!list_empty(list)) {
+		el = list_entry(list->next,
 				    struct cfs_expr_list, el_link);
-		cfs_list_del(&el->el_link);
+		list_del(&el->el_link);
 		cfs_expr_list_free(el);
 	}
 }
 EXPORT_SYMBOL(cfs_expr_list_free_list);
 
 int
-cfs_ip_addr_parse(char *str, int len, cfs_list_t *list)
+cfs_ip_addr_parse(char *str, int len, struct list_head *list)
 {
 	struct cfs_expr_list	*el;
 	struct cfs_lstr		src;
@@ -601,7 +601,7 @@ cfs_ip_addr_parse(char *str, int len, cfs_list_t *list)
 		if (rc != 0)
 			goto out;
 
-		cfs_list_add_tail(&el->el_link, list);
+		list_add_tail(&el->el_link, list);
 		i++;
 	}
 
@@ -623,12 +623,12 @@ EXPORT_SYMBOL(cfs_ip_addr_parse);
  * \retval 0 otherwise
  */
 int
-cfs_ip_addr_match(__u32 addr, cfs_list_t *list)
+cfs_ip_addr_match(__u32 addr, struct list_head *list)
 {
 	struct cfs_expr_list *el;
 	int i = 0;
 
-	cfs_list_for_each_entry_reverse(el, list, el_link) {
+	list_for_each_entry_reverse(el, list, el_link) {
 		if (!cfs_expr_list_match(addr & 0xff, el))
 			return 0;
 		addr >>= 8;
@@ -640,7 +640,7 @@ cfs_ip_addr_match(__u32 addr, cfs_list_t *list)
 EXPORT_SYMBOL(cfs_ip_addr_match);
 
 void
-cfs_ip_addr_free(cfs_list_t *list)
+cfs_ip_addr_free(struct list_head *list)
 {
 	cfs_expr_list_free_list(list);
 }

@@ -958,7 +958,7 @@ cfs_cpt_table_create_pattern(char *pattern)
 			goto failed;
 		}
 
-		cfs_list_for_each_entry(range, &el->el_exprs, re_link) {
+		list_for_each_entry(range, &el->el_exprs, re_link) {
 			for (i = range->re_lo; i <= range->re_hi; i++) {
 				if ((i - range->re_lo) % range->re_stride != 0)
 					continue;

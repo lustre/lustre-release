@@ -100,10 +100,10 @@ void cfs_enter_debugger(void);
 #define CFS_SYMBOL_LEN     64
 
 struct  cfs_symbol {
-	char       name[CFS_SYMBOL_LEN];
-	void      *value;
-	int        ref;
-	cfs_list_t sym_list;
+	char		 name[CFS_SYMBOL_LEN];
+	void		*value;
+	int		 ref;
+	struct list_head sym_list;
 };
 
 extern int      cfs_symbol_register(const char *, const void *);
@@ -254,8 +254,8 @@ struct ctl_table
 /* the mantaner of the cfs_sysctl_table trees */
 struct ctl_table_header
 {
-	struct ctl_table *    ctl_table;
-	cfs_list_t              ctl_entry;
+	struct ctl_table *ctl_table;
+	struct list_head ctl_entry;
 };
 
 /* proc root entries, support routines */
@@ -346,9 +346,9 @@ int seq_release_private(struct inode *, struct file *);
  * Helpers for iteration over list_head-s in seq_files
  */
 
-extern cfs_list_t *seq_list_start(cfs_list_t *head, loff_t pos);
-extern cfs_list_t *seq_list_start_head(cfs_list_t *head, loff_t pos);
-extern cfs_list_t *seq_list_next(void *v, cfs_list_t *head, loff_t *ppos);
+extern struct list_head *seq_list_start(struct list_head *head, loff_t pos);
+extern struct list_head *seq_list_start_head(struct list_head *head, loff_t pos);
+extern struct list_head *seq_list_next(void *v, struct list_head *head, loff_t *ppos);
 
 /*
  *  declaration of proc kernel process routines
@@ -384,8 +384,7 @@ typedef struct cfs_waitq {
 	unsigned int		flags;
 
 	spinlock_t		guard;
-	cfs_list_t		waiters;
-
+	struct list_head	waiters;
 } wait_queue_head_t;
 
 
@@ -396,12 +395,10 @@ typedef struct cfs_waitlink wait_queue_t;
 #define CFS_WAITQ_CHAN_NORMAL  (0)
 #define CFS_WAITQ_CHAN_FORWARD (1)
 
-
-
 typedef struct cfs_waitlink_channel {
-    cfs_list_t              link;
-    wait_queue_head_t *           waitq;
-    wait_queue_t *        waitl;
+	struct list_head	link;
+	wait_queue_head_t	*waitq;
+	wait_queue_t		*waitl;
 } cfs_waitlink_channel_t;
 
 struct cfs_waitlink {

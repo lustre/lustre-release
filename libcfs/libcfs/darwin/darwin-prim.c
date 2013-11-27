@@ -132,74 +132,72 @@ cfs_symbol_register(const char *name, const void *value)
         struct cfs_symbol   *sym = NULL;
         struct cfs_symbol   *new = NULL;
 
-        MALLOC(new, struct cfs_symbol *, sizeof(struct cfs_symbol), M_TEMP, M_WAITOK|M_ZERO);
-        strncpy(new->name, name, CFS_SYMBOL_LEN);
-        new->value = (void *)value;
-        new->ref = 0;
-        CFS_INIT_LIST_HEAD(&new->sym_list);
+	MALLOC(new, struct cfs_symbol *, sizeof(struct cfs_symbol), M_TEMP, M_WAITOK|M_ZERO);
+	strncpy(new->name, name, CFS_SYMBOL_LEN);
+	new->value = (void *)value;
+	new->ref = 0;
+	INIT_LIST_HEAD(&new->sym_list);
 
-        down_write(&cfs_symbol_lock);
-        list_for_each(walker, &cfs_symbol_list) {
-                sym = list_entry (walker, struct cfs_symbol, sym_list);
-                if (!strcmp(sym->name, name)) {
-                        up_write(&cfs_symbol_lock);
-                        FREE(new, M_TEMP);
-                        return KERN_NAME_EXISTS;
-                }
-
-        }
-        list_add_tail(&new->sym_list, &cfs_symbol_list);
-        up_write(&cfs_symbol_lock);
-
-        return KERN_SUCCESS;
+	down_write(&cfs_symbol_lock);
+	list_for_each(walker, &cfs_symbol_list) {
+		sym = list_entry (walker, struct cfs_symbol, sym_list);
+		if (!strcmp(sym->name, name)) {
+			up_write(&cfs_symbol_lock);
+			FREE(new, M_TEMP);
+			return KERN_NAME_EXISTS;
+		}
+	}
+	list_add_tail(&new->sym_list, &cfs_symbol_list);
+	up_write(&cfs_symbol_lock);
+	return KERN_SUCCESS;
 }
 
 kern_return_t
 cfs_symbol_unregister(const char *name)
 {
-        struct list_head    *walker;
-        struct list_head    *nxt;
-        struct cfs_symbol   *sym = NULL;
+	struct list_head  *walker;
+	struct list_head  *nxt;
+	struct cfs_symbol *sym = NULL;
 
-        down_write(&cfs_symbol_lock);
-        list_for_each_safe(walker, nxt, &cfs_symbol_list) {
-                sym = list_entry (walker, struct cfs_symbol, sym_list);
-                if (!strcmp(sym->name, name)) {
-                        LASSERT(sym->ref == 0);
-                        list_del (&sym->sym_list);
-                        FREE(sym, M_TEMP);
-                        break;
-                }
-        }
-        up_write(&cfs_symbol_lock);
+	down_write(&cfs_symbol_lock);
+	list_for_each_safe(walker, nxt, &cfs_symbol_list) {
+		sym = list_entry(walker, struct cfs_symbol, sym_list);
+		if (!strcmp(sym->name, name)) {
+			LASSERT(sym->ref == 0);
+			list_del(&sym->sym_list);
+			FREE(sym, M_TEMP);
+			break;
+		}
+	}
+	up_write(&cfs_symbol_lock);
 
-        return KERN_SUCCESS;
+	return KERN_SUCCESS;
 }
 
 void
 cfs_symbol_init()
 {
-        CFS_INIT_LIST_HEAD(&cfs_symbol_list);
-        init_rwsem(&cfs_symbol_lock);
+	INIT_LIST_HEAD(&cfs_symbol_list);
+	init_rwsem(&cfs_symbol_lock);
 }
 
 void
 cfs_symbol_fini()
 {
-        struct list_head    *walker;
-        struct cfs_symbol   *sym = NULL;
+	struct list_head  *walker;
+	struct cfs_symbol *sym = NULL;
 
-        down_write(&cfs_symbol_lock);
-        list_for_each(walker, &cfs_symbol_list) {
-                sym = list_entry (walker, struct cfs_symbol, sym_list);
-                LASSERT(sym->ref == 0);
-                list_del (&sym->sym_list);
-                FREE(sym, M_TEMP);
-        }
-        up_write(&cfs_symbol_lock);
+	down_write(&cfs_symbol_lock);
+	list_for_each(walker, &cfs_symbol_list) {
+		sym = list_entry(walker, struct cfs_symbol, sym_list);
+		LASSERT(sym->ref == 0);
+		list_del(&sym->sym_list);
+		FREE(sym, M_TEMP);
+	}
+	up_write(&cfs_symbol_lock);
 
-        fini_rwsem(&cfs_symbol_lock);
-        return;
+	fini_rwsem(&cfs_symbol_lock);
+	return;
 }
 
 struct kernel_thread_arg

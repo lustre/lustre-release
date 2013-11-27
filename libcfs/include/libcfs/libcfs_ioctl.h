@@ -94,15 +94,15 @@ do {                                                    \
 #ifdef __KERNEL__
 
 struct libcfs_ioctl_handler {
-        cfs_list_t item;
-        int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
+	struct list_head item;
+	int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
 };
 
-#define DECLARE_IOCTL_HANDLER(ident, func)                      \
-        struct libcfs_ioctl_handler ident = {                   \
-                /* .item = */ CFS_LIST_HEAD_INIT(ident.item),   \
-                /* .handle_ioctl = */ func                      \
-        }
+#define DECLARE_IOCTL_HANDLER(ident, func)			\
+	struct libcfs_ioctl_handler ident = {			\
+		/* .item = */ LIST_HEAD_INIT(ident.item),	\
+		/* .handle_ioctl = */ func			\
+	}
 
 #endif
 

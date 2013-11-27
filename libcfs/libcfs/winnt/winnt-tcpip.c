@@ -350,12 +350,12 @@ KsAllocateKsTsdu()
 
 	spin_lock(&(ks_data.ksnd_tsdu_lock));
 
-    if (!cfs_list_empty (&(ks_data.ksnd_freetsdus))) {
+    if (!list_empty (&(ks_data.ksnd_freetsdus))) {
 
         LASSERT(ks_data.ksnd_nfreetsdus > 0);
 
-        KsTsdu = cfs_list_entry(ks_data.ksnd_freetsdus.next, KS_TSDU, Link);
-        cfs_list_del(&(KsTsdu->Link));
+	KsTsdu = list_entry(ks_data.ksnd_freetsdus.next, KS_TSDU, Link);
+	list_del(&(KsTsdu->Link));
         ks_data.ksnd_nfreetsdus--;
 
     } else {
@@ -421,7 +421,7 @@ KsPutKsTsdu(
 	if (ks_data.ksnd_nfreetsdus > 128) {
 		KsFreeKsTsdu(KsTsdu);
 	} else {
-		cfs_list_add_tail( &(KsTsdu->Link), &(ks_data.ksnd_freetsdus));
+		list_add_tail( &(KsTsdu->Link), &(ks_data.ksnd_freetsdus));
 		ks_data.ksnd_nfreetsdus++;
 	}
 	spin_unlock(&(ks_data.ksnd_tsdu_lock));
@@ -447,8 +447,7 @@ KsLockTsdus(
 
     *Length  = 0;
 
-    cfs_list_for_each_entry_typed(KsTsdu,
-            &TsduMgr->TsduList,KS_TSDU, Link) {
+    list_for_each_entry(KsTsdu, &TsduMgr->TsduList, Link) {
 
         ULONG   start = 0;
 
@@ -593,11 +592,11 @@ KsReleaseTsdus(
 
     LASSERT(TsduMgr->TotalBytes >= length);
 
-    while (!cfs_list_empty(&TsduMgr->TsduList)) {
+    while (!list_empty(&TsduMgr->TsduList)) {
 
         ULONG   start = 0;
 
-        KsTsdu = cfs_list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
+	KsTsdu = list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
         LASSERT(KsTsdu->Magic == KS_TSDU_MAGIC);
         start = KsTsdu->StartOffset;
 
@@ -695,7 +694,7 @@ KsReleaseTsdus(
         if (KsTsdu->StartOffset >= KsTsdu->LastOffset) {
 
             /* remove KsTsdu from list */
-            cfs_list_del(&KsTsdu->Link);
+	    list_del(&KsTsdu->Link);
             TsduMgr->NumOfTsdu--;
             KsPutKsTsdu(KsTsdu);
         }
@@ -760,7 +759,7 @@ KsGetTsdu(PKS_TSDUMGR TsduMgr, ULONG Length)
     /* retrieve the latest Tsdu buffer form TsduMgr
        list if the list is not empty. */
 
-    if (cfs_list_empty(&(TsduMgr->TsduList))) {
+    if (list_empty(&(TsduMgr->TsduList))) {
 
         LASSERT(TsduMgr->NumOfTsdu == 0);
         KsTsdu = NULL;
@@ -768,7 +767,7 @@ KsGetTsdu(PKS_TSDUMGR TsduMgr, ULONG Length)
     } else {
 
         LASSERT(TsduMgr->NumOfTsdu > 0);
-        KsTsdu = cfs_list_entry(TsduMgr->TsduList.prev, KS_TSDU, Link);
+	KsTsdu = list_entry(TsduMgr->TsduList.prev, KS_TSDU, Link);
 
         /* if this Tsdu does not contain enough space, we need
            allocate a new Tsdu queue. */
@@ -782,7 +781,7 @@ KsGetTsdu(PKS_TSDUMGR TsduMgr, ULONG Length)
     if (NULL == KsTsdu) {
         KsTsdu = KsAllocateKsTsdu();
         if (NULL != KsTsdu) {
-            cfs_list_add_tail(&(KsTsdu->Link), &(TsduMgr->TsduList));
+	    list_add_tail(&(KsTsdu->Link), &(TsduMgr->TsduList));
             TsduMgr->NumOfTsdu++;
         }
     }
@@ -1011,11 +1010,11 @@ NextTsdu:
 
     } else {
 
-        KsTsdu = cfs_list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
+	KsTsdu = list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
         LASSERT(KsTsdu->Magic == KS_TSDU_MAGIC);
 
         /* remove the KsTsdu from TsduMgr list to release the lock */
-        cfs_list_del(&(KsTsdu->Link));
+	list_del(&(KsTsdu->Link));
         TsduMgr->NumOfTsdu--;
 
         while (length > BytesRecved) {
@@ -1164,7 +1163,7 @@ NextTsdu:
                 KsTsdu = NULL;
             } else {
                 TsduMgr->NumOfTsdu++;
-                cfs_list_add(&(KsTsdu->Link), &(TsduMgr->TsduList));
+		list_add(&(KsTsdu->Link), &(TsduMgr->TsduList));
             }
         }
         
@@ -1277,7 +1276,7 @@ KsInitializeKsTsduMgr(
             FALSE
             );
 
-    CFS_INIT_LIST_HEAD(
+    INIT_LIST_HEAD(
             &(TsduMgr->TsduList)
             );
 
@@ -1343,9 +1342,9 @@ KsCleanupTsduMgr(
     KsRemoveTdiEngine(TsduMgr);
     KeSetEvent(&(TsduMgr->Event), 0, FALSE);
 
-    while (!cfs_list_empty(&TsduMgr->TsduList)) {
+    while (!list_empty(&TsduMgr->TsduList)) {
 
-        KsTsdu = cfs_list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
+	KsTsdu = list_entry(TsduMgr->TsduList.next, KS_TSDU, Link);
         LASSERT(KsTsdu->Magic == KS_TSDU_MAGIC);
 
         if (KsTsdu->StartOffset == KsTsdu->LastOffset) {
@@ -1354,7 +1353,7 @@ KsCleanupTsduMgr(
             // KsTsdu is empty now, we need free it ...
             //
 
-            cfs_list_del(&(KsTsdu->Link));
+	    list_del(&(KsTsdu->Link));
             TsduMgr->NumOfTsdu--;
 
             KsFreeKsTsdu(KsTsdu);
@@ -3199,18 +3198,18 @@ KsGetVacancyBacklog(
     LASSERT(parent->kstc_type == kstt_listener);
     LASSERT(parent->kstc_state == ksts_listening);
 
-    if (cfs_list_empty(&(parent->listener.kstc_listening.list))) {
+    if (list_empty(&(parent->listener.kstc_listening.list))) {
 
         child = NULL;
 
     } else {
 
-        cfs_list_t * tmp;
+	struct list_head * tmp;
 
         /* check the listening queue and try to get a free connecton */
 
-        cfs_list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
-            child = cfs_list_entry (tmp, ks_tconn_t, child.kstc_link);
+	list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
+	    child = list_entry (tmp, ks_tconn_t, child.kstc_link);
 	    spin_lock(&(child->kstc_lock));
 
             if (!child->child.kstc_busy) {
@@ -4340,7 +4339,7 @@ ks_create_tconn()
 
         /* attach it into global list in ks_data */
 
-        cfs_list_add(&(tconn->kstc_list), &(ks_data.ksnd_tconns));
+	list_add(&(tconn->kstc_list), &(ks_data.ksnd_tconns));
         ks_data.ksnd_ntconns++;
 	spin_unlock(&(ks_data.ksnd_tconn_lock));
 
@@ -4373,7 +4372,7 @@ ks_free_tconn(ks_tconn_t * tconn)
 	spin_lock(&(ks_data.ksnd_tconn_lock));
 
     /* remove it from the global list */
-    cfs_list_del(&tconn->kstc_list);
+    list_del(&tconn->kstc_list);
     ks_data.ksnd_ntconns--;
 
     /* if this is the last tconn, it would be safe for
@@ -4415,8 +4414,8 @@ ks_init_listener(
 
     RtlInitUnicodeString(&(tconn->kstc_dev), TCP_DEVICE_NAME);
 
-    CFS_INIT_LIST_HEAD(&(tconn->listener.kstc_listening.list));
-    CFS_INIT_LIST_HEAD(&(tconn->listener.kstc_accepted.list));
+    INIT_LIST_HEAD(&(tconn->listener.kstc_listening.list));
+    INIT_LIST_HEAD(&(tconn->listener.kstc_accepted.list));
 
     cfs_init_event( &(tconn->listener.kstc_accept_event),
                     TRUE,
@@ -4632,7 +4631,7 @@ ks_destroy_tconn(
 
         if (tconn->child.kstc_queued) {
 
-            cfs_list_del(&(tconn->child.kstc_link));
+	    list_del(&(tconn->child.kstc_link));
 
             if (tconn->child.kstc_queueno) {
 
@@ -5560,7 +5559,7 @@ KsQueueTdiEngine(ks_tconn_t * tconn, PKS_TSDUMGR TsduMgr)
     if (!engs->queued) {
 	spin_lock(&engm->lock);
         if (!engs->queued) {
-            cfs_list_add_tail(&engs->link, &engm->list);
+	    list_add_tail(&engs->link, &engm->list);
             engs->queued = TRUE;
             engs->tconn = tconn;
             engs->emgr = engm;
@@ -5586,7 +5585,7 @@ KsRemoveTdiEngine(PKS_TSDUMGR TsduMgr)
         LASSERT(engm != NULL);
 	spin_lock(&engm->lock);
         if (engs->queued) {
-            cfs_list_del(&engs->link);
+	    list_del(&engs->link);
             engs->queued = FALSE;
             engs->tconn = NULL;
             engs->emgr = NULL;
@@ -5742,7 +5741,7 @@ KsDeliveryTsdus(ks_tconn_t * tconn, PKS_TSDUMGR TsduMgr)
         tflags = TDI_SEND_NON_BLOCKING;
     }
    
-    if (cfs_list_empty(&TsduMgr->TsduList)) {
+    if (list_empty(&TsduMgr->TsduList)) {
         LASSERT(TsduMgr->TotalBytes == 0);
         ks_unlock_tsdumgr(TsduMgr);
         goto errorout;
@@ -5800,7 +5799,7 @@ KsDeliveryEngineThread(void * context)
 {
     ks_engine_mgr_t *   engm = context;
     ks_engine_slot_t *  engs;
-    cfs_list_t *        list;
+    struct list_head *        list;
     ks_tconn_t *        tconn;
 
     cfs_set_thread_priority(31);
@@ -5810,14 +5809,14 @@ KsDeliveryEngineThread(void * context)
         cfs_wait_event_internal(&engm->start, 0);
 
 	spin_lock(&engm->lock);
-        if (cfs_list_empty(&engm->list)) {
+	if (list_empty(&engm->list)) {
 	    spin_unlock(&engm->lock);
             continue;
         }
 
         list = engm->list.next;
-        cfs_list_del(list);
-        engs = cfs_list_entry(list, ks_engine_slot_t, link);
+	list_del(list);
+	engs = list_entry(list, ks_engine_slot_t, link);
         LASSERT(engs->emgr == engm);
         LASSERT(engs->queued);
         engs->emgr = NULL;
@@ -5862,7 +5861,7 @@ ks_init_tdi_data()
     RtlZeroMemory(&ks_data, sizeof(ks_tdi_data_t));
 
 	spin_lock_init(&ks_data.ksnd_tconn_lock);
-    CFS_INIT_LIST_HEAD(&ks_data.ksnd_tconns);
+    INIT_LIST_HEAD(&ks_data.ksnd_tconns);
     cfs_init_event(&ks_data.ksnd_tconn_exit, TRUE, FALSE);
 
     ks_data.ksnd_tconn_slab = kmem_cache_create("tcon", sizeof(ks_tconn_t),
@@ -5875,7 +5874,7 @@ ks_init_tdi_data()
 
     /* initialize tsdu related globals */
 	spin_lock_init(&ks_data.ksnd_tsdu_lock);
-    CFS_INIT_LIST_HEAD(&ks_data.ksnd_freetsdus);
+    INIT_LIST_HEAD(&ks_data.ksnd_freetsdus);
     ks_data.ksnd_tsdu_size = TDINAL_TSDU_DEFAULT_SIZE; /* 64k */
     ks_data.ksnd_tsdu_slab = kmem_cache_create("tsdu", ks_data.ksnd_tsdu_size,
 					       0, 0, NULL);
@@ -5900,7 +5899,7 @@ ks_init_tdi_data()
 		spin_lock_init(&ks_data.ksnd_engine_mgr[i].lock);
 	cfs_init_event(&ks_data.ksnd_engine_mgr[i].start, TRUE, FALSE);
 	cfs_init_event(&ks_data.ksnd_engine_mgr[i].exit, TRUE, FALSE);
-	CFS_INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
+	INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
 	kthread_run(KsDeliveryEngineThread, &ks_data.ksnd_engine_mgr[i], "");
     }
 
@@ -5939,7 +5938,7 @@ void
 ks_fini_tdi_data()
 {
     PKS_TSDU            KsTsdu = NULL;
-    cfs_list_t *        list   = NULL;
+    struct list_head *        list   = NULL;
     int i;
 
     /* clean up the pnp handler and address slots */
@@ -5958,7 +5957,7 @@ ks_fini_tdi_data()
     /* we need wait until all the tconn are freed */
 	spin_lock(&(ks_data.ksnd_tconn_lock));
 
-    if (cfs_list_empty(&(ks_data.ksnd_tconns))) {
+    if (list_empty(&(ks_data.ksnd_tconns))) {
         cfs_wake_event(&ks_data.ksnd_tconn_exit);
     }
 	spin_unlock(&(ks_data.ksnd_tconn_lock));
@@ -5972,8 +5971,8 @@ kmem_cache_destroy(ks_data.ksnd_tconn_slab);
 
     /* clean up all the tsud buffers in the free list */
 	spin_lock(&(ks_data.ksnd_tsdu_lock));
-    cfs_list_for_each (list, &ks_data.ksnd_freetsdus) {
-        KsTsdu = cfs_list_entry (list, KS_TSDU, Link);
+    list_for_each (list, &ks_data.ksnd_freetsdus) {
+	KsTsdu = list_entry (list, KS_TSDU, Link);
 
 	kmem_cache_free(
                 ks_data.ksnd_tsdu_slab,
@@ -6108,7 +6107,7 @@ ks_replenish_backlogs(
         if (backlog) {
 	    spin_lock(&backlog->kstc_lock);
             /* attch it into the listing list of daemon */
-            cfs_list_add( &backlog->child.kstc_link,
+	    list_add( &backlog->child.kstc_link,
                       &parent->listener.kstc_listening.list );
             parent->listener.kstc_listening.num++;
 
@@ -6165,7 +6164,7 @@ ks_start_listen(ks_tconn_t *tconn, int nbacklog)
 void
 ks_stop_listen(ks_tconn_t *tconn)
 {
-    cfs_list_t *            list;
+    struct list_head *            list;
     ks_tconn_t *            backlog;
 
     /* reset all tdi event callbacks to NULL */
@@ -6176,8 +6175,8 @@ ks_stop_listen(ks_tconn_t *tconn)
     cfs_clear_flag(tconn->kstc_flags, KS_TCONN_DAEMON_STARTED);
 
     /* cleanup all the listening backlog child connections */
-    cfs_list_for_each (list, &(tconn->listener.kstc_listening.list)) {
-        backlog = cfs_list_entry(list, ks_tconn_t, child.kstc_link);
+    list_for_each (list, &(tconn->listener.kstc_listening.list)) {
+	backlog = list_entry(list, ks_tconn_t, child.kstc_link);
 
         /* destory and free it */
         ks_put_tconn(backlog);
@@ -6214,7 +6213,7 @@ ks_wait_child_tconn(
     ks_tconn_t **   child
     )
 {
-    cfs_list_t * tmp;
+    struct list_head * tmp;
     ks_tconn_t * backlog = NULL;
 
     ks_replenish_backlogs(parent, parent->listener.nbacklog);
@@ -6230,8 +6229,8 @@ again:
 
     /* check the listening queue and try to search the accepted connecton */
 
-    cfs_list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
-        backlog = cfs_list_entry (tmp, ks_tconn_t, child.kstc_link);
+    list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
+	backlog = list_entry (tmp, ks_tconn_t, child.kstc_link);
 
 	spin_lock(&(backlog->kstc_lock));
 
@@ -6240,8 +6239,8 @@ again:
             LASSERT(backlog->kstc_state == ksts_connected);
             LASSERT(backlog->child.kstc_busy);
 
-            cfs_list_del(&(backlog->child.kstc_link));
-            cfs_list_add(&(backlog->child.kstc_link),
+	    list_del(&(backlog->child.kstc_link));
+	    list_add(&(backlog->child.kstc_link),
                          &(parent->listener.kstc_accepted.list));
             parent->listener.kstc_accepted.num++;
             parent->listener.kstc_listening.num--;

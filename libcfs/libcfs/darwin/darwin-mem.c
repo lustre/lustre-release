@@ -54,8 +54,8 @@ extern void *zalloc_noblock(zone_t zone);
 extern void zfree(zone_t zone, void *addr);
 
 struct cfs_zone_nob {
-        struct list_head       *z_nob;  /* Pointer to z_link */
-        struct list_head        z_link; /* Do NOT access it directly */       
+	struct list_head	*z_nob;	/* Pointer to z_link */
+	struct list_head	z_link;	/* Do NOT access it directly */
 };
 
 static struct cfs_zone_nob      cfs_zone_nob;
@@ -96,25 +96,25 @@ struct kmem_cache *mem_cache_create(vm_size_t objsize, const char *name)
 		return NULL;
 	}
 
-        cname = _MALLOC(strlen(name) + 1, M_TEMP, M_WAITOK);
-        LASSERT(cname != NULL);
-        mc->mc_cache = zinit(objsize, (KMEM_MAX_ZONE * objsize), 0, strcpy(cname, name));
-        mc->mc_size = objsize;
-        CFS_INIT_LIST_HEAD(&mc->mc_link);
-        strncpy(mc->mc_name, name, 1 + strlen(name));
-        return mc;
+	cname = _MALLOC(strlen(name) + 1, M_TEMP, M_WAITOK);
+	LASSERT(cname != NULL);
+	mc->mc_cache = zinit(objsize, (KMEM_MAX_ZONE * objsize), 0, strcpy(cname, name));
+	mc->mc_size = objsize;
+	INIT_LIST_HEAD(&mc->mc_link);
+	strncpy(mc->mc_name, name, 1 + strlen(name));
+	return mc;
 }
 
 void mem_cache_destroy(struct kmem_cache *mc)
 {
-        /*
-         * zone can NOT be destroyed after creating, 
-         * so just keep it in list.
-         *
-         * We will not lost a zone after we unload
-         * libcfs, it can be found by from libcfs.zone
-         */
-        return;
+	/*
+	 * zone can NOT be destroyed after creating,
+	 * so just keep it in list.
+	 *
+	 * We will not lost a zone after we unload
+	 * libcfs, it can be found by from libcfs.zone
+	 */
+	return;
 }
 
 #define mem_cache_alloc(mc)     zalloc((mc)->mc_cache)
@@ -459,26 +459,26 @@ int cfs_mem_init(void)
 
                 assert(cfs_sysctl_isvalid());
 
-                nob = _MALLOC(sizeof(struct cfs_zone_nob), 
-                              M_TEMP, M_WAITOK | M_ZERO);
-                CFS_INIT_LIST_HEAD(&nob->z_link);
-                nob->z_nob = &nob->z_link;
-                oid = cfs_alloc_sysctl_struct(NULL, OID_AUTO, CTLFLAG_RD | CTLFLAG_KERN, 
-                                              "zone", nob, sizeof(struct cfs_zone_nob));
-                if (oid == NULL) {
-                        _FREE(nob, M_TEMP);
-                        return -ENOMEM;
-                }
-                sysctl_register_oid(oid);
+		nob = _MALLOC(sizeof(struct cfs_zone_nob),
+				M_TEMP, M_WAITOK | M_ZERO);
+		INIT_LIST_HEAD(&nob->z_link);
+		nob->z_nob = &nob->z_link;
+		oid = cfs_alloc_sysctl_struct(NULL, OID_AUTO, CTLFLAG_RD | CTLFLAG_KERN,
+						"zone", nob, sizeof(struct cfs_zone_nob));
+		if (oid == NULL) {
+			_FREE(nob, M_TEMP);
+			return -ENOMEM;
+		}
+		sysctl_register_oid(oid);
 
-                cfs_zone_nob.z_nob = nob->z_nob;
-        }
+		cfs_zone_nob.z_nob = nob->z_nob;
+	}
 	spin_lock_init(&cfs_zone_guard);
 #endif
-	CFS_INIT_LIST_HEAD(&page_death_row);
+	INIT_LIST_HEAD(&page_death_row);
 	spin_lock_init(&page_death_row_phylax);
 	raw_page_cache = kmem_cache_create("raw-page", PAGE_CACHE_SIZE,
-					   0, 0, NULL);
+						0, 0, NULL);
 	return 0;
 }
 

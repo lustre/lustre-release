@@ -44,16 +44,16 @@
 #include "tracefile.h"
 
 struct lc_watchdog {
-	spinlock_t  lcw_lock;     /* check or change lcw_list */
-	int             lcw_refcount; /* must hold lcw_pending_timers_lock */
-	struct timer_list     lcw_timer;    /* kernel timer */
-	cfs_list_t      lcw_list;     /* chain on pending list */
-	cfs_time_t      lcw_last_touched; /* last touched stamp */
-	struct task_struct     *lcw_task;     /* owner task */
-	void          (*lcw_callback)(pid_t, void *);
-	void           *lcw_data;
+	spinlock_t		lcw_lock;	/* check or change lcw_list */
+	int			lcw_refcount;	/* must hold lcw_pending_timers_lock */
+	struct timer_list	lcw_timer;	/* kernel timer */
+	struct list_head	lcw_list;	/* chain on pending list */
+	cfs_time_t		lcw_last_touched;/* last touched stamp */
+	struct task_struct     *lcw_task;	/* owner task */
+	void			(*lcw_callback)(pid_t, void *);
+	void			*lcw_data;
 
-	pid_t           lcw_pid;
+	pid_t			lcw_pid;
 
 	enum {
 		LC_WATCHDOG_DISABLED,
@@ -94,7 +94,7 @@ static DEFINE_MUTEX(lcw_refcount_mutex);
  */
 /* BH lock! */
 static DEFINE_SPINLOCK(lcw_pending_timers_lock);
-static cfs_list_t lcw_pending_timers = CFS_LIST_HEAD_INIT(lcw_pending_timers);
+static struct list_head lcw_pending_timers = LIST_HEAD_INIT(lcw_pending_timers);
 
 /* Last time a watchdog expired */
 static cfs_time_t lcw_last_watchdog_time;
@@ -130,11 +130,11 @@ static void lcw_cb(ulong_ptr_t data)
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
 
 	spin_lock_bh(&lcw->lcw_lock);
-	LASSERT(cfs_list_empty(&lcw->lcw_list));
+	LASSERT(list_empty(&lcw->lcw_list));
 
 	spin_lock_bh(&lcw_pending_timers_lock);
 	lcw->lcw_refcount++; /* +1 for pending list */
-	cfs_list_add(&lcw->lcw_list, &lcw_pending_timers);
+	list_add(&lcw->lcw_list, &lcw_pending_timers);
 	wake_up(&lcw_event_waitq);
 
 	spin_unlock_bh(&lcw_pending_timers_lock);
@@ -150,7 +150,7 @@ static int is_watchdog_fired(void)
 		return 1;
 
 	spin_lock_bh(&lcw_pending_timers_lock);
-	rc = !cfs_list_empty(&lcw_pending_timers);
+	rc = !list_empty(&lcw_pending_timers);
 	spin_unlock_bh(&lcw_pending_timers_lock);
 	return rc;
 }
@@ -206,7 +206,7 @@ static int lcw_dispatch_main(void *data)
 {
         int                 rc = 0;
         struct lc_watchdog *lcw;
-        CFS_LIST_HEAD      (zombies);
+	struct list_head zombies = LIST_HEAD_INIT(zombies);
 
         ENTRY;
 
@@ -222,7 +222,7 @@ static int lcw_dispatch_main(void *data)
 			CDEBUG(D_INFO, "LCW_FLAG_STOP set, shutting down...\n");
 
 			spin_lock_bh(&lcw_pending_timers_lock);
-			rc = !cfs_list_empty(&lcw_pending_timers);
+			rc = !list_empty(&lcw_pending_timers);
 			spin_unlock_bh(&lcw_pending_timers_lock);
 			if (rc) {
 				CERROR("pending timers list was not empty at "
@@ -232,32 +232,32 @@ static int lcw_dispatch_main(void *data)
 		}
 
 		spin_lock_bh(&lcw_pending_timers_lock);
-                while (!cfs_list_empty(&lcw_pending_timers)) {
-                        int is_dumplog;
+		while (!list_empty(&lcw_pending_timers)) {
+			int is_dumplog;
 
-                        lcw = cfs_list_entry(lcw_pending_timers.next,
-                                             struct lc_watchdog, lcw_list);
-                        /* +1 ref for callback to make sure lwc wouldn't be
-                         * deleted after releasing lcw_pending_timers_lock */
-                        lcw->lcw_refcount++;
+			lcw = list_entry(lcw_pending_timers.next,
+					 struct lc_watchdog, lcw_list);
+			/* +1 ref for callback to make sure lwc wouldn't be
+			 * deleted after releasing lcw_pending_timers_lock */
+			lcw->lcw_refcount++;
 			spin_unlock_bh(&lcw_pending_timers_lock);
 
 			/* lock ordering */
 			spin_lock_bh(&lcw->lcw_lock);
 			spin_lock_bh(&lcw_pending_timers_lock);
 
-			if (cfs_list_empty(&lcw->lcw_list)) {
+			if (list_empty(&lcw->lcw_list)) {
 				/* already removed from pending list */
 				lcw->lcw_refcount--; /* -1 ref for callback */
 				if (lcw->lcw_refcount == 0)
-					cfs_list_add(&lcw->lcw_list, &zombies);
+					list_add(&lcw->lcw_list, &zombies);
 				spin_unlock_bh(&lcw->lcw_lock);
-                                /* still hold lcw_pending_timers_lock */
-                                continue;
-                        }
+				/* still hold lcw_pending_timers_lock */
+				continue;
+			}
 
-                        cfs_list_del_init(&lcw->lcw_list);
-                        lcw->lcw_refcount--; /* -1 ref for pending list */
+			list_del_init(&lcw->lcw_list);
+			lcw->lcw_refcount--; /* -1 ref for pending list */
 
 			spin_unlock_bh(&lcw_pending_timers_lock);
 			spin_unlock_bh(&lcw->lcw_lock);
@@ -277,14 +277,14 @@ static int lcw_dispatch_main(void *data)
 			spin_lock_bh(&lcw_pending_timers_lock);
 			lcw->lcw_refcount--; /* -1 ref for callback */
 			if (lcw->lcw_refcount == 0)
-				cfs_list_add(&lcw->lcw_list, &zombies);
+				list_add(&lcw->lcw_list, &zombies);
 		}
 		spin_unlock_bh(&lcw_pending_timers_lock);
 
-		while (!cfs_list_empty(&zombies)) {
-			lcw = cfs_list_entry(zombies.next,
+		while (!list_empty(&zombies)) {
+			lcw = list_entry(zombies.next,
 					     struct lc_watchdog, lcw_list);
-			cfs_list_del_init(&lcw->lcw_list);
+			list_del_init(&lcw->lcw_list);
 			LIBCFS_FREE(lcw, sizeof(*lcw));
 		}
 	}
@@ -357,8 +357,8 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 	lcw->lcw_data     = data;
 	lcw->lcw_state    = LC_WATCHDOG_DISABLED;
 
-        CFS_INIT_LIST_HEAD(&lcw->lcw_list);
-        cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
+	INIT_LIST_HEAD(&lcw->lcw_list);
+	cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
 
 	mutex_lock(&lcw_refcount_mutex);
 	if (++lcw_refcount == 1)
@@ -401,9 +401,9 @@ static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 static void lc_watchdog_del_pending(struct lc_watchdog *lcw)
 {
 	spin_lock_bh(&lcw->lcw_lock);
-	if (unlikely(!cfs_list_empty(&lcw->lcw_list))) {
+	if (unlikely(!list_empty(&lcw->lcw_list))) {
 		spin_lock_bh(&lcw_pending_timers_lock);
-		cfs_list_del_init(&lcw->lcw_list);
+		list_del_init(&lcw->lcw_list);
 		lcw->lcw_refcount--; /* -1 ref for pending list */
 		spin_unlock_bh(&lcw_pending_timers_lock);
 	}
@@ -455,8 +455,8 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 
 	spin_lock_bh(&lcw->lcw_lock);
 	spin_lock_bh(&lcw_pending_timers_lock);
-	if (unlikely(!cfs_list_empty(&lcw->lcw_list))) {
-		cfs_list_del_init(&lcw->lcw_list);
+	if (unlikely(!list_empty(&lcw->lcw_list))) {
+		list_del_init(&lcw->lcw_list);
 		lcw->lcw_refcount--; /* -1 ref for pending list */
 	}
 

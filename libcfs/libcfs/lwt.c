@@ -114,13 +114,13 @@ lwt_control (int enable, int clear)
                 if (!clear)
                         continue;
 
-                for (j = 0; j < lwt_pages_per_cpu; j++) {
+		for (j = 0; j < lwt_pages_per_cpu; j++) {
 			memset(p->lwtp_events, 0, PAGE_CACHE_SIZE);
 
-                        p = cfs_list_entry (p->lwtp_list.next,
-                                            lwt_page_t, lwtp_list);
-                }
-        }
+			p = list_entry(p->lwtp_list.next,
+					lwt_page_t, lwtp_list);
+		}
+	}
 
 	if (enable) {
 		lwt_enabled = 1;
@@ -162,13 +162,12 @@ lwt_snapshot(cfs_cycles_t *now, int *ncpu, int *total_size,
 					 bytes_per_page))
 				return -EFAULT;
 
-                        user_ptr = ((char *)user_ptr) + bytes_per_page;
-                        p = cfs_list_entry(p->lwtp_list.next,
-                                           lwt_page_t, lwtp_list);
-                }
-        }
-
-        return (0);
+			user_ptr = ((char *)user_ptr) + bytes_per_page;
+			p = list_entry(p->lwtp_list.next,
+					lwt_page_t, lwtp_list);
+		}
+	}
+	return (0);
 }
 
 int lwt_init ()
@@ -210,11 +209,11 @@ int lwt_init ()
 			memset(lwtp->lwtp_events, 0, PAGE_CACHE_SIZE);
 
 			if (j == 0) {
-				CFS_INIT_LIST_HEAD (&lwtp->lwtp_list);
+				INIT_LIST_HEAD (&lwtp->lwtp_list);
 				lwt_cpus[i].lwtc_current_page = lwtp;
 			} else {
-				cfs_list_add (&lwtp->lwtp_list,
-				    &lwt_cpus[i].lwtc_current_page->lwtp_list);
+				list_add(&lwtp->lwtp_list,
+					&lwt_cpus[i].lwtc_current_page->lwtp_list);
 			}
                 }
 
@@ -236,19 +235,17 @@ void lwt_fini ()
 		while (lwt_cpus[i].lwtc_current_page != NULL) {
 			lwt_page_t *lwtp = lwt_cpus[i].lwtc_current_page;
 
-                        if (cfs_list_empty (&lwtp->lwtp_list)) {
-                                lwt_cpus[i].lwtc_current_page = NULL;
-                        } else {
-                                lwt_cpus[i].lwtc_current_page =
-                                        cfs_list_entry (lwtp->lwtp_list.next,
-                                                        lwt_page_t, lwtp_list);
-
-                                cfs_list_del (&lwtp->lwtp_list);
-                        }
-                        
-                        __free_page (lwtp->lwtp_page);
-                        LIBCFS_FREE (lwtp, sizeof (*lwtp));
-                }
+			if (list_empty (&lwtp->lwtp_list)) {
+				lwt_cpus[i].lwtc_current_page = NULL;
+			} else {
+				lwt_cpus[i].lwtc_current_page =
+					list_entry(lwtp->lwtp_list.next,
+							lwt_page_t, lwtp_list);
+				list_del (&lwtp->lwtp_list);
+			}
+			__free_page (lwtp->lwtp_page);
+			LIBCFS_FREE (lwtp, sizeof (*lwtp));
+		}
 }
 
 EXPORT_SYMBOL(lwt_enabled);

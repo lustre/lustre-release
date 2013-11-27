@@ -125,9 +125,9 @@ union cfs_trace_data_union {
 		/*
 		 * pages with trace records not yet processed by tracefiled.
 		 */
-		cfs_list_t              tcd_pages;
+		struct list_head	tcd_pages;
 		/* number of pages on ->tcd_pages */
-		unsigned long           tcd_cur_pages;
+		unsigned long		tcd_cur_pages;
 
 		/*
 		 * pages with trace records already processed by
@@ -139,9 +139,9 @@ union cfs_trace_data_union {
 		 * (put_pages_on_daemon_list()). LRU pages from this list are
 		 * discarded when list grows too large.
 		 */
-		cfs_list_t              tcd_daemon_pages;
+		struct list_head	tcd_daemon_pages;
 		/* number of pages on ->tcd_daemon_pages */
-		unsigned long           tcd_cur_daemon_pages;
+		unsigned long		tcd_cur_daemon_pages;
 
 		/*
 		 * Maximal number of pages allowed on ->tcd_pages and
@@ -173,7 +173,7 @@ union cfs_trace_data_union {
 		 * TCD_STOCK_PAGES pagesful are consumed by trace records all
 		 * emitted in non-blocking contexts. Which is quite unlikely.
 		 */
-		cfs_list_t              tcd_stock_pages;
+		struct list_head	tcd_stock_pages;
 		/* number of pages on ->tcd_stock_pages */
 		unsigned long           tcd_cur_stock_pages;
 
@@ -203,13 +203,13 @@ extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[NR_CPUS];
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
 struct page_collection {
-	cfs_list_t	pc_pages;
+	struct list_head	pc_pages;
 	/*
 	 * if this flag is set, collect_pages() will spill both
 	 * ->tcd_daemon_pages and ->tcd_pages to the ->pc_pages. Otherwise,
 	 * only ->tcd_pages are spilled.
 	 */
-	int		pc_want_daemon_pages;
+	int			pc_want_daemon_pages;
 };
 
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
@@ -231,24 +231,24 @@ struct cfs_trace_page {
 	/*
 	 * page itself
 	 */
-	struct page          *page;
+	struct page		*page;
 	/*
 	 * linkage into one of the lists in trace_data_union or
 	 * page_collection
 	 */
-	cfs_list_t           linkage;
+	struct list_head	linkage;
 	/*
 	 * number of bytes used within this page
 	 */
-	unsigned int         used;
+	unsigned int		used;
 	/*
 	 * cpu that owns this page
 	 */
-	unsigned short       cpu;
+	unsigned short		cpu;
 	/*
 	 * type(context) of this page
 	 */
-	unsigned short       type;
+	unsigned short		type;
 };
 
 extern void cfs_set_ptldebug_header(struct ptldebug_header *header,
@@ -302,7 +302,7 @@ static inline void cfs_trace_put_tcd(struct cfs_trace_cpu_data *tcd)
 }
 
 int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, int gfp,
-                           cfs_list_t *stock);
+				struct list_head *stock);
 
 
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,

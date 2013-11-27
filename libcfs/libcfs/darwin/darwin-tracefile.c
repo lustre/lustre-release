@@ -110,17 +110,17 @@ struct trace_cpu_data *trace_get_tcd(void)
 	 * debugging check for recursive call to libcfs_debug_msg()
 	 */
 	if (trace_owner == current_thread()) {
-                /*
-                 * Cannot assert here.
-                 */
+		/*
+		 * Cannot assert here.
+		 */
 		printk(KERN_EMERG "recursive call to %s", __FUNCTION__);
 		/*
-                 * "The death of God left the angels in a strange position."
+		 * "The death of God left the angels in a strange position."
 		 */
 		cfs_enter_debugger();
 	}
 	tcd = &trace_data[0].tcd;
-        CFS_INIT_LIST_HEAD(&pages);
+	INIT_LIST_HEAD(&pages);
 	if (get_preemption_level() == 0)
 		nr_pages = trace_refill_stock(tcd, GFP_IOFS, &pages);
 	else

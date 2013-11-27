@@ -253,15 +253,15 @@ extern void *kmem_cache_alloc(struct kmem_cache *, int);
 extern void kmem_cache_free(struct kmem_cache *, void *);
 
 /*
- * shrinker 
+ * shrinker
  */
 typedef int (*shrink_callback)(int nr_to_scan, gfp_t gfp_mask);
 struct shrinker {
-        shrink_callback cb;
+	shrink_callback cb;
 	int seeks;	/* seeks to recreate an obj */
 
 	/* These are for internal use */
-	cfs_list_t list;
+	struct list_head list;
 	long nr;	/* objs pending delete */
 };
 
@@ -272,7 +272,7 @@ int start_shrinker_timer();
 void stop_shrinker_timer();
 
 /*
- * Page allocator slabs 
+ * Page allocator slabs
  */
 
 extern struct kmem_cache *cfs_page_t_slab;

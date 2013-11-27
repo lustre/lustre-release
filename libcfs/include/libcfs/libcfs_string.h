@@ -79,15 +79,15 @@ struct cfs_range_expr {
 	/*
 	 * Link to cfs_expr_list::el_exprs.
 	 */
-	cfs_list_t	re_link;
-	__u32		re_lo;
-	__u32		re_hi;
-	__u32		re_stride;
+	struct list_head	re_link;
+	__u32			re_lo;
+	__u32			re_hi;
+	__u32			re_stride;
 };
 
 struct cfs_expr_list {
-	cfs_list_t	el_link;
-	cfs_list_t	el_exprs;
+	struct list_head	el_link;
+	struct list_head	el_exprs;
 };
 
 static inline int
@@ -127,10 +127,10 @@ void cfs_expr_list_free(struct cfs_expr_list *expr_list);
 void cfs_expr_list_print(struct cfs_expr_list *expr_list);
 int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 			struct cfs_expr_list **elpp);
-void cfs_expr_list_free_list(cfs_list_t *list);
-int cfs_ip_addr_parse(char *str, int len, cfs_list_t *list);
-int cfs_ip_addr_match(__u32 addr, cfs_list_t *list);
-void cfs_ip_addr_free(cfs_list_t *list);
+void cfs_expr_list_free_list(struct list_head *list);
+int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
+int cfs_ip_addr_match(__u32 addr, struct list_head *list);
+void cfs_ip_addr_free(struct list_head *list);
 
 #ifdef __KERNEL__
 #define	strtoul(str, endp, base)	simple_strtoul(str, endp, base)

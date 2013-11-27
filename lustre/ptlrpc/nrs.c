@@ -50,13 +50,7 @@
 #include <libcfs/libcfs.h>
 #include "ptlrpc_internal.h"
 
-/* XXX: This is just for liblustre. Remove the #if defined directive when the
- * "cfs_" prefix is dropped from cfs_list_head. */
-#if defined (__linux__) && defined(__KERNEL__)
 extern struct list_head ptlrpc_all_services;
-#else
-extern struct cfs_list_head ptlrpc_all_services;
-#endif
 
 /**
  * NRS core object.
