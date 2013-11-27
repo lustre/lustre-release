@@ -1,19 +1,6 @@
 SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
 DIST_SUBDIRS := ldiskfs @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre config contrib
 
-@TESTS_TRUE@BUILD_TESTS = true
-@TESTS_FALSE@BUILD_TESTS = false
-@SERVER_TRUE@BUILD_SERVER = true
-@SERVER_FALSE@BUILD_SERVER = false
-@CLIENT_TRUE@BUILD_CLIENT = true
-@CLIENT_FALSE@BUILD_CLIENT = false
-@LDISKFS_ENABLED_TRUE@BUILD_OSD_LDISKFS = true
-@LDISKFS_ENABLED_FALSE@BUILD_OSD_LDISKFS = false
-@ZFS_ENABLED_TRUE@BUILD_OSD_ZFS = true
-@ZFS_ENABLED_FALSE@BUILD_OSD_ZFS = false
-@BUILD_LUSTREIOKIT_TRUE@BUILD_LUSTREIOKIT = true
-@BUILD_LUSTREIOKIT_FALSE@BUILD_LUSTREIOKIT = false
-
 AUTOMAKE_OPTIONS = foreign
 
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
@@ -100,73 +87,10 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/gen_filelist.sh
 
 rpms: @PACKAGE_TARNAME@.spec dist Makefile
-	@CONFIGURE_ARGS=""; \
-	for arg in $(ac_configure_args); do \
-		case $$arg in \
-			--with-release=* ) ;; \
-			--with-kmp-moddir=* ) ;; \
-			--enable-tests | --disable-tests ) ;; \
-			--with-linux=* | --with-linux-obj=* ) ;; \
-			* ) CONFIGURE_ARGS="$$CONFIGURE_ARGS '$$arg'" ;; \
-		esac; \
-	done; \
-	RPMARGS="--define \"configure_args $$CONFIGURE_ARGS\""; \
-	if [ -n "@LINUX@" ]; then  \
-		RPMARGS="$$RPMARGS --define \"kdir @LINUX@\""; \
-		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
-			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
-		fi; \
-	fi; \
-	if [ -n "@KMP_MODDIR@" ]; then \
-		RPMARGS="$$RPMARGS --define \"kmoddir @KMP_MODDIR@\""; \
-	fi; \
-	if [ -n "@CROSS_PATH@" ]; then \
-		if [[ "X$(BUILD_SERVER)" = Xtrue ]]; then \
-			echo -e "\n" \
-			"*** Don't support cross compilation for the Intel(R) Xeon Phi(TM) card.\n"; \
-			exit 1; \
-		fi; \
-		CROSS_SUFFIX="-mic"; \
-		RPMARGS="$$RPMARGS --define \"post_script build/gen_filelist.sh\""; \
-		RPMARGS="$$RPMARGS --define \"cross_path @CROSS_PATH@\""; \
-		RPMARGS="$$RPMARGS --define \"rootdir %{cross_path}\""; \
-		RPMARGS="$$RPMARGS --define \"_prefix %{cross_path}/usr\""; \
-		RPMARGS="$$RPMARGS --define \"_mandir %{_prefix}/share/man\""; \
-		RPMARGS="$$RPMARGS --define \"_sysconfdir %{cross_path}/etc\""; \
-		RPMARGS="$$RPMARGS --define \"make_args @CROSS_VARS@\""; \
-		if [ "@CC_TARGET_ARCH@" = "x86_64-k1om-linux" ]; then \
-			RPMARGS="$$RPMARGS --define \"cross_requires intel-mic-gpl\""; \
-		fi; \
-	fi; \
-	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --without lustre_tests"; \
-	fi; \
-	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --without servers"; \
-		if [ -n "$$CROSS_SUFFIX" ]; then \
-			RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
-		fi; \
-	fi; \
-	if [[ "X$(BUILD_OSD_LDISKFS)" = Xfalse ]]; then \
-		RPMARGS="$$RPMARGS --without ldiskfs"; \
-	fi; \
-	if [[ "X$(BUILD_OSD_ZFS)" = Xtrue ]]; then \
-		RPMARGS="$$RPMARGS --with zfs"; \
-	fi; \
-        if [[ "X$(BUILD_LUSTREIOKIT)" = Xfalse ]]; then \
-                RPMARGS="$$RPMARGS --without lustre_iokit"; \
-        fi; \
-	echo "Building Lustre RPM with $$RPMARGS"; \
-	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
+	rpmbuild @RPMBUILD_BINARY_ARGS@ -ta $(distdir).tar.gz
 
 srpm: @PACKAGE_TARNAME@.spec dist Makefile
-	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
-		RPMARGS="--without lustre_tests"; \
-	fi; \
-        if [[ "X$(BUILD_LUSTREIOKIT)" = Xfalse ]]; then \
-                RPMARGS="$$RPMARGS --without lustre_iokit"; \
-        fi; \
-	eval rpmbuild $$RPMARGS -ts $(distdir).tar.gz
+	rpmbuild @RPMBUILD_SOURCE_ARGS@ -ts $(distdir).tar.gz
 
 # In the debs target, first make sure what's in the changelog reflects
 # the software version.  Here's how we could dig the version out of the

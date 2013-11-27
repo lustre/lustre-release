@@ -629,6 +629,89 @@ AS_IF([test x$enable_server = xyes],
 )
 ])
 
+
+#
+# LB_CONFIG_RPMBUILD_OPTIONS
+#
+# The purpose of this function is to assemble command line options
+# for the rpmbuild command based on the options passed to the configure
+# script, and also upon the descisions that configure makes based on
+# the tests that it runs.
+# These strings can be passed to rpmbuild on the command line
+# in the Make targets named "rpms" and "srpm".
+#
+AC_DEFUN([LB_CONFIG_RPMBUILD_OPTIONS],[
+	RPMBINARGS=
+	RPMSRCARGS=
+	CONFIGURE_ARGS=
+	eval set -- $ac_configure_args
+	for arg; do
+		case $arg in
+			--with-release=* ) ;;
+			--with-kmp-moddir=* ) ;;
+			--enable-tests | --disable-tests ) ;;
+			--with-linux=* | --with-linux-obj=* ) ;;
+			* ) CONFIGURE_ARGS="$CONFIGURE_ARGS '$arg'" ;;
+		esac
+	done
+	if test -n "$CONFIGURE_ARGS" ; then
+		RPMBINARGS="$RPMBINARGS --define \"configure_args $CONFIGURE_ARGS\""
+	fi
+	if test -n "$LINUX" ; then
+		RPMBINARGS="$RPMBINARGS --define \"kdir $LINUX\""
+		if test -n "$LINUX_OBJ" -a "$LINUX_OBJ" != x"$LINUX" ; then
+			RPMBINARGS="$RPMBINARGS --define \"kobjdir $LINUX_OBJ\""
+		fi
+	fi
+	if test -n "$KMP_MODDIR" ; then
+		RPMBINARGS="$RPMBINARGS --define \"kmoddir $KMP_MODDIR\""
+	fi
+	if test -n "$CROSS_PATH" ; then
+		if test x$enable_server = xyes ; then
+			echo -e "\n"
+			"*** Don't support cross compilation for the Intel(R) Xeon Phi(TM) card.\n"
+			exit 1
+		fi
+		CROSS_SUFFIX="-mic"
+		RPMBINARGS="$RPMBINARGS --define \"post_script build/gen_filelist.sh\""
+		RPMBINARGS="$RPMBINARGS --define \"cross_path $CROSS_PATH\""
+		RPMBINARGS="$RPMBINARGS --define \"rootdir %{cross_path}\""
+		RPMBINARGS="$RPMBINARGS --define \"_prefix %{cross_path}/usr\""
+		RPMBINARGS="$RPMBINARGS --define \"_mandir %{_prefix}/share/man\""
+		RPMBINARGS="$RPMBINARGS --define \"_sysconfdir %{cross_path}/etc\""
+		RPMBINARGS="$RPMBINARGS --define \"make_args $CROSS_VARS\""
+		if test x$CC_TARGET_ARCH = x"x86_64-k1om-linux" ; then
+			RPMBINARGS="$RPMBINARGS --define \"cross_requires intel-mic-gpl\""
+		fi
+	fi
+	if test x$enable_tests != xyes ; then
+		RPMBINARGS="$RPMBINARGS --without lustre_tests"
+		RPMSRCARGS="$RPMSRCARGS --without lustre_tests";
+	fi
+	if test x$enable_server != xyes ; then
+		RPMBINARGS="$RPMBINARGS --without servers"
+		if test -n "$CROSS_SUFFIX" ; then
+			RPMBINARGS="$RPMBINARGS --define \"lustre_name lustre-client$CROSS_SUFFIX\""
+		fi
+	fi
+	if test x$enable_ldiskfs != xyes ; then
+		RPMBINARGS="$RPMBINARGS --without ldiskfs"
+	fi
+	if test x$enable_zfs = xyes ; then
+		RPMBINARGS="$RPMBINARGS --with zfs"
+	fi
+	if test x$enable_iokit != xyes ; then
+		RPMBINARGS="$RPMBINARGS --without lustre_iokit"
+		RPMSRCARGS="$RPMSRCARGS --without lustre_iokit"
+	fi
+
+	RPMBUILD_BINARY_ARGS=$RPMBINARGS
+	RPMBUILD_SOURCE_ARGS=$RPMSRCARGS
+
+	AC_SUBST(RPMBUILD_BINARY_ARGS)
+	AC_SUBST(RPMBUILD_SOURCE_ARGS)
+])
+
 #
 # LB_CONFIGURE
 #
@@ -699,6 +782,8 @@ AC_SUBST(ac_configure_args)
 
 MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
 AC_SUBST(MOSTLYCLEANFILES)
+
+LB_CONFIG_RPMBUILD_OPTIONS
 
 AC_OUTPUT
 
