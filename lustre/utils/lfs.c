@@ -2572,13 +2572,13 @@ static void kbytes2str(__u64 num, char *buf, bool h)
 		sprintf(buf, LPU64, num);
 	} else {
 		if (num >> 30)
-			sprintf(buf, LPU64"%s", num >> 30, "T");
+			sprintf(buf, "%5.4gT", (double)num / (1 << 30));
 		else if (num >> 20)
-			sprintf(buf, LPU64"%s", num >> 20, "G");
+			sprintf(buf, "%5.4gG", (double)num / (1 << 20));
 		else if (num >> 10)
-			sprintf(buf, LPU64"%s", num >> 10, "M");
+			sprintf(buf, "%5.4gM", (double)num / (1 << 10));
 		else
-			sprintf(buf, LPU64"%s", num, "K");
+			sprintf(buf, LPU64"%s", num, "k");
 	}
 }
 
@@ -2869,11 +2869,11 @@ ug_output:
 	    verbose) {
 		char strbuf[32];
 
-		kbytes2str(total_balloc, strbuf, human_readable);
 		rc2 = print_obd_quota(mnt, &qctl, 1, human_readable,
 				      &total_ialloc);
 		rc3 = print_obd_quota(mnt, &qctl, 0, human_readable,
 				      &total_balloc);
+		kbytes2str(total_balloc, strbuf, human_readable);
 		printf("Total allocated inode limit: "LPU64", total "
 		       "allocated block limit: %s\n", total_ialloc, strbuf);
 	}
