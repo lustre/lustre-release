@@ -3861,6 +3861,15 @@ test_68() {
 run_test 68 "be able to reserve specific sequences in FLDB"
 
 test_69() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -lt $(version_code 2.4.2) ]] &&
+		skip "Need MDS version at least 2.4.2" && return
+
+	[[ $server_version -ge $(version_code 2.4.50) ]] &&
+	[[ $server_version -lt $(version_code 2.5.0) ]] &&
+		skip "Need MDS version at least 2.5.0" && return
+
 	setup
 
 	# use OST0000 since it probably has the most creations
