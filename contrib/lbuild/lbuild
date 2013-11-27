@@ -273,6 +273,8 @@ check_options() {
         DISTRO=${DISTRO/-/}
     fi
 
+    [ -z "$TARGET" ] && TARGET=$(autodetect_target "$DISTRO")
+
     if [ -z "$LINUX" ]; then
         [ "$KERNELDIR" -o "$KERNELTREE" ] || \
             usage 1 "A kernel directory must be specified with --kerneldir or --kerneltree."
@@ -280,7 +282,6 @@ check_options() {
         [ -d "$KERNELDIR" -o -d "$KERNELTREE" ] || \
             usage 1 "$KERNELDIR and $KERNELTREE are not a directory."
 
-        [ "$TARGET" ] || TARGET=$(autodetect_target "$DISTRO")
 #       TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
 #       [ -r "$TARGET_FILE" ] || \
 #               usage 1 "Target '$TARGET' was not found."
@@ -2190,6 +2191,9 @@ create_rpmbuild_dirs
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
 if [ -n "$LINUX" ]; then
+    find_linux_release() {
+        _find_linux_release $LINUX
+    }
     build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" ||
         fatal 1 "error building OFED"
     build_lustre "$LINUX" "$LINUXOBJ"
