@@ -967,25 +967,37 @@ static struct lu_device_type lod_device_type = {
 	.ldt_ctx_tags = LCT_MD_THREAD,
 };
 
-static int lod_obd_health_check(const struct lu_env *env,
-		struct obd_device *obd)
+static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
+			    __u32 keylen, void *key, __u32 *vallen, void *val,
+			    struct lov_stripe_md *lsm)
 {
-	struct lod_device   *d = lu2lod_dev(obd->obd_lu_dev);
-	struct lod_ost_desc *ost;
-	int                  i, rc = 1;
-	ENTRY;
+	int rc = -EINVAL;
 
-	LASSERT(d);
-	lod_getref(&d->lod_ost_descs);
-	lod_foreach_ost(d, i) {
-		ost = OST_TGT(d, i);
-		LASSERT(ost && ost->ltd_ost);
-		rc = obd_health_check(env, ost->ltd_exp->exp_obd);
-		/* one healthy device is enough */
-		if (rc == 0)
-			break;
+	if (KEY_IS(KEY_OSP_CONNECTED)) {
+		struct obd_device	*obd = exp->exp_obd;
+		struct lod_device	*d;
+		struct lod_ost_desc	*ost;
+		int			i, rc = 1;
+
+		if (!obd->obd_set_up || obd->obd_stopping)
+			RETURN(-EAGAIN);
+
+		d = lu2lod_dev(obd->obd_lu_dev);
+		lod_getref(&d->lod_ost_descs);
+		lod_foreach_ost(d, i) {
+			ost = OST_TGT(d, i);
+			LASSERT(ost && ost->ltd_ost);
+
+			rc = obd_get_info(env, ost->ltd_exp, keylen, key,
+					  vallen, val, lsm);
+			/* one healthy device is enough */
+			if (rc == 0)
+				break;
+		}
+		lod_putref(d, &d->lod_ost_descs);
+		RETURN(rc);
 	}
-	lod_putref(d, &d->lod_ost_descs);
+
 	RETURN(rc);
 }
 
@@ -993,7 +1005,7 @@ static struct obd_ops lod_obd_device_ops = {
 	.o_owner        = THIS_MODULE,
 	.o_connect      = lod_obd_connect,
 	.o_disconnect   = lod_obd_disconnect,
-	.o_health_check = lod_obd_health_check,
+	.o_get_info     = lod_obd_get_info,
 	.o_pool_new     = lod_pool_new,
 	.o_pool_rem     = lod_pool_remove,
 	.o_pool_add     = lod_pool_add,

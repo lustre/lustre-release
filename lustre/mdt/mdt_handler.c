@@ -5541,7 +5541,9 @@ static int mdt_obd_connect(const struct lu_env *env,
 	 */
 	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) && data != NULL &&
 	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
-		rc = obd_health_check(env, mdt->mdt_child_exp->exp_obd);
+		rc = obd_get_info(env, mdt->mdt_child_exp,
+				  sizeof(KEY_OSP_CONNECTED),
+				  KEY_OSP_CONNECTED, NULL, NULL, NULL);
 		if (rc)
 			RETURN(-EAGAIN);
 		set_bit(MDT_FL_SYNCED, &mdt->mdt_state);

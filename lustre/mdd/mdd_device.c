@@ -1156,15 +1156,26 @@ static int mdd_obd_disconnect(struct obd_export *exp)
 	RETURN(rc);
 }
 
-static int mdd_obd_health_check(const struct lu_env *env,
-				struct obd_device *obd)
+static int mdd_obd_get_info(const struct lu_env *env, struct obd_export *exp,
+			    __u32 keylen, void *key, __u32 *vallen, void *val,
+			    struct lov_stripe_md *lsm)
 {
-	struct mdd_device *mdd = lu2mdd_dev(obd->obd_lu_dev);
-	int		   rc;
-	ENTRY;
+	int rc = -EINVAL;
 
-	LASSERT(mdd);
-	rc = obd_health_check(env, mdd->mdd_child_exp->exp_obd);
+	if (KEY_IS(KEY_OSP_CONNECTED)) {
+		struct obd_device	*obd = exp->exp_obd;
+		struct mdd_device	*mdd;
+
+		if (!obd->obd_set_up || obd->obd_stopping)
+			RETURN(-EAGAIN);
+
+		mdd = lu2mdd_dev(obd->obd_lu_dev);
+		LASSERT(mdd);
+		rc = obd_get_info(env, mdd->mdd_child_exp, keylen, key, vallen,
+				  val, lsm);
+		RETURN(rc);
+	}
+
 	RETURN(rc);
 }
 
@@ -1172,7 +1183,7 @@ static struct obd_ops mdd_obd_device_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_connect	= mdd_obd_connect,
 	.o_disconnect	= mdd_obd_disconnect,
-	.o_health_check	= mdd_obd_health_check
+	.o_get_info     = mdd_obd_get_info,
 };
 
 static int mdd_changelog_user_register(const struct lu_env *env,

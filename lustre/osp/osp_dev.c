@@ -1108,20 +1108,30 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	return rc;
 }
 
-static int osp_obd_health_check(const struct lu_env *env,
-				struct obd_device *obd)
+static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
+			    __u32 keylen, void *key, __u32 *vallen, void *val,
+			    struct lov_stripe_md *lsm)
 {
-	struct osp_device *d = lu2osp_dev(obd->obd_lu_dev);
+	int rc = -EINVAL;
 
-	ENTRY;
+	if (KEY_IS(KEY_OSP_CONNECTED)) {
+		struct obd_device	*obd = exp->exp_obd;
+		struct osp_device	*osp;
 
-	/*
-	 * 1.8/2.0 behaviour is that OST being connected once at least
-	 * is considired "healthy". and one "healty" OST is enough to
-	 * allow lustre clients to connect to MDS
-	 */
-	LASSERT(d);
-	RETURN(!d->opd_imp_seen_connected);
+		if (!obd->obd_set_up || obd->obd_stopping)
+			RETURN(-EAGAIN);
+
+		osp = lu2osp_dev(obd->obd_lu_dev);
+		LASSERT(osp);
+		/*
+		 * 1.8/2.0 behaviour is that OST being connected once at least
+		 * is considered "healthy". and one "healthy" OST is enough to
+		 * allow lustre clients to connect to MDS
+		 */
+		RETURN(!osp->opd_imp_seen_connected);
+	}
+
+	RETURN(rc);
 }
 
 /* context key constructor/destructor: mdt_key_init, mdt_key_fini */
@@ -1178,7 +1188,7 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_reconnect	= osp_reconnect,
 	.o_connect	= osp_obd_connect,
 	.o_disconnect	= osp_obd_disconnect,
-	.o_health_check	= osp_obd_health_check,
+	.o_get_info     = osp_obd_get_info,
 	.o_import_event	= osp_import_event,
 	.o_iocontrol	= osp_iocontrol,
 	.o_statfs	= osp_obd_statfs,
