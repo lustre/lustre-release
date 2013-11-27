@@ -1033,6 +1033,7 @@ enum obd_cleanup_stage {
 #define KEY_CACHE_SET		"cache_set"
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_CHANGELOG_INDEX	"changelog_index"
+#define KEY_OSP_CONNECTED	"osp_connected"
 
 struct lu_context;
 
