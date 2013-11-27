@@ -1,3 +1,7 @@
+In dquot_initialize(), we'd call dqget() only when i_dquot not
+initialized, which can avoid 2 pair of dqget()/dqput() in most
+case. It could relieve the global locks contenion caused by
+dqget()/dqput().
 Index: linux-2.6.32-358.0.1.el6/fs/quota/dquot.c
 ===================================================================
 --- linux-2.6.32-358.0.1.el6.orig/fs/quota/dquot.c
