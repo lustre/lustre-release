@@ -130,7 +130,15 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
         int hash;
         ENTRY;
 
-        hash = fld_rrb_hash(fld, seq);
+	/* Because almost all of special sequence located in MDT0,
+	 * it should go to index 0 directly, instead of calculating
+	 * hash again, and also if other MDTs is not being connected,
+	 * the fld lookup requests(for seq on MDT0) should not be
+	 * blocked because of other MDTs */
+	if (fid_seq_is_norm(seq))
+		hash = fld_rrb_hash(fld, seq);
+	else
+		hash = 0;
 
         cfs_list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
                 if (target->ft_idx == hash)
