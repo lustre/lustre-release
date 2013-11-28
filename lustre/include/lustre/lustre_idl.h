@@ -514,6 +514,16 @@ static inline int fid_seq_is_local_file(const __u64 seq)
 	return seq == FID_SEQ_LOCAL_FILE;
 };
 
+static inline int fid_seq_is_root(const __u64 seq)
+{
+	return seq == FID_SEQ_ROOT;
+}
+
+static inline int fid_seq_is_dot(const __u64 seq)
+{
+	return seq == FID_SEQ_DOT_LUSTRE;
+}
+
 static inline int fid_is_mdt0(const struct lu_fid *fid)
 {
         return fid_seq_is_mdt0(fid_seq(fid));

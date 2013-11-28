@@ -302,7 +302,7 @@ static inline int fid_is_client_visible(const struct lu_fid *fid)
 static inline int fid_seq_in_fldb(__u64 seq)
 {
 	return fid_seq_is_igif(seq) || fid_seq_is_norm(seq) ||
-	       seq == FID_SEQ_ROOT;
+	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
 }
 
 static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq)
