@@ -296,7 +296,7 @@ run_compilebench() {
     [ -e $cbench_DIR/compilebench ] || \
         { skip_env "No compilebench build" && return; }
 
-	local space=$(lfs_df $DIR | awk '/^filesystem/{ print $4 }')
+	local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
 	if [[ $space -le $((1024 * 1024 * cbench_IDIRS)) ]]; then
 		cbench_IDIRS=$((space / 1024 / 1024))
 		[[ $cbench_IDIRS -eq 0 ]] &&
