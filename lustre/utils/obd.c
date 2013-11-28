@@ -3408,6 +3408,123 @@ out:
         return rc;
 }
 
+static int nodemap_cmd(enum lcfg_command_type cmd, int num_args, ...)
+{
+	va_list arguments;
+	int i;
+	const char *args;
+	char *arg;
+	struct lustre_cfg_bufs bufs;
+	struct obd_ioctl_data data;
+	struct lustre_cfg *lcfg;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc = 0;
+
+	lustre_cfg_bufs_reset(&bufs, NULL);
+
+	va_start(arguments, num_args);
+
+	for (i = 0; i < num_args; i++) {
+		args = va_arg(arguments, char *);
+		arg = (char *)args;
+		lustre_cfg_bufs_set_string(&bufs, i, arg);
+	}
+
+	va_end(arguments);
+
+	lcfg = lustre_cfg_new(cmd, &bufs);
+
+	if (IS_ERR(lcfg)) {
+		rc = PTR_ERR(lcfg);
+		return rc;
+	}
+
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		goto out;
+
+	data.ioc_type = LUSTRE_CFG_TYPE;
+	data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+			 lcfg->lcfg_buflens);
+	data.ioc_pbuf1 = (void *)lcfg;
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: invalid ioctl\n");
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NODEMAP, buf);
+out:
+	if (rc)
+		rc = -errno;
+
+	lustre_cfg_free(lcfg);
+	return rc;
+}
+
+int jt_nodemap_activate(int argc, char **argv)
+{
+	enum lcfg_command_type cmd;
+	int rc = 0;
+
+	cmd = LCFG_NODEMAP_ACTIVATE;
+	rc = nodemap_cmd(cmd, 1, argv[0]);
+
+	if (rc != 0) {
+		errno = -rc;
+		perror(argv[0]);
+	}
+
+	return rc;
+}
+
+int jt_nodemap_add(int argc, char **argv)
+{
+	enum lcfg_command_type cmd;
+	int rc = 0;
+
+	cmd = LCFG_NODEMAP_ADD;
+	rc = llapi_nodemap_exists(argv[1]);
+	if (rc == 0) {
+		fprintf(stderr, "error: %s existing nodemap name\n", argv[1]);
+		return 1;
+	}
+
+	rc = nodemap_cmd(cmd, 2, argv[0], argv[1]);
+
+	if (rc != 0) {
+		errno = -rc;
+		perror(argv[0]);
+	}
+
+	return rc;
+}
+
+int jt_nodemap_del(int argc, char **argv)
+{
+	enum lcfg_command_type cmd;
+	int rc = 0;
+
+	cmd = LCFG_NODEMAP_DEL;
+	rc = llapi_nodemap_exists(argv[1]);
+
+	if (rc != 0) {
+		fprintf(stderr, "error: %s not existing nodemap name\n",
+			argv[1]);
+		return rc;
+	}
+	rc = nodemap_cmd(cmd, 2, argv[0], argv[1]);
+
+	if (rc != 0) {
+		errno = -rc;
+		perror(argv[0]);
+	}
+
+	return rc;
+}
+
 /*
  * this function tranforms a rule [start-end/step] into an array
  * of matching numbers

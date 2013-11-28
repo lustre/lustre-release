@@ -32,6 +32,12 @@ CONFDIR=/etc/lustre
 PERM_CONF=$CONFDIR/perm.conf
 FAIL_ON_ERROR=false
 
+HN=$(hostname | sum | awk '{ print $1 }')
+NODEMAP_COUNT=10
+NODEMAP_RANGE_COUNT=3
+NODEMAP_IPADDR_COUNT=30
+NODEMAP_ID_COUNT=200
+
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
@@ -556,6 +562,80 @@ test_6() {
 	rm -f $file
 }
 run_test 6 "capa expiry ========================="
+
+create_nodemaps() {
+	local i
+	local out
+	local rc
+
+	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
+		if ! do_facet mgs $LCTL nodemap_add ${HN}_${i}; then
+		       	return 1
+		fi
+		out=$(do_facet mgs $LCTL get_param nodemap.${HN}_${i}.id)
+		## This needs to return zero if the following statement is 1
+		rc=$(echo $out | grep -c ${HN}_${i})
+		[[ $rc == 0 ]] && return 1
+	done
+	return 0
+}
+
+delete_nodemaps() {
+	local i
+	local out
+	local rc
+
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! do_facet mgs $LCTL nodemap_del ${HN}_${i}; then
+			error "nodemap_del ${HN}_${i} failed with $rc"
+			return 3
+		fi
+		out=$(do_facet mgs $LCTL get_param nodemap.${HN}_${i}.id)
+		rc=$(echo $out | grep -c ${HN}_${i})
+		[[ $rc != 0 ]] && return 1
+	done
+	return 0
+}
+
+test_7() {
+	local rc
+
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 2
+
+	return 0
+}
+run_test 7 "nodemap create and delete"
+
+test_8() {
+	local rc
+
+	# Set up nodemaps
+
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	# Try duplicates
+
+	create_nodemaps
+	rc=$?
+	[[ $rc == 0 ]] && error "duplicate nodemap_add allowed with $rc" &&
+	return 2
+
+	# Clean up
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 3
+
+	return 0
+}
+run_test 8 "nodemap reject duplicates"
 
 log "cleanup: ======================================================"
 

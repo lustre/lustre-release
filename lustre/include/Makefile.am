@@ -74,6 +74,7 @@ EXTRA_DIST = \
 	lustre_mdc.h \
 	lustre_mds.h \
 	lustre_net.h \
+	lustre_nodemap.h \
 	lustre_param.h \
 	lustre_quota.h \
 	lustre_req_layout.h \

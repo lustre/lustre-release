@@ -3892,6 +3892,27 @@ out:
         return rc;
 }
 
+int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
+		    enum lcfg_command_type cmd, const char *nodemap_name,
+		    const char *param)
+{
+	int rc = 0;
+	ENTRY;
+
+	switch (cmd) {
+	case LCFG_NODEMAP_ADD:
+		rc = nodemap_add(nodemap_name);
+		break;
+	case LCFG_NODEMAP_DEL:
+		rc = nodemap_del(nodemap_name);
+		break;
+	default:
+		rc = -EINVAL;
+	}
+
+	RETURN(rc);
+}
+
 int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		 enum lcfg_command_type cmd, char *fsname,
 		 char *poolname, char *ostname)

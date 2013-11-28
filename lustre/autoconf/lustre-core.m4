@@ -1595,6 +1595,23 @@ fi
 ])
 
 #
+# LC_CONFIG_NODEMAP_PROC_DEBUG
+#
+# enable nodemap proc file debugging
+#
+AC_DEFUN([LC_NODEMAP_PROC_DEBUG],
+[AC_MSG_CHECKING([whether to enable nodemap proc debug])
+AC_ARG_ENABLE([nodemap_proc_debug],
+        AC_HELP_STRING([--enable-nodemap-proc-debug],
+                        [enable nodemap proc debug]),
+        [],[enable_nodemap_proc_debug='no'])
+AC_MSG_RESULT([$enable_nodemap_proc_debug])
+if test x$enable_nodemap_proc_debug != xno; then
+   AC_DEFINE(NODEMAP_PROC_DEBUG, 1, [enable nodemap proc debug support])
+fi
+])
+
+#
 # LC_LLITE_LLOOP_MODULE
 # lloop_llite.ko does not currently work with page sizes
 # of 64k or larger.
@@ -1844,6 +1861,8 @@ lustre/lfsck/Makefile
 lustre/lfsck/autoMakefile
 lustre/mdt/Makefile
 lustre/mdt/autoMakefile
+lustre/nodemap/Makefile
+lustre/nodemap/autoMakefile
 lustre/mdd/Makefile
 lustre/mdd/autoMakefile
 lustre/fld/Makefile

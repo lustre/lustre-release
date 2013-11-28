@@ -216,19 +216,31 @@ command_t cmdlist[] = {
         {"===  Pools ==", jt_noop, 0, "pool management"},
         {"pool_new", jt_pool_cmd, 0,
          "add a new pool\n"
-         "usage pool_new <fsname>.<poolname>"},
-        {"pool_add", jt_pool_cmd, 0,
+	 "usage: pool_new <fsname>.<poolname>"},
+	{"pool_add", jt_pool_cmd, 0,
          "add the named OSTs to the pool\n"
-         "usage pool_add <fsname>.<poolname> <ostname indexed list>"},
+	 "usage: pool_add <fsname>.<poolname> <ostname indexed list>"},
         {"pool_remove", jt_pool_cmd, 0,
          "remove the named OST from the pool\n"
-         "usage pool_remove <fsname>.<poolname> <ostname indexed list>"},
+	 "usage: pool_remove <fsname>.<poolname> <ostname indexed list>"},
         {"pool_destroy", jt_pool_cmd, 0,
          "destroy a pool\n"
-         "usage pool_destroy <fsname>.<poolname>"},
+	 "usage: pool_destroy <fsname>.<poolname>"},
         {"pool_list", jt_pool_cmd, 0,
          "list pools and pools members\n"
-         "usage pool_list  <fsname>[.<poolname>] | <pathname>"},
+	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
+
+	/* Nodemap commands */
+	{"=== Nodemap ===", jt_noop, 0, "nodemap management"},
+	{"nodemap_activate_idmap", jt_nodemap_activate, 0,
+	 "activate nodemap idmapping functions\n"
+	 "usage: nodemap_activate_idmap"},
+	{"nodemap_add", jt_nodemap_add, 0,
+	 "add a new nodemap\n"
+	 "usage: nodemap_add <nodemap_name>"},
+	{"nodemap_del", jt_nodemap_del, 0,
+	 "remove a nodemap\n"
+	 "usage: nodemap_del <nodemap_name>"},
 
         /* Changelog commands */
         {"===  Changelogs ==", jt_noop, 0, "changelog user management"},

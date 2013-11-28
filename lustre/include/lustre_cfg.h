@@ -90,6 +90,21 @@ enum lcfg_command_type {
 					      * cleanup cleanup */
 	LCFG_SET_PARAM		= 0x00ce032, /**< use set_param syntax to set
 					      *a proc parameters */
+	LCFG_NODEMAP_ADD        = 0x00ce040, /**< create a cluster */
+	LCFG_NODEMAP_DEL        = 0x00ce041, /**< destroy a cluster */
+	LCFG_NODEMAP_ADD_RANGE  = 0x00ce042, /**< add a nid range */
+	LCFG_NODEMAP_DEL_RANGE  = 0x00ce043, /**< delete an nid range */
+	LCFG_NODEMAP_ADD_UIDMAP = 0x00ce044, /**< add a uidmap */
+	LCFG_NODEMAP_DEL_UIDMAP = 0x00ce045, /**< delete a uidmap */
+	LCFG_NODEMAP_ADD_GIDMAP = 0x00ce046, /**< add a gidmap */
+	LCFG_NODEMAP_DEL_GIDMAP = 0x00ce047, /**< delete a gidmap */
+	LCFG_NODEMAP_ACTIVATE   = 0x00ce048, /**< activate cluster id mapping */
+	LCFG_NODEMAP_ADMIN      = 0x00ce049, /**< allow cluster to use id 0 */
+	LCFG_NODEMAP_TRUSTED    = 0x00ce050, /**< trust a clusters ids */
+	LCFG_NODEMAP_SQUASH_UID = 0x00ce051, /**< default map uid */
+	LCFG_NODEMAP_SQUASH_GID = 0x00ce052, /**< default map gid */
+	LCFG_NODEMAP_ADD_SHKEY  = 0x00ce053, /**< add shared key to cluster */
+	LCFG_NODEMAP_DEL_SHKEY  = 0x00ce054, /**< delete shared key from cluster */
 };
 
 struct lustre_cfg_bufs {

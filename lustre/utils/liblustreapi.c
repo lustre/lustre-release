@@ -397,7 +397,7 @@ static int find_poolpath(char *fsname, char *poolname, char *poolpath)
   * Return 0 for success, with a NUL-terminated string in \param result.
   * Return -ve value for error.
   */
-static int get_param(const char *param_path, char *result,
+int get_param(const char *param_path, char *result,
                      unsigned int result_size)
 {
         char file[PATH_MAX + 1], pattern[PATH_MAX + 1], buf[result_size];
@@ -407,7 +407,7 @@ static int get_param(const char *param_path, char *result,
         snprintf(pattern, PATH_MAX, "/proc/{fs,sys}/{lnet,lustre}/%s",
                  param_path);
         rc = first_match(pattern, file);
-        if (rc)
+	if (rc != 0 || result == NULL)
                 return rc;
 
         fp = fopen(file, "r");

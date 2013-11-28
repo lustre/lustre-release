@@ -40,6 +40,7 @@
 #include <libcfs/libcfs.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
+#include <lustre_nodemap.h>
 #include <dt_object.h>
 
 #define MGSSELF_NAME    "_mgs"
@@ -207,6 +208,9 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		 enum lcfg_command_type cmd, char *poolname, char *fsname,
 		 char *ostname);
+int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
+		    enum lcfg_command_type cmd, const char *nodemap_name,
+		    const char *param);
 
 /* mgs_handler.c */
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
