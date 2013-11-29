@@ -234,7 +234,7 @@ diff -urp linux-2.6.32-53.7.orig/fs/quota/dquot.c linux-2.6.32.46-0/fs/quota/dqu
  	}
  
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
-@@ -1513,9 +1517,11 @@ int __dquot_alloc_space(struct inode *in
+@@ -1523,36 +1529,40 @@ int __dquot_alloc_space(struct inode *int inode *in
  
  	spin_lock(&dq_data_lock);
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
@@ -243,12 +243,14 @@ diff -urp linux-2.6.32-53.7.orig/fs/quota/dquot.c linux-2.6.32.46-0/fs/quota/dqu
 +		if (!dquot[cnt])
  			continue;
 -		if (check_bdq(inode->i_dquot[cnt], number, warn, warntype+cnt)
+-		    == NO_QUOTA) {
 +		atomic_inc(&dquot[cnt]->dq_count);
-+		if (check_bdq(dquot[cnt], number, warn, warntype+cnt)
- 		    == NO_QUOTA) {
++		if (check_bdq(dquot[cnt], number, warn, warntype + cnt) ==
++		    NO_QUOTA) {
  			ret = NO_QUOTA;
  			spin_unlock(&dq_data_lock);
-@@ -1523,26 +1529,27 @@ int __dquot_alloc_space(struct inode *in
++			spin_unlock(&inode->i_lock);
+ 			goto out_flush_warn;
  		}
  	}
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
