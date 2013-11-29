@@ -12,8 +12,10 @@ other locks:
  include/linux/fs.h |    2
  5 files changed, 154 insertions(+), 114 deletions(-)
 
---- linux-2.6.32-279.el6.x86_64/fs/quota/dquot.c	2012-06-14 05:40:59.000000000 +0800
-+++ linux-2.6.32-279.el6.x86_64.quota/fs/quota/dquot.c	2013-03-07 16:24:24.602781757 +0800
+Index: linux-2.6.32-358.0.1.el6/fs/quota/dquot.c
+===================================================================
+--- linux-2.6.32-358.0.1.el6.orig/fs/quota/dquot.c
++++ linux-2.6.32-358.0.1.el6/fs/quota/dquot.c
 @@ -83,22 +83,17 @@
  /*
   * There are three quota SMP locks. dq_list_lock protects all lists with quotas
@@ -60,7 +62,7 @@ other locks:
   */
  
  static __cacheline_aligned_in_smp DEFINE_SPINLOCK(dq_list_lock);
-@@ -868,7 +856,6 @@
+@@ -868,7 +856,6 @@ static inline int dqput_blocks(struct dq
  /*
   * Remove references to dquots from inode and add dquot to list for freeing
   * if we have the last referece to dquot
@@ -68,7 +70,7 @@ other locks:
   */
  static int remove_inode_dquot_ref(struct inode *inode, int type,
  				  struct list_head *tofree_head)
-@@ -926,10 +913,12 @@
+@@ -926,10 +913,12 @@ static void remove_dquot_ref(struct supe
  		 *  We have to scan also I_NEW inodes because they can already
  		 *  have quota pointer initialized. Luckily, we need to touch
  		 *  only quota pointers and these have separate locking
@@ -82,7 +84,7 @@ other locks:
  	}
  	spin_unlock(&inode_lock);
  }
-@@ -940,9 +929,7 @@
+@@ -940,9 +929,7 @@ static void drop_dquot_ref(struct super_
  	LIST_HEAD(tofree_head);
  
  	if (sb->dq_op) {
@@ -92,7 +94,7 @@ other locks:
  		put_dquot_list(&tofree_head);
  	}
  }
-@@ -1239,8 +1226,6 @@
+@@ -1239,8 +1226,6 @@ static int info_bdq_free(struct dquot *d
  
  /*
   *	Initialize quota pointers in inode
@@ -101,7 +103,7 @@ other locks:
   */
  int dquot_initialize(struct inode *inode, int type)
  {
-@@ -1270,8 +1255,7 @@
+@@ -1270,8 +1255,7 @@ int dquot_initialize(struct inode *inode
  		got[cnt] = dqget(sb, id, cnt);
  	}
  
@@ -111,7 +113,7 @@ other locks:
  	if (IS_NOQUOTA(inode))
  		goto out_err;
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-@@ -1288,12 +1272,16 @@
+@@ -1288,12 +1272,16 @@ int dquot_initialize(struct inode *inode
  			 * did a write before quota was turned on
  			 */
  			rsv = inode_get_rsv_space(inode);
@@ -130,7 +132,7 @@ other locks:
  	/* Drop unused references */
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
  		dqput(got[cnt]);
-@@ -1309,12 +1297,12 @@
+@@ -1309,12 +1297,12 @@ int dquot_drop(struct inode *inode)
  	int cnt;
  	struct dquot *put[MAXQUOTAS];
  
@@ -145,7 +147,7 @@ other locks:
  
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
  		dqput(put[cnt]);
-@@ -1357,27 +1345,42 @@
+@@ -1357,27 +1345,42 @@ static qsize_t *inode_reserved_space(str
  	return inode->i_sb->dq_op->get_reserved_space(inode);
  }
  
@@ -192,7 +194,7 @@ other locks:
  	spin_unlock(&inode->i_lock);
  }
  EXPORT_SYMBOL(inode_sub_rsv_space);
-@@ -1388,9 +1391,8 @@
+@@ -1388,9 +1391,8 @@ static qsize_t inode_get_rsv_space(struc
  
  	if (!inode->i_sb->dq_op->get_reserved_space)
  		return 0;
@@ -203,7 +205,7 @@ other locks:
  	return ret;
  }
  
-@@ -1398,17 +1400,17 @@
+@@ -1398,17 +1400,17 @@ static void inode_incr_space(struct inod
  				int reserve)
  {
  	if (reserve)
@@ -225,7 +227,7 @@ other locks:
  }
  
  /*
-@@ -1430,6 +1432,7 @@
+@@ -1430,6 +1432,7 @@ int __dquot_alloc_space(struct inode *in
  	int warn = flags & DQUOT_SPACE_WARN;
  	int reserve = flags & DQUOT_SPACE_RESERVE;
  	int nofail = flags & DQUOT_SPACE_NOFAIL;
@@ -233,7 +235,7 @@ other locks:
  
  	/*
  	 * First test before acquiring mutex - solves deadlocks when we
-@@ -1440,20 +1443,24 @@
+@@ -1440,47 +1443,53 @@ int __dquot_alloc_space(struct inode *in
  		goto out;
  	}
  
@@ -263,7 +265,8 @@ other locks:
  		    == NO_QUOTA && !nofail) {
  			ret = NO_QUOTA;
  			spin_unlock(&dq_data_lock);
-@@ -1461,26 +1468,27 @@
++			spin_unlock(&inode->i_lock);
+ 			goto out_flush_warn;
  		}
  	}
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
@@ -299,7 +302,7 @@ other locks:
  out:
  	return ret;
  }
-@@ -1508,6 +1516,7 @@
+@@ -1508,6 +1517,7 @@ int dquot_alloc_inode(const struct inode
  {
  	int cnt, ret = NO_QUOTA;
  	char warntype[MAXQUOTAS];
@@ -307,7 +310,7 @@ other locks:
  
  	/* First test before acquiring mutex - solves deadlocks when we
           * re-enter the quota code and are already holding the mutex */
-@@ -1515,35 +1524,41 @@
+@@ -1515,35 +1525,41 @@ int dquot_alloc_inode(const struct inode
  		return QUOTA_OK;
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
  		warntype[cnt] = QUOTA_NL_NOWARN;
@@ -359,7 +362,7 @@ other locks:
  	return ret;
  }
  EXPORT_SYMBOL(dquot_alloc_inode);
-@@ -1552,34 +1567,40 @@
+@@ -1552,34 +1568,40 @@ int dquot_claim_space(struct inode *inod
  {
  	int cnt;
  	int ret = QUOTA_OK;
@@ -410,7 +413,7 @@ other locks:
  out:
  	return ret;
  }
-@@ -1593,6 +1614,7 @@
+@@ -1593,6 +1615,7 @@ int __dquot_free_space(struct inode *ino
  	unsigned int cnt;
  	char warntype[MAXQUOTAS];
  	int reserve = flags & DQUOT_SPACE_RESERVE;
@@ -418,7 +421,7 @@ other locks:
  
  	/* First test before acquiring mutex - solves deadlocks when we
           * re-enter the quota code and are already holding the mutex */
-@@ -1602,34 +1624,37 @@
+@@ -1602,34 +1625,37 @@ out_sub:
  		return QUOTA_OK;
  	}
  
@@ -469,7 +472,7 @@ other locks:
  	return QUOTA_OK;
  }
  
-@@ -1656,32 +1681,37 @@
+@@ -1656,32 +1682,37 @@ int dquot_free_inode(const struct inode 
  {
  	unsigned int cnt;
  	char warntype[MAXQUOTAS];
@@ -517,7 +520,7 @@ other locks:
  	return QUOTA_OK;
  }
  EXPORT_SYMBOL(dquot_free_inode);
-@@ -1721,14 +1751,13 @@
+@@ -1721,14 +1752,13 @@ int dquot_transfer(struct inode *inode, 
  		transfer_to[GRPQUOTA] = dqget(inode->i_sb, iattr->ia_gid,
  					      GRPQUOTA);
  
@@ -535,7 +538,7 @@ other locks:
  	rsv_space = inode_get_rsv_space(inode);
  	space = cur_space + rsv_space;
  	/* Build the transfer_from list and check the limits */
-@@ -1771,7 +1800,7 @@
+@@ -1771,7 +1801,7 @@ int dquot_transfer(struct inode *inode, 
  		inode->i_dquot[cnt] = transfer_to[cnt];
  	}
  	spin_unlock(&dq_data_lock);
@@ -544,7 +547,7 @@ other locks:
  
  	/* Dirtify all the dquots - this can block when journalling */
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-@@ -1795,7 +1824,7 @@
+@@ -1795,7 +1825,7 @@ put_all:
  	return ret;
  over_quota:
  	spin_unlock(&dq_data_lock);
@@ -553,7 +556,7 @@ other locks:
  	/* Clear dquot pointers we don't want to dqput() */
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
  		transfer_from[cnt] = NULL;
-@@ -2047,13 +2076,13 @@
+@@ -2047,13 +2077,13 @@ static int vfs_load_quota_inode(struct i
  		/* We don't want quota and atime on quota files (deadlocks
  		 * possible) Also nobody should write to the file - we use
  		 * special IO operations which ignore the immutable bit. */
@@ -569,7 +572,7 @@ other locks:
  		sb->dq_op->drop(inode);
  	}
  
-@@ -2090,14 +2119,14 @@
+@@ -2090,14 +2120,14 @@ out_file_init:
  	iput(inode);
  out_lock:
  	if (oldflags != -1) {
@@ -586,9 +589,11 @@ other locks:
  	}
  	mutex_unlock(&dqopt->dqonoff_mutex);
  out_fmt:
---- linux-2.6.32-279.el6.x86_64/fs/quota/quota.c	2012-06-14 05:41:12.000000000 +0800
-+++ linux-2.6.32-279.el6.x86_64.quota/fs/quota/quota.c	2013-02-21 17:19:03.530511632 +0800
-@@ -257,13 +257,13 @@
+Index: linux-2.6.32-358.0.1.el6/fs/quota/quota.c
+===================================================================
+--- linux-2.6.32-358.0.1.el6.orig/fs/quota/quota.c
++++ linux-2.6.32-358.0.1.el6/fs/quota/quota.c
+@@ -257,13 +257,13 @@ static int do_quotactl(struct super_bloc
  		case Q_GETFMT: {
  			__u32 fmt;
  
@@ -605,9 +610,11 @@ other locks:
  			if (copy_to_user(addr, &fmt, sizeof(fmt)))
  				return -EFAULT;
  			return 0;
---- linux-2.6.32-279.el6.x86_64/fs/stat.c	2012-06-14 05:41:12.000000000 +0800
-+++ linux-2.6.32-279.el6.x86_64.quota/fs/stat.c	2013-03-04 23:14:19.471077448 +0800
-@@ -422,9 +422,8 @@
+Index: linux-2.6.32-358.0.1.el6/fs/stat.c
+===================================================================
+--- linux-2.6.32-358.0.1.el6.orig/fs/stat.c
++++ linux-2.6.32-358.0.1.el6/fs/stat.c
+@@ -422,9 +422,8 @@ void inode_add_bytes(struct inode *inode
  
  EXPORT_SYMBOL(inode_add_bytes);
  
@@ -618,7 +625,7 @@ other locks:
  	inode->i_blocks -= bytes >> 9;
  	bytes &= 511;
  	if (inode->i_bytes < bytes) {
-@@ -432,17 +431,28 @@
+@@ -432,17 +431,28 @@ void inode_sub_bytes(struct inode *inode
  		inode->i_bytes += 512;
  	}
  	inode->i_bytes -= bytes;
@@ -648,9 +655,11 @@ other locks:
  	spin_unlock(&inode->i_lock);
  	return ret;
  }
---- linux-2.6.32-279.el6.x86_64/fs/super.c	2012-06-14 05:41:12.000000000 +0800
-+++ linux-2.6.32-279.el6.x86_64.quota/fs/super.c	2013-02-21 17:19:03.530511632 +0800
-@@ -97,7 +97,6 @@
+Index: linux-2.6.32-358.0.1.el6/fs/super.c
+===================================================================
+--- linux-2.6.32-358.0.1.el6.orig/fs/super.c
++++ linux-2.6.32-358.0.1.el6/fs/super.c
+@@ -146,7 +146,6 @@ static struct super_block *alloc_super(s
  		mutex_init(&s->s_vfs_rename_mutex);
  		mutex_init(&s->s_dquot.dqio_mutex);
  		mutex_init(&s->s_dquot.dqonoff_mutex);
@@ -658,9 +667,11 @@ other locks:
  		init_waitqueue_head(&s->s_wait_unfrozen);
  		s->s_maxbytes = MAX_NON_LFS;
  		s->dq_op = sb_dquot_ops;
---- linux-2.6.32-279.el6.x86_64/include/linux/fs.h	2012-06-14 05:41:19.000000000 +0800
-+++ linux-2.6.32-279.el6.x86_64.quota/include/linux/fs.h	2013-02-21 17:19:03.531522089 +0800
-@@ -2396,7 +2400,9 @@
+Index: linux-2.6.32-358.0.1.el6/include/linux/fs.h
+===================================================================
+--- linux-2.6.32-358.0.1.el6.orig/include/linux/fs.h
++++ linux-2.6.32-358.0.1.el6/include/linux/fs.h
+@@ -2567,7 +2567,9 @@ extern void generic_fillattr(struct inod
  extern int vfs_getattr(struct vfsmount *, struct dentry *, struct kstat *);
  void __inode_add_bytes(struct inode *inode, loff_t bytes);
  void inode_add_bytes(struct inode *inode, loff_t bytes);
