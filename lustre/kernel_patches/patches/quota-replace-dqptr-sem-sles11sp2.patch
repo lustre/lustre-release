@@ -229,7 +229,7 @@ diff -urp linux-3.0.61-0.orig/fs/quota/dquot.c linux-3.0.61-0/fs/quota/dquot.c
  
  	/*
  	 * First test before acquiring mutex - solves deadlocks when we
-@@ -1557,15 +1560,17 @@ int __dquot_alloc_space(struct inode *in
+@@ -1557,38 +1560,41 @@ int __dquot_alloc_space(struct inode *in
  		goto out;
  	}
  
@@ -245,12 +245,13 @@ diff -urp linux-3.0.61-0.orig/fs/quota/dquot.c linux-3.0.61-0/fs/quota/dquot.c
 +		if (!dquot[cnt])
  			continue;
 -		ret = check_bdq(inode->i_dquot[cnt], number, !warn,
+-				warntype+cnt);
 +		atomic_inc(&dquot[cnt]->dq_count);
-+		ret = check_bdq(dquot[cnt], number, !warn,
- 				warntype+cnt);
++		ret = check_bdq(dquot[cnt], number, !warn, warntype + cnt);
  		if (ret && !nofail) {
  			spin_unlock(&dq_data_lock);
-@@ -1573,22 +1578,23 @@ int __dquot_alloc_space(struct inode *in
++			spin_unlock(&inode->i_lock);
+ 			goto out_flush_warn;
  		}
  	}
  	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
