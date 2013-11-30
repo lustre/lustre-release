@@ -368,11 +368,23 @@ int loop_setup(struct mkfs_opts *mop)
 int loop_cleanup(struct mkfs_opts *mop)
 {
 	char cmd[150];
-	int ret = 1;
+	int ret = 0;
+
 	if ((mop->mo_flags & MO_IS_LOOP) && *mop->mo_loopdev) {
+		int tries;
+
 		sprintf(cmd, "losetup -d %s", mop->mo_loopdev);
-		ret = run_command(cmd, sizeof(cmd));
+		for (tries = 0; tries < 3; tries++) {
+			ret = run_command(cmd, sizeof(cmd));
+			if (ret == 0)
+				break;
+			sleep(1);
+		}
 	}
+
+	if (ret != 0)
+		fprintf(stderr, "cannot cleanup %s: rc = %d\n",
+			mop->mo_loopdev, ret);
 	return ret;
 }
 

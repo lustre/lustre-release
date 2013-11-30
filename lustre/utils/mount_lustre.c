@@ -320,6 +320,7 @@ static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
 	char default_mountopts[512] = "";
 	struct mkfs_opts mkop;
 	int ret;
+	int ret2;
 
 	memset(&mkop, 0, sizeof(mkop));
 	mkop.mo_ldd = *ldd;
@@ -366,7 +367,10 @@ static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
 		fprintf(stderr, "failed to write local files: %s\n",
 			strerror(ret));
 	}
-	loop_cleanup(&mkop);
+
+	ret2 = loop_cleanup(&mkop);
+	if (ret == 0)
+		ret = ret2;
 
 	return ret;
 }
