@@ -1947,6 +1947,11 @@ static int __osd_object_create(struct osd_thread_info *info,
                                struct thandle *th)
 {
 	int	result;
+	__u32	umask;
+
+	/* we drop umask so that permissions we pass are not affected */
+	umask = current->fs->umask;
+	current->fs->umask = 0;
 
 	result = osd_create_type_f(dof->dof_type)(info, obj, attr, hint, dof,
 						  th);
@@ -1958,7 +1963,10 @@ static int __osd_object_create(struct osd_thread_info *info,
 			unlock_new_inode(obj->oo_inode);
         }
 
-        return result;
+	/* restore previous umask value */
+	current->fs->umask = umask;
+
+	return result;
 }
 
 /**
@@ -2631,6 +2639,7 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	struct inode	       *inode    = obj->oo_inode;
 	struct osd_thread_info *info     = osd_oti_get(env);
 	int			fs_flags = 0;
+	ENTRY;
 
         LASSERT(handle != NULL);
 

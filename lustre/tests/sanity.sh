@@ -58,7 +58,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 60c 63 64b 68 71 73 77f 78 101a 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 60c 63 64b 68 71 73 77f 78 101a 115 120g 124b"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
 # bug number for skipped test:        LU-2834 LU-1593 LU-2610 LU-2833 LU-1957 LU-2805
@@ -6164,8 +6164,12 @@ test_103 () {
     run_acl_subtest inheritance || error "inheritance test failed"
     rm -f make-tree
 
-    echo "LU-974 ignore umask when acl is enabled..."
-    run_acl_subtest 974 || error "LU-974 test failed"
+	echo "LU-974 ignore umask when acl is enabled..."
+	run_acl_subtest 974 || error "LU-974 test failed"
+	if [ $MDSCOUNT -ge 2 ]; then
+		run_acl_subtest 974_remote ||
+			error "LU-974 test failed under remote dir"
+	fi
 
     echo "LU-2561 newly created file is same size as directory..."
     run_acl_subtest 2561 || error "LU-2561 test failed"

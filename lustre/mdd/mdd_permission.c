@@ -173,57 +173,34 @@ stop:
 	RETURN(rc);
 }
 
-/*
- * Hold write_lock for obj.
- */
-int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
-                   struct lu_buf *buf, __u32 *mode, struct thandle *handle)
+/**
+ * Fix mode and ACL according to the default ACL(buf)
+ * \retval = 0 ACL does not need to be reset.
+ * \retval = 1 ACL needs to be reset.
+ * \retval < 0 error.
+ **/
+int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
+		       __u32 *mode)
 {
-        posix_acl_xattr_header  *head;
-        posix_acl_xattr_entry   *entry;
-        int                      entry_count;
-	__u32			 old = *mode;
-	int			 rc, rc2;
+	posix_acl_xattr_header  *head;
+	posix_acl_xattr_entry   *entry;
+	int                      entry_count;
+	int			 rc;
 
-        ENTRY;
+	ENTRY;
 
-        head = (posix_acl_xattr_header *)(buf->lb_buf);
-        entry = head->a_entries;
-        entry_count = (buf->lb_len - sizeof(head->a_version)) /
-                      sizeof(posix_acl_xattr_entry);
-        if (entry_count <= 0)
-                RETURN(0);
+	head = (posix_acl_xattr_header *)(buf->lb_buf);
+	entry = head->a_entries;
+	entry_count = (buf->lb_len - sizeof(head->a_version)) /
+		      sizeof(posix_acl_xattr_entry);
+	if (entry_count <= 0)
+		RETURN(0);
 
-        if (S_ISDIR(*mode)) {
-                rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_DEFAULT, 0,
-                                   handle, BYPASS_CAPA);
-                if (rc)
-                        RETURN(rc);
-        }
+	rc = lustre_posix_acl_create_masq(entry, mode, entry_count);
 
-        rc = lustre_posix_acl_create_masq(entry, mode, entry_count);
-	if (rc < 0)
-                RETURN(rc);
-
-	/* part of ACL went into i_mode */
-	if (*mode != old) {
-		struct mdd_thread_info	*info = mdd_env_info(env);
-		struct lu_attr		*pattr = &info->mti_pattr;
-
-		/* mode was initialized within object creation,
-		 * so we need explict ->attr_set() to update it */
-		pattr->la_valid = LA_MODE;
-		pattr->la_mode = *mode;
-		rc2 = mdo_attr_set(env, obj, pattr, handle, BYPASS_CAPA);
-		if (rc2 < 0)
-			rc = rc2;
-	}
-
-	if (rc > 0)
-		rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_ACCESS, 0,
-				   handle, BYPASS_CAPA);
 	RETURN(rc);
 }
+
 #endif
 
 /*

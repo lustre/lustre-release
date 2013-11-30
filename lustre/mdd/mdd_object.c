@@ -696,7 +696,7 @@ static inline int mdd_attr_check(const struct lu_env *env,
 }
 
 int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
-			  struct lu_attr *attr, struct thandle *handle,
+			  const struct lu_attr *attr, struct thandle *handle,
 			  int needacl)
 {
         int rc;

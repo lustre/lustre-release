@@ -1480,7 +1480,7 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 			  const struct lu_name *lname, struct mdd_object *child,
-			  struct lu_attr *attr, struct thandle *handle,
+			  const struct lu_attr *attr, struct thandle *handle,
 			  const struct md_op_spec *spec)
 {
         int rc;
@@ -1494,20 +1494,8 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
          *  (2) maybe, the child attributes should be set in OSD when creation.
          */
 
-	/*
-	 * inode mode has been set in creation time, and it's based on umask,
-	 * la_mode and acl, don't set here again! (which will go wrong
-	 * because below function doesn't consider umask).
-	 * I'd suggest set all object attributes in creation time, see above.
-	 */
-	LASSERT(attr->la_valid & (LA_MODE | LA_TYPE));
-	attr->la_valid &= ~(LA_MODE | LA_TYPE);
 	rc = mdd_attr_set_internal(env, child, attr, handle, 0);
 	/* arguments are supposed to stay the same */
-	attr->la_valid |= LA_MODE | LA_TYPE;
-	if (rc != 0)
-		RETURN(rc);
-
 	if (S_ISDIR(attr->la_mode)) {
                 /* Add "." and ".." for newly created dir */
                 mdo_ref_add(env, child, handle);
@@ -1699,6 +1687,38 @@ out:
         return rc;
 }
 
+static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
+			struct lu_attr *la, struct lu_buf *acl_buf,
+			int *got_def_acl, int *reset_acl)
+{
+	int	rc;
+	ENTRY;
+
+	if (S_ISLNK(la->la_mode))
+		RETURN(0);
+
+	mdd_read_lock(env, pobj, MOR_TGT_PARENT);
+	rc = mdo_xattr_get(env, pobj, acl_buf,
+			   XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
+	mdd_read_unlock(env, pobj);
+	if (rc > 0) {
+		/* If there are default ACL, fix mode by default ACL */
+		*got_def_acl = rc;
+		acl_buf->lb_len = rc;
+		rc = __mdd_fix_mode_acl(env, acl_buf, &la->la_mode);
+		if (rc < 0)
+			RETURN(rc);
+		*reset_acl = rc;
+	} else if (rc == -ENODATA || rc == -EOPNOTSUPP) {
+		/* If there are no default ACL, fix mode by mask */
+		struct lu_ucred *uc = lu_ucred(env);
+		la->la_mode &= ~uc->uc_umask;
+		rc = 0;
+	}
+
+	RETURN(rc);
+}
+
 /*
  * Create object and insert it into namespace.
  */
@@ -1714,10 +1734,12 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_attr		*attr = &ma->ma_attr;
 	struct thandle		*handle;
 	struct lu_attr		*pattr = &info->mti_pattr;
+	struct lu_buf		acl_buf;
 	struct dynlock_handle	*dlh;
 	const char		*name = lname->ln_name;
 	int			 rc, created = 0, initialized = 0, inserted = 0;
 	int			 got_def_acl = 0;
+	int			 reset_acl = 0;
 	ENTRY;
 
         /*
@@ -1768,20 +1790,12 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
 		GOTO(out_free, rc = -EINPROGRESS);
 
-        if (!S_ISLNK(attr->la_mode)) {
-		struct lu_buf *acl_buf;
-
-		acl_buf = mdd_buf_get(env, info->mti_xattr_buf,
-				sizeof(info->mti_xattr_buf));
-                mdd_read_lock(env, mdd_pobj, MOR_TGT_PARENT);
-		rc = mdo_xattr_get(env, mdd_pobj, acl_buf,
-				XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
-                mdd_read_unlock(env, mdd_pobj);
-		if (rc > 0)
-			got_def_acl = rc;
-		else if (rc < 0 && rc != -EOPNOTSUPP && rc != -ENODATA)
-			GOTO(out_free, rc);
-        }
+	acl_buf.lb_buf = info->mti_xattr_buf;
+	acl_buf.lb_len = sizeof(info->mti_xattr_buf);
+	rc = mdd_acl_init(env, mdd_pobj, attr, &acl_buf, &got_def_acl,
+			  &reset_acl);
+	if (rc < 0)
+		GOTO(out_free, rc);
 
 	mdd_object_make_hint(env, mdd_pobj, son, attr);
 
@@ -1813,13 +1827,33 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 
 #ifdef CONFIG_FS_POSIX_ACL
 	if (got_def_acl) {
-		struct lu_buf *acl_buf;
+		/* set default acl */
+		if (S_ISDIR(attr->la_mode)) {
+			LASSERTF(acl_buf.lb_len  == got_def_acl,
+				 "invalid acl_buf: %p:%d got_def %d\n",
+				 acl_buf.lb_buf, (int)acl_buf.lb_len,
+				 got_def_acl);
+			rc = mdo_xattr_set(env, son, &acl_buf,
+					   XATTR_NAME_ACL_DEFAULT, 0,
+					   handle, BYPASS_CAPA);
+			if (rc) {
+				mdd_write_unlock(env, son);
+				GOTO(cleanup, rc);
+			}
+		}
 
-		acl_buf = mdd_buf_get(env, info->mti_xattr_buf, got_def_acl);
-		rc = __mdd_acl_init(env, son, acl_buf, &attr->la_mode, handle);
-		if (rc) {
-			mdd_write_unlock(env, son);
-			GOTO(cleanup, rc);
+		/* set its own acl */
+		if (reset_acl) {
+			LASSERTF(acl_buf.lb_buf != NULL && acl_buf.lb_len != 0,
+				 "invalid acl_buf %p:%d\n", acl_buf.lb_buf,
+				 (int)acl_buf.lb_len);
+			rc = mdo_xattr_set(env, son, &acl_buf,
+					   XATTR_NAME_ACL_ACCESS,
+					   0, handle, BYPASS_CAPA);
+			if (rc) {
+				mdd_write_unlock(env, son);
+				GOTO(cleanup, rc);
+			}
 		}
 	}
 #endif

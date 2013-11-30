@@ -1,6 +1,6 @@
 LU-2561 newly created file is same size as directory
 
-	$ mkdir 2561
+	$ mkdir -p 2561
 	$ cd 2561
 	$ getfacl --access . | setfacl -d -M- .
 	$ touch f1
