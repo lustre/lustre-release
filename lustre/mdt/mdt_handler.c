@@ -1046,7 +1046,7 @@ int mdt_swap_layouts(struct mdt_thread_info *info)
 	if (IS_ERR(o))
 		GOTO(out, rc = PTR_ERR(o));
 
-	if (mdt_object_exists(o) < 0) /* remote object */
+	if (mdt_object_remote(o) || !mdt_object_exists(o)) /* remote object */
 		GOTO(put, rc = -ENOENT);
 
 	rc = lu_fid_cmp(&info->mti_body->fid1, &info->mti_body->fid2);
