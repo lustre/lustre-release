@@ -973,6 +973,33 @@ static int lprocfs_wr_enable_remote_dir(struct file *file, const char *buffer,
 	return count;
 }
 
+static int lprocfs_rd_enable_remote_dir_gid(char *page, char **start, off_t off,
+					    int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return snprintf(page, count, "%d\n",
+			(int)mdt->mdt_enable_remote_dir_gid);
+}
+
+static int lprocfs_wr_enable_remote_dir_gid(struct file *file,
+					    const char *buffer,
+					    unsigned long count, void *data)
+{
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	__u32 val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_remote_dir_gid = val;
+	return count;
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -1012,7 +1039,9 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 					lprocfs_wr_job_interval, 0 },
 	{ "enable_remote_dir",		lprocfs_rd_enable_remote_dir,
 					lprocfs_wr_enable_remote_dir,	    0},
-        { 0 }
+	{ "enable_remote_dir_gid",	lprocfs_rd_enable_remote_dir_gid,
+					lprocfs_wr_enable_remote_dir_gid,   0},
+	{ 0 }
 };
 
 static struct lprocfs_vars lprocfs_mdt_module_vars[] = {

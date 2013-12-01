@@ -311,10 +311,17 @@ static int mdt_md_create(struct mdt_thread_info *info)
 			struct lu_ucred *uc  = mdt_ucred(info);
 
 			if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
-				CERROR("%s: Creating remote dir is only "
-				       "permitted for administrator: rc = %d\n",
-					mdt2obd_dev(mdt)->obd_name, -EPERM);
-				GOTO(out_put_child, rc = -EPERM);
+				if (uc->uc_gid !=
+				    mdt->mdt_enable_remote_dir_gid &&
+				    mdt->mdt_enable_remote_dir_gid != -1) {
+					CERROR("%s: Creating remote dir is only"
+					       " permitted for administrator or"
+					       " set mdt_enable_remote_dir_gid:"
+					       " rc = %d\n",
+						mdt2obd_dev(mdt)->obd_name,
+						-EPERM);
+					GOTO(out_put_child, rc = -EPERM);
+				}
 			}
 
 			ss = mdt_seq_site(mdt);

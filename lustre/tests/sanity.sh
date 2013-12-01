@@ -10757,7 +10757,20 @@ test_230b() {
 	[ $rc -ne 0 ] &&
 	   error "create remote directory failed after set enable_remote_dir"
 
-	rm -r $DIR/$tdir || error "unlink remote directory failed"
+	rm -rf $remote_dir || error "first unlink remote directory failed"
+
+	$RUNAS -G$RUNAS_GID $LFS mkdir -i $MDTIDX $DIR/$tfile &&
+							error "chown worked"
+
+	do_facet mds$MDTIDX lctl set_param \
+				mdt.*.enable_remote_dir_gid=$RUNAS_GID
+	$LFS mkdir -i $MDTIDX $remote_dir || rc=$?
+	do_facet mds$MDTIDX lctl set_param mdt.*.enable_remote_dir_gid=0
+
+	[ $rc -ne 0 ] &&
+	   error "create remote dir failed after set enable_remote_dir_gid"
+
+	rm -r $DIR/$tdir || error "second unlink remote directory failed"
 }
 run_test 230b "nested remote directory should be failed"
 

@@ -161,8 +161,10 @@ struct mdt_device {
         struct lustre_capa_key     mdt_capa_keys[2];
 	unsigned int               mdt_capa_conf:1,
 				   mdt_som_conf:1,
+				   /* Enable remote dir on non-MDT0 */
 				   mdt_enable_remote_dir:1;
 
+	gid_t			   mdt_enable_remote_dir_gid;
 	/* statfs optimization: we cache a bit  */
 	struct obd_statfs	   mdt_osfs;
 	__u64			   mdt_osfs_age;
