@@ -326,6 +326,11 @@ static int mdt_md_create(struct mdt_thread_info *info)
 				       mdt2obd_dev(mdt)->obd_name);
 				GOTO(out_put_child, rc = -EPERM);
 			}
+			if (!mdt_is_dne_client(mdt_info_req(info)->rq_export)) {
+				/* Return -EIO for old client */
+				GOTO(out_put_child, rc = -EIO);
+			}
+
 		}
                 ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
@@ -745,6 +750,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		CDEBUG(D_INFO, "%s: name %s: "DFID" is another MDT\n",
 		       mdt2obd_dev(info->mti_mdt)->obd_name,
 		       (char *)rr->rr_name, PFID(mdt_object_fid(mc)));
+
+		if (!mdt_is_dne_client(req->rq_export))
+			/* Return -EIO for old client */
+			GOTO(unlock_parent, rc = -EIO);
 
 		if (info->mti_spec.sp_rm_entry) {
 			struct lu_ucred *uc  = mdt_ucred(info);

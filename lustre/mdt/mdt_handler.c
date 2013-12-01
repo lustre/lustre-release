@@ -686,6 +686,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	if (mdt_object_remote(o)) {
 		/* This object is located on remote node.*/
+		/* Return -EIO for old client */
+		if (!mdt_is_dne_client(req->rq_export))
+			GOTO(out, rc = -EIO);
+
 		repbody->fid1 = *mdt_object_fid(o);
 		repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
 		GOTO(out, rc = 0);
@@ -5518,12 +5522,12 @@ static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
 		RETURN(-EINVAL);
 	}
 
-	rc = lu_object_exists(&obj->mot_obj.mo_lu);
-	if (rc <= 0) {
-		if (rc == -1)
-			rc = -EREMOTE;
-		else
-			rc = -ENOENT;
+	if (mdt_object_remote(obj))
+		rc = -EREMOTE;
+	else if (!mdt_object_exists(obj))
+		rc = -ENOENT;
+
+	if (rc < 0) {
 		mdt_object_put(env, obj);
 		CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
 			PFID(&fp->gf_fid), rc);

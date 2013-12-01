@@ -1051,6 +1051,12 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 
 		if (unlikely(mdt_object_remote(child))) {
 			/* the child object was created on remote server */
+			if (!mdt_is_dne_client(exp)) {
+				/* Return -EIO for old client */
+				mdt_object_put(env, parent);
+				mdt_object_put(env, child);
+				GOTO(out, rc = -EIO);
+			}
 			repbody->fid1 = *rr->rr_fid2;
 			repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
 			rc = 0;

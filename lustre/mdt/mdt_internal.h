@@ -620,6 +620,13 @@ static inline void mdt_export_evict(struct obd_export *exp)
         class_export_put(exp);
 }
 
+/* Here we use LVB_TYPE to check dne client, because it is
+ * also landed on 2.4. */
+static inline int mdt_is_dne_client(struct obd_export *exp)
+{
+	return !!(exp_connect_flags(exp) & OBD_CONNECT_LVB_TYPE);
+}
+
 int mdt_get_disposition(struct ldlm_reply *rep, int flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
                         struct ldlm_reply *rep, int flag);

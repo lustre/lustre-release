@@ -739,14 +739,18 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         mti->mti_attr.ma_need = MA_INODE;
         mti->mti_attr.ma_valid = 0;
 	rc = mdt_attr_get_complex(mti, child, &mti->mti_attr);
-        if (rc == -EREMOTE) {
-                /* object was created on remote server */
-                req->rq_status = rc;
-                body->valid |= OBD_MD_MDS;
-        }
-        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
-                           mdt_object_fid(child));
-        mdt_object_put(mti->mti_env, child);
+	if (rc == -EREMOTE) {
+		/* object was created on remote server */
+		if (!mdt_is_dne_client(exp))
+			/* Return -EIO for old client */
+			rc = -EIO;
+
+		req->rq_status = rc;
+		body->valid |= OBD_MD_MDS;
+	}
+	mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
+			   mdt_object_fid(child));
+	mdt_object_put(mti->mti_env, child);
 }
 
 static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
