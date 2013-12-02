@@ -1,8 +1,8 @@
 MODULES := ko2iblnd
 ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 
-# Need to make sure we use PRE, not POST here so that an external OFED
-# source pool overrides any in-kernel OFED sources
-EXTRA_PRE_CFLAGS := @O2IBCPPFLAGS@
+# Need to make sure that an external OFED source pool overrides
+# any in-kernel OFED sources
+NOSTDINC_FLAGS += @EXTRA_OFED_INCLUDE@
 
 @INCLUDE_RULES@
