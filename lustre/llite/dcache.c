@@ -117,7 +117,7 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 
 	CDEBUG(D_DENTRY, "found name %.*s(%p) flags %#x refc %d\n",
 	       name->len, name->name, dentry, dentry->d_flags,
-	       d_refcount(dentry));
+	       d_count(dentry));
 
 	/* mountpoint is always valid */
 	if (d_mountpoint((struct dentry *)dentry))
@@ -181,10 +181,10 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
 
 #ifdef HAVE_DCACHE_LOCK
-	LASSERT(d_refcount(de) == 0);
+	LASSERT(d_count(de) == 0);
 #else
 	/* kernel >= 2.6.38 last refcount is decreased after this function. */
-	LASSERT(d_refcount(de) == 1);
+	LASSERT(d_count(de) == 1);
 #endif
 
 	/* Disable this piece of code temproarily because this is called
@@ -210,7 +210,7 @@ int ll_d_init(struct dentry *de)
 
 	CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
 		de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
-		d_refcount(de));
+		d_count(de));
 
 	if (de->d_fsdata == NULL) {
 		struct ll_dentry_data *lld;
