@@ -45,19 +45,8 @@
 #include <lustre_export.h>
 
 #ifdef LPROCFS
-void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars);
-int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
-                            int count, int *eof, void *data);
-#else
-static void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-static inline int lprocfs_mgc_rd_ir_state(char *page, char **start,
-        off_t off, int count, int *eof, void *data)
-{
-        return 0;
-}
+extern struct lprocfs_seq_vars lprocfs_mgc_obd_vars[];
+int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
 #endif  /* LPROCFS */
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);

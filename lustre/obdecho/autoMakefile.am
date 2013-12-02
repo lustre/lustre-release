@@ -51,7 +51,6 @@ endif
 if DARWIN
 macos_PROGRAMS = obdecho
 obdecho_SOURCES =	\
-	lproc_echo.c	\
 	echo_client.c
 
 if SERVER

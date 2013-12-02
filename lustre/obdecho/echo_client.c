@@ -3165,16 +3165,13 @@ static struct obd_ops echo_client_obd_ops = {
 
 int echo_client_init(void)
 {
-        struct lprocfs_static_vars lvars = { 0 };
         int rc;
-
-        lprocfs_echo_init_vars(&lvars);
 
 	rc = lu_kmem_init(echo_caches);
 	if (rc == 0) {
 		rc = class_register_type(&echo_client_obd_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-					lvars.module_vars,
+					NULL,
 #endif
 					LUSTRE_ECHO_CLIENT_NAME,
 					&echo_device_type);
@@ -3193,15 +3190,12 @@ void echo_client_exit(void)
 #ifdef __KERNEL__
 static int __init obdecho_init(void)
 {
-        struct lprocfs_static_vars lvars;
         int rc;
 
         ENTRY;
         LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
 
 	LASSERT(PAGE_CACHE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
-
-        lprocfs_echo_init_vars(&lvars);
 
 # ifdef HAVE_SERVER_SUPPORT
         rc = echo_persistent_pages_init();
@@ -3210,7 +3204,7 @@ static int __init obdecho_init(void)
 
 	rc = class_register_type(&echo_obd_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				NULL,
 #endif
 				LUSTRE_ECHO_NAME, NULL);
 	if (rc != 0)

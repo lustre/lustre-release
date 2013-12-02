@@ -1,5 +1,5 @@
 MODULES := obdecho
-obdecho-objs := echo_client.o lproc_echo.o
+obdecho-objs := echo_client.o
 @SERVER_TRUE@obdecho-objs += echo.o
 
 EXTRA_DIST = $(obdecho-objs:%.o=%.c) echo_internal.h

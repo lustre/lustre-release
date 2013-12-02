@@ -3519,7 +3519,6 @@ static int brw_queue_work(const struct lu_env *env, void *data)
 
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	struct lprocfs_static_vars lvars = { 0 };
 	struct client_obd          *cli = &obd->u.cli;
 	void                       *handler;
 	int                        rc;
@@ -3548,8 +3547,10 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out_ptlrpcd_work, rc);
 
 	cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
-	lprocfs_osc_init_vars(&lvars);
-	if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+#ifdef LPROCFS
+	obd->obd_vars = lprocfs_osc_obd_vars;
+#endif
+	if (lprocfs_seq_obd_setup(obd) == 0) {
 		lproc_osc_attach_seqstat(obd);
 		sptlrpc_lprocfs_cliobd_attach(obd);
 		ptlrpc_lprocfs_register_obd(obd);
@@ -3663,21 +3664,9 @@ int osc_cleanup(struct obd_device *obd)
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        struct lprocfs_static_vars lvars = { 0 };
-        int rc = 0;
-
-        lprocfs_osc_init_vars(&lvars);
-
-        switch (lcfg->lcfg_command) {
-        default:
-                rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
-                                              lcfg, obd);
-                if (rc > 0)
-                        rc = 0;
-                break;
-        }
-
-        return(rc);
+	int rc = class_process_proc_seq_param(PARAM_OSC, obd->obd_vars,
+					      lcfg, obd);
+	return(rc > 0 ? 0: rc);
 }
 
 static int osc_process_config(struct obd_device *obd, obd_count len, void *buf)
@@ -3730,7 +3719,6 @@ extern struct lock_class_key osc_ast_guard_class;
 
 int __init osc_init(void)
 {
-        struct lprocfs_static_vars lvars = { 0 };
         int rc;
         ENTRY;
 
@@ -3743,11 +3731,9 @@ int __init osc_init(void)
 	if (rc)
 		RETURN(rc);
 
-        lprocfs_osc_init_vars(&lvars);
-
 	rc = class_register_type(&osc_obd_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				NULL,
 #endif
 				LUSTRE_OSC_NAME, &osc_device_type);
         if (rc) {

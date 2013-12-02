@@ -954,16 +954,6 @@ cleanup_ctxt:
 	return rc;
 }
 
-#ifdef LPROCFS
-static struct lprocfs_vars lprocfs_llog_test_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_llog_test_module_vars[] = { {0} };
-static void lprocfs_llog_test_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars  = lprocfs_llog_test_module_vars;
-    lvars->obd_vars     = lprocfs_llog_test_obd_vars;
-}
-#endif
-
 static int llog_test_cleanup(struct obd_device *obd)
 {
 	struct obd_device	*tgt;
@@ -1067,12 +1057,9 @@ static struct obd_ops llog_obd_ops = {
 
 static int __init llog_test_init(void)
 {
-	struct lprocfs_static_vars lvars;
-
-	lprocfs_llog_test_init_vars(&lvars);
 	return class_register_type(&llog_obd_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-					lvars.module_vars,
+					NULL,
 #endif
 					"llog_test", NULL);
 }

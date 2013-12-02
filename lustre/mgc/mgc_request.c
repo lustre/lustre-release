@@ -462,33 +462,32 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         RETURN(rc);
 }
 
-int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
-                            int count, int *eof, void *data)
+#ifdef LPROCFS
+int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 {
         struct obd_device       *obd = data;
         struct obd_import       *imp = obd->u.cli.cl_import;
         struct obd_connect_data *ocd = &imp->imp_connect_data;
         struct config_llog_data *cld;
-        int rc = 0;
         ENTRY;
 
-        rc = snprintf(page, count, "imperative_recovery: %s\n",
-		      OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ENABLED" : "DISABLED");
-        rc += snprintf(page + rc, count - rc, "client_state:\n");
+	seq_printf(m, "imperative_recovery: %s\n",
+		   OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ENABLED" : "DISABLED");
+	seq_printf(m, "client_state:\n");
 
 	spin_lock(&config_list_lock);
 	cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
 		if (cld->cld_recover == NULL)
 			continue;
-		rc += snprintf(page + rc, count - rc,
-			       "    - { client: %s, nidtbl_version: %u }\n",
+		seq_printf(m,  "    - { client: %s, nidtbl_version: %u }\n",
 			       cld->cld_logname,
 			       cld->cld_recover->cld_cfg.cfg_last_idx);
 	}
 	spin_unlock(&config_list_lock);
 
-	RETURN(rc);
+	RETURN(0);
 }
+#endif
 
 /* reenqueue any lost locks */
 #define RQ_RUNNING 0x1
@@ -891,7 +890,6 @@ static int mgc_cleanup(struct obd_device *obd)
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	struct lprocfs_static_vars	lvars;
 	int				rc;
 	ENTRY;
 
@@ -909,8 +907,10 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(err_cleanup, rc);
 	}
 
-	lprocfs_mgc_init_vars(&lvars);
-	lprocfs_obd_setup(obd, lvars.obd_vars);
+#ifdef LPROCFS
+	obd->obd_vars = lprocfs_mgc_obd_vars;
+	lprocfs_seq_obd_setup(obd);
+#endif
 	sptlrpc_lprocfs_cliobd_attach(obd);
 
 	if (cfs_atomic_inc_return(&mgc_count) == 1) {
