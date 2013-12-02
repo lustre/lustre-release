@@ -413,25 +413,24 @@ extern const struct file_operations seq_fld_proc_seq_fops;
 static int seq_server_proc_init(struct lu_server_seq *seq)
 {
 #ifdef LPROCFS
+	int rc;
+	ENTRY;
 
-        int rc;
-        ENTRY;
+	seq->lss_proc_dir = lprocfs_seq_register(seq->lss_name,
+						 seq_type_proc_dir,
+						 NULL, NULL);
+	if (IS_ERR(seq->lss_proc_dir)) {
+		rc = PTR_ERR(seq->lss_proc_dir);
+		RETURN(rc);
+	}
 
-        seq->lss_proc_dir = lprocfs_register(seq->lss_name,
-                                             seq_type_proc_dir,
-                                             NULL, NULL);
-        if (IS_ERR(seq->lss_proc_dir)) {
-                rc = PTR_ERR(seq->lss_proc_dir);
-                RETURN(rc);
-        }
-
-        rc = lprocfs_add_vars(seq->lss_proc_dir,
-                              seq_server_proc_list, seq);
-        if (rc) {
-                CERROR("%s: Can't init sequence manager "
-                       "proc, rc %d\n", seq->lss_name, rc);
-                GOTO(out_cleanup, rc);
-        }
+	rc = lprocfs_seq_add_vars(seq->lss_proc_dir,
+				  seq_server_proc_list, seq);
+	if (rc) {
+		CERROR("%s: Can't init sequence manager "
+		       "proc, rc %d\n", seq->lss_name, rc);
+		GOTO(out_cleanup, rc);
+	}
 
 	if (seq->lss_type == LUSTRE_SEQ_CONTROLLER) {
 		rc = lprocfs_seq_create(seq->lss_proc_dir, "fldb", 0644,
@@ -443,11 +442,11 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
 		}
 	}
 
-        RETURN(0);
+	RETURN(0);
 
 out_cleanup:
-        seq_server_proc_fini(seq);
-        return rc;
+	seq_server_proc_fini(seq);
+	return rc;
 #else /* LPROCFS */
 	return 0;
 #endif
