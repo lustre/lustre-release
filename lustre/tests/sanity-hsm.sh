@@ -1335,19 +1335,32 @@ test_21() {
 	local fid=$(make_small $f)
 	check_hsm_flags $f "0x00000000"
 
+	local orig_size=$(stat -c "%s" $f)
+	local orig_blocks=$(stat -c "%b" $f)
+
+	start_full_debug_logging
+
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	[ $(stat -c "%b" $f) -ne "1" ] || error "wrong block number"
-	local sz=$(stat -c "%s" $f)
-	[ $sz -ne "0" ] || error "file size should not be zero"
+	local blocks=$(stat -c "%b" $f)
+	[ $blocks -eq $orig_blocks ] ||
+		error "$f: wrong block number after archive: " \
+		      "$blocks != $orig_blocks"
+	local size=$(stat -c "%s" $f)
+	[ $size -eq $orig_size ] ||
+		error "$f: wrong size after archive: $size != $orig_size"
 
 	# Release and check states
 	$LFS hsm_release $f || error "could not release file"
 	check_hsm_flags $f "0x0000000d"
 
-	[ $(stat -c "%b" $f) -eq "1" ] || error "wrong block number"
-	[ $(stat -c "%s" $f) -eq $sz ] || error "wrong file size"
+	blocks=$(stat -c "%b" $f)
+	[ $blocks -gt 5 ] &&
+		error "$f: too many blocks after release: $blocks > 5"
+	size=$(stat -c "%s" $f)
+	[ $size -ne $orig_size ] &&
+		error "$f: wrong size after release: $size != $orig_size"
 
 	# Check we can release an file without stripe info
 	f=$f.nolov
@@ -1364,6 +1377,8 @@ test_21() {
 	# Release again a file that is already released is OK
 	$LFS hsm_release $f || fail "second release should succeed"
 	check_hsm_flags $f "0x0000000d"
+
+	stop_full_debug_logging
 
 	copytool_cleanup
 }
