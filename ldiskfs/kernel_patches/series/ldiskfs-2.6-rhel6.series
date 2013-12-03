@@ -41,3 +41,4 @@ rhel6.3/ext4-quota-first-class.patch
 rhel6.3/ext4-inode_info_reorganize.patch
 rhel6.3/ext4-fix-mbgroups-access.patch
 rhel6.3/ext4-fix-ext4_mb_add_n_trim.patch
+rhel6.3/ext4-journal-path-opt.patch

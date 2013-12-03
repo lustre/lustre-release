@@ -1,0 +1,67 @@
+diff -ur linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
+--- linux-stage.orig/fs/ext4/super.c	2013-09-26 11:25:51.970361560 -0400
++++ linux-stage/fs/ext4/super.c	2013-09-26 11:46:25.078236831 -0400
+@@ -1274,7 +1274,7 @@
+ 	Opt_user_xattr, Opt_nouser_xattr, Opt_acl, Opt_noacl,
+ 	Opt_auto_da_alloc, Opt_noauto_da_alloc, Opt_noload, Opt_nobh, Opt_bh,
+ 	Opt_commit, Opt_min_batch_time, Opt_max_batch_time,
+-	Opt_journal_update, Opt_journal_dev,
++	Opt_journal_update, Opt_journal_dev, Opt_journal_path,
+ 	Opt_journal_checksum, Opt_journal_async_commit,
+ 	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
+ 	Opt_data_err_abort, Opt_data_err_ignore,
+@@ -1323,6 +1323,7 @@
+ 	{Opt_max_batch_time, "max_batch_time=%u"},
+ 	{Opt_journal_update, "journal=update"},
+ 	{Opt_journal_dev, "journal_dev=%u"},
++	{Opt_journal_path, "journal_path=%s"},
+ 	{Opt_journal_checksum, "journal_checksum"},
+ 	{Opt_journal_async_commit, "journal_async_commit"},
+ 	{Opt_abort, "abort"},
+@@ -1533,6 +1534,46 @@
+ 				return 0;
+ 			*journal_devnum = option;
+ 			break;
++		case Opt_journal_path: {
++			char *journal_path;
++			struct inode *journal_inode;
++			struct path path;
++			int error;
++
++			if (is_remount) {
++				ext4_msg(sb, KERN_ERR,
++					"Cannot specify journal on remount");
++				return -1;
++			}
++			journal_path = match_strdup(&args[0]);
++			if (!journal_path) {
++				ext4_msg(sb, KERN_ERR, "error: could not dup "
++					"journal device string");
++				return -1;
++			}
++
++			error = kern_path(journal_path, LOOKUP_FOLLOW, &path);
++			if (error) {
++				ext4_msg(sb, KERN_ERR, "error: could not find "
++					"journal device path: error %d", error);
++					kfree(journal_path);
++				return -1;
++			}
++
++			journal_inode = path.dentry->d_inode;
++			if (!S_ISBLK(journal_inode->i_mode)) {
++				ext4_msg(sb, KERN_ERR, "error: journal path %s "
++					"is not a block device", journal_path);
++				path_put(&path);
++				kfree(journal_path);
++				return -1;
++			}
++
++			*journal_devnum = new_encode_dev(journal_inode->i_rdev);
++			path_put(&path);
++			kfree(journal_path);
++			break;
++		}
+ 		case Opt_journal_checksum:
+ 			set_opt(sbi->s_mount_opt, JOURNAL_CHECKSUM);
+ 			break;

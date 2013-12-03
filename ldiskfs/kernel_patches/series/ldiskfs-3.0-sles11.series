@@ -42,3 +42,4 @@ rhel6.3/ext4-nocmtime-2.6.patch
 rhel6.3/ext4-export-64bit-name-hash.patch
 sles11sp2/ext4-store-tree-generation-at-find.patch
 sles11sp2/ext4_pdirop.patch
+rhel6.3/ext4-journal-path-opt.patch
