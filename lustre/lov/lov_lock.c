@@ -709,18 +709,26 @@ static int lov_lock_unuse(const struct lu_env *env,
                 if (sub == NULL)
                         continue;
 
-                sublock = sub->lss_cl.cls_lock;
-                rc = lov_sublock_lock(env, lck, lls, closure, &subenv);
-                if (rc == 0) {
-                        if (lls->sub_flags & LSF_HELD) {
-                                LASSERT(sublock->cll_state == CLS_HELD ||
-                                        sublock->cll_state == CLS_ENQUEUED);
-                                rc = cl_unuse_try(subenv->lse_env, sublock);
-                                rc = lov_sublock_release(env, lck, i, 0, rc);
-                        }
-                        lov_sublock_unlock(env, sub, closure, subenv);
-                }
-                result = lov_subresult(result, rc);
+		sublock = sub->lss_cl.cls_lock;
+		rc = lov_sublock_lock(env, lck, lls, closure, &subenv);
+		if (rc == 0) {
+			if (!(lls->sub_flags & LSF_HELD)) {
+				lov_sublock_unlock(env, sub, closure, subenv);
+				continue;
+			}
+
+			switch(sublock->cll_state) {
+			case CLS_HELD:
+				rc = cl_unuse_try(subenv->lse_env, sublock);
+				lov_sublock_release(env, lck, i, 0, 0);
+				break;
+			default:
+				lov_sublock_release(env, lck, i, 1, 0);
+				break;
+			}
+			lov_sublock_unlock(env, sub, closure, subenv);
+		}
+		result = lov_subresult(result, rc);
         }
 
         if (result == 0 && lck->lls_cancel_race) {
