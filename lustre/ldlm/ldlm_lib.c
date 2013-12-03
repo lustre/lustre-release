@@ -908,12 +908,11 @@ int target_handle_connect(struct ptlrpc_request *req)
 		}
 	}
 
-        if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) &&
-            (data->ocd_connect_flags & OBD_CONNECT_MDS))
-		mds_conn = true;
-
-	if ((data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
-		lw_client = true;
+	if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) {
+		mds_conn = (data->ocd_connect_flags & OBD_CONNECT_MDS) != 0;
+		lw_client = (data->ocd_connect_flags &
+			     OBD_CONNECT_LIGHTWEIGHT) != 0;
+	}
 
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
@@ -935,19 +934,21 @@ int target_handle_connect(struct ptlrpc_request *req)
 		class_export_put(export);
 		export = NULL;
 		rc = -EALREADY;
-	} else if (mds_conn && export->exp_connection) {
+	} else if ((mds_conn || lw_client) && export->exp_connection != NULL) {
 		spin_unlock(&export->exp_lock);
-                if (req->rq_peer.nid != export->exp_connection->c_peer.nid)
-			/* MDS reconnected after failover. */
-			LCONSOLE_WARN("%s: Received MDS connection from "
+		if (req->rq_peer.nid != export->exp_connection->c_peer.nid)
+			/* MDS or LWP reconnected after failover. */
+			LCONSOLE_WARN("%s: Received %s connection from "
 			    "%s, removing former export from %s\n",
-			    target->obd_name, libcfs_nid2str(req->rq_peer.nid),
+			    target->obd_name, mds_conn ? "MDS" : "LWP",
+			    libcfs_nid2str(req->rq_peer.nid),
 			    libcfs_nid2str(export->exp_connection->c_peer.nid));
 		else
 			/* New MDS connection from the same NID. */
-                        LCONSOLE_WARN("%s: Received new MDS connection from "
-                            "%s, removing former export from same NID\n",
-                            target->obd_name, libcfs_nid2str(req->rq_peer.nid));
+			LCONSOLE_WARN("%s: Received new %s connection from "
+				"%s, removing former export from same NID\n",
+				target->obd_name, mds_conn ? "MDS" : "LWP",
+				libcfs_nid2str(req->rq_peer.nid));
                 class_fail_export(export);
                 class_export_put(export);
                 export = NULL;
