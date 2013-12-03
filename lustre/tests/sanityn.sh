@@ -2549,6 +2549,28 @@ test_74() {
 }
 run_test 74 "flock deadlock: different mounts =============="
 
+# LU-3889
+test_75() {
+	$LFS setstripe -c 2 -S 1m -i 0 $DIR1/$tfile
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=2
+	cancel_lru_locks osc
+
+	dd of=$DIR1/$tfile if=/dev/zero bs=1M count=1 seek=1 conv=notrunc
+	sync
+
+	# define OBD_FAIL_LDLM_ENQUEUE_HANG 0x31d
+	$LCTL set_param fail_loc=0x31d
+	stat -c %s $DIR1/$tfile &
+	local pid=$!
+	sleep 1
+	kill -9 $pid
+
+	# For bad lock error handler we should ASSERT and got kernel panic here
+	sleep 4
+	$LCTL set_param fail_loc=0
+}
+run_test 75 "osc: upcall after unuse lock==================="
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
