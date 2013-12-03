@@ -891,12 +891,15 @@ void local_oid_storage_fini(const struct lu_env *env,
 	ls = dt2ls_dev(los->los_dev);
 
 	mutex_lock(&ls->ls_los_mutex);
-	if (cfs_atomic_read(&los->los_refcount) == 0) {
-		if (los->los_obj)
-			lu_object_put_nocache(env, &los->los_obj->do_lu);
-		cfs_list_del(&los->los_list);
-		OBD_FREE_PTR(los);
+	if (cfs_atomic_read(&los->los_refcount) > 0) {
+		mutex_unlock(&ls->ls_los_mutex);
+		return;
 	}
+
+	if (los->los_obj)
+		lu_object_put_nocache(env, &los->los_obj->do_lu);
+	cfs_list_del(&los->los_list);
+	OBD_FREE_PTR(los);
 	mutex_unlock(&ls->ls_los_mutex);
 	ls_device_put(env, ls);
 }
