@@ -158,10 +158,12 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 
 __u32 sptlrpc_name2flavor_base(const char *name)
 {
-        if (!strcmp(name, "null"))
-                return SPTLRPC_FLVR_NULL;
-        if (!strcmp(name, "plain"))
-                return SPTLRPC_FLVR_PLAIN;
+	if (!strcmp(name, "null"))
+		return SPTLRPC_FLVR_NULL;
+	if (!strcmp(name, "plain"))
+		return SPTLRPC_FLVR_PLAIN;
+	if (!strcmp(name, "gssnull"))
+		return SPTLRPC_FLVR_GSSNULL;
         if (!strcmp(name, "krb5n"))
                 return SPTLRPC_FLVR_KRB5N;
         if (!strcmp(name, "krb5a"))
@@ -183,6 +185,8 @@ const char *sptlrpc_flavor2name_base(__u32 flvr)
                 return "null";
         else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_PLAIN))
                 return "plain";
+	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_GSSNULL))
+		return "gssnull";
         else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_KRB5N))
                 return "krb5n";
         else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_KRB5A))

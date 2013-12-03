@@ -504,6 +504,10 @@ void gss_stat_oos_record_svc(int phase, int replay);
 int  __init gss_init_lproc(void);
 void gss_exit_lproc(void);
 
+/* gss_null_mech.c */
+int __init init_null_module(void);
+void cleanup_null_module(void);
+
 /* gss_krb5_mech.c */
 int __init init_kerberos_module(void);
 void cleanup_kerberos_module(void);

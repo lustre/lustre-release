@@ -32,8 +32,21 @@
 #include <gssapi/gssapi.h>
 
 /* from kerberos source, gssapi_krb5.c */
-gss_OID_desc krb5oid =
-   {9, "\052\206\110\206\367\022\001\002\002"};
+gss_OID_desc krb5oid = {
+	9,
+	"\052\206\110\206\367\022\001\002\002",
+};
 
-gss_OID_desc spkm3oid =
-   {7, "\053\006\001\005\005\001\003"};
+/*
+ * OpenSFS doesn't have reserved OID space, so for the null and shared
+ * key mechanisms, we use Indiana University's OID space for now
+ */
+gss_OID_desc nulloid = {
+	12,
+	"\053\006\001\004\001\311\146\215\126\001\000\000",
+};
+
+gss_OID_desc spkm3oid = {
+	7,
+	"\053\006\001\005\005\001\003",
+};
