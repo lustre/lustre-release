@@ -446,6 +446,6 @@ int __init gss_init_cli_upcall(void)
         return 0;
 }
 
-void __exit gss_exit_cli_upcall(void)
+void gss_exit_cli_upcall(void)
 {
 }

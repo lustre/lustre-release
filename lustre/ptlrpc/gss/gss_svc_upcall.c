@@ -1100,7 +1100,7 @@ int __init gss_init_svc_upcall(void)
 	return 0;
 }
 
-void __exit gss_exit_svc_upcall(void)
+void gss_exit_svc_upcall(void)
 {
 	cache_purge(&rsi_cache);
 	cache_unregister_net(&rsi_cache, &init_net);
