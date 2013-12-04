@@ -225,51 +225,41 @@ struct miscdevice obd_psdev = {
 #endif
 
 #ifdef LPROCFS
-int obd_proc_read_version(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
+static int obd_proc_version_seq_show(struct seq_file *m, void *v)
 {
-        *eof = 1;
-        return snprintf(page, count, "lustre: %s\nkernel: %s\nbuild:  %s\n",
-                        LUSTRE_VERSION_STRING, "patchless_client",
-                        BUILD_VERSION);
+	return seq_printf(m, "lustre: %s\nkernel: %s\nbuild:  %s\n",
+			  LUSTRE_VERSION_STRING, "patchless_client",
+			  BUILD_VERSION);
 }
+LPROC_SEQ_FOPS_RO(obd_proc_version);
 
-int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
-                         int *eof, void *data)
+static int obd_proc_pinger_seq_show(struct seq_file *m, void *v)
 {
-        *eof = 1;
-        return snprintf(page, count, "%s\n",
+	return seq_printf(m, "%s\n",
 #ifdef ENABLE_PINGER
-                        "on"
+			     "on"
 #else
-                        "off"
+			     "off"
 #endif
-                       );
+			 );
 }
+LPROC_SEQ_FOPS_RO(obd_proc_pinger);
 
 /**
  * Check all obd devices health
  *
- * \param page
- * \param start
- * \param off
- * \param count
- * \param eof
- * \param data
- *                  proc read function parameters, please refer to kernel
- *                  code fs/proc/generic.c proc_file_read()
+ * \param seq_file
  * \param data [in] unused
  *
- * \retval number of characters printed
+ * \retval number of characters printed if healthy
  */
-static int obd_proc_read_health(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
+static int obd_proc_health_seq_show(struct seq_file *m, void *data)
 {
-	int rc = 0, i;
-	*eof = 1;
+	bool healthy = true;
+	int i;
 
 	if (libcfs_catastrophe)
-		rc += snprintf(page + rc, count - rc, "LBUG\n");
+		seq_printf(m, "LBUG\n");
 
 	read_lock(&obd_dev_lock);
 	for (i = 0; i < class_devno_max(); i++) {
@@ -287,30 +277,31 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
 		read_unlock(&obd_dev_lock);
 
 		if (obd_health_check(NULL, obd)) {
-			rc += snprintf(page + rc, count - rc,
-				       "device %s reported unhealthy\n",
-				       obd->obd_name);
+			seq_printf(m, "device %s reported unhealthy\n",
+					obd->obd_name);
+			healthy = false;
 		}
 		class_decref(obd, __FUNCTION__, current);
 		read_lock(&obd_dev_lock);
 	}
 	read_unlock(&obd_dev_lock);
 
-	if (rc == 0)
-		return snprintf(page, count, "healthy\n");
+	if (healthy)
+		return seq_printf(m, "healthy\n");
 
-	rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
-	return rc;
+	seq_printf(m, "NOT HEALTHY\n");
+	return 0;
 }
+LPROC_SEQ_FOPS_RO(obd_proc_health);
 
-static int obd_proc_rd_jobid_var(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int obd_proc_jobid_var_seq_show(struct seq_file *m, void *v)
 {
-	return snprintf(page, count, "%s\n", obd_jobid_var);
+	return seq_printf(m, "%s\n", obd_jobid_var);
 }
 
-static int obd_proc_wr_jobid_var(struct file *file, const char *buffer,
-				unsigned long count, void *data)
+static ssize_t
+obd_proc_jobid_var_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
 	if (!count || count > JOBSTATS_JOBID_VAR_MAX_LEN)
 		return -EINVAL;
@@ -320,17 +311,21 @@ static int obd_proc_wr_jobid_var(struct file *file, const char *buffer,
 	memcpy(obd_jobid_var, buffer, count - (buffer[count - 1] == '\n'));
 	return count;
 }
+LPROC_SEQ_FOPS(obd_proc_jobid_var);
 
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
 EXPORT_SYMBOL(proc_lustre_root);
 
-struct lprocfs_vars lprocfs_base[] = {
-	{ "version", obd_proc_read_version, NULL, NULL },
-	{ "pinger", obd_proc_read_pinger, NULL, NULL },
-	{ "health_check", obd_proc_read_health, NULL, NULL },
-	{ "jobid_var", obd_proc_rd_jobid_var,
-		       obd_proc_wr_jobid_var, NULL },
+struct lprocfs_seq_vars lprocfs_base[] = {
+	{ .name =	"version",
+	  .fops	=	&obd_proc_version_fops	},
+	{ .name =	"pinger",
+	  .fops =	&obd_proc_pinger_fops	},
+	{ .name =	"health_check",
+	  .fops	=	&obd_proc_health_fops	},
+	{ .name =	"jobid_var",
+	  .fops	=	&obd_proc_jobid_var_fops},
 	{ 0 }
 };
 #else
@@ -395,17 +390,15 @@ struct seq_operations obd_device_list_sops = {
 
 static int obd_device_list_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file *seq;
-        int rc = seq_open(file, &obd_device_list_sops);
+	struct seq_file *seq;
+	int rc = seq_open(file, &obd_device_list_sops);
 
-        if (rc)
-                return rc;
+	if (rc)
+		return rc;
 
-        seq = file->private_data;
-        seq->private = dp->data;
-
-        return 0;
+	seq = file->private_data;
+	seq->private = PDE_DATA(inode);
+	return 0;
 }
 
 struct file_operations obd_device_list_fops = {
@@ -420,20 +413,20 @@ struct file_operations obd_device_list_fops = {
 int class_procfs_init(void)
 {
 #ifdef __KERNEL__
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        obd_sysctl_init();
-        proc_lustre_root = lprocfs_register("fs/lustre", NULL,
-                                            lprocfs_base, NULL);
-        rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
-                                &obd_device_list_fops, NULL);
-        if (rc)
-                CERROR("error adding /proc/fs/lustre/devices file\n");
+	obd_sysctl_init();
+	proc_lustre_root = lprocfs_seq_register("fs/lustre", NULL,
+						lprocfs_base, NULL);
+	rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
+				&obd_device_list_fops, NULL);
+	if (rc)
+		CERROR("error adding /proc/fs/lustre/devices file\n");
 #else
-        ENTRY;
+	ENTRY;
 #endif
-        RETURN(0);
+	RETURN(0);
 }
 
 #ifdef __KERNEL__
