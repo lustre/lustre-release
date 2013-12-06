@@ -1194,15 +1194,13 @@ struct nrs_lprocfs_orr_data {
  * XXX: the CRR-N version of this, ptlrpc_lprocfs_rd_nrs_crrn_quantum() is
  * almost identical; it can be reworked and then reused for ORR/TRR.
  */
-static int ptlrpc_lprocfs_rd_nrs_orr_quantum(char *page, char **start,
-					     off_t off, int count, int *eof,
-					     void *data)
+static int
+ptlrpc_lprocfs_nrs_orr_quantum_seq_show(struct seq_file *m, void *data)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	__u16			     quantum;
 	int			     rc;
-	int			     rc2 = 0;
 
 	/**
 	 * Perform two separate calls to this as only one of the NRS heads'
@@ -1214,9 +1212,7 @@ static int ptlrpc_lprocfs_rd_nrs_orr_quantum(char *page, char **start,
 				       NRS_CTL_ORR_RD_QUANTUM,
 				       true, &quantum);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 = snprintf(page, count, NRS_LPROCFS_QUANTUM_NAME_REG
-			       "%-5d\n", quantum);
+		seq_printf(m, NRS_LPROCFS_QUANTUM_NAME_REG "%-5d\n", quantum);
 		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1237,9 +1233,7 @@ static int ptlrpc_lprocfs_rd_nrs_orr_quantum(char *page, char **start,
 				       orr_data->name, NRS_CTL_ORR_RD_QUANTUM,
 				       true, &quantum);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += snprintf(page + rc2, count - rc2,
-				NRS_LPROCFS_QUANTUM_NAME_HP"%-5d\n", quantum);
+		seq_printf(m, NRS_LPROCFS_QUANTUM_NAME_HP"%-5d\n", quantum);
 		/**
 		 * Ignore -ENODEV as the high priority NRS head's policy may be
 		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1250,7 +1244,7 @@ static int ptlrpc_lprocfs_rd_nrs_orr_quantum(char *page, char **start,
 
 no_hp:
 
-	return rc2 ? : rc;
+	return rc;
 }
 
 /**
@@ -1279,11 +1273,12 @@ no_hp:
  * XXX: the CRR-N version of this, ptlrpc_lprocfs_wr_nrs_crrn_quantum() is
  * almost identical; it can be reworked and then reused for ORR/TRR.
  */
-static int ptlrpc_lprocfs_wr_nrs_orr_quantum(struct file *file,
-					     const char *buffer,
-					     unsigned long count, void *data)
+static ssize_t
+ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file, const char *buffer,
+					 size_t count, loff_t *off)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct seq_file		    *m = file->private_data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	enum ptlrpc_nrs_queue_type   queue = 0;
 	char			     kernbuf[LPROCFS_NRS_WR_QUANTUM_MAX_CMD];
@@ -1388,6 +1383,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_quantum(struct file *file,
 
 	return rc == -ENODEV && rc2 == -ENODEV ? -ENODEV : count;
 }
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_quantum);
 
 #define LPROCFS_NRS_OFF_NAME_REG		"reg_offset_type:"
 #define LPROCFS_NRS_OFF_NAME_HP			"hp_offset_type:"
@@ -1409,15 +1405,13 @@ static int ptlrpc_lprocfs_wr_nrs_orr_quantum(struct file *file,
  *	reg_offset_type:physical
  *	hp_offset_type:logical
  */
-static int ptlrpc_lprocfs_rd_nrs_orr_offset_type(char *page, char **start,
-						 off_t off, int count, int *eof,
-						 void *data)
+static int
+ptlrpc_lprocfs_nrs_orr_offset_type_seq_show(struct seq_file *m, void *data)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	bool			     physical;
 	int			     rc;
-	int			     rc2 = 0;
 
 	/**
 	 * Perform two separate calls to this as only one of the NRS heads'
@@ -1428,11 +1422,9 @@ static int ptlrpc_lprocfs_rd_nrs_orr_offset_type(char *page, char **start,
 				       orr_data->name, NRS_CTL_ORR_RD_OFF_TYPE,
 				       true, &physical);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 = snprintf(page, count,
-			       LPROCFS_NRS_OFF_NAME_REG"%s\n",
-			       physical ? LPROCFS_NRS_OFF_NAME_PHYSICAL :
-			       LPROCFS_NRS_OFF_NAME_LOGICAL);
+		seq_printf(m, LPROCFS_NRS_OFF_NAME_REG"%s\n",
+			   physical ? LPROCFS_NRS_OFF_NAME_PHYSICAL :
+			   LPROCFS_NRS_OFF_NAME_LOGICAL);
 		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1453,11 +1445,9 @@ static int ptlrpc_lprocfs_rd_nrs_orr_offset_type(char *page, char **start,
 				       orr_data->name, NRS_CTL_ORR_RD_OFF_TYPE,
 				       true, &physical);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += snprintf(page + rc2, count - rc2,
-				LPROCFS_NRS_OFF_NAME_HP"%s\n",
-				physical ? LPROCFS_NRS_OFF_NAME_PHYSICAL :
-				LPROCFS_NRS_OFF_NAME_LOGICAL);
+		seq_printf(m, LPROCFS_NRS_OFF_NAME_HP"%s\n",
+			   physical ? LPROCFS_NRS_OFF_NAME_PHYSICAL :
+			   LPROCFS_NRS_OFF_NAME_LOGICAL);
 		/**
 		 * Ignore -ENODEV as the high priority NRS head's policy may be
 		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1467,8 +1457,7 @@ static int ptlrpc_lprocfs_rd_nrs_orr_offset_type(char *page, char **start,
 	}
 
 no_hp:
-
-	return rc2 ? : rc;
+	return rc;
 }
 
 /**
@@ -1497,12 +1486,13 @@ no_hp:
  * policy instances in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state are
  * are skipped later by nrs_orr_ctl().
  */
-static int ptlrpc_lprocfs_wr_nrs_orr_offset_type(struct file *file,
-						 const char *buffer,
-						 unsigned long count,
-						 void *data)
+static ssize_t
+ptlrpc_lprocfs_nrs_orr_offset_type_seq_write(struct file *file,
+					     const char *buffer, size_t count,
+					     loff_t *off)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct seq_file		    *m = file->private_data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	enum ptlrpc_nrs_queue_type   queue = 0;
 	char			     kernbuf[LPROCFS_NRS_WR_OFF_TYPE_MAX_CMD];
@@ -1612,6 +1602,7 @@ static int ptlrpc_lprocfs_wr_nrs_orr_offset_type(struct file *file,
 
 	return rc == -ENODEV && rc2 == -ENODEV ? -ENODEV : count;
 }
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_offset_type);
 
 #define NRS_LPROCFS_REQ_SUPP_NAME_REG		"reg_supported:"
 #define NRS_LPROCFS_REQ_SUPP_NAME_HP		"hp_supported:"
@@ -1670,15 +1661,13 @@ static enum nrs_orr_supp nrs_orr_str2supp(const char *val)
  *	reg_supported:reads
  *	hp_supported:reads_and_writes
  */
-static int ptlrpc_lprocfs_rd_nrs_orr_supported(char *page, char **start,
-					       off_t off, int count, int *eof,
-					       void *data)
+static int
+ptlrpc_lprocfs_nrs_orr_supported_seq_show(struct seq_file *m, void *data)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	enum nrs_orr_supp	     supported;
 	int			     rc;
-	int			     rc2 = 0;
 
 	/**
 	 * Perform two separate calls to this as only one of the NRS heads'
@@ -1691,10 +1680,8 @@ static int ptlrpc_lprocfs_rd_nrs_orr_supported(char *page, char **start,
 				       &supported);
 
 	if (rc == 0) {
-		*eof = 1;
-		rc2 = snprintf(page, count,
-			       NRS_LPROCFS_REQ_SUPP_NAME_REG"%s\n",
-			       nrs_orr_supp2str(supported));
+		seq_printf(m, NRS_LPROCFS_REQ_SUPP_NAME_REG"%s\n",
+			   nrs_orr_supp2str(supported));
 		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1716,10 +1703,8 @@ static int ptlrpc_lprocfs_rd_nrs_orr_supported(char *page, char **start,
 				       NRS_CTL_ORR_RD_SUPP_REQ, true,
 				       &supported);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += snprintf(page + rc2, count - rc2,
-			       NRS_LPROCFS_REQ_SUPP_NAME_HP"%s\n",
-			       nrs_orr_supp2str(supported));
+		seq_printf(m, NRS_LPROCFS_REQ_SUPP_NAME_HP"%s\n",
+			   nrs_orr_supp2str(supported));
 		/**
 		 * Ignore -ENODEV as the high priority NRS head's policy may be
 		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1730,7 +1715,7 @@ static int ptlrpc_lprocfs_rd_nrs_orr_supported(char *page, char **start,
 
 no_hp:
 
-	return rc2 ? : rc;
+	return rc;
 }
 
 /**
@@ -1760,11 +1745,13 @@ no_hp:
  * policy instances in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state are
  * are skipped later by nrs_orr_ctl().
  */
-static int ptlrpc_lprocfs_wr_nrs_orr_supported(struct file *file,
-					       const char *buffer,
-					       unsigned long count, void *data)
+static ssize_t
+ptlrpc_lprocfs_nrs_orr_supported_seq_write(struct file *file,
+					   const char *buffer, size_t count,
+					   loff_t *off)
 {
-	struct nrs_lprocfs_orr_data *orr_data = data;
+	struct seq_file		    *m = file->private_data;
+	struct nrs_lprocfs_orr_data *orr_data = m->private;
 	struct ptlrpc_service	    *svc = orr_data->svc;
 	enum ptlrpc_nrs_queue_type   queue = 0;
 	char			     kernbuf[LPROCFS_NRS_WR_REQ_SUPP_MAX_CMD];
@@ -1865,22 +1852,19 @@ static int ptlrpc_lprocfs_wr_nrs_orr_supported(struct file *file,
 
 	return rc == -ENODEV && rc2 == -ENODEV ? -ENODEV : count;
 }
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_supported);
 
 int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 {
-	int	rc;
 	int	i;
 
-	struct lprocfs_vars nrs_orr_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_orr_lprocfs_vars[] = {
 		{ .name		= "nrs_orr_quantum",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_quantum,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_quantum },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops	},
 		{ .name		= "nrs_orr_offset_type",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_offset_type,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_offset_type },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_offset_type_fops },
 		{ .name		= "nrs_orr_supported",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_supported,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_supported },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_supported_fops },
 		{ NULL }
 	};
 
@@ -1892,9 +1876,7 @@ int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_orr_lprocfs_vars); i++)
 		nrs_orr_lprocfs_vars[i].data = &lprocfs_orr_data;
 
-	rc = lprocfs_add_vars(svc->srv_procroot, nrs_orr_lprocfs_vars, NULL);
-
-	return rc;
+	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_orr_lprocfs_vars, NULL);
 }
 
 void nrs_orr_lprocfs_fini(struct ptlrpc_service *svc)
@@ -1946,16 +1928,13 @@ int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	int	rc;
 	int	i;
 
-	struct lprocfs_vars nrs_trr_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_trr_lprocfs_vars[] = {
 		{ .name		= "nrs_trr_quantum",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_quantum,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_quantum },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops },
 		{ .name		= "nrs_trr_offset_type",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_offset_type,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_offset_type },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_offset_type_fops },
 		{ .name		= "nrs_trr_supported",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_orr_supported,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_orr_supported },
+		  .fops		= &ptlrpc_lprocfs_nrs_orr_supported_fops },
 		{ NULL }
 	};
 
@@ -1967,7 +1946,7 @@ int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_trr_lprocfs_vars); i++)
 		nrs_trr_lprocfs_vars[i].data = &lprocfs_trr_data;
 
-	rc = lprocfs_add_vars(svc->srv_procroot, nrs_trr_lprocfs_vars, NULL);
+	rc = lprocfs_seq_add_vars(svc->srv_procroot, nrs_trr_lprocfs_vars, NULL);
 
 	return rc;
 }

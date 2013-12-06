@@ -633,14 +633,12 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
  *	reg_quantum:8
  *	hp_quantum:4
  */
-static int ptlrpc_lprocfs_rd_nrs_crrn_quantum(char *page, char **start,
-					      off_t off, int count, int *eof,
-					      void *data)
+static int
+ptlrpc_lprocfs_nrs_crrn_quantum_seq_show(struct seq_file *m, void *data)
 {
-	struct ptlrpc_service	    *svc = data;
-	__u16			     quantum;
-	int			     rc;
-	int			     rc2 = 0;
+	struct ptlrpc_service	*svc = m->private;
+	__u16			quantum;
+	int			rc;
 
 	/**
 	 * Perform two separate calls to this as only one of the NRS heads'
@@ -652,9 +650,8 @@ static int ptlrpc_lprocfs_rd_nrs_crrn_quantum(char *page, char **start,
 				       NRS_CTL_CRRN_RD_QUANTUM,
 				       true, &quantum);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 = snprintf(page, count, NRS_LPROCFS_QUANTUM_NAME_REG
-			       "%-5d\n", quantum);
+		seq_printf(m, NRS_LPROCFS_QUANTUM_NAME_REG
+			   "%-5d\n", quantum);
 		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -671,9 +668,7 @@ static int ptlrpc_lprocfs_rd_nrs_crrn_quantum(char *page, char **start,
 				       NRS_CTL_CRRN_RD_QUANTUM,
 				       true, &quantum);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += snprintf(page + rc2, count - rc2,
-				NRS_LPROCFS_QUANTUM_NAME_HP"%-5d\n", quantum);
+		seq_printf(m, NRS_LPROCFS_QUANTUM_NAME_HP"%-5d\n", quantum);
 		/**
 		 * Ignore -ENODEV as the high priority NRS head's policy may be
 		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -683,8 +678,7 @@ static int ptlrpc_lprocfs_rd_nrs_crrn_quantum(char *page, char **start,
 	}
 
 no_hp:
-
-	return rc2 ? : rc;
+	return rc;
 }
 
 /**
@@ -707,11 +701,12 @@ no_hp:
  * policy instances in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state
  * are skipped later by nrs_crrn_ctl().
  */
-static int ptlrpc_lprocfs_wr_nrs_crrn_quantum(struct file *file,
-					      const char *buffer,
-					      unsigned long count, void *data)
+static ssize_t
+ptlrpc_lprocfs_nrs_crrn_quantum_seq_write(struct file *file,
+					  const char *buffer, size_t count,
+					  loff_t *off)
 {
-	struct ptlrpc_service	    *svc = data;
+	struct ptlrpc_service	    *svc = ((struct seq_file *)file->private_data)->private;
 	enum ptlrpc_nrs_queue_type   queue = 0;
 	char			     kernbuf[LPROCFS_NRS_WR_QUANTUM_MAX_CMD];
 	char			    *val;
@@ -815,6 +810,7 @@ static int ptlrpc_lprocfs_wr_nrs_crrn_quantum(struct file *file,
 
 	return rc == -ENODEV && rc2 == -ENODEV ? -ENODEV : count;
 }
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
 
 /**
  * Initializes a CRR-N policy's lprocfs interface for service \a svc
@@ -826,12 +822,9 @@ static int ptlrpc_lprocfs_wr_nrs_crrn_quantum(struct file *file,
  */
 int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 {
-	int	rc;
-
-	struct lprocfs_vars nrs_crrn_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_crrn_lprocfs_vars[] = {
 		{ .name		= "nrs_crrn_quantum",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_crrn_quantum,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_crrn_quantum,
+		  .fops		= &ptlrpc_lprocfs_nrs_crrn_quantum_fops,
 		  .data = svc },
 		{ NULL }
 	};
@@ -839,9 +832,8 @@ int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 	if (svc->srv_procroot == NULL)
 		return 0;
 
-	rc = lprocfs_add_vars(svc->srv_procroot, nrs_crrn_lprocfs_vars, NULL);
-
-	return rc;
+	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_crrn_lprocfs_vars,
+				    NULL);
 }
 
 /**

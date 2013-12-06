@@ -98,12 +98,9 @@ void gss_stat_oos_record_svc(int phase, int replay)
                 cfs_atomic_inc(&gss_stat_oos.oos_svc_pass[phase]);
 }
 
-static int gss_proc_read_oos(char *page, char **start, off_t off, int count,
-                             int *eof, void *data)
+static int gss_proc_oos_seq_show(struct seq_file *m, void *v)
 {
-        int written;
-
-        written = snprintf(page, count,
+	return seq_printf(m,
                         "seqwin:                %u\n"
                         "backwin:               %u\n"
                         "client fall behind seqwin\n"
@@ -123,12 +120,12 @@ static int gss_proc_read_oos(char *page, char **start, off_t off, int count,
                         cfs_atomic_read(&gss_stat_oos.oos_svc_replay[1]),
                         cfs_atomic_read(&gss_stat_oos.oos_svc_replay[2]),
                         cfs_atomic_read(&gss_stat_oos.oos_svc_pass[2]));
-
-        return written;
 }
+LPROC_SEQ_FOPS_RO(gss_proc_oos);
 
-static int gss_proc_write_secinit(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
+static ssize_t
+gss_proc_write_secinit(struct file *file, const char *buffer,
+				  size_t count, loff_t *off)
 {
         int rc;
 
@@ -137,14 +134,20 @@ static int gss_proc_write_secinit(struct file *file, const char *buffer,
                 LASSERT(rc < 0);
                 return rc;
         }
-
-        return ((int) count);
+	return count;
 }
 
-static struct lprocfs_vars gss_lprocfs_vars[] = {
-        { "replays", gss_proc_read_oos, NULL },
-        { "init_channel", NULL, gss_proc_write_secinit, NULL, NULL, 0222 },
-        { NULL }
+static const struct file_operations gss_proc_secinit = {
+	.write = gss_proc_write_secinit,
+};
+
+static struct lprocfs_seq_vars gss_lprocfs_vars[] = {
+	{ .name	=	"replays",
+	  .fops	=	&gss_proc_oos_fops	},
+	{ .name	=	"init_channel",
+	  .fops	=	&gss_proc_secinit,
+	  .proc_mode =	0222			},
+	{ NULL }
 };
 
 /*
@@ -154,14 +157,14 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
  */
 static int gss_lk_debug_level = 1;
 
-static int gss_lk_proc_read_dl(char *page, char **start, off_t off,
-                               int count, int *eof, void *data)
+static int gss_lk_proc_dl_seq_show(struct seq_file *m, void *v)
 {
-        return snprintf(page, count, "%u\n", gss_lk_debug_level);
+	return seq_printf(m, "%u\n", gss_lk_debug_level);
 }
 
-static int gss_lk_proc_write_dl(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
+static ssize_t
+gss_lk_proc_dl_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
         int     val, rc;
 
@@ -175,10 +178,12 @@ static int gss_lk_proc_write_dl(struct file *file, const char *buffer,
         gss_lk_debug_level = val;
         return count;
 }
+LPROC_SEQ_FOPS(gss_lk_proc_dl);
 
-static struct lprocfs_vars gss_lk_lprocfs_vars[] = {
-        { "debug_level", gss_lk_proc_read_dl, gss_lk_proc_write_dl, NULL },
-        { NULL }
+static struct lprocfs_seq_vars gss_lk_lprocfs_vars[] = {
+	{ .name	=	"debug_level",
+	  .fops	=	&gss_lk_proc_dl_fops	},
+	{ NULL }
 };
 
 void gss_exit_lproc(void)
@@ -200,16 +205,16 @@ int gss_init_lproc(void)
 
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
-	gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
-					 gss_lprocfs_vars, NULL);
+	gss_proc_root = lprocfs_seq_register("gss", sptlrpc_proc_root,
+						gss_lprocfs_vars, NULL);
 	if (IS_ERR(gss_proc_root)) {
 		rc = PTR_ERR(gss_proc_root);
 		gss_proc_root = NULL;
 		GOTO(out, rc);
 	}
 
-	gss_proc_lk = lprocfs_register("lgss_keyring", gss_proc_root,
-				       gss_lk_lprocfs_vars, NULL);
+	gss_proc_lk = lprocfs_seq_register("lgss_keyring", gss_proc_root,
+						gss_lk_lprocfs_vars, NULL);
 	if (IS_ERR(gss_proc_lk)) {
 		rc = PTR_ERR(gss_proc_lk);
 		gss_proc_lk = NULL;
