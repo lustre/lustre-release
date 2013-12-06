@@ -1258,13 +1258,12 @@ AC_DEFUN([LC_HAVE_ONLY_PROCFS_SEQ],
 LB_LINUX_TRY_COMPILE([
 	#include <linux/proc_fs.h>
 ],[
-	struct inode *inode = NULL;
-	PDE_DATA(inode);
+	((struct proc_dir_entry *)0)->write_proc(NULL, NULL, 0, NULL);
+],[
+	AC_MSG_RESULT([no])
 ],[
 	AC_DEFINE(HAVE_ONLY_PROCFS_SEQ, 1, [only seq_files supported])
 	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
 ])
 ])
 
