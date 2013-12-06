@@ -402,13 +402,13 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
         int rc = 0;
         ENTRY;
 
-        fld->lsf_proc_dir = lprocfs_register(fld->lsf_name,
-                                             fld_type_proc_dir,
-                                             fld_server_proc_list, fld);
-        if (IS_ERR(fld->lsf_proc_dir)) {
-                rc = PTR_ERR(fld->lsf_proc_dir);
-                RETURN(rc);
-        }
+	fld->lsf_proc_dir = lprocfs_seq_register(fld->lsf_name,
+						 fld_type_proc_dir,
+						 fld_server_proc_list, fld);
+	if (IS_ERR(fld->lsf_proc_dir)) {
+		rc = PTR_ERR(fld->lsf_proc_dir);
+		RETURN(rc);
+	}
 
 	rc = lprocfs_seq_create(fld->lsf_proc_dir, "fldb", 0444,
 				&fld_proc_seq_fops, fld);

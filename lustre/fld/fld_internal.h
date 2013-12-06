@@ -132,10 +132,10 @@ extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
 
-# ifdef LPROCFS
+#ifdef LPROCFS
 extern struct proc_dir_entry *fld_type_proc_dir;
-extern struct lprocfs_vars fld_client_proc_list[];
-# endif
+extern struct lprocfs_seq_vars fld_client_proc_list[];
+#endif
 
 # ifdef HAVE_SERVER_SUPPORT
 struct fld_thread_info {
@@ -170,10 +170,10 @@ void fld_server_mod_exit(void);
 
 int fld_server_read(const struct lu_env *env, struct lu_server_fld *fld,
 		    struct lu_seq_range *range, void *data, int data_len);
-# ifdef LPROCFS
+#ifdef LPROCFS
 extern const struct file_operations fld_proc_seq_fops;
-extern struct lprocfs_vars fld_server_proc_list[];
-# endif
+extern struct lprocfs_seq_vars fld_server_proc_list[];
+#endif
 
 # endif /* HAVE_SERVER_SUPPORT */
 
