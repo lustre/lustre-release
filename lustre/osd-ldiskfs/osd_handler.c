@@ -5619,8 +5619,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	struct osd_device *o = osd_dev(d);
 	ENTRY;
 
-	osd_procfs_fini(o);
 	osd_shutdown(env, o);
+	osd_procfs_fini(o);
 	osd_scrub_cleanup(env, o);
 	osd_obj_map_fini(o);
 	osd_umount(env, o);
