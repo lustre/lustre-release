@@ -327,38 +327,7 @@ chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
 
-cat >lustre.files <<EOF
-%{?rootdir}/sbin/mount.lustre
-%{_sbindir}/*
-%{_bindir}/lfs
-%{_bindir}/lfs_migrate
-%{_bindir}/llbackup
-%{_bindir}/llobdstat
-%{_bindir}/llstat
-%{_bindir}/lustre_req_history
-%{_bindir}/plot-llstat
-%{_bindir}/req_layout
-%{_libdir}/libptlctl.a
-%{_libdir}/liblustreapi.a
-%{_libdir}/liblustreapi.so
-%{_mandir}/man?/*
-%{_datadir}/lustre
-%{_includedir}/lustre
-%{_includedir}/libcfs
-%{_libexecdir}/lustre/lc_common
-%{_sysconfdir}/udev/rules.d/99-lustre.rules
-%{_sysconfdir}/init.d/lnet
-%{_sysconfdir}/init.d/lustre
-%config(noreplace) %{_sysconfdir}/ldev.conf
-%{_sysconfdir}/sysconfig/lustre
-%{_libexecdir}/lustre/haconfig
-%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
-%{_sysconfdir}/ha.d/resource.d/Lustre
-EOF
-
-if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then
-  echo '%{_libdir}/libcfsutil.a' >>lustre.files
-fi
+:> lustre.files
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%{_libdir}/liblustre.a' >>lustre.files
@@ -374,19 +343,8 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
   echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
-# Have universal lustre headers
-if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre/lustre_idl.h ] ; then
-  echo '%{_includedir}/linux/lustre_user.h' >>lustre.files
-else
-  echo '%{_includedir}/linux/lustre_idl.h' >>lustre.files
-fi
-
-if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ; then
-  echo '%{_includedir}/linux/lustre_types.h' >>lustre.files
-fi
-
 %if %{with lustre_tests}
-echo '%{_libdir}/lustre/tests/*' >lustre-tests.files
+echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
 %if %{with lustre_modules}
@@ -424,6 +382,34 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 
 %files -f lustre.files
 %defattr(-,root,root)
+%{?rootdir}/sbin/mount.lustre
+%{_sbindir}/*
+%{_bindir}/lfs
+%{_bindir}/lfs_migrate
+%{_bindir}/llbackup
+%{_bindir}/llobdstat
+%{_bindir}/llstat
+%{_bindir}/lustre_req_history
+%{_bindir}/plot-llstat
+%{_bindir}/req_layout
+%{_libdir}/libptlctl.a
+%{_libdir}/libcfsutil.a
+%{_libdir}/liblustreapi.a
+%{_libdir}/liblustreapi.so
+%{_mandir}/man?/*
+%{_datadir}/lustre
+%{_includedir}/lustre
+%{_includedir}/libcfs
+%{_includedir}/linux/lustre_user.h
+%{_libexecdir}/lustre/lc_common
+%{_sysconfdir}/udev/rules.d/99-lustre.rules
+%{_sysconfdir}/init.d/lnet
+%{_sysconfdir}/init.d/lustre
+%config(noreplace) %{_sysconfdir}/ldev.conf
+%{_sysconfdir}/sysconfig/lustre
+%{_libexecdir}/lustre/haconfig
+%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
+%{_sysconfdir}/ha.d/resource.d/Lustre
 
 %if %{with lustre_modules}
 %files modules
