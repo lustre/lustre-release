@@ -2020,7 +2020,7 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, const void *old_key,
         }
         /* overwrite key inside locks, otherwise may screw up with
          * other operations, i.e: rehash */
-        cfs_hash_keycpy(hs, new_key, hnode);
+        cfs_hash_keycpy(hs, hnode, new_key);
 
         cfs_hash_multi_bd_unlock(hs, bds, 3, 1);
         cfs_hash_unlock(hs, 0);
