@@ -12,14 +12,8 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$SRCDIR/../utils/gss:$PATH:/sbin
-export NAME=${NAME:-local}
-SAVE_PWD=$PWD
 
 export MULTIOP=${MULTIOP:-multiop}
-
-CLEANUP=${CLEANUP:-""}
-SETUP=${SETUP:-""}
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -40,26 +34,10 @@ unset SEC
 #
 # global variables of this sanity
 #
-KRB5_CCACHE_DIR=/tmp
-KRB5_CRED=$KRB5_CCACHE_DIR/krb5cc_$RUNAS_ID
-KRB5_CRED_SAVE=$KRB5_CCACHE_DIR/krb5cc.sanity.save
 DBENCH_PID=0
 
 # set manually
 GSS=true
-GSS_KRB5=true
-
-prepare_krb5_creds() {
-    echo prepare krb5 cred
-    rm -f $KRB5_CRED_SAVE
-    echo RUNAS=$RUNAS
-    $RUNAS krb5_login.sh || exit 1
-    [ -f $KRB5_CRED ] || exit 2
-    echo CRED=$KRB5_CRED
-    cp $KRB5_CRED $KRB5_CRED_SAVE
-}
-
-prepare_krb5_creds
 
 # we want double mount
 MOUNT_2=${MOUNT_2:-"yes"}
@@ -121,85 +99,22 @@ stop_dbench()
     sync || true
 }
 
-restore_krb5_cred() {
-    cp $KRB5_CRED_SAVE $KRB5_CRED
-    chown $RUNAS_ID:$RUNAS_ID $KRB5_CRED
-    chmod 0600 $KRB5_CRED
-}
-
-check_multiple_gss_daemons() {
-    local facet=$1
-    local gssd=$2
-    local gssd_name=`basename $gssd`
-
-    for ((i=0;i<10;i++)); do
-        do_facet $facet "$gssd -v &"
-    done
-
-    # wait daemons entering "stable" status
-    sleep 5
-
-    num=`do_facet $facet ps -o cmd -C $gssd_name | grep $gssd_name | wc -l`
-    echo "$num instance(s) of $gssd_name are running"
-
-    if [ $num -ne 1 ]; then
-        error "$gssd_name not unique"
-    fi
-}
-
 calc_connection_cnt
 umask 077
 
-test_0() {
-    local my_facet=mds
-
-    echo "bring up gss daemons..."
-    start_gss_daemons
-
-    echo "check with someone already running..."
-    check_multiple_gss_daemons $my_facet $LSVCGSSD
-    if $GSS_PIPEFS; then
-        check_multiple_gss_daemons $my_facet $LGSSD
-    fi
-
-    echo "check with someone run & finished..."
-    do_facet $my_facet killall -q -2 lgssd lsvcgssd || true
-    sleep 5 # wait fully exit
-    check_multiple_gss_daemons $my_facet $LSVCGSSD
-    if $GSS_PIPEFS; then
-        check_multiple_gss_daemons $my_facet $LGSSD
-    fi
-
-    echo "check refresh..."
-    do_facet $my_facet killall -q -2 lgssd lsvcgssd || true
-    sleep 5 # wait fully exit
-    do_facet $my_facet ipcrm -S 0x3b92d473
-    check_multiple_gss_daemons $my_facet $LSVCGSSD
-    if $GSS_PIPEFS; then
-        do_facet $my_facet ipcrm -S 0x3a92d473
-        check_multiple_gss_daemons $my_facet $LGSSD
-    fi
-}
-run_test 0 "start multiple gss daemons"
-
-set_flavor_all krb5p
+set_flavor_all gssnull
 
 test_1() {
-    local file=$DIR/$tfile
+	local file=$DIR/$tfile
 
-    chmod 0777 $DIR || error "chmod $DIR failed"
-    $RUNAS touch $DIR
-    # access w/o cred
-    $RUNAS kdestroy
-    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-    $RUNAS touch $file && error "unexpected success"
-
-    # access w/ cred
-    restore_krb5_cred
-    $RUNAS touch $file || error "should not fail"
-    [ -f $file ] || error "$file not found"
+	chmod 0777 $DIR || error "chmod $DIR failed"
+	# access w/o context
+	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS touch $DIR
+	$RUNAS touch $file || error "should not fail"
+	[ -f $file ] || error "$file not found"
 }
-run_test 1 "access with or without krb5 credential"
+run_test 1 "create file"
 
 test_2() {
     local file1=$DIR/$tfile-1
@@ -210,15 +125,9 @@ test_2() {
     $RUNAS touch $file1 || error "can't touch $file1"
     [ -f $file1 ] || error "$file1 not found"
 
-    # cleanup all cred/ctx and touch
-    $RUNAS kdestroy
-    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-    $RUNAS touch $file2 && error "unexpected success"
-
-    # restore and touch
-    restore_krb5_cred
-    $RUNAS touch $file2 || error "should not fail"
-    [ -f $file2 ] || error "$file2 not found"
+	# cleanup all cred/ctx and touch
+	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
+	$RUNAS touch $file2 && error "unexpected success"
 }
 run_test 2 "lfs flushctx"
 
@@ -241,96 +150,14 @@ test_3() {
     # cleanup all cred/ctx and check
     # metadata check should fail, but file data check should success
     # because we always use root credential to OSTs
-    $RUNAS kdestroy
     $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     echo "destroied credentials/contexs for $RUNAS_ID"
     $RUNAS $CHECKSTAT -p 0666 $file && error "checkstat succeed"
     kill -s 10 $OPPID
     wait $OPPID || error "read file data failed"
     echo "read file data OK"
-
-    # restore and check again
-    restore_krb5_cred
-    echo "restored credentials for $RUNAS_ID"
-    $RUNAS $CHECKSTAT -p 0666 $file || error "$RUNAS_ID checkstat (2) error"
-    echo "$RUNAS_ID checkstat OK"
-    $CHECKSTAT -p 0666 $file || error "$UID checkstat (2) error"
-    echo "$UID checkstat OK"
-    $RUNAS cat $file > /dev/null || error "$RUNAS_ID cat (2) error"
-    echo "$RUNAS_ID read file data OK"
 }
 run_test 3 "local cache under DLM lock"
-
-test_4() {
-    local file1=$DIR/$tfile-1
-    local file2=$DIR/$tfile-2
-
-    ! $GSS_PIPEFS && skip "pipefs not used" && return
-
-    chmod 0777 $DIR || error "chmod $DIR failed"
-    # current access should be ok
-    $RUNAS touch $file1 || error "can't touch $file1"
-    [ -f $file1 ] || error "$file1 not found"
-
-    # stop lgssd
-    send_sigint client lgssd
-    sleep 5
-    check_gss_daemon_facet client lgssd && error "lgssd still running"
-
-    # flush context, and touch
-    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-    $RUNAS touch $file2 &
-    TOUCHPID=$!
-    echo "waiting touch pid $TOUCHPID"
-    wait $TOUCHPID && error "touch should fail"
-
-    # restart lgssd
-    do_facet client "$LGSSD -v"
-    sleep 5
-    check_gss_daemon_facet client lgssd
-
-    # touch new should succeed
-    $RUNAS touch $file2 || error "can't touch $file2"
-    [ -f $file2 ] || error "$file2 not found"
-}
-run_test 4 "lgssd dead, operations should wait timeout and fail"
-
-test_5() {
-    local file1=$DIR/$tfile-1
-    local file2=$DIR/$tfile-2
-    local wait_time=$((TIMEOUT + TIMEOUT / 2))
-
-    chmod 0777 $DIR || error "chmod $DIR failed"
-    # current access should be ok
-    $RUNAS touch $file1 || error "can't touch $file1"
-    [ -f $file1 ] || error "$file1 not found"
-
-    # stop lsvcgssd
-    send_sigint $(comma_list $(mdts_nodes)) lsvcgssd
-    sleep 5
-    check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd && error "lsvcgssd still running"
-
-    # flush context, and touch
-    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-    $RUNAS touch $file2 &
-    TOUCHPID=$!
-
-    # wait certain time
-    echo "waiting $wait_time seconds for touch pid $TOUCHPID"
-    sleep $wait_time
-    num=`ps --no-headers -p $TOUCHPID | wc -l`
-    [ $num -eq 1 ] || error "touch already ended ($num)"
-    echo "process $TOUCHPID still hanging there... OK"
-
-    # restart lsvcgssd, expect touch suceed
-    echo "restart lsvcgssd and recovering"
-    start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -v"
-    sleep 5
-    check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd
-    wait $TOUCHPID || error "touch fail"
-    [ -f $file2 ] || error "$file2 not found"
-}
-run_test 5 "lsvcgssd dead, operations lead to recovery"
 
 test_6() {
     local nfile=10
@@ -435,8 +262,8 @@ test_90() {
     fi
 
     restore_to_default_flavor
-    set_rule $FSNAME any any krb5p
-    wait_flavor all2all krb5p
+	set_rule $FSNAME any any gssnull
+	wait_flavor all2all gssnull
 
     start_dbench
 
@@ -466,7 +293,7 @@ test_99() {
     echo "original general rules: $nrule_old"
 
     for ((i = $nrule_old; i < $max; i++)); do
-        set_rule $FSNAME elan$i any krb5n || error "set rule $i"
+        set_rule $FSNAME elan$i any gssnull || error "set rule $i"
     done
     for ((i = $nrule_old; i < $max; i++)); do
         set_rule $FSNAME elan$i any || error "remove rule $i"
@@ -474,26 +301,6 @@ test_99() {
 
     nrule_new=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
                | grep "$FSNAME.srpc.flavor." | wc -l`
-    if [ $nrule_new != $nrule_old ]; then
-        error "general rule: $nrule_new != $nrule_old"
-    fi
-
-    #
-    # target-specific rules
-    #
-    nrule_old=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
-               | grep "$FSNAME-MDT0000.srpc.flavor." | wc -l`
-    echo "original target rules: $nrule_old"
-
-    for ((i = $nrule_old; i < $max; i++)); do
-        set_rule $FSNAME-MDT0000 elan$i any krb5i || error "set rule $i"
-    done
-    for ((i = $nrule_old; i < $max; i++)); do
-        set_rule $FSNAME-MDT0000 elan$i any || error "remove rule $i"
-    done
-
-    nrule_new=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
-               | grep "$FSNAME-MDT0000.srpc.flavor." | wc -l`
     if [ $nrule_new != $nrule_old ]; then
         error "general rule: $nrule_new != $nrule_old"
     fi
@@ -511,96 +318,86 @@ error_dbench()
 }
 
 test_100() {
-    # started from default flavors
-    restore_to_default_flavor
+	# started from default flavors
+	restore_to_default_flavor
 
-    # running dbench background
-    start_dbench
+	# running dbench background
+	start_dbench
 
-    #
-    # all: null -> krb5n -> krb5a -> krb5i -> krb5p -> plain
-    #
-    set_rule $FSNAME any any krb5n
-    wait_flavor all2all krb5n || error_dbench "1"
-    check_dbench
+	#
+	# all: null -> gssnull -> plain
+	#
+	set_rule $FSNAME any any gssnull
+	wait_flavor all2all gssnull || error_dbench "1"
+	check_dbench
 
-    set_rule $FSNAME any any krb5a
-    wait_flavor all2all krb5a || error_dbench "2"
-    check_dbench
+	set_rule $FSNAME any any plain
+	wait_flavor all2all plain || error_dbench "2"
+	check_dbench
 
-    set_rule $FSNAME any any krb5i
-    wait_flavor all2all krb5i || error_dbench "3"
-    check_dbench
+	#
+	# M - M: gssnull
+	# C - M: gssnull
+	# M - O: gssnull
+	# C - O: gssnull
+	#
+	set_rule $FSNAME any mdt2mdt gssnull
+	wait_flavor mdt2mdt gssnull || error_dbench "3"
+	check_dbench
 
-    set_rule $FSNAME any any krb5p
-    wait_flavor all2all krb5p || error_dbench "4"
-    check_dbench
+	set_rule $FSNAME any cli2mdt gssnull
+	wait_flavor cli2mdt gssnull || error_dbench "4"
+	check_dbench
 
-    set_rule $FSNAME any any plain
-    wait_flavor all2all plain || error_dbench "5"
-    check_dbench
+	set_rule $FSNAME any mdt2ost gssnull
+	wait_flavor mdt2ost gssnull || error_dbench "5"
+	check_dbench
 
-    #
-    # M - M: krb5a
-    # C - M: krb5i
-    # M - O: krb5p
-    # C - O: krb5n
-    #
-    set_rule $FSNAME any mdt2mdt krb5a
-    wait_flavor mdt2mdt krb5a || error_dbench "6"
-    check_dbench
+	set_rule $FSNAME any cli2ost gssnull
+	wait_flavor cli2ost gssnull || error_dbench "6"
+	check_dbench
 
-    set_rule $FSNAME any cli2mdt krb5i
-    wait_flavor cli2mdt krb5i || error_dbench "7"
-    check_dbench
+	#
+	# * - MDT0: plain
+	# * - OST0: plain
+	#
+	# nothing should be changed because they are override by above dir rules
+	#
+	set_rule $FSNAME-MDT0000 any any plain
+	set_rule $FSNAME-OST0000 any any plain
+	wait_flavor mdt2mdt gssnull || error_dbench "7"
+	wait_flavor cli2mdt gssnull || error_dbench "8"
+	check_dbench
+	wait_flavor mdt2ost gssnull || error_dbench "9"
+	wait_flavor cli2ost gssnull || error_dbench "10"
 
-    set_rule $FSNAME any mdt2ost krb5p
-    wait_flavor mdt2ost krb5p || error_dbench "8"
-    check_dbench
+	#
+	# delete all dir-specific rules
+	#
+	set_rule $FSNAME any mdt2mdt
+	set_rule $FSNAME any cli2mdt
+	set_rule $FSNAME any mdt2ost
+	set_rule $FSNAME any cli2ost
+	wait_flavor mdt2mdt gssnull $((MDSCOUNT - 1)) || error_dbench "11"
+	wait_flavor cli2mdt gssnull $(get_clients_mount_count) ||
+		error_dbench "12"
+	check_dbench
+	wait_flavor mdt2ost gssnull $MDSCOUNT || error_dbench "13"
+	wait_flavor cli2ost gssnull $(get_clients_mount_count) ||
+		error_dbench "14"
+	check_dbench
 
-    set_rule $FSNAME any cli2ost krb5n
-    wait_flavor cli2ost krb5n || error_dbench "9"
-    check_dbench
+	#
+	# remove:
+	#  * - MDT0: gssnull
+	#  * - OST0: gssnull
+	#
+	set_rule $FSNAME-MDT0000 any any
+	set_rule $FSNAME-OST0000 any any || error_dbench "15"
+	wait_flavor all2all plain || error_dbench "16"
+	check_dbench
 
-    #
-    # * - MDT0: krb5p
-    # * - OST0: krb5i
-    #
-    # nothing should be changed because they are override by above dir rules
-    #
-    set_rule $FSNAME-MDT0000 any any krb5p
-    set_rule $FSNAME-OST0000 any any krb5i
-    wait_flavor mdt2mdt krb5a || error_dbench "10"
-    wait_flavor cli2mdt krb5i || error_dbench "11"
-    check_dbench
-    wait_flavor mdt2ost krb5p || error_dbench "12"
-    wait_flavor cli2ost krb5n || error_dbench "13"
-
-    #
-    # delete all dir-specific rules
-    #
-    set_rule $FSNAME any mdt2mdt
-    set_rule $FSNAME any cli2mdt
-    set_rule $FSNAME any mdt2ost
-    set_rule $FSNAME any cli2ost
-    wait_flavor mdt2mdt krb5p $((MDSCOUNT - 1)) || error_dbench "14"
-    wait_flavor cli2mdt krb5p $(get_clients_mount_count) || error_dbench "15"
-    check_dbench
-    wait_flavor mdt2ost krb5i $MDSCOUNT || error_dbench "16"
-    wait_flavor cli2ost krb5i $(get_clients_mount_count) || error_dbench "17"
-    check_dbench
-
-    #
-    # remove:
-    #  * - MDT0: krb5p
-    #  * - OST0: krb5i
-    #
-    set_rule $FSNAME-MDT0000 any any
-    set_rule $FSNAME-OST0000 any any || error_dbench "18"
-    wait_flavor all2all plain || error_dbench "19"
-    check_dbench
-
-    stop_dbench
+	stop_dbench
 }
 run_test 100 "change security flavor on the fly under load"
 
@@ -648,19 +445,15 @@ switch_sec_test()
 
 test_101()
 {
-    # started from default flavors
-    restore_to_default_flavor
+	# started from default flavors
+	restore_to_default_flavor
 
-    switch_sec_test null  plain
-    switch_sec_test plain krb5n
-    switch_sec_test krb5n krb5a
-    switch_sec_test krb5a krb5i
-    switch_sec_test krb5i krb5p
-    switch_sec_test krb5p null
-    switch_sec_test null  krb5p
-    switch_sec_test krb5p krb5i
-    switch_sec_test krb5i plain
-    switch_sec_test plain krb5p
+	switch_sec_test null    plain
+	switch_sec_test plain   gssnull
+	switch_sec_test gssnull null
+	switch_sec_test null    gssnull
+	switch_sec_test gssnull plain
+	switch_sec_test plain   gssnull
 }
 run_test 101 "switch ctx/sec for resending request"
 
@@ -681,13 +474,10 @@ test_102() {
     # run dbench background
     start_dbench
 
-    echo "Testing null->krb5n->krb5a->krb5i->krb5p->plain->null"
-    set_rule $FSNAME any any krb5n
-    set_rule $FSNAME any any krb5a
-    set_rule $FSNAME any any krb5i
-    set_rule $FSNAME any any krb5p
-    set_rule $FSNAME any any plain
-    set_rule $FSNAME any any null
+	echo "Testing null->gssnull->plain->null"
+	set_rule $FSNAME any any gssnull
+	set_rule $FSNAME any any plain
+	set_rule $FSNAME any any null
 
     check_dbench
     wait_flavor all2all null || error_dbench "1"
@@ -697,16 +487,16 @@ test_102() {
     sleep 15
     check_dbench
 
-    echo "Testing null->krb5i->null->krb5i->null..."
-    for ((i=0; i<10; i++)); do
-        set_rule $FSNAME any any krb5i
-        set_rule $FSNAME any any null
-    done
-    set_rule $FSNAME any any krb5i
+	echo "Testing null->gssnull->null->gssnull->null..."
+	for ((i=0; i<10; i++)); do
+		set_rule $FSNAME any any gssnull
+		set_rule $FSNAME any any null
+	done
+	set_rule $FSNAME any any gssnull
 
-    check_dbench
-    wait_flavor all2all krb5i || error_dbench "2"
-    check_dbench
+	check_dbench
+	wait_flavor all2all gssnull || error_dbench "2"
+	check_dbench
 
     echo "waiting for 15s and check again"
     sleep 15
@@ -735,9 +525,9 @@ test_150() {
 
     # mount client with conflict flavor - should fail
     save_opts=$MOUNTOPT
-    MOUNTOPT="$MOUNTOPT,mgssec=krb5p"
-    zconf_mount_clients $clients $MOUNT && \
-        error "mount with conflict flavor should have failed"
+	MOUNTOPT="$MOUNTOPT,mgssec=gssnull"
+	zconf_mount_clients $clients $MOUNT &&
+		error "mount with conflict flavor should have failed"
     MOUNTOPT=$save_opts
 
     # mount client with same flavor - should succeed
@@ -755,10 +545,10 @@ test_150() {
 run_test 150 "secure mgs connection: client flavor setting"
 
 test_151() {
-    local save_opts
+	local save_opts
 
-    # set mgs only accept krb5p
-    set_rule _mgs any any krb5p
+	# set mgs only accept gssnull
+	set_rule _mgs any any gssnull
 
     # umount everything, modules still loaded
     stopall
@@ -776,11 +566,12 @@ test_151() {
 
     # mount with designated flavor should succeed
     save_opts=$MDS_MOUNT_OPTS
-    MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=krb5p"
-    start mds1 $DEVNAME $MDS_MOUNT_OPTS || error "mount with designated flavor should have succeeded"
-    MDS_MOUNT_OPTS=$save_opts
+	MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=gssnull"
+	start mds1 $DEVNAME $MDS_MOUNT_OPTS ||
+		error "mount with designated flavor should have succeeded"
+	MDS_MOUNT_OPTS=$save_opts
 
-    stop mds1 -f
+	stop mds1 -f
 }
 run_test 151 "secure mgs connection: server flavor control"
 
