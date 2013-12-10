@@ -11241,6 +11241,10 @@ test_219() {
         dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=3
         $LCTL set_param fail_loc=0x411
         dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 seek=2 conv=notrunc
+
+	# LU-4201
+	dd if=/dev/zero of=$DIR/$tfile-2 bs=1024 count=1
+	$CHECKSTAT -s 1024 $DIR/$tfile-2 || error "checkstat wrong size"
 }
 run_test 219 "LU-394: Write partial won't cause uncontiguous pages vec at LND"
 
