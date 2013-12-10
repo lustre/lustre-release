@@ -61,7 +61,7 @@
 
 int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 {
-	struct lov_qos_oss *oss = NULL, *temposs;
+	struct lod_qos_oss *oss = NULL, *temposs;
 	struct obd_export  *exp = ost_desc->ltd_exp;
 	int		    rc = 0, found = 0;
 	cfs_list_t	   *list;
@@ -120,7 +120,7 @@ out:
 
 int qos_del_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 {
-	struct lov_qos_oss *oss;
+	struct lod_qos_oss *oss;
 	int                 rc = 0;
 	ENTRY;
 
@@ -238,7 +238,7 @@ out:
    depends on size of each ost in an oss */
 static int lod_qos_calc_ppo(struct lod_device *lod)
 {
-	struct lov_qos_oss *oss;
+	struct lod_qos_oss *oss;
 	__u64		    ba_max, ba_min, temp;
 	__u32		    num_active;
 	int		    rc, i, prio_wide;
@@ -371,7 +371,7 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 			__u32 index, __u64 *total_wt)
 {
 	struct lod_tgt_desc *ost;
-	struct lov_qos_oss  *oss;
+	struct lod_qos_oss  *oss;
 	int j;
 	ENTRY;
 
@@ -447,9 +447,9 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 #define LOV_QOS_EMPTY ((__u32)-1)
 /* compute optimal round-robin order, based on OSTs per OSS */
 static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
-			   struct lov_qos_rr *lqr)
+			   struct lod_qos_rr *lqr)
 {
-	struct lov_qos_oss  *oss;
+	struct lod_qos_oss  *oss;
 	struct lod_tgt_desc *ost;
 	unsigned placed, real_count;
 	int i, rc;
@@ -671,7 +671,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct pool_desc  *pool = NULL;
 	struct ost_pool   *osts;
-	struct lov_qos_rr *lqr;
+	struct lod_qos_rr *lqr;
 	struct dt_object  *o;
 	unsigned	   array_idx;
 	int		   i, rc;

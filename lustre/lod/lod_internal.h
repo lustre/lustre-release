@@ -45,6 +45,64 @@
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 
+struct lod_qos_rr {
+	__u32			 lqr_start_idx;	/* start index of new inode */
+	__u32			 lqr_offset_idx; /* aliasing for start_idx */
+	int			 lqr_start_count; /* reseed counter */
+	struct ost_pool		 lqr_pool;	/* round-robin optimized list */
+	unsigned long		 lqr_dirty:1;	/* recalc round-robin list */
+};
+
+struct pool_desc {
+	char			 pool_name[LOV_MAXPOOLNAME + 1];
+	struct ost_pool		 pool_obds;	/* pool members */
+	atomic_t		 pool_refcount;
+	struct lod_qos_rr	 pool_rr;
+	cfs_hlist_node_t	 pool_hash;	/* access by poolname */
+	struct list_head	 pool_list;
+	struct proc_dir_entry	*pool_proc_entry;
+	struct obd_device	*pool_lobd;	/* owner */
+};
+
+#define pool_tgt_size(p) ((p)->pool_obds.op_size)
+#define pool_tgt_count(p) ((p)->pool_obds.op_count)
+#define pool_tgt_array(p)  ((p)->pool_obds.op_array)
+#define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
+
+struct lod_qos {
+	struct list_head	 lq_oss_list;
+	struct rw_semaphore	 lq_rw_sem;
+	__u32			 lq_active_oss_count;
+	unsigned int		 lq_prio_free;   /* priority for free space */
+	unsigned int		 lq_threshold_rr;/* priority for rr */
+	struct lod_qos_rr	 lq_rr;          /* round robin qos data */
+	bool			 lq_dirty:1,     /* recalc qos data */
+				 lq_same_space:1,/* the ost's all have approx.
+						    the same space avail */
+				 lq_reset:1;     /* zero current penalties */
+};
+
+struct lod_qos_oss {
+	struct obd_uuid		 lqo_uuid;	/* ptlrpc's c_remote_uuid */
+	struct list_head	 lqo_oss_list;	/* link to lov_qos */
+	__u64			 lqo_bavail;	/* total bytes avail on OSS */
+	__u64			 lqo_penalty;	/* current penalty */
+	__u64			 lqo_penalty_per_obj; /* penalty decrease
+							 every obj*/
+	time_t			 lqo_used;	/* last used time, seconds */
+	__u32			 lqo_ost_count;	/* number of osts on this oss */
+};
+
+struct ltd_qos {
+	struct lod_qos_oss	*ltq_oss;	/* oss info */
+	__u64			 ltq_penalty;	/* current penalty */
+	__u64			 ltq_penalty_per_obj; /* penalty decrease
+							 every obj*/
+	__u64			 ltq_weight;	/* net weighting */
+	time_t			 ltq_used;	/* last used time, seconds */
+	bool			 ltq_usable:1;	/* usable for striping */
+};
+
 struct lod_tgt_desc {
 	struct dt_device  *ltd_tgt;
 	struct list_head   ltd_kill;
@@ -119,7 +177,7 @@ struct lod_device {
 	 * structure should be moved to lod_tgt_descs as well.
 	 */
 	/* QoS info per LOD */
-	struct lov_qos	      lod_qos; /* qos info per lod */
+	struct lod_qos	      lod_qos; /* qos info per lod */
 
 	/* OST pool data */
 	struct ost_pool	      lod_pool_info; /* all OSTs in a packed array */

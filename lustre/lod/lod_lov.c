@@ -1076,11 +1076,6 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod->lod_qos.lq_prio_free = 232;
 	/* Default threshold for rr (roughly 17%) */
 	lod->lod_qos.lq_threshold_rr = 43;
-	/* Init statfs fields */
-	OBD_ALLOC_PTR(lod->lod_qos.lq_statfs_data);
-	if (NULL == lod->lod_qos.lq_statfs_data)
-		RETURN(-ENOMEM);
-	init_waitqueue_head(&lod->lod_qos.lq_statfs_waitq);
 
 	/* Set up OST pool environment */
 	lod->lod_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
@@ -1090,8 +1085,9 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 						   CFS_HASH_MAX_THETA,
 						   &pool_hash_operations,
 						   CFS_HASH_DEFAULT);
-	if (!lod->lod_pools_hash_body)
-		GOTO(out_statfs, rc = -ENOMEM);
+	if (lod->lod_pools_hash_body == NULL)
+		RETURN(-ENOMEM);
+
 	CFS_INIT_LIST_HEAD(&lod->lod_pool_list);
 	lod->lod_pool_count = 0;
 	rc = lod_ost_pool_init(&lod->lod_pool_info, 0);
@@ -1107,8 +1103,7 @@ out_pool_info:
 	lod_ost_pool_free(&lod->lod_pool_info);
 out_hash:
 	cfs_hash_putref(lod->lod_pools_hash_body);
-out_statfs:
-	OBD_FREE_PTR(lod->lod_qos.lq_statfs_data);
+
 	return rc;
 }
 
@@ -1132,7 +1127,7 @@ int lod_pools_fini(struct lod_device *lod)
 	cfs_hash_putref(lod->lod_pools_hash_body);
 	lod_ost_pool_free(&(lod->lod_qos.lq_rr.lqr_pool));
 	lod_ost_pool_free(&lod->lod_pool_info);
-	OBD_FREE_PTR(lod->lod_qos.lq_statfs_data);
+
 	RETURN(0);
 }
 

@@ -409,6 +409,35 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
+static inline int lov_lum_swab_if_needed(struct lov_user_md_v3 *lumv3,
+					 int *lmm_magic,
+					 struct lov_user_md *lum)
+{
+	if (lum && copy_from_user(lumv3, lum, sizeof(struct lov_user_md_v1)))
+		return -EFAULT;
+
+	*lmm_magic = lumv3->lmm_magic;
+
+	if (*lmm_magic == __swab32(LOV_USER_MAGIC_V1)) {
+		lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lumv3);
+		*lmm_magic = LOV_USER_MAGIC_V1;
+	} else if (*lmm_magic == LOV_USER_MAGIC_V3) {
+		if (lum && copy_from_user(lumv3, lum, sizeof(*lumv3)))
+			return -EFAULT;
+	} else if (*lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
+		if (lum && copy_from_user(lumv3, lum, sizeof(*lumv3)))
+			return -EFAULT;
+		lustre_swab_lov_user_md_v3(lumv3);
+		*lmm_magic = LOV_USER_MAGIC_V3;
+	} else if (*lmm_magic != LOV_USER_MAGIC_V1) {
+		CDEBUG(D_IOCTL,
+		       "bad userland LOV MAGIC: %#08x != %#08x nor %#08x\n",
+		       *lmm_magic, LOV_USER_MAGIC_V1, LOV_USER_MAGIC_V3);
+		       return -EINVAL;
+	}
+	return 0;
+}
+
 static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                            struct lov_stripe_md **lsmp,
                            struct lov_user_md *lump)

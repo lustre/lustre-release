@@ -181,71 +181,6 @@ struct obd_info {
 	char                   *oi_jobid;
 };
 
-/* compare all relevant fields. */
-static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
-                                    struct lov_stripe_md *m2)
-{
-        /*
-         * ->lsm_wire contains padding, but it should be zeroed out during
-         * allocation.
-         */
-        return memcmp(&m1->lsm_wire, &m2->lsm_wire, sizeof m1->lsm_wire);
-}
-
-static inline int lov_lum_lsm_cmp(struct lov_user_md *lum,
-                                  struct lov_stripe_md  *lsm)
-{
-        if (lsm->lsm_magic != lum->lmm_magic)
-                return 1;
-        if ((lsm->lsm_stripe_count != 0) && (lum->lmm_stripe_count != 0) &&
-            (lsm->lsm_stripe_count != lum->lmm_stripe_count))
-                return 2;
-        if ((lsm->lsm_stripe_size != 0) && (lum->lmm_stripe_size != 0) &&
-            (lsm->lsm_stripe_size != lum->lmm_stripe_size))
-                return 3;
-        if ((lsm->lsm_pattern != 0) && (lum->lmm_pattern != 0) &&
-            (lsm->lsm_pattern != lum->lmm_pattern))
-                return 4;
-        if ((lsm->lsm_magic == LOV_MAGIC_V3) &&
-            (strncmp(lsm->lsm_pool_name,
-                     ((struct lov_user_md_v3 *)lum)->lmm_pool_name,
-                     LOV_MAXPOOLNAME) != 0))
-                return 5;
-        return 0;
-}
-
-static inline int lov_lum_swab_if_needed(struct lov_user_md_v3 *lumv3,
-					 int *lmm_magic,
-					 struct lov_user_md *lum)
-{
-	if (lum && copy_from_user(lumv3, lum, sizeof(struct lov_user_md_v1)))
-		return -EFAULT;
-
-	*lmm_magic = lumv3->lmm_magic;
-
-	if (*lmm_magic == __swab32(LOV_USER_MAGIC_V1)) {
-		lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lumv3);
-		*lmm_magic = LOV_USER_MAGIC_V1;
-	} else if (*lmm_magic == LOV_USER_MAGIC_V3) {
-		if (lum && copy_from_user(lumv3, lum, sizeof(*lumv3)))
-			return -EFAULT;
-	} else if (*lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-		if (lum && copy_from_user(lumv3, lum, sizeof(*lumv3)))
-			return -EFAULT;
-		lustre_swab_lov_user_md_v3(lumv3);
-		*lmm_magic = LOV_USER_MAGIC_V3;
-	} else if (*lmm_magic != LOV_USER_MAGIC_V1) {
-		CDEBUG(D_IOCTL,
-		       "bad userland LOV MAGIC: %#08x != %#08x nor %#08x\n",
-		       *lmm_magic, LOV_USER_MAGIC_V1, LOV_USER_MAGIC_V3);
-		       return -EINVAL;
-	}
-	return 0;
-}
-
-void lov_stripe_lock(struct lov_stripe_md *md);
-void lov_stripe_unlock(struct lov_stripe_md *md);
-
 struct obd_type {
         cfs_list_t typ_chain;
         struct obd_ops *typ_dt_ops;
@@ -461,25 +396,6 @@ struct echo_client_obd {
         __u64                ec_unique;
 };
 
-struct lov_qos_oss {
-        struct obd_uuid     lqo_uuid;       /* ptlrpc's c_remote_uuid */
-        cfs_list_t          lqo_oss_list;   /* link to lov_qos */
-        __u64               lqo_bavail;     /* total bytes avail on OSS */
-        __u64               lqo_penalty;    /* current penalty */
-        __u64               lqo_penalty_per_obj;/* penalty decrease every obj*/
-        time_t              lqo_used;       /* last used time, seconds */
-        __u32               lqo_ost_count;  /* number of osts on this oss */
-};
-
-struct ltd_qos {
-        struct lov_qos_oss *ltq_oss;         /* oss info */
-        __u64               ltq_penalty;     /* current penalty */
-        __u64               ltq_penalty_per_obj; /* penalty decrease every obj*/
-        __u64               ltq_weight;      /* net weighting */
-        time_t              ltq_used;        /* last used time, seconds */
-        unsigned int        ltq_usable:1;    /* usable for striping */
-};
-
 /* Generic subset of OSTs */
 struct ost_pool {
         __u32              *op_array;      /* array of index of
@@ -489,71 +405,19 @@ struct ost_pool {
 	struct rw_semaphore op_rw_sem;     /* to protect ost_pool use */
 };
 
-/* Round-robin allocator data */
-struct lov_qos_rr {
-        __u32               lqr_start_idx;   /* start index of new inode */
-        __u32               lqr_offset_idx;  /* aliasing for start_idx  */
-        int                 lqr_start_count; /* reseed counter */
-        struct ost_pool     lqr_pool;        /* round-robin optimized list */
-        unsigned long       lqr_dirty:1;     /* recalc round-robin list */
-};
-
 /* allow statfs data caching for 1 second */
 #define OBD_STATFS_CACHE_SECONDS 1
-
-struct lov_statfs_data {
-        struct obd_info   lsd_oi;
-        struct obd_statfs lsd_statfs;
-};
-/* Stripe placement optimization */
-struct lov_qos {
-        cfs_list_t          lq_oss_list; /* list of OSSs that targets use */
-	struct rw_semaphore lq_rw_sem;
-        __u32               lq_active_oss_count;
-        unsigned int        lq_prio_free;   /* priority for free space */
-        unsigned int        lq_threshold_rr;/* priority for rr */
-        struct lov_qos_rr   lq_rr;          /* round robin qos data */
-        unsigned long       lq_dirty:1,     /* recalc qos data */
-                            lq_same_space:1,/* the ost's all have approx.
-                                               the same space avail */
-                            lq_reset:1,     /* zero current penalties */
-                            lq_statfs_in_progress:1; /* statfs op in
-                                                        progress */
-	/* qos statfs data */
-	struct lov_statfs_data *lq_statfs_data;
-	wait_queue_head_t   lq_statfs_waitq; /* waitqueue to notify statfs
-					      * requests completion */
-};
 
 struct lov_tgt_desc {
         cfs_list_t          ltd_kill;
         struct obd_uuid     ltd_uuid;
         struct obd_device  *ltd_obd;
         struct obd_export  *ltd_exp;
-        struct ltd_qos      ltd_qos;     /* qos info per target */
         __u32               ltd_gen;
         __u32               ltd_index;   /* index in lov_obd->tgts */
         unsigned long       ltd_active:1,/* is this target up for requests */
                             ltd_activate:1,/* should  target be activated */
                             ltd_reap:1;  /* should this target be deleted */
-};
-
-/* Pool metadata */
-#define pool_tgt_size(_p)   _p->pool_obds.op_size
-#define pool_tgt_count(_p)  _p->pool_obds.op_count
-#define pool_tgt_array(_p)  _p->pool_obds.op_array
-#define pool_tgt_rw_sem(_p) _p->pool_obds.op_rw_sem
-
-struct pool_desc {
-        char                  pool_name[LOV_MAXPOOLNAME + 1]; /* name of pool */
-        struct ost_pool       pool_obds;              /* pool members */
-        cfs_atomic_t          pool_refcount;          /* pool ref. counter */
-        struct lov_qos_rr     pool_rr;                /* round robin qos */
-        cfs_hlist_node_t      pool_hash;              /* access by poolname */
-        cfs_list_t            pool_list;              /* serial access */
-        cfs_proc_dir_entry_t *pool_proc_entry;        /* file in /proc */
-	struct obd_device    *pool_lobd;	      /* obd of the lov/lod to which
-						       * this pool belongs */
 };
 
 struct lov_obd {
@@ -564,8 +428,6 @@ struct lov_obd {
 	struct mutex		lov_lock;
         struct obd_connect_data lov_ocd;
         cfs_atomic_t            lov_refcount;
-        __u32                   lov_tgt_count;         /* how many OBD's */
-        __u32                   lov_active_tgt_count;  /* how many active */
         __u32                   lov_death_row;/* tgts scheduled to be deleted */
         __u32                   lov_tgt_size;   /* size of tgts array */
         int                     lov_connects;

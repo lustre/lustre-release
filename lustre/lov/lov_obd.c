@@ -2720,7 +2720,6 @@ void lov_stripe_lock(struct lov_stripe_md *md)
 	LASSERT(md->lsm_lock_owner == 0);
 	md->lsm_lock_owner = current_pid();
 }
-EXPORT_SYMBOL(lov_stripe_lock);
 
 void lov_stripe_unlock(struct lov_stripe_md *md)
 {
@@ -2728,7 +2727,6 @@ void lov_stripe_unlock(struct lov_stripe_md *md)
 	md->lsm_lock_owner = 0;
 	spin_unlock(&md->lsm_lock);
 }
-EXPORT_SYMBOL(lov_stripe_unlock);
 
 static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
                         struct obd_quotactl *oqctl)
