@@ -313,7 +313,7 @@ static int fld_insert_special_entries(const struct lu_env *env,
 }
 
 int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
-		   struct dt_device *dt)
+		   struct dt_device *dt, int type)
 {
 	struct dt_object	*dt_obj = NULL;
 	struct lu_fid		fid;
@@ -404,7 +404,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	else
 		rc = 0;
 
-	if (index == 0) {
+	if (index == 0 && type == LU_SEQ_RANGE_MDT) {
 		/* Note: fld_insert_entry will detect whether these
 		 * special entries already exist inside FLDB */
 		mutex_lock(&fld->lsf_lock);

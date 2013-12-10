@@ -167,6 +167,8 @@ static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
 	struct lu_server_fld    *fld;
 	struct dt_object        *obj;
 	const struct dt_it_ops  *iops;
+	struct dt_key		*key;
+	int			rc;
 
 	if (param == NULL || param->fsp_stop)
 		return NULL;
@@ -176,9 +178,16 @@ static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
 	LASSERT(obj != NULL);
 	iops = &obj->do_index_ops->dio_it;
 
-	iops->load(&param->fsp_env, param->fsp_it, *pos);
+	rc = iops->load(&param->fsp_env, param->fsp_it, *pos);
+	if (rc <= 0)
+		return NULL;
 
-	*pos = be64_to_cpu(*(__u64 *)iops->key(&param->fsp_env, param->fsp_it));
+	key = iops->key(&param->fsp_env, param->fsp_it);
+	if (IS_ERR(key))
+		return NULL;
+
+	*pos = be64_to_cpu(*(__u64 *)key);
+
 	return param;
 }
 

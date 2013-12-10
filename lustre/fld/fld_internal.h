@@ -148,7 +148,7 @@ extern struct lu_context_key fld_thread_key;
 
 struct dt_device;
 int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
-		   struct dt_device *dt);
+		   struct dt_device *dt, int type);
 
 void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld);
 

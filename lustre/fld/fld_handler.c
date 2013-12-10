@@ -465,7 +465,7 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		RETURN(rc);
 	}
 
-	rc = fld_index_init(env, fld, dt);
+	rc = fld_index_init(env, fld, dt, type);
 	if (rc)
 		GOTO(out_cache, rc);
 
