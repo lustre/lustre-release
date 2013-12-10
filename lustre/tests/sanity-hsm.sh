@@ -1167,6 +1167,53 @@ test_12n() {
 }
 run_test 12n "Import/implicit restore/release"
 
+test_12o() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "release of $f failed"
+
+#define OBD_FAIL_MDS_HSM_SWAP_LAYOUTS		0x152
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x152
+
+	# set no retry action mode
+	cdt_set_no_retry
+
+	diff -q /etc/hosts $f
+	local st=$?
+
+	# we check we had a restore failure
+	wait_request_state $fid RESTORE FAILED
+
+	[[ $st -eq 0 ]] && error "Restore must fail"
+
+	# remove no retry action mode
+	cdt_clear_no_retry
+
+	# check file is still released
+	check_hsm_flags $f "0x0000000d"
+
+	# retry w/o failure injection
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
+
+	diff -q /etc/hosts $f
+	st=$?
+
+	# we check we had a restore done
+	wait_request_state $fid RESTORE SUCCEED
+
+	[[ $st -eq 0 ]] || error "Restored file differs"
+
+	copytool_cleanup
+}
+run_test 12o "Layout-swap failure during Restore leaves file released"
+
 test_13() {
 	# test needs a running copytool
 	copytool_setup

@@ -1157,9 +1157,11 @@ out:
  * \param mti [IN] context
  * \param fid1 [IN]
  * \param fid2 [IN]
+ * \param mh_common [IN] MD HSM
  */
 static int hsm_swap_layouts(struct mdt_thread_info *mti,
-			    const lustre_fid *fid, const lustre_fid *dfid)
+			    const lustre_fid *fid, const lustre_fid *dfid,
+			    struct md_hsm *mh_common)
 {
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct mdt_object	*child1, *child2;
@@ -1182,15 +1184,28 @@ static int hsm_swap_layouts(struct mdt_thread_info *mti,
 	/* if copy tool closes the volatile before sending the final
 	 * progress through llapi_hsm_copy_end(), all the objects
 	 * are removed and mdd_swap_layout LBUG */
-	if (mdt_object_exists(child2)) {
-		rc = mo_swap_layouts(mti->mti_env, mdt_object_child(child1),
-				     mdt_object_child(child2), 0);
-	} else {
+	if (!mdt_object_exists(child2)) {
 		CERROR("%s: Copytool has closed volatile file "DFID"\n",
 		       mdt_obd_name(mti->mti_mdt), PFID(dfid));
-		rc = -ENOENT;
+		GOTO(out_child2, rc = -ENOENT);
 	}
+	/* Since we only handle restores here, unconditionally use
+	 * SWAP_LAYOUTS_MDS_HSM flag to ensure original layout will
+	 * be preserved in case of failure during swap_layout and not
+	 * leave a file in an intermediate but incoherent state.
+	 * But need to setup HSM xattr of data FID before, reuse
+	 * mti and mh presets for FID in hsm_cdt_request_completed(),
+	 * only need to clear RELEASED and DIRTY.
+	 */
+	mh_common->mh_flags &= ~(HS_RELEASED | HS_DIRTY);
+	rc = mdt_hsm_attr_set(mti, child2, mh_common);
+	if (rc == 0)
+		rc = mo_swap_layouts(mti->mti_env,
+				     mdt_object_child(child1),
+				     mdt_object_child(child2),
+				     SWAP_LAYOUTS_MDS_HSM);
 
+out_child2:
 	mdt_object_unlock_put(mti, child2, lh2, 1);
 out_child1:
 	mdt_object_put(mti->mti_env, child1);
@@ -1320,8 +1335,10 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		case HSMA_RESTORE:
 			hsm_set_cl_event(&cl_flags, HE_RESTORE);
 
-			/* clear RELEASED and DIRTY */
-			mh.mh_flags &= ~(HS_RELEASED | HS_DIRTY);
+			/* do not clear RELEASED and DIRTY here
+			 * this will occur in hsm_swap_layouts()
+			 */
+
 			/* Restoring has changed the file version on
 			 * disk. */
 			mh.mh_arch_ver = pgs->hpk_data_version;
@@ -1378,7 +1395,7 @@ unlock:
 		 * only if restore is successfull */
 		if (pgs->hpk_errval == 0) {
 			rc = hsm_swap_layouts(mti, &car->car_hai->hai_fid,
-					      &car->car_hai->hai_dfid);
+					      &car->car_hai->hai_dfid, &mh);
 			if (rc) {
 				if (cdt->cdt_policy & CDT_NORETRY_ACTION)
 					*status = ARS_FAILED;

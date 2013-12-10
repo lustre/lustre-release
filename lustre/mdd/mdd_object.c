@@ -1489,13 +1489,18 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	if (fst_buf->lb_buf != NULL)
-		rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
-				   LU_XATTR_REPLACE, handle,
-				   mdd_object_capa(env, snd_o));
-	else
-		rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle,
-				   mdd_object_capa(env, snd_o));
+	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
+		rc = -EOPNOTSUPP;
+	} else {
+		if (fst_buf->lb_buf != NULL)
+			rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
+					   LU_XATTR_REPLACE, handle,
+					   mdd_object_capa(env, snd_o));
+		else
+			rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle,
+					   mdd_object_capa(env, snd_o));
+	}
+
 	if (rc != 0) {
 		int steps = 0;
 
