@@ -89,11 +89,19 @@ static void ll_release(struct dentry *de)
 int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
 		const struct dentry *dentry, const struct inode *inode,
 		unsigned int len, const char *str, const struct qstr *name)
+#elif defined(HAVE_D_COMPARE_5ARGS)
+int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
+		unsigned int len, const char *str, const struct qstr *name)
 #else
 int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 #endif
 {
-#ifdef HAVE_D_COMPARE_7ARGS
+#if !defined(HAVE_D_COMPARE_7ARGS) && !defined(HAVE_D_COMPARE_5ARGS)
+	/* XXX: (ugh !) d_name must be in-dentry structure */
+	struct dentry *dentry = container_of(d_name, struct dentry, d_name);
+	unsigned int len = d_name->len;
+	const char *str = d_name->name;
+#endif
 	ENTRY;
 
 	if (len != name->len)
@@ -101,19 +109,6 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 
 	if (memcmp(str, name->name, len))
 		RETURN(1);
-#else
-	struct dentry *dentry;
-	ENTRY;
-
-	if (d_name->len != name->len)
-		RETURN(1);
-
-	if (memcmp(d_name->name, name->name, name->len))
-		RETURN(1);
-
-	/* XXX: d_name must be in-dentry structure */
-	dentry = container_of(d_name, struct dentry, d_name); /* ugh */
-#endif
 
 	CDEBUG(D_DENTRY, "found name %.*s(%p) flags %#x refc %d\n",
 	       name->len, name->name, dentry, dentry->d_flags,
@@ -124,9 +119,9 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 		RETURN(0);
 
 	if (d_lustre_invalid(dentry))
-                RETURN(1);
+		RETURN(1);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static inline int return_if_equal(struct ldlm_lock *lock, void *data)

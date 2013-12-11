@@ -1287,6 +1287,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.11 dentry_operations.d_compare() taken 5 arguments.
+#
+AC_DEFUN([LC_D_COMPARE_5ARGS],
+[AC_MSG_CHECKING([if d_compare taken 5 arguments])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/dcache.h>
+],[
+	((struct dentry_operations*)0)->d_compare(NULL,NULL,0,NULL,NULL);
+],[
+	AC_DEFINE(HAVE_D_COMPARE_5ARGS, 1,
+		[d_compare need 5 arguments])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.11 need to access d_count to get dentry reference count
 #
 AC_DEFUN([LC_HAVE_DCOUNT],
@@ -1405,6 +1423,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_BLKDEV_RELEASE_RETURN_INT
 
 	 # 3.11
+	 LC_D_COMPARE_5ARGS
 	 LC_HAVE_DCOUNT
 
 	 #
