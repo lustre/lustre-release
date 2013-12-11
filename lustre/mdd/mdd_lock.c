@@ -82,8 +82,3 @@ int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj)
 
         return next->do_ops->do_write_locked(env, next);
 }
-
-unsigned long mdd_name2hash(const char *name)
-{
-        return full_name_hash((unsigned char*)name, strlen(name));
-}

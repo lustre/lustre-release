@@ -57,23 +57,10 @@
 #include "mdd_internal.h"
 
 static const struct lu_object_operations mdd_lu_obj_ops;
-extern struct kmem_cache *mdd_object_kmem;
 
 static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name);
-
-int mdd_data_get(const struct lu_env *env, struct mdd_object *obj,
-                 void **data)
-{
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        mdo_data_get(env, obj, data);
-        return 0;
-}
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
@@ -106,17 +93,6 @@ struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
         info = lu_context_key_get(&env->le_ctx, &mdd_thread_key);
         LASSERT(info != NULL);
         return info;
-}
-
-const struct lu_name *mdd_name_get_const(const struct lu_env *env,
-					 const void *area, ssize_t len)
-{
-	struct lu_name *lname;
-
-	lname = &mdd_env_info(env)->mti_name;
-	lname->ln_name = area;
-	lname->ln_namelen = len;
-	return lname;
 }
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
@@ -704,8 +680,8 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	RETURN(rc);
 }
 
-int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
-                  int flags, struct md_object *obj)
+static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
+			 int flags, struct md_object *obj)
 {
         struct thandle *handle;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
@@ -1120,8 +1096,8 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
  * The caller should guarantee to update the object ctime
  * after xattr_set if needed.
  */
-int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
-                  const char *name)
+static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
+			 const char *name)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
@@ -1692,25 +1668,6 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
 	mdd_write_unlock(env, mdd_obj);
 	return rc;
-}
-
-int mdd_declare_object_kill(const struct lu_env *env, struct mdd_object *obj,
-                            struct md_attr *ma, struct thandle *handle)
-{
-        return mdo_declare_destroy(env, obj, handle);
-}
-
-/* return md_attr back,
- * if it is last unlink then return lov ea + llog cookie*/
-int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
-                    struct md_attr *ma, struct thandle *handle)
-{
-	int rc;
-        ENTRY;
-
-	rc = mdo_destroy(env, obj, handle);
-
-        RETURN(rc);
 }
 
 static int mdd_declare_close(const struct lu_env *env,

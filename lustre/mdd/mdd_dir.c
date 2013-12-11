@@ -714,9 +714,9 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
  *		this will hopefully be fixed in llog rewrite
  * \retval 0 ok
  */
-int mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
-			    struct llog_changelog_ext_rec *rec,
-			    struct thandle *th)
+static int
+mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
+			struct llog_changelog_ext_rec *rec, struct thandle *th)
 {
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	struct llog_ctxt	*ctxt;

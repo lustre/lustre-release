@@ -1,6 +1,11 @@
 MODULES := mdd
-mdd-objs := mdd_object.o mdd_lov.o mdd_orphans.o mdd_lproc.o mdd_dir.o
-mdd-objs += mdd_device.o mdd_trans.o mdd_permission.o mdd_lock.o
-mdd-objs += mdd_compat.o
-
+mdd-objs := mdd_compat.o \
+	mdd_device.o \
+	mdd_dir.o \
+	mdd_lock.o \
+	mdd_lproc.o \
+	mdd_object.o \
+	mdd_orphans.o \
+	mdd_permission.o \
+	mdd_trans.o
 @INCLUDE_RULES@

@@ -52,7 +52,7 @@
 
 #include "mdd_internal.h"
 
-const struct md_device_operations mdd_ops;
+static const struct md_device_operations mdd_ops;
 static struct lu_device_type mdd_device_type;
 
 static const char mdd_root_dir_name[] = "ROOT";
@@ -260,7 +260,8 @@ static int llog_changelog_cancel(const struct lu_env *env,
 
 static struct llog_operations changelog_orig_logops;
 
-int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on);
+static int
+mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on);
 
 static int mdd_changelog_llog_init(const struct lu_env *env,
 				   struct mdd_device *mdd)
@@ -404,11 +405,13 @@ static void mdd_changelog_fini(const struct lu_env *env,
 	}
 }
 
-int mdd_changelog_write_header(const struct lu_env *env,
-			       struct mdd_device *mdd, int markerflags);
+static int
+mdd_changelog_write_header(const struct lu_env *env, struct mdd_device *mdd,
+			   int markerflags);
 
 /* Start / stop recording */
-int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
+static int
+mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
 {
         int rc = 0;
 
@@ -441,8 +444,9 @@ int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
  * \param endrec
  * \retval 0 ok
  */
-int mdd_changelog_llog_cancel(const struct lu_env *env,
-			      struct mdd_device *mdd, long long endrec)
+static int
+mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
+			  long long endrec)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct llog_ctxt *ctxt;
@@ -1515,7 +1519,7 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 /* type constructor/destructor: mdd_type_init, mdd_type_fini */
 LU_TYPE_INIT_FINI(mdd, &mdd_thread_key);
 
-const struct md_device_operations mdd_ops = {
+static const struct md_device_operations mdd_ops = {
 	.mdo_statfs         = mdd_statfs,
 	.mdo_root_get	    = mdd_root_get,
 	.mdo_init_capa_ctxt = mdd_init_capa_ctxt,

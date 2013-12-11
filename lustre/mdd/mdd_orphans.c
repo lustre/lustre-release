@@ -51,7 +51,7 @@
 #include "mdd_internal.h"
 
 const char orph_index_name[] = "PENDING";
-const char *dotdot = "..";
+static const char dotdot[] = "..";
 
 enum {
         ORPH_OP_UNLINK,
