@@ -56,93 +56,40 @@ struct pool_desc {
 	struct obd_device	*pool_lobd;	/* owner */
 };
 
-struct lov_lock_handles {
-        struct portals_handle   llh_handle;
-        cfs_atomic_t            llh_refcount;
-        int                     llh_stripe_count;
-        struct lustre_handle    llh_handles[0];
-};
-
 struct lov_request {
-        struct obd_info          rq_oi;
-        struct lov_request_set  *rq_rqset;
-
-        cfs_list_t               rq_link;
-
-        int                      rq_idx;        /* index in lov->tgts array */
-        int                      rq_stripe;     /* stripe number */
-        int                      rq_complete;
-        int                      rq_rc;
-        int                      rq_buflen;     /* length of sub_md */
-
-        obd_count                rq_oabufs;
-        obd_count                rq_pgaidx;
+	struct obd_info		 rq_oi;
+	struct lov_request_set	*rq_rqset;
+	cfs_list_t		 rq_link;
+	int			 rq_idx;	/* index in lov->tgts array */
+	int			 rq_stripe;	/* stripe number */
+	int			 rq_complete;
+	int			 rq_rc;
 };
 
 struct lov_request_set {
-	struct ldlm_enqueue_info	*set_ei;
-	struct obd_info			*set_oi;
-	cfs_atomic_t			set_refcount;
-	struct obd_export		*set_exp;
-	/* XXX: There is @set_exp already, however obd_statfs gets obd_device
-	   only. */
-	struct obd_device		*set_obd;
-	int				set_count;
-	cfs_atomic_t			set_completes;
-	cfs_atomic_t			set_success;
-	cfs_atomic_t			set_finish_checked;
-	struct llog_cookie		*set_cookies;
-	int				set_cookie_sent;
-	struct obd_trans_info		*set_oti;
-	obd_count			set_oabufs;
-	struct brw_page			*set_pga;
-	struct lov_lock_handles		*set_lockh;
-	cfs_list_t			set_list;
-	wait_queue_head_t		set_waitq;
-	spinlock_t			set_lock;
+	struct obd_info		*set_oi;
+	cfs_atomic_t		 set_refcount;
+	struct obd_export	*set_exp;
+	/* XXX: There is @set_exp already, however obd_statfs gets
+	   obd_device only. */
+	struct obd_device	*set_obd;
+	int			 set_count;
+	cfs_atomic_t		 set_completes;
+	cfs_atomic_t		 set_success;
+	cfs_atomic_t		 set_finish_checked;
+	struct llog_cookie	*set_cookies;
+	cfs_list_t		 set_list;
+	wait_queue_head_t	 set_waitq;
 };
 
 extern struct kmem_cache *lov_oinfo_slab;
 
 void lov_finish_set(struct lov_request_set *set);
 
-static inline void lov_get_reqset(struct lov_request_set *set)
-{
-        LASSERT(set != NULL);
-        LASSERT(cfs_atomic_read(&set->set_refcount) > 0);
-        cfs_atomic_inc(&set->set_refcount);
-}
-
 static inline void lov_put_reqset(struct lov_request_set *set)
 {
         if (cfs_atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
-}
-
-static inline struct lov_lock_handles *
-lov_handle2llh(const struct lustre_handle *handle)
-{
-	LASSERT(handle != NULL);
-	return class_handle2object(handle->cookie, NULL);
-}
-
-static inline void lov_llh_put(struct lov_lock_handles *llh)
-{
-        CDEBUG(D_INFO, "PUTting llh %p : new refcount %d\n", llh,
-               cfs_atomic_read(&llh->llh_refcount) - 1);
-        LASSERT(cfs_atomic_read(&llh->llh_refcount) > 0 &&
-                cfs_atomic_read(&llh->llh_refcount) < 0x5a5a);
-        if (cfs_atomic_dec_and_test(&llh->llh_refcount)) {
-                class_handle_unhash(&llh->llh_handle);
-                /* The structure may be held by other threads because RCU.
-                 *   -jxiong */
-                if (cfs_atomic_read(&llh->llh_refcount))
-                        return;
-
-                OBD_FREE_RCU(llh, sizeof *llh +
-                             sizeof(*llh->llh_handles) * llh->llh_stripe_count,
-                             &llh->llh_handle);
-        }
 }
 
 #define lov_uuid2str(lv, index) \
@@ -151,8 +98,6 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
 /* lov_merge.c */
 void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
                      struct lov_stripe_md *lsm, int stripeno, int *set);
-int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
-                  struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
@@ -178,17 +123,6 @@ void lov_update_set(struct lov_request_set *set,
 int lov_update_common_set(struct lov_request_set *set,
                           struct lov_request *req, int rc);
 int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx);
-int lov_prep_create_set(struct obd_export *exp, struct obd_info *oifo,
-                        struct lov_stripe_md **ea, struct obdo *src_oa,
-                        struct obd_trans_info *oti,
-                        struct lov_request_set **reqset);
-int cb_create_update(void *cookie, int rc);
-int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea);
-int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
-                     obd_count oa_bufs, struct brw_page *pga,
-                     struct obd_trans_info *oti,
-                     struct lov_request_set **reqset);
-int lov_fini_brw_set(struct lov_request_set *set);
 int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct lov_request_set **reqset);
 int lov_fini_getattr_set(struct lov_request_set *set);
@@ -196,8 +130,6 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct obdo *src_oa, struct lov_stripe_md *lsm,
                          struct obd_trans_info *oti,
                          struct lov_request_set **reqset);
-int lov_update_destroy_set(struct lov_request_set *set,
-                           struct lov_request *req, int rc);
 int lov_fini_destroy_set(struct lov_request_set *set);
 int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct obd_trans_info *oti,
@@ -205,30 +137,6 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
 int lov_update_setattr_set(struct lov_request_set *set,
                            struct lov_request *req, int rc);
 int lov_fini_setattr_set(struct lov_request_set *set);
-int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
-                       struct obd_trans_info *oti,
-                       struct lov_request_set **reqset);
-int lov_fini_punch_set(struct lov_request_set *set);
-int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
-                      obd_off start, obd_off end,
-                      struct lov_request_set **reqset);
-int lov_fini_sync_set(struct lov_request_set *set);
-int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct ldlm_enqueue_info *einfo,
-                         struct lov_request_set **reqset);
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
-                         struct ptlrpc_request_set *rqset);
-int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
-                       struct lov_stripe_md *lsm,
-                       ldlm_policy_data_t *policy, __u32 mode,
-                       struct lustre_handle *lockh,
-                       struct lov_request_set **reqset);
-int lov_fini_match_set(struct lov_request_set *set, __u32 mode, __u64 flags);
-int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
-                        struct lov_stripe_md *lsm,
-                        __u32 mode, struct lustre_handle *lockh,
-                        struct lov_request_set **reqset);
-int lov_fini_cancel_set(struct lov_request_set *set);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
 void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
@@ -260,10 +168,6 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
                struct lov_stripe_md *lsm);
 int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes);
-int lov_setstripe(struct obd_export *exp, int max_lmm_size,
-                  struct lov_stripe_md **lsmp, struct lov_user_md *lump);
-int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
-              struct lov_user_md *lump);
 int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_user_md *lump);
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, __u16 stripe_count,
@@ -279,8 +183,6 @@ void lov_dump_lmm(int level, void *lmm);
 struct lov_stripe_md *lsm_alloc_plain(__u16 stripe_count, int *size);
 void lsm_free_plain(struct lov_stripe_md *lsm);
 
-int lovea_destroy_object(struct lov_obd *lov, struct lov_stripe_md *lsm,
-                         struct obdo *oa, void *data);
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
 #ifdef LPROCFS
@@ -305,8 +207,6 @@ int lov_pool_del(struct obd_device *obd, char *poolname);
 int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 void lov_dump_pool(int level, struct pool_desc *pool);
-struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
-int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 void lov_pool_putref(struct pool_desc *pool);
 
 static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)

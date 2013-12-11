@@ -280,14 +280,6 @@ void llu_ioepoch_open(struct llu_inode_info *lli, __u64 ioepoch);
 int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_write(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_iodone(struct ioctx *ioctxp);
-int llu_glimpse_size(struct inode *inode);
-int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                    struct lov_stripe_md *lsm, int mode,
-                    ldlm_policy_data_t *policy, struct lustre_handle *lockh,
-                    int ast_flags);
-int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
-                      struct lov_stripe_md *lsm, int mode,
-                      struct lustre_handle *lockh);
 
 /* namei.c */
 int llu_iop_lookup(struct pnode *pnode,
