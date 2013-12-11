@@ -279,7 +279,7 @@ int lustre_start_mgc(struct super_block *sb)
                         GOTO(out_free, rc);
 
                 /* Re-using an existing MGC */
-                cfs_atomic_inc(&obd->u.cli.cl_mgc_refcount);
+		atomic_inc(&obd->u.cli.cl_mgc_refcount);
 
                 /* IR compatibility check, only for clients */
                 if (lmd_is_client(lsi->lsi_lmd)) {
@@ -442,7 +442,7 @@ int lustre_start_mgc(struct super_block *sb)
 
         /* Keep a refcount of servers/clients who started with "mount",
            so we know when we can get rid of the mgc. */
-        cfs_atomic_set(&obd->u.cli.cl_mgc_refcount, 1);
+	atomic_set(&obd->u.cli.cl_mgc_refcount, 1);
 
         /* Try all connections, but only once. */
         recov_bk = 1;
@@ -509,12 +509,12 @@ static int lustre_stop_mgc(struct super_block *sb)
         lsi->lsi_mgc = NULL;
 
 	mutex_lock(&mgc_start_lock);
-        LASSERT(cfs_atomic_read(&obd->u.cli.cl_mgc_refcount) > 0);
-        if (!cfs_atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
+	LASSERT(atomic_read(&obd->u.cli.cl_mgc_refcount) > 0);
+	if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 /* This is not fatal, every client that stops
                    will call in here. */
                 CDEBUG(D_MOUNT, "mgc still has %d references.\n",
-                       cfs_atomic_read(&obd->u.cli.cl_mgc_refcount));
+		       atomic_read(&obd->u.cli.cl_mgc_refcount));
                 GOTO(out, rc = -EBUSY);
         }
 
@@ -585,7 +585,7 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
         lsi->lsi_lmd->lmd_recovery_time_hard = 0;
         s2lsi_nocast(sb) = lsi;
         /* we take 1 extra ref for our setup */
-        cfs_atomic_set(&lsi->lsi_mounts, 1);
+	atomic_set(&lsi->lsi_mounts, 1);
 
         /* Default umount style */
         lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
@@ -602,7 +602,7 @@ static int lustre_free_lsi(struct super_block *sb)
         CDEBUG(D_MOUNT, "Freeing lsi %p\n", lsi);
 
         /* someone didn't call server_put_mount. */
-        LASSERT(cfs_atomic_read(&lsi->lsi_mounts) == 0);
+	LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
 
         if (lsi->lsi_lmd != NULL) {
                 if (lsi->lsi_lmd->lmd_dev != NULL)
@@ -649,8 +649,8 @@ int lustre_put_lsi(struct super_block *sb)
 
         LASSERT(lsi != NULL);
 
-        CDEBUG(D_MOUNT, "put %p %d\n", sb, cfs_atomic_read(&lsi->lsi_mounts));
-        if (cfs_atomic_dec_and_test(&lsi->lsi_mounts)) {
+	CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
+	if (atomic_dec_and_test(&lsi->lsi_mounts)) {
 		if (IS_SERVER(lsi) && lsi->lsi_osd_exp) {
 			lu_device_put(&lsi->lsi_dt_dev->dd_lu_dev);
 			lsi->lsi_osd_exp->exp_obd->obd_lvfs_ctxt.dt = NULL;

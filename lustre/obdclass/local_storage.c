@@ -110,7 +110,7 @@ static struct ls_device *__ls_find_dev(struct dt_device *dev)
 
 	cfs_list_for_each_entry(ls, &ls_list_head, ls_linkage) {
 		if (ls->ls_osd == dev) {
-			cfs_atomic_inc(&ls->ls_refcount);
+			atomic_inc(&ls->ls_refcount);
 			ret = ls;
 			break;
 		}
@@ -155,7 +155,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 	if (ls == NULL)
 		GOTO(out_ls, ls = ERR_PTR(-ENOMEM));
 
-	cfs_atomic_set(&ls->ls_refcount, 1);
+	atomic_set(&ls->ls_refcount, 1);
 	CFS_INIT_LIST_HEAD(&ls->ls_los_list);
 	mutex_init(&ls->ls_los_mutex);
 
@@ -176,11 +176,11 @@ out_ls:
 void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 {
 	LASSERT(env);
-	if (!cfs_atomic_dec_and_test(&ls->ls_refcount))
+	if (!atomic_dec_and_test(&ls->ls_refcount))
 		return;
 
 	mutex_lock(&ls_list_mutex);
-	if (cfs_atomic_read(&ls->ls_refcount) == 0) {
+	if (atomic_read(&ls->ls_refcount) == 0) {
 		LASSERT(cfs_list_empty(&ls->ls_los_list));
 		cfs_list_del(&ls->ls_linkage);
 		lu_site_purge(env, ls->ls_top_dev.dd_lu_dev.ld_site, ~0);
@@ -642,7 +642,7 @@ struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 
 	cfs_list_for_each_entry(los, &ls->ls_los_list, los_list) {
 		if (los->los_seq == seq) {
-			cfs_atomic_inc(&los->los_refcount);
+			atomic_inc(&los->los_refcount);
 			ret = los;
 			break;
 		}
@@ -652,7 +652,7 @@ struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 
 void dt_los_put(struct local_oid_storage *los)
 {
-	if (cfs_atomic_dec_and_test(&los->los_refcount))
+	if (atomic_dec_and_test(&los->los_refcount))
 		/* should never happen, only local_oid_storage_fini should
 		 * drop refcount to zero */
 		LBUG();
@@ -777,10 +777,10 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	if (*los == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	cfs_atomic_set(&(*los)->los_refcount, 1);
+	atomic_set(&(*los)->los_refcount, 1);
 	mutex_init(&(*los)->los_id_lock);
 	(*los)->los_dev = &ls->ls_top_dev;
-	cfs_atomic_inc(&ls->ls_refcount);
+	atomic_inc(&ls->ls_refcount);
 	cfs_list_add(&(*los)->los_list, &ls->ls_los_list);
 
 	/* Use {seq, 0, 0} to create the LAST_ID file for every
@@ -858,7 +858,7 @@ out_trans:
 out_los:
 	if (rc != 0) {
 		cfs_list_del(&(*los)->los_list);
-		cfs_atomic_dec(&ls->ls_refcount);
+		atomic_dec(&ls->ls_refcount);
 		OBD_FREE_PTR(*los);
 		*los = NULL;
 		if (o != NULL && !IS_ERR(o))
@@ -886,7 +886,7 @@ void local_oid_storage_fini(const struct lu_env *env,
 {
 	struct ls_device *ls;
 
-	if (!cfs_atomic_dec_and_test(&los->los_refcount))
+	if (!atomic_dec_and_test(&los->los_refcount))
 		return;
 
 	LASSERT(env);
@@ -894,7 +894,7 @@ void local_oid_storage_fini(const struct lu_env *env,
 	ls = dt2ls_dev(los->los_dev);
 
 	mutex_lock(&ls->ls_los_mutex);
-	if (cfs_atomic_read(&los->los_refcount) > 0) {
+	if (atomic_read(&los->los_refcount) > 0) {
 		mutex_unlock(&ls->ls_los_mutex);
 		return;
 	}

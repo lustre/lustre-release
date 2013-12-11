@@ -445,7 +445,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
                 }
         }
 
-        cfs_atomic_add(*pages, &obd->u.echo.eo_prep);
+	atomic_add(*pages, &obd->u.echo.eo_prep);
 
         if (cmd & OBD_BRW_READ)
                 lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -455,7 +455,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
                                     tot_bytes);
 
         CDEBUG(D_PAGE, "%d pages allocated after prep\n",
-               cfs_atomic_read(&obd->u.echo.eo_prep));
+	       atomic_read(&obd->u.echo.eo_prep));
 
         RETURN(0);
 
@@ -472,7 +472,7 @@ preprw_cleanup:
                  * lose the extra ref gained above */
                 OBD_PAGE_FREE(res[i].page);
                 res[i].page = NULL;
-                cfs_atomic_dec(&obd->u.echo.eo_prep);
+		atomic_dec(&obd->u.echo.eo_prep);
         }
 
         return rc;
@@ -534,14 +534,14 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 
 	}
 
-        cfs_atomic_sub(pgs, &obd->u.echo.eo_prep);
+	atomic_sub(pgs, &obd->u.echo.eo_prep);
 
         CDEBUG(D_PAGE, "%d pages remain after commit\n",
-               cfs_atomic_read(&obd->u.echo.eo_prep));
+	       atomic_read(&obd->u.echo.eo_prep));
         RETURN(rc);
 
 commitrw_cleanup:
-        cfs_atomic_sub(pgs, &obd->u.echo.eo_prep);
+	atomic_sub(pgs, &obd->u.echo.eo_prep);
 
         CERROR("cleaning up %d pages (%d obdos)\n",
                niocount - pgs - 1, objcount);
@@ -554,7 +554,7 @@ commitrw_cleanup:
 
                 /* NB see comment above regarding persistent pages */
                 OBD_PAGE_FREE(page);
-                cfs_atomic_dec(&obd->u.echo.eo_prep);
+		atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
 }
@@ -626,7 +626,7 @@ static int echo_cleanup(struct obd_device *obd)
 	ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 	obd->obd_namespace = NULL;
 
-	leaked = cfs_atomic_read(&obd->u.echo.eo_prep);
+	leaked = atomic_read(&obd->u.echo.eo_prep);
 	if (leaked != 0)
 		CERROR("%d prep/commitrw pages leaked\n", leaked);
 

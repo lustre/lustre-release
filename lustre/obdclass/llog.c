@@ -70,7 +70,7 @@ struct llog_handle *llog_alloc_handle(void)
 	init_rwsem(&loghandle->lgh_lock);
 	spin_lock_init(&loghandle->lgh_hdr_lock);
 	CFS_INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
-	cfs_atomic_set(&loghandle->lgh_refcount, 1);
+	atomic_set(&loghandle->lgh_refcount, 1);
 
 	return loghandle;
 }
@@ -98,13 +98,13 @@ out:
 
 void llog_handle_get(struct llog_handle *loghandle)
 {
-	cfs_atomic_inc(&loghandle->lgh_refcount);
+	atomic_inc(&loghandle->lgh_refcount);
 }
 
 void llog_handle_put(struct llog_handle *loghandle)
 {
-	LASSERT(cfs_atomic_read(&loghandle->lgh_refcount) > 0);
-	if (cfs_atomic_dec_and_test(&loghandle->lgh_refcount))
+	LASSERT(atomic_read(&loghandle->lgh_refcount) > 0);
+	if (atomic_dec_and_test(&loghandle->lgh_refcount))
 		llog_free_handle(loghandle);
 }
 

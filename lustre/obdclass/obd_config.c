@@ -432,14 +432,14 @@ int class_attach(struct lustre_cfg *lcfg)
 
         /* Detach drops this */
 	spin_lock(&obd->obd_dev_lock);
-	cfs_atomic_set(&obd->obd_refcount, 1);
+	atomic_set(&obd->obd_refcount, 1);
 	spin_unlock(&obd->obd_dev_lock);
         lu_ref_init(&obd->obd_reference);
         lu_ref_add(&obd->obd_reference, "attach", obd);
 
         obd->obd_attached = 1;
         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
-               obd->obd_minor, typename, cfs_atomic_read(&obd->obd_refcount));
+	       obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
         if (obd != NULL) {
@@ -666,12 +666,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* The three references that should be remaining are the
          * obd_self_export and the attach and setup references. */
-        if (cfs_atomic_read(&obd->obd_refcount) > 3) {
+	if (atomic_read(&obd->obd_refcount) > 3) {
                 /* refcounf - 3 might be the number of real exports
                    (excluding self export). But class_incref is called
                    by other things as well, so don't count on it. */
                 CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
-                       obd->obd_name, cfs_atomic_read(&obd->obd_refcount) - 3);
+		       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
                 dump_exports(obd, 0);
                 class_disconnect_exports(obd);
         }
@@ -711,9 +711,9 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
 {
         lu_ref_add_atomic(&obd->obd_reference, scope, source);
-        cfs_atomic_inc(&obd->obd_refcount);
+	atomic_inc(&obd->obd_refcount);
         CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,
-               cfs_atomic_read(&obd->obd_refcount));
+	       atomic_read(&obd->obd_refcount));
 
         return obd;
 }
@@ -725,8 +725,8 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
 	int refs;
 
 	spin_lock(&obd->obd_dev_lock);
-	cfs_atomic_dec(&obd->obd_refcount);
-	refs = cfs_atomic_read(&obd->obd_refcount);
+	atomic_dec(&obd->obd_refcount);
+	refs = atomic_read(&obd->obd_refcount);
 	spin_unlock(&obd->obd_dev_lock);
 	lu_ref_del(&obd->obd_reference, scope, source);
 

@@ -47,11 +47,11 @@
 #include <obd_support.h>
 
 #define lustre_get_group_info(group_info) do {             \
-        cfs_atomic_inc(&(group_info)->usage);              \
+	atomic_inc(&(group_info)->usage);              \
 } while (0)
 
 #define lustre_put_group_info(group_info) do {             \
-	if (cfs_atomic_dec_and_test(&(group_info)->usage)) \
+	if (atomic_dec_and_test(&(group_info)->usage)) \
 		groups_free(group_info);               	   \
 } while (0)
 

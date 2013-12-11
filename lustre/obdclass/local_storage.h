@@ -42,7 +42,7 @@ struct ls_device {
 	/* all initialized ls_devices on this node linked by this */
 	cfs_list_t		 ls_linkage;
 	/* how many handle's reference this local storage */
-	cfs_atomic_t		 ls_refcount;
+	atomic_t		 ls_refcount;
 	/* underlaying OSD device */
 	struct dt_device	*ls_osd;
 	/* list of all local OID storages */

@@ -184,7 +184,7 @@ static inline void capa_delete_lru(cfs_list_t *head)
         while (count++ < LRU_CAPA_DELETE_COUNT) {
                 ocapa = cfs_list_entry(node, struct obd_capa, c_list);
                 node = node->next;
-                if (cfs_atomic_read(&ocapa->c_refc))
+		if (atomic_read(&ocapa->c_refc))
                         continue;
 
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa, "free lru");

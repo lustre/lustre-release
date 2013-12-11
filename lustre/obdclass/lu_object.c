@@ -90,7 +90,7 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 		LASSERT(top->loh_hash.next == NULL
 			&& top->loh_hash.pprev == NULL);
 		LASSERT(cfs_list_empty(&top->loh_lru));
-		if (!cfs_atomic_dec_and_test(&top->loh_ref))
+		if (!atomic_dec_and_test(&top->loh_ref))
 			return;
 		cfs_list_for_each_entry_reverse(o, &top->loh_layers, lo_linkage) {
 			if (o->lo_ops->loo_object_release != NULL)
@@ -344,7 +344,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                 bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, &bd);
 
                 cfs_list_for_each_entry_safe(h, temp, &bkt->lsb_lru, loh_lru) {
-                        LASSERT(cfs_atomic_read(&h->loh_ref) == 0);
+			LASSERT(atomic_read(&h->loh_ref) == 0);
 
                         cfs_hash_bd_get(s->ls_obj_hash, &h->loh_fid, &bd2);
                         LASSERT(bd.bd_bucket == bd2.bd_bucket);
@@ -479,7 +479,7 @@ void lu_object_header_print(const struct lu_env *env, void *cookie,
                             const struct lu_object_header *hdr)
 {
         (*printer)(env, cookie, "header@%p[%#lx, %d, "DFID"%s%s%s]",
-                   hdr, hdr->loh_flags, cfs_atomic_read(&hdr->loh_ref),
+		   hdr, hdr->loh_flags, atomic_read(&hdr->loh_ref),
                    PFID(&hdr->loh_fid),
                    cfs_hlist_unhashed(&hdr->loh_hash) ? "" : " hash",
                    cfs_list_empty((cfs_list_t *)&hdr->loh_lru) ? \
@@ -979,7 +979,7 @@ static void lu_obj_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct lu_object_header *h;
 
         h = cfs_hlist_entry(hnode, struct lu_object_header, loh_hash);
-        if (cfs_atomic_add_return(1, &h->loh_ref) == 1) {
+	if (atomic_add_return(1, &h->loh_ref) == 1) {
                 struct lu_site_bkt_data *bkt;
                 cfs_hash_bd_t            bd;
 
@@ -1150,7 +1150,7 @@ EXPORT_SYMBOL(lu_site_init_finish);
  */
 void lu_device_get(struct lu_device *d)
 {
-        cfs_atomic_inc(&d->ld_ref);
+	atomic_inc(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_get);
 
@@ -1159,8 +1159,8 @@ EXPORT_SYMBOL(lu_device_get);
  */
 void lu_device_put(struct lu_device *d)
 {
-        LASSERT(cfs_atomic_read(&d->ld_ref) > 0);
-        cfs_atomic_dec(&d->ld_ref);
+	LASSERT(atomic_read(&d->ld_ref) > 0);
+	atomic_dec(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_put);
 
@@ -1172,7 +1172,7 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
         if (t->ldt_device_nr++ == 0 && t->ldt_ops->ldto_start != NULL)
                 t->ldt_ops->ldto_start(t);
         memset(d, 0, sizeof *d);
-        cfs_atomic_set(&d->ld_ref, 0);
+	atomic_set(&d->ld_ref, 0);
         d->ld_type = t;
         lu_ref_init(&d->ld_reference);
         CFS_INIT_LIST_HEAD(&d->ld_linkage);
@@ -1194,8 +1194,8 @@ void lu_device_fini(struct lu_device *d)
         }
 
         lu_ref_fini(&d->ld_reference);
-        LASSERTF(cfs_atomic_read(&d->ld_ref) == 0,
-                 "Refcount is %u\n", cfs_atomic_read(&d->ld_ref));
+	LASSERTF(atomic_read(&d->ld_ref) == 0,
+		 "Refcount is %u\n", atomic_read(&d->ld_ref));
         LASSERT(t->ldt_device_nr > 0);
         if (--t->ldt_device_nr == 0 && t->ldt_ops->ldto_stop != NULL)
                 t->ldt_ops->ldto_stop(t);
@@ -1268,7 +1268,7 @@ EXPORT_SYMBOL(lu_object_add);
 int lu_object_header_init(struct lu_object_header *h)
 {
         memset(h, 0, sizeof *h);
-        cfs_atomic_set(&h->loh_ref, 1);
+	atomic_set(&h->loh_ref, 1);
         CFS_INIT_HLIST_NODE(&h->loh_hash);
         CFS_INIT_LIST_HEAD(&h->loh_lru);
         CFS_INIT_LIST_HEAD(&h->loh_layers);
@@ -1382,7 +1382,7 @@ int lu_context_key_register(struct lu_context_key *key)
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                 if (lu_keys[i] == NULL) {
                         key->lct_index = i;
-                        cfs_atomic_set(&key->lct_used, 1);
+			atomic_set(&key->lct_used, 1);
                         lu_keys[i] = key;
                         lu_ref_init(&key->lct_reference);
                         result = 0;
@@ -1403,11 +1403,11 @@ static void key_fini(struct lu_context *ctx, int index)
                 key = lu_keys[index];
                 LASSERT(key != NULL);
                 LASSERT(key->lct_fini != NULL);
-                LASSERT(cfs_atomic_read(&key->lct_used) > 1);
+		LASSERT(atomic_read(&key->lct_used) > 1);
 
                 key->lct_fini(ctx, key, ctx->lc_value[index]);
                 lu_ref_del(&key->lct_reference, "ctx", ctx);
-                cfs_atomic_dec(&key->lct_used);
+		atomic_dec(&key->lct_used);
 
 		LASSERT(key->lct_owner != NULL);
 		if ((ctx->lc_tags & LCT_NOREF) == 0) {
@@ -1423,7 +1423,7 @@ static void key_fini(struct lu_context *ctx, int index)
  */
 void lu_context_key_degister(struct lu_context_key *key)
 {
-	LASSERT(cfs_atomic_read(&key->lct_used) >= 1);
+	LASSERT(atomic_read(&key->lct_used) >= 1);
 	LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
 
 	lu_context_key_quiesce(key);
@@ -1437,9 +1437,9 @@ void lu_context_key_degister(struct lu_context_key *key)
 	}
 	spin_unlock(&lu_keys_guard);
 
-	LASSERTF(cfs_atomic_read(&key->lct_used) == 1,
+	LASSERTF(atomic_read(&key->lct_used) == 1,
 		 "key has instances: %d\n",
-		 cfs_atomic_read(&key->lct_used));
+		 atomic_read(&key->lct_used));
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
@@ -1621,7 +1621,7 @@ static int keys_fill(struct lu_context *ctx)
 			if (!(ctx->lc_tags & LCT_NOREF))
 				try_module_get(key->lct_owner);
 			lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
-			cfs_atomic_inc(&key->lct_used);
+			atomic_inc(&key->lct_used);
                         /*
                          * This is the only place in the code, where an
                          * element of ctx->lc_value[] array is set to non-NULL
@@ -1995,7 +1995,7 @@ void lu_context_keys_dump(void)
                         CERROR("[%d]: %p %x (%p,%p,%p) %d %d \"%s\"@%p\n",
                                i, key, key->lct_tags,
                                key->lct_init, key->lct_fini, key->lct_exit,
-                               key->lct_index, cfs_atomic_read(&key->lct_used),
+			       key->lct_index, atomic_read(&key->lct_used),
                                key->lct_owner ? key->lct_owner->name : "",
                                key->lct_owner);
                         lu_ref_print(&key->lct_reference);

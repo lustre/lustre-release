@@ -65,13 +65,13 @@ static struct lu_kmem_descr cl_lock_caches[] = {
 
 #ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
 #define CS_LOCK_INC(o, item) \
-	cfs_atomic_inc(&cl_object_site(o)->cs_locks.cs_stats[CS_##item])
+	atomic_inc(&cl_object_site(o)->cs_locks.cs_stats[CS_##item])
 #define CS_LOCK_DEC(o, item) \
-	cfs_atomic_dec(&cl_object_site(o)->cs_locks.cs_stats[CS_##item])
+	atomic_dec(&cl_object_site(o)->cs_locks.cs_stats[CS_##item])
 #define CS_LOCKSTATE_INC(o, state) \
-        cfs_atomic_inc(&cl_object_site(o)->cs_locks_state[state])
+	atomic_inc(&cl_object_site(o)->cs_locks_state[state])
 #define CS_LOCKSTATE_DEC(o, state) \
-        cfs_atomic_dec(&cl_object_site(o)->cs_locks_state[state])
+	atomic_dec(&cl_object_site(o)->cs_locks_state[state])
 #else
 #define CS_LOCK_INC(o, item)
 #define CS_LOCK_DEC(o, item)
@@ -89,7 +89,7 @@ static int cl_lock_invariant_trusted(const struct lu_env *env,
                                      const struct cl_lock *lock)
 {
         return  ergo(lock->cll_state == CLS_FREEING, lock->cll_holds == 0) &&
-                cfs_atomic_read(&lock->cll_ref) >= lock->cll_holds &&
+		atomic_read(&lock->cll_ref) >= lock->cll_holds &&
                 lock->cll_holds >= lock->cll_users &&
                 lock->cll_holds >= 0 &&
                 lock->cll_users >= 0 &&
@@ -106,7 +106,7 @@ static int cl_lock_invariant(const struct lu_env *env,
 {
         int result;
 
-        result = cfs_atomic_read(&lock->cll_ref) > 0 &&
+	result = atomic_read(&lock->cll_ref) > 0 &&
                 cl_lock_invariant_trusted(env, lock);
         if (!result && env != NULL)
                 CL_LOCK_DEBUG(D_ERROR, env, lock, "invariant broken");
@@ -143,7 +143,7 @@ static void cl_lock_trace0(int level, const struct lu_env *env,
         struct cl_object_header *h = cl_object_header(lock->cll_descr.cld_obj);
         CDEBUG(level, "%s: %p@(%d %p %d %d %d %d %d %lx)"
                       "(%p/%d/%d) at %s():%d\n",
-               prefix, lock, cfs_atomic_read(&lock->cll_ref),
+	       prefix, lock, atomic_read(&lock->cll_ref),
                lock->cll_guarder, lock->cll_depth,
                lock->cll_state, lock->cll_error, lock->cll_holds,
                lock->cll_users, lock->cll_flags,
@@ -306,9 +306,9 @@ void cl_lock_put(const struct lu_env *env, struct cl_lock *lock)
         LINVRNT(obj != NULL);
 
         CDEBUG(D_TRACE, "releasing reference: %d %p %lu\n",
-               cfs_atomic_read(&lock->cll_ref), lock, RETIP);
+	       atomic_read(&lock->cll_ref), lock, RETIP);
 
-        if (cfs_atomic_dec_and_test(&lock->cll_ref)) {
+	if (atomic_dec_and_test(&lock->cll_ref)) {
                 if (lock->cll_state == CLS_FREEING) {
                         LASSERT(cfs_list_empty(&lock->cll_linkage));
                         cl_lock_free(env, lock);
@@ -331,8 +331,8 @@ void cl_lock_get(struct cl_lock *lock)
 {
         LINVRNT(cl_lock_invariant(NULL, lock));
         CDEBUG(D_TRACE, "acquiring reference: %d %p %lu\n",
-               cfs_atomic_read(&lock->cll_ref), lock, RETIP);
-        cfs_atomic_inc(&lock->cll_ref);
+	       atomic_read(&lock->cll_ref), lock, RETIP);
+	atomic_inc(&lock->cll_ref);
 }
 EXPORT_SYMBOL(cl_lock_get);
 
@@ -348,8 +348,8 @@ EXPORT_SYMBOL(cl_lock_get);
 void cl_lock_get_trust(struct cl_lock *lock)
 {
         CDEBUG(D_TRACE, "acquiring trusted reference: %d %p %lu\n",
-               cfs_atomic_read(&lock->cll_ref), lock, RETIP);
-        if (cfs_atomic_inc_return(&lock->cll_ref) == 1)
+	       atomic_read(&lock->cll_ref), lock, RETIP);
+	if (atomic_inc_return(&lock->cll_ref) == 1)
 		CS_LOCK_INC(lock->cll_descr.cld_obj, busy);
 }
 EXPORT_SYMBOL(cl_lock_get_trust);
@@ -380,7 +380,7 @@ static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
         ENTRY;
 	OBD_SLAB_ALLOC_PTR_GFP(lock, cl_lock_kmem, __GFP_IO);
         if (lock != NULL) {
-                cfs_atomic_set(&lock->cll_ref, 1);
+		atomic_set(&lock->cll_ref, 1);
                 lock->cll_descr = *descr;
                 lock->cll_state = CLS_NEW;
                 cl_object_get(obj);
@@ -2157,7 +2157,7 @@ void cl_lock_print(const struct lu_env *env, void *cookie,
 {
         const struct cl_lock_slice *slice;
         (*printer)(env, cookie, "lock@%p[%d %d %d %d %d %08lx] ",
-                   lock, cfs_atomic_read(&lock->cll_ref),
+		   lock, atomic_read(&lock->cll_ref),
                    lock->cll_state, lock->cll_error, lock->cll_holds,
                    lock->cll_users, lock->cll_flags);
         cl_lock_descr_print(env, cookie, printer, &lock->cll_descr);

@@ -78,7 +78,7 @@ struct echo_object {
         struct echo_device     *eo_dev;
         cfs_list_t              eo_obj_chain;
         struct lov_stripe_md   *eo_lsm;
-        cfs_atomic_t            eo_npages;
+	atomic_t            eo_npages;
         int                     eo_deleted;
 };
 
@@ -97,7 +97,7 @@ struct echo_lock {
         cfs_list_t             el_chain;
         struct echo_object    *el_object;
         __u64                  el_cookie;
-        cfs_atomic_t           el_refcount;
+	atomic_t           el_refcount;
 };
 
 static int echo_client_setup(const struct lu_env *env,
@@ -293,7 +293,7 @@ static void echo_page_fini(const struct lu_env *env,
 	struct echo_object *eco = cl2echo_obj(slice->cpl_obj);
 	ENTRY;
 
-	cfs_atomic_dec(&eco->eo_npages);
+	atomic_dec(&eco->eo_npages);
 	page_cache_release(slice->cpl_page->cp_vmpage);
 	EXIT;
 }
@@ -392,7 +392,7 @@ static int echo_page_init(const struct lu_env *env, struct cl_object *obj,
 	page_cache_get(page->cp_vmpage);
 	mutex_init(&ep->ep_lock);
 	cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
-	cfs_atomic_inc(&eco->eo_npages);
+	atomic_inc(&eco->eo_npages);
 	RETURN(0);
 }
 
@@ -414,7 +414,7 @@ static int echo_lock_init(const struct lu_env *env,
                 cl_lock_slice_add(lock, &el->el_cl, obj, &echo_lock_ops);
                 el->el_object = cl2echo_obj(obj);
                 CFS_INIT_LIST_HEAD(&el->el_chain);
-                cfs_atomic_set(&el->el_refcount, 0);
+		atomic_set(&el->el_refcount, 0);
         }
         RETURN(el == NULL ? -ENOMEM : 0);
 }
@@ -472,7 +472,7 @@ static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
         }
 
         eco->eo_dev = ed;
-        cfs_atomic_set(&eco->eo_npages, 0);
+	atomic_set(&eco->eo_npages, 0);
 	cl_object_page_init(lu2cl(obj), sizeof(struct echo_page));
 
 	spin_lock(&ec->ec_lock);
@@ -539,7 +539,7 @@ static void echo_object_free(const struct lu_env *env, struct lu_object *obj)
         struct echo_client_obd *ec = eco->eo_dev->ed_ec;
         ENTRY;
 
-        LASSERT(cfs_atomic_read(&eco->eo_npages) == 0);
+	LASSERT(atomic_read(&eco->eo_npages) == 0);
 
 	spin_lock(&ec->ec_lock);
         cfs_list_del_init(&eco->eo_obj_chain);
@@ -1185,7 +1185,7 @@ static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
 				cfs_list_add(&el->el_chain, &ec->ec_locks);
 				el->el_cookie = ++ec->ec_unique;
 			}
-			cfs_atomic_inc(&el->el_refcount);
+			atomic_inc(&el->el_refcount);
 			*cookie = el->el_cookie;
 			spin_unlock(&ec->ec_lock);
 		} else {
@@ -1243,7 +1243,7 @@ static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
                 CDEBUG(D_INFO, "ecl: %p, cookie: "LPX64"\n", ecl, ecl->el_cookie);
                 found = (ecl->el_cookie == cookie);
                 if (found) {
-                        if (cfs_atomic_dec_and_test(&ecl->el_refcount))
+			if (atomic_dec_and_test(&ecl->el_refcount))
                                 cfs_list_del_init(&ecl->el_chain);
                         else
                                 still_used = 1;
@@ -3117,7 +3117,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
                 RETURN(-EBUSY);
         }
 
-        LASSERT(cfs_atomic_read(&ec->ec_exp->exp_refcount) > 0);
+	LASSERT(atomic_read(&ec->ec_exp->exp_refcount) > 0);
         rc = obd_disconnect(ec->ec_exp);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);

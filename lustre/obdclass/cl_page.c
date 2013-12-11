@@ -80,13 +80,13 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg);
 /* Disable page statistic by default due to huge performance penalty. */
 #ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
 #define CS_PAGE_INC(o, item) \
-	cfs_atomic_inc(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
+	atomic_inc(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
 #define CS_PAGE_DEC(o, item) \
-	cfs_atomic_dec(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
+	atomic_dec(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
 #define CS_PAGESTATE_INC(o, state) \
-	cfs_atomic_inc(&cl_object_site(o)->cs_pages_state[state])
+	atomic_inc(&cl_object_site(o)->cs_pages_state[state])
 #define CS_PAGESTATE_DEC(o, state) \
-	cfs_atomic_dec(&cl_object_site(o)->cs_pages_state[state])
+	atomic_dec(&cl_object_site(o)->cs_pages_state[state])
 #else
 #define CS_PAGE_INC(o, item)
 #define CS_PAGE_DEC(o, item)
@@ -106,8 +106,8 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg);
  */
 static void cl_page_get_trust(struct cl_page *page)
 {
-        LASSERT(cfs_atomic_read(&page->cp_ref) > 0);
-        cfs_atomic_inc(&page->cp_ref);
+	LASSERT(atomic_read(&page->cp_ref) > 0);
+	atomic_inc(&page->cp_ref);
 }
 
 /**
@@ -182,7 +182,7 @@ struct cl_page *cl_page_alloc(const struct lu_env *env,
 			__GFP_IO);
 	if (page != NULL) {
 		int result = 0;
-		cfs_atomic_set(&page->cp_ref, 1);
+		atomic_set(&page->cp_ref, 1);
 		page->cp_obj = o;
 		cl_object_get(o);
 		lu_object_ref_add_at(&o->co_lu, &page->cp_obj_ref, "cl_page",
@@ -382,12 +382,12 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
 {
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
-                       cfs_atomic_read(&page->cp_ref));
+		       atomic_read(&page->cp_ref));
 
-	if (cfs_atomic_dec_and_test(&page->cp_ref)) {
+	if (atomic_dec_and_test(&page->cp_ref)) {
 		LASSERT(page->cp_state == CPS_FREEING);
 
-		LASSERT(cfs_atomic_read(&page->cp_ref) == 0);
+		LASSERT(atomic_read(&page->cp_ref) == 0);
 		PASSERT(env, page, page->cp_owner == NULL);
 		PASSERT(env, page, cfs_list_empty(&page->cp_batch));
 		/*
@@ -1068,7 +1068,7 @@ void cl_page_header_print(const struct lu_env *env, void *cookie,
 {
 	(*printer)(env, cookie,
 		   "page@%p[%d %p %d %d %d %p %p %#x]\n",
-		   pg, cfs_atomic_read(&pg->cp_ref), pg->cp_obj,
+		   pg, atomic_read(&pg->cp_ref), pg->cp_obj,
 		   pg->cp_state, pg->cp_error, pg->cp_type,
 		   pg->cp_owner, pg->cp_req, pg->cp_flags);
 }

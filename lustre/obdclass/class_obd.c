@@ -57,7 +57,7 @@
 
 #ifndef __KERNEL__
 /* liblustre workaround */
-cfs_atomic_t libcfs_kmemory = {0};
+atomic_t libcfs_kmemory = {0};
 #endif
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
@@ -84,9 +84,9 @@ unsigned int obd_dump_on_eviction;
 EXPORT_SYMBOL(obd_dump_on_eviction);
 unsigned int obd_max_dirty_pages = 256;
 EXPORT_SYMBOL(obd_max_dirty_pages);
-cfs_atomic_t obd_unstable_pages;
+atomic_t obd_unstable_pages;
 EXPORT_SYMBOL(obd_unstable_pages);
-cfs_atomic_t obd_dirty_pages;
+atomic_t obd_dirty_pages;
 EXPORT_SYMBOL(obd_dirty_pages);
 unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 EXPORT_SYMBOL(obd_timeout);
@@ -108,7 +108,7 @@ EXPORT_SYMBOL(at_early_margin);
 int at_extra = 30;
 EXPORT_SYMBOL(at_extra);
 
-cfs_atomic_t obd_dirty_transit_pages;
+atomic_t obd_dirty_transit_pages;
 EXPORT_SYMBOL(obd_dirty_transit_pages);
 
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
@@ -191,7 +191,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 		       obd_memory_sum(),
 		       obd_pages_sum() << PAGE_CACHE_SHIFT,
 		       obd_pages_sum(),
-			cfs_atomic_read(&libcfs_kmemory));
+			atomic_read(&libcfs_kmemory));
 		return 1;
 	}
 	return 0;
@@ -392,7 +392,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
-                         cfs_atomic_read(&obd->obd_refcount));
+			 atomic_read(&obd->obd_refcount));
                 err = obd_ioctl_popdata((void *)arg, data, len);
 
                 GOTO(out, err = 0);

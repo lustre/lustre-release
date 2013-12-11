@@ -69,7 +69,7 @@
 struct job_stat {
 	cfs_hlist_node_t      js_hash;
 	cfs_list_t            js_list;
-	cfs_atomic_t          js_refcount;
+	atomic_t          js_refcount;
 	char                  js_jobid[JOBSTATS_JOBID_SIZE];
 	time_t                js_timestamp; /* seconds */
 	struct lprocfs_stats *js_stats;
@@ -105,7 +105,7 @@ static void job_stat_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
 	struct job_stat *job;
 	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
-	cfs_atomic_inc(&job->js_refcount);
+	atomic_inc(&job->js_refcount);
 }
 
 static void job_free(struct job_stat *job)
@@ -204,7 +204,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	job->js_jobstats = jobs;
 	CFS_INIT_HLIST_NODE(&job->js_hash);
 	CFS_INIT_LIST_HEAD(&job->js_list);
-	cfs_atomic_set(&job->js_refcount, 1);
+	atomic_set(&job->js_refcount, 1);
 
 	return job;
 }

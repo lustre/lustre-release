@@ -549,7 +549,7 @@ void class_obd_list(void)
                 LCONSOLE(D_CONFIG, "%3d %s %s %s %s %d\n",
                          i, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
-                         cfs_atomic_read(&obd->obd_refcount));
+			 atomic_read(&obd->obd_refcount));
         }
 	read_unlock(&obd_dev_lock);
         return;
@@ -824,9 +824,9 @@ static struct portals_handle_ops export_handle_ops = {
 
 struct obd_export *class_export_get(struct obd_export *exp)
 {
-        cfs_atomic_inc(&exp->exp_refcount);
+	atomic_inc(&exp->exp_refcount);
         CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
-               cfs_atomic_read(&exp->exp_refcount));
+	       atomic_read(&exp->exp_refcount));
         return exp;
 }
 EXPORT_SYMBOL(class_export_get);
@@ -836,9 +836,9 @@ void class_export_put(struct obd_export *exp)
         LASSERT(exp != NULL);
         LASSERT_ATOMIC_GT_LT(&exp->exp_refcount, 0, LI_POISON);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
-               cfs_atomic_read(&exp->exp_refcount) - 1);
+	       atomic_read(&exp->exp_refcount) - 1);
 
-        if (cfs_atomic_dec_and_test(&exp->exp_refcount)) {
+	if (atomic_dec_and_test(&exp->exp_refcount)) {
                 LASSERT(!cfs_list_empty(&exp->exp_obd_chain));
                 CDEBUG(D_IOCTL, "final put %p/%s\n",
                        exp, exp->exp_client_uuid.uuid);
@@ -869,15 +869,15 @@ struct obd_export *class_new_export(struct obd_device *obd,
         export->exp_conn_cnt = 0;
         export->exp_lock_hash = NULL;
 	export->exp_flock_hash = NULL;
-        cfs_atomic_set(&export->exp_refcount, 2);
-        cfs_atomic_set(&export->exp_rpc_count, 0);
-        cfs_atomic_set(&export->exp_cb_count, 0);
-        cfs_atomic_set(&export->exp_locks_count, 0);
+	atomic_set(&export->exp_refcount, 2);
+	atomic_set(&export->exp_rpc_count, 0);
+	atomic_set(&export->exp_cb_count, 0);
+	atomic_set(&export->exp_locks_count, 0);
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
         CFS_INIT_LIST_HEAD(&export->exp_locks_list);
 	spin_lock_init(&export->exp_locks_list_guard);
 #endif
-	cfs_atomic_set(&export->exp_replay_count, 0);
+	atomic_set(&export->exp_replay_count, 0);
 	export->exp_obd = obd;
 	CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
 	spin_lock_init(&export->exp_uncommitted_replies_lock);
@@ -1006,9 +1006,9 @@ static struct portals_handle_ops import_handle_ops = {
 
 struct obd_import *class_import_get(struct obd_import *import)
 {
-        cfs_atomic_inc(&import->imp_refcount);
+	atomic_inc(&import->imp_refcount);
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
-               cfs_atomic_read(&import->imp_refcount),
+	       atomic_read(&import->imp_refcount),
                import->imp_obd->obd_name);
         return import;
 }
@@ -1022,10 +1022,10 @@ void class_import_put(struct obd_import *imp)
         LASSERT_ATOMIC_GT_LT(&imp->imp_refcount, 0, LI_POISON);
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
-               cfs_atomic_read(&imp->imp_refcount) - 1,
+	       atomic_read(&imp->imp_refcount) - 1,
                imp->imp_obd->obd_name);
 
-        if (cfs_atomic_dec_and_test(&imp->imp_refcount)) {
+	if (atomic_dec_and_test(&imp->imp_refcount)) {
                 CDEBUG(D_INFO, "final put import %p\n", imp);
                 obd_zombie_import_add(imp);
         }
@@ -1070,11 +1070,11 @@ struct obd_import *class_new_import(struct obd_device *obd)
 	mutex_init(&imp->imp_sec_mutex);
 	init_waitqueue_head(&imp->imp_recovery_waitq);
 
-	cfs_atomic_set(&imp->imp_refcount, 2);
-	cfs_atomic_set(&imp->imp_unregistering, 0);
-	cfs_atomic_set(&imp->imp_inflight, 0);
-	cfs_atomic_set(&imp->imp_replay_inflight, 0);
-	cfs_atomic_set(&imp->imp_inval_count, 0);
+	atomic_set(&imp->imp_refcount, 2);
+	atomic_set(&imp->imp_unregistering, 0);
+	atomic_set(&imp->imp_inflight, 0);
+	atomic_set(&imp->imp_replay_inflight, 0);
+	atomic_set(&imp->imp_inval_count, 0);
 	CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
 	CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
 	class_handle_hash(&imp->imp_handle, &import_handle_ops);
@@ -1185,7 +1185,7 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 			exp->exp_in_recovery = 0;
 			spin_unlock(&exp->exp_lock);
 			LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
-			cfs_atomic_dec(&obd->obd_connected_clients);
+			atomic_dec(&obd->obd_connected_clients);
 		}
 
 		/* if called during recovery then should update
@@ -1201,16 +1201,16 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 		spin_lock(&exp->exp_lock);
 		exp->exp_req_replay_needed = 0;
 		spin_unlock(&exp->exp_lock);
-		LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
-		cfs_atomic_dec(&obd->obd_req_replay_clients);
+		LASSERT(atomic_read(&obd->obd_req_replay_clients));
+		atomic_dec(&obd->obd_req_replay_clients);
 	}
 	/** Cleanup lock replay data */
 	if (exp->exp_lock_replay_needed) {
 		spin_lock(&exp->exp_lock);
 		exp->exp_lock_replay_needed = 0;
 		spin_unlock(&exp->exp_lock);
-		LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
-		cfs_atomic_dec(&obd->obd_lock_replay_clients);
+		LASSERT(atomic_read(&obd->obd_lock_replay_clients));
+		atomic_dec(&obd->obd_lock_replay_clients);
 	}
 }
 
@@ -1554,10 +1554,10 @@ static void print_export_data(struct obd_export *exp, const char *status,
 
         CDEBUG(D_HA, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: %p %s "LPU64"\n",
                exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
-               obd_export_nid2str(exp), cfs_atomic_read(&exp->exp_refcount),
-               cfs_atomic_read(&exp->exp_rpc_count),
-               cfs_atomic_read(&exp->exp_cb_count),
-               cfs_atomic_read(&exp->exp_locks_count),
+	       obd_export_nid2str(exp), atomic_read(&exp->exp_refcount),
+	       atomic_read(&exp->exp_rpc_count),
+	       atomic_read(&exp->exp_cb_count),
+	       atomic_read(&exp->exp_locks_count),
                exp->exp_disconnected, exp->exp_delayed, exp->exp_failed,
                nreplies, first_reply, nreplies > 3 ? "..." : "",
                exp->exp_last_committed);
@@ -1600,7 +1600,7 @@ void obd_exports_barrier(struct obd_device *obd)
 				      "more than %d seconds. "
 				      "The obd refcount = %d. Is it stuck?\n",
 				      obd->obd_name, waited,
-				      cfs_atomic_read(&obd->obd_refcount));
+				      atomic_read(&obd->obd_refcount));
 			dump_exports(obd, 1);
 		}
 		waited *= 2;
@@ -1792,7 +1792,7 @@ static int obd_zombie_impexp_thread(void *unused)
 
 #else /* ! KERNEL */
 
-static cfs_atomic_t zombie_recur = CFS_ATOMIC_INIT(0);
+static atomic_t zombie_recur = ATOMIC_INIT(0);
 static void *obd_zombie_impexp_work_cb;
 static void *obd_zombie_impexp_idle_cb;
 
@@ -1800,11 +1800,11 @@ int obd_zombie_impexp_kill(void *arg)
 {
         int rc = 0;
 
-        if (cfs_atomic_inc_return(&zombie_recur) == 1) {
+	if (atomic_inc_return(&zombie_recur) == 1) {
                 obd_zombie_impexp_cull();
                 rc = 1;
         }
-        cfs_atomic_dec(&zombie_recur);
+	atomic_dec(&zombie_recur);
         return rc;
 }
 

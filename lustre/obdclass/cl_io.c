@@ -1584,8 +1584,8 @@ void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages)
 {
 	ENTRY;
 	init_waitqueue_head(&anchor->csi_waitq);
-	cfs_atomic_set(&anchor->csi_sync_nr, nrpages);
-	cfs_atomic_set(&anchor->csi_barrier, nrpages > 0);
+	atomic_set(&anchor->csi_sync_nr, nrpages);
+	atomic_set(&anchor->csi_barrier, nrpages > 0);
 	anchor->csi_sync_rc = 0;
 	EXIT;
 }
@@ -1607,27 +1607,27 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
         LASSERT(timeout >= 0);
 
         rc = l_wait_event(anchor->csi_waitq,
-                          cfs_atomic_read(&anchor->csi_sync_nr) == 0,
+			  atomic_read(&anchor->csi_sync_nr) == 0,
                           &lwi);
         if (rc < 0) {
                 CERROR("SYNC IO failed with error: %d, try to cancel "
                        "%d remaining pages\n",
-                       rc, cfs_atomic_read(&anchor->csi_sync_nr));
+		       rc, atomic_read(&anchor->csi_sync_nr));
 
                 (void)cl_io_cancel(env, io, queue);
 
                 lwi = (struct l_wait_info) { 0 };
                 (void)l_wait_event(anchor->csi_waitq,
-                                   cfs_atomic_read(&anchor->csi_sync_nr) == 0,
+				   atomic_read(&anchor->csi_sync_nr) == 0,
                                    &lwi);
         } else {
                 rc = anchor->csi_sync_rc;
         }
-        LASSERT(cfs_atomic_read(&anchor->csi_sync_nr) == 0);
+	LASSERT(atomic_read(&anchor->csi_sync_nr) == 0);
         cl_page_list_assume(env, io, queue);
 
 	/* wait until cl_sync_io_note() has done wakeup */
-	while (unlikely(cfs_atomic_read(&anchor->csi_barrier) != 0)) {
+	while (unlikely(atomic_read(&anchor->csi_barrier) != 0)) {
 #ifdef __KERNEL__
 		cpu_relax();
 #endif
@@ -1651,11 +1651,11 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret)
          * ->{prepare,commit}_write(). Completion is used to signal the end of
          * IO.
          */
-        LASSERT(cfs_atomic_read(&anchor->csi_sync_nr) > 0);
-	if (cfs_atomic_dec_and_test(&anchor->csi_sync_nr)) {
+	LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
+	if (atomic_dec_and_test(&anchor->csi_sync_nr)) {
 		wake_up_all(&anchor->csi_waitq);
 		/* it's safe to nuke or reuse anchor now */
-		cfs_atomic_set(&anchor->csi_barrier, 0);
+		atomic_set(&anchor->csi_barrier, 0);
 	}
 	EXIT;
 }
