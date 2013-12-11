@@ -72,7 +72,6 @@
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
 #include <obd.h>
-#include <obd_lov.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 

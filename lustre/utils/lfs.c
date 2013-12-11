@@ -74,7 +74,6 @@
 
 #include <libcfs/libcfsutil.h>
 #include <obd.h>
-#include <obd_lov.h>
 #include "obdctl.h"
 
 /* all functions */

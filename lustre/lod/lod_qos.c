@@ -35,9 +35,9 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
+#include <asm/div64.h>
 #include <libcfs/libcfs.h>
 #include <obd_class.h>
-#include <obd_lov.h>
 #include <lustre/lustre_idl.h>
 #include "lod_internal.h"
 
@@ -284,7 +284,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 
 		/* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
 		temp >>= 1;
-		lov_do_div64(temp, num_active);
+		do_div(temp, num_active);
 		OST_TGT(lod,i)->ltd_qos.ltq_penalty_per_obj =
 			(temp * prio_wide) >> 8;
 
@@ -314,7 +314,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 	/* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
 	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
 		temp = oss->lqo_bavail >> 1;
-		lov_do_div64(temp, oss->lqo_ost_count * num_active);
+		do_div(temp, oss->lqo_ost_count * num_active);
 		oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
 
 		age = (now - oss->lqo_used) >> 3;
@@ -1203,8 +1203,8 @@ static __u16 lod_get_stripecnt(struct lod_device *lod, __u32 magic,
 
 	/* stripe count is based on whether OSD can handle larger EA sizes */
 	if (lod->lod_osd_max_easize > 0)
-		max_stripes = lov_mds_md_stripecnt(lod->lod_osd_max_easize,
-						   magic);
+		max_stripes = lov_mds_md_max_stripe_count(
+			lod->lod_osd_max_easize, magic);
 
 	return (stripe_count < max_stripes) ? stripe_count : max_stripes;
 }

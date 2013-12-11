@@ -235,7 +235,6 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 
 static int llog_changelog_cancel(const struct lu_env *env,
 				 struct llog_ctxt *ctxt,
-				 struct lov_stripe_md *lsm, int count,
 				 struct llog_cookie *cookies, int flags)
 {
 	struct llog_handle	*cathandle = ctxt->loc_handle;
@@ -480,7 +479,7 @@ int mdd_changelog_llog_cancel(const struct lu_env *env,
            changed since the last purge) */
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 
-	rc = llog_cancel(env, ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
+	rc = llog_cancel(env, ctxt, (struct llog_cookie *)&endrec, 0);
 out:
         llog_ctxt_put(ctxt);
         return rc;

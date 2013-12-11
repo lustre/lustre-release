@@ -43,7 +43,6 @@
 #include <lustre_param.h>
 #include <lustre_fid.h>
 #include <lustre_lmv.h>
-#include <obd_lov.h>
 #include <md_object.h>
 
 #include "lod_internal.h"

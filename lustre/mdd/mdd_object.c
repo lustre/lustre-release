@@ -49,7 +49,6 @@
 #include <lprocfs_status.h>
 /* fid_be_cpu(), fid_cpu_to_be(). */
 #include <lustre_fid.h>
-#include <obd_lov.h>
 #include <lustre_idmap.h>
 #include <lustre_param.h>
 #include <lustre_mds.h>

@@ -55,7 +55,6 @@
 #include <obd.h>
 #include <lustre_lib.h>
 #include <lustre/lustreapi.h>
-#include <obd_lov.h>
 
 #include <lnet/lnetctl.h>
 

@@ -46,7 +46,6 @@
 #define D_MGS D_CONFIG
 
 #include <obd.h>
-#include <obd_lov.h>
 #include <lustre_param.h>
 #include <lustre_sec.h>
 #include <lustre_quota.h>
@@ -1854,9 +1853,9 @@ static int mgs_write_log_lov(const struct lu_env *env, struct mgs_device *mgs,
         /* Defaults.  Can be changed later by lcfg config_param */
         lovdesc->ld_default_stripe_count = 1;
         lovdesc->ld_pattern = LOV_PATTERN_RAID0;
-        lovdesc->ld_default_stripe_size = 1024 * 1024;
+	lovdesc->ld_default_stripe_size = LOV_DESC_STRIPE_SIZE_DEFAULT;
         lovdesc->ld_default_stripe_offset = -1;
-        lovdesc->ld_qos_maxage = QOS_DEFAULT_MAXAGE;
+	lovdesc->ld_qos_maxage = LOV_DESC_QOS_MAXAGE_DEFAULT;
         sprintf((char*)lovdesc->ld_uuid.uuid, "%s_UUID", lovname);
         /* can these be the same? */
         uuid = (char *)lovdesc->ld_uuid.uuid;

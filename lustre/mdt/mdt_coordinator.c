@@ -41,7 +41,6 @@
 #include <lustre_net.h>
 #include <lustre_export.h>
 #include <obd.h>
-#include <obd_lov.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
 #include "mdt_internal.h"

@@ -43,7 +43,6 @@
 #endif
 
 #include <obd_class.h>
-#include <obd_lov.h>
 
 #include "lov_internal.h"
 

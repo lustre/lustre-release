@@ -48,7 +48,6 @@
 #include <obd_class.h>
 #include <lustre_ver.h>
 #include <obd_support.h>
-#include <obd_lov.h>
 #include <lprocfs_status.h>
 #include <lustre_mds.h>
 #include <lustre_fid.h>

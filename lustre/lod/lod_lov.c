@@ -34,7 +34,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <obd_class.h>
-#include <obd_lov.h>
 #include <lustre_lfsck.h>
 
 #include "lod_internal.h"
@@ -1015,8 +1014,8 @@ void lod_fix_desc_stripe_size(__u64 *val)
 		if (*val != 0)
 			LCONSOLE_INFO("Increasing default stripe size to "
 				      "minimum value %u\n",
-				      LOV_DEFAULT_STRIPE_SIZE);
-		*val = LOV_DEFAULT_STRIPE_SIZE;
+				      LOV_DESC_STRIPE_SIZE_DEFAULT);
+		*val = LOV_DESC_STRIPE_SIZE_DEFAULT;
 	} else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
 		*val &= ~(LOV_MIN_STRIPE_SIZE - 1);
 		LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
@@ -1044,7 +1043,7 @@ void lod_fix_desc_qos_maxage(__u32 *val)
 {
 	/* fix qos_maxage */
 	if (*val == 0)
-		*val = QOS_DEFAULT_MAXAGE;
+		*val = LOV_DESC_QOS_MAXAGE_DEFAULT;
 }
 
 void lod_fix_desc(struct lov_desc *desc)
