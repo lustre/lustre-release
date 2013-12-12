@@ -513,9 +513,10 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 
 	rc = osd_fld_lookup(info->oti_env, osd, fid_seq(fid), range);
 	if (rc != 0) {
-		CERROR("%s: "DFID" lookup failed: rc = %d\n", osd_name(osd),
-		       PFID(fid), rc);
-		RETURN(rc);
+		if (rc != -ENOENT)
+			CERROR("%s: lookup FLD "DFID": rc = %d\n",
+			       osd_name(osd), PFID(fid), rc);
+		RETURN(0);
 	}
 
 	if (fld_range_is_ost(range))

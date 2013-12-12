@@ -249,14 +249,14 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 
 	rc = osd_fld_lookup(env, osd, fid_seq(fid), range);
 	if (rc != 0) {
-		CERROR("%s: "DFID" lookup failed: rc = %d\n", osd_name(osd),
-		       PFID(fid), rc);
-		RETURN(rc);
+		if (rc != -ENOENT)
+			CERROR("%s: "DFID" lookup failed: rc = %d\n",
+			       osd_name(osd), PFID(fid), rc);
+		RETURN(0);
 	}
 
 	if (fld_range_is_ost(range))
 		RETURN(1);
-
 
 	RETURN(0);
 }
