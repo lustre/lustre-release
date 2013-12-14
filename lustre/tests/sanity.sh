@@ -8473,18 +8473,10 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
-test_154() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
-		{ skip "Need MDS version at least 2.2.51"; return 0; }
-
-	cp /etc/hosts $DIR/$tfile
-
-	fid=$($LFS path2fid $DIR/$tfile)
-	rc=$?
-	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
-
-	ffid=$DIR/.lustre/fid/$fid
+dot_lustre_fid_permission_check() {
+	local fid=$1
+	local ffid=$MOUNT/.lustre/fid/$fid
+	local test_dir=$2
 
 	echo "stat fid $fid"
 	stat $ffid > /dev/null || error "stat $ffid failed."
@@ -8497,14 +8489,16 @@ test_154() {
 	echo "append write to fid $fid"
 	cat /etc/hosts >> $ffid || error "append write $ffid failed."
 	echo "rename fid $fid"
-	mv $ffid $DIR/$tfile.1 && error "rename $ffid to $tfile.1 should fail."
-	touch $DIR/$tfile.1
-	mv $DIR/$tfile.1 $ffid && error "rename $tfile.1 to $ffid should fail."
-	rm -f $DIR/$tfile.1
+	mv $ffid $test_dir/$tfile.1 &&
+		error "rename $ffid to $tfile.1 should fail."
+	touch $test_dir/$tfile.1
+	mv $test_dir/$tfile.1 $ffid &&
+		error "rename $tfile.1 to $ffid should fail."
+	rm -f $test_dir/$tfile.1
 	echo "truncate fid $fid"
 	$TRUNCATE $ffid 777 || error "truncate $ffid failed."
 	echo "link fid $fid"
-	ln -f $ffid $DIR/tfile.lnk || error "link $ffid failed."
+	ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
 	if [ -n $(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl) ]; then
 		echo "setfacl fid $fid"
 		setfacl -R -m u:bin:rwx $ffid || error "setfacl $ffid failed."
@@ -8512,80 +8506,136 @@ test_154() {
 		getfacl $ffid >/dev/null || error "getfacl $ffid failed."
 	fi
 	echo "unlink fid $fid"
-	unlink $DIR/.lustre/fid/$fid && error "unlink $ffid should fail."
+	unlink $MOUNT/.lustre/fid/$fid && error "unlink $ffid should fail."
 	echo "mknod fid $fid"
 	mknod $ffid c 1 3 && error "mknod $ffid should fail."
 
 	fid=[0xf00000400:0x1:0x0]
-	ffid=$DIR/.lustre/fid/$fid
+	ffid=$MOUNT/.lustre/fid/$fid
 
 	echo "stat non-exist fid $fid"
 	stat $ffid > /dev/null && error "stat non-exist $ffid should fail."
 	echo "write to non-exist fid $fid"
 	cat /etc/hosts > $ffid && error "write non-exist $ffid should fail."
 	echo "link new fid $fid"
-	ln $DIR/$tfile $ffid && error "link $ffid should fail."
+	ln $test_dir/$tfile $ffid && error "link $ffid should fail."
 
-	test_mkdir -p $DIR/$tdir
-	touch $DIR/$tdir/$tfile
-	fid=$($LFS path2fid $DIR/$tdir)
+	mkdir -p $test_dir/$tdir
+	touch $test_dir/$tdir/$tfile
+	fid=$($LFS path2fid $test_dir/$tdir)
 	rc=$?
-	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+	[ $rc -ne 0 ] &&
+		error "error: could not get fid for $test_dir/$dir/$tfile."
 
-	ffid=$DIR/.lustre/fid/$fid
+	ffid=$MOUNT/.lustre/fid/$fid
 
 	echo "ls $fid"
 	ls $ffid > /dev/null || error "ls $ffid failed."
 	echo "touch $fid/$tfile.1"
 	touch $ffid/$tfile.1 || error "touch $ffid/$tfile.1 failed."
 
-	echo "touch $DIR/.lustre/fid/$tfile"
-	touch $DIR/.lustre/fid/$tfile && \
-		error "touch $DIR/.lustre/fid/$tfile should fail."
+	echo "touch $MOUNT/.lustre/fid/$tfile"
+	touch $MOUNT/.lustre/fid/$tfile && \
+		error "touch $MOUNT/.lustre/fid/$tfile should fail."
 
-	echo "setxattr to $DIR/.lustre/fid"
-	setfattr -n trusted.name1 -v value1 $DIR/.lustre/fid &&
+	echo "setxattr to $MOUNT/.lustre/fid"
+	setfattr -n trusted.name1 -v value1 $MOUNT/.lustre/fid &&
 		error "setxattr should fail."
 
-	echo "listxattr for $DIR/.lustre/fid"
-	getfattr -d -m "^trusted" $DIR/.lustre/fid &&
+	echo "listxattr for $MOUNT/.lustre/fid"
+	getfattr -d -m "^trusted" $MOUNT/.lustre/fid &&
 		error "listxattr should fail."
 
-	echo "delxattr from $DIR/.lustre/fid"
-	setfattr -x trusted.name1 $DIR/.lustre/fid &&
+	echo "delxattr from $MOUNT/.lustre/fid"
+	setfattr -x trusted.name1 $MOUNT/.lustre/fid &&
 		error "delxattr should fail."
 
-	echo "touch invalid fid: $DIR/.lustre/fid/[0x200000400:0x2:0x3]"
-	touch $DIR/.lustre/fid/[0x200000400:0x2:0x3] &&
+	echo "touch invalid fid: $MOUNT/.lustre/fid/[0x200000400:0x2:0x3]"
+	touch $MOUNT/.lustre/fid/[0x200000400:0x2:0x3] &&
 		error "touch invalid fid should fail."
 
-	echo "touch non-normal fid: $DIR/.lustre/fid/[0x1:0x2:0x0]"
-	touch $DIR/.lustre/fid/[0x1:0x2:0x0] &&
+	echo "touch non-normal fid: $MOUNT/.lustre/fid/[0x1:0x2:0x0]"
+	touch $MOUNT/.lustre/fid/[0x1:0x2:0x0] &&
 		error "touch non-normal fid should fail."
 
-	echo "rename $tdir to $DIR/.lustre/fid"
-	mrename $DIR/$tdir $DIR/.lustre/fid &&
-		error "rename to $DIR/.lustre/fid should fail."
+	echo "rename $tdir to $MOUNT/.lustre/fid"
+	mrename $test_dir/$tdir $MOUNT/.lustre/fid &&
+		error "rename to $MOUNT/.lustre/fid should fail."
 
 	echo "rename .lustre to itself"
-	fid=$($LFS path2fid $DIR)
-	mrename $DIR/.lustre $DIR/.lustre/fid/$fid/.lustre &&
+	fid=$($LFS path2fid $MOUNT)
+	mrename $MOUNT/.lustre $MOUNT/.lustre/fid/$fid/.lustre &&
 		error "rename .lustre to itself should fail."
 
-	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $DIR/$tfile-2
-	fid=$($LFS path2fid $DIR/$tfile-2)
-	echo "cp /etc/passwd $DIR/.lustre/fid/$fid"
-	cp /etc/passwd $DIR/.lustre/fid/$fid &&
+	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $test_dir/$tfile-2
+	fid=$($LFS path2fid $test_dir/$tfile-2)
+	echo "cp /etc/passwd $MOUNT/.lustre/fid/$fid"
+	cp /etc/passwd $MOUNT/.lustre/fid/$fid &&
 		error "create lov data thru .lustre should fail."
-	echo "cp /etc/passwd $DIR/$tfile-2"
-	cp /etc/passwd $DIR/$tfile-2 || error "copy to $DIR/$tfile-2 failed."
-	echo "diff /etc/passwd $DIR/.lustre/fid/$fid"
-	diff /etc/passwd $DIR/.lustre/fid/$fid ||
-		error "diff /etc/passwd $DIR/.lustre/fid/$fid failed."
+	echo "cp /etc/passwd $test_dir/$tfile-2"
+	cp /etc/passwd $test_dir/$tfile-2 ||
+		error "copy to $test_dir/$tfile-2 failed."
+	echo "diff /etc/passwd $MOUNT/.lustre/fid/$fid"
+	diff /etc/passwd $MOUNT/.lustre/fid/$fid ||
+		error "diff /etc/passwd $MOUNT/.lustre/fid/$fid failed."
 
-	echo "Open-by-FID succeeded"
+	rm -rf $test_dir/tfile.lnk
+	rm -rf $test_dir/$tfile-2
 }
-run_test 154 "Open-by-FID"
+
+test_154a() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
+		{ skip "Need MDS version at least 2.2.51"; return 0; }
+
+	cp /etc/hosts $DIR/$tfile
+
+	fid=$($LFS path2fid $DIR/$tfile)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+
+	dot_lustre_fid_permission_check "$fid" $DIR ||
+		error "dot lustre permission check $fid failed"
+
+	rm -rf $MOUNT/.lustre && error ".lustre is not allowed to be unlinked"
+	chmod 777 $MOUNT/.lustre && error ".lustre is not allowed to be chmod"
+
+	touch $MOUNT/.lustre/file &&
+		error "creation is not allowed under .lustre"
+
+	mkdir $MOUNT/.lustre/dir &&
+		error "mkdir is not allowed under .lustre"
+
+	rm -rf $DIR/$tfile
+}
+run_test 154a "Open-by-FID"
+
+test_154b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
+		{ skip "Need MDS version at least 2.2.51"; return 0; }
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+	local rc=0
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir ||
+		error "create remote directory failed"
+
+	cp /etc/hosts $remote_dir/$tfile
+
+	fid=$($LFS path2fid $remote_dir/$tfile)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $remote_dir/$tfile"
+
+	dot_lustre_fid_permission_check "$fid" $remote_dir ||
+		error "dot lustre permission check $fid failed"
+	rm -rf $DIR/$tdir
+}
+run_test 154b "Open-by-FID for remote directory"
 
 test_155_small_load() {
     local temp=$TMP/$tfile

@@ -108,29 +108,34 @@ void mdt_mfd_free(struct mdt_file_data *mfd)
 static int mdt_create_data(struct mdt_thread_info *info,
                            struct mdt_object *p, struct mdt_object *o)
 {
-        struct md_op_spec     *spec = &info->mti_spec;
-        struct md_attr        *ma   = &info->mti_attr;
-        int                    rc   = 0;
-        ENTRY;
+	struct md_op_spec     *spec = &info->mti_spec;
+	struct md_attr        *ma   = &info->mti_attr;
+	int                    rc   = 0;
+	ENTRY;
 
-        if (!md_should_create(spec->sp_cr_flags))
-                RETURN(0);
+	if (!md_should_create(spec->sp_cr_flags))
+		RETURN(0);
 
-        ma->ma_need = MA_INODE | MA_LOV;
-        ma->ma_valid = 0;
+	ma->ma_need = MA_INODE | MA_LOV;
+	ma->ma_valid = 0;
 	mutex_lock(&o->mot_lov_mutex);
-        if (!(o->mot_flags & MOF_LOV_CREATED)) {
-                rc = mdo_create_data(info->mti_env,
-                                     p ? mdt_object_child(p) : NULL,
-                                     mdt_object_child(o), spec, ma);
+	if (!(o->mot_flags & MOF_LOV_CREATED)) {
+		if (p != NULL && (fid_is_obf(mdt_object_fid(p)) ||
+				  fid_is_dot_lustre(mdt_object_fid(p))))
+			GOTO(unlock, rc = -EPERM);
+
+		rc = mdo_create_data(info->mti_env,
+				     p ? mdt_object_child(p) : NULL,
+				     mdt_object_child(o), spec, ma);
 		if (rc == 0)
 			rc = mdt_attr_get_complex(info, o, ma);
 
-                if (rc == 0 && ma->ma_valid & MA_LOV)
-                        o->mot_flags |= MOF_LOV_CREATED;
-        }
+		if (rc == 0 && ma->ma_valid & MA_LOV)
+			o->mot_flags |= MOF_LOV_CREATED;
+	}
+unlock:
 	mutex_unlock(&o->mot_lov_mutex);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdt_ioepoch_opened(struct mdt_object *mo)
@@ -1339,9 +1344,10 @@ int mdt_pin(struct mdt_thread_info* info)
 }
 
 /* Cross-ref request. Currently it can only be a pure open (w/o create) */
-int mdt_cross_open(struct mdt_thread_info* info,
-                   const struct lu_fid *fid,
-                   struct ldlm_reply *rep, __u32 flags)
+static int mdt_cross_open(struct mdt_thread_info *info,
+			  const struct lu_fid *parent_fid,
+			  const struct lu_fid *fid,
+			  struct ldlm_reply *rep, __u32 flags)
 {
         struct md_attr    *ma = &info->mti_attr;
         struct mdt_object *o;
@@ -1371,9 +1377,17 @@ int mdt_cross_open(struct mdt_thread_info* info,
 
 			mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
 			rc = mdt_attr_get_complex(info, o, ma);
-			if (rc == 0)
-				rc = mdt_finish_open(info, NULL, o, flags, 0,
-						     rep);
+			if (rc != 0)
+				GOTO(out, rc);
+
+			/* Do not create lov object if the fid is opened
+			 * under OBF */
+			if (S_ISREG(ma->ma_attr.la_mode) &&
+			    !(ma->ma_valid & MA_LOV) && (flags & FMODE_WRITE) &&
+			    fid_is_obf(parent_fid))
+				GOTO(out, rc = -EPERM);
+
+			rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
 		} else {
 			/*
 			 * Something is wrong here. lookup was positive but
@@ -1447,8 +1461,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		mdt_set_disposition(info, ldlm_rep,
 			    (DISP_IT_EXECD | DISP_LOOKUP_EXECD |
 			     DISP_LOOKUP_POS));
-		result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,
-					create_flags);
+		result = mdt_cross_open(info, rr->rr_fid2, rr->rr_fid1,
+					ldlm_rep, create_flags);
 		GOTO(out, result);
 	} else if (req_is_replay(req) ||
 	    (req->rq_export->exp_libclient && create_flags & MDS_OPEN_HAS_EA)) {
@@ -1549,8 +1563,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         if (result == -ENOENT) {
-                if (mdt_object_obf(parent))
-                        GOTO(out_child, result = -EPERM);
+		/* Create under OBF and .lustre is not permitted */
+		if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1))
+			GOTO(out_child, result = -EPERM);
 
                 /* save versions in reply */
                 mdt_version_get_save(info, parent, 0);

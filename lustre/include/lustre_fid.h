@@ -264,6 +264,12 @@ static inline int fid_is_dot_lustre(const struct lu_fid *fid)
 			fid_oid(fid) == FID_OID_DOT_LUSTRE);
 }
 
+static inline int fid_is_obf(const struct lu_fid *fid)
+{
+	return unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE &&
+			fid_oid(fid) == FID_OID_DOT_LUSTRE_OBF);
+}
+
 static inline int fid_is_otable_it(const struct lu_fid *fid)
 {
 	return unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&

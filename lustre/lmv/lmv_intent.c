@@ -58,11 +58,12 @@
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
 
-int lmv_intent_remote(struct obd_export *exp, void *lmm,
-                      int lmmsize, struct lookup_intent *it,
-                      int flags, struct ptlrpc_request **reqp,
-                      ldlm_blocking_callback cb_blocking,
-		      __u64 extra_lock_flags)
+static int lmv_intent_remote(struct obd_export *exp, void *lmm,
+			     int lmmsize, struct lookup_intent *it,
+			     const struct lu_fid *parent_fid, int flags,
+			     struct ptlrpc_request **reqp,
+			     ldlm_blocking_callback cb_blocking,
+			     __u64 extra_lock_flags)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
@@ -109,8 +110,11 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
 		GOTO(out, rc = -ENOMEM);
 
 	op_data->op_fid1 = body->fid1;
-	op_data->op_bias = MDS_CROSS_REF;
+	/* Sent the parent FID to the remote MDT */
+	if (parent_fid != NULL)
+		op_data->op_fid2 = *parent_fid;
 
+	op_data->op_bias = MDS_CROSS_REF;
 	CDEBUG(D_INODE, "REMOTE_INTENT with fid="DFID" -> mds #%d\n",
 	       PFID(&body->fid1), tgt->ltd_idx);
 
@@ -208,8 +212,8 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	 * Okay, MDS has returned success. Probably name has been resolved in
 	 * remote inode.
 	 */
-	rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp,
-			       cb_blocking, extra_lock_flags);
+	rc = lmv_intent_remote(exp, lmm, lmmsize, it, &op_data->op_fid1, flags,
+			       reqp, cb_blocking, extra_lock_flags);
 	if (rc != 0) {
 		LASSERT(rc < 0);
 		/*
@@ -276,7 +280,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	if (likely(!(body->valid & OBD_MD_MDS)))
 		RETURN(0);
 
-	rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp,
+	rc = lmv_intent_remote(exp, lmm, lmmsize, it, NULL, flags, reqp,
 			       cb_blocking, extra_lock_flags);
 
 	RETURN(rc);
