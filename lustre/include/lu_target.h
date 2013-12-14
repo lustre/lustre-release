@@ -103,7 +103,6 @@ struct tgt_session_info {
 	struct lu_object	*tsi_corpus;
 
 	struct lu_fid		 tsi_fid;
-	struct lu_fid		 tsi_fid2;
 	struct ldlm_res_id	 tsi_resid;
 
 	/* object affected by VBR, for last_rcvd_update */

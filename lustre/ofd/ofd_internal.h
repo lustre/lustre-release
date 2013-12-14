@@ -321,21 +321,21 @@ extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
 
 /* ofd_capa.c */
 int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *key);
-int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
-		  struct lustre_capa *capa, __u64 opc);
+int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
+		  obd_seq seq, struct lustre_capa *capa, __u64 opc);
 void ofd_free_capa_keys(struct ofd_device *ofd);
 
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd);
+int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
+		   struct lu_fid *fid, struct ll_user_fiemap *fiemap);
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;
 int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 			struct obd_statfs *osfs, __u64 max_age,
 			int *from_cache);
-int ofd_orphans_destroy(const struct lu_env *env, struct obd_export *exp,
-			struct ofd_device *ofd, struct obdo *oa);
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan);
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
@@ -420,7 +420,7 @@ int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
 static inline
 struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 					  struct ofd_device *ofd,
-					  struct lu_fid *fid)
+					  const struct lu_fid *fid)
 {
 	struct ofd_object *fo;
 
@@ -490,14 +490,14 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr);
 int ofd_fmd_init(void);
 void ofd_fmd_exit(void);
 struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
-				  struct lu_fid *fid);
+				  const struct lu_fid *fid);
 struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp,
-				 struct lu_fid *fid);
+				 const struct lu_fid *fid);
 void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd);
 void ofd_fmd_expire(struct obd_export *exp);
 void ofd_fmd_cleanup(struct obd_export *exp);
 #ifdef DO_FMD_DROP
-void ofd_fmd_drop(struct obd_export *exp, struct lu_fid *fid);
+void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid);
 #else
 #define ofd_fmd_drop(exp, fid) do {} while (0)
 #endif

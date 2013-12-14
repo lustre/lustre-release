@@ -393,12 +393,6 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 
 	ENTRY;
 
-	rc = lu_env_refill((struct lu_env *)env);
-	if (rc != 0) {
-		CERROR("Failure to refill session: '%d'\n", rc);
-		RETURN(rc);
-	}
-
 	info = ofd_info_init(env, NULL);
 	if (info == NULL)
 		RETURN(-EFAULT);
@@ -721,8 +715,8 @@ int ofd_set_info_hdl(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
-static int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
-			  struct lu_fid *fid, struct ll_user_fiemap *fiemap)
+int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
+		   struct lu_fid *fid, struct ll_user_fiemap *fiemap)
 {
 	struct ofd_object	*fo;
 	int			 rc;
@@ -863,7 +857,7 @@ int ofd_get_info_hdl(struct tgt_session_info *tsi)
 	} else if (KEY_IS(KEY_FIEMAP)) {
 		struct ll_fiemap_info_key	*fm_key;
 		struct ll_user_fiemap		*fiemap;
-		struct lu_fid			*fid = &fti->fti_fid;
+		struct lu_fid			*fid;
 
 		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_FIEMAP);
 
@@ -872,7 +866,7 @@ int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (rc)
 			RETURN(err_serious(rc));
 
-		*fid = fm_key->oa.o_oi.oi_fid;
+		fid = &fm_key->oa.o_oi.oi_fid;
 
 		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
 
@@ -1106,6 +1100,79 @@ out:
 			ldlm_resource_putref(res);
 		}
 	}
+	return rc;
+}
+
+static int ofd_orphans_destroy(const struct lu_env *env,
+			       struct obd_export *exp,
+			       struct ofd_device *ofd, struct obdo *oa)
+{
+	struct ofd_thread_info	*info	= ofd_info(env);
+	struct lu_fid		*fid	= &info->fti_fid;
+	struct ost_id		*oi	= &oa->o_oi;
+	struct ofd_seq		*oseq;
+	obd_seq 		 seq	= ostid_seq(oi);
+	obd_id			 end_id = ostid_id(oi);
+	obd_id			 last;
+	obd_id			 oid;
+	int			 skip_orphan;
+	int			 rc	= 0;
+
+	ENTRY;
+
+	oseq = ofd_seq_get(ofd, seq);
+	if (oseq == NULL) {
+		CERROR("%s: Can not find seq for "DOSTID"\n",
+		       ofd_name(ofd), POSTID(oi));
+		RETURN(-EINVAL);
+	}
+
+	*fid = oi->oi_fid;
+	last = ofd_seq_last_oid(oseq);
+	oid = last;
+
+	LASSERT(exp != NULL);
+	skip_orphan = !!(exp_connect_flags(exp) & OBD_CONNECT_SKIP_ORPHAN);
+
+	LCONSOLE(D_INFO, "%s: deleting orphan objects from "DOSTID
+		 " to "DOSTID"\n", ofd_name(ofd), seq, end_id + 1, seq, last);
+
+	while (oid > end_id) {
+		rc = fid_set_id(fid, oid);
+		if (unlikely(rc != 0))
+			GOTO(out_put, rc);
+
+		rc = ofd_destroy_by_fid(env, ofd, fid, 1);
+		if (rc != 0 && rc != -ENOENT) /* this is pretty fatal... */
+			CEMERG("%s: error destroying precreated id "DFID
+			       ": rc = %d\n", ofd_name(ofd), PFID(fid), rc);
+
+		oid--;
+		if (!skip_orphan) {
+			ofd_seq_last_oid_set(oseq, oid);
+			/* update last_id on disk periodically so that if we
+			 * restart * we don't need to re-scan all of the just
+			 * deleted objects. */
+			if ((oid & 511) == 0)
+				ofd_seq_last_oid_write(env, ofd, oseq);
+		}
+	}
+
+	CDEBUG(D_HA, "%s: after destroy: set last_id to "DOSTID"\n",
+	       ofd_name(ofd), seq, oid);
+
+	if (!skip_orphan) {
+		rc = ofd_seq_last_oid_write(env, ofd, oseq);
+	} else {
+		/* don't reuse orphan object, return last used objid */
+		ostid_set_id(oi, last);
+		rc = 0;
+	}
+
+	GOTO(out_put, rc);
+
+out_put:
+	ofd_seq_put(env, oseq);
 	return rc;
 }
 

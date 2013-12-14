@@ -43,7 +43,7 @@
 #include "ofd_internal.h"
 
 static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
-			   struct ofd_device *ofd, struct lu_fid *fid,
+			   struct ofd_device *ofd, const struct lu_fid *fid,
 			   struct lu_attr *la, int niocount,
 			   struct niobuf_remote *rnb, int *nr_local,
 			   struct niobuf_local *lnb, char *jobid)
@@ -100,7 +100,7 @@ unlock:
 }
 
 static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
-			    struct ofd_device *ofd, struct lu_fid *fid,
+			    struct ofd_device *ofd, const struct lu_fid *fid,
 			    struct lu_attr *la, struct obdo *oa,
 			    int objcount, struct obd_ioobj *obj,
 			    struct niobuf_remote *rnb, int *nr_local,
@@ -207,6 +207,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
 	char			*jobid;
+	const struct lu_fid	*fid = &oa->o_oi.oi_fid;
 	int			 rc = 0;
 
 	if (*nr_local > PTLRPC_MAX_BRW_PAGES) {
@@ -218,7 +219,6 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	if (tgt_ses_req(tsi) == NULL) { /* echo client case */
 		LASSERT(oti != NULL);
-		lu_env_refill((struct lu_env *)env);
 		info = ofd_info_init(env, exp);
 		ofd_oti2info(info, oti);
 		jobid = oti->oti_jobid;
@@ -253,22 +253,21 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	LASSERT(objcount == 1);
 	LASSERT(obj->ioo_bufcnt > 0);
 
-	info->fti_fid = oa->o_oi.oi_fid;
 	if (cmd == OBD_BRW_WRITE) {
-		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
+		rc = ofd_auth_capa(exp, fid, ostid_seq(&oa->o_oi),
 				   capa, CAPA_OPC_OSS_WRITE);
 		if (rc == 0) {
 			la_from_obdo(&info->fti_attr, oa, OBD_MD_FLGETATTR);
-			rc = ofd_preprw_write(env, exp, ofd, &info->fti_fid,
+			rc = ofd_preprw_write(env, exp, ofd, fid,
 					      &info->fti_attr, oa, objcount,
 					      obj, rnb, nr_local, lnb, jobid);
 		}
 	} else if (cmd == OBD_BRW_READ) {
-		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
+		rc = ofd_auth_capa(exp, fid, ostid_seq(&oa->o_oi),
 				   capa, CAPA_OPC_OSS_READ);
 		if (rc == 0) {
 			ofd_grant_prepare_read(env, exp, oa);
-			rc = ofd_preprw_read(env, exp, ofd, &info->fti_fid,
+			rc = ofd_preprw_read(env, exp, ofd, fid,
 					     &info->fti_attr, obj->ioo_bufcnt,
 					     rnb, nr_local, lnb, jobid);
 			obdo_from_la(oa, &info->fti_attr, LA_ATIME);
@@ -283,7 +282,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 static int
 ofd_commitrw_read(const struct lu_env *env, struct ofd_device *ofd,
-		  struct lu_fid *fid, int objcount, int niocount,
+		  const struct lu_fid *fid, int objcount, int niocount,
 		  struct niobuf_local *lnb)
 {
 	struct ofd_object *fo;
@@ -441,7 +440,7 @@ static int ofd_soft_sync_cb_add(struct thandle *th, struct obd_export *exp)
 
 static int
 ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
-		   struct ofd_device *ofd, struct lu_fid *fid,
+		   struct ofd_device *ofd, const struct lu_fid *fid,
 		   struct lu_attr *la, struct filter_fid *ff, int objcount,
 		   int niocount, struct niobuf_local *lnb, int old_rc)
 {
@@ -577,11 +576,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	__u64			 valid;
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct filter_fid	*ff = NULL;
+	const struct lu_fid	*fid = &oa->o_oi.oi_fid;
 	int			 rc = 0;
 
 	LASSERT(npages > 0);
 
-	info->fti_fid = oa->o_oi.oi_fid;
 	if (cmd == OBD_BRW_WRITE) {
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */
@@ -591,7 +590,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * doesn't already exist so we can store the reservation handle
 		 * there. */
 		valid = OBD_MD_FLUID | OBD_MD_FLGID;
-		fmd = ofd_fmd_find(exp, &info->fti_fid);
+		fmd = ofd_fmd_find(exp, fid);
 		if (!fmd || fmd->fmd_mactime_xid < info->fti_xid)
 			valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME |
 				 OBD_MD_FLCTIME;
@@ -603,9 +602,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			ofd_prepare_fidea(ff, oa);
 		}
 
-		rc = ofd_commitrw_write(env, exp, ofd, &info->fti_fid,
-					&info->fti_attr, ff, objcount, npages,
-					lnb, old_rc);
+		rc = ofd_commitrw_write(env, exp, ofd, fid, &info->fti_attr,
+					ff, objcount, npages, lnb, old_rc);
 		if (rc == 0)
 			obdo_from_la(oa, &info->fti_attr,
 				     OFD_VALID_FLAGS | LA_GID | LA_UID);
@@ -642,7 +640,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
 			 struct ldlm_resource *rs = NULL;
 
-			ost_fid_build_resid(&info->fti_fid, &info->fti_resid);
+			ost_fid_build_resid(fid, &info->fti_resid);
 			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
 					       LDLM_EXTENT, 0);
 			if (rs != NULL) {
@@ -650,7 +648,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				ldlm_resource_putref(rs);
 			}
 		}
-		rc = ofd_commitrw_read(env, ofd, &info->fti_fid, objcount,
+		rc = ofd_commitrw_read(env, ofd, fid, objcount,
 				       npages, lnb);
 		if (old_rc)
 			rc = old_rc;

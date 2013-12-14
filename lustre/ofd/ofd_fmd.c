@@ -134,7 +134,7 @@ static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
 
 /* Find fmd based on fid or return NULL if not found. */
 struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
-				  struct lu_fid *fid)
+				  const struct lu_fid *fid)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_mod_data		*fmd;
@@ -153,7 +153,7 @@ struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
  * or if fid = 0 is passed (which will only cause old entries to expire).
  * Currently this is not fatal because any fmd state is transient and
  * may also be freed when it gets sufficiently old. */
-struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, struct lu_fid *fid)
+struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fid)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -192,7 +192,7 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, struct lu_fid *fid)
  * This isn't so critical because it would in fact only affect the one client
  * that is doing the unlink and at worst we have an stale entry referencing
  * an object that should never be used again. */
-void ofd_fmd_drop(struct obd_export *exp, struct lu_fid *fid)
+void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_mod_data		*found = NULL;

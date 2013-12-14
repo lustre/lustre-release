@@ -148,7 +148,7 @@ int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 		oi->oi_fid.f_oid = id ?: 1;
 		oi->oi_fid.f_ver = 0;
 	} else {
-		struct lu_fid *fid = &tsi->tsi_fid2;
+		struct tgt_thread_info *tti = tgt_th_info(tsi->tsi_env);
 
 		if (unlikely((oa->o_valid & OBD_MD_FLID) && id == 0))
 			GOTO(out, rc = -EPROTO);
@@ -165,11 +165,12 @@ int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 			       fid_seq_is_norm(seq) || fid_seq_is_echo(seq))))
 			GOTO(out, rc = -EPROTO);
 
-		rc = ostid_to_fid(fid, oi, tsi->tsi_tgt->lut_lsd.lsd_osd_index);
+		rc = ostid_to_fid(&tti->tti_fid1, oi,
+				  tsi->tsi_tgt->lut_lsd.lsd_osd_index);
 		if (unlikely(rc != 0))
 			GOTO(out, rc);
 
-		oi->oi_fid = *fid;
+		oi->oi_fid = tti->tti_fid1;
 	}
 
 	RETURN(0);
