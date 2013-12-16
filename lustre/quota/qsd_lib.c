@@ -268,6 +268,7 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 			   int qtype)
 {
 	struct qsd_qtype_info	*qqi;
+	int repeat = 0;
 	ENTRY;
 
 	if (qsd->qsd_type_array[qtype] == NULL)
@@ -283,6 +284,29 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 	if (qqi->qqi_site != NULL && !IS_ERR(qqi->qqi_site)) {
 		lquota_site_free(env, qqi->qqi_site);
 		qqi->qqi_site = NULL;
+	}
+
+	/* The qqi may still be holding by global locks which are being
+	 * canceled asynchronously (LU-4365), see the following steps:
+	 *
+	 * - On server umount, we try to clear all quota locks first by
+	 *   disconnecting LWP (which will invalidate import and cleanup
+	 *   all locks on it), however, if quota reint process is holding
+	 *   the global lock for reintegration at that time, global lock
+	 *   will fail to be cleared on LWP disconnection.
+	 *
+	 * - Umount process goes on and stops reint process, the global
+	 *   lock will be dropped on reint process exit, however, the lock
+	 *   cancel in done in asynchronous way, so the
+	 *   qsd_glb_blocking_ast() might haven't been called yet when we
+	 *   get here.
+	 */
+	while (cfs_atomic_read(&qqi->qqi_ref) > 1) {
+		CDEBUG(D_QUOTA, "qqi reference count %u, repeat: %d\n",
+		       cfs_atomic_read(&qqi->qqi_ref), repeat);
+		repeat++;
+		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
+						cfs_time_seconds(1));
 	}
 
 	/* by now, all qqi users should have gone away */
