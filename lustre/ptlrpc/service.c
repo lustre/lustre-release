@@ -989,19 +989,21 @@ void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export)
 {
 	if (req->rq_export != NULL) {
-		if (!cfs_list_empty(&req->rq_exp_list)) {
-			/* remove rq_exp_list from last export */
-			spin_lock_bh(&req->rq_export->exp_rpc_lock);
-			cfs_list_del_init(&req->rq_exp_list);
-			spin_unlock_bh(&req->rq_export->exp_rpc_lock);
+		LASSERT(!list_empty(&req->rq_exp_list));
+		/* remove rq_exp_list from last export */
+		spin_lock_bh(&req->rq_export->exp_rpc_lock);
+		list_del_init(&req->rq_exp_list);
+		spin_unlock_bh(&req->rq_export->exp_rpc_lock);
+		/* export has one reference already, so it`s safe to
+		 * add req to export queue here and get another
+		 * reference for request later */
+		spin_lock_bh(&export->exp_rpc_lock);
+		if (req->rq_ops != NULL) /* hp request */
+			list_add(&req->rq_exp_list, &export->exp_hp_rpcs);
+		else
+			list_add(&req->rq_exp_list, &export->exp_reg_rpcs);
+		spin_unlock_bh(&export->exp_rpc_lock);
 
-			/* export has one reference already, so it`s safe to
-			 * add req to export queue here and get another
-			 * reference for request later */
-			spin_lock_bh(&export->exp_rpc_lock);
-			cfs_list_add(&req->rq_exp_list, &export->exp_hp_rpcs);
-			spin_unlock_bh(&export->exp_rpc_lock);
-		}
 		class_export_rpc_dec(req->rq_export);
 		class_export_put(req->rq_export);
 	}

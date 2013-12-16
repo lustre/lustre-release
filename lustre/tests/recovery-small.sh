@@ -1792,9 +1792,6 @@ run_test 111 "mdd setup fail should not cause umount oops"
 test_112a() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-	[[ $(lustre_version_code ost1) -ge $(version_code 2.5.92) ]] ||
-		{ skip "Need OST version at least 2.5.92"; return 0; }
-
 	do_facet_random_file client $TMP/$tfile 100K ||
 		error_noexit "Create random file $TMP/$tfile"
 
