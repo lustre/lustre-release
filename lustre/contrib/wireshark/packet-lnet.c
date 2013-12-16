@@ -1,5 +1,5 @@
-/* packet-lnet.c 
- * Lnet packet dissection 
+/* packet-lnet.c
+ * Lnet packet dissection
  * Author: Laurent George <george@ocre.cea.fr>
  * based on packet-agentx.c and packet-afs.c
  * 20080903
@@ -40,9 +40,11 @@
 #include <epan/conversation.h>
 #include <epan/prefs.h>
 #include <epan/emem.h>
-
+#include <epan/to_str.h>
 #include <epan/dissectors/packet-tcp.h>
 #include <epan/dissectors/packet-infiniband.h>
+
+#include "wireshark-compat.h"
 
 /* This value inidcates whether we are processing an Infiniband packet, or
    TCP.  It gets set to the extra bytes the IB header requires if IB,
@@ -325,8 +327,14 @@ static int dissect_ack_cookie(tvbuff_t * tvb, proto_tree *tree, int offset)
 	return offset + 8;
 }
 
-static void 
-dissect_ksock_msg_noop( tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
+#ifdef WIRESHARK_COMPAT
+static void
+dissect_ksock_msg_noop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+#else
+static int
+dissect_ksock_msg_noop(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+		       void *ignored)
+#endif
 {
 	guint32 offset;
 	offset=0;
@@ -334,6 +342,9 @@ dissect_ksock_msg_noop( tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
 	offset=dissect_csum(tvb,tree,offset);
 	offset=dissect_req_cookie(tvb, tree, offset);
 	offset=dissect_ack_cookie(tvb,tree,offset);
+#ifndef WIRESHARK_COMPAT
+	return offset;
+#endif
 }
 
 
@@ -452,10 +463,10 @@ static int dissect_lnet_put(tvbuff_t * tvb, proto_tree *tree, int offset, packet
 
 	proto_tree_add_item(tree,hf_match_bits,tvb,offset,8,little_endian);offset+=8;
 	proto_tree_add_item(tree,hf_hdr_data,tvb,offset,8,little_endian);offset+=8;
-	if (check_col(pinfo->cinfo, COL_INFO)) 
-		col_append_sep_str(pinfo->cinfo, COL_INFO, ", ",
-		val_to_str(tvb_get_letohl(tvb, offset), portal_indices,
-			   "Unknown")); /* add some nice value  */
+	col_append_sep_str(pinfo->cinfo, COL_INFO, ", ",
+			   val_to_str(tvb_get_letohl(tvb, offset),
+				      portal_indices,
+				      "Unknown")); /* add some nice value  */
 	proto_item_append_text(tree, ", %s" , val_to_str(tvb_get_letohl(tvb,
 									offset),
 							 portal_indices,
@@ -469,26 +480,36 @@ static int dissect_lnet_put(tvbuff_t * tvb, proto_tree *tree, int offset, packet
 static int dissect_lnet_get(tvbuff_t * tvb, proto_tree *tree, int offset, packet_info *pinfo _U_)
 {
 	/* typedef struct lnet_get {
-		 lnet_handle_wire_t  return_wmd;
-		 __u64               match_bits;
-		 __u32               ptl_index;
-		 __u32               src_offset;
-		 __u32               sink_length;
-		 } WIRE_ATTR lnet_get_t; */
+	   lnet_handle_wire_t  return_wmd;
+	   __u64               match_bits;
+	   __u32               ptl_index;
+	   __u32               src_offset;
+	   __u32               sink_length;
+	   } WIRE_ATTR lnet_get_t;
+	*/
 
-	proto_tree_add_item(tree,hf_dst_wmd_interface,tvb,offset,8,little_endian);offset+=8;
-	proto_tree_add_item(tree,hf_dst_wmd_object,tvb,offset,8,little_endian);offset+=8;
-	/*if (check_col(pinfo->cinfo, COL_INFO))*/
-	/*        col_prepend_fence_fstr(pinfo->cinfo, COL_INFO, " %" G_GINT64_MODIFIER "u ", tvb_get_letoh64(tvb,offset) );*/
-
-	proto_tree_add_item(tree,hf_match_bits,tvb,offset,8,little_endian);offset+=8;
-	if (check_col(pinfo->cinfo, COL_INFO)) 
-		col_append_sep_str(pinfo->cinfo, COL_INFO, ", ", val_to_str(tvb_get_letohl(tvb,offset), portal_indices, "Unknown"));
-	proto_item_append_text(tree, ", %s" , val_to_str(tvb_get_letohl(tvb,offset), portal_indices, "Unknown"));
-	proto_tree_add_item(tree,hf_ptl_index,tvb,offset,4,little_endian);offset+=4;
-	proto_tree_add_item(tree,hf_src_offset,tvb,offset,4,little_endian);offset+=4;
-	proto_tree_add_item(tree,hf_sink_length,tvb,offset,4,little_endian);offset+=4;
-	return offset; 
+	proto_tree_add_item(tree, hf_dst_wmd_interface,
+			    tvb, offset, 8, little_endian);
+	offset += 8;
+	proto_tree_add_item(tree, hf_dst_wmd_object, tvb, offset, 8,
+			    little_endian);
+	offset += 8;
+	proto_tree_add_item(tree, hf_match_bits, tvb, offset, 8, little_endian);
+	offset += 8;
+	col_append_sep_str(pinfo->cinfo, COL_INFO, ", ",
+			   val_to_str(tvb_get_letohl(tvb, offset),
+				      portal_indices, "Unknown"));
+	proto_item_append_text(tree, ", %s",
+			       val_to_str(tvb_get_letohl(tvb, offset),
+					  portal_indices, "Unknown"));
+	proto_tree_add_item(tree, hf_ptl_index, tvb, offset, 4, little_endian);
+	offset += 4;
+	proto_tree_add_item(tree, hf_src_offset, tvb, offset, 4, little_endian);
+	offset += 4;
+	proto_tree_add_item(tree, hf_sink_length, tvb, offset, 4,
+			    little_endian);
+	offset += 4;
+	return offset;
 }
 
 static int dissect_lnet_reply(tvbuff_t * tvb, proto_tree *tree, int offset)
@@ -531,7 +552,11 @@ static int dissect_lnet_ack(tvbuff_t * tvb, proto_tree *tree, int offset, packet
 	return offset ; 
 } 
 
-static void dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree); 
+#ifdef WIRESHARK_COMPAT
+static void dissect_lnet_message(tvbuff_t *, packet_info *, proto_tree *);
+#else
+static int dissect_lnet_message(tvbuff_t *, packet_info *, proto_tree *, void*);
+#endif
 
 /* The next two length getting routines are only used for KSOCK LNK messages. */
 static guint 
@@ -564,19 +589,38 @@ dissect_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
 	   NOOP and others ..  but I don't find how to use pdu_dissect with
 	   a variable length<=LNET_HEADER_LEN */
 	ib_lnd_extra_bytes = 0;
-	switch(tvb_get_letohl(tvb,0)){
-		case KSOCK_MSG_NOOP:
-			tcp_dissect_pdus(tvb,pinfo,tree,TRUE,0, get_noop_message_len,dissect_ksock_msg_noop);
-			break;
-		case KSOCK_MSG_LNET:
-			tcp_dissect_pdus(tvb,pinfo,tree,TRUE,LNET_HEADER_LEN, get_lnet_message_len,dissect_lnet_message);
-			break;
+	switch (tvb_get_letohl(tvb, 0)) {
+	case KSOCK_MSG_NOOP:
+#ifdef WIRESHARK_COMPAT
+		tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0,
+				 get_noop_message_len,
+				 dissect_ksock_msg_noop);
+#else
+		tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0,
+				 get_noop_message_len,
+				 dissect_ksock_msg_noop, NULL);
+#endif
+		break;
+	case KSOCK_MSG_LNET:
+#ifdef WIRESHARK_COMPAT
+		tcp_dissect_pdus(tvb, pinfo, tree, TRUE, LNET_HEADER_LEN,
+				 get_lnet_message_len,
+				 dissect_lnet_message);
+#else
+		tcp_dissect_pdus(tvb, pinfo, tree, TRUE, LNET_HEADER_LEN,
+				 get_lnet_message_len,
+				 dissect_lnet_message, NULL);
+#endif
+		break;
 	}
-
 }
 
 static int
-dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void*data)
+#ifdef WIRESHARK_COMPAT
+dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+#else
+dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data)
+#endif
 {
 	/* We can tell if this is an LNet payload by looking at the first
 	 * 32-bit word for our magic number. */
@@ -586,8 +630,13 @@ dissect_ib_lnet(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void*data)
 	}
 
 	ib_lnd_extra_bytes = EXTRA_IB_HEADER_SIZE;
+#ifdef WIRESHARK_COMPAT
 	tcp_dissect_pdus(tvb, pinfo, tree, TRUE, LNET_HEADER_LEN,
 			 get_lnet_message_len, dissect_lnet_message);
+#else
+	tcp_dissect_pdus(tvb, pinfo, tree, TRUE, LNET_HEADER_LEN,
+			 get_lnet_message_len, dissect_lnet_message, NULL);
+#endif
 	return tvb_length(tvb);
 }
 
@@ -686,159 +735,170 @@ get_lnet_conv(packet_info * pinfo , GHashTable * lnet_hash_table,  guint64 match
 
 
 /*----------------------------------------------------------- */
+#ifdef WIRESHARK_COMPAT
 static void
-dissect_lnet_message(tvbuff_t * tvb, packet_info *pinfo, proto_tree *tree)
+dissect_lnet_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+#else
+static int
+dissect_lnet_message(tvbuff_t *tvb, packet_info *pinfo,
+		     proto_tree *tree, void *data)
+#endif
 {
-
 	guint64 match;
 	guint32 msg_type;
-/*
-	lnet_request_val_t* conversation_val ;
+	gint offset = 0;
+	t_nid dest_nid; /* nid value */
+	t_nid src_nid;
+	proto_item *ti = NULL; /* principal  node */
+	proto_tree *lnet_tree = NULL; /* principal tree */
+	proto_tree *lnet_nid_src_tree = NULL; /*subtree for the nids*/
+	proto_tree *lnet_nid_dest_tree = NULL;
+	proto_item *ti_src_nid; /* node for the nids */
+	proto_item *ti_dest_nid;
+	guint32 payload_length;
+	guint32 msg_filler_length;
 
-*/
-	if (check_col(pinfo->cinfo, COL_PROTOCOL)) {
-		col_set_str(pinfo->cinfo, COL_PROTOCOL, "Lnet");
+	/* lnet_request_val_t* conversation_val ; */
+	col_set_str(pinfo->cinfo, COL_PROTOCOL, "Lnet");
+
+	msg_type = tvb_get_letohl(tvb, LNET_MSG_TYPE_OFFSET);
+	/* We delete the entire line and add LNET  + msg_type */
+	col_add_fstr(pinfo->cinfo, COL_INFO, "LNET_%s",
+		     (msg_type < sizeof(lnet_msg_type_t)/sizeof(value_string))
+		     ? lnet_msg_type_t[msg_type].strptr
+		     : "Unknown");
+
+	if (tree == NULL)
+		goto out;
+
+	/* principal node */
+	ti = proto_tree_add_item(tree, proto_lnet, tvb, 0, -1, FALSE);
+
+	lnet_tree = proto_item_add_subtree(ti, ett_lnet);
+
+	if (ib_lnd_extra_bytes) {
+		offset = dissect_ib_msg(tvb, lnet_tree, offset);
+		if (offset == 0) {
+			/*  There was no LNet payload, only ob2lnd. */
+			goto out;
+		}
+	} else {
+		/* dissect the first 24 bytes (ksock_msg_t in
+		 * lnet/socklnd.h
+		 */
+		offset = dissect_ksock_msg(tvb, lnet_tree, offset);
 	}
 
-	if (check_col(pinfo->cinfo, COL_INFO)) {
-		/* t_nid dest_nid ; */
-		/*t_nid src_nid ; */
-		/*guint32 msg_type;*/
-		/*[> col_clear(pinfo->cinfo, COL_INFO); <]*/
-		/*dest_nid = get_nid(tvb, LNET_NID_DEST_OFFSET);*/
-		/*src_nid = get_nid(tvb, LNET_NID_SRC_OFFSET);*/
+	/* Dest nid */
+	dest_nid = get_nid(tvb, offset);
+	ti_dest_nid = proto_tree_add_text(lnet_tree, tvb, offset, 8,
+					  "dest_nid = %s@tcp%d",
+					  ip_to_str((guint8 *) &dest_nid.addr),
+					  dest_nid.interface);
+	lnet_nid_dest_tree = proto_item_add_subtree(ti_dest_nid,
+						    ett_lnet_dest_nid);
+	offset = dissect_dest_nid(tvb, lnet_nid_dest_tree, offset);
 
-		/*[> col_add_fstr(pinfo->cinfo, COL_INFO, "%s@tcp%d > %s@tcp%d",
-			ip_to_str((guint8 *) &src_nid.addr), src_nid.interface,
-			ip_to_str((guint8 *) & dest_nid.addr), dest_nid.interface); */
+	/* Same for src_nid */
+	src_nid = get_nid(tvb, offset);
+	ti_src_nid = proto_tree_add_text(lnet_tree, tvb, offset, 8,
+					 "src_nid = %s@tcp%d",
+					 ip_to_str((guint8 *) &src_nid.addr),
+					 src_nid.interface);
+	lnet_nid_src_tree = proto_item_add_subtree(ti_src_nid,
+						   ett_lnet_src_nid);
+	offset = dissect_src_nid(tvb, lnet_nid_src_tree, offset);
 
-		msg_type = tvb_get_letohl(tvb, LNET_MSG_TYPE_OFFSET );
-		/* We delete the entire line and add LNET  + msg_type */
-		col_add_fstr(pinfo->cinfo, COL_INFO, "LNET_%s", (msg_type < sizeof(lnet_msg_type_t)/sizeof(value_string)) ? lnet_msg_type_t[msg_type].strptr : "Unknown");
+	/* pid */
+	proto_tree_add_item(lnet_tree, hf_lnet_src_pid, tvb, offset, 4, TRUE);
+	offset += 4;
+	proto_tree_add_item(lnet_tree, hf_lnet_dest_pid, tvb, offset, 4, TRUE);
+	offset += 4;
+
+	/* message_type (32 bits) */
+	msg_type = tvb_get_letohl(tvb, offset+0);
+	/* put some nice info on lnet line */
+	proto_item_append_text(ti, " %s",
+			       (msg_type <
+				sizeof(lnet_msg_type_t)/sizeof(value_string))
+			       ? lnet_msg_type_t[msg_type].strptr
+			       : "Unknow");
+	proto_tree_add_item(lnet_tree, hf_lnet_msg_type, tvb,
+			    offset, 4, TRUE);
+	offset += 4;
+
+	/* payload data (to follow) length :*/
+	payload_length = tvb_get_letohl(tvb, offset+0);
+	proto_tree_add_item(lnet_tree, hf_lnet_payload_length, tvb,
+			    offset, 4, TRUE);
+	offset += 4;
+
+	/* here offset = 24+8+8+4+4+4+4 = 56 */
+	match = 0;
+	switch (msg_type) {
+	case LNET_MSG_ACK:
+		offset = dissect_lnet_ack(tvb, lnet_tree, offset, pinfo);
+		match = tvb_get_letoh64(tvb, 72);
+		break;
+	case LNET_MSG_PUT:
+		offset = dissect_lnet_put(tvb, lnet_tree, offset, pinfo);
+		match = tvb_get_letoh64(tvb, 72);
+		break;
+	case LNET_MSG_GET:
+		offset = dissect_lnet_get(tvb, lnet_tree, offset, pinfo);
+		match = tvb_get_letoh64(tvb, 72);
+		break;
+	case LNET_MSG_REPLY:
+		offset = dissect_lnet_reply(tvb, lnet_tree, offset);
+		break;
+	case LNET_MSG_HELLO:
+		offset = dissect_lnet_hello(tvb, lnet_tree, offset);
+		break;
+	default:
+		break;
 	}
 
-	if (tree) {
-		t_nid dest_nid ; /* nid value */
-		t_nid src_nid ; 
+	/* conversation_val = */
+	get_lnet_conv(pinfo, lnet_request_hash, match);
+	/*	proto_tree_add_text(tree, tvb, 0 , 0, "match = %"
+	 *	G_GINT64_MODIFIER "u parent = %d",
+	 *	conversation_val -> match_bits ,
+	 *	conversation_val -> packet_num_parent);
+	 */
 
+	/* padding */
+	msg_filler_length = 72 - offset + 24 + ib_lnd_extra_bytes;
+	if (msg_filler_length > 72)
+		goto out;
+	/*  +24 : ksosck_message take 24bytes, and allready in offset  */
 
-		proto_item *ti = NULL; /* principal  node */
-		proto_tree *lnet_tree = NULL ; /* principal tree */
-		proto_tree *lnet_nid_src_tree= NULL ; /*subtree for the nids*/
-		proto_tree *lnet_nid_dest_tree= NULL ; 
-		proto_item *ti_src_nid ; /* node for the nids */
-		proto_item *ti_dest_nid ; 
+	proto_tree_add_item(lnet_tree, hf_lnet_msg_filler, tvb, offset,
+			    msg_filler_length, little_endian);
+	offset += msg_filler_length;
 
-		gint offset = 0 ; 
+	if (payload_length > 0) {
+		/* display of payload */
+		proto_tree_add_item(lnet_tree, hf_lnet_payload, tvb,
+				    offset, payload_length,
+				    little_endian);
 
-		guint32 msg_type ;
-		guint32 payload_length; 
-		guint32 msg_filler_length;
+		next_tvb = tvb_new_subset(tvb, offset,
+					  payload_length, payload_length);
+		if (msg_type == LNET_MSG_PUT)
+			dissector_try_uint(subdissector_table,
+				tvb_get_letohl(tvb, LNET_PTL_INDEX_OFFSET_PUT),
+				next_tvb, pinfo, tree);
 
+	}
 
-		ti = proto_tree_add_item(tree,proto_lnet,tvb,0,-1,FALSE); /* principal node */ 
-		/*	ti=proto_tree_add_protocol_format(tree, proto_lnet, tvb, 0, -1, "Lnet"); */
+	offset += payload_length;
 
-		lnet_tree = proto_item_add_subtree(ti,ett_lnet); /* add the subtree*/
-
-		if (ib_lnd_extra_bytes) {
-			offset = dissect_ib_msg(tvb, lnet_tree, offset);
-			if (offset == 0) {
-				/*  There was no LNet payload, only ob2lnd. */
-				return;
-			}
-		} else {
-			/* dissect the first 24 bytes (ksock_msg_t in
-			   lnet/socklnd.h */
-			offset=dissect_ksock_msg(tvb,lnet_tree,offset);
-		}
-
-		/* Dest nid */
-		dest_nid = get_nid(tvb, offset);
-		ti_dest_nid = proto_tree_add_text(lnet_tree, tvb, offset, 8, "dest_nid = %s@tcp%d", ip_to_str((guint8 *) &dest_nid.addr), dest_nid.interface);
-		lnet_nid_dest_tree = proto_item_add_subtree(ti_dest_nid,ett_lnet_dest_nid) ; 
-		offset=dissect_dest_nid(tvb,lnet_nid_dest_tree,offset); 
-
-		/* Same for src_nid */
-		src_nid = get_nid(tvb, offset);
-		ti_src_nid = proto_tree_add_text(lnet_tree, tvb, offset, 8, "src_nid = %s@tcp%d", ip_to_str((guint8 *) &src_nid.addr), src_nid.interface);
-		lnet_nid_src_tree = proto_item_add_subtree(ti_src_nid,ett_lnet_src_nid) ; 
-		offset=dissect_src_nid(tvb,lnet_nid_src_tree,offset);
-
-		/* pid */
-		proto_tree_add_item(lnet_tree, hf_lnet_src_pid, tvb, offset, 4, TRUE); offset+=4;
-		proto_tree_add_item(lnet_tree, hf_lnet_dest_pid, tvb, offset, 4, TRUE); offset+=4;
-
-		/* message_type (32 bits) */
-		msg_type = tvb_get_letohl(tvb, offset+0);
-		/* put some nice info on lnet line */ 
-		proto_item_append_text(ti," %s", (msg_type < sizeof(lnet_msg_type_t)/sizeof(value_string)) ? lnet_msg_type_t[msg_type].strptr : "Unknow") ;  /* rajout de l'info dans l'arbre */
-		proto_tree_add_item(lnet_tree, hf_lnet_msg_type, tvb, offset, 4, TRUE); offset+=4;
-
-		/* payload data (to follow) length :*/
-		payload_length = tvb_get_letohl(tvb,offset+0); 	
-		proto_tree_add_item(lnet_tree, hf_lnet_payload_length, tvb, offset, 4, TRUE); offset+=4;
-
-		/* here offset = 24+8+8+4+4+4+4 = 56 */
-		match = 0 ;
-		switch(msg_type) {
-			case LNET_MSG_ACK:
-				offset=dissect_lnet_ack(tvb,lnet_tree,offset,pinfo);
-				match = tvb_get_letoh64(tvb,72 );
-				break;
-			case LNET_MSG_PUT:
-				offset=dissect_lnet_put(tvb,lnet_tree,offset,pinfo);
-				match = tvb_get_letoh64(tvb, 72);
-				break;
-			case LNET_MSG_GET:
-				offset=dissect_lnet_get(tvb,lnet_tree,offset,pinfo);
-				match = tvb_get_letoh64(tvb, 72);
-				break;
-			case LNET_MSG_REPLY:
-				offset=dissect_lnet_reply(tvb,lnet_tree,offset);
-				break;
-			case LNET_MSG_HELLO:
-				offset=dissect_lnet_hello(tvb,lnet_tree,offset);
-				break;
-			default:
-				break;
-		}
-
-
-		/* conversation_val = */
-                get_lnet_conv(pinfo , lnet_request_hash, match );
-		/*	proto_tree_add_text(tree, tvb, 0 , 0, "match = %"
-                        G_GINT64_MODIFIER "u parent = %d",
-                        conversation_val -> match_bits ,
-                        conversation_val -> packet_num_parent); */
-
-
-		/* padding */
-		msg_filler_length = 72 - offset + 24 + ib_lnd_extra_bytes;
-		if ( msg_filler_length > 72)
-			return ;
-		/*  +24 : ksosck_message take 24bytes, and allready in offset  */
-
-		proto_tree_add_item(lnet_tree, hf_lnet_msg_filler, tvb, offset,
-				    msg_filler_length, little_endian);
-		offset+=msg_filler_length;
-
-		if (payload_length>0)
-		{
-
-			/* display of payload */ 
-			proto_tree_add_item(lnet_tree, hf_lnet_payload, tvb,
-					    offset, payload_length,
-					    little_endian);
-
-			next_tvb = tvb_new_subset (tvb, offset, payload_length, payload_length);
-			if(msg_type==LNET_MSG_PUT)
-				dissector_try_uint(subdissector_table, tvb_get_letohl(tvb,LNET_PTL_INDEX_OFFSET_PUT), next_tvb, pinfo, tree);
-
-		}
-
-		offset+=payload_length;
-	} 
+out:
+#ifdef WIRESHARK_COMPAT
+	return;
+#else
+	return offset;
+#endif
 }
 
 void
