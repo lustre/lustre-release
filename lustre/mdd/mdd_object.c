@@ -2029,7 +2029,6 @@ static int mdd_object_lock(const struct lu_env *env,
 			   void *policy)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
-	LASSERT(mdd_object_exists(mdd_obj));
 	return dt_object_lock(env, mdd_object_child(mdd_obj), lh,
 			      einfo, policy);
 }

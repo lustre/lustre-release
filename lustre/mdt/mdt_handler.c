@@ -1317,6 +1317,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 }
                 if (rc == 0) {
                         /* Finally, we can get attr for child. */
+			if (!mdt_object_exists(child)) {
+				LU_OBJECT_DEBUG(D_INFO, info->mti_env,
+						&child->mot_obj,
+					     "remote object doesn't exist.\n");
+                                mdt_object_unlock(info, child, lhc, 1);
+				RETURN(-ENOENT);
+			}
+
                         mdt_set_capainfo(info, 0, mdt_object_fid(child),
                                          BYPASS_CAPA);
                         rc = mdt_getattr_internal(info, child, 0);

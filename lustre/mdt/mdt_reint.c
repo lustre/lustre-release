@@ -945,6 +945,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (IS_ERR(ms))
                 GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
+	if (!mdt_object_exists(ms)) {
+		mdt_object_put(info->mti_env, ms);
+		CDEBUG(D_INFO, "%s: "DFID" does not exist.\n",
+		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1));
+		GOTO(out_unlock_parent, rc = -ENOENT);
+	}
+
 	if (mdt_object_remote(ms)) {
 		mdt_object_put(info->mti_env, ms);
 		CERROR("%s: source inode "DFID" on remote MDT from "DFID"\n",
