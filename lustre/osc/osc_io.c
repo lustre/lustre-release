@@ -331,15 +331,15 @@ static int osc_io_rw_iter_init(const struct lu_env *env,
 	if (npages > max_pages)
 		npages = max_pages;
 
-	c = cfs_atomic_read(cli->cl_lru_left);
+	c = atomic_read(cli->cl_lru_left);
 	if (c < npages && osc_lru_reclaim(cli) > 0)
-		c = cfs_atomic_read(cli->cl_lru_left);
+		c = atomic_read(cli->cl_lru_left);
 	while (c >= npages) {
-		if (c == cfs_atomic_cmpxchg(cli->cl_lru_left, c, c - npages)) {
+		if (c == atomic_cmpxchg(cli->cl_lru_left, c, c - npages)) {
 			oio->oi_lru_reserved = npages;
 			break;
 		}
-		c = cfs_atomic_read(cli->cl_lru_left);
+		c = atomic_read(cli->cl_lru_left);
 	}
 
 	RETURN(0);
@@ -353,7 +353,7 @@ static void osc_io_rw_iter_fini(const struct lu_env *env,
 	struct client_obd *cli = osc_cli(osc);
 
 	if (oio->oi_lru_reserved > 0) {
-		cfs_atomic_add(oio->oi_lru_reserved, cli->cl_lru_left);
+		atomic_add(oio->oi_lru_reserved, cli->cl_lru_left);
 		oio->oi_lru_reserved = 0;
 	}
 }

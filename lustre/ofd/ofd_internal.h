@@ -113,7 +113,7 @@ struct ofd_seq {
 	struct ost_id		os_oi;
 	spinlock_t		os_last_oid_lock;
 	struct mutex		os_create_lock;
-	cfs_atomic_t		os_refc;
+	atomic_t		os_refc;
 	struct dt_object	*os_lastid_obj;
 	unsigned long		os_destroys_in_progress:1;
 };

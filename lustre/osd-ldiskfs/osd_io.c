@@ -67,12 +67,12 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 
 	LASSERTF(iobuf->dr_elapsed_valid == 0,
 		 "iobuf %p, reqs %d, rw %d, line %d\n", iobuf,
-		 cfs_atomic_read(&iobuf->dr_numreqs), iobuf->dr_rw,
+		 atomic_read(&iobuf->dr_numreqs), iobuf->dr_rw,
 		 iobuf->dr_init_at);
 	LASSERT(pages <= PTLRPC_MAX_BRW_PAGES);
 
 	init_waitqueue_head(&iobuf->dr_wait);
-	cfs_atomic_set(&iobuf->dr_numreqs, 0);
+	atomic_set(&iobuf->dr_numreqs, 0);
 	iobuf->dr_npages = 0;
 	iobuf->dr_error = 0;
 	iobuf->dr_dev = d;
@@ -154,23 +154,23 @@ static void dio_complete_routine(struct bio *bio, int error)
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
-        if (unlikely(iobuf == NULL)) {
-                CERROR("***** bio->bi_private is NULL!  This should never "
-                       "happen.  Normally, I would crash here, but instead I "
-                       "will dump the bio contents to the console.  Please "
-                       "report this to <http://jira.whamcloud.com/> , along "
-                       "with any interesting messages leading up to this point "
-                       "(like SCSI errors, perhaps).  Because bi_private is "
-                       "NULL, I can't wake up the thread that initiated this "
-                       "IO - you will probably have to reboot this node.\n");
-                CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
-                       "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
-                       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
-                       bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
-                       bio->bi_end_io, cfs_atomic_read(&bio->bi_cnt),
-                       bio->bi_private);
+	if (unlikely(iobuf == NULL)) {
+		CERROR("***** bio->bi_private is NULL!  This should never "
+		       "happen.  Normally, I would crash here, but instead I "
+		       "will dump the bio contents to the console.  Please "
+		       "report this to <http://jira.whamcloud.com/> , along "
+		       "with any interesting messages leading up to this point "
+		       "(like SCSI errors, perhaps).  Because bi_private is "
+		       "NULL, I can't wake up the thread that initiated this "
+		       "IO - you will probably have to reboot this node.\n");
+		CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
+		       "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
+		       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
+		       bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
+		       bio->bi_end_io, atomic_read(&bio->bi_cnt),
+		       bio->bi_private);
 		return;
-        }
+	}
 
         /* the check is outside of the cycle for performance reason -bzzz */
 	if (!test_bit(__REQ_WRITE, &bio->bi_rw)) {
@@ -179,14 +179,14 @@ static void dio_complete_routine(struct bio *bio, int error)
                                 SetPageUptodate(bvl->bv_page);
                         LASSERT(PageLocked(bvl->bv_page));
                 }
-                cfs_atomic_dec(&iobuf->dr_dev->od_r_in_flight);
+		atomic_dec(&iobuf->dr_dev->od_r_in_flight);
         } else {
-                cfs_atomic_dec(&iobuf->dr_dev->od_w_in_flight);
+		atomic_dec(&iobuf->dr_dev->od_w_in_flight);
         }
 
-        /* any real error is good enough -bzzz */
-        if (error != 0 && iobuf->dr_error == 0)
-                iobuf->dr_error = error;
+	/* any real error is good enough -bzzz */
+	if (error != 0 && iobuf->dr_error == 0)
+		iobuf->dr_error = error;
 
 	/*
 	 * set dr_elapsed before dr_numreqs turns to 0, otherwise
@@ -195,42 +195,42 @@ static void dio_complete_routine(struct bio *bio, int error)
 	 * data in this processing and an assertion in a subsequent
 	 * call to OSD.
 	 */
-	if (cfs_atomic_read(&iobuf->dr_numreqs) == 1) {
+	if (atomic_read(&iobuf->dr_numreqs) == 1) {
 		iobuf->dr_elapsed = jiffies - iobuf->dr_start_time;
 		iobuf->dr_elapsed_valid = 1;
 	}
-	if (cfs_atomic_dec_and_test(&iobuf->dr_numreqs))
+	if (atomic_dec_and_test(&iobuf->dr_numreqs))
 		wake_up(&iobuf->dr_wait);
 
-        /* Completed bios used to be chained off iobuf->dr_bios and freed in
-         * filter_clear_dreq().  It was then possible to exhaust the biovec-256
-         * mempool when serious on-disk fragmentation was encountered,
-         * deadlocking the OST.  The bios are now released as soon as complete
-         * so the pool cannot be exhausted while IOs are competing. bug 10076 */
-        bio_put(bio);
+	/* Completed bios used to be chained off iobuf->dr_bios and freed in
+	 * filter_clear_dreq().  It was then possible to exhaust the biovec-256
+	 * mempool when serious on-disk fragmentation was encountered,
+	 * deadlocking the OST.  The bios are now released as soon as complete
+	 * so the pool cannot be exhausted while IOs are competing. bug 10076 */
+	bio_put(bio);
 }
 
 static void record_start_io(struct osd_iobuf *iobuf, int size)
 {
-        struct osd_device    *osd = iobuf->dr_dev;
-        struct obd_histogram *h = osd->od_brw_stats.hist;
+	struct osd_device    *osd = iobuf->dr_dev;
+	struct obd_histogram *h = osd->od_brw_stats.hist;
 
-        iobuf->dr_frags++;
-        cfs_atomic_inc(&iobuf->dr_numreqs);
+	iobuf->dr_frags++;
+	atomic_inc(&iobuf->dr_numreqs);
 
-        if (iobuf->dr_rw == 0) {
-                cfs_atomic_inc(&osd->od_r_in_flight);
-                lprocfs_oh_tally(&h[BRW_R_RPC_HIST],
-                                 cfs_atomic_read(&osd->od_r_in_flight));
-                lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE], size);
-        } else if (iobuf->dr_rw == 1) {
-                cfs_atomic_inc(&osd->od_w_in_flight);
-                lprocfs_oh_tally(&h[BRW_W_RPC_HIST],
-                                 cfs_atomic_read(&osd->od_w_in_flight));
-                lprocfs_oh_tally_log2(&h[BRW_W_DISK_IOSIZE], size);
-        } else {
-                LBUG();
-        }
+	if (iobuf->dr_rw == 0) {
+		atomic_inc(&osd->od_r_in_flight);
+		lprocfs_oh_tally(&h[BRW_R_RPC_HIST],
+				 atomic_read(&osd->od_r_in_flight));
+		lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE], size);
+	} else if (iobuf->dr_rw == 1) {
+		atomic_inc(&osd->od_w_in_flight);
+		lprocfs_oh_tally(&h[BRW_W_RPC_HIST],
+				 atomic_read(&osd->od_w_in_flight));
+		lprocfs_oh_tally_log2(&h[BRW_W_DISK_IOSIZE], size);
+	} else {
+		LBUG();
+	}
 }
 
 static void osd_submit_bio(int rw, struct bio *bio)
@@ -364,19 +364,19 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                 rc = 0;
         }
 
- out:
-        /* in order to achieve better IO throughput, we don't wait for writes
-         * completion here. instead we proceed with transaction commit in
-         * parallel and wait for IO completion once transaction is stopped
-         * see osd_trans_stop() for more details -bzzz */
-        if (iobuf->dr_rw == 0) {
+out:
+	/* in order to achieve better IO throughput, we don't wait for writes
+	 * completion here. instead we proceed with transaction commit in
+	 * parallel and wait for IO completion once transaction is stopped
+	 * see osd_trans_stop() for more details -bzzz */
+	if (iobuf->dr_rw == 0) {
 		wait_event(iobuf->dr_wait,
-                               cfs_atomic_read(&iobuf->dr_numreqs) == 0);
-        }
+			   atomic_read(&iobuf->dr_numreqs) == 0);
+	}
 
-        if (rc == 0)
-                rc = iobuf->dr_error;
-        RETURN(rc);
+	if (rc == 0)
+		rc = iobuf->dr_error;
+	RETURN(rc);
 }
 
 static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,

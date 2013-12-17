@@ -169,9 +169,9 @@ static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
 	rc = seq_printf(m,
 		      "used_mb: %d\n"
 		      "busy_cnt: %d\n",
-		      (cfs_atomic_read(&cli->cl_lru_in_list) +
-			cfs_atomic_read(&cli->cl_lru_busy)) >> shift,
-		      cfs_atomic_read(&cli->cl_lru_busy));
+		      (atomic_read(&cli->cl_lru_in_list) +
+			atomic_read(&cli->cl_lru_busy)) >> shift,
+		      atomic_read(&cli->cl_lru_busy));
 
 	return rc;
 }
@@ -194,7 +194,7 @@ osc_cached_mb_seq_write(struct file *file, const char *buffer,
 	if (pages_number < 0)
 		return -ERANGE;
 
-	rc = cfs_atomic_read(&cli->cl_lru_in_list) - pages_number;
+	rc = atomic_read(&cli->cl_lru_in_list) - pages_number;
 	if (rc > 0) {
 		struct lu_env *env;
 		int refcheck;
@@ -401,7 +401,7 @@ static int osc_resend_count_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *obd = m->private;
 
-	return seq_printf(m, "%u\n", cfs_atomic_read(&obd->u.cli.cl_resends));
+	return seq_printf(m, "%u\n", atomic_read(&obd->u.cli.cl_resends));
 }
 
 static ssize_t osc_resend_count_seq_write(struct file *file, const char *buffer,
@@ -410,16 +410,16 @@ static ssize_t osc_resend_count_seq_write(struct file *file, const char *buffer,
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
 	int val, rc;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
 
-        if (val < 0)
-               return -EINVAL;
+	if (val < 0)
+		return -EINVAL;
 
-        cfs_atomic_set(&obd->u.cli.cl_resends, val);
+	atomic_set(&obd->u.cli.cl_resends, val);
 
-        return count;
+	return count;
 }
 LPROC_SEQ_FOPS(osc_resend_count);
 
@@ -464,7 +464,7 @@ static int osc_destroys_in_flight_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *obd = m->private;
 	return seq_printf(m, "%u\n",
-			  cfs_atomic_read(&obd->u.cli.cl_destroy_in_flight));
+			  atomic_read(&obd->u.cli.cl_destroy_in_flight));
 }
 LPROC_SEQ_FOPS_RO(osc_destroys_in_flight);
 
@@ -515,7 +515,7 @@ static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 	int pages, mb;
 
-	pages = cfs_atomic_read(&cli->cl_unstable_count);
+	pages = atomic_read(&cli->cl_unstable_count);
 	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
 
 	return seq_printf(m, "unstable_pages: %8d\n"
@@ -581,56 +581,57 @@ struct lprocfs_seq_vars lprocfs_osc_obd_vars[] = {
 
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
-        struct obd_device *dev = seq->private;
-        struct client_obd *cli = &dev->u.cli;
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+	struct timeval now;
+	struct obd_device *dev = seq->private;
+	struct client_obd *cli = &dev->u.cli;
+	unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
 	int i;
 
 	do_gettimeofday(&now);
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
-        seq_printf(seq, "read RPCs in flight:  %d\n",
-                   cli->cl_r_in_flight);
-        seq_printf(seq, "write RPCs in flight: %d\n",
-                   cli->cl_w_in_flight);
-        seq_printf(seq, "pending write pages:  %d\n",
-		   cfs_atomic_read(&cli->cl_pending_w_pages));
-        seq_printf(seq, "pending read pages:   %d\n",
-		   cfs_atomic_read(&cli->cl_pending_r_pages));
+	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+		   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "read RPCs in flight:  %d\n",
+		   cli->cl_r_in_flight);
+	seq_printf(seq, "write RPCs in flight: %d\n",
+		   cli->cl_w_in_flight);
+	seq_printf(seq, "pending write pages:  %d\n",
+		   atomic_read(&cli->cl_pending_w_pages));
+	seq_printf(seq, "pending read pages:   %d\n",
+		   atomic_read(&cli->cl_pending_r_pages));
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+	seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+	seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
+	seq_printf(seq, "       rpcs   %% cum %%\n");
 
-        read_tot = lprocfs_oh_sum(&cli->cl_read_page_hist);
-        write_tot = lprocfs_oh_sum(&cli->cl_write_page_hist);
+	read_tot = lprocfs_oh_sum(&cli->cl_read_page_hist);
+	write_tot = lprocfs_oh_sum(&cli->cl_write_page_hist);
 
-        read_cum = 0;
-        write_cum = 0;
-        for (i = 0; i < OBD_HIST_MAX; i++) {
-                unsigned long r = cli->cl_read_page_hist.oh_buckets[i];
-                unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
-                read_cum += r;
-                write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                                 1 << i, r, pct(r, read_tot),
-                                 pct(read_cum, read_tot), w,
-                                 pct(w, write_tot),
-                                 pct(write_cum, write_tot));
-                if (read_cum == read_tot && write_cum == write_tot)
-                        break;
-        }
+	read_cum = 0;
+	write_cum = 0;
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		unsigned long r = cli->cl_read_page_hist.oh_buckets[i];
+		unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
 
-        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+		read_cum += r;
+		write_cum += w;
+		seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+			   1 << i, r, pct(r, read_tot),
+			   pct(read_cum, read_tot), w,
+			   pct(w, write_tot),
+			   pct(write_cum, write_tot));
+		if (read_cum == read_tot && write_cum == write_tot)
+			break;
+	}
 
-        read_tot = lprocfs_oh_sum(&cli->cl_read_rpc_hist);
-        write_tot = lprocfs_oh_sum(&cli->cl_write_rpc_hist);
+	seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+	seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
+	seq_printf(seq, "       rpcs   %% cum %%\n");
+
+	read_tot = lprocfs_oh_sum(&cli->cl_read_rpc_hist);
+	write_tot = lprocfs_oh_sum(&cli->cl_write_rpc_hist);
 
         read_cum = 0;
         write_cum = 0;

@@ -827,16 +827,16 @@ static void osd_trans_commit_cb(struct super_block *sb,
 }
 
 static struct thandle *osd_trans_create(const struct lu_env *env,
-                                        struct dt_device *d)
+					struct dt_device *d)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-        struct osd_thandle     *oh;
-        struct thandle         *th;
-        ENTRY;
+	struct osd_thread_info	*oti = osd_oti_get(env);
+	struct osd_iobuf	*iobuf = &oti->oti_iobuf;
+	struct osd_thandle	*oh;
+	struct thandle		*th;
+	ENTRY;
 
-        /* on pending IO in this thread should left from prev. request */
-        LASSERT(cfs_atomic_read(&iobuf->dr_numreqs) == 0);
+	/* on pending IO in this thread should left from prev. request */
+	LASSERT(atomic_read(&iobuf->dr_numreqs) == 0);
 
         th = ERR_PTR(-ENOMEM);
 	OBD_ALLOC_GFP(oh, sizeof *oh, __GFP_IO);
@@ -1045,7 +1045,7 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 	 * completed otherwise iobuf may be corrupted by different request
 	 */
 	wait_event(iobuf->dr_wait,
-		       cfs_atomic_read(&iobuf->dr_numreqs) == 0);
+		       atomic_read(&iobuf->dr_numreqs) == 0);
 	if (!rc)
 		rc = iobuf->dr_error;
 

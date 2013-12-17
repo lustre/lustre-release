@@ -261,13 +261,13 @@ struct osd_device {
 	struct osd_obj_map	*od_ost_map;
 	struct osd_mdobj_map	*od_mdt_map;
 
-        unsigned long long        od_readcache_max_filesize;
-        int                       od_read_cache;
-        int                       od_writethrough_cache;
+	unsigned long long	od_readcache_max_filesize;
+	int			od_read_cache;
+	int			od_writethrough_cache;
 
-        struct brw_stats          od_brw_stats;
-        cfs_atomic_t              od_r_in_flight;
-        cfs_atomic_t              od_w_in_flight;
+	struct brw_stats	od_brw_stats;
+	atomic_t		od_r_in_flight;
+	atomic_t		od_w_in_flight;
 
 	struct mutex		  od_otable_mutex;
 	struct osd_otable_it	 *od_otable_it;
@@ -455,7 +455,7 @@ struct osd_it_quota {
 
 struct osd_iobuf {
 	wait_queue_head_t  dr_wait;
-	cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
+	atomic_t       dr_numreqs;  /* number of reqs being processed */
 	int                dr_max_pages;
 	int                dr_npages;
 	int                dr_error;

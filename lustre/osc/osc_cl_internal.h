@@ -170,8 +170,8 @@ struct osc_object {
 
 	cfs_list_t	   oo_reading_exts;
 
-	cfs_atomic_t	 oo_nr_reads;
-	cfs_atomic_t	 oo_nr_writes;
+	atomic_t	 oo_nr_reads;
+	atomic_t	 oo_nr_writes;
 
 	/** Protect extent tree. Will be used to protect
 	 * oo_{read|write}_pages soon. */
@@ -614,70 +614,70 @@ enum osc_extent_state {
  */
 struct osc_extent {
 	/** red-black tree node */
-	struct rb_node     oe_node;
+	struct rb_node		oe_node;
 	/** osc_object of this extent */
-	struct osc_object *oe_obj;
+	struct osc_object	*oe_obj;
 	/** refcount, removed from red-black tree if reaches zero. */
-	cfs_atomic_t       oe_refc;
+	atomic_t		oe_refc;
 	/** busy if non-zero */
-	cfs_atomic_t       oe_users;
+	atomic_t		oe_users;
 	/** link list of osc_object's oo_{hp|urgent|locking}_exts. */
-	cfs_list_t	 oe_link;
+	cfs_list_t		oe_link;
 	/** state of this extent */
-	unsigned int       oe_state;
+	unsigned int		oe_state;
 	/** flags for this extent. */
-	unsigned int       oe_intree:1,
+	unsigned int		oe_intree:1,
 	/** 0 is write, 1 is read */
-			   oe_rw:1,
-			   oe_srvlock:1,
-			   oe_memalloc:1,
+				oe_rw:1,
+				oe_srvlock:1,
+				oe_memalloc:1,
 	/** an ACTIVE extent is going to be truncated, so when this extent
 	 * is released, it will turn into TRUNC state instead of CACHE. */
-			   oe_trunc_pending:1,
+				oe_trunc_pending:1,
 	/** this extent should be written asap and someone may wait for the
 	 * write to finish. This bit is usually set along with urgent if
 	 * the extent was CACHE state.
 	 * fsync_wait extent can't be merged because new extent region may
 	 * exceed fsync range. */
-			   oe_fsync_wait:1,
+				oe_fsync_wait:1,
 	/** covering lock is being canceled */
-			   oe_hp:1,
+				oe_hp:1,
 	/** this extent should be written back asap. set if one of pages is
 	 * called by page WB daemon, or sync write or reading requests. */
-			   oe_urgent:1;
+				oe_urgent:1;
 	/** how many grants allocated for this extent.
 	 *  Grant allocated for this extent. There is no grant allocated
 	 *  for reading extents and sync write extents. */
-	unsigned int       oe_grants;
+	unsigned int		oe_grants;
 	/** # of dirty pages in this extent */
-	unsigned int       oe_nr_pages;
+	unsigned int		oe_nr_pages;
 	/** list of pending oap pages. Pages in this list are NOT sorted. */
-	cfs_list_t         oe_pages;
+	cfs_list_t		oe_pages;
 	/** Since an extent has to be written out in atomic, this is used to
 	 * remember the next page need to be locked to write this extent out.
 	 * Not used right now.
 	 */
-	struct osc_page   *oe_next_page;
+	struct osc_page		*oe_next_page;
 	/** start and end index of this extent, include start and end
 	 * themselves. Page offset here is the page index of osc_pages.
 	 * oe_start is used as keyword for red-black tree. */
-	pgoff_t            oe_start;
-	pgoff_t            oe_end;
+	pgoff_t			oe_start;
+	pgoff_t			oe_end;
 	/** maximum ending index of this extent, this is limited by
 	 * max_pages_per_rpc, lock extent and chunk size. */
-	pgoff_t            oe_max_end;
+	pgoff_t			oe_max_end;
 	/** waitqueue - for those who want to be notified if this extent's
 	 * state has changed. */
-	wait_queue_head_t        oe_waitq;
+	wait_queue_head_t	oe_waitq;
 	/** lock covering this extent */
-	struct cl_lock    *oe_osclock;
+	struct cl_lock		*oe_osclock;
 	/** terminator of this extent. Must be true if this extent is in IO. */
-	struct task_struct        *oe_owner;
+	struct task_struct	*oe_owner;
 	/** return value of writeback. If somebody is waiting for this extent,
 	 * this value can be known by outside world. */
-	int                oe_rc;
+	int			oe_rc;
 	/** max pages per rpc when this extent was created */
-	unsigned int       oe_mppr;
+	unsigned int		oe_mppr;
 };
 
 int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,

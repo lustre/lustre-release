@@ -274,9 +274,9 @@ struct osd_device {
 	/* used to debug zerocopy logic: the fields track all
 	 * allocated, loaned and referenced buffers in use.
 	 * to be removed once the change is tested well. */
-	cfs_atomic_t		 od_zerocopy_alloc;
-	cfs_atomic_t		 od_zerocopy_loan;
-	cfs_atomic_t		 od_zerocopy_pin;
+	atomic_t		 od_zerocopy_alloc;
+	atomic_t		 od_zerocopy_loan;
+	atomic_t		 od_zerocopy_pin;
 
 	arc_prune_t		*arc_prune_cb;
 };

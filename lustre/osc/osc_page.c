@@ -306,9 +306,9 @@ static int osc_page_print(const struct lu_env *env,
 			  osc_list(&obj->oo_hp_ready_item),
 			  osc_list(&obj->oo_write_item),
 			  osc_list(&obj->oo_read_item),
-			  cfs_atomic_read(&obj->oo_nr_reads),
+			  atomic_read(&obj->oo_nr_reads),
 			  osc_list(&obj->oo_reading_exts),
-			  cfs_atomic_read(&obj->oo_nr_writes),
+			  atomic_read(&obj->oo_nr_writes),
 			  osc_list(&obj->oo_hp_exts),
 			  osc_list(&obj->oo_urgent_exts));
 }
@@ -464,10 +464,10 @@ int osc_over_unstable_soft_limit(struct client_obd *cli)
 	if (cli == NULL)
 		return 0;
 
-	obd_upages = cfs_atomic_read(&obd_unstable_pages);
-	obd_dpages = cfs_atomic_read(&obd_dirty_pages);
+	obd_upages = atomic_read(&obd_unstable_pages);
+	obd_dpages = atomic_read(&obd_dirty_pages);
 
-	osc_upages = cfs_atomic_read(&cli->cl_unstable_count);
+	osc_upages = atomic_read(&cli->cl_unstable_count);
 
 	/* obd_max_dirty_pages is the max number of (dirty + unstable)
 	 * pages allowed at any given time. To simulate an unstable page
@@ -543,14 +543,14 @@ static const int lru_shrink_max = 8 << (20 - PAGE_CACHE_SHIFT); /* 8M */
 static int osc_cache_too_much(struct client_obd *cli)
 {
 	struct cl_client_cache *cache = cli->cl_cache;
-	int pages = cfs_atomic_read(&cli->cl_lru_in_list);
+	int pages = atomic_read(&cli->cl_lru_in_list);
 	unsigned long budget;
 
-	budget = cache->ccc_lru_max / cfs_atomic_read(&cache->ccc_users);
+	budget = cache->ccc_lru_max / atomic_read(&cache->ccc_users);
 
 	/* if it's going to run out LRU slots, we should free some, but not
 	 * too much to maintain faireness among OSCs. */
-	if (cfs_atomic_read(cli->cl_lru_left) < cache->ccc_lru_max >> 4) {
+	if (atomic_read(cli->cl_lru_left) < cache->ccc_lru_max >> 4) {
 		if (pages >= budget)
 			return lru_shrink_max;
 		else if (pages >= budget / 2)
@@ -592,8 +592,8 @@ void osc_lru_add_batch(struct client_obd *cli, cfs_list_t *plist)
 	if (npages > 0) {
 		client_obd_list_lock(&cli->cl_lru_list_lock);
 		cfs_list_splice_tail(&lru, &cli->cl_lru_list);
-		cfs_atomic_sub(npages, &cli->cl_lru_busy);
-		cfs_atomic_add(npages, &cli->cl_lru_in_list);
+		atomic_sub(npages, &cli->cl_lru_busy);
+		atomic_add(npages, &cli->cl_lru_in_list);
 		client_obd_list_unlock(&cli->cl_lru_list_lock);
 
 		/* XXX: May set force to be true for better performance */
@@ -604,9 +604,9 @@ void osc_lru_add_batch(struct client_obd *cli, cfs_list_t *plist)
 
 static void __osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 {
-	LASSERT(cfs_atomic_read(&cli->cl_lru_in_list) > 0);
+	LASSERT(atomic_read(&cli->cl_lru_in_list) > 0);
 	cfs_list_del_init(&opg->ops_lru);
-	cfs_atomic_dec(&cli->cl_lru_in_list);
+	atomic_dec(&cli->cl_lru_in_list);
 }
 
 /**
@@ -620,12 +620,12 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 		if (!cfs_list_empty(&opg->ops_lru)) {
 			__osc_lru_del(cli, opg);
 		} else {
-			LASSERT(cfs_atomic_read(&cli->cl_lru_busy) > 0);
-			cfs_atomic_dec(&cli->cl_lru_busy);
+			LASSERT(atomic_read(&cli->cl_lru_busy) > 0);
+			atomic_dec(&cli->cl_lru_busy);
 		}
 		client_obd_list_unlock(&cli->cl_lru_list_lock);
 
-		cfs_atomic_inc(cli->cl_lru_left);
+		atomic_inc(cli->cl_lru_left);
 		/* this is a great place to release more LRU pages if
 		 * this osc occupies too many LRU pages and kernel is
 		 * stealing one of them. */
@@ -648,7 +648,7 @@ static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 		client_obd_list_lock(&cli->cl_lru_list_lock);
 		__osc_lru_del(cli, opg);
 		client_obd_list_unlock(&cli->cl_lru_list_lock);
-		cfs_atomic_inc(&cli->cl_lru_busy);
+		atomic_inc(&cli->cl_lru_busy);
 	}
 }
 
@@ -685,27 +685,27 @@ int osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	int rc = 0;
 	ENTRY;
 
-	LASSERT(cfs_atomic_read(&cli->cl_lru_in_list) >= 0);
-	if (cfs_atomic_read(&cli->cl_lru_in_list) == 0 || target <= 0)
+	LASSERT(atomic_read(&cli->cl_lru_in_list) >= 0);
+	if (atomic_read(&cli->cl_lru_in_list) == 0 || target <= 0)
 		RETURN(0);
 
 	if (!force) {
-		if (cfs_atomic_read(&cli->cl_lru_shrinkers) > 0)
+		if (atomic_read(&cli->cl_lru_shrinkers) > 0)
 			RETURN(-EBUSY);
 
-		if (cfs_atomic_inc_return(&cli->cl_lru_shrinkers) > 1) {
-			cfs_atomic_dec(&cli->cl_lru_shrinkers);
+		if (atomic_inc_return(&cli->cl_lru_shrinkers) > 1) {
+			atomic_dec(&cli->cl_lru_shrinkers);
 			RETURN(-EBUSY);
 		}
 	} else {
-		cfs_atomic_inc(&cli->cl_lru_shrinkers);
+		atomic_inc(&cli->cl_lru_shrinkers);
 	}
 
 	pvec = (struct cl_page **)osc_env_info(env)->oti_pvec;
 	io = &osc_env_info(env)->oti_io;
 
 	client_obd_list_lock(&cli->cl_lru_list_lock);
-	maxscan = min(target << 1, cfs_atomic_read(&cli->cl_lru_in_list));
+	maxscan = min(target << 1, atomic_read(&cli->cl_lru_in_list));
 	while (!cfs_list_empty(&cli->cl_lru_list)) {
 		struct cl_page *page;
 		bool will_free = false;
@@ -792,9 +792,9 @@ int osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		cl_object_put(env, clobj);
 	}
 
-	cfs_atomic_dec(&cli->cl_lru_shrinkers);
+	atomic_dec(&cli->cl_lru_shrinkers);
 	if (count > 0) {
-		cfs_atomic_add(count, cli->cl_lru_left);
+		atomic_add(count, cli->cl_lru_left);
 		wake_up_all(&osc_lru_waitq);
 	}
 	RETURN(count > 0 ? count : rc);
@@ -802,7 +802,7 @@ int osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 
 static inline int max_to_shrink(struct client_obd *cli)
 {
-	return min(cfs_atomic_read(&cli->cl_lru_in_list) >> 1, lru_shrink_max);
+	return min(atomic_read(&cli->cl_lru_in_list) >> 1, lru_shrink_max);
 }
 
 int osc_lru_reclaim(struct client_obd *cli)
@@ -833,8 +833,8 @@ int osc_lru_reclaim(struct client_obd *cli)
 
 	CDEBUG(D_CACHE, "%s: cli %p no free slots, pages: %d, busy: %d.\n",
 		cli->cl_import->imp_obd->obd_name, cli,
-		cfs_atomic_read(&cli->cl_lru_in_list),
-		cfs_atomic_read(&cli->cl_lru_busy));
+		atomic_read(&cli->cl_lru_in_list),
+		atomic_read(&cli->cl_lru_busy));
 
 	/* Reclaim LRU slots from other client_obd as it can't free enough
 	 * from its own. This should rarely happen. */
@@ -842,15 +842,15 @@ int osc_lru_reclaim(struct client_obd *cli)
 	cache->ccc_lru_shrinkers++;
 	cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 
-	max_scans = cfs_atomic_read(&cache->ccc_users);
+	max_scans = atomic_read(&cache->ccc_users);
 	while (--max_scans > 0 && !cfs_list_empty(&cache->ccc_lru)) {
 		cli = cfs_list_entry(cache->ccc_lru.next, struct client_obd,
 					cl_lru_osc);
 
 		CDEBUG(D_CACHE, "%s: cli %p LRU pages: %d, busy: %d.\n",
 			cli->cl_import->imp_obd->obd_name, cli,
-			cfs_atomic_read(&cli->cl_lru_in_list),
-			cfs_atomic_read(&cli->cl_lru_busy));
+			atomic_read(&cli->cl_lru_in_list),
+			atomic_read(&cli->cl_lru_busy));
 
 		cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 		if (osc_cache_too_much(cli) > 0) {
@@ -889,8 +889,8 @@ static int osc_lru_reserve(const struct lu_env *env, struct osc_object *obj,
 		goto out;
 	}
 
-	LASSERT(cfs_atomic_read(cli->cl_lru_left) >= 0);
-	while (!cfs_atomic_add_unless(cli->cl_lru_left, -1, 0)) {
+	LASSERT(atomic_read(cli->cl_lru_left) >= 0);
+	while (!atomic_add_unless(cli->cl_lru_left, -1, 0)) {
 
 		/* run out of LRU spaces, try to drop some by itself */
 		rc = osc_lru_reclaim(cli);
@@ -901,7 +901,7 @@ static int osc_lru_reserve(const struct lu_env *env, struct osc_object *obj,
 
 		cond_resched();
 		rc = l_wait_event(osc_lru_waitq,
-				cfs_atomic_read(cli->cl_lru_left) > 0,
+				atomic_read(cli->cl_lru_left) > 0,
 				&lwi);
 		if (rc < 0)
 			break;
@@ -909,7 +909,7 @@ static int osc_lru_reserve(const struct lu_env *env, struct osc_object *obj,
 
 out:
 	if (rc >= 0) {
-		cfs_atomic_inc(&cli->cl_lru_busy);
+		atomic_inc(&cli->cl_lru_busy);
 		opg->ops_in_lru = 1;
 		rc = 0;
 	}

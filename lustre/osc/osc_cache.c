@@ -102,28 +102,28 @@ static inline char list_empty_marker(cfs_list_t *list)
 static const char *oes_strings[] = {
 	"inv", "active", "cache", "locking", "lockdone", "rpc", "trunc", NULL };
 
-#define OSC_EXTENT_DUMP(lvl, extent, fmt, ...) do {			      \
-	struct osc_extent *__ext = (extent);				      \
-	char __buf[16];							      \
-									      \
-	CDEBUG(lvl,							      \
-		"extent %p@{" EXTSTR ", "				      \
-		"[%d|%d|%c|%s|%s|%p], [%d|%d|%c|%c|%p|%u|%p]} " fmt,	      \
-		/* ----- extent part 0 ----- */				      \
-		__ext, EXTPARA(__ext),					      \
-		/* ----- part 1 ----- */				      \
-		cfs_atomic_read(&__ext->oe_refc),			      \
-		cfs_atomic_read(&__ext->oe_users),			      \
-		list_empty_marker(&__ext->oe_link),			      \
-		oes_strings[__ext->oe_state], ext_flags(__ext, __buf),	      \
-		__ext->oe_obj,						      \
-		/* ----- part 2 ----- */				      \
-		__ext->oe_grants, __ext->oe_nr_pages,			      \
-		list_empty_marker(&__ext->oe_pages),			      \
-		waitqueue_active(&__ext->oe_waitq) ? '+' : '-',		      \
-		__ext->oe_osclock, __ext->oe_mppr, __ext->oe_owner,	      \
-		/* ----- part 4 ----- */				      \
-		## __VA_ARGS__);					      \
+#define OSC_EXTENT_DUMP(lvl, extent, fmt, ...) do {			\
+	struct osc_extent *__ext = (extent);				\
+	char __buf[16];							\
+									\
+	CDEBUG(lvl,							\
+		"extent %p@{" EXTSTR ", "				\
+		"[%d|%d|%c|%s|%s|%p], [%d|%d|%c|%c|%p|%u|%p]} " fmt,	\
+		/* ----- extent part 0 ----- */				\
+		__ext, EXTPARA(__ext),					\
+		/* ----- part 1 ----- */				\
+		atomic_read(&__ext->oe_refc),				\
+		atomic_read(&__ext->oe_users),				\
+		list_empty_marker(&__ext->oe_link),			\
+		oes_strings[__ext->oe_state], ext_flags(__ext, __buf),	\
+		__ext->oe_obj,						\
+		/* ----- part 2 ----- */				\
+		__ext->oe_grants, __ext->oe_nr_pages,			\
+		list_empty_marker(&__ext->oe_pages),			\
+		waitqueue_active(&__ext->oe_waitq) ? '+' : '-',		\
+		__ext->oe_osclock, __ext->oe_mppr, __ext->oe_owner,	\
+		/* ----- part 4 ----- */				\
+		## __VA_ARGS__);					\
 } while (0)
 
 #undef EASSERTF
@@ -184,10 +184,10 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 	if (ext->oe_state >= OES_STATE_MAX)
 		GOTO(out, rc = 10);
 
-	if (cfs_atomic_read(&ext->oe_refc) <= 0)
+	if (atomic_read(&ext->oe_refc) <= 0)
 		GOTO(out, rc = 20);
 
-	if (cfs_atomic_read(&ext->oe_refc) < cfs_atomic_read(&ext->oe_users))
+	if (atomic_read(&ext->oe_refc) < atomic_read(&ext->oe_users))
 		GOTO(out, rc = 30);
 
 	switch (ext->oe_state) {
@@ -197,7 +197,7 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 		GOTO(out, rc = 0);
 		break;
 	case OES_ACTIVE:
-		if (cfs_atomic_read(&ext->oe_users) == 0)
+		if (atomic_read(&ext->oe_users) == 0)
 			GOTO(out, rc = 40);
 		if (ext->oe_hp)
 			GOTO(out, rc = 50);
@@ -210,7 +210,7 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 		if (ext->oe_fsync_wait && !ext->oe_urgent && !ext->oe_hp)
 			GOTO(out, rc = 65);
 	default:
-		if (cfs_atomic_read(&ext->oe_users) > 0)
+		if (atomic_read(&ext->oe_users) > 0)
 			GOTO(out, rc = 70);
 	}
 
@@ -315,8 +315,8 @@ static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
 
 	RB_CLEAR_NODE(&ext->oe_node);
 	ext->oe_obj = obj;
-	cfs_atomic_set(&ext->oe_refc, 1);
-	cfs_atomic_set(&ext->oe_users, 0);
+	atomic_set(&ext->oe_refc, 1);
+	atomic_set(&ext->oe_users, 0);
 	CFS_INIT_LIST_HEAD(&ext->oe_link);
 	ext->oe_state = OES_INV;
 	CFS_INIT_LIST_HEAD(&ext->oe_pages);
@@ -333,17 +333,17 @@ static void osc_extent_free(struct osc_extent *ext)
 
 static struct osc_extent *osc_extent_get(struct osc_extent *ext)
 {
-	LASSERT(cfs_atomic_read(&ext->oe_refc) >= 0);
-	cfs_atomic_inc(&ext->oe_refc);
+	LASSERT(atomic_read(&ext->oe_refc) >= 0);
+	atomic_inc(&ext->oe_refc);
 	return ext;
 }
 
 static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
 {
-	LASSERT(cfs_atomic_read(&ext->oe_refc) > 0);
-	if (cfs_atomic_dec_and_test(&ext->oe_refc)) {
+	LASSERT(atomic_read(&ext->oe_refc) > 0);
+	if (atomic_dec_and_test(&ext->oe_refc)) {
 		LASSERT(cfs_list_empty(&ext->oe_link));
-		LASSERT(cfs_atomic_read(&ext->oe_users) == 0);
+		LASSERT(atomic_read(&ext->oe_users) == 0);
 		LASSERT(ext->oe_state == OES_INV);
 		LASSERT(!ext->oe_intree);
 
@@ -362,9 +362,9 @@ static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
  */
 static void osc_extent_put_trust(struct osc_extent *ext)
 {
-	LASSERT(cfs_atomic_read(&ext->oe_refc) > 1);
+	LASSERT(atomic_read(&ext->oe_refc) > 1);
 	LASSERT(osc_object_is_locked(ext->oe_obj));
-	cfs_atomic_dec(&ext->oe_refc);
+	atomic_dec(&ext->oe_refc);
 }
 
 /**
@@ -457,7 +457,7 @@ static struct osc_extent *osc_extent_hold(struct osc_extent *ext)
 		osc_extent_state_set(ext, OES_ACTIVE);
 		osc_update_pending(obj, OBD_BRW_WRITE, -ext->oe_nr_pages);
 	}
-	cfs_atomic_inc(&ext->oe_users);
+	atomic_inc(&ext->oe_users);
 	cfs_list_del_init(&ext->oe_link);
 	return osc_extent_get(ext);
 }
@@ -542,11 +542,11 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 	int rc = 0;
 	ENTRY;
 
-	LASSERT(cfs_atomic_read(&ext->oe_users) > 0);
+	LASSERT(atomic_read(&ext->oe_users) > 0);
 	LASSERT(sanity_check(ext) == 0);
 	LASSERT(ext->oe_grants > 0);
 
-	if (cfs_atomic_dec_and_lock(&ext->oe_users, &obj->oo_lock)) {
+	if (atomic_dec_and_lock(&ext->oe_users, &obj->oo_lock)) {
 		LASSERT(ext->oe_state == OES_ACTIVE);
 		if (ext->oe_trunc_pending) {
 			/* a truncate process is waiting for this extent.
@@ -1197,10 +1197,10 @@ static inline int osc_is_ready(struct osc_object *osc)
 	       (OSC), osc_is_ready(OSC),				       \
 	       list_empty_marker(&(OSC)->oo_hp_ready_item),		       \
 	       list_empty_marker(&(OSC)->oo_ready_item),		       \
-	       cfs_atomic_read(&(OSC)->oo_nr_writes),			       \
+	       atomic_read(&(OSC)->oo_nr_writes),			       \
 	       list_empty_marker(&(OSC)->oo_hp_exts),			       \
 	       list_empty_marker(&(OSC)->oo_urgent_exts),		       \
-	       cfs_atomic_read(&(OSC)->oo_nr_reads),			       \
+	       atomic_read(&(OSC)->oo_nr_reads),			       \
 	       list_empty_marker(&(OSC)->oo_reading_exts),		       \
 	       ##args)
 
@@ -1316,21 +1316,21 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	RETURN(0);
 }
 
-#define OSC_DUMP_GRANT(lvl, cli, fmt, args...) do {			      \
-	struct client_obd *__tmp = (cli);				      \
-	CDEBUG(lvl, "%s: grant { dirty: %ld/%ld dirty_pages: %d/%d "	      \
-	       "unstable_pages: %d/%d dropped: %ld avail: %ld, "	      \
-	       "reserved: %ld, flight: %d } lru {in list: %d, "		      \
-	       "left: %d, waiters: %d }" fmt,				      \
-	       __tmp->cl_import->imp_obd->obd_name,			      \
-	       __tmp->cl_dirty, __tmp->cl_dirty_max,			      \
-	       cfs_atomic_read(&obd_dirty_pages), obd_max_dirty_pages,	      \
-	       cfs_atomic_read(&obd_unstable_pages), obd_max_dirty_pages,     \
-	       __tmp->cl_lost_grant, __tmp->cl_avail_grant,		      \
-	       __tmp->cl_reserved_grant, __tmp->cl_w_in_flight,		      \
-	       cfs_atomic_read(&__tmp->cl_lru_in_list),			      \
-	       cfs_atomic_read(&__tmp->cl_lru_busy),			      \
-	       cfs_atomic_read(&__tmp->cl_lru_shrinkers), ##args);	      \
+#define OSC_DUMP_GRANT(lvl, cli, fmt, args...) do {			\
+	struct client_obd *__tmp = (cli);				\
+	CDEBUG(lvl, "%s: grant { dirty: %ld/%ld dirty_pages: %d/%d "	\
+	       "unstable_pages: %d/%d dropped: %ld avail: %ld, "	\
+	       "reserved: %ld, flight: %d } lru {in list: %d, "		\
+	       "left: %d, waiters: %d }" fmt,				\
+	       __tmp->cl_import->imp_obd->obd_name,			\
+	       __tmp->cl_dirty, __tmp->cl_dirty_max,			\
+	       atomic_read(&obd_dirty_pages), obd_max_dirty_pages,	\
+	       atomic_read(&obd_unstable_pages), obd_max_dirty_pages,	\
+	       __tmp->cl_lost_grant, __tmp->cl_avail_grant,		\
+	       __tmp->cl_reserved_grant, __tmp->cl_w_in_flight,		\
+	       atomic_read(&__tmp->cl_lru_in_list),			\
+	       atomic_read(&__tmp->cl_lru_busy),			\
+	       atomic_read(&__tmp->cl_lru_shrinkers), ##args);		\
 } while (0)
 
 /* caller must hold loi_list_lock */
@@ -1339,7 +1339,7 @@ static void osc_consume_write_grant(struct client_obd *cli,
 {
 	LASSERT(spin_is_locked(&cli->cl_loi_list_lock.lock));
 	LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
-	cfs_atomic_inc(&obd_dirty_pages);
+	atomic_inc(&obd_dirty_pages);
 	cli->cl_dirty += PAGE_CACHE_SIZE;
 	pga->flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
@@ -1361,11 +1361,11 @@ static void osc_release_write_grant(struct client_obd *cli,
 	}
 
 	pga->flag &= ~OBD_BRW_FROM_GRANT;
-	cfs_atomic_dec(&obd_dirty_pages);
+	atomic_dec(&obd_dirty_pages);
 	cli->cl_dirty -= PAGE_CACHE_SIZE;
 	if (pga->flag & OBD_BRW_NOCACHE) {
 		pga->flag &= ~OBD_BRW_NOCACHE;
-		cfs_atomic_dec(&obd_dirty_transit_pages);
+		atomic_dec(&obd_dirty_transit_pages);
 		cli->cl_dirty_transit -= PAGE_CACHE_SIZE;
 	}
 	EXIT;
@@ -1434,7 +1434,7 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 	int grant = (1 << cli->cl_chunkbits) + cli->cl_extent_tax;
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
-	cfs_atomic_sub(nr_pages, &obd_dirty_pages);
+	atomic_sub(nr_pages, &obd_dirty_pages);
 	cli->cl_dirty -= nr_pages << PAGE_CACHE_SHIFT;
 	cli->cl_lost_grant += lost_grant;
 	if (cli->cl_avail_grant < grant && cli->cl_lost_grant >= grant) {
@@ -1478,12 +1478,12 @@ static int osc_enter_cache_try(struct client_obd *cli,
 		return 0;
 
 	if (cli->cl_dirty + PAGE_CACHE_SIZE <= cli->cl_dirty_max &&
-	    cfs_atomic_read(&obd_unstable_pages) + 1 +
-	    cfs_atomic_read(&obd_dirty_pages) <= obd_max_dirty_pages) {
+	    atomic_read(&obd_unstable_pages) + 1 +
+	    atomic_read(&obd_dirty_pages) <= obd_max_dirty_pages) {
 		osc_consume_write_grant(cli, &oap->oap_brw_page);
 		if (transient) {
 			cli->cl_dirty_transit += PAGE_CACHE_SIZE;
-			cfs_atomic_inc(&obd_dirty_transit_pages);
+			atomic_inc(&obd_dirty_transit_pages);
 			oap->oap_brw_flags |= OBD_BRW_NOCACHE;
 		}
 		rc = 1;
@@ -1612,8 +1612,8 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 		ocw->ocw_rc = -EDQUOT;
 		/* we can't dirty more */
 		if ((cli->cl_dirty + PAGE_CACHE_SIZE > cli->cl_dirty_max) ||
-		    (cfs_atomic_read(&obd_unstable_pages) + 1 +
-		     cfs_atomic_read(&obd_dirty_pages) > obd_max_dirty_pages)) {
+		    (atomic_read(&obd_unstable_pages) + 1 +
+		     atomic_read(&obd_dirty_pages) > obd_max_dirty_pages)) {
 			CDEBUG(D_CACHE, "no dirty room: dirty: %ld "
 			       "osc max %ld, sys max %d\n", cli->cl_dirty,
 			       cli->cl_dirty_max, obd_max_dirty_pages);
@@ -1657,7 +1657,7 @@ static int osc_makes_rpc(struct client_obd *cli, struct osc_object *osc,
 		invalid_import = 1;
 
 	if (cmd & OBD_BRW_WRITE) {
-		if (cfs_atomic_read(&osc->oo_nr_writes) == 0)
+		if (atomic_read(&osc->oo_nr_writes) == 0)
 			RETURN(0);
 		if (invalid_import) {
 			CDEBUG(D_CACHE, "invalid import forcing RPC\n");
@@ -1678,11 +1678,11 @@ static int osc_makes_rpc(struct client_obd *cli, struct osc_object *osc,
 			CDEBUG(D_CACHE, "cache waiters forcing RPC\n");
 			RETURN(1);
 		}
-		if (cfs_atomic_read(&osc->oo_nr_writes) >=
+		if (atomic_read(&osc->oo_nr_writes) >=
 		    cli->cl_max_pages_per_rpc)
 			RETURN(1);
 	} else {
-		if (cfs_atomic_read(&osc->oo_nr_reads) == 0)
+		if (atomic_read(&osc->oo_nr_reads) == 0)
 			RETURN(0);
 		if (invalid_import) {
 			CDEBUG(D_CACHE, "invalid import forcing RPC\n");
@@ -1700,13 +1700,13 @@ static void osc_update_pending(struct osc_object *obj, int cmd, int delta)
 {
 	struct client_obd *cli = osc_cli(obj);
 	if (cmd & OBD_BRW_WRITE) {
-		cfs_atomic_add(delta, &obj->oo_nr_writes);
-		cfs_atomic_add(delta, &cli->cl_pending_w_pages);
-		LASSERT(cfs_atomic_read(&obj->oo_nr_writes) >= 0);
+		atomic_add(delta, &obj->oo_nr_writes);
+		atomic_add(delta, &cli->cl_pending_w_pages);
+		LASSERT(atomic_read(&obj->oo_nr_writes) >= 0);
 	} else {
-		cfs_atomic_add(delta, &obj->oo_nr_reads);
-		cfs_atomic_add(delta, &cli->cl_pending_r_pages);
-		LASSERT(cfs_atomic_read(&obj->oo_nr_reads) >= 0);
+		atomic_add(delta, &obj->oo_nr_reads);
+		atomic_add(delta, &cli->cl_pending_r_pages);
+		LASSERT(atomic_read(&obj->oo_nr_reads) >= 0);
 	}
 	OSC_IO_DEBUG(obj, "update pending cmd %d delta %d.\n", cmd, delta);
 }
@@ -1740,10 +1740,10 @@ static int __osc_list_maint(struct client_obd *cli, struct osc_object *osc)
 	}
 
 	on_list(&osc->oo_write_item, &cli->cl_loi_write_list,
-		cfs_atomic_read(&osc->oo_nr_writes) > 0);
+		atomic_read(&osc->oo_nr_writes) > 0);
 
 	on_list(&osc->oo_read_item, &cli->cl_loi_read_list,
-		cfs_atomic_read(&osc->oo_nr_reads) > 0);
+		atomic_read(&osc->oo_nr_reads) > 0);
 
 	return osc_is_ready(osc);
 }
@@ -1802,14 +1802,14 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 	for (i = 0; i < page_count; i++)
 		dec_zone_page_state(desc->bd_iov[i].kiov_page, NR_UNSTABLE_NFS);
 
-	cfs_atomic_sub(page_count, &cli->cl_cache->ccc_unstable_nr);
-	LASSERT(cfs_atomic_read(&cli->cl_cache->ccc_unstable_nr) >= 0);
+	atomic_sub(page_count, &cli->cl_cache->ccc_unstable_nr);
+	LASSERT(atomic_read(&cli->cl_cache->ccc_unstable_nr) >= 0);
 
-	cfs_atomic_sub(page_count, &cli->cl_unstable_count);
-	LASSERT(cfs_atomic_read(&cli->cl_unstable_count) >= 0);
+	atomic_sub(page_count, &cli->cl_unstable_count);
+	LASSERT(atomic_read(&cli->cl_unstable_count) >= 0);
 
-	cfs_atomic_sub(page_count, &obd_unstable_pages);
-	LASSERT(cfs_atomic_read(&obd_unstable_pages) >= 0);
+	atomic_sub(page_count, &obd_unstable_pages);
+	LASSERT(atomic_read(&obd_unstable_pages) >= 0);
 
 	spin_lock(&req->rq_lock);
 	req->rq_committed = 1;
@@ -1836,14 +1836,14 @@ void osc_inc_unstable_pages(struct ptlrpc_request *req)
 	for (i = 0; i < page_count; i++)
 		inc_zone_page_state(desc->bd_iov[i].kiov_page, NR_UNSTABLE_NFS);
 
-	LASSERT(cfs_atomic_read(&cli->cl_cache->ccc_unstable_nr) >= 0);
-	cfs_atomic_add(page_count, &cli->cl_cache->ccc_unstable_nr);
+	LASSERT(atomic_read(&cli->cl_cache->ccc_unstable_nr) >= 0);
+	atomic_add(page_count, &cli->cl_cache->ccc_unstable_nr);
 
-	LASSERT(cfs_atomic_read(&cli->cl_unstable_count) >= 0);
-	cfs_atomic_add(page_count, &cli->cl_unstable_count);
+	LASSERT(atomic_read(&cli->cl_unstable_count) >= 0);
+	atomic_add(page_count, &cli->cl_unstable_count);
 
-	LASSERT(cfs_atomic_read(&obd_unstable_pages) >= 0);
-	cfs_atomic_add(page_count, &obd_unstable_pages);
+	LASSERT(atomic_read(&obd_unstable_pages) >= 0);
+	atomic_add(page_count, &obd_unstable_pages);
 
 	spin_lock(&req->rq_lock);
 
@@ -2255,11 +2255,11 @@ static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 	if (!async) {
 		/* disable osc_lru_shrink() temporarily to avoid
 		 * potential stack overrun problem. LU-2859 */
-		cfs_atomic_inc(&cli->cl_lru_shrinkers);
+		atomic_inc(&cli->cl_lru_shrinkers);
 		client_obd_list_lock(&cli->cl_loi_list_lock);
 		osc_check_rpcs(env, cli, pol);
 		client_obd_list_unlock(&cli->cl_loi_list_lock);
-		cfs_atomic_dec(&cli->cl_lru_shrinkers);
+		atomic_dec(&cli->cl_lru_shrinkers);
 	} else {
 		CDEBUG(D_CACHE, "Queue writeback work for client %p.\n", cli);
 		LASSERT(cli->cl_writeback_work != NULL);

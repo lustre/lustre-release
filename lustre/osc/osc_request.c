@@ -695,19 +695,19 @@ static int osc_destroy_interpret(const struct lu_env *env,
 {
 	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
 
-	cfs_atomic_dec(&cli->cl_destroy_in_flight);
+	atomic_dec(&cli->cl_destroy_in_flight);
 	wake_up(&cli->cl_destroy_waitq);
 	return 0;
 }
 
 static int osc_can_send_destroy(struct client_obd *cli)
 {
-	if (cfs_atomic_inc_return(&cli->cl_destroy_in_flight) <=
+	if (atomic_inc_return(&cli->cl_destroy_in_flight) <=
 	    cli->cl_max_rpcs_in_flight) {
 		/* The destroy request can be sent */
 		return 1;
 	}
-	if (cfs_atomic_dec_return(&cli->cl_destroy_in_flight) <
+	if (atomic_dec_return(&cli->cl_destroy_in_flight) <
 	    cli->cl_max_rpcs_in_flight) {
 		/*
 		 * The counter has been modified between the two atomic
@@ -838,18 +838,18 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		CERROR("dirty %lu - %lu > dirty_max %lu\n",
 		       cli->cl_dirty, cli->cl_dirty_transit, cli->cl_dirty_max);
 		oa->o_undirty = 0;
-	} else if (unlikely(cfs_atomic_read(&obd_unstable_pages) +
-			    cfs_atomic_read(&obd_dirty_pages) -
-			    cfs_atomic_read(&obd_dirty_transit_pages) >
+	} else if (unlikely(atomic_read(&obd_unstable_pages) +
+			    atomic_read(&obd_dirty_pages) -
+			    atomic_read(&obd_dirty_transit_pages) >
 			    (long)(obd_max_dirty_pages + 1))) {
-		/* The cfs_atomic_read() allowing the cfs_atomic_inc() are
+		/* The atomic_read() allowing the atomic_inc() are
 		 * not covered by a lock thus they may safely race and trip
 		 * this CERROR() unless we add in a small fudge factor (+1). */
 		CERROR("%s: dirty %d + %d - %d > system dirty_max %d\n",
 		       cli->cl_import->imp_obd->obd_name,
-		       cfs_atomic_read(&obd_unstable_pages),
-		       cfs_atomic_read(&obd_dirty_pages),
-		       cfs_atomic_read(&obd_dirty_transit_pages),
+		       atomic_read(&obd_unstable_pages),
+		       atomic_read(&obd_dirty_pages),
+		       atomic_read(&obd_dirty_transit_pages),
 		       obd_max_dirty_pages);
 		oa->o_undirty = 0;
 	} else if (unlikely(cli->cl_dirty_max - cli->cl_dirty > 0x7fffffff)) {
@@ -3234,7 +3234,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 		LASSERT(cli->cl_cache == NULL); /* only once */
 		cli->cl_cache = (struct cl_client_cache *)val;
-		cfs_atomic_inc(&cli->cl_cache->ccc_users);
+		atomic_inc(&cli->cl_cache->ccc_users);
 		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
 
 		/* add this osc into entity list */
@@ -3248,7 +3248,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	if (KEY_IS(KEY_CACHE_LRU_SHRINK)) {
 		struct client_obd *cli = &obd->u.cli;
-		int nr = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
+		int nr = atomic_read(&cli->cl_lru_in_list) >> 1;
 		int target = *(int *)val;
 
 		nr = osc_lru_shrink(env, cli, min(nr, target), true);
@@ -3647,12 +3647,12 @@ int osc_cleanup(struct obd_device *obd)
 
 	/* lru cleanup */
 	if (cli->cl_cache != NULL) {
-		LASSERT(cfs_atomic_read(&cli->cl_cache->ccc_users) > 0);
+		LASSERT(atomic_read(&cli->cl_cache->ccc_users) > 0);
 		spin_lock(&cli->cl_cache->ccc_lru_lock);
 		cfs_list_del_init(&cli->cl_lru_osc);
 		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 		cli->cl_lru_left = NULL;
-		cfs_atomic_dec(&cli->cl_cache->ccc_users);
+		atomic_dec(&cli->cl_cache->ccc_users);
 		cli->cl_cache = NULL;
 	}
 

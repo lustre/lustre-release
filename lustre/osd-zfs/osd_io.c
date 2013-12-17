@@ -218,17 +218,17 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			/* this is anonymous page allocated for copy-write */
 			lnb[i].page->mapping = NULL;
 			__free_page(lnb[i].page);
-			cfs_atomic_dec(&osd->od_zerocopy_alloc);
+			atomic_dec(&osd->od_zerocopy_alloc);
 		} else {
 			/* see comment in osd_bufs_get_read() */
 			ptr = (unsigned long)lnb[i].dentry;
 			if (ptr & 1UL) {
 				ptr &= ~1UL;
 				dmu_buf_rele((void *)ptr, osd_zerocopy_tag);
-				cfs_atomic_dec(&osd->od_zerocopy_pin);
+				atomic_dec(&osd->od_zerocopy_pin);
 			} else if (lnb[i].dentry != NULL) {
 				dmu_return_arcbuf((void *)lnb[i].dentry);
-				cfs_atomic_dec(&osd->od_zerocopy_loan);
+				atomic_dec(&osd->od_zerocopy_loan);
 			}
 		}
 		lnb[i].page = NULL;
@@ -274,7 +274,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 
 			LASSERT(len > 0);
 
-			cfs_atomic_inc(&osd->od_zerocopy_pin);
+			atomic_inc(&osd->od_zerocopy_pin);
 
 			bufoff = off - dbp[i]->db_offset;
 			tocpy = min_t(int, dbp[i]->db_size - bufoff, len);
@@ -353,7 +353,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			if (unlikely(abuf == NULL))
 				GOTO(out_err, rc = -ENOMEM);
 
-			cfs_atomic_inc(&osd->od_zerocopy_loan);
+			atomic_inc(&osd->od_zerocopy_loan);
 
 			/* go over pages arcbuf contains, put them as
 			 * local niobufs for ptlrpc's bulks */
@@ -407,7 +407,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 				LASSERT(lnb[i].page->mapping == NULL);
 				lnb[i].page->mapping = (void *)obj;
 
-				cfs_atomic_inc(&osd->od_zerocopy_alloc);
+				atomic_inc(&osd->od_zerocopy_alloc);
 				lprocfs_counter_add(osd->od_stats,
 						LPROC_OSD_COPY_IO, 1);
 
@@ -680,7 +680,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			/* drop the reference, otherwise osd_put_bufs()
 			 * will be releasing it - bad! */
 			lnb[i].dentry = NULL;
-			cfs_atomic_dec(&osd->od_zerocopy_loan);
+			atomic_dec(&osd->od_zerocopy_loan);
 		}
 
 		if (new_size < lnb[i].lnb_file_offset + lnb[i].len)

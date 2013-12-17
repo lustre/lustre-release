@@ -604,15 +604,15 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
 
-	if (cfs_atomic_read(&o->od_zerocopy_alloc))
+	if (atomic_read(&o->od_zerocopy_alloc))
 		CERROR("%s: lost %d allocated page(s)\n", o->od_svname,
-		       cfs_atomic_read(&o->od_zerocopy_alloc));
-	if (cfs_atomic_read(&o->od_zerocopy_loan))
+		       atomic_read(&o->od_zerocopy_alloc));
+	if (atomic_read(&o->od_zerocopy_loan))
 		CERROR("%s: lost %d loaned abuf(s)\n", o->od_svname,
-		       cfs_atomic_read(&o->od_zerocopy_loan));
-	if (cfs_atomic_read(&o->od_zerocopy_pin))
+		       atomic_read(&o->od_zerocopy_loan));
+	if (atomic_read(&o->od_zerocopy_pin))
 		CERROR("%s: lost %d pinned dbuf(s)\n", o->od_svname,
-		       cfs_atomic_read(&o->od_zerocopy_pin));
+		       atomic_read(&o->od_zerocopy_pin));
 
 	if (o->od_objset.os != NULL)
 		udmu_objset_close(&o->od_objset);

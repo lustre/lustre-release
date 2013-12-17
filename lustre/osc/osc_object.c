@@ -95,8 +95,8 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 	CFS_INIT_LIST_HEAD(&osc->oo_urgent_exts);
 	CFS_INIT_LIST_HEAD(&osc->oo_rpc_exts);
 	CFS_INIT_LIST_HEAD(&osc->oo_reading_exts);
-	cfs_atomic_set(&osc->oo_nr_reads, 0);
-	cfs_atomic_set(&osc->oo_nr_writes, 0);
+	atomic_set(&osc->oo_nr_reads, 0);
+	atomic_set(&osc->oo_nr_writes, 0);
 	spin_lock_init(&osc->oo_lock);
 	spin_lock_init(&osc->oo_tree_lock);
 
@@ -123,8 +123,8 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	LASSERT(cfs_list_empty(&osc->oo_urgent_exts));
 	LASSERT(cfs_list_empty(&osc->oo_rpc_exts));
 	LASSERT(cfs_list_empty(&osc->oo_reading_exts));
-	LASSERT(cfs_atomic_read(&osc->oo_nr_reads) == 0);
-	LASSERT(cfs_atomic_read(&osc->oo_nr_writes) == 0);
+	LASSERT(atomic_read(&osc->oo_nr_reads) == 0);
+	LASSERT(atomic_read(&osc->oo_nr_writes) == 0);
 
 	lu_object_fini(obj);
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
