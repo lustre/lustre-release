@@ -190,14 +190,13 @@ static int mdc_getattr_common(struct obd_export *exp,
 
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
-        if (body->eadatasize != 0) {
-                mdc_update_max_ea_from_body(exp, body);
-
-                eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
-                                                      body->eadatasize);
-                if (eadata == NULL)
-                        RETURN(-EPROTO);
-        }
+	mdc_update_max_ea_from_body(exp, body);
+	if (body->eadatasize != 0) {
+		eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
+						      body->eadatasize);
+		if (eadata == NULL)
+			RETURN(-EPROTO);
+	}
 
         if (body->valid & OBD_MD_FLRMTPERM) {
                 struct mdt_remote_perm *perm;
