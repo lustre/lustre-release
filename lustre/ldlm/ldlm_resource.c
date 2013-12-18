@@ -66,9 +66,9 @@ CFS_LIST_HEAD(ldlm_cli_active_namespace_list);
 /* Client namespaces that don't have any locks in them */
 CFS_LIST_HEAD(ldlm_cli_inactive_namespace_list);
 
-cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
-cfs_proc_dir_entry_t *ldlm_ns_proc_dir = NULL;
-cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
+struct proc_dir_entry *ldlm_type_proc_dir = NULL;
+struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
+struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
 
 extern unsigned int ldlm_cancel_unused_locks_before_replay;
 
@@ -77,57 +77,64 @@ extern unsigned int ldlm_cancel_unused_locks_before_replay;
 unsigned int ldlm_dump_granted_max = 256;
 
 #ifdef LPROCFS
-static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
-                             unsigned long count, void *data)
+static ssize_t
+lprocfs_dump_ns_seq_write(struct file *file, const char *buffer,
+			  size_t count, loff_t *off)
 {
-        ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
-        ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
-        RETURN(count);
+	ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
+	ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
+	RETURN(count);
 }
+LPROC_SEQ_FOPS_WO_TYPE(ldlm, dump_ns);
+
+LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
+LPROC_SEQ_FOPS_RO_TYPE(ldlm, uint);
 
 int ldlm_proc_setup(void)
 {
-        int rc;
-        struct lprocfs_vars list[] = {
-                { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
-                { "dump_granted_max",
-                  lprocfs_rd_uint, lprocfs_wr_uint,
-                  &ldlm_dump_granted_max, NULL },
-                { "cancel_unused_locks_before_replay",
-                  lprocfs_rd_uint, lprocfs_wr_uint,
-                  &ldlm_cancel_unused_locks_before_replay, NULL },
-                { NULL }};
-        ENTRY;
-        LASSERT(ldlm_ns_proc_dir == NULL);
+	int rc;
+	struct lprocfs_seq_vars list[] = {
+		{ .name	=	"dump_namespaces",
+		  .fops	=	&ldlm_dump_ns_fops,
+		  .proc_mode =	0222 },
+		{ .name	=	"dump_granted_max",
+		  .fops	=	&ldlm_rw_uint_fops,
+		  .data	=	&ldlm_dump_granted_max },
+		{ .name	=	"cancel_unused_locks_before_replay",
+		  .fops	=	&ldlm_rw_uint_fops,
+		  .data	=	&ldlm_cancel_unused_locks_before_replay },
+		{ NULL }};
+	ENTRY;
+	LASSERT(ldlm_ns_proc_dir == NULL);
 
-        ldlm_type_proc_dir = lprocfs_register(OBD_LDLM_DEVICENAME,
-                                              proc_lustre_root,
-                                              NULL, NULL);
-        if (IS_ERR(ldlm_type_proc_dir)) {
-                CERROR("LProcFS failed in ldlm-init\n");
-                rc = PTR_ERR(ldlm_type_proc_dir);
-                GOTO(err, rc);
-        }
+	ldlm_type_proc_dir = lprocfs_seq_register(OBD_LDLM_DEVICENAME,
+							proc_lustre_root,
+							NULL, NULL);
+	if (IS_ERR(ldlm_type_proc_dir)) {
+		CERROR("LProcFS failed in ldlm-init\n");
+		rc = PTR_ERR(ldlm_type_proc_dir);
+		GOTO(err, rc);
+	}
 
-        ldlm_ns_proc_dir = lprocfs_register("namespaces",
-                                            ldlm_type_proc_dir,
-                                            NULL, NULL);
-        if (IS_ERR(ldlm_ns_proc_dir)) {
-                CERROR("LProcFS failed in ldlm-init\n");
-                rc = PTR_ERR(ldlm_ns_proc_dir);
-                GOTO(err_type, rc);
-        }
+	ldlm_ns_proc_dir = lprocfs_seq_register("namespaces",
+						ldlm_type_proc_dir,
+						NULL, NULL);
+	if (IS_ERR(ldlm_ns_proc_dir)) {
+		CERROR("LProcFS failed in ldlm-init\n");
+		rc = PTR_ERR(ldlm_ns_proc_dir);
+		GOTO(err_type, rc);
+	}
 
-        ldlm_svc_proc_dir = lprocfs_register("services",
-                                            ldlm_type_proc_dir,
-                                            NULL, NULL);
-        if (IS_ERR(ldlm_svc_proc_dir)) {
-                CERROR("LProcFS failed in ldlm-init\n");
-                rc = PTR_ERR(ldlm_svc_proc_dir);
-                GOTO(err_ns, rc);
-        }
+	ldlm_svc_proc_dir = lprocfs_seq_register("services",
+						ldlm_type_proc_dir,
+						NULL, NULL);
+	if (IS_ERR(ldlm_svc_proc_dir)) {
+		CERROR("LProcFS failed in ldlm-init\n");
+		rc = PTR_ERR(ldlm_svc_proc_dir);
+		GOTO(err_ns, rc);
+	}
 
-	rc = lprocfs_add_vars(ldlm_type_proc_dir, list, NULL);
+	rc = lprocfs_seq_add_vars(ldlm_type_proc_dir, list, NULL);
 	if (rc != 0) {
 		CERROR("LProcFS failed in ldlm-init\n");
 		GOTO(err_svc, rc);
@@ -158,46 +165,45 @@ void ldlm_proc_cleanup(void)
                 lprocfs_remove(&ldlm_type_proc_dir);
 }
 
-static int lprocfs_rd_ns_resources(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data)
+static int lprocfs_ns_resources_seq_show(struct seq_file *m, void *v)
 {
-        struct ldlm_namespace *ns  = data;
-        __u64                  res = 0;
-        cfs_hash_bd_t          bd;
-        int                    i;
+	struct ldlm_namespace	*ns  = m->private;
+	__u64			res = 0;
+	cfs_hash_bd_t		bd;
+	int			i;
 
-        /* result is not strictly consistant */
-        cfs_hash_for_each_bucket(ns->ns_rs_hash, &bd, i)
-                res += cfs_hash_bd_count_get(&bd);
-        return lprocfs_rd_u64(page, start, off, count, eof, &res);
+	/* result is not strictly consistant */
+	cfs_hash_for_each_bucket(ns->ns_rs_hash, &bd, i)
+		res += cfs_hash_bd_count_get(&bd);
+	return lprocfs_u64_seq_show(m, &res);
+}
+LPROC_SEQ_FOPS_RO(lprocfs_ns_resources);
+
+static int lprocfs_ns_locks_seq_show(struct seq_file *m, void *v)
+{
+	struct ldlm_namespace	*ns = m->private;
+	__u64			locks;
+
+	locks = lprocfs_stats_collector(ns->ns_stats, LDLM_NSS_LOCKS,
+					LPROCFS_FIELDS_FLAGS_SUM);
+	return lprocfs_u64_seq_show(m, &locks);
+}
+LPROC_SEQ_FOPS_RO(lprocfs_ns_locks);
+
+static int lprocfs_lru_size_seq_show(struct seq_file *m, void *v)
+{
+	struct ldlm_namespace *ns = m->private;
+	__u32 *nr = &ns->ns_max_unused;
+
+	if (ns_connect_lru_resize(ns))
+		nr = &ns->ns_nr_unused;
+	return lprocfs_uint_seq_show(m, nr);
 }
 
-static int lprocfs_rd_ns_locks(char *page, char **start, off_t off,
-                               int count, int *eof, void *data)
+static ssize_t lprocfs_lru_size_seq_write(struct file *file, const char *buffer,
+					  size_t count, loff_t *off)
 {
-        struct ldlm_namespace *ns = data;
-        __u64                  locks;
-
-        locks = lprocfs_stats_collector(ns->ns_stats, LDLM_NSS_LOCKS,
-                                        LPROCFS_FIELDS_FLAGS_SUM);
-        return lprocfs_rd_u64(page, start, off, count, eof, &locks);
-}
-
-static int lprocfs_rd_lru_size(char *page, char **start, off_t off,
-                               int count, int *eof, void *data)
-{
-        struct ldlm_namespace *ns = data;
-        __u32 *nr = &ns->ns_max_unused;
-
-        if (ns_connect_lru_resize(ns))
-                nr = &ns->ns_nr_unused;
-        return lprocfs_rd_uint(page, start, off, count, eof, nr);
-}
-
-static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
-                               unsigned long count, void *data)
-{
-        struct ldlm_namespace *ns = data;
+	struct ldlm_namespace *ns = ((struct seq_file *)file->private_data)->private;
         char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
         int lru_resize;
@@ -280,20 +286,20 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
 
         return count;
 }
+LPROC_SEQ_FOPS(lprocfs_lru_size);
 
-static int lprocfs_rd_elc(char *page, char **start, off_t off,
-			  int count, int *eof, void *data)
+static int lprocfs_elc_seq_show(struct seq_file *m, void *v)
 {
-	struct ldlm_namespace *ns = data;
+	struct ldlm_namespace *ns = m->private;
 	unsigned int supp = ns_connect_cancelset(ns);
 
-	return lprocfs_rd_uint(page, start, off, count, eof, &supp);
+	return lprocfs_uint_seq_show(m, &supp);
 }
 
-static int lprocfs_wr_elc(struct file *file, const char *buffer,
-			       unsigned long count, void *data)
+static ssize_t lprocfs_elc_seq_write(struct file *file, const char *buffer,
+				     size_t count, loff_t *off)
 {
-	struct ldlm_namespace *ns = data;
+	struct ldlm_namespace *ns = ((struct seq_file *)file->private_data)->private;
 	unsigned int supp = -1;
 	int rc;
 
@@ -307,30 +313,37 @@ static int lprocfs_wr_elc(struct file *file, const char *buffer,
 		ns->ns_connect_flags |= OBD_CONNECT_CANCELSET;
 	return count;
 }
+LPROC_SEQ_FOPS(lprocfs_elc);
 
 void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
 {
-        struct proc_dir_entry *dir;
-
-        dir = lprocfs_srch(ldlm_ns_proc_dir, ldlm_ns_name(ns));
-        if (dir == NULL) {
+	if (ns->ns_proc_dir_entry == NULL)
                 CERROR("dlm namespace %s has no procfs dir?\n",
                        ldlm_ns_name(ns));
-        } else {
-                lprocfs_remove(&dir);
-        }
+	else
+		lprocfs_remove(&ns->ns_proc_dir_entry);
 
-        if (ns->ns_stats != NULL)
-                lprocfs_free_stats(&ns->ns_stats);
+	if (ns->ns_stats != NULL)
+		lprocfs_free_stats(&ns->ns_stats);
 }
 
 int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 {
-        struct lprocfs_vars lock_vars[2];
+	struct lprocfs_seq_vars lock_vars[2];
         char lock_name[MAX_STRING_SIZE + 1];
+	struct proc_dir_entry *ns_pde;
 
         LASSERT(ns != NULL);
         LASSERT(ns->ns_rs_hash != NULL);
+
+	if (ns->ns_proc_dir_entry != NULL) {
+		ns_pde = ns->ns_proc_dir_entry;
+	} else {
+		ns_pde = proc_mkdir(ldlm_ns_name(ns), ldlm_ns_proc_dir);
+		if (ns_pde == NULL)
+			return -ENOMEM;
+		ns->ns_proc_dir_entry = ns_pde;
+	}
 
         ns->ns_stats = lprocfs_alloc_stats(LDLM_NSS_LAST, 0);
         if (ns->ns_stats == NULL)
@@ -344,88 +357,35 @@ int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
         memset(lock_vars, 0, sizeof(lock_vars));
         lock_vars[0].name = lock_name;
 
-        snprintf(lock_name, MAX_STRING_SIZE, "%s/resource_count",
-                 ldlm_ns_name(ns));
-        lock_vars[0].data = ns;
-        lock_vars[0].read_fptr = lprocfs_rd_ns_resources;
-        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+	ldlm_add_var(&lock_vars[0], ns_pde, "resource_count", ns,
+		     &lprocfs_ns_resources_fops);
+	ldlm_add_var(&lock_vars[0], ns_pde, "lock_count", ns,
+		     &lprocfs_ns_locks_fops);
 
-        snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count",
-                 ldlm_ns_name(ns));
-        lock_vars[0].data = ns;
-        lock_vars[0].read_fptr = lprocfs_rd_ns_locks;
-        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-        if (ns_is_client(ns)) {
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_unused_count",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_nr_unused;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_size",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = ns;
-                lock_vars[0].read_fptr = lprocfs_rd_lru_size;
-                lock_vars[0].write_fptr = lprocfs_wr_lru_size;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_max_age",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_max_age;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-		snprintf(lock_name, MAX_STRING_SIZE, "%s/early_lock_cancel",
-			 ldlm_ns_name(ns));
-		lock_vars[0].data = ns;
-		lock_vars[0].read_fptr = lprocfs_rd_elc;
-		lock_vars[0].write_fptr = lprocfs_wr_elc;
-		lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-        } else {
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/ctime_age_limit",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_ctime_age_limit;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_timeouts",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_timeouts;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/max_nolock_bytes",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_max_nolock_size;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/contention_seconds",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_contention_time;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/contended_locks",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_contended_locks;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-
-                snprintf(lock_name, MAX_STRING_SIZE, "%s/max_parallel_ast",
-                         ldlm_ns_name(ns));
-                lock_vars[0].data = &ns->ns_max_parallel_ast;
-                lock_vars[0].read_fptr = lprocfs_rd_uint;
-                lock_vars[0].write_fptr = lprocfs_wr_uint;
-                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
-        }
-        return 0;
+	if (ns_is_client(ns)) {
+		ldlm_add_var(&lock_vars[0], ns_pde, "lock_unused_count",
+			     &ns->ns_nr_unused, &ldlm_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "lru_size", ns,
+			     &lprocfs_lru_size_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "lru_max_age",
+			     &ns->ns_max_age, &ldlm_rw_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "early_lock_cancel",
+			     ns, &lprocfs_elc_fops);
+	} else {
+		ldlm_add_var(&lock_vars[0], ns_pde, "ctime_age_limit",
+			     &ns->ns_ctime_age_limit, &ldlm_rw_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "lock_timeouts",
+			     &ns->ns_timeouts, &ldlm_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "max_nolock_bytes",
+			     &ns->ns_max_nolock_size, &ldlm_rw_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "contention_seconds",
+			     &ns->ns_contention_time, &ldlm_rw_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "contended_locks",
+			     &ns->ns_contended_locks, &ldlm_rw_uint_fops);
+		ldlm_add_var(&lock_vars[0], ns_pde, "max_parallel_ast",
+			     &ns->ns_max_parallel_ast, &ldlm_rw_uint_fops);
+	}
+	return 0;
 }
 #undef MAX_STRING_SIZE
 #else /* LPROCFS */

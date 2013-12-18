@@ -243,7 +243,7 @@ struct ldlm_pool_ops {
  */
 struct ldlm_pool {
 	/** Pool proc directory. */
-	cfs_proc_dir_entry_t	*pl_proc_dir;
+	struct proc_dir_entry	*pl_proc_dir;
 	/** Pool name, must be long enough to hold compound proc entry name. */
 	char			pl_name[100];
 	/** Lock for protecting SLV/CLV updates. */
@@ -399,6 +399,9 @@ struct ldlm_namespace {
 
 	/** Client side original connect flags supported by server. */
 	__u64			ns_orig_connect_flags;
+
+	/* namespace proc dir entry */
+	struct proc_dir_entry	*ns_proc_dir_entry;
 
 	/**
 	 * Position in global namespace list linking all namespaces on

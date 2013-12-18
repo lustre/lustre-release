@@ -212,8 +212,8 @@ void ldlm_destroy_flock_export(struct obd_export *exp);
 void l_check_ns_lock(struct ldlm_namespace *ns);
 void l_check_no_ns_lock(struct ldlm_namespace *ns);
 
-extern cfs_proc_dir_entry_t *ldlm_svc_proc_dir;
-extern cfs_proc_dir_entry_t *ldlm_type_proc_dir;
+extern struct proc_dir_entry *ldlm_svc_proc_dir;
+extern struct proc_dir_entry *ldlm_type_proc_dir;
 
 struct ldlm_state {
         struct ptlrpc_service *ldlm_cb_service;
@@ -252,42 +252,51 @@ enum ldlm_policy_res {
 
 typedef enum ldlm_policy_res ldlm_policy_res_t;
 
-#define LDLM_POOL_PROC_READER(var, type)                                    \
-        static int lprocfs_rd_##var(char *page, char **start, off_t off,    \
-                                    int count, int *eof, void *data)        \
-        {                                                                   \
-                struct ldlm_pool *pl = data;                                \
-                type tmp;                                                   \
-                                                                            \
-		spin_lock(&pl->pl_lock);				    \
-		tmp = pl->pl_##var;					    \
-		spin_unlock(&pl->pl_lock);				    \
-                                                                            \
-                return lprocfs_rd_uint(page, start, off, count, eof, &tmp); \
-        }                                                                   \
-        struct __##var##__dummy_read {;} /* semicolon catcher */
+#define LDLM_POOL_PROC_READER_SEQ_SHOW(var, type)			\
+	static int lprocfs_##var##_seq_show(struct seq_file *m, void *v)\
+	{								\
+		struct ldlm_pool *pl = m->private;			\
+		type tmp;						\
+									\
+		spin_lock(&pl->pl_lock);				\
+		tmp = pl->pl_##var;					\
+		spin_unlock(&pl->pl_lock);				\
+									\
+		return lprocfs_uint_seq_show(m, &tmp);			\
+	}								\
+	struct __##var##__dummy_read {;} /* semicolon catcher */
 
-#define LDLM_POOL_PROC_WRITER(var, type)                                    \
-        int lprocfs_wr_##var(struct file *file, const char *buffer,         \
-                             unsigned long count, void *data)               \
-        {                                                                   \
-                struct ldlm_pool *pl = data;                                \
-                type tmp;                                                   \
-                int rc;                                                     \
-                                                                            \
-                rc = lprocfs_wr_uint(file, buffer, count, &tmp);            \
-                if (rc < 0) {                                               \
-                        CERROR("Can't parse user input, rc = %d\n", rc);    \
-                        return rc;                                          \
-                }                                                           \
-                                                                            \
-		spin_lock(&pl->pl_lock);				    \
-		pl->pl_##var = tmp;					    \
-		spin_unlock(&pl->pl_lock);				    \
-                                                                            \
-                return rc;                                                  \
-        }                                                                   \
-        struct __##var##__dummy_write {;} /* semicolon catcher */
+#define LDLM_POOL_PROC_WRITER(var, type)				\
+	int lprocfs_wr_##var(struct file *file, const char *buffer,	\
+			     unsigned long count, void *data)		\
+	{								\
+		struct ldlm_pool *pl = data;				\
+		type tmp;						\
+		int rc;							\
+									\
+		rc = lprocfs_wr_uint(file, buffer, count, &tmp);	\
+		if (rc < 0) {						\
+			CERROR("Can't parse user input, rc = %d\n", rc);\
+			return rc;					\
+		}							\
+									\
+		spin_lock(&pl->pl_lock);				\
+		pl->pl_##var = tmp;					\
+		spin_unlock(&pl->pl_lock);				\
+									\
+		return rc;						\
+	}								\
+	struct __##var##__dummy_write {;} /* semicolon catcher */
+
+static inline void
+ldlm_add_var(struct lprocfs_seq_vars *vars, struct proc_dir_entry *proc_dir,
+	     const char *name, void *data, const struct file_operations *ops)
+{
+	snprintf((char *)vars->name, MAX_STRING_SIZE, "%s", name);
+	vars->data = data;
+	vars->fops = ops;
+	lprocfs_seq_add_vars(proc_dir, vars, 0);
+}
 
 static inline int is_granted_or_cancelled(struct ldlm_lock *lock)
 {
