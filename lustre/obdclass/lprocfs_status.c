@@ -901,7 +901,7 @@ static int obd_import_flags2seqstr(struct obd_import *imp, struct seq_file *m)
 static const char *obd_connect_names[] = {
 	"read_only",
 	"lov_index",
-	"unused",
+	"connect_from_mds",
 	"write_grant",
 	"server_lock",
 	"version",
@@ -992,6 +992,56 @@ int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep)
 }
 EXPORT_SYMBOL(obd_connect_flags2str);
 
+static void obd_connect_data_seqprint(struct seq_file *m,
+				      struct obd_connect_data *ocd)
+{
+	int flags;
+
+	LASSERT(ocd != NULL);
+	flags = ocd->ocd_connect_flags;
+
+	seq_printf(m, "    connect_data:\n"
+		      "       flags: "LPX64"\n"
+		      "       instance: %u\n",
+		      ocd->ocd_connect_flags,
+		      ocd->ocd_instance);
+	if (flags & OBD_CONNECT_VERSION)
+		seq_printf(m, "       target_version: %u.%u.%u.%u\n",
+			      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+			      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+			      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+			      OBD_OCD_VERSION_FIX(ocd->ocd_version));
+	if (flags & OBD_CONNECT_MDS)
+		seq_printf(m, "       mdt_index: %d\n", ocd->ocd_group);
+	if (flags & OBD_CONNECT_GRANT)
+		seq_printf(m, "       initial_grant: %d\n", ocd->ocd_grant);
+	if (flags & OBD_CONNECT_INDEX)
+		seq_printf(m, "       target_index: %u\n", ocd->ocd_index);
+	if (flags & OBD_CONNECT_BRW_SIZE)
+		seq_printf(m, "       max_brw_size: %d\n", ocd->ocd_brw_size);
+	if (flags & OBD_CONNECT_IBITS)
+		seq_printf(m, "       ibits_known: "LPX64"\n",
+				ocd->ocd_ibits_known);
+	if (flags & OBD_CONNECT_GRANT_PARAM)
+		seq_printf(m, "       grant_block_size: %d\n"
+			      "       grant_inode_size: %d\n"
+			      "       grant_extent_overhead: %d\n",
+			      ocd->ocd_blocksize,
+			      ocd->ocd_inodespace,
+			      ocd->ocd_grant_extent);
+	if (flags & OBD_CONNECT_TRANSNO)
+		seq_printf(m, "       first_transno: "LPX64"\n",
+				ocd->ocd_transno);
+	if (flags & OBD_CONNECT_CKSUM)
+		seq_printf(m, "       cksum_types: %#x\n",
+			      ocd->ocd_cksum_types);
+	if (flags & OBD_CONNECT_MAX_EASIZE)
+		seq_printf(m, "       max_easize: %d\n", ocd->ocd_max_easize);
+	if (flags & OBD_CONNECT_MAXBYTES)
+		seq_printf(m, "       max_object_bytes: "LPU64"\n",
+			      ocd->ocd_maxbytes);
+}
+
 int lprocfs_import_seq_show(struct seq_file *m, void *data)
 {
 	struct lprocfs_counter          ret;
@@ -999,6 +1049,7 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 	struct obd_device               *obd    = (struct obd_device *)data;
 	struct obd_import               *imp;
 	struct obd_import_conn          *conn;
+	struct obd_connect_data		*ocd;
 	int                             j;
 	int                             k;
 	int                             rw      = 0;
@@ -1006,21 +1057,21 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 	LASSERT(obd != NULL);
 	LPROCFS_CLIMP_CHECK(obd);
 	imp = obd->u.cli.cl_import;
+	ocd = &imp->imp_connect_data;
 
-	seq_printf(m,"import:\n"
-		     "    name: %s\n"
-		     "    target: %s\n"
-		     "    state: %s\n"
-		     "    instance: %u\n"
-		     "    connect_flags: [",
-		     obd->obd_name,
-		     obd2cli_tgt(obd),
-		     ptlrpc_import_state_name(imp->imp_state),
-		     imp->imp_connect_data.ocd_instance);
+	seq_printf(m, "import:\n"
+		      "    name: %s\n"
+		      "    target: %s\n"
+		      "    state: %s\n"
+		      "    connect_flags: [",
+		      obd->obd_name,
+		      obd2cli_tgt(obd),
+		      ptlrpc_import_state_name(imp->imp_state));
 	obd_connect_seq_flags2str(m, imp->imp_connect_data.ocd_connect_flags,
 					", ");
-	seq_printf(m, "]\n"
-		      "    import_flags: [");
+	seq_printf(m, "]\n");
+	obd_connect_data_seqprint(m, ocd);
+	seq_printf(m, "    import_flags: [");
 	obd_import_flags2seqstr(imp, m);
 
 	seq_printf(m, "]\n"
