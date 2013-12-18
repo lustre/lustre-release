@@ -1711,16 +1711,17 @@ struct ll_stat_type {
 static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
 		int cooked, int lazy)
 {
-        struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
-        struct obd_uuid uuid_buf;
-        char *poolname = NULL;
-        struct ll_stat_type types[] = { { LL_STATFS_LMV, "MDT" },
-                                        { LL_STATFS_LOV, "OST" },
-                                        { 0, NULL } };
-        struct ll_stat_type *tp;
-        __u32 index;
-        __u32 type;
-        int rc;
+	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
+	struct obd_uuid uuid_buf;
+	char *poolname = NULL;
+	struct ll_stat_type types[] = { { LL_STATFS_LMV, "MDT" },
+					{ LL_STATFS_LOV, "OST" },
+					{ 0, NULL } };
+	struct ll_stat_type *tp;
+	__u64 ost_ffree = 0;
+	__u32 index;
+	__u32 type;
+	int rc;
 
         if (pool) {
                 poolname = strchr(pool, '.');
@@ -1774,23 +1775,32 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
                                         sum.os_ffree += stat_buf.os_ffree;
                                         sum.os_files += stat_buf.os_files;
                                 } else /* if (tp->st_op == LL_STATFS_LOV) */ {
-                                        sum.os_blocks += stat_buf.os_blocks *
-                                                stat_buf.os_bsize;
-                                        sum.os_bfree  += stat_buf.os_bfree *
-                                                stat_buf.os_bsize;
-                                        sum.os_bavail += stat_buf.os_bavail *
-                                                stat_buf.os_bsize;
-                                }
-                        } else if (rc == -EINVAL || rc == -EFAULT) {
-                                break;
-                        }
-                }
-        }
+					sum.os_blocks += stat_buf.os_blocks *
+						stat_buf.os_bsize;
+					sum.os_bfree  += stat_buf.os_bfree *
+						stat_buf.os_bsize;
+					sum.os_bavail += stat_buf.os_bavail *
+						stat_buf.os_bsize;
+					ost_ffree += stat_buf.os_ffree;
+				}
+			} else if (rc == -EINVAL || rc == -EFAULT) {
+				break;
+			}
+		}
+	}
 
-        printf("\n");
-        showdf(mntdir, &sum, "filesystem summary:", ishow, cooked, NULL, 0,0);
-        printf("\n");
-        return 0;
+	/* If we don't have as many objects free on the OST as inodes
+	 * on the MDS, we reduce the total number of inodes to
+	 * compensate, so that the "inodes in use" number is correct.
+	 * Matches ll_statfs_internal() so the results are consistent. */
+	if (ost_ffree < sum.os_ffree) {
+		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
+		sum.os_ffree = ost_ffree;
+	}
+	printf("\n");
+	showdf(mntdir, &sum, "filesystem summary:", ishow, cooked, NULL, 0, 0);
+	printf("\n");
+	return 0;
 }
 
 static int lfs_df(int argc, char **argv)
