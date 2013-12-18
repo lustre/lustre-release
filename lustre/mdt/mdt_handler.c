@@ -724,23 +724,34 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	}
 
 	buffer->lb_len = reqbody->eadatasize;
-	if (buffer->lb_len > 0)
+	if (buffer->lb_len > 0) {
 		buffer->lb_buf = req_capsule_server_get(pill, &RMF_MDT_MD);
-	else
+		if (buffer->lb_buf == NULL)
+			GOTO(out, rc = -EPROTO);
+	} else {
 		buffer->lb_buf = NULL;
+		ma_need &= ~(MA_LOV | MA_LMV);
+		CDEBUG(D_INFO, "%s: RPC from %s: does not need LOVEA.\n",
+		       mdt_obd_name(info->mti_mdt),
+		       req->rq_export->exp_client_uuid.uuid);
+	}
 
-        /* If it is dir object and client require MEA, then we got MEA */
-        if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
-            reqbody->valid & OBD_MD_MEA) {
-                /* Assumption: MDT_MD size is enough for lmv size. */
-                ma->ma_lmv = buffer->lb_buf;
-                ma->ma_lmv_size = buffer->lb_len;
-                ma->ma_need = MA_LMV | MA_INODE;
-        } else {
-                ma->ma_lmm = buffer->lb_buf;
-                ma->ma_lmm_size = buffer->lb_len;
-		ma->ma_need = MA_LOV | MA_INODE | MA_HSM;
-        }
+	/* If it is dir object and client require MEA, then we got MEA */
+	if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
+	    reqbody->valid & OBD_MD_MEA) {
+		/* Assumption: MDT_MD size is enough for lmv size. */
+		ma->ma_lmv = buffer->lb_buf;
+		ma->ma_lmv_size = buffer->lb_len;
+		ma->ma_need = MA_INODE;
+		if (ma->ma_lmm_size > 0)
+			ma->ma_need |= MA_LMV;
+	} else {
+		ma->ma_lmm = buffer->lb_buf;
+		ma->ma_lmm_size = buffer->lb_len;
+		ma->ma_need = MA_INODE | MA_HSM;
+		if (ma->ma_lmm_size > 0)
+			ma->ma_need |= MA_LOV;
+	}
 
         if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
             reqbody->valid & OBD_MD_FLDIREA  &&
