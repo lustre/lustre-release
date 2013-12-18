@@ -1076,20 +1076,21 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 
 	check_timeout || return 1
 
-	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
-
-	echo starting with $OST_NEXP OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
-        # evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
-        # But if there's a race to start the evictor from various obds,
-        # the loser might have to wait for the next ping.
-
+	local before=$(date +%s)
 	local rc=0
-	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
-	rc=$?
+
+	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
+	# But if there's a race to start the evictor from various obds,
+	# the loser might have to wait for the next ping.
+	sleep $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
 	do_facet client lctl set_param fail_loc=0x0
-        [ $rc -eq 0 ] || error "client not evicted from OST"
+	do_facet client df > /dev/null
+
+	local oscs=$(lctl dl | awk '/-osc-/ {print $4}')
+	check_clients_evicted $before ${oscs[@]}
+	check_clients_full 10 ${oscs[@]}
 }
 run_test 26a "evict dead exports"
 

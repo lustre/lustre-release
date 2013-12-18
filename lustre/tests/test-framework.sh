@@ -8448,3 +8448,41 @@ lfsck_verify_pfid()
 	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=0"
 	return $rc
 }
+
+# check that clients "oscs" was evicted after "before"
+check_clients_evicted() {
+	local before=$1
+	shift
+	local oscs=${@}
+	local osc
+	local rc=0
+
+	for osc in $oscs; do
+		((rc++))
+		echo "Check state for $osc"
+		local evicted=$(do_facet client $LCTL get_param osc.$osc.state |
+			tail -n 3 | awk -F"[ [,]" \
+			'/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+		if (($? == 0)) && (($evicted > $before)); then
+			echo "$osc is evicted at $evicted"
+			((rc--))
+		fi
+	done
+
+	[ $rc -eq 0 ] || error "client not evicted from OST"
+}
+
+# check that clients OSCS current_state is FULL
+check_clients_full() {
+	local timeout=$1
+	shift
+	local oscs=${@}
+
+	for osc in $oscs; do
+		wait_update_facet client \
+			"lctl get_param -n osc.$osc.state |
+			grep 'current_state: FULL'" \
+			"current_state: FULL" $timeout
+		[ $? -eq 0 ] || error "$osc state is not FULL"
+	done
+}
