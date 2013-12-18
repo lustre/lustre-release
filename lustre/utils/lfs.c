@@ -532,14 +532,12 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 				 SWAP_LAYOUTS_KEEP_MTIME |
 				 SWAP_LAYOUTS_KEEP_ATIME);
 	if (rc == -EAGAIN) {
-		fprintf(stderr, "file dataversion for %s has changed"
-				" during copy, migration is aborted\n",
-			name);
+		fprintf(stderr, "%s: dataversion changed during copy, "
+			"migration aborted\n", name);
 		goto error;
 	}
 	if (rc != 0)
-		fprintf(stderr, "cannot swap layouts between %s and "
-			"a volatile file (%s)\n",
+		fprintf(stderr, "%s: swap layout to new file failed: %s\n",
 			name, strerror(-rc));
 
 error:

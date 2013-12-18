@@ -147,16 +147,17 @@ lfs_migrate() {
 			       2> /dev/null)
 
 			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
+			SIZE=${LFS_SIZE_OPT}${SIZE}
 		fi
 
 		# first try to migrate inside lustre
 		# if failed go back to old rsync mode
 		if [[ $RSYNC_MODE == false ]]; then
-			$LFS migrate -c${COUNT} ${LFS_SIZE_OPT}${SIZE} $OLDNAME
-			if [[ $? == 0 ]]; then
+			if $LFS migrate -c${COUNT} ${SIZE} "$OLDNAME"; then
 				$ECHO "done"
 				continue
 			else
+				echo "falling back to rsync-based migration"
 				RSYNC_MODE=true
 			fi
 		fi
@@ -167,8 +168,7 @@ lfs_migrate() {
 			continue
 		fi
 
-		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} \
-		                      ${LFS_SIZE_OPT}${SIZE} "$NEWNAME"
+		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} ${SIZE} "$NEWNAME"
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
