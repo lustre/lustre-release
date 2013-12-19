@@ -134,9 +134,7 @@ command_t cmdlist[] = {
          "abort recovery on a restarting MDT or OST device\n"},
         {"set_timeout", jt_lcfg_set_timeout, 0,
          "usage: conf_param obd_timeout=<secs>\n"},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(3,0,53,0)
-#warning "remove conf_param option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
         {"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
          "This command must be run on the MGS node\n"
          "usage: conf_param [-d] <target.keyword=val>\n"

@@ -576,13 +576,13 @@ static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
  * AT NEXT REBOOT, not immediately. */
 int jt_lcfg_mgsparam(int argc, char **argv)
 {
-        int rc;
-        int del = 0;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-        char *buf = NULL;
+	int rc;
+	int del = 0;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	char *buf = NULL;
 
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,7,53,0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 7, 53, 0)
 	fprintf(stderr, "warning: 'lctl conf_param' is deprecated, "
 		"use 'lctl set_param -P' instead\n");
 #endif

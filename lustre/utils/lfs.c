@@ -328,21 +328,6 @@ command_t cmdlist[] = {
         { 0, 0, 0, NULL }
 };
 
-static int isnumber(const char *str)
-{
-        const char *ptr;
-
-        if (str[0] != '-' && !isdigit(str[0]))
-                return 0;
-
-        for (ptr = str + 1; *ptr != '\0'; ptr++) {
-                if (!isdigit(*ptr))
-                        return 0;
-        }
-
-        return 1;
-}
-
 #define MIGRATION_BLOCKS 1
 
 static int lfs_migrate(char *name, unsigned long long stripe_size,
@@ -581,9 +566,7 @@ static int lfs_setstripe(int argc, char **argv)
 	struct option		 long_opts[] = {
 		/* valid only in migrate mode */
 		{"block",	 no_argument,	    0, 'b'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --count option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
 		 * and to separate it from "mdt-count" when DNE arrives. */
@@ -592,9 +575,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe-count", required_argument, 0, 'c'},
 		{"stripe_count", required_argument, 0, 'c'},
 		{"delete",       no_argument,       0, 'd'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --index option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
 		 * and to separate it from "mdt-index" when DNE arrives. */
@@ -602,18 +583,14 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 		{"stripe-index", required_argument, 0, 'i'},
 		{"stripe_index", required_argument, 0, 'i'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --offset option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was confusing
 		 * with "file offset" (which will eventually be needed for
 		 * with different layouts by offset), so deprecate it. */
-		{"offset",       required_argument, 0, 'o'},
+		{"offset",	 required_argument, 0, 'o'},
 #endif
 		{"pool",	 required_argument, 0, 'p'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --size option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "--stripe-size", but was confusing
 		 * with "lfs find --size|-s", which means "file size", so use
 		 * the consistent "--stripe-size|-S" for all commands. */
@@ -631,24 +608,13 @@ static int lfs_setstripe(int argc, char **argv)
 	if (strcmp(argv[0], "migrate") == 0)
 		migrate_mode = 1;
 
-#if LUSTRE_VERSION < OBD_OCD_VERSION(2,4,50,0)
-        if (argc == 5 && argv[1][0] != '-' &&
-            isnumber(argv[2]) && isnumber(argv[3]) && isnumber(argv[4])) {
-                fprintf(stderr, "error: obsolete usage of setstripe "
-                        "positional parameters.  Use -c, -i, -S instead.\n");
-                return CMD_HELP;
-        } else
-#else
-#warning "remove obsolete positional parameter error"
-#endif
-        {
-                optind = 0;
-                while ((c = getopt_long(argc, argv, "c:di:o:p:s:S:",
-                                        long_opts, NULL)) >= 0) {
-                switch (c) {
-                case 0:
-                        /* Long options. */
-                        break;
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "c:di:o:p:s:S:",
+				long_opts, NULL)) >= 0) {
+		switch (c) {
+		case 0:
+			/* Long options. */
+			break;
 		case 'b':
 			if (migrate_mode == 0) {
 				fprintf(stderr, "--block is valid only for"
@@ -657,75 +623,65 @@ static int lfs_setstripe(int argc, char **argv)
 			}
 			migration_flags |= MIGRATION_BLOCKS;
 			break;
-                case 'c':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --count option"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
-                        if (strcmp(argv[optind - 1], "--count") == 0)
-                                fprintf(stderr, "warning: '--count' deprecated"
-                                        ", use '--stripe-count' instead\n");
+		case 'c':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
+			if (strcmp(argv[optind - 1], "--count") == 0)
+				fprintf(stderr, "warning: '--count' deprecated"
+					", use '--stripe-count' instead\n");
 #endif
-                        stripe_count_arg = optarg;
-                        break;
-                case 'd':
-                        /* delete the default striping pattern */
-                        delete = 1;
-                        break;
-                case 'o':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,4,50,0)
-                        fprintf(stderr, "warning: '--offset|-o' deprecated, "
-                                "use '--stripe-index|-i' instead\n");
-#else
-                        if (strcmp(argv[optind - 1], "--offset") == 0)
-                                /* need --stripe-index established first */
-                                fprintf(stderr, "warning: '--offset' deprecated"
-                                        ", use '--index' instead\n");
+			stripe_count_arg = optarg;
+			break;
+		case 'd':
+			/* delete the default striping pattern */
+			delete = 1;
+			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+		case 'o':
+			fprintf(stderr, "warning: '--offset|-o' deprecated, "
+				"use '--stripe-index|-i' instead\n");
 #endif
-                case 'i':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --offset and --index options"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
-                        if (strcmp(argv[optind - 1], "--index") == 0)
-                                fprintf(stderr, "warning: '--index' deprecated"
-                                        ", use '--stripe-index' instead\n");
+		case 'i':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
+			if (strcmp(argv[optind - 1], "--index") == 0)
+				fprintf(stderr, "warning: '--index' deprecated"
+					", use '--stripe-index' instead\n");
 #endif
-                        stripe_off_arg = optarg;
-                        break;
-                case 's':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --size option"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
-                        fprintf(stderr, "warning: '--size|-s' deprecated, "
-                                "use '--stripe-size|-S' instead\n");
+			stripe_off_arg = optarg;
+			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+		case 's':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
+			fprintf(stderr, "warning: '--size|-s' deprecated, "
+				"use '--stripe-size|-S' instead\n");
 #endif
-                case 'S':
-                        stripe_size_arg = optarg;
-                        break;
-                case 'p':
-                        pool_name_arg = optarg;
-                        break;
-                default:
-                        return CMD_HELP;
-                }
-                }
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0) */
+		case 'S':
+			stripe_size_arg = optarg;
+			break;
+		case 'p':
+			pool_name_arg = optarg;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
 
-                fname = argv[optind];
+	fname = argv[optind];
 
-                if (delete &&
-                    (stripe_size_arg != NULL || stripe_off_arg != NULL ||
-                     stripe_count_arg != NULL || pool_name_arg != NULL)) {
-                        fprintf(stderr, "error: %s: cannot specify -d with "
-                                        "-s, -c, -o, or -p options\n",
-                                        argv[0]);
-                        return CMD_HELP;
-                }
-        }
+	if (delete &&
+	    (stripe_size_arg != NULL || stripe_off_arg != NULL ||
+	     stripe_count_arg != NULL || pool_name_arg != NULL)) {
+		fprintf(stderr, "error: %s: cannot specify -d with "
+			"-s, -c, -o, or -p options\n",
+			argv[0]);
+		return CMD_HELP;
+	}
 
-        if (optind == argc) {
-                fprintf(stderr, "error: %s: missing filename|dirname\n",
-                        argv[0]);
-                return CMD_HELP;
-        }
+	if (optind == argc) {
+		fprintf(stderr, "error: %s: missing filename|dirname\n",
+			argv[0]);
+		return CMD_HELP;
+	}
 
 	/* get the stripe size */
 	if (stripe_size_arg != NULL) {
@@ -1242,9 +1198,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --count option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
 		 * and to separate it from "mdt-count" when DNE arrives. */
@@ -1254,9 +1208,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe_count",	no_argument,		0, 'c'},
 		{"directory",		no_argument,		0, 'd'},
 		{"generation",		no_argument,		0, 'g'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --index option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
 		 * and to separate it from "mdt-index" when DNE arrives. */
@@ -1267,9 +1219,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"layout",		no_argument,		0, 'L'},
 		{"mdt-index",		no_argument,		0, 'M'},
 		{"mdt_index",		no_argument,		0, 'M'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --offset option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was confusing
 		 * with "file offset" (which will eventually be needed for
 		 * with different layouts by offset), so deprecate it. */
@@ -1281,9 +1231,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"quiet",		no_argument,		0, 'q'},
 		{"recursive",		no_argument,		0, 'r'},
 		{"raw",			no_argument,		0, 'R'},
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --size option"
-#else
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "--stripe-size", but was confusing
 		 * with "lfs find --size|-s", which means "file size", so use
 		 * the consistent "--stripe-size|-S" for all commands. */
@@ -1323,9 +1271,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->verbose = VERBOSE_ALL | VERBOSE_DETAIL;
 			break;
 		case 'c':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --count option"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			if (strcmp(argv[optind - 1], "--count") == 0)
 				fprintf(stderr, "warning: '--count' deprecated,"
 					" use '--stripe-count' instead\n");
@@ -1335,33 +1281,26 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->maxdepth = 0;
 			}
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		case 's':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --size option"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			fprintf(stderr, "warning: '--size|-s' deprecated, "
 				"use '--stripe-size|-S' instead\n");
 #endif
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0) */
 		case 'S':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_SIZE;
 				param->maxdepth = 0;
 			}
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		case 'o':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,4,50,0)
 			fprintf(stderr, "warning: '--offset|-o' deprecated, "
 				"use '--stripe-index|-i' instead\n");
-#else
-			if (strcmp(argv[optind - 1], "--offset") == 0)
-				/* need --stripe-index established first */
-				fprintf(stderr, "warning: '--offset' deprecated"
-					", use '--index' instead\n");
 #endif
 		case 'i':
-#if LUSTRE_VERSION >= OBD_OCD_VERSION(2,9,50,0)
-#warning "remove deprecated --offset and --index options"
-#elif LUSTRE_VERSION >= OBD_OCD_VERSION(2,6,50,0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr, "warning: '--index' deprecated"
 					", use '--stripe-index' instead\n");
