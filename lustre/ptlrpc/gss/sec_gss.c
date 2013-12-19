@@ -2871,34 +2871,40 @@ int __init sptlrpc_gss_init(void)
 	if (rc)
 		goto out_null;
 
-        /* register policy after all other stuff be intialized, because it
-         * might be in used immediately after the registration. */
+	rc = init_sk_module();
+	if (rc)
+		goto out_kerberos;
 
-        rc = gss_init_keyring();
-        if (rc)
-                goto out_kerberos;
+	/* register policy after all other stuff be intialized, because it
+	 * might be in used immediately after the registration. */
 
-        rc = gss_init_pipefs();
-        if (rc)
-                goto out_keyring;
+	rc = gss_init_keyring();
+	if (rc)
+		goto out_sk;
 
-        gss_init_at_reply_offset();
+	rc = gss_init_pipefs();
+	if (rc)
+		goto out_keyring;
 
-        return 0;
+	gss_init_at_reply_offset();
+
+	return 0;
 
 out_keyring:
-        gss_exit_keyring();
+	gss_exit_keyring();
+out_sk:
+	cleanup_sk_module();
 out_kerberos:
-        cleanup_kerberos_module();
+	cleanup_kerberos_module();
 out_null:
 	cleanup_null_module();
 out_svc_upcall:
-        gss_exit_svc_upcall();
+	gss_exit_svc_upcall();
 out_cli_upcall:
-        gss_exit_cli_upcall();
+	gss_exit_cli_upcall();
 out_lproc:
-        gss_exit_lproc();
-        return rc;
+	gss_exit_lproc();
+	return rc;
 }
 
 static void __exit sptlrpc_gss_exit(void)

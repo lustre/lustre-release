@@ -103,6 +103,7 @@ enum sptlrpc_mech_plain {
 enum sptlrpc_mech_gss {
         SPTLRPC_MECH_GSS_NULL           = 0,
         SPTLRPC_MECH_GSS_KRB5           = 1,
+	SPTLRPC_MECH_GSS_SK             = 2,
         SPTLRPC_MECH_GSS_MAX,
 };
 
@@ -180,6 +181,10 @@ enum sptlrpc_bulk_service {
         MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_KRB5, SPTLRPC_SVC_INTG)
 #define SPTLRPC_SUBFLVR_KRB5P                                           \
         MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_KRB5, SPTLRPC_SVC_PRIV)
+#define SPTLRPC_SUBFLVR_SKI                                             \
+	MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_SK, SPTLRPC_SVC_INTG)
+#define SPTLRPC_SUBFLVR_SKPI                                            \
+	MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_SK, SPTLRPC_SVC_PRIV)
 
 /*
  * "end user" flavors
@@ -226,6 +231,18 @@ enum sptlrpc_bulk_service {
                   SPTLRPC_SVC_PRIV,                     \
                   SPTLRPC_BULK_DEFAULT,                 \
                   SPTLRPC_BULK_SVC_PRIV)
+#define SPTLRPC_FLVR_SKI                                \
+	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
+		  SPTLRPC_MECH_GSS_SK,                  \
+		  SPTLRPC_SVC_INTG,                     \
+		  SPTLRPC_BULK_DEFAULT,                 \
+		  SPTLRPC_BULK_SVC_PRIV)
+#define SPTLRPC_FLVR_SKPI                               \
+	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
+		  SPTLRPC_MECH_GSS_SK,                  \
+		  SPTLRPC_SVC_PRIV,                     \
+		  SPTLRPC_BULK_DEFAULT,                 \
+		  SPTLRPC_BULK_SVC_PRIV)
 
 #define SPTLRPC_FLVR_DEFAULT            SPTLRPC_FLVR_NULL
 

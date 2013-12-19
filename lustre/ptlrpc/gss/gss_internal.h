@@ -512,6 +512,9 @@ void cleanup_null_module(void);
 int __init init_kerberos_module(void);
 void cleanup_kerberos_module(void);
 
+/* gss_sk_mech.c */
+int __init init_sk_module(void);
+void cleanup_sk_module(void);
 
 /* debug */
 static inline

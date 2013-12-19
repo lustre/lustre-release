@@ -172,8 +172,12 @@ __u32 sptlrpc_name2flavor_base(const char *name)
                 return SPTLRPC_FLVR_KRB5I;
         if (!strcmp(name, "krb5p"))
                 return SPTLRPC_FLVR_KRB5P;
+	if (!strcmp(name, "ski"))
+		return SPTLRPC_FLVR_SKI;
+	if (!strcmp(name, "skpi"))
+		return SPTLRPC_FLVR_SKPI;
 
-        return SPTLRPC_FLVR_INVALID;
+	return SPTLRPC_FLVR_INVALID;
 }
 EXPORT_SYMBOL(sptlrpc_name2flavor_base);
 
@@ -195,9 +199,13 @@ const char *sptlrpc_flavor2name_base(__u32 flvr)
                 return "krb5i";
         else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_KRB5P))
                 return "krb5p";
+	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_SKI))
+		return "ski";
+	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_SKPI))
+		return "skpi";
 
-        CERROR("invalid wire flavor 0x%x\n", flvr);
-        return "invalid";
+	CERROR("invalid wire flavor 0x%x\n", flvr);
+	return "invalid";
 }
 EXPORT_SYMBOL(sptlrpc_flavor2name_base);
 
