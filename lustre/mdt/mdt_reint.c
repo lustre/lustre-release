@@ -1061,7 +1061,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 
 	memset(policy, 0, sizeof *policy);
 	policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 5, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
 	/* In phase I, we will not do cross-rename, so local BFL lock would
 	 * be enough
 	 */
