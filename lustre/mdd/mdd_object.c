@@ -2026,14 +2026,18 @@ out_unlock:
 
 static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
-        if (mdd_object_exists(mdd_obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
-                return -ENOENT;
-        }
-        return dt_object_sync(env, mdd_object_child(mdd_obj));
+	if (mdd_object_exists(mdd_obj) == 0) {
+		int rc = -ENOENT;
+
+		CERROR("%s: object "DFID" not found: rc = %d\n",
+		       mdd_obj_dev_name(mdd_obj),
+		       PFID(mdd_object_fid(mdd_obj)), rc);
+		return rc;
+	}
+	return dt_object_sync(env, mdd_object_child(mdd_obj),
+			      0, OBD_OBJECT_EOF);
 }
 
 static int mdd_object_lock(const struct lu_env *env,

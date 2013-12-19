@@ -3164,7 +3164,8 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 	RETURN(oc);
 }
 
-static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
+static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
+			   __u64 start, __u64 end)
 {
 	struct osd_object	*obj    = osd_dt_obj(dt);
 	struct inode		*inode  = obj->oo_inode;
@@ -3181,13 +3182,19 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
 	set_file_inode(file, inode);
-#ifndef HAVE_FILE_FSYNC_4ARGS
+
+#ifdef HAVE_FILE_FSYNC_4ARGS
+	rc = file->f_op->fsync(file, start, end, 0);
+#elif defined(HAVE_FILE_FSYNC_2ARGS)
 	mutex_lock(&inode->i_mutex);
-#endif
-	rc = do_fsync(file, 0);
-#ifndef HAVE_FILE_FSYNC_4ARGS
+	rc = file->f_op->fsync(file, 0);
+	mutex_unlock(&inode->i_mutex);
+#else
+	mutex_lock(&inode->i_mutex);
+	rc = file->f_op->fsync(file, dentry, 0);
 	mutex_unlock(&inode->i_mutex);
 #endif
+
 	RETURN(rc);
 }
 

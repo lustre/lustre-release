@@ -536,7 +536,7 @@ int filp_write(struct file *fp, void *buf, size_t nbytes, loff_t *pos)
  *   we must allocate our own Irp and issue it to the file
  *   system driver.
  */
-int filp_fsync(struct file *fp)
+int filp_fsync(struct file *fp, loff_t start, loff_t end)
 {
     PFILE_OBJECT            FileObject;
     PDEVICE_OBJECT          DeviceObject;

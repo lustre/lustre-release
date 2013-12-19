@@ -1126,7 +1126,7 @@ TGT_OBD_HDL    (0,	OBD_IDX_READ,		tgt_obd_idx_read)
 EXPORT_SYMBOL(tgt_obd_handlers);
 
 int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
-	     struct dt_object *obj)
+	     struct dt_object *obj, __u64 start, __u64 end)
 {
 	int rc = 0;
 
@@ -1137,7 +1137,7 @@ int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
 		rc = dt_sync(env, tgt->lut_bottom);
 	} else if (dt_version_get(env, obj) >
 		   tgt->lut_obd->obd_last_committed) {
-		rc = dt_object_sync(env, obj);
+		rc = dt_object_sync(env, obj, start, end);
 	}
 
 	RETURN(rc);
@@ -1167,6 +1167,9 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	    (tgt->lut_sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
 	     (tgt->lut_sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
 	      lock->l_flags & LDLM_FL_CBPENDING))) {
+		__u64 start = 0;
+		__u64 end = OBD_OBJECT_EOF;
+
 		rc = lu_env_init(&env, LCT_DT_THREAD);
 		if (unlikely(rc != 0))
 			RETURN(rc);
@@ -1180,7 +1183,12 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		if (!dt_object_exists(obj))
 			GOTO(err_put, rc = -ENOENT);
 
-		rc = tgt_sync(&env, tgt, obj);
+		if (lock->l_resource->lr_type == LDLM_EXTENT) {
+			start = lock->l_policy_data.l_extent.start;
+			end = lock->l_policy_data.l_extent.end;
+		}
+
+		rc = tgt_sync(&env, tgt, obj, start, end);
 		if (rc < 0) {
 			CERROR("%s: syncing "DFID" ("LPU64"-"LPU64") on lock "
 			       "cancel: rc = %d\n",

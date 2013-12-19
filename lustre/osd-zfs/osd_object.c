@@ -1710,13 +1710,16 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 	RETURN(oc);
 }
 
-static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
+static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
+			   __u64 start, __u64 end)
 {
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	ENTRY;
 
 	/* XXX: no other option than syncing the whole filesystem until we
-	 * support ZIL */
+	 * support ZIL.  If the object tracked the txg that it was last
+	 * modified in, it could pass that txg here instead of "0".  Maybe
+	 * the changes are already committed, so no wait is needed at all? */
 	txg_wait_synced(dmu_objset_pool(osd->od_objset.os), 0ULL);
 
 	RETURN(0);

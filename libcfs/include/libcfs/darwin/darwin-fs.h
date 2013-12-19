@@ -106,7 +106,7 @@ int kern_file_sync(struct file *fp);
 #define filp_close(f, i)		kern_file_close(f)
 #define filp_read(f, b, n, p)		kern_file_read(f, b, n, p)
 #define filp_write(f, b, n, p)		kern_file_write(f, b, n, p)
-#define filp_fsync(f)			kern_file_sync(f)
+#define filp_fsync(f, s, e)		kern_file_sync(f)
 
 int ref_file(struct file *fp);
 int rele_file(struct file *fp);

@@ -265,7 +265,7 @@ int tgt_sec_ctx_fini(struct tgt_session_info *tsi);
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob);
 int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa);
 int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
-	     struct dt_object *obj);
+	     struct dt_object *obj, __u64 start, __u64 end);
 
 int tgt_io_thread_init(struct ptlrpc_thread *thread);
 void tgt_io_thread_done(struct ptlrpc_thread *thread);

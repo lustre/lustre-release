@@ -451,18 +451,19 @@ struct dt_object_operations {
         int   (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
-        struct obd_capa *(*do_capa_get)(const struct lu_env *env,
-                                        struct dt_object *dt,
-                                        struct lustre_capa *old,
-                                        __u64 opc);
-        int (*do_object_sync)(const struct lu_env *, struct dt_object *);
-        /**
-         * Get object info of next level. Currently, only get inode from osd.
-         * This is only used by quota b=16542
-         * precondition: dt_object_exists(dt);
-         */
-        int (*do_data_get)(const struct lu_env *env, struct dt_object *dt,
-                           void **data);
+	struct obd_capa *(*do_capa_get)(const struct lu_env *env,
+					struct dt_object *dt,
+					struct lustre_capa *old,
+					__u64 opc);
+	int (*do_object_sync)(const struct lu_env *env, struct dt_object *obj,
+			      __u64 start, __u64 end);
+	/**
+	 * Get object info of next level. Currently, only get inode from osd.
+	 * This is only used by quota b=16542
+	 * precondition: dt_object_exists(dt);
+	 */
+	int (*do_data_get)(const struct lu_env *env, struct dt_object *dt,
+			   void **data);
 
 	/**
 	 * Lock object.
@@ -965,13 +966,13 @@ static inline int dt_object_unlock(const struct lu_env *env,
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
 		  const char *name, struct lu_fid *fid);
 
-static inline int dt_object_sync(const struct lu_env *env,
-                                 struct dt_object *o)
+static inline int dt_object_sync(const struct lu_env *env, struct dt_object *o,
+				 __u64 start, __u64 end)
 {
-        LASSERT(o);
-        LASSERT(o->do_ops);
-        LASSERT(o->do_ops->do_object_sync);
-        return o->do_ops->do_object_sync(env, o);
+	LASSERT(o);
+	LASSERT(o->do_ops);
+	LASSERT(o->do_ops->do_object_sync);
+	return o->do_ops->do_object_sync(env, o, start, end);
 }
 
 int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
