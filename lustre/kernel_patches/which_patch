@@ -1,10 +1,17 @@
-SERIES                VERSION                  COMMENT
+Note that Lustre server kernels do not REQUIRE patches to the core kernel
+code in order to function.  However, the server kernel patches may improve
+performance significantly.  Lustre may not work with the latest kernels
+due to API changes in the kernel.  See lustre/ChangeLog for details.
+ 
+In addition to the patches that should be applied to the core kernel,
+patches are required for a specific kernel in order to build the ldiskfs
+module from ext4.  Those patches are applied automatically during the
+ldiskfs build process and SHOULD NOT be applied to the kernel directly.
 
-SUPPORTED KERNELS:
-2.6-rhel6             RHEL6: 2.6.32-431.5.1.el6
+Servers running only ZFS OSDs DO NOT need any patches.
 
-CLIENT SUPPORT FOR UNPATCHED KERNELS:
-	2.6.18-348.3.1.el5	(RHEL5)
-	2.6.32-431.5.1.el6	(RHEL6)
-	2.6.16.60-0.69.1	(SLES10)
-	2.6.27.19-5		(SLES11)
+PATCH SERIES FOR SERVER KERNELS:
+2.6-rhel6.series	2.6.32-431.5.1.el6
+
+Clients since 2.6.18 DO NOT need any patches.
+See lustre/ChangeLog for supported client kernel versions.
