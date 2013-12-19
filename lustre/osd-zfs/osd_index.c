@@ -670,11 +670,6 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	rc = -zap_remove(osd->od_objset.os, zap_db->db_object,
 			 (char *) key, oh->ot_tx);
 
-#if LUSTRE_VERSION_CODE <= OBD_OCD_VERSION(2, 4, 53, 0)
-	if (unlikely(rc == -ENOENT && name[0] == '.' &&
-	    (name[1] == 0 || (name[1] == '.' && name[2] == 0))))
-		rc = 0;
-#endif
 	if (unlikely(rc && rc != -ENOENT))
 		CERROR("%s: zap_remove failed: rc = %d\n", osd->od_svname, rc);
 
@@ -851,19 +846,6 @@ static struct dt_key *osd_dir_it_key(const struct lu_env *env,
 
 	strcpy(it->ozi_name, za->za_name);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
-	if (za->za_name[0] == '.') {
-		if (za->za_name[1] == 0 || (za->za_name[1] == '.' &&
-		    za->za_name[2] == 0)) {
-			/* we should not get onto . and ..
-			 * stored in the directory. ->next() and
-			 * other methods should prevent this
-			 */
-			LBUG();
-		}
-	}
-#endif
-
 	RETURN((struct dt_key *)it->ozi_name);
 }
 
@@ -884,18 +866,6 @@ static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)) == 0)
 		rc = strlen(za->za_name);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
-	if (rc == 0 && za->za_name[0] == '.') {
-		if (za->za_name[1] == 0 || (za->za_name[1] == '.' &&
-		    za->za_name[2] == 0)) {
-			/* we should not get onto . and ..
-			 * stored in the directory. ->next() and
-			 * other methods should prevent this
-			 */
-			LBUG();
-		}
-	}
-#endif
 	RETURN(rc);
 }
 

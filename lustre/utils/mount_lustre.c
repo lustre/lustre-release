@@ -54,7 +54,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <lustre/lustre_idl.h>
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 10, 51, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 10, 53, 0)
 /*
  * LU-1783
  * We only #include a kernel level include file here because
@@ -63,9 +63,9 @@
  * In the future if SLES updates sys/mount.h to have a more complete
  * set of flag #defines we should stop including linux/fs.h
  */
-#warn remove kernel include
-#elif !defined(MS_RDONLY)
+#if !defined(MS_RDONLY)
 #include <linux/fs.h>
+#endif
 #endif
 
 #define MAXOPT 4096
@@ -258,35 +258,36 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
 		} else if (strncmp(arg, "nosvc", 5) == 0) {
 			mop->mo_nosvc = 1;
 			append_option(options, opt);
-                } else if (strcmp(opt, "force") == 0) {
-                        //XXX special check for 'force' option
+		} else if (strcmp(opt, "force") == 0) {
+			/* XXX special check for 'force' option */
 			++mop->mo_force;
 			printf("force: %d\n", mop->mo_force);
-                } else if (parse_one_option(opt, flagp) == 0) {
-                        /* pass this on as an option */
-                        append_option(options, opt);
-                }
-        }
+		} else if (parse_one_option(opt, flagp) == 0) {
+			/* pass this on as an option */
+			append_option(options, opt);
+		}
+	}
 #ifdef MS_STRICTATIME
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 10, 51, 0)
-/*
- * LU-1783
- * In the future when upstream fixes land in all supported kernels
- * we should stop forcing MS_STRICTATIME in lustre mounts.
- * We override the kernel level default of MS_RELATIME for now
- * due to a kernel vfs level bug in atime updates that fails
- * to reset timestamps from the future.
- */
-#warn remove MS_STRICTATIME override
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(3, 2, 53, 0)
+	/*
+	 * LU-1783
+	 * In the future when upstream fixes land in all supported kernels
+	 * we should stop forcing MS_STRICTATIME in lustre mounts.
+	 * We override the kernel level default of MS_RELATIME for now
+	 * due to a kernel vfs level bug in atime updates that fails
+	 * to reset timestamps from the future.
+	 */
+#warn "remove MS_STRICTATIME override if kernel updates atime from the future"
 #endif
 	/* set strictatime to default if NOATIME or RELATIME
 	   not given explicit */
 	if (!(*flagp & (MS_NOATIME | MS_RELATIME)))
 		*flagp |= MS_STRICTATIME;
 #endif
-        strcpy(orig_options, options);
-        free(options);
-        return 0;
+	strcpy(orig_options, options);
+	free(options);
+
+	return 0;
 }
 
 /* Add mgsnids from ldd params */

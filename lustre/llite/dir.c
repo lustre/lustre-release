@@ -1522,7 +1522,7 @@ out_rmdir:
                 OBD_FREE_PTR(check);
                 RETURN(rc);
         }
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
         case LL_IOC_QUOTACTL_18: {
                 /* copy the old 1.x quota struct for internal use, then copy
                  * back into old format struct.  For 1.8 compatibility. */
@@ -1573,9 +1573,7 @@ out_rmdir:
                 OBD_FREE_PTR(qctl_18);
                 RETURN(rc);
         }
-#else
-#warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0) */
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0) */
 	case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
 

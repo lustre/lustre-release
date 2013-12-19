@@ -844,7 +844,7 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 52, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
 		tmp = ll_set_opt("acl", s1, LL_SBI_ACL);
 		if (tmp) {
 			/* Ignore deprecated mount option.  The client will
@@ -860,14 +860,12 @@ static int ll_options(char *options, int *flags)
 						  "mount option 'noacl'.\n");
 			goto next;
 		}
-#else
-#warning "{no}acl options have been deprecated since 1.8, please remove them"
 #endif
-                tmp = ll_set_opt("remote_client", s1, LL_SBI_RMT_CLIENT);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
+		tmp = ll_set_opt("remote_client", s1, LL_SBI_RMT_CLIENT);
+		if (tmp) {
+			*flags |= tmp;
+			goto next;
+		}
 		tmp = ll_set_opt("user_fid2path", s1, LL_SBI_USER_FID2PATH);
 		if (tmp) {
 			*flags |= tmp;

@@ -455,10 +455,8 @@ int lustre_start_mgc(struct super_block *sb)
 				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
 				  OBD_CONNECT_LVB_TYPE;
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	data->ocd_connect_flags |= OBD_CONNECT_MNE_SWAB;
-#else
-#warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and imp_need_mne_swab"
 #endif
 
         if (lmd_is_client(lsi->lsi_lmd) &&

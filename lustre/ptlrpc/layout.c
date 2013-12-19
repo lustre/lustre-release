@@ -1003,10 +1003,10 @@ struct req_msg_field RMF_CONN =
 EXPORT_SYMBOL(RMF_CONN);
 
 struct req_msg_field RMF_CONNECT_DATA =
-        DEFINE_MSGF("cdata",
-                    RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 7, 50, 0)
-                    sizeof(struct obd_connect_data),
+	DEFINE_MSGF("cdata",
+		    RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 7, 53, 0)
+		    sizeof(struct obd_connect_data),
 #else
 /* For interoperability with 1.8 and 2.0 clients/servers.
  * The RPC verification code allows larger RPC buffers, but not
@@ -1015,9 +1015,9 @@ struct req_msg_field RMF_CONNECT_DATA =
  * size is at least as large as obd_connect_data_v1.  That is not
  * not in itself harmful, since the chance of just corrupting this
  * field is low.  See JIRA LU-16 for details. */
-                    sizeof(struct obd_connect_data_v1),
+		    sizeof(struct obd_connect_data_v1),
 #endif
-                    lustre_swab_connect, NULL);
+		    lustre_swab_connect, NULL);
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
 struct req_msg_field RMF_DLM_REQ =

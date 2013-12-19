@@ -134,23 +134,23 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
                                 break;
                         }
 
-                        /* check if we need to consume remaining bytes. */
-                        if (last_in_unit != NULL && bytes_in_unit) {
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+			/* check if we need to consume remaining bytes. */
+			if (last_in_unit != NULL && bytes_in_unit) {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
 				/* May need to swab back to update the length.*/
 				if (exp->exp_need_mne_swab)
 					lustre_swab_mgs_nidtbl_entry(last_in_unit);
 #endif
 				last_in_unit->mne_length += bytes_in_unit;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
 				if (exp->exp_need_mne_swab)
 					lustre_swab_mgs_nidtbl_entry(last_in_unit);
 #endif
-                                rc  += bytes_in_unit;
-                                buf += bytes_in_unit;
-                                last_in_unit = NULL;
-                        }
-                        LASSERT((rc & (unit_size - 1)) == 0);
+				rc  += bytes_in_unit;
+				buf += bytes_in_unit;
+				last_in_unit = NULL;
+			}
+			LASSERT((rc & (unit_size - 1)) == 0);
 
 			if (units_in_page == 0) {
 				/* allocate a new page */
@@ -192,7 +192,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
                 memcpy(entry->u.nids, mti->mti_nids,
                        mti->mti_nid_count * sizeof(lnet_nid_t));
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
 		/* For LU-1644, swab entry for 2.2 clients. */
 		if (exp->exp_need_mne_swab)
 			lustre_swab_mgs_nidtbl_entry(entry);

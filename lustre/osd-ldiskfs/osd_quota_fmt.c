@@ -65,7 +65,7 @@ static ssize_t quota_read_blk(const struct lu_env *env,
 
 	memset(buf, 0, LUSTRE_DQBLKSIZE);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
 	/* type is set as -1 when reading old admin quota file */
 	if (type != USRQUOTA && type != GRPQUOTA) {
 		struct lu_buf	lu_buffer;
