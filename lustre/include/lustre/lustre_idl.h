@@ -214,12 +214,12 @@ static inline unsigned fld_range_type(const struct lu_seq_range *range)
 	return range->lsr_flags & LU_SEQ_RANGE_MASK;
 }
 
-static inline int fld_range_is_ost(const struct lu_seq_range *range)
+static inline bool fld_range_is_ost(const struct lu_seq_range *range)
 {
 	return fld_range_type(range) == LU_SEQ_RANGE_OST;
 }
 
-static inline int fld_range_is_mdt(const struct lu_seq_range *range)
+static inline bool fld_range_is_mdt(const struct lu_seq_range *range)
 {
 	return fld_range_type(range) == LU_SEQ_RANGE_MDT;
 }
@@ -262,7 +262,7 @@ static inline void fld_range_set_any(struct lu_seq_range *range)
 
 static inline __u64 range_space(const struct lu_seq_range *range)
 {
-        return range->lsr_end - range->lsr_start;
+	return range->lsr_end - range->lsr_start;
 }
 
 /**
@@ -278,26 +278,25 @@ static inline void range_init(struct lu_seq_range *range)
  * check if given seq id \a s is within given range \a r
  */
 
-static inline int range_within(const struct lu_seq_range *range,
-                               __u64 s)
+static inline bool range_within(const struct lu_seq_range *range,
+				__u64 s)
 {
-        return s >= range->lsr_start && s < range->lsr_end;
+	return s >= range->lsr_start && s < range->lsr_end;
 }
 
-static inline int range_is_sane(const struct lu_seq_range *range)
+static inline bool range_is_sane(const struct lu_seq_range *range)
 {
-        return (range->lsr_end >= range->lsr_start);
+	return range->lsr_end >= range->lsr_start;
 }
 
-static inline int range_is_zero(const struct lu_seq_range *range)
+static inline bool range_is_zero(const struct lu_seq_range *range)
 {
-        return (range->lsr_start == 0 && range->lsr_end == 0);
+	return range->lsr_start == 0 && range->lsr_end == 0;
 }
 
-static inline int range_is_exhausted(const struct lu_seq_range *range)
-
+static inline bool range_is_exhausted(const struct lu_seq_range *range)
 {
-        return range_space(range) == 0;
+	return range_space(range) == 0;
 }
 
 /* return 0 if two range have the same location */
@@ -489,71 +488,71 @@ enum dot_lustre_oid {
 	FID_OID_DOT_LUSTRE_LPF	= 3UL,
 };
 
-static inline int fid_seq_is_mdt0(obd_seq seq)
+static inline bool fid_seq_is_mdt0(obd_seq seq)
 {
-        return (seq == FID_SEQ_OST_MDT0);
+	return seq == FID_SEQ_OST_MDT0;
 }
 
-static inline int fid_seq_is_mdt(const __u64 seq)
+static inline bool fid_seq_is_mdt(__u64 seq)
 {
 	return seq == FID_SEQ_OST_MDT0 || seq >= FID_SEQ_NORMAL;
 };
 
-static inline int fid_seq_is_echo(obd_seq seq)
+static inline bool fid_seq_is_echo(obd_seq seq)
 {
-	return (seq == FID_SEQ_ECHO);
+	return seq == FID_SEQ_ECHO;
 }
 
-static inline int fid_is_echo(const struct lu_fid *fid)
+static inline bool fid_is_echo(const struct lu_fid *fid)
 {
 	return fid_seq_is_echo(fid_seq(fid));
 }
 
-static inline int fid_seq_is_llog(obd_seq seq)
+static inline bool fid_seq_is_llog(obd_seq seq)
 {
-	return (seq == FID_SEQ_LLOG);
+	return seq == FID_SEQ_LLOG;
 }
 
-static inline int fid_is_llog(const struct lu_fid *fid)
+static inline bool fid_is_llog(const struct lu_fid *fid)
 {
 	/* file with OID == 0 is not llog but contains last oid */
 	return fid_seq_is_llog(fid_seq(fid)) && fid_oid(fid) > 0;
 }
 
-static inline int fid_seq_is_rsvd(const __u64 seq)
+static inline bool fid_seq_is_rsvd(__u64 seq)
 {
-        return (seq > FID_SEQ_OST_MDT0 && seq <= FID_SEQ_RSVD);
+	return seq > FID_SEQ_OST_MDT0 && seq <= FID_SEQ_RSVD;
 };
 
-static inline int fid_seq_is_special(const __u64 seq)
+static inline bool fid_seq_is_special(__u64 seq)
 {
 	return seq == FID_SEQ_SPECIAL;
 };
 
-static inline int fid_seq_is_local_file(const __u64 seq)
+static inline bool fid_seq_is_local_file(__u64 seq)
 {
 	return seq == FID_SEQ_LOCAL_FILE ||
 	       seq == FID_SEQ_LOCAL_NAME;
 };
 
-static inline int fid_seq_is_root(const __u64 seq)
+static inline bool fid_seq_is_root(__u64 seq)
 {
 	return seq == FID_SEQ_ROOT;
 }
 
-static inline int fid_seq_is_dot(const __u64 seq)
+static inline bool fid_seq_is_dot(__u64 seq)
 {
 	return seq == FID_SEQ_DOT_LUSTRE;
 }
 
-static inline int fid_seq_is_default(const __u64 seq)
+static inline bool fid_seq_is_default(__u64 seq)
 {
 	return seq == FID_SEQ_LOV_DEFAULT;
 }
 
-static inline int fid_is_mdt0(const struct lu_fid *fid)
+static inline bool fid_is_mdt0(const struct lu_fid *fid)
 {
-        return fid_seq_is_mdt0(fid_seq(fid));
+	return fid_seq_is_mdt0(fid_seq(fid));
 }
 
 static inline void lu_root_fid(struct lu_fid *fid)
@@ -568,14 +567,14 @@ static inline void lu_root_fid(struct lu_fid *fid)
  * \param fid the fid to be tested.
  * \return true if the fid is a igif; otherwise false.
  */
-static inline int fid_seq_is_igif(const __u64 seq)
+static inline bool fid_seq_is_igif(__u64 seq)
 {
-        return seq >= FID_SEQ_IGIF && seq <= FID_SEQ_IGIF_MAX;
+	return seq >= FID_SEQ_IGIF && seq <= FID_SEQ_IGIF_MAX;
 }
 
-static inline int fid_is_igif(const struct lu_fid *fid)
+static inline bool fid_is_igif(const struct lu_fid *fid)
 {
-        return fid_seq_is_igif(fid_seq(fid));
+	return fid_seq_is_igif(fid_seq(fid));
 }
 
 /**
@@ -583,29 +582,29 @@ static inline int fid_is_igif(const struct lu_fid *fid)
  * \param fid the fid to be tested.
  * \return true if the fid is a idif; otherwise false.
  */
-static inline int fid_seq_is_idif(const __u64 seq)
+static inline bool fid_seq_is_idif(__u64 seq)
 {
-        return seq >= FID_SEQ_IDIF && seq <= FID_SEQ_IDIF_MAX;
+	return seq >= FID_SEQ_IDIF && seq <= FID_SEQ_IDIF_MAX;
 }
 
-static inline int fid_is_idif(const struct lu_fid *fid)
+static inline bool fid_is_idif(const struct lu_fid *fid)
 {
-        return fid_seq_is_idif(fid_seq(fid));
+	return fid_seq_is_idif(fid_seq(fid));
 }
 
-static inline int fid_is_local_file(const struct lu_fid *fid)
+static inline bool fid_is_local_file(const struct lu_fid *fid)
 {
 	return fid_seq_is_local_file(fid_seq(fid));
 }
 
-static inline int fid_seq_is_norm(const __u64 seq)
+static inline bool fid_seq_is_norm(__u64 seq)
 {
-        return (seq >= FID_SEQ_NORMAL);
+	return (seq >= FID_SEQ_NORMAL);
 }
 
-static inline int fid_is_norm(const struct lu_fid *fid)
+static inline bool fid_is_norm(const struct lu_fid *fid)
 {
-        return fid_seq_is_norm(fid_seq(fid));
+	return fid_seq_is_norm(fid_seq(fid));
 }
 
 static inline int fid_is_layout_rbtree(const struct lu_fid *fid)
@@ -616,13 +615,13 @@ static inline int fid_is_layout_rbtree(const struct lu_fid *fid)
 /* convert an OST objid into an IDIF FID SEQ number */
 static inline obd_seq fid_idif_seq(obd_id id, __u32 ost_idx)
 {
-        return FID_SEQ_IDIF | (ost_idx << 16) | ((id >> 32) & 0xffff);
+	return FID_SEQ_IDIF | (ost_idx << 16) | ((id >> 32) & 0xffff);
 }
 
 /* convert a packed IDIF FID into an OST objid */
 static inline obd_id fid_idif_id(obd_seq seq, __u32 oid, __u32 ver)
 {
-        return ((__u64)ver << 48) | ((seq & 0xffff) << 32) | oid;
+	return ((__u64)ver << 48) | ((seq & 0xffff) << 32) | oid;
 }
 
 static inline __u32 idif_ost_idx(obd_seq seq)
@@ -831,9 +830,9 @@ static inline int fid_to_ostid(const struct lu_fid *fid, struct ost_id *ostid)
 }
 
 /* Check whether the fid is for LAST_ID */
-static inline int fid_is_last_id(const struct lu_fid *fid)
+static inline bool fid_is_last_id(const struct lu_fid *fid)
 {
-	return (fid_oid(fid) == 0);
+	return fid_oid(fid) == 0;
 }
 
 /**
@@ -900,7 +899,7 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 	dst->f_ver = be32_to_cpu(fid_ver(src));
 }
 
-static inline int fid_is_sane(const struct lu_fid *fid)
+static inline bool fid_is_sane(const struct lu_fid *fid)
 {
 	return fid != NULL &&
 	       ((fid_seq(fid) >= FID_SEQ_START && fid_ver(fid) == 0) ||
@@ -908,15 +907,15 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 		fid_seq_is_rsvd(fid_seq(fid)));
 }
 
-static inline int fid_is_zero(const struct lu_fid *fid)
+static inline bool fid_is_zero(const struct lu_fid *fid)
 {
-        return fid_seq(fid) == 0 && fid_oid(fid) == 0;
+	return fid_seq(fid) == 0 && fid_oid(fid) == 0;
 }
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
 extern void lustre_swab_lu_seq_range(struct lu_seq_range *range);
 
-static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
+static inline bool lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
@@ -1111,7 +1110,7 @@ static inline int lu_dirent_calc_size(int namelen, __u16 attr)
         return (size + 7) & ~7;
 }
 
-static inline int lu_dirent_size(struct lu_dirent *ent)
+static inline int lu_dirent_size(const struct lu_dirent *ent)
 {
         if (le16_to_cpu(ent->lde_reclen) == 0) {
                 return lu_dirent_calc_size(le16_to_cpu(ent->lde_namelen),
@@ -1144,21 +1143,21 @@ struct lustre_handle {
 };
 #define DEAD_HANDLE_MAGIC 0xdeadbeefcafebabeULL
 
-static inline int lustre_handle_is_used(struct lustre_handle *lh)
+static inline bool lustre_handle_is_used(const struct lustre_handle *lh)
 {
-        return lh->cookie != 0ull;
+	return lh->cookie != 0;
 }
 
-static inline int lustre_handle_equal(const struct lustre_handle *lh1,
-                                      const struct lustre_handle *lh2)
+static inline bool lustre_handle_equal(const struct lustre_handle *lh1,
+				       const struct lustre_handle *lh2)
 {
-        return lh1->cookie == lh2->cookie;
+	return lh1->cookie == lh2->cookie;
 }
 
 static inline void lustre_handle_copy(struct lustre_handle *tgt,
-                                      struct lustre_handle *src)
+				      const struct lustre_handle *src)
 {
-        tgt->cookie = src->cookie;
+	tgt->cookie = src->cookie;
 }
 
 /* flags for lm_flags */
@@ -1672,25 +1671,25 @@ static inline void lmm_oi_set_id(struct ost_id *oi, __u64 oid)
 	oi->oi.oi_id = oid;
 }
 
-static inline __u64 lmm_oi_id(struct ost_id *oi)
+static inline __u64 lmm_oi_id(const struct ost_id *oi)
 {
 	return oi->oi.oi_id;
 }
 
-static inline __u64 lmm_oi_seq(struct ost_id *oi)
+static inline __u64 lmm_oi_seq(const struct ost_id *oi)
 {
 	return oi->oi.oi_seq;
 }
 
 static inline void lmm_oi_le_to_cpu(struct ost_id *dst_oi,
-				    struct ost_id *src_oi)
+				    const struct ost_id *src_oi)
 {
 	dst_oi->oi.oi_id = le64_to_cpu(src_oi->oi.oi_id);
 	dst_oi->oi.oi_seq = le64_to_cpu(src_oi->oi.oi_seq);
 }
 
 static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
-				    struct ost_id *src_oi)
+				    const struct ost_id *src_oi)
 {
 	dst_oi->oi.oi_id = cpu_to_le64(src_oi->oi.oi_id);
 	dst_oi->oi.oi_seq = cpu_to_le64(src_oi->oi.oi_seq);
@@ -2925,10 +2924,10 @@ struct ldlm_res_id {
 
 extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 
-static inline int ldlm_res_eq(const struct ldlm_res_id *res0,
-                              const struct ldlm_res_id *res1)
+static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
+			       const struct ldlm_res_id *res1)
 {
-        return !memcmp(res0, res1, sizeof(*res0));
+	return memcmp(res0, res1, sizeof(*res0)) == 0;
 }
 
 /* lock types */
@@ -2963,17 +2962,17 @@ struct ldlm_extent {
         __u64 gid;
 };
 
-static inline int ldlm_extent_overlap(struct ldlm_extent *ex1,
-                                      struct ldlm_extent *ex2)
+static inline int ldlm_extent_overlap(const struct ldlm_extent *ex1,
+				      const struct ldlm_extent *ex2)
 {
-        return (ex1->start <= ex2->end) && (ex2->start <= ex1->end);
+	return ex1->start <= ex2->end && ex2->start <= ex1->end;
 }
 
 /* check if @ex1 contains @ex2 */
-static inline int ldlm_extent_contain(struct ldlm_extent *ex1,
-                                      struct ldlm_extent *ex2)
+static inline int ldlm_extent_contain(const struct ldlm_extent *ex1,
+				      const struct ldlm_extent *ex2)
 {
-        return (ex1->start <= ex2->start) && (ex1->end >= ex2->end);
+	return ex1->start <= ex2->start && ex1->end >= ex2->end;
 }
 
 struct ldlm_inodebits {
@@ -3343,7 +3342,7 @@ enum agent_req_status {
 	ARS_SUCCEED,
 };
 
-static inline char *agent_req_status2name(enum agent_req_status ars)
+static inline const char *agent_req_status2name(enum agent_req_status ars)
 {
 	switch (ars) {
 	case ARS_WAITING:
@@ -3565,7 +3564,7 @@ enum lfsck_event_flags {
 	LEF_FROM_OST		= 0x00000002,
 };
 
-static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
+static inline void lustre_set_wire_obdo(const struct obd_connect_data *ocd,
 					struct obdo *wobdo,
 					const struct obdo *lobdo)
 {
@@ -3583,7 +3582,7 @@ static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
 	}
 }
 
-static inline void lustre_get_wire_obdo(struct obd_connect_data *ocd,
+static inline void lustre_get_wire_obdo(const struct obd_connect_data *ocd,
 					struct obdo *lobdo,
 					const struct obdo *wobdo)
 {
