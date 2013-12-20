@@ -116,7 +116,7 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 	} else if (unlikely(oa == NULL || !(fid_seq_is_idif(oa->o_seq) ||
 					    fid_seq_is_mdt(oa->o_seq) ||
 					    fid_seq_is_echo(oa->o_seq)))) {
-		CERROR("%s: client %s sent bad object "POSTID": rc = -EPROTO\n",
+		CERROR("%s: client %s sent bad object "DOSTID": rc = -EPROTO\n",
 		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
 		       oa ? oa->o_id : -1, oa ? oa->o_seq : -1);
 		return -EPROTO;
@@ -127,10 +127,10 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 		unsigned max_brw = ioobj_max_brw_get(ioobj);
 
 		if (unlikely((max_brw & (max_brw - 1)) != 0)) {
-			CERROR("%s: client %s sent bad ioobj max %u for "POSTID
+			CERROR("%s: client %s sent bad ioobj max %u for "DOSTID
 			       ": rc = -EPROTO\n", exp->exp_obd->obd_name,
 			       obd_export_nid2str(exp), max_brw,
-			       oa->o_id, oa->o_seq);
+			       POSTID(&oa->o_oi));
 			return -EPROTO;
 		}
 		ioobj_from_obdo(ioobj, oa);

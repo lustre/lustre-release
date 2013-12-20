@@ -282,8 +282,7 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_seq = lsm->lsm_object_seq;
+	oa->o_oi = lsm->lsm_oi;
         oa->o_mode = body->mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
         obdo_set_parent_fid(oa, &llu_i2info(dir)->lli_fid);
@@ -300,15 +299,15 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(NULL, llu_i2obdexp(dir), oa, lsm, &oti, NULL, NULL);
-        OBDO_FREE(oa);
-        if (rc)
-                CERROR("obd destroy objid 0x"LPX64" error %d\n",
-                       lsm->lsm_object_id, rc);
- out_free_memmd:
-        obd_free_memmd(llu_i2obdexp(dir), &lsm);
- out:
-        return rc;
+	rc = obd_destroy(NULL, llu_i2obdexp(dir), oa, lsm, &oti, NULL, NULL);
+	OBDO_FREE(oa);
+	if (rc)
+		CERROR("obd destroy objid "DOSTID" error %d\n",
+		       POSTID(&lsm->lsm_oi), rc);
+out_free_memmd:
+	obd_free_memmd(llu_i2obdexp(dir), &lsm);
+out:
+	return rc;
 }
 
 /** Cliens updates SOM attributes on MDS: obd_getattr and md_setattr. */

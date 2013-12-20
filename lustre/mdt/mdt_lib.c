@@ -537,19 +537,21 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 
         count = le16_to_cpu(((struct lov_user_md*)lmm)->lmm_stripe_count);
 
-        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
-               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
-               le32_to_cpu(lmm->lmm_pattern));
+	CDEBUG(level, "objid "DOSTID", magic 0x%08X, pattern %#X\n",
+	       POSTID(&lmm->lmm_oi), le32_to_cpu(lmm->lmm_magic),
+	       le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size=0x%x, stripe_count=0x%x\n",
                le32_to_cpu(lmm->lmm_stripe_size), count);
         if (count == LOV_ALL_STRIPES)
                 return;
-        LASSERT(count <= LOV_MAX_STRIPE_COUNT);
-        for (i = 0, lod = lmm->lmm_objects; i < count; i++, lod++)
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
-                       i, le32_to_cpu(lod->l_ost_idx),
-                       le64_to_cpu(lod->l_object_seq),
-                       le64_to_cpu(lod->l_object_id));
+
+	LASSERT(count <= LOV_MAX_STRIPE_COUNT);
+	for (i = 0, lod = lmm->lmm_objects; i < count; i++, lod++) {
+		struct ost_id	oi;
+		ostid_le_to_cpu((struct ost_id *)&lod->l_ost_oi, &oi);
+		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n",
+		       i, le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
+	}
 }
 
 /* Shrink and/or grow reply buffers */

@@ -110,7 +110,7 @@ struct lov_stripe_md {
         __u64            lsm_maxbytes;
         struct {
                 /* Public members. */
-		struct ost_id lw_object_oid; /* lov object id/seq */
+		struct ost_id lw_object_oi; /* lov object id/seq */
 
                 /* LOV-private members start here -- only for use in lov/. */
                 __u32 lw_magic;
@@ -124,9 +124,7 @@ struct lov_stripe_md {
         struct lov_oinfo *lsm_oinfo[0];
 };
 
-#define lsm_object_oid	 lsm_wire.lw_object_oid
-#define lsm_object_id    lsm_wire.lw_object_oid.oi_id
-#define lsm_object_seq   lsm_wire.lw_object_oid.oi_seq
+#define lsm_oi		 lsm_wire.lw_object_oi
 #define lsm_magic        lsm_wire.lw_magic
 #define lsm_layout_gen   lsm_wire.lw_layout_gen
 #define lsm_stripe_size  lsm_wire.lw_stripe_size

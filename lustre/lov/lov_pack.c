@@ -56,34 +56,36 @@
 
 static void lov_dump_lmm_common(int level, void *lmmp)
 {
-        struct lov_mds_md *lmm = lmmp;
+	struct lov_mds_md *lmm = lmmp;
+	struct ost_id	oi;
 
-        CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
-               (__u64)le64_to_cpu(lmm->lmm_object_id),
-               le32_to_cpu(lmm->lmm_magic),
-               le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG(level,"stripe_size %u, stripe_count %u, layout_gen %u\n",
-               le32_to_cpu(lmm->lmm_stripe_size),
-               le16_to_cpu(lmm->lmm_stripe_count),
-               le16_to_cpu(lmm->lmm_layout_gen));
+	ostid_le_to_cpu(&lmm->lmm_oi, &oi);
+	CDEBUG(level, "objid "DOSTID", magic 0x%08x, pattern %#x\n",
+	       POSTID(&oi), le32_to_cpu(lmm->lmm_magic),
+	       le32_to_cpu(lmm->lmm_pattern));
+	CDEBUG(level, "stripe_size %u, stripe_count %u, layout_gen %u\n",
+	       le32_to_cpu(lmm->lmm_stripe_size),
+	       le16_to_cpu(lmm->lmm_stripe_count),
+	       le16_to_cpu(lmm->lmm_layout_gen));
 }
 
 static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
                                  int stripe_count)
 {
-        int i;
+	int i;
 
-        if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
-                CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
-                       stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
-        }
+	if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
+		CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
+		       stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
+	}
 
-        for (i = 0; i < stripe_count; ++i, ++lod) {
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n", i,
-                       le32_to_cpu(lod->l_ost_idx),
-                       (__u64)le64_to_cpu(lod->l_object_seq),
-                       (__u64)le64_to_cpu(lod->l_object_id));
-        }
+	for (i = 0; i < stripe_count; ++i, ++lod) {
+		struct ost_id	oi;
+
+		ostid_le_to_cpu(&lod->l_ost_oi, &oi);
+		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n", i,
+		       le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
+	}
 }
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
@@ -220,8 +222,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         /* lmmv1 and lmmv3 point to the same struct and have the
          * same first fields
          */
-        lmmv1->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
-        lmmv1->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
+	ostid_cpu_to_le(&lsm->lsm_oi, &lmmv1->lmm_oi);
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le16(stripe_count);
         lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
@@ -236,18 +237,18 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 lmm_objects = lmmv1->lmm_objects;
         }
 
-        for (i = 0; i < stripe_count; i++) {
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
-                /* XXX LOV STACKING call down to osc_packmd() to do packing */
-                LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
-                         lmmv1->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
-                lmm_objects[i].l_object_id = cpu_to_le64(loi->loi_id);
-                lmm_objects[i].l_object_seq = cpu_to_le64(loi->loi_seq);
-                lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
-                lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
-        }
+	for (i = 0; i < stripe_count; i++) {
+		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+		/* XXX LOV STACKING call down to osc_packmd() to do packing */
+		LASSERTF(loi->loi_id != 0, "lmm_oi "DOSTID" stripe %u/%u"
+			 " idx %u\n", POSTID(&lmmv1->lmm_oi), i, stripe_count,
+			 loi->loi_ost_idx);
+		ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
+		lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
+		lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
+	}
 
-        RETURN(lmm_size);
+	RETURN(lmm_size);
 }
 
 /* Find the max stripecount we should use */

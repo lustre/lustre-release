@@ -274,8 +274,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
 
         oinfo.oi_md = lsm;
         oinfo.oi_oa = obdo;
-        oinfo.oi_oa->o_id = lsm->lsm_object_id;
-        oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
+	oinfo.oi_oa->o_oi = lsm->lsm_oi;
         oinfo.oi_oa->o_mode = S_IFREG;
         oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |

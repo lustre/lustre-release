@@ -2021,23 +2021,23 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         char nl = is_dir ? ' ' : '\n';
         int rc;
 
-        if (is_dir && lum->lmm_object_seq == FID_SEQ_LOV_DEFAULT) {
-                lum->lmm_object_seq = FID_SEQ_OST_MDT0;
-                if (verbose & VERBOSE_DETAIL)
-                        llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
-        }
+	if (is_dir && ostid_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
+		lum->lmm_oi.oi_seq = FID_SEQ_OST_MDT0;
+		if (verbose & VERBOSE_DETAIL)
+			llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
+	}
 
         if (depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
                 llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
-        if ((verbose & VERBOSE_DETAIL) && !is_dir) {
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
-                             lum->lmm_magic);
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_seq:            "LPX64"\n",
-                             lum->lmm_object_seq);
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
-                             lum->lmm_object_id);
-        }
+	if ((verbose & VERBOSE_DETAIL) && !is_dir) {
+		llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
+			     lum->lmm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "lmm_seq:            "LPX64"\n",
+			     ostid_seq(&lum->lmm_oi));
+		llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
+			     ostid_id(&lum->lmm_oi));
+	}
 
         if (verbose & VERBOSE_COUNT) {
                 if (verbose & ~VERBOSE_COUNT)
@@ -2993,21 +2993,20 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
 
         if (ret) {
                 if (errno == ENODATA && d != NULL) {
-                        /* We need to "fake" the "use the default" values
-                         * since the lmm struct is zeroed out at this point.
-                         * The magic needs to be set in order to satisfy
-                         * a check later on in the code path.
-                         * The object_seq needs to be set for the "(Default)"
-                         * prefix to be displayed. */
-                        struct lov_user_md *lmm = &param->lmd->lmd_lmm;
-                        lmm->lmm_magic = LOV_MAGIC_V1;
-                        if (!param->raw)
-                                lmm->lmm_object_seq = FID_SEQ_LOV_DEFAULT;
-                        lmm->lmm_stripe_count = 0;
-                        lmm->lmm_stripe_size = 0;
-                        lmm->lmm_stripe_offset = -1;
-                        goto dump;
-
+			/* We need to "fake" the "use the default" values
+			 * since the lmm struct is zeroed out at this point.
+			 * The magic needs to be set in order to satisfy
+			 * a check later on in the code path.
+			 * The object_seq needs to be set for the "(Default)"
+			 * prefix to be displayed. */
+			struct lov_user_md *lmm = &param->lmd->lmd_lmm;
+			lmm->lmm_magic = LOV_MAGIC_V1;
+			if (!param->raw)
+				lmm->lmm_oi.oi_seq = FID_SEQ_LOV_DEFAULT;
+			lmm->lmm_stripe_count = 0;
+			lmm->lmm_stripe_size = 0;
+			lmm->lmm_stripe_offset = -1;
+			goto dump;
                 } else if (errno == ENODATA && parent != NULL) {
 			if (!param->obduuid && !param->mdtuuid)
                                 llapi_printf(LLAPI_MSG_NORMAL,

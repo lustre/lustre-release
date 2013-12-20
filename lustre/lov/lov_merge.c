@@ -55,26 +55,26 @@
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                       struct ost_lvb *lvb, __u64 *kms_place)
 {
-        __u64 size = 0;
-        __u64 kms = 0;
-        __u64 blocks = 0;
-        obd_time current_mtime = lvb->lvb_mtime;
-        obd_time current_atime = lvb->lvb_atime;
-        obd_time current_ctime = lvb->lvb_ctime;
-        int i;
-        int rc = 0;
+	__u64 size = 0;
+	__u64 kms = 0;
+	__u64 blocks = 0;
+	obd_time current_mtime = lvb->lvb_mtime;
+	obd_time current_atime = lvb->lvb_atime;
+	obd_time current_ctime = lvb->lvb_ctime;
+	int i;
+	int rc = 0;
+	struct lu_fid fid;
 
-        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+	LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
-        LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
+	LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
 #endif
 
+	ostid_fid_unpack(&lsm->lsm_oi, &fid);
 	CDEBUG(D_INODE, "MDT FID "DFID" initial value: s="LPU64" m="LPU64
-	       " a="LPU64" c="LPU64" b="LPU64"\n",
-	       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
-	       (__u32)(lsm->lsm_object_id >> 32), lvb->lvb_size,
+	       " a="LPU64" c="LPU64" b="LPU64"\n", PFID(&fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+	for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 obd_size lov_size, tmpsize;
 
@@ -102,13 +102,12 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                         current_atime = loi->loi_lvb.lvb_atime;
                 if (loi->loi_lvb.lvb_ctime > current_ctime)
                         current_ctime = loi->loi_lvb.lvb_ctime;
+
 		CDEBUG(D_INODE, "MDT FID "DFID" on OST[%u]: s="LPU64" m="LPU64
-		       " a="LPU64" c="LPU64" b="LPU64"\n",
-		       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
-		       (__u32)(lsm->lsm_object_id >> 32), loi->loi_ost_idx,
-		       loi->loi_lvb.lvb_size, loi->loi_lvb.lvb_mtime,
-		       loi->loi_lvb.lvb_atime, loi->loi_lvb.lvb_ctime,
-		       loi->loi_lvb.lvb_blocks);
+		       " a="LPU64" c="LPU64" b="LPU64"\n", PFID(&fid),
+		       loi->loi_ost_idx, loi->loi_lvb.lvb_size,
+		       loi->loi_lvb.lvb_mtime, loi->loi_lvb.lvb_atime,
+		       loi->loi_lvb.lvb_ctime, loi->loi_lvb.lvb_blocks);
         }
 
         *kms_place = kms;
@@ -132,6 +131,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 int lov_merge_lvb(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct ost_lvb *lvb, int kms_only)
 {
+	struct lu_fid fid;
 	int   rc;
 	__u64 kms;
 
@@ -141,11 +141,11 @@ int lov_merge_lvb(struct obd_export *exp,
 	lov_stripe_unlock(lsm);
 	if (kms_only)
 		lvb->lvb_size = kms;
+
+	ostid_fid_unpack(&lsm->lsm_oi, &fid);
 	CDEBUG(D_INODE, "merged for FID "DFID" s="LPU64" m="LPU64" a="LPU64
-	       " c="LPU64" b="LPU64"\n",
-	       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
-	       (__u32)(lsm->lsm_object_id >> 32), lvb->lvb_size, lvb->lvb_mtime,
-	       lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
+	       " c="LPU64" b="LPU64"\n", PFID(&fid), lvb->lvb_size,
+	       lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
 	RETURN(rc);
 }
 
@@ -213,12 +213,13 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
                         tgt->o_mtime = src->o_mtime;
                 if (valid & OBD_MD_FLDATAVERSION)
                         tgt->o_data_version += src->o_data_version;
-        } else {
-                memcpy(tgt, src, sizeof(*tgt));
-                tgt->o_id = lsm->lsm_object_id;
-                if (valid & OBD_MD_FLSIZE)
-                        tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
-        }
+	} else {
+		memcpy(tgt, src, sizeof(*tgt));
+		tgt->o_oi = lsm->lsm_oi;
+		if (valid & OBD_MD_FLSIZE)
+			tgt->o_size = lov_stripe_size(lsm, src->o_size,
+						      stripeno);
+	}
 
         /* data_version needs to be valid on all stripes to be correct! */
         if (!(valid & OBD_MD_FLDATAVERSION))

@@ -705,8 +705,7 @@ static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
 
         oinfo.oi_md = lsm;
         oinfo.oi_oa = obdo;
-        oinfo.oi_oa->o_id = lsm->lsm_object_id;
-        oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
+	oinfo.oi_oa->o_oi = lsm->lsm_oi;
         oinfo.oi_oa->o_mode = S_IFREG;
         oinfo.oi_oa->o_ioepoch = ioepoch;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
@@ -756,10 +755,11 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
 			    capa, obdo, ioepoch, sync);
 	capa_put(capa);
 	if (rc == 0) {
+		struct ost_id *oi = lsm ? &lsm->lsm_oi : &obdo->o_oi;
+
 		obdo_refresh_inode(inode, obdo, obdo->o_valid);
-		CDEBUG(D_INODE,
-		       "objid "LPX64" size %llu, blocks %llu, blksize %lu\n",
-		       lsm ? lsm->lsm_object_id : 0, i_size_read(inode),
+		CDEBUG(D_INODE, "objid "DOSTID" size %llu, blocks %llu,"
+		       " blksize %lu\n", POSTID(oi), i_size_read(inode),
 		       (unsigned long long)inode->i_blocks,
 		       (unsigned long)ll_inode_blksize(inode));
 	}
@@ -1691,8 +1691,7 @@ int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
 	    !(fiemap->fm_flags & FIEMAP_FLAG_DEVICE_ORDER))
 		GOTO(out, rc = -EOPNOTSUPP);
 
-        fm_key.oa.o_id = lsm->lsm_object_id;
-        fm_key.oa.o_seq = lsm->lsm_object_seq;
+	fm_key.oa.o_oi = lsm->lsm_oi;
         fm_key.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
         obdo_from_inode(&fm_key.oa, inode, OBD_MD_FLSIZE);

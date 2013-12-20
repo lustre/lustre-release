@@ -651,8 +651,7 @@ check_lov_mds_md_v1(void)
 	CHECK_STRUCT(lov_mds_md_v1);
 	CHECK_MEMBER(lov_mds_md_v1, lmm_magic);
 	CHECK_MEMBER(lov_mds_md_v1, lmm_pattern);
-	CHECK_MEMBER(lov_mds_md_v1, lmm_object_id);
-	CHECK_MEMBER(lov_mds_md_v1, lmm_object_seq);
+	CHECK_MEMBER(lov_mds_md_v1, lmm_oi);
 	CHECK_MEMBER(lov_mds_md_v1, lmm_stripe_size);
 	CHECK_MEMBER(lov_mds_md_v1, lmm_stripe_count);
 	CHECK_MEMBER(lov_mds_md_v1, lmm_layout_gen);
@@ -668,8 +667,7 @@ check_lov_mds_md_v3(void)
 	CHECK_STRUCT(lov_mds_md_v3);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_magic);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_pattern);
-	CHECK_MEMBER(lov_mds_md_v3, lmm_object_id);
-	CHECK_MEMBER(lov_mds_md_v3, lmm_object_seq);
+	CHECK_MEMBER(lov_mds_md_v3, lmm_oi);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_layout_gen);

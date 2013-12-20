@@ -61,10 +61,10 @@ EXPORT_SYMBOL(dump_lniobuf);
 
 void dump_lsm(int level, struct lov_stripe_md *lsm)
 {
-	CDEBUG(level, "lsm %p, objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
-	       "stripe_size %u, stripe_count %u, refc: %d, "
-	       "layout_gen %u, pool ["LOV_POOLNAMEF"]\n", lsm,
-	       lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
+	CDEBUG(level, "lsm %p, objid "DOSTID", maxbytes "LPX64", magic 0x%08X,"
+	       " stripe_size %u, stripe_count %u, refc: %d,"
+	       " layout_gen %u, pool ["LOV_POOLNAMEF"]\n", lsm,
+	       POSTID(&lsm->lsm_oi), lsm->lsm_maxbytes, lsm->lsm_magic,
 	       lsm->lsm_stripe_size, lsm->lsm_stripe_count,
 	       cfs_atomic_read(&lsm->lsm_refc), lsm->lsm_layout_gen,
 	       lsm->lsm_pool_name);

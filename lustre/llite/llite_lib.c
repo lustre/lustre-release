@@ -1993,8 +1993,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 			RETURN(-ENOMEM);
 		}
 		oinfo.oi_md = lsm;
-                oinfo.oi_oa->o_id = lsm->lsm_object_id;
-                oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
+		oinfo.oi_oa->o_oi = lsm->lsm_oi;
                 oinfo.oi_oa->o_flags = flags;
                 oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS |
                                        OBD_MD_FLGROUP;

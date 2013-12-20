@@ -1126,17 +1126,18 @@ static int lov_destroy(const struct lu_env *env, struct obd_export *exp,
                 if (oa->o_valid & OBD_MD_FLCOOKIE)
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
-                err = obd_destroy(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                  req->rq_oi.oi_oa, NULL, oti, NULL, capa);
-                err = lov_update_common_set(set, req, err);
-                if (err) {
-                        CERROR("error: destroying objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               oa->o_id, req->rq_oi.oi_oa->o_id,
-                               req->rq_idx, err);
-                        if (!rc)
-                                rc = err;
-                }
+		err = obd_destroy(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
+				  req->rq_oi.oi_oa, NULL, oti, NULL, capa);
+		err = lov_update_common_set(set, req, err);
+		if (err) {
+			CERROR("%s: destroying objid "DOSTID" subobj "
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name, POSTID(&oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi),
+			       req->rq_idx, err);
+			if (!rc)
+				rc = err;
+		}
         }
 
         if (rc == 0) {
@@ -1174,20 +1175,22 @@ static int lov_getattr(const struct lu_env *env, struct obd_export *exp,
         cfs_list_for_each (pos, &set->set_list) {
                 req = cfs_list_entry(pos, struct lov_request, rq_link);
 
-                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
-                       req->rq_oi.oi_oa->o_id, req->rq_idx);
+		CDEBUG(D_INFO, "objid "DOSTID"[%d] has subobj "DOSTID" at idx"
+		       " %u\n", POSTID(&oinfo->oi_oa->o_oi), req->rq_stripe,
+		       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx);
 
                 rc = obd_getattr(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
                                  &req->rq_oi);
-                err = lov_update_common_set(set, req, rc);
-                if (err) {
-                        CERROR("error: getattr objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               oinfo->oi_oa->o_id, req->rq_oi.oi_oa->o_id,
-                               req->rq_idx, err);
-                        break;
-                }
+		err = lov_update_common_set(set, req, rc);
+		if (err) {
+			CERROR("%s: getattr objid "DOSTID" subobj "
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       POSTID(&oinfo->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi),
+			       req->rq_idx, err);
+			break;
+		}
         }
 
         rc = lov_fini_getattr_set(set);
@@ -1232,26 +1235,28 @@ static int lov_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
-               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count,
-               oinfo->oi_md->lsm_stripe_size);
+	CDEBUG(D_INFO, "objid "DOSTID": %ux%u byte stripes\n",
+	       POSTID(&oinfo->oi_md->lsm_oi), oinfo->oi_md->lsm_stripe_count,
+	       oinfo->oi_md->lsm_stripe_size);
 
-        cfs_list_for_each (pos, &lovset->set_list) {
-                req = cfs_list_entry(pos, struct lov_request, rq_link);
+	cfs_list_for_each(pos, &lovset->set_list) {
+		req = cfs_list_entry(pos, struct lov_request, rq_link);
 
-                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
-                       req->rq_oi.oi_oa->o_id, req->rq_idx);
-                rc = obd_getattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                       &req->rq_oi, rqset);
-                if (rc) {
-                        CERROR("error: getattr objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               oinfo->oi_oa->o_id, req->rq_oi.oi_oa->o_id,
-                               req->rq_idx, rc);
-                        GOTO(out, rc);
-                }
-        }
+		CDEBUG(D_INFO, "objid "DOSTID"[%d] has subobj "DOSTID" at idx"
+		       "%u\n", POSTID(&oinfo->oi_oa->o_oi), req->rq_stripe,
+		       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx);
+		rc = obd_getattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
+				       &req->rq_oi, rqset);
+		if (rc) {
+			CERROR("%s: getattr objid "DOSTID" subobj"
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       POSTID(&oinfo->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi),
+			       req->rq_idx, rc);
+			GOTO(out, rc);
+		}
+	}
 
         if (!cfs_list_empty(&rqset->set_requests)) {
                 LASSERT(rc == 0);
@@ -1299,17 +1304,19 @@ static int lov_setattr(const struct lu_env *env, struct obd_export *exp,
         cfs_list_for_each (pos, &set->set_list) {
                 req = cfs_list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_setattr(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                 &req->rq_oi, NULL);
-                err = lov_update_setattr_set(set, req, rc);
-                if (err) {
-                        CERROR("error: setattr objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               set->set_oi->oi_oa->o_id,
-                               req->rq_oi.oi_oa->o_id, req->rq_idx, err);
-                        if (!rc)
-                                rc = err;
-                }
+		rc = obd_setattr(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
+				 &req->rq_oi, NULL);
+		err = lov_update_setattr_set(set, req, rc);
+		if (err) {
+			CERROR("%s: setattr objid "DOSTID" subobj "
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       POSTID(&set->set_oi->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx,
+			       err);
+			if (!rc)
+				rc = err;
+		}
         }
         err = lov_fini_setattr_set(set);
         if (!rc)
@@ -1358,31 +1365,32 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
-               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count,
-               oinfo->oi_md->lsm_stripe_size);
+	CDEBUG(D_INFO, "objid "DOSTID": %ux%u byte stripes\n",
+	       POSTID(&oinfo->oi_md->lsm_oi),
+	       oinfo->oi_md->lsm_stripe_count,
+	       oinfo->oi_md->lsm_stripe_size);
 
-        cfs_list_for_each (pos, &set->set_list) {
-                req = cfs_list_entry(pos, struct lov_request, rq_link);
+	cfs_list_for_each(pos, &set->set_list) {
+		req = cfs_list_entry(pos, struct lov_request, rq_link);
 
-                if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
-                        oti->oti_logcookies = set->set_cookies + req->rq_stripe;
+		if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
+			oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
-                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
-                       req->rq_oi.oi_oa->o_id, req->rq_idx);
+		CDEBUG(D_INFO, "objid "DOSTID"[%d] has subobj "DOSTID" at idx"
+		       "%u\n", POSTID(&oinfo->oi_oa->o_oi), req->rq_stripe,
+		       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx);
 
-                rc = obd_setattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                       &req->rq_oi, oti, rqset);
-                if (rc) {
-                        CERROR("error: setattr objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               set->set_oi->oi_oa->o_id,
-                               req->rq_oi.oi_oa->o_id,
-                               req->rq_idx, rc);
-                        break;
-                }
-        }
+		rc = obd_setattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
+				       &req->rq_oi, oti, rqset);
+		if (rc) {
+			CERROR("error: setattr objid "DOSTID" subobj"
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       POSTID(&set->set_oi->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi),
+			       req->rq_idx, rc);
+			break;
+		}
+	}
 
         /* If we are not waiting for responses on async requests, return. */
         if (rc || !rqset || cfs_list_empty(&rqset->set_requests)) {
@@ -1441,15 +1449,16 @@ static int lov_punch(const struct lu_env *env, struct obd_export *exp,
         cfs_list_for_each (pos, &set->set_list) {
                 req = cfs_list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_punch(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
-                               &req->rq_oi, NULL, rqset);
-                if (rc) {
-                        CERROR("error: punch objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n",
-                               set->set_oi->oi_oa->o_id,
-                               req->rq_oi.oi_oa->o_id, req->rq_idx, rc);
-                        break;
-                }
+		rc = obd_punch(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
+			       &req->rq_oi, NULL, rqset);
+		if (rc) {
+			CERROR("%s: punch objid "DOSTID" subobj "DOSTID
+			       " on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       POSTID(&set->set_oi->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx, rc);
+			break;
+		}
         }
 
         if (rc || cfs_list_empty(&rqset->set_requests)) {
@@ -1500,8 +1509,8 @@ static int lov_sync(const struct lu_env *env, struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "fsync objid "LPX64" ["LPX64", "LPX64"]\n",
-               set->set_oi->oi_oa->o_id, start, end);
+	CDEBUG(D_INFO, "fsync objid "DOSTID" ["LPX64", "LPX64"]\n",
+	       POSTID(&set->set_oi->oi_oa->o_oi), start, end);
 
         cfs_list_for_each (pos, &set->set_list) {
                 req = cfs_list_entry(pos, struct lov_request, rq_link);
@@ -1509,13 +1518,15 @@ static int lov_sync(const struct lu_env *env, struct obd_export *exp,
                 rc = obd_sync(env, lov->lov_tgts[req->rq_idx]->ltd_exp,
                               &req->rq_oi, req->rq_oi.oi_policy.l_extent.start,
                               req->rq_oi.oi_policy.l_extent.end, rqset);
-                if (rc) {
-                        CERROR("error: fsync objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n",
-                               set->set_oi->oi_oa->o_id,
-                               req->rq_oi.oi_oa->o_id, req->rq_idx, rc);
-                        break;
-                }
+		if (rc) {
+			CERROR("%s: fsync objid "DOSTID" subobj "DOSTID
+			       " on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       POSTID(&set->set_oi->oi_oa->o_oi),
+			       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx,
+			       rc);
+			break;
+		}
         }
 
         /* If we are not waiting for responses on async requests, return. */
@@ -1687,13 +1698,12 @@ static int lov_change_cbdata(struct obd_export *exp,
                         continue;
                 }
 
-                submd.lsm_object_id = loi->loi_id;
-                submd.lsm_object_seq = loi->loi_seq;
-                submd.lsm_stripe_count = 0;
-                rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
-                                       &submd, it, data);
-        }
-        RETURN(rc);
+		submd.lsm_oi = loi->loi_oi;
+		submd.lsm_stripe_count = 0;
+		rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
+				       &submd, it, data);
+	}
+	RETURN(rc);
 }
 
 /* find any ldlm lock of the inode in lov
@@ -1722,16 +1732,14 @@ static int lov_find_cbdata(struct obd_export *exp,
                         CDEBUG(D_HA, "lov idx %d NULL \n", loi->loi_ost_idx);
                         continue;
                 }
-
-                submd.lsm_object_id = loi->loi_id;
-                submd.lsm_object_seq = loi->loi_seq;
-                submd.lsm_stripe_count = 0;
-                rc = obd_find_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
-                                     &submd, it, data);
-                if (rc != 0)
-                        RETURN(rc);
-        }
-        RETURN(rc);
+		submd.lsm_oi = loi->loi_oi;
+		submd.lsm_stripe_count = 0;
+		rc = obd_find_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
+				     &submd, it, data);
+		if (rc != 0)
+			RETURN(rc);
+	}
+	RETURN(rc);
 }
 
 static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -1757,25 +1765,25 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (rc)
                 RETURN(rc);
 
-        cfs_list_for_each (pos, &set->set_list) {
-                req = cfs_list_entry(pos, struct lov_request, rq_link);
-                lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
+	cfs_list_for_each(pos, &set->set_list) {
+		req = cfs_list_entry(pos, struct lov_request, rq_link);
+		lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
 
-                rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_md, mode, lov_lockhp);
-                rc = lov_update_common_set(set, req, rc);
-                if (rc) {
-                        CERROR("error: cancel objid "LPX64" subobj "
-                               LPX64" on OST idx %d: rc = %d\n",
-                               lsm->lsm_object_id,
-                               req->rq_oi.oi_md->lsm_object_id,
-                               req->rq_idx, rc);
-                        err = rc;
-                }
+		rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
+				req->rq_oi.oi_md, mode, lov_lockhp);
+		rc = lov_update_common_set(set, req, rc);
+		if (rc) {
+			CERROR("%s: cancel objid "DOSTID" subobj "
+			       DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name, POSTID(&lsm->lsm_oi),
+			       POSTID(&req->rq_oi.oi_md->lsm_oi),
+			       req->rq_idx, rc);
+			err = rc;
+		}
 
-        }
-        lov_fini_cancel_set(set);
-        RETURN(err);
+	}
+	lov_fini_cancel_set(set);
+	RETURN(err);
 }
 
 static int lov_cancel_unused(struct obd_export *exp,
@@ -1806,33 +1814,34 @@ static int lov_cancel_unused(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                struct lov_stripe_md submd;
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
-                int err;
+	for (i = 0; i < lsm->lsm_stripe_count; i++) {
+		struct lov_stripe_md submd;
+		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+		int idx = loi->loi_ost_idx;
+		int err;
 
-                if (!lov->lov_tgts[loi->loi_ost_idx]) {
-                        CDEBUG(D_HA, "lov idx %d NULL\n", loi->loi_ost_idx);
-                        continue;
-                }
+		if (!lov->lov_tgts[idx]) {
+			CDEBUG(D_HA, "lov idx %d NULL\n", idx);
+			continue;
+		}
 
-                if (!lov->lov_tgts[loi->loi_ost_idx]->ltd_active)
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+		if (!lov->lov_tgts[idx]->ltd_active)
+			CDEBUG(D_HA, "lov idx %d inactive\n", idx);
 
-                submd.lsm_object_id = loi->loi_id;
-                submd.lsm_object_seq = loi->loi_seq;
-                submd.lsm_stripe_count = 0;
-                err = obd_cancel_unused(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
-                                        &submd, flags, opaque);
-                if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
-                        CERROR("error: cancel unused objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
-                               loi->loi_id, loi->loi_ost_idx, err);
-                        if (!rc)
-                                rc = err;
-                }
-        }
-        RETURN(rc);
+		submd.lsm_oi = loi->loi_oi;
+		submd.lsm_stripe_count = 0;
+		err = obd_cancel_unused(lov->lov_tgts[idx]->ltd_exp,
+					&submd, flags, opaque);
+		if (err && lov->lov_tgts[idx]->ltd_active) {
+			CERROR("%s: cancel unused objid "DOSTID
+			       " subobj "DOSTID" on OST idx %d: rc = %d\n",
+			       exp->exp_obd->obd_name, POSTID(&lsm->lsm_oi),
+			       POSTID(&loi->loi_oi), idx, err);
+			if (!rc)
+				rc = err;
+		}
+	}
+	RETURN(rc);
 }
 
 int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)

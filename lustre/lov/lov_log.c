@@ -188,17 +188,18 @@ static int lov_llog_repl_cancel(const struct lu_env *env,
                 int err;
 
 		err = llog_cancel(env, cctxt, NULL, 1, cookies, flags);
-                llog_ctxt_put(cctxt);
-                if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
-                        CERROR("error: objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
-                               loi->loi_id, loi->loi_ost_idx, err);
-                        if (!rc)
-                                rc = err;
-                }
-        }
-        obd_putref(obd);
-        RETURN(rc);
+		llog_ctxt_put(cctxt);
+		if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
+			CERROR("%s: objid "DOSTID" subobj "DOSTID
+			       " on OST idx %d: rc = %d\n",
+			       obd->obd_name, POSTID(&lsm->lsm_oi),
+			       POSTID(&loi->loi_oi), loi->loi_ost_idx, err);
+			if (!rc)
+				rc = err;
+		}
+	}
+	obd_putref(obd);
+	RETURN(rc);
 }
 
 static struct llog_operations lov_mds_ost_orig_logops = {

@@ -1361,14 +1361,12 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	/* set the file specific informations in lmm */
 	if (fst_lmm) {
 		fst_lmm->lmm_layout_gen = cpu_to_le16(snd_gen);
-		fst_lmm->lmm_object_seq = snd_lmm->lmm_object_seq;
-		fst_lmm->lmm_object_id = snd_lmm->lmm_object_id;
+		fst_lmm->lmm_oi = snd_lmm->lmm_oi;
 	}
 
 	if (snd_lmm) {
 		snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
-		snd_lmm->lmm_object_seq = old_fst_lmm->lmm_object_seq;
-		snd_lmm->lmm_object_id = old_fst_lmm->lmm_object_id;
+		snd_lmm->lmm_oi = old_fst_lmm->lmm_oi;
 	}
 
 	/* prepare transaction */
@@ -1403,8 +1401,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		/* restore object_id, object_seq and generation number
 		 * on first file */
 		if (fst_lmm) {
-			fst_lmm->lmm_object_id = old_fst_lmm->lmm_object_id;
-			fst_lmm->lmm_object_seq = old_fst_lmm->lmm_object_seq;
+			fst_lmm->lmm_oi = old_fst_lmm->lmm_oi;
 			fst_lmm->lmm_layout_gen = old_fst_lmm->lmm_layout_gen;
 		}
 

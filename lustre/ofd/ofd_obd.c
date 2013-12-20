@@ -42,6 +42,7 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <lustre/lustre_idl.h>
 #include "ofd_internal.h"
 #include <obd_cksum.h>
 #include <lustre_quota.h>
@@ -638,14 +639,12 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		ofd_info_init(&env, exp);
 
 		ostid_le_to_cpu(oid, oid);
-		CDEBUG(D_HA, "Get LAST FID for seq "LPX64"\n", oid->oi_seq);
 
 		oseq = ofd_seq_load(&env, ofd, oid->oi_seq);
 		if (IS_ERR(oseq))
 			GOTO(out_fini, rc = PTR_ERR(oseq));
 
-		CDEBUG(D_HA, "LAST FID is "POSTID"\n", oseq->os_last_oid,
-		       oseq->os_seq);
+		CDEBUG(D_HA, "LAST FID is "DOSTID"\n", POSTID(&oseq->os_oi));
 
 		*oid = oseq->os_oi;
 		*vallen = sizeof(*oid);
@@ -1322,7 +1321,7 @@ out_nolock:
 	if (rc == 0 && ea != NULL) {
 		struct lov_stripe_md *lsm = *ea;
 
-		lsm->lsm_object_id = oa->o_id;
+		lsm->lsm_oi = oa->o_oi;
 	}
 	ofd_seq_put(env, oseq);
 	RETURN(rc);

@@ -174,14 +174,6 @@ struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
         return container_of(c, struct echo_object_conf, eoc_cl);
 }
 
-static inline void lsm2fid(struct lov_stripe_md *lsm, struct lu_fid *fid)
-{
-        fid_zero(fid);
-        fid->f_seq = FID_SEQ_ECHO;
-        /* truncated to 32 bits by assignment */
-        fid->f_oid = lsm->lsm_object_id;
-        fid->f_ver = lsm->lsm_object_id >> 32;
-}
 /** @} echo_helpers */
 
 static struct echo_object *cl_echo_object_find(struct echo_device *d,
@@ -543,6 +535,7 @@ static int echo_alloc_memmd(struct echo_device *ed,
 
 	loi_init((*lsmp)->lsm_oinfo[0]);
 	(*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+	(*lsmp)->lsm_oi.oi_seq = FID_SEQ_ECHO;
 
 	RETURN(lsm_size);
 }
@@ -1088,10 +1081,11 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         int refcheck;
         ENTRY;
 
-        LASSERT(lsmp);
-        lsm = *lsmp;
-        LASSERT(lsm);
-        LASSERT(lsm->lsm_object_id);
+	LASSERT(lsmp);
+	lsm = *lsmp;
+	LASSERT(lsm);
+	LASSERT(ostid_id(&lsm->lsm_oi) != 0);
+	LASSERT(ostid_seq(&lsm->lsm_oi) == FID_SEQ_ECHO);
 
         /* Never return an object if the obd is to be freed. */
         if (echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_stopping)
@@ -1107,8 +1101,7 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
                 if (!d->ed_next_islov) {
                         struct lov_oinfo *oinfo = lsm->lsm_oinfo[0];
                         LASSERT(oinfo != NULL);
-                        oinfo->loi_id = lsm->lsm_object_id;
-                        oinfo->loi_seq = lsm->lsm_object_seq;
+			oinfo->loi_oi = lsm->lsm_oi;
                         conf->eoc_cl.u.coc_oinfo = oinfo;
                 } else {
                         struct lustre_md *md;
@@ -1121,7 +1114,7 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         conf->eoc_md = lsmp;
 
         fid  = &info->eti_fid;
-        lsm2fid(lsm, fid);
+	ostid_fid_unpack(&lsm->lsm_oi, fid);
 
 	/* In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp() */
@@ -2279,22 +2272,22 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 
                 idx = cfs_rand();
 
-                /* setup stripes: indices + default ids if required */
-                for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                        if (lsm->lsm_oinfo[i]->loi_id == 0)
-                                lsm->lsm_oinfo[i]->loi_id = lsm->lsm_object_id;
+		/* setup stripes: indices + default ids if required */
+		for (i = 0; i < lsm->lsm_stripe_count; i++) {
+			if (lsm->lsm_oinfo[i]->loi_id == 0)
+				lsm->lsm_oinfo[i]->loi_oi = lsm->lsm_oi;
 
-                        lsm->lsm_oinfo[i]->loi_ost_idx =
-                                (idx + i) % ec->ec_nstripes;
-                }
+			lsm->lsm_oinfo[i]->loi_ost_idx =
+				(idx + i) % ec->ec_nstripes;
+		}
         }
 
-        /* setup object ID here for !on_target and LOV hint */
-        if (oa->o_valid & OBD_MD_FLID)
-                lsm->lsm_object_id = oa->o_id;
+	/* setup object ID here for !on_target and LOV hint */
+	if (oa->o_valid & OBD_MD_FLID)
+		lsm->lsm_oi.oi_id = oa->o_id;
 
-        if (lsm->lsm_object_id == 0)
-                lsm->lsm_object_id = ++last_object_id;
+	if (ostid_id(&lsm->lsm_oi) == 0)
+		lsm->lsm_oi.oi_id = ++last_object_id;
 
         rc = 0;
         if (on_target) {
@@ -2310,7 +2303,7 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
         }
 
         /* See what object ID we were given */
-        oa->o_id = lsm->lsm_object_id;
+	oa->o_oi = lsm->lsm_oi;
         oa->o_valid |= OBD_MD_FLID;
 
         eco = cl_echo_object_find(ed, &lsm);
@@ -2350,11 +2343,9 @@ static int echo_get_object(struct echo_object **ecop, struct echo_device *ed,
         if (rc < 0)
                 RETURN(rc);
 
-        lsm->lsm_object_id = oa->o_id;
-        if (oa->o_valid & OBD_MD_FLGROUP)
-                lsm->lsm_object_seq = oa->o_seq;
-        else
-                lsm->lsm_object_seq = FID_SEQ_ECHO;
+	lsm->lsm_oi = oa->o_oi;
+	if (!(oa->o_valid & OBD_MD_FLGROUP))
+		lsm->lsm_oi.oi_seq = FID_SEQ_ECHO;
 
         rc = 0;
         eco = cl_echo_object_find(ed, &lsm);
@@ -2491,9 +2482,9 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 
         gfp_mask = ((oa->o_id & 2) == 0) ? CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
-        LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
-        LASSERT(lsm != NULL);
-        LASSERT(lsm->lsm_object_id == oa->o_id);
+	LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
+	LASSERT(lsm != NULL);
+	LASSERT(ostid_id(&lsm->lsm_oi) == ostid_id(&oa->o_oi));
 
         if (count <= 0 ||
             (count & (~CFS_PAGE_MASK)) != 0)
@@ -2579,9 +2570,9 @@ static int echo_client_prep_commit(const struct lu_env *env,
 
         ENTRY;
 
-        if (count <= 0 || (count & (~CFS_PAGE_MASK)) != 0 ||
-            (lsm != NULL && lsm->lsm_object_id != oa->o_id))
-                RETURN(-EINVAL);
+	if (count <= 0 || (count & (~CFS_PAGE_MASK)) != 0 ||
+	    (lsm != NULL && ostid_id(&lsm->lsm_oi) != ostid_id(&oa->o_oi)))
+		RETURN(-EINVAL);
 
         npages = batch >> CFS_PAGE_SHIFT;
         tot_pages = count >> CFS_PAGE_SHIFT;

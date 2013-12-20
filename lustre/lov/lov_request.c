@@ -151,25 +151,27 @@ extern void osc_update_enqueue(struct lustre_handle *lov_lockhp,
                                struct ost_lvb *lvb, __u32 mode, int rc);
 
 static int lov_update_enqueue_lov(struct obd_export *exp,
-                                  struct lustre_handle *lov_lockhp,
-                                  struct lov_oinfo *loi, int flags, int idx,
-                                  __u64 oid, int rc)
+				  struct lustre_handle *lov_lockhp,
+				  struct lov_oinfo *loi, int flags, int idx,
+				  struct ost_id *oi, int rc)
 {
-        struct lov_obd *lov = &exp->exp_obd->u.lov;
+	struct lov_obd *lov = &exp->exp_obd->u.lov;
 
-        if (rc != ELDLM_OK &&
-            !(rc == ELDLM_LOCK_ABORTED && (flags & LDLM_FL_HAS_INTENT))) {
-                memset(lov_lockhp, 0, sizeof(*lov_lockhp));
-                if (lov->lov_tgts[idx] && lov->lov_tgts[idx]->ltd_active) {
-                        /* -EUSERS used by OST to report file contention */
-                        if (rc != -EINTR && rc != -EUSERS)
-                                CERROR("enqueue objid "LPX64" subobj "
-                                       LPX64" on OST idx %d: rc %d\n",
-                                       oid, loi->loi_id, loi->loi_ost_idx, rc);
-                } else
-                        rc = ELDLM_OK;
-        }
-        return rc;
+	if (rc != ELDLM_OK &&
+	    !(rc == ELDLM_LOCK_ABORTED && (flags & LDLM_FL_HAS_INTENT))) {
+		memset(lov_lockhp, 0, sizeof(*lov_lockhp));
+		if (lov->lov_tgts[idx] && lov->lov_tgts[idx]->ltd_active) {
+			/* -EUSERS used by OST to report file contention */
+			if (rc != -EINTR && rc != -EUSERS)
+				CERROR("%s: enqueue objid "DOSTID" subobj"
+				       DOSTID" on OST idx %d: rc %d\n",
+				       exp->exp_obd->obd_name,
+				       POSTID(oi), POSTID(&loi->loi_oi),
+				       loi->loi_ost_idx, rc);
+		} else
+			rc = ELDLM_OK;
+	}
+	return rc;
 }
 
 int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
@@ -196,11 +198,11 @@ int lov_update_enqueue_set(struct lov_request *req, __u32 mode, int rc)
                            &req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb, mode, rc);
         if (rc == ELDLM_LOCK_ABORTED && (oi->oi_flags & LDLM_FL_HAS_INTENT))
                 memset(lov_lockhp, 0, sizeof *lov_lockhp);
-        rc = lov_update_enqueue_lov(set->set_exp, lov_lockhp, loi, oi->oi_flags,
-                                    req->rq_idx, oi->oi_md->lsm_object_id, rc);
-        lov_stripe_unlock(oi->oi_md);
-        lov_update_set(set, req, rc);
-        RETURN(rc);
+	rc = lov_update_enqueue_lov(set->set_exp, lov_lockhp, loi, oi->oi_flags,
+				    req->rq_idx, &oi->oi_md->lsm_oi, rc);
+	lov_stripe_unlock(oi->oi_md);
+	lov_update_set(set, req, rc);
+	RETURN(rc);
 }
 
 /* The callback for osc_enqueue that updates lov info for every OSC request. */
@@ -239,15 +241,16 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
                 if (!lustre_handle_is_used(lov_lockhp))
                         continue;
 
-                rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_md, mode, lov_lockhp);
-                if (rc && lov->lov_tgts[req->rq_idx] &&
-                    lov->lov_tgts[req->rq_idx]->ltd_active)
-                        CERROR("cancelling obdjid "LPX64" on OST "
-                               "idx %d error: rc = %d\n",
-                               req->rq_oi.oi_md->lsm_object_id,
-                               req->rq_idx, rc);
-        }
+		rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
+				req->rq_oi.oi_md, mode, lov_lockhp);
+		if (rc && lov->lov_tgts[req->rq_idx] &&
+		    lov->lov_tgts[req->rq_idx]->ltd_active)
+			CERROR("%s: cancelling obdjid "DOSTID" on OST"
+			       "idx %d error: rc = %d\n",
+			       set->set_exp->exp_obd->obd_name,
+			       POSTID(&req->rq_oi.oi_md->lsm_oi),
+			       req->rq_idx, rc);
+	}
         if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
         RETURN(rc);
@@ -378,14 +381,13 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
 
-                /* XXX LOV STACKING: submd should be from the subobj */
-                req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
-                req->rq_oi.oi_md->lsm_object_seq = loi->loi_seq;
-                req->rq_oi.oi_md->lsm_stripe_count = 0;
-                req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms_valid =
-                        loi->loi_kms_valid;
-                req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms = loi->loi_kms;
-                req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb = loi->loi_lvb;
+		/* XXX LOV STACKING: submd should be from the subobj */
+		req->rq_oi.oi_md->lsm_oi = loi->loi_oi;
+		req->rq_oi.oi_md->lsm_stripe_count = 0;
+		req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms_valid =
+			loi->loi_kms_valid;
+		req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms = loi->loi_kms;
+		req->rq_oi.oi_md->lsm_oinfo[0]->loi_lvb = loi->loi_lvb;
 
                 lov_set_add_req(req, set);
         }
@@ -474,10 +476,9 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
 
-                /* XXX LOV STACKING: submd should be from the subobj */
-                req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
-                req->rq_oi.oi_md->lsm_object_seq = loi->loi_seq;
-                req->rq_oi.oi_md->lsm_stripe_count = 0;
+		/* XXX LOV STACKING: submd should be from the subobj */
+		req->rq_oi.oi_md->lsm_oi = loi->loi_oi;
+		req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
         }
@@ -557,10 +558,9 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
 
-                /* XXX LOV STACKING: submd should be from the subobj */
-                req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
-                req->rq_oi.oi_md->lsm_object_seq = loi->loi_seq;
-                req->rq_oi.oi_md->lsm_stripe_count = 0;
+		/* XXX LOV STACKING: submd should be from the subobj */
+		req->rq_oi.oi_md->lsm_oi = loi->loi_oi;
+		req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
         }
@@ -747,12 +747,11 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
 
-                /* XXX LOV STACKING */
-                req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
-                req->rq_oi.oi_md->lsm_object_seq = loi->loi_seq;
-                req->rq_oabufs = info[i].count;
-                req->rq_pgaidx = shift;
-                shift += req->rq_oabufs;
+		/* XXX LOV STACKING */
+		req->rq_oi.oi_md->lsm_oi = loi->loi_oi;
+		req->rq_oabufs = info[i].count;
+		req->rq_pgaidx = shift;
+		shift += req->rq_oabufs;
 
                 /* remember the index for sort brw_page array */
                 info[i].index = req->rq_pgaidx;

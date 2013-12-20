@@ -1212,8 +1212,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_seq = lsm->lsm_object_seq;
+	oa->o_oi = lsm->lsm_oi;
         oa->o_mode = body->mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
@@ -1236,17 +1235,17 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                         GOTO(out_free_memmd, rc);
         }
 
-        rc = obd_destroy(NULL, ll_i2dtexp(dir), oa, lsm, &oti,
-                         ll_i2mdexp(dir), oc);
-        capa_put(oc);
-        if (rc)
-                CERROR("obd destroy objid "LPX64" error %d\n",
-                       lsm->lsm_object_id, rc);
- out_free_memmd:
-        obd_free_memmd(ll_i2dtexp(dir), &lsm);
+	rc = obd_destroy(NULL, ll_i2dtexp(dir), oa, lsm, &oti,
+			 ll_i2mdexp(dir), oc);
+	capa_put(oc);
+	if (rc)
+		CERROR("obd destroy objid "DOSTID" error %d\n",
+		       POSTID(&lsm->lsm_oi), rc);
+out_free_memmd:
+	obd_free_memmd(ll_i2dtexp(dir), &lsm);
 	OBDO_FREE(oa);
- out:
-        return rc;
+out:
+	return rc;
 }
 
 /* ll_unlink_generic() doesn't update the inode with the new link count.

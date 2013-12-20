@@ -300,10 +300,10 @@ parse_lsm (struct lsm_buffer *lsmb, char *string)
 
         reset_lsmb (lsmb);
 
-        lsm->lsm_object_id = strtoull (string, &end, 0);
-        if (end == string)
-                return (-1);
-        string = end;
+	lsm->lsm_oi.oi_id = strtoull(string, &end, 0);
+	if (end == string)
+		return -1;
+	string = end;
 
         if (*string == 0)
                 return (0);
@@ -1567,18 +1567,18 @@ int jt_obd_create(int argc, char **argv)
                         return CMD_HELP;
         }
 
-        if (argc < 5) {
-                reset_lsmb (&lsm_buffer);       /* will set default */
-        } else {
-                rc = parse_lsm (&lsm_buffer, argv[4]);
-                if (rc != 0) {
-                        fprintf(stderr, "error: %s: invalid lsm '%s'\n",
-                                jt_cmdname(argv[0]), argv[4]);
-                        return CMD_HELP;
-                }
-                base_id = lsm_buffer.lsm.lsm_object_id;
-                valid_lsm = 1;
-        }
+	if (argc < 5) {
+		reset_lsmb(&lsm_buffer);       /* will set default */
+	} else {
+		rc = parse_lsm(&lsm_buffer, argv[4]);
+		if (rc != 0) {
+			fprintf(stderr, "error: %s: invalid lsm '%s'\n",
+				jt_cmdname(argv[0]), argv[4]);
+			return CMD_HELP;
+		}
+		base_id = ostid_id(&lsm_buffer.lsm.lsm_oi);
+		valid_lsm = 1;
+	}
 
         printf("%s: "LPD64" objects\n", jt_cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);

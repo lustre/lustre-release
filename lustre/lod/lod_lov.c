@@ -519,8 +519,8 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 
 	lmm->lmm_magic = cpu_to_le32(magic);
 	lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
-	lmm->lmm_object_id = cpu_to_le64(fid_ver_oid(fid));
-	lmm->lmm_object_seq = cpu_to_le64(fid_seq(fid));
+	fid_ostid_pack(fid, &lmm->lmm_oi);
+	ostid_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
 	lmm->lmm_stripe_size = cpu_to_le32(lo->ldo_stripe_size);
 	lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_stripenr);
 	lmm->lmm_layout_gen = 0;
@@ -547,8 +547,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 		rc = fid_ostid_pack(fid, &info->lti_ostid);
 		LASSERT(rc == 0);
 
-		objs[i].l_object_id  = cpu_to_le64(info->lti_ostid.oi_id);
-		objs[i].l_object_seq = cpu_to_le64(info->lti_ostid.oi_seq);
+		ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
 		objs[i].l_ost_gen    = cpu_to_le32(0);
 		rc = lod_fld_lookup(env, lod, fid, &index, LU_SEQ_RANGE_OST);
 		if (rc < 0) {
@@ -642,8 +641,6 @@ int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 
 	v3->lmm_magic = cpu_to_le32(LOV_MAGIC_V3);
 	v3->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
-	v3->lmm_object_id = 0;
-	v3->lmm_object_seq = 0;
 	v3->lmm_stripe_size = cpu_to_le32(lo->ldo_def_stripe_size);
 	v3->lmm_stripe_count = cpu_to_le16(lo->ldo_def_stripenr);
 	v3->lmm_stripe_offset = cpu_to_le16(lo->ldo_def_stripe_offset);
@@ -693,8 +690,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 		RETURN(-ENOMEM);
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		info->lti_ostid.oi_id = le64_to_cpu(objs[i].l_object_id);
-		info->lti_ostid.oi_seq = le64_to_cpu(objs[i].l_object_seq);
+		ostid_le_to_cpu(&objs[i].l_ost_oi, &info->lti_ostid);
 		idx = le64_to_cpu(objs[i].l_ost_idx);
 		fid_ostid_unpack(&info->lti_fid, &info->lti_ostid, idx);
 		LASSERTF(fid_is_sane(&info->lti_fid), ""DFID" insane!\n",

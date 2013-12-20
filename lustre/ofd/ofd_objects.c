@@ -42,6 +42,7 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <dt_object.h>
+#include <lustre/lustre_idl.h>
 
 #include "ofd_internal.h"
 
@@ -163,12 +164,12 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 	/* Don't create objects beyond the valid range for this SEQ */
 	if (unlikely(fid_seq_is_mdt0(oseq->os_seq) && (id + nr) >= IDIF_MAX_OID)) {
-		CERROR("%s:"POSTID" hit the IDIF_MAX_OID (1<<48)!\n",
+		CERROR("%s:"DOSTID" hit the IDIF_MAX_OID (1<<48)!\n",
 		       ofd_name(ofd), id, oseq->os_seq);
 		RETURN(rc = -ENOSPC);
 	} else if (unlikely(!fid_seq_is_mdt0(oseq->os_seq) &&
 			    (id + nr) >= OBIF_MAX_OID)) {
-		CERROR("%s:"POSTID" hit the OBIF_MAX_OID (1<<32)!\n",
+		CERROR("%s:"DOSTID" hit the OBIF_MAX_OID (1<<32)!\n",
 		       ofd_name(ofd), id, oseq->os_seq);
 		RETURN(rc = -ENOSPC);
 	}

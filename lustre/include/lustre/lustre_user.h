@@ -110,6 +110,17 @@ struct obd_statfs {
 };
 
 /**
+ * OST object IDentifier.
+ */
+struct ost_id {
+	__u64	oi_id;
+	__u64	oi_seq;
+};
+
+#define DOSTID LPX64":"LPU64
+#define POSTID(oi) (oi)->oi_seq, (oi)->oi_id
+
+/**
  * File IDentifier.
  *
  * FID is a cluster-wide unique identifier of a file or an object (stripe).
@@ -272,18 +283,18 @@ typedef struct lu_fid lustre_fid;
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
-        __u64 l_object_id;        /* OST object ID */
-        __u64 l_object_seq;       /* OST object seq number */
-        __u32 l_ost_gen;          /* generation of this OST index */
-        __u32 l_ost_idx;          /* OST index in LOV */
+	struct ost_id l_ost_oi;	  /* OST object ID */
+	__u32 l_ost_gen;          /* generation of this OST index */
+	__u32 l_ost_idx;          /* OST index in LOV */
 } __attribute__((packed));
+#define l_object_id	l_ost_oi.oi_id
+#define l_object_seq	l_ost_oi.oi_seq
 
 #define lov_user_md lov_user_md_v1
 struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V1 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	__u64 lmm_object_id;      /* LOV object ID */
-	__u64 lmm_object_seq;     /* LOV object seq */
+	struct ost_id lmm_oi;	  /* LOV object ID */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
@@ -298,8 +309,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	__u64 lmm_object_id;      /* LOV object ID */
-	__u64 lmm_object_seq;     /* LOV object seq */
+	struct ost_id lmm_oi;	  /* LOV object ID */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
