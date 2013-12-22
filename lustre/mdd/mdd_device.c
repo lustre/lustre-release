@@ -533,7 +533,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	}
 
 	reclen = llog_data_len(sizeof(*rec) + len);
-	buf = mdd_buf_alloc(env, reclen);
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
@@ -697,12 +697,6 @@ static int dot_lustre_mdd_object_sync(const struct lu_env *env,
         return -ENOSYS;
 }
 
-static int dot_lustre_mdd_path(const struct lu_env *env, struct md_object *obj,
-                           char *path, int pathlen, __u64 *recno, int *linkno)
-{
-        return -ENOSYS;
-}
-
 static int dot_file_lock(const struct lu_env *env, struct md_object *obj,
                          struct lov_mds_md *lmm, struct ldlm_extent *extent,
                          struct lustre_handle *lockh)
@@ -734,7 +728,6 @@ static struct md_object_operations mdd_dot_lustre_obj_ops = {
 	.moo_close		= dot_lustre_mdd_close,
 	.moo_capa_get		= mdd_capa_get,
 	.moo_object_sync	= dot_lustre_mdd_object_sync,
-	.moo_path		= dot_lustre_mdd_path,
 	.moo_file_lock		= dot_file_lock,
 	.moo_file_unlock	= dot_file_unlock,
 };
@@ -942,12 +935,6 @@ static int obf_mdd_readpage(const struct lu_env *env, struct md_object *obj,
         return -EPERM;
 }
 
-static int obf_path(const struct lu_env *env, struct md_object *obj,
-                    char *path, int pathlen, __u64 *recno, int *linkno)
-{
-        return -ENOSYS;
-}
-
 static struct md_object_operations mdd_obf_obj_ops = {
 	.moo_attr_get    = obf_attr_get,
 	.moo_attr_set    = obf_attr_set,
@@ -958,7 +945,6 @@ static struct md_object_operations mdd_obf_obj_ops = {
 	.moo_open        = obf_mdd_open,
 	.moo_close       = obf_mdd_close,
 	.moo_readpage    = obf_mdd_readpage,
-	.moo_path        = obf_path
 };
 
 /**
@@ -1273,17 +1259,14 @@ const struct lu_device_operations mdd_lu_ops = {
         .ldo_prepare           = mdd_prepare,
 };
 
-/*
- * No permission check is needed.
- */
 static int mdd_root_get(const struct lu_env *env,
-                        struct md_device *m, struct lu_fid *f)
+			struct md_device *m, struct lu_fid *f)
 {
-        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
 
-        ENTRY;
-        *f = mdd->mdd_root_fid;
-        RETURN(0);
+	ENTRY;
+	*f = mdd->mdd_root_fid;
+	RETURN(0);
 }
 
 /*
@@ -1718,12 +1701,12 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_capainfo_key);
 
 const struct md_device_operations mdd_ops = {
-        .mdo_statfs         = mdd_statfs,
-        .mdo_root_get       = mdd_root_get,
-        .mdo_init_capa_ctxt = mdd_init_capa_ctxt,
-        .mdo_update_capa_key= mdd_update_capa_key,
-        .mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
-        .mdo_iocontrol      = mdd_iocontrol,
+	.mdo_statfs         = mdd_statfs,
+	.mdo_root_get	    = mdd_root_get,
+	.mdo_init_capa_ctxt = mdd_init_capa_ctxt,
+	.mdo_update_capa_key= mdd_update_capa_key,
+	.mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
+	.mdo_iocontrol      = mdd_iocontrol,
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {
@@ -1757,7 +1740,8 @@ static void mdd_key_fini(const struct lu_context *ctx,
                 OBD_FREE(info->mti_max_lmm, info->mti_max_lmm_size);
         if (info->mti_max_cookie != NULL)
                 OBD_FREE(info->mti_max_cookie, info->mti_max_cookie_size);
-        mdd_buf_put(&info->mti_big_buf);
+	lu_buf_free(&info->mti_big_buf);
+	lu_buf_free(&info->mti_link_buf);
 
         OBD_FREE_PTR(info);
 }

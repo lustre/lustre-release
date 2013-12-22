@@ -2092,12 +2092,6 @@ void lu_global_fini(void)
         lu_ref_global_fini();
 }
 
-struct lu_buf LU_BUF_NULL = {
-        .lb_buf = NULL,
-        .lb_len = 0
-};
-EXPORT_SYMBOL(LU_BUF_NULL);
-
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)
 {
 #ifdef LPROCFS
@@ -2228,6 +2222,12 @@ struct lu_object *lu_object_anon(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_anon);
 
+struct lu_buf LU_BUF_NULL = {
+	.lb_buf = NULL,
+	.lb_len = 0
+};
+EXPORT_SYMBOL(LU_BUF_NULL);
+
 void lu_buf_free(struct lu_buf *buf)
 {
 	LASSERT(buf);
@@ -2257,3 +2257,45 @@ void lu_buf_realloc(struct lu_buf *buf, int size)
 	lu_buf_alloc(buf, size);
 }
 EXPORT_SYMBOL(lu_buf_realloc);
+
+struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, int len)
+{
+	if (buf->lb_buf == NULL && buf->lb_len == 0)
+		lu_buf_alloc(buf, len);
+
+	if ((len > buf->lb_len) && (buf->lb_buf != NULL))
+		lu_buf_realloc(buf, len);
+
+	return buf;
+}
+EXPORT_SYMBOL(lu_buf_check_and_alloc);
+
+/**
+ * Increase the size of the \a buf.
+ * preserves old data in buffer
+ * old buffer remains unchanged on error
+ * \retval 0 or -ENOMEM
+ */
+int lu_buf_check_and_grow(struct lu_buf *buf, int len)
+{
+	char *ptr;
+
+	if (len <= buf->lb_len)
+		return 0;
+
+	OBD_ALLOC_LARGE(ptr, len);
+	if (ptr == NULL)
+		return -ENOMEM;
+
+	/* Free the old buf */
+	if (buf->lb_buf != NULL) {
+		memcpy(ptr, buf->lb_buf, buf->lb_len);
+		OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
+	}
+
+	buf->lb_buf = ptr;
+	buf->lb_len = len;
+	return 0;
+}
+EXPORT_SYMBOL(lu_buf_check_and_grow);
+

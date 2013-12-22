@@ -128,14 +128,6 @@ struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
         return buf;
 }
 
-void mdd_buf_put(struct lu_buf *buf)
-{
-	if (buf == NULL || buf->lb_buf == NULL)
-		return;
-	OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
-	*buf = LU_BUF_NULL;
-}
-
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len)
 {
@@ -145,49 +137,6 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
         buf->lb_buf = (void *)area;
         buf->lb_len = len;
         return buf;
-}
-
-struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len)
-{
-	struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
-
-	if ((len > buf->lb_len) && (buf->lb_buf != NULL)) {
-		OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
-		*buf = LU_BUF_NULL;
-	}
-	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
-		buf->lb_len = len;
-		OBD_ALLOC_LARGE(buf->lb_buf, buf->lb_len);
-		if (buf->lb_buf == NULL)
-			*buf = LU_BUF_NULL;
-	}
-	return buf;
-}
-
-/** Increase the size of the \a mti_big_buf.
- * preserves old data in buffer
- * old buffer remains unchanged on error
- * \retval 0 or -ENOMEM
- */
-int mdd_buf_grow(const struct lu_env *env, ssize_t len)
-{
-        struct lu_buf *oldbuf = &mdd_env_info(env)->mti_big_buf;
-        struct lu_buf buf;
-
-        LASSERT(len >= oldbuf->lb_len);
-        OBD_ALLOC_LARGE(buf.lb_buf, len);
-
-        if (buf.lb_buf == NULL)
-                return -ENOMEM;
-
-        buf.lb_len = len;
-        memcpy(buf.lb_buf, oldbuf->lb_buf, oldbuf->lb_len);
-
-        OBD_FREE_LARGE(oldbuf->lb_buf, oldbuf->lb_len);
-
-        memcpy(oldbuf, &buf, sizeof(buf));
-
-        return 0;
 }
 
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
@@ -273,246 +222,7 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
         return md2mdd_obj(md_object_find_slice(env, &d->mdd_md_dev, f));
 }
 
-static int mdd_path2fid(const struct lu_env *env, struct mdd_device *mdd,
-                        const char *path, struct lu_fid *fid)
-{
-        struct lu_buf *buf;
-        struct lu_fid *f = &mdd_env_info(env)->mti_fid;
-        struct mdd_object *obj;
-        struct lu_name *lname = &mdd_env_info(env)->mti_name;
-        char *name;
-        int rc = 0;
-        ENTRY;
-
-        /* temp buffer for path element */
-        buf = mdd_buf_alloc(env, PATH_MAX);
-        if (buf->lb_buf == NULL)
-                RETURN(-ENOMEM);
-
-        lname->ln_name = name = buf->lb_buf;
-        lname->ln_namelen = 0;
-        *f = mdd->mdd_root_fid;
-
-        while(1) {
-                while (*path == '/')
-                        path++;
-                if (*path == '\0')
-                        break;
-                while (*path != '/' && *path != '\0') {
-                        *name = *path;
-                        path++;
-                        name++;
-                        lname->ln_namelen++;
-                }
-
-                *name = '\0';
-                /* find obj corresponding to fid */
-                obj = mdd_object_find(env, mdd, f);
-                if (obj == NULL)
-                        GOTO(out, rc = -EREMOTE);
-                if (IS_ERR(obj))
-                        GOTO(out, rc = PTR_ERR(obj));
-                /* get child fid from parent and name */
-                rc = mdd_lookup(env, &obj->mod_obj, lname, f, NULL);
-                mdd_object_put(env, obj);
-                if (rc)
-                        break;
-
-                name = buf->lb_buf;
-                lname->ln_namelen = 0;
-        }
-
-        if (!rc)
-                *fid = *f;
-out:
-        RETURN(rc);
-}
-
-/** The maximum depth that fid2path() will search.
- * This is limited only because we want to store the fids for
- * historical path lookup purposes.
- */
-#define MAX_PATH_DEPTH 100
-
-/** mdd_path() lookup structure. */
-struct path_lookup_info {
-        __u64                pli_recno;        /**< history point */
-        __u64                pli_currec;       /**< current record */
-        struct lu_fid        pli_fid;
-        struct lu_fid        pli_fids[MAX_PATH_DEPTH]; /**< path, in fids */
-        struct mdd_object   *pli_mdd_obj;
-        char                *pli_path;         /**< full path */
-        int                  pli_pathlen;
-        int                  pli_linkno;       /**< which hardlink to follow */
-        int                  pli_fidcount;     /**< number of \a pli_fids */
-};
-
-static int mdd_path_current(const struct lu_env *env,
-                            struct path_lookup_info *pli)
-{
-        struct mdd_device *mdd = mdo2mdd(&pli->pli_mdd_obj->mod_obj);
-        struct mdd_object *mdd_obj;
-        struct lu_buf     *buf = NULL;
-        struct link_ea_header *leh;
-        struct link_ea_entry  *lee;
-        struct lu_name *tmpname = &mdd_env_info(env)->mti_name;
-        struct lu_fid  *tmpfid = &mdd_env_info(env)->mti_fid;
-        char *ptr;
-        int reclen;
-        int rc;
-        ENTRY;
-
-        ptr = pli->pli_path + pli->pli_pathlen - 1;
-        *ptr = 0;
-        --ptr;
-        pli->pli_fidcount = 0;
-        pli->pli_fids[0] = *(struct lu_fid *)mdd_object_fid(pli->pli_mdd_obj);
-
-        while (!mdd_is_root(mdd, &pli->pli_fids[pli->pli_fidcount])) {
-                mdd_obj = mdd_object_find(env, mdd,
-                                          &pli->pli_fids[pli->pli_fidcount]);
-                if (mdd_obj == NULL)
-                        GOTO(out, rc = -EREMOTE);
-                if (IS_ERR(mdd_obj))
-                        GOTO(out, rc = PTR_ERR(mdd_obj));
-                rc = lu_object_exists(&mdd_obj->mod_obj.mo_lu);
-                if (rc <= 0) {
-                        mdd_object_put(env, mdd_obj);
-                        if (rc == -1)
-                                rc = -EREMOTE;
-                        else if (rc == 0)
-                                /* Do I need to error out here? */
-                                rc = -ENOENT;
-                        GOTO(out, rc);
-                }
-
-                /* Get parent fid and object name */
-                mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
-                buf = mdd_links_get(env, mdd_obj);
-                mdd_read_unlock(env, mdd_obj);
-                mdd_object_put(env, mdd_obj);
-                if (IS_ERR(buf))
-                        GOTO(out, rc = PTR_ERR(buf));
-
-                leh = buf->lb_buf;
-                lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
-                mdd_lee_unpack(lee, &reclen, tmpname, tmpfid);
-
-                /* If set, use link #linkno for path lookup, otherwise use
-                   link #0.  Only do this for the final path element. */
-                if ((pli->pli_fidcount == 0) &&
-                    (pli->pli_linkno < leh->leh_reccount)) {
-                        int count;
-                        for (count = 0; count < pli->pli_linkno; count++) {
-                                lee = (struct link_ea_entry *)
-                                     ((char *)lee + reclen);
-                                mdd_lee_unpack(lee, &reclen, tmpname, tmpfid);
-                        }
-                        if (pli->pli_linkno < leh->leh_reccount - 1)
-                                /* indicate to user there are more links */
-                                pli->pli_linkno++;
-                }
-
-                /* Pack the name in the end of the buffer */
-                ptr -= tmpname->ln_namelen;
-                if (ptr - 1 <= pli->pli_path)
-                        GOTO(out, rc = -EOVERFLOW);
-                strncpy(ptr, tmpname->ln_name, tmpname->ln_namelen);
-                *(--ptr) = '/';
-
-                /* Store the parent fid for historic lookup */
-                if (++pli->pli_fidcount >= MAX_PATH_DEPTH)
-                        GOTO(out, rc = -EOVERFLOW);
-                pli->pli_fids[pli->pli_fidcount] = *tmpfid;
-        }
-
-        /* Verify that our path hasn't changed since we started the lookup.
-           Record the current index, and verify the path resolves to the
-           same fid. If it does, then the path is correct as of this index. */
-	spin_lock(&mdd->mdd_cl.mc_lock);
-	pli->pli_currec = mdd->mdd_cl.mc_index;
-	spin_unlock(&mdd->mdd_cl.mc_lock);
-        rc = mdd_path2fid(env, mdd, ptr, &pli->pli_fid);
-        if (rc) {
-                CDEBUG(D_INFO, "mdd_path2fid(%s) failed %d\n", ptr, rc);
-                GOTO (out, rc = -EAGAIN);
-        }
-        if (!lu_fid_eq(&pli->pli_fids[0], &pli->pli_fid)) {
-                CDEBUG(D_INFO, "mdd_path2fid(%s) found another FID o="DFID
-                       " n="DFID"\n", ptr, PFID(&pli->pli_fids[0]),
-                       PFID(&pli->pli_fid));
-                GOTO(out, rc = -EAGAIN);
-        }
-        ptr++; /* skip leading / */
-        memmove(pli->pli_path, ptr, pli->pli_path + pli->pli_pathlen - ptr);
-
-        EXIT;
-out:
-        if (buf && !IS_ERR(buf) && buf->lb_len > OBD_ALLOC_BIG)
-                /* if we vmalloced a large buffer drop it */
-                mdd_buf_put(buf);
-
-        return rc;
-}
-
-static int mdd_path_historic(const struct lu_env *env,
-                             struct path_lookup_info *pli)
-{
-        return 0;
-}
-
 /* Returns the full path to this fid, as of changelog record recno. */
-static int mdd_path(const struct lu_env *env, struct md_object *obj,
-                    char *path, int pathlen, __u64 *recno, int *linkno)
-{
-        struct path_lookup_info *pli;
-        int tries = 3;
-        int rc = -EAGAIN;
-        ENTRY;
-
-        if (pathlen < 3)
-                RETURN(-EOVERFLOW);
-
-        if (mdd_is_root(mdo2mdd(obj), mdd_object_fid(md2mdd_obj(obj)))) {
-                path[0] = '\0';
-                RETURN(0);
-        }
-
-        OBD_ALLOC_PTR(pli);
-        if (pli == NULL)
-                RETURN(-ENOMEM);
-
-        pli->pli_mdd_obj = md2mdd_obj(obj);
-        pli->pli_recno = *recno;
-        pli->pli_path = path;
-        pli->pli_pathlen = pathlen;
-        pli->pli_linkno = *linkno;
-
-        /* Retry multiple times in case file is being moved */
-        while (tries-- && rc == -EAGAIN)
-                rc = mdd_path_current(env, pli);
-
-        /* For historical path lookup, the current links may not have existed
-         * at "recno" time.  We must switch over to earlier links/parents
-         * by using the changelog records.  If the earlier parent doesn't
-         * exist, we must search back through the changelog to reconstruct
-         * its parents, then check if it exists, etc.
-         * We may ignore this problem for the initial implementation and
-         * state that an "original" hardlink must still exist for us to find
-         * historic path name. */
-        if (pli->pli_recno != -1) {
-                rc = mdd_path_historic(env, pli);
-        } else {
-                *recno = pli->pli_currec;
-                /* Return next link index to caller */
-                *linkno = pli->pli_linkno;
-        }
-
-        OBD_FREE_PTR(pli);
-
-        RETURN (rc);
-}
-
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
 {
         struct lu_attr *la = &mdd_env_info(env)->mti_la;
@@ -993,10 +703,10 @@ static int mdd_changelog_data_store(const struct lu_env *env,
                 RETURN(0);
         }
 
-        reclen = llog_data_len(sizeof(*rec));
-        buf = mdd_buf_alloc(env, reclen);
-        if (buf->lb_buf == NULL)
-                RETURN(-ENOMEM);
+	reclen = llog_data_len(sizeof(*rec));
+	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
         rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
@@ -1458,7 +1168,8 @@ repeat:
 	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
 		/* mti_big_buf was not allocated, so we have to
 		 * allocate it based on the ea size */
-		buf = mdd_buf_alloc(env, sz);
+		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
+					     sz);
 		if (buf->lb_buf == NULL)
 			GOTO(out, rc = -ENOMEM);
 		goto repeat;
@@ -2212,6 +1923,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_changelog		= mdd_changelog,
 	.moo_capa_get		= mdd_capa_get,
 	.moo_object_sync	= mdd_object_sync,
-	.moo_path		= mdd_path,
 	.moo_object_lock	= mdd_object_lock,
 };

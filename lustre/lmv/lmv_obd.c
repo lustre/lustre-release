@@ -730,6 +730,88 @@ out_local:
         RETURN(rc);
 }
 
+static int lmv_fid2path(struct obd_export *exp, int len, void *karg, void *uarg)
+{
+	struct obd_device	*obddev = class_exp2obd(exp);
+	struct lmv_obd		*lmv = &obddev->u.lmv;
+	struct getinfo_fid2path *gf;
+	struct lmv_tgt_desc     *tgt;
+	struct getinfo_fid2path *remote_gf = NULL;
+	int			remote_gf_size = 0;
+	int			rc;
+
+	gf = (struct getinfo_fid2path *)karg;
+	tgt = lmv_find_target(lmv, &gf->gf_fid);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
+
+repeat_fid2path:
+	rc = obd_iocontrol(OBD_IOC_FID2PATH, tgt->ltd_exp, len, gf, uarg);
+	if (rc != 0 && rc != -EREMOTE)
+		GOTO(out_fid2path, rc);
+
+	/* If remote_gf != NULL, it means just building the
+	 * path on the remote MDT, copy this path segement to gf */
+	if (remote_gf != NULL) {
+		struct getinfo_fid2path *ori_gf;
+		char *ptr;
+
+		ori_gf = (struct getinfo_fid2path *)karg;
+		if (strlen(ori_gf->gf_path) +
+		    strlen(gf->gf_path) > ori_gf->gf_pathlen)
+			GOTO(out_fid2path, rc = -EOVERFLOW);
+
+		ptr = ori_gf->gf_path;
+
+		memmove(ptr + strlen(gf->gf_path) + 1, ptr,
+			strlen(ori_gf->gf_path));
+
+		strncpy(ptr, gf->gf_path, strlen(gf->gf_path));
+		ptr += strlen(gf->gf_path);
+		*ptr = '/';
+	}
+
+	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: "LPU64" ln: %u\n",
+	       tgt->ltd_exp->exp_obd->obd_name,
+	       gf->gf_path, PFID(&gf->gf_fid), gf->gf_recno,
+	       gf->gf_linkno);
+
+	if (rc == 0)
+		GOTO(out_fid2path, rc);
+
+	/* sigh, has to go to another MDT to do path building further */
+	if (remote_gf == NULL) {
+		remote_gf_size = sizeof(*remote_gf) + PATH_MAX;
+		OBD_ALLOC(remote_gf, remote_gf_size);
+		if (remote_gf == NULL)
+			GOTO(out_fid2path, rc = -ENOMEM);
+		remote_gf->gf_pathlen = PATH_MAX;
+	}
+
+	if (!fid_is_sane(&gf->gf_fid)) {
+		CERROR("%s: invalid FID "DFID": rc = %d\n",
+		       tgt->ltd_exp->exp_obd->obd_name,
+		       PFID(&gf->gf_fid), -EINVAL);
+		GOTO(out_fid2path, rc = -EINVAL);
+	}
+
+	tgt = lmv_find_target(lmv, &gf->gf_fid);
+	if (IS_ERR(tgt))
+		GOTO(out_fid2path, rc = -EINVAL);
+
+	remote_gf->gf_fid = gf->gf_fid;
+	remote_gf->gf_recno = -1;
+	remote_gf->gf_linkno = -1;
+	memset(remote_gf->gf_path, 0, remote_gf->gf_pathlen);
+	gf = remote_gf;
+	goto repeat_fid2path;
+
+out_fid2path:
+	if (remote_gf != NULL)
+		OBD_FREE(remote_gf, remote_gf_size);
+	RETURN(rc);
+}
+
 static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg)
 {
@@ -850,14 +932,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		break;
 	}
 	case OBD_IOC_FID2PATH: {
-		struct getinfo_fid2path *gf;
-		struct lmv_tgt_desc     *tgt;
-
-		gf = (struct getinfo_fid2path *)karg;
-		tgt = lmv_find_target(lmv, &gf->gf_fid);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
-		rc = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
+		rc = lmv_fid2path(exp, len, karg, uarg);
 		break;
 	}
 	case LL_IOC_HSM_STATE_GET:

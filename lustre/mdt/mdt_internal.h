@@ -468,9 +468,10 @@ struct mdt_thread_info {
         struct mdt_ioepoch        *mti_ioepoch;
         __u64                      mti_replayepoch;
 
-        loff_t                     mti_off;
-        struct lu_buf              mti_buf;
-        struct lustre_capa_key     mti_capa_key;
+	loff_t                     mti_off;
+	struct lu_buf              mti_buf;
+	struct lu_buf              mti_big_buf;
+	struct lustre_capa_key     mti_capa_key;
 
         /* Ops object filename */
         struct lu_name             mti_name;

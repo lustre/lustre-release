@@ -1198,9 +1198,9 @@ static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
         /* Val is struct getinfo_fid2path result plus path */
         vallen = sizeof(*gf) + gf->gf_pathlen;
 
-        rc = obd_get_info(NULL, exp, keylen, key, &vallen, gf, NULL);
-        if (rc)
-                GOTO(out, rc);
+	rc = obd_get_info(NULL, exp, keylen, key, &vallen, gf, NULL);
+	if (rc != 0 && rc != -EREMOTE)
+		GOTO(out, rc);
 
         if (vallen <= sizeof(*gf))
                 GOTO(out, rc = -EPROTO);
@@ -1960,19 +1960,20 @@ int mdc_get_info_rpc(struct obd_export *exp,
                              RCL_SERVER, vallen);
         ptlrpc_request_set_replen(req);
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc == 0) {
-                tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
-                memcpy(val, tmp, vallen);
-                if (ptlrpc_rep_need_swab(req)) {
-                        if (KEY_IS(KEY_FID2PATH)) {
-                                lustre_swab_fid2path(val);
-                        }
-                }
-        }
-        ptlrpc_req_finished(req);
+	rc = ptlrpc_queue_wait(req);
+	/* -EREMOTE means the get_info result is partial, and it needs to
+	 * continue on another MDT, see fid2path part in lmv_iocontrol */
+	if (rc == 0 || rc == -EREMOTE) {
+		tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
+		memcpy(val, tmp, vallen);
+		if (ptlrpc_rep_need_swab(req)) {
+			if (KEY_IS(KEY_FID2PATH))
+				lustre_swab_fid2path(val);
+		}
+	}
+	ptlrpc_req_finished(req);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static void lustre_swab_hai(struct hsm_action_item *h)

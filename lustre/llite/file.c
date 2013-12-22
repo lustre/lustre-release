@@ -1748,6 +1748,7 @@ int ll_fid2path(struct inode *inode, void *arg)
 	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
 	if (rc)
 		GOTO(gf_free, rc);
+
 	if (copy_to_user(arg, gfout, outsize))
 		rc = -EFAULT;
 

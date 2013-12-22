@@ -107,7 +107,7 @@ static int mdd_convert_linkea(const struct lu_env *env,
 	ENTRY;
 
 	th = dt_trans_create(env, mdd->mdd_child);
-	rc = mdd_declare_links_add(env, o, th);
+	rc = mdd_declare_links_add(env, o, th, NULL);
 	if (rc)
 		GOTO(out, rc);
 	rc = dt_trans_start_local(env, mdd->mdd_child, th);
@@ -118,7 +118,7 @@ static int mdd_convert_linkea(const struct lu_env *env,
 	oldfid.f_oid = MDD_ROOT_INDEX_OID;
 	oldfid.f_ver = 0;
 	rc = mdd_links_rename(env, o, &oldfid, name, &mdd->mdd_root_fid,
-			      name, th, 0, 1);
+			      name, th, NULL, 0, 1);
 	if (rc == -ENOENT || rc == -EEXIST)
 		rc = 0;
 

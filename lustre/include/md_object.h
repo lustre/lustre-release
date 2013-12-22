@@ -276,14 +276,13 @@ struct md_object_operations {
                             struct lustre_capa *, int renewal);
 
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
-        int (*moo_path)(const struct lu_env *env, struct md_object *obj,
-                        char *path, int pathlen, __u64 *recno, int *linkno);
-        int (*moo_file_lock)(const struct lu_env *env, struct md_object *obj,
-                             struct lov_mds_md *lmm, struct ldlm_extent *extent,
-                             struct lustre_handle *lockh);
-        int (*moo_file_unlock)(const struct lu_env *env, struct md_object *obj,
-                               struct lov_mds_md *lmm,
-                               struct lustre_handle *lockh);
+
+	int (*moo_file_lock)(const struct lu_env *env, struct md_object *obj,
+			     struct lov_mds_md *lmm, struct ldlm_extent *extent,
+			     struct lustre_handle *lockh);
+	int (*moo_file_unlock)(const struct lu_env *env, struct md_object *obj,
+			       struct lov_mds_md *lmm,
+			       struct lustre_handle *lockh);
 	int (*moo_object_lock)(const struct lu_env *env, struct md_object *obj,
 			       struct lustre_handle *lh,
 			       struct ldlm_enqueue_info *einfo,
@@ -355,8 +354,8 @@ struct md_dir_operations {
 
 struct md_device_operations {
         /** meta-data device related handlers. */
-        int (*mdo_root_get)(const struct lu_env *env, struct md_device *m,
-                            struct lu_fid *f);
+	int (*mdo_root_get)(const struct lu_env *env, struct md_device *m,
+			    struct lu_fid *f);
 
         int (*mdo_maxsize_get)(const struct lu_env *env, struct md_device *m,
                                int *md_size, int *cookie_size);
@@ -683,14 +682,6 @@ static inline int mo_capa_get(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_capa_get);
         return m->mo_ops->moo_capa_get(env, m, c, renewal);
-}
-
-static inline int mo_path(const struct lu_env *env, struct md_object *m,
-                          char *path, int pathlen, __u64 *recno, int *linkno)
-{
-        if (m->mo_ops->moo_path == NULL)
-                return -ENOSYS;
-        return m->mo_ops->moo_path(env, m, path, pathlen, recno, linkno);
 }
 
 static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)

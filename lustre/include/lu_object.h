@@ -1321,9 +1321,6 @@ struct lu_buf {
         ssize_t lb_len;
 };
 
-/** null buffer */
-extern struct lu_buf LU_BUF_NULL;
-
 #define DLUBUF "(%p %zu)"
 #define PLUBUF(buf) (buf)->lb_buf, (buf)->lb_len
 /**
@@ -1356,9 +1353,15 @@ struct lu_object *lu_object_anon(const struct lu_env *env,
 				 struct lu_device *dev,
 				 const struct lu_object_conf *conf);
 
+/** null buffer */
+extern struct lu_buf LU_BUF_NULL;
+
 void lu_buf_free(struct lu_buf *buf);
 void lu_buf_alloc(struct lu_buf *buf, int size);
 void lu_buf_realloc(struct lu_buf *buf, int size);
+
+int lu_buf_check_and_grow(struct lu_buf *buf, int len);
+struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, int len);
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

@@ -579,6 +579,7 @@ static int osp_md_declare_xattr_set(const struct lu_env *env,
 	char			*bufs[3] = {(char *)name, (char *)buf->lb_buf };
 	int			rc;
 
+	LASSERT(buf->lb_len > 0 && buf->lb_buf != NULL);
 	update = osp_find_create_update_loc(th, dt);
 	if (IS_ERR(update)) {
 		CERROR("%s: Get OSP update buf failed: rc = %d\n",
@@ -661,8 +662,9 @@ static int osp_md_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(size > 0 && size < CFS_PAGE_SIZE);
 	LASSERT(ea_buf != NULL);
 
-	buf->lb_len = size;
-	memcpy(buf->lb_buf, ea_buf, size);
+	rc = size;
+	if (buf->lb_buf != NULL)
+		memcpy(buf->lb_buf, ea_buf, size);
 out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);

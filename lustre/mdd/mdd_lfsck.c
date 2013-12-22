@@ -912,7 +912,7 @@ static int mdd_lfsck_namespace_double_scan_one(const struct lu_env *env,
 	struct lfsck_bookmark	*bk	  = &lfsck->ml_bookmark_ram;
 	struct lfsck_namespace	*ns	  =
 				(struct lfsck_namespace *)com->lc_file_ram;
-	struct mdd_link_data	 ldata	  = { 0 };
+	struct linkea_data	 ldata	  = { 0 };
 	struct thandle		*handle   = NULL;
 	bool			 locked   = false;
 	bool			 update	  = false;
@@ -930,7 +930,7 @@ again:
 		if (IS_ERR(handle))
 			RETURN(rc = PTR_ERR(handle));
 
-		rc = mdd_declare_links_add(env, child, handle);;
+		rc = mdd_declare_links_add(env, child, handle, NULL);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -958,13 +958,14 @@ again:
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	ldata.ml_lee = (struct link_ea_entry *)(ldata.ml_leh + 1);
-	count = ldata.ml_leh->leh_reccount;
+	ldata.ld_lee = LINKEA_FIRST_ENTRY(ldata);
+	count = ldata.ld_leh->leh_reccount;
 	while (count-- > 0) {
 		struct mdd_object *parent = NULL;
 		struct dt_object *dir;
 
-		mdd_lee_unpack(ldata.ml_lee, &ldata.ml_reclen, cname, pfid);
+		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, cname,
+				    pfid);
 		if (!fid_is_sane(pfid))
 			goto shrink;
 
@@ -980,8 +981,7 @@ again:
 		/* XXX: need more processing for remote object in the future. */
 		if (mdd_object_remote(parent)) {
 			mdd_object_put(env, parent);
-			ldata.ml_lee = (struct link_ea_entry *)
-				       ((char *)ldata.ml_lee + ldata.ml_reclen);
+			ldata.ld_lee = LINKEA_NEXT_ENTRY(ldata);
 			continue;
 		}
 
@@ -1004,15 +1004,14 @@ again:
 		if (rc == 0) {
 			if (lu_fid_eq(cfid, mdo2fid(child))) {
 				mdd_object_put(env, parent);
-				ldata.ml_lee = (struct link_ea_entry *)
-				       ((char *)ldata.ml_lee + ldata.ml_reclen);
+				ldata.ld_lee = LINKEA_NEXT_ENTRY(ldata);
 				continue;
 			}
 
 			goto shrink;
 		}
 
-		if (ldata.ml_leh->leh_reccount > la->la_nlink)
+		if (ldata.ld_leh->leh_reccount > la->la_nlink)
 			goto shrink;
 
 		/* XXX: For the case of there is linkea entry, but without name
@@ -1023,8 +1022,7 @@ again:
 		 *	It is out of LFSCK 1.5 scope, will implement it in the
 		 *	future. Keep the linkEA entry. */
 		mdd_object_put(env, parent);
-		ldata.ml_lee = (struct link_ea_entry *)
-			       ((char *)ldata.ml_lee + ldata.ml_reclen);
+		ldata.ld_lee = LINKEA_NEXT_ENTRY(ldata);
 		continue;
 
 shrink:
@@ -1036,7 +1034,7 @@ shrink:
 		CDEBUG(D_LFSCK, "Remove linkEA: "DFID"[%.*s], "DFID"\n",
 		       PFID(mdo2fid(child)), cname->ln_namelen, cname->ln_name,
 		       PFID(pfid));
-		mdd_links_del_buf(env, &ldata, cname);
+		linkea_del_buf(&ldata, cname);
 		update = true;
 	}
 
@@ -1272,7 +1270,7 @@ static int mdd_declare_lfsck_namespace_exec_dir(const struct lu_env *env,
 		return rc;
 
 	/* For insert new linkEA entry. */
-	rc = mdd_declare_links_add(env, obj, handle);
+	rc = mdd_declare_links_add(env, obj, handle, NULL);
 	return rc;
 }
 
@@ -1315,7 +1313,7 @@ static int mdd_lfsck_namespace_exec_dir(const struct lu_env *env,
 	struct lfsck_namespace	   *ns	     =
 				(struct lfsck_namespace *)com->lc_file_ram;
 	struct mdd_device	   *mdd      = mdd_lfsck2mdd(lfsck);
-	struct mdd_link_data	    ldata    = { 0 };
+	struct linkea_data	    ldata    = { 0 };
 	const struct lu_fid	   *pfid     =
 				lu_object_fid(&lfsck->ml_obj_dir->do_lu);
 	const struct lu_fid	   *cfid     = mdo2fid(obj);
@@ -1373,8 +1371,8 @@ again:
 
 	rc = mdd_links_read(env, obj, &ldata);
 	if (rc == 0) {
-		count = ldata.ml_leh->leh_reccount;
-		rc = mdd_links_find(env, obj, &ldata, cname, pfid);
+		count = ldata.ld_leh->leh_reccount;
+		rc = linkea_links_find(&ldata, cname, pfid);
 		if (rc == 0) {
 			/* For dir, if there are more than one linkea entries,
 			 * then remove all the other redundant linkea entries.*/
@@ -1435,7 +1433,7 @@ unmatch:
 		}
 
 nodata:
-		rc = mdd_links_new(env, &ldata);
+		rc = linkea_data_new(&ldata, &mdd_env_info(env)->mti_link_buf);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -1443,7 +1441,7 @@ add:
 		if (!com->lc_journal)
 			goto again;
 
-		rc = mdd_links_add_buf(env, &ldata, cname, pfid);
+		rc = linkea_add_buf(&ldata, cname, pfid);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -1451,7 +1449,7 @@ add:
 		if (rc != 0)
 			GOTO(stop, rc);
 
-		count = ldata.ml_leh->leh_reccount;
+		count = ldata.ld_leh->leh_reccount;
 		repaired = true;
 	} else {
 		GOTO(stop, rc);

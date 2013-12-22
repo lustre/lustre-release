@@ -51,6 +51,7 @@
 #include <lustre_capa.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
+#include <lustre_linkea.h>
 
 #include "mdd_lfsck.h"
 
@@ -156,6 +157,7 @@ struct mdd_thread_info {
         struct obd_trans_info     mti_oti;
         struct lu_buf             mti_buf;
         struct lu_buf             mti_big_buf; /* biggish persistent buf */
+	struct lu_buf		  mti_link_buf; /* buf for link ea */
         struct lu_name            mti_name;
 	struct lu_name            mti_name2;
         struct obdo               mti_oa;
@@ -167,22 +169,7 @@ struct mdd_thread_info {
         int                       mti_max_cookie_size;
         struct dt_object_format   mti_dof;
         struct obd_quotactl       mti_oqctl;
-};
-
-/**
- * The data that link search is done on.
- */
-struct mdd_link_data {
-	/**
-	 * Buffer to keep link EA body.
-	 */
-	struct lu_buf           *ml_buf;
-	/**
-	 * The matched header, entry and its lenght in the EA
-	 */
-	struct link_ea_header   *ml_leh;
-	struct link_ea_entry    *ml_lee;
-	int                      ml_reclen;
+	struct linkea_data	  mti_link_data;
 };
 
 extern const char orph_index_name[];
@@ -302,10 +289,7 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
 			    struct mdd_object *cobj, struct lu_attr *cattr);
 int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
                       struct md_attr *ma, struct thandle *th);
-int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
-			  const struct lu_name *lname, struct mdd_object *child,
-			  const struct lu_attr *attr, struct thandle *handle,
-			  const struct md_op_spec *spec);
+
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                           const struct lu_name *lname, struct mdd_object *src_obj);
 int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
@@ -313,24 +297,13 @@ int mdd_lookup(const struct lu_env *env,
                struct md_object *pobj, const struct lu_name *lname,
                struct lu_fid* fid, struct md_op_spec *spec);
 int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
-		   struct mdd_link_data *ldata);
-int mdd_links_find(const struct lu_env *env, struct mdd_object *mdd_obj,
-		   struct mdd_link_data *ldata, const struct lu_name *lname,
-		   const struct lu_fid  *pfid);
-int mdd_links_new(const struct lu_env *env, struct mdd_link_data *ldata);
-int mdd_links_add_buf(const struct lu_env *env, struct mdd_link_data *ldata,
-		      const struct lu_name *lname, const struct lu_fid *pfid);
-void mdd_links_del_buf(const struct lu_env *env, struct mdd_link_data *ldata,
-		       const struct lu_name *lname);
-int mdd_declare_links_add(const struct lu_env *env,
-			  struct mdd_object *mdd_obj,
-			  struct thandle *handle);
+		   struct linkea_data *ldata);
+int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
+			  struct thandle *handle, struct linkea_data *ldata);
 int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
-		    struct mdd_link_data *ldata, struct thandle *handle);
+		    struct linkea_data *ldata, struct thandle *handle);
 struct lu_buf *mdd_links_get(const struct lu_env *env,
                              struct mdd_object *mdd_obj);
-void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
-                    struct lu_name *lname, struct lu_fid *pfid);
 int mdd_links_rename(const struct lu_env *env,
 		     struct mdd_object *mdd_obj,
 		     const struct lu_fid *oldpfid,
@@ -338,7 +311,10 @@ int mdd_links_rename(const struct lu_env *env,
 		     const struct lu_fid *newpfid,
 		     const struct lu_name *newlname,
 		     struct thandle *handle,
+		     struct linkea_data *ldata,
 		     int first, int check);
+int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
+			  struct thandle *handle, struct linkea_data *ldata);
 
 /* mdd_lov.c */
 int mdd_declare_unlink_log(const struct lu_env *env, struct mdd_object *obj,
@@ -393,6 +369,8 @@ struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len);
 int mdd_buf_grow(const struct lu_env *env, ssize_t len);
 void mdd_buf_put(struct lu_buf *buf);
 
+struct lu_buf *mdd_link_buf_alloc(const struct lu_env *env, ssize_t len);
+int mdd_link_buf_grow(const struct lu_env *env, ssize_t len);
 extern const struct md_dir_operations    mdd_dir_ops;
 extern const struct md_object_operations mdd_obj_ops;
 

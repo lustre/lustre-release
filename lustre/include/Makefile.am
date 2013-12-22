@@ -51,4 +51,4 @@ EXTRA_DIST = ioctl.h liblustre.h lprocfs_status.h lustre_cfg.h 	\
              lustre_fid.h lustre_fld.h lustre_req_layout.h lustre_capa.h \
              lustre_idmap.h lustre_eacl.h interval_tree.h obd_cksum.h \
 	     lu_ref.h cl_object.h lustre_acl.h lclient.h lu_target.h \
-	     lustre_update.h
+	     lustre_update.h lustre_linkea.h
