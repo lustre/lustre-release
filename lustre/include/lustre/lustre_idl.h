@@ -280,6 +280,9 @@ enum lma_compat {
  */
 enum lma_incompat {
 	LMAI_RELEASED = 0x0000001, /* file is released */
+	LMAI_AGENT = 0x00000002, /* agent inode */
+	LMAI_REMOTE_PARENT = 0x00000004, /* the parent of the object
+					    is on the remote MDT */
 };
 #define LMA_INCOMPAT_SUPP 0x0
 
@@ -313,7 +316,7 @@ struct lustre_mdt_attrs {
 
 extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
-			    const struct lu_fid *fid);
+			    const struct lu_fid *fid, __u32 incompat);
 /**
  * SOM on-disk attributes stored in a separate xattr.
  */

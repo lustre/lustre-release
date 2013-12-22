@@ -46,6 +46,8 @@
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
 #include <linux/fs.h>
+/* XATTR_{REPLACE,CREATE} */
+#include <linux/xattr.h>
 
 /*
  * struct OBD_{ALLOC,FREE}*()
@@ -161,23 +163,17 @@ out:
 	return count;
 }
 
-/*
- * directory structure on legacy MDT:
- *
- * REM_OBJ_DIR/ per mdt
- * AGENT_OBJ_DIR/ per mdt
- *
- */
-static const char remote_obj_dir[] = "REM_OBJ_DIR";
-static const char agent_obj_dir[] = "AGENT_OBJ_DIR";
-int osd_mdt_init(struct osd_device *dev)
+static const char remote_parent_dir[] = "REMOTE_PARENT_DIR";
+static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 {
-	struct lvfs_run_ctxt  new;
-	struct lvfs_run_ctxt  save;
-	struct dentry	*parent;
-	struct osd_mdobj_map *omm;
-	struct dentry	*d;
-	int		   rc = 0;
+	struct lvfs_run_ctxt	new;
+	struct lvfs_run_ctxt	save;
+	struct dentry		*parent;
+	struct osd_mdobj_map	*omm;
+	struct dentry		*d;
+	struct osd_thread_info	*info = osd_oti_get(env);
+	struct lu_fid		*fid = &info->oti_fid;
+	int			rc = 0;
 	ENTRY;
 
 	OBD_ALLOC_PTR(dev->od_mdt_map);
@@ -191,18 +187,23 @@ int osd_mdt_init(struct osd_device *dev)
 	parent = osd_sb(dev)->s_root;
 	osd_push_ctxt(dev, &new, &save);
 
-	d = simple_mkdir(parent, dev->od_mnt, agent_obj_dir,
+	d = simple_mkdir(parent, dev->od_mnt, remote_parent_dir,
 			 0755, 1);
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
 
-	omm->omm_agent_dentry = d;
+	omm->omm_remote_parent = d;
 
+	/* Set LMA for remote parent inode */
+	lu_local_obj_fid(fid, REMOTE_PARENT_DIR_OID);
+	rc = osd_ea_fid_set(info, d->d_inode, fid, 0);
+	if (rc != 0)
+		GOTO(cleanup, rc);
 cleanup:
 	pop_ctxt(&save, &new, NULL);
 	if (rc) {
-		if (omm->omm_agent_dentry != NULL)
-			dput(omm->omm_agent_dentry);
+		if (omm->omm_remote_parent != NULL)
+			dput(omm->omm_remote_parent);
 		OBD_FREE_PTR(omm);
 		dev->od_mdt_map = NULL;
 	}
@@ -216,62 +217,90 @@ static void osd_mdt_fini(struct osd_device *osd)
 	if (omm == NULL)
 		return;
 
-	if (omm->omm_agent_dentry)
-		dput(omm->omm_agent_dentry);
+	if (omm->omm_remote_parent)
+		dput(omm->omm_remote_parent);
 
 	OBD_FREE_PTR(omm);
 	osd->od_ost_map = NULL;
 }
 
-int osd_add_to_agent(const struct lu_env *env, struct osd_device *osd,
-		     struct osd_object *obj, struct osd_thandle *oh)
+int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
+			     struct osd_object *obj, struct osd_thandle *oh)
 {
 	struct osd_mdobj_map	*omm = osd->od_mdt_map;
 	struct osd_thread_info	*oti = osd_oti_get(env);
+	struct lustre_mdt_attrs	*lma = &oti->oti_mdt_attrs;
 	char			*name = oti->oti_name;
-	struct dentry		*agent;
+	struct dentry		*dentry;
 	struct dentry		*parent;
 	int			rc;
 
-	parent = omm->omm_agent_dentry;
+	/* Set REMOTE_PARENT in lma, so other process like unlink or lfsck
+	 * can identify this object quickly */
+	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry, lma);
+	if (rc != 0)
+		RETURN(rc);
+
+	lma->lma_incompat |= LMAI_REMOTE_PARENT;
+	lustre_lma_swab(lma);
+	rc = __osd_xattr_set(oti, obj->oo_inode, XATTR_NAME_LMA, lma,
+			     sizeof(*lma), XATTR_REPLACE);
+	if (rc != 0)
+		RETURN(rc);
+
+	parent = omm->omm_remote_parent;
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
-	agent = osd_child_dentry_by_inode(env, parent->d_inode,
-					  name, strlen(name));
+	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
+					   name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
-	rc = osd_ldiskfs_add_entry(oh->ot_handle, agent, obj->oo_inode, NULL);
-	LASSERTF(parent->d_inode->i_nlink > 1, "%s: agent inode nlink %d",
-		 osd_name(osd), parent->d_inode->i_nlink);
+	rc = osd_ldiskfs_add_entry(oh->ot_handle, dentry, obj->oo_inode,
+				   NULL);
+	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
+		 osd_name(osd), parent->d_inode->i_ino,
+		 parent->d_inode->i_nlink);
 	parent->d_inode->i_nlink++;
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
 	RETURN(rc);
 }
 
-int osd_delete_from_agent(const struct lu_env *env, struct osd_device *osd,
-			  struct osd_object *obj, struct osd_thandle *oh)
+int osd_delete_from_remote_parent(const struct lu_env *env,
+				  struct osd_device *osd,
+				  struct osd_object *obj,
+				  struct osd_thandle *oh)
 {
 	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
 	struct osd_thread_info	   *oti = osd_oti_get(env);
+	struct lustre_mdt_attrs    *lma = &oti->oti_mdt_attrs;
 	char			   *name = oti->oti_name;
-	struct dentry		   *agent;
+	struct dentry		   *dentry;
 	struct dentry		   *parent;
 	struct ldiskfs_dir_entry_2 *de;
 	struct buffer_head	   *bh;
 	int			   rc;
 
-	parent = omm->omm_agent_dentry;
+	/* Check lma to see whether it is remote object */
+	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry, lma);
+	if (rc != 0)
+		RETURN(rc);
+
+	if (likely(!(lma->lma_incompat & LMAI_REMOTE_PARENT)))
+		RETURN(0);
+
+	parent = omm->omm_remote_parent;
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
-	agent = osd_child_dentry_by_inode(env, parent->d_inode,
-					  name, strlen(name));
+	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
+					   name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
-	bh = osd_ldiskfs_find_entry(parent->d_inode, agent, &de, NULL);
+	bh = osd_ldiskfs_find_entry(parent->d_inode, dentry, &de, NULL);
 	if (bh == NULL) {
 		mutex_unlock(&parent->d_inode->i_mutex);
 		RETURN(-ENOENT);
 	}
 	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
-	LASSERTF(parent->d_inode->i_nlink > 1, "%s: agent inode nlink %d",
-		 osd_name(osd), parent->d_inode->i_nlink);
+	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
+		 osd_name(osd), parent->d_inode->i_ino,
+		 parent->d_inode->i_nlink);
 	parent->d_inode->i_nlink--;
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
@@ -289,7 +318,7 @@ int osd_delete_from_agent(const struct lu_env *env, struct osd_device *osd,
  * CONFIGS
  *
  */
-int osd_ost_init(struct osd_device *dev)
+static int osd_ost_init(struct osd_device *dev)
 {
 	struct lvfs_run_ctxt  new;
 	struct lvfs_run_ctxt  save;
@@ -382,7 +411,7 @@ static void osd_ost_fini(struct osd_device *osd)
 	EXIT;
 }
 
-int osd_obj_map_init(struct osd_device *dev)
+int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 {
 	int rc;
 	ENTRY;
@@ -393,7 +422,7 @@ int osd_obj_map_init(struct osd_device *dev)
 		RETURN(rc);
 
 	/* prepare structures for MDS */
-	rc = osd_mdt_init(dev);
+	rc = osd_mdt_init(env, dev);
 
         RETURN(rc);
 }

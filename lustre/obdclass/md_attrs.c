@@ -36,13 +36,15 @@
  *
  * \param lma - is the new LMA structure to be initialized
  * \param fid - is the FID of the object this LMA belongs to
+ * \param incompat - features that MDS must understand to access object
  */
-void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid)
+void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
+		     __u32 incompat)
 {
 	lma->lma_compat   = 0;
-	lma->lma_incompat = 0;
+	lma->lma_incompat = incompat;
 	lma->lma_self_fid = *fid;
-	lma->lma_flags    = 0;
+	lma->lma_flags = 0;
 
 	/* If a field is added in struct lustre_mdt_attrs, zero it explicitly
 	 * and change the test below. */

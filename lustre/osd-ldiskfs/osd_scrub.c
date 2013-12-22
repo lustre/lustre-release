@@ -455,7 +455,7 @@ iget:
 		ops = DTO_INDEX_INSERT;
 		idx = osd_oi_fid2idx(dev, fid);
 		if (val == SCRUB_NEXT_NOLMA) {
-			rc = osd_ea_fid_set(info, inode, fid);
+			rc = osd_ea_fid_set(info, inode, fid, 0);
 			if (rc != 0)
 				GOTO(out, rc);
 		} else {
@@ -1254,7 +1254,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 			lu_igif_build(&tfid, inode->i_ino, inode->i_generation);
 		else
 			tfid = *fid;
-		rc = osd_ea_fid_set(info, inode, &tfid);
+		rc = osd_ea_fid_set(info, inode, &tfid, 0);
 		if (rc != 0)
 			RETURN(rc);
 	} else {

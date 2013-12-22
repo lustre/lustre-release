@@ -168,7 +168,7 @@ struct osd_mdobj {
 };
 
 struct osd_mdobj_map {
-	struct dentry	*omm_agent_dentry;
+	struct dentry	*omm_remote_parent;
 };
 
 #define osd_ldiskfs_find_entry(dir, dentry, de, lock)   \
@@ -605,6 +605,17 @@ struct osd_thread_info {
 
 extern int ldiskfs_pdo;
 
+static inline int __osd_xattr_set(struct osd_thread_info *info,
+				  struct inode *inode, const char *name,
+				  const void *buf, int buflen, int fl)
+{
+	struct dentry *dentry = &info->oti_child_dentry;
+
+	ll_vfs_dq_init(inode);
+	dentry->d_inode = inode;
+	return inode->i_op->setxattr(dentry, name, buf, buflen, fl);
+}
+
 #ifdef LPROCFS
 /* osd_lproc.c */
 void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars);
@@ -620,11 +631,11 @@ int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
-		   const struct lu_fid *fid);
+		   const struct lu_fid *fid, __u64 flags);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		struct dentry *dentry, struct lustre_mdt_attrs *lma);
 
-int osd_obj_map_init(struct osd_device *osd);
+int osd_obj_map_init(const struct lu_env *env, struct osd_device *osd);
 void osd_obj_map_fini(struct osd_device *dev);
 int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id);
@@ -653,14 +664,13 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len);
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   const struct lu_fid *fid, struct lu_seq_range *range);
-struct dentry *osd_agent_lookup(struct osd_mdobj_map *omm, int index);
-struct dentry *osd_agent_load(const struct osd_device *osd, int mdt_index,
-			      int create);
 
-int osd_delete_from_agent(const struct lu_env *env, struct osd_device *osd,
-			  struct osd_object *obj, struct osd_thandle *oh);
-int osd_add_to_agent(const struct lu_env *env, struct osd_device *osd,
-		     struct osd_object *obj, struct osd_thandle *oh);
+int osd_delete_from_remote_parent(const struct lu_env *env,
+				  struct osd_device *osd,
+				  struct osd_object *obj,
+				  struct osd_thandle *oh);
+int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
+			     struct osd_object *obj, struct osd_thandle *oh);
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,

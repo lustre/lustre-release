@@ -180,7 +180,7 @@ static int mdd_convert_lma(const struct lu_env *env, struct mdd_device *mdd,
 	lu_root_fid(&fid);
 
 	lma = (struct lustre_mdt_attrs *)&mdd_env_info(env)->mti_xattr_buf;
-	lustre_lma_init(lma, &fid);
+	lustre_lma_init(lma, &fid, 0);
 	lustre_lma_swab(lma);
 	buf.lb_buf = lma;
 	buf.lb_len = sizeof(*lma);

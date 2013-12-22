@@ -2178,12 +2178,11 @@ static int osd_object_destroy(const struct lu_env *env,
 	mutex_lock(&inode->i_mutex);
 	if (S_ISDIR(inode->i_mode)) {
 		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1);
-		/* it will check/delete the agent inode for every dir
-		 * destory, how to optimize it? unlink performance
-		 * impaction XXX */
-		result = osd_delete_from_agent(env, osd, obj, oh);
+		/* it will check/delete the inode from remote parent,
+		 * how to optimize it? unlink performance impaction XXX */
+		result = osd_delete_from_remote_parent(env, osd, obj, oh);
 		if (result != 0 && result != -ENOENT) {
-			CERROR("%s: delete agent inode "DFID": rc = %d\n",
+			CERROR("%s: delete inode "DFID": rc = %d\n",
 			       osd_name(osd), PFID(fid), result);
 		}
 		spin_lock(&obj->oo_guard);
@@ -2206,17 +2205,6 @@ static int osd_object_destroy(const struct lu_env *env,
         RETURN(0);
 }
 
-static inline int __osd_xattr_set(struct osd_thread_info *info,
-				  struct inode *inode, const char *name,
-				  const void *buf, int buflen, int fl)
-{
-	struct dentry *dentry = &info->oti_child_dentry;
-
-	ll_vfs_dq_init(inode);
-	dentry->d_inode = inode;
-	return inode->i_op->setxattr(dentry, name, buf, buflen, fl);
-}
-
 /**
  * Put the fid into lustre_mdt_attrs, and then place the structure
  * inode's ea. This fid should not be altered during the life time
@@ -2228,7 +2216,7 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
  * FIXME: It is good to have/use ldiskfs_xattr_set_handle() here
  */
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
-		   const struct lu_fid *fid)
+		   const struct lu_fid *fid, __u64 flags)
 {
 	struct lustre_mdt_attrs	*lma = &info->oti_mdt_attrs;
 	int			 rc;
@@ -2239,7 +2227,7 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF) && fid_is_client_visible(fid))
 		return 0;
 
-	lustre_lma_init(lma, fid);
+	lustre_lma_init(lma, fid, flags);
 	lustre_lma_swab(lma);
 
 	rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma, sizeof(*lma),
@@ -2315,13 +2303,13 @@ static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 }
 
 /**
- * Create an local inode for remote entry
+ * Create an local agent inode for remote entry
  */
-static struct inode *osd_create_remote_inode(const struct lu_env *env,
-					     struct osd_device *osd,
-					     struct osd_object *pobj,
-					     const struct lu_fid *fid,
-					     struct thandle *th)
+static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
+						  struct osd_device *osd,
+						  struct osd_object *pobj,
+						  const struct lu_fid *fid,
+						  struct thandle *th)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct inode		*local;
@@ -2340,6 +2328,14 @@ static struct inode *osd_create_remote_inode(const struct lu_env *env,
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));
 		RETURN(local);
+	}
+
+	/* Set special LMA flag for local agent inode */
+	rc = osd_ea_fid_set(info, local, fid, LMAI_AGENT);
+	if (rc != 0) {
+		CERROR("%s: set LMA for "DFID" remote inode failed: rc = %d\n",
+		       osd_name(osd), PFID(fid), rc);
+		RETURN(ERR_PTR(rc));
 	}
 
 	rc = osd_add_dot_dotdot_internal(info, local, pobj->oo_inode,
@@ -2422,7 +2418,7 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 	if ((result == 0) &&
 	    (fid_is_last_id(fid) ||
 	     !fid_is_on_ost(info, osd_dt_dev(th->th_dev), fid)))
-		result = osd_ea_fid_set(info, obj->oo_inode, fid);
+		result = osd_ea_fid_set(info, obj->oo_inode, fid, 0);
 
         if (result == 0)
                 result = __osd_oi_insert(env, obj, fid, th);
@@ -3930,18 +3926,19 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 			/* If parent on remote MDT, we need put this object
 			 * under AGENT */
 			oh = container_of(th, typeof(*oh), ot_super);
-			rc = osd_add_to_agent(env, osd, obj, oh);
+			rc = osd_add_to_remote_parent(env, osd, obj, oh);
 			if (rc != 0) {
-				CERROR("%s: add agent "DFID" error: rc = %d\n",
+				CERROR("%s: add "DFID" error: rc = %d\n",
 				       osd_name(osd),
 				       PFID(lu_object_fid(&dt->do_lu)), rc);
 				RETURN(rc);
 			}
 
-			child_inode = igrab(omm->omm_agent_dentry->d_inode);
+			child_inode = igrab(omm->omm_remote_parent->d_inode);
 		} else {
-			child_inode = osd_create_remote_inode(env, osd, obj,
-							      fid, th);
+			child_inode = osd_create_local_agent_inode(env, osd,
+								   obj, fid,
+								   th);
 			if (IS_ERR(child_inode))
 				RETURN(PTR_ERR(child_inode));
 		}
@@ -4805,7 +4802,7 @@ again:
 		if (unlikely(fid_is_sane(fid))) {
 			/* FID-in-dirent exists, but FID-in-LMA is lost.
 			 * Trust the FID-in-dirent, and add FID-in-LMA. */
-			rc = osd_ea_fid_set(info, inode, fid);
+			rc = osd_ea_fid_set(info, inode, fid, 0);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
 		} else {
@@ -5273,7 +5270,7 @@ static int osd_device_init0(const struct lu_env *env,
 		GOTO(out_mnt, rc);
 	}
 
-	rc = osd_obj_map_init(o);
+	rc = osd_obj_map_init(env, o);
 	if (rc != 0)
 		GOTO(out_scrub, rc);
 
