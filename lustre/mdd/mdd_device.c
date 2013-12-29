@@ -1235,6 +1235,11 @@ static int mdd_prepare(const struct lu_env *env,
 			       mdd2obd_dev(mdd)->obd_name, rc);
 			GOTO(out, rc);
 		}
+
+		rc = mdd_compat_fixes(env, mdd);
+		if (rc)
+			GOTO(out, rc);
+
 	}
 
 	rc = orph_index_init(env, mdd);

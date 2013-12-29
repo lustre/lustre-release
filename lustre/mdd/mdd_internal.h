@@ -101,7 +101,7 @@ struct mdd_device {
 	struct obd_export               *mdd_child_exp;
         struct dt_device                *mdd_child;
 	struct dt_device		*mdd_bottom;
-        struct lu_fid                    mdd_root_fid;
+	struct lu_fid                    mdd_root_fid; /* /ROOT */
 	struct lu_fid			 mdd_local_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
@@ -331,6 +331,14 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
                              struct mdd_object *mdd_obj);
 void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
                     struct lu_name *lname, struct lu_fid *pfid);
+int mdd_links_rename(const struct lu_env *env,
+		     struct mdd_object *mdd_obj,
+		     const struct lu_fid *oldpfid,
+		     const struct lu_name *oldlname,
+		     const struct lu_fid *newpfid,
+		     const struct lu_name *newlname,
+		     struct thandle *handle,
+		     int first, int check);
 
 /* mdd_lov.c */
 int mdd_declare_unlink_log(const struct lu_env *env, struct mdd_object *obj,
@@ -478,6 +486,9 @@ int mdd_permission(const struct lu_env *env,
                    struct md_attr *ma, int mask);
 int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                  struct lustre_capa *capa, int renewal);
+
+/* mdd_prepare.c */
+int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
 
 static inline int lu_device_is_mdd(struct lu_device *d)
 {

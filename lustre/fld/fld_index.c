@@ -262,9 +262,9 @@ int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
         RETURN(rc);
 }
 
-static int fld_insert_entry(const struct lu_env *env,
-			    struct lu_server_fld *fld,
-			    const struct lu_seq_range *range)
+int fld_insert_entry(const struct lu_env *env,
+		     struct lu_server_fld *fld,
+		     const struct lu_seq_range *range)
 {
 	struct thandle *th;
 	int rc;
@@ -293,6 +293,7 @@ out:
 	dt_trans_stop(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev), th);
 	RETURN(rc);
 }
+EXPORT_SYMBOL(fld_insert_entry);
 
 static int fld_insert_special_entries(const struct lu_env *env,
 				      struct lu_server_fld *fld)

@@ -163,6 +163,10 @@ int fld_server_create(const struct lu_env *env,
 		      struct lu_seq_range *add_range,
 		      struct thandle *th);
 
+int fld_insert_entry(const struct lu_env *env,
+		     struct lu_server_fld *fld,
+		     const struct lu_seq_range *range);
+
 int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		      seqno_t seq, struct lu_seq_range *range);
 
