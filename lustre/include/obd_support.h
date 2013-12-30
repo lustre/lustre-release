@@ -38,7 +38,6 @@
 #define _OBD_SUPPORT
 
 #include <libcfs/libcfs.h>
-#include <lvfs.h>
 #include <lprocfs_status.h>
 
 #if defined(__linux__)

@@ -48,38 +48,24 @@
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>
 #include <linux/lustre_common.h>
-#include <linux/lvfs_linux.h>
+#include <linux/fs.h>
 #else
 #include <liblustre.h>
 #endif
 
-#define LLOG_LVFS
+#define OBD_RUN_CTXT_MAGIC	0xC0FFEEAA
+#define OBD_CTXT_DEBUG		/* development-only debugging */
 
-/* simple.c */
+struct dt_device;
 
-struct lvfs_ucred {
-	__u32			luc_uid;
-	__u32			luc_gid;
-	__u32			luc_fsuid;
-	__u32			luc_fsgid;
-	kernel_cap_t		luc_cap;
-	__u32			luc_umask;
-	struct group_info	*luc_ginfo;
-	struct md_identity	*luc_identity;
-};
-
-#define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
-#define OBD_CTXT_DEBUG          /* development-only debugging */
 struct lvfs_run_ctxt {
-        struct vfsmount         *pwdmnt;
-        struct dentry           *pwd;
-        mm_segment_t             fs;
-        struct lvfs_ucred        luc;
-        int                      ngroups;
-        struct group_info       *group_info;
+	struct vfsmount		*pwdmnt;
+	struct dentry		*pwd;
+	mm_segment_t		 fs;
+	uint32_t		 umask;
 	struct dt_device	*dt;
 #ifdef OBD_CTXT_DEBUG
-        __u32                    magic;
+	uint32_t		magic;
 #endif
 };
 
@@ -90,18 +76,6 @@ struct lvfs_run_ctxt {
 #endif
 
 #ifdef __KERNEL__
-
-int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *oldname,
-                  char *newname);
-
-static inline void l_dput(struct dentry *de)
-{
-        if (!de || IS_ERR(de))
-                return;
-        //shrink_dcache_parent(de);
-	LASSERT(d_count(de) > 0);
-        dput(de);
-}
 
 /* We need to hold the inode semaphore over the dcache lookup itself, or we
  * run the risk of entering the filesystem lookup path concurrently on SMP

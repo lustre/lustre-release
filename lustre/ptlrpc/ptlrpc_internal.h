@@ -282,6 +282,9 @@ void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
 int  sptlrpc_conf_init(void);
 void sptlrpc_conf_fini(void);
 
+int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *old_name,
+		  char *new_name);
+
 /* sec.c */
 int  sptlrpc_init(void);
 void sptlrpc_fini(void);

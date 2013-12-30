@@ -2041,10 +2041,10 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	spin_lock_init(&scrub->os_lock);
 	CFS_INIT_LIST_HEAD(&scrub->os_inconsistent_items);
 
-	push_ctxt(&saved, ctxt, NULL);
+	push_ctxt(&saved, ctxt);
 	filp = filp_open(osd_scrub_name, O_RDWR | O_CREAT, 0644);
 	if (IS_ERR(filp)) {
-		pop_ctxt(&saved, ctxt, NULL);
+		pop_ctxt(&saved, ctxt);
 		RETURN(PTR_ERR(filp));
 	}
 
@@ -2056,13 +2056,13 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	rc = osd_ea_fid_set(info, inode, fid, LMAC_NOT_IN_OI, 0);
 	if (rc != 0) {
 		filp_close(filp, 0);
-		pop_ctxt(&saved, ctxt, NULL);
+		pop_ctxt(&saved, ctxt);
 		RETURN(rc);
 	}
 
 	scrub->os_inode = igrab(inode);
 	filp_close(filp, 0);
-	pop_ctxt(&saved, ctxt, NULL);
+	pop_ctxt(&saved, ctxt);
 
 	rc = osd_scrub_file_load(scrub);
 	if (rc == -ENOENT) {

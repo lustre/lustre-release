@@ -50,6 +50,7 @@
 
 #if defined(__KERNEL__)
 
+#include <libcfs/lucache.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
 #include <obd_class.h>

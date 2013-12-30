@@ -62,19 +62,12 @@ static void osd_push_ctxt(const struct osd_device *dev,
                           struct lvfs_run_ctxt *newctxt,
                           struct lvfs_run_ctxt *save)
 {
-        OBD_SET_CTXT_MAGIC(newctxt);
-        newctxt->pwdmnt = dev->od_mnt;
-        newctxt->pwd = dev->od_mnt->mnt_root;
-        newctxt->fs = get_ds();
+	OBD_SET_CTXT_MAGIC(newctxt);
+	newctxt->pwdmnt = dev->od_mnt;
+	newctxt->pwd = dev->od_mnt->mnt_root;
+	newctxt->fs = get_ds();
 
-        push_ctxt(save, newctxt, NULL);
-}
-
-static void osd_pop_ctxt(const struct osd_device *dev,
-			 struct lvfs_run_ctxt *new,
-			 struct lvfs_run_ctxt *save)
-{
-	pop_ctxt(save, new, NULL);
+	push_ctxt(save, newctxt);
 }
 
 /* utility to make a directory */
@@ -200,7 +193,7 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 	GOTO(cleanup, rc);
 
 cleanup:
-	pop_ctxt(&save, &new, NULL);
+	pop_ctxt(&save, &new);
 	if (rc) {
 		if (omm->omm_remote_parent != NULL)
 			dput(omm->omm_remote_parent);
@@ -418,7 +411,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	GOTO(cleanup, rc);
 
 cleanup:
-	osd_pop_ctxt(dev, &new, &save);
+	pop_ctxt(&new, &save);
         if (IS_ERR(d)) {
                 OBD_FREE_PTR(dev->od_ost_map);
                 RETURN(PTR_ERR(d));

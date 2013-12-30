@@ -101,25 +101,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 	 generic_permission(inode, mask, check_acl)
 #endif
 
-#ifdef HAVE_DENTRY_OPEN_USE_PATH
-#define ll_dentry_open(a,b,c)	dentry_open(a,b,c)
-#else
-/*
- * dentry_open handles its own reference counting since Linux v3.6
- * (commit 765927b2). Callers should free their own references.
- *
- * Prior versions expected the caller to increment the references.
- * The references are retained on success and freed on error.
- */
-static inline struct file *ll_dentry_open(struct path *path, int flags,
-					  const struct cred *cred)
-{
-	mntget(path->mnt);
-	dget(path->dentry);
-	return dentry_open(path->dentry, path->mnt, flags, cred);
-}
-#endif
-
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                 vfs_symlink(dir, dentry, path, mode)

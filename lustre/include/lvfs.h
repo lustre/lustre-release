@@ -39,8 +39,6 @@
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
-#define LL_FID_NAMELEN (16 + 1 + 8 + 1)
-
 #include <libcfs/libcfs.h>
 #if defined(__linux__)
 #include <linux/lvfs.h>
@@ -52,15 +50,7 @@
 #error Unsupported operating system.
 #endif
 
-#include <libcfs/lucache.h>
-
-#ifdef LIBLUSTRE
-#include <lvfs_user_fs.h>
-#endif
-
-/* lvfs_linux.c */
-void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
-               struct lvfs_ucred *cred);
-void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
-              struct lvfs_ucred *cred);
+/* ptlrpc_sec_ctx.c */
+void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);
+void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx);
 #endif
