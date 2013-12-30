@@ -112,6 +112,28 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
         return hash >> (BITS_PER_LONG - bits);
 }
 
+/* This compatibility can be removed once kernel 3.3 is used,
+ * since cache_register_net/cache_unregister_net are exported.
+ * Note that since kernel 3.4 cache_register and cache_unregister
+ * are removed.
+*/
+static inline int _cache_register_net(struct cache_detail *cd, struct net *net)
+{
+#ifdef HAVE_CACHE_REGISTER
+	return cache_register(cd);
+#else
+	return cache_register_net(cd, net);
+#endif
+}
+static inline void _cache_unregister_net(struct cache_detail *cd,
+					 struct net *net)
+{
+#ifdef HAVE_CACHE_REGISTER
+	cache_unregister(cd);
+#else
+	cache_unregister_net(cd, net);
+#endif
+}
 /****************************************
  * rsi cache                            *
  ****************************************/
@@ -1081,13 +1103,13 @@ int __init gss_init_svc_upcall(void)
 	 */
 	cfs_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
-	rc = cache_register_net(&rsi_cache, &init_net);
+	rc = _cache_register_net(&rsi_cache, &init_net);
 	if (rc != 0)
 		return rc;
 
-	rc = cache_register_net(&rsc_cache, &init_net);
+	rc = _cache_register_net(&rsc_cache, &init_net);
 	if (rc != 0) {
-		cache_unregister_net(&rsi_cache, &init_net);
+		_cache_unregister_net(&rsi_cache, &init_net);
 		return rc;
 	}
 
@@ -1114,8 +1136,8 @@ int __init gss_init_svc_upcall(void)
 void gss_exit_svc_upcall(void)
 {
 	cache_purge(&rsi_cache);
-	cache_unregister_net(&rsi_cache, &init_net);
+	_cache_unregister_net(&rsi_cache, &init_net);
 
 	cache_purge(&rsc_cache);
-	cache_unregister_net(&rsc_cache, &init_net);
+	_cache_unregister_net(&rsc_cache, &init_net);
 }

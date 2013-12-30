@@ -1035,6 +1035,29 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.4 cache_register/cache_unregister are removed
+# see kernel commit 2c5f846747526e2b83c5f1b8e69016be0e2e87c0
+# Note, since 2.6.37 cache_register_net/cache_unregister_net
+# are defined, but not exported.
+# 3.3 cache_register_net/cache_unregister_net are
+# exported and replacing cache_register/cache_unregister in 3.4
+#
+AC_DEFUN([LC_HAVE_CACHE_REGISTER],
+[AC_MSG_CHECKING([if have cache_register])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sunrpc/cache.h>
+],[
+	cache_register(NULL);
+],[
+	AC_DEFINE(HAVE_CACHE_REGISTER, 1,
+		  [have cache_register])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.5 renames end_writeback() back to clear_inode()...
 # see kernel commit dbd5768f87ff6fb0a4fe09c4d7b6c4a24de99430
 #
@@ -1407,6 +1430,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_MIGRATEPAGE_4ARGS
 	 LC_SUPEROPS_USE_DENTRY
 	 LC_INODEOPS_USE_UMODE_T
+	 LC_HAVE_CACHE_REGISTER
 
 	 # 3.4
 	 LC_TOUCH_ATIME_1ARG
