@@ -1188,7 +1188,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# 3.8 struct file has new memeber f_inode
+# 3.8 struct file has new member f_inode
 #
 AC_DEFUN([LC_HAVE_FILE_F_INODE],
 [AC_MSG_CHECKING([if struct file has memeber f_inode])
@@ -1199,6 +1199,21 @@ LB_LINUX_TRY_COMPILE([
 ],[
 	AC_DEFINE(HAVE_FILE_F_INODE, 1,
 		  [struct file has memeber f_inode])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_HAVE_SUNRPC_UPCALL_HAS_3ARGS],
+[AC_MSG_CHECKING([if sunrpc_cache_pipe_upcall takes 3 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sunrpc/cache.h>
+],[
+	sunrpc_cache_pipe_upcall(NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_SUNRPC_UPCALL_HAS_3ARGS, 1,
+		[sunrpc_cache_pipe_upcall takes 3 args])
 	AC_MSG_RESULT([yes])
 ],[
 	AC_MSG_RESULT([no])
@@ -1413,6 +1428,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.8
 	 LC_HAVE_FILE_F_INODE
+	 LC_HAVE_SUNRPC_UPCALL_HAS_3ARGS
 
 	 # 3.9
 	 LC_HAVE_HLIST_FOR_EACH_3ARG

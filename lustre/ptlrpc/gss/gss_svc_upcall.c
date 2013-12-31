@@ -161,26 +161,34 @@ static void rsi_request(struct cache_detail *cd,
                         struct cache_head *h,
                         char **bpp, int *blen)
 {
-        struct rsi *rsi = container_of(h, struct rsi, h);
-        __u64 index = 0;
+	struct rsi *rsi = container_of(h, struct rsi, h);
+	__u64 index = 0;
 
-        /* if in_handle is null, provide kernel suggestion */
-        if (rsi->in_handle.len == 0)
-                index = gss_get_next_ctx_index();
+	/* if in_handle is null, provide kernel suggestion */
+	if (rsi->in_handle.len == 0)
+		index = gss_get_next_ctx_index();
 
-        qword_addhex(bpp, blen, (char *) &rsi->lustre_svc,
-                     sizeof(rsi->lustre_svc));
-        qword_addhex(bpp, blen, (char *) &rsi->nid, sizeof(rsi->nid));
-        qword_addhex(bpp, blen, (char *) &index, sizeof(index));
-        qword_addhex(bpp, blen, rsi->in_handle.data, rsi->in_handle.len);
-        qword_addhex(bpp, blen, rsi->in_token.data, rsi->in_token.len);
-        (*bpp)[-1] = '\n';
+	qword_addhex(bpp, blen, (char *) &rsi->lustre_svc,
+			sizeof(rsi->lustre_svc));
+	qword_addhex(bpp, blen, (char *) &rsi->nid, sizeof(rsi->nid));
+	qword_addhex(bpp, blen, (char *) &index, sizeof(index));
+	qword_addhex(bpp, blen, rsi->in_handle.data, rsi->in_handle.len);
+	qword_addhex(bpp, blen, rsi->in_token.data, rsi->in_token.len);
+	(*bpp)[-1] = '\n';
 }
+
+#ifdef HAVE_SUNRPC_UPCALL_HAS_3ARGS
+static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
+{
+	return sunrpc_cache_pipe_upcall(cd, h, rsi_request);
+}
+#else
 
 static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
 {
-        return sunrpc_cache_pipe_upcall(cd, h, rsi_request);
+	return sunrpc_cache_pipe_upcall(cd, h);
 }
+#endif
 
 static inline void __rsi_init(struct rsi *new, struct rsi *item)
 {
@@ -349,16 +357,19 @@ out:
 }
 
 static struct cache_detail rsi_cache = {
-        .hash_size      = RSI_HASHMAX,
-        .hash_table     = rsi_table,
-        .name           = "auth.sptlrpc.init",
-        .cache_put      = rsi_put,
-        .cache_upcall   = rsi_upcall,
-        .cache_parse    = rsi_parse,
-        .match          = rsi_match,
-        .init           = rsi_init,
-        .update         = update_rsi,
-        .alloc          = rsi_alloc,
+	.hash_size	= RSI_HASHMAX,
+	.hash_table	= rsi_table,
+	.name		= "auth.sptlrpc.init",
+	.cache_put	= rsi_put,
+#ifndef HAVE_SUNRPC_UPCALL_HAS_3ARGS
+	.cache_request	= rsi_request,
+#endif
+	.cache_upcall	= rsi_upcall,
+	.cache_parse	= rsi_parse,
+	.match		= rsi_match,
+	.init		= rsi_init,
+	.update		= update_rsi,
+	.alloc		= rsi_alloc,
 };
 
 static struct rsi *rsi_lookup(struct rsi *item)
