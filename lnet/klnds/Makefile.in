@@ -3,7 +3,6 @@
 @BUILD_GNILND_TRUE@subdir-m += gnilnd
 @BUILD_O2IBLND_TRUE@subdir-m += o2iblnd
 @BUILD_QSWLND_TRUE@subdir-m += qswlnd
-@BUILD_PTLLND_TRUE@subdir-m += ptllnd
 subdir-m += socklnd
 
 @INCLUDE_RULES@

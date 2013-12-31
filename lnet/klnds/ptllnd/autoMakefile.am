@@ -1,8 +1,0 @@
-if MODULES
-if BUILD_PTLLND
-modulenet_DATA = kptllnd$(KMODEXT)
-endif
-endif
-
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-EXTRA_DIST = $(kptllnd-objs:%.o=%.c) ptllnd.h

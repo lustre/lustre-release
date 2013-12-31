@@ -566,7 +566,7 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, PTLLND, MXLND,
+	if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND,
 				  O2IBLND, GNILND, 0))
                 return -1;
 
@@ -593,25 +593,6 @@ jt_ptl_print_peers (int argc, char **argv)
 						 sizeof(buffer[1]), 1),
                                 data.ioc_u32[1], /* peer port */
                                 data.ioc_u32[3]); /* conn_count */
-                } else if (g_net_is_compatible(NULL, PTLLND, 0)) {
-                        id.nid = data.ioc_nid;
-                        id.pid = data.ioc_u32[4];
-                        printf ("%-20s s %d%s [%d] "LPD64".%06d"
-                                " m "LPD64"/"LPD64" q %d/%d c %d/%d\n",
-                                libcfs_id2str(id),
-                                data.ioc_net,   /* state */
-                                data.ioc_flags ? "" : " ~!h", /* sent_hello */
-                                data.ioc_count, /* refcount */
-                                data.ioc_u64[0]/1000000, /* incarnation secs */
-                                (int)(data.ioc_u64[0]%1000000), /* incarnation usecs */
-                                (((__u64)data.ioc_u32[1])<<32) |
-                                ((__u64)data.ioc_u32[0]), /* next_matchbits */
-                                (((__u64)data.ioc_u32[3])<<32) |
-                                ((__u64)data.ioc_u32[2]), /* last_matchbits_seen */
-                                data.ioc_u32[5] >> 16, /* nsendq */
-                                data.ioc_u32[5] & 0xffff, /* nactiveq */
-                                data.ioc_u32[6] >> 16, /* credits */
-                                data.ioc_u32[6] & 0xffff); /* outstanding_credits */
                 } else if (g_net_is_compatible(NULL, RALND, 0)) {
                         printf ("%-20s [%d]@%s:%d\n",
                                 libcfs_nid2str(data.ioc_nid), /* peer nid */
@@ -716,22 +697,15 @@ jt_ptl_del_peer (int argc, char **argv)
         lnet_nid_t               nid = LNET_NID_ANY;
         lnet_pid_t               pid = LNET_PID_ANY;
         __u32                    ip = 0;
-        char                    *end;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, PTLLND,
+	if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND,
 				  O2IBLND, GNILND, 0))
                 return -1;
 
         if (g_net_is_compatible(NULL, SOCKLND, 0)) {
                 if (argc > 3) {
                         fprintf (stderr, "usage: %s [nid] [ipaddr]\n",
-                                 argv[0]);
-                        return 0;
-                }
-        } else if (g_net_is_compatible(NULL, PTLLND, 0)) {
-                if (argc > 3) {
-                        fprintf (stderr, "usage: %s [nid] [pid]\n",
                                  argv[0]);
                         return 0;
                 }
@@ -752,15 +726,6 @@ jt_ptl_del_peer (int argc, char **argv)
                         fprintf (stderr, "Can't parse ip addr: %s\n",
                                  argv[2]);
                         return -1;
-                }
-        } else if (g_net_is_compatible(NULL, PTLLND, 0)) {
-                if (argc > 2) {
-                        pid = strtol(argv[2], &end, 0);
-                        if (end == argv[2] || *end == 0) {
-                                fprintf(stderr, "Can't parse pid %s\n",
-                                        argv[2]);
-                                return -1;
-                        }
                 }
         }
 

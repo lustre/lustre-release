@@ -93,41 +93,6 @@ fi
 ])
 
 #
-# LN_CONFIG_PORTALS
-#
-# configure support for Portals
-#
-AC_DEFUN([LN_CONFIG_PORTALS],
-[AC_MSG_CHECKING([for portals])
-AC_ARG_WITH([portals],
-	AC_HELP_STRING([--with-portals=path],
-                       [set path to portals]),
-        [
-		case $with_portals in
-			no)     ENABLEPORTALS=0
-				;;
-			*)	PORTALS="${with_portals}"
-				ENABLEPORTALS=1
-				;;
-		esac
-	], [
-		ENABLEPORTALS=0
-	])
-PTLLNDCPPFLAGS=""
-if test $ENABLEPORTALS -eq 0; then
-	AC_MSG_RESULT([no])
-elif test ! \( -f ${PORTALS}/include/portals/p30.h \); then
-	AC_MSG_RESULT([no])
-	AC_MSG_ERROR([bad --with-portals path])
-else
-	PORTALS=$(readlink --canonicalize $PORTALS)
-	AC_MSG_RESULT([$PORTALS])
-	PTLLNDCPPFLAGS="-I${PORTALS}/include"
-fi
-AC_SUBST(PTLLNDCPPFLAGS)
-])
-
-#
 # LN_CONFIG_BACKOFF
 #
 # check if tunable tcp backoff is available/wanted
@@ -152,53 +117,6 @@ else
                AC_MSG_RESULT([no (no kernel support)])
        fi
 fi
-])
-
-
-#
-# LN_CONFIG_PTLLND
-#
-# configure support for Portals LND
-#
-AC_DEFUN([LN_CONFIG_PTLLND],
-[
-if test -z "$ENABLEPORTALS"; then
-	LN_CONFIG_PORTALS
-fi
-
-AC_MSG_CHECKING([whether to build the kernel portals LND])
-
-PTLLND=""
-if test $ENABLEPORTALS -ne 0; then
-	AC_MSG_RESULT([yes])
-	PTLLND="ptllnd"
-else
-	AC_MSG_RESULT([no])
-fi
-AC_SUBST(PTLLND)
-])
-
-#
-# LN_CONFIG_UPTLLND
-#
-# configure support for Portals LND
-#
-AC_DEFUN([LN_CONFIG_UPTLLND],
-[
-if test -z "$ENABLEPORTALS"; then
-	LN_CONFIG_PORTALS
-fi
-
-AC_MSG_CHECKING([whether to build the userspace portals LND])
-
-UPTLLND=""
-if test $ENABLEPORTALS -ne 0; then
-	AC_MSG_RESULT([yes])
-	UPTLLND="ptllnd"
-else
-	AC_MSG_RESULT([no])
-fi
-AC_SUBST(UPTLLND)
 ])
 
 #
@@ -683,7 +601,6 @@ LN_CONFIG_QUADRICS
 LN_CONFIG_O2IB
 LN_CONFIG_RALND
 LN_CONFIG_GNILND
-LN_CONFIG_PTLLND
 LN_CONFIG_MX
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
@@ -809,7 +726,6 @@ if test x$enable_liblustre = xyes ; then
 fi
 
 LN_CONFIG_MAX_PAYLOAD
-LN_CONFIG_UPTLLND
 LN_CONFIG_USOCKLND
 ])
 
@@ -825,7 +741,6 @@ AM_CONDITIONAL(BUILD_O2IBLND, test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_GNILND, test x$GNILND = "xgnilnd")
 AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
-AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
 AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
 
@@ -858,8 +773,6 @@ lnet/klnds/gnilnd/Makefile
 lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile
 lnet/klnds/socklnd/autoMakefile
-lnet/klnds/ptllnd/Makefile
-lnet/klnds/ptllnd/autoMakefile
 lnet/lnet/Makefile
 lnet/lnet/autoMakefile
 lnet/selftest/Makefile
