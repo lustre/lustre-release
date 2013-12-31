@@ -2809,48 +2809,48 @@ int ll_fsync(struct file *file, int datasync)
 int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 {
 #endif
-        struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct ptlrpc_request *req;
-        struct obd_capa *oc;
-        int rc, err;
-        ENTRY;
+	struct inode *inode = dentry->d_inode;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ptlrpc_request *req;
+	struct obd_capa *oc;
+	int rc, err;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
 	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
 	mutex_lock(&inode->i_mutex);
 #else
-        /* fsync's caller has already called _fdata{sync,write}, we want
-         * that IO to finish before calling the osc and mdc sync methods */
-        rc = filemap_fdatawait(inode->i_mapping);
+	/* fsync's caller has already called _fdata{sync,write}, we want
+	 * that IO to finish before calling the osc and mdc sync methods */
+	rc = filemap_fdatawait(inode->i_mapping);
 #endif
 
-        /* catch async errors that were recorded back when async writeback
-         * failed for pages in this mapping. */
-        if (!S_ISDIR(inode->i_mode)) {
-                err = lli->lli_async_rc;
-                lli->lli_async_rc = 0;
-                if (rc == 0)
-                        rc = err;
+	/* catch async errors that were recorded back when async writeback
+	 * failed for pages in this mapping. */
+	if (!S_ISDIR(inode->i_mode)) {
+		err = lli->lli_async_rc;
+		lli->lli_async_rc = 0;
+		if (rc == 0)
+			rc = err;
 		err = lov_read_and_clear_async_rc(lli->lli_clob);
 		if (rc == 0)
 			rc = err;
-        }
+	}
 
-        oc = ll_mdscapa_get(inode);
+	oc = ll_mdscapa_get(inode);
 	err = md_fsync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
 		       &req);
-        capa_put(oc);
-        if (!rc)
-                rc = err;
-        if (!err)
-                ptlrpc_req_finished(req);
+	capa_put(oc);
+	if (!rc)
+		rc = err;
+	if (!err)
+		ptlrpc_req_finished(req);
 
-	if (datasync && S_ISREG(inode->i_mode)) {
+	if (S_ISREG(inode->i_mode)) {
 		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 
 		err = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
