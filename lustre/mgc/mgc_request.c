@@ -119,26 +119,26 @@ static DEFINE_SPINLOCK(config_list_lock);
 /* Take a reference to a config log */
 static int config_log_get(struct config_llog_data *cld)
 {
-        ENTRY;
-        cfs_atomic_inc(&cld->cld_refcount);
-        CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
-               cfs_atomic_read(&cld->cld_refcount));
-        RETURN(0);
+	ENTRY;
+	atomic_inc(&cld->cld_refcount);
+	CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
+		atomic_read(&cld->cld_refcount));
+	RETURN(0);
 }
 
 /* Drop a reference to a config log.  When no longer referenced,
    we can free the config log data */
 static void config_log_put(struct config_llog_data *cld)
 {
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
-               cfs_atomic_read(&cld->cld_refcount));
-        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
+	CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
+		atomic_read(&cld->cld_refcount));
+	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
-        /* spinlock to make sure no item with 0 refcount in the list */
-        if (cfs_atomic_dec_and_lock(&cld->cld_refcount, &config_list_lock)) {
-                cfs_list_del(&cld->cld_list_chain);
+	/* spinlock to make sure no item with 0 refcount in the list */
+	if (atomic_dec_and_lock(&cld->cld_refcount, &config_list_lock)) {
+		cfs_list_del(&cld->cld_list_chain);
 		spin_unlock(&config_list_lock);
 
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
@@ -178,16 +178,16 @@ struct config_llog_data *config_log_find(char *logname,
                 if (instance != cld->cld_cfg.cfg_instance)
                         continue;
 
-                /* instance may be NULL, should check name */
-                if (strcmp(logname, cld->cld_logname) == 0) {
-                        found = cld;
-                        break;
-                }
-        }
-        if (found) {
-                cfs_atomic_inc(&found->cld_refcount);
-                LASSERT(found->cld_stopping == 0 || cld_is_sptlrpc(found) == 0);
-        }
+		/* instance may be NULL, should check name */
+		if (strcmp(logname, cld->cld_logname) == 0) {
+			found = cld;
+			break;
+		}
+	}
+	if (found) {
+		atomic_inc(&found->cld_refcount);
+		LASSERT(found->cld_stopping == 0 || cld_is_sptlrpc(found) == 0);
+	}
 	spin_unlock(&config_list_lock);
 	RETURN(found);
 }
@@ -210,17 +210,17 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         if (!cld)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        strcpy(cld->cld_logname, logname);
-        if (cfg)
-                cld->cld_cfg = *cfg;
+	strcpy(cld->cld_logname, logname);
+	if (cfg)
+		cld->cld_cfg = *cfg;
 	else
 		cld->cld_cfg.cfg_callback = class_config_llog_handler;
 	mutex_init(&cld->cld_lock);
-        cld->cld_cfg.cfg_last_idx = 0;
-        cld->cld_cfg.cfg_flags = 0;
-        cld->cld_cfg.cfg_sb = sb;
-        cld->cld_type = type;
-        cfs_atomic_set(&cld->cld_refcount, 1);
+	cld->cld_cfg.cfg_last_idx = 0;
+	cld->cld_cfg.cfg_flags = 0;
+	cld->cld_cfg.cfg_sb = sb;
+	cld->cld_type = type;
+	atomic_set(&cld->cld_refcount, 1);
 
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(obd->obd_self_export);
@@ -501,12 +501,13 @@ static DECLARE_COMPLETION(rq_exit);
 static void do_requeue(struct config_llog_data *cld)
 {
 	int rc = 0;
-        ENTRY;
-        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
+	ENTRY;
 
-        /* Do not run mgc_process_log on a disconnected export or an
-           export which is being disconnected. Take the client
-           semaphore to make the check non-racy. */
+	LASSERT(atomic_read(&cld->cld_refcount) > 0);
+
+	/* Do not run mgc_process_log on a disconnected export or an
+	 * export which is being disconnected. Take the client
+	 * semaphore to make the check non-racy. */
 	down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
 	if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
 		CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
@@ -576,13 +577,13 @@ static int mgc_requeue_thread(void *data)
 
 			spin_unlock(&config_list_lock);
 
-                        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
+			LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
-                        /* Whether we enqueued again or not in mgc_process_log,
-                         * we're done with the ref from the old enqueue */
-                        if (cld_prev)
-                                config_log_put(cld_prev);
-                        cld_prev = cld;
+			/* Whether we enqueued again or not in mgc_process_log,
+			 * we're done with the ref from the old enqueue */
+			if (cld_prev)
+				config_log_put(cld_prev);
+			cld_prev = cld;
 
                         cld->cld_lostlock = 0;
 			if (likely(!stopped))
@@ -621,12 +622,12 @@ static int mgc_requeue_thread(void *data)
    We are responsible for dropping the config log reference from here on out. */
 static void mgc_requeue_add(struct config_llog_data *cld)
 {
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_INFO, "log %s: requeue (r=%d sp=%d st=%x)\n",
-               cld->cld_logname, cfs_atomic_read(&cld->cld_refcount),
-               cld->cld_stopping, rq_state);
-        LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
+	CDEBUG(D_INFO, "log %s: requeue (r=%d sp=%d st=%x)\n",
+		cld->cld_logname, atomic_read(&cld->cld_refcount),
+		cld->cld_stopping, rq_state);
+	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
 	mutex_lock(&cld->cld_lock);
 	if (cld->cld_stopping || cld->cld_lostlock) {
@@ -838,19 +839,19 @@ static int mgc_llog_fini(const struct lu_env *env, struct obd_device *obd)
 }
 
 
-static cfs_atomic_t mgc_count = CFS_ATOMIC_INIT(0);
+static atomic_t mgc_count = ATOMIC_INIT(0);
 static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-        switch (stage) {
-        case OBD_CLEANUP_EARLY:
-                break;
-        case OBD_CLEANUP_EXPORTS:
-                if (cfs_atomic_dec_and_test(&mgc_count)) {
-                        int running;
-                        /* stop requeue thread */
+	switch (stage) {
+	case OBD_CLEANUP_EARLY:
+		break;
+	case OBD_CLEANUP_EXPORTS:
+		if (atomic_dec_and_test(&mgc_count)) {
+			int running;
+			/* stop requeue thread */
 			spin_lock(&config_list_lock);
 			running = rq_state & RQ_RUNNING;
 			if (running)
@@ -859,15 +860,15 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 			if (running) {
 				wake_up(&rq_waitq);
 				wait_for_completion(&rq_exit);
-                        }
-                }
-                obd_cleanup_client_import(obd);
+			}
+		}
+		obd_cleanup_client_import(obd);
 		rc = mgc_llog_fini(NULL, obd);
-                if (rc != 0)
-                        CERROR("failed to cleanup llogging subsystems\n");
-                break;
-        }
-        RETURN(rc);
+		if (rc != 0)
+			CERROR("failed to cleanup llogging subsystems\n");
+		break;
+	}
+	RETURN(rc);
 }
 
 static int mgc_cleanup(struct obd_device *obd)
@@ -913,7 +914,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 #endif
 	sptlrpc_lprocfs_cliobd_attach(obd);
 
-	if (cfs_atomic_inc_return(&mgc_count) == 1) {
+	if (atomic_inc_return(&mgc_count) == 1) {
 		rq_state = 0;
 		init_waitqueue_head(&rq_waitq);
 
@@ -963,29 +964,29 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		       PLDLMRES(lock->l_resource),
 		       (char *)&lock->l_resource->lr_name.name[0]);
 
-                if (!cld) {
-                        CDEBUG(D_INFO, "missing data, won't requeue\n");
-                        break;
-                }
+		if (!cld) {
+			CDEBUG(D_INFO, "missing data, won't requeue\n");
+			break;
+		}
 
-                /* held at mgc_process_log(). */
-                LASSERT(cfs_atomic_read(&cld->cld_refcount) > 0);
-                /* Are we done with this log? */
-                if (cld->cld_stopping) {
-                        CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
-                               cld->cld_logname);
-                        config_log_put(cld);
-                        break;
-                }
-                /* Make sure not to re-enqueue when the mgc is stopping
-                   (we get called from client_disconnect_export) */
-                if (!lock->l_conn_export ||
-                    !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
-                        CDEBUG(D_MGC, "log %.8s: disconnecting, won't requeue\n",
-                               cld->cld_logname);
-                        config_log_put(cld);
-                        break;
-                }
+		/* held at mgc_process_log(). */
+		LASSERT(atomic_read(&cld->cld_refcount) > 0);
+		/* Are we done with this log? */
+		if (cld->cld_stopping) {
+			CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
+				cld->cld_logname);
+			config_log_put(cld);
+			break;
+		}
+		/* Make sure not to re-enqueue when the mgc is stopping
+		   (we get called from client_disconnect_export) */
+		if (!lock->l_conn_export ||
+		    !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
+			CDEBUG(D_MGC, "log %.8s: disconnecting, won't requeue\n",
+				cld->cld_logname);
+			config_log_put(cld);
+			break;
+		}
 
                 /* Re-enqueue now */
                 mgc_requeue_add(cld);

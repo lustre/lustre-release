@@ -4238,7 +4238,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	 */
 	mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
-	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
+	LASSERT(atomic_read(&d->ld_ref) == 0);
 
 	server_put_mount(mdt_obd_name(m));
 

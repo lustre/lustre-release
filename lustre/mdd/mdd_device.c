@@ -1079,7 +1079,7 @@ static struct lu_device *mdd_device_free(const struct lu_env *env,
 	struct mdd_device *m = lu2mdd_dev(lu);
 	ENTRY;
 
-	LASSERT(cfs_atomic_read(&lu->ld_ref) == 0);
+	LASSERT(atomic_read(&lu->ld_ref) == 0);
 	md_device_fini(&m->mdd_md_dev);
 	OBD_FREE_PTR(m);
 	RETURN(NULL);

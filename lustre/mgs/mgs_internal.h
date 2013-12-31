@@ -149,7 +149,7 @@ struct fs_db {
 	wait_queue_head_t    fsdb_notify_waitq;
 	struct completion    fsdb_notify_comp;
 	cfs_time_t           fsdb_notify_start;
-	cfs_atomic_t         fsdb_notify_phase;
+	atomic_t         fsdb_notify_phase;
 	volatile unsigned int fsdb_notify_async:1,
                              fsdb_notify_stop:1;
         /* statistic data */
