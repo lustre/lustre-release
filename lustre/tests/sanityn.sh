@@ -2352,6 +2352,32 @@ test_51c() {
 }
 run_test 51c "layout lock: IT_LAYOUT blocked and correct layout can be returned"
 
+test_51d() {
+	dd if=/dev/zero of=/$DIR1/$tfile bs=1M count=1
+	cancel_lru_locks mdc
+
+	# open should grant LAYOUT lock, mmap and read will install pages
+	$MULTIOP $DIR1/$tfile oO_RDWR:SMR_Uc &
+	local PID=$!
+	sleep 1
+
+	# rss before revoking
+	local br=$(grep -A 10 $tfile /proc/$PID/smaps | awk '/^Rss/{print $2}')
+	echo "Before revoking layout lock: $br KB mapped"
+
+	# delete the file will revoke layout lock
+	rm -f $DIR2/$tfile
+
+	# rss after revoking
+	local ar=$(grep -A 10 $tfile /proc/$PID/smaps | awk '/^Rss/{print $2}')
+
+	kill -USR1 $PID
+	wait $PID || error
+
+	[ $ar -eq 0 ] || error "rss before: $br, after $ar, some pages remained"
+}
+run_test 51d "layout lock: losing layout lock should clean up memory map region"
+
 test_60() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
 	{ skip "Need MDS version at least 2.3.0"; return; }
