@@ -728,7 +728,7 @@ test_7_cycle() {
     client_evicted $CLIENT1 || rc=1
 
     wait_recovery_complete $SINGLEMDS
-    wait_mds_ost_sync $SINGLEMDS
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 
     rm -rf $DIR/$tdir
     return $rc
