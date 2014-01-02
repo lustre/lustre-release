@@ -2540,6 +2540,9 @@ test_73() {
 run_test 73 "getxattr should not cause xattr lock cancellation"
 
 test_74() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.93) ] &&
+		skip "Need MDS version at least 2.4.93" && return
+
 	dd if=/dev/zero of=$DIR1/$tfile-1 bs=1K count=1
 	dd if=/dev/zero of=$DIR1/$tfile-2 bs=1K count=1
 	flocks_test 4 $DIR1/$tfile-1 $DIR2/$tfile-2
