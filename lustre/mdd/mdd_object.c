@@ -936,15 +936,14 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
 	/* Only record user and layout xattr changes */
 	if (strncmp(XATTR_USER_PREFIX, name,
 		    sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
-	    strncmp(XATTR_NAME_LOV, name,
-		    sizeof(XATTR_NAME_LOV) - 1) == 0) {
+	    strcmp(XATTR_NAME_LOV, name) == 0) {
 		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 		if (rc)
 			return rc;
 	}
 
 	/* If HSM data is modified, this could add a changelog */
-	if (strncmp(XATTR_NAME_HSM, name, sizeof(XATTR_NAME_HSM) - 1) == 0) {
+	if (strcmp(XATTR_NAME_HSM, name) == 0) {
 		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 		if (rc)
 			return rc;
@@ -1059,7 +1058,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
-	if (strncmp(XATTR_NAME_HSM, name, sizeof(XATTR_NAME_HSM) - 1) == 0) {
+	if (strcmp(XATTR_NAME_HSM, name) == 0) {
 		rc = mdd_hsm_update_locked(env, obj, buf, handle);
 		if (rc) {
 			mdd_write_unlock(env, mdd_obj);
@@ -1073,7 +1072,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	if (strncmp(XATTR_NAME_LOV, name, sizeof(XATTR_NAME_LOV) - 1) == 0)
+	if (strcmp(XATTR_NAME_LOV, name) == 0)
 		rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, mdd_obj,
 					      handle);
 	else if (strncmp(XATTR_USER_PREFIX, name,
@@ -1097,17 +1096,18 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
                                  const char *name,
                                  struct thandle *handle)
 {
-        int rc;
+	int rc;
 
-        rc = mdo_declare_xattr_del(env, obj, name, handle);
-        if (rc)
-                return rc;
+	rc = mdo_declare_xattr_del(env, obj, name, handle);
+	if (rc)
+		return rc;
 
-        /* Only record user xattr changes */
-        if ((strncmp("user.", name, 5) == 0))
-                rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	/* Only record user xattr changes */
+	if ((strncmp(XATTR_USER_PREFIX, name,
+		     sizeof(XATTR_USER_PREFIX) - 1) == 0))
+		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 
-        return rc;
+	return rc;
 }
 
 /**

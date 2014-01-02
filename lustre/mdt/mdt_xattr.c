@@ -423,10 +423,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		    strcmp(xattr_name, XATTR_NAME_LFSCK_NAMESPACE) == 0)
 			GOTO(out, rc = 0);
 	} else if ((valid & OBD_MD_FLXATTR) &&
-		   (strncmp(xattr_name, XATTR_NAME_ACL_ACCESS,
-			    sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0 ||
-		    strncmp(xattr_name, XATTR_NAME_ACL_DEFAULT,
-			    sizeof(XATTR_NAME_ACL_DEFAULT) - 1) == 0)) {
+		   (strcmp(xattr_name, XATTR_NAME_ACL_ACCESS) == 0 ||
+		    strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0)) {
 		/* currently lustre limit acl access size */
 		if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
 			GOTO(out, rc = -ERANGE);

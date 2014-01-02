@@ -530,7 +530,7 @@ static int lod_xattr_set(const struct lu_env *env,
 
 	attr = dt->do_lu.lo_header->loh_attr & S_IFMT;
 	if (S_ISDIR(attr)) {
-		if (strncmp(name, XATTR_NAME_LOV, strlen(XATTR_NAME_LOV)) == 0)
+		if (strcmp(name, XATTR_NAME_LOV) == 0)
 			rc = lod_xattr_set_lov_on_dir(env, dt, buf, name,
 						      fl, th, capa);
 		else

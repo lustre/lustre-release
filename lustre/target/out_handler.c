@@ -610,8 +610,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 	/**
 	 * Ignore errors if this is LINK EA
 	 **/
-	if (unlikely(rc && !strncmp(arg->u.xattr_set.name, XATTR_NAME_LINK,
-				    strlen(XATTR_NAME_LINK))))
+	if (unlikely(rc && !strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK)))
 		rc = 0;
 
 	CDEBUG(D_INFO, "%s: insert xattr set reply %p index %d: rc = %d\n",

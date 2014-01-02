@@ -3794,7 +3794,7 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
 	if (rc == 0 && !mgs_parse_devname(devname, NULL, &index)) {
                 /* param related to llite isn't allowed to set by OST or MDT */
 		if (rc == 0 && strncmp(param, PARAM_LLITE,
-				   sizeof(PARAM_LLITE)) == 0)
+				       sizeof(PARAM_LLITE) - 1) == 0)
                         RETURN(-EINVAL);
         } else {
                 /* assume devname is the fsname */
