@@ -179,14 +179,11 @@ static void *lmv_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 {
 	struct lmv_tgt_desc     *tgt = v;
-	struct obd_device       *dev = p->private;
-	struct lmv_obd          *lmv = &dev->u.lmv;
-	int                      idx = tgt - lmv->tgts[0];
 
 	if (tgt == NULL)
 		return 0;
-	return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->ltd_uuid.uuid,
-			  tgt->ltd_active ? "" : "IN");
+	return seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_idx,
+			  tgt->ltd_uuid.uuid, tgt->ltd_active ? "" : "IN");
 }
 
 struct seq_operations lmv_tgt_sops = {
