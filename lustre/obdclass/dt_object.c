@@ -939,7 +939,7 @@ out:
 EXPORT_SYMBOL(dt_index_read);
 
 #ifdef LPROCFS
-
+#ifndef HAVE_ONLY_PROCFS_SEQ
 int lprocfs_dt_rd_blksize(char *page, char **start, off_t off,
 			  int count, int *eof, void *data)
 {
@@ -1054,5 +1054,99 @@ int lprocfs_dt_rd_filesfree(char *page, char **start, off_t off,
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_dt_rd_filesfree);
+#endif
+
+int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0)
+		seq_printf(m, "%u\n", (unsigned) osfs.os_bsize);
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_blksize_seq_show);
+
+int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0) {
+		__u32 blk_size = osfs.os_bsize >> 10;
+		__u64 result = osfs.os_blocks;
+
+		while (blk_size >>= 1)
+			result <<= 1;
+
+		seq_printf(m, LPU64"\n", result);
+	}
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_kbytestotal_seq_show);
+
+int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0) {
+		__u32 blk_size = osfs.os_bsize >> 10;
+		__u64 result = osfs.os_bfree;
+
+		while (blk_size >>= 1)
+			result <<= 1;
+
+		seq_printf(m, LPU64"\n", result);
+	}
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_kbytesfree_seq_show);
+
+int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0) {
+		__u32 blk_size = osfs.os_bsize >> 10;
+		__u64 result = osfs.os_bavail;
+
+		while (blk_size >>= 1)
+			result <<= 1;
+
+		seq_printf(m, LPU64"\n", result);
+	}
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_kbytesavail_seq_show);
+
+int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0)
+		seq_printf(m, LPU64"\n", osfs.os_files);
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_filestotal_seq_show);
+
+int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
+{
+	struct dt_device *dt = m->private;
+	struct obd_statfs osfs;
+
+	int rc = dt_statfs(NULL, dt, &osfs);
+	if (rc == 0)
+		seq_printf(m, LPU64"\n", osfs.os_ffree);
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_dt_filesfree_seq_show);
 
 #endif /* LPROCFS */

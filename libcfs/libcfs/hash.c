@@ -2026,6 +2026,7 @@ void cfs_hash_rehash_key(cfs_hash_t *hs, const void *old_key,
 }
 EXPORT_SYMBOL(cfs_hash_rehash_key);
 
+#ifndef HAVE_ONLY_PROCFS_SEQ
 int cfs_hash_debug_header(char *str, int size)
 {
         return snprintf(str, size, "%-*s%6s%6s%6s%6s%6s%6s%6s%7s%8s%8s%8s%s\n",
@@ -2035,6 +2036,17 @@ int cfs_hash_debug_header(char *str, int size)
                  " distribution");
 }
 EXPORT_SYMBOL(cfs_hash_debug_header);
+#endif
+
+int cfs_hash_debug_header_seq(struct seq_file *m)
+{
+	return seq_printf(m, "%-*s%6s%6s%6s%6s%6s%6s%6s%7s%8s%8s%8s%s\n",
+			CFS_HASH_BIGNAME_LEN,
+			"name", "cur", "min", "max", "theta", "t-min", "t-max",
+			"flags", "rehash", "count", "maxdep", "maxdepb",
+			" distribution");
+}
+EXPORT_SYMBOL(cfs_hash_debug_header_seq);
 
 static cfs_hash_bucket_t **
 cfs_hash_full_bkts(cfs_hash_t *hs)
@@ -2060,6 +2072,7 @@ cfs_hash_full_nbkt(cfs_hash_t *hs)
                CFS_HASH_RH_NBKT(hs) : CFS_HASH_NBKT(hs);
 }
 
+#ifndef HAVE_ONLY_PROCFS_SEQ
 int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
 {
         int                    dist[8] = { 0, };
@@ -2134,3 +2147,70 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
         return c;
 }
 EXPORT_SYMBOL(cfs_hash_debug_str);
+#endif
+
+int cfs_hash_debug_str_seq(cfs_hash_t *hs, struct seq_file *m)
+{
+	int	dist[8]	= { 0, };
+	int	maxdep	= -1;
+	int	maxdepb	= -1;
+	int	total	= 0;
+	int	c	= 0;
+	int	theta;
+	int	i;
+
+	cfs_hash_lock(hs, 0);
+	theta = __cfs_hash_theta(hs);
+
+	c += seq_printf(m, "%-*s ", CFS_HASH_BIGNAME_LEN, hs->hs_name);
+	c += seq_printf(m, "%5d ",  1 << hs->hs_cur_bits);
+	c += seq_printf(m, "%5d ",  1 << hs->hs_min_bits);
+	c += seq_printf(m, "%5d ",  1 << hs->hs_max_bits);
+	c += seq_printf(m, "%d.%03d ", __cfs_hash_theta_int(theta),
+			__cfs_hash_theta_frac(theta));
+	c += seq_printf(m, "%d.%03d ", __cfs_hash_theta_int(hs->hs_min_theta),
+			__cfs_hash_theta_frac(hs->hs_min_theta));
+	c += seq_printf(m, "%d.%03d ", __cfs_hash_theta_int(hs->hs_max_theta),
+			__cfs_hash_theta_frac(hs->hs_max_theta));
+	c += seq_printf(m, " 0x%02x ", hs->hs_flags);
+	c += seq_printf(m, "%6d ", hs->hs_rehash_count);
+
+	/*
+	 * The distribution is a summary of the chained hash depth in
+	 * each of the libcfs hash buckets.  Each buckets hsb_count is
+	 * divided by the hash theta value and used to generate a
+	 * histogram of the hash distribution.  A uniform hash will
+	 * result in all hash buckets being close to the average thus
+	 * only the first few entries in the histogram will be non-zero.
+	 * If you hash function results in a non-uniform hash the will
+	 * be observable by outlier bucks in the distribution histogram.
+	 *
+	 * Uniform hash distribution:		128/128/0/0/0/0/0/0
+	 * Non-Uniform hash distribution:	128/125/0/0/0/0/2/1
+	 */
+	for (i = 0; i < cfs_hash_full_nbkt(hs); i++) {
+		cfs_hash_bd_t bd;
+
+		bd.bd_bucket = cfs_hash_full_bkts(hs)[i];
+		cfs_hash_bd_lock(hs, &bd, 0);
+		if (maxdep < bd.bd_bucket->hsb_depmax) {
+			maxdep  = bd.bd_bucket->hsb_depmax;
+#ifdef __KERNEL__
+			maxdepb = ffz(~maxdep);
+#endif
+		}
+		total += bd.bd_bucket->hsb_count;
+		dist[min(fls(bd.bd_bucket->hsb_count/max(theta,1)),7)]++;
+		cfs_hash_bd_unlock(hs, &bd, 0);
+	}
+
+	c += seq_printf(m, "%7d ", total);
+	c += seq_printf(m, "%7d ", maxdep);
+	c += seq_printf(m, "%7d ", maxdepb);
+	for (i = 0; i < 8; i++)
+		c += seq_printf(m, "%d%c",  dist[i], (i == 7) ? '\n' : '/');
+
+	cfs_hash_unlock(hs, 0);
+	return c;
+}
+EXPORT_SYMBOL(cfs_hash_debug_str_seq);

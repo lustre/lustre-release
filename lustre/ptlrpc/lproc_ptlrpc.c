@@ -1180,49 +1180,6 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
-#define BUFLEN (UUID_MAX + 5)
-
-int lprocfs_wr_evict_client(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        char              *kbuf;
-        char              *tmpbuf;
-
-        OBD_ALLOC(kbuf, BUFLEN);
-        if (kbuf == NULL)
-                return -ENOMEM;
-
-        /*
-         * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
-         * bytes into kbuf, to ensure that the string is NUL-terminated.
-         * UUID_MAX should include a trailing NUL already.
-         */
-	if (copy_from_user(kbuf, buffer,
-                               min_t(unsigned long, BUFLEN - 1, count))) {
-                count = -EFAULT;
-                goto out;
-        }
-        tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
-	class_incref(obd, __FUNCTION__, current);
-
-        if (strncmp(tmpbuf, "nid:", 4) == 0)
-                obd_export_evict_by_nid(obd, tmpbuf + 4);
-        else if (strncmp(tmpbuf, "uuid:", 5) == 0)
-                obd_export_evict_by_uuid(obd, tmpbuf + 5);
-        else
-                obd_export_evict_by_uuid(obd, tmpbuf);
-
-	class_decref(obd, __FUNCTION__, current);
-
-out:
-        OBD_FREE(kbuf, BUFLEN);
-        return count;
-}
-EXPORT_SYMBOL(lprocfs_wr_evict_client);
-
-#undef BUFLEN
-
 #ifndef HAVE_ONLY_PROCFS_SEQ
 int lprocfs_wr_ping(struct file *file, const char *buffer,
                     unsigned long count, void *data)

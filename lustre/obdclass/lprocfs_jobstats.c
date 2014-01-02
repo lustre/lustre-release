@@ -416,18 +416,17 @@ struct seq_operations lprocfs_jobstats_seq_sops = {
 
 static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry *dp = PDE(inode);
 	struct seq_file *seq;
 	int rc;
 
-	if (LPROCFS_ENTRY_CHECK(dp))
+	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
 		return -ENOENT;
 
 	rc = seq_open(file, &lprocfs_jobstats_seq_sops);
 	if (rc)
 		return rc;
 	seq = file->private_data;
-	seq->private = dp->data;
+	seq->private = PDE_DATA(inode);
 	return 0;
 }
 
@@ -520,19 +519,18 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	stats->ojs_last_cleanup = cfs_time_current_sec();
 
 	LPROCFS_WRITE_ENTRY();
-	entry = create_proc_entry("job_stats", 0644, obd->obd_proc_entry);
+	entry = proc_create_data("job_stats", 0644, obd->obd_proc_entry,
+				&lprocfs_jobstats_seq_fops, stats);
 	LPROCFS_WRITE_EXIT();
-	if (entry) {
-		entry->proc_fops = &lprocfs_jobstats_seq_fops;
-		entry->data = stats;
-		RETURN(0);
-	} else {
+	if (entry == NULL) {
 		lprocfs_job_stats_fini(obd);
 		RETURN(-ENOMEM);
 	}
+	RETURN(0);
 }
 EXPORT_SYMBOL(lprocfs_job_stats_init);
 
+#ifndef HAVE_ONLY_PROCFS_SEQ
 int lprocfs_rd_job_interval(char *page, char **start, off_t off,
 			    int count, int *eof, void *data)
 {
@@ -567,5 +565,36 @@ int lprocfs_wr_job_interval(struct file *file, const char *buffer,
 
 }
 EXPORT_SYMBOL(lprocfs_wr_job_interval);
+#endif
+int lprocfs_job_interval_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct obd_job_stats *stats;
 
+	LASSERT(obd != NULL);
+	stats = &obd->u.obt.obt_jobstats;
+	return seq_printf(m, "%d\n", stats->ojs_cleanup_interval);
+}
+EXPORT_SYMBOL(lprocfs_job_interval_seq_show);
+
+ssize_t
+lprocfs_job_interval_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
+{
+	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
+	struct obd_job_stats *stats;
+	int val, rc;
+
+	LASSERT(obd != NULL);
+	stats = &obd->u.obt.obt_jobstats;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	stats->ojs_cleanup_interval = val;
+	lprocfs_job_cleanup(stats, true);
+	return count;
+}
+EXPORT_SYMBOL(lprocfs_job_interval_seq_write);
 #endif /* LPROCFS*/
