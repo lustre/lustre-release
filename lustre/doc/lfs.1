@@ -1,6 +1,6 @@
 .TH lfs 1 "2009 Jan 29" Lustre "user utilities"
 .SH NAME
-lfs \- Lustre utility to create a file with specific striping pattern, find the striping pattern of existing files
+lfs \- Lustre utility to create a file with specific striping pattern, find the striping pattern of existing files, do certain quota operations, and manage distributed namespace options for directories
 .SH SYNOPSIS
 .br
 .B lfs
@@ -83,6 +83,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs swap_layouts <filename1> <filename2>
 .br
 .B lfs data_version [-n] \fB<filename>\fR
+.br
+.B lfs mkdir <--index|-i mdt_index> <dir>
 .br
 .B lfs help
 .SH DESCRIPTION
@@ -265,6 +267,25 @@ Even without -n, race conditions are possible and data version should be
 checked before and after an operation to be confident the data did not change
 during it.
 .TP
+.B mkdir <--index|-i mdt_index> <dir>
+Allocate a new directory on a specified MDT.  
+
+The "lfs mkdir" command is only executable by root unless
+"mdt.*.enable_remote_dir_gid" is set via "lctl set_param" to be either a
+non-zero GID to limit it to a single group (e.g. "operator" or "admin"),
+or "-1" to allow any group to create remote directories.
+
+The root of the file system is on MDT0000, and directories and files inherit the
+MDT of their parent directory unless a different MDT is specified with this
+command.
+
+By default, only directories on MDT0000 can contain directories that are not on
+the same MDT.  However, if "mdt.*.enable_remote_dir" is set non-zero on an MDT
+then it will allow creating remote directories that have parents other than
+MDT0000. This is restricted to avoid creating directory trees that have
+intermediate path components on a series different MDTs and become unavailable
+if any of the intermediate MDTs are offline.
+.TP
 .B help 
 Provides brief help on the various arguments
 .TP
@@ -328,6 +349,9 @@ Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlim
 .TP
 .B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
+.TP
+.B $ lfs mkdir -i 1 new_directory
+Create directory 'new_directory' on the mdt with index 1.
 .SH BUGS
 The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
 .SH AUTHOR
