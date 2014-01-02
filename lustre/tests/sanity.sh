@@ -9864,6 +9864,15 @@ obdecho_test() {
 	local pages=${3:-64}
         local rc=0
         local id
+
+	local count=10
+	local obd_size=$(get_obd_size $node $OBD)
+	local page_size=$(get_page_size $node)
+	if [[ -n "$obd_size" ]]; then
+		local new_count=$((obd_size / (pages * page_size / 1024)))
+		[[ $new_count -ge $count ]] || count=$new_count
+	fi
+
         do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
         [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||
                            rc=2; }
@@ -9875,7 +9884,7 @@ obdecho_test() {
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec getattr $id" ||
 			   rc=4; }
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec "		       \
-			   "test_brw 10 w v $pages $id" || rc=4; }
+			   "test_brw $count w v $pages $id" || rc=4; }
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec destroy $id 1" ||
 			   rc=4; }
 	[ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
