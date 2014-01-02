@@ -159,18 +159,20 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
 }
 
 ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
-                           const struct lu_fid *fid, ldlm_type_t type,
-                           ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                           struct lustre_handle *lockh)
+			   const struct lu_fid *fid, ldlm_type_t type,
+			   ldlm_policy_data_t *policy, ldlm_mode_t mode,
+			   struct lustre_handle *lockh)
 {
-        struct ldlm_res_id res_id;
-        ldlm_mode_t rc;
-        ENTRY;
+	struct ldlm_res_id res_id;
+	ldlm_mode_t rc;
+	ENTRY;
 
-        fid_build_reg_res_name(fid, &res_id);
-        rc = ldlm_lock_match(class_exp2obd(exp)->obd_namespace, flags,
-                             &res_id, type, policy, mode, lockh, 0);
-        RETURN(rc);
+	fid_build_reg_res_name(fid, &res_id);
+	/* LU-4405: Clear bits not supported by server */
+	policy->l_inodebits.bits &= exp_connect_ibits(exp);
+	rc = ldlm_lock_match(class_exp2obd(exp)->obd_namespace, flags,
+			     &res_id, type, policy, mode, lockh, 0);
+	RETURN(rc);
 }
 
 int mdc_cancel_unused(struct obd_export *exp,
@@ -1115,10 +1117,10 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
                         break;
                 }
 
-                mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
-                                       LDLM_FL_BLOCK_GRANTED, &res_id,
-                                       LDLM_IBITS, &policy,
-                                       LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh, 0);
+		mode = mdc_lock_match(exp, LDLM_FL_BLOCK_GRANTED, fid,
+				      LDLM_IBITS, &policy,
+				      LCK_CR | LCK_CW | LCK_PR | LCK_PW,
+				      &lockh);
         }
 
         if (mode) {
