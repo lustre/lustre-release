@@ -182,8 +182,8 @@ static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which);
  * get a zero ra window, although there is still ra space remaining. - Jay */
 
 static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
-                                     struct ra_io_arg *ria,
-                                     unsigned long pages)
+				     struct ra_io_arg *ria,
+				     unsigned long pages, unsigned long min)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
         long ret;
@@ -192,7 +192,7 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
         /* If read-ahead pages left are less than 1M, do not do read-ahead,
          * otherwise it will form small read RPC(< 1M), which hurt server
          * performance a lot. */
-        ret = min(ra->ra_max_pages - cfs_atomic_read(&ra->ra_cur_pages), pages);
+	ret = min(ra->ra_max_pages - atomic_read(&ra->ra_cur_pages), pages);
         if (ret < 0 || ret < min_t(long, PTLRPC_MAX_BRW_PAGES, pages))
                 GOTO(out, ret = 0);
 
@@ -213,19 +213,24 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
                         ret -= beyond_rpc;
         }
 
-        if (cfs_atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
-                cfs_atomic_sub(ret, &ra->ra_cur_pages);
-                ret = 0;
-        }
+	if (atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
+		atomic_sub(ret, &ra->ra_cur_pages);
+		ret = 0;
+	}
 
 out:
-        RETURN(ret);
+	if (ret < min) {
+		/* override ra limit for maximum performance */
+		atomic_add(min - ret, &ra->ra_cur_pages);
+		ret = min;
+	}
+	RETURN(ret);
 }
 
 void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
 {
-        struct ll_ra_info *ra = &sbi->ll_ra_info;
-        cfs_atomic_sub(len, &ra->ra_cur_pages);
+	struct ll_ra_info *ra = &sbi->ll_ra_info;
+	atomic_sub(len, &ra->ra_cur_pages);
 }
 
 static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which)
@@ -234,10 +239,10 @@ static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which)
         lprocfs_counter_incr(sbi->ll_ra_stats, which);
 }
 
-void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which)
+void ll_ra_stats_inc(struct inode *inode, enum ra_stat which)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(mapping->host);
-        ll_ra_stats_inc_sbi(sbi, which);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	ll_ra_stats_inc_sbi(sbi, which);
 }
 
 #define RAS_CDEBUG(ras) \
@@ -325,7 +330,7 @@ struct ll_ra_read *ll_ra_read_get(struct file *f)
 
 static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 			      struct cl_page_list *queue, struct cl_page *page,
-			      struct cl_object *clob)
+			      struct cl_object *clob, pgoff_t *max_index)
 {
 	struct page *vmpage = page->cp_vmpage;
 	struct ccc_page *cp;
@@ -338,8 +343,11 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 	lu_ref_add(&page->cp_reference, "ra", current);
 	cp = cl2ccc_page(cl_object_page_slice(clob, page));
 	if (!cp->cpg_defer_uptodate && !PageUptodate(vmpage)) {
-		rc = cl_page_is_under_lock(env, io, page);
-		if (rc == -EBUSY) {
+		CDEBUG(D_READA, "page index %lu, max_index: %lu\n",
+		       ccc_index(cp), *max_index);
+		if (*max_index == 0 || ccc_index(cp) > *max_index)
+			rc = cl_page_is_under_lock(env, io, page, max_index);
+		if (rc == 0) {
 			cp->cpg_defer_uptodate = 1;
 			cp->cpg_ra_used = 0;
 			cl_page_list_add(queue, page);
@@ -368,11 +376,12 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
  * \retval  -ve, 0: page wasn't added to \a queue for other reason.
  */
 static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
-                              struct cl_page_list *queue,
-                              pgoff_t index, struct address_space *mapping)
+			      struct cl_page_list *queue,
+			      pgoff_t index, pgoff_t *max_index)
 {
+	struct cl_object *clob  = io->ci_obj;
+	struct inode     *inode = ccc_object_inode(clob);
         struct page      *vmpage;
-        struct cl_object *clob  = ll_i2info(mapping->host)->lli_clob;
         struct cl_page   *page;
         enum ra_stat      which = _NR_RA_STAT; /* keep gcc happy */
         unsigned int      gfp_mask;
@@ -385,15 +394,15 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 #ifdef __GFP_NOWARN
         gfp_mask |= __GFP_NOWARN;
 #endif
-        vmpage = grab_cache_page_nowait(mapping, index);
-        if (vmpage != NULL) {
-                /* Check if vmpage was truncated or reclaimed */
-                if (vmpage->mapping == mapping) {
-                        page = cl_page_find(env, clob, vmpage->index,
-                                            vmpage, CPT_CACHEABLE);
-                        if (!IS_ERR(page)) {
-                                rc = cl_read_ahead_page(env, io, queue,
-							page, clob);
+	vmpage = grab_cache_page_nowait(inode->i_mapping, index);
+	if (vmpage != NULL) {
+		/* Check if vmpage was truncated or reclaimed */
+		if (vmpage->mapping == inode->i_mapping) {
+			page = cl_page_find(env, clob, vmpage->index,
+					    vmpage, CPT_CACHEABLE);
+			if (!IS_ERR(page)) {
+				rc = cl_read_ahead_page(env, io, queue,
+							page, clob, max_index);
                                 if (rc == -ENOLCK) {
                                         which = RA_STAT_FAILED_MATCH;
                                         msg   = "lock match failed";
@@ -413,11 +422,11 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
                 which = RA_STAT_FAILED_GRAB_PAGE;
                 msg   = "g_c_p_n failed";
         }
-        if (msg != NULL) {
-                ll_ra_stats_inc(mapping, which);
-                CDEBUG(D_READA, "%s\n", msg);
-        }
-        RETURN(rc);
+	if (msg != NULL) {
+		ll_ra_stats_inc(inode, which);
+		CDEBUG(D_READA, "%s\n", msg);
+	}
+	RETURN(rc);
 }
 
 #define RIA_DEBUG(ria)                                                       \
@@ -522,25 +531,26 @@ static int ll_read_ahead_pages(const struct lu_env *env,
                                struct cl_io *io, struct cl_page_list *queue,
                                struct ra_io_arg *ria,
                                unsigned long *reserved_pages,
-                               struct address_space *mapping,
                                unsigned long *ra_end)
 {
-        int rc, count = 0, stride_ria;
-        unsigned long page_idx;
+	int rc, count = 0;
+	bool stride_ria;
+	pgoff_t page_idx;
+	pgoff_t max_index = 0;
 
-        LASSERT(ria != NULL);
-        RIA_DEBUG(ria);
+	LASSERT(ria != NULL);
+	RIA_DEBUG(ria);
 
-        stride_ria = ria->ria_length > ria->ria_pages && ria->ria_pages > 0;
-        for (page_idx = ria->ria_start; page_idx <= ria->ria_end &&
-                        *reserved_pages > 0; page_idx++) {
-                if (ras_inside_ra_window(page_idx, ria)) {
-                        /* If the page is inside the read-ahead window*/
-                        rc = ll_read_ahead_page(env, io, queue,
-                                                page_idx, mapping);
+	stride_ria = ria->ria_length > ria->ria_pages && ria->ria_pages > 0;
+	for (page_idx = ria->ria_start;
+	     page_idx <= ria->ria_end && *reserved_pages > 0; page_idx++) {
+		if (ras_inside_ra_window(page_idx, ria)) {
+			/* If the page is inside the read-ahead window*/
+			rc = ll_read_ahead_page(env, io, queue,
+						page_idx, &max_index);
                         if (rc == 1) {
                                 (*reserved_pages)--;
-                                count ++;
+                                count++;
                         } else if (rc == -ENOLCK)
                                 break;
                 } else if (stride_ria) {
@@ -570,40 +580,38 @@ static int ll_read_ahead_pages(const struct lu_env *env,
 }
 
 int ll_readahead(const struct lu_env *env, struct cl_io *io,
-                 struct ll_readahead_state *ras, struct address_space *mapping,
-                 struct cl_page_list *queue, int flags)
+		 struct cl_page_list *queue, struct ll_readahead_state *ras,
+		 bool hit)
 {
-        struct vvp_io *vio = vvp_env_io(env);
-        struct vvp_thread_info *vti = vvp_env_info(env);
-        struct cl_attr *attr = ccc_env_thread_attr(env);
-        unsigned long start = 0, end = 0, reserved;
-        unsigned long ra_end, len;
-        struct inode *inode;
-        struct ll_ra_read *bead;
-        struct ra_io_arg *ria = &vti->vti_ria;
-        struct ll_inode_info *lli;
-        struct cl_object *clob;
-        int ret = 0;
-        __u64 kms;
-        ENTRY;
+	struct vvp_io *vio = vvp_env_io(env);
+	struct vvp_thread_info *vti = vvp_env_info(env);
+	struct cl_attr *attr = ccc_env_thread_attr(env);
+	unsigned long start = 0, end = 0, reserved;
+	unsigned long ra_end, len, mlen = 0;
+	struct inode *inode;
+	struct ll_ra_read *bead;
+	struct ra_io_arg *ria = &vti->vti_ria;
+	struct cl_object *clob;
+	int ret = 0;
+	__u64 kms;
+	ENTRY;
 
-        inode = mapping->host;
-        lli = ll_i2info(inode);
-        clob = lli->lli_clob;
+	clob = io->ci_obj;
+	inode = ccc_object_inode(clob);
 
-        memset(ria, 0, sizeof *ria);
+	memset(ria, 0, sizeof *ria);
 
-        cl_object_attr_lock(clob);
-        ret = cl_object_attr_get(env, clob, attr);
-        cl_object_attr_unlock(clob);
+	cl_object_attr_lock(clob);
+	ret = cl_object_attr_get(env, clob, attr);
+	cl_object_attr_unlock(clob);
 
-        if (ret != 0)
-                RETURN(ret);
-        kms = attr->cat_kms;
-        if (kms == 0) {
-                ll_ra_stats_inc(mapping, RA_STAT_ZERO_LEN);
-                RETURN(0);
-        }
+	if (ret != 0)
+		RETURN(ret);
+	kms = attr->cat_kms;
+	if (kms == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_LEN);
+		RETURN(0);
+	}
 
 	spin_lock(&ras->ras_lock);
         if (vio->cui_ra_window_set)
@@ -658,40 +666,60 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         }
 	spin_unlock(&ras->ras_lock);
 
-        if (end == 0) {
-                ll_ra_stats_inc(mapping, RA_STAT_ZERO_WINDOW);
-                RETURN(0);
-        }
-        len = ria_page_count(ria);
-        if (len == 0)
-                RETURN(0);
+	if (end == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
+		RETURN(0);
+	}
+	len = ria_page_count(ria);
+	if (len == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_WINDOW);
+		RETURN(0);
+	}
 
-        reserved = ll_ra_count_get(ll_i2sbi(inode), ria, len);
-        if (reserved < len)
-                ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
+	CDEBUG(D_READA, DFID": ria: %lu/%lu, bead: %lu/%lu, hit: %d\n",
+	       PFID(lu_object_fid(&clob->co_lu)),
+	       ria->ria_start, ria->ria_end,
+	       bead == NULL ? 0 : bead->lrr_start,
+	       bead == NULL ? 0 : bead->lrr_count,
+	       hit);
 
-        CDEBUG(D_READA, "reserved page %lu ra_cur %d ra_max %lu\n", reserved,
-               cfs_atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
-               ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
+	/* at least to extend the readahead window to cover current read */
+	if (!hit && bead != NULL &&
+	    bead->lrr_start + bead->lrr_count > ria->ria_start) {
+		/* to the end of current read window. */
+		mlen = bead->lrr_start + bead->lrr_count - ria->ria_start;
+		/* trim to RPC boundary */
+		start = ria->ria_start & (PTLRPC_MAX_BRW_PAGES - 1);
+		mlen = min(mlen, PTLRPC_MAX_BRW_PAGES - start);
+	}
 
-        ret = ll_read_ahead_pages(env, io, queue,
-                                  ria, &reserved, mapping, &ra_end);
+	reserved = ll_ra_count_get(ll_i2sbi(inode), ria, len, mlen);
+	if (reserved < len)
+		ll_ra_stats_inc(inode, RA_STAT_MAX_IN_FLIGHT);
 
-        if (reserved != 0)
-                ll_ra_count_put(ll_i2sbi(inode), reserved);
+	CDEBUG(D_READA, "reserved pages: %lu/%lu/%lu, ra_cur %d, ra_max %lu\n",
+	       reserved, len, mlen,
+	       atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
+	       ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
+
+	ret = ll_read_ahead_pages(env, io, queue, ria, &reserved, &ra_end);
+
+	if (reserved != 0)
+		ll_ra_count_put(ll_i2sbi(inode), reserved);
 
 	if (ra_end == end + 1 && ra_end == (kms >> PAGE_CACHE_SHIFT))
-                ll_ra_stats_inc(mapping, RA_STAT_EOF);
+		ll_ra_stats_inc(inode, RA_STAT_EOF);
 
-        /* if we didn't get to the end of the region we reserved from
-         * the ras we need to go back and update the ras so that the
-         * next read-ahead tries from where we left off.  we only do so
-         * if the region we failed to issue read-ahead on is still ahead
-         * of the app and behind the next index to start read-ahead from */
-        CDEBUG(D_READA, "ra_end %lu end %lu stride end %lu \n",
-               ra_end, end, ria->ria_end);
+	/* if we didn't get to the end of the region we reserved from
+	 * the ras we need to go back and update the ras so that the
+	 * next read-ahead tries from where we left off.  we only do so
+	 * if the region we failed to issue read-ahead on is still ahead
+	 * of the app and behind the next index to start read-ahead from */
+	CDEBUG(D_READA, "ra_end %lu end %lu stride end %lu \n",
+	       ra_end, end, ria->ria_end);
 
 	if (ra_end != end + 1) {
+		ll_ra_stats_inc(inode, RA_STAT_FAILED_REACH_END);
 		spin_lock(&ras->ras_lock);
 		if (ra_end < ras->ras_next_readahead &&
 		    index_in_window(ra_end, ras->ras_window_start, 0,
@@ -963,14 +991,17 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	ras->ras_last_readpage = index;
 	ras_set_start(inode, ras, index);
 
-	if (stride_io_mode(ras))
+	if (stride_io_mode(ras)) {
 		/* Since stride readahead is sentivite to the offset
 		 * of read-ahead, so we use original offset here,
 		 * instead of ras_window_start, which is RPC aligned */
 		ras->ras_next_readahead = max(index, ras->ras_next_readahead);
-	else
-		ras->ras_next_readahead = max(ras->ras_window_start,
-					      ras->ras_next_readahead);
+	} else {
+		if (ras->ras_next_readahead < ras->ras_window_start)
+			ras->ras_next_readahead = ras->ras_window_start;
+		if (!hit)
+			ras->ras_next_readahead = index + 1;
+	}
 	RAS_CDEBUG(ras);
 
 	/* Trigger RA in the mmap case where ras_consecutive_requests

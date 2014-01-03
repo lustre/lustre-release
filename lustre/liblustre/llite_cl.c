@@ -237,8 +237,8 @@ static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
 	} else {
 		struct ccc_object *clobj = cl2ccc(obj);
 
-		cl_page_slice_add(page, &cpg->cpg_cl, obj,
-				&slp_transient_page_ops);
+		cl_page_slice_add(page, &cpg->cpg_cl, obj, index,
+				  &slp_transient_page_ops);
 		clobj->cob_transient_pages++;
 	}
 
@@ -361,7 +361,6 @@ static const struct cl_page_operations slp_transient_page_ops = {
         .cpo_discard       = ccc_transient_page_discard,
         .cpo_is_vmlocked   = slp_page_is_vmlocked,
         .cpo_fini          = slp_transient_page_fini,
-        .cpo_is_under_lock = ccc_page_is_under_lock,
         .io = {
                 [CRT_READ] = {
                         .cpo_completion  = slp_page_completion_read,

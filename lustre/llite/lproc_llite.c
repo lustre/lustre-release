@@ -908,18 +908,19 @@ void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
 EXPORT_SYMBOL(ll_stats_ops_tally);
 
 static const char *ra_stat_string[] = {
-        [RA_STAT_HIT] = "hits",
-        [RA_STAT_MISS] = "misses",
-        [RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",
-        [RA_STAT_MISS_IN_WINDOW] = "miss inside window",
-        [RA_STAT_FAILED_GRAB_PAGE] = "failed grab_cache_page",
-        [RA_STAT_FAILED_MATCH] = "failed lock match",
-        [RA_STAT_DISCARDED] = "read but discarded",
-        [RA_STAT_ZERO_LEN] = "zero length file",
-        [RA_STAT_ZERO_WINDOW] = "zero size window",
-        [RA_STAT_EOF] = "read-ahead to EOF",
-        [RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
-        [RA_STAT_WRONG_GRAB_PAGE] = "wrong page from grab_cache_page",
+	[RA_STAT_HIT] = "hits",
+	[RA_STAT_MISS] = "misses",
+	[RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",
+	[RA_STAT_MISS_IN_WINDOW] = "miss inside window",
+	[RA_STAT_FAILED_GRAB_PAGE] = "failed grab_cache_page",
+	[RA_STAT_FAILED_MATCH] = "failed lock match",
+	[RA_STAT_DISCARDED] = "read but discarded",
+	[RA_STAT_ZERO_LEN] = "zero length file",
+	[RA_STAT_ZERO_WINDOW] = "zero size window",
+	[RA_STAT_EOF] = "read-ahead to EOF",
+	[RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
+	[RA_STAT_WRONG_GRAB_PAGE] = "wrong page from grab_cache_page",
+	[RA_STAT_FAILED_REACH_END] = "failed to reach end"
 };
 
 LPROC_SEQ_FOPS_RO_TYPE(llite, name);

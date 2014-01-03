@@ -313,8 +313,6 @@ int ccc_object_glimpse(const struct lu_env *env,
                        const struct cl_object *obj, struct ost_lvb *lvb);
 int ccc_conf_set(const struct lu_env *env, struct cl_object *obj,
                  const struct cl_object_conf *conf);
-int ccc_page_is_under_lock(const struct lu_env *env,
-                           const struct cl_page_slice *slice, struct cl_io *io);
 int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice);
 void ccc_transient_page_verify(const struct cl_page *page);
 int  ccc_transient_page_own(const struct lu_env *env,

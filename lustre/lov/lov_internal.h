@@ -114,6 +114,8 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
                           obd_off start, obd_off end,
                           obd_off *obd_start, obd_off *obd_end);
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
+pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
+			 int stripe);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);

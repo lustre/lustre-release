@@ -642,6 +642,7 @@ struct lov_io_sub    *lov_page_subio    (const struct lu_env *env,
                                          const struct cl_page_slice *slice);
 
 struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov);
+int lov_page_stripe(const struct cl_page *page);
 
 #define lov_foreach_target(lov, var)                    \
         for (var = 0; var < lov_targets_nr(lov); ++var)

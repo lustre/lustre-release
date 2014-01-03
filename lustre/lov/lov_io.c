@@ -246,7 +246,7 @@ void lov_sub_put(struct lov_io_sub *sub)
  *
  */
 
-static int lov_page_stripe(const struct cl_page *page)
+int lov_page_stripe(const struct cl_page *page)
 {
 	struct lovsub_object *subobj;
 	const struct cl_page_slice *slice;

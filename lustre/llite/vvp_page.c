@@ -146,7 +146,7 @@ static void vvp_page_discard(const struct lu_env *env,
 	LASSERT(PageLocked(vmpage));
 
 	if (cpg->cpg_defer_uptodate && !cpg->cpg_ra_used)
-		ll_ra_stats_inc(vmpage->mapping, RA_STAT_DISCARDED);
+		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
 
 	ll_invalidate_page(vmpage);
 }
@@ -360,6 +360,23 @@ static int vvp_page_make_ready(const struct lu_env *env,
 	RETURN(result);
 }
 
+static int vvp_page_is_under_lock(const struct lu_env *env,
+				  const struct cl_page_slice *slice,
+				  struct cl_io *io, pgoff_t *max_index)
+{
+	ENTRY;
+
+	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE ||
+	    io->ci_type == CIT_FAULT) {
+		struct ccc_io *cio = ccc_env_io(env);
+
+		if (unlikely(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED))
+			*max_index = CL_PAGE_EOF;
+	}
+	RETURN(0);
+}
+
+
 static int vvp_page_print(const struct lu_env *env,
                           const struct cl_page_slice *slice,
                           void *cookie, lu_printer_t printer)
@@ -393,7 +410,7 @@ static const struct cl_page_operations vvp_page_ops = {
         .cpo_is_vmlocked   = vvp_page_is_vmlocked,
         .cpo_fini          = vvp_page_fini,
         .cpo_print         = vvp_page_print,
-        .cpo_is_under_lock = ccc_page_is_under_lock,
+        .cpo_is_under_lock = vvp_page_is_under_lock,
         .io = {
                 [CRT_READ] = {
                         .cpo_prep        = vvp_page_prep_read,
@@ -491,25 +508,25 @@ static void vvp_transient_page_fini(const struct lu_env *env,
 }
 
 static const struct cl_page_operations vvp_transient_page_ops = {
-        .cpo_own           = vvp_transient_page_own,
-        .cpo_assume        = vvp_transient_page_assume,
-        .cpo_unassume      = vvp_transient_page_unassume,
-        .cpo_disown        = vvp_transient_page_disown,
-        .cpo_discard       = vvp_transient_page_discard,
-        .cpo_fini          = vvp_transient_page_fini,
-        .cpo_is_vmlocked   = vvp_transient_page_is_vmlocked,
-        .cpo_print         = vvp_page_print,
-        .cpo_is_under_lock = ccc_page_is_under_lock,
-        .io = {
-                [CRT_READ] = {
-                        .cpo_prep        = ccc_transient_page_prep,
-                        .cpo_completion  = vvp_transient_page_completion,
-                },
-                [CRT_WRITE] = {
-                        .cpo_prep        = ccc_transient_page_prep,
-                        .cpo_completion  = vvp_transient_page_completion,
-                }
-        }
+	.cpo_own		= vvp_transient_page_own,
+	.cpo_assume		= vvp_transient_page_assume,
+	.cpo_unassume		= vvp_transient_page_unassume,
+	.cpo_disown		= vvp_transient_page_disown,
+	.cpo_discard		= vvp_transient_page_discard,
+	.cpo_fini		= vvp_transient_page_fini,
+	.cpo_is_vmlocked	= vvp_transient_page_is_vmlocked,
+	.cpo_print		= vvp_page_print,
+	.cpo_is_under_lock	= vvp_page_is_under_lock,
+	.io = {
+		[CRT_READ] = {
+			.cpo_prep	= ccc_transient_page_prep,
+			.cpo_completion	= vvp_transient_page_completion,
+		},
+		[CRT_WRITE] = {
+			.cpo_prep	= ccc_transient_page_prep,
+			.cpo_completion	= vvp_transient_page_completion,
+		}
+	}
 };
 
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
@@ -520,7 +537,6 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 
 	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	cpg->cpg_cl.cpl_index = index;
 	cpg->cpg_page = vmpage;
 	page_cache_get(vmpage);
 
@@ -530,13 +546,13 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 		atomic_inc(&page->cp_ref);
 		SetPagePrivate(vmpage);
 		vmpage->private = (unsigned long)page;
-		cl_page_slice_add(page, &cpg->cpg_cl, obj,
+		cl_page_slice_add(page, &cpg->cpg_cl, obj, index,
 				&vvp_page_ops);
 	} else {
 		struct ccc_object *clobj = cl2ccc(obj);
 
 		LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
-		cl_page_slice_add(page, &cpg->cpg_cl, obj,
+		cl_page_slice_add(page, &cpg->cpg_cl, obj, index,
 				&vvp_transient_page_ops);
 		clobj->cob_transient_pages++;
 	}

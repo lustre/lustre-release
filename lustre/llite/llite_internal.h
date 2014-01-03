@@ -334,7 +334,8 @@ enum ra_stat {
         RA_STAT_EOF,
         RA_STAT_MAX_IN_FLIGHT,
         RA_STAT_WRONG_GRAB_PAGE,
-        _NR_RA_STAT,
+	RA_STAT_FAILED_REACH_END,
+	_NR_RA_STAT,
 };
 
 struct ll_ra_info {
@@ -755,8 +756,8 @@ ssize_t ll_file_lockless_io(struct file *, char *, size_t, loff_t *, int);
 void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 int ll_readahead(const struct lu_env *env, struct cl_io *io,
-                 struct ll_readahead_state *ras, struct address_space *mapping,
-                 struct cl_page_list *queue, int flags);
+		 struct cl_page_list *queue, struct ll_readahead_state *ras,
+		 bool hit);
 int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
 struct ll_cl_context *ll_cl_init(struct file *file, struct page *vmpage);
 void ll_cl_fini(struct ll_cl_context *lcc);
@@ -1238,7 +1239,7 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                 unsigned hit);
 void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len);
 int ll_is_file_contended(struct file *file);
-void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which);
+void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 
 /* llite/llite_rmtacl.c */
 #ifdef CONFIG_FS_POSIX_ACL
