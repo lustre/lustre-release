@@ -371,7 +371,7 @@ static int osp_process_config(const struct lu_env *env,
 			      struct lu_device *dev, struct lustre_cfg *lcfg)
 {
 	struct osp_device		*d = lu2osp_dev(dev);
-	struct lprocfs_static_vars	 lvars = { 0 };
+	struct obd_device		*obd = d->opd_obd;
 	int				 rc;
 
 	ENTRY;
@@ -385,11 +385,9 @@ static int osp_process_config(const struct lu_env *env,
 		rc = osp_shutdown(env, d);
 		break;
 	case LCFG_PARAM:
-		lprocfs_osp_init_vars(&lvars);
-
-		LASSERT(d->opd_obd);
-		rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
-					      lcfg, d->opd_obd);
+		LASSERT(obd);
+		rc = class_process_proc_seq_param(PARAM_OSC, obd->obd_vars,
+						  lcfg, obd);
 		if (rc > 0)
 			rc = 0;
 		if (rc == -ENOSYS) {
@@ -842,6 +840,9 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 			OBD_FREE_PTR(cli->cl_rpc_lock);
 			cli->cl_rpc_lock = NULL;
 		}
+	} else {
+		if (m->opd_obd->obd_proc_private != NULL)
+			lprocfs_remove((struct proc_dir_entry **)&m->opd_obd->obd_proc_private);
 	}
 
 	rc = client_obd_cleanup(m->opd_obd);
@@ -1235,33 +1236,25 @@ struct llog_operations osp_mds_ost_orig_logops;
 
 static int __init osp_mod_init(void)
 {
-	struct lprocfs_static_vars	 lvars;
-	cfs_proc_dir_entry_t		*osc_proc_dir;
-	int				 rc;
+	int rc;
 
 	rc = lu_kmem_init(osp_caches);
 	if (rc)
 		return rc;
 
-	lprocfs_osp_init_vars(&lvars);
-
 	rc = class_register_type(&osp_obd_device_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				NULL,
 #endif
 				LUSTRE_OSP_NAME, &osp_device_type);
-
-	/* create "osc" entry in procfs for compatibility purposes */
 	if (rc != 0) {
 		lu_kmem_fini(osp_caches);
 		return rc;
 	}
 
-	lprocfs_lwp_init_vars(&lvars);
-
 	rc = class_register_type(&lwp_obd_device_ops, NULL, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				NULL,
 #endif
 				LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
@@ -1274,22 +1267,11 @@ static int __init osp_mod_init(void)
 	osp_mds_ost_orig_logops = llog_osd_ops;
 	osp_mds_ost_orig_logops.lop_add = llog_cat_add_rec;
 	osp_mds_ost_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
-
-	osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
-	if (osc_proc_dir == NULL) {
-		osc_proc_dir = lprocfs_register("osc", proc_lustre_root, NULL,
-						NULL);
-		if (IS_ERR(osc_proc_dir))
-			CERROR("osp: can't create compat entry \"osc\": %d\n",
-			       (int) PTR_ERR(osc_proc_dir));
-	}
 	return rc;
 }
 
 static void __exit osp_mod_exit(void)
 {
-	lprocfs_try_remove_proc_entry("osc", proc_lustre_root);
-
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
 	lu_kmem_fini(osp_caches);

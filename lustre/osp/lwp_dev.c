@@ -210,25 +210,13 @@ const struct lu_device_operations lwp_lu_ops = {
 	.ldo_process_config	= lwp_process_config,
 };
 
-static struct lprocfs_vars lprocfs_lwp_module_vars[] = {
-	{ "num_refs",		lprocfs_rd_numrefs, 0, 0 },
+static struct lprocfs_seq_vars lprocfs_lwp_obd_vars[] = {
 	{ 0 }
 };
-
-static struct lprocfs_vars lprocfs_lwp_obd_vars[] = {
-	{ 0 }
-};
-
-void lprocfs_lwp_init_vars(struct lprocfs_static_vars *lvars)
-{
-	lvars->module_vars = lprocfs_lwp_module_vars;
-	lvars->obd_vars = lprocfs_lwp_obd_vars;
-}
 
 int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 	      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-	struct lprocfs_static_vars lvars = { 0 };
 	int			   rc;
 	ENTRY;
 
@@ -257,8 +245,8 @@ int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		RETURN(rc);
 	}
 
-	lprocfs_lwp_init_vars(&lvars);
-	if (lprocfs_obd_setup(lwp->lpd_obd, lvars.obd_vars) == 0)
+	lwp->lpd_obd->obd_vars = lprocfs_lwp_obd_vars;
+	if (lprocfs_seq_obd_setup(lwp->lpd_obd) == 0)
 		ptlrpc_lprocfs_register_obd(lwp->lpd_obd);
 
 	RETURN(0);
