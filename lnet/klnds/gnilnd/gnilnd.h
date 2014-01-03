@@ -106,7 +106,11 @@
 /* tune down some COMPUTE options as they won't see the same number of connections and
  * don't need the throughput of multiple threads by default */
 #if defined(CONFIG_CRAY_COMPUTE)
+#ifdef CONFIG_MK1OM
+#define GNILND_SCHED_THREADS      2             /* default # of kgnilnd_scheduler threads */
+#else
 #define GNILND_SCHED_THREADS      1             /* default # of kgnilnd_scheduler threads */
+#endif
 #define GNILND_FMABLK             64            /* default number of mboxes per fmablk */
 #define GNILND_SCHED_NICE         0		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            1             /* compute image */
@@ -467,6 +471,8 @@ typedef struct kgn_tunables {
 	int              *kgn_dgram_timeout;    /* max time for dgram mover to run before scheduling */
 	int		 *kgn_sched_nice;	/* nice value for kgnilnd scheduler threads */
 	int		 *kgn_reverse_rdma;	/* Reverse RDMA setting */
+	int		 *kgn_eager_credits;	/* allocated eager buffers */
+	int              *kgn_efault_lbug;      /* Should we LBUG on receiving an EFAULT */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	cfs_sysctl_table_header_t *kgn_sysctl;  /* sysctl interface */
 #endif
@@ -811,6 +817,7 @@ typedef struct kgn_data {
 
 	struct list_head       *kgn_conns;            /* conns hashed by cqid */
 	atomic_t                kgn_nconns;           /* # connections extant */
+	atomic_t                kgn_neager_allocs;    /* # of eager allocations */
 	__u64                   kgn_peerstamp;        /* when I started up */
 	__u64                   kgn_connstamp;        /* conn stamp generator */
 	int                     kgn_conn_version;     /* version flag for conn tables */
@@ -844,6 +851,7 @@ typedef struct kgn_data {
 	atomic_t		kgn_rev_offset;	      /* number of time REV rdma have been misaligned offsets */
 	atomic_t		kgn_rev_length;	      /* Number of times REV rdma have been misaligned lengths */
 	atomic_t		kgn_rev_copy_buff;    /* Number of times REV rdma have had to make a copy buffer */
+	struct socket          *kgn_sock;             /* for Apollo */
 } kgn_data_t;
 
 extern kgn_data_t         kgnilnd_data;
@@ -1035,7 +1043,7 @@ do {									\
 	CDEBUG(D_NET, "Waiting for thread pause to be over...\n");	\
 	while (kgnilnd_data.kgn_quiesce_trigger) {			\
 		set_current_state(TASK_INTERRUPTIBLE);			\
-		schedule_timeout(HZ);					\
+		schedule_timeout(HZ);				\
 	}								\
 	/* Mom, my homework is done */					\
 	CDEBUG(D_NET, "Waking up from thread pause\n");			\
@@ -1666,7 +1674,7 @@ void kgnilnd_base_shutdown(void);
 
 int kgnilnd_allocate_phys_fmablk(kgn_device_t *device);
 int kgnilnd_map_phys_fmablk(kgn_device_t *device);
-void kgnilnd_unmap_phys_fmablk(kgn_device_t *device);
+void kgnilnd_unmap_fma_blocks(kgn_device_t *device);
 void kgnilnd_free_phys_fmablk(kgn_device_t *device);
 
 int kgnilnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
@@ -1697,7 +1705,7 @@ int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int r
 int kgnilnd_schedule_process_conn(kgn_conn_t *conn, int sched_intent);
 
 void kgnilnd_schedule_dgram(kgn_device_t *dev);
-int kgnilnd_create_peer_safe(kgn_peer_t **peerp, lnet_nid_t nid, kgn_net_t *net);
+int kgnilnd_create_peer_safe(kgn_peer_t **peerp, lnet_nid_t nid, kgn_net_t *net, int node_state);
 void kgnilnd_add_peer_locked(lnet_nid_t nid, kgn_peer_t *new_stub_peer, kgn_peer_t **peerp);
 int kgnilnd_add_peer(kgn_net_t *net, lnet_nid_t nid, kgn_peer_t **peerp);
 
@@ -1738,6 +1746,7 @@ int kgnilnd_close_peer_conns_locked(kgn_peer_t *peer, int why);
 int kgnilnd_report_node_state(lnet_nid_t nid, int down);
 void kgnilnd_wakeup_rca_thread(void);
 int kgnilnd_start_rca_thread(void);
+int kgnilnd_get_node_state(__u32 nid);
 
 int kgnilnd_tunables_init(void);
 void kgnilnd_tunables_fini(void);
@@ -1763,11 +1772,12 @@ void kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold);
 
 int kgnilnd_find_and_cancel_dgram(kgn_device_t *dev, lnet_nid_t dst_nid);
 void kgnilnd_cancel_dgram_locked(kgn_dgram_t *dgram);
-void kgnilnd_release_dgram(kgn_device_t *dev, kgn_dgram_t *dgram);
+void kgnilnd_release_dgram(kgn_device_t *dev, kgn_dgram_t *dgram, int shutdown);
 
 int kgnilnd_setup_wildcard_dgram(kgn_device_t *dev);
 int kgnilnd_cancel_net_dgrams(kgn_net_t *net);
 int kgnilnd_cancel_wc_dgrams(kgn_device_t *dev);
+int kgnilnd_cancel_dgrams(kgn_device_t *dev);
 void kgnilnd_wait_for_canceled_dgrams(kgn_device_t *dev);
 
 int kgnilnd_dgram_waitq(void *arg);

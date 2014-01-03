@@ -207,6 +207,13 @@ static struct netstrfns  libcfs_netstrfns[] = {
          /* .nf_str2addr  */  libcfs_num_str2addr,
          /* .nf_parse_addrlist*/  libcfs_num_parse,
          /* .nf_match_addr*/  libcfs_num_match},
+	{/* .nf_type      */  GNIIPLND,
+	 /* .nf_name      */  "gip",
+	 /* .nf_modname   */  "kgnilnd",
+	 /* .nf_addr2str  */  libcfs_ip_addr2str,
+	 /* .nf_str2addr  */  libcfs_ip_str2addr,
+	 /* .nf_parse_addrlist*/  cfs_ip_addr_parse,
+	 /* .nf_match_addr*/  cfs_ip_addr_match},
         /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
         {/* .nf_type      */  -1},
 };

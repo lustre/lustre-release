@@ -684,6 +684,7 @@ enum {
         VIBLND    = 11,
         MXLND     = 12,
         GNILND    = 13,
+	GNIIPLND  = 14,
 };
 
 #endif

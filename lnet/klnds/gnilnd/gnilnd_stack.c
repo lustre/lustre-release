@@ -20,8 +20,9 @@
  *
  */
 #include "gnilnd.h"
+#if defined(GNILND_USE_RCA)
 #include <rsms/rs_sm_states.h>
-
+#endif
 /* Advance all timeouts by nap_time seconds. */
 void
 kgnilnd_bump_timeouts(__u32 nap_time, char *reason)
@@ -298,7 +299,7 @@ kgnilnd_reset_stack(void)
 		/* now all the cons/mboxes should be cleaned up, including purgatory
 		 * so go through and release the MDDs for our persistent PHYS fma_blks
 		 */
-		kgnilnd_unmap_phys_fmablk(dev);
+		kgnilnd_unmap_fma_blocks(dev);
 
 		LASSERTF(atomic_read(&dev->gnd_nfmablk) == 0,
 			"reset failed: fma blocks still live %d\n",
@@ -758,6 +759,36 @@ kgnilnd_wakeup_rca_thread(void)
 	}
 }
 
+int
+kgnilnd_get_node_state(__u32 nid)
+{
+	int i;
+	int rc = GNILND_RCA_NODE_UNKNOWN;
+	int ret;
+	rs_node_array_t nlist;
+	rs_node_t       *na = NULL;
+
+	if ((ret = krca_get_sysnodes(&nlist)) < 0) {
+		CDEBUG(D_NETERROR, "krca_get_sysnodes failed %d\n", ret);
+		goto ns_done;
+	}
+
+	na = nlist.na_ids;
+
+	for (i = 0; i < nlist.na_len; i++) {
+		if ((rca_nid_t)RSN_GET_FLD(na[i].rs_node_flat, NID) == nid) {
+			rc = RSN_GET_FLD(na[i].rs_node_flat, STATE) == RS_CS_READY ?
+				GNILND_RCA_NODE_UP : GNILND_RCA_NODE_DOWN;
+			break;
+		}
+	}
+
+ns_done:
+	kfree(na);
+	CDEBUG(D_NET, "nid %d rc %d (0=up)\n", nid, rc);
+	return rc;
+}
+
 #else /* GNILND_USE_RCA */
 
 int
@@ -771,4 +802,9 @@ kgnilnd_wakeup_rca_thread(void)
 {
 }
 
+int
+kgnilnd_get_node_state(__u32 nid)
+{
+	return GNILND_RCA_NODE_UP;
+}
 #endif /* GNILND_USE_RCA */

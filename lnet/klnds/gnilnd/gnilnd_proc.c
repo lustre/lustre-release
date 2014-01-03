@@ -127,7 +127,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 	getnstimeofday(&end);
 
-	mbytes = (nloops * nob * 2) / (1024*1024);
+	mbytes = ((__u64)nloops * nob * 2) / (1024*1024);
 
 	diff = kgnilnd_ts_sub(end, begin);
 
@@ -214,6 +214,7 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 			   "nfmablk: %d\n"
 			   "n_mdd: %d\n"
 			   "n_mdd_held: %d\n"
+			   "n_eager_allocs: %d\n"
 			   "GART map bytes: %ld\n"
 			   "TX queued maps: %d\n"
 			   "TX phys nmaps: %d\n"
@@ -251,6 +252,7 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 		atomic_read(&dev->gnd_ndgrams),
 		atomic_read(&dev->gnd_nfmablk),
 		atomic_read(&dev->gnd_n_mdd), atomic_read(&dev->gnd_n_mdd_held),
+		atomic_read(&kgnilnd_data.kgn_neager_allocs),
 		atomic64_read(&dev->gnd_nbytes_map),
 		atomic_read(&dev->gnd_nq_map),
 		dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,

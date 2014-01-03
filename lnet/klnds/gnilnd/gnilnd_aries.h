@@ -31,7 +31,15 @@
 #endif
 
 /* Set HW related values */
+#ifdef CONFIG_CRAY_XT
 #include <aries/aries_timeouts_gpl.h>
+#else
+/* from aries_timeouts_gpl.h when building for generic kernel */
+#define TIMEOUT_SECS(x)         ((uint64_t)(((x) / 1000.0) + 0.5))
+#ifndef TO_GNILND_timeout
+#define TO_GNILND_timeout               (60000.000000)
+#endif /* TO_GNILND_timeout */
+#endif /* CONFIG_CRAY_XT */
 
 #define GNILND_BASE_TIMEOUT        TIMEOUT_SECS(TO_GNILND_timeout)
 #define GNILND_CHECKSUM_DEFAULT    0            /* all off for Aries */
@@ -50,6 +58,8 @@
 extern kgn_data_t kgnilnd_data;
 
 #define kgnilnd_hw_hb()              do {} while(0)
+
+#ifdef CONFIG_CRAY_XT
 
 /* Aries Sim doesn't have hardcoded tables, so we'll hijack the nic_pe
  * and decode our address and nic addr from that - the rest are just offsets */
@@ -104,11 +114,86 @@ kgnilnd_setup_nic_translation(__u32 device_id)
 	}
 
 	my_nid = ((ipaddr >> 8) & 0xFF) + (ipaddr & 0xFF);
-
 	kgnilnd_data.kgn_nid_trans_private = my_nid - device_id;
 
 	return 0;
 }
+
+#else /* CONFIG_CRAY_XT */
+#include <net/inet_common.h>
+#include <linux/if_arp.h>
+
+static inline int
+kgnilnd_nid_to_nicaddrs(__u32 nid, int numnic, __u32 *nicaddrs)
+{
+	int rc;
+
+#define NID_MASK ((1ULL << 18) - 1)
+	mm_segment_t fs;
+	struct arpreq req = {
+		.arp_dev = "ipogif0",
+	};
+
+	req.arp_pa.sa_family = AF_INET;
+	((struct sockaddr_in *)&req.arp_pa)->sin_addr.s_addr = htonl(nid);
+
+	fs = get_fs();
+	set_fs(get_ds());
+
+	rc = inet_ioctl(kgnilnd_data.kgn_sock, SIOCGARP, (unsigned long)&req);
+	set_fs(fs);
+
+	if (rc < 0) {
+		CDEBUG(D_NETERROR, "inet_ioctl returned %d\n", rc);
+		return 0;
+	}
+
+	/* use the lower 18 bits of the mac address to use as a nid value */
+	*nicaddrs = *(__u32 *)&req.arp_ha.sa_data[2];
+	*nicaddrs = ntohl(*nicaddrs) & NID_MASK;
+
+	CDEBUG(D_NETTRACE, "nid %s -> nic 0x%x\n", libcfs_nid2str(nid),
+		nicaddrs[0]);
+
+	return 1;
+}
+
+static inline int
+kgnilnd_nicaddr_to_nid(__u32 nicaddr, __u32 *nid)
+{
+	int rc;
+	mm_segment_t fs;
+	struct ifreq ifr = {
+		.ifr_name = "ipogif0",
+	};
+
+	struct sockaddr_in* ipaddr = (struct sockaddr_in*)&ifr.ifr_addr;
+
+	fs = get_fs();
+	set_fs(get_ds());
+	rc = inet_ioctl(kgnilnd_data.kgn_sock, SIOCGIFADDR, (unsigned long)&ifr);
+	set_fs(fs);
+
+	if (rc < 0) {
+		CDEBUG(D_NETERROR, "inet_ioctl returned %d\n", rc);
+		return 1;
+	}
+
+	CDEBUG(D_NETTRACE, "ipaddr %08x\n", htonl(ipaddr->sin_addr.s_addr));
+
+	*nid = htonl(ipaddr->sin_addr.s_addr);
+	CDEBUG(D_NETTRACE, "nic 0x%x -> nid %s\n", nicaddr,
+		libcfs_nid2str(*nid));
+	return 0;
+}
+
+static inline int
+kgnilnd_setup_nic_translation(__u32 device_id)
+{
+	return 0;
+}
+
+#endif /* CONFIG_CRAY_XT */
 
 #endif /* GNILND_USE_RCA */
 

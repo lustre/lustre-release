@@ -29,6 +29,10 @@ static int credits = 256;
 CFS_MODULE_PARM(credits, "i", int, 0444,
 		"# concurrent sends");
 
+static int eager_credits = 256 * 1024;
+CFS_MODULE_PARM(eager_credits, "i", int, 0444,
+		"# eager buffers");
+
 static int peer_credits = 16;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
 		"# LNet peer credits");
@@ -82,7 +86,11 @@ static int bte_relaxed_ordering = 1;
 CFS_MODULE_PARM(bte_relaxed_ordering, "i", int, 0644,
 		"enable relaxed ordering (PASSPW) for BTE (RDMA) transfers");
 
+#ifdef CONFIG_MK1OM
+static int ptag = GNI_PTAG_LND_KNC;
+#else
 static int ptag = GNI_PTAG_LND;
+#endif
 CFS_MODULE_PARM(ptag, "i", int, 0444,
 		"ptag for Gemini CDM");
 
@@ -166,6 +174,11 @@ static int dgram_timeout = GNILND_DGRAM_TIMEOUT;
 CFS_MODULE_PARM(dgram_timeout, "i", int, 0644,
 		"dgram thread aliveness seconds max time");
 
+static int efault_lbug = 0;
+CFS_MODULE_PARM(efault_lbug, "i", int, 0644,
+		"If a compute receives an EFAULT in"
+		" a message should it LBUG. 0 off 1 on");
+
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
 	.kgn_max_reconnect_interval = &max_reconnect_interval,
@@ -199,7 +212,9 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_sched_timeout	    = &sched_timeout,
 	.kgn_sched_nice		    = &sched_nice,
 	.kgn_reverse_rdma           = &reverse_rdma,
-	.kgn_dgram_timeout          = &dgram_timeout
+	.kgn_dgram_timeout          = &dgram_timeout,
+	.kgn_eager_credits          = &eager_credits,
+	.kgn_efault_lbug            = &efault_lbug
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -465,6 +480,22 @@ static struct ctl_table kgnilnd_ctl_table[] = {
 		.data     = &peer_timeout,
 		.maxlen   = sizeof(int),
 		.mode     = 0444,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname = "eager_credits",
+		.data	  = &eager_credits,
+		.maxlen	  = sizeof(int),
+		.mode	  = 0644,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname = "efault_lbug"
+		.data     = &efault_lbug,
+		.maxlen   = sizeof(int),
+		.mode     = 0644,
 		.proc_handler = &proc_dointvec
 	},
 	{ 0 }

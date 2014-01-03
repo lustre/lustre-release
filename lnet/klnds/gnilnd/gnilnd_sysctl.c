@@ -26,12 +26,12 @@
 
 #include "gnilnd.h"
 
-#define GNILND_RCA_INJ_STRLEN 16
+#define GNILND_PEERSTATE_STRLEN 16
 typedef struct kgn_sysctl_data {
 	int                     ksd_pause_trigger;
 	int                     ksd_quiesce_secs;
 	int                     ksd_rdmaq_override;
-	char                    ksd_rca_inject[GNILND_RCA_INJ_STRLEN];
+	char                    ksd_peer_state[GNILND_PEERSTATE_STRLEN];
 } kgn_sysctl_data_t;
 
 static kgn_sysctl_data_t        kgnilnd_sysctl;
@@ -100,8 +100,8 @@ static int LL_PROC_PROTO(proc_hw_quiesce)
 int LL_PROC_PROTO(proc_trigger_stack_reset)
 {
 	int              rc = 0;
-	int                i = 1;
-       kgn_device_t    *dev;
+	int              i = 1;
+	kgn_device_t    *dev;
 	ENTRY;
 
 	if (!write) {
@@ -119,12 +119,12 @@ int LL_PROC_PROTO(proc_trigger_stack_reset)
 
 	/* Wait for the reset to complete.  This prevents any races in testing
 	 * where we'd immediately try to send traffic again */
-       while (kgnilnd_data.kgn_needs_reset != 0) {
-	       i++;
-	       LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
-			       "Waiting for stack reset request to clear\n");
-	       cfs_pause(cfs_time_seconds(1 * i));
-       }
+	while (kgnilnd_data.kgn_needs_reset != 0) {
+		i++;
+		LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
+				"Waiting for stack reset request to clear\n");
+		cfs_pause(cfs_time_seconds(1 * i));
+	}
 
 	RETURN(rc);
 }
@@ -161,7 +161,7 @@ static int LL_PROC_PROTO(proc_toggle_rdmaq_override)
 /* /proc/sys entry point for injecting up/down nid event
  * <up|down> <nid>
  */
-static int LL_PROC_PROTO(proc_rca_inject)
+static int LL_PROC_PROTO(proc_peer_state)
 {
 	int             rc;
 	int             nid;
@@ -182,7 +182,7 @@ static int LL_PROC_PROTO(proc_rca_inject)
 	}
 
 	/* convert to nid, up/down values */
-	rc = sscanf(kgnilnd_sysctl.ksd_rca_inject, "%s %d", command, &nid);
+	rc = sscanf(kgnilnd_sysctl.ksd_peer_state, "%s %d", command, &nid);
 	CDEBUG(D_INFO, "command %s, nid %d\n", command, nid);
 
 	if (rc != 2) {
@@ -204,7 +204,7 @@ static int LL_PROC_PROTO(proc_rca_inject)
 		}
 	}
 
-	CDEBUG(D_INFO, "proc_rca_inject: reporting node_down %d, nid %d\n",
+	CDEBUG(D_INFO, "proc_peer_state: reporting node_down %d, nid %d\n",
 		      node_down, nid);
 	rc = kgnilnd_report_node_state(nid, node_down);
 
@@ -262,11 +262,11 @@ static struct ctl_table kgnilnd_table[] = {
 	},
 	{
 		INIT_CTL_NAME
-		.procname = "rca_inject",
-		.data     = kgnilnd_sysctl.ksd_rca_inject,
-		.maxlen   = GNILND_RCA_INJ_STRLEN,
+		.procname = "peer_state",
+		.data     = kgnilnd_sysctl.ksd_peer_state,
+		.maxlen   = GNILND_PEERSTATE_STRLEN,
 		.mode     = 0644,
-		.proc_handler = &proc_rca_inject,
+		.proc_handler = &proc_peer_state,
 	},
 	{ 0 }
 };
