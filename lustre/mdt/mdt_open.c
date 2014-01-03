@@ -811,13 +811,14 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         RETURN(rc);
 
 err_out:
-        if (flags & FMODE_WRITE)
-                        /* XXX We also need to close io epoch here.
-                         * See LU-1220 - green */
-                mdt_write_put(o);
-        else if (flags & FMODE_EXEC)
-                mdt_write_allow(o);
-        return rc;
+	if (flags & FMODE_WRITE)
+		/* XXX We also need to close io epoch here.
+		 * See LU-1220 - green */
+		mdt_write_put(o);
+	else if (flags & MDS_FMODE_EXEC)
+		mdt_write_allow(o);
+
+	return rc;
 }
 
 int mdt_finish_open(struct mdt_thread_info *info,
