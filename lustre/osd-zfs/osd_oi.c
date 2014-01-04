@@ -219,6 +219,12 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 
+	if (fid_is_root(fid)) {
+		range->lsr_flags = LU_SEQ_RANGE_MDT;
+		range->lsr_index = 0;
+		return 0;
+	}
+
 	if (fid_is_idif(fid)) {
 		range->lsr_flags = LU_SEQ_RANGE_OST;
 		range->lsr_index = fid_idif_ost_idx(fid);
@@ -227,6 +233,7 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 
 	if (!fid_is_norm(fid)) {
 		range->lsr_flags = LU_SEQ_RANGE_MDT;
+		/* If ss is NULL, it suppose not get lsr_index at all */
 		if (ss != NULL)
 			range->lsr_index = ss->ss_node_id;
 		return 0;
@@ -235,10 +242,9 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 	LASSERT(ss != NULL);
 	range->lsr_flags = -1;
 	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
-	if (rc != 0) {
+	if (rc != 0)
 		CERROR("%s can not find "DFID": rc = %d\n",
-		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid), rc);
-	}
+		       osd_name(osd), PFID(fid), rc);
 	return rc;
 }
 

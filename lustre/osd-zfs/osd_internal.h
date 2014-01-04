@@ -426,7 +426,8 @@ int osd_convert_root_to_new_seq(const struct lu_env *env,
 /* osd_index.c */
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
-
+int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid, struct lu_seq_range *range);
 
 /* osd_xattr.c */
 int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr);
