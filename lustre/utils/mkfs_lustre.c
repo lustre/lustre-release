@@ -540,13 +540,14 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
 int main(int argc, char *const argv[])
 {
-        struct mkfs_opts mop;
-        struct lustre_disk_data *ldd;
-        char *mountopts = NULL;
-        char always_mountopts[512] = "";
-        char default_mountopts[512] = "";
+	struct mkfs_opts mop;
+	struct lustre_disk_data *ldd;
+	char *mountopts = NULL;
+	char always_mountopts[512] = "";
+	char default_mountopts[512] = "";
 	unsigned mount_type;
-        int ret = 0;
+	int ret = 0;
+	int ret2 = 0;
 
         if ((progname = strrchr(argv[0], '/')) != NULL)
                 progname++;
@@ -802,8 +803,10 @@ int main(int argc, char *const argv[])
         }
 
 out:
-        loop_cleanup(&mop);
 	osd_fini();
+	ret2 = loop_cleanup(&mop);
+	if (ret == 0)
+		ret = ret2;
 
         /* Fix any crazy return values from system() */
         if (ret && ((ret & 255) == 0))
