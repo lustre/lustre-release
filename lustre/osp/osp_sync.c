@@ -94,14 +94,13 @@ static void osp_sync_remove_from_tracker(struct osp_device *d);
 
 #define OSP_JOB_MAGIC		0x26112005
 
-/**
- * Return status: whether OSP thread should keep running
- *
- * \param[in] d		OSP device
- *
- * \retval 1		should keep running
- * \retval 0		should stop
- */
+struct osp_job_req_args {
+	/** bytes reserved for ptlrpc_replay_req() */
+	struct ptlrpc_replay_async_args	jra_raa;
+	struct list_head		jra_link;
+	__u32				jra_magic;
+};
+
 static inline int osp_sync_running(struct osp_device *d)
 {
 	return !!(d->opd_syn_thread.t_flags & SVC_RUNNING);
@@ -410,6 +409,7 @@ int osp_sync_gap(const struct lu_env *env, struct osp_device *d,
 static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 {
 	struct osp_device *d = req->rq_cb_data;
+	struct osp_job_req_args *jra;
 
 	CDEBUG(D_HA, "commit req %p, transno "LPU64"\n", req, req->rq_transno);
 
@@ -418,15 +418,16 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 
 	/* do not do any opd_dyn_rpc_* accounting here
 	 * it's done in osp_sync_interpret sooner or later */
-
 	LASSERT(d);
-	LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
-	LASSERT(list_empty(&req->rq_exp_list));
+
+	jra = ptlrpc_req_async_args(req);
+	LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
+	LASSERT(list_empty(&jra->jra_link));
 
 	ptlrpc_request_addref(req);
 
 	spin_lock(&d->opd_syn_lock);
-	list_add(&req->rq_exp_list, &d->opd_syn_committed_there);
+	list_add(&jra->jra_link, &d->opd_syn_committed_there);
 	spin_unlock(&d->opd_syn_lock);
 
 	/* XXX: some batching wouldn't hurt */
@@ -454,10 +455,12 @@ static int osp_sync_interpret(const struct lu_env *env,
 			      struct ptlrpc_request *req, void *aa, int rc)
 {
 	struct osp_device *d = req->rq_cb_data;
+	struct osp_job_req_args *jra = aa;
 
-	if (req->rq_svc_thread != (void *) OSP_JOB_MAGIC)
-		DEBUG_REQ(D_ERROR, req, "bad magic %p\n", req->rq_svc_thread);
-	LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
+	if (jra->jra_magic != OSP_JOB_MAGIC) {
+		DEBUG_REQ(D_ERROR, req, "bad magic %u\n", jra->jra_magic);
+		LBUG();
+	}
 	LASSERT(d);
 
 	CDEBUG(D_HA, "reply req %p/%d, rc %d, transno %u\n", req,
@@ -471,12 +474,12 @@ static int osp_sync_interpret(const struct lu_env *env,
 		 * but object doesn't exist anymore - cancell llog record
 		 */
 		LASSERT(req->rq_transno == 0);
-		LASSERT(list_empty(&req->rq_exp_list));
+		LASSERT(list_empty(&jra->jra_link));
 
 		ptlrpc_request_addref(req);
 
 		spin_lock(&d->opd_syn_lock);
-		list_add(&req->rq_exp_list, &d->opd_syn_committed_there);
+		list_add(&jra->jra_link, &d->opd_syn_committed_there);
 		spin_unlock(&d->opd_syn_lock);
 
 		wake_up(&d->opd_syn_waitq);
@@ -537,8 +540,13 @@ static int osp_sync_interpret(const struct lu_env *env,
 static void osp_sync_send_new_rpc(struct osp_device *d,
 				  struct ptlrpc_request *req)
 {
+	struct osp_job_req_args *jra;
+
 	LASSERT(d->opd_syn_rpc_in_flight <= d->opd_syn_max_rpc_in_flight);
-	LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
+
+	jra = ptlrpc_req_async_args(req);
+	jra->jra_magic = OSP_JOB_MAGIC;
+	INIT_LIST_HEAD(&jra->jra_link);
 
 	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
 }
@@ -596,8 +604,6 @@ static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
 	body->oa.o_lcookie.lgc_lgl = llh->lgh_id;
 	body->oa.o_lcookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
 	body->oa.o_lcookie.lgc_index = h->lrh_index;
-	INIT_LIST_HEAD(&req->rq_exp_list);
-	req->rq_svc_thread = (void *) OSP_JOB_MAGIC;
 
 	req->rq_interpret_reply = osp_sync_interpret;
 	req->rq_commit_cb = osp_sync_request_commit_cb;
@@ -768,9 +774,6 @@ static int osp_prep_unlink_update_req(const struct lu_env *env,
 				 update->dur_buf.ub_req, &req);
 	if (rc != 0)
 		GOTO(out, rc);
-
-	INIT_LIST_HEAD(&req->rq_exp_list);
-	req->rq_svc_thread = (void *)OSP_JOB_MAGIC;
 
 	req->rq_interpret_reply = osp_sync_interpret;
 	req->rq_commit_cb = osp_sync_request_commit_cb;
@@ -969,7 +972,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	struct obd_device	*obd = d->opd_obd;
 	struct obd_import	*imp = obd->u.cli.cl_import;
 	struct ost_body		*body;
-	struct ptlrpc_request	*req, *tmp;
+	struct ptlrpc_request	*req;
 	struct llog_ctxt	*ctxt;
 	struct llog_handle	*llh;
 	struct list_head	 list;
@@ -1008,12 +1011,16 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	INIT_LIST_HEAD(&d->opd_syn_committed_there);
 	spin_unlock(&d->opd_syn_lock);
 
-	list_for_each_entry_safe(req, tmp, &list, rq_exp_list) {
+	while (!list_empty(&list)) {
 		struct llog_cookie *lcookie = NULL;
+		struct osp_job_req_args	*jra;
 
-		LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
-		list_del_init(&req->rq_exp_list);
+		jra = list_entry(list.next, struct osp_job_req_args, jra_link);
+		LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
+		list_del_init(&jra->jra_link);
 
+		req = container_of((void *)jra, struct ptlrpc_request,
+				   rq_async_args);
 		if (d->opd_connect_mdt) {
 			struct object_update_request *ureq;
 			struct object_update *update;

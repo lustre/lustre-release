@@ -928,11 +928,9 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	if (!req)
 		RETURN(-ENOMEM);
 
-	spin_lock_init(&req->rq_lock);
+	ptlrpc_cli_req_init(req);
 	atomic_set(&req->rq_refcount, 10000);
-	INIT_LIST_HEAD(&req->rq_ctx_chain);
-	init_waitqueue_head(&req->rq_reply_waitq);
-	init_waitqueue_head(&req->rq_set_waitq);
+
 	req->rq_import = imp;
 	req->rq_flvr = sec->ps_flvr;
 	req->rq_cli_ctx = ctx;
@@ -1106,14 +1104,16 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 				   struct ptlrpc_request **req_ret)
 {
 	struct ptlrpc_request  *early_req;
-	char                   *early_buf;
-	int                     early_bufsz, early_size;
-	int                     rc;
+	char		       *early_buf;
+	int			early_bufsz, early_size;
+	int			rc;
 	ENTRY;
 
 	early_req = ptlrpc_request_cache_alloc(GFP_NOFS);
 	if (early_req == NULL)
 		RETURN(-ENOMEM);
+
+	ptlrpc_cli_req_init(early_req);
 
 	early_size = req->rq_nob_received;
 	early_bufsz = size_roundup_power2(early_size);
@@ -1157,7 +1157,6 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 	memcpy(early_buf, req->rq_repbuf, early_size);
 	spin_unlock(&req->rq_lock);
 
-	spin_lock_init(&early_req->rq_lock);
         early_req->rq_cli_ctx = sptlrpc_cli_ctx_get(req->rq_cli_ctx);
         early_req->rq_flvr = req->rq_flvr;
         early_req->rq_repbuf = early_buf;

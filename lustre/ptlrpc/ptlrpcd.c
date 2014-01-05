@@ -88,11 +88,10 @@ static int ptlrpcd_users = 0;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
 {
-        struct ptlrpc_request_set *rq_set = req->rq_set;
+	struct ptlrpc_request_set *set = req->rq_set;
 
-        LASSERT(rq_set != NULL);
-
-	wake_up(&rq_set->set_waitq);
+	LASSERT(set != NULL);
+	wake_up(&set->set_waitq);
 }
 EXPORT_SYMBOL(ptlrpcd_wake);
 

@@ -2652,6 +2652,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		long timeoutl = deadline - cfs_time_current_sec();
 		cfs_duration_t timeout = timeoutl <= 0 ?
 					 CFS_TICK : cfs_time_seconds(timeoutl);
+		time_t	rq_deadline;
 
 		*lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
 					    target_bulk_timeout, desc);
@@ -2663,9 +2664,10 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 				  lwi);
 		LASSERT(rc == 0 || rc == -ETIMEDOUT);
 		/* Wait again if we changed rq_deadline. */
+		rq_deadline = ACCESS_ONCE(req->rq_deadline);
 		deadline = start + bulk_timeout;
-		if (deadline > req->rq_deadline)
-			deadline = req->rq_deadline;
+		if (deadline > rq_deadline)
+			deadline = rq_deadline;
 	} while ((rc == -ETIMEDOUT) &&
 		 (deadline > cfs_time_current_sec()));
 

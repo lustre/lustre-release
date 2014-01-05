@@ -614,7 +614,6 @@ static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
         lustre_msg_add_version(request->rq_reqmsg, version);
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
-        request->rq_export = NULL;
 
         request->rq_req_cbid.cbid_fn  = request_out_callback;
         request->rq_req_cbid.cbid_arg = request;
@@ -631,19 +630,7 @@ static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 
         ptlrpc_at_set_req_timeout(request);
 
-	spin_lock_init(&request->rq_lock);
-	INIT_LIST_HEAD(&request->rq_list);
-	INIT_LIST_HEAD(&request->rq_timed_list);
-	INIT_LIST_HEAD(&request->rq_replay_list);
-	INIT_LIST_HEAD(&request->rq_ctx_chain);
-	INIT_LIST_HEAD(&request->rq_set_chain);
-	INIT_LIST_HEAD(&request->rq_history_list);
-	INIT_LIST_HEAD(&request->rq_exp_list);
-	init_waitqueue_head(&request->rq_reply_waitq);
-	init_waitqueue_head(&request->rq_set_waitq);
 	request->rq_xid = ptlrpc_next_xid();
-	atomic_set(&request->rq_refcount, 1);
-
 	lustre_msg_set_opc(request->rq_reqmsg, opcode);
 
 	RETURN(0);
@@ -720,7 +707,9 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
 		request = ptlrpc_request_cache_alloc(GFP_NOFS);
 
 	if (request) {
-		LASSERTF((unsigned long)imp > 0x1000, "%p\n", imp);
+		ptlrpc_cli_req_init(request);
+
+		LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
 		LASSERT(imp != LP_POISON);
 		LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p\n",
 			imp->imp_client);
@@ -1310,7 +1299,7 @@ static int after_reply(struct ptlrpc_request *req)
 	}
 
 	do_gettimeofday(&work_start);
-	timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
+	timediff = cfs_timeval_sub(&work_start, &req->rq_sent_tv, NULL);
 	if (obd->obd_svc_stats != NULL) {
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
 				    timediff);
@@ -2266,24 +2255,23 @@ EXPORT_SYMBOL(ptlrpc_set_wait);
  */
 static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 {
-        ENTRY;
-        if (request == NULL) {
-                EXIT;
-                return;
-        }
+	ENTRY;
 
-        LASSERTF(!request->rq_receiving_reply, "req %p\n", request);
-        LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
+	if (request == NULL)
+		RETURN_EXIT;
+
+	LASSERT(!request->rq_srv_req);
+	LASSERT(request->rq_export == NULL);
+	LASSERTF(!request->rq_receiving_reply, "req %p\n", request);
 	LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
 	LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
-	LASSERTF(list_empty(&request->rq_exp_list), "req %p\n", request);
-        LASSERTF(!request->rq_replay, "req %p\n", request);
+	LASSERTF(!request->rq_replay, "req %p\n", request);
 
-        req_capsule_fini(&request->rq_pill);
+	req_capsule_fini(&request->rq_pill);
 
-        /* We must take it off the imp_replay_list first.  Otherwise, we'll set
-         * request->rq_reqmsg to NULL while osc_close is dereferencing it. */
-        if (request->rq_import != NULL) {
+	/* We must take it off the imp_replay_list first.  Otherwise, we'll set
+	 * request->rq_reqmsg to NULL while osc_close is dereferencing it. */
+	if (request->rq_import != NULL) {
 		if (!locked)
 			spin_lock(&request->rq_import->imp_lock);
 		list_del_init(&request->rq_replay_list);
@@ -2300,10 +2288,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 
         if (request->rq_repbuf != NULL)
                 sptlrpc_cli_free_repbuf(request);
-        if (request->rq_export != NULL) {
-                class_export_put(request->rq_export);
-                request->rq_export = NULL;
-        }
+
         if (request->rq_import != NULL) {
                 class_import_put(request->rq_import);
                 request->rq_import = NULL;
@@ -2738,11 +2723,6 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ptlrpc_queue_wait);
 
-struct ptlrpc_replay_async_args {
-        int praa_old_state;
-        int praa_old_status;
-};
-
 /**
  * Callback used for replayed requests reply processing.
  * In case of succesful reply calls registeresd request replay callback.
@@ -3122,7 +3102,7 @@ static int ptlrpcd_check_work(struct ptlrpc_request *req)
 void *ptlrpcd_alloc_work(struct obd_import *imp,
 			 int (*cb)(const struct lu_env *, void *), void *cbdata)
 {
-	struct ptlrpc_request         *req = NULL;
+	struct ptlrpc_request	      *req = NULL;
 	struct ptlrpc_work_async_args *args;
 	ENTRY;
 
@@ -3138,26 +3118,17 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
+	ptlrpc_cli_req_init(req);
+
 	req->rq_send_state = LUSTRE_IMP_FULL;
 	req->rq_type = PTL_RPC_MSG_REQUEST;
 	req->rq_import = class_import_get(imp);
-	req->rq_export = NULL;
 	req->rq_interpret_reply = work_interpreter;
 	/* don't want reply */
 	req->rq_receiving_reply = 0;
 	req->rq_req_unlink = req->rq_reply_unlink = 0;
 	req->rq_no_delay = req->rq_no_resend = 1;
 	req->rq_pill.rc_fmt = (void *)&worker_format;
-
-	spin_lock_init(&req->rq_lock);
-	INIT_LIST_HEAD(&req->rq_list);
-	INIT_LIST_HEAD(&req->rq_replay_list);
-	INIT_LIST_HEAD(&req->rq_set_chain);
-	INIT_LIST_HEAD(&req->rq_history_list);
-	INIT_LIST_HEAD(&req->rq_exp_list);
-	init_waitqueue_head(&req->rq_reply_waitq);
-	init_waitqueue_head(&req->rq_set_waitq);
-	atomic_set(&req->rq_refcount, 1);
 
 	CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
 	args = ptlrpc_req_async_args(req);
