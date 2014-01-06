@@ -1570,13 +1570,6 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (rc != 0)
 				GOTO(out, rc);
 
-			/* Do not create lov object if the fid is opened
-			 * under OBF */
-			if (S_ISREG(ma->ma_attr.la_mode) &&
-			    !(ma->ma_valid & MA_LOV) && (flags & FMODE_WRITE) &&
-			    fid_is_obf(parent_fid))
-				GOTO(out, rc = -EPERM);
-
 			rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
 		} else {
 			/*
