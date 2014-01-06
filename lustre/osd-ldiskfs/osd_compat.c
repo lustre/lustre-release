@@ -255,6 +255,8 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	mutex_lock(&parent->d_inode->i_mutex);
 	rc = osd_ldiskfs_add_entry(oh->ot_handle, dentry, obj->oo_inode,
 				   NULL);
+	CDEBUG(D_INODE, "%s: add %s:%lu to remote parent %lu.\n", osd_name(osd),
+	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
 	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
 		 osd_name(osd), parent->d_inode->i_ino,
 		 parent->d_inode->i_nlink);
@@ -297,6 +299,8 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 		mutex_unlock(&parent->d_inode->i_mutex);
 		RETURN(-ENOENT);
 	}
+	CDEBUG(D_INODE, "%s: el %s:%lu to remote parent %lu.\n", osd_name(osd),
+	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
 	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
 	LASSERTF(parent->d_inode->i_nlink > 1, "%s: %lu nlink %d",
 		 osd_name(osd), parent->d_inode->i_ino,
@@ -305,6 +309,12 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
 	brelse(bh);
+
+	/* Get rid of REMOTE_PARENT flag from incompat */
+	lma->lma_incompat &= ~LMAI_REMOTE_PARENT;
+	lustre_lma_swab(lma);
+	rc = __osd_xattr_set(oti, obj->oo_inode, XATTR_NAME_LMA, lma,
+			     sizeof(*lma), XATTR_REPLACE);
 	RETURN(rc);
 }
 

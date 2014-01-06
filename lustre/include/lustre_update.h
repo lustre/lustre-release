@@ -31,7 +31,7 @@
 #ifndef _LUSTRE_UPDATE_H
 #define _LUSTRE_UPDATE_H
 
-#define UPDATE_BUFFER_SIZE	4096
+#define UPDATE_BUFFER_SIZE	8192
 struct update_request {
 	struct dt_device	*ur_dt;
 	cfs_list_t		ur_list;    /* attached itself to thandle */

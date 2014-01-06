@@ -284,7 +284,7 @@ enum lma_incompat {
 	LMAI_REMOTE_PARENT = 0x00000004, /* the parent of the object
 					    is on the remote MDT */
 };
-#define LMA_INCOMPAT_SUPP 0x0
+#define LMA_INCOMPAT_SUPP	(LMAI_AGENT | LMAI_REMOTE_PARENT)
 
 /**
  * Following struct for MDT attributes, that will be kept inode's EA.

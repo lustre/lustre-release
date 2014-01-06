@@ -194,7 +194,7 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		/* Check LMA compatibility */
 		if (lma->lma_incompat & ~cpu_to_le32(LMA_INCOMPAT_SUPP)) {
 			CWARN("%.16s: unsupported incompat LMA feature(s) "
-			      "%lx/%#x\n",
+			      "%lu/%#x\n",
 			      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
 			      inode->i_ino, le32_to_cpu(lma->lma_incompat) &
 							~LMA_INCOMPAT_SUPP);
@@ -3265,10 +3265,22 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	/* For inode on the remote MDT, .. will point to
-	 * /Agent directory. So do not try to lookup/delete
-	 * remote inode for .. */
-	if (strcmp((char *)key, dotdot) == 0)
-		GOTO(out, rc = 0);
+	 * /Agent directory. So
+	 * 1. do not need to lookup/delete remote inode for ..
+	 * 2. Check whether it needs to delete from agent directory */
+	if (strcmp((char *)key, dotdot) == 0) {
+		rc = osd_delete_from_remote_parent(env, osd_obj2dev(obj), obj,
+						   oh);
+		if (rc != 0 && rc != -ENOENT) {
+			CERROR("%s: delete agent inode "DFID": rc = %d\n",
+			       osd_name(osd), PFID(fid), rc);
+		}
+
+		if (rc == -ENOENT)
+			rc = 0;
+
+		GOTO(out, rc);
+	}
 
 	LASSERT(de != NULL);
 	rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);

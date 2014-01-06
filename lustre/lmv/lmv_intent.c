@@ -111,8 +111,16 @@ static int lmv_intent_remote(struct obd_export *exp, void *lmm,
 
 	op_data->op_fid1 = body->fid1;
 	/* Sent the parent FID to the remote MDT */
-	if (parent_fid != NULL)
+	if (parent_fid != NULL) {
+		/* The parent fid is only for remote open to
+		 * check whether the open is from OBF,
+		 * see mdt_cross_open */
+		LASSERT(it->it_op & IT_OPEN);
 		op_data->op_fid2 = *parent_fid;
+		/* Add object FID to op_fid3, in case it needs to check stale
+		 * (M_CHECK_STALE), see mdc_finish_intent_lock */
+		op_data->op_fid3 = body->fid1;
+	}
 
 	op_data->op_bias = MDS_CROSS_REF;
 	CDEBUG(D_INODE, "REMOTE_INTENT with fid="DFID" -> mds #%d\n",
