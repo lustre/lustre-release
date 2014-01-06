@@ -363,6 +363,7 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 	__u64			 rpos, wpos, bufoff;
 	int			 gid = 0, sz;
 	int			 have_gl = 0;
+	struct stat		 st, stv;
 
 	/* find the right size for the IO and allocate the buffer */
 	lumsz = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
@@ -449,6 +450,34 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 		fprintf(stderr, "cannot open %s (%s)\n", name, strerror(-rc));
 		close(fdv);
 		goto free;
+	}
+
+	/* Not-owner (root?) special case.
+	 * Need to set owner/group of volatile file like original.
+	 * This will allow to pass related check during layout_swap.
+	 */
+	rc = fstat(fd, &st);
+	if (rc != 0) {
+		rc = -errno;
+		fprintf(stderr, "cannot stat %s (%s)\n", name,
+			strerror(errno));
+		goto error;
+	}
+	rc = fstat(fdv, &stv);
+	if (rc != 0) {
+		rc = -errno;
+		fprintf(stderr, "cannot stat %s (%s)\n", volatile_file,
+			strerror(errno));
+		goto error;
+	}
+	if (st.st_uid != stv.st_uid || st.st_gid != stv.st_gid) {
+		rc = fchown(fdv, st.st_uid, st.st_gid);
+		if (rc != 0) {
+			rc = -errno;
+			fprintf(stderr, "cannot chown %s (%s)\n", name,
+				strerror(errno));
+			goto error;
+		}
 	}
 
 	/* get file data version */

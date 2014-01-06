@@ -1273,6 +1273,7 @@ static int mdd_xattr_hsm_replace(const struct lu_env *env,
 /*
  *  check if layout swapping between 2 objects is allowed
  *  the rules are:
+ *  - only normal FIDs or non-system IGIFs
  *  - same type of objects
  *  - same owner/group (so quotas are still valid)
  */
@@ -1289,9 +1290,21 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 	fid1 = mdo2fid(o1);
 	fid2 = mdo2fid(o2);
 
-	if (!fid_is_norm(fid1) || !fid_is_norm(fid2) ||
-	    (mdd_object_type(o1) != mdd_object_type(o2)))
-		RETURN(-EPERM);
+	if (!fid_is_norm(fid1) &&
+	    (!fid_is_igif(fid1) || IS_ERR(mdd_links_get(env, o1))))
+		RETURN(-EBADF);
+
+	if (!fid_is_norm(fid2) &&
+	    (!fid_is_igif(fid2) || IS_ERR(mdd_links_get(env, o2))))
+		RETURN(-EBADF);
+
+	if (mdd_object_type(o1) != mdd_object_type(o2)) {
+		if (S_ISDIR(mdd_object_type(o1)))
+			RETURN(-ENOTDIR);
+		if (S_ISREG(mdd_object_type(o1)))
+			RETURN(-EISDIR);
+		RETURN(-EBADF);
+	}
 
 	tmp_la->la_valid = 0;
 	rc = mdd_la_get(env, o1, tmp_la, BYPASS_CAPA);
