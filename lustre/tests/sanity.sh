@@ -10857,7 +10857,7 @@ test_208() {
 run_test 208 "Exclusive open"
 
 test_209() {
-	[[ $($LCTL get_param -n mdc.*.connect_flags) == ~disp_stripe ]] &&
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep disp_stripe)" ] &&
 		skip_env "must have disp_stripe" && return
 
 	touch $DIR/$tfile
