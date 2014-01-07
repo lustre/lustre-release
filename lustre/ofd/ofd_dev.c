@@ -187,6 +187,40 @@ static struct cfg_interop_param ofd_interop_param[] = {
 	{ NULL }
 };
 
+/* Some parameters were moved from ofd to osd and only their
+ * symlinks were kept in ofd by LU-3106. They are:
+ * -writehthrough_cache_enable
+ * -readcache_max_filese
+ * -read_cache_enable
+ * -brw_stats
+ * Since they are not included by the static lprocfs var list,
+ * a pre-check is added for them to avoid "unknown param" error
+ * message confuses the customer. If they are matched in this
+ * check, they will be passed to the osd directly.
+ */
+static bool match_symlink_param(char *param)
+{
+	char *sval;
+	int paramlen;
+
+	if (class_match_param(param, PARAM_OST, &param) == 0) {
+		sval = strchr(param, '=');
+		if (sval != NULL) {
+			paramlen = sval - param;
+			if (strncmp(param, "writethrough_cache_enable",
+				    paramlen) == 0 ||
+			    strncmp(param, "readcache_max_filesize",
+				    paramlen) == 0 ||
+			    strncmp(param, "read_cache_enable",
+				    paramlen) == 0 ||
+			    strncmp(param, "brw_stats", paramlen) == 0)
+				return true;
+		}
+	}
+
+	return false;
+}
+
 /* used by MGS to process specific configurations */
 static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			      struct lustre_cfg *cfg)
@@ -234,12 +268,20 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			}
 		}
 
+		if (match_symlink_param(param)) {
+			rc = next->ld_ops->ldo_process_config(env, next, cfg);
+			break;
+		}
+
 		lprocfs_ofd_init_vars(&lvars);
 		rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, cfg,
 					      d->ld_obd);
-		if (rc > 0 || rc == -ENOSYS)
+		if (rc > 0 || rc == -ENOSYS) {
+			CDEBUG(D_CONFIG, "pass param %s down the stack.\n",
+			       param);
 			/* we don't understand; pass it on */
 			rc = next->ld_ops->ldo_process_config(env, next, cfg);
+		}
 		break;
 	}
 	case LCFG_SPTLRPC_CONF: {

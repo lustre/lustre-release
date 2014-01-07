@@ -54,6 +54,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#include <lustre_param.h>
 #include <md_object.h>
 
 #include "osd_internal.h"
@@ -740,21 +741,31 @@ static int osd_process_config(const struct lu_env *env,
 			      struct lu_device *d, struct lustre_cfg *cfg)
 {
 	struct osd_device	*o = osd_dev(d);
-	int			 err;
+	int			rc;
 	ENTRY;
 
 	switch(cfg->lcfg_command) {
 	case LCFG_SETUP:
-		err = osd_mount(env, o, cfg);
+		rc = osd_mount(env, o, cfg);
 		break;
 	case LCFG_CLEANUP:
-		err = osd_shutdown(env, o);
+		rc = osd_shutdown(env, o);
 		break;
+	case LCFG_PARAM: {
+		LASSERT(&o->od_dt_dev);
+		rc = class_process_proc_param(PARAM_OSD, lprocfs_osd_obd_vars,
+					      cfg, &o->od_dt_dev);
+		if (rc > 0 || rc == -ENOSYS)
+			rc = class_process_proc_param(PARAM_OST,
+						      lprocfs_osd_obd_vars,
+						      cfg, &o->od_dt_dev);
+		break;
+	}
 	default:
-		err = -ENOTTY;
+		rc = -ENOTTY;
 	}
 
-	RETURN(err);
+	RETURN(rc);
 }
 
 static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)

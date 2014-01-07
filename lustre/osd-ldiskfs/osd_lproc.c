@@ -239,7 +239,6 @@ out:
 
 int osd_procfs_init(struct osd_device *osd, const char *name)
 {
-        struct lprocfs_static_vars lvars;
         struct obd_type     *type;
         int                  rc;
         ENTRY;
@@ -252,9 +251,9 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
         LASSERT(type != NULL);
 
         /* Find the type procroot and add the proc entry for this device */
-        lprocfs_osd_init_vars(&lvars);
         osd->od_proc_entry = lprocfs_register(name, type->typ_procroot,
-                                              lvars.obd_vars, &osd->od_dt_dev);
+					      lprocfs_osd_obd_vars,
+					      &osd->od_dt_dev);
         if (IS_ERR(osd->od_proc_entry)) {
                 rc = PTR_ERR(osd->od_proc_entry);
                 CERROR("Error %d setting up lprocfs for %s\n",
@@ -545,9 +544,4 @@ struct lprocfs_vars lprocfs_osd_module_vars[] = {
         { 0 }
 };
 
-void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars)
-{
-        lvars->module_vars = lprocfs_osd_module_vars;
-        lvars->obd_vars = lprocfs_osd_obd_vars;
-}
 #endif

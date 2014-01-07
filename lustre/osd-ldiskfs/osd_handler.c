@@ -62,6 +62,8 @@
 /* struct ptlrpc_thread */
 #include <lustre_net.h>
 #include <lustre_fid.h>
+/* process_config */
+#include <lustre_param.h>
 
 #include "osd_internal.h"
 #include "osd_dynlocks.h"
@@ -5687,23 +5689,32 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 static int osd_process_config(const struct lu_env *env,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
-        struct osd_device *o = osd_dev(d);
-        int err;
-        ENTRY;
+	struct osd_device		*o = osd_dev(d);
+	int				rc;
+	ENTRY;
 
-        switch(cfg->lcfg_command) {
-        case LCFG_SETUP:
-                err = osd_mount(env, o, cfg);
-                break;
-        case LCFG_CLEANUP:
-		lu_dev_del_linkage(d->ld_site, d);
-		err = osd_shutdown(env, o);
+	switch (cfg->lcfg_command) {
+	case LCFG_SETUP:
+		rc = osd_mount(env, o, cfg);
 		break;
-        default:
-                err = -ENOSYS;
-        }
+	case LCFG_CLEANUP:
+		lu_dev_del_linkage(d->ld_site, d);
+		rc = osd_shutdown(env, o);
+		break;
+	case LCFG_PARAM:
+		LASSERT(&o->od_dt_dev);
+		rc = class_process_proc_param(PARAM_OSD, lprocfs_osd_obd_vars,
+					      cfg, &o->od_dt_dev);
+		if (rc > 0 || rc == -ENOSYS)
+			rc = class_process_proc_param(PARAM_OST,
+						      lprocfs_osd_obd_vars,
+						      cfg, &o->od_dt_dev);
+		break;
+	default:
+		rc = -ENOSYS;
+	}
 
-        RETURN(err);
+	RETURN(rc);
 }
 
 static int osd_recovery_complete(const struct lu_env *env,
@@ -5836,17 +5847,16 @@ static struct obd_ops osd_obd_device_ops = {
 
 static int __init osd_mod_init(void)
 {
-        struct lprocfs_static_vars lvars;
 	int rc;
 
 	osd_oi_mod_init();
-	lprocfs_osd_init_vars(&lvars);
 
 	rc = lu_kmem_init(ldiskfs_caches);
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
+	rc = class_register_type(&osd_obd_device_ops, NULL,
+				 lprocfs_osd_module_vars,
 				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
 	if (rc)
 		lu_kmem_fini(ldiskfs_caches);

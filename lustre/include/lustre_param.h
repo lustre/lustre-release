@@ -101,6 +101,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST		"ost."
+#define PARAM_OSD		"osd."
 #define PARAM_OSC		"osc."
 #define PARAM_MDT		"mdt."
 #define PARAM_HSM		"mdt.hsm."
