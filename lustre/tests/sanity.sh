@@ -1119,6 +1119,11 @@ test_24z() {
 	mrename $remote_src $remote_tgt &&
 		error "rename remote dirs should not work!"
 
+	# If target dir does not exists, it should succeed
+	rm -rf $remote_tgt
+	mrename $remote_src $remote_tgt ||
+		error "rename remote dirs(tgt dir does not exists) failed!"
+
 	rm -rf $DIR/$tdir || error "Can not delete directories"
 }
 run_test 24z "rename one remote dir to another remote dir should fail"

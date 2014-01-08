@@ -2376,17 +2376,19 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_declare_rename(const struct lu_env *env,
-                              struct mdd_device *mdd,
-                              struct mdd_object *mdd_spobj,
-                              struct mdd_object *mdd_tpobj,
-                              struct mdd_object *mdd_sobj,
-                              struct mdd_object *mdd_tobj,
-                              const struct lu_name *tname,
+			      struct mdd_device *mdd,
+			      struct mdd_object *mdd_spobj,
+			      struct mdd_object *mdd_tpobj,
+			      struct mdd_object *mdd_sobj,
+			      struct mdd_object *mdd_tobj,
+			      const struct lu_name *tname,
 			      const struct lu_name *sname,
-                              struct md_attr *ma,
-                              struct thandle *handle)
+			      struct md_attr *ma,
+			      struct linkea_data *ldata,
+			      struct thandle *handle)
 {
-        int rc;
+	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	int rc;
 
         LASSERT(mdd_spobj);
         LASSERT(mdd_tpobj);
@@ -2404,16 +2406,18 @@ static int mdd_declare_rename(const struct lu_env *env,
                 rc = mdo_declare_ref_del(env, mdd_spobj, handle);
                 if (rc)
                         return rc;
+		if (mdd_spobj != mdd_tpobj) {
+			rc = mdo_declare_index_delete(env, mdd_sobj, dotdot,
+						      handle);
+			if (rc)
+				return rc;
 
-                rc = mdo_declare_index_delete(env, mdd_sobj, dotdot, handle);
-                if (rc)
-                        return rc;
-
-                rc = mdo_declare_index_insert(env, mdd_sobj, mdo2fid(mdd_tpobj),
-                                              dotdot, handle);
-                if (rc)
-                        return rc;
-
+			rc = mdo_declare_index_insert(env, mdd_sobj,
+						      mdo2fid(mdd_tpobj),
+						      dotdot, handle);
+			if (rc)
+				return rc;
+		}
                 /* new target child can be directory,
                  * counted by target dir's nlink */
                 rc = mdo_declare_ref_add(env, mdd_tpobj, handle);
@@ -2426,12 +2430,16 @@ static int mdd_declare_rename(const struct lu_env *env,
         if (rc)
                 return rc;
 
-        rc = mdo_declare_attr_set(env, mdd_sobj, NULL, handle);
-        if (rc)
-                return rc;
-	mdd_declare_links_add(env, mdd_sobj, handle, NULL);
-        if (rc)
-                return rc;
+	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
+	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
+	la->la_valid = LA_CTIME | LA_MTIME;
+	rc = mdo_declare_attr_set(env, mdd_sobj, la, handle);
+	if (rc)
+		return rc;
+
+	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata);
+	if (rc)
+		return rc;
 
         rc = mdo_declare_attr_set(env, mdd_tpobj, NULL, handle);
         if (rc)
@@ -2496,40 +2504,61 @@ static int mdd_rename(const struct lu_env *env,
                       struct md_object *tobj, const struct lu_name *ltname,
                       struct md_attr *ma)
 {
-        const char *sname = lsname->ln_name;
-        const char *tname = ltname->ln_name;
-        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	const char *sname = lsname->ln_name;
+	const char *tname = ltname->ln_name;
+	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
 	struct lu_attr    *so_attr = &mdd_env_info(env)->mti_cattr;
 	struct lu_attr    *tg_attr = &mdd_env_info(env)->mti_pattr;
-        struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj); /* source parent */
-        struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
-        struct mdd_device *mdd = mdo2mdd(src_pobj);
-        struct mdd_object *mdd_sobj = NULL;                  /* source object */
-        struct mdd_object *mdd_tobj = NULL;
-        struct dynlock_handle *sdlh, *tdlh;
-        struct thandle *handle;
-        const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
-        const struct lu_fid *spobj_fid = mdo2fid(mdd_spobj);
-        bool is_dir;
+	struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj); /* source parent */
+	struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
+	struct mdd_device *mdd = mdo2mdd(src_pobj);
+	struct mdd_object *mdd_sobj = NULL;                  /* source object */
+	struct mdd_object *mdd_tobj = NULL;
+	struct dynlock_handle *sdlh = NULL, *tdlh = NULL;
+	struct thandle *handle;
+	struct linkea_data  *ldata = &mdd_env_info(env)->mti_link_data;
+	const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
+	const struct lu_fid *spobj_fid = mdo2fid(mdd_spobj);
+	bool is_dir;
 	bool tobj_ref = 0;
 	bool tobj_locked = 0;
 	unsigned cl_flags = 0;
-        int rc, rc2;
-        ENTRY;
+	int rc, rc2;
+	ENTRY;
 
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 
         mdd_sobj = mdd_object_find(env, mdd, lf);
 
+	rc = mdd_la_get(env, mdd_sobj, so_attr,
+			mdd_object_capa(env, mdd_sobj));
+	if (rc)
+		GOTO(out_pending, rc);
+
+	if (mdd_tobj) {
+		rc = mdd_la_get(env, mdd_tobj, tg_attr,
+				mdd_object_capa(env, mdd_tobj));
+		if (rc)
+			GOTO(out_pending, rc);
+	}
+
+	rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj, mdd_sobj,
+				     mdd_tobj, so_attr, tg_attr);
+	if (rc)
+		GOTO(out_pending, rc);
+
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
 
-        rc = mdd_declare_rename(env, mdd, mdd_spobj, mdd_tpobj, mdd_sobj,
-                                mdd_tobj, lsname, ltname, ma, handle);
-        if (rc)
-                GOTO(stop, rc);
+	memset(ldata, 0, sizeof(*ldata));
+	mdd_linkea_prepare(env, mdd_sobj, NULL, NULL, mdd_object_fid(mdd_tpobj),
+			   ltname, 1, 0, ldata);
+	rc = mdd_declare_rename(env, mdd, mdd_spobj, mdd_tpobj, mdd_sobj,
+				mdd_tobj, lsname, ltname, ma, ldata, handle);
+	if (rc)
+		GOTO(stop, rc);
 
         rc = mdd_trans_start(env, mdd, handle);
         if (rc)
@@ -2559,23 +2588,6 @@ static int mdd_rename(const struct lu_env *env,
         }
         if (sdlh == NULL || tdlh == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
-
-	rc = mdd_la_get(env, mdd_sobj, so_attr,
-			mdd_object_capa(env, mdd_sobj));
-	if (rc)
-		GOTO(cleanup, rc);
-
-	if (mdd_tobj) {
-		rc = mdd_la_get(env, mdd_tobj, tg_attr,
-				mdd_object_capa(env, mdd_tobj));
-		if (rc)
-			GOTO(cleanup, rc);
-	}
-
-	rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj, mdd_sobj,
-				     mdd_tobj, so_attr, tg_attr);
-        if (rc)
-                GOTO(cleanup, rc);
 
 	is_dir = S_ISDIR(so_attr->la_mode);
 
@@ -2713,8 +2725,8 @@ static int mdd_rename(const struct lu_env *env,
 						 handle, 0);
         }
 
-        if (rc == 0 && mdd_sobj) {
-                mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
+	if (rc == 0 && mdd_sobj) {
+		mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
 		rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
 				      mdo2fid(mdd_tpobj), ltname, handle, NULL,
 				      0, 0);
@@ -2756,19 +2768,21 @@ fixup_tpobj:
         }
 
 fixup_spobj:
-        if (rc && is_dir && mdd_sobj) {
-                rc2 = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
-                                              BYPASS_CAPA);
+	if (rc && is_dir && mdd_sobj && mdd_spobj != mdd_tpobj) {
+		rc2 = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
+					      BYPASS_CAPA);
 
-                if (rc2)
-                        CWARN("sp obj dotdot delete error %d\n",rc2);
+		if (rc2)
+			CWARN("%s: sp obj dotdot delete error: rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, rc2);
 
 
-                rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid,
-                                              dotdot, handle, BYPASS_CAPA);
-                if (rc2)
-                        CWARN("sp obj dotdot insert error %d\n",rc2);
-        }
+		rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid,
+					      dotdot, handle, BYPASS_CAPA);
+		if (rc2)
+			CWARN("%s: sp obj dotdot insert error: rc = %d\n",
+			      mdd2obd_dev(mdd)->obd_name, rc2);
+	}
 
 fixup_spobj2:
         if (rc) {
