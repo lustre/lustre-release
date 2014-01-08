@@ -1665,20 +1665,20 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                         /* No locks which got blocking requests. */
 			LASSERT(!ldlm_is_bl_ast(lock));
 
-                        if (flags & LDLM_CANCEL_NO_WAIT &&
+			if (flags & LDLM_CANCEL_NO_WAIT &&
 			    ldlm_is_skipped(lock))
-                                /* already processed */
-                                continue;
+				/* already processed */
+				continue;
 
 			/* Somebody is already doing CANCEL. No need for this
 			 * lock in LRU, do not traverse it again. */
 			if (!ldlm_is_canceling(lock))
                                 break;
 
-                        ldlm_lock_remove_from_lru_nolock(lock);
-                }
-                if (&lock->l_lru == &ns->ns_unused_list)
-                        break;
+			ldlm_lock_remove_from_lru_nolock(lock);
+		}
+		if (&lock->l_lru == &ns->ns_unused_list)
+			break;
 
 		LDLM_LOCK_GET(lock);
 		spin_unlock(&ns->ns_lock);
