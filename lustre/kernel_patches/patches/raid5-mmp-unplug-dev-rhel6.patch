@@ -10,7 +10,7 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/drivers/md/raid5.c
 @@ -2177,6 +2177,8 @@ static int add_stripe_bio(struct stripe_
  		bi->bi_next = *bip;
  	*bip = bi;
- 	bi->bi_phys_segments++;
+ 	raid5_inc_bi_active_stripes(bi);
 + 	if (bio_rw_flagged(bi, BIO_RW_SYNCIO) && !forwrite)
 + 		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
  

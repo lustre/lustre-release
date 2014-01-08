@@ -554,6 +554,8 @@ else
 				case $RHEL_KERNEL_VERSION in
 					2.6.32-358*)
 						EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
+					2.6.32-431*)
+						EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE -DCONFIG_COMPAT_RHEL_6_5";;
 				esac
 			elif test x$SUSE_KERNEL = xyes; then
 				SP=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')

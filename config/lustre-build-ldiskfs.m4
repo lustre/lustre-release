@@ -5,10 +5,12 @@ AC_MSG_CHECKING([which ldiskfs series to use])
 
 SER=
 AS_IF([test x$RHEL_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-431],[
 	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-343],[
 	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32],[],
 	[SER="2.6-rhel6.series"],[SER="2.6-rhel6.series"])],
-	[SER="2.6-rhel6.4.series"],[SER="2.6-rhel6.4.series"])
+	[SER="2.6-rhel6.4.series"],[SER="2.6-rhel6.4.series"])],
+	[SER="2.6-rhel6.5.series"],[SER="2.6-rhel6.5.series"])
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32],[],
