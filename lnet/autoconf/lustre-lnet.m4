@@ -342,6 +342,8 @@ else
 			case $RHEL_KERNEL_VERSION in
 				2.6.32-358*)
 					EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
+				2.6.32-431*)
+					EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_5";;
 			esac
 		fi
 		AC_MSG_CHECKING([whether to use any OFED backport headers])
