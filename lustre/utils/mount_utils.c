@@ -46,6 +46,7 @@
 #include <lustre_ver.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <linux/loop.h>
 
 extern char *progname;
 extern int verbose;
@@ -307,7 +308,8 @@ int loop_setup(struct mkfs_opts *mop)
 	int i, ret = 0;
 
 	/* Figure out the loop device names */
-	if (!access("/dev/loop0", F_OK | R_OK)) {
+	if (!access("/dev/loop0", F_OK | R_OK) ||
+	    !access("/dev/loop-control", F_OK | R_OK)) {
 		strcpy(loop_base, "/dev/loop\0");
 	} else if (!access("/dev/loop/0", F_OK | R_OK)) {
 		strcpy(loop_base, "/dev/loop/\0");
@@ -321,9 +323,24 @@ int loop_setup(struct mkfs_opts *mop)
 		char cmd[PATH_MAX];
 		int cmdsz = sizeof(cmd);
 
+#ifdef LOOP_CTL_GET_FREE
+		ret = open("/dev/loop-control", O_RDWR);
+		if (ret < 0) {
+			fprintf(stderr, "%s: can't access loop control\n", progname);
+			return EACCES;
+		}
+		/* find or allocate a free loop device to use */
+		i = ioctl(ret, LOOP_CTL_GET_FREE);
+		if (i < 0) {
+			fprintf(stderr, "%s: access loop control error\n", progname);
+			return EACCES;
+		}
+		sprintf(l_device, "%s%d", loop_base, i);
+#else
 		sprintf(l_device, "%s%d", loop_base, i);
 		if (access(l_device, F_OK | R_OK))
 			break;
+#endif
 		snprintf(cmd, cmdsz, "losetup %s > /dev/null 2>&1", l_device);
 		ret = system(cmd);
 
