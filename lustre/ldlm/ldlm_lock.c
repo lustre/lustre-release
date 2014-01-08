@@ -250,19 +250,17 @@ EXPORT_SYMBOL(ldlm_lock_put);
  */
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
 {
-        int rc = 0;
-        if (!cfs_list_empty(&lock->l_lru)) {
-                struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	int rc = 0;
+	if (!cfs_list_empty(&lock->l_lru)) {
+		struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
-                LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
-                cfs_list_del_init(&lock->l_lru);
-                if (lock->l_flags & LDLM_FL_SKIPPED)
-                        lock->l_flags &= ~LDLM_FL_SKIPPED;
-                LASSERT(ns->ns_nr_unused > 0);
-                ns->ns_nr_unused--;
-                rc = 1;
-        }
-        return rc;
+		LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
+		cfs_list_del_init(&lock->l_lru);
+		LASSERT(ns->ns_nr_unused > 0);
+		ns->ns_nr_unused--;
+		rc = 1;
+	}
+	return rc;
 }
 
 /**
@@ -291,14 +289,15 @@ int ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
  */
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 {
-        struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
-        lock->l_last_used = cfs_time_current();
-        LASSERT(cfs_list_empty(&lock->l_lru));
-        LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
-        cfs_list_add_tail(&lock->l_lru, &ns->ns_unused_list);
-        LASSERT(ns->ns_nr_unused >= 0);
-        ns->ns_nr_unused++;
+	lock->l_last_used = cfs_time_current();
+	LASSERT(cfs_list_empty(&lock->l_lru));
+	LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
+	cfs_list_add_tail(&lock->l_lru, &ns->ns_unused_list);
+	ldlm_clear_skipped(lock);
+	LASSERT(ns->ns_nr_unused >= 0);
+	ns->ns_nr_unused++;
 }
 
 /**
