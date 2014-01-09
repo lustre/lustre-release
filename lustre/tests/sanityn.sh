@@ -2317,23 +2317,30 @@ test_51b() {
 run_test 51b "layout lock: glimpse should be able to restart if layout changed"
 
 test_51c() {
-	# create an empty file
-	$MCREATE $DIR1/$tfile
+	[ $OSTCOUNT -ge 2 ] || { skip "need at least 2 osts"; return; }
+
+	# set default layout to have 1 stripe
+	mkdir -p $DIR1/$tdir
+	$LFS setstripe -c 1 $DIR1/$tdir
+
+	# create a file with empty layout
+	$MCREATE $DIR1/$tdir/$tfile
 
 #define OBD_FAIL_MDS_LL_BLOCK 0x172
-	$LCTL set_param fail_loc=0x172
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x172
 
 	# change the layout of testing file
-	echo "Setting layout ..."
-	$LFS setstripe -c $OSTCOUNT $DIR1/$tfile &
+	echo "Setting layout to have $OSTCOUNT stripes ..."
+	$LFS setstripe -c $OSTCOUNT $DIR1/$tdir/$tfile &
 	pid=$!
 	sleep 1
 
-	# get layout of this file should wait until dd is finished
-	local stripecnt=`$LFS getstripe -c $DIR2/$tfile`
-	[ $stripecnt -eq $OSTCOUNT ] || error "layout wrong"
+	# write something to the file, it should be blocked on fetching layout
+	dd if=/dev/zero of=$DIR2/$tdir/$tfile bs=1k count=1 conv=notrunc
+	local cnt=$($LFS getstripe -c $DIR2/$tdir/$tfile)
+	[ $cnt -eq $OSTCOUNT ] || error "have $cnt stripes, expected $OSTCOUNT"
 
-	rm -f $DIR1/$tfile
+	rm -fr $DIR1/$tdir
 }
 run_test 51c "layout lock: IT_LAYOUT blocked and correct layout can be returned"
 
