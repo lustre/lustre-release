@@ -38,6 +38,40 @@
 #include <lu_object.h>
 #include <dt_object.h>
 
+enum lfsck_status {
+	/* The lfsck file is new created, for new MDT, upgrading from old disk,
+	 * or re-creating the lfsck file manually. */
+	LS_INIT			= 0,
+
+	/* The first-step system scanning. */
+	LS_SCANNING_PHASE1	= 1,
+
+	/* The second-step system scanning. */
+	LS_SCANNING_PHASE2	= 2,
+
+	/* The LFSCK processing has completed for all objects. */
+	LS_COMPLETED		= 3,
+
+	/* The LFSCK exited automatically for failure, will not auto restart. */
+	LS_FAILED		= 4,
+
+	/* The LFSCK is stopped manually, will not auto restart. */
+	LS_STOPPED		= 5,
+
+	/* LFSCK is paused automatically when umount,
+	 * will be restarted automatically when remount. */
+	LS_PAUSED		= 6,
+
+	/* System crashed during the LFSCK,
+	 * will be restarted automatically after recovery. */
+	LS_CRASHED		= 7,
+
+	/* Some OST/MDT failed during the LFSCK, or not join the LFSCK. */
+	LS_PARTIAL		= 8,
+
+	LS_MAX
+};
+
 struct lfsck_start_param {
 	struct lfsck_start	*lsp_start;
 	struct ldlm_namespace	*lsp_namespace;
@@ -55,6 +89,6 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 int lfsck_get_speed(struct dt_device *key, void *buf, int len);
 int lfsck_set_speed(struct dt_device *key, int val);
 
-int lfsck_dump(struct dt_device *key, void *buf, int len, __u16 type);
+int lfsck_dump(struct dt_device *key, void *buf, int len, enum lfsck_type type);
 
 #endif /* _LUSTRE_LFSCK_H */
