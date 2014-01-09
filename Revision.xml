@@ -1,39 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <section xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <title>Revisions</title>
-    <para>The <emphasis role="italic">Lustre Software Release 2.x Operations Manual</emphasis>
-        contains content relevant for all 2.x releases of the Lustre software. <note>
-            <para>Updates to the manual are made as the changes become available.  When features are
-                added with new releases of the Lustre software, they are clearly marked with the
-                version of the release in which the functionality was added. Features that are
-                deprecated by a release or removed from the software are also marked with the
-                version of the release in which they became deprecated or were removed.</para>
-        </note></para>
-    <para>
+	<para>The Lustre* File System Release 2.x Operations Manual is a community
+maintained work. Versions of the manual are continually built as suggestions for
+changes and improvements arrive. Suggestions for improvements can be submitted
+through the ticketing system maintained at <link
+xl:href="http://jira.hpdd.intel.com/browse/LUDOC">https://jira.hpdd.intel.com/browse/LUDOC</link>.
+Instructions for providing a patch to the existing manual are available at:
+<link
+xl:href="https://wiki.hpdd.intel.com/display/PUB/Making+changes+to+the+Lustre+Manual+source">https://wiki.hpdd.intel.com/display/PUB/Making+changes+to+the+Lustre+Manual+source</link>.</para>
+
+	<para>This manual currently covers all the 2.x Lustre software releases.
+Features that are specific to individual releases are identified within the
+table of contents using a short hand notation (i.e. 'L24' is a Lustre software
+release 2.4 specific feature), and within the text using a distinct box.  For
+example:</para>
+
+	<para condition='l24'>Lustre software release version 2.4 includes support
+for multiple metadata servers.</para>
+
+	<para>Only the latest revision of this document is made readily available
+because changes are continually arriving. The current and latest revision of
+this manual is available from links maintained at: <link
+xl:href="http://lustre.opensfs.org/documentation/">http://lustre.opensfs.org/documentation/</link>.
+
         <revhistory>
             <revision>
-                <revnumber>2.x</revnumber>
-                <date>Ongoing (see note above)</date>
+                <revnumber>0</revnumber>
+                <date>Built on <?dbtimestamp format="d B Y X"?></date>
                 <author>
                     <orgname>Intel Corporation</orgname>
                 </author>
-                <revremark>Release of manual for Lustre software release 2.x</revremark>
-            </revision>
-            <revision>
-                <revnumber>2.3</revnumber>
-                <date>November 2012</date>
-                <author>
-                    <orgname>Intel Corporation</orgname>
-                </author>
-                <revremark>Release of manual for Lustre software release 2.3</revremark>
-            </revision>
-            <revision>
-                <revnumber>2.1</revnumber>
-                <date>June 2011</date>
-                <author>
-                    <orgname>Whamcloud, Inc</orgname>
-                </author>
-                <revremark>First release of manual with Lustre software release 2.1</revremark>
+                <revremark>Continuous build of Manual.</revremark>
             </revision>
         </revhistory>
     </para>
