@@ -1165,8 +1165,7 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 		/* if called during recovery then should update
 		 * obd_stale_clients counter,
 		 * lightweight exports are not counted */
-		if (exp->exp_failed &&
-		    (exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT) == 0)
+		if ((exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT) == 0)
 			exp->exp_obd->obd_stale_clients++;
 	}
 	spin_unlock(&obd->obd_recovery_task_lock);
