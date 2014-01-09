@@ -1058,6 +1058,8 @@ struct ldlm_enqueue_info {
 	unsigned int ei_enq_slave:1; /* whether enqueue slave stripes */
 };
 
+#define ei_res_id	ei_cb_gl
+
 extern struct obd_ops ldlm_obd_ops;
 
 extern char *ldlm_lockname[];

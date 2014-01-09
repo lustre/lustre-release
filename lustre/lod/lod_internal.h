@@ -274,6 +274,7 @@ struct lod_thread_info {
 	struct obd_statfs lti_osfs;
 	struct lu_attr    lti_attr;
 	struct lod_it	  lti_it;
+	struct ldlm_res_id lti_res_id;
 };
 
 extern const struct lu_device_operations lod_lu_ops;

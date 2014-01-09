@@ -679,7 +679,8 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
 void mdt_client_compatibility(struct mdt_thread_info *info);
 
 int mdt_remote_object_lock(struct mdt_thread_info *mti,
-			   struct mdt_object *o, struct lustre_handle *lh,
+			   struct mdt_object *o, const struct lu_fid *fid,
+			   struct lustre_handle *lh,
 			   ldlm_mode_t mode, __u64 ibits);
 
 enum mdt_name_flags {

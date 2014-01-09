@@ -603,8 +603,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      struct ldlm_enqueue_info *einfo,
 			      ldlm_policy_data_t *policy)
 {
-	struct osp_thread_info	*info = osp_env_info(env);
-	struct ldlm_res_id	*res_id = &info->osi_resid;
+	struct ldlm_res_id	*res_id;
 	struct dt_device	*dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
 	struct osp_device	*osp = dt2osp_dev(dt_dev);
 	struct ptlrpc_request	*req;
@@ -612,7 +611,8 @@ static int osp_md_object_lock(const struct lu_env *env,
 	__u64			flags = 0;
 	ldlm_mode_t		mode;
 
-	fid_build_reg_res_name(lu_object_fid(&dt->do_lu), res_id);
+	res_id = einfo->ei_res_id;
+	LASSERT(res_id != NULL);
 
 	mode = ldlm_lock_match(osp->opd_obd->obd_namespace,
 			       LDLM_FL_BLOCK_GRANTED, res_id,

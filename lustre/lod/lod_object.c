@@ -2206,6 +2206,12 @@ static int lod_object_lock(const struct lu_env *env,
 	/* striped directory lock */
 	for (i = 0; i < lo->ldo_stripenr; i++) {
 		struct lustre_handle	lockh;
+		struct ldlm_res_id	*res_id;
+
+		res_id = &lod_env_info(env)->lti_res_id;
+		fid_build_reg_res_name(lu_object_fid(&lo->ldo_stripe[i]->do_lu),
+				       res_id);
+		einfo->ei_res_id = res_id;
 
 		LASSERT(lo->ldo_stripe[i]);
 		rc = dt_object_lock(env, lo->ldo_stripe[i], &lockh, einfo,
