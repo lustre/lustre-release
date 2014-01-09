@@ -3579,10 +3579,8 @@ static void mdt_seq_fini_cli(struct mdt_device *mdt)
 	if (ss == NULL)
 		return;
 
-	if (ss->ss_server_seq == NULL)
+	if (ss->ss_server_seq != NULL)
 		seq_server_set_cli(NULL, ss->ss_server_seq, NULL);
-
-	return;
 }
 
 static int mdt_seq_fini(const struct lu_env *env, struct mdt_device *mdt)
