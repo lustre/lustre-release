@@ -573,19 +573,18 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         if (req->rq_status)
                 return;
 
-        /* if no error, so child was created with requested fid */
-        child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
-        if (IS_ERR(child)) {
-                rc = PTR_ERR(child);
-                LCONSOLE_WARN("Child "DFID" lookup error %d."
-                              " Evicting client %s with export %s.\n",
-                              PFID(mdt_object_fid(child)), rc,
-                              obd_uuid2str(&exp->exp_client_uuid),
-                              obd_export_nid2str(exp));
-                mdt_export_evict(exp);
-                EXIT;
-                return;
-        }
+	/* if no error, so child was created with requested fid */
+	child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
+	if (IS_ERR(child)) {
+		rc = PTR_ERR(child);
+		LCONSOLE_WARN("cannot lookup child "DFID": rc = %d; "
+			      "evicting client %s with export %s\n",
+			      PFID(mti->mti_rr.rr_fid2), rc,
+			      obd_uuid2str(&exp->exp_client_uuid),
+			      obd_export_nid2str(exp));
+		mdt_export_evict(exp);
+		RETURN_EXIT;
+	}
 
         body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
         mti->mti_attr.ma_need = MA_INODE;
@@ -614,6 +613,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         struct mdt_device *mdt = mti->mti_mdt;
         struct mdt_object *obj;
         struct mdt_body *body;
+	int rc;
 
         mdt_req_from_lcd(req, med->med_ted.ted_lcd);
         if (req->rq_status)
@@ -621,17 +621,17 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 
         body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
         obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
-        if (IS_ERR(obj)) {
-                int rc = PTR_ERR(obj);
-                LCONSOLE_WARN(""DFID" lookup error %d."
-                              " Evicting client %s with export %s.\n",
-                              PFID(mdt_object_fid(obj)), rc,
-                              obd_uuid2str(&exp->exp_client_uuid),
-                              obd_export_nid2str(exp));
-                mdt_export_evict(exp);
-                EXIT;
-                return;
-        }
+	if (IS_ERR(obj)) {
+		rc = PTR_ERR(obj);
+		LCONSOLE_WARN("cannot lookup "DFID": rc = %d; "
+			      "evicting client %s with export %s\n",
+			      PFID(mti->mti_rr.rr_fid1), rc,
+			      obd_uuid2str(&exp->exp_client_uuid),
+			      obd_export_nid2str(exp));
+		mdt_export_evict(exp);
+		RETURN_EXIT;
+	}
+
         mti->mti_attr.ma_need = MA_INODE;
         mti->mti_attr.ma_valid = 0;
 	mdt_attr_get_complex(mti, obj, &mti->mti_attr);

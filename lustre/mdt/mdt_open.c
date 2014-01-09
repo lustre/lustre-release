@@ -1059,18 +1059,19 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                         mdt_export_evict(exp);
                         RETURN_EXIT;
                 }
-                child = mdt_object_find(env, mdt, rr->rr_fid2);
-                if (IS_ERR(child)) {
-                        rc = PTR_ERR(child);
-                        LCONSOLE_WARN("Child "DFID" lookup error %d."
-                                      " Evicting client %s with export %s.\n",
-                                      PFID(mdt_object_fid(child)), rc,
-                                      obd_uuid2str(&exp->exp_client_uuid),
-                                      obd_export_nid2str(exp));
-                        mdt_object_put(env, parent);
-                        mdt_export_evict(exp);
-                        RETURN_EXIT;
-                }
+
+		child = mdt_object_find(env, mdt, rr->rr_fid2);
+		if (IS_ERR(child)) {
+			rc = PTR_ERR(child);
+			LCONSOLE_WARN("cannot lookup child "DFID": rc = %d; "
+				      "evicting client %s with export %s\n",
+				      PFID(rr->rr_fid2), rc,
+				      obd_uuid2str(&exp->exp_client_uuid),
+				      obd_export_nid2str(exp));
+			mdt_object_put(env, parent);
+			mdt_export_evict(exp);
+			RETURN_EXIT;
+		}
 
 		if (unlikely(mdt_object_remote(child))) {
 			/* the child object was created on remote server */
