@@ -1233,8 +1233,12 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				*start = le64_to_cpu(dp->ldp_hash_start);
 				*end   = le64_to_cpu(dp->ldp_hash_end);
 			}
-			LASSERTF(*start <= *hash, "start = "LPX64",end = "
-				 LPX64",hash = "LPX64"\n", *start, *end, *hash);
+			if (unlikely(*start == 1 && *hash == 0))
+				*hash = *start;
+			else
+				LASSERTF(*start <= *hash, "start = "LPX64
+					 ",end = "LPX64",hash = "LPX64"\n",
+					 *start, *end, *hash);
 			CDEBUG(D_VFSTRACE, "page%lu [%llu %llu], hash"LPU64"\n",
 			       offset, *start, *end, *hash);
 			if (*hash > *end) {
