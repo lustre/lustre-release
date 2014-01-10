@@ -5611,11 +5611,16 @@ static int osd_mount(const struct lu_env *env,
 #endif
 
 	if (!LDISKFS_HAS_COMPAT_FEATURE(o->od_mnt->mnt_sb,
-	    LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)) {
+					LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)) {
 		CERROR("%s: device %s is mounted w/o journal\n", name, dev);
 		GOTO(out_mnt, rc = -EINVAL);
 	}
 
+#ifdef LDISKFS_MOUNT_DIRDATA
+	if (LDISKFS_HAS_INCOMPAT_FEATURE(o->od_mnt->mnt_sb,
+					 LDISKFS_FEATURE_INCOMPAT_DIRDATA))
+		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
+#endif
 	inode = osd_sb(o)->s_root->d_inode;
 	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
