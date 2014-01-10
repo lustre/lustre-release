@@ -530,17 +530,16 @@ static struct seq_operations vvp_pgcache_ops = {
 
 static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 {
-        struct proc_dir_entry *dp  = PDE(inode);
-        struct ll_sb_info     *sbi = dp->data;
-        struct seq_file       *seq;
-        int                    result;
+	struct ll_sb_info	*sbi = PDE_DATA(inode);
+	struct seq_file		*seq;
+	int			result;
 
-        result = seq_open(filp, &vvp_pgcache_ops);
-        if (result == 0) {
-                seq = filp->private_data;
-                seq->private = sbi;
-        }
-        return result;
+	result = seq_open(filp, &vvp_pgcache_ops);
+	if (result == 0) {
+		seq = filp->private_data;
+		seq->private = sbi;
+	}
+	return result;
 }
 
 struct file_operations vvp_dump_pgcache_file_ops = {

@@ -400,11 +400,10 @@ void cache_stats_init(struct cache_stats *cs, const char *name)
 		atomic_set(&cs->cs_stats[i], 0);
 }
 
-int cache_stats_print(const struct cache_stats *cs,
-                      char *page, int count, int h)
+int cache_stats_print(const struct cache_stats *cs, struct seq_file *m, int h)
 {
-	int nob = 0;
 	int i;
+
 	/*
 	 *   lookup    hit    total  cached create
 	 * env: ...... ...... ...... ...... ......
@@ -412,18 +411,16 @@ int cache_stats_print(const struct cache_stats *cs,
 	if (h) {
 		const char *names[CS_NR] = CS_NAMES;
 
-		nob += snprintf(page + nob, count - nob, "%6s", " ");
+		seq_printf(m, "%6s", " ");
 		for (i = 0; i < CS_NR; i++)
-			nob += snprintf(page + nob, count - nob,
-					"%8s", names[i]);
-		nob += snprintf(page + nob, count - nob, "\n");
+			seq_printf(m, "%8s", names[i]);
+		seq_printf(m, "\n");
 	}
 
-	nob += snprintf(page + nob, count - nob, "%5.5s:", cs->cs_name);
+	seq_printf(m, "%5.5s:", cs->cs_name);
 	for (i = 0; i < CS_NR; i++)
-		nob += snprintf(page + nob, count - nob, "%8u",
-				atomic_read(&cs->cs_stats[i]));
-	return nob;
+		seq_printf(m, "%8u", atomic_read(&cs->cs_stats[i]));
+	return 0;
 }
 
 static void cl_env_percpu_refill(void);
@@ -471,50 +468,48 @@ static struct cache_stats cl_env_stats = {
  * Outputs client site statistical counters into a buffer. Suitable for
  * ll_rd_*()-style functions.
  */
-int cl_site_stats_print(const struct cl_site *site, char *page, int count)
+int cl_site_stats_print(const struct cl_site *site, struct seq_file *m)
 {
-        int nob;
-        int i;
-        static const char *pstate[] = {
-                [CPS_CACHED]  = "c",
-                [CPS_OWNED]   = "o",
-                [CPS_PAGEOUT] = "w",
-                [CPS_PAGEIN]  = "r",
-                [CPS_FREEING] = "f"
-        };
-        static const char *lstate[] = {
-                [CLS_NEW]       = "n",
-                [CLS_QUEUING]   = "q",
-                [CLS_ENQUEUED]  = "e",
-                [CLS_HELD]      = "h",
-                [CLS_INTRANSIT] = "t",
-                [CLS_CACHED]    = "c",
-                [CLS_FREEING]   = "f"
-        };
+	static const char *pstate[] = {
+		[CPS_CACHED]	= "c",
+		[CPS_OWNED]	= "o",
+		[CPS_PAGEOUT]	= "w",
+		[CPS_PAGEIN]	= "r",
+		[CPS_FREEING]	= "f"
+	};
+	static const char *lstate[] = {
+		[CLS_NEW]	= "n",
+		[CLS_QUEUING]	= "q",
+		[CLS_ENQUEUED]	= "e",
+		[CLS_HELD]	= "h",
+		[CLS_INTRANSIT]	= "t",
+		[CLS_CACHED]	= "c",
+		[CLS_FREEING]	= "f"
+	};
+	int i;
+
 /*
        lookup    hit  total   busy create
 pages: ...... ...... ...... ...... ...... [...... ...... ...... ......]
 locks: ...... ...... ...... ...... ...... [...... ...... ...... ...... ......]
   env: ...... ...... ...... ...... ......
  */
-        nob = lu_site_stats_print(&site->cs_lu, page, count);
-        nob += cache_stats_print(&site->cs_pages, page + nob, count - nob, 1);
-        nob += snprintf(page + nob, count - nob, " [");
-        for (i = 0; i < ARRAY_SIZE(site->cs_pages_state); ++i)
-                nob += snprintf(page + nob, count - nob, "%s: %u ",
-                                pstate[i],
-				atomic_read(&site->cs_pages_state[i]));
-        nob += snprintf(page + nob, count - nob, "]\n");
-        nob += cache_stats_print(&site->cs_locks, page + nob, count - nob, 0);
-        nob += snprintf(page + nob, count - nob, " [");
-        for (i = 0; i < ARRAY_SIZE(site->cs_locks_state); ++i)
-                nob += snprintf(page + nob, count - nob, "%s: %u ",
-                                lstate[i],
-				atomic_read(&site->cs_locks_state[i]));
-        nob += snprintf(page + nob, count - nob, "]\n");
-        nob += cache_stats_print(&cl_env_stats, page + nob, count - nob, 0);
-        nob += snprintf(page + nob, count - nob, "\n");
-        return nob;
+	lu_site_stats_seq_print(&site->cs_lu, m);
+	cache_stats_print(&site->cs_pages, m, 1);
+	seq_printf(m, " [");
+	for (i = 0; i < ARRAY_SIZE(site->cs_pages_state); ++i)
+		seq_printf(m, "%s: %u ", pstate[i],
+			   atomic_read(&site->cs_pages_state[i]));
+	seq_printf(m, "]\n");
+	cache_stats_print(&site->cs_locks, m, 0);
+	seq_printf(m, " [");
+	for (i = 0; i < ARRAY_SIZE(site->cs_locks_state); ++i)
+		seq_printf(m, "%s: %u ", lstate[i],
+			   atomic_read(&site->cs_locks_state[i]));
+	seq_printf(m, "]\n");
+	cache_stats_print(&cl_env_stats, m, 0);
+	seq_printf(m, "\n");
+	return 0;
 }
 EXPORT_SYMBOL(cl_site_stats_print);
 

@@ -706,16 +706,12 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
-void lprocfs_llite_init_vars(struct lprocfs_static_vars *lvars);
+extern struct lprocfs_seq_vars lprocfs_llite_obd_vars[];
 #else
 static inline int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                         struct super_block *sb, char *osc, char *mdc){return 0;}
 static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
 static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
-static void lprocfs_llite_init_vars(struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
 #endif
 
 

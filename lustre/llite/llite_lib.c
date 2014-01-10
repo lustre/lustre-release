@@ -2274,31 +2274,28 @@ out_statfs:
 
 int ll_process_config(struct lustre_cfg *lcfg)
 {
-        char *ptr;
-        void *sb;
-        struct lprocfs_static_vars lvars;
-        unsigned long x;
-        int rc = 0;
+	struct super_block *sb;
+	unsigned long x;
+	int rc = 0;
+	char *ptr;
 
-        lprocfs_llite_init_vars(&lvars);
+	/* The instance name contains the sb: lustre-client-aacfe000 */
+	ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');
+	if (!ptr || !*(++ptr))
+		return -EINVAL;
+	if (sscanf(ptr, "%lx", &x) != 1)
+		return -EINVAL;
+	sb = (struct super_block *)x;
+	/* This better be a real Lustre superblock! */
+	LASSERT(s2lsi(sb)->lsi_lmd->lmd_magic == LMD_MAGIC);
 
-        /* The instance name contains the sb: lustre-client-aacfe000 */
-        ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');
-        if (!ptr || !*(++ptr))
-                return -EINVAL;
-        if (sscanf(ptr, "%lx", &x) != 1)
-                return -EINVAL;
-        sb = (void *)x;
-        /* This better be a real Lustre superblock! */
-        LASSERT(s2lsi((struct super_block *)sb)->lsi_lmd->lmd_magic == LMD_MAGIC);
-
-        /* Note we have not called client_common_fill_super yet, so
-           proc fns must be able to handle that! */
-        rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
-                                      lcfg, sb);
-        if (rc > 0)
-                rc = 0;
-        return(rc);
+	/* Note we have not called client_common_fill_super yet, so
+	   proc fns must be able to handle that! */
+	rc = class_process_proc_seq_param(PARAM_LLITE, lprocfs_llite_obd_vars,
+					  lcfg, sb);
+	if (rc > 0)
+		rc = 0;
+	return rc;
 }
 
 /* this function prepares md_op_data hint for passing ot down to MD stack. */
