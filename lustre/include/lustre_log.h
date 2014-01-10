@@ -331,7 +331,7 @@ struct llog_handle {
 	char			*lgh_name;
 	void			*private_data;
 	struct llog_operations	*lgh_logops;
-	cfs_atomic_t		 lgh_refcount;
+	atomic_t		 lgh_refcount;
 };
 
 /* llog_osd.c */
@@ -353,11 +353,11 @@ struct llog_ctxt {
         struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
         struct obd_import       *loc_imp; /* to use in RPC's: can be backward
                                              pointing import */
-        struct llog_operations  *loc_logops;
-        struct llog_handle      *loc_handle;
+	struct llog_operations  *loc_logops;
+	struct llog_handle      *loc_handle;
 	struct mutex		 loc_mutex; /* protect loc_imp */
-        cfs_atomic_t             loc_refcount;
-        long                     loc_flags; /* flags, see above defines */
+	atomic_t                 loc_refcount;
+	long                     loc_flags; /* flags, see above defines */
 	struct dt_object	*loc_dir;
 };
 
@@ -401,19 +401,19 @@ static inline int llog_get_size(struct llog_handle *loghandle)
 
 static inline struct llog_ctxt *llog_ctxt_get(struct llog_ctxt *ctxt)
 {
-        cfs_atomic_inc(&ctxt->loc_refcount);
-        CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt,
-               cfs_atomic_read(&ctxt->loc_refcount));
-        return ctxt;
+	atomic_inc(&ctxt->loc_refcount);
+	CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt,
+	       atomic_read(&ctxt->loc_refcount));
+	return ctxt;
 }
 
 static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 {
-        if (ctxt == NULL)
-                return;
-        LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, LI_POISON);
-        CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
-               cfs_atomic_read(&ctxt->loc_refcount) - 1);
+	if (ctxt == NULL)
+		return;
+	LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, LI_POISON);
+	CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
+	       atomic_read(&ctxt->loc_refcount) - 1);
 	__llog_ctxt_put(NULL, ctxt);
 }
 

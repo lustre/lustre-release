@@ -156,13 +156,13 @@ struct import_state_hist {
  * Imports are representing client-side view to remote target.
  */
 struct obd_import {
-        /** Local handle (== id) for this import. */
-        struct portals_handle     imp_handle;
-        /** Reference counter */
-        cfs_atomic_t              imp_refcount;
-        struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
-        /** Currently active connection */
-        struct ptlrpc_connection *imp_connection;
+	/** Local handle (== id) for this import. */
+	struct portals_handle     imp_handle;
+	/** Reference counter */
+	atomic_t                  imp_refcount;
+	struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
+	/** Currently active connection */
+	struct ptlrpc_connection *imp_connection;
         /** PortalRPC client structure for this import */
         struct ptlrpc_client     *imp_client;
         /** List element for linking into pinger chain */
@@ -206,17 +206,17 @@ struct obd_import {
 	/** Wait queue for those who need to wait for recovery completion */
 	wait_queue_head_t         imp_recovery_waitq;
 
-        /** Number of requests currently in-flight */
-        cfs_atomic_t              imp_inflight;
-        /** Number of requests currently unregistering */
-        cfs_atomic_t              imp_unregistering;
-        /** Number of replay requests inflight */
-        cfs_atomic_t              imp_replay_inflight;
-        /** Number of currently happening import invalidations */
-        cfs_atomic_t              imp_inval_count;
-        /** Numbner of request timeouts */
-        cfs_atomic_t              imp_timeouts;
-        /** Current import state */
+	/** Number of requests currently in-flight */
+	atomic_t                  imp_inflight;
+	/** Number of requests currently unregistering */
+	atomic_t                  imp_unregistering;
+	/** Number of replay requests inflight */
+	atomic_t                  imp_replay_inflight;
+	/** Number of currently happening import invalidations */
+	atomic_t                  imp_inval_count;
+	/** Numbner of request timeouts */
+	atomic_t                  imp_timeouts;
+	/** Current import state */
         enum lustre_imp_state     imp_state;
         /** History of import states */
         struct import_state_hist  imp_state_hist[IMP_STATE_HIST_LEN];

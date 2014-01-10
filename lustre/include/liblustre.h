@@ -437,9 +437,9 @@ typedef struct {
 } posix_acl_xattr_entry;
 
 struct posix_acl {
-        cfs_atomic_t           a_refcount;
-        unsigned int           a_count;
-        posix_acl_xattr_entry  a_entries[0];
+	atomic_t		a_refcount;
+	unsigned int		a_count;
+	posix_acl_xattr_entry	a_entries[0];
 };
 
 typedef struct {

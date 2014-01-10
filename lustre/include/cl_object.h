@@ -714,13 +714,13 @@ enum cl_page_flags {
  * cl_page::cp_owner (when set).
  */
 struct cl_page {
-        /** Reference counter. */
-        cfs_atomic_t             cp_ref;
-        /** An object this page is a part of. Immutable after creation. */
-        struct cl_object        *cp_obj;
-        /** List of slices. Immutable after creation. */
-        cfs_list_t               cp_layers;
-	struct page             *cp_vmpage;
+	/** Reference counter. */
+	atomic_t		cp_ref;
+	/** An object this page is a part of. Immutable after creation. */
+	struct cl_object	*cp_obj;
+	/** List of slices. Immutable after creation. */
+	cfs_list_t		cp_layers;
+	struct page		*cp_vmpage;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.
@@ -1073,8 +1073,8 @@ static inline int __page_in_use(const struct cl_page *page, int refc)
 {
 	if (page->cp_type == CPT_CACHEABLE)
 		++refc;
-	LASSERT(cfs_atomic_read(&page->cp_ref) > 0);
-	return (cfs_atomic_read(&page->cp_ref) > refc);
+	LASSERT(atomic_read(&page->cp_ref) > 0);
+	return (atomic_read(&page->cp_ref) > refc);
 }
 #define cl_page_in_use(pg)       __page_in_use(pg, 1)
 #define cl_page_in_use_noref(pg) __page_in_use(pg, 0)
@@ -1505,10 +1505,10 @@ struct cl_lock_closure {
  * Layered client lock.
  */
 struct cl_lock {
-        /** Reference counter. */
-        cfs_atomic_t          cll_ref;
-        /** List of slices. Immutable after creation. */
-        cfs_list_t            cll_layers;
+	/** Reference counter. */
+	atomic_t              cll_ref;
+	/** List of slices. Immutable after creation. */
+	cfs_list_t            cll_layers;
         /**
          * Linkage into cl_lock::cll_descr::cld_obj::coh_locks list. Protected
          * by cl_lock::cll_descr::cld_obj::coh_lock_guard.
@@ -2547,8 +2547,8 @@ enum cache_stats_item {
  * Stats for a generic cache (similar to inode, lu_object, etc. caches).
  */
 struct cache_stats {
-        const char    *cs_name;
-        cfs_atomic_t   cs_stats[CS_NR];
+	const char	*cs_name;
+	atomic_t	cs_stats[CS_NR];
 };
 
 /** These are not exported so far */
@@ -2562,24 +2562,24 @@ int  cache_stats_print(const struct cache_stats *cs,
  * clients to co-exist in the single address space.
  */
 struct cl_site {
-        struct lu_site        cs_lu;
-        /**
-         * Statistical counters. Atomics do not scale, something better like
-         * per-cpu counters is needed.
-         *
-         * These are exported as /proc/fs/lustre/llite/.../site
-         *
-         * When interpreting keep in mind that both sub-locks (and sub-pages)
-         * and top-locks (and top-pages) are accounted here.
-         */
-        struct cache_stats    cs_pages;
-        struct cache_stats    cs_locks;
-        cfs_atomic_t          cs_pages_state[CPS_NR];
-        cfs_atomic_t          cs_locks_state[CLS_NR];
+	struct lu_site		cs_lu;
+	/**
+	 * Statistical counters. Atomics do not scale, something better like
+	 * per-cpu counters is needed.
+	 *
+	 * These are exported as /proc/fs/lustre/llite/.../site
+	 *
+	 * When interpreting keep in mind that both sub-locks (and sub-pages)
+	 * and top-locks (and top-pages) are accounted here.
+	 */
+	struct cache_stats	cs_pages;
+	struct cache_stats	cs_locks;
+	atomic_t		cs_pages_state[CPS_NR];
+	atomic_t		cs_locks_state[CLS_NR];
 };
 
-int  cl_site_init (struct cl_site *s, struct cl_device *top);
-void cl_site_fini (struct cl_site *s);
+int  cl_site_init(struct cl_site *s, struct cl_device *top);
+void cl_site_fini(struct cl_site *s);
 void cl_stack_fini(const struct lu_env *env, struct cl_device *cl);
 
 /**
@@ -2729,7 +2729,7 @@ static inline void *cl_object_page_slice(struct cl_object *clob,
 static inline int cl_object_refc(struct cl_object *clob)
 {
 	struct lu_object_header *header = clob->co_lu.lo_header;
-	return cfs_atomic_read(&header->loh_ref);
+	return atomic_read(&header->loh_ref);
 }
 
 /** @} cl_object */
@@ -3135,11 +3135,11 @@ void cl_req_completion(const struct lu_env *env, struct cl_req *req, int ioret);
  */
 struct cl_sync_io {
 	/** number of pages yet to be transferred. */
-	cfs_atomic_t		csi_sync_nr;
+	atomic_t		csi_sync_nr;
 	/** error code. */
 	int			csi_sync_rc;
 	/** barrier of destroy this structure */
-	cfs_atomic_t		csi_barrier;
+	atomic_t		csi_barrier;
 	/** completion to be signaled when transfer is complete. */
 	wait_queue_head_t	csi_waitq;
 };

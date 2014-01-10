@@ -201,12 +201,12 @@ struct ccc_object {
          * we don't need to hold any lock..
          */
         int                     cob_transient_pages;
-        /**
-         * Number of outstanding mmaps on this file.
-         *
-         * \see ll_vm_open(), ll_vm_close().
-         */
-        cfs_atomic_t            cob_mmap_cnt;
+	/**
+	 * Number of outstanding mmaps on this file.
+	 *
+	 * \see ll_vm_open(), ll_vm_close().
+	 */
+	atomic_t                cob_mmap_cnt;
 
 	/**
 	 * various flags
@@ -447,13 +447,13 @@ void ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm);
  * layer for recovery purposes.
  */
 struct cl_client_cache {
-	cfs_atomic_t		ccc_users;    /* # of users (OSCs) */
+	atomic_t		ccc_users;    /* # of users (OSCs) */
 	cfs_list_t		ccc_lru;      /* LRU of cached clean pages */
 	spinlock_t		ccc_lru_lock; /* lock for list */
-	cfs_atomic_t		ccc_lru_left; /* # of LRU entries available */
+	atomic_t		ccc_lru_left; /* # of LRU entries available */
 	unsigned long		ccc_lru_max;  /* Max # of LRU entries */
 	unsigned int		ccc_lru_shrinkers;  /* # of threads shrinking */
-	cfs_atomic_t		ccc_unstable_nr;    /* # of pages pinned */
+	atomic_t		ccc_unstable_nr;    /* # of pages pinned */
 	wait_queue_head_t	ccc_unstable_waitq; /* Signaled on BRW commit */
 };
 

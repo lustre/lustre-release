@@ -87,7 +87,7 @@ static inline struct mutex *ldlm_namespace_lock(ldlm_side_t client)
 /* ns_bref is the number of resources in this namespace */
 static inline int ldlm_ns_empty(struct ldlm_namespace *ns)
 {
-	return cfs_atomic_read(&ns->ns_bref) == 0;
+	return atomic_read(&ns->ns_bref) == 0;
 }
 
 void ldlm_namespace_move_to_active_locked(struct ldlm_namespace *, ldlm_side_t);
@@ -125,7 +125,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 struct ldlm_cb_set_arg {
 	struct ptlrpc_request_set	*set;
 	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
-	cfs_atomic_t			 restart;
+	atomic_t			 restart;
 	cfs_list_t			*list;
 	union ldlm_gl_desc		*gl_desc; /* glimpse AST descriptor */
 };

@@ -690,7 +690,7 @@ struct local_oid_storage {
 	cfs_list_t	  los_list;
 
 	/* how many handle's reference this los has */
-	cfs_atomic_t	  los_refcount;
+	atomic_t	  los_refcount;
 	struct dt_device *los_dev;
 	struct dt_object *los_obj;
 

@@ -244,7 +244,7 @@ struct lfsck_component {
 	/* into lfsck_instance::li_list_dir */
 	cfs_list_t		 lc_link_dir;
 	struct rw_semaphore	 lc_sem;
-	cfs_atomic_t		 lc_ref;
+	atomic_t		 lc_ref;
 
 	struct lfsck_position	 lc_pos_start;
 	struct lfsck_instance	*lc_lfsck;
@@ -281,7 +281,7 @@ struct lfsck_instance {
 	/* For the components those are not scanning now. */
 	cfs_list_t		  li_list_idle;
 
-	cfs_atomic_t		  li_ref;
+	atomic_t		  li_ref;
 	struct ptlrpc_thread	  li_thread;
 
 	/* The time for last checkpoint, jiffies */

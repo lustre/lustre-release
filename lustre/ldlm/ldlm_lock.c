@@ -196,7 +196,7 @@ EXPORT_SYMBOL(ldlm_register_intent);
  */
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
-        cfs_atomic_inc(&lock->l_refc);
+	atomic_inc(&lock->l_refc);
         return lock;
 }
 EXPORT_SYMBOL(ldlm_lock_get);
@@ -211,8 +211,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         ENTRY;
 
         LASSERT(lock->l_resource != LP_POISON);
-        LASSERT(cfs_atomic_read(&lock->l_refc) > 0);
-        if (cfs_atomic_dec_and_test(&lock->l_refc)) {
+	LASSERT(atomic_read(&lock->l_refc) > 0);
+	if (atomic_dec_and_test(&lock->l_refc)) {
                 struct ldlm_resource *res;
 
                 LDLM_DEBUG(lock,
@@ -482,7 +482,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lock->l_resource = resource;
         lu_ref_add(&resource->lr_reference, "lock", lock);
 
-	cfs_atomic_set(&lock->l_refc, 2);
+	atomic_set(&lock->l_refc, 2);
 	CFS_INIT_LIST_HEAD(&lock->l_res_link);
 	CFS_INIT_LIST_HEAD(&lock->l_lru);
 	CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
@@ -1979,7 +1979,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
 	if (arg == NULL)
 		RETURN(-ENOMEM);
 
-	cfs_atomic_set(&arg->restart, 0);
+	atomic_set(&arg->restart, 0);
 	arg->list = rpc_list;
 
 	switch (ast_type) {
@@ -2015,7 +2015,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
 	ptlrpc_set_wait(arg->set);
 	ptlrpc_set_destroy(arg->set);
 
-	rc = cfs_atomic_read(&arg->restart) ? -ERESTART : 0;
+	rc = atomic_read(&arg->restart) ? -ERESTART : 0;
 	GOTO(out, rc);
 out:
 	OBD_FREE_PTR(arg);
@@ -2236,7 +2236,7 @@ int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 		       "Cancel lock %p for export %p (loop %d), still have "
 		       "%d locks left on hash table.\n",
 		       lock, exp, ecl->ecl_loop,
-		       cfs_atomic_read(&hs->hs_count));
+		       atomic_read(&hs->hs_count));
 	}
 
 	return 0;
@@ -2471,12 +2471,12 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        "remote: "LPX64" expref: %d pid: %u timeout: %lu "
 		       "lvb_type: %d\n",
                        lock,
-                       lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
+		       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
                        lock->l_flags, nid, lock->l_remote_handle.cookie,
-                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
+		       exp ? atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout, lock->l_lvb_type);
                 va_end(args);
                 return;
@@ -2490,18 +2490,18 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 			"(req "LPU64"->"LPU64") flags: "LPX64" nid: %s remote: "
 			LPX64" expref: %d pid: %u timeout: %lu lvb_type: %d\n",
 			ldlm_lock_to_ns_name(lock), lock,
-			lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
+			lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
 			lock->l_readers, lock->l_writers,
 			ldlm_lockname[lock->l_granted_mode],
 			ldlm_lockname[lock->l_req_mode],
 			PLDLMRES(resource),
-			cfs_atomic_read(&resource->lr_refcount),
+			atomic_read(&resource->lr_refcount),
 			ldlm_typename[resource->lr_type],
 			lock->l_policy_data.l_extent.start,
 			lock->l_policy_data.l_extent.end,
 			lock->l_req_extent.start, lock->l_req_extent.end,
 			lock->l_flags, nid, lock->l_remote_handle.cookie,
-			exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
+			exp ? atomic_read(&exp->exp_refcount) : -99,
 			lock->l_pid, lock->l_callback_timeout,
 			lock->l_lvb_type);
 		break;
@@ -2513,18 +2513,18 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 			"["LPU64"->"LPU64"] flags: "LPX64" nid: %s "
 			"remote: "LPX64" expref: %d pid: %u timeout: %lu\n",
 			ldlm_lock_to_ns_name(lock), lock,
-			lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
+			lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
 			lock->l_readers, lock->l_writers,
 			ldlm_lockname[lock->l_granted_mode],
 			ldlm_lockname[lock->l_req_mode],
 			PLDLMRES(resource),
-			cfs_atomic_read(&resource->lr_refcount),
+			atomic_read(&resource->lr_refcount),
 			ldlm_typename[resource->lr_type],
 			lock->l_policy_data.l_flock.pid,
 			lock->l_policy_data.l_flock.start,
 			lock->l_policy_data.l_flock.end,
 			lock->l_flags, nid, lock->l_remote_handle.cookie,
-			exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
+			exp ? atomic_read(&exp->exp_refcount) : -99,
 			lock->l_pid, lock->l_callback_timeout);
 		break;
 
@@ -2536,16 +2536,16 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 			"pid: %u timeout: %lu lvb_type: %d\n",
 			ldlm_lock_to_ns_name(lock),
 			lock, lock->l_handle.h_cookie,
-			cfs_atomic_read(&lock->l_refc),
+			atomic_read(&lock->l_refc),
 			lock->l_readers, lock->l_writers,
 			ldlm_lockname[lock->l_granted_mode],
 			ldlm_lockname[lock->l_req_mode],
 			PLDLMRES(resource),
 			lock->l_policy_data.l_inodebits.bits,
-			cfs_atomic_read(&resource->lr_refcount),
+			atomic_read(&resource->lr_refcount),
 			ldlm_typename[resource->lr_type],
 			lock->l_flags, nid, lock->l_remote_handle.cookie,
-			exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
+			exp ? atomic_read(&exp->exp_refcount) : -99,
 			lock->l_pid, lock->l_callback_timeout,
 			lock->l_lvb_type);
 		break;
@@ -2558,15 +2558,15 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 			"timeout: %lu lvb_type: %d\n",
 			ldlm_lock_to_ns_name(lock),
 			lock, lock->l_handle.h_cookie,
-			cfs_atomic_read(&lock->l_refc),
+			atomic_read(&lock->l_refc),
 			lock->l_readers, lock->l_writers,
 			ldlm_lockname[lock->l_granted_mode],
 			ldlm_lockname[lock->l_req_mode],
 			PLDLMRES(resource),
-			cfs_atomic_read(&resource->lr_refcount),
+			atomic_read(&resource->lr_refcount),
 			ldlm_typename[resource->lr_type],
 			lock->l_flags, nid, lock->l_remote_handle.cookie,
-			exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
+			exp ? atomic_read(&exp->exp_refcount) : -99,
 			lock->l_pid, lock->l_callback_timeout,
 			lock->l_lvb_type);
 		break;

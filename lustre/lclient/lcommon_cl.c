@@ -1220,7 +1220,7 @@ static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 	struct lu_object_header *header = obj->co_lu.lo_header;
 	wait_queue_t           waiter;
 
-	if (unlikely(cfs_atomic_read(&header->loh_ref) != 1)) {
+	if (unlikely(atomic_read(&header->loh_ref) != 1)) {
 		struct lu_site *site = obj->co_lu.lo_dev->ld_site;
 		struct lu_site_bkt_data *bkt;
 
@@ -1231,7 +1231,7 @@ static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 
 		while (1) {
 			set_current_state(TASK_UNINTERRUPTIBLE);
-			if (cfs_atomic_read(&header->loh_ref) == 1)
+			if (atomic_read(&header->loh_ref) == 1)
 				break;
 			waitq_wait(&waiter, TASK_UNINTERRUPTIBLE);
 		}

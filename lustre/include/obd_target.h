@@ -69,7 +69,7 @@ struct echo_obd {
 	spinlock_t			eo_lock;
 	__u64				eo_lastino;
 	struct lustre_handle		eo_nl_lock;
-	cfs_atomic_t			eo_prep;
+	atomic_t			eo_prep;
 };
 
 struct ost_obd {

@@ -517,16 +517,16 @@
  * Structure to single define portal connection.
  */
 struct ptlrpc_connection {
-        /** linkage for connections hash table */
-        cfs_hlist_node_t        c_hash;
-        /** Our own lnet nid for this connection */
-        lnet_nid_t              c_self;
-        /** Remote side nid for this connection */
-        lnet_process_id_t       c_peer;
-        /** UUID of the other side */
-        struct obd_uuid         c_remote_uuid;
-        /** reference counter for this connection */
-        cfs_atomic_t            c_refcount;
+	/** linkage for connections hash table */
+	cfs_hlist_node_t        c_hash;
+	/** Our own lnet nid for this connection */
+	lnet_nid_t              c_self;
+	/** Remote side nid for this connection */
+	lnet_process_id_t       c_peer;
+	/** UUID of the other side */
+	struct obd_uuid         c_remote_uuid;
+	/** reference counter for this connection */
+	atomic_t            c_refcount;
 };
 
 /** Client definition for PortalRPC */
@@ -574,11 +574,11 @@ typedef int (*set_producer_func)(struct ptlrpc_request_set *, void *);
  * returned.
  */
 struct ptlrpc_request_set {
-	cfs_atomic_t          set_refcount;
+	atomic_t          set_refcount;
 	/** number of in queue requests */
-	cfs_atomic_t          set_new_count;
+	atomic_t          set_new_count;
 	/** number of uncompleted requests */
-	cfs_atomic_t          set_remaining;
+	atomic_t          set_remaining;
 	/** wait queue to wait on for request events */
 	wait_queue_head_t           set_waitq;
 	wait_queue_head_t          *set_wakeup_ptr;
@@ -683,16 +683,16 @@ struct ptlrpc_reply_state {
         __u64                  rs_transno;
         /** xid */
         __u64                  rs_xid;
-        struct obd_export     *rs_export;
+	struct obd_export     *rs_export;
 	struct ptlrpc_service_part *rs_svcpt;
-        /** Lnet metadata handle for the reply */
-        lnet_handle_md_t       rs_md_h;
-        cfs_atomic_t           rs_refcount;
+	/** Lnet metadata handle for the reply */
+	lnet_handle_md_t       rs_md_h;
+	atomic_t	       rs_refcount;
 
-        /** Context for the sevice thread */
-        struct ptlrpc_svc_ctx *rs_svc_ctx;
-        /** Reply buffer (actually sent to the client), encoded if needed */
-        struct lustre_msg     *rs_repbuf;       /* wrapper */
+	/** Context for the sevice thread */
+	struct ptlrpc_svc_ctx *rs_svc_ctx;
+	/** Reply buffer (actually sent to the client), encoded if needed */
+	struct lustre_msg     *rs_repbuf;       /* wrapper */
         /** Size of the reply buffer */
         int                    rs_repbuf_len;   /* wrapper buf length */
         /** Size of the reply message */
@@ -1235,7 +1235,7 @@ struct ptlrpc_nrs_pol_desc {
 	/**
 	 * # of references on this descriptor
 	 */
-	cfs_atomic_t				pd_refs;
+	atomic_t				pd_refs;
 };
 
 /**
@@ -1478,7 +1478,7 @@ struct nrs_crrn_client {
 	 * the current round number.
 	 */
 	__u64				cc_sequence;
-	cfs_atomic_t			cc_ref;
+	atomic_t			cc_ref;
 	/**
 	 * Round Robin quantum; the maximum number of RPCs the client is allowed
 	 * to schedule in a single batch of each round.
@@ -1866,10 +1866,10 @@ struct ptlrpc_request {
 
 	unsigned int rq_nr_resend;
 
-        enum rq_phase rq_phase; /* one of RQ_PHASE_* */
-        enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
-        cfs_atomic_t rq_refcount;/* client-side refcount for SENT race,
-                                    server-side refcounf for multiple replies */
+	enum rq_phase rq_phase; /* one of RQ_PHASE_* */
+	enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
+	atomic_t rq_refcount;/* client-side refcount for SENT race,
+				    server-side refcounf for multiple replies */
 
 	/** Portal to which this request would be sent */
 	short rq_request_portal;  /* XXX FIXME bug 249 */
@@ -2681,7 +2681,7 @@ struct ptlrpc_service_part {
 	/** waitq to run, when adding stuff to srv_free_rs_list */
 	wait_queue_head_t		scp_rep_waitq;
 	/** # 'difficult' replies */
-	cfs_atomic_t			scp_nreps_difficult;
+	atomic_t			scp_nreps_difficult;
 };
 
 #define ptlrpc_service_for_each_part(part, i, svc)			\
@@ -3278,24 +3278,24 @@ static inline int ptlrpc_status_ntoh(int n)
 static inline void
 ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 {
-        if (req->rq_phase == new_phase)
-                return;
+	if (req->rq_phase == new_phase)
+		return;
 
-        if (new_phase == RQ_PHASE_UNREGISTERING) {
-                req->rq_next_phase = req->rq_phase;
-                if (req->rq_import)
-                        cfs_atomic_inc(&req->rq_import->imp_unregistering);
-        }
+	if (new_phase == RQ_PHASE_UNREGISTERING) {
+		req->rq_next_phase = req->rq_phase;
+		if (req->rq_import)
+			atomic_inc(&req->rq_import->imp_unregistering);
+	}
 
-        if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
-                if (req->rq_import)
-                        cfs_atomic_dec(&req->rq_import->imp_unregistering);
-        }
+	if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
+		if (req->rq_import)
+			atomic_dec(&req->rq_import->imp_unregistering);
+	}
 
-        DEBUG_REQ(D_INFO, req, "move req \"%s\" -> \"%s\"",
-                  ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
+	DEBUG_REQ(D_INFO, req, "move req \"%s\" -> \"%s\"",
+		  ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
 
-        req->rq_phase = new_phase;
+	req->rq_phase = new_phase;
 }
 
 /**
@@ -3360,16 +3360,16 @@ ptlrpc_client_wake_req(struct ptlrpc_request *req)
 static inline void
 ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)
 {
-        LASSERT(cfs_atomic_read(&rs->rs_refcount) > 0);
-        cfs_atomic_inc(&rs->rs_refcount);
+	LASSERT(atomic_read(&rs->rs_refcount) > 0);
+	atomic_inc(&rs->rs_refcount);
 }
 
 static inline void
 ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
 {
-        LASSERT(cfs_atomic_read(&rs->rs_refcount) > 0);
-        if (cfs_atomic_dec_and_test(&rs->rs_refcount))
-                lustre_free_reply_state(rs);
+	LASSERT(atomic_read(&rs->rs_refcount) > 0);
+	if (atomic_dec_and_test(&rs->rs_refcount))
+		lustre_free_reply_state(rs);
 }
 
 /* Should only be called once per req */

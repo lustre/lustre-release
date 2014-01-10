@@ -486,20 +486,20 @@ static inline __u64 lcd_last_xid(struct lsd_client_data *lcd)
 struct ll_sb_info;
 
 struct lustre_sb_info {
-        int                       lsi_flags;
-        struct obd_device        *lsi_mgc;     /* mgc obd */
-        struct lustre_mount_data *lsi_lmd;     /* mount command info */
-        struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
+	int                       lsi_flags;
+	struct obd_device        *lsi_mgc;     /* mgc obd */
+	struct lustre_mount_data *lsi_lmd;     /* mount command info */
+	struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
 	struct dt_device	 *lsi_dt_dev;  /* dt device to access disk fs*/
-        cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
+	atomic_t		  lsi_mounts;  /* references to the srv_mnt */
 	char			  lsi_svname[MTI_NAME_MAXLEN];
 	char			  lsi_osd_obdname[64];
 	char			  lsi_osd_uuid[64];
 	struct obd_export	 *lsi_osd_exp;
 	char			  lsi_osd_type[16];
 	char			  lsi_fstype[16];
-        struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
-                                                  own backing_dev_info */
+	struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
+						  own backing_dev_info */
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000

@@ -2133,18 +2133,17 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 }
 
 static int replay_lock_interpret(const struct lu_env *env,
-                                 struct ptlrpc_request *req,
-                                 struct ldlm_async_args *aa, int rc)
+				 struct ptlrpc_request *req,
+				 struct ldlm_async_args *aa, int rc)
 {
-        struct ldlm_lock     *lock;
-        struct ldlm_reply    *reply;
-        struct obd_export    *exp;
+	struct ldlm_lock     *lock;
+	struct ldlm_reply    *reply;
+	struct obd_export    *exp;
 
-        ENTRY;
-        cfs_atomic_dec(&req->rq_import->imp_replay_inflight);
-        if (rc != ELDLM_OK)
-                GOTO(out, rc);
-
+	ENTRY;
+	atomic_dec(&req->rq_import->imp_replay_inflight);
+	if (rc != ELDLM_OK)
+		GOTO(out, rc);
 
         reply = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
         if (reply == NULL)
@@ -2253,18 +2252,18 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
          * also, we mark the request to be put on a dedicated
          * queue to be processed after all request replayes.
          * bug 6063 */
-        lustre_msg_set_flags(req->rq_reqmsg, MSG_REQ_REPLAY_DONE);
+	lustre_msg_set_flags(req->rq_reqmsg, MSG_REQ_REPLAY_DONE);
 
-        LDLM_DEBUG(lock, "replaying lock:");
+	LDLM_DEBUG(lock, "replaying lock:");
 
-        cfs_atomic_inc(&req->rq_import->imp_replay_inflight);
-        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        aa->lock_handle = body->lock_handle[0];
-        req->rq_interpret_reply = (ptlrpc_interpterer_t)replay_lock_interpret;
-        ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+	atomic_inc(&req->rq_import->imp_replay_inflight);
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	aa->lock_handle = body->lock_handle[0];
+	req->rq_interpret_reply = (ptlrpc_interpterer_t)replay_lock_interpret;
+	ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /**
@@ -2298,39 +2297,39 @@ static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 
 int ldlm_replay_locks(struct obd_import *imp)
 {
-        struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        CFS_LIST_HEAD(list);
-        struct ldlm_lock *lock, *next;
-        int rc = 0;
+	struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+	CFS_LIST_HEAD(list);
+	struct ldlm_lock *lock, *next;
+	int rc = 0;
 
-        ENTRY;
+	ENTRY;
 
-        LASSERT(cfs_atomic_read(&imp->imp_replay_inflight) == 0);
+	LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
 
-        /* don't replay locks if import failed recovery */
-        if (imp->imp_vbr_failed)
-                RETURN(0);
+	/* don't replay locks if import failed recovery */
+	if (imp->imp_vbr_failed)
+		RETURN(0);
 
-        /* ensure this doesn't fall to 0 before all have been queued */
-        cfs_atomic_inc(&imp->imp_replay_inflight);
+	/* ensure this doesn't fall to 0 before all have been queued */
+	atomic_inc(&imp->imp_replay_inflight);
 
-        if (ldlm_cancel_unused_locks_before_replay)
-                ldlm_cancel_unused_locks_for_replay(ns);
+	if (ldlm_cancel_unused_locks_before_replay)
+		ldlm_cancel_unused_locks_for_replay(ns);
 
-        ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
+	ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
 
-        cfs_list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
-                cfs_list_del_init(&lock->l_pending_chain);
-                if (rc) {
-                        LDLM_LOCK_RELEASE(lock);
-                        continue; /* or try to do the rest? */
-                }
-                rc = replay_one_lock(imp, lock);
-                LDLM_LOCK_RELEASE(lock);
-        }
+	cfs_list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
+		cfs_list_del_init(&lock->l_pending_chain);
+		if (rc) {
+			LDLM_LOCK_RELEASE(lock);
+			continue; /* or try to do the rest? */
+		}
+		rc = replay_one_lock(imp, lock);
+		LDLM_LOCK_RELEASE(lock);
+	}
 
-        cfs_atomic_dec(&imp->imp_replay_inflight);
+	atomic_dec(&imp->imp_replay_inflight);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_replay_locks);

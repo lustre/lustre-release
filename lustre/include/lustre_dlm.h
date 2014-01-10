@@ -249,20 +249,20 @@ struct ldlm_pool {
 	/** Lock for protecting SLV/CLV updates. */
 	spinlock_t		pl_lock;
 	/** Number of allowed locks in in pool, both, client and server side. */
-	cfs_atomic_t		pl_limit;
+	atomic_t		pl_limit;
 	/** Number of granted locks in */
-	cfs_atomic_t		pl_granted;
+	atomic_t		pl_granted;
 	/** Grant rate per T. */
-	cfs_atomic_t		pl_grant_rate;
+	atomic_t		pl_grant_rate;
 	/** Cancel rate per T. */
-	cfs_atomic_t		pl_cancel_rate;
+	atomic_t		pl_cancel_rate;
 	/** Server lock volume (SLV). Protected by pl_lock. */
 	__u64			pl_server_lock_volume;
 	/** Current biggest client lock volume. Protected by pl_lock. */
 	__u64			pl_client_lock_volume;
 	/** Lock volume factor. SLV on client is calculated as following:
 	 *  server_slv * lock_volume_factor. */
-	cfs_atomic_t		pl_lock_volume_factor;
+	atomic_t		pl_lock_volume_factor;
 	/** Time when last SLV from server was obtained. */
 	time_t			pl_recalc_time;
 	/** Recalculation period for pool. */
@@ -389,7 +389,7 @@ struct ldlm_namespace {
 	spinlock_t		ns_lock;
 
 	/** big refcount (by bucket) */
-	cfs_atomic_t		ns_bref;
+	atomic_t		ns_bref;
 
 	/**
 	 * Namespace connect flags supported by server (may be changed via
@@ -678,7 +678,7 @@ struct ldlm_lock {
 	 * This is how many users have pointers to actual structure, so that
 	 * we do not accidentally free lock structure that is in use.
 	 */
-	cfs_atomic_t		l_refc;
+	atomic_t		l_refc;
 	/**
 	 * Internal spinlock protects l_resource.  We should hold this lock
 	 * first before taking res_lock.
@@ -942,7 +942,7 @@ struct ldlm_resource {
 	/** Resource name */
 	struct ldlm_res_id	lr_name;
 	/** Reference count for this resource */
-	cfs_atomic_t		lr_refcount;
+	atomic_t		lr_refcount;
 
 	/**
 	 * Interval trees (only for extent locks) for all modes of this resource

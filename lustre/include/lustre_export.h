@@ -112,27 +112,27 @@ struct mgs_export_data {
  * It tracks access patterns to this export on a per-client-NID basis
  */
 struct nid_stat {
-        lnet_nid_t               nid;
-        cfs_hlist_node_t         nid_hash;
-        cfs_list_t               nid_list;
-        struct obd_device       *nid_obd;
-        struct proc_dir_entry   *nid_proc;
-        struct lprocfs_stats    *nid_stats;
-        struct lprocfs_stats    *nid_ldlm_stats;
-        cfs_atomic_t             nid_exp_ref_count; /* for obd_nid_stats_hash
+	lnet_nid_t              nid;
+	cfs_hlist_node_t        nid_hash;
+	cfs_list_t              nid_list;
+	struct obd_device       *nid_obd;
+	struct proc_dir_entry   *nid_proc;
+	struct lprocfs_stats    *nid_stats;
+	struct lprocfs_stats    *nid_ldlm_stats;
+	atomic_t             	nid_exp_ref_count; /* for obd_nid_stats_hash
                                                            exp_nid_stats */
 };
 
 #define nidstat_getref(nidstat)                                                \
 do {                                                                           \
-        cfs_atomic_inc(&(nidstat)->nid_exp_ref_count);                         \
+	atomic_inc(&(nidstat)->nid_exp_ref_count);                         \
 } while(0)
 
 #define nidstat_putref(nidstat)                                                \
 do {                                                                           \
-        cfs_atomic_dec(&(nidstat)->nid_exp_ref_count);                         \
-        LASSERTF(cfs_atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,          \
-                 "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
+	atomic_dec(&(nidstat)->nid_exp_ref_count);                         \
+	LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,          \
+		 "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
 } while(0)
 
 enum obd_option {
@@ -149,26 +149,26 @@ enum obd_option {
  * attached to the same obd device.
  */
 struct obd_export {
-        /**
-         * Export handle, it's id is provided to client on connect
-         * Subsequent client RPCs contain this handle id to identify
-         * what export they are talking to.
-         */
-        struct portals_handle     exp_handle;
-        cfs_atomic_t              exp_refcount;
-        /**
-         * Set of counters below is to track where export references are
-         * kept. The exp_rpc_count is used for reconnect handling also,
-         * the cb_count and locks_count are for debug purposes only for now.
-         * The sum of them should be less than exp_refcount by 3
-         */
-        cfs_atomic_t              exp_rpc_count; /* RPC references */
-        cfs_atomic_t              exp_cb_count; /* Commit callback references */
+	/**
+	 * Export handle, it's id is provided to client on connect
+	 * Subsequent client RPCs contain this handle id to identify
+	 * what export they are talking to.
+	 */
+	struct portals_handle     exp_handle;
+	atomic_t              exp_refcount;
+	/**
+	 * Set of counters below is to track where export references are
+	 * kept. The exp_rpc_count is used for reconnect handling also,
+	 * the cb_count and locks_count are for debug purposes only for now.
+	 * The sum of them should be less than exp_refcount by 3
+	 */
+	atomic_t              exp_rpc_count; /* RPC references */
+	atomic_t              exp_cb_count; /* Commit callback references */
 	/** Number of queued replay requests to be processes */
-	cfs_atomic_t		  exp_replay_count;
-        cfs_atomic_t              exp_locks_count; /** Lock references */
+	atomic_t		  exp_replay_count;
+	atomic_t              exp_locks_count; /** Lock references */
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
-        cfs_list_t                exp_locks_list;
+	cfs_list_t                exp_locks_list;
 	spinlock_t		  exp_locks_list_guard;
 #endif
         /** UUID of client connected to this export */

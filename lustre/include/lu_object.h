@@ -258,17 +258,17 @@ struct lu_device_type;
  * Device: a layer in the server side abstraction stacking.
  */
 struct lu_device {
-        /**
-         * reference count. This is incremented, in particular, on each object
-         * created at this layer.
-         *
-         * \todo XXX which means that atomic_t is probably too small.
-         */
-        cfs_atomic_t                       ld_ref;
-        /**
-         * Pointer to device type. Never modified once set.
-         */
-        struct lu_device_type       *ld_type;
+	/**
+	 * reference count. This is incremented, in particular, on each object
+	 * created at this layer.
+	 *
+	 * \todo XXX which means that atomic_t is probably too small.
+	 */
+	atomic_t			   ld_ref;
+	/**
+	 * Pointer to device type. Never modified once set.
+	 */
+	struct lu_device_type		  *ld_type;
         /**
          * Operation vector for this device.
          */
@@ -515,41 +515,41 @@ enum lu_object_header_attr {
  * whether object is backed by persistent storage entity.
  */
 struct lu_object_header {
-        /**
-         * Object flags from enum lu_object_header_flags. Set and checked
-         * atomically.
-         */
-        unsigned long          loh_flags;
-        /**
-         * Object reference count. Protected by lu_site::ls_guard.
-         */
-        cfs_atomic_t           loh_ref;
-        /**
-         * Fid, uniquely identifying this object.
-         */
-        struct lu_fid          loh_fid;
-        /**
-         * Common object attributes, cached for efficiency. From enum
-         * lu_object_header_attr.
-         */
-        __u32                  loh_attr;
-        /**
-         * Linkage into per-site hash table. Protected by lu_site::ls_guard.
-         */
-        cfs_hlist_node_t       loh_hash;
-        /**
-         * Linkage into per-site LRU list. Protected by lu_site::ls_guard.
-         */
-        cfs_list_t             loh_lru;
-        /**
-         * Linkage into list of layers. Never modified once set (except lately
-         * during object destruction). No locking is necessary.
-         */
-        cfs_list_t             loh_layers;
-        /**
-         * A list of references to this object, for debugging.
-         */
-        struct lu_ref          loh_reference;
+	/**
+	 * Object flags from enum lu_object_header_flags. Set and checked
+	 * atomically.
+	 */
+	unsigned long		loh_flags;
+	/**
+	 * Object reference count. Protected by lu_site::ls_guard.
+	 */
+	atomic_t		loh_ref;
+	/**
+	 * Fid, uniquely identifying this object.
+	 */
+	struct lu_fid		loh_fid;
+	/**
+	 * Common object attributes, cached for efficiency. From enum
+	 * lu_object_header_attr.
+	 */
+	__u32			loh_attr;
+	/**
+	 * Linkage into per-site hash table. Protected by lu_site::ls_guard.
+	 */
+	cfs_hlist_node_t	loh_hash;
+	/**
+	 * Linkage into per-site LRU list. Protected by lu_site::ls_guard.
+	 */
+	cfs_list_t		loh_lru;
+	/**
+	 * Linkage into list of layers. Never modified once set (except lately
+	 * during object destruction). No locking is necessary.
+	 */
+	cfs_list_t		loh_layers;
+	/**
+	 * A list of references to this object, for debugging.
+	 */
+	struct lu_ref		loh_reference;
 };
 
 struct fld;
@@ -697,8 +697,8 @@ void lu_types_stop(void);
  */
 static inline void lu_object_get(struct lu_object *o)
 {
-        LASSERT(cfs_atomic_read(&o->lo_header->loh_ref) > 0);
-        cfs_atomic_inc(&o->lo_header->loh_ref);
+	LASSERT(atomic_read(&o->lo_header->loh_ref) > 0);
+	atomic_inc(&o->lo_header->loh_ref);
 }
 
 /**
@@ -1103,24 +1103,24 @@ struct lu_context_key {
          */
         void   (*lct_exit)(const struct lu_context *ctx,
                            struct lu_context_key *key, void *data);
-        /**
-         * Internal implementation detail: index within lu_context::lc_value[]
-         * reserved for this key.
-         */
-        int      lct_index;
-        /**
-         * Internal implementation detail: number of values created for this
-         * key.
-         */
-        cfs_atomic_t lct_used;
+	/**
+	 * Internal implementation detail: index within lu_context::lc_value[]
+	 * reserved for this key.
+	 */
+	int		lct_index;
+	/**
+	 * Internal implementation detail: number of values created for this
+	 * key.
+	 */
+	atomic_t	lct_used;
 	/**
 	 * Internal implementation detail: module for this key.
 	 */
-	struct module *lct_owner;
+	struct module	*lct_owner;
 	/**
 	 * References to this key. For debugging.
 	 */
-	struct lu_ref  lct_reference;
+	struct lu_ref	lct_reference;
 };
 
 #define LU_KEY_INIT(mod, type)                                    \

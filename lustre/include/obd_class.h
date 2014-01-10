@@ -196,7 +196,7 @@ struct config_llog_data {
         struct ldlm_res_id          cld_resid;
         struct config_llog_instance cld_cfg;
         cfs_list_t                  cld_list_chain;
-        cfs_atomic_t                cld_refcount;
+	atomic_t		    cld_refcount;
 	struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
 	struct config_llog_data	   *cld_params;	/* common parameters log */
 	struct config_llog_data    *cld_recover;/* imperative recover log */
@@ -235,53 +235,53 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 
 #define class_export_rpc_inc(exp)                                       \
 ({                                                                      \
-        cfs_atomic_inc(&(exp)->exp_rpc_count);                          \
-        CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
-               (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
+	atomic_inc(&(exp)->exp_rpc_count);                          	\
+	CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
+	       (exp), atomic_read(&(exp)->exp_rpc_count));          	\
 })
 
 #define class_export_rpc_dec(exp)                                       \
 ({                                                                      \
-        LASSERT_ATOMIC_POS(&exp->exp_rpc_count);                        \
-        cfs_atomic_dec(&(exp)->exp_rpc_count);                          \
-        CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
-               (exp), cfs_atomic_read(&(exp)->exp_rpc_count));          \
+	LASSERT_ATOMIC_POS(&exp->exp_rpc_count);                        \
+	atomic_dec(&(exp)->exp_rpc_count);                          	\
+	CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
+	       (exp), atomic_read(&(exp)->exp_rpc_count));          	\
 })
 
 #define class_export_lock_get(exp, lock)                                \
 ({                                                                      \
-        cfs_atomic_inc(&(exp)->exp_locks_count);                        \
-        __class_export_add_lock_ref(exp, lock);                         \
-        CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
-               (exp), cfs_atomic_read(&(exp)->exp_locks_count));        \
-        class_export_get(exp);                                          \
+	atomic_inc(&(exp)->exp_locks_count);                        	\
+	__class_export_add_lock_ref(exp, lock);                         \
+	CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
+	       (exp), atomic_read(&(exp)->exp_locks_count));        	\
+	class_export_get(exp);                                          \
 })
 
 #define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
-        LASSERT_ATOMIC_POS(&exp->exp_locks_count);                      \
-        cfs_atomic_dec(&(exp)->exp_locks_count);                        \
-        __class_export_del_lock_ref(exp, lock);                         \
-        CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
-               (exp), cfs_atomic_read(&(exp)->exp_locks_count));        \
-        class_export_put(exp);                                          \
+	LASSERT_ATOMIC_POS(&exp->exp_locks_count);                      \
+	atomic_dec(&(exp)->exp_locks_count);                        	\
+	__class_export_del_lock_ref(exp, lock);                         \
+	CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
+	       (exp), atomic_read(&(exp)->exp_locks_count));        	\
+	class_export_put(exp);                                          \
 })
 
 #define class_export_cb_get(exp)                                        \
 ({                                                                      \
-        cfs_atomic_inc(&(exp)->exp_cb_count);                           \
-        CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
-               (exp), cfs_atomic_read(&(exp)->exp_cb_count));           \
-        class_export_get(exp);                                          \
+	atomic_inc(&(exp)->exp_cb_count);                           	\
+	CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
+	       (exp), atomic_read(&(exp)->exp_cb_count));           	\
+	class_export_get(exp);                                          \
 })
 
 #define class_export_cb_put(exp)                                        \
 ({                                                                      \
-        LASSERT_ATOMIC_POS(&exp->exp_cb_count);                         \
-        cfs_atomic_dec(&(exp)->exp_cb_count);                           \
-        CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
-               (exp), cfs_atomic_read(&(exp)->exp_cb_count));           \
-        class_export_put(exp);                                          \
+	LASSERT_ATOMIC_POS(&exp->exp_cb_count);                         \
+	atomic_dec(&(exp)->exp_cb_count);                           	\
+	CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
+	       (exp), atomic_read(&(exp)->exp_cb_count));           	\
+	class_export_put(exp);                                          \
 })
 
 /* genops.c */

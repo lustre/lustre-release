@@ -80,11 +80,11 @@ struct target_capa {
 };
 
 struct obd_capa {
-        cfs_list_t                c_list;       /* link to capa_list */
+	cfs_list_t		c_list;		/* link to capa_list */
 
-        struct lustre_capa        c_capa;       /* capa */
-        cfs_atomic_t              c_refc;       /* ref count */
-        cfs_time_t                c_expiry;     /* jiffies */
+	struct lustre_capa	c_capa;		/* capa */
+	atomic_t		c_refc;		/* ref count */
+	cfs_time_t		c_expiry;	/* jiffies */
 	spinlock_t		c_lock;	/* protect capa content */
 	int			c_site;
 
@@ -205,10 +205,10 @@ static inline struct obd_capa *alloc_capa(int site)
         if (unlikely(!ocapa))
                 return ERR_PTR(-ENOMEM);
 
-        CFS_INIT_LIST_HEAD(&ocapa->c_list);
-        cfs_atomic_set(&ocapa->c_refc, 1);
+	CFS_INIT_LIST_HEAD(&ocapa->c_list);
+	atomic_set(&ocapa->c_refc, 1);
 	spin_lock_init(&ocapa->c_lock);
-        ocapa->c_site = site;
+	ocapa->c_site = site;
         if (ocapa->c_site == CAPA_SITE_CLIENT)
                 CFS_INIT_LIST_HEAD(&ocapa->u.cli.lli_list);
         else
@@ -222,29 +222,29 @@ static inline struct obd_capa *alloc_capa(int site)
 
 static inline struct obd_capa *capa_get(struct obd_capa *ocapa)
 {
-        if (!ocapa)
-                return NULL;
+	if (!ocapa)
+		return NULL;
 
-        cfs_atomic_inc(&ocapa->c_refc);
-        return ocapa;
+	atomic_inc(&ocapa->c_refc);
+	return ocapa;
 }
 
 static inline void capa_put(struct obd_capa *ocapa)
 {
-        if (!ocapa)
-                return;
+	if (!ocapa)
+		return;
 
-        if (cfs_atomic_read(&ocapa->c_refc) == 0) {
-                DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "refc is 0 for");
-                LBUG();
-        }
+	if (atomic_read(&ocapa->c_refc) == 0) {
+		DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "refc is 0 for");
+		LBUG();
+	}
 
-        if (cfs_atomic_dec_and_test(&ocapa->c_refc)) {
-                LASSERT(cfs_list_empty(&ocapa->c_list));
-                if (ocapa->c_site == CAPA_SITE_CLIENT) {
-                        LASSERT(cfs_list_empty(&ocapa->u.cli.lli_list));
-                } else {
-                        cfs_hlist_node_t *hnode;
+	if (atomic_dec_and_test(&ocapa->c_refc)) {
+		LASSERT(cfs_list_empty(&ocapa->c_list));
+		if (ocapa->c_site == CAPA_SITE_CLIENT) {
+			LASSERT(cfs_list_empty(&ocapa->u.cli.lli_list));
+		} else {
+			cfs_hlist_node_t *hnode;
 
                         hnode = &ocapa->u.tgt.c_hash;
                         LASSERT(!hnode->next && !hnode->pprev);

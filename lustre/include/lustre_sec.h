@@ -514,10 +514,10 @@ struct ptlrpc_ctx_ops {
                                         PTLRPC_CTX_ERROR)
 
 struct ptlrpc_cli_ctx {
-        cfs_hlist_node_t        cc_cache;      /* linked into ctx cache */
-        cfs_atomic_t            cc_refcount;
-        struct ptlrpc_sec      *cc_sec;
-        struct ptlrpc_ctx_ops  *cc_ops;
+	cfs_hlist_node_t        cc_cache;      /* linked into ctx cache */
+	atomic_t                cc_refcount;
+	struct ptlrpc_sec      *cc_sec;
+	struct ptlrpc_ctx_ops  *cc_ops;
         cfs_time_t              cc_expire;     /* in seconds */
         unsigned int            cc_early_expire:1;
         unsigned long           cc_flags;
@@ -825,12 +825,12 @@ struct ptlrpc_sec_policy {
  * \see sptlrpc_import_sec_adapt().
  */
 struct ptlrpc_sec {
-        struct ptlrpc_sec_policy       *ps_policy;
-        cfs_atomic_t                    ps_refcount;
-        /** statistic only */
-        cfs_atomic_t                    ps_nctx;
-        /** unique identifier */
-        int                             ps_id;
+	struct ptlrpc_sec_policy       *ps_policy;
+	atomic_t                        ps_refcount;
+	/** statistic only */
+	atomic_t                        ps_nctx;
+	/** unique identifier */
+	int                             ps_id;
         struct sptlrpc_flavor           ps_flvr;
         enum lustre_sec_part            ps_part;
         /** after set, no more new context will be created */
@@ -859,8 +859,8 @@ static inline int sec_is_rootonly(struct ptlrpc_sec *sec)
 
 
 struct ptlrpc_svc_ctx {
-        cfs_atomic_t                    sc_refcount;
-        struct ptlrpc_sec_policy       *sc_policy;
+	atomic_t                        sc_refcount;
+	struct ptlrpc_sec_policy       *sc_policy;
 };
 
 /*

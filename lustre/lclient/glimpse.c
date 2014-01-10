@@ -94,8 +94,8 @@ blkcnt_t dirty_cnt(struct inode *inode)
                 cnt += radix_tree_gang_lookup_tag(&inode->i_mapping->page_tree,
                                                   results, 0, 1,
                                                   PAGECACHE_TAG_DIRTY);
-        if (cnt == 0 && cfs_atomic_read(&vob->cob_mmap_cnt) > 0)
-                cnt = 1;
+	if (cnt == 0 && atomic_read(&vob->cob_mmap_cnt) > 0)
+		cnt = 1;
 
 #endif
         return (cnt > 0) ? 1 : 0;

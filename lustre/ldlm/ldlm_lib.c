@@ -352,14 +352,14 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
 	if (cli->cl_dirty_max >> PAGE_CACHE_SHIFT > totalram_pages / 8)
 		cli->cl_dirty_max = totalram_pages << (PAGE_CACHE_SHIFT - 3);
-        CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
-        CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
-        CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
-        CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
-        CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
-        client_obd_list_lock_init(&cli->cl_loi_list_lock);
-	cfs_atomic_set(&cli->cl_pending_w_pages, 0);
-	cfs_atomic_set(&cli->cl_pending_r_pages, 0);
+	CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
+	CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+	CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
+	CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
+	CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
+	client_obd_list_lock_init(&cli->cl_loi_list_lock);
+	atomic_set(&cli->cl_pending_w_pages, 0);
+	atomic_set(&cli->cl_pending_r_pages, 0);
 	cli->cl_r_in_flight = 0;
 	cli->cl_w_in_flight = 0;
 
@@ -372,26 +372,26 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 
 	/* lru for osc. */
 	CFS_INIT_LIST_HEAD(&cli->cl_lru_osc);
-	cfs_atomic_set(&cli->cl_lru_shrinkers, 0);
-	cfs_atomic_set(&cli->cl_lru_busy, 0);
-	cfs_atomic_set(&cli->cl_lru_in_list, 0);
+	atomic_set(&cli->cl_lru_shrinkers, 0);
+	atomic_set(&cli->cl_lru_busy, 0);
+	atomic_set(&cli->cl_lru_in_list, 0);
 	CFS_INIT_LIST_HEAD(&cli->cl_lru_list);
 	client_obd_list_lock_init(&cli->cl_lru_list_lock);
-	cfs_atomic_set(&cli->cl_unstable_count, 0);
+	atomic_set(&cli->cl_unstable_count, 0);
 
 	init_waitqueue_head(&cli->cl_destroy_waitq);
-	cfs_atomic_set(&cli->cl_destroy_in_flight, 0);
+	atomic_set(&cli->cl_destroy_in_flight, 0);
 #ifdef ENABLE_CHECKSUM
 	/* Turn on checksumming by default. */
 	cli->cl_checksum = 1;
-        /*
-         * The supported checksum types will be worked out at connect time
-         * Set cl_chksum* to CRC32 for now to avoid returning screwed info
-         * through procfs.
-         */
-        cli->cl_cksum_type = cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
+	/*
+	 * The supported checksum types will be worked out at connect time
+	 * Set cl_chksum* to CRC32 for now to avoid returning screwed info
+	 * through procfs.
+	 */
+	cli->cl_cksum_type = cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
 #endif
-        cfs_atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
+	atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
 	/* This value may be reduced at connect time in
 	 * ptlrpc_connect_interpret() . We initialize it to only
@@ -980,12 +980,12 @@ int target_handle_connect(struct ptlrpc_request *req)
 no_export:
                 OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
         } else if (req->rq_export == NULL &&
-                   cfs_atomic_read(&export->exp_rpc_count) > 0) {
+		   atomic_read(&export->exp_rpc_count) > 0) {
                 LCONSOLE_WARN("%s: Client %s (at %s) refused connection, "
                               "still busy with %d references\n",
                               target->obd_name, cluuid.uuid,
                               libcfs_nid2str(req->rq_peer.nid),
-                              cfs_atomic_read(&export->exp_refcount));
+			      atomic_read(&export->exp_refcount));
                 GOTO(out, rc = -EBUSY);
         } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
                 if (!strstr(cluuid.uuid, "mdt"))
@@ -1037,8 +1037,8 @@ no_export:
 			int	k; /* known */
 			int	s; /* stale/evicted */
 
-			c = cfs_atomic_read(&target->obd_connected_clients);
-			i = cfs_atomic_read(&target->obd_lock_replay_clients);
+			c = atomic_read(&target->obd_connected_clients);
+			i = atomic_read(&target->obd_lock_replay_clients);
 			k = target->obd_max_recoverable_clients;
 			s = target->obd_stale_clients;
 			t = cfs_timer_deadline(&target->obd_recovery_timer);
@@ -1192,9 +1192,9 @@ dont_check_exports:
 			spin_unlock(&target->obd_recovery_task_lock);
                 }
 
-		cfs_atomic_inc(&target->obd_req_replay_clients);
-		cfs_atomic_inc(&target->obd_lock_replay_clients);
-		if (cfs_atomic_inc_return(&target->obd_connected_clients) ==
+		atomic_inc(&target->obd_req_replay_clients);
+		atomic_inc(&target->obd_lock_replay_clients);
+		if (atomic_inc_return(&target->obd_connected_clients) ==
 		    target->obd_max_recoverable_clients)
 			wake_up(&target->obd_next_transno_waitq);
 	}
@@ -1319,23 +1319,23 @@ EXPORT_SYMBOL(target_destroy_export);
 static void target_request_copy_get(struct ptlrpc_request *req)
 {
 	class_export_rpc_inc(req->rq_export);
-        LASSERT(cfs_list_empty(&req->rq_list));
-        CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+	LASSERT(cfs_list_empty(&req->rq_list));
+	CFS_INIT_LIST_HEAD(&req->rq_replay_list);
 
 	/* Increase refcount to keep request in queue. */
-	cfs_atomic_inc(&req->rq_refcount);
+	atomic_inc(&req->rq_refcount);
 	/* Let export know it has replays to be handled. */
-        cfs_atomic_inc(&req->rq_export->exp_replay_count);
+	atomic_inc(&req->rq_export->exp_replay_count);
 }
 
 static void target_request_copy_put(struct ptlrpc_request *req)
 {
-        LASSERT(cfs_list_empty(&req->rq_replay_list));
-        LASSERT_ATOMIC_POS(&req->rq_export->exp_replay_count);
+	LASSERT(cfs_list_empty(&req->rq_replay_list));
+	LASSERT_ATOMIC_POS(&req->rq_export->exp_replay_count);
 
-        cfs_atomic_dec(&req->rq_export->exp_replay_count);
+	atomic_dec(&req->rq_export->exp_replay_count);
 	class_export_rpc_dec(req->rq_export);
-        ptlrpc_server_drop_request(req);
+	ptlrpc_server_drop_request(req);
 }
 
 static int target_exp_enqueue_req_replay(struct ptlrpc_request *req)
@@ -1394,7 +1394,7 @@ static void target_finish_recovery(struct obd_device *obd)
 			"%d recovered and %d %s evicted.\n", obd->obd_name,
 			(int)elapsed_time / 60, (int)elapsed_time % 60,
 			obd->obd_max_recoverable_clients,
-			cfs_atomic_read(&obd->obd_connected_clients),
+			atomic_read(&obd->obd_connected_clients),
 			obd->obd_stale_clients,
 			obd->obd_stale_clients == 1 ? "was" : "were");
 	}
@@ -1658,14 +1658,14 @@ static inline int exp_connect_healthy(struct obd_export *exp)
 /** if export done req_replay or has replay in queue */
 static inline int exp_req_replay_healthy(struct obd_export *exp)
 {
-        return (!exp->exp_req_replay_needed ||
-                cfs_atomic_read(&exp->exp_replay_count) > 0);
+	return (!exp->exp_req_replay_needed ||
+		atomic_read(&exp->exp_replay_count) > 0);
 }
 /** if export done lock_replay or has replay in queue */
 static inline int exp_lock_replay_healthy(struct obd_export *exp)
 {
-        return (!exp->exp_lock_replay_needed ||
-                cfs_atomic_read(&exp->exp_replay_count) > 0);
+	return (!exp->exp_lock_replay_needed ||
+		atomic_read(&exp->exp_replay_count) > 0);
 }
 
 static inline int exp_vbr_healthy(struct obd_export *exp)
@@ -1681,11 +1681,11 @@ static inline int exp_finished(struct obd_export *exp)
 /** Checking routines for recovery */
 static int check_for_clients(struct obd_device *obd)
 {
-        unsigned int clnts = cfs_atomic_read(&obd->obd_connected_clients);
+	unsigned int clnts = atomic_read(&obd->obd_connected_clients);
 
-        if (obd->obd_abort_recovery || obd->obd_recovery_expired)
-                return 1;
-        LASSERT(clnts <= obd->obd_max_recoverable_clients);
+	if (obd->obd_abort_recovery || obd->obd_recovery_expired)
+		return 1;
+	LASSERT(clnts <= obd->obd_max_recoverable_clients);
 	return (clnts + obd->obd_stale_clients ==
 		obd->obd_max_recoverable_clients);
 }
@@ -1698,61 +1698,61 @@ static int check_for_next_transno(struct obd_device *obd)
 	ENTRY;
 
 	spin_lock(&obd->obd_recovery_task_lock);
-        if (!cfs_list_empty(&obd->obd_req_replay_queue)) {
-                req = cfs_list_entry(obd->obd_req_replay_queue.next,
-                                     struct ptlrpc_request, rq_list);
-                req_transno = lustre_msg_get_transno(req->rq_reqmsg);
-        } else {
-                req_transno = 0;
-        }
+	if (!cfs_list_empty(&obd->obd_req_replay_queue)) {
+		req = cfs_list_entry(obd->obd_req_replay_queue.next,
+				     struct ptlrpc_request, rq_list);
+		req_transno = lustre_msg_get_transno(req->rq_reqmsg);
+	} else {
+		req_transno = 0;
+	}
 
-        connected = cfs_atomic_read(&obd->obd_connected_clients);
-        completed = connected - cfs_atomic_read(&obd->obd_req_replay_clients);
-        queue_len = obd->obd_requests_queued_for_recovery;
-        next_transno = obd->obd_next_recovery_transno;
+	connected = atomic_read(&obd->obd_connected_clients);
+	completed = connected - atomic_read(&obd->obd_req_replay_clients);
+	queue_len = obd->obd_requests_queued_for_recovery;
+	next_transno = obd->obd_next_recovery_transno;
 
-        CDEBUG(D_HA, "max: %d, connected: %d, completed: %d, queue_len: %d, "
-               "req_transno: "LPU64", next_transno: "LPU64"\n",
-               obd->obd_max_recoverable_clients, connected, completed,
-               queue_len, req_transno, next_transno);
+	CDEBUG(D_HA, "max: %d, connected: %d, completed: %d, queue_len: %d, "
+	       "req_transno: "LPU64", next_transno: "LPU64"\n",
+	       obd->obd_max_recoverable_clients, connected, completed,
+	       queue_len, req_transno, next_transno);
 
-        if (obd->obd_abort_recovery) {
-                CDEBUG(D_HA, "waking for aborted recovery\n");
-                wake_up = 1;
-        } else if (obd->obd_recovery_expired) {
-                CDEBUG(D_HA, "waking for expired recovery\n");
-                wake_up = 1;
-        } else if (req_transno == next_transno) {
-                CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
-                wake_up = 1;
+	if (obd->obd_abort_recovery) {
+		CDEBUG(D_HA, "waking for aborted recovery\n");
+		wake_up = 1;
+	} else if (obd->obd_recovery_expired) {
+		CDEBUG(D_HA, "waking for expired recovery\n");
+		wake_up = 1;
+	} else if (req_transno == next_transno) {
+		CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
+		wake_up = 1;
 	} else if (queue_len > 0 &&
-		   queue_len == cfs_atomic_read(&obd->obd_req_replay_clients)) {
-                int d_lvl = D_HA;
-                /** handle gaps occured due to lost reply or VBR */
-                LASSERTF(req_transno >= next_transno,
-                         "req_transno: "LPU64", next_transno: "LPU64"\n",
-                         req_transno, next_transno);
-                if (req_transno > obd->obd_last_committed &&
-                    !obd->obd_version_recov)
-                        d_lvl = D_ERROR;
-                CDEBUG(d_lvl,
-                       "%s: waking for gap in transno, VBR is %s (skip: "
-                       LPD64", ql: %d, comp: %d, conn: %d, next: "LPD64
-                       ", last_committed: "LPD64")\n",
-                       obd->obd_name, obd->obd_version_recov ? "ON" : "OFF",
-                       next_transno, queue_len, completed, connected,
-                       req_transno, obd->obd_last_committed);
-                obd->obd_next_recovery_transno = req_transno;
-                wake_up = 1;
-	} else if (cfs_atomic_read(&obd->obd_req_replay_clients) == 0) {
+		   queue_len == atomic_read(&obd->obd_req_replay_clients)) {
+		int d_lvl = D_HA;
+		/** handle gaps occured due to lost reply or VBR */
+		LASSERTF(req_transno >= next_transno,
+			 "req_transno: "LPU64", next_transno: "LPU64"\n",
+			 req_transno, next_transno);
+		if (req_transno > obd->obd_last_committed &&
+		    !obd->obd_version_recov)
+			d_lvl = D_ERROR;
+		CDEBUG(d_lvl,
+		       "%s: waking for gap in transno, VBR is %s (skip: "
+		       LPD64", ql: %d, comp: %d, conn: %d, next: "LPD64
+		       ", last_committed: "LPD64")\n",
+		       obd->obd_name, obd->obd_version_recov ? "ON" : "OFF",
+		       next_transno, queue_len, completed, connected,
+		       req_transno, obd->obd_last_committed);
+		obd->obd_next_recovery_transno = req_transno;
+		wake_up = 1;
+	} else if (atomic_read(&obd->obd_req_replay_clients) == 0) {
 		CDEBUG(D_HA, "waking for completed recovery\n");
 		wake_up = 1;
-        } else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
-                CDEBUG(D_HA, "accepting transno gaps is explicitly allowed"
-                       " by fail_lock, waking up ("LPD64")\n", next_transno);
-                obd->obd_next_recovery_transno = req_transno;
-                wake_up = 1;
-        }
+	} else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
+		CDEBUG(D_HA, "accepting transno gaps is explicitly allowed"
+		       " by fail_lock, waking up ("LPD64")\n", next_transno);
+		obd->obd_next_recovery_transno = req_transno;
+		wake_up = 1;
+	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 	return wake_up;
 }
@@ -1762,19 +1762,19 @@ static int check_for_next_lock(struct obd_device *obd)
 	int wake_up = 0;
 
 	spin_lock(&obd->obd_recovery_task_lock);
-        if (!cfs_list_empty(&obd->obd_lock_replay_queue)) {
-                CDEBUG(D_HA, "waking for next lock\n");
-                wake_up = 1;
-        } else if (cfs_atomic_read(&obd->obd_lock_replay_clients) == 0) {
-                CDEBUG(D_HA, "waking for completed lock replay\n");
-                wake_up = 1;
-        } else if (obd->obd_abort_recovery) {
-                CDEBUG(D_HA, "waking for aborted recovery\n");
-                wake_up = 1;
-        } else if (obd->obd_recovery_expired) {
-                CDEBUG(D_HA, "waking for expired recovery\n");
-                wake_up = 1;
-        }
+	if (!cfs_list_empty(&obd->obd_lock_replay_queue)) {
+		CDEBUG(D_HA, "waking for next lock\n");
+		wake_up = 1;
+	} else if (atomic_read(&obd->obd_lock_replay_clients) == 0) {
+		CDEBUG(D_HA, "waking for completed lock replay\n");
+		wake_up = 1;
+	} else if (obd->obd_abort_recovery) {
+		CDEBUG(D_HA, "waking for aborted recovery\n");
+		wake_up = 1;
+	} else if (obd->obd_recovery_expired) {
+		CDEBUG(D_HA, "waking for expired recovery\n");
+		wake_up = 1;
+	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 
 	return wake_up;
@@ -1842,7 +1842,7 @@ static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
 	} else {
 		spin_unlock(&obd->obd_recovery_task_lock);
 		LASSERT(cfs_list_empty(&obd->obd_req_replay_queue));
-		LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients) == 0);
+		LASSERT(atomic_read(&obd->obd_req_replay_clients) == 0);
 		/** evict exports failed VBR */
 		class_disconnect_stale_exports(obd, exp_vbr_healthy);
 	}
@@ -1851,12 +1851,12 @@ static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
 
 static struct ptlrpc_request *target_next_replay_lock(struct obd_device *obd)
 {
-        struct ptlrpc_request *req = NULL;
+	struct ptlrpc_request *req = NULL;
 
-        CDEBUG(D_HA, "Waiting for lock\n");
-        if (target_recovery_overseer(obd, check_for_next_lock,
-                                     exp_lock_replay_healthy))
-                abort_lock_replay_queue(obd);
+	CDEBUG(D_HA, "Waiting for lock\n");
+	if (target_recovery_overseer(obd, check_for_next_lock,
+				     exp_lock_replay_healthy))
+		abort_lock_replay_queue(obd);
 
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!cfs_list_empty(&obd->obd_lock_replay_queue)) {
@@ -1866,12 +1866,12 @@ static struct ptlrpc_request *target_next_replay_lock(struct obd_device *obd)
 		spin_unlock(&obd->obd_recovery_task_lock);
 	} else {
 		spin_unlock(&obd->obd_recovery_task_lock);
-                LASSERT(cfs_list_empty(&obd->obd_lock_replay_queue));
-                LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients) == 0);
-                /** evict exports failed VBR */
-                class_disconnect_stale_exports(obd, exp_vbr_healthy);
-        }
-        return req;
+		LASSERT(cfs_list_empty(&obd->obd_lock_replay_queue));
+		LASSERT(atomic_read(&obd->obd_lock_replay_clients) == 0);
+		/** evict exports failed VBR */
+		class_disconnect_stale_exports(obd, exp_vbr_healthy);
+	}
+	return req;
 }
 
 static struct ptlrpc_request *target_next_final_ping(struct obd_device *obd)
@@ -2003,11 +2003,11 @@ static int target_recovery_thread(void *arg)
                 abort_lock_replay_queue(obd);
         }
 
-        /* next stage: replay requests */
-        delta = jiffies;
-        CDEBUG(D_INFO, "1: request replay stage - %d clients from t"LPU64"\n",
-               cfs_atomic_read(&obd->obd_req_replay_clients),
-               obd->obd_next_recovery_transno);
+	/* next stage: replay requests */
+	delta = jiffies;
+	CDEBUG(D_INFO, "1: request replay stage - %d clients from t"LPU64"\n",
+	       atomic_read(&obd->obd_req_replay_clients),
+	       obd->obd_next_recovery_transno);
 	while ((req = target_next_replay_req(obd))) {
 		LASSERT(trd->trd_processing_task == current_pid());
 		DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s",
@@ -2027,20 +2027,20 @@ static int target_recovery_thread(void *arg)
                 obd->obd_replayed_requests++;
         }
 
-        /**
-         * The second stage: replay locks
-         */
-        CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
-               cfs_atomic_read(&obd->obd_lock_replay_clients));
+	/**
+	 * The second stage: replay locks
+	 */
+	CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
+	       atomic_read(&obd->obd_lock_replay_clients));
 	while ((req = target_next_replay_lock(obd))) {
 		LASSERT(trd->trd_processing_task == current_pid());
 		DEBUG_REQ(D_HA, req, "processing lock from %s: ",
 			  libcfs_nid2str(req->rq_peer.nid));
-                handle_recovery_req(thread, req,
-                                    trd->trd_recovery_handler);
-                target_request_copy_put(req);
-                obd->obd_replayed_locks++;
-        }
+		handle_recovery_req(thread, req,
+				    trd->trd_recovery_handler);
+		target_request_copy_put(req);
+		obd->obd_replayed_locks++;
+	}
 
         /**
          * The third stage: reply on final pings, at this moment all clients
@@ -2139,9 +2139,9 @@ static void target_recovery_expired(unsigned long castmeharder)
 	struct obd_device *obd = (struct obd_device *)castmeharder;
 	CDEBUG(D_HA, "%s: recovery timed out; %d clients are still in recovery"
 	       " after %lds (%d clients connected)\n",
-	       obd->obd_name, cfs_atomic_read(&obd->obd_lock_replay_clients),
+	       obd->obd_name, atomic_read(&obd->obd_lock_replay_clients),
 	       cfs_time_current_sec()- obd->obd_recovery_start,
-	       cfs_atomic_read(&obd->obd_connected_clients));
+	       atomic_read(&obd->obd_connected_clients));
 
 	obd->obd_recovery_expired = 1;
 	wake_up(&obd->obd_next_transno_waitq);
@@ -2184,7 +2184,7 @@ static int target_process_req_flags(struct obd_device *obd,
 			spin_unlock(&exp->exp_lock);
 
 			LASSERT_ATOMIC_POS(&obd->obd_req_replay_clients);
-			cfs_atomic_dec(&obd->obd_req_replay_clients);
+			atomic_dec(&obd->obd_req_replay_clients);
 		} else {
 			spin_unlock(&exp->exp_lock);
 		}
@@ -2198,7 +2198,7 @@ static int target_process_req_flags(struct obd_device *obd,
 			spin_unlock(&exp->exp_lock);
 
 			LASSERT_ATOMIC_POS(&obd->obd_lock_replay_clients);
-			cfs_atomic_dec(&obd->obd_lock_replay_clients);
+			atomic_dec(&obd->obd_lock_replay_clients);
 		} else {
 			spin_unlock(&exp->exp_lock);
 		}
@@ -2477,17 +2477,17 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
 	spin_lock(&svcpt->scp_rep_lock);
 
-	cfs_atomic_inc(&svcpt->scp_nreps_difficult);
+	atomic_inc(&svcpt->scp_nreps_difficult);
 
-        if (netrc != 0) {
-                /* error sending: reply is off the net.  Also we need +1
-                 * reply ref until ptlrpc_handle_rs() is done
-                 * with the reply state (if the send was successful, there
-                 * would have been +1 ref for the net, which
-                 * reply_out_callback leaves alone) */
-                rs->rs_on_net = 0;
-                ptlrpc_rs_addref(rs);
-        }
+	if (netrc != 0) {
+		/* error sending: reply is off the net.  Also we need +1
+		 * reply ref until ptlrpc_handle_rs() is done
+		 * with the reply state (if the send was successful, there
+		 * would have been +1 ref for the net, which
+		 * reply_out_callback leaves alone) */
+		rs->rs_on_net = 0;
+		ptlrpc_rs_addref(rs);
+	}
 
 	spin_lock(&rs->rs_lock);
 	if (rs->rs_transno <= exp->exp_last_committed ||
@@ -2637,10 +2637,10 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 	ENTRY;
 
 	/* If there is eviction in progress, wait for it to finish. */
-	if (unlikely(cfs_atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
+	if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
 		*lwi = LWI_INTR(NULL, NULL);
 		rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-				  !cfs_atomic_read(&exp->exp_obd->
+				  !atomic_read(&exp->exp_obd->
 					  	   obd_evict_inprogress),
 				  lwi);
 	}
