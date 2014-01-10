@@ -1521,7 +1521,6 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
         struct inode       *inode = obj->oo_inode;
         handle_t           *h;
         tid_t               tid;
-	loff_t		   oldsize;
 	int		   rc = 0, rc2 = 0;
         ENTRY;
 
@@ -1539,9 +1538,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 
         tid = oh->ot_handle->h_transaction->t_tid;
 
-	oldsize=inode->i_size;
 	i_size_write(inode, start);
-	truncate_pagecache(inode, oldsize, start);
+	ll_truncate_pagecache(inode, start);
 #ifdef HAVE_INODEOPS_TRUNCATE
 	if (inode->i_op->truncate)
 		inode->i_op->truncate(inode);

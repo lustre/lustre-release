@@ -418,7 +418,6 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 {
 	int     result;
-	loff_t oldsize;
 
 	/*
 	 * Only ll_inode_size_lock is taken at this level.
@@ -429,10 +428,9 @@ static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 		ll_inode_size_unlock(inode);
 		return result;
 	}
-	oldsize = inode->i_size;
 	i_size_write(inode, size);
 
-	truncate_pagecache(inode, oldsize, size);
+	ll_truncate_pagecache(inode, size);
 	ll_inode_size_unlock(inode);
 	return result;
 }
