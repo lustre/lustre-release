@@ -1071,6 +1071,10 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 		       lsd->lsd_feature_incompat & ~tgt_scd[type].incompat);
 		RETURN(-EINVAL);
 	}
+
+	if (type == LDD_F_SV_TYPE_MDT)
+		lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
+
 	if (lsd->lsd_feature_rocompat & ~tgt_scd[type].rocompat) {
 		CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
 		       tgt_name(tgt),
@@ -1093,8 +1097,6 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 		/** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
 		lsd->lsd_feature_compat |= OBD_COMPAT_20;
 	}
-
-	lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
 	spin_lock(&tgt->lut_translock);
 	tgt->lut_last_transno = lsd->lsd_last_transno;
