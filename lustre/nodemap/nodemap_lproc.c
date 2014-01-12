@@ -27,25 +27,20 @@
 #define NODEMAP_LPROC_ID_LEN 16
 #define NODEMAP_LPROC_FLAG_LEN 2
 
+#define NODEMAP_PROC_DEBUG 1
+
 #include <lprocfs_status.h>
 #include <lustre_net.h>
 #include "nodemap_internal.h"
 
-static int nodemap_rd_active(char *page, char **start, off_t off, int count,
-			     int *eof, void *data)
+static int nodemap_active_seq_show(struct seq_file *m, void *data)
 {
-	int rc;
-
-	rc = snprintf(page, count, "%u\n", (unsigned int)nodemap_idmap_active);
-
-	if (count == 0)
-		return 0;
-
-	return rc;
+	return seq_printf(m, "%u\n", (unsigned int)nodemap_idmap_active);
 }
 
-static int nodemap_wr_active(struct file *file, const char __user *buffer,
-			     unsigned long count, void *data)
+static ssize_t
+nodemap_active_seq_write(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *off)
 {
 	char	active_string[NODEMAP_LPROC_FLAG_LEN + 1];
 	__u32	active;
@@ -66,47 +61,42 @@ static int nodemap_wr_active(struct file *file, const char __user *buffer,
 
 	return rc;
 }
+LPROC_SEQ_FOPS(nodemap_active);
 
-static int nodemap_rd_id(char *page, char **start, off_t off, int count,
-			 int *eof, void *data)
+static int nodemap_id_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = data;
+	struct lu_nodemap *nodemap = m->private;
 
-	return snprintf(page, count, "%u\n", nodemap->nm_id);
+	return seq_printf(m, "%u\n", nodemap->nm_id);
+}
+LPROC_SEQ_FOPS_RO(nodemap_id);
+
+static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap = m->private;
+
+	return seq_printf(m, "%u\n", nodemap->nm_squash_uid);
 }
 
-static int nodemap_rd_squash_uid(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
+static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = data;
+	struct lu_nodemap *nodemap = m->private;
 
-	return snprintf(page, count, "%u\n", nodemap->nm_squash_uid);
+	return seq_printf(m, "%u\n", nodemap->nm_squash_gid);
 }
 
-static int nodemap_rd_squash_gid(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
+static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = data;
+	struct lu_nodemap *nodemap = m->private;
 
-	return snprintf(page, count, "%u\n", nodemap->nm_squash_gid);
+	return seq_printf(m, "%d\n", (int)nodemap->nmf_trust_client_ids);
 }
 
-static int nodemap_rd_trusted(char *page, char **start, off_t off,
-			      int count, int *eof, void *data)
+static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = data;
+	struct lu_nodemap *nodemap = m->private;
 
-	return snprintf(page, count, "%d\n",
-			(int)nodemap->nmf_trust_client_ids);
-}
-
-static int nodemap_rd_admin(char *page, char **start, off_t off, int count,
-			    int *eof, void *data)
-{
-	struct lu_nodemap *nodemap = data;
-
-	return snprintf(page, count, "%d\n",
-			(int)nodemap->nmf_allow_root_access);
+	return seq_printf(m, "%d\n", (int)nodemap->nmf_allow_root_access);
 }
 
 #ifdef NODEMAP_PROC_DEBUG
@@ -130,11 +120,13 @@ static int nodemap_proc_read_flag(const char __user *buffer,
 	return 0;
 }
 
-static int nodemap_wr_squash_uid(struct file *file, const char __user *buffer,
-				 unsigned long count, void *data)
+static ssize_t
+nodemap_squash_uid_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
 {
 	char			squash[NODEMAP_LPROC_ID_LEN + 1];
-	struct lu_nodemap	*nodemap = data;
+	struct seq_file		*m = file->private_data;
+	struct lu_nodemap	*nodemap = m->private;
 	uid_t			squash_uid;
 	int			rc = count;
 
@@ -154,11 +146,13 @@ static int nodemap_wr_squash_uid(struct file *file, const char __user *buffer,
 	return rc;
 }
 
-static int nodemap_wr_squash_gid(struct file *file, const char __user *buffer,
-				 unsigned long count, void *data)
+static ssize_t
+nodemap_squash_gid_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
 {
 	char			squash[NODEMAP_LPROC_ID_LEN + 1];
-	struct lu_nodemap	*nodemap = data;
+	struct seq_file		*m = file->private_data;
+	struct lu_nodemap	*nodemap = m->private;
 	gid_t			squash_gid;
 	int			rc = count;
 
@@ -178,10 +172,12 @@ static int nodemap_wr_squash_gid(struct file *file, const char __user *buffer,
 	return rc;
 }
 
-static int nodemap_wr_trusted(struct file *file, const char __user *buffer,
-			      unsigned long count, void *data)
+static ssize_t
+nodemap_trusted_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
-	struct lu_nodemap	*nodemap = data;
+	struct seq_file		*m = file->private_data;
+	struct lu_nodemap	*nodemap = m->private;
 	int			flags;
 	int			rc;
 
@@ -192,10 +188,12 @@ static int nodemap_wr_trusted(struct file *file, const char __user *buffer,
 	return rc;
 }
 
-static int nodemap_wr_admin(struct file *file, const char __user *buffer,
-			    unsigned long count, void *data)
+static ssize_t
+nodemap_admin_seq_write(struct file *file, const char __user *buffer,
+			size_t count, loff_t *off)
 {
-	struct lu_nodemap	*nodemap = data;
+	struct seq_file		*m = file->private_data;
+	struct lu_nodemap	*nodemap = m->private;
 	int			flags;
 	int			rc;
 
@@ -206,9 +204,9 @@ static int nodemap_wr_admin(struct file *file, const char __user *buffer,
 	return rc;
 }
 
-static int nodemap_proc_add_nodemap(struct file *file,
-				    const char __user *buffer,
-				    unsigned long count, void *data)
+static ssize_t
+lprocfs_add_nodemap_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
 {
 	char	buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	char	*cpybuf = NULL;
@@ -241,10 +239,11 @@ static int nodemap_proc_add_nodemap(struct file *file,
 
 	return rc;
 }
+LPROC_SEQ_FOPS_WO_TYPE(nodemap, add_nodemap);
 
-static int nodemap_proc_del_nodemap(struct file *file,
-				    const char __user *buffer,
-				    unsigned long count, void *data)
+static ssize_t
+lprocfs_del_nodemap_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
 {
 	char	buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	char	*cpybuf = NULL;
@@ -278,22 +277,23 @@ static int nodemap_proc_del_nodemap(struct file *file,
 	return rc;
 
 }
+LPROC_SEQ_FOPS_WO_TYPE(nodemap, del_nodemap);
+
 #endif /* NODEMAP_PROC_DEBUG */
 
-static struct lprocfs_vars lprocfs_nodemap_module_vars[] = {
+static struct lprocfs_seq_vars lprocfs_nodemap_module_vars[] = {
 	{
 		.name		= "active",
-		.read_fptr	= nodemap_rd_active,
-		.write_fptr	= nodemap_wr_active,
+		.fops		= &nodemap_active_fops,
 	},
 #ifdef NODEMAP_PROC_DEBUG
 	{
 		.name		= "add_nodemap",
-		.write_fptr	= nodemap_proc_add_nodemap,
+		.fops		= &nodemap_add_nodemap_fops,
 	},
 	{
 		.name		= "remove_nodemap",
-		.write_fptr	= nodemap_proc_del_nodemap,
+		.fops		= &nodemap_del_nodemap_fops,
 	},
 #endif /* NODEMAP_PROC_DEBUG */
 	{
@@ -302,127 +302,77 @@ static struct lprocfs_vars lprocfs_nodemap_module_vars[] = {
 };
 
 #ifdef NODEMAP_PROC_DEBUG
-static struct lprocfs_vars lprocfs_nodemap_vars[] = {
-	{
-		.name		= "id",
-		.read_fptr	= nodemap_rd_id,
-	},
-	{
-		.name		= "trusted_nodemap",
-		.read_fptr	= nodemap_rd_trusted,
-		.write_fptr	= nodemap_wr_trusted,
-	},
-	{
-		.name		= "admin_nodemap",
-		.read_fptr	= nodemap_rd_admin,
-		.write_fptr	= nodemap_wr_admin,
-	},
-	{
-		.name		= "squash_uid",
-		.read_fptr	= nodemap_rd_squash_uid,
-		.write_fptr	= nodemap_wr_squash_uid,
-	},
-	{
-		.name		= "squash_gid",
-		.read_fptr	= nodemap_rd_squash_gid,
-		.write_fptr	= nodemap_wr_squash_gid,
-	},
-	{
-		NULL
-	}
-};
-
-static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
-	{
-		.name		= "id",
-		.read_fptr	= nodemap_rd_id,
-	},
-	{
-		.name		= "trusted_nodemap",
-		.read_fptr	= nodemap_rd_trusted,
-		.write_fptr	= nodemap_wr_trusted,
-	},
-	{
-		.name		= "admin_nodemap",
-		.read_fptr	= nodemap_rd_admin,
-		.write_fptr	= nodemap_wr_admin,
-	},
-	{
-		.name		= "squash_uid",
-		.read_fptr	= nodemap_rd_squash_uid,
-		.write_fptr	= nodemap_wr_squash_uid,
-	},
-	{
-		.name		= "squash_gid",
-		.read_fptr	= nodemap_rd_squash_gid,
-		.write_fptr	= nodemap_wr_squash_gid,
-	},
-	{
-		NULL
-	}
-};
+LPROC_SEQ_FOPS(nodemap_trusted);
+LPROC_SEQ_FOPS(nodemap_admin);
+LPROC_SEQ_FOPS(nodemap_squash_uid);
+LPROC_SEQ_FOPS(nodemap_squash_gid);
 #else
-static struct lprocfs_vars lprocfs_nodemap_vars[] = {
+LPROC_SEQ_FOPS_RO(nodemap_trusted);
+LPROC_SEQ_FOPS_RO(nodemap_admin);
+LPROC_SEQ_FOPS_RO(nodemap_squash_uid);
+LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
+#endif
+
+static struct lprocfs_seq_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "id",
-		.read_fptr	= nodemap_rd_id,
+		.fops		= &nodemap_id_fops,
 	},
 	{
 		.name		= "trusted_nodemap",
-		.read_fptr	= nodemap_rd_trusted,
+		.fops		= &nodemap_trusted_fops,
 	},
 	{
 		.name		= "admin_nodemap",
-		.read_fptr	= nodemap_rd_admin,
+		.fops		= &nodemap_admin_fops,
 	},
 	{
 		.name		= "squash_uid",
-		.read_fptr	= nodemap_rd_squash_uid,
+		.fops		= &nodemap_squash_uid_fops,
 	},
 	{
 		.name		= "squash_gid",
-		.read_fptr	= nodemap_rd_squash_gid,
+		.fops		= &nodemap_squash_gid_fops,
 	},
 	{
 		NULL
 	}
 };
 
-static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
+static struct lprocfs_seq_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "id",
-		.read_fptr	= nodemap_rd_id,
+		.fops		= &nodemap_id_fops,
 	},
 	{
 		.name		= "trusted_nodemap",
-		.read_fptr	= nodemap_rd_trusted,
+		.fops		= &nodemap_trusted_fops,
 	},
 	{
 		.name		= "admin_nodemap",
-		.read_fptr	= nodemap_rd_admin,
+		.fops		= &nodemap_admin_fops,
 	},
 	{
 		.name		= "squash_uid",
-		.read_fptr	= nodemap_rd_squash_uid,
+		.fops		= &nodemap_squash_uid_fops,
 	},
 	{
 		.name		= "squash_gid",
-		.read_fptr	= nodemap_rd_squash_gid,
+		.fops		= &nodemap_squash_gid_fops,
 	},
 	{
 		NULL
 	}
 };
-#endif /* NODEMAP_PROC_DEBUG */
 
 int nodemap_procfs_init(void)
 {
 	int rc = 0;
 
-	proc_lustre_nodemap_root = lprocfs_register(LUSTRE_NODEMAP_NAME,
-						    proc_lustre_root,
-						    lprocfs_nodemap_module_vars,
-						    NULL);
+	proc_lustre_nodemap_root = lprocfs_seq_register(LUSTRE_NODEMAP_NAME,
+							proc_lustre_root,
+							lprocfs_nodemap_module_vars,
+							NULL);
 
 	if (IS_ERR(proc_lustre_nodemap_root)) {
 		rc = PTR_ERR(proc_lustre_nodemap_root);
@@ -450,15 +400,15 @@ int lprocfs_nodemap_register(const char *name,
 
 	if (is_default)
 		nodemap_proc_entry =
-			lprocfs_register(name,
+			lprocfs_seq_register(name,
 					 proc_lustre_nodemap_root,
 					 lprocfs_default_nodemap_vars,
 					 nodemap);
 	else
-		nodemap_proc_entry = lprocfs_register(name,
-						      proc_lustre_nodemap_root,
-						      lprocfs_nodemap_vars,
-						      nodemap);
+		nodemap_proc_entry = lprocfs_seq_register(name,
+							  proc_lustre_nodemap_root,
+							  lprocfs_nodemap_vars,
+							  nodemap);
 
 	if (IS_ERR(nodemap_proc_entry)) {
 		rc = PTR_ERR(nodemap_proc_entry);
