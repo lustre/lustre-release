@@ -2115,18 +2115,20 @@ test_31m() {
 run_test 31m "link to file: the same, non-existing, dir==============="
 
 test_31n() {
-	[ -e /proc/self/fd/173 ] && echo "skipping, fd 173 is in use" && return
 	touch $DIR/$tfile || error "cannot create '$DIR/$tfile'"
 	nlink=$(stat --format=%h $DIR/$tfile)
 	[ ${nlink:--1} -eq 1 ] || error "nlink is $nlink, expected 1"
-	exec 173<$DIR/$tfile
-	trap "exec 173<&-" EXIT
-	nlink=$(stat --dereference --format=%h /proc/self/fd/173)
+	local fd=$(free_fd)
+	local cmd="exec $fd<$DIR/$tfile"
+	eval $cmd
+	cmd="exec $fd<&-"
+	trap "eval $cmd" EXIT
+	nlink=$(stat --dereference --format=%h /proc/self/fd/$fd)
 	[ ${nlink:--1} -eq 1 ] || error "nlink is $nlink, expected 1"
 	rm $DIR/$tfile || error "cannot remove '$DIR/$tfile'"
-	nlink=$(stat --dereference --format=%h /proc/self/fd/173)
+	nlink=$(stat --dereference --format=%h /proc/self/fd/$fd)
 	[ ${nlink:--1} -eq 0 ] || error "nlink is $nlink, expected 0"
-	exec 173<&-
+	eval $cmd
 }
 run_test 31n "check link count of unlinked file"
 
@@ -11783,11 +11785,14 @@ test_236() {
 	cp $ref1 $file1 || error "cp $ref1 $file1 failed: rc = $?"
 	$SETSTRIPE -c 2 $file2 || error "cannot setstripe on '$file2': rc = $?"
 	cp $ref2 $file2 || error "cp $ref2 $file2 failed: rc = $?"
-	exec {FD}<>$file2
+	local fd=$(free_fd)
+	local cmd="exec $fd<>$file2"
+	eval $cmd
 	rm $file2
-	$LFS swap_layouts $file1 /proc/self/fd/${FD} ||
-		error "cannot swap layouts of '$file1' and /proc/self/fd/${FD}"
-	exec {FD}>&-
+	$LFS swap_layouts $file1 /proc/self/fd/${fd} ||
+		error "cannot swap layouts of '$file1' and /proc/self/fd/${fd}"
+	cmd="exec $fd>&-"
+	eval $cmd
 	cmp $ref2 $file1 || error "content compare failed ($ref2 != $file1)"
 
 	#cleanup
