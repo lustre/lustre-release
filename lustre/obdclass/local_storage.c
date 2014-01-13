@@ -297,12 +297,18 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 				      const char *name, struct lu_attr *attr,
 				      struct dt_object_format *dof)
 {
-	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_thread_info	*dti	= dt_info(env);
+	struct lu_object_conf	*conf	= &dti->dti_conf;
 	struct dt_object	*dto;
 	struct thandle		*th;
 	int			 rc;
 
-	dto = ls_locate(env, ls, fid);
+	/* We know that the target object does not exist, to be created,
+	 * then give some hints - LOC_F_NEW to help low layer to handle
+	 * that efficiently and properly. */
+	memset(conf, 0, sizeof(*conf));
+	conf->loc_flags = LOC_F_NEW;
+	dto = ls_locate(env, ls, fid, conf);
 	if (unlikely(IS_ERR(dto)))
 		RETURN(dto);
 
@@ -398,7 +404,8 @@ struct dt_object *local_file_find_or_create(const struct lu_env *env,
 	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
 	if (rc == 0)
 		/* name is found, get the object */
-		dto = ls_locate(env, dt2ls_dev(los->los_dev), &dti->dti_fid);
+		dto = ls_locate(env, dt2ls_dev(los->los_dev),
+				&dti->dti_fid, NULL);
 	else if (rc != -ENOENT)
 		dto = ERR_PTR(rc);
 	else {
@@ -485,7 +492,8 @@ struct dt_object *local_index_find_or_create(const struct lu_env *env,
 	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
 	if (rc == 0) {
 		/* name is found, get the object */
-		dto = ls_locate(env, dt2ls_dev(los->los_dev), &dti->dti_fid);
+		dto = ls_locate(env, dt2ls_dev(los->los_dev),
+				&dti->dti_fid, NULL);
 	} else if (rc != -ENOENT) {
 		dto = ERR_PTR(rc);
 	} else {
@@ -675,7 +683,7 @@ int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	if (rc)
 		return rc;
 
-	root = ls_locate(env, ls, &dti->dti_fid);
+	root = ls_locate(env, ls, &dti->dti_fid, NULL);
 	if (IS_ERR(root))
 		return PTR_ERR(root);
 
@@ -685,13 +693,17 @@ int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	rc = dt_lookup_dir(env, root, dti->dti_buf, &dti->dti_fid);
 	lu_object_put_nocache(env, &root->do_lu);
 	if (rc == -ENOENT) {
+		struct lu_object_conf *conf = &dti->dti_conf;
+
 		/* old llog lastid accessed by FID only */
 		if (lastid_seq != FID_SEQ_LLOG)
 			return 0;
 		dti->dti_fid.f_seq = FID_SEQ_LLOG;
 		dti->dti_fid.f_oid = 1;
 		dti->dti_fid.f_ver = 0;
-		o = ls_locate(env, ls, &dti->dti_fid);
+		memset(conf, 0, sizeof(*conf));
+		conf->loc_flags = LOC_F_NEW;
+		o = ls_locate(env, ls, &dti->dti_fid, conf);
 		if (IS_ERR(o))
 			return PTR_ERR(o);
 
@@ -705,7 +717,7 @@ int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	} else {
 		CDEBUG(D_INFO, "Found old lastid file for sequence "LPX64"\n",
 		       lastid_seq);
-		o = ls_locate(env, ls, &dti->dti_fid);
+		o = ls_locate(env, ls, &dti->dti_fid, NULL);
 		if (IS_ERR(o))
 			return PTR_ERR(o);
 	}
@@ -789,7 +801,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	dti->dti_fid.f_seq = fid_seq(first_fid);
 	dti->dti_fid.f_oid = LUSTRE_FID_LASTID_OID;
 	dti->dti_fid.f_ver = 0;
-	o = ls_locate(env, ls, &dti->dti_fid);
+	o = ls_locate(env, ls, &dti->dti_fid, NULL);
 	if (IS_ERR(o))
 		GOTO(out_los, rc = PTR_ERR(o));
 

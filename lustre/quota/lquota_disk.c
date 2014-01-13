@@ -180,7 +180,7 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 			GOTO(out, rc);
 
 		parent = dt_locate_at(env, dev, &qti->qti_fid,
-				      dev->dd_lu_dev.ld_site->ls_top_dev);
+				      dev->dd_lu_dev.ld_site->ls_top_dev, NULL);
 		if (IS_ERR(parent))
 			GOTO(out, rc = PTR_ERR(parent));
 	} else {

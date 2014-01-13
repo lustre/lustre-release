@@ -542,7 +542,7 @@ test_6() {
 
 	local -a position1
 	for n in $(seq $MDSCOUNT); do
-		positions1[$n]=$(scrub_status $n |
+		position1[$n]=$(scrub_status $n |
 			awk '/^latest_start_position/ {print $2}')
 		if [ ${position0[$n]} -ne ${position1[$n]} ]; then
 			error "(14) Expected position ${position0[$n]}, but" \
@@ -562,9 +562,6 @@ test_6() {
 run_test 6 "OI scrub resumes from last checkpoint"
 
 test_7() {
-	# skip test_7 for LU-4149
-	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return
-
 	scrub_prep 500
 	scrub_backup_restore 1
 

@@ -852,7 +852,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 			GOTO(out, rc);
 	}
 
-	o = ls_locate(env, ls, &lgi->lgi_fid);
+	o = ls_locate(env, ls, &lgi->lgi_fid, NULL);
 	if (IS_ERR(o))
 		GOTO(out_name, rc = PTR_ERR(o));
 

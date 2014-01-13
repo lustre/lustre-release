@@ -215,22 +215,25 @@ EXPORT_SYMBOL(dt_lookup_dir);
 /* this differs from dt_locate by top_dev as parameter
  * but not one from lu_site */
 struct dt_object *dt_locate_at(const struct lu_env *env,
-			       struct dt_device *dev, const struct lu_fid *fid,
-			       struct lu_device *top_dev)
+			       struct dt_device *dev,
+			       const struct lu_fid *fid,
+			       struct lu_device *top_dev,
+			       const struct lu_object_conf *conf)
 {
-	struct lu_object *lo, *n;
-	ENTRY;
+	struct lu_object *lo;
+	struct lu_object *n;
 
-	lo = lu_object_find_at(env, top_dev, fid, NULL);
+	lo = lu_object_find_at(env, top_dev, fid, conf);
 	if (IS_ERR(lo))
-		return (void *)lo;
+		return ERR_PTR(PTR_ERR(lo));
 
 	LASSERT(lo != NULL);
 
-	cfs_list_for_each_entry(n, &lo->lo_header->loh_layers, lo_linkage) {
+	list_for_each_entry(n, &lo->lo_header->loh_layers, lo_linkage) {
 		if (n->lo_dev == &dev->dd_lu_dev)
 			return container_of0(n, struct dt_object, do_lu);
 	}
+
 	return ERR_PTR(-ENOENT);
 }
 EXPORT_SYMBOL(dt_locate_at);
