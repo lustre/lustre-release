@@ -5138,7 +5138,7 @@ wait_osc_import_state() {
 	#until list_param can return valid value. And also if there
 	#are mulitple osc entries we should list all of them before
 	#go to wait.
-	local params=$($LCTL list_param $param || true)
+	local params=$($LCTL list_param $param 2>/dev/null || true)
 	while [ -z "$params" ]; do
 		if [ $i -ge $maxtime ]; then
 			echo "can't get $param by list_param in $maxtime secs"
@@ -5152,7 +5152,7 @@ wait_osc_import_state() {
 		fi
 		sleep 1
 		i=$((i + 1))
-		params=$($LCTL list_param $param || true)
+		params=$($LCTL list_param $param 2>/dev/null || true)
 	done
 
 	if ! do_rpc_nodes "$(facet_host $facet)" \

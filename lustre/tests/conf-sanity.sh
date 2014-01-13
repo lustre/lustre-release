@@ -1346,8 +1346,6 @@ t32_check() {
 }
 
 t32_test_cleanup() {
-	local node=$(facet_active_host $SINGLEMDS)
-	local r="do_node $node"
 	local tmp=$TMP/t32
 	local rc=$?
 
@@ -1358,13 +1356,14 @@ t32_test_cleanup() {
 		$r umount -d $tmp/mnt/mdt || rc=$?
 	fi
 	if $shall_cleanup_mdt1; then
-		$r umount -d $tmp/mnt/mdt1 || rc=$?
+		$r2 umount -d $tmp/mnt/mdt1 || rc=$?
 	fi
 	if $shall_cleanup_ost; then
 		$r umount -d $tmp/mnt/ost || rc=$?
 	fi
-	$r rm -rf $tmp || rc=$?
-	rm -rf $tmp || rc=$?
+
+	$r rm -rf $tmp
+	rm -rf $tmp
 	return $rc
 }
 
@@ -1391,7 +1390,7 @@ t32_reload_modules() {
 			all_removed=true
 		do_rpc_nodes $node check_mem_leak || return 1
 		if $all_removed; then
-			load_modules
+			do_rpc_nodes $node load_modules
 			return 0
 		fi
 		sleep 5
@@ -1409,8 +1408,7 @@ t32_wait_til_devices_gone() {
 	echo wait for devices to go
 	while ((i < 20)); do
 		devices=$(do_rpc_nodes $node $LCTL device_list | wc -l)
-		echo $device
-		((devices == 0)) && return 1
+		((devices == 0)) && return 0
 		sleep 5
 		i=$((i + 1))
 	done
@@ -1805,6 +1803,14 @@ t32_test() {
 		}
 		shall_cleanup_lustre=false
 	else
+		if [ "$dne_upgrade" != "no" ]; then
+			$r2 umount -d $tmp/mnt/mdt1 || {
+				error_noexit "Unmounting the MDT2"
+				return 1
+			}
+			shall_cleanup_mdt1=false
+		fi
+
 		$r umount -d $tmp/mnt/mdt || {
 			error_noexit "Unmounting the MDT"
 			return 1
@@ -2386,6 +2392,7 @@ test_42() { #bug 14693
 
 	do_facet mgs $LCTL conf_param $FSNAME.sys.some_wrong_param=20
 	cleanup || error "stopping $FSNAME failed with invalid sys param"
+	load_modules
 	setup
 	check_mount || "client was not mounted with invalid sys param"
 	cleanup || error "stopping $FSNAME failed with invalid sys param"
