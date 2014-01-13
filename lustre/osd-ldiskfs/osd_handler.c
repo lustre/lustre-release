@@ -2349,12 +2349,12 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 }
 
 /**
- * Delete local inode for remote entry
+ * Delete local agent inode for remote entry
  */
-static int osd_delete_remote_inode(const struct lu_env *env,
-				   struct osd_device *osd,
-				   const struct lu_fid *fid,
-				    __u32 ino, struct osd_thandle *oh)
+static int osd_delete_local_agent_inode(const struct lu_env *env,
+					struct osd_device *osd,
+					const struct lu_fid *fid,
+					__u32 ino, struct osd_thandle *oh)
 {
 	struct osd_thread_info	*oti = osd_oti_get(env);
 	struct osd_inode_id	*id = &oti->oti_id;
@@ -3252,9 +3252,32 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 
         bh = osd_ldiskfs_find_entry(dir, dentry, &de, hlock);
         if (bh) {
-                rc = ldiskfs_delete_entry(oh->ot_handle,
-                                          dir, de, bh);
+		__u32 ino = 0;
+
+		/* Tried to delete local agent inode for the entries,
+		 * If it tries to delete .., which only happens during
+		 * rename or move the dir to /ORPHAN, even .. might
+		 * point to the remote parent, but it do not have
+		 * local agent inode, so we do not need check .. at all,
+		 * Note: we need delete entry first, then inode to keep
+		 * lfsck safe. */
+		if (strcmp((char *)key, dotdot) != 0) {
+			LASSERT(de != NULL);
+			rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
+			if (rc == 0 &&
+			    unlikely(osd_remote_fid(env, osd, fid)))
+				/* Need to delete agent inode */
+				ino = le32_to_cpu(de->inode);
+		}
+                rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
                 brelse(bh);
+		if (rc == 0 && unlikely(ino != 0)) {
+			rc = osd_delete_local_agent_inode(env, osd, fid, ino,
+							  oh);
+			if (rc != 0)
+				CERROR("%s: del local inode "DFID": rc = %d\n",
+				       osd_name(osd), PFID(fid), rc);
+		}
         } else {
                 rc = -ENOENT;
         }
@@ -3267,10 +3290,9 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	/* For inode on the remote MDT, .. will point to
-	 * /Agent directory. So
-	 * 1. do not need to lookup/delete remote inode for ..
-	 * 2. Check whether it needs to delete from agent directory */
-	if (strcmp((char *)key, dotdot) == 0) {
+	 * /Agent directory, Check whether it needs to delete
+	 * from agent directory */
+	if (unlikely(strcmp((char *)key, dotdot) == 0)) {
 		rc = osd_delete_from_remote_parent(env, osd_obj2dev(obj), obj,
 						   oh);
 		if (rc != 0 && rc != -ENOENT) {
@@ -3282,20 +3304,6 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 			rc = 0;
 
 		GOTO(out, rc);
-	}
-
-	LASSERT(de != NULL);
-	rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
-	if (rc == 0 && osd_remote_fid(env, osd, fid)) {
-		__u32 ino = le32_to_cpu(de->inode);
-
-		rc = osd_delete_remote_inode(env, osd, fid, ino, oh);
-		if (rc != 0)
-			CERROR("%s: del local inode "DFID": rc = %d\n",
-				osd_name(osd), PFID(fid), rc);
-	} else {
-		if (rc == -ENODATA)
-			rc = 0;
 	}
 out:
 
