@@ -11945,6 +11945,17 @@ test_236() {
 }
 run_test 236 "Layout swap on open unlinked file"
 
+# test to verify file handle related system calls
+# (name_to_handle_at/open_by_handle_at)
+# The new system calls are supported in glibc >= 2.14.
+
+test_237() {
+	echo "Test file_handle syscalls" > $DIR/$tfile
+	check_fhandle_syscalls $DIR/$tfile ||
+		error "check_fhandle_syscalls failed"
+}
+run_test 237 "Verify name_to_handle_at/open_by_handle_at syscalls"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

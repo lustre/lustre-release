@@ -2,6 +2,7 @@
 /*.xml
 /Makefile.in
 /XMLCONFIG
+/check_fhandle_syscalls
 /checkfiemap
 /checkstat
 /chownmany
@@ -13,10 +14,12 @@
 /createtest
 /directio
 /fchdir_test
+/flock_deadlock
 /flock_test
 /flocks_test
 /fsx
 /getdents
+/listxattr_size_check
 /iopentest1
 /iopentest2
 /it_test
