@@ -589,43 +589,46 @@ parse_mpss_info() {
     local res2=""
     local res3=""
     for url in $urls; do
-        # Try to match with MPSS 3.1 distro package
-        if [[ $url =~ mpss-[0-9].[0-9]-$distro.tar ]]; then
-            local bid=${url##*mpss-}
-            bid="${bid%%-$distro.tar}.0-0"
-            if [ -z "$build" ]; then
-                res3="$bid"
-            elif [ "$build" = "$bid" ]; then
-                res3="$res3 $url"
-            fi
-        # Try to match with MPSS 3.1 source package
-        elif [[ $url =~ mpss-src-[0-9].[0-9].tar ]]; then
-            local bid=${url##*mpss-src-}
-            bid="${bid%%.tar}.0-0"
-            if [ -z "$build" ]; then
-                res3="$bid"
-            elif [ "$build" = "$bid" ]; then
-                res3="$res3 $url"
-            fi
-        # Try to match with MPSS 3.1 cross compiler package
-        elif [[ $url =~ mpss-[0-9].[0-9]-k1om.tar ]]; then
-            local bid=${url##*mpss-}
-            bid="${bid%%-k1om.tar}.0-0"
-            if [ -z "$build" ]; then
-                res3="$bid"
-            elif [ "$build" = "$bid" ]; then
-                res3="$res3 $url"
-            fi
-        # Try to match with MPSS 2.1 source package
+        local ver2=""
+        local ver3=""
+        # Try to match with MPSS 3.x or 3.x.x distro package
+        if [[ $url =~ mpss-[0-9].[0-9](.[0-9]*)?-$distro.tar ]]; then
+            ver3=${url##*mpss-}
+            ver3=${ver3%%-$distro.tar}
+        # Try to match with MPSS 3.x or 3.x.x source package
+        elif [[ $url =~ mpss-src-[0-9].[0-9](.[0-9]*)?.tar ]]; then
+            ver3=${url##*mpss-src-}
+            ver3=${ver3%%.tar}
+        # Try to match with MPSS 3.x or 3.x.x cross compiler package
+        elif [[ $url =~ mpss-[0-9].[0-9](.[0-9]*)?-k1om.tar ]]; then
+            ver3=${url##*mpss-}
+            ver3=${ver3%%-k1om.tar}
+        # Try to match with MPSS 2.1.x source package
         elif [[ $url =~ _src-[0-9].[0-9].[0-9]*-[0-9]*_$distro_name.tar ]]; then
-            local bid=${url##*_src-}
-            bid=${bid%%_$distro_name.tar}
+            ver2=${url##*_src-}
+            ver2=${ver2%%_$distro_name.tar}
+        fi
+
+        if [ -n "$ver3" ]; then
+            # Check for MPSS 3.x or MPSS 3.x.x
+            if [[ $ver3 =~ [0-9].[0-9].[0-9]* ]]; then
+                ver3="${ver3}-0"
+            else
+                ver3="${ver3}.0-0"
+            fi
             if [ -z "$build" ]; then
-                res2="$bid"
-            elif [ "$build" = "$bid" ]; then
+                res3="$ver3"
+            elif [ "$build" = "$ver3" ]; then
+                res3="$res3 $url"
+            fi
+        elif [ -n "$ver2" ]; then
+            if [ -z "$build" ]; then
+                res2="$ver2"
+            elif [ "$build" = "$ver2" ]; then
                 res2="$res2 $url"
             fi
         fi
+
     done
 
     if [ -z "$build" ]; then
@@ -636,20 +639,23 @@ parse_mpss_info() {
             echo "$res2"
         fi
     elif [ "${build%%.*}" = "3" ]; then
-        local ver=${build%.*}
-        local bid=${build%%-*}
-        bid=${bid##$ver.}
+        local ver=${build%%-*}
+        local bid=${build##*-}
         if [ $bid -eq 0 ]; then
             # return URLs from MPSS info file
             echo "$res3"
         else
+            # Check for MPSS 3.x or MPSS 3.x.x
+            if [ ${ver##*.} -eq 0 ]; then
+                ver=${ver%.*}
+            fi
             # return URLs from internal site with MPSS builds
             # kernel sources:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-src-$ver.tar"
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-src-$ver.tar"
             # kernel configs:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-$ver-k1om.tar"
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-$ver-k1om.tar"
             # OFED headers:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/builds/mpss/rc"}/$bid/release/knightscorner/package/mpss-$ver-$distro.tar"
+            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-$ver-$distro.tar"
         fi
     else
         # return URLs from MPSS info file
@@ -675,7 +681,7 @@ download_mpss() {
     [ -z "$urls" ] && fatal 1 "Could not determine the URLs of MPSS $MPSS_VERSION"
 
     # force re-download if build number is zero
-    [[ $MPSS_VERSION = [0-9].[0-9].0-0 ]] && force=true
+    [[ $MPSS_VERSION = [0-9].[0-9].[0-9]*-0 ]] && force=true
 
     local url
     local i=0
@@ -840,9 +846,13 @@ unpack_mpss() {
     [ -d mpss ] && return 0
 
     if [ "${MPSS_VERSION%%.*}" = "3" ]; then
-        local ver=${MPSS_VERSION%.*}
+        local ver=${MPSS_VERSION%%-*}
         local file
         local i
+        # Check for MPSS 3.x or MPSS 3.x.x
+        if [ ${ver##*.} -eq 0 ]; then
+            ver=${ver%.*}
+        fi
         for i in $(seq 0 9); do
             file="$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part$i.tar"
             if [ -r "$file" ]; then
@@ -2165,7 +2175,6 @@ if [ -n "$MPSS_VERSION" ]; then
     if [ "${MPSS_VERSION%%.*}" = "3" ]; then
         CC_TARGET_ARCH=k1om-mpss-linux
         LINUX="$TOPDIR/mpss"
-        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires mpss-bootimage\""
     else
         CC_TARGET_ARCH=x86_64-k1om-linux
         LINUX="$TOPDIR/mpss/card/kernel"
