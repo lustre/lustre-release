@@ -129,9 +129,7 @@ rpms: @PACKAGE_TARNAME@.spec dist Makefile
 		RPMARGS="$$RPMARGS --define \"_mandir %{_prefix}/share/man\""; \
 		RPMARGS="$$RPMARGS --define \"_sysconfdir %{cross_path}/etc\""; \
 		RPMARGS="$$RPMARGS --define \"make_args @CROSS_VARS@\""; \
-		if [ "@CC_TARGET_ARCH@" = "k1om-mpss-linux" ]; then \
-			RPMARGS="$$RPMARGS --define \"cross_requires mpss-bootimage\""; \
-		else \
+		if [ "@CC_TARGET_ARCH@" = "x86_64-k1om-linux" ]; then \
 			RPMARGS="$$RPMARGS --define \"cross_requires intel-mic-gpl\""; \
 		fi; \
 	fi; \
