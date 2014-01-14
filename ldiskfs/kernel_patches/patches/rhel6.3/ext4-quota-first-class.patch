@@ -30,9 +30,9 @@ Signed-off-by: Aditya Kali <adityakali@google.com>
 ---
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2012-06-26 11:26:23.345235745 +0200
-+++ linux-stage/fs/ext4/ext4.h	2012-06-26 11:37:38.250355000 +0200
-@@ -162,6 +162,8 @@ typedef struct ext4_io_end {
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -185,6 +185,8 @@ typedef struct ext4_io_end {
   */
  #define	EXT4_BAD_INO		 1	/* Bad blocks inode */
  #define EXT4_ROOT_INO		 2	/* Root inode */
@@ -41,7 +41,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_BOOT_LOADER_INO	 5	/* Boot loader inode */
  #define EXT4_UNDEL_DIR_INO	 6	/* Undelete directory inode */
  #define EXT4_RESIZE_INO		 7	/* Reserved group descriptors inode */
-@@ -1016,7 +1018,9 @@ struct ext4_super_block {
+@@ -1042,7 +1044,9 @@ struct ext4_super_block {
  	__u8	s_last_error_func[32];	/* function where the error happened */
  #define EXT4_S_ERR_END offsetof(struct ext4_super_block, s_mount_opts)
  	__u8	s_mount_opts[64];
@@ -52,7 +52,7 @@ Index: linux-stage/fs/ext4/ext4.h
  };
  
  #ifdef __KERNEL__
-@@ -1090,6 +1094,7 @@ struct ext4_sb_info {
+@@ -1116,6 +1120,7 @@ struct ext4_sb_info {
  #ifdef CONFIG_QUOTA
  	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
  	int s_jquota_fmt;			/* Format of quota to use */
@@ -60,7 +60,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #endif
  	unsigned int s_want_extra_isize; /* New inodes should reserve # bytes */
  	struct rb_root system_blks;
-@@ -1189,6 +1194,8 @@ static inline struct timespec ext4_curre
+@@ -1216,6 +1221,8 @@ static inline struct timespec ext4_curre
  static inline int ext4_valid_inum(struct super_block *sb, unsigned long ino)
  {
  	return ino == EXT4_ROOT_INO ||
@@ -69,7 +69,7 @@ Index: linux-stage/fs/ext4/ext4.h
  		ino == EXT4_JOURNAL_INO ||
  		ino == EXT4_RESIZE_INO ||
  		(ino >= EXT4_FIRST_INO(sb) &&
-@@ -1293,6 +1300,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1320,6 +1327,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  #define EXT4_FEATURE_RO_COMPAT_GDT_CSUM		0x0010
  #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
  #define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
@@ -77,7 +77,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  #define EXT4_FEATURE_INCOMPAT_COMPRESSION	0x0001
  #define EXT4_FEATURE_INCOMPAT_FILETYPE		0x0002
-@@ -1325,7 +1333,8 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1352,7 +1360,8 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK | \
  					 EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE | \
  					 EXT4_FEATURE_RO_COMPAT_BTREE_DIR |\
@@ -119,9 +119,9 @@ Index: linux-stage/fs/ext4/ext4_jbd2.h
  #define EXT4_QUOTA_INIT_BLOCKS(sb) 0
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2012-06-26 11:37:30.905374000 +0200
-+++ linux-stage/fs/ext4/super.c	2012-06-26 11:38:30.997488000 +0200
-@@ -86,6 +86,11 @@ wait_queue_head_t aio_wq[WQ_HASH_SZ];
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -115,6 +115,11 @@ void ext4_kvfree(void *ptr)
  
  static int bigendian_extents;
  
@@ -133,7 +133,7 @@ Index: linux-stage/fs/ext4/super.c
  ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
  			       struct ext4_group_desc *bg)
  {
-@@ -670,6 +675,12 @@ static void ext4_put_super(struct super_
+@@ -703,6 +708,12 @@ static void ext4_put_super(struct super_
  
  	ext4_unregister_li_request(sb);
  
@@ -146,7 +146,7 @@ Index: linux-stage/fs/ext4/super.c
  	flush_workqueue(sbi->dio_unwritten_wq);
  	destroy_workqueue(sbi->dio_unwritten_wq);
  
-@@ -2142,14 +2153,22 @@ static void ext4_orphan_cleanup(struct s
+@@ -2162,14 +2173,22 @@ static void ext4_orphan_cleanup(struct s
  #ifdef CONFIG_QUOTA
  	/* Needed for iput() to work correctly and not trash data */
  	sb->s_flags |= MS_ACTIVE;
@@ -177,7 +177,7 @@ Index: linux-stage/fs/ext4/super.c
  		}
  	}
  #endif
-@@ -2193,10 +2212,14 @@ static void ext4_orphan_cleanup(struct s
+@@ -2213,10 +2232,14 @@ static void ext4_orphan_cleanup(struct s
  		ext4_msg(sb, KERN_INFO, "%d truncate%s cleaned up",
  		       PLURAL(nr_truncates));
  #ifdef CONFIG_QUOTA
@@ -196,7 +196,7 @@ Index: linux-stage/fs/ext4/super.c
  	}
  #endif
  	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
-@@ -3395,6 +3418,15 @@ static int ext4_fill_super(struct super_
+@@ -3408,6 +3431,15 @@ static int ext4_fill_super(struct super_
  #ifdef CONFIG_QUOTA
  	sb->s_qcop = &ext4_qctl_operations;
  	sb->dq_op = &ext4_quota_operations;
@@ -212,7 +212,7 @@ Index: linux-stage/fs/ext4/super.c
  #endif
  	INIT_LIST_HEAD(&sbi->s_orphan); /* unlinked but open files */
  	mutex_init(&sbi->s_orphan_lock);
-@@ -3622,8 +3654,31 @@ no_journal:
+@@ -3633,13 +3665,40 @@ no_journal:
  	} else
  		descr = "out journal";
  
@@ -227,7 +227,7 @@ Index: linux-stage/fs/ext4/super.c
 +		if (ret) {
 +			ext4_msg(sb, KERN_ERR, "Can't enable usage tracking on "
 +			         "a filesystem with the QUOTA feature set");
-+			goto failed_mount4;
++			goto failed_mount8;
 +		}
 +	}
 +#else
@@ -246,7 +246,16 @@ Index: linux-stage/fs/ext4/super.c
  		 *sbi->s_es->s_mount_opts ? "; " : "");
  
  	lock_kernel();
-@@ -3981,6 +4036,12 @@ static int ext4_commit_super(struct supe
+ 	return 0;
+ 
++#ifdef CONFIG_QUOTA
++failed_mount8:
++	kobject_del(&sbi->s_kobj);
++#endif
+ cantfind_ext4:
+ 	if (!silent)
+ 		ext4_msg(sb, KERN_ERR, "VFS: Can't find ext4 filesystem");
+@@ -3991,6 +4050,12 @@ static int ext4_commit_super(struct supe
  					&EXT4_SB(sb)->s_freeblocks_counter));
  	es->s_free_inodes_count = cpu_to_le32(percpu_counter_sum_positive(
  					&EXT4_SB(sb)->s_freeinodes_counter));
@@ -259,7 +268,7 @@ Index: linux-stage/fs/ext4/super.c
  	sb->s_dirt = 0;
  	BUFFER_TRACE(sbh, "marking dirty");
  	mark_buffer_dirty(sbh);
-@@ -4531,6 +4592,22 @@ static int ext4_quota_on(struct super_bl
+@@ -4552,6 +4617,22 @@ static int ext4_quota_on(struct super_bl
  	int err;
  	struct path path;
  
@@ -282,7 +291,7 @@ Index: linux-stage/fs/ext4/super.c
  	if (!test_opt(sb, QUOTA))
  		return -EINVAL;
  	/* When remounting, no checks are needed and in fact, name is NULL */
-@@ -4630,9 +4707,114 @@ static int ext4_quota_off(struct super_b
+@@ -4651,9 +4732,114 @@ static int ext4_quota_off(struct super_b
  		iput(inode);
  	}
  
