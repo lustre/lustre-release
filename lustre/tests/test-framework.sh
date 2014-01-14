@@ -4757,7 +4757,8 @@ check_mds() {
 
 reset_fail_loc () {
     echo -n "Resetting fail_loc on all nodes..."
-    do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 2>/dev/null || true"
+    do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 \
+	    fail_val=0 2>/dev/null || true"
     echo done.
 }
 
