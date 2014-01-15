@@ -118,6 +118,12 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 		   void *notify_data, bool master);
 void lfsck_degister(const struct lu_env *env, struct dt_device *key);
 
+int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
+		     struct dt_device *tgt, struct obd_export *exp,
+		     __u32 index, bool for_ost);
+void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
+		      struct dt_device *tgt, __u32 index, bool for_ost);
+
 int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_start_param *lsp);
 int lfsck_stop(const struct lu_env *env, struct dt_device *key,

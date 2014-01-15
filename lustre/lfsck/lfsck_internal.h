@@ -292,12 +292,57 @@ struct lfsck_operations {
 				   struct lfsck_component *com);
 };
 
+#define TGT_PTRS		256     /* number of pointers at 1st level */
+#define TGT_PTRS_PER_BLOCK	256     /* number of pointers at 2nd level */
+
+struct lfsck_tgt_desc {
+	struct list_head   ltd_orphan_list;
+	struct dt_device  *ltd_tgt;
+	struct dt_device  *ltd_key;
+	struct obd_export *ltd_exp;
+	struct list_head   ltd_layout_list;
+	atomic_t	   ltd_ref;
+	__u32              ltd_index;
+};
+
+struct lfsck_tgt_desc_idx {
+	struct lfsck_tgt_desc *ldi_tgts[TGT_PTRS_PER_BLOCK];
+};
+
+struct lfsck_tgt_descs {
+	/* list of known TGTs */
+	struct lfsck_tgt_desc_idx	*ltd_tgts_idx[TGT_PTRS];
+
+	/* bitmap of TGTs available */
+	cfs_bitmap_t			*ltd_tgts_bitmap;
+
+	/* for lfsck_tgt_desc::ltd_xxx_list */
+	spinlock_t			 ltd_lock;
+
+	/* for tgts table accessing and changes */
+	struct rw_semaphore		 ltd_rw_sem;
+
+	/* Temporary list for orphan targets. */
+	struct list_head		 ltd_orphan;
+
+	/* number of registered TGTs */
+	int				 ltd_tgtnr;
+};
+
+#define LTD_TGT(ltd, index)	\
+	((ltd)->ltd_tgts_idx[(index) / TGT_PTRS_PER_BLOCK]->\
+	 ldi_tgts[(index) % TGT_PTRS_PER_BLOCK])
+
+#define OST_TGT(lfsck, index)   LTD_TGT(&lfsck->li_ost_descs, index)
+#define MDT_TGT(lfsck, index)   LTD_TGT(&lfsck->li_mdt_descs, index)
+
 struct lfsck_component {
 	/* into lfsck_instance::li_list_(scan,double_scan,idle} */
 	cfs_list_t		 lc_link;
 
 	/* into lfsck_instance::li_list_dir */
 	cfs_list_t		 lc_link_dir;
+
 	struct rw_semaphore	 lc_sem;
 	atomic_t		 lc_ref;
 
@@ -381,6 +426,12 @@ struct lfsck_instance {
 
 	/* It for directory traversal */
 	struct dt_it		 *li_di_dir;
+
+	/* Description of OST */
+	struct lfsck_tgt_descs	  li_ost_descs;
+
+	/* Description of MDT */
+	struct lfsck_tgt_descs	  li_mdt_descs;
 
 	/* namespace-based directory traversal position. */
 	__u64			  li_cookie_dir;
@@ -634,6 +685,24 @@ static inline void lfsck_object_put(const struct lu_env *env,
 				    struct dt_object *obj)
 {
 	lu_object_put(env, &obj->do_lu);
+}
+
+static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
+						   __u32 index)
+{
+	struct lfsck_tgt_desc *ltd;
+
+	ltd = LTD_TGT(ltds, index);
+	if (ltd != NULL)
+		atomic_inc(&ltd->ltd_ref);
+
+	return ltd;
+}
+
+static inline void lfsck_tgt_put(struct lfsck_tgt_desc *ltd)
+{
+	if (atomic_dec_and_test(&ltd->ltd_ref))
+		OBD_FREE_PTR(ltd);
 }
 
 static inline struct lfsck_component *

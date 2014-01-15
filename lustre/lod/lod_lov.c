@@ -35,6 +35,7 @@
 
 #include <obd_class.h>
 #include <obd_lov.h>
+#include <lustre_lfsck.h>
 
 #include "lod_internal.h"
 
@@ -184,6 +185,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	struct lod_tgt_desc     *tgt_desc;
 	struct lod_tgt_descs    *ltd;
 	struct obd_uuid		obd_uuid;
+	bool			for_ost;
 	ENTRY;
 
 	CDEBUG(D_CONFIG, "osp:%s idx:%d gen:%d\n", osp, index, gen);
@@ -212,6 +214,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	data->ocd_index = index;
 
 	if (strcmp(LUSTRE_OSC_NAME, type) == 0) {
+		for_ost = true;
 		data->ocd_connect_flags |= OBD_CONNECT_AT |
 					   OBD_CONNECT_FULL20 |
 					   OBD_CONNECT_INDEX |
@@ -232,6 +235,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	} else {
 		struct obd_import *imp = obd->u.cli.cl_import;
 
+		for_ost = false;
 		data->ocd_ibits_known = MDS_INODELOCK_UPDATE;
 		data->ocd_connect_flags |= OBD_CONNECT_ACL |
 					   OBD_CONNECT_MDS_CAPA |
@@ -347,7 +351,12 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	if (lod->lod_recovery_completed)
 		ldev->ld_ops->ldo_recovery_complete(env, ldev);
 
-	RETURN(0);
+	rc = lfsck_add_target(env, lod->lod_child, d, exp, index, for_ost);
+	if (rc != 0)
+		CERROR("Fail to add LFSCK target: name = %s, type = %s, "
+		       "index = %u, rc = %d\n", osp, type, index, rc);
+
+	RETURN(rc);
 
 out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
@@ -365,17 +374,23 @@ out_free:
 /*
  * helper function to schedule OST removal from the device table
  */
-static void __lod_del_device(struct lod_tgt_descs *ltd,
-			     unsigned idx)
+static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
+			     struct lod_tgt_descs *ltd, unsigned idx,
+			     bool for_ost)
 {
 	LASSERT(LTD_TGT(ltd, idx));
+
+	lfsck_del_target(env, lod->lod_child, LTD_TGT(ltd, idx)->ltd_tgt,
+			 idx, for_ost);
+
 	if (LTD_TGT(ltd, idx)->ltd_reap == 0) {
 		LTD_TGT(ltd, idx)->ltd_reap = 1;
 		ltd->ltd_death_row++;
 	}
 }
 
-int lod_fini_tgt(struct lod_device *lod, struct lod_tgt_descs *ltd)
+int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
+		 struct lod_tgt_descs *ltd, bool for_ost)
 {
 	int idx;
 
@@ -384,7 +399,7 @@ int lod_fini_tgt(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	lod_getref(ltd);
 	mutex_lock(&ltd->ltd_mutex);
 	cfs_foreach_bit(ltd->ltd_tgt_bitmap, idx)
-		__lod_del_device(ltd, idx);
+		__lod_del_device(env, lod, ltd, idx, for_ost);
 	mutex_unlock(&ltd->ltd_mutex);
 	lod_putref(lod, ltd);
 	CFS_FREE_BITMAP(ltd->ltd_tgt_bitmap);
@@ -411,7 +426,7 @@ int lod_fini_tgt(struct lod_device *lod, struct lod_tgt_descs *ltd)
  */
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
-		   unsigned gen)
+		   unsigned gen, bool for_ost)
 {
 	struct obd_device *obd;
 	int                rc = 0;
@@ -454,7 +469,7 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	__lod_del_device(ltd, idx);
+	__lod_del_device(env, lod, ltd, idx, for_ost);
 	EXIT;
 out:
 	mutex_unlock(&ltd->ltd_mutex);

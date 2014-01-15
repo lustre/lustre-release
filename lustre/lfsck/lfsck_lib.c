@@ -58,6 +58,8 @@ LU_CONTEXT_KEY_DEFINE(lfsck, LCT_MD_THREAD | LCT_DT_THREAD);
 LU_KEY_INIT_GENERIC(lfsck);
 
 static CFS_LIST_HEAD(lfsck_instance_list);
+static struct list_head lfsck_ost_orphan_list;
+static struct list_head lfsck_mdt_orphan_list;
 static DEFINE_SPINLOCK(lfsck_instance_lock);
 
 static const char *lfsck_status_names[] = {
@@ -94,6 +96,177 @@ const char *lfsck_status2names(enum lfsck_status status)
 		return "unknown";
 
 	return lfsck_status_names[status];
+}
+
+static int lfsck_tgt_descs_init(struct lfsck_tgt_descs *ltds)
+{
+	spin_lock_init(&ltds->ltd_lock);
+	init_rwsem(&ltds->ltd_rw_sem);
+	INIT_LIST_HEAD(&ltds->ltd_orphan);
+	ltds->ltd_tgts_bitmap = CFS_ALLOCATE_BITMAP(BITS_PER_LONG);
+	if (ltds->ltd_tgts_bitmap == NULL)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
+{
+	struct lfsck_tgt_desc	*ltd;
+	struct lfsck_tgt_desc	*next;
+	int			 idx;
+
+	down_write(&ltds->ltd_rw_sem);
+
+	list_for_each_entry_safe(ltd, next, &ltds->ltd_orphan,
+				 ltd_orphan_list) {
+		list_del_init(&ltd->ltd_orphan_list);
+		lfsck_tgt_put(ltd);
+	}
+
+	if (unlikely(ltds->ltd_tgts_bitmap == NULL)) {
+		up_write(&ltds->ltd_rw_sem);
+
+		return;
+	}
+
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = LTD_TGT(ltds, idx);
+		if (likely(ltd != NULL)) {
+			LASSERT(list_empty(&ltd->ltd_layout_list));
+
+			ltds->ltd_tgtnr--;
+			cfs_bitmap_clear(ltds->ltd_tgts_bitmap, idx);
+			LTD_TGT(ltds, idx) = NULL;
+			lfsck_tgt_put(ltd);
+		}
+	}
+
+	LASSERTF(ltds->ltd_tgtnr == 0, "tgt count unmatched: %d\n",
+		 ltds->ltd_tgtnr);
+
+	for (idx = 0; idx < TGT_PTRS; idx++) {
+		if (ltds->ltd_tgts_idx[idx] != NULL) {
+			OBD_FREE_PTR(ltds->ltd_tgts_idx[idx]);
+			ltds->ltd_tgts_idx[idx] = NULL;
+		}
+	}
+
+	CFS_FREE_BITMAP(ltds->ltd_tgts_bitmap);
+	ltds->ltd_tgts_bitmap = NULL;
+	up_write(&ltds->ltd_rw_sem);
+}
+
+static int __lfsck_add_target(const struct lu_env *env,
+			      struct lfsck_instance *lfsck,
+			      struct lfsck_tgt_desc *ltd,
+			      bool for_ost, bool locked)
+{
+	struct lfsck_tgt_descs *ltds;
+	__u32			index = ltd->ltd_index;
+	int			rc    = 0;
+	ENTRY;
+
+	if (for_ost)
+		ltds = &lfsck->li_ost_descs;
+	else
+		ltds = &lfsck->li_mdt_descs;
+
+	if (!locked)
+		down_write(&ltds->ltd_rw_sem);
+
+	LASSERT(ltds->ltd_tgts_bitmap != NULL);
+
+	if (index >= ltds->ltd_tgts_bitmap->size) {
+		__u32 newsize = max((__u32)ltds->ltd_tgts_bitmap->size,
+				    (__u32)BITS_PER_LONG);
+		cfs_bitmap_t *old_bitmap = ltds->ltd_tgts_bitmap;
+		cfs_bitmap_t *new_bitmap;
+
+		while (newsize < index + 1)
+			newsize <<= 1;
+
+		new_bitmap = CFS_ALLOCATE_BITMAP(newsize);
+		if (new_bitmap == NULL)
+			GOTO(unlock, rc = -ENOMEM);
+
+		if (ltds->ltd_tgtnr > 0)
+			cfs_bitmap_copy(new_bitmap, old_bitmap);
+		ltds->ltd_tgts_bitmap = new_bitmap;
+		CFS_FREE_BITMAP(old_bitmap);
+	}
+
+	if (cfs_bitmap_check(ltds->ltd_tgts_bitmap, index)) {
+		CERROR("%s: the device %s (%u) is registered already\n",
+		       lfsck_lfsck2name(lfsck),
+		       ltd->ltd_tgt->dd_lu_dev.ld_obd->obd_name, index);
+		GOTO(unlock, rc = -EEXIST);
+	}
+
+	if (ltds->ltd_tgts_idx[index / TGT_PTRS_PER_BLOCK] == NULL) {
+		OBD_ALLOC_PTR(ltds->ltd_tgts_idx[index / TGT_PTRS_PER_BLOCK]);
+		if (ltds->ltd_tgts_idx[index / TGT_PTRS_PER_BLOCK] == NULL)
+			GOTO(unlock, rc = -ENOMEM);
+	}
+
+	LTD_TGT(ltds, index) = ltd;
+	cfs_bitmap_set(ltds->ltd_tgts_bitmap, index);
+	ltds->ltd_tgtnr++;
+
+	GOTO(unlock, rc = 0);
+
+unlock:
+	if (!locked)
+		up_write(&ltds->ltd_rw_sem);
+
+	return rc;
+}
+
+static int lfsck_add_target_from_orphan(const struct lu_env *env,
+					struct lfsck_instance *lfsck)
+{
+	struct lfsck_tgt_descs	*ltds    = &lfsck->li_ost_descs;
+	struct lfsck_tgt_desc	*ltd;
+	struct lfsck_tgt_desc	*next;
+	struct list_head	*head    = &lfsck_ost_orphan_list;
+	int			 rc;
+	bool			 for_ost = true;
+
+again:
+	spin_lock(&lfsck_instance_lock);
+	list_for_each_entry_safe(ltd, next, head, ltd_orphan_list) {
+		if (ltd->ltd_key == lfsck->li_bottom) {
+			list_del_init(&ltd->ltd_orphan_list);
+			list_add_tail(&ltd->ltd_orphan_list,
+				      &ltds->ltd_orphan);
+		}
+	}
+	spin_unlock(&lfsck_instance_lock);
+
+	down_write(&ltds->ltd_rw_sem);
+	while (!list_empty(&ltds->ltd_orphan)) {
+		ltd = list_entry(ltds->ltd_orphan.next,
+				 struct lfsck_tgt_desc,
+				 ltd_orphan_list);
+		list_del_init(&ltd->ltd_orphan_list);
+		rc = __lfsck_add_target(env, lfsck, ltd, for_ost, true);
+		/* Do not hold the semaphore for too long time. */
+		up_write(&ltds->ltd_rw_sem);
+		if (rc != 0)
+			return rc;
+
+		down_write(&ltds->ltd_rw_sem);
+	}
+	up_write(&ltds->ltd_rw_sem);
+
+	if (for_ost) {
+		ltds = &lfsck->li_mdt_descs;
+		head = &lfsck_mdt_orphan_list;
+		for_ost = false;
+		goto again;
+	}
+
+	return 0;
 }
 
 static inline struct lfsck_component *
@@ -153,6 +326,9 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 	LASSERT(list_empty(&lfsck->li_link));
 	LASSERT(thread_is_init(thread) || thread_is_stopped(thread));
 
+	lfsck_tgt_descs_fini(&lfsck->li_ost_descs);
+	lfsck_tgt_descs_fini(&lfsck->li_mdt_descs);
+
 	if (lfsck->li_obj_oit != NULL) {
 		lu_object_put_nocache(env, &lfsck->li_obj_oit->do_lu);
 		lfsck->li_obj_oit = NULL;
@@ -196,24 +372,35 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 	OBD_FREE_PTR(lfsck);
 }
 
-static inline struct lfsck_instance *lfsck_instance_find(struct dt_device *key,
-							 bool ref, bool unlink)
+static inline struct lfsck_instance *
+__lfsck_instance_find(struct dt_device *key, bool ref, bool unlink)
 {
 	struct lfsck_instance *lfsck;
 
-	spin_lock(&lfsck_instance_lock);
 	cfs_list_for_each_entry(lfsck, &lfsck_instance_list, li_link) {
 		if (lfsck->li_bottom == key) {
 			if (ref)
 				lfsck_instance_get(lfsck);
 			if (unlink)
 				list_del_init(&lfsck->li_link);
-			spin_unlock(&lfsck_instance_lock);
+
 			return lfsck;
 		}
 	}
-	spin_unlock(&lfsck_instance_lock);
+
 	return NULL;
+}
+
+static inline struct lfsck_instance *lfsck_instance_find(struct dt_device *key,
+							 bool ref, bool unlink)
+{
+	struct lfsck_instance *lfsck;
+
+	spin_lock(&lfsck_instance_lock);
+	lfsck = __lfsck_instance_find(key, ref, unlink);
+	spin_unlock(&lfsck_instance_lock);
+
+	return lfsck;
 }
 
 static inline int lfsck_instance_add(struct lfsck_instance *lfsck)
@@ -1152,6 +1339,14 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	lfsck->li_next = next;
 	lfsck->li_bottom = key;
 
+	rc = lfsck_tgt_descs_init(&lfsck->li_ost_descs);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = lfsck_tgt_descs_init(&lfsck->li_mdt_descs);
+	if (rc != 0)
+		GOTO(out, rc);
+
 	fid->f_seq = FID_SEQ_LOCAL_NAME;
 	fid->f_oid = 1;
 	fid->f_ver = 0;
@@ -1216,6 +1411,8 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 add:
 	rc = lfsck_instance_add(lfsck);
+	if (rc == 0)
+		rc = lfsck_add_target_from_orphan(env, lfsck);
 out:
 	if (root != NULL && !IS_ERR(root))
 		lu_object_put(env, &root->do_lu);
@@ -1235,18 +1432,163 @@ void lfsck_degister(const struct lu_env *env, struct dt_device *key)
 }
 EXPORT_SYMBOL(lfsck_degister);
 
+int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
+		     struct dt_device *tgt, struct obd_export *exp,
+		     __u32 index, bool for_ost)
+{
+	struct lfsck_instance	*lfsck;
+	struct lfsck_tgt_desc	*ltd;
+	int			 rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(ltd);
+	if (ltd == NULL)
+		RETURN(-ENOMEM);
+
+	ltd->ltd_tgt = tgt;
+	ltd->ltd_key = key;
+	ltd->ltd_exp = exp;
+	INIT_LIST_HEAD(&ltd->ltd_orphan_list);
+	INIT_LIST_HEAD(&ltd->ltd_layout_list);
+	atomic_set(&ltd->ltd_ref, 1);
+	ltd->ltd_index = index;
+
+	spin_lock(&lfsck_instance_lock);
+	lfsck = __lfsck_instance_find(key, true, false);
+	if (lfsck == NULL) {
+		if (for_ost)
+			list_add_tail(&ltd->ltd_orphan_list,
+				      &lfsck_ost_orphan_list);
+		else
+			list_add_tail(&ltd->ltd_orphan_list,
+				      &lfsck_mdt_orphan_list);
+		spin_unlock(&lfsck_instance_lock);
+
+		RETURN(0);
+	}
+	spin_unlock(&lfsck_instance_lock);
+
+	rc = __lfsck_add_target(env, lfsck, ltd, for_ost, false);
+	if (rc != 0)
+		lfsck_tgt_put(ltd);
+
+	lfsck_instance_put(env, lfsck);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lfsck_add_target);
+
+void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
+		      struct dt_device *tgt, __u32 index, bool for_ost)
+{
+	struct lfsck_instance	*lfsck;
+	struct lfsck_tgt_descs	*ltds;
+	struct lfsck_tgt_desc	*ltd;
+	struct list_head	*head;
+	bool			 found = false;
+
+	if (for_ost)
+		head = &lfsck_ost_orphan_list;
+	else
+		head = &lfsck_mdt_orphan_list;
+
+	spin_lock(&lfsck_instance_lock);
+	list_for_each_entry(ltd, head, ltd_orphan_list) {
+		if (ltd->ltd_tgt == tgt) {
+			list_del_init(&ltd->ltd_orphan_list);
+			spin_unlock(&lfsck_instance_lock);
+			lfsck_tgt_put(ltd);
+
+			return;
+		}
+	}
+
+	lfsck = __lfsck_instance_find(key, true, false);
+	spin_unlock(&lfsck_instance_lock);
+	if (unlikely(lfsck == NULL))
+		return;
+
+	if (for_ost)
+		ltds = &lfsck->li_ost_descs;
+	else
+		ltds = &lfsck->li_mdt_descs;
+
+	down_write(&ltds->ltd_rw_sem);
+
+	LASSERT(ltds->ltd_tgts_bitmap != NULL);
+
+	if (unlikely(index >= ltds->ltd_tgts_bitmap->size))
+		goto unlock;
+
+	ltd = LTD_TGT(ltds, index);
+	if (unlikely(ltd == NULL))
+		goto unlock;
+
+	found = true;
+	if (!list_empty(&ltd->ltd_layout_list)) {
+		spin_lock(&ltds->ltd_lock);
+		list_del_init(&ltd->ltd_layout_list);
+		spin_unlock(&ltds->ltd_lock);
+	}
+
+	LASSERT(ltds->ltd_tgtnr > 0);
+
+	ltds->ltd_tgtnr--;
+	cfs_bitmap_clear(ltds->ltd_tgts_bitmap, index);
+	LTD_TGT(ltds, index) = NULL;
+	lfsck_tgt_put(ltd);
+
+unlock:
+	if (!found) {
+		if (for_ost)
+			head = &lfsck->li_ost_descs.ltd_orphan;
+		else
+			head = &lfsck->li_ost_descs.ltd_orphan;
+
+		list_for_each_entry(ltd, head, ltd_orphan_list) {
+			if (ltd->ltd_tgt == tgt) {
+				list_del_init(&ltd->ltd_orphan_list);
+				lfsck_tgt_put(ltd);
+				break;
+			}
+		}
+	}
+
+	up_write(&ltds->ltd_rw_sem);
+	lfsck_instance_put(env, lfsck);
+}
+EXPORT_SYMBOL(lfsck_del_target);
+
 static int __init lfsck_init(void)
 {
 	int rc;
 
+	INIT_LIST_HEAD(&lfsck_ost_orphan_list);
+	INIT_LIST_HEAD(&lfsck_mdt_orphan_list);
 	lfsck_key_init_generic(&lfsck_thread_key, NULL);
 	rc = lu_context_key_register(&lfsck_thread_key);
+
 	return rc;
 }
 
 static void __exit lfsck_exit(void)
 {
+	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *next;
+
 	LASSERT(cfs_list_empty(&lfsck_instance_list));
+
+	list_for_each_entry_safe(ltd, next, &lfsck_ost_orphan_list,
+				 ltd_orphan_list) {
+		list_del_init(&ltd->ltd_orphan_list);
+		lfsck_tgt_put(ltd);
+	}
+
+	list_for_each_entry_safe(ltd, next, &lfsck_mdt_orphan_list,
+				 ltd_orphan_list) {
+		list_del_init(&ltd->ltd_orphan_list);
+		lfsck_tgt_put(ltd);
+	}
 
 	lu_context_key_degister(&lfsck_thread_key);
 }
