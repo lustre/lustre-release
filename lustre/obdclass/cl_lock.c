@@ -2053,8 +2053,8 @@ void cl_lock_hold_add(const struct lu_env *env, struct cl_lock *lock,
         LASSERT(lock->cll_state != CLS_FREEING);
 
         ENTRY;
-        cl_lock_hold_mod(env, lock, +1);
         cl_lock_get(lock);
+	cl_lock_hold_mod(env, lock, +1);
         lu_ref_add(&lock->cll_holders, scope, source);
         lu_ref_add(&lock->cll_reference, scope, source);
         EXIT;
