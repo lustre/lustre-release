@@ -77,8 +77,8 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-2778 LU-2059
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 57b     50h"
+# bug number for skipped test:        LU-2778 LU-2059 LU-4444
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 57b     50h     69"
 
 init_logging
 
@@ -3972,7 +3972,8 @@ test_69() {
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -i 0 $DIR/$tdir
-	createmany -o $DIR/$tdir/$tfile- $num_create
+	createmany -o $DIR/$tdir/$tfile- $num_create ||
+		error "createmany: failed to create $num_create files: $?"
 	# delete all of the files with objects on OST0 so the
 	# filesystem is not inconsistent later on
 	$LFS find $MOUNT --ost 0 | xargs rm
