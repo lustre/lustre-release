@@ -29,9 +29,9 @@ rhel6.3/ext4-extents-mount-option.patch
 rhel6.3/ext4-fiemap-2.6.patch
 rhel6.3/ext4-mballoc-pa_free-mismatch.patch
 rhel6.3/ext4-data-in-dirent.patch
+rhel6.4/ext4-back-dquot-to.patch
 rhel6.3/ext4-large-eas.patch
 rhel6.3/ext4-disable-mb-cache.patch
-rhel6.3/ext4-back-dquot-to.patch
 rhel6.3/ext4-nocmtime-2.6.patch
 rhel6.3/ext4-journal-callback.patch
 rhel6.3/ext4-store-tree-generation-at-find.patch

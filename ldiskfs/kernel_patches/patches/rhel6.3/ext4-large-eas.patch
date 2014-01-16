@@ -2,7 +2,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -1267,6 +1267,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1333,6 +1333,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  #define EXT4_FEATURE_INCOMPAT_64BIT		0x0080
  #define EXT4_FEATURE_INCOMPAT_MMP               0x0100
  #define EXT4_FEATURE_INCOMPAT_FLEX_BG		0x0200
@@ -10,7 +10,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_INCOMPAT_DIRDATA		0x1000
  
  #define EXT4_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
-@@ -1276,6 +1277,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1342,6 +1343,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -18,7 +18,7 @@ Index: linux-stage/fs/ext4/ext4.h
  					 EXT4_FEATURE_INCOMPAT_MMP| \
  					 EXT4_FEATURE_INCOMPAT_DIRDATA)
  
-@@ -1607,6 +1609,12 @@ struct mmpd_data {
+@@ -1706,6 +1708,12 @@ struct mmpd_data {
  #endif
  
  /*
@@ -30,6 +30,17 @@ Index: linux-stage/fs/ext4/ext4.h
 +/*
   * Function prototypes
   */
+ 
+@@ -1717,6 +1725,10 @@ struct mmpd_data {
+ # define ATTRIB_NORET	__attribute__((noreturn))
+ # define NORET_AND	noreturn,
+ 
++struct ext4_xattr_ino_array {
++	unsigned int xia_count;		/* # of used item in the array */
++	unsigned int xia_inodes[0];
++};
+ /* bitmap.c */
+ extern unsigned int ext4_count_free(struct buffer_head *, unsigned);
  
 Index: linux-stage/fs/ext4/xattr.c
 ===================================================================
@@ -228,7 +239,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	}
  	error = size;
  
-@@ -512,7 +628,7 @@ static size_t ext4_xattr_free_space(stru
+@@ -513,7 +629,7 @@ static size_t ext4_xattr_free_space(stru
  {
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
  		*total += EXT4_XATTR_LEN(last->e_name_len);
@@ -237,7 +248,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < *min_offs)
  				*min_offs = offs;
-@@ -521,11 +637,159 @@ static size_t ext4_xattr_free_space(stru
+@@ -522,11 +638,159 @@ static size_t ext4_xattr_free_space(stru
  	return (*min_offs - ((void *)last - base) - sizeof(__u32));
  }
  
@@ -346,7 +357,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +/*
 + * Unlink the inode storing the value of the EA.
 + */
-+static int
++int
 +ext4_xattr_inode_unlink(struct inode *inode, int ea_ino)
 +{
 +	struct inode *ea_inode = NULL;
@@ -398,7 +409,7 @@ Index: linux-stage/fs/ext4/xattr.c
  };
  
  struct ext4_xattr_search {
-@@ -537,15 +801,23 @@ struct ext4_xattr_search {
+@@ -538,15 +802,23 @@ struct ext4_xattr_search {
  };
  
  static int
@@ -424,7 +435,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < min_offs)
  				min_offs = offs;
-@@ -553,16 +825,21 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -554,16 +826,21 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  	}
  	free = min_offs - ((void *)last - s->base) - sizeof(__u32);
  	if (!s->not_found) {
@@ -450,7 +461,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			return -ENOSPC;
  	}
  
-@@ -576,7 +853,8 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -577,7 +854,8 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  		s->here->e_name_len = name_len;
  		memcpy(s->here->e_name, i->name, name_len);
  	} else {
@@ -460,7 +471,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			void *first_val = s->base + min_offs;
  			size_t offs = le16_to_cpu(s->here->e_value_offs);
  			void *val = s->base + offs;
-@@ -605,13 +883,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -606,13 +884,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  			last = s->first;
  			while (!IS_LAST_ENTRY(last)) {
  				size_t o = le16_to_cpu(last->e_value_offs);
@@ -480,7 +491,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (!i->value) {
  			/* Remove the old name. */
  			size_t size = EXT4_XATTR_LEN(name_len);
-@@ -625,10 +907,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -626,10 +908,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  	if (i->value) {
  		/* Insert the new value. */
  		s->here->e_value_size = cpu_to_le32(i->value_len);
@@ -499,7 +510,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			memset(val + size - EXT4_XATTR_PAD, 0,
  			       EXT4_XATTR_PAD); /* Clear the pad bytes. */
  			memcpy(val, i->value, i->value_len);
-@@ -673,7 +962,7 @@ ext4_xattr_block_find(struct inode *inod
+@@ -674,7 +963,7 @@ ext4_xattr_block_find(struct inode *inod
  		bs->s.end = bs->bh->b_data + bs->bh->b_size;
  		bs->s.here = bs->s.first;
  		error = ext4_xattr_find_entry(&bs->s.here, i->name_index,
@@ -508,7 +519,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (error && error != -ENODATA)
  			goto cleanup;
  		bs->s.not_found = error;
-@@ -697,8 +986,6 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -698,8 +987,6 @@ ext4_xattr_block_set(handle_t *handle, s
  
  #define header(x) ((struct ext4_xattr_header *)(x))
  
@@ -517,7 +528,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (s->base) {
  		ce = mb_cache_entry_get(ext4_xattr_cache, bs->bh->b_bdev,
  					bs->bh->b_blocknr);
-@@ -713,7 +1000,7 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -714,7 +1001,7 @@ ext4_xattr_block_set(handle_t *handle, s
  				ce = NULL;
  			}
  			ea_bdebug(bs->bh, "modifying in-place");
@@ -526,7 +537,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			if (!error) {
  				if (!IS_LAST_ENTRY(s->first))
  					ext4_xattr_rehash(header(s->base),
-@@ -765,7 +1052,7 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -766,7 +1053,7 @@ ext4_xattr_block_set(handle_t *handle, s
  		s->end = s->base + sb->s_blocksize;
  	}
  
@@ -535,7 +546,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (error == -EIO)
  		goto bad_block;
  	if (error)
-@@ -909,7 +1196,7 @@ ext4_xattr_ibody_find(struct inode *inod
+@@ -917,7 +1204,7 @@ ext4_xattr_ibody_find(struct inode *inod
  		/* Find the named attribute. */
  		error = ext4_xattr_find_entry(&is->s.here, i->name_index,
  					      i->name, is->s.end -
@@ -544,7 +555,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (error && error != -ENODATA)
  			return error;
  		is->s.not_found = error;
-@@ -928,7 +1215,7 @@ ext4_xattr_ibody_set(handle_t *handle, s
+@@ -936,7 +1223,7 @@ ext4_xattr_ibody_set(handle_t *handle, s
  
  	if (EXT4_I(inode)->i_extra_isize == 0)
  		return -ENOSPC;
@@ -553,7 +564,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (error)
  		return error;
  	header = IHDR(inode, ext4_raw_inode(&is->iloc));
-@@ -964,7 +1251,7 @@ ext4_xattr_set_handle(handle_t *handle, 
+@@ -972,7 +1259,7 @@ ext4_xattr_set_handle(handle_t *handle, 
  		.name = name,
  		.value = value,
  		.value_len = value_len,
@@ -562,7 +573,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	};
  	struct ext4_xattr_ibody_find is = {
  		.s = { .not_found = -ENODATA, },
-@@ -1033,6 +1320,15 @@ ext4_xattr_set_handle(handle_t *handle, 
+@@ -1041,6 +1328,15 @@ ext4_xattr_set_handle(handle_t *handle, 
  					goto cleanup;
  			}
  			error = ext4_xattr_block_set(handle, inode, &i, &bs);
@@ -578,7 +589,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			if (error)
  				goto cleanup;
  			if (!is.s.not_found) {
-@@ -1080,10 +1376,25 @@ ext4_xattr_set(struct inode *inode, int 
+@@ -1088,10 +1384,25 @@ ext4_xattr_set(struct inode *inode, int 
  	       const void *value, size_t value_len, int flags)
  {
  	handle_t *handle;
@@ -605,7 +616,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (IS_ERR(handle)) {
  		error = PTR_ERR(handle);
  	} else {
-@@ -1093,7 +1404,7 @@ retry:
+@@ -1101,7 +1412,7 @@ retry:
  					      value, value_len, flags);
  		error2 = ext4_journal_stop(handle);
  		if (error == -ENOSPC &&
@@ -614,7 +625,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			goto retry;
  		if (error == 0)
  			error = error2;
-@@ -1115,7 +1426,7 @@ static void ext4_xattr_shift_entries(str
+@@ -1123,7 +1434,7 @@ static void ext4_xattr_shift_entries(str
  
  	/* Adjust the value offsets of the entries */
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
@@ -623,7 +634,54 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1353,15 +1664,41 @@ cleanup:
+@@ -1356,20 +1667,89 @@ cleanup:
+ 	return error;
+ }
+ 
+-
++#define EIA_INCR 16 /* must be 2^n */
++#define EIA_MASK (EIA_INCR - 1)
++/* Add the large xattr @ino into @lea_ino_array for later deletion.
++ * If @lea_ino_array is new or full it will be grown and the old
++ * contents copied over.
++ */
++static int
++ext4_expand_ino_array(struct ext4_xattr_ino_array **lea_ino_array, __u32 ino)
++{
++	if (*lea_ino_array == NULL) {
++		/*
++		 * Start with 15 inodes, so it fits into a power-of-two size.
++		 * If *lea_ino_array is NULL, this is essentially offsetof()
++		 */
++		(*lea_ino_array) =
++			kmalloc(offsetof(struct ext4_xattr_ino_array,
++					 xia_inodes[EIA_MASK]),
++				GFP_NOFS);
++		if (*lea_ino_array == NULL)
++			return -ENOMEM;
++		(*lea_ino_array)->xia_count = 0;
++	} else if (((*lea_ino_array)->xia_count & EIA_MASK) == EIA_MASK) {
++		/* expand the array once all 15 + n * 16 slots are full */
++		struct ext4_xattr_ino_array *new_array = NULL;
++		int count = (*lea_ino_array)->xia_count;
++
++		/* if new_array is NULL, this is essentially offsetof() */
++		new_array = kmalloc(
++				offsetof(struct ext4_xattr_ino_array,
++					 xia_inodes[count + EIA_INCR]),
++				GFP_NOFS);
++		if (new_array == NULL)
++			return -ENOMEM;
++		memcpy(new_array, *lea_ino_array,
++		       offsetof(struct ext4_xattr_ino_array,
++			        xia_inodes[count]));
++		kfree(*lea_ino_array);
++		*lea_ino_array = new_array;
++	}
++	(*lea_ino_array)->xia_inodes[(*lea_ino_array)->xia_count++] = ino;
++	return 0;
++}
+ 
  /*
   * ext4_xattr_delete_inode()
   *
@@ -636,15 +694,18 @@ Index: linux-stage/fs/ext4/xattr.c
 + * xattr block and all xattr inodes. They are checked by ext4_xattr_inode_iget()
 + * to ensure they belong to the parent inode and were not deleted already.
   */
- void
- ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
+-void
+-ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
++int
++ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
++			struct ext4_xattr_ino_array **lea_ino_array)
  {
  	struct buffer_head *bh = NULL;
 +	struct ext4_xattr_ibody_header *header;
 +	struct ext4_inode *raw_inode;
 +	struct ext4_iloc iloc;
 +	struct ext4_xattr_entry *entry;
-+	int error;
++	int error = 0;
 +
 +	if (!ext4_test_inode_state(inode, EXT4_STATE_XATTR))
 +		goto delete_external_ea;
@@ -656,35 +717,94 @@ Index: linux-stage/fs/ext4/xattr.c
 +	header = IHDR(inode, raw_inode);
 +	entry = IFIRST(header);
 +	for (; !IS_LAST_ENTRY(entry); entry = EXT4_XATTR_NEXT(entry)) {
-+		if (entry->e_value_inum != 0) {
-+			ext4_xattr_inode_unlink(inode,
-+					le32_to_cpu(entry->e_value_inum));
-+			entry->e_value_inum = 0;
-+		}
++		if (entry->e_value_inum == 0)
++			continue;
++		if (ext4_expand_ino_array(lea_ino_array,
++					  entry->e_value_inum) != 0)
++			goto cleanup;
++		entry->e_value_inum = 0;
 +	}
  
 +delete_external_ea:
  	if (!EXT4_I(inode)->i_file_acl)
  		goto cleanup;
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
-@@ -1376,6 +1713,16 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1384,11 +1764,74 @@ ext4_xattr_delete_inode(handle_t *handle
  			   inode->i_ino, EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
 +
 +	entry = BFIRST(bh);
 +	for (; !IS_LAST_ENTRY(entry); entry = EXT4_XATTR_NEXT(entry)) {
-+		if (entry->e_value_inum != 0) {
-+			ext4_xattr_inode_unlink(inode,
-+					le32_to_cpu(entry->e_value_inum));
-+			entry->e_value_inum = 0;
++		if (entry->e_value_inum == 0)
++			continue;
++		if (ext4_expand_ino_array(lea_ino_array,
++					  entry->e_value_inum) != 0)
++			goto cleanup;
++		entry->e_value_inum = 0;
++	}
++
++	/* add xattr inode to orphan list */
++	if (*lea_ino_array != NULL) {
++		struct inode *ea_inode = NULL;
++		int idx = 0;
++
++		for (; idx < (*lea_ino_array)->xia_count; ++idx) {
++			if (!ext4_handle_has_enough_credits(handle, 3)) {
++				error = ext4_journal_extend(handle, 3);
++				if (error > 0)
++					error = ext4_journal_restart(handle, 3);
++				if (error != 0) {
++					ext4_warning(inode->i_sb,
++						"couldn't extend journal "
++						"(err %d)", error);
++					goto cleanup;
++				}
++			}
++			ea_inode = ext4_xattr_inode_iget(inode,
++				(*lea_ino_array)->xia_inodes[idx], &error);
++			if (error)
++				continue;
++			ext4_orphan_add(handle, ea_inode);
++			/* the inode's i_count will be released by caller */
 +		}
 +	}
 +
  	ext4_xattr_release_block(handle, inode, bh);
  	EXT4_I(inode)->i_file_acl = 0;
  
-@@ -1450,10 +1797,9 @@ ext4_xattr_cmp(struct ext4_xattr_header 
+ cleanup:
+ 	brelse(bh);
++
++	return error;
++}
++
++void
++ext4_xattr_inode_array_free(struct inode *inode,
++			    struct ext4_xattr_ino_array *lea_ino_array)
++{
++	struct inode	*ea_inode = NULL;
++	int		idx = 0;
++	int		err;
++
++	if (lea_ino_array == NULL)
++		return;
++
++	for (; idx < lea_ino_array->xia_count; ++idx) {
++		ea_inode = ext4_xattr_inode_iget(inode,
++				lea_ino_array->xia_inodes[idx], &err);
++		if (err)
++			continue;
++		ea_inode->i_nlink = 0;
++		iput(ea_inode);
++		/* for inode's i_count get from ext4_xattr_delete_inode */
++		iput(ea_inode);
++	}
++	kfree(lea_ino_array);
+ }
+ 
+ /*
+@@ -1458,10 +1901,9 @@ ext4_xattr_cmp(struct ext4_xattr_header 
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -696,7 +816,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1538,7 +1884,7 @@ static inline void ext4_xattr_hash_entry
+@@ -1546,7 +1988,7 @@ static inline void ext4_xattr_hash_entry
  		       *name++;
  	}
  
@@ -734,3 +854,115 @@ Index: linux-stage/fs/ext4/xattr.h
  # ifdef CONFIG_EXT4_FS_XATTR
  
  extern struct xattr_handler ext4_xattr_user_handler;
+@@ -77,7 +86,13 @@ extern int ext4_xattr_get(struct inode *
+ extern int ext4_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
+ extern int ext4_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
+ 
+-extern void ext4_xattr_delete_inode(handle_t *, struct inode *);
++extern struct inode *ext4_xattr_inode_iget(struct inode *parent, int ea_ino,
++					   int *err);
++extern int ext4_xattr_inode_unlink(struct inode *inode, int ea_ino);
++extern int ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
++				   struct ext4_xattr_ino_array **array);
++extern void ext4_xattr_inode_array_free(struct inode *inode,
++					struct ext4_xattr_ino_array *array);
+ extern void ext4_xattr_put_super(struct super_block *);
+ 
+ extern int ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
+@@ -111,9 +126,11 @@ ext4_xattr_set_handle(handle_t *handle, 
+ 	return -EOPNOTSUPP;
+ }
+ 
+-static inline void
+-ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
++inline int
++ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
++			struct ext4_xattr_ino_array **array)
+ {
++	return -EOPNOTSUPP;
+ }
+ 
+ static inline void
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -223,6 +223,7 @@ void ext4_delete_inode(struct inode *ino
+ 	handle_t *handle;
+ 	int err;
+ 	int extra_credits = 3;
++	struct ext4_xattr_ino_array *lea_ino_array = NULL;
+ 
+ 	if (ext4_should_order_data(inode))
+ 		ext4_begin_ordered_truncate(inode, 0);
+@@ -238,8 +239,8 @@ void ext4_delete_inode(struct inode *ino
+ 	 * protection against it
+ 	 */
+ 	sb_start_intwrite(inode->i_sb);
+-	handle = ext4_journal_start(inode,
+-			blocks_for_truncate(inode) + extra_credits);
++
++	handle = ext4_journal_start(inode, extra_credits);
+ 	if (IS_ERR(handle)) {
+ 		ext4_std_error(inode->i_sb, PTR_ERR(handle));
+ 		/*
+@@ -251,9 +252,33 @@ void ext4_delete_inode(struct inode *ino
+ 		sb_end_intwrite(inode->i_sb);
+ 		goto no_delete;
+ 	}
+-
+ 	if (IS_SYNC(inode))
+ 		ext4_handle_sync(handle);
++
++	/*
++	 * Delete xattr inode before deleting the main inode.
++	 */
++	err = ext4_xattr_delete_inode(handle, inode, &lea_ino_array);
++	if (err) {
++		ext4_warning(inode->i_sb,
++			     "couldn't delete inode's xattr (err %d)", err);
++		goto stop_handle;
++	}
++
++	if (!ext4_handle_has_enough_credits(handle,
++				blocks_for_truncate(inode) + extra_credits)) {
++		err = ext4_journal_extend(handle,
++				blocks_for_truncate(inode) + extra_credits);
++		if (err > 0)
++			err = ext4_journal_restart(handle,
++				blocks_for_truncate(inode) + extra_credits);
++		if (err != 0) {
++			ext4_warning(inode->i_sb,
++				     "couldn't extend journal (err %d)", err);
++			goto stop_handle;
++		}
++	}
++
+ 	inode->i_size = 0;
+ 	err = ext4_mark_inode_dirty(handle, inode);
+ 	if (err) {
+@@ -307,8 +332,12 @@ void ext4_delete_inode(struct inode *ino
+ 		clear_inode(inode);
+ 	else
+ 		ext4_free_inode(handle, inode);
++
+ 	ext4_journal_stop(handle);
+ 	sb_end_intwrite(inode->i_sb);
++
++	if (lea_ino_array != NULL)
++		ext4_xattr_inode_array_free(inode, lea_ino_array);
+ 	return;
+ no_delete:
+ 	clear_inode(inode);	/* We must guarantee clearing of inode... */
+Index: linux-stage/fs/ext4/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -219,7 +219,6 @@ void ext4_free_inode(handle_t *handle, s
+ 	 * as writing the quota to disk may need the lock as well.
+ 	 */
+ 	vfs_dq_init(inode);
+-	ext4_xattr_delete_inode(handle, inode);
+ 	vfs_dq_free_inode(inode);
+ 	vfs_dq_drop(inode);
+ 
