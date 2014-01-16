@@ -77,8 +77,6 @@ struct osp_precreate {
 	struct lu_fid			 osp_pre_last_created_fid;
 	/* how many ids are reserved in declare, we shouldn't block in create */
 	__u64				 osp_pre_reserved;
-	/* thread waits for signals about pool going empty */
-	wait_queue_head_t		 osp_pre_waitq;
 	/* consumers (who needs new ids) wait here */
 	wait_queue_head_t		 osp_pre_user_waitq;
 	/* current precreation status: working, failed, stopping? */
@@ -137,6 +135,8 @@ struct osp_device {
 	struct osp_precreate		*opd_pre;
 	/* dedicate precreate thread */
 	struct ptlrpc_thread		 opd_pre_thread;
+	/* thread waits for signals about pool going empty */
+	wait_queue_head_t		 opd_pre_waitq;
 
 	/*
 	 * OST synchronization
@@ -190,7 +190,6 @@ struct osp_device {
 #define opd_pre_used_fid		opd_pre->osp_pre_used_fid
 #define opd_pre_last_created_fid	opd_pre->osp_pre_last_created_fid
 #define opd_pre_reserved		opd_pre->osp_pre_reserved
-#define opd_pre_waitq			opd_pre->osp_pre_waitq
 #define opd_pre_user_waitq		opd_pre->osp_pre_user_waitq
 #define opd_pre_status			opd_pre->osp_pre_status
 #define opd_pre_grow_count		opd_pre->osp_pre_grow_count
