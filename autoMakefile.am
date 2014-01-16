@@ -147,8 +147,8 @@ rpms: @PACKAGE_TARNAME@.spec dist Makefile
 			RPMARGS="$$RPMARGS --define \"lustre_name lustre-client$$CROSS_SUFFIX\""; \
 		fi; \
 	fi; \
-	if [[ "X$(BUILD_OSD_LDISKFS)" = Xtrue ]]; then \
-		RPMARGS="$$RPMARGS --with ldiskfs"; \
+	if [[ "X$(BUILD_OSD_LDISKFS)" = Xfalse ]]; then \
+		RPMARGS="$$RPMARGS --without ldiskfs"; \
 	fi; \
 	if [[ "X$(BUILD_OSD_ZFS)" = Xtrue ]]; then \
 		RPMARGS="$$RPMARGS --with zfs"; \
