@@ -85,7 +85,7 @@ struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq)
 
 	read_lock(&ofd->ofd_seq_list_lock);
 	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
-		if (oseq->os_seq == seq) {
+		if (ostid_seq(&oseq->os_oi) == seq) {
 			cfs_atomic_inc(&oseq->os_refc);
 			read_unlock(&ofd->ofd_seq_list_lock);
 			return oseq;
@@ -132,7 +132,7 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 
 	write_lock(&ofd->ofd_seq_list_lock);
 	cfs_list_for_each_entry(os, &ofd->ofd_seq_list, os_list) {
-		if (os->os_seq == new_seq->os_seq) {
+		if (ostid_seq(&os->os_oi) == ostid_seq(&new_seq->os_oi)) {
 			cfs_atomic_inc(&os->os_refc);
 			write_unlock(&ofd->ofd_seq_list_lock);
 			/* The seq has not been added to the list */
@@ -152,7 +152,7 @@ obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
 	obd_id id;
 
 	spin_lock(&oseq->os_last_oid_lock);
-	id = oseq->os_last_oid;
+	id = ostid_id(&oseq->os_oi);
 	spin_unlock(&oseq->os_last_oid_lock);
 
 	return id;
@@ -161,8 +161,8 @@ obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
 void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id)
 {
 	spin_lock(&oseq->os_last_oid_lock);
-	if (likely(oseq->os_last_oid < id))
-		oseq->os_last_oid = id;
+	if (likely(ostid_id(&oseq->os_oi) < id))
+		ostid_set_id(&oseq->os_oi, id);
 	spin_unlock(&oseq->os_last_oid_lock);
 }
 
@@ -175,17 +175,18 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 
 	ENTRY;
 
+	tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
+
 	info->fti_buf.lb_buf = &tmp;
 	info->fti_buf.lb_len = sizeof(tmp);
 	info->fti_off = 0;
 
-	CDEBUG(D_INODE, "%s: write last_objid for seq "LPX64" : "LPX64"\n",
-	       ofd_name(ofd), oseq->os_seq, ofd_seq_last_oid(oseq));
-
-	tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
-
 	rc = ofd_record_write(env, ofd, oseq->os_lastid_obj, &info->fti_buf,
 			      &info->fti_off);
+
+	CDEBUG(D_INODE, "%s: write last_objid "DOSTID": rc = %d\n",
+	       ofd_name(ofd), POSTID(&oseq->os_oi), rc);
+
 	RETURN(rc);
 }
 
@@ -296,7 +297,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	CFS_INIT_LIST_HEAD(&oseq->os_list);
 	mutex_init(&oseq->os_create_lock);
 	spin_lock_init(&oseq->os_last_oid_lock);
-	oseq->os_seq = seq;
+	ostid_set_seq(&oseq->os_oi, seq);
 
 	cfs_atomic_set(&oseq->os_refc, 1);
 
@@ -306,7 +307,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (info->fti_attr.la_size == 0) {
 		/* object is just created, initialize last id */
-		oseq->os_last_oid = OFD_INIT_OBJID;
+		ofd_seq_last_oid_set(oseq, OFD_INIT_OBJID);
 		ofd_seq_last_oid_write(env, ofd, oseq);
 	} else if (info->fti_attr.la_size == sizeof(lastid)) {
 		info->fti_off = 0;
@@ -319,7 +320,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 				ofd_name(ofd), rc);
 			GOTO(cleanup, rc);
 		}
-		oseq->os_last_oid = le64_to_cpu(lastid);
+		ofd_seq_last_oid_set(oseq, le64_to_cpu(lastid));
 	} else {
 		CERROR("%s: corrupted size "LPU64" LAST_ID of seq "LPX64"\n",
 			ofd_name(ofd), (__u64)info->fti_attr.la_size, seq);

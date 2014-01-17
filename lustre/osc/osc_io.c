@@ -449,13 +449,12 @@ static int osc_io_setattr_start(const struct lu_env *env,
         }
         memset(oa, 0, sizeof(*oa));
         if (result == 0) {
-                oa->o_id = loi->loi_id;
-                oa->o_seq = loi->loi_seq;
-                oa->o_mtime = attr->cat_mtime;
-                oa->o_atime = attr->cat_atime;
-                oa->o_ctime = attr->cat_ctime;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
-                        OBD_MD_FLCTIME | OBD_MD_FLMTIME;
+		oa->o_oi = loi->loi_oi;
+		oa->o_mtime = attr->cat_mtime;
+		oa->o_atime = attr->cat_atime;
+		oa->o_ctime = attr->cat_ctime;
+		oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
+			OBD_MD_FLCTIME | OBD_MD_FLMTIME;
                 if (ia_valid & ATTR_SIZE) {
                         oa->o_size = size;
                         oa->o_blocks = OBD_OBJECT_EOF;
@@ -579,8 +578,7 @@ static int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 	ENTRY;
 
 	memset(oa, 0, sizeof(*oa));
-	oa->o_id = loi->loi_id;
-	oa->o_seq = loi->loi_seq;
+	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
 	/* reload size abd blocks for start and end of sync range */
@@ -770,15 +768,15 @@ static void osc_req_attr_set(const struct lu_env *env,
 		oa->o_ctime = lvb->lvb_ctime;
 		oa->o_valid |= OBD_MD_FLCTIME;
 	}
-        if (flags & OBD_MD_FLID) {
-                oa->o_id = oinfo->loi_id;
-                oa->o_valid |= OBD_MD_FLID;
-        }
-        if (flags & OBD_MD_FLGROUP) {
-                oa->o_seq = oinfo->loi_seq;
-                oa->o_valid |= OBD_MD_FLGROUP;
-        }
-        if (flags & OBD_MD_FLHANDLE) {
+	if (flags & OBD_MD_FLGROUP) {
+		ostid_set_seq(&oa->o_oi, ostid_seq(&oinfo->loi_oi));
+		oa->o_valid |= OBD_MD_FLGROUP;
+	}
+	if (flags & OBD_MD_FLID) {
+		ostid_set_id(&oa->o_oi, ostid_id(&oinfo->loi_oi));
+		oa->o_valid |= OBD_MD_FLID;
+	}
+	if (flags & OBD_MD_FLHANDLE) {
                 clerq = slice->crs_req;
                 LASSERT(!cfs_list_empty(&clerq->crq_pages));
                 apage = container_of(clerq->crq_pages.next,

@@ -725,7 +725,7 @@ int osc_create(const struct lu_env *env, struct obd_export *exp,
 		RETURN(osc_real_create(exp, oa, ea, oti));
 	}
 
-	if (!fid_seq_is_mdt(oa->o_seq))
+	if (!fid_seq_is_mdt(ostid_seq(&oa->o_oi)))
 		RETURN(osc_real_create(exp, oa, ea, oti));
 
 	/* we should not get here anymore */
@@ -1472,20 +1472,18 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                 msg = "changed in transit AND doesn't match the original - "
                       "likely false positive due to mmap IO (bug 11742)";
 
-        LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inode "DFID
-                           " object "LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
-                           msg, libcfs_nid2str(peer->nid),
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
-                           oa->o_id,
-                           oa->o_valid & OBD_MD_FLGROUP ? oa->o_seq : (__u64)0,
-                           pga[0]->off,
-                           pga[page_count-1]->off + pga[page_count-1]->count - 1);
-        CERROR("original client csum %x (type %x), server csum %x (type %x), "
-               "client csum now %x\n", client_cksum, client_cksum_type,
-               server_cksum, cksum_type, new_cksum);
-        return 1;
+	LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inode "DFID
+			   " object "DOSTID" extent ["LPU64"-"LPU64"]\n",
+			   msg, libcfs_nid2str(peer->nid),
+			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
+			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
+			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
+			   POSTID(&oa->o_oi), pga[0]->off,
+			   pga[page_count-1]->off + pga[page_count-1]->count - 1);
+	CERROR("original client csum %x (type %x), server csum %x (type %x), "
+	       "client csum now %x\n", client_cksum, client_cksum_type,
+	       server_cksum, cksum_type, new_cksum);
+	return 1;
 }
 
 /* Note rc enters this function as number of bytes transferred */
@@ -1594,42 +1592,39 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                         router = libcfs_nid2str(req->rq_bulk->bd_sender);
                 }
 
-                if (server_cksum == ~0 && rc > 0) {
-                        CERROR("Protocol error: server %s set the 'checksum' "
-                               "bit, but didn't send a checksum.  Not fatal, "
-                               "but please notify on http://bugs.whamcloud.com/\n",
-                               libcfs_nid2str(peer->nid));
-                } else if (server_cksum != client_cksum) {
-                        LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
-                                           "%s%s%s inode "DFID" object "
-                                           LPU64"/"LPU64" extent "
-                                           "["LPU64"-"LPU64"]\n",
-                                           req->rq_import->imp_obd->obd_name,
-                                           libcfs_nid2str(peer->nid),
-                                           via, router,
-                                           body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_seq : (__u64)0,
-                                           body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_oid : 0,
-                                           body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_ver : 0,
-                                           body->oa.o_id,
-                                           body->oa.o_valid & OBD_MD_FLGROUP ?
-                                                body->oa.o_seq : (__u64)0,
-                                           aa->aa_ppga[0]->off,
-                                           aa->aa_ppga[aa->aa_page_count-1]->off +
-                                           aa->aa_ppga[aa->aa_page_count-1]->count -
-                                                                        1);
-                        CERROR("client %x, server %x, cksum_type %x\n",
-                               client_cksum, server_cksum, cksum_type);
-                        cksum_counter = 0;
-                        aa->aa_oa->o_cksum = client_cksum;
-                        rc = -EAGAIN;
-                } else {
-                        cksum_counter++;
-                        CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
-                        rc = 0;
-                }
+		if (server_cksum == ~0 && rc > 0) {
+			CERROR("Protocol error: server %s set the 'checksum' "
+			       "bit, but didn't send a checksum.  Not fatal, "
+			       "but please notify on http://bugs.whamcloud.com/\n",
+			       libcfs_nid2str(peer->nid));
+		} else if (server_cksum != client_cksum) {
+			LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
+					   "%s%s%s inode "DFID" object "DOSTID
+					   " extent ["LPU64"-"LPU64"]\n",
+					   req->rq_import->imp_obd->obd_name,
+					   libcfs_nid2str(peer->nid),
+					   via, router,
+					   body->oa.o_valid & OBD_MD_FLFID ?
+						body->oa.o_parent_seq : (__u64)0,
+					   body->oa.o_valid & OBD_MD_FLFID ?
+						body->oa.o_parent_oid : 0,
+					   body->oa.o_valid & OBD_MD_FLFID ?
+						body->oa.o_parent_ver : 0,
+					   POSTID(&body->oa.o_oi),
+					   aa->aa_ppga[0]->off,
+					   aa->aa_ppga[aa->aa_page_count-1]->off +
+					   aa->aa_ppga[aa->aa_page_count-1]->count -
+									1);
+			CERROR("client %x, server %x, cksum_type %x\n",
+			       client_cksum, server_cksum, cksum_type);
+			cksum_counter = 0;
+			aa->aa_oa->o_cksum = client_cksum;
+			rc = -EAGAIN;
+		} else {
+			cksum_counter++;
+			CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
+			rc = 0;
+		}
         } else if (unlikely(client_cksum)) {
                 static int cksum_missed;
 
@@ -1693,17 +1688,17 @@ restart_bulk:
                 if (rc != -EINPROGRESS &&
                     !client_should_resend(resends, &exp->exp_obd->u.cli)) {
                         CERROR("%s: too many resend retries for object: "
-                               ""LPU64":"LPU64", rc = %d.\n",
-                               exp->exp_obd->obd_name, oa->o_id, oa->o_seq, rc);
+                               ""DOSTID", rc = %d.\n", exp->exp_obd->obd_name,
+			       POSTID(&oa->o_oi), rc);
                         goto out;
                 }
-                if (generation !=
-                    exp->exp_obd->u.cli.cl_import->imp_generation) {
-                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
-                               ""LPU64":"LPU64", rc = %d.\n",
-                               exp->exp_obd->obd_name, oa->o_id, oa->o_seq, rc);
-                        goto out;
-                }
+		if (generation !=
+		    exp->exp_obd->u.cli.cl_import->imp_generation) {
+			CDEBUG(D_HA, "%s: resend cross eviction for object: "
+			       ""DOSTID", rc = %d.\n", exp->exp_obd->obd_name,
+			       POSTID(&oa->o_oi), rc);
+			goto out;
+		}
 
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL,
                                        NULL);
@@ -1955,28 +1950,28 @@ static int brw_interpret(const struct lu_env *env,
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
         /* When server return -EINPROGRESS, client should always retry
          * regardless of the number of times the bulk was resent already. */
-        if (osc_recoverable_error(rc)) {
-                if (req->rq_import_generation !=
-                    req->rq_import->imp_generation) {
-                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
-                               ""LPU64":"LPU64", rc = %d.\n",
-                               req->rq_import->imp_obd->obd_name,
-                               aa->aa_oa->o_id, aa->aa_oa->o_seq, rc);
-                } else if (rc == -EINPROGRESS ||
-                    client_should_resend(aa->aa_resends, aa->aa_cli)) {
-                        rc = osc_brw_redo_request(req, aa, rc);
-                } else {
-                        CERROR("%s: too many resent retries for object: "
-                               ""LPU64":"LPU64", rc = %d.\n",
-                               req->rq_import->imp_obd->obd_name,
-                               aa->aa_oa->o_id, aa->aa_oa->o_seq, rc);
-                }
+	if (osc_recoverable_error(rc)) {
+		if (req->rq_import_generation !=
+		    req->rq_import->imp_generation) {
+			CDEBUG(D_HA, "%s: resend cross eviction for object: "
+			       ""DOSTID", rc = %d.\n",
+			       req->rq_import->imp_obd->obd_name,
+			       POSTID(&aa->aa_oa->o_oi), rc);
+		} else if (rc == -EINPROGRESS ||
+		    client_should_resend(aa->aa_resends, aa->aa_cli)) {
+			rc = osc_brw_redo_request(req, aa, rc);
+		} else {
+			CERROR("%s: too many resent retries for object: "
+			       ""LPU64":"LPU64", rc = %d.\n",
+			       req->rq_import->imp_obd->obd_name,
+			       POSTID(&aa->aa_oa->o_oi), rc);
+		}
 
-                if (rc == 0)
-                        RETURN(0);
-                else if (rc == -EAGAIN || rc == -EINPROGRESS)
-                        rc = -EIO;
-        }
+		if (rc == 0)
+			RETURN(0);
+		else if (rc == -EAGAIN || rc == -EINPROGRESS)
+			rc = -EIO;
+	}
 
         if (aa->aa_ocapa) {
                 capa_put(aa->aa_ocapa);

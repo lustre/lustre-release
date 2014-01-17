@@ -220,10 +220,9 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         valid &= src->o_valid;
 
-        LASSERTF(!(valid & (OBD_MD_FLTYPE | OBD_MD_FLGENER | OBD_MD_FLFID |
-                            OBD_MD_FLID | OBD_MD_FLGROUP)),
-                 "object "LPU64"/"LPU64", valid %x\n",
-                 src->o_id, src->o_seq, valid);
+	LASSERTF(!(valid & (OBD_MD_FLTYPE | OBD_MD_FLGENER | OBD_MD_FLFID |
+			    OBD_MD_FLID | OBD_MD_FLGROUP)),
+		 "object "DOSTID", valid %x\n", POSTID(&src->o_oi), valid);
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE,"valid "LPX64", cur time "CFS_TIME_T"/"CFS_TIME_T
@@ -306,9 +305,9 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                OBD_MD_FLSIZE;
 
-        obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
-        CDEBUG(D_INODE, "objid "LPX64" size %llu, blocks %llu, "
-	       "blksize %llu\n", oinfo.oi_oa->o_id,
+	obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
+	CDEBUG(D_INODE, "objid "DOSTID" size %llu, blocks %llu, "
+	       "blksize %llu\n", POSTID(&oinfo.oi_oa->o_oi),
 	       (long long unsigned)llu_i2stat(inode)->st_size,
 	       (long long unsigned)llu_i2stat(inode)->st_blocks,
 	       (long long unsigned)llu_i2stat(inode)->st_blksize);

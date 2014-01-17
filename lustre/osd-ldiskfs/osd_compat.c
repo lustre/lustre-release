@@ -701,16 +701,16 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
         LASSERT(map);
 	LASSERT(map->om_root);
 
-        fid_ostid_pack(fid, ostid);
-	osd_seq = osd_seq_load(dev, ostid->oi_seq);
+        fid_to_ostid(fid, ostid);
+	osd_seq = osd_seq_load(dev, ostid_seq(ostid));
 	if (IS_ERR(osd_seq))
 		RETURN(PTR_ERR(osd_seq));
 
-	dirn = ostid->oi_id & (osd_seq->oos_subdir_count - 1);
+	dirn = ostid_id(ostid) & (osd_seq->oos_subdir_count - 1);
 	d_seq = osd_seq->oos_dirs[dirn];
 	LASSERT(d_seq);
 
-	osd_oid_name(name, fid, ostid->oi_id);
+	osd_oid_name(name, fid, ostid_id(ostid));
 
 	child = &info->oti_child_dentry;
 	child->d_parent = d_seq;
@@ -756,17 +756,17 @@ int osd_obj_map_insert(struct osd_thread_info *info,
         LASSERT(map);
 
 	/* map fid to seq:objid */
-        fid_ostid_pack(fid, ostid);
+        fid_to_ostid(fid, ostid);
 
-	osd_seq = osd_seq_load(osd, ostid->oi_seq);
+	osd_seq = osd_seq_load(osd, ostid_seq(ostid));
 	if (IS_ERR(osd_seq))
 		RETURN(PTR_ERR(osd_seq));
 
-	dirn = ostid->oi_id & (osd_seq->oos_subdir_count - 1);
+	dirn = ostid_id(ostid) & (osd_seq->oos_subdir_count - 1);
 	d = osd_seq->oos_dirs[dirn];
         LASSERT(d);
 
-	osd_oid_name(name, fid, ostid->oi_id);
+	osd_oid_name(name, fid, ostid_id(ostid));
 	rc = osd_obj_add_entry(info, osd, d, name, id, th);
 
         RETURN(rc);
@@ -787,17 +787,17 @@ int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
         LASSERT(map);
 
 	/* map fid to seq:objid */
-        fid_ostid_pack(fid, ostid);
+        fid_to_ostid(fid, ostid);
 
-	osd_seq = osd_seq_load(osd, ostid->oi_seq);
+	osd_seq = osd_seq_load(osd, ostid_seq(ostid));
 	if (IS_ERR(osd_seq))
 		GOTO(cleanup, rc = PTR_ERR(osd_seq));
 
-	dirn = ostid->oi_id & (osd_seq->oos_subdir_count - 1);
+	dirn = ostid_id(ostid) & (osd_seq->oos_subdir_count - 1);
 	d = osd_seq->oos_dirs[dirn];
 	LASSERT(d);
 
-	osd_oid_name(name, fid, ostid->oi_id);
+	osd_oid_name(name, fid, ostid_id(ostid));
 	rc = osd_obj_del_entry(info, osd, d, name, th);
 cleanup:
         RETURN(rc);

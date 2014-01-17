@@ -1264,14 +1264,14 @@ int t55(char *name)
 		printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
 		printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
 
-                for (index = 0; index < lum->lmm_stripe_count; index++) {
-                        lo = lum->lmm_objects + index;
-                        printf("object %d:\n", index);
-                        printf("\tobject_seq:   "LPX64"\n", lo->l_object_seq);
-                        printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
-                        printf("\tost_gen:      %#x\n", lo->l_ost_gen);
-                        printf("\tost_idx:      %u\n", lo->l_ost_idx);
-                }
+		for (index = 0; index < lum->lmm_stripe_count; index++) {
+			lo = lum->lmm_objects + index;
+			printf("object %d:\n", index);
+			printf("\tobject_oid:   "DOSTID"\n",
+			       POSTID(&lo->l_ost_oi));
+			printf("\tost_gen:      %#x\n", lo->l_ost_gen);
+			printf("\tost_idx:      %u\n", lo->l_ost_idx);
+		}
         }
 
         if (lum->lmm_magic != LOV_USER_MAGIC ||
@@ -1332,14 +1332,14 @@ int t55(char *name)
 		printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
 		printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
 
-                for (index = 0; index < lum->lmm_stripe_count; index++) {
-                        lo = lum->lmm_objects + index;
-                        printf("object %d:\n", index);
-                        printf("\tobject_seq:   "LPX64"\n", lo->l_object_seq);
-                        printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
-                        printf("\tost_gen:      %#x\n", lo->l_ost_gen);
-                        printf("\tost_idx:      %u\n", lo->l_ost_idx);
-                }
+		for (index = 0; index < lum->lmm_stripe_count; index++) {
+			lo = lum->lmm_objects + index;
+			printf("object %d:\n", index);
+			printf("\tobject_oid:   "DOSTID"\n",
+			       POSTID(&lo->l_ost_oi));
+			printf("\tost_gen:      %#x\n", lo->l_ost_gen);
+			printf("\tost_idx:      %u\n", lo->l_ost_idx);
+		}
         }
 
         if (lum->lmm_magic != LOV_USER_MAGIC ||

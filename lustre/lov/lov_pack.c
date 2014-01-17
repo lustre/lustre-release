@@ -240,9 +240,9 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 	for (i = 0; i < stripe_count; i++) {
 		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
 		/* XXX LOV STACKING call down to osc_packmd() to do packing */
-		LASSERTF(loi->loi_id != 0, "lmm_oi "DOSTID" stripe %u/%u"
-			 " idx %u\n", POSTID(&lmmv1->lmm_oi), i, stripe_count,
-			 loi->loi_ost_idx);
+		LASSERTF(ostid_id(&loi->loi_oi) != 0, "lmm_oi "DOSTID
+			 " stripe %u/%u idx %u\n", POSTID(&lmmv1->lmm_oi),
+			 i, stripe_count, loi->loi_ost_idx);
 		ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
 		lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
 		lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
@@ -555,13 +555,13 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                                   &len, &last_id, NULL);
                 if (rc)
                         RETURN(rc);
-                if (lmm_objects[i].l_object_id > last_id) {
-                        CERROR("Setting EA for object > than last id on "
-                               "ost idx %d "LPD64" > "LPD64" \n",
-                               lmm_objects[i].l_ost_idx,
-                               lmm_objects[i].l_object_id, last_id);
-                        RETURN(-EINVAL);
-                }
+		if (ostid_id(&lmm_objects[i].l_ost_oi) > last_id) {
+			CERROR("Setting EA for object > than last id on"
+			       " ost idx %d "DOSTID" > "LPD64" \n",
+			       lmm_objects[i].l_ost_idx,
+			       POSTID(&lmm_objects[i].l_ost_oi), last_id);
+			RETURN(-EINVAL);
+		}
         }
 
         rc = lov_setstripe(exp, 0, lsmp, lump);
@@ -571,8 +571,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 (*lsmp)->lsm_oinfo[i]->loi_ost_idx =
                         lmm_objects[i].l_ost_idx;
-                (*lsmp)->lsm_oinfo[i]->loi_id = lmm_objects[i].l_object_id;
-                (*lsmp)->lsm_oinfo[i]->loi_seq = lmm_objects[i].l_object_seq;
+		(*lsmp)->lsm_oinfo[i]->loi_oi = lmm_objects[i].l_ost_oi;
         }
         RETURN(0);
 }

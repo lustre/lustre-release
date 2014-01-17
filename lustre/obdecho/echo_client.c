@@ -535,7 +535,7 @@ static int echo_alloc_memmd(struct echo_device *ed,
 
 	loi_init((*lsmp)->lsm_oinfo[0]);
 	(*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
-	(*lsmp)->lsm_oi.oi_seq = FID_SEQ_ECHO;
+	ostid_set_seq_echo(&(*lsmp)->lsm_oi);
 
 	RETURN(lsm_size);
 }
@@ -1114,7 +1114,7 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         conf->eoc_md = lsmp;
 
         fid  = &info->eti_fid;
-	ostid_fid_unpack(&lsm->lsm_oi, fid);
+	ostid_to_fid(fid, &lsm->lsm_oi, 0);
 
 	/* In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp() */
@@ -2118,8 +2118,8 @@ static void echo_ucred_fini(struct lu_env *env)
 #define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
 #define ECHO_MD_SES_TAG (LCT_REMEMBER | LCT_SESSION)
 static int echo_md_handler(struct echo_device *ed, int command,
-                           char *path, int path_len, int id, int count,
-                           struct obd_ioctl_data *data)
+			   char *path, int path_len, __u64 id, int count,
+			   struct obd_ioctl_data *data)
 {
 	struct echo_thread_info *info;
         struct lu_device      *ld = ed->ed_next;
@@ -2183,9 +2183,7 @@ static int echo_md_handler(struct echo_device *ed, int command,
                 int stripe_count = (int)data->ioc_obdo2.o_misc;
                 int stripe_index = (int)data->ioc_obdo2.o_stripe_idx;
 
-                fid->f_seq = data->ioc_obdo1.o_seq;
-                fid->f_oid = (__u32)data->ioc_obdo1.o_id;
-                fid->f_ver = 0;
+		ostid_to_fid(fid, &data->ioc_obdo1.o_oi, 0);
 		/* In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp() */
 		/* coverity[overrun-buffer-val] */
@@ -2274,7 +2272,7 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 
 		/* setup stripes: indices + default ids if required */
 		for (i = 0; i < lsm->lsm_stripe_count; i++) {
-			if (lsm->lsm_oinfo[i]->loi_id == 0)
+			if (ostid_id(&lsm->lsm_oinfo[i]->loi_oi) == 0)
 				lsm->lsm_oinfo[i]->loi_oi = lsm->lsm_oi;
 
 			lsm->lsm_oinfo[i]->loi_ost_idx =
@@ -2283,24 +2281,26 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
         }
 
 	/* setup object ID here for !on_target and LOV hint */
-	if (oa->o_valid & OBD_MD_FLID)
-		lsm->lsm_oi.oi_id = oa->o_id;
+	if (oa->o_valid & OBD_MD_FLID) {
+		LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+		lsm->lsm_oi = oa->o_oi;
+	}
 
 	if (ostid_id(&lsm->lsm_oi) == 0)
-		lsm->lsm_oi.oi_id = ++last_object_id;
+		ostid_set_id(&lsm->lsm_oi, ++last_object_id);
 
         rc = 0;
-        if (on_target) {
-                /* Only echo objects are allowed to be created */
-                LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
-                        (oa->o_seq == FID_SEQ_ECHO));
-                rc = obd_create(env, ec->ec_exp, oa, &lsm, oti);
-                if (rc != 0) {
-                        CERROR("Cannot create objects: rc = %d\n", rc);
-                        GOTO(failed, rc);
-                }
-                created = 1;
-        }
+	if (on_target) {
+		/* Only echo objects are allowed to be created */
+		LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
+			(ostid_seq(&oa->o_oi) == FID_SEQ_ECHO));
+		rc = obd_create(env, ec->ec_exp, oa, &lsm, oti);
+		if (rc != 0) {
+			CERROR("Cannot create objects: rc = %d\n", rc);
+			GOTO(failed, rc);
+		}
+		created = 1;
+	}
 
         /* See what object ID we were given */
 	oa->o_oi = lsm->lsm_oi;
@@ -2311,7 +2311,7 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
                 GOTO(failed, rc = PTR_ERR(eco));
         cl_echo_object_put(eco);
 
-        CDEBUG(D_INFO, "oa->o_id = %lx\n", (long)oa->o_id);
+        CDEBUG(D_INFO, "oa oid "DOSTID"\n", POSTID(&oa->o_oi));
         EXIT;
 
  failed:
@@ -2332,9 +2332,8 @@ static int echo_get_object(struct echo_object **ecop, struct echo_device *ed,
         int                     rc;
         ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLID) == 0 ||
-            oa->o_id == 0)  /* disallow use of object id 0 */
-        {
+        if ((oa->o_valid & OBD_MD_FLID) == 0 || ostid_id(&oa->o_oi) == 0) {
+		/* disallow use of object id 0 */
                 CERROR ("No valid oid\n");
                 RETURN(-EINVAL);
         }
@@ -2345,7 +2344,7 @@ static int echo_get_object(struct echo_object **ecop, struct echo_device *ed,
 
 	lsm->lsm_oi = oa->o_oi;
 	if (!(oa->o_valid & OBD_MD_FLGROUP))
-		lsm->lsm_oi.oi_seq = FID_SEQ_ECHO;
+		ostid_set_seq_echo(&lsm->lsm_oi);
 
         rc = 0;
         eco = cl_echo_object_find(ed, &lsm);
@@ -2389,8 +2388,8 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
 
         stripe_index = woffset / stripe_size;
 
-        *idp = lsm->lsm_oinfo[stripe_index]->loi_id;
-        *offp = offset * stripe_size + woffset % stripe_size;
+	*idp = ostid_id(&lsm->lsm_oinfo[stripe_index]->loi_oi);
+	*offp = offset * stripe_size + woffset % stripe_size;
 }
 
 static void
@@ -2476,11 +2475,11 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
         int                     brw_flags = 0;
         ENTRY;
 
-        verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
+        verify = (ostid_id(&oa->o_oi) != ECHO_PERSISTENT_OBJID &&
                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
                   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
 
-        gfp_mask = ((oa->o_id & 2) == 0) ? CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
+        gfp_mask = ((ostid_id(&oa->o_oi) & 2) == 0) ? CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
 	LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 	LASSERT(lsm != NULL);
@@ -2522,9 +2521,10 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
                 pgp->off = off;
                 pgp->flag = brw_flags;
 
-                if (verify)
-                        echo_client_page_debug_setup(lsm, pgp->pg, rw,
-                                                     oa->o_id, off, pgp->count);
+		if (verify)
+			echo_client_page_debug_setup(lsm, pgp->pg, rw,
+						     ostid_id(&oa->o_oi), off,
+						     pgp->count);
         }
 
         /* brw mode can only be used at client */
@@ -2539,14 +2539,15 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
                 if (pgp->pg == NULL)
                         continue;
 
-                if (verify) {
-                        int vrc;
-                        vrc = echo_client_page_debug_check(lsm, pgp->pg, oa->o_id,
-                                                           pgp->off, pgp->count);
-                        if (vrc != 0 && rc == 0)
-                                rc = vrc;
-                }
-                OBD_PAGE_FREE(pgp->pg);
+		if (verify) {
+			int vrc;
+			vrc = echo_client_page_debug_check(lsm, pgp->pg,
+							   ostid_id(&oa->o_oi),
+							   pgp->off, pgp->count);
+			if (vrc != 0 && rc == 0)
+				rc = vrc;
+		}
+		OBD_PAGE_FREE(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
         OBD_FREE(pages, npages * sizeof(*pages));
@@ -2622,22 +2623,22 @@ static int echo_client_prep_commit(const struct lu_env *env,
                         if (async)
                                 lnb[i].flags |= OBD_BRW_ASYNC;
 
-                        if (oa->o_id == ECHO_PERSISTENT_OBJID ||
-                            (oa->o_valid & OBD_MD_FLFLAGS) == 0 ||
-                            (oa->o_flags & OBD_FL_DEBUG_CHECK) == 0)
-                                continue;
+			if (ostid_id(&oa->o_oi) == ECHO_PERSISTENT_OBJID ||
+			    (oa->o_valid & OBD_MD_FLFLAGS) == 0 ||
+			    (oa->o_flags & OBD_FL_DEBUG_CHECK) == 0)
+				continue;
 
-                        if (rw == OBD_BRW_WRITE)
-                                echo_client_page_debug_setup(lsm, page, rw,
-                                                             oa->o_id,
-                                                             rnb[i].offset,
-                                                             rnb[i].len);
-                        else
-                                echo_client_page_debug_check(lsm, page,
-                                                             oa->o_id,
-                                                             rnb[i].offset,
-                                                             rnb[i].len);
-                }
+			if (rw == OBD_BRW_WRITE)
+				echo_client_page_debug_setup(lsm, page, rw,
+							    ostid_id(&oa->o_oi),
+							     rnb[i].offset,
+							     rnb[i].len);
+			else
+				echo_client_page_debug_check(lsm, page,
+							    ostid_id(&oa->o_oi),
+							     rnb[i].offset,
+							     rnb[i].len);
+		}
 
 		ret = obd_commitrw(env, rw, exp, oa, 1, &ioo,
 				   rnb, npages, lnb, oti, ret);
@@ -2783,14 +2784,14 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
-        oa = &data->ioc_obdo1;
-        if (!(oa->o_valid & OBD_MD_FLGROUP)) {
-                oa->o_valid |= OBD_MD_FLGROUP;
-                oa->o_seq = FID_SEQ_ECHO;
-        }
+	oa = &data->ioc_obdo1;
+	if (!(oa->o_valid & OBD_MD_FLGROUP)) {
+		oa->o_valid |= OBD_MD_FLGROUP;
+		ostid_set_seq_echo(&oa->o_oi);
+	}
 
         /* This FID is unpacked just for validation at this point */
-        rc = fid_ostid_unpack(&fid, &oa->o_oi, 0);
+        rc = ostid_to_fid(&fid, &oa->o_oi, 0);
         if (rc < 0)
                 RETURN(rc);
 
@@ -2811,35 +2812,35 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                         data->ioc_plen1, &dummy_oti);
                 GOTO(out, rc);
 
-        case OBD_IOC_ECHO_MD: {
-                int count;
-                int cmd;
-                char *dir = NULL;
-                int dirlen;
-                __u64 id;
+	case OBD_IOC_ECHO_MD: {
+		int count;
+		int cmd;
+		char *dir = NULL;
+		int dirlen;
+		__u64 id;
 
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-                        GOTO(out, rc = -EPERM);
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+			GOTO(out, rc = -EPERM);
 
-                count = data->ioc_count;
-                cmd = data->ioc_command;
+		count = data->ioc_count;
+		cmd = data->ioc_command;
 
-                id = data->ioc_obdo2.o_id;
+		id = ostid_id(&data->ioc_obdo2.o_oi);
 
-                dirlen = data->ioc_plen1;
-                OBD_ALLOC(dir, dirlen + 1);
-                if (dir == NULL)
-                        GOTO(out, rc = -ENOMEM);
+		dirlen = data->ioc_plen1;
+		OBD_ALLOC(dir, dirlen + 1);
+		if (dir == NULL)
+			GOTO(out, rc = -ENOMEM);
 
-                if (cfs_copy_from_user(dir, data->ioc_pbuf1, dirlen)) {
-                        OBD_FREE(dir, data->ioc_plen1 + 1);
-                        GOTO(out, rc = -EFAULT);
-                }
+		if (cfs_copy_from_user(dir, data->ioc_pbuf1, dirlen)) {
+			OBD_FREE(dir, data->ioc_plen1 + 1);
+			GOTO(out, rc = -EFAULT);
+		}
 
-                rc = echo_md_handler(ed, cmd, dir, dirlen, id, count, data);
-                OBD_FREE(dir, dirlen + 1);
-                GOTO(out, rc);
-        }
+		rc = echo_md_handler(ed, cmd, dir, dirlen, id, count, data);
+		OBD_FREE(dir, dirlen + 1);
+		GOTO(out, rc);
+	}
         case OBD_IOC_ECHO_ALLOC_SEQ: {
                 struct lu_env   *cl_env;
                 int              refcheck;

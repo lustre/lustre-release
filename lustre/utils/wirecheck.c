@@ -241,8 +241,7 @@ check_ost_id(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(ost_id);
-	CHECK_MEMBER(ost_id, oi_id);
-	CHECK_MEMBER(ost_id, oi_seq);
+	CHECK_MEMBER(ost_id, oi);
 
 	CHECK_VALUE(LUSTRE_FID_INIT_OID);
 
@@ -262,6 +261,7 @@ check_ost_id(void)
 	CHECK_VALUE_64X(FID_SEQ_SPECIAL);
 	CHECK_VALUE_64X(FID_SEQ_QUOTA);
 	CHECK_VALUE_64X(FID_SEQ_QUOTA_GLB);
+	CHECK_VALUE_64X(FID_SEQ_ROOT);
 	CHECK_VALUE_64X(FID_SEQ_NORMAL);
 	CHECK_VALUE_64X(FID_SEQ_LOV_DEFAULT);
 
@@ -532,8 +532,7 @@ check_obdo(void)
 	BLANK_LINE();
 	CHECK_STRUCT(obdo);
 	CHECK_MEMBER(obdo, o_valid);
-	CHECK_MEMBER(obdo, o_id);
-	CHECK_MEMBER(obdo, o_seq);
+	CHECK_MEMBER(obdo, o_oi);
 	CHECK_MEMBER(obdo, o_parent_seq);
 	CHECK_MEMBER(obdo, o_size);
 	CHECK_MEMBER(obdo, o_mtime);
@@ -637,8 +636,7 @@ check_lov_ost_data_v1(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(lov_ost_data_v1);
-	CHECK_MEMBER(lov_ost_data_v1, l_object_id);
-	CHECK_MEMBER(lov_ost_data_v1, l_object_seq);
+	CHECK_MEMBER(lov_ost_data_v1, l_ost_oi);
 	CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
 	CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
 }
@@ -712,8 +710,7 @@ check_obd_ioobj(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(obd_ioobj);
-	CHECK_MEMBER(obd_ioobj, ioo_id);
-	CHECK_MEMBER(obd_ioobj, ioo_seq);
+	CHECK_MEMBER(obd_ioobj, ioo_oid);
 	CHECK_MEMBER(obd_ioobj, ioo_max_brw);
 	CHECK_MEMBER(obd_ioobj, ioo_bufcnt);
 }
@@ -1410,8 +1407,7 @@ check_llog_logid(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(llog_logid);
-	CHECK_MEMBER(llog_logid, lgl_oid);
-	CHECK_MEMBER(llog_logid, lgl_oseq);
+	CHECK_MEMBER(llog_logid, lgl_oi);
 	CHECK_MEMBER(llog_logid, lgl_ogen);
 
 	CHECK_CVALUE(OST_SZ_REC);
@@ -1501,8 +1497,7 @@ check_llog_setattr64_rec(void)
 	BLANK_LINE();
 	CHECK_STRUCT(llog_setattr64_rec);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
-	CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
-	CHECK_MEMBER(llog_setattr64_rec, lsr_oseq);
+	CHECK_MEMBER(llog_setattr64_rec, lsr_oi);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_gid);

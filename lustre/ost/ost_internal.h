@@ -73,20 +73,4 @@ static void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
-/* Here "ostid" maybe part of "oa", the return value of "ostid_id()" depends on
- * the original "ostid->oi_seq", which maybe changed by the assignment of
- * "oa->o_seq = ostid_seq(ostid)", so keep the order of setting "oa->o_id" and
- * "oa->o_seq". */
-static inline void obdo_from_ostid(struct obdo *oa, struct ost_id *ostid)
-{
-        oa->o_id  = ostid_id(ostid);
-        oa->o_seq = ostid_seq(ostid);
-}
-
-static inline void ioobj_from_obdo(struct obd_ioobj *ioobj, struct obdo *oa)
-{
-        ioobj->ioo_id  = oa->o_id;
-        ioobj->ioo_seq = oa->o_seq;
-}
-
 #endif /* OST_INTERNAL_H */

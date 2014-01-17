@@ -353,8 +353,8 @@ static int osp_fid_end_seq(const struct lu_env *env, struct lu_fid *fid)
 		struct osp_thread_info *info = osp_env_info(env);
 		struct ost_id *oi = &info->osi_oi;
 
-		fid_ostid_pack(fid, oi);
-		return oi->oi_id == IDIF_MAX_OID;
+		fid_to_ostid(fid, oi);
+		return ostid_id(oi) == IDIF_MAX_OID;
 	} else {
 		return fid_oid(fid) == LUSTRE_DATA_SEQ_MAX_WIDTH;
 	}

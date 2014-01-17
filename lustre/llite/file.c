@@ -1257,7 +1257,7 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
 }
 #endif
 
-static int ll_lov_recreate(struct inode *inode, obd_id id, obd_seq seq,
+static int ll_lov_recreate(struct inode *inode, struct ost_id *oi,
                            obd_count ost_idx)
 {
 	struct obd_export *exp = ll_i2dtexp(inode);
@@ -1283,8 +1283,7 @@ static int ll_lov_recreate(struct inode *inode, obd_id id, obd_seq seq,
         if (lsm2 == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        oa->o_id = id;
-        oa->o_seq = seq;
+	oa->o_oi = *oi;
         oa->o_nlink = ost_idx;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
@@ -1307,6 +1306,7 @@ out:
 static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 {
 	struct ll_recreate_obj ucreat;
+	struct ost_id		oi;
 	ENTRY;
 
 	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
@@ -1316,14 +1316,15 @@ static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 			   sizeof(ucreat)))
 		RETURN(-EFAULT);
 
-	RETURN(ll_lov_recreate(inode, ucreat.lrc_id, 0,
-			       ucreat.lrc_ost_idx));
+	ostid_set_seq_mdt0(&oi);
+	ostid_set_id(&oi, ucreat.lrc_id);
+	RETURN(ll_lov_recreate(inode, &oi, ucreat.lrc_ost_idx));
 }
 
 static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 {
 	struct lu_fid	fid;
-	obd_id		id;
+	struct ost_id	oi;
 	obd_count	ost_idx;
         ENTRY;
 
@@ -1333,9 +1334,9 @@ static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 	if (copy_from_user(&fid, (struct lu_fid *)arg, sizeof(fid)))
 		RETURN(-EFAULT);
 
-	id = fid_oid(&fid) | ((fid_seq(&fid) & 0xffff) << 32);
+	fid_to_ostid(&fid, &oi);
 	ost_idx = (fid_seq(&fid) >> 16) & 0xffff;
-	RETURN(ll_lov_recreate(inode, id, 0, ost_idx));
+	RETURN(ll_lov_recreate(inode, &oi, ost_idx));
 }
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,

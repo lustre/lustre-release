@@ -592,7 +592,7 @@ static const struct req_msg_field *ost_get_last_id_server[] = {
 
 static const struct req_msg_field *ost_get_last_fid_server[] = {
 	&RMF_PTLRPC_BODY,
-	&RMF_OST_ID
+	&RMF_FID,
 };
 
 static const struct req_msg_field *ost_get_fiemap_client[] = {

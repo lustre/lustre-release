@@ -230,12 +230,11 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		osi->osi_unlink.lur_count = count;
 		break;
 	case MDS_SETATTR64_REC:
-		rc = fid_ostid_pack(fid, &osi->osi_oi);
+		rc = fid_to_ostid(fid, &osi->osi_oi);
 		LASSERT(rc == 0);
 		osi->osi_hdr.lrh_len = sizeof(osi->osi_setattr);
 		osi->osi_hdr.lrh_type = MDS_SETATTR64_REC;
-		osi->osi_setattr.lsr_oid  = osi->osi_oi.oi_id;
-		osi->osi_setattr.lsr_oseq = osi->osi_oi.oi_seq;
+		osi->osi_setattr.lsr_oi  = osi->osi_oi;
 		LASSERT(attr);
 		osi->osi_setattr.lsr_uid = attr->la_uid;
 		osi->osi_setattr.lsr_gid = attr->la_gid;
@@ -257,10 +256,8 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		      NULL, th);
 	llog_ctxt_put(ctxt);
 
-	CDEBUG(D_OTHER, "%s: new record %lu:%lu:%lu/%lu: %d\n",
-	       d->opd_obd->obd_name,
-	       (unsigned long) osi->osi_cookie.lgc_lgl.lgl_oid,
-	       (unsigned long) osi->osi_cookie.lgc_lgl.lgl_oseq,
+	CDEBUG(D_OTHER, "%s: new record "DOSTID":%lu/%lu: %d\n",
+	       d->opd_obd->obd_name, POSTID(&osi->osi_cookie.lgc_lgl.lgl_oi),
 	       (unsigned long) osi->osi_cookie.lgc_lgl.lgl_ogen,
 	       (unsigned long) osi->osi_cookie.lgc_index, rc);
 
@@ -489,8 +486,7 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
-	body->oa.o_id  = rec->lsr_oid;
-	body->oa.o_seq = rec->lsr_oseq;
+	body->oa.o_oi = rec->lsr_oi;
 	body->oa.o_uid = rec->lsr_uid;
 	body->oa.o_gid = rec->lsr_gid;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
@@ -518,8 +514,8 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
-	body->oa.o_id  = rec->lur_oid;
-	body->oa.o_seq = rec->lur_oseq;
+	ostid_set_seq(&body->oa.o_oi, rec->lur_oseq);
+	ostid_set_id(&body->oa.o_oi, rec->lur_oid);
 	body->oa.o_misc = rec->lur_count;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
 	if (rec->lur_count)
@@ -548,7 +544,7 @@ static int osp_sync_new_unlink64_job(struct osp_device *d,
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	if (body == NULL)
 		RETURN(-EFAULT);
-	rc = fid_ostid_pack(&rec->lur_fid, &body->oa.o_oi);
+	rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
 	if (rc < 0)
 		RETURN(rc);
 	body->oa.o_misc = rec->lur_count;
@@ -911,7 +907,7 @@ out:
 static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 {
 	struct osp_thread_info *osi = osp_env_info(env);
-	struct llog_handle     *lgh;
+	struct llog_handle     *lgh = NULL;
 	struct obd_device      *obd = d->opd_obd;
 	struct llog_ctxt       *ctxt;
 	int                     rc;
@@ -934,9 +930,9 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 		RETURN(rc);
 	}
 
-	CDEBUG(D_INFO, "%s: Init llog for %d - catid "LPX64"/"LPX64":%x\n",
-	       obd->obd_name, d->opd_index, osi->osi_cid.lci_logid.lgl_oid,
-	       osi->osi_cid.lci_logid.lgl_oseq,
+	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DOSTID":%x\n",
+	       obd->obd_name, d->opd_index,
+	       POSTID(&osi->osi_cid.lci_logid.lgl_oi),
 	       osi->osi_cid.lci_logid.lgl_ogen);
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, obd,
@@ -947,23 +943,24 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
 	LASSERT(ctxt);
 
-	if (likely(osi->osi_cid.lci_logid.lgl_oid != 0)) {
+	if (likely(ostid_id(&osi->osi_cid.lci_logid.lgl_oi) != 0)) {
 		rc = llog_open(env, ctxt, &lgh, &osi->osi_cid.lci_logid, NULL,
 			       LLOG_OPEN_EXISTS);
 		/* re-create llog if it is missing */
 		if (rc == -ENOENT)
-			osi->osi_cid.lci_logid.lgl_oid = 0;
+			logid_set_id(&osi->osi_cid.lci_logid, 0);
 		else if (rc < 0)
 			GOTO(out_cleanup, rc);
 	}
 
-	if (unlikely(osi->osi_cid.lci_logid.lgl_oid == 0)) {
+	if (unlikely(logid_id(&osi->osi_cid.lci_logid) == 0)) {
 		rc = llog_open_create(env, ctxt, &lgh, NULL, NULL);
 		if (rc < 0)
 			GOTO(out_cleanup, rc);
 		osi->osi_cid.lci_logid = lgh->lgh_id;
 	}
 
+	LASSERT(lgh != NULL);
 	ctxt->loc_handle = lgh;
 
 	rc = llog_cat_init_and_process(env, lgh);

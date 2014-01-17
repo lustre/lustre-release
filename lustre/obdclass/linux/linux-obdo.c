@@ -189,10 +189,9 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 {
         valid &= src->o_valid;
 
-        LASSERTF(!(valid & (OBD_MD_FLTYPE | OBD_MD_FLGENER | OBD_MD_FLFID |
-                            OBD_MD_FLID | OBD_MD_FLGROUP)),
-                 "object "LPU64"/"LPU64", valid %x\n",
-                 src->o_id, src->o_seq, valid);
+	LASSERTF(!(valid & (OBD_MD_FLTYPE | OBD_MD_FLGENER | OBD_MD_FLFID |
+			    OBD_MD_FLID | OBD_MD_FLGROUP)),
+		 "object "DOSTID", valid %x\n", POSTID(&src->o_oi), valid);
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE,

@@ -329,22 +329,6 @@ struct hsm_attrs {
 };
 extern void lustre_hsm_swab(struct hsm_attrs *attrs);
 
-static inline void ostid_cpu_to_le(struct ost_id *src_oi,
-				   struct ost_id *dst_oi)
-{
-	dst_oi->oi_id = cpu_to_le64(src_oi->oi_id);
-	dst_oi->oi_seq = cpu_to_le64(src_oi->oi_seq);
-}
-
-static inline void ostid_le_to_cpu(struct ost_id *src_oi,
-				   struct ost_id *dst_oi)
-{
-	dst_oi->oi_id = le64_to_cpu(src_oi->oi_id);
-	dst_oi->oi_seq = le64_to_cpu(src_oi->oi_seq);
-}
-
-extern void lustre_swab_ost_id(struct ost_id *oid);
-
 /**
  * fid constants
  */
@@ -495,6 +479,11 @@ static inline int fid_seq_is_dot(const __u64 seq)
 	return seq == FID_SEQ_DOT_LUSTRE;
 }
 
+static inline int fid_seq_is_default(const __u64 seq)
+{
+	return seq == FID_SEQ_LOV_DEFAULT;
+}
+
 static inline int fid_is_mdt0(const struct lu_fid *fid)
 {
         return fid_seq_is_mdt0(fid_seq(fid));
@@ -571,24 +560,109 @@ static inline __u32 fid_idif_ost_idx(const struct lu_fid *fid)
 	return (fid_seq(fid) >> 16) & 0xffff;
 }
 
-/* unpack an ostid (id/seq) from a wire/disk structure into an IDIF FID */
-static inline void ostid_idif_unpack(struct ost_id *ostid,
-                                     struct lu_fid *fid, __u32 ost_idx)
+/* extract OST sequence (group) from a wire ost_id (id/seq) pair */
+static inline obd_seq ostid_seq(const struct ost_id *ostid)
 {
-        fid->f_seq = fid_idif_seq(ostid->oi_id, ost_idx);
-        fid->f_oid = ostid->oi_id;       /* truncate to 32 bits by assignment */
-        fid->f_ver = ostid->oi_id >> 48; /* in theory, not currently used */
+	if (fid_seq_is_mdt0(ostid->oi.oi_seq))
+		return FID_SEQ_OST_MDT0;
+
+	if (fid_seq_is_default(ostid->oi.oi_seq))
+		return FID_SEQ_LOV_DEFAULT;
+
+	if (fid_is_idif(&ostid->oi_fid))
+		return FID_SEQ_OST_MDT0;
+
+	return fid_seq(&ostid->oi_fid);
 }
 
-/* unpack an ostid (id/seq) from a wire/disk structure into a non-IDIF FID */
-static inline void ostid_fid_unpack(struct ost_id *ostid, struct lu_fid *fid)
+/* extract OST objid from a wire ost_id (id/seq) pair */
+static inline obd_id ostid_id(const struct ost_id *ostid)
 {
-        fid->f_seq = ostid->oi_seq;
-        fid->f_oid = ostid->oi_id;       /* truncate to 32 bits by assignment */
-        fid->f_ver = ostid->oi_id >> 32; /* in theory, not currently used */
+	if (fid_seq_is_mdt0(ostid_seq(ostid)))
+		return ostid->oi.oi_id & IDIF_OID_MASK;
+
+	if (fid_is_idif(&ostid->oi_fid))
+		return fid_idif_id(fid_seq(&ostid->oi_fid),
+				   fid_oid(&ostid->oi_fid), 0);
+
+	return fid_oid(&ostid->oi_fid);
 }
 
-/* Unpack an OST object id/seq (group) into a FID.  This is needed for
+static inline void ostid_set_seq(struct ost_id *oi, __u64 seq)
+{
+	if (fid_seq_is_mdt0(seq) || fid_seq_is_default(seq)) {
+		oi->oi.oi_seq = seq;
+	} else {
+		oi->oi_fid.f_seq = seq;
+		/* Note: if f_oid + f_ver is zero, we need init it
+		 * to be 1, otherwise, ostid_seq will treat this
+		 * as old ostid (oi_seq == 0) */
+		if (oi->oi_fid.f_oid == 0 && oi->oi_fid.f_ver == 0)
+			oi->oi_fid.f_oid = LUSTRE_FID_INIT_OID;
+	}
+}
+
+static inline void ostid_set_seq_mdt0(struct ost_id *oi)
+{
+	ostid_set_seq(oi, FID_SEQ_OST_MDT0);
+}
+
+static inline void ostid_set_seq_echo(struct ost_id *oi)
+{
+	ostid_set_seq(oi, FID_SEQ_ECHO);
+}
+
+static inline void ostid_set_seq_llog(struct ost_id *oi)
+{
+	ostid_set_seq(oi, FID_SEQ_LLOG);
+}
+
+/**
+ * Note: we need check oi_seq to decide where to set oi_id,
+ * so oi_seq should always be set ahead of oi_id.
+ */
+static inline void ostid_set_id(struct ost_id *oi, __u64 oid)
+{
+	if (fid_seq_is_mdt0(ostid_seq(oi))) {
+		if (oid >= IDIF_MAX_OID) {
+			CERROR("Bad "LPU64" to set "DOSTID"\n",
+				oid, POSTID(oi));
+			return;
+		}
+		oi->oi.oi_id = oid;
+	} else {
+		if (oid > OBIF_MAX_OID) {
+			CERROR("Bad "LPU64" to set "DOSTID"\n",
+				oid, POSTID(oi));
+			return;
+		}
+		oi->oi_fid.f_oid = oid;
+	}
+}
+
+static inline void ostid_inc_id(struct ost_id *oi)
+{
+	if (fid_seq_is_mdt0(ostid_seq(oi))) {
+		if (unlikely(ostid_id(oi) + 1 > IDIF_MAX_OID)) {
+			CERROR("Bad inc "DOSTID"\n", POSTID(oi));
+			return;
+		}
+		oi->oi.oi_id++;
+	} else {
+		oi->oi_fid.f_oid++;
+	}
+}
+
+static inline void ostid_dec_id(struct ost_id *oi)
+{
+	if (fid_seq_is_mdt0(ostid_seq(oi)))
+		oi->oi.oi_id--;
+	else
+		oi->oi_fid.f_oid--;
+}
+
+/**
+ * Unpack an OST object id/seq (group) into a FID.  This is needed for
  * converting all obdo, lmm, lsm, etc. 64-bit id/seq pairs into proper
  * FIDs.  Note that if an id/seq is already in FID/IDIF format it will
  * be passed through unchanged.  Only legacy OST objects in "group 0"
@@ -596,118 +670,64 @@ static inline void ostid_fid_unpack(struct ost_id *ostid, struct lu_fid *fid)
  * struct lu_fid fields without loss.  For reference see:
  * http://arch.lustre.org/index.php?title=Interoperability_fids_zfs
  */
-static inline int fid_ostid_unpack(struct lu_fid *fid, struct ost_id *ostid,
-                                   __u32 ost_idx)
+static inline int ostid_to_fid(struct lu_fid *fid, struct ost_id *ostid,
+			       __u32 ost_idx)
 {
-        if (ost_idx > 0xffff) {
-                CERROR("bad ost_idx, seq:"LPU64" id:"LPU64" ost_idx:%u\n",
-                       ostid->oi_seq, ostid->oi_id, ost_idx);
-                return -EBADF;
-        }
+	if (ost_idx > 0xffff) {
+		CERROR("bad ost_idx, "DOSTID" ost_idx:%u\n", POSTID(ostid),
+		       ost_idx);
+		return -EBADF;
+	}
 
-        if (fid_seq_is_mdt0(ostid->oi_seq)) {
-                /* This is a "legacy" (old 1.x/2.early) OST object in "group 0"
-                 * that we map into the IDIF namespace.  It allows up to 2^48
-                 * objects per OST, as this is the object namespace that has
-                 * been in production for years.  This can handle create rates
-                 * of 1M objects/s/OST for 9 years, or combinations thereof. */
-                if (ostid->oi_id >= IDIF_MAX_OID) {
-                         CERROR("bad MDT0 id, seq:"LPU64" id:"LPU64" ost_idx:%u\n",
-                                ostid->oi_seq, ostid->oi_id, ost_idx);
-                         return -EBADF;
-                }
-                ostid_idif_unpack(ostid, fid, ost_idx);
-
-        } else if (fid_seq_is_rsvd(ostid->oi_seq)) {
-                /* These are legacy OST objects for LLOG/ECHO and CMD testing.
-                 * We only support 2^32 objects in these groups, and cannot
-                 * uniquely identify them in the system (i.e. they are the
-                 * duplicated on all OSTs), but this is not strictly required
-                 * for the old object protocol, which has a separate ost_idx. */
-                if (ostid->oi_id >= 0xffffffffULL) {
-                         CERROR("bad RSVD id, seq:"LPU64" id:"LPU64" ost_idx:%u\n",
-                                ostid->oi_seq, ostid->oi_id, ost_idx);
-                         return -EBADF;
-                }
-                ostid_fid_unpack(ostid, fid);
-
-        } else if (unlikely(fid_seq_is_igif(ostid->oi_seq))) {
-                /* This is an MDT inode number, which should never collide with
-                 * proper OST object IDs, and is probably a broken filesystem */
-                CERROR("bad IGIF, seq:"LPU64" id:"LPU64" ost_idx:%u\n",
-                       ostid->oi_seq, ostid->oi_id, ost_idx);
-                return -EBADF;
-
-        } else /* if (fid_seq_is_idif(seq) || fid_seq_is_norm(seq)) */ {
-               /* This is either an IDIF object, which identifies objects across
-                * all OSTs, or a regular FID.  The IDIF namespace maps legacy
-                * OST objects into the FID namespace.  In both cases, we just
-                * pass the FID through, no conversion needed. */
-                ostid_fid_unpack(ostid, fid);
-        }
+	if (fid_seq_is_mdt0(ostid_seq(ostid))) {
+		/* This is a "legacy" (old 1.x/2.early) OST object in "group 0"
+		 * that we map into the IDIF namespace.  It allows up to 2^48
+		 * objects per OST, as this is the object namespace that has
+		 * been in production for years.  This can handle create rates
+		 * of 1M objects/s/OST for 9 years, or combinations thereof. */
+		if (ostid_id(ostid) >= IDIF_MAX_OID) {
+			 CERROR("bad MDT0 id, "DOSTID" ost_idx:%u\n",
+				POSTID(ostid), ost_idx);
+			 return -EBADF;
+		}
+		fid->f_seq = fid_idif_seq(ostid_id(ostid), ost_idx);
+		/* truncate to 32 bits by assignment */
+		fid->f_oid = ostid_id(ostid);
+		/* in theory, not currently used */
+		fid->f_ver = ostid_id(ostid) >> 48;
+	} else /* if (fid_seq_is_idif(seq) || fid_seq_is_norm(seq)) */ {
+	       /* This is either an IDIF object, which identifies objects across
+		* all OSTs, or a regular FID.  The IDIF namespace maps legacy
+		* OST objects into the FID namespace.  In both cases, we just
+		* pass the FID through, no conversion needed. */
+		if (ostid->oi_fid.f_ver != 0) {
+			CERROR("bad MDT0 id, "DOSTID" ost_idx:%u\n",
+				POSTID(ostid), ost_idx);
+			return -EBADF;
+		}
+		*fid = ostid->oi_fid;
+	}
 
         return 0;
 }
 
-/* pack an IDIF FID into an ostid (id/seq) for the wire/disk */
-static inline void ostid_idif_pack(const struct lu_fid *fid,
-                                   struct ost_id *ostid)
-{
-        ostid->oi_seq = FID_SEQ_OST_MDT0;
-        ostid->oi_id  = fid_idif_id(fid->f_seq, fid->f_oid, fid->f_ver);
-}
-
-/* pack a non-IDIF FID into an ostid (id/seq) for the wire/disk */
-static inline void ostid_normal_fid_pack(const struct lu_fid *fid,
-                                  struct ost_id *ostid)
-{
-        ostid->oi_seq = fid_seq(fid);
-        ostid->oi_id  = fid_ver_oid(fid);
-}
-
 /* pack any OST FID into an ostid (id/seq) for the wire/disk */
-static inline int fid_ostid_pack(const struct lu_fid *fid,
-                                 struct ost_id *ostid)
+static inline int fid_to_ostid(const struct lu_fid *fid, struct ost_id *ostid)
 {
 	if (unlikely(fid_seq_is_igif(fid->f_seq))) {
 		CERROR("bad IGIF, "DFID"\n", PFID(fid));
 		return -EBADF;
 	}
 
-	if (fid_is_idif(fid))
-		ostid_idif_pack(fid, ostid);
-	else
-		ostid_normal_fid_pack(fid, ostid);
+	if (fid_is_idif(fid)) {
+		ostid_set_seq_mdt0(ostid);
+		ostid_set_id(ostid, fid_idif_id(fid_seq(fid), fid_oid(fid),
+						fid_ver(fid)));
+	} else {
+		ostid->oi_fid = *fid;
+	}
 
 	return 0;
-}
-
-/* extract OST sequence (group) from a wire ost_id (id/seq) pair */
-static inline obd_seq ostid_seq(struct ost_id *ostid)
-{
-        if (unlikely(fid_seq_is_igif(ostid->oi_seq)))
-                CWARN("bad IGIF, oi_seq: "LPU64" oi_id: "LPX64"\n",
-                      ostid->oi_seq, ostid->oi_id);
-
-        if (unlikely(fid_seq_is_idif(ostid->oi_seq)))
-                return FID_SEQ_OST_MDT0;
-
-        return ostid->oi_seq;
-}
-
-/* extract OST objid from a wire ost_id (id/seq) pair */
-static inline obd_id ostid_id(struct ost_id *ostid)
-{
-        if (ostid->oi_seq == FID_SEQ_OST_MDT0)
-                return ostid->oi_id & IDIF_OID_MASK;
-
-        if (fid_seq_is_rsvd(ostid->oi_seq))
-                return ostid->oi_id & OBIF_OID_MASK;
-
-        if (fid_seq_is_idif(ostid->oi_seq))
-                return fid_idif_id(ostid->oi_seq, ostid->oi_id, 0);
-
-        return ostid->oi_id;
 }
 
 /* Check whether the fid is for LAST_ID */
@@ -726,6 +746,8 @@ static inline ino_t lu_igif_ino(const struct lu_fid *fid)
 {
         return fid_seq(fid);
 }
+
+extern void lustre_swab_ost_id(struct ost_id *oid);
 
 /**
  * Get inode generation from a igif.
@@ -834,6 +856,28 @@ static inline int lu_fid_cmp(const struct lu_fid *f0,
                 __diff_normalize(fid_seq(f0), fid_seq(f1)) ?:
                 __diff_normalize(fid_oid(f0), fid_oid(f1)) ?:
                 __diff_normalize(fid_ver(f0), fid_ver(f1));
+}
+
+static inline void ostid_cpu_to_le(struct ost_id *src_oi,
+				   struct ost_id *dst_oi)
+{
+	if (fid_seq_is_mdt0(ostid_seq(src_oi))) {
+		dst_oi->oi.oi_id = cpu_to_le64(src_oi->oi.oi_id);
+		dst_oi->oi.oi_seq = cpu_to_le64(src_oi->oi.oi_seq);
+	} else {
+		fid_cpu_to_le(&dst_oi->oi_fid, &src_oi->oi_fid);
+	}
+}
+
+static inline void ostid_le_to_cpu(struct ost_id *src_oi,
+				   struct ost_id *dst_oi)
+{
+	if (fid_seq_is_mdt0(ostid_seq(src_oi))) {
+		dst_oi->oi.oi_id = le64_to_cpu(src_oi->oi.oi_id);
+		dst_oi->oi.oi_seq = le64_to_cpu(src_oi->oi.oi_seq);
+	} else {
+		fid_le_to_cpu(&dst_oi->oi_fid, &src_oi->oi_fid);
+	}
 }
 
 /** @} lu_fid */
@@ -1634,9 +1678,6 @@ struct obd_ioobj {
 #define ioobj_max_brw_get(ioo)	(((ioo)->ioo_max_brw >> IOOBJ_MAX_BRW_BITS) + 1)
 #define ioobj_max_brw_set(ioo, num)					\
 do { (ioo)->ioo_max_brw = ((num) - 1) << IOOBJ_MAX_BRW_BITS; } while (0)
-
-#define ioo_id	ioo_oid.oi_id
-#define ioo_seq	ioo_oid.oi_seq
 
 extern void lustre_swab_obd_ioobj (struct obd_ioobj *ioo);
 
@@ -2779,8 +2820,7 @@ typedef enum {
 
 /** Identifier for a single log object */
 struct llog_logid {
-        __u64                   lgl_oid;
-        __u64                   lgl_oseq;
+	struct ost_id		lgl_oi;
         __u32                   lgl_ogen;
 } __attribute__((packed));
 
@@ -2876,8 +2916,7 @@ struct llog_unlink64_rec {
 
 struct llog_setattr64_rec {
 	struct llog_rec_hdr	lsr_hdr;
-	obd_id			lsr_oid;
-	obd_seq			lsr_oseq;
+	struct ost_id		lsr_oi;
 	__u32			lsr_uid;
 	__u32			lsr_uid_h;
 	__u32			lsr_gid;
@@ -3026,7 +3065,7 @@ struct llogd_conn_body {
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
         obd_valid               o_valid;        /* hot fields in this obdo */
-        struct ost_id           o_oi;
+	struct ost_id           o_oi;
         obd_id                  o_parent_seq;
         obd_size                o_size;         /* o_size-o_blocks == ost_lvb */
         obd_time                o_mtime;
@@ -3064,8 +3103,6 @@ struct obdo {
 	__u64			o_padding_6;
 };
 
-#define o_id     o_oi.oi_id
-#define o_seq    o_oi.oi_seq
 #define o_dirty   o_blocks
 #define o_undirty o_mode
 #define o_dropped o_misc

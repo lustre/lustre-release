@@ -1032,13 +1032,14 @@ static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
             !lov->lov_tgts[ost_idx])
                 GOTO(out, rc = -EINVAL);
 
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (lsm->lsm_oinfo[i]->loi_ost_idx == ost_idx) {
-                        if (lsm->lsm_oinfo[i]->loi_id != src_oa->o_id)
-                                GOTO(out, rc = -EINVAL);
-                        break;
-                }
-        }
+	for (i = 0; i < lsm->lsm_stripe_count; i++) {
+		if (lsm->lsm_oinfo[i]->loi_ost_idx == ost_idx) {
+			if (ostid_id(&lsm->lsm_oinfo[i]->loi_oi) !=
+					ostid_id(&src_oa->o_oi))
+				GOTO(out, rc = -EINVAL);
+			break;
+		}
+	}
         if (i == lsm->lsm_stripe_count)
                 GOTO(out, rc = -EINVAL);
 
@@ -2368,8 +2369,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                         fm_local->fm_mapped_extents = 0;
                         fm_local->fm_flags = fiemap->fm_flags;
 
-                        fm_key->oa.o_id = lsm->lsm_oinfo[cur_stripe]->loi_id;
-                        fm_key->oa.o_seq = lsm->lsm_oinfo[cur_stripe]->loi_seq;
+			fm_key->oa.o_oi = lsm->lsm_oinfo[cur_stripe]->loi_oi;
                         ost_index = lsm->lsm_oinfo[cur_stripe]->loi_ost_idx;
 
                         if (ost_index < 0 || ost_index >=lov->desc.ld_tgt_count)

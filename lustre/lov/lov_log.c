@@ -91,14 +91,13 @@ static int lov_llog_origin_add(const struct lu_env *env,
                 switch (rec->lrh_type) {
                 case MDS_UNLINK_REC: {
                         struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
-                        lur->lur_oid = loi->loi_id;
-                        lur->lur_oseq = loi->loi_seq;
+                        lur->lur_oid = ostid_id(&loi->loi_oi);
+                        lur->lur_oseq = (__u32)ostid_seq(&loi->loi_oi);
                         break;
                 }
                 case MDS_SETATTR64_REC: {
                         struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
-                        lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_oseq = loi->loi_seq;
+                        lsr->lsr_oi = loi->loi_oi;
                         break;
                 }
                 default:

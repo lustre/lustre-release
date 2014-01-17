@@ -1726,13 +1726,6 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         CLASSERT(offsetof(typeof(*ocd), paddingF) != 0);
 }
 
-void lustre_swab_ost_id(struct ost_id *oid)
-{
-	__swab64s(&oid->oi_id);
-	__swab64s(&oid->oi_seq);
-}
-EXPORT_SYMBOL(lustre_swab_ost_id);
-
 void lustre_swab_obdo (struct obdo  *o)
 {
         __swab64s (&o->o_valid);
@@ -1794,8 +1787,7 @@ EXPORT_SYMBOL(lustre_swab_obd_statfs);
 
 void lustre_swab_obd_ioobj(struct obd_ioobj *ioo)
 {
-	__swab64s(&ioo->ioo_id);
-	__swab64s(&ioo->ioo_seq);
+	lustre_swab_ost_id(&ioo->ioo_oid);
 	__swab32s(&ioo->ioo_max_brw);
 	__swab32s(&ioo->ioo_bufcnt);
 }
@@ -2218,8 +2210,7 @@ void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
         int i;
         ENTRY;
         for (i = 0; i < stripe_count; i++) {
-                __swab64s(&(lod[i].l_object_id));
-                __swab64s(&(lod[i].l_object_seq));
+                lustre_swab_ost_id(&(lod[i].l_ost_oi));
                 __swab32s(&(lod[i].l_ost_gen));
                 __swab32s(&(lod[i].l_ost_idx));
         }
@@ -2306,8 +2297,8 @@ void lustre_swab_quota_body(struct quota_body *b)
 void dump_ioo(struct obd_ioobj *ioo)
 {
 	CDEBUG(D_RPCTRACE,
-	       "obd_ioobj: ioo_id="LPD64", ioo_seq="LPD64", ioo_max_brw=%#x, "
-	       "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_seq, ioo->ioo_max_brw,
+	       "obd_ioobj: ioo_oid="DOSTID", ioo_max_brw=%#x, "
+	       "ioo_bufct=%d\n", POSTID(&ioo->ioo_oid), ioo->ioo_max_brw,
 	       ioo->ioo_bufcnt);
 }
 EXPORT_SYMBOL(dump_ioo);
@@ -2321,16 +2312,14 @@ EXPORT_SYMBOL(dump_rniobuf);
 
 void dump_obdo(struct obdo *oa)
 {
-        __u32 valid = oa->o_valid;
+	__u32 valid = oa->o_valid;
 
-        CDEBUG(D_RPCTRACE, "obdo: o_valid = %08x\n", valid);
-        if (valid & OBD_MD_FLID)
-                CDEBUG(D_RPCTRACE, "obdo: o_id = "LPD64"\n", oa->o_id);
-        if (valid & OBD_MD_FLGROUP)
-                CDEBUG(D_RPCTRACE, "obdo: o_seq = "LPD64"\n", oa->o_seq);
-        if (valid & OBD_MD_FLFID)
-                CDEBUG(D_RPCTRACE, "obdo: o_parent_seq = "LPX64"\n",
-                       oa->o_parent_seq);
+	CDEBUG(D_RPCTRACE, "obdo: o_valid = %08x\n", valid);
+	if (valid & OBD_MD_FLID)
+		CDEBUG(D_RPCTRACE, "obdo: id = "DOSTID"\n", POSTID(&oa->o_oi));
+	if (valid & OBD_MD_FLFID)
+		CDEBUG(D_RPCTRACE, "obdo: o_parent_seq = "LPX64"\n",
+		       oa->o_parent_seq);
         if (valid & OBD_MD_FLSIZE)
                 CDEBUG(D_RPCTRACE, "obdo: o_size = "LPD64"\n", oa->o_size);
         if (valid & OBD_MD_FLMTIME)

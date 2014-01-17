@@ -43,6 +43,7 @@
 static int str2logid(struct llog_logid *logid, char *str, int len)
 {
         char *start, *end, *endp;
+	__u64 id, seq;
 
         ENTRY;
         start = str;
@@ -57,7 +58,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_oid = simple_strtoull(start, &endp, 0);
+	id = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -69,11 +70,14 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_oseq = simple_strtoull(start, &endp, 0);
+	seq = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
-        start = ++end;
+	ostid_set_seq(&logid->lgl_oi, seq);
+	ostid_set_id(&logid->lgl_oi, id);
+
+	start = ++end;
         if (start - str >= len - 1)
                 RETURN(-EINVAL);
         logid->lgl_ogen = simple_strtoul(start, &endp, 16);
@@ -130,9 +134,8 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
                         RETURN(-EOPNOTSUPP);
 		rc = llog_cat_id2handle(env, handle, &loghandle, &lir->lid_id);
 		if (rc) {
-			CDEBUG(D_IOCTL,
-			       "cannot find log #"LPX64"#"LPX64"#%08x\n",
-			       lir->lid_id.lgl_oid, lir->lid_id.lgl_oseq,
+			CDEBUG(D_IOCTL, "cannot find log #"DOSTID"#%08x\n",
+			       POSTID(&lir->lid_id.lgl_oi),
 			       lir->lid_id.lgl_ogen);
 			RETURN(rc);
 		}
@@ -210,10 +213,10 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
                         RETURN(-EINVAL);
                 }
 
-                l = snprintf(out, remains,
-                             "[index]: %05d  [logid]: #"LPX64"#"LPX64"#%08x\n",
-                             cur_index, lir->lid_id.lgl_oid,
-                             lir->lid_id.lgl_oseq, lir->lid_id.lgl_ogen);
+		l = snprintf(out, remains,
+			     "[index]: %05d  [logid]: #"DOSTID"#%08x\n",
+			     cur_index, POSTID(&lir->lid_id.lgl_oi),
+			     lir->lid_id.lgl_ogen);
 	} else if (rec->lrh_type == OBD_CFG_REC) {
 		int rc;
 
@@ -245,8 +248,8 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 
 	rc = llog_cat_id2handle(env, cat, &log, logid);
 	if (rc) {
-		CDEBUG(D_IOCTL, "cannot find log #"LPX64"#"LPX64"#%08x\n",
-		       logid->lgl_oid, logid->lgl_oseq, logid->lgl_ogen);
+		CDEBUG(D_IOCTL, "cannot find log #"DOSTID"#%08x\n",
+		       POSTID(&logid->lgl_oi), logid->lgl_ogen);
 		RETURN(-ENOENT);
 	}
 
@@ -316,18 +319,18 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 				   cfs_size_round(data->ioc_inllen1);
 		char	*out = data->ioc_bulk;
 
-                l = snprintf(out, remains,
-                             "logid:            #"LPX64"#"LPX64"#%08x\n"
-                             "flags:            %x (%s)\n"
-                             "records count:    %d\n"
-                             "last index:       %d\n",
-                             handle->lgh_id.lgl_oid, handle->lgh_id.lgl_oseq,
-                             handle->lgh_id.lgl_ogen,
-                             handle->lgh_hdr->llh_flags,
-                             handle->lgh_hdr->llh_flags &
-                             LLOG_F_IS_CAT ? "cat" : "plain",
-                             handle->lgh_hdr->llh_count,
-                             handle->lgh_last_idx);
+		l = snprintf(out, remains,
+			     "logid:            #"DOSTID"#%08x\n"
+			     "flags:            %x (%s)\n"
+			     "records count:    %d\n"
+			     "last index:       %d\n",
+			     POSTID(&handle->lgh_id.lgl_oi),
+			     handle->lgh_id.lgl_ogen,
+			     handle->lgh_hdr->llh_flags,
+			     handle->lgh_hdr->llh_flags &
+			     LLOG_F_IS_CAT ? "cat" : "plain",
+			     handle->lgh_hdr->llh_count,
+			     handle->lgh_last_idx);
                 out += l;
                 remains -= l;
 		if (remains <= 0) {

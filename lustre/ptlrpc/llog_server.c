@@ -80,8 +80,8 @@ int llog_origin_handle_open(struct ptlrpc_request *req)
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if (body->lgd_logid.lgl_oid > 0)
-                logid = &body->lgd_logid;
+	if (ostid_id(&body->lgd_logid.lgl_oi) > 0)
+		logid = &body->lgd_logid;
 
         if (req_capsule_field_present(&req->rq_pill, &RMF_NAME, RCL_CLIENT)) {
                 name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
@@ -136,8 +136,8 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if (body->lgd_logid.lgl_oid > 0)
-                logid = &body->lgd_logid;
+	if (ostid_id(&body->lgd_logid.lgl_oi) > 0)
+		logid = &body->lgd_logid;
 
 	if (!(body->lgd_llh_flags & LLOG_F_IS_PLAIN))
 		CERROR("%s: wrong llog flags %x\n",

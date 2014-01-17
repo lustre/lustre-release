@@ -272,9 +272,9 @@ static int llog_lvfs_write_rec(const struct lu_env *env,
                         /* We assume that caller has set lgh_cur_* */
                         saved_offset = loghandle->lgh_cur_offset;
                         CDEBUG(D_OTHER,
-                               "modify record "LPX64": idx:%d/%u/%d, len:%u "
+                               "modify record "DOSTID": idx:%d/%u/%d, len:%u "
                                "offset %llu\n",
-                               loghandle->lgh_id.lgl_oid, idx, rec->lrh_index,
+                               POSTID(&loghandle->lgh_id.lgl_oi), idx, rec->lrh_index,
                                loghandle->lgh_cur_idx, rec->lrh_len,
                                (long long)(saved_offset - sizeof(*llh)));
                         if (rec->lrh_index != loghandle->lgh_cur_idx) {
@@ -348,8 +348,8 @@ static int llog_lvfs_write_rec(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u \n",
-               loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
+	CDEBUG(D_RPCTRACE, "added record "DOSTID": idx: %u, %u \n",
+	       POSTID(&loghandle->lgh_id.lgl_oi), index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
@@ -417,13 +417,13 @@ static int llog_lvfs_next_block(const struct lu_env *env,
 					loghandle->lgh_file, buf, llen,
 					cur_offset);
 		if (rc < 0) {
-                        CERROR("Cant read llog block at log id "LPU64
-                               "/%u offset "LPU64"\n",
-                               loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen,
-                               *cur_offset);
-                        RETURN(rc);
-                }
+			CERROR("Cant read llog block at log id "DOSTID
+			       "/%u offset "LPU64"\n",
+			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen,
+			       *cur_offset);
+			RETURN(rc);
+		}
 
                 /* put number of bytes read into rc to make code simpler */
 		rc = *cur_offset - ppos;
@@ -435,12 +435,12 @@ static int llog_lvfs_next_block(const struct lu_env *env,
                 if (rc == 0) /* end of file, nothing to do */
                         RETURN(0);
 
-                if (rc < sizeof(*tail)) {
-                        CERROR("Invalid llog block at log id "LPU64"/%u offset "
-                               LPU64"\n", loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen, *cur_offset);
-                        RETURN(-EINVAL);
-                }
+		if (rc < sizeof(*tail)) {
+			CERROR("Invalid llog block at log id "DOSTID"/%u offset"
+			       LPU64"\n", POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen, *cur_offset);
+			RETURN(-EINVAL);
+		}
 
                 rec = buf;
 		if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
@@ -459,13 +459,13 @@ static int llog_lvfs_next_block(const struct lu_env *env,
 
                 *cur_idx = tail->lrt_index;
 
-                /* this shouldn't happen */
-                if (tail->lrt_index == 0) {
-                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "
-                               LPU64"\n", loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen, *cur_offset);
-                        RETURN(-EINVAL);
-                }
+		/* this shouldn't happen */
+		if (tail->lrt_index == 0) {
+			CERROR("Invalid llog tail at log id "DOSTID"/%u offset "
+			       LPU64"\n", POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen, *cur_offset);
+			RETURN(-EINVAL);
+		}
                 if (tail->lrt_index < next_idx)
                         continue;
 
@@ -506,13 +506,13 @@ static int llog_lvfs_prev_block(const struct lu_env *env,
 					loghandle->lgh_file, buf, len,
 					&cur_offset);
 		if (rc < 0) {
-                        CERROR("Cant read llog block at log id "LPU64
-                               "/%u offset "LPU64"\n",
-                               loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen,
-                               cur_offset);
-                        RETURN(rc);
-                }
+			CERROR("Cant read llog block at log id "DOSTID
+			       "/%u offset "LPU64"\n",
+			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen,
+			       cur_offset);
+			RETURN(rc);
+		}
 
                 /* put number of bytes read into rc to make code simpler */
 		rc = cur_offset - ppos;
@@ -521,8 +521,8 @@ static int llog_lvfs_prev_block(const struct lu_env *env,
                         RETURN(0);
 
                 if (rc < sizeof(*tail)) {
-                        CERROR("Invalid llog block at log id "LPU64"/%u offset "
-                               LPU64"\n", loghandle->lgh_id.lgl_oid,
+                        CERROR("Invalid llog block at log id "DOSTID"/%u offset"
+                               LPU64"\n", POSTID(&loghandle->lgh_id.lgl_oi),
                                loghandle->lgh_id.lgl_ogen, cur_offset);
                         RETURN(-EINVAL);
                 }
@@ -542,13 +542,13 @@ static int llog_lvfs_prev_block(const struct lu_env *env,
 			lustre_swab_llog_rec(last_rec);
 		LASSERT(last_rec->lrh_index == tail->lrt_index);
 
-                /* this shouldn't happen */
-                if (tail->lrt_index == 0) {
-                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "
-                               LPU64"\n", loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen, cur_offset);
-                        RETURN(-EINVAL);
-                }
+		/* this shouldn't happen */
+		if (tail->lrt_index == 0) {
+			CERROR("Invalid llog tail at log id "DOSTID"/%u offset"
+			       LPU64"\n", POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen, cur_offset);
+			RETURN(-EINVAL);
+		}
 		if (tail->lrt_index < prev_idx)
                         continue;
 
@@ -605,23 +605,21 @@ static int llog_lvfs_open(const struct lu_env *env,  struct llog_handle *handle,
 
 	LASSERT(handle);
 	if (logid != NULL) {
-		dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, logid->lgl_oid,
-					     logid->lgl_ogen, logid->lgl_oseq);
+		dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, &logid->lgl_oi,
+					     logid->lgl_ogen);
 		if (IS_ERR(dchild)) {
 			rc = PTR_ERR(dchild);
-			CERROR("%s: error looking up logfile #"LPX64"#"
-			       LPX64"#%08x: rc = %d\n",
-			       ctxt->loc_obd->obd_name, logid->lgl_oid,
-			       logid->lgl_oseq, logid->lgl_ogen, rc);
+			CERROR("%s: error looking up logfile #"DOSTID "#%08x:"
+			       " rc = %d\n", ctxt->loc_obd->obd_name,
+			       POSTID(&logid->lgl_oi), logid->lgl_ogen, rc);
 			GOTO(out, rc);
 		}
 		if (dchild->d_inode == NULL) {
 			l_dput(dchild);
 			rc = -ENOENT;
-			CERROR("%s: nonexistent llog #"LPX64"#"LPX64"#%08x: "
+			CERROR("%s: nonexistent llog #"DOSTID"#%08x:"
 			       "rc = %d\n", ctxt->loc_obd->obd_name,
-			       logid->lgl_oid, logid->lgl_oseq,
-			       logid->lgl_ogen, rc);
+			       POSTID(&logid->lgl_oi), logid->lgl_ogen, rc);
 			GOTO(out, rc);
 		}
 		handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
@@ -630,10 +628,9 @@ static int llog_lvfs_open(const struct lu_env *env,  struct llog_handle *handle,
 		if (IS_ERR(handle->lgh_file)) {
 			rc = PTR_ERR(handle->lgh_file);
 			handle->lgh_file = NULL;
-			CERROR("%s: error opening llog #"LPX64"#"LPX64"#%08x: "
+			CERROR("%s: error opening llog #"DOSTID"#%08x:"
 			       "rc = %d\n", ctxt->loc_obd->obd_name,
-			       logid->lgl_oid, logid->lgl_oseq,
-			       logid->lgl_ogen, rc);
+			       POSTID(&logid->lgl_oi), logid->lgl_ogen, rc);
 			GOTO(out, rc);
 		}
 		handle->lgh_id = *logid;
@@ -654,11 +651,9 @@ static int llog_lvfs_open(const struct lu_env *env,  struct llog_handle *handle,
 				GOTO(out, rc);
 			}
 		} else {
-			handle->lgh_id.lgl_oseq = FID_SEQ_LLOG;
-			handle->lgh_id.lgl_oid =
-				handle->lgh_file->f_dentry->d_inode->i_ino;
-			handle->lgh_id.lgl_ogen =
-				handle->lgh_file->f_dentry->d_inode->i_generation;
+			lustre_build_llog_lvfs_oid(&handle->lgh_id,
+			    handle->lgh_file->f_dentry->d_inode->i_ino,
+			    handle->lgh_file->f_dentry->d_inode->i_generation);
 		}
 	} else {
 		LASSERTF(open_param == LLOG_OPEN_NEW, "%#x\n", open_param);
@@ -709,17 +704,16 @@ static int llog_lvfs_create(const struct lu_env *env,
 		if (IS_ERR(file))
 			RETURN(PTR_ERR(file));
 
-		handle->lgh_id.lgl_oseq = FID_SEQ_LLOG;
-		handle->lgh_id.lgl_oid = file->f_dentry->d_inode->i_ino;
-		handle->lgh_id.lgl_ogen =
-				file->f_dentry->d_inode->i_generation;
+		lustre_build_llog_lvfs_oid(&handle->lgh_id,
+				file->f_dentry->d_inode->i_ino,
+				file->f_dentry->d_inode->i_generation);
 		handle->lgh_file = file;
 	} else {
 		OBDO_ALLOC(oa);
 		if (oa == NULL)
 			RETURN(-ENOMEM);
 
-		oa->o_seq = FID_SEQ_LLOG;
+		ostid_set_seq_llog(&oa->o_oi);
 		oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
 
 		rc = obd_create(NULL, ctxt->loc_exp, oa, NULL, NULL);
@@ -730,8 +724,8 @@ static int llog_lvfs_create(const struct lu_env *env,
 		 *        this API along with mds_obd_{create,destroy}.
 		 *        Hopefully it is only an internal API issue. */
 #define o_generation o_parent_oid
-		dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, oa->o_id,
-					     oa->o_generation, oa->o_seq);
+		dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, &oa->o_oi,
+					     oa->o_generation);
 		if (IS_ERR(dchild))
 			GOTO(out, rc = PTR_ERR(dchild));
 
@@ -739,8 +733,7 @@ static int llog_lvfs_create(const struct lu_env *env,
 		l_dput(dchild);
 		if (IS_ERR(file))
 			GOTO(out, rc = PTR_ERR(file));
-		handle->lgh_id.lgl_oseq = oa->o_seq;
-		handle->lgh_id.lgl_oid = oa->o_id;
+		handle->lgh_id.lgl_oi = oa->o_oi;
 		handle->lgh_id.lgl_ogen = oa->o_generation;
 		handle->lgh_file = file;
 out:
@@ -760,9 +753,9 @@ static int llog_lvfs_close(const struct lu_env *env,
 		RETURN(0);
 	rc = filp_close(handle->lgh_file, 0);
 	if (rc)
-		CERROR("%s: error closing llog #"LPX64"#"LPX64"#%08x: "
+		CERROR("%s: error closing llog #"DOSTID"#%08x: "
 		       "rc = %d\n", handle->lgh_ctxt->loc_obd->obd_name,
-		       handle->lgh_id.lgl_oid, handle->lgh_id.lgl_oseq,
+		       POSTID(&handle->lgh_id.lgl_oi),
 		       handle->lgh_id.lgl_ogen, rc);
 	handle->lgh_file = NULL;
 	if (handle->lgh_name) {
@@ -812,9 +805,8 @@ static int llog_lvfs_destroy(const struct lu_env *env,
         if (oa == NULL)
                 RETURN(-ENOMEM);
 
-        oa->o_id = handle->lgh_id.lgl_oid;
-        oa->o_seq = handle->lgh_id.lgl_oseq;
-        oa->o_generation = handle->lgh_id.lgl_ogen;
+	oa->o_oi = handle->lgh_id.lgl_oi;
+	oa->o_generation = handle->lgh_id.lgl_ogen;
 #undef o_generation
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLGENER;
 

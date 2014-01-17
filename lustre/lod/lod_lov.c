@@ -518,7 +518,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 
 	lmm->lmm_magic = cpu_to_le32(magic);
 	lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
-	fid_ostid_pack(fid, &lmm->lmm_oi);
+	fid_to_ostid(fid, &lmm->lmm_oi);
 	ostid_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
 	lmm->lmm_stripe_size = cpu_to_le32(lo->ldo_stripe_size);
 	lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_stripenr);
@@ -543,7 +543,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 		LASSERT(lo->ldo_stripe[i]);
 		fid = lu_object_fid(&lo->ldo_stripe[i]->do_lu);
 
-		rc = fid_ostid_pack(fid, &info->lti_ostid);
+		rc = fid_to_ostid(fid, &info->lti_ostid);
 		LASSERT(rc == 0);
 
 		ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
@@ -691,7 +691,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	for (i = 0; i < lo->ldo_stripenr; i++) {
 		ostid_le_to_cpu(&objs[i].l_ost_oi, &info->lti_ostid);
 		idx = le64_to_cpu(objs[i].l_ost_idx);
-		fid_ostid_unpack(&info->lti_fid, &info->lti_ostid, idx);
+		ostid_to_fid(&info->lti_fid, &info->lti_ostid, idx);
 		LASSERTF(fid_is_sane(&info->lti_fid), ""DFID" insane!\n",
 			 PFID(&info->lti_fid));
 		/*

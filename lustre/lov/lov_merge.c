@@ -63,14 +63,14 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	obd_time current_ctime = lvb->lvb_ctime;
 	int i;
 	int rc = 0;
-	struct lu_fid fid;
+	struct lu_fid fid = {0};
 
 	LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
 	LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
 #endif
 
-	ostid_fid_unpack(&lsm->lsm_oi, &fid);
+	ostid_to_fid(&fid, &lsm->lsm_oi, 0);
 	CDEBUG(D_INODE, "MDT FID "DFID" initial value: s="LPU64" m="LPU64
 	       " a="LPU64" c="LPU64" b="LPU64"\n", PFID(&fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
@@ -131,7 +131,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 int lov_merge_lvb(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct ost_lvb *lvb, int kms_only)
 {
-	struct lu_fid fid;
+	struct lu_fid fid = {0};
 	int   rc;
 	__u64 kms;
 
@@ -142,7 +142,7 @@ int lov_merge_lvb(struct obd_export *exp,
 	if (kms_only)
 		lvb->lvb_size = kms;
 
-	ostid_fid_unpack(&lsm->lsm_oi, &fid);
+	ostid_to_fid(&fid, &lsm->lsm_oi, 0);
 	CDEBUG(D_INODE, "merged for FID "DFID" s="LPU64" m="LPU64" a="LPU64
 	       " c="LPU64" b="LPU64"\n", PFID(&fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);

@@ -148,12 +148,11 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
         parent = subhdr->coh_parent;
 
 	oinfo = lov->lo_lsm->lsm_oinfo[idx];
-        CDEBUG(D_INODE, DFID"@%p[%d] -> "DFID"@%p: id: "LPU64" seq: "LPU64
-               " idx: %d gen: %d\n",
-               PFID(&subhdr->coh_lu.loh_fid), subhdr, idx,
-               PFID(&hdr->coh_lu.loh_fid), hdr,
-               oinfo->loi_id, oinfo->loi_seq,
-               oinfo->loi_ost_idx, oinfo->loi_ost_gen);
+	CDEBUG(D_INODE, DFID"@%p[%d] -> "DFID"@%p: ostid: "DOSTID
+	       " idx: %d gen: %d\n",
+	       PFID(&subhdr->coh_lu.loh_fid), subhdr, idx,
+	       PFID(&hdr->coh_lu.loh_fid), hdr, POSTID(&oinfo->loi_oi),
+	       oinfo->loi_ost_idx, oinfo->loi_ost_gen);
 
         if (parent == NULL) {
                 subhdr->coh_parent = hdr;
@@ -231,8 +230,7 @@ static int lov_init_raid0(const struct lu_env *env,
                         struct lov_oinfo *oinfo = lsm->lsm_oinfo[i];
                         int ost_idx = oinfo->loi_ost_idx;
 
-                        fid_ostid_unpack(ofid, &oinfo->loi_oi,
-                                         oinfo->loi_ost_idx);
+                        ostid_to_fid(ofid, &oinfo->loi_oi, oinfo->loi_ost_idx);
                         subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
                         subconf->u.coc_oinfo = oinfo;
                         LASSERTF(subdev != NULL, "not init ost %d\n", ost_idx);

@@ -160,14 +160,15 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	ENTRY;
 
 	/* Don't create objects beyond the valid range for this SEQ */
-	if (unlikely(fid_seq_is_mdt0(oseq->os_seq) && (id + nr) >= IDIF_MAX_OID)) {
+	if (unlikely(fid_seq_is_mdt0(ostid_seq(&oseq->os_oi)) &&
+		     (id + nr) >= IDIF_MAX_OID)) {
 		CERROR("%s:"DOSTID" hit the IDIF_MAX_OID (1<<48)!\n",
-		       ofd_name(ofd), id, oseq->os_seq);
+		       ofd_name(ofd), id, ostid_seq(&oseq->os_oi));
 		RETURN(rc = -ENOSPC);
-	} else if (unlikely(!fid_seq_is_mdt0(oseq->os_seq) &&
+	} else if (unlikely(!fid_seq_is_mdt0(ostid_seq(&oseq->os_oi)) &&
 			    (id + nr) >= OBIF_MAX_OID)) {
 		CERROR("%s:"DOSTID" hit the OBIF_MAX_OID (1<<32)!\n",
-		       ofd_name(ofd), id, oseq->os_seq);
+		       ofd_name(ofd), id, ostid_seq(&oseq->os_oi));
 		RETURN(rc = -ENOSPC);
 	}
 
@@ -193,11 +194,10 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	info->fti_attr.la_ctime = 0;
 
 	/* prepare objects */
+	ostid_set_seq(&info->fti_ostid, ostid_seq(&oseq->os_oi));
 	for (i = 0; i < nr; i++) {
-		info->fti_ostid.oi_id = id + i;
-		info->fti_ostid.oi_seq = oseq->os_seq;
-
-		rc = fid_ostid_unpack(&info->fti_fid, &info->fti_ostid, 0);
+		ostid_set_id(&info->fti_ostid, id + i);
+		rc = ostid_to_fid(&info->fti_fid, &info->fti_ostid, 0);
 		if (rc) {
 			if (i == 0)
 				GOTO(out, rc = PTR_ERR(fo));
@@ -240,7 +240,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		if (unlikely(ofd_object_exists(fo))) {
 			/* object may exist being re-created by write replay */
 			CDEBUG(D_INODE, "object "LPX64"/"LPX64" exists: "
-			       DFID"\n", oseq->os_seq, id,
+			       DFID"\n", ostid_seq(&oseq->os_oi), id,
 			       PFID(&info->fti_fid));
 			continue;
 		}
@@ -260,7 +260,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	if (rc)
 		GOTO(trans_stop, rc);
 
-	CDEBUG(D_OTHER, "create new object "DFID"\n", PFID(&info->fti_fid));
+	CDEBUG(D_OTHER, "%s: create new object "DFID" nr %d\n",
+	       ofd_name(ofd), PFID(&info->fti_fid), nr);
 
 	for (i = 0; i < nr; i++) {
 		fo = batch[i];

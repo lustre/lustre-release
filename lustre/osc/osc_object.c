@@ -140,18 +140,18 @@ int osc_lvb_print(const struct lu_env *env, void *cookie,
 static int osc_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *obj)
 {
-        struct osc_object   *osc   = lu2osc(obj);
-        struct lov_oinfo    *oinfo = osc->oo_oinfo;
-        struct osc_async_rc *ar    = &oinfo->loi_ar;
+	struct osc_object   *osc   = lu2osc(obj);
+	struct lov_oinfo    *oinfo = osc->oo_oinfo;
+	struct osc_async_rc *ar    = &oinfo->loi_ar;
 
-        (*p)(env, cookie, "id: "LPU64" gr: "LPU64" "
-             "idx: %d gen: %d kms_valid: %u kms "LPU64" "
-             "rc: %d force_sync: %d min_xid: "LPU64" ",
-             oinfo->loi_id, oinfo->loi_seq, oinfo->loi_ost_idx,
-             oinfo->loi_ost_gen, oinfo->loi_kms_valid, oinfo->loi_kms,
-             ar->ar_rc, ar->ar_force_sync, ar->ar_min_xid);
-        osc_lvb_print(env, cookie, p, &oinfo->loi_lvb);
-        return 0;
+	(*p)(env, cookie, "id: "DOSTID" "
+	     "idx: %d gen: %d kms_valid: %u kms "LPU64" "
+	     "rc: %d force_sync: %d min_xid: "LPU64" ",
+	     POSTID(&oinfo->loi_oi), oinfo->loi_ost_idx,
+	     oinfo->loi_ost_gen, oinfo->loi_kms_valid, oinfo->loi_kms,
+	     ar->ar_rc, ar->ar_force_sync, ar->ar_min_xid);
+	osc_lvb_print(env, cookie, p, &oinfo->loi_lvb);
+	return 0;
 }
 
 

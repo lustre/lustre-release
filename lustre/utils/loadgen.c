@@ -471,18 +471,18 @@ out:
 /* See jt_obd_create */
 static int obj_create(struct kid_t *kid)
 {
-        struct obd_ioctl_data data;
-        int rc;
+	struct obd_ioctl_data data;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = kid->k_dev;
-        data.ioc_obdo1.o_mode = 0100644;
-        data.ioc_obdo1.o_id = 0;
-        data.ioc_obdo1.o_seq = FID_SEQ_ECHO;
-        data.ioc_obdo1.o_uid = 0;
-        data.ioc_obdo1.o_gid = 0;
-        data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = kid->k_dev;
+	data.ioc_obdo1.o_mode = 0100644;
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	ostid_set_id(&data.ioc_obdo1.o_oi, 1);
+	data.ioc_obdo1.o_uid = 0;
+	data.ioc_obdo1.o_gid = 0;
+	data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+			OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
 
         rc = obj_ioctl(OBD_IOC_CREATE, &data, 1);
         if (rc) {
@@ -497,7 +497,7 @@ static int obj_create(struct kid_t *kid)
                 return rc;
         }
 
-        kid->k_objid = data.ioc_obdo1.o_id;
+	kid->k_objid = ostid_id(&data.ioc_obdo1.o_oi);
 
         if (o_verbose > 4)
                 printf("%d: cr "LPX64"\n", kid->k_id, kid->k_objid);
@@ -516,7 +516,7 @@ static int obj_delete(struct kid_t *kid)
 
         memset(&data, 0, sizeof(data));
         data.ioc_dev = kid->k_dev;
-        data.ioc_obdo1.o_id = kid->k_objid;
+	ostid_set_id(&data.ioc_obdo1.o_oi, kid->k_objid);
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
         data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
@@ -556,13 +556,14 @@ static int obj_write(struct kid_t *kid)
         data.ioc_pbuf1 = (void *)1;
         data.ioc_plen1 = 1;
 
-        data.ioc_obdo1.o_id = kid->k_objid;
-        data.ioc_obdo1.o_mode = S_IFREG;
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLFLAGS;
-        data.ioc_obdo1.o_flags = OBD_FL_DEBUG_CHECK;
-        data.ioc_count = len;
-        data.ioc_offset = 0;
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	ostid_set_id(&data.ioc_obdo1.o_oi, kid->k_objid);
+	data.ioc_obdo1.o_mode = S_IFREG;
+	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
+				 OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
+	data.ioc_obdo1.o_flags = OBD_FL_DEBUG_CHECK;
+	data.ioc_count = len;
+	data.ioc_offset = 0;
 
         gettimeofday(&start, NULL);
 

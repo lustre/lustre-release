@@ -116,8 +116,8 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_RPCTRACE, "Canceling %d in log "LPX64"\n",
-               index, loghandle->lgh_id.lgl_oid);
+        CDEBUG(D_RPCTRACE, "Canceling %d in log "DOSTID"\n",
+               index, POSTID(&loghandle->lgh_id.lgl_oi));
 
         if (index == 0) {
                 CERROR("Can't cancel index 0 which is header\n");
@@ -139,11 +139,10 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		spin_unlock(&loghandle->lgh_hdr_lock);
 		rc = llog_destroy(env, loghandle);
 		if (rc < 0) {
-			CERROR("%s: can't destroy empty llog #"LPX64"#"LPX64
+			CERROR("%s: can't destroy empty llog #"DOSTID
 			       "#%08x: rc = %d\n",
 			       loghandle->lgh_ctxt->loc_obd->obd_name,
-			       loghandle->lgh_id.lgl_oid,
-			       loghandle->lgh_id.lgl_oseq,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, rc);
 			GOTO(out_err, rc);
 		}
@@ -153,11 +152,10 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	rc = llog_write(env, loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 	if (rc < 0) {
-		CERROR("%s: fail to write header for llog #"LPX64"#"LPX64
+		CERROR("%s: fail to write header for llog #"DOSTID
 		       "#%08x: rc = %d\n",
 		       loghandle->lgh_ctxt->loc_obd->obd_name,
-		       loghandle->lgh_id.lgl_oid,
-		       loghandle->lgh_id.lgl_oseq,
+		       POSTID(&loghandle->lgh_id.lgl_oi),
 		       loghandle->lgh_id.lgl_ogen, rc);
 		GOTO(out_err, rc);
 	}

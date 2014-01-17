@@ -390,9 +390,10 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			/* We assume that caller has set lgh_cur_* */
 			lgi->lgi_off = loghandle->lgh_cur_offset;
 			CDEBUG(D_OTHER,
-			       "modify record "LPX64": idx:%d/%u/%d, len:%u "
+			       "modify record "DOSTID": idx:%d/%u/%d, len:%u "
 			       "offset %llu\n",
-			       loghandle->lgh_id.lgl_oid, idx, rec->lrh_index,
+			       POSTID(&loghandle->lgh_id.lgl_oi), idx,
+			       rec->lrh_index,
 			       loghandle->lgh_cur_idx, rec->lrh_len,
 			       (long long)(lgi->lgi_off - sizeof(*llh)));
 			if (rec->lrh_index != loghandle->lgh_cur_idx) {
@@ -494,8 +495,8 @@ out:
 				    &lgi->lgi_off, th);
 	}
 
-	CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u\n",
-	       loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
+	CDEBUG(D_RPCTRACE, "added record "DOSTID": idx: %u, %u\n",
+	       POSTID(&loghandle->lgh_id.lgl_oi), index, rec->lrh_len);
 	if (rc == 0 && reccookie) {
 		reccookie->lgc_lgl = loghandle->lgh_id;
 		reccookie->lgc_index = index;
@@ -606,10 +607,10 @@ static int llog_osd_next_block(const struct lu_env *env,
 			GOTO(out, rc);
 
 		if (rc < sizeof(*tail)) {
-			CERROR("%s: invalid llog block at log id "LPU64"/%u "
+			CERROR("%s: invalid llog block at log id "DOSTID"/%u "
 			       "offset "LPU64"\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       loghandle->lgh_id.lgl_oid,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -632,10 +633,10 @@ static int llog_osd_next_block(const struct lu_env *env,
 
 		/* this shouldn't happen */
 		if (tail->lrt_index == 0) {
-			CERROR("%s: invalid llog tail at log id "LPU64"/%u "
+			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
 			       "offset "LPU64"\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       loghandle->lgh_id.lgl_oid,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -714,10 +715,10 @@ static int llog_osd_prev_block(const struct lu_env *env,
 			GOTO(out, rc);
 
 		if (rc < sizeof(*tail)) {
-			CERROR("%s: invalid llog block at log id "LPU64"/%u "
+			CERROR("%s: invalid llog block at log id "DOSTID"/%u "
 			       "offset "LPU64"\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       loghandle->lgh_id.lgl_oid,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -738,10 +739,10 @@ static int llog_osd_prev_block(const struct lu_env *env,
 
 		/* this shouldn't happen */
 		if (tail->lrt_index == 0) {
-			CERROR("%s: invalid llog tail at log id "LPU64"/%u "
+			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
 			       "offset "LPU64"\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       loghandle->lgh_id.lgl_oid,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}

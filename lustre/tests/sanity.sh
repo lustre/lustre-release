@@ -3776,7 +3776,8 @@ test_53() {
 		ostnum=$(index_from_ostuuid ${ostname}_UUID)
 		node=$(facet_active_host ost$((ostnum+1)))
 		param="obdfilter.$ostname.last_id"
-		ost_last=$(do_node $node lctl get_param -n $param | head -n 1)
+		ost_last=$(do_node $node lctl get_param -n $param | head -n 1 |
+			   awk -F':' '{print $2}')
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
                 if [ $ost_last != $mds_last ]; then
                     error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"

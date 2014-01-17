@@ -273,7 +273,9 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 		spin_lock(&d->opd_pre_lock);
 		if (d->opd_gap_count > 0) {
 			int count = d->opd_gap_count;
-			osi->osi_oi.oi_id = fid_oid(&d->opd_gap_start_fid);
+
+			ostid_set_id(&osi->osi_oi,
+				     fid_oid(&d->opd_gap_start_fid));
 			d->opd_gap_count = 0;
 			spin_unlock(&d->opd_pre_lock);
 

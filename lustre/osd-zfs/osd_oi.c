@@ -396,12 +396,13 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 		       PFID(fid));
 		return PTR_ERR(osd_seq);
 	}
-	rc = fid_ostid_pack(fid, &osd_oti_get(env)->oti_ostid);
+
+	rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
 	LASSERT(rc == 0); /* we should not get here with IGIF */
-	b = osd_oti_get(env)->oti_ostid.oi_id % OSD_OST_MAP_SIZE;
+	b = ostid_id(&osd_oti_get(env)->oti_ostid) % OSD_OST_MAP_SIZE;
 	LASSERT(osd_seq->os_compat_dirs[b]);
 
-	sprintf(buf, LPU64, osd_oti_get(env)->oti_ostid.oi_id);
+	sprintf(buf, LPU64, ostid_id(&osd_oti_get(env)->oti_ostid));
 
 	return osd_seq->os_compat_dirs[b];
 }

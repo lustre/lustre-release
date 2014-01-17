@@ -202,17 +202,18 @@ out:
 
 char *obdo_print(struct obdo *obd)
 {
-        char buf[1024];
+	char buf[1024];
 
-        sprintf(buf, "id: "LPX64"\ngrp: "LPX64"\natime: "LPU64"\nmtime: "LPU64
-                "\nctime: "LPU64"\nsize: "LPU64"\nblocks: "LPU64
-                "\nblksize: %u\nmode: %o\nuid: %d\ngid: %d\nflags: %x\n"
-                "misc: %x\nnlink: %d,\nvalid "LPX64"\n",
-                obd->o_id, obd->o_seq, obd->o_atime, obd->o_mtime, obd->o_ctime,
-                obd->o_size, obd->o_blocks, obd->o_blksize, obd->o_mode,
-                obd->o_uid, obd->o_gid, obd->o_flags, obd->o_misc,
-                obd->o_nlink, obd->o_valid);
-        return strdup(buf);
+	sprintf(buf, "id: "LPX64"\ngrp: "LPX64"\natime: "LPU64"\nmtime: "LPU64
+		"\nctime: "LPU64"\nsize: "LPU64"\nblocks: "LPU64
+		"\nblksize: %u\nmode: %o\nuid: %d\ngid: %d\nflags: %x\n"
+		"misc: %x\nnlink: %d,\nvalid "LPX64"\n",
+		ostid_id(&obd->o_oi), ostid_seq(&obd->o_oi), obd->o_atime,
+		obd->o_mtime, obd->o_ctime,
+		obd->o_size, obd->o_blocks, obd->o_blksize, obd->o_mode,
+		obd->o_uid, obd->o_gid, obd->o_flags, obd->o_misc,
+		obd->o_nlink, obd->o_valid);
+	return strdup(buf);
 }
 
 
@@ -300,7 +301,7 @@ parse_lsm (struct lsm_buffer *lsmb, char *string)
 
         reset_lsmb (lsmb);
 
-	lsm->lsm_oi.oi_id = strtoull(string, &end, 0);
+	ostid_set_id(&lsm->lsm_oi, strtoull(string, &end, 0));
 	if (end == string)
 		return -1;
 	string = end;
@@ -329,17 +330,18 @@ parse_lsm (struct lsm_buffer *lsmb, char *string)
         if (*string == 0)               /* don't have to specify obj ids */
                 return (0);
 
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (*string != '@')
-                        return (-1);
-                string++;
-                lsm->lsm_oinfo[i]->loi_ost_idx = strtoul(string, &end, 0);
-                if (*end != ':')
-                        return (-1);
-                string = end + 1;
-                lsm->lsm_oinfo[i]->loi_id = strtoull(string, &end, 0);
-                string = end;
-        }
+	for (i = 0; i < lsm->lsm_stripe_count; i++) {
+		if (*string != '@')
+			return (-1);
+		string++;
+		lsm->lsm_oinfo[i]->loi_ost_idx = strtoul(string, &end, 0);
+		if (*end != ':')
+			return (-1);
+		string = end + 1;
+		ostid_set_id(&lsm->lsm_oinfo[i]->loi_oi,
+			     strtoull(string, &end, 0));
+		string = end;
+	}
 
         if (*string != 0)
                 return (-1);
@@ -1411,9 +1413,9 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
 
         gettimeofday(&start, NULL);
         while (shmem_running()) {
-                struct lu_fid fid;
+                struct lu_fid fid = { 0 };
 
-                data.ioc_obdo2.o_id = child_base_id;
+		ostid_set_id(&data.ioc_obdo2.o_oi, child_base_id);
                 data.ioc_obdo2.o_mode = mode | create_mode;
                 data.ioc_obdo2.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
                                          OBD_MD_FLMODE | OBD_MD_FLFLAGS |
@@ -1438,8 +1440,7 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                                 fprintf(stderr, "Allocate fids error %d.\n",rc);
                                 return rc;
                         }
-                        data.ioc_obdo1.o_seq = fid.f_seq;
-                        data.ioc_obdo1.o_id = fid.f_oid;
+			fid_to_ostid(&fid, &data.ioc_obdo1.o_oi);
                 }
 
                 child_base_id += data.ioc_count;
@@ -1534,7 +1535,7 @@ int jt_obd_create(int argc, char **argv)
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
         struct obd_ioctl_data data;
         struct timeval next_time;
-        __u64 count = 1, next_count, base_id = 0;
+        __u64 count = 1, next_count, base_id = 1;
         int verbose = 1, mode = 0100644, rc = 0, i, valid_lsm = 0;
         char *end;
 
@@ -1585,17 +1586,18 @@ int jt_obd_create(int argc, char **argv)
         next_time.tv_sec -= verbose;
 
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-                data.ioc_obdo1.o_mode = mode;
-                data.ioc_obdo1.o_id = base_id;
-                data.ioc_obdo1.o_uid = 0;
-                data.ioc_obdo1.o_gid = 0;
-                data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
-
-                if (valid_lsm) {
-                        data.ioc_plen1 = sizeof lsm_buffer;
-                        data.ioc_pbuf1 = (char *)&lsm_buffer;
-                }
+		data.ioc_obdo1.o_mode = mode;
+		ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+		ostid_set_id(&data.ioc_obdo1.o_oi, base_id);
+		data.ioc_obdo1.o_uid = 0;
+		data.ioc_obdo1.o_gid = 0;
+		data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+					 OBD_MD_FLID | OBD_MD_FLUID |
+					 OBD_MD_FLGID | OBD_MD_FLGROUP;
+		if (valid_lsm) {
+			data.ioc_plen1 = sizeof lsm_buffer;
+			data.ioc_pbuf1 = (char *)&lsm_buffer;
+		}
 
                 memset(buf, 0, sizeof(rawbuf));
                 rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -1619,9 +1621,10 @@ int jt_obd_create(int argc, char **argv)
                         break;
                 }
 
-                if (be_verbose(verbose, &next_time, i, &next_count, count))
-                        printf("%s: #%d is object id "LPX64"\n",
-                                jt_cmdname(argv[0]), i, data.ioc_obdo1.o_id);
+		if (be_verbose(verbose, &next_time, i, &next_count, count))
+			printf("%s: #%d is object id "LPX64"\n",
+			       jt_cmdname(argv[0]), i,
+			       ostid_id(&data.ioc_obdo1.o_oi));
         }
         return rc;
 }
@@ -1638,7 +1641,7 @@ int jt_obd_setattr(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
+	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
         if (*end) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         jt_cmdname(argv[0]), argv[1]);
@@ -1718,7 +1721,7 @@ int jt_obd_test_setattr(int argc, char **argv)
                        jt_cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-                data.ioc_obdo1.o_id = objid;
+		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
                 data.ioc_obdo1.o_mode = S_IFREG;
                 data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
                 memset(buf, 0, sizeof(rawbuf));
@@ -1802,9 +1805,9 @@ int jt_obd_destroy(int argc, char **argv)
         next_time.tv_sec -= verbose;
 
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++, id++) {
-                data.ioc_obdo1.o_id = id;
-                data.ioc_obdo1.o_mode = S_IFREG | 0644;
-                data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
+		ostid_set_id(&data.ioc_obdo1.o_oi, id);
+		data.ioc_obdo1.o_mode = S_IFREG | 0644;
+		data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
                 memset(buf, 0, sizeof(rawbuf));
                 rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -1840,18 +1843,19 @@ int jt_obd_getattr(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_obdo1.o_id = strtoull(argv[1], &end, 0);
-        if (*end) {
-                fprintf(stderr, "error: %s: invalid objid '%s'\n",
-                        jt_cmdname(argv[0]), argv[1]);
-                return CMD_HELP;
-        }
-        /* to help obd filter */
-        data.ioc_obdo1.o_mode = 0100644;
-        data.ioc_obdo1.o_valid = 0xffffffff;
-        printf("%s: object id "LPX64"\n", jt_cmdname(argv[0]),data.ioc_obdo1.o_id);
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
+	if (*end) {
+		fprintf(stderr, "error: %s: invalid objid '%s'\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
+	/* to help obd filter */
+	data.ioc_obdo1.o_mode = 0100644;
+	data.ioc_obdo1.o_valid = 0xffffffff;
+	printf("%s: object id "LPX64"\n", jt_cmdname(argv[0]),
+	       ostid_id(&data.ioc_obdo1.o_oi));
 
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -1866,8 +1870,8 @@ int jt_obd_getattr(int argc, char **argv)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
         } else {
-                printf("%s: object id "LPX64", mode %o\n", jt_cmdname(argv[0]),
-                       data.ioc_obdo1.o_id, data.ioc_obdo1.o_mode);
+		printf("%s: object id "LPU64", mode %o\n", jt_cmdname(argv[0]),
+		       ostid_id(&data.ioc_obdo1.o_oi), data.ioc_obdo1.o_mode);
         }
         return rc;
 }
@@ -1923,16 +1927,16 @@ int jt_obd_test_getattr(int argc, char **argv)
                        jt_cmdname(argv[0]), count, objid, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-                data.ioc_obdo1.o_id = objid;
-                data.ioc_obdo1.o_mode = S_IFREG;
-                data.ioc_obdo1.o_valid = 0xffffffff;
-                memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl\n",
-                                jt_cmdname(argv[0]));
-                        return rc;
-                }
+		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
+		data.ioc_obdo1.o_mode = S_IFREG;
+		data.ioc_obdo1.o_valid = 0xffffffff;
+		memset(buf, 0, sizeof(rawbuf));
+		rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
                 shmem_bump(1);
                 if (rc < 0) {
@@ -2128,12 +2132,14 @@ int jt_obd_test_brw(int argc, char **argv)
         }
 #endif
 
-        data.ioc_obdo1.o_id = objid;
-        data.ioc_obdo1.o_mode = S_IFREG;
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLFLAGS;
-        data.ioc_obdo1.o_flags = (verify ? OBD_FL_DEBUG_CHECK : 0);
-        data.ioc_count = len;
-        data.ioc_offset = (repeat_offset ? 0 : thr_offset);
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	ostid_set_id(&data.ioc_obdo1.o_oi, objid);
+	data.ioc_obdo1.o_mode = S_IFREG;
+	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
+				 OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
+	data.ioc_obdo1.o_flags = (verify ? OBD_FL_DEBUG_CHECK : 0);
+	data.ioc_count = len;
+	data.ioc_offset = (repeat_offset ? 0 : thr_offset);
 
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
@@ -2162,12 +2168,12 @@ int jt_obd_test_brw(int argc, char **argv)
                                 write ? "write" : "read");
                         break;
                 } else if (be_verbose(verbose, &next_time,i, &next_count,count)) {
-                        shmem_lock ();
-                        printf("%s: %s number %d @ "LPD64":"LPU64" for %d\n",
-                               jt_cmdname(argv[0]), write ? "write" : "read", i,
-                               data.ioc_obdo1.o_id, data.ioc_offset,
-                               (int)(pages * getpagesize()));
-                        shmem_unlock ();
+			shmem_lock ();
+			printf("%s: %s number %d @ "LPD64":"LPU64" for %d\n",
+			       jt_cmdname(argv[0]), write ? "write" : "read", i,
+			       ostid_id(&data.ioc_obdo1.o_oi), data.ioc_offset,
+			       (int)(pages * getpagesize()));
+			shmem_unlock ();
                 }
 
                 if (!repeat_offset) {

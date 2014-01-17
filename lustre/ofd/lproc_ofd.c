@@ -191,8 +191,7 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 
 	read_lock(&ofd->ofd_seq_list_lock);
 	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
-		rc = snprintf(page, count, LPX64": "LPX64"\n",
-			      oseq->os_seq, ofd_seq_last_oid(oseq));
+		rc = snprintf(page, count, DOSTID"\n", POSTID(&oseq->os_oi));
 		if (rc < 0) {
 			retval = rc;
 			break;

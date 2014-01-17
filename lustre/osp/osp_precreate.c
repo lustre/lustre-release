@@ -212,11 +212,11 @@ static inline int osp_objs_precreated(const struct lu_env *env,
 		struct ost_id *oi2 = &osp_env_info(env)->osi_oi2;
 
 		LASSERT(fid_is_idif(fid1) && fid_is_idif(fid2));
-		ostid_idif_pack(fid1, oi1);
-		ostid_idif_pack(fid2, oi2);
-		LASSERT(oi1->oi_id >= oi2->oi_id);
+		fid_to_ostid(fid1, oi1);
+		fid_to_ostid(fid2, oi2);
+		LASSERT(ostid_id(oi1) >= ostid_id(oi2));
 
-		return oi1->oi_id - oi2->oi_id;
+		return ostid_id(oi1) - ostid_id(oi2);
 	}
 
 	return fid_oid(fid1) - fid_oid(fid2);
@@ -381,16 +381,16 @@ static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
 
 		spin_lock(&osp->opd_pre_lock);
 		last_fid = &osp->opd_pre_last_created_fid;
-		ostid_idif_pack(last_fid, oi);
-		end = min(oi->oi_id + *grow, IDIF_MAX_OID);
-		*grow = end - oi->oi_id;
-		oi->oi_id += *grow;
+		fid_to_ostid(last_fid, oi);
+		end = min(ostid_id(oi) + *grow, IDIF_MAX_OID);
+		*grow = end - ostid_id(oi);
+		ostid_set_id(oi, ostid_id(oi) + *grow);
 		spin_unlock(&osp->opd_pre_lock);
 
 		if (*grow == 0)
 			return 1;
 
-		ostid_idif_unpack(oi, fid, osp->opd_index);
+		ostid_to_fid(fid, oi, osp->opd_index);
 		return 0;
 	}
 
@@ -473,7 +473,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		fid->f_seq = 0;
 	}
 
-	fid_ostid_pack(fid, &body->oa.o_oi);
+	fid_to_ostid(fid, &body->oa.o_oi);
 	body->oa.o_valid = OBD_MD_FLGROUP;
 
 	ptlrpc_request_set_replen(req);
@@ -490,13 +490,10 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	if (body == NULL)
 		GOTO(out_req, rc = -EPROTO);
 
-	fid_ostid_unpack(fid, &body->oa.o_oi, d->opd_index);
+	ostid_to_fid(fid, &body->oa.o_oi, d->opd_index);
 	LASSERTF(lu_fid_diff(fid, &d->opd_pre_used_fid) > 0,
 		 "reply fid "DFID" pre used fid "DFID"\n", PFID(fid),
 		 PFID(&d->opd_pre_used_fid));
-
-	CDEBUG(D_HA, "%s: new last_created "DFID"\n", d->opd_obd->obd_name,
-	       PFID(fid));
 
 	diff = lu_fid_diff(fid, &d->opd_pre_last_created_fid);
 
@@ -516,8 +513,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	d->opd_pre_last_created_fid = *fid;
 	spin_unlock(&d->opd_pre_lock);
 
-	CDEBUG(D_OTHER, "current precreated pool: "DFID"-"DFID"\n",
-	       PFID(&d->opd_pre_used_fid), PFID(&d->opd_pre_last_created_fid));
+	CDEBUG(D_HA, "%s: current precreated pool: "DFID"-"DFID"\n",
+	       d->opd_obd->obd_name, PFID(&d->opd_pre_used_fid),
+	       PFID(&d->opd_pre_last_created_fid));
 out_req:
 	/* now we can wakeup all users awaiting for objects */
 	osp_pre_update_status(d, rc);
@@ -530,10 +528,9 @@ out_req:
 static int osp_get_lastfid_from_ost(const struct lu_env *env,
 				    struct osp_device *d)
 {
-	struct ost_id		*oi = &osp_env_info(env)->osi_oi;
 	struct ptlrpc_request	*req = NULL;
 	struct obd_import	*imp;
-	struct lu_fid		*last_fid = &d->opd_last_used_fid;
+	struct lu_fid		*last_fid;
 	char			*tmp;
 	int			rc;
 	ENTRY;
@@ -549,7 +546,7 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 			     sizeof(KEY_LAST_FID));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL, RCL_CLIENT,
-			     sizeof(*oi));
+			     sizeof(struct lu_fid));
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GET_INFO);
 	if (rc) {
@@ -561,10 +558,8 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 	memcpy(tmp, KEY_LAST_FID, sizeof(KEY_LAST_FID));
 
 	req->rq_no_delay = req->rq_no_resend = 1;
-	fid_ostid_pack(last_fid, oi);
-	ostid_cpu_to_le(oi, oi);
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
-	memcpy(tmp, oi, sizeof(*oi));
+	fid_cpu_to_le((struct lu_fid *)tmp, &d->opd_last_used_fid);
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);
@@ -578,14 +573,13 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	oi = req_capsule_server_get(&req->rq_pill, &RMF_OST_ID);
-	if (oi == NULL) {
+	last_fid = req_capsule_server_get(&req->rq_pill, &RMF_FID);
+	if (last_fid == NULL) {
 		CERROR("%s: Got last_fid failed.\n", d->opd_obd->obd_name);
 		GOTO(out, rc = -EPROTO);
 	}
 
-	rc = fid_ostid_unpack(last_fid, oi, d->opd_index);
-	if (rc != 0 || !fid_is_sane(last_fid)) {
+	if (!fid_is_sane(last_fid)) {
 		CERROR("%s: Got insane last_fid "DFID"\n",
 		       d->opd_obd->obd_name, PFID(last_fid));
 		GOTO(out, rc = -EPROTO);
@@ -682,7 +676,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	body->oa.o_flags = OBD_FL_DELORPHAN;
 	body->oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
 
-	fid_ostid_pack(&d->opd_last_used_fid, &body->oa.o_oi);
+	fid_to_ostid(&d->opd_last_used_fid, &body->oa.o_oi);
 
 	ptlrpc_request_set_replen(req);
 
@@ -702,10 +696,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	/*
 	 * OST provides us with id new pool starts from in body->oa.o_id
 	 */
-	fid_ostid_unpack(last_fid, &body->oa.o_oi, d->opd_index);
-	CDEBUG(D_INFO, "%s: last_fid "DFID" server last fid "DFID"\n",
-	       d->opd_obd->obd_name, PFID(&d->opd_last_used_fid),
-	       PFID(last_fid));
+	ostid_to_fid(last_fid, &body->oa.o_oi, d->opd_index);
 
 	spin_lock(&d->opd_pre_lock);
 	diff = lu_fid_diff(&d->opd_last_used_fid, last_fid);
@@ -1231,7 +1222,7 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 	if (oa == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	rc = fid_ostid_pack(lu_object_fid(&dt->do_lu), &oa->o_oi);
+	rc = fid_to_ostid(lu_object_fid(&dt->do_lu), &oa->o_oi);
 	LASSERT(rc == 0);
 	oa->o_size = size;
 	oa->o_blocks = OBD_OBJECT_EOF;

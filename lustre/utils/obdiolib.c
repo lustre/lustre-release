@@ -126,10 +126,10 @@ obdio_pread (struct obdio_conn *conn, __u64 oid,
 {
         obdio_iocinit (conn);
 
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid =
-                OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+	ostid_set_id(&conn->oc_data.ioc_obdo1.o_oi, oid);
+	conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
+	conn->oc_data.ioc_obdo1.o_valid =
+		OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         conn->oc_data.ioc_pbuf2 = buffer;
         conn->oc_data.ioc_plen2 = count;
@@ -145,10 +145,10 @@ obdio_pwrite (struct obdio_conn *conn, __u64 oid,
 {
         obdio_iocinit (conn);
 
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid =
-                OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+	ostid_set_id(&conn->oc_data.ioc_obdo1.o_oi, oid);
+	conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
+	conn->oc_data.ioc_obdo1.o_valid =
+		OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         conn->oc_data.ioc_pbuf1 = (void*)1;
         conn->oc_data.ioc_plen1 = 1;
@@ -169,9 +169,10 @@ obdio_enqueue (struct obdio_conn *conn, __u64 oid,
 
         obdio_iocinit (conn);
 
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+	ostid_set_id(&conn->oc_data.ioc_obdo1.o_oi, oid);
+	conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
+	conn->oc_data.ioc_obdo1.o_valid =
+		OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         conn->oc_data.ioc_conn1 = mode;
         conn->oc_data.ioc_count = count;

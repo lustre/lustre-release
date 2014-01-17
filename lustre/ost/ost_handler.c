@@ -110,19 +110,20 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 			     struct obd_ioobj *ioobj)
 {
 	if (unlikely(oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP))) {
-		oa->o_seq = FID_SEQ_OST_MDT0;
+		ostid_set_seq_mdt0(&oa->o_oi);
 		if (ioobj)
-			ioobj->ioo_seq = FID_SEQ_OST_MDT0;
-	} else if (unlikely(oa == NULL || !(fid_seq_is_idif(oa->o_seq) ||
-					    fid_seq_is_mdt(oa->o_seq) ||
-					    fid_seq_is_echo(oa->o_seq)))) {
+			ostid_set_seq_mdt0(&ioobj->ioo_oid);
+	} else if (unlikely(oa == NULL ||
+			    !(fid_seq_is_idif(ostid_seq(&oa->o_oi)) ||
+			      fid_seq_is_mdt(ostid_seq(&oa->o_oi)) ||
+			      fid_seq_is_echo(ostid_seq(&oa->o_oi))))) {
 		CERROR("%s: client %s sent bad object "DOSTID": rc = -EPROTO\n",
 		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
-		       oa ? oa->o_id : -1, oa ? oa->o_seq : -1);
+		       oa ? ostid_seq(&oa->o_oi) : -1,
+		       oa ? ostid_id(&oa->o_oi) : -1);
 		return -EPROTO;
 	}
 
-	obdo_from_ostid(oa, &oa->o_oi);
 	if (ioobj != NULL) {
 		unsigned max_brw = ioobj_max_brw_get(ioobj);
 
@@ -133,7 +134,7 @@ static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
 			       POSTID(&oa->o_oi));
 			return -EPROTO;
 		}
-		ioobj_from_obdo(ioobj, oa);
+		ioobj->ioo_oid = oa->o_oi;
 	}
 	return 0;
 }
@@ -176,8 +177,8 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if (body->oa.o_id == 0)
-                RETURN(-EPROTO);
+	if (ostid_id(&body->oa.o_oi) == 0)
+		RETURN(-EPROTO);
 
         rc = ost_validate_obdo(exp, &body->oa, NULL);
         if (rc)
@@ -792,20 +793,20 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_tls, rc);
 
-        /*
-         * If getting the lock took more time than
-         * client was willing to wait, drop it. b=11330
-         */
-        if (cfs_time_current_sec() > req->rq_deadline ||
-            OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
-                no_reply = 1;
-                CERROR("Dropping timed-out read from %s because locking"
-                       "object "LPX64" took %ld seconds (limit was %ld).\n",
-                       libcfs_id2str(req->rq_peer), ioo->ioo_id,
-                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
-                       req->rq_deadline - req->rq_arrival_time.tv_sec);
-                GOTO(out_lock, rc = -ETIMEDOUT);
-        }
+	/*
+	 * If getting the lock took more time than
+	 * client was willing to wait, drop it. b=11330
+	 */
+	if (cfs_time_current_sec() > req->rq_deadline ||
+	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
+		no_reply = 1;
+		CERROR("Dropping timed-out read from %s because locking"
+		       "object "DOSTID" took %ld seconds (limit was %ld).\n",
+		       libcfs_id2str(req->rq_peer), POSTID(&ioo->ioo_oid),
+		       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+		       req->rq_deadline - req->rq_arrival_time.tv_sec);
+		GOTO(out_lock, rc = -ETIMEDOUT);
+	}
 
         repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
@@ -952,7 +953,7 @@ static void ost_warn_on_cksum(struct ptlrpc_request *req,
 	}
 
 	LCONSOLE_ERROR_MSG(0x168, "BAD WRITE CHECKSUM: %s from %s%s%s inode "
-			   DFID" object "LPU64"/"LPU64" extent ["LPU64"-"LPU64
+			   DFID" object "DOSTID" extent ["LPU64"-"LPU64
 			   "]: client csum %x, server csum %x\n",
 			   exp->exp_obd->obd_name, libcfs_id2str(req->rq_peer),
 			   via, router,
@@ -962,9 +963,7 @@ static void ost_warn_on_cksum(struct ptlrpc_request *req,
 			   body->oa.o_parent_oid : 0,
 			   body->oa.o_valid & OBD_MD_FLFID ?
 			   body->oa.o_parent_ver : 0,
-			   body->oa.o_id,
-			   body->oa.o_valid & OBD_MD_FLGROUP ?
-			   body->oa.o_seq : (__u64)0,
+			   POSTID(&body->oa.o_oi),
 			   local_nb[0].lnb_file_offset,
 			   local_nb[npages-1].lnb_file_offset +
 			   local_nb[npages-1].len - 1,
@@ -1060,20 +1059,20 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_tls, rc);
 
-        /*
-         * If getting the lock took more time than
-         * client was willing to wait, drop it. b=11330
-         */
-        if (cfs_time_current_sec() > req->rq_deadline ||
-            OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
-                no_reply = 1;
-                CERROR("Dropping timed-out write from %s because locking "
-                       "object "LPX64" took %ld seconds (limit was %ld).\n",
-                       libcfs_id2str(req->rq_peer), ioo->ioo_id,
-                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
-                       req->rq_deadline - req->rq_arrival_time.tv_sec);
-                GOTO(out_lock, rc = -ETIMEDOUT);
-        }
+	/*
+	 * If getting the lock took more time than
+	 * client was willing to wait, drop it. b=11330
+	 */
+	if (cfs_time_current_sec() > req->rq_deadline ||
+	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
+		no_reply = 1;
+		CERROR("Dropping timed-out write from %s because locking "
+		       "object "DOSTID" took %ld seconds (limit was %ld).\n",
+		       libcfs_id2str(req->rq_peer), POSTID(&ioo->ioo_oid),
+		       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+		       req->rq_deadline - req->rq_arrival_time.tv_sec);
+		GOTO(out_lock, rc = -ETIMEDOUT);
+	}
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {

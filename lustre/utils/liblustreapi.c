@@ -2022,7 +2022,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         int rc;
 
 	if (is_dir && ostid_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
-		lum->lmm_oi.oi_seq = FID_SEQ_OST_MDT0;
+		ostid_set_seq_mdt0(&lum->lmm_oi);
 		if (verbose & VERBOSE_DETAIL)
 			llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
 	}
@@ -2154,8 +2154,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         int idx = objects[i].l_ost_idx;
-                        long long oid = objects[i].l_object_id;
-                        long long gr = objects[i].l_object_seq;
+                        long long oid = ostid_id(&objects[i].l_ost_oi);
+                        long long gr = ostid_seq(&objects[i].l_ost_oi);
 			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx)) {
 				char fmt[48];
 				sprintf(fmt, "%s%s%s\n",
@@ -3002,7 +3002,8 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
 			struct lov_user_md *lmm = &param->lmd->lmd_lmm;
 			lmm->lmm_magic = LOV_MAGIC_V1;
 			if (!param->raw)
-				lmm->lmm_oi.oi_seq = FID_SEQ_LOV_DEFAULT;
+				ostid_set_seq(&lmm->lmm_oi,
+					      FID_SEQ_LOV_DEFAULT);
 			lmm->lmm_stripe_count = 0;
 			lmm->lmm_stripe_size = 0;
 			lmm->lmm_stripe_offset = -1;

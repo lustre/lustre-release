@@ -78,17 +78,15 @@ struct osc_async_rc {
 };
 
 struct lov_oinfo {                 /* per-stripe data structure */
-        struct ost_id   loi_oi;    /* object ID/Sequence on the target OST */
-        int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
-        int loi_ost_gen;           /* generation of this loi_ost_idx */
+	struct ost_id   loi_oi;    /* object ID/Sequence on the target OST */
+	int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
+	int loi_ost_gen;           /* generation of this loi_ost_idx */
 
-        unsigned long loi_kms_valid:1;
-        __u64 loi_kms;             /* known minimum size */
-        struct ost_lvb loi_lvb;
-        struct osc_async_rc     loi_ar;
+	unsigned long loi_kms_valid:1;
+	__u64 loi_kms;             /* known minimum size */
+	struct ost_lvb loi_lvb;
+	struct osc_async_rc     loi_ar;
 };
-#define loi_id  loi_oi.oi_id
-#define loi_seq loi_oi.oi_seq
 
 static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
 {

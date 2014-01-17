@@ -433,7 +433,7 @@ static int cat_print_cb(const struct lu_env *env, struct llog_handle *llh,
 			struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
-	struct lu_fid		 fid;
+	struct lu_fid		 fid = {0};
 
 	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
 		CERROR("invalid record in catalog\n");
@@ -456,7 +456,7 @@ static int plain_counter;
 static int plain_print_cb(const struct lu_env *env, struct llog_handle *llh,
 			  struct llog_rec_hdr *rec, void *data)
 {
-	struct lu_fid fid;
+	struct lu_fid fid = {0};
 
 	if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
 		CERROR("log is not plain\n");
@@ -703,7 +703,7 @@ static union {
 static int test_7_print_cb(const struct lu_env *env, struct llog_handle *llh,
 			   struct llog_rec_hdr *rec, void *data)
 {
-	struct lu_fid fid;
+	struct lu_fid fid = {0};
 
 	logid_to_fid(&llh->lgh_id, &fid);
 

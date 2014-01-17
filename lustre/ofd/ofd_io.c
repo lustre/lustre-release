@@ -143,8 +143,8 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_read_lock(env, fo);
 	if (!ofd_object_exists(fo)) {
-		CERROR("%s: BRW to missing obj "LPU64"/"LPU64"\n",
-		       exp->exp_obd->obd_name, obj->ioo_id, obj->ioo_seq);
+		CERROR("%s: BRW to missing obj "DOSTID"\n",
+		       exp->exp_obd->obd_name, POSTID(&obj->ioo_oid));
 		ofd_read_unlock(env, fo);
 		ofd_object_put(env, fo);
 		GOTO(out, rc = -ENOENT);
@@ -222,11 +222,11 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
 		struct ofd_seq		*oseq;
-		oseq = ofd_seq_load(env, ofd, oa->o_seq);
+		oseq = ofd_seq_load(env, ofd, ostid_seq(&oa->o_oi));
 		if (IS_ERR(oseq)) {
-			CERROR("%s: Can not find seq for "LPU64":"LPU64
-			       ": rc = %ld\n", ofd_name(ofd), oa->o_seq,
-			       oa->o_id, PTR_ERR(oseq));
+			CERROR("%s: Can not find seq for "DOSTID
+			       ": rc = %ld\n", ofd_name(ofd), POSTID(&oa->o_oi),
+			       PTR_ERR(oseq));
 			RETURN(-EINVAL);
 		}
 
@@ -243,9 +243,9 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 	LASSERT(objcount == 1);
 	LASSERT(obj->ioo_bufcnt > 0);
 
-	fid_ostid_unpack(&info->fti_fid, &oa->o_oi, 0);
+	ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
 	if (cmd == OBD_BRW_WRITE) {
-		rc = ofd_auth_capa(exp, &info->fti_fid, oa->o_seq,
+		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
 				   capa, CAPA_OPC_OSS_WRITE);
 		if (rc == 0) {
 			la_from_obdo(&info->fti_attr, oa, OBD_MD_FLGETATTR);
@@ -254,7 +254,7 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 					      obj, rnb, nr_local, lnb, oti);
 		}
 	} else if (cmd == OBD_BRW_READ) {
-		rc = ofd_auth_capa(exp, &info->fti_fid, oa->o_seq,
+		rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
 				   capa, CAPA_OPC_OSS_READ);
 		if (rc == 0) {
 			ofd_grant_prepare_read(env, exp, oa);
@@ -502,7 +502,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	LASSERT(npages > 0);
 
-	fid_ostid_unpack(&info->fti_fid, &oa->o_oi, 0);
+	ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
 	if (cmd == OBD_BRW_WRITE) {
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */
@@ -563,7 +563,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		if (oa && ns && ns->ns_lvbo && ns->ns_lvbo->lvbo_update) {
 			 struct ldlm_resource *rs = NULL;
 
-			ofd_build_resid(&info->fti_fid, &info->fti_resid);
+			ost_fid_build_resid(&info->fti_fid, &info->fti_resid);
 			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
 					       LDLM_EXTENT, 0);
 			if (rs != NULL) {
