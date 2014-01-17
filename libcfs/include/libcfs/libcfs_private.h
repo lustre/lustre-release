@@ -552,6 +552,10 @@ int		 cfs_parse_nidlist(char *str, int len, struct list_head *list);
 int		 cfs_print_nidlist(char *buffer, int count,
 				   struct list_head *list);
 int		 cfs_match_nid(lnet_nid_t nid, struct list_head *list);
+bool		 cfs_nidrange_is_contiguous(struct list_head *nidlist);
+void		 cfs_nidrange_find_min_max(struct list_head *nidlist,
+					   char *min_nid, char *max_nid,
+					   int nidstr_length);
 
 /** \addtogroup lnet_addr
  * @{ */

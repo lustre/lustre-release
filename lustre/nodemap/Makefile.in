@@ -1,4 +1,4 @@
 MODULES := nodemap
-nodemap-objs := nodemap_handler.o nodemap_lproc.o
+nodemap-objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 
 @INCLUDE_RULES@

@@ -32,7 +32,8 @@ CONFDIR=/etc/lustre
 PERM_CONF=$CONFDIR/perm.conf
 FAIL_ON_ERROR=false
 
-HN=$(hostname | sum | awk '{ print $1 }')
+HOSTNAME_CHECKSUM=$(hostname | sum | awk '{ print $1 }')
+SUBNET_CHECKSUM=$(expr $HOSTNAME_CHECKSUM % 250 + 1)
 NODEMAP_COUNT=10
 NODEMAP_RANGE_COUNT=3
 NODEMAP_IPADDR_COUNT=30
@@ -569,12 +570,14 @@ create_nodemaps() {
 	local rc
 
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
-		if ! do_facet mgs $LCTL nodemap_add ${HN}_${i}; then
+		if ! do_facet mgs $LCTL nodemap_add			\
+		       	${HOSTNAME_CHECKSUM}_${i}; then
 		       	return 1
 		fi
-		out=$(do_facet mgs $LCTL get_param nodemap.${HN}_${i}.id)
+		out=$(do_facet mgs $LCTL get_param			\
+			nodemap.${HOSTNAME_CHECKSUM}_${i}.id)
 		## This needs to return zero if the following statement is 1
-		rc=$(echo $out | grep -c ${HN}_${i})
+		rc=$(echo $out | grep -c ${HOSTNAME_CHECKSUM}_${i})
 		[[ $rc == 0 ]] && return 1
 	done
 	return 0
@@ -586,19 +589,115 @@ delete_nodemaps() {
 	local rc
 
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_del ${HN}_${i}; then
-			error "nodemap_del ${HN}_${i} failed with $rc"
+		if ! do_facet mgs $LCTL nodemap_del 			\
+			${HOSTNAME_CHECKSUM}_${i}; then
+			error "nodemap_del ${HOSTNAME_CHECKSUM}_${i} 	\
+				failed with $rc"
 			return 3
 		fi
-		out=$(do_facet mgs $LCTL get_param nodemap.${HN}_${i}.id)
-		rc=$(echo $out | grep -c ${HN}_${i})
+		out=$(do_facet mgs $LCTL get_param 			\
+			nodemap.${HOSTNAME_CHECKSUM}_${i}.id)
+		rc=$(echo $out | grep -c ${HOSTNAME_CHECKSUM}_${i})
 		[[ $rc != 0 ]] && return 1
 	done
 	return 0
 }
 
+add_range() {
+	local i
+	local j
+	local cmd="$LCTL nodemap_add_range"
+	local range
+	local rc=0
+
+	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+		range="$SUBNET_CHECKSUM.${2}.${j}.[1-253]@tcp"
+		if ! do_facet mgs $cmd --name $1	\
+			--range $range; then
+			rc=$(($rc + 1))
+		fi
+	done
+	return $rc
+}
+
+del_range() {
+	local i
+	local j
+	local cmd="$LCTL nodemap_del_range"
+	local range
+	local rc=0
+
+	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+		range="$SUBNET_CHECKSUM.${2}.${j}.[1-253]@tcp"
+		if ! do_facet mgs $cmd --name $1	\
+			--range $range; then
+			rc=$(($rc + 1))
+		fi
+	done
+	return $rc
+}
+
+modify_flags() {
+	local i
+	local proc
+	local option
+	local cmd="$LCTL nodemap_modify"
+	local rc=0
+
+	proc[0]="admin_nodemap"
+	proc[1]="trusted_nodemap"
+	option[0]="admin"
+	option[1]="trusted"
+
+	for ((idx = 0; idx < 2; idx++)); do
+		if ! do_facet mgs $cmd --name $1	\
+			--property ${option[$idx]}	\
+			--value 1; then
+			rc=$((rc + 1))
+		fi
+
+		if ! do_facet mgs $cmd --name $1	\
+			--property ${option[$idx]}	\
+			--value 0; then
+			rc=$((rc + 1))
+		fi
+	done
+
+	return $rc
+}
+
+squash_id() {
+	local cmd
+
+	cmd[0]="$LCTL nodemap_modify --property squash_uid"
+	cmd[1]="$LCTL nodemap_modify --property squash_gid"
+
+	if ! do_facet mgs ${cmd[$3]} --name $1 --value $2; then
+		return 1
+	fi
+}
+
+test_nid() {
+	local cmd
+
+	cmd="$LCTL nodemap_test_nid"
+
+	nid=$(do_facet mgs $cmd $1)
+
+	if [ $nid == $2 ]; then
+		return 0
+	fi
+
+	return 1
+}
+
 test_7() {
 	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
 
 	create_nodemaps
 	rc=$?
@@ -614,6 +713,11 @@ run_test 7 "nodemap create and delete"
 
 test_8() {
 	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
 
 	# Set up nodemaps
 
@@ -636,6 +740,239 @@ test_8() {
 	return 0
 }
 run_test 8 "nodemap reject duplicates"
+
+test_9() {
+	local i
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! add_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_add_range failed with $rc" && return 2
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! del_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_del_range failed with $rc" && return 4
+
+	rc=0
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 4
+
+	return 0
+}
+run_test 9 "nodemap range add"
+
+test_10() {
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! add_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_add_range failed with $rc" && return 2
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! add_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc == 0 ]] && error "nodemap_add_range duplicate add with $rc" &&
+		return 2
+
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! del_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_del_range failed with $rc" && return 4
+
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 5
+
+	return 0
+}
+run_test 10 "nodemap reject duplicate ranges"
+
+test_11() {
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! modify_flags ${HOSTNAME_CHECKSUM}_${i}; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_modify with $rc" && return 2
+
+	rc=0
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 3
+
+	return 0
+}
+run_test 11 "nodemap modify"
+
+test_12() {
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! squash_id ${HOSTNAME_CHECKSUM}_${i} 88 0; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap squash_uid with $rc" && return 2
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! squash_id ${HOSTNAME_CHECKSUM}_${i} 88 1; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap squash_gid with $rc" && return 3
+
+	rc=0
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 4
+
+	return 0
+}
+run_test 12 "nodemap set squash ids"
+
+test_13() {
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		if ! add_range ${HOSTNAME_CHECKSUM}_${i} $i; then
+			rc=$((rc + 1))
+		fi
+	done
+	[[ $rc != 0 ]] && error "nodemap_add_range failed with $rc" && return 2
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+			for ((k = 1; k < 253; k++)); do
+				if ! test_nid $SUBNET_CHECKSUM.$i.$j.$k	\
+				       ${HOSTNAME_CHECKSUM}_${i}; then
+					rc=$((rc + 1))
+				fi
+			done
+		done
+	done
+	[[ $rc != 0 ]] && error "nodemap_test_nid failed with $rc" && return 3
+
+	rc=0
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 4
+
+	return 0
+}
+run_test 13 "test nids"
+
+test_14() {
+	local rc
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+		return
+
+	rc=0
+	create_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+
+	rc=0
+	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
+			for ((k = 1; k < 253; k++)); do
+				if ! test_nid $SUBNET_CHECKSUM.$i.$j.$k \
+					default; then
+					rc=$((rc + 1))
+				fi
+			done
+		done
+	done
+	[[ $rc != 0 ]] && error "nodemap_test_nid failed with $rc" && return 3
+
+	rc=0
+	delete_nodemaps
+	rc=$?
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 4
+
+	return 0
+}
+run_test 14 "test default nodemap nid lookup"
+
 
 log "cleanup: ======================================================"
 

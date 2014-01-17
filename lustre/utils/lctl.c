@@ -239,6 +239,17 @@ command_t cmdlist[] = {
 	{"nodemap_del", jt_nodemap_del, 0,
 	 "remove a nodemap\n"
 	 "usage: nodemap_del <nodemap_name>"},
+	{"nodemap_add_range", jt_nodemap_add_range, 0,
+	 "add a range to a nodemap\n"
+	 "usage: nodemap_add_range <NID range>"},
+	{"nodemap_del_range", jt_nodemap_del_range, 0,
+	 "add a range to a nodemap\n"
+	 "usage: nodemap_del_range <NID range>"},
+	{"nodemap_modify", jt_nodemap_modify, 0,
+	 "modify a nodemap parameters"
+	 "usage: nodemap_modify nodemap_name param value"},
+	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
+	 "usage: nodemap_test_nid <nid>"},
 
         /* Changelog commands */
         {"===  Changelogs ==", jt_noop, 0, "changelog user management"},

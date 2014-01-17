@@ -624,11 +624,15 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct obd_ioctl_data *data)
 {
-	struct lustre_cfg *lcfg = NULL;
-	const char *nodemap_name;
-	char *param = NULL;
-	__u32 cmd;
-	int rc = 0;
+	struct lustre_cfg	*lcfg = NULL;
+	struct lu_nodemap	*nodemap;
+	lnet_nid_t		nid;
+	const char		*nodemap_name = NULL;
+	const char		*nidstr = NULL;
+	char			*param = NULL;
+	int			rc = 0;
+	__u32			cmd;
+
 	ENTRY;
 
 	if (data->ioc_type != LUSTRE_CFG_TYPE) {
@@ -647,7 +651,6 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 		GOTO(out_lcfg, rc = -EFAULT);
 
-	nodemap_name = lustre_cfg_string(lcfg, 1);
 	cmd = lcfg->lcfg_command;
 
 	switch (cmd) {
@@ -655,8 +658,39 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	case LCFG_NODEMAP_DEL:
 		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
+		nodemap_name = lustre_cfg_string(lcfg, 1);
 		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
 		break;
+	case LCFG_NODEMAP_TEST_NID:
+		if (lcfg->lcfg_bufcount != 2)
+			GOTO(out_lcfg, rc = -EINVAL);
+		nidstr = lustre_cfg_string(lcfg, 1);
+		nid = libcfs_str2nid(nidstr);
+		nodemap = nodemap_classify_nid(nid);
+		memset(data->ioc_pbuf1, 0, data->ioc_plen1);
+		if (copy_to_user(data->ioc_pbuf1, nodemap->nm_name,
+				 strlen(nodemap->nm_name)) != 0)
+			GOTO(out_lcfg, rc = -EFAULT);
+		break;
+	case LCFG_NODEMAP_ADD_RANGE:
+	case LCFG_NODEMAP_DEL_RANGE:
+		if (lcfg->lcfg_bufcount != 3)
+			GOTO(out_lcfg, rc = -EINVAL);
+		nodemap_name = lustre_cfg_string(lcfg, 1);
+		param = lustre_cfg_string(lcfg, 2);
+		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
+		break;
+	case LCFG_NODEMAP_ADMIN:
+	case LCFG_NODEMAP_TRUSTED:
+	case LCFG_NODEMAP_SQUASH_UID:
+	case LCFG_NODEMAP_SQUASH_GID:
+		if (lcfg->lcfg_bufcount != 4)
+			GOTO(out_lcfg, rc = -EINVAL);
+		nodemap_name = lustre_cfg_string(lcfg, 1);
+		param = lustre_cfg_string(lcfg, 3);
+		rc = mgs_nodemap_cmd(env, mgs, cmd, nodemap_name, param);
+		break;
+
 	default:
 		rc = -ENOTTY;
 	}

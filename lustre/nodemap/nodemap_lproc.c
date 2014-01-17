@@ -27,11 +27,39 @@
 #define NODEMAP_LPROC_ID_LEN 16
 #define NODEMAP_LPROC_FLAG_LEN 2
 
-#define NODEMAP_PROC_DEBUG 1
-
 #include <lprocfs_status.h>
 #include <lustre_net.h>
+#include <interval_tree.h>
 #include "nodemap_internal.h"
+
+static int nodemap_ranges_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap		*nodemap = m->private;
+	struct lu_nid_range		*range;
+	struct interval_node_extent	ext;
+
+
+	list_for_each_entry(range, &nodemap->nm_ranges, rn_list) {
+			ext = range->rn_node.in_extent;
+			seq_printf(m, "id: %u: { start_nid: %s, "
+					"end_nid: %s }\n",
+				   range->rn_id, libcfs_nid2str(ext.start),
+				   libcfs_nid2str(ext.end));
+	}
+
+	return 0;
+}
+
+static int nodemap_ranges_open(struct inode *inode, struct file *file)
+{
+	struct proc_dir_entry	*dir;
+	struct lu_nodemap	*nodemap;
+
+	dir = PDE(inode);
+	nodemap = dir->data;
+
+	return single_open(file, nodemap_ranges_show, nodemap);
+}
 
 static int nodemap_active_seq_show(struct seq_file *m, void *data)
 {
@@ -313,6 +341,13 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_uid);
 LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
 #endif
 
+const struct file_operations nodemap_ranges_fops = {
+	.open			= nodemap_ranges_open,
+	.read			= seq_read,
+	.llseek			= seq_lseek,
+	.release		= single_release
+};
+
 static struct lprocfs_seq_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "id",
@@ -333,6 +368,10 @@ static struct lprocfs_seq_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "squash_gid",
 		.fops		= &nodemap_squash_gid_fops,
+	},
+	{
+		.name		= "ranges",
+		.fops		= &nodemap_ranges_fops,
 	},
 	{
 		NULL
