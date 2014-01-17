@@ -4842,10 +4842,11 @@ test_62() {
 #run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
-test_63a() {	# was test_63
+# Though this test is irrelevant anymore, it helped to reveal some
+# other grant bugs (LU-4482), let's keep it.
+test_63a() {   # was test_63
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	MAX_DIRTY_MB=`lctl get_param -n osc.*.max_dirty_mb | head -n 1`
-	lctl set_param -n osc.*.max_dirty_mb 0
 	for i in `seq 10` ; do
 		dd if=/dev/zero of=$DIR/f63 bs=8k &
 		sleep 5
@@ -4853,7 +4854,6 @@ test_63a() {	# was test_63
 		sleep 1
 	done
 
-	lctl set_param -n osc.*.max_dirty_mb $MAX_DIRTY_MB
 	rm -f $DIR/f63 || true
 }
 run_test 63a "Verify oig_wait interruption does not crash ======="

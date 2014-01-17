@@ -206,7 +206,8 @@ static void ofd_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 
 	rc = ofd_statfs_internal(env, ofd, osfs, max_age, from_cache);
 	if (unlikely(rc)) {
-		*from_cache = 0;
+		if (from_cache)
+			*from_cache = 0;
 		return;
 	}
 
@@ -249,10 +250,11 @@ static obd_size ofd_grant_space_left(struct obd_export *exp)
 			    D_ERROR : D_CACHE;
 
 		CDEBUG_LIMIT(mask, "%s: cli %s/%p left "LPU64" < tot_grant "
-			     LPU64" unstable "LPU64" pending "LPU64"\n",
+			     LPU64" unstable "LPU64" pending "LPU64" "
+			     "dirty "LPU64"\n",
 			     obd->obd_name, exp->exp_client_uuid.uuid, exp,
 			     left, tot_granted, unstable,
-			     ofd->ofd_tot_pending);
+			     ofd->ofd_tot_pending, ofd->ofd_tot_dirty);
 		RETURN(0);
 	}
 

@@ -1245,6 +1245,8 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
                     d ? d->id_ops->id_name : "plain");
 }
 
+#define GRANT_FOR_LOCAL_OIDS 32 /* 128kB for last_rcvd, quota files, ... */
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -1269,23 +1271,27 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
         }
 
 	spin_lock(&osd->od_osfs_lock);
-	/* cache 1 second */
-	if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
-		result = sb->s_op->statfs(sb->s_root, ksfs);
-		if (likely(result == 0)) { /* N.B. statfs can't really fail */
-			osd->od_osfs_age = cfs_time_current_64();
-			statfs_pack(&osd->od_statfs, ksfs);
-			if (sb->s_flags & MS_RDONLY)
-				sfs->os_state = OS_STATE_READONLY;
-		}
+	result = sb->s_op->statfs(sb->s_root, ksfs);
+	if (likely(result == 0)) { /* N.B. statfs can't really fail */
+		statfs_pack(sfs, ksfs);
+		if (sb->s_flags & MS_RDONLY)
+			sfs->os_state = OS_STATE_READONLY;
 	}
 
-	if (likely(result == 0))
-		*sfs = osd->od_statfs;
 	spin_unlock(&osd->od_osfs_lock);
 
-        if (unlikely(env == NULL))
+	if (unlikely(env == NULL))
                 OBD_FREE_PTR(ksfs);
+
+	/* Reserve a small amount of space for local objects like last_rcvd,
+	 * llog, quota files, ... */
+	if (sfs->os_bavail <= GRANT_FOR_LOCAL_OIDS) {
+		sfs->os_bavail = 0;
+	} else {
+		sfs->os_bavail -= GRANT_FOR_LOCAL_OIDS;
+		/** Take out metadata overhead for indirect blocks */
+		sfs->os_bavail -= sfs->os_bavail >> (sb->s_blocksize_bits - 3);
+	}
 
         return result;
 }
@@ -5686,7 +5692,6 @@ static int osd_device_init0(const struct lu_env *env,
 
 	spin_lock_init(&o->od_osfs_lock);
 	mutex_init(&o->od_otable_mutex);
-	o->od_osfs_age = cfs_time_shift_64(-1000);
 
 	o->od_capa_hash = init_capa_hash();
 	if (o->od_capa_hash == NULL)
