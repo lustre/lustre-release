@@ -531,20 +531,25 @@ load_modules_local() {
 		load_module osp/osp
     fi
 
+	load_module llite/lustre
+	llite_lloop_enabled && load_module llite/llite_lloop
+	[ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
+	OGDB=${OGDB:-$TMP}
+	rm -f $OGDB/ogdb-$HOSTNAME
+	$LCTL modules > $OGDB/ogdb-$HOSTNAME
 
-    load_module llite/lustre
-    llite_lloop_enabled && load_module llite/llite_lloop
-    [ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
-    OGDB=${OGDB:-$TMP}
-    rm -f $OGDB/ogdb-$HOSTNAME
-    $LCTL modules > $OGDB/ogdb-$HOSTNAME
-
-    # 'mount' doesn't look in $PATH, just sbin
-    if [ -f $LUSTRE/utils/mount.lustre ] && \
-       ! grep -qe "/sbin/mount\.lustre " /proc/mounts; then
-        [ ! -f /sbin/mount.lustre ] && touch /sbin/mount.lustre
-        mount --bind $LUSTRE/utils/mount.lustre /sbin/mount.lustre || true
-    fi
+	# 'mount' doesn't look in $PATH, just sbin
+	local MOUNT_LUSTRE=$LUSTRE/utils/mount.lustre
+	if [ -f $MOUNT_LUSTRE ]; then
+		if grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+			cmp $MOUNT_LUSTRE /sbin/mount.lustre ||
+				umount /sbin/mount.lustre
+		fi
+		if ! grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+			[ ! -f /sbin/mount.lustre ] && touch /sbin/mount.lustre
+			mount --bind $MOUNT_LUSTRE /sbin/mount.lustre
+		fi
+	fi
 }
 
 load_modules () {
@@ -4070,18 +4075,22 @@ check_and_cleanup_lustre() {
 		[ "$ENABLE_QUOTA" ] && restore_quota || true
 	fi
 
-    if [ "$I_UMOUNTED2" = "yes" ]; then
-        restore_mount $MOUNT2 || error "restore $MOUNT2 failed"
-    fi
+	if [ "$I_UMOUNTED2" = "yes" ]; then
+		restore_mount $MOUNT2 || error "restore $MOUNT2 failed"
+	fi
 
-    if [ "$I_MOUNTED2" = "yes" ]; then
-        cleanup_mount $MOUNT2
-    fi
+	if [ "$I_MOUNTED2" = "yes" ]; then
+		cleanup_mount $MOUNT2
+	fi
 
-    if [ "$I_MOUNTED" = "yes" ]; then
-        cleanupall -f || error "cleanup failed"
-        unset I_MOUNTED
-    fi
+	if [ "$I_MOUNTED" = "yes" ]; then
+		cleanupall -f || error "cleanup failed"
+		unset I_MOUNTED
+	fi
+
+	if grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+		umount /sbin/mount.lustre
+	fi
 }
 
 #######
