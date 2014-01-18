@@ -17,8 +17,12 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+# remove the check when ZFS backend iteration is ready
 [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
 	skip "test LFSCK only for ldiskfs" && exit 0
+[ $(facet_fstype ost1) != ldiskfs ] &&
+	skip "test LFSCK only for ldiskfs" && exit 0
+
 require_dsh_mds || exit 0
 
 MCREATE=${MCREATE:-mcreate}
@@ -38,17 +42,24 @@ check_and_setup_lustre
 [[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
+[[ $(lustre_version_code ost1) -lt $(version_code 2.5.50) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11"
+
 build_test_filter
 
 $LCTL set_param debug=+lfsck > /dev/null || true
 
 MDT_DEV="${FSNAME}-MDT0000"
+OST_DEV="${FSNAME}-OST0000"
 MDT_DEVNAME=$(mdsdevname ${SINGLEMDS//mds/})
 START_NAMESPACE="do_facet $SINGLEMDS \
 		$LCTL lfsck_start -M ${MDT_DEV} -t namespace"
+START_LAYOUT_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV} -t layout"
 STOP_LFSCK="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
 SHOW_NAMESPACE="do_facet $SINGLEMDS \
 		$LCTL get_param -n mdd.${MDT_DEV}.lfsck_namespace"
+SHOW_LAYOUT_ON_OST="do_facet ost1 \
+		$LCTL get_param -n obdfilter.${OST_DEV}.lfsck_layout"
 MOUNT_OPTS_SCRUB="-o user_xattr"
 MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
 
@@ -997,6 +1008,152 @@ test_10()
 		error "(16) Expect 'completed', but got '$STATUS'"
 }
 run_test 10 "System is available during LFSCK scanning"
+
+# remove LAST_ID
+ost_remove_lastid() {
+	local ost=$1
+	local idx=$2
+	local rcmd="do_facet ost${ost}"
+
+	echo "remove LAST_ID on ost${ost}: idx=${idx}"
+
+	# step 1: local mount
+	mount_fstype ost${ost} || return 1
+	# step 2: remove the specified LAST_ID
+	${rcmd} rm -fv $(facet_mntpt ost${ost})/O/${idx}/LAST_ID
+	# step 3: umount
+	unmount_fstype ost${ost} || return 2
+}
+
+test_11a() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	createmany -o $DIR/$tdir/f 64
+
+	echo "stopall"
+	stopall > /dev/null
+
+	ost_remove_lastid 1 0 || error "(1) Fail to remove LAST_ID"
+
+	echo "start ost1"
+	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(2) Fail to start ost1"
+
+	local STATUS=$($SHOW_LAYOUT_ON_OST | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY4		0x160e
+	do_facet ost1 $LCTL set_param fail_val=3
+	do_facet ost1 $LCTL set_param fail_loc=0x160e
+
+	echo "trigger LFSCK for layout on ost1 to rebuild the LAST_ID(s)"
+	$START_LAYOUT_ON_OST || error "(4) Fail to start LFSCK on OST!"
+
+	wait_update_facet ost1 "$LCTL get_param -n \
+		obdfilter.${OST_DEV}.lfsck_layout |
+		awk '/^flags/ { print \\\$2 }'" "crashed_lastid" 60 || {
+		$SHOW_LAYOUT_ON_OST
+		return 5
+	}
+
+	do_facet ost1 $LCTL set_param fail_val=0
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	wait_update_facet ost1 "$LCTL get_param -n \
+		obdfilter.${OST_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 3 || {
+		$SHOW_LAYOUT_ON_OST
+		return 6
+	}
+
+	echo "the LAST_ID(s) should have been rebuilt"
+	FLAGS=$($SHOW_LAYOUT_ON_OST | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(7) Expect empty flags, but got '$FLAGS'"
+}
+run_test 11a "LFSCK can rebuild lost last_id"
+
+test_11b() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+
+	echo "set fail_loc=0x160d to skip the updating LAST_ID on-disk"
+	#define OBD_FAIL_LFSCK_SKIP_LASTID	0x160d
+	do_facet ost1 $LCTL set_param fail_loc=0x160d
+	createmany -o $DIR/$tdir/f 64
+	local lastid1=$(do_facet ost1 "lctl get_param -n \
+		obdfilter.${ost1_svc}.last_id" | grep 0x100000000 |
+		awk -F: '{ print $2 }')
+
+	umount_client $MOUNT
+	echo "stop ost1"
+	stop ost1 || error "(1) Fail to stop ost1"
+
+	#define OBD_FAIL_OST_ENOSPC              0x215
+	do_facet ost1 $LCTL set_param fail_loc=0x215
+
+	echo "start ost1"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "(2) Fail to start ost1"
+
+	local STATUS=$($SHOW_LAYOUT_ON_OST | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	for ((i = 0; i < 60; i++)); do
+		lastid2=$(do_facet ost1 "lctl get_param -n \
+			obdfilter.${ost1_svc}.last_id" | grep 0x100000000 |
+			awk -F: '{ print $2 }')
+		[ ! -z $lastid2 ] && break;
+		sleep 1
+	done
+
+	echo "the on-disk LAST_ID should be smaller than the expected one"
+	[ $lastid1 -gt $lastid2 ] ||
+		error "(4) expect lastid1 [ $lastid1 ] > lastid2 [ $lastid2 ]"
+
+	echo "trigger LFSCK for layout on ost1 to rebuild the on-disk LAST_ID"
+	$START_LAYOUT_ON_OST || error "(5) Fail to start LFSCK on OST!"
+
+	wait_update_facet ost1 "$LCTL get_param -n \
+		obdfilter.${OST_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 3 || {
+		$SHOW_LAYOUT_ON_OST
+		return 6
+	}
+
+	echo "stop ost1"
+	stop ost1 || error "(7) Fail to stop ost1"
+
+	echo "start ost1"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "(8) Fail to start ost1"
+
+	echo "the on-disk LAST_ID should have been rebuilt"
+	wait_update_facet ost1 "$LCTL get_param -n \
+		obdfilter.${ost1_svc}.last_id | grep 0x100000000 |
+		awk -F: '{ print \\\$2 }'" "$lastid1" 60 || {
+		$LCTL get_param -n obdfilter.${ost1_svc}.last_id
+		error "(9) expect lastid1 0x100000000:$lastid1"
+	}
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+}
+run_test 11b "LFSCK can rebuild crashed last_id"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

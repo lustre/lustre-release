@@ -90,6 +90,7 @@ struct ec_export_data { /* echo client */
 struct filter_export_data {
 	struct tg_export_data	fed_ted;
 	spinlock_t		fed_lock;	/**< protects fed_mod_list */
+	__u64			fed_lastid_gen;
 	long			fed_dirty;    /* in bytes */
 	long			fed_grant;    /* in bytes */
 	cfs_list_t		fed_mod_list; /* files being modified */

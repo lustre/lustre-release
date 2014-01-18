@@ -220,22 +220,11 @@ static int ofd_fld_fini(const struct lu_env *env,
 	RETURN(0);
 }
 
-void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
+void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct ofd_seq  *oseq;
 	struct ofd_seq  *tmp;
 	cfs_list_t       dispose;
-	int		rc;
-
-	ofd_deregister_seq_exp(ofd);
-
-	rc = ofd_fid_fini(env, ofd);
-	if (rc != 0)
-		CERROR("%s: fid fini error: rc = %d\n", ofd_name(ofd), rc);
-
-	rc = ofd_fld_fini(env, ofd);
-	if (rc != 0)
-		CERROR("%s: fld fini error: rc = %d\n", ofd_name(ofd), rc);
 
 	CFS_INIT_LIST_HEAD(&dispose);
 	write_lock(&ofd->ofd_seq_list_lock);
@@ -248,9 +237,25 @@ void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 		oseq = container_of0(dispose.next, struct ofd_seq, os_list);
 		ofd_seq_delete(env, oseq);
 	}
+}
+
+void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
+{
+	int rc;
+
+	ofd_deregister_seq_exp(ofd);
+
+	rc = ofd_fid_fini(env, ofd);
+	if (rc != 0)
+		CERROR("%s: fid fini error: rc = %d\n", ofd_name(ofd), rc);
+
+	rc = ofd_fld_fini(env, ofd);
+	if (rc != 0)
+		CERROR("%s: fld fini error: rc = %d\n", ofd_name(ofd), rc);
+
+	ofd_seqs_free(env, ofd);
 
 	LASSERT(cfs_list_empty(&ofd->ofd_seq_list));
-	return;
 }
 
 /**

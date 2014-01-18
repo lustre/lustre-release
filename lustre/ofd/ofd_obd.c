@@ -309,7 +309,7 @@ out:
 	RETURN(rc);
 }
 
-static int ofd_obd_disconnect(struct obd_export *exp)
+int ofd_obd_disconnect(struct obd_export *exp)
 {
 	struct ofd_device	*ofd = ofd_dev(exp->exp_obd->obd_lu_dev);
 	struct lu_env		 env;
@@ -500,7 +500,15 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
                         struct obd_statfs *osfs, __u64 max_age, int *from_cache)
 {
-	int rc;
+	int rc = 0;
+	ENTRY;
+
+	down_read(&ofd->ofd_lastid_rwsem);
+	/* Currently, for safe, we do not distinguish which LAST_ID is broken,
+	 * we may do that in the future.
+	 * Return -ENOSPC until the LAST_ID rebuilt. */
+	if (unlikely(ofd->ofd_lastid_rebuilding))
+		GOTO(out, rc = -ENOSPC);
 
 	spin_lock(&ofd->ofd_osfs_lock);
 	if (cfs_time_before_64(ofd->ofd_osfs_age, max_age) || max_age == 0) {
@@ -527,7 +535,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		 * call it fairly often as space fills up */
 		rc = dt_statfs(env, ofd->ofd_osd, osfs);
 		if (unlikely(rc))
-			return rc;
+			GOTO(out, rc);
 
 		spin_lock(&ofd->ofd_grant_lock);
 		spin_lock(&ofd->ofd_osfs_lock);
@@ -574,7 +582,13 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		if (from_cache)
 			*from_cache = 1;
 	}
-	return 0;
+
+	GOTO(out, rc);
+
+out:
+	up_read(&ofd->ofd_lastid_rwsem);
+
+	return rc;
 }
 
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
@@ -822,11 +836,18 @@ int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	CDEBUG(D_INFO, "ofd_create("DOSTID")\n", POSTID(&oa->o_oi));
 
+	down_read(&ofd->ofd_lastid_rwsem);
+	/* Currently, for safe, we do not distinguish which LAST_ID is broken,
+	 * we may do that in the future.
+	 * Return -ENOSPC until the LAST_ID rebuilt. */
+	if (unlikely(ofd->ofd_lastid_rebuilding))
+		GOTO(out_sem, rc = -ENOSPC);
+
 	oseq = ofd_seq_load(env, ofd, seq);
 	if (IS_ERR(oseq)) {
 		CERROR("%s: Can't find FID Sequence "LPX64": rc = %ld\n",
 		       ofd_name(ofd), seq, PTR_ERR(oseq));
-		RETURN(-EINVAL);
+		GOTO(out_sem, rc = -EINVAL);
 	}
 
 	mutex_lock(&oseq->os_create_lock);
@@ -860,6 +881,9 @@ out:
 		lsm->lsm_oi = oa->o_oi;
 	}
 	ofd_seq_put(env, oseq);
+
+out_sem:
+	up_read(&ofd->ofd_lastid_rwsem);
 	RETURN(rc);
 }
 

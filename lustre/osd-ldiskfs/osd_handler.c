@@ -353,7 +353,7 @@ check_oi:
 		LASSERTF(rc == -ESTALE || rc == -ENOENT, "rc = %d\n", rc);
 
 		rc = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
-		/* XXX: There are three possible cases:
+		/* XXX: There are some possible cases:
 		 *	1. rc = 0.
 		 *	   Backup/restore caused the OI invalid.
 		 *	2. rc = 0.

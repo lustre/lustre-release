@@ -38,6 +38,34 @@
 #include <lu_object.h>
 #include <dt_object.h>
 
+/**
+ * status machine:
+ *
+ * 					LS_INIT
+ * 					   |
+ * 				     (lfsck|start)
+ * 					   |
+ *					   v
+ *				   LS_SCANNING_PHASE1
+ *					|	^
+ *					|	:
+ *					| (lfsck:restart)
+ *					|	:
+ *					v	:
+ *	-----------------------------------------------------------------
+ *	|		    |^		|^	   |^	      |^ 	|^
+ *	|		    |:		|:	   |:	      |:	|:
+ *	v		    v:		v:	   v:	      v: 	v:
+ * LS_SCANNING_PHASE2	LS_FAILED  LS_STOPPED  LS_PAUSED LS_CRASHED LS_PARTIAL
+ *	|	^	    ^:		^:	   ^:	      ^:	^:
+ *	|	:	    |:		|:	   |:	      |:	|:
+ *	| (lfsck:restart)   |:		|:	   |:	      |:	|:
+ *	v	:	    |v		|v	   |v	      |v	|v
+ *	-----------------------------------------------------------------
+ *	    |
+ *	    v
+ *    LS_COMPLETED
+ */
 enum lfsck_status {
 	/* The lfsck file is new created, for new MDT, upgrading from old disk,
 	 * or re-creating the lfsck file manually. */
@@ -77,8 +105,17 @@ struct lfsck_start_param {
 	struct ldlm_namespace	*lsp_namespace;
 };
 
+enum lfsck_events {
+	LE_LASTID_REBUILDING	= 1,
+	LE_LASTID_REBUILT	= 2,
+};
+
+typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
+				enum lfsck_events event);
+
 int lfsck_register(const struct lu_env *env, struct dt_device *key,
-		   struct dt_device *next, bool master);
+		   struct dt_device *next, lfsck_out_notify notify,
+		   void *notify_data, bool master);
 void lfsck_degister(const struct lu_env *env, struct dt_device *key);
 
 int lfsck_start(const struct lu_env *env, struct dt_device *key,

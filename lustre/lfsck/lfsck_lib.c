@@ -77,6 +77,7 @@ const char *lfsck_flags_names[] = {
 	"inconsistent",
 	"upgrade",
 	"incomplete",
+	"crashed_lastid",
 	NULL
 };
 
@@ -1119,7 +1120,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key, bool pause)
 EXPORT_SYMBOL(lfsck_stop);
 
 int lfsck_register(const struct lu_env *env, struct dt_device *key,
-		   struct dt_device *next, bool master)
+		   struct dt_device *next, lfsck_out_notify notify,
+		   void *notify_data, bool master)
 {
 	struct lfsck_instance	*lfsck;
 	struct dt_object	*root  = NULL;
@@ -1145,6 +1147,8 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	CFS_INIT_LIST_HEAD(&lfsck->li_list_idle);
 	atomic_set(&lfsck->li_ref, 1);
 	init_waitqueue_head(&lfsck->li_thread.t_ctl_waitq);
+	lfsck->li_out_notify = notify;
+	lfsck->li_out_notify_data = notify_data;
 	lfsck->li_next = next;
 	lfsck->li_bottom = key;
 

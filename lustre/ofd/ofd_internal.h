@@ -181,10 +181,15 @@ struct ofd_device {
 				 ofd_syncjournal:1,
 				 /* shall we grant space to clients not
 				  * supporting OBD_CONNECT_GRANT_PARAM? */
-				 ofd_grant_compat_disable:1;
+				 ofd_grant_compat_disable:1,
+				 /* Protected by ofd_lastid_rwsem. */
+				 ofd_lastid_rebuilding:1;
 	struct seq_server_site	 ofd_seq_site;
 	/* the limit of SOFT_SYNC RPCs that will trigger a soft sync */
 	unsigned int		 ofd_soft_sync_limit;
+	/* Protect ::ofd_lastid_rebuilding */
+	struct rw_semaphore	 ofd_lastid_rwsem;
+	__u64			 ofd_lastid_gen;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
@@ -340,6 +345,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan);
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       struct obd_statfs *osfs, __u64 max_age, __u32 flags);
+int ofd_obd_disconnect(struct obd_export *exp);
 
 /* ofd_fs.c */
 obd_id ofd_seq_last_oid(struct ofd_seq *oseq);
@@ -357,6 +363,7 @@ int ofd_precreate_batch(struct ofd_device *ofd, int batch);
 struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 			     obd_seq seq);
 void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd);
+void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd);
 
 /* ofd_io.c */
 int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,

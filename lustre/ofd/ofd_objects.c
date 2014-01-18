@@ -266,6 +266,31 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	CDEBUG(D_OTHER, "%s: create new object "DFID" nr %d\n",
 	       ofd_name(ofd), PFID(fid), nr);
 
+	LASSERT(nr > 0);
+
+	 /* When the LFSCK scanning the whole device to verify the LAST_ID file
+	  * consistency, it will load the last_id into RAM firstly, and compare
+	  * the last_id with echo OST-object's ID. If the later one is larger,
+	  * then it will regard the LAST_ID file crashed. But during the LFSCK
+	  * scanning, the OFD may continue to create new OST-objects. Those new
+	  * created OST-objects will have larger IDs than the LFSCK known ones.
+	  * So from the LFSCK view, it needs to re-load the last_id from disk
+	  * file, and if the latest last_id is still smaller than the object's
+	  * ID, then the LAST_ID file is real crashed.
+	  *
+	  * To make above mechanism to work, before OFD pre-create OST-objects,
+	  * it needs to update the LAST_ID file firstly, otherwise, the LFSCK
+	  * may cannot get latest last_id although new OST-object created. */
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_SKIP_LASTID)) {
+		tmp = cpu_to_le64(id + nr - 1);
+		dt_write_lock(env, oseq->os_lastid_obj, 0);
+		rc = dt_record_write(env, oseq->os_lastid_obj,
+				     &info->fti_buf, &info->fti_off, th);
+		dt_write_unlock(env, oseq->os_lastid_obj);
+		if (rc != 0)
+			GOTO(trans_stop, rc);
+	}
+
 	for (i = 0; i < nr; i++) {
 		fo = batch[i];
 		LASSERT(fo);
@@ -284,11 +309,24 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	}
 
 	objects = i;
-	if (objects > 0) {
+	/* NOT all the wanted objects have been created,
+	 * set the LAST_ID as the real created. */
+	if (unlikely(objects < nr)) {
+		int rc1;
+
+		info->fti_off = 0;
 		tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
-		rc = dt_record_write(env, oseq->os_lastid_obj,
-				     &info->fti_buf, &info->fti_off, th);
+		dt_write_lock(env, oseq->os_lastid_obj, 0);
+		rc1 = dt_record_write(env, oseq->os_lastid_obj,
+				      &info->fti_buf, &info->fti_off, th);
+		dt_write_unlock(env, oseq->os_lastid_obj);
+		if (rc1 != 0)
+			CERROR("%s: fail to reset the LAST_ID for seq ("LPX64
+			       ") from "LPU64" to "LPU64"\n", ofd_name(ofd),
+			       ostid_seq(&oseq->os_oi), id + nr - 1,
+			       ofd_seq_last_oid(oseq));
 	}
+
 trans_stop:
 	ofd_trans_stop(env, ofd, th, rc);
 out:
