@@ -1185,7 +1185,6 @@ restart_bulk:
 #ifdef __KERNEL__
 static void mdc_release_page(struct page *page, int remove)
 {
-	kunmap(page);
 	if (remove) {
 		lock_page(page);
 		if (likely(page->mapping != NULL))
@@ -1239,6 +1238,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			CDEBUG(D_VFSTRACE, "page%lu [%llu %llu], hash"LPU64"\n",
 			       offset, *start, *end, *hash);
 			if (*hash > *end) {
+				kunmap(page);
 				mdc_release_page(page, 0);
 				page = NULL;
 			} else if (*end != *start && *hash == *end) {
@@ -1248,6 +1248,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				 * ll_get_dir_page() will issue RPC to fetch
 				 * the page we want.
 				 */
+				kunmap(page);
 				mdc_release_page(page,
 				    le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
 				page = NULL;
@@ -1637,37 +1638,38 @@ fail:
  * Read one directory entry from the cache.
  */
 int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **entp)
+		   struct md_callback *cb_op, struct lu_dirent **entp,
+		   struct page **ppage)
 {
 	struct page		*page = NULL;
 	struct lu_dirpage	*dp;
 	struct lu_dirent	*ent;
 	int			rc = 0;
-	int			index = 0;
 	ENTRY;
 
-	if (op_data->op_hash_offset == MDS_DIR_END_OFF) {
-		*entp = NULL;
+	CDEBUG(D_INFO, DFID "offset = "LPU64"\n", PFID(&op_data->op_fid1),
+	       op_data->op_hash_offset);
+
+	*ppage = NULL;
+	*entp = NULL;
+
+	if (op_data->op_hash_offset == MDS_DIR_END_OFF)
 		RETURN(0);
-	}
 
 	rc = mdc_read_page(exp, op_data, cb_op, &page);
 	if (rc != 0)
 		RETURN(rc);
 
-	if (op_data->op_cli_flags & CLI_READENT_END) {
-		mdc_release_page(page, 0);
-		RETURN(0);
-	}
-
-	dp = kmap(page);
+	dp = page_address(page);
 	for (ent = lu_dirent_start(dp); ent != NULL;
 	     ent = lu_dirent_next(ent)) {
-		index++;
-		if (ent->lde_hash > op_data->op_hash_offset)
+		/* Skip dummy entry */
+		if (le16_to_cpu(ent->lde_namelen) == 0)
+			continue;
+
+		if (le64_to_cpu(ent->lde_hash) > op_data->op_hash_offset)
 			break;
 	}
-	kunmap(page);
 
 	/* If it can not find entry in current page, try next page. */
 	if (ent == NULL) {
@@ -1686,14 +1688,14 @@ int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 			RETURN(rc);
 
 		if (page != NULL) {
-			dp = kmap(page);
+			dp = page_address(page);
 			ent = lu_dirent_start(dp);
-			kunmap(page);
 		}
 
 		op_data->op_hash_offset = orig_offset;
 	}
 
+	*ppage = page;
 	*entp = ent;
 
 	RETURN(rc);
@@ -1746,7 +1748,8 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **entp)
+		   struct md_callback *cb_op, struct lu_dirent **entp,
+		   struct page **ppage)
 {
 	struct page		*page = NULL;
 	struct lu_dirpage	*dp;

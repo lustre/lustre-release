@@ -723,13 +723,13 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 int ll_get_mdt_idx(struct inode *inode);
 
 struct lu_dirent *ll_dir_entry_start(struct inode *dir,
-				     struct md_op_data *op_data);
+				     struct md_op_data *op_data,
+				     struct page **ppage);
 
 struct lu_dirent *ll_dir_entry_next(struct inode *dir,
 				    struct md_op_data *op_data,
-				    struct lu_dirent *ent);
-void ll_dir_entry_end(struct inode *dir, struct md_op_data *op_data,
-		      struct lu_dirent *ent);
+				    struct lu_dirent *ent,
+				    struct page **ppage);
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request,
                        struct inode *dir);

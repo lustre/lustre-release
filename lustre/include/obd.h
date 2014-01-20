@@ -1281,7 +1281,8 @@ struct md_ops {
 			  struct page **, struct ptlrpc_request **);
 
 	int (*m_read_entry)(struct obd_export *, struct md_op_data *,
-			    struct md_callback *cb_op, struct lu_dirent **ld);
+			    struct md_callback *cb_op, struct lu_dirent **ld,
+			    struct page **ppage);
 
 	int (*m_unlink)(struct obd_export *, struct md_op_data *,
 			struct ptlrpc_request **);

@@ -159,14 +159,16 @@
  * ll_dir_entry_end: release the last page.
  **/
 struct lu_dirent *ll_dir_entry_start(struct inode *dir,
-				     struct md_op_data *op_data)
+				     struct md_op_data *op_data,
+				     struct page **ppage)
 {
 	struct lu_dirent *entry;
 	struct md_callback cb_op;
 	int rc;
 
+	LASSERT(*ppage == NULL);
 	cb_op.md_blocking_ast = ll_md_blocking_ast;
-	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry);
+	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
 	if (rc != 0)
 		entry = ERR_PTR(rc);
 	return entry;
@@ -174,30 +176,23 @@ struct lu_dirent *ll_dir_entry_start(struct inode *dir,
 
 struct lu_dirent *ll_dir_entry_next(struct inode *dir,
 				    struct md_op_data *op_data,
-				    struct lu_dirent *ent)
+				    struct lu_dirent *ent,
+				    struct page **ppage)
 {
 	struct lu_dirent *entry;
 	struct md_callback cb_op;
 	int rc;
 
+	LASSERT(*ppage != NULL);
 	cb_op.md_blocking_ast = ll_md_blocking_ast;
 	op_data->op_hash_offset = le64_to_cpu(ent->lde_hash);
-	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry);
+	kunmap(*ppage);
+	page_cache_release(*ppage);
+	*ppage = NULL;
+	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
 	if (rc != 0)
 		entry = ERR_PTR(rc);
 	return entry;
-}
-
-void ll_dir_entry_end(struct inode *dir, struct md_op_data *op_data,
-		      struct lu_dirent *ent)
-{
-	struct lu_dirent *entry;
-	struct md_callback cb_op;
-
-	cb_op.md_blocking_ast = ll_md_blocking_ast;
-	op_data->op_cli_flags = CLI_READENT_END;
-	md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry);
-	return;
 }
 
 int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
@@ -212,12 +207,13 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 	int			rc = 0;
 	__u64			hash = MDS_DIR_END_OFF;
 	__u64			last_hash = MDS_DIR_END_OFF;
+	struct page		*page = NULL;
 	ENTRY;
 
         ll_dir_chain_init(&chain);
-	for (ent = ll_dir_entry_start(inode, op_data);
+	for (ent = ll_dir_entry_start(inode, op_data, &page);
 	     ent != NULL && !IS_ERR(ent) && !done;
-	     ent = ll_dir_entry_next(inode, op_data, ent)) {
+	     ent = ll_dir_entry_next(inode, op_data, ent, &page)) {
 		__u16          type;
 		int            namelen;
 		struct lu_fid  fid;
@@ -262,8 +258,11 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 
 	if (IS_ERR(ent))
 		rc = PTR_ERR(ent);
-	else if (ent != NULL)
-		ll_dir_entry_end(inode, op_data, ent);
+
+	if (page != NULL) {
+		kunmap(page);
+		page_cache_release(page);
+	}
 
 	ll_dir_chain_fini(&chain);
 	RETURN(rc);

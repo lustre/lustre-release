@@ -1072,6 +1072,7 @@ static int ll_statahead_thread(void *arg)
 	struct ll_dir_chain       chain;
 	struct l_wait_info        lwi    = { 0 };
 	struct lu_dirent	 *ent;
+	struct page		*page = NULL;
 	ENTRY;
 
 	CDEBUG(D_READA, "statahead thread started: [pid %d] [parent %.*s]\n",
@@ -1096,9 +1097,9 @@ static int ll_statahead_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 
 	ll_dir_chain_init(&chain);
-	for (ent = ll_dir_entry_start(dir, op_data);
+	for (ent = ll_dir_entry_start(dir, op_data, &page);
 	     ent != NULL && !IS_ERR(ent);
-	     ent = ll_dir_entry_next(dir, op_data, ent)) {
+	     ent = ll_dir_entry_next(dir, op_data, ent, &page)) {
 		__u64 hash;
 		int namelen;
 		char *name;
@@ -1192,8 +1193,10 @@ do_it:
 		ll_statahead_one(parent, name, namelen);
 	}
 
-	if (ent != NULL && !IS_ERR(ent))
-		ll_dir_entry_end(dir, op_data, ent);
+	if (page != NULL) {
+		kunmap(page);
+		page_cache_release(page);
+	}
 
 	 /*
 	 * End of directory reached.
@@ -1337,6 +1340,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	struct md_op_data    *op_data;
 	int                   dot_de;
 	struct lu_dirent     *ent;
+	struct page	     *page = NULL;
 	int                   rc     = LS_NONE_FIRST_DE;
 	ENTRY;
 
@@ -1354,9 +1358,9 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	op_data->op_max_pages =
 		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
 
-	for (ent = ll_dir_entry_start(dir, op_data);
+	for (ent = ll_dir_entry_start(dir, op_data, &page);
 	     ent != NULL && !IS_ERR(ent);
-	     ent = ll_dir_entry_next(dir, op_data, ent)) {
+	     ent = ll_dir_entry_next(dir, op_data, ent, &page)) {
 		__u64 hash;
 		int namelen;
 		char *name;
@@ -1410,8 +1414,11 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 		break;
 	}
         EXIT;
-	if (ent != NULL && !IS_ERR(ent))
-		ll_dir_entry_end(dir, op_data, ent);
+
+	if (page != NULL) {
+		kunmap(page);
+		page_cache_release(page);
+	}
 	ll_finish_md_op_data(op_data);
 out:
 	ll_dir_chain_fini(&chain);

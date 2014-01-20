@@ -2288,7 +2288,8 @@ static void lmv_adjust_dirpages(struct page **pages, int ncfspgs, int nlupgs)
 
 #define NORMAL_MAX_STRIPES 4
 int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **ldp)
+		   struct md_callback *cb_op, struct lu_dirent **ldp,
+		   struct page **ppage)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
@@ -2298,6 +2299,7 @@ int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 	int			stripe_count;
 	__u64			min_hash;
 	int			min_idx = 0;
+	struct page		*min_page = NULL;
 	int			i;
 	int			rc;
 	ENTRY;
@@ -2323,6 +2325,7 @@ int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 	min_hash = MDS_DIR_END_OFF;
 	for (i = 0; i < stripe_count; i++) {
 		struct lmv_tgt_desc *tgt;
+		struct page *page = NULL;
 
 		if (likely(lsm == NULL)) {
 			tgt = lmv_find_target(lmv, &op_data->op_fid1);
@@ -2338,12 +2341,16 @@ int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 			op_data->op_stripe_offset = i;
 		}
 
-		rc = md_read_entry(tgt->ltd_exp, op_data, cb_op, &ents[i]);
+		rc = md_read_entry(tgt->ltd_exp, op_data, cb_op, &ents[i],
+				   &page);
 		if (rc != 0)
 			GOTO(out, rc);
 
 		if (ents[i] != NULL &&
 		    le64_to_cpu(ents[i]->lde_hash) <= min_hash) {
+			if (min_page != NULL)
+				page_cache_release(min_page);
+			min_page = page;
 			min_hash = le64_to_cpu(ents[i]->lde_hash);
 			min_idx = i;
 		}
@@ -2356,6 +2363,13 @@ int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 out:
 	if (stripe_count > NORMAL_MAX_STRIPES && ents != NULL)
 		OBD_FREE(ents, sizeof(ents[0]) * stripe_count);
+
+	if (rc != 0 && min_page != NULL) {
+		kunmap(min_page);
+		page_cache_release(min_page);
+	} else {
+		*ppage = min_page;
+	}
 
 	RETURN(rc);
 }
