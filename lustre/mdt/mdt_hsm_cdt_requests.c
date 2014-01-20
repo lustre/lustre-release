@@ -521,7 +521,7 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 		   " compound/cookie="LPX64"/"LPX64
 		   " action=%s archive#=%d flags="LPX64
 		   " extent="LPX64"-"LPX64" gid="LPX64
-		   " data=[%s] canceled=%d uuid=%s done="LPU64"%%\n",
+		   " data=[%s] canceled=%d uuid=%s done="LPU64"\n",
 		   PFID(&car->car_hai->hai_fid),
 		   PFID(&car->car_hai->hai_dfid),
 		   car->car_compound_id, car->car_hai->hai_cookie,

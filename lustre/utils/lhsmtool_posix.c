@@ -164,16 +164,18 @@ static void usage(const char *name, int rc)
 	"       each line of <list_file> consists of <old_FID> <new_FID>\n"
 	"   %s [options] --max-sequence <fsname>\n"
 	"       return the max fid sequence of archived files\n"
-	"   -A, --archive <#>        Archive number (repeatable)\n"
-	"   -p, --hsm-root <path>    Target HSM mount point\n"
-	"   -q, --quiet              Produce less verbose output\n"
-	"   -v, --verbose            Produce more verbose output\n"
-	"   -c, --chunk-size <sz>    I/O size used during data copy\n"
-	"                            (unit can be used, default is MB)\n"
-	"   --abort-on-error         Abort operation on major error\n"
-	"   --dry-run                Don't run, just show what would be done\n"
-	"   --bandwidth <bw>         Limit I/O bandwidth (unit can be used\n,"
-	"                            default is MB)\n",
+	"   --abort-on-error          Abort operation on major error\n"
+	"   -A, --archive <#>         Archive number (repeatable)\n"
+	"   -b, --bandwidth <bw>      Limit I/O bandwidth (unit can be used\n,"
+	"                             default is MB)\n"
+	"   --dry-run                 Don't run, just show what would be done\n"
+	"   -c, --chunk-size <sz>     I/O size used during data copy\n"
+	"                             (unit can be used, default is MB)\n"
+	"   -p, --hsm-root <path>     Target HSM mount point\n"
+	"   -q, --quiet               Produce less verbose output\n"
+	"   -u, --update-interval <s> Interval between progress reports sent\n"
+	"                             to Coordinator\n"
+	"   -v, --verbose             Produce more verbose output\n",
 	cmd_name, cmd_name, cmd_name, cmd_name, cmd_name);
 
 	exit(rc);
@@ -204,7 +206,8 @@ static int ct_parseopts(int argc, char * const *argv)
 		{"no_xattr",	   no_argument,	      &opt.o_copy_xattrs,   0},
 		{"quiet",	   no_argument,	      NULL,		   'q'},
 		{"rebind",	   no_argument,	      NULL,		   'r'},
-		{"report",	   required_argument, &opt.o_report_int,    0},
+		{"update-interval", required_argument,	NULL,		   'u'},
+		{"update_interval", required_argument,	NULL,		   'u'},
 		{"verbose",	   no_argument,	      NULL,		   'v'},
 		{0, 0, 0, 0}
 	};
@@ -213,7 +216,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	unsigned long long	 unit;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "A:b:c:hiMp:qrv",
+	while ((c = getopt_long(argc, argv, "A:b:c:hiMp:qru:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'A':
@@ -257,6 +260,15 @@ static int ct_parseopts(int argc, char * const *argv)
 			break;
 		case 'r':
 			opt.o_action = CA_REBIND;
+			break;
+		case 'u':
+			opt.o_report_int = atoi(optarg);
+			if (opt.o_report_int < 0) {
+				rc = -EINVAL;
+				CT_ERROR(rc, "bad value for -%c '%s'", c,
+					 optarg);
+				return rc;
+			}
 			break;
 		case 'v':
 			opt.o_verbose++;
