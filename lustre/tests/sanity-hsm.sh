@@ -90,6 +90,7 @@ init_agt_vars() {
 
 	export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
 	export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
+	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
 	export HSMTOOL_BASE=$(basename "$HSMTOOL" | cut -f1 -d" ")
 	HSM_ARCHIVE=$(copytool_device $SINGLEAGT)
 	HSM_ARCHIVE_NUMBER=2
@@ -164,6 +165,8 @@ copytool_setup() {
 	# independent of hardware
 	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --hsm-root $hsm_root"
 	[[ -z "$arc_id" ]] || cmd+=" --archive $arc_id"
+	[[ -z "$HSMTOOL_UPDATE_INTERVAL" ]] ||
+		cmd+=" --update-interval $HSMTOOL_UPDATE_INTERVAL"
 	cmd+=" --bandwidth 1 $lustre_mntpnt"
 
 	# Redirect the standard output and error to a log file which
@@ -560,6 +563,21 @@ wait_request_state() {
 
 	wait_result $mds "$cmd" $state 100 ||
 		error "request on $fid is not $state on $mds"
+}
+
+wait_request_progress() {
+	local fid=$1
+	local request=$2
+	local progress=$3
+	# 4th arg (mdt index) is optional
+	local mdtidx=${4:-0}
+	local mds=mds$((mdtidx + 1))
+
+	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.active_requests"
+	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$12}' | cut -f2 -d="
+
+	wait_result $mds "$cmd" $progress 100 ||
+		error "request on $fid has not made progress $progress on $mds"
 }
 
 get_request_state() {
@@ -2530,6 +2548,36 @@ test_58() {
 	copytool_cleanup
 }
 run_test 58 "Truncate a released file will trigger restore"
+
+test_60() {
+	local interval=5
+	local progress_timeout=$((interval * 2))
+
+	# test needs a new running copytool
+	copytool_cleanup
+	HSMTOOL_UPDATE_INTERVAL=$interval copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(make_large_for_progress $f)
+
+	local start_at=$(date +%s)
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
+		error "could not archive file"
+	wait_request_progress $fid ARCHIVE 5242880
+	local finish_at=$(date +%s)
+	local elapsed=$((finish_at - start_at))
+
+	if [ $elapsed -gt $progress_timeout ]; then
+		error "Expected progress update within $progress_timeout seconds"
+	elif [ $elapsed -lt $interval ]; then
+		error "Expected progress update after at least $interval seconds"
+	fi
+
+	cdt_clear_no_retry
+	copytool_cleanup
+}
+run_test 60 "Changing progress update interval from default"
 
 test_90() {
 	file_count=57
