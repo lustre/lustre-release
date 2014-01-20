@@ -434,6 +434,7 @@ int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 int osp_init_pre_fid(struct osp_device *osp);
 
 /* lproc_osp.c */
+void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);
 void osp_lprocfs_init(struct osp_device *osp);
 
 /* osp_sync.c */
@@ -447,6 +448,7 @@ int osp_sync_fini(struct osp_device *d);
 void __osp_sync_check_for_work(struct osp_device *d);
 
 /* lwp_dev.c */
+void lprocfs_lwp_init_vars(struct lprocfs_static_vars *lvars);
 extern struct obd_ops lwp_obd_device_ops;
 extern struct lu_device_type lwp_device_type;
 
