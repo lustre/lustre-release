@@ -122,10 +122,15 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 	/* XXX create an env to talk to mdt stack. We should get this env from
 	 * ptlrpc_thread->t_env. */
 	rc = lu_env_init(&env, LCT_MD_THREAD);
-	LASSERT(rc == 0);
+	/* Likely ENOMEM */
+	if (rc)
+		RETURN(rc);
 
 	info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
-	LASSERT(info != NULL);
+	/* Likely ENOMEM */
+	if (info == NULL)
+		GOTO(out, rc = -ENOMEM);
+
 	memset(info, 0, sizeof *info);
 	info->mti_env = &env;
 	info->mti_exp = lock->l_export;
