@@ -3291,18 +3291,20 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         if (errno == EISDIR)
                 fd = open(path, O_DIRECTORY | O_RDONLY);
 
-        if (fd < 0) {
-                rc = errno ? -errno : -EBADF;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: %s: opening '%s'",
-                            __func__, path);
-                return rc;
-        }
-        rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
-        if (rc)
-                rc = errno ? -errno : -EINVAL;
+	if (fd < 0) {
+		rc = errno ? -errno : -EBADF;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: %s: opening '%s'",
+			    __func__, path);
+		/* If we can't even open a file on the filesystem (e.g. with
+		 * -ESHUTDOWN), force caller to exit or it will loop forever. */
+		return -ENODEV;
+	}
+	rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
+	if (rc)
+		rc = errno ? -errno : -EINVAL;
 
-        close(fd);
-        return rc;
+	close(fd);
+	return rc;
 }
 
 #define MAX_STRING_SIZE 128
