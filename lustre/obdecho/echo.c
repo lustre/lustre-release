@@ -561,7 +561,8 @@ commitrw_cleanup:
 
 LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
 static struct lprocfs_seq_vars lprocfs_echo_obd_vars[] = {
-	{ "uuid",	&echo_uuid_fops		},
+	{ .name	=	"uuid",
+	  .fops	=	&echo_uuid_fops		},
 	{ 0 }
 };
 

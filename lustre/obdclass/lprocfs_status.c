@@ -2584,7 +2584,6 @@ void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 EXPORT_SYMBOL(lprocfs_init_ldlm_stats);
 
 #ifdef HAVE_SERVER_SUPPORT
-/* No one appears to be using this ?? */
 int lprocfs_exp_nid_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_export *exp = m->private;

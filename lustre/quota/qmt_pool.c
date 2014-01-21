@@ -171,7 +171,8 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 LPROC_SEQ_FOPS_RO(qpi_state);
 
 static struct lprocfs_seq_vars lprocfs_quota_qpi_vars[] = {
-	{ "info",	&qpi_state_fops	},
+	{ .name	=	"info",
+	  .fops	=	&qpi_state_fops	},
 	{ NULL }
 };
 

@@ -59,14 +59,23 @@ static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 LPROC_SEQ_FOPS_RO(mgc_ir_state);
 
 struct lprocfs_seq_vars lprocfs_mgc_obd_vars[] = {
-	{ "uuid",		&mgc_uuid_fops,		0,	0 },
-	{ "ping",		&mgc_ping_fops,		0,	0222 },
-	{ "connect_flags",	&mgc_connect_flags_fops,0,	0 },
-	{ "mgs_server_uuid",	&mgc_server_uuid_fops,	0,	0 },
-	{ "mgs_conn_uuid",	&mgc_conn_uuid_fops,	0,	0 },
-	{ "import",		&mgc_import_fops,	0,	0 },
-	{ "state",		&mgc_state_fops,	0,	0 },
-	{ "ir_state",		&mgc_ir_state_fops,	0,	0 },
+	{ .name	=	"uuid",
+	  .fops	=	&mgc_uuid_fops		},
+	{ .name	=	"ping",
+	  .fops	=	&mgc_ping_fops,
+	  .proc_mode =	0222			},
+	{ .name	=	"connect_flags",
+	  .fops	=	&mgc_connect_flags_fops	},
+	{ .name	=	"mgs_server_uuid",
+	  .fops	=	&mgc_server_uuid_fops	},
+	{ .name	=	"mgs_conn_uuid",
+	  .fops	=	&mgc_conn_uuid_fops	},
+	{ .name	=	"import",
+	  .fops	=	&mgc_import_fops	},
+	{ .name	=	"state",
+	  .fops	=	&mgc_state_fops		},
+	{ .name	=	"ir_state",
+	  .fops	=	&mgc_ir_state_fops	},
 	{ 0 }
 };
 #endif /* LPROCFS */

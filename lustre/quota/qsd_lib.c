@@ -208,10 +208,14 @@ qsd_timeout_seq_write(struct file *file, const char *buffer,
 LPROC_SEQ_FOPS(qsd_timeout);
 
 static struct lprocfs_seq_vars lprocfs_quota_qsd_vars[] = {
-	{ "info",		&qsd_state_fops		},
-	{ "enabled",		&qsd_enabled_fops	},
-	{ "force_reint",	&qsd_force_reint_fops	},
-	{ "timeout",		&qsd_timeout_fops	},
+	{ .name	=	"info",
+	  .fops	=	&qsd_state_fops		},
+	{ .name	=	"enabled",
+	  .fops	=	&qsd_enabled_fops	},
+	{ .name	=	"force_reint",
+	  .fops	=	&qsd_force_reint_fops	},
+	{ .name	=	"timeout",
+	  .fops	=	&qsd_timeout_fops	},
 	{ NULL }
 };
 

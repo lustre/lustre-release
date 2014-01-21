@@ -1382,7 +1382,7 @@ lprocfs_import_seq_write(struct file *file, const char *buffer, size_t count,
 
 		*ptr = 0;
 		do_reconn = 0;
-		ptr += strlen("::");
+		ptr += 2; /* Skip :: */
 		inst = simple_strtol(ptr, &endptr, 10);
 		if (*endptr) {
 			CERROR("config: wrong instance # %s\n", ptr);

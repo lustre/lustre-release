@@ -203,9 +203,12 @@ LPROC_SEQ_FOPS(lprocfs_server_fid_width);
 LPROC_SEQ_FOPS_RO(lprocfs_server_fid_server);
 
 struct lprocfs_seq_vars seq_server_proc_list[] = {
-	{ "space",      &lprocfs_server_fid_space_fops },
-	{ "width",      &lprocfs_server_fid_width_fops },
-	{ "server",     &lprocfs_server_fid_server_fops },
+	{ .name	=	"space",
+	  .fops	=	&lprocfs_server_fid_space_fops	},
+	{ .name	=	"width",
+	  .fops	=	&lprocfs_server_fid_width_fops	},
+	{ .name	=	"server",
+	  .fops	=	&lprocfs_server_fid_server_fops	},
 	{ NULL }
 };
 
@@ -623,10 +626,14 @@ LPROC_SEQ_FOPS_RO(lprocfs_client_fid_server);
 LPROC_SEQ_FOPS_RO(lprocfs_client_fid_fid);
 
 struct lprocfs_seq_vars seq_client_proc_list[] = {
-	{ "space",	&lprocfs_client_fid_space_fops },
-	{ "width",	&lprocfs_client_fid_width_fops },
-	{ "server",	&lprocfs_client_fid_server_fops },
-	{ "fid",	&lprocfs_client_fid_fid_fops },
+	{ .name	=	"space",
+	  .fops	=	&lprocfs_client_fid_space_fops	},
+	{ .name	=	"width",
+	  .fops	=	&lprocfs_client_fid_width_fops	},
+	{ .name	=	"server",
+	  .fops	=	&lprocfs_client_fid_server_fops	},
+	{ .name	=	"fid",
+	  .fops	=	&lprocfs_client_fid_fid_fops	},
 	{ NULL }
 };
 #endif

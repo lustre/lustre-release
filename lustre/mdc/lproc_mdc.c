@@ -103,29 +103,47 @@ LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
 struct lprocfs_seq_vars lprocfs_mdc_obd_vars[] = {
-	{ "uuid",		&mdc_uuid_fops,		0,	0 },
-	{ "ping",		&mdc_ping_fops,		0,	0222 },
-	{ "connect_flags",	&mdc_connect_flags_fops,0,	0 },
-	{ "blocksize",		&mdc_blksize_fops,	0,	0 },
-	{ "kbytestotal",	&mdc_kbytestotal_fops,	0,	0 },
-	{ "kbytesfree",		&mdc_kbytesfree_fops,	0,	0 },
-	{ "kbytesavail",	&mdc_kbytesavail_fops,	0,	0 },
-	{ "filestotal",		&mdc_filestotal_fops,	0,	0 },
-	{ "filesfree",		&mdc_filesfree_fops,	0,	0 },
-	{ "mds_server_uuid",	&mdc_server_uuid_fops,	0,	0 },
-	{ "mds_conn_uuid",	&mdc_conn_uuid_fops,	0,	0 },
+	{ .name	=	"uuid",
+	  .fops	=	&mdc_uuid_fops		},
+	{ .name	=	"ping",
+	  .fops	=	&mdc_ping_fops,
+	  .proc_mode =	0222			},
+	{ .name	=	"connect_flags",
+	  .fops	=	&mdc_connect_flags_fops	},
+	{ .name	=	"blocksize",
+	  .fops	=	&mdc_blksize_fops	},
+	{ .name	=	"kbytestotal",
+	  .fops	=	&mdc_kbytestotal_fops	},
+	{ .name	=	"kbytesfree",
+	  .fops	=	&mdc_kbytesfree_fops	},
+	{ .name	=	"kbytesavail",
+	  .fops	=	&mdc_kbytesavail_fops	},
+	{ .name	=	"filestotal",
+	  .fops	=	&mdc_filestotal_fops	},
+	{ .name	=	"filesfree",
+	  .fops	=	&mdc_filesfree_fops	},
+	{ .name	=	"mds_server_uuid",
+	  .fops	=	&mdc_server_uuid_fops	},
+	{ .name	=	"mds_conn_uuid",
+	  .fops	=	&mdc_conn_uuid_fops	},
 	/*
 	 * FIXME: below proc entry is provided, but not in used, instead
 	 * sbi->sb_md_brw_size is used, the per obd variable should be used
 	 * when CMD is enabled, and dir pages are managed in MDC layer.
 	 * Remember to enable proc write function.
 	 */
-	{ "max_pages_per_rpc",	&mdc_obd_max_pages_per_rpc_fops	},
-	{ "max_rpcs_in_flight",	&mdc_max_rpcs_in_flight_fops	},
-	{ "timeouts",		&mdc_timeouts_fops		},
-	{ "import",		&mdc_import_fops		},
-	{ "state",		&mdc_state_fops			},
-	{ "pinger_recov",	&mdc_pinger_recov_fops		},
+	{ .name	=	"max_pages_per_rpc",
+	  .fops	=	&mdc_obd_max_pages_per_rpc_fops	},
+	{ .name	=	"max_rpcs_in_flight",
+	  .fops	=	&mdc_max_rpcs_in_flight_fops	},
+	{ .name	=	"timeouts",
+	  .fops	=	&mdc_timeouts_fops		},
+	{ .name	=	"import",
+	  .fops	=	&mdc_import_fops		},
+	{ .name	=	"state",
+	  .fops	=	&mdc_state_fops			},
+	{ .name	=	"pinger_recov",
+	  .fops	=	&mdc_pinger_recov_fops		},
 	{ 0 }
 };
 #endif /* LPROCFS */
