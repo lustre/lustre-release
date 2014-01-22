@@ -348,7 +348,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 			/* Clear lqe_lockh & reset qunit to 0 */
 			qsd_set_qunit(lqe, 0);
 			memset(&lqe->lqe_lockh, 0, sizeof(lqe->lqe_lockh));
-			lqe->lqe_edquot = false;
+			qsd_set_edquot(lqe, false);
 			rel = true;
 		}
 		lqe_write_unlock(lqe);
@@ -443,7 +443,7 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 		}
 	}
 
-	lqe->lqe_edquot = !!(desc->gl_flags & LQUOTA_FL_EDQUOT);
+	qsd_set_edquot(lqe, !!(desc->gl_flags & LQUOTA_FL_EDQUOT));
 	lqe_write_unlock(lqe);
 
 	if (wakeup)
@@ -512,7 +512,7 @@ int qsd_id_lock_cancel(const struct lu_env *env, struct lquota_entry *lqe)
 	if (lustre_handle_is_used(&qti->qti_lockh)) {
 		memset(&lqe->lqe_lockh, 0, sizeof(lqe->lqe_lockh));
 		qsd_set_qunit(lqe, 0);
-		lqe->lqe_edquot = false;
+		qsd_set_edquot(lqe, false);
 	}
 	lqe_write_unlock(lqe);
 

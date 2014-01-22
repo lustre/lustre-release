@@ -317,6 +317,14 @@ static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
 	lqe->lqe_nopreacq = false;
 }
 
+/* helper function to set/clear edquot flag */
+static inline void qsd_set_edquot(struct lquota_entry *lqe, bool edquot)
+{
+	lqe->lqe_edquot = edquot;
+	if (edquot)
+		lqe->lqe_edquot_time = cfs_time_current_64();
+}
+
 #define QSD_WB_INTERVAL	60 /* 60 seconds */
 
 /* helper function calculating how long a service thread should be waiting for

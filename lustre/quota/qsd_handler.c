@@ -388,10 +388,7 @@ static void qsd_req_completion(const struct lu_env *env,
 	if (ret == 0 && lvb != 0) {
 		if (lvb->lvb_id_qunit != 0)
 			qsd_set_qunit(lqe, lvb->lvb_id_qunit);
-		if (lvb->lvb_flags & LQUOTA_FL_EDQUOT)
-			lqe->lqe_edquot = true;
-		else
-			lqe->lqe_edquot = false;
+		qsd_set_edquot(lqe, !!(lvb->lvb_flags & LQUOTA_FL_EDQUOT));
 	} else if (repbody != NULL && repbody->qb_qunit != 0) {
 		qsd_set_qunit(lqe, repbody->qb_qunit);
 	}
@@ -461,9 +458,15 @@ static int qsd_acquire_local(struct lquota_entry *lqe, __u64 space)
 		lqe->lqe_pending_write += space;
 		lqe->lqe_waiting_write -= space;
 		rc = 0;
-	} else if (lqe->lqe_edquot) {
+	/* lqe_edquot flag is used to avoid flooding dqacq requests when
+	 * the user is over quota, however, the lqe_edquot could be stale
+	 * sometimes due to the race reply of dqacq vs. id lock glimpse
+	 * (see LU-4505), so we revalidate it every 5 seconds. */
+	} else if (lqe->lqe_edquot &&
+		   cfs_time_before_64(cfs_time_shift_64(-5),
+			   	      lqe->lqe_edquot_time)) {
 		rc = -EDQUOT;
-	} else {
+	}else {
 		rc = -EAGAIN;
 	}
 	lqe_write_unlock(lqe);
