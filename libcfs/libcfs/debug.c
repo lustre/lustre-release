@@ -229,14 +229,20 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
  */
 void libcfs_debug_dumplog_internal(void *arg)
 {
+	static time_t last_dump_time;
+	time_t current_time;
 	DECL_JOURNAL_DATA;
 
 	PUSH_JOURNAL;
 
-	if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0) {
+	current_time = cfs_time_current_sec();
+
+	if (strncmp(libcfs_debug_file_path_arr, "NONE", 4) != 0 &&
+	    current_time > last_dump_time) {
+		last_dump_time = current_time;
 		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
 			 "%s.%ld." LPLD, libcfs_debug_file_path_arr,
-			 cfs_time_current_sec(), (long_ptr_t)arg);
+			 current_time, (long_ptr_t)arg);
 		printk(KERN_ALERT "LustreError: dumping log to %s\n",
 		       debug_file_name);
 		cfs_tracefile_dump_all_pages(debug_file_name);
