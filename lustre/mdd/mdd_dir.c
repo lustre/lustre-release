@@ -1471,6 +1471,19 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		is_dir = 1;
 	}
 
+	if (likely(mdd_cobj != NULL)) {
+		/* fetch cattr */
+		rc = mdd_la_get(env, mdd_cobj, cattr, BYPASS_CAPA);
+		if (rc)
+			RETURN(rc);
+
+		is_dir = S_ISDIR(cattr->la_mode);
+	}
+
+	rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, cattr);
+	if (rc)
+                RETURN(rc);
+
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
@@ -1484,22 +1497,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		GOTO(stop, rc);
 
-	if (likely(mdd_cobj != NULL)) {
+	if (likely(mdd_cobj != NULL))
 		mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
-
-		/* fetch cattr */
-		rc = mdd_la_get(env, mdd_cobj, cattr,
-				mdd_object_capa(env, mdd_cobj));
-		if (rc)
-			GOTO(cleanup, rc);
-
-		is_dir = S_ISDIR(cattr->la_mode);
-
-	}
-
-	rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, cattr);
-	if (rc)
-		GOTO(cleanup, rc);
 
 	if (likely(no_name == 0)) {
 		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,

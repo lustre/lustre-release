@@ -193,6 +193,24 @@ test_3() {
 }
 run_test 3 "mkdir; touch; rmdir; check dir ====================="
 
+# LU-4471 - failed rmdir on remote directories still removes directory on MDT0
+test_4() {
+	local MDTIDX=1
+	local remote_dir=remote_dir
+
+	test_mkdir $DIR/$remote_dir ||
+		error "Create remote directory failed"
+
+	touch $DIR/$remote_dir/$tfile ||
+		error "Create file under remote directory failed"
+
+	rmdir $DIR/$remote_dir &&
+		error "Expect error removing in-use dir $DIR/$remote_dir"
+
+	test -d $DIR/$remote_dir || error "Remote directory disappeared"
+}
+run_test 4 "mkdir; touch dir/file; rmdir; checkdir (expect error)"
+
 test_5() {
 	test_mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
 	test_mkdir $DIR/$tdir/d2 || error "mkdir $tdir/d2 failed"
