@@ -1052,8 +1052,8 @@ build_spl_zfs() {
     # The spl/zfs spec files expect RPM_BUILD_ROOT to point to the root of the
     # destination for the rpms
     export RPM_BUILD_ROOT=$TOPDIR
-    SPLZFSVER=${SPLZFSVER:-0.6.2}
-    SPLZFSTAG=${SPLZFSTAG:-upstream-master}
+    SPLZFSVER=${SPLZFSVER:-0.6.3}
+    SPLZFSTAG=${SPLZFSTAG:-}
 
     # The files expect a kver to be set to the kernel version .
     local kver=$(find_linux_release)
@@ -1151,7 +1151,7 @@ build_spl_zfs() {
             # https://github.com/zfsonlinux/zfs/issues/2329
             # and it looks like it could be one day soon:
             # https://github.com/zfsonlinux/zfs/pull/2341
-            local devel_rpms=$(ls -1 $TOPDIR/RPMS/*/{$pkg-devel,$pkg-$SPLZFSVER}-*.rpm)
+            local devel_rpms=$(ls -1 $TOPDIR/RPMS/*/{$pkg-devel,$pkg-$SPLZFSVER,lib*}-*.rpm)
             for rpm in $devel_rpms; do
                 rpm2cpio $rpm | cpio -id
             done

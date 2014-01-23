@@ -283,7 +283,7 @@ AC_DEFUN([LB_ZFS_DEVEL], [
 	AS_IF([test ! -z "${zfsdevel}"], [
 		AS_IF([test -d "${zfsdevel}/usr/include/libspl" && test -d "${zfsdevel}/usr/include/libzfs"], [
 			zfsinc="-I $zfsdevel/usr/include/libspl -I $zfsdevel/usr/include/libzfs"
-			zfslib="-L$zfsdevel/lib64 -L$zfsdevel/lib"
+			zfslib="-L$zfsdevel/usr/lib64 -L$zfsdevel/usr/lib -L$zfsdevel/lib64 -L$zfsdevel/lib"
 		], [
 			AC_MSG_ERROR([Path to development headers directory does not exist])
 		])
