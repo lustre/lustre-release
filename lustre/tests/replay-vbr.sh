@@ -887,7 +887,14 @@ test_7g() {
     first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
     lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
     last="link $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
-    test_7_cycle "$first" "$lost" "$last" || error "Test 7g.3 failed"
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.52) ]
+	then
+		test_7_cycle "$first" "$lost" "$last" ||
+			error "Test 7g.3 failed"
+	else #LU-4442 LU-3528
+		test_7_cycle "$first" "$lost" "$last" &&
+			error "Test 7g.3 failed"
+	fi
     return 0
 }
 run_test 7g "rename, {lost}, create"
