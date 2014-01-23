@@ -1102,19 +1102,17 @@ static int osd_seq_exists(const struct lu_env *env,
 static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-        int                     rc = 0;
-        struct osd_thandle     *oh;
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_iobuf       *iobuf = &oti->oti_iobuf;
+	int                     rc = 0;
+	struct osd_thandle     *oh;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_iobuf       *iobuf = &oti->oti_iobuf;
 	struct qsd_instance    *qsd = oti->oti_dev->od_quota_slave;
-        ENTRY;
+	struct lquota_trans    *qtrans;
+	ENTRY;
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
+	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	if (qsd != NULL)
-		/* inform the quota slave device that the transaction is
-		 * stopping */
-		qsd_op_end(env, qsd, oh->ot_quota_trans);
+	qtrans = oh->ot_quota_trans;
 	oh->ot_quota_trans = NULL;
 
         if (oh->ot_handle != NULL) {
@@ -1145,6 +1143,9 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
         } else {
 		thandle_put(&oh->ot_super);
         }
+
+	/* inform the quota slave device that the transaction is stopping */
+	qsd_op_end(env, qsd, qtrans);
 
 	/* as we want IO to journal and data IO be concurrent, we don't block
 	 * awaiting data IO completion in osd_do_bio(), instead we wait here
