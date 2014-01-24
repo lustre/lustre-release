@@ -694,6 +694,16 @@ static const struct req_msg_field *mdt_hsm_request[] = {
 	&RMF_GENERIC_DATA,
 };
 
+static const struct req_msg_field *obd_lfsck_request[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_LFSCK_REQUEST,
+};
+
+static const struct req_msg_field *obd_lfsck_reply[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_LFSCK_REPLY,
+};
+
 static struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_OBD_SET_INFO,
@@ -791,6 +801,8 @@ static struct req_format *req_formats[] = {
         &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
 	&RQF_LLOG_ORIGIN_CONNECT,
 	&RQF_CONNECT,
+	&RQF_LFSCK_NOTIFY,
+	&RQF_LFSCK_QUERY,
 };
 
 struct req_msg_field {
@@ -1191,6 +1203,17 @@ struct req_msg_field RMF_SWAP_LAYOUTS =
 	DEFINE_MSGF("swap_layouts", 0, sizeof(struct  mdc_swap_layouts),
 		    lustre_swab_swap_layouts, NULL);
 EXPORT_SYMBOL(RMF_SWAP_LAYOUTS);
+
+struct req_msg_field RMF_LFSCK_REQUEST =
+	DEFINE_MSGF("lfsck_request", 0, sizeof(struct lfsck_request),
+		    lustre_swab_lfsck_request, NULL);
+EXPORT_SYMBOL(RMF_LFSCK_REQUEST);
+
+struct req_msg_field RMF_LFSCK_REPLY =
+	DEFINE_MSGF("lfsck_reply", 0, sizeof(struct lfsck_reply),
+		    lustre_swab_lfsck_reply, NULL);
+EXPORT_SYMBOL(RMF_LFSCK_REPLY);
+
 /*
  * Request formats.
  */
@@ -1662,6 +1685,14 @@ struct req_format RQF_OST_GET_INFO_FIEMAP =
         DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
                                                ost_get_fiemap_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
+
+struct req_format RQF_LFSCK_NOTIFY =
+	DEFINE_REQ_FMT0("LFSCK_NOTIFY", obd_lfsck_request, empty);
+EXPORT_SYMBOL(RQF_LFSCK_NOTIFY);
+
+struct req_format RQF_LFSCK_QUERY =
+	DEFINE_REQ_FMT0("LFSCK_QUERY", obd_lfsck_request, obd_lfsck_reply);
+EXPORT_SYMBOL(RQF_LFSCK_QUERY);
 
 #if !defined(__REQ_LAYOUT_USER__)
 

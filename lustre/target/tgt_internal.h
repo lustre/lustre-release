@@ -43,6 +43,10 @@
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
 
+extern int (*tgt_lfsck_in_notify)(const struct lu_env *env,
+				  struct dt_device *key,
+				  struct lfsck_request *lr);
+
 struct tx_arg;
 typedef int (*tx_exec_func_t)(const struct lu_env *env, struct thandle *th,
 			      struct tx_arg *ta);

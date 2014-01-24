@@ -41,6 +41,7 @@
 #include <lustre_export.h>
 #include <lustre_update.h>
 #include <lustre_disk.h>
+#include <lustre_lfsck.h>
 
 struct lu_target {
 	struct obd_device	*lut_obd;
@@ -281,8 +282,18 @@ void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 int tgt_brw_read(struct tgt_session_info *tsi);
 int tgt_brw_write(struct tgt_session_info *tsi);
 int tgt_hpreq_handler(struct ptlrpc_request *req);
+void tgt_register_lfsck_start(int (*start)(const struct lu_env *,
+					   struct dt_device *,
+					   struct lfsck_start_param *));
+void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
+						struct dt_device *,
+						struct lfsck_request *));
+void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
+					   struct dt_device *,
+					   struct lfsck_request *));
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];
+extern struct tgt_handler tgt_lfsck_handlers[];
 extern struct tgt_handler tgt_obd_handlers[];
 extern struct tgt_handler tgt_dlm_handlers[];
 extern struct tgt_handler tgt_llog_handlers[];
@@ -452,6 +463,11 @@ static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
 #define TGT_FLD_HDL_VAR(flags, name, fn)				\
 	TGT_RPC_HANDLER(FLD_QUERY, flags, name, fn, NULL,		\
 			LUSTRE_MDS_VERSION)
+
+/* LFSCK handlers */
+#define TGT_LFSCK_HDL(flags, name, fn)					\
+	TGT_RPC_HANDLER(LFSCK_FIRST_OPC, flags, name, fn,		\
+			&RQF_ ## name, LUSTRE_OBD_VERSION)
 
 /* Request with a format known in advance */
 #define TGT_UPDATE_HDL(flags, name, fn)					\

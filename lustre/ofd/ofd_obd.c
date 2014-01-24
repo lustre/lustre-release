@@ -1023,13 +1023,17 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			break;
 		}
 
-		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
 		lsp.lsp_namespace = ofd->ofd_namespace;
+		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
+		lsp.lsp_index_valid = 0;
 		rc = lfsck_start(&env, ofd->ofd_osd, &lsp);
 		break;
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		rc = lfsck_stop(&env, ofd->ofd_osd, false);
+		struct lfsck_stop stop;
+
+		stop.ls_status = LS_STOPPED;
+		rc = lfsck_stop(&env, ofd->ofd_osd, &stop);
 		break;
 	}
 	case OBD_IOC_GET_OBJ_VERSION:

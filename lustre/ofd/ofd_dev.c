@@ -442,8 +442,9 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		RETURN(rc);
 	}
 
-	lsp.lsp_start = NULL;
 	lsp.lsp_namespace = ofd->ofd_namespace;
+	lsp.lsp_start = NULL;
+	lsp.lsp_index_valid = 0;
 	rc = lfsck_start(env, ofd->ofd_osd, &lsp);
 	if (rc != 0) {
 		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
@@ -2068,6 +2069,11 @@ static struct tgt_opc_slice ofd_common_slice[] = {
 		.tos_hs		= seq_handlers
 	},
 	{
+		.tos_opc_start	= LFSCK_FIRST_OPC,
+		.tos_opc_end	= LFSCK_LAST_OPC,
+		.tos_hs		= tgt_lfsck_handlers
+	},
+	{
 		.tos_hs		= NULL
 	}
 };
@@ -2237,10 +2243,12 @@ err_fini_proc:
 
 static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 {
-	struct obd_device *obd = ofd_obd(m);
-	struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
+	struct obd_device	*obd = ofd_obd(m);
+	struct lu_device	*d   = &m->ofd_dt_dev.dd_lu_dev;
+	struct lfsck_stop	 stop;
 
-	lfsck_stop(env, m->ofd_osd, true);
+	stop.ls_status = LS_PAUSED;
+	lfsck_stop(env, m->ofd_osd, &stop);
 	lfsck_degister(env, m->ofd_osd);
 	target_recovery_fini(obd);
 	obd_exports_barrier(obd);

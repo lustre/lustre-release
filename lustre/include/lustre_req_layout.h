@@ -250,6 +250,10 @@ extern struct req_format RQF_LLOG_ORIGIN_CONNECT;
 
 extern struct req_format RQF_CONNECT;
 
+/* LFSCK req_format */
+extern struct req_format RQF_LFSCK_NOTIFY;
+extern struct req_format RQF_LFSCK_QUERY;
+
 extern struct req_msg_field RMF_GENERIC_DATA;
 extern struct req_msg_field RMF_PTLRPC_BODY;
 extern struct req_msg_field RMF_MDT_BODY;
@@ -337,6 +341,10 @@ extern struct req_msg_field RMF_U32;
 /* OBJ update format */
 extern struct req_msg_field RMF_UPDATE;
 extern struct req_msg_field RMF_UPDATE_REPLY;
+
+/* LFSCK format */
+extern struct req_msg_field RMF_LFSCK_REQUEST;
+extern struct req_msg_field RMF_LFSCK_REPLY;
 /** @} req_layout */
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */

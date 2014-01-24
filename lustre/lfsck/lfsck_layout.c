@@ -667,9 +667,8 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 		lo->ll_time_last_complete = lo->ll_time_last_checkpoint;
 		lo->ll_success_count++;
 	} else if (rc == 0) {
-		if (lfsck->li_paused)
-			lo->ll_status = LS_PAUSED;
-		else
+		lo->ll_status = lfsck->li_status;
+		if (lo->ll_status == 0)
 			lo->ll_status = LS_STOPPED;
 	} else {
 		lo->ll_status = LS_FAILED;
@@ -879,10 +878,14 @@ cleanup2:
 		lr->lr_status = rc;
 	} else if (rc == 0) {
 		lr->lr_event = LE_STOP;
-		if (lfsck->li_paused)
+		if (lfsck->li_status == LS_PAUSED ||
+		    lfsck->li_status == LS_CO_PAUSED)
 			lr->lr_status = LS_CO_PAUSED;
-		else
+		else if (lfsck->li_status == LS_STOPPED ||
+			 lfsck->li_status == LS_CO_STOPPED)
 			lr->lr_status = LS_CO_STOPPED;
+		else
+			LBUG();
 	} else {
 		lr->lr_event = LE_STOP;
 		lr->lr_status = LS_CO_FAILED;
@@ -1305,10 +1308,10 @@ static int lfsck_layout_master_post(const struct lu_env *env,
 		list_del_init(&com->lc_link);
 		list_add_tail(&com->lc_link, &lfsck->li_list_double_scan);
 	} else if (result == 0) {
-		if (lfsck->li_paused) {
-			lo->ll_status = LS_PAUSED;
-		} else {
+		lo->ll_status = lfsck->li_status;
+		if (lo->ll_status == 0)
 			lo->ll_status = LS_STOPPED;
+		if (lo->ll_status != LS_PAUSED) {
 			list_del_init(&com->lc_link);
 			list_add_tail(&com->lc_link, &lfsck->li_list_idle);
 		}
@@ -1365,10 +1368,10 @@ static int lfsck_layout_slave_post(const struct lu_env *env,
 		list_del_init(&com->lc_link);
 		list_add_tail(&com->lc_link, &lfsck->li_list_double_scan);
 	} else if (result == 0) {
-		if (lfsck->li_paused) {
-			lo->ll_status = LS_PAUSED;
-		} else {
+		lo->ll_status = lfsck->li_status;
+		if (lo->ll_status == 0)
 			lo->ll_status = LS_STOPPED;
+		if (lo->ll_status != LS_PAUSED) {
 			list_del_init(&com->lc_link);
 			list_add_tail(&com->lc_link, &lfsck->li_list_idle);
 		}
@@ -1681,6 +1684,30 @@ static void lfsck_layout_master_quit(const struct lu_env *env,
 		     &lwi);
 }
 
+static int lfsck_layout_master_in_notify(const struct lu_env *env,
+					 struct lfsck_component *com,
+					 struct lfsck_request *lr)
+{
+	/* XXX: to record the event from layout slave on the OST. */
+	return 0;
+}
+
+static int lfsck_layout_slave_in_notify(const struct lu_env *env,
+					struct lfsck_component *com,
+					struct lfsck_request *lr)
+{
+	/* XXX: to record the event from layout master on the MDT. */
+	return 0;
+}
+
+static int lfsck_layout_query(const struct lu_env *env,
+			      struct lfsck_component *com)
+{
+	struct lfsck_layout *lo = com->lc_file_ram;
+
+	return lo->ll_status;
+}
+
 static struct lfsck_operations lfsck_layout_master_ops = {
 	.lfsck_reset		= lfsck_layout_reset,
 	.lfsck_fail		= lfsck_layout_fail,
@@ -1693,6 +1720,8 @@ static struct lfsck_operations lfsck_layout_master_ops = {
 	.lfsck_double_scan	= lfsck_layout_master_double_scan,
 	.lfsck_data_release	= lfsck_layout_master_data_release,
 	.lfsck_quit		= lfsck_layout_master_quit,
+	.lfsck_in_notify	= lfsck_layout_master_in_notify,
+	.lfsck_query		= lfsck_layout_query,
 };
 
 static struct lfsck_operations lfsck_layout_slave_ops = {
@@ -1706,6 +1735,8 @@ static struct lfsck_operations lfsck_layout_slave_ops = {
 	.lfsck_dump		= lfsck_layout_dump,
 	.lfsck_double_scan	= lfsck_layout_slave_double_scan,
 	.lfsck_data_release	= lfsck_layout_slave_data_release,
+	.lfsck_in_notify	= lfsck_layout_slave_in_notify,
+	.lfsck_query		= lfsck_layout_query,
 };
 
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)

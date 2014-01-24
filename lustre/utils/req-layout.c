@@ -101,6 +101,8 @@
 #define dump_ost_body NULL
 #define dump_rcs NULL
 #define lustre_swab_lmv_user_md NULL
+#define lustre_swab_lfsck_request NULL
+#define lustre_swab_lfsck_reply NULL
 
 /*
  * Yes, include .c file.

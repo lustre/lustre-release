@@ -1055,10 +1055,10 @@ static int lfsck_namespace_post(const struct lu_env *env,
 		cfs_list_del_init(&com->lc_link_dir);
 		cfs_list_add_tail(&com->lc_link, &lfsck->li_list_double_scan);
 	} else if (result == 0) {
-		if (lfsck->li_paused) {
-			ns->ln_status = LS_PAUSED;
-		} else {
+		ns->ln_status = lfsck->li_status;
+		if (ns->ln_status == 0)
 			ns->ln_status = LS_STOPPED;
+		if (ns->ln_status != LS_PAUSED) {
 			cfs_list_del_init(&com->lc_link);
 			cfs_list_del_init(&com->lc_link_dir);
 			cfs_list_add_tail(&com->lc_link, &lfsck->li_list_idle);
@@ -1497,9 +1497,8 @@ out:
 		ns->ln_time_last_complete = ns->ln_time_last_checkpoint;
 		ns->ln_success_count++;
 	} else if (rc == 0) {
-		if (lfsck->li_paused)
-			ns->ln_status = LS_PAUSED;
-		else
+		ns->ln_status = lfsck->li_status;
+		if (ns->ln_status == 0)
 			ns->ln_status = LS_STOPPED;
 	} else {
 		ns->ln_status = LS_FAILED;
@@ -1554,6 +1553,21 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static int lfsck_namespace_in_notify(const struct lu_env *env,
+				     struct lfsck_component *com,
+				     struct lfsck_request *lr)
+{
+	return 0;
+}
+
+static int lfsck_namespace_query(const struct lu_env *env,
+				 struct lfsck_component *com)
+{
+	struct lfsck_namespace *ns = com->lc_file_ram;
+
+	return ns->ln_status;
+}
+
 static struct lfsck_operations lfsck_namespace_ops = {
 	.lfsck_reset		= lfsck_namespace_reset,
 	.lfsck_fail		= lfsck_namespace_fail,
@@ -1564,6 +1578,8 @@ static struct lfsck_operations lfsck_namespace_ops = {
 	.lfsck_post		= lfsck_namespace_post,
 	.lfsck_dump		= lfsck_namespace_dump,
 	.lfsck_double_scan	= lfsck_namespace_double_scan,
+	.lfsck_in_notify	= lfsck_namespace_in_notify,
+	.lfsck_query		= lfsck_namespace_query,
 };
 
 int lfsck_namespace_setup(const struct lu_env *env,

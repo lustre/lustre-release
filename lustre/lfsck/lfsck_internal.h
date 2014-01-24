@@ -296,6 +296,13 @@ struct lfsck_operations {
 
 	void (*lfsck_quit)(const struct lu_env *env,
 			   struct lfsck_component *com);
+
+	int (*lfsck_in_notify)(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       struct lfsck_request *lr);
+
+	int (*lfsck_query)(const struct lu_env *env,
+			   struct lfsck_component *com);
 };
 
 #define TGT_PTRS		256     /* number of pointers at 1st level */
@@ -458,8 +465,10 @@ struct lfsck_instance {
 	/* How many objects have been scanned since last sleep. */
 	__u32			  li_new_scanned;
 
-	unsigned int		  li_paused:1, /* The lfsck is paused. */
-				  li_oit_over:1, /* oit is finished. */
+	/* The status when the LFSCK stopped or paused. */
+	__u32			  li_status;
+
+	unsigned int		  li_oit_over:1, /* oit is finished. */
 				  li_drop_dryrun:1, /* Ever dryrun, not now. */
 				  li_master:1, /* Master instance or not. */
 				  li_current_oit_processed:1;

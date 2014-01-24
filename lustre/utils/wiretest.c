@@ -298,6 +298,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)SEQ_FIRST_OPC);
 	LASSERTF(SEQ_LAST_OPC == 701, "found %lld\n",
 		 (long long)SEQ_LAST_OPC);
+	LASSERTF(LFSCK_NOTIFY == 1101, "found %lld\n",
+		 (long long)LFSCK_NOTIFY);
+	LASSERTF(LFSCK_QUERY == 1102, "found %lld\n",
+		 (long long)LFSCK_QUERY);
+	LASSERTF(LFSCK_FIRST_OPC == 1101, "found %lld\n",
+		 (long long)LFSCK_FIRST_OPC);
+	LASSERTF(LFSCK_LAST_OPC == 1103, "found %lld\n",
+		 (long long)LFSCK_LAST_OPC);
 	LASSERTF(SEQ_ALLOC_SUPER == 0, "found %lld\n",
 		 (long long)SEQ_ALLOC_SUPER);
 	LASSERTF(SEQ_ALLOC_META == 1, "found %lld\n",

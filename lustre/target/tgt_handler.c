@@ -38,6 +38,7 @@
 #include <obd_class.h>
 #include <obd_cksum.h>
 #include <md_object.h>
+#include <lustre_lfsck.h>
 
 #include "tgt_internal.h"
 
@@ -1361,6 +1362,121 @@ TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT_CONT,	tgt_sec_ctx_handle),
 TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		tgt_sec_ctx_handle),
 };
 EXPORT_SYMBOL(tgt_sec_ctx_handlers);
+
+static int (*tgt_lfsck_start)(const struct lu_env *env,
+			      struct dt_device *key,
+			      struct lfsck_start_param *lsp) = NULL;
+
+void tgt_register_lfsck_start(int (*start)(const struct lu_env *,
+					   struct dt_device *,
+					   struct lfsck_start_param *))
+{
+	tgt_lfsck_start = start;
+}
+EXPORT_SYMBOL(tgt_register_lfsck_start);
+
+int (*tgt_lfsck_in_notify)(const struct lu_env *env,
+			   struct dt_device *key,
+			   struct lfsck_request *lr) = NULL;
+
+void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
+						struct dt_device *,
+						struct lfsck_request *))
+{
+	tgt_lfsck_in_notify = notify;
+}
+EXPORT_SYMBOL(tgt_register_lfsck_in_notify);
+
+static int (*tgt_lfsck_query)(const struct lu_env *env,
+			      struct dt_device *key,
+			      struct lfsck_request *lr) = NULL;
+
+void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
+					   struct dt_device *,
+					   struct lfsck_request *))
+{
+	tgt_lfsck_query = query;
+}
+EXPORT_SYMBOL(tgt_register_lfsck_query);
+
+/* LFSCK request handlers */
+static int tgt_handle_lfsck_notify(struct tgt_session_info *tsi)
+{
+	const struct lu_env	*env = tsi->tsi_env;
+	struct dt_device	*key = tsi->tsi_tgt->lut_bottom;
+	struct lfsck_request	*lr;
+	int			 rc;
+	ENTRY;
+
+	lr = req_capsule_client_get(tsi->tsi_pill, &RMF_LFSCK_REQUEST);
+	if (lr == NULL)
+		RETURN(-EPROTO);
+
+	switch (lr->lr_event) {
+	case LE_START: {
+		struct lfsck_start	 start;
+		struct lfsck_start_param lsp;
+
+		start.ls_valid = lr->lr_valid;
+		start.ls_speed_limit = lr->lr_speed;
+		start.ls_version = lr->lr_version;
+		start.ls_active = lr->lr_active;
+		start.ls_flags = lr->lr_param;
+		start.ls_async_windows = lr->lr_async_windows;
+
+		lsp.lsp_namespace = tsi->tsi_exp->exp_obd->obd_namespace;
+		lsp.lsp_start = &start;
+		lsp.lsp_index = lr->lr_index;
+		if (lr->lr_flags & LEF_TO_OST)
+			lsp.lsp_index_valid = 1;
+		else
+			lsp.lsp_index_valid = 0;
+		rc = tgt_lfsck_start(env, key, &lsp);
+		break;
+	}
+	case LE_STOP:
+	case LE_PHASE1_DONE:
+	case LE_PHASE2_DONE:
+		rc = tgt_lfsck_in_notify(env, key, lr);
+		break;
+	default:
+		CERROR("%s: unsupported lfsck_event: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), lr->lr_event);
+		rc = -EOPNOTSUPP;
+		break;
+	}
+
+	RETURN(rc);
+}
+
+static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
+{
+	struct lfsck_request	*request;
+	struct lfsck_reply	*reply;
+	int			 rc	 = 0;
+	ENTRY;
+
+	request = req_capsule_client_get(tsi->tsi_pill, &RMF_LFSCK_REQUEST);
+	if (request == NULL)
+		RETURN(-EPROTO);
+
+	reply = req_capsule_server_get(tsi->tsi_pill, &RMF_LFSCK_REPLY);
+	if (reply == NULL)
+		RETURN(-ENOMEM);
+
+	reply->lr_status = tgt_lfsck_query(tsi->tsi_env,
+					   tsi->tsi_tgt->lut_bottom, request);
+	if (reply->lr_status < 0)
+		rc = reply->lr_status;
+
+	RETURN(rc);
+}
+
+struct tgt_handler tgt_lfsck_handlers[] = {
+TGT_LFSCK_HDL(HABEO_REFERO,	LFSCK_NOTIFY,	tgt_handle_lfsck_notify),
+TGT_LFSCK_HDL(HABEO_REFERO,	LFSCK_QUERY,	tgt_handle_lfsck_query),
+};
+EXPORT_SYMBOL(tgt_lfsck_handlers);
 
 /*
  * initialize per-thread page pool (bug 5137).

@@ -111,8 +111,10 @@ enum lfsck_status {
 };
 
 struct lfsck_start_param {
-	struct lfsck_start	*lsp_start;
 	struct ldlm_namespace	*lsp_namespace;
+	struct lfsck_start	*lsp_start;
+	__u32			 lsp_index;
+	unsigned int		 lsp_index_valid:1;
 };
 
 enum lfsck_events {
@@ -122,6 +124,13 @@ enum lfsck_events {
 	LE_PHASE2_DONE		= 4,
 	LE_START		= 5,
 	LE_STOP 		= 6,
+	LE_QUERY		= 7,
+};
+
+enum lfsck_event_flags {
+	LEF_TO_OST		= 0x00000001,
+	LEF_FROM_OST		= 0x00000002,
+	LEF_FORCE_STOP		= 0x00000004,
 };
 
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
@@ -141,7 +150,11 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_start_param *lsp);
 int lfsck_stop(const struct lu_env *env, struct dt_device *key,
-	       bool pause);
+	       struct lfsck_stop *stop);
+int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
+		    struct lfsck_request *lr);
+int lfsck_query(const struct lu_env *env, struct dt_device *key,
+		struct lfsck_request *lr);
 
 int lfsck_get_speed(struct dt_device *key, void *buf, int len);
 int lfsck_set_speed(struct dt_device *key, int val);
