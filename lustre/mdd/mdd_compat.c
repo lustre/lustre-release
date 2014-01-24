@@ -284,7 +284,7 @@ static int mdd_fill_fldb(const struct lu_env *env, struct mdd_device *mdd)
 	/* Pre-existing ZFS does not insert any entries to FLDB, we need
 	 * to insert it to FLDB during convertion */
 	range.lsr_start = FID_SEQ_NORMAL;
-	range.lsr_flags = LU_SEQ_RANGE_MDT;
+	fld_range_set_mdt(&range);
 
 	mutex_lock(&ss->ss_server_fld->lsf_lock);
 	rc = fld_insert_entry(env, ss->ss_server_fld, &range);

@@ -56,12 +56,12 @@
  * \param lod LOD to be lookup at.
  * \param fid FID of object to find MDT/OST.
  * \param tgt MDT/OST index to return.
- * \param flags indidcate the FID is on MDS or OST.
+ * \param type indidcate the FID is on MDS or OST.
  **/
 int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
-		   const struct lu_fid *fid, __u32 *tgt, int flags)
+		   const struct lu_fid *fid, __u32 *tgt, int type)
 {
-	struct lu_seq_range	range;
+	struct lu_seq_range	range = { 0 };
 	struct lu_server_fld	*server_fld;
 	int rc = 0;
 	ENTRY;
@@ -79,7 +79,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
-	range.lsr_flags = flags;
+	fld_range_set_type(&range, type);
 	rc = fld_server_lookup(env, server_fld, fid_seq(fid), &range);
 	if (rc) {
 		CERROR("%s: Can't find tgt by seq "LPX64", rc %d\n",

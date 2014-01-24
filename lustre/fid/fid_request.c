@@ -89,9 +89,9 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
 	in->lsr_index = seq->lcs_space.lsr_index;
 	if (seq->lcs_type == LUSTRE_SEQ_METADATA)
-		in->lsr_flags = LU_SEQ_RANGE_MDT;
+		fld_range_set_mdt(in);
 	else
-		in->lsr_flags = LU_SEQ_RANGE_OST;
+		fld_range_set_ost(in);
 
 	if (opc == SEQ_ALLOC_SUPER) {
 		req->rq_request_portal = SEQ_CONTROLLER_PORTAL;

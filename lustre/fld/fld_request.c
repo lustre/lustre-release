@@ -476,12 +476,12 @@ out_req:
 }
 
 int fld_client_lookup(struct lu_client_fld *fld, seqno_t seq, mdsno_t *mds,
-                      __u32 flags, const struct lu_env *env)
+		      __u32 flags, const struct lu_env *env)
 {
-        struct lu_seq_range res;
-        struct lu_fld_target *target;
-        int rc;
-        ENTRY;
+	struct lu_seq_range res = { 0 };
+	struct lu_fld_target *target;
+	int rc;
+	ENTRY;
 
         fld->lcf_flags |= LUSTRE_FLD_RUN;
 
@@ -499,26 +499,25 @@ int fld_client_lookup(struct lu_client_fld *fld, seqno_t seq, mdsno_t *mds,
                "target %s (idx "LPU64")\n", fld->lcf_name, seq,
                fld_target_name(target), target->ft_idx);
 
-        res.lsr_start = seq;
-        res.lsr_flags = flags;
+	res.lsr_start = seq;
+	fld_range_set_type(&res, flags);
 #ifdef __KERNEL__
-        if (target->ft_srv != NULL) {
+	if (target->ft_srv != NULL) {
 		LASSERT(env != NULL);
 		rc = fld_server_lookup(env, target->ft_srv, seq, &res);
-        } else {
+	} else {
 #endif
-                rc = fld_client_rpc(target->ft_exp,
-                                    &res, FLD_LOOKUP);
+		rc = fld_client_rpc(target->ft_exp, &res, FLD_LOOKUP);
 #ifdef __KERNEL__
-        }
+	}
 #endif
 
-        if (rc == 0) {
-                *mds = res.lsr_index;
+	if (rc == 0) {
+		*mds = res.lsr_index;
 
 		fld_cache_insert(fld->lcf_cache, &res);
-        }
-        RETURN(rc);
+	}
+	RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_lookup);
 

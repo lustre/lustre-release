@@ -218,31 +218,26 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	int			rc;
 
-	if (fid_is_root(fid)) {
-		range->lsr_flags = LU_SEQ_RANGE_MDT;
-		range->lsr_index = 0;
-		return 0;
-	}
-
 	if (fid_is_idif(fid)) {
-		range->lsr_flags = LU_SEQ_RANGE_OST;
+		fld_range_set_ost(range);
 		range->lsr_index = fid_idif_ost_idx(fid);
 		return 0;
 	}
 
-	if (!fid_is_norm(fid)) {
-		range->lsr_flags = LU_SEQ_RANGE_MDT;
-		/* If ss is NULL, it suppose not get lsr_index at all */
+	if (!fid_seq_in_fldb(fid_seq(fid))) {
+		fld_range_set_mdt(range);
 		if (ss != NULL)
+			/* FIXME: If ss is NULL, it suppose not get lsr_index
+			 * at all */
 			range->lsr_index = ss->ss_node_id;
 		return 0;
 	}
 
 	LASSERT(ss != NULL);
-	range->lsr_flags = -1;
+	fld_range_set_any(range);
 	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
 	if (rc != 0)
-		CERROR("%s can not find "DFID": rc = %d\n",
+		CERROR("%s: cannot find FLD range for "DFID": rc = %d\n",
 		       osd_name(osd), PFID(fid), rc);
 	return rc;
 }
@@ -260,14 +255,14 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 	rc = osd_fld_lookup(env, osd, fid, range);
 	if (rc != 0) {
 		CERROR("%s: Can not lookup fld for "DFID"\n",
-		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid));
+		       osd_name(osd), PFID(fid));
 		RETURN(rc);
 	}
 
 	CDEBUG(D_INFO, "fid "DFID" range "DRANGE"\n", PFID(fid),
 	       PRANGE(range));
 
-	if (range->lsr_flags == LU_SEQ_RANGE_OST)
+	if (fld_range_is_ost(range))
 		RETURN(1);
 
 	RETURN(0);

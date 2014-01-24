@@ -136,38 +136,37 @@ EXPORT_SYMBOL(fld_server_create);
  *  sequence controller node (MDT0). All other MDT[1...N] and client
  *  cache fld entries, but this cache is not persistent.
  */
-
 int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		      seqno_t seq, struct lu_seq_range *range)
 {
-        struct lu_seq_range *erange;
-        struct fld_thread_info *info;
-        int rc;
-        ENTRY;
+	struct lu_seq_range *erange;
+	struct fld_thread_info *info;
+	int rc;
+	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
 	LASSERT(info != NULL);
 	erange = &info->fti_lrange;
 
-        /* Lookup it in the cache. */
-        rc = fld_cache_lookup(fld->lsf_cache, seq, erange);
-        if (rc == 0) {
-		if (unlikely(erange->lsr_flags != range->lsr_flags) &&
-		    range->lsr_flags != -1) {
-                        CERROR("FLD cache found a range "DRANGE" doesn't "
-                               "match the requested flag %x\n",
-                               PRANGE(erange), range->lsr_flags);
-                        RETURN(-EIO);
-                }
-                *range = *erange;
-                RETURN(0);
-        }
+	/* Lookup it in the cache. */
+	rc = fld_cache_lookup(fld->lsf_cache, seq, erange);
+	if (rc == 0) {
+		if (unlikely(fld_range_type(erange) != fld_range_type(range) &&
+			     !fld_range_is_any(range))) {
+			CERROR("%s: FLD cache range "DRANGE" does not match"
+			       "requested flag %x: rc = %d\n", fld->lsf_name,
+			       PRANGE(erange), range->lsr_flags, -EIO);
+			RETURN(-EIO);
+		}
+		*range = *erange;
+		RETURN(0);
+	}
 
 	if (fld->lsf_obj) {
 		/* On server side, all entries should be in cache.
 		 * If we can not find it in cache, just return error */
-		CERROR("%s: Can not found the seq "LPX64"\n",
-			fld->lsf_name, seq);
+		CERROR("%s: Cannot find sequence "LPX64": rc = %d\n",
+			fld->lsf_name, seq, -EIO);
 		RETURN(-EIO);
 	} else {
 		LASSERT(fld->lsf_control_exp);
@@ -245,15 +244,16 @@ static int fld_req_handle(struct ptlrpc_request *req,
 		    !(exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
 		    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT) &&
 		    !exp->exp_libclient)
-			out->lsr_flags = LU_SEQ_RANGE_MDT;
+			fld_range_set_mdt(out);
 
 		rc = fld_server_handle(lu_site2seq(site)->ss_server_fld,
 				       req->rq_svc_thread->t_env,
 				       *opc, out, info);
-        } else
+	} else {
                 rc = err_serious(-EPROTO);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static void fld_thread_info_init(struct ptlrpc_request *req,
@@ -382,11 +382,11 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		    struct dt_device *dt, const char *prefix, int mds_node_id,
-		    __u32 lsr_flags)
+		    int type)
 {
-        int cache_size, cache_threshold;
-        int rc;
-        ENTRY;
+	int cache_size, cache_threshold;
+	int rc;
+	ENTRY;
 
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "srv-%s", prefix);
@@ -406,12 +406,13 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
                 GOTO(out, rc);
         }
 
-	if (!mds_node_id && lsr_flags == LU_SEQ_RANGE_MDT) {
+	if (!mds_node_id && type == LU_SEQ_RANGE_MDT) {
 		rc = fld_index_init(env, fld, dt);
                 if (rc)
                         GOTO(out, rc);
-        } else
+        } else {
                 fld->lsf_obj = NULL;
+	}
 
         rc = fld_server_proc_init(fld);
         if (rc)

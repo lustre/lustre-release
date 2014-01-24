@@ -188,16 +188,66 @@ typedef __u32 obd_count;
  * Same structure is used in fld module where lsr_index field holds mdt id
  * of the home mdt.
  */
-
-#define LU_SEQ_RANGE_MDT        0x0
-#define LU_SEQ_RANGE_OST        0x1
-
 struct lu_seq_range {
-        __u64 lsr_start;
-        __u64 lsr_end;
-        __u32 lsr_index;
-        __u32 lsr_flags;
+	__u64 lsr_start;
+	__u64 lsr_end;
+	__u32 lsr_index;
+	__u32 lsr_flags;
 };
+
+#define LU_SEQ_RANGE_MDT	0x0
+#define LU_SEQ_RANGE_OST	0x1
+#define LU_SEQ_RANGE_ANY	0x3
+
+#define LU_SEQ_RANGE_MASK	0x3
+
+static inline unsigned fld_range_type(const struct lu_seq_range *range)
+{
+	return range->lsr_flags & LU_SEQ_RANGE_MASK;
+}
+
+static inline int fld_range_is_ost(const struct lu_seq_range *range)
+{
+	return fld_range_type(range) == LU_SEQ_RANGE_OST;
+}
+
+static inline int fld_range_is_mdt(const struct lu_seq_range *range)
+{
+	return fld_range_type(range) == LU_SEQ_RANGE_MDT;
+}
+
+/**
+ * This all range is only being used when fld client sends fld query request,
+ * but it does not know whether the seq is MDT or OST, so it will send req
+ * with ALL type, which means either seq type gotten from lookup can be
+ * expected.
+ */
+static inline unsigned fld_range_is_any(const struct lu_seq_range *range)
+{
+	return fld_range_type(range) == LU_SEQ_RANGE_ANY;
+}
+
+static inline void fld_range_set_type(struct lu_seq_range *range,
+				      unsigned flags)
+{
+	LASSERT(!(flags & ~LU_SEQ_RANGE_MASK));
+	range->lsr_flags |= flags;
+}
+
+static inline void fld_range_set_mdt(struct lu_seq_range *range)
+{
+	fld_range_set_type(range, LU_SEQ_RANGE_MDT);
+}
+
+static inline void fld_range_set_ost(struct lu_seq_range *range)
+{
+	fld_range_set_type(range, LU_SEQ_RANGE_OST);
+}
+
+static inline void fld_range_set_any(struct lu_seq_range *range)
+{
+	fld_range_set_type(range, LU_SEQ_RANGE_ANY);
+}
 
 /**
  * returns  width of given range \a r
@@ -253,11 +303,11 @@ static inline int range_compare_loc(const struct lu_seq_range *r1,
 
 #define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x:%s"
 
-#define PRANGE(range)      \
-	(range)->lsr_start, \
-	(range)->lsr_end,    \
-	(range)->lsr_index,  \
-	(range)->lsr_flags == LU_SEQ_RANGE_MDT ? "mdt" : "ost"
+#define PRANGE(range)		\
+	(range)->lsr_start,	\
+	(range)->lsr_end,	\
+	(range)->lsr_index,	\
+	fld_range_is_mdt(range) ? "mdt" : "ost"
 
 
 /** \defgroup lu_fid lu_fid

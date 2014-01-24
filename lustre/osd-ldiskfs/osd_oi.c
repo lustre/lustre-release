@@ -477,14 +477,14 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 	rc = osd_fld_lookup(info->oti_env, osd, fid, range);
 	if (rc != 0) {
 		CERROR("%s: Can not lookup fld for "DFID"\n",
-		       osd2lu_dev(osd)->ld_obd->obd_name, PFID(fid));
+		       osd_name(osd), PFID(fid));
 		RETURN(rc);
 	}
 
 	CDEBUG(D_INFO, "fid "DFID" range "DRANGE"\n", PFID(fid),
 	       PRANGE(range));
 
-	if (range->lsr_flags == LU_SEQ_RANGE_OST)
+	if (fld_range_is_ost(range))
 		RETURN(1);
 
 	RETURN(0);
