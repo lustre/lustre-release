@@ -752,7 +752,8 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 }
 
 static int lfsck_namespace_prep(const struct lu_env *env,
-				struct lfsck_component *com)
+				struct lfsck_component *com,
+				struct lfsck_start_param *lsp)
 {
 	struct lfsck_instance	*lfsck	= com->lc_lfsck;
 	struct lfsck_namespace	*ns	= com->lc_file_ram;
@@ -1534,7 +1535,7 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 	if (unlikely(ns->ln_status != LS_SCANNING_PHASE2))
 		RETURN(0);
 
-	lta = lfsck_thread_args_init(lfsck, com);
+	lta = lfsck_thread_args_init(lfsck, com, NULL);
 	if (IS_ERR(lta))
 		RETURN(PTR_ERR(lta));
 

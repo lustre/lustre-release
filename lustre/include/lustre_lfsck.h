@@ -137,8 +137,8 @@ typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
 				enum lfsck_events event);
 
 int lfsck_register(const struct lu_env *env, struct dt_device *key,
-		   struct dt_device *next, lfsck_out_notify notify,
-		   void *notify_data, bool master);
+		   struct dt_device *next, struct obd_device *obd,
+		   lfsck_out_notify notify, void *notify_data, bool master);
 void lfsck_degister(const struct lu_env *env, struct dt_device *key);
 
 int lfsck_add_target(const struct lu_env *env, struct dt_device *key,

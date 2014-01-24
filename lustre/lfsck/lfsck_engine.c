@@ -383,7 +383,7 @@ int lfsck_master_engine(void *args)
 	spin_lock(&lfsck->li_lock);
 	lfsck->li_di_oit = oit_di;
 	spin_unlock(&lfsck->li_lock);
-	rc = lfsck_prep(env, lfsck);
+	rc = lfsck_prep(env, lfsck, lta->lta_lsp);
 	if (rc != 0)
 		GOTO(fini_oit, rc);
 

@@ -269,7 +269,8 @@ struct lfsck_operations {
 				bool init);
 
 	int (*lfsck_prep)(const struct lu_env *env,
-			  struct lfsck_component *com);
+			  struct lfsck_component *com,
+			  struct lfsck_start_param *lsp);
 
 	int (*lfsck_exec_oit)(const struct lu_env *env,
 			      struct lfsck_component *com,
@@ -326,7 +327,8 @@ struct lfsck_tgt_desc {
 	atomic_t	   ltd_ref;
 	__u32              ltd_index;
 	__u32		   ltd_layout_gen;
-	unsigned int	   ltd_dead:1;
+	unsigned int	   ltd_dead:1,
+			   ltd_layout_done:1;
 };
 
 struct lfsck_tgt_desc_idx {
@@ -431,6 +433,7 @@ struct lfsck_instance {
 	void			 *li_out_notify_data;
 	struct dt_device	 *li_next;
 	struct dt_device	 *li_bottom;
+	struct obd_device	 *li_obd;
 	struct ldlm_namespace	 *li_namespace;
 	struct local_oid_storage *li_los;
 	struct lu_fid		  li_local_root_fid;  /* backend root "/" */
@@ -501,9 +504,10 @@ struct lfsck_async_interpret_args {
 };
 
 struct lfsck_thread_args {
-	struct lu_env		 lta_env;
-	struct lfsck_instance	*lta_lfsck;
-	struct lfsck_component	*lta_com;
+	struct lu_env			 lta_env;
+	struct lfsck_instance		*lta_lfsck;
+	struct lfsck_component		*lta_com;
+	struct lfsck_start_param	*lta_lsp;
 };
 
 struct lfsck_thread_info {
@@ -526,6 +530,7 @@ struct lfsck_thread_info {
 	char			lti_key[NAME_MAX + 16];
 	struct lfsck_request	lti_lr;
 	struct lfsck_async_interpret_args lti_laia;
+	struct lfsck_stop	lti_stop;
 };
 
 /* lfsck_lib.c */
@@ -546,12 +551,14 @@ void lfsck_control_speed_by_self(struct lfsck_component *com);
 int lfsck_reset(const struct lu_env *env, struct lfsck_instance *lfsck,
 		bool init);
 struct lfsck_thread_args *lfsck_thread_args_init(struct lfsck_instance *lfsck,
-						 struct lfsck_component *com);
+						 struct lfsck_component *com,
+						 struct lfsck_start_param *lsp);
 void lfsck_thread_args_fini(struct lfsck_thread_args *lta);
 void lfsck_fail(const struct lu_env *env, struct lfsck_instance *lfsck,
 		bool new_checked);
 int lfsck_checkpoint(const struct lu_env *env, struct lfsck_instance *lfsck);
-int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck);
+int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
+	       struct lfsck_start_param *lsp);
 int lfsck_exec_oit(const struct lu_env *env, struct lfsck_instance *lfsck,
 		   struct dt_object *obj);
 int lfsck_exec_dir(const struct lu_env *env, struct lfsck_instance *lfsck,

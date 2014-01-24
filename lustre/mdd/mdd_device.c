@@ -972,7 +972,8 @@ static int mdd_prepare(const struct lu_env *env,
 		GOTO(out_changelog, rc);
 
 	rc = lfsck_register(env, mdd->mdd_bottom, mdd->mdd_child,
-			    mdd_lfsck_out_notify, mdd, true);
+			    mdd2obd_dev(mdd), mdd_lfsck_out_notify,
+			    mdd, true);
 	if (rc != 0) {
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);

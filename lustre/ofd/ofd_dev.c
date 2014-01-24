@@ -434,7 +434,7 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = lfsck_register(env, ofd->ofd_osd, ofd->ofd_osd,
+	rc = lfsck_register(env, ofd->ofd_osd, ofd->ofd_osd, obd,
 			    ofd_lfsck_out_notify, ofd, false);
 	if (rc != 0) {
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
