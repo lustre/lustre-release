@@ -137,6 +137,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 		ltd = LTD_TGT(ltds, idx);
 		if (likely(ltd != NULL)) {
 			LASSERT(list_empty(&ltd->ltd_layout_list));
+			LASSERT(list_empty(&ltd->ltd_layout_phase_list));
 
 			ltds->ltd_tgtnr--;
 			cfs_bitmap_clear(ltds->ltd_tgts_bitmap, idx);
@@ -981,7 +982,49 @@ int lfsck_double_scan(const struct lu_env *env, struct lfsck_instance *lfsck)
 		     atomic_read(&lfsck->li_double_scan_count) == 0,
 		     &lwi);
 
-	return (rc1 != 0 ? rc1 : rc);
+	return rc1 != 0 ? rc1 : rc;
+}
+
+int lfsck_stop_notify(const struct lu_env *env, struct lfsck_instance *lfsck,
+		      struct lfsck_tgt_descs *ltds, struct lfsck_tgt_desc *ltd)
+{
+	struct ptlrpc_request_set *set;
+	struct lfsck_component    *com;
+	int			   cnt = 0;
+	int			   rc  = 0;
+	int			   rc1 = 0;
+
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		return -ENOMEM;
+
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		if (com->lc_ops->lfsck_stop_notify != NULL) {
+			rc = com->lc_ops->lfsck_stop_notify(env, com, ltds,
+							    ltd, set);
+			if (rc != 0)
+				rc1 = rc;
+			else
+				cnt++;
+		}
+	}
+
+	list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
+		if (com->lc_ops->lfsck_stop_notify != NULL) {
+			rc = com->lc_ops->lfsck_stop_notify(env, com, ltds,
+							    ltd, set);
+			if (rc != 0)
+				rc1 = rc;
+			else
+				cnt++;
+		}
+	}
+
+	if (cnt > 0)
+		rc = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	return rc1 != 0 ? rc1 : rc;
 }
 
 void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck)
@@ -1000,6 +1043,57 @@ void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck)
 		if (com->lc_ops->lfsck_quit != NULL)
 			com->lc_ops->lfsck_quit(env, com);
 	}
+}
+
+int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
+			struct lfsck_request *lr,
+			struct ptlrpc_request_set *set,
+			ptlrpc_interpterer_t interpreter,
+			void *args, int request)
+{
+	struct lfsck_async_interpret_args *laia;
+	struct ptlrpc_request		  *req;
+	struct lfsck_request		  *tmp;
+	struct req_format		  *format;
+	int				   rc;
+
+	if (!(exp_connect_flags(exp) & OBD_CONNECT_LFSCK))
+		return -EOPNOTSUPP;
+
+	switch (request) {
+	case LFSCK_NOTIFY:
+		format = &RQF_LFSCK_NOTIFY;
+		break;
+	case LFSCK_QUERY:
+		format = &RQF_LFSCK_QUERY;
+		break;
+	default:
+		CERROR("%s: unknown async request: opc = %d\n",
+		       exp->exp_obd->obd_name, request);
+		return -EINVAL;
+	}
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), format);
+	if (req == NULL)
+		return -ENOMEM;
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OBD_VERSION, request);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+
+		return rc;
+	}
+
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_LFSCK_REQUEST);
+	*tmp = *lr;
+	ptlrpc_request_set_replen(req);
+
+	laia = ptlrpc_req_async_args(req);
+	*laia = *(struct lfsck_async_interpret_args *)args;
+	req->rq_interpret_reply = interpreter;
+	ptlrpc_set_add_req(set, req);
+
+	return 0;
 }
 
 /* external interfaces */
@@ -1617,6 +1711,7 @@ int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
 	ltd->ltd_exp = exp;
 	INIT_LIST_HEAD(&ltd->ltd_orphan_list);
 	INIT_LIST_HEAD(&ltd->ltd_layout_list);
+	INIT_LIST_HEAD(&ltd->ltd_layout_phase_list);
 	atomic_set(&ltd->ltd_ref, 1);
 	ltd->ltd_index = index;
 
@@ -1653,6 +1748,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 	struct lfsck_tgt_desc	*ltd;
 	struct list_head	*head;
 	bool			 found = false;
+	bool			 stop  = false;
 
 	if (for_ost)
 		head = &lfsck_ost_orphan_list;
@@ -1692,11 +1788,18 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		goto unlock;
 
 	found = true;
+	spin_lock(&ltds->ltd_lock);
+	ltd->ltd_dead = 1;
 	if (!list_empty(&ltd->ltd_layout_list)) {
-		spin_lock(&ltds->ltd_lock);
 		list_del_init(&ltd->ltd_layout_list);
-		spin_unlock(&ltds->ltd_lock);
+		stop = true;
+	} else {
+		LASSERT(list_empty(&ltd->ltd_layout_phase_list));
 	}
+	spin_unlock(&ltds->ltd_lock);
+
+	if (stop && lfsck->li_master)
+		lfsck_stop_notify(env, lfsck, ltds, ltd);
 
 	LASSERT(ltds->ltd_tgtnr > 0);
 

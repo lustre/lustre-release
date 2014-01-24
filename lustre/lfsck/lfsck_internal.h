@@ -252,6 +252,8 @@ struct lfsck_layout {
 };
 
 struct lfsck_component;
+struct lfsck_tgt_descs;
+struct lfsck_tgt_desc;
 
 struct lfsck_operations {
 	int (*lfsck_reset)(const struct lu_env *env,
@@ -303,6 +305,12 @@ struct lfsck_operations {
 
 	int (*lfsck_query)(const struct lu_env *env,
 			   struct lfsck_component *com);
+
+	int (*lfsck_stop_notify)(const struct lu_env *env,
+				 struct lfsck_component *com,
+				 struct lfsck_tgt_descs *ltds,
+				 struct lfsck_tgt_desc *ltd,
+				 struct ptlrpc_request_set *set);
 };
 
 #define TGT_PTRS		256     /* number of pointers at 1st level */
@@ -314,8 +322,11 @@ struct lfsck_tgt_desc {
 	struct dt_device  *ltd_key;
 	struct obd_export *ltd_exp;
 	struct list_head   ltd_layout_list;
+	struct list_head   ltd_layout_phase_list;
 	atomic_t	   ltd_ref;
 	__u32              ltd_index;
+	__u32		   ltd_layout_gen;
+	unsigned int	   ltd_dead:1;
 };
 
 struct lfsck_tgt_desc_idx {
@@ -482,6 +493,13 @@ enum lfsck_linkea_flags {
 	LLF_REPAIR_FAILED	= 0x02,
 };
 
+struct lfsck_async_interpret_args {
+	struct lfsck_component		*laia_com;
+	struct lfsck_tgt_descs		*laia_ltds;
+	struct lfsck_tgt_desc		*laia_ltd;
+	struct lfsck_request		*laia_lr;
+};
+
 struct lfsck_thread_args {
 	struct lu_env		 lta_env;
 	struct lfsck_instance	*lta_lfsck;
@@ -507,6 +525,7 @@ struct lfsck_thread_info {
 	struct lu_dirent	lti_ent;
 	char			lti_key[NAME_MAX + 16];
 	struct lfsck_request	lti_lr;
+	struct lfsck_async_interpret_args lti_laia;
 };
 
 /* lfsck_lib.c */
@@ -541,6 +560,11 @@ int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       int result);
 int lfsck_double_scan(const struct lu_env *env, struct lfsck_instance *lfsck);
 void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck);
+int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
+			struct lfsck_request *lr,
+			struct ptlrpc_request_set *set,
+			ptlrpc_interpterer_t interpterer,
+			void *args, int request);
 
 /* lfsck_engine.c */
 int lfsck_master_engine(void *args);
