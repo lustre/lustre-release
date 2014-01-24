@@ -912,19 +912,18 @@ static int osp_precreate_thread(void *_arg)
 			break;
 
 		LASSERT(d->opd_obd->u.cli.cl_seq != NULL);
-		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL) {
-			/* Get new sequence for client first */
-			LASSERT(d->opd_exp != NULL);
-			d->opd_obd->u.cli.cl_seq->lcs_exp =
-			class_export_get(d->opd_exp);
-			rc = osp_init_pre_fid(d);
-			if (rc != 0) {
-				class_export_put(d->opd_exp);
-				d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
-				CERROR("%s: init pre fid error: rc = %d\n",
-				       d->opd_obd->obd_name, rc);
-				continue;
-			}
+		/* Sigh, fid client is not ready yet */
+		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
+			continue;
+
+		/* Init fid for osp_precreate if necessary */
+		rc = osp_init_pre_fid(d);
+		if (rc != 0) {
+			class_export_put(d->opd_exp);
+			d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
+			CERROR("%s: init pre fid error: rc = %d\n",
+			       d->opd_obd->obd_name, rc);
+			continue;
 		}
 
 		osp_statfs_update(d);
