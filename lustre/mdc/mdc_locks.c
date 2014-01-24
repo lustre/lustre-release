@@ -892,21 +892,24 @@ resend:
 		    (einfo->ei_type == LDLM_FLOCK) &&
 		    (einfo->ei_mode == LCK_NL))
 			goto resend;
-                RETURN(rc);
-        }
+		RETURN(rc);
+	}
 
-        mdc_exit_request(&obddev->u.cli);
-        mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+	mdc_exit_request(&obddev->u.cli);
+	mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
-        if (rc < 0) {
-                CERROR("ldlm_cli_enqueue: %d\n", rc);
-                mdc_clear_replay_flag(req, rc);
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
+	if (rc < 0) {
+		CDEBUG_LIMIT((rc == -EACCES || rc == -EIDRM) ? D_INFO : D_ERROR,
+			     "%s: ldlm_cli_enqueue failed: rc = %d\n",
+			     obddev->obd_name, rc);
 
-        lockrep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-        LASSERT(lockrep != NULL);
+		mdc_clear_replay_flag(req, rc);
+		ptlrpc_req_finished(req);
+		RETURN(rc);
+	}
+
+	lockrep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	LASSERT(lockrep != NULL);
 
 	lockrep->lock_policy_res2 =
 		ptlrpc_status_ntoh(lockrep->lock_policy_res2);
