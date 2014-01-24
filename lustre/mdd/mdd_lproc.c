@@ -294,6 +294,35 @@ static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
 	return rc != 0 ? rc : count;
 }
 
+static int lprocfs_rd_lfsck_async_windows(char *page, char **start, off_t off,
+					  int count, int *eof, void *data)
+{
+	struct mdd_device *mdd = data;
+	int		   rc;
+
+	LASSERT(mdd != NULL);
+	*eof = 1;
+
+	rc = lfsck_get_windows(mdd->mdd_bottom, page, count);
+
+	return rc != 0 ? rc : count;
+}
+
+static int lprocfs_wr_lfsck_async_windows(struct file *file, const char *buffer,
+					  unsigned long count, void *data)
+{
+	struct mdd_device *mdd = data;
+	__u32		   val;
+	int		   rc;
+
+	LASSERT(mdd != NULL);
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc == 0)
+		rc = lfsck_set_windows(mdd->mdd_bottom, val);
+
+	return rc != 0 ? rc : count;
+}
+
 static int lprocfs_rd_lfsck_namespace(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
 {
@@ -315,6 +344,8 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "sync_permission", lprocfs_rd_sync_perm, lprocfs_wr_sync_perm, 0 },
 	{ "lfsck_speed_limit", lprocfs_rd_lfsck_speed_limit,
 			       lprocfs_wr_lfsck_speed_limit, 0 },
+	{ "lfsck_async_windows", lprocfs_rd_lfsck_async_windows,
+				 lprocfs_wr_lfsck_async_windows, 0 },
 	{ "lfsck_namespace", lprocfs_rd_lfsck_namespace, 0, 0 },
 	{ 0 }
 };

@@ -2028,6 +2028,34 @@ static void check_update(void)
 	CHECK_MEMBER(update, u_bufs);
 }
 
+static void check_lfsck_request(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lfsck_request);
+	CHECK_MEMBER(lfsck_request, lr_event);
+	CHECK_MEMBER(lfsck_request, lr_index);
+	CHECK_MEMBER(lfsck_request, lr_flags);
+	CHECK_MEMBER(lfsck_request, lr_valid);
+	CHECK_MEMBER(lfsck_request, lr_speed);
+	CHECK_MEMBER(lfsck_request, lr_version);
+	CHECK_MEMBER(lfsck_request, lr_active);
+	CHECK_MEMBER(lfsck_request, lr_param);
+	CHECK_MEMBER(lfsck_request, lr_async_windows);
+	CHECK_MEMBER(lfsck_request, lr_padding_1);
+	CHECK_MEMBER(lfsck_request, lr_fid);
+	CHECK_MEMBER(lfsck_request, lr_padding_2);
+	CHECK_MEMBER(lfsck_request, lr_padding_3);
+}
+
+static void check_lfsck_reply(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lfsck_reply);
+	CHECK_MEMBER(lfsck_reply, lr_status);
+	CHECK_MEMBER(lfsck_reply, lr_padding_1);
+	CHECK_MEMBER(lfsck_reply, lr_padding_2);
+}
+
 static void system_string(char *cmdline, char *str, int len)
 {
 	int   fds[2];
@@ -2421,6 +2449,9 @@ main(int argc, char **argv)
 	check_update_buf();
 	check_update_reply();
 	check_update();
+
+	check_lfsck_request();
+	check_lfsck_reply();
 
 	printf("}\n\n");
 

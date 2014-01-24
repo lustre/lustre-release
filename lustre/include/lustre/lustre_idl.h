@@ -3409,6 +3409,37 @@ struct obdo {
 #define o_cksum   o_nlink
 #define o_grant_used o_data_version
 
+struct lfsck_request {
+	__u32		lr_event;
+	__u32		lr_index;
+	__u32		lr_flags;
+	__u32		lr_valid;
+	union {
+		__u32	lr_speed;
+		__u32	lr_status;
+	};
+	__u16		lr_version;
+	__u16		lr_active;
+	__u16		lr_param;
+	__u16		lr_async_windows;
+	__u32		lr_padding_1;
+	/* lr_fid is used on server-side only, and can be
+	 * reused as others by client in the future. */
+	struct lu_fid	lr_fid;
+	__u64		lr_padding_2;
+	__u64		lr_padding_3;
+};
+
+void lustre_swab_lfsck_request(struct lfsck_request *lr);
+
+struct lfsck_reply {
+	__u32		lr_status;
+	__u32		lr_padding_1;
+	__u64		lr_padding_2;
+};
+
+void lustre_swab_lfsck_reply(struct lfsck_reply *lr);
+
 static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
 					struct obdo *wobdo,
 					const struct obdo *lobdo)

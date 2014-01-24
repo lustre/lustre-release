@@ -2580,3 +2580,29 @@ void lustre_swab_close_data(struct close_data *cd)
 	__swab64s(&cd->cd_data_version);
 }
 EXPORT_SYMBOL(lustre_swab_close_data);
+
+void lustre_swab_lfsck_request(struct lfsck_request *lr)
+{
+	__swab32s(&lr->lr_event);
+	__swab32s(&lr->lr_index);
+	__swab32s(&lr->lr_flags);
+	__swab32s(&lr->lr_valid);
+	__swab32s(&lr->lr_speed);
+	__swab16s(&lr->lr_version);
+	__swab16s(&lr->lr_active);
+	__swab16s(&lr->lr_param);
+	__swab16s(&lr->lr_async_windows);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_1) != 0);
+	lustre_swab_lu_fid(&lr->lr_fid);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_3) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_lfsck_request);
+
+void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
+{
+	__swab32s(&lr->lr_status);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_1) != 0);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_lfsck_reply);

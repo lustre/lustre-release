@@ -428,6 +428,8 @@ fini_oit:
 			rc = lfsck_double_scan(env, lfsck);
 		else
 			rc = 0;
+	} else {
+		lfsck_quit(env, lfsck);
 	}
 
 	/* XXX: Purge the pinned objects in the future. */

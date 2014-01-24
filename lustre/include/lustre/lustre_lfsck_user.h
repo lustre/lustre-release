@@ -27,7 +27,7 @@
  *
  * Lustre LFSCK userspace interfaces.
  *
- * Author: Fan Yong <yong.fan@whamcloud.com>
+ * Author: Fan, Yong <fan.yong@intel.com>
  */
 
 #ifndef _LUSTRE_LFSCK_USER_H
@@ -64,11 +64,14 @@ enum lfsck_type {
 
 #define LFSCK_SPEED_NO_LIMIT	0
 #define LFSCK_SPEED_LIMIT_DEF	LFSCK_SPEED_NO_LIMIT
+#define LFSCK_ASYNC_WIN_DEFAULT 1024
+#define LFSCK_ASYNC_WIN_MAX	((__u16)(~0))
 
 enum lfsck_start_valid {
 	LSV_SPEED_LIMIT 	= 0x00000001,
 	LSV_ERROR_HANDLE	= 0x00000002,
 	LSV_DRYRUN		= 0x00000004,
+	LSV_ASYNC_WINDOWS	= 0x00000008,
 };
 
 /* Arguments for starting lfsck. */
@@ -88,8 +91,15 @@ struct lfsck_start {
 	/* Flags for the LFSCK, see 'enum lfsck_param_flags'. */
 	__u16   ls_flags;
 
-	/* For 64-bits aligned. */
-	__u16   ls_padding;
+	/* The windows size for async requests pipeline. */
+	__u16   ls_async_windows;
+};
+
+struct lfsck_stop {
+	__u32	ls_status;
+	__u16	ls_flags;
+	__u16	ls_padding_1; /* For 64-bits aligned. */
+	__u64	ls_padding_2;
 };
 
 #endif /* _LUSTRE_LFSCK_USER_H */

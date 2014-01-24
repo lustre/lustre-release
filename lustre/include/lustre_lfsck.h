@@ -57,6 +57,7 @@
  *	|		    |:		|:	   |:	      |:	|:
  *	v		    v:		v:	   v:	      v: 	v:
  * LS_SCANNING_PHASE2	LS_FAILED  LS_STOPPED  LS_PAUSED LS_CRASHED LS_PARTIAL
+ *			  (CO_)       (CO_)	 (CO_)
  *	|	^	    ^:		^:	   ^:	      ^:	^:
  *	|	:	    |:		|:	   |:	      |:	|:
  *	| (lfsck:restart)   |:		|:	   |:	      |:	|:
@@ -97,6 +98,15 @@ enum lfsck_status {
 	/* Some OST/MDT failed during the LFSCK, or not join the LFSCK. */
 	LS_PARTIAL		= 8,
 
+	/* The LFSCK is failed because its controller is failed. */
+	LS_CO_FAILED		= 9,
+
+	/* The LFSCK is stopped because its controller is stopped. */
+	LS_CO_STOPPED		= 10,
+
+	/* The LFSCK is paused because its controller is paused. */
+	LS_CO_PAUSED		= 11,
+
 	LS_MAX
 };
 
@@ -108,6 +118,10 @@ struct lfsck_start_param {
 enum lfsck_events {
 	LE_LASTID_REBUILDING	= 1,
 	LE_LASTID_REBUILT	= 2,
+	LE_PHASE1_DONE		= 3,
+	LE_PHASE2_DONE		= 4,
+	LE_START		= 5,
+	LE_STOP 		= 6,
 };
 
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
@@ -131,6 +145,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 
 int lfsck_get_speed(struct dt_device *key, void *buf, int len);
 int lfsck_set_speed(struct dt_device *key, int val);
+int lfsck_get_windows(struct dt_device *key, void *buf, int len);
+int lfsck_set_windows(struct dt_device *key, int val);
 
 int lfsck_dump(struct dt_device *key, void *buf, int len, enum lfsck_type type);
 

@@ -1347,9 +1347,11 @@ out:
 	return ret;
 }
 
-static int lfsck_namespace_double_scan(const struct lu_env *env,
-				       struct lfsck_component *com)
+static int lfsck_namespace_double_scan_main(void *args)
 {
+	struct lfsck_thread_args *lta	= args;
+	const struct lu_env	*env	= &lta->lta_env;
+	struct lfsck_component	*com	= lta->lta_com;
 	struct lfsck_instance	*lfsck	= com->lc_lfsck;
 	struct ptlrpc_thread	*thread = &lfsck->li_thread;
 	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
@@ -1372,7 +1374,7 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 
 	di = iops->init(env, obj, 0, BYPASS_CAPA);
 	if (IS_ERR(di))
-		RETURN(PTR_ERR(di));
+		GOTO(out, rc = PTR_ERR(di));
 
 	fid_cpu_to_be(&fid, &ns->ln_fid_latest_scanned_phase2);
 	rc = iops->get(env, di, (const struct dt_key *)&fid);
@@ -1477,6 +1479,8 @@ put:
 
 fini:
 	iops->fini(env, di);
+
+out:
 	down_write(&com->lc_sem);
 
 	ns->ln_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
@@ -1511,7 +1515,43 @@ fini:
 	rc = lfsck_namespace_store(env, com, false);
 
 	up_write(&com->lc_sem);
+	if (atomic_dec_and_test(&lfsck->li_double_scan_count))
+		wake_up_all(&thread->t_ctl_waitq);
+
+	lfsck_thread_args_fini(lta);
+
 	return rc;
+}
+
+static int lfsck_namespace_double_scan(const struct lu_env *env,
+				       struct lfsck_component *com)
+{
+	struct lfsck_instance		*lfsck = com->lc_lfsck;
+	struct lfsck_namespace		*ns    = com->lc_file_ram;
+	struct lfsck_thread_args	*lta;
+	long				 rc;
+	ENTRY;
+
+	if (unlikely(ns->ln_status != LS_SCANNING_PHASE2))
+		RETURN(0);
+
+	lta = lfsck_thread_args_init(lfsck, com);
+	if (IS_ERR(lta))
+		RETURN(PTR_ERR(lta));
+
+	atomic_inc(&lfsck->li_double_scan_count);
+	rc = PTR_ERR(kthread_run(lfsck_namespace_double_scan_main, lta,
+				 "lfsck_namespace"));
+	if (IS_ERR_VALUE(rc)) {
+		CERROR("%s: cannot start LFSCK namespace thread: rc = %ld\n",
+		       lfsck_lfsck2name(lfsck), rc);
+		atomic_dec(&lfsck->li_double_scan_count);
+		lfsck_thread_args_fini(lta);
+	} else {
+		rc = 0;
+	}
+
+	RETURN(rc);
 }
 
 static struct lfsck_operations lfsck_namespace_ops = {

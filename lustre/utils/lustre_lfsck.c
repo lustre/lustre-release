@@ -53,6 +53,7 @@ static struct option long_opt_start[] = {
 	{"reset",       no_argument,       0, 'r'},
 	{"speed",       required_argument, 0, 's'},
 	{"type",	required_argument, 0, 't'},
+	{"windows",	required_argument, 0, 'w'},
 	{0,		0,		   0,   0}
 };
 
@@ -96,6 +97,7 @@ static void usage_start(void)
 		"	     [-n | --dryrun switch] [-r | --reset]\n"
 		"	     [-s | --speed speed_limit]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
+		"	     [-w | --windows win_size]\n"
 		"OPTIONS:\n"
 		"-M: The device to start LFSCK/scrub on.\n"
 		"-e: Error handle, 'continue'(default) or 'abort'.\n"
@@ -104,7 +106,8 @@ static void usage_start(void)
 		"-r: Reset scanning start position to the device beginning.\n"
 		"-s: How many items can be scanned at most per second. "
 		    "'%d' means no limit (default).\n"
-		"-t: The LFSCK type(s) to be started.\n",
+		"-t: The LFSCK type(s) to be started.\n"
+		"-w: The windows size for async requests pipeline.\n",
 		LFSCK_SPEED_NO_LIMIT);
 }
 
@@ -141,7 +144,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:e:hn:rs:t:";
+	char *optstring = "M:e:hn:rs:t:w:";
 	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
@@ -234,6 +237,23 @@ int jt_lfsck_start(int argc, char **argv)
 			}
 			break;
 		}
+		case 'w':
+			val = atoi(optarg);
+			if (val < 0 || val > LFSCK_ASYNC_WIN_MAX) {
+				fprintf(stderr,
+					"Too large async windows size, "
+					"which may cause memory issues. "
+					"The valid range is [0 - %u]. "
+					"If you do not want to restrict "
+					"the windows size for async reqeusts "
+					"pipeline, just set it as 0.\n",
+					LFSCK_ASYNC_WIN_MAX);
+				return -EINVAL;
+			}
+
+			start.ls_async_windows = val;
+			start.ls_valid |= LSV_ASYNC_WINDOWS;
+			break;
 		default:
 			fprintf(stderr, "Invalid option, '-h' for help.\n");
 			return -EINVAL;

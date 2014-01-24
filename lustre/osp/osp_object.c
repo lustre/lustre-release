@@ -413,6 +413,14 @@ static void osp_object_release(const struct lu_env *env, struct lu_object *o)
 		/* not needed in cache any more */
 		set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
 	}
+
+	if (is_ost_obj(o))
+		/* XXX: Currently, NOT cache OST-object on MDT because:
+		 *	1. it is not often accessed on MDT.
+		 *	2. avoid up layer (such as LFSCK) to load too many
+		 *	   once-used OST-objects. */
+		set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
+
 	EXIT;
 }
 
