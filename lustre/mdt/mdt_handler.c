@@ -4238,6 +4238,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         }
 
 	stop.ls_status = LS_PAUSED;
+	stop.ls_flags = 0;
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
 
         mdt_seq_fini(env, m);
@@ -5569,10 +5570,12 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	}
 	case OBD_IOC_STOP_LFSCK: {
 		struct md_device	*next = mdt->mdt_child;
-		struct lfsck_stop	 stop;
+		struct obd_ioctl_data	*data = karg;
+		struct lfsck_stop	*stop =
+				(struct lfsck_stop *)(data->ioc_inlbuf1);
 
-		stop.ls_status = LS_STOPPED;
-		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0, &stop);
+		stop->ls_status = LS_STOPPED;
+		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0, stop);
 		break;
 	}
         case OBD_IOC_GET_OBJ_VERSION: {

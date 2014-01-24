@@ -2248,6 +2248,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	struct lfsck_stop	 stop;
 
 	stop.ls_status = LS_PAUSED;
+	stop.ls_flags = 0;
 	lfsck_stop(env, m->ofd_osd, &stop);
 	lfsck_degister(env, m->ofd_osd);
 	target_recovery_fini(obd);

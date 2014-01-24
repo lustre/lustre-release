@@ -52,6 +52,7 @@ static struct option long_opt_start[] = {
 	{"dryrun",      required_argument, 0, 'n'},
 	{"reset",       no_argument,       0, 'r'},
 	{"speed",       required_argument, 0, 's'},
+	{"all", 	no_argument,       0, 'A'},
 	{"type",	required_argument, 0, 't'},
 	{"windows",	required_argument, 0, 'w'},
 	{0,		0,		   0,   0}
@@ -59,6 +60,7 @@ static struct option long_opt_start[] = {
 
 static struct option long_opt_stop[] = {
 	{"device",      required_argument, 0, 'M'},
+	{"all", 	no_argument,       0, 'A'},
 	{"help",	no_argument,       0, 'h'},
 	{0,		0,		   0,   0}
 };
@@ -95,7 +97,7 @@ static void usage_start(void)
 		"lfsck_start <-M | --device [MDT,OST]_device>\n"
 		"	     [-e | --error error_handle] [-h | --help]\n"
 		"	     [-n | --dryrun switch] [-r | --reset]\n"
-		"	     [-s | --speed speed_limit]\n"
+		"	     [-s | --speed speed_limit] [-A | --all]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
 		"	     [-w | --windows win_size]\n"
 		"OPTIONS:\n"
@@ -106,6 +108,7 @@ static void usage_start(void)
 		"-r: Reset scanning start position to the device beginning.\n"
 		"-s: How many items can be scanned at most per second. "
 		    "'%d' means no limit (default).\n"
+		"-A: Start LFSCK on all MDT devices.\n"
 		"-t: The LFSCK type(s) to be started.\n"
 		"-w: The windows size for async requests pipeline.\n",
 		LFSCK_SPEED_NO_LIMIT);
@@ -115,9 +118,11 @@ static void usage_stop(void)
 {
 	fprintf(stderr, "Stop LFSCK.\n"
 		"SYNOPSIS:\n"
-		"lfsck_stop <-M | --device [MDT,OST]_device> [-h | --help]\n"
+		"lfsck_stop <-M | --device [MDT,OST]_device>\n"
+		"[-A | --all] [-h | --help]\n"
 		"OPTIONS:\n"
 		"-M: The device to stop LFSCK/scrub on.\n"
+		"-A: Stop LFSCK on all MDT devices.\n"
 		"-h: Help information.\n");
 }
 
@@ -144,7 +149,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:e:hn:rs:t:w:";
+	char *optstring = "M:e:hn:rs:At:w:";
 	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
@@ -196,6 +201,9 @@ int jt_lfsck_start(int argc, char **argv)
 			val = atoi(optarg);
 			start.ls_speed_limit = val;
 			start.ls_valid |= LSV_SPEED_LIMIT;
+			break;
+		case 'A':
+			start.ls_flags |= LPF_ALL_MDT | LPF_BROADCAST;
 			break;
 		case 't': {
 			char *str = optarg, *p, c;
@@ -312,10 +320,12 @@ int jt_lfsck_stop(int argc, char **argv)
 	struct obd_ioctl_data data;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
-	char *optstring = "M:h";
+	struct lfsck_stop stop;
+	char *optstring = "M:Ah";
 	int opt, index, rc;
 
 	memset(&data, 0, sizeof(data));
+	memset(&stop, 0, sizeof(stop));
 	memset(device, 0, MAX_OBD_NAME);
 
 	/* Reset the 'optind' for the case of getopt_long() called multiple
@@ -328,6 +338,9 @@ int jt_lfsck_stop(int argc, char **argv)
 			rc = lfsck_pack_dev(&data, device, optarg);
 			if (rc != 0)
 				return rc;
+			break;
+		case 'A':
+			stop.ls_flags |= LPF_ALL_MDT | LPF_BROADCAST;
 			break;
 		case 'h':
 			usage_stop();
@@ -350,6 +363,8 @@ int jt_lfsck_stop(int argc, char **argv)
 		}
 	}
 
+	data.ioc_inlbuf1 = (char *)&stop;
+	data.ioc_inllen1 = sizeof(stop);
 	memset(buf, 0, sizeof(rawbuf));
 	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {

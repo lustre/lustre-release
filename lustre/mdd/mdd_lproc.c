@@ -269,13 +269,11 @@ static int lprocfs_rd_lfsck_speed_limit(char *page, char **start, off_t off,
 					int count, int *eof, void *data)
 {
 	struct mdd_device *mdd = data;
-	int rc;
 
 	LASSERT(mdd != NULL);
 	*eof = 1;
 
-	rc = lfsck_get_speed(mdd->mdd_bottom, page, count);
-	return rc != 0 ? rc : count;
+	return lfsck_get_speed(mdd->mdd_bottom, page, count);
 }
 
 static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
@@ -336,6 +334,17 @@ static int lprocfs_rd_lfsck_namespace(char *page, char **start, off_t off,
 	return rc;
 }
 
+static int lprocfs_rd_lfsck_layout(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct mdd_device *mdd = data;
+
+	LASSERT(mdd != NULL);
+	*eof = 1;
+
+	return lfsck_dump(mdd->mdd_bottom, page, count, LT_LAYOUT);
+}
+
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { "changelog_mask",  lprocfs_rd_changelog_mask,
@@ -347,6 +356,7 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	{ "lfsck_async_windows", lprocfs_rd_lfsck_async_windows,
 				 lprocfs_wr_lfsck_async_windows, 0 },
 	{ "lfsck_namespace", lprocfs_rd_lfsck_namespace, 0, 0 },
+	{ "lfsck_layout", lprocfs_rd_lfsck_layout, 0, 0 },
 	{ 0 }
 };
 

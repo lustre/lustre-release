@@ -1030,10 +1030,10 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		break;
 	}
 	case OBD_IOC_STOP_LFSCK: {
-		struct lfsck_stop stop;
+		struct obd_ioctl_data *data = karg;
 
-		stop.ls_status = LS_STOPPED;
-		rc = lfsck_stop(&env, ofd->ofd_osd, &stop);
+		rc = lfsck_stop(&env, ofd->ofd_osd,
+				(struct lfsck_stop *)(data->ioc_inlbuf1));
 		break;
 	}
 	case OBD_IOC_GET_OBJ_VERSION:
