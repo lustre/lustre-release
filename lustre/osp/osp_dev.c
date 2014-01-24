@@ -863,8 +863,6 @@ static int osp_reconnect(const struct lu_env *env,
 
 static int osp_prepare_fid_client(struct osp_device *osp)
 {
-	int rc;
-
 	LASSERT(osp->opd_obd->u.cli.cl_seq != NULL);
 	if (osp->opd_obd->u.cli.cl_seq->lcs_exp != NULL)
 		return 0;
@@ -872,19 +870,6 @@ static int osp_prepare_fid_client(struct osp_device *osp)
 	LASSERT(osp->opd_exp != NULL);
 	osp->opd_obd->u.cli.cl_seq->lcs_exp =
 				class_export_get(osp->opd_exp);
-	if (osp->opd_pre == NULL)
-		return 0;
-
-	/* Init fid for osp_precreate if necessary */
-	rc = osp_init_pre_fid(osp);
-	if (rc != 0) {
-		class_export_put(osp->opd_exp);
-		osp->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
-		CERROR("%s: init pre fid error: rc = %d\n",
-		       osp->opd_obd->obd_name, rc);
-		return rc;
-	}
-
 	return 0;
 }
 
