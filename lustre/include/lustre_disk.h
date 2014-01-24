@@ -500,6 +500,9 @@ struct lustre_sb_info {
 	char			  lsi_fstype[16];
 	struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
 						  own backing_dev_info */
+	struct list_head	  lsi_lwp_list;
+	spinlock_t		  lsi_lwp_lock;
+	unsigned long		  lsi_lwp_started:1;
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000
@@ -527,7 +530,6 @@ struct lustre_mount_info {
 #ifdef __KERNEL__
 /* obd_mount.c */
 int server_name2fsname(const char *svname, char *fsname, const char **endptr);
-int server_name2index(const char *svname, __u32 *idx, const char **endptr);
 int server_name2svname(const char *label, char *svname, const char **endptr,
 		       size_t svsize);
 int server_name_is_ost(const char *svname);

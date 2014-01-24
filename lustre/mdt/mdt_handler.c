@@ -3505,7 +3505,7 @@ static int mdt_register_seq_exp(struct mdt_device *mdt)
 	if (lwp_name == NULL)
 		GOTO(out_free, rc = -ENOMEM);
 
-	rc = tgt_name2lwpname(mdt_obd_name(mdt), lwp_name);
+	rc = tgt_name2lwp_name(mdt_obd_name(mdt), lwp_name, MAX_OBD_NAME, 0);
 	if (rc != 0)
 		GOTO(out_free, rc);
 

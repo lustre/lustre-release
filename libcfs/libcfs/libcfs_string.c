@@ -42,6 +42,33 @@
 
 #include <libcfs/libcfs.h>
 
+char *cfs_strrstr(const char *haystack, const char *needle)
+{
+	char *ptr;
+
+	if (unlikely(haystack == NULL || needle == NULL))
+		return NULL;
+
+	if (strlen(needle) == 1)
+		return strrchr(haystack, needle[0]);
+
+	ptr = strstr(haystack, needle);
+	if (ptr != NULL) {
+		while (1) {
+			char *tmp;
+
+			tmp = strstr(&ptr[1], needle);
+			if (tmp == NULL)
+				return ptr;
+
+			ptr = tmp;
+		}
+	}
+
+	return NULL;
+}
+EXPORT_SYMBOL(cfs_strrstr);
+
 /* non-0 = don't match */
 int cfs_strncasecmp(const char *s1, const char *s2, size_t n)
 {

@@ -728,7 +728,8 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	}
 
 	/* generate osp name */
-	rc = tgt_name2lwpname((char *)qsd->qsd_svname, qti->qti_buf);
+	rc = tgt_name2lwp_name(qsd->qsd_svname, qti->qti_buf,
+			       MTI_NAME_MAXLEN, 0);
 	if (rc) {
 		CERROR("%s: failed to generate ospname (%d)\n",
 		       qsd->qsd_svname, rc);

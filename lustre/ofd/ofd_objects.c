@@ -270,7 +270,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 	 /* When the LFSCK scanning the whole device to verify the LAST_ID file
 	  * consistency, it will load the last_id into RAM firstly, and compare
-	  * the last_id with echo OST-object's ID. If the later one is larger,
+	  * the last_id with each OST-object's ID. If the later one is larger,
 	  * then it will regard the LAST_ID file crashed. But during the LFSCK
 	  * scanning, the OFD may continue to create new OST-objects. Those new
 	  * created OST-objects will have larger IDs than the LFSCK known ones.

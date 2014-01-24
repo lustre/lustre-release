@@ -44,6 +44,7 @@
 #define __LIBCFS_STRING_H__
 
 /* libcfs_string.c */
+char *cfs_strrstr(const char *haystack, const char *needle);
 /* string comparison ignoring case */
 int cfs_strncasecmp(const char *s1, const char *s2, size_t n);
 /* Convert a text string to a bitmask */
