@@ -4302,11 +4302,13 @@ test_56u() { # LU-611
 	[ $NUMS -eq $EXPECTED ] ||
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 
-	EXPECTED=$(((NUMDIRS + 1) * NUMFILES + ONESTRIPE))
-	CMD="$LFIND -stripe-index 0,1 -type f $TDIR"
-	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
-		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	if [ $OSTCOUNT -gt 1 ]; then
+		EXPECTED=$(((NUMDIRS + 1) * NUMFILES + ONESTRIPE))
+		CMD="$LFIND -stripe-index 0,1 -type f $TDIR"
+		NUMS=$($CMD | wc -l)
+		[ $NUMS -eq $EXPECTED ] ||
+			error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	fi
 }
 run_test 56u "check lfs find -stripe-index works"
 
@@ -6209,7 +6211,7 @@ test_102k() {
         local default_size=`$GETSTRIPE -S $test_kdir`
         local default_count=`$GETSTRIPE -c $test_kdir`
         local default_offset=`$GETSTRIPE -i $test_kdir`
-        $SETSTRIPE -S 65536 -i 1 -c $OSTCOUNT $test_kdir ||
+	$SETSTRIPE -S 65536 -i 0 -c $OSTCOUNT $test_kdir ||
                 error 'dir setstripe failed'
         setfattr -n trusted.lov $test_kdir
         local stripe_size=`$GETSTRIPE -S $test_kdir`
