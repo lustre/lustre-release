@@ -5645,39 +5645,34 @@ request_timeout () {
 }
 
 _wait_osc_import_state() {
-    local facet=$1
-    local ost_facet=$2
-    local expected=$3
-    local ost=$(get_osc_import_name $facet $ost_facet)
-
+	local facet=$1
+	local ost_facet=$2
+	local expected=$3
+	local ost=$(get_osc_import_name $facet $ost_facet)
 	local param="osc.${ost}.ost_server_uuid"
+	local params=$param
 	local i=0
 
-    # 1. wait the deadline of client 1st request (it could be skipped)
-    # 2. wait the deadline of client 2nd request
-    local maxtime=$(( 2 * $(request_timeout $facet)))
+	# 1. wait the deadline of client 1st request (it could be skipped)
+	# 2. wait the deadline of client 2nd request
+	local maxtime=$(( 2 * $(request_timeout $facet)))
 
-	#During setup time, the osc might not be setup, it need wait
-	#until list_param can return valid value. And also if there
-	#are mulitple osc entries we should list all of them before
-	#go to wait.
-	local params=$($LCTL list_param $param 2>/dev/null || true)
-	while [ -z "$params" ]; do
-		if [ $i -ge $maxtime ]; then
-			echo "can't get $param by list_param in $maxtime secs"
-			if [[ $facet != client* ]]; then
-				echo "Go with $param directly"
-				params=$param
-				break
-			else
+	if [[ $facet == client* ]]; then
+		# During setup time, the osc might not be setup, it need wait
+		# until list_param can return valid value. And also if there
+		# are mulitple osc entries we should list all of them before
+		# go to wait.
+		params=$($LCTL list_param $param 2>/dev/null || true)
+		while [ -z "$params" ]; do
+			if [ $i -ge $maxtime ]; then
+				echo "can't get $param in $maxtime secs"
 				return 1
 			fi
-		fi
-		sleep 1
-		i=$((i + 1))
-		params=$($LCTL list_param $param 2>/dev/null || true)
-	done
-
+			sleep 1
+			i=$((i + 1))
+			params=$($LCTL list_param $param 2>/dev/null || true)
+		done
+	fi
 	if ! do_rpc_nodes "$(facet_active_host $facet)" \
 			wait_import_state $expected "$params" $maxtime; then
 		error "import is not in ${expected} state"
