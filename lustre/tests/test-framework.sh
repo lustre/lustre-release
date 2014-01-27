@@ -4527,10 +4527,16 @@ skip() {
 build_test_filter() {
     EXCEPT="$EXCEPT $(testslist_filter)"
 
-    [ "$ONLY" ] && log "only running test `echo $ONLY`"
-    for O in $ONLY; do
-        eval ONLY_${O}=true
-    done
+	for O in $ONLY; do
+		if [[ $O = [0-9]*-[0-9]* ]]; then
+			for num in $(seq $(echo $O | tr '-' ' ')); do
+				eval ONLY_$num=true
+			done
+		else
+			eval ONLY_${O}=true
+		fi
+	done
+
     [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
         log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
     [ "$EXCEPT_SLOW" ] && \
