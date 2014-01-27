@@ -139,7 +139,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 		GOTO(out_los, rc);
 
 	root = dt_locate_at(env, mgs->mgs_bottom, &rfid,
-			    &mgs->mgs_dt_dev.dd_lu_dev);
+			    &mgs->mgs_dt_dev.dd_lu_dev, NULL);
 	if (unlikely(IS_ERR(root)))
 		GOTO(out_los, rc = PTR_ERR(root));
 

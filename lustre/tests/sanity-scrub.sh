@@ -542,7 +542,7 @@ test_6() {
 
 	local -a position1
 	for n in $(seq $MDSCOUNT); do
-		positions1[$n]=$(scrub_status $n |
+		position1[$n]=$(scrub_status $n |
 			awk '/^latest_start_position/ {print $2}')
 		if [ ${position0[$n]} -ne ${position1[$n]} ]; then
 			error "(14) Expected position ${position0[$n]}, but" \
@@ -1006,6 +1006,8 @@ test_14() {
 run_test 14 "OI scrub can repair objects under lost+found"
 
 test_15() {
+	# skip test_15 for LU-4182
+	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return
 	scrub_prep 20
 	scrub_backup_restore 1
 	echo "starting MDTs with OI scrub disabled"

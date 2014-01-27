@@ -301,7 +301,7 @@ static int nidtbl_read_version(const struct lu_env *env,
 	}
 
 	fsdb = dt_locate_at(env, mgs->mgs_bottom, &fid,
-			    &mgs->mgs_dt_dev.dd_lu_dev);
+			    &mgs->mgs_dt_dev.dd_lu_dev, NULL);
 	if (IS_ERR(fsdb))
 		RETURN(PTR_ERR(fsdb));
 

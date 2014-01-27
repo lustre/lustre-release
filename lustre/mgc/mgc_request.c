@@ -727,7 +727,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb)
 		GOTO(out_env, rc);
 
 	root = dt_locate_at(env, lsi->lsi_dt_dev, &rfid,
-			    &cli->cl_mgc_los->los_dev->dd_lu_dev);
+			    &cli->cl_mgc_los->los_dev->dd_lu_dev, NULL);
 	if (unlikely(IS_ERR(root)))
 		GOTO(out_los, rc = PTR_ERR(root));
 
