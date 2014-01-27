@@ -3746,7 +3746,7 @@ run_test 51a "special situations: split htree with empty entry =="
 export NUMTEST=70000
 test_51b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	local BASE=$DIR/$tdir
+	local BASE=$DIR/d${base}.${TESTSUITE}
 
 	# cleanup the directory
 	rm -fr $BASE
@@ -3773,7 +3773,7 @@ test_51b() {
 run_test 51b "exceed 64k subdirectory nlink limit"
 
 test_51ba() { # LU-993
-	local BASE=$DIR/$tdir
+	local BASE=$DIR/d${base}.${TESTSUITE}
 	# unlink all but 100 subdirectories, then check it still works
 	local LEFT=100
 	[ -f $BASE/fnum ] && local NUMPREV=$(cat $BASE/fnum) && rm $BASE/fnum
