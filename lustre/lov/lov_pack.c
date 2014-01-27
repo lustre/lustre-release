@@ -59,7 +59,7 @@ static void lov_dump_lmm_common(int level, void *lmmp)
 	struct lov_mds_md *lmm = lmmp;
 	struct ost_id	oi;
 
-	ostid_le_to_cpu(&lmm->lmm_oi, &oi);
+	lmm_oi_le_to_cpu(&oi, &lmm->lmm_oi);
 	CDEBUG(level, "objid "DOSTID", magic 0x%08x, pattern %#x\n",
 	       POSTID(&oi), le32_to_cpu(lmm->lmm_magic),
 	       le32_to_cpu(lmm->lmm_pattern));
@@ -222,7 +222,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         /* lmmv1 and lmmv3 point to the same struct and have the
          * same first fields
          */
-	ostid_cpu_to_le(&lsm->lsm_oi, &lmmv1->lmm_oi);
+	lmm_oi_cpu_to_le(&lmmv1->lmm_oi, &lsm->lsm_oi);
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le16(stripe_count);
         lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);

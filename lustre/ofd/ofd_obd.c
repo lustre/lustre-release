@@ -589,7 +589,9 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		}
 
 		info = ofd_info_init(env, exp);
-		ostid_to_fid(&info->fti_fid, &fm_key->oa.o_oi, 0);
+		rc = ostid_to_fid(&info->fti_fid, &fm_key->oa.o_oi, 0);
+		if (rc != 0)
+			RETURN(rc);
 		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n",
 		       PFID(&info->fti_fid));
 
@@ -642,12 +644,15 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		if (IS_ERR(oseq))
 			GOTO(out_fini, rc = PTR_ERR(oseq));
 
-		ostid_to_fid(fid, &oseq->os_oi,
+		rc = ostid_to_fid(fid, &oseq->os_oi,
 			     ofd->ofd_lut.lut_lsd.lsd_osd_index);
+		if (rc != 0)
+			GOTO(out_put, rc);
 
 		CDEBUG(D_HA, "%s: LAST FID is "DFID"\n", ofd_name(ofd),
 		       PFID(fid));
 		*vallen = sizeof(*fid);
+out_put:
 		ofd_seq_put(&env, oseq);
 out_fini:
 		lu_env_fini(&env);
@@ -829,9 +834,11 @@ int ofd_setattr(const struct lu_env *env, struct obd_export *exp,
 	info = ofd_info_init(env, exp);
 	ofd_oti2info(info, oti);
 
-	ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
-	ost_fid_build_resid(&info->fti_fid, &info->fti_resid);
+	rc = ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	if (rc != 0)
+		RETURN(rc);
 
+	ost_fid_build_resid(&info->fti_fid, &info->fti_resid);
 	rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oa->o_oi),
 			   oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
 	if (rc)
@@ -915,7 +922,9 @@ static int ofd_punch(const struct lu_env *env, struct obd_export *exp,
 	info = ofd_info_init(env, exp);
 	ofd_oti2info(info, oti);
 
-	ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	rc = ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	if (rc != 0)
+		RETURN(rc);
 	ost_fid_build_resid(&info->fti_fid, &info->fti_resid);
 
 	CDEBUG(D_INODE, "calling punch for object "DFID", valid = "LPX64
@@ -1058,7 +1067,12 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 	while (count > 0) {
 		int lrc;
 
-		ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
+		lrc = ostid_to_fid(&info->fti_fid, &oa->o_oi, 0);
+		if (lrc != 0) {
+			if (rc == 0)
+				rc = lrc;
+			GOTO(out, rc);
+		}
 		lrc = ofd_destroy_by_fid(env, ofd, &info->fti_fid, 0);
 		if (lrc == -ENOENT) {
 			CDEBUG(D_INODE,
@@ -1094,6 +1108,7 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 		info->fti_transno = 0;
 	}
 	ofd_info2oti(info, oti);
+out:
 	RETURN(rc);
 }
 
@@ -1128,7 +1143,9 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 
 	for (ostid_set_id(&oi, last); ostid_id(&oi) > end_id;
 			  ostid_dec_id(&oi)) {
-		ostid_to_fid(&info->fti_fid, &oi, 0);
+		rc = ostid_to_fid(&info->fti_fid, &oi, 0);
+		if (rc != 0)
+			GOTO(out_put, rc);
 		rc = ofd_destroy_by_fid(env, ofd, &info->fti_fid, 1);
 		if (rc && rc != -ENOENT) /* this is pretty fatal... */
 			CEMERG("error destroying precreated id "DOSTID": %d\n",
@@ -1151,6 +1168,7 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 		ostid_set_id(&oa->o_oi, last);
 		rc = 0;
 	}
+out_put:
 	ofd_seq_put(env, oseq);
 	RETURN(rc);
 }
@@ -1346,7 +1364,9 @@ int ofd_getattr(const struct lu_env *env, struct obd_export *exp,
 
 	info = ofd_info_init(env, exp);
 
-	ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	rc = ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	if (rc != 0)
+		GOTO(out, rc);
 	rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oinfo->oi_oa->o_oi),
 			   oinfo_capa(oinfo), CAPA_OPC_META_READ);
 	if (rc)
@@ -1391,7 +1411,9 @@ static int ofd_sync(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	info = ofd_info_init(env, exp);
-	ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	rc = ostid_to_fid(&info->fti_fid, &oinfo->oi_oa->o_oi, 0);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	rc = ofd_auth_capa(exp, &info->fti_fid, ostid_seq(&oinfo->oi_oa->o_oi),
 			   oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);

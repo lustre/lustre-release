@@ -1079,7 +1079,8 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         struct cl_object   *obj;
         struct lu_fid *fid;
         int refcheck;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	LASSERT(lsmp);
 	lsm = *lsmp;
@@ -1114,7 +1115,9 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         conf->eoc_md = lsmp;
 
         fid  = &info->eti_fid;
-	ostid_to_fid(fid, &lsm->lsm_oi, 0);
+	rc = ostid_to_fid(fid, &lsm->lsm_oi, 0);
+	if (rc != 0)
+		GOTO(out, eco = ERR_PTR(rc));
 
 	/* In the function below, .hs_keycmp resolves to
 	 * lu_obj_hop_keycmp() */
@@ -2183,7 +2186,10 @@ static int echo_md_handler(struct echo_device *ed, int command,
                 int stripe_count = (int)data->ioc_obdo2.o_misc;
                 int stripe_index = (int)data->ioc_obdo2.o_stripe_idx;
 
-		ostid_to_fid(fid, &data->ioc_obdo1.o_oi, 0);
+		rc = ostid_to_fid(fid, &data->ioc_obdo1.o_oi, 0);
+		if (rc != 0)
+			break;
+
 		/* In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp() */
 		/* coverity[overrun-buffer-val] */

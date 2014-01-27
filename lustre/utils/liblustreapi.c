@@ -2021,8 +2021,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
         char nl = is_dir ? ' ' : '\n';
         int rc;
 
-	if (is_dir && ostid_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
-		ostid_set_seq_mdt0(&lum->lmm_oi);
+	if (is_dir && lmm_oi_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
+		lmm_oi_set_seq(&lum->lmm_oi, 0);
 		if (verbose & VERBOSE_DETAIL)
 			llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
 	}
@@ -2034,9 +2034,9 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
 			     lum->lmm_magic);
 		llapi_printf(LLAPI_MSG_NORMAL, "lmm_seq:            "LPX64"\n",
-			     ostid_seq(&lum->lmm_oi));
+			     lmm_oi_seq(&lum->lmm_oi));
 		llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
-			     ostid_id(&lum->lmm_oi));
+			     lmm_oi_id(&lum->lmm_oi));
 	}
 
         if (verbose & VERBOSE_COUNT) {

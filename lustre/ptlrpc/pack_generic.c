@@ -2150,12 +2150,18 @@ static void print_lum (struct lov_user_md *lum)
 	CDEBUG(D_OTHER, "lov_user_md %p:\n", lum);
 	CDEBUG(D_OTHER, "\tlmm_magic: %#x\n", lum->lmm_magic);
 	CDEBUG(D_OTHER, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
-	CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", ostid_id(&lum->lmm_oi));
-	CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", ostid_seq(&lum->lmm_oi));
+	CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", lmm_oi_id(&lum->lmm_oi));
+	CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lmm_oi_seq(&lum->lmm_oi));
 	CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lum->lmm_stripe_size);
 	CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lum->lmm_stripe_count);
 	CDEBUG(D_OTHER, "\tlmm_stripe_offset/lmm_layout_gen: %#x\n",
 			lum->lmm_stripe_offset);
+}
+
+static void lustre_swab_lmm_oi(struct ost_id *oi)
+{
+	__swab64s(&oi->oi.oi_id);
+	__swab64s(&oi->oi.oi_seq);
 }
 
 static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
@@ -2163,7 +2169,7 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
 	ENTRY;
 	__swab32s(&lum->lmm_magic);
 	__swab32s(&lum->lmm_pattern);
-	lustre_swab_ost_id(&lum->lmm_oi);
+	lustre_swab_lmm_oi(&lum->lmm_oi);
 	__swab32s(&lum->lmm_stripe_size);
 	__swab16s(&lum->lmm_stripe_count);
 	__swab16s(&lum->lmm_stripe_offset);
@@ -2196,7 +2202,7 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
 	CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
 	__swab32s(&lmm->lmm_magic);
 	__swab32s(&lmm->lmm_pattern);
-	lustre_swab_ost_id(&lmm->lmm_oi);
+	lustre_swab_lmm_oi(&lmm->lmm_oi);
 	__swab32s(&lmm->lmm_stripe_size);
 	__swab16s(&lmm->lmm_stripe_count);
 	__swab16s(&lmm->lmm_layout_gen);

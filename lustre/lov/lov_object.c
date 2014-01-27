@@ -230,7 +230,11 @@ static int lov_init_raid0(const struct lu_env *env,
                         struct lov_oinfo *oinfo = lsm->lsm_oinfo[i];
                         int ost_idx = oinfo->loi_ost_idx;
 
-                        ostid_to_fid(ofid, &oinfo->loi_oi, oinfo->loi_ost_idx);
+                        result = ostid_to_fid(ofid, &oinfo->loi_oi,
+					      oinfo->loi_ost_idx);
+			if (result != 0)
+				GOTO(out, result);
+
                         subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
                         subconf->u.coc_oinfo = oinfo;
                         LASSERTF(subdev != NULL, "not init ost %d\n", ost_idx);
@@ -250,6 +254,7 @@ static int lov_init_raid0(const struct lu_env *env,
                 }
         } else
                 result = -ENOMEM;
+out:
         RETURN(result);
 }
 

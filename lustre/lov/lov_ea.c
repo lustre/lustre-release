@@ -68,7 +68,7 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                 return -EINVAL;
         }
 
-	if (ostid_id(&lmm->lmm_oi) == 0) {
+	if (lmm_oi_id(&lmm->lmm_oi) == 0) {
 		CERROR("zero object id\n");
 		lov_dump_lmm(D_WARNING, lmm);
 		return -EINVAL;
@@ -140,7 +140,7 @@ static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
 	 * This supposes lov_mds_md_v1/v3 first fields are
 	 * are the same
 	 */
-	ostid_le_to_cpu(&lmm->lmm_oi, &lsm->lsm_oi);
+	lmm_oi_le_to_cpu(&lsm->lsm_oi, &lmm->lmm_oi);
 	lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
 	lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
 	lsm->lsm_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);

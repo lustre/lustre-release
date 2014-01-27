@@ -393,7 +393,7 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			rc = sizeof(struct lov_user_md_v1);
 		} else if (buf->lb_len >= sizeof(struct lov_user_md_v1)) {
 			lum->lmm_magic = LOV_USER_MAGIC_V1;
-			ostid_set_seq(&lum->lmm_oi, FID_SEQ_LOV_DEFAULT);
+			lmm_oi_set_seq(&lum->lmm_oi, FID_SEQ_LOV_DEFAULT);
 			lum->lmm_pattern = desc->ld_pattern;
 			lum->lmm_stripe_size = desc->ld_default_stripe_size;
 			lum->lmm_stripe_count = desc->ld_default_stripe_count;
@@ -930,8 +930,8 @@ static int lod_declare_object_create(const struct lu_env *env,
 
 		v3->lmm_magic = cpu_to_le32(LOV_MAGIC_V3);
 		v3->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
-		fid_to_ostid(lu_object_fid(&dt->do_lu), &v3->lmm_oi);
-		ostid_cpu_to_le(&v3->lmm_oi, &v3->lmm_oi);
+		fid_to_lmm_oi(lu_object_fid(&dt->do_lu), &v3->lmm_oi);
+		lmm_oi_cpu_to_le(&v3->lmm_oi, &v3->lmm_oi);
 		v3->lmm_stripe_size = cpu_to_le32(lo->ldo_def_stripe_size);
 		v3->lmm_stripe_count = cpu_to_le32(lo->ldo_def_stripenr);
 		v3->lmm_stripe_offset = cpu_to_le16(lo->ldo_def_stripe_offset);

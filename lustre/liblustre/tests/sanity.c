@@ -1257,9 +1257,9 @@ int t55(char *name)
         if (opt_verbose) {
 		printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
 		printf("lmm_object_id:      "LPX64"\n",
-						ostid_id(&lum->lmm_oi));
+						lmm_oi_id(&lum->lmm_oi));
 		printf("lmm_object_seq:     "LPX64"\n",
-						ostid_seq(&lum->lmm_oi));
+						lmm_oi_seq(&lum->lmm_oi));
 		printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
 		printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
 		printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
@@ -1325,9 +1325,9 @@ int t55(char *name)
 	if (opt_verbose) {
 		printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
 		printf("lmm_object_id:      "LPX64"\n",
-						ostid_id(&lum->lmm_oi));
+						lmm_oi_id(&lum->lmm_oi));
 		printf("lmm_object_seq:     "LPX64"\n",
-						ostid_seq(&lum->lmm_oi));
+						lmm_oi_seq(&lum->lmm_oi));
 		printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
 		printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
 		printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
