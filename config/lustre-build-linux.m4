@@ -550,10 +550,15 @@ else
 				. $O2IBPATH/ofed_patch.mk
 			fi
 		else
-			case $RHEL_KERNEL_VERSION in
-				2.6.32-358*)
-					EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
-			esac
+			if test x$RHEL_KERNEL = xyes; then
+				case $RHEL_KERNEL_VERSION in
+					2.6.32-358*)
+						EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
+				esac
+			elif test x$SUSE_KERNEL = xyes; then
+				SP=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
+				EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE -DCONFIG_COMPAT_SLES_11_$SP"
+			fi
 		fi
 		if test -n "$BACKPORT_INCLUDES"; then
 			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
