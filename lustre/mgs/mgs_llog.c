@@ -2714,33 +2714,38 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
 
 static int mgs_wlp_lcfg(const struct lu_env *env,
 			struct mgs_device *mgs, struct fs_db *fsdb,
-                        struct mgs_target_info *mti,
-                        char *logname, struct lustre_cfg_bufs *bufs,
-                        char *tgtname, char *ptr)
+			struct mgs_target_info *mti,
+			char *logname, struct lustre_cfg_bufs *bufs,
+			char *tgtname, char *ptr)
 {
-        char comment[MTI_NAME_MAXLEN];
-        char *tmp;
-        struct lustre_cfg *lcfg;
-        int rc, del;
+	char comment[MTI_NAME_MAXLEN];
+	char *tmp;
+	struct lustre_cfg *lcfg;
+	int rc, del;
 
-        /* Erase any old settings of this same parameter */
-        memcpy(comment, ptr, MTI_NAME_MAXLEN);
-        comment[MTI_NAME_MAXLEN - 1] = 0;
-        /* But don't try to match the value. */
-        if ((tmp = strchr(comment, '=')))
-            *tmp = 0;
-        /* FIXME we should skip settings that are the same as old values */
+	/* Erase any old settings of this same parameter */
+	memcpy(comment, ptr, MTI_NAME_MAXLEN);
+	comment[MTI_NAME_MAXLEN - 1] = 0;
+	/* But don't try to match the value. */
+	tmp = strchr(comment, '=');
+	if (tmp)
+		*tmp = 0;
+	/* FIXME we should skip settings that are the same as old values */
 	rc = mgs_modify(env, mgs, fsdb, mti, logname, tgtname, comment,CM_SKIP);
 	if (rc < 0)
 		return rc;
-        del = mgs_param_empty(ptr);
+	del = mgs_param_empty(ptr);
 
-        LCONSOLE_INFO("%sing parameter %s.%s in log %s\n", del ? "Disabl" : rc ?
-                      "Sett" : "Modify", tgtname, comment, logname);
-        if (del)
-                return rc;
+	LCONSOLE_INFO("%s parameter %s.%s in log %s\n", del ? "Disabling" : rc ?
+		      "Setting" : "Modifying", tgtname, comment, logname);
+	if (del) {
+		/* mgs_modify() will return 1 if nothing had to be done */
+		if (rc == 1)
+			rc = 0;
+		return rc;
+	}
 
-        lustre_cfg_bufs_reset(bufs, tgtname);
+	lustre_cfg_bufs_reset(bufs, tgtname);
 	lustre_cfg_bufs_set_string(bufs, 1, ptr);
 	if (mti->mti_flags & LDD_F_PARAM2)
 		lustre_cfg_bufs_set_string(bufs, 2, LCTL_UPCALL);
@@ -2748,11 +2753,11 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	lcfg = lustre_cfg_new((mti->mti_flags & LDD_F_PARAM2) ?
 			      LCFG_SET_PARAM : LCFG_PARAM, bufs);
 
-        if (!lcfg)
-                return -ENOMEM;
+	if (!lcfg)
+		return -ENOMEM;
 	rc = mgs_write_log_direct(env, mgs, fsdb, logname,lcfg,tgtname,comment);
-        lustre_cfg_free(lcfg);
-        return rc;
+	lustre_cfg_free(lcfg);
+	return rc;
 }
 
 static int mgs_write_log_param2(const struct lu_env *env,
