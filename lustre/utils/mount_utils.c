@@ -102,31 +102,19 @@ int run_command(char *cmd, int cmdsz)
 
 int add_param(char *buf, char *key, char *val)
 {
-	char *sub_val = NULL;
-	int   buflen = strlen(buf);
-	int   end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
-	int   start = 0;
-	int   keylen = 0;
+	int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
+	int start = strlen(buf);
+	int keylen = 0;
 
-	if (key != NULL)
+	if (key)
 		keylen = strlen(key);
-
-	start = buflen;
-	while ((sub_val = strsep(&val, ",")) != NULL) {
-		if (*sub_val == 0)
-			continue;
-
-		if (start + 1 + keylen + strlen(sub_val) >= end) {
-			fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
-				progname, buf, key != NULL ? key : "", sub_val);
-			buf[buflen] = '\0';
-			return 1;
-		}
-
-		sprintf(buf + start, " %s%s", key != NULL ? key : "", sub_val);
-		start = strlen(buf);
+	if (start + 1 + keylen + strlen(val) >= end) {
+		fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
+			progname, buf, key ? key : "", val);
+		return 1;
 	}
 
+	sprintf(buf + start, " %s%s", key ? key : "", val);
 	return 0;
 }
 

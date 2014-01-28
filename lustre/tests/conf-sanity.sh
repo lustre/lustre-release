@@ -1319,7 +1319,9 @@ test_32newtarball() {
 		count=$(($T32_BLIMIT / 1024 / 2))
 	chown $T32_QID.$T32_QID $tmp/src/t32_qf_old
 
-	formatall
+	# format ost with comma-separated NIDs to verify LU-4460
+	local failnid="$(h2$NETTYPE 1.2.3.4),$(h2$NETTYPE 4.3.2.1)"
+	MGSNID="$MGSNID,$MGSNID" OSTOPT="--failnode=$failnid" formatall
 
 	setupall
 

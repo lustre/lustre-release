@@ -1032,7 +1032,7 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
  */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
-        char *s1, *s2, *devname = NULL;
+	char *s1, *s2, *s3, *devname = NULL;
         struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
         int rc = 0;
         ENTRY;
@@ -1068,6 +1068,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 /* Skip whitespace and extra commas */
                 while (*s1 == ' ' || *s1 == ',')
                         s1++;
+		s3 = s1;
 
                 /* Client options are parsed in ll_options: eg. flock,
                    user_xattr, acl */
@@ -1105,6 +1106,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			rc = lmd_parse_mgs(lmd, &s2);
 			if (rc)
 				goto invalid;
+			s3 = s2;
 			clear++;
                 } else if (strncmp(s1, "writeconf", 9) == 0) {
                         lmd->lmd_flags |= LMD_FLG_WRITECONF;
@@ -1141,13 +1143,23 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		} else if (strncmp(s1, "param=", 6) == 0) {
 			int length;
 			char *tail = strchr(s1 + 6, ',');
-			if (tail == NULL)
+			if (tail == NULL) {
 				length = strlen(s1);
-			else
-				length = tail - s1;
+			} else {
+				lnet_nid_t nid;
+				char      *param_str = tail + 1;
+				int        supplementary = 1;
+
+				while (class_parse_nid_quiet(param_str, &nid,
+							     &param_str) == 0) {
+					supplementary = 0;
+				}
+				length = param_str - s1 - supplementary;
+			}
 			length -= 6;
 			strncat(lmd->lmd_params, s1 + 6, length);
 			strcat(lmd->lmd_params, " ");
+			s3 = s1 + 6 + length;
 			clear++;
 		} else if (strncmp(s1, "osd=", 4) == 0) {
 			rc = lmd_parse_string(&lmd->lmd_osd_type, s1 + 4);
@@ -1165,8 +1177,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         break;
                 }
 
-                /* Find next opt */
-                s2 = strchr(s1, ',');
+		/* Find next opt */
+		s2 = strchr(s3, ',');
                 if (s2 == NULL) {
                         if (clear)
                                 *s1 = '\0';
