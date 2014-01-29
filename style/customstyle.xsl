@@ -71,6 +71,30 @@
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
+		<xsl:when test="@condition = 'l26'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.6'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l27'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.7'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l28'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.8'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l29'">
+			<xsl:call-template name='textdecoration_1'>
+				<xsl:with-param name='version' select="'introduced in Lustre 2.9'"/>
+				<xsl:with-param name='chunkid' select="$id"/>
+			</xsl:call-template>
+		</xsl:when>
 		<xsl:otherwise>
 			<xsl:call-template name='textdecoration_1'>
 				<xsl:with-param name='version' select="'unrecognised Lustre version'"/>
@@ -143,6 +167,18 @@
 	</xsl:if>
 	<xsl:if test="@condition='l25'">
 		<span class='floatright'>L 2.5 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l26'">
+		<span class='floatright'>L 2.6 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l27'">
+		<span class='floatright'>L 2.7 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l28'">
+		<span class='floatright'>L 2.8 </span>
+	</xsl:if>
+	<xsl:if test="@condition='l29'">
+		<span class='floatright'>L 2.9 </span>
 	</xsl:if>
 </xsl:template>
 
