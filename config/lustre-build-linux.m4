@@ -644,7 +644,7 @@ LB_CONFIG_OFED_BACKPORTS
 # or check
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
-grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
+grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX_OBJ/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
 	export=0
