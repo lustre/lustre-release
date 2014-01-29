@@ -960,6 +960,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_def_acl = NULL;
 		spin_lock_init(&lli->lli_sa_lock);
 		lli->lli_opendir_pid = 0;
+		lli->lli_lmv_md = NULL;
 	} else {
 		sema_init(&lli->lli_size_sem, 1);
 		lli->lli_size_sem_owner = NULL;
