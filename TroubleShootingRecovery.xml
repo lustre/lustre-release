@@ -261,6 +261,10 @@ lfsck: fixed 0 errors</screen>
             restoring from a file-level MDT backup (<xref linkend="dbdoclet.50438207_71633"/>), or
             in case the OI table is otherwise corrupted. Later phases of LFSCK will add further
             checks to the Lustre distributed file system state.</para>
+        <para condition='l24'>In Lustre software release 2.4, LFSCK can verify and repairing FID-in-Dirent and LinkEA consistency.
+</para>
+        <para condition='l26'>In Lustre software release 2.6, LFSCK can verify and repair MDT-OST file layout inconsistency. File layout inconsistencies between MDT-objects and OST-objects that are checked and corrected include dangling reference, unreferenced OST-objects, mismatched references and multiple references.
+</para>
 	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc</literal> file system
             interfaces. LFSCK supports three types of interface: switch interfaces, status
             interfaces and adjustments interfaces. These interfaces are detailed below.</para>
@@ -270,30 +274,32 @@ lfsck: fixed 0 errors</screen>
             <title>Manually Starting LFSCK</title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl lfsck_start -M | --device <replaceable>MDT_device</replaceable> \
+                <screen>lctl lfsck_start -M | --device <replaceable>[MDT,OST]_device</replaceable> \
                     [-e | --error <replaceable>error_handle</replaceable>] \
                     [-h | --help] \
-                    [-m | --method <replaceable>iteration_method</replaceable>] \
                     [-n | --dryrun <replaceable>switch</replaceable>] \
                     [-r | --reset] \
                     [-s | --speed <replaceable>speed_limit</replaceable>] \
-                    [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>]
+                    [-A | --all] \
+                    [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
+                    [-w | --windows <replaceable>win_size</replaceable>] \
+                    [-o | --orphan]
                 </screen>
             </section>
             <section>
                 <title>Description</title>
-                <para>This is command is used by LFSCK after the MDT is mounted.</para>
+                <para>This command is used by LFSCK after the MDT is mounted.</para>
             </section>
             <section>
                 <title>Options</title>
                 <para>The various <literal>lfsck_start</literal> options are listed and described below. For a complete list of available options, type <literal>lctl lfsck_start -h</literal>.</para>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <thead>
                             <row>
-                                <entry nameend="c2" namest="c1">
+                                <entry>
                                     <para><emphasis role="bold">Option</emphasis></para>
                                 </entry>
                                 <entry>
@@ -307,7 +313,7 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-M | --device</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>The MDT device to start LFSCK on. This will be a requirement when multiple MDTs are supported.</para>
+                                    <para>The MDT or OST device to start LFSCK/scrub on.</para>
                                 </entry>
                             </row>
                             <row>
@@ -323,15 +329,7 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-h | --help</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>Operating help.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-m | --method</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Method for scanning the MDT device. Currently only <literal>otable</literal> (object table based) iteration is supported. If it is not specified, the saved value (when resuming from checkpoint) will be used if present.</para>
+                                    <para>Operating help information.</para>
                                 </entry>
                             </row>
                             <row>
@@ -339,7 +337,7 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-n | --dryrun</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>Perform a trial without making any changes.</para>
+                                    <para>Perform a trial without making any changes. <literal>off</literal> (default) or <literal>on</literal>.</para>
                                 </entry>
                             </row>
                             <row>
@@ -360,12 +358,37 @@ lfsck: fixed 0 errors</screen>
                             </row>
                             <row>
                                 <entry>
+                                    <para><literal>-A | --all</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para condition='l26'>Start LFSCK on all devices via a single lctl command. It is not only used for layout consistency check/repair, but also for other LFSCK components, such as LFSCK for namespace consistency (LFSCK 1.5) and for DNE consistency check/repair in the future.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
                                     <para><literal>-t | --type</literal> </para>
                                 </entry>
                                 <entry>
                                     <para>The type of checking/repairing that should be performed. The new LFSCK framework provides a single interface for a variety of system consistency checking/repairing operations including:</para>
-<para>Without a specified option: check and repair object index (OI Scrub.)</para>
+<para>Without a specified option, the LFSCK component(s) which ran last time and did not finish or the component(s) corresponding to some known system inconsistency, will be started. Anytime the LFSCK is triggered, the OI scrub will run automatically, so there is no need to specify OI_scrub.</para>
 <para condition='l24'><literal>namespace</literal>: check and repair FID-in-Dirent and LinkEA consistency.</para>
+<para condition='l26'><literal>layout</literal>: check and repair MDT-OST inconsistency.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para><literal>-w | --windows</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para condition='l26'>The windows size for async requests pipeline.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para><literal>-o | --orphan</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para condition='l26'>Handle orphan objects, such as orphan OST-objects for layout LFSCK.</para>
                                 </entry>
                             </row>
                         </tbody>
@@ -377,24 +400,25 @@ lfsck: fixed 0 errors</screen>
             <title>Manually Stopping LFSCK</title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl lfsck_stop -M | --device <replaceable>MDT_device</replaceable> \
+                <screen>lctl lfsck_stop -M | --device <replaceable>[MDT,OST]_device</replaceable> \
+                    [-A | --all] \
                     [-h | --help]
                 </screen>
             </section>
             <section>
                 <title>Description</title>
-                <para>This is command is used by LFSCK after the MDT is mounted.</para>
+                <para>This command is used by LFSCK after the MDT is mounted.</para>
             </section>
             <section>
                 <title>Options</title>
-                <para>The various <literal>lfsck_stop</literal> options are listed and described below. For a complete list of available options, type <literal>lctl lfsck_stop h</literal>.</para>
+                <para>The various <literal>lfsck_stop</literal> options are listed and described below. For a complete list of available options, type <literal>lctl lfsck_stop -h</literal>.</para>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <thead>
                             <row>
-                                <entry nameend="c2" namest="c1">
+                                <entry>
                                     <para><emphasis role="bold">Option</emphasis></para>
                                 </entry>
                                 <entry>
@@ -408,7 +432,15 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-M | --device</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>The MDT device to start LFSCK on. This will be a requirement when multiple MDTs are supported.</para>
+                                    <para>The MDT or OST device to stop LFSCK/scrub on.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para><literal>-A | --all</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para>Stop LFSCK on all devices.</para>
                                 </entry>
                             </row>
                             <row>
@@ -416,7 +448,7 @@ lfsck: fixed 0 errors</screen>
                                     <para><literal>-h | --help</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para>Operating help.</para>
+                                    <para>Operating help information.</para>
                                 </entry>
                             </row>
                         </tbody>
@@ -431,7 +463,7 @@ lfsck: fixed 0 errors</screen>
             <title>LFSCK status of OI Scrub via <literal>procfs</literal></title>
             <section >
                 <title>Synopsis</title>
-                <screen>lctl get_param -n osd-ldisk.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
+                <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
                 </screen>
             </section>
             <section>
@@ -441,12 +473,12 @@ lfsck: fixed 0 errors</screen>
             <section>
                 <title>Output</title>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <thead>
                             <row>
-                                <entry nameend="c2" namest="c1">
+                                <entry>
                                     <para><emphasis role="bold">Information</emphasis></para>
                                 </entry>
                                 <entry>
@@ -491,13 +523,16 @@ lfsck: fixed 0 errors</screen>
                                         <listitem><para><literal>Checked</literal> total number of objects scanned.</para></listitem>
                                         <listitem><para><literal>Updated</literal> total number of objects repaired.</para></listitem>
                                         <listitem><para><literal>Failed</literal> total number of objects that failed to be repaired.</para></listitem>
-                                        <listitem><para><literal>Ignored</literal> total number of objects marked <literal>I_LUSTER_NOSCRUB</literal>.</para></listitem>
+                                        <listitem><para><literal>No Scrub</literal> total number of objects marked <literal>LDISKFS_STATE_LUSTRE_NOSCRUB and skipped</literal>.</para></listitem>
                                         <listitem><para><literal>IGIF</literal> total number of objects IGIF scanned.</para></listitem>
                                         <listitem><para><literal>Prior Updated</literal> how many objects have been repaired which are triggered by parallel RPC.</para></listitem>
                                         <listitem><para><literal>Success Count</literal> total number of completed OI_scrub runs on the device.</para></listitem>
                                         <listitem><para><literal>Run Time</literal> how long the scrub has run, tally from the time of scanning from the beginning of the specified MDT device, not include the paused/failure time among checkpoints.</para></listitem>
                                         <listitem><para><literal>Average Speed</literal> calculated by dividing <literal>Checked</literal> by <literal>run_time</literal>.</para></listitem>
                                         <listitem><para><literal>Real-Time Speed</literal> the speed since last checkpoint if the OI_scrub is running.</para></listitem>
+                                        <listitem><para><literal>Scanned</literal> total number of objects under /lost+found that have been scanned.</para></listitem>
+                                        <listitem><para><literal>Repaired</literal> total number of objects under /lost+found that have been recovered.</para></listitem>
+                                        <listitem><para><literal>Failed</literal> total number of objects under /lost+found failed to be scanned or failed to be recovered.</para></listitem>
                                     </itemizedlist>
                                 </entry>
                             </row>
@@ -515,17 +550,17 @@ lfsck: fixed 0 errors</screen>
             </section>
             <section>
                 <title>Description</title>
-                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as follows:</para>
+                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the synopsis.</para>
             </section>
             <section>
                 <title>Output</title>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <thead>
                             <row>
-                                <entry nameend="c2" namest="c1">
+                                <entry>
                                     <para><emphasis role="bold">Information</emphasis></para>
                                 </entry>
                                 <entry>
@@ -550,7 +585,7 @@ lfsck: fixed 0 errors</screen>
                                                   entries have been discovered),
                                                   <literal>upgrade</literal> (from Lustre software
                                                   release 1.8 IGIF format.)</para></listitem>
-                                        <listitem><para>Parameters: including <literal>dryrun</literal> and <literal>failout</literal>.</para></listitem>
+                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal> and <literal>failout</literal>.</para></listitem>
                                         <listitem><para>Time Since Last Completed.</para></listitem>
                                         <listitem><para>Time Since Latest Start.</para></listitem>
                                         <listitem><para>Time Since Last Checkpoint.</para></listitem>
@@ -576,8 +611,95 @@ lfsck: fixed 0 errors</screen>
                                         <listitem><para><literal>Dirs</literal> total number of directories scanned.</para></listitem>
                                         <listitem><para><literal>M-linked</literal> total number of multiple-linked objects that have been scanned.</para></listitem>
                                         <listitem><para><literal>Nlinks Repaired</literal> total number of objects with nlink attributes that have been repaired.</para></listitem>
-                                        <listitem><para><literal>Name-entry Added</literal> total number of objects that have had a name entry added back to the namespace.</para></listitem>
-                                        <listitem><para><literal>Success Count</literal> the total number off completed LFSCK runs on the device.</para></listitem>
+                                        <listitem><para><literal>Lost_found</literal> total number of objects that have had a name entry added back to the namespace.</para></listitem>
+                                        <listitem><para><literal>Success Count</literal> the total number of completed LFSCK runs on the device.</para></listitem>
+                                        <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
+                                        <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
+                                        <listitem><para><literal>Average Speed Phase1</literal> calculated by dividing <literal>checked_phase1</literal> by <literal>run_time_phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Average Speed Phase2</literal> calculated by dividing <literal>checked_phase2</literal> by <literal>run_time_phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Real-Time Speed Phase1</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Real-Time Speed Phase2</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase2</literal>.</para></listitem>
+                                    </itemizedlist>
+                                </entry>
+                            </row>
+                        </tbody>
+                    </tgroup>
+                </informaltable>
+            </section>
+        </section>
+        <section condition='l26'>
+            <title>LFSCK status of layout via <literal>procfs</literal></title>
+            <section >
+                <title>Synopsis</title>
+                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_layout
+lctl get_param -n obdfilter.<replaceable>FSNAME</replaceable>-<replaceable>OST_device</replaceable>.lfsck_layout
+                </screen>
+            </section>
+            <section>
+                <title>Description</title>
+                <para>The <literal>layout</literal> component is responsible for checking and repairing MDT-OST inconsistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_layout</literal>, and in the OBD layer, named <literal>lfsck_layout</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the synopsis.</para>
+            </section>
+            <section>
+                <title>Output</title>
+                <informaltable frame="all">
+                    <tgroup cols="2">
+                        <colspec colname="c1" colwidth="3*"/>
+                        <colspec colname="c2" colwidth="7*"/>
+                        <thead>
+                            <row>
+                                <entry>
+                                    <para><emphasis role="bold">Information</emphasis></para>
+                                </entry>
+                                <entry>
+                                    <para><emphasis role="bold">Detail</emphasis></para>
+                                </entry>
+                            </row>
+                        </thead>
+                        <tbody>
+                            <row>
+                                <entry>
+                                    <para>General Information</para>
+                                </entry>
+                                <entry>
+                                    <itemizedlist>
+                                        <listitem><para>Name: <literal>lfsck_layout</literal></para></listitem>
+                                        <listitem><para>LFSCK namespace magic.</para></listitem>
+                                        <listitem><para>LFSCK namespace version..</para></listitem>
+                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, <literal>crashed</literal>, <literal>partial</literal>, <literal>co-failed</literal>, <literal>co-stopped</literal>, or <literal>co-paused</literal>.</para></listitem>
+                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been
+                                                  completed), <literal>inconsistent</literal> (one
+                                                  or more MDT-OST inconsistencies
+                                                  have been discovered),
+                                                  <literal>incomplete</literal> (some MDT or OST did not participate in the LFSCK or failed to finish the LFSCK) or <literal>crashed_lastid</literal> (the lastid files on the OST crashed and needs to be rebuilt).</para></listitem>
+                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal> and <literal>failout</literal>.</para></listitem>
+                                        <listitem><para>Time Since Last Completed.</para></listitem>
+                                        <listitem><para>Time Since Latest Start.</para></listitem>
+                                        <listitem><para>Time Since Last Checkpoint.</para></listitem>
+                                        <listitem><para>Latest Start Position: the position the checking began most recently.</para></listitem>
+                                        <listitem><para>Last Checkpoint Position.</para></listitem>
+                                        <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
+                                        <listitem><para>Current Position.</para></listitem>
+                                    </itemizedlist>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para>Statistics</para>
+                                </entry>
+                                <entry>
+                                    <itemizedlist>
+                                        <listitem><para><literal>Success Count:</literal> the total number of completed LFSCK runs on the device.</para></listitem>
+                                        <listitem><para><literal>Repaired Dangling:</literal> total number of MDT-objects with dangling reference have been repaired in the scanning-phase1.</para></listitem>
+                                        <listitem><para><literal>Repaired Unmatched Pairs</literal> total number of unmatched MDT and OST-object paris have been repaired in the scanning-phase1</para></listitem>
+                                        <listitem><para><literal>Repaired Multiple Referenced</literal> total number of OST-objects with multiple reference have been repaired in the scanning-phase1.</para></listitem>
+                                        <listitem><para><literal>Repaired Orphan</literal> total number of orphan OST-objects have been repaired in the scanning-phase2.</para></listitem>
+                                        <listitem><para><literal>Repaired Inconsistent Owner</literal> total number.of OST-objects with incorrect owner information have been repaired in the scanning-phase1.</para></listitem>
+                                        <listitem><para><literal>Repaired Others</literal> total number of.other inconsistency repaired in the scanning phases. </para></listitem>
+                                        <listitem><para><literal>Skipped</literal> Number of skipped objects.</para></listitem>
+                                        <listitem><para><literal>Failed Phase1</literal> total number of objects that failed to be repaired during <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Failed Phase2</literal> total number of objects that failed to be repaired during <literal>scanning-phase2</literal>.</para></listitem>
+                                        <listitem><para><literal>Checked Phase1</literal> total number of objects scanned during <literal>scanning-phase1</literal>.</para></listitem>
+                                        <listitem><para><literal>Checked Phase2</literal> total number of objects scanned during <literal>scanning-phase2</literal>.</para></listitem>
                                         <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
                                         <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
                                         <listitem><para><literal>Average Speed Phase1</literal> calculated by dividing <literal>checked_phase1</literal> by <literal>run_time_phase1</literal>.</para></listitem>
@@ -595,12 +717,12 @@ lfsck: fixed 0 errors</screen>
     </section>
     <section>
         <title>LFSCK adjustment interface</title>
-        <section>
+        <section condition='l26'>
             <title>Rate control</title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl set_param mdt.${FSNAME}-${MDT_device}.lfsck_speed_limit=N
-                </screen>
+                <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=N
+lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=N</screen>
             </section>
             <section>
                 <title>Description</title>
@@ -609,7 +731,7 @@ lfsck: fixed 0 errors</screen>
             <section>
                 <title>Values</title>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <tbody>
@@ -648,7 +770,7 @@ lfsck: fixed 0 errors</screen>
             <section>
                 <title>Values</title>
                 <informaltable frame="all">
-                    <tgroup cols="3">
+                    <tgroup cols="2">
                         <colspec colname="c1" colwidth="3*"/>
                         <colspec colname="c2" colwidth="7*"/>
                         <tbody>
