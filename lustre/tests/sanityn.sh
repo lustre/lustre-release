@@ -358,6 +358,16 @@ test_14d() { # bug 10921
 }
 run_test 14d "chmod of executing file is still possible ========"
 
+test_14e() { # LU-4398
+	test_mkdir -p $DIR1/$tdir
+	rm -f $DIR1/$tdir/echo
+	cp /bin/echo $DIR1/$tdir/echo
+	$DIR1/$tdir/echo Hi
+	$DIR1/$tdir/echo Hi
+	echo Bye > $DIR2/$tdir/echo
+}
+run_test 14e "conflicting locks are flushed on open"
+
 test_15() {	# bug 974 - ENOSPC
 	echo "PATH=$PATH"
 	sh oos2.sh $MOUNT1 $MOUNT2

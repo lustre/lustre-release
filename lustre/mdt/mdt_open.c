@@ -1218,30 +1218,29 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		/* normal open holds read mode of open sem */
 		down_read(&obj->mot_open_sem);
 
+		if (open_flags & FMODE_WRITE)
+			lm = LCK_CW;
+		else if (open_flags & MDS_FMODE_EXEC)
+			lm = LCK_PR;
+		else
+			lm = LCK_CR;
+
 		if (open_flags & MDS_OPEN_LOCK) {
-			if (open_flags & FMODE_WRITE)
-				lm = LCK_CW;
-			else if (open_flags & MDS_FMODE_EXEC)
-				lm = LCK_PR;
-			else
-				lm = LCK_CR;
-
 			*ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN;
-		} else if (atomic_read(&obj->mot_lease_count) > 0) {
-			if (open_flags & FMODE_WRITE)
-				lm = LCK_CW;
-			else
-				lm = LCK_CR;
-
-			/* revoke lease */
-			*ibits = MDS_INODELOCK_OPEN;
+		} else if (open_flags & (FMODE_WRITE | MDS_FMODE_EXEC) ||
+			   atomic_read(&obj->mot_lease_count) > 0) {
+			/* We need to flush conflicting locks or revoke a lease.
+			 * In either case there is no need to acquire a layout
+			 * lock since it won't be returned to the client. */
 			try_layout = false;
-
+			*ibits = MDS_INODELOCK_OPEN;
 			lhc = &info->mti_lh[MDT_LH_LOCAL];
 		}
-		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
-			PFID(mdt_object_fid(obj)),
-			atomic_read(&obj->mot_open_count), lm);
+
+		CDEBUG(D_INODE, "normal open FID = "DFID", open_count = %d, "
+		       "lm = %d\n",
+		       PFID(mdt_object_fid(obj)),
+		       atomic_read(&obj->mot_open_count), lm);
 	}
 
 	mdt_lock_reg_init(lhc, lm);
