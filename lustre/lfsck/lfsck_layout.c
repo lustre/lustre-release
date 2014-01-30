@@ -117,7 +117,6 @@ struct lfsck_layout_master_data {
 	struct list_head	llmd_mdt_phase2_list;
 
 	struct ptlrpc_thread	llmd_thread;
-	atomic_t		llmd_rpcs_in_flight;
 	__u32			llmd_touch_gen;
 	int			llmd_prefetched;
 	int			llmd_assistant_status;
@@ -1285,13 +1284,6 @@ static int lfsck_layout_assistant(void *args)
 		while (!list_empty(&llmd->llmd_req_list)) {
 			bool wakeup = false;
 
-			l_wait_event(athread->t_ctl_waitq,
-				     bk->lb_async_windows == 0 ||
-				     atomic_read(&llmd->llmd_rpcs_in_flight) <
-						bk->lb_async_windows ||
-				     llmd->llmd_exit,
-				     &lwi);
-
 			if (unlikely(llmd->llmd_exit))
 				GOTO(cleanup1, rc = llmd->llmd_post_result);
 
@@ -1318,8 +1310,7 @@ static int lfsck_layout_assistant(void *args)
 		}
 
 		/* Wakeup the master engine if it is waiting in checkpoint. */
-		if (atomic_read(&llmd->llmd_rpcs_in_flight) == 0)
-			wake_up_all(&mthread->t_ctl_waitq);
+		wake_up_all(&mthread->t_ctl_waitq);
 
 		l_wait_event(athread->t_ctl_waitq,
 			     !lfsck_layout_req_empty(llmd) ||
@@ -1442,10 +1433,6 @@ cleanup1:
 
 	LASSERTF(llmd->llmd_prefetched == 0, "unmatched prefeteched objs %d\n",
 		 llmd->llmd_prefetched);
-
-	l_wait_event(athread->t_ctl_waitq,
-		     atomic_read(&llmd->llmd_rpcs_in_flight) == 0,
-		     &lwi);
 
 cleanup2:
 	memset(lr, 0, sizeof(*lr));
@@ -1807,8 +1794,7 @@ static int lfsck_layout_master_checkpoint(const struct lu_env *env,
 		return 0;
 
 	l_wait_event(mthread->t_ctl_waitq,
-		     (list_empty(&llmd->llmd_req_list) &&
-		      atomic_read(&llmd->llmd_rpcs_in_flight) == 0) ||
+		     list_empty(&llmd->llmd_req_list) ||
 		     !thread_is_running(mthread) ||
 		     thread_is_stopped(athread),
 		     &lwi);
@@ -2129,8 +2115,7 @@ static int lfsck_layout_master_post(const struct lu_env *env,
 
 	wake_up_all(&athread->t_ctl_waitq);
 	l_wait_event(mthread->t_ctl_waitq,
-		     (result > 0 && list_empty(&llmd->llmd_req_list) &&
-		      atomic_read(&llmd->llmd_rpcs_in_flight) == 0) ||
+		     (result > 0 && list_empty(&llmd->llmd_req_list)) ||
 		     thread_is_stopped(athread),
 		     &lwi);
 
@@ -2526,7 +2511,6 @@ static void lfsck_layout_master_data_release(const struct lu_env *env,
 	LASSERT(thread_is_init(&llmd->llmd_thread) ||
 		thread_is_stopped(&llmd->llmd_thread));
 	LASSERT(list_empty(&llmd->llmd_req_list));
-	LASSERT(atomic_read(&llmd->llmd_rpcs_in_flight) == 0);
 
 	com->lc_data = NULL;
 
@@ -2881,7 +2865,6 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		INIT_LIST_HEAD(&llmd->llmd_mdt_phase1_list);
 		INIT_LIST_HEAD(&llmd->llmd_mdt_phase2_list);
 		init_waitqueue_head(&llmd->llmd_thread.t_ctl_waitq);
-		atomic_set(&llmd->llmd_rpcs_in_flight, 0);
 		com->lc_data = llmd;
 	} else {
 		struct lfsck_layout_slave_data *llsd;

@@ -46,6 +46,8 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_fid.h>
+#include <lustre_update.h>
+#include <lu_target.h>
 
 /*
  * Infrastructure to support tracking of last committed llog record
@@ -184,6 +186,15 @@ struct osp_device {
 	int				 opd_statfs_maxage;
 
 	cfs_proc_dir_entry_t		*opd_symlink;
+
+	/* If the caller wants to do some idempotent async operations on
+	 * remote server, it can append the async remote requests on the
+	 * osp_device::opd_async_requests via declare() functions, these
+	 * requests can be packed together and sent to the remote server
+	 * via single OUT RPC later. */
+	struct update_request		*opd_async_requests;
+	/* Protect current operations on opd_async_requests. */
+	struct mutex			 opd_async_requests_mutex;
 };
 
 #define opd_pre_lock			opd_pre->osp_pre_lock
@@ -200,17 +211,40 @@ struct osp_device {
 
 extern struct kmem_cache *osp_object_kmem;
 
+/* The first part of oxe_buf is xattr name, and is '\0' terminated.
+ * The left part is for value, binary mode. */
+struct osp_xattr_entry {
+	struct list_head	 oxe_list;
+	atomic_t		 oxe_ref;
+	void			*oxe_value;
+	int			 oxe_buflen;
+	int			 oxe_namelen;
+	int			 oxe_vallen;
+	unsigned int		 oxe_exist:1,
+				 oxe_ready:1;
+	char			 oxe_buf[0];
+};
+
+struct osp_object_attr {
+	struct lu_attr		ooa_attr;
+	struct list_head	ooa_xattr_list;
+};
+
 /* this is a top object */
 struct osp_object {
 	struct lu_object_header	opo_header;
 	struct dt_object	opo_obj;
 	unsigned int		opo_reserved:1,
 				opo_new:1,
-				opo_empty:1;
+				opo_empty:1,
+				opo_non_exist:1;
 
 	/* read/write lock for md osp object */
 	struct rw_semaphore	opo_sem;
 	const struct lu_env	*opo_owner;
+	struct osp_object_attr *opo_ooa;
+	/* Protect opo_ooa. */
+	spinlock_t		opo_lock;
 };
 
 extern struct lu_object_operations osp_lu_obj_ops;
@@ -238,6 +272,11 @@ struct osp_thread_info {
 	struct ldlm_res_id	 osi_resid;
 	struct obdo		 osi_obdo;
 };
+
+static inline bool is_remote_trans(struct thandle *th)
+{
+	return th->th_dev->dd_ops == &osp_dt_ops;
+}
 
 static inline void osp_objid_buf_prep(struct lu_buf *buf, loff_t *off,
 				      __u32 *id, int index)
@@ -409,14 +448,49 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 	return imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_FID;
 }
 
+typedef int (*osp_async_update_interpterer_t)(const struct lu_env *env,
+					      struct update_reply *reply,
+					      struct osp_object *obj,
+					      void *data, int index, int rc);
+
 /* osp_dev.c */
 void osp_update_last_id(struct osp_device *d, obd_id objid);
 extern struct llog_operations osp_mds_ost_orig_logops;
 
-/* osp_md_object.c */
+/* osp_trans.c */
+struct update_request *
+osp_find_or_create_async_update_request(struct osp_device *osp);
+int osp_insert_async_update(const struct lu_env *env,
+			    struct update_request *update, int op,
+			    struct osp_object *obj, int count,
+			    int *lens, const char **bufs, void *data,
+			    osp_async_update_interpterer_t interpterer);
+int osp_unplug_async_update(const struct lu_env *env,
+			    struct osp_device *osp,
+			    struct update_request *update);
+struct thandle *osp_trans_create(const struct lu_env *env,
+				 struct dt_device *d);
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th);
 int osp_trans_stop(const struct lu_env *env, struct thandle *th);
+
+/* osp_object.c */
+int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
+		 struct lu_attr *attr, struct lustre_capa *capa);
+int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
+		  struct lu_buf *buf, const char *name,
+		  struct lustre_capa *capa);
+int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			  const struct lu_buf *buf, const char *name,
+			  int flag, struct thandle *th);
+int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
+		  const struct lu_buf *buf, const char *name, int fl,
+		  struct thandle *th, struct lustre_capa *capa);
+int osp_declare_object_destroy(const struct lu_env *env,
+			       struct dt_object *dt, struct thandle *th);
+int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th);
+
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d);

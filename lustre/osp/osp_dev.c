@@ -489,10 +489,11 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 }
 
 const struct dt_device_operations osp_dt_ops = {
-	.dt_statfs	= osp_statfs,
-	.dt_sync	= osp_sync,
-	.dt_trans_start = osp_trans_start,
-	.dt_trans_stop  = osp_trans_stop,
+	.dt_statfs	 = osp_statfs,
+	.dt_sync	 = osp_sync,
+	.dt_trans_create = osp_trans_create,
+	.dt_trans_start  = osp_trans_start,
+	.dt_trans_stop   = osp_trans_stop,
 };
 
 static int osp_connect_to_osd(const struct lu_env *env, struct osp_device *m,
@@ -547,6 +548,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 
 	ENTRY;
 
+	mutex_init(&m->opd_async_requests_mutex);
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	if (obd == NULL) {
 		CERROR("Cannot find obd with name %s\n",
@@ -818,6 +820,11 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	int                rc;
 
 	ENTRY;
+
+	if (m->opd_async_requests != NULL) {
+		out_destroy_update_req(m->opd_async_requests);
+		m->opd_async_requests = NULL;
+	}
 
 	if (m->opd_storage_exp)
 		obd_disconnect(m->opd_storage_exp);
@@ -1198,7 +1205,7 @@ static struct lu_device_type osp_device_type = {
 	.ldt_tags     = LU_DEVICE_DT,
 	.ldt_name     = LUSTRE_OSP_NAME,
 	.ldt_ops      = &osp_device_type_ops,
-	.ldt_ctx_tags = LCT_MD_THREAD
+	.ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD,
 };
 
 static struct obd_ops osp_obd_device_ops = {

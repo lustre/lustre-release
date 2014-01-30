@@ -337,6 +337,23 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
 
+/* target/out_lib.c */
+struct update_request *
+out_find_update(struct thandle *th, struct dt_device *dt_dev);
+void out_destroy_update_req(struct update_request *update);
+struct update_request *out_create_update_req(struct dt_device *dt);
+struct update_request *out_find_create_update_loc(struct thandle *th,
+						  struct dt_object *dt);
+int out_prep_update_req(const struct lu_env *env, struct obd_import *imp,
+			const struct update_buf *ubuf, int ubuf_len,
+			struct ptlrpc_request **reqp);
+int out_remote_sync(const struct lu_env *env, struct obd_import *imp,
+		    struct update_request *update,
+		    struct ptlrpc_request **reqp);
+int out_insert_update(const struct lu_env *env, struct update_request *update,
+		      int op, const struct lu_fid *fid, int count,
+		      int *lens, const char **bufs);
+
 enum {
 	ESERIOUS = 0x0001000
 };

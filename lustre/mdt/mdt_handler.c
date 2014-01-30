@@ -4926,6 +4926,9 @@ static int mdt_obd_connect(const struct lu_env *env,
 		rc = tgt_client_new(env, lexp);
                 if (rc == 0)
                         mdt_export_stats_init(obd, lexp, localdata);
+
+		/* For phase I, sync for cross-ref operation. */
+		lexp->exp_keep_sync = 1;
         }
 
         if (rc != 0) {
