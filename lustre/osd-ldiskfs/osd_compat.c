@@ -183,7 +183,6 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
 
-	ldiskfs_set_inode_state(d->d_inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	omm->omm_remote_parent = d;
 
 	/* Set LMA for remote parent inode */
@@ -399,7 +398,6 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	inode = d->d_inode;
-	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	dev->od_ost_map->om_root = d;
 
 	/* 'What the @fid is' is not imporatant, because the object
@@ -741,7 +739,6 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 		GOTO(out_put, rc = -EFAULT);
 
 	inode = seq_dir->d_inode;
-	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	osd_seq->oos_root = seq_dir;
 
 	/* 'What the @fid is' is not imporatant, because the object
@@ -772,7 +769,6 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 		}
 
 		inode = dir->d_inode;
-		ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 		osd_seq->oos_dirs[i] = dir;
 
 		/* 'What the @fid is' is not imporatant, because the object

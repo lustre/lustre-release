@@ -228,7 +228,6 @@ static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
-	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	/* 'What the @fid is' is not imporatant, because these objects
 	 * have no OI mappings, and only are visible inside the OSD.*/
 	lu_igif_build(&info->oti_fid, inode->i_ino, inode->i_generation);

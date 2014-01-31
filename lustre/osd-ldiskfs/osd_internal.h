@@ -78,9 +78,6 @@ struct inode;
 /* OI scrub should skip this inode. */
 #define LDISKFS_STATE_LUSTRE_NOSCRUB	31
 
-/* Do not add OI mapping for this inode. */
-#define LDISKFS_STATE_LUSTRE_NO_OI	30
-
 /** Enable thandle usage statistics */
 #define OSD_THANDLE_STATS (0)
 

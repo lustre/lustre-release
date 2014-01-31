@@ -808,43 +808,12 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
 		has_lma = true;
-		if (lma->lma_compat & LMAC_NOT_IN_OI) {
-			ldiskfs_set_inode_state(inode,
-						LDISKFS_STATE_LUSTRE_NO_OI);
+		if (lma->lma_compat & LMAC_NOT_IN_OI ||
+		    lma->lma_incompat & LMAI_AGENT)
 			return SCRUB_NEXT_CONTINUE;
-		}
 
 		*fid = lma->lma_self_fid;
-		if (unlikely(fid_is_last_id(fid))) {
-			if (scrub) {
-				if (lma->lma_compat & LMAC_FID_ON_OST)
-					rc = SCRUB_NEXT_OSTOBJ;
-				else
-					rc = osd_scrub_check_local_fldb(info,
-								dev, fid);
-			}
-
-			/* XXX: For up layer iteration, LAST_ID is a visible
-			 *	object to be checked and repaired, so return
-			 *	it directly.
-			 *
-			 *	In fact, the OSD layer otable-based iteration
-			 *	should not care about the FID type, it is the
-			 *	up layer user's duty (LFSCK) to handle that.
-			 *	It will be fixed in other patch in future. */
-			return rc;
-		}
-
-		if (fid_is_internal(&lma->lma_self_fid)) {
-			if (!scrub)
-				rc = SCRUB_NEXT_CONTINUE;
-			return rc;
-		}
-
 		if (!scrub)
-			return 0;
-
-		if (fid_is_namespace_visible(fid) && !fid_is_norm(fid))
 			return 0;
 
 		if (lma->lma_compat & LMAC_FID_ON_OST)
@@ -853,11 +822,17 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 		if (fid_is_idif(fid))
 			return SCRUB_NEXT_OSTOBJ_OLD;
 
-		if (lma->lma_incompat & LMAI_AGENT)
-			return SCRUB_NEXT_CONTINUE;
+		/* For local object. */
+		if (fid_is_internal(fid))
+			return 0;
 
-		/* Here, it may be MDT-object, or may be 2.4 OST-object.
-		 * Fall through. */
+		/* For external visible MDT-object with non-normal FID. */
+		if (fid_is_namespace_visible(fid) && !fid_is_norm(fid))
+			return 0;
+
+		/* For the object with normal FID, it may be MDT-object,
+		 * or may be 2.4 OST-object, need further distinguish.
+		 * Fall through to next section. */
 	}
 
 	if (rc == -ENODATA || rc == 0) {
@@ -930,11 +905,6 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       LDISKFS_SB(sb)->s_es->s_volume_name, pos, rc);
 		RETURN(rc);
 	}
-
-	/* If the inode has no OI mapping, then it is special locally used,
-	 * should be invisible to OI scrub or up layer LFSCK. */
-	if (ldiskfs_test_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI))
-		GOTO(put, rc = SCRUB_NEXT_CONTINUE);
 
 	if (scrub &&
 	    ldiskfs_test_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB)) {
@@ -2119,7 +2089,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	inode = filp->f_dentry->d_inode;
-	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	/* 'What the @fid is' is not imporatant, because the object
 	 * has no OI mapping, and only is visible inside the OSD.*/
 	lu_igif_build(fid, inode->i_ino, inode->i_generation);

@@ -306,6 +306,12 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				ostid_to_fid(fid, oi, idx);
 				update_lma = true;
 			}
+		} else if (!fid_is_norm(fid) && !fid_is_igif(fid) &&
+			   !fid_is_last_id(fid) && !fid_is_root(fid) &&
+			   !fid_seq_is_dot(fid_seq(fid))) {
+			/* If the FID/object is only used locally and invisible
+			 * to external nodes, then LFSCK will not handle it. */
+			goto checkpoint;
 		}
 
 		target = lfsck_object_find(env, lfsck, fid);

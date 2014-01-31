@@ -2031,7 +2031,6 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 		/* For new created object, it must be consistent,
 		 * and it is unnecessary to scrub against it. */
 		ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB);
-		ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
                 obj->oo_inode = inode;
                 result = 0;
         } else {
@@ -2639,7 +2638,6 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 		RETURN(local);
 	}
 
-	ldiskfs_set_inode_state(local, LDISKFS_STATE_LUSTRE_NO_OI);
 	/* Set special LMA flag for local agent inode */
 	rc = osd_ea_fid_set(info, local, fid, 0, LMAI_AGENT);
 	if (rc != 0) {
@@ -5622,7 +5620,6 @@ static int osd_mount(const struct lu_env *env,
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
 #endif
 	inode = osd_sb(o)->s_root->d_inode;
-	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
 	rc = osd_ea_fid_set(info, inode, fid, LMAC_NOT_IN_OI, 0);
 	if (rc != 0) {
