@@ -983,7 +983,7 @@ test_10d() {
 }
 run_test 10d "Archive a file on the default archive id"
 
-test_11() {
+test_11a() {
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
@@ -1007,7 +1007,31 @@ test_11() {
 	local AFILE=$(do_facet $SINGLEAGT ls $HSM_ARCHIVE'/*/*/*/*/*/*/'$fid) ||
 		error "fid $fid not in archive $HSM_ARCHIVE"
 }
-run_test 11 "Import a file"
+run_test 11a "Import a file"
+
+test_11b() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+	$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $f ||
+		error "hsm_archive failed"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	local FILE_HASH=$(md5sum $f)
+	rm -f $f
+
+	import_file $fid $f
+
+	echo "$FILE_HASH" | md5sum -c
+
+	[[ $? -eq 0 ]] || error "Restored file differs"
+
+	copytool_cleanup
+}
+run_test 11b "Import a deleted file using its FID"
 
 test_12a() {
 	# test needs a running copytool
