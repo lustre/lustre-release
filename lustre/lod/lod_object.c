@@ -44,6 +44,7 @@
 #include <lustre_fid.h>
 #include <lustre_lmv.h>
 #include <obd_lov.h>
+#include <md_object.h>
 
 #include "lod_internal.h"
 
@@ -2075,23 +2076,57 @@ static const struct dt_body_operations lod_body_lnk_ops = {
 	.dbo_write		= lod_write
 };
 
-static int lod_object_init(const struct lu_env *env, struct lu_object *o,
+static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 			   const struct lu_object_conf *conf)
 {
-	struct lod_device *d = lu2lod_dev(o->lo_dev);
-	struct lu_object  *below;
-	struct lu_device  *under;
+	struct lod_device	*lod	= lu2lod_dev(lo->lo_dev);
+	struct lu_device	*cdev	= NULL;
+	struct lu_object	*cobj;
+	struct lod_tgt_descs	*ltd	= NULL;
+	struct lod_tgt_desc	*tgt;
+	mdsno_t			 idx	= 0;
+	int			 type	= LU_SEQ_RANGE_ANY;
+	int			 rc;
 	ENTRY;
 
-	/*
-	 * create local object
-	 */
-	under = &d->lod_child->dd_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
-	if (below == NULL)
+	rc = lod_fld_lookup(env, lod, lu_object_fid(lo), &idx, &type);
+	if (rc != 0)
+		RETURN(rc);
+
+	if (type == LU_SEQ_RANGE_MDT &&
+	    idx == lu_site2seq(lo->lo_dev->ld_site)->ss_node_id) {
+		cdev = &lod->lod_child->dd_lu_dev;
+	} else if (type == LU_SEQ_RANGE_MDT) {
+		ltd = &lod->lod_mdt_descs;
+		lod_getref(ltd);
+	} else if (type == LU_SEQ_RANGE_OST) {
+		ltd = &lod->lod_ost_descs;
+		lod_getref(ltd);
+	} else {
+		LBUG();
+	}
+
+	if (ltd != NULL) {
+		if (ltd->ltd_tgts_size > idx &&
+		    cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx)) {
+			tgt = LTD_TGT(ltd, idx);
+
+			LASSERT(tgt != NULL);
+			LASSERT(tgt->ltd_tgt != NULL);
+
+			cdev = &(tgt->ltd_tgt->dd_lu_dev);
+		}
+		lod_putref(lod, ltd);
+	}
+
+	if (unlikely(cdev == NULL))
+		RETURN(-ENOENT);
+
+	cobj = cdev->ld_ops->ldo_object_alloc(env, lo->lo_header, cdev);
+	if (unlikely(cobj == NULL))
 		RETURN(-ENOMEM);
 
-	lu_object_add(o, below);
+	lu_object_add(lo, cobj);
 
 	RETURN(0);
 }
@@ -2169,52 +2204,4 @@ struct lu_object_operations lod_lu_obj_ops = {
 	.loo_object_free	= lod_object_free,
 	.loo_object_release	= lod_object_release,
 	.loo_object_print	= lod_object_print,
-};
-
-/**
- * Init remote lod object
- */
-static int lod_robject_init(const struct lu_env *env, struct lu_object *lo,
-			    const struct lu_object_conf *conf)
-{
-	struct lod_device *lod = lu2lod_dev(lo->lo_dev);
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lu_device  *c_dev = NULL;
-	struct lu_object  *c_obj;
-	int i;
-	ENTRY;
-
-	lod_getref(ltd);
-	if (ltd->ltd_tgts_size > 0) {
-		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-			struct lod_tgt_desc *tgt;
-			tgt = LTD_TGT(ltd, i);
-			LASSERT(tgt && tgt->ltd_tgt);
-			if (tgt->ltd_index ==
-			    lu2lod_obj(lo)->ldo_mds_num) {
-				c_dev = &(tgt->ltd_tgt->dd_lu_dev);
-				break;
-			}
-		}
-	}
-	lod_putref(lod, ltd);
-
-	if (unlikely(c_dev == NULL))
-		RETURN(-ENOENT);
-
-	c_obj = c_dev->ld_ops->ldo_object_alloc(env, lo->lo_header, c_dev);
-	if (unlikely(c_obj == NULL))
-		RETURN(-ENOMEM);
-
-	lu_object_add(lo, c_obj);
-
-	RETURN(0);
-}
-
-struct lu_object_operations lod_lu_robj_ops = {
-	.loo_object_init      = lod_robject_init,
-	.loo_object_start     = lod_object_start,
-	.loo_object_free      = lod_object_free,
-	.loo_object_release   = lod_object_release,
-	.loo_object_print     = lod_object_print,
 };

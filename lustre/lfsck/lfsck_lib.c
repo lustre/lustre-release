@@ -51,6 +51,7 @@ static void lfsck_key_fini(const struct lu_context *ctx,
 	struct lfsck_thread_info *info = data;
 
 	lu_buf_free(&info->lti_linkea_buf);
+	lu_buf_free(&info->lti_big_buf);
 	OBD_FREE_PTR(info);
 }
 

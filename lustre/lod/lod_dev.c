@@ -57,7 +57,7 @@
  * \param type indidcate the FID is on MDS or OST.
  **/
 int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
-		   const struct lu_fid *fid, __u32 *tgt, int type)
+		   const struct lu_fid *fid, __u32 *tgt, int *type)
 {
 	struct lu_seq_range	range = { 0 };
 	struct lu_server_fld	*server_fld;
@@ -65,24 +65,29 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	ENTRY;
 
 	LASSERTF(fid_is_sane(fid), "Invalid FID "DFID"\n", PFID(fid));
+
 	if (fid_is_idif(fid)) {
 		*tgt = fid_idif_ost_idx(fid);
+		*type = LU_SEQ_RANGE_OST;
 		RETURN(rc);
 	}
 
 	if (!lod->lod_initialized || (!fid_seq_in_fldb(fid_seq(fid)))) {
 		LASSERT(lu_site2seq(lod2lu_dev(lod)->ld_site) != NULL);
+
 		*tgt = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
+		*type = LU_SEQ_RANGE_MDT;
 		RETURN(rc);
 	}
 
 	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
-	fld_range_set_type(&range, type);
+	fld_range_set_type(&range, *type);
 	rc = fld_server_lookup(env, server_fld, fid_seq(fid), &range);
 	if (rc)
 		RETURN(rc);
 
 	*tgt = range.lsr_index;
+	*type = range.lsr_flags;
 
 	CDEBUG(D_INFO, "LOD: got tgt %x for sequence: "
 	       LPX64"\n", *tgt, fid_seq(fid));
@@ -91,7 +96,6 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 }
 
 extern struct lu_object_operations lod_lu_obj_ops;
-extern struct lu_object_operations lod_lu_robj_ops;
 extern struct dt_object_operations lod_obj_ops;
 
 /* Slab for OSD object allocation */
@@ -117,29 +121,17 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 {
 	struct lod_object	*lod_obj;
 	struct lu_object	*lu_obj;
-	const struct lu_fid	*fid = &hdr->loh_fid;
-	mdsno_t			mds;
-	int			rc = 0;
 	ENTRY;
 
 	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, __GFP_IO);
 	if (lod_obj == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	rc = lod_fld_lookup(env, lu2lod_dev(dev), fid, &mds, LU_SEQ_RANGE_MDT);
-	if (rc) {
-		OBD_SLAB_FREE_PTR(lod_obj, lod_object_kmem);
-		RETURN(ERR_PTR(rc));
-	}
-
-	lod_obj->ldo_mds_num = mds;
 	lu_obj = lod2lu_obj(lod_obj);
 	dt_object_init(&lod_obj->ldo_obj, NULL, dev);
 	lod_obj->ldo_obj.do_ops = &lod_obj_ops;
-	if (likely(mds == lu_site2seq(dev->ld_site)->ss_node_id))
-		lu_obj->lo_ops = &lod_lu_obj_ops;
-	else
-		lu_obj->lo_ops = &lod_lu_robj_ops;
+	lu_obj->lo_ops = &lod_lu_obj_ops;
+
 	RETURN(lu_obj);
 }
 
