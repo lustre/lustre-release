@@ -430,6 +430,7 @@ int fld_client_rpc(struct obd_export *exp,
 
 	LASSERT(exp != NULL);
 
+again:
 	imp = class_exp2cliimp(exp);
 	switch (fld_op) {
 	case FLD_QUERY:
@@ -443,8 +444,14 @@ int fld_client_rpc(struct obd_export *exp,
 		op = req_capsule_client_get(&req->rq_pill, &RMF_FLD_OPC);
 		*op = FLD_LOOKUP;
 
-		if (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS)
+		/* For MDS_MDS seq lookup, it will always use LWP connection,
+		 * but LWP will be evicted after restart, so cause the error.
+		 * so we will set no_delay for seq lookup request, once the
+		 * request fails because of the eviction. always retry here */
+		if (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) {
 			req->rq_allow_replay = 1;
+			req->rq_no_delay = 1;
+		}
 		break;
 	case FLD_READ:
 		req = ptlrpc_request_alloc_pack(imp, &RQF_FLD_READ,
@@ -473,8 +480,18 @@ int fld_client_rpc(struct obd_export *exp,
 	fld_enter_request(&exp->exp_obd->u.cli);
 	rc = ptlrpc_queue_wait(req);
 	fld_exit_request(&exp->exp_obd->u.cli);
-	if (rc)
+	if (rc != 0) {
+		if (rc == -EWOULDBLOCK) {
+			/* For no_delay req(see above), EWOULDBLOCK means the
+			 * connection is being evicted, but this seq lookup
+			 * should not return error, since it would cause
+			 * unecessary failure of the application, instead
+			 * it should retry here */
+			ptlrpc_req_finished(req);
+			goto again;
+		}
 		GOTO(out_req, rc);
+	}
 
 	if (fld_op == FLD_QUERY) {
 		prange = req_capsule_server_get(&req->rq_pill,

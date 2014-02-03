@@ -571,7 +571,7 @@ test_17m() {
 
 	echo "stop and checking mds${mds_index}: $cmd"
 	# e2fsck should not return error
-	stop mds${mds_index} -f
+	stop mds${mds_index}
 	do_facet mds${mds_index} $cmd || rc=$?
 
 	start mds${mds_index} $devname $MDS_MOUNT_OPTS
