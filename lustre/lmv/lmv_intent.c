@@ -179,7 +179,10 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	if (it->it_op & IT_CREAT) {
+	/* If it is ready to open the file by FID, do not need
+	 * allocate FID at all, otherwise it will confuse MDT */
+	if ((it->it_op & IT_CREAT) &&
+	    !(it->it_flags & MDS_OPEN_BY_FID)) {
 		/*
 		 * For open with IT_CREATE and for IT_CREATE cases allocate new
 		 * fid and setup FLD for it.
