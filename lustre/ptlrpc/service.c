@@ -1274,13 +1274,16 @@ ptlrpc_at_remove_timed(struct ptlrpc_request *req)
 	array->paa_count--;
 }
 
+/*
+ * Attempt to extend the request deadline by sending an early reply to the
+ * client.
+ */
 static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
         struct ptlrpc_request *reqcopy;
         struct lustre_msg *reqmsg;
         cfs_duration_t olddl = req->rq_deadline - cfs_time_current_sec();
-        time_t newdl;
         int rc;
         ENTRY;
 
@@ -1322,8 +1325,13 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 		at_measured(&svcpt->scp_at_estimate, min(at_extra,
 			    req->rq_export->exp_obd->obd_recovery_timeout / 4));
 	} else {
-		/* Fake our processing time into the future to ask the clients
-		 * for some extra amount of time */
+		/* We want to extend the request deadline by at_extra seconds,
+		 * so we set our service estimate to reflect how much time has
+		 * passed since this request arrived plus an additional
+		 * at_extra seconds. The client will calculate the new deadline
+		 * based on this service estimate (plus some additional time to
+		 * account for network latency). See ptlrpc_at_recv_early_reply
+		 */
 		at_measured(&svcpt->scp_at_estimate, at_extra +
 			    cfs_time_current_sec() -
 			    req->rq_arrival_time.tv_sec);
@@ -1340,7 +1348,6 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 			RETURN(-ETIMEDOUT);
 		}
 	}
-	newdl = cfs_time_current_sec() + at_get(&svcpt->scp_at_estimate);
 
 	reqcopy = ptlrpc_request_cache_alloc(GFP_NOFS);
 	if (reqcopy == NULL)
@@ -1386,13 +1393,14 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 
         rc = ptlrpc_send_reply(reqcopy, PTLRPC_REPLY_EARLY);
 
-        if (!rc) {
-                /* Adjust our own deadline to what we told the client */
-                req->rq_deadline = newdl;
-                req->rq_early_count++; /* number sent, server side */
-        } else {
-                DEBUG_REQ(D_ERROR, req, "Early reply send failed %d", rc);
-        }
+	if (!rc) {
+		/* Adjust our own deadline to what we told the client */
+		req->rq_deadline = req->rq_arrival_time.tv_sec +
+				   at_get(&svcpt->scp_at_estimate);
+		req->rq_early_count++; /* number sent, server side */
+	} else {
+		DEBUG_REQ(D_ERROR, req, "Early reply send failed %d", rc);
+	}
 
         /* Free the (early) reply state from lustre_pack_reply.
            (ptlrpc_send_reply takes it's own rs ref, so this is safe here) */
