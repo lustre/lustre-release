@@ -77,8 +77,10 @@
 
 #ifndef HAVE_LIBCFS_CPT
 
+#ifndef __KERNEL__
 typedef unsigned long		cpumask_t;
 typedef unsigned long		nodemask_t;
+#endif
 
 struct cfs_cpt_table {
 	/* # of CPU partitions */
@@ -193,6 +195,11 @@ void cfs_cpt_clear(struct cfs_cpt_table *cptab, int cpt);
  * nodes in this partition, it might return a different node id each time.
  */
 int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt);
+
+/**
+ * return number of HTs in the same core of \a cpu
+ */
+int cfs_cpu_ht_nsiblings(int cpu);
 
 /**
  * iterate over all CPU partitions in \a cptab
