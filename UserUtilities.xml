@@ -1067,10 +1067,26 @@ ext:       device_logical:         start..end              physical:            
           </row>
           <row>
             <entry>
+              <para> <literal>nomgs</literal></para>
+            </entry>
+            <entry>
+              <para>Start a MDT with a co-located MGS without starting the MGS</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
               <para> <literal>exclude</literal></para>
             </entry>
             <entry>
               <para>Starts with a dead OST</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para> <literal>md_stripe_cache_size</literal></para>
+            </entry>
+            <entry>
+              <para>Sets the stripe cache size for server side disk with a striped raid configuration</para>
             </entry>
           </row>
         </tbody>
@@ -1093,10 +1109,10 @@ ext:       device_logical:         start..end              physical:            
         <tbody>
           <row>
             <entry>
-              <para> <literal>flock</literal></para>
+              <para> <literal>flock/noflock/localflock</literal></para>
             </entry>
             <entry>
-              <para>Enables/disables flock support</para>
+              <para>Enables/disables global flock or local flock support</para>
             </entry>
           </row>
           <row>
@@ -1105,6 +1121,14 @@ ext:       device_logical:         start..end              physical:            
             </entry>
             <entry>
               <para>Enables/disables user-extended attributes</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para> <literal>user_fid2path/nouser_fid2path</literal></para>
+            </entry>
+            <entry>
+              <para condition='l23'>Enables/disables FID to path translation by regular users</para>
             </entry>
           </row>
           <row>

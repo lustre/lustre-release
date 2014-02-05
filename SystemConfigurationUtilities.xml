@@ -1952,6 +1952,38 @@ mount.lustre</title>
                 <para> Disables Access Control List support.</para>
               </entry>
             </row>
+            <row>
+              <entry>
+                <para> <literal>verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Enable mount/umount console messages.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>noverbose</literal></para>
+              </entry>
+              <entry>
+                <para> Disable mount/umount console messages.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>user_fid2path</literal></para>
+              </entry>
+              <entry>
+                <para condition='l23'>Enable FID to path translation by regular users. Note: This option allows a potential security hole because it allows regular users direct access to a file by its FID, bypassing POSIX path-based permission checks which could otherwise prevent the user from accessing a file in a directory that they do not have access to. Regular permission checks are still performed on the file itself, so the user cannot access a file to which they have no access rights.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nouser_fid2path</literal></para>
+              </entry>
+              <entry>
+                <para condition='l23'> Disable FID to path translation by regular users. Root and processes with CAP_DAC_READ_SEARCH can still perform FID to path translation.</para>
+              </entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>
@@ -1981,7 +2013,7 @@ mount.lustre</title>
             </row>
             <row>
               <entry>
-                <para> <literal>nomsgs</literal></para>
+                <para> <literal>nomgs</literal></para>
               </entry>
               <entry>
                 <para>  Starts only the MDT (with a co-located MGS), without starting the MGS.</para>
@@ -1993,30 +2025,6 @@ mount.lustre</title>
               </entry>
               <entry>
                 <para>  Starts a client or MDT with a colon-separated list of known inactive OSTs.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>nosvc</literal></para>
-              </entry>
-              <entry>
-                <para>  Only starts the MGC (and MGS, if co-located) for a target service, not the actual service.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>nomsgs</literal></para>
-              </entry>
-              <entry>
-                <para>  Starts a MDT with a co-located MGS, without starting the MGS.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>exclude=<replaceable>ostlist</replaceable></literal></para>
-              </entry>
-              <entry>
-                <para>  Starts a client or MDT with a (colon-separated) list of known inactive OSTs.</para>
               </entry>
             </row>
             <row>
