@@ -176,7 +176,7 @@ routes (&quot;&quot;)</title>
         <para><literal>routes=&quot;[tcp,vib] 2 [8-14/2]@elan&quot;</literal> says that 2 networks (<literal>tcp0</literal> and <literal>vib0</literal>) are accessible through 4 routers (<literal>8@elan</literal>, <literal>10@elan</literal>, <literal>12@elan</literal> and <literal>14@elan</literal>). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
         <para>Duplicate entries, entries that route to a local network, and entries that specify routers on a non-local network are ignored.</para>
         <para>Prior to release 2.5, a conflict between equivalent entries was resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent)..</para>
-        <para condition='125'>Since 2.5, equivalent entries are resolved in favor of the route with the lowest priority number or shorter hopcount if the priorities are equal. The priority, if omitted, defaults to 0.  The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
+        <para condition='l25'>Since 2.5, equivalent entries are resolved in favor of the route with the lowest priority number or shorter hopcount if the priorities are equal. The priority, if omitted, defaults to 0.  The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
         <para>It is an error to specify routes to the same destination with routers on different local networks.</para>
         <para>If the target network string contains no expansions, then the hopcount defaults to 1 and may be omitted (that is, the remote network is adjacent). In practice, this is true for most multi-network configurations. It is an error to specify an inconsistent hop count for a given target network. This is why an explicit hopcount is required if the target network string specifies more than one network.</para>
       </section>
@@ -264,7 +264,7 @@ forwarding (&quot;&quot;)</title>
       <section>
           <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>rnet_htable_size</tertiary></indexterm>
 <literal>rnet_htable_size</literal></title>
-        <para condition='123'><literal>rnet_htable_size</literal> is an integer that indicates how many remote networks the internal LNet hash table is configured to handle. <literal>rnet_htable_size</literal> is used for optimizing the hash table size and does not put a limit on how many remote networks you can have.  The default hash table size when this parameter is not specified is: 128.</para>
+        <para condition='l23'><literal>rnet_htable_size</literal> is an integer that indicates how many remote networks the internal LNet hash table is configured to handle. <literal>rnet_htable_size</literal> is used for optimizing the hash table size and does not put a limit on how many remote networks you can have.  The default hash table size when this parameter is not specified is: 128.</para>
       </section>
     </section>
     <section remap="h3" xml:id="section_ngq_qhy_zl">
