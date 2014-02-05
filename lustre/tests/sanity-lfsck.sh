@@ -43,7 +43,7 @@ check_and_setup_lustre
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14"
 
 build_test_filter
 
@@ -1273,6 +1273,53 @@ test_13() {
 		error "(3) Fail to repair crashed lmm_oi: $repaired"
 }
 run_test 13 "LFSCK can repair crashed lmm_oi"
+
+test_14() {
+	echo "#####"
+	echo "The OST-object referenced by the MDT-object should be there;"
+	echo "otherwise, the LFSCK should re-create the missed OST-object."
+	echo "#####"
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	echo "Inject failure stub to simulate dangling referenced MDT-object"
+	#define OBD_FAIL_LFSCK_DANGLING	0x1610
+	do_facet ost1 $LCTL set_param fail_loc=0x1610
+	createmany -o $DIR/$tdir/f 64
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	echo "'ls' should fail because of dangling referenced MDT-object"
+	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(1) ls should fail."
+
+	echo "Trigger layout LFSCK to find out dangling reference and fix them"
+	$START_LAYOUT || error "(2) Fail to start LFSCK for layout!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 6 || return 3
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_dangling/ { print $2 }')
+	[ $repaired -eq 32 ] ||
+		error "(4) Fail to repair dangling reference: $repaired"
+
+	echo "'ls' should success after layout LFSCK repairing"
+	ls -ail $DIR/$tdir > /dev/null || error "(5) ls should success."
+}
+run_test 14 "LFSCK can repair MDT-object with dangling reference"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

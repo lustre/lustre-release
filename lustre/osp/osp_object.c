@@ -864,10 +864,18 @@ static int osp_declare_object_create(const struct lu_env *env,
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object	*o = dt2osp_obj(dt);
-	const struct lu_fid	*fid;
+	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
 	int			 rc = 0;
 
 	ENTRY;
+
+	if (is_remote_trans(th)) {
+		LASSERT(fid_is_sane(fid));
+
+		rc = osp_md_declare_object_create(env, dt, attr, hint, dof, th);
+
+		RETURN(rc);
+	}
 
 	/* should happen to non-0 OSP only so that at least one object
 	 * has been already declared in the scenario and LOD should
@@ -876,7 +884,6 @@ static int osp_declare_object_create(const struct lu_env *env,
 		RETURN(-ENOSPC);
 
 	LASSERT(d->opd_last_used_oid_file);
-	fid = lu_object_fid(&dt->do_lu);
 
 	/*
 	 * There can be gaps in precreated ids and record to unlink llog
@@ -935,6 +942,16 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	int			rc = 0;
 	struct lu_fid		*fid = &osi->osi_fid;
 	ENTRY;
+
+	if (is_remote_trans(th)) {
+		LASSERT(fid_is_sane(lu_object_fid(&dt->do_lu)));
+
+		rc = osp_md_object_create(env, dt, attr, hint, dof, th);
+		if (rc == 0)
+			o->opo_non_exist = 0;
+
+		RETURN(rc);
+	}
 
 	o->opo_non_exist = 0;
 	if (o->opo_reserved) {

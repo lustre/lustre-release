@@ -295,7 +295,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		fo = batch[i];
 		LASSERT(fo);
 
-		if (likely(!ofd_object_exists(fo))) {
+		if (likely(!ofd_object_exists(fo) &&
+			   !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING))) {
 			next = ofd_object_child(fo);
 			LASSERT(next != NULL);
 

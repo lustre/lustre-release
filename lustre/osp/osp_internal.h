@@ -497,6 +497,16 @@ int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		   struct thandle *th);
 
+/* osp_md_object.c */
+int osp_md_declare_object_create(const struct lu_env *env,
+				 struct dt_object *dt,
+				 struct lu_attr *attr,
+				 struct dt_allocation_hint *hint,
+				 struct dt_object_format *dof,
+				 struct thandle *th);
+int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
+			 struct lu_attr *attr, struct dt_allocation_hint *hint,
+			 struct dt_object_format *dof, struct thandle *th);
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d);

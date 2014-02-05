@@ -38,12 +38,12 @@
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
-static int osp_md_declare_object_create(const struct lu_env *env,
-					struct dt_object *dt,
-					struct lu_attr *attr,
-					struct dt_allocation_hint *hint,
-					struct dt_object_format *dof,
-					struct thandle *th)
+int osp_md_declare_object_create(const struct lu_env *env,
+				 struct dt_object *dt,
+				 struct lu_attr *attr,
+				 struct dt_allocation_hint *hint,
+				 struct dt_object_format *dof,
+				 struct thandle *th)
 {
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct update_request	*update;
@@ -62,7 +62,6 @@ static int osp_md_declare_object_create(const struct lu_env *env,
 	}
 
 	osi->osi_obdo.o_valid = 0;
-	LASSERT(S_ISDIR(attr->la_mode));
 	obdo_from_la(&osi->osi_obdo, attr, attr->la_valid);
 	lustre_set_wire_obdo(NULL, &osi->osi_obdo, &osi->osi_obdo);
 	obdo_cpu_to_le(&osi->osi_obdo, &osi->osi_obdo);
@@ -132,11 +131,9 @@ out:
 	return rc;
 }
 
-static int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
-				struct lu_attr *attr,
-				struct dt_allocation_hint *hint,
-				struct dt_object_format *dof,
-				struct thandle *th)
+int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
+			 struct lu_attr *attr, struct dt_allocation_hint *hint,
+			 struct dt_object_format *dof, struct thandle *th)
 {
 	struct osp_object  *obj = dt2osp_obj(dt);
 
@@ -147,7 +144,8 @@ static int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	 * if creation reaches here, it means the object has been created
 	 * successfully */
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
-	obj->opo_empty = 1;
+	if (S_ISDIR(attr->la_mode))
+		obj->opo_empty = 1;
 
 	return 0;
 }
