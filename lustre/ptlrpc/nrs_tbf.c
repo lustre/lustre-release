@@ -1211,7 +1211,7 @@ int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
 
 	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
 
-	switch (opc) {
+	switch ((enum nrs_ctl_tbf)opc) {
 	default:
 		RETURN(-EINVAL);
 
