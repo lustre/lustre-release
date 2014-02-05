@@ -368,6 +368,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd)
 	/* if previous failed then try found single OI from old filesystem */
 	rc = osd_oi_open(info, osd, OSD_OI_NAME_BASE, &oi[0], false);
 	if (rc == 0) { /* found single OI from old filesystem */
+		ldiskfs_clear_bit(0, sf->sf_oi_bitmap);
 		if (sf->sf_success_count == 0)
 			/* XXX: There is one corner case that if the OI_scrub
 			 *	file crashed or lost and we regard it upgrade,
