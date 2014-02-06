@@ -1999,7 +1999,13 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 	/* Return -EALREADY here so that we know that the /proc
 	 * entry already has been created */
 	if (old_stat != new_stat) {
-		nidstat_putref(old_stat);
+		spin_lock(&exp->exp_lock);
+		if (exp->exp_nid_stats) {
+			LASSERT(exp->exp_nid_stats == old_stat);
+			nidstat_putref(exp->exp_nid_stats);
+		}
+		exp->exp_nid_stats = old_stat;
+		spin_unlock(&exp->exp_lock);
 		GOTO(destroy_new, rc = -EALREADY);
 	}
         /* not found - create */
