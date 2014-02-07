@@ -2062,11 +2062,11 @@ test_30() {
 	# over-quota flag has not yet settled since we do not trigger async
 	# events based on grace time period expiration
 	$SHOW_QUOTA_USER
-	$RUNAS $DD of=$TESTFILE conv=notrunc oflag=append count=1 || true
+	$RUNAS $DD of=$TESTFILE conv=notrunc oflag=append count=4 || true
 	cancel_lru_locks osc
 	# now over-quota flag should be settled and further writes should fail
 	$SHOW_QUOTA_USER
-	$RUNAS $DD of=$TESTFILE conv=notrunc oflag=append count=1 &&
+	$RUNAS $DD of=$TESTFILE conv=notrunc oflag=append count=4 &&
 		error "grace times were reset"
 	# cleanup
 	cleanup_quota_test
