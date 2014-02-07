@@ -1513,48 +1513,51 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,
-                     __u64 start, __u64 end, struct thandle *th,
-                     struct lustre_capa *capa)
+		     __u64 start, __u64 end, struct thandle *th,
+		     struct lustre_capa *capa)
 {
-        struct osd_thandle *oh;
-        struct osd_object  *obj = osd_dt_obj(dt);
-        struct inode       *inode = obj->oo_inode;
-        handle_t           *h;
-        tid_t               tid;
+	struct osd_thandle *oh;
+	struct osd_object  *obj = osd_dt_obj(dt);
+	struct inode       *inode = obj->oo_inode;
+	handle_t           *h;
+	tid_t               tid;
 	int		   rc = 0, rc2 = 0;
-        ENTRY;
+	ENTRY;
 
-        LASSERT(end == OBD_OBJECT_EOF);
-        LASSERT(dt_object_exists(dt));
-        LASSERT(osd_invariant(obj));
+	LASSERT(end == OBD_OBJECT_EOF);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
 	ll_vfs_dq_init(inode);
 
-        LASSERT(th);
-        oh = container_of(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle->h_transaction != NULL);
+	LASSERT(th);
+	oh = container_of(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_PUNCH);
 
-        tid = oh->ot_handle->h_transaction->t_tid;
+	tid = oh->ot_handle->h_transaction->t_tid;
 
 	i_size_write(inode, start);
 	ll_truncate_pagecache(inode, start);
 #ifdef HAVE_INODEOPS_TRUNCATE
-	if (inode->i_op->truncate)
+	if (inode->i_op->truncate) {
 		inode->i_op->truncate(inode);
-#else
+	} else {
+#endif
 	if (!(inode->i_state & (I_NEW|I_FREEING)))
 		mutex_lock(&inode->i_mutex);
 	ldiskfs_truncate(inode);
 	if (!(inode->i_state & (I_NEW|I_FREEING)))
 		mutex_unlock(&inode->i_mutex);
+#ifdef HAVE_INODEOPS_TRUNCATE
+	}
 #endif
 
-        /*
-         * For a partial-page truncate, flush the page to disk immediately to
-         * avoid data corruption during direct disk write.  b=17397
-         */
+	/*
+	 * For a partial-page truncate, flush the page to disk immediately to
+	 * avoid data corruption during direct disk write.  b=17397
+	 */
 	if ((start & ~CFS_PAGE_MASK) != 0)
                 rc = filemap_fdatawrite_range(inode->i_mapping, start, start+1);
 
