@@ -908,7 +908,11 @@ static int weigh_cb(const struct lu_env *env, struct cl_io *io,
 {
 	struct cl_page *page = ops->ops_cl.cpl_page;
 
-	if (cl_page_is_vmlocked(env, page)) {
+	if (cl_page_is_vmlocked(env, page)
+#if defined(__KERNEL__)
+	    || PageDirty(page->cp_vmpage) || PageWriteback(page->cp_vmpage)
+#endif
+	   ) {
 		(*(unsigned long *)cbdata)++;
 		return CLP_GANG_ABORT;
 	}
