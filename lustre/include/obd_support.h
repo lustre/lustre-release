@@ -502,6 +502,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LFSCK_DELAY4		0x160e
 #define OBD_FAIL_LFSCK_BAD_LMMOI	0x160f
 #define OBD_FAIL_LFSCK_DANGLING 	0x1610
+#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
+#define OBD_FAIL_LFSCK_UNMATCHED_PAIR2	0x1612
 
 #define OBD_FAIL_LFSCK_NOTIFY_NET	0x16f0
 #define OBD_FAIL_LFSCK_QUERY_NET	0x16f1

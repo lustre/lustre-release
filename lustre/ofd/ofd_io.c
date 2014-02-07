@@ -354,6 +354,12 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	}
 
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+			ff->ff_parent.f_oid =
+			cpu_to_le32(le32_to_cpu(ff->ff_parent.f_oid) - 1);
+
 		info->fti_buf.lb_buf = ff;
 		info->fti_buf.lb_len = sizeof(*ff);
 		rc = dt_declare_xattr_set(env, dt_obj, &info->fti_buf,

@@ -144,8 +144,7 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	 * if creation reaches here, it means the object has been created
 	 * successfully */
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
-	if (S_ISDIR(attr->la_mode))
-		obj->opo_empty = 1;
+	obj->opo_empty = 1;
 
 	return 0;
 }
@@ -228,10 +227,8 @@ static void osp_md_ah_init(const struct lu_env *env,
 	ah->dah_mode = child_mode;
 }
 
-static int osp_md_declare_attr_set(const struct lu_env *env,
-				   struct dt_object *dt,
-				   const struct lu_attr *attr,
-				   struct thandle *th)
+int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
+			    const struct lu_attr *attr, struct thandle *th)
 {
 	struct osp_thread_info *osi = osp_env_info(env);
 	struct update_request  *update;
@@ -263,9 +260,9 @@ static int osp_md_declare_attr_set(const struct lu_env *env,
 	return rc;
 }
 
-static int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
-			   const struct lu_attr *attr, struct thandle *th,
-			   struct lustre_capa *capa)
+int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
+		    const struct lu_attr *attr, struct thandle *th,
+		    struct lustre_capa *capa)
 {
 	CDEBUG(D_INFO, "attr set object "DFID"\n",
 	       PFID(&dt->do_lu.lo_header->loh_fid));

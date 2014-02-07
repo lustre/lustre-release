@@ -431,10 +431,16 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (!(attr->la_valid & (LA_UID | LA_GID)))
 		RETURN(0);
 
-	/*
-	 * track all UID/GID changes via llog
-	 */
-	rc = osp_sync_declare_add(env, o, MDS_SETATTR64_REC, th);
+	if (!is_remote_trans(th))
+		/*
+		 * track all UID/GID changes via llog
+		 */
+		rc = osp_sync_declare_add(env, o, MDS_SETATTR64_REC, th);
+	else
+		/* It is for OST-object attr_set directly without updating
+		 * local MDT-object attribute. It is usually used by LFSCK. */
+		rc = osp_md_declare_attr_set(env, dt, attr, th);
+
 	if (rc != 0 || o->opo_ooa == NULL)
 		RETURN(rc);
 
@@ -476,13 +482,17 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
-	/*
-	 * once transaction is committed put proper command on
-	 * the queue going to our OST
-	 */
-	rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
-
-	/* XXX: send new uid/gid to OST ASAP? */
+	if (!is_remote_trans(th))
+		/*
+		 * once transaction is committed put proper command on
+		 * the queue going to our OST
+		 */
+		rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
+		/* XXX: send new uid/gid to OST ASAP? */
+	else
+		/* It is for OST-object attr_set directly without updating
+		 * local MDT-object attribute. It is usually used by LFSCK. */
+		rc = osp_md_attr_set(env, dt, attr, th, capa);
 
 	RETURN(rc);
 }

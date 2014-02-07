@@ -526,6 +526,7 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid2;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
+	struct lu_attr		lti_la3;
 	struct ost_id		lti_oi;
 	union {
 		struct lustre_mdt_attrs lti_lma;
