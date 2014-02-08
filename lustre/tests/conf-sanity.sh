@@ -2411,31 +2411,30 @@ test_37() {
 run_test 37 "verify set tunables works for symlink device"
 
 test_38() { # bug 14222
-	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
-		return
-	fi
+	local fstype=$(facet_fstype $SINGLEMDS)
+	local mntpt=$TMP/$SINGLEMDS
 
 	setup
 	# like runtests
-	COUNT=10
-	SRC="/etc /bin"
-	FILES=`find $SRC -type f -mtime +1 | head -n $COUNT`
+	local COUNT=10
+	local SRC="/etc /bin"
+	local FILES=$(find $SRC -type f -mtime +1 | head -n $COUNT)
 	log "copying $(echo $FILES | wc -w) files to $DIR/$tdir"
 	mkdir -p $DIR/$tdir
-	tar cf - $FILES | tar xf - -C $DIR/$tdir || \
+	tar cf - $FILES | tar xf - -C $DIR/$tdir ||
 		error "copying $SRC to $DIR/$tdir"
 	sync
 	umount_client $MOUNT
+	do_facet $SINGLEMDS "$LCTL get_param osp.*.prealloc_next_id"
 	stop_mds
-	log "rename lov_objid file on MDS"
-	rm -f $TMP/lov_objid.orig
+	log "delete lov_objid file on MDS"
 
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
-	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
-	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet $SINGLEMDS "mkdir -p $mntpt; mount -t $fstype $MDSDEV $mntpt"||
+		error "mount -t $fstype $MDSDEV $mntpt failed (1)"
+	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid; rm $mntpt/lov_objid"
+	do_facet $SINGLEMDS "umount $mntpt" || error "umount failed (1)"
 
-	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.orig"
 	# check create in mds_lov_connect
 	start_mds
 	mount_client $MOUNT
@@ -2443,17 +2442,26 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
-	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.new"
-	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
+	do_facet $SINGLEMDS "$LCTL get_param osp.*.prealloc_next_id"
+	if [ "$ERROR" = "y" ]; then
+		# check it's updates in sync
+		umount_client $MOUNT
+		stop_mds
+		do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt;
+			od -Ax -td8 $mntpt/lov_objid; umount $mntpt"
+		error "old and new files are different after connect" || true
+	fi
+	touch $DIR/$tdir/f2 || error "f2 file create failed"
 
 	# check it's updates in sync
 	umount_client $MOUNT
 	stop_mds
 
-	do_facet $SINGLEMDS dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
-	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
-	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
+	do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt" ||
+		error "mount -t $fstype $MDSDEV $mntpt fail (3)"
+	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid"
+	do_facet $SINGLEMDS dd if=/dev/zero of=$mntpt/lov_objid.clear count=8
+	do_facet $SINGLEMDS "umount $mntpt" || error "umount failed (3)"
 
 	start_mds
 	mount_client $MOUNT
@@ -2461,11 +2469,14 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
-	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.new1"
+	touch $DIR/$tdir/f3 || error "f3 file create failed"
+	do_facet $SINGLEMDS "$LCTL get_param osp.*.prealloc_next_id"
 	umount_client $MOUNT
 	stop_mds
-	[ "$ERROR" = "y" ] && error "old and new files are different after sync" || true
+	do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt;
+		od -Ax -td8 $mntpt/lov_objid; umount $mntpt"
+	[ "$ERROR" = "y" ] &&
+		error "old and new files are different after sync" || true
 
 	log "files compared the same"
 	cleanup
