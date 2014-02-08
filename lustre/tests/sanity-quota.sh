@@ -863,6 +863,9 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota"
 
 # test dropping acquire request on master
 test_6() {
+	# LU-4422
+	[ $MDSCOUNT -ge 2 ] && skip "disable test_6 for DNE temporary" && return
+
 	local LIMIT=3 # 3M
 
 	# Clear dmesg so watchdog is not triggered by previous
