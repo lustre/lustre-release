@@ -516,6 +516,10 @@ enum lu_object_header_attr {
  */
 struct lu_object_header {
 	/**
+	 * Fid, uniquely identifying this object.
+	 */
+	struct lu_fid		loh_fid;
+	/**
 	 * Object flags from enum lu_object_header_flags. Set and checked
 	 * atomically.
 	 */
@@ -525,10 +529,6 @@ struct lu_object_header {
 	 */
 	atomic_t		loh_ref;
 	/**
-	 * Fid, uniquely identifying this object.
-	 */
-	struct lu_fid		loh_fid;
-	/**
 	 * Common object attributes, cached for efficiency. From enum
 	 * lu_object_header_attr.
 	 */
@@ -536,16 +536,16 @@ struct lu_object_header {
 	/**
 	 * Linkage into per-site hash table. Protected by lu_site::ls_guard.
 	 */
-	cfs_hlist_node_t	loh_hash;
+	struct hlist_node	loh_hash;
 	/**
 	 * Linkage into per-site LRU list. Protected by lu_site::ls_guard.
 	 */
-	cfs_list_t		loh_lru;
+	struct list_head	loh_lru;
 	/**
 	 * Linkage into list of layers. Never modified once set (except lately
 	 * during object destruction). No locking is necessary.
 	 */
-	cfs_list_t		loh_layers;
+	struct list_head	loh_layers;
 	/**
 	 * A list of references to this object, for debugging.
 	 */
