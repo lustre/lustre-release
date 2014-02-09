@@ -63,7 +63,7 @@
  * set of flag #defines we should stop including linux/fs.h
  */
 #warn remove kernel include
-#else
+#elif !defined(MS_RDONLY)
 #include <linux/fs.h>
 #endif
 
