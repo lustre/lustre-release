@@ -556,14 +556,21 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	}
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		const struct lu_fid	*fid;
+		struct lu_fid		*fid	= &info->lti_fid;
 		struct lod_device	*lod;
 		__u32			index;
 		int			type	= LU_SEQ_RANGE_OST;
 
 		lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 		LASSERT(lo->ldo_stripe[i]);
-		fid = lu_object_fid(&lo->ldo_stripe[i]->do_lu);
+
+		*fid = *lu_object_fid(&lo->ldo_stripe[i]->do_lu);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF)) {
+			if (cfs_fail_val == 0)
+				cfs_fail_val = fid->f_oid;
+			else
+				fid->f_oid = cfs_fail_val;
+		}
 
 		rc = fid_to_ostid(fid, &info->lti_ostid);
 		LASSERT(rc == 0);

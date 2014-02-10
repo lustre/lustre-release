@@ -431,7 +431,7 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (!(attr->la_valid & (LA_UID | LA_GID)))
 		RETURN(0);
 
-	if (!is_remote_trans(th))
+	if (!is_only_remote_trans(th))
 		/*
 		 * track all UID/GID changes via llog
 		 */
@@ -482,7 +482,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
-	if (!is_remote_trans(th))
+	if (!is_only_remote_trans(th))
 		/*
 		 * once transaction is committed put proper command on
 		 * the queue going to our OST
@@ -879,7 +879,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 	ENTRY;
 
-	if (is_remote_trans(th)) {
+	if (is_only_remote_trans(th)) {
 		LASSERT(fid_is_sane(fid));
 
 		rc = osp_md_declare_object_create(env, dt, attr, hint, dof, th);
@@ -953,7 +953,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	struct lu_fid		*fid = &osi->osi_fid;
 	ENTRY;
 
-	if (is_remote_trans(th)) {
+	if (is_only_remote_trans(th)) {
 		LASSERT(fid_is_sane(lu_object_fid(&dt->do_lu)));
 
 		rc = osp_md_object_create(env, dt, attr, hint, dof, th);

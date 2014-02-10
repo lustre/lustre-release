@@ -303,6 +303,9 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
 		if (!(attr->la_valid & (LA_UID | LA_GID)))
 			RETURN(rc);
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
+			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
 					LA_ATIME | LA_MTIME | LA_CTIME)))
@@ -380,6 +383,9 @@ static int lod_attr_set(const struct lu_env *env,
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
 		if (!(attr->la_valid & (LA_UID | LA_GID)))
 			RETURN(rc);
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
+			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
 					LA_ATIME | LA_MTIME | LA_CTIME)))

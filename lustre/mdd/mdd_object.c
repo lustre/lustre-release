@@ -888,20 +888,24 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
 		       la->la_mtime, la->la_ctime);
 
-        if (la_copy->la_valid & LA_FLAGS) {
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	if (la_copy->la_valid & LA_FLAGS) {
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-                if (rc == 0)
-                        mdd_flags_xlate(mdd_obj, la_copy->la_flags);
-        } else if (la_copy->la_valid) {            /* setattr */
+		if (rc == 0)
+			mdd_flags_xlate(mdd_obj, la_copy->la_flags);
+	} else if (la_copy->la_valid) { /* setattr */
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-        }
+	}
+	mdd_write_unlock(env, mdd_obj);
 
-        if (rc == 0)
-                rc = mdd_attr_set_changelog(env, obj, handle,
-					    la->la_valid);
+	if (rc == 0)
+		rc = mdd_attr_set_changelog(env, obj, handle, la->la_valid);
+
+	GOTO(stop, rc);
+
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+	mdd_trans_stop(env, mdd, rc, handle);
+	return rc;
 }
 
 static int mdd_xattr_sanity_check(const struct lu_env *env,

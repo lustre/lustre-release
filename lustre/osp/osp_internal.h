@@ -277,10 +277,8 @@ struct osp_thread_info {
  * no local updates at all */
 static inline bool is_only_remote_trans(struct thandle *th)
 {
-	return th->th_dev->dd_ops == &osp_dt_ops;
+	return th->th_dev != NULL && th->th_dev->dd_ops == &osp_dt_ops;
 }
-/* compat define for lfsck, to be removed soon */
-#define is_remote_trans(a) is_only_remote_trans(a)
 
 static inline void osp_objid_buf_prep(struct lu_buf *buf, loff_t *off,
 				      __u32 *id, int index)

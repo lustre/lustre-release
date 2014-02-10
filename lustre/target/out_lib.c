@@ -123,7 +123,8 @@ struct update_request *out_find_create_update_loc(struct thandle *th,
 
 	list_add_tail(&update->ur_list, &tu->tu_remote_update_list);
 
-	thandle_get(th);
+	if (!tu->tu_only_remote_trans)
+		thandle_get(th);
 
 	RETURN(update);
 }

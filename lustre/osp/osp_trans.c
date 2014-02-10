@@ -228,7 +228,7 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 {
 	struct thandle *th = NULL;
 	struct thandle_update *tu = NULL;
-	int rc;
+	int rc = 0;
 
 	OBD_ALLOC_PTR(th);
 	if (unlikely(th == NULL))
@@ -245,6 +245,8 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 
 	INIT_LIST_HEAD(&tu->tu_remote_update_list);
 	tu->tu_only_remote_trans = 1;
+	th->th_update = tu;
+
 out:
 	if (rc != 0) {
 		if (tu != NULL)
@@ -267,7 +269,7 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 
 	/* If the transaction only includes remote update, it should
 	 * still be asynchronous */
-	if (tu->tu_only_remote_trans) {
+	if (is_only_remote_trans(th)) {
 		struct osp_async_update_args	*args;
 		struct ptlrpc_request		*req;
 
@@ -323,7 +325,7 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 	 * If it is remote unlink, it will send the remote req before
 	 * the local transaction, i.e. delete the name entry remote
 	 * first, then destroy the local object. */
-	if (!tu->tu_only_remote_trans && !tu->tu_sent_after_local_trans)
+	if (!is_only_remote_trans(th) && !tu->tu_sent_after_local_trans)
 		rc = osp_trans_trigger(env, dt2osp_dev(dt), update, th);
 
 	return rc;
@@ -339,26 +341,34 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	LASSERT(tu != NULL);
 	/* Check whether there are updates related with this OSP */
 	update = out_find_update(tu, dt);
-	if (update == NULL)
-		return rc;
+	if (update == NULL) {
+		if (!is_only_remote_trans(th))
+			return rc;
+		goto put;
+	}
 
-	if (update->ur_buf->ub_count == 0)
-		GOTO(free, rc);
+	if (update->ur_buf->ub_count == 0) {
+		out_destroy_update_req(update);
+		goto put;
+	}
 
-	if (tu->tu_only_remote_trans) {
-		if (th->th_result == 0)
+	if (is_only_remote_trans(th)) {
+		if (th->th_result == 0) {
 			rc = osp_trans_trigger(env, dt2osp_dev(dt),
 					       update, th);
-		else
+		} else {
 			rc = th->th_result;
+			out_destroy_update_req(update);
+		}
 	} else {
 		if (tu->tu_sent_after_local_trans)
 			rc = osp_trans_trigger(env, dt2osp_dev(dt),
 					       update, th);
 		rc = update->ur_rc;
+		out_destroy_update_req(update);
 	}
-free:
-	out_destroy_update_req(update);
+
+put:
 	thandle_put(th);
 	return rc;
 }

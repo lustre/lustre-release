@@ -43,7 +43,7 @@ check_and_setup_lustre
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17"
 
 build_test_filter
 
@@ -1416,6 +1416,117 @@ test_15b() {
 		error "(3) Fail to repair unmatched pair: $repaired"
 }
 run_test 15b "LFSCK can repair unmatched MDT-object/OST-object pairs (2)"
+
+test_16() {
+	echo "#####"
+	echo "If the OST-object's owner information does not match the owner"
+	echo "information stored in the MDT-object, then the LFSCK trust the"
+	echo "MDT-object and update the OST-object's owner information."
+	echo "#####"
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1
+	cancel_lru_locks osc
+	sync
+	sleep 2
+
+	echo "Inject failure stub to skip OST-object owner changing"
+	#define OBD_FAIL_LFSCK_BAD_OWNER	0x1613
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1613
+	chown 1.1 $DIR/$tdir/f0
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	echo "Trigger layout LFSCK to find out inconsistent OST-object owner"
+	echo "and fix them"
+
+	$START_LAYOUT || error "(1) Fail to start LFSCK for layout!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 3 || return 2
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_inconsistent_owner/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(3) Fail to repair inconsistent owner: $repaired"
+}
+run_test 16 "LFSCK can repair inconsistent MDT-object/OST-object owner"
+
+test_17() {
+	echo "#####"
+	echo "If more than one MDT-objects reference the same OST-object,"
+	echo "and the OST-object only recognizes one MDT-object, then the"
+	echo "LFSCK should create new OST-objects for such non-recognized"
+	echo "MDT-objects."
+	echo "#####"
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	echo "Inject failure stub to make two MDT-objects to refernce"
+	echo "the OST-object"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	#define OBD_FAIL_LFSCK_MULTIPLE_REF	0x1614
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1614
+
+	dd if=/dev/zero of=$DIR/$tdir/guard bs=1M count=1
+	cancel_lru_locks osc
+	sync
+	sleep 2
+
+	createmany -o $DIR/$tdir/f 1 > /dev/null 2>&1
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	echo "$DIR/$tdir/f0 and $DIR/$tdir/guard use the same OST-objects"
+	local size=$(ls -l $DIR/$tdir/f0 | awk '{ print $5 }')
+	[ $size -eq 1048576 ] ||
+		error "(1) f0 (wrong) size should be 1048576, but got $size"
+
+	echo "Trigger layout LFSCK to find out multiple refenced MDT-objects"
+	echo "and fix them"
+
+	$START_LAYOUT || error "(2) Fail to start LFSCK for layout!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 3 || return 3
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_multiple_referenced/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to repair multiple references: $repaired"
+
+	echo "$DIR/$tdir/f0 and $DIR/$tdir/guard should use diff OST-objects"
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=2 ||
+		error "(5) Fail to write f0."
+	size=$(ls -l $DIR/$tdir/guard | awk '{ print $5 }')
+	[ $size -eq 1048576 ] ||
+		error "(6) guard size should be 1048576, but got $size"
+}
+run_test 17 "LFSCK can repair multiple references"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 
