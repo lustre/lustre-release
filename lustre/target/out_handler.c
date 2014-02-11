@@ -1318,6 +1318,12 @@ int out_handle(struct tgt_session_info *tsi)
 		if (IS_ERR(dt_obj))
 			GOTO(out, rc = PTR_ERR(dt_obj));
 
+		if (dt->dd_record_fid_accessed) {
+			lfsck_pack_rfa(&tti->tti_lr,
+				       lu_object_fid(&dt_obj->do_lu));
+			tgt_lfsck_in_notify(env, dt, &tti->tti_lr);
+		}
+
 		tti->tti_u.update.tti_dt_object = dt_obj;
 		tti->tti_u.update.tti_update = update;
 		tti->tti_u.update.tti_update_reply_index = i;

@@ -671,6 +671,7 @@ struct dt_device {
          * single-threaded start-up shut-down procedures.
          */
         cfs_list_t                         dd_txn_callbacks;
+	unsigned int			   dd_record_fid_accessed:1;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);

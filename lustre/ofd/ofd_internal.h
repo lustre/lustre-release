@@ -183,7 +183,8 @@ struct ofd_device {
 				  * supporting OBD_CONNECT_GRANT_PARAM? */
 				 ofd_grant_compat_disable:1,
 				 /* Protected by ofd_lastid_rwsem. */
-				 ofd_lastid_rebuilding:1;
+				 ofd_lastid_rebuilding:1,
+				 ofd_record_fid_accessed:1;
 	struct seq_server_site	 ofd_seq_site;
 	/* the limit of SOFT_SYNC RPCs that will trigger a soft sync */
 	unsigned int		 ofd_soft_sync_limit;
@@ -319,6 +320,7 @@ struct ofd_thread_info {
 	/* Space used by the I/O, used by grant code */
 	unsigned long			 fti_used;
 	struct ost_lvb			 fti_lvb;
+	struct lfsck_request		 fti_lr;
 };
 
 extern void target_recovery_fini(struct obd_device *obd);

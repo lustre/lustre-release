@@ -43,6 +43,7 @@
 
 #include <dt_object.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_lfsck.h>
 
 #include "ofd_internal.h"
 
@@ -294,6 +295,14 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	for (i = 0; i < nr; i++) {
 		fo = batch[i];
 		LASSERT(fo);
+
+		/* Only the new created objects need to be recorded. */
+		if (ofd->ofd_osd->dd_record_fid_accessed) {
+			lfsck_pack_rfa(&ofd_info(env)->fti_lr,
+				       lu_object_fid(&fo->ofo_obj.do_lu));
+			lfsck_in_notify(env, ofd->ofd_osd,
+					&ofd_info(env)->fti_lr);
+		}
 
 		if (likely(!ofd_object_exists(fo) &&
 			   !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING))) {

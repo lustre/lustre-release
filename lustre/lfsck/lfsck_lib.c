@@ -1544,6 +1544,7 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 	case LE_STOP:
 	case LE_PHASE1_DONE:
 	case LE_PHASE2_DONE:
+	case LE_FID_ACCESSED:
 		break;
 	default:
 		RETURN(-EOPNOTSUPP);
