@@ -932,11 +932,11 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 
 	LASSERT(lde);
 
-	lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
-
-	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)))
+	rc = -zap_cursor_retrieve(it->ozi_zc, za);
+	if (unlikely(rc != 0))
 		GOTO(out, rc);
 
+	lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
 	namelen = strlen(za->za_name);
 	if (namelen > NAME_MAX)
 		GOTO(out, rc = -EOVERFLOW);
