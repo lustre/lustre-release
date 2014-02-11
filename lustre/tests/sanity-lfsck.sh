@@ -1182,9 +1182,47 @@ test_12() {
 		createmany -o $DIR/${k}/f 100
 	done
 
-	echo "Trigger LFSCK on all targets by single command (limited speed)."
-	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
+	echo "Start namespace LFSCK on all targets by single command (-s 10)."
+	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
 		-s 10 || error "(2) Fail to start LFSCK on all devices!"
+
+	echo "All the LFSCK targets should be in 'scanning-phase1' status."
+	for k in $(seq $MDSCOUNT); do
+		local STATUS=$(do_facet mds${k} $LCTL get_param -n \
+				mdd.$(facet_svc mds${k}).lfsck_namespace |
+				awk '/^status/ { print $2 }')
+		[ "$STATUS" == "scanning-phase1" ] ||
+		error "(3) MDS${k} Expect 'scanning-phase1', but got '$STATUS'"
+	done
+
+	echo "Stop namespace LFSCK on all targets by single lctl command."
+	do_facet mds1 $LCTL lfsck_stop -M ${FSNAME}-MDT0000 -A ||
+		error "(4) Fail to stop LFSCK on all devices!"
+
+	echo "All the LFSCK targets should be in 'stopped' status."
+	for k in $(seq $MDSCOUNT); do
+		local STATUS=$(do_facet mds${k} $LCTL get_param -n \
+				mdd.$(facet_svc mds${k}).lfsck_namespace |
+				awk '/^status/ { print $2 }')
+		[ "$STATUS" == "stopped" ] ||
+			error "(5) MDS${k} Expect 'stopped', but got '$STATUS'"
+	done
+
+	echo "Re-start namespace LFSCK on all targets by single command (-s 0)."
+	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
+		-s 0 -r || error "(6) Fail to start LFSCK on all devices!"
+
+	echo "All the LFSCK targets should be in 'completed' status."
+	for k in $(seq $MDSCOUNT); do
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_namespace |
+			awk '/^status/ { print \\\$2 }'" "completed" 8 ||
+			error "(7) MDS${k} is not the expected 'completed'"
+	done
+
+	echo "Start layout LFSCK on all targets by single command (-s 10)."
+	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
+		-s 10 || error "(8) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'scanning-phase1' status."
 	for k in $(seq $MDSCOUNT); do
@@ -1192,12 +1230,12 @@ test_12() {
 				mdd.$(facet_svc mds${k}).lfsck_layout |
 				awk '/^status/ { print $2 }')
 		[ "$STATUS" == "scanning-phase1" ] ||
-		error "(3) MDS${k} Expect 'scanning-phase1', but got '$STATUS'"
+		error "(9) MDS${k} Expect 'scanning-phase1', but got '$STATUS'"
 	done
 
 	echo "Stop layout LFSCK on all targets by single lctl command."
 	do_facet mds1 $LCTL lfsck_stop -M ${FSNAME}-MDT0000 -A ||
-		error "(4) Fail to stop LFSCK on all devices!"
+		error "(10) Fail to stop LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'stopped' status."
 	for k in $(seq $MDSCOUNT); do
@@ -1205,7 +1243,7 @@ test_12() {
 				mdd.$(facet_svc mds${k}).lfsck_layout |
 				awk '/^status/ { print $2 }')
 		[ "$STATUS" == "stopped" ] ||
-			error "(5) MDS${k} Expect 'stopped', but got '$STATUS'"
+			error "(11) MDS${k} Expect 'stopped', but got '$STATUS'"
 	done
 
 	for k in $(seq $OSTCOUNT); do
@@ -1213,12 +1251,12 @@ test_12() {
 				obdfilter.$(facet_svc ost${k}).lfsck_layout |
 				awk '/^status/ { print $2 }')
 		[ "$STATUS" == "stopped" ] ||
-			error "(6) OST${k} Expect 'stopped', but got '$STATUS'"
+			error "(12) OST${k} Expect 'stopped', but got '$STATUS'"
 	done
 
-	echo "Re-trigger LFSCK on all targets by single command (full speed)."
+	echo "Re-start layout LFSCK on all targets by single command (-s 0)."
 	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
-		-s 0 || error "(7) Fail to start LFSCK on all devices!"
+		-s 0 -r || error "(13) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'completed' status."
 	for k in $(seq $MDSCOUNT); do
@@ -1228,7 +1266,7 @@ test_12() {
 		wait_update_facet mds${k} "$LCTL get_param -n \
 			mdd.$(facet_svc mds${k}).lfsck_layout |
 			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
-			error "(8) MDS${k} is not the expected 'completed'"
+			error "(14) MDS${k} is not the expected 'completed'"
 	done
 }
 run_test 12 "single command to trigger LFSCK on all devices"

@@ -55,6 +55,7 @@ static struct option long_opt_start[] = {
 	{"all", 	no_argument,       0, 'A'},
 	{"type",	required_argument, 0, 't'},
 	{"windows",	required_argument, 0, 'w'},
+	{"orphan", 	no_argument,       0, 'o'},
 	{0,		0,		   0,   0}
 };
 
@@ -99,7 +100,7 @@ static void usage_start(void)
 		"	     [-n | --dryrun switch] [-r | --reset]\n"
 		"	     [-s | --speed speed_limit] [-A | --all]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
-		"	     [-w | --windows win_size]\n"
+		"	     [-w | --windows win_size] [-o | --orphan]\n"
 		"OPTIONS:\n"
 		"-M: The device to start LFSCK/scrub on.\n"
 		"-e: Error handle, 'continue'(default) or 'abort'.\n"
@@ -110,7 +111,8 @@ static void usage_start(void)
 		    "'%d' means no limit (default).\n"
 		"-A: Start LFSCK on all MDT devices.\n"
 		"-t: The LFSCK type(s) to be started.\n"
-		"-w: The windows size for async requests pipeline.\n",
+		"-w: The windows size for async requests pipeline.\n"
+		"-o: handle orphan objects.\n",
 		LFSCK_SPEED_NO_LIMIT);
 }
 
@@ -149,7 +151,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:e:hn:rs:At:w:";
+	char *optstring = "M:e:hn:rs:At:w:o";
 	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
@@ -203,7 +205,7 @@ int jt_lfsck_start(int argc, char **argv)
 			start.ls_valid |= LSV_SPEED_LIMIT;
 			break;
 		case 'A':
-			start.ls_flags |= LPF_ALL_MDT | LPF_BROADCAST;
+			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
 			break;
 		case 't': {
 			char *str = optarg, *p, c;
@@ -261,6 +263,10 @@ int jt_lfsck_start(int argc, char **argv)
 
 			start.ls_async_windows = val;
 			start.ls_valid |= LSV_ASYNC_WINDOWS;
+			break;
+		case 'o':
+			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST |
+					  LPF_ORPHAN;
 			break;
 		default:
 			fprintf(stderr, "Invalid option, '-h' for help.\n");
@@ -340,7 +346,7 @@ int jt_lfsck_stop(int argc, char **argv)
 				return rc;
 			break;
 		case 'A':
-			stop.ls_flags |= LPF_ALL_MDT | LPF_BROADCAST;
+			stop.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
 			break;
 		case 'h':
 			usage_stop();

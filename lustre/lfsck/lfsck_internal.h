@@ -286,6 +286,11 @@ struct lfsck_operations {
 			  int result,
 			  bool init);
 
+	int (*lfsck_interpret)(const struct lu_env *env,
+			       struct ptlrpc_request *req,
+			       void *args,
+			       int rc);
+
 	int (*lfsck_dump)(const struct lu_env *env,
 			  struct lfsck_component *com,
 			  char *buf,
@@ -492,7 +497,8 @@ struct lfsck_instance {
 	unsigned int		  li_oit_over:1, /* oit is finished. */
 				  li_drop_dryrun:1, /* Ever dryrun, not now. */
 				  li_master:1, /* Master instance or not. */
-				  li_current_oit_processed:1;
+				  li_current_oit_processed:1,
+				  li_start_unplug:1;
 };
 
 enum lfsck_linkea_flags {
@@ -508,6 +514,8 @@ struct lfsck_async_interpret_args {
 	struct lfsck_tgt_descs		*laia_ltds;
 	struct lfsck_tgt_desc		*laia_ltd;
 	struct lfsck_request		*laia_lr;
+	int				 laia_result;
+	unsigned int			 laia_shared:1;
 };
 
 struct lfsck_thread_args {
@@ -540,6 +548,7 @@ struct lfsck_thread_info {
 	char			lti_key[NAME_MAX + 16];
 	struct lfsck_request	lti_lr;
 	struct lfsck_async_interpret_args lti_laia;
+	struct lfsck_start	lti_start;
 	struct lfsck_stop	lti_stop;
 	ldlm_policy_data_t	lti_policy;
 	struct ldlm_res_id	lti_resid;

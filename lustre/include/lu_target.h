@@ -282,9 +282,6 @@ void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 int tgt_brw_read(struct tgt_session_info *tsi);
 int tgt_brw_write(struct tgt_session_info *tsi);
 int tgt_hpreq_handler(struct ptlrpc_request *req);
-void tgt_register_lfsck_start(int (*start)(const struct lu_env *,
-					   struct dt_device *,
-					   struct lfsck_start_param *));
 void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
 						struct dt_device *,
 						struct lfsck_request *));

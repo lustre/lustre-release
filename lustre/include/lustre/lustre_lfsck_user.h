@@ -43,11 +43,14 @@ enum lfsck_param_flags {
 	/* Dryrun mode, only check without modification */
 	LPF_DRYRUN      = 0x0004,
 
-	/* Start/stop LFSCK on all MDT devices. */
-	LPF_ALL_MDT	= 0x0008,
+	/* LFSCK runs on all targets. */
+	LPF_ALL_TGT	= 0x0008,
 
-	/* Broadcast the command to other MDTs. */
+	/* Broadcast the command to other MDTs. Only valid on the sponsor MDT */
 	LPF_BROADCAST	= 0x0010,
+
+	/* Handle orphan objects. */
+	LPF_ORPHAN	= 0x0020,
 };
 
 enum lfsck_type {

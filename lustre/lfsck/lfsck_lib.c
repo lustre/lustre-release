@@ -966,6 +966,32 @@ int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 	return result;
 }
 
+static void lfsck_interpret(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct ptlrpc_request *req, void *args, int result)
+{
+	struct lfsck_async_interpret_args *laia = args;
+	struct lfsck_component		  *com;
+
+	LASSERT(laia->laia_shared);
+
+	spin_lock(&lfsck->li_lock);
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		if (com->lc_ops->lfsck_interpret != NULL) {
+			laia->laia_com = com;
+			com->lc_ops->lfsck_interpret(env, req, laia, result);
+		}
+	}
+
+	list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
+		if (com->lc_ops->lfsck_interpret != NULL) {
+			laia->laia_com = com;
+			com->lc_ops->lfsck_interpret(env, req, laia, result);
+		}
+	}
+	spin_unlock(&lfsck->li_lock);
+}
+
 int lfsck_double_scan(const struct lu_env *env, struct lfsck_instance *lfsck)
 {
 	struct lfsck_component *com;
@@ -991,46 +1017,46 @@ int lfsck_double_scan(const struct lu_env *env, struct lfsck_instance *lfsck)
 	return rc1 != 0 ? rc1 : rc;
 }
 
-int lfsck_stop_notify(const struct lu_env *env, struct lfsck_instance *lfsck,
-		      struct lfsck_tgt_descs *ltds, struct lfsck_tgt_desc *ltd)
+static int lfsck_stop_notify(const struct lu_env *env,
+			     struct lfsck_instance *lfsck,
+			     struct lfsck_tgt_descs *ltds,
+			     struct lfsck_tgt_desc *ltd, __u16 type)
 {
 	struct ptlrpc_request_set *set;
 	struct lfsck_component    *com;
-	int			   cnt = 0;
 	int			   rc  = 0;
-	int			   rc1 = 0;
+	ENTRY;
 
-	set = ptlrpc_prep_set();
-	if (set == NULL)
-		return -ENOMEM;
+	spin_lock(&lfsck->li_lock);
+	com = __lfsck_component_find(lfsck, type, &lfsck->li_list_scan);
+	if (com == NULL)
+		com = __lfsck_component_find(lfsck, type,
+					     &lfsck->li_list_double_scan);
+	if (com != NULL)
+		lfsck_component_get(com);
+	spin_lock(&lfsck->li_lock);
 
-	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+	if (com != NULL) {
 		if (com->lc_ops->lfsck_stop_notify != NULL) {
+			set = ptlrpc_prep_set();
+			if (set == NULL) {
+				lfsck_component_put(env, com);
+
+				RETURN(-ENOMEM);
+			}
+
 			rc = com->lc_ops->lfsck_stop_notify(env, com, ltds,
 							    ltd, set);
-			if (rc != 0)
-				rc1 = rc;
-			else
-				cnt++;
+			if (rc == 0)
+				rc = ptlrpc_set_wait(set);
+
+			ptlrpc_set_destroy(set);
 		}
+
+		lfsck_component_put(env, com);
 	}
 
-	list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
-		if (com->lc_ops->lfsck_stop_notify != NULL) {
-			rc = com->lc_ops->lfsck_stop_notify(env, com, ltds,
-							    ltd, set);
-			if (rc != 0)
-				rc1 = rc;
-			else
-				cnt++;
-		}
-	}
-
-	if (cnt > 0)
-		rc = ptlrpc_set_wait(set);
-	ptlrpc_set_destroy(set);
-
-	return rc1 != 0 ? rc1 : rc;
+	RETURN(rc);
 }
 
 void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck)
@@ -1049,6 +1075,23 @@ void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck)
 		if (com->lc_ops->lfsck_quit != NULL)
 			com->lc_ops->lfsck_quit(env, com);
 	}
+}
+
+static int lfsck_async_interpret(const struct lu_env *env,
+				 struct ptlrpc_request *req,
+				 void *args, int rc)
+{
+	struct lfsck_async_interpret_args *laia = args;
+	struct lfsck_instance		  *lfsck;
+
+	lfsck = container_of0(laia->laia_ltds, struct lfsck_instance,
+			      li_mdt_descs);
+	lfsck_interpret(env, lfsck, req, laia, rc);
+	lfsck_tgt_put(laia->laia_ltd);
+	if (rc != 0 && laia->laia_result != -EALREADY)
+		laia->laia_result = rc;
+
+	return 0;
 }
 
 int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
@@ -1096,7 +1139,8 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 
 	laia = ptlrpc_req_async_args(req);
 	*laia = *(struct lfsck_async_interpret_args *)args;
-	lfsck_component_get(laia->laia_com);
+	if (laia->laia_com != NULL)
+		lfsck_component_get(laia->laia_com);
 	req->rq_interpret_reply = interpreter;
 	ptlrpc_set_add_req(set, req);
 
@@ -1256,6 +1300,195 @@ int lfsck_dump(struct dt_device *key, void *buf, int len, enum lfsck_type type)
 }
 EXPORT_SYMBOL(lfsck_dump);
 
+static int lfsck_stop_all(const struct lu_env *env,
+			  struct lfsck_instance *lfsck,
+			  struct lfsck_stop *stop)
+{
+	struct lfsck_thread_info	  *info	  = lfsck_env_info(env);
+	struct lfsck_request		  *lr	  = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia	  = &info->lti_laia;
+	struct ptlrpc_request_set	  *set;
+	struct lfsck_tgt_descs		  *ltds   = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc		  *ltd;
+	struct lfsck_bookmark		  *bk	  = &lfsck->li_bookmark_ram;
+	__u32				   idx;
+	int				   rc	  = 0;
+	int				   rc1	  = 0;
+	ENTRY;
+
+	LASSERT(stop->ls_flags & LPF_BROADCAST);
+
+	set = ptlrpc_prep_set();
+	if (unlikely(set == NULL)) {
+		CERROR("%s: cannot allocate memory for stop LFSCK on "
+		       "all targets\n", lfsck_lfsck2name(lfsck));
+
+		RETURN(-ENOMEM);
+	}
+
+	memset(lr, 0, sizeof(*lr));
+	lr->lr_event = LE_STOP;
+	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_status = stop->ls_status;
+	lr->lr_version = bk->lb_version;
+	lr->lr_active = LFSCK_TYPES_ALL;
+	lr->lr_param = stop->ls_flags;
+
+	laia->laia_com = NULL;
+	laia->laia_ltds = ltds;
+	laia->laia_lr = lr;
+	laia->laia_result = 0;
+	laia->laia_shared = 1;
+
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_tgt_get(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		laia->laia_ltd = ltd;
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					 lfsck_async_interpret, laia,
+					 LFSCK_NOTIFY);
+		if (rc != 0) {
+			lfsck_interpret(env, lfsck, NULL, laia, rc);
+			lfsck_tgt_put(ltd);
+			CWARN("%s: cannot notify MDT %x for LFSCK stop: "
+			      "rc = %d\n", lfsck_lfsck2name(lfsck), idx, rc);
+			rc1 = rc;
+		}
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	rc = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	if (rc == 0)
+		rc = laia->laia_result;
+
+	if (rc == -EALREADY)
+		rc = 0;
+
+	if (rc != 0)
+		CWARN("%s: fail to stop LFSCK on some MDTs: rc = %d\n",
+		      lfsck_lfsck2name(lfsck), rc);
+
+	RETURN(rc != 0 ? rc : rc1);
+}
+
+static int lfsck_start_all(const struct lu_env *env,
+			   struct lfsck_instance *lfsck,
+			   struct lfsck_start *start)
+{
+	struct lfsck_thread_info	  *info	  = lfsck_env_info(env);
+	struct lfsck_request		  *lr	  = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia	  = &info->lti_laia;
+	struct ptlrpc_request_set	  *set;
+	struct lfsck_tgt_descs		  *ltds   = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc		  *ltd;
+	struct lfsck_bookmark		  *bk	  = &lfsck->li_bookmark_ram;
+	__u32				   idx;
+	int				   rc	  = 0;
+	ENTRY;
+
+	LASSERT(start->ls_flags & LPF_BROADCAST);
+
+	set = ptlrpc_prep_set();
+	if (unlikely(set == NULL)) {
+		if (bk->lb_param & LPF_FAILOUT) {
+			CERROR("%s: cannot allocate memory for start LFSCK on "
+			       "all targets, failout.\n",
+			       lfsck_lfsck2name(lfsck));
+
+			RETURN(-ENOMEM);
+		} else {
+			CWARN("%s: cannot allocate memory for start LFSCK on "
+			      "all targets, partly scan.\n",
+			      lfsck_lfsck2name(lfsck));
+
+			RETURN(0);
+		}
+	}
+
+	memset(lr, 0, sizeof(*lr));
+	lr->lr_event = LE_START;
+	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_speed = bk->lb_speed_limit;
+	lr->lr_version = bk->lb_version;
+	lr->lr_active = start->ls_active;
+	lr->lr_param = start->ls_flags;
+	lr->lr_async_windows = bk->lb_async_windows;
+	lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
+		       LSV_ASYNC_WINDOWS;
+
+	laia->laia_com = NULL;
+	laia->laia_ltds = ltds;
+	laia->laia_lr = lr;
+	laia->laia_result = 0;
+	laia->laia_shared = 1;
+
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_tgt_get(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		laia->laia_ltd = ltd;
+		ltd->ltd_layout_done = 0;
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					 lfsck_async_interpret, laia,
+					 LFSCK_NOTIFY);
+		if (rc != 0) {
+			lfsck_interpret(env, lfsck, NULL, laia, rc);
+			lfsck_tgt_put(ltd);
+			if (bk->lb_param & LPF_FAILOUT) {
+				CERROR("%s: cannot notify MDT %x for LFSCK "
+				       "start, failout: rc = %d\n",
+				       lfsck_lfsck2name(lfsck), idx, rc);
+				break;
+			} else {
+				CWARN("%s: cannot notify MDT %x for LFSCK "
+				      "start, partly scan: rc = %d\n",
+				      lfsck_lfsck2name(lfsck), idx, rc);
+				rc = 0;
+			}
+		}
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	if (rc != 0) {
+		ptlrpc_set_destroy(set);
+
+		RETURN(rc);
+	}
+
+	rc = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	if (rc == 0)
+		rc = laia->laia_result;
+
+	if (rc != 0) {
+		if (bk->lb_param & LPF_FAILOUT) {
+			struct lfsck_stop *stop = &info->lti_stop;
+
+			CERROR("%s: cannot start LFSCK on some MDTs, "
+			       "stop all: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), rc);
+			if (rc != -EALREADY) {
+				stop->ls_status = LS_FAILED;
+				stop->ls_flags = LPF_ALL_TGT | LPF_BROADCAST;
+				lfsck_stop_all(env, lfsck, stop);
+			}
+		} else {
+			CWARN("%s: cannot start LFSCK on some MDTs, "
+			      "partly scan: rc = %d\n",
+			      lfsck_lfsck2name(lfsck), rc);
+			rc = 0;
+		}
+	}
+
+	RETURN(rc);
+}
+
 int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_start_param *lsp)
 {
@@ -1276,6 +1509,10 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENODEV);
+
+	/* System is not ready, try again later. */
+	if (unlikely(lfsck->li_namespace == NULL))
+		GOTO(put, rc = -EAGAIN);
 
 	/* start == NULL means auto trigger paused LFSCK. */
 	if ((start == NULL) &&
@@ -1318,15 +1555,22 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	}
 	spin_unlock(&lfsck->li_lock);
 
-	lfsck->li_namespace = lsp->lsp_namespace;
 	lfsck->li_status = 0;
 	lfsck->li_oit_over = 0;
+	lfsck->li_start_unplug = 0;
 	lfsck->li_drop_dryrun = 0;
 	lfsck->li_new_scanned = 0;
 
 	/* For auto trigger. */
 	if (start == NULL)
 		goto trigger;
+
+	if (start->ls_flags & LPF_BROADCAST && !lfsck->li_master) {
+		CERROR("%s: only allow to specify '-A | -o' via MDS\n",
+		       lfsck_lfsck2name(lfsck));
+
+		GOTO(out, rc = -EPERM);
+	}
 
 	start->ls_version = bk->lb_version;
 	if (start->ls_valid & LSV_SPEED_LIMIT) {
@@ -1373,13 +1617,23 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		}
 	}
 
-	if (bk->lb_param & LPF_ALL_MDT &&
-	    !(start->ls_flags & LPF_ALL_MDT)) {
-		bk->lb_param &= ~LPF_ALL_MDT;
+	if (bk->lb_param & LPF_ALL_TGT &&
+	    !(start->ls_flags & LPF_ALL_TGT)) {
+		bk->lb_param &= ~LPF_ALL_TGT;
 		dirty = true;
-	} else if (!(bk->lb_param & LPF_ALL_MDT) &&
-		   start->ls_flags & LPF_ALL_MDT) {
-		bk->lb_param |= LPF_ALL_MDT;
+	} else if (!(bk->lb_param & LPF_ALL_TGT) &&
+		   start->ls_flags & LPF_ALL_TGT) {
+		bk->lb_param |= LPF_ALL_TGT;
+		dirty = true;
+	}
+
+	if (bk->lb_param & LPF_ORPHAN &&
+	    !(start->ls_flags & LPF_ORPHAN)) {
+		bk->lb_param &= ~LPF_ORPHAN;
+		dirty = true;
+	} else if (!(bk->lb_param & LPF_ORPHAN) &&
+		   start->ls_flags & LPF_ORPHAN) {
+		bk->lb_param |= LPF_ORPHAN;
 		dirty = true;
 	}
 
@@ -1467,21 +1721,54 @@ trigger:
 		CERROR("%s: cannot start LFSCK thread: rc = %ld\n",
 		       lfsck_lfsck2name(lfsck), rc);
 		lfsck_thread_args_fini(lta);
-	} else {
-		rc = 0;
-		l_wait_event(thread->t_ctl_waitq,
-			     thread_is_running(thread) ||
-			     thread_is_stopped(thread),
-			     &lwi);
+
+		GOTO(out, rc);
 	}
 
-	GOTO(out, rc);
+	l_wait_event(thread->t_ctl_waitq,
+		     thread_is_running(thread) ||
+		     thread_is_stopped(thread),
+		     &lwi);
+	if (start == NULL || !(start->ls_flags & LPF_BROADCAST)) {
+		lfsck->li_start_unplug = 1;
+		wake_up_all(&thread->t_ctl_waitq);
+
+		GOTO(out, rc = 0);
+	}
+
+	/* release lfsck::li_mutex to avoid deadlock. */
+	mutex_unlock(&lfsck->li_mutex);
+	rc = lfsck_start_all(env, lfsck, start);
+	if (rc != 0) {
+		spin_lock(&lfsck->li_lock);
+		if (thread_is_stopped(thread)) {
+			spin_unlock(&lfsck->li_lock);
+		} else {
+			lfsck->li_status = LS_FAILED;
+			lfsck->li_flags = 0;
+			thread_set_flags(thread, SVC_STOPPING);
+			spin_unlock(&lfsck->li_lock);
+
+			lfsck->li_start_unplug = 1;
+			wake_up_all(&thread->t_ctl_waitq);
+			l_wait_event(thread->t_ctl_waitq,
+				     thread_is_stopped(thread),
+				     &lwi);
+		}
+	} else {
+		lfsck->li_start_unplug = 1;
+		wake_up_all(&thread->t_ctl_waitq);
+	}
+
+	GOTO(put, rc);
 
 out:
 	mutex_unlock(&lfsck->li_mutex);
+
 put:
 	lfsck_instance_put(env, lfsck);
-	return (rc < 0 ? rc : 0);
+
+	return rc < 0 ? rc : 0;
 }
 EXPORT_SYMBOL(lfsck_start);
 
@@ -1492,6 +1779,7 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	struct ptlrpc_thread	*thread;
 	struct l_wait_info	 lwi    = { 0 };
 	int			 rc	= 0;
+	int			 rc1	= 0;
 	ENTRY;
 
 	lfsck = lfsck_instance_find(key, true, false);
@@ -1499,6 +1787,18 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		RETURN(-ENODEV);
 
 	thread = &lfsck->li_thread;
+	/* release lfsck::li_mutex to avoid deadlock. */
+	if (stop != NULL && stop->ls_flags & LPF_BROADCAST) {
+		if (!lfsck->li_master) {
+			CERROR("%s: only allow to specify '-A' via MDS\n",
+			       lfsck_lfsck2name(lfsck));
+
+			GOTO(out, rc = -EPERM);
+		}
+
+		rc1 = lfsck_stop_all(env, lfsck, stop);
+	}
+
 	mutex_lock(&lfsck->li_mutex);
 	spin_lock(&lfsck->li_lock);
 	if (thread_is_init(thread) || thread_is_stopped(thread)) {
@@ -1528,41 +1828,67 @@ out:
 	mutex_unlock(&lfsck->li_mutex);
 	lfsck_instance_put(env, lfsck);
 
-	return rc;
+	return rc != 0 ? rc : rc1;
 }
 EXPORT_SYMBOL(lfsck_stop);
 
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 		    struct lfsck_request *lr)
 {
-	struct lfsck_instance  *lfsck;
-	struct lfsck_component *com;
-	int			rc;
+	int rc = -EOPNOTSUPP;
 	ENTRY;
 
 	switch (lr->lr_event) {
-	case LE_STOP:
+	case LE_START: {
+		struct lfsck_start	 *start = &lfsck_env_info(env)->lti_start;
+		struct lfsck_start_param  lsp;
+
+		memset(start, 0, sizeof(*start));
+		start->ls_valid = lr->lr_valid;
+		start->ls_speed_limit = lr->lr_speed;
+		start->ls_version = lr->lr_version;
+		start->ls_active = lr->lr_active;
+		start->ls_flags = lr->lr_param & ~LPF_BROADCAST;
+		start->ls_async_windows = lr->lr_async_windows;
+
+		lsp.lsp_start = start;
+		lsp.lsp_index = lr->lr_index;
+		lsp.lsp_index_valid = 1;
+		rc = lfsck_start(env, key, &lsp);
+		break;
+	}
+	case LE_STOP: {
+		struct lfsck_stop *stop = &lfsck_env_info(env)->lti_stop;
+
+		memset(stop, 0, sizeof(*stop));
+		stop->ls_status = lr->lr_status;
+		stop->ls_flags = lr->lr_param & ~LPF_BROADCAST;
+		rc = lfsck_stop(env, key, stop);
+		break;
+	}
 	case LE_PHASE1_DONE:
 	case LE_PHASE2_DONE:
 	case LE_FID_ACCESSED:
+	case LE_PEER_EXIT: {
+		struct lfsck_instance  *lfsck;
+		struct lfsck_component *com;
+
+		lfsck = lfsck_instance_find(key, true, false);
+		if (unlikely(lfsck == NULL))
+			RETURN(-ENODEV);
+
+		com = lfsck_component_find(lfsck, lr->lr_active);
+		if (likely(com != NULL)) {
+			rc = com->lc_ops->lfsck_in_notify(env, com, lr);
+			lfsck_component_put(env, com);
+		}
+
+		lfsck_instance_put(env, lfsck);
 		break;
+	}
 	default:
-		RETURN(-EOPNOTSUPP);
+		break;
 	}
-
-	lfsck = lfsck_instance_find(key, true, false);
-	if (unlikely(lfsck == NULL))
-		RETURN(-ENODEV);
-
-	com = lfsck_component_find(lfsck, lr->lr_active);
-	if (likely(com != NULL)) {
-		rc = com->lc_ops->lfsck_in_notify(env, com, lr);
-		lfsck_component_put(env, com);
-	} else {
-		rc = -ENOTSUPP;
-	}
-
-	lfsck_instance_put(env, lfsck);
 
 	RETURN(rc);
 }
@@ -1593,6 +1919,23 @@ int lfsck_query(const struct lu_env *env, struct dt_device *key,
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lfsck_query);
+
+int lfsck_register_namespace(const struct lu_env *env, struct dt_device *key,
+			     struct ldlm_namespace *ns)
+{
+	struct lfsck_instance  *lfsck;
+	int			rc	= -ENODEV;
+
+	lfsck = lfsck_instance_find(key, true, false);
+	if (likely(lfsck != NULL)) {
+		lfsck->li_namespace = ns;
+		lfsck_instance_put(env, lfsck);
+		rc = 0;
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(lfsck_register_namespace);
 
 int lfsck_register(const struct lu_env *env, struct dt_device *key,
 		   struct dt_device *next, struct obd_device *obd,
@@ -1774,10 +2117,8 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 {
 	struct lfsck_instance	*lfsck;
 	struct lfsck_tgt_descs	*ltds;
-	struct lfsck_tgt_desc	*ltd;
+	struct lfsck_tgt_desc	*ltd	= NULL;
 	struct list_head	*head;
-	bool			 found = false;
-	bool			 stop  = false;
 
 	if (for_ost)
 		head = &lfsck_ost_orphan_list;
@@ -1806,7 +2147,6 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		ltds = &lfsck->li_mdt_descs;
 
 	down_write(&ltds->ltd_rw_sem);
-
 	LASSERT(ltds->ltd_tgts_bitmap != NULL);
 
 	if (unlikely(index >= ltds->ltd_tgts_bitmap->size))
@@ -1816,30 +2156,14 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 	if (unlikely(ltd == NULL))
 		goto unlock;
 
-	found = true;
-	spin_lock(&ltds->ltd_lock);
-	ltd->ltd_dead = 1;
-	if (!list_empty(&ltd->ltd_layout_list)) {
-		list_del_init(&ltd->ltd_layout_phase_list);
-		list_del_init(&ltd->ltd_layout_list);
-		stop = true;
-	} else {
-		LASSERT(list_empty(&ltd->ltd_layout_phase_list));
-	}
-	spin_unlock(&ltds->ltd_lock);
-
-	if (stop && lfsck->li_master)
-		lfsck_stop_notify(env, lfsck, ltds, ltd);
-
 	LASSERT(ltds->ltd_tgtnr > 0);
 
 	ltds->ltd_tgtnr--;
 	cfs_bitmap_clear(ltds->ltd_tgts_bitmap, index);
 	LTD_TGT(ltds, index) = NULL;
-	lfsck_tgt_put(ltd);
 
 unlock:
-	if (!found) {
+	if (ltd == NULL) {
 		if (for_ost)
 			head = &lfsck->li_ost_descs.ltd_orphan;
 		else
@@ -1848,13 +2172,20 @@ unlock:
 		list_for_each_entry(ltd, head, ltd_orphan_list) {
 			if (ltd->ltd_tgt == tgt) {
 				list_del_init(&ltd->ltd_orphan_list);
-				lfsck_tgt_put(ltd);
 				break;
 			}
 		}
 	}
 
 	up_write(&ltds->ltd_rw_sem);
+	if (ltd != NULL) {
+		spin_lock(&ltds->ltd_lock);
+		ltd->ltd_dead = 1;
+		spin_unlock(&ltds->ltd_lock);
+		lfsck_stop_notify(env, lfsck, ltds, ltd, LT_LAYOUT);
+		lfsck_tgt_put(ltd);
+	}
+
 	lfsck_instance_put(env, lfsck);
 }
 EXPORT_SYMBOL(lfsck_del_target);
@@ -1868,7 +2199,6 @@ static int __init lfsck_init(void)
 	lfsck_key_init_generic(&lfsck_thread_key, NULL);
 	rc = lu_context_key_register(&lfsck_thread_key);
 	if (rc == 0) {
-		tgt_register_lfsck_start(lfsck_start);
 		tgt_register_lfsck_in_notify(lfsck_in_notify);
 		tgt_register_lfsck_query(lfsck_query);
 	}

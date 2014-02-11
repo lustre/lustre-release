@@ -111,7 +111,6 @@ enum lfsck_status {
 };
 
 struct lfsck_start_param {
-	struct ldlm_namespace	*lsp_namespace;
 	struct lfsck_start	*lsp_start;
 	__u32			 lsp_index;
 	unsigned int		 lsp_index_valid:1;
@@ -126,17 +125,19 @@ enum lfsck_events {
 	LE_STOP 		= 6,
 	LE_QUERY		= 7,
 	LE_FID_ACCESSED 	= 8,
+	LE_PEER_EXIT		= 9,
 };
 
 enum lfsck_event_flags {
 	LEF_TO_OST		= 0x00000001,
 	LEF_FROM_OST		= 0x00000002,
-	LEF_FORCE_STOP		= 0x00000004,
 };
 
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
 				enum lfsck_events event);
 
+int lfsck_register_namespace(const struct lu_env *env, struct dt_device *key,
+			     struct ldlm_namespace *ns);
 int lfsck_register(const struct lu_env *env, struct dt_device *key,
 		   struct dt_device *next, struct obd_device *obd,
 		   lfsck_out_notify notify, void *notify_data, bool master);

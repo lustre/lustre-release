@@ -4749,7 +4749,9 @@ static int mdt_prepare(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	lsp.lsp_namespace = mdt->mdt_namespace;
+	rc = lfsck_register_namespace(env, mdt->mdt_bottom, mdt->mdt_namespace);
+	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
+
 	lsp.lsp_start = NULL;
 	lsp.lsp_index_valid = 0;
 	rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
@@ -5608,7 +5610,6 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			break;
 		}
 
-		lsp.lsp_namespace = mdt->mdt_namespace;
 		lsp.lsp_start = (struct lfsck_start *)(data->ioc_inlbuf1);
 		lsp.lsp_index_valid = 0;
 		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0, &lsp);
@@ -5617,11 +5618,17 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case OBD_IOC_STOP_LFSCK: {
 		struct md_device	*next = mdt->mdt_child;
 		struct obd_ioctl_data	*data = karg;
-		struct lfsck_stop	*stop =
-				(struct lfsck_stop *)(data->ioc_inlbuf1);
+		struct lfsck_stop	 stop;
 
-		stop->ls_status = LS_STOPPED;
-		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0, stop);
+		stop.ls_status = LS_STOPPED;
+		/* Old lfsck utils may pass NULL @stop. */
+		if (data->ioc_inlbuf1 == NULL)
+			stop.ls_flags = 0;
+		else
+			stop.ls_flags =
+			((struct lfsck_stop *)(data->ioc_inlbuf1))->ls_flags;
+
+		rc = next->md_ops->mdo_iocontrol(&env, next, cmd, 0, &stop);
 		break;
 	}
         case OBD_IOC_GET_OBJ_VERSION: {

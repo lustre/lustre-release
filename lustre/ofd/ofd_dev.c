@@ -442,7 +442,9 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		RETURN(rc);
 	}
 
-	lsp.lsp_namespace = ofd->ofd_namespace;
+	rc = lfsck_register_namespace(env, ofd->ofd_osd, ofd->ofd_namespace);
+	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
+
 	lsp.lsp_start = NULL;
 	lsp.lsp_index_valid = 0;
 	rc = lfsck_start(env, ofd->ofd_osd, &lsp);

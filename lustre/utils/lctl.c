@@ -369,7 +369,7 @@ command_t cmdlist[] = {
 	 "		     [-n | --dryrun switch] [-r | --reset]\n"
 	 "		     [-s | --speed speed_limit] [-A | --all]\n"
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
-	 "		     [-w | --windows win_size]"},
+	 "		     [-w | --windows win_size] [-o | --orphan]"},
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
 	 "usage: lfsck_stop <-M | --device [MDT,OST]_device>\n"
 	 "		    [-A | --all] [-h | --help]"},
