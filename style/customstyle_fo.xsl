@@ -125,7 +125,9 @@
 			<xsl:call-template name="chapter.titlepage"/>
 		  </fo:block>
 
-		  <xsl:call-template name="make.component.tocs"/>
+		  <!-- RHEL and SLES versions have an older docbook xsl install
+		       that fails on this call: 
+			   xsl:call-template name="make.component.tocs"/-->
 
 		  <xsl:apply-templates/>
       </fo:block-container>
