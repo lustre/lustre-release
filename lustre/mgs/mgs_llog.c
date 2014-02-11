@@ -3897,6 +3897,7 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		    const char *param)
 {
 	lnet_nid_t	nid[2];
+	__u32		idmap[2];
 	bool		bool_switch;
 	__u32		int_id;
 	int		rc = 0;
@@ -3936,6 +3937,30 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	case LCFG_NODEMAP_SQUASH_GID:
 		int_id = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_squash_gid(nodemap_name, int_id);
+		break;
+	case LCFG_NODEMAP_ADD_UIDMAP:
+	case LCFG_NODEMAP_ADD_GIDMAP:
+		rc = nodemap_parse_idmap(param, idmap);
+		if (rc != 0)
+			break;
+		if (cmd == LCFG_NODEMAP_ADD_UIDMAP)
+			rc = nodemap_add_idmap(nodemap_name, NODEMAP_UID,
+					       idmap);
+		else
+			rc = nodemap_add_idmap(nodemap_name, NODEMAP_GID,
+					       idmap);
+		break;
+	case LCFG_NODEMAP_DEL_UIDMAP:
+	case LCFG_NODEMAP_DEL_GIDMAP:
+		rc = nodemap_parse_idmap(param, idmap);
+		if (rc != 0)
+			break;
+		if (cmd == LCFG_NODEMAP_DEL_UIDMAP)
+			rc = nodemap_del_idmap(nodemap_name, NODEMAP_UID,
+					       idmap);
+		else
+			rc = nodemap_del_idmap(nodemap_name, NODEMAP_GID,
+					       idmap);
 		break;
 	default:
 		rc = -EINVAL;

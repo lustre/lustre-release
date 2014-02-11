@@ -32,20 +32,72 @@
 #include <interval_tree.h>
 #include "nodemap_internal.h"
 
+static int nodemap_idmap_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap	*nodemap = m->private;
+	struct lu_idmap		*idmap;
+	struct rb_node		*node;
+	bool			cont = 0;
+
+	seq_printf(m, "[\n");
+	for (node = rb_first(&nodemap->nm_client_to_fs_uidmap); node;
+				node = rb_next(node)) {
+		if (cont)
+			seq_printf(m, ",\n");
+		cont = 1;
+		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
+		if (idmap != NULL)
+			seq_printf(m, " { idtype: uid, client_id: %u, "
+				   "fs_id: %u }", idmap->id_client,
+				   idmap->id_fs);
+	}
+	for (node = rb_first(&nodemap->nm_client_to_fs_gidmap);
+				node; node = rb_next(node)) {
+		if (cont)
+			seq_printf(m, ",\n");
+		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
+		if (idmap != NULL)
+			seq_printf(m, " { idtype: gid, client_id: %u, "
+				   "fs_id: %u }", idmap->id_client,
+				   idmap->id_fs);
+	}
+	seq_printf(m, "\n");
+	seq_printf(m, "]\n");
+
+	return 0;
+}
+
+static int nodemap_idmap_open(struct inode *inode, struct file *file)
+{
+	struct proc_dir_entry	*dir;
+	struct lu_nodemap	*nodemap;
+
+	dir = PDE(inode);
+	nodemap = dir->data;
+
+	return single_open(file, nodemap_idmap_show, nodemap);
+}
+
 static int nodemap_ranges_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap		*nodemap = m->private;
 	struct lu_nid_range		*range;
 	struct interval_node_extent	ext;
+	bool				cont = 0;
 
-
+	seq_printf(m, "[\n");
 	list_for_each_entry(range, &nodemap->nm_ranges, rn_list) {
-			ext = range->rn_node.in_extent;
-			seq_printf(m, "id: %u: { start_nid: %s, "
-					"end_nid: %s }\n",
-				   range->rn_id, libcfs_nid2str(ext.start),
-				   libcfs_nid2str(ext.end));
+		if (cont)
+			seq_printf(m, ",\n");
+		cont = 1;
+		ext = range->rn_node.in_extent;
+		seq_printf(m, " { id: %u, start_nid: %s, "
+				"end_nid: %s }",
+			   range->rn_id, libcfs_nid2str(ext.start),
+			   libcfs_nid2str(ext.end));
 	}
+	seq_printf(m, "\n");
+	seq_printf(m, "]\n");
 
 	return 0;
 }
@@ -63,7 +115,7 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 
 static int nodemap_active_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "%u\n", (unsigned int)nodemap_idmap_active);
+	return seq_printf(m, "%u\n", (unsigned int)nodemap_active);
 }
 
 static ssize_t
@@ -85,7 +137,7 @@ nodemap_active_seq_write(struct file *file, const char __user *buffer,
 
 	active_string[count] = '\0';
 	active = simple_strtoul(active_string, NULL, 10);
-	nodemap_idmap_active = active;
+	nodemap_active = active;
 
 	return rc;
 }
@@ -348,6 +400,13 @@ const struct file_operations nodemap_ranges_fops = {
 	.release		= single_release
 };
 
+const struct file_operations nodemap_idmap_fops = {
+	.open			= nodemap_idmap_open,
+	.read			= seq_read,
+	.llseek			= seq_lseek,
+	.release		= single_release
+};
+
 static struct lprocfs_seq_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "id",
@@ -372,6 +431,10 @@ static struct lprocfs_seq_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "ranges",
 		.fops		= &nodemap_ranges_fops,
+	},
+	{
+		.name		= "idmap",
+		.fops		= &nodemap_idmap_fops,
 	},
 	{
 		NULL

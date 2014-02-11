@@ -3506,7 +3506,8 @@ int jt_nodemap_activate(int argc, char **argv)
 {
 	int rc;
 
-	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, NULL, 0, argv[0], NULL);
+	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, NULL, 0, argv[0], argv[1],
+			 NULL);
 
 	if (rc != 0) {
 		errno = -rc;
@@ -3594,6 +3595,80 @@ int jt_nodemap_test_nid(int argc, char **argv)
 
 	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, &rawbuf, sizeof(rawbuf),
 			 argv[0], argv[1], NULL);
+	if (rc == 0)
+		printf("%s\n", (char *)rawbuf);
+
+	return rc;
+}
+
+/**
+ * test a nodemap id pair for mapping
+ *
+ * \param	argc		number of args
+ * \param	argv[[]		variable string arguments
+ *
+ * \retval			0 on success
+ *
+ * The argv array should contain the nodemap name, the id
+ * to checking the mapping on, and the id type (UID or GID)
+ *
+ */
+int jt_nodemap_test_id(int argc, char **argv)
+{
+	char	rawbuf[MAX_IOC_BUFLEN];
+	char	*nidstr = NULL;
+	char	*idstr = NULL;
+	char	*typestr = NULL;
+	int	rc = 0;
+	int	c;
+
+	static struct option long_options[] = {
+		{
+			.name		= "nid",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'n',
+		},
+		{
+			.name		= "idtype",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 't',
+		},
+		{
+			.name		= "id",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'i',
+		},
+		{
+			NULL
+		}
+	};
+
+	while ((c = getopt_long(argc, argv, "n:t:i:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nidstr = optarg;
+			break;
+		case 't':
+			typestr = optarg;
+			break;
+		case 'i':
+			idstr = optarg;
+			break;
+		}
+	}
+
+	if (nidstr == NULL || typestr == NULL || idstr == NULL) {
+		fprintf(stderr, "usage: nodemap_test_id --nid <nid> "
+				"--idtype [uid|gid] --id <id>\n");
+		return -1;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, &rawbuf, sizeof(rawbuf),
+			 argv[0], nidstr, typestr, idstr);
 	if (rc == 0)
 		printf("%s\n", (char *)rawbuf);
 
@@ -3793,10 +3868,12 @@ int jt_nodemap_del_range(int argc, char **argv)
  */
 int jt_nodemap_modify(int argc, char **argv)
 {
-	int c;
-	int rc = 0;
-	enum lcfg_command_type cmd = 0;
-	char *nodemap_name = NULL, *param = NULL, *value = NULL;
+	int			c;
+	int			rc = 0;
+	enum lcfg_command_type	cmd = 0;
+	char			*nodemap_name = NULL;
+	char			*param = NULL;
+	char			*value = NULL;
 
 	static struct option long_options[] = {
 		{
@@ -3865,6 +3942,149 @@ int jt_nodemap_modify(int argc, char **argv)
 		fprintf(stderr, "error: %s: cannot modify nodemap '%s' "
 			       "to param '%s': value '%s': rc = %d\n",
 			jt_cmdname(argv[0]), nodemap_name, param, value, rc);
+	}
+
+	return rc;
+}
+
+int jt_nodemap_add_idmap(int argc, char **argv)
+{
+	int			c;
+	enum			lcfg_command_type cmd = 0;
+	char			*nodemap_name = NULL;
+	char			*idmap = NULL;
+	char			*idtype = NULL;
+	int			rc = 0;
+
+	static struct option long_options[] = {
+		{
+			.name		= "name",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'n',
+		},
+		{
+			.name		= "idmap",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'm',
+		},
+		{
+			.name		= "idtype",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'i',
+		},
+		{
+			NULL
+		}
+	};
+
+	while ((c = getopt_long(argc, argv, "n:m:i:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'm':
+			idmap = optarg;
+			break;
+		case 'i':
+			idtype = optarg;
+			break;
+		}
+	}
+
+	if (nodemap_name == NULL || idmap == NULL || idtype == NULL) {
+		fprintf(stderr, "usage: %s --name <name> --idtype [uid | gid]"
+			" --idmap <client id>:<filesystem id>\n", argv[0]);
+		return -1;
+	}
+
+	if (strcmp("uid", idtype) == 0) {
+		cmd = LCFG_NODEMAP_ADD_UIDMAP;
+	} else if (strcmp("gid", idtype) == 0) {
+		cmd = LCFG_NODEMAP_ADD_GIDMAP;
+	} else {
+		fprintf(stderr, "usage: %s --name <name> --idtype [uid | gid]"
+			" --idmap <client id>:<filesystem id>\n", argv[0]);
+		return -1;
+	}
+
+	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
+	if (rc != 0) {
+		errno = -rc;
+		fprintf(stderr, "cannot add %smap '%s' to nodemap '%s'"
+			": rc = %d\n", idtype, idmap, nodemap_name, rc);
+	}
+
+	return rc;
+}
+
+int jt_nodemap_del_idmap(int argc, char **argv)
+{
+	int			c;
+	enum			lcfg_command_type cmd = 0;
+	char			*nodemap_name = NULL;
+	char			*idmap = NULL;
+	char			*idtype = NULL;
+	int			rc = 0;
+
+	static struct option long_options[] = {
+		{
+			.name		= "name",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'n',
+		},
+		{
+			.name		= "idmap",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'm',
+		},
+		{
+			.name		= "idtype",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'i',
+		},
+		{
+			NULL
+		}
+	};
+
+	while ((c = getopt_long(argc, argv, "n:m:i:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'm':
+			idmap = optarg;
+			break;
+		case 'i':
+			idtype = optarg;
+			break;
+		}
+	}
+
+	if (nodemap_name == NULL || idmap == NULL || idtype == NULL) {
+		fprintf(stderr, "usage: %s --name <name> --idtype [uid | gid]"
+			" --idmap <client id>:<filesystem id>\n", argv[0]);
+		return -1;
+	}
+
+	if (strcmp("uid", idtype) == 0)
+		cmd = LCFG_NODEMAP_DEL_UIDMAP;
+	else
+		cmd = LCFG_NODEMAP_DEL_GIDMAP;
+
+	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
+	if (rc != 0) {
+		errno = -rc;
+		fprintf(stderr, "cannot add %smap '%s' to nodemap '%s'"
+			": rc = %d\n", idtype, idmap, nodemap_name, rc);
 	}
 
 	return rc;

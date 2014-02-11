@@ -42,7 +42,7 @@ struct lprocfs_static_vars;
 /* nodemap root proc directory under fs/lustre */
 extern struct proc_dir_entry *proc_lustre_nodemap_root;
 /* flag if nodemap is active */
-extern bool nodemap_idmap_active;
+extern bool nodemap_active;
 
 struct lu_nid_range {
 	/* unique id set my mgs */
@@ -53,6 +53,17 @@ struct lu_nid_range {
 	struct list_head	 rn_list;
 	/* nid interval tree */
 	struct interval_node	 rn_node;
+};
+
+struct lu_idmap {
+	/* uid/gid of client */
+	__u32		id_client;
+	/* uid/gid on filesystem */
+	__u32		id_fs;
+	/* tree mapping client ids to filesystem ids */
+	struct rb_node	id_client_to_fs;
+	/* tree mappung filesystem to client */
+	struct rb_node	id_fs_to_client;
 };
 
 int nodemap_procfs_init(void);
@@ -68,5 +79,29 @@ struct lu_nid_range *range_find(lnet_nid_t start_nid, lnet_nid_t end_nid);
 int range_parse_nidstring(char *range_string, lnet_nid_t *start_nid,
 			  lnet_nid_t *end_nid);
 void range_init_tree(void);
+struct lu_idmap *idmap_create(__u32 client_id, __u32 fs_id);
+void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
+		 struct lu_nodemap *nodemap);
+void idmap_delete(enum nodemap_id_type id_type,  struct lu_idmap *idmap,
+		  struct lu_nodemap *nodemap);
+void idmap_delete_tree(struct lu_nodemap *nodemap);
+struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
+			      enum nodemap_tree_type,
+			      enum nodemap_id_type id_type,
+			      __u32 id);
 int nodemap_cleanup_nodemaps(void);
+
+struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
+struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
+
+#define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\
+						root, field)		\
+	for (pos = rb_entry(nm_rb_first_postorder(root), typeof(*pos),	\
+			    field),					\
+		n = rb_entry(nm_rb_next_postorder(&pos->field),		\
+		typeof(*pos), field);					\
+		&pos->field;						\
+		pos = n,						\
+		n = rb_entry(nm_rb_next_postorder(&pos->field),		\
+			     typeof(*pos), field))
 #endif  /* _NODEMAP_INTERNAL_H */

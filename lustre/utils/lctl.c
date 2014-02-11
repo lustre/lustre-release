@@ -230,9 +230,9 @@ command_t cmdlist[] = {
 
 	/* Nodemap commands */
 	{"=== Nodemap ===", jt_noop, 0, "nodemap management"},
-	{"nodemap_activate_idmap", jt_nodemap_activate, 0,
+	{"nodemap_activate", jt_nodemap_activate, 0,
 	 "activate nodemap idmapping functions\n"
-	 "usage: nodemap_activate_idmap"},
+	 "usage: nodemap_activate"},
 	{"nodemap_add", jt_nodemap_add, 0,
 	 "add a new nodemap\n"
 	 "usage: nodemap_add <nodemap_name>"},
@@ -248,8 +248,14 @@ command_t cmdlist[] = {
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap parameters"
 	 "usage: nodemap_modify nodemap_name param value"},
+	{"nodemap_add_idmap", jt_nodemap_add_idmap, 0,
+	 "add a UID or GID mapping to a nodemap"},
+	{"nodemap_del_idmap", jt_nodemap_del_idmap, 0,
+	 "delete a UID or GID mapping from a nodemap"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
 	 "usage: nodemap_test_nid <nid>"},
+	{"nodemap_test_id", jt_nodemap_test_id, 0,
+	 "Usage: nodemap_test_id --nid <nid> --idtype [uid|gid] --id <id>"},
 
         /* Changelog commands */
         {"===  Changelogs ==", jt_noop, 0, "changelog user management"},

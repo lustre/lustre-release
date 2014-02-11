@@ -106,6 +106,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_ADD_SHKEY  = 0x00ce053, /**< add shared key to cluster */
 	LCFG_NODEMAP_DEL_SHKEY  = 0x00ce054, /**< delete shared key from cluster */
 	LCFG_NODEMAP_TEST_NID   = 0x00ce055, /**< test for nodemap membership */
+	LCFG_NODEMAP_TEST_ID	= 0x00ce056, /**< test uid/gid mapping */
 };
 
 struct lustre_cfg_bufs {
