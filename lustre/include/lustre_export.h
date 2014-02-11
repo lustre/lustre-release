@@ -388,6 +388,14 @@ static inline bool imp_connect_disp_stripe(struct obd_import *imp)
 	return ocd->ocd_connect_flags & OBD_CONNECT_DISP_STRIPE;
 }
 
+static inline __u64 exp_connect_ibits(struct obd_export *exp)
+{
+	struct obd_connect_data *ocd;
+
+	ocd = &exp->exp_connect_data;
+	return ocd->ocd_ibits_known;
+}
+
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
 
