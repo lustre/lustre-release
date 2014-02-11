@@ -411,7 +411,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	GOTO(cleanup, rc);
 
 cleanup:
-	pop_ctxt(&new, &save);
+	pop_ctxt(&save, &new);
         if (IS_ERR(d)) {
                 OBD_FREE_PTR(dev->od_ost_map);
                 RETURN(PTR_ERR(d));
