@@ -136,50 +136,50 @@ static void lov_sublock_adopt(const struct lu_env *env, struct lov_lock *lck,
 }
 
 static struct cl_lock *lov_sublock_alloc(const struct lu_env *env,
-                                         const struct cl_io *io,
-                                         struct lov_lock *lck,
-                                         int idx, struct lov_lock_link **out)
+					 const struct cl_io *io,
+					 struct lov_lock *lck,
+					 int idx, struct lov_lock_link **out)
 {
-        struct cl_lock       *sublock;
-        struct cl_lock       *parent;
-        struct lov_lock_link *link;
+	struct cl_lock       *sublock;
+	struct cl_lock       *parent;
+	struct lov_lock_link *link;
 
-        LASSERT(idx < lck->lls_nr);
-        ENTRY;
+	LASSERT(idx < lck->lls_nr);
+	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(link, lov_lock_link_kmem, __GFP_IO);
-        if (link != NULL) {
-                struct lov_sublock_env *subenv;
-                struct lov_lock_sub  *lls;
-                struct cl_lock_descr *descr;
+	OBD_SLAB_ALLOC_PTR_GFP(link, lov_lock_link_kmem, GFP_NOFS);
+	if (link != NULL) {
+		struct lov_sublock_env *subenv;
+		struct lov_lock_sub  *lls;
+		struct cl_lock_descr *descr;
 
-                parent = lck->lls_cl.cls_lock;
-                lls    = &lck->lls_sub[idx];
-                descr  = &lls->sub_got;
+		parent = lck->lls_cl.cls_lock;
+		lls    = &lck->lls_sub[idx];
+		descr  = &lls->sub_got;
 
-                subenv = lov_sublock_env_get(env, parent, lls);
-                if (!IS_ERR(subenv)) {
-                        /* CAVEAT: Don't try to add a field in lov_lock_sub
-                         * to remember the subio. This is because lock is able
-                         * to be cached, but this is not true for IO. This
-                         * further means a sublock might be referenced in
-                         * different io context. -jay */
+		subenv = lov_sublock_env_get(env, parent, lls);
+		if (!IS_ERR(subenv)) {
+			/* CAVEAT: Don't try to add a field in lov_lock_sub
+			 * to remember the subio. This is because lock is able
+			 * to be cached, but this is not true for IO. This
+			 * further means a sublock might be referenced in
+			 * different io context. -jay */
 
-                        sublock = cl_lock_hold(subenv->lse_env, subenv->lse_io,
-                                               descr, "lov-parent", parent);
-                        lov_sublock_env_put(subenv);
-                } else {
-                        /* error occurs. */
-                        sublock = (void*)subenv;
-                }
+			sublock = cl_lock_hold(subenv->lse_env, subenv->lse_io,
+					       descr, "lov-parent", parent);
+			lov_sublock_env_put(subenv);
+		} else {
+			/* error occurs. */
+			sublock = (void *)subenv;
+		}
 
-                if (!IS_ERR(sublock))
-                        *out = link;
-                else
-                        OBD_SLAB_FREE_PTR(link, lov_lock_link_kmem);
-        } else
-                sublock = ERR_PTR(-ENOMEM);
-        RETURN(sublock);
+		if (!IS_ERR(sublock))
+			*out = link;
+		else
+			OBD_SLAB_FREE_PTR(link, lov_lock_link_kmem);
+	} else
+		sublock = ERR_PTR(-ENOMEM);
+	RETURN(sublock);
 }
 
 static void lov_sublock_unlock(const struct lu_env *env,
@@ -1198,19 +1198,19 @@ static const struct cl_lock_operations lov_lock_ops = {
 };
 
 int lov_lock_init_raid0(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_lock *lock, const struct cl_io *io)
+			struct cl_lock *lock, const struct cl_io *io)
 {
-        struct lov_lock *lck;
-        int result;
+	struct lov_lock *lck;
+	int result;
 
-        ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, __GFP_IO);
-        if (lck != NULL) {
-                cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_lock_ops);
-                result = lov_lock_sub_init(env, lck, io);
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, GFP_NOFS);
+	if (lck != NULL) {
+		cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_lock_ops);
+		result = lov_lock_sub_init(env, lck, io);
+	} else
+		result = -ENOMEM;
+	RETURN(result);
 }
 
 static void lov_empty_lock_fini(const struct lu_env *env,
@@ -1234,13 +1234,13 @@ static const struct cl_lock_operations lov_empty_lock_ops = {
 };
 
 int lov_lock_init_empty(const struct lu_env *env, struct cl_object *obj,
-		struct cl_lock *lock, const struct cl_io *io)
+			struct cl_lock *lock, const struct cl_io *io)
 {
 	struct lov_lock *lck;
 	int result = -ENOMEM;
 
 	ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, __GFP_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, GFP_NOFS);
 	if (lck != NULL) {
 		cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_empty_lock_ops);
 		lck->lls_orig = lock->cll_descr;

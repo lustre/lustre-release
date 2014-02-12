@@ -260,21 +260,21 @@ static const struct lu_object_operations osc_lu_obj_ops = {
 };
 
 struct lu_object *osc_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *unused,
-                                   struct lu_device *dev)
+				   const struct lu_object_header *unused,
+				   struct lu_device *dev)
 {
-        struct osc_object *osc;
-        struct lu_object  *obj;
+	struct osc_object *osc;
+	struct lu_object  *obj;
 
-	OBD_SLAB_ALLOC_PTR_GFP(osc, osc_object_kmem, __GFP_IO);
-        if (osc != NULL) {
-                obj = osc2lu(osc);
-                lu_object_init(obj, NULL, dev);
-                osc->oo_cl.co_ops = &osc_ops;
-                obj->lo_ops = &osc_lu_obj_ops;
-        } else
-                obj = NULL;
-        return obj;
+	OBD_SLAB_ALLOC_PTR_GFP(osc, osc_object_kmem, GFP_NOFS);
+	if (osc != NULL) {
+		obj = osc2lu(osc);
+		lu_object_init(obj, NULL, dev);
+		osc->oo_cl.co_ops = &osc_ops;
+		obj->lo_ops = &osc_lu_obj_ops;
+	} else
+		obj = NULL;
+	return obj;
 }
 
 /** @} osc */

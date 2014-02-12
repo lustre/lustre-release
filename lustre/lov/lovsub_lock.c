@@ -472,20 +472,20 @@ static const struct cl_lock_operations lovsub_lock_ops = {
 };
 
 int lovsub_lock_init(const struct lu_env *env, struct cl_object *obj,
-                     struct cl_lock *lock, const struct cl_io *io)
+		     struct cl_lock *lock, const struct cl_io *io)
 {
-        struct lovsub_lock *lsk;
-        int result;
+	struct lovsub_lock *lsk;
+	int result;
 
-        ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lsk, lovsub_lock_kmem, __GFP_IO);
-        if (lsk != NULL) {
-                CFS_INIT_LIST_HEAD(&lsk->lss_parents);
-                cl_lock_slice_add(lock, &lsk->lss_cl, obj, &lovsub_lock_ops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(lsk, lovsub_lock_kmem, GFP_NOFS);
+	if (lsk != NULL) {
+		CFS_INIT_LIST_HEAD(&lsk->lss_parents);
+		cl_lock_slice_add(lock, &lsk->lss_cl, obj, &lovsub_lock_ops);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	RETURN(result);
 }
 
 /** @} lov */

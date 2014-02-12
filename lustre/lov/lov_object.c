@@ -922,28 +922,28 @@ static const struct lu_object_operations lov_lu_obj_ops = {
 };
 
 struct lu_object *lov_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *unused,
-                                   struct lu_device *dev)
+				   const struct lu_object_header *unused,
+				   struct lu_device *dev)
 {
-        struct lov_object *lov;
-        struct lu_object  *obj;
+	struct lov_object *lov;
+	struct lu_object  *obj;
 
-        ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lov, lov_object_kmem, __GFP_IO);
-        if (lov != NULL) {
-                obj = lov2lu(lov);
-                lu_object_init(obj, NULL, dev);
-                lov->lo_cl.co_ops = &lov_ops;
-                lov->lo_type = -1; /* invalid, to catch uninitialized type */
-                /*
-                 * object io operation vector (cl_object::co_iop) is installed
-                 * later in lov_object_init(), as different vectors are used
-                 * for object with different layouts.
-                 */
-                obj->lo_ops = &lov_lu_obj_ops;
-        } else
-                obj = NULL;
-        RETURN(obj);
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(lov, lov_object_kmem, GFP_NOFS);
+	if (lov != NULL) {
+		obj = lov2lu(lov);
+		lu_object_init(obj, NULL, dev);
+		lov->lo_cl.co_ops = &lov_ops;
+		lov->lo_type = -1; /* invalid, to catch uninitialized type */
+		/*
+		 * object io operation vector (cl_object::co_iop) is installed
+		 * later in lov_object_init(), as different vectors are used
+		 * for object with different layouts.
+		 */
+		obj->lo_ops = &lov_lu_obj_ops;
+	} else
+		obj = NULL;
+	RETURN(obj);
 }
 
 struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov)

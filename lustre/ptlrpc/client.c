@@ -464,7 +464,7 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
 		struct lustre_msg *msg;
 
 		spin_unlock(&pool->prp_lock);
-		req = ptlrpc_request_cache_alloc(__GFP_IO);
+		req = ptlrpc_request_cache_alloc(GFP_NOFS);
 		if (!req)
 			return;
 		OBD_ALLOC_LARGE(msg, size);
@@ -698,7 +698,7 @@ EXPORT_SYMBOL(ptlrpc_request_pack);
  */
 static inline
 struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
-                                              struct ptlrpc_request_pool *pool)
+					      struct ptlrpc_request_pool *pool)
 {
 	struct ptlrpc_request *request = NULL;
 
@@ -706,21 +706,21 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
 		request = ptlrpc_prep_req_from_pool(pool);
 
 	if (!request)
-		request = ptlrpc_request_cache_alloc(__GFP_IO);
+		request = ptlrpc_request_cache_alloc(GFP_NOFS);
 
-        if (request) {
-                LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
-                LASSERT(imp != LP_POISON);
-                LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p",
-                        imp->imp_client);
-                LASSERT(imp->imp_client != LP_POISON);
+	if (request) {
+		LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
+		LASSERT(imp != LP_POISON);
+		LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p",
+			imp->imp_client);
+		LASSERT(imp->imp_client != LP_POISON);
 
-                request->rq_import = class_import_get(imp);
-        } else {
-                CERROR("request allocation out of memory\n");
-        }
+		request->rq_import = class_import_get(imp);
+	} else {
+		CERROR("request allocation out of memory\n");
+	}
 
-        return request;
+	return request;
 }
 
 /**
@@ -3090,22 +3090,22 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
 	if (cb == NULL)
 		RETURN(ERR_PTR(-EINVAL));
 
-        /* copy some code from deprecated fakereq. */
-        req = ptlrpc_request_cache_alloc(__GFP_IO);
-        if (req == NULL) {
-                CERROR("ptlrpc: run out of memory!\n");
-                RETURN(ERR_PTR(-ENOMEM));
-        }
+	/* copy some code from deprecated fakereq. */
+	req = ptlrpc_request_cache_alloc(GFP_NOFS);
+	if (req == NULL) {
+		CERROR("ptlrpc: run out of memory!\n");
+		RETURN(ERR_PTR(-ENOMEM));
+	}
 
-        req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_type = PTL_RPC_MSG_REQUEST;
-        req->rq_import = class_import_get(imp);
-        req->rq_export = NULL;
-        req->rq_interpret_reply = work_interpreter;
-        /* don't want reply */
-        req->rq_receiving_reply = 0;
-        req->rq_must_unlink = 0;
-        req->rq_no_delay = req->rq_no_resend = 1;
+	req->rq_send_state = LUSTRE_IMP_FULL;
+	req->rq_type = PTL_RPC_MSG_REQUEST;
+	req->rq_import = class_import_get(imp);
+	req->rq_export = NULL;
+	req->rq_interpret_reply = work_interpreter;
+	/* don't want reply */
+	req->rq_receiving_reply = 0;
+	req->rq_must_unlink = 0;
+	req->rq_no_delay = req->rq_no_resend = 1;
 	req->rq_pill.rc_fmt = (void *)&worker_format;
 
 	spin_lock_init(&req->rq_lock);

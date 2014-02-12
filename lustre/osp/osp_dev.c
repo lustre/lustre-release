@@ -73,7 +73,7 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 	struct osp_object	*o;
 	struct lu_object	*l;
 
-	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, __GFP_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(o, osp_object_kmem, GFP_NOFS);
 	if (o != NULL) {
 		l = &o->opo_obj.do_lu;
 

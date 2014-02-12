@@ -286,7 +286,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 {
 	struct osd_object *mo;
 
-	OBD_SLAB_ALLOC_PTR_GFP(mo, osd_object_kmem, __GFP_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(mo, osd_object_kmem, GFP_NOFS);
 	if (mo != NULL) {
 		struct lu_object *l;
 

@@ -144,27 +144,27 @@ static const struct lu_object_operations lovsub_lu_obj_ops = {
 };
 
 struct lu_object *lovsub_object_alloc(const struct lu_env *env,
-                                      const struct lu_object_header *unused,
-                                      struct lu_device *dev)
+				      const struct lu_object_header *unused,
+				      struct lu_device *dev)
 {
-        struct lovsub_object *los;
-        struct lu_object     *obj;
+	struct lovsub_object *los;
+	struct lu_object     *obj;
 
-        ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(los, lovsub_object_kmem, __GFP_IO);
-        if (los != NULL) {
-                struct cl_object_header *hdr;
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(los, lovsub_object_kmem, GFP_NOFS);
+	if (los != NULL) {
+		struct cl_object_header *hdr;
 
-                obj = lovsub2lu(los);
-                hdr = &los->lso_header;
-                cl_object_header_init(hdr);
-                lu_object_init(obj, &hdr->coh_lu, dev);
-                lu_object_add_top(&hdr->coh_lu, obj);
-                los->lso_cl.co_ops = &lovsub_ops;
-                obj->lo_ops = &lovsub_lu_obj_ops;
-        } else
-                obj = NULL;
-        RETURN(obj);
+		obj = lovsub2lu(los);
+		hdr = &los->lso_header;
+		cl_object_header_init(hdr);
+		lu_object_init(obj, &hdr->coh_lu, dev);
+		lu_object_add_top(&hdr->coh_lu, obj);
+		los->lso_cl.co_ops = &lovsub_ops;
+		obj->lo_ops = &lovsub_lu_obj_ops;
+	} else
+		obj = NULL;
+	RETURN(obj);
 }
 
 /** @} lov */

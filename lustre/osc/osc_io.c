@@ -864,18 +864,18 @@ int osc_io_init(const struct lu_env *env,
 }
 
 int osc_req_init(const struct lu_env *env, struct cl_device *dev,
-                 struct cl_req *req)
+		 struct cl_req *req)
 {
-        struct osc_req *or;
-        int result;
+	struct osc_req *or;
+	int result;
 
-	OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, __GFP_IO);
-        if (or != NULL) {
-                cl_req_slice_add(req, &or->or_cl, dev, &osc_req_ops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return result;
+	OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, GFP_NOFS);
+	if (or != NULL) {
+		cl_req_slice_add(req, &or->or_cl, dev, &osc_req_ops);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	return result;
 }
 
 /** @} osc */

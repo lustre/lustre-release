@@ -403,20 +403,20 @@ static int echo_io_init(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int echo_lock_init(const struct lu_env *env,
-                          struct cl_object *obj, struct cl_lock *lock,
-                          const struct cl_io *unused)
+			  struct cl_object *obj, struct cl_lock *lock,
+			  const struct cl_io *unused)
 {
-        struct echo_lock *el;
-        ENTRY;
+	struct echo_lock *el;
+	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(el, echo_lock_kmem, __GFP_IO);
-        if (el != NULL) {
-                cl_lock_slice_add(lock, &el->el_cl, obj, &echo_lock_ops);
-                el->el_object = cl2echo_obj(obj);
-                CFS_INIT_LIST_HEAD(&el->el_chain);
+	OBD_SLAB_ALLOC_PTR_GFP(el, echo_lock_kmem, GFP_NOFS);
+	if (el != NULL) {
+		cl_lock_slice_add(lock, &el->el_cl, obj, &echo_lock_ops);
+		el->el_object = cl2echo_obj(obj);
+		CFS_INIT_LIST_HEAD(&el->el_chain);
 		atomic_set(&el->el_refcount, 0);
-        }
-        RETURN(el == NULL ? -ENOMEM : 0);
+	}
+	RETURN(el == NULL ? -ENOMEM : 0);
 }
 
 static int echo_conf_set(const struct lu_env *env, struct cl_object *obj,
@@ -579,30 +579,30 @@ static const struct lu_object_operations echo_lu_obj_ops = {
  * @{
  */
 static struct lu_object *echo_object_alloc(const struct lu_env *env,
-                                           const struct lu_object_header *hdr,
-                                           struct lu_device *dev)
+					   const struct lu_object_header *hdr,
+					   struct lu_device *dev)
 {
-        struct echo_object *eco;
-        struct lu_object *obj = NULL;
-        ENTRY;
+	struct echo_object *eco;
+	struct lu_object *obj = NULL;
+	ENTRY;
 
-        /* we're the top dev. */
-        LASSERT(hdr == NULL);
-	OBD_SLAB_ALLOC_PTR_GFP(eco, echo_object_kmem, __GFP_IO);
-        if (eco != NULL) {
-                struct cl_object_header *hdr = &eco->eo_hdr;
+	/* we're the top dev. */
+	LASSERT(hdr == NULL);
+	OBD_SLAB_ALLOC_PTR_GFP(eco, echo_object_kmem, GFP_NOFS);
+	if (eco != NULL) {
+		struct cl_object_header *hdr = &eco->eo_hdr;
 
-                obj = &echo_obj2cl(eco)->co_lu;
-                cl_object_header_init(hdr);
+		obj = &echo_obj2cl(eco)->co_lu;
+		cl_object_header_init(hdr);
 		hdr->coh_page_bufsize = cfs_size_round(sizeof(struct cl_page));
 
-                lu_object_init(obj, &hdr->coh_lu, dev);
-                lu_object_add_top(&hdr->coh_lu, obj);
+		lu_object_init(obj, &hdr->coh_lu, dev);
+		lu_object_add_top(&hdr->coh_lu, obj);
 
-                eco->eo_cl.co_ops = &echo_cl_obj_ops;
-                obj->lo_ops       = &echo_lu_obj_ops;
-        }
-        RETURN(obj);
+		eco->eo_cl.co_ops = &echo_cl_obj_ops;
+		obj->lo_ops       = &echo_lu_obj_ops;
+	}
+	RETURN(obj);
 }
 
 static struct lu_device_operations echo_device_lu_ops = {
@@ -650,14 +650,14 @@ static void echo_site_fini(const struct lu_env *env, struct echo_device *ed)
 }
 
 static void *echo_thread_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
+				  struct lu_context_key *key)
 {
-        struct echo_thread_info *info;
+	struct echo_thread_info *info;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, echo_thread_kmem, __GFP_IO);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
+	OBD_SLAB_ALLOC_PTR_GFP(info, echo_thread_kmem, GFP_NOFS);
+	if (info == NULL)
+		info = ERR_PTR(-ENOMEM);
+	return info;
 }
 
 static void echo_thread_key_fini(const struct lu_context *ctx,
@@ -680,14 +680,14 @@ static struct lu_context_key echo_thread_key = {
 };
 
 static void *echo_session_key_init(const struct lu_context *ctx,
-                                  struct lu_context_key *key)
+				  struct lu_context_key *key)
 {
-        struct echo_session_info *session;
+	struct echo_session_info *session;
 
-	OBD_SLAB_ALLOC_PTR_GFP(session, echo_session_kmem, __GFP_IO);
-        if (session == NULL)
-                session = ERR_PTR(-ENOMEM);
-        return session;
+	OBD_SLAB_ALLOC_PTR_GFP(session, echo_session_kmem, GFP_NOFS);
+	if (session == NULL)
+		session = ERR_PTR(-ENOMEM);
+	return session;
 }
 
 static void echo_session_key_fini(const struct lu_context *ctx,
