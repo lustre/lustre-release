@@ -273,10 +273,10 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	struct inode		*inode	= filp->f_dentry->d_inode;
 	struct ll_file_data	*lfd	= LUSTRE_FPRIVATE(filp);
 	struct ll_sb_info	*sbi	= ll_i2sbi(inode);
-	__u64			pos	= lfd->lfd_pos;
 	int			hash64	= sbi->ll_flags & LL_SBI_64BIT_HASH;
 	int			api32	= ll_need_32bit_api(sbi);
 	struct md_op_data	*op_data;
+	__u64			pos;
 	int			rc;
 #ifdef HAVE_TOUCH_ATIME_1ARG
 	struct path		path;
