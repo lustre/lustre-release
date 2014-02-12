@@ -91,33 +91,33 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
 
 struct lov_stripe_md *lsm_alloc_plain(__u16 stripe_count, int *size)
 {
-        struct lov_stripe_md *lsm;
-        struct lov_oinfo     *loi;
-        int                   i, oinfo_ptrs_size;
+	struct lov_stripe_md *lsm;
+	struct lov_oinfo     *loi;
+	int                   i, oinfo_ptrs_size;
 
-        LASSERT(stripe_count <= LOV_MAX_STRIPE_COUNT);
+	LASSERT(stripe_count <= LOV_MAX_STRIPE_COUNT);
 
-        oinfo_ptrs_size = sizeof(struct lov_oinfo *) * stripe_count;
-        *size = sizeof(struct lov_stripe_md) + oinfo_ptrs_size;
+	oinfo_ptrs_size = sizeof(struct lov_oinfo *) * stripe_count;
+	*size = sizeof(struct lov_stripe_md) + oinfo_ptrs_size;
 
-        OBD_ALLOC_LARGE(lsm, *size);
-        if (!lsm)
-                return NULL;;
+	OBD_ALLOC_LARGE(lsm, *size);
+	if (!lsm)
+		return NULL;
 
-        for (i = 0; i < stripe_count; i++) {
-		OBD_SLAB_ALLOC_PTR_GFP(loi, lov_oinfo_slab, __GFP_IO);
-                if (loi == NULL)
-                        goto err;
-                lsm->lsm_oinfo[i] = loi;
-        }
-        lsm->lsm_stripe_count = stripe_count;
-        return lsm;
+	for (i = 0; i < stripe_count; i++) {
+		OBD_SLAB_ALLOC_PTR_GFP(loi, lov_oinfo_slab, GFP_NOFS);
+		if (loi == NULL)
+			goto err;
+		lsm->lsm_oinfo[i] = loi;
+	}
+	lsm->lsm_stripe_count = stripe_count;
+	return lsm;
 
 err:
-        while (--i >= 0)
-                OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab, sizeof(*loi));
-        OBD_FREE_LARGE(lsm, *size);
-        return NULL;
+	while (--i >= 0)
+		OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab, sizeof(*loi));
+	OBD_FREE_LARGE(lsm, *size);
+	return NULL;
 }
 
 void lsm_free_plain(struct lov_stripe_md *lsm)

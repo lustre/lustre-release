@@ -842,17 +842,17 @@ EXPORT_SYMBOL(ldlm_extent_shift_kms);
 struct kmem_cache *ldlm_interval_slab;
 struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock)
 {
-        struct ldlm_interval *node;
-        ENTRY;
+	struct ldlm_interval *node;
+	ENTRY;
 
-        LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
-	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, __GFP_IO);
-        if (node == NULL)
-                RETURN(NULL);
+	LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
+	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
+	if (node == NULL)
+		RETURN(NULL);
 
-        CFS_INIT_LIST_HEAD(&node->li_group);
-        ldlm_interval_attach(node, lock);
-        RETURN(node);
+	CFS_INIT_LIST_HEAD(&node->li_group);
+	ldlm_interval_attach(node, lock);
+	RETURN(node);
 }
 
 void ldlm_interval_free(struct ldlm_interval *node)

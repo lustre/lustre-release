@@ -140,25 +140,25 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
 }
 
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *hdr,
-                                   struct lu_device *d)
+				   const struct lu_object_header *hdr,
+				   struct lu_device *d)
 {
-        struct mdd_object *mdd_obj;
+	struct mdd_object *mdd_obj;
 
-	OBD_SLAB_ALLOC_PTR_GFP(mdd_obj, mdd_object_kmem, __GFP_IO);
-        if (mdd_obj != NULL) {
-                struct lu_object *o;
+	OBD_SLAB_ALLOC_PTR_GFP(mdd_obj, mdd_object_kmem, GFP_NOFS);
+	if (mdd_obj != NULL) {
+		struct lu_object *o;
 
-                o = mdd2lu_obj(mdd_obj);
-                lu_object_init(o, NULL, d);
-                mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
-                mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
-                mdd_obj->mod_count = 0;
-                o->lo_ops = &mdd_lu_obj_ops;
-                return o;
-        } else {
-                return NULL;
-        }
+		o = mdd2lu_obj(mdd_obj);
+		lu_object_init(o, NULL, d);
+		mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
+		mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
+		mdd_obj->mod_count = 0;
+		o->lo_ops = &mdd_lu_obj_ops;
+		return o;
+	} else {
+		return NULL;
+	}
 }
 
 static int mdd_object_init(const struct lu_env *env, struct lu_object *o,

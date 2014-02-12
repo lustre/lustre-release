@@ -54,7 +54,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	for (i = 0; i < LNET_MAX_IOV; i++) {
 		src[i].kiov_offset = 0;
 		src[i].kiov_len = PAGE_SIZE;
-		src[i].kiov_page = alloc_page(__GFP_IO | __GFP_FS | __GFP_ZERO);
+		src[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 
 		if (src[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
@@ -63,7 +63,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 		dest[i].kiov_offset = 0;
 		dest[i].kiov_len = PAGE_SIZE;
-		dest[i].kiov_page = alloc_page(__GFP_IO | __GFP_FS | __GFP_ZERO);
+		dest[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 
 		if (dest[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);

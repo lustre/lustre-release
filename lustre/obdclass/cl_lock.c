@@ -370,20 +370,20 @@ static void cl_lock_finish(const struct lu_env *env, struct cl_lock *lock)
 }
 
 static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
-                                     struct cl_object *obj,
-                                     const struct cl_io *io,
-                                     const struct cl_lock_descr *descr)
+				     struct cl_object *obj,
+				     const struct cl_io *io,
+				     const struct cl_lock_descr *descr)
 {
-        struct cl_lock          *lock;
-        struct lu_object_header *head;
+	struct cl_lock          *lock;
+	struct lu_object_header *head;
 
         ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lock, cl_lock_kmem, __GFP_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lock, cl_lock_kmem, GFP_NOFS);
         if (lock != NULL) {
-                cfs_atomic_set(&lock->cll_ref, 1);
-                lock->cll_descr = *descr;
-                lock->cll_state = CLS_NEW;
-                cl_object_get(obj);
+		cfs_atomic_set(&lock->cll_ref, 1);
+		lock->cll_descr = *descr;
+		lock->cll_state = CLS_NEW;
+		cl_object_get(obj);
 		lu_object_ref_add_at(&obj->co_lu, &lock->cll_obj_ref, "cl_lock",
 				     lock);
 		CFS_INIT_LIST_HEAD(&lock->cll_layers);

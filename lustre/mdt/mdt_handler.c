@@ -5216,24 +5216,24 @@ static int mdt_process_config(const struct lu_env *env,
 }
 
 static struct lu_object *mdt_object_alloc(const struct lu_env *env,
-                                          const struct lu_object_header *hdr,
-                                          struct lu_device *d)
+					  const struct lu_object_header *hdr,
+					  struct lu_device *d)
 {
-        struct mdt_object *mo;
+	struct mdt_object *mo;
 
-        ENTRY;
+	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(mo, mdt_object_kmem, __GFP_IO);
-        if (mo != NULL) {
-                struct lu_object *o;
-                struct lu_object_header *h;
+	OBD_SLAB_ALLOC_PTR_GFP(mo, mdt_object_kmem, GFP_NOFS);
+	if (mo != NULL) {
+		struct lu_object *o;
+		struct lu_object_header *h;
 
 		o = &mo->mot_obj;
-                h = &mo->mot_header;
-                lu_object_header_init(h);
-                lu_object_init(o, h, d);
-                lu_object_add_top(h, o);
-                o->lo_ops = &mdt_obj_ops;
+		h = &mo->mot_header;
+		lu_object_header_init(h);
+		lu_object_init(o, h, d);
+		lu_object_add_top(h, o);
+		o->lo_ops = &mdt_obj_ops;
 		mutex_init(&mo->mot_ioepoch_mutex);
 		mutex_init(&mo->mot_lov_mutex);
 		init_rwsem(&mo->mot_open_sem);

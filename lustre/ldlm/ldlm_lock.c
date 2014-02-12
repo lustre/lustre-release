@@ -468,19 +468,19 @@ struct portals_handle_ops lock_handle_ops = {
  */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 {
-        struct ldlm_lock *lock;
-        ENTRY;
+	struct ldlm_lock *lock;
+	ENTRY;
 
-        if (resource == NULL)
-                LBUG();
+	if (resource == NULL)
+		LBUG();
 
-	OBD_SLAB_ALLOC_PTR_GFP(lock, ldlm_lock_slab, __GFP_IO);
-        if (lock == NULL)
-                RETURN(NULL);
+	OBD_SLAB_ALLOC_PTR_GFP(lock, ldlm_lock_slab, GFP_NOFS);
+	if (lock == NULL)
+		RETURN(NULL);
 
 	spin_lock_init(&lock->l_lock);
-        lock->l_resource = resource;
-        lu_ref_add(&resource->lr_reference, "lock", lock);
+	lock->l_resource = resource;
+	lu_ref_add(&resource->lr_reference, "lock", lock);
 
 	cfs_atomic_set(&lock->l_refc, 2);
 	CFS_INIT_LIST_HEAD(&lock->l_res_link);
@@ -1687,12 +1687,12 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 }
         }
 
-        /* For a replaying lock, it might be already in granted list. So
-         * unlinking the lock will cause the interval node to be freed, we
-         * have to allocate the interval node early otherwise we can't regrant
-         * this lock in the future. - jay */
-        if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
-		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, __GFP_IO);
+	/* For a replaying lock, it might be already in granted list. So
+	 * unlinking the lock will cause the interval node to be freed, we
+	 * have to allocate the interval node early otherwise we can't regrant
+	 * this lock in the future. - jay */
+	if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
+		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
 
         lock_res_and_lock(lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
@@ -2297,38 +2297,38 @@ EXPORT_SYMBOL(ldlm_lock_downgrade);
  * pages on a file.
  */
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
-                                        __u32 *flags)
+					__u32 *flags)
 {
-        CFS_LIST_HEAD(rpc_list);
-        struct ldlm_resource *res;
-        struct ldlm_namespace *ns;
-        int granted = 0;
+	CFS_LIST_HEAD(rpc_list);
+	struct ldlm_resource *res;
+	struct ldlm_namespace *ns;
+	int granted = 0;
 #ifdef HAVE_SERVER_SUPPORT
 	int old_mode;
 	struct sl_insert_point prev;
 #endif
-        struct ldlm_interval *node;
-        ENTRY;
+	struct ldlm_interval *node;
+	ENTRY;
 
 	/* Just return if mode is unchanged. */
 	if (new_mode == lock->l_granted_mode) {
-                *flags |= LDLM_FL_BLOCK_GRANTED;
-                RETURN(lock->l_resource);
-        }
+		*flags |= LDLM_FL_BLOCK_GRANTED;
+		RETURN(lock->l_resource);
+	}
 
-        /* I can't check the type of lock here because the bitlock of lock
-         * is not held here, so do the allocation blindly. -jay */
-	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, __GFP_IO);
+	/* I can't check the type of lock here because the bitlock of lock
+	 * is not held here, so do the allocation blindly. -jay */
+	OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
 	if (node == NULL)  /* Actually, this causes EDEADLOCK to be returned */
-                RETURN(NULL);
+		RETURN(NULL);
 
-        LASSERTF((new_mode == LCK_PW && lock->l_granted_mode == LCK_PR),
-                 "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
+	LASSERTF((new_mode == LCK_PW && lock->l_granted_mode == LCK_PR),
+		 "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
-        lock_res_and_lock(lock);
+	lock_res_and_lock(lock);
 
-        res = lock->l_resource;
-        ns  = ldlm_res_to_ns(res);
+	res = lock->l_resource;
+	ns  = ldlm_res_to_ns(res);
 
 #ifdef HAVE_SERVER_SUPPORT
 	old_mode = lock->l_req_mode;

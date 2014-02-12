@@ -122,7 +122,7 @@ struct lu_object *lod_object_alloc(const struct lu_env *env,
 	int			rc = 0;
 	ENTRY;
 
-	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, __GFP_IO);
+	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, GFP_NOFS);
 	if (lod_obj == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 

@@ -40,7 +40,7 @@ static const union
 
 static inline dqbuf_t getdqbuf(void)
 {
-	dqbuf_t buf = kmalloc(LUSTRE_DQBLKSIZE, __GFP_IO);
+	dqbuf_t buf = kmalloc(LUSTRE_DQBLKSIZE, GFP_NOFS);
 	if (!buf)
 		CWARN("Not enough memory for quota buffers.\n");
 	return buf;

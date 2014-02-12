@@ -194,7 +194,7 @@ do {									    \
  * default allocator
  */
 #define LIBCFS_ALLOC(ptr, size) \
-	LIBCFS_ALLOC_GFP(ptr, size, __GFP_IO)
+	LIBCFS_ALLOC_GFP(ptr, size, GFP_NOFS)
 
 /**
  * non-sleeping allocator
@@ -218,7 +218,7 @@ do {									    \
 
 /** default numa allocator */
 #define LIBCFS_CPT_ALLOC(ptr, cptab, cpt, size)				    \
-	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, __GFP_IO)
+	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, GFP_NOFS)
 
 #define LIBCFS_FREE(ptr, size)						\
 do {									\

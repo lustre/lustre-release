@@ -128,15 +128,14 @@ static struct lu_kmem_descr ccc_caches[] = {
  *
  */
 
-void *ccc_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
+void *ccc_key_init(const struct lu_context *ctx, struct lu_context_key *key)
 {
-        struct ccc_thread_info *info;
+	struct ccc_thread_info *info;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, __GFP_IO);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
+	OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, GFP_NOFS);
+	if (info == NULL)
+		info = ERR_PTR(-ENOMEM);
+	return info;
 }
 
 void ccc_key_fini(const struct lu_context *ctx,
@@ -147,14 +146,14 @@ void ccc_key_fini(const struct lu_context *ctx,
 }
 
 void *ccc_session_key_init(const struct lu_context *ctx,
-                                  struct lu_context_key *key)
+			   struct lu_context_key *key)
 {
-        struct ccc_session *session;
+	struct ccc_session *session;
 
-	OBD_SLAB_ALLOC_PTR_GFP(session, ccc_session_kmem, __GFP_IO);
-        if (session == NULL)
-                session = ERR_PTR(-ENOMEM);
-        return session;
+	OBD_SLAB_ALLOC_PTR_GFP(session, ccc_session_kmem, GFP_NOFS);
+	if (session == NULL)
+		session = ERR_PTR(-ENOMEM);
+	return session;
 }
 
 void ccc_session_key_fini(const struct lu_context *ctx,
@@ -264,18 +263,18 @@ struct lu_device *ccc_device_free(const struct lu_env *env,
 }
 
 int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
-                        struct cl_req *req)
+		 struct cl_req *req)
 {
-        struct ccc_req *vrq;
-        int result;
+	struct ccc_req *vrq;
+	int result;
 
-	OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, __GFP_IO);
-        if (vrq != NULL) {
-                cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return result;
+	OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, GFP_NOFS);
+	if (vrq != NULL) {
+		cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	return result;
 }
 
 /**
@@ -337,17 +336,17 @@ void ccc_global_fini(struct lu_device_type *device_type)
  */
 
 struct lu_object *ccc_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *unused,
-                                   struct lu_device *dev,
-                                   const struct cl_object_operations *clops,
-                                   const struct lu_object_operations *luops)
+				   const struct lu_object_header *unused,
+				   struct lu_device *dev,
+				   const struct cl_object_operations *clops,
+				   const struct lu_object_operations *luops)
 {
-        struct ccc_object *vob;
-        struct lu_object  *obj;
+	struct ccc_object *vob;
+	struct lu_object  *obj;
 
-	OBD_SLAB_ALLOC_PTR_GFP(vob, ccc_object_kmem, __GFP_IO);
-        if (vob != NULL) {
-                struct cl_object_header *hdr;
+	OBD_SLAB_ALLOC_PTR_GFP(vob, ccc_object_kmem, GFP_NOFS);
+	if (vob != NULL) {
+		struct cl_object_header *hdr;
 
                 obj = ccc2lu(vob);
                 hdr = &vob->cob_header;
@@ -355,11 +354,11 @@ struct lu_object *ccc_object_alloc(const struct lu_env *env,
                 lu_object_init(obj, &hdr->coh_lu, dev);
                 lu_object_add_top(&hdr->coh_lu, obj);
 
-                vob->cob_cl.co_ops = clops;
-                obj->lo_ops = luops;
-        } else
-                obj = NULL;
-        return obj;
+		vob->cob_cl.co_ops = clops;
+		obj->lo_ops = luops;
+	} else
+		obj = NULL;
+	return obj;
 }
 
 int ccc_object_init0(const struct lu_env *env,
@@ -405,22 +404,22 @@ void ccc_object_free(const struct lu_env *env, struct lu_object *obj)
 }
 
 int ccc_lock_init(const struct lu_env *env,
-                  struct cl_object *obj, struct cl_lock *lock,
-                  const struct cl_io *unused,
-                  const struct cl_lock_operations *lkops)
+		  struct cl_object *obj, struct cl_lock *lock,
+		  const struct cl_io *unused,
+		  const struct cl_lock_operations *lkops)
 {
-        struct ccc_lock *clk;
-        int result;
+	struct ccc_lock *clk;
+	int result;
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	OBD_SLAB_ALLOC_PTR_GFP(clk, ccc_lock_kmem, __GFP_IO);
-        if (clk != NULL) {
-                cl_lock_slice_add(lock, &clk->clk_cl, obj, lkops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return result;
+	OBD_SLAB_ALLOC_PTR_GFP(clk, ccc_lock_kmem, GFP_NOFS);
+	if (clk != NULL) {
+		cl_lock_slice_add(lock, &clk->clk_cl, obj, lkops);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	return result;
 }
 
 int ccc_attr_set(const struct lu_env *env, struct cl_object *obj,

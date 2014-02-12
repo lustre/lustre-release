@@ -892,19 +892,19 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         /* on pending IO in this thread should left from prev. request */
         LASSERT(cfs_atomic_read(&iobuf->dr_numreqs) == 0);
 
-        th = ERR_PTR(-ENOMEM);
-	OBD_ALLOC_GFP(oh, sizeof *oh, __GFP_IO);
-        if (oh != NULL) {
+	th = ERR_PTR(-ENOMEM);
+	OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
+	if (oh != NULL) {
 		oh->ot_quota_trans = &oti->oti_quota_trans;
 		memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
-                th = &oh->ot_super;
-                th->th_dev = d;
-                th->th_result = 0;
-                th->th_tags = LCT_TX_HANDLE;
-                oh->ot_credits = 0;
-                oti->oti_dev = osd_dt_dev(d);
-                CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
-                osd_th_alloced(oh);
+		th = &oh->ot_super;
+		th->th_dev = d;
+		th->th_result = 0;
+		th->th_tags = LCT_TX_HANDLE;
+		oh->ot_credits = 0;
+		oti->oti_dev = osd_dt_dev(d);
+		CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
+		osd_th_alloced(oh);
 
 		memset(oti->oti_declare_ops, 0,
 					sizeof(oti->oti_declare_ops));
@@ -913,8 +913,8 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 		memset(oti->oti_declare_ops_cred, 0,
 					sizeof(oti->oti_declare_ops_cred));
 		oti->oti_rollback = false;
-        }
-        RETURN(th);
+	}
+	RETURN(th);
 }
 
 /*

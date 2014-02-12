@@ -139,16 +139,16 @@ static const struct cl_req_operations lov_req_ops = {
  */
 
 static void *lov_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
+			  struct lu_context_key *key)
 {
-        struct lov_thread_info *info;
+	struct lov_thread_info *info;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, lov_thread_kmem, __GFP_IO);
-        if (info != NULL)
-                CFS_INIT_LIST_HEAD(&info->lti_closure.clc_list);
-        else
-                info = ERR_PTR(-ENOMEM);
-        return info;
+	OBD_SLAB_ALLOC_PTR_GFP(info, lov_thread_kmem, GFP_NOFS);
+	if (info != NULL)
+		CFS_INIT_LIST_HEAD(&info->lti_closure.clc_list);
+	else
+		info = ERR_PTR(-ENOMEM);
+	return info;
 }
 
 static void lov_key_fini(const struct lu_context *ctx,
@@ -166,14 +166,14 @@ struct lu_context_key lov_key = {
 };
 
 static void *lov_session_key_init(const struct lu_context *ctx,
-                                  struct lu_context_key *key)
+				  struct lu_context_key *key)
 {
-        struct lov_session *info;
+	struct lov_session *info;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, lov_session_kmem, __GFP_IO);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
+	OBD_SLAB_ALLOC_PTR_GFP(info, lov_session_kmem, GFP_NOFS);
+	if (info == NULL)
+		info = ERR_PTR(-ENOMEM);
+	return info;
 }
 
 static void lov_session_key_fini(const struct lu_context *ctx,
@@ -255,19 +255,19 @@ static int lov_device_init(const struct lu_env *env, struct lu_device *d,
 }
 
 static int lov_req_init(const struct lu_env *env, struct cl_device *dev,
-                        struct cl_req *req)
+			struct cl_req *req)
 {
-        struct lov_req *lr;
-        int result;
+	struct lov_req *lr;
+	int result;
 
-        ENTRY;
-	OBD_SLAB_ALLOC_PTR_GFP(lr, lov_req_kmem, __GFP_IO);
-        if (lr != NULL) {
-                cl_req_slice_add(req, &lr->lr_cl, dev, &lov_req_ops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(lr, lov_req_kmem, GFP_NOFS);
+	if (lr != NULL) {
+		cl_req_slice_add(req, &lr->lr_cl, dev, &lov_req_ops);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	RETURN(result);
 }
 
 static const struct cl_device_operations lov_cl_ops = {

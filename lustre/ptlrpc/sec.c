@@ -916,7 +916,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
                 RETURN(-EACCES);
         }
 
-	req = ptlrpc_request_cache_alloc(__GFP_IO);
+	req = ptlrpc_request_cache_alloc(GFP_NOFS);
 	if (!req)
 		RETURN(-ENOMEM);
 
@@ -1088,14 +1088,14 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
  * changed at any time, no matter we're holding rq_lock or not. For this reason
  * we allocate a separate ptlrpc_request and reply buffer for early reply
  * processing.
- * 
+ *
  * \retval 0 success, \a req_ret is filled with a duplicated ptlrpc_request.
  * Later the caller must call sptlrpc_cli_finish_early_reply() on the returned
  * \a *req_ret to release it.
  * \retval -ev error number, and \a req_ret will not be set.
  */
 int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
-                                   struct ptlrpc_request **req_ret)
+				   struct ptlrpc_request **req_ret)
 {
 	struct ptlrpc_request  *early_req;
 	char                   *early_buf;
@@ -1103,17 +1103,17 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 	int                     rc;
 	ENTRY;
 
-	early_req = ptlrpc_request_cache_alloc(__GFP_IO);
-        if (early_req == NULL)
-                RETURN(-ENOMEM);
+	early_req = ptlrpc_request_cache_alloc(GFP_NOFS);
+	if (early_req == NULL)
+		RETURN(-ENOMEM);
 
-        early_size = req->rq_nob_received;
-        early_bufsz = size_roundup_power2(early_size);
-        OBD_ALLOC_LARGE(early_buf, early_bufsz);
-        if (early_buf == NULL)
-                GOTO(err_req, rc = -ENOMEM);
+	early_size = req->rq_nob_received;
+	early_bufsz = size_roundup_power2(early_size);
+	OBD_ALLOC_LARGE(early_buf, early_bufsz);
+	if (early_buf == NULL)
+		GOTO(err_req, rc = -ENOMEM);
 
-        /* sanity checkings and copy data out, do it inside spinlock */
+	/* sanity checkings and copy data out, do it inside spinlock */
 	spin_lock(&req->rq_lock);
 
 	if (req->rq_replied) {

@@ -869,7 +869,7 @@ int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
 
 	OBD_SLAB_CPT_ALLOC_PTR_GFP(orro, orrd->od_cache,
 				   nrs_pol2cptab(policy), nrs_pol2cptid(policy),
-				   moving_req ? GFP_ATOMIC : __GFP_IO);
+				   moving_req ? GFP_ATOMIC : GFP_NOFS);
 	if (orro == NULL)
 		RETURN(-ENOMEM);
 

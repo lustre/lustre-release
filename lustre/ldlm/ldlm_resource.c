@@ -1059,16 +1059,16 @@ struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client)
 /** Create and initialize new resource. */
 static struct ldlm_resource *ldlm_resource_new(void)
 {
-        struct ldlm_resource *res;
-        int idx;
+	struct ldlm_resource *res;
+	int idx;
 
-	OBD_SLAB_ALLOC_PTR_GFP(res, ldlm_resource_slab, __GFP_IO);
-        if (res == NULL)
-                return NULL;
+	OBD_SLAB_ALLOC_PTR_GFP(res, ldlm_resource_slab, GFP_NOFS);
+	if (res == NULL)
+		return NULL;
 
-        CFS_INIT_LIST_HEAD(&res->lr_granted);
-        CFS_INIT_LIST_HEAD(&res->lr_converting);
-        CFS_INIT_LIST_HEAD(&res->lr_waiting);
+	CFS_INIT_LIST_HEAD(&res->lr_granted);
+	CFS_INIT_LIST_HEAD(&res->lr_converting);
+	CFS_INIT_LIST_HEAD(&res->lr_waiting);
 
 	/* Initialize interval trees for each lock mode. */
         for (idx = 0; idx < LCK_MODE_NUM; idx++) {
