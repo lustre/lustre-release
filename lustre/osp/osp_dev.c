@@ -531,6 +531,8 @@ out:
 	RETURN(rc);
 }
 
+#define OSP_MAX_AUIF_MAX	512
+
 static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -544,6 +546,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	ENTRY;
 
 	mutex_init(&m->opd_async_requests_mutex);
+	/* We allow OSP_MAX_AUIF_MAX async updates in flight at most. */
+	sema_init(&m->opd_async_fc_sem, OSP_MAX_AUIF_MAX);
+
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	if (obd == NULL) {
 		CERROR("Cannot find obd with name %s\n",

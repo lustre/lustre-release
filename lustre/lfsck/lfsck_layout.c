@@ -3380,11 +3380,15 @@ static int lfsck_layout_assistant(void *args)
 			rc = lfsck_layout_assistant_handle_one(env, com, llr);
 			spin_lock(&llmd->llmd_lock);
 			list_del_init(&llr->llr_list);
-			if (bk->lb_async_windows != 0 &&
-			    llmd->llmd_prefetched >= bk->lb_async_windows)
-				wakeup = true;
-
 			llmd->llmd_prefetched--;
+			/* Wake up the main engine thread only when the list
+			 * is empty or half of the prefetched items have been
+			 * handled to avoid too frequent thread schedule. */
+			if (llmd->llmd_prefetched == 0 ||
+			    (bk->lb_async_windows != 0 &&
+			     (bk->lb_async_windows >> 1) ==
+			     llmd->llmd_prefetched))
+				wakeup = true;
 			spin_unlock(&llmd->llmd_lock);
 			if (wakeup)
 				wake_up_all(&mthread->t_ctl_waitq);
@@ -3393,9 +3397,6 @@ static int lfsck_layout_assistant(void *args)
 			if (rc < 0 && bk->lb_param & LPF_FAILOUT)
 				GOTO(cleanup1, rc);
 		}
-
-		/* Wakeup the master engine if it is waiting in checkpoint. */
-		wake_up_all(&mthread->t_ctl_waitq);
 
 		l_wait_event(athread->t_ctl_waitq,
 			     !lfsck_layout_req_empty(llmd) ||

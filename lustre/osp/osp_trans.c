@@ -35,6 +35,7 @@
 
 struct osp_async_update_args {
 	struct update_request	*oaua_update;
+	unsigned int		 oaua_fc:1;
 };
 
 struct osp_async_update_item {
@@ -81,9 +82,13 @@ static int osp_async_update_interpret(const struct lu_env *env,
 	struct update_request		*update = oaua->oaua_update;
 	struct osp_async_update_item	*oaui;
 	struct osp_async_update_item	*next;
+	struct osp_device		*osp	= dt2osp_dev(update->ur_dt);
 	int				 count	= 0;
 	int				 index  = 0;
 	int				 rc1	= 0;
+
+	if (oaua->oaua_fc)
+		up(&osp->opd_async_fc_sem);
 
 	if (rc == 0 || req->rq_repmsg != NULL) {
 		reply = req_capsule_server_sized_get(&req->rq_pill,
@@ -260,7 +265,8 @@ out:
 }
 
 static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
-			     struct update_request *update, struct thandle *th)
+			     struct update_request *update, struct thandle *th,
+			     bool fc)
 {
 	struct thandle_update	*tu = th->th_update;
 	int			rc = 0;
@@ -280,6 +286,7 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 		if (rc == 0) {
 			args = ptlrpc_req_async_args(req);
 			args->oaua_update = update;
+			args->oaua_fc = !!fc;
 			req->rq_interpret_reply =
 				osp_async_update_interpret;
 			ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
@@ -326,7 +333,7 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 	 * the local transaction, i.e. delete the name entry remote
 	 * first, then destroy the local object. */
 	if (!is_only_remote_trans(th) && !tu->tu_sent_after_local_trans)
-		rc = osp_trans_trigger(env, dt2osp_dev(dt), update, th);
+		rc = osp_trans_trigger(env, dt2osp_dev(dt), update, th, false);
 
 	return rc;
 }
@@ -354,8 +361,25 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	if (is_only_remote_trans(th)) {
 		if (th->th_result == 0) {
+			struct osp_device *osp = dt2osp_dev(th->th_dev);
+
+			do {
+				if (!osp->opd_imp_active ||
+				    osp->opd_got_disconnected) {
+					out_destroy_update_req(update);
+					GOTO(put, rc = -ENOTCONN);
+				}
+
+				/* Get the semaphore to guarantee it has
+				 * free slot, which will be released via
+				 * osp_async_update_interpret(). */
+				rc = down_timeout(&osp->opd_async_fc_sem, HZ);
+			} while (rc != 0);
+
 			rc = osp_trans_trigger(env, dt2osp_dev(dt),
-					       update, th);
+					       update, th, true);
+			if (rc != 0)
+				up(&osp->opd_async_fc_sem);
 		} else {
 			rc = th->th_result;
 			out_destroy_update_req(update);
@@ -363,7 +387,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	} else {
 		if (tu->tu_sent_after_local_trans)
 			rc = osp_trans_trigger(env, dt2osp_dev(dt),
-					       update, th);
+					       update, th, false);
 		rc = update->ur_rc;
 		out_destroy_update_req(update);
 	}

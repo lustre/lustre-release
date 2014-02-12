@@ -60,6 +60,8 @@
 #include <lu_ref.h>
 #include <libcfs/list.h>
 
+extern spinlock_t obd_types_lock;
+
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 
 /**
@@ -802,33 +804,30 @@ int lu_device_type_init(struct lu_device_type *ldt)
 {
 	int result = 0;
 
-	CFS_INIT_LIST_HEAD(&ldt->ldt_linkage);
+	atomic_set(&ldt->ldt_device_nr, 0);
+	INIT_LIST_HEAD(&ldt->ldt_linkage);
 	if (ldt->ldt_ops->ldto_init)
 		result = ldt->ldt_ops->ldto_init(ldt);
-	if (result == 0)
-		cfs_list_add(&ldt->ldt_linkage, &lu_device_types);
+
+	if (result == 0) {
+		spin_lock(&obd_types_lock);
+		list_add(&ldt->ldt_linkage, &lu_device_types);
+		spin_unlock(&obd_types_lock);
+	}
+
 	return result;
 }
 EXPORT_SYMBOL(lu_device_type_init);
 
 void lu_device_type_fini(struct lu_device_type *ldt)
 {
-	cfs_list_del_init(&ldt->ldt_linkage);
+	spin_lock(&obd_types_lock);
+	list_del_init(&ldt->ldt_linkage);
+	spin_unlock(&obd_types_lock);
 	if (ldt->ldt_ops->ldto_fini)
 		ldt->ldt_ops->ldto_fini(ldt);
 }
 EXPORT_SYMBOL(lu_device_type_fini);
-
-void lu_types_stop(void)
-{
-        struct lu_device_type *ldt;
-
-	cfs_list_for_each_entry(ldt, &lu_device_types, ldt_linkage) {
-		if (ldt->ldt_device_nr == 0 && ldt->ldt_ops->ldto_stop)
-			ldt->ldt_ops->ldto_stop(ldt);
-	}
-}
-EXPORT_SYMBOL(lu_types_stop);
 
 /**
  * Global list of all sites on this node
@@ -1169,14 +1168,16 @@ EXPORT_SYMBOL(lu_device_put);
  */
 int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 {
-        if (t->ldt_device_nr++ == 0 && t->ldt_ops->ldto_start != NULL)
-                t->ldt_ops->ldto_start(t);
-        memset(d, 0, sizeof *d);
-	atomic_set(&d->ld_ref, 0);
-        d->ld_type = t;
-        lu_ref_init(&d->ld_reference);
-        CFS_INIT_LIST_HEAD(&d->ld_linkage);
-        return 0;
+	if (atomic_inc_return(&t->ldt_device_nr) == 1 &&
+	    t->ldt_ops->ldto_start != NULL)
+		t->ldt_ops->ldto_start(t);
+
+	memset(d, 0, sizeof *d);
+	d->ld_type = t;
+	lu_ref_init(&d->ld_reference);
+	INIT_LIST_HEAD(&d->ld_linkage);
+
+	return 0;
 }
 EXPORT_SYMBOL(lu_device_init);
 
@@ -1185,20 +1186,21 @@ EXPORT_SYMBOL(lu_device_init);
  */
 void lu_device_fini(struct lu_device *d)
 {
-        struct lu_device_type *t;
+	struct lu_device_type *t = d->ld_type;
 
-        t = d->ld_type;
-        if (d->ld_obd != NULL) {
-                d->ld_obd->obd_lu_dev = NULL;
-                d->ld_obd = NULL;
-        }
+	if (d->ld_obd != NULL) {
+		d->ld_obd->obd_lu_dev = NULL;
+		d->ld_obd = NULL;
+	}
 
-        lu_ref_fini(&d->ld_reference);
+	lu_ref_fini(&d->ld_reference);
 	LASSERTF(atomic_read(&d->ld_ref) == 0,
 		 "Refcount is %u\n", atomic_read(&d->ld_ref));
-        LASSERT(t->ldt_device_nr > 0);
-        if (--t->ldt_device_nr == 0 && t->ldt_ops->ldto_stop != NULL)
-                t->ldt_ops->ldto_stop(t);
+	LASSERT(atomic_read(&t->ldt_device_nr) > 0);
+
+	if (atomic_dec_and_test(&t->ldt_device_nr) &&
+	    t->ldt_ops->ldto_stop != NULL)
+		t->ldt_ops->ldto_stop(t);
 }
 EXPORT_SYMBOL(lu_device_fini);
 

@@ -122,11 +122,11 @@ struct osp_device {
 	cfs_proc_dir_entry_t		*opd_proc_entry;
 	struct lprocfs_stats		*opd_stats;
 	/* connection status. */
-	int				 opd_new_connection;
-	int				 opd_got_disconnected;
-	int				 opd_imp_connected;
-	int				 opd_imp_active;
-	unsigned int			 opd_imp_seen_connected:1,
+	unsigned int			 opd_new_connection:1,
+					 opd_got_disconnected:1,
+					 opd_imp_connected:1,
+					 opd_imp_active:1,
+					 opd_imp_seen_connected:1,
 					 opd_connect_mdt:1;
 
 	/* whether local recovery is completed:
@@ -195,6 +195,7 @@ struct osp_device {
 	struct update_request		*opd_async_requests;
 	/* Protect current operations on opd_async_requests. */
 	struct mutex			 opd_async_requests_mutex;
+	struct semaphore		 opd_async_fc_sem;
 };
 
 #define opd_pre_lock			opd_pre->osp_pre_lock
