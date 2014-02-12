@@ -43,7 +43,7 @@ check_and_setup_lustre
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18"
 
 build_test_filter
 
@@ -1567,6 +1567,113 @@ test_17() {
 		error "(6) guard size should be 1048576, but got $size"
 }
 run_test 17 "LFSCK can repair multiple references"
+
+test_18a() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for test_18a" && exit 0
+
+	[ $OSTCOUNT -lt 2 ] &&
+		skip "We need at least 2 OSTs for test_18a" && exit 0
+
+	echo "#####"
+	echo "The target MDT-object is there, but related stripe information"
+	echo "is lost or partly lost. The LFSCK should regenerate the missed"
+	echo "layout EA entries."
+	echo "#####"
+
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/a1
+	$LFS mkdir -i 1 $DIR/$tdir/a2
+	$LFS setstripe -c 1 -i 0 -s 1M $DIR/$tdir/a1
+	$LFS setstripe -c 2 -i 1 -s 1M $DIR/$tdir/a2
+	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
+	dd if=/dev/zero of=$DIR/$tdir/a2/f2 bs=1M count=2
+
+	local saved_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
+
+	$LFS path2fid $DIR/$tdir/a1/f1
+	$LFS getstripe $DIR/$tdir/a1/f1
+	$LFS path2fid $DIR/$tdir/a2/f2
+	$LFS getstripe $DIR/$tdir/a2/f2
+	sync
+	cancel_lru_locks osc
+
+	echo "Inject failure, to make the MDT-object lost its layout EA"
+	#define OBD_FAIL_LFSCK_LOST_STRIPE 0x1615
+	do_facet mds1 $LCTL set_param fail_loc=0x1615
+	chown 1.1 $DIR/$tdir/a1/f1
+	do_facet mds2 $LCTL set_param fail_loc=0x1615
+	chown 1.1 $DIR/$tdir/a2/f2
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0
+	do_facet mds2 $LCTL set_param fail_loc=0
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	echo "The file size should be incorrect since layout EA is lost"
+	local cur_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
+	[ "$cur_size" != "$saved_size" ] ||
+		error "(1) Expect incorrect file1 size"
+
+	cur_size=$(ls -il $DIR/$tdir/a2/f2 | awk '{ print $6 }')
+	[ "$cur_size" != "$saved_size" ] ||
+		error "(2) Expect incorrect file2 size"
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -o || error "(3) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(4) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(5) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	for k in 1 2; do
+		local repaired=$(do_facet mds${k} $LCTL get_param -n \
+				 mdd.$(facet_svc mds${k}).lfsck_layout |
+				 awk '/^repaired_orphan/ { print $2 }')
+		[ $repaired -eq ${k} ] ||
+		error "(6) Expect ${k} fixed on mds${k}, but got: $repaired"
+	done
+
+	$LFS path2fid $DIR/$tdir/a1/f1
+	$LFS getstripe $DIR/$tdir/a1/f1
+	$LFS path2fid $DIR/$tdir/a2/f2
+	$LFS getstripe $DIR/$tdir/a2/f2
+
+	echo "The file size should be correct after layout LFSCK scanning"
+	cur_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size" ] ||
+		error "(7) Expect file1 size $saved_size, but got $cur_size"
+
+	cur_size=$(ls -il $DIR/$tdir/a2/f2 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size" ] ||
+		error "(8) Expect file2 size $saved_size, but got $cur_size"
+}
+run_test 18a "Find out orphan OST-object and repair it (1)"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

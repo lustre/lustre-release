@@ -1478,7 +1478,9 @@ static int osp_index_try(const struct lu_env *env,
 			 struct dt_object *dt,
 			 const struct dt_index_features *feat)
 {
-	if (fid_is_last_id(lu_object_fid(&dt->do_lu))) {
+	const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
+
+	if (fid_is_last_id(fid) && fid_is_idif(fid)) {
 		dt->do_index_ops = &osp_orphan_index_ops;
 
 		return 0;

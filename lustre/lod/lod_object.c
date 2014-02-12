@@ -359,6 +359,11 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		}
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE) &&
+	    dt_object_exists(next) != 0 &&
+	    dt_object_remote(next) == 0)
+		dt_declare_xattr_del(env, next, XATTR_NAME_LOV, handle);
+
 	RETURN(rc);
 }
 
@@ -430,6 +435,11 @@ static int lod_attr_set(const struct lu_env *env,
 			break;
 		}
 	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE) &&
+	    dt_object_exists(next) != 0 &&
+	    dt_object_remote(next) == 0)
+		dt_xattr_del(env, next, XATTR_NAME_LOV, handle, BYPASS_CAPA);
 
 	RETURN(rc);
 }
