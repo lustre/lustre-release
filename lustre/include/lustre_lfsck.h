@@ -126,6 +126,7 @@ enum lfsck_events {
 	LE_QUERY		= 7,
 	LE_FID_ACCESSED 	= 8,
 	LE_PEER_EXIT		= 9,
+	LE_CONDITIONAL_DESTROY	= 10,
 };
 
 enum lfsck_event_flags {

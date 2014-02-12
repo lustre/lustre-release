@@ -384,6 +384,9 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 
 	/* set filter fid EA */
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+			GOTO(out_tx, rc);
+
 		rc = dt_xattr_set(env, dt_obj, &info->fti_buf, XATTR_NAME_FID,
 				  0, th, BYPASS_CAPA);
 		if (rc)

@@ -3496,8 +3496,6 @@ struct lfsck_request {
 	__u16		lr_param;
 	__u16		lr_async_windows;
 	__u32		lr_padding_1;
-	/* lr_fid is used on server-side only, and can be
-	 * reused as others by client in the future. */
 	struct lu_fid	lr_fid;
 	__u64		lr_padding_2;
 	__u64		lr_padding_3;

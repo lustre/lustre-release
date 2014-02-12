@@ -364,6 +364,18 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	    dt_object_remote(next) == 0)
 		dt_declare_xattr_del(env, next, XATTR_NAME_LOV, handle);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) &&
+	    dt_object_exists(next) &&
+	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lu_buf *buf = &info->lti_buf;
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		dt_declare_xattr_set(env, next, buf, XATTR_NAME_LOV,
+				     LU_XATTR_REPLACE, handle);
+	}
+
 	RETURN(rc);
 }
 
@@ -440,6 +452,39 @@ static int lod_attr_set(const struct lu_env *env,
 	    dt_object_exists(next) != 0 &&
 	    dt_object_remote(next) == 0)
 		dt_xattr_del(env, next, XATTR_NAME_LOV, handle, BYPASS_CAPA);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) &&
+	    dt_object_exists(next) &&
+	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lu_buf *buf = &info->lti_buf;
+		struct ost_id *oi = &info->lti_ostid;
+		struct lu_fid *fid = &info->lti_fid;
+		struct lov_mds_md_v1 *lmm;
+		struct lov_ost_data_v1 *objs;
+		__u32 magic;
+		int rc1;
+
+		rc1 = lod_get_lov_ea(env, lo);
+		if (rc1  <= 0)
+			RETURN(rc);
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		lmm = info->lti_ea_store;
+		magic = le32_to_cpu(lmm->lmm_magic);
+		if (magic == LOV_MAGIC_V1)
+			objs = &(lmm->lmm_objects[0]);
+		else
+			objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
+		ostid_le_to_cpu(&objs->l_ost_oi, oi);
+		ostid_to_fid(fid, oi, le32_to_cpu(objs->l_ost_idx));
+		fid->f_oid--;
+		fid_to_ostid(fid, oi);
+		ostid_cpu_to_le(oi, &objs->l_ost_oi);
+		dt_xattr_set(env, next, buf, XATTR_NAME_LOV,
+			     LU_XATTR_REPLACE, handle, BYPASS_CAPA);
+	}
 
 	RETURN(rc);
 }
@@ -1916,6 +1961,9 @@ static int lod_declare_object_destroy(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ))
+		RETURN(0);
+
 	/*
 	 * load striping information, notice we don't do this when object
 	 * is being initialized as we don't need this information till
@@ -1949,6 +1997,9 @@ static int lod_object_destroy(const struct lu_env *env,
 	rc = dt_destroy(env, next, th);
 	if (rc)
 		RETURN(rc);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ))
+		RETURN(0);
 
 	/* destroy all underlying objects */
 	for (i = 0; i < lo->ldo_stripenr; i++) {
