@@ -1202,6 +1202,10 @@ test_12o() {
 	# retry w/o failure injection
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
 
+	# to be sure previous RESTORE result is gone
+	cdt_purge
+	wait_for_grace_delay
+
 	diff -q /etc/hosts $f
 	st=$?
 
