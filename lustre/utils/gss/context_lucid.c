@@ -90,7 +90,6 @@ prepare_krb5_rfc1964_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	gss_krb5_lucid_key_t enc_key;
 	int i;
 	char *skd, *dkd;
-	gss_buffer_desc fakeoid;
 
 	/*
 	 * The new Kerberos interface to get the gss context
@@ -100,7 +99,6 @@ prepare_krb5_rfc1964_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	 * interface to the kernel.
 	 */
 	memset(&enc_key, 0, sizeof(enc_key));
-	memset(&fakeoid, 0, sizeof(fakeoid));
 
 	if (!(buf->value = calloc(1, MAX_CTX_LEN)))
 		goto out_err;
@@ -146,20 +144,20 @@ prepare_krb5_rfc1964_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	dkd = (char *) enc_key.data;
 	for (i = 0; i < enc_key.length; i++)
 		dkd[i] = skd[i] ^ 0xf0;
-	if (write_lucid_keyblock(&p, end, &enc_key)) {
-		free(enc_key.data);
+	if (write_lucid_keyblock(&p, end, &enc_key))
 		goto out_err;
-	}
-	free(enc_key.data);
-
 	if (write_lucid_keyblock(&p, end, &lctx->rfc1964_kd.ctx_key))
 		goto out_err;
+	free(enc_key.data);
 
 	buf->length = p - (char *)buf->value;
 	return 0;
 out_err:
 	printerr(0, "ERROR: failed serializing krb5 context for kernel\n");
-	if (buf->value) free(buf->value);
+	if (buf->value) {
+		free(buf->value);
+		buf->value = NULL;
+	}
 	buf->length = 0;
 	if (enc_key.data) free(enc_key.data);
 	return -1;

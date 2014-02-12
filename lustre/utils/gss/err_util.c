@@ -81,7 +81,8 @@ void printerr(int priority, char *format, ...)
 		strcat(message_buf, "...\n");
 		goto printit;
 	}
-	if (message_buf[strlen(message_buf) - 1] == '\n')
+	buf_used = strlen(message_buf);
+	if (buf_used > 0 && message_buf[buf_used - 1] == '\n')
 		goto printit;
 	return;
 printit:
