@@ -339,12 +339,17 @@ else
 				. $O2IBPATH/ofed_patch.mk
 			fi
 		else
-			case $RHEL_KERNEL_VERSION in
-				2.6.32-358*)
-					EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
-				2.6.32-431*)
-					EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_5";;
-			esac
+			if test x$RHEL_KERNEL = xyes; then
+				case $RHEL_KERNEL_VERSION in
+					2.6.32-358*)
+						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
+					2.6.32-431*)
+						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_5";;
+				esac
+			elif test x$SUSE_KERNEL = xyes; then
+				SP=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
+				EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_SLES_11_$SP"
+			fi
 		fi
 		AC_MSG_CHECKING([whether to use any OFED backport headers])
 		if test -n "$BACKPORT_INCLUDES"; then
