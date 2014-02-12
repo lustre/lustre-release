@@ -101,8 +101,14 @@ struct lfsck_bookmark {
 	/* For 64-bits aligned. */
 	__u16	lb_padding;
 
+	/* The FID for .lustre/lost+found/MDTxxxx */
+	struct lu_fid	lb_lpf_fid;
+
+	/* The FID for the last MDT-object created by the LFSCK repairing. */
+	struct lu_fid	lb_last_fid;
+
 	/* For future using. */
-	__u64	lb_reserved[6];
+	__u64	lb_reserved[2];
 };
 
 struct lfsck_namespace {
@@ -449,6 +455,8 @@ struct lfsck_instance {
 	struct lu_fid		  li_local_root_fid;  /* backend root "/" */
 	struct lu_fid		  li_global_root_fid; /* /ROOT */
 	struct dt_object	 *li_bookmark_obj;
+	struct dt_object	 *li_lpf_obj;
+	struct lu_client_seq	 *li_seq;
 	struct lfsck_bookmark	  li_bookmark_ram;
 	struct lfsck_bookmark	  li_bookmark_disk;
 	struct lfsck_position	  li_pos_current;
@@ -533,6 +541,7 @@ struct lfsck_thread_info {
 	struct lu_buf		lti_big_buf;
 	struct lu_fid		lti_fid;
 	struct lu_fid		lti_fid2;
+	struct lu_fid		lti_fid3;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct lu_attr		lti_la3;
@@ -562,6 +571,9 @@ struct lfsck_thread_info {
 };
 
 /* lfsck_lib.c */
+int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
+		    struct lu_fid *fid, bool locked);
+int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
 struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
 					   bool unlink);
 struct lfsck_component *lfsck_component_find(struct lfsck_instance *lfsck,
@@ -609,6 +621,8 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 int lfsck_master_engine(void *args);
 
 /* lfsck_bookmark.c */
+void lfsck_bookmark_cpu_to_le(struct lfsck_bookmark *des,
+			      struct lfsck_bookmark *src);
 int lfsck_bookmark_store(const struct lu_env *env,
 			 struct lfsck_instance *lfsck);
 int lfsck_bookmark_setup(const struct lu_env *env,

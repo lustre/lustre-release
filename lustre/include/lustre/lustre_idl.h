@@ -484,8 +484,9 @@ enum special_oid {
 
 /** OID for FID_SEQ_DOT_LUSTRE */
 enum dot_lustre_oid {
-        FID_OID_DOT_LUSTRE  = 1UL,
-        FID_OID_DOT_LUSTRE_OBF = 2UL,
+	FID_OID_DOT_LUSTRE	= 1UL,
+	FID_OID_DOT_LUSTRE_OBF	= 2UL,
+	FID_OID_DOT_LUSTRE_LPF	= 3UL,
 };
 
 static inline int fid_seq_is_mdt0(obd_seq seq)

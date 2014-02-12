@@ -49,16 +49,20 @@ static void lfsck_bookmark_le_to_cpu(struct lfsck_bookmark *des,
 	des->lb_param = le16_to_cpu(src->lb_param);
 	des->lb_speed_limit = le32_to_cpu(src->lb_speed_limit);
 	des->lb_async_windows = le16_to_cpu(src->lb_async_windows);
+	fid_le_to_cpu(&des->lb_lpf_fid, &src->lb_lpf_fid);
+	fid_le_to_cpu(&des->lb_last_fid, &src->lb_last_fid);
 }
 
-static void lfsck_bookmark_cpu_to_le(struct lfsck_bookmark *des,
-				     struct lfsck_bookmark *src)
+void lfsck_bookmark_cpu_to_le(struct lfsck_bookmark *des,
+			      struct lfsck_bookmark *src)
 {
 	des->lb_magic = cpu_to_le32(src->lb_magic);
 	des->lb_version = cpu_to_le16(src->lb_version);
 	des->lb_param = cpu_to_le16(src->lb_param);
 	des->lb_speed_limit = cpu_to_le32(src->lb_speed_limit);
 	des->lb_async_windows = cpu_to_le16(src->lb_async_windows);
+	fid_cpu_to_le(&des->lb_lpf_fid, &src->lb_lpf_fid);
+	fid_cpu_to_le(&des->lb_last_fid, &src->lb_last_fid);
 }
 
 static int lfsck_bookmark_load(const struct lu_env *env,

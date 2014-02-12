@@ -176,6 +176,8 @@ static int mdd_is_parent(const struct lu_env *env,
 			GOTO(out, rc);
                 if (mdd_is_root(mdd, pfid))
                         GOTO(out, rc = 0);
+		if (lu_fid_eq(pfid, &mdd->mdd_local_root_fid))
+			GOTO(out, rc = 0);
                 if (lu_fid_eq(pfid, lf))
                         GOTO(out, rc = 1);
                 if (parent)

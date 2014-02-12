@@ -84,7 +84,8 @@ static inline __u64 cl_time(void) {
 
 /** Objects in .lustre dir */
 struct mdd_dot_lustre_objs {
-        struct mdd_object *mdd_obf;
+	struct mdd_object *mdd_obf;
+	struct mdd_object *mdd_lpf;
 };
 
 struct mdd_device {

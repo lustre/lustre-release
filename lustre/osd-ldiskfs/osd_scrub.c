@@ -1428,6 +1428,10 @@ static const struct osd_lf_map osd_dl_maps[] = {
 	{ "fid", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_OBF, 0 }, 0,
 		NULL, NULL },
 
+	/* .lustre/lost+found */
+	{ "lost+found", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_LPF, 0 }, 0,
+		NULL, NULL },
+
 	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
 };
 
