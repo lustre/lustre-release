@@ -161,7 +161,7 @@ int mdt_handle_idmap(struct tgt_session_info *tsi)
                 RETURN(-EACCES);
         }
 
-        if (req->rq_auth_mapped_uid == INVALID_UID) {
+	if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_mapped_uid))) {
                 CDEBUG(D_SEC, "invalid authorized mapped uid, please check "
                        "/etc/lustre/idmap.conf!\n");
                 RETURN(-EACCES);

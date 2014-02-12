@@ -62,7 +62,10 @@
 #ifdef HAVE_LINUX_RANDOM_H
 #include <linux/random.h>
 #endif
-
+#ifdef HAVE_UIDGID_HEADER
+#include <linux/uidgid.h>
+#endif
+#include <linux/user_namespace.h>
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
 #include <asm/div64.h>

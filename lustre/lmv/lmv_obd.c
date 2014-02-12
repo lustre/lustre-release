@@ -2118,8 +2118,8 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 	       PFID(&op_data->op_fid2), op_data->op_namelen,
 	       op_data->op_name, PFID(&op_data->op_fid1));
 
-	op_data->op_fsuid = current_fsuid();
-	op_data->op_fsgid = current_fsgid();
+	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
+	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
 	op_data->op_cap = cfs_curproc_cap_pack();
 	if (op_data->op_mea2 != NULL) {
 		struct lmv_stripe_md	*lsm = op_data->op_mea2;
@@ -2173,8 +2173,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc)
 		RETURN(rc);
 
-	op_data->op_fsuid = current_fsuid();
-	op_data->op_fsgid = current_fsgid();
+	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
+	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
 	op_data->op_cap = cfs_curproc_cap_pack();
 	if (op_data->op_cli_flags & CLI_MIGRATE) {
 		LASSERTF(fid_is_sane(&op_data->op_fid3), "invalid FID "DFID"\n",
@@ -2556,8 +2556,8 @@ retry:
 			RETURN(PTR_ERR(tgt));
 	}
 
-	op_data->op_fsuid = current_fsuid();
-	op_data->op_fsgid = current_fsgid();
+	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
+	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
 	op_data->op_cap = cfs_curproc_cap_pack();
 
 	/*

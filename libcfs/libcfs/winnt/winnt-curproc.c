@@ -58,6 +58,8 @@ struct task_struct this_task =
       /* journal_info */ NULL
     };
 
+struct user_namespace init_user_ns __read_mostly;
+EXPORT_SYMBOL(init_user_ns);
 
 uid_t  current_uid(void)
 {

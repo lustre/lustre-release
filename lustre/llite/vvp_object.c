@@ -81,46 +81,46 @@ static int vvp_object_print(const struct lu_env *env, void *cookie,
 static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
                         struct cl_attr *attr)
 {
-        struct inode *inode = ccc_object_inode(obj);
+	struct inode *inode = ccc_object_inode(obj);
 
-        /*
-         * lov overwrites most of these fields in
-         * lov_attr_get()->...lov_merge_lvb_kms(), except when inode
-         * attributes are newer.
-         */
+	/*
+	 * lov overwrites most of these fields in
+	 * lov_attr_get()->...lov_merge_lvb_kms(), except when inode
+	 * attributes are newer.
+	 */
 
-        attr->cat_size = i_size_read(inode);
-        attr->cat_mtime = LTIME_S(inode->i_mtime);
-        attr->cat_atime = LTIME_S(inode->i_atime);
-        attr->cat_ctime = LTIME_S(inode->i_ctime);
-        attr->cat_blocks = inode->i_blocks;
-        attr->cat_uid = inode->i_uid;
-        attr->cat_gid = inode->i_gid;
-        /* KMS is not known by this layer */
-        return 0; /* layers below have to fill in the rest */
+	attr->cat_size = i_size_read(inode);
+	attr->cat_mtime = LTIME_S(inode->i_mtime);
+	attr->cat_atime = LTIME_S(inode->i_atime);
+	attr->cat_ctime = LTIME_S(inode->i_ctime);
+	attr->cat_blocks = inode->i_blocks;
+	attr->cat_uid = from_kuid(&init_user_ns, inode->i_uid);
+	attr->cat_gid = from_kgid(&init_user_ns, inode->i_gid);
+	/* KMS is not known by this layer */
+	return 0; /* layers below have to fill in the rest */
 }
 
 static int vvp_attr_set(const struct lu_env *env, struct cl_object *obj,
                         const struct cl_attr *attr, unsigned valid)
 {
-        struct inode *inode = ccc_object_inode(obj);
+	struct inode *inode = ccc_object_inode(obj);
 
-        if (valid & CAT_UID)
-                inode->i_uid = attr->cat_uid;
-        if (valid & CAT_GID)
-                inode->i_gid = attr->cat_gid;
-        if (valid & CAT_ATIME)
-                LTIME_S(inode->i_atime) = attr->cat_atime;
-        if (valid & CAT_MTIME)
-                LTIME_S(inode->i_mtime) = attr->cat_mtime;
-        if (valid & CAT_CTIME)
-                LTIME_S(inode->i_ctime) = attr->cat_ctime;
-        if (0 && valid & CAT_SIZE)
-                cl_isize_write_nolock(inode, attr->cat_size);
-        /* not currently necessary */
-        if (0 && valid & (CAT_UID|CAT_GID|CAT_SIZE))
-                mark_inode_dirty(inode);
-        return 0;
+	if (valid & CAT_UID)
+		inode->i_uid = make_kuid(&init_user_ns, attr->cat_uid);
+	if (valid & CAT_GID)
+		inode->i_gid = make_kgid(&init_user_ns, attr->cat_gid);
+	if (valid & CAT_ATIME)
+		LTIME_S(inode->i_atime) = attr->cat_atime;
+	if (valid & CAT_MTIME)
+		LTIME_S(inode->i_mtime) = attr->cat_mtime;
+	if (valid & CAT_CTIME)
+		LTIME_S(inode->i_ctime) = attr->cat_ctime;
+	if (0 && valid & CAT_SIZE)
+		cl_isize_write_nolock(inode, attr->cat_size);
+	/* not currently necessary */
+	if (0 && valid & (CAT_UID|CAT_GID|CAT_SIZE))
+		mark_inode_dirty(inode);
+	return 0;
 }
 
 int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,

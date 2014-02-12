@@ -199,30 +199,29 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                        src->o_valid, LTIME_S(dst->i_mtime),
                        LTIME_S(dst->i_ctime), src->o_mtime, src->o_ctime);
 
-        if (valid & OBD_MD_FLATIME)
-                LTIME_S(dst->i_atime) = src->o_atime;
-        if (valid & OBD_MD_FLMTIME)
-                LTIME_S(dst->i_mtime) = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
-                LTIME_S(dst->i_ctime) = src->o_ctime;
-        if (valid & OBD_MD_FLSIZE)
-                i_size_write(dst, src->o_size);
-        if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
-                dst->i_blocks = src->o_blocks;
-                if (dst->i_blocks < src->o_blocks) /* overflow */
-                        dst->i_blocks = -1;
-
-        }
+	if (valid & OBD_MD_FLATIME)
+		LTIME_S(dst->i_atime) = src->o_atime;
+	if (valid & OBD_MD_FLMTIME)
+		LTIME_S(dst->i_mtime) = src->o_mtime;
+	if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
+		LTIME_S(dst->i_ctime) = src->o_ctime;
+	if (valid & OBD_MD_FLSIZE)
+		i_size_write(dst, src->o_size);
+	if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
+		dst->i_blocks = src->o_blocks;
+		if (dst->i_blocks < src->o_blocks) /* overflow */
+			dst->i_blocks = -1;
+	}
 	if (valid & OBD_MD_FLBLKSZ)
 		dst->i_blkbits = ffs(src->o_blksize)-1;
-        if (valid & OBD_MD_FLMODE)
-                dst->i_mode = (dst->i_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
-        if (valid & OBD_MD_FLUID)
-                dst->i_uid = src->o_uid;
-        if (valid & OBD_MD_FLGID)
-                dst->i_gid = src->o_gid;
-        if (valid & OBD_MD_FLFLAGS)
-                dst->i_flags = src->o_flags;
+	if (valid & OBD_MD_FLMODE)
+		dst->i_mode = (dst->i_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
+	if (valid & OBD_MD_FLUID)
+		dst->i_uid = make_kuid(&init_user_ns, src->o_uid);
+	if (valid & OBD_MD_FLGID)
+		dst->i_gid = make_kgid(&init_user_ns, src->o_gid);
+	if (valid & OBD_MD_FLFLAGS)
+		dst->i_flags = src->o_flags;
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif

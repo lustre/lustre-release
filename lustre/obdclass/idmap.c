@@ -73,7 +73,8 @@ static int lustre_groups_search(struct group_info *group_info,
 	right = group_info->ngroups;
 	while (left < right) {
 		int mid = (left + right) / 2;
-		int cmp = grp - CFS_GROUP_AT(group_info, mid);
+		int cmp = grp -
+			from_kgid(&init_user_ns, CFS_GROUP_AT(group_info, mid));
 
 		if (cmp > 0)
 			left = mid + 1;
@@ -113,24 +114,27 @@ void lustre_groups_sort(struct group_info *group_info)
                 ; /* nothing */
         stride /= 3;
 
-        while (stride) {
-                max = gidsetsize - stride;
-                for (base = 0; base < max; base++) {
-                        int left = base;
-                        int right = left + stride;
-                        gid_t tmp = CFS_GROUP_AT(group_info, right);
+	while (stride) {
+		max = gidsetsize - stride;
+		for (base = 0; base < max; base++) {
+			int left = base;
+			int right = left + stride;
+			gid_t tmp = from_kgid(&init_user_ns,
+					      CFS_GROUP_AT(group_info, right));
 
-                        while (left >= 0 &&
-                               CFS_GROUP_AT(group_info, left) > tmp) {
-                                CFS_GROUP_AT(group_info, right) =
-                                    CFS_GROUP_AT(group_info, left);
-                                right = left;
-                                left -= stride;
-                        }
-                        CFS_GROUP_AT(group_info, right) = tmp;
-                }
-                stride /= 3;
-        }
+			while (left >= 0 &&
+			       tmp < from_kgid(&init_user_ns,
+					       CFS_GROUP_AT(group_info, left))) {
+				CFS_GROUP_AT(group_info, right) =
+					CFS_GROUP_AT(group_info, left);
+				right = left;
+				left -= stride;
+			}
+			CFS_GROUP_AT(group_info, right) =
+						make_kgid(&init_user_ns, tmp);
+		}
+		stride /= 3;
+	}
 }
 EXPORT_SYMBOL(lustre_groups_sort);
 

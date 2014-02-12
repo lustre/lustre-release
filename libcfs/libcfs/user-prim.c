@@ -245,6 +245,9 @@ void *kthread_run(cfs_thread_t func, void *arg, const char namefmt[], ...)
 }
 #endif
 
+struct user_namespace init_user_ns __read_mostly;
+EXPORT_SYMBOL(init_user_ns);
+
 uid_t current_uid(void)
 {
         return getuid();

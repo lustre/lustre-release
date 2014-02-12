@@ -797,7 +797,7 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 			RETURN(-EACCES);
 		}
 	} else {
-		if (req->rq_auth_uid == INVALID_UID) {
+		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_uid))) {
 			CDEBUG(D_SEC, "client %s -> target %s: user is not "
 			       "authenticated!\n", client, tgt_name(tgt));
 			RETURN(-EACCES);

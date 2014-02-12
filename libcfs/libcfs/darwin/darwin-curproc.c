@@ -143,6 +143,9 @@ char  *current_comm(void)
 #endif
 }
 
+struct user_namespace init_user_ns __read_mostly;
+EXPORT_SYMBOL(init_user_ns);
+
 void cfs_cap_raise(cfs_cap_t cap) {}
 void cfs_cap_lower(cfs_cap_t cap) {}
 

@@ -103,19 +103,19 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                               (src->i_mode & S_IALLUGO);
                 newvalid |= OBD_MD_FLMODE;
         }
-        if (valid & OBD_MD_FLUID) {
-                dst->o_uid = src->i_uid;
-                newvalid |= OBD_MD_FLUID;
-        }
-        if (valid & OBD_MD_FLGID) {
-                dst->o_gid = src->i_gid;
-                newvalid |= OBD_MD_FLGID;
-        }
-        if (valid & OBD_MD_FLFLAGS) {
-                dst->o_flags = ll_inode_flags(src);
-                newvalid |= OBD_MD_FLFLAGS;
-        }
-        dst->o_valid |= newvalid;
+	if (valid & OBD_MD_FLUID) {
+		dst->o_uid = from_kuid(&init_user_ns, src->i_uid);
+		newvalid |= OBD_MD_FLUID;
+	}
+	if (valid & OBD_MD_FLGID) {
+		dst->o_gid = from_kgid(&init_user_ns, src->i_gid);
+		newvalid |= OBD_MD_FLGID;
+	}
+	if (valid & OBD_MD_FLFLAGS) {
+		dst->o_flags = ll_inode_flags(src);
+		newvalid |= OBD_MD_FLFLAGS;
+	}
+	dst->o_valid |= newvalid;
 }
 EXPORT_SYMBOL(obdo_from_inode);
 
@@ -231,25 +231,25 @@ void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
                 oa->o_ctime = LTIME_S(attr->ia_ctime);
                 oa->o_valid |= OBD_MD_FLCTIME;
         }
-        if (ia_valid & ATTR_SIZE) {
-                oa->o_size = attr->ia_size;
-                oa->o_valid |= OBD_MD_FLSIZE;
-        }
+	if (ia_valid & ATTR_SIZE) {
+		oa->o_size = attr->ia_size;
+		oa->o_valid |= OBD_MD_FLSIZE;
+	}
 	if (ia_valid & ATTR_MODE) {
 		oa->o_mode = attr->ia_mode;
 		oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
-		if (!in_group_p(oa->o_gid) &&
+		if (!in_group_p(make_kgid(&init_user_ns, oa->o_gid)) &&
 		    !cfs_capable(CFS_CAP_FSETID))
 			oa->o_mode &= ~S_ISGID;
 	}
-        if (ia_valid & ATTR_UID) {
-                oa->o_uid = attr->ia_uid;
-                oa->o_valid |= OBD_MD_FLUID;
-        }
-        if (ia_valid & ATTR_GID) {
-                oa->o_gid = attr->ia_gid;
-                oa->o_valid |= OBD_MD_FLGID;
-        }
+	if (ia_valid & ATTR_UID) {
+		oa->o_uid = from_kuid(&init_user_ns, attr->ia_uid);
+		oa->o_valid |= OBD_MD_FLUID;
+	}
+	if (ia_valid & ATTR_GID) {
+		oa->o_gid = from_kgid(&init_user_ns, attr->ia_gid);
+		oa->o_valid |= OBD_MD_FLGID;
+	}
 }
 EXPORT_SYMBOL(obdo_from_iattr);
 
@@ -287,16 +287,16 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
         if (valid & OBD_MD_FLMODE) {
 		attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
 		attr->ia_valid |= ATTR_MODE;
-		if (!in_group_p(oa->o_gid) &&
+		if (!in_group_p(make_kgid(&init_user_ns, oa->o_gid)) &&
 		    !cfs_capable(CFS_CAP_FSETID))
 			attr->ia_mode &= ~S_ISGID;
         }
         if (valid & OBD_MD_FLUID) {
-                attr->ia_uid = oa->o_uid;
+		attr->ia_uid = make_kuid(&init_user_ns, oa->o_uid);
                 attr->ia_valid |= ATTR_UID;
         }
         if (valid & OBD_MD_FLGID) {
-                attr->ia_gid = oa->o_gid;
+		attr->ia_gid = make_kgid(&init_user_ns, oa->o_gid);
                 attr->ia_valid |= ATTR_GID;
         }
 }

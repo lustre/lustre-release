@@ -43,6 +43,68 @@
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
+#if !defined(HAVE_UIDGID_HEADER) || !defined(__KERNEL__)
+
+typedef uid_t kuid_t;
+typedef gid_t kgid_t;
+
+#define INVALID_UID     -1
+#define INVALID_GID     -1
+
+#ifndef __KERNEL__
+struct user_namespace {
+	unsigned int pad;
+};
+
+extern struct user_namespace init_user_ns;
+#endif
+
+static inline uid_t __kuid_val(kuid_t uid)
+{
+	return uid;
+}
+
+static inline gid_t __kgid_val(kgid_t gid)
+{
+	return gid;
+}
+
+static inline kuid_t make_kuid(struct user_namespace *from, uid_t uid)
+{
+	return uid;
+}
+
+static inline kgid_t make_kgid(struct user_namespace *from, gid_t gid)
+{
+	return gid;
+}
+
+static inline uid_t from_kuid(struct user_namespace *to, kuid_t uid)
+{
+	return uid;
+}
+
+static inline gid_t from_kgid(struct user_namespace *to, kgid_t gid)
+{
+	return gid;
+}
+
+static inline bool uid_eq(kuid_t left, kuid_t right)
+{
+	return left == right;
+}
+
+static inline bool uid_valid(kuid_t uid)
+{
+	return (uid != INVALID_UID);
+}
+
+static inline bool gid_valid(kgid_t gid)
+{
+	return (gid != INVALID_GID);
+}
+#endif
+
 int cfs_get_environ(const char *key, char *value, int *val_len);
 
 typedef __u32 cfs_cap_t;
