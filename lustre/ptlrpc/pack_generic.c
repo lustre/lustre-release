@@ -2628,3 +2628,12 @@ void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
 	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
 }
 EXPORT_SYMBOL(lustre_swab_lfsck_reply);
+
+void lustre_swab_orphan_ent(struct lu_orphan_ent *ent)
+{
+	lustre_swab_lu_fid(&ent->loe_key);
+	lustre_swab_lu_fid(&ent->loe_rec.lor_fid);
+	__swab32s(&ent->loe_rec.lor_uid);
+	__swab32s(&ent->loe_rec.lor_gid);
+}
+EXPORT_SYMBOL(lustre_swab_orphan_ent);

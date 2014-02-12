@@ -4752,6 +4752,8 @@ static int mdt_prepare(const struct lu_env *env,
 		RETURN(rc);
 
 	rc = lfsck_register_namespace(env, mdt->mdt_bottom, mdt->mdt_namespace);
+	/* The LFSCK instance is registered just now, so it must be there when
+	 * register the namespace to such instance. */
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
 
 	lsp.lsp_start = NULL;

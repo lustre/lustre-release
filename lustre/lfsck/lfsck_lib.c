@@ -287,7 +287,7 @@ __lfsck_component_find(struct lfsck_instance *lfsck, __u16 type, cfs_list_t *lis
 	return NULL;
 }
 
-static struct lfsck_component *
+struct lfsck_component *
 lfsck_component_find(struct lfsck_instance *lfsck, __u16 type)
 {
 	struct lfsck_component *com;
@@ -397,8 +397,8 @@ __lfsck_instance_find(struct dt_device *key, bool ref, bool unlink)
 	return NULL;
 }
 
-static inline struct lfsck_instance *lfsck_instance_find(struct dt_device *key,
-							 bool ref, bool unlink)
+struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
+					   bool unlink)
 {
 	struct lfsck_instance *lfsck;
 

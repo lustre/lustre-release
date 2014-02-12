@@ -1170,6 +1170,8 @@ test_12() {
 	echo "setupall"
 	setupall > /dev/null
 
+	mkdir -p $DIR/$tdir
+
 	echo "All the LFSCK targets should be in 'init' status."
 	for k in $(seq $MDSCOUNT); do
 		local STATUS=$(do_facet mds${k} $LCTL get_param -n \
@@ -1178,13 +1180,13 @@ test_12() {
 		[ "$STATUS" == "init" ] ||
 			error "(1) MDS${k} Expect 'init', but got '$STATUS'"
 
-		$LFS mkdir -i $((k - 1)) $DIR/${k}
-		createmany -o $DIR/${k}/f 100
+		$LFS mkdir -i $((k - 1)) $DIR/$tdir/${k}
+		createmany -o $DIR/$tdir/${k}/f 100
 	done
 
-	echo "Start namespace LFSCK on all targets by single command (-s 10)."
+	echo "Start namespace LFSCK on all targets by single command (-s 1)."
 	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
-		-s 10 || error "(2) Fail to start LFSCK on all devices!"
+		-s 1 || error "(2) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'scanning-phase1' status."
 	for k in $(seq $MDSCOUNT); do
@@ -1220,9 +1222,9 @@ test_12() {
 			error "(7) MDS${k} is not the expected 'completed'"
 	done
 
-	echo "Start layout LFSCK on all targets by single command (-s 10)."
+	echo "Start layout LFSCK on all targets by single command (-s 1)."
 	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
-		-s 10 || error "(8) Fail to start LFSCK on all devices!"
+		-s 1 || error "(8) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'scanning-phase1' status."
 	for k in $(seq $MDSCOUNT); do

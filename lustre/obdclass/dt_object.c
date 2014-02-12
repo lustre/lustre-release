@@ -567,6 +567,17 @@ EXPORT_SYMBOL(dt_directory_features);
 const struct dt_index_features dt_otable_features;
 EXPORT_SYMBOL(dt_otable_features);
 
+/* lfsck orphan */
+const struct dt_index_features dt_lfsck_orphan_features = {
+	.dif_flags		= 0,
+	.dif_keysize_min	= sizeof(struct lu_fid),
+	.dif_keysize_max	= sizeof(struct lu_fid),
+	.dif_recsize_min	= sizeof(struct lu_orphan_rec),
+	.dif_recsize_max	= sizeof(struct lu_orphan_rec),
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_lfsck_orphan_features);
+
 /* lfsck */
 const struct dt_index_features dt_lfsck_features = {
 	.dif_flags		= DT_IND_UPDATE,
@@ -630,6 +641,8 @@ static inline const struct dt_index_features *dt_index_feat_select(__u64 seq,
 			/* slave index should be a regular file */
 			return ERR_PTR(-ENOENT);
 		return &dt_quota_slv_features;
+	} else if (seq == FID_SEQ_LAYOUT_RBTREE){
+		return &dt_lfsck_orphan_features;
 	} else if (seq >= FID_SEQ_NORMAL) {
 		/* object is part of the namespace, verify that it is a
 		 * directory */
@@ -870,8 +883,9 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 		 * time being */
 		RETURN(-EOPNOTSUPP);
 
-	if (!fid_is_quota(&ii->ii_fid))
-		/* block access to all local files except quota files */
+	if (!fid_is_quota(&ii->ii_fid) && !fid_is_layout_rbtree(&ii->ii_fid))
+		/* Block access to all local files except quota files and
+		 * layout brtree. */
 		RETURN(-EPERM);
 
 	/* lookup index object subject to the transfer */
@@ -917,13 +931,16 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 		/* key isn't necessarily unique */
 		ii->ii_flags |= II_FL_NONUNQ;
 
-	dt_read_lock(env, obj, 0);
-	/* fetch object version before walking the index */
-	ii->ii_version = dt_version_get(env, obj);
+	if (!fid_is_layout_rbtree(&ii->ii_fid)) {
+		dt_read_lock(env, obj, 0);
+		/* fetch object version before walking the index */
+		ii->ii_version = dt_version_get(env, obj);
+	}
 
 	/* walk the index and fill lu_idxpages with key/record pairs */
 	rc = dt_index_walk(env, obj, rdpg, dt_index_page_build ,ii);
-	dt_read_unlock(env, obj);
+	if (!fid_is_layout_rbtree(&ii->ii_fid))
+		dt_read_unlock(env, obj);
 
 	if (rc == 0) {
 		/* index is empty */

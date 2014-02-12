@@ -78,6 +78,7 @@ struct ost_obd {
 	struct ptlrpc_service	*ost_io_service;
 	struct ptlrpc_service	*ost_seq_service;
 	struct ptlrpc_service	*ost_out_service;
+	struct ptlrpc_service	*ost_idx_service;
 	struct mutex		 ost_health_mutex;
 };
 

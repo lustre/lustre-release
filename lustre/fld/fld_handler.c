@@ -250,10 +250,8 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 	rc = fld_name_to_index(fld->lsf_name, &index);
 	if (rc < 0)
 		RETURN(rc);
-	else
-		rc = 0;
 
-	if (index == 0) {
+	if (index == 0 && rc == LDD_F_SV_TYPE_MDT) {
 		/* On server side, all entries should be in cache.
 		 * If we can not find it in cache, just return error */
 		CERROR("%s: Cannot find sequence "LPX64": rc = %d\n",

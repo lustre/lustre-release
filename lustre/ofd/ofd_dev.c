@@ -443,6 +443,8 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	}
 
 	rc = lfsck_register_namespace(env, ofd->ofd_osd, ofd->ofd_namespace);
+	/* The LFSCK instance is registered just now, so it must be there when
+	 * register the namespace to such instance. */
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
 
 	lsp.lsp_start = NULL;

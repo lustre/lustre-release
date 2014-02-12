@@ -388,6 +388,7 @@ struct lfsck_component {
 	void			*lc_file_ram;
 	void			*lc_file_disk;
 	void			*lc_data;
+	struct lu_fid		 lc_fid_latest_scanned_phase2;
 
 	/* The time for last checkpoint, jiffies */
 	cfs_time_t		 lc_time_last_checkpoint;
@@ -557,9 +558,14 @@ struct lfsck_thread_info {
 		struct filter_fid	lti_new_pfid;
 	};
 	struct dt_allocation_hint lti_hint;
+	struct lu_orphan_rec	lti_rec;
 };
 
 /* lfsck_lib.c */
+struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
+					   bool unlink);
+struct lfsck_component *lfsck_component_find(struct lfsck_instance *lfsck,
+					     __u16 type);
 const char *lfsck_status2names(enum lfsck_status status);
 void lfsck_component_cleanup(const struct lu_env *env,
 			     struct lfsck_component *com);

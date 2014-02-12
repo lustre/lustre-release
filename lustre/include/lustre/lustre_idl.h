@@ -141,6 +141,7 @@
 #define SEQ_DATA_PORTAL                31
 #define SEQ_CONTROLLER_PORTAL          32
 #define MGS_BULK_PORTAL                33
+#define OST_IDX_PORTAL		       34
 
 /* Portal 63 is reserved for the Cray Inc DVS - nic@cray.com, roe@cray.com, n8851@cray.com */
 
@@ -606,6 +607,11 @@ static inline int fid_is_norm(const struct lu_fid *fid)
         return fid_seq_is_norm(fid_seq(fid));
 }
 
+static inline int fid_is_layout_rbtree(const struct lu_fid *fid)
+{
+	return fid_seq(fid) == FID_SEQ_LAYOUT_RBTREE;
+}
+
 /* convert an OST objid into an IDIF FID SEQ number */
 static inline obd_seq fid_idif_seq(obd_id id, __u32 ost_idx)
 {
@@ -952,6 +958,20 @@ static inline void ostid_le_to_cpu(const struct ost_id *src_oi,
 		fid_le_to_cpu(&dst_oi->oi_fid, &src_oi->oi_fid);
 	}
 }
+
+struct lu_orphan_rec {
+	/* The MDT-object's FID referenced by the orphan OST-object */
+	struct lu_fid	lor_fid;
+	__u32		lor_uid;
+	__u32		lor_gid;
+};
+
+struct lu_orphan_ent {
+	/* The orphan OST-object's FID */
+	struct lu_fid		loe_key;
+	struct lu_orphan_rec	loe_rec;
+};
+void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 
 /** @} lu_fid */
 
