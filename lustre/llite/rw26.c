@@ -76,7 +76,13 @@
  * aligned truncate). Lustre leaves partially truncated page in the cache,
  * relying on struct inode::i_size to limit further accesses.
  */
-static void ll_invalidatepage(struct page *vmpage, unsigned long offset)
+static void ll_invalidatepage(struct page *vmpage,
+#ifdef HAVE_INVALIDATE_RANGE
+				unsigned int offset, unsigned int length
+#else
+				unsigned long offset
+#endif
+			     )
 {
         struct inode     *inode;
         struct lu_env    *env;
@@ -88,12 +94,16 @@ static void ll_invalidatepage(struct page *vmpage, unsigned long offset)
         LASSERT(PageLocked(vmpage));
         LASSERT(!PageWriteback(vmpage));
 
-        /*
-         * It is safe to not check anything in invalidatepage/releasepage
-         * below because they are run with page locked and all our io is
-         * happening with locked page too
-         */
-        if (offset == 0) {
+	/*
+	 * It is safe to not check anything in invalidatepage/releasepage
+	 * below because they are run with page locked and all our io is
+	 * happening with locked page too
+	 */
+#ifdef HAVE_INVALIDATE_RANGE
+	if (offset == 0 && length == PAGE_CACHE_SIZE) {
+#else
+	if (offset == 0) {
+#endif
                 env = cl_env_get(&refcheck);
                 if (!IS_ERR(env)) {
                         inode = vmpage->mapping->host;

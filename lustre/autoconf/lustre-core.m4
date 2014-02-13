@@ -1308,6 +1308,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.11 invalidatepage requires the length of the range to invalidate
+#
+AC_DEFUN([LC_INVALIDATE_RANGE],
+[AC_MSG_CHECKING([if address_space_operations.invalidatepage requires 3 arguments])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct address_space_operations a_ops;
+
+	a_ops.invalidatepage(NULL,0,0);
+],[
+	AC_DEFINE(HAVE_INVALIDATE_RANGE, 1, [address_space_operations.invalidatepage needs 3 arguments])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.11 readdir now takes the new struct dir_context
 #
 AC_DEFUN([LC_HAVE_DIR_CONTEXT],
@@ -1499,6 +1518,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_BLKDEV_RELEASE_RETURN_INT
 
 	 # 3.11
+	 LC_INVALIDATE_RANGE
 	 LC_HAVE_DIR_CONTEXT
 	 LC_D_COMPARE_5ARGS
 	 LC_HAVE_DCOUNT

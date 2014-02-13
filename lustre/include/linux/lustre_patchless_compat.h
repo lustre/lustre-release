@@ -78,15 +78,18 @@ static inline void ll_delete_from_page_cache(struct page *page)
 static inline void
 truncate_complete_page(struct address_space *mapping, struct page *page)
 {
-        if (page->mapping != mapping)
-                return;
+	if (page->mapping != mapping)
+		return;
 
-        if (PagePrivate(page))
-                page->mapping->a_ops->invalidatepage(page, 0);
-
-        cancel_dirty_page(page, PAGE_SIZE);
-        ClearPageMappedToDisk(page);
-        ll_delete_from_page_cache(page);
+	if (PagePrivate(page))
+#ifdef HAVE_INVALIDATE_RANGE
+		page->mapping->a_ops->invalidatepage(page, 0, PAGE_CACHE_SIZE);
+#else
+		page->mapping->a_ops->invalidatepage(page, 0);
+#endif
+	cancel_dirty_page(page, PAGE_SIZE);
+	ClearPageMappedToDisk(page);
+	ll_delete_from_page_cache(page);
 }
 #endif /* !HAVE_TRUNCATE_COMPLETE_PAGE */
 
