@@ -195,9 +195,15 @@ struct lu_dirent *ll_dir_entry_next(struct inode *dir,
 	return entry;
 }
 
+#ifdef HAVE_DIR_CONTEXT
+int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+		struct dir_context *ctx)
+{
+#else
 int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir)
 {
+#endif
 	struct ll_sb_info	*sbi = ll_i2sbi(inode);
 	struct ll_dir_chain	chain;
 	struct lu_dirent	*ent;
@@ -241,12 +247,17 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 		fid_le_to_cpu(&fid, &ent->lde_fid);
 		ino = cl_fid_build_ino(&fid, api32);
 		type = ll_dirent_type_get(ent);
+
+#ifdef HAVE_DIR_CONTEXT
 		/* For 'll_nfs_get_name_filldir()', it will try
 		 * to access the 'ent' through its 'lde_name',
 		 * so the parameter 'name' for 'filldir()' must
 		 * be part of the 'ent'. */
+		done = !dir_emit(ctx, ent->lde_name, namelen, ino, type);
+#else
 		done = filldir(cookie, ent->lde_name, namelen, lhash,
 			       ino, type);
+#endif
 		if (done) {
 			if (op_data->op_hash_offset != MDS_DIR_END_OFF)
 				op_data->op_hash_offset = last_hash;
@@ -268,7 +279,11 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 	RETURN(rc);
 }
 
+#ifdef HAVE_DIR_CONTEXT
+static int ll_iterate(struct file *filp, struct dir_context *ctx)
+#else
 static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
+#endif
 {
 	struct inode		*inode	= filp->f_dentry->d_inode;
 	struct ll_file_data	*lfd	= LUSTRE_FPRIVATE(filp);
@@ -302,22 +317,32 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
 	op_data->op_hash_offset = pos;
 	op_data->op_max_pages = sbi->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+#ifdef HAVE_DIR_CONTEXT
+	ctx->pos = pos;
+	rc = ll_dir_read(inode, op_data, ctx);
+	pos = ctx->pos;
+#else
 	rc = ll_dir_read(inode, op_data, cookie, filldir);
+#endif
 	if (lfd != NULL)
 		lfd->lfd_pos = op_data->op_hash_offset;
 
 	if (pos == MDS_DIR_END_OFF) {
 		if (api32)
-			filp->f_pos = LL_DIR_END_OFF_32BIT;
+			pos = LL_DIR_END_OFF_32BIT;
 		else
-			filp->f_pos = LL_DIR_END_OFF;
+			pos = LL_DIR_END_OFF;
 	} else {
 		if (api32 && hash64)
-			filp->f_pos = op_data->op_hash_offset >> 32;
+			pos = op_data->op_hash_offset >> 32;
 		else
-			filp->f_pos = op_data->op_hash_offset;
+			pos = op_data->op_hash_offset;
 	}
-
+#ifdef HAVE_DIR_CONTEXT
+	ctx->pos = pos;
+#else
+	filp->f_pos = pos;
+#endif
 	ll_finish_md_op_data(op_data);
 	filp->f_version = inode->i_version;
 
@@ -1827,11 +1852,15 @@ int ll_dir_release(struct inode *inode, struct file *file)
 }
 
 struct file_operations ll_dir_operations = {
-        .llseek   = ll_dir_seek,
-        .open     = ll_dir_open,
-        .release  = ll_dir_release,
-        .read     = generic_read_dir,
-        .readdir  = ll_readdir,
-        .unlocked_ioctl   = ll_dir_ioctl,
-        .fsync    = ll_fsync,
+	.llseek		= ll_dir_seek,
+	.open		= ll_dir_open,
+	.release	= ll_dir_release,
+	.read		= generic_read_dir,
+#ifdef HAVE_DIR_CONTEXT
+	.iterate	= ll_iterate,
+#else
+	.readdir	= ll_readdir,
+#endif
+	.unlocked_ioctl	= ll_dir_ioctl,
+	.fsync		= ll_fsync,
 };

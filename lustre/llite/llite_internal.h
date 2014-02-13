@@ -92,9 +92,12 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define REMOTE_PERM_HASHSIZE 16
 
 struct ll_getname_data {
-        char            *lgd_name;      /* points to a buffer with NAME_MAX+1 size */
-        struct lu_fid    lgd_fid;       /* target fid we are looking for */
-        int              lgd_found;     /* inode matched? */
+#ifdef HAVE_DIR_CONTEXT
+	struct dir_context	ctx;
+#endif
+	char		*lgd_name;	/* points to a buffer with NAME_MAX+1 size */
+	struct lu_fid	lgd_fid;	/* target fid we are looking for */
+	int		lgd_found;	/* inode matched? */
 };
 
 /* llite setxid/access permission for user on remote client */
@@ -726,8 +729,13 @@ static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 /* llite/dir.c */
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
+#ifdef HAVE_DIR_CONTEXT
+int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+		struct dir_context *ctx);
+#else
 int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir);
+#endif
 int ll_get_mdt_idx(struct inode *inode);
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
 

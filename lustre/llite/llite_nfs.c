@@ -230,7 +230,14 @@ static int ll_get_name(struct dentry *dentry, char *name,
                        struct dentry *child)
 {
 	struct inode *dir = dentry->d_inode;
-	struct ll_getname_data lgd;
+	struct ll_getname_data lgd = {
+		.lgd_name	= name,
+		.lgd_fid	= ll_i2info(child->d_inode)->lli_fid,
+#ifdef HAVE_DIR_CONTEXT
+		.ctx.actor	= ll_nfs_get_name_filldir,
+#endif
+		.lgd_found = 0,
+	};
 	struct md_op_data *op_data;
 	int rc;
 	ENTRY;
@@ -241,10 +248,6 @@ static int ll_get_name(struct dentry *dentry, char *name,
         if (!dir->i_fop)
                 GOTO(out, rc = -EINVAL);
 
-        lgd.lgd_name = name;
-        lgd.lgd_fid = ll_i2info(child->d_inode)->lli_fid;
-        lgd.lgd_found = 0;
-
 	op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
 				     LUSTRE_OPC_ANY, dir);
 	if (IS_ERR(op_data))
@@ -254,7 +257,11 @@ static int ll_get_name(struct dentry *dentry, char *name,
 	op_data->op_max_pages =
 		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
 	mutex_lock(&dir->i_mutex);
+#ifdef HAVE_DIR_CONTEXT
+	rc = ll_dir_read(dir, op_data, &lgd.ctx);
+#else
 	rc = ll_dir_read(dir, op_data, &lgd, ll_nfs_get_name_filldir);
+#endif
 	mutex_unlock(&dir->i_mutex);
 	ll_finish_md_op_data(op_data);
 	if (!rc && !lgd.lgd_found)
