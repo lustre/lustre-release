@@ -95,28 +95,28 @@ static int match_nosquash_list(struct rw_semaphore *sem,
 static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 {
 	struct lu_ucred *ucred = mdt_ucred(info);
+	struct root_squash_info *squash = &info->mti_mdt->mdt_squash;
 	ENTRY;
 
 	LASSERT(ucred != NULL);
-	if (!info->mti_mdt->mdt_squash_uid || ucred->uc_fsuid)
+	if (!squash->rsi_uid || ucred->uc_fsuid)
 		RETURN(0);
 
-        if (match_nosquash_list(&info->mti_mdt->mdt_squash_sem,
-                                &info->mti_mdt->mdt_nosquash_nids,
-                                peernid)) {
-                CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
-                       libcfs_nid2str(peernid));
-                RETURN(0);
-        }
+	if (match_nosquash_list(&squash->rsi_sem,
+				&squash->rsi_nosquash_nids,
+				peernid)) {
+		CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
+		       libcfs_nid2str(peernid));
+		RETURN(0);
+	}
 
 	CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
 	       libcfs_nid2str(peernid),
 	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap,
-	       info->mti_mdt->mdt_squash_uid, info->mti_mdt->mdt_squash_gid,
-	       0);
+	       squash->rsi_uid, squash->rsi_gid, 0);
 
-	ucred->uc_fsuid = info->mti_mdt->mdt_squash_uid;
-	ucred->uc_fsgid = info->mti_mdt->mdt_squash_gid;
+	ucred->uc_fsuid = squash->rsi_uid;
+	ucred->uc_fsgid = squash->rsi_gid;
 	ucred->uc_cap = 0;
 	ucred->uc_suppgids[0] = -1;
 	ucred->uc_suppgids[1] = -1;

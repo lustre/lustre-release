@@ -2102,6 +2102,15 @@ void class_exit_uuidlist(void);
 /* prng.c */
 #define ll_generate_random_uuid(uuid_out) cfs_get_random_bytes(uuid_out, sizeof(class_uuid_t))
 
+/* root squash info */
+struct rw_semaphore;
+struct root_squash_info {
+	uid_t			rsi_uid;
+	gid_t			rsi_gid;
+	struct list_head	rsi_nosquash_nids;
+	struct rw_semaphore	rsi_sem;
+};
+
 #ifdef __KERNEL__
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);
 #else

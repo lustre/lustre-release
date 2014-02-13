@@ -831,6 +831,71 @@ static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_unstable_stats);
 
+static int ll_root_squash_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct root_squash_info *squash = &sbi->ll_squash;
+
+	return seq_printf(m, "%u:%u\n", squash->rsi_uid, squash->rsi_gid);
+}
+
+static ssize_t ll_root_squash_seq_write(struct file *file,
+					const char __user *buffer,
+					size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct root_squash_info *squash = &sbi->ll_squash;
+
+	return lprocfs_wr_root_squash(buffer, count, squash,
+				      ll_get_fsname(sb, NULL, 0));
+}
+LPROC_SEQ_FOPS(ll_root_squash);
+
+static int ll_nosquash_nids_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct root_squash_info *squash = &sbi->ll_squash;
+	int len, rc;
+
+	down_read(&squash->rsi_sem);
+	if (!list_empty(&squash->rsi_nosquash_nids)) {
+		len = cfs_print_nidlist(m->buf + m->count, m->size - m->count,
+					&squash->rsi_nosquash_nids);
+		m->count += len;
+		rc = seq_printf(m, "\n");
+	} else {
+		rc = seq_printf(m, "NONE\n");
+	}
+	up_read(&squash->rsi_sem);
+
+	return rc;
+}
+
+static ssize_t ll_nosquash_nids_seq_write(struct file *file,
+					  const char __user *buffer,
+					  size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct root_squash_info *squash = &sbi->ll_squash;
+	int rc;
+
+	rc = lprocfs_wr_nosquash_nids(buffer, count, squash,
+				      ll_get_fsname(sb, NULL, 0));
+	if (rc < 0)
+		return rc;
+
+	ll_compute_rootsquash_state(sbi);
+
+	return rc;
+}
+LPROC_SEQ_FOPS(ll_nosquash_nids);
+
 struct lprocfs_seq_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&ll_sb_uuid_fops			},
@@ -892,6 +957,10 @@ struct lprocfs_seq_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_xattr_cache_fops			},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&ll_unstable_stats_fops			},
+	{ .name	=	"root_squash",
+	  .fops	=	&ll_root_squash_fops			},
+	{ .name	=	"nosquash_nids",
+	  .fops	=	&ll_nosquash_nids_fops			},
 	{ 0 }
 };
 

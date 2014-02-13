@@ -219,12 +219,7 @@ struct mdt_device {
 	spinlock_t		   mdt_osfs_lock;
 
         /* root squash */
-        uid_t                      mdt_squash_uid;
-        gid_t                      mdt_squash_gid;
-        cfs_list_t                 mdt_nosquash_nids;
-        char                      *mdt_nosquash_str;
-        int                        mdt_nosquash_strlen;
-	struct rw_semaphore	   mdt_squash_sem;
+	struct root_squash_info    mdt_squash;
 
         struct rename_stats        mdt_rename_stats;
 	struct lu_fid		   mdt_md_root_fid;
