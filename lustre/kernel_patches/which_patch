@@ -1,10 +1,10 @@
 SERIES                VERSION                  COMMENT
 
 SUPPORTED KERNELS:
-2.6-rhel6             RHEL6: 2.6.32-431.3.1.el6
+2.6-rhel6             RHEL6: 2.6.32-431.5.1.el6
 
 CLIENT SUPPORT FOR UNPATCHED KERNELS:
 	2.6.18-348.3.1.el5	(RHEL5)
-	2.6.32-431.3.1.el6	(RHEL6)
+	2.6.32-431.5.1.el6	(RHEL6)
 	2.6.16.60-0.69.1	(SLES10)
 	2.6.27.19-5		(SLES11)
