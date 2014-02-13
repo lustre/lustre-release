@@ -51,6 +51,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#include <lustre/lustre_idl.h>	/* LLOG_CHUNK_SIZE definition */
 
 #include "osd_internal.h"
 
@@ -137,6 +138,12 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		dmu_tx_hold_sa_create(oh->ot_tx, ZFS_SA_BASE_ATTR_SIZE);
 	}
 
+	/* XXX: we still miss for append declaration support in ZFS
+	 *	-1 means append which is used by llog mostly, llog
+	 *	can grow upto LLOG_CHUNK_SIZE*8 records */
+	if (pos == -1)
+		pos = max_t(loff_t, 256 * 8 * LLOG_CHUNK_SIZE,
+			    obj->oo_attr.la_size + (2 << 20));
 	dmu_tx_hold_write(oh->ot_tx, oid, pos, buf->lb_len);
 
 	/* dt_declare_write() is usually called for system objects, such

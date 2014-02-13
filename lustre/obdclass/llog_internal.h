@@ -58,6 +58,7 @@ struct llog_thread_info {
 	loff_t				 lgi_off;
 	struct llog_rec_hdr		 lgi_lrh;
 	struct llog_rec_tail		 lgi_tail;
+	struct llog_logid_rec		 lgi_logid;
 };
 
 extern struct lu_context_key llog_thread_key;
