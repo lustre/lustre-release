@@ -1482,7 +1482,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		if (attr->ia_valid & ATTR_SIZE)
 			inode_dio_write_done(inode);
 		mutex_unlock(&inode->i_mutex);
-		down_write(&lli->lli_trunc_sem);
 	}
 
 	/* truncate on a released file must failed with -ENODATA,
@@ -1550,7 +1549,11 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		 * excessive to send mtime/atime updates to OSTs when not
 		 * setting times to past, but it is necessary due to possible
 		 * time de-synchronization between MDT inode and OST objects */
+		if (attr->ia_valid & ATTR_SIZE)
+			down_write(&lli->lli_trunc_sem);
 		rc = ll_setattr_ost(inode, attr);
+		if (attr->ia_valid & ATTR_SIZE)
+			up_write(&lli->lli_trunc_sem);
 	}
 	EXIT;
 out:
@@ -1563,7 +1566,6 @@ out:
 		ll_finish_md_op_data(op_data);
 	}
 	if (!S_ISDIR(inode->i_mode)) {
-		up_write(&lli->lli_trunc_sem);
 		mutex_lock(&inode->i_mutex);
 		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			inode_dio_wait(inode);
