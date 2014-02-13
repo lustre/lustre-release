@@ -2,9 +2,9 @@ TBD Intel Corporation
        * version 2.5.1
        * See http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server support for kernels:
-	 2.6.32-431.3.1.el6  (RHEL6)
+	 2.6.32-431.5.1.el6  (RHEL6)
        * Client support for unpatched kernels:
-	 2.6.32-431.3.1.el6  (RHEL6)
+	 2.6.32-431.5.1.el6  (RHEL6)
          2.6.27.19-5         (SLES11)
 	 2.6.18-348.3.1.el5  (RHEL5)
          2.6.16.60-0.69.1    (SLES10)
