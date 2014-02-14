@@ -898,6 +898,206 @@ out:
 	RETURN(rc);
 }
 
+static int llog_truncate(const struct lu_env *env, struct dt_object *o)
+{
+	struct lu_attr		 la;
+	struct thandle		*th;
+	struct dt_device	*d;
+	int			 rc;
+	ENTRY;
+
+	LASSERT(o);
+	d = lu2dt_dev(o->do_lu.lo_dev);
+	LASSERT(d);
+
+	rc = dt_attr_get(env, o, &la, NULL);
+	if (rc)
+		RETURN(rc);
+
+	CDEBUG(D_OTHER, "original size %Lu\n", la.la_size);
+	rc = sizeof(struct llog_log_hdr) + sizeof(struct llog_mini_rec);
+	if (la.la_size < rc) {
+		CERROR("too small llog: %Lu\n", la.la_size);
+		RETURN(0);
+	}
+
+	/* drop 2 records */
+	la.la_size = la.la_size - (sizeof(struct llog_mini_rec) * 2);
+	la.la_valid = LA_SIZE;
+
+	th = dt_trans_create(env, d);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_attr_set(env, o, &la, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_declare_punch(env, o, la.la_size, OBD_OBJECT_EOF, th);
+
+	rc = dt_trans_start_local(env, d, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_punch(env, o, la.la_size, OBD_OBJECT_EOF, th, BYPASS_CAPA);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_attr_set(env, o, &la, th, BYPASS_CAPA);
+	if (rc)
+		GOTO(stop, rc);
+
+stop:
+	dt_trans_stop(env, d, th);
+
+	RETURN(rc);
+}
+
+static int test_8_cb(const struct lu_env *env, struct llog_handle *llh,
+			  struct llog_rec_hdr *rec, void *data)
+{
+	plain_counter++;
+	return 0;
+}
+
+static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_handle	*llh = NULL;
+	char			 name[10];
+	int			 rc, rc2, i;
+	int			 orig_counter;
+	struct llog_mini_rec	 lmr;
+	struct llog_ctxt	*ctxt;
+	struct dt_object	*obj = NULL;
+
+	ENTRY;
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = 0xf00f00;
+
+	CWARN("8a: fill the first plain llog\n");
+	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc) {
+		CERROR("8a: llog_create with logid failed: %d\n", rc);
+		GOTO(out_put, rc);
+	}
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("8a: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	plain_counter = 0;
+	rc = llog_cat_process(env, llh, test_8_cb, "foobar", 0, 0);
+	if (rc != 0) {
+		CERROR("5a: process with cat_cancel_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	orig_counter = plain_counter;
+
+	for (i = 0; i < 100; i++) {
+		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL, NULL);
+		if (rc) {
+			CERROR("5a: add record failed\n");
+			GOTO(out, rc);
+		}
+	}
+
+	/* grab the current plain llog, we'll corrupt it later */
+	obj = llh->u.chd.chd_current_log->lgh_obj;
+	LASSERT(obj);
+	lu_object_get(&obj->do_lu);
+	CWARN("8a: pin llog "DFID"\n", PFID(lu_object_fid(&obj->do_lu)));
+
+	rc2 = llog_cat_close(env, llh);
+	if (rc2) {
+		CERROR("8a: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+		GOTO(out_put, rc);
+	}
+
+	CWARN("8b: fill the second plain llog\n");
+	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc) {
+		CERROR("8b: llog_create with logid failed: %d\n", rc);
+		GOTO(out_put, rc);
+	}
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("8b: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	for (i = 0; i < 100; i++) {
+		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL, NULL);
+		if (rc) {
+			CERROR("8b: add record failed\n");
+			GOTO(out, rc);
+		}
+	}
+	CWARN("8b: second llog "DFID"\n",
+		PFID(lu_object_fid(&llh->u.chd.chd_current_log->lgh_obj->do_lu)));
+
+	rc2 = llog_cat_close(env, llh);
+	if (rc2) {
+		CERROR("8b: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+		GOTO(out_put, rc);
+	}
+
+	CWARN("8c: drop two records from the first plain llog\n");
+	llog_truncate(env, obj);
+
+	CWARN("8d: count survived records\n");
+	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc) {
+		CERROR("8d: llog_create with logid failed: %d\n", rc);
+		GOTO(out_put, rc);
+	}
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("8d: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	plain_counter = 0;
+	rc = llog_cat_process(env, llh, test_8_cb, "foobar", 0, 0);
+	if (rc != 0) {
+		CERROR("8d: process with cat_cancel_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	if (orig_counter + 200 - 2 != plain_counter) {
+		CERROR("found %d records (expected %d)\n", plain_counter,
+		       orig_counter + 200 - 2);
+		rc = -EIO;
+	}
+
+out:
+	CWARN("8d: close re-opened catalog\n");
+	rc2 = llog_cat_close(env, llh);
+	if (rc2) {
+		CERROR("8d: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+out_put:
+	llog_ctxt_put(ctxt);
+
+	if (obj != NULL)
+		lu_object_put(env, &obj->do_lu);
+
+	RETURN(rc);
+}
+
 /* -------------------------------------------------------------------------
  * Tests above, boring obd functions below
  * ------------------------------------------------------------------------- */
@@ -939,6 +1139,10 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 		GOTO(cleanup, rc);
 
 	rc = llog_test_7(env, obd);
+	if (rc)
+		GOTO(cleanup, rc);
+
+	rc = llog_test_8(env, obd);
 	if (rc)
 		GOTO(cleanup, rc);
 

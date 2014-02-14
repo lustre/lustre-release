@@ -400,6 +400,20 @@ out:
         if (cd != NULL)
                 cd->lpcd_last_idx = last_called_index;
 
+	if (unlikely(rc == -EIO)) {
+		/* something bad happened to the processing, probably I/O
+		 * error or the log got corrupted..
+		 * to be able to finally release the log we discard any
+		 * remaining bits in the header */
+		CERROR("llog found corrupted\n");
+		while (index <= last_index) {
+			if (ext2_test_bit(index, llh->llh_bitmap) != 0)
+				llog_cancel_rec(lpi->lpi_env, loghandle, index);
+			index++;
+		}
+		rc = 0;
+	}
+
 	OBD_FREE(buf, LLOG_CHUNK_SIZE);
         lpi->lpi_rc = rc;
         return 0;
