@@ -754,7 +754,7 @@ extern struct module libcfs_global_module;
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 
 #if 0 /* defined in libcfs/libcfs_hash.h */
-static inline u32 cfs_hash_long(u32 val, unsigned int bits)
+static inline u32 hash_long(u32 val, unsigned int bits)
 {
 	/* On some cpus multiply is faster, on others gcc will do shifts */
 	u32 hash = val * GOLDEN_RATIO_PRIME_32;

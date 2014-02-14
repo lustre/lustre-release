@@ -90,26 +90,26 @@ __u64 gss_get_next_ctx_index(void)
 
 static inline unsigned long hash_mem(char *buf, int length, int bits)
 {
-        unsigned long hash = 0;
-        unsigned long l = 0;
-        int len = 0;
-        unsigned char c;
+	unsigned long hash = 0;
+	unsigned long l = 0;
+	int len = 0;
+	unsigned char c;
 
-        do {
-                if (len == length) {
-                        c = (char) len;
-                        len = -1;
-                } else
-                        c = *buf++;
+	do {
+		if (len == length) {
+			c = (char) len;
+			len = -1;
+		} else
+			c = *buf++;
 
-                l = (l << 8) | c;
-                len++;
+		l = (l << 8) | c;
+		len++;
 
-                if ((len & (BITS_PER_LONG/8-1)) == 0)
-                        hash = cfs_hash_long(hash^l, BITS_PER_LONG);
-        } while (len);
+		if ((len & (BITS_PER_LONG/8-1)) == 0)
+			hash = hash_long(hash^l, BITS_PER_LONG);
+	} while (len);
 
-        return hash >> (BITS_PER_LONG - bits);
+	return hash >> (BITS_PER_LONG - bits);
 }
 
 /* This compatibility can be removed once kernel 3.3 is used,

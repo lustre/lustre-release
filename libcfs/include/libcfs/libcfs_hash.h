@@ -65,8 +65,6 @@
 
 #if (defined __linux__ && defined __KERNEL__)
 #include <linux/hash.h>
-
-#define cfs_hash_long(val, bits)    hash_long(val, bits)
 #else
 /* Fast hashing routine for a long.
    (C) 2002 William Lee Irwin III, IBM */
@@ -81,7 +79,7 @@
 #error Define CFS_GOLDEN_RATIO_PRIME for your wordsize.
 #endif
 
-static inline unsigned long cfs_hash_long(unsigned long val, unsigned int bits)
+static inline unsigned long hash_long(unsigned long val, unsigned int bits)
 {
 	unsigned long hash = val;
 
@@ -111,7 +109,7 @@ static inline unsigned long cfs_hash_long(unsigned long val, unsigned int bits)
 #if 0
 static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
 {
-	return cfs_hash_long((unsigned long)ptr, bits);
+	return hash_long((unsigned long)ptr, bits);
 }
 #endif
 

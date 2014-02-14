@@ -697,7 +697,7 @@ void lnet_ni_free(lnet_ni_t *ni);
 static inline int
 lnet_nid2peerhash(lnet_nid_t nid)
 {
-	return cfs_hash_long(nid, LNET_PEER_HASH_BITS);
+	return hash_long(nid, LNET_PEER_HASH_BITS);
 }
 
 static inline cfs_list_t *

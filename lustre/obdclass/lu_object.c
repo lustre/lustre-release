@@ -935,22 +935,22 @@ static int lu_htable_order(void)
 }
 
 static unsigned lu_obj_hop_hash(cfs_hash_t *hs,
-                                const void *key, unsigned mask)
+				const void *key, unsigned mask)
 {
-        struct lu_fid  *fid = (struct lu_fid *)key;
-        __u32           hash;
+	struct lu_fid  *fid = (struct lu_fid *)key;
+	__u32           hash;
 
-        hash = fid_flatten32(fid);
-        hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
-        hash = cfs_hash_long(hash, hs->hs_bkt_bits);
+	hash = fid_flatten32(fid);
+	hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
+	hash = hash_long(hash, hs->hs_bkt_bits);
 
-        /* give me another random factor */
-        hash -= cfs_hash_long((unsigned long)hs, fid_oid(fid) % 11 + 3);
+	/* give me another random factor */
+	hash -= hash_long((unsigned long)hs, fid_oid(fid) % 11 + 3);
 
-        hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
-        hash |= (fid_seq(fid) + fid_oid(fid)) & (CFS_HASH_NBKT(hs) - 1);
+	hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
+	hash |= (fid_seq(fid) + fid_oid(fid)) & (CFS_HASH_NBKT(hs) - 1);
 
-        return hash & mask;
+	return hash & mask;
 }
 
 static void *lu_obj_hop_object(cfs_hlist_node_t *hnode)

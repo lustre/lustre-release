@@ -419,22 +419,22 @@ static unsigned ldlm_res_hop_fid_hash(cfs_hash_t *hs,
         fid.f_oid = (__u32)id->name[LUSTRE_RES_ID_VER_OID_OFF];
         fid.f_ver = (__u32)(id->name[LUSTRE_RES_ID_VER_OID_OFF] >> 32);
 
-        hash = fid_flatten32(&fid);
-        hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
-        if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0) {
-                val = id->name[LUSTRE_RES_ID_HSH_OFF];
-                hash += (val >> 5) + (val << 11);
-        } else {
-                val = fid_oid(&fid);
-        }
-        hash = cfs_hash_long(hash, hs->hs_bkt_bits);
-        /* give me another random factor */
-        hash -= cfs_hash_long((unsigned long)hs, val % 11 + 3);
+	hash = fid_flatten32(&fid);
+	hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
+	if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0) {
+		val = id->name[LUSTRE_RES_ID_HSH_OFF];
+		hash += (val >> 5) + (val << 11);
+	} else {
+		val = fid_oid(&fid);
+	}
+	hash = hash_long(hash, hs->hs_bkt_bits);
+	/* give me another random factor */
+	hash -= hash_long((unsigned long)hs, val % 11 + 3);
 
-        hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
-        hash |= ldlm_res_hop_hash(hs, key, CFS_HASH_NBKT(hs) - 1);
+	hash <<= hs->hs_cur_bits - hs->hs_bkt_bits;
+	hash |= ldlm_res_hop_hash(hs, key, CFS_HASH_NBKT(hs) - 1);
 
-        return hash & mask;
+	return hash & mask;
 }
 
 static void *ldlm_res_hop_key(cfs_hlist_node_t *hnode)
