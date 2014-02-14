@@ -388,11 +388,6 @@ static int llu_inode_revalidate(struct inode *inode)
         struct intnl_stat *st = llu_i2stat(inode);
         ENTRY;
 
-        if (!inode) {
-                CERROR("REPORT THIS LINE TO PETER\n");
-                RETURN(0);
-        }
-
         if (!llu_have_md_lock(inode, MDS_INODELOCK_UPDATE)) {
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
