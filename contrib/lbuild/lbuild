@@ -1710,17 +1710,20 @@ build_ofed() {
     cd ${kib_rpm}-devel
     # the actual ofed RPMs don't have the -rc$n or -$date string appened that
     # might be present on the file
-    local linuxrelease=$(find_linux_release)
-    ofed_version=$(echo $ofed_version |
-                   sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+    #local linuxrelease=$(find_linux_release)
+    #ofed_version=$(echo $ofed_version |
+    #               sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
     # FIXME
     # OFED version will have 'hyphen' for minor release. (e.g. 3.5-1, instead
     # of 3.5.1) compat-rdma and compat-rdma-devel could have same version
     # number, but currectly not. Once OFED fix this in the future release, we
     # can remove following filter.
-    ofed_version=$(echo $ofed_version |
-                   sed -re 's/-([0-9]*-[rR][cC][0-9]*)$//')
-    local rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
+    #ofed_version=$(echo $ofed_version |
+    #               sed -re 's/-([0-9]*-[rR][cC][0-9]*)$//')
+    #local rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
+    # I dont' know why we have gone through the trouble to filter out the name
+    # of the rpm there should only be one ${kib_rpm}-devel built
+    local rpm=$(ls $TOPDIR/RPMS/*/${kib_rpm}-devel-*.rpm)
     if ! rpm2cpio < $rpm | cpio -id; then
         fatal 1 "could not unpack the ${kib_rpm}-devel rpm."
     fi

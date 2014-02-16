@@ -358,9 +358,8 @@ AC_SUBST(MXLND)
 #
 # LN_CONFIG_O2IB
 #
-AC_DEFUN([LN_CONFIG_O2IB],[
-
-AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
+AC_DEFUN([LN_CONFIG_O2IB],
+[AC_MSG_CHECKING([whether to use Compat RDMA])
 # set default
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
@@ -381,7 +380,7 @@ AC_ARG_WITH([o2ib],
 		ENABLEO2IB=1
 	])
 if test $ENABLEO2IB -eq 0; then
-	AC_MSG_RESULT([disabled])
+	AC_MSG_RESULT([no])
 else
 	o2ib_found=false
 	for O2IBPATH in $O2IBPATHS; do
@@ -396,7 +395,7 @@ else
 			fi
 			o2ib_found=true
 			break
- 		fi
+		fi
 	done
 	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
@@ -407,11 +406,45 @@ else
 			*) AC_MSG_ERROR([internal error]);;
 		esac
 	else
+		compatrdma_found=false
+		if test -f ${O2IBPATH}/include/linux/compat-2.6.h; then
+			compatrdma_found=true
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_COMPAT_RDMA, 1, [compat rdma found])
+		else
+			AC_MSG_RESULT([no])
+		fi
+		if ! $compatrdma_found; then
+			if test -f $O2IBPATH/config.mk; then
+				. $O2IBPATH/config.mk
+			elif test -f $O2IBPATH/ofed_patch.mk; then
+				. $O2IBPATH/ofed_patch.mk
+			fi
+		else
+			if test x$RHEL_KERNEL = xyes; then
+				case $RHEL_KERNEL_VERSION in
+					2.6.32-358*)
+						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4";;
+					2.6.32-431*)
+						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_5";;
+				esac
+			elif test x$SUSE_KERNEL = xyes; then
+				SP=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
+				EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_SLES_11_$SP"
+			fi
+		fi
+		AC_MSG_CHECKING([whether to use any OFED backport headers])
+		if test -n "$BACKPORT_INCLUDES"; then
+			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
+			EXTRA_OFED_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_OFED_INCLUDE"
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([no])
+		fi
+
+		AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
 		O2IBPATH=$(readlink --canonicalize $O2IBPATH)
-		O2IBCPPFLAGS="-I$O2IBPATH/include"
-		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-		EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE $O2IBCPPFLAGS"
+		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$O2IBPATH/include"
 
 		LB_LINUX_TRY_COMPILE([
 		        #include <linux/version.h>
@@ -445,7 +478,6 @@ else
 		        *) AC_MSG_ERROR([internal error]);;
 		        esac
 		        O2IBLND=""
-		        O2IBCPPFLAGS=""
 		])
 		# we know at this point that the found OFED source is good
 		O2IB_SYMVER=""
@@ -473,12 +505,10 @@ else
 		fi
 
 		LN_CONFIG_OFED_SPEC
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
 fi
 
-AC_SUBST(EXTRA_LNET_INCLUDE)
-AC_SUBST(O2IBCPPFLAGS)
+AC_SUBST(EXTRA_OFED_INCLUDE)
 AC_SUBST(O2IBLND)
 
 # In RHEL 6.2, rdma_create_id() takes the queue-pair type as a fourth argument
