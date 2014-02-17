@@ -542,7 +542,7 @@ static int lustre_lwp_connect(struct obd_device *lwp)
 	data->ocd_connect_flags |= OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
 		OBD_CONNECT_AT | OBD_CONNECT_LRU_RESIZE |
 		OBD_CONNECT_FULL20 | OBD_CONNECT_LVB_TYPE |
-		OBD_CONNECT_LIGHTWEIGHT;
+		OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LFSCK;
 	OBD_ALLOC_PTR(uuid);
 	if (uuid == NULL)
 		GOTO(out, rc = -ENOMEM);

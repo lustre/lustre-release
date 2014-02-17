@@ -510,6 +510,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
 #define OBD_FAIL_LFSCK_NOPFID		0x1617
 #define OBD_FAIL_LFSCK_CHANGE_STRIPE	0x1618
+#define OBD_FAIL_LFSCK_INVALID_PFID	0x1619
 
 #define OBD_FAIL_LFSCK_NOTIFY_NET	0x16f0
 #define OBD_FAIL_LFSCK_QUERY_NET	0x16f1

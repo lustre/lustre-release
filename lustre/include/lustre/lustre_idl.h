@@ -3530,6 +3530,8 @@ struct lfsck_request {
 	__u16		lr_async_windows;
 	__u32		lr_padding_1;
 	struct lu_fid	lr_fid;
+	struct lu_fid	lr_fid2;
+	struct lu_fid	lr_fid3;
 	__u64		lr_padding_2;
 	__u64		lr_padding_3;
 };
@@ -3543,6 +3545,25 @@ struct lfsck_reply {
 };
 
 void lustre_swab_lfsck_reply(struct lfsck_reply *lr);
+
+enum lfsck_events {
+	LE_LASTID_REBUILDING	= 1,
+	LE_LASTID_REBUILT	= 2,
+	LE_PHASE1_DONE		= 3,
+	LE_PHASE2_DONE		= 4,
+	LE_START		= 5,
+	LE_STOP 		= 6,
+	LE_QUERY		= 7,
+	LE_FID_ACCESSED 	= 8,
+	LE_PEER_EXIT		= 9,
+	LE_CONDITIONAL_DESTROY	= 10,
+	LE_PAIRS_VERIFY 	= 11,
+};
+
+enum lfsck_event_flags {
+	LEF_TO_OST		= 0x00000001,
+	LEF_FROM_OST		= 0x00000002,
+};
 
 static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
 					struct obdo *wobdo,

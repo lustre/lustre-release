@@ -2069,8 +2069,25 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_async_windows);
 	CHECK_MEMBER(lfsck_request, lr_padding_1);
 	CHECK_MEMBER(lfsck_request, lr_fid);
+	CHECK_MEMBER(lfsck_request, lr_fid2);
+	CHECK_MEMBER(lfsck_request, lr_fid3);
 	CHECK_MEMBER(lfsck_request, lr_padding_2);
 	CHECK_MEMBER(lfsck_request, lr_padding_3);
+
+	CHECK_VALUE(LE_LASTID_REBUILDING);
+	CHECK_VALUE(LE_LASTID_REBUILT);
+	CHECK_VALUE(LE_PHASE1_DONE);
+	CHECK_VALUE(LE_PHASE2_DONE);
+	CHECK_VALUE(LE_START);
+	CHECK_VALUE(LE_STOP);
+	CHECK_VALUE(LE_QUERY);
+	CHECK_VALUE(LE_FID_ACCESSED);
+	CHECK_VALUE(LE_PEER_EXIT);
+	CHECK_VALUE(LE_CONDITIONAL_DESTROY);
+	CHECK_VALUE(LE_PAIRS_VERIFY);
+
+	CHECK_VALUE_X(LEF_TO_OST);
+	CHECK_VALUE_X(LEF_FROM_OST);
 }
 
 static void check_lfsck_reply(void)

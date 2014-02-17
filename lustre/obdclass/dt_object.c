@@ -885,7 +885,7 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 
 	if (!fid_is_quota(&ii->ii_fid) && !fid_is_layout_rbtree(&ii->ii_fid))
 		/* Block access to all local files except quota files and
-		 * layout brtree. */
+		 * layout rbtree. */
 		RETURN(-EPERM);
 
 	/* lookup index object subject to the transfer */

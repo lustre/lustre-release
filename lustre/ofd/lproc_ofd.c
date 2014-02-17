@@ -528,6 +528,38 @@ static int lprocfs_rd_lfsck_layout(char *page, char **start, off_t off,
 	return lfsck_dump(ofd->ofd_osd, page, count, LT_LAYOUT);
 }
 
+static int lprocfs_rd_lfsck_verify_pfid(char *page, char **start, off_t off,
+					int count, int *eof, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+
+	*eof = 1;
+
+	return snprintf(page, count,
+			"switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
+			ofd->ofd_lfsck_verify_pfid ? "on" : "off",
+			ofd->ofd_inconsistency_self_detected,
+			ofd->ofd_inconsistency_self_repaired);
+}
+
+static int lprocfs_wr_lfsck_verify_pfid(struct file *file, const char *buffer,
+					unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	__u32			 val;
+	int			 rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc != 0)
+		return rc;
+
+	ofd->ofd_lfsck_verify_pfid = !!val;
+
+	return count;
+}
+
 static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "uuid",		 lprocfs_rd_uuid, 0, 0 },
 	{ "blocksize",		 lprocfs_rd_blksize, 0, 0 },
@@ -580,6 +612,8 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "lfsck_speed_limit",	lprocfs_rd_lfsck_speed_limit,
 				lprocfs_wr_lfsck_speed_limit, 0 },
 	{ "lfsck_layout",	lprocfs_rd_lfsck_layout, 0, 0 },
+	{ "lfsck_verify_pfid",	lprocfs_rd_lfsck_verify_pfid,
+				lprocfs_wr_lfsck_verify_pfid, 0 },
 	{ 0 }
 };
 

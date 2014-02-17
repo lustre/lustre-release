@@ -2341,7 +2341,8 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 	case LE_PHASE2_DONE:
 	case LE_FID_ACCESSED:
 	case LE_PEER_EXIT:
-	case LE_CONDITIONAL_DESTROY: {
+	case LE_CONDITIONAL_DESTROY:
+	case LE_PAIRS_VERIFY: {
 		struct lfsck_instance  *lfsck;
 		struct lfsck_component *com;
 

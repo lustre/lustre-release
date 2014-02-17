@@ -141,6 +141,11 @@ struct lu_fid {
 	__u32 f_ver;
 };
 
+/* Currently, the filter_fid::ff_parent::f_ver is not the real parent
+ * MDT-object's FID::f_ver, instead it is the OST-object index in its
+ * parent MDT-object's layout EA. */
+#define f_stripe_idx f_ver
+
 struct filter_fid {
 	struct lu_fid	ff_parent;  /* ff_parent.f_ver == file stripe number */
 };

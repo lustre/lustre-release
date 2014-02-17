@@ -116,22 +116,11 @@ struct lfsck_start_param {
 	unsigned int		 lsp_index_valid:1;
 };
 
-enum lfsck_events {
-	LE_LASTID_REBUILDING	= 1,
-	LE_LASTID_REBUILT	= 2,
-	LE_PHASE1_DONE		= 3,
-	LE_PHASE2_DONE		= 4,
-	LE_START		= 5,
-	LE_STOP 		= 6,
-	LE_QUERY		= 7,
-	LE_FID_ACCESSED 	= 8,
-	LE_PEER_EXIT		= 9,
-	LE_CONDITIONAL_DESTROY	= 10,
-};
-
-enum lfsck_event_flags {
-	LEF_TO_OST		= 0x00000001,
-	LEF_FROM_OST		= 0x00000002,
+/* For LE_PAIRS_VERIFY returned status */
+enum lfsck_pv_status {
+	LPVS_INIT		= 0,
+	LPVS_INCONSISTENT	= 1,
+	LPVS_INCONSISTENT_TOFIX = 2,
 };
 
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,

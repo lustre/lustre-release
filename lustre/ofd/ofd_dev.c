@@ -1656,7 +1656,7 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 	}
 
 	rc = ofd_object_punch(tsi->tsi_env, fo, start, end, &info->fti_attr,
-			      ff);
+			      ff, (struct obdo *)oa);
 	if (rc)
 		GOTO(out_put, rc);
 
@@ -2128,6 +2128,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_tot_granted = 0;
 	m->ofd_tot_pending = 0;
 	m->ofd_seq_count = 0;
+	init_waitqueue_head(&m->ofd_inconsistency_thread.t_ctl_waitq);
+	INIT_LIST_HEAD(&m->ofd_inconsistency_list);
+	spin_lock_init(&m->ofd_inconsistency_lock);
 
 	spin_lock_init(&m->ofd_batch_lock);
 	rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
@@ -2232,7 +2235,14 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc)
 		GOTO(err_fini_lut, rc);
 
+	rc = ofd_start_inconsistency_verification_thread(m);
+	if (rc != 0)
+		GOTO(err_fini_fs, rc);
+
 	RETURN(0);
+
+err_fini_fs:
+	ofd_fs_cleanup(env, m);
 err_fini_lut:
 	tgt_fini(env, &m->ofd_lut);
 err_free_ns:
@@ -2254,12 +2264,13 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	stop.ls_status = LS_PAUSED;
 	stop.ls_flags = 0;
 	lfsck_stop(env, m->ofd_osd, &stop);
-	lfsck_degister(env, m->ofd_osd);
 	target_recovery_fini(obd);
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
 	tgt_fini(env, &m->ofd_lut);
+	ofd_stop_inconsistency_verification_thread(m);
+	lfsck_degister(env, m->ofd_osd);
 	ofd_fs_cleanup(env, m);
 
 	ofd_free_capa_keys(m);

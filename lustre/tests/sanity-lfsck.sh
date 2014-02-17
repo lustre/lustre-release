@@ -43,7 +43,7 @@ check_and_setup_lustre
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19"
 
 build_test_filter
 
@@ -2036,6 +2036,10 @@ test_18e() {
 		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 ||
 		error "(3) MDS1 is not the expected 'scanning-phase2'"
 
+	# to guarantee all updates are synced.
+	sync
+	sleep 2
+
 	echo "Write new data to f2 to modify the new created OST-object."
 	echo "dummy" >> $DIR/$tdir/a1/f2
 
@@ -2086,6 +2090,80 @@ test_18e() {
 	$LFS getstripe $DIR/$tdir/a1/f2
 }
 run_test 18e "Find out orphan OST-object and repair it (5)"
+
+test_19a() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	echo "foo" > $DIR/$tdir/a0
+	echo "guard" > $DIR/$tdir/a1
+
+	cancel_lru_locks osc
+	umount_client $MOUNT || error "(1) Fail to stop client!"
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	echo "Inject failure, then client will offer wrong parent FID when read"
+	do_facet ost1 $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
+	#define OBD_FAIL_LFSCK_INVALID_PFID	0x1619
+	$LCTL set_param fail_loc=0x1619
+
+	echo "Read RPC with wrong parent FID should be denied"
+	cat $DIR/$tdir/a0 && error "(3) Read should be denied!"
+	$LCTL set_param fail_loc=0
+}
+run_test 19a "OST-object inconsistency self detect"
+
+test_19b() {
+	echo "stopall"
+	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	echo "Inject failure stub to make the OST-object to back point to"
+	echo "non-exist MDT-object"
+
+	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
+	do_facet ost1 $LCTL set_param fail_loc=0x1611
+	echo "foo" > $DIR/$tdir/f0
+	cancel_lru_locks osc
+	sync
+	sleep 2
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	echo "Nothing should be fixed since self detect and repair is disabled"
+	local repaired=$(do_facet ost1 $LCTL get_param -n \
+			obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
+			awk '/^repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(1) Expected 0 repaired, but got $repaired"
+
+	echo "Read RPC with right parent FID should be accepted,"
+	echo "and cause parent FID on OST to be fixed"
+
+	do_facet ost1 $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
+	cat $DIR/$tdir/f0 || error "(2) Read should not be denied!"
+
+	repaired=$(do_facet ost1 $LCTL get_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
+		awk '/^repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(3) Expected 1 repaired, but got $repaired"
+}
+run_test 19b "OST-object inconsistency self repair"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

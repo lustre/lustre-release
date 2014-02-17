@@ -82,13 +82,13 @@ int main(int argc, char *argv[])
 			       le64_to_cpu(ffo->ff_parent.f_seq),
 			       le32_to_cpu(ffo->ff_parent.f_oid), 0 /* ver */,
 			       /* this is stripe_nr actually */
-			       le32_to_cpu(ffo->ff_parent.f_ver));
+			       le32_to_cpu(ffo->ff_parent.f_stripe_idx));
 		} else {
 			printf("%s: parent="DFID" stripe=%u\n", argv[i],
 			       le64_to_cpu(ff->ff_parent.f_seq),
 			       le32_to_cpu(ff->ff_parent.f_oid), 0, /* ver */
 			       /* this is stripe_nr actually */
-			       le32_to_cpu(ff->ff_parent.f_ver));
+			       le32_to_cpu(ff->ff_parent.f_stripe_idx));
 		}
 	}
 

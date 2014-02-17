@@ -430,6 +430,12 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	if (!lu_object_exists(&obj->do_lu)) {
+		set_bit(LU_OBJECT_HEARD_BANSHEE,
+			&obj->do_lu.lo_header->loh_flags);
+		RETURN(-ENOENT);
+	}
+
 	name = object_update_param_get(update, 0, NULL);
 	if (name == NULL) {
 		CERROR("%s: empty name for xattr get: rc = %d\n",
