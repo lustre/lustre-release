@@ -173,7 +173,7 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 	struct buffer_head *bh;
 	int err;
 
-	LASSERT(down_trylock(&c->ic_idle_sem) != 0);
+	LASSERT(mutex_is_locked(&c->ic_idle_mutex));
 
 	if (blk == 0)
 		return NULL;
@@ -237,13 +237,13 @@ static int iam_format_guess(struct iam_container *c)
 		idle_blocks = (__u32 *)(c->ic_root_bh->b_data +
 					c->ic_descr->id_root_gap +
 					sizeof(struct dx_countlimit));
-		down(&c->ic_idle_sem);
+		mutex_lock(&c->ic_idle_mutex);
 		bh = iam_load_idle_blocks(c, le32_to_cpu(*idle_blocks));
 		if (bh != NULL && IS_ERR(bh))
 			result = PTR_ERR(bh);
 		else
 			c->ic_idle_bh = bh;
-		up(&c->ic_idle_sem);
+		mutex_unlock(&c->ic_idle_mutex);
 	}
 
 	return result;
@@ -260,7 +260,7 @@ int iam_container_init(struct iam_container *c,
 	c->ic_object = inode;
 	init_rwsem(&c->ic_sem);
 	dynlock_init(&c->ic_tree_lock);
-	sema_init(&c->ic_idle_sem, 1);
+	mutex_init(&c->ic_idle_mutex);
 	return 0;
 }
 EXPORT_SYMBOL(iam_container_init);
@@ -1665,9 +1665,9 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	if (c->ic_idle_bh == NULL)
 		goto newblock;
 
-	down(&c->ic_idle_sem);
+	mutex_lock(&c->ic_idle_mutex);
 	if (unlikely(c->ic_idle_bh == NULL)) {
-		up(&c->ic_idle_sem);
+		mutex_unlock(&c->ic_idle_mutex);
 		goto newblock;
 	}
 
@@ -1685,7 +1685,7 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 		if (*e != 0)
 			goto fail;
 
-		up(&c->ic_idle_sem);
+		mutex_unlock(&c->ic_idle_mutex);
 		bh = ldiskfs_bread(NULL, inode, *b, 0, e);
 		if (bh == NULL)
 			return NULL;
@@ -1723,7 +1723,7 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	}
 
 	c->ic_idle_bh = idle;
-	up(&c->ic_idle_sem);
+	mutex_unlock(&c->ic_idle_mutex);
 
 got:
 	/* get write access for the found buffer head */
@@ -1744,7 +1744,7 @@ newblock:
 	return bh;
 
 fail:
-	up(&c->ic_idle_sem);
+	mutex_unlock(&c->ic_idle_mutex);
 	ldiskfs_std_error(inode->i_sb, *e);
 	return NULL;
 }
@@ -2382,7 +2382,7 @@ static void iam_recycle_leaf(handle_t *h, struct iam_path *p,
 	int count;
 	int rc;
 
-	down(&c->ic_idle_sem);
+	mutex_lock(&c->ic_idle_mutex);
 	if (unlikely(c->ic_idle_failed)) {
 		rc = -EFAULT;
 		goto unlock;
@@ -2415,7 +2415,7 @@ static void iam_recycle_leaf(handle_t *h, struct iam_path *p,
 	rc = iam_txn_dirty(h, p, c->ic_idle_bh);
 
 unlock:
-	up(&c->ic_idle_sem);
+	mutex_unlock(&c->ic_idle_mutex);
 	if (rc != 0)
 		CWARN("%.16s: idle blocks failed, will lose the blk %u\n",
 		      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk);

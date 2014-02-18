@@ -387,7 +387,7 @@ kgnilnd_ruhroh_thread(void *arg)
 			break;
 
 		/* Serialize with driver startup and shutdown. */
-		down(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
 
 	       CDEBUG(D_NET, "trigger %d reset %d to_bump %d pause %d\n",
 			kgnilnd_data.kgn_quiesce_trigger,
@@ -452,7 +452,7 @@ kgnilnd_ruhroh_thread(void *arg)
 			set_mb(kgnilnd_data.kgn_needs_reset, 0);
 		}
 
-		up(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	}
 
 	kgnilnd_data.kgn_ruhroh_running = 0;

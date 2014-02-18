@@ -192,7 +192,7 @@ struct qsd_fsinfo {
 
 	/* list of all qsd_instance for this fs */
 	cfs_list_t		qfs_qsd_list;
-	struct semaphore	qfs_sem;
+	struct mutex		qfs_mutex;
 
 	/* link to the global quota fsinfo list.  */
 	cfs_list_t		qfs_link;

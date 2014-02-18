@@ -485,10 +485,8 @@ struct iam_container {
          */
 	struct rw_semaphore	ic_sem;
 	struct dynlock       ic_tree_lock;
-	/*
-	 * Protect ic_idle_bh
-	 */
-	struct semaphore	ic_idle_sem;
+	/* Protect ic_idle_bh */
+	struct mutex	     ic_idle_mutex;
 	/*
 	 * BH for idle blocks
 	 */
