@@ -67,9 +67,15 @@ AC_DEFUN([AC_KERBEROS_V5],[
   dnl We didn't find a usable Kerberos environment
   if test "x$require_krb5" = "xyes" -a "x$KRBDIR" = "x"; then
     if test "x$krb5_with" = "x"; then
-      AC_MSG_ERROR(Kerberos v5 with GSS support not found: consider --disable-gss or --with-krb5=)
+      AC_MSG_ERROR([
+
+Kerberos v5 with GSS support not found: consider --disable-gss or --with-krb5=
+])
     else
-      AC_MSG_ERROR(Kerberos v5 with GSS support not found at $krb5_with)
+      AC_MSG_ERROR([
+
+Kerberos v5 with GSS support not found at $krb5_with
+])
     fi
   fi
   AC_MSG_RESULT($KRBDIR)
@@ -111,11 +117,19 @@ AC_DEFUN([AC_KERBEROS_V5],[
 
   AS_IF([test "x$HAVE_KRB5INT_DERIVE_KEY" = "x1" -o "x$HAVE_KRB5_DERIVE_KEY" = "x1"],
         [AC_DEFINE(HAVE_KRB5, 1, [Define this if you have MIT Kerberos libraries])],
-        [KRBDIR=""; AC_MSG_WARN(Disable gss/krb5 due to missing both krb5int_derive_key and krb5_derive_key functions!)])
+        [KRBDIR=""; AC_MSG_WARN([
+
+Disable gss/krb5 due to missing both
+krb5int_derive_key and krb5_derive_key functions!
+])
+])
 
   dnl If they specified a directory and it didn't work, give them a warning
   if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then
-    AC_MSG_WARN(Using $KRBDIR instead of requested value of $krb5_with for Kerberos!)
+    AC_MSG_WARN([
+
+Using $KRBDIR instead of requested value of $krb5_with for Kerberos!
+])
   fi
 
   AC_SUBST([KRBDIR])

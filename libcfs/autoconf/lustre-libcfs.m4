@@ -243,18 +243,15 @@ LB_LINUX_TRY_COMPILE([
 # upstream commit 56b31d1c9f1e6a3ad92e7bfe252721e05d92b285
 #
 AC_DEFUN([LIBCFS_SOCK_ALLOC_FILE],
-[AC_MSG_CHECKING([sock_alloc_file is exported])
-LB_CHECK_SYMBOL_EXPORT([sock_alloc_file], [net/socket.c],[
+[LB_CHECK_SYMBOL_EXPORT([sock_alloc_file], [net/socket.c],[
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/net.h>
 	],[
 		sock_alloc_file(NULL, 0, NULL);
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_SOCK_ALLOC_FILE_3ARGS, 1,
 			[sock_alloc_file takes 3 arguments])
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_SOCK_ALLOC_FILE, 1,
 			[sock_alloc_file is exported])
 	])
@@ -275,8 +272,10 @@ AC_DEFUN([LIBCFS_ENABLE_CRC32_ACCEL],
 	[enable_crc32_crypto=false],[enable_crc32_crypto=true])
 if test x$have_crc32 = xtrue -a x$enable_crc32_crypto = xtrue; then
 	AC_DEFINE(NEED_CRC32_ACCEL, 1, [need pclmulqdq based crc32])
-	AC_MSG_WARN([No crc32 pclmulqdq crypto api found,
-		    enable internal pclmulqdq based crc32])
+	AC_MSG_WARN([
+
+No crc32 pclmulqdq crypto api found, enable internal pclmulqdq based crc32
+])
 fi
 ])
 
@@ -285,8 +284,10 @@ AC_DEFUN([LIBCFS_ENABLE_CRC32C_ACCEL],
 	[enable_crc32c_crypto=false],[enable_crc32c_crypto=true])
 if test x$enable_crc32c_crypto = xtrue; then
 	AC_DEFINE(NEED_CRC32C_ACCEL, 1, [need pclmulqdq based crc32c])
-	AC_MSG_WARN([No crc32c pclmulqdq crypto api found,
-		    enable internal pclmulqdq based crc32c])
+	AC_MSG_WARN([
+
+No crc32c pclmulqdq crypto api found, enable internal pclmulqdq based crc32c
+])
 fi
 ])
 
@@ -457,7 +458,6 @@ AC_SUBST(LIBEFENCE)
 
 
 # -------- check for -lpthread support ----
-AC_MSG_CHECKING([whether to use libpthread for libcfs library])
 AC_ARG_ENABLE([libpthread],
        	AC_HELP_STRING([--disable-libpthread],
                	[disable libpthread]),
@@ -466,22 +466,20 @@ if test "$enable_libpthread" = "yes" ; then
 	AC_CHECK_LIB([pthread], [pthread_create],
 		[ENABLE_LIBPTHREAD="yes"],
 		[ENABLE_LIBPTHREAD="no"])
+	AC_MSG_CHECKING([whether to use libpthread for libcfs library])
+	AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
 		PTHREAD_LIBS="-lpthread"
 		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
 	else
 		PTHREAD_LIBS=""
-		AC_MSG_RESULT([no libpthread is found])
 	fi
 	AC_SUBST(PTHREAD_LIBS)
 else
-	AC_MSG_RESULT([no (disabled explicitly)])
+	AC_MSG_WARN([Using libpthread for libcfs library is disabled explicitly])
 	ENABLE_LIBPTHREAD="no"
 fi
 AC_SUBST(ENABLE_LIBPTHREAD)
-
-
 ])
 
 #

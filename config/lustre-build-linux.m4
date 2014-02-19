@@ -56,13 +56,16 @@ AC_DEFUN([LB_LINUX_UTSRELEASE], [
 		              ${utsrelease})
 		AS_IF([test -z "$UTS_RELEASE"], [
 			AC_MSG_RESULT([Not found])
-			AC_MSG_ERROR([*** Cannot determine kernel version.])
+			AC_MSG_ERROR([Cannot determine kernel version.])
 		])
 	], [
 		AC_MSG_RESULT([Not found])
 		AC_MSG_ERROR([
-	*** Cannot find UTS_RELEASE definition.
-	*** This is often provided by the kernel-devel package.])
+
+Cannot find UTS_RELEASE definition.
+
+This is often provided by the kernel-devel package.
+])
 	])
 
 	AC_MSG_RESULT([${UTS_RELEASE}])
@@ -234,7 +237,13 @@ AC_ARG_WITH([kernel-source-header],
 
 # ------------ .config exists ----------------
 LB_CHECK_FILE([$LINUX_CONFIG],[],
-	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
+	[AC_MSG_ERROR([
+
+Kernel config could not be found.
+
+If you are building from a kernel-source rpm consult build/README.kernel-source
+])
+])
 
 # ----------- make dep run? ------------------
 # at 2.6.19 # $LINUX/include/linux/config.h is removed
@@ -272,9 +281,13 @@ if grep rhconfig $LINUX_OBJ/include/$VERSION_HDIR/version.h >/dev/null ; then
 	# modules
 	LB_CHECK_FILE([$KERNEL_SOURCE_HEADER],
 		[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
-			AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
-			AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])
-			AC_MSG_WARN([Consult build/README.kernel-source for details.])
+			AC_MSG_WARN([
+
+Using /boot/kernel.h from RUNNING kernel.
+
+If this is not what you want, use --with-kernel-source-header.
+Consult build/README.kernel-source for details.
+])
 		fi],
 		[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult build/README.kernel-source for details.])])
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
@@ -290,9 +303,13 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([yes])
 ],[
 	AC_MSG_RESULT([no])
-	AC_MSG_WARN([Consult config.log for details.])
-	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
-	AC_MSG_ERROR([Kernel modules cannot be built.])
+	AC_MSG_ERROR([
+
+Kernel modules cannot be built. Consult config.log for details.
+
+If you are trying to build with a kernel-source rpm,
+consult build/README.kernel-source
+])
 ])
 
 LB_LINUX_RELEASE
@@ -494,9 +511,10 @@ LB_LINUX_TRY_MAKE([
 		  [kernel module loading is possible])
 ],[
 	AC_MSG_RESULT(no)
-	AC_MSG_WARN([])
-	AC_MSG_WARN([Kernel module loading support is highly recommended.])
-	AC_MSG_WARN([])
+	AC_MSG_WARN([
+
+Kernel module loading support is highly recommended.
+])
 ])
 ])
 
@@ -512,13 +530,19 @@ LB_LINUX_SYMVERFILE
 
 
 LB_LINUX_CONFIG([MODULES],[],[
-	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
+	AC_MSG_ERROR([
+
+module support is required to build Lustre kernel modules.
+])
 ])
 
 LB_LINUX_CONFIG([MODVERSIONS])
 
 LB_LINUX_CONFIG([KALLSYMS],[],[
-	AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
+	AC_MSG_ERROR([
+
+Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.
+])
 ])
 
 # 2.6.28

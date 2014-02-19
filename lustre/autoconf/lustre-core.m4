@@ -83,14 +83,11 @@ AC_TRY_COMPILE([
 ])
 
 AC_DEFUN([LC_GLIBC_SUPPORT_FHANDLES],
-[AC_MSG_CHECKING([if file handle and related syscalls are supported by glibc])
-AC_CHECK_FUNCS([name_to_handle_at
-],[
-	AC_MSG_RESULT([yes])
+[AC_CHECK_FUNCS([name_to_handle_at],[
 	AC_DEFINE(HAVE_FHANDLE_GLIBC_SUPPORT, 1,
 		[file handle and related syscalls are supported])
 ],[
-	AC_MSG_RESULT([no])
+	AC_MSG_WARN([file handle and related syscalls are not supported])
 ])
 ])
 
@@ -269,7 +266,10 @@ dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
 dnl FIXME
 AC_DEFUN([LC_CONFIG_RMTCLIENT],
 [LB_LINUX_CONFIG_IM([CRYPTO_AES],[],[
-        AC_MSG_WARN([Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.])
+        AC_MSG_WARN([
+
+Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.
+])
 ])
 ])
 
@@ -287,20 +287,32 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
  if test x$enable_gss_keyring != xno; then
 	LB_LINUX_CONFIG_IM([KEYS],[],
 			   [gss_keyring_conf_test='fail';
-			    AC_MSG_WARN([GSS keyring backend require that CONFIG_KEYS be enabled in your kernel.])])
+			    AC_MSG_WARN([
+
+GSS keyring backend require that CONFIG_KEYS be enabled in your kernel.
+])])
 
 	AC_CHECK_LIB([keyutils], [keyctl_search], [],
 		     [gss_keyring_conf_test='fail';
-		      AC_MSG_WARN([libkeyutils is not found, which is required by gss keyring backend])],)
+		      AC_MSG_WARN([
+
+libkeyutils is not found, which is required by gss keyring backend
+])],)
 
 	if test x$gss_keyring_conf_test != xfail; then
 		AC_DEFINE([HAVE_GSS_KEYRING], [1], [Define this if you enable gss keyring backend])
 		enable_gss_keyring='yes'
 	else
 		if test x$enable_gss_keyring == xyes; then
-			AC_MSG_ERROR([Cannot enable gss_keyring. See above for details.])
+			AC_MSG_ERROR([
+
+Cannot enable gss_keyring. See above for details.
+])
 		else
-			AC_MSG_WARN([Cannot enable gss keyring.  See above for details.])
+			AC_MSG_WARN([
+
+Cannot enable gss keyring.  See above for details.
+])
 		fi
 	fi
  fi
@@ -309,7 +321,10 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
 AC_DEFUN([LC_CONFIG_SUNRPC],
 [LB_LINUX_CONFIG_IM([SUNRPC],[],
                     [if test x$sunrpc_required == xyes; then
-                         AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])
+                         AC_MSG_ERROR([
+
+kernel SUNRPC support is required by using GSS.
+])
                      fi])
 ])
 
@@ -353,9 +368,15 @@ AC_DEFUN([LC_CONFIG_GSS],
 					   [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue";
 					    gss_conf_test='success'],
 					   [if test x$enable_gss == xyes; then
-						AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])
+						AC_MSG_ERROR([
+
+libgssapi or libgssglue is not found, which is required by GSS.
+])
 					    else
-						AC_MSG_WARN([libgssapi or libgssglue is not found, which is required by GSS.])
+						AC_MSG_WARN([
+
+libgssapi or libgssglue is not found, which is required by GSS.
+])
 					    fi])],)
 		AC_SUBST(GSSAPI_LIBS)
 	fi
@@ -433,7 +454,6 @@ LB_LINUX_TRY_COMPILE([
 		AC_MSG_RESULT([yes])
 	],[
 		AC_MSG_RESULT([no])
-		AC_MSG_CHECKING([if quotactl_ops.set_dqblk takes struct kqid&fs_disk_quota])
 	])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
@@ -1807,9 +1827,14 @@ AC_CHECK_LIB([z],
                                [ZLIB="-lz"
                                 AC_DEFINE([HAVE_ADLER], 1,
                                           [support alder32 checksum type])],
-                               [AC_MSG_WARN([No zlib-devel package found,
-                                             unable to use adler32 checksum])])],
-             [AC_MSG_WARN([No zlib package found, unable to use adler32 checksum])]
+                               [AC_MSG_WARN([
+
+No zlib-devel package found, unable to use adler32 checksum
+])])],
+             [AC_MSG_WARN([
+
+No zlib package found, unable to use adler32 checksum
+])]
 )
 AC_SUBST(ZLIB)
 
@@ -1820,11 +1845,14 @@ AC_CHECK_LIB([selinux],
 				[SELINUX="-lselinux"
 				AC_DEFINE([HAVE_SELINUX], 1,
 						[support for selinux ])],
-				[AC_MSG_WARN([No selinux-devel package found,
-						unable to build selinux enabled
-						tools])])],
-		[AC_MSG_WARN([No selinux package found, unable to build selinux
-				enabled tools])]
+				[AC_MSG_WARN([
+
+No selinux-devel package found, unable to build selinux enabled tools
+])])],
+		[AC_MSG_WARN([
+
+No selinux package found, unable to build selinux enabled tools
+])]
 )
 AC_SUBST(SELINUX)
 

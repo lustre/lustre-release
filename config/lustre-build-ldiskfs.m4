@@ -116,8 +116,11 @@ AC_ARG_WITH([ldiskfs],
 	[],
 	[AC_MSG_WARN([--with-ldiskfs is deprecated, please use --enable-ldiskfs])
 	AS_IF([test x$withval != xyes -a x$withval != xno],
-		[AC_MSG_ERROR([the ldiskfs option is deprecated, and
-			no longer supports paths to external ldiskfs source])])
+		[AC_MSG_ERROR([
+
+The ldiskfs option is deprecated,
+and no longer supports paths to external ldiskfs source
+])])
 	]
 )
 
@@ -200,7 +203,6 @@ Disabling ldiskfs support because complete ext4 source does not exist.
 If you are building using kernel-devel packages and require ldiskfs
 server support then ensure that the matching kernel-debuginfo-common
 and kernel-debuginfo-common-<arch> packages are installed.
-
 ])
 
 fi
