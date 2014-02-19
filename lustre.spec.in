@@ -731,8 +731,8 @@ rm /var/run/%{name}-osd-zfs
 %endif # with lustre_modules
 
 %if %{with lustre_tests}
-%post tests
 %if %{defined rpm_post_base}
+%post tests
 if [ -x %{rpm_post_base}-tests.sh ]; then
 	%{rpm_post_base}-tests.sh %{cross_path} create
 fi
@@ -742,6 +742,8 @@ if [ -x %{rpm_post_base}-tests.sh ]; then
 	%{rpm_post_base}-tests.sh %{cross_path} remove
 fi
 %else
+%if %{with lustre_modules}
+%post tests
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
@@ -754,6 +756,7 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+%endif
 %endif
 %endif
 
