@@ -787,8 +787,9 @@ static int ct_begin(struct hsm_copyaction_private **phcp,
 static int ct_fini(struct hsm_copyaction_private **phcp,
 		   const struct hsm_action_item *hai, int hp_flags, int ct_rc)
 {
-	char	lstr[PATH_MAX];
-	int	rc;
+	struct hsm_copyaction_private	*hcp;
+	char				 lstr[PATH_MAX];
+	int				 rc;
 
 	CT_TRACE("Action completed, notifying coordinator "
 		 "cookie="LPX64", FID="DFID", hp_flags=%d err=%d",
@@ -796,6 +797,17 @@ static int ct_fini(struct hsm_copyaction_private **phcp,
 		 hp_flags, -ct_rc);
 
 	ct_path_lustre(lstr, sizeof(lstr), opt.o_mnt, &hai->hai_fid);
+
+	if (phcp == NULL || *phcp == NULL) {
+		rc = llapi_hsm_action_begin(&hcp, ctdata, hai, -1, 0, true);
+		if (rc < 0) {
+			CT_ERROR(rc, "llapi_hsm_action_begin() on '%s' failed",
+				 lstr);
+			return rc;
+		}
+		phcp = &hcp;
+	}
+
 	rc = llapi_hsm_action_end(phcp, &hai->hai_extent, hp_flags, abs(ct_rc));
 	if (rc == -ECANCELED)
 		CT_ERROR(rc, "completed action on '%s' has been canceled: "
@@ -1039,8 +1051,7 @@ out:
 	if (!(dst_fd < 0))
 		close(dst_fd);
 
-	if (hcp != NULL)
-		rc = ct_fini(&hcp, hai, hp_flags, rcf);
+	rc = ct_fini(&hcp, hai, hp_flags, rcf);
 
 	return rc;
 }
@@ -1137,8 +1148,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	CT_TRACE("data restore from '%s' to '%s' done", src, dst);
 
 fini:
-	if (hcp != NULL)
-		rc = ct_fini(&hcp, hai, hp_flags, rc);
+	rc = ct_fini(&hcp, hai, hp_flags, rc);
 
 	/* object swaping is done by cdt at copy end, so close of volatile file
 	 * cannot be done before */
@@ -1188,23 +1198,7 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 	}
 
 fini:
-	if (hcp != NULL)
-		rc = ct_fini(&hcp, hai, 0, rc);
-
-	return rc;
-}
-
-static int ct_report_error(const struct hsm_action_item *hai, int flags,
-			   int errval)
-{
-	struct hsm_copyaction_private	*hcp;
-	int				 rc;
-
-	rc = llapi_hsm_action_begin(&hcp, ctdata, hai, -1, 0, true);
-	if (rc < 0)
-		return rc;
-
-	rc = llapi_hsm_action_end(&hcp, &hai->hai_extent, flags, abs(errval));
+	rc = ct_fini(&hcp, hai, 0, rc);
 
 	return rc;
 }
@@ -1257,7 +1251,7 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 		CT_ERROR(rc, "unknown action %d, on '%s'", hai->hai_action,
 			 opt.o_mnt);
 		err_minor++;
-		ct_report_error(hai, 0, rc);
+		ct_fini(NULL, hai, 0, rc);
 	}
 
 	return 0;
