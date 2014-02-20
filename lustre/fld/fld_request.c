@@ -488,6 +488,7 @@ again:
 			 * unecessary failure of the application, instead
 			 * it should retry here */
 			ptlrpc_req_finished(req);
+			rc = 0;
 			goto again;
 		}
 		GOTO(out_req, rc);
