@@ -1328,8 +1328,8 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 		struct lu_dirpage	*first = dp;
 		struct lu_dirent	*end_dirent = NULL;
 		struct lu_dirent	*ent;
-		__u64			hash_end = dp->ldp_hash_end;
-		__u32			flags = dp->ldp_flags;
+		__u64		hash_end = le64_to_cpu(dp->ldp_hash_end);
+		__u32		flags = le32_to_cpu(dp->ldp_flags);
 
 		while (--lu_pgs > 0) {
 			ent = lu_dirent_start(dp);
@@ -1344,8 +1344,8 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 				break;
 
 			/* Save the hash and flags of this lu_dirpage. */
-			hash_end = dp->ldp_hash_end;
-			flags = dp->ldp_flags;
+			hash_end = le64_to_cpu(dp->ldp_hash_end);
+			flags = le32_to_cpu(dp->ldp_flags);
 
 			/* Check if lu_dirpage contains no entries. */
 			if (end_dirent == NULL)
@@ -1679,12 +1679,12 @@ int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 	if (ent == NULL) {
 		__u64 orig_offset = op_data->op_hash_offset;
 
-		if (dp->ldp_hash_end == MDS_DIR_END_OFF) {
+		if (le64_to_cpu(dp->ldp_hash_end) == MDS_DIR_END_OFF) {
 			mdc_release_page(page, 0);
 			RETURN(0);
 		}
 
-		op_data->op_hash_offset = dp->ldp_hash_end;
+		op_data->op_hash_offset = le64_to_cpu(dp->ldp_hash_end);
 		mdc_release_page(page,
 				 le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
 		rc = mdc_read_page(exp, op_data, cb_op, &page);
@@ -1766,12 +1766,12 @@ int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(rc);
 
 	dp = page_address(page);
-	if (dp->ldp_hash_end < op_data->op_hash_offset)
+	if (le64_to_cpu(dp->ldp_hash_end) < op_data->op_hash_offset)
 		GOTO(out, *entp = NULL);
 
 	for (ent = lu_dirent_start(dp); ent != NULL;
 	     ent = lu_dirent_next(ent))
-		if (ent->lde_hash >= op_data->op_hash_offset)
+		if (le64_to_cpu(ent->lde_hash) >= op_data->op_hash_offset)
 			break;
 	*entp = ent;
 out:
