@@ -529,6 +529,7 @@ void gss_delete_sec_context_kerberos(void *internal_ctx)
 static
 void buf_to_sg(struct scatterlist *sg, void *ptr, int len)
 {
+	sg_init_table(sg, 1);
 	sg_set_buf(sg, ptr, len);
 }
 
