@@ -979,8 +979,9 @@ static int ll_agl_thread(void *arg)
         struct l_wait_info        lwi    = { 0 };
         ENTRY;
 
-	CDEBUG(D_READA, "agl thread started: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	thread->t_pid = current_pid();
+	CDEBUG(D_READA, "agl thread started: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 
 	atomic_inc(&sbi->ll_agl_total);
 	spin_lock(&plli->lli_agl_lock);
@@ -1029,8 +1030,8 @@ static int ll_agl_thread(void *arg)
 	spin_unlock(&plli->lli_agl_lock);
 	wake_up(&thread->t_ctl_waitq);
 	ll_sai_put(sai);
-	CDEBUG(D_READA, "agl thread stopped: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "agl thread stopped: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 	RETURN(0);
 }
 
@@ -1042,8 +1043,8 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 	struct task_struct	      *task;
 	ENTRY;
 
-	CDEBUG(D_READA, "start agl thread: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "start agl thread: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 
 	plli = ll_i2info(parent->d_inode);
 	task = kthread_run(ll_agl_thread, parent,
@@ -1079,8 +1080,9 @@ static int ll_statahead_thread(void *arg)
 	struct page		*page = NULL;
 	ENTRY;
 
-	CDEBUG(D_READA, "statahead thread started: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	thread->t_pid = current_pid();
+	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 
 	op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
 				     LUSTRE_OPC_ANY, dir);
@@ -1246,8 +1248,8 @@ out:
 		spin_unlock(&plli->lli_agl_lock);
 		wake_up(&agl_thread->t_ctl_waitq);
 
-		CDEBUG(D_READA, "stop agl thread: [pid %d]\n",
-		       current_pid());
+		CDEBUG(D_READA, "stop agl thread: sai %p pid %u\n",
+		       sai, (unsigned int)agl_thread->t_pid);
 		l_wait_event(agl_thread->t_ctl_waitq,
 			     thread_is_stopped(agl_thread),
 			     &lwi);
@@ -1273,8 +1275,8 @@ out:
 	wake_up(&thread->t_ctl_waitq);
         ll_sai_put(sai);
         dput(parent);
-	CDEBUG(D_READA, "statahead thread stopped: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "statahead thread stopped: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 	return rc;
 }
 
@@ -1305,8 +1307,8 @@ void ll_stop_statahead(struct inode *dir, void *key)
 			spin_unlock(&lli->lli_sa_lock);
 			wake_up(&thread->t_ctl_waitq);
 
-			CDEBUG(D_READA, "stop statahead thread: [pid %d]\n",
-			       current_pid());
+			CDEBUG(D_READA, "stop statahead thread: sai %p pid %u\n",
+			       lli->lli_sai, (unsigned int)thread->t_pid);
 			l_wait_event(thread->t_ctl_waitq,
 				     thread_is_stopped(thread),
 				     &lwi);
@@ -1461,10 +1463,10 @@ ll_sai_unplug(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 			CDEBUG(D_READA, "Statahead for dir "DFID" hit "
 			       "ratio too low: hit/miss "LPU64"/"LPU64
 			       ", sent/replied "LPU64"/"LPU64", stopping "
-			       "statahead thread: pid %d\n",
+			       "statahead thread\n",
 			       PFID(&lli->lli_fid), sai->sai_hit,
 			       sai->sai_miss, sai->sai_sent,
-			       sai->sai_replied, current_pid());
+			       sai->sai_replied);
 			spin_lock(&lli->lli_sa_lock);
 			if (!thread_is_stopped(thread))
 				thread_set_flags(thread, SVC_STOPPING);
@@ -1647,8 +1649,8 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                 GOTO(out, rc = -EAGAIN);
         }
 
-	CDEBUG(D_READA, "start statahead thread: [pid %d] [parent %.*s]\n",
-	       current_pid(), parent->d_name.len, parent->d_name.name);
+	CDEBUG(D_READA, "start statahead thread: sai %p, parent %.*s\n",
+	       sai, parent->d_name.len, parent->d_name.name);
 
 	/* The sai buffer already has one reference taken at allocation time,
 	 * but as soon as we expose the sai by attaching it to the lli that default
