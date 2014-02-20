@@ -100,7 +100,10 @@ LQUOTAOPTS=${LQUOTAOPTS:-"hash_lqs_cur_bits=3"}
 MOUNT=${MOUNT:-/mnt/${FSNAME}}
 MOUNT1=${MOUNT1:-$MOUNT}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-MOUNTOPT=${MOUNTOPT:-"-o user_xattr,flock"}
+# Comma-separated option list used as "mount [...] -o $MOUNT_OPTS [...]"
+MOUNT_OPTS=${MOUNT_OPTS:-"user_xattr,flock"}
+# Mount flags (e.g. "-n") used as "mount [...] $MOUNT_FLAGS [...]"
+MOUNT_FLAGS=${MOUNT_FLAGS:-""}
 DIR=${DIR:-$MOUNT}
 DIR1=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}

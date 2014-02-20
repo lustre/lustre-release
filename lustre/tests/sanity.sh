@@ -8824,11 +8824,12 @@ som_mode_switch() {
 
         if [ x$som = x"enabled" ]; then
                 [ $((gl2 - gl1)) -gt 0 ] && error "no glimpse RPC is expected"
-                MOUNTOPT=`echo $MOUNTOPT | sed 's/som_preview//g'`
+                MOUNT_OPTS=`echo $MOUNT_OPTS |
+                    sed 's/som_preview,\|,som_preview\|som_preview//g'`
                 do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=disabled"
         else
                 [ $((gl2 - gl1)) -gt 0 ] || error "some glimpse RPC is expected"
-                MOUNTOPT="$MOUNTOPT,som_preview"
+                MOUNT_OPTS="${MOUNT_OPTS:+$MOUNT_OPTS,}som_preview"
                 do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=enabled"
         fi
 
@@ -8844,12 +8845,12 @@ test_132() { #1028, SOM
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
         local num=$(get_mds_dir $DIR)
         local mymds=mds${num}
-        local MOUNTOPT_SAVE=$MOUNTOPT
+        local MOUNT_OPTS_SAVE=$MOUNT_OPTS
 
         dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
         cancel_lru_locks osc
 
-        som1=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
+        som1=$(do_facet $mymds "$LCTL get_param -n mdt.*.som" | head -n 1)
 
         gl1=$(get_ost_param "ldlm_glimpse_enqueue")
         stat $DIR/$tfile >/dev/null
@@ -8861,7 +8862,7 @@ test_132() { #1028, SOM
         dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
         cancel_lru_locks osc
 
-        som2=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
+        som2=$(do_facet $mymds "$LCTL get_param -n mdt.*.som" | head -n 1)
         if [ $som1 == $som2 ]; then
             error "som is still "$som2
             if [ x$som2 = x"enabled" ]; then
@@ -8876,7 +8877,7 @@ test_132() { #1028, SOM
         gl2=$(get_ost_param "ldlm_glimpse_enqueue")
         echo "====> SOM is "$som2", "$((gl2 - gl1))" glimpse RPC occured"
         som_mode_switch $som2 $gl1 $gl2
-        MOUNTOPT=$MOUNTOPT_SAVE
+        MOUNT_OPTS=$MOUNT_OPTS_SAVE
 }
 run_test 132 "som avoids glimpse rpc"
 

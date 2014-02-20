@@ -20,7 +20,8 @@ check_and_setup_lustre
 cleanup_mount $MOUNT
 # mount lustre on mds
 lustre_client=$(facet_active_host $SINGLEMDS)
-[ "$NFSVERSION" = "4" ] && cl_mnt_opt="$MOUNTOPT,32bitapi" || cl_mnt_opt=""
+[ "$NFSVERSION" = "4" ] && cl_mnt_opt="${MOUNT_OPTS:+$MOUNT_OPTS,}32bitapi" ||
+    cl_mnt_opt=""
 zconf_mount_clients $lustre_client $MOUNT "$cl_mnt_opt" || \
     error "mount lustre on $lustre_client failed"
 

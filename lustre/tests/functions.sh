@@ -908,7 +908,7 @@ run_statahead () {
 
     local num_mntpts=$statahead_NUMMNTPTS
     local mntpt_root=$TMP/mntpt/lustre
-    local mntopts=${MNTOPTSTATAHEAD:-$MOUNTOPT}
+    local mntopts=$MNTOPTSTATAHEAD
 
     echo "Mounting $num_mntpts lustre clients starts on $clients"
     trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR

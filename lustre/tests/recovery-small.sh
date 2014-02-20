@@ -1568,10 +1568,9 @@ test_105()
         # get one of the clients from client list
         local rcli=$(echo $RCLIENTS |cut -d' ' -f 1)
 
-        local old_MOUNTOPT=$MOUNTOPT
-        MOUNTOPT=${MOUNTOPT},noir
+        local mount_opts=${MOUNT_OPTS:+$MOUNT_OPTS,}noir
         zconf_umount $rcli $MOUNT || error "umount failed"
-        zconf_mount $rcli $MOUNT || error "mount failed"
+        zconf_mount $rcli $MOUNT $mount_opts || error "mount failed"
 
         # make sure lustre mount at $rcli disabling IR
         local ir_state=$(check_cli_ir_state $rcli)
@@ -1593,8 +1592,7 @@ test_105()
 	[ $ir_state = "DISABLED" -o $ir_state = "OFF" ] ||
 		error "IR status on ost1 should be DISABLED"
 
-        # restore it
-        MOUNTOPT=$old_MOUNTOPT
+        # remount with the default MOUNT_OPTS
         zconf_umount $rcli $MOUNT || error "umount failed"
         zconf_mount $rcli $MOUNT || error "mount failed"
 

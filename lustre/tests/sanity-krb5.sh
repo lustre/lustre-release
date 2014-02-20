@@ -719,7 +719,7 @@ test_102() {
 run_test 102 "survive from insanely fast flavor switch"
 
 test_150() {
-	local save_opts
+	local mount_opts
 	local count
 	local clients=$CLIENTS
 
@@ -736,18 +736,14 @@ test_150() {
 	zconf_umount_clients $clients $MOUNT || return 1
 
 	# mount client with conflict flavor - should fail
-	save_opts=$MOUNTOPT
-	MOUNTOPT="$MOUNTOPT,mgssec=krb5p"
-	zconf_mount_clients $clients $MOUNT &&
+	mount_opts="${MOUNT_OPTS:+$MOUNT_OPTS,}mgssec=krb5p"
+	zconf_mount_clients $clients $MOUNT $mount_opts &&
 	    error "mount with conflict flavor should have failed"
-	MOUNTOPT=$save_opts
 
 	# mount client with same flavor - should succeed
-	save_opts=$MOUNTOPT
-	MOUNTOPT="$MOUNTOPT,mgssec=null"
-	zconf_mount_clients $clients $MOUNT ||
+	mount_opts="${MOUNT_OPTS:+$MOUNT_OPTS,}mgssec=null"
+	zconf_mount_clients $clients $MOUNT $mount_opts ||
 	    error "mount with same flavor should have succeeded"
-	MOUNTOPT=$save_opts
 	zconf_umount_clients $clients $MOUNT || return 2
 
 	# mount client with default flavor - should succeed
