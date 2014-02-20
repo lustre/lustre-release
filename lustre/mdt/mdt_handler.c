@@ -481,6 +481,32 @@ void mdt_client_compatibility(struct mdt_thread_info *info)
         EXIT;
 }
 
+int mdt_attr_get_eabuf_size(struct mdt_thread_info *info, struct mdt_object *o)
+{
+	const struct lu_env *env = info->mti_env;
+	int rc, rc2;
+
+	rc = mo_xattr_get(env, mdt_object_child(o), &LU_BUF_NULL,
+			  XATTR_NAME_LOV);
+
+	if (rc == -ENODATA)
+		rc = 0;
+
+	if (rc < 0)
+		goto out;
+
+	/* Is it a directory? Let's check for the LMV as well */
+	if (S_ISDIR(lu_object_attr(&mdt_object_child(o)->mo_lu))) {
+		rc2 = mo_xattr_get(env, mdt_object_child(o), &LU_BUF_NULL,
+				   XATTR_NAME_LMV);
+		if ((rc2 < 0 && rc2 != -ENODATA) || (rc2 > rc))
+			rc = rc2;
+	}
+
+out:
+	return rc;
+}
+
 static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 			     const char *name)
 {
@@ -767,13 +793,15 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		GOTO(out, rc = 0);
 	}
 
-	buffer->lb_len = reqbody->eadatasize;
-	if (buffer->lb_len > 0) {
+	if (reqbody->eadatasize > 0) {
 		buffer->lb_buf = req_capsule_server_get(pill, &RMF_MDT_MD);
 		if (buffer->lb_buf == NULL)
 			GOTO(out, rc = -EPROTO);
+		buffer->lb_len = req_capsule_get_size(pill, &RMF_MDT_MD,
+						      RCL_SERVER);
 	} else {
 		buffer->lb_buf = NULL;
+		buffer->lb_len = 0;
 		ma_need &= ~(MA_LOV | MA_LMV);
 		CDEBUG(D_INFO, "%s: RPC from %s: does not need LOVEA.\n",
 		       mdt_obd_name(info->mti_mdt),
@@ -1053,11 +1081,34 @@ int mdt_getattr(struct tgt_session_info *tsi)
 
 	mode = lu_object_attr(&obj->mot_obj);
 
+	/* Readlink */
+	if (reqbody->valid & OBD_MD_LINKNAME) {
+		/* No easy way to know how long is the symlink, but it cannot
+		 * be more than PATH_MAX, so we allocate +1 */
+		rc = PATH_MAX + 1;
+
+	/* A special case for fs ROOT: getattr there might fetch
+	 * default EA for entire fs, not just for this dir!
+	 */
+	} else if (lu_fid_eq(mdt_object_fid(obj),
+			     &info->mti_mdt->mdt_md_root_fid) &&
+		   (reqbody->valid & OBD_MD_FLDIREA) &&
+		   (lustre_msg_get_opc(mdt_info_req(info)->rq_reqmsg) ==
+								 MDS_GETATTR)) {
+		/* Should the default strping be bigger, mdt_fix_reply
+		 * will reallocate */
+		rc = DEF_REP_MD_SIZE;
+	} else {
+		/* Hopefully no race in EA change for either file or directory?
+		 */
+		rc = mdt_attr_get_eabuf_size(info, obj);
+	}
+
+	if (rc < 0)
+		GOTO(out_shrink, rc);
+
 	/* old clients may not report needed easize, use max value then */
-	req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
-			     reqbody->eadatasize == 0 ?
-			     info->mti_mdt->mdt_max_mdsize :
-			     reqbody->eadatasize);
+	req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
 
 	rc = req_capsule_server_pack(pill);
 	if (unlikely(rc != 0))
@@ -1768,7 +1819,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         /* for replay (no_create) lmm is not needed, client has it already */
         if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
-                                     info->mti_rr.rr_eadatalen);
+				     DEF_REP_MD_SIZE);
 
 	/* llog cookies are always 0, the field is kept for compatibility */
         if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
@@ -2702,7 +2753,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
                 /* Pack reply. */
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                         req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
-                                             info->mti_body->eadatasize);
+					     DEF_REP_MD_SIZE);
                 if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_LOGCOOKIES,
 					     RCL_SERVER, 0);
