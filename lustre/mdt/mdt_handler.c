@@ -1147,6 +1147,10 @@ int mdt_swap_layouts(struct tgt_session_info *tsi)
 		RETURN(-EOPNOTSUPP);
 
 	info = tsi2mdt_info(tsi);
+
+	if (info->mti_dlm_req != NULL)
+		ldlm_request_cancel(req, info->mti_dlm_req, 0);
+
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
 				 req_capsule_client_get(info->mti_pill,
@@ -4220,8 +4224,9 @@ TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_STATE_SET,
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_ACTION,	mdt_hsm_action),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_REQUEST,
 							mdt_hsm_request),
-TGT_MDT_HDL(HABEO_CORPUS|HABEO_REFERO | MUTABOR, MDS_SWAP_LAYOUTS,
-							mdt_swap_layouts)
+TGT_MDT_HDL(HABEO_CLAVIS | HABEO_CORPUS | HABEO_REFERO | MUTABOR,
+	    MDS_SWAP_LAYOUTS,
+	    mdt_swap_layouts),
 };
 
 static struct tgt_handler mdt_sec_ctx_ops[] = {
