@@ -482,6 +482,12 @@ make_small() {
         path2fid $1 || error "cannot get fid on $1"
 }
 
+make_small_sync() {
+	dd if=/dev/urandom of=$1 count=1 bs=1M conv=sync ||
+		error "cannot create $1"
+	path2fid $1 || error "cannot get fid on $1"
+}
+
 cleanup_large_files() {
 	local ratio=$(df -P $MOUNT | tail -1 | awk '{print $5}' |
 		      sed 's/%//g')
@@ -3343,10 +3349,9 @@ test_228() {
 	# test needs a running copytool
 	copytool_setup
 
-	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=1 conv=sync ||
-		error "creating $DIR/$tfile"
+	local fid=$(make_small_sync $DIR/$tfile)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tfile
-	wait_request_state $(path2fid $DIR/$tfile) ARCHIVE SUCCEED
+	wait_request_state $fid ARCHIVE SUCCEED
 
 	$LFS hsm_release $DIR/$tfile
 	check_hsm_flags $DIR/$tfile "0x0000000d"
@@ -3363,13 +3368,15 @@ test_228() {
 	$LFS hsm_release $DIR/$tfile
 	check_hsm_flags $DIR/$tfile "0x0000000d"
 
-	mkdir $DIR/$tdir
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
 
 	tar cf - --sparse $DIR/$tfile | tar xvf - -C $DIR/$tdir ||
 		error "tar failed"
 	cmp $DIR/$tfile $DIR/$tdir/$DIR/$tfile ||
 		error "comparing untarred $DIR/$tfile"
 
+	rm -f $DIR/$tfile $DIR/$tfile.2 ||
+		error "rm $DIR/$tfile or $DIR/$tfile.2 failed"
 	copytool_cleanup
 }
 run_test 228 "On released file, return extend to FIEMAP. For [cp,tar] --sparse"
