@@ -35,6 +35,7 @@ AC_SUBST(LDISKFS_SERIES)
 # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 #
 # 2.6.32-rc7 ext4_free_blocks requires struct buffer_head
+# Note that RHEL6 is pre 2.6.32-rc7 so this check is still needed.
 #
 AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
 LB_CHECK_COMPILE([if 'ext4_free_blocks' needs 'struct buffer_head'],
