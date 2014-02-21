@@ -4150,8 +4150,8 @@ cleanupall() {
 	nfs_client_mode && return
 	cifs_client_mode && return
 
-	CLEANUP_DM_DEV=true stopall $*
 	cleanup_echo_devs
+	CLEANUP_DM_DEV=true stopall $*
 
 	unload_modules
 	cleanup_sk

@@ -80,8 +80,10 @@ obdflter_survey_run () {
 	local cmd="NETTYPE=$NETTYPE thrlo=$thrlo nobjhi=$nobjhi thrhi=$thrhi size=$size case=$case rslt_loc=${TMP} targets=\"$targets\" $OBDSURVEY"
 	echo + $cmd
 	eval $cmd
+	local rc=$?
 
 	cat ${TMP}/obdfilter_survey*
+	[ $rc = 0 ] || error "$OBDSURVEY failed: $rc"
 }
 test_1a () {
 	obdflter_survey_run disk
