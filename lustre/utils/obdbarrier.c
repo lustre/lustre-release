@@ -210,8 +210,10 @@ main (int argc, char **argv)
                 return (1);
 
         b = obdio_new_barrier (oid, bid, npeers);
-        if (b == NULL)
-                return (1);
+	if (b == NULL) {
+		rc = 1;
+		goto out;
+	}
 
         rc = 0;
         if (setup) {
@@ -230,7 +232,7 @@ main (int argc, char **argv)
         }
 
         free(b);
-
+out:
         obdio_disconnect(conn, 0);
 
         return (rc == 0 ? 0 : 1);

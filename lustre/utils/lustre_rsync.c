@@ -1687,6 +1687,8 @@ int main(int argc, char *argv[])
                         break;
 		case 'D':
 			/* Undocumented option debug log file */
+			if (debug_log != NULL)
+				fclose(debug_log);
 			debug_log = fopen(optarg, "a");
 			if (debug_log == NULL) {
 				printf("Cannot open %s for debug log\n",

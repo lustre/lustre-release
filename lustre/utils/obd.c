@@ -475,22 +475,22 @@ static int shmem_setup(void)
         rc = pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
         if (rc != 0) {
                 fprintf(stderr, "Can't set shared mutex attr\n");
-                return rc;
+		goto out;
         }
 
         rc = pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED);
         if (rc != 0) {
                 fprintf(stderr, "Can't set shared cond attr\n");
-                return rc;
+		goto out;
         }
 
         pthread_mutex_init(&shared_data->mutex, &mattr);
         pthread_cond_init(&shared_data->cond, &cattr);
-
+out:
         pthread_mutexattr_destroy(&mattr);
         pthread_condattr_destroy(&cattr);
 
-        return 0;
+	return rc;
 }
 
 static inline void shmem_lock(void)
