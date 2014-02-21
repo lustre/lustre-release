@@ -860,9 +860,6 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota"
 
 # test dropping acquire request on master
 test_6() {
-	# LU-4422
-	[ $MDSCOUNT -ge 2 ] && skip "disable test_6 for DNE temporary" && return
-
 	local LIMIT=3 # 3M
 
 	# Clear dmesg so watchdog is not triggered by previous
@@ -933,9 +930,8 @@ test_6() {
 
 	rm -f $TMP/lustre-log-${TESTNAME}.log
 
-	# write should continue & succeed
+	# write should continue then fail with EDQUOT
 	local count=0
-	local o_size=$(stat -c %s $TESTFILE)
 	local c_size
 	while [ true ]; do
 		if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
@@ -945,13 +941,8 @@ test_6() {
 		count=$((count + 1))
 		if [ $((count % 30)) -eq 0 ]; then
 			c_size=$(stat -c %s $TESTFILE)
-			if [ $c_size -eq $o_size ]; then
-				quota_error u $TSTUSR "file not growed" \
-				"in 30 seconds $o_size/$c_size"
-			else
-				echo "Waiting $count secs. $o_size/$c_size"
-				o_size=$c_size
-			fi
+			echo "Waiting $count secs. $c_size"
+			$SHOW_QUOTA_USER
 		fi
 		sleep 1
 	done
