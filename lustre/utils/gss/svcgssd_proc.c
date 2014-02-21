@@ -487,6 +487,7 @@ handle_nullreq(FILE *f) {
 	gss_cred_id_t		svc_cred;
 	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
 	u_int32_t		ignore_min_stat;
+	int			get_len;
 	struct svc_cred		cred;
 	static char		*lbuf = NULL;
 	static int		lbuflen = 0;
@@ -508,21 +509,27 @@ handle_nullreq(FILE *f) {
 	printerr(2, "handling req: svc %u, nid %016llx, idx %llx\n",
 		 lustre_svc, nid, handle_seq);
 
-	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
-					      sizeof(in_handle_buf));
-	printerr(3, "in_handle: \n");
-	print_hexl(3, in_handle.value, in_handle.length);
-
-	in_tok.length = (size_t) qword_get(&cp, in_tok.value,
-					   sizeof(in_tok_buf));
-	printerr(3, "in_tok: \n");
-	print_hexl(3, in_tok.value, in_tok.length);
-
-	if (in_tok.length < 0) {
+	get_len = qword_get(&cp, in_handle.value, sizeof(in_handle_buf));
+	if (get_len < 0) {
 		printerr(0, "WARNING: handle_nullreq: "
 			    "failed parsing request\n");
 		goto out_err;
 	}
+	in_handle.length = (size_t)get_len;
+
+	printerr(3, "in_handle:\n");
+	print_hexl(3, in_handle.value, in_handle.length);
+
+	get_len = qword_get(&cp, in_tok.value, sizeof(in_tok_buf));
+	if (get_len < 0) {
+		printerr(0, "WARNING: handle_nullreq: "
+			    "failed parsing request\n");
+		goto out_err;
+	}
+	in_tok.length = (size_t)get_len;
+
+	printerr(3, "in_tok:\n");
+	print_hexl(3, in_tok.value, in_tok.length);
 
 	if (in_handle.length != 0) { /* CONTINUE_INIT case */
 		if (in_handle.length != sizeof(ctx)) {

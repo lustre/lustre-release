@@ -1788,9 +1788,9 @@ static void osc_process_ar(struct osc_async_rc *ar, __u64 xid,
  * involved in the bulk transfer are no longer considered unstable. */
 void osc_dec_unstable_pages(struct ptlrpc_request *req)
 {
-	struct ptlrpc_bulk_desc *desc       = req->rq_bulk;
-	struct client_obd       *cli        = &req->rq_import->imp_obd->u.cli;
-	obd_count                page_count = desc->bd_iov_count;
+	struct ptlrpc_bulk_desc	*desc       = req->rq_bulk;
+	struct client_obd	*cli        = &req->rq_import->imp_obd->u.cli;
+	int			 page_count = desc->bd_iov_count;
 	int i;
 
 	/* No unstable page tracking */
@@ -1817,9 +1817,9 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 /* "unstable" page accounting. See: osc_dec_unstable_pages. */
 void osc_inc_unstable_pages(struct ptlrpc_request *req)
 {
-	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-	struct client_obd       *cli  = &req->rq_import->imp_obd->u.cli;
-	obd_count                page_count = desc->bd_iov_count;
+	struct ptlrpc_bulk_desc	*desc       = req->rq_bulk;
+	struct client_obd	*cli        = &req->rq_import->imp_obd->u.cli;
+	int			 page_count = desc->bd_iov_count;
 	int i;
 
 	/* No unstable page tracking */

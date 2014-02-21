@@ -182,18 +182,17 @@ static int llu_file_rwx(struct inode *ino,
                         struct ioctx *ioctx,
                         int read)
 {
-        struct llu_io_session *session;
-        ssize_t cc;
-        int cmd = read ? OBD_BRW_READ : OBD_BRW_WRITE;
-        ENTRY;
+	struct llu_io_session *session;
+	ssize_t cc;
+	int cmd = read ? OBD_BRW_READ : OBD_BRW_WRITE;
+	ENTRY;
 
-        LASSERT(ioctx->ioctx_xtvlen >= 0);
-        LASSERT(ioctx->ioctx_iovlen >= 0);
+	LASSERT(ioctx->ioctx_iovlen > 0);
 
-        liblustre_wait_event(0);
+	liblustre_wait_event(0);
 
-        if (!ioctx->ioctx_xtvlen)
-                RETURN(0);
+	if (ioctx->ioctx_xtvlen == 0)
+		RETURN(0);
 
         /* XXX consider other types later */
         if (S_ISDIR(llu_i2stat(ino)->st_mode))
