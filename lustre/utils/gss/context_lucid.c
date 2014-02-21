@@ -210,7 +210,7 @@ extern void *krb5int_enc_aes256;
 static void
 key_lucid_to_krb5(const gss_krb5_lucid_key_t *lin, krb5_keyblock *kout)
 {
-	memset(kout, '\0', sizeof(kout));
+	memset(kout, 0, sizeof(*kout));
 #ifdef HAVE_KRB5
 	kout->enctype = lin->type;
 	kout->length = lin->length;
@@ -225,7 +225,7 @@ key_lucid_to_krb5(const gss_krb5_lucid_key_t *lin, krb5_keyblock *kout)
 static void
 key_krb5_to_lucid(const krb5_keyblock *kin, gss_krb5_lucid_key_t *lout)
 {
-	memset(lout, '\0', sizeof(lout));
+	memset(lout, 0, sizeof(*lout));
 #ifdef HAVE_KRB5
 	lout->type = kin->enctype;
 	lout->length = kin->length;
