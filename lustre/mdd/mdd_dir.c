@@ -1330,8 +1330,10 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 
 /* caller should take a lock before calling */
 int mdd_finish_unlink(const struct lu_env *env,
-                      struct mdd_object *obj, struct md_attr *ma,
-                      struct thandle *th)
+		      struct mdd_object *obj, struct md_attr *ma,
+		      const struct mdd_object *pobj,
+		      const struct lu_name *lname,
+		      struct thandle *th)
 {
 	int rc = 0;
         int is_dir = S_ISDIR(ma->ma_attr.la_mode);
@@ -1360,9 +1362,12 @@ int mdd_finish_unlink(const struct lu_env *env,
                 } else {
 			rc = mdo_destroy(env, obj, th);
                 }
-        }
+	} else if (!is_dir) {
+		/* old files may not have link ea; ignore errors */
+		mdd_links_del(env, obj, mdo2fid(pobj), lname, th);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /*
@@ -1584,15 +1589,11 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	/* XXX: this transfer to ma will be removed with LOD/OSP */
 	ma->ma_attr = *cattr;
 	ma->ma_valid |= MA_INODE;
-	rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
+	rc = mdd_finish_unlink(env, mdd_cobj, ma, mdd_pobj, lname, handle);
 
 	/* fetch updated nlink */
 	if (rc == 0)
 		rc = mdd_la_get(env, mdd_cobj, cattr, BYPASS_CAPA);
-
-	if (!is_dir)
-		/* old files may not have link ea; ignore errors */
-		mdd_links_del(env, mdd_cobj, mdo2fid(mdd_pobj), lname, handle);
 
 	/* if object is removed then we can't get its attrs, use last get */
 	if (cattr->la_nlink == 0) {
@@ -2706,7 +2707,8 @@ static int mdd_rename(const struct lu_env *env,
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
 		ma->ma_attr = *tattr;
 		ma->ma_valid |= MA_INODE;
-		rc = mdd_finish_unlink(env, mdd_tobj, ma, handle);
+		rc = mdd_finish_unlink(env, mdd_tobj, ma, mdd_tpobj, ltname,
+					 handle);
 		if (rc != 0) {
 			CERROR("%s: Failed to unlink tobj "
 				DFID": rc = %d\n",
