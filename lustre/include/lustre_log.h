@@ -357,6 +357,8 @@ struct llog_ctxt {
         cfs_atomic_t             loc_refcount;
         long                     loc_flags; /* flags, see above defines */
 	struct dt_object	*loc_dir;
+	struct local_oid_storage *loc_los_nameless;
+	struct local_oid_storage *loc_los_named;
 };
 
 #define LLOG_PROC_BREAK 0x0001

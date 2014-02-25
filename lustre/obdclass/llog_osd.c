@@ -1090,11 +1090,9 @@ static int llog_osd_setup(const struct lu_env *env, struct obd_device *obd,
 			  struct obd_llog_group *olg, int ctxt_idx,
 			  struct obd_device *disk_obd)
 {
-	struct local_oid_storage	*los;
 	struct llog_thread_info		*lgi = llog_info(env);
 	struct llog_ctxt		*ctxt;
 	int				 rc = 0;
-
 	ENTRY;
 
 	LASSERT(obd);
@@ -1109,44 +1107,41 @@ static int llog_osd_setup(const struct lu_env *env, struct obd_device *obd,
 	lgi->lgi_fid.f_oid = 1;
 	lgi->lgi_fid.f_ver = 0;
 	rc = local_oid_storage_init(env, disk_obd->obd_lvfs_ctxt.dt,
-				    &lgi->lgi_fid, &los);
-	if (rc < 0)
-		return rc;
+				    &lgi->lgi_fid,
+				    &ctxt->loc_los_nameless);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	lgi->lgi_fid.f_seq = FID_SEQ_LLOG_NAME;
 	lgi->lgi_fid.f_oid = 1;
 	lgi->lgi_fid.f_ver = 0;
 	rc = local_oid_storage_init(env, disk_obd->obd_lvfs_ctxt.dt,
-				    &lgi->lgi_fid, &los);
+				    &lgi->lgi_fid,
+				    &ctxt->loc_los_named);
+	if (rc != 0) {
+		local_oid_storage_fini(env, ctxt->loc_los_nameless);
+		ctxt->loc_los_nameless = NULL;
+	}
+
+	GOTO(out, rc);
+
+out:
 	llog_ctxt_put(ctxt);
 	return rc;
 }
 
 static int llog_osd_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt)
 {
-	struct dt_device		*dt;
-	struct ls_device		*ls;
-	struct local_oid_storage	*los, *nlos;
-
-	LASSERT(ctxt->loc_exp->exp_obd);
-	dt = ctxt->loc_exp->exp_obd->obd_lvfs_ctxt.dt;
-	ls = ls_device_get(dt);
-	if (IS_ERR(ls))
-		RETURN(PTR_ERR(ls));
-
-	mutex_lock(&ls->ls_los_mutex);
-	los = dt_los_find(ls, FID_SEQ_LLOG);
-	nlos = dt_los_find(ls, FID_SEQ_LLOG_NAME);
-	mutex_unlock(&ls->ls_los_mutex);
-	if (los != NULL) {
-		dt_los_put(los);
-		local_oid_storage_fini(env, los);
+	if (ctxt->loc_los_nameless != NULL) {
+		local_oid_storage_fini(env, ctxt->loc_los_nameless);
+		ctxt->loc_los_nameless = NULL;
 	}
-	if (nlos != NULL) {
-		dt_los_put(nlos);
-		local_oid_storage_fini(env, nlos);
+
+	if (ctxt->loc_los_named != NULL) {
+		local_oid_storage_fini(env, ctxt->loc_los_named);
+		ctxt->loc_los_named = NULL;
 	}
-	ls_device_put(env, ls);
+
 	return 0;
 }
 

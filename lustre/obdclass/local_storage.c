@@ -693,17 +693,13 @@ int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	rc = dt_lookup_dir(env, root, dti->dti_buf, &dti->dti_fid);
 	lu_object_put_nocache(env, &root->do_lu);
 	if (rc == -ENOENT) {
-		struct lu_object_conf *conf = &dti->dti_conf;
-
 		/* old llog lastid accessed by FID only */
 		if (lastid_seq != FID_SEQ_LLOG)
 			return 0;
 		dti->dti_fid.f_seq = FID_SEQ_LLOG;
 		dti->dti_fid.f_oid = 1;
 		dti->dti_fid.f_ver = 0;
-		memset(conf, 0, sizeof(*conf));
-		conf->loc_flags = LOC_F_NEW;
-		o = ls_locate(env, ls, &dti->dti_fid, conf);
+		o = ls_locate(env, ls, &dti->dti_fid, NULL);
 		if (IS_ERR(o))
 			return PTR_ERR(o);
 
@@ -729,18 +725,18 @@ int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	dt_read_lock(env, o, 0);
 	rc = dt_record_read(env, o, &dti->dti_lb, &dti->dti_off);
 	dt_read_unlock(env, o);
-	lu_object_put_nocache(env, &o->do_lu);
 	if (rc == 0 && le32_to_cpu(losd.lso_magic) != LOS_MAGIC) {
 		CERROR("%s: wrong content of seq-"LPX64"-lastid file, magic %x\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, lastid_seq,
 		       le32_to_cpu(losd.lso_magic));
-		return -EINVAL;
+		rc = -EINVAL;
 	} else if (rc < 0) {
 		CERROR("%s: failed to read seq-"LPX64"-lastid: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, lastid_seq, rc);
-		return rc;
 	}
-	*first_oid = le32_to_cpu(losd.lso_next_oid);
+	lu_object_put_nocache(env, &o->do_lu);
+	if (rc == 0)
+		*first_oid = le32_to_cpu(losd.lso_next_oid);
 	return rc;
 }
 
@@ -894,19 +890,18 @@ out:
 EXPORT_SYMBOL(local_oid_storage_init);
 
 void local_oid_storage_fini(const struct lu_env *env,
-                            struct local_oid_storage *los)
+			    struct local_oid_storage *los)
 {
 	struct ls_device *ls;
-
-	if (!cfs_atomic_dec_and_test(&los->los_refcount))
-		return;
 
 	LASSERT(env);
 	LASSERT(los->los_dev);
 	ls = dt2ls_dev(los->los_dev);
 
+	/* Take the mutex before decreasing the reference to avoid race
+	 * conditions as described in LU-4721. */
 	mutex_lock(&ls->ls_los_mutex);
-	if (cfs_atomic_read(&los->los_refcount) > 0) {
+	if (!cfs_atomic_dec_and_test(&los->los_refcount)) {
 		mutex_unlock(&ls->ls_los_mutex);
 		return;
 	}

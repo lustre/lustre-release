@@ -793,8 +793,10 @@ static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 		mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
 	if (m->mdd_dot_lustre)
 		mdd_object_put(env, m->mdd_dot_lustre);
-	if (m->mdd_los != NULL)
+	if (m->mdd_los != NULL) {
 		local_oid_storage_fini(env, m->mdd_los);
+		m->mdd_los = NULL;
+	}
 	lu_site_purge(env, mdd2lu_dev(m)->ld_site, ~0);
 
 	if (m->mdd_child_exp)
