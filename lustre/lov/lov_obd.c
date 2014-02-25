@@ -978,7 +978,7 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 
                 obd_str2uuid(&obd_uuid,  lustre_cfg_buf(lcfg, 1));
 
-                if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", indexp) != 1)
+		if (sscanf(lustre_cfg_buf(lcfg, 2), "%u", indexp) != 1)
                         GOTO(out, rc = -EINVAL);
                 if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", genp) != 1)
                         GOTO(out, rc = -EINVAL);

@@ -670,21 +670,31 @@ static void report_perf()
 
 static void *run_one_child(void *threadvp)
 {
-        struct kid_t *kid;
-        char oname[10], ename[10];
-        int thread = (long)threadvp, dev = 0;
-        int rc = 0, err;
+	struct kid_t *kid;
+	char oname[16], ename[16];
+	int thread = (long)threadvp;
+	int dev = 0;
+	int err;
+	int rc;
 
-        if (o_verbose > 2)
-                printf("%s: running thread #%d\n", cmdname, thread);
+	if (o_verbose > 2)
+		printf("%s: running thread #%d\n", cmdname, thread);
 
-        sprintf(oname, "o%.5d", thread);
-        sprintf(ename, "e%.5d", thread);
+	rc = snprintf(oname, sizeof(oname), "o%.5d", thread);
+	if (rc != 1) {
+		rc = -EFAULT;
+		goto out_exit;
+	}
+	rc = snprintf(ename, sizeof(ename), "e%.5d", thread);
+	if (rc != 1) {
+		rc = -EFAULT;
+		goto out_exit;
+	}
         rc = echocli_setup(oname, ename, &dev);
         if (rc) {
                 fprintf(stderr, "%s: can't setup '%s/%s' (%d)\n",
                         cmdname, oname, ename, rc);
-                pthread_exit((void *)(long)rc);
+		goto out_exit;
         }
 
         kid = push_kid(thread);
@@ -736,7 +746,8 @@ out:
         err = cleanup(oname, 0);
         if (!rc) rc = err;
 
-        pthread_exit((void *)(long)rc);
+out_exit:
+	pthread_exit((void *)(long)rc);
 }
 
 /* 
