@@ -829,13 +829,13 @@ ksocknal_select_ips(ksock_peer_t *peer, __u32 *peerips, int n_peerips)
                                 best_npeers = iface->ksni_npeers;
                         }
 
+			LASSERT(best_iface != NULL);
+
                         best_iface->ksni_npeers++;
                         ip = best_iface->ksni_ipaddr;
                         peer->ksnp_passive_ips[i] = ip;
                         peer->ksnp_n_passive_ips = i+1;
                 }
-
-                LASSERT (best_iface != NULL);
 
                 /* mark the best matching peer IP used */
                 j = ksocknal_match_peerip(best_iface, peerips, n_peerips);

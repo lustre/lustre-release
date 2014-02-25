@@ -544,9 +544,9 @@ sfw_debug_session (srpc_debug_reqst_t *request, srpc_debug_reply_t *reply)
                 return 0;
         } 
 
-        reply->dbg_status  = 0;
-        reply->dbg_sid     = sn->sn_id;      
-        reply->dbg_timeout = sn->sn_timeout;
+	reply->dbg_status  = 0;
+	reply->dbg_sid     = sn->sn_id;
+	reply->dbg_timeout = sn->sn_timeout;
 	if (strlcpy(reply->dbg_name, &sn->sn_name[0], sizeof(reply->dbg_name))
 	    >= sizeof(reply->dbg_name))
 		return -E2BIG;
@@ -568,9 +568,15 @@ sfw_test_rpc_fini (srpc_client_rpc_t *rpc)
 static inline int
 sfw_test_buffers(sfw_test_instance_t *tsi)
 {
-	struct sfw_test_case	*tsc = sfw_find_test_case(tsi->tsi_service);
-	struct srpc_service	*svc = tsc->tsc_srv_service;
+	struct sfw_test_case	*tsc;
+	struct srpc_service	*svc;
 	int			nbuf;
+
+	LASSERT(tsi != NULL);
+	tsc = sfw_find_test_case(tsi->tsi_service);
+	LASSERT(tsc != NULL);
+	svc = tsc->tsc_srv_service;
+	LASSERT(svc != NULL);
 
 	nbuf = min(svc->sv_wi_total, tsi->tsi_loop) / svc->sv_ncpts;
 	return max(SFW_TEST_WI_MIN, nbuf + SFW_TEST_WI_EXTRA);
@@ -616,8 +622,10 @@ sfw_load_test(struct sfw_test_instance *tsi)
 void
 sfw_unload_test(struct sfw_test_instance *tsi)
 {
-	struct sfw_test_case *tsc = sfw_find_test_case(tsi->tsi_service);
+	struct sfw_test_case *tsc;
 
+	LASSERT(tsi != NULL);
+	tsc = sfw_find_test_case(tsi->tsi_service);
 	LASSERT(tsc != NULL);
 
 	if (tsi->tsi_is_client)

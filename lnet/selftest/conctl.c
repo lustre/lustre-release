@@ -758,13 +758,18 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
 		goto out;
 
 	LIBCFS_ALLOC(dst_name, args->lstio_tes_dgrp_nmlen + 1);
-	 if (dst_name == NULL)
+	if (dst_name == NULL)
 		goto out;
 
 	if (args->lstio_tes_param != NULL) {
 		LIBCFS_ALLOC(param, args->lstio_tes_param_len);
 		if (param == NULL)
 			goto out;
+		if (copy_from_user(param, args->lstio_tes_param,
+				   args->lstio_tes_param_len)) {
+			rc = -EFAULT;
+			goto out;
+		}
 	}
 
 	rc = -EFAULT;
@@ -773,9 +778,7 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
 	    copy_from_user(src_name, args->lstio_tes_sgrp_name,
 			   args->lstio_tes_sgrp_nmlen) ||
 	    copy_from_user(dst_name, args->lstio_tes_dgrp_name,
-			   args->lstio_tes_dgrp_nmlen) ||
-	    copy_from_user(param, args->lstio_tes_param,
-			      args->lstio_tes_param_len))
+			   args->lstio_tes_dgrp_nmlen))
 		goto out;
 
 	rc = lstcon_test_add(batch_name,
