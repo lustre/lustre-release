@@ -639,6 +639,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
  */
 static char *moveopts_to_end(char *start)
 {
+	size_t len;
 	char save[512];
 	char *end, *idx;
 
@@ -651,9 +652,13 @@ static char *moveopts_to_end(char *start)
 	while (*end != ' ' && *end != '\0')
 		++end;
 
+	len = end - start;
+	if (len >= sizeof(save))
+		len = sizeof(save) - 1;
+
 	/* save options */
-	strncpy(save, start, end - start);
-	save[end - start] = '\0';
+	strncpy(save, start, len);
+	save[len] = '\0';
 
 	/* move remaining options up front */
 	if (*end)

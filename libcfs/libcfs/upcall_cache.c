@@ -441,9 +441,9 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 	rwlock_init(&cache->uc_upcall_rwlock);
         for (i = 0; i < UC_CACHE_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&cache->uc_hashtable[i]);
-	strncpy(cache->uc_name, name, sizeof(cache->uc_name) - 1);
+	strlcpy(cache->uc_name, name, sizeof(cache->uc_name));
 	/* upcall pathname proc tunable */
-	strncpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall) - 1);
+	strlcpy(cache->uc_upcall, upcall, sizeof(cache->uc_upcall));
 	cache->uc_entry_expire = 20 * 60;
 	cache->uc_acquire_expire = 30;
 	cache->uc_ops = ops;

@@ -328,6 +328,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		return -1;
 	}
 	memcpy(sname, name.value, name.length);
+	sname[name.length] = '\0';
 	gss_release_buffer(&min_stat, &name);
 
 	if (lustre_svc == LUSTRE_GSS_SVC_MDS)

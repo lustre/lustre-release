@@ -351,7 +351,8 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 		       __u64 migration_flags)
 {
 	int			 fd, fdv;
-	char			 volatile_file[PATH_MAX];
+	char			 volatile_file[PATH_MAX +
+						LUSTRE_VOLATILE_HDR_LEN + 4];
 	char			 parent[PATH_MAX];
 	char			*ptr;
 	int			 rc;
@@ -427,7 +428,12 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 		else
 			*ptr = '\0';
 	}
-	sprintf(volatile_file, "%s/%s::", parent, LUSTRE_VOLATILE_HDR);
+	rc = snprintf(volatile_file, sizeof(volatile_file), "%s/%s::", parent,
+		      LUSTRE_VOLATILE_HDR);
+	if (rc >= sizeof(volatile_file)) {
+		rc = -E2BIG;
+		goto free;
+	}
 
 	/* create, open a volatile file, use caching (ie no directio) */
 	/* exclusive create is not needed because volatile files cannot
@@ -1735,7 +1741,10 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         double ratio = 0;
         char *suffix = "KMGTPEZY";
         /* Note if we have >2^64 bytes/fs these buffers will need to be grown */
-        char tbuf[20], ubuf[20], abuf[20], rbuf[20];
+	char tbuf[3 * sizeof(__u64)];
+	char ubuf[3 * sizeof(__u64)];
+	char abuf[3 * sizeof(__u64)];
+	char rbuf[3 * sizeof(__u64)];
 
         if (!uuid || !stat)
                 return -EINVAL;
@@ -2869,7 +2878,7 @@ static int lfs_quota(int argc, char **argv)
                         break;
                 case 'o':
                         valid = qctl.qc_valid = QC_UUID;
-                        strncpy(obd_uuid, optarg, sizeof(qctl.obd_uuid));
+			strlcpy(obd_uuid, optarg, sizeof(qctl.obd_uuid));
                         break;
                 case 'i':
                         valid = qctl.qc_valid = QC_MDTIDX;
@@ -3281,6 +3290,10 @@ static int lfs_fid2path(int argc, char **argv)
 
 	device = argv[optind++];
 	path = calloc(1, PATH_MAX);
+	if (path == NULL) {
+		fprintf(stderr, "error: Not enough memory\n");
+		return -errno;
+	}
 
 	rc = 0;
 	while (optind < argc) {

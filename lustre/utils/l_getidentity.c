@@ -128,8 +128,7 @@ int get_groups_local(struct identity_downcall_data *data,
 		return -1;
 	}
 
-	memset(pw_name, 0, namelen);
-	strncpy(pw_name, pw->pw_name, namelen - 1);
+	strlcpy(pw_name, pw->pw_name, namelen);
 	groups = data->idd_groups;
 
 	/* Allocate array of size maxgroups instead of handling two
@@ -225,13 +224,18 @@ int parse_perm(__u32 *perm, __u32 *noperm, char *str)
         *noperm = 0;
         start = str;
         while (1) {
-                memset(name, 0, sizeof(name));
-                end = strchr(start, ',');
-                if (!end)
-                        end = str + strlen(str);
-                if (start >= end)
-                        break;
-                strncpy(name, start, end - start);
+		size_t len;
+		memset(name, 0, sizeof(name));
+		end = strchr(start, ',');
+		if (end == NULL)
+			end = str + strlen(str);
+		if (start >= end)
+			break;
+		len = end - start;
+		if (len >= sizeof(name))
+			return -E2BIG;
+		strncpy(name, start, len);
+		name[len] = '\0';
                 for (pt = perm_types; pt->name; pt++) {
                         if (!strcasecmp(name, pt->name)) {
                                 *perm |= pt->bit;

@@ -67,7 +67,7 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	char			*ptr;
 	class_uuid_t		 uuid;
 	struct obd_import	*imp;
-	int			 len = strlen(lwp_name);
+	int			 len = strlen(lwp_name) + 1;
 	int			 rc;
 	ENTRY;
 
@@ -89,7 +89,7 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 
 	strncpy(server_uuid, lwp_name, ptr - lwp_name);
 	server_uuid[ptr - lwp_name] = '\0';
-	strncat(server_uuid, "_UUID", len - 1);
+	strlcat(server_uuid, "_UUID", len);
 	lustre_cfg_bufs_reset(bufs, lwp_name);
 	lustre_cfg_bufs_set_string(bufs, 1, server_uuid);
 	lustre_cfg_bufs_set_string(bufs, 2, nidstring);

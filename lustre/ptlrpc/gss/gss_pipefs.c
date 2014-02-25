@@ -1083,7 +1083,7 @@ int gss_ctx_refresh_pf(struct ptlrpc_cli_ctx *ctx)
 	gmsg->gum_data.gum_gid = 0; /* not used for now */
 	gmsg->gum_data.gum_svc = import_to_gss_svc(imp);
 	gmsg->gum_data.gum_nid = imp->imp_connection->c_peer.nid;
-	strncpy(gmsg->gum_data.gum_obd, imp->imp_obd->obd_name,
+	strlcpy(gmsg->gum_data.gum_obd, imp->imp_obd->obd_name,
 		sizeof(gmsg->gum_data.gum_obd));
 
         /* This only could happen when sysadmin set it dead/expired

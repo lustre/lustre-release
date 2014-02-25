@@ -454,12 +454,20 @@ int Parser_help(int argc, char **argv)
                 return 0;
         }
 
-        line[0]='\0';
-        for ( i = 1 ;  i < argc ; i++ ) {
-		if (strlen(argv[i]) > sizeof(line)-strlen(line)-1)
+	/* Joining command line arguments without space is not critical here
+	 * because of this string is used for search a help topic and assume
+	 * that only one argument will be (the name of topic). For example:
+	 * lst > help ping run
+	 * pingrun: Unknown command. */
+	line[0] = '\0';
+	for (i = 1;  i < argc; i++) {
+		if (strlen(argv[i]) >= sizeof(line) - strlen(line))
 			return -E2BIG;
-		strncat(line, argv[i], sizeof(line)-strlen(line)-1);
-        }
+		/* The function strlcat() cannot be used here because of
+		 * this function is used in LNet utils that is not linked
+		 * with libcfs.a. */
+		strncat(line, argv[i], sizeof(line) - strlen(line));
+	}
 
         switch ( process(line, &next, top_level, &result, &prev) ) {
         case CMD_COMPLETE:
@@ -535,18 +543,20 @@ char *Parser_getstr(const char *prompt, const char *deft, char *res,
         line  = readline(theprompt);
         free(theprompt);
 
-        if ( line == NULL || *line == '\0' ) {
-                strncpy(res, deft, len);
-        } else {
-                strncpy(res, line, len);
-        }
+	/* The function strlcpy() cannot be used here because of
+	 * this function is used in LNet utils that is not linked
+	 * with libcfs.a. */
+	if (line == NULL || *line == '\0')
+		strncpy(res, deft, len);
+	else
+		strncpy(res, line, len);
+	res[len - 1] = '\0';
 
-        if ( line ) {
-                free(line);
-                return res;
-        } else {
-                return NULL;
-        }
+	if (line != NULL) {
+		free(line);
+		return res;
+	}
+	return NULL;
 }
 
 /* get integer from prompt, loop forever to get it */

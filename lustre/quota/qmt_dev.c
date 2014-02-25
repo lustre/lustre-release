@@ -202,12 +202,17 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	struct lu_device	*ld = qmt2lu_dev(qmt);
 	struct obd_device	*obd, *mdt_obd;
 	struct obd_type		*type;
+	char			*svname = lustre_cfg_string(cfg, 0);
 	int			 rc;
 	ENTRY;
 
+	if (svname == NULL)
+		RETURN(-EINVAL);
+
 	/* record who i am, it might be useful ... */
-	strncpy(qmt->qmt_svname, lustre_cfg_string(cfg, 0),
-		sizeof(qmt->qmt_svname) - 1);
+	rc = strlcpy(qmt->qmt_svname, svname, sizeof(qmt->qmt_svname));
+	if (rc >= sizeof(qmt->qmt_svname))
+		RETURN(-E2BIG);
 
 	/* look-up the obd_device associated with the qmt */
 	obd = class_name2obd(qmt->qmt_svname);

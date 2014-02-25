@@ -389,7 +389,7 @@ void fork_command(int type, unsigned short id, char* command, char* llstat_file)
         int with_llstat = 1;
         int status;
         char stats_path[1024];
-        char stats_path_temp[1024];
+	char stats_path_temp[1024 + 6]; /* 6=strlen("/stats") */
 
         if (strlen(llstat_file) == 0)
                 with_llstat = 0;
@@ -411,7 +411,7 @@ void fork_command(int type, unsigned short id, char* command, char* llstat_file)
 
         if (with_llstat) {
                 /* comment #25 of BUG 10968 */
-                sleep(2); 
+		sleep(2);
 
                 /* sending kill to all llstat commands created for each
                  * lustre-client respectively */

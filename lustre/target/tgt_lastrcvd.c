@@ -453,8 +453,7 @@ int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
 	dcb = &ccb->llcc_cb;
 	dcb->dcb_func = tgt_cb_last_committed;
 	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
-	strncpy(dcb->dcb_name, "tgt_cb_last_committed", MAX_COMMIT_CB_STR_LEN);
-	dcb->dcb_name[MAX_COMMIT_CB_STR_LEN - 1] = '\0';
+	strlcpy(dcb->dcb_name, "tgt_cb_last_committed", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);
 	if (rc) {
@@ -516,8 +515,7 @@ int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
 	dcb = &ccb->lncc_cb;
 	dcb->dcb_func = tgt_cb_new_client;
 	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
-	strncpy(dcb->dcb_name, "tgt_cb_new_client", MAX_COMMIT_CB_STR_LEN);
-	dcb->dcb_name[MAX_COMMIT_CB_STR_LEN - 1] = '\0';
+	strlcpy(dcb->dcb_name, "tgt_cb_new_client", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);
 	if (rc) {

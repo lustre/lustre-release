@@ -1068,9 +1068,10 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 	if (!mrul)
 		GOTO(out_close, rc = -ENOMEM);
 	/* devname is only needed information to replace UUID records */
-	strncpy(mrul->target.mti_svname, devname, MTI_NAME_MAXLEN);
+	strlcpy(mrul->target.mti_svname, devname,
+		sizeof(mrul->target.mti_svname));
 	/* parse nids later */
-	strncpy(mrul->target.mti_params, nids, MTI_PARAM_MAXLEN);
+	strlcpy(mrul->target.mti_params, nids, sizeof(mrul->target.mti_params));
 	/* Copy records to this temporary llog */
 	mrul->temp_llh = orig_llh;
 
@@ -3861,9 +3862,7 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
                         RETURN(-EINVAL);
         } else {
                 /* assume devname is the fsname */
-		memset(fsname, 0, MTI_NAME_MAXLEN);
-                strncpy(fsname, devname, MTI_NAME_MAXLEN);
-		fsname[MTI_NAME_MAXLEN - 1] = 0;
+		strlcpy(fsname, devname, MTI_NAME_MAXLEN);
         }
         CDEBUG(D_MGS, "setparam fs='%s' device='%s'\n", fsname, devname);
 

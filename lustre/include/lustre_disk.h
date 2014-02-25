@@ -208,7 +208,8 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 /* The lmd is only used internally by Lustre; mount simply passes
    everything as string options */
 
-#define LMD_MAGIC    0xbdacbd03
+#define LMD_MAGIC		0xbdacbd03
+#define LMD_PARAMS_MAXLEN	4096
 
 /* gleaned from the mount command - no persistent info here */
 struct lustre_mount_data {

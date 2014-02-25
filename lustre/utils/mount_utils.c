@@ -450,7 +450,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 
 	/* This deals with duplicate ldd_mount_types resolving to same OSD layer
 	 * plugin (e.g. ext3/ldiskfs/ldiskfs2 all being ldiskfs) */
-	strncpy(fsname, mt_type(mount_type), sizeof(fsname));
+	strlcpy(fsname, mt_type(mount_type), sizeof(fsname));
 	name = fsname + sizeof("osd-") - 1;
 
 	/* change osd- to osd_ */

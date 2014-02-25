@@ -348,7 +348,7 @@ static char *iam_convert(int size, int need_convert, char *source)
                         free(opt);
                 }
         } else {
-                strncpy(ptr, source, size + 1);
+		strlcpy(ptr, source, size + 1);
         }
 
         return ptr;

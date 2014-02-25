@@ -602,7 +602,7 @@ jt_lst_new_session(int argc,  char **argv)
                 if (rc != 0)
                         snprintf(host, sizeof(host), "unknown_host");
 
-                snprintf(buf, LST_NAME_SIZE, "%s@%s", user, host);
+		snprintf(buf, sizeof(buf), "%s@%s", user, host);
                 name = buf;
 
         } else {
@@ -648,7 +648,7 @@ jt_lst_show_session(int argc, char **argv)
 	int		    key;
 	int		    rc;
 
-	rc = lst_session_info_ioctl(name, LST_NAME_SIZE, &key,
+	rc = lst_session_info_ioctl(name, sizeof(name), &key,
 				    &feats, &sid, &ndinfo);
 
         if (rc != 0) {

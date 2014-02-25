@@ -152,8 +152,7 @@ ptl_ipaddr_2_str(__u32 ipaddr, char *str, size_t strsize, int lookup)
                 net_ip = htonl (ipaddr);
                 he = gethostbyaddr (&net_ip, sizeof (net_ip), AF_INET);
                 if (he != NULL) {
-			strncpy(str, he->h_name, strsize - 1);
-			str[strsize - 1] = '\0';
+			strlcpy(str, he->h_name, strsize);
                         return (str);
                 }
         }

@@ -624,24 +624,22 @@ int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
 
 void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
 {
-        buf[0] = '\0';
+	buf[0] = '\0';
 
-        if (flags & PTLRPC_CTX_NEW)
-                strncat(buf, "new,", bufsize);
-        if (flags & PTLRPC_CTX_UPTODATE)
-                strncat(buf, "uptodate,", bufsize);
-        if (flags & PTLRPC_CTX_DEAD)
-                strncat(buf, "dead,", bufsize);
-        if (flags & PTLRPC_CTX_ERROR)
-                strncat(buf, "error,", bufsize);
-        if (flags & PTLRPC_CTX_CACHED)
-                strncat(buf, "cached,", bufsize);
-        if (flags & PTLRPC_CTX_ETERNAL)
-                strncat(buf, "eternal,", bufsize);
-        if (buf[0] == '\0')
-                strncat(buf, "-,", bufsize);
-
-        buf[strlen(buf) - 1] = '\0';
+	if (flags & PTLRPC_CTX_NEW)
+		strlcat(buf, "new,", bufsize);
+	if (flags & PTLRPC_CTX_UPTODATE)
+		strlcat(buf, "uptodate,", bufsize);
+	if (flags & PTLRPC_CTX_DEAD)
+		strlcat(buf, "dead,", bufsize);
+	if (flags & PTLRPC_CTX_ERROR)
+		strlcat(buf, "error,", bufsize);
+	if (flags & PTLRPC_CTX_CACHED)
+		strlcat(buf, "cached,", bufsize);
+	if (flags & PTLRPC_CTX_ETERNAL)
+		strlcat(buf, "eternal,", bufsize);
+	if (buf[0] == '\0')
+		strlcat(buf, "-,", bufsize);
 }
 
 int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx,

@@ -296,22 +296,21 @@ dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
 	struct dt_thread_info *info = dt_info(env);
 	struct dt_find_hint   *dfh = &info->dti_dfh;
 	struct dt_object      *obj;
-	char		      *local = info->dti_buf;
 	int		       result;
 
 
         dfh->dfh_dt = dt;
         dfh->dfh_fid = fid;
 
-        strncpy(local, path, DT_MAX_PATH);
-        local[DT_MAX_PATH - 1] = '\0';
+	strlcpy(info->dti_buf, path, sizeof(info->dti_buf));
 
         result = dt->dd_ops->dt_root_get(env, dt, fid);
         if (result == 0) {
                 obj = dt_locate(env, dt, fid);
                 if (!IS_ERR(obj)) {
                         dfh->dfh_o = obj;
-                        result = dt_path_parser(env, local, dt_find_entry, dfh);
+			result = dt_path_parser(env, info->dti_buf,
+						dt_find_entry, dfh);
                         if (result != 0)
                                 obj = ERR_PTR(result);
                         else

@@ -102,7 +102,8 @@ lstjn_join_session(char *ses, char *grp, unsigned feats)
         req = &rpc->crpc_reqstmsg.msg_body.join_reqst;
 
         req->join_sid = LST_INVALID_SID;
-        strncpy(req->join_group, grp, LST_NAME_SIZE);
+	strncpy(req->join_group, grp, sizeof(req->join_group));
+	req->join_group[sizeof(req->join_group) - 1] = '\0';
 
         sfw_post_rpc(rpc);
 

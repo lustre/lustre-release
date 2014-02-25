@@ -569,10 +569,9 @@ int lr_get_symlink(struct lr_info *info)
         } else {
                 link = info->linktmp;
         }
-        strncpy(info->link, link, PATH_MAX);
-        info->link[PATH_MAX] = '\0';
+	strlcpy(info->link, link, sizeof(info->link));
 
-        return rc;
+	return rc;
 }
 
 /* Create file/directory/device file/symlink. */
@@ -628,24 +627,25 @@ int lr_mkfile(struct lr_info *info)
 
 int lr_add_pc(const char *pfid, const char *tfid, const char *name)
 {
-        struct lr_parent_child_list *p;
+	struct lr_parent_child_list *p;
+	size_t len;
 
-        p = calloc(1, sizeof(*p));
-        if (!p)
-                return -ENOMEM;
-	if (strlen(pfid) > sizeof(p->pc_log.pcl_pfid)-1)
+	p = calloc(1, sizeof(*p));
+	if (p == NULL)
+		return -ENOMEM;
+	len = strlcpy(p->pc_log.pcl_pfid, pfid, sizeof(p->pc_log.pcl_pfid));
+	if (len >= sizeof(p->pc_log.pcl_pfid))
 		goto out_err;
-	strncpy(p->pc_log.pcl_pfid, pfid, sizeof(p->pc_log.pcl_pfid));
-	if (strlen(tfid) > sizeof(p->pc_log.pcl_tfid)-1)
+	len = strlcpy(p->pc_log.pcl_tfid, tfid, sizeof(p->pc_log.pcl_tfid));
+	if (len >= sizeof(p->pc_log.pcl_tfid))
 		goto out_err;
-	strncpy(p->pc_log.pcl_tfid, tfid, sizeof(p->pc_log.pcl_tfid));
-	if (strlen(name) > sizeof(p->pc_log.pcl_name)-1)
+	len = strlcpy(p->pc_log.pcl_name, name, sizeof(p->pc_log.pcl_name));
+	if (len >= sizeof(p->pc_log.pcl_name))
 		goto out_err;
-	strncpy(p->pc_log.pcl_name, name, sizeof(p->pc_log.pcl_name));
 
-        p->pc_next = parents;
-        parents = p;
-        return 0;
+	p->pc_next = parents;
+	parents = p;
+	return 0;
 
 out_err:
 	free(p);
@@ -1121,7 +1121,8 @@ int lr_parse_line(void *priv, struct lr_info *info)
         info->type = rec->cr_type;
         sprintf(info->tfid, DFID, PFID(&rec->cr_tfid));
         sprintf(info->pfid, DFID, PFID(&rec->cr_pfid));
-        strncpy(info->name, rec->cr_name, rec->cr_namelen);
+	strncpy(info->name, rec->cr_name, rec->cr_namelen);
+	info->name[rec->cr_namelen] = '\0';
 
 	if (fid_is_sane(&rec->cr_sfid)) {
 		sprintf(info->sfid, DFID, PFID(&rec->cr_sfid));
@@ -1134,8 +1135,6 @@ int lr_parse_line(void *priv, struct lr_info *info)
 			printf("Rec %lld: %d %s %s\n", info->recno, info->type,
 				info->name, info->sname);
 	} else {
-		info->name[rec->cr_namelen] = '\0';
-
 		if (verbose > 1)
 			printf("Rec %lld: %d %s\n", info->recno, info->type,
 				info->name);
@@ -1281,20 +1280,21 @@ int lr_read_log()
         if (status->ls_last_recno == -1)
                 status->ls_last_recno = s->ls_last_recno;
 
-        if (status->ls_registration[0] == '\0')
-                strncpy(status->ls_registration, s->ls_registration,
-                        LR_NAME_MAXLEN);
+	if (status->ls_registration[0] == '\0')
+		strlcpy(status->ls_registration, s->ls_registration,
+			sizeof(status->ls_registration));
 
-        if (status->ls_mdt_device[0] == '\0')
-                strncpy(status->ls_mdt_device, s->ls_mdt_device,
-                        LR_NAME_MAXLEN);
+	if (status->ls_mdt_device[0] == '\0')
+		strlcpy(status->ls_mdt_device, s->ls_mdt_device,
+			sizeof(status->ls_mdt_device));
 
-        if (status->ls_source_fs[0] == '\0')
-                strncpy(status->ls_source_fs, s->ls_source_fs,
-                        LR_NAME_MAXLEN);
+	if (status->ls_source_fs[0] == '\0')
+		strlcpy(status->ls_source_fs, s->ls_source_fs,
+			sizeof(status->ls_source_fs));
 
-        if (status->ls_source[0] == '\0')
-                strncpy(status->ls_source, s->ls_source, PATH_MAX);
+	if (status->ls_source[0] == '\0')
+		strlcpy(status->ls_source, s->ls_source,
+			sizeof(status->ls_source));
 
  out:
         if (fd != -1)
@@ -1308,9 +1308,9 @@ int lr_read_log()
    processing. */
 int lr_clear_cl(struct lr_info *info, int force)
 {
-        char    mdt_device[LR_NAME_MAXLEN + 1];
-        long long rec;
-        int rc = 0;
+	char		mdt_device[LR_NAME_MAXLEN + 1];
+	long long	rec;
+	int		rc = 0;
 
         if (force || info->recno > status->ls_last_recno + CLEAR_INTERVAL) {
                 if (info->type == CL_RENAME)
@@ -1322,8 +1322,8 @@ int lr_clear_cl(struct lr_info *info, int force)
                          * device name so make a copy of it until this
                          * is fixed.
                         */
-                        strncpy(mdt_device, status->ls_mdt_device,
-                                LR_NAME_MAXLEN);
+			strlcpy(mdt_device, status->ls_mdt_device,
+				sizeof(mdt_device));
                         rc = llapi_changelog_clear(mdt_device,
                                                    status->ls_registration,
                                                    rec);
@@ -1495,8 +1495,8 @@ int lr_replicate()
 			memcpy(info->spfid, info->pfid, sizeof(info->spfid));
 			memcpy(info->tfid, ext->tfid, sizeof(info->tfid));
 			memcpy(info->pfid, ext->pfid, sizeof(info->pfid));
-			strncpy(info->sname, info->name, sizeof(info->sname));
-			strncpy(info->name, ext->name, sizeof(info->name));
+			strlcpy(info->sname, info->name, sizeof(info->sname));
+			strlcpy(info->name, ext->name, sizeof(info->name));
 			info->is_extended = 1;
 		}
 
@@ -1603,7 +1603,8 @@ int main(int argc, char *argv[])
                         break;
                 case 's':
                         /* Assume absolute paths */
-                        strncpy(status->ls_source, optarg, PATH_MAX);
+			strlcpy(status->ls_source, optarg,
+				sizeof(status->ls_source));
                         break;
                 case 't':
                         status->ls_num_targets++;
@@ -1624,16 +1625,16 @@ int main(int argc, char *argv[])
                                 if (status == NULL)
                                         return -ENOMEM;
                         }
-                        strncpy(status->ls_targets[status->ls_num_targets - 1],
-                                optarg,
-                                PATH_MAX);
-                        break;
-                case 'm':
-                        strncpy(status->ls_mdt_device, optarg, LR_NAME_MAXLEN);
-                        break;
-                case 'u':
-                        strncpy(status->ls_registration, optarg,
-                                LR_NAME_MAXLEN);
+			strlcpy(status->ls_targets[status->ls_num_targets - 1],
+				optarg, sizeof(status->ls_targets[0]));
+			break;
+		case 'm':
+			strlcpy(status->ls_mdt_device, optarg,
+				sizeof(status->ls_mdt_device));
+			break;
+		case 'u':
+			strlcpy(status->ls_registration, optarg,
+				sizeof(status->ls_registration));
                         break;
                 case 'l':
                         statuslog = optarg;

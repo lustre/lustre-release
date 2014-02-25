@@ -227,9 +227,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 				RETURN(-ENOMEM);
 			}
 			hal->hal_version = HAL_VERSION;
-			strncpy(hal->hal_fsname, hsd->fs_name,
-				MTI_NAME_MAXLEN);
-			hal->hal_fsname[MTI_NAME_MAXLEN] = '\0';
+			strlcpy(hal->hal_fsname, hsd->fs_name,
+				MTI_NAME_MAXLEN + 1);
 			hal->hal_compound_id = larr->arr_compound_id;
 			hal->hal_archive_id = larr->arr_archive_id;
 			hal->hal_flags = larr->arr_flags;

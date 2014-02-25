@@ -300,11 +300,11 @@ int libcfs_debug_init(unsigned long bufsize)
 		libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
 	}
 
-        if (libcfs_debug_file_path != NULL) {
-                memset(libcfs_debug_file_path_arr, 0, PATH_MAX);
-                strncpy(libcfs_debug_file_path_arr, 
-                        libcfs_debug_file_path, PATH_MAX-1);
-        }
+	if (libcfs_debug_file_path != NULL) {
+		strlcpy(libcfs_debug_file_path_arr,
+			libcfs_debug_file_path,
+			sizeof(libcfs_debug_file_path_arr));
+	}
 
 	/* If libcfs_debug_mb is set to an invalid value or uninitialized
 	 * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */

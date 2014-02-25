@@ -47,7 +47,7 @@ libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c  \
 		  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
 		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c \
 		  posix/rbtree.c user-crypto.c posix/posix-crc32.c          \
-		  posix/posix-adler.c posix/posix-proc.c heap.c
+		  posix/posix-adler.c posix/posix-proc.c heap.c user-string.c
 
 if HAVE_PCLMULQDQ
 if NEED_PCLMULQDQ_CRC32
@@ -99,4 +99,4 @@ MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
 EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) Info.plist tracefile.h prng.c \
 	      user-lock.c user-tcpip.c user-bitops.c user-prim.c workitem.c \
 	      user-mem.c kernel_user_comm.c fail.c libcfs_cpu.c heap.c \
-	      libcfs_mem.c libcfs_lock.c linux/linux-tracefile.h
+	      libcfs_mem.c libcfs_lock.c user-string.c linux/linux-tracefile.h

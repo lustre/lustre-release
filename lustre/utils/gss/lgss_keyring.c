@@ -576,7 +576,7 @@ static int parse_callout_info(const char *coinfo,
                data[6], data[7]);
 
         uparam->kup_secid = strtol(data[0], NULL, 0);
-        strncpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
+	strlcpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
         uparam->kup_uid = strtol(data[2], NULL, 0);
         uparam->kup_gid = strtol(data[3], NULL, 0);
         if (strchr(data[4], 'r'))
@@ -587,7 +587,7 @@ static int parse_callout_info(const char *coinfo,
                 uparam->kup_is_ost = 1;
         uparam->kup_svc = strtol(data[5], NULL, 0);
         uparam->kup_nid = strtoll(data[6], NULL, 0);
-        strncpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
+	strlcpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
 
         logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u "
                "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%llx, tgt %s\n",

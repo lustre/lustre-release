@@ -268,32 +268,6 @@ gid_t current_fsgid(void)
         return getgid();
 }
 
-#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcpy(char *tgt, const char *src, size_t tgt_len)
-{
-	int src_len = strlen(src);
-
-	strncpy(tgt, src, tgt_len - 1);
-	tgt[tgt_len - 1] = '\0';
-
-	return src_len + 1;
-}
-#endif
-
-#ifndef HAVE_STRLCAT /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcat(char *tgt, const char *src, size_t size)
-{
-	size_t tgt_len = strlen(tgt);
-
-	if (size > tgt_len) {
-		strncat(tgt, src, size - tgt_len - 1);
-		tgt[size - 1] = '\0';
-	}
-
-	return tgt_len + strlen(src);
-}
-#endif
-
 /* Read the environment variable of current process specified by @key. */
 int cfs_get_environ(const char *key, char *value, int *val_len)
 {
