@@ -2560,8 +2560,8 @@ test_60() {
 run_test 60 "Changing progress update interval from default"
 
 test_90() {
-	file_count=57
-	mkdir -p $DIR/$tdir
+	file_count=51 # Max number of files constrained by LNET message size
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	local f=$DIR/$tdir/$tfile
 	local FILELIST=/tmp/filelist.txt
 	local i=""
