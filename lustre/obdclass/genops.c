@@ -234,19 +234,21 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         RETURN (0);
 
  failed:
+#ifdef LPROCFS
+	if (type->typ_name != NULL) {
+#ifndef HAVE_ONLY_PROCFS_SEQ
+		lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
+#else
+		remove_proc_subtree(type->typ_name, proc_lustre_root);
+#endif
+	}
+#endif
         if (type->typ_name != NULL)
                 OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_md_ops != NULL)
                 OBD_FREE_PTR(type->typ_md_ops);
         if (type->typ_dt_ops != NULL)
                 OBD_FREE_PTR(type->typ_dt_ops);
-#ifdef LPROCFS
-#ifndef HAVE_ONLY_PROCFS_SEQ
-	lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
-#else
-	remove_proc_subtree(type->typ_name, proc_lustre_root);
-#endif
-#endif
         OBD_FREE(type, sizeof(*type));
         RETURN(rc);
 }
