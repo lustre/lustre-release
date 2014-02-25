@@ -632,21 +632,6 @@ wait_request_state() {
 		error "request on $fid is not $state on $mds"
 }
 
-wait_request_progress() {
-	local fid=$1
-	local request=$2
-	local progress=$3
-	# 4th arg (mdt index) is optional
-	local mdtidx=${4:-0}
-	local mds=mds$((mdtidx + 1))
-
-	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.active_requests"
-	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$12}' | cut -f2 -d="
-
-	wait_result $mds "$cmd" $progress 100 ||
-		error "request on $fid has not made progress $progress on $mds"
-}
-
 get_request_state() {
 	local fid=$1
 	local request=$2
@@ -2609,6 +2594,9 @@ test_58() {
 run_test 58 "Truncate a released file will trigger restore"
 
 test_60() {
+	# This test validates the fix for LU-4512. Ensure that the -u
+	# option changes the progress reporting interval from the default
+	# (30 seconds) to the user-specified interval.
 	local interval=5
 	local progress_timeout=$((interval * 3))
 
@@ -2623,13 +2611,36 @@ test_60() {
 	local start_at=$(date +%s)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
-	wait_request_progress $fid ARCHIVE 5242880
+
+	local mdtidx=0
+	local mdt=${MDT_PREFIX}${mdtidx}
+	local mds=mds$((mdtidx + 1))
+
+	local cmd="$LCTL get_param -n ${mdt}.hsm.active_requests"
+	cmd+=" | awk '/'$fid'.*action=ARCHIVE/ {print \\\$12}' | cut -f2 -d="
+
+	local RESULT
+	local WAIT=0
+	local sleep=1
+
+	echo -n "Expecting a progress update within $progress_timeout seconds... "
+	while [ true ]; do
+		RESULT=$(do_node $(facet_active_host $mds) "$cmd")
+		if [ $RESULT -gt 0 ]; then
+			echo "$RESULT bytes copied in $WAIT seconds."
+			break
+		elif [ $WAIT -ge $progress_timeout ]; then
+			error "Timed out waiting for progress update!"
+		fi
+		WAIT=$((WAIT + sleep))
+		sleep $sleep
+	done
+
 	local finish_at=$(date +%s)
 	local elapsed=$((finish_at - start_at))
 
-	if [ $elapsed -gt $progress_timeout ]; then
-		error "Expected progress update within $progress_timeout seconds"
-	elif [ $elapsed -lt $interval ]; then
+	# Ensure that the progress update occurred within the expected window.
+	if [ $elapsed -lt $interval ]; then
 		error "Expected progress update after at least $interval seconds"
 	fi
 
