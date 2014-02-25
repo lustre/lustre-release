@@ -203,12 +203,13 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 rc = 0;
         }
         *request = req;
-        if (rc && req->rq_commit_cb) {
-                /* Put an extra reference on \var mod on error case. */
-                obd_mod_put(*mod);
-                req->rq_commit_cb(req);
-        }
-        RETURN(rc);
+	if (rc && req->rq_commit_cb) {
+		/* Put an extra reference on \var mod on error case. */
+		if (mod != NULL && *mod != NULL)
+			obd_mod_put(*mod);
+		req->rq_commit_cb(req);
+	}
+	RETURN(rc);
 }
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
