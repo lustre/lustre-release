@@ -128,8 +128,6 @@ static inline void lov_put_reqset(struct lov_request_set *set)
 /* lov_merge.c */
 void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
                      struct lov_stripe_md *lsm, int stripeno, int *set);
-int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                   obd_off size, int shrink);
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                       struct ost_lvb *lvb, __u64 *kms_place);
 

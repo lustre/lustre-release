@@ -44,7 +44,6 @@
 # include <liblustre.h>
 #endif
 
-#include <obd_ost.h>
 #include <obd_support.h>
 #include <lustre_debug.h>
 #include <lustre_net.h>

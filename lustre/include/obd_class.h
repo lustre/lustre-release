@@ -789,18 +789,6 @@ static inline int obd_free_memmd(struct obd_export *exp,
         return rc;
 }
 
-static inline int obd_precreate(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, precreate);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, precreate);
-
-        rc = OBP(exp->exp_obd, precreate)(exp);
-        RETURN(rc);
-}
-
 static inline int obd_create_async(struct obd_export *exp,
                                    struct obd_info *oinfo,
                                    struct lov_stripe_md **ea,
@@ -1169,17 +1157,6 @@ static inline int obd_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
-static inline int obd_extent_calc(struct obd_export *exp,
-                                  struct lov_stripe_md *md,
-                                  int cmd, obd_off *offset)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_DT_OP(exp, extent_calc);
-        rc = OBP(exp->exp_obd, extent_calc)(exp, md, cmd, offset);
-        RETURN(rc);
-}
-
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
@@ -1281,97 +1258,6 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
-static inline int obd_sync_rqset(struct obd_export *exp, struct obd_info *oinfo,
-                                 obd_size start, obd_size end)
-{
-        struct ptlrpc_request_set *set = NULL;
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
-        EXP_COUNTER_INCREMENT(exp, sync);
-
-        set =  ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        rc = OBP(exp->exp_obd, sync)(NULL, exp, oinfo, start, end, set);
-        if (rc == 0)
-                rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
-        RETURN(rc);
-}
-
-static inline int obd_sync(const struct lu_env *env, struct obd_export *exp,
-                           struct obd_info *oinfo, obd_size start, obd_size end,
-                           struct ptlrpc_request_set *set)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
-        EXP_COUNTER_INCREMENT(exp, sync);
-
-        rc = OBP(exp->exp_obd, sync)(env, exp, oinfo, start, end, set);
-        RETURN(rc);
-}
-
-static inline int obd_punch_rqset(struct obd_export *exp,
-                                  struct obd_info *oinfo,
-                                  struct obd_trans_info *oti)
-{
-        struct ptlrpc_request_set *set = NULL;
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, punch);
-        EXP_COUNTER_INCREMENT(exp, punch);
-
-        set =  ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        rc = OBP(exp->exp_obd, punch)(NULL, exp, oinfo, oti, set);
-        if (rc == 0)
-                rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
-        RETURN(rc);
-}
-
-static inline int obd_punch(const struct lu_env *env, struct obd_export *exp,
-                            struct obd_info *oinfo, struct obd_trans_info *oti,
-                            struct ptlrpc_request_set *rqset)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, punch);
-        EXP_COUNTER_INCREMENT(exp, punch);
-
-        rc = OBP(exp->exp_obd, punch)(env, exp, oinfo, oti, rqset);
-        RETURN(rc);
-}
-
-static inline int obd_brw(int cmd, struct obd_export *exp,
-                          struct obd_info *oinfo, obd_count oa_bufs,
-                          struct brw_page *pg, struct obd_trans_info *oti)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, brw);
-        EXP_COUNTER_INCREMENT(exp, brw);
-
-        if (!(cmd & (OBD_BRW_RWMASK | OBD_BRW_CHECK))) {
-                CERROR("obd_brw: cmd must be OBD_BRW_READ, OBD_BRW_WRITE, "
-                       "or OBD_BRW_CHECK\n");
-                LBUG();
-        }
-
-        rc = OBP(exp->exp_obd, brw)(cmd, exp, oinfo, oa_bufs, pg, oti);
-        RETURN(rc);
-}
-
 static inline int obd_preprw(const struct lu_env *env, int cmd,
                              struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
@@ -1408,34 +1294,6 @@ static inline int obd_commitrw(const struct lu_env *env, int cmd,
         RETURN(rc);
 }
 
-static inline int obd_merge_lvb(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                struct ost_lvb *lvb, int kms_only)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, merge_lvb);
-        EXP_COUNTER_INCREMENT(exp, merge_lvb);
-
-        rc = OBP(exp->exp_obd, merge_lvb)(exp, lsm, lvb, kms_only);
-        RETURN(rc);
-}
-
-static inline int obd_adjust_kms(struct obd_export *exp,
-                                 struct lov_stripe_md *lsm, obd_off size,
-                                 int shrink)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, adjust_kms);
-        EXP_COUNTER_INCREMENT(exp, adjust_kms);
-
-        rc = OBP(exp->exp_obd, adjust_kms)(exp, lsm, size, shrink);
-        RETURN(rc);
-}
-
 static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
                                 int len, void *karg, void *uarg)
 {
@@ -1446,43 +1304,6 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, iocontrol);
 
         rc = OBP(exp->exp_obd, iocontrol)(cmd, exp, len, karg, uarg);
-        RETURN(rc);
-}
-
-static inline int obd_enqueue_rqset(struct obd_export *exp,
-                                    struct obd_info *oinfo,
-                                    struct ldlm_enqueue_info *einfo)
-{
-        struct ptlrpc_request_set *set = NULL;
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, enqueue);
-        EXP_COUNTER_INCREMENT(exp, enqueue);
-
-        set =  ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
-        if (rc == 0)
-                rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
-        RETURN(rc);
-}
-
-static inline int obd_enqueue(struct obd_export *exp,
-                              struct obd_info *oinfo,
-                              struct ldlm_enqueue_info *einfo,
-                              struct ptlrpc_request_set *set)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, enqueue);
-        EXP_COUNTER_INCREMENT(exp, enqueue);
-
-        rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
         RETURN(rc);
 }
 
@@ -1511,35 +1332,6 @@ static inline int obd_find_cbdata(struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, find_cbdata);
 
         rc = OBP(exp->exp_obd, find_cbdata)(exp, lsm, it, data);
-        RETURN(rc);
-}
-
-static inline int obd_cancel(struct obd_export *exp,
-                             struct lov_stripe_md *ea, __u32 mode,
-                             struct lustre_handle *lockh)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, cancel);
-        EXP_COUNTER_INCREMENT(exp, cancel);
-
-        rc = OBP(exp->exp_obd, cancel)(exp, ea, mode, lockh);
-        RETURN(rc);
-}
-
-static inline int obd_cancel_unused(struct obd_export *exp,
-                                    struct lov_stripe_md *ea,
-                                    ldlm_cancel_flags_t flags,
-                                    void *opaque)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, cancel_unused);
-        EXP_COUNTER_INCREMENT(exp, cancel_unused);
-
-        rc = OBP(exp->exp_obd, cancel_unused)(exp, ea, flags, opaque);
         RETURN(rc);
 }
 

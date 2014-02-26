@@ -43,7 +43,6 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <obd_ost.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 

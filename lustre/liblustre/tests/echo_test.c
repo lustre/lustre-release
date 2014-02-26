@@ -39,7 +39,6 @@
 #include <liblustre.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <obd_ost.h>
 
 #define LIBLUSTRE_TEST 1
 #include "../utils/lctl.c"

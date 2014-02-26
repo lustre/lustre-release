@@ -42,9 +42,9 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
-#include <obd_ost.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <obd_class.h>
 #include "ost_internal.h"
 
 static int oss_num_threads;

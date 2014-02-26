@@ -53,7 +53,6 @@
 #endif
 
 #include <obd_class.h>
-#include <obd_ost.h>
 #include <lustre_net.h>
 #include <lustre_mds.h>
 #include <lustre_ha.h>

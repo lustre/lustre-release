@@ -42,7 +42,6 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_fid.h>
-#include <obd_ost.h>
 #include <lustre_capa.h>
 
 #define OFD_INIT_OBJID	0

@@ -55,7 +55,6 @@
 #include <lustre_dlm.h>
 #include <lustre_mds.h>
 #include <obd_class.h>
-#include <obd_ost.h>
 #include <lprocfs_status.h>
 #include <lustre_param.h>
 #include <cl_object.h>
@@ -2344,7 +2343,6 @@ static struct obd_ops lov_obd_ops = {
 	.o_destroy		= lov_destroy,
 	.o_getattr_async	= lov_getattr_async,
 	.o_setattr_async	= lov_setattr_async,
-	.o_adjust_kms		= lov_adjust_kms,
 	.o_change_cbdata	= lov_change_cbdata,
 	.o_find_cbdata		= lov_find_cbdata,
 	.o_iocontrol		= lov_iocontrol,

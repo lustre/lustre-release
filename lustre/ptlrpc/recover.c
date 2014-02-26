@@ -51,7 +51,6 @@
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <obd.h>
-#include <obd_ost.h>
 #include <obd_class.h>
 #include <libcfs/list.h>
 

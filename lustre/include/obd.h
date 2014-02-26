@@ -1081,10 +1081,6 @@ struct obd_ops {
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
                           struct lov_mds_md *disk_src, int disk_len);
-        int (*o_preallocate)(struct lustre_handle *, obd_count *req,
-                             obd_id *ids);
-        /* FIXME: add fid capability support for create & destroy! */
-        int (*o_precreate)(struct obd_export *exp);
         int (*o_create)(const struct lu_env *env, struct obd_export *exp,
                         struct obdo *oa, struct lov_stripe_md **ea,
                         struct obd_trans_info *oti);
@@ -1104,28 +1100,6 @@ struct obd_ops {
                          struct obd_info *oinfo);
         int (*o_getattr_async)(struct obd_export *exp, struct obd_info *oinfo,
                                struct ptlrpc_request_set *set);
-        int (*o_brw)(int rw, struct obd_export *exp, struct obd_info *oinfo,
-                     obd_count oa_bufs, struct brw_page *pgarr,
-                     struct obd_trans_info *oti);
-        int (*o_merge_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
-                           struct ost_lvb *lvb, int kms_only);
-        int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
-                            obd_off size, int shrink);
-        int (*o_punch)(const struct lu_env *, struct obd_export *exp,
-                       struct obd_info *oinfo, struct obd_trans_info *oti,
-                       struct ptlrpc_request_set *rqset);
-        int (*o_sync)(const struct lu_env *env, struct obd_export *exp,
-                      struct obd_info *oinfo, obd_size start, obd_size end,
-                      struct ptlrpc_request_set *set);
-        int (*o_migrate)(struct lustre_handle *conn, struct lov_stripe_md *dst,
-                         struct lov_stripe_md *src, obd_size start,
-                         obd_size end, struct obd_trans_info *oti);
-        int (*o_copy)(struct lustre_handle *dstconn, struct lov_stripe_md *dst,
-                      struct lustre_handle *srconn, struct lov_stripe_md *src,
-                      obd_size start, obd_size end, struct obd_trans_info *);
-        int (*o_iterate)(struct lustre_handle *conn,
-                         int (*)(obd_id, obd_seq, void *),
-                         obd_id *startid, obd_seq seq, void *data);
         int (*o_preprw)(const struct lu_env *env, int cmd,
                         struct obd_export *exp, struct obdo *oa, int objcount,
                         struct obd_ioobj *obj, struct niobuf_remote *remote,
@@ -1137,21 +1111,12 @@ struct obd_ops {
                           struct niobuf_remote *remote, int pages,
                           struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
-        int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
-                         struct ldlm_enqueue_info *einfo,
-                         struct ptlrpc_request_set *rqset);
         int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
                                ldlm_iterator_t it, void *data);
         int (*o_find_cbdata)(struct obd_export *, struct lov_stripe_md *,
                              ldlm_iterator_t it, void *data);
-        int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
-                        __u32 mode, struct lustre_handle *);
-        int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
-                               ldlm_cancel_flags_t flags, void *opaque);
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
-        int (*o_extent_calc)(struct obd_export *, struct lov_stripe_md *,
-                             int cmd, obd_off *);
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_llog_group *grp,
