@@ -257,9 +257,15 @@ int cfs_crypto_hash_update_page(struct cfs_crypto_hash_desc *desc,
 int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 			  unsigned char *hash, unsigned int *hash_len)
 {
+	const struct cfs_crypto_hash_type *type;
 	struct hash_desc	*d = (struct hash_desc *)desc;
-	int	size = (cfs_crypto_hash_type(d->hd_hash->ha_id))->cht_size;
-	int	err;
+	int			size;
+	int			err;
+
+	LASSERT(d != NULL);
+	type = cfs_crypto_hash_type(d->hd_hash->ha_id);
+	LASSERT(type != NULL);
+	size = type->cht_size;
 
 	if (hash_len == NULL) {
 		kfree(d);
@@ -273,8 +279,8 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 	LASSERT(d->hd_hash->final != NULL);
 	err = d->hd_hash->final(d->hd_ctx, hash, *hash_len);
 	if (err == 0) {
-		  /* If get final digest success free hash descriptor */
-		  kfree(d);
+		/* If get final digest success free hash descriptor */
+		kfree(d);
 	}
 
 	return err;
