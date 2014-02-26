@@ -91,6 +91,8 @@ init_agt_vars() {
 	export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
 	export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
 	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
+	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
+	export HSMTOOL_TESTDIR
 	export HSMTOOL_BASE=$(basename "$HSMTOOL" | cut -f1 -d" ")
 	HSM_ARCHIVE=$(copytool_device $SINGLEAGT)
 	HSM_ARCHIVE_NUMBER=2
@@ -113,6 +115,7 @@ copytool_device() {
 
 # Stop copytool and unregister an existing changelog user.
 cleanup() {
+	copytool_monitor_cleanup
 	copytool_cleanup
 	changelog_cleanup
 	cdt_set_sanity_policy
@@ -141,6 +144,57 @@ search_and_kill_copytool() {
 	do_nodesv $agents "killall -q $HSMTOOL_BASE" || true
 }
 
+copytool_monitor_setup() {
+	local facet=${1:-$SINGLEAGT}
+	local agent=$(facet_active_host $facet)
+
+	local cmd="mktemp --tmpdir=/tmp -d ${TESTSUITE}.${TESTNAME}.XXXX"
+	local test_dir=$(do_node $agent "$cmd") ||
+		error "Failed to create tempdir on $agent"
+	export HSMTOOL_MONITOR_DIR=$test_dir
+
+	# Create the fifo and a monitor (cat dies when copytool dies)
+	do_node $agent "mkfifo -m 0644 $test_dir/fifo" ||
+		error "failed to create copytool fifo on $agent"
+	cmd="cat $test_dir/fifo > $test_dir/events &"
+	cmd+=" echo \\\$! > $test_dir/monitor_pid"
+
+	# This is required for pdsh -Rmrsh and its handling of remote shells.
+	# Regular ssh and pdsh -Rssh work fine without this backgrounded
+	# subshell nonsense.
+	(do_node $agent "$cmd") &
+	export HSMTOOL_MONITOR_PDSH=$!
+
+	# Slightly racy, but just making a best-effort to catch obvious
+	# problems. If we get rid of the ridiculous backgrounded subshell,
+	# this check will need to be updated to just look at the returncode
+	# of do_node.
+	sleep 1
+	ps -p $HSMTOOL_MONITOR_PDSH >&- ||
+		error "Failed to start copytool monitor on $agent"
+}
+
+copytool_monitor_cleanup() {
+	local facet=${1:-$SINGLEAGT}
+	local agent=$(facet_active_host $facet)
+
+	if [ -n "$HSMTOOL_MONITOR_DIR" ]; then
+		# Should die when the copytool dies, but just in case.
+		local cmd="kill \\\$(cat $HSMTOOL_MONITOR_DIR/monitor_pid)"
+		cmd+=" 2>/dev/null || true"
+		do_node $agent "$cmd"
+		do_node $agent "rm -fr $HSMTOOL_MONITOR_DIR"
+		export HSMTOOL_MONITOR_DIR=
+	fi
+
+	# The pdsh should die on its own when the monitor dies. Just
+	# in case, though, try to clean up to avoid any cruft.
+	if [ -n "$HSMTOOL_MONITOR_PDSH" ]; then
+		kill $HSMTOOL_MONITOR_PDSH 2>/dev/null
+		export HSMTOOL_MONITOR_PDSH=
+	fi
+}
+
 copytool_setup() {
 	local facet=${1:-$SINGLEAGT}
 	local lustre_mntpnt=${2:-$MOUNT}
@@ -167,6 +221,8 @@ copytool_setup() {
 	[[ -z "$arc_id" ]] || cmd+=" --archive $arc_id"
 	[[ -z "$HSMTOOL_UPDATE_INTERVAL" ]] ||
 		cmd+=" --update-interval $HSMTOOL_UPDATE_INTERVAL"
+	[[ -z "$HSMTOOL_EVENT_FIFO" ]] ||
+		cmd+=" --event-fifo $HSMTOOL_EVENT_FIFO"
 	cmd+=" --bandwidth 1 $lustre_mntpnt"
 
 	# Redirect the standard output and error to a log file which
@@ -178,6 +234,17 @@ copytool_setup() {
 	do_facet $facet "$cmd < /dev/null > $copytool_log 2>&1" ||
 		error "start copytool $facet on $agent failed"
 	trap cleanup EXIT
+}
+
+get_copytool_event_log() {
+	local facet=${1:-$SINGLEAGT}
+	local agent=$(facet_active_host $facet)
+
+	[ -z "$HSMTOOL_MONITOR_DIR" ] &&
+		error "Can't get event log: No monitor directory!"
+
+	do_node $agent "cat $HSMTOOL_MONITOR_DIR/events" ||
+		error "Could not collect event log from $agent"
 }
 
 copytool_cleanup() {
@@ -594,6 +661,18 @@ wait_all_done() {
 wait_for_grace_delay() {
 	local val=$(get_hsm_param grace_delay)
 	sleep $val
+}
+
+parse_json_event() {
+	local raw_event=$1
+
+	# python2.6 in EL6 includes an internal json module
+	local json_parser='import json; import fileinput;'
+	json_parser+=' print "\n".join(["local %s=\"%s\"" % tuple for tuple in '
+	json_parser+='json.loads([line for line in '
+	json_parser+='fileinput.input()][0]).items()])'
+
+	echo $raw_event | python -c "$json_parser"
 }
 
 # populate MDT device array
@@ -2543,7 +2622,7 @@ test_60() {
 	# option changes the progress reporting interval from the default
 	# (30 seconds) to the user-specified interval.
 	local interval=5
-	local progress_timeout=$((interval * 2))
+	local progress_timeout=$((interval * 3))
 
 	# test needs a new running copytool
 	copytool_cleanup
@@ -2596,6 +2675,227 @@ test_60() {
 	copytool_cleanup
 }
 run_test 60 "Changing progress update interval from default"
+
+test_70() {
+	# test needs a new running copytool
+	copytool_cleanup
+	copytool_monitor_setup
+	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
+
+	# Just start and stop the copytool to generate events.
+	cdt_clear_no_retry
+	copytool_cleanup
+
+	local REGISTER_EVENT
+	local UNREGISTER_EVENT
+	while read event; do
+		local parsed=$(parse_json_event "$event")
+		if [ -z "$parsed" ]; then
+			error "Copytool sent malformed event: $event"
+		fi
+		eval $parsed
+
+		if [ $event_type == "REGISTER" ]; then
+			REGISTER_EVENT=$event
+		elif [ $event_type == "UNREGISTER" ]; then
+			UNREGISTER_EVENT=$event
+		fi
+	done < <(echo $"$(get_copytool_event_log)")
+
+	if [ -z "$REGISTER_EVENT" ]; then
+		error "Copytool failed to send register event to FIFO"
+	fi
+
+	if [ -z "$UNREGISTER_EVENT" ]; then
+		error "Copytool failed to send unregister event to FIFO"
+	fi
+
+	copytool_monitor_cleanup
+	echo "Register/Unregister events look OK."
+}
+run_test 70 "Copytool logs JSON register/unregister events to FIFO"
+
+test_71() {
+	# Bump progress interval for livelier events.
+	local interval=5
+
+	# test needs a new running copytool
+	copytool_cleanup
+	copytool_monitor_setup
+	HSMTOOL_UPDATE_INTERVAL=$interval \
+	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(make_large_for_progress $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
+		error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	local expected_fields="event_time data_fid source_fid"
+	expected_fields+=" total_bytes current_bytes"
+
+	local START_EVENT
+	local FINISH_EVENT
+	while read event; do
+		# Make sure we're not getting anything from previous events.
+		for field in $expected_fields; do
+			unset $field
+		done
+
+		local parsed=$(parse_json_event "$event")
+		if [ -z "$parsed" ]; then
+			error "Copytool sent malformed event: $event"
+		fi
+		eval $parsed
+
+		if [ $event_type == "ARCHIVE_START" ]; then
+			START_EVENT=$event
+			continue
+		elif [ $event_type == "ARCHIVE_FINISH" ]; then
+			FINISH_EVENT=$event
+			continue
+		elif [ $event_type != "ARCHIVE_RUNNING" ]; then
+			continue
+		fi
+
+		# Do some simple checking of the progress update events.
+		for expected_field in $expected_fields; do
+			if [ -z ${!expected_field+x} ]; then
+				error "Missing $expected_field field in event"
+			fi
+		done
+
+		if [ $total_bytes -eq 0 ]; then
+			error "Expected total_bytes to be > 0"
+		fi
+
+		# These should be identical throughout an archive
+		# operation.
+		if [ $source_fid != $data_fid ]; then
+			error "Expected source_fid to equal data_fid"
+		fi
+	done < <(echo $"$(get_copytool_event_log)")
+
+	if [ -z "$START_EVENT" ]; then
+		error "Copytool failed to send archive start event to FIFO"
+	fi
+
+	if [ -z "$FINISH_EVENT" ]; then
+		error "Copytool failed to send archive finish event to FIFO"
+	fi
+
+	echo "Archive events look OK."
+
+	cdt_clear_no_retry
+	copytool_cleanup
+	copytool_monitor_cleanup
+}
+run_test 71 "Copytool logs JSON archive events to FIFO"
+
+test_72() {
+	# Bump progress interval for livelier events.
+	local interval=5
+
+	# test needs a new running copytool
+	copytool_cleanup
+	copytool_monitor_setup
+	HSMTOOL_UPDATE_INTERVAL=$interval \
+	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
+	local test_file=$HSMTOOL_MONITOR_DIR/file
+
+	local cmd="dd if=/dev/urandom of=$test_file count=16 bs=1000000 "
+	cmd+="conv=fsync"
+	do_facet $SINGLEAGT "$cmd" ||
+		error "cannot create $test_file on $SINGLEAGT"
+	copy2archive $test_file $tdir/$tfile
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	import_file $tdir/$tfile $f
+	f=$DIR2/$tdir/$tfile
+	echo "Verifying released state: "
+	check_hsm_flags $f "0x0000000d"
+
+	local fid=$(path2fid $f)
+	$LFS hsm_restore $f
+	wait_request_state $fid RESTORE SUCCEED
+
+	local expected_fields="event_time data_fid source_fid"
+	expected_fields+=" total_bytes current_bytes"
+
+	local START_EVENT
+	local FINISH_EVENT
+	while read event; do
+		# Make sure we're not getting anything from previous events.
+		for field in $expected_fields; do
+			unset $field
+		done
+
+		local parsed=$(parse_json_event "$event")
+		if [ -z "$parsed" ]; then
+			error "Copytool sent malformed event: $event"
+		fi
+		eval $parsed
+
+		if [ $event_type == "RESTORE_START" ]; then
+			START_EVENT=$event
+			if [ $source_fid != $data_fid ]; then
+				error "source_fid should == data_fid at start"
+			fi
+			continue
+		elif [ $event_type == "RESTORE_FINISH" ]; then
+			FINISH_EVENT=$event
+			if [ $source_fid != $data_fid ]; then
+				error "source_fid should == data_fid at finish"
+			fi
+			continue
+		elif [ $event_type != "RESTORE_RUNNING" ]; then
+			continue
+		fi
+
+		# Do some simple checking of the progress update events.
+		for expected_field in $expected_fields; do
+			if [ -z ${!expected_field+x} ]; then
+				error "Missing $expected_field field in event"
+			fi
+		done
+
+		if [ $total_bytes -eq 0 ]; then
+			error "Expected total_bytes to be > 0"
+		fi
+
+		# When a restore starts out, the data fid is the same as the
+		# source fid. After the restore has gotten going, we learn
+		# the new data fid. Once the restore has finished, the source
+		# fid is set to the new data fid.
+		#
+		# We test this because some monitoring software may depend on
+		# this behavior. If it changes, then the consumers of these
+		# events may need to be modified.
+		if [ $source_fid == $data_fid ]; then
+			error "source_fid should != data_fid during restore"
+		fi
+	done < <(echo $"$(get_copytool_event_log)")
+
+	if [ -z "$START_EVENT" ]; then
+		error "Copytool failed to send restore start event to FIFO"
+	fi
+
+	if [ -z "$FINISH_EVENT" ]; then
+		error "Copytool failed to send restore finish event to FIFO"
+	fi
+
+	echo "Restore events look OK."
+
+	cdt_clear_no_retry
+	copytool_cleanup
+	copytool_monitor_cleanup
+
+	rm -rf $test_dir
+}
+run_test 72 "Copytool logs JSON restore events to FIFO"
 
 test_90() {
 	file_count=51 # Max number of files constrained by LNET message size

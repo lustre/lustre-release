@@ -84,7 +84,7 @@ L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
 L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/kernel_user_comm.c
 liblustreapitmp_a_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			    liblustreapi_nodemap.c lustreapi_internal.h \
-			    $(L_IOCTL) $(L_KERNELCOMM)
+			    liblustreapi_json.c $(L_IOCTL) $(L_KERNELCOMM)
 
 # build static and shared lib lustreapi
 liblustreapi.a : liblustreapitmp.a
