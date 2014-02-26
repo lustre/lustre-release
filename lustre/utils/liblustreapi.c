@@ -380,6 +380,24 @@ static int find_poolpath(char *fsname, char *poolname, char *poolpath)
         return 0;
 }
 
+/*
+ * Trim a trailing newline from a string, if it exists.
+ */
+int llapi_chomp_string(char *buf)
+{
+	if (!buf || !*buf)
+		return 0;
+
+	while (buf[1])
+		buf++;
+
+	if (*buf != '\n')
+		return 0;
+
+	*buf = '\0';
+	return '\n';
+}
+
 /**
   * return a parameter string for a specific device type or mountpoint
   *
@@ -598,6 +616,11 @@ static int get_mds_md_size(const char *path)
 
 out:
 	return md_size;
+}
+
+int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)
+{
+	return get_param_lmv(path, "uuid", buf, bufsize);
 }
 
 /*

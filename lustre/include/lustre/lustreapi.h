@@ -68,6 +68,17 @@ typedef void (*llapi_log_callback_t)(enum llapi_message_level level, int err,
 #define LLAPI_MSG_MASK          0x00000007
 #define LLAPI_MSG_NO_ERRNO      0x00000010
 
+static inline const char *llapi_msg_level2str(enum llapi_message_level level)
+{
+	static const char *levels[LLAPI_MSG_MAX] = {"OFF", "FATAL", "ERROR",
+						    "WARNING", "NORMAL",
+						    "INFO", "DEBUG"};
+
+	if (level >= LLAPI_MSG_MAX)
+		return NULL;
+
+	return levels[level];
+}
 extern void llapi_msg_set_level(int level);
 extern llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb);
 extern llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb);
@@ -263,6 +274,7 @@ extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
 			  int pathlen, long long *recno, int *linkno);
 extern int llapi_path2fid(const char *path, lustre_fid *fid);
 extern int llapi_fd2fid(const int fd, lustre_fid *fid);
+extern int llapi_chomp_string(char *buf);
 
 extern int llapi_get_version(char *buffer, int buffer_size, char **version);
 extern int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
@@ -272,7 +284,12 @@ extern int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
 				  __u32 archive_id);
 extern int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 			       __u32 archive_id);
+extern int llapi_hsm_register_event_fifo(char *path);
+extern int llapi_hsm_unregister_event_fifo(char *path);
+extern void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
+				const char *fmt, va_list args);
 
+extern int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize);
 extern int llapi_create_volatile_idx(char *directory, int idx, int mode);
 static inline int llapi_create_volatile(char *directory, int mode)
 {
@@ -328,7 +345,8 @@ extern int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 				const struct hsm_extent *he,
 				int hp_flags, int errval);
 extern int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
-				     const struct hsm_extent *he, int hp_flags);
+				     const struct hsm_extent *he, __u64 total,
+				     int hp_flags);
 extern int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
 				     lustre_fid *fid);
 extern int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
@@ -344,6 +362,14 @@ extern int llapi_hsm_request(const char *path,
 			     const struct hsm_user_request *request);
 extern int llapi_hsm_current_action(const char *path,
 				    struct hsm_current_action *hca);
+
+/* JSON handling */
+extern int llapi_json_init_list(struct llapi_json_item_list **item_list);
+extern int llapi_json_destroy_list(struct llapi_json_item_list **item_list);
+extern int llapi_json_add_item(struct llapi_json_item_list **item_list,
+			       char *key, __u32 type, void *val);
+extern int llapi_json_write_list(struct llapi_json_item_list **item_list,
+				 FILE *fp);
 /** @} llapi */
 
 #endif
