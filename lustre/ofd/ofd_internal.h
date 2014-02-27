@@ -48,7 +48,7 @@
 #define OFD_INIT_OBJID	0
 #define OFD_ROCOMPAT_SUPP (0)
 #define OFD_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
-			   OBD_INCOMPAT_COMMON_LR)
+			   OBD_INCOMPAT_FID | OBD_INCOMPAT_COMMON_LR)
 #define OFD_PRECREATE_BATCH_DEFAULT (FILTER_SUBDIR_COUNT * 4)
 
 /* on small filesystems we should not precreate too many objects in
