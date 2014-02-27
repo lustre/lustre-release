@@ -184,6 +184,7 @@ void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 
 #ifdef __KERNEL__
 
+#ifdef CONFIG_X86
 #include <linux/nmi.h>
 #include <asm/stacktrace.h>
 
@@ -229,6 +230,28 @@ static const struct stacktrace_ops print_trace_ops = {
 #endif
 };
 
+static void libcfs_call_trace(struct task_struct *tsk)
+{
+	dump_trace(tsk, NULL, NULL,
+#ifdef HAVE_DUMP_TRACE_ADDRESS
+		   0,
+#endif /* HAVE_DUMP_TRACE_ADDRESS */
+		   &print_trace_ops, NULL);
+	printk("\n");
+}
+
+#else /* !CONFIG_X86 */
+
+static void libcfs_call_trace(struct task_struct *tsk)
+{
+	if ((tsk == NULL) || (tsk == current))
+		dump_stack();
+	else
+		CWARN("can't show stack: kernel doesn't export show_task\n");
+}
+
+#endif /* CONFIG_X86 */
+
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
         /* dump_stack() */
@@ -238,12 +261,7 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
-	dump_trace(tsk, NULL, NULL,
-#ifdef HAVE_DUMP_TRACE_ADDRESS
-                   0,
-#endif /* HAVE_DUMP_TRACE_ADDRESS */
-                   &print_trace_ops, NULL);
-	printk("\n");
+	libcfs_call_trace(tsk);
 }
 
 struct task_struct *libcfs_current(void)
@@ -268,10 +286,10 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
         if (in_interrupt()) {
                 cfs_trace_debug_print();
         } else {
-# ifdef HAVE_KERNEL_LOCKED
+#ifdef HAVE_KERNEL_LOCKED
 		while (kernel_locked())
 			unlock_kernel();
-# endif
+#endif
 		libcfs_debug_dumplog_internal((void *)(long)current_pid());
         }
 #endif
