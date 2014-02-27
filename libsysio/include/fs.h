@@ -44,6 +44,10 @@
 /*
  * File system or volume support.
  */
+#ifndef SYSIO_FS_H_
+#define SYSIO_FS_H_
+
+#include <sys/queue.h>
 
 struct filesys;
 
@@ -171,3 +175,5 @@ extern void _sysio_fs_gone(struct filesys *fs);
 #ifdef ZERO_SUM_MEMORY
 extern void _sysio_fssw_shutdown(void);
 #endif
+
+#endif /* SYSIO_FS_H_ */

@@ -40,114 +40,26 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/queue.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #include <sys/uio.h>
-
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
+#include <liblustre.h>
+#include <cl_object.h>
+#include <lclient.h>
+#include <lustre_dlm.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include "llite_lib.h"
-
-typedef ssize_t llu_file_piov_t(const struct iovec *iovec, int iovlen,
-                                _SYSIO_OFF_T pos, ssize_t len,
-                                void *private);
-
-size_t llap_cookie_size;
-
-static int llu_lock_to_stripe_offset(struct obd_export *exp,
-				     struct lov_stripe_md *lsm,
-				     struct ldlm_lock *lock)
-{
-        struct {
-                char name[16];
-                struct ldlm_lock *lock;
-        } key = { .name = KEY_LOCK_TO_STRIPE, .lock = lock };
-        __u32 stripe, vallen = sizeof(stripe);
-        int rc;
-        ENTRY;
-
-	if (lsm == NULL || lsm->lsm_stripe_count == 1)
-		RETURN(0);
-
-        /* get our offset in the lov */
-        rc = obd_get_info(NULL, exp, sizeof(key), &key, &vallen, &stripe, lsm);
-        if (rc != 0) {
-                CERROR("obd_get_info: rc = %d\n", rc);
-                LBUG();
-        }
-        LASSERT(stripe < lsm->lsm_stripe_count);
-	RETURN(stripe);
-}
-
-int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
-                              struct ldlm_lock_desc *new, void *data,
-                              int flag)
-{
-        struct lustre_handle lockh = { 0 };
-        int rc;
-        ENTRY;
-
-        if ((unsigned long)data > 0 && (unsigned long)data < 0x1000) {
-                LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
-                LBUG();
-        }
-
-        switch (flag) {
-        case LDLM_CB_BLOCKING:
-                ldlm_lock2handle(lock, &lockh);
-		rc = ldlm_cli_cancel(&lockh, 0);
-                if (rc != ELDLM_OK)
-                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
-                break;
-        case LDLM_CB_CANCELING: {
-                struct inode *inode;
-                struct llu_inode_info *lli;
-                struct lov_stripe_md *lsm;
-                __u32 stripe;
-                __u64 kms;
-
-                /* This lock wasn't granted, don't try to evict pages */
-                if (lock->l_req_mode != lock->l_granted_mode)
-                        RETURN(0);
-
-                inode = llu_inode_from_lock(lock);
-                if (!inode)
-                        RETURN(0);
-                lli= llu_i2info(inode);
-                if (!lli)
-                        goto iput;
-		if (!lli->lli_has_smd)
-			goto iput;
-
-		lsm = ccc_inode_lsm_get(inode);
-		if (lsm == NULL)
-			goto iput;
-
-                stripe = llu_lock_to_stripe_offset(llu_i2obdexp(inode),
-						   lsm, lock);
-                lock_res_and_lock(lock);
-                kms = ldlm_extent_shift_kms(lock,
-                                            lsm->lsm_oinfo[stripe]->loi_kms);
-                unlock_res_and_lock(lock);
-                if (lsm->lsm_oinfo[stripe]->loi_kms != kms)
-                        LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
-                                   lsm->lsm_oinfo[stripe]->loi_kms, kms);
-                loi_kms_set(lsm->lsm_oinfo[stripe], kms);
-		ccc_inode_lsm_put(inode, lsm);
-iput:
-                I_RELE(inode);
-                break;
-        }
-        default:
-                LBUG();
-        }
-
-        RETURN(0);
-}
 
 int llu_merge_lvb(const struct lu_env *env, struct inode *inode)
 {
@@ -256,7 +168,6 @@ struct llu_io_session *get_io_session(struct inode *ino, int ngroups, int cmd)
 
         I_REF(ino);
         session->lis_inode = ino;
-        session->lis_max_groups = ngroups;
         session->lis_cmd = cmd;
         return session;
 }

@@ -38,22 +38,25 @@
  * Lustre Light common routines
  */
 
+#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/queue.h>
-
+#include <unistd.h>
+#include <sys/mount.h>
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
 #include <liblustre.h>
-#include <lnet/lnetctl.h>     /* needed for parse_dump */
+#include <lnet/lnet.h>
+#include <lustre_cfg.h>
+#include <lustre_export.h>
 #include <lustre_log.h>
-
-#include "lutil.h"
+#include <lustre_ver.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include "llite_lib.h"
-
-int slp_global_init(void);
+#include "lutil.h"
 
 static int lllib_init(void)
 {
@@ -269,7 +272,7 @@ int ll_parse_mount_target(const char *target, char **mgsnid,
  * to enable libsysio's processing of namespace init strings containing
  * lustre filesystem operations
  */
-int _sysio_lustre_init(void)
+static int _sysio_lustre_init(void)
 {
         int err;
         char *envstr;

@@ -71,27 +71,16 @@ typedef unsigned short umode_t;
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
 
-
-/*
- * The inter_module_get implementation is specific to liblustre, so this needs
- * to stay here for now.
- */
-static inline void inter_module_put(void *a)
-{
-        return;
-}
-void *inter_module_get(char *arg);
-
 /* bits ops */
 
 /* a long can be more than 32 bits, so use BITS_PER_LONG
  * to allow the compiler to adjust the bit shifting accordingly
  */
 
-static __inline__ int ext2_set_bit(int nr, void *addr)
+static inline int ext2_set_bit(int nr, void *addr)
 {
 #if __BYTE_ORDER == __BIG_ENDIAN
-	return set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+	return set_bit((nr ^ ((BITS_PER_LONG - 1) & ~0x7)), addr);
 #else
 	return set_bit(nr, addr);
 #endif
@@ -100,22 +89,21 @@ static __inline__ int ext2_set_bit(int nr, void *addr)
 static inline int ext2_clear_bit(int nr, void *addr)
 {
 #if __BYTE_ORDER == __BIG_ENDIAN
-	return clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+	return clear_bit((nr ^ ((BITS_PER_LONG - 1) & ~0x7)), addr);
 #else
 	return clear_bit(nr, addr);
 #endif
 }
 
-static __inline__ int ext2_test_bit(int nr, void *addr)
+static inline int ext2_test_bit(int nr, const void *addr)
 {
 #if __BYTE_ORDER == __BIG_ENDIAN
-        __const__ unsigned char *tmp = (__const__ unsigned char *) addr;
-        return (tmp[nr >> 3] >> (nr & 7)) & 1;
+	const unsigned char *tmp = addr;
+	return (tmp[nr >> 3] >> (nr & 7)) & 1;
 #else
 	return test_bit(nr, addr);
 #endif
 }
-
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -126,9 +114,6 @@ extern int lov_init(void);
 extern int mdc_init(void);
 extern int lmv_init(void);
 extern int mgc_init(void);
-extern int echo_client_init(void);
-
-
 
 /* general stuff */
 
@@ -148,8 +133,6 @@ extern int echo_client_init(void);
 #define max_t(type,x,y) \
         ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
-
-#define simple_strtol strtol
 
 /* registering symbols */
 #ifndef ERESTARTSYS
@@ -245,32 +228,11 @@ static inline void it_clear_disposition(struct lookup_intent *it, int flag)
 	it->d.lustre.it_disposition &= ~flag;
 }
 
-static inline void intent_init(struct lookup_intent *it, int op, int flags)
-{
-        memset(it, 0, sizeof(*it));
-        it->it_magic = INTENT_MAGIC;
-        it->it_op = op;
-        it->it_flags = flags;
-}
-
-struct dentry {
-        int d_count;
-};
-
-struct vfsmount {
-        void *pwd;
-};
-
-struct signal {
-        int signal;
-};
-
 #undef  LL_TASK_CL_ENV
 #define LL_TASK_CL_ENV          cl_env
 
 struct task_struct {
         int state;
-        struct signal pending;
         char comm[32];
         int uid;
         int gid;
@@ -308,12 +270,7 @@ int in_group_p(gid_t gid);
 	ret;                                                            \
 }
 
-#define daemonize(l) do {} while (0)
-#define sigfillset(l) do {} while (0)
-#define recalc_sigpending(l) do {} while (0)
-
 #define call_usermodehelper(path, argv, envp, wait) (0)
-#define KERN_INFO
 
 #if HZ != 1
 #error "liblustre's jiffies currently expects HZ to be 1"
@@ -360,10 +317,6 @@ typedef enum {
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 
-static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
-                                           const int l){}
-
-
 struct liblustre_wait_callback {
         cfs_list_t              llwc_list;
         const char             *llwc_name;
@@ -380,13 +333,6 @@ void *liblustre_register_idle_callback(const char *name,
                                        int (*fn)(void *arg), void *arg);
 void liblustre_deregister_idle_callback(void *notifier);
 void liblustre_wait_idle(void);
-
-/* flock related */
-struct nfs_lock_info {
-        __u32             state;
-        __u32             flags;
-        void            *host;
-};
 
 struct file_lock {
         struct file_lock *fl_next;  /* singly linked list for this inode  */
@@ -407,10 +353,6 @@ struct file_lock {
 
         void *fl_fasync; /* for lease break notifications */
         unsigned long fl_break_time;    /* for nonblocking lease breaks */
-
-        union {
-                struct nfs_lock_info    nfs_fl;
-        } fl_u;
 };
 
 #define flock_type(fl)			((fl)->fl_type)
@@ -499,24 +441,9 @@ void posix_acl_release(struct posix_acl *acl)
 #endif
 
 typedef int mm_segment_t;
-enum {
-        KERNEL_DS,
-        USER_DS
-};
-static inline mm_segment_t get_fs(void)
-{
-        return USER_DS;
-}
-
-static inline void set_fs(mm_segment_t seg)
-{
-}
 
 #define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
 #define S_IALLUGO       (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
-
-struct inode *igrab(struct inode *inode);
-void iput(struct inode *inode);
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>

@@ -40,15 +40,23 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/queue.h>
+#include <errno.h>
 #include <fcntl.h>
-
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
+#include <liblustre.h>
+#include <lclient.h>
+#include <lustre_lib.h>
+#include <lustre_lite.h>
+#include <lustre_mdc.h>
+#include <lustre_net.h>
+#include <lustre_req_layout.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
 #include "llite_lib.h"
 
 /* Pack the required supplementary groups into the supplied groups array.

@@ -43,6 +43,18 @@
 #ifndef LCLIENT_H
 #define LCLIENT_H
 
+#include <lustre/lustre_idl.h>
+#include <cl_object.h>
+
+enum obd_notify_event;
+struct inode;
+struct lov_stripe_md;
+struct lustre_md;
+struct obd_capa;
+struct obd_device;
+struct obd_export;
+struct page;
+
 blkcnt_t dirty_cnt(struct inode *inode);
 
 int cl_glimpse_size0(struct inode *inode, int agl);

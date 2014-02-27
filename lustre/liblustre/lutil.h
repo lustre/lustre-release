@@ -35,10 +35,6 @@
 #ifndef __LUTIL_H_
 #define __LUTIL_H_
 
-#include <liblustre.h>
-#include <obd.h>
-#include <obd_class.h>
-
 void liblustre_init_random(void);
 int liblustre_init_current(char *comm);
 int init_lib_portals(void);

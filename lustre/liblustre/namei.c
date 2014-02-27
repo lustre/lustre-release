@@ -40,19 +40,27 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/queue.h>
-
-#include "llite_lib.h"
+#include <sys/types.h>
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
+#include <liblustre.h>
+#include <lclient.h>
+#include <lustre_dlm.h>
 #include <lustre_fid.h>
+#include <lustre_mdc.h>
+#include <lustre_net.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
+#include "llite_lib.h"
 
-void ll_intent_drop_lock(struct lookup_intent *it)
+static void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
 
@@ -68,7 +76,7 @@ void ll_intent_drop_lock(struct lookup_intent *it)
         }
 }
 
-void ll_intent_release(struct lookup_intent *it)
+static void ll_intent_release(struct lookup_intent *it)
 {
         ENTRY;
 
@@ -80,7 +88,8 @@ void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
-void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
+static void
+llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
         struct inode *inode;
         LASSERT(it);
@@ -291,11 +300,9 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
 }
 
 static int lookup_it_finish(struct ptlrpc_request *request, int offset,
-                            struct lookup_intent *it, void *data)
+			    struct lookup_intent *it,
+			    struct inode *parent, struct pnode *child)
 {
-        struct it_cb_data *icbd = data;
-        struct pnode *child = icbd->icbd_child;
-        struct inode *parent = icbd->icbd_parent;
         struct llu_sb_info *sbi = llu_i2sbi(parent);
         struct inode *inode = NULL;
         int rc;
@@ -395,26 +402,10 @@ struct inode *llu_inode_from_resource_lock(struct ldlm_lock *lock)
 	return inode;
 }
 
-struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
-{
-        struct inode *inode;
-        lock_res_and_lock(lock);
-
-        if (lock->l_ast_data) {
-                inode = (struct inode *)lock->l_ast_data;
-                I_REF(inode);
-        } else
-                inode = NULL;
-
-        unlock_res_and_lock(lock);
-        return inode;
-}
-
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
         struct md_op_data op_data = {{ 0 }};
-        struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         __u32 opc;
@@ -428,9 +419,6 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                 it = &lookup_it;
                 it->it_op_release = ll_intent_release;
         }
-
-        icbd.icbd_child = pnode;
-        icbd.icbd_parent = parent;
 
 	if (it->it_op & IT_CREAT)
 		opc = LUSTRE_OPC_CREATE;
@@ -447,7 +435,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
+	rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, parent, pnode);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc);

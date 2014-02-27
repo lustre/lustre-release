@@ -34,47 +34,27 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <signal.h>
-#include <sys/types.h>
-
+#include <byteswap.h>
+#include <errno.h>
 #include <fcntl.h>
-#ifdef HAVE_NETDB_H
+#include <malloc.h>
 #include <netdb.h>
-#endif
-#ifdef _AIX
-#include "syscall_AIX.h"
-#else
-#include <sys/syscall.h>
-#endif
-#include <sys/utsname.h>
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#include <sys/socket.h>
-#ifdef HAVE_ARPA_INET_H
+#include <stdio.h>
+#include <unistd.h>
 #include <arpa/inet.h>
-#endif
-
+#include <sys/socket.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
+#include <liblustre.h>
+#include <lnet/lnet.h>
+#include <lustre_dlm.h>
 #include "lutil.h"
 
-
-
-struct task_struct     *current;
-
-void *inter_module_get(char *arg)
-{
-        if (!strcmp(arg, "ldlm_cli_cancel_unused"))
-                return ldlm_cli_cancel_unused;
-        else if (!strcmp(arg, "ldlm_namespace_cleanup"))
-                return ldlm_namespace_cleanup;
-        else if (!strcmp(arg, "ldlm_replay_locks"))
-                return ldlm_replay_locks;
-        else
-                return NULL;
-}
+struct task_struct *current;
 
 /*
  * random number generator stuff
@@ -197,7 +177,6 @@ int liblustre_init_current(char *comm)
         current->gid = getgid();
         current->fsuid = geteuid();
         current->fsgid = getegid();
-        memset(&current->pending, 0, sizeof(current->pending));
 
         current->max_groups = sysconf(_SC_NGROUPS_MAX);
         current->groups = malloc(sizeof(gid_t) * current->max_groups);
