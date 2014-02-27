@@ -63,7 +63,7 @@ static CFS_LIST_HEAD(sec_gc_ctx_list);
 static spinlock_t sec_gc_ctx_list_lock;
 
 static struct ptlrpc_thread sec_gc_thread;
-static cfs_atomic_t sec_gc_wait_del = CFS_ATOMIC_INIT(0);
+static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
 
 
 void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
@@ -90,7 +90,7 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 	might_sleep();
 
 	/* signal before list_del to make iteration in gc thread safe */
-	cfs_atomic_inc(&sec_gc_wait_del);
+	atomic_inc(&sec_gc_wait_del);
 
 	spin_lock(&sec_gc_list_lock);
 	cfs_list_del_init(&sec->ps_gc_list);
@@ -100,7 +100,7 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 	mutex_lock(&sec_gc_mutex);
 	mutex_unlock(&sec_gc_mutex);
 
-	cfs_atomic_dec(&sec_gc_wait_del);
+	atomic_dec(&sec_gc_wait_del);
 
 	CDEBUG(D_SEC, "del sec %p(%s)\n", sec, sec->ps_policy->sp_name);
 }
@@ -134,7 +134,7 @@ static void sec_process_ctx_list(void)
 		spin_unlock(&sec_gc_ctx_list_lock);
 
 		LASSERT(ctx->cc_sec);
-		LASSERT(cfs_atomic_read(&ctx->cc_refcount) == 1);
+		LASSERT(atomic_read(&ctx->cc_refcount) == 1);
 		CDEBUG(D_SEC, "gc pick up ctx %p(%u->%s)\n",
 		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 		sptlrpc_cli_ctx_put(ctx, 1);
@@ -191,7 +191,7 @@ again:
 		cfs_list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
 			/* if someone is waiting to be deleted, let it
 			 * proceed as soon as possible. */
-			if (cfs_atomic_read(&sec_gc_wait_del)) {
+			if (atomic_read(&sec_gc_wait_del)) {
 				CDEBUG(D_SEC, "deletion pending, start over\n");
 				mutex_unlock(&sec_gc_mutex);
 				goto again;

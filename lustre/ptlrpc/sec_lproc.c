@@ -97,22 +97,22 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
 
         sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str));
 
-        seq_printf(seq, "rpc flavor:    %s\n",
-                   sptlrpc_flavor2name_base(sec->ps_flvr.sf_rpc));
-        seq_printf(seq, "bulk flavor:   %s\n",
-                   sptlrpc_flavor2name_bulk(&sec->ps_flvr, str, sizeof(str)));
-        seq_printf(seq, "flags:         %s\n",
-                   sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str)));
-        seq_printf(seq, "id:            %d\n", sec->ps_id);
-        seq_printf(seq, "refcount:      %d\n",
-                   cfs_atomic_read(&sec->ps_refcount));
-        seq_printf(seq, "nctx:          %d\n", cfs_atomic_read(&sec->ps_nctx));
-        seq_printf(seq, "gc internal    %ld\n", sec->ps_gc_interval);
-        seq_printf(seq, "gc next        %ld\n",
-                   sec->ps_gc_interval ?
-                   sec->ps_gc_next - cfs_time_current_sec() : 0);
+	seq_printf(seq, "rpc flavor:	%s\n",
+		   sptlrpc_flavor2name_base(sec->ps_flvr.sf_rpc));
+	seq_printf(seq, "bulk flavor:	%s\n",
+		   sptlrpc_flavor2name_bulk(&sec->ps_flvr, str, sizeof(str)));
+	seq_printf(seq, "flags:		%s\n",
+		   sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str)));
+	seq_printf(seq, "id:		%d\n", sec->ps_id);
+	seq_printf(seq, "refcount:	%d\n",
+		   atomic_read(&sec->ps_refcount));
+	seq_printf(seq, "nctx:	%d\n", atomic_read(&sec->ps_nctx));
+	seq_printf(seq, "gc internal	%ld\n", sec->ps_gc_interval);
+	seq_printf(seq, "gc next	%ld\n",
+		   sec->ps_gc_interval ?
+		   sec->ps_gc_next - cfs_time_current_sec() : 0);
 
-        sptlrpc_sec_put(sec);
+	sptlrpc_sec_put(sec);
 out:
         return 0;
 }

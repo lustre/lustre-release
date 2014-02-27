@@ -65,21 +65,21 @@ static void qmt_pool_free(const struct lu_env *, struct qmt_pool_info *);
  */
 static inline void qpi_getref(struct qmt_pool_info *pool)
 {
-	cfs_atomic_inc(&pool->qpi_ref);
+	atomic_inc(&pool->qpi_ref);
 }
 
 static inline void qpi_putref(const struct lu_env *env,
 			      struct qmt_pool_info *pool)
 {
 	LASSERT(atomic_read(&pool->qpi_ref) > 0);
-	if (cfs_atomic_dec_and_test(&pool->qpi_ref))
+	if (atomic_dec_and_test(&pool->qpi_ref))
 		qmt_pool_free(env, pool);
 }
 
 static inline void qpi_putref_locked(struct qmt_pool_info *pool)
 {
-	LASSERT(cfs_atomic_read(&pool->qpi_ref) > 1);
-	cfs_atomic_dec(&pool->qpi_ref);
+	LASSERT(atomic_read(&pool->qpi_ref) > 1);
+	atomic_dec(&pool->qpi_ref);
 }
 
 /*
@@ -155,7 +155,7 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 		   "    least qunit: %lu\n",
 		   pool->qpi_key & 0x0000ffff,
 		   RES_NAME(pool->qpi_key >> 16),
-		   cfs_atomic_read(&pool->qpi_ref),
+		   atomic_read(&pool->qpi_ref),
 		   pool->qpi_least_qunit);
 
 	for (type = 0; type < MAXQUOTAS; type++)
@@ -164,7 +164,7 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 			   "        #lqe: %d\n",
 			   QTYPE_NAME(type),
 			   pool->qpi_slv_nr[type],
-		    cfs_atomic_read(&pool->qpi_site[type]->lqs_hash->hs_count));
+		    atomic_read(&pool->qpi_site[type]->lqs_hash->hs_count));
 
 	return 0;
 }

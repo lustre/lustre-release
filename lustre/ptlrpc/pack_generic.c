@@ -349,14 +349,14 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         if (rc)
                 RETURN(rc);
 
-        rs = req->rq_reply_state;
-        cfs_atomic_set(&rs->rs_refcount, 1);    /* 1 ref for rq_reply_state */
-        rs->rs_cb_id.cbid_fn = reply_out_callback;
-        rs->rs_cb_id.cbid_arg = rs;
+	rs = req->rq_reply_state;
+	atomic_set(&rs->rs_refcount, 1);	/* 1 ref for rq_reply_state */
+	rs->rs_cb_id.cbid_fn = reply_out_callback;
+	rs->rs_cb_id.cbid_arg = rs;
 	rs->rs_svcpt = req->rq_rqbd->rqbd_svcpt;
-        CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
-        CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
-        CFS_INIT_LIST_HEAD(&rs->rs_list);
+	CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
+	CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
+	CFS_INIT_LIST_HEAD(&rs->rs_list);
 	spin_lock_init(&rs->rs_lock);
 
         req->rq_replen = msg_len;
@@ -511,18 +511,18 @@ EXPORT_SYMBOL(lustre_shrink_msg);
 
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 {
-        PTLRPC_RS_DEBUG_LRU_DEL(rs);
+	PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
-        LASSERT (cfs_atomic_read(&rs->rs_refcount) == 0);
-        LASSERT (!rs->rs_difficult || rs->rs_handled);
-        LASSERT (!rs->rs_on_net);
-        LASSERT (!rs->rs_scheduled);
-        LASSERT (rs->rs_export == NULL);
-        LASSERT (rs->rs_nlocks == 0);
-        LASSERT (cfs_list_empty(&rs->rs_exp_list));
-        LASSERT (cfs_list_empty(&rs->rs_obd_list));
+	LASSERT(atomic_read(&rs->rs_refcount) == 0);
+	LASSERT(!rs->rs_difficult || rs->rs_handled);
+	LASSERT(!rs->rs_on_net);
+	LASSERT(!rs->rs_scheduled);
+	LASSERT(rs->rs_export == NULL);
+	LASSERT(rs->rs_nlocks == 0);
+	LASSERT(cfs_list_empty(&rs->rs_exp_list));
+	LASSERT(cfs_list_empty(&rs->rs_obd_list));
 
-        sptlrpc_svc_free_rs(rs);
+	sptlrpc_svc_free_rs(rs);
 }
 EXPORT_SYMBOL(lustre_free_reply_state);
 
@@ -2457,30 +2457,30 @@ void _debug_req(struct ptlrpc_request *req,
         else if (req->rq_export && req->rq_export->exp_connection)
                 nid = req->rq_export->exp_connection->c_peer.nid;
 
-        va_start(args, fmt);
-        libcfs_debug_vmsg2(msgdata, fmt, args,
-                           " req@%p x"LPU64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
-                           " lens %d/%d e %d to %d dl "CFS_TIME_T" ref %d "
-                           "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
-                           req, req->rq_xid, req->rq_transno,
-                           req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
-                           req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
-                           req->rq_import ?
-                                req->rq_import->imp_obd->obd_name :
-                                req->rq_export ?
-                                     req->rq_export->exp_client_uuid.uuid :
-                                     "<?>",
-                           libcfs_nid2str(nid),
-                           req->rq_request_portal, req->rq_reply_portal,
-                           req->rq_reqlen, req->rq_replen,
-                           req->rq_early_count, req->rq_timedout,
-                           req->rq_deadline,
-                           cfs_atomic_read(&req->rq_refcount),
-                           DEBUG_REQ_FLAGS(req),
-                           req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
-                           rep_ok ? lustre_msg_get_flags(req->rq_repmsg) : -1,
-                           req->rq_status,
-                           rep_ok ? lustre_msg_get_status(req->rq_repmsg) : -1);
+	va_start(args, fmt);
+	libcfs_debug_vmsg2(msgdata, fmt, args,
+			   " req@%p x"LPU64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
+			   " lens %d/%d e %d to %d dl "CFS_TIME_T" ref %d "
+			   "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+			   req, req->rq_xid, req->rq_transno,
+			   req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
+			   req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
+			   req->rq_import ?
+				req->rq_import->imp_obd->obd_name :
+				req->rq_export ?
+					req->rq_export->exp_client_uuid.uuid :
+					"<?>",
+			   libcfs_nid2str(nid),
+			   req->rq_request_portal, req->rq_reply_portal,
+			   req->rq_reqlen, req->rq_replen,
+			   req->rq_early_count, req->rq_timedout,
+			   req->rq_deadline,
+			   atomic_read(&req->rq_refcount),
+			   DEBUG_REQ_FLAGS(req),
+			   req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
+			   rep_ok ? lustre_msg_get_flags(req->rq_repmsg) : -1,
+			   req->rq_status,
+			   rep_ok ? lustre_msg_get_status(req->rq_repmsg) : -1);
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);

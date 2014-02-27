@@ -110,7 +110,7 @@ static void nrs_policy_stop0(struct ptlrpc_nrs_policy *policy)
 
 	policy->pol_state = NRS_POL_STATE_STOPPED;
 
-	if (cfs_atomic_dec_and_test(&policy->pol_desc->pd_refs))
+	if (atomic_dec_and_test(&policy->pol_desc->pd_refs))
 		module_put(policy->pol_desc->pd_owner);
 
 	EXIT;
@@ -252,9 +252,9 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 	 * Increase the module usage count for policies registering from other
 	 * modules.
 	 */
-	if (cfs_atomic_inc_return(&policy->pol_desc->pd_refs) == 1 &&
+	if (atomic_inc_return(&policy->pol_desc->pd_refs) == 1 &&
 	    !try_module_get(policy->pol_desc->pd_owner)) {
-		cfs_atomic_dec(&policy->pol_desc->pd_refs);
+		atomic_dec(&policy->pol_desc->pd_refs);
 		CERROR("NRS: cannot get module for policy %s; is it alive?\n",
 		       policy->pol_desc->pd_name);
 		RETURN(-ENODEV);
@@ -274,7 +274,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 
 		spin_lock(&nrs->nrs_lock);
 		if (rc != 0) {
-			if (cfs_atomic_dec_and_test(&policy->pol_desc->pd_refs))
+			if (atomic_dec_and_test(&policy->pol_desc->pd_refs))
 				module_put(policy->pol_desc->pd_owner);
 
 			policy->pol_state = NRS_POL_STATE_STOPPED;
@@ -1206,7 +1206,7 @@ int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 	if ((conf->nc_flags & PTLRPC_NRS_FL_REG_EXTERN) != 0)
 		desc->pd_owner	 = conf->nc_owner;
 	desc->pd_flags		 = conf->nc_flags;
-	cfs_atomic_set(&desc->pd_refs, 0);
+	atomic_set(&desc->pd_refs, 0);
 
 	/**
 	 * For policies that are held in the same module as NRS (currently

@@ -124,7 +124,7 @@ struct qsd_instance {
  */
 struct qsd_qtype_info {
 	/* reference count incremented by each user of this structure */
-	cfs_atomic_t		 qqi_ref;
+	atomic_t		 qqi_ref;
 
 	/* quota type, either USRQUOTA or GRPQUOTA
 	 * immutable after creation. */
@@ -215,13 +215,13 @@ static inline struct qsd_qtype_info *lqe2qqi(struct lquota_entry *lqe)
 /* qqi_getref/putref is used to track users of a qqi structure  */
 static inline void qqi_getref(struct qsd_qtype_info *qqi)
 {
-	cfs_atomic_inc(&qqi->qqi_ref);
+	atomic_inc(&qqi->qqi_ref);
 }
 
 static inline void qqi_putref(struct qsd_qtype_info *qqi)
 {
-	LASSERT(cfs_atomic_read(&qqi->qqi_ref) > 0);
-	cfs_atomic_dec(&qqi->qqi_ref);
+	LASSERT(atomic_read(&qqi->qqi_ref) > 0);
+	atomic_dec(&qqi->qqi_ref);
 }
 
 #define QSD_RES_TYPE(qsd) ((qsd)->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT)

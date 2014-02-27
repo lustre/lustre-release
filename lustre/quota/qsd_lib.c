@@ -305,16 +305,16 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 	 *   qsd_glb_blocking_ast() might haven't been called yet when we
 	 *   get here.
 	 */
-	while (cfs_atomic_read(&qqi->qqi_ref) > 1) {
+	while (atomic_read(&qqi->qqi_ref) > 1) {
 		CDEBUG(D_QUOTA, "qqi reference count %u, repeat: %d\n",
-		       cfs_atomic_read(&qqi->qqi_ref), repeat);
+		       atomic_read(&qqi->qqi_ref), repeat);
 		repeat++;
 		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
 						cfs_time_seconds(1));
 	}
 
 	/* by now, all qqi users should have gone away */
-	LASSERT(cfs_atomic_read(&qqi->qqi_ref) == 1);
+	LASSERT(atomic_read(&qqi->qqi_ref) == 1);
 	lu_ref_fini(&qqi->qqi_reference);
 
 	/* release accounting object */
@@ -370,7 +370,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	if (qqi == NULL)
 		RETURN(-ENOMEM);
 	qsd->qsd_type_array[qtype] = qqi;
-	cfs_atomic_set(&qqi->qqi_ref, 1); /* referenced from qsd */
+	atomic_set(&qqi->qqi_ref, 1); /* referenced from qsd */
 
 	/* set backpointer and other parameters */
 	qqi->qqi_qsd   = qsd;

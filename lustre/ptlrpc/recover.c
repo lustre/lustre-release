@@ -328,7 +328,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state == LUSTRE_IMP_NEW || imp->imp_deactive ||
-	    cfs_atomic_read(&imp->imp_inval_count))
+	    atomic_read(&imp->imp_inval_count))
 		rc = -EINVAL;
 	spin_unlock(&imp->imp_lock);
         if (rc)

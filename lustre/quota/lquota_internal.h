@@ -147,7 +147,7 @@ struct lquota_entry {
 	struct lquota_site	*lqe_site;
 
 	/* reference counter */
-	cfs_atomic_t		 lqe_ref;
+	atomic_t		 lqe_ref;
 
 	/* linked to list of lqes which:
 	 * - need quota space adjustment on slave
@@ -220,7 +220,7 @@ struct lquota_site {
 static inline void lqe_getref(struct lquota_entry *lqe)
 {
 	LASSERT(lqe != NULL);
-	cfs_atomic_inc(&lqe->lqe_ref);
+	atomic_inc(&lqe->lqe_ref);
 }
 
 static inline void lqe_putref(struct lquota_entry *lqe)

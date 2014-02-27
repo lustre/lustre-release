@@ -261,15 +261,15 @@ struct gss_svc_reqctx {
 };
 
 struct gss_cli_ctx {
-        struct ptlrpc_cli_ctx   gc_base;
-        __u32                   gc_flavor;
-        __u32                   gc_proc;
-        __u32                   gc_win;
-        cfs_atomic_t            gc_seq;
-        rawobj_t                gc_handle;
-        struct gss_ctx         *gc_mechctx;
-        /* handle for the buddy svc ctx */
-        rawobj_t                gc_svc_handle;
+	struct ptlrpc_cli_ctx	gc_base;
+	__u32			gc_flavor;
+	__u32			gc_proc;
+	__u32			gc_win;
+	atomic_t		gc_seq;
+	rawobj_t		gc_handle;
+	struct gss_ctx		*gc_mechctx;
+	/* handle for the buddy svc ctx */
+	rawobj_t		gc_svc_handle;
 };
 
 struct gss_cli_ctx_keyring {

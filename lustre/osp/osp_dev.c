@@ -779,7 +779,7 @@ static struct lu_device *osp_device_free(const struct lu_env *env,
 
 	ENTRY;
 
-	if (cfs_atomic_read(&lu->ld_ref) && lu->ld_site) {
+	if (atomic_read(&lu->ld_ref) && lu->ld_site) {
 		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
 		lu_site_print(env, lu->ld_site, &msgdata, lu_cdebug_printer);
 	}

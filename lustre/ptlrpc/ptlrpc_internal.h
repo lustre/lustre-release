@@ -293,7 +293,7 @@ void sptlrpc_fini(void);
 
 static inline int ll_rpc_recoverable_error(int rc)
 {
-        return (rc == -ENOTCONN || rc == -ENODEV);
+	return (rc == -ENOTCONN || rc == -ENODEV);
 }
 
 #if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
@@ -313,7 +313,7 @@ static inline void tgt_mod_exit(void)
 
 static inline void ptlrpc_reqset_put(struct ptlrpc_request_set *set)
 {
-        if (cfs_atomic_dec_and_test(&set->set_refcount))
-                OBD_FREE_PTR(set);
+	if (atomic_dec_and_test(&set->set_refcount))
+		OBD_FREE_PTR(set);
 }
 #endif /* PTLRPC_INTERNAL_H */

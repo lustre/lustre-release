@@ -87,7 +87,7 @@ static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
 
 static void nrs_tbf_rule_fini(struct nrs_tbf_rule *rule)
 {
-	LASSERT(cfs_atomic_read(&rule->tr_ref) == 0);
+	LASSERT(atomic_read(&rule->tr_ref) == 0);
 	LASSERT(cfs_list_empty(&rule->tr_cli_list));
 	LASSERT(cfs_list_empty(&rule->tr_linkage));
 
@@ -103,7 +103,7 @@ static void nrs_tbf_rule_fini(struct nrs_tbf_rule *rule)
  */
 static void nrs_tbf_rule_put(struct nrs_tbf_rule *rule)
 {
-	if (cfs_atomic_dec_and_test(&rule->tr_ref))
+	if (atomic_dec_and_test(&rule->tr_ref))
 		nrs_tbf_rule_fini(rule);
 }
 
@@ -112,7 +112,7 @@ static void nrs_tbf_rule_put(struct nrs_tbf_rule *rule)
  */
 static inline void nrs_tbf_rule_get(struct nrs_tbf_rule *rule)
 {
-	cfs_atomic_inc(&rule->tr_ref);
+	atomic_inc(&rule->tr_ref);
 }
 
 static void
@@ -137,7 +137,7 @@ nrs_tbf_cli_reset_value(struct nrs_tbf_head *head,
 	cli->tc_depth = rule->tr_depth;
 	cli->tc_ntoken = rule->tr_depth;
 	cli->tc_check_time = ktime_to_ns(ktime_get());
-	cli->tc_rule_sequence = cfs_atomic_read(&head->th_rule_sequence);
+	cli->tc_rule_sequence = atomic_read(&head->th_rule_sequence);
 	cli->tc_rule_generation = rule->tr_generation;
 
 	if (cli->tc_in_heap)
@@ -252,7 +252,7 @@ nrs_tbf_cli_init(struct nrs_tbf_head *head,
 	head->th_ops->o_cli_init(cli, req);
 	CFS_INIT_LIST_HEAD(&cli->tc_list);
 	CFS_INIT_LIST_HEAD(&cli->tc_linkage);
-	cfs_atomic_set(&cli->tc_ref, 1);
+	atomic_set(&cli->tc_ref, 1);
 	rule = nrs_tbf_rule_match(head, cli);
 	nrs_tbf_cli_reset(head, rule, cli);
 }
@@ -262,7 +262,7 @@ nrs_tbf_cli_fini(struct nrs_tbf_client *cli)
 {
 	LASSERT(cfs_list_empty(&cli->tc_list));
 	LASSERT(!cli->tc_in_heap);
-	LASSERT(cfs_atomic_read(&cli->tc_ref) == 0);
+	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_rule_put(cli);
 	OBD_FREE_PTR(cli);
 }
@@ -289,7 +289,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	rule->tr_rpc_rate = start->tc_rpc_rate;
 	rule->tr_nsecs = NSEC_PER_SEC / rule->tr_rpc_rate;
 	rule->tr_depth = tbf_depth;
-	cfs_atomic_set(&rule->tr_ref, 1);
+	atomic_set(&rule->tr_ref, 1);
 	CFS_INIT_LIST_HEAD(&rule->tr_cli_list);
 	CFS_INIT_LIST_HEAD(&rule->tr_nids);
 
@@ -310,7 +310,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	cfs_list_add(&rule->tr_linkage, &head->th_list);
 	rule->tr_head = head;
 	spin_unlock(&head->th_rule_lock);
-	cfs_atomic_inc(&head->th_rule_sequence);
+	atomic_inc(&head->th_rule_sequence);
 	if (start->tc_rule_flags & NTRS_DEFAULT) {
 		rule->tr_flags |= NTRS_DEFAULT;
 		LASSERT(head->th_rule == NULL);
@@ -472,7 +472,7 @@ static void nrs_tbf_jobid_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	cfs_atomic_inc(&cli->tc_ref);
+	atomic_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_jobid_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -481,7 +481,7 @@ static void nrs_tbf_jobid_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	cfs_atomic_dec(&cli->tc_ref);
+	atomic_dec(&cli->tc_ref);
 }
 
 static void nrs_tbf_jobid_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -491,7 +491,7 @@ static void nrs_tbf_jobid_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	LASSERT(cfs_atomic_read(&cli->tc_ref) == 0);
+	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_fini(cli);
 }
 
@@ -601,7 +601,7 @@ nrs_tbf_jobid_cli_put(struct nrs_tbf_head *head,
 		cli = cfs_list_entry(bkt->ntb_lru.next,
 				     struct nrs_tbf_client,
 				     tc_lru);
-		LASSERT(cfs_atomic_read(&cli->tc_ref) == 0);
+		LASSERT(atomic_read(&cli->tc_ref) == 0);
 		cfs_hash_bd_del_locked(hs, &bd, &cli->tc_hnode);
 		cfs_list_move(&cli->tc_lru, &zombies);
 	}
@@ -822,7 +822,7 @@ nrs_tbf_jobid_rule_dump(struct nrs_tbf_rule *rule, char *buff, int length)
 			rule->tr_name,
 			rule->tr_jobids_str,
 			rule->tr_rpc_rate,
-			cfs_atomic_read(&rule->tr_ref) - 1);
+			atomic_read(&rule->tr_ref) - 1);
 }
 
 static int
@@ -898,7 +898,7 @@ static void nrs_tbf_nid_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	cfs_atomic_inc(&cli->tc_ref);
+	atomic_inc(&cli->tc_ref);
 }
 
 static void nrs_tbf_nid_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -907,7 +907,7 @@ static void nrs_tbf_nid_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	cfs_atomic_dec(&cli->tc_ref);
+	atomic_dec(&cli->tc_ref);
 }
 
 static void nrs_tbf_nid_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -916,9 +916,9 @@ static void nrs_tbf_nid_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 						     struct nrs_tbf_client,
 						     tc_hnode);
 
-	LASSERTF(cfs_atomic_read(&cli->tc_ref) == 0,
+	LASSERTF(atomic_read(&cli->tc_ref) == 0,
 		 "Busy TBF object from client with NID %s, with %d refs\n",
-		 libcfs_nid2str(cli->tc_nid), cfs_atomic_read(&cli->tc_ref));
+		 libcfs_nid2str(cli->tc_nid), atomic_read(&cli->tc_ref));
 
 	nrs_tbf_cli_fini(cli);
 }
@@ -1029,7 +1029,7 @@ nrs_tbf_nid_rule_dump(struct nrs_tbf_rule *rule, char *buff, int length)
 			rule->tr_name,
 			rule->tr_nids_str,
 			rule->tr_rpc_rate,
-			cfs_atomic_read(&rule->tr_ref) - 1);
+			atomic_read(&rule->tr_ref) - 1);
 }
 
 static int
@@ -1135,7 +1135,7 @@ static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	if (head->th_binheap == NULL)
 		GOTO(out_free_head, rc = -ENOMEM);
 
-	cfs_atomic_set(&head->th_rule_sequence, 0);
+	atomic_set(&head->th_rule_sequence, 0);
 	spin_lock_init(&head->th_rule_lock);
 	CFS_INIT_LIST_HEAD(&head->th_list);
 	hrtimer_init(&head->th_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
@@ -1297,7 +1297,7 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 		spin_lock(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 		LASSERT(cli->tc_rule);
 		if (cli->tc_rule_sequence !=
-		    cfs_atomic_read(&head->th_rule_sequence) ||
+		    atomic_read(&head->th_rule_sequence) ||
 		    cli->tc_rule->tr_flags & NTRS_STOPPING) {
 			struct nrs_tbf_rule *rule;
 
@@ -1321,7 +1321,7 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 	nrs_tbf_cli_init(head, cli, req);
 	tmp = head->th_ops->o_cli_findadd(head, cli);
 	if (tmp != cli) {
-		cfs_atomic_dec(&cli->tc_ref);
+		atomic_dec(&cli->tc_ref);
 		nrs_tbf_cli_fini(cli);
 		cli = tmp;
 	}

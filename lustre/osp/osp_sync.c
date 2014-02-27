@@ -344,7 +344,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 	LASSERT(d);
 
 	CDEBUG(D_HA, "reply req %p/%d, rc %d, transno %u\n", req,
-	       cfs_atomic_read(&req->rq_refcount),
+	       atomic_read(&req->rq_refcount),
 	       rc, (unsigned) req->rq_transno);
 	LASSERT(rc || req->rq_transno);
 
@@ -1215,8 +1215,8 @@ static int osp_sync_id_traction_init(struct osp_device *d)
 	mutex_lock(&osp_id_tracker_sem);
 	cfs_list_for_each_entry(tr, &osp_id_tracker_list, otr_list) {
 		if (tr->otr_dev == d->opd_storage) {
-			LASSERT(cfs_atomic_read(&tr->otr_refcount));
-			cfs_atomic_inc(&tr->otr_refcount);
+			LASSERT(atomic_read(&tr->otr_refcount));
+			atomic_inc(&tr->otr_refcount);
 			d->opd_syn_tracker = tr;
 			found = tr;
 			break;
@@ -1232,7 +1232,7 @@ static int osp_sync_id_traction_init(struct osp_device *d)
 			tr->otr_dev = d->opd_storage;
 			tr->otr_next_id = 1;
 			tr->otr_committed_id = 0;
-			cfs_atomic_set(&tr->otr_refcount, 1);
+			atomic_set(&tr->otr_refcount, 1);
 			CFS_INIT_LIST_HEAD(&tr->otr_wakeup_list);
 			cfs_list_add(&tr->otr_list, &osp_id_tracker_list);
 			tr->otr_tx_cb.dtc_txn_commit =
@@ -1264,7 +1264,7 @@ static void osp_sync_id_traction_fini(struct osp_device *d)
 	osp_sync_remove_from_tracker(d);
 
 	mutex_lock(&osp_id_tracker_sem);
-	if (cfs_atomic_dec_and_test(&tr->otr_refcount)) {
+	if (atomic_dec_and_test(&tr->otr_refcount)) {
 		dt_txn_callback_del(d->opd_storage, &tr->otr_tx_cb);
 		LASSERT(cfs_list_empty(&tr->otr_wakeup_list));
 		cfs_list_del(&tr->otr_list);

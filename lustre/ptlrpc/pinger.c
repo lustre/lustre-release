@@ -802,9 +802,9 @@ static int pinger_check_rpcs(void *arg)
         pd->pd_this_ping = curtime;
 	mutex_unlock(&pinger_mutex);
 
-        /* Might be empty, that's OK. */
-        if (cfs_atomic_read(&set->set_remaining) == 0)
-                CDEBUG(D_RPCTRACE, "nothing to ping\n");
+	/* Might be empty, that's OK. */
+	if (atomic_read(&set->set_remaining) == 0)
+		CDEBUG(D_RPCTRACE, "nothing to ping\n");
 
         cfs_list_for_each(iter, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -849,10 +849,10 @@ do_check_set:
 		spin_lock(&imp->imp_lock);
 		if (!cfs_list_empty(&req->rq_list)) {
 			cfs_list_del_init(&req->rq_list);
-			cfs_atomic_dec(&imp->imp_inflight);
+			atomic_dec(&imp->imp_inflight);
 		}
 		spin_unlock(&imp->imp_lock);
-		cfs_atomic_dec(&set->set_remaining);
+		atomic_dec(&set->set_remaining);
 	}
 	mutex_unlock(&pinger_mutex);
 

@@ -118,42 +118,42 @@ static
 struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 {
 	static DEFINE_MUTEX(load_mutex);
-        static cfs_atomic_t       loaded = CFS_ATOMIC_INIT(0);
-        struct ptlrpc_sec_policy *policy;
-        __u16                     number = SPTLRPC_FLVR_POLICY(flavor);
-        __u16                     flag = 0;
+	static atomic_t		  loaded = ATOMIC_INIT(0);
+	struct ptlrpc_sec_policy *policy;
+	__u16			  number = SPTLRPC_FLVR_POLICY(flavor);
+	__u16			  flag = 0;
 
-        if (number >= SPTLRPC_POLICY_MAX)
-                return NULL;
+	if (number >= SPTLRPC_POLICY_MAX)
+		return NULL;
 
-        while (1) {
+	while (1) {
 		read_lock(&policy_lock);
 		policy = policies[number];
 		if (policy && !try_module_get(policy->sp_owner))
 			policy = NULL;
 		if (policy == NULL)
-			flag = cfs_atomic_read(&loaded);
+			flag = atomic_read(&loaded);
 		read_unlock(&policy_lock);
 
-                if (policy != NULL || flag != 0 ||
-                    number != SPTLRPC_POLICY_GSS)
-                        break;
+		if (policy != NULL || flag != 0 ||
+		    number != SPTLRPC_POLICY_GSS)
+			break;
 
-                /* try to load gss module, once */
+		/* try to load gss module, once */
 		mutex_lock(&load_mutex);
-		if (cfs_atomic_read(&loaded) == 0) {
+		if (atomic_read(&loaded) == 0) {
 			if (request_module("ptlrpc_gss") == 0)
 				CDEBUG(D_SEC,
 				       "module ptlrpc_gss loaded on demand\n");
-                        else
-                                CERROR("Unable to load module ptlrpc_gss\n");
+			else
+				CERROR("Unable to load module ptlrpc_gss\n");
 
-                        cfs_atomic_set(&loaded, 1);
-                }
+			atomic_set(&loaded, 1);
+		}
 		mutex_unlock(&load_mutex);
-        }
+	}
 
-        return policy;
+	return policy;
 }
 
 __u32 sptlrpc_name2flavor_base(const char *name)
@@ -296,22 +296,22 @@ struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
 
 struct ptlrpc_cli_ctx *sptlrpc_cli_ctx_get(struct ptlrpc_cli_ctx *ctx)
 {
-        cfs_atomic_inc(&ctx->cc_refcount);
-        return ctx;
+	atomic_inc(&ctx->cc_refcount);
+	return ctx;
 }
 EXPORT_SYMBOL(sptlrpc_cli_ctx_get);
 
 void sptlrpc_cli_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync)
 {
-        struct ptlrpc_sec *sec = ctx->cc_sec;
+	struct ptlrpc_sec *sec = ctx->cc_sec;
 
-        LASSERT(sec);
-        LASSERT_ATOMIC_POS(&ctx->cc_refcount);
+	LASSERT(sec);
+	LASSERT_ATOMIC_POS(&ctx->cc_refcount);
 
-        if (!cfs_atomic_dec_and_test(&ctx->cc_refcount))
-                return;
+	if (!atomic_dec_and_test(&ctx->cc_refcount))
+		return;
 
-        sec->ps_policy->sp_cops->release_ctx(sec, ctx, sync);
+	sec->ps_policy->sp_cops->release_ctx(sec, ctx, sync);
 }
 EXPORT_SYMBOL(sptlrpc_cli_ctx_put);
 
@@ -933,7 +933,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 		RETURN(-ENOMEM);
 
 	spin_lock_init(&req->rq_lock);
-	cfs_atomic_set(&req->rq_refcount, 10000);
+	atomic_set(&req->rq_refcount, 10000);
 	CFS_INIT_LIST_HEAD(&req->rq_ctx_chain);
 	init_waitqueue_head(&req->rq_reply_waitq);
 	init_waitqueue_head(&req->rq_set_waitq);
@@ -1214,11 +1214,11 @@ void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req)
 /*
  * "fixed" sec (e.g. null) use sec_id < 0
  */
-static cfs_atomic_t sptlrpc_sec_id = CFS_ATOMIC_INIT(1);
+static atomic_t sptlrpc_sec_id = ATOMIC_INIT(1);
 
 int sptlrpc_get_next_secid(void)
 {
-        return cfs_atomic_inc_return(&sptlrpc_sec_id);
+	return atomic_inc_return(&sptlrpc_sec_id);
 }
 EXPORT_SYMBOL(sptlrpc_get_next_secid);
 
@@ -1270,23 +1270,23 @@ static void sptlrpc_sec_kill(struct ptlrpc_sec *sec)
 
 struct ptlrpc_sec *sptlrpc_sec_get(struct ptlrpc_sec *sec)
 {
-        if (sec)
-                cfs_atomic_inc(&sec->ps_refcount);
+	if (sec)
+		atomic_inc(&sec->ps_refcount);
 
-        return sec;
+	return sec;
 }
 EXPORT_SYMBOL(sptlrpc_sec_get);
 
 void sptlrpc_sec_put(struct ptlrpc_sec *sec)
 {
-        if (sec) {
-                LASSERT_ATOMIC_POS(&sec->ps_refcount);
+	if (sec) {
+		LASSERT_ATOMIC_POS(&sec->ps_refcount);
 
-                if (cfs_atomic_dec_and_test(&sec->ps_refcount)) {
-                        sptlrpc_gc_del_sec(sec);
-                        sec_cop_destroy_sec(sec);
-                }
-        }
+		if (atomic_dec_and_test(&sec->ps_refcount)) {
+			sptlrpc_gc_del_sec(sec);
+			sec_cop_destroy_sec(sec);
+		}
+	}
 }
 EXPORT_SYMBOL(sptlrpc_sec_put);
 
@@ -1329,19 +1329,19 @@ struct ptlrpc_sec * sptlrpc_sec_create(struct obd_import *imp,
                 }
         }
 
-        sec = policy->sp_cops->create_sec(imp, svc_ctx, sf);
-        if (sec) {
-                cfs_atomic_inc(&sec->ps_refcount);
+	sec = policy->sp_cops->create_sec(imp, svc_ctx, sf);
+	if (sec) {
+		atomic_inc(&sec->ps_refcount);
 
-                sec->ps_part = sp;
+		sec->ps_part = sp;
 
-                if (sec->ps_gc_interval && policy->sp_cops->gc_ctx)
-                        sptlrpc_gc_add_sec(sec);
-        } else {
-                sptlrpc_policy_put(policy);
-        }
+		if (sec->ps_gc_interval && policy->sp_cops->gc_ctx)
+			sptlrpc_gc_add_sec(sec);
+	} else {
+		sptlrpc_policy_put(policy);
+	}
 
-        RETURN(sec);
+	RETURN(sec);
 }
 
 struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp)
@@ -2197,25 +2197,25 @@ void sptlrpc_svc_free_rs(struct ptlrpc_reply_state *rs)
 
 void sptlrpc_svc_ctx_addref(struct ptlrpc_request *req)
 {
-        struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
+	struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
 
-        if (ctx != NULL)
-                cfs_atomic_inc(&ctx->sc_refcount);
+	if (ctx != NULL)
+		atomic_inc(&ctx->sc_refcount);
 }
 
 void sptlrpc_svc_ctx_decref(struct ptlrpc_request *req)
 {
-        struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
+	struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
 
-        if (ctx == NULL)
-                return;
+	if (ctx == NULL)
+		return;
 
-        LASSERT_ATOMIC_POS(&ctx->sc_refcount);
-        if (cfs_atomic_dec_and_test(&ctx->sc_refcount)) {
-                if (ctx->sc_policy->sp_sops->free_ctx)
-                        ctx->sc_policy->sp_sops->free_ctx(ctx);
-        }
-        req->rq_svc_ctx = NULL;
+	LASSERT_ATOMIC_POS(&ctx->sc_refcount);
+	if (atomic_dec_and_test(&ctx->sc_refcount)) {
+		if (ctx->sc_policy->sp_sops->free_ctx)
+			ctx->sc_policy->sp_sops->free_ctx(ctx);
+	}
+	req->rq_svc_ctx = NULL;
 }
 
 void sptlrpc_svc_ctx_invalidate(struct ptlrpc_request *req)

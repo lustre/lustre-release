@@ -404,31 +404,31 @@ struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
 
 	write_lock(&plsec->pls_lock);
 
-        ctx = plsec->pls_ctx;
-        if (ctx) {
-                cfs_atomic_inc(&ctx->cc_refcount);
+	ctx = plsec->pls_ctx;
+	if (ctx) {
+		atomic_inc(&ctx->cc_refcount);
 
-                if (ctx_new)
-                        OBD_FREE_PTR(ctx_new);
-        } else if (ctx_new) {
-                ctx = ctx_new;
+		if (ctx_new)
+			OBD_FREE_PTR(ctx_new);
+	} else if (ctx_new) {
+		ctx = ctx_new;
 
-                cfs_atomic_set(&ctx->cc_refcount, 1); /* for cache */
-                ctx->cc_sec = &plsec->pls_base;
-                ctx->cc_ops = &plain_ctx_ops;
-                ctx->cc_expire = 0;
-                ctx->cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_UPTODATE;
-                ctx->cc_vcred.vc_uid = 0;
+		atomic_set(&ctx->cc_refcount, 1);	/* for cache */
+		ctx->cc_sec = &plsec->pls_base;
+		ctx->cc_ops = &plain_ctx_ops;
+		ctx->cc_expire = 0;
+		ctx->cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_UPTODATE;
+		ctx->cc_vcred.vc_uid = 0;
 		spin_lock_init(&ctx->cc_lock);
-                CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
-                CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
+		CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
+		CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
 
-                plsec->pls_ctx = ctx;
-                cfs_atomic_inc(&plsec->pls_base.ps_nctx);
-                cfs_atomic_inc(&plsec->pls_base.ps_refcount);
+		plsec->pls_ctx = ctx;
+		atomic_inc(&plsec->pls_base.ps_nctx);
+		atomic_inc(&plsec->pls_base.ps_refcount);
 
-                cfs_atomic_inc(&ctx->cc_refcount); /* for caller */
-        }
+		atomic_inc(&ctx->cc_refcount);	/* for caller */
+	}
 
 	write_unlock(&plsec->pls_lock);
 
@@ -438,19 +438,19 @@ struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
 static
 void plain_destroy_sec(struct ptlrpc_sec *sec)
 {
-        struct plain_sec       *plsec = sec2plsec(sec);
-        ENTRY;
+	struct plain_sec *plsec = sec2plsec(sec);
+	ENTRY;
 
-        LASSERT(sec->ps_policy == &plain_policy);
-        LASSERT(sec->ps_import);
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) == 0);
-        LASSERT(cfs_atomic_read(&sec->ps_nctx) == 0);
-        LASSERT(plsec->pls_ctx == NULL);
+	LASSERT(sec->ps_policy == &plain_policy);
+	LASSERT(sec->ps_import);
+	LASSERT(atomic_read(&sec->ps_refcount) == 0);
+	LASSERT(atomic_read(&sec->ps_nctx) == 0);
+	LASSERT(plsec->pls_ctx == NULL);
 
-        class_import_put(sec->ps_import);
+	class_import_put(sec->ps_import);
 
-        OBD_FREE_PTR(plsec);
-        EXIT;
+	OBD_FREE_PTR(plsec);
+	EXIT;
 }
 
 static
@@ -483,8 +483,8 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
 
 	sec = &plsec->pls_base;
 	sec->ps_policy = &plain_policy;
-	cfs_atomic_set(&sec->ps_refcount, 0);
-	cfs_atomic_set(&sec->ps_nctx, 0);
+	atomic_set(&sec->ps_refcount, 0);
+	atomic_set(&sec->ps_nctx, 0);
 	sec->ps_id = sptlrpc_get_next_secid();
 	sec->ps_import = class_import_get(imp);
 	sec->ps_flvr = *sf;
@@ -518,7 +518,7 @@ struct ptlrpc_cli_ctx *plain_lookup_ctx(struct ptlrpc_sec *sec,
 	read_lock(&plsec->pls_lock);
 	ctx = plsec->pls_ctx;
 	if (ctx)
-		cfs_atomic_inc(&ctx->cc_refcount);
+		atomic_inc(&ctx->cc_refcount);
 	read_unlock(&plsec->pls_lock);
 
 	if (unlikely(ctx == NULL))
@@ -531,15 +531,15 @@ static
 void plain_release_ctx(struct ptlrpc_sec *sec,
                        struct ptlrpc_cli_ctx *ctx, int sync)
 {
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
-        LASSERT(cfs_atomic_read(&sec->ps_nctx) > 0);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) == 0);
-        LASSERT(ctx->cc_sec == sec);
+	LASSERT(atomic_read(&sec->ps_refcount) > 0);
+	LASSERT(atomic_read(&sec->ps_nctx) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) == 0);
+	LASSERT(ctx->cc_sec == sec);
 
-        OBD_FREE_PTR(ctx);
+	OBD_FREE_PTR(ctx);
 
-        cfs_atomic_dec(&sec->ps_nctx);
-        sptlrpc_sec_put(sec);
+	atomic_dec(&sec->ps_nctx);
+	sptlrpc_sec_put(sec);
 }
 
 static
@@ -727,7 +727,7 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
  ****************************************/
 
 static struct ptlrpc_svc_ctx plain_svc_ctx = {
-        .sc_refcount    = CFS_ATOMIC_INIT(1),
+	.sc_refcount    = ATOMIC_INIT(1),
         .sc_policy      = &plain_policy,
 };
 
@@ -794,13 +794,13 @@ int plain_accept(struct ptlrpc_request *req)
                 req->rq_pack_bulk = 1;
         }
 
-        req->rq_reqmsg = lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0);
-        req->rq_reqlen = msg->lm_buflens[PLAIN_PACK_MSG_OFF];
+	req->rq_reqmsg = lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0);
+	req->rq_reqlen = msg->lm_buflens[PLAIN_PACK_MSG_OFF];
 
-        req->rq_svc_ctx = &plain_svc_ctx;
-        cfs_atomic_inc(&req->rq_svc_ctx->sc_refcount);
+	req->rq_svc_ctx = &plain_svc_ctx;
+	atomic_inc(&req->rq_svc_ctx->sc_refcount);
 
-        RETURN(SECSVC_OK);
+	RETURN(SECSVC_OK);
 }
 
 static
@@ -834,29 +834,29 @@ int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
                 rs->rs_size = rs_size;
         }
 
-        rs->rs_svc_ctx = req->rq_svc_ctx;
-        cfs_atomic_inc(&req->rq_svc_ctx->sc_refcount);
-        rs->rs_repbuf = (struct lustre_msg *) (rs + 1);
-        rs->rs_repbuf_len = rs_size - sizeof(*rs);
+	rs->rs_svc_ctx = req->rq_svc_ctx;
+	atomic_inc(&req->rq_svc_ctx->sc_refcount);
+	rs->rs_repbuf = (struct lustre_msg *) (rs + 1);
+	rs->rs_repbuf_len = rs_size - sizeof(*rs);
 
-        lustre_init_msg_v2(rs->rs_repbuf, PLAIN_PACK_SEGMENTS, buflens, NULL);
-        rs->rs_msg = lustre_msg_buf_v2(rs->rs_repbuf, PLAIN_PACK_MSG_OFF, 0);
+	lustre_init_msg_v2(rs->rs_repbuf, PLAIN_PACK_SEGMENTS, buflens, NULL);
+	rs->rs_msg = lustre_msg_buf_v2(rs->rs_repbuf, PLAIN_PACK_MSG_OFF, 0);
 
-        req->rq_reply_state = rs;
-        RETURN(0);
+	req->rq_reply_state = rs;
+	RETURN(0);
 }
 
 static
 void plain_free_rs(struct ptlrpc_reply_state *rs)
 {
-        ENTRY;
+	ENTRY;
 
-        LASSERT(cfs_atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
-        cfs_atomic_dec(&rs->rs_svc_ctx->sc_refcount);
+	LASSERT(atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
+	atomic_dec(&rs->rs_svc_ctx->sc_refcount);
 
-        if (!rs->rs_prealloc)
-                OBD_FREE_LARGE(rs, rs->rs_size);
-        EXIT;
+	if (!rs->rs_prealloc)
+		OBD_FREE_LARGE(rs, rs->rs_size);
+	EXIT;
 }
 
 static

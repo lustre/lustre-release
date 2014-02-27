@@ -103,7 +103,7 @@ struct gss_api_mech {
 	struct module           *gm_owner;
 	char                   *gm_name;
 	rawobj_t                gm_oid;
-	cfs_atomic_t            gm_count;
+	atomic_t            gm_count;
 	struct gss_api_ops     *gm_ops;
 	int                     gm_sf_num;
 	struct subflavor_desc  *gm_sfs;

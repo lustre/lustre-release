@@ -139,7 +139,7 @@ static void nrs_crrn_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 	struct nrs_crrn_client *cli = cfs_hlist_entry(hnode,
 						      struct nrs_crrn_client,
 						      cc_hnode);
-	cfs_atomic_inc(&cli->cc_ref);
+	atomic_inc(&cli->cc_ref);
 }
 
 static void nrs_crrn_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -147,7 +147,7 @@ static void nrs_crrn_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
-	cfs_atomic_dec(&cli->cc_ref);
+	atomic_dec(&cli->cc_ref);
 }
 
 static void nrs_crrn_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -155,9 +155,9 @@ static void nrs_crrn_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
-	LASSERTF(cfs_atomic_read(&cli->cc_ref) == 0,
+	LASSERTF(atomic_read(&cli->cc_ref) == 0,
 		 "Busy CRR-N object from client with NID %s, with %d refs\n",
-		 libcfs_nid2str(cli->cc_nid), cfs_atomic_read(&cli->cc_ref));
+		 libcfs_nid2str(cli->cc_nid), atomic_read(&cli->cc_ref));
 
 	OBD_FREE_PTR(cli);
 }
@@ -358,7 +358,7 @@ int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 
 	cli->cc_nid = req->rq_peer.nid;
 
-	cfs_atomic_set(&cli->cc_ref, 1);
+	atomic_set(&cli->cc_ref, 1);
 	tmp = cfs_hash_findadd_unique(net->cn_cli_hash, &cli->cc_nid,
 				      &cli->cc_hnode);
 	if (tmp != cli) {

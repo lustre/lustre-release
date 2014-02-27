@@ -270,18 +270,18 @@ static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
  */
 void ptlrpc_invalidate_import(struct obd_import *imp)
 {
-        cfs_list_t *tmp, *n;
-        struct ptlrpc_request *req;
-        struct l_wait_info lwi;
-        unsigned int timeout;
-        int rc;
+	cfs_list_t *tmp, *n;
+	struct ptlrpc_request *req;
+	struct l_wait_info lwi;
+	unsigned int timeout;
+	int rc;
 
-        cfs_atomic_inc(&imp->imp_inval_count);
+	atomic_inc(&imp->imp_inval_count);
 
-        if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
-                ptlrpc_deactivate_import(imp);
+	if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
+		ptlrpc_deactivate_import(imp);
 
-        LASSERT(imp->imp_invalid);
+	LASSERT(imp->imp_invalid);
 
         /* Wait forever until inflight == 0. We really can't do it another
          * way because in some cases we need to wait for very long reply
@@ -305,40 +305,39 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
                        timeout);
 
-                /* Wait for all requests to error out and call completion
-                 * callbacks. Cap it at obd_timeout -- these should all
-                 * have been locally cancelled by ptlrpc_abort_inflight. */
-                lwi = LWI_TIMEOUT_INTERVAL(
-                        cfs_timeout_cap(cfs_time_seconds(timeout)),
-                        (timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
-                        NULL, NULL);
-                rc = l_wait_event(imp->imp_recovery_waitq,
-                                  (cfs_atomic_read(&imp->imp_inflight) == 0),
-                                  &lwi);
-                if (rc) {
-                        const char *cli_tgt = obd2cli_tgt(imp->imp_obd);
+		/* Wait for all requests to error out and call completion
+		 * callbacks. Cap it at obd_timeout -- these should all
+		 * have been locally cancelled by ptlrpc_abort_inflight. */
+		lwi = LWI_TIMEOUT_INTERVAL(
+			cfs_timeout_cap(cfs_time_seconds(timeout)),
+			(timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
+			NULL, NULL);
+		rc = l_wait_event(imp->imp_recovery_waitq,
+				  (atomic_read(&imp->imp_inflight) == 0),
+				  &lwi);
+		if (rc) {
+			const char *cli_tgt = obd2cli_tgt(imp->imp_obd);
 
-                        CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
-                               cli_tgt, rc,
-                               cfs_atomic_read(&imp->imp_inflight));
+			CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
+			       cli_tgt, rc, atomic_read(&imp->imp_inflight));
 
 			spin_lock(&imp->imp_lock);
-                        if (cfs_atomic_read(&imp->imp_inflight) == 0) {
-                                int count = cfs_atomic_read(&imp->imp_unregistering);
+			if (atomic_read(&imp->imp_inflight) == 0) {
+				int count = atomic_read(&imp->imp_unregistering);
 
-                                /* We know that "unregistering" rpcs only can
-                                 * survive in sending or delaying lists (they
-                                 * maybe waiting for long reply unlink in
-                                 * sluggish nets). Let's check this. If there
-                                 * is no inflight and unregistering != 0, this
-                                 * is bug. */
-                                LASSERTF(count == 0, "Some RPCs are still "
-                                         "unregistering: %d\n", count);
+				/* We know that "unregistering" rpcs only can
+				 * survive in sending or delaying lists (they
+				 * maybe waiting for long reply unlink in
+				 * sluggish nets). Let's check this. If there
+				 * is no inflight and unregistering != 0, this
+				 * is bug. */
+				LASSERTF(count == 0, "Some RPCs are still "
+					 "unregistering: %d\n", count);
 
-                                /* Let's save one loop as soon as inflight have
-                                 * dropped to zero. No new inflights possible at
-                                 * this point. */
-                                rc = 0;
+				/* Let's save one loop as soon as inflight have
+				 * dropped to zero. No new inflights possible at
+				 * this point. */
+				rc = 0;
                         } else {
                                 cfs_list_for_each_safe(tmp, n,
                                                        &imp->imp_sending_list) {
@@ -357,26 +356,25 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                                   "still on delayed list");
                                 }
 
-                                CERROR("%s: RPCs in \"%s\" phase found (%d). "
-                                       "Network is sluggish? Waiting them "
-                                       "to error out.\n", cli_tgt,
-                                       ptlrpc_phase2str(RQ_PHASE_UNREGISTERING),
-                                       cfs_atomic_read(&imp->
-                                                       imp_unregistering));
-                        }
+				CERROR("%s: RPCs in \"%s\" phase found (%d). "
+				       "Network is sluggish? Waiting them "
+				       "to error out.\n", cli_tgt,
+				       ptlrpc_phase2str(RQ_PHASE_UNREGISTERING),
+				       atomic_read(&imp->imp_unregistering));
+			}
 			spin_unlock(&imp->imp_lock);
-                  }
-        } while (rc != 0);
+		}
+	} while (rc != 0);
 
 	/*
 	 * Let's additionally check that no new rpcs added to import in
 	 * "invalidate" state.
 	 */
-	LASSERT(cfs_atomic_read(&imp->imp_inflight) == 0);
+	LASSERT(atomic_read(&imp->imp_inflight) == 0);
 	obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 	sptlrpc_import_flush_all_ctx(imp);
 
-	cfs_atomic_dec(&imp->imp_inval_count);
+	atomic_dec(&imp->imp_inval_count);
 	wake_up_all(&imp->imp_recovery_waitq);
 }
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
@@ -429,30 +427,31 @@ EXPORT_SYMBOL(ptlrpc_fail_import);
 
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
-        ptlrpc_set_import_discon(imp, 0);
-        /* Force a new connect attempt */
-        ptlrpc_invalidate_import(imp);
-        /* Do a fresh connect next time by zeroing the handle */
-        ptlrpc_disconnect_import(imp, 1);
-        /* Wait for all invalidate calls to finish */
-        if (cfs_atomic_read(&imp->imp_inval_count) > 0) {
-                int rc;
-                struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-                rc = l_wait_event(imp->imp_recovery_waitq,
-                                  (cfs_atomic_read(&imp->imp_inval_count) == 0),
-                                  &lwi);
-                if (rc)
-                        CERROR("Interrupted, inval=%d\n",
-                               cfs_atomic_read(&imp->imp_inval_count));
-        }
+	ptlrpc_set_import_discon(imp, 0);
+	/* Force a new connect attempt */
+	ptlrpc_invalidate_import(imp);
+	/* Do a fresh connect next time by zeroing the handle */
+	ptlrpc_disconnect_import(imp, 1);
+	/* Wait for all invalidate calls to finish */
+	if (atomic_read(&imp->imp_inval_count) > 0) {
+		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+		int rc;
 
-        /* Allow reconnect attempts */
-        imp->imp_obd->obd_no_recov = 0;
-        /* Remove 'invalid' flag */
-        ptlrpc_activate_import(imp);
-        /* Attempt a new connect */
-        ptlrpc_recover_import(imp, NULL, 0);
-        return 0;
+		rc = l_wait_event(imp->imp_recovery_waitq,
+				  (atomic_read(&imp->imp_inval_count) == 0),
+				  &lwi);
+		if (rc)
+			CERROR("Interrupted, inval=%d\n",
+			       atomic_read(&imp->imp_inval_count));
+	}
+
+	/* Allow reconnect attempts */
+	imp->imp_obd->obd_no_recov = 0;
+	/* Remove 'invalid' flag */
+	ptlrpc_activate_import(imp);
+	/* Attempt a new connect */
+	ptlrpc_recover_import(imp, NULL, 0);
+	return 0;
 }
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 
@@ -1216,26 +1215,26 @@ static int completed_replay_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
                                       void * data, int rc)
 {
-        ENTRY;
-        cfs_atomic_dec(&req->rq_import->imp_replay_inflight);
-        if (req->rq_status == 0 &&
-            !req->rq_import->imp_vbr_failed) {
-                ptlrpc_import_recovery_state_machine(req->rq_import);
-        } else {
-                if (req->rq_import->imp_vbr_failed) {
-                        CDEBUG(D_WARNING,
-                               "%s: version recovery fails, reconnecting\n",
-                               req->rq_import->imp_obd->obd_name);
-                } else {
-                        CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                                     "reconnecting\n",
-                               req->rq_import->imp_obd->obd_name,
-                               req->rq_status);
-                }
-                ptlrpc_connect_import(req->rq_import);
-        }
+	ENTRY;
+	atomic_dec(&req->rq_import->imp_replay_inflight);
+	if (req->rq_status == 0 &&
+	    !req->rq_import->imp_vbr_failed) {
+		ptlrpc_import_recovery_state_machine(req->rq_import);
+	} else {
+		if (req->rq_import->imp_vbr_failed) {
+			CDEBUG(D_WARNING,
+			       "%s: version recovery fails, reconnecting\n",
+			       req->rq_import->imp_obd->obd_name);
+		} else {
+			CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
+				     "reconnecting\n",
+			       req->rq_import->imp_obd->obd_name,
+			       req->rq_status);
+		}
+		ptlrpc_connect_import(req->rq_import);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /**
@@ -1244,32 +1243,32 @@ static int completed_replay_interpret(const struct lu_env *env,
  */
 static int signal_completed_replay(struct obd_import *imp)
 {
-        struct ptlrpc_request *req;
-        ENTRY;
+	struct ptlrpc_request *req;
+	ENTRY;
 
-        if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
-                RETURN(0);
+	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_FINISH_REPLAY)))
+		RETURN(0);
 
-        LASSERT(cfs_atomic_read(&imp->imp_replay_inflight) == 0);
-        cfs_atomic_inc(&imp->imp_replay_inflight);
+	LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
+	atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
-                                        OBD_PING);
-        if (req == NULL) {
-                cfs_atomic_dec(&imp->imp_replay_inflight);
-                RETURN(-ENOMEM);
-        }
+	req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
+					OBD_PING);
+	if (req == NULL) {
+		atomic_dec(&imp->imp_replay_inflight);
+		RETURN(-ENOMEM);
+	}
 
-        ptlrpc_request_set_replen(req);
-        req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        lustre_msg_add_flags(req->rq_reqmsg,
-                             MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
-        if (AT_OFF)
-                req->rq_timeout *= 3;
-        req->rq_interpret_reply = completed_replay_interpret;
+	ptlrpc_request_set_replen(req);
+	req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
+	lustre_msg_add_flags(req->rq_reqmsg,
+			     MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
+	if (AT_OFF)
+		req->rq_timeout *= 3;
+	req->rq_interpret_reply = completed_replay_interpret;
 
-        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
-        RETURN(0);
+	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	RETURN(0);
 }
 
 #ifdef __KERNEL__
@@ -1379,35 +1378,34 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 #endif
         }
 
-        if (imp->imp_state == LUSTRE_IMP_REPLAY) {
-                CDEBUG(D_HA, "replay requested by %s\n",
-                       obd2cli_tgt(imp->imp_obd));
-                rc = ptlrpc_replay_next(imp, &inflight);
-                if (inflight == 0 &&
-                    cfs_atomic_read(&imp->imp_replay_inflight) == 0) {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
-                        rc = ldlm_replay_locks(imp);
-                        if (rc)
-                                GOTO(out, rc);
-                }
-                rc = 0;
-        }
+	if (imp->imp_state == LUSTRE_IMP_REPLAY) {
+		CDEBUG(D_HA, "replay requested by %s\n",
+		       obd2cli_tgt(imp->imp_obd));
+		rc = ptlrpc_replay_next(imp, &inflight);
+		if (inflight == 0 &&
+		    atomic_read(&imp->imp_replay_inflight) == 0) {
+			IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
+			rc = ldlm_replay_locks(imp);
+			if (rc)
+				GOTO(out, rc);
+		}
+		rc = 0;
+	}
 
-        if (imp->imp_state == LUSTRE_IMP_REPLAY_LOCKS) {
-                if (cfs_atomic_read(&imp->imp_replay_inflight) == 0) {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_WAIT);
-                        rc = signal_completed_replay(imp);
-                        if (rc)
-                                GOTO(out, rc);
-                }
+	if (imp->imp_state == LUSTRE_IMP_REPLAY_LOCKS) {
+		if (atomic_read(&imp->imp_replay_inflight) == 0) {
+			IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_WAIT);
+			rc = signal_completed_replay(imp);
+			if (rc)
+				GOTO(out, rc);
+		}
+	}
 
-        }
-
-        if (imp->imp_state == LUSTRE_IMP_REPLAY_WAIT) {
-                if (cfs_atomic_read(&imp->imp_replay_inflight) == 0) {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
-                }
-        }
+	if (imp->imp_state == LUSTRE_IMP_REPLAY_WAIT) {
+		if (atomic_read(&imp->imp_replay_inflight) == 0) {
+			IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+		}
+	}
 
         if (imp->imp_state == LUSTRE_IMP_RECOVER) {
                 CDEBUG(D_HA, "reconnected to %s@%s\n",

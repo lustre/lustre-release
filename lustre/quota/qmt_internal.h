@@ -108,7 +108,7 @@ struct qmt_pool_info {
 	__u32			 qpi_key;
 
 	/* track users of this pool instance */
-	cfs_atomic_t		 qpi_ref;
+	atomic_t		 qpi_ref;
 
 	/* back pointer to master target
 	 * immutable after creation. */

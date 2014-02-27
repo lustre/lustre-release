@@ -218,9 +218,9 @@ struct ptlrpc_hr_thread {
 
 struct ptlrpc_hr_partition {
 	/* # of started threads */
-	cfs_atomic_t			hrp_nstarted;
+	atomic_t			hrp_nstarted;
 	/* # of stopped threads */
-	cfs_atomic_t			hrp_nstopped;
+	atomic_t			hrp_nstopped;
 	/* cpu partition id */
 	int				hrp_cpt;
 	/* round-robin rotor for choosing thread */
@@ -647,7 +647,7 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 #endif
 	CFS_INIT_LIST_HEAD(&svcpt->scp_rep_idle);
 	init_waitqueue_head(&svcpt->scp_rep_waitq);
-	cfs_atomic_set(&svcpt->scp_nreps_difficult, 0);
+	atomic_set(&svcpt->scp_nreps_difficult, 0);
 
 	/* adaptive timeout */
 	spin_lock_init(&svcpt->scp_at_lock);
@@ -859,16 +859,16 @@ EXPORT_SYMBOL(ptlrpc_register_service);
  */
 static void ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
-        LASSERT(cfs_atomic_read(&req->rq_refcount) == 0);
-        LASSERT(cfs_list_empty(&req->rq_timed_list));
+	LASSERT(atomic_read(&req->rq_refcount) == 0);
+	LASSERT(cfs_list_empty(&req->rq_timed_list));
 
-         /* DEBUG_REQ() assumes the reply state of a request with a valid
-          * ref will not be destroyed until that reference is dropped. */
-        ptlrpc_req_drop_rs(req);
+	/* DEBUG_REQ() assumes the reply state of a request with a valid
+	 * ref will not be destroyed until that reference is dropped. */
+	ptlrpc_req_drop_rs(req);
 
-        sptlrpc_svc_ctx_decref(req);
+	sptlrpc_svc_ctx_decref(req);
 
-        if (req != &req->rq_rqbd->rqbd_req) {
+	if (req != &req->rq_rqbd->rqbd_req) {
 		/* NB request buffers use an embedded
 		 * req if the incoming req unlinked the
 		 * MD; this isn't one of them! */
@@ -889,7 +889,7 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 	cfs_list_t			  *tmp;
 	cfs_list_t			  *nxt;
 
-	if (!cfs_atomic_dec_and_test(&req->rq_refcount))
+	if (!atomic_dec_and_test(&req->rq_refcount))
 		return;
 
 	if (req->rq_session.lc_state == LCS_ENTERED) {
@@ -965,7 +965,7 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 			 * now all reqs including the embedded req has been
 			 * disposed, schedule request buffer for re-use.
 			 */
-			LASSERT(cfs_atomic_read(&rqbd->rqbd_req.rq_refcount) ==
+			LASSERT(atomic_read(&rqbd->rqbd_req.rq_refcount) ==
 				0);
 			cfs_list_add_tail(&rqbd->rqbd_list,
 					  &svcpt->scp_rqbd_idle);
@@ -1364,13 +1364,13 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
-        LASSERT(cfs_atomic_read(&req->rq_refcount));
-        /** if it is last refcount then early reply isn't needed */
-        if (cfs_atomic_read(&req->rq_refcount) == 1) {
-                DEBUG_REQ(D_ADAPTTO, reqcopy, "Normal reply already sent out, "
-                          "abort sending early reply\n");
-                GOTO(out, rc = -EINVAL);
-        }
+	LASSERT(atomic_read(&req->rq_refcount));
+	/** if it is last refcount then early reply isn't needed */
+	if (atomic_read(&req->rq_refcount) == 1) {
+		DEBUG_REQ(D_ADAPTTO, reqcopy, "Normal reply already sent out, "
+			  "abort sending early reply\n");
+		GOTO(out, rc = -EINVAL);
+	}
 
         /* Connection ref */
         reqcopy->rq_export = class_conn2export(
@@ -1474,15 +1474,15 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 			 * refcount to 0 already. Let's check this and
 			 * don't add entry to work_list
 			 */
-			if (likely(cfs_atomic_inc_not_zero(&rq->rq_refcount)))
+			if (likely(atomic_inc_not_zero(&rq->rq_refcount)))
 				cfs_list_add(&rq->rq_timed_list, &work_list);
 			counter++;
-                }
+		}
 
-                if (++index >= array->paa_size)
-                        index = 0;
-        }
-        array->paa_deadline = deadline;
+		if (++index >= array->paa_size)
+			index = 0;
+	}
+	array->paa_deadline = deadline;
 	/* we have a new earliest deadline, restart the timer */
 	ptlrpc_at_set_timer(svcpt);
 
@@ -1526,7 +1526,7 @@ static int ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 	struct ptlrpc_request	*tmp = NULL;
 
 	if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) ||
-	    (cfs_atomic_read(&req->rq_export->exp_rpc_count) == 0))
+	    (atomic_read(&req->rq_export->exp_rpc_count) == 0))
 		return 0;
 
 	/* bulk request are aborted upon reconnect, don't try to
@@ -1805,7 +1805,7 @@ ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, bool force)
 	spin_lock(&svcpt->scp_req_lock);
 #ifndef __KERNEL__
 	/* !@%$# liblustre only has 1 thread */
-	if (cfs_atomic_read(&svcpt->scp_nreps_difficult) != 0) {
+	if (atomic_read(&svcpt->scp_nreps_difficult) != 0) {
 		spin_unlock(&svcpt->scp_req_lock);
 		RETURN(NULL);
 	}
@@ -2076,7 +2076,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       (request->rq_export ?
 		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
-		cfs_atomic_read(&request->rq_export->exp_refcount) : -99),
+		atomic_read(&request->rq_export->exp_refcount) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg));
@@ -2117,7 +2117,7 @@ put_conn:
 		(request->rq_export ?
 		 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                 (request->rq_export ?
-                 cfs_atomic_read(&request->rq_export->exp_refcount) : -99),
+		 atomic_read(&request->rq_export->exp_refcount) : -99),
                 lustre_msg_get_status(request->rq_reqmsg),
                 request->rq_xid,
                 libcfs_id2str(request->rq_peer),
@@ -2245,10 +2245,10 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 		/* Off the net */
 		spin_unlock(&rs->rs_lock);
 
-                class_export_put (exp);
-                rs->rs_export = NULL;
-                ptlrpc_rs_decref (rs);
-		if (cfs_atomic_dec_and_test(&svcpt->scp_nreps_difficult) &&
+		class_export_put (exp);
+		rs->rs_export = NULL;
+		ptlrpc_rs_decref(rs);
+		if (atomic_dec_and_test(&svcpt->scp_nreps_difficult) &&
 		    svc->srv_is_stopping)
 			wake_up_all(&svcpt->scp_waitq);
 		RETURN(1);
@@ -2684,7 +2684,7 @@ static int ptlrpc_hr_main(void *arg)
 		      threadname, hrp->hrp_cpt, ptlrpc_hr.hr_cpt_table, rc);
 	}
 
-	cfs_atomic_inc(&hrp->hrp_nstarted);
+	atomic_inc(&hrp->hrp_nstarted);
 	wake_up(&ptlrpc_hr.hr_waitq);
 
 	while (!ptlrpc_hr.hr_stopping) {
@@ -2701,7 +2701,7 @@ static int ptlrpc_hr_main(void *arg)
                 }
         }
 
-	cfs_atomic_inc(&hrp->hrp_nstopped);
+	atomic_inc(&hrp->hrp_nstopped);
 	wake_up(&ptlrpc_hr.hr_waitq);
 
 	return 0;
@@ -2726,8 +2726,8 @@ static void ptlrpc_stop_hr_threads(void)
 		if (hrp->hrp_thrs == NULL)
 			continue; /* uninitialized */
 		wait_event(ptlrpc_hr.hr_waitq,
-			       cfs_atomic_read(&hrp->hrp_nstopped) ==
-			       cfs_atomic_read(&hrp->hrp_nstarted));
+			       atomic_read(&hrp->hrp_nstopped) ==
+			       atomic_read(&hrp->hrp_nstarted));
 	}
 }
 
@@ -2752,7 +2752,7 @@ static int ptlrpc_start_hr_threads(void)
 				break;
 		}
 		wait_event(ptlrpc_hr.hr_waitq,
-			       cfs_atomic_read(&hrp->hrp_nstarted) == j);
+			       atomic_read(&hrp->hrp_nstarted) == j);
 		if (!IS_ERR_VALUE(rc))
 			continue;
 
@@ -2990,8 +2990,8 @@ int ptlrpc_hr_init(void)
 	cfs_percpt_for_each(hrp, i, ptlrpc_hr.hr_partitions) {
 		hrp->hrp_cpt = i;
 
-		cfs_atomic_set(&hrp->hrp_nstarted, 0);
-		cfs_atomic_set(&hrp->hrp_nstopped, 0);
+		atomic_set(&hrp->hrp_nstarted, 0);
+		atomic_set(&hrp->hrp_nstopped, 0);
 
 		hrp->hrp_nthrs = cfs_cpt_weight(ptlrpc_hr.hr_cpt_table, i);
 		hrp->hrp_nthrs /= cfs_cpu_ht_nsiblings(0);
@@ -3054,7 +3054,7 @@ static void ptlrpc_wait_replies(struct ptlrpc_service_part *svcpt)
 						     NULL, NULL);
 
 		rc = l_wait_event(svcpt->scp_waitq,
-		     cfs_atomic_read(&svcpt->scp_nreps_difficult) == 0, &lwi);
+		     atomic_read(&svcpt->scp_nreps_difficult) == 0, &lwi);
 		if (rc == 0)
 			break;
 		CWARN("Unexpectedly long timeout %s %p\n",

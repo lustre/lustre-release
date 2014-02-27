@@ -322,10 +322,10 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* undo which did by md_intent_lock */
                 if (it_disposition(it, DISP_OPEN_CREATE) &&
                     !it_open_error(DISP_OPEN_CREATE, it)) {
-                        LASSERT(request);
-                        LASSERT(cfs_atomic_read(&request->rq_refcount) > 1);
-                        CDEBUG(D_INODE, "dec a ref of req %p\n", request);
-                        ptlrpc_req_finished(request);
+			LASSERT(request);
+			LASSERT(atomic_read(&request->rq_refcount) > 1);
+			CDEBUG(D_INODE, "dec a ref of req %p\n", request);
+			ptlrpc_req_finished(request);
                 }
                 return it_open_error(DISP_OPEN_OPEN, it);
         }

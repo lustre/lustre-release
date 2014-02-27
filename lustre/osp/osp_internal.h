@@ -64,7 +64,7 @@ struct osp_id_tracker {
 	/* underlying shared device */
 	struct dt_device	*otr_dev;
 	/* how many users of this tracker */
-	cfs_atomic_t		 otr_refcount;
+	atomic_t		 otr_refcount;
 };
 
 struct osp_precreate {

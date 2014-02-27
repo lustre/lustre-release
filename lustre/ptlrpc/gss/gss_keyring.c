@@ -221,55 +221,55 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
                 return NULL;
         }
 
-        ctx->cc_expire = cfs_time_current_sec() + KEYRING_UPCALL_TIMEOUT;
+	ctx->cc_expire = cfs_time_current_sec() + KEYRING_UPCALL_TIMEOUT;
 	clear_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags);
-        cfs_atomic_inc(&ctx->cc_refcount); /* for the caller */
+	atomic_inc(&ctx->cc_refcount); /* for the caller */
 
-        return ctx;
+	return ctx;
 }
 
 static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        struct ptlrpc_sec          *sec = ctx->cc_sec;
-        struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
+	struct ptlrpc_sec		*sec = ctx->cc_sec;
+	struct gss_cli_ctx_keyring	*gctx_kr = ctx2gctx_keyring(ctx);
 
-        CDEBUG(D_SEC, "destroying ctx %p\n", ctx);
+	CDEBUG(D_SEC, "destroying ctx %p\n", ctx);
 
         /* at this time the association with key has been broken. */
         LASSERT(sec);
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
-        LASSERT(cfs_atomic_read(&sec->ps_nctx) > 0);
+	LASSERT(atomic_read(&sec->ps_refcount) > 0);
+	LASSERT(atomic_read(&sec->ps_nctx) > 0);
 	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
         LASSERT(gctx_kr->gck_key == NULL);
 
-        ctx_clear_timer_kr(ctx);
-        LASSERT(gctx_kr->gck_timer == NULL);
+	ctx_clear_timer_kr(ctx);
+	LASSERT(gctx_kr->gck_timer == NULL);
 
-        if (gss_cli_ctx_fini_common(sec, ctx))
-                return;
+	if (gss_cli_ctx_fini_common(sec, ctx))
+		return;
 
-        OBD_FREE_PTR(gctx_kr);
+	OBD_FREE_PTR(gctx_kr);
 
-        cfs_atomic_dec(&sec->ps_nctx);
-        sptlrpc_sec_put(sec);
+	atomic_dec(&sec->ps_nctx);
+	sptlrpc_sec_put(sec);
 }
 
 static void ctx_release_kr(struct ptlrpc_cli_ctx *ctx, int sync)
 {
-        if (sync) {
-                ctx_destroy_kr(ctx);
-        } else {
-                cfs_atomic_inc(&ctx->cc_refcount);
-                sptlrpc_gc_add_ctx(ctx);
-        }
+	if (sync) {
+		ctx_destroy_kr(ctx);
+	} else {
+		atomic_inc(&ctx->cc_refcount);
+		sptlrpc_gc_add_ctx(ctx);
+	}
 }
 
 static void ctx_put_kr(struct ptlrpc_cli_ctx *ctx, int sync)
 {
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
-        if (cfs_atomic_dec_and_test(&ctx->cc_refcount))
-                ctx_release_kr(ctx, sync);
+	if (atomic_dec_and_test(&ctx->cc_refcount))
+		ctx_release_kr(ctx, sync);
 }
 
 /*
@@ -300,15 +300,15 @@ static inline void spin_unlock_if(spinlock_t *lock, int condition)
 
 static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
 {
-	struct ptlrpc_sec      *sec = ctx->cc_sec;
-	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
+	struct ptlrpc_sec	*sec = ctx->cc_sec;
+	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
 
 	LASSERT(!test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
-	LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 	spin_lock_if(&sec->ps_lock, !locked);
 
-	cfs_atomic_inc(&ctx->cc_refcount);
+	atomic_inc(&ctx->cc_refcount);
 	set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
 	cfs_hlist_add_head(&ctx->cc_cache, &gsec_kr->gsk_clist);
 	if (is_root)
@@ -326,24 +326,24 @@ static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
  */
 static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
 {
-        struct ptlrpc_sec       *sec = ctx->cc_sec;
-        struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
+	struct ptlrpc_sec	*sec = ctx->cc_sec;
+	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
 
-        /* if hashed bit has gone, leave the job to somebody who is doing it */
+	/* if hashed bit has gone, leave the job to somebody who is doing it */
 	if (test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0)
-                return 0;
+		return 0;
 
-        /* drop ref inside spin lock to prevent race with other operations */
-        spin_lock_if(&sec->ps_lock, !locked);
+	/* drop ref inside spin lock to prevent race with other operations */
+	spin_lock_if(&sec->ps_lock, !locked);
 
-        if (gsec_kr->gsk_root_ctx == ctx)
-                gsec_kr->gsk_root_ctx = NULL;
-        cfs_hlist_del_init(&ctx->cc_cache);
-        cfs_atomic_dec(&ctx->cc_refcount);
+	if (gsec_kr->gsk_root_ctx == ctx)
+		gsec_kr->gsk_root_ctx = NULL;
+	cfs_hlist_del_init(&ctx->cc_cache);
+	atomic_dec(&ctx->cc_refcount);
 
-        spin_unlock_if(&sec->ps_lock, !locked);
+	spin_unlock_if(&sec->ps_lock, !locked);
 
-        return 1;
+	return 1;
 }
 
 /*
@@ -352,16 +352,16 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
  */
 static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
         LASSERT(atomic_read(&key->usage) > 0);
-        LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
-        LASSERT(key->payload.data == NULL);
+	LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
+	LASSERT(key->payload.data == NULL);
 
-        /* at this time context may or may not in list. */
-        key_get(key);
-        cfs_atomic_inc(&ctx->cc_refcount);
-        ctx2gctx_keyring(ctx)->gck_key = key;
-        key->payload.data = ctx;
+	/* at this time context may or may not in list. */
+	key_get(key);
+	atomic_inc(&ctx->cc_refcount);
+	ctx2gctx_keyring(ctx)->gck_key = key;
+	key->payload.data = ctx;
 }
 
 /*
@@ -451,29 +451,29 @@ static void dispose_ctx_list_kr(cfs_hlist_head_t *freelist)
         cfs_hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
                 cfs_hlist_del_init(&ctx->cc_cache);
 
-                /* reverse ctx: update current seq to buddy svcctx if exist.
-                 * ideally this should be done at gss_cli_ctx_finalize(), but
-                 * the ctx destroy could be delayed by:
-                 *  1) ctx still has reference;
-                 *  2) ctx destroy is asynchronous;
-                 * and reverse import call inval_all_ctx() require this be done
-                 *_immediately_ otherwise newly created reverse ctx might copy
-                 * the very old sequence number from svcctx. */
-                gctx = ctx2gctx(ctx);
-                if (!rawobj_empty(&gctx->gc_svc_handle) &&
-                    sec_is_reverse(gctx->gc_base.cc_sec)) {
-                        gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
-                                        (__u32) cfs_atomic_read(&gctx->gc_seq));
-                }
+		/* reverse ctx: update current seq to buddy svcctx if exist.
+		 * ideally this should be done at gss_cli_ctx_finalize(), but
+		 * the ctx destroy could be delayed by:
+		 *  1) ctx still has reference;
+		 *  2) ctx destroy is asynchronous;
+		 * and reverse import call inval_all_ctx() require this be done
+		 * _immediately_ otherwise newly created reverse ctx might copy
+		 * the very old sequence number from svcctx. */
+		gctx = ctx2gctx(ctx);
+		if (!rawobj_empty(&gctx->gc_svc_handle) &&
+		    sec_is_reverse(gctx->gc_base.cc_sec)) {
+			gss_svc_upcall_update_sequence(&gctx->gc_svc_handle,
+					(__u32) atomic_read(&gctx->gc_seq));
+		}
 
-                /* we need to wakeup waiting reqs here. the context might
-                 * be forced released before upcall finished, then the
-                 * late-arrived downcall can't find the ctx even. */
-                sptlrpc_cli_ctx_wakeup(ctx);
+		/* we need to wakeup waiting reqs here. the context might
+		 * be forced released before upcall finished, then the
+		 * late-arrived downcall can't find the ctx even. */
+		sptlrpc_cli_ctx_wakeup(ctx);
 
-                unbind_ctx_kr(ctx);
-                ctx_put_kr(ctx, 0);
-        }
+		unbind_ctx_kr(ctx);
+		ctx_put_kr(ctx, 0);
+	}
 }
 
 /*
@@ -508,11 +508,11 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
                 }
         }
 
-        if (ctx) {
-                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-                LASSERT(!cfs_hlist_empty(&gsec_kr->gsk_clist));
-                cfs_atomic_inc(&ctx->cc_refcount);
-        }
+	if (ctx) {
+		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+		LASSERT(!cfs_hlist_empty(&gsec_kr->gsk_clist));
+		atomic_inc(&ctx->cc_refcount);
+	}
 
 	spin_unlock(&sec->ps_lock);
 
@@ -786,37 +786,37 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
          * need wirtelock of key->sem to serialize them. */
         down_write(&key->sem);
 
-        if (likely(key->payload.data != NULL)) {
-                ctx = key->payload.data;
+	if (likely(key->payload.data != NULL)) {
+		ctx = key->payload.data;
 
-                LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 1);
-                LASSERT(ctx2gctx_keyring(ctx)->gck_key == key);
-                LASSERT(atomic_read(&key->usage) >= 2);
+		LASSERT(atomic_read(&ctx->cc_refcount) >= 1);
+		LASSERT(ctx2gctx_keyring(ctx)->gck_key == key);
+		LASSERT(atomic_read(&key->usage) >= 2);
 
-                /* simply take a ref and return. it's upper layer's
-                 * responsibility to detect & replace dead ctx. */
-                cfs_atomic_inc(&ctx->cc_refcount);
-        } else {
-                /* pre initialization with a cli_ctx. this can't be done in
-                 * key_instantiate() because we'v no enough information
-                 * there. */
-                ctx = ctx_create_kr(sec, vcred);
-                if (ctx != NULL) {
-                        ctx_enlist_kr(ctx, is_root, 0);
-                        bind_key_ctx(key, ctx);
+		/* simply take a ref and return. it's upper layer's
+		 * responsibility to detect & replace dead ctx. */
+		atomic_inc(&ctx->cc_refcount);
+	} else {
+		/* pre initialization with a cli_ctx. this can't be done in
+		 * key_instantiate() because we'v no enough information
+		 * there. */
+		ctx = ctx_create_kr(sec, vcred);
+		if (ctx != NULL) {
+			ctx_enlist_kr(ctx, is_root, 0);
+			bind_key_ctx(key, ctx);
 
-                        ctx_start_timer_kr(ctx, KEYRING_UPCALL_TIMEOUT);
+			ctx_start_timer_kr(ctx, KEYRING_UPCALL_TIMEOUT);
 
-                        CDEBUG(D_SEC, "installed key %p <-> ctx %p (sec %p)\n",
-                               key, ctx, sec);
-                } else {
-                        /* we'd prefer to call key_revoke(), but we more like
-                         * to revoke it within this key->sem locked period. */
-                        key_revoke_locked(key);
-                }
+			CDEBUG(D_SEC, "installed key %p <-> ctx %p (sec %p)\n",
+			       key, ctx, sec);
+		} else {
+			/* we'd prefer to call key_revoke(), but we more like
+			 * to revoke it within this key->sem locked period. */
+			key_revoke_locked(key);
+		}
 
-                create_new = 1;
-        }
+		create_new = 1;
+	}
 
         up_write(&key->sem);
 
@@ -835,8 +835,8 @@ void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx,
                             int sync)
 {
-        LASSERT(cfs_atomic_read(&sec->ps_refcount) > 0);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) == 0);
+	LASSERT(atomic_read(&sec->ps_refcount) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) == 0);
         ctx_release_kr(ctx, sync);
 }
 
@@ -902,37 +902,37 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
         gsec_kr = sec2gsec_keyring(sec);
 
 	spin_lock(&sec->ps_lock);
-        cfs_hlist_for_each_entry_safe(ctx, pos, next,
-                                      &gsec_kr->gsk_clist, cc_cache) {
-                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	cfs_hlist_for_each_entry_safe(ctx, pos, next,
+				      &gsec_kr->gsk_clist, cc_cache) {
+		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
-                if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
-                        continue;
+		if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
+			continue;
 
-                /* at this moment there's at least 2 base reference:
-                 * key association and in-list. */
-                if (cfs_atomic_read(&ctx->cc_refcount) > 2) {
-                        if (!force)
-                                continue;
-                        CWARN("flush busy ctx %p(%u->%s, extra ref %d)\n",
-                              ctx, ctx->cc_vcred.vc_uid,
-                              sec2target_str(ctx->cc_sec),
-                              cfs_atomic_read(&ctx->cc_refcount) - 2);
-                }
+		/* at this moment there's at least 2 base reference:
+		 * key association and in-list. */
+		if (atomic_read(&ctx->cc_refcount) > 2) {
+			if (!force)
+				continue;
+			CWARN("flush busy ctx %p(%u->%s, extra ref %d)\n",
+			      ctx, ctx->cc_vcred.vc_uid,
+			      sec2target_str(ctx->cc_sec),
+			      atomic_read(&ctx->cc_refcount) - 2);
+		}
 
 		set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
 		if (!grace)
 			clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-                cfs_atomic_inc(&ctx->cc_refcount);
+		atomic_inc(&ctx->cc_refcount);
 
-                if (ctx_unlist_kr(ctx, 1)) {
-                        cfs_hlist_add_head(&ctx->cc_cache, &freelist);
-                } else {
-                        LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 2);
-                        cfs_atomic_dec(&ctx->cc_refcount);
-                }
-        }
+		if (ctx_unlist_kr(ctx, 1)) {
+			cfs_hlist_add_head(&ctx->cc_cache, &freelist);
+		} else {
+			LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
+			atomic_dec(&ctx->cc_refcount);
+		}
+	}
 	spin_unlock(&sec->ps_lock);
 
 	dispose_ctx_list_kr(&freelist);
@@ -943,47 +943,47 @@ static
 int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
                                uid_t uid, int grace, int force)
 {
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_SEC, "sec %p(%d, nctx %d), uid %d, grace %d, force %d\n",
-               sec, cfs_atomic_read(&sec->ps_refcount),
-               cfs_atomic_read(&sec->ps_nctx),
-               uid, grace, force);
+	CDEBUG(D_SEC, "sec %p(%d, nctx %d), uid %d, grace %d, force %d\n",
+	       sec, atomic_read(&sec->ps_refcount),
+	       atomic_read(&sec->ps_nctx),
+	       uid, grace, force);
 
-        if (uid != -1 && uid != 0)
-                flush_user_ctx_cache_kr(sec, uid, grace, force);
-        else
-                flush_spec_ctx_cache_kr(sec, uid, grace, force);
+	if (uid != -1 && uid != 0)
+		flush_user_ctx_cache_kr(sec, uid, grace, force);
+	else
+		flush_spec_ctx_cache_kr(sec, uid, grace, force);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static
 void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
-        struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        cfs_hlist_head_t        freelist = CFS_HLIST_HEAD_INIT;
-        cfs_hlist_node_t       *pos, *next;
-        struct ptlrpc_cli_ctx  *ctx;
-        ENTRY;
+	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
+	cfs_hlist_head_t	freelist = CFS_HLIST_HEAD_INIT;
+	cfs_hlist_node_t	*pos, *next;
+	struct ptlrpc_cli_ctx	*ctx;
+	ENTRY;
 
-        CWARN("running gc\n");
+	CWARN("running gc\n");
 
 	spin_lock(&sec->ps_lock);
-        cfs_hlist_for_each_entry_safe(ctx, pos, next,
-                                      &gsec_kr->gsk_clist, cc_cache) {
-                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	cfs_hlist_for_each_entry_safe(ctx, pos, next,
+				      &gsec_kr->gsk_clist, cc_cache) {
+		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
-                cfs_atomic_inc(&ctx->cc_refcount);
+		atomic_inc(&ctx->cc_refcount);
 
-                if (cli_ctx_check_death(ctx) && ctx_unlist_kr(ctx, 1)) {
-                        cfs_hlist_add_head(&ctx->cc_cache, &freelist);
-                        CWARN("unhashed ctx %p\n", ctx);
-                } else {
-                        LASSERT(cfs_atomic_read(&ctx->cc_refcount) >= 2);
-                        cfs_atomic_dec(&ctx->cc_refcount);
-                }
-        }
+		if (cli_ctx_check_death(ctx) && ctx_unlist_kr(ctx, 1)) {
+			cfs_hlist_add_head(&ctx->cc_cache, &freelist);
+			CWARN("unhashed ctx %p\n", ctx);
+		} else {
+			LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
+			atomic_dec(&ctx->cc_refcount);
+		}
+	}
 	spin_unlock(&sec->ps_lock);
 
 	dispose_ctx_list_kr(&freelist);
@@ -1020,22 +1020,22 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
                         snprintf(mech, sizeof(mech), "N/A");
                 mech[sizeof(mech) - 1] = '\0';
 
-                seq_printf(seq, "%p: uid %u, ref %d, expire %ld(%+ld), fl %s, "
-                           "seq %d, win %u, key %08x(ref %d), "
-                           "hdl "LPX64":"LPX64", mech: %s\n",
-                           ctx, ctx->cc_vcred.vc_uid,
-                           cfs_atomic_read(&ctx->cc_refcount),
-                           ctx->cc_expire,
-                           ctx->cc_expire ?  ctx->cc_expire - now : 0,
-                           flags_str,
-                           cfs_atomic_read(&gctx->gc_seq),
-                           gctx->gc_win,
-                           key ? key->serial : 0,
-                           key ? atomic_read(&key->usage) : 0,
-                           gss_handle_to_u64(&gctx->gc_handle),
-                           gss_handle_to_u64(&gctx->gc_svc_handle),
-                           mech);
-        }
+		seq_printf(seq, "%p: uid %u, ref %d, expire %ld(%+ld), fl %s, "
+			   "seq %d, win %u, key %08x(ref %d), "
+			   "hdl "LPX64":"LPX64", mech: %s\n",
+			   ctx, ctx->cc_vcred.vc_uid,
+			   atomic_read(&ctx->cc_refcount),
+			   ctx->cc_expire,
+			   ctx->cc_expire ?  ctx->cc_expire - now : 0,
+			   flags_str,
+			   atomic_read(&gctx->gc_seq),
+			   gctx->gc_win,
+			   key ? key->serial : 0,
+			   key ? atomic_read(&key->usage) : 0,
+			   gss_handle_to_u64(&gctx->gc_handle),
+			   gss_handle_to_u64(&gctx->gc_svc_handle),
+			   mech);
+	}
 	spin_unlock(&sec->ps_lock);
 
 	RETURN(0);
@@ -1055,27 +1055,27 @@ int gss_cli_ctx_refresh_kr(struct ptlrpc_cli_ctx *ctx)
 static
 int gss_cli_ctx_validate_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(ctx->cc_sec);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(ctx->cc_sec);
 
-        if (cli_ctx_check_death(ctx)) {
-                kill_ctx_kr(ctx);
-                return 1;
-        }
+	if (cli_ctx_check_death(ctx)) {
+		kill_ctx_kr(ctx);
+		return 1;
+	}
 
-        if (cli_ctx_is_ready(ctx))
-                return 0;
-        return 1;
+	if (cli_ctx_is_ready(ctx))
+		return 0;
+	return 1;
 }
 
 static
 void gss_cli_ctx_die_kr(struct ptlrpc_cli_ctx *ctx, int grace)
 {
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(ctx->cc_sec);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(ctx->cc_sec);
 
-        cli_ctx_expire(ctx);
-        kill_ctx_kr(ctx);
+	cli_ctx_expire(ctx);
+	kill_ctx_kr(ctx);
 }
 
 /****************************************
@@ -1296,10 +1296,10 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                         RETURN(rc);
         }
 
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(ctx->cc_sec);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(ctx->cc_sec);
 
-        ctx_clear_timer_kr(ctx);
+	ctx_clear_timer_kr(ctx);
 
         /* don't proceed if already refreshed */
         if (cli_ctx_is_refreshed(ctx)) {

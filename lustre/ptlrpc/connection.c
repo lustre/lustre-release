@@ -66,81 +66,81 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
         conn->c_peer = peer;
         conn->c_self = self;
         CFS_INIT_HLIST_NODE(&conn->c_hash);
-        cfs_atomic_set(&conn->c_refcount, 1);
+	atomic_set(&conn->c_refcount, 1);
         if (uuid)
                 obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
 
-        /*
-         * Add the newly created conn to the hash, on key collision we
-         * lost a racing addition and must destroy our newly allocated
-         * connection.  The object which exists in the has will be
-         * returned and may be compared against out object.
-         */
+	/*
+	 * Add the newly created conn to the hash, on key collision we
+	 * lost a racing addition and must destroy our newly allocated
+	 * connection.  The object which exists in the has will be
+	 * returned and may be compared against out object.
+	 */
 	/* In the function below, .hs_keycmp resolves to
 	 * conn_keycmp() */
 	/* coverity[overrun-buffer-val] */
-        conn2 = cfs_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
-        if (conn != conn2) {
-                OBD_FREE_PTR(conn);
-                conn = conn2;
-        }
-        EXIT;
+	conn2 = cfs_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
+	if (conn != conn2) {
+		OBD_FREE_PTR(conn);
+		conn = conn2;
+	}
+	EXIT;
 out:
-        CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
-               conn, cfs_atomic_read(&conn->c_refcount),
-               libcfs_nid2str(conn->c_peer.nid));
-        return conn;
+	CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
+	       conn, atomic_read(&conn->c_refcount),
+	       libcfs_nid2str(conn->c_peer.nid));
+	return conn;
 }
 EXPORT_SYMBOL(ptlrpc_connection_get);
 
 int ptlrpc_connection_put(struct ptlrpc_connection *conn)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-        if (!conn)
-                RETURN(rc);
+	if (!conn)
+		RETURN(rc);
 
-        LASSERT(cfs_atomic_read(&conn->c_refcount) > 1);
+	LASSERT(atomic_read(&conn->c_refcount) > 1);
 
-        /*
-         * We do not remove connection from hashtable and
-         * do not free it even if last caller released ref,
-         * as we want to have it cached for the case it is
-         * needed again.
-         *
-         * Deallocating it and later creating new connection
-         * again would be wastful. This way we also avoid
-         * expensive locking to protect things from get/put
-         * race when found cached connection is freed by
-         * ptlrpc_connection_put().
-         *
-         * It will be freed later in module unload time,
-         * when ptlrpc_connection_fini()->lh_exit->conn_exit()
-         * path is called.
-         */
-        if (cfs_atomic_dec_return(&conn->c_refcount) == 1)
-                rc = 1;
+	/*
+	 * We do not remove connection from hashtable and
+	 * do not free it even if last caller released ref,
+	 * as we want to have it cached for the case it is
+	 * needed again.
+	 *
+	 * Deallocating it and later creating new connection
+	 * again would be wastful. This way we also avoid
+	 * expensive locking to protect things from get/put
+	 * race when found cached connection is freed by
+	 * ptlrpc_connection_put().
+	 *
+	 * It will be freed later in module unload time,
+	 * when ptlrpc_connection_fini()->lh_exit->conn_exit()
+	 * path is called.
+	 */
+	if (atomic_dec_return(&conn->c_refcount) == 1)
+		rc = 1;
 
-        CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
-               conn, cfs_atomic_read(&conn->c_refcount),
-               libcfs_nid2str(conn->c_peer.nid));
+	CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
+	       conn, atomic_read(&conn->c_refcount),
+	       libcfs_nid2str(conn->c_peer.nid));
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_connection_put);
 
 struct ptlrpc_connection *
 ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 {
-        ENTRY;
+	ENTRY;
 
-        cfs_atomic_inc(&conn->c_refcount);
-        CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
-               conn, cfs_atomic_read(&conn->c_refcount),
-               libcfs_nid2str(conn->c_peer.nid));
+	atomic_inc(&conn->c_refcount);
+	CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
+	       conn, atomic_read(&conn->c_refcount),
+	       libcfs_nid2str(conn->c_peer.nid));
 
-        RETURN(conn);
+	RETURN(conn);
 }
 EXPORT_SYMBOL(ptlrpc_connection_addref);
 
@@ -212,7 +212,7 @@ conn_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct ptlrpc_connection *conn;
 
         conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        cfs_atomic_inc(&conn->c_refcount);
+	atomic_inc(&conn->c_refcount);
 }
 
 static void
@@ -221,24 +221,24 @@ conn_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct ptlrpc_connection *conn;
 
         conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        cfs_atomic_dec(&conn->c_refcount);
+	atomic_dec(&conn->c_refcount);
 }
 
 static void
 conn_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-        struct ptlrpc_connection *conn;
+	struct ptlrpc_connection *conn;
 
-        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        /*
-         * Nothing should be left. Connection user put it and
-         * connection also was deleted from table by this time
-         * so we should have 0 refs.
-         */
-        LASSERTF(cfs_atomic_read(&conn->c_refcount) == 0,
-                 "Busy connection with %d refs\n",
-                 cfs_atomic_read(&conn->c_refcount));
-        OBD_FREE_PTR(conn);
+	conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	/*
+	 * Nothing should be left. Connection user put it and
+	 * connection also was deleted from table by this time
+	 * so we should have 0 refs.
+	 */
+	LASSERTF(atomic_read(&conn->c_refcount) == 0,
+		 "Busy connection with %d refs\n",
+		 atomic_read(&conn->c_refcount));
+	OBD_FREE_PTR(conn);
 }
 
 static cfs_hash_ops_t conn_hash_ops = {

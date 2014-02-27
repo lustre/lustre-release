@@ -377,14 +377,14 @@ out_copy:
 
 int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 {
-        struct ptlrpc_cli_ctx   *ctx = &gctx->gc_base;
-        struct obd_import       *imp = ctx->cc_sec->ps_import;
-        struct ptlrpc_request   *req;
-        struct ptlrpc_user_desc *pud;
-        int                      rc;
-        ENTRY;
+	struct ptlrpc_cli_ctx	*ctx = &gctx->gc_base;
+	struct obd_import	*imp = ctx->cc_sec->ps_import;
+	struct ptlrpc_request	*req;
+	struct ptlrpc_user_desc	*pud;
+	int			 rc;
+	ENTRY;
 
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 	if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
 		CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
