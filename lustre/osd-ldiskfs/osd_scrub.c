@@ -1443,6 +1443,10 @@ struct osd_ios_item {
 };
 
 struct osd_ios_filldir_buf {
+#ifdef HAVE_DIR_CONTEXT
+	/* please keep it as first member */
+	struct dir_context	 ctx;
+#endif
 	struct osd_thread_info	*oifb_info;
 	struct osd_device	*oifb_dev;
 	struct dentry		*oifb_dentry;
@@ -1738,7 +1742,13 @@ static int
 osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 		     struct dentry *dentry, filldir_t filldir)
 {
-	struct osd_ios_filldir_buf    buf   = { info, dev, dentry };
+	struct osd_ios_filldir_buf    buf   = {
+#ifdef HAVE_DIR_CONTEXT
+						.ctx.actor = filldir,
+#endif
+						.oifb_info = info,
+						.oifb_dev = dev,
+						.oifb_dentry = dentry };
 	struct file		     *filp  = &info->oti_it_ea.oie_file;
 	struct inode		     *inode = dentry->d_inode;
 	const struct file_operations *fops  = inode->i_fop;
@@ -1755,7 +1765,13 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 	filp->private_data = NULL;
 	set_file_inode(filp, inode);
 
+#ifdef HAVE_DIR_CONTEXT
+	buf.ctx.pos = filp->f_pos;
+	rc = fops->iterate(filp, &buf.ctx);
+	filp->f_pos = buf.ctx.pos;
+#else
 	rc = fops->readdir(filp, &buf, filldir);
+#endif
 	fops->release(inode, filp);
 
 	RETURN(rc);
