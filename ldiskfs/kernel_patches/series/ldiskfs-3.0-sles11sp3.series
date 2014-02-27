@@ -43,3 +43,4 @@ rhel6.3/ext4-max-dir-size.patch
 sles11sp2/ext4-max-dir-size-options.patch
 rhel6.3/ext4-not-discard-preallocation-umount.patch
 rhel6.3/ext4-journal-path-opt.patch
+sles11sp2/ext4-init-statfs-after-journal.patch
