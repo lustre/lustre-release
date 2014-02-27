@@ -1768,7 +1768,8 @@ static int ct_run(void)
 			 hal->hal_fsname, hal->hal_archive_id, hal->hal_count);
 
 		if (strcmp(hal->hal_fsname, fs_name) != 0) {
-			CT_ERROR(EINVAL, "'%s' invalid fs name, expecting: %s",
+			rc = -EINVAL;
+			CT_ERROR(rc, "'%s' invalid fs name, expecting: %s",
 				 hal->hal_fsname, fs_name);
 			err_major++;
 			if (opt.o_abort_on_error)
