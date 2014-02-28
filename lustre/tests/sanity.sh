@@ -198,6 +198,7 @@ test_4() {
 	local MDTIDX=1
 	local remote_dir=remote_dir
 
+	[ $MDSCOUNT -ge 2 ] && skip "skip now for LU-4690" && return #LU-4690
 	test_mkdir $DIR/$remote_dir ||
 		error "Create remote directory failed"
 
