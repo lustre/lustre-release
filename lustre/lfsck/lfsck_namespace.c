@@ -1483,7 +1483,6 @@ fini:
 
 out:
 	down_write(&com->lc_sem);
-
 	ns->ln_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
 				HALF_SEC - lfsck->li_time_last_checkpoint);
 	ns->ln_time_last_checkpoint = cfs_time_current_sec();
@@ -1505,15 +1504,7 @@ out:
 		ns->ln_status = LS_FAILED;
 	}
 
-	if (ns->ln_status != LS_PAUSED) {
-		spin_lock(&lfsck->li_lock);
-		cfs_list_del_init(&com->lc_link);
-		cfs_list_add_tail(&com->lc_link, &lfsck->li_list_idle);
-		spin_unlock(&lfsck->li_lock);
-	}
-
 	rc = lfsck_namespace_store(env, com, false);
-
 	up_write(&com->lc_sem);
 	if (atomic_dec_and_test(&lfsck->li_double_scan_count))
 		wake_up_all(&thread->t_ctl_waitq);

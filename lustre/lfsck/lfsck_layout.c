@@ -1577,7 +1577,6 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
 
 	down_write(&com->lc_sem);
-
 	lo->ll_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
 				HALF_SEC - lfsck->li_time_last_checkpoint);
 	lo->ll_time_last_checkpoint = cfs_time_current_sec();
@@ -1601,15 +1600,7 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 		lo->ll_status = LS_FAILED;
 	}
 
-	if (lo->ll_status != LS_PAUSED) {
-		spin_lock(&lfsck->li_lock);
-		list_del_init(&com->lc_link);
-		list_add_tail(&com->lc_link, &lfsck->li_list_idle);
-		spin_unlock(&lfsck->li_lock);
-	}
-
 	rc = lfsck_layout_store(env, com);
-
 	up_write(&com->lc_sem);
 
 	return rc;
@@ -2049,7 +2040,7 @@ static int lfsck_layout_master_conditional_destroy(const struct lu_env *env,
 
 	ltd = lfsck_tgt_get(&lfsck->li_ost_descs, index);
 	if (unlikely(ltd == NULL))
-		RETURN(-ENODEV);
+		RETURN(-ENXIO);
 
 	exp = ltd->ltd_exp;
 	if (!(exp_connect_flags(exp) & OBD_CONNECT_LFSCK))
@@ -3293,10 +3284,15 @@ repair:
 out:
 	down_write(&com->lc_sem);
 	if (rc < 0) {
-		/* If cannot touch the target server,
-		 * mark the LFSCK as INCOMPLETE. */
-		if (rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -ETIMEDOUT ||
-		    rc == -EHOSTDOWN || rc == -EHOSTUNREACH) {
+		struct lfsck_layout_master_data *llmd = com->lc_data;
+
+		if (unlikely(llmd->llmd_exit)) {
+			rc = 0;
+		} else if (rc == -ENOTCONN || rc == -ESHUTDOWN ||
+			   rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
+			   rc == -EHOSTUNREACH) {
+			/* If cannot touch the target server,
+			 * mark the LFSCK as INCOMPLETE. */
 			CERROR("%s: Fail to talk with OST %x: rc = %d.\n",
 			       lfsck_lfsck2name(lfsck), llr->llr_ost_idx, rc);
 			lo->ll_flags |= LF_INCOMPLETE;
@@ -3363,7 +3359,8 @@ static int lfsck_layout_assistant(void *args)
 		while (!list_empty(&llmd->llmd_req_list)) {
 			bool wakeup = false;
 
-			if (unlikely(llmd->llmd_exit))
+			if (unlikely(llmd->llmd_exit ||
+				     !thread_is_running(mthread)))
 				GOTO(cleanup1, rc = llmd->llmd_post_result);
 
 			llr = list_entry(llmd->llmd_req_list.next,
@@ -3576,7 +3573,7 @@ cleanup2:
 	/* Under force exit case, some requests may be just freed without
 	 * verification, those objects should be re-handled when next run.
 	 * So not update the on-disk tracing file under such case. */
-	if (!llmd->llmd_exit)
+	if (llmd->llmd_in_double_scan && !llmd->llmd_exit)
 		rc1 = lfsck_layout_double_scan_result(env, com, rc);
 
 fini:
@@ -5237,7 +5234,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 	if (ltd == NULL) {
 		spin_unlock(&ltds->ltd_lock);
 
-		RETURN(-ENODEV);
+		RETURN(-ENXIO);
 	}
 
 	list_del_init(&ltd->ltd_layout_phase_list);
@@ -5363,7 +5360,7 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 
 	llst = lfsck_layout_llst_find_and_del(llsd, lr->lr_index, true);
 	if (llst == NULL)
-		RETURN(-ENODEV);
+		RETURN(-ENXIO);
 
 	lfsck_layout_llst_put(llst);
 	if (list_empty(&llsd->llsd_master_list))
@@ -5795,7 +5792,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 
 	lfsck = lfsck_instance_find(dev, true, false);
 	if (unlikely(lfsck == NULL))
-		RETURN(ERR_PTR(-ENODEV));
+		RETURN(ERR_PTR(-ENXIO));
 
 	com = lfsck_component_find(lfsck, LT_LAYOUT);
 	if (unlikely(com == NULL))
@@ -5811,7 +5808,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 
 	it->loi_llst = lfsck_layout_llst_find_and_del(llsd, attr, false);
 	if (it->loi_llst == NULL)
-		GOTO(out, rc = -ENODEV);
+		GOTO(out, rc = -ENXIO);
 
 	if (dev->dd_record_fid_accessed) {
 		/* The first iteration against the rbtree, scan the whole rbtree
