@@ -2869,7 +2869,7 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
 				    &lname, &fid);
 
-		if (strncmp(lname.ln_name, name, namelen) ||
+		if (strncmp(lname.ln_name, name, namelen) != 0 ||
 		    lu_fid_eq(&fid, mdd_object_fid(parent))) {
 			ldata.ld_lee = (struct link_ea_entry *)
 				       ((char *)ldata.ld_lee +
@@ -3730,6 +3730,11 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	if (is_dir)
 		mdo_ref_del(env, mdd_sobj, handle);
 
+	/* Get the attr again after ref_del */
+	rc = mdd_la_get(env, mdd_sobj, so_attr,
+			mdd_object_capa(env, mdd_sobj));
+	if (rc != 0)
+		GOTO(stop_trans, rc);
 	ma->ma_attr = *so_attr;
 	ma->ma_valid |= MA_INODE;
 	rc = mdd_finish_unlink(env, mdd_sobj, ma, handle);
@@ -3860,22 +3865,18 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
-		       const struct lu_fid *lf, const struct lu_name *lname,
+		       struct md_object *sobj, const struct lu_name *lname,
 		       struct md_object *tobj, struct md_attr *ma)
 {
 	struct mdd_object	*mdd_pobj = md2mdd_obj(pobj);
 	struct mdd_device	*mdd = mdo2mdd(pobj);
-	struct mdd_object	*mdd_sobj = NULL;
+	struct mdd_object	*mdd_sobj = md2mdd_obj(sobj);
 	struct mdd_object	*mdd_tobj = NULL;
 	struct lu_attr		*so_attr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr		*pattr = MDD_ENV_VAR(env, pattr);
 	int			rc;
 
 	ENTRY;
-	/* object has to be locked by mdt, so it must exist */
-	mdd_sobj = mdd_object_find(env, mdd, lf);
-	LASSERT(mdd_sobj != NULL);
-
 	/* If the file will being migrated, it will check whether
 	 * the file is being opened by someone else right now */
 	mdd_read_lock(env, mdd_sobj, MOR_SRC_CHILD);
@@ -3955,9 +3956,6 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 	if (rc != 0)
 		GOTO(put, rc);
 put:
-	if (mdd_sobj)
-		mdd_object_put(env, mdd_sobj);
-
 	RETURN(rc);
 }
 

@@ -1049,7 +1049,8 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 		lastid = cpu_to_le64(lls->lls_lastid);
 		rc = dt_declare_record_write(env, lls->lls_lastid_obj,
 					     lfsck_buf_get(env, &lastid,
-					     sizeof(lastid)), pos, th);
+							   sizeof(lastid)),
+					     pos, th);
 		if (rc != 0)
 			goto stop;
 

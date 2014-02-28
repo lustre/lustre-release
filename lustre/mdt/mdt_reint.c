@@ -1125,18 +1125,29 @@ static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
 	return rc;
 }
 
+enum mdt_rename_lock {
+	MRL_RENAME,
+	MRL_MIGRATE,
+};
+
+/**
+ * Get BFL lock for rename or migrate process, right now, it does not support
+ * cross-MDT rename, so we only need global rename lock during migration.
+ **/
 static int mdt_rename_lock(struct mdt_thread_info *info,
-			   struct lustre_handle *lh, bool rename)
+			   struct lustre_handle *lh,
+			   enum mdt_rename_lock rename_lock)
 {
 	struct ldlm_namespace	*ns = info->mti_mdt->mdt_namespace;
-	__u64			flags = 0;
-	int			rc;
 	ldlm_policy_data_t	*policy = &info->mti_policy;
 	struct ldlm_res_id	*res_id = &info->mti_res_id;
+	__u64			flags = 0;
+	int			rc;
 	ENTRY;
 
 	/* XXX only do global rename lock for migration */
-	if (mdt_seq_site(info->mti_mdt)->ss_node_id != 0 && !rename) {
+	if (mdt_seq_site(info->mti_mdt)->ss_node_id != 0 &&
+	    rename_lock == MRL_MIGRATE) {
 		struct lu_fid *fid = &info->mti_tmp_fid1;
 		struct mdt_object *obj;
 
@@ -1468,8 +1479,9 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		if (IS_ERR(mnew))
 			GOTO(out_unlock_child, rc = PTR_ERR(mnew));
 		if (!mdt_object_remote(mnew)) {
-			CERROR("%s: Migration "DFID" is on this MDT !\n",
-			       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid2));
+			CERROR("%s: Migration "DFID" is on this MDT:"
+			       " rc = %d\n", mdt_obd_name(info->mti_mdt),
+			       PFID(rr->rr_fid2), -EXDEV);
 			GOTO(out_put_new, rc = -EXDEV);
 		}
 	}
@@ -1481,7 +1493,8 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		       OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
 	rc = mdo_migrate(info->mti_env, mdt_object_child(msrcdir),
-			 old_fid, &rr->rr_name, mdt_object_child(mnew), ma);
+			 mdt_object_child(mold), &rr->rr_name,
+			 mdt_object_child(mnew), ma);
 	if (rc != 0)
 		GOTO(out_unlock_new, rc);
 out_unlock_new:
@@ -1754,7 +1767,7 @@ out_unlock_source:
 
 static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 				       struct mdt_lock_handle *lhc,
-				       bool  rename)
+				       enum mdt_rename_lock rename_lock)
 {
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct ptlrpc_request   *req = mdt_info_req(info);
@@ -1769,14 +1782,14 @@ static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 	    fid_is_obf(rr->rr_fid2) || fid_is_dot_lustre(rr->rr_fid2))
 		RETURN(-EPERM);
 
-	rc = mdt_rename_lock(info, &rename_lh, rename);
+	rc = mdt_rename_lock(info, &rename_lh, rename_lock);
 	if (rc != 0) {
 		CERROR("%s: can't lock FS for rename: rc  = %d\n",
 		       mdt_obd_name(info->mti_mdt), rc);
 		RETURN(rc);
 	}
 
-	if (rename)
+	if (rename_lock == MRL_RENAME)
 		rc = mdt_reint_rename_internal(info, lhc);
 	else
 		rc = mdt_reint_migrate_internal(info, lhc);
@@ -1790,13 +1803,13 @@ static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 static int mdt_reint_rename(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
-	return mdt_reint_rename_or_migrate(info, lhc, true);
+	return mdt_reint_rename_or_migrate(info, lhc, MRL_RENAME);
 }
 
 static int mdt_reint_migrate(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
-	return mdt_reint_rename_or_migrate(info, lhc, false);
+	return mdt_reint_rename_or_migrate(info, lhc, MRL_MIGRATE);
 }
 
 typedef int (*mdt_reinter)(struct mdt_thread_info *info,

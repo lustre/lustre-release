@@ -232,6 +232,8 @@ static int lov_init_raid0(const struct lu_env *env,
 	r0->lo_nr  = lsm->lsm_stripe_count;
 	LASSERT(r0->lo_nr <= lov_targets_nr(dev));
 
+	lov->lo_layout_invalid = true;
+
 	OBD_ALLOC_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
 	if (r0->lo_sub != NULL) {
 		int psz = 0;
