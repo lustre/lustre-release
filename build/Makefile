@@ -10,8 +10,6 @@
 # 3.  At configure time, as the toplevel module dir for building
 #     kernel tests
 #
-# 4.  At configure time, to determine the kernel's idea of $(ARCH)
-#
 
 ifeq ($(PATCHLEVEL),)
 
@@ -32,8 +30,7 @@ endif # LUSTRE_LINUX_CONFIG
 
 else # PATCHLEVEL
 
-# case 3
-
+# case #3
 ifneq ($(LUSTRE_KERNEL_TEST),)
 extra-y = $(LUSTRE_KERNEL_TEST)
 endif
@@ -41,8 +38,3 @@ endif
 obj-m := conftest.o
 
 endif # PATCHLEVEL
-
-# case 4
-
-echoarch:
-	echo $(ARCH) >$(ARCHFILE)
