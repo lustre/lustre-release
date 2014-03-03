@@ -6606,7 +6606,11 @@ test_103 () {
 	fi
 
 	echo "LU-2561 newly created file is same size as directory..."
-	run_acl_subtest 2561 || error "LU-2561 test failed"
+	if [ $(facet_fstype $SINGLEMDS) != "zfs" ]; then
+		run_acl_subtest 2561 || error "LU-2561 test failed"
+	else
+		run_acl_subtest 2561_zfs || error "LU-2561 zfs test failed"
+	fi
 
 	run_acl_subtest 4924 || error "LU-4924 test failed"
 
