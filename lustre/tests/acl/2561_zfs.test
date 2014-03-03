@@ -5,7 +5,7 @@ LU-2561 newly created file is same size as directory
 	$ getfacl --access . | setfacl -d -M- .
 	$ touch f1
 	$ ls -s f1
-	> 0 f1
+	> 1 f1
 	$ cd ..
 	$ rm -rf 2561
 

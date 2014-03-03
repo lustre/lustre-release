@@ -32,9 +32,16 @@ my ($prog, $in, $out) = ([], [], []);
 my $line_number = 0;
 my $prog_line;
 my ($tests, $failed) = (0,0);
+my $testfile;
 
+if (!defined($ARGV[0])) {
+	print "No test file specified\n";
+	exit 1;
+}
+
+open($testfile, $ARGV[0]) or die "Can't open file $ARGV[0]: $!";
 for (;;) {
-  my $line = <>; $line_number++;
+  my $line = <$testfile>; $line_number++;
   if (defined $line) {
     # Substitute %VAR and %{VAR} with environment variables.
     $line =~ s[%(?:(\w+)|\{(\w+)\})][$ENV{"$1$2"}]eg;
@@ -62,6 +69,7 @@ for (;;) {
     last;
   }
 }
+close($testfile);
 
 my $status = sprintf("%d commands (%d passed, %d failed)",
 	$tests, $tests-$failed, $failed);
