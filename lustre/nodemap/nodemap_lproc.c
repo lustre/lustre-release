@@ -69,11 +69,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 
 static int nodemap_idmap_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry	*dir;
-	struct lu_nodemap	*nodemap;
-
-	dir = PDE(inode);
-	nodemap = dir->data;
+	struct lu_nodemap *nodemap = PDE_DATA(inode);
 
 	return single_open(file, nodemap_idmap_show, nodemap);
 }
@@ -104,11 +100,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry	*dir;
-	struct lu_nodemap	*nodemap;
-
-	dir = PDE(inode);
-	nodemap = dir->data;
+	struct lu_nodemap *nodemap = PDE_DATA(inode);
 
 	return single_open(file, nodemap_ranges_show, nodemap);
 }
