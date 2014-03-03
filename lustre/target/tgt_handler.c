@@ -39,6 +39,7 @@
 #include <obd_cksum.h>
 #include <md_object.h>
 #include <lustre_lfsck.h>
+#include <lustre_nodemap.h>
 
 #include "tgt_internal.h"
 
@@ -242,6 +243,7 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	struct ost_body		*body;
 	struct req_capsule	*pill = tsi->tsi_pill;
 	struct lustre_capa	*capa;
+	struct lu_nodemap	*nodemap;
 	int			 rc;
 
 	ENTRY;
@@ -253,6 +255,15 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	rc = tgt_validate_obdo(tsi, &body->oa);
 	if (rc)
 		RETURN(rc);
+
+	nodemap = tsi->tsi_exp->exp_target_data.ted_nodemap;
+
+	body->oa.o_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+					NODEMAP_CLIENT_TO_FS,
+					body->oa.o_uid);
+	body->oa.o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+					NODEMAP_CLIENT_TO_FS,
+					body->oa.o_gid);
 
 	if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
 		capa = req_capsule_client_get(pill, &RMF_CAPA1);

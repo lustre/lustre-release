@@ -29,7 +29,7 @@
 #include "nodemap_internal.h"
 
 /**
- * allocate the lu_idmap structure
+ * Allocate the lu_idmap structure
  *
  * \param	client_id		client uid or gid
  * \param	fs_id			filesystem uid or gid
@@ -63,7 +63,7 @@ static void idmap_destroy(struct lu_idmap *idmap)
 }
 
 /**
- * insert idmap into the proper trees
+ * Insert idmap into the proper trees
  *
  * \param	node_type		0 for UID
  *					1 for GID
@@ -102,7 +102,7 @@ void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 	bck_node = &bck_root->rb_node;
 
 	/* find fwd and bck idmap nodes before insertion or
-	 * replacing to precent split brain idmaps
+	 * replacing to prevent split brain idmaps
 	 */
 	while (*fwd_node) {
 		fwd_parent = *fwd_node;
@@ -117,7 +117,6 @@ void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 			replace = true;
 			break;
 		}
-
 	}
 
 	if (!replace) {
@@ -134,7 +133,6 @@ void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 				replace = true;
 				break;
 			}
-
 		}
 	}
 
@@ -156,7 +154,7 @@ void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 }
 
 /**
- * delete idmap from the correct nodemap tree
+ * Delete idmap from the correct nodemap tree
  *
  * \param	node_type		0 for UID
  *					1 for GID
@@ -184,7 +182,7 @@ void idmap_delete(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 }
 
 /**
- * search for an existing id in the nodemap trees
+ * Search for an existing id in the nodemap trees.
  *
  * \param	nodemap		nodemap trees to search
  * \param	tree_type	0 for filesystem to client maps

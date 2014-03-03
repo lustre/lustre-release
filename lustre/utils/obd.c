@@ -3740,8 +3740,10 @@ int jt_nodemap_modify(int argc, char **argv)
 	}
 
 	if (nodemap_name == NULL || param == NULL || value == NULL) {
-		fprintf(stderr, "usage: nodemap_modify --name <name> "
-				"--property <range> --value <value>\n");
+		fprintf(stderr, "usage: nodemap_modify --name <nodemap_name> "
+				"--property <property_name> --value <value>\n");
+		fprintf(stderr, "valid properties: admin trusted "
+				"squash_uid squash_gid\n");
 		return -1;
 	}
 
@@ -3908,7 +3910,7 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 	rc = nodemap_cmd(cmd, NULL, 0, argv[0], nodemap_name, idmap, NULL);
 	if (rc != 0) {
 		errno = -rc;
-		fprintf(stderr, "cannot add %smap '%s' to nodemap '%s'"
+		fprintf(stderr, "cannot delete %smap '%s' from nodemap '%s'"
 			": rc = %d\n", idtype, idmap, nodemap_name, rc);
 	}
 

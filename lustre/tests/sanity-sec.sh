@@ -732,6 +732,10 @@ squash_id() {
 	fi
 }
 
+# ensure that the squash defaults are the expected defaults
+squash_id default 99 0
+squash_id default 99 1
+
 test_nid() {
 	local cmd
 
@@ -1194,11 +1198,14 @@ run_test 15 "test id mapping"
 log "cleanup: ======================================================"
 
 sec_unsetup() {
-       	for num in `seq $MDSCOUNT`; do
+	## nodemap deactivated
+	do_facet mgs lctl nodemap_activate 0
+
+	for num in $(seq $MDSCOUNT); do
 		if [ "${identity_old[$num]}" = 1 ]; then
-       			switch_identity $num false || identity_old[$num]=$?
+			switch_identity $num false || identity_old[$num]=$?
 		fi
-       	done
+	done
 
 	$RUNAS -u $ID0 ls $DIR
 	$RUNAS -u $ID1 ls $DIR

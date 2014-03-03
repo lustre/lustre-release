@@ -49,6 +49,7 @@
 #include <lustre_ioctl.h>
 #include <lustre_quota.h>
 #include <lustre_lfsck.h>
+#include <lustre_nodemap.h>
 
 /**
  * Initialize OFD per-export statistics.
@@ -64,7 +65,8 @@
  * \retval		negative value on error
  */
 static int ofd_export_stats_init(struct ofd_device *ofd,
-				 struct obd_export *exp, void *client_nid)
+				 struct obd_export *exp,
+				 lnet_nid_t *client_nid)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
@@ -296,7 +298,8 @@ static int ofd_parse_connect_data(const struct lu_env *env,
  */
 static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
-			     struct obd_connect_data *data, void *localdata)
+			     struct obd_connect_data *data,
+			     void *client_nid)
 {
 	struct ofd_device	*ofd;
 	int			 rc;
@@ -310,7 +313,9 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 
 	rc = ofd_parse_connect_data(env, exp, data, false);
 	if (rc == 0)
-		ofd_export_stats_init(ofd, exp, localdata);
+		ofd_export_stats_init(ofd, exp, client_nid);
+
+	nodemap_add_member(*(lnet_nid_t *)client_nid, exp);
 
 	RETURN(rc);
 }
@@ -340,6 +345,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	struct ofd_device	*ofd;
 	struct lustre_handle	 conn = { 0 };
 	int			 rc;
+	lnet_nid_t		*client_nid;
 	ENTRY;
 
 	if (_exp == NULL || obd == NULL || cluuid == NULL)
@@ -358,6 +364,11 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	if (rc)
 		GOTO(out, rc);
 
+	if (localdata != NULL) {
+		client_nid = localdata;
+		nodemap_add_member(*client_nid, exp);
+	}
+
 	if (obd->obd_replayable) {
 		struct tg_export_data *ted = &exp->exp_target_data;
 
@@ -374,6 +385,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 
 out:
 	if (rc != 0) {
+		nodemap_del_member(exp);
 		class_disconnect(exp);
 		*_exp = NULL;
 	} else {
@@ -407,6 +419,7 @@ int ofd_obd_disconnect(struct obd_export *exp)
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		ofd_grant_sanity_check(ofd_obd(ofd), __FUNCTION__);
 
+	nodemap_del_member(exp);
 	rc = server_disconnect_export(exp);
 
 	ofd_grant_discard(exp);

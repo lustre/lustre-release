@@ -50,6 +50,7 @@
 
 #include "mdt_internal.h"
 #include <lnet/nidstr.h>
+#include <lustre_nodemap.h>
 
 typedef enum ucred_init_type {
         NONE_INIT       = 0,
@@ -421,14 +422,37 @@ out:
         return rc;
 }
 
+static void mdt_squash_nodemap_id(struct lu_ucred *ucred,
+				  struct lu_nodemap *nodemap)
+{
+	if (ucred->uc_o_uid == nodemap->nm_squash_uid) {
+		ucred->uc_fsuid = nodemap->nm_squash_uid;
+		ucred->uc_fsgid = nodemap->nm_squash_gid;
+		ucred->uc_cap = 0;
+		ucred->uc_suppgids[0] = -1;
+		ucred->uc_suppgids[1] = -1;
+	}
+}
+
+
 static int old_init_ucred(struct mdt_thread_info *info,
 			  struct mdt_body *body)
 {
-	struct lu_ucred *uc = mdt_ucred(info);
-	struct mdt_device  *mdt = info->mti_mdt;
-	struct md_identity *identity = NULL;
-
+	struct lu_ucred		*uc = mdt_ucred(info);
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct md_identity	*identity = NULL;
+	struct lu_nodemap	*nodemap =
+		info->mti_exp->exp_target_data.ted_nodemap;
 	ENTRY;
+
+	body->mbo_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+				       NODEMAP_CLIENT_TO_FS, body->mbo_uid);
+	body->mbo_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+				       NODEMAP_CLIENT_TO_FS, body->mbo_gid);
+	body->mbo_fsuid = nodemap_map_id(nodemap, NODEMAP_UID,
+				       NODEMAP_CLIENT_TO_FS, body->mbo_fsuid);
+	body->mbo_fsgid = nodemap_map_id(nodemap, NODEMAP_GID,
+				       NODEMAP_CLIENT_TO_FS, body->mbo_fsgid);
 
 	LASSERT(uc != NULL);
 	uc->uc_valid = UCRED_INVALID;
@@ -454,6 +478,8 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	}
 	uc->uc_identity = identity;
 
+	mdt_squash_nodemap_id(uc, nodemap);
+
 	/* process root_squash here. */
 	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
@@ -470,17 +496,25 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
 static int old_init_ucred_reint(struct mdt_thread_info *info)
 {
-	struct lu_ucred *uc = mdt_ucred(info);
-	struct mdt_device  *mdt = info->mti_mdt;
-	struct md_identity *identity = NULL;
-
+	struct lu_ucred		*uc = mdt_ucred(info);
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct md_identity	*identity = NULL;
+	struct lu_nodemap	*nodemap =
+		info->mti_exp->exp_target_data.ted_nodemap;
 	ENTRY;
 
 	LASSERT(uc != NULL);
+
+	uc->uc_fsuid = nodemap_map_id(nodemap, NODEMAP_UID,
+				      NODEMAP_CLIENT_TO_FS, uc->uc_fsuid);
+	uc->uc_fsgid = nodemap_map_id(nodemap, NODEMAP_GID,
+				      NODEMAP_CLIENT_TO_FS, uc->uc_fsgid);
+
 	uc->uc_valid = UCRED_INVALID;
 	uc->uc_o_uid = uc->uc_o_fsuid = uc->uc_uid = uc->uc_fsuid;
 	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
 	uc->uc_ginfo = NULL;
+
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
@@ -884,12 +918,14 @@ int mdt_name_unpack(struct req_capsule *pill,
 
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc  = mdt_ucred(info);
-        struct md_attr          *ma = &info->mti_attr;
-        struct lu_attr          *la = &ma->ma_attr;
-        struct req_capsule      *pill = info->mti_pill;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct mdt_rec_setattr  *rec;
+	struct lu_ucred		*uc = mdt_ucred(info);
+	struct md_attr		*ma = &info->mti_attr;
+	struct lu_attr		*la = &ma->ma_attr;
+	struct req_capsule	*pill = info->mti_pill;
+	struct mdt_reint_record	*rr = &info->mti_rr;
+	struct mdt_rec_setattr	*rec;
+	struct lu_nodemap	*nodemap =
+		info->mti_exp->exp_target_data.ted_nodemap;
         ENTRY;
 
         CLASSERT(sizeof(struct mdt_rec_setattr)== sizeof(struct mdt_rec_reint));
@@ -920,16 +956,18 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 		     (rec->sa_valid & MDS_ATTR_CTIME))
 			la->la_valid |= LA_CTIME;
 	}
-        la->la_mode  = rec->sa_mode;
-        la->la_flags = rec->sa_attr_flags;
-        la->la_uid   = rec->sa_uid;
-        la->la_gid   = rec->sa_gid;
-        la->la_size  = rec->sa_size;
-        la->la_blocks = rec->sa_blocks;
-        la->la_ctime = rec->sa_ctime;
-        la->la_atime = rec->sa_atime;
-        la->la_mtime = rec->sa_mtime;
-        ma->ma_valid = MA_INODE;
+	la->la_mode  = rec->sa_mode;
+	la->la_flags = rec->sa_attr_flags;
+	la->la_uid   = nodemap_map_id(nodemap, NODEMAP_UID,
+				      NODEMAP_CLIENT_TO_FS, rec->sa_uid);
+	la->la_gid   = nodemap_map_id(nodemap, NODEMAP_GID,
+				      NODEMAP_CLIENT_TO_FS, rec->sa_gid);
+	la->la_size  = rec->sa_size;
+	la->la_blocks = rec->sa_blocks;
+	la->la_ctime = rec->sa_ctime;
+	la->la_atime = rec->sa_atime;
+	la->la_mtime = rec->sa_mtime;
+	ma->ma_valid = MA_INODE;
 
 	if (rec->sa_bias & MDS_DATA_MODIFIED)
 		ma->ma_attr_flags |= MDS_DATA_MODIFIED;

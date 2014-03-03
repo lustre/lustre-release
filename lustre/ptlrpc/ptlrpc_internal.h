@@ -296,6 +296,8 @@ static inline int ll_rpc_recoverable_error(int rc)
 #ifdef HAVE_SERVER_SUPPORT
 int tgt_mod_init(void);
 void tgt_mod_exit(void);
+int nodemap_mod_init(void);
+void nodemap_mod_exit(void);
 #else /* HAVE_SERVER_SUPPORT */
 static inline int tgt_mod_init(void)
 {
@@ -303,6 +305,16 @@ static inline int tgt_mod_init(void)
 }
 
 static inline void tgt_mod_exit(void)
+{
+	return;
+}
+
+static inline int nodemap_mod_init(void)
+{
+	return 0;
+}
+
+static inline void nodemap_mod_exit(void)
 {
 	return;
 }

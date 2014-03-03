@@ -36,7 +36,8 @@
  * classified into their nodemaps, and the lu_nodemap structure will be
  * set in the export structure for the connecting client. Pointers to
  * the lu_nid_range nodes will be added to linked links within the
- * lu_nodemap structure for reporting purposes.A
+ * lu_nodemap structure for reporting purposes. Access to range tree should be
+ * controlled to prevent read access during update operations.
  */
 
 static struct interval_node *range_interval_root;

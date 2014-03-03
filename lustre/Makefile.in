@@ -4,7 +4,7 @@ subdir-m += ptlrpc
 subdir-m += obdecho
 subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += ost mgs mdt mdd ofd quota osp lod lfsck nodemap
+@SERVER_TRUE@subdir-m += ost mgs mdt mdd ofd quota osp lod lfsck
 @CLIENT_TRUE@subdir-m += lov osc mdc lmv llite fld
 @LDISKFS_ENABLED_TRUE@subdir-m += osd-ldiskfs
 @ZFS_ENABLED_TRUE@subdir-m += osd-zfs

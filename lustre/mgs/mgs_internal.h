@@ -217,7 +217,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		 char *ostname);
 int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		    enum lcfg_command_type cmd, const char *nodemap_name,
-		    const char *param);
+		    char *param);
 
 /* mgs_handler.c */
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,

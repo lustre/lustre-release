@@ -3972,7 +3972,7 @@ out:
 
 int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		    enum lcfg_command_type cmd, const char *nodemap_name,
-		    const char *param)
+		    char *param)
 {
 	lnet_nid_t	nid[2];
 	__u32		idmap[2];

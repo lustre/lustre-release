@@ -71,6 +71,8 @@ struct lu_nodemap {
 	gid_t			nm_squash_gid;
 	/* NID range list */
 	struct list_head	nm_ranges;
+	/* lock for idmap red/black trees */
+	rwlock_t		nm_idmap_lock;
 	/* UID map keyed by local UID */
 	struct rb_root		nm_fs_to_client_uidmap;
 	/* UID map keyed by remote UID */
@@ -82,7 +84,7 @@ struct lu_nodemap {
 	/* proc directory entry */
 	struct proc_dir_entry	*nm_proc_entry;
 	/* attached client members of this nodemap */
-	struct list_head	nm_exports;
+	cfs_hash_t		*nm_member_hash;
 	/* access by nodemap name */
 	struct hlist_node	nm_hash;
 };
@@ -91,14 +93,17 @@ void nodemap_activate(const bool value);
 int nodemap_add(const char *nodemap_name);
 int nodemap_del(const char *nodemap_name);
 struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid);
+int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp);
+void nodemap_del_member(struct obd_export *exp);
 int nodemap_parse_range(const char *range_string, lnet_nid_t range[2]);
-int nodemap_parse_idmap(const char *idmap_string, __u32 idmap[2]);
+int nodemap_parse_idmap(char *idmap_string, __u32 idmap[2]);
 int nodemap_add_range(const char *name, const lnet_nid_t nid[2]);
 int nodemap_del_range(const char *name, const lnet_nid_t nid[2]);
 int nodemap_set_allow_root(const char *name, bool allow_root);
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
+bool nodemap_can_setquota(const struct lu_nodemap *nodemap);
 int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
@@ -106,4 +111,6 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
 		     enum nodemap_tree_type tree_type, __u32 id);
+ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
+			enum nodemap_tree_type tree_type);
 #endif	/* _LUSTRE_NODEMAP_H */

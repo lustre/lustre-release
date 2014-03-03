@@ -43,6 +43,8 @@ struct lprocfs_static_vars;
 extern struct proc_dir_entry *proc_lustre_nodemap_root;
 /* flag if nodemap is active */
 extern bool nodemap_active;
+/* lock for range interval tree, used in nodemap_lproc.c */
+extern rwlock_t nm_range_tree_lock;
 
 struct lu_nid_range {
 	/* unique id set my mgs */
@@ -90,6 +92,13 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_id_type id_type,
 			      __u32 id);
 int nodemap_cleanup_nodemaps(void);
+int nm_member_init_hash(struct lu_nodemap *nodemap);
+int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);
+void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp);
+void nm_member_delete_hash(struct lu_nodemap *nodemap);
+void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
+void nm_member_revoke_locks(struct lu_nodemap *nodemap);
+void nm_member_revoke_all(void);
 
 struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);

@@ -46,6 +46,8 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/xattr.h>
+#include <obd_class.h>
+#include <lustre_nodemap.h>
 #include <lustre_acl.h>
 #include "mdt_internal.h"
 
@@ -354,25 +356,27 @@ _out:
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *unused)
 {
-	struct ptlrpc_request   *req = mdt_info_req(info);
-	struct lu_ucred         *uc  = lu_ucred(info->mti_env);
-        struct mdt_lock_handle  *lh;
-        const struct lu_env     *env  = info->mti_env;
-        struct lu_buf           *buf  = &info->mti_buf;
-        struct mdt_reint_record *rr   = &info->mti_rr;
-        struct md_attr          *ma = &info->mti_attr;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_object       *obj;
-        struct md_object        *child;
-        __u64                    valid = attr->la_valid;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct lu_ucred		*uc  = lu_ucred(info->mti_env);
+	struct mdt_lock_handle	*lh;
+	const struct lu_env	*env  = info->mti_env;
+	struct lu_buf		*buf  = &info->mti_buf;
+	struct mdt_reint_record	*rr   = &info->mti_rr;
+	struct md_attr		*ma = &info->mti_attr;
+	struct lu_attr		*attr = &info->mti_attr.ma_attr;
+	struct mdt_object	*obj;
+	struct md_object	*child;
+	struct obd_export	*exp = info->mti_exp;
+	struct lu_nodemap	*nodemap = exp->exp_target_data.ted_nodemap;
+	__u64			 valid = attr->la_valid;
 	const char		*xattr_name = rr->rr_name.ln_name;
-        int                      xattr_len = rr->rr_eadatalen;
-        __u64                    lockpart;
-        int                      rc;
-        posix_acl_xattr_header  *new_xattr = NULL;
-        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
-        __u32                    perm;
-        ENTRY;
+	int			 xattr_len = rr->rr_eadatalen;
+	__u64			 lockpart;
+	int			 rc;
+	posix_acl_xattr_header	*new_xattr = NULL;
+	__u32			 remote = exp_connect_rmtclient(info->mti_exp);
+	__u32			 perm;
+	ENTRY;
 
         CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
 
@@ -422,9 +426,19 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	} else if ((valid & OBD_MD_FLXATTR) &&
 		   (strcmp(xattr_name, XATTR_NAME_ACL_ACCESS) == 0 ||
 		    strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0)) {
+
 		/* currently lustre limit acl access size */
 		if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
 			GOTO(out, rc = -ERANGE);
+
+		rc = nodemap_map_acl(nodemap, rr->rr_eadata, xattr_len,
+				     NODEMAP_CLIENT_TO_FS);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		/* ACLs were mapped out, return an error so the user knows */
+		if (rc != xattr_len)
+			GOTO(out, rc = -EPERM);
 	}
 
         lockpart = MDS_INODELOCK_UPDATE;
@@ -447,8 +461,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
          * to cancel them. */
         mdt_lock_reg_init(lh, LCK_EX);
         obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
-        if (IS_ERR(obj))
-                GOTO(out, rc =  PTR_ERR(obj));
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
 
 	tgt_vbr_obj_set(env, mdt_obj2dt(obj));
 	rc = mdt_version_get_check_save(info, obj, 0);
@@ -464,10 +478,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		      PFID(rr->rr_fid1), valid);
 		attr->la_ctime = cfs_time_current_sec();
 	}
-        attr->la_valid = LA_CTIME;
-        child = mdt_object_child(obj);
-        if (valid & OBD_MD_FLXATTR) {
-                char *xattr = (void *)rr->rr_eadata;
+	attr->la_valid = LA_CTIME;
+	child = mdt_object_child(obj);
+	if (valid & OBD_MD_FLXATTR) {
+		char *xattr = rr->rr_eadata;
 
                 if (xattr_len > 0) {
                         int flags = 0;

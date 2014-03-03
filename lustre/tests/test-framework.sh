@@ -520,7 +520,6 @@ load_modules_local() {
 			load_module ../ldiskfs/ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi
-		load_module nodemap/nodemap
 		load_module mgs/mgs
 		load_module mdd/mdd
 		load_module mdt/mdt

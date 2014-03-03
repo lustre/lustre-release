@@ -326,7 +326,7 @@ struct mdt_reint_record {
 	const struct lu_fid		*rr_fid2;
 	struct lu_name			 rr_name;
 	struct lu_name			 rr_tgt_name;
-	const void			*rr_eadata;
+	void				*rr_eadata;
 	int				 rr_eadatalen;
 	__u32				 rr_flags;
 };

@@ -75,6 +75,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lustre_quota.h>
+#include <lustre_nodemap.h>
 
 #include "ofd_internal.h"
 
@@ -2100,6 +2101,9 @@ out:
 static int ofd_quotactl(struct tgt_session_info *tsi)
 {
 	struct obd_quotactl	*oqctl, *repoqc;
+	struct lu_nodemap	*nodemap =
+		tsi->tsi_exp->exp_target_data.ted_nodemap;
+	int			 id;
 	int			 rc;
 
 	ENTRY;
@@ -2118,10 +2122,27 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 		RETURN(0);
 
 	*repoqc = *oqctl;
+
+	id = repoqc->qc_id;
+	if (oqctl->qc_type == USRQUOTA)
+		id = nodemap_map_id(nodemap, NODEMAP_UID,
+				    NODEMAP_CLIENT_TO_FS,
+				    repoqc->qc_id);
+	else if (oqctl->qc_type == GRPQUOTA)
+		id = nodemap_map_id(nodemap, NODEMAP_GID,
+				    NODEMAP_CLIENT_TO_FS,
+				    repoqc->qc_id);
+
+	if (repoqc->qc_id != id)
+		swap(repoqc->qc_id, id);
+
 	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
 			 tsi->tsi_jobid, 1);
+
+	if (repoqc->qc_id != id)
+		swap(repoqc->qc_id, id);
 
 	RETURN(rc);
 }
