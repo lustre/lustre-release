@@ -92,6 +92,8 @@ const char *lfsck_param_names[] = {
 	"failout",
 	"dryrun",
 	"all_targets",
+	"broadcast",
+	"orphan",
 	NULL
 };
 
@@ -904,8 +906,9 @@ int lfsck_bits_dump(char **buf, int *len, int bits, const char *names[],
 	int flag;
 	int rc;
 	int i;
+	bool newline = (bits != 0 ? false : true);
 
-	rc = snprintf(*buf, *len, "%s:%c", prefix, bits != 0 ? ' ' : '\n');
+	rc = snprintf(*buf, *len, "%s:%c", prefix, newline ? '\n' : ' ');
 	if (rc <= 0)
 		return -ENOSPC;
 
@@ -915,8 +918,11 @@ int lfsck_bits_dump(char **buf, int *len, int bits, const char *names[],
 		if (flag & bits) {
 			bits &= ~flag;
 			if (names[i] != NULL) {
+				if (bits == 0)
+					newline = true;
+
 				rc = snprintf(*buf, *len, "%s%c", names[i],
-					      bits != 0 ? ',' : '\n');
+					      newline ? '\n' : ',');
 				if (rc <= 0)
 					return -ENOSPC;
 
@@ -925,6 +931,16 @@ int lfsck_bits_dump(char **buf, int *len, int bits, const char *names[],
 			}
 		}
 	}
+
+	if (!newline) {
+		rc = snprintf(*buf, *len, "\n");
+		if (rc <= 0)
+			return -ENOSPC;
+
+		*buf += rc;
+		*len -= rc;
+	}
+
 	return save - *len;
 }
 
