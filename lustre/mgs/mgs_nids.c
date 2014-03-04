@@ -838,15 +838,14 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
         return 0;
 }
 
-int lprocfs_rd_ir_timeout(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
+int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)
 {
-        *eof = 1;
-        return snprintf(page, count, "%d\n", ir_timeout);
+	return lprocfs_uint_seq_show(m, &ir_timeout);
 }
 
-int lprocfs_wr_ir_timeout(struct file *file, const char *buffer,
-                          unsigned long count, void *data)
+ssize_t
+lprocfs_ir_timeout_seq_write(struct file *file, const char *buffer,
+			     size_t count, loff_t *off)
 {
         return lprocfs_wr_uint(file, buffer, count, &ir_timeout);
 }

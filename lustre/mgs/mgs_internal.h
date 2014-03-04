@@ -229,10 +229,10 @@ int  mgs_get_ir_logs(struct ptlrpc_request *req);
 int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
                            unsigned long count, void *data);
 int  lprocfs_rd_ir_state(struct seq_file *seq, void *data);
-int  lprocfs_wr_ir_timeout(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int  lprocfs_rd_ir_timeout(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
+ssize_t
+lprocfs_ir_timeout_seq_write(struct file *file, const char *buffer,
+			     size_t count, loff_t *off);
+int  lprocfs_ir_timeout_seq_show(struct seq_file *seq, void *data);
 void mgs_fsc_cleanup(struct obd_export *exp);
 void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb);
 int  mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
@@ -250,7 +250,6 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name);
 void lproc_mgs_cleanup(struct mgs_device *mgs);
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
-void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 {return 0;}
@@ -260,10 +259,6 @@ static inline int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {return 0;}
 static inline int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {return 0;}
-static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
 #endif
 
 /* mgs/lproc_mgs.c */

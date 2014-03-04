@@ -126,8 +126,100 @@ static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
 
         return 0;
 }
-
 LPROC_SEQ_FOPS_RO(mgsself_srpc);
+
+static int mgs_live_seq_show(struct seq_file *seq, void *v)
+{
+	struct fs_db             *fsdb = seq->private;
+	struct mgs_tgt_srpc_conf *srpc_tgt;
+	int i;
+
+	mutex_lock(&fsdb->fsdb_mutex);
+
+	seq_printf(seq, "fsname: %s\n", fsdb->fsdb_name);
+	seq_printf(seq, "flags: %#lx     gen: %d\n",
+		   fsdb->fsdb_flags, fsdb->fsdb_gen);
+	for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
+		if (test_bit(i, fsdb->fsdb_mdt_index_map))
+			 seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
+	for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
+		if (test_bit(i, fsdb->fsdb_ost_index_map))
+			 seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
+
+	seq_printf(seq, "\nSecure RPC Config Rules:\n");
+#if 0
+	seq_printf(seq, "%s.%s=%s\n", fsdb->fsdb_name,
+		   PARAM_SRPC_UDESC, fsdb->fsdb_srpc_fl_udesc ? "yes" : "no");
+#endif
+	for (srpc_tgt = fsdb->fsdb_srpc_tgt; srpc_tgt;
+	     srpc_tgt = srpc_tgt->mtsc_next) {
+		seq_show_srpc_rules(seq, srpc_tgt->mtsc_tgt,
+				    &srpc_tgt->mtsc_rset);
+	}
+	seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
+
+	lprocfs_rd_ir_state(seq, fsdb);
+
+	mutex_unlock(&fsdb->fsdb_mutex);
+	return 0;
+}
+
+static ssize_t mgs_live_seq_write(struct file *file, const char *buf,
+				  size_t len, loff_t *off)
+{
+	struct seq_file *seq  = file->private_data;
+	struct fs_db    *fsdb = seq->private;
+	ssize_t rc;
+
+	rc = lprocfs_wr_ir_state(file, buf, len, fsdb);
+	if (rc >= 0)
+		rc = len;
+	return rc;
+}
+LPROC_SEQ_FOPS(mgs_live);
+
+int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
+{
+	int rc;
+
+	if (!mgs->mgs_proc_live)
+		return 0;
+	rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0644,
+				&mgs_live_fops, fsdb);
+
+	return 0;
+}
+
+int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
+{
+	if (!mgs->mgs_proc_live)
+		return 0;
+
+	/* didn't create the proc file for MGSSELF_NAME */
+	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags))
+		lprocfs_remove_proc_entry(fsdb->fsdb_name, mgs->mgs_proc_live);
+	return 0;
+}
+
+LPROC_SEQ_FOPS_RO_TYPE(mgs, uuid);
+LPROC_SEQ_FOPS_RO_TYPE(mgs, num_exports);
+LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
+LPROC_SEQ_FOPS_WO_TYPE(mgs, evict_client);
+LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
+
+struct lprocfs_seq_vars lprocfs_mgs_obd_vars[] = {
+	{ .name	=	"uuid",
+	  .fops	=	&mgs_uuid_fops		},
+	{ .name	=	"num_exports",
+	  .fops	=	&mgs_num_exports_fops	},
+	{ .name	=	"hash_stats",
+	  .fops	=	&mgs_hash_fops		},
+	{ .name	=	"evict_client",
+	  .fops	=	&mgs_evict_client_fops	},
+	{ .name	=	"ir_timeout",
+	  .fops	=	&mgs_ir_timeout_fops	},
+	{ 0 }
+};
 
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 {
@@ -135,10 +227,9 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	struct obd_device *osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
 	int		   osd_len = strlen(osd_name) - strlen("-osd");
 	int		   rc;
-	struct lprocfs_static_vars lvars;
 
-	lprocfs_mgs_init_vars(&lvars);
-	rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+	obd->obd_vars = lprocfs_mgs_obd_vars;
+	rc = lprocfs_seq_obd_setup(obd);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -152,17 +243,17 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	if (rc != 0)
 		GOTO(out, rc);
 
-        mgs->mgs_proc_live = lprocfs_register("live", obd->obd_proc_entry,
-                                              NULL, NULL);
+	mgs->mgs_proc_live = lprocfs_seq_register("live", obd->obd_proc_entry,
+						  NULL, NULL);
         if (IS_ERR(mgs->mgs_proc_live)) {
                 rc = PTR_ERR(mgs->mgs_proc_live);
                 mgs->mgs_proc_live = NULL;
 		GOTO(out, rc);
         }
 
-        obd->obd_proc_exports_entry = lprocfs_register("exports",
-                                                       obd->obd_proc_entry,
-                                                       NULL, NULL);
+	obd->obd_proc_exports_entry = lprocfs_seq_register("exports",
+							   obd->obd_proc_entry,
+							   NULL, NULL);
         if (IS_ERR(obd->obd_proc_exports_entry)) {
                 rc = PTR_ERR(obd->obd_proc_exports_entry);
                 obd->obd_proc_exports_entry = NULL;
@@ -215,7 +306,6 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 
 	if (mgs->mgs_proc_live != NULL) {
 		/* Should be no live entries */
-		LASSERT(mgs->mgs_proc_live->subdir == NULL);
 		lprocfs_remove(&mgs->mgs_proc_live);
 		mgs->mgs_proc_live = NULL;
 	}
@@ -225,92 +315,6 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
         lprocfs_free_obd_stats(obd);
         lprocfs_free_md_stats(obd);
 }
-
-static int mgs_live_seq_show(struct seq_file *seq, void *v)
-{
-        struct fs_db             *fsdb = seq->private;
-        struct mgs_tgt_srpc_conf *srpc_tgt;
-        int i;
-
-	mutex_lock(&fsdb->fsdb_mutex);
-
-        seq_printf(seq, "fsname: %s\n", fsdb->fsdb_name);
-        seq_printf(seq, "flags: %#lx     gen: %d\n",
-                   fsdb->fsdb_flags, fsdb->fsdb_gen);
-        for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-		if (test_bit(i, fsdb->fsdb_mdt_index_map))
-                         seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
-        for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-		if (test_bit(i, fsdb->fsdb_ost_index_map))
-                         seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
-
-        seq_printf(seq, "\nSecure RPC Config Rules:\n");
-#if 0
-        seq_printf(seq, "%s.%s=%s\n", fsdb->fsdb_name,
-                   PARAM_SRPC_UDESC, fsdb->fsdb_srpc_fl_udesc ? "yes" : "no");
-#endif
-        for (srpc_tgt = fsdb->fsdb_srpc_tgt; srpc_tgt;
-             srpc_tgt = srpc_tgt->mtsc_next) {
-                seq_show_srpc_rules(seq, srpc_tgt->mtsc_tgt,
-                                    &srpc_tgt->mtsc_rset);
-        }
-        seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
-
-        lprocfs_rd_ir_state(seq, fsdb);
-
-	mutex_unlock(&fsdb->fsdb_mutex);
-        return 0;
-}
-
-static ssize_t mgs_live_seq_write(struct file *file, const char *buf,
-                                  size_t len, loff_t *off)
-{
-        struct seq_file *seq  = file->private_data;
-        struct fs_db    *fsdb = seq->private;
-        ssize_t rc;
-
-        rc = lprocfs_wr_ir_state(file, buf, len, fsdb);
-        if (rc >= 0)
-                rc = len;
-        return rc;
-}
-LPROC_SEQ_FOPS(mgs_live);
-
-int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
-{
-        int rc;
-
-        if (!mgs->mgs_proc_live)
-                return 0;
-	rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0644,
-				&mgs_live_fops, fsdb);
-
-        return 0;
-}
-
-int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
-{
-        if (!mgs->mgs_proc_live)
-                return 0;
-
-	/* didn't create the proc file for MGSSELF_NAME */
-	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags))
-		lprocfs_remove_proc_entry(fsdb->fsdb_name, mgs->mgs_proc_live);
-        return 0;
-}
-
-struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
-        { "uuid",            lprocfs_rd_uuid,        0, 0 },
-        { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
-        { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
-        { "evict_client",    0, lprocfs_wr_evict_client, 0 },
-        { "ir_timeout",      lprocfs_rd_ir_timeout, lprocfs_wr_ir_timeout, 0 },
-        { 0 }
-};
-
-struct lprocfs_vars lprocfs_mgs_module_vars[] = {
-        { 0 }
-};
 
 void mgs_counter_incr(struct obd_export *exp, int opcode)
 {
@@ -328,11 +332,5 @@ void mgs_stats_counter_init(struct lprocfs_stats *stats)
                              "reqs");
         lprocfs_counter_init(stats, LPROC_MGS_TARGET_REG, 0, "tgtreg", "reqs");
         lprocfs_counter_init(stats, LPROC_MGS_TARGET_DEL, 0, "tgtdel", "reqs");
-}
-
-void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars  = lprocfs_mgs_module_vars;
-    lvars->obd_vars     = lprocfs_mgs_obd_vars;
 }
 #endif
