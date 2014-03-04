@@ -368,7 +368,7 @@ static int lfsck_layout_verify_header(struct lov_mds_md_v1 *lmm)
 
 #define LFSCK_RBTREE_BITMAP_SIZE	PAGE_CACHE_SIZE
 #define LFSCK_RBTREE_BITMAP_WIDTH	(LFSCK_RBTREE_BITMAP_SIZE << 3)
-#define LFSCK_RBTREE_BITMAP_MASK	(LFSCK_RBTREE_BITMAP_SIZE - 1)
+#define LFSCK_RBTREE_BITMAP_MASK	(LFSCK_RBTREE_BITMAP_WIDTH - 1)
 
 struct lfsck_rbtree_node {
 	struct rb_node	 lrn_node;
@@ -392,7 +392,7 @@ static inline int lfsck_rbtree_cmp(struct lfsck_rbtree_node *lrn,
 	if (oid < lrn->lrn_first_oid)
 		return -1;
 
-	if (oid >= lrn->lrn_first_oid + LFSCK_RBTREE_BITMAP_WIDTH)
+	if (oid - lrn->lrn_first_oid >= LFSCK_RBTREE_BITMAP_WIDTH)
 		return 1;
 
 	return 0;
@@ -492,19 +492,19 @@ static struct lfsck_rbtree_node *
 lfsck_rbtree_insert(struct lfsck_layout_slave_data *llsd,
 		    struct lfsck_rbtree_node *lrn)
 {
-	struct rb_node		 **pos    = &(llsd->llsd_rb_root.rb_node);
+	struct rb_node		 **pos    = &llsd->llsd_rb_root.rb_node;
 	struct rb_node		  *parent = NULL;
 	struct lfsck_rbtree_node  *tmp;
 	int			   rc;
 
-	while (*pos) {
+	while (*pos != NULL) {
 		parent = *pos;
-		tmp = rb_entry(*pos, struct lfsck_rbtree_node, lrn_node);
+		tmp = rb_entry(parent, struct lfsck_rbtree_node, lrn_node);
 		rc = lfsck_rbtree_cmp(tmp, lrn->lrn_seq, lrn->lrn_first_oid);
 		if (rc < 0)
-			pos = &((*pos)->rb_left);
+			pos = &(*pos)->rb_left;
 		else if (rc > 0)
-			pos = &((*pos)->rb_right);
+			pos = &(*pos)->rb_right;
 		else
 			return tmp;
 	}
