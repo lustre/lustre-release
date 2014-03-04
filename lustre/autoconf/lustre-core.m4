@@ -1765,6 +1765,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.39 renames is_owner_or_cap to inode_owner_or_capable
+#
+AC_DEFUN([LC_HAVE_INODE_OWNER_OR_CAPABLE],
+[AC_MSG_CHECKING([if inode_owner_or_capable exist])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	inode_owner_or_capable(NULL);
+],[
+	AC_DEFINE(HAVE_INODE_OWNER_OR_CAPABLE, 1,
+		[inode_owner_or_capable exist])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.0 dirty_inode() has a flag parameter
 # see kernel commit aa38572954ade525817fe88c54faebf85e5a61c0
 #
@@ -2376,6 +2394,7 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN
 	 LC_HAVE_FSTYPE_MOUNT
+	 LC_HAVE_INODE_OWNER_OR_CAPABLE
 
 	 # 3.0
 	 LC_DIRTY_INODE_WITH_FLAG
