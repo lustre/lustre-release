@@ -1041,14 +1041,14 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		RETURN(rc);
 
+	rc = mdd_xattr_sanity_check(env, mdd_obj, attr);
+	if (rc)
+		RETURN(rc);
+
 	if (!strcmp(name, XATTR_NAME_ACL_ACCESS)) {
 		rc = mdd_acl_set(env, mdd_obj, attr, buf, fl);
 		RETURN(rc);
 	}
-
-	rc = mdd_xattr_sanity_check(env, mdd_obj, attr);
-	if (rc)
-		RETURN(rc);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
