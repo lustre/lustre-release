@@ -177,7 +177,12 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 /* Dump a debug log */
 void lc_watchdog_dumplog(pid_t pid, void *data);
 
-#endif /* __KERNEL__ */
+#else /* !__KERNEL__ */
+#include <unistd.h>
+#ifndef PAGE_SIZE
+#define PAGE_SIZE sysconf(_SC_PAGESIZE)
+#endif
+#endif /* !__KERNEL__ */
 
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
