@@ -96,12 +96,15 @@ struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
 
 #define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\
 						root, field)		\
-	for (pos = rb_entry(nm_rb_first_postorder(root), typeof(*pos),	\
-			    field),					\
-		n = rb_entry(nm_rb_next_postorder(&pos->field),		\
-		typeof(*pos), field);					\
-		&pos->field;						\
+	for (pos = nm_rb_first_postorder(root) ?			\
+		rb_entry(nm_rb_first_postorder(root), typeof(*pos),	\
+		field) : NULL,						\
+		n = (pos && nm_rb_next_postorder(&pos->field)) ?	\
+		rb_entry(nm_rb_next_postorder(&pos->field),		\
+		typeof(*pos), field) : NULL;				\
+		pos != NULL;						\
 		pos = n,						\
-		n = rb_entry(nm_rb_next_postorder(&pos->field),		\
-			     typeof(*pos), field))
+		n = (pos && nm_rb_next_postorder(&pos->field)) ?	\
+		rb_entry(nm_rb_next_postorder(&pos->field),		\
+		typeof(*pos), field) : NULL)
 #endif  /* _NODEMAP_INTERNAL_H */
