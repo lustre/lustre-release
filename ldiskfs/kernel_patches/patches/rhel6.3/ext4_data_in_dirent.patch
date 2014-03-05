@@ -57,7 +57,7 @@ changes in ext4_add_entry() interface required.
  	struct fname *fname, *new_fn;
  	struct dir_private_info *info;
  	int len;
-+	int extra_data = 1;
++	int extra_data = 0;
  
  	info = (struct dir_private_info *) dir_file->private_data;
  	p = &info->root.rb_node;
@@ -67,7 +67,7 @@ changes in ext4_add_entry() interface required.
 +	if (dirent->file_type & EXT4_DIRENT_LUFID)
 +		extra_data = ext4_get_dirent_data_len(dirent);
 +
-+	len = sizeof(struct fname) + dirent->name_len + extra_data;
++	len = sizeof(struct fname) + dirent->name_len + extra_data + 1;
 +
  	new_fn = kzalloc(len, GFP_KERNEL);
  	if (!new_fn)
