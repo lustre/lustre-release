@@ -6549,6 +6549,25 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 }
 run_test 102n "silently ignore setxattr on internal trusted xattrs"
 
+test_102p() { # LU-4703 setxattr did not check ownership
+	local testfile=$DIR/$tfile
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.56) ] &&
+		skip "MDS needs to be at least 2.5.56" && return
+
+	touch $testfile
+
+	echo "setfacl as user..."
+	$RUNAS setfacl -m "u:$RUNAS_ID:rwx" $testfile
+	[ $? -ne 0 ] || error "setfacl by $RUNAS_ID was allowed on $testfile"
+
+	echo "setfattr as user..."
+	setfacl -m "u:$RUNAS_ID:---" $testfile
+	$RUNAS setfattr -x system.posix_acl_access $testfile
+	[ $? -ne 0 ] || error "setfattr by $RUNAS_ID was allowed on $testfile"
+}
+run_test 102p "check setxattr(2) correctly fails without permission"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test
