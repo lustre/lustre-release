@@ -12,9 +12,7 @@ AC_ARG_ENABLE([libcfs_cdebug],
 	[],[enable_libcfs_cdebug='yes'])
 AC_MSG_RESULT([$enable_libcfs_cdebug])
 if test x$enable_libcfs_cdebug = xyes; then
-   AC_DEFINE(CDEBUG_ENABLED, 1, [enable libcfs CDEBUG, CWARN])
-else
-   AC_DEFINE(CDEBUG_ENABLED, 0, [disable libcfs CDEBUG, CWARN])
+	AC_DEFINE(CDEBUG_ENABLED, 1, [enable libcfs CDEBUG, CWARN])
 fi
 
 AC_MSG_CHECKING([whether to enable ENTRY/EXIT])
@@ -24,9 +22,7 @@ AC_ARG_ENABLE([libcfs_trace],
 	[],[enable_libcfs_trace='yes'])
 AC_MSG_RESULT([$enable_libcfs_trace])
 if test x$enable_libcfs_trace = xyes; then
-   AC_DEFINE(CDEBUG_ENTRY_EXIT, 1, [enable libcfs ENTRY/EXIT])
-else
-   AC_DEFINE(CDEBUG_ENTRY_EXIT, 0, [disable libcfs ENTRY/EXIT])
+	AC_DEFINE(CDEBUG_ENTRY_EXIT, 1, [enable libcfs ENTRY/EXIT])
 fi
 
 AC_MSG_CHECKING([whether to enable LASSERT, LASSERTF])

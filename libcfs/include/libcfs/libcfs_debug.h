@@ -282,24 +282,22 @@ do {                                                                    \
 
 #define LCONSOLE_EMERG(format, ...) CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
-#ifdef CDEBUG_ENABLED
-
-void libcfs_log_goto(struct libcfs_debug_msg_data *, const char *, long_ptr_t);
-#define GOTO(label, rc)                                                 \
-do {                                                                    \
-        if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {                \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);     \
-                libcfs_log_goto(&msgdata, #label, (long_ptr_t)(rc));    \
-        } else {                                                        \
-                (void)(rc);                                             \
-        }                                                               \
-        goto label;                                                     \
-} while (0)
-#else
-#define GOTO(label, rc) do { ((void)(rc)); goto label; } while (0)
-#endif
-
 #ifdef CDEBUG_ENTRY_EXIT
+
+void libcfs_log_goto(struct libcfs_debug_msg_data *goto_data,
+		     const char *label, long_ptr_t rc);
+
+# define GOTO(label, rc)						\
+do {									\
+	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
+		LIBCFS_DEBUG_MSG_DATA_DECL(_goto_data, D_TRACE, NULL);	\
+		libcfs_log_goto(&_goto_data, #label, (long_ptr_t)(rc));	\
+	} else {							\
+		(void)(rc);						\
+	}								\
+									\
+	goto label;							\
+} while (0)
 
 /*
  * if rc == NULL, we need to code as RETURN((void *)NULL), otherwise
@@ -363,6 +361,12 @@ do {                                                                    \
         EXIT_NESTING;                                                   \
 } while(0)
 #else /* !CDEBUG_ENTRY_EXIT */
+
+# define GOTO(label, rc)						\
+	do {								\
+		((void)(rc));						\
+		goto label;						\
+	} while (0)
 
 #define RETURN(rc) return (rc)
 #define ENTRY                           do { } while (0)
