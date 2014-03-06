@@ -41,11 +41,18 @@ sbinscripts += lustre_routes_config lustre_routes_conversion
 genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman lustre_createcsv \
     lc_md lc_lvm lustre_start
 
+if INIT_SCRIPTS
 initdir = $(sysconfdir)/init.d
-init_SCRIPTS = lustre lnet
+init_SCRIPTS = lnet
+if SERVER
+init_SCRIPTS += lustre
+endif
+endif
 
+if SERVER
 hadir = $(sysconfdir)/ha.d/resource.d
 ha_SCRIPTS = Lustre.ha_v2
+endif
 
 sbin_SCRIPTS = $(genscripts) $(sbinscripts)
 bin_SCRIPTS = lustre_req_history lfs_migrate

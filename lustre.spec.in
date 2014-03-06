@@ -334,11 +334,6 @@ elif [ -e ${llog_base}.o ]; then
   cp ${llog_base}.o $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/lustre
 fi
 
-# The .ha_v2 extension identifies the heartbeat resource agent as using
-# legacy syntax. Install a compatibility symlink to avoid conflicts when
-# newer-style agents are added.
-ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
-
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
 mkdir -p $RPM_BUILD_ROOT%{_prefix}/src
@@ -368,15 +363,28 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_includedir}/lustre
 %attr(-, root, root) %{_includedir}/libcfs
 %attr(-, root, root) %{_libexecdir}/lustre/lc_common
-%attr(-, root, root) %{_sysconfdir}/udev/rules.d/99-lustre.rules
-%attr(-, root, root) %{_sysconfdir}/init.d/lnet
-%attr(-, root, root) %{_sysconfdir}/init.d/lustre
-%attr(-, root, root) %config(noreplace) %{_sysconfdir}/ldev.conf
-%attr(-, root, root) %{_sysconfdir}/sysconfig/lustre
 %attr(-, root, root) %{_libexecdir}/lustre/haconfig
-%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
-%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre
+%attr(-, root, root) %{_sysconfdir}/udev/rules.d/99-lustre.rules
+%attr(-, root, root) %config(noreplace) %{_sysconfdir}/ldev.conf
 EOF
+
+%if %{with servers}
+# The .ha_v2 extension identifies the heartbeat resource agent as using
+# legacy syntax. Install a compatibility symlink to avoid conflicts when
+# newer-style agents are added.
+ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
+echo '%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
+echo '%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
+
+if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lustre ]; then
+	echo '%attr(-, root, root) %{_sysconfdir}/sysconfig/lustre' >>lustre.files
+	echo '%attr(-, root, root) %{_sysconfdir}/init.d/lustre' >>lustre.files
+fi
+%endif
+
+if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lnet ]; then
+	echo '%attr(-, root, root) %{_sysconfdir}/init.d/lnet' >>lustre.files
+fi
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then
   echo '%attr(-, root, root) %{_libdir}/libcfsutil.a' >>lustre.files
