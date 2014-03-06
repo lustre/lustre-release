@@ -312,10 +312,25 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # hack to avoid changing the libsysio code for "make install"
 rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 
+:> lustre.files
+
+%if %{with servers}
 # The .ha_v2 extension identifies the heartbeat resource agent as using
 # legacy syntax. Install a compatibility symlink to avoid conflicts when
 # newer-style agents are added.
 ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
+echo '%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
+echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
+
+if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lustre ]; then
+	echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
+	echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
+fi
+%endif
+
+if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lnet ]; then
+	echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
+fi
 
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
@@ -326,8 +341,6 @@ make distdir distdir=lustre-source/lustre-%{version}
 chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
-
-:> lustre.files
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%{_libdir}/liblustre.a' >>lustre.files
@@ -402,14 +415,9 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %{_includedir}/libcfs
 %{_includedir}/linux/lustre_user.h
 %{_libexecdir}/lustre/lc_common
-%{_sysconfdir}/udev/rules.d/99-lustre.rules
-%{_sysconfdir}/init.d/lnet
-%{_sysconfdir}/init.d/lustre
-%config(noreplace) %{_sysconfdir}/ldev.conf
-%{_sysconfdir}/sysconfig/lustre
 %{_libexecdir}/lustre/haconfig
-%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
-%{_sysconfdir}/ha.d/resource.d/Lustre
+%{_sysconfdir}/udev/rules.d/99-lustre.rules
+%config(noreplace) %{_sysconfdir}/ldev.conf
 
 %if %{with lustre_modules}
 %files modules
