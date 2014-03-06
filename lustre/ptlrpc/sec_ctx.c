@@ -116,7 +116,7 @@ int lustre_rename(struct dentry *dir, struct vfsmount *mnt,
 	if (IS_ERR(dchild_new))
 		GOTO(put_old, err = PTR_ERR(dchild_new));
 
-	err = vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
+	err = ll_vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
 
 	dput(dchild_new);
 put_old:

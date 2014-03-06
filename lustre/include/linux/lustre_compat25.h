@@ -336,4 +336,10 @@ static inline struct dentry *d_make_root(struct inode *root)
 #define ll_truncate_pagecache(inode, size) truncate_pagecache(inode, size)
 #endif
 
+#ifdef HAVE_VFS_RENAME_5ARGS
+#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL)
+#else
+#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d)
+#endif
+
 #endif /* _COMPAT25_H */
