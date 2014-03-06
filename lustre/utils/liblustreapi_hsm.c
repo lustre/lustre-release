@@ -309,16 +309,28 @@ out_free:
  * llapi_hsm_write_json_event:
  *
  * Copytool registration and deregistration:
- * {"event_time": "2014-02-26 14:58:01 -0500", "event_type": "REGISTER", "archive": 0, "mount_point": "/mnt/lustre", "uuid": "80379a60-1f8a-743f-daf2-307cde793ec2"}
- * {"event_time": "2014-02-26 14:58:01 -0500", "event_type": "UNREGISTER", "archive": 0, "mount_point": "/mnt/lustre", "uuid": "80379a60-1f8a-743f-daf2-307cde793ec2"}
+ * {"event_time": "2014-02-26 14:58:01 -0500", "event_type": "REGISTER",
+ *  "archive": 0, "mount_point": "/mnt/lustre",
+ *  "uuid": "80379a60-1f8a-743f-daf2-307cde793ec2"}
+ * {"event_time": "2014-02-26 14:58:01 -0500", "event_type": "UNREGISTER",
+ *  "archive": 0, "mount_point": "/mnt/lustre",
+ *  "uuid": "80379a60-1f8a-743f-daf2-307cde793ec2"}
  *
  * An archive action, start to completion:
- * {"event_time": "2014-02-26 14:50:13 -0500", "event_type": "ARCHIVE_START", "total_bytes": 0, "lustre_path": "d71.sanity-hsm/f71.sanity-hsm", "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
- * {"event_time": "2014-02-26 14:50:18 -0500", "event_type": "ARCHIVE_RUNNING", "current_bytes": 5242880, "total_bytes": 39000000, "lustre_path": "d71.sanity-hsm/f71.sanity-hsm", "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
- * {"event_time": "2014-02-26 14:50:50 -0500", "event_type": "ARCHIVE_FINISH", "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
+ * {"event_time": "2014-02-26 14:50:13 -0500", "event_type": "ARCHIVE_START",
+ *  "total_bytes": 0, "lustre_path": "d71.sanity-hsm/f71.sanity-hsm",
+ *  "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
+ * {"event_time": "2014-02-26 14:50:18 -0500", "event_type": "ARCHIVE_RUNNING",
+ *  "current_bytes": 5242880, "total_bytes": 39000000,
+ *  "lustre_path": "d71.sanity-hsm/f71.sanity-hsm",
+ *  "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
+ * {"event_time": "2014-02-26 14:50:50 -0500", "event_type": "ARCHIVE_FINISH",
+ *  "source_fid": "0x2000013a1:0x2:0x0", "data_fid": "0x2000013a1:0x2:0x0"}
  *
  * A log message:
- * {"event_time": "2014-02-26 14:50:13 -0500", "event_type": "LOGGED_MESSAGE", "level": "INFO", "message": "lhsmtool_posix[59401]: copytool fs=lustre archive#=2 item_count=1"}
+ * {"event_time": "2014-02-26 14:50:13 -0500", "event_type": "LOGGED_MESSAGE",
+ *  "level": "INFO",
+ *  "message": "lhsmtool_posix[42]: copytool fs=lustre archive#=2 item_count=1"}
  *
  * \param hcp                Opaque action handle returned by
  *                           llapi_hsm_action_start.
