@@ -477,8 +477,4 @@ struct dentry {
  *  misc
  */
 
-#define ERR_PTR(error) ((void *)(long_ptr_t)(error))
-#define PTR_ERR(ptr)   ((long)(long_ptr_t) (ptr))
-#define IS_ERR(ptr)    ((long)(((ulong_ptr_t) (ptr)) > (ulong_ptr_t)(-1000L)))
-
 #endif /* __LIBCFS_WINNT_CFS_FS_H__*/

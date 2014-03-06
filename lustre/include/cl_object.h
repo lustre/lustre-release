@@ -2636,12 +2636,6 @@ static inline struct cl_object *cl_object_next(const struct cl_object *obj)
         return obj ? lu2cl(lu_object_next(&obj->co_lu)) : NULL;
 }
 
-static inline struct cl_device *cl_object_device(const struct cl_object *o)
-{
-        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_cl(o->co_lu.lo_dev));
-        return container_of0(o->co_lu.lo_dev, struct cl_device, cd_lu_dev);
-}
-
 static inline struct cl_object_header *luh2coh(const struct lu_object_header *h)
 {
         return container_of0(h, struct cl_object_header, coh_lu);

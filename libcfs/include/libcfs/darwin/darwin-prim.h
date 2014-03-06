@@ -497,14 +497,6 @@ static inline int request_module(const char *name, ...)
 #define KERN_INFO       "<6>"   /* informational                        */
 #define KERN_DEBUG      "<7>"   /* debug-level messages                 */
 
-static inline long PTR_ERR(const void *ptr)
-{
-	return (long) ptr;
-}
-
-#define ERR_PTR(err)	((void *)err)
-#define IS_ERR(p)	((unsigned long)(p) + 1000 < 1000)
-
 #else	/* !__KERNEL__ */
 
 typedef struct cfs_proc_dir_entry {
