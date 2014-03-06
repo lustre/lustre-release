@@ -41,9 +41,4 @@
 
 #include <darwin/lustre_compat.h>
 
-/* for obd_class.h */
-# ifndef ERR_PTR
-#  define ERR_PTR(a) ((void *)(a))
-# endif
-
 #endif

@@ -468,12 +468,6 @@ static inline struct md_object *md_object_next(const struct md_object *obj)
         return (obj ? lu2md(lu_object_next(&obj->mo_lu)) : NULL);
 }
 
-static inline struct md_device *md_obj2dev(const struct md_object *o)
-{
-        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->mo_lu.lo_dev));
-        return container_of0(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
-}
-
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
 {
         return lu_device_init(&md->md_lu_dev, t);

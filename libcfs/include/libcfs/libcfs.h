@@ -289,6 +289,7 @@ unsigned int cfs_rand(void);
 void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
 
+#include <libcfs/err.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_cpu.h>
 #include <libcfs/libcfs_private.h>
@@ -305,16 +306,16 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_crypto.h>
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
-static inline void *__container_of(void *ptr, unsigned long shift)
+static inline void *__container_of(const void *ptr, unsigned long shift)
 {
-        if (unlikely(IS_ERR(ptr) || ptr == NULL))
-                return ptr;
-        else
-                return (char *)ptr - shift;
+	if (unlikely(IS_ERR(ptr) || ptr == NULL))
+		return ERR_CAST(ptr);
+	else
+		return (char *)ptr - shift;
 }
 
-#define container_of0(ptr, type, member) \
-        ((type *)__container_of((void *)(ptr), offsetof(type, member)))
+#define container_of0(ptr, type, member)				\
+	((type *)__container_of((ptr), offsetof(type, member)))
 
 #define _LIBCFS_H
 

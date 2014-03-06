@@ -65,9 +65,6 @@
 #else /* !__KERNEL__ */
 # define LTIME_S(time) (time)
 /* for obd_class.h */
-# ifndef ERR_PTR
-#  define ERR_PTR(a) ((void *)(a))
-# endif
 #endif  /* __KERNEL__ */
 
 #endif
