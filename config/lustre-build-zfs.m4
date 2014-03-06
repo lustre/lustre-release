@@ -371,20 +371,17 @@ your distribution.
 		])
 	])
 
-	AS_IF([test x$enable_zfs = xyes], [
-		AC_MSG_CHECKING([if zfs defines dsl_pool_config_enter/exit])
-		LB_LINUX_TRY_COMPILE([
+	AS_IF([test "x$enable_zfs" = xyes], [
+		LB_CHECK_COMPILE([if zfs defines dsl_pool_config_enter/exit],
+		dsl_pool_config_enter, [
 			#include <sys/dsl_pool.h>
 		],[
 			dsl_pool_config_enter(NULL, FTAG);
 		],[
-			AC_MSG_RESULT([yes])
-				AC_DEFINE(HAVE_DSL_POOL_CONFIG, 1,
-					  [Have dsl_pool_config_enter/exit in ZFS])
-		],[
-			AC_MSG_RESULT([no])
+			AC_DEFINE(HAVE_DSL_POOL_CONFIG, 1,
+				[Have dsl_pool_config_enter/exit in ZFS])
 		])
 	])
 
-	AM_CONDITIONAL(ZFS_ENABLED, test x$enable_zfs = xyes)
+	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])
 ])

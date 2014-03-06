@@ -1,8 +1,10 @@
 dnl Checks for OFED
-AC_DEFUN([LN_CONFIG_OFED_SPEC],
-[
-	AC_MSG_CHECKING([if OFED has ib_dma_map_single])
-	LB_LINUX_TRY_COMPILE([
+AC_DEFUN([LN_CONFIG_OFED_SPEC], [
+	AC_MSG_NOTICE([OFED checks
+==============================================================================])
+
+	LB_CHECK_COMPILE([if OFED has 'ib_dma_map_single'],
+	ib_dma_map_single, [
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
@@ -11,15 +13,12 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		ib_dma_map_single(NULL, NULL, 0, 0);
 		return 0;
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
-			  [ib_dma_map_single defined])
-	],[
-		AC_MSG_RESULT(no)
+			[ib_dma_map_single defined])
 	])
 
-	AC_MSG_CHECKING([if ib_create_cq wants comp_vector])
-	LB_LINUX_TRY_COMPILE([
+	LB_CHECK_COMPILE([if OFED 'ib_create_cq' wants 'comp_vector'],
+	ib_create_cq_comp_vector, [
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
@@ -28,15 +27,12 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
 		return 0;
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
-			  [has completion vector])
-	],[
-		AC_MSG_RESULT(no)
+			[has completion vector])
 	])
 
-	AC_MSG_CHECKING([if OFED has RDMA_CM_EVENT_ADDR_CHANGE])
-	LB_LINUX_TRY_COMPILE([
+	LB_CHECK_COMPILE([if OFED has 'RDMA_CM_EVENT_ADDR_CHANGE'],
+	RDMA_CM_EVENT_ADDR_CHANGE, [
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
@@ -47,15 +43,12 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 	],[
 		return (RDMA_CM_EVENT_ADDR_CHANGE == 0);
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_OFED_RDMA_CMEV_ADDRCHANGE, 1,
-			  [has completion vector])
-	],[
-		AC_MSG_RESULT(no)
+			[has completion vector])
 	])
 
-	AC_MSG_CHECKING([if OFED has RDMA_CM_EVENT_TIMEWAIT_EXIT])
-	LB_LINUX_TRY_COMPILE([
+	LB_CHECK_COMPILE([if OFED has 'RDMA_CM_EVENT_TIMEWAIT_EXIT'],
+	RDMA_CM_EVENT_TIMEWAIT_EXIT, [
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
@@ -66,15 +59,12 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 	],[
 		return (RDMA_CM_EVENT_TIMEWAIT_EXIT == 0);
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_OFED_RDMA_CMEV_TIMEWAIT_EXIT, 1,
-			  [has completion vector])
-	],[
-		AC_MSG_RESULT(no)
+			[has completion vector])
 	])
 
-	AC_MSG_CHECKING([if OFED has rdma_set_reuseaddr])
-	LB_LINUX_TRY_COMPILE([
+	LB_CHECK_COMPILE([if OFED has 'rdma_set_reuseaddr'],
+	rdma_set_reuseaddr, [
 		#include <linux/version.h>
 		#include <linux/pci.h>
 		#include <linux/gfp.h>
@@ -86,10 +76,7 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		rdma_set_reuseaddr(NULL, 1);
 		return 0;
 	],[
-		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_OFED_RDMA_SET_REUSEADDR, 1,
-			  [rdma_set_reuse defined])
-	],[
-		AC_MSG_RESULT(no)
+			[rdma_set_reuse defined])
 	])
 ])

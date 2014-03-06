@@ -3,12 +3,12 @@
 #
 # configure bits for lustre-snmp
 #
-AC_DEFUN([LS_CONFIGURE],
-[AC_MSG_CHECKING([whether to try to build SNMP support])
+AC_DEFUN([LS_CONFIGURE], [
+AC_MSG_CHECKING([whether to try to build SNMP support])
 AC_ARG_ENABLE([snmp],
 	AC_HELP_STRING([--enable-snmp],
-		       [require SNMP support (default=auto)]),
-	[],[enable_snmp='auto'])
+		[require SNMP support (default=auto)]),
+	[], [enable_snmp="auto"])
 AC_MSG_RESULT([$enable_snmp])
 
 if test x$enable_snmp != xno ; then
@@ -54,16 +54,16 @@ AC_SUBST(NET_SNMP_CFLAGS)
 AC_SUBST(NET_SNMP_LIBS)
 AC_SUBST(agentdir)
 AC_SUBST(mibdir)
-])
+]) # LS_CONFIGURE
 
 #
 # LS_CONFIG_FILE
 #
 # files that should be generated with AC_OUTPUT
 #
-AC_DEFUN([LS_CONFIG_FILES],
-[AC_CONFIG_FILES([
+AC_DEFUN([LS_CONFIG_FILES], [
+AC_CONFIG_FILES([
 snmp/Makefile
 snmp/autoconf/Makefile
 ])
-])
+]) # LS_CONFIG_FILES

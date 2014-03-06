@@ -1,76 +1,70 @@
-AC_DEFUN([LDISKFS_LINUX_SERIES],
-[
+#
+# LDISKFS_LINUX_SERIES
+#
+AC_DEFUN([LDISKFS_LINUX_SERIES], [
 LDISKFS_SERIES=
 AC_MSG_CHECKING([which ldiskfs series to use])
-
-SER=
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-431],[
 	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-343],[
 	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32],[],
-	[SER="2.6-rhel6.series"],[SER="2.6-rhel6.series"])],
-	[SER="2.6-rhel6.4.series"],[SER="2.6-rhel6.4.series"])],
-	[SER="2.6-rhel6.5.series"],[SER="2.6-rhel6.5.series"])
+	[LDISKFS_SERIES="2.6-rhel6.series"],  [LDISKFS_SERIES="2.6-rhel6.series"])],
+	[LDISKFS_SERIES="2.6-rhel6.4.series"],[LDISKFS_SERIES="2.6-rhel6.4.series"])],
+	[LDISKFS_SERIES="2.6-rhel6.5.series"],[LDISKFS_SERIES="2.6-rhel6.5.series"])
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
-	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32],[],
-	[SER="2.6-sles11.series"],[SER="2.6-sles11.series"])],
-	[SER="3.0-sles11.series"],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32], [],
+	[LDISKFS_SERIES="2.6-sles11.series"],[LDISKFS_SERIES="2.6-sles11.series"])],
+	[LDISKFS_SERIES="3.0-sles11.series"],[
 		PLEV=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
 		case $PLEV in
-		2) SER="3.0-sles11.series"
+		2) LDISKFS_SERIES="3.0-sles11.series"
 			;;
-		3) SER="3.0-sles11sp3.series"
+		3) LDISKFS_SERIES="3.0-sles11sp3.series"
 			;;
 		esac
 	])
 ])
-LDISKFS_SERIES=$SER
-
 AS_IF([test -z "$LDISKFS_SERIES"],
 	[AC_MSG_WARN([Unknown kernel version $LDISKFS_VERSIONRELEASE])])
 AC_MSG_RESULT([$LDISKFS_SERIES])
-
 AC_SUBST(LDISKFS_SERIES)
-])
+]) # LDISKFS_LINUX_SERIES
 
+#
+# LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 #
 # 2.6.32-rc7 ext4_free_blocks requires struct buffer_head
 #
-AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD],
-[AC_MSG_CHECKING([if ext4_free_blocks needs struct buffer_head])
- LB_LINUX_TRY_COMPILE([
+AC_DEFUN([LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD], [
+LB_CHECK_COMPILE([if 'ext4_free_blocks' needs 'struct buffer_head'],
+ext4_free_blocks_with_buffer_head, [
 	#include <linux/fs.h>
 	#include "$EXT4_SRC_DIR/ext4.h"
 ],[
 	ext4_free_blocks(NULL, NULL, NULL, 0, 0, 0);
 ],[
-	AC_MSG_RESULT([yes])
 	AC_DEFINE(HAVE_EXT_FREE_BLOCK_WITH_BUFFER_HEAD, 1,
-		  [ext4_free_blocks do not require struct buffer_head])
-],[
-	AC_MSG_RESULT([no])
+		[ext4_free_blocks do not require struct buffer_head])
 ])
-])
+]) # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 
+#
+# LB_EXT_PBLOCK
 #
 # 2.6.35 renamed ext_pblock to ext4_ext_pblock(ex)
 #
-AC_DEFUN([LB_EXT_PBLOCK],
-[AC_MSG_CHECKING([if kernel has ext_pblocks])
- LB_LINUX_TRY_COMPILE([
+AC_DEFUN([LB_EXT_PBLOCK], [
+LB_CHECK_COMPILE([if Linux kernel has 'ext_pblock'],
+ext_pblock, [
 	#include <linux/fs.h>
 	#include "$EXT4_SRC_DIR/ext4_extents.h"
 ],[
 	ext_pblock(NULL);
 ],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_EXT_PBLOCK, 1,
-		  [kernel has ext_pblocks])
-],[
-	AC_MSG_RESULT([no])
+	AC_DEFINE(HAVE_EXT_PBLOCK, 1, [Linux kernel has ext_pblock])
 ])
-])
+]) # LB_EXT_PBLOCK
 
 #
 # LDISKFS_AC_PATCH_PROGRAM
@@ -103,13 +97,12 @@ AC_DEFUN([LDISKFS_AC_PATCH_PROGRAM], [
 			AC_MSG_ERROR([*** Need "quilt" or "patch" command])
 		])
 	])
-])
+]) # LDISKFS_AC_PATCH_PROGRAM
 
 #
-# LB_CONDITIONAL_LDISKFS
+# LB_CONFIG_LDISKFS
 #
-AC_DEFUN([LB_CONFIG_LDISKFS],
-[
+AC_DEFUN([LB_CONFIG_LDISKFS], [
 # --with-ldiskfs is deprecated now that ldiskfs is fully merged with lustre.
 # However we continue to support this option through Lustre 2.5.
 AC_ARG_WITH([ldiskfs],
@@ -121,8 +114,7 @@ AC_ARG_WITH([ldiskfs],
 The ldiskfs option is deprecated,
 and no longer supports paths to external ldiskfs source
 ])])
-	]
-)
+])
 
 AC_ARG_ENABLE([ldiskfs],
 	[AS_HELP_STRING([--disable-ldiskfs],
@@ -132,15 +124,13 @@ AC_ARG_ENABLE([ldiskfs],
 	[AS_IF([test "${with_ldiskfs+set}" = set],
 		[enable_ldiskfs=$with_ldiskfs],
 		[enable_ldiskfs=maybe])
-	]
-)
+])
 
 AS_IF([test x$enable_server = xno],
 	[AS_CASE([$enable_ldiskfs],
 		[maybe], [enable_ldiskfs=no],
 		[yes], [AC_MSG_ERROR([cannot build ldiskfs when servers are disabled])]
-	)]
-)
+	)])
 
 AS_IF([test x$enable_ldiskfs != xno],[
 	# In the future, we chould change enable_ldiskfs from maybe to
@@ -165,7 +155,7 @@ AC_MSG_CHECKING([whether to build ldiskfs])
 AC_MSG_RESULT([$enable_ldiskfs])
 
 AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
-])
+]) # LB_CONFIG_LDISKFS
 
 #
 # LB_VALIDATE_EXT4_SRC_DIR
@@ -174,27 +164,30 @@ AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 # Detecting this at configure time allows us to avoid a potential build
 # failure and provide a useful error message to explain what is wrong.
 #
-AC_DEFUN([LB_VALIDATE_EXT4_SRC_DIR],
-[
-if test x$EXT4_SRC_DIR = x; then
-	enable_ldiskfs_build='no'
-else
+AC_DEFUN([LB_VALIDATE_EXT4_SRC_DIR], [
+enable_ldiskfs_build="no"
+AS_IF([test -n "$EXT4_SRC_DIR"], [
+	enable_ldiskfs_build="yes"
 	LB_CHECK_FILE([$EXT4_SRC_DIR/dir.c], [], [
-		enable_ldiskfs_build='no'
-		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
+		enable_ldiskfs_build="no"
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])
+	])
 	LB_CHECK_FILE([$EXT4_SRC_DIR/file.c], [], [
-		enable_ldiskfs_build='no'
-		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
+		enable_ldiskfs_build="no"
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])
+	])
 	LB_CHECK_FILE([$EXT4_SRC_DIR/inode.c], [], [
-		enable_ldiskfs_build='no'
-		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
+		enable_ldiskfs_build="no"
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])
+	])
 	LB_CHECK_FILE([$EXT4_SRC_DIR/super.c], [], [
-		enable_ldiskfs_build='no'
-		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
-fi
+		enable_ldiskfs_build="no"
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])
+	])
+])
 
-if test x$enable_ldiskfs_build = xno; then
-	enable_ldiskfs='no'
+AS_IF([test "x$enable_ldiskfs_build" = xno], [
+	enable_ldiskfs="no"
 
 	AC_MSG_WARN([
 
@@ -204,9 +197,8 @@ If you are building using kernel-devel packages and require ldiskfs
 server support then ensure that the matching kernel-debuginfo-common
 and kernel-debuginfo-common-<arch> packages are installed.
 ])
-
-fi
 ])
+]) # LB_VALIDATE_EXT4_SRC_DIR
 
 #
 # LB_EXT4_SRC_DIR
@@ -214,44 +206,40 @@ fi
 # Determine the location of the ext4 source code.  It it required
 # for several configure tests and to build ldiskfs.
 #
-AC_DEFUN([LB_EXT4_SRC_DIR],
-[
+AC_DEFUN([LB_EXT4_SRC_DIR], [
+AC_MSG_CHECKING([ext4 source directory])
 # Kernel ext source located with devel headers
 linux_src=$LINUX
-if test -e "$linux_src/fs/ext4/super.c"; then
-	EXT4_SRC_DIR=$linux_src/fs/ext4
-else
+AS_IF([test -e "$linux_src/fs/ext4/super.c"], [
+	EXT4_SRC_DIR="$linux_src/fs/ext4"
+], [
 	# Kernel ext source provided by kernel-debuginfo-common package
 	linux_src=$(ls -1d /usr/src/debug/*/linux-$LINUXRELEASE \
 		2>/dev/null | tail -1)
-	if test -e "$linux_src/fs/ext4/super.c"; then
-		EXT4_SRC_DIR=$linux_src/fs/ext4
-	else
-		EXT4_SRC_DIR=
-	fi
-fi
-
-AC_MSG_CHECKING([ext4 source directory])
+	AS_IF([test -e "$linux_src/fs/ext4/super.c"],
+		[EXT4_SRC_DIR="$linux_src/fs/ext4"],
+		[EXT4_SRC_DIR=""])
+])
 AC_MSG_RESULT([$EXT4_SRC_DIR])
 AC_SUBST(EXT4_SRC_DIR)
 
 LB_VALIDATE_EXT4_SRC_DIR
-])
+]) # LB_EXT4_SRC_DIR
 
 #
 # LB_DEFINE_E2FSPROGS_NAMES
 #
 # Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
 #
-AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
-[
-AC_ARG_WITH([ldiskfsprogs],
-        AC_HELP_STRING([--with-ldiskfsprogs],
-                       [use alternate names for ldiskfs-enabled e2fsprogs]),
-	[],[withval='no'])
-
+AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES], [
 AC_MSG_CHECKING([whether to use alternate names for e2fsprogs])
-if test x$withval = xyes ; then
+AC_ARG_WITH([ldiskfsprogs],
+	AC_HELP_STRING([--with-ldiskfsprogs],
+		[use alternate names for ldiskfs-enabled e2fsprogs]),
+	[], [withval="no"])
+
+AS_IF([test "x$withval" = xyes], [
+	AC_MSG_RESULT([enabled])
 	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
 	E2FSPROGS="ldiskfsprogs"
 	MKE2FS="mkfs.ldiskfs"
@@ -261,8 +249,8 @@ if test x$withval = xyes ; then
 	DUMPE2FS="dumpfs.ldiskfs"
 	E2FSCK="fsck.ldiskfs"
 	PFSCK="pfsck.ldiskfs"
-	AC_MSG_RESULT([enabled])
-else
+], [
+	AC_MSG_RESULT([disabled])
 	E2FSPROGS="e2fsprogs"
 	MKE2FS="mke2fs"
 	DEBUGFS="debugfs"
@@ -271,8 +259,7 @@ else
 	DUMPE2FS="dumpe2fs"
 	E2FSCK="e2fsck"
 	PFSCK="fsck"
-	AC_MSG_RESULT([disabled])
-fi
+])
 
 AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
 AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
@@ -291,4 +278,4 @@ AC_SUBST([E2LABEL], [$E2LABEL])
 AC_SUBST([DUMPE2FS], [$DUMPE2FS])
 AC_SUBST([E2FSCK], [$E2FSCK])
 AC_SUBST([PFSCK], [$PFSCK])
-])
+]) # LB_DEFINE_E2FSPROGS_NAMES
