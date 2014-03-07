@@ -200,25 +200,8 @@ void osp_statfs_need_now(struct osp_device *d)
 static inline int osp_objs_precreated(const struct lu_env *env,
 				      struct osp_device *osp)
 {
-	struct lu_fid *fid1 = &osp->opd_pre_last_created_fid;
-	struct lu_fid *fid2 = &osp->opd_pre_used_fid;
-
-	LASSERTF(fid_seq(fid1) == fid_seq(fid2),
-		 "Created fid"DFID" Next fid "DFID"\n", PFID(fid1), PFID(fid2));
-
-	if (fid_is_idif(fid1)) {
-		struct ost_id *oi1 = &osp_env_info(env)->osi_oi;
-		struct ost_id *oi2 = &osp_env_info(env)->osi_oi2;
-
-		LASSERT(fid_is_idif(fid1) && fid_is_idif(fid2));
-		fid_to_ostid(fid1, oi1);
-		fid_to_ostid(fid2, oi2);
-		LASSERT(ostid_id(oi1) >= ostid_id(oi2));
-
-		return ostid_id(oi1) - ostid_id(oi2);
-	}
-
-	return fid_oid(fid1) - fid_oid(fid2);
+	return osp_fid_diff(&osp->opd_pre_last_created_fid,
+			    &osp->opd_pre_used_fid);
 }
 
 static inline int osp_precreate_near_empty_nolock(const struct lu_env *env,
@@ -490,11 +473,11 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		GOTO(out_req, rc = -EPROTO);
 
 	ostid_to_fid(fid, &body->oa.o_oi, d->opd_index);
-	LASSERTF(lu_fid_diff(fid, &d->opd_pre_used_fid) > 0,
+	LASSERTF(osp_fid_diff(fid, &d->opd_pre_used_fid) > 0,
 		 "reply fid "DFID" pre used fid "DFID"\n", PFID(fid),
 		 PFID(&d->opd_pre_used_fid));
 
-	diff = lu_fid_diff(fid, &d->opd_pre_last_created_fid);
+	diff = osp_fid_diff(fid, &d->opd_pre_last_created_fid);
 
 	spin_lock(&d->opd_pre_lock);
 	if (diff < grow) {
@@ -696,7 +679,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	ostid_to_fid(last_fid, &body->oa.o_oi, d->opd_index);
 
 	spin_lock(&d->opd_pre_lock);
-	diff = lu_fid_diff(&d->opd_last_used_fid, last_fid);
+	diff = osp_fid_diff(&d->opd_last_used_fid, last_fid);
 	if (diff > 0) {
 		d->opd_pre_grow_count = OST_MIN_PRECREATE + diff;
 		d->opd_pre_last_created_fid = d->opd_last_used_fid;
@@ -1149,7 +1132,7 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 	/* grab next id from the pool */
 	spin_lock(&d->opd_pre_lock);
 
-	LASSERTF(lu_fid_diff(&d->opd_pre_used_fid,
+	LASSERTF(osp_fid_diff(&d->opd_pre_used_fid,
 			     &d->opd_pre_last_created_fid) < 0,
 		 "next fid "DFID" last created fid "DFID"\n",
 		 PFID(&d->opd_pre_used_fid),
