@@ -2669,9 +2669,10 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
                          * want it slowed down due to possible cancels.
                          */
                         policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
-                                          policy, res_id, dlmflags,
-                                          &info->mti_exp->exp_handle.h_cookie);
+			rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
+					  policy, res_id, dlmflags,
+					  info->mti_exp == NULL ? NULL :
+					  &info->mti_exp->exp_handle.h_cookie);
                         if (unlikely(rc))
                                 RETURN(rc);
                 }
@@ -2690,9 +2691,10 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
          * going to be sent to client. If it is - mdt_intent_policy() path will
          * fix it up and turn FL_LOCAL flag off.
          */
-        rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
-                          res_id, LDLM_FL_LOCAL_ONLY | dlmflags,
-                          &info->mti_exp->exp_handle.h_cookie);
+	rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
+			  res_id, LDLM_FL_LOCAL_ONLY | dlmflags,
+			  info->mti_exp == NULL ? NULL :
+			  &info->mti_exp->exp_handle.h_cookie);
         if (rc)
                 mdt_object_unlock(info, o, lh, 1);
         else if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK)) &&
