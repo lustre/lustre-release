@@ -114,7 +114,7 @@ enum ct_event {
 };
 
 /* initialized in llapi_hsm_register_event_fifo() */
-FILE *llapi_hsm_event_fp;
+int llapi_hsm_event_fd = -1;
 
 static inline const char *llapi_hsm_ct_ev2str(int type)
 {
@@ -174,12 +174,14 @@ int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
 {
 	int				rc;
 	char				time_string[40];
+	char				json_buf[PIPE_BUF];
+	FILE				*buf_file;
 	time_t				event_time = time(0);
 	struct tm			time_components;
 	struct llapi_json_item_list	*json_items;
 
-	/* Noop unless the event fp was initialized */
-	if (llapi_hsm_event_fp == NULL)
+	/* Noop unless the event fd was initialized */
+	if (llapi_hsm_event_fd < 0)
 		return 0;
 
 	if (event == NULL || *event == NULL)
@@ -204,19 +206,22 @@ int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
 		return rc;
 	}
 
-	rc = llapi_json_write_list(event, llapi_hsm_event_fp);
-	if (rc < 0) {
-		/* Ignore write failures due to missing reader. */
-		if (rc == -EPIPE)
-			return 0;
+	buf_file = fmemopen(json_buf, sizeof(json_buf), "w");
+	if (buf_file == NULL)
+		return -errno;
 
-		/* Skip llapi_error() here because there's no point
-		 * in creating a JSON-formatted error message about
-		 * failing to write a JSON-formatted message.
-		 */
-		fprintf(stderr,
-			"\nFATAL ERROR IN llapi_hsm_write_list(): rc %d", rc);
+	rc = llapi_json_write_list(event, buf_file);
+	if (rc < 0) {
+		fclose(buf_file);
 		return rc;
+	}
+
+	fclose(buf_file);
+
+	if (write(llapi_hsm_event_fd, json_buf, strlen(json_buf)) < 0) {
+		/* Ignore write failures due to missing reader. */
+		if (errno != EPIPE)
+			return -errno;
 	}
 
 	return 0;
@@ -444,7 +449,7 @@ out_free:
  */
 int llapi_hsm_register_event_fifo(char *path)
 {
-	int read_fd, write_fd;
+	int read_fd;
 	struct stat statbuf;
 
 	/* Create the FIFO if necessary. */
@@ -477,8 +482,8 @@ int llapi_hsm_register_event_fifo(char *path)
 
 	/* Open the FIFO for writes, but don't block on waiting
 	 * for a reader. */
-	write_fd = open(path, O_WRONLY | O_NONBLOCK);
-	if (write_fd < 0) {
+	llapi_hsm_event_fd = open(path, O_WRONLY | O_NONBLOCK);
+	if (llapi_hsm_event_fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "cannot open(%s) for write", path);
 		return -errno;
@@ -489,18 +494,8 @@ int llapi_hsm_register_event_fifo(char *path)
 	 * events are lost. NOTE: Only one reader at a time! */
 	close(read_fd);
 
-	llapi_hsm_event_fp = fdopen(write_fd, "w");
-	if (llapi_hsm_event_fp == NULL) {
-		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "cannot fdopen(%s) for write", path);
-		return -errno;
-	}
-
 	/* Ignore SIGPIPEs -- can occur if the reader goes away. */
 	signal(SIGPIPE, SIG_IGN);
-
-	/* Don't buffer the event stream. */
-	setbuf(llapi_hsm_event_fp, NULL);
 
 	return 0;
 }
@@ -515,16 +510,16 @@ int llapi_hsm_register_event_fifo(char *path)
  */
 int llapi_hsm_unregister_event_fifo(char *path)
 {
-	/* Noop unless the event fp was initialized */
-	if (llapi_hsm_event_fp == NULL)
+	/* Noop unless the event fd was initialized */
+	if (llapi_hsm_event_fd < 0)
 		return 0;
 
-	if (fclose(llapi_hsm_event_fp) != 0)
+	if (close(llapi_hsm_event_fd) < 0)
 		return -errno;
 
 	unlink(path);
 
-	llapi_hsm_event_fp = NULL;
+	llapi_hsm_event_fd = -1;
 
 	return 0;
 }
@@ -551,8 +546,8 @@ void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
 	va_list				args2;
 	struct llapi_json_item_list	*json_items;
 
-	/* Noop unless the event fp was initialized */
-	if (llapi_hsm_event_fp == NULL)
+	/* Noop unless the event fd was initialized */
+	if (llapi_hsm_event_fd < 0)
 		return;
 
 	rc = llapi_json_init_list(&json_items);

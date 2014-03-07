@@ -124,8 +124,7 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 	list = *json_items;
 	item = list->ljil_items;
 
-	if (fprintf(fp, "{") < 0)
-		return -errno;
+	fprintf(fp, "{");
 	for (i = 0; i < list->ljil_item_count; i++) {
 		if (item == NULL) {
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
@@ -136,34 +135,26 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 			break;
 		}
 
-		if (fprintf(fp, "\"%s\": ", item->lji_key) < 0)
-			return -errno;
+		fprintf(fp, "\"%s\": ", item->lji_key);
 		switch (item->lji_type) {
 		case LLAPI_JSON_INTEGER:
-			if (fprintf(fp, "%d", item->lji_integer) < 0)
-				return -errno;
+			fprintf(fp, "%d", item->lji_integer);
 			break;
 		case LLAPI_JSON_BIGNUM:
-			if (fprintf(fp, LPU64, item->lji_u64) < 0)
-				return -errno;
+			fprintf(fp, LPU64, item->lji_u64);
 			break;
 		case LLAPI_JSON_REAL:
-			if (fprintf(fp, "%f", item->lji_real) < 0)
-				return -errno;
+			fprintf(fp, "%f", item->lji_real);
 			break;
 		case LLAPI_JSON_STRING:
 			if (llapi_json_escape_string(&escaped_string,
-							item->lji_string) < 0) {
+						     item->lji_string) < 0) {
 				if (escaped_string != NULL)
 					free(escaped_string);
 				return -errno;
 			}
 
-			if (fprintf(fp, "\"%s\"", escaped_string) < 0) {
-				if (escaped_string != NULL)
-					free(escaped_string);
-				return -errno;
-			}
+			fprintf(fp, "\"%s\"", escaped_string);
 
 			if (escaped_string != NULL)
 				free(escaped_string);
@@ -172,19 +163,16 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
 				    "Invalid item type: %d", item->lji_type);
 			/* Ensure valid JSON */
-			if (fprintf(fp, "\"\"") < 0)
-				return -errno;
+			fprintf(fp, "\"\"");
 			break;
 		}
 
 		if (i < list->ljil_item_count - 1)
-			if (fprintf(fp, ", ") < 0)
-				return -errno;
+			fprintf(fp, ", ");
 
 		item = item->lji_next;
 	}
-	if (fprintf(fp, "}\n") < 0)
-		return -errno;
+	fprintf(fp, "}\n");
 
 	return 0;
 }
