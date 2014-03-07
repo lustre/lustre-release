@@ -55,14 +55,14 @@ find_rpm() {
 
 find_linux_rpms() {
     local prefix="$1"
-    local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+    local pathtorpms=${2:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
     local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}"
     local kernel_rpms=$(find_linux_rpm "$prefix" "$pathtorpms")
     # call a distro specific hook, if available
-    if type -p find_linux_rpms-$DISTRO; then
+    if type -p find_linux_rpms-$DISTROMAJ; then
         local rpm
-        if rpm=$(find_linux_rpms-$DISTRO "$prefix" "$wanted_kernel" "$pathtorpms"); then
+        if rpm=$(find_linux_rpms-$DISTROMAJ "$prefix" "$wanted_kernel" "$pathtorpms"); then
             kernel_rpms="$kernel_rpms $rpm"
         else
             return 255
@@ -85,7 +85,7 @@ resolve_arch() {
 #     or just gotten rid of.  :-)
 find_linux_rpm() {
     local prefix="$1"
-    local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+    local pathtorpms=${2:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
     local found_rpm=""
     local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}"
@@ -107,8 +107,8 @@ find_linux_rpm() {
     # done
     if [ -z "$found_rpm" ]; then
         # see if there is a distro specific way of getting the RPM
-        if type -p find_linux_rpm-$DISTRO; then
-            if found_rpm=$(find_linux_rpm-$DISTRO "$prefix" "$wanted_kernel" "$pathtorpms"); then
+        if type -p find_linux_rpm-$DISTROMAJ; then
+            if found_rpm=$(find_linux_rpm-$DISTROMAJ "$prefix" "$wanted_kernel" "$pathtorpms"); then
                 found_rpm="${pathtorpms}/$found_rpm"
                 ret=0
             else
@@ -140,6 +140,8 @@ autodetect_distro() {
                 ;;
             "SUSE LINUX")
                 name="sles"
+                PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+                version="${version}.$PATCHLEVEL"
                 ;;
             "Fedora")
                 name="fc"
@@ -149,11 +151,13 @@ autodetect_distro() {
                 ;;
         esac
     else
-        echo "You really ought to install lsb_release for accurate distro identification"
+        error "You really ought to install lsb_release for accurate distro identification"
         # try some heuristics
         if [ -f /etc/SuSE-release ]; then
             name=sles
             version=$(sed -n -e 's/^VERSION = //p' /etc/SuSE-release)
+            PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+            version="${version}.$PATCHLEVEL"
         elif [ -f /etc/redhat-release ]; then
             #name=$(head -1 /etc/redhat-release)
             name=rhel
@@ -176,20 +180,16 @@ autodetect_target() {
 
     local target=""
     case ${distro} in
-          oel5) target="2.6-oel5";;
-         rhel5) target="2.6-rhel5";;
-         rhel6) target="2.6-rhel6";;
-         rhel7) target="3.10-rhel7";;
-        sles10) target="2.6-sles10";;
-        sles11) target="$(uname -r | cut -d . -f 1,2)-sles11"
-                local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-                if [ "$PLEV" = "3" ]; then
-                        target=${target}sp3
-                fi
-                ;;
-          fc15) target="2.6-fc15";;
-          fc18) target="3.x-fc18";;
-            *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
+          oel5*)  target="2.6-oel5";;
+         rhel5*)  target="2.6-rhel5";;
+         rhel6*)  target="2.6-rhel6";;
+         rhel7*)  target="3.10-rhel7";;
+        sles10*)  target="2.6-sles10";;
+        sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
+        sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
+          fc15)   target="2.6-fc15";;
+          fc18)   target="3.x-fc18";;
+             *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
 
     echo ${target}

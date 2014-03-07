@@ -82,6 +82,14 @@
 %define rpm_post_base %(echo $(dirname %{cross_path})/%{lustre_name})
 %endif
 
+# SUSE don't support .debug_info section from cross compiler:
+# /usr/lib/rpm/debugedit: Unhandled relocation 10 in .debug_info section
+%if %{defined cross_path} && 0%{?suse_version}
+%global __debug_install_post %{nil}
+%global __debug_package %{nil}
+%global debug_package %{nil}
+%endif
+
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}

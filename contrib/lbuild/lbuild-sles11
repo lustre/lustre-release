@@ -90,7 +90,7 @@ unpack_linux_devel_rpm-sles11() {
 find_linux_rpm-sles11() {
     local prefix="$1"
     local wanted_kernel="$2"
-    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+    local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
     local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
     local site="https://nu.novell.com/repo/\$RCE/SLES11-SP${PLEV}-Updates/sle-11-$(resolve_arch $TARGET_ARCH)/rpm/$(resolve_arch $TARGET_ARCH)"

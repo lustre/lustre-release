@@ -261,11 +261,10 @@ check_options() {
 
     if [ -z "$DISTRO" ] ; then
         DISTRO=$(autodetect_distro)
-        # remove minor version only for rhel and oel
-        [[ $DISTRO =~ "el-" ]] && DISTRO=${DISTRO%%.*}
         # remove separator
         DISTRO=${DISTRO/-/}
     fi
+    DISTROMAJ=${DISTRO%%.*}
 
     [ -z "$TARGET" ] && TARGET=$(autodetect_target "$DISTRO")
 
@@ -442,11 +441,11 @@ download_srpm() {
                [ ! -s "$KERNELDIR/$srpm" ]; then
                 rm -f $KERNELDIR/$srpm
                 # punt to a distro specific method if it exists
-                if ! type -p download_srpm-$DISTRO; then
+                if ! type -p download_srpm-$DISTROMAJ; then
                     fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
                 else
-                    if ! download_srpm-$DISTRO "$target" "$srpm" "$force"; then
-                        fatal 1 "Could not download target $target's kernel SRPM $srpm using download_srpm-$DISTRO."
+                    if ! download_srpm-$DISTROMAJ "$target" "$srpm" "$force"; then
+                        fatal 1 "Could not download target $target's kernel SRPM $srpm using download_srpm-$DISTROMAJ."
                     fi
                 fi
             fi
@@ -800,18 +799,19 @@ load_target() {
 tarflags() {
     local file="$1"
 
+    echo -n '--wildcards '
     case "$file" in
         '')
             fatal 1 "tarflags(): File name argument missing."
             ;;
         *.tar.gz | *.tgz)
-            echo 'zxf'
+            echo '-zxf'
             ;;
         *.tar.bz2)
-            echo 'jxf'
+            echo '-jxf'
             ;;
         *.tar)
-            echo 'xf'
+            echo '-xf'
             ;;
         *)
             fatal 1 "tarflags(): Unrecognized tar extension in file: $1"
@@ -1298,8 +1298,8 @@ unpack_linux_devel_rpm() {
     fi
 
     # call a distro specific hook, if available
-    if type -p unpack_linux_devel_rpm-$DISTRO; then
-        if ! unpack_linux_devel_rpm-$DISTRO "$kernelrpm"; then
+    if type -p unpack_linux_devel_rpm-$DISTROMAJ; then
+        if ! unpack_linux_devel_rpm-$DISTROMAJ "$kernelrpm"; then
             return 255
         fi
     fi
@@ -1561,8 +1561,11 @@ build_kernel_with_srpm() {
     if $USE_BUILD_CACHE && [ -n "$REUSEBUILD" ]; then
         local REUSE_SIGNATURE=$({ echo -en $release_str;
                                   echo $BUILD_GEN;
-                                  cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH;
-                                  cat $LBUILD_DIR/lbuild $LBUILD_DIR/lbuild-${DISTRO}; } |
+                                  cat "$CONFIG_FILE";
+                                  cat "$TARGET_FILE";
+                                  cat "$FULL_PATCH";
+                                  cat "$LBUILD_DIR/lbuild";
+                                  cat "$LBUILD_DIR/lbuild-$DISTROMAJ"; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
         # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
@@ -1656,9 +1659,9 @@ build_ofed() {
         # XXX we need to better integrate a distro specific override with
         #     the rest of this function so that all of the reuse cache
         #     stuff is leveraged given that 80% of this function is reuse
-        if type -p build_ofed-${DISTRO}; then
+        if type -p build_ofed-$DISTROMAJ; then
             local ofed_location
-            ofed_location=$(build_ofed-${DISTRO} ${STDOUT})
+            ofed_location=$(build_ofed-$DISTROMAJ ${STDOUT})
             local rc=${PIPESTATUS[0]}
             CONFIGURE_FLAGS="--with-o2ib=${ofed_location} ${CONFIGURE_FLAGS}"
             return $rc
@@ -1679,8 +1682,8 @@ build_ofed() {
                                   echo "$(find_linux_release;
                                   echo "$BUILD_GEN")";
                                   cat "${linux}/include/linux/autoconf.h";
-                                  cat "$LBUILD_DIR/lbuild" ;
-                                  cat "$LBUILD_DIR/lbuild-${DISTRO}"; } |
+                                  cat "$LBUILD_DIR/lbuild";
+                                  cat "$LBUILD_DIR/lbuild-$DISTROMAJ"; } |
                                 md5sum | cut -d" " -f1)
         # see if we can link to the reuse pool
         # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
@@ -1780,7 +1783,7 @@ build_with_srpm() {
         # client build
         local kernelrpm
         if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE"); then
-            fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
+            fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ"
         fi
         if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
             fatal 1 "Could not find the Linux tree in $kernelrpm"
@@ -2135,8 +2138,7 @@ unpack_lustre
 
 # XXX - should we _always_ get the buildid from the META file?  what are the
 # other (i.e. non-lustre-tarball use cases of lbuild)?
-BUILDID=$(sed -ne '/^BUILDID =/s/.*= *//p' lustre/META)
-VERSION=$(sed -ne '/^VERSION =/s/.*= *//p' lustre/META)
+BUILDID=$(sed -n -e 's/^BUILDID = //p' lustre/META)
 
 load_target
 
@@ -2153,9 +2155,8 @@ if [ -n "$MPSS_VERSION" ]; then
 
     if [ "$MPSS_VERSION" = "last" ]; then
         MPSS_VERSION=$(parse_mpss_info "$MPSS_INFO" "" ${MPSS_DISTRO})
-        [ -z "$MPSS_VERSION" ] && fatal 1 "Could not determine the last MPSS version"
-    elif [[ $MPSS_VERSION != [0-9].[0-9].[0-9]*-[0-9]* ]]; then
-        fatal 1 "Incorrect MPSS version $MPSS_VERSION"
+        [ -z "$MPSS_VERSION" ] &&
+            fatal 1 "Could not determine the last MPSS version"
     fi
 
     download_mpss "$MPSS_INFO"
@@ -2184,15 +2185,17 @@ if [ -n "$MPSS_VERSION" ]; then
     if [ "${MPSS_VERSION%%.*}" = "3" ]; then
         CC_TARGET_ARCH=k1om-mpss-linux
         LINUX="$TOPDIR/mpss"
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires /bin/sh\""
     else
         CC_TARGET_ARCH=x86_64-k1om-linux
         LINUX="$TOPDIR/mpss/card/kernel"
         RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires intel-mic-gpl = ${MPSS_VERSION%%-*}\""
     fi
+    LUSTRE_VERSION=$(sed -n -e 's/^VERSION = //p' lustre/META)
     CONFIGURE_FLAGS="$CONFIGURE_FLAGS $MPSS_OFED --host=$CC_TARGET_ARCH --build=x86_64-pc-linux"
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"post_script build/gen_filelist.sh\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"make_args ARCH=k1om CROSS_COMPILE=${CC_TARGET_ARCH}-\""
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_path ${CROSS_PATH:=/opt/lustre/${VERSION}/${CC_TARGET_ARCH}}\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_path ${CROSS_PATH:=/opt/lustre/${LUSTRE_VERSION}/${CC_TARGET_ARCH}}\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"rootdir %{cross_path}\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_prefix %{cross_path}/usr\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_mandir %{_prefix}/share/man\""
@@ -2216,10 +2219,10 @@ if [ -n "$LINUX" ]; then
         fatal 1 "error building OFED"
     build_lustre "$LINUX" "$LINUXOBJ"
 else
-    if [ ! -f "${LBUILD_DIR}/lbuild-$DISTRO" ]; then
-        fatal 1 "${LBUILD_DIR}/lbuild-$DISTRO not found"
+    if [ ! -f "${LBUILD_DIR}/lbuild-$DISTROMAJ" ]; then
+        fatal 1 "${LBUILD_DIR}/lbuild-$DISTROMAJ not found"
     fi
-    source ${LBUILD_DIR}/lbuild-$DISTRO
+    source ${LBUILD_DIR}/lbuild-$DISTROMAJ
     build_with_srpm || fatal 1 "Failed to build_with_srpm"
 fi
 

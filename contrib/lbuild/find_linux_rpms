@@ -20,12 +20,15 @@ TOPDIR=$PWD
 KERNELRPMSDIR="$1"
 
 DISTRO=$(autodetect_distro)
-# remove minor version only for rhel and oel
-[[ $DISTRO =~ "el-" ]] && DISTRO=${DISTRO%%.*}
 # remove separator
 DISTRO=${DISTRO/-/}
+DISTROMAJ=${DISTRO%%.*}
 
-source $LBUILD_DIR/lbuild-$DISTRO
+if [ -f $LBUILD_DIR/lbuild-$DISTRO ]; then
+    . $LBUILD_DIR/lbuild-$DISTRO
+else
+    . $LBUILD_DIR/lbuild-$DISTROMAJ
+fi
 
 TARGET_ARCH="$(uname -m)"
 TARGET_ARCHS="$(uname -m)"

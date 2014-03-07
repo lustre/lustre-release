@@ -182,7 +182,7 @@ unpack_linux_devel_rpm-rhel() {
 find_linux_rpm-rhel() {
     local prefix="$1"
     local wanted_kernel="$2"
-    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+    local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
     local tmpdir=$(mktemp -d $pathtorpms/yumXXXXXX)
     local sudo=""
