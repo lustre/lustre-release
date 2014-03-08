@@ -1226,7 +1226,7 @@ static int osp_orphan_it_fetch(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	req->rq_request_portal = OST_IDX_PORTAL;
+	req->rq_request_portal = OUT_PORTAL;
 	ptlrpc_at_set_req_timeout(req);
 
 	desc = ptlrpc_prep_bulk_imp(req, npages, 1, BULK_PUT_SINK,

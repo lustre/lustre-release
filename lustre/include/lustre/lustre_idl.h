@@ -141,7 +141,6 @@
 #define SEQ_DATA_PORTAL                31
 #define SEQ_CONTROLLER_PORTAL          32
 #define MGS_BULK_PORTAL                33
-#define OST_IDX_PORTAL		       34
 
 /* Portal 63 is reserved for the Cray Inc DVS - nic@cray.com, roe@cray.com, n8851@cray.com */
 

@@ -332,53 +332,10 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		GOTO(out_seq, rc);
 	}
 
-	/* Index read service */
-	memset(&svc_conf, 0, sizeof(svc_conf));
-	svc_conf = (typeof(svc_conf)) {
-		.psc_name		= "ost_idx_read",
-		.psc_watchdog_factor	= OSS_SERVICE_WATCHDOG_FACTOR,
-		.psc_buf		= {
-			.bc_nbufs		= OST_NBUFS,
-			.bc_buf_size		= OST_BUFSIZE,
-			.bc_req_max_size	= OST_MAXREQSIZE,
-			.bc_rep_max_size	= OST_MAXREPSIZE,
-			.bc_req_portal		= OST_IDX_PORTAL,
-			.bc_rep_portal		= OSC_REPLY_PORTAL,
-		},
-		.psc_thr		= {
-			.tc_thr_name		= "ll_ost_idx",
-			.tc_thr_factor		= OSS_CR_THR_FACTOR,
-			.tc_nthrs_init		= OSS_CR_NTHRS_INIT,
-			.tc_nthrs_base		= OSS_CR_NTHRS_BASE,
-			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
-			.tc_nthrs_user		= oss_num_create_threads,
-			.tc_cpu_affinity	= 1,
-			.tc_ctx_tags		= LCT_DT_THREAD,
-		},
-		.psc_cpt		= {
-			.cc_pattern		= oss_cpts,
-		},
-		.psc_ops		= {
-			.so_req_handler		= tgt_request_handle,
-			.so_req_printer		= target_print_req,
-		},
-	};
-	ost->ost_idx_service = ptlrpc_register_service(&svc_conf,
-						       obd->obd_proc_entry);
-	if (IS_ERR(ost->ost_idx_service)) {
-		rc = PTR_ERR(ost->ost_idx_service);
-		CERROR("failed to start OST index read service: rc = %d\n", rc);
-		ost->ost_idx_service = NULL;
-		GOTO(out_out, rc);
-	}
-
 	ping_evictor_start();
 
 	RETURN(0);
 
-out_out:
-	ptlrpc_unregister_service(ost->ost_out_service);
-	ost->ost_out_service = NULL;
 out_seq:
 	ptlrpc_unregister_service(ost->ost_seq_service);
 	ost->ost_seq_service = NULL;
@@ -413,14 +370,12 @@ static int ost_cleanup(struct obd_device *obd)
 	ptlrpc_unregister_service(ost->ost_io_service);
 	ptlrpc_unregister_service(ost->ost_seq_service);
 	ptlrpc_unregister_service(ost->ost_out_service);
-	ptlrpc_unregister_service(ost->ost_idx_service);
 
 	ost->ost_service = NULL;
 	ost->ost_create_service = NULL;
 	ost->ost_io_service = NULL;
 	ost->ost_seq_service = NULL;
 	ost->ost_out_service = NULL;
-	ost->ost_idx_service = NULL;
 
 	mutex_unlock(&ost->ost_health_mutex);
 
