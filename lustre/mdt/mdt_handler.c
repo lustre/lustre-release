@@ -4306,6 +4306,10 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	struct lfsck_stop	 stop;
 	ENTRY;
 
+	stop.ls_status = LS_PAUSED;
+	stop.ls_flags = 0;
+	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
+
 	target_recovery_fini(obd);
 	ping_evictor_stop();
 	mdt_stack_pre_fini(env, m, md2lu_dev(m->mdt_child));
@@ -4341,10 +4345,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 m->mdt_nosquash_str = NULL;
                 m->mdt_nosquash_strlen = 0;
         }
-
-	stop.ls_status = LS_PAUSED;
-	stop.ls_flags = 0;
-	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
 
         mdt_seq_fini(env, m);
         mdt_fld_fini(env, m);
