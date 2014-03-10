@@ -903,10 +903,13 @@ test_12() {
 
 	echo "stopall"
 	stopall > /dev/null
+
+	#define OBD_FAIL_OST_NODESTROY		 0x233
+	do_facet ost1 $LCTL set_param fail_loc=0x233
+
 	echo "setupall"
 	setupall > /dev/null
 
-	do_facet ost1 $LCTL set_param fail_loc=0
 	local STATUS=$($SHOW_SCRUB_ON_OST | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "init" ] ||
 		error "(1) Expect 'init', but got '$STATUS'"
@@ -918,6 +921,7 @@ test_12() {
 	[ "$STATUS" == "completed" ] ||
 		error "(3) Expect 'completed', but got '$STATUS'"
 
+	do_facet ost1 $LCTL set_param fail_loc=0
 	ls -ail $DIR/$tdir > /dev/null 2>&1 || error "(4) ls should succeed"
 }
 run_test 12 "OI scrub can rebuild invalid /O entries"
