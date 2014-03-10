@@ -717,6 +717,13 @@ Filesystem volume name:   myth-OST0004
 lctl&gt; show dlmtrace 
 lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
     </section>
+    <section remap="h3">
+      <title>Controlling Console Message Rate Limiting</title>
+      <para>Some console messages which are printed by Lustre are rate limited.  When such messages are printed, they may be followed by a message saying "Skipped N previous similar message(s)," where N is the number of messages skipped.  This rate limiting can be completely disabled by a libcfs module parameter called <literal>libcfs_console_ratelimit</literal>.  To disable console message rate limiting, add this line to <literal>/etc/modprobe.d/lustre.conf</literal> and then reload Lustre modules.</para>
+      <screen>options libcfs libcfs_console_ratelimit=0</screen>
+      <para>It is also possible to set the minimum and maximum delays between rate-limited console messages using the module parameters <literal>libcfs_console_max_delay</literal> and <literal>libcfs_console_min_delay</literal>.  Set these in <literal>/etc/modprobe.d/lustre.conf</literal> and then reload Lustre modules.  Additional information on libcfs module parameters is available via <literal>modinfo</literal>:</para>
+      <screen>modinfo libcfs</screen>
+    </section>
   </section>
   <section xml:id="dbdoclet.50438274_80443">
     <title><indexterm><primary>debugging</primary><secondary>developers tools</secondary></indexterm>Lustre Debugging for Developers</title>
