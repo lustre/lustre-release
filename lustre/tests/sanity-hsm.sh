@@ -159,19 +159,25 @@ copytool_monitor_setup() {
 	cmd="cat $test_dir/fifo > $test_dir/events &"
 	cmd+=" echo \\\$! > $test_dir/monitor_pid"
 
-	# This is required for pdsh -Rmrsh and its handling of remote shells.
-	# Regular ssh and pdsh -Rssh work fine without this backgrounded
-	# subshell nonsense.
-	(do_node $agent "$cmd") &
-	export HSMTOOL_MONITOR_PDSH=$!
+	if [[ $PDSH == *Rmrsh* ]]; then
+		# This is required for pdsh -Rmrsh and its handling of remote
+		# shells.
+		# Regular ssh and pdsh -Rssh work fine without this
+		# backgrounded subshell nonsense.
+		(do_node $agent "$cmd") &
+		export HSMTOOL_MONITOR_PDSH=$!
 
-	# Slightly racy, but just making a best-effort to catch obvious
-	# problems. If we get rid of the ridiculous backgrounded subshell,
-	# this check will need to be updated to just look at the returncode
-	# of do_node.
-	sleep 1
-	ps -p $HSMTOOL_MONITOR_PDSH >&- ||
-		error "Failed to start copytool monitor on $agent"
+		# Slightly racy, but just making a best-effort to catch obvious
+		# problems.
+		sleep 1
+		ps -p $HSMTOOL_MONITOR_PDSH >&- ||
+			error "Failed to start copytool monitor on $agent"
+	else
+		do_node $agent "$cmd"
+		if [ $? != 0 ]; then
+			error "Failed to start copytool monitor on $agent"
+		fi
+	fi
 }
 
 copytool_monitor_cleanup() {
