@@ -605,9 +605,10 @@ static int osp_sync_process_record(const struct lu_env *env,
 		rc = osp_sync_new_setattr_job(d, llh, rec);
 		break;
 	default:
-		CERROR("unknown record type: %x\n", rec->lrh_type);
-		       rc = -EINVAL;
-		       break;
+		CERROR("%s: unknown record type: %x\n", d->opd_obd->obd_name,
+		       rec->lrh_type);
+		/* we should continue processing */
+		return 0;
 	}
 
 	if (likely(rc == 0)) {
