@@ -5,6 +5,10 @@
 # (c) 2008-2010 Andy Whitcroft <apw@canonical.com>
 # Licensed under the terms of the GNU GPL License version 2
 
+# Based on linux/scripts/checkpatch.pl from 2.6.38 but uses Lustre
+# specific deprecated symbol/functions/include lists rather than
+# Documentation/feature-removal-schedule.txt.
+
 use strict;
 
 my $P = $0;
@@ -347,26 +351,107 @@ sub deparenthesize {
 
 $chk_signoff = 0 if ($file);
 
-my @dep_includes = ();
-my @dep_functions = ();
-my $removal = "Documentation/feature-removal-schedule.txt";
-if ($tree && -f "$root/$removal") {
-	open(my $REMOVE, '<', "$root/$removal") ||
-				die "$P: $removal: open failed - $!\n";
-	while (<$REMOVE>) {
-		if (/^Check:\s+(.*\S)/) {
-			for my $entry (split(/[, ]+/, $1)) {
-				if ($entry =~ m@include/(.*)@) {
-					push(@dep_includes, $1);
+my %dep_includes = (
+	'asm/types.h',			'linux/types.h',
+	'asm/uaccess.h',		'linux/uaccess.h',
+);
 
-				} elsif ($entry !~ m@/@) {
-					push(@dep_functions, $entry);
-				}
-			}
-		}
-	}
-	close($REMOVE);
-}
+my %dep_functions = (
+	'CFS_ATOMIC_INIT',		'ATOMIC_INIT',
+	'cfs_atomic_add',		'atomic_add',
+	'cfs_atomic_add_return',	'atomic_add_return',
+	'cfs_atomic_add_unless',	'atomic_add_unless',
+	'cfs_atomic_cmpxchg',		'atomic_cmpxchg',
+	'cfs_atomic_dec',		'atomic_dec',
+	'cfs_atomic_dec_and_lock',	'atomic_dec_and_lock',
+	'cfs_atomic_dec_and_test',	'atomic_dec_and_test',
+	'cfs_atomic_dec_return',	'atomic_dec_return',
+	'cfs_atomic_inc',		'atomic_inc',
+	'cfs_atomic_inc_and_test',	'atomic_inc_and_test',
+	'cfs_atomic_inc_not_zero',	'atomic_inc_not_zero',
+	'cfs_atomic_inc_return',	'atomic_inc_return',
+	'cfs_atomic_read',		'atomic_read',
+	'cfs_atomic_set',		'atomic_set',
+	'cfs_atomic_sub',		'atomic_sub',
+	'cfs_atomic_sub_and_test',	'atomic_sub_and_test',
+	'cfs_atomic_sub_return',	'atomic_sub_return',
+	'cfs_atomic_t',			'atomic_t',
+
+	'CFS_HLIST_HEAD',		'HLIST_HEAD',
+	'CFS_HLIST_HEAD_INIT',		'HLIST_HEAD_INIT',
+	'CFS_INIT_HLIST_HEAD',		'INIT_HLIST_HEAD',
+	'CFS_INIT_HLIST_NODE',		'INIT_HLIST_NODE',
+	'cfs_hlist_add_after',		'hlist_add_after',
+	'cfs_hlist_add_before',		'hlist_add_before',
+	'cfs_hlist_add_head',		'hlist_add_head',
+	'cfs_hlist_del',		'hlist_del',
+	'cfs_hlist_del_init',		'hlist_del_init',
+	'cfs_hlist_empty',		'hlist_empty',
+	'cfs_hlist_entry',		'hlist_entry',
+	'cfs_hlist_for_each',		'hlist_for_each',
+	'cfs_hlist_for_each_entry',	'hlist_for_each_entry',
+	'cfs_hlist_for_each_entry_continue',
+					'hlist_for_each_entry_continue',
+	'cfs_hlist_for_each_entry_from',
+					'hlist_for_each_entry_from',
+	'cfs_hlist_for_each_entry_safe',
+					'hlist_for_each_entry_safe',
+	'cfs_hlist_for_each_safe',	'hlist_for_each_safe',
+	'cfs_hlist_head_t',		'struct hlist_head',
+	'cfs_hlist_node_t',		'struct hlist_node',
+	'cfs_hlist_unhashed',		'hlist_unhashed',
+
+	'cfs_inode_t',			'struct inode',
+
+	'CFS_INIT_LIST_HEAD',		'INIT_LIST_HEAD',
+	'CFS_LIST_HEAD',		'LIST_HEAD',
+	'CFS_LIST_HEAD_INIT',		'LIST_HEAD_INIT',
+	'cfs_list_add',			'list_add',
+	'cfs_list_add_tail',		'list_add_tail',
+	'cfs_list_del',			'list_del',
+	'cfs_list_del_init',		'list_del_init',
+	'cfs_list_empty',		'list_empty',
+	'cfs_list_empty_careful',	'list_empty_careful',
+	'cfs_list_entry',		'list_entry',
+	'cfs_list_for_each',		'list_for_each',
+	'cfs_list_for_each_entry',	'list_for_each_entry',
+	'cfs_list_for_each_entry_continue',
+					'list_for_each_entry_continue',
+	'cfs_list_for_each_entry_reverse',
+					'list_for_each_entry_reverse',
+	'cfs_list_for_each_entry_safe',
+					'list_for_each_entry_safe',
+	'cfs_list_for_each_entry_safe_from',
+					'list_for_each_entry_safe_from',
+	'cfs_list_for_each_entry_safe_reverse',
+					'list_for_each_entry_safe_reverse',
+	'cfs_list_for_each_entry_safe_typed',
+					'list_for_each_entry_safe_typed',
+	'cfs_list_for_each_entry_typed',
+					'list_for_each_entry_typed',
+	'cfs_list_for_each_prev',	'list_for_each_prev',
+	'cfs_list_for_each_safe',	'list_for_each_safe',
+	'cfs_list_move',		'list_move',
+	'cfs_list_move_tail',		'list_move_tail',
+	'cfs_list_splice',		'list_splice',
+	'cfs_list_splice_init',		'list_splice_init',
+	'cfs_list_splice_tail',		'list_splice_tail',
+	'cfs_list_t',			'struct list_head',
+
+	'CFS_PAGE_MASK',		'PAGE_CACHE_MASK or PAGE_MASK',
+	'CFS_PAGE_SIZE',		'PAGE_CACHE_SIZE or PAGE_SIZE',
+
+	'cfs_proc_dir_entry_t',		'struct proc_dir_entry',
+
+	'cfs_rcu_head_t',		'struct rcu_head',
+
+	'alloca',			'malloc',
+	'mktemp',			'mkstemp',
+	'sprintf',			'snprintf',
+	'strcpy',			'strncpy',
+	'strcat',			'strncat',
+	'tempnam',			'mkstemp',
+);
 
 my @rawlines = ();
 my @lines = ();
@@ -2987,18 +3072,22 @@ sub process {
 		}
 
 # don't include deprecated include files (uses RAW line)
-		for my $inc (@dep_includes) {
+		for my $inc (keys %dep_includes) {
 			if ($rawline =~ m@^.\s*\#\s*include\s*\<$inc>@) {
 				ERROR("DEPRECATED_INCLUDE",
-				      "Don't use <$inc>: see Documentation/feature-removal-schedule.txt\n" . $herecurr);
+				      "Don't use <$inc>, include " .
+				      "$dep_includes{$inc} instead\n" .
+				      $herecurr);
 			}
 		}
 
 # don't use deprecated functions
-		for my $func (@dep_functions) {
+		for my $func (keys %dep_functions) {
 			if ($line =~ /\b$func\b/) {
 				ERROR("DEPRECATED_FUNCTION",
-				      "Don't use $func(): see Documentation/feature-removal-schedule.txt\n" . $herecurr);
+				      "$func is deprecated, " .
+				      "use $dep_functions{$func} instead\n" .
+				      $herecurr);
 			}
 		}
 
