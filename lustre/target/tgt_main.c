@@ -143,7 +143,26 @@ void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 EXPORT_SYMBOL(tgt_fini);
 
 /* context key constructor/destructor: tg_key_init, tg_key_fini */
-LU_KEY_INIT_FINI(tgt, struct tgt_thread_info);
+LU_KEY_INIT(tgt, struct tgt_thread_info);
+
+static void tgt_key_fini(const struct lu_context *ctx,
+			 struct lu_context_key *key, void *data)
+{
+	struct tgt_thread_info		*info = data;
+	struct thandle_exec_args	*args = &info->tti_tea;
+	int				i;
+
+	for (i = 0; i < args->ta_alloc_args; i++) {
+		if (args->ta_args[i] != NULL)
+			OBD_FREE_PTR(args->ta_args[i]);
+	}
+
+	if (args->ta_args != NULL)
+		OBD_FREE(args->ta_args, sizeof(args->ta_args[0]) *
+					args->ta_alloc_args);
+	OBD_FREE_PTR(info);
+}
+
 static void tgt_key_exit(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {

@@ -2159,6 +2159,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	const char		*name = lname->ln_name;
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
 	int			 rc;
+	int			 rc2;
 	ENTRY;
 
         /*
@@ -2309,7 +2310,9 @@ err_created:
 			S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
 			0, son, mdd_pobj, lname, handle);
 out_stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	rc2 = mdd_trans_stop(env, mdd, rc, handle);
+	if (rc == 0)
+		rc = rc2;
 out_free:
 	if (ldata->ld_buf && ldata->ld_buf->lb_len > OBD_ALLOC_BIG)
 		/* if we vmalloced a large buffer drop it */

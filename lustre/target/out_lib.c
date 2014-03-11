@@ -249,14 +249,6 @@ int out_insert_update(const struct lu_env *env,
 	int				i;
 	ENTRY;
 
-	if (ureq->ourq_count >= OUT_UPDATE_PER_TRANS_MAX) {
-		CERROR("%s: too much params %d or update %d "DFID" op %d: "
-		       "rc = %d\n",
-		       update->dur_dt->dd_lu_dev.ld_obd->obd_name,
-		       params_count, ureq->ourq_count, PFID(fid), op, -E2BIG);
-		RETURN(-E2BIG);
-	}
-
 	/* Check update size to make sure it can fit into the buffer */
 	ureq_len = object_update_request_size(ureq);
 	update_length = offsetof(struct object_update, ou_params[0]);

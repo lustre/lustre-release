@@ -419,8 +419,8 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
                                  struct mdd_device *mdd);
 int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,
                     struct thandle *th);
-void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
-                    int rc, struct thandle *handle);
+int mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
+		   int rc, struct thandle *handle);
 int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
                     void *cookie);
 int mdd_txn_start_cb(const struct lu_env *env, struct thandle *,
