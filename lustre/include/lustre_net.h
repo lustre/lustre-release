@@ -494,7 +494,7 @@
 /**
  * FIEMAP request can be 4K+ for now
  */
-#define OST_MAXREQSIZE		(5 * 1024)
+#define OST_MAXREQSIZE		(16 * 1024)
 #define OST_IO_MAXREQSIZE	max_t(int, OST_MAXREQSIZE, \
 				(((_OST_MAXREQSIZE_SUM - 1) | (1024 - 1)) + 1))
 
