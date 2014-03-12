@@ -664,8 +664,10 @@ get_request_count() {
 
 wait_all_done() {
 	local timeout=$1
+	local fid=$2
 
 	local cmd="$LCTL get_param -n $HSM_PARAM.actions"
+	[[ -n $fid ]] && cmd+=" | grep '$fid'"
 	cmd+=" | egrep 'WAITING|STARTED'"
 
 	wait_result $SINGLEMDS "$cmd" "" $timeout ||
@@ -2231,6 +2233,15 @@ test_33() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
+	# to be sure wait_all_done will not be mislead by previous tests
+	# and ops.
+	cdt_purge
+	wait_for_grace_delay
+	# Also raise grace_delay significantly so the Canceled
+	# Restore action will stay enough long avail.
+	local old_grace=$(get_hsm_param grace_delay)
+	set_hsm_param grace_delay 100
+
 	md5sum $f >/dev/null &
 	local pid=$!
 	wait_request_state $fid RESTORE STARTED
@@ -2243,8 +2254,29 @@ test_33() {
 
 	$LFS hsm_cancel $f
 
-	wait_request_state $fid RESTORE CANCELED
-	wait_request_state $fid CANCEL SUCCEED
+	# instead of waiting+checking both Restore and Cancel ops
+	# sequentially, wait for both to be finished and then check
+	# each results.
+	wait_all_done 100 $fid
+	local rstate=$(get_request_state $fid RESTORE)
+	local cstate=$(get_request_state $fid CANCEL)
+
+	# restore orig grace_delay.
+	set_hsm_param grace_delay $old_grace
+
+	if [[ "$rstate" == "CANCELED" ]] ; then
+		[[ "$cstate" == "SUCCEED" ]] ||
+			error "Restore state is CANCELED and Cancel state " \
+			       "is not SUCCEED but $cstate"
+		echo "Restore state is CANCELED, Cancel state is SUCCEED"
+	elif [[ "$rstate" == "SUCCEED" ]] ; then
+		[[ "$cstate" == "FAILED" ]] ||
+			error "Restore state is SUCCEED and Cancel state " \
+				"is not FAILED but $cstate"
+		echo "Restore state is SUCCEED, Cancel state is FAILED"
+	else
+		error "Restore state is $rstate and Cancel state is $cstate"
+	fi
 
 	[ -z $killed ] ||
 		error "Cannot kill process waiting for restore ($killed)"
