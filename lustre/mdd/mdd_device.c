@@ -558,19 +558,20 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
 
         sscanf(name, SFID, RFID(f));
         if (!fid_is_sane(f)) {
-		CWARN("%s: bad FID format [%s], should be "DFID"\n",
-		      mdd2obd_dev(mdd)->obd_name, lname->ln_name,
+		CWARN("%s: Trying to lookup invalid FID [%s] in %s/%s, FID "
+		      "format should be "DFID"\n", mdd2obd_dev(mdd)->obd_name,
+		      lname->ln_name, dot_lustre_name, mdd_obf_dir_name,
 		      (__u64)FID_SEQ_NORMAL, 1, 0);
                 GOTO(out, rc = -EINVAL);
         }
 
 	if (!fid_is_norm(f) && !fid_is_igif(f) && !fid_is_root(f) &&
 	    !fid_seq_is_dot(f->f_seq)) {
-		CWARN("%s: "DFID" is invalid, sequence should be "
-		      ">= "LPX64" or within ["LPX64","LPX64"].\n",
-		      mdd2obd_dev(mdd)->obd_name, PFID(f),
-		      (__u64)FID_SEQ_NORMAL, (__u64)FID_SEQ_IGIF,
-		      (__u64)FID_SEQ_IGIF_MAX);
+		CWARN("%s: Trying to lookup invalid FID "DFID" in %s/%s, "
+		      "sequence should be >= "LPX64" or within ["LPX64","
+		      ""LPX64"].\n", mdd2obd_dev(mdd)->obd_name, PFID(f),
+		      dot_lustre_name, mdd_obf_dir_name, (__u64)FID_SEQ_NORMAL,
+		      (__u64)FID_SEQ_IGIF, (__u64)FID_SEQ_IGIF_MAX);
 		GOTO(out, rc = -EINVAL);
 	}
 
