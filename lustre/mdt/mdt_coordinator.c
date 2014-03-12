@@ -973,7 +973,7 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	rc = mdt_hsm_pending_restore(cdt_mti);
 	if (rc)
 		CERROR("%s: cannot take the layout locks needed"
-		       " for registered restore: %d",
+		       " for registered restore: %d\n",
 		       mdt_obd_name(mdt), rc);
 
 	task = kthread_run(mdt_coordinator, cdt_mti, "hsm_cdtr");
