@@ -837,9 +837,9 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			memset(v3, 0, sizeof(*v3));
 			v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
 			v3->lmm_stripe_count =
-				cpu_to_le32(lo->ldo_def_stripenr);
+				cpu_to_le16(lo->ldo_def_stripenr);
 			v3->lmm_stripe_offset =
-				cpu_to_le32(lo->ldo_def_stripe_offset);
+				cpu_to_le16(lo->ldo_def_stripe_offset);
 			v3->lmm_stripe_size =
 				cpu_to_le32(lo->ldo_def_stripe_size);
 			if (lo->ldo_pool)
@@ -1183,9 +1183,9 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			memset(v3, 0, sizeof(*v3));
 			v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
 			v3->lmm_stripe_count =
-				cpu_to_le32(lo->ldo_def_stripenr);
+				cpu_to_le16(lo->ldo_def_stripenr);
 			v3->lmm_stripe_offset =
-				cpu_to_le32(lo->ldo_def_stripe_offset);
+				cpu_to_le16(lo->ldo_def_stripe_offset);
 			v3->lmm_stripe_size =
 				cpu_to_le32(lo->ldo_def_stripe_size);
 			if (lo->ldo_pool)
