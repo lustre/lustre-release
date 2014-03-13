@@ -855,7 +855,7 @@ mxlnd_ip2nic_id(u32 ip, u64 *nic_id, int tries)
 
         if (tmp_id == 0ULL)
                 ret = -EHOSTUNREACH;
-#ifdef __LITTLE_ENDIAN
+#if __BYTE_ORDER == __LITTLE_ENDIAN
         *nic_id = ___arch__swab64(tmp_id);
 #else
         *nic_id = tmp_id;
