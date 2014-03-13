@@ -1170,13 +1170,36 @@ static int mgs_parse_devname(char *devname, char *fsname, __u32 *index)
 	RETURN(0);
 }
 
+/* This is only called during replace_nids */
 static int only_mgs_is_running(struct obd_device *mgs_obd)
 {
 	/* TDB: Is global variable with devices count exists? */
 	int num_devices = get_devices_count();
+	int num_exports = 0;
+	struct obd_export *exp;
+
+	spin_lock(&mgs_obd->obd_dev_lock);
+	list_for_each_entry(exp, &mgs_obd->obd_exports, exp_obd_chain) {
+		/* skip self export */
+		if (exp == mgs_obd->obd_self_export)
+			continue;
+		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
+			continue;
+
+		++num_exports;
+
+		CERROR("%s: node %s still connected during replace_nids "
+		       "connect_flags:%llx\n",
+		       mgs_obd->obd_name,
+		       libcfs_nid2str(exp->exp_nid_stats->nid),
+		       exp_connect_flags(exp));
+
+	}
+	spin_unlock(&mgs_obd->obd_dev_lock);
+
 	/* osd, MGS and MGC + self_export
-	   (wc -l /proc/fs/lustre/devices <= 2) && (num_exports <= 2) */
-	return (num_devices <= 3) && (mgs_obd->obd_num_exports <= 2);
+	   (wc -l /proc/fs/lustre/devices <= 2) && (non self exports == 0) */
+	return (num_devices <= 3) && (num_exports == 0);
 }
 
 static int name_create_mdt(char **logname, char *fsname, int i)
