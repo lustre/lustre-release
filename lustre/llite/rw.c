@@ -114,15 +114,8 @@ struct ll_cl_context *ll_cl_init(struct file *file, struct page *vmpage)
         cio = ccc_env_io(env);
         io = cio->cui_cl.cis_io;
         lcc->lcc_io = io;
-	if (io == NULL) {
-		struct inode *inode = file->f_dentry->d_inode;
-
-		CERROR("%s: " DFID " no active IO, please file a ticket.\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(ll_inode2fid(inode)));
-		libcfs_debug_dumpstack(NULL);
+	if (io == NULL)
 		result = -EIO;
-	}
 	if (result == 0 && vmpage != NULL) {
                 struct cl_page   *page;
 
