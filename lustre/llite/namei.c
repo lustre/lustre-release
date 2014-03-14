@@ -536,14 +536,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	if (it == NULL || it->it_op == IT_GETXATTR)
 		it = &lookup_it;
 
-        if (it->it_op == IT_GETATTR) {
-                rc = ll_statahead_enter(parent, &dentry, 0);
-                if (rc == 1) {
-                        if (dentry == save)
-                                GOTO(out, retval = NULL);
-                        GOTO(out, retval = dentry);
-                }
-        }
+	if (it->it_op == IT_GETATTR && dentry_may_statahead(parent, dentry)) {
+		rc = ll_statahead(parent, &dentry, 0);
+		if (rc == 1)
+			RETURN(dentry == save ? NULL : dentry);
+	}
 
 	if (it->it_op & IT_CREAT)
 		opc = LUSTRE_OPC_CREATE;
@@ -578,16 +575,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
         ll_lookup_finish_locks(it, dentry);
 
-        if (dentry == save)
-                GOTO(out, retval = NULL);
-        else
-                GOTO(out, retval = dentry);
- out:
-        if (req)
-                ptlrpc_req_finished(req);
-        if (it->it_op == IT_GETATTR && (retval == NULL || retval == dentry))
-                ll_statahead_mark(parent, dentry);
-        return retval;
+	retval = (dentry == save) ? NULL : dentry;
+	EXIT;
+
+out:
+	ptlrpc_req_finished(req);
+	return retval;
 }
 
 #ifdef HAVE_IOP_ATOMIC_OPEN

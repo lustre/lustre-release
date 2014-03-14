@@ -1539,7 +1539,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 					    rp_param.rp_hash64),
 			       mdc_read_page_remote, &rp_param);
 	if (IS_ERR(page)) {
-		CERROR("%s: read cache page: "DFID" at "LPU64": rc %ld\n",
+		CDEBUG(D_INFO, "%s: read cache page: "DFID" at "LPU64": %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, PTR_ERR(page));
 		GOTO(out_unlock, rc = PTR_ERR(page));
