@@ -2582,14 +2582,13 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 
  no_match:
         if (intent) {
-                CFS_LIST_HEAD(cancels);
-                req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-                                           &RQF_LDLM_ENQUEUE_LVB);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
+		req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+					   &RQF_LDLM_ENQUEUE_LVB);
+		if (req == NULL)
+			RETURN(-ENOMEM);
 
-                rc = ldlm_prep_enqueue_req(exp, req, &cancels, 0);
-                if (rc) {
+		rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
+		if (rc < 0) {
                         ptlrpc_request_free(req);
                         RETURN(rc);
                 }
