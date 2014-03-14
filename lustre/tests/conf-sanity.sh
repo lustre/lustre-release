@@ -2412,7 +2412,7 @@ run_test 37 "verify set tunables works for symlink device"
 
 test_38() { # bug 14222
 	local fstype=$(facet_fstype $SINGLEMDS)
-	local mntpt=$TMP/$SINGLEMDS
+	local mntpt=$(facet_mntpt $SINGLEMDS)
 
 	setup
 	# like runtests
@@ -2429,11 +2429,11 @@ test_38() { # bug 14222
 	stop_mds
 	log "delete lov_objid file on MDS"
 
-	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
-	do_facet $SINGLEMDS "mkdir -p $mntpt; mount -t $fstype $MDSDEV $mntpt"||
-		error "mount -t $fstype $MDSDEV $mntpt failed (1)"
+	mount_fstype $SINGLEMDS || error "mount MDS failed (1)"
+
 	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid; rm $mntpt/lov_objid"
-	do_facet $SINGLEMDS "umount $mntpt" || error "umount failed (1)"
+
+	unmount_fstype $SINGLEMDS || error "umount failed (1)"
 
 	# check create in mds_lov_connect
 	start_mds
@@ -2447,8 +2447,9 @@ test_38() { # bug 14222
 		# check it's updates in sync
 		umount_client $MOUNT
 		stop_mds
-		do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt;
-			od -Ax -td8 $mntpt/lov_objid; umount $mntpt"
+		mount_fstype $SIGNLEMDS
+		do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid"
+		unmount_fstype $SINGLEMDS
 		error "old and new files are different after connect" || true
 	fi
 	touch $DIR/$tdir/f2 || error "f2 file create failed"
@@ -2457,11 +2458,12 @@ test_38() { # bug 14222
 	umount_client $MOUNT
 	stop_mds
 
-	do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt" ||
-		error "mount -t $fstype $MDSDEV $mntpt fail (3)"
+	mount_fstype $SINGLEMDS || error "mount MDS failed (3)"
+
 	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid"
 	do_facet $SINGLEMDS dd if=/dev/zero of=$mntpt/lov_objid.clear count=8
-	do_facet $SINGLEMDS "umount $mntpt" || error "umount failed (3)"
+
+	unmount_fstype $SINGLEMDS || error "umount failed (3)"
 
 	start_mds
 	mount_client $MOUNT
@@ -2473,8 +2475,10 @@ test_38() { # bug 14222
 	do_facet $SINGLEMDS "$LCTL get_param osp.*.prealloc_next_id"
 	umount_client $MOUNT
 	stop_mds
-	do_facet $SINGLEMDS "mount -t $fstype $MDSDEV $mntpt;
-		od -Ax -td8 $mntpt/lov_objid; umount $mntpt"
+	mount_fstype $SINGLEMDS || error "mount MDS failed (4)"
+	do_facet $SINGLEMDS "od -Ax -td8 $mntpt/lov_objid"
+	unmount_fstype $SINGLEMDS || error "umount failed (4)"
+
 	[ "$ERROR" = "y" ] &&
 		error "old and new files are different after sync" || true
 
