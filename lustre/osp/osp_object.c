@@ -753,7 +753,7 @@ unlock:
 			      "cache for "DFID": rc = %d\n",
 			      dname, name, PFID(lu_object_fid(&dt->do_lu)), rc);
 			spin_lock(&obj->opo_lock);
-			oxe->oxe_ready = 0;
+			old->oxe_ready = 0;
 			spin_unlock(&obj->opo_lock);
 
 			GOTO(out, rc);
@@ -840,7 +840,7 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			      ": rc = %d\n", dt->do_lu.lo_dev->ld_obd->obd_name,
 			      name, PFID(lu_object_fid(&dt->do_lu)), rc);
 			spin_lock(&o->opo_lock);
-			oxe->oxe_ready = 0;
+			old->oxe_ready = 0;
 			spin_unlock(&o->opo_lock);
 
 			return 0;
