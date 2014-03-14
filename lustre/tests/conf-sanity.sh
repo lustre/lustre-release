@@ -3577,10 +3577,6 @@ count_osts() {
 }
 
 test_58() { # bug 22658
-	if [ $(facet_fstype mds) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
-		return
-	fi
 	setup_noconfig
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 100
@@ -3592,15 +3588,13 @@ test_58() { # bug 22658
 
 	local MNTDIR=$(facet_mntpt $SINGLEMDS)
 	local devname=$(mdsdevname ${SINGLEMDS//mds/})
-	local opts=""
-	if ! do_facet $SINGLEMDS "test -b $devname"; then
-		opts="-o loop"
-	fi
 
 	# remove all files from the OBJECTS dir
-	do_facet $SINGLEMDS "mount -t ldiskfs $opts $devname $MNTDIR"
+	mount_fstype $SINGLEMDS
+
 	do_facet $SINGLEMDS "find $MNTDIR/O/1/d* -type f -delete"
-	do_facet $SINGLEMDS "umount -d $MNTDIR"
+
+	unmount_fstype $SINGLEMDS
 	# restart MDS with missing llog files
 	start_mds
 	do_facet mds "lctl set_param fail_loc=0"
