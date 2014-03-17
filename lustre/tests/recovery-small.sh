@@ -1194,8 +1194,8 @@ err17935 () {
 }
 
 test_60() {
-        MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
-	    awk '{gsub(/_UUID/,""); print $1}' | head -1)
+	MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
+		awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 
 	NUM_FILES=15000
 	mkdir -p $DIR/$tdir
@@ -1381,8 +1381,8 @@ target_instance_match()
 
         local target=${srv}_svc
         local si=$(do_facet $srv lctl get_param -n $obdname.${!target}.instance)
-        local ci=$(lctl get_param -n $cliname.${!target}-${cliname}-*.import | \
-                  awk '/instance/{ print $2 }' |head -1)
+	local ci=$(lctl get_param -n $cliname.${!target}-${cliname}-*.import |
+		awk '/instance/{ print $2 }' | head -n1)
 
         return $([ $si -eq $ci ])
 }

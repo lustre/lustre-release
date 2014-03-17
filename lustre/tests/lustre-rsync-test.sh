@@ -49,8 +49,8 @@ export LRSYNC="$LRSYNC -v -c no -d 2"
 DBENCH_TIME=${DBENCH_TIME:-60}  # No of seconds to run dbench
 TGT=$TMP/target
 TGT2=$TMP/target2
-MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
-    awk '{gsub(/_UUID/,""); print $1}' | head -1)
+MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
+	awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 
 init_changelog() {
     CL_USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)

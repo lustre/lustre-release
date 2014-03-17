@@ -934,7 +934,7 @@ test_24a() {
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_24a EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2
-	mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || return 1
 	# 1 still works
 	check_mount || return 2
 	# files written on 1 should not show up on 2
@@ -1274,8 +1274,8 @@ test_30b() {
 run_test 30b "Remove failover nids"
 
 test_31() { # bug 10734
-        # ipaddr must not exist
-        mount -t lustre 4.3.2.1@tcp:/lustre $MOUNT || true
+	# ipaddr must not exist
+	$MOUNT_CMD 4.3.2.1@tcp:/lustre $MOUNT || true
 	cleanup
 }
 run_test 31 "Connect to non-existent node (shouldn't crash)"
@@ -1664,7 +1664,7 @@ t32_test() {
 			if [ $fstype == "ldiskfs" ]; then
 				mopts="loop,$mopts"
 			fi
-			$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt
+			$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
 			$r lctl replace_nids $fsname-OST0000 $ostnid
 			$r lctl replace_nids $fsname-MDT0000 $nid
 			$r umount -d $tmp/mnt/mdt
@@ -1678,7 +1678,7 @@ t32_test() {
 
 	t32_wait_til_devices_gone $node
 
-	$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt || {
+	$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt || {
 		$r losetup -a
 		error_noexit "Mounting the MDT"
 		return 1
@@ -1707,7 +1707,7 @@ t32_test() {
 
 		echo "mount new MDT....$fs2mdsdev"
 		$r mkdir -p $tmp/mnt/mdt1
-		$r mount -t lustre -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
+		$r $MOUNT_CMD -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
 			error_noexit "mount mdt1 failed"
 			return 1
 		}
@@ -1743,7 +1743,7 @@ t32_test() {
 			mopts="loop,$mopts"
 		fi
 	fi
-	$r mount -t lustre -o $mopts $ost_dev $tmp/mnt/ost || {
+	$r $MOUNT_CMD -o $mopts $ost_dev $tmp/mnt/ost || {
 		error_noexit "Mounting the OST"
 		return 1
 	}
@@ -1825,7 +1825,7 @@ t32_test() {
 	fi
 
 	if [ "$writeconf" ]; then
-		mount -t lustre $nid:/$fsname $tmp/mnt/lustre || {
+		$MOUNT_CMD $nid:/$fsname $tmp/mnt/lustre || {
 			error_noexit "Mounting the client"
 			return 1
 		}
@@ -1993,7 +1993,7 @@ t32_test() {
 		if [ $fstype == "ldiskfs" ]; then
 			mopts="loop,$mopts"
 		fi
-		$r mount -t lustre -o $mopts $mdt_dev $tmp/mnt/mdt || {
+		$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt || {
 			error_noexit "Remounting the MDT"
 			return 1
 		}
@@ -2088,7 +2088,7 @@ test_33a() { # bug 12333, was test_33
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
         do_facet $SINGLEMDS "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
-        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
+	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
         echo "ok."
 
         cp /etc/hosts $MOUNT2/ || rc=3
@@ -2331,7 +2331,7 @@ test_36() { # 12743
         start fs2ost $fs2ostdev $OST_MOUNT_OPTS
         start fs3ost $fs3ostdev $OST_MOUNT_OPTS
         mkdir -p $MOUNT2
-        mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || return 1
+	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || return 1
 
         sleep 5 # until 11778 fixed
 
@@ -4468,7 +4468,7 @@ test_77() { # LU-3445
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS || error "start fs2ost failed"
 
 	mkdir -p $MOUNT2
-	mount -t lustre $mgsnid:/$fsname $MOUNT2 || error "mount $MOUNT2 failed"
+	$MOUNT_CMD $mgsnid:/$fsname $MOUNT2 || error "mount $MOUNT2 failed"
 	DIR=$MOUNT2 MOUNT=$MOUNT2 check_mount || error "check $MOUNT2 failed"
 	cleanup_24a
 }

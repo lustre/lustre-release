@@ -128,7 +128,7 @@ get_mdt_devices() {
 		local idx=$(($mdtno - 1))
 		MDT[$idx]=$($LCTL get_param -n \
 			mdc.$FSNAME-MDT000${idx}-mdc-*.mds_server_uuid |
-			awk '{gsub(/_UUID/,""); print $1}' | head -1)
+			awk '{gsub(/_UUID/,""); print $1}' | head -n1)
 	done
 }
 
@@ -569,7 +569,7 @@ cleanup_large_files() {
 
 make_large_for_striping() {
 	local file2=${1/$DIR/$DIR2}
-	local sz=$($LCTL get_param -n lov.*-clilov-*.stripesize | head -1)
+	local sz=$($LCTL get_param -n lov.*-clilov-*.stripesize | head -n1)
 
 	cleanup_large_files
 

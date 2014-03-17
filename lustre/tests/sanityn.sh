@@ -493,7 +493,7 @@ run_test 21 " Try to remove mountpoint on another dir ===="
 
 test_23() { # Bug 5972
 	local at_diff=$(do_facet $SINGLEMDS \
-		$LCTL get_param -n mdd.*MDT0000*.atime_diff | head -1)
+		$LCTL get_param -n mdd.*MDT0000*.atime_diff | head -n1)
 	echo "atime should be updated while another read" > $DIR1/$tfile
 
 	# clear the lock(mode: LCK_PW) gotten from creating operation
@@ -627,11 +627,11 @@ test_27() {
 	DD2_PID=$!
 	usleep 50
 	log "dd 1 started"
-	
+
 	dd if=/dev/zero of=$DIR1/$tfile bs=$((16384-1024))k conv=notrunc count=1 seek=4 &
 	DD1_PID=$!
 	log "dd 2 started"
-	
+
 	sleep 1
 	dd if=/dev/zero of=$DIR1/$tfile bs=8k conv=notrunc count=1 seek=0
 	log "dd 3 finished"
@@ -643,7 +643,7 @@ run_test 27 "align non-overlapping extent locks from request ==="
 
 test_28() { # bug 9977
 	ECHO_UUID="ECHO_osc1_UUID"
-	tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
+	tOST=$($LCTL dl | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -n1)
 
 	$LFS setstripe $DIR1/$tfile -S 1048576 -i 0 -c 2
 	tOBJID=`$LFS getstripe $DIR1/$tfile | awk '$1 == 1 {print $2}'`
@@ -838,8 +838,8 @@ print_jbd_stat () {
         varsvc=${mds}_svc
         dev=$(basename $(do_facet $mds "lctl get_param -n osd*.${!varsvc}.mntdev|\
 		xargs readlink -f" ))
-        val=$(do_facet $mds "cat /proc/fs/jbd*/${dev}{,:*,-*}/info 2>/dev/null|\
-		head -1")
+	val=$(do_facet $mds "cat /proc/fs/jbd*/${dev}{,:*,-*}/info 2>/dev/null |
+		head -n1")
         val=${val%% *};
         stat=$(( stat + val))
     done
