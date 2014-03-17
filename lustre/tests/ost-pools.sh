@@ -155,15 +155,15 @@ check_file_not_in_pool() {
 }
 
 check_dir_not_in_pool() {
-    local dir=$1
-    local pool=$2
-    local res=$($GETSTRIPE -v $dir | grep "^stripe_count" | head -1 |
-                cut -f 8 -d ' ')
-    if [[ "$res" == "$pool" ]]; then
-        error "File $dir is in pool: $res"
-        return 1
-    fi
-    return 0
+	local dir=$1
+	local pool=$2
+	local res=$($GETSTRIPE -v $dir | grep "^stripe_count" | head -n1 |
+		cut -f 8 -d ' ')
+	if [[ "$res" == "$pool" ]]; then
+		error "File $dir is in pool: $res"
+		return 1
+	fi
+	return 0
 }
 
 drain_pool() {

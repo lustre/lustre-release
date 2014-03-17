@@ -143,33 +143,37 @@ iozone_bg () {
 }
 
 test_5() {
-    [ -z "`which iozone 2> /dev/null`" ] && skip_env "iozone missing" && return 0
+	if [ -z "`which iozone 2> /dev/null`" ]; then
+		skip_env "iozone missing"
+		return 0
+	fi
 
-    # striping is -c 1, get min of available
-    local minavail=$(lctl get_param -n osc.*[oO][sS][cC][-_]*.kbytesavail | sort -n | head -1)
-    local size=$(( minavail * 3/4 ))
-    local GB=1048576  # 1048576KB == 1GB
+	# striping is -c 1, get min of available
+	local minavail=$(lctl get_param -n osc.*[oO][sS][cC][-_]*.kbytesavail |
+		sort -n | head -n1)
+	local size=$(( minavail * 3/4 ))
+	local GB=1048576  # 1048576KB == 1GB
 
-    if (( size > GB )); then
-        size=$GB
-    fi
-    local iozone_opts="-i 0 -i 1 -i 2 -+d -r 4 -s $size -f $TDIR/$tfile"
+	if (( size > GB )); then
+		size=$GB
+	fi
+	local iozone_opts="-i 0 -i 1 -i 2 -+d -r 4 -s $size -f $TDIR/$tfile"
 
-    iozone_bg $iozone_opts &
-    local pid=$!
+	iozone_bg $iozone_opts &
+	local pid=$!
 
-    echo iozone bg pid=$pid
+	echo iozone bg pid=$pid
 
-    sleep 8
-    fail ost1
-    local rc=0
-    wait $pid
-    rc=$?
-    log "iozone rc=$rc"
-    rm -f $TDIR/$tfile
-    wait_delete_completed_mds
-    [ $rc -eq 0 ] || error "iozone failed"
-    return $rc
+	sleep 8
+	fail ost1
+	local rc=0
+	wait $pid
+	rc=$?
+	log "iozone rc=$rc"
+	rm -f $TDIR/$tfile
+	wait_delete_completed_mds
+	[ $rc -eq 0 ] || error "iozone failed"
+	return $rc
 }
 run_test 5 "Fail OST during iozone"
 
