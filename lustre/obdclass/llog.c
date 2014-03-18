@@ -146,7 +146,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			       loghandle->lgh_id.lgl_ogen, rc);
 			GOTO(out_err, rc);
 		}
-		RETURN(1);
+		RETURN(LLOG_DEL_PLAIN);
 	}
 	spin_unlock(&loghandle->lgh_hdr_lock);
 
@@ -378,10 +378,9 @@ repeat:
 				if (rc == LLOG_PROC_BREAK) {
 					GOTO(out, rc);
 				} else if (rc == LLOG_DEL_RECORD) {
-					llog_cancel_rec(lpi->lpi_env,
-							loghandle,
-							rec->lrh_index);
-                                        rc = 0;
+					rc = llog_cancel_rec(lpi->lpi_env,
+							     loghandle,
+							     rec->lrh_index);
                                 }
                                 if (rc)
                                         GOTO(out, rc);
@@ -480,7 +479,9 @@ EXPORT_SYMBOL(llog_process_or_fork);
 int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
 		 llog_cb_t cb, void *data, void *catdata)
 {
-	return llog_process_or_fork(env, loghandle, cb, data, catdata, true);
+	int rc;
+	rc = llog_process_or_fork(env, loghandle, cb, data, catdata, true);
+	return rc == LLOG_DEL_PLAIN ? 0 : rc;
 }
 EXPORT_SYMBOL(llog_process);
 
@@ -551,9 +552,8 @@ int llog_reverse_process(const struct lu_env *env,
 				if (rc == LLOG_PROC_BREAK) {
 					GOTO(out, rc);
 				} else if (rc == LLOG_DEL_RECORD) {
-					llog_cancel_rec(env, loghandle,
-							tail->lrt_index);
-					rc = 0;
+					rc = llog_cancel_rec(env, loghandle,
+							     tail->lrt_index);
 				}
                                 if (rc)
                                         GOTO(out, rc);

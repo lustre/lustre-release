@@ -784,7 +784,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 
 	plain_counter = 0;
 	rc = llog_reverse_process(env, llh, test_7_cancel_cb, "test 7", NULL);
-	if (rc) {
+	if (rc && rc != LLOG_DEL_PLAIN) {
 		CERROR("7_sub: reverse llog process failed: %d\n", rc);
 		GOTO(out_close, rc);
 	}

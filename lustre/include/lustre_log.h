@@ -363,6 +363,7 @@ struct llog_ctxt {
 
 #define LLOG_PROC_BREAK 0x0001
 #define LLOG_DEL_RECORD 0x0002
+#define LLOG_DEL_PLAIN  0x0003
 
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
                                struct llog_operations **lop)
