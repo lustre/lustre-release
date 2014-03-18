@@ -1095,27 +1095,26 @@ lnet_shutdown_lndnis (void)
 	/* Now wait for the NI's I just nuked to show up on ln_zombie_nis
 	 * and shut them down in guaranteed thread context */
 	i = 2;
-	while (!cfs_list_empty(&the_lnet.ln_nis_zombie)) {
+	while (!list_empty(&the_lnet.ln_nis_zombie)) {
 		int	*ref;
 		int	j;
 
-		ni = cfs_list_entry(the_lnet.ln_nis_zombie.next,
-				    lnet_ni_t, ni_list);
-		cfs_list_del_init(&ni->ni_list);
+		ni = list_entry(the_lnet.ln_nis_zombie.next,
+				lnet_ni_t, ni_list);
+		list_del_init(&ni->ni_list);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
 				continue;
 			/* still busy, add it back to zombie list */
-			cfs_list_add(&ni->ni_list, &the_lnet.ln_nis_zombie);
+			list_add(&ni->ni_list, &the_lnet.ln_nis_zombie);
 			break;
 		}
 
-		while (!cfs_list_empty(&ni->ni_list)) {
+		if (!list_empty(&ni->ni_list)) {
 			lnet_net_unlock(LNET_LOCK_EX);
 			++i;
 			if ((i & (-i)) == i) {
-				CDEBUG(D_WARNING,
-				       "Waiting for zombie LNI %s\n",
+				CDEBUG(D_WARNING, "Waiting for zombie LNI %s\n",
 				       libcfs_nid2str(ni->ni_nid));
 			}
 			cfs_pause(cfs_time_seconds(1));
@@ -1134,11 +1133,13 @@ lnet_shutdown_lndnis (void)
 		/* can't deref lnd anymore now; it might have unregistered
 		 * itself...  */
 
-                if (!islo)
-                        CDEBUG(D_LNI, "Removed LNI %s\n",
-                               libcfs_nid2str(ni->ni_nid));
+		if (!islo)
+			CDEBUG(D_LNI, "Removed LNI %s\n",
+			       libcfs_nid2str(ni->ni_nid));
 
 		lnet_ni_free(ni);
+		i = 2;
+
 		lnet_net_lock(LNET_LOCK_EX);
 	}
 
