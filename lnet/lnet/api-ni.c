@@ -1100,7 +1100,7 @@ lnet_shutdown_lndnis (void)
 		int	j;
 
 		ni = cfs_list_entry(the_lnet.ln_nis_zombie.next,
-				    lnet_ni_t, ni_list);
+				lnet_ni_t, ni_list);
 		cfs_list_del_init(&ni->ni_list);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
@@ -1110,12 +1110,11 @@ lnet_shutdown_lndnis (void)
 			break;
 		}
 
-		while (!cfs_list_empty(&ni->ni_list)) {
+		if (!cfs_list_empty(&ni->ni_list)) {
 			lnet_net_unlock(LNET_LOCK_EX);
 			++i;
 			if ((i & (-i)) == i) {
-				CDEBUG(D_WARNING,
-				       "Waiting for zombie LNI %s\n",
+				CDEBUG(D_WARNING, "Waiting for zombie LNI %s\n",
 				       libcfs_nid2str(ni->ni_nid));
 			}
 			cfs_pause(cfs_time_seconds(1));
@@ -1134,11 +1133,13 @@ lnet_shutdown_lndnis (void)
 		/* can't deref lnd anymore now; it might have unregistered
 		 * itself...  */
 
-                if (!islo)
-                        CDEBUG(D_LNI, "Removed LNI %s\n",
-                               libcfs_nid2str(ni->ni_nid));
+		if (!islo)
+			CDEBUG(D_LNI, "Removed LNI %s\n",
+			       libcfs_nid2str(ni->ni_nid));
 
 		lnet_ni_free(ni);
+		i = 2;
+
 		lnet_net_lock(LNET_LOCK_EX);
 	}
 
