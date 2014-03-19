@@ -67,6 +67,89 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
+static inline int osd_object_is_zap(dmu_buf_t *db)
+{
+	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *) db;
+	dnode_t *dn;
+	int rc;
+
+	DB_DNODE_ENTER(dbi);
+	dn = DB_DNODE(dbi);
+	rc = (dn->dn_type == DMU_OT_DIRECTORY_CONTENTS ||
+			dn->dn_type == DMU_OT_USERGROUP_USED);
+	DB_DNODE_EXIT(dbi);
+
+	return rc;
+}
+
+/* We don't actually have direct access to the zap_hashbits() function
+ * so just pretend like we do for now.  If this ever breaks we can look at
+ * it at that time. */
+#define zap_hashbits(zc) 48
+/*
+ * ZFS hash format:
+ * | cd (16 bits) | hash (48 bits) |
+ * we need it in other form:
+ * |0| hash (48 bit) | cd (15 bit) |
+ * to be a full 64-bit ordered hash so that Lustre readdir can use it to merge
+ * the readdir hashes from multiple directory stripes uniformly on the client.
+ * Another point is sign bit, the hash range should be in [0, 2^63-1] because
+ * loff_t (for llseek) needs to be a positive value.  This means the "cd" field
+ * should only be the low 15 bits.
+ */
+uint64_t osd_zap_cursor_serialize(zap_cursor_t *zc)
+{
+	uint64_t zfs_hash = zap_cursor_serialize(zc) & (~0ULL >> 1);
+
+	return (zfs_hash >> zap_hashbits(zc)) |
+		(zfs_hash << (63 - zap_hashbits(zc)));
+}
+
+void osd_zap_cursor_init_serialized(zap_cursor_t *zc, struct objset *os,
+				    uint64_t id, uint64_t dirhash)
+{
+	uint64_t zfs_hash = ((dirhash << zap_hashbits(zc)) & (~0ULL >> 1)) |
+		(dirhash >> (63 - zap_hashbits(zc)));
+
+	zap_cursor_init_serialized(zc, os, id, zfs_hash);
+}
+
+int osd_zap_cursor_init(zap_cursor_t **zc, struct objset *os,
+			uint64_t id, uint64_t dirhash)
+{
+	zap_cursor_t *t;
+
+	OBD_ALLOC_PTR(t);
+	if (unlikely(t == NULL))
+		return -ENOMEM;
+
+	osd_zap_cursor_init_serialized(t, os, id, dirhash);
+	*zc = t;
+
+	return 0;
+}
+
+void osd_zap_cursor_fini(zap_cursor_t *zc)
+{
+	zap_cursor_fini(zc);
+	OBD_FREE_PTR(zc);
+}
+
+static inline void osd_obj_cursor_init_serialized(zap_cursor_t *zc,
+						 struct osd_object *o,
+						 uint64_t dirhash)
+{
+	struct osd_device *d = osd_obj2dev(o);
+	zap_cursor_init_serialized(zc, d->od_os, o->oo_db->db_object, dirhash);
+}
+
+static inline int osd_obj_cursor_init(zap_cursor_t **zc, struct osd_object *o,
+			uint64_t dirhash)
+{
+	struct osd_device *d = osd_obj2dev(o);
+	return osd_zap_cursor_init(zc, d->od_os, o->oo_db->db_object, dirhash);
+}
+
 static struct dt_it *osd_index_it_init(const struct lu_env *env,
 				       struct dt_object *dt,
 				       __u32 unused,
@@ -75,22 +158,22 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct osd_zap_it       *it;
 	struct osd_object       *obj = osd_dt_obj(dt);
-	struct osd_device       *osd = osd_obj2dev(obj);
 	struct lu_object        *lo  = &dt->do_lu;
+	int			 rc;
 	ENTRY;
 
 	/* XXX: check capa ? */
 
 	LASSERT(lu_object_exists(lo));
 	LASSERT(obj->oo_db);
-	LASSERT(udmu_object_is_zap(obj->oo_db));
+	LASSERT(osd_object_is_zap(obj->oo_db));
 	LASSERT(info);
 
 	it = &info->oti_it_zap;
 
-	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-				 obj->oo_db->db_object, 0))
-		RETURN(ERR_PTR(-ENOMEM));
+	rc = osd_obj_cursor_init(&it->ozi_zc, obj, 0);
+	if (rc != 0)
+		RETURN(ERR_PTR(rc));
 
 	it->ozi_obj   = obj;
 	it->ozi_capa  = capa;
@@ -111,7 +194,7 @@ static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 
 	obj = it->ozi_obj;
 
-	udmu_zap_cursor_fini(it->ozi_zc);
+	osd_zap_cursor_fini(it->ozi_zc);
 	lu_object_put(env, &obj->oo_dt.do_lu);
 
 	EXIT;
@@ -122,57 +205,6 @@ static void osd_index_it_put(const struct lu_env *env, struct dt_it *di)
 {
 	/* PBS: do nothing : ref are incremented at retrive and decreamented
 	 *      next/finish. */
-}
-
-int udmu_zap_cursor_retrieve_key(const struct lu_env *env,
-				 zap_cursor_t *zc, char *key, int max)
-{
-	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
-	int		 err;
-
-	if ((err = zap_cursor_retrieve(zc, za)))
-		return err;
-
-	if (key)
-		strcpy(key, za->za_name);
-
-	return 0;
-}
-
-/*
- * zap_cursor_retrieve read from current record.
- * to read bytes we need to call zap_lookup explicitly.
- */
-int udmu_zap_cursor_retrieve_value(const struct lu_env *env,
-		zap_cursor_t *zc,  char *buf,
-		int buf_size, int *bytes_read)
-{
-	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
-	int err, actual_size;
-
-	if ((err = zap_cursor_retrieve(zc, za)))
-		return err;
-
-	if (za->za_integer_length <= 0)
-		return (ERANGE);
-
-	actual_size = za->za_integer_length * za->za_num_integers;
-
-	if (actual_size > buf_size) {
-		actual_size = buf_size;
-		buf_size = actual_size / za->za_integer_length;
-	} else {
-		buf_size = za->za_num_integers;
-	}
-
-	err = -zap_lookup(zc->zc_objset, zc->zc_zapobj,
-			za->za_name, za->za_integer_length,
-			buf_size, buf);
-
-	if (!err)
-		*bytes_read = actual_size;
-
-	return err;
 }
 
 static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
@@ -202,8 +234,8 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 				    struct dt_object *o,
 				    struct lu_fid *fid)
 {
+	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(o));
 	struct lustre_mdt_attrs	*lma;
-	udmu_objset_t		*uos = &osd_obj2dev(osd_dt_obj(o))->od_objset;
 	struct lu_buf		 buf;
 	sa_handle_t		*sa_hdl;
 	nvlist_t		*nvbuf = NULL;
@@ -214,19 +246,19 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 
 	/* first of all, get parent dnode from own attributes */
 	LASSERT(osd_dt_obj(o)->oo_db);
-	rc = -sa_handle_get(uos->os, osd_dt_obj(o)->oo_db->db_object,
+	rc = -sa_handle_get(osd->od_os, osd_dt_obj(o)->oo_db->db_object,
 			    NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
 		RETURN(rc);
 
 	dnode = ZFS_NO_OBJECT;
-	rc = -sa_lookup(sa_hdl, SA_ZPL_PARENT(uos), &dnode, 8);
+	rc = -sa_lookup(sa_hdl, SA_ZPL_PARENT(osd), &dnode, 8);
 	sa_handle_destroy(sa_hdl);
 	if (rc)
 		RETURN(rc);
 
 	/* now get EA buffer */
-	rc = __osd_xattr_load(uos, dnode, &nvbuf);
+	rc = __osd_xattr_load(osd, dnode, &nvbuf);
 	if (rc)
 		GOTO(regular, rc);
 
@@ -246,12 +278,12 @@ regular:
 	/* no LMA attribute in SA, let's try regular EA */
 
 	/* first of all, get parent dnode storing regular EA */
-	rc = -sa_handle_get(uos->os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
+	rc = -sa_handle_get(osd->od_os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
 		GOTO(out, rc);
 
 	dnode = ZFS_NO_OBJECT;
-	rc = -sa_lookup(sa_hdl, SA_ZPL_XATTR(uos), &dnode, 8);
+	rc = -sa_lookup(sa_hdl, SA_ZPL_XATTR(osd), &dnode, 8);
 	sa_handle_destroy(sa_hdl);
 	if (rc)
 		GOTO(out, rc);
@@ -261,7 +293,7 @@ regular:
 	buf.lb_len = sizeof(osd_oti_get(env)->oti_buf);
 
 	/* now try to find LMA */
-	rc = __osd_xattr_get_large(env, uos, dnode, &buf,
+	rc = __osd_xattr_get_large(env, osd, dnode, &buf,
 				   XATTR_NAME_LMA, &size);
 	if (rc == 0 && size >= sizeof(*lma)) {
 		lma = buf.lb_buf;
@@ -361,7 +393,7 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	int                 rc;
 	ENTRY;
 
-	LASSERT(udmu_object_is_zap(obj->oo_db));
+	LASSERT(osd_object_is_zap(obj->oo_db));
 
 	if (name[0] == '.') {
 		if (name[1] == 0) {
@@ -374,7 +406,7 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 
-	rc = -zap_lookup(osd->od_objset.os, obj->oo_db->db_object,
+	rc = -zap_lookup(osd->od_os, obj->oo_db->db_object,
 			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
 			 (void *)&oti->oti_zde);
 	memcpy(rec, &oti->oti_zde.lzd_fid, sizeof(struct lu_fid));
@@ -396,7 +428,7 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	LASSERT(obj->oo_db);
-	LASSERT(udmu_object_is_zap(obj->oo_db));
+	LASSERT(osd_object_is_zap(obj->oo_db));
 
 	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_db->db_object);
 	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, (char *)key);
@@ -547,7 +579,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(parent->oo_db);
-	LASSERT(udmu_object_is_zap(parent->oo_db));
+	LASSERT(osd_object_is_zap(parent->oo_db));
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(parent));
@@ -585,9 +617,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 			} else if (name[1] == '.' && name[2] == 0) {
 				/* update parent dnode in the child.
 				 * later it will be used to generate ".." */
-				udmu_objset_t *uos = &osd->od_objset;
 				rc = osd_object_sa_update(parent,
-						 SA_ZPL_PARENT(uos),
+						 SA_ZPL_PARENT(osd),
 						 &child->oo_db->db_object,
 						 8, oh);
 				GOTO(out, rc);
@@ -602,7 +633,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 
 	oti->oti_zde.lzd_fid = *fid;
 	/* Insert (key,oid) into ZAP */
-	rc = -zap_add(osd->od_objset.os, parent->oo_db->db_object,
+	rc = -zap_add(osd->od_os, parent->oo_db->db_object,
 		      (char *)key, 8, sizeof(oti->oti_zde) / 8,
 		      (void *)&oti->oti_zde, oh->ot_tx);
 
@@ -629,7 +660,7 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	LASSERT(obj->oo_db);
-	LASSERT(udmu_object_is_zap(obj->oo_db));
+	LASSERT(osd_object_is_zap(obj->oo_db));
 
 	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, (char *)key);
 
@@ -649,7 +680,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(obj->oo_db);
-	LASSERT(udmu_object_is_zap(obj->oo_db));
+	LASSERT(osd_object_is_zap(obj->oo_db));
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -667,7 +698,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	/* Remove key from the ZAP */
-	rc = -zap_remove(osd->od_objset.os, zap_db->db_object,
+	rc = -zap_remove(osd->od_os, zap_db->db_object,
 			 (char *) key, oh->ot_tx);
 
 	if (unlikely(rc && rc != -ENOENT))
@@ -705,7 +736,6 @@ static int osd_dir_it_get(const struct lu_env *env,
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	struct osd_object *obj = it->ozi_obj;
-	struct osd_device *osd = osd_obj2dev(obj);
 	char		  *name = (char *)key;
 	int		   rc;
 	ENTRY;
@@ -713,11 +743,9 @@ static int osd_dir_it_get(const struct lu_env *env,
 	LASSERT(it);
 	LASSERT(it->ozi_zc);
 
-	udmu_zap_cursor_fini(it->ozi_zc);
-
-	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-				 obj->oo_db->db_object, 0))
-		RETURN(-ENOMEM);
+	/* reset the cursor */
+	zap_cursor_fini(it->ozi_zc);
+	osd_obj_cursor_init_serialized(it->ozi_zc, obj, 0);
 
 	/* XXX: implementation of the API is broken at the moment */
 	LASSERT(((const char *)key)[0] == 0);
@@ -916,7 +944,7 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 	if (unlikely(rc != 0))
 		GOTO(out, rc);
 
-	lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
+	lde->lde_hash = cpu_to_le64(osd_zap_cursor_serialize(it->ozi_zc));
 	namelen = strlen(za->za_name);
 	if (namelen > NAME_MAX)
 		GOTO(out, rc = -EOVERFLOW);
@@ -995,7 +1023,7 @@ static __u64 osd_dir_it_store(const struct lu_env *env, const struct dt_it *di)
 	if (it->ozi_pos <= 2)
 		pos = it->ozi_pos;
 	else
-		pos = udmu_zap_cursor_serialize(it->ozi_zc);
+		pos = osd_zap_cursor_serialize(it->ozi_zc);
 
 	RETURN(pos);
 }
@@ -1011,15 +1039,13 @@ static int osd_dir_it_load(const struct lu_env *env,
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	struct osd_object *obj = it->ozi_obj;
-	struct osd_device *osd = osd_obj2dev(obj);
 	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
 	ENTRY;
 
-	udmu_zap_cursor_fini(it->ozi_zc);
-	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-				 obj->oo_db->db_object, hash))
-		RETURN(-ENOMEM);
+	/* reset the cursor */
+	zap_cursor_fini(it->ozi_zc);
+	osd_obj_cursor_init_serialized(it->ozi_zc, obj, hash);
 
 	if (hash <= 2) {
 		it->ozi_pos = hash;
@@ -1096,7 +1122,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osd_prepare_key_uint64(obj, k, key);
 
-	rc = -zap_lookup_uint64(osd->od_objset.os, obj->oo_db->db_object,
+	rc = -zap_lookup_uint64(osd->od_os, obj->oo_db->db_object,
 				k, rc, obj->oo_recusize, obj->oo_recsize,
 				(void *)rec);
 	RETURN(rc == 0 ? 1 : rc);
@@ -1149,7 +1175,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_prepare_key_uint64(obj, k, key);
 
 	/* Insert (key,oid) into ZAP */
-	rc = -zap_add_uint64(osd->od_objset.os, obj->oo_db->db_object,
+	rc = -zap_add_uint64(osd->od_os, obj->oo_db->db_object,
 			     k, rc, obj->oo_recusize, obj->oo_recsize,
 			     (void *)rec, oh->ot_tx);
 	RETURN(rc);
@@ -1193,7 +1219,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_prepare_key_uint64(obj, k, key);
 
 	/* Remove binary key from the ZAP */
-	rc = -zap_remove_uint64(osd->od_objset.os, obj->oo_db->db_object,
+	rc = -zap_remove_uint64(osd->od_os, obj->oo_db->db_object,
 				k, rc, oh->ot_tx);
 	RETURN(rc);
 }
@@ -1217,8 +1243,7 @@ static int osd_index_it_get(const struct lu_env *env, struct dt_it *di,
 		       *((__u64 *)key));
 
 	zap_cursor_fini(it->ozi_zc);
-	memset(it->ozi_zc, 0, sizeof(*it->ozi_zc));
-	zap_cursor_init(it->ozi_zc, osd->od_objset.os, obj->oo_db->db_object);
+	zap_cursor_init(it->ozi_zc, osd->od_os, obj->oo_db->db_object);
 	it->ozi_reset = 1;
 
 	RETURN(+1);
@@ -1294,7 +1319,7 @@ static int osd_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 
 	rc = osd_prepare_key_uint64(obj, k, (const struct dt_key *)za->za_name);
 
-	rc = -zap_lookup_uint64(osd->od_objset.os, obj->oo_db->db_object,
+	rc = -zap_lookup_uint64(osd->od_os, obj->oo_db->db_object,
 				k, rc, obj->oo_recusize, obj->oo_recsize,
 				(void *)rec);
 	RETURN(rc);
@@ -1319,12 +1344,9 @@ static int osd_index_it_load(const struct lu_env *env, const struct dt_it *di,
 	int                rc;
 	ENTRY;
 
-	/* close the current cursor */
+	/* reset the cursor */
 	zap_cursor_fini(it->ozi_zc);
-
-	/* create a new one starting at hash */
-	memset(it->ozi_zc, 0, sizeof(*it->ozi_zc));
-	zap_cursor_init_serialized(it->ozi_zc, osd->od_objset.os,
+	zap_cursor_init_serialized(it->ozi_zc, osd->od_os,
 				   obj->oo_db->db_object, hash);
 	it->ozi_reset = 0;
 
@@ -1382,7 +1404,7 @@ static struct dt_it *osd_zfs_otable_it_init(const struct lu_env *env,
 	/* XXX: dmu_object_next() does NOT find dnodes allocated
 	 *	in the current non-committed txg, so we force txg
 	 *	commit to find all existing dnodes ... */
-	txg_wait_synced(dmu_objset_pool(dev->od_objset.os), 0ULL);
+	txg_wait_synced(dmu_objset_pool(dev->od_os), 0ULL);
 
 	RETURN((struct dt_it *)it);
 }
@@ -1410,7 +1432,6 @@ static void osd_zfs_otable_prefetch(const struct lu_env *env,
 				    struct osd_metadnode_it *it)
 {
 	struct osd_device	*dev = it->mit_dev;
-	udmu_objset_t		*uos = &dev->od_objset;
 	int			 rc;
 
 	/* can go negative on the very first access to the iterator
@@ -1425,7 +1446,7 @@ static void osd_zfs_otable_prefetch(const struct lu_env *env,
 		it->mit_prefetched_dnode = it->mit_pos;
 
 	while (it->mit_prefetched < OTABLE_PREFETCH) {
-		rc = -dmu_object_next(uos->os, &it->mit_prefetched_dnode,
+		rc = -dmu_object_next(dev->od_os, &it->mit_prefetched_dnode,
 				      B_FALSE, 0);
 		if (unlikely(rc != 0))
 			break;
@@ -1433,7 +1454,7 @@ static void osd_zfs_otable_prefetch(const struct lu_env *env,
 		/* dmu_prefetch() was exported in 0.6.2, if you use with
 		 * an older release, just comment it out - this is an
 		 * optimization */
-		dmu_prefetch(uos->os, it->mit_prefetched_dnode, 0, 0);
+		dmu_prefetch(dev->od_os, it->mit_prefetched_dnode, 0, 0);
 
 		it->mit_prefetched++;
 	}
@@ -1444,7 +1465,6 @@ static int osd_zfs_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct osd_metadnode_it *it  = (struct osd_metadnode_it *)di;
 	struct lustre_mdt_attrs *lma;
 	struct osd_device	*dev = it->mit_dev;
-	udmu_objset_t		*uos = &dev->od_objset;
 	nvlist_t		*nvbuf = NULL;
 	uchar_t			*v;
 	__u64			 dnode;
@@ -1454,14 +1474,14 @@ static int osd_zfs_otable_it_next(const struct lu_env *env, struct dt_it *di)
 
 	dnode = it->mit_pos;
 	do {
-		rc = -dmu_object_next(uos->os, &it->mit_pos, B_FALSE, 0);
+		rc = -dmu_object_next(dev->od_os, &it->mit_pos, B_FALSE, 0);
 		if (unlikely(rc != 0))
 			GOTO(out, rc = 1);
 		it->mit_prefetched--;
 
 		/* LMA is required for this to be a Lustre object.
 		 * If there is no xattr skip it. */
-		rc = __osd_xattr_load(uos, it->mit_pos, &nvbuf);
+		rc = __osd_xattr_load(dev, it->mit_pos, &nvbuf);
 		if (unlikely(rc != 0))
 			continue;
 
@@ -1589,14 +1609,14 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_db != NULL);
 	if (likely(feat == &dt_directory_features)) {
-		if (udmu_object_is_zap(obj->oo_db))
+		if (osd_object_is_zap(obj->oo_db))
 			dt->do_index_ops = &osd_dir_ops;
 		else
 			RETURN(-ENOTDIR);
 	} else if (unlikely(feat == &dt_acct_features)) {
 		LASSERT(fid_is_acct(lu_object_fid(&dt->do_lu)));
 		dt->do_index_ops = &osd_acct_index_ops;
-	} else if (udmu_object_is_zap(obj->oo_db) &&
+	} else if (osd_object_is_zap(obj->oo_db) &&
 		   dt->do_index_ops == NULL) {
 		/* For index file, we don't support variable key & record sizes
 		 * and the key has to be unique */

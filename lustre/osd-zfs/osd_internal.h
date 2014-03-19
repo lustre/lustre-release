@@ -59,17 +59,26 @@
 #endif
 
 #include <sys/arc.h>
-
 #include <sys/nvpair.h>
-
 #include <sys/zfs_znode.h>
-#include "udmu.h"
+#include <sys/zap.h>
 
 #define LUSTRE_ROOT_FID_SEQ	0
 #define DMU_OSD_SVNAME		"svname"
 #define DMU_OSD_OI_NAME_BASE	"oi"
 
 #define OSD_GFP_IO		(GFP_NOFS | __GFP_HIGHMEM)
+
+/* Statfs space reservation for grant, fragmentation, and unlink space. */
+#define OSD_STATFS_RESERVED_BLKS  (1ULL << (22 - SPA_MAXBLOCKSHIFT)) /* 4MB */
+#define OSD_STATFS_RESERVED_SHIFT (7)         /* reserve 0.78% of all space */
+
+/* Statfs {minimum, safe estimate, and maximum} dnodes per block */
+#define OSD_DNODE_MIN_BLKSHIFT (SPA_MAXBLOCKSHIFT - DNODE_SHIFT) /* 17-9 =8 */
+#define OSD_DNODE_EST_BLKSHIFT (SPA_MAXBLOCKSHIFT - 12)          /* 17-12=5 */
+#define OSD_DNODE_EST_COUNT    1024
+
+#define OSD_GRANT_FOR_LOCAL_OIDS (2ULL << 20) /* 2MB for last_rcvd, ... */
 
 /**
  * Iterator's in-memory data structure for quota file.
@@ -233,7 +242,11 @@ struct osd_device {
 	/* super-class */
 	struct dt_device	 od_dt_dev;
 	/* information about underlying file system */
-	udmu_objset_t		 od_objset;
+	struct objset		*od_os;
+	uint64_t		 od_rootid;  /* id of root znode */
+	/* SA attr mapping->id,
+	 * name is the same as in ZFS to use defines SA_ZPL_...*/
+	sa_attr_type_t		 *z_attr_table;
 
 	/*
 	 * Fid Capability
@@ -323,6 +336,8 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      qid_t uid, qid_t gid, long long space,
 		      struct osd_thandle *oh, bool is_blk, int *flags,
 		      bool force);
+uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
+				 uint64_t nrblocks);
 
 /*
  * Helpers.
@@ -367,7 +382,7 @@ static inline struct lu_device *osd2lu_dev(struct osd_device *osd)
 
 static inline struct objset * osd_dtobj2objset(struct dt_object *o)
 {
-	return osd_dev(o->do_lu.lo_dev)->od_objset.os;
+	return osd_dev(o->do_lu.lo_dev)->od_os;
 }
 
 static inline int osd_invariant(const struct osd_object *obj)
@@ -411,28 +426,22 @@ extern struct lprocfs_seq_vars lprocfs_osd_obd_vars[];
 int osd_procfs_init(struct osd_device *osd, const char *name);
 int osd_procfs_fini(struct osd_device *osd);
 
-int udmu_zap_cursor_retrieve_key(const struct lu_env *env,
-				 zap_cursor_t *zc, char *key, int max);
-int udmu_zap_cursor_retrieve_value(const struct lu_env *env,
-				   zap_cursor_t *zc,  char *buf,
-				   int buf_size, int *bytes_read);
-
 /* osd_object.c */
+extern char *osd_obj_tag;
 void osd_object_sa_dirty_rele(struct osd_thandle *oh);
 int __osd_obj2dbuf(const struct lu_env *env, objset_t *os,
-		   uint64_t oid, dmu_buf_t **dbp, void *tag);
+		   uint64_t oid, dmu_buf_t **dbp);
 struct lu_object *osd_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *d);
 int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
-int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
+int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dmu_buf_t **zap_dbp, dmu_tx_t *tx, struct lu_attr *la,
-		     uint64_t parent, void *tag, zap_flags_t flags);
-int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
+		     uint64_t parent, zap_flags_t flags);
+int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
 			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la,
-			uint64_t parent, void *tag);
-int __osd_object_free(udmu_objset_t *uos, uint64_t oid, dmu_tx_t *tx);
+			uint64_t parent);
 
 /* osd_oi.c */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o);
@@ -451,10 +460,17 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   obd_seq seq, struct lu_seq_range *range);
+void osd_zap_cursor_init_serialized(zap_cursor_t *zc, struct objset *os,
+				    uint64_t id, uint64_t dirhash);
+int osd_zap_cursor_init(zap_cursor_t **zc, struct objset *os,
+			uint64_t id, uint64_t dirhash);
+void osd_zap_cursor_fini(zap_cursor_t *zc);
+uint64_t osd_zap_cursor_serialize(zap_cursor_t *zc);
 
 /* osd_xattr.c */
-int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr);
-int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
+int __osd_xattr_load(struct osd_device *osd, uint64_t dnode,
+		     nvlist_t **sa_xattr);
+int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep);
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,

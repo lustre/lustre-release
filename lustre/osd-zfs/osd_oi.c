@@ -69,8 +69,6 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
-static char *oi_tag = "osd_mount, oi";
-
 #define OSD_OI_FID_NR         (1UL << 7)
 #define OSD_OI_FID_NR_MAX     (1UL << OSD_OI_FID_OID_BITS_MAX)
 unsigned int osd_oi_count = OSD_OI_FID_NR;
@@ -123,7 +121,7 @@ osd_oi_lookup(const struct lu_env *env, struct osd_device *o,
 	struct zpl_direntry	*zde = &osd_oti_get(env)->oti_zde.lzd_reg;
 	int			 rc;
 
-	rc = -zap_lookup(o->od_objset.os, parent, name, 8, 1, (void *)zde);
+	rc = -zap_lookup(o->od_os, parent, name, 8, 1, (void *)zde);
 	if (rc)
 		return rc;
 
@@ -151,12 +149,12 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 	int			 rc;
 
 	/* verify it doesn't already exist */
-	rc = -zap_lookup(o->od_objset.os, parent, name, 8, 1, (void *)zde);
+	rc = -zap_lookup(o->od_os, parent, name, 8, 1, (void *)zde);
 	if (rc == 0)
 		return -EEXIST;
 
 	/* create fid-to-dnode index */
-	tx = dmu_tx_create(o->od_objset.os);
+	tx = dmu_tx_create(o->od_os);
 	if (tx == NULL)
 		return -ENOMEM;
 
@@ -175,18 +173,18 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 	la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
 	la->la_uid = la->la_gid = 0;
-	__osd_zap_create(env, &o->od_objset, &db, tx, la, parent, oi_tag, 0);
+	__osd_zap_create(env, o, &db, tx, la, parent, 0);
 
 	zde->zde_dnode = db->db_object;
 	zde->zde_pad = 0;
 	zde->zde_type = IFTODT(S_IFDIR);
 
-	rc = -zap_add(o->od_objset.os, parent, name, 8, 1, (void *)zde, tx);
+	rc = -zap_add(o->od_os, parent, name, 8, 1, (void *)zde, tx);
 
 	dmu_tx_commit(tx);
 
 	*child = db->db_object;
-	sa_buf_rele(db, oi_tag);
+	sa_buf_rele(db, osd_obj_tag);
 
 	return rc;
 }
@@ -484,7 +482,7 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 	} else {
 		zapid = osd_get_name_n_idx(env, dev, fid, buf);
 
-		rc = -zap_lookup(dev->od_objset.os, zapid, buf,
+		rc = -zap_lookup(dev->od_os, zapid, buf,
 				8, 1, &info->oti_zde);
 		if (rc)
 			RETURN(rc);
@@ -492,7 +490,7 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 	}
 
 	if (rc == 0)
-		dmu_prefetch(dev->od_objset.os, *oid, 0, 0);
+		dmu_prefetch(dev->od_os, *oid, 0, 0);
 
 	RETURN(rc);
 }
@@ -710,7 +708,7 @@ int osd_convert_root_to_new_seq(const struct lu_env *env,
 		RETURN(0);
 
 	/* lookup /ROOT */
-	rc = -zap_lookup(o->od_objset.os, o->od_root, root2convert, 8,
+	rc = -zap_lookup(o->od_os, o->od_root, root2convert, 8,
 			 sizeof(*lze) / 8, (void *)lze);
 	/* doesn't exist or let actual user to handle the error */
 	if (rc)
@@ -723,7 +721,7 @@ int osd_convert_root_to_new_seq(const struct lu_env *env,
 	if (fid_seq(&lze->lzd_fid) == FID_SEQ_ROOT)
 		return 0;
 
-	tx = dmu_tx_create(o->od_objset.os);
+	tx = dmu_tx_create(o->od_os);
 	if (tx == NULL)
 		return -ENOMEM;
 
@@ -750,25 +748,25 @@ int osd_convert_root_to_new_seq(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	rc = -zap_remove(o->od_objset.os, o->od_root, root2convert, tx);
+	rc = -zap_remove(o->od_os, o->od_root, root2convert, tx);
 	if (rc)
 		GOTO(err, rc);
 
 	/* remove from OI */
 	zapid = osd_get_name_n_idx(env, o, &lze->lzd_fid, buf);
-	rc = -zap_remove(o->od_objset.os, zapid, buf, tx);
+	rc = -zap_remove(o->od_os, zapid, buf, tx);
 	if (rc)
 		GOTO(err, rc);
 
 	lze->lzd_fid = newfid;
-	rc = -zap_add(o->od_objset.os, o->od_root, root2convert,
+	rc = -zap_add(o->od_os, o->od_root, root2convert,
 		      8, sizeof(*lze) / 8, (void *)lze, tx);
 	if (rc)
 		GOTO(err, rc);
 
 	/* add to OI with the new fid */
 	zapid = osd_get_name_n_idx(env, o, &newfid, buf);
-	rc = -zap_add(o->od_objset.os, zapid, buf, 8, 1, &lze->lzd_reg, tx);
+	rc = -zap_add(o->od_os, zapid, buf, 8, 1, &lze->lzd_reg, tx);
 	if (rc)
 		GOTO(err, rc);
 

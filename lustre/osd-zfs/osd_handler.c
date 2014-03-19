@@ -74,8 +74,6 @@
 
 struct lu_context_key	osd_key;
 
-static char *root_tag = "osd_mount, rootdb";
-
 /* Slab for OSD object allocation */
 struct kmem_cache *osd_object_kmem;
 
@@ -271,7 +269,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	dmu_tx_commit(oh->ot_tx);
 
 	if (th->th_sync)
-		txg_wait_synced(dmu_objset_pool(osd->od_objset.os), txg);
+		txg_wait_synced(dmu_objset_pool(osd->od_os), txg);
 
 	RETURN(rc);
 }
@@ -285,7 +283,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	dmu_tx_t		*tx;
 	ENTRY;
 
-	tx = dmu_tx_create(osd->od_objset.os);
+	tx = dmu_tx_create(osd->od_os);
 	if (tx == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
@@ -310,6 +308,149 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	RETURN(th);
 }
 
+/* Estimate the number of objects from a number of blocks */
+uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
+				 uint64_t nrblocks)
+{
+	uint64_t est_objs, est_refdblocks, est_usedobjs;
+
+	/* Compute an nrblocks estimate based on the actual number of
+	 * dnodes that could fit in the space.  Since we don't know the
+	 * overhead associated with each dnode (xattrs, SAs, VDEV overhead,
+	 * etc) just using DNODE_SHIFT isn't going to give a good estimate.
+	 * Instead, compute an estimate based on the average space usage per
+	 * dnode, with an upper and lower cap.
+	 *
+	 * In case there aren't many dnodes or blocks used yet, add a small
+	 * correction factor using OSD_DNODE_EST_SHIFT.  This correction
+	 * factor gradually disappears as the number of real dnodes grows.
+	 * This also avoids the need to check for divide-by-zero later.
+	 */
+	CLASSERT(OSD_DNODE_MIN_BLKSHIFT > 0);
+	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
+
+	est_refdblocks = (refdbytes >> SPA_MAXBLOCKSHIFT) +
+			 (OSD_DNODE_EST_COUNT >> OSD_DNODE_EST_BLKSHIFT);
+	est_usedobjs   = usedobjs + OSD_DNODE_EST_COUNT;
+
+	/* Average space/dnode more than maximum dnode size, use max dnode
+	 * size to estimate free dnodes from adjusted free blocks count.
+	 * OSTs typically use more than one block dnode so this case applies. */
+	if (est_usedobjs <= est_refdblocks * 2) {
+		est_objs = nrblocks;
+
+	/* Average space/dnode smaller than min dnode size (probably due to
+	 * metadnode compression), use min dnode size to estimate the number of
+	 * objects.
+	 * An MDT typically uses below 512 bytes/dnode so this case applies. */
+	} else if (est_usedobjs >= (est_refdblocks << OSD_DNODE_MIN_BLKSHIFT)) {
+		est_objs = nrblocks << OSD_DNODE_MIN_BLKSHIFT;
+
+		/* Between the extremes, we try to use the average size of
+		 * existing dnodes to compute the number of dnodes that fit
+		 * into nrblocks:
+		 *
+		 * est_objs = nrblocks * (est_usedobjs / est_refblocks);
+		 *
+		 * but this may overflow 64 bits or become 0 if not handled well
+		 *
+		 * We know nrblocks is below (64 - 17 = 47) bits from
+		 * SPA_MAXBLKSHIFT, and est_usedobjs is under 48 bits due to
+		 * DN_MAX_OBJECT_SHIFT, which means that multiplying them may
+		 * get as large as 2 ^ 95.
+		 *
+		 * We also know (est_usedobjs / est_refdblocks) is between 2 and
+		 * 256, due to above checks, we can safely compute this first.
+		 * We care more about accuracy on the MDT (many dnodes/block)
+		 * which is good because this is where truncation errors are
+		 * smallest.  This adds 8 bits to nrblocks so we can use 7 bits
+		 * to compute a fixed-point fraction and nrblocks can still fit
+		 * in 64 bits. */
+	} else {
+		unsigned dnodes_per_block = (est_usedobjs << 7)/est_refdblocks;
+
+		est_objs = (nrblocks * dnodes_per_block) >> 7;
+	}
+	return est_objs;
+}
+
+static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
+{
+	uint64_t refdbytes, availbytes, usedobjs, availobjs;
+	uint64_t est_availobjs;
+	uint64_t reserved;
+
+	dmu_objset_space(os, &refdbytes, &availbytes, &usedobjs,
+			 &availobjs);
+
+	/*
+	 * ZFS allows multiple block sizes.  For statfs, Linux makes no
+	 * proper distinction between bsize and frsize.  For calculations
+	 * of free and used blocks incorrectly uses bsize instead of frsize,
+	 * but bsize is also used as the optimal blocksize.  We return the
+	 * largest possible block size as IO size for the optimum performance
+	 * and scale the free and used blocks count appropriately.
+	 */
+	osfs->os_bsize = 1ULL << SPA_MAXBLOCKSHIFT;
+
+	osfs->os_blocks = (refdbytes + availbytes) >> SPA_MAXBLOCKSHIFT;
+	osfs->os_bfree = availbytes >> SPA_MAXBLOCKSHIFT;
+	osfs->os_bavail = osfs->os_bfree; /* no extra root reservation */
+
+	/* Take replication (i.e. number of copies) into account */
+	osfs->os_bavail /= os->os_copies;
+
+	/*
+	 * Reserve some space so we don't run into ENOSPC due to grants not
+	 * accounting for metadata overhead in ZFS, and to avoid fragmentation.
+	 * Rather than report this via os_bavail (which makes users unhappy if
+	 * they can't fill the filesystem 100%), reduce os_blocks as well.
+	 *
+	 * Reserve 0.78% of total space, at least 4MB for small filesystems,
+	 * for internal files to be created/unlinked when space is tight.
+	 */
+	CLASSERT(OSD_STATFS_RESERVED_BLKS > 0);
+	if (likely(osfs->os_blocks >=
+			OSD_STATFS_RESERVED_BLKS << OSD_STATFS_RESERVED_SHIFT))
+		reserved = osfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
+	else
+		reserved = OSD_STATFS_RESERVED_BLKS;
+
+	osfs->os_blocks -= reserved;
+	osfs->os_bfree  -= MIN(reserved, osfs->os_bfree);
+	osfs->os_bavail -= MIN(reserved, osfs->os_bavail);
+
+	/*
+	 * The availobjs value returned from dmu_objset_space() is largely
+	 * useless, since it reports the number of objects that might
+	 * theoretically still fit into the dataset, independent of minor
+	 * issues like how much space is actually available in the pool.
+	 * Compute a better estimate in udmu_objs_count_estimate().
+	 */
+	est_availobjs = osd_objs_count_estimate(refdbytes, usedobjs,
+						osfs->os_bfree);
+
+	osfs->os_ffree = min(availobjs, est_availobjs);
+	osfs->os_files = osfs->os_ffree + usedobjs;
+
+	/* ZFS XXX: fill in backing dataset FSID/UUID
+	   memcpy(osfs->os_fsid, .... );*/
+
+	/* We're a zfs filesystem. */
+	osfs->os_type = UBERBLOCK_MAGIC;
+
+	/* ZFS XXX: fill in appropriate OS_STATE_{DEGRADED,READONLY} flags
+	   osfs->os_state = vf_to_stf(vfsp->vfs_flag);
+	   if (sb->s_flags & MS_RDONLY)
+	   osfs->os_state = OS_STATE_READONLY;
+	 */
+
+	osfs->os_namelen = MAXNAMELEN;
+	osfs->os_maxbytes = OBD_OBJECT_EOF;
+
+	return 0;
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -320,13 +461,34 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	int		   rc;
 	ENTRY;
 
-	rc = udmu_objset_statfs(&osd->od_objset, osfs);
-	if (unlikely(rc))
+	rc = osd_objset_statfs(osd->od_os, osfs);
+	if (unlikely(rc != 0))
 		RETURN(rc);
+
 	osfs->os_bavail -= min_t(obd_size,
 				 OSD_GRANT_FOR_LOCAL_OIDS / osfs->os_bsize,
 				 osfs->os_bavail);
 	RETURN(0);
+}
+
+static int osd_blk_insert_cost(void)
+{
+	int max_blockshift, nr_blkptrshift;
+
+	/* max_blockshift is the log2 of the number of blocks needed to reach
+	 * the maximum filesize (that's to say 2^64) */
+	max_blockshift = DN_MAX_OFFSET_SHIFT - SPA_MAXBLOCKSHIFT;
+
+	/* nr_blkptrshift is the log2 of the number of block pointers that can
+	 * be stored in an indirect block */
+	CLASSERT(DN_MAX_INDBLKSHIFT > SPA_BLKPTRSHIFT);
+	nr_blkptrshift = DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT;
+
+	/* max_blockshift / nr_blkptrshift is thus the maximum depth of the
+	 * tree. We add +1 for rounding purpose.
+	 * The tree depth times the indirect block size gives us the maximum
+	 * cost of inserting a block in the tree */
+	return (max_blockshift / nr_blkptrshift + 1) * (1<<DN_MAX_INDBLKSHIFT);
 }
 
 /*
@@ -367,7 +529,7 @@ static void osd_conf_get(const struct lu_env *env,
 	 * estimate the real size consumed by an object */
 	param->ddp_inodespace = OSD_DNODE_EST_COUNT;
 	/* per-fragment overhead to be used by the client code */
-	param->ddp_grant_frag = udmu_blk_insert_cost();
+	param->ddp_grant_frag = osd_blk_insert_cost();
 }
 
 /*
@@ -377,14 +539,14 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
 	struct osd_device  *osd = osd_dt_dev(d);
 	CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_ZFS_NAME);
-	txg_wait_synced(dmu_objset_pool(osd->od_objset.os), 0ULL);
+	txg_wait_synced(dmu_objset_pool(osd->od_os), 0ULL);
 	return 0;
 }
 
 static int osd_commit_async(const struct lu_env *env, struct dt_device *dev)
 {
 	struct osd_device *osd = osd_dt_dev(dev);
-	tx_state_t	  *tx = &dmu_objset_pool(osd->od_objset.os)->dp_tx;
+	tx_state_t	  *tx = &dmu_objset_pool(osd->od_os)->dp_tx;
 	uint64_t	   txg;
 
 	mutex_enter(&tx->tx_sync_lock);
@@ -409,7 +571,7 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	CERROR("%s: *** setting device %s read-only ***\n",
 	       osd->od_svname, LUSTRE_OSD_ZFS_NAME);
 	osd->od_rdonly = 1;
-	spa_freeze(dmu_objset_spa(osd->od_objset.os));
+	spa_freeze(dmu_objset_spa(osd->od_os));
 
 	RETURN(0);
 }
@@ -516,6 +678,65 @@ static void osd_xattr_changed_cb(void *arg, uint64_t newval)
 	osd->od_xattr_in_sa = (newval == ZFS_XATTR_SA);
 }
 
+static int osd_objset_open(struct osd_device *o)
+{
+	uint64_t	version = ZPL_VERSION;
+	uint64_t	sa_obj;
+	int		rc;
+	ENTRY;
+
+	rc = -dmu_objset_own(o->od_mntdev, DMU_OST_ZFS, B_FALSE, o, &o->od_os);
+	if (rc) {
+		o->od_os = NULL;
+		goto out;
+	}
+
+	/* Check ZFS version */
+	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ,
+			 ZPL_VERSION_STR, 8, 1, &version);
+	if (rc) {
+		CERROR("%s: Error looking up ZPL VERSION\n", o->od_mntdev);
+		/*
+		 * We can't return ENOENT because that would mean the objset
+		 * didn't exist.
+		 */
+		GOTO(out, rc = -EIO);
+	}
+
+	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ,
+			 ZFS_SA_ATTRS, 8, 1, &sa_obj);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = -sa_setup(o->od_os, sa_obj, zfs_attr_table,
+		       ZPL_END, &o->z_attr_table);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ, ZFS_ROOT_OBJ,
+			 8, 1, &o->od_rootid);
+	if (rc) {
+		CERROR("%s: lookup for root failed: rc = %d\n",
+			o->od_svname, rc);
+		GOTO(out, rc);
+	}
+
+	/* Check that user/group usage tracking is supported */
+	if (!dmu_objset_userused_enabled(o->od_os) ||
+	    DMU_USERUSED_DNODE(o->od_os)->dn_type != DMU_OT_USERGROUP_USED ||
+	    DMU_GROUPUSED_DNODE(o->od_os)->dn_type != DMU_OT_USERGROUP_USED) {
+		CERROR("%s: Space accounting not supported by this target, "
+			"aborting\n", o->od_svname);
+		GOTO(out, -ENOTSUPP);
+	}
+
+out:
+	if (rc != 0 && o->od_os != NULL)
+		dmu_objset_disown(o->od_os, o);
+
+	RETURN(rc);
+}
+
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
@@ -528,7 +749,7 @@ static int osd_mount(const struct lu_env *env,
 	int			 rc;
 	ENTRY;
 
-	if (o->od_objset.os != NULL)
+	if (o->od_os != NULL)
 		RETURN(0);
 
 	if (mntdev == NULL || svname == NULL)
@@ -545,33 +766,34 @@ static int osd_mount(const struct lu_env *env,
 	if (server_name_is_ost(o->od_svname))
 		o->od_is_ost = 1;
 
-	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
+	rc = osd_objset_open(o);
 	if (rc) {
-		CERROR("can't open objset %s: %d\n", o->od_mntdev, rc);
+		CERROR("%s: can't open objset %s: rc = %d\n", o->od_svname,
+			o->od_mntdev, rc);
 		RETURN(rc);
 	}
 
-	ds = dmu_objset_ds(o->od_objset.os);
-	dp = dmu_objset_pool(o->od_objset.os);
+	ds = dmu_objset_ds(o->od_os);
+	dp = dmu_objset_pool(o->od_os);
 	LASSERT(ds);
 	LASSERT(dp);
 	dsl_pool_config_enter(dp, FTAG);
 	rc = dsl_prop_register(ds, "xattr", osd_xattr_changed_cb, o);
 	dsl_pool_config_exit(dp, FTAG);
 	if (rc)
-		CERROR("%s: cat not register xattr callback, ignore: %d\n",
-		       o->od_svname, rc);
+		CWARN("%s: can't register xattr callback, ignore: rc=%d\n",
+		      o->od_svname, rc);
 
-	rc = __osd_obj2dbuf(env, o->od_objset.os, o->od_objset.root,
-				&rootdb, root_tag);
+	rc = __osd_obj2dbuf(env, o->od_os, o->od_rootid, &rootdb);
 	if (rc) {
-		CERROR("udmu_obj2dbuf() failed with error %d\n", rc);
-		udmu_objset_close(&o->od_objset);
+		CERROR("%s: obj2dbuf() failed: rc = %d\n", o->od_svname, rc);
+		dmu_objset_disown(o->od_os, o);
+		o->od_os = NULL;
 		RETURN(rc);
 	}
 
 	o->od_root = rootdb->db_object;
-	sa_buf_rele(rootdb, root_tag);
+	sa_buf_rele(rootdb, osd_obj_tag);
 
 	/* 1. initialize oi before any file create or file open */
 	rc = osd_oi_init(env, o);
@@ -633,8 +855,15 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 		CERROR("%s: lost %d pinned dbuf(s)\n", o->od_svname,
 		       atomic_read(&o->od_zerocopy_pin));
 
-	if (o->od_objset.os != NULL)
-		udmu_objset_close(&o->od_objset);
+	if (o->od_os != NULL) {
+		/* force a txg sync to get all commit callbacks */
+		txg_wait_synced(dmu_objset_pool(o->od_os), 0ULL);
+
+		/* close the object set */
+		dmu_objset_disown(o->od_os, o);
+
+		o->od_os = NULL;
+	}
 
 	EXIT;
 }
@@ -727,8 +956,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	osd_shutdown(env, o);
 	osd_oi_fini(env, o);
 
-	if (o->od_objset.os) {
-		ds = dmu_objset_ds(o->od_objset.os);
+	if (o->od_os) {
+		ds = dmu_objset_ds(o->od_os);
 		rc = dsl_prop_unregister(ds, "xattr", osd_xattr_changed_cb, o);
 		if (rc)
 			CERROR("%s: dsl_prop_unregister xattr error %d\n",
@@ -738,7 +967,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 			o->arc_prune_cb = NULL;
 		}
 		osd_sync(env, lu2dt_dev(d));
-		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_objset.os)));
+		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
 	}
 
 	rc = osd_procfs_fini(o);
@@ -747,7 +976,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 		RETURN(ERR_PTR(rc));
 	}
 
-	if (o->od_objset.os)
+	if (o->od_os)
 		osd_umount(env, o);
 
 	RETURN(NULL);
@@ -829,9 +1058,9 @@ static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	*exp = class_conn2export(&conn);
 
-	spin_lock(&osd->od_objset.lock);
+	spin_lock(&obd->obd_dev_lock);
 	osd->od_connects++;
-	spin_unlock(&osd->od_objset.lock);
+	spin_unlock(&obd->obd_dev_lock);
 
 	RETURN(0);
 }
@@ -848,11 +1077,11 @@ static int osd_obd_disconnect(struct obd_export *exp)
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
-	spin_lock(&osd->od_objset.lock);
+	spin_lock(&obd->obd_dev_lock);
 	osd->od_connects--;
 	if (osd->od_connects == 0)
 		release = 1;
-	spin_unlock(&osd->od_objset.lock);
+	spin_unlock(&obd->obd_dev_lock);
 
 	rc = class_disconnect(exp); /* bz 9811 */
 

@@ -43,4 +43,4 @@ endif
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
-EXTRA_DIST := $(osd_zfs-objs:%.o=%.c) osd_internal.h udmu.h
+EXTRA_DIST := $(osd_zfs-objs:%.o=%.c) osd_internal.h

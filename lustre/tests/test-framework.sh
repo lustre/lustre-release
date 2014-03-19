@@ -5608,30 +5608,24 @@ check_catastrophe() {
 }
 
 # CMD: determine mds index where directory inode presents
-get_mds_dir () {
+get_mds_dir() {
     local dir=$1
-    local file=$dir/f0.get_mds_dir_tmpfile
+    local SEQ
 
-    mkdir -p $dir
-    rm -f $file
-    sleep 1
-    local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local -a oldused=($iused)
+    SEQ=$(lfs path2fid $dir | tr '[:]' ' '|cut -f2 -d ' ')
+    if [ "$SEQ" == "" ]; then
+	error "can't get sequence for $dir"
+	return 1
+    fi
+    export SEQ
 
-    openfile -f O_CREAT:O_LOV_DELAY_CREATE -m 0644 $file > /dev/null
-    sleep 1
-    iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local -a newused=($iused)
-
-    local num=0
-    for ((i=0; i<${#newused[@]}; i++)); do
-         if [ ${oldused[$i]} -lt ${newused[$i]} ];  then
-             echo $(( i + 1 ))
-             rm -f $file
-             return 0
-         fi
-    done
-    error "mdt-s : inodes count OLD ${oldused[@]} NEW ${newused[@]}"
+    do_facet mds1 "cat /proc/fs/lustre/fld/srv-*-MDT0000/fldb" | \
+	tr '[)]:-' ' ' |				\
+	while read SS EE IDX TYP; do			\
+		if let "SEQ >= SS && SEQ < EE"; then	\
+			echo $IDX;			\
+		fi;					\
+	done
 }
 
 mdsrate_cleanup () {

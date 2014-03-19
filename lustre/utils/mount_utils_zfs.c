@@ -528,13 +528,12 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	/*
 	 * Create the ZFS filesystem with any required mkfs options:
 	 * - canmount=off is set to prevent zfs automounting
-	 * - version=4 is set because SA are not yet handled by the osd
+	 * - xattr=sa is set to use system attribute based xattrs
 	 */
 	memset(mkfs_cmd, 0, PATH_MAX);
 	snprintf(mkfs_cmd, PATH_MAX,
 		 "zfs create -o canmount=off -o xattr=sa%s %s",
-		 zfs_mkfs_opts(mop, mkfs_tmp, PATH_MAX),
-		 ds);
+		 zfs_mkfs_opts(mop, mkfs_tmp, PATH_MAX), ds);
 
 	vprint("mkfs_cmd = %s\n", mkfs_cmd);
 	ret = run_command(mkfs_cmd, PATH_MAX);

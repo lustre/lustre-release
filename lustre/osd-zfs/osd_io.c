@@ -94,7 +94,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			size = old_size - *pos;
 	}
 
-	rc = -dmu_read(osd->od_objset.os, obj->oo_db->db_object, *pos, size,
+	rc = -dmu_read(osd->od_os, obj->oo_db->db_object, *pos, size,
 			buf->lb_buf, DMU_READ_PREFETCH);
 	if (rc == 0) {
 		rc = size;
@@ -161,7 +161,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
-	udmu_objset_t      *uos = &osd->od_objset;
 	struct osd_thandle *oh;
 	uint64_t            offset = *pos;
 	int                 rc;
@@ -173,7 +172,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	dmu_write(osd->od_objset.os, obj->oo_db->db_object, offset,
+	dmu_write(osd->od_os, obj->oo_db->db_object, offset,
 		(uint64_t)buf->lb_len, buf->lb_buf, oh->ot_tx);
 	write_lock(&obj->oo_attr_lock);
 	if (obj->oo_attr.la_size < offset + buf->lb_len) {
@@ -182,7 +181,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 		/* osd_object_sa_update() will be copying directly from oo_attr
 		 * into dbuf.  any update within a single txg will copy the
 		 * most actual */
-		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(uos),
+		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
 					&obj->oo_attr.la_size, 8, oh);
 		if (unlikely(rc))
 			GOTO(out, rc);
@@ -609,7 +608,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	/* backend zfs filesystem might be configured to store multiple data
 	 * copies */
-	space  *= osd->od_objset.os->os_copies;
+	space  *= osd->od_os->os_copies;
 	space   = toqb(space);
 	CDEBUG(D_QUOTA, "writting %d pages, reserving "LPD64"K of quota "
 	       "space\n", npages, space);
@@ -645,7 +644,6 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
-	udmu_objset_t      *uos = &osd->od_objset;
 	struct osd_thandle *oh;
 	uint64_t            new_size = 0;
 	int                 i, rc = 0;
@@ -673,7 +671,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		}
 
 		if (lnb[i].lnb_page->mapping == (void *)obj) {
-			dmu_write(osd->od_objset.os, obj->oo_db->db_object,
+			dmu_write(osd->od_os, obj->oo_db->db_object,
 				lnb[i].lnb_file_offset, lnb[i].lnb_len,
 				kmap(lnb[i].lnb_page), oh->ot_tx);
 			kunmap(lnb[i].lnb_page);
@@ -710,8 +708,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		/* osd_object_sa_update() will be copying directly from
 		 * oo_attr into dbuf. any update within a single txg will copy
 		 * the most actual */
-		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(uos),
-					&obj->oo_attr.la_size, 8, oh);
+		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
+					  &obj->oo_attr.la_size, 8, oh);
 	} else {
 		write_unlock(&obj->oo_attr_lock);
 	}
@@ -792,7 +790,6 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
-	udmu_objset_t      *uos = &osd->od_objset;
 	struct osd_thandle *oh;
 	__u64               len;
 	int                 rc = 0;
@@ -812,15 +809,15 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		len = end - start;
 	write_unlock(&obj->oo_attr_lock);
 
-	rc = __osd_object_punch(osd->od_objset.os, obj->oo_db, oh->ot_tx,
+	rc = __osd_object_punch(osd->od_os, obj->oo_db, oh->ot_tx,
 				obj->oo_attr.la_size, start, len);
 	/* set new size */
 	if (len == DMU_OBJECT_END) {
 		write_lock(&obj->oo_attr_lock);
 		obj->oo_attr.la_size = start;
 		write_unlock(&obj->oo_attr_lock);
-		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(uos),
-					&obj->oo_attr.la_size, 8, oh);
+		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(osd),
+					  &obj->oo_attr.la_size, 8, oh);
 	}
 	RETURN(rc);
 }

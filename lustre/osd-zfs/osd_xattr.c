@@ -81,7 +81,7 @@
  *
  * No locking is done here.
  */
-int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr)
+int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
 {
 	sa_handle_t *sa_hdl;
 	char	    *buf;
@@ -90,14 +90,14 @@ int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr)
 	if (unlikely(dnode == ZFS_NO_OBJECT))
 		return -ENOENT;
 
-	rc = -sa_handle_get(uos->os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
+	rc = -sa_handle_get(osd->od_os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
 		return rc;
 
-	rc = -sa_size(sa_hdl, SA_ZPL_DXATTR(uos), &size);
+	rc = -sa_size(sa_hdl, SA_ZPL_DXATTR(osd), &size);
 	if (rc) {
 		if (rc == -ENOENT)
-			rc = -nvlist_alloc(sa_xattr, NV_UNIQUE_NAME, KM_SLEEP);
+			rc = -nvlist_alloc(sa, NV_UNIQUE_NAME, KM_SLEEP);
 		goto out_sa;
 	}
 
@@ -106,9 +106,9 @@ int __osd_xattr_load(udmu_objset_t *uos, uint64_t dnode, nvlist_t **sa_xattr)
 		rc = -ENOMEM;
 		goto out_sa;
 	}
-	rc = -sa_lookup(sa_hdl, SA_ZPL_DXATTR(uos), buf, size);
+	rc = -sa_lookup(sa_hdl, SA_ZPL_DXATTR(osd), buf, size);
 	if (rc == 0)
-		rc = -nvlist_unpack(buf, size, sa_xattr, KM_SLEEP);
+		rc = -nvlist_unpack(buf, size, sa, KM_SLEEP);
 	sa_spill_free(buf);
 out_sa:
 	sa_handle_destroy(sa_hdl);
@@ -122,12 +122,12 @@ static inline int __osd_xattr_cache(const struct lu_env *env,
 	LASSERT(obj->oo_sa_xattr == NULL);
 	LASSERT(obj->oo_db != NULL);
 
-	return __osd_xattr_load(&osd_obj2dev(obj)->od_objset,
-				obj->oo_db->db_object, &obj->oo_sa_xattr);
+	return __osd_xattr_load(osd_obj2dev(obj), obj->oo_db->db_object,
+				&obj->oo_sa_xattr);
 }
 
 int __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		const struct lu_buf *buf, const char *name, int *sizep)
+		       const struct lu_buf *buf, const char *name, int *sizep)
 {
 	uchar_t *nv_value;
 	int      rc;
@@ -158,7 +158,7 @@ int __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
 	return 0;
 }
 
-int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
+int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep)
 {
@@ -172,22 +172,22 @@ int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
 		return -ENOENT;
 
 	/* Lookup the object number containing the xattr data */
-	rc = -zap_lookup(uos->os, xattr, name, sizeof(uint64_t), 1,
+	rc = -zap_lookup(osd->od_os, xattr, name, sizeof(uint64_t), 1,
 			&xa_data_obj);
 	if (rc)
 		return rc;
 
-	rc = __osd_obj2dbuf(env, uos->os, xa_data_obj, &xa_data_db, FTAG);
+	rc = __osd_obj2dbuf(env, osd->od_os, xa_data_obj, &xa_data_db);
 	if (rc)
 		return rc;
 
-	rc = -sa_handle_get(uos->os, xa_data_obj, NULL, SA_HDL_PRIVATE,
+	rc = -sa_handle_get(osd->od_os, xa_data_obj, NULL, SA_HDL_PRIVATE,
 			&sa_hdl);
 	if (rc)
 		goto out_rele;
 
 	/* Get the xattr value length / object size */
-	rc = -sa_lookup(sa_hdl, SA_ZPL_SIZE(uos), &size, 8);
+	rc = -sa_lookup(sa_hdl, SA_ZPL_SIZE(osd), &size, 8);
 	if (rc)
 		goto out;
 
@@ -207,7 +207,7 @@ int __osd_xattr_get_large(const struct lu_env *env, udmu_objset_t *uos,
 		goto out;
 	}
 
-	rc = -dmu_read(uos->os, xa_data_db->db_object, 0,
+	rc = -dmu_read(osd->od_os, xa_data_db->db_object, 0,
 			size, buf->lb_buf, DMU_READ_PREFETCH);
 
 out:
@@ -219,7 +219,7 @@ out_rele:
 }
 
 int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		struct lu_buf *buf, const char *name, int *sizep)
+		    struct lu_buf *buf, const char *name, int *sizep)
 {
 	int rc;
 
@@ -228,15 +228,15 @@ int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
 	if (rc != -ENOENT)
 		return rc;
 
-	rc = __osd_xattr_get_large(env, &osd_obj2dev(obj)->od_objset,
-				   obj->oo_xattr, buf, name, sizep);
+	rc = __osd_xattr_get_large(env, osd_obj2dev(obj), obj->oo_xattr,
+				   buf, name, sizep);
 
 	return rc;
 }
 
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
-		struct lu_buf *buf, const char *name,
-		struct lustre_capa *capa)
+		  struct lu_buf *buf, const char *name,
+		  struct lustre_capa *capa)
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	int                 rc, size = 0;
@@ -263,10 +263,10 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 }
 
 void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
-			int vallen, const char *name, struct osd_thandle *oh)
+			     int vallen, const char *name,
+			     struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
 	dmu_buf_t         *db = obj->oo_db;
 	dmu_tx_t          *tx = oh->ot_tx;
 	uint64_t           xa_data_obj;
@@ -300,7 +300,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		return;
 	}
 
-	rc = -zap_lookup(uos->os, obj->oo_xattr, name, sizeof(uint64_t), 1,
+	rc = -zap_lookup(osd->od_os, obj->oo_xattr, name, sizeof(uint64_t), 1,
 			&xa_data_obj);
 	if (rc == 0) {
 		/*
@@ -328,8 +328,8 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
-		const struct lu_buf *buf, const char *name,
-		int fl, struct thandle *handle)
+			  const struct lu_buf *buf, const char *name,
+			  int fl, struct thandle *handle)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
@@ -355,10 +355,9 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
  */
 static int
 __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
-			struct osd_thandle *oh)
+		      struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
 	char              *dxattr;
 	size_t             sa_size;
 	int                rc;
@@ -381,15 +380,15 @@ __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 	if (rc)
 		GOTO(out_free, rc);
 
-	rc = osd_object_sa_update(obj, SA_ZPL_DXATTR(uos), dxattr, sa_size, oh);
+	rc = osd_object_sa_update(obj, SA_ZPL_DXATTR(osd), dxattr, sa_size, oh);
 out_free:
 	sa_spill_free(dxattr);
 	RETURN(rc);
 }
 
 int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
-			const struct lu_buf *buf, const char *name, int fl,
-			struct osd_thandle *oh)
+		       const struct lu_buf *buf, const char *name, int fl,
+		       struct osd_thandle *oh)
 {
 	uchar_t *nv_value;
 	size_t  size;
@@ -445,14 +444,14 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 	/* Ensure xattr doesn't exist in ZAP */
 	if (obj->oo_xattr != ZFS_NO_OBJECT) {
-		udmu_objset_t     *uos = &osd_obj2dev(obj)->od_objset;
-		uint64_t           xa_data_obj;
-		rc = -zap_lookup(uos->os, obj->oo_xattr,
-				 name, 8, 1, &xa_data_obj);
+		struct osd_device *osd = osd_obj2dev(obj);
+		uint64_t           objid;
+		rc = -zap_lookup(osd->od_os, obj->oo_xattr,
+				 name, 8, 1, &objid);
 		if (rc == 0) {
-			rc = __osd_object_free(uos, xa_data_obj, oh->ot_tx);
+			rc = -dmu_object_free(osd->od_os, objid, oh->ot_tx);
 			if (rc == 0)
-				zap_remove(uos->os, obj->oo_xattr,
+				zap_remove(osd->od_os, obj->oo_xattr,
 					   name, oh->ot_tx);
 		}
 	}
@@ -472,7 +471,6 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
 	dmu_buf_t         *xa_zap_db = NULL;
 	dmu_buf_t         *xa_data_db = NULL;
 	uint64_t           xa_data_obj;
@@ -488,20 +486,20 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-		rc = __osd_zap_create(env, uos, &xa_zap_db, tx, la,
-				      obj->oo_db->db_object, FTAG, 0);
+		rc = __osd_zap_create(env, osd, &xa_zap_db, tx, la,
+				      obj->oo_db->db_object, 0);
 		if (rc)
 			return rc;
 
 		obj->oo_xattr = xa_zap_db->db_object;
-		rc = osd_object_sa_update(obj, SA_ZPL_XATTR(uos),
+		rc = osd_object_sa_update(obj, SA_ZPL_XATTR(osd),
 				&obj->oo_xattr, 8, oh);
 		if (rc)
 			goto out;
 	}
 
-	rc = -zap_lookup(uos->os, obj->oo_xattr, name, sizeof(uint64_t), 1,
-			&xa_data_obj);
+	rc = -zap_lookup(osd->od_os, obj->oo_xattr, name, sizeof(uint64_t), 1,
+			 &xa_data_obj);
 	if (rc == 0) {
 		if (fl & LU_XATTR_CREATE) {
 			rc = -EEXIST;
@@ -511,21 +509,21 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		 * Entry already exists.
 		 * We'll truncate the existing object.
 		 */
-		rc = __osd_obj2dbuf(env, uos->os, xa_data_obj,
-					&xa_data_db, FTAG);
+		rc = __osd_obj2dbuf(env, osd->od_os, xa_data_obj,
+					&xa_data_db);
 		if (rc)
 			goto out;
 
-		rc = -sa_handle_get(uos->os, xa_data_obj, NULL,
+		rc = -sa_handle_get(osd->od_os, xa_data_obj, NULL,
 					SA_HDL_PRIVATE, &sa_hdl);
 		if (rc)
 			goto out;
 
-		rc = -sa_lookup(sa_hdl, SA_ZPL_SIZE(uos), &size, 8);
+		rc = -sa_lookup(sa_hdl, SA_ZPL_SIZE(osd), &size, 8);
 		if (rc)
 			goto out_sa;
 
-		rc = -dmu_free_range(uos->os, xa_data_db->db_object,
+		rc = -dmu_free_range(osd->od_os, xa_data_db->db_object,
 					0, DMU_OBJECT_END, tx);
 		if (rc)
 			goto out_sa;
@@ -544,18 +542,18 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, uos, &xa_data_db, tx, la,
-					 obj->oo_xattr, FTAG);
+		rc = __osd_object_create(env, osd, &xa_data_db, tx, la,
+					 obj->oo_xattr);
 		if (rc)
 			goto out;
 		xa_data_obj = xa_data_db->db_object;
 
-		rc = -sa_handle_get(uos->os, xa_data_obj, NULL,
+		rc = -sa_handle_get(osd->od_os, xa_data_obj, NULL,
 					SA_HDL_PRIVATE, &sa_hdl);
 		if (rc)
 			goto out;
 
-		rc = -zap_add(uos->os, obj->oo_xattr, name, sizeof(uint64_t),
+		rc = -zap_add(osd->od_os, obj->oo_xattr, name, sizeof(uint64_t),
 				1, &xa_data_obj, tx);
 		if (rc)
 			goto out_sa;
@@ -565,10 +563,10 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	/* Finally write the xattr value */
-	dmu_write(uos->os, xa_data_obj, 0, buf->lb_len, buf->lb_buf, tx);
+	dmu_write(osd->od_os, xa_data_obj, 0, buf->lb_len, buf->lb_buf, tx);
 
 	size = buf->lb_len;
-	rc = -sa_update(sa_hdl, SA_ZPL_SIZE(uos), &size, 8, tx);
+	rc = -sa_update(sa_hdl, SA_ZPL_SIZE(osd), &size, 8, tx);
 
 out_sa:
 	sa_handle_destroy(sa_hdl);
@@ -616,7 +614,6 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 			const char *name, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
 	dmu_tx_t          *tx = oh->ot_tx;
 	uint64_t           xa_data_obj;
 	int                rc;
@@ -627,7 +624,7 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 	if (obj->oo_xattr == ZFS_NO_OBJECT)
 		return;
 
-	rc = -zap_lookup(uos->os, obj->oo_xattr, name, 8, 1, &xa_data_obj);
+	rc = -zap_lookup(osd->od_os, obj->oo_xattr, name, 8, 1, &xa_data_obj);
 	if (rc == 0) {
 		/*
 		 * Entry exists.
@@ -649,7 +646,7 @@ __osd_xattr_declare_del(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
-			const char *name, struct thandle *handle)
+			  const char *name, struct thandle *handle)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
@@ -671,7 +668,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
-			const char *name, struct osd_thandle *oh)
+		       const char *name, struct osd_thandle *oh)
 {
 	int rc;
 
@@ -688,10 +685,9 @@ int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
 }
 
 int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
-			const char *name, struct osd_thandle *oh)
+		    const char *name, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	udmu_objset_t     *uos = &osd->od_objset;
 	uint64_t           xa_data_obj;
 	int                rc;
 
@@ -703,7 +699,7 @@ int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
 	if (obj->oo_xattr == ZFS_NO_OBJECT)
 		return 0;
 
-	rc = -zap_lookup(uos->os, obj->oo_xattr, name, sizeof(uint64_t), 1,
+	rc = -zap_lookup(osd->od_os, obj->oo_xattr, name, sizeof(uint64_t), 1,
 			&xa_data_obj);
 	if (rc == -ENOENT) {
 		rc = 0;
@@ -712,19 +708,19 @@ int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
 		 * Entry exists.
 		 * We'll delete the existing object and ZAP entry.
 		 */
-		rc = __osd_object_free(uos, xa_data_obj, oh->ot_tx);
+		rc = -dmu_object_free(osd->od_os, xa_data_obj, oh->ot_tx);
 		if (rc)
 			return rc;
 
-		rc = -zap_remove(uos->os, obj->oo_xattr, name, oh->ot_tx);
+		rc = -zap_remove(osd->od_os, obj->oo_xattr, name, oh->ot_tx);
 	}
 
 	return rc;
 }
 
 int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
-		const char *name, struct thandle *handle,
-		struct lustre_capa *capa)
+		  const char *name, struct thandle *handle,
+		  struct lustre_capa *capa)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
@@ -752,7 +748,7 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 static int
 osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
-		struct lu_buf *lb)
+		  struct lu_buf *lb)
 {
 	nvpair_t *nvp = NULL;
 	int       len, counted = 0, remain = lb->lb_len;
@@ -791,12 +787,11 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
-		struct lu_buf *lb, struct lustre_capa *capa)
+		   struct lu_buf *lb, struct lustre_capa *capa)
 {
-	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object      *obj = osd_dt_obj(dt);
 	struct osd_device      *osd = osd_obj2dev(obj);
-	udmu_objset_t          *uos = &osd->od_objset;
+	zap_attribute_t	       *za = &osd_oti_get(env)->oti_za;
 	zap_cursor_t           *zc;
 	int                    rc, counted = 0, remain = lb->lb_len;
 	ENTRY;
@@ -817,25 +812,24 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	if (obj->oo_xattr == ZFS_NO_OBJECT)
 		GOTO(out, rc = counted);
 
-	rc = -udmu_zap_cursor_init(&zc, uos, obj->oo_xattr, 0);
+	rc = osd_zap_cursor_init(&zc, osd->od_os, obj->oo_xattr, 0);
 	if (rc)
 		GOTO(out, rc);
 
-	while ((rc = -udmu_zap_cursor_retrieve_key(env, zc, oti->oti_key,
-						MAXNAMELEN)) == 0) {
+	while ((rc = -zap_cursor_retrieve(zc, za)) == 0) {
 		if (!osd_obj2dev(obj)->od_posix_acl &&
-		    (strcmp(oti->oti_key, POSIX_ACL_XATTR_ACCESS) == 0 ||
-		     strcmp(oti->oti_key, POSIX_ACL_XATTR_DEFAULT) == 0)) {
+		    (strcmp(za->za_name, POSIX_ACL_XATTR_ACCESS) == 0 ||
+		     strcmp(za->za_name, POSIX_ACL_XATTR_DEFAULT) == 0)) {
 			zap_cursor_advance(zc);
 			continue;
 		}
 
-		rc = strlen(oti->oti_key);
+		rc = strlen(za->za_name);
 		if (lb->lb_buf != NULL) {
 			if (rc + 1 > remain)
 				RETURN(-ERANGE);
 
-			memcpy(lb->lb_buf, oti->oti_key, rc);
+			memcpy(lb->lb_buf, za->za_name, rc);
 			lb->lb_buf += rc;
 			*((char *)lb->lb_buf) = '\0';
 			lb->lb_buf++;
@@ -852,7 +846,7 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	rc = counted;
 
 out_fini:
-	udmu_zap_cursor_fini(zc);
+	osd_zap_cursor_fini(zc);
 out:
 	up(&obj->oo_guard);
 	RETURN(rc);
