@@ -771,19 +771,19 @@ static int mdd_attr_set_changelog(const struct lu_env *env,
         struct mdd_device *mdd = mdo2mdd(obj);
         int bits, type = 0;
 
-        bits = (valid & ~(LA_CTIME|LA_MTIME|LA_ATIME)) ? 1 << CL_SETATTR : 0;
+	bits =  (valid & LA_SIZE)  ? 1 << CL_TRUNC : 0;
+	bits |= (valid & ~(LA_CTIME|LA_MTIME|LA_ATIME)) ? 1 << CL_SETATTR : 0;
         bits |= (valid & LA_MTIME) ? 1 << CL_MTIME : 0;
         bits |= (valid & LA_CTIME) ? 1 << CL_CTIME : 0;
         bits |= (valid & LA_ATIME) ? 1 << CL_ATIME : 0;
         bits = bits & mdd->mdd_cl.mc_mask;
+	/* This is an implementation limit rather than a protocol limit */
+	CLASSERT(CL_LAST <= sizeof(int) * 8);
         if (bits == 0)
                 return 0;
 
         /* The record type is the lowest non-masked set bit */
-        while (bits && ((bits & 1) == 0)) {
-                bits = bits >> 1;
-                type++;
-        }
+	type = __ffs(bits);
 
         /* FYI we only store the first CLF_FLAGMASK bits of la_valid */
         return mdd_changelog_data_store(env, mdd, type, (int)valid,

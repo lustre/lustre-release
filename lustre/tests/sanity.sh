@@ -9733,6 +9733,32 @@ test_160b() { # LU-3587
 }
 run_test 160b "Verify that very long rename doesn't crash in changelog"
 
+test_160c() {
+	local rc=0
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+
+	# Registration step
+	local USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
+		changelog_register -n)
+
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
+	$MCREATE $DIR/$tdir/foo_160c
+	changelog_chmask "TRUNC"
+	$TRUNCATE $DIR/$tdir/foo_160c 200
+	changelog_chmask "TRUNC"
+	$TRUNCATE $DIR/$tdir/foo_160c 199
+	$LFS changelog $MDT0
+	TRUNCS=$($LFS changelog $MDT0 | tail -5 | grep -c "TRUNC")
+	[ $TRUNCS -eq 1 ] || err17935 "TRUNC changelog mask count $TRUNCS != 1"
+	$LFS changelog_clear $MDT0 $USER 0
+
+	# Deregistration step
+	echo "deregistering $USER"
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $USER
+}
+run_test 160c "verify that changelog log catch the truncate event"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
     test_mkdir -p $DIR/$tdir
