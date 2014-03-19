@@ -327,9 +327,8 @@ enum {
 	OSD_OT_WRITE		= 7,
 	OSD_OT_INSERT		= 8,
 	OSD_OT_DELETE		= 9,
-	OSD_OT_UPDATE		= 10,
-	OSD_OT_QUOTA		= 11,
-	OSD_OT_MAX		= 12
+	OSD_OT_QUOTA		= 10,
+	OSD_OT_MAX		= 11
 };
 
 struct osd_thandle {
@@ -495,18 +494,26 @@ struct osd_iobuf {
 };
 
 struct osd_thread_info {
-        const struct lu_env   *oti_env;
-        /**
-         * used for index operations.
-         */
-        struct dentry          oti_obj_dentry;
-        struct dentry          oti_child_dentry;
+	const struct lu_env   *oti_env;
+	/**
+	 * used for index operations.
+	 */
+	struct dentry          oti_obj_dentry;
+	struct dentry          oti_child_dentry;
 
-        /** dentry for Iterator context. */
-        struct dentry          oti_it_dentry;
-        struct htree_lock     *oti_hlock;
+	/** dentry for Iterator context. */
+	struct dentry		oti_it_dentry;
 
-        struct lu_fid          oti_fid;
+	union {
+		/* fake struct file for osd_object_sync */
+		struct file		oti_file;
+		/* osd_statfs() */
+		struct kstatfs		oti_ksfs;
+	};
+
+	struct htree_lock     *oti_hlock;
+
+	struct lu_fid          oti_fid;
 	struct lu_fid	       oti_fid2;
 	struct lu_fid	       oti_fid3;
 	struct osd_inode_id    oti_id;
@@ -518,10 +525,6 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct timespec        oti_time;
-	/*
-	 * XXX temporary: fake struct file for osd_object_sync
-	 */
-	struct file            oti_file;
         /*
          * XXX temporary: for capa operations.
          */
@@ -542,13 +545,12 @@ struct osd_thread_info {
 	void			*oti_it_ea_buf;
 	unsigned int		oti_it_ea_buf_used:1;
 
-	struct kstatfs		oti_ksfs;
-
-        /** IAM iterator for index operation. */
-        struct iam_iterator    oti_idx_it;
+	/* IAM iterator for index operation. */
+	struct iam_iterator    oti_idx_it;
 
         /** union to guarantee that ->oti_ipd[] has proper alignment. */
         union {
+		char	       oti_name[48];
                 char           oti_it_ipd[DX_IPD_MAX_SIZE];
                 long long      oti_alignment_lieutenant;
         };
@@ -571,10 +573,13 @@ struct osd_thread_info {
 		struct lustre_mdt_attrs oti_mdt_attrs;
 		/* old LMA for compatibility */
 		char			oti_mdt_attrs_old[LMA_OLD_SIZE];
+		struct filter_fid_old	oti_ff;
+		struct filter_fid	oti_ff_new;
 	};
 	/** 0-copy IO */
 	struct osd_iobuf       oti_iobuf;
-	struct inode           oti_inode;
+	/* used to access objects in /O */
+	struct inode          *oti_inode;
 #define OSD_FID_REC_SZ 32
 	char		       oti_ldp[OSD_FID_REC_SZ];
 	char		       oti_ldp2[OSD_FID_REC_SZ];
@@ -601,12 +606,6 @@ struct osd_thread_info {
 	unsigned short		oti_declare_ops_rb[OSD_OT_MAX];
 	unsigned short		oti_declare_ops_cred[OSD_OT_MAX];
 	bool			oti_rollback;
-
-	char			oti_name[48];
-	union {
-		struct filter_fid_old	oti_ff;
-		struct filter_fid	oti_ff_new;
-	};
 };
 
 extern int ldiskfs_pdo;
@@ -957,7 +956,7 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 			LASSERT(op < OSD_OT_MAX);
 		} else {
 			CWARN("%s: Invalid operation index %d\n",
-			      osd_name(oti->oti_dev), op);
+			      osd_name(osd_dt_dev(oh->ot_super.th_dev)), op);
 			libcfs_debug_dumpstack(NULL);
 		}
 	} else {
@@ -981,7 +980,7 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 			LASSERT(op < OSD_OT_MAX);
 		else {
 			CWARN("%s: Invalid operation index %d\n",
-			      osd_name(oti->oti_dev), op);
+			      osd_name(osd_dt_dev(oh->ot_super.th_dev)), op);
 			libcfs_debug_dumpstack(NULL);
 			return;
 		}
@@ -999,7 +998,7 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 				LASSERTF(rb < OSD_OT_MAX, "rb = %u\n", rb);
 			else {
 				CWARN("%s: Invalid rollback index %d\n",
-				      osd_name(oti->oti_dev), rb);
+				      osd_name(osd_dt_dev(th->th_dev)), rb);
 				libcfs_debug_dumpstack(NULL);
 				return;
 			}
@@ -1011,7 +1010,7 @@ static inline void osd_trans_exec_op(const struct lu_env *env,
 			else {
 				CWARN("%s: Overflow in tracking declares for "
 				      "index, rb = %d\n",
-				      osd_name(oti->oti_dev), rb);
+				      osd_name(osd_dt_dev(th->th_dev)), rb);
 				libcfs_debug_dumpstack(NULL);
 				return;
 			}
@@ -1033,7 +1032,7 @@ static inline void osd_trans_declare_rb(const struct lu_env *env,
 			LASSERT(op < OSD_OT_MAX);
 		else {
 			CWARN("%s: Invalid operation index %d\n",
-			      osd_name(oti->oti_dev), op);
+			      osd_name(osd_dt_dev(th->th_dev)), op);
 			libcfs_debug_dumpstack(NULL);
 		}
 

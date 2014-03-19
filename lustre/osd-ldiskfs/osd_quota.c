@@ -509,8 +509,7 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
 		    bool enforce, int *flags)
 {
-	struct osd_thread_info  *info = osd_oti_get(env);
-	struct osd_device       *dev = info->oti_dev;
+	struct osd_device       *dev = osd_dt_dev(oh->ot_super.th_dev);
 	struct qsd_instance     *qsd = dev->od_quota_slave;
 	struct inode		*inode = NULL;
 	int                      i, rc = 0, crd;

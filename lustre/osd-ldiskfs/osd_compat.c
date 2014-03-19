@@ -664,7 +664,14 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 	LASSERT(th != NULL);
 	LASSERT(th->h_transaction != NULL);
 
-	inode = &info->oti_inode;
+	inode = info->oti_inode;
+	if (unlikely(inode == NULL)) {
+		OBD_ALLOC_PTR(inode);
+		if (inode == NULL)
+			RETURN(-ENOMEM);
+		info->oti_inode = inode;
+	}
+
 	inode->i_sb = osd_sb(osd);
 	osd_id_to_inode(inode, id);
 	inode->i_mode = S_IFREG; /* for type in ldiskfs dir entry */

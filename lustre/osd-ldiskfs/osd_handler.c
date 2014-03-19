@@ -127,7 +127,6 @@ int osd_trans_declare_op2rb[] = {
 	[OSD_OT_WRITE]		= OSD_OT_WRITE,
 	[OSD_OT_INSERT]		= OSD_OT_DELETE,
 	[OSD_OT_DELETE]		= OSD_OT_INSERT,
-	[OSD_OT_UPDATE]		= OSD_OT_MAX,
 	[OSD_OT_QUOTA]		= OSD_OT_MAX,
 };
 
@@ -985,7 +984,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 		oh->ot_credits = 0;
 		atomic_set(&th->th_refc, 1);
 		th->th_alloc_size = sizeof(*oh);
-		oti->oti_dev = osd_dt_dev(d);
 		INIT_LIST_HEAD(&oh->ot_dcb_list);
 		osd_th_alloced(oh);
 
@@ -1132,7 +1130,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osd_thandle     *oh;
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-	struct qsd_instance    *qsd = oti->oti_dev->od_quota_slave;
+	struct osd_device      *osd = osd_dt_dev(th->th_dev);
+	struct qsd_instance    *qsd = osd->od_quota_slave;
 	struct lquota_trans    *qtrans;
 	ENTRY;
 
@@ -1156,19 +1155,20 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
                 oti->oti_txns--;
                 rc = dt_txn_hook_stop(env, th);
                 if (rc != 0)
-                        CERROR("Failure in transaction hook: %d\n", rc);
+			CERROR("%s: failed in transaction hook: rc = %d\n",
+			       osd_name(osd), rc);
 
 		/* hook functions might modify th_sync */
 		hdl->h_sync = th->th_sync;
 
-                oh->ot_handle = NULL;
-                OSD_CHECK_SLOW_TH(oh, oti->oti_dev,
-                                  rc = ldiskfs_journal_stop(hdl));
-                if (rc != 0)
-                        CERROR("Failure to stop transaction: %d\n", rc);
-        } else {
+		oh->ot_handle = NULL;
+		OSD_CHECK_SLOW_TH(oh, osd, rc = ldiskfs_journal_stop(hdl));
+		if (rc != 0)
+			CERROR("%s: failed to stop transaction: rc = %d\n",
+			       osd_name(osd), rc);
+	} else {
 		thandle_put(&oh->ot_super);
-        }
+	}
 
 	/* inform the quota slave device that the transaction is stopping */
 	qsd_op_end(env, qsd, qtrans);
@@ -1184,7 +1184,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	 */
 	wait_event(iobuf->dr_wait,
 		       atomic_read(&iobuf->dr_numreqs) == 0);
-	osd_fini_iobuf(oti->oti_dev, iobuf);
+	osd_fini_iobuf(osd, iobuf);
 	if (!rc)
 		rc = iobuf->dr_error;
 
@@ -5864,6 +5864,8 @@ static void osd_key_fini(const struct lu_context *ctx,
 {
 	struct osd_thread_info *info = data;
 
+	if (info->oti_inode != NULL)
+		OBD_FREE_PTR(info->oti_inode);
 	if (info->oti_hlock != NULL)
 		ldiskfs_htree_lock_free(info->oti_hlock);
 	OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
@@ -6449,6 +6451,9 @@ static struct obd_ops osd_obd_device_ops = {
 static int __init osd_mod_init(void)
 {
 	int rc;
+
+	/* please, try to keep osd_thread_info smaller than a page */
+	CLASSERT(sizeof(struct osd_thread_info) <= PAGE_SIZE);
 
 	osd_oi_mod_init();
 
