@@ -1087,6 +1087,8 @@ int jt_lcfg_setparam(int argc, char **argv)
                         *value = '\0';
                         value ++;
                         path = argv[i];
+			if (*value == '\0')
+				break;
                 } else {
                         /* format: set_param a b */
                         if (path == NULL) {
@@ -1107,6 +1109,9 @@ int jt_lcfg_setparam(int argc, char **argv)
 		if (rc2 < 0 && rc == 0)
 			rc = rc2;
 	}
+	if (path != NULL && (value == NULL || *value == '\0'))
+		fprintf(stderr, "error: %s: setting %s=: %s\n",
+			jt_cmdname(argv[0]), path, strerror(rc = EINVAL));
 
 	return rc;
 }
