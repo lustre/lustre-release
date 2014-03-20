@@ -1615,9 +1615,6 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 	struct req_format		  *format;
 	int				   rc;
 
-	if (!(exp_connect_flags(exp) & OBD_CONNECT_LFSCK))
-		return -EOPNOTSUPP;
-
 	switch (request) {
 	case LFSCK_NOTIFY:
 		format = &RQF_LFSCK_NOTIFY;
