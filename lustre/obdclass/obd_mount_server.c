@@ -173,28 +173,19 @@ struct lustre_mount_info *server_get_mount(const char *name)
 }
 EXPORT_SYMBOL(server_get_mount);
 
-/*
- * Used by mdt to get mount_info from obdname.
- * There are no blocking when using the mount_info.
- * Do not use server_get_mount for this purpose.
+/**
+ * server_put_mount: to be called from obd_cleanup methods
+ * @name:	obd name
+ * @dereg_mnt:	0 or 1 depending on whether the mount is to be deregistered or
+ * not
+ *
+ * The caller decides whether server_deregister_mount() needs to be called or
+ * not. Calling of server_deregister_mount() does not depend on refcounting on
+ * lsi because we could have say the mgs and mds on the same node and we
+ * unmount the mds, then the ref on the lsi would still be non-zero but we
+ * would still want to deregister the mds mount.
  */
-struct lustre_mount_info *server_get_mount_2(const char *name)
-{
-	struct lustre_mount_info *lmi;
-	ENTRY;
-
-	mutex_lock(&lustre_mount_info_lock);
-	lmi = server_find_mount(name);
-	mutex_unlock(&lustre_mount_info_lock);
-	if (!lmi)
-		CERROR("Can't find mount for %s\n", name);
-
-	RETURN(lmi);
-}
-EXPORT_SYMBOL(server_get_mount_2);
-
-/* to be called from obd_cleanup methods */
-int server_put_mount(const char *name)
+int server_put_mount(const char *name, bool dereg_mnt)
 {
 	struct lustre_mount_info *lmi;
 	struct lustre_sb_info *lsi;
@@ -216,20 +207,13 @@ int server_put_mount(const char *name)
 		CDEBUG(D_MOUNT, "Last put of mount %p from %s\n",
 		       lmi->lmi_sb, name);
 
-	/* this obd should never need the mount again */
-	server_deregister_mount(name);
+	if (dereg_mnt)
+		/* this obd should never need the mount again */
+		server_deregister_mount(name);
 
 	RETURN(0);
 }
 EXPORT_SYMBOL(server_put_mount);
-
-/* Corresponding to server_get_mount_2 */
-int server_put_mount_2(const char *name, struct vfsmount *mnt)
-{
-	ENTRY;
-	RETURN(0);
-}
-EXPORT_SYMBOL(server_put_mount_2);
 
 /* Set up a MGS to serve startup logs */
 static int server_start_mgs(struct super_block *sb)
@@ -468,7 +452,7 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 	char			  lwp_name[24];
 	int			  rc;
 
-	lmi = server_get_mount_2(dev);
+	lmi = server_get_mount(dev);
 	if (lmi == NULL)
 		return NULL;
 
@@ -477,7 +461,7 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 	if (rc != 0) {
 		CERROR("%s: failed to get fsname: rc = %d\n",
 		       lsi->lsi_svname, rc);
-		return NULL;
+		goto err_lmi;
 	}
 
 	snprintf(lwp_name, sizeof(lwp_name), "%s-MDT%04x", fsname, idx);
@@ -491,6 +475,9 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 		}
 	}
 	spin_unlock(&lsi->lsi_lwp_lock);
+
+err_lmi:
+	server_put_mount(dev, false);
 
 	return exp;
 }

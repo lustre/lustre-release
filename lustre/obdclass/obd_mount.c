@@ -645,10 +645,10 @@ static int lustre_free_lsi(struct super_block *sb)
    e.g. MDT, MGS, and potentially MGC */
 int lustre_put_lsi(struct super_block *sb)
 {
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        ENTRY;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	ENTRY;
 
-        LASSERT(lsi != NULL);
+	LASSERT(lsi != NULL);
 
 	CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
 	if (atomic_dec_and_test(&lsi->lsi_mounts)) {
@@ -660,10 +660,10 @@ int lustre_put_lsi(struct super_block *sb)
 			/* wait till OSD is gone */
 			obd_zombie_barrier();
 		}
-                lustre_free_lsi(sb);
-                RETURN(1);
-        }
-        RETURN(0);
+		lustre_free_lsi(sb);
+		RETURN(1);
+	}
+	RETURN(0);
 }
 
 /*** SERVER NAME ***

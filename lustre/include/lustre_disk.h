@@ -548,9 +548,7 @@ int lustre_common_put_super(struct super_block *sb);
 /* obd_mount_server.c */
 int server_fill_super(struct super_block *sb);
 struct lustre_mount_info *server_get_mount(const char *name);
-struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name);
-int server_put_mount_2(const char *name, struct vfsmount *mnt);
+int server_put_mount(const char *name, bool dereg_mnt);
 struct mgs_target_info;
 int server_mti_print(const char *title, struct mgs_target_info *mti);
 void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd);
