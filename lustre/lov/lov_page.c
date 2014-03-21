@@ -70,7 +70,9 @@ static int lov_raid0_page_is_under_lock(const struct lu_env *env,
 	unsigned int pps; /* pages per stripe */
 	ENTRY;
 
-	CDEBUG(D_READA, "*max_index = %lu, nr = %d\n", index, r0->lo_nr);
+	CDEBUG(D_READA, DFID "*max_index = %lu, nr = %d\n",
+	       PFID(lu_object_fid(lov2lu(loo))), index, r0->lo_nr);
+
 	if (index == 0) /* the page is not covered by any lock */
 		RETURN(0);
 
@@ -85,7 +87,13 @@ static int lov_raid0_page_is_under_lock(const struct lu_env *env,
 
 	/* calculate the end of current stripe */
 	pps = loo->lo_lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
-	index = ((slice->cpl_index + pps) & ~(pps - 1)) - 1;
+	index = slice->cpl_index + pps - slice->cpl_index % pps - 1;
+
+	CDEBUG(D_READA, DFID "*max_index = %lu, index = %lu, pps = %u, "
+	       "stripe_size = %u, stripe no = %u, page index = %lu\n",
+	       PFID(lu_object_fid(lov2lu(loo))), *max_index, index, pps,
+	       loo->lo_lsm->lsm_stripe_size, lov_page_stripe(slice->cpl_page),
+	       slice->cpl_index);
 
 	/* never exceed the end of the stripe */
 	*max_index = min_t(pgoff_t, *max_index, index);
