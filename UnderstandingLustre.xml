@@ -328,9 +328,9 @@
         </listitem>
         <listitem>
           <para><emphasis role="bold">Disaster recovery tool:</emphasis> The Lustre file system
-            provides a distributed file system check (lfsck) that can restore consistency between
+            provides an online distributed file system check (LFSCK) that can restore consistency between
             storage components in case of a major file system error. A Lustre file system can
-            operate even in the presence of file system inconsistencies, so lfsck is not required
+            operate even in the presence of file system inconsistencies, and LFSCK can run while the filesystem is in use, so LFSCK is not required to complete
             before returning the file system to production.</para>
         </listitem>
         <listitem>

@@ -9,9 +9,6 @@
       <para><xref linkend="dbdoclet.50438206_42260"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_91700"/></para>
-    </listitem>
-    <listitem>
       <para><xref linkend="dbdoclet.50438206_75125"/></para>
     </listitem>
     <listitem>
@@ -800,123 +797,6 @@ lfs help
     <section remap="h5">
       <title>See Also</title>
       <para><xref linkend="dbdoclet.50438206_94597"/></para>
-    </section>
-  </section>
-  <section xml:id="dbdoclet.50438206_91700">
-    <title><indexterm><primary>lfsck</primary></indexterm>
-       <literal>lfsck</literal>
-    </title>
-    <para><literal>lfsck</literal> ensures that objects are not referenced by multiple MDS files,
-      that there are no orphan objects on the OSTs (objects that do not have any file on the MDS
-      which references them), and that all of the objects referenced by the MDS exist. Under normal
-      circumstances, the Lustre software maintains such coherency by distributed logging mechanisms,
-      but under exceptional circumstances that may fail (e.g. disk failure, file system corruption
-      leading to e2fsck repair). To avoid lengthy downtime, you can also run
-        <literal>lfsck</literal> once the Lustre file system is already started.</para>
-    <para>The <literal>e2fsck</literal> utility is run on each of the local MDS and OST device file systems and verifies that the underlying <literal>ldiskfs</literal> is consistent. After <literal>e2fsck</literal> is run, <literal>lfsck</literal> does distributed coherency checking for the Lustre file system. In most cases, <literal>e2fsck</literal> is sufficient to repair any file system issues and <literal>lfsck</literal> is not required.</para>
-    <section remap="h5">
-      <title>Synopsis</title>
-      <screen>lfsck [-c|--create] [-d|--delete] [-f|--force] [-h|--help] [-l|--lostfound] [-n|--nofix] [-v|--verbose] --mdsdb <replaceable>mds_database_file</replaceable> --ostdb <replaceable>ost1_database_file</replaceable>[<replaceable>ost2_database_file</replaceable>...] <replaceable>/mount_point</replaceable>
-</screen>
-      <note>
-        <para>As shown, the <literal><replaceable>/mount_point</replaceable></literal> parameter refers to the Lustre file system mount point. The default mount point is <literal>/mnt/lustre</literal>.</para>
-      </note>
-      <note>
-        <para>For <literal>lfsck</literal>, database filenames must be provided as absolute pathnames. Relative paths do not work, the databases cannot be properly opened.</para>
-      </note>
-    </section>
-    <section remap="h5">
-      <title>Options</title>
-      <para>The options and descriptions for the <literal>lfsck</literal> command are listed below.</para>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal>-c</literal></para>
-              </entry>
-              <entry>
-                <para>Creates (empty) missing OST objects referenced by MDS inodes.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-d</literal></para>
-              </entry>
-              <entry>
-                <para>Deletes orphaned objects from the file system. Since objects on the OST are often only one of several stripes of a file, it can be difficult to compile multiple objects together in a single, usable file.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-h</literal></para>
-              </entry>
-              <entry>
-                <para>Prints a brief help message.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-l</literal></para>
-              </entry>
-              <entry>
-                <para>Puts orphaned objects into a <literal>lost+found</literal> directory in the root of the file system.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-n</literal></para>
-              </entry>
-              <entry>
-                <para>Does not repair the file system, just performs a read-only check (default).</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>-v</literal></para>
-              </entry>
-              <entry>
-                <para>Verbose operation - more verbosity by specifying the option multiple times.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>--mdsdb</literal></para>
-                <para><literal>mds_database_file</literal></para>
-              </entry>
-              <entry>
-                <para>MDT database file created by running <literal>e2fsck --mdsdb <replaceable>mds_database_file</replaceable> <replaceable>/dev/mdt_device</replaceable></literal> on the MDT backing device. This is required.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>--ostdb <replaceable>ost1_database_file</replaceable></literal></para>
-                <para><literal>[<replaceable>ost2_database_file</replaceable>...]</literal></para>
-              </entry>
-              <entry>
-                <para>OST database files created by running <literal>e2fsck --ostdb <replaceable>ost_database_file</replaceable> <replaceable>/dev/ost_device</replaceable></literal> on each of the OST backing devices. These are required unless an OST is unavailable, in which case all objects thereon are considered missing.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-    </section>
-    <section remap="h5">
-      <title>Description</title>
-      <para>The <literal>lfsck</literal> utility is used to check and repair the distributed coherency of a Lustre file system. If an MDS or an OST becomes corrupt, run a distributed check on the file system to determine what sort of problems exist. Use lfsck to correct any defects found.</para>
-      <para>For more information on using <literal>e2fsck</literal> and <literal>lfsck</literal>, including examples, see <xref linkend="commitonshare"/> (Commit on Share). For information on resolving orphaned objects, see <xref linkend="dbdoclet.50438225_13916"/> (Working with Orphaned Objects).</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_75125">

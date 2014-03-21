@@ -58,16 +58,10 @@ root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corrupt
 :
 root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)
         </screen>
-        <para>In addition, the <literal>e2fsprogs</literal> package contains the LFSCK tool, which
-            does distributed coherency checking for the Lustre file system after
-                <literal>e2fsck</literal> has been run. Running LFSCK is NOT required in a large
-            majority of cases, at a small risk of having some leaked space in the file system. To
-            avoid a lengthy downtime, it can be run (with care) after the Lustre file system is
-            started.</para>
     </section>
     <section xml:id="dbdoclet.50438225_37365">
         <title><indexterm><primary>recovery</primary><secondary>corruption of Lustre file system</secondary></indexterm>Recovering from Corruption in the Lustre File System</title>
-        <para>In cases where the MDS or an OST becomes corrupt, you can run a distributed check on the file system to determine what sort of problems exist. Use LFSCK to correct any defects found.</para>
+        <para>In cases where an ldiskfs MDT or OST becomes corrupt, you need to run e2fsck to correct the local filesystem consistency, then use <literal>LFSCK</literal> to run a distributed check on the file system to resolve any inconsistencies between the MDTs and OSTs.</para>
         <orderedlist>
             <listitem>
                 <para>Stop the Lustre file system.</para>
@@ -76,171 +70,29 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                 <para>Run <literal>e2fsck -f</literal> on the individual MDS / OST that had problems to fix any local file system damage.</para>
                 <para>We recommend running <literal>e2fsck</literal> under script, to create a log of changes made to the file system in case it is needed later. After <literal>e2fsck</literal> is run, bring up the file system, if necessary, to reduce the outage window.</para>
             </listitem>
-            <listitem>
-                <para>Run a full <literal>e2fsck</literal> of the MDS to create a database for LFSCK. You <emphasis>must</emphasis> use the <literal>-n</literal> option for a mounted file system, otherwise you will corrupt the file system.</para>
-                <screen>e2fsck -n -v --mdsdb /tmp/mdsdb /dev/{mdsdev}
-                </screen>
-                <para>The <literal>mds</literal>db file can grow fairly large, depending on the number of files in the file system (10 GB or more for millions of files, though the actual file size is larger because the file is sparse). It is quicker to write the file to a local file system due to seeking and small writes. Depending on the number of files, this step can take several hours to complete.</para>
-                <para><emphasis role="bold">Example</emphasis></para>
-                <screen>e2fsck -n -v --mdsdb /tmp/mdsdb /dev/sdb
-e2fsck 1.42.5.wc3 (15-Sep-2012)
-Warning: skipping journal recovery because doing a read-only filesystem check.
-lustre-MDT0000 contains a file system with errors, check forced.
-Pass 1: Checking inodes, blocks, and sizes
-MDS: ost_idx 0 max_id 288
-MDS: got 8 bytes = 1 entries in lov_objids
-MDS: max_files = 13
-MDS: num_osts = 1
-mds info db file written
-Pass 2: Checking directory structure
-Pass 3: Checking directory connectivity
-Pass 4: Checking reference counts
-Pass 5: Checking group summary information
-Free blocks count wrong (656160, counted=656058).
-Fix? no
-
-Free inodes count wrong (786419, counted=786036).
-Fix? no
-
-Pass 6: Acquiring information for lfsck
-MDS: max_files = 13
-MDS: num_osts = 1
-MDS: &apos;lustre-MDT0000_UUID&apos; mdt idx 0: compat 0x4 rocomp 0x1 incomp 0x4
-lustre-MDT0000: ******* WARNING: Filesystem still has errors *******
-13 inodes used (0%)
-2 non-contiguous inodes (15.4%)
-# of inodes with ind/dind/tind blocks: 0/0/0
-130272 blocks used (16%)
-0 bad blocks
-1 large file
-296 regular files
-91 directories
-0 character device files
-0 block device files
-0 fifos
-0 links
-0 symbolic links (0 fast symbolic links)
-0 sockets
---------
-387 files
-                </screen>
-            </listitem>
-            <listitem>
-                <para>Make this file accessible on all OSTs, either by using a shared file system or copying the file to the OSTs. The <literal>pdcp</literal> command is useful here.</para>
-                <para>The <literal>pdcp</literal> command (installed with <literal>pdsh</literal>), can be used to copy files to groups of hosts. <literal>pdcp</literal> is available here:</para>
-                <para><link xl:href="http://sourceforge.net/projects/pdsh">http://sourceforge.net/projects/pdsh</link></para>
-            </listitem>
-            <listitem>
-                <para>Run a similar <literal>e2fsck</literal> step on the OSTs. The <literal>e2fsck --ostdb</literal> command can be run in parallel on all OSTs.</para>
-                <screen>e2fsck -n -v --mdsdb /tmp/mdsdb --ostdb /tmp/{ostNdb} \/dev/{ostNdev}
-                </screen>
-                <para>The <literal>mdsdb</literal> file is read-only in this step; a single copy can be shared by all OSTs.</para>
-                <note>
-                    <para>If the OSTs do not have shared file system access to the MDS, a stub <literal>mdsdb</literal> file, <literal>{mdsdb}.mdshdr</literal>, is generated. This can be used instead of the full <literal>mdsdb</literal> file.</para>
-                </note>
-                <para><emphasis role="bold">Example:</emphasis></para>
-                <screen>[root@oss161 ~]# e2fsck -n -v --mdsdb /tmp/mdsdb --ostdb \ /tmp/ostdb /dev/sda
-e2fsck 1.42.5.wc3 (15-Sep-2012)
-Warning: skipping journal recovery because doing a read-only filesystem check.
-lustre-OST0000 contains a file system with errors, check forced.
-Pass 1: Checking inodes, blocks, and sizes
-Pass 2: Checking directory structure
-Pass 3: Checking directory connectivity
-Pass 4: Checking reference counts
-Pass 5: Checking group summary information
-Free blocks count wrong (989015, counted=817968).
-Fix? no
-
-Free inodes count wrong (262088, counted=261767).
-Fix? no
-
-Pass 6: Acquiring information for lfsck
-OST: &apos;lustre-OST0000_UUID&apos; ost idx 0: compat 0x2 rocomp 0 incomp 0x2
-OST: num files = 321
-OST: last_id = 321
-
-lustre-OST0000: ******* WARNING: Filesystem still has errors *******
-
-56 inodes used (0%)
-27 non-contiguous inodes (48.2%)
-# of inodes with ind/dind/tind blocks: 13/0/0
-59561 blocks used (5%)
-0 bad blocks
-1 large file
-329 regular files
-39 directories
-0 character device files
-0 block device files
-0 fifos
-0 links
-0 symbolic links (0 fast symbolic links)
-0 sockets
---------
-368 files
-                </screen>
-            </listitem>
-            <listitem>
-                <para>Make the <literal>mdsdb</literal> file and all <literal>ostdb</literal> files available on a mounted client and run LFSKC to examine the file system. Optionally, correct the defects found by LFSCK.</para>
-                <screen>script /root/lfsck.lustre.log
-                    lfsck -n -v --mdsdb /tmp/mdsdb --ostdb /tmp/{ost1db} /tmp/{ost2db} ... /lustre/mount/point\</screen>
-                <para><emphasis role="bold">Example:</emphasis></para>
-                <screen>script /root/lfsck.lustre.log
-lfsck -n -v --mdsdb /home/mdsdb --ostdb /home/{ost1db} /mnt/lustre/client/
-MDSDB: /home/mdsdb
-OSTDB[0]: /home/ostdb
-MOUNTPOINT: /mnt/lustre/client/
-MDS: max_id 288 OST: max_id 321
-lfsck: ost_idx 0: pass1: check for duplicate objects
-lfsck: ost_idx 0: pass1 OK (287 files total)
-lfsck: ost_idx 0: pass2: check for missing inode objects
-lfsck: ost_idx 0: pass2 OK (287 objects)
-lfsck: ost_idx 0: pass3: check for orphan objects
-[0] uuid lustre-OST0000_UUID
-[0] last_id 288
-[0] zero-length orphan objid 1
-lfsck: ost_idx 0: pass3 OK (321 files total)
-lfsck: pass4: check for duplicate object references
-lfsck: pass4 OK (no duplicates)
-lfsck: fixed 0 errors</screen>
-                <para>By default, LFSCK reports errors, but it does not repair any inconsistencies found. LFSCK checks for three kinds of inconsistencies:</para>
-                <itemizedlist>
-                    <listitem>
-                        <para>Inode exists but has missing objects (dangling inode). This normally happens if there was a problem with an OST.</para>
-                    </listitem>
-                    <listitem>
-                        <para>Inode is missing but OST has unreferenced objects (orphan object). Normally, this happens if there was a problem with the MDS.</para>
-                    </listitem>
-                    <listitem>
-                        <para>Multiple inodes reference the same objects. This can happen if the MDS is corrupted or if the MDS storage is cached and loses some, but not all, writes.</para>
-                    </listitem>
-                </itemizedlist>
-                <para>If the file system is in use and being modified while the <literal>--mdsdb</literal> and <literal>--ostdb</literal> steps are running, LFSCK may report inconsistencies where none exist due to files and objects being created/removed after the database files were collected. Examine the LFSCK results closely. You may want to re-run the test.</para>
-            </listitem>
         </orderedlist>
         <section xml:id="dbdoclet.50438225_13916">
             <title><indexterm><primary>recovery</primary><secondary>orphaned objects</secondary></indexterm>Working with Orphaned Objects</title>
-            <para>The easiest problem to resolve is that of orphaned objects. When the <literal>-l</literal> option for LFSCK is used, these objects are linked to new files and put into <literal>lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary. If you are certain the objects are not useful, run LFSCK with the <literal>-d</literal> option to delete orphaned objects and free up any space they are using.</para>
-            <para>To fix dangling inodes, use LFSCK with the <literal>-c</literal> option to create new, zero-length objects on the OSTs. These files read back with binary zeros for stripes that had objects re-created. Even without LFSCK repair, these files can be read by entering:</para>
-            <screen>dd if=/lustre/bad/file of=/new/file bs=4k conv=sync,noerror</screen>
-            <para>Because it is rarely useful to have files with large holes in them, most users delete these files after reading them (if useful) and/or restoring them from backup.</para>
-            <note>
-                <para>You cannot write to the holes of such files without having LFSCK re-create the objects. Generally, it is easier to delete these files and restore them from backup.</para>
-            </note>
-            <para>To fix inodes with duplicate objects, use LFSCK with the <literal>-c</literal> option to copy the duplicate object to a new object and assign it to a file. One file will be okay and the duplicate will likely contain garbage. By itself, LFSCK cannot tell which file is the usable one.</para>
+            <para>The easiest problem to resolve is that of orphaned objects. When the LFSCK layout check is run, these objects are linked to new files and put into <literal>.lustre/lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary.</para>
         </section>
     </section>
     <section xml:id="dbdoclet.50438225_12316">
         <title><indexterm><primary>recovery</primary><secondary>unavailable OST</secondary></indexterm>Recovering from an Unavailable OST</title>
-        <para>One of the most common problems encountered in a Lustre file system environment is
+        <para>One problem encountered in a Lustre file system environment is
             when an OST becomes unavailable due to a network partition, OSS node crash, etc. When
             this happens, the OST&apos;s clients pause and wait for the OST to become available
             again, either on the primary OSS or a failover OSS. When the OST comes back online, the
             Lustre file system starts a recovery process to enable clients to reconnect to the OST.
             Lustre servers put a limit on the time they will wait in recovery for clients to
-            reconnect. The timeout length is determined by the <literal>obd_timeout</literal>
-            parameter.</para>
+            reconnect.</para>
         <para>During recovery, clients reconnect and replay their requests serially, in the same order they were done originally. Until a client receives a confirmation that a given transaction has been written to stable storage, the client holds on to the transaction, in case it needs to be replayed. Periodically, a progress message prints to the log, stating how_many/expected clients have reconnected. If the recovery is aborted, this log shows how many clients managed to reconnect. When all clients have completed recovery, or if the recovery timeout is reached, the recovery period ends and the OST resumes normal request processing.</para>
         <para>If some clients fail to replay their requests during the recovery period, this will not stop the recovery from completing. You may have a situation where the OST recovers, but some clients are not able to participate in recovery (e.g. network problems or client failure), so they are evicted and their requests are not replayed. This would result in any operations on the evicted clients failing, including in-progress writes, which would cause cached writes to be lost. This is a normal outcome; the recovery cannot wait indefinitely, or the file system would be hung any time a client failed. The lost transactions are an unfortunate result of the recovery process.</para>
+        <note>
+	    <para>The failure of client recovery does not indicate or lead to
+	    filesystem corruption.  This is a normal event that is handled by
+	    the MDT and OST, and should not result in any inconsistencies
+	    between servers.</para>
+        </note>
         <note>
             <para>The version-based recovery (VBR) feature enables a failed client to be &apos;&apos;skipped&apos;&apos;, so remaining clients can replay their requests, resulting in a more successful recovery from a downed OST. For more information about the VBR feature, see <xref linkend="lustrerecovery"/>(Version-based Recovery).</para>
         </note>
@@ -249,9 +101,8 @@ lfsck: fixed 0 errors</screen>
         <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the file system with LFSCK</title>
         <para>LFSCK is an administrative tool introduced in Lustre software release 2.3 for checking
             and repair of the attributes specific to a mounted Lustre file system. It is similar in
-            concept to the offline LFSCK Lustre repair tool that is included with the Lustre
-                <literal>e2fsprogs</literal> package (see <xref linkend="dbdoclet.50438225_37365"
-            />), but LFSCK is implemented to run as part of the Lustre file system while the file
+            concept to an offline fsck repair tool for a local filesystem,
+            but LFSCK is implemented to run as part of the Lustre file system while the file
             system is mounted and in use. This allows consistency of checking and repair by the
             Lustre software without unnecessary downtime, and can be run on the largest Lustre file
             systems.</para>
@@ -261,13 +112,13 @@ lfsck: fixed 0 errors</screen>
             restoring from a file-level MDT backup (<xref linkend="dbdoclet.50438207_71633"/>), or
             in case the OI table is otherwise corrupted. Later phases of LFSCK will add further
             checks to the Lustre distributed file system state.</para>
-        <para condition='l24'>In Lustre software release 2.4, LFSCK can verify and repairing FID-in-Dirent and LinkEA consistency.
+        <para condition='l24'>In Lustre software release 2.4, LFSCK namespace scanning can verify and repair the directory FID-in-Dirent and LinkEA consistency.
 </para>
-        <para condition='l26'>In Lustre software release 2.6, LFSCK can verify and repair MDT-OST file layout inconsistency. File layout inconsistencies between MDT-objects and OST-objects that are checked and corrected include dangling reference, unreferenced OST-objects, mismatched references and multiple references.
+        <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning can verify and repair MDT-OST file layout inconsistency. File layout inconsistencies between MDT-objects and OST-objects that are checked and corrected include dangling reference, unreferenced OST-objects, mismatched references and multiple references.
 </para>
 	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc</literal> file system
-            interfaces. LFSCK supports three types of interface: switch interfaces, status
-            interfaces and adjustments interfaces. These interfaces are detailed below.</para>
+            interfaces. LFSCK supports three types of interface: switch interface, status
+            interface and adjustment interface. These interfaces are detailed below.</para>
     <section>
         <title>LFSCK switch interface</title>
         <section>
