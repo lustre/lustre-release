@@ -1214,16 +1214,9 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 #ifdef HAVE_INODEOPS_TRUNCATE
 	if (inode->i_op->truncate) {
 		inode->i_op->truncate(inode);
-	} else {
+	} else
 #endif
-	if (!(inode->i_state & (I_NEW|I_FREEING)))
-		mutex_lock(&inode->i_mutex);
-	ldiskfs_truncate(inode);
-	if (!(inode->i_state & (I_NEW|I_FREEING)))
-		mutex_unlock(&inode->i_mutex);
-#ifdef HAVE_INODEOPS_TRUNCATE
-	}
-#endif
+		ldiskfs_truncate(inode);
 
         /*
          * For a partial-page truncate, flush the page to disk immediately to
