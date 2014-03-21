@@ -820,8 +820,11 @@ ll_recover_lost_found_objs</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The first time Lustre writes to an object, it saves the MDS inode number and the objid as an extended attribute on the object, so in case of directory corruption of the OST, it is possible to recover the objects. Running e2fsck fixes the corrupted OST directory, but it puts all of the objects into a lost and found directory, where they are inaccessible to Lustre. Use the ll_recover_lost_found_objs utility to recover all (or at least most) objects from a lost and found directory and return them to the O/0/d* directories.</para>
-      <para>To use ll_recover_lost_found_objs, mount the file system locally (using the -t ldiskfs command), run the utility and then unmount it again. The OST must not be mounted by Lustre when ll_recover_lost_found_objs is run.</para>
+      <para>The first time Lustre modifies an object, it saves the MDS inode number and the objid as an extended attribute on the object, so in case of directory corruption of the OST, it is possible to recover the objects. Running e2fsck fixes the corrupted OST directory, but it puts all of the objects into a lost and found directory, where they are inaccessible to Lustre. Use the ll_recover_lost_found_objs utility to recover all (or at least most) objects from a lost and found directory and return them to the O/0/d* directories.</para>
+      <para>To use ll_recover_lost_found_objs, mount the file system locally (using the <literal>-t ldiskfs</literal>, or <literal>-t zfs</literal> command), run the utility and then unmount it again. The OST must not be mounted by Lustre when ll_recover_lost_found_objs is run.</para>
+      <para condition="l26">This utility is not needed for 2.6 and later,
+      since the <literal>LFSCK</literal> online scanning will move objects
+      from <literal>lost+found</literal> to the proper place in the OST.</para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -911,7 +914,7 @@ Timestamp Read-delta ReadRate Write-delta WriteRate
   <section xml:id="dbdoclet.50438219_90386">
     <title><indexterm><primary>llog_reader</primary></indexterm>
 llog_reader</title>
-    <para>The llog_reader utility parses Lustre&apos;s on-disk configuration logs.</para>
+    <para>The llog_reader utility translates a Lustre configuration log into human-readable form.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>llog_reader filename</screen>
@@ -919,7 +922,7 @@ llog_reader</title>
     <section remap="h5">
       <title>Description</title>
       <para>The llog_reader utility parses the binary format of Lustre&apos;s on-disk configuration logs. Llog_reader can only read logs; use tunefs.lustre to write to them.</para>
-      <para>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs, then use llog_reader to dump the log file&apos;s contents, for example:</para>
+      <para>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs or zfs, then use llog_reader to dump the log file&apos;s contents, for example:</para>
       <screen>mount -t ldiskfs /dev/sda /mnt/mgs 
 llog_reader /mnt/mgs/CONFIGS/tfs-client</screen>
       <para>To examine the same log file on a running Lustre server, use the ldiskfs-enabled debugfs utility (called debug.ldiskfs on some distributions) to extract the file, for example:</para>
@@ -1559,7 +1562,7 @@ mkfs.lustre</title>
                 <para> <literal>--backfstype=<replaceable>fstype</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Forces a particular format for the backing file system (such as ext3, ldiskfs).</para>
+                <para> Forces a particular format for the backing file system such as ldiskfs (the default) or zfs.</para>
               </entry>
             </row>
             <row>
@@ -2474,10 +2477,6 @@ Application Profiling Utilities</title>
       <para>The following utilities are located in /usr/bin.</para>
       <para><literal>lustre_req_history.sh</literal></para>
       <para>The lustre_req_history.sh utility (run from a client), assembles as much Lustre RPC request history as possible from the local node and from the servers that were contacted, providing a better picture of the coordinated network activity.</para>
-      <para><literal>llstat.sh</literal></para>
-      <para>The llstat.sh utility handles a wider range of statistics files, and has command line switches to produce more graphable output.</para>
-      <para><literal>plot-llstat.sh</literal></para>
-      <para>The plot-llstat.sh utility plots the output from llstat.sh using gnuplot.</para>
     </section>
     <section remap="h3">
       <title>More /proc Statistics for Application Profiling</title>
@@ -2626,59 +2625,6 @@ wait
 quit 
 EOF 
 </screen>
-        <para>Feature Requests</para>
-        <para>The loadgen utility is intended to grow into a more comprehensive test tool; feature requests are encouraged. The current feature requests include:</para>
-        <itemizedlist>
-          <listitem>
-            <para> Locking simulation</para>
-          </listitem>
-          <listitem>
-            <itemizedlist>
-              <listitem>
-                <para> Many (echo) clients cache locks for the specified resource at the same time.</para>
-              </listitem>
-              <listitem>
-                <para> Many (echo) clients enqueue locks for the specified resource simultaneously.</para>
-              </listitem>
-            </itemizedlist>
-          </listitem>
-          <listitem>
-            <para> obdsurvey functionality</para>
-          </listitem>
-          <listitem>
-            <itemizedlist>
-              <listitem>
-                <para> Fold the Lustre I/O kit&apos;s obdsurvey script functionality into loadgen</para>
-              </listitem>
-            </itemizedlist>
-          </listitem>
-        </itemizedlist>
-      </section>
-      <section remap="h5">
-        <title><indexterm><primary>llog_reader</primary></indexterm>
-llog_reader</title>
-        <para>The llog_reader utility translates a Lustre configuration log into human-readable form.</para>
-      </section>
-      <section remap="h5">
-        <title>Synopsis</title>
-        <screen>llog_reader filename
-</screen>
-      </section>
-      <section remap="h5">
-        <title>Description</title>
-        <para>llog_reader parses the binary format of Lustre&apos;s on-disk configuration logs. It can only read the logs. Use tunefs.lustre to write to them.</para>
-        <para>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs, then use llog_reader to dump the log file&apos;s contents. For example:</para>
-        <screen>mount -t ldiskfs /dev/sda /mnt/mgs 
-llog_reader /mnt/mgs/CONFIGS/tfs-client
-</screen>
-        <para>To examine the same log file on a running Lustre server, use the ldiskfs-enabled debugfs utility (called debug.ldiskfs on some distributions) to extract the file. For example:</para>
-        <screen>debugfs -c -R &apos;dump CONFIGS/tfs-client /tmp/tfs-client&apos; /dev/sda 
-llog_reader /tmp/tfs-client
-</screen>
-        <caution>
-          <para>Although they are stored in the CONFIGS directory, mountdata files do not use the config log format and will confuse llog_reader.</para>
-        </caution>
-        <para>See Also <xref linkend="dbdoclet.50438219_39574"/></para>
       </section>
       <section remap="h5">
         <title><indexterm><primary>lr_reader</primary></indexterm>

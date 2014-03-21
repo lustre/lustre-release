@@ -188,7 +188,7 @@
       <para>Each client request processed by the server that involves any state change (metadata update, file open, write, etc., depending on server type) is assigned a transaction number by the server that is a target-unique, monotonically increasing, server-wide 64-bit integer. The transaction number for each file system-modifying request is sent back to the client along with the reply to that client request. The transaction numbers allow the client and server to unambiguously order every modification to the file system in case recovery is needed.</para>
       <para>Each reply sent to a client (regardless of request type) also contains the last
         committed transaction number that indicates the highest transaction number committed to the
-        file system. The <literal>ldiskfs</literal> backing file system that the Lustre software
+        file system. The <literal>ldiskfs</literal> and <literal>ZFS</literal> backing file systems that the Lustre software
         uses enforces the requirement that any earlier disk operation will always be committed to
         disk before a later disk operation, so the last committed transaction number also reports
         that any requests with a lower transaction number have been committed to disk.</para>

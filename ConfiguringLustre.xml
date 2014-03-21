@@ -91,7 +91,7 @@
       <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
         <para>Create the OST. On the OSS node, run:</para>
         <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>MGS_NID</replaceable> --ost --index=<replaceable>OST_index</replaceable> <replaceable>/dev/block_device</replaceable></screen>
-        <para>When you create an OST, you are formatting a <literal>ldiskfs</literal> file system on a block storage device like you would with any local file system.</para>
+        <para>When you create an OST, you are formatting a <literal>ldiskfs</literal> or <literal>ZFS</literal> file system on a block storage device like you would with any local file system.</para>
         <para>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend="settinguplustresystem"/>.</para>
         <para>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
         <para>You should specify the OST index number at format time in order to simplify translating the OST number in error messages or file striping to the OSS node and block device later on.</para>

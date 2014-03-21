@@ -16,7 +16,7 @@
         </listitem>
     </itemizedlist>
     <section xml:id="dbdoclet.50438225_71141">
-        <title><indexterm><primary>recovery</primary><secondary>corruption of backing file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing File System</title>
+        <title><indexterm><primary>recovery</primary><secondary>corruption of backing ldiskfs file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing ldiskfs File System</title>
         <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the
             file system. <literal>ldiskfs</literal> journaling ensures that the file system remains
             consistent over a system crash. The backing file systems are never accessed directly

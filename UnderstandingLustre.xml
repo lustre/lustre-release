@@ -172,19 +172,17 @@
               </entry>
               <entry>
                 <para>
-                  <emphasis>Single MDS:</emphasis></para>
-                <para> 4 billion files</para>
+                  <emphasis>Single MDT:</emphasis></para>
+                <para> 4 billion files (ldiskfs), 256 trillion files (ZFS)</para>
                 <para>
                   <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
-                <para condition="l24"><emphasis role="italic">Since Lustre software release 2.4:
-                  </emphasis></para>
-                <para condition="l24">Up to 4096 MDSs and up to 4096 MDTs</para>
+                <para condition="l24">Up to 4096 MDTs and up to 4096 MDSs</para>
               </entry>
               <entry>
                 <para>
-                  <emphasis>Single MDS:</emphasis></para>
-                <para> 750 million files</para>
+                  <emphasis>Single MDT:</emphasis></para>
+                <para> 1 billion files</para>
                 <para>
                   <emphasis>MDS count:</emphasis></para>
                 <para> 1 primary + 1 backup</para>
@@ -223,7 +221,7 @@
                 <para>multi-TB max file size</para>
                 <para>
                   <emphasis>Aggregate:</emphasis></para>
-                <para>10 PB space, 750 million files</para>
+                <para>55 PB space, 1 billion files</para>
               </entry>
             </row>
           </tbody>
@@ -234,9 +232,12 @@
         <listitem>
           <para><emphasis role="bold">Performance-enhanced ext4 file system:</emphasis> The Lustre
             file system uses an improved version of the ext4 journaling file system to store data
-            and metadata. This version, called <emphasis role="italic"
-              ><literal>ldiskfs</literal></emphasis>, has been enhanced to improve performance and
+            and metadata. This version, called <emphasis role="italic">
+              <literal>ldiskfs</literal></emphasis>, has been enhanced to improve performance and
             provide additional functionality needed by the Lustre file system.</para>
+        </listitem>
+        <listitem>
+	  <para condition="l24">With the Lustre software release 2.4 and later, it is also possible to use ZFS as the backing filesystem for Lustre for the MDT, OST, and MGS storage.  This allows Lustre to leverage the scalability and data integrity features of ZFS for individual storage targets.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">POSIX standard compliance:</emphasis> The full POSIX test
@@ -257,14 +258,18 @@
           <para><emphasis role="bold">High-availability:</emphasis> The Lustre file system supports
             active/active failover using shared storage partitions for OSS targets (OSTs). Lustre
             software release 2.3 and earlier releases offer active/passive failover using a shared
-            storage partition for the MDS target (MDT).</para>
-          <para condition="l24">With Lustre software release 2.4 or later servers and clients it is
-            possible to configure active/active failover of multiple MDTs. This allows application
-            transparent recovery. The Lustre file system can work with a variety of high
-            availability (HA) managers to allow automated failover and has no single point of
-            failure (NSPF). Multiple mount protection (MMP) provides integrated protection from
+            storage partition for the MDS target (MDT).  The Lustre file system can work with a variety of high
+            availability (HA) managers to allow automated failover and has no single point of failure (NSPF).
+	    This allows application transparent recovery.  Multiple mount protection (MMP) provides integrated protection from
             errors in highly-available systems that would otherwise cause file system
             corruption.</para>
+        </listitem>
+        <listitem>
+          <para condition="l24">With Lustre software release 2.4 or later
+	    servers and clients it is possible to configure active/active
+	    failover of multiple MDTs.  This allows scaling the metadata
+	    performance of Lustre filesystems with the addition of MDT storage
+	    devices and MDS nodes.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Security:</emphasis> By default TCP connections are only
@@ -690,10 +695,10 @@
         </mediaobject>
       </figure>
       <para>The maximum file size is not limited by the size of a single target. In a Lustre file
-        system,   files can be striped across multiple objects (up to 2000), and each object can be
-        up to 16 TB in size with ldiskfs. This leads to a maximum file size of 31.25 PB. (Note that
-        a Lustre file system can support files up to 2^64 bytes depending on the backing storage
-        used by OSTs.)</para>
+        system, files can be striped across multiple objects (up to 2000), and each object can be
+        up to 16 TB in size with ldiskfs, or up to 256PB with ZFS. This leads to a maximum file size of 31.25 PB for ldiskfs or 8EB with ZFS. Note that
+        a Lustre file system can support files up to 2^63 bytes (8EB), limited
+	only by the space available on the OSTs.</para>
       <note>
         <para>Versions of the Lustre software prior to Release 2.2 limited the  maximum stripe count
           for a single file to 160 OSTs.</para>

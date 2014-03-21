@@ -68,7 +68,7 @@
         relies on the backend file system to maintain per-user/group block and inode usage:</para>
       <itemizedlist>
         <listitem>
-          <para>For ldiskfs backend, <literal>mkfs.lustre</literal> now creates empty quota files
+          <para>For ldiskfs backends, <literal>mkfs.lustre</literal> now creates empty quota files
             and enables the QUOTA feature flag in the superblock which turns quota accounting on at
             mount time automatically. e2fsck was also modified to fix the quota files when the QUOTA
             feature flag is present.</para>

@@ -230,6 +230,11 @@ Changelog records consumed: 42</screen>
     system data after running <literal>e2fsck -fy /dev/{newdev}</literal> on
     the new device, along with <literal>ll_recover_lost_found_objs</literal>
     for OST devices.</para>
+    <para condition="l26">With Lustre software version 2.6 and later, there is
+    no longer a need to run <literal>ll_recover_lost_found_objs</literal> on
+    the OSTs, since the <literal>LFSCK</literal> scanning will automatically
+    move objects from <literal>lost+found</literal> back into its correct
+    location on the OST after directory corruption.</para>
   </section>
   <section xml:id="dbdoclet.50438207_21638">
       <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
