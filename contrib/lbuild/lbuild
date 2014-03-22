@@ -2111,7 +2111,6 @@ while [ "$1" ]; do
                 LUSTRE_TESTS=false
             fi
             CONFIGURE_FLAGS=$@
-            CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-liblustre --enable-liblustre-tests"
             break
             ;;
         *)

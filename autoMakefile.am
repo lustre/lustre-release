@@ -132,7 +132,7 @@ debs:
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog); \
 	mkdir -p debs && \
-	mv ../liblustre_$${VER}_*.deb ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER%-[0-9]*}.orig.tar.gz ../lustre_$${VER}.diff.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
+	mv ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER%-[0-9]*}.orig.tar.gz ../lustre_$${VER}.diff.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
 
 EXTRA_DIST += config.h.in
 

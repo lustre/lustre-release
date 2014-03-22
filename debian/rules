@@ -63,7 +63,6 @@ PATCH_PKG=linux-patch-lustre
 UTILS_PKG=lustre-utils
 TESTS_PKG=lustre-tests
 DEV_PKG=lustre-dev
-LIB_PKG=liblustre
 SOURCE_PKG=lustre-source
 MODS_PKG=lustre-client-modules
 
@@ -150,8 +149,9 @@ build-stamp: patch-stamp configure-stamp
 # let's try and operate as close as the user would and not build modules
 # here (for now)
 # instead we will build the modules with m-a in the "make debs" target
-# binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) binary-$(LIB_PKG) binary-$(MODS_PKG) binary-kern-mods
-binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) binary-$(LIB_PKG)
+# binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) \
+# binary-$(MODS_PKG) binary-kern-mods
+binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG)
 
 binary-indep: binary-$(PATCH_PKG) binary-$(SOURCE_PKG)
 
@@ -203,7 +203,6 @@ binary-$(UTILS_PKG): build-stamp
 	dh_installman -p $(UTILS_PKG)
 	dh_install -p $(UTILS_PKG)
 	dh_makeshlibs -p $(UTILS_PKG)
-	dh_shlibdeps -L $(LIB_PKG) -l debian/$(LIB_PKG)/usr/lib
 	dh_installexamples -p $(UTILS_PKG)
 	dh_installchangelogs -p $(UTILS_PKG) lustre/ChangeLog
 	dh_compress -p $(UTILS_PKG)
@@ -222,7 +221,6 @@ binary-$(TESTS_PKG): build-stamp
 	dh_installman -p $(TESTS_PKG)
 	dh_install -p $(TESTS_PKG)
 	dh_makeshlibs -p $(TESTS_PKG)
-	dh_shlibdeps -L $(LIB_PKG) -l debian/$(LIB_PKG)/usr/lib
 	dh_installexamples -p $(TESTS_PKG)
 	dh_installchangelogs -p $(TESTS_PKG) lustre/ChangeLog
 	dh_compress -p $(TESTS_PKG)
@@ -246,23 +244,6 @@ binary-$(DEV_PKG): build-stamp
 	dh_gencontrol -p $(DEV_PKG)
 	dh_md5sums -p $(DEV_PKG)
 	dh_builddeb -p $(DEV_PKG)
-
-binary-$(LIB_PKG): build-stamp
-	dh_testdir
-	dh_testroot
-	dh_installdirs -p $(LIB_PKG)
-	dh_installdocs -p $(LIB_PKG)
-	dh_install -p $(LIB_PKG)
-	dh_makeshlibs -p $(LIB_PKG)
-	dh_shlibdeps -L $(LIB_PKG) -l debian/$(LIB_PKG)/usr/lib
-	dh_installchangelogs -p $(LIB_PKG) lustre/ChangeLog
-	dh_compress -p $(LIB_PKG)
-	dh_installdeb -p $(LIB_PKG)
-	dh_strip -p $(LIB_PKG)
-	dh_fixperms -p $(LIB_PKG)
-	dh_gencontrol -p $(LIB_PKG)
-	dh_md5sums -p $(LIB_PKG)
-	dh_builddeb -p $(LIB_PKG)
 
 binary-$(SOURCE_PKG): build-stamp
 	dh_testdir 
@@ -311,7 +292,6 @@ binary-$(MODS_PKG): build-stamp
 		dh_installdocs -p $(MODS_PKG)-$(KVER); \
 		dh_install -p $(MODS_PKG)-$(KVER); \
 		dh_makeshlibs -p $(MODS_PKG)-$(KVER); \
-		dh_shlibdeps -L $(LIB_PKG) -l debian/$(LIB_PKG)/usr/lib; \
 		dh_installchangelogs -p $(MODS_PKG)-$(KVER) lustre/ChangeLog; \
 		dh_compress -p $(MODS_PKG)-$(KVER); \
 		dh_installdeb -p $(MODS_PKG)-$(KVER); \

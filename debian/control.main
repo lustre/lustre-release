@@ -67,28 +67,6 @@ Description: Test suite for the Lustre filesystem
  .
  This package provides a number of test utilities for the Lustre filesystem.
 
-Package: liblustre
-Priority: optional
-Architecture: i386 powerpc amd64 ia64
-Section: libs
-Depends: ${shlibs:Depends}
-Description: Runtime library for Lustre filesystem utilities
- Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Whamcloud, Inc. and available
- http://wiki.whamcloud.com/
- .
- This package provides a shared library that is used by userspace
- applications to  work with Lustre filesystems. It gives a user application
- linked with the library access to Lustre
- file systems without the need to mount Lustre (VFS) on the client.
- The key goals for the library are to provide a portable mechanism to
- access Lustre from different POSIX compliant operating systems, to provide
- access from microkernel based systems and from the Windows operating system.
- .
- Currently, liblustre is still under development and only works on Linux
- (i386 & x86_64, not tested on ia64).
- .
-
 Package: lustre-dev
 Section: libdevel
 Priority: optional
