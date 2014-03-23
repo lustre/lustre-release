@@ -230,7 +230,8 @@ struct lfsck_layout {
 	/* Position for the last LFSCK checkpoint. */
 	__u64	ll_pos_last_checkpoint;
 
-	/* Position for the first should be updated object. */
+	/* Position for the first object to be fixed or
+	 * failed to be checked in the phase1. */
 	__u64	ll_pos_first_inconsistent;
 
 	/* How many objects have been checked. */

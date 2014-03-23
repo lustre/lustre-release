@@ -1153,6 +1153,17 @@ out:
 	return rc;
 }
 
+static void lfsck_layout_record_failure(const struct lu_env *env,
+						 struct lfsck_instance *lfsck,
+						 struct lfsck_layout *lo)
+{
+	lo->ll_objs_failed_phase1++;
+	if (unlikely(lo->ll_pos_first_inconsistent == 0))
+		lo->ll_pos_first_inconsistent =
+			lfsck->li_obj_oit->do_index_ops->dio_it.store(env,
+							lfsck->li_di_oit);
+}
+
 static int lfsck_layout_master_async_interpret(const struct lu_env *env,
 					       struct ptlrpc_request *req,
 					       void *args, int rc)
@@ -3299,13 +3310,18 @@ out:
 			lo->ll_objs_skipped++;
 			rc = 0;
 		} else {
-			lo->ll_objs_failed_phase1++;
+			lfsck_layout_record_failure(env, lfsck, lo);
 		}
 	} else if (rc > 0) {
 		LASSERTF(type > LLIT_NONE && type <= LLIT_MAX,
 			 "unknown type = %d\n", type);
 
 		lo->ll_objs_repaired[type - 1]++;
+		if (bk->lb_param & LPF_DRYRUN &&
+		    unlikely(lo->ll_pos_first_inconsistent == 0))
+			lo->ll_pos_first_inconsistent =
+			lfsck->li_obj_oit->do_index_ops->dio_it.store(env,
+							lfsck->li_di_oit);
 	}
 	up_write(&com->lc_sem);
 
@@ -4062,14 +4078,7 @@ static void lfsck_layout_fail(const struct lu_env *env,
 	down_write(&com->lc_sem);
 	if (new_checked)
 		com->lc_new_checked++;
-	lo->ll_objs_failed_phase1++;
-	if (lo->ll_pos_first_inconsistent == 0) {
-		struct lfsck_instance *lfsck = com->lc_lfsck;
-
-		lo->ll_pos_first_inconsistent =
-			lfsck->li_obj_oit->do_index_ops->dio_it.store(env,
-							lfsck->li_di_oit);
-	}
+	lfsck_layout_record_failure(env, com->lc_lfsck, lo);
 	up_write(&com->lc_sem);
 }
 
@@ -4408,7 +4417,7 @@ next:
 		down_write(&com->lc_sem);
 		com->lc_new_checked++;
 		if (rc < 0)
-			lo->ll_objs_failed_phase1++;
+			lfsck_layout_record_failure(env, lfsck, lo);
 		up_write(&com->lc_sem);
 
 		if (cobj != NULL && !IS_ERR(cobj))
@@ -4555,7 +4564,7 @@ out:
 		down_write(&com->lc_sem);
 		com->lc_new_checked++;
 		if (rc < 0)
-			lo->ll_objs_failed_phase1++;
+			lfsck_layout_record_failure(env, lfsck, lo);
 		up_write(&com->lc_sem);
 	}
 	buf->lb_len = buflen;
