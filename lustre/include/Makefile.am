@@ -44,7 +44,6 @@ EXTRA_DIST = \
 	cl_object.h \
 	dt_object.h \
 	interval_tree.h \
-	ioctl.h \
 	lclient.h \
 	liblustre.h \
 	lprocfs_status.h \
