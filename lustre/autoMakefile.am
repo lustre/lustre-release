@@ -70,7 +70,7 @@ endif
 DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
 	$(LIBLUSTRE_SUBDIRS)
 
-EXTRA_DIST = BUGS FDL kernel_patches BUILDING
+EXTRA_DIST = BUGS kernel_patches BUILDING
 
 sources: lustre_build_version
 
