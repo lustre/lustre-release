@@ -80,12 +80,6 @@ void ll_cl_fini(struct ll_cl_context *lcc)
                 cl_page_put(env, page);
         }
 
-        if (io && lcc->lcc_created) {
-                cl_io_end(env, io);
-                cl_io_unlock(env, io);
-                cl_io_iter_fini(env, io);
-                cl_io_fini(env, io);
-        }
         cl_env_put(env, &lcc->lcc_refcheck);
 }
 

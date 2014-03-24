@@ -47,7 +47,7 @@
 
 #include <obd.h>
 #include <lustre_lite.h>
-
+#include "llite_internal.h"
 #include "vvp_internal.h"
 
 /*****************************************************************************
@@ -61,7 +61,7 @@
  * "llite_" (var. "ll_") prefix.
  */
 
-struct kmem_cache *vvp_thread_kmem;
+static struct kmem_cache *vvp_thread_kmem;
 static struct kmem_cache *vvp_session_kmem;
 static struct lu_kmem_descr vvp_caches[] = {
         {
@@ -537,7 +537,7 @@ static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 	return result;
 }
 
-struct file_operations vvp_dump_pgcache_file_ops = {
+const struct file_operations vvp_dump_pgcache_file_ops = {
         .owner   = THIS_MODULE,
         .open    = vvp_dump_pgcache_seq_open,
         .read    = seq_read,

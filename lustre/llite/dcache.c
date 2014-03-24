@@ -70,8 +70,7 @@ static void ll_release(struct dentry *de)
                 ll_intent_release(lld->lld_it);
                 OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
         }
-	LASSERT(lld->lld_cwd_count == 0);
-	LASSERT(lld->lld_mnt_count == 0);
+
 	de->d_fsdata = NULL;
 	call_rcu(&lld->lld_rcu_head, free_dentry_data);
 
@@ -86,14 +85,17 @@ static void ll_release(struct dentry *de)
  * INVALID) so d_lookup() matches it, but we have no lock on it (so
  * lock_match() fails) and we spin around real_lookup(). */
 #ifdef HAVE_D_COMPARE_7ARGS
-int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
-		const struct dentry *dentry, const struct inode *inode,
-		unsigned int len, const char *str, const struct qstr *name)
+static int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
+		       const struct dentry *dentry, const struct inode *inode,
+		       unsigned int len, const char *str,
+		       const struct qstr *name)
 #elif defined(HAVE_D_COMPARE_5ARGS)
-int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
-		unsigned int len, const char *str, const struct qstr *name)
+static int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
+		       unsigned int len, const char *str,
+		       const struct qstr *name)
 #else
-int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
+static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
+		       struct qstr *name)
 #endif
 {
 #if !defined(HAVE_D_COMPARE_7ARGS) && !defined(HAVE_D_COMPARE_5ARGS)
@@ -144,8 +146,8 @@ static int find_cbdata(struct inode *inode)
         LASSERT(inode);
         rc = md_find_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
                             return_if_equal, NULL);
-        if (rc != 0)
-                 RETURN(rc);
+	if (rc != 0)
+		RETURN(rc);
 
 	lsm = ccc_inode_lsm_get(inode);
 	if (lsm == NULL)
@@ -267,7 +269,8 @@ void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         /* We are still holding extra reference on a request, need to free it */
         if (it_disposition(it, DISP_ENQ_OPEN_REF))
-                 ptlrpc_req_finished(it->d.lustre.it_data); /* ll_file_open */
+		ptlrpc_req_finished(it->d.lustre.it_data); /* ll_file_open */
+
         if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
                 ptlrpc_req_finished(it->d.lustre.it_data);
 
@@ -350,15 +353,6 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
         }
 }
 
-void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
-{
-        struct lookup_intent *it = *itp;
-
-        if (!it || it->it_op == IT_GETXATTR)
-                it = *itp = deft;
-
-}
-
 static int ll_revalidate_dentry(struct dentry *dentry,
 				unsigned int lookup_flags)
 {
@@ -393,7 +387,7 @@ static int ll_revalidate_dentry(struct dentry *dentry,
  * Always trust cached dentries. Update statahead window if necessary.
  */
 #ifdef HAVE_IOP_ATOMIC_OPEN
-int ll_revalidate_nd(struct dentry *dentry, unsigned int flags)
+static int ll_revalidate_nd(struct dentry *dentry, unsigned int flags)
 {
 	int rc;
 	ENTRY;
@@ -405,7 +399,7 @@ int ll_revalidate_nd(struct dentry *dentry, unsigned int flags)
 	RETURN(rc);
 }
 #else
-int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
 	int rc;
 	ENTRY;
@@ -425,7 +419,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 }
 #endif
 
-void ll_d_iput(struct dentry *de, struct inode *inode)
+static void ll_d_iput(struct dentry *de, struct inode *inode)
 {
 	LASSERT(inode);
 	if (!find_cbdata(inode))
@@ -433,7 +427,7 @@ void ll_d_iput(struct dentry *de, struct inode *inode)
 	iput(inode);
 }
 
-struct dentry_operations ll_d_ops = {
+const struct dentry_operations ll_d_ops = {
         .d_revalidate = ll_revalidate_nd,
         .d_release = ll_release,
         .d_delete  = ll_ddelete,

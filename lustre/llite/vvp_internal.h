@@ -59,6 +59,6 @@ struct lu_object *vvp_object_alloc(const struct lu_env *env,
 				   struct lu_device *dev);
 struct ccc_object *cl_inode2ccc(struct inode *inode);
 
-extern struct kmem_cache *vvp_thread_kmem;
+extern const struct file_operations vvp_dump_pgcache_file_ops;
 
 #endif /* VVP_INTERNAL_H */

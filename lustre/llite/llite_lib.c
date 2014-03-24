@@ -58,14 +58,8 @@
 
 struct kmem_cache *ll_file_data_slab;
 
-CFS_LIST_HEAD(ll_super_blocks);
-DEFINE_SPINLOCK(ll_sb_lock);
-
-#ifndef MS_HAS_NEW_AOPS
-extern struct address_space_operations ll_aops;
-#else
-extern struct address_space_operations_ext ll_aops;
-#endif
+static LIST_HEAD(ll_super_blocks);
+static DEFINE_SPINLOCK(ll_sb_lock);
 
 #ifndef log2
 #define log2(n) ffz(~(n))
@@ -147,7 +141,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	RETURN(sbi);
 }
 
-void ll_free_sbi(struct super_block *sb)
+static void ll_free_sbi(struct super_block *sb)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	ENTRY;
@@ -683,7 +677,7 @@ int ll_get_default_cookiesize(struct ll_sb_info *sbi, int *lmmsize)
 	RETURN(rc);
 }
 
-void ll_dump_inode(struct inode *inode)
+static void ll_dump_inode(struct inode *inode)
 {
 	struct ll_d_hlist_node *tmp;
 	int dentry_count = 0;
@@ -728,7 +722,7 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
 	}
 }
 
-void client_common_put_super(struct super_block *sb)
+static void client_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
@@ -781,30 +775,6 @@ void ll_kill_super(struct super_block *sb)
 		sbi->ll_umounting = 1;
 	}
 	EXIT;
-}
-
-char *ll_read_opt(const char *opt, char *data)
-{
-        char *value;
-        char *retval;
-        ENTRY;
-
-        CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if (strncmp(opt, data, strlen(opt)))
-                RETURN(NULL);
-        if ((value = strchr(data, '=')) == NULL)
-                RETURN(NULL);
-
-        value++;
-        OBD_ALLOC(retval, strlen(value) + 1);
-        if (!retval) {
-                CERROR("out of memory!\n");
-                RETURN(NULL);
-        }
-
-        memcpy(retval, value, strlen(value)+1);
-        CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
-        RETURN(retval);
 }
 
 static inline int ll_set_opt(const char *opt, char *data, int fl)
@@ -997,7 +967,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 		mutex_init(&lli->lli_readdir_mutex);
 		lli->lli_opendir_key = NULL;
 		lli->lli_sai = NULL;
-		lli->lli_def_acl = NULL;
 		spin_lock_init(&lli->lli_sa_lock);
 		lli->lli_opendir_pid = 0;
 	} else {
@@ -1010,7 +979,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 		CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
 		lli->lli_agl_index = 0;
 		lli->lli_async_rc = 0;
-		lli->lli_volatile = false;
 	}
 	mutex_init(&lli->lli_layout_mutex);
 }
@@ -1121,9 +1089,6 @@ out_free:
         RETURN(err);
 } /* ll_fill_super */
 
-
-void lu_context_keys_dump(void);
-
 void ll_put_super(struct super_block *sb)
 {
 	struct config_llog_instance cfg, params_cfg;
@@ -1229,28 +1194,6 @@ struct inode *ll_inode_from_resource_lock(struct ldlm_lock *lock)
 	}
 	unlock_res_and_lock(lock);
 	return inode;
-}
-
-struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
-{
-        struct inode *inode = NULL;
-        /* NOTE: we depend on atomic igrab() -bzzz */
-        lock_res_and_lock(lock);
-        if (lock->l_ast_data) {
-                struct ll_inode_info *lli = ll_i2info(lock->l_ast_data);
-                if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
-                        inode = igrab(lock->l_ast_data);
-                } else {
-                        inode = lock->l_ast_data;
-                        LDLM_DEBUG_LIMIT(inode->i_state & I_FREEING ?  D_INFO :
-                                         D_WARNING, lock, "l_ast_data %p is "
-                                         "bogus: magic %08x", lock->l_ast_data,
-                                         lli->lli_inode_magic);
-                        inode = NULL;
-                }
-        }
-        unlock_res_and_lock(lock);
-        return inode;
 }
 
 static void ll_dir_clear_lsm_md(struct inode *inode)

@@ -81,7 +81,7 @@ static void ll_destroy_inode(struct inode *inode)
 }
 #endif
 
-int ll_init_inodecache(void)
+static int ll_init_inodecache(void)
 {
 	ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
 					    sizeof(struct ll_inode_info),
@@ -91,7 +91,7 @@ int ll_init_inodecache(void)
 	return 0;
 }
 
-void ll_destroy_inodecache(void)
+static void ll_destroy_inodecache(void)
 {
 	kmem_cache_destroy(ll_inode_cachep);
 }
@@ -116,9 +116,6 @@ struct super_operations lustre_super_operations =
 
 
 void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
-
-int vvp_global_init(void);
-void vvp_global_fini(void);
 
 static int __init init_lustre_lite(void)
 {
