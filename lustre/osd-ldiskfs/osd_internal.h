@@ -617,8 +617,8 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 
 #ifdef LPROCFS
 /* osd_lproc.c */
-extern struct lprocfs_vars lprocfs_osd_obd_vars[];
-extern struct lprocfs_vars lprocfs_osd_module_vars[];
+extern struct lprocfs_seq_vars lprocfs_osd_obd_vars[];
+extern struct lprocfs_seq_vars lprocfs_osd_module_vars[];
 int osd_procfs_init(struct osd_device *osd, const char *name);
 int osd_procfs_fini(struct osd_device *osd);
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf);
@@ -673,7 +673,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		   int insert);
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
-int osd_scrub_dump(struct osd_device *dev, char *buf, int len);
+int osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   obd_seq seq, struct lu_seq_range *range);
