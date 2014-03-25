@@ -6840,7 +6840,10 @@ test_116a() { # was previously test_116()
 	free_min_max
 
 	[ $MINV -eq 0 ] && skip "no free space in OST$MINI, skip" && return
+	[ $MINV -gt 10000000 ] && skip "too much free space in OST$MINI, skip" \
+		&& return
 	trap simple_cleanup_common EXIT
+
 
 	# Check if we need to generate uneven OSTs
 	test_mkdir -p $DIR/$tdir/OST${MINI}
