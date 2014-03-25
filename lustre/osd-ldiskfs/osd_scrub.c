@@ -486,7 +486,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		(val == SCRUB_NEXT_OSTOBJ ||
 		 val == SCRUB_NEXT_OSTOBJ_OLD) ? OI_KNOWN_ON_OST : 0);
 	if (rc != 0) {
-		if (rc != -ENOENT)
+		if (rc != -ENOENT && rc != -ESTALE)
 			GOTO(out, rc);
 
 iget:
