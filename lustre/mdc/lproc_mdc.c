@@ -45,12 +45,12 @@
 static int mdc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
-	struct client_obd *cli = &dev->u.cli;
+	__u32 max;
 	int rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
-	rc = seq_printf(m, "%u\n", cli->cl_max_rpcs_in_flight);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
+	rc = seq_printf(m, "%u\n", max);
+
 	return rc;
 }
 
@@ -60,21 +60,17 @@ static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 						loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-        struct client_obd *cli = &dev->u.cli;
-        int val, rc;
+	int val;
+	int rc;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc == 0)
+		rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
 
-        if (val < 1 || val > MDC_MAX_RIF_MAX)
-                return -ERANGE;
+	if (rc != 0)
+		count = rc;
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_max_rpcs_in_flight = val;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-
-        return count;
+	return count;
 }
 LPROC_SEQ_FOPS(mdc_max_rpcs_in_flight);
 

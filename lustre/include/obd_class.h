@@ -128,6 +128,10 @@ struct kuc_hdr * kuc_ptr(void *p);
 int kuc_ispayload(void *p);
 void *kuc_alloc(int payload_len, int transport, int type);
 void kuc_free(void *p, int payload_len);
+int obd_get_request_slot(struct client_obd *cli);
+void obd_put_request_slot(struct client_obd *cli);
+__u32 obd_get_max_rpcs_in_flight(struct client_obd *cli);
+int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max);
 
 struct llog_handle;
 struct llog_rec_hdr;

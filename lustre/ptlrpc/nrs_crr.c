@@ -214,7 +214,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	 * with the default max_rpcs_in_flight value, as we are scheduling over
 	 * NIDs, and there may be more than one mount point per client.
 	 */
-	net->cn_quantum = OSC_MAX_RIF_DEFAULT;
+	net->cn_quantum = OBD_MAX_RIF_DEFAULT;
 	/**
 	 * Set to 1 so that the test inside nrs_crrn_req_add() can evaluate to
 	 * true.

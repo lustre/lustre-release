@@ -405,7 +405,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	cli->cl_chunkbits = PAGE_CACHE_SHIFT;
 
 	if (!strcmp(name, LUSTRE_MDC_NAME)) {
-		cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;
+		cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
 	} else if (totalram_pages >> (20 - PAGE_CACHE_SHIFT) <= 128 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 2;
 	} else if (totalram_pages >> (20 - PAGE_CACHE_SHIFT) <= 256 /* MB */) {
@@ -414,9 +414,9 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 		cli->cl_max_rpcs_in_flight = 4;
 	} else {
 		if (osc_on_mdt(obddev->obd_name))
-			cli->cl_max_rpcs_in_flight = MDS_OSC_MAX_RIF_DEFAULT;
+			cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_MAX;
 		else
-			cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+			cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
         }
         rc = ldlm_get_ref();
         if (rc) {

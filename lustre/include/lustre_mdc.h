@@ -191,11 +191,6 @@ static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
 }
 
 
-struct mdc_cache_waiter {
-	cfs_list_t              mcw_entry;
-	wait_queue_head_t             mcw_waitq;
-};
-
 /* mdc/mdc_locks.c */
 int it_disposition(const struct lookup_intent *it, int flag);
 void it_clear_disposition(struct lookup_intent *it, int flag);

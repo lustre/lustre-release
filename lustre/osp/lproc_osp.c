@@ -429,6 +429,38 @@ static int osp_rd_old_sync_processed(char *page, char **start, off_t off,
 	return rc;
 }
 
+static int osp_rd_lfsck_max_rpcs_in_flight(char *page, char **start, off_t off,
+					   int count, int *eof, void *data)
+{
+	struct obd_device *dev = data;
+	__u32 max;
+	int rc;
+
+	*eof = 1;
+	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
+	rc = snprintf(page, count, "%u\n", max);
+
+	return rc;
+}
+
+static int osp_wr_lfsck_max_rpcs_in_flight(struct file *file,
+					   const char *buffer,
+					   unsigned long count, void *data)
+{
+	struct obd_device *dev = data;
+	int val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc == 0)
+		rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
+
+	if (rc != 0)
+		count = rc;
+
+	return count;
+}
+
 static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ "uuid",		lprocfs_rd_uuid, 0, 0 },
 	{ "ping",		0, lprocfs_wr_ping, 0, 0, 0222 },
@@ -461,6 +493,8 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 
 	/* for compatibility reasons */
 	{ "destroys_in_flight",	osp_rd_destroys_in_flight, 0, 0 },
+	{ "lfsck_max_rpcs_in_flight", osp_rd_lfsck_max_rpcs_in_flight,
+				      osp_wr_lfsck_max_rpcs_in_flight, 0 },
 	{ 0 }
 };
 

@@ -872,7 +872,7 @@ resend:
          * rpcs in flight counter. We do not do flock request limiting, though*/
         if (it) {
                 mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-                rc = mdc_enter_request(&obddev->u.cli);
+		rc = obd_get_request_slot(&obddev->u.cli);
                 if (rc != 0) {
                         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
                         mdc_clear_replay_flag(req, 0);
@@ -899,7 +899,7 @@ resend:
 		RETURN(rc);
 	}
 
-	mdc_exit_request(&obddev->u.cli);
+	obd_put_request_slot(&obddev->u.cli);
 	mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
 	if (rc < 0) {
@@ -1228,7 +1228,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 
         obddev = class_exp2obd(exp);
 
-        mdc_exit_request(&obddev->u.cli);
+	obd_put_request_slot(&obddev->u.cli);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
                 rc = -ETIMEDOUT;
 
@@ -1290,7 +1290,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
 
-        rc = mdc_enter_request(&obddev->u.cli);
+	rc = obd_get_request_slot(&obddev->u.cli);
         if (rc != 0) {
                 ptlrpc_req_finished(req);
                 RETURN(rc);
@@ -1299,7 +1299,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
 			      0, LVB_T_NONE, &minfo->mi_lockh, 1);
         if (rc < 0) {
-                mdc_exit_request(&obddev->u.cli);
+		obd_put_request_slot(&obddev->u.cli);
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
