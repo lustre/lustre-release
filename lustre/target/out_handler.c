@@ -1299,7 +1299,7 @@ struct tgt_handler *out_handler_find(__u32 opc)
 static int out_tx_start(const struct lu_env *env, struct dt_device *dt,
 			struct thandle_exec_args *ta, struct obd_export *exp)
 {
-	memset(ta, 0, sizeof(*ta));
+	ta->ta_argno = 0;
 	ta->ta_handle = dt_trans_create(env, dt);
 	if (IS_ERR(ta->ta_handle)) {
 		int rc;
@@ -1346,6 +1346,8 @@ static int out_trans_stop(const struct lu_env *env,
 			ta->ta_args[i]->object = NULL;
 		}
 	}
+	ta->ta_handle = NULL;
+	ta->ta_argno = 0;
 
 	return rc;
 }
@@ -1483,7 +1485,6 @@ int out_handle(struct tgt_session_info *tsi)
 	tti->tti_u.update.tti_update_reply = reply;
 	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
 
-	memset(ta, 0, sizeof(*ta));
 	/* Walk through updates in the request to execute them synchronously */
 	for (i = 0; i < count; i++) {
 		struct tgt_handler	*h;
