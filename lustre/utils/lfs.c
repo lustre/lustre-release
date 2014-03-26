@@ -882,7 +882,8 @@ static int name2layout(__u32 *layout, char *name)
 #define FIND_POOL_OPT 3
 static int lfs_find(int argc, char **argv)
 {
-        int c, ret;
+	int c, rc;
+	int ret = 0;
         time_t t;
 	struct find_param param = {
 		.fp_max_depth = -1,
@@ -984,14 +985,14 @@ static int lfs_find(int argc, char **argv)
 				xsign = &param.fp_msign;
 				param.fp_exclude_mtime = !!neg_opt;
 			}
-                        ret = set_time(&t, xtime, optarg);
-                        if (ret == INT_MAX) {
-                                ret = -1;
-                                goto err;
-                        }
-                        if (ret)
-                                *xsign = ret;
-                        break;
+			rc = set_time(&t, xtime, optarg);
+			if (rc == INT_MAX) {
+				ret = -1;
+				goto err;
+			}
+			if (rc)
+				*xsign = rc;
+			break;
                 case 'c':
                         if (optarg[0] == '+') {
                                 param.stripecount_sign = -1;
@@ -1016,8 +1017,8 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case 'g':
 		case 'G':
-			ret = name2id(&param.fp_gid, optarg, GROUP);
-			if (ret) {
+			rc = name2id(&param.fp_gid, optarg, GROUP);
+			if (rc) {
 				param.fp_gid = strtoul(optarg, &endptr, 10);
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "Group/GID: %s cannot "
@@ -1038,8 +1039,8 @@ static int lfs_find(int argc, char **argv)
 			break;
                 case 'u':
                 case 'U':
-			ret = name2id(&param.fp_uid, optarg, USER);
-			if (ret) {
+			rc = name2id(&param.fp_uid, optarg, USER);
+			if (rc) {
 				param.fp_uid = strtoul(optarg, &endptr, 10);
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "User/UID: %s cannot "
@@ -1228,9 +1229,11 @@ err_free:
                 pathend = argc;
         }
 
-        do {
-                ret = llapi_find(argv[pathstart], &param);
-        } while (++pathstart < pathend && !ret);
+	do {
+		rc = llapi_find(argv[pathstart], &param);
+		if (rc != 0 && ret == 0)
+			ret = rc;
+	} while (++pathstart < pathend);
 
         if (ret)
                 fprintf(stderr, "error: %s failed for %s.\n",

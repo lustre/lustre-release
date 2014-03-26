@@ -4910,6 +4910,30 @@ test_56y() {
 }
 run_test 56y "lfs find -L raid0|released"
 
+test_56z() { # LU-4824
+	# This checks to make sure 'lfs find' continues after errors
+	# There are two classes of errors that should be caught:
+	# - If multiple paths are provided, all should be searched even if one
+	#   errors out
+	# - If errors are encountered during the search, it should not terminate
+	#   early
+	local i
+	test_mkdir $DIR/$tdir
+	for i in d{0..9}; do
+		test_mkdir $DIR/$tdir/$i
+	done
+	touch $DIR/$tdir/d{0..9}/$tfile
+	$LFS find $DIR/non_existent_dir $DIR/$tdir &&
+		error "$LFS find did not return an error"
+	# Make a directory unsearchable. This should NOT be the last entry in
+	# directory order.  Arbitrarily pick the 6th entry
+	chmod 700 $(lfs find $DIR/$tdir -type d | sed '6!d')
+	local count=$($RUNAS $LFS find $DIR/non_existent $DIR/$tdir | wc -l)
+	# The user should be able to see 10 directories and 9 files
+	[ $count == 19 ] || error "$LFS find did not continue after error"
+}
+run_test 56z "lfs find should continue after an error"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	# note test will not do anything if MDS is not local
