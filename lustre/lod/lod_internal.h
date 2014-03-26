@@ -441,7 +441,6 @@ int qos_add_tgt(struct lod_device*, struct lod_tgt_desc *);
 int qos_del_tgt(struct lod_device *, struct lod_tgt_desc *);
 
 /* lproc_lod.c */
-void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
 int lod_procfs_init(struct lod_device *lod);
 void lod_procfs_fini(struct lod_device *lod);
 

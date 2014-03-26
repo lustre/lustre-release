@@ -283,7 +283,7 @@ static int pool_proc_open(struct inode *inode, struct file *file)
 	rc = seq_open(file, &pool_proc_ops);
 	if (!rc) {
 		struct seq_file *s = file->private_data;
-		s->private = PROC_I(inode)->pde->data;
+		s->private = PDE_DATA(inode);
 	}
 	return rc;
 }
@@ -462,7 +462,10 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 #ifdef LPROCFS
 	lod_pool_getref(new_pool);
 	new_pool->pool_proc_entry = lprocfs_add_simple(lod->lod_pool_proc_entry,
-						       poolname, NULL, NULL,
+						       poolname,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+						       NULL, NULL,
+#endif
 						       new_pool,
 						       &pool_proc_operations);
 	if (IS_ERR(new_pool->pool_proc_entry)) {
