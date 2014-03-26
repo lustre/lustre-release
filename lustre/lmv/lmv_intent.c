@@ -492,7 +492,6 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
 		rc = md_intent_lock(tgt->ltd_exp, op_data, lmm, lmmsize, it,
 				    flags, reqp, cb_blocking, extra_lock_flags);
-		RETURN(rc);
 	}
 	/*
 	 * MDS has returned success. Probably name has been resolved in
