@@ -1661,6 +1661,7 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define XATTR_NAME_SOM		"trusted.som"
 #define XATTR_NAME_HSM		"trusted.hsm"
 #define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_namespace"
+#define XATTR_NAME_MAX_LEN	32 /* increase this, if there is longer name. */
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
