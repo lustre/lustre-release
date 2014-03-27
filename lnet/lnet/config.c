@@ -97,6 +97,8 @@ lnet_net_unique(__u32 net, struct list_head *nilist)
 void
 lnet_ni_free(struct lnet_ni *ni)
 {
+	int i;
+
 	if (ni->ni_refs != NULL)
 		cfs_percpt_free(ni->ni_refs);
 
@@ -111,6 +113,11 @@ lnet_ni_free(struct lnet_ni *ni)
 	pthread_mutex_destroy(&ni->ni_lock);
 # endif
 #endif
+	for (i = 0; i < LNET_MAX_INTERFACES &&
+		    ni->ni_interfaces[i] != NULL; i++) {
+		LIBCFS_FREE(ni->ni_interfaces[i],
+			    strlen(ni->ni_interfaces[i]) + 1);
+	}
 	LIBCFS_FREE(ni, sizeof(*ni));
 }
 
@@ -205,15 +212,13 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		return -EINVAL;
 	}
 
-        LIBCFS_ALLOC(tokens, tokensize);
-        if (tokens == NULL) {
-                CERROR("Can't allocate net tokens\n");
+	LIBCFS_ALLOC(tokens, tokensize);
+	if (tokens == NULL) {
+		CERROR("Can't allocate net tokens\n");
 		return -ENOMEM;
-        }
+	}
 
-        the_lnet.ln_network_tokens = tokens;
-        the_lnet.ln_network_tokens_nob = tokensize;
-        memcpy (tokens, networks, tokensize);
+	memcpy(tokens, networks, tokensize);
 	str = tmp = tokens;
 
 	/* Add in the loopback network */
@@ -324,14 +329,28 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 				goto failed_syntax;
                         }
 
-                        if (niface == LNET_MAX_INTERFACES) {
-                                LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
-                                                   "for net %s\n",
-                                                   libcfs_net2str(net));
-                                goto failed;
-                        }
+			if (niface == LNET_MAX_INTERFACES) {
+				LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
+						   "for net %s\n",
+						   libcfs_net2str(net));
+				goto failed;
+			}
 
-                        ni->ni_interfaces[niface++] = iface;
+			/* Allocate a seperate piece of memory and copy
+			 * into it the string, so we don't have
+			 * a depencency on the tokens string.  This way we
+			 * can free the tokens at the end of the function.
+			 * The newly allocated ni_interfaces[] can be
+			 * freed when freeing the NI */
+			LIBCFS_ALLOC(ni->ni_interfaces[niface],
+				     strlen(iface) + 1);
+			if (ni->ni_interfaces[niface] == NULL) {
+				CERROR("Can't allocate net interface name\n");
+				goto failed;
+			}
+			strncpy(ni->ni_interfaces[niface], iface,
+				strlen(iface));
+			niface++;
 			iface = comma;
 		} while (iface != NULL);
 
@@ -356,6 +375,8 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	}
 
 	LASSERT(!list_empty(nilist));
+
+	LIBCFS_FREE(tokens, tokensize);
 	return 0;
 
  failed_syntax:
@@ -372,7 +393,6 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		cfs_expr_list_free(el);
 
 	LIBCFS_FREE(tokens, tokensize);
-	the_lnet.ln_network_tokens = NULL;
 
 	return -EINVAL;
 }
@@ -663,9 +683,9 @@ lnet_parse_route (char *str, int *im_a_router)
 	char             *sep;
 	char             *token = str;
 	int               ntokens = 0;
-        int               myrc = -1;
-        unsigned int      hops;
-        int               got_hops = 0;
+	int               myrc = -1;
+	unsigned int      hops;
+	int               got_hops = 0;
 	unsigned int	  priority = 0;
 
 	INIT_LIST_HEAD(&gateways);
@@ -747,8 +767,8 @@ lnet_parse_route (char *str, int *im_a_router)
 		}
 	}
 
-        if (!got_hops)
-                hops = 1;
+	if (!got_hops)
+		hops = 1;
 
 	LASSERT(!list_empty(&nets));
 	LASSERT(!list_empty(&gateways));
@@ -763,28 +783,28 @@ lnet_parse_route (char *str, int *im_a_router)
 			nid = libcfs_str2nid(ltb->ltb_text);
 			LASSERT(nid != LNET_NID_ANY);
 
-                        if (lnet_islocalnid(nid)) {
-                                *im_a_router = 1;
-                                continue;
-                        }
+			if (lnet_islocalnid(nid)) {
+				*im_a_router = 1;
+				continue;
+			}
 
 			rc = lnet_add_route(net, hops, nid, priority);
-                        if (rc != 0) {
-                                CERROR("Can't create route "
-                                       "to %s via %s\n",
-                                       libcfs_net2str(net),
-                                       libcfs_nid2str(nid));
-                                goto out;
-                        }
+			if (rc != 0) {
+				CERROR("Can't create route "
+				       "to %s via %s\n",
+				       libcfs_net2str(net),
+				       libcfs_nid2str(nid));
+				goto out;
+			}
 		}
 	}
 
-        myrc = 0;
-        goto out;
+	myrc = 0;
+	goto out;
 
- token_error:
+token_error:
 	lnet_syntax("routes", cmd, (int)(token - str), strlen(token));
- out:
+out:
 	lnet_free_text_bufs(&nets);
 	lnet_free_text_bufs(&gateways);
 	return myrc;
