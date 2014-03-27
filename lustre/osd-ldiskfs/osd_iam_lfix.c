@@ -175,7 +175,7 @@ static int iam_lfix_init(struct iam_leaf *l)
 
         ill = iam_get_head(l);
         count = le16_to_cpu(ill->ill_count);
-        if (ill->ill_magic == le16_to_cpu(IAM_LEAF_HEADER_MAGIC) &&
+	if (le16_to_cpu(ill->ill_magic) == IAM_LEAF_HEADER_MAGIC &&
             0 <= count && count <= leaf_count_limit(l)) {
                 l->il_at = l->il_entries = iam_get_lentries(l);
                 result = 0;
@@ -186,7 +186,7 @@ static int iam_lfix_init(struct iam_leaf *l)
                 CERROR("Wrong magic in node %llu (#%lu): %#x != %#x or "
                        "wrong count: %d (%d)\n",
                        (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
-                       ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC),
+		       le16_to_cpu(ill->ill_magic), IAM_LEAF_HEADER_MAGIC,
                        count, leaf_count_limit(l));
                 result = -EIO;
         }

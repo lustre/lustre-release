@@ -399,7 +399,7 @@ static int lvar_init(struct iam_leaf *l)
 
         head = n_head(l);
         used = h_used(head);
-        if (head->vlh_magic == le16_to_cpu(IAM_LVAR_LEAF_MAGIC) &&
+	if (le16_to_cpu(head->vlh_magic) == IAM_LVAR_LEAF_MAGIC &&
             used <= blocksize(l)) {
                 l->il_at = l->il_entries = lvar_lentry(n_start(l));
                 result = 0;
@@ -410,7 +410,7 @@ static int lvar_init(struct iam_leaf *l)
                 CERROR("Wrong magic in node %llu (#%lu): %#x != %#x or "
                        "wrong used: %d",
                        (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
-                       head->vlh_magic, le16_to_cpu(IAM_LVAR_LEAF_MAGIC),
+		       le16_to_cpu(head->vlh_magic), IAM_LVAR_LEAF_MAGIC,
                        used);
                 result = -EIO;
         }
@@ -862,7 +862,7 @@ static int lvar_node_check(struct iam_path *path, struct iam_frame *frame)
                 struct lvar_root *root;
 
                 root = (void *)frame->bh->b_data;
-                if (le64_to_cpu(root->vr_magic) != IAM_LVAR_ROOT_MAGIC)
+		if (le32_to_cpu(root->vr_magic) != IAM_LVAR_ROOT_MAGIC)
                         return -EIO;
                 limit_correct = dx_root_limit(path);
         } else
@@ -1059,7 +1059,7 @@ static int lvar_guess(struct iam_container *c)
         result = iam_node_read(c, lvar_root_ptr(c), NULL, &bh);
         if (result == 0) {
                 root = (void *)bh->b_data;
-                if (le64_to_cpu(root->vr_magic) == IAM_LVAR_ROOT_MAGIC) {
+		if (le32_to_cpu(root->vr_magic) == IAM_LVAR_ROOT_MAGIC) {
                         struct iam_descr *descr;
 
                         descr = c->ic_descr;

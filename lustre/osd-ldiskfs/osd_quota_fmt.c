@@ -244,7 +244,7 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 	}
 	ret = 1;
 
-	if (!le32_to_cpu(dqhead->dqdh_entries))
+	if (!le16_to_cpu(dqhead->dqdh_entries))
 		GOTO(out_buf, ret);
 
 	ddquot = (struct lustre_disk_dqblk_v2 *)GETENTRIES(buf);
