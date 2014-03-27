@@ -66,9 +66,9 @@ static int llog_cat_new_log(const struct lu_env *env,
 			    struct llog_handle *loghandle,
 			    struct thandle *th)
 {
-
+	struct llog_thread_info	*lgi = llog_info(env);
+	struct llog_logid_rec *rec = &lgi->lgi_logid;
         struct llog_log_hdr *llh;
-        struct llog_logid_rec rec = { { 0 }, };
         int rc, index, bitmap_size;
         ENTRY;
 
@@ -122,16 +122,16 @@ static int llog_cat_new_log(const struct lu_env *env,
 	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
 	       loghandle->lgh_id.lgl_ogen, index,
 	       POSTID(&cathandle->lgh_id.lgl_oi));
-        /* build the record for this log in the catalog */
-        rec.lid_hdr.lrh_len = sizeof(rec);
-        rec.lid_hdr.lrh_index = index;
-        rec.lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
-        rec.lid_id = loghandle->lgh_id;
-        rec.lid_tail.lrt_len = sizeof(rec);
-        rec.lid_tail.lrt_index = index;
+	/* build the record for this log in the catalog */
+	rec->lid_hdr.lrh_len = sizeof(*rec);
+	rec->lid_hdr.lrh_index = index;
+	rec->lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
+	rec->lid_id = loghandle->lgh_id;
+	rec->lid_tail.lrt_len = sizeof(*rec);
+	rec->lid_tail.lrt_index = index;
 
         /* update the catalog: header and record */
-	rc = llog_write_rec(env, cathandle, &rec.lid_hdr,
+	rc = llog_write_rec(env, cathandle, &rec->lid_hdr,
 			    &loghandle->u.phd.phd_cookie, 1, NULL, index, th);
 	if (rc < 0)
 		GOTO(out_destroy, rc);
@@ -383,6 +383,8 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 			     struct llog_handle *cathandle,
 			     struct llog_rec_hdr *rec, struct thandle *th)
 {
+	struct llog_thread_info	*lgi = llog_info(env);
+	struct llog_logid_rec	*lirec = &lgi->lgi_logid;
 	struct llog_handle	*loghandle, *next;
 	int			 rc = 0;
 
@@ -418,12 +420,14 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
+	lirec->lid_hdr.lrh_len = sizeof(*lirec);
+
 	if (!llog_exist(cathandle->u.chd.chd_current_log)) {
 		rc = llog_declare_create(env, cathandle->u.chd.chd_current_log,
 					 th);
 		if (rc)
 			GOTO(out, rc);
-		llog_declare_write_rec(env, cathandle, NULL, -1, th);
+		llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1, th);
 	}
 	/* declare records in the llogs */
 	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_current_log,
@@ -435,9 +439,14 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 	if (next) {
 		if (!llog_exist(next)) {
 			rc = llog_declare_create(env, next, th);
-			llog_declare_write_rec(env, cathandle, NULL, -1, th);
+			llog_declare_write_rec(env, cathandle, &lirec->lid_hdr,
+					       -1, th);
 		}
-		llog_declare_write_rec(env, next, rec, -1, th);
+		/* XXX: we hope for declarations made for existing llog
+		 *	this might be not correct with some backends
+		 *	where declarations are expected against specific
+		 *	object like ZFS with full debugging enabled */
+		/*llog_declare_write_rec(env, next, rec, -1, th);*/
 	}
 out:
 	RETURN(rc);

@@ -979,36 +979,141 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
         return rc;
 }
 
+static inline int osd_extents_enabled(struct super_block *sb,
+				      struct inode *inode)
+{
+	if (inode != NULL) {
+		if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL)
+			return 1;
+	} else if (test_opt(sb, EXTENTS)) {
+		return 1;
+	}
+	return 0;
+}
+
+static inline int osd_calc_bkmap_credits(struct super_block *sb,
+					 struct inode *inode,
+					 const loff_t size,
+					 const loff_t pos,
+					 const int blocks)
+{
+	int credits, bits, bs, i;
+
+	bits = sb->s_blocksize_bits;
+	bs = 1 << bits;
+
+	/* legacy blockmap: 3 levels * 3 (bitmap,gd,itself)
+	 * we do not expect blockmaps on the large files,
+	 * so let's shrink it to 2 levels (4GB files) */
+
+	/* this is default reservation: 2 levels */
+	credits = (blocks + 2) * 3;
+
+	/* actual offset is unknown, hard to optimize */
+	if (pos == -1)
+		return credits;
+
+	/* now check for few specific cases to optimize */
+	if (pos + size <= LDISKFS_NDIR_BLOCKS * bs) {
+		/* no indirects */
+		credits = blocks;
+		/* allocate if not allocated */
+		if (inode == NULL) {
+			credits += blocks * 2;
+			return credits;
+		}
+		for (i = (pos >> bits); i < (pos >> bits) + blocks; i++) {
+			LASSERT(i < LDISKFS_NDIR_BLOCKS);
+			if (LDISKFS_I(inode)->i_data[i] == 0)
+				credits += 2;
+		}
+	} else if (pos + size <= (LDISKFS_NDIR_BLOCKS + 1024) * bs) {
+		/* single indirect */
+		credits = blocks * 3;
+		/* probably indirect block has been allocated already */
+		if (!inode || LDISKFS_I(inode)->i_data[LDISKFS_IND_BLOCK])
+			credits += 3;
+	}
+
+	return credits;
+}
+
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
-                                 const loff_t size, loff_t pos,
+                                 const loff_t size, loff_t _pos,
                                  struct thandle *handle)
 {
-        struct osd_thandle *oh;
-        int                 credits;
-	struct inode	   *inode;
-	int		    rc;
+	struct osd_object  *obj  = osd_dt_obj(dt);
+	struct inode	   *inode = obj->oo_inode;
+	struct super_block *sb = osd_sb(osd_obj2dev(obj));
+	struct osd_thandle *oh;
+	int		    rc = 0, est = 0, credits, blocks, allocated = 0;
+	int		    bits, bs;
+	int		    depth;
+	loff_t		    pos;
 	ENTRY;
 
-        LASSERT(handle != NULL);
+	LASSERT(handle != NULL);
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	credits = osd_dto_credits_noquota[DTO_WRITE_BLOCK];
+	bits = sb->s_blocksize_bits;
+	bs = 1 << bits;
+
+	if (_pos == -1) {
+		/* if this is an append, then we
+		 * should expect cross-block record */
+		pos = 0;
+	} else {
+		pos = _pos;
+	}
+
+	/* blocks to modify */
+	blocks = ((pos + size + bs - 1) >> bits) - (pos >> bits);
+	LASSERT(blocks > 0);
+
+	if (inode != NULL && _pos != -1) {
+		/* object size in blocks */
+		est = (i_size_read(inode) + bs - 1) >> bits;
+		allocated = inode->i_blocks >> (bits - 9);
+		if (pos + size <= i_size_read(inode) && est <= allocated) {
+			/* looks like an overwrite, no need to modify tree */
+			credits = blocks;
+			/* no need to modify i_size */
+			goto out;
+		}
+	}
+
+	if (osd_extents_enabled(sb, inode)) {
+		/*
+		 * many concurrent threads may grow tree by the time
+		 * our transaction starts. so, consider 2 is a min depth
+		 * for every level we may need to allocate a new block
+		 * and take some entries from the old one. so, 3 blocks
+		 * to allocate (bitmap, gd, itself) + old block - 4 per
+		 * level.
+		 */
+		depth = inode != NULL ? ext_depth(inode) : 0;
+		depth = max(depth, 1) + 1;
+		credits = depth;
+		/* if not append, then split may need to modify
+		 * existing blocks moving entries into the new ones */
+		if (_pos == -1)
+			credits += depth;
+		/* blocks to store data: bitmap,gd,itself */
+		credits += blocks * 3;
+	} else {
+		credits = osd_calc_bkmap_credits(sb, inode, size, _pos, blocks);
+	}
 
 	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
-
-	inode = osd_dt_obj(dt)->oo_inode;
-
-	/* we may declare write to non-exist llog */
-	if (inode == NULL)
-		RETURN(0);
-
+out:
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those
 	 * objects, so always set the lqi_space as 0. */
-	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
-				   true, true, NULL, false);
+	if (inode != NULL)
+		rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid,
+					   0, oh, true, true, NULL, false);
 	RETURN(rc);
 }
 
