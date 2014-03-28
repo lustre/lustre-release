@@ -349,19 +349,40 @@ again:
 static int lfsck_layout_verify_header(struct lov_mds_md_v1 *lmm)
 {
 	__u32 magic;
-	__u32 patten;
+	__u32 pattern;
 
 	magic = le32_to_cpu(lmm->lmm_magic);
 	/* If magic crashed, keep it there. Sometime later, during OST-object
 	 * orphan handling, if some OST-object(s) back-point to it, it can be
 	 * verified and repaired. */
-	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)
-		return -EINVAL;
+	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3) {
+		struct ost_id	oi;
+		int		rc;
 
-	patten = le32_to_cpu(lmm->lmm_pattern);
+		lmm_oi_cpu_to_le(&oi, &lmm->lmm_oi);
+		if ((magic & LOV_MAGIC_MASK) == LOV_MAGIC_MAGIC)
+			rc = -EOPNOTSUPP;
+		else
+			rc = -EINVAL;
+
+		CDEBUG(D_LFSCK, "%s LOV EA magic %u on "DOSTID"\n",
+		       rc == -EINVAL ? "Unknown" : "Unsupported",
+		       magic, POSTID(&oi));
+
+		return rc;
+	}
+
+	pattern = le32_to_cpu(lmm->lmm_pattern);
 	/* XXX: currently, we only support LOV_PATTERN_RAID0. */
-	if (patten != LOV_PATTERN_RAID0)
+	if (lov_pattern(pattern) != LOV_PATTERN_RAID0) {
+		struct ost_id oi;
+
+		lmm_oi_cpu_to_le(&oi, &lmm->lmm_oi);
+		CDEBUG(D_LFSCK, "Unsupported LOV EA pattern %u on "DOSTID"\n",
+		       pattern, POSTID(&oi));
+
 		return -EOPNOTSUPP;
+	}
 
 	return 0;
 }
@@ -1710,14 +1731,14 @@ static int lfsck_layout_extend_lovea(const struct lu_env *env,
 				     struct dt_object *parent,
 				     struct lu_fid *cfid,
 				     struct lu_buf *buf, int fl,
-				     __u32 ost_idx, __u32 ea_off)
+				     __u32 ost_idx, __u32 ea_off, bool reset)
 {
 	struct lov_mds_md_v1	*lmm	= buf->lb_buf;
 	struct lov_ost_data_v1	*objs;
 	int			 rc;
 	ENTRY;
 
-	if (fl == LU_XATTR_CREATE) {
+	if (fl == LU_XATTR_CREATE || reset) {
 		LASSERT(buf->lb_len == lov_mds_md_size(ea_off + 1,
 						       LOV_MAGIC_V1));
 
@@ -2006,7 +2027,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 		/* 3b. Add layout EA for the MDT-object. */
 		rc = lfsck_layout_extend_lovea(env, th, pobj, cfid, ea_buf,
 					       LU_XATTR_CREATE, ltd->ltd_index,
-					       ea_off);
+					       ea_off, false);
 	dt_write_unlock(env, pobj);
 	if (rc < 0)
 		GOTO(stop, rc);
@@ -2406,13 +2427,30 @@ again:
 
 		buf->lb_len = rc;
 		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
-					       fl, ost_idx, ea_off);
+					       fl, ost_idx, ea_off, false);
 
 		GOTO(unlock_parent, rc);
 	}
 
 	lmm = buf->lb_buf;
 	rc1 = lfsck_layout_verify_header(lmm);
+
+	/* If the LOV EA crashed, the rebuild it. */
+	if (rc1 == -EINVAL) {
+		if (bk->lb_param & LPF_DRYRUN)
+			GOTO(unlock_parent, rc = 1);
+
+		LASSERT(buf->lb_len >= rc);
+
+		buf->lb_len = rc;
+		memset(lmm, 0, buf->lb_len);
+		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
+					       fl, ost_idx, ea_off, true);
+
+		GOTO(unlock_parent, rc);
+	}
+
+	/* For other unknown magic/pattern, keep the current LOV EA. */
 	if (rc1 != 0)
 		GOTO(unlock_parent, rc = rc1);
 
@@ -2445,7 +2483,7 @@ again:
 
 		buf->lb_len = rc;
 		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
-					       fl, ost_idx, ea_off);
+					       fl, ost_idx, ea_off, false);
 		GOTO(unlock_parent, rc);
 	}
 
@@ -2947,10 +2985,6 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 		GOTO(unlock2, rc = 0);
 
 	lmm = buf->lb_buf;
-	rc = lfsck_layout_verify_header(lmm);
-	if (rc != 0)
-		GOTO(unlock2, rc);
-
 	/* Someone change layout during the LFSCK, no need to repair then. */
 	if (le16_to_cpu(lmm->lmm_layout_gen) != llr->llr_parent->llo_gen)
 		GOTO(unlock2, rc = 0);
@@ -3137,14 +3171,6 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 		GOTO(out, rc);
 
 	lmm = buf->lb_buf;
-	rc = lfsck_layout_verify_header(lmm);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	/* Currently, we only support LOV_MAGIC_V1/LOV_MAGIC_V3 which has
-	 * been verified in lfsck_layout_verify_header() already. If some
-	 * new magic introduced in the future, then layout LFSCK needs to
-	 * be updated also. */
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
 		objs = &(lmm->lmm_objects[0]);
@@ -4487,6 +4513,8 @@ again:
 	buf->lb_len = rc;
 	lmm = buf->lb_buf;
 	rc = lfsck_layout_verify_header(lmm);
+	/* If the LOV EA crashed, then it is possible to be rebuilt later
+	 * when handle orphan OST-objects. */
 	if (rc != 0)
 		GOTO(out, rc);
 
