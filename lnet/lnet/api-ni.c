@@ -834,7 +834,7 @@ lnet_unprepare (void)
 
 	lnet_msg_containers_destroy();
 	lnet_peer_tables_destroy();
-	lnet_rtrpools_free();
+	lnet_rtrpools_free(0);
 
 	if (the_lnet.ln_counters != NULL) {
 		cfs_percpt_free(the_lnet.ln_counters);
@@ -1755,19 +1755,21 @@ lnet_create_ping_info(void)
                 return -ENOMEM;
         }
 
-        pinfo->pi_nnis    = n;
-        pinfo->pi_pid     = the_lnet.ln_pid;
-        pinfo->pi_magic   = LNET_PROTO_PING_MAGIC;
+	pinfo->pi_nnis    = n;
+	pinfo->pi_pid     = the_lnet.ln_pid;
+	pinfo->pi_magic   = LNET_PROTO_PING_MAGIC;
 	pinfo->pi_features = LNET_PING_FEAT_NI_STATUS;
+	if (!the_lnet.ln_routing)
+		pinfo->pi_features |= LNET_PING_FEAT_RTE_DISABLED;
 
-        for (i = 0; i < n; i++) {
-                lnet_ni_status_t *ns = &pinfo->pi_ni[i];
+	for (i = 0; i < n; i++) {
+		lnet_ni_status_t *ns = &pinfo->pi_ni[i];
 
-                rc = LNetGetId(i, &id);
-                LASSERT (rc == 0);
+		rc = LNetGetId(i, &id);
+		LASSERT(rc == 0);
 
-                ns->ns_nid    = id.nid;
-                ns->ns_status = LNET_NI_STATUS_UP;
+		ns->ns_nid    = id.nid;
+		ns->ns_status = LNET_NI_STATUS_UP;
 
 		lnet_net_lock(0);
 
