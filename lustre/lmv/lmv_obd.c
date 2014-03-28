@@ -1872,69 +1872,10 @@ static int lmv_done_writing(struct obd_export *exp,
 }
 
 static int
-lmv_enqueue_remote(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
-		   struct lookup_intent *it, struct md_op_data *op_data,
-		   struct lustre_handle *lockh, void *lmm, int lmmsize,
-		   __u64 extra_lock_flags)
-{
-        struct ptlrpc_request      *req = it->d.lustre.it_data;
-        struct obd_device          *obd = exp->exp_obd;
-        struct lmv_obd             *lmv = &obd->u.lmv;
-        struct lustre_handle        plock;
-        struct lmv_tgt_desc        *tgt;
-        struct md_op_data          *rdata;
-        struct lu_fid               fid1;
-        struct mdt_body            *body;
-        int                         rc = 0;
-        int                         pmode;
-        ENTRY;
-
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        LASSERT(body != NULL);
-
-        if (!(body->valid & OBD_MD_MDS))
-                RETURN(0);
-
-        CDEBUG(D_INODE, "REMOTE_ENQUEUE '%s' on "DFID" -> "DFID"\n",
-               LL_IT2STR(it), PFID(&op_data->op_fid1), PFID(&body->fid1));
-
-        /*
-         * We got LOOKUP lock, but we really need attrs.
-         */
-        pmode = it->d.lustre.it_lock_mode;
-        LASSERT(pmode != 0);
-        memcpy(&plock, lockh, sizeof(plock));
-        it->d.lustre.it_lock_mode = 0;
-        it->d.lustre.it_data = NULL;
-        fid1 = body->fid1;
-
-        ptlrpc_req_finished(req);
-
-        tgt = lmv_find_target(lmv, &fid1);
-        if (IS_ERR(tgt))
-                GOTO(out, rc = PTR_ERR(tgt));
-
-        OBD_ALLOC_PTR(rdata);
-        if (rdata == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        rdata->op_fid1 = fid1;
-        rdata->op_bias = MDS_CROSS_REF;
-
-        rc = md_enqueue(tgt->ltd_exp, einfo, it, rdata, lockh,
-                        lmm, lmmsize, NULL, extra_lock_flags);
-        OBD_FREE_PTR(rdata);
-        EXIT;
-out:
-        ldlm_lock_decref(&plock, pmode);
-        return rc;
-}
-
-static int
 lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
-            struct lookup_intent *it, struct md_op_data *op_data,
-            struct lustre_handle *lockh, void *lmm, int lmmsize,
-	    struct ptlrpc_request **req, __u64 extra_lock_flags)
+	    const union ldlm_policy_data *policy,
+	    struct lookup_intent *it, struct md_op_data *op_data,
+	    struct lustre_handle *lockh, __u64 extra_lock_flags)
 {
 	struct obd_device        *obd = exp->exp_obd;
 	struct lmv_obd           *lmv = &obd->u.lmv;
@@ -1956,13 +1897,9 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 	CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID" -> mds #%d\n",
 	       LL_IT2STR(it), PFID(&op_data->op_fid1), tgt->ltd_idx);
 
-	rc = md_enqueue(tgt->ltd_exp, einfo, it, op_data, lockh,
-			lmm, lmmsize, req, extra_lock_flags);
+	rc = md_enqueue(tgt->ltd_exp, einfo, policy, it, op_data, lockh,
+			extra_lock_flags);
 
-	if (rc == 0 && it && it->it_op == IT_OPEN) {
-		rc = lmv_enqueue_remote(exp, einfo, it, op_data, lockh,
-					lmm, lmmsize, extra_lock_flags);
-	}
 	RETURN(rc);
 }
 

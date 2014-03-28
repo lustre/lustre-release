@@ -86,9 +86,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 			.ei_cbdata	= inode,
 		};
 
-                rc = md_enqueue(sbi->ll_md_exp, &einfo, &it,
-                                &op_data, &lockh, NULL, 0, NULL,
-                                LDLM_FL_CANCEL_ON_BLOCK);
+		rc = md_enqueue(sbi->ll_md_exp, &einfo, NULL, &it, &op_data,
+				&lockh, LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);

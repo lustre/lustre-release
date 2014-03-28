@@ -1681,19 +1681,18 @@ static inline int md_done_writing(struct obd_export *exp,
 
 static inline int md_enqueue(struct obd_export *exp,
 			     struct ldlm_enqueue_info *einfo,
+			     const union ldlm_policy_data *policy,
 			     struct lookup_intent *it,
 			     struct md_op_data *op_data,
 			     struct lustre_handle *lockh,
-			     void *lmm, int lmmsize,
-			     struct ptlrpc_request **req,
 			     __u64 extra_lock_flags)
 {
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, enqueue);
-        EXP_MD_COUNTER_INCREMENT(exp, enqueue);
-        rc = MDP(exp->exp_obd, enqueue)(exp, einfo, it, op_data, lockh,
-                                        lmm, lmmsize, req, extra_lock_flags);
+	int rc;
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, enqueue);
+	EXP_MD_COUNTER_INCREMENT(exp, enqueue);
+	rc = MDP(exp->exp_obd, enqueue)(exp, einfo, policy, it, op_data, lockh,
+					extra_lock_flags);
         RETURN(rc);
 }
 
@@ -1710,20 +1709,19 @@ static inline int md_getattr_name(struct obd_export *exp,
 }
 
 static inline int md_intent_lock(struct obd_export *exp,
-				 struct md_op_data *op_data, void *lmm,
-				 int lmmsize, struct lookup_intent *it,
-				 int lookup_flags, struct ptlrpc_request **reqp,
+				 struct md_op_data *op_data,
+				 struct lookup_intent *it,
+				 struct ptlrpc_request **reqp,
 				 ldlm_blocking_callback cb_blocking,
 				 __u64 extra_lock_flags)
 {
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, intent_lock);
-        EXP_MD_COUNTER_INCREMENT(exp, intent_lock);
-        rc = MDP(exp->exp_obd, intent_lock)(exp, op_data, lmm, lmmsize,
-                                            it, lookup_flags, reqp, cb_blocking,
-                                            extra_lock_flags);
-        RETURN(rc);
+	int rc;
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, intent_lock);
+	EXP_MD_COUNTER_INCREMENT(exp, intent_lock);
+	rc = MDP(exp->exp_obd, intent_lock)(exp, op_data, it, reqp, cb_blocking,
+					    extra_lock_flags);
+	RETURN(rc);
 }
 
 static inline int md_link(struct obd_export *exp, struct md_op_data *op_data,
