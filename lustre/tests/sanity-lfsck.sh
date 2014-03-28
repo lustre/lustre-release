@@ -1353,7 +1353,7 @@ test_14() {
 	echo "'ls' should fail because of dangling referenced MDT-object"
 	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(1) ls should fail."
 
-	echo "Trigger layout LFSCK to find out dangling reference and fix them"
+	echo "Trigger layout LFSCK to find out dangling reference"
 	$START_LAYOUT || error "(2) Fail to start LFSCK for layout!"
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
@@ -1365,8 +1365,23 @@ test_14() {
 	[ $repaired -eq 32 ] ||
 		error "(4) Fail to repair dangling reference: $repaired"
 
+	echo "'ls' should fail because it will not repair dangling by default"
+	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(5) ls should fail."
+
+	echo "Trigger layout LFSCK to repair dangling reference"
+	$START_LAYOUT -r -c || error "(6) Fail to start LFSCK for layout!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 6 || return 3
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_dangling/ { print $2 }')
+	[ $repaired -eq 32 ] ||
+		error "(7) Fail to repair dangling reference: $repaired"
+
 	echo "'ls' should success after layout LFSCK repairing"
-	ls -ail $DIR/$tdir > /dev/null || error "(5) ls should success."
+	ls -ail $DIR/$tdir > /dev/null || error "(8) ls should success."
 }
 run_test 14 "LFSCK can repair MDT-object with dangling reference"
 
@@ -1940,7 +1955,7 @@ test_18d() {
 		error "(1) Expect incorrect file2 size"
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
-	$START_LAYOUT -o || error "(2) Fail to start LFSCK for layout!"
+	$START_LAYOUT -o -c || error "(2) Fail to start LFSCK for layout!"
 
 	for k in $(seq $MDSCOUNT); do
 		# The LFSCK status query internal is 30 seconds. For the case
@@ -2039,7 +2054,7 @@ test_18e() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1602
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
-	$START_LAYOUT -o || error "(2) Fail to start LFSCK for layout!"
+	$START_LAYOUT -o -c || error "(2) Fail to start LFSCK for layout!"
 
 	wait_update_facet mds1 "$LCTL get_param -n \
 		mdd.$(facet_svc mds1).lfsck_layout |

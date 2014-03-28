@@ -2737,16 +2737,24 @@ put:
 	return rc > 0 ? 0 : rc;
 }
 
-/* For the MDT-object with dangling reference, we need to re-create
- * the missed OST-object with the known FID/owner information. */
-static int lfsck_layout_recreate_ostobj(const struct lu_env *env,
+/* For the MDT-object with dangling reference, we need to repare the
+ * inconsistency according to the LFSCK sponsor's requirement:
+ *
+ * 1) Keep the inconsistency there and report the inconsistency case,
+ *    then give the chance to the application to find related issues,
+ *    and the users can make the decision about how to handle it with
+ *    more human knownledge. (by default)
+ *
+ * 2) Re-create the missed OST-object with the FID/owner information. */
+static int lfsck_layout_repair_dangling(const struct lu_env *env,
 					struct lfsck_component *com,
 					struct lfsck_layout_req *llr,
-					struct lu_attr *la)
+					const struct lu_attr *pla)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct filter_fid		*pfid	= &info->lti_new_pfid;
 	struct dt_allocation_hint	*hint	= &info->lti_hint;
+	struct lu_attr			*cla    = &info->lti_la2;
 	struct dt_object		*parent = llr->llr_parent->llo_obj;
 	struct dt_object		*child  = llr->llr_child;
 	struct dt_device		*dev	= lfsck_obj2dt_dev(child);
@@ -2755,12 +2763,30 @@ static int lfsck_layout_recreate_ostobj(const struct lu_env *env,
 	struct lu_buf			*buf;
 	struct lustre_handle		 lh	= { 0 };
 	int				 rc;
+	bool				 create;
 	ENTRY;
 
-	CDEBUG(D_LFSCK, "Repair dangling reference for: parent "DFID
-	       ", child "DFID", OST-index %u, stripe-index %u, owner %u:%u\n",
+	if (com->lc_lfsck->li_bookmark_ram.lb_param & LPF_CREATE_OSTOBJ)
+		create = true;
+	else
+		create = false;
+
+	CDEBUG(D_LFSCK, "Found dangling reference for: parent "DFID
+	       ", child "DFID", OST-index %u, stripe-index %u, owner %u:%u. %s",
 	       PFID(lfsck_dto2fid(parent)), PFID(lfsck_dto2fid(child)),
-	       llr->llr_ost_idx, llr->llr_lov_idx, la->la_uid, la->la_gid);
+	       llr->llr_ost_idx, llr->llr_lov_idx, pla->la_uid, pla->la_gid,
+	       create ? "Create the lost OST-object as required.\n" :
+			"Keep the MDT-object there by default.\n");
+
+	if (!create)
+		RETURN(1);
+
+	memset(cla, 0, sizeof(*cla));
+	cla->la_uid = pla->la_uid;
+	cla->la_gid = pla->la_gid;
+	cla->la_mode = S_IFREG | 0666;
+	cla->la_valid = LA_TYPE | LA_MODE | LA_UID | LA_GID |
+			LA_ATIME | LA_MTIME | LA_CTIME;
 
 	rc = lfsck_layout_lock(env, com, parent, &lh,
 			       MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR);
@@ -2781,7 +2807,7 @@ static int lfsck_layout_recreate_ostobj(const struct lu_env *env,
 	pfid->ff_parent.f_stripe_idx = cpu_to_le32(llr->llr_lov_idx);
 	buf = lfsck_buf_get(env, pfid, sizeof(struct filter_fid));
 
-	rc = dt_declare_create(env, child, la, hint, NULL, handle);
+	rc = dt_declare_create(env, child, cla, hint, NULL, handle);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -2798,7 +2824,7 @@ static int lfsck_layout_recreate_ostobj(const struct lu_env *env,
 	if (unlikely(lu_object_is_dying(parent->do_lu.lo_header)))
 		GOTO(unlock2, rc = 1);
 
-	rc = dt_create(env, child, la, hint, NULL, handle);
+	rc = dt_create(env, child, cla, hint, NULL, handle);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
@@ -3293,13 +3319,7 @@ repair:
 
 	switch (type) {
 	case LLIT_DANGLING:
-		memset(cla, 0, sizeof(*cla));
-		cla->la_uid = pla->la_uid;
-		cla->la_gid = pla->la_gid;
-		cla->la_mode = S_IFREG | 0666;
-		cla->la_valid = LA_TYPE | LA_MODE | LA_UID | LA_GID |
-				LA_ATIME | LA_MTIME | LA_CTIME;
-		rc = lfsck_layout_recreate_ostobj(env, com, llr, cla);
+		rc = lfsck_layout_repair_dangling(env, com, llr, pla);
 		break;
 	case LLIT_UNMATCHED_PAIR:
 		rc = lfsck_layout_repair_unmatched_pair(env, com, llr, pla);
@@ -3376,7 +3396,7 @@ static int lfsck_layout_assistant(void *args)
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_START;
 	lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
-		       LSV_ASYNC_WINDOWS;
+		       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ;
 	lr->lr_speed = bk->lb_speed_limit;
 	lr->lr_version = bk->lb_version;
 	lr->lr_param = bk->lb_param;

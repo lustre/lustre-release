@@ -35,22 +35,25 @@
 
 enum lfsck_param_flags {
 	/* Reset LFSCK iterator position to the device beginning. */
-	LPF_RESET       = 0x0001,
+	LPF_RESET		= 0x0001,
 
 	/* Exit when fail. */
-	LPF_FAILOUT     = 0x0002,
+	LPF_FAILOUT		= 0x0002,
 
 	/* Dryrun mode, only check without modification */
-	LPF_DRYRUN      = 0x0004,
+	LPF_DRYRUN		= 0x0004,
 
 	/* LFSCK runs on all targets. */
-	LPF_ALL_TGT	= 0x0008,
+	LPF_ALL_TGT		= 0x0008,
 
 	/* Broadcast the command to other MDTs. Only valid on the sponsor MDT */
-	LPF_BROADCAST	= 0x0010,
+	LPF_BROADCAST		= 0x0010,
 
 	/* Handle orphan objects. */
-	LPF_ORPHAN	= 0x0020,
+	LPF_ORPHAN		= 0x0020,
+
+	/* Create OST-object for dangling LOV EA. */
+	LPF_CREATE_OSTOBJ	= 0x0040,
 };
 
 enum lfsck_type {
@@ -81,6 +84,7 @@ enum lfsck_start_valid {
 	LSV_ERROR_HANDLE	= 0x00000002,
 	LSV_DRYRUN		= 0x00000004,
 	LSV_ASYNC_WINDOWS	= 0x00000008,
+	LSV_CREATE_OSTOBJ	= 0x00000010,
 };
 
 /* Arguments for starting lfsck. */

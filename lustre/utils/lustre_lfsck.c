@@ -46,17 +46,18 @@
 #include <lnet/lnetctl.h>
 
 static struct option long_opt_start[] = {
-	{"device",      required_argument, 0, 'M'},
-	{"error",       required_argument, 0, 'e'},
-	{"help",	no_argument,       0, 'h'},
-	{"dryrun",      required_argument, 0, 'n'},
-	{"reset",       no_argument,       0, 'r'},
-	{"speed",       required_argument, 0, 's'},
-	{"all", 	no_argument,       0, 'A'},
-	{"type",	required_argument, 0, 't'},
-	{"windows",	required_argument, 0, 'w'},
-	{"orphan", 	no_argument,       0, 'o'},
-	{0,		0,		   0,   0}
+	{"device",		required_argument, 0, 'M'},
+	{"all",			no_argument,	   0, 'A'},
+	{"create_ostobj",	optional_argument, 0, 'c'},
+	{"error",		required_argument, 0, 'e'},
+	{"help",		no_argument,	   0, 'h'},
+	{"dryrun",		optional_argument, 0, 'n'},
+	{"orphan",		no_argument,	   0, 'o'},
+	{"reset",		no_argument,	   0, 'r'},
+	{"speed",		required_argument, 0, 's'},
+	{"type",		required_argument, 0, 't'},
+	{"windows",		required_argument, 0, 'w'},
+	{0,			0,		   0,  0 }
 };
 
 static struct option long_opt_stop[] = {
@@ -96,23 +97,26 @@ static void usage_start(void)
 	fprintf(stderr, "Start LFSCK.\n"
 		"SYNOPSIS:\n"
 		"lfsck_start <-M | --device [MDT,OST]_device>\n"
+		"	     [-A | --all] [-c | --create_ostobj [swtich]]\n"
 		"	     [-e | --error error_handle] [-h | --help]\n"
-		"	     [-n | --dryrun switch] [-r | --reset]\n"
-		"	     [-s | --speed speed_limit] [-A | --all]\n"
+		"	     [-n | --dryrun [switch]] [-o | --orphan]\n"
+		"	     [-r | --reset] [-s | --speed speed_limit]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
-		"	     [-w | --windows win_size] [-o | --orphan]\n"
+		"	     [-w | --windows win_size]\n"
 		"OPTIONS:\n"
 		"-M: The device to start LFSCK/scrub on.\n"
+		"-A: Start LFSCK on all MDT devices.\n"
+		"-c: create the lost OST-object for dangling LOV EA. "
+		    "'off'(default) or 'on'.\n"
 		"-e: Error handle, 'continue'(default) or 'abort'.\n"
 		"-h: Help information.\n"
 		"-n: Check without modification. 'off'(default) or 'on'.\n"
+		"-o: handle orphan objects.\n"
 		"-r: Reset scanning start position to the device beginning.\n"
 		"-s: How many items can be scanned at most per second. "
 		    "'%d' means no limit (default).\n"
-		"-A: Start LFSCK on all MDT devices.\n"
 		"-t: The LFSCK type(s) to be started.\n"
-		"-w: The windows size for async requests pipeline.\n"
-		"-o: handle orphan objects.\n",
+		"-w: The windows size for async requests pipeline.\n",
 		LFSCK_SPEED_NO_LIMIT);
 }
 
@@ -151,7 +155,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:e:hn:rs:At:w:o";
+	char *optstring = "M:Ac::e:hn::ors:t:w:";
 	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
@@ -171,6 +175,22 @@ int jt_lfsck_start(int argc, char **argv)
 			if (rc != 0)
 				return rc;
 			break;
+		case 'A':
+			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
+			break;
+		case 'c':
+			if (optarg == NULL || strcmp(optarg, "on") == 0) {
+				start.ls_flags |= LPF_CREATE_OSTOBJ;
+			} else if (strcmp(optarg, "off") != 0) {
+				fprintf(stderr, "Invalid switch: %s. "
+					"The valid switch should be: 'on' "
+					"or 'off' (default) without blank, "
+					"or empty. For example: '-non' or "
+					"'-noff' or '-n'.\n", optarg);
+				return -EINVAL;
+			}
+			start.ls_valid |= LSV_CREATE_OSTOBJ;
+			break;
 		case 'e':
 			if (strcmp(optarg, "abort") == 0) {
 				start.ls_flags |= LPF_FAILOUT;
@@ -186,15 +206,21 @@ int jt_lfsck_start(int argc, char **argv)
 			usage_start();
 			return 0;
 		case 'n':
-			if (strcmp(optarg, "on") == 0) {
+			if (optarg == NULL || strcmp(optarg, "on") == 0) {
 				start.ls_flags |= LPF_DRYRUN;
 			} else if (strcmp(optarg, "off") != 0) {
-				fprintf(stderr, "Invalid dryrun switch: %s. "
-					"The valid value shou be: 'off'"
-					"(default) or 'on'\n", optarg);
+				fprintf(stderr, "Invalid switch: %s. "
+					"The valid switch should be: 'on' "
+					"or 'off' (default) without blank, "
+					"or empty. For example: '-non' or "
+					"'-noff' or '-n'.\n", optarg);
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_DRYRUN;
+			break;
+		case 'o':
+			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST |
+					  LPF_ORPHAN;
 			break;
 		case 'r':
 			start.ls_flags |= LPF_RESET;
@@ -203,9 +229,6 @@ int jt_lfsck_start(int argc, char **argv)
 			val = atoi(optarg);
 			start.ls_speed_limit = val;
 			start.ls_valid |= LSV_SPEED_LIMIT;
-			break;
-		case 'A':
-			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
 			break;
 		case 't': {
 			char *str = optarg, *p, c;
@@ -263,10 +286,6 @@ int jt_lfsck_start(int argc, char **argv)
 
 			start.ls_async_windows = val;
 			start.ls_valid |= LSV_ASYNC_WINDOWS;
-			break;
-		case 'o':
-			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST |
-					  LPF_ORPHAN;
 			break;
 		default:
 			fprintf(stderr, "Invalid option, '-h' for help.\n");

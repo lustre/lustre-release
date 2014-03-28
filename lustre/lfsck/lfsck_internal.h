@@ -246,7 +246,7 @@ struct lfsck_layout {
 	/* How many objects failed to be processed during double scan. */
 	__u64	ll_objs_failed_phase2;
 
-	/* kinds of inconsistency have been repaired.
+	/* kinds of inconsistency have been or to be repaired.
 	 * ll_objs_repaired[type - 1] is the count for the given @type. */
 	__u64	ll_objs_repaired[LLIT_MAX];
 

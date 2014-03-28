@@ -94,6 +94,7 @@ const char *lfsck_param_names[] = {
 	"all_targets",
 	"broadcast",
 	"orphan",
+	"create_ostobj",
 	NULL
 };
 
@@ -2141,6 +2142,18 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		   start->ls_flags & LPF_ORPHAN) {
 		bk->lb_param |= LPF_ORPHAN;
 		dirty = true;
+	}
+
+	if (start->ls_valid & LSV_CREATE_OSTOBJ) {
+		if (bk->lb_param & LPF_CREATE_OSTOBJ &&
+		    !(start->ls_flags & LPF_CREATE_OSTOBJ)) {
+			bk->lb_param &= ~LPF_CREATE_OSTOBJ;
+			dirty = true;
+		} else if (!(bk->lb_param & LPF_CREATE_OSTOBJ) &&
+			   start->ls_flags & LPF_CREATE_OSTOBJ) {
+			bk->lb_param |= LPF_CREATE_OSTOBJ;
+			dirty = true;
+		}
 	}
 
 	if (dirty) {
