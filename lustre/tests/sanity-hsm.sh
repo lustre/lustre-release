@@ -4002,7 +4002,7 @@ test_402() {
 	copytool_cleanup
 
 	# deactivate all mdc on agent1
-	mdc_change_state $SINGLEAGT "MDT000." "deactivate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "deactivate"
 
 	copytool_setup $SINGLEAGT
 
@@ -4012,7 +4012,7 @@ test_402() {
 	search_copytools $agent && error "Copytool start should have failed"
 
 	# reactivate MDCs
-	mdc_change_state $SINGLEAGT "MDT000." "activate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "activate"
 }
 run_test 402 "Copytool start fails if all MDTs are inactive"
 
@@ -4026,7 +4026,7 @@ test_403() {
 	local uuid=$(do_rpc_nodes $agent get_client_uuid | cut -d' ' -f2)
 
 	# deactivate all mdc for MDT0001
-	mdc_change_state $SINGLEAGT "MDT0001" "deactivate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "deactivate"
 
 	copytool_setup
 	# check the agent is registered on MDT0000, and not on MDT0001
@@ -4037,7 +4037,7 @@ test_403() {
 	search_copytools $agent || error "No running copytools on $agent"
 
 	# reactivate all mdc for MDT0001
-	mdc_change_state $SINGLEAGT "MDT0001" "activate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "activate"
 
 	# make sure the copytool is now registered to all MDTs
 	check_agent_registered $uuid
@@ -4061,7 +4061,7 @@ test_404() {
 	local fid1=$(make_small $dir_mdt0/$tfile)
 
 	# deactivate all mdc for MDT0001
-	mdc_change_state $SINGLEAGT "MDT0001" "deactivate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "deactivate"
 
 	# send an HSM request for files in MDT0000
 	$LFS hsm_archive $dir_mdt0/$tfile || error "lfs hsm_archive"
@@ -4071,7 +4071,7 @@ test_404() {
 		echo "archive successful on mdt0"
 
 	# reactivate all mdc for MDT0001
-	mdc_change_state $SINGLEAGT "MDT0001" "activate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "activate"
 
 	copytool_cleanup
 	# clean test files and directories
