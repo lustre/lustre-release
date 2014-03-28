@@ -248,8 +248,8 @@ static char *convert_hostnames(char *s1)
 		*s2 = sep;
 
                 if (nid == LNET_NID_ANY) {
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n",
-                                progname, s1);
+			fprintf(stderr, "%s: Cannot resolve hostname '%s'.\n",
+				progname, s1);
                         free(converted);
                         return NULL;
                 }
