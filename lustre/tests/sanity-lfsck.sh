@@ -844,10 +844,11 @@ test_9a() {
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
-	sleep 5
-	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "completed" ] ||
-		error "(7) Expect 'completed', but got '$STATUS'"
+
+	wait_update_facet $SINGLEMDS \
+	    "$LCTL get_param -n mdd.${MDT_DEV}.lfsck_namespace|\
+	    awk '/^status/ { print \\\$2 }'" "completed" 30 ||
+		error "(7) Failed to get expected 'completed'"
 }
 run_test 9a "LFSCK speed control (1)"
 
@@ -1433,7 +1434,8 @@ test_15b() {
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
-	touch $DIR/$tdir/guard
+	dd if=/dev/zero of=$DIR/$tdir/guard bs=1K count=1
+	cancel_lru_locks osc
 
 	echo "Inject failure stub to make the OST-object to back point to"
 	echo "other MDT-object"
