@@ -2402,11 +2402,11 @@ int __init ofd_init(void)
 
 	lprocfs_ofd_init_vars(&lvars);
 
-	rc = class_register_type(&ofd_obd_ops, NULL, NULL,
+	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				 lvars.module_vars,
 #endif
-				LUSTRE_OST_NAME, &ofd_device_type);
+				 LUSTRE_OST_NAME, &ofd_device_type);
 	return rc;
 }
 

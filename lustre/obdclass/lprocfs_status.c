@@ -1936,7 +1936,6 @@ lprocfs_seq_obd_setup(struct obd_device *obd)
 	int rc = 0;
 
 	LASSERT(obd != NULL);
-	LASSERT(obd->obd_vars != NULL);
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 	LASSERT(obd->obd_type->typ_procroot != NULL);
 

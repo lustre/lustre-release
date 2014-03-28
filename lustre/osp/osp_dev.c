@@ -1239,7 +1239,7 @@ struct llog_operations osp_mds_ost_orig_logops;
 static int __init osp_mod_init(void)
 {
 	struct lprocfs_static_vars	 lvars;
-	cfs_proc_dir_entry_t		*osc_proc_dir;
+	struct obd_type *type;
 	int				 rc;
 
 	rc = lu_kmem_init(osp_caches);
@@ -1248,11 +1248,11 @@ static int __init osp_mod_init(void)
 
 	lprocfs_osp_init_vars(&lvars);
 
-	rc = class_register_type(&osp_obd_device_ops, NULL, NULL,
+	rc = class_register_type(&osp_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				 lvars.module_vars,
 #endif
-				LUSTRE_OSP_NAME, &osp_device_type);
+				 LUSTRE_OSP_NAME, &osp_device_type);
 
 	/* create "osc" entry in procfs for compatibility purposes */
 	if (rc != 0) {
@@ -1262,11 +1262,11 @@ static int __init osp_mod_init(void)
 
 	lprocfs_lwp_init_vars(&lvars);
 
-	rc = class_register_type(&lwp_obd_device_ops, NULL, NULL,
+	rc = class_register_type(&lwp_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				 lvars.module_vars,
 #endif
-				LUSTRE_LWP_NAME, &lwp_device_type);
+				 LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
 		class_unregister_type(LUSTRE_OSP_NAME);
 		lu_kmem_fini(osp_caches);
@@ -1278,14 +1278,17 @@ static int __init osp_mod_init(void)
 	osp_mds_ost_orig_logops.lop_add = llog_cat_add_rec;
 	osp_mds_ost_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
 
-	osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
-	if (osc_proc_dir == NULL) {
-		osc_proc_dir = lprocfs_register("osc", proc_lustre_root, NULL,
-						NULL);
-		if (IS_ERR(osc_proc_dir))
-			CERROR("osp: can't create compat entry \"osc\": %d\n",
-			       (int) PTR_ERR(osc_proc_dir));
-	}
+	/* create "osc" entry in procfs for compatibility purposes */
+	type = class_search_type(LUSTRE_OSC_NAME);
+	if (type != NULL && type->typ_procroot != NULL)
+		return rc;
+
+	type = class_search_type(LUSTRE_OSP_NAME);
+	type->typ_procsym = lprocfs_register("osc", proc_lustre_root,
+					     NULL, NULL);
+	if (IS_ERR(type->typ_procsym))
+		CERROR("osp: can't create compat entry \"osc\": %d\n",
+		       (int) PTR_ERR(type->typ_procsym));
 	return rc;
 }
 

@@ -466,11 +466,11 @@ int qmt_glb_init(void)
 	int rc;
 	ENTRY;
 
-	rc = class_register_type(&qmt_obd_ops, NULL, NULL,
+	rc = class_register_type(&qmt_obd_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				NULL,
+				 NULL,
 #endif
-				LUSTRE_QMT_NAME, &qmt_device_type);
+				 LUSTRE_QMT_NAME, &qmt_device_type);
 	RETURN(rc);
 }
 

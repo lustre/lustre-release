@@ -539,11 +539,11 @@ int mds_mod_init(void)
 		mds_num_threads = mdt_num_threads;
 	}
 
-	return class_register_type(&mds_obd_device_ops, NULL, NULL,
+	return class_register_type(&mds_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-					lprocfs_mds_module_vars,
+				   lprocfs_mds_module_vars,
 #endif
-					LUSTRE_MDS_NAME, &mds_device_type);
+				   LUSTRE_MDS_NAME, &mds_device_type);
 }
 
 void mds_mod_exit(void)

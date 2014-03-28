@@ -270,9 +270,6 @@ static int lmv_connect(const struct lu_env *env,
                        struct obd_uuid *cluuid, struct obd_connect_data *data,
                        void *localdata)
 {
-#ifdef __KERNEL__
-        struct proc_dir_entry *lmv_proc_dir;
-#endif
         struct lmv_obd        *lmv = &obd->u.lmv;
         struct lustre_handle  conn = { 0 };
         int                    rc = 0;
@@ -304,21 +301,16 @@ static int lmv_connect(const struct lu_env *env,
         if (data)
                 lmv->conn_data = *data;
 
-#ifdef __KERNEL__
-	if (obd->obd_proc_private != NULL) {
-		lmv_proc_dir = obd->obd_proc_private;
-	} else {
-		lmv_proc_dir = lprocfs_seq_register("target_obds",
-						    obd->obd_proc_entry,
-						    NULL, NULL);
-		if (IS_ERR(lmv_proc_dir)) {
+	if (obd->obd_type->typ_procsym == NULL) {
+		obd->obd_type->typ_procsym = lprocfs_seq_register("target_obds",
+							 obd->obd_proc_entry,
+							 NULL, NULL);
+		if (IS_ERR(obd->obd_type->typ_procsym)) {
 			CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
 			       obd->obd_type->typ_name, obd->obd_name);
-			lmv_proc_dir = NULL;
+			obd->obd_type->typ_procsym = NULL;
 		}
-		obd->obd_proc_private = lmv_proc_dir;
 	}
-#endif
 
         /*
          * All real clients should perform actual connection right away, because
@@ -329,12 +321,8 @@ static int lmv_connect(const struct lu_env *env,
 	if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_REAL))
                 rc = lmv_check_connect(obd);
 
-#ifdef __KERNEL__
-	if (rc && lmv_proc_dir) {
-		lprocfs_remove(&lmv_proc_dir);
-		obd->obd_proc_private = NULL;
-	}
-#endif
+	if (rc && obd->obd_type->typ_procsym != NULL)
+		lprocfs_remove(&obd->obd_type->typ_procsym);
         RETURN(rc);
 }
 
@@ -416,9 +404,6 @@ static int lmv_init_ea_size(struct obd_export *exp, int easize,
 
 int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
-#ifdef __KERNEL__
-        struct proc_dir_entry   *lmv_proc_dir;
-#endif
         struct lmv_obd          *lmv = &obd->u.lmv;
         struct obd_uuid         *cluuid = &lmv->cluuid;
         struct obd_uuid          lmv_mdc_uuid = { "LMV_MDC_UUID" };
@@ -497,15 +482,13 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
 		atomic_read(&obd->obd_refcount));
 
-#ifdef __KERNEL__
-	lmv_proc_dir = obd->obd_proc_private;
-	if (lmv_proc_dir) {
+	if (obd->obd_type->typ_procsym != NULL) {
 		struct proc_dir_entry *mdc_symlink;
 
 		LASSERT(mdc_obd->obd_type != NULL);
 		LASSERT(mdc_obd->obd_type->typ_name != NULL);
 		mdc_symlink = lprocfs_add_symlink(mdc_obd->obd_name,
-						  lmv_proc_dir,
+						  obd->obd_type->typ_procsym,
 						  "../../../%s/%s",
 						  mdc_obd->obd_type->typ_name,
 						  mdc_obd->obd_name);
@@ -514,11 +497,9 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 			       "/proc/fs/lustre/%s/%s/target_obds/%s.",
 			       obd->obd_type->typ_name, obd->obd_name,
 			       mdc_obd->obd_name);
-			lprocfs_remove(&lmv_proc_dir);
-			obd->obd_proc_private = NULL;
+			lprocfs_remove(&obd->obd_type->typ_procsym);
 		}
 	}
-#endif
 	RETURN(0);
 }
 
@@ -706,9 +687,6 @@ int lmv_check_connect(struct obd_device *obd)
 
 static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
-#ifdef __KERNEL__
-        struct proc_dir_entry  *lmv_proc_dir;
-#endif
         struct lmv_obd         *lmv = &obd->u.lmv;
         struct obd_device      *mdc_obd;
         int                     rc;
@@ -725,11 +703,10 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 mdc_obd->obd_no_recov = obd->obd_no_recov;
         }
 
-#ifdef __KERNEL__
-	lmv_proc_dir = obd->obd_proc_private;
-	if (lmv_proc_dir)
-		lprocfs_remove_proc_entry(mdc_obd->obd_name, lmv_proc_dir);
-#endif
+	if (obd->obd_type->typ_procsym != NULL)
+		lprocfs_remove_proc_entry(mdc_obd->obd_name,
+					  obd->obd_type->typ_procsym);
+
 	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
 	if (rc)
 		CERROR("Can't finanize fids factory\n");
@@ -777,13 +754,11 @@ static int lmv_disconnect(struct obd_export *exp)
 		lmv_disconnect_mdc(obd, lmv->tgts[i]);
         }
 
-#ifdef __KERNEL__
-	if (obd->obd_proc_private)
-		lprocfs_remove((struct proc_dir_entry **)&obd->obd_proc_private);
+	if (obd->obd_type->typ_procsym != NULL)
+		lprocfs_remove(&obd->obd_type->typ_procsym);
 	else
 		CERROR("/proc/fs/lustre/%s/%s/target_obds missing\n",
 		       obd->obd_type->typ_name, obd->obd_name);
-#endif
 
 out_local:
         /*
@@ -3423,11 +3398,11 @@ struct md_ops lmv_md_ops = {
 
 int __init lmv_init(void)
 {
-	return class_register_type(&lmv_obd_ops, &lmv_md_ops, NULL,
+	return class_register_type(&lmv_obd_ops, &lmv_md_ops, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-					NULL,
+				   NULL,
 #endif
-					LUSTRE_LMV_NAME, NULL);
+				   LUSTRE_LMV_NAME, NULL);
 }
 
 #ifdef __KERNEL__

@@ -1145,12 +1145,10 @@ static inline int lprocfs_seq_add_vars(cfs_proc_dir_entry_t *root,
 				       struct lprocfs_seq_vars *var,
 				       void *data)
 { return 0; }
-#ifndef HAVE_ONLY_PROCFS_SEQ
 static inline cfs_proc_dir_entry_t *
 lprocfs_seq_register(const char *name, cfs_proc_dir_entry_t *parent,
-		     struct lprocfs_vars *list, void *data)
+		     struct lprocfs_seq_vars *list, void *data)
 { return NULL; }
-#endif
 static inline void lprocfs_remove(cfs_proc_dir_entry_t **root)
 { return; }
 static inline void lprocfs_remove_proc_entry(const char *name,

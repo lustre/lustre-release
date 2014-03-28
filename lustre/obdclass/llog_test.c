@@ -1261,11 +1261,11 @@ static struct obd_ops llog_obd_ops = {
 
 static int __init llog_test_init(void)
 {
-	return class_register_type(&llog_obd_ops, NULL, NULL,
+	return class_register_type(&llog_obd_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-					NULL,
+				   NULL,
 #endif
-					"llog_test", NULL);
+				   "llog_test", NULL);
 }
 
 static void __exit llog_test_exit(void)

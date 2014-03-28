@@ -162,7 +162,7 @@ EXPORT_SYMBOL(class_put_type);
 #define CLASS_MAX_NAME 1024
 
 int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
-			struct lprocfs_seq_vars *module_vars,
+			bool enable_proc, struct lprocfs_seq_vars *module_vars,
 #ifndef HAVE_ONLY_PROCFS_SEQ
 			struct lprocfs_vars *vars,
 #endif
@@ -202,22 +202,24 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	spin_lock_init(&type->obd_type_lock);
 
 #ifdef LPROCFS
+	if (enable_proc) {
 #ifndef HAVE_ONLY_PROCFS_SEQ
-	if (vars) {
-		type->typ_procroot = lprocfs_register(type->typ_name,
-							proc_lustre_root,
-							vars, type);
-	} else
+		if (vars) {
+			type->typ_procroot = lprocfs_register(type->typ_name,
+							      proc_lustre_root,
+							      vars, type);
+		} else
 #endif
-	{
-		type->typ_procroot = lprocfs_seq_register(type->typ_name,
-							proc_lustre_root,
-							module_vars, type);
-	}
-	if (IS_ERR(type->typ_procroot)) {
-		rc = PTR_ERR(type->typ_procroot);
-		type->typ_procroot = NULL;
-		GOTO (failed, rc);
+		{
+			type->typ_procroot = lprocfs_seq_register(type->typ_name,
+								  proc_lustre_root,
+								  module_vars, type);
+		}
+		if (IS_ERR(type->typ_procroot)) {
+			rc = PTR_ERR(type->typ_procroot);
+			type->typ_procroot = NULL;
+			GOTO(failed, rc);
+		}
 	}
 #endif
         if (ldt != NULL) {
@@ -233,18 +235,20 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 
         RETURN (0);
 
- failed:
-#ifdef LPROCFS
+failed:
 	if (type->typ_name != NULL) {
+#ifdef LPROCFS
+		if (type->typ_procroot != NULL) {
 #ifndef HAVE_ONLY_PROCFS_SEQ
-		lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
+			lprocfs_try_remove_proc_entry(type->typ_name,
+						      proc_lustre_root);
 #else
-		remove_proc_subtree(type->typ_name, proc_lustre_root);
+			remove_proc_subtree(type->typ_name, proc_lustre_root);
 #endif
-	}
+		}
 #endif
-        if (type->typ_name != NULL)
                 OBD_FREE(type->typ_name, strlen(name) + 1);
+	}
         if (type->typ_md_ops != NULL)
                 OBD_FREE_PTR(type->typ_md_ops);
         if (type->typ_dt_ops != NULL)
@@ -278,11 +282,16 @@ int class_unregister_type(const char *name)
 	 * we can't reference pointer as it can get invalided when another
 	 * module removes the entry */
 #ifdef LPROCFS
+	if (type->typ_procroot != NULL) {
 #ifndef HAVE_ONLY_PROCFS_SEQ
-	lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
+		lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
 #else
-	remove_proc_subtree(type->typ_name, proc_lustre_root);
+		remove_proc_subtree(type->typ_name, proc_lustre_root);
 #endif
+	}
+
+	if (type->typ_procsym != NULL)
+		lprocfs_remove(&type->typ_procsym);
 #endif
         if (type->typ_lu)
                 lu_device_type_fini(type->typ_lu);

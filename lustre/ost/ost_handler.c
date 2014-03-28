@@ -425,11 +425,11 @@ static int __init ost_init(void)
 
 	ENTRY;
 
-	rc = class_register_type(&ost_obd_ops, NULL, NULL,
+	rc = class_register_type(&ost_obd_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				NULL,
+				 NULL,
 #endif
-				LUSTRE_OSS_NAME, NULL);
+				 LUSTRE_OSS_NAME, NULL);
 
         if (ost_num_threads != 0 && oss_num_threads == 0) {
                 LCONSOLE_INFO("ost_num_threads module parameter is deprecated, "

@@ -5949,11 +5949,11 @@ static int __init mdt_mod_init(void)
 		GOTO(lu_fini, rc);
 
 	lprocfs_mdt_init_vars(&lvars);
-	rc = class_register_type(&mdt_obd_device_ops, NULL, NULL,
+	rc = class_register_type(&mdt_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				lvars.module_vars,
+				 lvars.module_vars,
 #endif
-				LUSTRE_MDT_NAME, &mdt_device_type);
+				 LUSTRE_MDT_NAME, &mdt_device_type);
 	if (rc)
 		GOTO(mds_fini, rc);
 lu_fini:
