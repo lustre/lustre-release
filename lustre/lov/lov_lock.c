@@ -723,6 +723,7 @@ static int lov_lock_unuse(const struct lu_env *env,
 				lov_sublock_release(env, lck, i, 0, 0);
 				break;
 			default:
+				cl_lock_cancel(subenv->lse_env, sublock);
 				lov_sublock_release(env, lck, i, 1, 0);
 				break;
 			}
@@ -779,6 +780,7 @@ static void lov_lock_cancel(const struct lu_env *env,
                                 lov_sublock_release(env, lck, i, 0, 0);
                                 break;
                         default:
+				cl_lock_cancel(subenv->lse_env, sublock);
                                 lov_sublock_release(env, lck, i, 1, 0);
                                 break;
                         }
