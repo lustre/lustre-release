@@ -105,6 +105,9 @@ init_agt_vars() {
 
 	# archive is purged at copytool setup
 	HSM_ARCHIVE_PURGE=true
+
+	# Don't allow copytool error upon start/setup
+	HSMTOOL_NOERROR=false
 }
 
 # Get the backend root path for the given agent facet.
@@ -239,8 +242,13 @@ copytool_setup() {
 	[[ -z "$TESTNAME" ]] || prefix=$prefix.$TESTNAME
 	local copytool_log=$prefix.copytool${arc_id}_log.$agent.log
 
-	do_facet $facet "$cmd < /dev/null > $copytool_log 2>&1" ||
-		error "start copytool $facet on $agent failed"
+	do_facet $facet "$cmd < /dev/null > $copytool_log 2>&1"
+	if [[ $? !=  0 ]]; then
+		[[ $HSMTOOL_NOERROR == true ]] ||
+			error "start copytool $facet on $agent failed"
+		echo "start copytool $facet on $agent failed"
+	fi
+
 	trap cleanup EXIT
 }
 
@@ -4007,7 +4015,7 @@ test_402() {
 	# deactivate all mdc on agent1
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "deactivate"
 
-	copytool_setup $SINGLEAGT
+	HSMTOOL_NOERROR=true copytool_setup $SINGLEAGT
 
 	check_agent_unregistered "uuid" # match any agent
 
