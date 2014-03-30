@@ -1838,7 +1838,7 @@ static int ct_setup(void)
 	if (rc < 0) {
 		CT_ERROR(rc, "cannot find a Lustre filesystem mounted at '%s'",
 			 opt.o_mnt);
-		return -rc;
+		return rc;
 	}
 
 	return rc;
@@ -1871,7 +1871,9 @@ int main(int argc, char **argv)
 		return -rc;
 	}
 
-	ct_setup();
+	rc = ct_setup();
+	if (rc < 0)
+		goto error_cleanup;
 
 	switch (opt.o_action) {
 	case CA_IMPORT:
@@ -1893,6 +1895,7 @@ int main(int argc, char **argv)
 			 " rc=%d (%s)", err_major, err_minor, rc,
 			 strerror(-rc));
 
+error_cleanup:
 	ct_cleanup();
 
 	return -rc;
