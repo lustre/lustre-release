@@ -3558,11 +3558,24 @@ int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 		LASSERT(lock != NULL);
 		LASSERT(ldlm_has_layout(lock));
 		if (result == 0) {
+			struct lustre_md *md = conf->u.coc_md;
+			__u32 gen = LL_LAYOUT_GEN_EMPTY;
+
 			/* it can only be allowed to match after layout is
 			 * applied to inode otherwise false layout would be
 			 * seen. Applying layout shoud happen before dropping
 			 * the intent lock. */
 			ldlm_lock_allow_match(lock);
+
+			lli->lli_has_smd = lsm_has_objects(md->lsm);
+			if (md->lsm != NULL)
+				gen = md->lsm->lsm_layout_gen;
+
+			CDEBUG(D_VFSTRACE,
+			       DFID ": layout version change: %u -> %u\n",
+			       PFID(&lli->lli_fid), ll_layout_version_get(lli),
+			       gen);
+			ll_layout_version_set(lli, gen);
 		}
 	}
 	RETURN(result);
