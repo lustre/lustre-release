@@ -792,7 +792,7 @@ static int vvp_io_write_start(const struct lu_env *env,
         ENTRY;
 
 	if (!can_populate_pages(env, io, inode))
-		return 0;
+		RETURN(0);
 
         if (cl_io_is_append(io)) {
                 /*
