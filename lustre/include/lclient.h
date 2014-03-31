@@ -481,6 +481,7 @@ enum op_cli_flags {
 	CLI_HASH64	= 1 << 2,
 	CLI_API32	= 1 << 3,
 	CLI_MIGRATE	= 1 << 4,
+	CLI_NEXT_ENTRY	= 1 << 5,
 };
 
 #endif /*LCLIENT_H */

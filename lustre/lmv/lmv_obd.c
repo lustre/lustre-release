@@ -2331,33 +2331,65 @@ static void lmv_adjust_dirpages(struct page **pages, int ncfspgs, int nlupgs)
 #define lmv_adjust_dirpages(pages, ncfspgs, nlupgs) do {} while (0)
 #endif	/* PAGE_CACHE_SIZE > LU_PAGE_SIZE */
 
+/**
+ * This function will read entry from a striped directory, bascially, it will
+ * read entries from all of stripes, and choose one closest to the required
+ * offset(&op_data->op_hash_offset). A few notes
+ * 1. skip . and .. for non-zero stripes, because there can only have one .
+ * and .. in a directory.
+ * 2. op_data will be shared by all of stripes, instead of allocating new
+ * one, so need to restore before reusing.
+ * 3. release the entry page if that is not being chosen.
+ *
+ * param[in]exp		obd export refer to LMV
+ * param[in]op_data	hold those MD parameters of read_entry.
+ * param[in]cb_op	ldlm callback being used in enqueue in mdc_read_entry
+ * param[out]ldp	the entry being read.
+ * param[out]ppage	the page holding the entry, note: because the entry
+ *                      will be accessed in upper layer, so we need hold the
+ *                      page until the usages of entry is finished, see
+ *                      ll_dir_entry_next.
+ *
+ * retval		=0 if get entry successfully
+ *                      <0 can not get entry.
+ */
 #define NORMAL_MAX_STRIPES 4
-int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **ldp,
-		   struct page **ppage)
+static int lmv_read_striped_entry(struct obd_export *exp,
+				  struct md_op_data *op_data,
+				  struct md_callback *cb_op,
+				  struct lu_dirent **ldp,
+				  struct page **ppage)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
 	struct lmv_stripe_md	*lsm = op_data->op_mea1;
+	struct lmv_tgt_desc	*tgt;
 	struct lu_dirent	*tmp_ents[NORMAL_MAX_STRIPES];
 	struct lu_dirent	**ents = NULL;
+	struct lu_fid		master_fid = op_data->op_fid1;
+	void			*master_data = op_data->op_data;
+	__u64			last_idx = op_data->op_stripe_offset;
+	__u64			hash_offset = op_data->op_hash_offset;
+	__u32			same_hash_offset = op_data->op_same_hash_offset;
+	__u32			cli_flags = op_data->op_cli_flags;
 	int			stripe_count;
 	__u64			min_hash;
+	int			min_same_hash_offset = 0;
 	int			min_idx = 0;
 	struct page		*min_page = NULL;
 	int			i;
 	int			rc;
 	ENTRY;
 
+	LASSERT(lsm != NULL);
+
 	rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
 
-	if (lsm == NULL)
-		stripe_count = 1;
-	else
-		stripe_count = lsm->lsm_md_stripe_count;
-
+	/* . and .. will be stored on the master object, so we need iterate
+	 * the master object as well */
+	stripe_count = lsm->lsm_md_stripe_count;
 	if (stripe_count > NORMAL_MAX_STRIPES) {
 		OBD_ALLOC(ents, sizeof(ents[0]) * stripe_count);
 		if (ents == NULL)
@@ -2369,53 +2401,142 @@ int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
 
 	min_hash = MDS_DIR_END_OFF;
 	for (i = 0; i < stripe_count; i++) {
-		struct lmv_tgt_desc *tgt;
 		struct page *page = NULL;
 
-		if (likely(lsm == NULL)) {
-			tgt = lmv_find_target(lmv, &op_data->op_fid1);
-			if (IS_ERR(tgt))
-				GOTO(out, rc = PTR_ERR(tgt));
-			LASSERT(op_data->op_data != NULL);
-		} else {
-			tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
-			if (IS_ERR(tgt))
-				GOTO(out, rc = PTR_ERR(tgt));
-			op_data->op_fid1 = lsm->lsm_md_oinfo[i].lmo_fid;
-			op_data->op_fid2 = lsm->lsm_md_oinfo[i].lmo_fid;
-			op_data->op_stripe_offset = i;
-		}
+		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
+		if (IS_ERR(tgt))
+			GOTO(out, rc = PTR_ERR(tgt));
 
+		if (last_idx != i)
+			op_data->op_same_hash_offset = 0;
+		else
+			op_data->op_same_hash_offset = same_hash_offset;
+
+		/* op_data will be shared by each stripe, so we need
+		 * reset these value for each stripe */
+		op_data->op_stripe_offset = i;
+		op_data->op_hash_offset = hash_offset;
+		op_data->op_cli_flags = cli_flags;
+		op_data->op_fid1 = lsm->lsm_md_oinfo[i].lmo_fid;
+		op_data->op_fid2 = lsm->lsm_md_oinfo[i].lmo_fid;
+		op_data->op_data = lsm->lsm_md_oinfo[i].lmo_root;
+
+next:
 		rc = md_read_entry(tgt->ltd_exp, op_data, cb_op, &ents[i],
 				   &page);
 		if (rc != 0)
 			GOTO(out, rc);
 
 		if (ents[i] != NULL &&
-		    le64_to_cpu(ents[i]->lde_hash) <= min_hash) {
-			if (min_page != NULL)
-				page_cache_release(min_page);
-			min_page = page;
-			min_hash = le64_to_cpu(ents[i]->lde_hash);
-			min_idx = i;
+		    (strncmp(ents[i]->lde_name, ".",
+			     le16_to_cpu(ents[i]->lde_namelen)) == 0 ||
+		    strncmp(ents[i]->lde_name, "..",
+			    le16_to_cpu(ents[i]->lde_namelen)) == 0)) {
+			if (i == 0) {
+				/* replace . with master FID */
+				if (le16_to_cpu(ents[i]->lde_namelen) == 1)
+					fid_cpu_to_le(&ents[i]->lde_fid,
+						      &master_fid);
+				else
+					fid_cpu_to_le(&ents[i]->lde_fid,
+						      &op_data->op_fid3);
+			} else {
+				/* skip . and .. for other stripes */
+				op_data->op_cli_flags |= CLI_NEXT_ENTRY;
+				op_data->op_hash_offset =
+					le64_to_cpu(ents[i]->lde_hash);
+				kunmap(page);
+				page_cache_release(page);
+				goto next;
+			}
+		}
+
+		if (ents[i] != NULL) {
+			/* If the hash value of read_entry is equal to the
+			 * current min_hash, which is very rare and only
+			 * happens if two entries have the same hash value
+			 * but on different stripes, in this case, we need
+			 * make sure these entries are being reading forward,
+			 * not backward, i.e. only reset the min_entry, if
+			 * current stripe is ahead of last entry. Note: if
+			 * there are hash conflict inside the entry, MDC
+			 * (see mdc_read_entry) will resolve them. */
+			if (le64_to_cpu(ents[i]->lde_hash) < min_hash ||
+			    (le64_to_cpu(ents[i]->lde_hash) == min_hash &&
+			     i >= last_idx)) {
+				if (min_page != NULL) {
+					kunmap(min_page);
+					page_cache_release(min_page);
+				}
+				min_page = page;
+				min_hash = le64_to_cpu(ents[i]->lde_hash);
+				min_same_hash_offset =
+					   op_data->op_same_hash_offset;
+				min_idx = i;
+			} else {
+				kunmap(page);
+				page_cache_release(page);
+			}
 		}
 	}
 
-	if (min_hash != MDS_DIR_END_OFF)
+	if (min_hash != MDS_DIR_END_OFF) {
 		*ldp = ents[min_idx];
-	else
+		op_data->op_stripe_offset = min_idx;
+		op_data->op_same_hash_offset = min_same_hash_offset;
+		*ppage = min_page;
+	} else {
 		*ldp = NULL;
+		*ppage = NULL;
+	}
 out:
+	/* We do not want to allocate md_op_data during each
+	 * dir entry reading, so op_data will be shared by every stripe,
+	 * then we need to restore it back to original value before
+	 * return to the upper layer */
+	op_data->op_hash_offset = hash_offset;
+	op_data->op_fid1 = master_fid;
+	op_data->op_fid2 = master_fid;
+	op_data->op_data = master_data;
+	op_data->op_cli_flags = cli_flags;
 	if (stripe_count > NORMAL_MAX_STRIPES && ents != NULL)
 		OBD_FREE(ents, sizeof(ents[0]) * stripe_count);
 
 	if (rc != 0 && min_page != NULL) {
 		kunmap(min_page);
 		page_cache_release(min_page);
-	} else {
-		*ppage = min_page;
 	}
 
+	RETURN(rc);
+}
+
+int lmv_read_entry(struct obd_export *exp, struct md_op_data *op_data,
+		   struct md_callback *cb_op, struct lu_dirent **ldp,
+		   struct page **ppage)
+{
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	struct lmv_stripe_md	*lsm = op_data->op_mea1;
+	struct lmv_tgt_desc	*tgt;
+	int			rc;
+	ENTRY;
+
+	rc = lmv_check_connect(obd);
+	if (rc != 0)
+		RETURN(rc);
+
+	if (unlikely(lsm != NULL)) {
+		rc = lmv_read_striped_entry(exp, op_data, cb_op,
+					    ldp, ppage);
+		RETURN(rc);
+	}
+
+	tgt = lmv_find_target(lmv, &op_data->op_fid1);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
+
+	rc = md_read_entry(tgt->ltd_exp, op_data, cb_op, ldp,
+			   ppage);
 	RETURN(rc);
 }
 

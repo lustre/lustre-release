@@ -984,6 +984,10 @@ struct md_op_data {
 	/* Used by readdir */
 	__u64                   op_hash_offset;
 
+	/* The offset of dir entry among the same hash entries, which
+	 * is used to resolve the hash conflict. */
+	__u32                   op_same_hash_offset;
+
 	/* Used by readdir */
 	__u32                   op_npages;
 

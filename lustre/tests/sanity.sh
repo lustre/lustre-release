@@ -1199,15 +1199,70 @@ test_24A() { # LU-3182
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 	createmany -m $DIR/$tdir/$tfile $NFILES
-	local t=`ls $DIR/$tdir | wc -l`
-	local u=`ls $DIR/$tdir | sort -u | wc -l`
-	if [ $t -ne $NFILES -o $u -ne $NFILES ] ; then
-		error "Expected $NFILES files, got $t ($u unique)"
+	local t=$(ls $DIR/$tdir | wc -l)
+	local u=$(ls $DIR/$tdir | sort -u | wc -l)
+	local v=$(ls -ai $DIR/$tdir | sort -u | wc -l)
+	if [ $t -ne $NFILES -o $u -ne $NFILES -o $v -ne $((NFILES + 2)) ] ; then
+		error "Expected $NFILES files, got $t ($u unique $v .&..)"
 	fi
 
 	rm -rf $DIR/$tdir || error "Can not delete directories"
 }
 run_test 24A "readdir() returns correct number of entries."
+
+test_24B() { # LU-4805
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local count
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "create striped dir failed"
+
+	count=$(ls -ai $DIR/$tdir/striped_dir | wc -l)
+	[ $count -eq 2 ] || error "Expected 2, got $count"
+
+	touch $DIR/$tdir/striped_dir/a
+
+	count=$(ls -ai $DIR/$tdir/striped_dir | wc -l)
+	[ $count -eq 3 ] || error "Expected 3, got $count"
+
+	touch $DIR/$tdir/striped_dir/.f
+
+	count=$(ls -ai $DIR/$tdir/striped_dir | wc -l)
+	[ $count -eq 4 ] || error "Expected 4, got $count"
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24B "readdir for striped dir return correct number of entries"
+
+test_24C() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	mkdir $DIR/$tdir/d0
+	mkdir $DIR/$tdir/d1
+
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/d0/striped_dir ||
+		error "create striped dir failed"
+
+	cd $DIR/$tdir/d0/striped_dir
+
+	local d0_ino=$(ls -i -l -a $DIR/$tdir | grep "d0" | awk '{print $1}')
+	local d1_ino=$(ls -i -l -a $DIR/$tdir | grep "d1" | awk '{print $1}')
+	local parent_ino=$(ls -i -l -a | grep "\.\." | awk '{print $1}')
+
+	[ "$d0_ino" = "$parent_ino" ] ||
+		error ".. wrong, expect $d0_ino, get $parent_ino"
+
+	mv $DIR/$tdir/d0/striped_dir $DIR/$tdir/d1/ ||
+		error "mv striped dir failed"
+
+	parent_ino=$(ls -i -l -a | grep "\.\." | awk '{print $1}')
+
+	[ "$d1_ino" = "$parent_ino" ] ||
+		error ".. wrong after mv, expect $d1_ino, get $parent_ino"
+}
+run_test 24C "check .. in striped dir"
 
 test_25a() {
 	echo '== symlink sanity ============================================='

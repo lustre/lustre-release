@@ -292,22 +292,20 @@ static struct dentry *ll_fh_to_parent(struct super_block *sb, struct fid *fid,
         RETURN(ll_iget_for_nfs(sb, &nfs_fid->lnf_parent, NULL));
 }
 
-static struct dentry *ll_get_parent(struct dentry *dchild)
+int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid)
 {
-        struct ptlrpc_request *req = NULL;
-        struct inode          *dir = dchild->d_inode;
-        struct ll_sb_info     *sbi;
-        struct dentry         *result = NULL;
-        struct mdt_body       *body;
-        static char           dotdot[] = "..";
-        struct md_op_data     *op_data;
-        int                   rc;
-	int		      lmmsize;
-        ENTRY;
+	struct ptlrpc_request	*req = NULL;
+	struct ll_sb_info	*sbi;
+	struct mdt_body		*body;
+	static const char	dotdot[] = "..";
+	struct md_op_data	*op_data;
+	int			rc;
+	int			lmmsize;
+	ENTRY;
 
-        LASSERT(dir && S_ISDIR(dir->i_mode));
+	LASSERT(dir && S_ISDIR(dir->i_mode));
 
-        sbi = ll_s2sbi(dir->i_sb);
+	sbi = ll_s2sbi(dir->i_sb);
 
 	CDEBUG(D_INFO, "%s: getting parent for ("DFID")\n",
 	       ll_get_fsname(dir->i_sb, NULL, 0),
@@ -315,23 +313,24 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
 
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc != 0)
-		RETURN(ERR_PTR(rc));
+		RETURN(rc);
 
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
 				     strlen(dotdot), lmmsize,
 				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
-		RETURN((void *)op_data);
+		RETURN(PTR_ERR(op_data));
 
 	rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
 	ll_finish_md_op_data(op_data);
-	if (rc) {
+	if (rc != 0) {
 		CERROR("%s: failure inode "DFID" get parent: rc = %d\n",
 		       ll_get_fsname(dir->i_sb, NULL, 0),
 		       PFID(ll_inode2fid(dir)), rc);
-		RETURN(ERR_PTR(rc));
+		RETURN(rc);
 	}
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+
 	/*
 	 * LU-3952: MDT may lost the FID of its parent, we should not crash
 	 * the NFS server, ll_iget_for_nfs() will handle the error.
@@ -339,11 +338,27 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
 	if (body->valid & OBD_MD_FLID) {
 		CDEBUG(D_INFO, "parent for "DFID" is "DFID"\n",
 		       PFID(ll_inode2fid(dir)), PFID(&body->fid1));
+		*parent_fid = body->fid1;
 	}
-	result = ll_iget_for_nfs(dir->i_sb, &body->fid1, NULL);
 
 	ptlrpc_req_finished(req);
-	RETURN(result);
+	RETURN(0);
+}
+
+static struct dentry *ll_get_parent(struct dentry *dchild)
+{
+	struct lu_fid	parent_fid = { 0 };
+	int		rc;
+	struct dentry	*dentry;
+	ENTRY;
+
+	rc = ll_dir_get_parent_fid(dchild->d_inode, &parent_fid);
+	if (rc != 0)
+		RETURN(ERR_PTR(rc));
+
+	dentry = ll_iget_for_nfs(dchild->d_inode->i_sb, &parent_fid, NULL);
+
+	RETURN(dentry);
 }
 
 struct export_operations lustre_export_operations = {

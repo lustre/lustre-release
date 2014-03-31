@@ -897,6 +897,7 @@ extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
 struct inode *search_inode_for_lustre(struct super_block *sb,
 				      const struct lu_fid *fid);
+int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid);
 
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;

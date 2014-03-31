@@ -162,16 +162,18 @@ struct lu_dirent *ll_dir_entry_start(struct inode *dir,
 				     struct md_op_data *op_data,
 				     struct page **ppage)
 {
-	struct lu_dirent *entry;
+	struct lu_dirent *entry = NULL;
 	struct md_callback cb_op;
 	int rc;
+	ENTRY;
 
 	LASSERT(*ppage == NULL);
 	cb_op.md_blocking_ast = ll_md_blocking_ast;
+	op_data->op_cli_flags &= ~CLI_NEXT_ENTRY;
 	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
 	if (rc != 0)
 		entry = ERR_PTR(rc);
-	return entry;
+	RETURN(entry);
 }
 
 struct lu_dirent *ll_dir_entry_next(struct inode *dir,
@@ -179,20 +181,25 @@ struct lu_dirent *ll_dir_entry_next(struct inode *dir,
 				    struct lu_dirent *ent,
 				    struct page **ppage)
 {
-	struct lu_dirent *entry;
+	struct lu_dirent *entry = NULL;
 	struct md_callback cb_op;
 	int rc;
+	ENTRY;
 
-	LASSERT(*ppage != NULL);
-	cb_op.md_blocking_ast = ll_md_blocking_ast;
 	op_data->op_hash_offset = le64_to_cpu(ent->lde_hash);
+
+	/* release last page */
+	LASSERT(*ppage != NULL);
 	kunmap(*ppage);
 	page_cache_release(*ppage);
-	*ppage = NULL;
+
+	cb_op.md_blocking_ast = ll_md_blocking_ast;
+	op_data->op_cli_flags |= CLI_NEXT_ENTRY;
 	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
 	if (rc != 0)
 		entry = ERR_PTR(rc);
-	return entry;
+
+	RETURN(entry);
 }
 
 #ifdef HAVE_DIR_CONTEXT
@@ -212,7 +219,6 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 	int			done = 0;
 	int			rc = 0;
 	__u64			hash = MDS_DIR_END_OFF;
-	__u64			last_hash = MDS_DIR_END_OFF;
 	struct page		*page = NULL;
 	ENTRY;
 
@@ -260,15 +266,15 @@ int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 #endif
 		if (done) {
 			if (op_data->op_hash_offset != MDS_DIR_END_OFF)
-				op_data->op_hash_offset = last_hash;
+				op_data->op_hash_offset = hash;
 			break;
-		} else {
-			last_hash = hash;
 		}
 	}
 
 	if (IS_ERR(ent))
 		rc = PTR_ERR(ent);
+	else if (ent == NULL)
+		op_data->op_hash_offset = MDS_DIR_END_OFF;
 
 	if (page != NULL) {
 		kunmap(page);
@@ -315,6 +321,27 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
+	if (unlikely(op_data->op_mea1 != NULL)) {
+		/* This is only needed for striped dir to fill ..,
+		 * see lmv_read_entry */
+		if (filp->f_dentry->d_parent != NULL &&
+		    filp->f_dentry->d_parent->d_inode != NULL) {
+			__u64 ibits = MDS_INODELOCK_UPDATE;
+			struct inode *parent =
+				filp->f_dentry->d_parent->d_inode;
+
+			if (ll_have_md_lock(parent, &ibits, LCK_MINMODE))
+				op_data->op_fid3 = *ll_inode2fid(parent);
+		}
+
+		/* If it can not find in cache, do lookup .. on the master
+		 * object */
+		if (fid_is_zero(&op_data->op_fid3)) {
+			rc = ll_dir_get_parent_fid(inode, &op_data->op_fid3);
+			if (rc != 0)
+				RETURN(rc);
+		}
+	}
 	op_data->op_hash_offset = pos;
 	op_data->op_max_pages = sbi->ll_md_brw_pages;
 #ifdef HAVE_DIR_CONTEXT
