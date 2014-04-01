@@ -1974,7 +1974,7 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
 static int
 lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
-                 struct ptlrpc_request **request)
+		 struct ptlrpc_request **preq)
 {
 	struct ptlrpc_request   *req = NULL;
 	struct obd_device       *obd = exp->exp_obd;
@@ -1996,12 +1996,11 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 	       op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
 	       tgt->ltd_idx);
 
-	rc = md_getattr_name(tgt->ltd_exp, op_data, request);
+	rc = md_getattr_name(tgt->ltd_exp, op_data, preq);
 	if (rc != 0)
 		RETURN(rc);
 
-	body = req_capsule_server_get(&(*request)->rq_pill,
-				      &RMF_MDT_BODY);
+	body = req_capsule_server_get(&(*preq)->rq_pill, &RMF_MDT_BODY);
 	LASSERT(body != NULL);
 
 	if (body->valid & OBD_MD_MDS) {
@@ -2011,7 +2010,8 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 
 		tgt = lmv_find_target(lmv, &rid);
 		if (IS_ERR(tgt)) {
-			ptlrpc_req_finished(*request);
+			ptlrpc_req_finished(*preq);
+			preq = NULL;
 			RETURN(PTR_ERR(tgt));
 		}
 
@@ -2020,8 +2020,8 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 		op_data->op_namelen = 0;
 		op_data->op_name = NULL;
 		rc = md_getattr_name(tgt->ltd_exp, op_data, &req);
-		ptlrpc_req_finished(*request);
-		*request = req;
+		ptlrpc_req_finished(*preq);
+		*preq = req;
 	}
 
 	RETURN(rc);
