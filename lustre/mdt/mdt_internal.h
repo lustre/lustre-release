@@ -474,31 +474,6 @@ static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
 	return mti;
 }
 
-/* ptlrpc request handler for MDT. All handlers are
- * grouped into several slices - struct mdt_opc_slice,
- * and stored in an array - mdt_handlers[].
- */
-struct mdt_handler {
-	/* The name of this handler. */
-	const char *mh_name;
-	/* Fail id for this handler, checked at the beginning of this handler*/
-	int	 mh_fail_id;
-	/* Operation code for this handler */
-	__u32       mh_opc;
-	/* flags are listed in enum mdt_handler_flags below. */
-	__u32       mh_flags;
-	/* The actual handler function to execute. */
-	int (*mh_act)(struct mdt_thread_info *info);
-	/* Request format for this request. */
-	const struct req_format *mh_fmt;
-};
-
-struct mdt_opc_slice {
-	__u32			mos_opc_start;
-	int			mos_opc_end;
-	struct mdt_handler	*mos_hs;
-};
-
 struct cdt_req_progress {
 	struct mutex		 crp_lock;	/**< protect tree */
 	struct interval_node	*crp_root;	/**< tree to track extent
