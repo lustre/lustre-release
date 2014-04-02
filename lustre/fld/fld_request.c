@@ -135,10 +135,19 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
 	else
 		hash = 0;
 
+again:
         cfs_list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
                 if (target->ft_idx == hash)
                         RETURN(target);
         }
+
+	if (hash != 0) {
+		/* It is possible the remote target(MDT) are not connected to
+		 * with client yet, so we will refer this to MDT0, which should
+		 * be connected during mount */
+		hash = 0;
+		goto again;
+	}
 
         CERROR("%s: Can't find target by hash %d (seq "LPX64"). "
                "Targets (%d):\n", fld->lcf_name, hash, seq,
