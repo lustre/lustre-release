@@ -85,6 +85,8 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 		strcat(enabled, "u");
 	if (qsd_type_enabled(qsd, GRPQUOTA))
 		strcat(enabled, "g");
+	if (qsd_type_enabled(qsd, PRJQUOTA))
+		strncat(enabled, "p", 1);
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
@@ -103,18 +105,24 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 			strcat(enabled, "u");
 		if (qsd->qsd_type_array[GRPQUOTA]->qqi_acct_obj != NULL)
 			strcat(enabled, "g");
+		if (qsd->qsd_type_array[PRJQUOTA]->qqi_acct_obj != NULL)
+			strncat(enabled, "p", 1);
 		if (strlen(enabled) == 0)
 			strcat(enabled, "none");
 		seq_printf(m, "space acct:     %s\n"
 			   "user uptodate:  glb[%d],slv[%d],reint[%d]\n"
-			   "group uptodate: glb[%d],slv[%d],reint[%d]\n",
+			   "group uptodate: glb[%d],slv[%d],reint[%d]\n"
+			   "project uptodate: glb[%d],slv[%d],reint[%d]\n",
 			   enabled,
 			   qsd->qsd_type_array[USRQUOTA]->qqi_glb_uptodate,
 			   qsd->qsd_type_array[USRQUOTA]->qqi_slv_uptodate,
 			   qsd->qsd_type_array[USRQUOTA]->qqi_reint,
 			   qsd->qsd_type_array[GRPQUOTA]->qqi_glb_uptodate,
 			   qsd->qsd_type_array[GRPQUOTA]->qqi_slv_uptodate,
-			   qsd->qsd_type_array[GRPQUOTA]->qqi_reint);
+			   qsd->qsd_type_array[GRPQUOTA]->qqi_reint,
+			   qsd->qsd_type_array[PRJQUOTA]->qqi_glb_uptodate,
+			   qsd->qsd_type_array[PRJQUOTA]->qqi_slv_uptodate,
+			   qsd->qsd_type_array[PRJQUOTA]->qqi_reint);
 	}
 	return 0;
 }
@@ -132,6 +140,8 @@ static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 		strcat(enabled, "u");
 	if (qsd_type_enabled(qsd, GRPQUOTA))
 		strcat(enabled, "g");
+	if (qsd_type_enabled(qsd, PRJQUOTA))
+		strncat(enabled, "p", 1);
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 

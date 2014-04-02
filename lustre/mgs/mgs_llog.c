@@ -3128,6 +3128,7 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 		CDEBUG(D_MGS, "global '%s'\n", quota);
 
 		if (strchr(tmp, 'u') == NULL && strchr(tmp, 'g') == NULL &&
+		    strchr(tmp, 'p') == NULL &&
 		    strcmp(tmp, "none") != 0) {
 			CERROR("enable option(%s) isn't supported\n", tmp);
 			return -EINVAL;

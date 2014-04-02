@@ -159,6 +159,8 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 		enabled |= 1 << USRQUOTA;
 	if (strchr(valstr, 'g'))
 		enabled |= 1 << GRPQUOTA;
+	if (strchr(valstr, 'p'))
+		enabled |= 1 << PRJQUOTA;
 
 	mutex_lock(&qfs->qfs_mutex);
 	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)

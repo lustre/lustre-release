@@ -64,7 +64,8 @@ static ssize_t quota_read_blk(const struct lu_env *env,
 	ENTRY;
 
 	memset(buf, 0, LUSTRE_DQBLKSIZE);
-	LASSERTF((type == USRQUOTA || type == GRPQUOTA), "type=%d\n", type);
+	LASSERTF((type == USRQUOTA || type == GRPQUOTA || type == PRJQUOTA),
+		 "type=%d\n", type);
 
 	ret = sb->s_op->quota_read(sb, type, buf, LUSTRE_DQBLKSIZE,
 				   blk << LUSTRE_DQBLKSIZE_BITS);
