@@ -99,7 +99,7 @@
 +
 +	if (path) {
 +		/* probably there is space in leaf? */
-+		depth = ext_depth(inode);
++		depth = path->p_depth;
 +		if (le16_to_cpu(path[depth].p_hdr->eh_entries)
 +				< le16_to_cpu(path[depth].p_hdr->eh_max))
 +			return 1;
