@@ -90,6 +90,7 @@ static const struct named_oid oids[] = {
 	{ .oid = OFD_HEALTH_CHECK_OID, .name = HEALTH_CHECK },
 	{ .oid = ACCT_USER_OID,	       .name = "acct_usr_inode" },
 	{ .oid = ACCT_GROUP_OID,       .name = "acct_grp_inode" },
+	{ .oid = ACCT_PROJECT_OID,     .name = "acct_prj_inode" },
 	{ .oid = REPLY_DATA_OID,       .name = REPLY_DATA },
 	{ .oid = 0 }
 };
@@ -481,17 +482,24 @@ static inline int fid_is_fs_root(const struct lu_fid *fid)
 		fid_oid(fid) == OSD_FS_ROOT_OID;
 }
 
-static inline uint64_t osd_oid(struct osd_device *dev, __u32 local_oid)
+static inline int osd_oid(struct osd_device *dev, __u32 local_oid,
+			       uint64_t *oid)
 {
 	switch (local_oid) {
 	case ACCT_USER_OID:
-		return dev->od_iusr_oid;
+		*oid = dev->od_iusr_oid;
+		return 0;
 	case ACCT_GROUP_OID:
-		return dev->od_igrp_oid;
+		*oid = dev->od_igrp_oid;
+		return 0;
+	case ACCT_PROJECT_OID:
+		/* TODO: real oid */
+		CERROR("unsupported quota oid: %#x\n", local_oid);
+		return -ENOTSUPP;
 	}
 
 	LASSERTF(0, "invalid oid: %u for quota type", local_oid);
-	return dev->od_igrp_oid;
+	return -ENOTSUPP;
 }
 
 int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
@@ -507,7 +515,9 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		RETURN(-ENOENT);
 
 	if (unlikely(fid_is_acct(fid))) {
-		*oid = osd_oid(dev, fid_oid(fid));
+		rc = osd_oid(dev, fid_oid(fid), oid);
+		if (rc)
+			RETURN(rc);
 	} else if (unlikely(fid_is_fs_root(fid))) {
 		*oid = dev->od_root;
 	} else {

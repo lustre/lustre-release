@@ -39,6 +39,9 @@ static inline char *qtype_name(int qtype)
 		return "usr";
 	case GRPQUOTA:
 		return "grp";
+	case PRJQUOTA:
+		return "prj";
+		break;
 	}
 	return "unknown";
 }
@@ -58,6 +61,7 @@ static inline char *qtype_name(int qtype)
 enum lquota_local_oid {
 	LQUOTA_USR_OID		= 1UL, /* slave index copy for user quota */
 	LQUOTA_GRP_OID		= 2UL, /* slave index copy for group quota */
+	LQUOTA_PRJ_OID		= 3UL, /* slave index copy for project quota */
 	/* all OIDs after this are allocated dynamically by the QMT */
 	LQUOTA_GENERATED_OID	= 4096UL,
 };
@@ -69,6 +73,8 @@ static inline __u32 qtype2slv_oid(int qtype)
 		return LQUOTA_USR_OID;
 	case GRPQUOTA:
 		return LQUOTA_GRP_OID;
+	case PRJQUOTA:
+		return LQUOTA_PRJ_OID;
 	}
 
 	LASSERTF(0, "invalid quota type: %d", qtype);
@@ -311,6 +317,8 @@ static inline int lquota_over_fl(int qtype)
 		return QUOTA_FL_OVER_USRQUOTA;
 	case GRPQUOTA:
 		return QUOTA_FL_OVER_GRPQUOTA;
+	case PRJQUOTA:
+		return QUOTA_FL_OVER_PRJQUOTA;
 	}
 
 	LASSERTF(0, "invalid quota type: %d", qtype);

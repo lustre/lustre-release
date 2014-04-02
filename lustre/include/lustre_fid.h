@@ -224,6 +224,7 @@ enum local_oid {
 	OTABLE_IT_OID		= 18UL,
 	OSD_LPF_OID		= 19UL,
 	REPLY_DATA_OID		= 21UL,
+	ACCT_PROJECT_OID	= 22UL,
 	OFD_LAST_GROUP_OID	= 4117UL,
 	LLOG_CATALOGS_OID	= 4118UL,
 	MGS_CONFIGS_OID		= 4119UL,
@@ -283,6 +284,7 @@ static inline int fid_oid_is_quota(const struct lu_fid *fid)
 	switch (fid_oid(fid)) {
 	case ACCT_USER_OID:
 	case ACCT_GROUP_OID:
+	case ACCT_PROJECT_OID:
 		return 1;
 	default:
 		return 0;

@@ -350,6 +350,8 @@ static const char *qtype2acct_name(int qtype)
 		return "acct_user";
 	case GRPQUOTA:
 		return "acct_group";
+	case PRJQUOTA:
+		return "acct_project";
 	}
 
 	LASSERTF(0, "invalid quota type: %d", qtype);
@@ -363,6 +365,8 @@ static const char *qtype2glb_name(int qtype)
 		return "limit_user";
 	case GRPQUOTA:
 		return "limit_group";
+	case PRJQUOTA:
+		return "limit_project";
 	}
 
 	LASSERTF(0, "invalid quota type: %d", qtype);

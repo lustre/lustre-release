@@ -43,6 +43,8 @@ static inline int fid2type(const struct lu_fid *fid)
 		return USRQUOTA;
 	case ACCT_GROUP_OID:
 		return GRPQUOTA;
+	case ACCT_PROJECT_OID:
+		return PRJQUOTA;
 	}
 
 	LASSERTF(0, "invalid fid for quota type: %u", fid_oid(fid));
@@ -66,10 +68,6 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id)
 {
 	struct super_block *sb = osd_sb(osd);
-	unsigned long qf_inums[LL_MAXQUOTAS] = {
-		le32_to_cpu(LDISKFS_SB(sb)->s_es->s_usr_quota_inum),
-		le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum)
-	};
 
 	ENTRY;
 	LASSERT(fid_is_acct(fid));
@@ -79,7 +77,27 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		RETURN(-ENOENT);
 
 	id->oii_gen = OSD_OII_NOGEN;
-	id->oii_ino = qf_inums[fid2type(fid)];
+	switch (fid2type(fid)) {
+	case USRQUOTA:
+		id->oii_ino =
+			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_usr_quota_inum);
+		break;
+	case GRPQUOTA:
+		id->oii_ino =
+			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum);
+		break;
+	case PRJQUOTA:
+#ifdef	HAVE_PROJECT_QUOTA
+		if (!LDISKFS_HAS_RO_COMPAT_FEATURE(sb,
+				LDISKFS_FEATURE_RO_COMPAT_PROJECT))
+			RETURN(-ENOTSUPP);
+		id->oii_ino =
+			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum);
+		break;
+#else
+		RETURN(-ENOTSUPP);
+#endif
+	}
 	if (!ldiskfs_valid_inum(sb, id->oii_ino))
 		RETURN(-ENOENT);
 	RETURN(0);

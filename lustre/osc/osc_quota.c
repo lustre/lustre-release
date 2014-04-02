@@ -73,6 +73,8 @@ static inline u32 md_quota_flag(int qtype)
 		return OBD_MD_FLUSRQUOTA;
 	case GRPQUOTA:
 		return OBD_MD_FLGRPQUOTA;
+	case PRJQUOTA:
+		return OBD_MD_FLPRJQUOTA;
 	default:
 		return 0;
 	}
@@ -85,6 +87,8 @@ static inline u32 fl_quota_flag(int qtype)
 		return OBD_FL_NO_USRQUOTA;
 	case GRPQUOTA:
 		return OBD_FL_NO_GRPQUOTA;
+	case PRJQUOTA:
+		return OBD_FL_NO_PRJQUOTA;
 	default:
 		return 0;
 	}
@@ -98,7 +102,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 
         ENTRY;
 
-	if ((valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) == 0)
+	if ((valid & (OBD_MD_FLALLQUOTA)) == 0)
 		RETURN(0);
 
 	for (type = 0; type < LL_MAXQUOTAS; type++) {

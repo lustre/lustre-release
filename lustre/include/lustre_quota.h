@@ -227,6 +227,7 @@ struct lquota_trans {
 #define QUOTA_FL_OVER_USRQUOTA  0x01
 #define QUOTA_FL_OVER_GRPQUOTA  0x02
 #define QUOTA_FL_SYNC           0x04
+#define QUOTA_FL_OVER_PRJQUOTA  0x08
 
 #define IS_LQUOTA_RES(res)						\
 	(res->lr_name.name[LUSTRE_RES_ID_SEQ_OFF] == FID_SEQ_QUOTA ||	\

@@ -172,6 +172,9 @@ static inline const char *oid2name(__u32 oid)
 		return "usr_accounting";
 	case ACCT_GROUP_OID:
 		return "grp_accounting";
+	case ACCT_PROJECT_OID:
+		return "prj_accounting";
+		break;
 	default:
 		return "unknown_accounting";
 	}

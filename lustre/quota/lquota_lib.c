@@ -61,6 +61,8 @@ static inline __u32 qtype2acct_oid(int qtype)
 		return ACCT_USER_OID;
 	case GRPQUOTA:
 		return ACCT_GROUP_OID;
+	case PRJQUOTA:
+		return ACCT_PROJECT_OID;
 	}
 
 	return ACCT_GROUP_OID;
@@ -250,6 +252,8 @@ static inline __u8 qtype2lqtype(int qtype)
 		return LQUOTA_TYPE_USR;
 	case GRPQUOTA:
 		return LQUOTA_TYPE_GRP;
+	case PRJQUOTA:
+		return LQUOTA_TYPE_PRJ;
 	}
 
 	return LQUOTA_TYPE_GRP;
@@ -262,6 +266,8 @@ static inline int lqtype2qtype(int lqtype)
 		return USRQUOTA;
 	case LQUOTA_TYPE_GRP:
 		return GRPQUOTA;
+	case LQUOTA_TYPE_PRJ:
+		return PRJQUOTA;
 	}
 
 	return GRPQUOTA;

@@ -1206,6 +1206,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
 	if (flags & QUOTA_FL_OVER_GRPQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_GRPQUOTA;
+	if (flags & QUOTA_FL_OVER_PRJQUOTA)
+		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
 
 	RETURN(rc);
 }

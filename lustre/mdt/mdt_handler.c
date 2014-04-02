@@ -2146,6 +2146,10 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
 				    NODEMAP_CLIENT_TO_FS, id);
 		break;
+	case PRJQUOTA:
+		/* todo: check/map project id */
+		id = oqctl->qc_id;
+		break;
 	default:
 		GOTO(out_nodemap, rc = -EOPNOTSUPP);
 	}

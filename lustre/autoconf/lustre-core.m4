@@ -1464,6 +1464,21 @@ block_device_ops_release_return_int, [
 ])
 ]) # LC_BLKDEV_RELEASE_RETURN_INT
 
+AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
+LB_CHECK_COMPILE([if get_projid exists],
+get_projid, [
+	#include <linux/quota.h>
+],[
+	struct dquot_operations ops;
+
+	ops.get_projid(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_PROJECT_QUOTA, 1,
+		[get_projid function exists])
+])
+]) # LC_HAVE_PROJECT_QUOTA
+
+
 #
 # LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
 #
@@ -2401,6 +2416,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BLKDEV_RELEASE_RETURN_INT
 	LC_HAVE_REMOVE_PROC_SUBTREE
 	LC_HAVE_PROC_REMOVE
+	LC_HAVE_PROJECT_QUOTA
 	LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
 
 	# 3.11

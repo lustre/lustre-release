@@ -1248,6 +1248,12 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				else
 					oa->o_flags = OBD_FL_NO_GRPQUOTA;
 			}
+			if (lnb[0].lnb_flags & OBD_BRW_OVER_PRJQUOTA) {
+				if (oa->o_valid & OBD_MD_FLFLAGS)
+					oa->o_flags |= OBD_FL_NO_PRJQUOTA;
+				else
+					oa->o_flags = OBD_FL_NO_PRJQUOTA;
+			}
 
 			oa->o_valid |= OBD_MD_FLFLAGS;
 			oa->o_valid |= OBD_MD_FLALLQUOTA;
