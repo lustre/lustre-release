@@ -60,6 +60,21 @@
 #endif /* __KERNEL__ */
 #include <lustre/ll_fiemap.h>
 
+/*
+ * This is a temporary solution of adding quota type.
+ * Should be removed as soon as system header is updated.
+ */
+#undef LL_MAXQUOTAS
+#define LL_MAXQUOTAS 2
+#undef INITQFNAMES
+#define INITQFNAMES { \
+    "user",	/* USRQUOTA */ \
+    "group",	/* GRPQUOTA */ \
+    "project",	/* PRJQUOTA */ \
+    "undefined", \
+};
+#define PRJQUOTA 2
+
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
     defined(__craynv) || defined(__mips64__) || defined(__powerpc64__) || \
     defined(__aarch64__)

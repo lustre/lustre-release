@@ -60,9 +60,6 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
-#ifdef HAVE_SYS_QUOTA_H
-# include <sys/quota.h>
-#endif
 
 #include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
