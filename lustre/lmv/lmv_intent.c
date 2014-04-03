@@ -184,9 +184,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 	 * revalidate slaves has some problems, temporarily return,
 	 * we may not need that
 	 */
-	if (lsm->lsm_md_stripe_count <= 1)
-		RETURN(0);
-
 	OBD_ALLOC_PTR(op_data);
 	if (op_data == NULL)
 		RETURN(-ENOMEM);
@@ -205,14 +202,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 
 		fid = lsm->lsm_md_oinfo[i].lmo_fid;
 		inode = lsm->lsm_md_oinfo[i].lmo_root;
-		if (i == 0) {
-			if (mbody != NULL) {
-				body = mbody;
-				goto update;
-			} else {
-				goto release_lock;
-			}
-		}
 
 		/*
 		 * Prepare op_data for revalidating. Note that @fid2 shluld be
@@ -246,7 +235,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 			body = req_capsule_server_get(&req->rq_pill,
 						      &RMF_MDT_BODY);
 			LASSERT(body != NULL);
-update:
 			if (unlikely(body->nlink < 2)) {
 				CERROR("%s: nlink %d < 2 corrupt stripe %d "DFID
 				       ":" DFID"\n", obd->obd_name, body->nlink,
@@ -265,9 +253,6 @@ update:
 				GOTO(cleanup, rc = -EIO);
 			}
 
-			if (i != 0)
-				md_set_lock_data(tgt->ltd_exp, &lockh->cookie,
-						 inode, NULL);
 
 			i_size_write(inode, body->size);
 			set_nlink(inode, body->nlink);
@@ -278,7 +263,9 @@ update:
 			if (req != NULL)
 				ptlrpc_req_finished(req);
 		}
-release_lock:
+
+		md_set_lock_data(tgt->ltd_exp, &lockh->cookie, inode, NULL);
+
 		size += i_size_read(inode);
 
 		if (i != 0)
@@ -385,7 +372,7 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 		 * fid and setup FLD for it.
 		 */
 		op_data->op_fid3 = op_data->op_fid2;
-		rc = lmv_fid_alloc(exp, &op_data->op_fid2, op_data);
+		rc = lmv_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -475,8 +462,8 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 				RETURN(rc);
 		}
 		RETURN(rc);
-	} else if (it_disposition(it, DISP_LOOKUP_NEG) &&
-		   lsm != NULL && lsm->lsm_md_magic == LMV_MAGIC_MIGRATE) {
+	} else if (it_disposition(it, DISP_LOOKUP_NEG) && lsm != NULL &&
+		   lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION) {
 		/* For migrating directory, if it can not find the child in
 		 * the source directory(master stripe), try the targeting
 		 * directory(stripe 1) */

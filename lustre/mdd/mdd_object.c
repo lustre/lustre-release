@@ -1969,6 +1969,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 			 * No pages were processed, mark this for first page
 			 * and send back.
 			 */
+			dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
 			dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
 			rc = min_t(unsigned int, LU_PAGE_SIZE, rdpg->rp_count);
 		}

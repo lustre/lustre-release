@@ -969,6 +969,44 @@ out:
 	RETURN(rc);
 }
 
+static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
+			       __u32 attr)
+{
+	struct osd_zap_it   *it = (struct osd_zap_it *)di;
+	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
+	int		     rc, namelen = 0;
+	ENTRY;
+
+	if (it->ozi_pos <= 1)
+		namelen = cpu_to_le16(1);
+	else if (it->ozi_pos == 2)
+		namelen = cpu_to_le16(2);
+
+	if (namelen > 0) {
+		rc = lu_dirent_calc_size(namelen, attr);
+		RETURN(rc);
+	}
+
+	rc = -zap_cursor_retrieve(it->ozi_zc, za);
+	if (unlikely(rc != 0))
+		RETURN(rc);
+
+	if (za->za_integer_length != 8 || za->za_num_integers < 3) {
+		CERROR("%s: unsupported direntry format: %d %d\n",
+		       osd_obj2dev(it->ozi_obj)->od_svname,
+		       za->za_integer_length, (int)za->za_num_integers);
+		RETURN(-EIO);
+	}
+
+	namelen = strlen(za->za_name);
+	if (namelen > NAME_MAX)
+		RETURN(-EOVERFLOW);
+
+	rc = lu_dirent_calc_size(namelen, attr);
+
+	RETURN(rc);
+}
+
 static __u64 osd_dir_it_store(const struct lu_env *env, const struct dt_it *di)
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
@@ -1035,6 +1073,7 @@ static struct dt_index_operations osd_dir_ops = {
 		.key      = osd_dir_it_key,
 		.key_size = osd_dir_it_key_size,
 		.rec      = osd_dir_it_rec,
+		.rec_size = osd_dir_it_rec_size,
 		.store    = osd_dir_it_store,
 		.load     = osd_dir_it_load
 	}

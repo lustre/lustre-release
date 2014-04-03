@@ -1043,18 +1043,19 @@ static inline int obd_fid_fini(struct obd_device *obd)
 	RETURN(rc);
 }
 
-static inline int obd_fid_alloc(struct obd_export *exp,
+static inline int obd_fid_alloc(const struct lu_env *env,
+				struct obd_export *exp,
                                 struct lu_fid *fid,
                                 struct md_op_data *op_data)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        EXP_CHECK_DT_OP(exp, fid_alloc);
-        EXP_COUNTER_INCREMENT(exp, fid_alloc);
+	EXP_CHECK_DT_OP(exp, fid_alloc);
+	EXP_COUNTER_INCREMENT(exp, fid_alloc);
 
-        rc = OBP(exp->exp_obd, fid_alloc)(exp, fid, op_data);
-        RETURN(rc);
+	rc = OBP(exp->exp_obd, fid_alloc)(env, exp, fid, op_data);
+	RETURN(rc);
 }
 
 static inline int obd_ping(const struct lu_env *env, struct obd_export *exp)

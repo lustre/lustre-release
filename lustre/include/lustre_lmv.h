@@ -48,10 +48,35 @@ struct lmv_stripe_md {
 	__u32	lsm_md_layout_version;
 	__u32	lsm_md_default_count;
 	__u32	lsm_md_default_index;
+	struct lu_fid	lsm_md_master_fid;
 	char	lsm_md_pool_name[LOV_MAXPOOLNAME];
 	struct lmv_oinfo lsm_md_oinfo[0];
 };
 
+static inline bool
+lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
+{
+	int idx;
+
+	if (lsm1->lsm_md_magic != lsm2->lsm_md_magic ||
+	    lsm1->lsm_md_stripe_count != lsm2->lsm_md_stripe_count ||
+	    lsm1->lsm_md_master_mdt_index !=
+				lsm2->lsm_md_master_mdt_index ||
+	    lsm1->lsm_md_hash_type != lsm2->lsm_md_hash_type ||
+	    lsm1->lsm_md_layout_version !=
+				lsm2->lsm_md_layout_version ||
+	    strcmp(lsm1->lsm_md_pool_name,
+		      lsm2->lsm_md_pool_name) != 0)
+		return false;
+
+	for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
+		if (!lu_fid_eq(&lsm1->lsm_md_oinfo[idx].lmo_fid,
+			       &lsm2->lsm_md_oinfo[idx].lmo_fid))
+			return false;
+	}
+
+	return true;
+}
 union lmv_mds_md;
 
 int lmv_pack_md(union lmv_mds_md **lmmp, const struct lmv_stripe_md *lsm,
@@ -98,10 +123,8 @@ static inline void lmv_cpu_to_le(union lmv_mds_md *lmv_dst,
 {
 	switch (lmv_src->lmv_magic) {
 	case LMV_MAGIC_V1:
-	case LMV_MAGIC_MIGRATE: {
 		lmv1_cpu_to_le(&lmv_dst->lmv_md_v1, &lmv_src->lmv_md_v1);
 		break;
-	}
 	default:
 		break;
 	}
@@ -112,10 +135,8 @@ static inline void lmv_le_to_cpu(union lmv_mds_md *lmv_dst,
 {
 	switch (le32_to_cpu(lmv_src->lmv_magic)) {
 	case LMV_MAGIC_V1:
-	case LMV_MAGIC_MIGRATE: {
 		lmv1_le_to_cpu(&lmv_dst->lmv_md_v1, &lmv_src->lmv_md_v1);
 		break;
-	}
 	default:
 		break;
 	}

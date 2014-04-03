@@ -1058,9 +1058,9 @@ struct obd_ops {
 			  struct obd_export *exp, enum lu_cli_type type);
 	int (*o_fid_fini)(struct obd_device *obd);
 
-        /* Allocate new fid according to passed @hint. */
-        int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
-                           struct md_op_data *op_data);
+	/* Allocate new fid according to passed @hint. */
+	int (*o_fid_alloc)(const struct lu_env *env, struct obd_export *exp,
+			   struct lu_fid *fid, struct md_op_data *op_data);
 
         /*
          * Object with @fid is getting deleted, we may want to do something

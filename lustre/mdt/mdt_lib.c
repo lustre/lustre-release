@@ -576,6 +576,10 @@ void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
 	       le32_to_cpu(lmm1->lmv_magic),
 	       le32_to_cpu(lmm1->lmv_master_mdt_index),
 	       le32_to_cpu(lmm1->lmv_stripe_count));
+
+	if (le32_to_cpu(lmm1->lmv_magic) == LMV_MAGIC_STRIPE)
+		return;
+
 	for (i = 0; i < le32_to_cpu(lmm1->lmv_stripe_count); i++) {
 		struct lu_fid fid;
 

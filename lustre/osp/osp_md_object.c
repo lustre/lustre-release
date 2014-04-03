@@ -132,8 +132,6 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_attr *attr, struct dt_allocation_hint *hint,
 			 struct dt_object_format *dof, struct thandle *th)
 {
-	struct osp_object  *obj = dt2osp_obj(dt);
-
 	CDEBUG(D_INFO, "create object "DFID"\n",
 	       PFID(&dt->do_lu.lo_header->loh_fid));
 
@@ -141,7 +139,6 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	 * if creation reaches here, it means the object has been created
 	 * successfully */
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
-	obj->opo_empty = 1;
 
 	return 0;
 }
@@ -478,51 +475,41 @@ static int osp_md_index_delete(const struct lu_env *env,
 	return 0;
 }
 
-/**
- * Creates or initializes iterator context.
- *
- * Note: for OSP, these index iterate api is only used to check
- * whether the directory is empty now (see mdd_dir_is_empty).
- * Since dir_empty will be return by OUT_ATTR_GET(see osp_attr_get/
- * out_attr_get). So the implementation of these iterator is simplied
- * to make mdd_dir_is_empty happy. The real iterator should be
- * implemented, if we need it one day.
- */
-static struct dt_it *osp_it_init(const struct lu_env *env,
-				 struct dt_object *dt,
-				 __u32 attr,
-				struct lustre_capa *capa)
+int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
 {
-	lu_object_get(&dt->do_lu);
-	return (struct dt_it *)dt;
-}
+	struct osp_it		*it = (struct osp_it *)di;
+	struct lu_idxpage	*idxpage;
+	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
+	int			rc;
+	ENTRY;
 
-static void osp_it_fini(const struct lu_env *env, struct dt_it *di)
-{
-	struct dt_object *dt = (struct dt_object *)di;
-	lu_object_put(env, &dt->do_lu);
-}
+again:
+	idxpage = it->ooi_cur_idxpage;
+	if (idxpage != NULL) {
+		if (idxpage->lip_nr == 0)
+			RETURN(1);
 
-static int osp_it_get(const struct lu_env *env,
-		      struct dt_it *di, const struct dt_key *key)
-{
-	return 1;
-}
+		it->ooi_pos_ent++;
+		if (ent == NULL) {
+			it->ooi_ent =
+			      (struct lu_dirent *)idxpage->lip_entries;
+			RETURN(0);
+		} else if (le16_to_cpu(ent->lde_reclen) != 0 &&
+			   it->ooi_pos_ent < idxpage->lip_nr) {
+			ent = (struct lu_dirent *)(((char *)ent) +
+					le16_to_cpu(ent->lde_reclen));
+			it->ooi_ent = ent;
+			RETURN(0);
+		} else {
+			it->ooi_ent = NULL;
+		}
+	}
 
-static void osp_it_put(const struct lu_env *env, struct dt_it *di)
-{
-	return;
-}
+	rc = osp_it_next_page(env, di);
+	if (rc == 0)
+		goto again;
 
-static int osp_it_next(const struct lu_env *env, struct dt_it *di)
-{
-	struct dt_object *dt = (struct dt_object *)di;
-	struct osp_object *o = dt2osp_obj(dt);
-
-	if (o->opo_empty)
-		return 1;
-
-	return 0;
+	RETURN(rc);
 }
 
 static struct dt_key *osp_it_key(const struct lu_env *env,
@@ -538,16 +525,15 @@ static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	return 0;
 }
 
-static int osp_it_rec(const struct lu_env *env, const struct dt_it *di,
-		      struct dt_rec *lde, __u32 attr)
+static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
+			       struct dt_rec *rec, __u32 attr)
 {
-	LBUG();
-	return 0;
-}
+	struct osp_it		*it = (struct osp_it *)di;
+	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
+	int			reclen;
 
-static __u64 osp_it_store(const struct lu_env *env, const struct dt_it *di)
-{
-	LBUG();
+	reclen = lu_dirent_calc_size(ent->lde_namelen, attr);
+	memcpy(rec, ent, reclen);
 	return 0;
 }
 
@@ -558,14 +544,7 @@ static int osp_it_load(const struct lu_env *env, const struct dt_it *di,
 	return 0;
 }
 
-static int osp_it_key_rec(const struct lu_env *env, const struct dt_it *di,
-			  void *key_rec)
-{
-	LBUG();
-	return 0;
-}
-
-static const struct dt_index_operations osp_md_index_ops = {
+const struct dt_index_operations osp_md_index_ops = {
 	.dio_lookup         = osp_md_index_lookup,
 	.dio_declare_insert = osp_md_declare_insert,
 	.dio_insert         = osp_md_index_insert,
@@ -576,10 +555,10 @@ static const struct dt_index_operations osp_md_index_ops = {
 		.fini     = osp_it_fini,
 		.get      = osp_it_get,
 		.put      = osp_it_put,
-		.next     = osp_it_next,
+		.next     = osp_md_index_it_next,
 		.key      = osp_it_key,
 		.key_size = osp_it_key_size,
-		.rec      = osp_it_rec,
+		.rec      = osp_md_index_it_rec,
 		.store    = osp_it_store,
 		.load     = osp_it_load,
 		.key_rec  = osp_it_key_rec,
@@ -665,6 +644,8 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_xattr_get         = osp_xattr_get,
 	.do_declare_xattr_set = osp_declare_xattr_set,
 	.do_xattr_set         = osp_xattr_set,
+	.do_declare_xattr_del = osp_declare_xattr_del,
+	.do_xattr_del         = osp_xattr_del,
 	.do_index_try         = osp_md_index_try,
 	.do_object_lock       = osp_md_object_lock,
 	.do_object_unlock     = osp_md_object_unlock,

@@ -225,18 +225,16 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 	struct list_head cancels = LIST_HEAD_INIT(cancels);
         ENTRY;
 
-        /* For case if upper layer did not alloc fid, do it now. */
-        if (!fid_is_sane(&op_data->op_fid2)) {
-                /*
-                 * mdc_fid_alloc() may return errno 1 in case of switch to new
-                 * sequence, handle this.
-                 */
-                rc = mdc_fid_alloc(exp, &op_data->op_fid2, op_data);
-                if (rc < 0) {
-                        CERROR("Can't alloc new fid, rc %d\n", rc);
-                        RETURN(rc);
-                }
-        }
+	/* For case if upper layer did not alloc fid, do it now. */
+	if (!fid_is_sane(&op_data->op_fid2)) {
+		/*
+		 * mdc_fid_alloc() may return errno 1 in case of switch to new
+		 * sequence, handle this.
+		 */
+		rc = mdc_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 rebuild:
         count = 0;

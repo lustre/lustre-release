@@ -399,6 +399,8 @@ put_parent:
 
 static int mdt_unlock_slaves(struct mdt_thread_info *mti,
 			     struct mdt_object *obj, __u64 ibits,
+			     struct mdt_lock_handle *s0_lh,
+			     struct mdt_object *s0_obj,
 			     struct ldlm_enqueue_info *einfo)
 {
 	ldlm_policy_data_t	*policy = &mti->mti_policy;
@@ -407,6 +409,12 @@ static int mdt_unlock_slaves(struct mdt_thread_info *mti,
 
 	if (!S_ISDIR(obj->mot_header.loh_attr))
 		RETURN(0);
+
+	/* Unlock stripe 0 */
+	if (s0_lh != NULL && lustre_handle_is_used(&s0_lh->mlh_reg_lh)) {
+		LASSERT(s0_obj != NULL);
+		mdt_object_unlock_put(mti, s0_obj, s0_lh, 1);
+	}
 
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
@@ -422,14 +430,50 @@ static int mdt_unlock_slaves(struct mdt_thread_info *mti,
  **/
 static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 			   ldlm_mode_t mode, __u64 ibits,
+			   struct mdt_lock_handle *s0_lh,
+			   struct mdt_object **s0_objp,
 			   struct ldlm_enqueue_info *einfo)
 {
 	ldlm_policy_data_t	*policy = &mti->mti_policy;
-	int			rc;
+	struct lu_buf		*buf = &mti->mti_buf;
+	struct lmv_mds_md_v1	*lmv;
+	struct lu_fid		*fid = &mti->mti_tmp_fid1;
+	int rc;
 	ENTRY;
 
 	if (!S_ISDIR(obj->mot_header.loh_attr))
 		RETURN(0);
+
+	buf->lb_buf = mti->mti_xattr_buf;
+	buf->lb_len = sizeof(mti->mti_xattr_buf);
+	rc = mo_xattr_get(mti->mti_env, mdt_object_child(obj), buf,
+			  XATTR_NAME_LMV);
+	if (rc == -ERANGE) {
+		rc = mdt_big_xattr_get(mti, obj, XATTR_NAME_LMV);
+		if (rc > 0) {
+			buf->lb_buf = mti->mti_big_lmm;
+			buf->lb_len = mti->mti_big_lmmsize;
+		}
+	}
+
+	if (rc == -ENODATA || rc == -ENOENT)
+		RETURN(0);
+
+	if (rc <= 0)
+		RETURN(rc);
+
+	lmv = buf->lb_buf;
+	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+		RETURN(-EINVAL);
+
+	/* Sigh, 0_stripe and master object are different
+	 * object, though they are in the same MDT, to avoid
+	 * adding osd_object_lock here, so we will enqueue the
+	 * stripe0 lock in MDT0 for now */
+	fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[0]);
+	*s0_objp = mdt_object_find_lock(mti, fid, s0_lh, ibits);
+	if (IS_ERR(*s0_objp))
+		RETURN(PTR_ERR(*s0_objp));
 
 	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
@@ -448,12 +492,14 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                  struct md_attr *ma, int flags)
 {
-        struct mdt_lock_handle  *lh;
-        int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
-        __u64 lockpart = MDS_INODELOCK_UPDATE;
+	struct mdt_lock_handle  *lh;
+	int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
+	__u64 lockpart = MDS_INODELOCK_UPDATE;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
-        int rc;
-        ENTRY;
+	struct mdt_lock_handle  *s0_lh;
+	struct mdt_object	*s0_obj = NULL;
+	int rc;
+	ENTRY;
 
 	/* attr shouldn't be set on remote object */
 	LASSERT(!mdt_object_remote(mo));
@@ -472,7 +518,9 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
         if (rc != 0)
                 RETURN(rc);
 
-	rc = mdt_lock_slaves(info, mo, LCK_EX, lockpart, einfo);
+	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
+	mdt_lock_reg_init(s0_lh, LCK_EX);
+	rc = mdt_lock_slaves(info, mo, LCK_PW, lockpart, s0_lh, &s0_obj, einfo);
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
@@ -511,7 +559,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
         EXIT;
 out_unlock:
-	mdt_unlock_slaves(info, mo, lockpart, einfo);
+	mdt_unlock_slaves(info, mo, lockpart, s0_lh, s0_obj, einfo);
         mdt_object_unlock(info, mo, lh, rc);
         return rc;
 }
@@ -769,6 +817,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         struct mdt_lock_handle  *parent_lh;
         struct mdt_lock_handle  *child_lh;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
+	struct mdt_lock_handle  *s0_lh = NULL;
+	struct mdt_object	*s0_obj = NULL;
 	int			rc;
 	int			no_name = 0;
 	ENTRY;
@@ -916,7 +966,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;
 
-	rc = mdt_lock_slaves(info, mc, LCK_EX, MDS_INODELOCK_UPDATE, einfo);
+	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
+	mdt_lock_reg_init(s0_lh, LCK_EX);
+	rc = mdt_lock_slaves(info, mc, LCK_EX, MDS_INODELOCK_UPDATE, s0_lh,
+			     &s0_obj, einfo);
 	if (rc != 0)
 		GOTO(unlock_child, rc);
 
@@ -961,7 +1014,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         EXIT;
 
 unlock_child:
-	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, einfo);
+	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo);
 	mdt_object_unlock(info, mc, child_lh, rc);
 
 	/* Since we do not need reply md striped dir info to client, so
@@ -1440,7 +1493,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 
 		lmv_le_to_cpu(ma->ma_lmv, ma->ma_lmv);
 		lmm1 = &ma->ma_lmv->lmv_md_v1;
-		if (lmm1->lmv_magic != LMV_MAGIC_MIGRATE) {
+		if (!(lmm1->lmv_hash_type & LMV_HASH_FLAG_MIGRATION)) {
 			CERROR("%s: can not migrate striped dir "DFID
 			       ": rc = %d\n", mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(mold)), -EPERM);

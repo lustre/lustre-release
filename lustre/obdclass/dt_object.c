@@ -677,10 +677,6 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 	int			 rc, size;
 	ENTRY;
 
-	/* no support for variable key & record size for now */
-	LASSERT((ii->ii_flags & II_FL_VARKEY) == 0);
-	LASSERT((ii->ii_flags & II_FL_VARREC) == 0);
-
 	/* initialize the header of the new container */
 	memset(lip, 0, LIP_HDR_SIZE);
 	lip->lip_magic = LIP_MAGIC;
@@ -696,7 +692,9 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 	do {
 		char		*tmp_entry = entry;
 		struct dt_key	*key;
-		__u64		 hash;
+		__u64		hash;
+		__u16		keysize;
+		__u16		recsize;
 
 		/* fetch 64-bit hash value */
 		hash = iops->store(env, it);
@@ -713,18 +711,24 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 			GOTO(out, rc = 0);
 		}
 
-		if ((ii->ii_flags & II_FL_NOHASH) == 0) {
+		if (!(ii->ii_flags & II_FL_NOHASH)) {
 			/* client wants to the 64-bit hash value associated with
 			 * each record */
 			memcpy(tmp_entry, &hash, sizeof(hash));
 			tmp_entry += sizeof(hash);
 		}
 
-		/* then the key value */
-		LASSERT(iops->key_size(env, it) == ii->ii_keysize);
-		key = iops->key(env, it);
-		memcpy(tmp_entry, key, ii->ii_keysize);
-		tmp_entry += ii->ii_keysize;
+		if (ii->ii_flags & II_FL_VARKEY)
+			keysize = iops->key_size(env, it);
+		else
+			keysize = ii->ii_keysize;
+
+		if (!(ii->ii_flags & II_FL_NOKEY)) {
+			/* then the key value */
+			key = iops->key(env, it);
+			memcpy(tmp_entry, key, keysize);
+			tmp_entry += keysize;
+		}
 
 		/* and finally the record */
 		rc = iops->rec(env, it, (struct dt_rec *)tmp_entry, attr);
@@ -736,7 +740,13 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 			lip->lip_nr++;
 			if (unlikely(lip->lip_nr == 1 && ii->ii_count == 0))
 				ii->ii_hash_start = hash;
-			entry = tmp_entry + ii->ii_recsize;
+
+			if (ii->ii_flags & II_FL_VARREC)
+				recsize = iops->rec_size(env, it, attr);
+			else
+				recsize = ii->ii_recsize;
+
+			entry = tmp_entry + recsize;
 			nob -= size;
 		}
 
@@ -757,6 +767,7 @@ out:
 		ii->ii_hash_end = II_END_OFF;
 	return rc;
 }
+
 
 /*
  * Walk index and fill lu_page containers with key/record pairs
@@ -810,6 +821,10 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		rc = iops->next(env, it);
 	} else if (rc > 0) {
 		rc = 0;
+	} else {
+		if (rc == -ENODATA)
+			rc = 0;
+		GOTO(out, rc);
 	}
 
 	/* Fill containers one after the other. There might be multiple
@@ -841,6 +856,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		kunmap(rdpg->rp_pages[i]);
 	}
 
+out:
 	iops->put(env, it);
 	iops->fini(env, it);
 
@@ -878,15 +894,9 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	if (rdpg->rp_count <= 0 && (rdpg->rp_count & (LU_PAGE_SIZE - 1)) != 0)
 		RETURN(-EFAULT);
 
-	if (fid_seq(&ii->ii_fid) >= FID_SEQ_NORMAL)
-		/* we don't support directory transfer via OBD_IDX_READ for the
-		 * time being */
+	if (!fid_is_quota(&ii->ii_fid) && !fid_is_layout_rbtree(&ii->ii_fid) &&
+	    !fid_is_norm(&ii->ii_fid))
 		RETURN(-EOPNOTSUPP);
-
-	if (!fid_is_quota(&ii->ii_fid) && !fid_is_layout_rbtree(&ii->ii_fid))
-		/* Block access to all local files except quota files and
-		 * layout rbtree. */
-		RETURN(-EPERM);
 
 	/* lookup index object subject to the transfer */
 	obj = dt_locate(env, dev, &ii->ii_fid);
@@ -909,25 +919,16 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	}
 
 	/* fill ii_flags with supported index features */
-	ii->ii_flags &= II_FL_NOHASH;
+	ii->ii_flags &= (II_FL_NOHASH | II_FL_NOKEY | II_FL_VARKEY |
+			 II_FL_VARREC);
 
-	ii->ii_keysize = feat->dif_keysize_max;
-	if ((feat->dif_flags & DT_IND_VARKEY) != 0) {
-		/* key size is variable */
-		ii->ii_flags |= II_FL_VARKEY;
-		/* we don't support variable key size for the time being */
-		GOTO(out, rc = -EOPNOTSUPP);
-	}
+	if (!(feat->dif_flags & DT_IND_VARKEY))
+		ii->ii_keysize = feat->dif_keysize_max;
 
-	ii->ii_recsize = feat->dif_recsize_max;
-	if ((feat->dif_flags & DT_IND_VARREC) != 0) {
-		/* record size is variable */
-		ii->ii_flags |= II_FL_VARREC;
-		/* we don't support variable record size for the time being */
-		GOTO(out, rc = -EOPNOTSUPP);
-	}
+	if (!(feat->dif_flags & DT_IND_VARREC))
+		ii->ii_recsize = feat->dif_recsize_max;
 
-	if ((feat->dif_flags & DT_IND_NONUNQ) != 0)
+	if (!(feat->dif_flags & DT_IND_NONUNQ))
 		/* key isn't necessarily unique */
 		ii->ii_flags |= II_FL_NONUNQ;
 
@@ -938,7 +939,7 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	}
 
 	/* walk the index and fill lu_idxpages with key/record pairs */
-	rc = dt_index_walk(env, obj, rdpg, dt_index_page_build ,ii);
+	rc = dt_index_walk(env, obj, rdpg, dt_index_page_build, ii);
 	if (!fid_is_layout_rbtree(&ii->ii_fid))
 		dt_read_unlock(env, obj);
 

@@ -308,7 +308,8 @@ int mdd_permission(const struct lu_env *env,
 	struct lu_ucred *uc = NULL;
 	struct lu_attr *pattr = NULL;
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
-	int check_create, check_link;
+	bool check_create;
+	bool check_link;
 	int check_unlink;
 	int check_rename_src, check_rename_tar;
 	int check_vtx_part, check_vtx_full;
@@ -336,8 +337,8 @@ int mdd_permission(const struct lu_env *env,
 	if (unlikely(mask & MDS_OPEN_CROSS))
 		mask = accmode(env, cattr, mask & ~MDS_OPEN_CROSS);
 
-        check_create = mask & MAY_CREATE;
-        check_link = mask & MAY_LINK;
+	check_create = mask & MAY_CREATE;
+	check_link = mask & MAY_LINK;
         check_unlink = mask & MAY_UNLINK;
         check_rename_src = mask & MAY_RENAME_SRC;
         check_rename_tar = mask & MAY_RENAME_TAR;
@@ -355,8 +356,8 @@ int mdd_permission(const struct lu_env *env,
 					MOR_TGT_CHILD);
 
 	if (!rc && (check_create || check_link))
-		rc = mdd_may_create(env, mdd_pobj, pattr, mdd_cobj, 1,
-				check_link);
+		rc = mdd_may_create(env, mdd_pobj, pattr, mdd_cobj, true,
+				    check_link);
 
 	if (!rc && check_unlink)
 		rc = mdd_may_unlink(env, mdd_pobj, pattr, cattr);

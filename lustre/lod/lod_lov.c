@@ -836,28 +836,22 @@ out:
 	RETURN(rc);
 }
 
-/*
- * Load and parse striping information, create in-core representation for the
- * stripes
- */
-int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
+int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
 	int			 rc = 0;
 	ENTRY;
 
-	/*
-	 * currently this code is supposed to be called from declaration
-	 * phase only, thus the object is not expected to be locked by caller
-	 */
-	dt_write_lock(env, next, 0);
 	/* already initialized? */
 	if (lo->ldo_stripe != NULL)
 		GOTO(out, rc = 0);
 
+	if (!dt_object_exists(next))
+		GOTO(out, rc = 0);
+
 	/* Do not load stripe for slaves of striped dir */
-	if (!dt_object_exists(next) || lo->ldo_dir_slave_stripe)
+	if (lo->ldo_dir_slave_stripe)
 		GOTO(out, rc = 0);
 
 	/* only regular files can be striped */
@@ -885,8 +879,24 @@ int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 		rc = lod_parse_dir_striping(env, lo, &info->lti_buf);
 	}
 out:
-	dt_write_unlock(env, next);
 	RETURN(rc);
+}
+
+/**
+ * Load and parse striping information, create in-core representation for the
+ * stripes
+ **/
+int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
+{
+	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
+	int			rc = 0;
+
+	/* currently this code is supposed to be called from declaration
+	 * phase only, thus the object is not expected to be locked by caller */
+	dt_write_lock(env, next, 0);
+	rc = lod_load_striping_locked(env, lo);
+	dt_write_unlock(env, next);
+	return rc;
 }
 
 int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,

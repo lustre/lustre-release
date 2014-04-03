@@ -260,39 +260,39 @@ int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
 static int mdd_dir_is_empty(const struct lu_env *env,
                             struct mdd_object *dir)
 {
-        struct dt_it     *it;
-        struct dt_object *obj;
-        const struct dt_it_ops *iops;
-        int result;
-        ENTRY;
+	struct dt_it     *it;
+	struct dt_object *obj;
+	const struct dt_it_ops *iops;
+	int result;
+	ENTRY;
 
-        obj = mdd_object_child(dir);
-        if (!dt_try_as_dir(env, obj))
-                RETURN(-ENOTDIR);
+	obj = mdd_object_child(dir);
+	if (!dt_try_as_dir(env, obj))
+		RETURN(-ENOTDIR);
 
-        iops = &obj->do_index_ops->dio_it;
-        it = iops->init(env, obj, LUDA_64BITHASH, BYPASS_CAPA);
-        if (!IS_ERR(it)) {
-                result = iops->get(env, it, (const void *)"");
-                if (result > 0) {
-                        int i;
-                        for (result = 0, i = 0; result == 0 && i < 3; ++i)
-                                result = iops->next(env, it);
-                        if (result == 0)
-                                result = -ENOTEMPTY;
-                        else if (result == +1)
-                                result = 0;
-                } else if (result == 0)
-                        /*
-                         * Huh? Index contains no zero key?
-                         */
-                        result = -EIO;
+	iops = &obj->do_index_ops->dio_it;
+	it = iops->init(env, obj, LUDA_64BITHASH, BYPASS_CAPA);
+	if (!IS_ERR(it)) {
+		result = iops->get(env, it, (const struct dt_key *)"");
+		if (result > 0) {
+			int i;
+			for (result = 0, i = 0; result == 0 && i < 3; ++i)
+				result = iops->next(env, it);
+			if (result == 0)
+				result = -ENOTEMPTY;
+			else if (result == 1)
+				result = 0;
+		} else if (result == 0)
+			/*
+			 * Huh? Index contains no zero key?
+			 */
+			result = -EIO;
 
-                iops->put(env, it);
-                iops->fini(env, it);
-        } else
-                result = PTR_ERR(it);
-        RETURN(result);
+		iops->put(env, it);
+		iops->fini(env, it);
+	} else
+		result = PTR_ERR(it);
+	RETURN(result);
 }
 
 static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
@@ -321,8 +321,10 @@ static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
  */
 int mdd_may_create(const struct lu_env *env,
 		   struct mdd_object *pobj, const struct lu_attr *pattr,
-		   struct mdd_object *cobj, int check_perm, int check_nlink)
+		   struct mdd_object *cobj, bool check_perm, bool check_nlink)
 {
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_buf	*xbuf;
 	int rc = 0;
 	ENTRY;
 
@@ -331,6 +333,19 @@ int mdd_may_create(const struct lu_env *env,
 
 	if (mdd_is_dead_obj(pobj))
 		RETURN(-ENOENT);
+
+	/* If the parent is a sub-stripe, check whether it is dead */
+	xbuf = mdd_buf_get(env, info->mti_key, sizeof(info->mti_key));
+	rc = mdo_xattr_get(env, pobj, xbuf, XATTR_NAME_LMV,
+			   mdd_object_capa(env, pobj));
+	if (unlikely(rc > 0)) {
+		struct lmv_mds_md_v1  *lmv1 = xbuf->lb_buf;
+
+		if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_STRIPE &&
+		    le32_to_cpu(lmv1->lmv_hash_type) & LMV_HASH_FLAG_DEAD)
+			RETURN(-ESTALE);
+	}
+	rc = 0;
 
 	if (check_perm)
 		rc = mdd_permission_internal_locked(env, pobj, pattr,
@@ -517,7 +532,7 @@ static int mdd_link_sanity_check(const struct lu_env *env,
 
 	LASSERT(src_obj != tgt_obj);
 	if (tgt_obj) {
-		rc = mdd_may_create(env, tgt_obj, tattr, NULL, 1, 0);
+		rc = mdd_may_create(env, tgt_obj, tattr, NULL, true, false);
 		if (rc)
 			RETURN(rc);
 	}
@@ -1323,11 +1338,40 @@ out_pending:
         return rc;
 }
 
+static int mdd_mark_dead_object(const struct lu_env *env,
+				struct mdd_object *obj, struct thandle *handle,
+				bool declare)
+{
+	struct lu_attr *attr = MDD_ENV_VAR(env, la_for_start);
+	int rc;
+
+	if (!declare)
+		obj->mod_flags |= DEAD_OBJ;
+
+	if (!S_ISDIR(mdd_object_type(obj)))
+		return 0;
+
+	attr->la_valid = LA_FLAGS;
+	attr->la_flags = LUSTRE_SLAVE_DEAD_FL;
+
+	if (declare)
+		rc = mdo_declare_attr_set(env, obj, attr, handle);
+	else
+		rc = mdo_attr_set(env, obj, attr, handle,
+				  mdd_object_capa(env, obj));
+
+	return rc;
+}
+
 static int mdd_declare_finish_unlink(const struct lu_env *env,
 				     struct mdd_object *obj,
 				     struct thandle *handle)
 {
 	int	rc;
+
+	rc = mdd_mark_dead_object(env, obj, handle, true);
+	if (rc != 0)
+		return rc;
 
 	rc = orph_declare_index_insert(env, obj, mdd_object_type(obj), handle);
 	if (rc != 0)
@@ -1354,7 +1398,9 @@ int mdd_finish_unlink(const struct lu_env *env,
         LASSERT(mdd_write_locked(env, obj) != 0);
 
 	if (ma->ma_attr.la_nlink == 0 || is_dir) {
-                obj->mod_flags |= DEAD_OBJ;
+		rc = mdd_mark_dead_object(env, obj, th, false);
+		if (rc != 0)
+			RETURN(rc);
 
                 /* add new orphan and the object
                  * will be deleted during mdd_close() */
@@ -1802,12 +1848,12 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 				   struct lu_attr *cattr,
                                    struct md_op_spec *spec)
 {
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct lu_fid     *fid       = &info->mti_fid;
-        struct mdd_object *obj       = md2mdd_obj(pobj);
-        struct mdd_device *m         = mdo2mdd(pobj);
-        int rc;
-        ENTRY;
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_fid     *fid       = &info->mti_fid;
+	struct mdd_object *obj       = md2mdd_obj(pobj);
+	struct mdd_device *m         = mdo2mdd(pobj);
+	int rc;
+	ENTRY;
 
         /* EEXIST check */
         if (mdd_is_dead_obj(obj))
@@ -1828,15 +1874,9 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 				  MAY_WRITE | MAY_EXEC);
                 if (rc != -ENOENT)
                         RETURN(rc ? : -EEXIST);
-        } else {
-		/*
-		 * Check WRITE permission for the parent.
-		 * EXEC permission have been checked
-		 * when lookup before create already.
-		 */
-		rc = mdd_permission_internal_locked(env, obj, pattr, MAY_WRITE,
-						    MOR_TGT_PARENT);
-		if (rc)
+	} else {
+		rc = mdd_may_create(env, obj, pattr, NULL, true, false);
+		if (rc != 0)
 			RETURN(rc);
 	}
 
@@ -2067,6 +2107,43 @@ static int mdd_object_create(const struct lu_env *env, struct mdd_object *pobj,
 	if (rc)
 		GOTO(unlock, rc);
 
+	/* Note: In DNE phase I, for striped dir, though sub-stripes will be
+	 * created in declare phase, they also needs to be added to master
+	 * object as sub-directory entry. So it has to initialize the master
+	 * object, then set dir striped EA.(in mdo_xattr_set) */
+	rc = mdd_object_initialize(env, mdo2fid(pobj), son, attr, handle,
+				   spec);
+	if (rc != 0)
+		GOTO(err_destroy, rc);
+
+	/*
+	 * in case of replay we just set LOVEA provided by the client
+	 * XXX: I think it would be interesting to try "old" way where
+	 *      MDT calls this xattr_set(LOV) in a different transaction.
+	 *      probably this way we code can be made better.
+	 */
+
+	/* During creation, there are only a few cases we need do xattr_set to
+	 * create stripes.
+	 * 1. regular file: see comments above.
+	 * 2. create striped directory with provided stripeEA.
+	 * 3. create striped directory because inherit default layout from the
+	 * parent. */
+	if (spec->no_create ||
+	    (S_ISREG(attr->la_mode) && spec->sp_cr_flags & MDS_OPEN_HAS_EA) ||
+	    S_ISDIR(attr->la_mode)) {
+		const struct lu_buf *buf;
+
+		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
+					spec->u.sp_ea.eadatalen);
+		rc = mdo_xattr_set(env, son, buf,
+				   S_ISDIR(attr->la_mode) ? XATTR_NAME_LMV :
+							    XATTR_NAME_LOV, 0,
+				   handle, BYPASS_CAPA);
+		if (rc != 0)
+			GOTO(err_destroy, rc);
+	}
+
 #ifdef CONFIG_FS_POSIX_ACL
 	if (def_acl_buf != NULL && def_acl_buf->lb_len > 0 &&
 	    S_ISDIR(attr->la_mode)) {
@@ -2086,29 +2163,6 @@ static int mdd_object_create(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_destroy, rc);
 	}
 #endif
-
-	rc = mdd_object_initialize(env, mdo2fid(pobj), son, attr, handle,
-				   spec);
-	if (rc != 0)
-		GOTO(err_destroy, rc);
-
-	/*
-	 * in case of replay we just set LOVEA provided by the client
-	 * XXX: I think it would be interesting to try "old" way where
-	 *      MDT calls this xattr_set(LOV) in a different transaction.
-	 *      probably this way we code can be made better.
-	 */
-	if (spec->no_create || (spec->sp_cr_flags & MDS_OPEN_HAS_EA &&
-				S_ISREG(attr->la_mode))) {
-		const struct lu_buf *buf;
-
-		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
-				spec->u.sp_ea.eadatalen);
-		rc = mdo_xattr_set(env, son, buf, XATTR_NAME_LOV, 0, handle,
-				   BYPASS_CAPA);
-		if (rc != 0)
-			GOTO(err_destroy, rc);
-	}
 
 	if (S_ISLNK(attr->la_mode)) {
 		struct lu_ucred  *uc = lu_ucred_assert(env);
@@ -2411,7 +2465,7 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * So check may_create, but not check may_unlink. */
 	if (!tobj)
 		rc = mdd_may_create(env, tgt_pobj, tpattr, NULL,
-				    (src_pobj != tgt_pobj), 0);
+				    (src_pobj != tgt_pobj), false);
 	else
 		rc = mdd_may_delete(env, tgt_pobj, tpattr, tobj, tattr, cattr,
 				    (src_pobj != tgt_pobj), 1);
@@ -3206,7 +3260,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			return rc;
 	}
 
-	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_MIGRATE);
+	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_V1);
 	buf = mdd_buf_get_const(env, mgr_ea, mgr_easize);
 	rc = mdo_declare_xattr_set(env, mdd_sobj, buf, XATTR_NAME_LMV,
 				   0, handle);
@@ -3236,6 +3290,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	struct thandle		*handle;
 	struct lmv_mds_md_v1	*mgr_ea;
 	struct lu_attr		*la_flag = MDD_ENV_VAR(env, la_for_fix);
+	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
 	int			mgr_easize;
 	int			rc;
 	ENTRY;
@@ -3259,7 +3314,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			RETURN(rc);
 		}
 		spec->u.sp_symname = link_buf.lb_buf;
-	} else{
+	} else if S_ISREG(la->la_mode) {
 		/* retrieve lov of the old object */
 		rc = mdd_get_lov_ea(env, mdd_sobj, &lmm_buf);
 		if (rc != 0 && rc != -ENODATA)
@@ -3272,12 +3327,15 @@ static int mdd_migrate_create(const struct lu_env *env,
 	}
 
 	mgr_ea = (struct lmv_mds_md_v1 *)info->mti_xattr_buf;
-	mgr_ea->lmv_magic = cpu_to_le32(LMV_MAGIC_MIGRATE);
+	mgr_ea->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 	mgr_ea->lmv_stripe_count = cpu_to_le32(2);
 	mgr_ea->lmv_master_mdt_index = mdd_seq_site(mdd)->ss_node_id;
-	mgr_ea->lmv_hash_type = cpu_to_le32(LMV_HASH_TYPE_MIGRATION);
+	mgr_ea->lmv_hash_type = cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
+	fid_cpu_to_le(&mgr_ea->lmv_master_fid, mdd_object_fid(mdd_sobj));
 	fid_cpu_to_le(&mgr_ea->lmv_stripe_fids[0], mdd_object_fid(mdd_sobj));
 	fid_cpu_to_le(&mgr_ea->lmv_stripe_fids[1], mdd_object_fid(mdd_tobj));
+
+	mdd_object_make_hint(env, mdd_pobj, mdd_tobj, la, spec, hint);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
@@ -3300,22 +3358,14 @@ static int mdd_migrate_create(const struct lu_env *env,
 
 	/* create the target object */
 	rc = mdd_object_create(env, mdd_pobj, mdd_tobj, la, spec, NULL, NULL,
-			       NULL, handle);
+			       hint, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
-
-	if (lmm_buf.lb_buf != NULL && lmm_buf.lb_len != 0) {
-		buf = mdd_buf_get_const(env, lmm_buf.lb_buf, lmm_buf.lb_len);
-		rc = mdo_xattr_set(env, mdd_tobj, buf, XATTR_NAME_LOV,
-				   0, handle, mdd_object_capa(env, mdd_sobj));
-		if (rc != 0)
-			GOTO(stop_trans, rc);
-	}
 
 	/* Set MIGRATE EA on the source inode, so once the migration needs
 	 * to be re-done during failover, the re-do process can locate the
 	 * target object which is already being created. */
-	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_MIGRATE);
+	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_V1);
 	buf = mdd_buf_get_const(env, mgr_ea, mgr_easize);
 	rc = mdo_xattr_set(env, mdd_sobj, buf, XATTR_NAME_LMV, 0,
 			   handle, mdd_object_capa(env, mdd_sobj));
@@ -3793,7 +3843,7 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 
 	ENTRY;
 
-	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_MIGRATE);
+	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_V1);
 	mgr_buf = lu_buf_check_and_alloc(&info->mti_big_buf, mgr_easize);
 	if (mgr_buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
@@ -3807,8 +3857,8 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 		 * is being set by previous migration process, so it
 		 * needs to override the IMMUTE flag, otherwise the
 		 * following sanity check will fail */
-		if (le32_to_cpu(lmm->lmv_md_v1.lmv_magic) ==
-						LMV_MAGIC_MIGRATE) {
+		if (le32_to_cpu(lmm->lmv_md_v1.lmv_hash_type) &
+						LMV_HASH_FLAG_MIGRATION) {
 			struct mdd_device *mdd = mdo2mdd(&sobj->mod_obj);
 
 			sattr->la_flags &= ~LUSTRE_IMMUTABLE_FL;

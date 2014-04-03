@@ -590,9 +590,8 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
 			lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
 		break;
-	case LMV_MAGIC:
-	case LMV_MAGIC_MIGRATE:
-		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+	case LMV_MAGIC_V1:
+		if (LMV_MAGIC != cpu_to_le32(LMV_MAGIC))
 			lustre_swab_lmv_mds_md((union lmv_mds_md *)lmm);
 		break;
 	case LMV_USER_MAGIC:
@@ -1184,7 +1183,7 @@ lmv_out_free:
 
 		rc = ll_dir_getstripe(inode, (void **)&lmm, &lmmsize, &request,
 				      valid);
-		if (rc != 0 && rc != -ENODATA)
+		if (rc != 0)
 			GOTO(finish_req, rc);
 
 		/* Get default LMV EA */
@@ -1201,38 +1200,29 @@ lmv_out_free:
 			GOTO(finish_req, rc);
 		}
 
-		/* Get normal LMV EA */
-		if (rc == -ENODATA) {
-			stripe_count = 1;
-		} else {
-			LASSERT(lmm != NULL);
-			stripe_count = lmv_mds_md_stripe_count_get(lmm);
-		}
-
+		stripe_count = lmv_mds_md_stripe_count_get(lmm);
 		lum_size = lmv_user_md_size(stripe_count, LMV_MAGIC_V1);
 		OBD_ALLOC(tmp, lum_size);
 		if (tmp == NULL)
 			GOTO(finish_req, rc = -ENOMEM);
 
-		tmp->lum_magic = LMV_MAGIC_V1;
-		tmp->lum_stripe_count = 1;
 		mdt_index = ll_get_mdt_idx(inode);
 		if (mdt_index < 0)
 			GOTO(out_tmp, rc = -ENOMEM);
-		tmp->lum_stripe_offset = mdt_index;
-		tmp->lum_objects[0].lum_mds = mdt_index;
-		tmp->lum_objects[0].lum_fid = *ll_inode2fid(inode);
-		for (i = 1; i < stripe_count; i++) {
-			struct lmv_mds_md_v1 *lmm1;
 
-			lmm1 = &lmm->lmv_md_v1;
-			mdt_index = ll_get_mdt_idx_by_fid(sbi,
-						     &lmm1->lmv_stripe_fids[i]);
+		tmp->lum_magic = LMV_MAGIC_V1;
+		tmp->lum_stripe_count = 0;
+		tmp->lum_stripe_offset = mdt_index;
+		for (i = 0; i < stripe_count; i++) {
+			struct lu_fid	*fid;
+
+			fid = &lmm->lmv_md_v1.lmv_stripe_fids[i];
+			mdt_index = ll_get_mdt_idx_by_fid(sbi, fid);
 			if (mdt_index < 0)
 				GOTO(out_tmp, rc = mdt_index);
 
 			tmp->lum_objects[i].lum_mds = mdt_index;
-			tmp->lum_objects[i].lum_fid = lmm1->lmv_stripe_fids[i];
+			tmp->lum_objects[i].lum_fid = *fid;
 			tmp->lum_stripe_count++;
 		}
 

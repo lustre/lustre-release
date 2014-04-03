@@ -2387,6 +2387,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	struct lmv_user_mds_data *objects = lum->lum_objects;
 	char *prefix = lum->lum_magic == LMV_USER_MAGIC ? "(Default)" : "";
 	int i, obdstripe = 0;
+	char *seperator = "";
 
 	if (obdindex != OBD_NOT_FOUND) {
 		for (i = 0; i < lum->lum_stripe_count; i++) {
@@ -2413,21 +2414,26 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%s\n", prefix, path);
 
 	if (verbose & VERBOSE_COUNT) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
 		if (verbose & ~VERBOSE_COUNT)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
-		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lum_stripe_count);
+		seperator = "\n";
 	}
 
 	if (verbose & VERBOSE_OFFSET) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
 		if (verbose & ~VERBOSE_OFFSET)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_offset: ");
-		llapi_printf(LLAPI_MSG_NORMAL, "%d\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%d",
 			     (int)lum->lum_stripe_offset);
+		seperator = "\n";
 	}
 
 	if (verbose & VERBOSE_OBJID && lum->lum_magic != LMV_USER_MAGIC) {
-		if ((obdstripe == 1))
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
+		if (obdstripe == 1 && lum->lum_stripe_count > 0)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "mdtidx\t\t FID[seq:oid:ver]\n");
 		for (i = 0; i < lum->lum_stripe_count; i++) {
@@ -2443,12 +2449,16 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	}
 
 	if ((verbose & VERBOSE_POOL) && (pool_name[0] != '\0')) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", seperator);
 		if (verbose & ~VERBOSE_POOL)
 			llapi_printf(LLAPI_MSG_NORMAL, "%slmv_pool:           ",
 				     prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%c ", pool_name, ' ');
+		seperator = "\n";
 	}
-	llapi_printf(LLAPI_MSG_NORMAL, "\n");
+
+	if (!(verbose & VERBOSE_OBJID))
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
@@ -3305,6 +3315,17 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 				lum->lum_stripe_count = 0;
 				lum->lum_stripe_offset = -1;
 				goto dump;
+			} else if (param->get_lmv) {
+				struct lmv_user_md *lum = param->fp_lmv_md;
+				int mdtidx;
+
+				ret = llapi_file_fget_mdtidx(dirfd(d), &mdtidx);
+				if (ret != 0)
+					goto err_out;
+				lum->lum_magic = LMV_MAGIC_V1;
+				lum->lum_stripe_count = 0;
+				lum->lum_stripe_offset = mdtidx;
+				goto dump;
 			} else {
 				struct lov_user_md *lmm = &param->lmd->lmd_lmm;
 				lmm->lmm_magic = LOV_USER_MAGIC_V1;
@@ -3333,11 +3354,12 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
                                     __func__, path);
                 } else {
                         ret = -errno;
-                        llapi_error(LLAPI_MSG_ERROR, ret,
-                                    "error: %s: %s failed for %s",
-                                     __func__, d ? "LL_IOC_LOV_GETSTRIPE" :
-                                    "IOC_MDC_GETFILESTRIPE", path);
-                }
+err_out:
+			llapi_error(LLAPI_MSG_ERROR, ret,
+				    "error: %s: %s failed for %s",
+				     __func__, d ? "LL_IOC_LOV_GETSTRIPE" :
+				    "IOC_MDC_GETFILESTRIPE", path);
+		}
 
                 return ret;
         }

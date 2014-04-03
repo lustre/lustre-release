@@ -275,6 +275,9 @@ struct osd_device {
 
 	/* quota slave instance */
 	struct qsd_instance      *od_quota_slave;
+
+	/* osd seq instance */
+	struct lu_client_seq	*od_cl_seq;
 };
 
 /* There are at most 10 uid/gids are affected in a transaction, and

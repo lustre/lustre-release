@@ -2741,17 +2741,46 @@ struct lmv_desc {
 
 extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
 
-/* lmv structures */
-#define LMV_MAGIC_V1	0x0CD10CD0    /* normal stripe lmv magic */
-#define LMV_USER_MAGIC	0x0CD20CD0    /* default lmv magic*/
-#define LMV_MAGIC_MIGRATE	0x0CD30CD0    /* migrate stripe lmv magic */
+/* LMV layout EA, and it will be stored both in master and slave object */
+struct lmv_mds_md_v1 {
+	__u32 lmv_magic;
+	__u32 lmv_stripe_count;
+	__u32 lmv_master_mdt_index;	/* On master object, it is master
+					 * MDT index, on slave object, it
+					 * is stripe index of the slave obj */
+	__u32 lmv_hash_type;		/* dir stripe policy, i.e. indicate
+					 * which hash function to be used,
+					 * Note: only lower 16 bits is being
+					 * used for now. Higher 16 bits will
+					 * be used to mark the object status,
+					 * for example migrating or dead. */
+	__u32 lmv_layout_version;	/* Used for directory restriping */
+	__u32 lmv_padding;
+	struct lu_fid	lmv_master_fid; /* The FID of the master object, which
+					 * is the namespace-visible dir FID */
+	char lmv_pool_name[LOV_MAXPOOLNAME];	/* pool name */
+	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */
+};
+
+#define LMV_MAGIC_V1	0x0CD20CD0    /* normal stripe lmv magic */
 #define LMV_MAGIC	LMV_MAGIC_V1
 
+/* #define LMV_USER_MAGIC 0x0CD30CD0 */
+#define LMV_MAGIC_STRIPE 0x0CD40CD0 /* magic for dir sub_stripe */
+
+/* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
+ * and the higher part will be the flag to indicate the status of object,
+ * for example the object is being migrated. And the hash function
+ * might be interpreted differently with different flags. */
 enum lmv_hash_type {
 	LMV_HASH_TYPE_ALL_CHARS = 1,
 	LMV_HASH_TYPE_FNV_1A_64 = 2,
-	LMV_HASH_TYPE_MIGRATION = 3,
 };
+
+#define LMV_HASH_TYPE_MASK 0x0000ffff
+
+#define LMV_HASH_FLAG_MIGRATION	0x80000000
+#define LMV_HASH_FLAG_DEAD	0x40000000
 
 #define LMV_HASH_NAME_ALL_CHARS	"all_char"
 #define LMV_HASH_NAME_FNV_1A_64	"fnv_1a_64"
@@ -2784,18 +2813,6 @@ static inline __u64 lustre_hash_fnv_1a_64(const void *buf, size_t size)
 	return hash;
 }
 
-struct lmv_mds_md_v1 {
-	__u32 lmv_magic;
-	__u32 lmv_stripe_count;		/* stripe count */
-	__u32 lmv_master_mdt_index;	/* master MDT index */
-	__u32 lmv_hash_type;		/* dir stripe policy, i.e. indicate
-					 * which hash function to be used */
-	__u32 lmv_layout_version;	/* Used for directory restriping */
-	__u32 lmv_padding;
-	char lmv_pool_name[LOV_MAXPOOLNAME];	/* pool name */
-	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */
-};
-
 union lmv_mds_md {
 	__u32			 lmv_magic;
 	struct lmv_mds_md_v1	 lmv_md_v1;
@@ -2807,8 +2824,7 @@ extern void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm);
 static inline int lmv_mds_md_size(int stripe_count, unsigned int lmm_magic)
 {
 	switch (lmm_magic) {
-	case LMV_MAGIC_V1:
-	case LMV_MAGIC_MIGRATE: {
+	case LMV_MAGIC_V1:{
 		struct lmv_mds_md_v1 *lmm1;
 
 		return sizeof(*lmm1) + stripe_count *
@@ -2823,7 +2839,6 @@ static inline int lmv_mds_md_stripe_count_get(const union lmv_mds_md *lmm)
 {
 	switch (le32_to_cpu(lmm->lmv_magic)) {
 	case LMV_MAGIC_V1:
-	case LMV_MAGIC_MIGRATE:
 		return le32_to_cpu(lmm->lmv_md_v1.lmv_stripe_count);
 	case LMV_USER_MAGIC:
 		return le32_to_cpu(lmm->lmv_user_md.lum_stripe_count);
@@ -2837,7 +2852,6 @@ static inline int lmv_mds_md_stripe_count_set(union lmv_mds_md *lmm,
 {
 	switch (le32_to_cpu(lmm->lmv_magic)) {
 	case LMV_MAGIC_V1:
-	case LMV_MAGIC_MIGRATE:
 		lmm->lmv_md_v1.lmv_stripe_count = cpu_to_le32(stripe_count);
 		break;
 	case LMV_USER_MAGIC:
@@ -3719,6 +3733,7 @@ enum idx_info_flags {
 	II_FL_VARKEY	= 1 << 1, /* keys can be of variable size */
 	II_FL_VARREC	= 1 << 2, /* records can be of variable size */
 	II_FL_NONUNQ	= 1 << 3, /* index supports non-unique keys */
+	II_FL_NOKEY	= 1 << 4, /* client doesn't care about key */
 };
 
 #define LIP_MAGIC 0x8A6D6B6C
@@ -3966,6 +3981,7 @@ enum update_type {
 	OUT_INDEX_INSERT	= 10,
 	OUT_INDEX_DELETE	= 11,
 	OUT_WRITE		= 12,
+	OUT_XATTR_DEL		= 13,
 	OUT_LAST
 };
 

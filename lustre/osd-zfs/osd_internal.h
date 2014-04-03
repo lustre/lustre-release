@@ -298,6 +298,9 @@ struct osd_device {
 	struct osd_zfs_acct_txg *od_acct_delta;
 	cfs_hash_t		*od_acct_usr;
 	cfs_hash_t		*od_acct_grp;
+
+	/* osd seq instance */
+	struct lu_client_seq	*od_cl_seq;
 };
 
 struct osd_object {

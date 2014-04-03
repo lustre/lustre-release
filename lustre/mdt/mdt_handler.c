@@ -508,8 +508,8 @@ out:
 	return rc;
 }
 
-static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
-			     const char *name)
+int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
+		      const char *name)
 {
 	const struct lu_env *env = info->mti_env;
 	int rc;
@@ -543,6 +543,8 @@ static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 	info->mti_buf.lb_buf = info->mti_big_lmm;
 	info->mti_buf.lb_len = info->mti_big_lmmsize;
 	rc = mo_xattr_get(env, mdt_object_child(o), &info->mti_buf, name);
+	if (rc > 0)
+		info->mti_big_lmm_used = 1;
 
 	RETURN(rc);
 }
@@ -594,7 +596,6 @@ int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 			return rc;
 		rc = mdt_big_xattr_get(info, o, name);
 		if (rc > 0) {
-			info->mti_big_lmm_used = 1;
 			if (!strcmp(name, XATTR_NAME_LOV)) {
 				ma->ma_valid |= MA_LOV;
 				ma->ma_lmm = info->mti_big_lmm;

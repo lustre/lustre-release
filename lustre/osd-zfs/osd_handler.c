@@ -878,6 +878,14 @@ static void osd_type_stop(struct lu_device_type *t)
 {
 }
 
+int osd_fid_alloc(const struct lu_env *env, struct obd_export *exp,
+		  struct lu_fid *fid, struct md_op_data *op_data)
+{
+	struct osd_device *osd = osd_dev(exp->exp_obd->obd_lu_dev);
+
+	return seq_client_alloc_fid(env, osd->od_cl_seq, fid);
+}
+
 static struct lu_device_type_operations osd_device_type_ops = {
 	.ldto_init		= osd_type_init,
 	.ldto_fini		= osd_type_fini,
@@ -903,7 +911,8 @@ static struct lu_device_type osd_device_type = {
 static struct obd_ops osd_obd_device_ops = {
 	.o_owner       = THIS_MODULE,
 	.o_connect	= osd_obd_connect,
-	.o_disconnect	= osd_obd_disconnect
+	.o_disconnect	= osd_obd_disconnect,
+	.o_fid_alloc	= osd_fid_alloc
 };
 
 int __init osd_init(void)

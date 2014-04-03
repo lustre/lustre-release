@@ -81,7 +81,7 @@ out:
 #define TX_ALLOC_STEP	8
 static struct tx_arg *tx_add_exec(struct thandle_exec_args *ta,
 				  tx_exec_func_t func, tx_exec_func_t undo,
-				  char *file, int line)
+				  const char *file, int line)
 {
 	int rc;
 	int i;
@@ -210,7 +210,7 @@ static int __out_tx_create(const struct lu_env *env, struct dt_object *obj,
 			   struct dt_object_format *dof,
 			   struct thandle_exec_args *ta,
 			   struct object_update_reply *reply,
-			   int index, char *file, int line)
+			   int index, const char *file, int line)
 {
 	struct tx_arg *arg;
 	int rc;
@@ -333,7 +333,7 @@ static int __out_tx_attr_set(const struct lu_env *env,
 			     const struct lu_attr *attr,
 			     struct thandle_exec_args *th,
 			     struct object_update_reply *reply,
-			     int index, char *file, int line)
+			     int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -417,42 +417,6 @@ static int out_attr_get(struct tgt_session_info *tsi)
 	rc = dt_attr_get(env, obj, la, NULL);
 	if (rc)
 		GOTO(out_unlock, rc);
-	/*
-	 * If it is a directory, we will also check whether the
-	 * directory is empty.
-	 * la_flags = 0 : Empty.
-	 *          = 1 : Not empty.
-	 */
-	la->la_flags = 0;
-	if (S_ISDIR(la->la_mode)) {
-		struct dt_it		*it;
-		const struct dt_it_ops	*iops;
-
-		if (!dt_try_as_dir(env, obj))
-			GOTO(out_unlock, rc = -ENOTDIR);
-
-		iops = &obj->do_index_ops->dio_it;
-		it = iops->init(env, obj, LUDA_64BITHASH, BYPASS_CAPA);
-		if (!IS_ERR(it)) {
-			int  result;
-			result = iops->get(env, it, (const void *)"");
-			if (result > 0) {
-				int i;
-				for (result = 0, i = 0; result == 0 && i < 3;
-				     ++i)
-					result = iops->next(env, it);
-				if (result == 0)
-					la->la_flags = 1;
-			} else if (result == 0)
-				/*
-				 * Huh? Index contains no zero key?
-				 */
-				rc = -EIO;
-
-			iops->put(env, it);
-			iops->fini(env, it);
-		}
-	}
 
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, la, la->la_valid);
@@ -624,7 +588,7 @@ static int __out_tx_xattr_set(const struct lu_env *env,
 			      const char *name, int flags,
 			      struct thandle_exec_args *ta,
 			      struct object_update_reply *reply,
-			      int index, char *file, int line)
+			      int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -699,6 +663,79 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
+static int out_tx_xattr_del_exec(const struct lu_env *env, struct thandle *th,
+				 struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	CDEBUG(D_INFO, "%s: del xattr name '%s' on "DFID"\n",
+	       dt_obd_name(th->th_dev), arg->u.xattr_set.name,
+	       PFID(lu_object_fid(&dt_obj->do_lu)));
+
+	if (!lu_object_exists(&dt_obj->do_lu))
+		GOTO(out, rc = -ENOENT);
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_xattr_del(env, dt_obj, arg->u.xattr_set.name,
+			  th, NULL);
+	dt_write_unlock(env, dt_obj);
+out:
+	CDEBUG(D_INFO, "%s: insert xattr del reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	object_update_result_insert(arg->reply, NULL, 0, arg->index, rc);
+
+	return rc;
+}
+
+static int __out_tx_xattr_del(const struct lu_env *env,
+			      struct dt_object *dt_obj, const char *name,
+			      struct thandle_exec_args *ta,
+			      struct object_update_reply *reply,
+			      int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_xattr_del(env, dt_obj, name, ta->ta_handle);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_xattr_del_exec, NULL, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->u.xattr_set.name = name;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_xattr_del(struct tgt_session_info *tsi)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
+	struct object_update	*update = tti->tti_u.update.tti_update;
+	struct dt_object	*obj = tti->tti_u.update.tti_dt_object;
+	char			*name;
+	int			 rc;
+	ENTRY;
+
+	name = object_update_param_get(update, 0, NULL);
+	if (name == NULL) {
+		CERROR("%s: empty name for xattr set: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), -EPROTO);
+		RETURN(err_serious(-EPROTO));
+	}
+
+	rc = out_tx_xattr_del(tsi->tsi_env, obj, name, &tti->tti_tea,
+			      tti->tti_u.update.tti_update_reply,
+			      tti->tti_u.update.tti_update_reply_index);
+	RETURN(rc);
+}
+
 static int out_obj_ref_add(const struct lu_env *env,
 			   struct dt_object *dt_obj,
 			   struct thandle *th)
@@ -750,7 +787,7 @@ static int __out_tx_ref_add(const struct lu_env *env,
 			    struct dt_object *dt_obj,
 			    struct thandle_exec_args *ta,
 			    struct object_update_reply *reply,
-			    int index, char *file, int line)
+			    int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -815,7 +852,7 @@ static int __out_tx_ref_del(const struct lu_env *env,
 			    struct dt_object *dt_obj,
 			    struct thandle_exec_args *ta,
 			    struct object_update_reply *reply,
-			    int index, char *file, int line)
+			    int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -925,7 +962,7 @@ static int __out_tx_index_insert(const struct lu_env *env,
 				 char *name, struct lu_fid *fid,
 				 struct thandle_exec_args *ta,
 				 struct object_update_reply *reply,
-				 int index, char *file, int line)
+				 int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -1027,7 +1064,7 @@ static int __out_tx_index_delete(const struct lu_env *env,
 				 struct dt_object *dt_obj, char *name,
 				 struct thandle_exec_args *ta,
 				 struct object_update_reply *reply,
-				 int index, char *file, int line)
+				 int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -1107,7 +1144,7 @@ static int out_tx_destroy_undo(const struct lu_env *env, struct thandle *th,
 static int __out_tx_destroy(const struct lu_env *env, struct dt_object *dt_obj,
 			     struct thandle_exec_args *ta,
 			     struct object_update_reply *reply,
-			     int index, char *file, int line)
+			     int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -1179,7 +1216,7 @@ static int __out_tx_write(const struct lu_env *env,
 			  const struct lu_buf *buf,
 			  loff_t pos, struct thandle_exec_args *ta,
 			  struct object_update_reply *reply,
-			  int index, char *file, int line)
+			  int index, const char *file, int line)
 {
 	struct tx_arg	*arg;
 	int		rc;
@@ -1269,6 +1306,8 @@ static struct tgt_handler out_update_ops[] = {
 		     out_attr_get),
 	DEF_OUT_HNDL(OUT_XATTR_SET, "out_xattr_set", MUTABOR | HABEO_REFERO,
 		     out_xattr_set),
+	DEF_OUT_HNDL(OUT_XATTR_DEL, "out_xattr_del", MUTABOR | HABEO_REFERO,
+		     out_xattr_del),
 	DEF_OUT_HNDL(OUT_XATTR_GET, "out_xattr_get", HABEO_REFERO,
 		     out_xattr_get),
 	DEF_OUT_HNDL(OUT_INDEX_LOOKUP, "out_index_lookup", HABEO_REFERO,

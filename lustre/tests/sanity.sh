@@ -214,7 +214,6 @@ test_4() {
 	local MDTIDX=1
 	local remote_dir=remote_dir
 
-	[ $MDSCOUNT -ge 2 ] && skip "skip now for LU-4690" && return #LU-4690
 	test_mkdir $DIR/$remote_dir ||
 		error "Create remote directory failed"
 
@@ -225,6 +224,8 @@ test_4() {
 		error "Expect error removing in-use dir $DIR/$remote_dir"
 
 	test -d $DIR/$remote_dir || error "Remote directory disappeared"
+
+	rm -rf $DIR/$remote_dir || error "remove remote dir error"
 }
 run_test 4 "mkdir; touch dir/file; rmdir; checkdir (expect error)"
 
@@ -515,7 +516,7 @@ run_test 17h "create objects: lov_free_memmd() doesn't lbug"
 test_17i() { #bug 20018
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir -p $DIR/$tdir
+	test_mkdir -c1 $DIR/$tdir
 	local foo=$DIR/$tdir/$tfile
 	local mdt_idx
 	if [[ $MDSCOUNT -gt 1 ]]; then
@@ -664,9 +665,9 @@ test_17n() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir
 	for ((i=0; i<10; i++)); do
-		$LFS mkdir -i 1 $DIR/$tdir/remote_dir_${i} ||
+		$LFS mkdir -i1 -c2 $DIR/$tdir/remote_dir_${i} ||
 			error "create remote dir error $i"
 		createmany -o $DIR/$tdir/remote_dir_${i}/f 10 ||
 			error "create files under remote dir failed $i"
@@ -2225,6 +2226,25 @@ test_31o() { # LU-2901
 }
 run_test 31o "duplicate hard links with same filename"
 
+test_31p() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -D -c2 -t all_char $DIR/$tdir/striped_dir
+
+	opendirunlink $DIR/$tdir/striped_dir/test1 ||
+		error "open unlink test1 failed"
+	opendirunlink $DIR/$tdir/striped_dir/test2 ||
+		error "open unlink test2 failed"
+
+	$CHECKSTAT -a $DIR/$tdir/striped_dir/test1 ||
+		error "test1 still exists"
+	$CHECKSTAT -a $DIR/$tdir/striped_dir/test2 ||
+		error "test2 still exists"
+}
+run_test 31p "remove of open striped directory"
+
 cleanup_test32_mount() {
 	trap 0
 	$UMOUNT -d $DIR/$tdir/ext2-mountpoint
@@ -2803,6 +2823,25 @@ test_36h() {
 	subr_36fh "0x80000227"
 }
 run_test 36h "utime on file racing with OST BRW write =========="
+
+test_36i() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir
+
+	local mtime=$(stat -c%Y $DIR/$tdir/striped_dir)
+	local new_mtime=$((mtime + 200))
+
+	#change Modify time of striped dir
+	touch -m -d @$new_mtime	$DIR/$tdir/striped_dir ||
+			error "change mtime failed"
+
+	local got=$(stat -c%Y $DIR/$tdir/striped_dir)
+
+	[ "$new_mtime" = "$got" ] || error "expect $new_mtime got $got"
+}
+run_test 36i "change mtime on striped directory"
 
 # test_37 - duplicate with tests 32q 32r
 
@@ -3803,7 +3842,7 @@ run_test 50 "special situations: /proc symlinks  ==============="
 
 test_51a() {	# was test_51
 	# bug 1516 - create an empty entry right after ".." then split dir
-	test_mkdir -p $DIR/$tdir
+	test_mkdir -c1 $DIR/$tdir
 	touch $DIR/$tdir/foo
 	$MCREATE $DIR/$tdir/bar
 	rm $DIR/$tdir/foo
@@ -3827,7 +3866,7 @@ test_51b() {
 	# cleanup the directory
 	rm -fr $BASE
 
-	test_mkdir -p $BASE
+	test_mkdir -p -c1 $BASE
 
 	local mdtidx=$(printf "%04x" $($LFS getstripe -M $BASE))
 	local numfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.filesfree)
@@ -12678,6 +12717,50 @@ test_300f() {
 	rm -rf $DIR/$tdir
 }
 run_test 300f "check rename cross striped directory"
+
+test_300g() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_count
+	local dir
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -i 0 -c $MDSCOUNT -t all_char \
+					$DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	$LFS setdirstripe -D -c $MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+		error "set default stripe on striped dir error"
+
+	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
+
+	for dir in $(find $DIR/$tdir/striped_dir/*); do
+		stripe_count=$($LFS getdirstripe -c $dir)
+		[ $stripe_count -eq $MDSCOUNT ] ||
+			error "expect $MDSCOUNT get $stripe_count for $dir"
+	done
+
+	rmdir $DIR/$tdir/striped_dir/* || error "rmdir1 failed"
+	#change default stripe count to 2
+	$LFS setdirstripe -D -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set default stripe on striped dir error"
+
+	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
+
+	rmdir $DIR/$tdir/striped_dir/* || error "rmdir2 failed"
+
+	#change default stripe count to 1
+	$LFS setdirstripe -D -c 1 -t all_char $DIR/$tdir/striped_dir ||
+		error "set default stripe on striped dir error"
+
+	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
+	for dir in $(find $DIR/$tdir/striped_dir/*); do
+		stripe_count=$($LFS getdirstripe -c $dir)
+		[ $stripe_count -eq 1 ] ||
+			error "expect 1 get $stripe_count for $dir"
+	done
+	rmdir $DIR/$tdir/striped_dir/* || error "rmdir3 failed"
+}
+run_test 300g "check default striped directory for striped directory"
 
 #
 # tests that do cleanup/setup should be run at the end
