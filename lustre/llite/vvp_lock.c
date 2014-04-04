@@ -62,12 +62,12 @@
  * ordered within themselves by weights assigned from other layers.
  */
 static unsigned long vvp_lock_weigh(const struct lu_env *env,
-                                    const struct cl_lock_slice *slice)
+				    const struct cl_lock_slice *slice)
 {
-        struct ccc_object *cob = cl2ccc(slice->cls_obj);
+	struct ccc_object *cob = cl2ccc(slice->cls_obj);
 
-        ENTRY;
-        RETURN(cfs_atomic_read(&cob->cob_mmap_cnt) > 0 ? ~0UL >> 2 : 0);
+	ENTRY;
+	RETURN(atomic_read(&cob->cob_mmap_cnt) > 0 ? ~0UL >> 2 : 0);
 }
 
 static const struct cl_lock_operations vvp_lock_ops = {

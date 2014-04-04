@@ -132,12 +132,12 @@ static struct lu_device *lovsub_device_fini(const struct lu_env *env,
 }
 
 static struct lu_device *lovsub_device_free(const struct lu_env *env,
-                                            struct lu_device *d)
+					    struct lu_device *d)
 {
 	struct lovsub_device *lsd  = lu2lovsub_dev(d);
 	struct lu_device     *next = cl2lu_dev(lsd->acid_next);
 
-	if (cfs_atomic_read(&d->ld_ref) && d->ld_site) {
+	if (atomic_read(&d->ld_ref) && d->ld_site) {
 		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
 		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
 	}

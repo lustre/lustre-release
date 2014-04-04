@@ -432,14 +432,14 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
  */
 static void ll_vm_open(struct vm_area_struct * vma)
 {
-        struct inode *inode    = vma->vm_file->f_dentry->d_inode;
-        struct ccc_object *vob = cl_inode2ccc(inode);
+	struct inode *inode    = vma->vm_file->f_dentry->d_inode;
+	struct ccc_object *vob = cl_inode2ccc(inode);
 
-        ENTRY;
-        LASSERT(vma->vm_file);
-        LASSERT(cfs_atomic_read(&vob->cob_mmap_cnt) >= 0);
-        cfs_atomic_inc(&vob->cob_mmap_cnt);
-        EXIT;
+	ENTRY;
+	LASSERT(vma->vm_file);
+	LASSERT(atomic_read(&vob->cob_mmap_cnt) >= 0);
+	atomic_inc(&vob->cob_mmap_cnt);
+	EXIT;
 }
 
 /**
@@ -447,14 +447,14 @@ static void ll_vm_open(struct vm_area_struct * vma)
  */
 static void ll_vm_close(struct vm_area_struct *vma)
 {
-        struct inode      *inode = vma->vm_file->f_dentry->d_inode;
-        struct ccc_object *vob   = cl_inode2ccc(inode);
+	struct inode      *inode = vma->vm_file->f_dentry->d_inode;
+	struct ccc_object *vob   = cl_inode2ccc(inode);
 
-        ENTRY;
-        LASSERT(vma->vm_file);
-        cfs_atomic_dec(&vob->cob_mmap_cnt);
-        LASSERT(cfs_atomic_read(&vob->cob_mmap_cnt) >= 0);
-        EXIT;
+	ENTRY;
+	LASSERT(vma->vm_file);
+	atomic_dec(&vob->cob_mmap_cnt);
+	LASSERT(atomic_read(&vob->cob_mmap_cnt) >= 0);
+	EXIT;
 }
 
 /* return the user space pointer that maps to a file offset via a vma */

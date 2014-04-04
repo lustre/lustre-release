@@ -438,7 +438,7 @@ static int lov_print_raid0(const struct lu_env *env, void *cookie,
 
 	(*p)(env, cookie, "stripes: %d, %s, lsm{%p 0x%08X %d %u %u}:\n",
 		r0->lo_nr, lov->lo_layout_invalid ? "invalid" : "valid", lsm,
-		lsm->lsm_magic, cfs_atomic_read(&lsm->lsm_refc),
+		lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
 		lsm->lsm_stripe_count, lsm->lsm_layout_gen);
 	for (i = 0; i < r0->lo_nr; ++i) {
 		struct lu_object *sub;
@@ -462,7 +462,7 @@ static int lov_print_released(const struct lu_env *env, void *cookie,
 	(*p)(env, cookie,
 		"released: %s, lsm{%p 0x%08X %d %u %u}:\n",
 		lov->lo_layout_invalid ? "invalid" : "valid", lsm,
-		lsm->lsm_magic, cfs_atomic_read(&lsm->lsm_refc),
+		lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
 		lsm->lsm_stripe_count, lsm->lsm_layout_gen);
 	return 0;
 }
@@ -499,7 +499,7 @@ static int lov_attr_get_raid0(const struct lu_env *env, struct cl_object *obj,
 	 * hit this assertion.
 	 * Anyway, it's still okay to call attr_get w/o type guard as layout
 	 * can't go if locks exist. */
-	/* LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 1); */
+	/* LASSERT(atomic_read(&lsm->lsm_refc) > 1); */
 
 	if (!r0->lo_attr_valid) {
 		struct lov_stripe_md    *lsm = lov->lo_lsm;
@@ -672,13 +672,13 @@ static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
-	while (cfs_atomic_read(&lov->lo_active_ios) > 0) {
+	while (atomic_read(&lov->lo_active_ios) > 0) {
 		CDEBUG(D_INODE, "file:"DFID" wait for active IO, now: %d.\n",
 			PFID(lu_object_fid(lov2lu(lov))),
-			cfs_atomic_read(&lov->lo_active_ios));
+			atomic_read(&lov->lo_active_ios));
 
 		l_wait_event(lov->lo_waitq,
-			     cfs_atomic_read(&lov->lo_active_ios) == 0, &lwi);
+			     atomic_read(&lov->lo_active_ios) == 0, &lwi);
 	}
 	RETURN(0);
 }
@@ -724,7 +724,7 @@ static int lov_layout_change(const struct lu_env *unused,
 	if (result == 0) {
 		old_ops->llo_fini(env, lov, &lov->u);
 
-		LASSERT(cfs_atomic_read(&lov->lo_active_ios) == 0);
+		LASSERT(atomic_read(&lov->lo_active_ios) == 0);
 
 		lov->lo_type = LLT_EMPTY;
 		result = new_ops->llo_init(env,
@@ -762,7 +762,7 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
 
         ENTRY;
 	init_rwsem(&lov->lo_type_guard);
-	cfs_atomic_set(&lov->lo_active_ios, 0);
+	atomic_set(&lov->lo_active_ios, 0);
 	init_waitqueue_head(&lov->lo_waitq);
 
 	cl_object_page_init(lu2cl(obj), sizeof(struct lov_page));
@@ -792,7 +792,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 
 	if (conf->coc_opc == OBJECT_CONF_WAIT) {
 		if (lov->lo_layout_invalid &&
-		    cfs_atomic_read(&lov->lo_active_ios) > 0) {
+		    atomic_read(&lov->lo_active_ios) > 0) {
 			lov_conf_unlock(lov);
 			result = lov_layout_wait(env, lov);
 			lov_conf_lock(lov);
@@ -814,7 +814,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	/* will change layout - check if there still exists active IO. */
-	if (cfs_atomic_read(&lov->lo_active_ios) > 0) {
+	if (atomic_read(&lov->lo_active_ios) > 0) {
 		lov->lo_layout_invalid = true;
 		GOTO(out, result = -EBUSY);
 	}
@@ -955,7 +955,7 @@ struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov)
 	if (lov->lo_lsm != NULL) {
 		lsm = lsm_addref(lov->lo_lsm);
 		CDEBUG(D_INODE, "lsm %p addref %d/%d by %p.\n",
-			lsm, cfs_atomic_read(&lsm->lsm_refc),
+			lsm, atomic_read(&lsm->lsm_refc),
 			lov->lo_layout_invalid, current);
 	}
 	lov_conf_thaw(lov);

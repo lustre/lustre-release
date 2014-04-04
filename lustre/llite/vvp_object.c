@@ -58,24 +58,24 @@
  */
 
 static int vvp_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
+			    lu_printer_t p, const struct lu_object *o)
 {
-        struct ccc_object    *obj   = lu2ccc(o);
-        struct inode         *inode = obj->cob_inode;
-        struct ll_inode_info *lli;
+	struct ccc_object    *obj   = lu2ccc(o);
+	struct inode         *inode = obj->cob_inode;
+	struct ll_inode_info *lli;
 
-        (*p)(env, cookie, "(%s %d %d) inode: %p ",
-             cfs_list_empty(&obj->cob_pending_list) ? "-" : "+",
-             obj->cob_transient_pages, cfs_atomic_read(&obj->cob_mmap_cnt),
-             inode);
-        if (inode) {
-                lli = ll_i2info(inode);
-                (*p)(env, cookie, "%lu/%u %o %u %d %p "DFID,
-                     inode->i_ino, inode->i_generation, inode->i_mode,
-                     inode->i_nlink, atomic_read(&inode->i_count),
-                     lli->lli_clob, PFID(&lli->lli_fid));
-        }
-        return 0;
+	(*p)(env, cookie, "(%s %d %d) inode: %p ",
+	     list_empty(&obj->cob_pending_list) ? "-" : "+",
+	     obj->cob_transient_pages, atomic_read(&obj->cob_mmap_cnt),
+	     inode);
+	if (inode) {
+		lli = ll_i2info(inode);
+		(*p)(env, cookie, "%lu/%u %o %u %d %p "DFID,
+		     inode->i_ino, inode->i_generation, inode->i_mode,
+		     inode->i_nlink, atomic_read(&inode->i_count),
+		     lli->lli_clob, PFID(&lli->lli_fid));
+	}
+	return 0;
 }
 
 static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,

@@ -96,20 +96,20 @@ static struct ll_sb_info *ll_init_sbi(void)
 	lru_page_max = pages / 2;
 
 	/* initialize ll_cache data */
-	cfs_atomic_set(&sbi->ll_cache.ccc_users, 0);
+	atomic_set(&sbi->ll_cache.ccc_users, 0);
 	sbi->ll_cache.ccc_lru_max = lru_page_max;
-	cfs_atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
+	atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
 	spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
 	CFS_INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
 
-	cfs_atomic_set(&sbi->ll_cache.ccc_unstable_nr, 0);
+	atomic_set(&sbi->ll_cache.ccc_unstable_nr, 0);
 	init_waitqueue_head(&sbi->ll_cache.ccc_unstable_waitq);
 
-        sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
-                                           SBI_DEFAULT_READAHEAD_MAX);
-        sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
-        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-                                           SBI_DEFAULT_READAHEAD_WHOLE_MAX;
+	sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
+					   SBI_DEFAULT_READAHEAD_MAX);
+	sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
+	sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
+					   SBI_DEFAULT_READAHEAD_WHOLE_MAX;
         CFS_INIT_LIST_HEAD(&sbi->ll_conn_chain);
         CFS_INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
 
@@ -137,14 +137,14 @@ static struct ll_sb_info *ll_init_sbi(void)
 			       pp_w_hist.oh_lock);
         }
 
-        /* metadata statahead is enabled by default */
-        sbi->ll_sa_max = LL_SA_RPC_DEF;
-        cfs_atomic_set(&sbi->ll_sa_total, 0);
-        cfs_atomic_set(&sbi->ll_sa_wrong, 0);
-        cfs_atomic_set(&sbi->ll_agl_total, 0);
-        sbi->ll_flags |= LL_SBI_AGL_ENABLED;
+	/* metadata statahead is enabled by default */
+	sbi->ll_sa_max = LL_SA_RPC_DEF;
+	atomic_set(&sbi->ll_sa_total, 0);
+	atomic_set(&sbi->ll_sa_wrong, 0);
+	atomic_set(&sbi->ll_agl_total, 0);
+	sbi->ll_flags |= LL_SBI_AGL_ENABLED;
 
-        RETURN(sbi);
+	RETURN(sbi);
 }
 
 void ll_free_sbi(struct super_block *sb)
@@ -968,15 +968,15 @@ void ll_lli_init(struct ll_inode_info *lli)
 	lli->lli_posix_acl = NULL;
 	lli->lli_remote_perms = NULL;
 	mutex_init(&lli->lli_rmtperm_mutex);
-        /* Do not set lli_fid, it has been initialized already. */
-        fid_zero(&lli->lli_pfid);
-        CFS_INIT_LIST_HEAD(&lli->lli_close_list);
-        CFS_INIT_LIST_HEAD(&lli->lli_oss_capas);
-        cfs_atomic_set(&lli->lli_open_count, 0);
-        lli->lli_mds_capa = NULL;
-        lli->lli_rmtperm_time = 0;
-        lli->lli_pending_och = NULL;
-        lli->lli_mds_read_och = NULL;
+	/* Do not set lli_fid, it has been initialized already. */
+	fid_zero(&lli->lli_pfid);
+	INIT_LIST_HEAD(&lli->lli_close_list);
+	INIT_LIST_HEAD(&lli->lli_oss_capas);
+	atomic_set(&lli->lli_open_count, 0);
+	lli->lli_mds_capa = NULL;
+	lli->lli_rmtperm_time = 0;
+	lli->lli_pending_och = NULL;
+	lli->lli_mds_read_och = NULL;
         lli->lli_mds_write_och = NULL;
         lli->lli_mds_exec_och = NULL;
         lli->lli_open_fd_read_count = 0;
@@ -1017,11 +1017,11 @@ void ll_lli_init(struct ll_inode_info *lli)
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
 {
-        static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+	static atomic_t ll_bdi_num = ATOMIC_INIT(0);
 
-        bdi->name = "lustre";
-        return bdi_register(bdi, NULL, "lustre-%d",
-                            atomic_inc_return(&ll_bdi_num));
+	bdi->name = "lustre";
+	return bdi_register(bdi, NULL, "lustre-%d",
+			    atomic_inc_return(&ll_bdi_num));
 }
 
 int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
@@ -1154,11 +1154,11 @@ void ll_put_super(struct super_block *sb)
 	if (force == 0) {
 		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 		rc = l_wait_event(sbi->ll_cache.ccc_unstable_waitq,
-			cfs_atomic_read(&sbi->ll_cache.ccc_unstable_nr) == 0,
+			atomic_read(&sbi->ll_cache.ccc_unstable_nr) == 0,
 			&lwi);
 	}
 
-	ccc_count = cfs_atomic_read(&sbi->ll_cache.ccc_unstable_nr);
+	ccc_count = atomic_read(&sbi->ll_cache.ccc_unstable_nr);
 	if (force == 0 && rc != -EINTR)
 		LASSERTF(ccc_count == 0, "count: %i\n", ccc_count);
 
@@ -1499,22 +1499,22 @@ void ll_clear_inode(struct inode *inode)
 
 	ll_xattr_cache_destroy(inode);
 
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
-                LASSERT(lli->lli_posix_acl == NULL);
-                if (lli->lli_remote_perms) {
-                        free_rmtperm_hash(lli->lli_remote_perms);
-                        lli->lli_remote_perms = NULL;
-                }
-        }
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+		LASSERT(lli->lli_posix_acl == NULL);
+		if (lli->lli_remote_perms) {
+			free_rmtperm_hash(lli->lli_remote_perms);
+			lli->lli_remote_perms = NULL;
+		}
+	}
 #ifdef CONFIG_FS_POSIX_ACL
-        else if (lli->lli_posix_acl) {
-                LASSERT(cfs_atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
-                LASSERT(lli->lli_remote_perms == NULL);
-                posix_acl_release(lli->lli_posix_acl);
-                lli->lli_posix_acl = NULL;
-        }
+	else if (lli->lli_posix_acl) {
+		LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
+		LASSERT(lli->lli_remote_perms == NULL);
+		posix_acl_release(lli->lli_posix_acl);
+		lli->lli_posix_acl = NULL;
+	}
 #endif
-        lli->lli_inode_magic = LLI_INODE_DEAD;
+	lli->lli_inode_magic = LLI_INODE_DEAD;
 
 	ll_clear_inode_capas(inode);
 	if (S_ISDIR(inode->i_mode))
@@ -2320,22 +2320,22 @@ int ll_flush_ctx(struct inode *inode)
 /* umount -f client means force down, don't save state */
 void ll_umount_begin(struct super_block *sb)
 {
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_device *obd;
-        struct obd_ioctl_data *ioc_data;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct obd_device *obd;
+	struct obd_ioctl_data *ioc_data;
+	ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
-               sb->s_count, atomic_read(&sb->s_active));
+	CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
+	       sb->s_count, atomic_read(&sb->s_active));
 
-        obd = class_exp2obd(sbi->ll_md_exp);
-        if (obd == NULL) {
-                CERROR("Invalid MDC connection handle "LPX64"\n",
-                       sbi->ll_md_exp->exp_handle.h_cookie);
-                EXIT;
-                return;
-        }
-        obd->obd_force = 1;
+	obd = class_exp2obd(sbi->ll_md_exp);
+	if (obd == NULL) {
+		CERROR("Invalid MDC connection handle "LPX64"\n",
+		       sbi->ll_md_exp->exp_handle.h_cookie);
+		EXIT;
+		return;
+	}
+	obd->obd_force = 1;
 
         obd = class_exp2obd(sbi->ll_dt_exp);
         if (obd == NULL) {

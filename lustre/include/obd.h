@@ -296,9 +296,9 @@ struct client_obd {
 	int                  cl_chunk;
 	int                  cl_extent_tax; /* extent overhead, by bytes */
 
-        /* keep track of objects that have lois that contain pages which
-         * have been queued for async brw.  this lock also protects the
-         * lists of osc_client_pages that hang off of the loi */
+	/* keep track of objects that have lois that contain pages which
+	 * have been queued for async brw.  this lock also protects the
+	 * lists of osc_client_pages that hang off of the loi */
         /*
          * ->cl_loi_list_lock protects consistency of
          * ->cl_loi_{ready,read,write}_list. ->ap_make_ready() and

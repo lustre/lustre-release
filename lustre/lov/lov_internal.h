@@ -98,15 +98,15 @@ struct lov_request {
 
 struct lov_request_set {
 	struct obd_info		*set_oi;
-	cfs_atomic_t		 set_refcount;
+	atomic_t		 set_refcount;
 	struct obd_export	*set_exp;
 	/* XXX: There is @set_exp already, however obd_statfs gets
 	   obd_device only. */
 	struct obd_device	*set_obd;
 	int			 set_count;
-	cfs_atomic_t		 set_completes;
-	cfs_atomic_t		 set_success;
-	cfs_atomic_t		 set_finish_checked;
+	atomic_t		 set_completes;
+	atomic_t		 set_success;
+	atomic_t		 set_finish_checked;
 	struct llog_cookie	*set_cookies;
 	cfs_list_t		 set_list;
 	wait_queue_head_t	 set_waitq;
@@ -118,8 +118,8 @@ void lov_finish_set(struct lov_request_set *set);
 
 static inline void lov_put_reqset(struct lov_request_set *set)
 {
-        if (cfs_atomic_dec_and_test(&set->set_refcount))
-                lov_finish_set(set);
+	if (atomic_dec_and_test(&set->set_refcount))
+		lov_finish_set(set);
 }
 
 #define lov_uuid2str(lv, index) \
@@ -242,8 +242,8 @@ void lov_pool_putref(struct pool_desc *pool);
 
 static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)
 {
-	LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 0);
-	cfs_atomic_inc(&lsm->lsm_refc);
+	LASSERT(atomic_read(&lsm->lsm_refc) > 0);
+	atomic_inc(&lsm->lsm_refc);
 	return lsm;
 }
 

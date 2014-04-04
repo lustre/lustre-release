@@ -683,7 +683,7 @@ static struct lu_device *lod_device_free(const struct lu_env *env,
 	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
 	ENTRY;
 
-	LASSERT(cfs_atomic_read(&lu->ld_ref) == 0);
+	LASSERT(atomic_read(&lu->ld_ref) == 0);
 	dt_device_fini(&lod->lod_dt_dev);
 	OBD_FREE_PTR(lod);
 	RETURN(next);

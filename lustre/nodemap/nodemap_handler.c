@@ -88,7 +88,7 @@ static void nodemap_getref(struct lu_nodemap *nodemap)
 void nodemap_putref(struct lu_nodemap *nodemap)
 {
 	LASSERT(nodemap != NULL);
-	LASSERT(cfs_atomic_read(&nodemap->nm_refcount) > 0);
+	LASSERT(atomic_read(&nodemap->nm_refcount) > 0);
 
 	if (atomic_dec_and_test(&nodemap->nm_refcount))
 		nodemap_destroy(nodemap);

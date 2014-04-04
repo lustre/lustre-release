@@ -68,30 +68,31 @@
    Any function that expects lov_tgts to remain stationary must take a ref. */
 static void lov_getref(struct obd_device *obd)
 {
-        struct lov_obd *lov = &obd->u.lov;
+	struct lov_obd *lov = &obd->u.lov;
 
-        /* nobody gets through here until lov_putref is done */
+	/* nobody gets through here until lov_putref is done */
 	mutex_lock(&lov->lov_lock);
-        cfs_atomic_inc(&lov->lov_refcount);
+	atomic_inc(&lov->lov_refcount);
 	mutex_unlock(&lov->lov_lock);
-        return;
+	return;
 }
 
 static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt);
 
 static void lov_putref(struct obd_device *obd)
 {
-        struct lov_obd *lov = &obd->u.lov;
+	struct lov_obd *lov = &obd->u.lov;
 
 	mutex_lock(&lov->lov_lock);
-        /* ok to dec to 0 more than once -- ltd_exp's will be null */
-        if (cfs_atomic_dec_and_test(&lov->lov_refcount) && lov->lov_death_row) {
-                CFS_LIST_HEAD(kill);
-                int i;
-                struct lov_tgt_desc *tgt, *n;
-                CDEBUG(D_CONFIG, "destroying %d lov targets\n",
-                       lov->lov_death_row);
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+	/* ok to dec to 0 more than once -- ltd_exp's will be null */
+	if (atomic_dec_and_test(&lov->lov_refcount) && lov->lov_death_row) {
+		struct list_head kill = LIST_HEAD_INIT(kill);
+		struct lov_tgt_desc *tgt, *n;
+		int i;
+
+		CDEBUG(D_CONFIG, "destroying %d lov targets\n",
+		       lov->lov_death_row);
+		for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         tgt = lov->lov_tgts[i];
 
                         if (!tgt || !tgt->ltd_reap)
@@ -809,13 +810,13 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         lov_fix_desc(desc);
 
-        desc->ld_active_tgt_count = 0;
-        lov->desc = *desc;
-        lov->lov_tgt_size = 0;
+	desc->ld_active_tgt_count = 0;
+	lov->desc = *desc;
+	lov->lov_tgt_size = 0;
 
 	mutex_init(&lov->lov_lock);
-        cfs_atomic_set(&lov->lov_refcount, 0);
-        lov->lov_sp_me = LUSTRE_SP_CLI;
+	atomic_set(&lov->lov_refcount, 0);
+	lov->lov_sp_me = LUSTRE_SP_CLI;
 
 	init_rwsem(&lov->lov_notify_lock);
 
@@ -899,21 +900,21 @@ static int lov_cleanup(struct obd_device *obd)
                 int i;
                 obd_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i])
-                                continue;
+			if (!lov->lov_tgts[i])
+				continue;
 
-                        /* Inactive targets may never have connected */
-                        if (lov->lov_tgts[i]->ltd_active ||
-                            cfs_atomic_read(&lov->lov_refcount))
-                            /* We should never get here - these
-                               should have been removed in the
-                             disconnect. */
-                                CERROR("lov tgt %d not cleaned!"
-                                       " deathrow=%d, lovrc=%d\n",
-                                       i, lov->lov_death_row,
-                                       cfs_atomic_read(&lov->lov_refcount));
-                        lov_del_target(obd, i, 0, 0);
-                }
+			/* Inactive targets may never have connected */
+			if (lov->lov_tgts[i]->ltd_active ||
+			    atomic_read(&lov->lov_refcount))
+				/* We should never get here - these
+				 * should have been removed in the
+				 * disconnect. */
+				CERROR("%s: lov tgt %d not cleaned! "
+				       "deathrow=%d, lovrc=%d\n",
+				       obd->obd_name, i, lov->lov_death_row,
+				       atomic_read(&lov->lov_refcount));
+			lov_del_target(obd, i, 0, 0);
+		}
                 obd_putref(obd);
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
                          lov->lov_tgt_size);
@@ -1128,17 +1129,17 @@ out:
 }
 
 static int lov_getattr_interpret(struct ptlrpc_request_set *rqset,
-                                 void *data, int rc)
+				 void *data, int rc)
 {
-        struct lov_request_set *lovset = (struct lov_request_set *)data;
-        int err;
-        ENTRY;
+	struct lov_request_set *lovset = (struct lov_request_set *)data;
+	int err;
+	ENTRY;
 
-        /* don't do attribute merge if this aysnc op failed */
-        if (rc)
-                cfs_atomic_set(&lovset->set_completes, 0);
-        err = lov_fini_getattr_set(lovset);
-        RETURN(rc ? rc : err);
+	/* don't do attribute merge if this aysnc op failed */
+	if (rc)
+		atomic_set(&lovset->set_completes, 0);
+	err = lov_fini_getattr_set(lovset);
+	RETURN(rc ? rc : err);
 }
 
 static int lov_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
@@ -1194,23 +1195,23 @@ static int lov_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 out:
-        if (rc)
-                cfs_atomic_set(&lovset->set_completes, 0);
-        err = lov_fini_getattr_set(lovset);
-        RETURN(rc ? rc : err);
+	if (rc)
+		atomic_set(&lovset->set_completes, 0);
+	err = lov_fini_getattr_set(lovset);
+	RETURN(rc ? rc : err);
 }
 
 static int lov_setattr_interpret(struct ptlrpc_request_set *rqset,
-                                 void *data, int rc)
+				 void *data, int rc)
 {
-        struct lov_request_set *lovset = (struct lov_request_set *)data;
-        int err;
-        ENTRY;
+	struct lov_request_set *lovset = (struct lov_request_set *)data;
+	int err;
+	ENTRY;
 
-        if (rc)
-                cfs_atomic_set(&lovset->set_completes, 0);
-        err = lov_fini_setattr_set(lovset);
-        RETURN(rc ? rc : err);
+	if (rc)
+		atomic_set(&lovset->set_completes, 0);
+	err = lov_fini_setattr_set(lovset);
+	RETURN(rc ? rc : err);
 }
 
 /* If @oti is given, the request goes from MDS and responses from OSTs are not
@@ -1268,20 +1269,20 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 		}
 	}
 
-        /* If we are not waiting for responses on async requests, return. */
-        if (rc || !rqset || cfs_list_empty(&rqset->set_requests)) {
-                int err;
-                if (rc)
-                        cfs_atomic_set(&set->set_completes, 0);
-                err = lov_fini_setattr_set(set);
-                RETURN(rc ? rc : err);
-        }
+	/* If we are not waiting for responses on async requests, return. */
+	if (rc || !rqset || cfs_list_empty(&rqset->set_requests)) {
+		int err;
+		if (rc)
+			atomic_set(&set->set_completes, 0);
+		err = lov_fini_setattr_set(set);
+		RETURN(rc ? rc : err);
+	}
 
-        LASSERT(rqset->set_interpret == NULL);
-        rqset->set_interpret = lov_setattr_interpret;
-        rqset->set_arg = (void *)set;
+	LASSERT(rqset->set_interpret == NULL);
+	rqset->set_interpret = lov_setattr_interpret;
+	rqset->set_arg = (void *)set;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int lov_change_cbdata(struct obd_export *exp,
@@ -1353,15 +1354,15 @@ static int lov_find_cbdata(struct obd_export *exp,
 
 int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
 {
-        struct lov_request_set *lovset = (struct lov_request_set *)data;
-        int err;
-        ENTRY;
+	struct lov_request_set *lovset = (struct lov_request_set *)data;
+	int err;
+	ENTRY;
 
-        if (rc)
-                cfs_atomic_set(&lovset->set_completes, 0);
+	if (rc)
+		atomic_set(&lovset->set_completes, 0);
 
-        err = lov_fini_statfs_set(lovset);
-        RETURN(rc ? rc : err);
+	err = lov_fini_statfs_set(lovset);
+	RETURN(rc ? rc : err);
 }
 
 static int lov_statfs_async(struct obd_export *exp, struct obd_info *oinfo,
@@ -1391,18 +1392,18 @@ static int lov_statfs_async(struct obd_export *exp, struct obd_info *oinfo,
                         break;
         }
 
-        if (rc || cfs_list_empty(&rqset->set_requests)) {
-                int err;
-                if (rc)
-                        cfs_atomic_set(&set->set_completes, 0);
-                err = lov_fini_statfs_set(set);
-                RETURN(rc ? rc : err);
-        }
+	if (rc || cfs_list_empty(&rqset->set_requests)) {
+		int err;
+		if (rc)
+			atomic_set(&set->set_completes, 0);
+		err = lov_fini_statfs_set(set);
+		RETURN(rc ? rc : err);
+	}
 
-        LASSERT(rqset->set_interpret == NULL);
-        rqset->set_interpret = lov_statfs_interpret;
-        rqset->set_arg = (void *)set;
-        RETURN(0);
+	LASSERT(rqset->set_interpret == NULL);
+	rqset->set_interpret = lov_statfs_interpret;
+	rqset->set_arg = (void *)set;
+	RETURN(0);
 }
 
 static int lov_statfs(const struct lu_env *env, struct obd_export *exp,

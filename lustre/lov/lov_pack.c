@@ -307,34 +307,34 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, __u16 *stripe_count)
 }
 
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, __u16 stripe_count,
-                    int pattern, int magic)
+		    int pattern, int magic)
 {
-        int i, lsm_size;
-        ENTRY;
+	int i, lsm_size;
+	ENTRY;
 
-        CDEBUG(D_INFO, "alloc lsm, stripe_count %d\n", stripe_count);
+	CDEBUG(D_INFO, "alloc lsm, stripe_count %d\n", stripe_count);
 
-        *lsmp = lsm_alloc_plain(stripe_count, &lsm_size);
-        if (!*lsmp) {
-                CERROR("can't allocate lsmp stripe_count %d\n", stripe_count);
-                RETURN(-ENOMEM);
-        }
+	*lsmp = lsm_alloc_plain(stripe_count, &lsm_size);
+	if (!*lsmp) {
+		CERROR("can't allocate lsmp stripe_count %d\n", stripe_count);
+		RETURN(-ENOMEM);
+	}
 
-	cfs_atomic_set(&(*lsmp)->lsm_refc, 1);
+	atomic_set(&(*lsmp)->lsm_refc, 1);
 	spin_lock_init(&(*lsmp)->lsm_lock);
-        (*lsmp)->lsm_magic = magic;
-        (*lsmp)->lsm_stripe_count = stripe_count;
-        (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-        (*lsmp)->lsm_pattern = pattern;
-        (*lsmp)->lsm_pool_name[0] = '\0';
-        (*lsmp)->lsm_layout_gen = 0;
+	(*lsmp)->lsm_magic = magic;
+	(*lsmp)->lsm_stripe_count = stripe_count;
+	(*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
+	(*lsmp)->lsm_pattern = pattern;
+	(*lsmp)->lsm_pool_name[0] = '\0';
+	(*lsmp)->lsm_layout_gen = 0;
 	if (stripe_count > 0)
 		(*lsmp)->lsm_oinfo[0]->loi_ost_idx = ~0;
 
-        for (i = 0; i < stripe_count; i++)
-                loi_init((*lsmp)->lsm_oinfo[i]);
+	for (i = 0; i < stripe_count; i++)
+		loi_init((*lsmp)->lsm_oinfo[i]);
 
-        RETURN(lsm_size);
+	RETURN(lsm_size);
 }
 
 int lov_free_memmd(struct lov_stripe_md **lsmp)
@@ -343,8 +343,9 @@ int lov_free_memmd(struct lov_stripe_md **lsmp)
 	int refc;
 
 	*lsmp = NULL;
-	LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 0);
-	if ((refc = cfs_atomic_dec_return(&lsm->lsm_refc)) == 0) {
+	refc = atomic_dec_return(&lsm->lsm_refc);
+	LASSERT(refc >= 0);
+	if (refc == 0) {
 		LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
 		lsm_op_find(lsm->lsm_magic)->lsm_free(lsm);
 	}

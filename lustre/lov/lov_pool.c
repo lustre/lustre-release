@@ -58,29 +58,29 @@
 
 static void lov_pool_getref(struct pool_desc *pool)
 {
-        CDEBUG(D_INFO, "pool %p\n", pool);
-        cfs_atomic_inc(&pool->pool_refcount);
+	CDEBUG(D_INFO, "pool %p\n", pool);
+	atomic_inc(&pool->pool_refcount);
 }
 
 void lov_pool_putref(struct pool_desc *pool) 
 {
-        CDEBUG(D_INFO, "pool %p\n", pool);
-        if (cfs_atomic_dec_and_test(&pool->pool_refcount)) {
-                LASSERT(cfs_hlist_unhashed(&pool->pool_hash));
-                LASSERT(cfs_list_empty(&pool->pool_list));
-                LASSERT(pool->pool_proc_entry == NULL);
-                lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE_PTR(pool);
-                EXIT;
-        }
+	CDEBUG(D_INFO, "pool %p\n", pool);
+	if (atomic_dec_and_test(&pool->pool_refcount)) {
+		LASSERT(hlist_unhashed(&pool->pool_hash));
+		LASSERT(list_empty(&pool->pool_list));
+		LASSERT(pool->pool_proc_entry == NULL);
+		lov_ost_pool_free(&(pool->pool_obds));
+		OBD_FREE_PTR(pool);
+		EXIT;
+	}
 }
 
 void lov_pool_putref_locked(struct pool_desc *pool)
 {
-        CDEBUG(D_INFO, "pool %p\n", pool);
-        LASSERT(cfs_atomic_read(&pool->pool_refcount) > 1);
+	CDEBUG(D_INFO, "pool %p\n", pool);
+	LASSERT(atomic_read(&pool->pool_refcount) > 1);
 
-        cfs_atomic_dec(&pool->pool_refcount);
+	atomic_dec(&pool->pool_refcount);
 }
 
 /*
@@ -448,16 +448,16 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         if (new_pool == NULL)
                 RETURN(-ENOMEM);
 
-        strncpy(new_pool->pool_name, poolname, LOV_MAXPOOLNAME);
-        new_pool->pool_name[LOV_MAXPOOLNAME] = '\0';
+	strncpy(new_pool->pool_name, poolname, LOV_MAXPOOLNAME);
+	new_pool->pool_name[LOV_MAXPOOLNAME] = '\0';
 	new_pool->pool_lobd = obd;
-        /* ref count init to 1 because when created a pool is always used
-         * up to deletion
-         */
-        cfs_atomic_set(&new_pool->pool_refcount, 1);
-        rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
-        if (rc)
-               GOTO(out_err, rc);
+	/* ref count init to 1 because when created a pool is always used
+	 * up to deletion
+	 */
+	atomic_set(&new_pool->pool_refcount, 1);
+	rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
+	if (rc)
+		GOTO(out_err, rc);
 
         CFS_INIT_HLIST_NODE(&new_pool->pool_hash);
 

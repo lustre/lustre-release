@@ -58,7 +58,7 @@ struct nrs_tbf_client {
 	/** Jobid of the client. */
 	char				 tc_jobid[JOBSTATS_JOBID_SIZE];
 	/** Reference number of the client. */
-	cfs_atomic_t			 tc_ref;
+	atomic_t			 tc_ref;
 	/** Likage to rule. */
 	cfs_list_t		         tc_linkage;
 	/** Pointer to rule. */
@@ -121,7 +121,7 @@ struct nrs_tbf_rule {
 	/** Flags of the rule. */
 	__u32				 tr_flags;
 	/** Usage Reference count taken on the rule. */
-	cfs_atomic_t			 tr_ref;
+	atomic_t			 tr_ref;
 	/** Generation of the rule. */
 	__u64				 tr_generation;
 };
@@ -185,7 +185,7 @@ struct nrs_tbf_head {
 	/**
 	 * Generation of rules.
 	 */
-	cfs_atomic_t			 th_rule_sequence;
+	atomic_t			 th_rule_sequence;
 	/**
 	 * Default rule.
 	 */

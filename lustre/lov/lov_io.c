@@ -367,17 +367,17 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct lov_object *lov = cl2lov(ios->cis_obj);
 	int i;
 
-        ENTRY;
-        if (lio->lis_subs != NULL) {
-                for (i = 0; i < lio->lis_nr_subios; i++)
-                        lov_io_sub_fini(env, lio, &lio->lis_subs[i]);
-                OBD_FREE_LARGE(lio->lis_subs,
-                         lio->lis_nr_subios * sizeof lio->lis_subs[0]);
-                lio->lis_nr_subios = 0;
-        }
+	ENTRY;
+	if (lio->lis_subs != NULL) {
+		for (i = 0; i < lio->lis_nr_subios; i++)
+			lov_io_sub_fini(env, lio, &lio->lis_subs[i]);
+		OBD_FREE_LARGE(lio->lis_subs,
+			 lio->lis_nr_subios * sizeof lio->lis_subs[0]);
+		lio->lis_nr_subios = 0;
+	}
 
-	LASSERT(cfs_atomic_read(&lov->lo_active_ios) > 0);
-	if (cfs_atomic_dec_and_test(&lov->lo_active_ios))
+	LASSERT(atomic_read(&lov->lo_active_ios) > 0);
+	if (atomic_dec_and_test(&lov->lo_active_ios))
 		wake_up_all(&lov->lo_waitq);
 	EXIT;
 }
@@ -822,7 +822,7 @@ static void lov_empty_io_fini(const struct lu_env *env,
 	struct lov_object *lov = cl2lov(ios->cis_obj);
 	ENTRY;
 
-	if (cfs_atomic_dec_and_test(&lov->lo_active_ios))
+	if (atomic_dec_and_test(&lov->lo_active_ios))
 		wake_up_all(&lov->lo_waitq);
 	EXIT;
 }
@@ -882,22 +882,22 @@ static const struct cl_io_operations lov_empty_io_ops = {
 };
 
 int lov_io_init_raid0(const struct lu_env *env, struct cl_object *obj,
-                      struct cl_io *io)
+		      struct cl_io *io)
 {
-        struct lov_io       *lio = lov_env_io(env);
-        struct lov_object   *lov = cl2lov(obj);
+	struct lov_io       *lio = lov_env_io(env);
+	struct lov_object   *lov = cl2lov(obj);
 
-        ENTRY;
-        CFS_INIT_LIST_HEAD(&lio->lis_active);
-        lov_io_slice_init(lio, lov, io);
-        if (io->ci_result == 0) {
-                io->ci_result = lov_io_subio_init(env, lio, io);
-                if (io->ci_result == 0) {
-                        cl_io_slice_add(io, &lio->lis_cl, obj, &lov_io_ops);
-			cfs_atomic_inc(&lov->lo_active_ios);
+	ENTRY;
+	INIT_LIST_HEAD(&lio->lis_active);
+	lov_io_slice_init(lio, lov, io);
+	if (io->ci_result == 0) {
+		io->ci_result = lov_io_subio_init(env, lio, io);
+		if (io->ci_result == 0) {
+			cl_io_slice_add(io, &lio->lis_cl, obj, &lov_io_ops);
+			atomic_inc(&lov->lo_active_ios);
 		}
-        }
-        RETURN(io->ci_result);
+	}
+	RETURN(io->ci_result);
 }
 
 int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
@@ -920,18 +920,18 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 	case CIT_SETATTR:
 		result = +1;
 		break;
-        case CIT_WRITE:
-                result = -EBADF;
-                break;
-        case CIT_FAULT:
-                result = -EFAULT;
-                CERROR("Page fault on a file without stripes: "DFID"\n",
-                       PFID(lu_object_fid(&obj->co_lu)));
-                break;
-        }
-        if (result == 0) {
-                cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
-		cfs_atomic_inc(&lov->lo_active_ios);
+	case CIT_WRITE:
+		result = -EBADF;
+		break;
+	case CIT_FAULT:
+		result = -EFAULT;
+		CERROR("Page fault on a file without stripes: "DFID"\n",
+		       PFID(lu_object_fid(&obj->co_lu)));
+		break;
+	}
+	if (result == 0) {
+		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
+		atomic_inc(&lov->lo_active_ios);
 	}
 
 	io->ci_result = result < 0 ? result : 0;
@@ -975,7 +975,7 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	}
 	if (result == 0) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
-		cfs_atomic_inc(&lov->lo_active_ios);
+		atomic_inc(&lov->lo_active_ios);
 	}
 
 	io->ci_result = result < 0 ? result : 0;

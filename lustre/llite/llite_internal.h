@@ -151,13 +151,13 @@ struct ll_inode_info {
          * for allocating OST objects after a mknod() and later open-by-FID. */
         struct lu_fid                   lli_pfid;
 
-        cfs_list_t                      lli_close_list;
-        cfs_list_t                      lli_oss_capas;
-        /* open count currently used by capability only, indicate whether
-         * capability needs renewal */
-        cfs_atomic_t                    lli_open_count;
-        struct obd_capa                *lli_mds_capa;
-        cfs_time_t                      lli_rmtperm_time;
+	struct list_head		lli_close_list;
+	struct list_head		lli_oss_capas;
+	/* open count currently used by capability only, indicate whether
+	 * capability needs renewal */
+	atomic_t                    lli_open_count;
+	struct obd_capa                *lli_mds_capa;
+	cfs_time_t                      lli_rmtperm_time;
 
         /* handle is to be sent to MDS later on done_writing and setattr.
          * Open handle data are needed for the recovery to reconstruct
@@ -366,10 +366,10 @@ enum ra_stat {
 };
 
 struct ll_ra_info {
-        cfs_atomic_t              ra_cur_pages;
-        unsigned long             ra_max_pages;
-        unsigned long             ra_max_pages_per_file;
-        unsigned long             ra_max_read_ahead_whole_pages;
+	atomic_t	ra_cur_pages;
+	unsigned long	ra_max_pages;
+	unsigned long	ra_max_pages_per_file;
+	unsigned long	ra_max_read_ahead_whole_pages;
 };
 
 /* ra_io_arg will be filled in the beginning of ll_readahead with
@@ -557,18 +557,18 @@ struct ll_sb_info {
         enum stats_track_type     ll_stats_track_type;
         int                       ll_rw_stats_on;
 
-        /* metadata stat-ahead */
-        unsigned int              ll_sa_max;     /* max statahead RPCs */
-        atomic_t                  ll_sa_total;   /* statahead thread started
-                                                  * count */
-        atomic_t                  ll_sa_wrong;   /* statahead thread stopped for
-                                                  * low hit ratio */
-        atomic_t                  ll_agl_total;  /* AGL thread started count */
+	/* metadata stat-ahead */
+	unsigned int              ll_sa_max;     /* max statahead RPCs */
+	atomic_t                  ll_sa_total;   /* statahead thread started
+						  * count */
+	atomic_t                  ll_sa_wrong;   /* statahead thread stopped for
+						  * low hit ratio */
+	atomic_t                  ll_agl_total;  /* AGL thread started count */
 
-        dev_t                     ll_sdev_orig; /* save s_dev before assign for
-                                                 * clustred nfs */
-        struct rmtacl_ctl_table   ll_rct;
-        struct eacl_table         ll_et;
+	dev_t                     ll_sdev_orig; /* save s_dev before assign for
+						 * clustred nfs */
+	struct rmtacl_ctl_table   ll_rct;
+	struct eacl_table         ll_et;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
@@ -978,7 +978,7 @@ struct ll_close_queue {
 	cfs_list_t		lcq_head;
 	wait_queue_head_t	lcq_waitq;
 	struct completion	lcq_comp;
-	cfs_atomic_t		lcq_stop;
+	atomic_t		lcq_stop;
 };
 
 struct ccc_object *cl_inode2ccc(struct inode *inode);
@@ -1301,44 +1301,44 @@ void et_fini(struct eacl_table *et);
 
 /* per inode struct, for dir only */
 struct ll_statahead_info {
-        struct inode           *sai_inode;
-        cfs_atomic_t            sai_refcount;   /* when access this struct, hold
-                                                 * refcount */
-        unsigned int            sai_generation; /* generation for statahead */
-        unsigned int            sai_max;        /* max ahead of lookup */
-        __u64                   sai_sent;       /* stat requests sent count */
-        __u64                   sai_replied;    /* stat requests which received
-                                                 * reply */
-        __u64                   sai_index;      /* index of statahead entry */
-        __u64                   sai_index_wait; /* index of entry which is the
-                                                 * caller is waiting for */
-        __u64                   sai_hit;        /* hit count */
-        __u64                   sai_miss;       /* miss count:
-                                                 * for "ls -al" case, it includes
-                                                 * hidden dentry miss;
-                                                 * for "ls -l" case, it does not
-                                                 * include hidden dentry miss.
-                                                 * "sai_miss_hidden" is used for
-                                                 * the later case.
-                                                 */
+	struct inode		*sai_inode;
+	atomic_t		sai_refcount;	/* when access this struct, hold
+						 * refcount */
+	unsigned int		sai_generation;	/* generation for statahead */
+	unsigned int		sai_max;	/* max ahead of lookup */
+	__u64			sai_sent;	/* stat requests sent count */
+	__u64			sai_replied;	/* stat requests which received
+						 * reply */
+	__u64			sai_index;	/* index of statahead entry */
+	__u64			sai_index_wait;	/* index of entry which is the
+						 * caller is waiting for */
+	__u64			sai_hit;	/* hit count */
+	__u64			sai_miss;	/* miss count:
+						 * for "ls -al" case, it
+						 * includes hidden dentry miss;
+						 * for "ls -l" case, it does not
+						 * include hidden dentry miss.
+						 * "sai_miss_hidden" is used for
+						 * the later case.
+						 */
         unsigned int            sai_consecutive_miss; /* consecutive miss */
         unsigned int            sai_miss_hidden;/* "ls -al", but first dentry
                                                  * is not a hidden one */
         unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
-	unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
+	unsigned int		sai_ls_all:1,   /* "ls -al", do stat-ahead for
 						 * hidden entries */
 				sai_in_readpage:1,/* statahead is in readdir()*/
 				sai_agl_valid:1;/* AGL is valid for the dir */
-	wait_queue_head_t       sai_waitq;      /* stat-ahead wait queue */
-	struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
-	struct ptlrpc_thread    sai_agl_thread; /* AGL thread */
-	cfs_list_t              sai_entries;    /* entry list */
-        cfs_list_t              sai_entries_received; /* entries returned */
-        cfs_list_t              sai_entries_stated;   /* entries stated */
-        cfs_list_t              sai_entries_agl; /* AGL entries to be sent */
-        cfs_list_t              sai_cache[LL_SA_CACHE_SIZE];
+	wait_queue_head_t	sai_waitq;	/* stat-ahead wait queue */
+	struct ptlrpc_thread	sai_thread;	/* stat-ahead thread */
+	struct ptlrpc_thread	sai_agl_thread;	/* AGL thread */
+	struct list_head	sai_entries;	/* entry list */
+	struct list_head	sai_entries_received;	/* entries returned */
+	struct list_head	sai_entries_stated;	/* entries stated */
+	struct list_head	sai_entries_agl;  /* AGL entries to be sent */
+	struct list_head	sai_cache[LL_SA_CACHE_SIZE];
 	spinlock_t		sai_cache_lock[LL_SA_CACHE_SIZE];
-	cfs_atomic_t		sai_cache_count; /* entry count in cache */
+	atomic_t		sai_cache_count; /* entry count in cache */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry,

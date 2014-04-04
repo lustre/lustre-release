@@ -486,9 +486,9 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		}
         }
 
-        tgt->ltd_active = 1;
-        tgt->ltd_exp = mdc_exp;
-        lmv->desc.ld_active_tgt_count++;
+	tgt->ltd_active = 1;
+	tgt->ltd_exp = mdc_exp;
+	lmv->desc.ld_active_tgt_count++;
 
 	md_init_ea_size(tgt->ltd_exp, lmv->max_easize, lmv->max_def_easize,
 			lmv->max_cookiesize, lmv->max_def_cookiesize);

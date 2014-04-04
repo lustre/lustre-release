@@ -226,7 +226,7 @@ struct lov_object {
 	 * How many IOs are on going on this object. Layout can be changed
 	 * only if there is no active IO.
 	 */
-	cfs_atomic_t	       lo_active_ios;
+	atomic_t	       lo_active_ios;
 	/**
 	 * Waitq - wait for no one else is using lo_lsm
 	 */
