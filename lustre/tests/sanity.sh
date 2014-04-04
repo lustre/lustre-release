@@ -2838,7 +2838,7 @@ test_39() {
 run_test 39 "mtime changed on create ==========================="
 
 test_39b() {
-	test_mkdir -p $DIR/$tdir
+	test_mkdir -p -c1 $DIR/$tdir
 	cp -p /etc/passwd $DIR/$tdir/fopen
 	cp -p /etc/passwd $DIR/$tdir/flink
 	cp -p /etc/passwd $DIR/$tdir/funlink
@@ -10122,12 +10122,12 @@ check_path() {
 test_162() {
 	# Make changes to filesystem
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir -p $DIR/$tdir/d2
+	test_mkdir -p -c1 $DIR/$tdir/d2
 	touch $DIR/$tdir/d2/$tfile
 	touch $DIR/$tdir/d2/x1
 	touch $DIR/$tdir/d2/x2
-	test_mkdir -p $DIR/$tdir/d2/a/b/c
-	test_mkdir -p $DIR/$tdir/d2/p/q/r
+	test_mkdir -p -c1 $DIR/$tdir/d2/a/b/c
+	test_mkdir -p -c1 $DIR/$tdir/d2/p/q/r
 	# regular file
 	FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[]')
 	check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0
