@@ -909,16 +909,16 @@ test_15() {
 	# run under normal mode
 	#
 	# Lustre-2.x (x <= 5) used "-n off" to disable dryrun which does not
-	# work under Lustre-2.y (y >=6), the test scripts should be fixed as
-	# "-noff" or "--dryrun=off".
-	scrub_start 15 --dryrun=off
+	# work under Lustre-2.y (y >= 6), the test script should be fixed as
+	# "-noff" or "--dryrun=off" or nothing by default.
+	scrub_start 15
 	scrub_check_status 16 completed
 	scrub_check_flags 17 ""
 	scrub_check_params 18 ""
 	scrub_check_repaired 19 20
 
 	# run under normal mode again
-	scrub_start 20 --dryrun=off
+	scrub_start 20
 	scrub_check_status 21 completed
 	scrub_check_flags 22 ""
 	scrub_check_params 23 ""

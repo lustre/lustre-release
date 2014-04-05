@@ -196,3 +196,130 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 
 	RETURN(rc);
 }
+
+int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
+		    struct lfsck_start *start, bool reset)
+{
+	struct lfsck_bookmark	*bk	= &lfsck->li_bookmark_ram;
+	int			 rc	= 0;
+	bool			 dirty	= false;
+
+	if (start == NULL) {
+		LASSERT(reset);
+
+		if (bk->lb_param & LPF_ALL_TGT) {
+			bk->lb_param &= ~LPF_ALL_TGT;
+			dirty = true;
+		}
+
+		if (bk->lb_param & LPF_CREATE_OSTOBJ) {
+			bk->lb_param &= ~LPF_CREATE_OSTOBJ;
+			dirty = true;
+		}
+
+		if (bk->lb_param & LPF_FAILOUT) {
+			bk->lb_param &= ~LPF_FAILOUT;
+			dirty = true;
+		}
+
+		if (bk->lb_param & LPF_DRYRUN) {
+			bk->lb_param &= ~LPF_DRYRUN;
+			dirty = true;
+		}
+
+		if (bk->lb_param & LPF_ORPHAN) {
+			bk->lb_param &= ~LPF_ORPHAN;
+			dirty = true;
+		}
+
+		if (__lfsck_set_speed(lfsck, LFSCK_SPEED_NO_LIMIT))
+			dirty = true;
+
+		if (bk->lb_async_windows != LFSCK_ASYNC_WIN_DEFAULT) {
+			bk->lb_async_windows = LFSCK_ASYNC_WIN_DEFAULT;
+			dirty = true;
+		}
+	} else {
+		if ((bk->lb_param & LPF_ALL_TGT) &&
+		    !(start->ls_flags & LPF_ALL_TGT)) {
+			bk->lb_param &= ~LPF_ALL_TGT;
+			dirty = true;
+		} else if (!(bk->lb_param & LPF_ALL_TGT) &&
+			   (start->ls_flags & LPF_ALL_TGT)) {
+			bk->lb_param |= LPF_ALL_TGT;
+			dirty = true;
+		}
+
+		if ((start->ls_valid & LSV_CREATE_OSTOBJ) || reset) {
+			if ((bk->lb_param & LPF_CREATE_OSTOBJ) &&
+			    !(start->ls_valid & LSV_CREATE_OSTOBJ)) {
+				bk->lb_param &= ~LPF_CREATE_OSTOBJ;
+				dirty = true;
+			} else if (!(bk->lb_param & LPF_CREATE_OSTOBJ) &&
+				   (start->ls_flags & LPF_CREATE_OSTOBJ)) {
+				bk->lb_param |= LPF_CREATE_OSTOBJ;
+				dirty = true;
+			}
+		}
+
+		if ((start->ls_valid & LSV_ERROR_HANDLE) || reset) {
+			if ((bk->lb_param & LPF_FAILOUT) &&
+			    !(start->ls_valid & LSV_ERROR_HANDLE)) {
+				bk->lb_param &= ~LPF_FAILOUT;
+				dirty = true;
+			} else if (!(start->ls_flags & LPF_FAILOUT) &&
+				   (bk->lb_param & LPF_FAILOUT)) {
+				bk->lb_param &= ~LPF_FAILOUT;
+				dirty = true;
+			}
+		}
+
+		if ((start->ls_valid & LSV_DRYRUN) || reset) {
+			if ((bk->lb_param & LPF_DRYRUN) &&
+			   !(start->ls_valid & LSV_DRYRUN)) {
+				bk->lb_param &= ~LPF_DRYRUN;
+				dirty = true;
+			} else if (!(start->ls_flags & LPF_DRYRUN) &&
+				   (bk->lb_param & LPF_DRYRUN)) {
+				bk->lb_param &= ~LPF_DRYRUN;
+				lfsck->li_drop_dryrun = 1;
+				dirty = true;
+			}
+		}
+
+		if ((bk->lb_param & LPF_ORPHAN) &&
+		    !(start->ls_flags & LPF_ORPHAN)) {
+			bk->lb_param &= ~LPF_ORPHAN;
+			dirty = true;
+		} else if (!(bk->lb_param & LPF_ORPHAN) &&
+			   (start->ls_flags & LPF_ORPHAN)) {
+			bk->lb_param |= LPF_ORPHAN;
+			dirty = true;
+		}
+
+		if (start->ls_valid & LSV_SPEED_LIMIT) {
+			if (__lfsck_set_speed(lfsck, start->ls_speed_limit))
+				dirty = true;
+		} else if (reset) {
+			if (__lfsck_set_speed(lfsck, LFSCK_SPEED_NO_LIMIT))
+				dirty = true;
+		}
+
+		if (start->ls_valid & LSV_ASYNC_WINDOWS) {
+			if (bk->lb_async_windows != start->ls_async_windows) {
+				bk->lb_async_windows = start->ls_async_windows;
+				dirty = true;
+			}
+		} else if (reset &&
+			   bk->lb_async_windows != LFSCK_ASYNC_WIN_DEFAULT) {
+			bk->lb_async_windows = LFSCK_ASYNC_WIN_DEFAULT;
+			dirty = true;
+		}
+	}
+
+	if (dirty)
+		rc = lfsck_bookmark_store(env, lfsck);
+
+	return rc;
+}
+

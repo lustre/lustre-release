@@ -56,7 +56,7 @@ static struct option long_opt_start[] = {
 	{"reset",		no_argument,	   0, 'r'},
 	{"speed",		required_argument, 0, 's'},
 	{"type",		required_argument, 0, 't'},
-	{"windows",		required_argument, 0, 'w'},
+	{"window_size",		required_argument, 0, 'w'},
 	{0,			0,		   0,  0 }
 };
 
@@ -97,26 +97,27 @@ static void usage_start(void)
 	fprintf(stderr, "Start LFSCK.\n"
 		"SYNOPSIS:\n"
 		"lfsck_start <-M | --device [MDT,OST]_device>\n"
-		"	     [-A | --all] [-c | --create_ostobj [swtich]]\n"
-		"	     [-e | --error error_handle] [-h | --help]\n"
-		"	     [-n | --dryrun [switch]] [-o | --orphan]\n"
+		"	     [-A | --all] [-c | --create_ostobj [on | off]]\n"
+		"	     [-e | --error {continue | abort}] [-h | --help]\n"
+		"	     [-n | --dryrun [on | off]] [-o | --orphan]\n"
 		"	     [-r | --reset] [-s | --speed speed_limit]\n"
 		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
-		"	     [-w | --windows win_size]\n"
+		"	     [-w | --window_size size]\n"
 		"OPTIONS:\n"
 		"-M: The device to start LFSCK/scrub on.\n"
 		"-A: Start LFSCK on all MDT devices.\n"
-		"-c: create the lost OST-object for dangling LOV EA. "
+		"-c: Create the lost OST-object for dangling LOV EA: "
 		    "'off'(default) or 'on'.\n"
 		"-e: Error handle, 'continue'(default) or 'abort'.\n"
 		"-h: Help information.\n"
 		"-n: Check without modification. 'off'(default) or 'on'.\n"
-		"-o: handle orphan objects.\n"
+		"-o: Handle orphan objects.\n"
 		"-r: Reset scanning start position to the device beginning.\n"
+		"    The non-specified parameters will be reset as default.\n"
 		"-s: How many items can be scanned at most per second. "
 		    "'%d' means no limit (default).\n"
 		"-t: The LFSCK type(s) to be started.\n"
-		"-w: The windows size for async requests pipeline.\n",
+		"-w: The window size for async requests pipeline.\n",
 		LFSCK_SPEED_NO_LIMIT);
 }
 
@@ -155,7 +156,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:Ac::e:hn::ors:t:w:";
+	char *optstring = "Ac::e:hM:n::ors:t:w:";
 	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
@@ -170,11 +171,6 @@ int jt_lfsck_start(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, optstring, long_opt_start,
 				  &index)) != EOF) {
 		switch (opt) {
-		case 'M':
-			rc = lfsck_pack_dev(&data, device, optarg);
-			if (rc != 0)
-				return rc;
-			break;
 		case 'A':
 			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
 			break;
@@ -205,6 +201,11 @@ int jt_lfsck_start(int argc, char **argv)
 		case 'h':
 			usage_start();
 			return 0;
+		case 'M':
+			rc = lfsck_pack_dev(&data, device, optarg);
+			if (rc != 0)
+				return rc;
+			break;
 		case 'n':
 			if (optarg == NULL || strcmp(optarg, "on") == 0) {
 				start.ls_flags |= LPF_DRYRUN;
@@ -274,11 +275,11 @@ int jt_lfsck_start(int argc, char **argv)
 			val = atoi(optarg);
 			if (val < 0 || val > LFSCK_ASYNC_WIN_MAX) {
 				fprintf(stderr,
-					"Too large async windows size, "
+					"Too large async window size, "
 					"which may cause memory issues. "
 					"The valid range is [0 - %u]. "
 					"If you do not want to restrict "
-					"the windows size for async reqeusts "
+					"the window size for async reqeusts "
 					"pipeline, just set it as 0.\n",
 					LFSCK_ASYNC_WIN_MAX);
 				return -EINVAL;
@@ -346,7 +347,7 @@ int jt_lfsck_stop(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_stop stop;
-	char *optstring = "M:Ah";
+	char *optstring = "AhM:";
 	int opt, index, rc;
 
 	memset(&data, 0, sizeof(data));
@@ -359,17 +360,17 @@ int jt_lfsck_stop(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, optstring, long_opt_stop,
 				  &index)) != EOF) {
 		switch (opt) {
-		case 'M':
-			rc = lfsck_pack_dev(&data, device, optarg);
-			if (rc != 0)
-				return rc;
-			break;
 		case 'A':
 			stop.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST;
 			break;
 		case 'h':
 			usage_stop();
 			return 0;
+		case 'M':
+			rc = lfsck_pack_dev(&data, device, optarg);
+			if (rc != 0)
+				return rc;
+			break;
 		default:
 			fprintf(stderr, "Invalid option, '-h' for help.\n");
 			return -EINVAL;

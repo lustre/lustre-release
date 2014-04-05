@@ -767,6 +767,9 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 		int rc;
 
 		rc = lfsck_namespace_reset(env, com, false);
+		if (rc == 0)
+			rc = lfsck_set_param(env, lfsck, lsp->lsp_start, true);
+
 		if (rc != 0)
 			return rc;
 	}

@@ -2013,8 +2013,15 @@ again:
 	}
 	spin_unlock(&scrub->os_lock);
 
-	if (scrub->os_file.sf_status == SS_COMPLETED)
+	if (scrub->os_file.sf_status == SS_COMPLETED) {
+		if (!(flags & SS_SET_FAILOUT))
+			flags |= SS_CLEAR_FAILOUT;
+
+		if (!(flags & SS_SET_DRYRUN))
+			flags |= SS_CLEAR_DRYRUN;
+
 		flags |= SS_RESET;
+	}
 
 	scrub->os_start_flags = flags;
 	thread_set_flags(thread, 0);

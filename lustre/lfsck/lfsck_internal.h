@@ -597,6 +597,7 @@ int lfsck_pos_dump(char **buf, int *len, struct lfsck_position *pos,
 		   const char *prefix);
 void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lfsck_position *pos, bool init);
+bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit);
 void lfsck_control_speed(struct lfsck_instance *lfsck);
 void lfsck_control_speed_by_self(struct lfsck_component *com);
 int lfsck_reset(const struct lu_env *env, struct lfsck_instance *lfsck,
@@ -634,6 +635,8 @@ int lfsck_bookmark_store(const struct lu_env *env,
 			 struct lfsck_instance *lfsck);
 int lfsck_bookmark_setup(const struct lu_env *env,
 			 struct lfsck_instance *lfsck);
+int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
+		    struct lfsck_start *start, bool reset);
 
 /* lfsck_namespace.c */
 int lfsck_namespace_setup(const struct lu_env *env,

@@ -4218,6 +4218,9 @@ static int lfsck_layout_prep(const struct lu_env *env,
 		int rc;
 
 		rc = lfsck_layout_reset(env, com, false);
+		if (rc == 0)
+			rc = lfsck_set_param(env, lfsck, start, true);
+
 		if (rc != 0)
 			return rc;
 	}
