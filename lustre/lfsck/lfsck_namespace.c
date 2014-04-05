@@ -880,7 +880,7 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	if (ent->lde_name[0] == '.' &&
 	    (ent->lde_namelen == 1 ||
 	     (ent->lde_namelen == 2 && ent->lde_name[1] == '.') ||
-	     fid_is_dot_lustre(&ent->lde_fid)))
+	     fid_seq_is_dot_lustre(fid_seq(&ent->lde_fid))))
 		GOTO(out, rc = 0);
 
 	if (!(bk->lb_param & LPF_DRYRUN) &&
