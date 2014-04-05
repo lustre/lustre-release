@@ -2046,6 +2046,11 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	spin_lock(&lfsck->li_lock);
 	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
 		rc = -EALREADY;
+		if (unlikely(start == NULL)) {
+			spin_unlock(&lfsck->li_lock);
+			GOTO(out, rc);
+		}
+
 		while (start->ls_active != 0) {
 			if (!(type & start->ls_active)) {
 				type <<= 1;

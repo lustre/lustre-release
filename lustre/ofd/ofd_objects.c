@@ -92,28 +92,6 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 	RETURN(fo);
 }
 
-struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
-					     struct ofd_device *ofd,
-					     const struct lu_fid *fid,
-					     struct lu_attr *attr)
-{
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct lu_object	*fo_obj;
-	struct dt_object	*dto;
-
-	ENTRY;
-
-	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
-
-	dto = dt_find_or_create(env, ofd->ofd_osd, fid, &info->fti_dof, attr);
-	if (IS_ERR(dto))
-		RETURN(ERR_CAST(dto));
-
-	fo_obj = lu_object_locate(dto->do_lu.lo_header,
-				  ofd->ofd_dt_dev.dd_lu_dev.ld_type);
-	RETURN(ofd_obj(fo_obj));
-}
-
 int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 {
 	struct ofd_thread_info	*info = ofd_info(env);

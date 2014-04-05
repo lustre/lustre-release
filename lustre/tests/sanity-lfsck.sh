@@ -607,16 +607,12 @@ test_7a()
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(5) Fail to start MDS!"
 
-	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(6) Expect 'scanning-phase1', but got '$STATUS'"
-
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 30 || {
 		$SHOW_NAMESPACE
-		error "(7) unexpected status"
+		error "(6) unexpected status"
 	}
 }
 run_test 7a "non-stopped LFSCK should auto restarts after MDS remount (1)"
@@ -648,16 +644,12 @@ test_7b()
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(6) Fail to start MDS!"
 
-	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
-	[ "$STATUS" == "scanning-phase2" ] ||
-		error "(7) Expect 'scanning-phase2', but got '$STATUS'"
-
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 30 || {
 		$SHOW_NAMESPACE
-		error "(8) unexpected status"
+		error "(7) unexpected status"
 	}
 }
 run_test 7b "non-stopped LFSCK should auto restarts after MDS remount (2)"

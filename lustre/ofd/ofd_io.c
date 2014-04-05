@@ -436,27 +436,62 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(objcount == 1);
 
 	if (unlikely(exp->exp_obd->obd_recovering)) {
-		struct ofd_thread_info *info = ofd_info(env);
+		obd_seq seq = fid_seq(fid);
+		obd_id  oid = fid_oid(fid);
+		struct ofd_seq *oseq;
 
-		/* copied from ofd_precreate_object */
-		/* XXX this should be consolidated to use the same code
-		 *     instead of a copy, due to the ongoing risk of bugs. */
-		memset(&info->fti_attr, 0, sizeof(info->fti_attr));
-		info->fti_attr.la_valid = LA_TYPE | LA_MODE;
-		info->fti_attr.la_mode = S_IFREG | S_ISUID | S_ISGID | 0666;
-		info->fti_attr.la_valid |= LA_ATIME | LA_MTIME | LA_CTIME;
-		/* Initialize a/c/m time so any client timestamp will always
-		 * be newer and update the inode. ctime = 0 is also handled
-		 * specially in osd_inode_setattr().  See LU-221, LU-1042 */
-		info->fti_attr.la_atime = 0;
-		info->fti_attr.la_mtime = 0;
-		info->fti_attr.la_ctime = 0;
+		oseq = ofd_seq_load(env, ofd, seq);
+		if (IS_ERR(oseq)) {
+			CERROR("%s: Can't find FID Sequence "LPX64": rc = %d\n",
+			       ofd_name(ofd), seq, (int)PTR_ERR(oseq));
+			GOTO(out, rc = -EINVAL);
+		}
 
-		fo = ofd_object_find_or_create(env, ofd, fid, &info->fti_attr);
-	} else {
-		fo = ofd_object_find(env, ofd, fid);
+		if (oid > ofd_seq_last_oid(oseq)) {
+			int sync = 0;
+			int diff;
+
+			mutex_lock(&oseq->os_create_lock);
+			diff = oid - ofd_seq_last_oid(oseq);
+
+			/* Do sync create if the seq is about to used up */
+			if (fid_seq_is_idif(seq) || fid_seq_is_mdt0(seq)) {
+				if (unlikely(oid >= IDIF_MAX_OID - 1))
+					sync = 1;
+			} else if (fid_seq_is_norm(seq)) {
+				if (unlikely(oid >=
+					     LUSTRE_DATA_SEQ_MAX_WIDTH - 1))
+					sync = 1;
+			} else {
+				CERROR("%s : invalid o_seq "DOSTID"\n",
+				       ofd_name(ofd), POSTID(&oa->o_oi));
+				mutex_unlock(&oseq->os_create_lock);
+				ofd_seq_put(env, oseq);
+				GOTO(out, rc = -EINVAL);
+			}
+
+			while (diff > 0) {
+				obd_id next_id = ofd_seq_last_oid(oseq) + 1;
+				int count = ofd_precreate_batch(ofd, diff);
+
+				rc = ofd_precreate_objects(env, ofd, next_id,
+							   oseq, count, sync);
+				if (rc < 0) {
+					mutex_unlock(&oseq->os_create_lock);
+					ofd_seq_put(env, oseq);
+					GOTO(out, rc);
+				}
+
+				diff -= rc;
+			}
+
+			mutex_unlock(&oseq->os_create_lock);
+		}
+
+		ofd_seq_put(env, oseq);
 	}
 
+	fo = ofd_object_find(env, ofd, fid);
 	if (IS_ERR(fo))
 		GOTO(out, rc = PTR_ERR(fo));
 	LASSERT(fo != NULL);

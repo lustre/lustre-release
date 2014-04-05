@@ -410,8 +410,18 @@ static int ofd_destroy_export(struct obd_export *exp)
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct lu_device *ldev = &ofd->ofd_dt_dev.dd_lu_dev;
+	struct lfsck_start_param lsp;
+	int rc;
 
 	CDEBUG(D_HA, "%s: recovery is over\n", ofd_obd(ofd)->obd_name);
+
+	lsp.lsp_start = NULL;
+	lsp.lsp_index_valid = 0;
+	rc = lfsck_start(env, ofd->ofd_osd, &lsp);
+	if (rc != 0 && rc != -EALREADY)
+		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
+		      ofd_obd(ofd)->obd_name, rc);
+
 	return ldev->ld_ops->ldo_recovery_complete(env, ldev);
 }
 

@@ -4822,7 +4822,6 @@ static int mdt_prepare(const struct lu_env *env,
 	struct mdt_device *mdt = mdt_dev(cdev);
 	struct lu_device *next = &mdt->mdt_child->md_lu_dev;
 	struct obd_device *obd = cdev->ld_obd;
-	struct lfsck_start_param lsp;
 	int rc;
 
 	ENTRY;
@@ -4845,17 +4844,6 @@ static int mdt_prepare(const struct lu_env *env,
 	/* The LFSCK instance is registered just now, so it must be there when
 	 * register the namespace to such instance. */
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
-
-	lsp.lsp_start = NULL;
-	lsp.lsp_index_valid = 0;
-	rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
-						   OBD_IOC_START_LFSCK,
-						   0, &lsp);
-	if (rc != 0) {
-		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
-		      mdt_obd_name(mdt), rc);
-		rc = 0;
-	}
 
 	if (mdt->mdt_seq_site.ss_node_id == 0) {
 		rc = mdt->mdt_child->md_ops->mdo_root_get(env, mdt->mdt_child,
@@ -5757,12 +5745,22 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 static int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 {
-        struct lu_device *ld = md2lu_dev(mdt->mdt_child);
-        int rc;
-        ENTRY;
+	struct lu_device *ld = md2lu_dev(mdt->mdt_child);
+	struct lfsck_start_param lsp;
+	int rc;
+	ENTRY;
 
-        rc = ld->ld_ops->ldo_recovery_complete(env, ld);
-        RETURN(rc);
+	lsp.lsp_start = NULL;
+	lsp.lsp_index_valid = 0;
+	rc = mdt->mdt_child->md_ops->mdo_iocontrol(env, mdt->mdt_child,
+						   OBD_IOC_START_LFSCK,
+						   0, &lsp);
+	if (rc != 0 && rc != -EALREADY)
+		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
+		      mdt_obd_name(mdt), rc);
+
+	rc = ld->ld_ops->ldo_recovery_complete(env, ld);
+	RETURN(rc);
 }
 
 static int mdt_obd_postrecov(struct obd_device *obd)

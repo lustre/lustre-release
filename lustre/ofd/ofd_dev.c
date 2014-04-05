@@ -419,7 +419,6 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	struct ofd_device		*ofd = ofd_dev(dev);
 	struct obd_device		*obd = ofd_obd(ofd);
 	struct lu_device		*next = &ofd->ofd_osd->dd_lu_dev;
-	struct lfsck_start_param	 lsp;
 	int				 rc;
 
 	ENTRY;
@@ -445,15 +444,6 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	/* The LFSCK instance is registered just now, so it must be there when
 	 * register the namespace to such instance. */
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
-
-	lsp.lsp_start = NULL;
-	lsp.lsp_index_valid = 0;
-	rc = lfsck_start(env, ofd->ofd_osd, &lsp);
-	if (rc != 0) {
-		CWARN("%s: auto trigger paused LFSCK failed: rc = %d\n",
-		      obd->obd_name, rc);
-		rc = 0;
-	}
 
 	target_recovery_init(&ofd->ofd_lut, tgt_request_handle);
 	LASSERT(obd->obd_no_conn);
