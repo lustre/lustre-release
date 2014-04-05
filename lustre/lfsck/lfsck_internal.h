@@ -181,8 +181,11 @@ struct lfsck_namespace {
 	/* The latest object has been processed (failed) during double scan. */
 	struct lu_fid	ln_fid_latest_scanned_phase2;
 
-	/* For further using. 256-bytes aligned now. */
-	__u64	ln_reserved[2];
+	/* How many FID-in-dirent entries have been repaired. */
+	__u64	ln_dirent_repaired;
+
+	/* How many linkEA entries have been repaired. */
+	__u64	ln_linkea_repaired;
 };
 
 enum lfsck_layout_inconsistency_type {

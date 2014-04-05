@@ -177,7 +177,12 @@ test_1a() {
 	}
 
 	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
 			 awk '/^updated_phase1/ { print $2 }')
+
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed FID-in-dirent: $repaired"
 
@@ -215,7 +220,12 @@ test_1b()
 	}
 
 	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
 			 awk '/^updated_phase1/ { print $2 }')
+
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair missed FID-in-LMA: $repaired"
 
@@ -248,7 +258,12 @@ test_2a() {
 	}
 
 	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^linkea_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
 			 awk '/^updated_phase1/ { print $2 }')
+
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
@@ -374,9 +389,14 @@ test_4()
 	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
 
 	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
 			 awk '/^updated_phase1/ { print $2 }')
+
 	[ $repaired -ge 9 ] ||
-		error "(9) Fail to repair crashed linkEA: $repaired"
+		error "(9) Fail to re-generate FID-in-dirent: $repaired"
 
 	mount_client $MOUNT || error "(10) Fail to start client!"
 
@@ -427,9 +447,14 @@ test_5()
 	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
 
 	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
 			 awk '/^updated_phase1/ { print $2 }')
+
 	[ $repaired -ge 2 ] ||
-		error "(9) Fail to repair crashed linkEA: $repaired"
+		error "(9) Fail to generate FID-in-dirent for IGIF: $repaired"
 
 	mount_client $MOUNT || error "(10) Fail to start client!"
 

@@ -5744,6 +5744,11 @@ static int osd_mount(const struct lu_env *env,
 	if (LDISKFS_HAS_INCOMPAT_FEATURE(o->od_mnt->mnt_sb,
 					 LDISKFS_FEATURE_INCOMPAT_DIRDATA))
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
+	else if (!o->od_is_ost)
+		CWARN("%s: device %s was upgraded from Lustre-1.x without "
+		      "enabling the dirdata feature. If you do not want to "
+		      "downgrade to Lustre-1.x again, you can enable it via "
+		      "'tune2fs -O dirdata device'\n", name, dev);
 #endif
 	inode = osd_sb(o)->s_root->d_inode;
 	lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
@@ -5814,19 +5819,19 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_writethrough_cache = 1;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 
-	rc = osd_mount(env, o, cfg);
-	if (rc)
-		GOTO(out_capa, rc);
-
 	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname));
 	if (cplen >= sizeof(o->od_svname)) {
 		rc = -E2BIG;
-		GOTO(out_mnt, rc);
+		GOTO(out_capa, rc);
 	}
 
 	if (server_name_is_ost(o->od_svname))
 		o->od_is_ost = 1;
+
+	rc = osd_mount(env, o, cfg);
+	if (rc != 0)
+		GOTO(out_capa, rc);
 
 	rc = osd_obj_map_init(env, o);
 	if (rc != 0)
