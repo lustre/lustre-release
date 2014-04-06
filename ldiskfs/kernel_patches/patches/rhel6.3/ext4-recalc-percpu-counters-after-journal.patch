@@ -1,0 +1,21 @@
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -3613,6 +3613,18 @@ static int ext4_fill_super(struct super_
+ 
+ 	sbi->s_journal->j_commit_callback = ext4_journal_commit_callback;
+ 
++	/*
++	 * The journal may have updated the bg summary counts, so we
++	 * need to update the global counters.
++	 */
++	percpu_counter_set(&sbi->s_freeblocks_counter,
++			   ext4_count_free_blocks(sb));
++	percpu_counter_set(&sbi->s_freeinodes_counter,
++			   ext4_count_free_inodes(sb));
++	percpu_counter_set(&sbi->s_dirs_counter,
++			   ext4_count_dirs(sb));
++	percpu_counter_set(&sbi->s_dirtyblocks_counter, 0);
++
+ no_journal:
+ 
+	if (test_opt(sb, NOBH)) {
