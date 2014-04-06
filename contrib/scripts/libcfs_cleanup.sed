@@ -594,44 +594,6 @@ s/\bcfs_groups_alloc\b/groups_alloc/g
 s/\bcfs_get_random_bytes_prim\b/get_random_bytes/g
 /#[ \t]*define[ \t]*\bget_random_bytes\b *( *\w* *, *\w* *)[ \t]*\bget_random_bytes\b *( *\w* *, *\w* *)/d
 
-# atomic
-s/\bcfs_atomic_t\b/atomic_t/g
-/typedef[ \t]*\batomic_t\b[ \t]*\batomic_t\b/d
-s/\bcfs_atomic_read\b/atomic_read/g
-/#[ \t]*define[ \t]*\batomic_read\b *( *\w* *)[ \t]*\batomic_read\b *( *\w* *)/d
-s/\bcfs_atomic_add_unless\b/atomic_add_unless/g
-s/\bcfs_atomic_cmpxchg\b/atomic_cmpxchg/g
-s/\bcfs_atomic_inc\b/atomic_inc/g
-/#[ \t]*define[ \t]*\batomic_inc\b *( *\w* *)[ \t]*\batomic_inc\b *( *\w* *)/d
-s/\bcfs_atomic_inc_and_test\b/atomic_inc_and_test/g
-/#[ \t]*define[ \t]*\batomic_inc_and_test\b *( *\w* *)[ \t]*\batomic_inc_and_test\b *( *\w* *)/d
-s/\bcfs_atomic_inc_return\b/atomic_inc_return/g
-/#[ \t]*define[ \t]*\batomic_inc_return\b *( *\w* *)[ \t]*\batomic_inc_return\b *( *\w* *)/d
-s/\bcfs_atomic_inc_not_zero\b/atomic_inc_not_zero/g
-/#[ \t]*define[ \t]*\batomic_inc_not_zero\b *( *\w* *)[ \t]*\batomic_inc_not_zero\b *( *\w* *)/d
-s/\bcfs_atomic_dec\b/atomic_dec/g
-/#[ \t]*define[ \t]*\batomic_dec\b *( *\w* *)[ \t]*\batomic_dec\b *( *\w* *)/d
-s/\bcfs_atomic_dec_and_test\b/atomic_dec_and_test/g
-/#[ \t]*define[ \t]*\batomic_dec_and_test\b *( *\w* *)[ \t]*\batomic_dec_and_test\b *( *\w* *)/d
-s/\bcfs_atomic_dec_return\b/atomic_dec_return/g
-/#[ \t]*define[ \t]*\batomic_dec_return\b *( *\w* *)[ \t]*\batomic_dec_return\b *( *\w* *)/d
-s/\bcfs_atomic_dec_and_lock\b/atomic_dec_and_lock/g
-/#[ \t]*define[ \t]*\batomic_dec_and_lock\b *( *\w* *, *\w* *)[ \t]*\batomic_dec_and_lock\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_set\b/atomic_set/g
-/#[ \t]*define[ \t]*\batomic_set\b *( *\w* *, *\w* *)[ \t]*\batomic_set\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_add\b/atomic_add/g
-/#[ \t]*define[ \t]*\batomic_add\b *( *\w* *, *\w* *)[ \t]*\batomic_add\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_add_return\b/atomic_add_return/g
-/#[ \t]*define[ \t]*\batomic_add_return\b *( *\w* *, *\w* *)[ \t]*\batomic_add_return\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_sub\b/atomic_sub/g
-/#[ \t]*define[ \t]*\batomic_sub\b *( *\w* *, *\w* *)[ \t]*\batomic_sub\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_sub_and_test\b/atomic_sub_and_test/g
-/#[ \t]*define[ \t]*\batomic_sub_and_test\b *( *\w* *, *\w* *)[ \t]*\batomic_sub_and_test\b *( *\w* *, *\w* *)/d
-s/\bcfs_atomic_sub_return\b/atomic_sub_return/g
-/#[ \t]*define[ \t]*\batomic_sub_return\b *( *\w* *, *\w* *)[ \t]*\batomic_sub_return\b *( *\w* *, *\w* *)/d
-s/\bCFS_ATOMIC_INIT\b/ATOMIC_INIT/g
-/#[ \t]*define[ \t]*\bATOMIC_INIT\b *( *\w* *)[ \t]*\bATOMIC_INIT\b *( *\w* *)/d
-
 ################################################################################
 # list operations
 s/\bcfs_list_t\b/struct list_head/g
