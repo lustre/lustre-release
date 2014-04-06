@@ -854,6 +854,9 @@ test_11() {
 	sleep 3
 	scrub_check_status 4 completed
 
+	declare -a checked0
+	declare -a checked1
+
 	# OI scrub should skip the new created objects for the first accessing
 	# notice we're creating a new llog for every OST on every startup
 	# new features can make this even less stable, so we only check
@@ -865,17 +868,21 @@ test_11() {
 		[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
 			error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects" \
 				"skipped on mds$n, but got $SKIPPED"
+
+		checked0[$n]=$(scrub_status $n | awk '/^checked/ { print $2 }')
 	done
 
 	# reset OI scrub start point by force
-	scrub_start -r
+	scrub_start 6 -r
 	sleep 3
 	scrub_check_status 7 completed
 
 	# OI scrub should skip the new created object only once
 	for n in $(seq $MDSCOUNT); do
 		SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
-		[ $SKIPPED -eq 0 ] ||
+		checked1[$n]=$(scrub_status $n | awk '/^checked/ { print $2 }')
+
+		[ ${checked0[$n]} -ne ${checked1[$n]} -o $SKIPPED -eq 0 ] ||
 			error "(8) Expect 0 objects skipped on mds$n, but" \
 				"got $SKIPPED"
 	done
