@@ -430,7 +430,8 @@ static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t lprocfs_jobstats_seq_write(struct file *file, const char *buf,
+static ssize_t lprocfs_jobstats_seq_write(struct file *file,
+					  const char __user *buf,
 					  size_t len, loff_t *off)
 {
 	struct seq_file *seq = file->private_data;
@@ -439,18 +440,19 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file, const char *buf,
 	int all = 0;
 	struct job_stat *job;
 
-	if (!memcmp(buf, "clear", strlen("clear"))) {
-		all = 1;
-	} else if (len < JOBSTATS_JOBID_SIZE) {
-		memset(jobid, 0, JOBSTATS_JOBID_SIZE);
-		/* Trim '\n' if any */
-		if (buf[len - 1] == '\n')
-			memcpy(jobid, buf, len - 1);
-		else
-			memcpy(jobid, buf, len);
-	} else {
+	if (len == 0 || len >= JOBSTATS_JOBID_SIZE)
 		return -EINVAL;
-	}
+
+	if (copy_from_user(jobid, buf, len))
+		return -EFAULT;
+	jobid[len] = 0;
+
+	/* Trim '\n' if any */
+	if (jobid[len - 1] == '\n')
+		jobid[len - 1] = 0;
+
+	if (strcmp(jobid, "clear") == 0)
+		all = 1;
 
 	LASSERT(stats->ojs_hash);
 	if (all) {
@@ -544,7 +546,7 @@ int lprocfs_rd_job_interval(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_rd_job_interval);
 
-int lprocfs_wr_job_interval(struct file *file, const char *buffer,
+int lprocfs_wr_job_interval(struct file *file, const char __user *buffer,
 			    unsigned long count, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;

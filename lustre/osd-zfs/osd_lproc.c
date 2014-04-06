@@ -140,8 +140,8 @@ static int lprocfs_osd_wr_force_sync(struct file *file, const char *buffer,
 	return rc == 0 ? count : rc;
 }
 
-static int lprocfs_osd_rd_iused_est(char *page, char **start, off_t off, int count,
-					int *eof, void *data)
+static int lprocfs_osd_rd_iused_est(char *page, char **start, off_t off,
+				    int count, int *eof, void *data)
 {
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)data);
 	LASSERT(osd != NULL);
@@ -149,8 +149,9 @@ static int lprocfs_osd_rd_iused_est(char *page, char **start, off_t off, int cou
 	return snprintf(page, count, "%d\n", osd->od_quota_iused_est);
 }
 
-static int lprocfs_osd_wr_iused_est(struct file *file, const char *buffer,
-					unsigned long count, void *data)
+static int lprocfs_osd_wr_iused_est(struct file *file,
+				    const char __user *buffer,
+				    unsigned long count, void *data)
 {
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)data);
 	int                rc, val;

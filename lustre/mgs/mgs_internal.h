@@ -227,7 +227,7 @@ void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb);
 void mgs_ir_notify_complete(struct fs_db *fsdb);
 int  mgs_get_ir_logs(struct ptlrpc_request *req);
 int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
+			 size_t count, void *data);
 int  lprocfs_rd_ir_state(struct seq_file *seq, void *data);
 ssize_t
 lprocfs_ir_timeout_seq_write(struct file *file, const char *buffer,

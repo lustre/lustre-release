@@ -8960,6 +8960,36 @@ test_133f() {
 }
 run_test 133f "Check for LBUGs/Oopses/unreadable files in /proc"
 
+test_133g() {
+	local proc_dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/"
+	local facet
+
+	# Second verifying readability.
+	find $proc_dirs \
+		-type f \
+		-not -name force_lbug \
+		-not -name changelog_mask \
+		-exec badarea_io '{}' \; > /dev/null
+
+	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.5.54) ] &&
+		skip "Too old lustre on MDS"
+
+	[ $(lustre_version_code ost1) -le $(version_code 2.5.54) ] &&
+		skip "Too old lustre on ost1"
+
+	for facet in $SINGLEMDS ost1; do
+		do_facet $facet find $proc_dirs \
+			-type f \
+			-not -name force_lbug \
+			-not -name changelog_mask \
+			-exec badarea_io '{}' \\\; &> /dev/null
+
+	done
+
+	true
+}
+run_test 133g "Check for Oopses on bad io area writes/reads in /proc"
+
 test_140() { #bug-17379
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
         test_mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"

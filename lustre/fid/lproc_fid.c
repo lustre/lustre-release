@@ -53,6 +53,9 @@
 #include <md_object.h>
 
 #ifdef LPROCFS
+
+/* Format: [0x64BIT_INT - 0x64BIT_INT] + 32 bytes just in case */
+#define MAX_FID_RANGE_STRLEN (32 + 2 * 2 * sizeof(__u64))
 /**
  * Reduce the SEQ range allocated to a node to a strict subset of the range
  * currently-allocated SEQ range.  If the specified range is "clear", then
@@ -62,22 +65,31 @@
  * safe for production use.
  */
 static int
-lprocfs_fid_write_common(const char *buffer, unsigned long count,
+lprocfs_fid_write_common(const char __user *buffer, size_t count,
 				struct lu_seq_range *range)
 {
 	struct lu_seq_range tmp = { 0, };
 	int rc;
+	char kernbuf[MAX_FID_RANGE_STRLEN];
 	ENTRY;
 
 	LASSERT(range != NULL);
 
-	if (count == 5 && strcmp(buffer, "clear") == 0) {
+	if (count >= sizeof(kernbuf))
+		RETURN(-EINVAL);
+
+	if (copy_from_user(kernbuf, buffer, count))
+		RETURN(-EFAULT);
+
+	kernbuf[count] = 0;
+
+	if (count == 5 && strcmp(kernbuf, "clear") == 0) {
 		memset(range, 0, sizeof(*range));
 		RETURN(0);
 	}
 
 	/* of the form "[0x0000000240000400 - 0x000000028000400]" */
-	rc = sscanf(buffer, "[%llx - %llx]\n",
+	rc = sscanf(kernbuf, "[%llx - %llx]\n",
 		    (long long unsigned *)&tmp.lsr_start,
 		    (long long unsigned *)&tmp.lsr_end);
 	if (!range_is_sane(&tmp) || range_is_zero(&tmp) ||
@@ -92,7 +104,7 @@ lprocfs_fid_write_common(const char *buffer, unsigned long count,
  * Server side procfs stuff.
  */
 static ssize_t
-lprocfs_server_fid_space_seq_write(struct file *file, const char *buffer,
+lprocfs_server_fid_space_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct lu_server_seq *seq = ((struct seq_file *)file->private_data)->private;
@@ -155,7 +167,7 @@ lprocfs_server_fid_server_seq_show(struct seq_file *m, void *unused)
 }
 
 static ssize_t
-lprocfs_server_fid_width_seq_write(struct file *file, const char *buffer,
+lprocfs_server_fid_width_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct lu_server_seq *seq = ((struct seq_file *)file->private_data)->private;
@@ -421,26 +433,27 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t fldb_seq_write(struct file *file, const char *buf,
+static ssize_t fldb_seq_write(struct file *file, const char __user *buf,
 			      size_t len, loff_t *off)
 {
 	struct seq_file		*seq = file->private_data;
 	struct fld_seq_param	*param;
 	struct lu_seq_range	 range;
 	int			 rc = 0;
-	char			*buffer, *_buffer;
+	char			 _buffer[MAX_FID_RANGE_STRLEN];
+	char			*buffer = _buffer;
 	ENTRY;
 
 	param = seq->private;
 	if (param == NULL)
 		RETURN(-EINVAL);
 
-	OBD_ALLOC(buffer, len + 1);
-	if (buffer == NULL)
-		RETURN(-ENOMEM);
-	memcpy(buffer, buf, len);
+	if (len >= sizeof(_buffer))
+		RETURN(-EINVAL);
+
+	if (copy_from_user(buffer, buf, len))
+		GOTO(out, rc = -EFAULT);
 	buffer[len] = 0;
-	_buffer = buffer;
 
 	/*
 	 * format - [0x0000000200000007-0x0000000200000008):0:mdt
@@ -478,7 +491,6 @@ static ssize_t fldb_seq_write(struct file *file, const char *buf,
 				   &range, &param->fsp_env);
 
 out:
-	OBD_FREE(_buffer, len + 1);
 	RETURN(rc < 0 ? rc : len);
 }
 
@@ -494,7 +506,7 @@ const struct file_operations seq_fld_proc_seq_fops = {
 
 /* Client side procfs stuff */
 static ssize_t
-lprocfs_client_fid_space_seq_write(struct file *file, const char *buffer,
+lprocfs_client_fid_space_seq_write(struct file *file, const char __user *buffer,
 				   size_t count, loff_t *off)
 {
 	struct lu_client_seq *seq = ((struct seq_file *)file->private_data)->private;
@@ -533,7 +545,7 @@ lprocfs_client_fid_space_seq_show(struct seq_file *m, void *unused)
 }
 
 static ssize_t
-lprocfs_client_fid_width_seq_write(struct file *file, const char *buffer,
+lprocfs_client_fid_width_seq_write(struct file *file, const char __user *buffer,
 				   size_t count, loff_t *off)
 {
 	struct lu_client_seq *seq = ((struct seq_file *)file->private_data)->private;

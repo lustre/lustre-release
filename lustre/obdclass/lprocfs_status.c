@@ -307,7 +307,7 @@ int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 #define BUFLEN (UUID_MAX + 5)
 
 #ifndef HAVE_ONLY_PROCFS_SEQ
-int lprocfs_wr_evict_client(struct file *file, const char *buffer,
+int lprocfs_wr_evict_client(struct file *file, const char __user *buffer,
 			    unsigned long count, void *data)
 {
 	struct obd_device *obd = data;

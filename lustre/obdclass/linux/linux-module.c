@@ -300,15 +300,22 @@ static int obd_proc_jobid_var_seq_show(struct seq_file *m, void *v)
 }
 
 static ssize_t
-obd_proc_jobid_var_seq_write(struct file *file, const char *buffer,
-				size_t count, loff_t *off)
+obd_proc_jobid_var_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
 {
 	if (!count || count > JOBSTATS_JOBID_VAR_MAX_LEN)
 		return -EINVAL;
 
 	memset(obd_jobid_var, 0, JOBSTATS_JOBID_VAR_MAX_LEN + 1);
+
+	/* This might leave the var invalid on error, which is probably fine.*/
+	if (copy_from_user(obd_jobid_var, buffer, count))
+		return -EFAULT;
+
 	/* Trim the trailing '\n' if any */
-	memcpy(obd_jobid_var, buffer, count - (buffer[count - 1] == '\n'));
+	if (obd_jobid_var[count - 1] == '\n')
+		obd_jobid_var[count - 1] = 0;
+
 	return count;
 }
 LPROC_SEQ_FOPS(obd_proc_jobid_var);

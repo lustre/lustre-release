@@ -748,25 +748,25 @@ static struct lproc_ir_cmd {
         { "0",        1, lprocfs_ir_clear_stats }
 };
 
-int lprocfs_wr_ir_state(struct file *file, const char *buffer,
-                         unsigned long count, void *data)
+int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
+			size_t count, void *data)
 {
         struct fs_db *fsdb = data;
         char *kbuf;
         char *ptr;
         int rc = 0;
 
-	if (count > PAGE_CACHE_SIZE)
-                return -EINVAL;
+	if (count == 0 || count >= PAGE_CACHE_SIZE)
+		return -EINVAL;
 
-        OBD_ALLOC(kbuf, count + 1);
-        if (kbuf == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(kbuf, count + 1);
+	if (kbuf == NULL)
+		return -ENOMEM;
 
-        if (copy_from_user(kbuf, buffer, count)) {
-                OBD_FREE(kbuf, count);
-                return -EFAULT;
-        }
+	if (copy_from_user(kbuf, buffer, count)) {
+		OBD_FREE(kbuf, count + 1);
+		return -EFAULT;
+	}
 
         kbuf[count] = 0; /* buffer is supposed to end with 0 */
         if (kbuf[count - 1] == '\n')
@@ -843,9 +843,9 @@ int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)
 	return lprocfs_uint_seq_show(m, &ir_timeout);
 }
 
-ssize_t
-lprocfs_ir_timeout_seq_write(struct file *file, const char *buffer,
-			     size_t count, loff_t *off)
+ssize_t lprocfs_ir_timeout_seq_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *off)
 {
         return lprocfs_wr_uint(file, buffer, count, &ir_timeout);
 }
