@@ -3144,9 +3144,10 @@ static int cb_mv_init(char *path, DIR *parent, DIR **dirp,
 	if (parent == NULL) {
 		dir = opendir_parent(path);
 		if (dir == NULL) {
+			*dirp = NULL;
 			ret = -errno;
-			fprintf(stderr, "can not open %s ret %d\n",
-				path, ret);
+			llapi_error(LLAPI_MSG_ERROR, ret,
+				    "can not open %s\n", path);
 			return ret;
 		}
 	}
