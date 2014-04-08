@@ -141,20 +141,19 @@ To remove all Lustre modules, run:</para>
               <para>Dual HCA OSS server</para>
             </listitem>
           </itemizedlist>
-          <screen>options lnet networks=&quot;o2ib0(ib0),o2ib1(ib1) 192.168.10.1.[101-102] </screen>
+          <screen>options lnet networks="o2ib0(ib0),o2ib1(ib1)"</screen>
           <itemizedlist>
             <listitem>
               <para>Client with the odd IP address</para>
             </listitem>
           </itemizedlist>
-          <screen>options lnet networks=o2ib0(ib0) 192.168.10.[103-253/2] </screen>
+          <screen>options lnet ip2nets="o2ib0(ib0) 192.168.10.[103-253/2]"</screen>
           <itemizedlist>
             <listitem>
               <para>Client with the even IP address</para>
             </listitem>
           </itemizedlist>
-          <screen>options lnet networks=o2ib1(ib0) 192.168.10.[102-254/2]
-</screen>
+          <screen>options lnet ip2nets="o2ib1(ib0) 192.168.10.[102-254/2]"</screen>
         </listitem>
         <listitem>
           <para>Run the modprobe lnet command and create a combined MGS/MDT file system.</para>
