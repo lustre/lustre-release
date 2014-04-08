@@ -293,53 +293,75 @@ will not be purged beyond any registered users' set point. (See lfs changelog_cl
 .BI changelog_deregister " <id>"
 Unregister an existing changelog user.  If the user's "clear" record number
 is the minimum for the device, changelog records will be purged until the
-next minimum.  
+next minimum.
 .PP
 .SS LFSCK
 An on-line Lustre consistency check and repair tool.
 .TP
-.B lfsck_start \fR<-M | --device MDT_device>
+.B lfsck_start \fR<-M | --device [MDT,OST]_device>
      \fR[-e | --error <error_handle>]
      \fR[-h | --help]
      \fR[-n | --dryrun <switch>]
      \fR[-r | --reset]
      \fR[-s | --speed <speed_limit>]
+     \fR[-A | --all]
      \fR[-t | --type <lfsck_type[,lfsck_type...]>]
+     \fR[-w | --windows <win_size>]
+     \fR[-o | --orphan]
 .br
-Start LFSCK on the specified MDT device with specified parameters.
+Start LFSCK on the specified MDT or OST device with specified parameters.
 .TP
-  -M, --device <MDT_device>
-The MDT device to check.
+  -M, --device <MDT,OST_device>
+The MDT or OST device to start LFSCK/scrub on.
 .TP
   -e, --error <error_handle>
 With error_handle as 'abort' LFSCK will stop if a repair is impossible. If no
 value is specified, the saved value will be used if resuming from a checkpoint.
-Otherwise the default behavior is to 'continue' if a rapair is impossible.
+Otherwise the default behavior is to 'continue' if a repair is impossible.
 .TP
   -h, --help
 Show this help.
 .TP
   -n, --dryrun <on|off>
-Perform a trial run with no changes made.
+Perform a trial run with no changes made. Default is 'off'
 .TP
   -r, --reset
-Set the current position of LFSCK progress to the beginning of the specified
-MDT.
+Set the current position of object iteration to the beginning of the specified
+MDT. By default the iterator will resume scanning from the last checkpoint
+(saved periodically by LFSCK) provided it is available.
 .TP
   -s, --speed <speed_limit>
 Set the upper limit of LFSCK processing in objects per second. If no value is
 specified the saved value is used (if resuming from a check point). Otherwise
 the default value of 0 is used. 0 means run as fast as possible.
 .TP
+  -A, --all
+Start LFSCK on all devices.
+.TP
   -t, --type <lfsck_type[,lfsck_type...]>
-Specify the type of LFSCK to execute. By default, OI Scrub is executed.
-Alternative types include FID-in-dirent and linkEA (namespace).
+The type of LFSCK checking/repair to execute. By default, the LFSCK
+component(s) which ran last time and did not finish or the component(s)
+corresponding to some known system inconsistency, will be started. Anytime
+LFSCK is triggered on an ldiskfs MDT or OST, the OI Scrub is executed.
+Alternative types include FID-in-dirent and linkEA (namespace) and MDT-OST
+inconsistency (layout).
 .TP
-.B lfsck_stop  \fR<-M | --device MDT_device> [-h | --help]
-Stop LFSCK on the specified MDT device.
+  -w, --windows
+The window size for async requests pipeline.
 .TP
-  -M, --device <MDT_device>
-The MDT device.
+  -o, --orphan
+Handle orphan objects, such as orphan OST-objects for layout LFSCK.
+.TP
+.B lfsck_stop  \fR<-M | --device [MDT,OST]_device>
+     \fR[-A | --all]
+     \fR[-h | --help]
+Stop LFSCK on the specified MDT or OST device.
+.TP
+  -M, --device <[MDT,OST]_device>
+The MDT or OST device to stop LFSCK/scrub on.
+.TP
+  -A, --all
+Stop LFSCK on all devices.
 .TP
   -h, --help
 Show this help.
