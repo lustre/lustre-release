@@ -3091,6 +3091,27 @@ sub process {
 			}
 		}
 
+# try to replace assertions with error handling
+		if ($line =~ /\bLASSERTF?\s*\(/) {
+		    WARN("LASSERT",
+			 "try to replace assertions with error handling\n" .
+			 $herecurr);
+		}
+
+# avoid new console messages
+		if ($line =~ /\bLCONSOLE[A-Z_]*\s*\(/) {
+		    WARN("LCONSOLE",
+			 "avoid adding new console messages\n" .
+			 $herecurr);
+		}
+
+# minimize new CERROR messages
+		if ($line =~ /\bC(EMERG|ERROR|NETERR|WARN)\s*\(/) {
+		    WARN("LCONSOLE",
+			 "think hard before adding new CERROR messages\n" .
+			 $herecurr);
+		}
+
 # no volatiles please
 		my $asm_volatile = qr{\b(__asm__|asm)\s+(__volatile__|volatile)\b};
 		if ($line =~ /\bvolatile\b/ && $line !~ /$asm_volatile/) {
