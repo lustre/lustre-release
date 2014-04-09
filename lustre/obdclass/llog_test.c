@@ -914,10 +914,10 @@ static int llog_truncate(const struct lu_env *env, struct dt_object *o)
 	if (rc)
 		RETURN(rc);
 
-	CDEBUG(D_OTHER, "original size %Lu\n", la.la_size);
+	CDEBUG(D_OTHER, "original size "LPU64"\n", la.la_size);
 	rc = sizeof(struct llog_log_hdr) + sizeof(struct llog_mini_rec);
 	if (la.la_size < rc) {
-		CERROR("too small llog: %Lu\n", la.la_size);
+		CERROR("too small llog: "LPU64"\n", la.la_size);
 		RETURN(0);
 	}
 

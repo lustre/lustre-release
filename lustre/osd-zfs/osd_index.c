@@ -1195,7 +1195,8 @@ static int osd_index_it_get(const struct lu_env *env, struct dt_it *di,
 	 * XXX: we need a binary version of zap_cursor_move_to_key()
 	 *	to implement this API */
 	if (*((const __u64 *)key) != 0)
-		CERROR("NOT IMPLEMETED YET (move to %Lx)\n", *((__u64 *)key));
+		CERROR("NOT IMPLEMETED YET (move to "LPX64")\n",
+		       *((__u64 *)key));
 
 	zap_cursor_fini(it->ozi_zc);
 	memset(it->ozi_zc, 0, sizeof(*it->ozi_zc));

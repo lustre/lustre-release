@@ -872,7 +872,7 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	if (it.d.lustre.it_lock_mode == 0 ||
 	    it.d.lustre.it_lock_bits != MDS_INODELOCK_OPEN) {
 		/* open lock must return for lease */
-		CERROR(DFID "lease granted but no open lock, %d/%Lu.\n",
+		CERROR(DFID "lease granted but no open lock, %d/"LPU64".\n",
 			PFID(ll_inode2fid(inode)), it.d.lustre.it_lock_mode,
 			it.d.lustre.it_lock_bits);
 		GOTO(out_close, rc = -EPROTO);

@@ -74,7 +74,8 @@ kgnilnd_nid_to_nicaddrs(__u32 nid, int numnic, __u32 *nicaddr)
 		return -EINVAL;
 	}
 	if (nid < kgnilnd_data.kgn_nid_trans_private) {
-		CERROR("Request for invalid nid translation %u, minimum %Lu\n",
+		CERROR("Request for invalid nid translation %u,"
+		       "minimum "LPU64"\n",
 		       nid, kgnilnd_data.kgn_nid_trans_private);
 		return -ESRCH;
 	}
