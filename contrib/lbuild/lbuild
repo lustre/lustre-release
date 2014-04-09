@@ -60,9 +60,6 @@ EXTRA_VERSION=
 STAGEDIR=
 TMPDIR=${TMPDIR:-"/var/tmp"}
 TIMESTAMP=
-# this is a dir to try reuse old kernel RPMs in (although, it seems to be
-# unused in any real manner
-REUSERPM=
 # this is the dir that should be used to store reuse products
 REUSEBUILD=
 # should cached products be used or force rebuilding?
@@ -136,9 +133,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
   --timestamp=TIMESTAMP
     Date of building lustre in format YYYYMMDDhhmmss
-
-  --reuserpm=DIR
-    Try to reuse old kernel RPMs from DIR
 
   --reusebuild=DIR
     Try to reuse old kernel builds from DIR
@@ -1968,7 +1962,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,mpss-version:,publish,release,set-value:,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ccache,norpm,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,mpss-version:,publish,release,set-value:,src,stage:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -2020,10 +2014,6 @@ while [ "$1" ]; do
             DISTRO=$2
             shift 2
             ;;
-        --reuserpm)
-            REUSERPM=$2
-            shift 2
-            ;;
         --reusebuild)
             if ! REUSEBUILD=$(canon_path "$2"); then
                 fatal 1 "Could not determine the canonical location of $2"
@@ -2032,10 +2022,6 @@ while [ "$1" ]; do
             ;;
         --norpm)
             NORPM=true
-            shift
-            ;;
-        --ldiskfs)
-	    echo "WARNING: \"--ldiskfs\" is deprecated" > 2
             shift
             ;;
         --noiokit)
@@ -2092,10 +2078,6 @@ while [ "$1" ]; do
         --stage)
             STAGEDIR=$2
             shift 2
-            ;;
-        --tag)
-            shift 2
-            echo "WARNING: \"--tag\" is deprecated" > 2
             ;;
         --target)
             TARGET=$2
