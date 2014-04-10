@@ -404,8 +404,8 @@ ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs)
 {
 	ENTRY;
 
-	LASSERT(spin_is_locked(&rs->rs_svcpt->scp_rep_lock));
-	LASSERT(spin_is_locked(&rs->rs_lock));
+	assert_spin_locked(&rs->rs_svcpt->scp_rep_lock);
+	assert_spin_locked(&rs->rs_lock);
 	LASSERT (rs->rs_difficult);
 	rs->rs_scheduled_ever = 1;  /* flag any notification attempt */
 

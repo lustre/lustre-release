@@ -327,7 +327,7 @@ nrs_tbf_rule_change(struct ptlrpc_nrs_policy *policy,
 {
 	struct nrs_tbf_rule *rule;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
 	rule = nrs_tbf_rule_find(head, change->tc_name);
 	if (rule == NULL)
@@ -348,7 +348,7 @@ nrs_tbf_rule_stop(struct ptlrpc_nrs_policy *policy,
 {
 	struct nrs_tbf_rule *rule;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
 	if (strcmp(stop->tc_name, NRS_TBF_DEFAULT_RULE) == 0)
 		return -EPERM;
@@ -372,7 +372,7 @@ nrs_tbf_command(struct ptlrpc_nrs_policy *policy,
 {
 	int rc;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
 	switch (cmd->tc_cmd) {
 	case NRS_CTL_TBF_START_RULE:
@@ -1197,8 +1197,8 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
  * \param[in]	  opc	 the opcode
  * \param[in,out] arg	 used for passing parameters and information
  *
- * \pre spin_is_locked(&policy->pol_nrs->->nrs_lock)
- * \post spin_is_locked(&policy->pol_nrs->->nrs_lock)
+ * \pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
+ * \post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  *
  * \retval 0   operation carried out successfully
  * \retval -ve error
@@ -1209,7 +1209,7 @@ int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
 	int rc = 0;
 	ENTRY;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
 	switch ((enum nrs_ctl_tbf)opc) {
 	default:
@@ -1382,7 +1382,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_client     *cli;
 	cfs_binheap_node_t	  *node;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	if (!peek && policy->pol_nrs->nrs_throttling)
 		return NULL;
@@ -1469,7 +1469,7 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_client *cli;
 	int		       rc = 0;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	cli = container_of(nrs_request_resource(nrq),
 			   struct nrs_tbf_client, tc_res);
@@ -1519,7 +1519,7 @@ static void nrs_tbf_req_del(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_head   *head;
 	struct nrs_tbf_client *cli;
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	cli = container_of(nrs_request_resource(nrq),
 			   struct nrs_tbf_client, tc_res);
@@ -1554,7 +1554,7 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 	struct ptlrpc_request *req = container_of(nrq, struct ptlrpc_request,
 						  rq_nrq);
 
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
 	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: "LPU64"\n",
 	       policy->pol_desc->pd_name, libcfs_id2str(req->rq_peer),

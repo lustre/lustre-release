@@ -214,7 +214,7 @@ int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 	struct lu_object_header *top;
 	int result;
 
-	LASSERT(spin_is_locked(cl_object_attr_guard(obj)));
+	assert_spin_locked(cl_object_attr_guard(obj));
 	ENTRY;
 
         top = obj->co_lu.lo_header;
@@ -246,7 +246,7 @@ int cl_object_attr_set(const struct lu_env *env, struct cl_object *obj,
 	struct lu_object_header *top;
 	int result;
 
-	LASSERT(spin_is_locked(cl_object_attr_guard(obj)));
+	assert_spin_locked(cl_object_attr_guard(obj));
 	ENTRY;
 
         top = obj->co_lu.lo_header;

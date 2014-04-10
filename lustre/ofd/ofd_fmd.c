@@ -48,7 +48,7 @@ static inline void ofd_fmd_put_nolock(struct obd_export *exp,
 {
 	struct filter_export_data *fed = &exp->exp_filter_data;
 
-	LASSERT(spin_is_locked(&fed->fed_lock));
+	assert_spin_locked(&fed->fed_lock);
 	if (--fmd->fmd_refcount == 0) {
 		/* XXX when we have persistent reservations and the handle
 		 * is stored herein we need to drop it here. */
@@ -115,7 +115,7 @@ static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
 
 	cfs_time_t now = cfs_time_current();
 
-	LASSERT(spin_is_locked(&fed->fed_lock));
+	assert_spin_locked(&fed->fed_lock);
 
 	cfs_list_for_each_entry_reverse(fmd, &fed->fed_mod_list, fmd_list) {
 		if (lu_fid_eq(&fmd->fmd_fid, fid)) {

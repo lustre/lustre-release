@@ -500,7 +500,7 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
         ENTRY;
 
 	head = cl_object_header(obj);
-	LINVRNT(spin_is_locked(&head->coh_lock_guard));
+	assert_spin_locked(&head->coh_lock_guard);
 	CS_LOCK_INC(obj, lookup);
 	cfs_list_for_each_entry(lock, &head->coh_locks, cll_linkage) {
 		int matched;

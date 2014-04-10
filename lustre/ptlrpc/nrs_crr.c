@@ -267,8 +267,8 @@ static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
  * \param[in]	  opc	 the opcode
  * \param[in,out] arg	 used for passing parameters and information
  *
- * \pre spin_is_locked(&policy->pol_nrs->->nrs_lock)
- * \post spin_is_locked(&policy->pol_nrs->->nrs_lock)
+ * \pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
+ * \post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  *
  * \retval 0   operation carried out successfully
  * \retval -ve error
@@ -276,7 +276,7 @@ static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
 int nrs_crrn_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
 		 void *arg)
 {
-	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
 	switch((enum nrs_ctl_crr)opc) {
 	default:

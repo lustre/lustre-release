@@ -298,7 +298,7 @@ static int spin_trylock(spinlock_t *lock)
 	return rc;
 }
 
-static int spin_is_locked(spinlock_t *lock)
+static int assert_spin_locked(spinlock_t *lock)
 {
 #if _WIN32_WINNT >= 0x502
 	/* KeTestSpinLock only avalilable on 2k3 server or later */
