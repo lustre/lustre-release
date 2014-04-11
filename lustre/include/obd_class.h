@@ -305,6 +305,8 @@ static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 static inline struct lu_target *class_exp2tgt(struct obd_export *exp)
 {
         LASSERT(exp->exp_obd);
+	if (exp->exp_obd->u.obt.obt_magic != OBT_MAGIC)
+		return NULL;
         return exp->exp_obd->u.obt.obt_lut;
 }
 
