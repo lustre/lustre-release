@@ -138,13 +138,11 @@ struct md_attr {
         struct lov_mds_md      *ma_lmm;
         struct lmv_stripe_md   *ma_lmv;
         void                   *ma_acl;
-        struct llog_cookie     *ma_cookie;
         struct lustre_capa     *ma_capa;
         struct md_som_data     *ma_som;
         int                     ma_lmm_size;
         int                     ma_lmv_size;
         int                     ma_acl_size;
-        int                     ma_cookie_size;
         __u16                   ma_layout_gen;
 };
 

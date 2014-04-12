@@ -1873,7 +1873,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		if (created) {
 			ma->ma_need = 0;
 			ma->ma_valid = 0;
-			ma->ma_cookie_size = 0;
 			rc = mdo_unlink(info->mti_env,
 					mdt_object_child(parent),
 					mdt_object_child(child),
@@ -2276,10 +2275,10 @@ int mdt_close(struct mdt_thread_info *info)
 
         LASSERT(info->mti_ioepoch);
 
-        req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
-                             info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
-                             info->mti_mdt->mdt_max_cookiesize);
+	/* These fields are no longer used and are left for compatibility.
+	 * size is always zero */
+	req_capsule_set_size(info->mti_pill, &RMF_MDT_MD, RCL_SERVER, 0);
+	req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER, 0);
         rc = req_capsule_server_pack(info->mti_pill);
         if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
                 mdt_client_compatibility(info);
@@ -2298,11 +2297,6 @@ int mdt_close(struct mdt_thread_info *info)
                 ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
-                ma->ma_cookie = req_capsule_server_get(info->mti_pill,
-                                                       &RMF_LOGCOOKIES);
-                ma->ma_cookie_size = req_capsule_get_size(info->mti_pill,
-                                                          &RMF_LOGCOOKIES,
-                                                          RCL_SERVER);
                 ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
                 repbody->eadatasize = 0;
                 repbody->aclsize = 0;

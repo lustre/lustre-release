@@ -1639,6 +1639,12 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 4 * sizeof(struct lov_ost_data))
 #define MIN_MD_SIZE (sizeof(struct lov_mds_md) + 1 * sizeof(struct lov_ost_data))
 
+/* This is the default MDT reply size allocated, should the striping be bigger,
+ * it will be reallocated in mdt_fix_reply.
+ * 100 stripes is a bit less than 2.5k of data */
+#define DEF_REP_MD_SIZE (sizeof(struct lov_mds_md) + \
+			 100 * sizeof(struct lov_ost_data))
+
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 #define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
 #define XATTR_USER_PREFIX       "user."
