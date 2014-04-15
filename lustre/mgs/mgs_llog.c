@@ -1369,6 +1369,7 @@ static int record_start_log(const struct lu_env *env, struct mgs_device *mgs,
 	static struct obd_uuid	 cfg_uuid = { .uuid = "config_uuid" };
 	struct llog_ctxt	*ctxt;
 	int			 rc = 0;
+	ENTRY;
 
 	if (*llh)
 		GOTO(out, rc = -EBUSY);
@@ -3712,6 +3713,34 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
                                lustre_cfg_string(lcfg, i));
                 }
         EXIT;
+}
+
+/* Setup params fsdb and log
+ */
+int mgs_params_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs,
+			  struct fs_db *fsdb)
+{
+	struct llog_handle	*params_llh = NULL;
+	int			rc;
+	ENTRY;
+
+	rc = mgs_find_or_make_fsdb(env, mgs, PARAMS_FILENAME, &fsdb);
+	if (fsdb != NULL) {
+		mutex_lock(&fsdb->fsdb_mutex);
+		rc = record_start_log(env, mgs, &params_llh, PARAMS_FILENAME);
+		if (rc == 0)
+			rc = record_end_log(env, &params_llh);
+		mutex_unlock(&fsdb->fsdb_mutex);
+	}
+
+	RETURN(rc);
+}
+
+/* Cleanup params fsdb and log
+ */
+int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs)
+{
+	return mgs_erase_logs(env, mgs, PARAMS_FILENAME);
 }
 
 /* Set a permanent (config log) param for a target or fs

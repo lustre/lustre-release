@@ -4374,7 +4374,7 @@ test_75() { # LU-2374
 }
 run_test 75 "The order of --index should be irrelevant"
 
-test_76() {
+test_76a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.4.52) ]] ||
 		{ skip "Need MDS version at least 2.4.52" && return 0; }
 	setup
@@ -4431,7 +4431,18 @@ test_76() {
 		error "client_cache_count is not saved after remount"
 	stopall
 }
-run_test 76 "set permanent params set_param -P"
+run_test 76a "set permanent params set_param -P"
+
+test_76b() { # LU-4783
+	[[ $(lustre_version_code mgs) -ge $(version_code 2.5.57) ]] ||
+		{ skip "Need MGS version at least 2.5.57" && return 0; }
+	stopall
+	setupall
+	do_facet mgs $LCTL get_param mgs.MGS.live.params ||
+		error "start params log failed"
+	stopall
+}
+run_test 76b "verify params log setup correctly"
 
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)

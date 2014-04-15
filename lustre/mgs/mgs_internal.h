@@ -187,15 +187,22 @@ struct mgs_object {
 
 int mgs_init_fsdb_list(struct mgs_device *mgs);
 int mgs_cleanup_fsdb_list(struct mgs_device *mgs);
-int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs, char *name,
-                          struct fs_db **dbh);
+int mgs_params_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs,
+			  struct fs_db *fsdb);
+int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs);
+int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
+			  char *name, struct fs_db **dbh);
 struct fs_db *mgs_find_fsdb(struct mgs_device *mgs, char *fsname);
-int mgs_get_fsdb_srpc_from_llog(const struct lu_env *env, struct mgs_device *mgs, struct fs_db *fsdb);
-int mgs_check_index(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti);
-int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti);
-int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti,
-			 struct fs_db *fsdb);
-int mgs_replace_nids(const struct lu_env *env, struct mgs_device *mgs, char *devname, char *nids);
+int mgs_get_fsdb_srpc_from_llog(const struct lu_env *env,
+				struct mgs_device *mgs, struct fs_db *fsdb);
+int mgs_check_index(const struct lu_env *env, struct mgs_device *mgs,
+		    struct mgs_target_info *mti);
+int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs,
+		      struct mgs_target_info *mti);
+int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
+			 struct mgs_target_info *mti, struct fs_db *fsdb);
+int mgs_replace_nids(const struct lu_env *env, struct mgs_device *mgs,
+		     char *devname, char *nids);
 int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs,
 		  char *name);
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,

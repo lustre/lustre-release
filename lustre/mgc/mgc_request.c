@@ -1970,7 +1970,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
 		if (rc == 0 && cld->cld_params != NULL) {
 			rc = mgc_process_log(obd, cld->cld_params);
 			if (rc == -ENOENT) {
-				CDEBUG(D_MGC, "There is no params"
+				CDEBUG(D_MGC, "There is no params "
 					      "config file yet\n");
 				rc = 0;
 			}
