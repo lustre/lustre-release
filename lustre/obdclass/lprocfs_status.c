@@ -3281,7 +3281,7 @@ void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value)
 	unsigned int val = 0;
 
 	if (likely(value != 0))
-		val = min_t(unsigned int, __fls(value - 1), OBD_HIST_MAX);
+		val = min(fls(value - 1), OBD_HIST_MAX);
 
 	lprocfs_oh_tally(oh, val);
 }
