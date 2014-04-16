@@ -71,7 +71,7 @@ export ${NAME:=local}
 while getopts "c:d:D:nkf:S:g:i:rRslhv" opt
 do
     case "$opt" in
-        c) CONFIG=$OPTARG;;
+        c) export CONFIG=$OPTARG;;
         d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
         D) test_logs_dir=$OPTARG;;
         g) test_group_file=$OPTARG;;
