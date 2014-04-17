@@ -264,7 +264,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		qti->qti_einfo.ei_cbdata = arg;
 		break;
 	default:
-		LASSERTF(0, "invalid it_op %d", it_op);
+		LASSERTF(0, "invalid it_op %d\n", it_op);
 	}
 
 	/* build lock enqueue request */

@@ -1899,19 +1899,20 @@ static int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
 /* this should sync this object */
 static int mdt_object_sync(struct mdt_thread_info *info)
 {
-        struct md_object *next;
-        int rc;
-        ENTRY;
+	struct md_object *next;
+	int rc;
+	ENTRY;
 
-        if (!mdt_object_exists(info->mti_object)) {
-                CWARN("Non existing object  "DFID"!\n",
-                      PFID(mdt_object_fid(info->mti_object)));
-                RETURN(-ESTALE);
-        }
-        next = mdt_object_child(info->mti_object);
-        rc = mo_object_sync(info->mti_env, next);
+	if (!mdt_object_exists(info->mti_object)) {
+		CWARN("%s: non existing object "DFID": rc = %d\n",
+		      mdt_obd_name(info->mti_mdt),
+		      PFID(mdt_object_fid(info->mti_object)), -ESTALE);
+		RETURN(-ESTALE);
+	}
+	next = mdt_object_child(info->mti_object);
+	rc = mo_object_sync(info->mti_env, next);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdt_sync(struct tgt_session_info *tsi)
@@ -2195,12 +2196,13 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
 static void mdt_device_commit_async(const struct lu_env *env,
                                     struct mdt_device *mdt)
 {
-        struct dt_device *dt = mdt->mdt_bottom;
-        int rc;
+	struct dt_device *dt = mdt->mdt_bottom;
+	int rc;
 
-        rc = dt->dd_ops->dt_commit_async(env, dt);
-        if (unlikely(rc != 0))
-                CWARN("async commit start failed with rc = %d", rc);
+	rc = dt->dd_ops->dt_commit_async(env, dt);
+	if (unlikely(rc != 0))
+		CWARN("%s: async commit start failed: rc = %d\n",
+		      mdt_obd_name(mdt), rc);
 }
 
 /**
@@ -2275,10 +2277,11 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         if (lock->l_req_mode == LCK_COS && lock->l_blocking_lock != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, LCT_LOCAL);
-                if (unlikely(rc != 0))
-                        CWARN("lu_env initialization failed with rc = %d,"
-                              "cannot start asynchronous commit\n", rc);
+		rc = lu_env_init(&env, LCT_LOCAL);
+		if (unlikely(rc != 0))
+			CWARN("%s: lu_env initialization failed, cannot "
+			      "start asynchronous commit: rc = %d\n",
+			      obd->obd_name, rc);
                 else
                         mdt_device_commit_async(&env, mdt);
                 lu_env_fini(&env);
@@ -3807,7 +3810,7 @@ static void mdt_stack_pre_fini(const struct lu_env *env,
 	lustre_cfg_bufs_set_string(bufs, 1, NULL);
 	lcfg = lustre_cfg_new(LCFG_PRE_CLEANUP, bufs);
 	if (!lcfg) {
-		CERROR("%s:Cannot alloc lcfg!\n", mdt_obd_name(m));
+		CERROR("%s: cannot alloc lcfg\n", mdt_obd_name(m));
 		return;
 	}
 	top->ld_ops->ldo_process_config(env, top, lcfg);
@@ -5172,13 +5175,13 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         LASSERT(exp);
         class_export_get(exp);
 
-        rc = server_disconnect_export(exp);
-        if (rc != 0)
-                CDEBUG(D_IOCTL, "server disconnect error: %d\n", rc);
+	rc = server_disconnect_export(exp);
+	if (rc != 0)
+		CDEBUG(D_IOCTL, "server disconnect error: rc = %d\n", rc);
 
-        rc = mdt_export_cleanup(exp);
-        class_export_put(exp);
-        RETURN(rc);
+	rc = mdt_export_cleanup(exp);
+	class_export_put(exp);
+	RETURN(rc);
 }
 
 /* FIXME: Can we avoid using these two interfaces? */
@@ -5491,7 +5494,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 
 	if (rc < 0) {
 		mdt_object_put(info->mti_env, obj);
-		CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
+		CDEBUG(D_IOCTL, "nonlocal object "DFID": rc = %d\n",
 		       PFID(&fp->gf_fid), rc);
 		RETURN(rc);
 	}
@@ -5539,7 +5542,7 @@ int mdt_get_info(struct tgt_session_info *tsi)
 
 	key = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_KEY);
 	if (key == NULL) {
-		CDEBUG(D_IOCTL, "No GETINFO key");
+		CDEBUG(D_IOCTL, "No GETINFO key\n");
 		RETURN(err_serious(-EFAULT));
 	}
 	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_GETINFO_KEY,
@@ -5547,7 +5550,8 @@ int mdt_get_info(struct tgt_session_info *tsi)
 
 	vallen = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_VALLEN);
 	if (vallen == NULL) {
-		CDEBUG(D_IOCTL, "Unable to get RMF_GETINFO_VALLEN buffer");
+		CDEBUG(D_IOCTL, "%s: cannot get RMF_GETINFO_VALLEN buffer\n",
+				tgt_name(tsi->tsi_tgt));
 		RETURN(err_serious(-EFAULT));
 	}
 
@@ -5559,7 +5563,8 @@ int mdt_get_info(struct tgt_session_info *tsi)
 
 	valout = req_capsule_server_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
 	if (valout == NULL) {
-		CDEBUG(D_IOCTL, "Unable to get get-info RPC out buffer");
+		CDEBUG(D_IOCTL, "%s: cannot get get-info RPC out buffer\n",
+				tgt_name(tsi->tsi_tgt));
 		RETURN(err_serious(-EFAULT));
 	}
 
@@ -5873,13 +5878,13 @@ void mdt_enable_cos(struct mdt_device *mdt, int val)
 
         mdt->mdt_opts.mo_cos = !!val;
         rc = lu_env_init(&env, LCT_LOCAL);
-        if (unlikely(rc != 0)) {
-                CWARN("lu_env initialization failed with rc = %d,"
-                      "cannot sync\n", rc);
-                return;
-        }
-        mdt_device_sync(&env, mdt);
-        lu_env_fini(&env);
+	if (unlikely(rc != 0)) {
+		CWARN("%s: lu_env initialization failed, cannot "
+		      "sync: rc = %d\n", mdt_obd_name(mdt), rc);
+		return;
+	}
+	mdt_device_sync(&env, mdt);
+	lu_env_fini(&env);
 }
 
 /**

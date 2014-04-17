@@ -479,12 +479,12 @@ sfw_make_session(srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply)
 		return 0;
 	}
 
-        /* brand new or create by force */
-        LIBCFS_ALLOC(sn, sizeof(sfw_session_t));
-        if (sn == NULL) {
-                CERROR ("Dropping RPC (mksn) under memory pressure.\n");
-                return -ENOMEM;
-        }
+	/* brand new or create by force */
+	LIBCFS_ALLOC(sn, sizeof(sfw_session_t));
+	if (sn == NULL) {
+		CERROR("dropping RPC mksn under memory pressure\n");
+		return -ENOMEM;
+	}
 
 	sfw_init_session(sn, request->mksn_sid,
 			 msg->msg_ses_feats, &request->mksn_name[0]);
@@ -1186,9 +1186,9 @@ sfw_add_test (srpc_server_rpc_t *rpc)
                 return 0;
         }
 
-        bat = sfw_bid2batch(request->tsr_bid);
-        if (bat == NULL) {
-                CERROR ("Dropping RPC (%s) from %s under memory pressure.\n",
+	bat = sfw_bid2batch(request->tsr_bid);
+	if (bat == NULL) {
+		CERROR("dropping RPC %s from %s under memory pressure\n",
 			rpc->srpc_scd->scd_svc->sv_name,
                         libcfs_id2str(rpc->srpc_peer));
                 return -ENOMEM;
@@ -1288,7 +1288,7 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 
 	/* Remove timer to avoid racing with it or expiring active session */
 	if (sfw_del_session_timer() != 0) {
-		CERROR("Dropping RPC (%s) from %s: racing with expiry timer.",
+		CERROR("dropping RPC %s from %s: racing with expiry timer\n",
 		       sv->sv_name, libcfs_id2str(rpc->srpc_peer));
 		spin_unlock(&sfw_data.fw_lock);
 		return -EAGAIN;
@@ -1405,7 +1405,7 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 	}
 
 	if (sfw_del_session_timer() != 0) {
-		CERROR("Dropping RPC (%s) from %s: racing with expiry timer",
+		CERROR("dropping RPC %s from %s: racing with expiry timer\n",
 		       sv->sv_name, libcfs_id2str(rpc->srpc_peer));
 		spin_unlock(&sfw_data.fw_lock);
 		return -EAGAIN;

@@ -303,8 +303,10 @@ static int lmv_connect(const struct lu_env *env,
 							obd->obd_proc_entry,
 							NULL, NULL);
 		if (IS_ERR(lmv->targets_proc_entry)) {
-			CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
-			       obd->obd_type->typ_name, obd->obd_name);
+			CERROR("%s: cannot register "
+			       "/proc/fs/lustre/%s/%s/target_obds\n",
+			       obd->obd_name, obd->obd_type->typ_name,
+			       obd->obd_name);
 			lmv->targets_proc_entry = NULL;
 		}
 	}
@@ -390,7 +392,7 @@ static int lmv_init_ea_size(struct obd_export *exp, int easize,
 				     cookiesize, def_cookiesize);
 		if (rc) {
 			CERROR("%s: obd_init_ea_size() failed on MDT target %d:"
-			       " rc = %d.\n", obd->obd_name, i, rc);
+			       " rc = %d\n", obd->obd_name, i, rc);
 			break;
 		}
 	}
@@ -490,8 +492,8 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 						  mdc_obd->obd_type->typ_name,
 						  mdc_obd->obd_name);
 		if (mdc_symlink == NULL) {
-			CERROR("Could not register LMV target "
-			       "/proc/fs/lustre/%s/%s/target_obds/%s.",
+			CERROR("cannot register LMV target "
+			       "/proc/fs/lustre/%s/%s/target_obds/%s\n",
 			       obd->obd_type->typ_name, obd->obd_name,
 			       mdc_obd->obd_name);
 		}

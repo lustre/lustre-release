@@ -854,7 +854,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	    qsd->qsd_acct_failed)
 		RETURN(0);
 
-	LASSERTF(trans->lqt_id_cnt <= QUOTA_MAX_TRANSIDS, "id_cnt=%d",
+	LASSERTF(trans->lqt_id_cnt <= QUOTA_MAX_TRANSIDS, "id_cnt=%d\n",
 		 trans->lqt_id_cnt);
 	/* check whether we already allocated a slot for this id */
 	for (i = 0; i < trans->lqt_id_cnt; i++) {

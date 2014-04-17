@@ -1339,7 +1339,7 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 
 		kunmap(pages[i]);
 	}
-	LASSERTF(lu_pgs == 0, "left = %d", lu_pgs);
+	LASSERTF(lu_pgs == 0, "left = %d\n", lu_pgs);
 }
 #else
 #define mdc_adjust_dirpages(pages, cfs_pgs, lu_pgs) do {} while (0)
@@ -2347,7 +2347,8 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         ENTRY;
 
 	if (!try_module_get(THIS_MODULE)) {
-		CERROR("Can't get module. Is it alive?");
+		CERROR("%s: cannot get module '%s'\n", obd->obd_name,
+		       module_name(THIS_MODULE));
 		return -EINVAL;
 	}
         switch (cmd) {

@@ -354,7 +354,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 	struct agent_action_iterator	*aai = s->private;
 	ENTRY;
 
-	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
+	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
 		 aai->aai_magic);
 
 	aai->aai_ctxt = llog_get_context(mdt2obd_dev(aai->aai_mdt),
@@ -403,7 +403,7 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 	ENTRY;
 
 	aai = s->private;
-	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
+	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
 		 aai->aai_magic);
 
 	/* if rec already printed => skip */
@@ -459,7 +459,7 @@ static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 	int				 rc;
 	ENTRY;
 
-	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
+	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
 		 aai->aai_magic);
 
 	CDEBUG(D_HSM, "show from cat %d index %d eof=%d\n",
@@ -488,7 +488,7 @@ static void mdt_hsm_actions_proc_stop(struct seq_file *s, void *v)
 	struct agent_action_iterator *aai = s->private;
 	ENTRY;
 
-	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X",
+	LASSERTF(aai->aai_magic == AGENT_ACTIONS_IT_MAGIC, "%08X\n",
 		 aai->aai_magic);
 
 	if (aai->aai_ctxt)

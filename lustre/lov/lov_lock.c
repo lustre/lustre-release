@@ -270,7 +270,7 @@ static int lov_subresult(int result, int rc)
         ENTRY;
 
 	LASSERTF(result <= 0 || result == CLO_REPEAT || result == CLO_WAIT,
-		 "result = %d", result);
+		 "result = %d\n", result);
 	LASSERTF(rc <= 0 || rc == CLO_REPEAT || rc == CLO_WAIT,
 		 "rc = %d\n", rc);
         CLASSERT(CLO_WAIT < CLO_REPEAT);

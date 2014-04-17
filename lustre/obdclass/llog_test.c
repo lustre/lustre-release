@@ -558,7 +558,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 	plain_counter = 0;
 	rc = llog_cat_reverse_process(env, llh, plain_print_cb, "foobar");
 	if (rc) {
-		CERROR("5f: reversely process with plain_print_cb failed:"
+		CERROR("5f: reversely process with plain_print_cb failed: "
 		       "%d\n", rc);
 		GOTO(out, rc);
 	}
@@ -610,7 +610,7 @@ static int llog_test_6(const struct lu_env *env, struct obd_device *obd,
 			 NULL /* obd_connect_data */, NULL);
 	if (rc != -EALREADY) {
 		CERROR("6a: connect on connected MGC (%s) failed to return"
-		       " -EALREADY", mgc_obd->obd_name);
+		       " -EALREADY\n", mgc_obd->obd_name);
 		if (rc == 0)
 			obd_disconnect(exp);
 		GOTO(ctxt_release, rc = -EINVAL);

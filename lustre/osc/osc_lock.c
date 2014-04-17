@@ -1752,7 +1752,7 @@ int osc_lock_init(const struct lu_env *env,
 		if (clk->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
 			clk->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
-		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64"\n",
+		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64,
 				lock, clk, clk->ols_flags);
 
 		result = 0;

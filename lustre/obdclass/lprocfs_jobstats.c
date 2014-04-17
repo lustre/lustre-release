@@ -137,7 +137,7 @@ static void job_stat_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 
 static void job_stat_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 {
-	CERROR("Should not have any items!");
+	CERROR("should not have any items\n");
 }
 
 static cfs_hash_ops_t job_stats_hash_ops = {

@@ -56,7 +56,6 @@ static struct qsd_upd_rec *qsd_upd_alloc(struct qsd_qtype_info *qqi,
 
 	OBD_SLAB_ALLOC_PTR_GFP(upd, upd_kmem, GFP_NOFS);
 	if (upd == NULL) {
-		CERROR("Failed to allocate upd");
 		return NULL;
 	}
 
@@ -427,7 +426,7 @@ static int qsd_upd_thread(void *arg)
 
 	rc = lu_env_init(env, LCT_DT_THREAD);
 	if (rc) {
-		CERROR("%s: Fail to init env.", qsd->qsd_svname);
+		CERROR("%s: cannot init env: rc = %d\n", qsd->qsd_svname, rc);
 		OBD_FREE_PTR(env);
 		RETURN(rc);
 	}
@@ -500,7 +499,7 @@ int qsd_start_upd_thread(struct qsd_instance *qsd)
 	task = kthread_run(qsd_upd_thread, (void *)qsd,
 			   "lquota_wb_%s", qsd->qsd_svname);
 	if (IS_ERR(task)) {
-		CERROR("Fail to start quota update thread. rc: %ld\n",
+		CERROR("fail to start quota update thread: rc = %ld\n",
 			PTR_ERR(task));
 		thread_set_flags(thread, SVC_STOPPED);
 		RETURN(PTR_ERR(task));

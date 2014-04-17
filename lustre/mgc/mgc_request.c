@@ -365,7 +365,8 @@ static int config_log_add(struct obd_device *obd, char *logname,
 			*ptr = 0;
 		}
 		else {
-			CERROR("sptlrpc log name not correct: %s", seclogname);
+			CERROR("%s: sptlrpc log name not correct, %s: "
+			       "rc = %d\n", obd->obd_name, seclogname, -EINVAL);
 			config_log_put(cld);
 			RETURN(-EINVAL);
 		}

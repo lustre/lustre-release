@@ -558,7 +558,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(obj->oo_inode == NULL);
-	LASSERTF(fid_is_sane(fid) || fid_is_idif(fid), DFID, PFID(fid));
+	LASSERTF(fid_is_sane(fid) || fid_is_idif(fid), DFID"\n", PFID(fid));
 
 	dev = osd_dev(ldev);
 	scrub = &dev->od_scrub;
@@ -1937,8 +1937,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 		rc = ll_vfs_dq_transfer(inode, &iattr);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is quota "
-			       "enforcement enabled on the ldiskfs filesystem?",
-			       inode->i_sb->s_id, rc);
+			       "enforcement enabled on the ldiskfs "
+			       "filesystem?\n", inode->i_sb->s_id, rc);
 			return rc;
 		}
 	}
@@ -2250,7 +2250,7 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
                  * should not happen since quota enforcement is no longer
                  * enabled on ldiskfs (lquota takes care of it).
                  */
-                LASSERTF(result == 0, "%d", result);
+		LASSERTF(result == 0, "%d\n", result);
 		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
         }
 
@@ -4380,7 +4380,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
 		RETURN(-EACCES);
 
-	LASSERTF(fid_is_sane(fid), "fid"DFID" is insane!", PFID(fid));
+	LASSERTF(fid_is_sane(fid), "fid"DFID" is insane!\n", PFID(fid));
 
 	rc = osd_remote_fid(env, osd, fid);
 	if (rc < 0) {

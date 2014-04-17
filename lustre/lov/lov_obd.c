@@ -206,13 +206,13 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 						  osc_obd->obd_type->typ_name,
 						  osc_obd->obd_name);
 		if (osc_symlink == NULL) {
-			CERROR("could not register LOV target "
-			       "/proc/fs/lustre/%s/%s/target_obds/%s.",
+			CERROR("cannot register LOV target "
+			       "/proc/fs/lustre/%s/%s/target_obds/%s\n",
 			       obd->obd_type->typ_name, obd->obd_name,
 			       osc_obd->obd_name);
-                }
-        }
-        RETURN(0);
+		}
+	}
+	RETURN(0);
 }
 
 static int lov_connect(const struct lu_env *env,
@@ -246,7 +246,8 @@ static int lov_connect(const struct lu_env *env,
 						       obd->obd_proc_entry,
 						       NULL, NULL);
 	if (IS_ERR(lov->targets_proc_entry)) {
-		CERROR("%s: could not register /proc/fs/lustre/%s/%s/target_obds.",
+		CERROR("%s: cannot register "
+		       "/proc/fs/lustre/%s/%s/target_obds\n",
 		       obd->obd_name, obd->obd_type->typ_name, obd->obd_name);
 		lov->targets_proc_entry = NULL;
 	}
@@ -440,13 +441,14 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
                         lov->desc.ld_active_tgt_count--;
                         lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
                 }
-        } else {
-                CERROR("Unknown event(%d) for uuid %s", ev, uuid->uuid);
-        }
+	} else {
+		CERROR("%s: unknown event %d for uuid %s\n", obd->obd_name,
+		       ev, uuid->uuid);
+	}
 
  out:
-        obd_putref(obd);
-        RETURN(index);
+	obd_putref(obd);
+	RETURN(index);
 }
 
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
@@ -2297,9 +2299,10 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
             oqctl->qc_cmd != Q_INITQUOTA &&
             oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
             oqctl->qc_cmd != Q_FINVALIDATE) {
-                CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
-                RETURN(-EFAULT);
-        }
+		CERROR("%s: bad quota opc %x for lov obd\n",
+		       obd->obd_name, oqctl->qc_cmd);
+		RETURN(-EFAULT);
+	}
 
         /* for lov tgt */
         obd_getref(obd);

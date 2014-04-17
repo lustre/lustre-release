@@ -163,7 +163,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	if (remote) {
 		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_mapped_uid))) {
 			CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
-			CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
 			RETURN(-EACCES);
 		}
 

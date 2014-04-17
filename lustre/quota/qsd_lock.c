@@ -221,7 +221,7 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 		break;
 	}
 	default:
-		LASSERTF(0, "invalid flags for blocking ast %d", flag);
+		LASSERTF(0, "invalid flags for blocking ast %d\n", flag);
 	}
 
 	RETURN(rc);
@@ -363,7 +363,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 		break;
 	}
 	default:
-		LASSERTF(0, "invalid flags for blocking ast %d", flag);
+		LASSERTF(0, "invalid flags for blocking ast %d\n", flag);
 	}
 
 	RETURN(rc);

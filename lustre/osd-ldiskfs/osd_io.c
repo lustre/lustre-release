@@ -1509,9 +1509,9 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
                                err);
                         break;
                 }
-                LASSERTF(boffs + size <= bh->b_size,
-                         "boffs %d size %d bh->b_size %lu",
-                         boffs, size, (unsigned long)bh->b_size);
+		LASSERTF(boffs + size <= bh->b_size,
+			 "boffs %d size %d bh->b_size %lu\n",
+			 boffs, size, (unsigned long)bh->b_size);
                 memcpy(bh->b_data + boffs, buf, size);
                 err = ldiskfs_journal_dirty_metadata(handle, bh);
                 if (err)

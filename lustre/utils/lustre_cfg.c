@@ -243,11 +243,11 @@ int jt_obd_cleanup(int argc, char **argv)
                         flags[flag_cnt++] = force;
                 } else if (strcmp(argv[n], "failover") == 0) {
                         flags[flag_cnt++] = failover;
-                } else {
-                        fprintf(stderr, "unknown option: %s", argv[n]);
-                        return CMD_HELP;
-                }
-        }
+		} else {
+			fprintf(stderr, "unknown option: %s\n", argv[n]);
+			return CMD_HELP;
+		}
+	}
 
         if (flag_cnt) {
                 lustre_cfg_bufs_set_string(&bufs, 1, flags);

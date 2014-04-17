@@ -1183,7 +1183,8 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	LASSERT(d->opd_dt_dev.dd_ops == &osp_dt_ops);
 
 	if (!try_module_get(THIS_MODULE)) {
-		CERROR("%s: can't get module. Is it alive?", obd->obd_name);
+		CERROR("%s: cannot get module '%s'\n", obd->obd_name,
+		       module_name(THIS_MODULE));
 		return -EINVAL;
 	}
 

@@ -678,7 +678,7 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 			rc = dt_insert(env, obj, (struct dt_rec *)&qti->qti_rec,
 				       key, th, BYPASS_CAPA, 1);
 			LASSERTF(rc == 0, "failed to insert record in quota "
-			         "index "DFID,
+				 "index "DFID"\n",
 				 PFID(lu_object_fid(&obj->do_lu)));
 			GOTO(out, rc);
 		}
