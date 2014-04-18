@@ -785,9 +785,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	if (mdt_object_remote(o)) {
 		/* This object is located on remote node.*/
-		/* Return -EIO for old client */
+		/* Return -ENOTSUPP for old client */
 		if (!mdt_is_dne_client(req->rq_export))
-			GOTO(out, rc = -EIO);
+			GOTO(out, rc = -ENOTSUPP);
 
 		repbody->fid1 = *mdt_object_fid(o);
 		repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
@@ -897,12 +897,19 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         mdt_dump_lmm(D_INFO, ma->ma_lmm, repbody->valid);
                 }
 		if (ma->ma_valid & MA_LMV) {
+			/* Return -ENOTSUPP for old client */
+			if (!mdt_is_striped_client(req->rq_export))
+				RETURN(-ENOTSUPP);
+
 			LASSERT(S_ISDIR(la->la_mode));
 			mdt_dump_lmv(D_INFO, ma->ma_lmv);
 			repbody->eadatasize = ma->ma_lmv_size;
 			repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_MEA);
 		}
 		if (ma->ma_valid & MA_LMV_DEF) {
+			/* Return -ENOTSUPP for old client */
+			if (!mdt_is_striped_client(req->rq_export))
+				RETURN(-ENOTSUPP);
 			LASSERT(S_ISDIR(la->la_mode));
 			repbody->eadatasize = ma->ma_lmv_size;
 			repbody->valid |= (OBD_MD_FLDIREA|OBD_MD_DEFAULT_MEA);

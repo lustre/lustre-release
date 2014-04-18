@@ -1685,6 +1685,14 @@ test_110a () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
+	local num
+
+	#prepare for 110 test, which need set striped dir on remote MDT.
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num \
+			lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 \
+				2>/dev/null
+	done
 
 	mkdir -p $DIR/$tdir
 	drop_request "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||

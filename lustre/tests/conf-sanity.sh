@@ -1694,6 +1694,10 @@ t32_test() {
 			error_noexit "mount mdt1 failed"
 			return 1
 		}
+
+		$r $LCTL set_param -n mdt.${fsname}*.enable_remote_dir=1 ||
+			error_noexit "enable remote dir create failed"
+
 		shall_cleanup_mdt1=true
 	fi
 
