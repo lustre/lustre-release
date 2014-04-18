@@ -3328,7 +3328,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 
-	seq_printf(m, "status: \n");
+	seq_printf(m, "status: ");
 	if (obd->obd_max_recoverable_clients == 0) {
 		seq_printf(m, "INACTIVE\n");
 		goto out;
