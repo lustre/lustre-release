@@ -1262,6 +1262,7 @@ struct md_ops {
 
         int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
                                  struct lu_fid *, __u64 *bits);
+
 #define MD_STATS_LAST_OP m_revalidate_lock
 
 	int (*m_getstatus)(struct obd_export *, struct lu_fid *,
@@ -1324,6 +1325,11 @@ struct md_ops {
 	int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
 				 struct obd_capa *, __u32,
 				 struct ptlrpc_request **);
+
+	int (*m_get_fid_from_lsm)(struct obd_export *,
+				  const struct lmv_stripe_md *,
+				  const char *name, int namelen,
+				  struct lu_fid *fid);
 };
 
 struct lsm_operations {

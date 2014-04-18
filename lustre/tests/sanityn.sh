@@ -2811,6 +2811,34 @@ test_80() {
 }
 run_test 80 "migrate directory when some children is being opened"
 
+test_81() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	rm -rf $DIR1/$tdir
+
+	mkdir -p $DIR1/$tdir
+
+	$LFS setdirstripe -i0 -c$MDSCOUNT  $DIR1/$tdir/d0
+	$LFS setdirstripe -i0 -c$MDSCOUNT  $DIR1/$tdir/d1
+
+	cd $DIR1/$tdir
+	touch d0/0	|| error "create 0 failed"
+	mv d0/0	d1/0	|| error "rename d0/0 d1/0 failed"
+	stat d0/0	&& error "stat mv filed succeed"
+	mv $DIR2/$tdir/d1/0 $DIR2/$tdir/d0/0 || "rename d1/0 d0/0 failed"
+	stat d0/0	|| error "stat failed"
+
+	local t=$(ls -ai $DIR1/$tdir/d0 | sort -u | wc -l)
+
+	if [ $t -ne 3 ]; then
+		ls -ai $DIR1/$tdir/d0
+		error "expect 3 get $t"
+	fi
+
+	return 0
+}
+run_test 81 "rename and stat under striped directory"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

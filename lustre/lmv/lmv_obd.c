@@ -3275,6 +3275,22 @@ int lmv_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         RETURN(rc);
 }
 
+int lmv_get_fid_from_lsm(struct obd_export *exp,
+			 const struct lmv_stripe_md *lsm,
+			 const char *name, int namelen, struct lu_fid *fid)
+{
+	const struct lmv_oinfo *oinfo;
+
+	LASSERT(lsm != NULL);
+	oinfo = lsm_name_to_stripe_info(lsm, name, namelen);
+	if (IS_ERR(oinfo))
+		return PTR_ERR(oinfo);
+
+	*fid = oinfo->lmo_fid;
+
+	RETURN(0);
+}
+
 /**
  * For lmv, only need to send request to master MDT, and the master MDT will
  * process with other slave MDTs. The only exception is Q_GETOQUOTA for which
@@ -3449,7 +3465,8 @@ struct md_ops lmv_md_ops = {
         .m_unpack_capa          = lmv_unpack_capa,
         .m_get_remote_perm      = lmv_get_remote_perm,
         .m_intent_getattr_async = lmv_intent_getattr_async,
-        .m_revalidate_lock      = lmv_revalidate_lock
+	.m_revalidate_lock      = lmv_revalidate_lock,
+	.m_get_fid_from_lsm	= lmv_get_fid_from_lsm,
 };
 
 int __init lmv_init(void)
