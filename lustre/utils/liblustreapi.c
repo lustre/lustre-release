@@ -817,7 +817,7 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 	return rc;
 }
 
-int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
+int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 			  int stripe_count, int stripe_pattern,
 			  const char *pool_name)
 {
@@ -859,6 +859,7 @@ int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 	data.ioc_inllen1 = strlen(filename) + 1;
 	data.ioc_inlbuf2 = (char *)&lmu;
 	data.ioc_inllen2 = sizeof(struct lmv_user_md);
+	data.ioc_type = mode;
 	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc,

@@ -2660,6 +2660,52 @@ test_33d() {
 }
 run_test 33d "openfile with 444 modes and malformed flags under remote dir"
 
+test_33e() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+
+	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -i1 -c2 $DIR/$tdir/striped_dir1
+	mkdir $DIR/$tdir/local_dir
+
+	local s0_mode=$(stat -c%f $DIR/$tdir/striped_dir)
+	local s1_mode=$(stat -c%f $DIR/$tdir/striped_dir1)
+	local l_mode=$(stat -c%f $DIR/$tdir/local_dir)
+
+	[ "$l_mode" = "$s0_mode" -a "$l_mode" = "$s1_mode" ] ||
+		error "mkdir $l_mode striped0 $s0_mode striped1 $s1_mode"
+
+	rmdir $DIR/$tdir/* || error "rmdir failed"
+
+	umask 777
+	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -i1 -c2 $DIR/$tdir/striped_dir1
+	mkdir $DIR/$tdir/local_dir
+
+	s0_mode=$(stat -c%f $DIR/$tdir/striped_dir)
+	s1_mode=$(stat -c%f $DIR/$tdir/striped_dir1)
+	l_mode=$(stat -c%f $DIR/$tdir/local_dir)
+
+	[ "$l_mode" = "$s0_mode" -a "$l_mode" = "$s1_mode" ] ||
+		error "mkdir $l_mode striped0 $s0_mode striped1 $s1_mode 777"
+
+	rmdir $DIR/$tdir/* || error "rmdir(umask 777) failed"
+
+	umask 000
+	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -i1 -c2 $DIR/$tdir/striped_dir1
+	mkdir $DIR/$tdir/local_dir
+
+	s0_mode=$(stat -c%f $DIR/$tdir/striped_dir)
+	s1_mode=$(stat -c%f $DIR/$tdir/striped_dir1)
+	l_mode=$(stat -c%f $DIR/$tdir/local_dir)
+
+	[ "$l_mode" = "$s0_mode" -a "$l_mode" = "$s1_mode" ] ||
+		error "mkdir $l_mode striped0 $s0_mode striped1 $s1_mode 0"
+}
+run_test 33e "mkdir and striped directory should have same mode"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
@@ -12597,14 +12643,26 @@ test_238() {
 }
 run_test 238 "Verify linkea consistency"
 
+cleanup_test_300() {
+	trap 0
+	umask $SAVE_UMASK
+}
 test_striped_dir() {
 	local mdt_index=$1
 	local stripe_count
 	local stripe_index
 
 	mkdir -p $DIR/$tdir
-	$LFS setdirstripe -i $mdt_index -c 2 -t all_char $DIR/$tdir/striped_dir ||
+
+	SAVE_UMASK=$(umask)
+	trap cleanup_test_300 RETURN EXIT
+
+	$LFS setdirstripe -i $mdt_index -c 2 -t all_char -m 755 \
+						$DIR/$tdir/striped_dir ||
 		error "set striped dir error"
+
+	local mode=$(stat -c%a $DIR/$tdir/striped_dir)
+	[ "$mode" = "755" ] || error "expect 755 got $mode"
 
 	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
 	if [ "$stripe_count" != "2" ]; then
@@ -12640,6 +12698,9 @@ test_striped_dir() {
 
 	rmdir $DIR/$tdir/striped_dir ||
 		error "rmdir striped dir error"
+
+	cleanup_test_300
+
 	true
 }
 
