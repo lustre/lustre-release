@@ -812,13 +812,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (mdt_body_has_lov(la, reqbody)) {
                 if (ma->ma_valid & MA_LOV) {
                         LASSERT(ma->ma_lmm_size);
-                        mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         if (S_ISDIR(la->la_mode))
                                 repbody->valid |= OBD_MD_FLDIREA;
                         else
-                                repbody->valid |= OBD_MD_FLEASIZE;
-                }
+				repbody->valid |= OBD_MD_FLEASIZE;
+			mdt_dump_lmm(D_INFO, ma->ma_lmm, repbody->valid);
+		}
                 if (ma->ma_valid & MA_LMV) {
                         LASSERT(S_ISDIR(la->la_mode));
                         repbody->eadatasize = ma->ma_lmv_size;

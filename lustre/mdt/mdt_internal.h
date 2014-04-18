@@ -834,7 +834,7 @@ struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdt_buf_const(const struct lu_env *env,
                                    const void *area, ssize_t len);
 
-void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
+void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid);
 
 int mdt_check_ucred(struct mdt_thread_info *);
 int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
