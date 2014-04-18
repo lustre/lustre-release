@@ -151,6 +151,9 @@ static int lfs_mv(int argc, char **argv);
 	"\n"								\
 	"\tblock:        Block file access during data migration\n"	\
 
+static const char	*progname;
+static bool		 file_lease_supported = true;
+
 /* all available commands */
 command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
@@ -343,8 +346,7 @@ command_t cmdlist[] = {
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe, 0, "migrate file from one OST layout to "
-	 "another (may be not safe with concurrent writes).\n"
-	 MIGRATE_USAGE},
+	 "another.\n" MIGRATE_USAGE},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs.\n"
 	 "usage: mv <directory|filename> [--mdt-index|-M] <mdt_index> "
@@ -357,31 +359,269 @@ command_t cmdlist[] = {
 	{ 0, 0, 0, NULL }
 };
 
+
 #define MIGRATION_BLOCKS 1
+
+/**
+ * Internal helper for migrate_copy_data(). Check lease and report error if
+ * need be.
+ *
+ * \param[in]  fd           File descriptor on which to check the lease.
+ * \param[out] lease_broken Set to true if the lease was broken.
+ * \param[in]  group_locked Whether a group lock was taken or not.
+ * \param[in]  path         Name of the file being processed, for error
+ *			    reporting
+ *
+ * \retval 0       Migration can keep on going.
+ * \retval -errno  Error occurred, abort migration.
+ */
+static int check_lease(int fd, bool *lease_broken, bool group_locked,
+		       const char *path)
+{
+	int rc;
+
+	if (!file_lease_supported)
+		return 0;
+
+	rc = llapi_lease_check(fd);
+	if (rc > 0)
+		return 0; /* llapi_check_lease returns > 0 on success. */
+
+	if (!group_locked) {
+		fprintf(stderr, "%s: cannot migrate '%s': file busy\n",
+			progname, path);
+		rc = rc ? rc : -EAGAIN;
+	} else {
+		fprintf(stderr, "%s: external attempt to access file '%s' "
+			"blocked until migration ends.\n", progname, path);
+		rc = 0;
+	}
+	*lease_broken = true;
+	return rc;
+}
+
+static int migrate_copy_data(int fd_src, int fd_dst, size_t buf_size,
+			     bool group_locked, const char *fname)
+{
+	void	*buf = NULL;
+	ssize_t	 rsize = -1;
+	ssize_t	 wsize = 0;
+	size_t	 rpos = 0;
+	size_t	 wpos = 0;
+	off_t	 bufoff = 0;
+	int	 rc;
+	bool	 lease_broken = false;
+
+	/* Use a page-aligned buffer for direct I/O */
+	rc = posix_memalign(&buf, getpagesize(), buf_size);
+	if (rc != 0)
+		return -rc;
+
+	while (1) {
+		/* read new data only if we have written all
+		 * previously read data */
+		if (wpos == rpos) {
+			if (!lease_broken) {
+				rc = check_lease(fd_src, &lease_broken,
+						 group_locked, fname);
+				if (rc < 0)
+					goto out;
+			}
+			rsize = read(fd_src, buf, buf_size);
+			if (rsize < 0) {
+				rc = -errno;
+				fprintf(stderr, "%s: %s: read failed: %s\n",
+					progname, fname, strerror(-rc));
+				goto out;
+			}
+			rpos += rsize;
+			bufoff = 0;
+		}
+		/* eof ? */
+		if (rsize == 0)
+			break;
+
+		wsize = write(fd_dst, buf + bufoff, rpos - wpos);
+		if (wsize < 0) {
+			rc = -errno;
+			fprintf(stderr,
+				"%s: %s: write failed on volatile: %s\n",
+				progname, fname, strerror(-rc));
+			goto out;
+		}
+		wpos += wsize;
+		bufoff += wsize;
+	}
+
+	rc = fsync(fd_dst);
+	if (rc < 0) {
+		rc = -errno;
+		fprintf(stderr, "%s: %s: fsync failed: %s\n",
+			progname, fname, strerror(-rc));
+	}
+
+out:
+	free(buf);
+	return rc;
+}
+
+static int migrate_copy_timestamps(int fdv, const struct stat *st)
+{
+	struct timeval	tv[2] = {
+		{.tv_sec = st->st_atime},
+		{.tv_sec = st->st_mtime}
+	};
+
+	return futimes(fdv, tv);
+}
+
+static int migrate_block(int fd, int fdv, const struct stat *st,
+			 size_t buf_size, const char *name)
+{
+	__u64	dv1;
+	int	gid;
+	int	rc;
+	int	rc2;
+
+	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: cannot get dataversion: %s\n",
+			progname, name, strerror(-rc));
+		return rc;
+	}
+
+	do
+		gid = random();
+	while (gid == 0);
+
+	/* The grouplock blocks all concurrent accesses to the file.
+	 * It has to be taken after llapi_get_data_version as it would
+	 * block it too. */
+	rc = llapi_group_lock(fd, gid);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: cannot get group lock: %s\n",
+			progname, name, strerror(-rc));
+		return rc;
+	}
+
+	rc = migrate_copy_data(fd, fdv, buf_size, true, name);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: data copy failed\n", progname, name);
+		goto out_unlock;
+	}
+
+	/* Make sure we keep original atime/mtime values */
+	rc = migrate_copy_timestamps(fdv, st);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: timestamp copy failed\n",
+			progname, name);
+		goto out_unlock;
+	}
+
+	/* swap layouts
+	 * for a migration we need to check data version on file did
+	 * not change.
+	 *
+	 * Pass in gid=0 since we already own grouplock. */
+	rc = llapi_fswap_layouts_grouplock(fd, fdv, dv1, 0, 0,
+					   SWAP_LAYOUTS_CHECK_DV1);
+	if (rc == -EAGAIN) {
+		fprintf(stderr, "%s: %s: dataversion changed during copy, "
+			"migration aborted\n", progname, name);
+		goto out_unlock;
+	} else if (rc < 0) {
+		fprintf(stderr, "%s: %s: cannot swap layouts: %s\n", progname,
+			name, strerror(-rc));
+		goto out_unlock;
+	}
+
+out_unlock:
+	rc2 = llapi_group_unlock(fd, gid);
+	if (rc2 < 0 && rc == 0) {
+		fprintf(stderr, "%s: %s: putting group lock failed: %s\n",
+			progname, name, strerror(-rc2));
+		rc = rc2;
+	}
+
+	return rc;
+}
+
+static int migrate_nonblock(int fd, int fdv, const struct stat *st,
+			    size_t buf_size, const char *name)
+{
+	__u64	dv1;
+	__u64	dv2;
+	int	rc;
+
+	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: cannot get data version: %s\n",
+			progname, name, strerror(-rc));
+		return rc;
+	}
+
+	rc = migrate_copy_data(fd, fdv, buf_size, false, name);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: data copy failed\n", progname, name);
+		return rc;
+	}
+
+	rc = llapi_get_data_version(fd, &dv2, LL_DV_RD_FLUSH);
+	if (rc != 0) {
+		fprintf(stderr, "%s: %s: cannot get data version: %s\n",
+			progname, name, strerror(-rc));
+		return rc;
+	}
+
+	if (dv1 != dv2) {
+		rc = -EAGAIN;
+		fprintf(stderr, "%s: %s: data version changed during "
+				"migration\n",
+			progname, name);
+		return rc;
+	}
+
+	/* Make sure we keep original atime/mtime values */
+	rc = migrate_copy_timestamps(fdv, st);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: timestamp copy failed\n",
+			progname, name);
+		return rc;
+	}
+
+	/* Atomically put lease, swap layouts and close.
+	 * for a migration we need to check data version on file did
+	 * not change. */
+	rc = llapi_fswap_layouts(fd, fdv, 0, 0, SWAP_LAYOUTS_CLOSE);
+	if (rc < 0) {
+		fprintf(stderr, "%s: %s: cannot swap layouts: %s\n",
+			progname, name, strerror(-rc));
+		return rc;
+	}
+
+	return 0;
+}
 
 static int lfs_migrate(char *name, __u64 migration_flags,
 		       struct llapi_stripe_param *param)
 {
-	int			 fd, fdv;
+	int			 fd = -1;
+	int			 fdv = -1;
 	char			 volatile_file[PATH_MAX +
 						LUSTRE_VOLATILE_HDR_LEN + 4];
 	char			 parent[PATH_MAX];
 	char			*ptr;
 	int			 rc;
-	__u64			 dv1;
 	struct lov_user_md	*lum = NULL;
-	int			 lumsz;
-	int			 bufsz;
-	void			*buf = NULL;
-	int			 rsize, wsize;
-	__u64			 rpos, wpos, bufoff;
-	int			 gid;
-	int			 have_gl = 0;
-	struct stat		 st, stv;
+	int			 lum_size;
+	int			 buf_size;
+	bool			 have_lease_rdlck = false;
+	struct stat		 st;
+	struct stat		 stv;
 
 	/* find the right size for the IO and allocate the buffer */
-	lumsz = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
-	lum = malloc(lumsz);
+	lum_size = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
+	lum = malloc(lum_size);
 	if (lum == NULL) {
 		rc = -ENOMEM;
 		goto free;
@@ -393,26 +633,48 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	 * in case of a real error, a later call will fail with better
 	 * error management */
 	if (rc < 0)
-		bufsz = 1024*1024;
+		buf_size = 1024 * 1024;
 	else
-		bufsz = lum->lmm_stripe_size;
-	rc = posix_memalign(&buf, getpagesize(), bufsz);
-	if (rc != 0) {
-		rc = -rc;
+		buf_size = lum->lmm_stripe_size;
+
+	/* open file, direct io */
+	/* even if the file is only read, WR mode is nedeed to allow
+	 * layout swap on fd */
+	fd = open(name, O_RDWR | O_DIRECT);
+	if (fd == -1) {
+		rc = -errno;
+		fprintf(stderr, "%s: %s: cannot open: %s\n", progname, name,
+			strerror(-rc));
 		goto free;
+	}
+
+	if (file_lease_supported) {
+		rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+		if (rc == -EOPNOTSUPP) {
+			/* Older servers do not support file lease.
+			 * Disable related checks. This opens race conditions
+			 * as explained in LU-4840 */
+			file_lease_supported = false;
+		} else if (rc < 0) {
+			fprintf(stderr, "%s: %s: cannot get open lease: %s\n",
+				progname, name, strerror(-rc));
+			goto error;
+		} else {
+			have_lease_rdlck = true;
+		}
 	}
 
 	/* search for file directory pathname */
 	if (strlen(name) > sizeof(parent)-1) {
 		rc = -E2BIG;
-		goto free;
+		goto error;
 	}
 	strncpy(parent, name, sizeof(parent));
 	ptr = strrchr(parent, '/');
 	if (ptr == NULL) {
 		if (getcwd(parent, sizeof(parent)) == NULL) {
 			rc = -errno;
-			goto free;
+			goto error;
 		}
 	} else {
 		if (ptr == parent)
@@ -420,11 +682,12 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		else
 			*ptr = '\0';
 	}
+
 	rc = snprintf(volatile_file, sizeof(volatile_file), "%s/%s::", parent,
 		      LUSTRE_VOLATILE_HDR);
 	if (rc >= sizeof(volatile_file)) {
 		rc = -E2BIG;
-		goto free;
+		goto error;
 	}
 
 	/* create, open a volatile file, use caching (ie no directio) */
@@ -434,20 +697,10 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 				    param);
 	if (fdv < 0) {
 		rc = fdv;
-		fprintf(stderr, "cannot create volatile file in %s (%s)\n",
-			parent, strerror(-rc));
-		goto free;
-	}
-
-	/* open file, direct io */
-	/* even if the file is only read, WR mode is nedeed to allow
-	 * layout swap on fd */
-	fd = open(name, O_RDWR | O_DIRECT);
-	if (fd == -1) {
-		rc = -errno;
-		fprintf(stderr, "cannot open %s (%s)\n", name, strerror(-rc));
-		close(fdv);
-		goto free;
+		fprintf(stderr, "%s: %s: cannot create volatile file in"
+				" directory: %s\n",
+			progname, parent, strerror(-rc));
+		goto error;
 	}
 
 	/* Not-owner (root?) special case.
@@ -457,137 +710,53 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	rc = fstat(fd, &st);
 	if (rc != 0) {
 		rc = -errno;
-		fprintf(stderr, "cannot stat %s (%s)\n", name,
+		fprintf(stderr, "%s: %s: cannot stat: %s\n", progname, name,
 			strerror(errno));
 		goto error;
 	}
 	rc = fstat(fdv, &stv);
 	if (rc != 0) {
 		rc = -errno;
-		fprintf(stderr, "cannot stat %s (%s)\n", volatile_file,
-			strerror(errno));
+		fprintf(stderr, "%s: %s: cannot stat: %s\n", progname,
+			volatile_file, strerror(errno));
 		goto error;
 	}
 	if (st.st_uid != stv.st_uid || st.st_gid != stv.st_gid) {
 		rc = fchown(fdv, st.st_uid, st.st_gid);
 		if (rc != 0) {
 			rc = -errno;
-			fprintf(stderr, "cannot chown %s (%s)\n", name,
-				strerror(errno));
+			fprintf(stderr, "%s: %s: cannot chown: %s\n", progname,
+				name, strerror(errno));
 			goto error;
 		}
 	}
 
-	/* get file data version */
-	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
-	if (rc != 0) {
-		fprintf(stderr, "cannot get dataversion on %s (%s)\n",
-			name, strerror(-rc));
-		goto error;
-	}
-
-	do
-		gid = random();
-	while (gid == 0);
-	if (migration_flags & MIGRATION_BLOCKS) {
-		/* take group lock to limit concurrent access
-		 * this will be no more needed when exclusive access will
-		 * be implemented (see LU-2919) */
-		/* group lock is taken after data version read because it
-		 * blocks data version call */
-		rc = llapi_group_lock(fd, gid);
-		if (rc < 0) {
-			fprintf(stderr, "cannot get group lock on %s (%s)\n",
-				name, strerror(-rc));
-			goto error;
+	if (migration_flags & MIGRATION_BLOCKS || !file_lease_supported) {
+		/* Blocking mode, forced if servers do not support file lease */
+		rc = migrate_block(fd, fdv, &st, buf_size, name);
+	} else {
+		rc = migrate_nonblock(fd, fdv, &st, buf_size, name);
+		if (rc == 0) {
+			have_lease_rdlck = false;
+			fdv = -1; /* The volatile file is closed as we put the
+				   * lease in non-blocking mode. */
 		}
-		have_gl = 1;
 	}
-
-	/* copy data */
-	rpos = 0;
-	wpos = 0;
-	bufoff = 0;
-	rsize = -1;
-	do {
-		/* read new data only if we have written all
-		 * previously read data */
-		if (wpos == rpos) {
-			rsize = read(fd, buf, bufsz);
-			if (rsize < 0) {
-				rc = -errno;
-				fprintf(stderr, "read failed on %s"
-					" (%s)\n", name,
-					strerror(-rc));
-				goto error;
-			}
-			rpos += rsize;
-			bufoff = 0;
-		}
-		/* eof ? */
-		if (rsize == 0)
-			break;
-		wsize = write(fdv, buf + bufoff, rpos - wpos);
-		if (wsize < 0) {
-			rc = -errno;
-			fprintf(stderr, "write failed on volatile"
-				" for %s (%s)\n", name, strerror(-rc));
-			goto error;
-		}
-		wpos += wsize;
-		bufoff += wsize;
-	} while (1);
-
-	/* flush data */
-	fsync(fdv);
-
-	if (migration_flags & MIGRATION_BLOCKS) {
-		/* give back group lock */
-		rc = llapi_group_unlock(fd, gid);
-		if (rc < 0)
-			fprintf(stderr, "cannot put group lock on %s (%s)\n",
-				name, strerror(-rc));
-		have_gl = 0;
-	}
-
-	/* swap layouts
-	 * for a migration we need to:
-	 * - check data version on file did not change
-	 * - keep file mtime
-	 * - keep file atime
-	 */
-	rc = llapi_fswap_layouts(fd, fdv, dv1, 0,
-				 SWAP_LAYOUTS_CHECK_DV1 |
-				 SWAP_LAYOUTS_KEEP_MTIME |
-				 SWAP_LAYOUTS_KEEP_ATIME);
-	if (rc == -EAGAIN) {
-		fprintf(stderr, "%s: dataversion changed during copy, "
-			"migration aborted\n", name);
-		goto error;
-	}
-	if (rc != 0)
-		fprintf(stderr, "%s: swap layout to new file failed: %s\n",
-			name, strerror(-rc));
 
 error:
-	/* give back group lock */
-	if ((migration_flags & MIGRATION_BLOCKS) && have_gl) {
-		int rc2;
+	if (have_lease_rdlck)
+		llapi_lease_put(fd);
 
-		/* we keep the original error in rc */
-		rc2 = llapi_group_unlock(fd, gid);
-		if (rc2 < 0)
-			fprintf(stderr, "cannot put group lock on %s (%s)\n",
-				name, strerror(-rc2));
-	}
+	if (fd >= 0)
+		close(fd);
 
-	close(fdv);
-	close(fd);
+	if (fdv >= 0)
+		close(fdv);
+
 free:
 	if (lum)
 		free(lum);
-	if (buf)
-		free(buf);
+
 	return rc;
 }
 
@@ -681,6 +850,7 @@ static int lfs_setstripe(int argc, char **argv)
 	struct llapi_stripe_param	*param;
 	char				*fname;
 	int				 result;
+	int				 result2 = 0;
 	unsigned long long		 st_size;
 	int				 st_offset, st_count;
 	char				*end;
@@ -746,7 +916,7 @@ static int lfs_setstripe(int argc, char **argv)
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr, "--block is valid only for"
-						" migrate mode");
+						" migrate mode\n");
 				return CMD_HELP;
 			}
 			migration_flags |= MIGRATION_BLOCKS;
@@ -881,8 +1051,10 @@ static int lfs_setstripe(int argc, char **argv)
 		memcpy(param->lsp_osts, osts, sizeof(*osts) * nr_osts);
 	}
 
-	do {
-		if (!migrate_mode) {
+	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
+		if (migrate_mode) {
+			result = lfs_migrate(fname, migration_flags, param);
+		} else {
 			result = llapi_file_open_param(fname,
 						       O_CREAT | O_WRONLY,
 						       0644, param);
@@ -890,21 +1062,21 @@ static int lfs_setstripe(int argc, char **argv)
 				close(result);
 				result = 0;
 			}
-		} else {
-			result = lfs_migrate(fname, migration_flags, param);
 		}
 		if (result) {
+			/* Save the first error encountered. */
+			if (result2 == 0)
+				result2 = result;
 			fprintf(stderr,
 				"error: %s: %s stripe file '%s' failed\n",
 				argv[0], migrate_mode ? "migrate" : "create",
 				fname);
-			break;
+			continue;
 		}
-		fname = argv[++optind];
-	} while (fname != NULL);
+	}
 
 	free(param);
-	return result;
+	return result2;
 }
 
 static int lfs_poollist(int argc, char **argv)
@@ -3862,6 +4034,7 @@ int main(int argc, char **argv)
 
 	Parser_init("lfs > ", cmdlist);
 
+	progname = argv[0]; /* Used in error messages */
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {

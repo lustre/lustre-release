@@ -1703,11 +1703,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		 * excessive to send mtime/atime updates to OSTs when not
 		 * setting times to past, but it is necessary due to possible
 		 * time de-synchronization between MDT inode and OST objects */
-		if (attr->ia_valid & ATTR_SIZE)
-			down_write(&lli->lli_trunc_sem);
 		rc = ll_setattr_ost(inode, attr);
-		if (attr->ia_valid & ATTR_SIZE)
-			up_write(&lli->lli_trunc_sem);
 	}
 	EXIT;
 out:
@@ -2452,13 +2448,13 @@ int ll_process_config(struct lustre_cfg *lcfg)
 	return rc;
 }
 
-/* this function prepares md_op_data hint for passing ot down to MD stack. */
-struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
-				       struct inode *i1, struct inode *i2,
-				       const char *name, size_t namelen,
-				       __u32 mode, __u32 opc, void *data)
+/* this function prepares md_op_data hint for passing it down to MD stack. */
+struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
+				      struct inode *i1, struct inode *i2,
+				      const char *name, size_t namelen,
+				      __u32 mode, __u32 opc, void *data)
 {
-        LASSERT(i1 != NULL);
+	LASSERT(i1 != NULL);
 
 	if (name == NULL) {
 		/* Do not reuse namelen for something else. */
@@ -2472,11 +2468,11 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 			return ERR_PTR(-EINVAL);
 	}
 
-        if (op_data == NULL)
-                OBD_ALLOC_PTR(op_data);
+	if (op_data == NULL)
+		OBD_ALLOC_PTR(op_data);
 
-        if (op_data == NULL)
-                return ERR_PTR(-ENOMEM);
+	if (op_data == NULL)
+		return ERR_PTR(-ENOMEM);
 
 	ll_i2gids(op_data->op_suppgids, i1, i2);
 	op_data->op_fid1 = *ll_inode2fid(i1);

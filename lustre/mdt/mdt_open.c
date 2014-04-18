@@ -1018,7 +1018,7 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
         struct mdt_object       *parent= NULL;
         struct mdt_object       *o;
         int                      rc;
-	int			 object_locked = 0;
+	bool			 object_locked = false;
 	__u64			 ibits = 0;
         ENTRY;
 
@@ -1078,7 +1078,7 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 		GOTO(out, rc);
 	} else if (rc > 0) {
 		rc = mdt_object_open_lock(info, o, lhc, &ibits);
-		object_locked = 1;
+		object_locked = true;
 		if (rc)
 			GOTO(out_unlock, rc);
 	}
@@ -1728,11 +1728,13 @@ out_close:
 out_unlock:
 	up_write(&o->mot_open_sem);
 
-	if (rc == 0) { /* already released */
+	/* already released */
+	if (rc == 0) {
 		struct mdt_body *repbody;
+
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
-		repbody->mbo_valid |= OBD_MD_FLRELEASED;
+		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
 	}
 
 out_reprocess:
@@ -1745,8 +1747,141 @@ out_reprocess:
 	return rc;
 }
 
-#define MFD_CLOSED(mode) ((mode) == MDS_FMODE_CLOSED)
+static int mdt_close_swap_layouts(struct mdt_thread_info *info,
+				  struct mdt_object *o, struct md_attr *ma)
+{
+	struct mdt_lock_handle	*lh1 = &info->mti_lh[MDT_LH_NEW];
+	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
+	struct close_data	*data;
+	struct ldlm_lock	*lease;
+	struct mdt_object	*o1 = o, *o2;
+	bool			 lease_broken;
+	bool			 swap_objects;
+	int			 rc;
+	ENTRY;
 
+	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
+		RETURN(-EROFS);
+
+	if (!S_ISREG(lu_object_attr(&o1->mot_obj)))
+		RETURN(-EINVAL);
+
+	data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);
+	if (data == NULL)
+		RETURN(-EPROTO);
+
+	if (fid_is_zero(&data->cd_fid) || !fid_is_sane(&data->cd_fid))
+		RETURN(-EINVAL);
+
+	rc = lu_fid_cmp(&data->cd_fid, mdt_object_fid(o));
+	if (unlikely(rc == 0))
+		RETURN(-EINVAL);
+
+	/* Exchange o1 and o2, to enforce locking order */
+	swap_objects = (rc < 0);
+
+	lease = ldlm_handle2lock(&data->cd_handle);
+	if (lease == NULL)
+		RETURN(-ESTALE);
+
+	o2 = mdt_object_find(info->mti_env, info->mti_mdt, &data->cd_fid);
+	if (IS_ERR(o2))
+		GOTO(out_lease, rc = PTR_ERR(o2));
+
+	if (!S_ISREG(lu_object_attr(&o2->mot_obj))) {
+		swap_objects = false; /* not swapped yet */
+		GOTO(out_obj, rc = -EINVAL);
+	}
+
+	if (swap_objects)
+		swap(o1, o2);
+
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o1), NULL,
+			   MAY_WRITE);
+	if (rc < 0)
+		GOTO(out_obj, rc);
+
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o2), NULL,
+			   MAY_WRITE);
+	if (rc < 0)
+		GOTO(out_obj, rc);
+
+	/* try to hold open_sem so that nobody else can open the file */
+	if (!down_write_trylock(&o->mot_open_sem)) {
+		ldlm_lock_cancel(lease);
+		GOTO(out_obj, rc = -EBUSY);
+	}
+
+	/* Check if the lease open lease has already canceled */
+	lock_res_and_lock(lease);
+	lease_broken = ldlm_is_cancel(lease);
+	unlock_res_and_lock(lease);
+
+	LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+		   PFID(mdt_object_fid(o)), lease_broken);
+
+	/* Cancel server side lease. Client side counterpart should
+	 * have been cancelled. It's okay to cancel it now as we've
+	 * held mot_open_sem. */
+	ldlm_lock_cancel(lease);
+
+	if (lease_broken)
+		GOTO(out_unlock_sem, rc = -ESTALE);
+
+	mdt_lock_reg_init(lh1, LCK_EX);
+	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
+			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
+	if (rc < 0)
+		GOTO(out_unlock_sem, rc);
+
+	mdt_lock_reg_init(lh2, LCK_EX);
+	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
+			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
+	if (rc < 0)
+		GOTO(out_unlock1, rc);
+
+	/* Swap layout with orphan object */
+	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
+			     mdt_object_child(o2), 0);
+	if (rc < 0)
+		GOTO(out_unlock2, rc);
+
+	EXIT;
+
+out_unlock2:
+	/* Release exclusive LL */
+	mdt_object_unlock(info, o2, lh2, 1);
+
+out_unlock1:
+	mdt_object_unlock(info, o1, lh1, 1);
+
+out_unlock_sem:
+	up_write(&o->mot_open_sem);
+
+	/* already swapped */
+	if (rc == 0) {
+		struct mdt_body *repbody;
+
+		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+		LASSERT(repbody != NULL);
+		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
+	}
+
+out_obj:
+	mdt_object_put(info->mti_env, swap_objects ? o1 : o2);
+
+	ldlm_reprocess_all(lease->l_resource);
+
+out_lease:
+	LDLM_LOCK_PUT(lease);
+
+	ma->ma_valid = 0;
+	ma->ma_need = 0;
+
+	return rc;
+}
+
+#define MFD_CLOSED(mode) ((mode) == MDS_FMODE_CLOSED)
 static int mdt_mfd_closed(struct mdt_file_data *mfd)
 {
         return ((mfd == NULL) || MFD_CLOSED(mfd->mfd_mode));
@@ -1767,9 +1902,20 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		rc = mdt_hsm_release(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_HSM, "%s: File " DFID " release failed: %d\n",
-				mdt_obd_name(info->mti_mdt),
-				PFID(mdt_object_fid(o)), rc);
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even error occurred. */
+		}
+	}
+
+	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
+		rc = mdt_close_swap_layouts(info, o, ma);
+		if (rc < 0) {
+			CDEBUG(D_INODE,
+			       "%s: cannot swap layout of "DFID": rc=%d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(o)), rc);
+			/* continue to close even if error occurred. */
 		}
 	}
 

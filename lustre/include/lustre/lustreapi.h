@@ -321,8 +321,10 @@ static inline int llapi_create_volatile(char *directory, int mode)
 }
 
 
-extern int llapi_fswap_layouts(const int fd1, const int fd2,
-			       __u64 dv1, __u64 dv2, __u64 flags);
+extern int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
+					 int gid, __u64 flags);
+extern int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2,
+			       __u64 flags);
 extern int llapi_swap_layouts(const char *path1, const char *path2,
 			      __u64 dv1, __u64 dv2, __u64 flags);
 
