@@ -1,6 +1,9 @@
 #!/bin/bash
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 load_llog_test() {
     grep -q llog_test /proc/modules && return
@@ -15,30 +18,28 @@ load_llog_test() {
     return
 }
 
-PATH=`dirname $0`:$LUSTRE/utils:$PATH
+PATH=$(dirname $0):$LUSTRE/utils:$PATH
 TMP=${TMP:-/tmp}
 
-MGS=`lctl dl | awk '/mgs/ { print $4 }'`
+set -x
+MGS=$($LCTL dl | awk '/mgs/ { print $4 }')
 [ -z "$MGS" ] && echo "$0: SKIP: no MGS available, skipping llog test" && exit 0
 
 load_llog_test || exit 0
-lctl modules > $TMP/ogdb-`hostname`
+$LCTL modules > $TMP/ogdb-$(hostname)
 echo "NOW reload debugging syms.."
 
 RC=0
-lctl <<EOT || RC=2
-attach llog_test llt_name llt_uuid
-setup $MGS
-EOT
-
 # Using ignore_errors will allow lctl to cleanup even if the test fails.
-lctl <<EOC
-device llt_name
-ignore_errors
-cleanup
-detach
-EOC
-rmmod llog_test || RC2=3
+eval "$LCTL <<-EOF || RC=2
+	attach llog_test llt_name llt_uuid
+	setup $MGS
+	device llt_name
+	ignore_errors
+	cleanup
+	detach
+EOF"
+rmmod -vw llog_test || RC2=3
 [ $RC -eq 0 -a "$RC2" ] && RC=$RC2
 
 exit $RC
