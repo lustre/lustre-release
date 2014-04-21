@@ -2077,6 +2077,334 @@ test_19b() {
 }
 run_test 19b "OST-object inconsistency self repair"
 
+test_20() {
+	[ $OSTCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 OSTs" && return
+
+	echo "#####"
+	echo "The target MDT-object and some of its OST-object are lost."
+	echo "The LFSCK should find out the left OST-objects and re-create"
+	echo "the MDT-object under the direcotry .lustre/lost+found/MDTxxxx/"
+	echo "with the partial OST-objects (LOV EA hole)."
+
+	echo "New client can access the file with LOV EA hole via normal"
+	echo "system tools or commands without crash the system."
+
+	echo "For old client, even though it cannot access the file with"
+	echo "LOV EA hole, it should not cause the system crash."
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS mkdir -i 0 $DIR/$tdir/a1
+	if [ $OSTCOUNT -gt 2 ]; then
+		$LFS setstripe -c 3 -i 0 -s 1M $DIR/$tdir/a1
+		bcount=513
+	else
+		$LFS setstripe -c 2 -i 0 -s 1M $DIR/$tdir/a1
+		bcount=257
+	fi
+
+	# 256 blocks on the stripe0.
+	# 1 block on the stripe1 for 2 OSTs case.
+	# 256 blocks on the stripe1 for other cases.
+	# 1 block on the stripe2 if OSTs > 2
+	dd if=/dev/zero of=$DIR/$tdir/a1/f0 bs=4096 count=$bcount
+	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=4096 count=$bcount
+	dd if=/dev/zero of=$DIR/$tdir/a1/f2 bs=4096 count=$bcount
+
+	local fid0=$($LFS path2fid $DIR/$tdir/a1/f0)
+	local fid1=$($LFS path2fid $DIR/$tdir/a1/f1)
+	local fid2=$($LFS path2fid $DIR/$tdir/a1/f2)
+
+	echo ${fid0}
+	$LFS getstripe $DIR/$tdir/a1/f0
+	echo ${fid1}
+	$LFS getstripe $DIR/$tdir/a1/f1
+	echo ${fid2}
+	$LFS getstripe $DIR/$tdir/a1/f2
+
+	if [ $OSTCOUNT -gt 2 ]; then
+		dd if=/dev/zero of=$DIR/$tdir/a1/f3 bs=4096 count=$bcount
+		fid3=$($LFS path2fid $DIR/$tdir/a1/f3)
+		echo ${fid3}
+		$LFS getstripe $DIR/$tdir/a1/f3
+	fi
+
+	cancel_lru_locks osc
+
+	echo "Inject failure..."
+	echo "To simulate f0 lost MDT-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet mds1 $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/a1/f0
+
+	echo "To simulate f1 lost MDT-object and OST-object0"
+	#define OBD_FAIL_LFSCK_LOST_SPEOBJ	0x161a
+	do_facet mds1 $LCTL set_param fail_loc=0x161a
+	rm -f $DIR/$tdir/a1/f1
+
+	echo "To simulate f2 lost MDT-object and OST-object1"
+	do_facet mds1 $LCTL set_param fail_val=1
+	rm -f $DIR/$tdir/a1/f2
+
+	if [ $OSTCOUNT -gt 2 ]; then
+		echo "To simulate f3 lost MDT-object and OST-object2"
+		do_facet mds1 $LCTL set_param fail_val=2
+		rm -f $DIR/$tdir/a1/f3
+	fi
+
+	umount_client $MOUNT
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
+
+	echo "Inject failure to slow down the LFSCK on OST0"
+	#define OBD_FAIL_LFSCK_DELAY5		0x161b
+	do_facet ost1 $LCTL set_param fail_loc=0x161b
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
+
+	sleep 3
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(2) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(3) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+	if [ $OSTCOUNT -gt 2 ]; then
+		[ $repaired -eq 9 ] ||
+			error "(4.1) Expect 9 fixed on mds1, but got: $repaired"
+	else
+		[ $repaired -eq 4 ] ||
+			error "(4.2) Expect 4 fixed on mds1, but got: $repaired"
+	fi
+
+	mount_client $MOUNT || error "(5.0) Fail to start client!"
+
+	LOV_PATTERN_F_HOLE=0x40000000
+
+	#
+	# R-${fid0} is the old f0
+	#
+	local name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid0}"
+	echo "Check $name, which is the old f0"
+
+	$LFS getstripe -v $name || error "(5.1) cannot getstripe on $name"
+
+	local pattern=0x$($LFS getstripe -L $name)
+	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
+		error "(5.2) NOT expect pattern flag hole, but got $pattern"
+
+	local stripes=$($LFS getstripe -c $name)
+	if [ $OSTCOUNT -gt 2 ]; then
+		[ $stripes -eq 3 ] ||
+		error "(5.3.1) expect the stripe count is 3, but got $stripes"
+	else
+		[ $stripes -eq 2 ] ||
+		error "(5.3.2) expect the stripe count is 2, but got $stripes"
+	fi
+
+	local size=$(stat $name | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(5.4) expect the size $((4096 * $bcount)), but got $size"
+
+	cat $name > /dev/null || error "(5.5) cannot read $name"
+
+	echo "dummy" >> $name || error "(5.6) cannot write $name"
+
+	chown $RUNAS_ID:$RUNAS_GID $name || error "(5.7) cannot chown on $name"
+
+	touch $name || error "(5.8) cannot touch $name"
+
+	rm -f $name || error "(5.9) cannot unlink $name"
+
+	#
+	# R-${fid1} contains the old f1's stripe1 (and stripe2 if OSTs > 2)
+	#
+	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid1}"
+	if [ $OSTCOUNT -gt 2 ]; then
+		echo "Check $name, it contains the old f1's stripe1 and stripe2"
+	else
+		echo "Check $name, it contains the old f1's stripe1"
+	fi
+
+	$LFS getstripe -v $name || error "(6.1) cannot getstripe on $name"
+
+	pattern=0x$($LFS getstripe -L $name)
+	[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
+		error "(6.2) expect pattern flag hole, but got $pattern"
+
+	stripes=$($LFS getstripe -c $name)
+	if [ $OSTCOUNT -gt 2 ]; then
+		[ $stripes -eq 3 ] ||
+		error "(6.3.1) expect the stripe count is 3, but got $stripes"
+	else
+		[ $stripes -eq 2 ] ||
+		error "(6.3.2) expect the stripe count is 2, but got $stripes"
+	fi
+
+	size=$(stat $name | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(6.4) expect the size $((4096 * $bcount)), but got $size"
+
+	cat $name > /dev/null && error "(6.5) normal read $name should fail"
+
+	local failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+			 bs=4096 2>&1 | grep "Input/output error" | wc -l)
+
+	# stripe0 is dummy
+	[ $failures -eq 256 ] ||
+		error "(6.6) expect 256 IO failures, but get $failures"
+
+	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(6.7) expect the size $((4096 * $bcount)), but got $size"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 &&
+		error "(6.8) write to the LOV EA hole should fail"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 seek=300 ||
+		error "(6.9) write to normal stripe should NOT fail"
+
+	echo "foo" >> $name && error "(6.10) append write $name should fail"
+
+	chown $RUNAS_ID:$RUNAS_GID $name || error "(6.11) cannot chown on $name"
+
+	touch $name || error "(6.12) cannot touch $name"
+
+	rm -f $name || error "(6.13) cannot unlink $name"
+
+	#
+	# R-${fid2} it contains the old f2's stripe0 (and stripe2 if OSTs > 2)
+	#
+	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid2}"
+	if [ $OSTCOUNT -gt 2 ]; then
+		echo "Check $name, it contains the old f2's stripe0 and stripe2"
+	else
+		echo "Check $name, it contains the old f2's stripe0"
+	fi
+
+	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
+
+	pattern=0x$($LFS getstripe -L $name)
+	stripes=$($LFS getstripe -c $name)
+	size=$(stat $name | awk '/Size:/ { print $2 }')
+	if [ $OSTCOUNT -gt 2 ]; then
+		[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
+		error "(7.2.1) expect pattern flag hole, but got $pattern"
+
+		[ $stripes -eq 3 ] ||
+		error "(7.3.1) expect the stripe count is 3, but got $stripes"
+
+		[ $size -eq $((4096 * $bcount)) ] ||
+		error "(7.4.1) expect size $((4096 * $bcount)), but got $size"
+
+		cat $name > /dev/null &&
+			error "(7.5.1) normal read $name should fail"
+
+		failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+			   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+		# stripe1 is dummy
+		[ $failures -eq 256 ] ||
+			error "(7.6) expect 256 IO failures, but get $failures"
+
+		size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+		[ $size -eq $((4096 * $bcount)) ] ||
+		error "(7.7) expect the size $((4096 * $bcount)), but got $size"
+
+		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=300 && error "(7.8.0) write to the LOV EA hole should fail"
+
+		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 ||
+		error "(7.8.1) write to normal stripe should NOT fail"
+
+		echo "foo" >> $name &&
+			error "(7.8.3) append write $name should fail"
+
+		chown $RUNAS_ID:$RUNAS_GID $name ||
+			error "(7.9.1) cannot chown on $name"
+
+		touch $name || error "(7.10.1) cannot touch $name"
+	else
+		[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
+		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
+
+		[ $stripes -eq 1 ] ||
+		error "(7.3.2) expect the stripe count is 1, but got $stripes"
+
+		# stripe1 is dummy
+		[ $size -eq $((4096 * (256 + 0))) ] ||
+		error "(7.4.2) expect the size $((4096 * 256)), but got $size"
+
+		cat $name > /dev/null || error "(7.5.2) cannot read $name"
+
+		echo "dummy" >> $name || error "(7.8.2) cannot write $name"
+
+		chown $RUNAS_ID:$RUNAS_GID $name ||
+			error "(7.9.2) cannot chown on $name"
+
+		touch $name || error "(7.10.2) cannot touch $name"
+	fi
+
+	rm -f $name || error "(7.11) cannot unlink $name"
+
+	[ $OSTCOUNT -le 2 ] && return
+
+	#
+	# R-${fid3} should contains the old f3's stripe0 and stripe1
+	#
+	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid3}"
+	echo "Check $name, which contains the old f3's stripe0 and stripe1"
+
+	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
+
+	pattern=0x$($LFS getstripe -L $name)
+	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
+		error "(8.2) NOT expect pattern flag hole, but got $pattern"
+
+	stripes=$($LFS getstripe -c $name)
+	# LFSCK does not know the old f3 had 3 stripes.
+	# It only tries to find as much as possible.
+	# The stripe count depends on the last stripe's offset.
+	[ $stripes -eq 2 ] ||
+		error "(8.3) expect the stripe count is 2, but got $stripes"
+
+	size=$(stat $name | awk '/Size:/ { print $2 }')
+	# stripe2 is lost
+	[ $size -eq $((4096 * (256 + 256 + 0))) ] ||
+		error "(8.4) expect the size $((4096 * 512)), but got $size"
+
+	cat $name > /dev/null || error "(8.5) cannot read $name"
+
+	echo "dummy" >> $name || error "(8.6) cannot write $name"
+
+	chown $RUNAS_ID:$RUNAS_GID $name ||
+		error "(8.7) cannot chown on $name"
+
+	touch $name || error "(8.8) cannot touch $name"
+
+	rm -f $name || error "(8.9) cannot unlink $name"
+}
+run_test 20 "Handle the orphan with dummy LOV EA slot properly"
+
 $LCTL set_param debug=-lfsck > /dev/null || true
 
 # restore MDS/OST size

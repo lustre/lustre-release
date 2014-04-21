@@ -739,6 +739,9 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 		RETURN(-ENOMEM);
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
+		if (unlikely(lovea_slot_is_dummy(&objs[i])))
+			continue;
+
 		ostid_le_to_cpu(&objs[i].l_ost_oi, &info->lti_ostid);
 		idx = le32_to_cpu(objs[i].l_ost_idx);
 		rc = ostid_to_fid(&info->lti_fid, &info->lti_ostid, idx);

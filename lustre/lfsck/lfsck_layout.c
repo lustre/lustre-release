@@ -673,15 +673,6 @@ out:
 	}
 }
 
-static inline bool is_dummy_lov_ost_data(struct lov_ost_data_v1 *obj)
-{
-	if (fid_is_zero(&obj->l_ost_oi.oi_fid) &&
-	    obj->l_ost_gen == 0 && obj->l_ost_idx == 0)
-		return true;
-
-	return false;
-}
-
 static void lfsck_layout_le_to_cpu(struct lfsck_layout *des,
 				   const struct lfsck_layout *src)
 {
@@ -1694,6 +1685,45 @@ static int lfsck_layout_trans_stop(const struct lu_env *env,
 }
 
 /**
+ * Get the system default stripe size.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[out] size	pointer to the default stripe size
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_layout_get_def_stripesize(const struct lu_env *env,
+					   struct lfsck_instance *lfsck,
+					   __u32 *size)
+{
+	struct lov_user_md	*lum = &lfsck_env_info(env)->lti_lum;
+	struct dt_object	*root;
+	int			 rc;
+
+	root = dt_locate(env, lfsck->li_next, &lfsck->li_local_root_fid);
+	if (IS_ERR(root))
+		return PTR_ERR(root);
+
+	/* Get the default stripe size via xattr_get on the backend root. */
+	rc = dt_xattr_get(env, root, lfsck_buf_get(env, lum, sizeof(*lum)),
+			  XATTR_NAME_LOV, BYPASS_CAPA);
+	if (rc > 0) {
+		/* The lum->lmm_stripe_size is LE mode. The *size also
+		 * should be LE mode. So it is unnecessary to convert. */
+		*size = lum->lmm_stripe_size;
+		rc = 0;
+	} else if (unlikely(rc == 0)) {
+		rc = -EINVAL;
+	}
+
+	lfsck_object_put(env, root);
+
+	return rc;
+}
+
+/**
  * \retval	 +1: repaired
  * \retval	  0: did nothing
  * \retval	-ve: on error
@@ -1706,13 +1736,36 @@ static int lfsck_layout_refill_lovea(const struct lu_env *env,
 				     struct lov_ost_data_v1 *slot,
 				     int fl, __u32 ost_idx)
 {
-	struct ost_id	*oi	= &lfsck_env_info(env)->lti_oi;
-	int		 rc;
+	struct ost_id		*oi	= &lfsck_env_info(env)->lti_oi;
+	struct lov_mds_md_v1	*lmm	= buf->lb_buf;
+	int			 rc;
 
 	fid_to_ostid(cfid, oi);
 	ostid_cpu_to_le(oi, &slot->l_ost_oi);
 	slot->l_ost_gen = cpu_to_le32(0);
 	slot->l_ost_idx = cpu_to_le32(ost_idx);
+
+	if (le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_HOLE) {
+		struct lov_ost_data_v1 *objs;
+		int			i;
+		__u16			count;
+
+		count = le16_to_cpu(lmm->lmm_stripe_count);
+		if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1)
+			objs = &lmm->lmm_objects[0];
+		else
+			objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
+		for (i = 0; i < count; i++, objs++) {
+			if (objs != slot && lovea_slot_is_dummy(objs))
+				break;
+		}
+
+		/* If the @slot is the last dummy slot to be refilled,
+		 * then drop LOV_PATTERN_F_HOLE from lmm::lmm_pattern. */
+		if (i == count)
+			lmm->lmm_pattern &= ~cpu_to_le32(LOV_PATTERN_F_HOLE);
+	}
+
 	rc = dt_xattr_set(env, parent, buf, XATTR_NAME_LOV, fl, handle,
 			  BYPASS_CAPA);
 	if (rc == 0)
@@ -1727,6 +1780,7 @@ static int lfsck_layout_refill_lovea(const struct lu_env *env,
  * \retval	-ve: on error
  */
 static int lfsck_layout_extend_lovea(const struct lu_env *env,
+				     struct lfsck_instance *lfsck,
 				     struct thandle *handle,
 				     struct dt_object *parent,
 				     struct lu_fid *cfid,
@@ -1736,50 +1790,57 @@ static int lfsck_layout_extend_lovea(const struct lu_env *env,
 	struct lov_mds_md_v1	*lmm	= buf->lb_buf;
 	struct lov_ost_data_v1	*objs;
 	int			 rc;
+	__u16			 count;
 	ENTRY;
 
 	if (fl == LU_XATTR_CREATE || reset) {
-		LASSERT(buf->lb_len == lov_mds_md_size(ea_off + 1,
-						       LOV_MAGIC_V1));
+		__u32 pattern = LOV_PATTERN_RAID0;
+
+		count = ea_off + 1;
+		LASSERT(buf->lb_len == lov_mds_md_size(count, LOV_MAGIC_V1));
+
+		if (ea_off != 0 || reset)
+			pattern |= LOV_PATTERN_F_HOLE;
 
 		memset(lmm, 0, buf->lb_len);
 		lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1);
-		/* XXX: currently, we only support LOV_PATTERN_RAID0. */
-		lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
+		lmm->lmm_pattern = cpu_to_le32(pattern);
 		fid_to_lmm_oi(lfsck_dto2fid(parent), &lmm->lmm_oi);
 		lmm_oi_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
-		/* XXX: We cannot know the stripe size,
-		 *	then use the default value (1 MB). */
-		lmm->lmm_stripe_size =
-			cpu_to_le32(LOV_DESC_STRIPE_SIZE_DEFAULT);
-		objs = &(lmm->lmm_objects[ea_off]);
-	} else {
-		__u16	count = le16_to_cpu(lmm->lmm_stripe_count);
-		int	gap   = ea_off - count;
-		__u32	magic = le32_to_cpu(lmm->lmm_magic);
 
-		/* Currently, we only support LOV_MAGIC_V1/LOV_MAGIC_V3
-		 * which has been verified in lfsck_layout_verify_header()
-		 * already. If some new magic introduced in the future,
-		 * then layout LFSCK needs to be updated also. */
-		if (magic == LOV_MAGIC_V1) {
-			objs = &(lmm->lmm_objects[count]);
-		} else {
-			LASSERT(magic == LOV_MAGIC_V3);
+		rc = lfsck_layout_get_def_stripesize(env, lfsck,
+						     &lmm->lmm_stripe_size);
+		if (rc != 0)
+			RETURN(rc);
+
+		objs = &lmm->lmm_objects[ea_off];
+	} else {
+		__u32	magic = le32_to_cpu(lmm->lmm_magic);
+		int	gap;
+
+		count = le16_to_cpu(lmm->lmm_stripe_count);
+		if (magic == LOV_MAGIC_V1)
+			objs = &lmm->lmm_objects[count];
+		else
 			objs = &((struct lov_mds_md_v3 *)lmm)->
 							lmm_objects[count];
+
+		gap = ea_off - count;
+		if (gap >= 0)
+			count = ea_off + 1;
+		LASSERT(buf->lb_len == lov_mds_md_size(count, magic));
+
+		if (gap > 0) {
+			memset(objs, 0, gap * sizeof(*objs));
+			lmm->lmm_pattern |= cpu_to_le32(LOV_PATTERN_F_HOLE);
 		}
 
-		if (gap > 0)
-			memset(objs, 0, gap * sizeof(*objs));
 		lmm->lmm_layout_gen =
 			    cpu_to_le16(le16_to_cpu(lmm->lmm_layout_gen) + 1);
 		objs += gap;
-
-		LASSERT(buf->lb_len == lov_mds_md_size(ea_off + 1, magic));
 	}
 
-	lmm->lmm_stripe_count = cpu_to_le16(ea_off + 1);
+	lmm->lmm_stripe_count = cpu_to_le16(count);
 	rc = lfsck_layout_refill_lovea(env, handle, parent, cfid, buf, objs,
 				       fl, ost_idx);
 
@@ -1949,7 +2010,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	memset(la, 0, sizeof(*la));
 	la->la_uid = rec->lor_uid;
 	la->la_gid = rec->lor_gid;
-	la->la_mode = S_IFREG | S_IRUSR | S_IWUSR;
+	la->la_mode = S_IFREG | S_IRUSR;
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 
 	memset(dof, 0, sizeof(*dof));
@@ -2025,9 +2086,9 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	rc = dt_create(env, pobj, la, NULL, dof, th);
 	if (rc == 0)
 		/* 3b. Add layout EA for the MDT-object. */
-		rc = lfsck_layout_extend_lovea(env, th, pobj, cfid, ea_buf,
-					       LU_XATTR_CREATE, ltd->ltd_index,
-					       ea_off, false);
+		rc = lfsck_layout_extend_lovea(env, lfsck, th, pobj, cfid,
+					       ea_buf, LU_XATTR_CREATE,
+					       ltd->ltd_index, ea_off, false);
 	dt_write_unlock(env, pobj);
 	if (rc < 0)
 		GOTO(stop, rc);
@@ -2426,8 +2487,8 @@ again:
 		LASSERT(buf->lb_len >= rc);
 
 		buf->lb_len = rc;
-		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
-					       fl, ost_idx, ea_off, false);
+		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
+					       buf, fl, ost_idx, ea_off, false);
 
 		GOTO(unlock_parent, rc);
 	}
@@ -2444,8 +2505,8 @@ again:
 
 		buf->lb_len = rc;
 		memset(lmm, 0, buf->lb_len);
-		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
-					       fl, ost_idx, ea_off, true);
+		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
+					       buf, fl, ost_idx, ea_off, true);
 
 		GOTO(unlock_parent, rc);
 	}
@@ -2460,7 +2521,7 @@ again:
 	 * be updated also. */
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
-		objs = &(lmm->lmm_objects[0]);
+		objs = &lmm->lmm_objects[0];
 	} else {
 		LASSERT(magic == LOV_MAGIC_V3);
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
@@ -2482,8 +2543,9 @@ again:
 			goto again;
 
 		buf->lb_len = rc;
-		rc = lfsck_layout_extend_lovea(env, handle, parent, cfid, buf,
-					       fl, ost_idx, ea_off, false);
+		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
+					       buf, fl, ost_idx, ea_off, false);
+
 		GOTO(unlock_parent, rc);
 	}
 
@@ -2493,7 +2555,7 @@ again:
 	for (i = 0; i < count; i++, objs++) {
 		/* The MDT-object was created via lfsck_layout_recover_create()
 		 * by others before, and we fill the dummy layout EA. */
-		if (is_dummy_lov_ost_data(objs)) {
+		if (lovea_slot_is_dummy(objs)) {
 			if (i != ea_off)
 				continue;
 
@@ -2545,7 +2607,7 @@ again:
 		dt_trans_stop(env, dt, handle);
 	lfsck_layout_unlock(&lh);
 	if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1)
-		objs = &(lmm->lmm_objects[ea_off]);
+		objs = &lmm->lmm_objects[ea_off];
 	else
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[ea_off];
 	rc = lfsck_layout_conflict_create(env, com, ltd, rec, parent, cfid,
@@ -3025,7 +3087,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	 * be updated also. */
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
-		objs = &(lmm->lmm_objects[0]);
+		objs = &lmm->lmm_objects[0];
 	} else {
 		LASSERT(magic == LOV_MAGIC_V3);
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
@@ -3199,7 +3261,7 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 	lmm = buf->lb_buf;
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
-		objs = &(lmm->lmm_objects[0]);
+		objs = &lmm->lmm_objects[0];
 	} else {
 		LASSERT(magic == LOV_MAGIC_V3);
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
@@ -3210,7 +3272,7 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 		struct lu_fid		*tfid	= &info->lti_fid2;
 		struct ost_id		*oi	= &info->lti_oi;
 
-		if (is_dummy_lov_ost_data(objs))
+		if (lovea_slot_is_dummy(objs))
 			continue;
 
 		ostid_le_to_cpu(&objs->l_ost_oi, oi);
@@ -3934,7 +3996,7 @@ static int lfsck_layout_master_check_pairs(const struct lu_env *env,
 	 * be updated also. */
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
-		objs = &(lmm->lmm_objects[0]);
+		objs = &lmm->lmm_objects[0];
 	} else {
 		LASSERT(magic == LOV_MAGIC_V3);
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
@@ -4389,7 +4451,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 	 * be updated also. */
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
-		objs = &(lmm->lmm_objects[0]);
+		objs = &lmm->lmm_objects[0];
 	} else {
 		LASSERT(magic == LOV_MAGIC_V3);
 		objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[0];
@@ -4405,7 +4467,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 					le32_to_cpu(objs->l_ost_idx);
 		bool			 wakeup = false;
 
-		if (is_dummy_lov_ost_data(objs))
+		if (unlikely(lovea_slot_is_dummy(objs)))
 			continue;
 
 		l_wait_event(mthread->t_ctl_waitq,
@@ -4653,6 +4715,17 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(llsd != NULL);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY5) &&
+	    cfs_fail_val == lfsck_dev_idx(lfsck->li_bottom)) {
+		struct l_wait_info	 lwi = LWI_TIMEOUT(cfs_time_seconds(1),
+							   NULL, NULL);
+		struct ptlrpc_thread	*thread = &lfsck->li_thread;
+
+		l_wait_event(thread->t_ctl_waitq,
+			     !thread_is_running(thread),
+			     &lwi);
+	}
 
 	lfsck_rbtree_update_bitmap(env, com, fid, false);
 
