@@ -329,9 +329,34 @@ static inline struct dt_object *osp_object_child(struct osp_object *o)
 #define osp_get_rpc_lock(lck, it)  mdc_get_rpc_lock(lck, it)
 #define osp_put_rpc_lock(lck, it) mdc_put_rpc_lock(lck, it)
 
+static inline int osp_fid_diff(const struct lu_fid *fid1,
+			       const struct lu_fid *fid2)
+{
+	/* In 2.6+ ost_idx is packed into IDIF FID, while in 2.4 and 2.5 IDIF
+	 * is always FID_SEQ_IDIF(0x100000000ULL), which does not include OST
+	 * index in the seq. So we can not compare IDIF FID seq here */
+	if (fid_is_idif(fid1) && fid_is_idif(fid2)) {
+		__u32 ost_idx1 = fid_idif_ost_idx(fid1);
+		__u32 ost_idx2 = fid_idif_ost_idx(fid2);
+
+		LASSERTF(ost_idx1 == 0 || ost_idx2 == 0 || ost_idx1 == ost_idx2,
+			 "fid1: "DFID", fid2: "DFID"\n", PFID(fid1),
+			 PFID(fid2));
+
+		return fid_idif_id(fid1->f_seq, fid1->f_oid, 0) -
+		       fid_idif_id(fid2->f_seq, fid2->f_oid, 0);
+	}
+
+	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID
+		 ", fid2:"DFID"\n", PFID(fid1), PFID(fid2));
+
+	return fid_oid(fid1) - fid_oid(fid2);
+}
+
+
 static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 {
-	int diff = lu_fid_diff(fid, &d->opd_last_used_fid);
+	int diff = osp_fid_diff(fid, &d->opd_last_used_fid);
 	/*
 	 * we might have lost precreated objects due to VBR and precreate
 	 * orphans, the gap in objid can be calculated properly only here
