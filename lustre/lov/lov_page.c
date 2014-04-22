@@ -144,8 +144,8 @@ int lov_page_init_raid0(const struct lu_env *env, struct cl_object *obj,
 		RETURN(PTR_ERR(sub));
 
 	subobj = lovsub2cl(r0->lo_sub[stripe]);
-	cfs_list_for_each_entry(o, &subobj->co_lu.lo_header->loh_layers,
-				co_lu.lo_linkage) {
+	list_for_each_entry(o, &subobj->co_lu.lo_header->loh_layers,
+			    co_lu.lo_linkage) {
 		if (o->co_ops->coo_page_init != NULL) {
 			rc = o->co_ops->coo_page_init(sub->sub_env, o, page,
 						      cl_index(subobj, suboff));

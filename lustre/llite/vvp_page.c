@@ -540,7 +540,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	cpg->cpg_page = vmpage;
 	page_cache_get(vmpage);
 
-	CFS_INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
+	INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
 	if (page->cp_type == CPT_CACHEABLE) {
 		/* in cache, decref in vvp_page_delete */
 		atomic_inc(&page->cp_ref);

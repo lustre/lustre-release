@@ -298,7 +298,7 @@ static loff_t vvp_pgcache_id_pack(struct vvp_pgcache_id *id)
 }
 
 static int vvp_pgcache_obj_get(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-                               cfs_hlist_node_t *hnode, void *data)
+			       struct hlist_node *hnode, void *data)
 {
         struct vvp_pgcache_id   *id  = data;
         struct lu_object_header *hdr = cfs_hash_object(hs, hnode);

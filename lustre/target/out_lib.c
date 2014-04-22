@@ -54,7 +54,7 @@ void out_destroy_update_req(struct dt_update_request *dt_update)
 	if (dt_update == NULL)
 		return;
 
-	cfs_list_del(&dt_update->dur_list);
+	list_del(&dt_update->dur_list);
 	if (dt_update->dur_req != NULL)
 		OBD_FREE_LARGE(dt_update->dur_req, dt_update->dur_req_len);
 

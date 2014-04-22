@@ -59,7 +59,7 @@
 
 struct kmem_cache *ll_file_data_slab;
 
-static LIST_HEAD(ll_super_blocks);
+static struct list_head ll_super_blocks = LIST_HEAD_INIT(ll_super_blocks);
 static DEFINE_SPINLOCK(ll_sb_lock);
 
 #ifndef log2
@@ -95,7 +95,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_cache.ccc_lru_max = lru_page_max;
 	atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
 	spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
-	CFS_INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
+	INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
 
 	atomic_set(&sbi->ll_cache.ccc_unstable_nr, 0);
 	init_waitqueue_head(&sbi->ll_cache.ccc_unstable_waitq);
@@ -105,15 +105,15 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
 	sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
 					   SBI_DEFAULT_READAHEAD_WHOLE_MAX;
-        CFS_INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        CFS_INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
+	INIT_LIST_HEAD(&sbi->ll_conn_chain);
+	INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
 
         ll_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
         CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
 	spin_lock(&ll_sb_lock);
-	cfs_list_add_tail(&sbi->ll_list, &ll_super_blocks);
+	list_add_tail(&sbi->ll_list, &ll_super_blocks);
 	spin_unlock(&ll_sb_lock);
 
         sbi->ll_flags |= LL_SBI_VERBOSE;
@@ -149,7 +149,7 @@ static void ll_free_sbi(struct super_block *sb)
 
 	if (sbi != NULL) {
 		spin_lock(&ll_sb_lock);
-		cfs_list_del(&sbi->ll_list);
+		list_del(&sbi->ll_list);
 		spin_unlock(&ll_sb_lock);
 		OBD_FREE(sbi, sizeof(*sbi));
 	}
@@ -739,7 +739,7 @@ static void client_common_put_super(struct super_block *sb)
 
         cl_sb_fini(sb);
 
-        cfs_list_del(&sbi->ll_conn_chain);
+	list_del(&sbi->ll_conn_chain);
 
 	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
         obd_disconnect(sbi->ll_dt_exp);
@@ -977,7 +977,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		mutex_init(&lli->lli_write_mutex);
 		init_rwsem(&lli->lli_glimpse_sem);
 		lli->lli_glimpse_time = 0;
-		CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
+		INIT_LIST_HEAD(&lli->lli_agl_list);
 		lli->lli_agl_index = 0;
 		lli->lli_async_rc = 0;
 	}

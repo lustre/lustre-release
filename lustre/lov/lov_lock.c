@@ -122,7 +122,7 @@ static void lov_sublock_adopt(const struct lu_env *env, struct lov_lock *lck,
         lck->lls_sub[idx].sub_lock = lsl;
         lck->lls_nr_filled++;
         LASSERT(lck->lls_nr_filled <= lck->lls_nr);
-        cfs_list_add_tail(&link->lll_list, &lsl->lss_parents);
+	list_add_tail(&link->lll_list, &lsl->lss_parents);
         link->lll_idx = idx;
         link->lll_super = lck;
         cl_lock_get(parent);
@@ -205,7 +205,7 @@ static int lov_sublock_lock(const struct lu_env *env,
         int                 result = 0;
         ENTRY;
 
-        LASSERT(cfs_list_empty(&closure->clc_list));
+	LASSERT(list_empty(&closure->clc_list));
 
         sublock = lls->sub_lock;
         child = sublock->lss_cl.cls_lock;
@@ -1047,7 +1047,7 @@ void lov_lock_unlink(const struct lu_env *env,
         LASSERT(cl_lock_is_mutexed(sub->lss_cl.cls_lock));
         ENTRY;
 
-        cfs_list_del_init(&link->lll_list);
+	list_del_init(&link->lll_list);
         LASSERT(lck->lls_sub[link->lll_idx].sub_lock == sub);
         /* yank this sub-lock from parent's array */
         lck->lls_sub[link->lll_idx].sub_lock = NULL;
@@ -1068,7 +1068,7 @@ struct lov_lock_link *lov_lock_link_find(const struct lu_env *env,
         LASSERT(cl_lock_is_mutexed(sub->lss_cl.cls_lock));
         ENTRY;
 
-        cfs_list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+	list_for_each_entry(scan, &sub->lss_parents, lll_list) {
                 if (scan->lll_super == lck)
                         RETURN(scan);
         }
@@ -1223,7 +1223,7 @@ static struct cl_lock_closure *lov_closure_get(const struct lu_env *env,
         struct cl_lock_closure *closure;
 
         closure = &lov_env_info(env)->lti_closure;
-        LASSERT(cfs_list_empty(&closure->clc_list));
+	LASSERT(list_empty(&closure->clc_list));
         cl_lock_closure_init(env, closure, parent, 1);
         return closure;
 }

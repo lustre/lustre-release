@@ -276,7 +276,7 @@ void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
 	ras->ras_consecutive_requests++;
 	rar->lrr_reader = current;
 
-	cfs_list_add(&rar->lrr_linkage, &ras->ras_read_beads);
+	list_add(&rar->lrr_linkage, &ras->ras_read_beads);
 	spin_unlock(&ras->ras_lock);
 }
 
@@ -287,7 +287,7 @@ void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar)
 	ras = ll_ras_get(f);
 
 	spin_lock(&ras->ras_lock);
-	cfs_list_del_init(&rar->lrr_linkage);
+	list_del_init(&rar->lrr_linkage);
 	spin_unlock(&ras->ras_lock);
 }
 
@@ -295,7 +295,7 @@ static struct ll_ra_read *ll_ra_read_get_locked(struct ll_readahead_state *ras)
 {
         struct ll_ra_read *scan;
 
-        cfs_list_for_each_entry(scan, &ras->ras_read_beads, lrr_linkage) {
+	list_for_each_entry(scan, &ras->ras_read_beads, lrr_linkage) {
                 if (scan->lrr_reader == current)
                         return scan;
         }
@@ -754,7 +754,7 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 	spin_lock_init(&ras->ras_lock);
 	ras_reset(inode, ras, 0);
 	ras->ras_requests = 0;
-	CFS_INIT_LIST_HEAD(&ras->ras_read_beads);
+	INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
 /*

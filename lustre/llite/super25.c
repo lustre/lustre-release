@@ -154,7 +154,7 @@ static int __init init_lustre_lite(void)
 
 	ll_rmtperm_hash_cachep = kmem_cache_create("ll_rmtperm_hash_cache",
 						   REMOTE_PERM_HASHSIZE *
-						   sizeof(cfs_list_t),
+						   sizeof(struct list_head),
 						   0, 0, NULL);
 	if (ll_rmtperm_hash_cachep == NULL) {
 		kmem_cache_destroy(ll_remote_perm_cachep);

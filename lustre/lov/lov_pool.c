@@ -106,43 +106,44 @@ static __u32 pool_hashfn(cfs_hash_t *hash_body, const void *key, unsigned mask)
         return (result % mask);
 }
 
-static void *pool_key(cfs_hlist_node_t *hnode)
+static void *pool_key(struct hlist_node *hnode)
 {
         struct pool_desc *pool;
 
-        pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
+	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
         return (pool->pool_name);
 }
 
-static int pool_hashkey_keycmp(const void *key, cfs_hlist_node_t *compared_hnode)
+static int
+pool_hashkey_keycmp(const void *key, struct hlist_node *compared_hnode)
 {
         char *pool_name;
         struct pool_desc *pool;
 
         pool_name = (char *)key;
-        pool = cfs_hlist_entry(compared_hnode, struct pool_desc, pool_hash);
+	pool = hlist_entry(compared_hnode, struct pool_desc, pool_hash);
         return !strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
 }
 
-static void *pool_hashobject(cfs_hlist_node_t *hnode)
+static void *pool_hashobject(struct hlist_node *hnode)
 {
-        return cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
+	return hlist_entry(hnode, struct pool_desc, pool_hash);
 }
 
-static void pool_hashrefcount_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void pool_hashrefcount_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct pool_desc *pool;
 
-        pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
+	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
         lov_pool_getref(pool);
 }
 
 static void pool_hashrefcount_put_locked(cfs_hash_t *hs,
-                                         cfs_hlist_node_t *hnode)
+					 struct hlist_node *hnode)
 {
         struct pool_desc *pool;
 
-        pool = cfs_hlist_entry(hnode, struct pool_desc, pool_hash);
+	pool = hlist_entry(hnode, struct pool_desc, pool_hash);
         lov_pool_putref_locked(pool);
 }
 
@@ -459,7 +460,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	if (rc)
 		GOTO(out_err, rc);
 
-        CFS_INIT_HLIST_NODE(&new_pool->pool_hash);
+	INIT_HLIST_NODE(&new_pool->pool_hash);
 
 #ifdef LPROCFS
         /* we need this assert seq_file is not implementated for liblustre */
@@ -481,7 +482,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 #endif
 
 	spin_lock(&obd->obd_dev_lock);
-	cfs_list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
+	list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
 	lov->lov_pool_count++;
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -498,7 +499,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 
 out_err:
 	spin_lock(&obd->obd_dev_lock);
-	cfs_list_del_init(&new_pool->pool_list);
+	list_del_init(&new_pool->pool_list);
 	lov->lov_pool_count--;
 	spin_unlock(&obd->obd_dev_lock);
         lprocfs_remove(&new_pool->pool_proc_entry);
@@ -528,7 +529,7 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
         }
 
 	spin_lock(&obd->obd_dev_lock);
-	cfs_list_del_init(&pool->pool_list);
+	list_del_init(&pool->pool_list);
 	lov->lov_pool_count--;
 	spin_unlock(&obd->obd_dev_lock);
 

@@ -80,7 +80,7 @@ struct pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct ost_pool		 pool_obds;
 	atomic_t		 pool_refcount;
-	cfs_hlist_node_t	 pool_hash;	/* access by poolname */
+	struct hlist_node	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;	/* serial access */
 	struct proc_dir_entry	*pool_proc_entry;
 	struct obd_device	*pool_lobd;	/* owner */
@@ -89,7 +89,7 @@ struct pool_desc {
 struct lov_request {
 	struct obd_info		 rq_oi;
 	struct lov_request_set	*rq_rqset;
-	cfs_list_t		 rq_link;
+	struct list_head	 rq_link;
 	int			 rq_idx;	/* index in lov->tgts array */
 	int			 rq_stripe;	/* stripe number */
 	int			 rq_complete;
@@ -108,7 +108,7 @@ struct lov_request_set {
 	atomic_t		 set_success;
 	atomic_t		 set_finish_checked;
 	struct llog_cookie	*set_cookies;
-	cfs_list_t		 set_list;
+	struct list_head	 set_list;
 	wait_queue_head_t	 set_waitq;
 };
 

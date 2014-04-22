@@ -3608,15 +3608,15 @@ struct inode_operations ll_file_inode_operations = {
 /* dynamic ioctl number support routins */
 static struct llioc_ctl_data {
 	struct rw_semaphore	ioc_sem;
-        cfs_list_t              ioc_head;
+	struct list_head	ioc_head;
 } llioc = {
-        __RWSEM_INITIALIZER(llioc.ioc_sem),
-        CFS_LIST_HEAD_INIT(llioc.ioc_head)
+	__RWSEM_INITIALIZER(llioc.ioc_sem),
+	LIST_HEAD_INIT(llioc.ioc_head)
 };
 
 
 struct llioc_data {
-        cfs_list_t              iocd_list;
+	struct list_head	iocd_list;
         unsigned int            iocd_size;
         llioc_callback_t        iocd_cb;
         unsigned int            iocd_count;
@@ -3645,7 +3645,7 @@ void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd)
         memcpy(in_data->iocd_cmd, cmd, sizeof(unsigned int) * count);
 
 	down_write(&llioc.ioc_sem);
-        cfs_list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
+	list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
 	up_write(&llioc.ioc_sem);
 
         RETURN(in_data);
@@ -3659,11 +3659,11 @@ void ll_iocontrol_unregister(void *magic)
                 return;
 
 	down_write(&llioc.ioc_sem);
-        cfs_list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
+	list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
                 if (tmp == magic) {
                         unsigned int size = tmp->iocd_size;
 
-                        cfs_list_del(&tmp->iocd_list);
+			list_del(&tmp->iocd_list);
 			up_write(&llioc.ioc_sem);
 
                         OBD_FREE(tmp, size);
@@ -3687,7 +3687,7 @@ ll_iocontrol_call(struct inode *inode, struct file *file,
         int rc = -EINVAL, i;
 
 	down_read(&llioc.ioc_sem);
-        cfs_list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
+	list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
                 for (i = 0; i < data->iocd_count; i++) {
                         if (cmd != data->iocd_cmd[i])
                                 continue;

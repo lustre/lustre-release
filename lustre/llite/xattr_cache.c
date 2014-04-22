@@ -84,7 +84,7 @@ static void ll_xattr_cache_init(struct ll_inode_info *lli)
 
 	LASSERT(lli != NULL);
 
-	CFS_INIT_LIST_HEAD(&lli->lli_xattrs);
+	INIT_LIST_HEAD(&lli->lli_xattrs);
 	lli->lli_flags |= LLIF_XATTR_CACHE;
 }
 

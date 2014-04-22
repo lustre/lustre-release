@@ -59,13 +59,13 @@ typedef enum {
 
 struct ll_sa_entry {
 	/* link into sai->sai_entries */
-	cfs_list_t              se_link;
+	struct list_head	se_link;
 	/* link into sai->sai_entries_{received,stated} */
-	cfs_list_t              se_list;
+	struct list_head	se_list;
 	/* link into sai hash table locally */
-	cfs_list_t              se_hash;
+	struct list_head	se_hash;
 	/* entry reference count */
-	atomic_t            se_refcount;
+	atomic_t		se_refcount;
 	/* entry index in the sai */
 	__u64                   se_index;
 	/* low layer ldlm lock handle */
@@ -89,7 +89,7 @@ static DEFINE_SPINLOCK(sai_generation_lock);
 
 static inline int ll_sa_entry_unhashed(struct ll_sa_entry *entry)
 {
-        return cfs_list_empty(&entry->se_hash);
+	return list_empty(&entry->se_hash);
 }
 
 /*
@@ -115,7 +115,7 @@ ll_sa_entry_enhash(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 	int i = ll_sa_entry_hash(entry->se_qstr.hash);
 
 	spin_lock(&sai->sai_cache_lock[i]);
-	cfs_list_add_tail(&entry->se_hash, &sai->sai_cache[i]);
+	list_add_tail(&entry->se_hash, &sai->sai_cache[i]);
 	spin_unlock(&sai->sai_cache_lock[i]);
 }
 
@@ -128,7 +128,7 @@ ll_sa_entry_unhash(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 	int i = ll_sa_entry_hash(entry->se_qstr.hash);
 
 	spin_lock(&sai->sai_cache_lock[i]);
-	cfs_list_del_init(&entry->se_hash);
+	list_del_init(&entry->se_hash);
 	spin_unlock(&sai->sai_cache_lock[i]);
 }
 
@@ -141,15 +141,15 @@ static inline int agl_should_run(struct ll_statahead_info *sai,
 static inline struct ll_sa_entry *
 sa_first_received_entry(struct ll_statahead_info *sai)
 {
-        return cfs_list_entry(sai->sai_entries_received.next,
-                              struct ll_sa_entry, se_list);
+	return list_entry(sai->sai_entries_received.next,
+			  struct ll_sa_entry, se_list);
 }
 
 static inline struct ll_inode_info *
 agl_first_entry(struct ll_statahead_info *sai)
 {
-        return cfs_list_entry(sai->sai_entries_agl.next,
-                              struct ll_inode_info, lli_agl_list);
+	return list_entry(sai->sai_entries_agl.next,
+			  struct ll_inode_info, lli_agl_list);
 }
 
 static inline int sa_sent_full(struct ll_statahead_info *sai)
@@ -159,12 +159,12 @@ static inline int sa_sent_full(struct ll_statahead_info *sai)
 
 static inline int sa_received_empty(struct ll_statahead_info *sai)
 {
-        return cfs_list_empty(&sai->sai_entries_received);
+	return list_empty(&sai->sai_entries_received);
 }
 
 static inline int agl_list_empty(struct ll_statahead_info *sai)
 {
-        return cfs_list_empty(&sai->sai_entries_agl);
+	return list_empty(&sai->sai_entries_agl);
 }
 
 /**
@@ -247,8 +247,8 @@ ll_sa_entry_alloc(struct ll_statahead_info *sai, __u64 index,
 
 	lli = ll_i2info(sai->sai_inode);
 	spin_lock(&lli->lli_sa_lock);
-	cfs_list_add_tail(&entry->se_link, &sai->sai_entries);
-	CFS_INIT_LIST_HEAD(&entry->se_list);
+	list_add_tail(&entry->se_link, &sai->sai_entries);
+	INIT_LIST_HEAD(&entry->se_list);
 	ll_sa_entry_enhash(sai, entry);
 	spin_unlock(&lli->lli_sa_lock);
 
@@ -270,7 +270,7 @@ ll_sa_entry_get_byname(struct ll_statahead_info *sai, const struct qstr *qstr)
         struct ll_sa_entry *entry;
         int i = ll_sa_entry_hash(qstr->hash);
 
-        cfs_list_for_each_entry(entry, &sai->sai_cache[i], se_hash) {
+	list_for_each_entry(entry, &sai->sai_cache[i], se_hash) {
                 if (entry->se_qstr.hash == qstr->hash &&
                     entry->se_qstr.len == qstr->len &&
                     memcmp(entry->se_qstr.name, qstr->name, qstr->len) == 0)
@@ -291,7 +291,7 @@ ll_sa_entry_get_byindex(struct ll_statahead_info *sai, __u64 index)
 {
 	struct ll_sa_entry *entry;
 
-	cfs_list_for_each_entry(entry, &sai->sai_entries, se_link) {
+	list_for_each_entry(entry, &sai->sai_entries, se_link) {
 		if (entry->se_index == index) {
 			LASSERT(atomic_read(&entry->se_refcount) > 0);
 			atomic_inc(&entry->se_refcount);
@@ -330,8 +330,8 @@ static void ll_sa_entry_put(struct ll_statahead_info *sai,
 		       entry->se_qstr.len, entry->se_qstr.name, entry,
 		       entry->se_index);
 
-		LASSERT(cfs_list_empty(&entry->se_link));
-		LASSERT(cfs_list_empty(&entry->se_list));
+		LASSERT(list_empty(&entry->se_link));
+		LASSERT(list_empty(&entry->se_list));
 		LASSERT(ll_sa_entry_unhashed(entry));
 
 		ll_sa_entry_cleanup(sai, entry);
@@ -349,15 +349,15 @@ do_sa_entry_fini(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 	struct ll_inode_info *lli = ll_i2info(sai->sai_inode);
 
 	LASSERT(!ll_sa_entry_unhashed(entry));
-	LASSERT(!cfs_list_empty(&entry->se_link));
+	LASSERT(!list_empty(&entry->se_link));
 
 	ll_sa_entry_unhash(sai, entry);
 
 	spin_lock(&lli->lli_sa_lock);
 	entry->se_stat = SA_ENTRY_DEST;
-	cfs_list_del_init(&entry->se_link);
-	if (likely(!cfs_list_empty(&entry->se_list)))
-		cfs_list_del_init(&entry->se_list);
+	list_del_init(&entry->se_link);
+	if (likely(!list_empty(&entry->se_list)))
+		list_del_init(&entry->se_list);
 	spin_unlock(&lli->lli_sa_lock);
 
 	ll_sa_entry_put(sai, entry);
@@ -375,7 +375,7 @@ ll_sa_entry_fini(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 		do_sa_entry_fini(sai, entry);
 
 	/* drop old entry, only 'scanner' process does this, no need to lock */
-	cfs_list_for_each_entry_safe(pos, next, &sai->sai_entries, se_link) {
+	list_for_each_entry_safe(pos, next, &sai->sai_entries, se_link) {
 		if (!is_omitted_entry(sai, pos->se_index))
 			break;
 		do_sa_entry_fini(sai, pos);
@@ -390,19 +390,19 @@ do_sa_entry_to_stated(struct ll_statahead_info *sai,
 		      struct ll_sa_entry *entry, se_stat_t stat)
 {
 	struct ll_sa_entry *se;
-	cfs_list_t         *pos = &sai->sai_entries_stated;
+	struct list_head   *pos = &sai->sai_entries_stated;
 
-	if (!cfs_list_empty(&entry->se_list))
-		cfs_list_del_init(&entry->se_list);
+	if (!list_empty(&entry->se_list))
+		list_del_init(&entry->se_list);
 
-	cfs_list_for_each_entry_reverse(se, &sai->sai_entries_stated, se_list) {
+	list_for_each_entry_reverse(se, &sai->sai_entries_stated, se_list) {
 		if (se->se_index < entry->se_index) {
 			pos = &se->se_list;
 			break;
 		}
 	}
 
-	cfs_list_add(&entry->se_list, pos);
+	list_add(&entry->se_list, pos);
 	entry->se_stat = stat;
 }
 
@@ -445,13 +445,13 @@ static void ll_agl_add(struct ll_statahead_info *sai,
 		child->lli_agl_index = index;
 		spin_unlock(&child->lli_agl_lock);
 
-		LASSERT(cfs_list_empty(&child->lli_agl_list));
+		LASSERT(list_empty(&child->lli_agl_list));
 
 		igrab(inode);
 		spin_lock(&parent->lli_agl_lock);
 		if (agl_list_empty(sai))
 			added = 1;
-		cfs_list_add_tail(&child->lli_agl_list, &sai->sai_entries_agl);
+		list_add_tail(&child->lli_agl_list, &sai->sai_entries_agl);
 		spin_unlock(&parent->lli_agl_lock);
 	} else {
 		spin_unlock(&child->lli_agl_lock);
@@ -485,13 +485,13 @@ static struct ll_statahead_info *ll_sai_alloc(void)
 	init_waitqueue_head(&sai->sai_thread.t_ctl_waitq);
 	init_waitqueue_head(&sai->sai_agl_thread.t_ctl_waitq);
 
-	CFS_INIT_LIST_HEAD(&sai->sai_entries);
-	CFS_INIT_LIST_HEAD(&sai->sai_entries_received);
-	CFS_INIT_LIST_HEAD(&sai->sai_entries_stated);
-	CFS_INIT_LIST_HEAD(&sai->sai_entries_agl);
+	INIT_LIST_HEAD(&sai->sai_entries);
+	INIT_LIST_HEAD(&sai->sai_entries_received);
+	INIT_LIST_HEAD(&sai->sai_entries_stated);
+	INIT_LIST_HEAD(&sai->sai_entries_agl);
 
 	for (i = 0; i < LL_SA_CACHE_SIZE; i++) {
-		CFS_INIT_LIST_HEAD(&sai->sai_cache[i]);
+		INIT_LIST_HEAD(&sai->sai_cache[i]);
 		spin_lock_init(&sai->sai_cache_lock[i]);
 	}
 	atomic_set(&sai->sai_cache_count, 0);
@@ -536,8 +536,8 @@ static void ll_sai_put(struct ll_statahead_info *sai)
                               PFID(&lli->lli_fid),
                               sai->sai_sent, sai->sai_replied);
 
-		cfs_list_for_each_entry_safe(entry, next,
-					     &sai->sai_entries, se_link)
+		list_for_each_entry_safe(entry, next,
+					 &sai->sai_entries, se_link)
 			do_sa_entry_fini(sai, entry);
 
 		LASSERT(list_empty(&sai->sai_entries));
@@ -562,7 +562,7 @@ static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
         int                   rc;
         ENTRY;
 
-        LASSERT(cfs_list_empty(&lli->lli_agl_list));
+	LASSERT(list_empty(&lli->lli_agl_list));
 
         /* AGL maybe fall behind statahead with one entry */
         if (is_omitted_entry(sai, index + 1)) {
@@ -637,7 +637,7 @@ static void ll_post_statahead(struct ll_statahead_info *sai)
 	}
 	entry = sa_first_received_entry(sai);
 	atomic_inc(&entry->se_refcount);
-	cfs_list_del_init(&entry->se_list);
+	list_del_init(&entry->se_list);
 	spin_unlock(&lli->lli_sa_lock);
 
         LASSERT(entry->se_handle != 0);
@@ -753,7 +753,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 			entry->se_handle = it->d.lustre.it_lock_handle;
 			ll_intent_drop_lock(it);
 			wakeup = sa_received_empty(sai);
-			cfs_list_add_tail(&entry->se_list,
+			list_add_tail(&entry->se_list,
 					  &sai->sai_entries_received);
                 }
 		sai->sai_replied++;
@@ -1008,7 +1008,7 @@ static int ll_agl_thread(void *arg)
 		 * so check whether list empty again. */
 		if (!agl_list_empty(sai)) {
 			clli = agl_first_entry(sai);
-			cfs_list_del_init(&clli->lli_agl_list);
+			list_del_init(&clli->lli_agl_list);
 			spin_unlock(&plli->lli_agl_lock);
 			ll_agl_trigger(&clli->lli_vfs_inode, sai);
 		} else {
@@ -1020,7 +1020,7 @@ static int ll_agl_thread(void *arg)
 	sai->sai_agl_valid = 0;
 	while (!agl_list_empty(sai)) {
 		clli = agl_first_entry(sai);
-		cfs_list_del_init(&clli->lli_agl_list);
+		list_del_init(&clli->lli_agl_list);
 		spin_unlock(&plli->lli_agl_lock);
 		clli->lli_agl_index = 0;
 		iput(&clli->lli_vfs_inode);
@@ -1177,7 +1177,7 @@ interpret_it:
 			spin_lock(&plli->lli_agl_lock);
 			while (!agl_list_empty(sai)) {
 				clli = agl_first_entry(sai);
-				cfs_list_del_init(&clli->lli_agl_list);
+				list_del_init(&clli->lli_agl_list);
 				spin_unlock(&plli->lli_agl_lock);
 				ll_agl_trigger(&clli->lli_vfs_inode,
 					       sai);
@@ -1233,7 +1233,7 @@ do_it:
 	while (!agl_list_empty(sai) &&
 	       thread_is_running(thread)) {
 		clli = agl_first_entry(sai);
-		cfs_list_del_init(&clli->lli_agl_list);
+		list_del_init(&clli->lli_agl_list);
 		spin_unlock(&plli->lli_agl_lock);
 		ll_agl_trigger(&clli->lli_vfs_inode, sai);
 		spin_lock(&plli->lli_agl_lock);
@@ -1508,7 +1508,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
         if (sai) {
                 thread = &sai->sai_thread;
                 if (unlikely(thread_is_stopped(thread) &&
-                             cfs_list_empty(&sai->sai_entries_stated))) {
+			     list_empty(&sai->sai_entries_stated))) {
                         /* to release resource */
                         ll_stop_statahead(dir, lli->lli_opendir_key);
                         RETURN(-EAGAIN);

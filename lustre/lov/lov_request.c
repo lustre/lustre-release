@@ -54,7 +54,7 @@ static void lov_init_set(struct lov_request_set *set)
 	atomic_set(&set->set_success, 0);
 	atomic_set(&set->set_finish_checked, 0);
 	set->set_cookies = 0;
-	CFS_INIT_LIST_HEAD(&set->set_list);
+	INIT_LIST_HEAD(&set->set_list);
 	atomic_set(&set->set_refcount, 1);
 	init_waitqueue_head(&set->set_waitq);
 }
@@ -130,7 +130,7 @@ int lov_update_common_set(struct lov_request_set *set,
 
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
 {
-        cfs_list_add_tail(&req->rq_link, &set->set_list);
+	list_add_tail(&req->rq_link, &set->set_list);
         set->set_count++;
         req->rq_rqset = set;
 }
@@ -193,7 +193,7 @@ out:
 
 static int common_attr_done(struct lov_request_set *set)
 {
-        cfs_list_t *pos;
+	struct list_head *pos;
         struct lov_request *req;
         struct obdo *tmp_oa;
         int rc = 0, attrset = 0;
@@ -211,8 +211,8 @@ static int common_attr_done(struct lov_request_set *set)
 	if (tmp_oa == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-        cfs_list_for_each (pos, &set->set_list) {
-                req = cfs_list_entry(pos, struct lov_request, rq_link);
+	list_for_each(pos, &set->set_list) {
+		req = list_entry(pos, struct lov_request, rq_link);
 
                 if (!req->rq_complete || req->rq_rc)
                         continue;

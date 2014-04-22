@@ -349,7 +349,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	struct lu_env		 env;
 	struct ptlrpc_request	*req;
 	__u32			 start_epoch;
-	cfs_list_t		 client_list;
+	struct list_head	 client_list;
 	int			 rc;
 
 	if (tgt->lut_obd->obd_stopping)
@@ -374,21 +374,21 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	 * with resend requests. Move final list to separate one for processing
 	 */
 	spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
-	cfs_list_splice_init(&tgt->lut_obd->obd_final_req_queue, &client_list);
+	list_splice_init(&tgt->lut_obd->obd_final_req_queue, &client_list);
 	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
 
 	/**
 	 * go through list of exports participated in recovery and
 	 * set new epoch for them
 	 */
-	cfs_list_for_each_entry(req, &client_list, rq_list) {
+	list_for_each_entry(req, &client_list, rq_list) {
 		LASSERT(!req->rq_export->exp_delayed);
 		if (!req->rq_export->exp_vbr_failed)
 			tgt_client_epoch_update(&env, req->rq_export);
 	}
 	/** return list back at once */
 	spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
-	cfs_list_splice_init(&client_list, &tgt->lut_obd->obd_final_req_queue);
+	list_splice_init(&client_list, &tgt->lut_obd->obd_final_req_queue);
 	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
 	/** update server epoch */
 	tgt_server_data_update(&env, tgt, 1);

@@ -145,7 +145,7 @@ static void *lov_key_init(const struct lu_context *ctx,
 
 	OBD_SLAB_ALLOC_PTR_GFP(info, lov_thread_kmem, GFP_NOFS);
 	if (info != NULL)
-		CFS_INIT_LIST_HEAD(&info->lti_closure.clc_list);
+		INIT_LIST_HEAD(&info->lti_closure.clc_list);
 	else
 		info = ERR_PTR(-ENOMEM);
 	return info;
@@ -155,7 +155,7 @@ static void lov_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)
 {
         struct lov_thread_info *info = data;
-        LINVRNT(cfs_list_empty(&info->lti_closure.clc_list));
+	LINVRNT(list_empty(&info->lti_closure.clc_list));
         OBD_SLAB_FREE_PTR(info, lov_thread_kmem);
 }
 

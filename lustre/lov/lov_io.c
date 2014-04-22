@@ -421,7 +421,7 @@ static int lov_io_iter_init(const struct lu_env *env,
                         rc = PTR_ERR(sub);
 
                 if (!rc)
-                        cfs_list_add_tail(&sub->sub_linkage, &lio->lis_active);
+			list_add_tail(&sub->sub_linkage, &lio->lis_active);
                 else
                         break;
         }
@@ -473,7 +473,7 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
         int rc = 0;
 
         ENTRY;
-        cfs_list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
                 lov_sub_enter(sub);
                 rc = iofunc(sub->sub_env, sub->sub_io);
                 lov_sub_exit(sub);
@@ -542,8 +542,8 @@ static void lov_io_iter_fini(const struct lu_env *env,
         ENTRY;
         rc = lov_io_call(env, lio, lov_io_iter_fini_wrapper);
         LASSERT(rc == 0);
-        while (!cfs_list_empty(&lio->lis_active))
-                cfs_list_del_init(lio->lis_active.next);
+	while (!list_empty(&lio->lis_active))
+		list_del_init(lio->lis_active.next);
         EXIT;
 }
 
@@ -742,7 +742,7 @@ static void lov_io_fsync_end(const struct lu_env *env,
 	ENTRY;
 
 	*written = 0;
-	cfs_list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
 		struct cl_io *subio = sub->sub_io;
 
 		lov_sub_enter(sub);

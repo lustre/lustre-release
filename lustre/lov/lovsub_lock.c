@@ -59,7 +59,7 @@ static void lovsub_lock_fini(const struct lu_env *env,
 
         ENTRY;
         lsl = cl2lovsub_lock(slice);
-        LASSERT(cfs_list_empty(&lsl->lss_parents));
+	LASSERT(list_empty(&lsl->lss_parents));
         OBD_SLAB_FREE_PTR(lsl, lovsub_lock_kmem);
         EXIT;
 }
@@ -103,7 +103,7 @@ static void lovsub_lock_state(const struct lu_env *env,
         LASSERT(cl_lock_is_mutexed(slice->cls_lock));
         ENTRY;
 
-        cfs_list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+	list_for_each_entry(scan, &sub->lss_parents, lll_list) {
                 struct lov_lock *lov    = scan->lll_super;
                 struct cl_lock  *parent = lov->lls_cl.cls_lock;
 
@@ -131,7 +131,7 @@ static unsigned long lovsub_lock_weigh(const struct lu_env *env,
 
         LASSERT(cl_lock_is_mutexed(slice->cls_lock));
 
-        if (!cfs_list_empty(&lock->lss_parents)) {
+	if (!list_empty(&lock->lss_parents)) {
                 /*
                  * It is not clear whether all parents have to be asked and
                  * their estimations summed, or it is enough to ask one. For
@@ -252,7 +252,7 @@ static int lovsub_lock_modify(const struct lu_env *env,
 
         LASSERT(cl_lock_mode_match(d->cld_mode,
                                    s->cls_lock->cll_descr.cld_mode));
-        cfs_list_for_each_entry(scan, &lock->lss_parents, lll_list) {
+	list_for_each_entry(scan, &lock->lss_parents, lll_list) {
                 int rc;
 
                 lov = scan->lll_super;
@@ -279,7 +279,7 @@ static int lovsub_lock_closure(const struct lu_env *env,
         sub    = cl2lovsub_lock(slice);
         result = 0;
 
-        cfs_list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+	list_for_each_entry(scan, &sub->lss_parents, lll_list) {
                 parent = scan->lll_super->lls_cl.cls_lock;
                 result = cl_lock_closure_build(env, parent, closure);
                 if (result != 0)
@@ -426,7 +426,7 @@ static void lovsub_lock_delete(const struct lu_env *env,
                 struct lov_lock_link *temp;
 
                 restart = 0;
-                cfs_list_for_each_entry_safe(scan, temp,
+		list_for_each_entry_safe(scan, temp,
                                              &sub->lss_parents, lll_list) {
                         lov     = scan->lll_super;
                         lovsub_parent_lock(env, lov);
@@ -450,7 +450,7 @@ static int lovsub_lock_print(const struct lu_env *env, void *cookie,
         struct lov_lock      *lov;
         struct lov_lock_link *scan;
 
-        cfs_list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+	list_for_each_entry(scan, &sub->lss_parents, lll_list) {
                 lov = scan->lll_super;
                 (*p)(env, cookie, "[%d %p ", scan->lll_idx, lov);
                 if (lov != NULL)
@@ -480,7 +480,7 @@ int lovsub_lock_init(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 	OBD_SLAB_ALLOC_PTR_GFP(lsk, lovsub_lock_kmem, GFP_NOFS);
 	if (lsk != NULL) {
-		CFS_INIT_LIST_HEAD(&lsk->lss_parents);
+		INIT_LIST_HEAD(&lsk->lss_parents);
 		cl_lock_slice_add(lock, &lsk->lss_cl, obj, &lovsub_lock_ops);
 		result = 0;
 	} else
