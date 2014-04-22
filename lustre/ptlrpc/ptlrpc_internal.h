@@ -238,7 +238,6 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
 struct ptlrpc_reply_state *
 lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt);
 void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
-int ptlrpc_enlarge_req_buffer(struct ptlrpc_request *req, int newbuf_size);
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);

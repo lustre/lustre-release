@@ -68,7 +68,6 @@
 #include <lustre_import.h>
 #include <lustre_sec.h>
 
-#include "../ptlrpc_internal.h"
 #include "gss_err.h"
 #include "gss_internal.h"
 #include "gss_api.h"
@@ -1652,9 +1651,9 @@ int gss_enlarge_reqbuf_intg(struct ptlrpc_sec *sec,
                             int svc,
                             int segment, int newsize)
 {
+        struct lustre_msg      *newbuf;
         int                     txtsize, sigsize = 0, i;
         int                     newmsg_size, newbuf_size;
-	int			rc;
 
         /*
          * gss header is at seg 0;
@@ -1698,10 +1697,19 @@ int gss_enlarge_reqbuf_intg(struct ptlrpc_sec *sec,
         LASSERT(!req->rq_pool || req->rq_reqbuf_len >= newbuf_size);
 
         if (req->rq_reqbuf_len < newbuf_size) {
-		rc = ptlrpc_enlarge_req_buffer(req, newbuf_size);
-		if (rc != 0)
-			RETURN(rc);
-	}
+                newbuf_size = size_roundup_power2(newbuf_size);
+
+                OBD_ALLOC_LARGE(newbuf, newbuf_size);
+                if (newbuf == NULL)
+                        RETURN(-ENOMEM);
+
+                memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
+
+                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+                req->rq_reqbuf = newbuf;
+                req->rq_reqbuf_len = newbuf_size;
+                req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 1, 0);
+        }
 
         /* do enlargement, from wrapper to embedded, from end to begin */
         if (svc != SPTLRPC_SVC_NULL)
@@ -1761,8 +1769,6 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                 if (newclrbuf_size + newcipbuf_size <= req->rq_reqbuf_len) {
                         void *src, *dst;
 
-			if (req->rq_import)
-				spin_lock(&req->rq_import->imp_lock);
                         /* move clear text backward. */
                         src = req->rq_clrbuf;
                         dst = (char *) req->rq_reqbuf + newcipbuf_size;
@@ -1772,9 +1778,6 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                         req->rq_clrbuf = (struct lustre_msg *) dst;
                         req->rq_clrbuf_len = newclrbuf_size;
                         req->rq_reqmsg = lustre_msg_buf(req->rq_clrbuf, 0, 0);
-
-			if (req->rq_import)
-				spin_unlock(&req->rq_import->imp_lock);
                 } else {
                         /* sadly we have to split out the clear buffer */
                         LASSERT(req->rq_reqbuf_len >= newcipbuf_size);
@@ -1789,15 +1792,6 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                 if (newclrbuf == NULL)
                         RETURN(-ENOMEM);
 
-		/* Must lock this, so that otherwise unprotected change of
-		 * rq_reqmsg is not racing with parallel processing of
-		 * imp_replay_list traversing threads. See LU-3333
-		 * This is a bandaid at best, we really need to deal with this
-		 * in request enlarging code before unpacking that's already
-		 * there */
-		if (req->rq_import)
-			spin_lock(&req->rq_import->imp_lock);
-
                 memcpy(newclrbuf, req->rq_clrbuf, req->rq_clrbuf_len);
 
                 if (req->rq_reqbuf == NULL ||
@@ -1810,9 +1804,6 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
                 req->rq_clrbuf = newclrbuf;
                 req->rq_clrbuf_len = newclrbuf_size;
                 req->rq_reqmsg = lustre_msg_buf(req->rq_clrbuf, 0, 0);
-
-		if (req->rq_import)
-			spin_unlock(&req->rq_import->imp_lock);
         }
 
         _sptlrpc_enlarge_msg_inplace(req->rq_clrbuf, 0, newmsg_size);
