@@ -107,27 +107,27 @@ out:
 	RETURN(result);
 }
 
-static int lprocfs_osd_rd_fstype(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int zfs_osd_fstype_seq_show(struct seq_file *m, void *data)
 {
-	return snprintf(page, count, "zfs\n");
+	return seq_printf(m, "zfs\n");
 }
+LPROC_SEQ_FOPS_RO(zfs_osd_fstype);
 
-static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
-				int *eof, void *data)
+static int zfs_osd_mntdev_seq_show(struct seq_file *m, void *data)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)data);
+	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 
 	LASSERT(osd != NULL);
-	*eof = 1;
-
-	return snprintf(page, count, "%s\n", osd->od_mntdev);
+	return seq_printf(m, "%s\n", osd->od_mntdev);
 }
+LPROC_SEQ_FOPS_RO(zfs_osd_mntdev);
 
-static int lprocfs_osd_wr_force_sync(struct file *file, const char *buffer,
-					unsigned long count, void *data)
+static ssize_t
+lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
 {
-	struct dt_device  *dt = data;
+	struct seq_file	  *m = file->private_data;
+	struct dt_device  *dt = m->private;
 	struct lu_env      env;
 	int rc;
 
@@ -139,21 +139,23 @@ static int lprocfs_osd_wr_force_sync(struct file *file, const char *buffer,
 
 	return rc == 0 ? count : rc;
 }
+LPROC_SEQ_FOPS_WO_TYPE(zfs, osd_force_sync);
 
-static int lprocfs_osd_rd_iused_est(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int zfs_osd_iused_est_seq_show(struct seq_file *m, void *data)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)data);
+	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 	LASSERT(osd != NULL);
 
-	return snprintf(page, count, "%d\n", osd->od_quota_iused_est);
+	return seq_printf(m, "%d\n", osd->od_quota_iused_est);
 }
 
-static int lprocfs_osd_wr_iused_est(struct file *file,
-				    const char __user *buffer,
-				    unsigned long count, void *data)
+static ssize_t
+zfs_osd_iused_est_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)data);
+	struct seq_file	  *m = file->private_data;
+	struct dt_device  *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
 	int                rc, val;
 
 	LASSERT(osd != NULL);
@@ -166,24 +168,36 @@ static int lprocfs_osd_wr_iused_est(struct file *file,
 
 	return count;
 }
+LPROC_SEQ_FOPS(zfs_osd_iused_est);
 
-struct lprocfs_vars lprocfs_osd_obd_vars[] = {
-	{ "blocksize",		lprocfs_dt_rd_blksize,	0, 0 },
-	{ "kbytestotal",	lprocfs_dt_rd_kbytestotal,	0, 0 },
-	{ "kbytesfree",		lprocfs_dt_rd_kbytesfree,	0, 0 },
-	{ "kbytesavail",	lprocfs_dt_rd_kbytesavail,	0, 0 },
-	{ "filestotal",		lprocfs_dt_rd_filestotal,	0, 0 },
-	{ "filesfree",		lprocfs_dt_rd_filesfree,	0, 0 },
-	{ "fstype",          lprocfs_osd_rd_fstype,      0, 0 },
-	{ "mntdev",          lprocfs_osd_rd_mntdev,      0, 0 },
-	{ "force_sync",      0, lprocfs_osd_wr_force_sync     },
-	{ "quota_iused_estimate",  lprocfs_osd_rd_iused_est,
-		lprocfs_osd_wr_iused_est,   0, 0 },
-	{ 0 }
-};
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_blksize);
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytestotal);
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytesfree);
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytesavail);
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_filestotal);
+LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_filesfree);
 
-struct lprocfs_vars lprocfs_osd_module_vars[] = {
-	{ "num_refs",        lprocfs_rd_numrefs,         0, 0 },
+struct lprocfs_seq_vars lprocfs_osd_obd_vars[] = {
+	{ .name	=	"blocksize",
+	  .fops	=	&zfs_dt_blksize_fops		},
+	{ .name	=	"kbytestotal",
+	  .fops	=	&zfs_dt_kbytestotal_fops	},
+	{ .name	=	"kbytesfree",
+	  .fops	=	&zfs_dt_kbytesfree_fops		},
+	{ .name	=	"kbytesavail",
+	  .fops	=	&zfs_dt_kbytesavail_fops	},
+	{ .name	=	"filestotal",
+	  .fops	=	&zfs_dt_filestotal_fops		},
+	{ .name	=	"filesfree",
+	  .fops	=	&zfs_dt_filesfree_fops		},
+	{ .name	=	"fstype",
+	  .fops	=	&zfs_osd_fstype_fops		},
+	{ .name	=	"mntdev",
+	  .fops	=	&zfs_osd_mntdev_fops		},
+	{ .name	=	"force_sync",
+	  .fops	=	&zfs_osd_force_sync_fops	},
+	{ .name	=	"quota_iused_estimate",
+	  .fops	=	&zfs_osd_iused_est_fops		},
 	{ 0 }
 };
 
@@ -203,7 +217,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 	LASSERT(name != NULL);
 	LASSERT(type != NULL);
 
-	osd->od_proc_entry = lprocfs_register(name, type->typ_procroot,
+	osd->od_proc_entry = lprocfs_seq_register(name, type->typ_procroot,
 			lprocfs_osd_obd_vars, &osd->od_dt_dev);
 	if (IS_ERR(osd->od_proc_entry)) {
 		rc = PTR_ERR(osd->od_proc_entry);
