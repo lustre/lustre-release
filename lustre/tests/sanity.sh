@@ -6699,6 +6699,8 @@ test_103 () {
 		run_acl_subtest 2561_zfs || error "LU-2561 zfs test failed"
 	fi
 
+	run_acl_subtest 4924 || error "LU-4924 test failed"
+
 	cd $SAVE_PWD
 	umask $SAVE_UMASK
 
