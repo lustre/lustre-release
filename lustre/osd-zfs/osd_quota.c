@@ -392,7 +392,11 @@ static int osd_zfs_commit_item(cfs_hash_t *hs, cfs_hash_bd_t *bd,
  * we go over all the changes cached in per-txg structure
  * and apply them to actual ZAPs
  */
+#ifdef HAVE_DSL_SYNC_TASK_DO_NOWAIT
 static void osd_zfs_acct_update(void *arg, void *arg2, dmu_tx_t *tx)
+#else
+static void osd_zfs_acct_update(void *arg, dmu_tx_t *tx)
+#endif
 {
 	struct osd_zfs_acct_txg	*zat = arg;
 	struct osd_device	*osd = zat->zat_osd;
@@ -417,11 +421,10 @@ static void osd_zfs_acct_update(void *arg, void *arg2, dmu_tx_t *tx)
 	OBD_FREE_PTR(zat);
 }
 
-static int osd_zfs_acct_check(void *arg1, void *arg2, dmu_tx_t *tx)
-{
-	/* check function isn't used currently */
-	return 0;
-}
+#ifdef HAVE_DSL_SYNC_TASK_DO_NOWAIT
+#define dsl_sync_task_nowait(pool, func, arg, blocks, tx) \
+	dsl_sync_task_do_nowait(pool, NULL, func, arg, NULL, blocks, tx)
+#endif
 
 /*
  * if any change to the object accounting is going to happen,
@@ -476,10 +479,9 @@ int osd_zfs_acct_trans_start(const struct lu_env *env, struct osd_thandle *oh)
 		spa_t *spa = dmu_objset_spa(osd->od_objset.os);
 		LASSERT(ac->zat_osd == NULL);
 		ac->zat_osd = osd;
-		dsl_sync_task_do_nowait(spa_get_dsl(spa),
-					osd_zfs_acct_check,
+		dsl_sync_task_nowait(spa_get_dsl(spa),
 					osd_zfs_acct_update,
-					ac, NULL, 128, oh->ot_tx);
+					ac, 128, oh->ot_tx);
 
 		/* no to be freed now */
 		ac = NULL;
