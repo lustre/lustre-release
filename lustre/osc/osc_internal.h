@@ -69,7 +69,6 @@ struct osc_async_page {
         struct client_obd       *oap_cli;
 	struct osc_object       *oap_obj;
 
-	struct ldlm_lock	*oap_ldlm_lock;
 	spinlock_t		 oap_lock;
 };
 

@@ -251,16 +251,14 @@ void lov_sub_put(struct lov_io_sub *sub)
 
 int lov_page_stripe(const struct cl_page *page)
 {
-	struct lovsub_object *subobj;
 	const struct cl_page_slice *slice;
 	ENTRY;
 
-	slice = cl_page_at(page, &lovsub_device_type);
+	slice = cl_page_at(page, &lov_device_type);
 	LASSERT(slice != NULL);
 	LASSERT(slice->cpl_obj != NULL);
 
-	subobj = cl2lovsub(slice->cpl_obj);
-	RETURN(subobj->lso_index);
+	RETURN(cl2lov_page(slice)->lps_stripe);
 }
 
 struct lov_io_sub *lov_page_subio(const struct lu_env *env, struct lov_io *lio,

@@ -369,8 +369,8 @@ struct lov_lock {
 };
 
 struct lov_page {
-        struct cl_page_slice lps_cl;
-        int                  lps_invalid;
+	struct cl_page_slice	lps_cl;
+	unsigned int		lps_stripe; /* stripe index */
 };
 
 /*

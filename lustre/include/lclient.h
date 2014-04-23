@@ -237,20 +237,20 @@ struct ccc_object {
  * ccc-private page state.
  */
 struct ccc_page {
-        struct cl_page_slice cpg_cl;
-        int                  cpg_defer_uptodate;
-        int                  cpg_ra_used;
-        int                  cpg_write_queued;
-        /**
-         * Non-empty iff this page is already counted in
-         * ccc_object::cob_pending_list. Protected by
-         * ccc_object::cob_pending_guard. This list is only used as a flag,
-         * that is, never iterated through, only checked for list_empty(), but
-         * having a list is useful for debugging.
-         */
-        cfs_list_t           cpg_pending_linkage;
-        /** VM page */
-	struct page          *cpg_page;
+	struct cl_page_slice cpg_cl;
+	unsigned	cpg_defer_uptodate:1,
+			cpg_ra_used:1,
+			cpg_write_queued:1;
+	/**
+	 * Non-empty iff this page is already counted in
+	 * ccc_object::cob_pending_list. Protected by
+	 * ccc_object::cob_pending_guard. This list is only used as a flag,
+	 * that is, never iterated through, only checked for list_empty(), but
+	 * having a list is useful for debugging.
+	 */
+	struct list_head cpg_pending_linkage;
+	/** VM page */
+	struct page	*cpg_page;
 };
 
 static inline struct ccc_page *cl2ccc_page(const struct cl_page_slice *slice)

@@ -1897,7 +1897,6 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	struct cl_req			*clerq = NULL;
 	enum cl_req_type		crt = (cmd & OBD_BRW_WRITE) ? CRT_WRITE :
 								      CRT_READ;
-	struct ldlm_lock		*lock = NULL;
 	struct cl_req_attr		*crattr = NULL;
 	obd_off				starting_offset = OBD_OBJECT_EOF;
 	obd_off				ending_offset = 0;
@@ -1954,7 +1953,6 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 					     1 /* only 1-object rpcs for now */);
 			if (IS_ERR(clerq))
 				GOTO(out, rc = PTR_ERR(clerq));
-			lock = oap->oap_ldlm_lock;
 		}
 		if (mem_tight)
 			oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
@@ -1971,10 +1969,6 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	LASSERT(clerq != NULL);
 	crattr->cra_oa = oa;
 	cl_req_attr_set(env, clerq, crattr, ~0ULL);
-	if (lock) {
-		oa->o_handle = lock->l_remote_handle;
-		oa->o_valid |= OBD_MD_FLHANDLE;
-	}
 
 	rc = cl_req_prep(env, clerq);
 	if (rc != 0) {
