@@ -290,6 +290,22 @@ No crc32c pclmulqdq crypto api found, enable internal pclmulqdq based crc32c
 ]) # LIBCFS_ENABLE_CRC32C_ACCEL
 
 #
+# FC19 3.12 kernel struct shrinker change
+#
+AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
+LB_CHECK_COMPILE([shrinker has 'count_objects'],
+shrinker_count_objects, [
+	#include <linux/mmzone.h>
+	#include <linux/shrinker.h>
+],[
+	((struct shrinker*)0)->count_objects(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_SHRINKER_COUNT, 1,
+		[shrinker has count_objects memeber])
+])
+])
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -324,6 +340,8 @@ LIBCFS_HAVE_CRC32
 LIBCFS_ENABLE_CRC32_ACCEL
 # 3.10
 LIBCFS_ENABLE_CRC32C_ACCEL
+# 3.12
+LIBCFS_SHRINKER_COUNT
 ]) # LIBCFS_PROG_LINUX
 
 #

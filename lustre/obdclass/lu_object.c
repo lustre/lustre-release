@@ -1884,6 +1884,68 @@ static void lu_site_stats_get(cfs_hash_t *hs,
 
 #ifdef __KERNEL__
 
+static unsigned long lu_cache_shrink_count(struct shrinker *sk,
+					   struct shrink_control *sc)
+{
+	lu_site_stats_t stats;
+	struct lu_site *s;
+	struct lu_site *tmp;
+	unsigned long cached = 0;
+
+	if (!(sc->gfp_mask & __GFP_FS))
+		return 0;
+
+	mutex_lock(&lu_sites_guard);
+	list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
+		memset(&stats, 0, sizeof(stats));
+		lu_site_stats_get(s->ls_obj_hash, &stats, 0);
+		cached += stats.lss_total - stats.lss_busy;
+	}
+	mutex_unlock(&lu_sites_guard);
+
+	cached = (cached / 100) * sysctl_vfs_cache_pressure;
+	CDEBUG(D_INODE, "%ld objects cached\n", cached);
+	return cached;
+}
+
+static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
+					  struct shrink_control *sc)
+{
+	struct lu_site *s;
+	struct lu_site *tmp;
+	unsigned long remain = sc->nr_to_scan;
+	LIST_HEAD(splice);
+
+	if (!(sc->gfp_mask & __GFP_FS))
+		/* We must not take the lu_sites_guard lock when
+		 * __GFP_FS is *not* set because of the deadlock
+		 * possibility detailed above. Additionally,
+		 * since we cannot determine the number of
+		 * objects in the cache without taking this
+		 * lock, we're in a particularly tough spot. As
+		 * a result, we'll just lie and say our cache is
+		 * empty. This _should_ be ok, as we can't
+		 * reclaim objects when __GFP_FS is *not* set
+		 * anyways.
+		 */
+		return SHRINK_STOP;
+
+	mutex_lock(&lu_sites_guard);
+	list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
+		remain = lu_site_purge(&lu_shrink_env, s, remain);
+		/*
+		 * Move just shrunk site to the tail of site list to
+		 * assure shrinking fairness.
+		 */
+		list_move_tail(&s->ls_linkage, &splice);
+	}
+	list_splice(&splice, lu_sites.prev);
+	mutex_unlock(&lu_sites_guard);
+
+	return sc->nr_to_scan - remain;
+}
+
+#ifndef HAVE_SHRINKER_COUNT
 /*
  * There exists a potential lock inversion deadlock scenario when using
  * Lustre on top of ZFS. This occurs between one of ZFS's
@@ -1904,58 +1966,28 @@ static void lu_site_stats_get(cfs_hash_t *hs,
  */
 static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 {
-        lu_site_stats_t stats;
-        struct lu_site *s;
-        struct lu_site *tmp;
         int cached = 0;
-        int remain = shrink_param(sc, nr_to_scan);
-        CFS_LIST_HEAD(splice);
+	struct shrink_control scv = {
+		 .nr_to_scan = shrink_param(sc, nr_to_scan),
+		 .gfp_mask   = shrink_param(sc, gfp_mask)
+	};
+#if !defined(HAVE_SHRINKER_WANT_SHRINK_PTR) && !defined(HAVE_SHRINK_CONTROL)
+	struct shrinker* shrinker = NULL;
+#endif
 
-	if (!(shrink_param(sc, gfp_mask) & __GFP_FS)) {
-		if (remain != 0)
-                        return -1;
-		else
-			/* We must not take the lu_sites_guard lock when
-			 * __GFP_FS is *not* set because of the deadlock
-			 * possibility detailed above. Additionally,
-			 * since we cannot determine the number of
-			 * objects in the cache without taking this
-			 * lock, we're in a particularly tough spot. As
-			 * a result, we'll just lie and say our cache is
-			 * empty. This _should_ be ok, as we can't
-			 * reclaim objects when __GFP_FS is *not* set
-			 * anyways.
-			 */
-			return 0;
-        }
 
-	CDEBUG(D_INODE, "Shrink %d objects\n", remain);
+	CDEBUG(D_INODE, "Shrink %lu objects\n", scv.nr_to_scan);
 
-	mutex_lock(&lu_sites_guard);
-        cfs_list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
-                if (shrink_param(sc, nr_to_scan) != 0) {
-                        remain = lu_site_purge(&lu_shrink_env, s, remain);
-                        /*
-                         * Move just shrunk site to the tail of site list to
-                         * assure shrinking fairness.
-                         */
-                        cfs_list_move_tail(&s->ls_linkage, &splice);
-                }
+	lu_cache_shrink_scan(shrinker, &scv);
 
-                memset(&stats, 0, sizeof(stats));
-                lu_site_stats_get(s->ls_obj_hash, &stats, 0);
-                cached += stats.lss_total - stats.lss_busy;
-                if (shrink_param(sc, nr_to_scan) && remain <= 0)
-                        break;
-        }
-        cfs_list_splice(&splice, lu_sites.prev);
-	mutex_unlock(&lu_sites_guard);
-
-        cached = (cached / 100) * sysctl_vfs_cache_pressure;
-        if (shrink_param(sc, nr_to_scan) == 0)
-                CDEBUG(D_INODE, "%d objects cached\n", cached);
-        return cached;
+	cached = lu_cache_shrink_count(shrinker, &scv);
+	if (scv.nr_to_scan == 0)
+		CDEBUG(D_INODE, "%d objects cached\n", cached);
+	return cached;
 }
+
+#endif /* HAVE_SHRINKER_COUNT */
+
 
 /*
  * Debugging stuff.
@@ -2005,11 +2037,6 @@ void lu_context_keys_dump(void)
         }
 }
 EXPORT_SYMBOL(lu_context_keys_dump);
-#else  /* !__KERNEL__ */
-static int lu_cache_shrink(int nr, unsigned int gfp_mask)
-{
-        return 0;
-}
 #endif /* __KERNEL__ */
 
 /**
@@ -2018,6 +2045,8 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 int lu_global_init(void)
 {
         int result;
+	DEF_SHRINKER_VAR(shvar, lu_cache_shrink,
+			 lu_cache_shrink_count, lu_cache_shrink_scan);
 
         CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
 
@@ -2046,7 +2075,7 @@ int lu_global_init(void)
          * inode, one for ea. Unfortunately setting this high value results in
          * lu_object/inode cache consuming all the memory.
          */
-	lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, lu_cache_shrink);
+	lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, &shvar);
         if (lu_site_shrinker == NULL)
                 return -ENOMEM;
 

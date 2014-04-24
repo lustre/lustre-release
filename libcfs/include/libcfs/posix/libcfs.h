@@ -269,12 +269,19 @@ struct shrinker {
 #endif
 };
 
+struct shrinker_var {
+#ifndef __INTEL_COMPILER
+	;
+#endif
+};
+
+#define DEF_SHRINKER_VAR(name, shrink, count, scan) \
+		struct shrinker_var name = {};
+
 #define DEFAULT_SEEKS (0)
 
-typedef int (*shrinker_t)(int, unsigned int);
-
 static inline
-struct shrinker *set_shrinker(int seeks, shrinker_t shrink)
+struct shrinker *set_shrinker(int seeks, struct shrinker_var *var)
 {
 	return (struct shrinker *)0xdeadbea1; /* Cannot return NULL here */
 }
