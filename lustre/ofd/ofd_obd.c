@@ -1169,6 +1169,7 @@ struct obd_ops ofd_obd_ops = {
 	.o_reconnect		= ofd_obd_reconnect,
 	.o_disconnect		= ofd_obd_disconnect,
 	.o_create		= ofd_echo_create,
+	.o_statfs		= ofd_statfs,
 	.o_setattr		= ofd_echo_setattr,
 	.o_preprw		= ofd_preprw,
 	.o_commitrw		= ofd_commitrw,
