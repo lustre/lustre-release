@@ -354,7 +354,7 @@ lnet_mt_set_exhausted(struct lnet_match_table *mtable, int pos, int exhausted)
 		*bmap |= 1ULL << pos;
 }
 
-cfs_list_t *
+struct list_head *
 lnet_mt_match_head(struct lnet_match_table *mtable,
 		   lnet_process_id_t id, __u64 mbits)
 {
@@ -375,14 +375,14 @@ int
 lnet_mt_match_md(struct lnet_match_table *mtable,
 		 struct lnet_match_info *info, struct lnet_msg *msg)
 {
-	cfs_list_t		*head;
+	struct list_head	*head;
 	lnet_me_t		*me;
 	lnet_me_t		*tmp;
 	int			exhausted = 0;
 	int			rc;
 
 	/* any ME with ignore bits? */
-	if (!cfs_list_empty(&mtable->mt_mhash[LNET_MT_HASH_IGNORE]))
+	if (!list_empty(&mtable->mt_mhash[LNET_MT_HASH_IGNORE]))
 		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
 	else
 		head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
@@ -391,7 +391,7 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	if (lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]))
 		exhausted = LNET_MATCHMD_EXHAUSTED;
 
-	cfs_list_for_each_entry_safe(me, tmp, head, me_list) {
+	list_for_each_entry_safe(me, tmp, head, me_list) {
 		/* ME attached but MD not attached yet */
 		if (me->me_md == NULL)
 			continue;
@@ -447,8 +447,8 @@ lnet_ptl_match_early(struct lnet_portal *ptl, struct lnet_msg *msg)
 	if (lnet_ptl_is_lazy(ptl)) {
 		if (msg->msg_rx_ready_delay) {
 			msg->msg_rx_delayed = 1;
-			cfs_list_add_tail(&msg->msg_list,
-					  &ptl->ptl_msg_delayed);
+			list_add_tail(&msg->msg_list,
+				      &ptl->ptl_msg_delayed);
 		}
 		rc = LNET_MATCHMD_NONE;
 	} else {
@@ -485,11 +485,11 @@ lnet_ptl_match_delay(struct lnet_portal *ptl,
 		lnet_ptl_lock(ptl);
 
 		if (i == 0) { /* the first try, attach on stealing list */
-			cfs_list_add_tail(&msg->msg_list,
-					  &ptl->ptl_msg_stealing);
+			list_add_tail(&msg->msg_list,
+				      &ptl->ptl_msg_stealing);
 		}
 
-		if (!cfs_list_empty(&msg->msg_list)) { /* on stealing list */
+		if (!list_empty(&msg->msg_list)) { /* on stealing list */
 			rc = lnet_mt_match_md(mtable, info, msg);
 
 			if ((rc & LNET_MATCHMD_EXHAUSTED) != 0 &&
@@ -497,7 +497,7 @@ lnet_ptl_match_delay(struct lnet_portal *ptl,
 				lnet_ptl_disable_mt(ptl, cpt);
 
 			if ((rc & LNET_MATCHMD_FINISH) != 0)
-				cfs_list_del_init(&msg->msg_list);
+				list_del_init(&msg->msg_list);
 
 		} else {
 			/* could be matched by lnet_ptl_attach_md()
@@ -506,18 +506,18 @@ lnet_ptl_match_delay(struct lnet_portal *ptl,
 			     LNET_MATCHMD_DROP : LNET_MATCHMD_OK;
 		}
 
-		if (!cfs_list_empty(&msg->msg_list) && /* not matched yet */
+		if (!list_empty(&msg->msg_list) && /* not matched yet */
 		    (i == LNET_CPT_NUMBER - 1 || /* the last CPT */
 		     ptl->ptl_mt_nmaps == 0 ||   /* no active CPT */
 		     (ptl->ptl_mt_nmaps == 1 &&  /* the only active CPT */
 		      ptl->ptl_mt_maps[0] == cpt))) {
 			/* nothing to steal, delay or drop */
-			cfs_list_del_init(&msg->msg_list);
+			list_del_init(&msg->msg_list);
 
 			if (lnet_ptl_is_lazy(ptl)) {
 				msg->msg_rx_delayed = 1;
-				cfs_list_add_tail(&msg->msg_list,
-						  &ptl->ptl_msg_delayed);
+				list_add_tail(&msg->msg_list,
+					      &ptl->ptl_msg_delayed);
 				rc = LNET_MATCHMD_NONE;
 			} else {
 				rc = LNET_MATCHMD_DROP;
@@ -585,7 +585,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 		lnet_ptl_lock(ptl);
 
 		msg->msg_rx_delayed = 1;
-		cfs_list_add_tail(&msg->msg_list, &ptl->ptl_msg_delayed);
+		list_add_tail(&msg->msg_list, &ptl->ptl_msg_delayed);
 
 		lnet_ptl_unlock(ptl);
 		lnet_res_unlock(mtable->mt_cpt);
@@ -622,11 +622,11 @@ lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md)
 /* called with lnet_res_lock held */
 void
 lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
-		   cfs_list_t *matches, cfs_list_t *drops)
+		   struct list_head *matches, struct list_head *drops)
 {
 	struct lnet_portal	*ptl = the_lnet.ln_portals[me->me_portal];
 	struct lnet_match_table	*mtable;
-	cfs_list_t		*head;
+	struct list_head	*head;
 	lnet_msg_t		*tmp;
 	lnet_msg_t		*msg;
 	int			exhausted = 0;
@@ -640,15 +640,15 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 	cpt = lnet_cpt_of_cookie(md->md_lh.lh_cookie);
 	mtable = ptl->ptl_mtables[cpt];
 
-	if (cfs_list_empty(&ptl->ptl_msg_stealing) &&
-	    cfs_list_empty(&ptl->ptl_msg_delayed) &&
+	if (list_empty(&ptl->ptl_msg_stealing) &&
+	    list_empty(&ptl->ptl_msg_delayed) &&
 	    !lnet_mt_test_exhausted(mtable, me->me_pos))
 		return;
 
 	lnet_ptl_lock(ptl);
 	head = &ptl->ptl_msg_stealing;
  again:
-	cfs_list_for_each_entry_safe(msg, tmp, head, msg_list) {
+	list_for_each_entry_safe(msg, tmp, head, msg_list) {
 		struct lnet_match_info	info;
 		lnet_hdr_t		*hdr;
 		int			rc;
@@ -675,7 +675,7 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 
 		/* Hurrah! This _is_ a match */
 		LASSERT((rc & LNET_MATCHMD_FINISH) != 0);
-		cfs_list_del_init(&msg->msg_list);
+		list_del_init(&msg->msg_list);
 
 		if (head == &ptl->ptl_msg_stealing) {
 			if (exhausted)
@@ -685,7 +685,7 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 		}
 
 		if ((rc & LNET_MATCHMD_OK) != 0) {
-			cfs_list_add_tail(&msg->msg_list, matches);
+			list_add_tail(&msg->msg_list, matches);
 
 			CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
 			       "match "LPU64" offset %d length %d.\n",
@@ -693,7 +693,7 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 			       info.mi_portal, info.mi_mbits,
 			       info.mi_roffset, info.mi_rlength);
 		} else {
-			cfs_list_add_tail(&msg->msg_list, drops);
+			list_add_tail(&msg->msg_list, drops);
 		}
 
 		if (exhausted)
@@ -723,17 +723,17 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 	if (ptl->ptl_mtables == NULL) /* uninitialized portal */
 		return;
 
-	LASSERT(cfs_list_empty(&ptl->ptl_msg_delayed));
-	LASSERT(cfs_list_empty(&ptl->ptl_msg_stealing));
+	LASSERT(list_empty(&ptl->ptl_msg_delayed));
+	LASSERT(list_empty(&ptl->ptl_msg_stealing));
 #ifndef __KERNEL__
 # ifdef HAVE_LIBPTHREAD
 	pthread_mutex_destroy(&ptl->ptl_lock);
 # endif
 #endif
 	cfs_percpt_for_each(mtable, i, ptl->ptl_mtables) {
-		cfs_list_t	*mhash;
-		lnet_me_t	*me;
-		int		j;
+		struct list_head *mhash;
+		lnet_me_t	 *me;
+		int		  j;
 
 		if (mtable->mt_mhash == NULL) /* uninitialized match-table */
 			continue;
@@ -741,11 +741,11 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 		mhash = mtable->mt_mhash;
 		/* cleanup ME */
 		for (j = 0; j < LNET_MT_HASH_SIZE + 1; j++) {
-			while (!cfs_list_empty(&mhash[j])) {
-				me = cfs_list_entry(mhash[j].next,
-						    lnet_me_t, me_list);
+			while (!list_empty(&mhash[j])) {
+				me = list_entry(mhash[j].next,
+						lnet_me_t, me_list);
 				CERROR("Active ME %p on exit\n", me);
-				cfs_list_del(&me->me_list);
+				list_del(&me->me_list);
 				lnet_me_free(me);
 			}
 		}
@@ -761,7 +761,7 @@ int
 lnet_ptl_setup(struct lnet_portal *ptl, int index)
 {
 	struct lnet_match_table	*mtable;
-	cfs_list_t		*mhash;
+	struct list_head	*mhash;
 	int			i;
 	int			j;
 
@@ -773,8 +773,8 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 	}
 
 	ptl->ptl_index = index;
-	CFS_INIT_LIST_HEAD(&ptl->ptl_msg_delayed);
-	CFS_INIT_LIST_HEAD(&ptl->ptl_msg_stealing);
+	INIT_LIST_HEAD(&ptl->ptl_msg_delayed);
+	INIT_LIST_HEAD(&ptl->ptl_msg_stealing);
 #ifdef __KERNEL__
 	spin_lock_init(&ptl->ptl_lock);
 #else
@@ -797,7 +797,7 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 		       LNET_MT_EXHAUSTED_BMAP);
 		mtable->mt_mhash = mhash;
 		for (j = 0; j < LNET_MT_HASH_SIZE + 1; j++)
-			CFS_INIT_LIST_HEAD(&mhash[j]);
+			INIT_LIST_HEAD(&mhash[j]);
 
 		mtable->mt_portal = index;
 		mtable->mt_cpt = i;
@@ -913,7 +913,7 @@ int
 LNetClearLazyPortal(int portal)
 {
 	struct lnet_portal	*ptl;
-	CFS_LIST_HEAD		(zombies);
+	struct list_head        zombies = LIST_HEAD_INIT(zombies);
 
 	if (portal < 0 || portal >= the_lnet.ln_nportals)
 		return -EINVAL;
@@ -935,7 +935,7 @@ LNetClearLazyPortal(int portal)
 		CDEBUG(D_NET, "clearing portal %d lazy\n", portal);
 
 	/* grab all the blocked messages atomically */
-	cfs_list_splice_init(&ptl->ptl_msg_delayed, &zombies);
+	list_splice_init(&ptl->ptl_msg_delayed, &zombies);
 
 	lnet_ptl_unsetopt(ptl, LNET_PTL_LAZY);
 

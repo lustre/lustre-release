@@ -62,22 +62,22 @@ typedef struct lstcon_node {
 } lstcon_node_t;                                /*** node descriptor */
 
 typedef struct {
-        cfs_list_t           ndl_link;       /* chain on list */
-        cfs_list_t           ndl_hlink;      /* chain on hash */
-        lstcon_node_t       *ndl_node;       /* pointer to node */
-} lstcon_ndlink_t;                              /*** node link descriptor */
+	struct list_head	ndl_link;	/* chain on list */
+	struct list_head	ndl_hlink;	/* chain on hash */
+	lstcon_node_t		*ndl_node;	/* pointer to node */
+} lstcon_ndlink_t;				/*** node link descriptor */
 
 typedef struct {
-        cfs_list_t           grp_link;       /* chain on global group list */
-        int                  grp_ref;        /* reference count */
-        int                  grp_userland;   /* has userland nodes */
-        int                  grp_nnode;      /* # of nodes */
-        char                 grp_name[LST_NAME_SIZE]; /* group name */
+	struct list_head	grp_link;	/* chain on global group list */
+	int			grp_ref;	/* reference count */
+	int			grp_userland;	/* has userland nodes */
+	int			grp_nnode;	/* # of nodes */
+	char			grp_name[LST_NAME_SIZE];	/* group name */
 
-        cfs_list_t           grp_trans_list; /* transaction list */
-        cfs_list_t           grp_ndl_list;   /* nodes list */
-        cfs_list_t           grp_ndl_hash[0];/* hash table for nodes */
-} lstcon_group_t;                    /*** (alias of nodes) group descriptor */
+	struct list_head	grp_trans_list;	/* transaction list */
+	struct list_head	grp_ndl_list;	/* nodes list */
+	struct list_head	grp_ndl_hash[0];/* hash table for nodes */
+} lstcon_group_t;		/*** (alias of nodes) group descriptor */
 
 #define LST_BATCH_IDLE          0xB0            /* idle batch */
 #define LST_BATCH_RUNNING       0xB1            /* running batch */
@@ -88,25 +88,40 @@ typedef struct lstcon_tsb_hdr {
 } lstcon_tsb_hdr_t;
 
 typedef struct {
-        lstcon_tsb_hdr_t        bat_hdr;        /* test_batch header */
-        cfs_list_t              bat_link;       /* chain on session's batches list */
-        int                     bat_ntest;      /* # of test */
-        int                     bat_state;      /* state of the batch */
-        int                     bat_arg;        /* parameter for run|stop, timeout for run, force for stop */
-        char                    bat_name[LST_NAME_SIZE]; /* name of batch */
+	/* test_batch header */
+	lstcon_tsb_hdr_t	bat_hdr;
+	/* chain on session's batches list */
+	struct list_head	bat_link;
+	/* # of test */
+	int			bat_ntest;
+	/* state of the batch */
+	int			bat_state;
+	/* parameter for run|stop, timeout for run, force for stop */
+	int			bat_arg;
+	/* name of batch */
+	char			bat_name[LST_NAME_SIZE];
 
-        cfs_list_t              bat_test_list;  /* list head of tests (lstcon_test_t) */
-        cfs_list_t              bat_trans_list; /* list head of transaction */
-        cfs_list_t              bat_cli_list;   /* list head of client nodes (lstcon_node_t) */
-        cfs_list_t             *bat_cli_hash;   /* hash table of client nodes */ 
-        cfs_list_t              bat_srv_list;   /* list head of server nodes */
-        cfs_list_t             *bat_srv_hash;   /* hash table of server nodes */
-} lstcon_batch_t;                             /*** (tests ) batch descritptor */
+	/* list head of tests (lstcon_test_t) */
+	struct list_head	bat_test_list;
+	/* list head of transaction */
+	struct list_head	bat_trans_list;
+	/* list head of client nodes (lstcon_node_t) */
+	struct list_head	bat_cli_list;
+	/* hash table of client nodes */
+	struct list_head	*bat_cli_hash;
+	/* list head of server nodes */
+	struct list_head	bat_srv_list;
+	/* hash table of server nodes */
+	struct list_head	*bat_srv_hash;
+} lstcon_batch_t;		/*** (tests ) batch descritptor */
 
 typedef struct lstcon_test {
-        lstcon_tsb_hdr_t      tes_hdr;        /* test batch header */
-        cfs_list_t            tes_link;       /* chain on batch's tests list */
-        lstcon_batch_t       *tes_batch;      /* pointer to batch */
+	/* test batch header */
+	lstcon_tsb_hdr_t	tes_hdr;
+	/* chain on batch's tests list */
+	struct list_head	tes_link;
+	/* pointer to batch */
+	lstcon_batch_t	       *tes_batch;
 
         int                   tes_type;       /* type of the test, i.e: bulk, ping */
         int                   tes_stop_onerr; /* stop on error */
@@ -117,9 +132,9 @@ typedef struct lstcon_test {
         int                   tes_span;       /* nodes span of target group */
         int                   tes_cliidx;     /* client index, used for RPC creating */
 
-        cfs_list_t  tes_trans_list; /* transaction list */
-        lstcon_group_t       *tes_src_grp;    /* group run the test */
-        lstcon_group_t       *tes_dst_grp;    /* target group */
+	struct list_head	tes_trans_list;	/* transaction list */
+	lstcon_group_t		*tes_src_grp;	/* group run the test */
+	lstcon_group_t		*tes_dst_grp;	/* target group */
 
         int                   tes_paramlen;   /* test parameter length */
         char                  tes_param[0];   /* test parameter */
@@ -156,16 +171,16 @@ typedef struct {
         stt_timer_t             ses_ping_timer; /* timer for pinger */
         lstcon_trans_stat_t     ses_trans_stat; /* transaction stats */
 
-        cfs_list_t              ses_trans_list; /* global list of transaction */
-        cfs_list_t              ses_grp_list;   /* global list of groups */
-        cfs_list_t              ses_bat_list;   /* global list of batches */
-        cfs_list_t              ses_ndl_list;   /* global list of nodes */
-        cfs_list_t             *ses_ndl_hash;   /* hash table of nodes */
+	struct list_head	ses_trans_list;	/* global list of transaction */
+	struct list_head	ses_grp_list;	/* global list of groups */
+	struct list_head	ses_bat_list;	/* global list of batches */
+	struct list_head	ses_ndl_list;	/* global list of nodes */
+	struct list_head	*ses_ndl_hash;	/* hash table of nodes */
 
-	spinlock_t          ses_rpc_lock;   /* serialize */
-	atomic_t            ses_rpc_counter;/* # of initialized RPCs */
-	cfs_list_t              ses_rpc_freelist; /* idle console rpc */
-} lstcon_session_t;                             /*** session descriptor */
+	spinlock_t		ses_rpc_lock;	/* serialize */
+	atomic_t		ses_rpc_counter;/* # of initialized RPCs */
+	struct list_head	ses_rpc_freelist;/* idle console rpc */
+} lstcon_session_t;		/*** session descriptor */
 
 extern lstcon_session_t         console_session;
 
@@ -175,8 +190,8 @@ lstcon_trans_stat(void)
         return &console_session.ses_trans_stat;
 }
 
-static inline cfs_list_t *
-lstcon_id2hash (lnet_process_id_t id, cfs_list_t *hash)
+static inline struct list_head *
+lstcon_id2hash(lnet_process_id_t id, struct list_head *hash)
 {
         unsigned int idx = LNET_NIDADDR(id.nid) % LST_NODE_HASHSIZE;
 
@@ -189,47 +204,47 @@ extern int lstcon_session_new(char *name, int key, unsigned version,
 extern int lstcon_session_info(lst_sid_t *sid_up, int *key, unsigned *verp,
                                lstcon_ndlist_ent_t *entp, char *name_up, int len);
 extern int lstcon_session_end(void);
-extern int lstcon_session_debug(int timeout, cfs_list_t *result_up);
+extern int lstcon_session_debug(int timeout, struct list_head *result_up);
 extern int lstcon_session_feats_check(unsigned feats);
 extern int lstcon_batch_debug(int timeout, char *name,
-                              int client, cfs_list_t *result_up);
+			      int client, struct list_head *result_up);
 extern int lstcon_group_debug(int timeout, char *name,
-                              cfs_list_t *result_up);
+			      struct list_head *result_up);
 extern int lstcon_nodes_debug(int timeout, int nnd, lnet_process_id_t *nds_up,
-                              cfs_list_t *result_up);
+			      struct list_head *result_up);
 extern int lstcon_group_add(char *name);
 extern int lstcon_group_del(char *name);
 extern int lstcon_group_clean(char *name, int args);
-extern int lstcon_group_refresh(char *name, cfs_list_t *result_up);
+extern int lstcon_group_refresh(char *name, struct list_head *result_up);
 extern int lstcon_nodes_add(char *name, int nnd, lnet_process_id_t *nds_up,
-			    unsigned *featp, cfs_list_t *result_up);
+			    unsigned *featp, struct list_head *result_up);
 extern int lstcon_nodes_remove(char *name, int nnd, lnet_process_id_t *nds_up,
-                               cfs_list_t *result_up);
+			       struct list_head *result_up);
 extern int lstcon_group_info(char *name, lstcon_ndlist_ent_t *gent_up, 
                              int *index_p, int *ndent_p, lstcon_node_ent_t *ndents_up);
 extern int lstcon_group_list(int idx, int len, char *name_up);
 extern int lstcon_batch_add(char *name);
 extern int lstcon_batch_run(char *name, int timeout,
-                            cfs_list_t *result_up);
+			    struct list_head *result_up);
 extern int lstcon_batch_stop(char *name, int force,
-                             cfs_list_t *result_up);
+			     struct list_head *result_up);
 extern int lstcon_test_batch_query(char *name, int testidx,
-                                   int client, int timeout,
-                                   cfs_list_t *result_up);
+				   int client, int timeout,
+				   struct list_head *result_up);
 extern int lstcon_batch_del(char *name);
 extern int lstcon_batch_list(int idx, int namelen, char *name_up);
 extern int lstcon_batch_info(char *name, lstcon_test_batch_ent_t *ent_up,
                              int server, int testidx, int *index_p,
                              int *ndent_p, lstcon_node_ent_t *dents_up);
 extern int lstcon_group_stat(char *grp_name, int timeout,
-                             cfs_list_t *result_up);
+			     struct list_head *result_up);
 extern int lstcon_nodes_stat(int count, lnet_process_id_t *ids_up,
-                             int timeout, cfs_list_t *result_up);
+			     int timeout, struct list_head *result_up);
 extern int lstcon_test_add(char *batch_name, int type, int loop,
 			   int concur, int dist, int span,
 			   char *src_name, char *dst_name,
 			   void *param, int paramlen, int *retp,
-			   cfs_list_t *result_up);
+			   struct list_head *result_up);
 #endif
 
 #endif

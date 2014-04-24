@@ -50,19 +50,19 @@ CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,
 static void
 brw_client_fini (sfw_test_instance_t *tsi)
 {
-        srpc_bulk_t     *bulk;
-        sfw_test_unit_t *tsu;
+	srpc_bulk_t	*bulk;
+	sfw_test_unit_t	*tsu;
 
-        LASSERT (tsi->tsi_is_client);
+	LASSERT(tsi->tsi_is_client);
 
-        cfs_list_for_each_entry_typed (tsu, &tsi->tsi_units,
-                                       sfw_test_unit_t, tsu_list) {
-                bulk = tsu->tsu_private;
-                if (bulk == NULL) continue;
+	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
+		bulk = tsu->tsu_private;
+		if (bulk == NULL)
+			continue;
 
-                srpc_free_bulk(bulk);
-                tsu->tsu_private = NULL;
-        }
+		srpc_free_bulk(bulk);
+		tsu->tsu_private = NULL;
+	}
 }
 
 int
@@ -112,17 +112,16 @@ brw_client_init (sfw_test_instance_t *tsi)
 	    flags != LST_BRW_CHECK_FULL && flags != LST_BRW_CHECK_SIMPLE)
 		return -EINVAL;
 
-	cfs_list_for_each_entry_typed(tsu, &tsi->tsi_units,
-				      sfw_test_unit_t, tsu_list) {
+	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
 		bulk = srpc_alloc_bulk(lnet_cpt_of_nid(tsu->tsu_dest.nid),
 				       npg, len, opc == LST_BRW_READ);
-                if (bulk == NULL) {
-                        brw_client_fini(tsi);
-                        return -ENOMEM;
-                }
+		if (bulk == NULL) {
+			brw_client_fini(tsi);
+			return -ENOMEM;
+		}
 
-                tsu->tsu_private = bulk;
-        }
+		tsu->tsu_private = bulk;
+	}
 
 	return 0;
 }

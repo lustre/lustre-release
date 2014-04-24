@@ -264,24 +264,24 @@ void lnet_freelist_fini(lnet_freelist_t *fl);
 static inline void *
 lnet_freelist_alloc (lnet_freelist_t *fl)
 {
-        /* ALWAYS called with liblock held */
-        lnet_freeobj_t *o;
+	/* ALWAYS called with liblock held */
+	lnet_freeobj_t *o;
 
-        if (cfs_list_empty (&fl->fl_list))
-                return (NULL);
+	if (list_empty(&fl->fl_list))
+		return NULL;
 
-        o = cfs_list_entry (fl->fl_list.next, lnet_freeobj_t, fo_list);
-        cfs_list_del (&o->fo_list);
-        return ((void *)&o->fo_contents);
+	o = list_entry(fl->fl_list.next, lnet_freeobj_t, fo_list);
+	list_del(&o->fo_list);
+	return (void *)&o->fo_contents;
 }
 
 static inline void
 lnet_freelist_free (lnet_freelist_t *fl, void *obj)
 {
-        /* ALWAYS called with liblock held */
-        lnet_freeobj_t *o = cfs_list_entry (obj, lnet_freeobj_t, fo_contents);
+	/* ALWAYS called with liblock held */
+	lnet_freeobj_t *o = list_entry(obj, lnet_freeobj_t, fo_contents);
 
-        cfs_list_add (&o->fo_list, &fl->fl_list);
+	list_add(&o->fo_list, &fl->fl_list);
 }
 
 
@@ -333,7 +333,7 @@ lnet_md_alloc (lnet_md_t *umd)
 	lnet_res_unlock(0);
 
 	if (md != NULL)
-		CFS_INIT_LIST_HEAD(&md->md_list);
+		INIT_LIST_HEAD(&md->md_list);
 
 	return md;
 }
@@ -467,14 +467,14 @@ lnet_md_alloc (lnet_md_t *umd)
 
         LIBCFS_ALLOC(md, size);
 
-        if (md != NULL) {
-                /* Set here in case of early free */
-                md->md_options = umd->options;
-                md->md_niov = niov;
-                CFS_INIT_LIST_HEAD(&md->md_list);
-        }
+	if (md != NULL) {
+		/* Set here in case of early free */
+		md->md_options = umd->options;
+		md->md_niov = niov;
+		INIT_LIST_HEAD(&md->md_list);
+	}
 
-        return (md);
+	return md;
 }
 
 static inline void
@@ -544,7 +544,7 @@ lnet_res_lh_invalidate(lnet_libhandle_t *lh)
 {
 	/* ALWAYS called with resource lock held */
 	/* NB: cookie is still useful, don't reset it */
-	cfs_list_del(&lh->lh_hash_chain);
+	list_del(&lh->lh_hash_chain);
 }
 
 static inline void
@@ -700,7 +700,7 @@ lnet_nid2peerhash(lnet_nid_t nid)
 	return hash_long(nid, LNET_PEER_HASH_BITS);
 }
 
-static inline cfs_list_t *
+static inline struct list_head *
 lnet_net2rnethash(__u32 net)
 {
 	return &the_lnet.ln_remote_nets_hash[(LNET_NETNUM(net) +
@@ -801,7 +801,7 @@ lnet_ptl_unsetopt(lnet_portal_t *ptl, int opt)
 }
 
 /* match-table functions */
-cfs_list_t *lnet_mt_match_head(struct lnet_match_table *mtable,
+struct list_head *lnet_mt_match_head(struct lnet_match_table *mtable,
 			       lnet_process_id_t id, __u64 mbits);
 struct lnet_match_table *lnet_mt_of_attach(unsigned int index,
 					   lnet_process_id_t id, __u64 mbits,
@@ -812,7 +812,7 @@ int lnet_mt_match_md(struct lnet_match_table *mtable,
 
 /* portals match/attach functions */
 void lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
-			cfs_list_t *matches, cfs_list_t *drops);
+			struct list_head *matches, struct list_head *drops);
 void lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md);
 int lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg);
 
@@ -828,8 +828,8 @@ void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
 void lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *msg, unsigned int len);
 void lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int rc);
-void lnet_drop_delayed_msg_list(cfs_list_t *head, char *reason);
-void lnet_recv_delayed_msg_list(cfs_list_t *head);
+void lnet_drop_delayed_msg_list(struct list_head *head, char *reason);
+void lnet_recv_delayed_msg_list(struct list_head *head);
 
 int lnet_msg_container_setup(struct lnet_msg_container *container, int cpt);
 void lnet_msg_container_cleanup(struct lnet_msg_container *container);
@@ -952,9 +952,9 @@ void lnet_ping_target_fini(void);
 int lnet_ping(lnet_process_id_t id, int timeout_ms,
               lnet_process_id_t *ids, int n_ids);
 
-int lnet_parse_ip2nets (char **networksp, char *ip2nets);
-int lnet_parse_routes (char *route_str, int *im_a_router);
-int lnet_parse_networks (cfs_list_t *nilist, char *networks);
+int lnet_parse_ip2nets(char **networksp, char *ip2nets);
+int lnet_parse_routes(char *route_str, int *im_a_router);
+int lnet_parse_networks(struct list_head *nilist, char *networks);
 
 int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt);
 lnet_peer_t *lnet_find_peer_locked(struct lnet_peer_table *ptable,

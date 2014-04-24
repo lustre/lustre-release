@@ -328,7 +328,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 ksocknal_lib_csum_tx(tx);
 
         nob = ks_query_iovs_length(tx->tx_iov, tx->tx_niov);
-        flags = (!cfs_list_empty (&conn->ksnc_tx_queue) || nob < tx->tx_resid) ? 
+	flags = (!list_empty(&conn->ksnc_tx_queue) || nob < tx->tx_resid) ?
                 (MSG_DONTWAIT | MSG_MORE) : MSG_DONTWAIT;
         rc = ks_send_iovs(sock, tx->tx_iov, tx->tx_niov, flags, 0);
 
@@ -349,7 +349,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 
         nkiov = tx->tx_nkiov;
         nob = ks_query_kiovs_length(tx->tx_kiov, nkiov);
-        flags = (!cfs_list_empty (&conn->ksnc_tx_queue) || nob < tx->tx_resid) ? 
+	flags = (!list_empty(&conn->ksnc_tx_queue) || nob < tx->tx_resid) ?
                 (MSG_DONTWAIT | MSG_MORE) : MSG_DONTWAIT;
         rc = ks_send_kiovs(sock, tx->tx_kiov, nkiov, flags, 0);
 
@@ -632,9 +632,9 @@ ksocknal_tx_fini_callback(ksock_conn_t * conn, ksock_tx_t * tx)
 {
 	/* remove tx/conn from conn's outgoing queue */
 	spin_lock_bh(&conn->ksnc_scheduler->kss_lock);
-	cfs_list_del(&tx->tx_list);
-	if (cfs_list_empty(&conn->ksnc_tx_queue))
-		cfs_list_del(&conn->ksnc_tx_list);
+	list_del(&tx->tx_list);
+	if (list_empty(&conn->ksnc_tx_queue))
+		list_del(&conn->ksnc_tx_list);
 
 	spin_unlock_bh(&conn->ksnc_scheduler->kss_lock);
 

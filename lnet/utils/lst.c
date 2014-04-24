@@ -401,33 +401,33 @@ lst_print_error(char *sub, const char *def_format, ...)
 }
 
 void
-lst_free_rpcent(cfs_list_t *head)
+lst_free_rpcent(struct list_head *head)
 {
-        lstcon_rpc_ent_t *ent;
+	lstcon_rpc_ent_t *ent;
 
-        while (!cfs_list_empty(head)) {
-                ent = cfs_list_entry(head->next, lstcon_rpc_ent_t, rpe_link);
+	while (!list_empty(head)) {
+		ent = list_entry(head->next, lstcon_rpc_ent_t, rpe_link);
 
-                cfs_list_del(&ent->rpe_link);
-                free(ent);
-        }
+		list_del(&ent->rpe_link);
+		free(ent);
+	}
 }
 
 void
-lst_reset_rpcent(cfs_list_t *head)
+lst_reset_rpcent(struct list_head *head)
 {
-        lstcon_rpc_ent_t *ent;
+	lstcon_rpc_ent_t *ent;
 
-        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
-                ent->rpe_sid      = LST_INVALID_SID;
-                ent->rpe_peer.nid = LNET_NID_ANY;
-                ent->rpe_peer.pid = LNET_PID_ANY;
-                ent->rpe_rpc_errno = ent->rpe_fwk_errno = 0;
-        }
+	list_for_each_entry(ent, head, rpe_link) {
+		ent->rpe_sid	   = LST_INVALID_SID;
+		ent->rpe_peer.nid  = LNET_NID_ANY;
+		ent->rpe_peer.pid  = LNET_PID_ANY;
+		ent->rpe_rpc_errno = ent->rpe_fwk_errno = 0;
+	}
 }
 
 int
-lst_alloc_rpcent(cfs_list_t *head, int count, int offset)
+lst_alloc_rpcent(struct list_head *head, int count, int offset)
 {
         lstcon_rpc_ent_t *ent;
         int               i;
@@ -441,23 +441,23 @@ lst_alloc_rpcent(cfs_list_t *head, int count, int offset)
 
                 memset(ent, 0, offsetof(lstcon_rpc_ent_t, rpe_payload[offset]));
 
-                ent->rpe_sid      = LST_INVALID_SID;
-                ent->rpe_peer.nid = LNET_NID_ANY;
-                ent->rpe_peer.pid = LNET_PID_ANY;
-                cfs_list_add(&ent->rpe_link, head);
-        }
+		ent->rpe_sid	  = LST_INVALID_SID;
+		ent->rpe_peer.nid = LNET_NID_ANY;
+		ent->rpe_peer.pid = LNET_PID_ANY;
+		list_add(&ent->rpe_link, head);
+	}
 
-        return 0;
+	return 0;
 }
 
 void
-lst_print_transerr(cfs_list_t *head, char *optstr)
+lst_print_transerr(struct list_head *head, char *optstr)
 {
-        lstcon_rpc_ent_t  *ent;
+	lstcon_rpc_ent_t *ent;
 
-        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
-                if (ent->rpe_rpc_errno == 0 && ent->rpe_fwk_errno == 0)
-                        continue;
+	list_for_each_entry(ent, head, rpe_link) {
+		if (ent->rpe_rpc_errno == 0 && ent->rpe_fwk_errno == 0)
+			continue;
 
                 if (ent->rpe_rpc_errno != 0) {
                         fprintf(stderr, "%s RPC failed on %s: %s\n",
@@ -480,7 +480,7 @@ int lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
                          int *idx, int *count, lstcon_node_ent_t *dents);
 
 int lst_query_batch_ioctl(char *batch, int test, int server,
-                          int timeout, cfs_list_t *head);
+			  int timeout, struct list_head *head);
 
 int
 lst_ioctl(unsigned int opc, void *buf, int len)
@@ -716,7 +716,7 @@ jt_lst_end_session(int argc, char **argv)
 
 int
 lst_ping_ioctl(char *str, int type, int timeout,
-               int count, lnet_process_id_t *ids, cfs_list_t *head)
+	       int count, lnet_process_id_t *ids, struct list_head *head)
 {
         lstio_debug_args_t args = {0};
 
@@ -778,9 +778,9 @@ lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
 int
 jt_lst_ping(int argc,  char **argv)
 {
-        cfs_list_t         head;
-        lnet_process_id_t *ids = NULL;
-        lstcon_rpc_ent_t  *ent = NULL;
+	struct list_head   head;
+	lnet_process_id_t *ids = NULL;
+	lstcon_rpc_ent_t  *ent = NULL;
         char              *str = NULL;
         int                optidx  = 0;
         int                server  = 0;
@@ -864,7 +864,7 @@ jt_lst_ping(int argc,  char **argv)
                 return -1;
         }
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         rc = lst_alloc_rpcent(&head, count, LST_NAME_SIZE);
         if (rc != 0) {
@@ -887,17 +887,17 @@ jt_lst_ping(int argc,  char **argv)
                 goto out;
         }
 
-        /* ignore RPC errors and framwork errors */
-        cfs_list_for_each_entry_typed(ent, &head, lstcon_rpc_ent_t, rpe_link) {
-                fprintf(stdout, "\t%s: %s [session: %s id: %s]\n",
-                        libcfs_id2str(ent->rpe_peer),
-                        lst_node_state2str(ent->rpe_state),
-                        (ent->rpe_state == LST_NODE_ACTIVE ||
-                         ent->rpe_state == LST_NODE_BUSY)?
-                                 (ent->rpe_rpc_errno == 0 ?
-                                         &ent->rpe_payload[0] : "Unknown") :
-                                 "<NULL>", libcfs_nid2str(ent->rpe_sid.ses_nid));
-        }
+	/* ignore RPC errors and framwork errors */
+	list_for_each_entry(ent, &head, rpe_link) {
+		fprintf(stdout, "\t%s: %s [session: %s id: %s]\n",
+			libcfs_id2str(ent->rpe_peer),
+			lst_node_state2str(ent->rpe_state),
+			(ent->rpe_state == LST_NODE_ACTIVE ||
+			 ent->rpe_state == LST_NODE_BUSY) ?
+				(ent->rpe_rpc_errno == 0 ?
+					&ent->rpe_payload[0] : "Unknown") :
+				"<NULL>", libcfs_nid2str(ent->rpe_sid.ses_nid));
+	}
 
 out:
         lst_free_rpcent(&head);
@@ -911,7 +911,7 @@ out:
 
 int
 lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
-		     unsigned *featp, cfs_list_t *resultp)
+		     unsigned *featp, struct list_head *resultp)
 {
         lstio_group_nodes_args_t args = {0};
 
@@ -989,7 +989,7 @@ lst_add_group_ioctl (char *name)
 int
 jt_lst_add_group(int argc, char **argv)
 {
-	cfs_list_t	   head;
+	struct list_head   head;
 	lnet_process_id_t *ids;
 	char		  *name;
 	unsigned	   feats = session_features;
@@ -1023,7 +1023,7 @@ jt_lst_add_group(int argc, char **argv)
 		return -1;
 	}
 
-	CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
 	for (i = 2; i < argc; i++) {
 		/* parse address list */
@@ -1141,7 +1141,7 @@ jt_lst_del_group(int argc, char **argv)
 
 int
 lst_update_group_ioctl(int opc, char *name, int clean, int count,
-                       lnet_process_id_t *ids, cfs_list_t *resultp)
+		       lnet_process_id_t *ids, struct list_head *resultp)
 {
         lstio_group_update_args_t args = {0};
 
@@ -1160,7 +1160,7 @@ lst_update_group_ioctl(int opc, char *name, int clean, int count,
 int
 jt_lst_update_group(int argc, char **argv)
 {
-        cfs_list_t         head;
+	struct list_head         head;
         lnet_process_id_t *ids = NULL;
         char              *str = NULL;
         char              *grp = NULL;
@@ -1234,7 +1234,7 @@ jt_lst_update_group(int argc, char **argv)
 
         grp = argv[optind];
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         if (opc == LST_GROUP_RMND || opc == LST_GROUP_REFRESH) {
                 rc = lst_get_node_count(opc == LST_GROUP_RMND ? LST_OPC_NODES :
@@ -1491,7 +1491,7 @@ jt_lst_list_group(int argc, char **argv)
 
 int
 lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
-                int timeout, cfs_list_t *resultp)
+		int timeout, struct list_head *resultp)
 {
         lstio_stat_args_t args = {0};
 
@@ -1507,11 +1507,11 @@ lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
 }
 
 typedef struct {
-        cfs_list_t              srp_link;
+	struct list_head              srp_link;
         int                     srp_count;
         char                   *srp_name;
         lnet_process_id_t      *srp_ids;
-        cfs_list_t              srp_result[2];
+	struct list_head              srp_result[2];
 } lst_stat_req_param_t;
 
 static void
@@ -1541,8 +1541,8 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp, int save_old)
                 return -ENOMEM;
 
         memset(srp, 0, sizeof(*srp));
-        CFS_INIT_LIST_HEAD(&srp->srp_result[0]);
-        CFS_INIT_LIST_HEAD(&srp->srp_result[1]);
+	INIT_LIST_HEAD(&srp->srp_result[0]);
+	INIT_LIST_HEAD(&srp->srp_result[1]);
 
         rc = lst_get_node_count(LST_OPC_GROUP, name,
                                 &srp->srp_count, NULL);
@@ -1769,10 +1769,10 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
 }
 
 void
-lst_print_stat(char *name, cfs_list_t *resultp,
+lst_print_stat(char *name, struct list_head *resultp,
 	       int idx, int lnet, int bwrt, int rdwr, int type)
 {
-        cfs_list_t        tmp[2];
+	struct list_head        tmp[2];
         lstcon_rpc_ent_t *new;
         lstcon_rpc_ent_t *old;
         sfw_counters_t   *sfwk_new;
@@ -1784,20 +1784,20 @@ lst_print_stat(char *name, cfs_list_t *resultp,
         float             delta;
         int               errcount = 0;
 
-        CFS_INIT_LIST_HEAD(&tmp[0]);
-        CFS_INIT_LIST_HEAD(&tmp[1]);
+	INIT_LIST_HEAD(&tmp[0]);
+	INIT_LIST_HEAD(&tmp[1]);
 
         memset(&lnet_stat_result, 0, sizeof(lnet_stat_result));
 
-        while (!cfs_list_empty(&resultp[idx])) {
-                if (cfs_list_empty(&resultp[1 - idx])) {
+	while (!list_empty(&resultp[idx])) {
+		if (list_empty(&resultp[1 - idx])) {
                         fprintf(stderr, "Group is changed, re-run stat\n");
                         break;
                 }
 
-                new = cfs_list_entry(resultp[idx].next, lstcon_rpc_ent_t,
+		new = list_entry(resultp[idx].next, lstcon_rpc_ent_t,
                                      rpe_link);
-                old = cfs_list_entry(resultp[1 - idx].next, lstcon_rpc_ent_t,
+		old = list_entry(resultp[1 - idx].next, lstcon_rpc_ent_t,
                                      rpe_link);
 
                 /* first time get stats result, can't calculate diff */
@@ -1810,11 +1810,11 @@ lst_print_stat(char *name, cfs_list_t *resultp,
                         break;
                 }
 
-                cfs_list_del(&new->rpe_link);
-                cfs_list_add_tail(&new->rpe_link, &tmp[idx]);
+		list_del(&new->rpe_link);
+		list_add_tail(&new->rpe_link, &tmp[idx]);
 
-                cfs_list_del(&old->rpe_link);
-                cfs_list_add_tail(&old->rpe_link, &tmp[1 - idx]);
+		list_del(&old->rpe_link);
+		list_add_tail(&old->rpe_link, &tmp[1 - idx]);
 
                 if (new->rpe_rpc_errno != 0 || new->rpe_fwk_errno != 0 ||
                     old->rpe_rpc_errno != 0 || old->rpe_fwk_errno != 0) {
@@ -1858,8 +1858,8 @@ lst_print_stat(char *name, cfs_list_t *resultp,
                 lst_cal_lnet_stat(delta, lnet_new, lnet_old);
         }
 
-        cfs_list_splice(&tmp[idx], &resultp[idx]);
-        cfs_list_splice(&tmp[1 - idx], &resultp[1 - idx]);
+	list_splice(&tmp[idx], &resultp[idx]);
+	list_splice(&tmp[1 - idx], &resultp[1 - idx]);
 
         if (errcount > 0)
                 fprintf(stdout, "Failed to stat on %d nodes\n", errcount);
@@ -1873,7 +1873,7 @@ lst_print_stat(char *name, cfs_list_t *resultp,
 int
 jt_lst_stat(int argc, char **argv)
 {
-        cfs_list_t            head;
+	struct list_head	head;
         lst_stat_req_param_t *srp;
         time_t                last    = 0;
         int                   optidx  = 0;
@@ -1992,14 +1992,14 @@ jt_lst_stat(int argc, char **argv)
         if (count != -1)
             count++;
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         while (optind < argc) {
                 rc = lst_stat_req_param_alloc(argv[optind++], &srp, 1);
                 if (rc != 0)
                         goto out;
 
-                cfs_list_add_tail(&srp->srp_link, &head);
+		list_add_tail(&srp->srp_link, &head);
         }
 
         do {
@@ -2009,11 +2009,9 @@ jt_lst_stat(int argc, char **argv)
                         sleep(delay - now + last);
                         time(&now);
                 }
+		last = now;
 
-                last = now;
-
-                cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
-                                              srp_link) {
+		list_for_each_entry(srp, &head, srp_link) {
                         rc = lst_stat_ioctl(srp->srp_name,
                                             srp->srp_count, srp->srp_ids,
                                             timeout, &srp->srp_result[idx]);
@@ -2036,10 +2034,10 @@ jt_lst_stat(int argc, char **argv)
         } while (count == -1 || count > 0);
 
 out:
-        while (!cfs_list_empty(&head)) {
-                srp = cfs_list_entry(head.next, lst_stat_req_param_t, srp_link);
+	while (!list_empty(&head)) {
+		srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
 
-                cfs_list_del(&srp->srp_link);
+		list_del(&srp->srp_link);
                 lst_stat_req_param_free(srp);
         }
 
@@ -2049,7 +2047,7 @@ out:
 int
 jt_lst_show_error(int argc, char **argv)
 {
-        cfs_list_t            head;
+	struct list_head            head;
         lst_stat_req_param_t *srp;
         lstcon_rpc_ent_t     *ent;
         sfw_counters_t       *sfwk;
@@ -2094,18 +2092,17 @@ jt_lst_show_error(int argc, char **argv)
                 return -1;
         }
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         while (optind < argc) {
                 rc = lst_stat_req_param_alloc(argv[optind++], &srp, 0);
                 if (rc != 0)
                         goto out;
 
-                cfs_list_add_tail(&srp->srp_link, &head);
+		list_add_tail(&srp->srp_link, &head);
         }
 
-        cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
-                                      srp_link) {
+	list_for_each_entry(srp, &head, srp_link) {
                 rc = lst_stat_ioctl(srp->srp_name, srp->srp_count,
                                     srp->srp_ids, 10, &srp->srp_result[0]);
 
@@ -2119,8 +2116,7 @@ jt_lst_show_error(int argc, char **argv)
 
                 ecount = 0;
 
-                cfs_list_for_each_entry_typed(ent, &srp->srp_result[0],
-                                              lstcon_rpc_ent_t, rpe_link) {
+		list_for_each_entry(ent, &srp->srp_result[0], rpe_link) {
                         if (ent->rpe_rpc_errno != 0) {
                                 ecount ++;
                                 fprintf(stderr, "RPC failure, can't show error on %s\n",
@@ -2163,10 +2159,10 @@ jt_lst_show_error(int argc, char **argv)
                 fprintf(stdout, "Total %d error nodes in %s\n", ecount, srp->srp_name);
         }
 out:
-        while (!cfs_list_empty(&head)) {
-                srp = cfs_list_entry(head.next, lst_stat_req_param_t, srp_link);
+	while (!list_empty(&head)) {
+		srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
 
-                cfs_list_del(&srp->srp_link);
+		list_del(&srp->srp_link);
                 lst_stat_req_param_free(srp);
         }
 
@@ -2220,7 +2216,7 @@ jt_lst_add_batch(int argc, char **argv)
 }
 
 int
-lst_start_batch_ioctl (char *name, int timeout, cfs_list_t *resultp)
+lst_start_batch_ioctl(char *name, int timeout, struct list_head *resultp)
 {
         lstio_batch_run_args_t args = {0};
 
@@ -2236,7 +2232,7 @@ lst_start_batch_ioctl (char *name, int timeout, cfs_list_t *resultp)
 int
 jt_lst_start_batch(int argc, char **argv)
 {
-        cfs_list_t        head;
+	struct list_head        head;
         char             *batch;
         int               optidx  = 0;
         int               timeout = 0;
@@ -2292,7 +2288,7 @@ jt_lst_start_batch(int argc, char **argv)
                 return -1;
         }
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         rc = lst_alloc_rpcent(&head, count, 0);
         if (rc != 0) {
@@ -2323,7 +2319,7 @@ jt_lst_start_batch(int argc, char **argv)
 }
 
 int
-lst_stop_batch_ioctl(char *name, int force, cfs_list_t *resultp)
+lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
 {
         lstio_batch_stop_args_t args = {0};
 
@@ -2339,7 +2335,7 @@ lst_stop_batch_ioctl(char *name, int force, cfs_list_t *resultp)
 int
 jt_lst_stop_batch(int argc, char **argv)
 {
-        cfs_list_t        head;
+	struct list_head        head;
         char             *batch;
         int               force = 0;
         int               optidx;
@@ -2395,7 +2391,7 @@ jt_lst_stop_batch(int argc, char **argv)
                 return -1;
         }
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         rc = lst_alloc_rpcent(&head, count, 0);
         if (rc != 0) {
@@ -2692,7 +2688,7 @@ loop:
 
 int
 lst_query_batch_ioctl(char *batch, int test, int server,
-                      int timeout, cfs_list_t *head)
+		      int timeout, struct list_head *head)
 {
         lstio_batch_query_args_t args = {0};
 
@@ -2708,12 +2704,12 @@ lst_query_batch_ioctl(char *batch, int test, int server,
 }
 
 void
-lst_print_tsb_verbose(cfs_list_t *head,
+lst_print_tsb_verbose(struct list_head *head,
                       int active, int idle, int error)
 {
         lstcon_rpc_ent_t *ent;
 
-        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
+	list_for_each_entry(ent, head, rpe_link) {
                 if (ent->rpe_priv[0] == 0 && active)
                         continue;
 
@@ -2736,7 +2732,7 @@ int
 jt_lst_query_batch(int argc, char **argv)
 {
         lstcon_test_batch_ent_t ent;
-        cfs_list_t              head;
+	struct list_head              head;
         char                   *batch   = NULL;
         time_t                  last    = 0;
         int                     optidx  = 0;
@@ -2833,7 +2829,7 @@ jt_lst_query_batch(int argc, char **argv)
         }
 
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         if (verbose) {
                 rc = lst_info_batch_ioctl(batch, test, server,
@@ -3048,7 +3044,7 @@ lst_get_test_param(char *test, int argc, char **argv, void **param, int *plen)
 int
 lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                    int dist, int span, char *sgrp, char *dgrp,
-                   void *param, int plen, int *retp, cfs_list_t *resultp)
+		   void *param, int plen, int *retp, struct list_head *resultp)
 {
         lstio_test_args_t args = {0};
 
@@ -3076,7 +3072,7 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
 int
 jt_lst_add_test(int argc, char **argv)
 {
-        cfs_list_t    head;
+	struct list_head    head;
         char         *batch  = NULL;
         char         *test   = NULL;
         char         *dstr   = NULL;
@@ -3178,7 +3174,7 @@ jt_lst_add_test(int argc, char **argv)
                 return -1;
         }
 
-        CFS_INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head);
 
         rc = lst_get_node_count(LST_OPC_GROUP, from, &fcount, NULL);
         if (rc != 0) {

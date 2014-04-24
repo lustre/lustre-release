@@ -84,26 +84,26 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
 }
 
 void
-kiblnd_txlist_done (lnet_ni_t *ni, cfs_list_t *txlist, int status)
+kiblnd_txlist_done(lnet_ni_t *ni, struct list_head *txlist, int status)
 {
-        kib_tx_t *tx;
+	kib_tx_t *tx;
 
-        while (!cfs_list_empty (txlist)) {
-                tx = cfs_list_entry (txlist->next, kib_tx_t, tx_list);
+	while (!list_empty(txlist)) {
+		tx = list_entry(txlist->next, kib_tx_t, tx_list);
 
-                cfs_list_del(&tx->tx_list);
-                /* complete now */
-                tx->tx_waiting = 0;
-                tx->tx_status = status;
-                kiblnd_tx_done(ni, tx);
-        }
+		list_del(&tx->tx_list);
+		/* complete now */
+		tx->tx_waiting = 0;
+		tx->tx_status = status;
+		kiblnd_tx_done(ni, tx);
+	}
 }
 
 kib_tx_t *
 kiblnd_get_idle_tx(lnet_ni_t *ni, lnet_nid_t target)
 {
 	kib_net_t		*net = (kib_net_t *)ni->ni_data;
-	cfs_list_t		*node;
+	struct list_head	*node;
 	kib_tx_t		*tx;
 	kib_tx_poolset_t	*tps;
 
@@ -212,26 +212,26 @@ kiblnd_post_rx (kib_rx_t *rx, int credit)
 kib_tx_t *
 kiblnd_find_waiting_tx_locked(kib_conn_t *conn, int txtype, __u64 cookie)
 {
-        cfs_list_t   *tmp;
+	struct list_head *tmp;
 
-        cfs_list_for_each(tmp, &conn->ibc_active_txs) {
-                kib_tx_t *tx = cfs_list_entry(tmp, kib_tx_t, tx_list);
+	list_for_each(tmp, &conn->ibc_active_txs) {
+		kib_tx_t *tx = list_entry(tmp, kib_tx_t, tx_list);
 
-                LASSERT (!tx->tx_queued);
-                LASSERT (tx->tx_sending != 0 || tx->tx_waiting);
+		LASSERT(!tx->tx_queued);
+		LASSERT(tx->tx_sending != 0 || tx->tx_waiting);
 
-                if (tx->tx_cookie != cookie)
-                        continue;
+		if (tx->tx_cookie != cookie)
+			continue;
 
-                if (tx->tx_waiting &&
-                    tx->tx_msg->ibm_type == txtype)
-                        return tx;
+		if (tx->tx_waiting &&
+		    tx->tx_msg->ibm_type == txtype)
+			return tx;
 
-                CWARN("Bad completion: %swaiting, type %x (wanted %x)\n",
-                      tx->tx_waiting ? "" : "NOT ",
-                      tx->tx_msg->ibm_type, txtype);
-        }
-        return NULL;
+		CWARN("Bad completion: %swaiting, type %x (wanted %x)\n",
+		      tx->tx_waiting ? "" : "NOT ",
+		      tx->tx_msg->ibm_type, txtype);
+	}
+	return NULL;
 }
 
 void
@@ -265,7 +265,7 @@ kiblnd_handle_completion(kib_conn_t *conn, int txtype, int status, __u64 cookie)
 
         idle = !tx->tx_queued && (tx->tx_sending == 0);
         if (idle)
-                cfs_list_del(&tx->tx_list);
+		list_del(&tx->tx_list);
 
 	spin_unlock(&conn->ibc_lock);
 
@@ -392,7 +392,7 @@ kiblnd_handle_rx (kib_rx_t *rx)
 		tx = kiblnd_find_waiting_tx_locked(conn, IBLND_MSG_PUT_REQ,
 					msg->ibm_u.putack.ibpam_src_cookie);
 		if (tx != NULL)
-			cfs_list_del(&tx->tx_list);
+			list_del(&tx->tx_list);
 		spin_unlock(&conn->ibc_lock);
 
                 if (tx == NULL) {
@@ -508,7 +508,7 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
 		write_lock_irqsave(g_lock, flags);
 		/* must check holding global lock to eliminate race */
 		if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
-			cfs_list_add_tail(&rx->rx_list, &conn->ibc_early_rxs);
+			list_add_tail(&rx->rx_list, &conn->ibc_early_rxs);
 			write_unlock_irqrestore(g_lock, flags);
 			return;
 		}
@@ -831,7 +831,7 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
         }
 
         /* NB don't drop ibc_lock before bumping tx_sending */
-        cfs_list_del(&tx->tx_list);
+	list_del(&tx->tx_list);
         tx->tx_queued = 0;
 
         if (msg->ibm_type == IBLND_MSG_NOOP &&
@@ -866,7 +866,7 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
          * tx_sending is non-zero if we've not done the tx_complete()
          * from the first send; hence the ++ rather than = below. */
         tx->tx_sending++;
-        cfs_list_add(&tx->tx_list, &conn->ibc_active_txs);
+	list_add(&tx->tx_list, &conn->ibc_active_txs);
 
         /* I'm still holding ibc_lock! */
         if (conn->ibc_state != IBLND_CONN_ESTABLISHED) {
@@ -899,7 +899,7 @@ kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
 
         done = (tx->tx_sending == 0);
         if (done)
-                cfs_list_del(&tx->tx_list);
+		list_del(&tx->tx_list);
 
 	spin_unlock(&conn->ibc_lock);
 
@@ -942,11 +942,11 @@ kiblnd_check_sends (kib_conn_t *conn)
         LASSERT (conn->ibc_reserved_credits >= 0);
 
         while (conn->ibc_reserved_credits > 0 &&
-               !cfs_list_empty(&conn->ibc_tx_queue_rsrvd)) {
-                tx = cfs_list_entry(conn->ibc_tx_queue_rsrvd.next,
+	       !list_empty(&conn->ibc_tx_queue_rsrvd)) {
+		tx = list_entry(conn->ibc_tx_queue_rsrvd.next,
                                     kib_tx_t, tx_list);
-                cfs_list_del(&tx->tx_list);
-                cfs_list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
+		list_del(&tx->tx_list);
+		list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
                 conn->ibc_reserved_credits--;
         }
 
@@ -967,18 +967,18 @@ kiblnd_check_sends (kib_conn_t *conn)
         for (;;) {
                 int credit;
 
-                if (!cfs_list_empty(&conn->ibc_tx_queue_nocred)) {
+		if (!list_empty(&conn->ibc_tx_queue_nocred)) {
                         credit = 0;
-                        tx = cfs_list_entry(conn->ibc_tx_queue_nocred.next,
+			tx = list_entry(conn->ibc_tx_queue_nocred.next,
                                             kib_tx_t, tx_list);
-                } else if (!cfs_list_empty(&conn->ibc_tx_noops)) {
+		} else if (!list_empty(&conn->ibc_tx_noops)) {
                         LASSERT (!IBLND_OOB_CAPABLE(ver));
                         credit = 1;
-                        tx = cfs_list_entry(conn->ibc_tx_noops.next,
+			tx = list_entry(conn->ibc_tx_noops.next,
                                         kib_tx_t, tx_list);
-                } else if (!cfs_list_empty(&conn->ibc_tx_queue)) {
+		} else if (!list_empty(&conn->ibc_tx_queue)) {
                         credit = 1;
-                        tx = cfs_list_entry(conn->ibc_tx_queue.next,
+			tx = list_entry(conn->ibc_tx_queue.next,
                                             kib_tx_t, tx_list);
                 } else
                         break;
@@ -1033,7 +1033,7 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
                !tx->tx_waiting &&               /* Not waiting for peer */
                !tx->tx_queued;                  /* Not re-queued (PUT_DONE) */
         if (idle)
-                cfs_list_del(&tx->tx_list);
+		list_del(&tx->tx_list);
 
         kiblnd_conn_addref(conn);               /* 1 ref for me.... */
 
@@ -1169,11 +1169,11 @@ kiblnd_init_rdma (kib_conn_t *conn, kib_tx_t *tx, int type,
 void
 kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
 {
-        cfs_list_t   *q;
+	struct list_head *q;
 
-        LASSERT (tx->tx_nwrq > 0);              /* work items set up */
-        LASSERT (!tx->tx_queued);               /* not queued for sending already */
-        LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+	LASSERT(tx->tx_nwrq > 0);	/* work items set up */
+	LASSERT(!tx->tx_queued);	/* not queued for sending already */
+	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
 	tx->tx_queued = 1;
 	tx->tx_deadline = jiffies + (*kiblnd_tunables.kib_timeout * HZ);
@@ -1216,7 +1216,7 @@ kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                 break;
         }
 
-        cfs_list_add_tail(&tx->tx_list, q);
+	list_add_tail(&tx->tx_list, q);
 }
 
 void
@@ -1357,7 +1357,7 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 	read_lock_irqsave(g_lock, flags);
 
         peer = kiblnd_find_peer_locked(nid);
-        if (peer != NULL && !cfs_list_empty(&peer->ibp_conns)) {
+	if (peer != NULL && !list_empty(&peer->ibp_conns)) {
                 /* Found a peer with an established connection */
                 conn = kiblnd_get_conn_locked(peer);
                 kiblnd_conn_addref(conn); /* 1 ref for me... */
@@ -1376,12 +1376,12 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
         peer = kiblnd_find_peer_locked(nid);
         if (peer != NULL) {
-                if (cfs_list_empty(&peer->ibp_conns)) {
+		if (list_empty(&peer->ibp_conns)) {
                         /* found a peer, but it's still connecting... */
                         LASSERT (peer->ibp_connecting != 0 ||
                                  peer->ibp_accepting != 0);
                         if (tx != NULL)
-                                cfs_list_add_tail(&tx->tx_list,
+				list_add_tail(&tx->tx_list,
                                                   &peer->ibp_tx_queue);
 			write_unlock_irqrestore(g_lock, flags);
 		} else {
@@ -1415,12 +1415,12 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
         peer2 = kiblnd_find_peer_locked(nid);
         if (peer2 != NULL) {
-                if (cfs_list_empty(&peer2->ibp_conns)) {
+		if (list_empty(&peer2->ibp_conns)) {
                         /* found a peer, but it's still connecting... */
                         LASSERT (peer2->ibp_connecting != 0 ||
                                  peer2->ibp_accepting != 0);
                         if (tx != NULL)
-                                cfs_list_add_tail(&tx->tx_list,
+				list_add_tail(&tx->tx_list,
                                                   &peer2->ibp_tx_queue);
 			write_unlock_irqrestore(g_lock, flags);
 		} else {
@@ -1446,10 +1446,10 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
         if (tx != NULL)
-                cfs_list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
+		list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
 
         kiblnd_peer_addref(peer);
-        cfs_list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+	list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
 
 	write_unlock_irqrestore(g_lock, flags);
 
@@ -1838,7 +1838,7 @@ kiblnd_peer_notify (kib_peer_t *peer)
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        if (cfs_list_empty(&peer->ibp_conns) &&
+	if (list_empty(&peer->ibp_conns) &&
             peer->ibp_accepting == 0 &&
             peer->ibp_connecting == 0 &&
             peer->ibp_error != 0) {
@@ -1877,28 +1877,30 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 return; /* already being handled  */
 
         if (error == 0 &&
-            cfs_list_empty(&conn->ibc_tx_noops) &&
-            cfs_list_empty(&conn->ibc_tx_queue) &&
-            cfs_list_empty(&conn->ibc_tx_queue_rsrvd) &&
-            cfs_list_empty(&conn->ibc_tx_queue_nocred) &&
-            cfs_list_empty(&conn->ibc_active_txs)) {
+	    list_empty(&conn->ibc_tx_noops) &&
+	    list_empty(&conn->ibc_tx_queue) &&
+	    list_empty(&conn->ibc_tx_queue_rsrvd) &&
+	    list_empty(&conn->ibc_tx_queue_nocred) &&
+	    list_empty(&conn->ibc_active_txs)) {
                 CDEBUG(D_NET, "closing conn to %s\n", 
                        libcfs_nid2str(peer->ibp_nid));
         } else {
                 CNETERR("Closing conn to %s: error %d%s%s%s%s%s\n",
                        libcfs_nid2str(peer->ibp_nid), error,
-                       cfs_list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
-                       cfs_list_empty(&conn->ibc_tx_noops) ? "" : "(sending_noops)",
-                       cfs_list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
-                       cfs_list_empty(&conn->ibc_tx_queue_nocred) ? "" : "(sending_nocred)",
-                       cfs_list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
+		       list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
+		       list_empty(&conn->ibc_tx_noops) ? "" : "(sending_noops)",
+		       list_empty(&conn->ibc_tx_queue_rsrvd) ?
+						"" : "(sending_rsrvd)",
+		       list_empty(&conn->ibc_tx_queue_nocred) ?
+						 "" : "(sending_nocred)",
+		       list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
         }
 
         dev = ((kib_net_t *)peer->ibp_ni->ni_data)->ibn_dev;
-        cfs_list_del(&conn->ibc_list);
+	list_del(&conn->ibc_list);
         /* connd (see below) takes over ibc_list's ref */
 
-        if (cfs_list_empty (&peer->ibp_conns) &&    /* no more conns */
+	if (list_empty(&peer->ibp_conns) &&    /* no more conns */
             kiblnd_peer_active(peer)) {         /* still in peer table */
                 kiblnd_unlink_peer_locked(peer);
 
@@ -1910,14 +1912,14 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
 
 	if (error != 0 &&
 	    kiblnd_dev_can_failover(dev)) {
-		cfs_list_add_tail(&dev->ibd_fail_list,
+		list_add_tail(&dev->ibd_fail_list,
 			      &kiblnd_data.kib_failed_devs);
 		wake_up(&kiblnd_data.kib_failover_waitq);
 	}
 
 	spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 
-	cfs_list_add_tail(&conn->ibc_list, &kiblnd_data.kib_connd_conns);
+	list_add_tail(&conn->ibc_list, &kiblnd_data.kib_connd_conns);
 	wake_up(&kiblnd_data.kib_connd_waitq);
 
 	spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);
@@ -1945,10 +1947,10 @@ kiblnd_handle_early_rxs(kib_conn_t *conn)
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	while (!cfs_list_empty(&conn->ibc_early_rxs)) {
-		rx = cfs_list_entry(conn->ibc_early_rxs.next,
+	while (!list_empty(&conn->ibc_early_rxs)) {
+		rx = list_entry(conn->ibc_early_rxs.next,
 				    kib_rx_t, rx_list);
-		cfs_list_del(&rx->rx_list);
+		list_del(&rx->rx_list);
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 		kiblnd_handle_rx(rx);
@@ -1959,35 +1961,35 @@ kiblnd_handle_early_rxs(kib_conn_t *conn)
 }
 
 void
-kiblnd_abort_txs(kib_conn_t *conn, cfs_list_t *txs)
+kiblnd_abort_txs(kib_conn_t *conn, struct list_head *txs)
 {
-        CFS_LIST_HEAD       (zombies);
-        cfs_list_t          *tmp;
-        cfs_list_t          *nxt;
-        kib_tx_t            *tx;
+	struct list_head	 zombies = LIST_HEAD_INIT(zombies);
+	struct list_head	*tmp;
+	struct list_head	*nxt;
+	kib_tx_t		*tx;
 
 	spin_lock(&conn->ibc_lock);
 
-        cfs_list_for_each_safe (tmp, nxt, txs) {
-                tx = cfs_list_entry (tmp, kib_tx_t, tx_list);
+	list_for_each_safe(tmp, nxt, txs) {
+		tx = list_entry(tmp, kib_tx_t, tx_list);
 
-                if (txs == &conn->ibc_active_txs) {
-                        LASSERT (!tx->tx_queued);
-                        LASSERT (tx->tx_waiting ||
-                                 tx->tx_sending != 0);
-                } else {
-                        LASSERT (tx->tx_queued);
-                }
+		if (txs == &conn->ibc_active_txs) {
+			LASSERT(!tx->tx_queued);
+			LASSERT(tx->tx_waiting ||
+				tx->tx_sending != 0);
+		} else {
+			LASSERT(tx->tx_queued);
+		}
 
-                tx->tx_status = -ECONNABORTED;
-                tx->tx_waiting = 0;
+		tx->tx_status = -ECONNABORTED;
+		tx->tx_waiting = 0;
 
-                if (tx->tx_sending == 0) {
-                        tx->tx_queued = 0;
-                        cfs_list_del (&tx->tx_list);
-                        cfs_list_add (&tx->tx_list, &zombies);
-                }
-        }
+		if (tx->tx_sending == 0) {
+			tx->tx_queued = 0;
+			list_del(&tx->tx_list);
+			list_add(&tx->tx_list, &zombies);
+		}
+	}
 
 	spin_unlock(&conn->ibc_lock);
 
@@ -2022,8 +2024,8 @@ kiblnd_finalise_conn (kib_conn_t *conn)
 void
 kiblnd_peer_connect_failed (kib_peer_t *peer, int active, int error)
 {
-	CFS_LIST_HEAD    (zombies);
-	unsigned long     flags;
+	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	unsigned long	flags;
 
 	LASSERT (error != 0);
 	LASSERT (!in_interrupt());
@@ -2039,48 +2041,48 @@ kiblnd_peer_connect_failed (kib_peer_t *peer, int active, int error)
 	}
 
 	if (peer->ibp_connecting != 0 ||
-            peer->ibp_accepting != 0) {
-                /* another connection attempt under way... */
+	    peer->ibp_accepting != 0) {
+		/* another connection attempt under way... */
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-                                            flags);
-                return;
-        }
+					flags);
+		return;
+	}
 
-        if (cfs_list_empty(&peer->ibp_conns)) {
-                /* Take peer's blocked transmits to complete with error */
-                cfs_list_add(&zombies, &peer->ibp_tx_queue);
-                cfs_list_del_init(&peer->ibp_tx_queue);
+	if (list_empty(&peer->ibp_conns)) {
+		/* Take peer's blocked transmits to complete with error */
+		list_add(&zombies, &peer->ibp_tx_queue);
+		list_del_init(&peer->ibp_tx_queue);
 
-                if (kiblnd_peer_active(peer))
-                        kiblnd_unlink_peer_locked(peer);
+		if (kiblnd_peer_active(peer))
+			kiblnd_unlink_peer_locked(peer);
 
-                peer->ibp_error = error;
-        } else {
-                /* Can't have blocked transmits if there are connections */
-                LASSERT (cfs_list_empty(&peer->ibp_tx_queue));
-        }
+		peer->ibp_error = error;
+	} else {
+		/* Can't have blocked transmits if there are connections */
+		LASSERT(list_empty(&peer->ibp_tx_queue));
+	}
 
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        kiblnd_peer_notify(peer);
+	kiblnd_peer_notify(peer);
 
-        if (cfs_list_empty (&zombies))
-                return;
+	if (list_empty(&zombies))
+		return;
 
-        CNETERR("Deleting messages for %s: connection failed\n",
-                libcfs_nid2str(peer->ibp_nid));
+	CNETERR("Deleting messages for %s: connection failed\n",
+		libcfs_nid2str(peer->ibp_nid));
 
-        kiblnd_txlist_done(peer->ibp_ni, &zombies, -EHOSTUNREACH);
+	kiblnd_txlist_done(peer->ibp_ni, &zombies, -EHOSTUNREACH);
 }
 
 void
 kiblnd_connreq_done(kib_conn_t *conn, int status)
 {
-        kib_peer_t        *peer = conn->ibc_peer;
-        kib_tx_t          *tx;
-        cfs_list_t         txs;
-        unsigned long      flags;
-        int                active;
+	kib_peer_t	 *peer = conn->ibc_peer;
+	kib_tx_t	 *tx;
+	struct list_head txs;
+	unsigned long	 flags;
+	int		 active;
 
         active = (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
 
@@ -2111,14 +2113,14 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         kiblnd_set_conn_state(conn, IBLND_CONN_ESTABLISHED);
         kiblnd_peer_alive(peer);
 
-        /* Add conn to peer's list and nuke any dangling conns from a different
-         * peer instance... */
-        kiblnd_conn_addref(conn);               /* +1 ref for ibc_list */
-        cfs_list_add(&conn->ibc_list, &peer->ibp_conns);
-        if (active)
-                peer->ibp_connecting--;
-        else
-                peer->ibp_accepting--;
+	/* Add conn to peer's list and nuke any dangling conns from a different
+	 * peer instance... */
+	kiblnd_conn_addref(conn);	/* +1 ref for ibc_list */
+	list_add(&conn->ibc_list, &peer->ibp_conns);
+	if (active)
+		peer->ibp_connecting--;
+	else
+		peer->ibp_accepting--;
 
         if (peer->ibp_version == 0) {
                 peer->ibp_version     = conn->ibc_version;
@@ -2133,9 +2135,9 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
                 peer->ibp_incarnation = conn->ibc_incarnation;
         }
 
-        /* grab pending txs while I have the lock */
-        cfs_list_add(&txs, &peer->ibp_tx_queue);
-        cfs_list_del_init(&peer->ibp_tx_queue);
+	/* grab pending txs while I have the lock */
+	list_add(&txs, &peer->ibp_tx_queue);
+	list_del_init(&peer->ibp_tx_queue);
 
         if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
             conn->ibc_comms_error != 0) {       /* error has happened already */
@@ -2154,9 +2156,9 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
 	/* Schedule blocked txs */
 	spin_lock(&conn->ibc_lock);
-	while (!cfs_list_empty(&txs)) {
-		tx = cfs_list_entry(txs.next, kib_tx_t, tx_list);
-		cfs_list_del(&tx->tx_list);
+	while (!list_empty(&txs)) {
+		tx = list_entry(txs.next, kib_tx_t, tx_list);
+		list_del(&tx->tx_list);
 
 		kiblnd_queue_tx_locked(tx, conn);
 	}
@@ -2383,7 +2385,7 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
                 LASSERT (net->ibn_shutdown == 0);
 
                 kiblnd_peer_addref(peer);
-                cfs_list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+		list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
 
 		write_unlock_irqrestore(g_lock, flags);
         }
@@ -2472,7 +2474,7 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
          * NB: reconnect is still needed even when ibp_tx_queue is
          * empty if ibp_version != version because reconnect may be
          * initiated by kiblnd_query() */
-        if ((!cfs_list_empty(&peer->ibp_tx_queue) ||
+	if ((!list_empty(&peer->ibp_tx_queue) ||
              peer->ibp_version != version) &&
             peer->ibp_connecting == 1 &&
             peer->ibp_accepting == 0) {
@@ -2994,30 +2996,30 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 }
 
 static int
-kiblnd_check_txs_locked(kib_conn_t *conn, cfs_list_t *txs)
+kiblnd_check_txs_locked(kib_conn_t *conn, struct list_head *txs)
 {
-        kib_tx_t          *tx;
-        cfs_list_t        *ttmp;
+	kib_tx_t	 *tx;
+	struct list_head *ttmp;
 
-        cfs_list_for_each (ttmp, txs) {
-                tx = cfs_list_entry (ttmp, kib_tx_t, tx_list);
+	list_for_each(ttmp, txs) {
+		tx = list_entry(ttmp, kib_tx_t, tx_list);
 
-                if (txs != &conn->ibc_active_txs) {
-                        LASSERT (tx->tx_queued);
-                } else {
-                        LASSERT (!tx->tx_queued);
-                        LASSERT (tx->tx_waiting || tx->tx_sending != 0);
-                }
+		if (txs != &conn->ibc_active_txs) {
+			LASSERT(tx->tx_queued);
+		} else {
+			LASSERT(!tx->tx_queued);
+			LASSERT(tx->tx_waiting || tx->tx_sending != 0);
+		}
 
-                if (cfs_time_aftereq (jiffies, tx->tx_deadline)) {
-                        CERROR("Timed out tx: %s, %lu seconds\n",
-                               kiblnd_queue2str(conn, txs),
-                               cfs_duration_sec(jiffies - tx->tx_deadline));
-                        return 1;
-                }
-        }
+		if (cfs_time_aftereq(jiffies, tx->tx_deadline)) {
+			CERROR("Timed out tx: %s, %lu seconds\n",
+			       kiblnd_queue2str(conn, txs),
+			       cfs_duration_sec(jiffies - tx->tx_deadline));
+			return 1;
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 static int
@@ -3033,30 +3035,30 @@ kiblnd_conn_timed_out_locked(kib_conn_t *conn)
 void
 kiblnd_check_conns (int idx)
 {
-        CFS_LIST_HEAD (closes);
-        CFS_LIST_HEAD (checksends);
-        cfs_list_t    *peers = &kiblnd_data.kib_peers[idx];
-        cfs_list_t    *ptmp;
-        kib_peer_t    *peer;
-        kib_conn_t    *conn;
-        cfs_list_t    *ctmp;
-        unsigned long  flags;
+	struct list_head  closes = LIST_HEAD_INIT(closes);
+	struct list_head  checksends = LIST_HEAD_INIT(checksends);
+	struct list_head *peers = &kiblnd_data.kib_peers[idx];
+	struct list_head *ptmp;
+	kib_peer_t	 *peer;
+	kib_conn_t	 *conn;
+	struct list_head *ctmp;
+	unsigned long	  flags;
 
         /* NB. We expect to have a look at all the peers and not find any
          * RDMAs to time out, so we just use a shared lock while we
          * take a look... */
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        cfs_list_for_each (ptmp, peers) {
-                peer = cfs_list_entry (ptmp, kib_peer_t, ibp_list);
+	list_for_each(ptmp, peers) {
+		peer = list_entry(ptmp, kib_peer_t, ibp_list);
 
-                cfs_list_for_each (ctmp, &peer->ibp_conns) {
-                        int timedout;
-                        int sendnoop;
+		list_for_each(ctmp, &peer->ibp_conns) {
+			int timedout;
+			int sendnoop;
 
-                        conn = cfs_list_entry(ctmp, kib_conn_t, ibc_list);
+			conn = list_entry(ctmp, kib_conn_t, ibc_list);
 
-                        LASSERT (conn->ibc_state == IBLND_CONN_ESTABLISHED);
+			LASSERT(conn->ibc_state == IBLND_CONN_ESTABLISHED);
 
 			spin_lock(&conn->ibc_lock);
 
@@ -3064,25 +3066,24 @@ kiblnd_check_conns (int idx)
 			timedout = kiblnd_conn_timed_out_locked(conn);
 			if (!sendnoop && !timedout) {
 				spin_unlock(&conn->ibc_lock);
-                                continue;
-                        }
+				continue;
+			}
 
-                        if (timedout) {
-                                CERROR("Timed out RDMA with %s (%lu): "
-                                       "c: %u, oc: %u, rc: %u\n",
-                                       libcfs_nid2str(peer->ibp_nid),
-                                       cfs_duration_sec(cfs_time_current() -
-                                                        peer->ibp_last_alive),
-                                       conn->ibc_credits,
-                                       conn->ibc_outstanding_credits,
-                                       conn->ibc_reserved_credits);
-                                cfs_list_add(&conn->ibc_connd_list, &closes);
-                        } else {
-                                cfs_list_add(&conn->ibc_connd_list,
-                                             &checksends);
-                        }
-                        /* +ref for 'closes' or 'checksends' */
-                        kiblnd_conn_addref(conn);
+			if (timedout) {
+				CERROR("Timed out RDMA with %s (%lu): "
+				       "c: %u, oc: %u, rc: %u\n",
+				       libcfs_nid2str(peer->ibp_nid),
+				       cfs_duration_sec(cfs_time_current() -
+							peer->ibp_last_alive),
+				       conn->ibc_credits,
+				       conn->ibc_outstanding_credits,
+				       conn->ibc_reserved_credits);
+				list_add(&conn->ibc_connd_list, &closes);
+			} else {
+				list_add(&conn->ibc_connd_list, &checksends);
+			}
+			/* +ref for 'closes' or 'checksends' */
+			kiblnd_conn_addref(conn);
 
 			spin_unlock(&conn->ibc_lock);
 		}
@@ -3090,27 +3091,27 @@ kiblnd_check_conns (int idx)
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        /* Handle timeout by closing the whole
-         * connection. We can only be sure RDMA activity
-         * has ceased once the QP has been modified. */
-        while (!cfs_list_empty(&closes)) {
-                conn = cfs_list_entry(closes.next,
-                                      kib_conn_t, ibc_connd_list);
-                cfs_list_del(&conn->ibc_connd_list);
-                kiblnd_close_conn(conn, -ETIMEDOUT);
-                kiblnd_conn_decref(conn);
-        }
+	/* Handle timeout by closing the whole
+	 * connection. We can only be sure RDMA activity
+	 * has ceased once the QP has been modified. */
+	while (!list_empty(&closes)) {
+		conn = list_entry(closes.next,
+				  kib_conn_t, ibc_connd_list);
+		list_del(&conn->ibc_connd_list);
+		kiblnd_close_conn(conn, -ETIMEDOUT);
+		kiblnd_conn_decref(conn);
+	}
 
-        /* In case we have enough credits to return via a
-         * NOOP, but there were no non-blocking tx descs
-         * free to do it last time... */
-        while (!cfs_list_empty(&checksends)) {
-                conn = cfs_list_entry(checksends.next,
-                                      kib_conn_t, ibc_connd_list);
-                cfs_list_del(&conn->ibc_connd_list);
-                kiblnd_check_sends(conn);
-                kiblnd_conn_decref(conn);
-        }
+	/* In case we have enough credits to return via a
+	 * NOOP, but there were no non-blocking tx descs
+	 * free to do it last time... */
+	while (!list_empty(&checksends)) {
+		conn = list_entry(checksends.next,
+				  kib_conn_t, ibc_connd_list);
+		list_del(&conn->ibc_connd_list);
+		kiblnd_check_sends(conn);
+		kiblnd_conn_decref(conn);
+	}
 }
 
 void
@@ -3149,11 +3150,11 @@ kiblnd_connd (void *arg)
 
                 dropped_lock = 0;
 
-                if (!cfs_list_empty (&kiblnd_data.kib_connd_zombies)) {
-                        conn = cfs_list_entry(kiblnd_data. \
+		if (!list_empty(&kiblnd_data.kib_connd_zombies)) {
+			conn = list_entry(kiblnd_data. \
                                               kib_connd_zombies.next,
                                               kib_conn_t, ibc_list);
-                        cfs_list_del(&conn->ibc_list);
+			list_del(&conn->ibc_list);
 
 			spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock,
 					       flags);
@@ -3164,10 +3165,10 @@ kiblnd_connd (void *arg)
 			spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);
 		}
 
-		if (!cfs_list_empty(&kiblnd_data.kib_connd_conns)) {
-			conn = cfs_list_entry(kiblnd_data.kib_connd_conns.next,
+		if (!list_empty(&kiblnd_data.kib_connd_conns)) {
+			conn = list_entry(kiblnd_data.kib_connd_conns.next,
 					      kib_conn_t, ibc_list);
-			cfs_list_del(&conn->ibc_list);
+			list_del(&conn->ibc_list);
 
 			spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock,
 					       flags);
@@ -3304,7 +3305,7 @@ kiblnd_cq_completion(struct ib_cq *cq, void *arg)
 	     conn->ibc_nsends_posted > 0)) {
 		kiblnd_conn_addref(conn); /* +1 ref for sched_conns */
 		conn->ibc_scheduled = 1;
-		cfs_list_add_tail(&conn->ibc_sched_list, &sched->ibs_conns);
+		list_add_tail(&conn->ibc_sched_list, &sched->ibs_conns);
 
 		if (waitqueue_active(&sched->ibs_waitq))
 			wake_up(&sched->ibs_waitq);
@@ -3363,12 +3364,12 @@ kiblnd_scheduler(void *arg)
 
 		did_something = 0;
 
-		if (!cfs_list_empty(&sched->ibs_conns)) {
-			conn = cfs_list_entry(sched->ibs_conns.next,
+		if (!list_empty(&sched->ibs_conns)) {
+			conn = list_entry(sched->ibs_conns.next,
 					      kib_conn_t, ibc_sched_list);
 			/* take over kib_sched_conns' ref on conn... */
 			LASSERT(conn->ibc_scheduled);
-			cfs_list_del(&conn->ibc_sched_list);
+			list_del(&conn->ibc_sched_list);
 			conn->ibc_ready = 0;
 
 			spin_unlock_irqrestore(&sched->ibs_lock, flags);
@@ -3410,7 +3411,7 @@ kiblnd_scheduler(void *arg)
 				 * this one... */
 				/* +1 ref for sched_conns */
 				kiblnd_conn_addref(conn);
-				cfs_list_add_tail(&conn->ibc_sched_list,
+				list_add_tail(&conn->ibc_sched_list,
 						  &sched->ibs_conns);
 				if (waitqueue_active(&sched->ibs_waitq))
 					wake_up(&sched->ibs_waitq);
@@ -3470,7 +3471,7 @@ kiblnd_failover_thread(void *arg)
                 int     do_failover = 0;
                 int     long_sleep;
 
-                cfs_list_for_each_entry(dev, &kiblnd_data.kib_failed_devs,
+		list_for_each_entry(dev, &kiblnd_data.kib_failed_devs,
                                     ibd_fail_list) {
                         if (cfs_time_before(cfs_time_current(),
                                             dev->ibd_next_failover))
@@ -3480,7 +3481,7 @@ kiblnd_failover_thread(void *arg)
                 }
 
                 if (do_failover) {
-                        cfs_list_del_init(&dev->ibd_fail_list);
+			list_del_init(&dev->ibd_fail_list);
                         dev->ibd_failover = 1;
 			write_unlock_irqrestore(glock, flags);
 
@@ -3499,7 +3500,7 @@ kiblnd_failover_thread(void *arg)
                         dev->ibd_next_failover =
                                 cfs_time_shift(min(dev->ibd_failed_failover, 10));
                         if (kiblnd_dev_can_failover(dev)) {
-                                cfs_list_add_tail(&dev->ibd_fail_list,
+				list_add_tail(&dev->ibd_fail_list,
                                               &kiblnd_data.kib_failed_devs);
                         }
 
@@ -3507,7 +3508,7 @@ kiblnd_failover_thread(void *arg)
                 }
 
                 /* long sleep if no more pending failover */
-                long_sleep = cfs_list_empty(&kiblnd_data.kib_failed_devs);
+		long_sleep = list_empty(&kiblnd_data.kib_failed_devs);
 
 		set_current_state(TASK_INTERRUPTIBLE);
 		add_wait_queue(&kiblnd_data.kib_failover_waitq, &wait);
@@ -3526,9 +3527,9 @@ kiblnd_failover_thread(void *arg)
                  * we need checking like this because if there is not active
                  * connection on the dev and no SEND from local, we may listen
                  * on wrong HCA for ever while there is a bonding failover */
-                cfs_list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
+		list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
                         if (kiblnd_dev_can_failover(dev)) {
-                                cfs_list_add_tail(&dev->ibd_fail_list,
+				list_add_tail(&dev->ibd_fail_list,
                                               &kiblnd_data.kib_failed_devs);
                         }
                 }

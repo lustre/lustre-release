@@ -55,7 +55,7 @@ usocklnd_send_tx_immediately(usock_conn_t *conn, usock_tx_t *tx)
         rc = usocklnd_send_tx(conn, tx);
         if (rc == 0) { /* partial send or connection closed */
                 pthread_mutex_lock(&conn->uc_lock);
-                cfs_list_add(&tx->tx_list, &conn->uc_tx_list);
+		list_add(&tx->tx_list, &conn->uc_tx_list);
                 conn->uc_sending = 0;
                 pthread_mutex_unlock(&conn->uc_lock);
                 partial_send = 1;
@@ -79,8 +79,8 @@ usocklnd_send_tx_immediately(usock_conn_t *conn, usock_tx_t *tx)
         /* schedule write handler */
         if (partial_send ||
             (conn->uc_state == UC_READY &&
-             (!cfs_list_empty(&conn->uc_tx_list) ||
-              !cfs_list_empty(&conn->uc_zcack_list)))) {
+	     (!list_empty(&conn->uc_tx_list) ||
+	      !list_empty(&conn->uc_zcack_list)))) {
                 conn->uc_tx_deadline =
                         cfs_time_shift(usock_tuns.ut_timeout);
                 conn->uc_tx_flag = 1;

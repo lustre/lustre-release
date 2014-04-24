@@ -81,7 +81,7 @@ LNetMEAttach(unsigned int portal,
 {
 	struct lnet_match_table *mtable;
 	struct lnet_me		*me;
-	cfs_list_t		*head;
+	struct list_head	*head;
 
 	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
@@ -116,9 +116,9 @@ LNetMEAttach(unsigned int portal,
 
 	me->me_pos = head - &mtable->mt_mhash[0];
 	if (pos == LNET_INS_AFTER || pos == LNET_INS_LOCAL)
-		cfs_list_add_tail(&me->me_list, head);
+		list_add_tail(&me->me_list, head);
 	else
-		cfs_list_add(&me->me_list, head);
+		list_add(&me->me_list, head);
 
 	lnet_me2handle(handle, me);
 
@@ -198,12 +198,12 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
 	lnet_res_lh_initialize(the_lnet.ln_me_containers[cpt], &new_me->me_lh);
 
-        if (pos == LNET_INS_AFTER)
-                cfs_list_add(&new_me->me_list, &current_me->me_list);
-        else
-                cfs_list_add_tail(&new_me->me_list, &current_me->me_list);
+	if (pos == LNET_INS_AFTER)
+		list_add(&new_me->me_list, &current_me->me_list);
+	else
+		list_add_tail(&new_me->me_list, &current_me->me_list);
 
-        lnet_me2handle(handle, new_me);
+	lnet_me2handle(handle, new_me);
 
 	lnet_res_unlock(cpt);
 
@@ -265,7 +265,7 @@ EXPORT_SYMBOL(LNetMEUnlink);
 void
 lnet_me_unlink(lnet_me_t *me)
 {
-	cfs_list_del(&me->me_list);
+	list_del(&me->me_list);
 
 	if (me->me_md != NULL) {
 		lnet_libmd_t *md = me->me_md;
@@ -291,8 +291,8 @@ lib_me_dump(lnet_me_t *me)
 
         CWARN("\tMD\t= %p\n", me->md);
         CWARN("\tprev\t= %p\n",
-              cfs_list_entry(me->me_list.prev, lnet_me_t, me_list));
+	      list_entry(me->me_list.prev, lnet_me_t, me_list));
         CWARN("\tnext\t= %p\n",
-              cfs_list_entry(me->me_list.next, lnet_me_t, me_list));
+	      list_entry(me->me_list.next, lnet_me_t, me_list));
 }
 #endif

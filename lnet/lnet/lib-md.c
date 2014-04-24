@@ -79,8 +79,8 @@ lnet_md_unlink(lnet_libmd_t *md)
 		(*md->md_eq->eq_refs[cpt])--;
 	}
 
-	LASSERT(!cfs_list_empty(&md->md_list));
-	cfs_list_del_init(&md->md_list);
+	LASSERT(!list_empty(&md->md_list));
+	list_del_init(&md->md_list);
 	lnet_md_free_locked(md);
 }
 
@@ -194,8 +194,8 @@ lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle, int cpt)
 
 	lnet_res_lh_initialize(container, &md->md_lh);
 
-	LASSERT(cfs_list_empty(&md->md_list));
-	cfs_list_add(&md->md_list, &container->rec_active);
+	LASSERT(list_empty(&md->md_list));
+	list_add(&md->md_list, &container->rec_active);
 
 	return 0;
 }
@@ -267,8 +267,8 @@ int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	     lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-	CFS_LIST_HEAD		(matches);
-	CFS_LIST_HEAD		(drops);
+	struct list_head        matches = LIST_HEAD_INIT(matches);
+	struct list_head        drops = LIST_HEAD_INIT(drops);
 	struct lnet_me		*me;
 	struct lnet_libmd	*md;
 	int			cpt;

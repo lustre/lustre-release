@@ -162,7 +162,7 @@ lnet_msg_commit(lnet_msg_t *msg, int cpt)
 
 	LASSERT(!msg->msg_onactivelist);
 	msg->msg_onactivelist = 1;
-	cfs_list_add(&msg->msg_activelist, &container->msc_active);
+	list_add(&msg->msg_activelist, &container->msc_active);
 
 	counters->msgs_alloc++;
 	if (counters->msgs_alloc > counters->msgs_max)
@@ -296,7 +296,7 @@ lnet_msg_decommit(lnet_msg_t *msg, int cpt, int status)
 		lnet_msg_decommit_rx(msg, status);
 	}
 
-	cfs_list_del(&msg->msg_activelist);
+	list_del(&msg->msg_activelist);
 	msg->msg_onactivelist = 0;
 
 	the_lnet.ln_counters[cpt2]->msgs_alloc--;
@@ -492,7 +492,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 	lnet_net_lock(cpt);
 
 	container = the_lnet.ln_msg_containers[cpt];
-	cfs_list_add_tail(&msg->msg_list, &container->msc_finalizing);
+	list_add_tail(&msg->msg_list, &container->msc_finalizing);
 
 	/* Recursion breaker.  Don't complete the message here if I am (or
 	 * enough other threads are) already completing messages */
@@ -524,11 +524,11 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 	container->msc_finalizers[0] = (struct lnet_msg_container *)1;
 #endif
 
-	while (!cfs_list_empty(&container->msc_finalizing)) {
-		msg = cfs_list_entry(container->msc_finalizing.next,
-				     lnet_msg_t, msg_list);
+	while (!list_empty(&container->msc_finalizing)) {
+		msg = list_entry(container->msc_finalizing.next,
+				 lnet_msg_t, msg_list);
 
-		cfs_list_del(&msg->msg_list);
+		list_del(&msg->msg_list);
 
 		/* NB drops and regains the lnet lock if it actually does
 		 * anything, so my finalizing friends can chomp along too */
@@ -553,13 +553,13 @@ lnet_msg_container_cleanup(struct lnet_msg_container *container)
 	if (container->msc_init == 0)
 		return;
 
-	while (!cfs_list_empty(&container->msc_active)) {
-		lnet_msg_t *msg = cfs_list_entry(container->msc_active.next,
-						 lnet_msg_t, msg_activelist);
+	while (!list_empty(&container->msc_active)) {
+		lnet_msg_t *msg = list_entry(container->msc_active.next,
+					     lnet_msg_t, msg_activelist);
 
 		LASSERT(msg->msg_onactivelist);
 		msg->msg_onactivelist = 0;
-		cfs_list_del(&msg->msg_activelist);
+		list_del(&msg->msg_activelist);
 		lnet_msg_free(msg);
 		count++;
 	}
@@ -586,8 +586,8 @@ lnet_msg_container_setup(struct lnet_msg_container *container, int cpt)
 
 	container->msc_init = 1;
 
-	CFS_INIT_LIST_HEAD(&container->msc_active);
-	CFS_INIT_LIST_HEAD(&container->msc_finalizing);
+	INIT_LIST_HEAD(&container->msc_active);
+	INIT_LIST_HEAD(&container->msc_finalizing);
 
 #ifdef LNET_USE_LIB_FREELIST
 	memset(&container->msc_freelist, 0, sizeof(lnet_freelist_t));

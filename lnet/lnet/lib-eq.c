@@ -122,7 +122,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 	lnet_eq_wait_lock();
 
 	lnet_res_lh_initialize(&the_lnet.ln_eq_container, &eq->eq_lh);
-	cfs_list_add(&eq->eq_list, &the_lnet.ln_eq_container.rec_active);
+	list_add(&eq->eq_list, &the_lnet.ln_eq_container.rec_active);
 
 	lnet_eq_wait_unlock();
 	lnet_res_unlock(LNET_LOCK_EX);
@@ -194,7 +194,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
 	refs	= eq->eq_refs;
 
 	lnet_res_lh_invalidate(&eq->eq_lh);
-	cfs_list_del(&eq->eq_list);
+	list_del(&eq->eq_list);
 	lnet_eq_free_locked(eq);
  out:
 	lnet_eq_wait_unlock();
