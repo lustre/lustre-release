@@ -585,20 +585,21 @@ static int osd_declare_write_commit(const struct lu_env *env,
 			continue;
 		}
 
-		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object, offset,size);
-
+		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object,
+				  offset, size);
 		/* estimating space that will be consumed by a write is rather
 		 * complicated with ZFS. As a consequence, we don't account for
 		 * indirect blocks and quota overrun will be adjusted once the
 		 * operation is committed, if required. */
 		space += osd_count_not_mapped(obj, offset, size);
 
-		offset = lnb->lnb_file_offset;
-		size = lnb->len;
+		offset = lnb[i].lnb_file_offset;
+		size = lnb[i].len;
 	}
 
 	if (size) {
-		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object, offset,size);
+		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object,
+				  offset, size);
 		space += osd_count_not_mapped(obj, offset, size);
 	}
 
