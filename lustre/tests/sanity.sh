@@ -12667,7 +12667,8 @@ run_test 236 "Layout swap on open unlinked file"
 # The new system calls are supported in glibc >= 2.14.
 
 test_237() {
-	echo "Test file_handle syscalls" > $DIR/$tfile
+	echo "Test file_handle syscalls" > $DIR/$tfile ||
+		error "write failed"
 	check_fhandle_syscalls $DIR/$tfile ||
 		error "check_fhandle_syscalls failed"
 }
