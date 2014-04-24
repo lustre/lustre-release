@@ -374,7 +374,7 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 	/* Flush local XATTR locks to get rid of a possible cancel RPC */
 	if (opcode == MDS_REINT && fid_is_sane(fid) &&
 	    exp->exp_connect_data.ocd_ibits_known & MDS_INODELOCK_XATTR) {
-		CFS_LIST_HEAD(cancels);
+		struct list_head cancels = LIST_HEAD_INIT(cancels);
 		int count;
 
 		/* Without that packing would fail */
@@ -2407,7 +2407,7 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 static int mdc_ioc_swap_layouts(struct obd_export *exp,
 				struct md_op_data *op_data)
 {
-	CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
 	struct ptlrpc_request	*req;
 	int			 rc, count;
 	struct mdc_swap_layouts *msl, *payload;

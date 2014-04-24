@@ -113,7 +113,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id, int type)
 }
 
 /********************** config llog list **********************/
-static CFS_LIST_HEAD(config_llog_list);
+static struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);
 static DEFINE_SPINLOCK(config_list_lock);
 
 /* Take a reference to a config log */
@@ -138,7 +138,7 @@ static void config_log_put(struct config_llog_data *cld)
 
 	/* spinlock to make sure no item with 0 refcount in the list */
 	if (atomic_dec_and_lock(&cld->cld_refcount, &config_list_lock)) {
-		cfs_list_del(&cld->cld_list_chain);
+		list_del(&cld->cld_list_chain);
 		spin_unlock(&config_list_lock);
 
                 CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
@@ -173,7 +173,7 @@ struct config_llog_data *config_log_find(char *logname,
 
         instance = cfg ? cfg->cfg_instance : NULL;
 	spin_lock(&config_list_lock);
-        cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
+	list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
                 /* check if instance equals */
                 if (instance != cld->cld_cfg.cfg_instance)
                         continue;
@@ -233,7 +233,7 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         rc = mgc_logname2resid(logname, &cld->cld_resid, type);
 
 	spin_lock(&config_list_lock);
-	cfs_list_add(&cld->cld_list_chain, &config_llog_list);
+	list_add(&cld->cld_list_chain, &config_llog_list);
 	spin_unlock(&config_list_lock);
 
         if (rc) {
@@ -476,7 +476,7 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 	seq_printf(m, "client_state:\n");
 
 	spin_lock(&config_list_lock);
-	cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
+	list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
 		if (cld->cld_recover == NULL)
 			continue;
 		seq_printf(m,  "    - { client: %s, nidtbl_version: %u }\n",
@@ -570,7 +570,7 @@ static int mgc_requeue_thread(void *data)
                 cld_prev = NULL;
 
 		spin_lock(&config_list_lock);
-		cfs_list_for_each_entry(cld, &config_llog_list,
+		list_for_each_entry(cld, &config_llog_list,
 					cld_list_chain) {
 			if (!cld->cld_lostlock)
 				continue;

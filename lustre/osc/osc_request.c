@@ -639,7 +639,7 @@ int osc_sync_base(struct obd_export *exp, struct obd_info *oinfo,
  * @objid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
 static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
-				   cfs_list_t *cancels,
+				   struct list_head *cancels,
 				   ldlm_mode_t mode, __u64 lock_flags)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
@@ -742,7 +742,7 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
         struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct ost_body       *body;
-        CFS_LIST_HEAD(cancels);
+	struct list_head       cancels = LIST_HEAD_INIT(cancels);
         int rc, count;
         ENTRY;
 
@@ -1002,14 +1002,13 @@ static int osc_should_shrink_grant(struct client_obd *client)
 
 static int osc_grant_shrink_grant_cb(struct timeout_item *item, void *data)
 {
-        struct client_obd *client;
+	struct client_obd *client;
 
-        cfs_list_for_each_entry(client, &item->ti_obd_list,
-                                cl_grant_shrink_list) {
-                if (osc_should_shrink_grant(client))
-                        osc_shrink_grant(client);
-        }
-        return 0;
+	list_for_each_entry(client, &item->ti_obd_list, cl_grant_shrink_list) {
+		if (osc_should_shrink_grant(client))
+			osc_shrink_grant(client);
+	}
+	return 0;
 }
 
 static int osc_add_shrink_grant(struct client_obd *client)
@@ -1071,7 +1070,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 		cli->cl_avail_grant, cli->cl_lost_grant, cli->cl_chunkbits);
 
 	if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
-	    cfs_list_empty(&cli->cl_grant_shrink_list))
+	    list_empty(&cli->cl_grant_shrink_list))
 		osc_add_shrink_grant(cli);
 }
 
@@ -1423,7 +1422,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         aa->aa_resends = 0;
         aa->aa_ppga = pga;
         aa->aa_cli = cli;
-        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
+	INIT_LIST_HEAD(&aa->aa_oaps);
         if (ocapa && reserve)
                 aa->aa_ocapa = capa_get(ocapa);
 
@@ -1657,7 +1656,7 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
         if (rc)
                 RETURN(rc);
 
-        cfs_list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
+	list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request != NULL) {
                         LASSERTF(request == oap->oap_request,
                                  "request %p != oap_request %p\n",
@@ -1685,13 +1684,13 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 
         new_aa = ptlrpc_req_async_args(new_req);
 
-        CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
-	cfs_list_splice_init(&aa->aa_oaps, &new_aa->aa_oaps);
-	CFS_INIT_LIST_HEAD(&new_aa->aa_exts);
-	cfs_list_splice_init(&aa->aa_exts, &new_aa->aa_exts);
+	INIT_LIST_HEAD(&new_aa->aa_oaps);
+	list_splice_init(&aa->aa_oaps, &new_aa->aa_oaps);
+	INIT_LIST_HEAD(&new_aa->aa_exts);
+	list_splice_init(&aa->aa_exts, &new_aa->aa_exts);
 	new_aa->aa_resends = aa->aa_resends;
 
-        cfs_list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
+	list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request) {
                         ptlrpc_req_finished(oap->oap_request);
                         oap->oap_request = ptlrpc_request_addref(new_req);
@@ -1841,12 +1840,12 @@ static int brw_interpret(const struct lu_env *env,
 	}
 	OBDO_FREE(aa->aa_oa);
 
-	cfs_list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
-		cfs_list_del_init(&ext->oe_link);
+	list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
+		list_del_init(&ext->oe_link);
 		osc_extent_finish(env, ext, 1, rc);
 	}
-	LASSERT(cfs_list_empty(&aa->aa_exts));
-	LASSERT(cfs_list_empty(&aa->aa_oaps));
+	LASSERT(list_empty(&aa->aa_exts));
+	LASSERT(list_empty(&aa->aa_oaps));
 
 	cl_req_completion(env, aa->aa_clerq, rc < 0 ? rc :
 			  req->rq_bulk->bd_nob_transferred);
@@ -1892,7 +1891,7 @@ static void brw_commit(struct ptlrpc_request *req)
  * Extents in the list must be in OES_RPC state.
  */
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
-		  cfs_list_t *ext_list, int cmd, pdl_policy_t pol)
+		  struct list_head *ext_list, int cmd, pdl_policy_t pol)
 {
 	struct ptlrpc_request		*req = NULL;
 	struct osc_extent		*ext;
@@ -1913,18 +1912,18 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int				page_count = 0;
 	int				i;
 	int				rc;
-	CFS_LIST_HEAD(rpc_list);
+	struct list_head		rpc_list = LIST_HEAD_INIT(rpc_list);
 
 	ENTRY;
-	LASSERT(!cfs_list_empty(ext_list));
+	LASSERT(!list_empty(ext_list));
 
 	/* add pages into rpc_list to build BRW rpc */
-	cfs_list_for_each_entry(ext, ext_list, oe_link) {
+	list_for_each_entry(ext, ext_list, oe_link) {
 		LASSERT(ext->oe_state == OES_RPC);
 		mem_tight |= ext->oe_memalloc;
-		cfs_list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
+		list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
 			++page_count;
-			cfs_list_add_tail(&oap->oap_rpc_item, &rpc_list);
+			list_add_tail(&oap->oap_rpc_item, &rpc_list);
 			if (starting_offset > oap->oap_obj_off)
 				starting_offset = oap->oap_obj_off;
 			else
@@ -1954,7 +1953,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		GOTO(out, rc = -ENOMEM);
 
 	i = 0;
-	cfs_list_for_each_entry(oap, &rpc_list, oap_rpc_item) {
+	list_for_each_entry(oap, &rpc_list, oap_rpc_item) {
 		struct cl_page *page = oap2cl_page(oap);
 		if (clerq == NULL) {
 			clerq = cl_req_alloc(env, page, crt,
@@ -2015,16 +2014,16 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 
 	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
 	aa = ptlrpc_req_async_args(req);
-	CFS_INIT_LIST_HEAD(&aa->aa_oaps);
-	cfs_list_splice_init(&rpc_list, &aa->aa_oaps);
-	CFS_INIT_LIST_HEAD(&aa->aa_exts);
-	cfs_list_splice_init(ext_list, &aa->aa_exts);
+	INIT_LIST_HEAD(&aa->aa_oaps);
+	list_splice_init(&rpc_list, &aa->aa_oaps);
+	INIT_LIST_HEAD(&aa->aa_exts);
+	list_splice_init(ext_list, &aa->aa_exts);
 	aa->aa_clerq = clerq;
 
 	/* queued sync pages can be torn down while the pages
 	 * were between the pending list and the rpc */
 	tmp = NULL;
-	cfs_list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
+	list_for_each_entry(oap, &aa->aa_oaps, oap_rpc_item) {
 		/* only one oap gets a request reference */
 		if (tmp == NULL)
 			tmp = oap;
@@ -2092,10 +2091,10 @@ out:
 			OBD_FREE(pga, sizeof(*pga) * page_count);
 		/* this should happen rarely and is pretty bad, it makes the
 		 * pending list not follow the dirty order */
-		while (!cfs_list_empty(ext_list)) {
-			ext = cfs_list_entry(ext_list->next, struct osc_extent,
-					     oe_link);
-			cfs_list_del_init(&ext->oe_link);
+		while (!list_empty(ext_list)) {
+			ext = list_entry(ext_list->next, struct osc_extent,
+					 oe_link);
+			list_del_init(&ext->oe_link);
 			osc_extent_finish(env, ext, 0, rc);
 		}
 		if (clerq && !IS_ERR(clerq))
@@ -2839,9 +2838,9 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
 
 		/* add this osc into entity list */
-		LASSERT(cfs_list_empty(&cli->cl_lru_osc));
+		LASSERT(list_empty(&cli->cl_lru_osc));
 		spin_lock(&cli->cl_cache->ccc_lru_lock);
-		cfs_list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
+		list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
 		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 
 		RETURN(0);
@@ -3162,7 +3161,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 				    OST_MAXREQSIZE,
 				    ptlrpc_add_rqs_to_pool);
 
-	CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
+	INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
 	ns_register_cancel(obd->obd_namespace, osc_cancel_weight);
 	RETURN(0);
 
@@ -3242,7 +3241,7 @@ int osc_cleanup(struct obd_device *obd)
 	if (cli->cl_cache != NULL) {
 		LASSERT(atomic_read(&cli->cl_cache->ccc_users) > 0);
 		spin_lock(&cli->cl_cache->ccc_lru_lock);
-		cfs_list_del_init(&cli->cl_lru_osc);
+		list_del_init(&cli->cl_lru_osc);
 		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 		cli->cl_lru_left = NULL;
 		atomic_dec(&cli->cl_cache->ccc_users);

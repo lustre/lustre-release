@@ -72,8 +72,8 @@ struct fld_cache *fld_cache_init(const char *name,
         if (cache == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        CFS_INIT_LIST_HEAD(&cache->fci_entries_head);
-        CFS_INIT_LIST_HEAD(&cache->fci_lru);
+	INIT_LIST_HEAD(&cache->fci_entries_head);
+	INIT_LIST_HEAD(&cache->fci_lru);
 
         cache->fci_cache_count = 0;
 	rwlock_init(&cache->fci_lock);
@@ -127,8 +127,8 @@ void fld_cache_fini(struct fld_cache *cache)
 void fld_cache_entry_delete(struct fld_cache *cache,
 			    struct fld_cache_entry *node)
 {
-	cfs_list_del(&node->fce_list);
-	cfs_list_del(&node->fce_lru);
+	list_del(&node->fce_list);
+	list_del(&node->fce_lru);
 	cache->fci_cache_count--;
 	OBD_FREE_PTR(node);
 }
@@ -142,12 +142,12 @@ static void fld_fix_new_list(struct fld_cache *cache)
         struct fld_cache_entry *f_next;
         struct lu_seq_range *c_range;
         struct lu_seq_range *n_range;
-        cfs_list_t *head = &cache->fci_entries_head;
+	struct list_head *head = &cache->fci_entries_head;
         ENTRY;
 
 restart_fixup:
 
-        cfs_list_for_each_entry_safe(f_curr, f_next, head, fce_list) {
+	list_for_each_entry_safe(f_curr, f_next, head, fce_list) {
                 c_range = &f_curr->fce_range;
                 n_range = &f_next->fce_range;
 
@@ -205,13 +205,13 @@ restart_fixup:
  */
 static inline void fld_cache_entry_add(struct fld_cache *cache,
                                        struct fld_cache_entry *f_new,
-                                       cfs_list_t *pos)
+				       struct list_head *pos)
 {
-        cfs_list_add(&f_new->fce_list, pos);
-        cfs_list_add(&f_new->fce_lru, &cache->fci_lru);
+	list_add(&f_new->fce_list, pos);
+	list_add(&f_new->fce_lru, &cache->fci_lru);
 
-        cache->fci_cache_count++;
-        fld_fix_new_list(cache);
+	cache->fci_cache_count++;
+	fld_fix_new_list(cache);
 }
 
 /**
@@ -221,7 +221,7 @@ static inline void fld_cache_entry_add(struct fld_cache *cache,
 static int fld_cache_shrink(struct fld_cache *cache)
 {
         struct fld_cache_entry *flde;
-        cfs_list_t *curr;
+	struct list_head *curr;
         int num = 0;
         ENTRY;
 
@@ -235,7 +235,7 @@ static int fld_cache_shrink(struct fld_cache *cache)
         while (cache->fci_cache_count + cache->fci_threshold >
                cache->fci_cache_size && curr != &cache->fci_lru) {
 
-                flde = cfs_list_entry(curr, struct fld_cache_entry, fce_lru);
+		flde = list_entry(curr, struct fld_cache_entry, fce_lru);
                 curr = curr->prev;
                 fld_cache_entry_delete(cache, flde);
                 num++;
@@ -396,8 +396,8 @@ int fld_cache_insert_nolock(struct fld_cache *cache,
 {
 	struct fld_cache_entry *f_curr;
 	struct fld_cache_entry *n;
-	cfs_list_t *head;
-	cfs_list_t *prev = NULL;
+	struct list_head *head;
+	struct list_head *prev = NULL;
 	const seqno_t new_start  = f_new->fce_range.lsr_start;
 	const seqno_t new_end  = f_new->fce_range.lsr_end;
 	__u32 new_flags  = f_new->fce_range.lsr_flags;
@@ -414,7 +414,7 @@ int fld_cache_insert_nolock(struct fld_cache *cache,
 
 	head = &cache->fci_entries_head;
 
-	cfs_list_for_each_entry_safe(f_curr, n, head, fce_list) {
+	list_for_each_entry_safe(f_curr, n, head, fce_list) {
 		/* add list if next is end of list */
 		if (new_end < f_curr->fce_range.lsr_start ||
 		   (new_end == f_curr->fce_range.lsr_start &&
@@ -464,10 +464,10 @@ void fld_cache_delete_nolock(struct fld_cache *cache,
 {
 	struct fld_cache_entry *flde;
 	struct fld_cache_entry *tmp;
-	cfs_list_t *head;
+	struct list_head *head;
 
 	head = &cache->fci_entries_head;
-	cfs_list_for_each_entry_safe(flde, tmp, head, fce_list) {
+	list_for_each_entry_safe(flde, tmp, head, fce_list) {
 		/* add list if next is end of list */
 		if (range->lsr_start == flde->fce_range.lsr_start ||
 		   (range->lsr_end == flde->fce_range.lsr_end &&
@@ -496,10 +496,10 @@ fld_cache_entry_lookup_nolock(struct fld_cache *cache,
 {
 	struct fld_cache_entry *flde;
 	struct fld_cache_entry *got = NULL;
-	cfs_list_t *head;
+	struct list_head *head;
 
 	head = &cache->fci_entries_head;
-	cfs_list_for_each_entry(flde, head, fce_list) {
+	list_for_each_entry(flde, head, fce_list) {
 		if (range->lsr_start == flde->fce_range.lsr_start ||
 		   (range->lsr_end == flde->fce_range.lsr_end &&
 		    range->lsr_flags == flde->fce_range.lsr_flags)) {
@@ -536,14 +536,14 @@ int fld_cache_lookup(struct fld_cache *cache,
 {
 	struct fld_cache_entry *flde;
 	struct fld_cache_entry *prev = NULL;
-	cfs_list_t *head;
+	struct list_head *head;
 	ENTRY;
 
 	read_lock(&cache->fci_lock);
 	head = &cache->fci_entries_head;
 
 	cache->fci_stat.fst_count++;
-	cfs_list_for_each_entry(flde, head, fce_list) {
+	list_for_each_entry(flde, head, fce_list) {
 		if (flde->fce_range.lsr_start > seq) {
 			if (prev != NULL)
 				*range = prev->fce_range;

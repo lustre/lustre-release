@@ -68,9 +68,8 @@ fld_proc_targets_seq_show(struct seq_file *m, void *unused)
 	LASSERT(fld != NULL);
 
 	spin_lock(&fld->lcf_lock);
-        cfs_list_for_each_entry(target,
-                                &fld->lcf_targets, ft_chain)
-		seq_printf(m, "%s\n", fld_target_name(target));
+	list_for_each_entry(target, &fld->lcf_targets, ft_chain)
+	seq_printf(m, "%s\n", fld_target_name(target));
 	spin_unlock(&fld->lcf_lock);
 	RETURN(0);
 }

@@ -103,13 +103,13 @@ static int osc_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
 			 enum cl_req_type crt, struct cl_2queue *queue)
 {
-        struct cl_page    *page;
-        struct cl_page    *tmp;
-        struct client_obd *cli  = NULL;
-        struct osc_object *osc  = NULL; /* to keep gcc happy */
-        struct osc_page   *opg;
-        struct cl_io      *io;
-	CFS_LIST_HEAD     (list);
+	struct cl_page	  *page;
+	struct cl_page	  *tmp;
+	struct client_obd *cli  = NULL;
+	struct osc_object *osc  = NULL;	/* to keep gcc happy */
+	struct osc_page	  *opg;
+	struct cl_io	  *io;
+	struct list_head  list = LIST_HEAD_INIT(list);
 
 	struct cl_page_list *qin      = &queue->c2_qin;
 	struct cl_page_list *qout     = &queue->c2_qout;
@@ -145,8 +145,8 @@ static int osc_io_submit(const struct lu_env *env,
 		oap = &opg->ops_oap;
 		LASSERT(osc == oap->oap_obj);
 
-		if (!cfs_list_empty(&oap->oap_pending_item) ||
-		    !cfs_list_empty(&oap->oap_rpc_item)) {
+		if (!list_empty(&oap->oap_pending_item) ||
+		    !list_empty(&oap->oap_rpc_item)) {
 			CDEBUG(D_CACHE, "Busy oap %p page %p for submit.\n",
 			       oap, opg);
                         result = -EBUSY;
@@ -174,7 +174,7 @@ static int osc_io_submit(const struct lu_env *env,
 		spin_unlock(&oap->oap_lock);
 
 		osc_page_submit(env, opg, crt, brw_flags);
-		cfs_list_add_tail(&oap->oap_pending_item, &list);
+		list_add_tail(&oap->oap_pending_item, &list);
 		if (++queued == max_pages) {
 			queued = 0;
 			result = osc_queue_sync_pages(env, osc, &list, cmd,
@@ -272,7 +272,7 @@ static int osc_io_commit_async(const struct lu_env *env,
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
 
-		if (!cfs_list_empty(&oap->oap_rpc_item)) {
+		if (!list_empty(&oap->oap_rpc_item)) {
 			CDEBUG(D_CACHE, "Busy oap %p page %p for submit.\n",
 			       oap, opg);
 			result = -EBUSY;
@@ -280,7 +280,7 @@ static int osc_io_commit_async(const struct lu_env *env,
 		}
 
 		/* The page may be already in dirty cache. */
-		if (cfs_list_empty(&oap->oap_pending_item)) {
+		if (list_empty(&oap->oap_pending_item)) {
 			result = osc_page_cache_add(env, &opg->ops_cl, io);
 			if (result != 0)
 				break;
@@ -403,7 +403,7 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 
 	oap = &ops->ops_oap;
 	if (oap->oap_cmd & OBD_BRW_WRITE &&
-	    !cfs_list_empty(&oap->oap_pending_item))
+	    !list_empty(&oap->oap_pending_item))
 		CL_PAGE_DEBUG(D_ERROR, env, page, "exists " LPU64 "/%s.\n",
 				start, current->comm);
 
@@ -804,7 +804,7 @@ static void osc_req_attr_set(const struct lu_env *env,
 		struct cl_object *subobj;
 
 		clerq = slice->crs_req;
-		LASSERT(!cfs_list_empty(&clerq->crq_pages));
+		LASSERT(!list_empty(&clerq->crq_pages));
 		apage = container_of(clerq->crq_pages.next,
 				     struct cl_page, cp_flight);
 		opg = osc_cl_page_osc(apage, NULL);
@@ -816,8 +816,8 @@ static void osc_req_attr_set(const struct lu_env *env,
 			struct cl_lock          *scan;
 
 			head = cl_object_header(subobj);
-                        cfs_list_for_each_entry(scan, &head->coh_locks,
-                                                cll_linkage)
+			list_for_each_entry(scan, &head->coh_locks,
+					    cll_linkage)
                                 CL_LOCK_DEBUG(D_ERROR, env, scan,
                                               "no cover page!\n");
                         CL_PAGE_DEBUG(D_ERROR, env, apage,

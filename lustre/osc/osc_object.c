@@ -83,18 +83,18 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 #endif
 	spin_lock_init(&osc->oo_seatbelt);
         for (i = 0; i < CRT_NR; ++i)
-                CFS_INIT_LIST_HEAD(&osc->oo_inflight[i]);
+		INIT_LIST_HEAD(&osc->oo_inflight[i]);
 
-	CFS_INIT_LIST_HEAD(&osc->oo_ready_item);
-	CFS_INIT_LIST_HEAD(&osc->oo_hp_ready_item);
-	CFS_INIT_LIST_HEAD(&osc->oo_write_item);
-	CFS_INIT_LIST_HEAD(&osc->oo_read_item);
+	INIT_LIST_HEAD(&osc->oo_ready_item);
+	INIT_LIST_HEAD(&osc->oo_hp_ready_item);
+	INIT_LIST_HEAD(&osc->oo_write_item);
+	INIT_LIST_HEAD(&osc->oo_read_item);
 
 	osc->oo_root.rb_node = NULL;
-	CFS_INIT_LIST_HEAD(&osc->oo_hp_exts);
-	CFS_INIT_LIST_HEAD(&osc->oo_urgent_exts);
-	CFS_INIT_LIST_HEAD(&osc->oo_rpc_exts);
-	CFS_INIT_LIST_HEAD(&osc->oo_reading_exts);
+	INIT_LIST_HEAD(&osc->oo_hp_exts);
+	INIT_LIST_HEAD(&osc->oo_urgent_exts);
+	INIT_LIST_HEAD(&osc->oo_rpc_exts);
+	INIT_LIST_HEAD(&osc->oo_reading_exts);
 	atomic_set(&osc->oo_nr_reads, 0);
 	atomic_set(&osc->oo_nr_writes, 0);
 	spin_lock_init(&osc->oo_lock);
@@ -111,18 +111,18 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	int i;
 
 	for (i = 0; i < CRT_NR; ++i)
-		LASSERT(cfs_list_empty(&osc->oo_inflight[i]));
+		LASSERT(list_empty(&osc->oo_inflight[i]));
 
-	LASSERT(cfs_list_empty(&osc->oo_ready_item));
-	LASSERT(cfs_list_empty(&osc->oo_hp_ready_item));
-	LASSERT(cfs_list_empty(&osc->oo_write_item));
-	LASSERT(cfs_list_empty(&osc->oo_read_item));
+	LASSERT(list_empty(&osc->oo_ready_item));
+	LASSERT(list_empty(&osc->oo_hp_ready_item));
+	LASSERT(list_empty(&osc->oo_write_item));
+	LASSERT(list_empty(&osc->oo_read_item));
 
 	LASSERT(osc->oo_root.rb_node == NULL);
-	LASSERT(cfs_list_empty(&osc->oo_hp_exts));
-	LASSERT(cfs_list_empty(&osc->oo_urgent_exts));
-	LASSERT(cfs_list_empty(&osc->oo_rpc_exts));
-	LASSERT(cfs_list_empty(&osc->oo_reading_exts));
+	LASSERT(list_empty(&osc->oo_hp_exts));
+	LASSERT(list_empty(&osc->oo_urgent_exts));
+	LASSERT(list_empty(&osc->oo_rpc_exts));
+	LASSERT(list_empty(&osc->oo_reading_exts));
 	LASSERT(atomic_read(&osc->oo_nr_reads) == 0);
 	LASSERT(atomic_read(&osc->oo_nr_writes) == 0);
 

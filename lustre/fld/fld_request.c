@@ -85,7 +85,7 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
 		hash = 0;
 
 again:
-        cfs_list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
+	list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
                 if (target->ft_idx == hash)
                         RETURN(target);
         }
@@ -102,7 +102,7 @@ again:
                "Targets (%d):\n", fld->lcf_name, hash, seq,
                fld->lcf_count);
 
-        cfs_list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
+	list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
                 const char *srv_name = target->ft_srv != NULL  ?
                         target->ft_srv->lsf_name : "<null>";
                 const char *exp_name = target->ft_exp != NULL ?
@@ -185,7 +185,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
                 RETURN(-ENOMEM);
 
 	spin_lock(&fld->lcf_lock);
-	cfs_list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
+	list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
 		if (tmp->ft_idx == tar->ft_idx) {
 			spin_unlock(&fld->lcf_lock);
                         OBD_FREE_PTR(target);
@@ -201,8 +201,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
         target->ft_srv = tar->ft_srv;
         target->ft_idx = tar->ft_idx;
 
-        cfs_list_add_tail(&target->ft_chain,
-                          &fld->lcf_targets);
+	list_add_tail(&target->ft_chain, &fld->lcf_targets);
 
         fld->lcf_count++;
 	spin_unlock(&fld->lcf_lock);
@@ -218,11 +217,10 @@ int fld_client_del_target(struct lu_client_fld *fld, __u64 idx)
 	ENTRY;
 
 	spin_lock(&fld->lcf_lock);
-	cfs_list_for_each_entry_safe(target, tmp,
-				     &fld->lcf_targets, ft_chain) {
+	list_for_each_entry_safe(target, tmp, &fld->lcf_targets, ft_chain) {
 		if (target->ft_idx == idx) {
 			fld->lcf_count--;
-			cfs_list_del(&target->ft_chain);
+			list_del(&target->ft_chain);
 			spin_unlock(&fld->lcf_lock);
 
                         if (target->ft_exp != NULL)
@@ -319,7 +317,7 @@ int fld_client_init(struct lu_client_fld *fld,
 	spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
         fld->lcf_flags = LUSTRE_FLD_INIT;
-        CFS_INIT_LIST_HEAD(&fld->lcf_targets);
+	INIT_LIST_HEAD(&fld->lcf_targets);
 
         cache_size = FLD_CLIENT_CACHE_SIZE /
                 sizeof(struct fld_cache_entry);
@@ -355,10 +353,9 @@ void fld_client_fini(struct lu_client_fld *fld)
 	ENTRY;
 
 	spin_lock(&fld->lcf_lock);
-        cfs_list_for_each_entry_safe(target, tmp,
-                                     &fld->lcf_targets, ft_chain) {
+	list_for_each_entry_safe(target, tmp, &fld->lcf_targets, ft_chain) {
                 fld->lcf_count--;
-                cfs_list_del(&target->ft_chain);
+		list_del(&target->ft_chain);
                 if (target->ft_exp != NULL)
                         class_export_put(target->ft_exp);
                 OBD_FREE_PTR(target);

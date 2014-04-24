@@ -71,7 +71,7 @@ static int mdc_reint(struct ptlrpc_request *request,
  * found by @fid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
 int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
-                            cfs_list_t *cancels, ldlm_mode_t mode,
+			    struct list_head *cancels, ldlm_mode_t mode,
                             __u64 bits)
 {
 	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
@@ -109,7 +109,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request, struct md_open_data **mod)
 {
-        CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
         struct ptlrpc_request *req;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
@@ -222,7 +222,7 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
         int count, resends = 0;
         struct obd_import *import = exp->exp_obd->u.cli.cl_import;
         int generation = import->imp_generation;
-        CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
         ENTRY;
 
         /* For case if upper layer did not alloc fid, do it now. */
@@ -327,7 +327,7 @@ rebuild:
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request)
 {
-        CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
         int count = 0, rc;
@@ -382,7 +382,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request)
 {
-        CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int count = 0, rc;
@@ -430,7 +430,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
-        CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int count = 0, rc;

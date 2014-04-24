@@ -147,48 +147,48 @@ oqi_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
 }
 
 static int
-oqi_keycmp(const void *key, cfs_hlist_node_t *hnode)
+oqi_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
 	obd_uid uid;
 
 	LASSERT(key != NULL);
 	uid = *((obd_uid*)key);
-	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 
 	return uid == oqi->oqi_id;
 }
 
 static void *
-oqi_key(cfs_hlist_node_t *hnode)
+oqi_key(struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
-	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 	return &oqi->oqi_id;
 }
 
 static void *
-oqi_object(cfs_hlist_node_t *hnode)
+oqi_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+	return hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 }
 
 static void
-oqi_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
-{
-}
-
-static void
-oqi_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+oqi_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 }
 
 static void
-oqi_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+oqi_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+{
+}
+
+static void
+oqi_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
 
-	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+	oqi = hlist_entry(hnode, struct osc_quota_info, oqi_hash);
 
         OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
 }

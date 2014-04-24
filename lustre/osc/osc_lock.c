@@ -1116,7 +1116,7 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                 return 0;
 
 	spin_lock(&hdr->coh_lock_guard);
-        cfs_list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
+	list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
                 struct cl_lock_descr *cld = &scan->cll_descr;
                 const struct osc_lock *scan_ols;
 
