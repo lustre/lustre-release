@@ -367,7 +367,7 @@ static int osp_process_config(const struct lu_env *env,
 			      struct lu_device *dev, struct lustre_cfg *lcfg)
 {
 	struct osp_device		*d = lu2osp_dev(dev);
-	struct lprocfs_static_vars	 lvars = { 0 };
+	struct obd_device		*obd = d->opd_obd;
 	int				 rc;
 
 	ENTRY;
@@ -381,11 +381,9 @@ static int osp_process_config(const struct lu_env *env,
 		rc = osp_shutdown(env, d);
 		break;
 	case LCFG_PARAM:
-		lprocfs_osp_init_vars(&lvars);
-
-		LASSERT(d->opd_obd);
-		rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
-					      lcfg, d->opd_obd);
+		LASSERT(obd);
+		rc = class_process_proc_seq_param(PARAM_OSC, obd->obd_vars,
+						  lcfg, obd);
 		if (rc > 0)
 			rc = 0;
 		if (rc == -ENOSYS) {
@@ -1241,33 +1239,27 @@ struct llog_operations osp_mds_ost_orig_logops;
 
 static int __init osp_mod_init(void)
 {
-	struct lprocfs_static_vars	 lvars;
 	struct obd_type *type;
-	int				 rc;
+	int rc;
 
 	rc = lu_kmem_init(osp_caches);
 	if (rc)
 		return rc;
 
-	lprocfs_osp_init_vars(&lvars);
 
 	rc = class_register_type(&osp_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				 lvars.module_vars,
+				 NULL,
 #endif
 				 LUSTRE_OSP_NAME, &osp_device_type);
-
-	/* create "osc" entry in procfs for compatibility purposes */
 	if (rc != 0) {
 		lu_kmem_fini(osp_caches);
 		return rc;
 	}
 
-	lprocfs_lwp_init_vars(&lvars);
-
 	rc = class_register_type(&lwp_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				 lvars.module_vars,
+				 NULL,
 #endif
 				 LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
@@ -1287,18 +1279,18 @@ static int __init osp_mod_init(void)
 		return rc;
 
 	type = class_search_type(LUSTRE_OSP_NAME);
-	type->typ_procsym = lprocfs_register("osc", proc_lustre_root,
-					     NULL, NULL);
-	if (IS_ERR(type->typ_procsym))
+	type->typ_procsym = lprocfs_seq_register("osc", proc_lustre_root,
+						 NULL, NULL);
+	if (IS_ERR(type->typ_procsym)) {
 		CERROR("osp: can't create compat entry \"osc\": %d\n",
 		       (int) PTR_ERR(type->typ_procsym));
+		type->typ_procsym = NULL;
+	}
 	return rc;
 }
 
 static void __exit osp_mod_exit(void)
 {
-	lprocfs_try_remove_proc_entry("osc", proc_lustre_root);
-
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
 	lu_kmem_fini(osp_caches);

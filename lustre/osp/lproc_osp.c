@@ -45,24 +45,24 @@
 #include "osp_internal.h"
 
 #ifdef LPROCFS
-static int osp_rd_active(char *page, char **start, off_t off,
-			 int count, int *eof, void *data)
+static int osp_active_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	int			 rc;
 
 	LPROCFS_CLIMP_CHECK(dev);
-	rc = snprintf(page, count, "%d\n",
-		      !dev->u.cli.cl_import->imp_deactive);
+	rc = seq_printf(m, "%d\n", !dev->u.cli.cl_import->imp_deactive);
 	LPROCFS_CLIMP_EXIT(dev);
 	return rc;
 }
 
-static int osp_wr_active(struct file *file, const char *buffer,
-			 unsigned long count, void *data)
+static ssize_t
+osp_active_seq_write(struct file *file, const char *buffer,
+			size_t count, loff_t *off)
 {
-	struct obd_device	*dev = data;
-	int			 val, rc;
+	struct seq_file   *m = file->private_data;
+	struct obd_device *dev = m->private;
+	int		   val, rc;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
 	if (rc)
@@ -81,67 +81,61 @@ static int osp_wr_active(struct file *file, const char *buffer,
 	LPROCFS_CLIMP_EXIT(dev);
 	return count;
 }
+LPROC_SEQ_FOPS(osp_active);
 
-static int osp_rd_syn_in_flight(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int osp_syn_in_flight_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%u\n", osp->opd_syn_rpc_in_flight);
-	return rc;
+	return seq_printf(m, "%u\n", osp->opd_syn_rpc_in_flight);
 }
+LPROC_SEQ_FOPS_RO(osp_syn_in_flight);
 
-static int osp_rd_syn_in_prog(char *page, char **start, off_t off, int count,
-			      int *eof, void *data)
+static int osp_syn_in_prog_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%u\n", osp->opd_syn_rpc_in_progress);
-	return rc;
+	return seq_printf(m, "%u\n", osp->opd_syn_rpc_in_progress);
 }
+LPROC_SEQ_FOPS_RO(osp_syn_in_prog);
 
-static int osp_rd_syn_changes(char *page, char **start, off_t off,
-			      int count, int *eof, void *data)
+static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%lu\n", osp->opd_syn_changes);
-	return rc;
+	return seq_printf(m, "%lu\n", osp->opd_syn_changes);
 }
+LPROC_SEQ_FOPS_RO(osp_syn_changes);
 
-static int osp_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
-				     int count, int *eof, void *data)
+static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%u\n", osp->opd_syn_max_rpc_in_flight);
-	return rc;
+	return seq_printf(m, "%u\n", osp->opd_syn_max_rpc_in_flight);
 }
 
-static int osp_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
-				     unsigned long count, void *data)
+static ssize_t
+osp_max_rpcs_in_flight_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*dev = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
 	int			 val, rc;
 
@@ -158,25 +152,25 @@ static int osp_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 	osp->opd_syn_max_rpc_in_flight = val;
 	return count;
 }
+LPROC_SEQ_FOPS(osp_max_rpcs_in_flight);
 
-static int osp_rd_max_rpcs_in_prog(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int osp_max_rpcs_in_prog_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%u\n", osp->opd_syn_max_rpc_in_progress);
-	return rc;
+	return seq_printf(m, "%u\n", osp->opd_syn_max_rpc_in_progress);
 }
 
-static int osp_wr_max_rpcs_in_prog(struct file *file, const char *buffer,
-				   unsigned long count, void *data)
+static ssize_t
+osp_max_rpcs_in_prog_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*dev = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
 	int			 val, rc;
 
@@ -194,23 +188,25 @@ static int osp_wr_max_rpcs_in_prog(struct file *file, const char *buffer,
 
 	return count;
 }
+LPROC_SEQ_FOPS(osp_max_rpcs_in_prog);
 
-static int osp_rd_create_count(char *page, char **start, off_t off, int count,
-			       int *eof, void *data)
+static int osp_create_count_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, "%d\n", osp->opd_pre_grow_count);
+	return seq_printf(m, "%d\n", osp->opd_pre_grow_count);
 }
 
-static int osp_wr_create_count(struct file *file, const char *buffer,
-			       unsigned long count, void *data)
+static ssize_t
+osp_create_count_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
 	int			 val, rc, i;
 
@@ -242,23 +238,25 @@ static int osp_wr_create_count(struct file *file, const char *buffer,
 
 	return count;
 }
+LPROC_SEQ_FOPS(osp_create_count);
 
-static int osp_rd_max_create_count(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int osp_max_create_count_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, "%d\n", osp->opd_pre_max_grow_count);
+	return seq_printf(m, "%d\n", osp->opd_pre_max_grow_count);
 }
 
-static int osp_wr_max_create_count(struct file *file, const char *buffer,
-				   unsigned long count, void *data)
+static ssize_t
+osp_max_create_count_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
 	int			 val, rc;
 
@@ -281,89 +279,86 @@ static int osp_wr_max_create_count(struct file *file, const char *buffer,
 
 	return count;
 }
+LPROC_SEQ_FOPS(osp_max_create_count);
 
-static int osp_rd_prealloc_next_id(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int osp_prealloc_next_id_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, "%u\n",
-			fid_oid(&osp->opd_pre_used_fid) + 1);
+	return seq_printf(m, "%u\n", fid_oid(&osp->opd_pre_used_fid) + 1);
 }
+LPROC_SEQ_FOPS_RO(osp_prealloc_next_id);
 
-static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int osp_prealloc_last_id_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, "%u\n",
-			fid_oid(&osp->opd_pre_last_created_fid));
+	return seq_printf(m, "%u\n", fid_oid(&osp->opd_pre_last_created_fid));
 }
+LPROC_SEQ_FOPS_RO(osp_prealloc_last_id);
 
-static int osp_rd_prealloc_next_seq(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int osp_prealloc_next_seq_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, LPX64"\n",
-			fid_seq(&osp->opd_pre_used_fid));
+	return seq_printf(m, LPX64"\n", fid_seq(&osp->opd_pre_used_fid));
 }
+LPROC_SEQ_FOPS_RO(osp_prealloc_next_seq);
 
-static int osp_rd_prealloc_last_seq(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int osp_prealloc_last_seq_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, LPX64"\n",
+	return seq_printf(m, LPX64"\n",
 			fid_seq(&osp->opd_pre_last_created_fid));
 }
+LPROC_SEQ_FOPS_RO(osp_prealloc_last_seq);
 
-static int osp_rd_prealloc_reserved(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int osp_prealloc_reserved_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	return snprintf(page, count, LPU64"\n", osp->opd_pre_reserved);
+	return seq_printf(m, LPU64"\n", osp->opd_pre_reserved);
 }
+LPROC_SEQ_FOPS_RO(osp_prealloc_reserved);
 
-static int osp_rd_maxage(char *page, char **start, off_t off,
-			 int count, int *eof, void *data)
+static int osp_maxage_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%u\n", osp->opd_statfs_maxage);
-	return rc;
+	return seq_printf(m, "%u\n", osp->opd_statfs_maxage);
 }
 
-static int osp_wr_maxage(struct file *file, const char *buffer,
-			 unsigned long count, void *data)
+static ssize_t
+osp_maxage_seq_write(struct file *file, const char *buffer,
+			size_t count, loff_t *off)
 {
-	struct obd_device	*dev = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
 	int			 val, rc;
 
@@ -381,25 +376,23 @@ static int osp_wr_maxage(struct file *file, const char *buffer,
 
 	return count;
 }
+LPROC_SEQ_FOPS(osp_maxage);
 
-static int osp_rd_pre_status(char *page, char **start, off_t off,
-			     int count, int *eof, void *data)
+static int osp_pre_status_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%d\n", osp->opd_pre_status);
-	return rc;
+	return seq_printf(m, "%d\n", osp->opd_pre_status);
 }
+LPROC_SEQ_FOPS_RO(osp_pre_status);
 
-static int osp_rd_destroys_in_flight(char *page, char **start, off_t off,
-				     int count, int *eof, void *data)
+static int osp_destroys_in_flight_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *dev = data;
+	struct obd_device *dev = m->private;
 	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
 
 	if (osp == NULL)
@@ -411,43 +404,40 @@ static int osp_rd_destroys_in_flight(char *page, char **start, off_t off,
 	 * - sync changes are zero - no llog records
 	 * - sync in progress are zero - no RPCs in flight
 	 */
-	return snprintf(page, count, "%lu\n",
-			osp->opd_syn_rpc_in_progress + osp->opd_syn_changes);
+	return seq_printf(m, "%lu\n",
+			  osp->opd_syn_rpc_in_progress + osp->opd_syn_changes);
 }
+LPROC_SEQ_FOPS_RO(osp_destroys_in_flight);
 
-static int osp_rd_old_sync_processed(char *page, char **start, off_t off,
-				     int count, int *eof, void *data)
+static int osp_old_sync_processed_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*dev = data;
+	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
-	int			 rc;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = snprintf(page, count, "%d\n", osp->opd_syn_prev_done);
-	return rc;
+	return seq_printf(m, "%d\n", osp->opd_syn_prev_done);
 }
+LPROC_SEQ_FOPS_RO(osp_old_sync_processed);
 
-static int osp_rd_lfsck_max_rpcs_in_flight(char *page, char **start, off_t off,
-					   int count, int *eof, void *data)
+static int
+osp_lfsck_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *dev = data;
+	struct obd_device *dev = m->private;
 	__u32 max;
-	int rc;
 
-	*eof = 1;
 	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
-	rc = snprintf(page, count, "%u\n", max);
-
-	return rc;
+	return seq_printf(m, "%u\n", max);
 }
 
-static int osp_wr_lfsck_max_rpcs_in_flight(struct file *file,
-					   const char *buffer,
-					   unsigned long count, void *data)
+static ssize_t
+osp_lfsck_max_rpcs_in_flight_seq_write(struct file *file,
+				       const char __user *buffer,
+				       size_t count, loff_t *off)
 {
-	struct obd_device *dev = data;
+	struct seq_file	  *m = file->private_data;
+	struct obd_device *dev = m->private;
 	int val;
 	int rc;
 
@@ -460,111 +450,148 @@ static int osp_wr_lfsck_max_rpcs_in_flight(struct file *file,
 
 	return count;
 }
+LPROC_SEQ_FOPS(osp_lfsck_max_rpcs_in_flight);
 
-static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
-	{ "uuid",		lprocfs_rd_uuid, 0, 0 },
-	{ "ping",		0, lprocfs_wr_ping, 0, 0, 0222 },
-	{ "connect_flags",	lprocfs_rd_connect_flags, 0, 0 },
-	{ "ost_server_uuid",	lprocfs_rd_server_uuid, 0, 0 },
-	{ "ost_conn_uuid",	lprocfs_rd_conn_uuid, 0, 0 },
-	{ "active",		osp_rd_active, osp_wr_active, 0 },
-	{ "max_rpcs_in_flight",	osp_rd_max_rpcs_in_flight,
-				osp_wr_max_rpcs_in_flight, 0 },
-	{ "max_rpcs_in_progress", osp_rd_max_rpcs_in_prog,
-				  osp_wr_max_rpcs_in_prog, 0 },
-	{ "create_count",	osp_rd_create_count,
-				osp_wr_create_count, 0 },
-	{ "max_create_count",	osp_rd_max_create_count,
-				osp_wr_max_create_count, 0 },
-	{ "prealloc_next_id",	osp_rd_prealloc_next_id, 0, 0 },
-	{ "prealloc_next_seq",  osp_rd_prealloc_next_seq, 0, 0 },
-	{ "prealloc_last_id",   osp_rd_prealloc_last_id,  0, 0 },
-	{ "prealloc_last_seq",  osp_rd_prealloc_last_seq, 0, 0 },
-	{ "prealloc_reserved",	osp_rd_prealloc_reserved, 0, 0 },
-	{ "timeouts",		lprocfs_rd_timeouts, 0, 0 },
-	{ "import",		lprocfs_rd_import, lprocfs_wr_import, 0 },
-	{ "state",		lprocfs_rd_state, 0, 0 },
-	{ "maxage",		osp_rd_maxage, osp_wr_maxage, 0 },
-	{ "prealloc_status",	osp_rd_pre_status, 0, 0 },
-	{ "sync_changes",	osp_rd_syn_changes, 0, 0 },
-	{ "sync_in_flight",	osp_rd_syn_in_flight, 0, 0 },
-	{ "sync_in_progress",	osp_rd_syn_in_prog, 0, 0 },
-	{ "old_sync_processed",	osp_rd_old_sync_processed, 0, 0 },
+LPROC_SEQ_FOPS_WO_TYPE(osp, ping);
+LPROC_SEQ_FOPS_RO_TYPE(osp, uuid);
+LPROC_SEQ_FOPS_RO_TYPE(osp, connect_flags);
+LPROC_SEQ_FOPS_RO_TYPE(osp, server_uuid);
+LPROC_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
+
+static int osp_max_pages_per_rpc_seq_show(struct seq_file *m, void *v)
+{
+	return lprocfs_obd_max_pages_per_rpc_seq_show(m, m->private);
+}
+LPROC_SEQ_FOPS_RO(osp_max_pages_per_rpc);
+LPROC_SEQ_FOPS_RO_TYPE(osp, timeouts);
+
+LPROC_SEQ_FOPS_RW_TYPE(osp, import);
+LPROC_SEQ_FOPS_RO_TYPE(osp, state);
+
+static struct lprocfs_seq_vars lprocfs_osp_obd_vars[] = {
+	{ .name =	"uuid",
+	  .fops =	&osp_uuid_fops			},
+	{ .name =	"ping",
+	  .fops =	&osp_ping_fops,
+	  .proc_mode =	0222				},
+	{ .name =	"connect_flags",
+	  .fops =	&osp_connect_flags_fops		},
+	{ .name =	"ost_server_uuid",
+	  .fops =	&osp_server_uuid_fops		},
+	{ .name =	"ost_conn_uuid",
+	  .fops =	&osp_conn_uuid_fops		},
+	{ .name =	"active",
+	  .fops =	&osp_active_fops		},
+	{ .name =	"max_rpcs_in_flight",
+	  .fops =	&osp_max_rpcs_in_flight_fops	},
+	{ .name =	"max_rpcs_in_progress",
+	  .fops =	&osp_max_rpcs_in_prog_fops	},
+	{ .name =	"create_count",
+	  .fops =	&osp_create_count_fops		},
+	{ .name =	"max_create_count",
+	  .fops =	&osp_max_create_count_fops	},
+	{ .name =	"prealloc_next_id",
+	  .fops =	&osp_prealloc_next_id_fops	},
+	{ .name =	"prealloc_next_seq",
+	  .fops =	&osp_prealloc_next_seq_fops	},
+	{ .name =	"prealloc_last_id",
+	  .fops =	&osp_prealloc_last_id_fops	},
+	{ .name =	"prealloc_last_seq",
+	  .fops =	&osp_prealloc_last_seq_fops	},
+	{ .name =	"prealloc_reserved",
+	  .fops =	&osp_prealloc_reserved_fops	},
+	{ .name =	"timeouts",
+	  .fops =	&osp_timeouts_fops		},
+	{ .name =	"import",
+	  .fops =	&osp_import_fops		},
+	{ .name =	"state",
+	  .fops =	&osp_state_fops			},
+	{ .name =	"maxage",
+	  .fops =	&osp_maxage_fops		},
+	{ .name =	"prealloc_status",
+	  .fops =	&osp_pre_status_fops		},
+	{ .name =	"sync_changes",
+	  .fops =	&osp_syn_changes_fops		},
+	{ .name =	"sync_in_flight",
+	  .fops =	&osp_syn_in_flight_fops		},
+	{ .name =	"sync_in_progress",
+	  .fops =	&osp_syn_in_prog_fops		},
+	{ .name =	"old_sync_processed",
+	  .fops =	&osp_old_sync_processed_fops	},
 
 	/* for compatibility reasons */
-	{ "destroys_in_flight",	osp_rd_destroys_in_flight, 0, 0 },
-	{ "lfsck_max_rpcs_in_flight", osp_rd_lfsck_max_rpcs_in_flight,
-				      osp_wr_lfsck_max_rpcs_in_flight, 0 },
+	{ .name =	"destroys_in_flight",
+	  .fops =	&osp_destroys_in_flight_fops		},
+	{ .name	=	"lfsck_max_rpcs_in_flight",
+	  .fops	=	&osp_lfsck_max_rpcs_in_flight_fops	},
 	{ 0 }
 };
 
-static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
-	{ "blocksize",		lprocfs_dt_rd_blksize, 0, 0 },
-	{ "kbytestotal",	lprocfs_dt_rd_kbytestotal, 0, 0 },
-	{ "kbytesfree",		lprocfs_dt_rd_kbytesfree, 0, 0 },
-	{ "kbytesavail",	lprocfs_dt_rd_kbytesavail, 0, 0 },
-	{ "filestotal",		lprocfs_dt_rd_filestotal, 0, 0 },
-	{ "filesfree",		lprocfs_dt_rd_filesfree, 0, 0 },
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_blksize);
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytestotal);
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesfree);
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesavail);
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filestotal);
+LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filesfree);
+
+static struct lprocfs_seq_vars lprocfs_osp_osd_vars[] = {
+	{ .name =	"blocksize",
+	  .fops =	&osp_dt_blksize_fops		},
+	{ .name =	"kbytestotal",
+	  .fops =	&osp_dt_kbytestotal_fops	},
+	{ .name =	"kbytesfree",
+	  .fops =	&osp_dt_kbytesfree_fops		},
+	{ .name =	"kbytesavail",
+	  .fops =	&osp_dt_kbytesavail_fops	},
+	{ .name =	"filestotal",
+	  .fops =	&osp_dt_filestotal_fops		},
+	{ .name =	"filesfree",
+	  .fops =	&osp_dt_filesfree_fops		},
 	{ 0 }
 };
-
-static struct lprocfs_vars lprocfs_osp_module_vars[] = {
-	{ "num_refs",		lprocfs_rd_numrefs, 0, 0 },
-	{ 0 }
-};
-
-void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars)
-{
-	lvars->module_vars = lprocfs_osp_module_vars;
-	lvars->obd_vars = lprocfs_osp_obd_vars;
-}
 
 void osp_lprocfs_init(struct osp_device *osp)
 {
 	struct obd_device	*obd = osp->opd_obd;
-	struct proc_dir_entry	*osc_proc_dir;
+	struct proc_dir_entry	*osc_proc_dir = NULL;
+	struct obd_type		*type;
 	int			 rc;
 
-	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
-					       obd->obd_type->typ_procroot,
-					       lprocfs_osp_osd_vars,
-					       &osp->opd_dt_dev);
-	if (IS_ERR(obd->obd_proc_entry)) {
-		CERROR("%s: can't register in lprocfs: %ld\n",
-		       obd->obd_name, PTR_ERR(obd->obd_proc_entry));
-		obd->obd_proc_entry = NULL;
+	obd->obd_vars = lprocfs_osp_obd_vars;
+	if (lprocfs_seq_obd_setup(obd) != 0)
 		return;
-	}
 
-	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_osp_obd_vars, obd);
+	rc = lprocfs_seq_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,
+				  &osp->opd_dt_dev);
 	if (rc) {
-		CERROR("%s: can't register in lprocfs: %ld\n",
-		       obd->obd_name, PTR_ERR(obd->obd_proc_entry));
+		CERROR("%s: can't register in lprocfs, rc %d\n",
+		       obd->obd_name, rc);
 		return;
 	}
 
 	ptlrpc_lprocfs_register_obd(obd);
 
+	if (osp->opd_connect_mdt || !strstr(obd->obd_name, "osc"))
+		return;
+
+	/* If the real OSC is present which is the case for setups
+	 * with both server and clients on the same node then use
+	 * the OSC's proc root */
+	type = class_search_type(LUSTRE_OSC_NAME);
+	if (type != NULL && type->typ_procroot != NULL)
+		osc_proc_dir = type->typ_procroot;
+	else
+		osc_proc_dir = obd->obd_type->typ_procsym;
+
+	if (osc_proc_dir == NULL)
+		return;
+
 	/* for compatibility we link old procfs's OSC entries to osp ones */
-	if (!osp->opd_connect_mdt) {
-		osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
-		if (osc_proc_dir) {
-			cfs_proc_dir_entry_t	*symlink = NULL;
-			char			*name;
-
-			OBD_ALLOC(name, strlen(obd->obd_name) + 1);
-			if (name == NULL)
-				return;
-
-			strcpy(name, obd->obd_name);
-			if (strstr(name, "osc"))
-				symlink = lprocfs_add_symlink(name,
-						osc_proc_dir, "../osp/%s",
-						obd->obd_name);
-			OBD_FREE(name, strlen(obd->obd_name) + 1);
-			osp->opd_symlink = symlink;
-		}
-	}
+	osp->opd_symlink = lprocfs_add_symlink(obd->obd_name, osc_proc_dir,
+					       "../osp/%s", obd->obd_name);
+	if (osp->opd_symlink == NULL)
+		CERROR("could not register OSC symlink for "
+		       "/proc/fs/lustre/osp/%s.", obd->obd_name);
 }
 
 #endif /* LPROCFS */
