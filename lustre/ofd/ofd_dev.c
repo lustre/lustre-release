@@ -176,7 +176,6 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 
 	LASSERT(m->ofd_osd_exp);
 	obd_disconnect(m->ofd_osd_exp);
-	m->ofd_osd = NULL;
 
 	EXIT;
 }
