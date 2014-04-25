@@ -150,7 +150,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 	spin_unlock(&loghandle->lgh_hdr_lock);
 
-	rc = llog_write(env, loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
+	rc = llog_write(env, loghandle, &llh->llh_hdr, LLOG_HEADER_IDX);
 	if (rc < 0) {
 		CERROR("%s: fail to write header for llog #"DOSTID
 		       "#%08x: rc = %d\n",
@@ -703,7 +703,7 @@ EXPORT_SYMBOL(llog_declare_write_rec);
 
 int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		   struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
-		   int numcookies, void *buf, int idx, struct thandle *th)
+		   int idx, struct thandle *th)
 {
 	struct llog_operations	*lop;
 	int			 raised, rc, buflen;
@@ -718,18 +718,13 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 	if (lop->lop_write_rec == NULL)
 		RETURN(-EOPNOTSUPP);
 
-	if (buf)
-		buflen = rec->lrh_len + sizeof(struct llog_rec_hdr) +
-			 sizeof(struct llog_rec_tail);
-	else
-		buflen = rec->lrh_len;
+	buflen = rec->lrh_len;
 	LASSERT(cfs_size_round(buflen) == buflen);
 
 	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
 	if (!raised)
 		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-	rc = lop->lop_write_rec(env, handle, rec, logcookies, numcookies,
-				buf, idx, th);
+	rc = lop->lop_write_rec(env, handle, rec, logcookies, idx, th);
 	if (!raised)
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
@@ -738,7 +733,7 @@ EXPORT_SYMBOL(llog_write_rec);
 
 int llog_add(const struct lu_env *env, struct llog_handle *lgh,
 	     struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
-	     void *buf, struct thandle *th)
+	     struct thandle *th)
 {
 	int raised, rc;
 
@@ -750,7 +745,7 @@ int llog_add(const struct lu_env *env, struct llog_handle *lgh,
 	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
 	if (!raised)
 		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-	rc = lgh->lgh_logops->lop_add(env, lgh, rec, logcookies, buf, th);
+	rc = lgh->lgh_logops->lop_add(env, lgh, rec, logcookies, th);
 	if (!raised)
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
@@ -856,8 +851,7 @@ EXPORT_SYMBOL(llog_erase);
  * Valid only with local llog.
  */
 int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
-	       struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-	       int cookiecount, void *buf, int idx)
+	       struct llog_rec_hdr *rec, int idx)
 {
 	struct dt_device	*dt;
 	struct thandle		*th;
@@ -884,8 +878,7 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 		GOTO(out_trans, rc);
 
 	down_write(&loghandle->lgh_lock);
-	rc = llog_write_rec(env, loghandle, rec, reccookie,
-			    cookiecount, buf, idx, th);
+	rc = llog_write_rec(env, loghandle, rec, NULL, idx, th);
 	up_write(&loghandle->lgh_lock);
 out_trans:
 	dt_trans_stop(env, dt, th);
@@ -981,7 +974,7 @@ int llog_copy_handler(const struct lu_env *env, struct llog_handle *llh,
 	struct llog_handle	*copy_llh = data;
 
 	/* Append all records */
-	return llog_write(env, copy_llh, rec, NULL, 0, NULL, -1);
+	return llog_write(env, copy_llh, rec, LLOG_NEXT_IDX);
 }
 EXPORT_SYMBOL(llog_copy_handler);
 

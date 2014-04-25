@@ -910,9 +910,9 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 
 	LASSERT(oh->ot_handle == NULL);
 	if (unlikely(op >= OSD_OT_MAX)) {
-		if (unlikely(ldiskfs_track_declares_assert))
+		if (unlikely(ldiskfs_track_declares_assert)) {
 			LASSERT(op < OSD_OT_MAX);
-		else {
+		} else {
 			CWARN("%s: Invalid operation index %d\n",
 			      osd_name(oti->oti_dev), op);
 			libcfs_debug_dumpstack(NULL);

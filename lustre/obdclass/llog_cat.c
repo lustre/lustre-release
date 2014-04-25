@@ -67,21 +67,10 @@ static int llog_cat_new_log(const struct lu_env *env,
 			    struct thandle *th)
 {
 	struct llog_thread_info	*lgi = llog_info(env);
-	struct llog_logid_rec *rec = &lgi->lgi_logid;
-        struct llog_log_hdr *llh;
-        int rc, index, bitmap_size;
-        ENTRY;
+	struct llog_logid_rec	*rec = &lgi->lgi_logid;
+	int			 rc;
 
-        llh = cathandle->lgh_hdr;
-        bitmap_size = LLOG_BITMAP_SIZE(llh);
-
-        index = (cathandle->lgh_last_idx + 1) % bitmap_size;
-
-        /* maximum number of available slots in catlog is bitmap_size - 2 */
-        if (llh->llh_cat_idx == index) {
-                CERROR("no free catalog slots for log...\n");
-		RETURN(-ENOSPC);
-	}
+	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
 		RETURN(-ENOSPC);
@@ -97,46 +86,29 @@ static int llog_cat_new_log(const struct lu_env *env,
 	}
 
 	rc = llog_init_handle(env, loghandle,
-                              LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
-                              &cathandle->lgh_hdr->llh_tgtuuid);
-        if (rc)
-                GOTO(out_destroy, rc);
+			      LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
+			      &cathandle->lgh_hdr->llh_tgtuuid);
+	if (rc)
+		GOTO(out_destroy, rc);
 
-        if (index == 0)
-                index = 1;
-
-	spin_lock(&loghandle->lgh_hdr_lock);
-	llh->llh_count++;
-	if (ext2_set_bit(index, llh->llh_bitmap)) {
-		CERROR("argh, index %u already set in log bitmap?\n",
-		       index);
-		spin_unlock(&loghandle->lgh_hdr_lock);
-		LBUG(); /* should never happen */
-	}
-	spin_unlock(&loghandle->lgh_hdr_lock);
-
-        cathandle->lgh_last_idx = index;
-        llh->llh_tail.lrt_index = index;
-
-	CDEBUG(D_RPCTRACE,"new recovery log "DOSTID":%x for index %u of catalog"
-	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
-	       loghandle->lgh_id.lgl_ogen, index,
-	       POSTID(&cathandle->lgh_id.lgl_oi));
 	/* build the record for this log in the catalog */
 	rec->lid_hdr.lrh_len = sizeof(*rec);
-	rec->lid_hdr.lrh_index = index;
 	rec->lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
 	rec->lid_id = loghandle->lgh_id;
-	rec->lid_tail.lrt_len = sizeof(*rec);
-	rec->lid_tail.lrt_index = index;
 
-        /* update the catalog: header and record */
+	/* append the new record into catalog. The new index will be
+	 * assigned to the record and updated in rec header */
 	rc = llog_write_rec(env, cathandle, &rec->lid_hdr,
-			    &loghandle->u.phd.phd_cookie, 1, NULL, index, th);
+			    &loghandle->u.phd.phd_cookie, LLOG_NEXT_IDX, th);
 	if (rc < 0)
 		GOTO(out_destroy, rc);
 
-	loghandle->lgh_hdr->llh_cat_idx = index;
+	CDEBUG(D_OTHER, "new recovery log "DOSTID":%x for index %u of catalog"
+	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
+	       loghandle->lgh_id.lgl_ogen, rec->lid_hdr.lrh_index,
+	       POSTID(&cathandle->lgh_id.lgl_oi));
+
+	loghandle->lgh_hdr->llh_cat_idx = rec->lid_hdr.lrh_index;
 	RETURN(0);
 out_destroy:
 	llog_destroy(env, loghandle);
@@ -331,7 +303,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
  */
 int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-		     void *buf, struct thandle *th)
+		     struct thandle *th)
 {
         struct llog_handle *loghandle;
         int rc;
@@ -350,7 +322,7 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 		}
 	}
 	/* now let's try to add the record */
-	rc = llog_write_rec(env, loghandle, rec, reccookie, 1, buf, -1, th);
+	rc = llog_write_rec(env, loghandle, rec, reccookie, LLOG_NEXT_IDX, th);
 	if (rc < 0)
 		CDEBUG_LIMIT(rc == -ENOSPC ? D_HA : D_ERROR,
 			     "llog_write_rec %d: lh=%p\n", rc, loghandle);
@@ -368,8 +340,8 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 			}
 		}
 		/* now let's try to add the record */
-		rc = llog_write_rec(env, loghandle, rec, reccookie, 1, buf,
-				    -1, th);
+		rc = llog_write_rec(env, loghandle, rec, reccookie,
+				    LLOG_NEXT_IDX, th);
 		if (rc < 0)
 			CERROR("llog_write_rec %d: lh=%p\n", rc, loghandle);
 		up_write(&loghandle->lgh_lock);
@@ -454,8 +426,7 @@ out:
 EXPORT_SYMBOL(llog_cat_declare_add_rec);
 
 int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
-		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-		 void *buf)
+		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie)
 {
 	struct llog_ctxt	*ctxt;
 	struct dt_device	*dt;
@@ -480,7 +451,7 @@ int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 	rc = dt_trans_start_local(env, dt, th);
 	if (rc)
 		GOTO(out_trans, rc);
-	rc = llog_cat_add_rec(env, cathandle, rec, reccookie, buf, th);
+	rc = llog_cat_add_rec(env, cathandle, rec, reccookie, th);
 out_trans:
 	dt_trans_stop(env, dt, th);
 	RETURN(rc);

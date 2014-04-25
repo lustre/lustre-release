@@ -242,30 +242,35 @@ static inline int lustre_cfg_len(__u32 bufcount, __u32 *buflens)
 
 #include <obd_support.h>
 
-static inline struct lustre_cfg *lustre_cfg_new(int cmd,
-                                                struct lustre_cfg_bufs *bufs)
+static inline void lustre_cfg_init(struct lustre_cfg *lcfg, int cmd,
+				   struct lustre_cfg_bufs *bufs)
 {
-        struct lustre_cfg *lcfg;
-        char *ptr;
-        int i;
+	char *ptr;
+	int i;
 
-        ENTRY;
+	lcfg->lcfg_version = LUSTRE_CFG_VERSION;
+	lcfg->lcfg_command = cmd;
+	lcfg->lcfg_bufcount = bufs->lcfg_bufcount;
 
-        OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
-                                       bufs->lcfg_buflen));
-        if (!lcfg)
-                RETURN(ERR_PTR(-ENOMEM));
+	ptr = (char *)lcfg + LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
+	for (i = 0; i < lcfg->lcfg_bufcount; i++) {
+		lcfg->lcfg_buflens[i] = bufs->lcfg_buflen[i];
+		LOGL((char *)bufs->lcfg_buf[i], bufs->lcfg_buflen[i], ptr);
+	}
+}
 
-        lcfg->lcfg_version = LUSTRE_CFG_VERSION;
-        lcfg->lcfg_command = cmd;
-        lcfg->lcfg_bufcount = bufs->lcfg_bufcount;
+static inline struct lustre_cfg *lustre_cfg_new(int cmd,
+						struct lustre_cfg_bufs *bufs)
+{
+	struct lustre_cfg	*lcfg;
 
-        ptr = (char *)lcfg + LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
-        for (i = 0; i < lcfg->lcfg_bufcount; i++) {
-                lcfg->lcfg_buflens[i] = bufs->lcfg_buflen[i];
-                LOGL((char *)bufs->lcfg_buf[i], bufs->lcfg_buflen[i], ptr);
-        }
-        RETURN(lcfg);
+	ENTRY;
+
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
+				       bufs->lcfg_buflen));
+	if (lcfg != NULL)
+		lustre_cfg_init(lcfg, cmd, bufs);
+	RETURN(lcfg);
 }
 
 static inline void lustre_cfg_free(struct lustre_cfg *lcfg)

@@ -47,15 +47,16 @@
 
 static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
-        struct obd_device *obd = seq->private;
-	struct mgs_device *mgs;
-	cfs_list_t list;
-	struct mgs_direntry *dirent, *n;
-	struct lu_env env;
-        int rc, len;
-        ENTRY;
+	struct obd_device	*obd = seq->private;
+	struct mgs_device	*mgs;
+	struct list_head	 list;
+	struct mgs_direntry	*dirent, *n;
+	struct lu_env		 env;
+	int rc, len;
 
-        LASSERT(obd != NULL);
+	ENTRY;
+
+	LASSERT(obd != NULL);
 	LASSERT(obd->obd_lu_dev != NULL);
 	mgs = lu2mgs_dev(obd->obd_lu_dev);
 
@@ -64,22 +65,21 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 		RETURN(rc);
 
 	rc = class_dentry_readdir(&env, mgs, &list);
-        if (rc) {
-                CERROR("Can't read config dir\n");
+	if (rc)
 		GOTO(out, rc);
-        }
-	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
-		cfs_list_del(&dirent->list);
-		len = strlen(dirent->name);
+
+	list_for_each_entry_safe(dirent, n, &list, mde_list) {
+		list_del_init(&dirent->mde_list);
+		len = strlen(dirent->mde_name);
 		if (len > 7 &&
-		    strncmp(dirent->name + len - 7, "-client", len) == 0)
-			seq_printf(seq, "%.*s\n", len - 7, dirent->name);
+		    strncmp(dirent->mde_name + len - 7, "-client", len) == 0)
+			seq_printf(seq, "%.*s\n", len - 7, dirent->mde_name);
 		mgs_direntry_free(dirent);
-        }
+	}
 
 out:
 	lu_env_fini(&env);
-        RETURN(0);
+	RETURN(0);
 }
 
 LPROC_SEQ_FOPS_RO(mgs_fs);

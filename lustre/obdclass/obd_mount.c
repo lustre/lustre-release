@@ -95,9 +95,11 @@ int lustre_process_log(struct super_block *sb, char *logname,
         lustre_cfg_bufs_set(bufs, 2, cfg, sizeof(*cfg));
         lustre_cfg_bufs_set(bufs, 3, &sb, sizeof(sb));
         lcfg = lustre_cfg_new(LCFG_LOG_START, bufs);
-        rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
-        lustre_cfg_free(lcfg);
-
+	if (lcfg == NULL)
+		GOTO(out, rc = -ENOMEM);
+	rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
+	lustre_cfg_free(lcfg);
+out:
         OBD_FREE_PTR(bufs);
 
         if (rc == -EINVAL)
@@ -140,6 +142,8 @@ int lustre_end_log(struct super_block *sb, char *logname,
         if (cfg)
                 lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
         lcfg = lustre_cfg_new(LCFG_LOG_END, &bufs);
+	if (lcfg == NULL)
+		RETURN(-ENOMEM);
         rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
         lustre_cfg_free(lcfg);
         RETURN(rc);
@@ -172,6 +176,8 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
                 lustre_cfg_bufs_set_string(&bufs, 4, s4);
 
         lcfg = lustre_cfg_new(cmd, &bufs);
+	if (lcfg == NULL)
+		return -ENOMEM;
         lcfg->lcfg_nid = nid;
         rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);

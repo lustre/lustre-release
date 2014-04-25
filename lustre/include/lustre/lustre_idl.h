@@ -3276,6 +3276,12 @@ struct llog_rec_tail {
 	(rec->lrh_len - sizeof(struct llog_rec_hdr) -		\
 	 sizeof(struct llog_rec_tail))
 
+static inline void *rec_tail(struct llog_rec_hdr *rec)
+{
+	return (void *)((char *)rec + rec->lrh_len -
+			sizeof(struct llog_rec_tail));
+}
+
 struct llog_logid_rec {
 	struct llog_rec_hdr	lid_hdr;
 	struct llog_logid	lid_id;

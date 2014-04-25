@@ -1472,6 +1472,42 @@ extern int lustre_check_exclusion(struct super_block *sb, char *svname);
 #define lustre_check_exclusion(a,b)  0
 #endif
 
+/*
+ * Supplemental functions for config logs, it allocates lustre_cfg
+ * buffers plus initialized llog record header at the beginning.
+ */
+struct llog_cfg_rec *lustre_cfg_rec_new(int cmd, struct lustre_cfg_bufs *bufs)
+{
+	struct llog_cfg_rec	*lcr;
+	int			 reclen;
+
+	ENTRY;
+
+	reclen = lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen);
+	reclen = llog_data_len(reclen) + sizeof(struct llog_rec_hdr) +
+		 sizeof(struct llog_rec_tail);
+
+	OBD_ALLOC(lcr, reclen);
+	if (lcr == NULL)
+		RETURN(NULL);
+
+	lustre_cfg_init(&lcr->lcr_cfg, cmd, bufs);
+
+	lcr->lcr_hdr.lrh_len = reclen;
+	lcr->lcr_hdr.lrh_type = OBD_CFG_REC;
+
+	RETURN(lcr);
+}
+EXPORT_SYMBOL(lustre_cfg_rec_new);
+
+void lustre_cfg_rec_free(struct llog_cfg_rec *lcr)
+{
+	ENTRY;
+	OBD_FREE(lcr, lcr->lcr_hdr.lrh_len);
+	EXIT;
+}
+EXPORT_SYMBOL(lustre_cfg_rec_free);
+
 /** Parse a configuration llog, doing various manipulations on them
  * for various reasons, (modifications for compatibility, skip obsolete
  * records, change uuids, etc), then class_process_config() resulting
@@ -1654,6 +1690,8 @@ int class_config_llog_handler(const struct lu_env *env,
                 }
 
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
+		if (lcfg_new == NULL)
+			GOTO(out, rc = -ENOMEM);
 
                 lcfg_new->lcfg_num   = lcfg->lcfg_num;
                 lcfg_new->lcfg_flags = lcfg->lcfg_flags;

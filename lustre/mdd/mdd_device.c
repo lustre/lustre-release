@@ -535,7 +535,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	LASSERT(ctxt);
 
-	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, NULL);
+	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL);
 	if (rc > 0)
 		rc = 0;
 	llog_ctxt_put(ctxt);
@@ -1305,7 +1305,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	rec->cur_endrec = mdd->mdd_cl.mc_index;
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL, NULL);
+	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:
@@ -1380,10 +1380,7 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
         CDEBUG(D_IOCTL, "Rewriting changelog user %d endrec to "LPU64"\n",
                mcud->mcud_id, rec->cur_endrec);
 
-        /* hdr+1 is loc of data */
-        hdr->lrh_len -= sizeof(*hdr) + sizeof(struct llog_rec_tail);
-	rc = llog_write(env, llh, hdr, NULL, 0, (void *)(hdr + 1),
-			hdr->lrh_index);
+	rc = llog_write(env, llh, hdr, hdr->lrh_index);
 
         RETURN(rc);
 }

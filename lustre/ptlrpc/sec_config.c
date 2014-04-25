@@ -969,32 +969,26 @@ static int sptlrpc_record_rule_set(struct llog_handle *llh,
                                    char *target,
                                    struct sptlrpc_rule_set *rset)
 {
-        struct lustre_cfg_bufs  bufs;
-        struct lustre_cfg      *lcfg;
-        struct llog_rec_hdr     rec;
-        int                     buflen;
-        char                    param[48];
-        int                     i, rc;
+	struct llog_cfg_rec	*lcr;
+	struct lustre_cfg_bufs	 bufs;
+	char			 param[48];
+	int			 i, rc;
 
-        for (i = 0; i < rset->srs_nrule; i++) {
-                rule2string(&rset->srs_rules[i], param, sizeof(param));
+	for (i = 0; i < rset->srs_nrule; i++) {
+		rule2string(&rset->srs_rules[i], param, sizeof(param));
 
-                lustre_cfg_bufs_reset(&bufs, NULL);
-                lustre_cfg_bufs_set_string(&bufs, 1, target);
-                lustre_cfg_bufs_set_string(&bufs, 2, param);
-                lcfg = lustre_cfg_new(LCFG_SPTLRPC_CONF, &bufs);
-                LASSERT(lcfg);
-
-                buflen = lustre_cfg_len(lcfg->lcfg_bufcount,
-                                        lcfg->lcfg_buflens);
-                rec.lrh_len = llog_data_len(buflen);
-                rec.lrh_type = OBD_CFG_REC;
-		rc = llog_write(NULL, llh, &rec, NULL, 0, (void *)lcfg, -1);
-                if (rc)
-                        CERROR("failed to write a rec: rc = %d\n", rc);
-                lustre_cfg_free(lcfg);
-        }
-        return 0;
+		lustre_cfg_bufs_reset(&bufs, NULL);
+		lustre_cfg_bufs_set_string(&bufs, 1, target);
+		lustre_cfg_bufs_set_string(&bufs, 2, param);
+		lcr = lustre_cfg_rec_new(LCFG_SPTLRPC_CONF, &bufs);
+		if (lcr == NULL)
+			return -ENOMEM;
+		rc = llog_write(NULL, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
+		lustre_cfg_rec_free(lcr);
+		if (rc)
+			return rc;
+	}
+	return 0;
 }
 
 static int sptlrpc_record_rules(struct llog_handle *llh,

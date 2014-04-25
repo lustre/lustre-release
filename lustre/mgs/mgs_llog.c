@@ -55,8 +55,9 @@
 
 /********************** Class functions ********************/
 
+/* Find all logs in CONFIG directory and link then into list */
 int class_dentry_readdir(const struct lu_env *env,
-			 struct mgs_device *mgs, cfs_list_t *list)
+			 struct mgs_device *mgs, struct list_head *log_list)
 {
 	struct dt_object    *dir = mgs->mgs_configs_dir;
 	const struct dt_it_ops *iops;
@@ -65,7 +66,7 @@ int class_dentry_readdir(const struct lu_env *env,
 	char		    *key;
 	int		     rc, key_sz;
 
-	CFS_INIT_LIST_HEAD(list);
+	INIT_LIST_HEAD(log_list);
 
 	LASSERT(dir);
 	LASSERT(dir->do_index_ops);
@@ -105,10 +106,10 @@ int class_dentry_readdir(const struct lu_env *env,
 			break;
 		}
 
-		memcpy(de->name, key, key_sz);
-		de->name[key_sz] = 0;
+		memcpy(de->mde_name, key, key_sz);
+		de->mde_name[key_sz] = 0;
 
-		cfs_list_add(&de->list, list);
+		list_add(&de->mde_list, log_list);
 
 next:
 		rc = iops->next(env, it);
@@ -640,11 +641,7 @@ static int mgs_modify_handler(const struct lu_env *env,
                 marker->cm_flags &= ~CM_EXCLUDE; /* in case we're unexcluding */
                 marker->cm_flags |= mml->mml_marker.cm_flags;
                 marker->cm_canceltime = mml->mml_marker.cm_canceltime;
-                /* Header and tail are added back to lrh_len in
-                   llog_lvfs_write_rec */
-                rec->lrh_len = cfg_len;
-		rc = llog_write(env, llh, rec, NULL, 0, (void *)lcfg,
-				rec->lrh_index);
+		rc = llog_write(env, llh, rec, rec->lrh_index);
                 if (!rc)
                          mml->mml_modified++;
         }
@@ -784,35 +781,12 @@ static int check_markers(struct lustre_cfg *lcfg,
 	return 0;
 }
 
-static int record_lcfg(const struct lu_env *env, struct llog_handle *llh,
-		       struct lustre_cfg *lcfg)
-{
-	struct llog_rec_hdr	 rec;
-	int			 buflen, rc;
-
-        if (!lcfg || !llh)
-                return -ENOMEM;
-
-        LASSERT(llh->lgh_ctxt);
-
-        buflen = lustre_cfg_len(lcfg->lcfg_bufcount,
-                                lcfg->lcfg_buflens);
-        rec.lrh_len = llog_data_len(buflen);
-        rec.lrh_type = OBD_CFG_REC;
-
-        /* idx = -1 means append */
-	rc = llog_write(env, llh, &rec, NULL, 0, (void *)lcfg, -1);
-        if (rc)
-                CERROR("failed %d\n", rc);
-        return rc;
-}
-
 static int record_base(const struct lu_env *env, struct llog_handle *llh,
                      char *cfgname, lnet_nid_t nid, int cmd,
                      char *s1, char *s2, char *s3, char *s4)
 {
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-	struct lustre_cfg     *lcfg;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct llog_cfg_rec	*lcr;
 	int rc;
 
 	CDEBUG(D_MGS, "lcfg %s %#x %s %s %s %s\n", cfgname,
@@ -828,19 +802,19 @@ static int record_base(const struct lu_env *env, struct llog_handle *llh,
 	if (s4)
 		lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 4, s4);
 
-	lcfg = lustre_cfg_new(cmd, &mgi->mgi_bufs);
-	if (!lcfg)
+	lcr = lustre_cfg_rec_new(cmd, &mgi->mgi_bufs);
+	if (lcr == NULL)
 		return -ENOMEM;
-	lcfg->lcfg_nid = nid;
 
-	rc = record_lcfg(env, llh, lcfg);
+	lcr->lcr_cfg.lcfg_nid = nid;
+	rc = llog_write(env, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
 
-	lustre_cfg_free(lcfg);
+	lustre_cfg_rec_free(lcr);
 
-        if (rc) {
-                CERROR("error %d: lcfg %s %#x %s %s %s %s\n", rc, cfgname,
-                       cmd, s1, s2, s3, s4);
-        }
+	if (rc < 0)
+		CDEBUG(D_MGS,
+		       "failed to write lcfg %s %#x %s %s %s %s: rc = %d\n",
+		       cfgname, cmd, s1, s2, s3, s4, rc);
 	return rc;
 }
 
@@ -997,7 +971,7 @@ static int mgs_replace_handler(const struct lu_env *env,
 		RETURN(0);
 copy_out:
 	/* Record is placed in temporary llog as is */
-	rc = llog_write(env, mrul->temp_llh, rec, NULL, 0, NULL, -1);
+	rc = llog_write(env, mrul->temp_llh, rec, LLOG_NEXT_IDX);
 
 	CDEBUG(D_MGS, "Copied idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
 	       rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command,
@@ -1291,35 +1265,36 @@ out:
 static int record_lov_setup(const struct lu_env *env, struct llog_handle *llh,
 			    char *devname, struct lov_desc *desc)
 {
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-	struct lustre_cfg *lcfg;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct llog_cfg_rec	*lcr;
 	int rc;
 
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, devname);
 	lustre_cfg_bufs_set(&mgi->mgi_bufs, 1, desc, sizeof(*desc));
-	lcfg = lustre_cfg_new(LCFG_SETUP, &mgi->mgi_bufs);
-	if (!lcfg)
+	lcr = lustre_cfg_rec_new(LCFG_SETUP, &mgi->mgi_bufs);
+	if (lcr == NULL)
 		return -ENOMEM;
-	rc = record_lcfg(env, llh, lcfg);
 
-	lustre_cfg_free(lcfg);
+	rc = llog_write(env, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
+	lustre_cfg_rec_free(lcr);
 	return rc;
 }
 
 static int record_lmv_setup(const struct lu_env *env, struct llog_handle *llh,
                             char *devname, struct lmv_desc *desc)
 {
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-	struct lustre_cfg *lcfg;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct llog_cfg_rec	*lcr;
 	int rc;
 
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, devname);
 	lustre_cfg_bufs_set(&mgi->mgi_bufs, 1, desc, sizeof(*desc));
-	lcfg = lustre_cfg_new(LCFG_SETUP, &mgi->mgi_bufs);
+	lcr = lustre_cfg_rec_new(LCFG_SETUP, &mgi->mgi_bufs);
+	if (lcr == NULL)
+		return -ENOMEM;
 
-	rc = record_lcfg(env, llh, lcfg);
-
-	lustre_cfg_free(lcfg);
+	rc = llog_write(env, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
+	lustre_cfg_rec_free(lcr);
 	return rc;
 }
 
@@ -1357,7 +1332,7 @@ static int record_marker(const struct lu_env *env,
                          char *tgtname, char *comment)
 {
 	struct mgs_thread_info *mgi = mgs_env_info(env);
-	struct lustre_cfg *lcfg;
+	struct llog_cfg_rec *lcr;
 	int rc;
 	int cplen = 0;
 
@@ -1379,12 +1354,12 @@ static int record_marker(const struct lu_env *env,
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set(&mgi->mgi_bufs, 1, &mgi->mgi_marker,
 			    sizeof(mgi->mgi_marker));
-	lcfg = lustre_cfg_new(LCFG_MARKER, &mgi->mgi_bufs);
-	if (!lcfg)
+	lcr = lustre_cfg_rec_new(LCFG_MARKER, &mgi->mgi_bufs);
+	if (lcr == NULL)
 		return -ENOMEM;
-	rc = record_lcfg(env, llh, lcfg);
 
-	lustre_cfg_free(lcfg);
+	rc = llog_write(env, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
+	lustre_cfg_rec_free(lcr);
 	return rc;
 }
 
@@ -1436,25 +1411,23 @@ static int record_end_log(const struct lu_env *env, struct llog_handle **llh)
 /* write an lcfg directly into a log (with markers) */
 static int mgs_write_log_direct(const struct lu_env *env,
 				struct mgs_device *mgs, struct fs_db *fsdb,
-                                char *logname, struct lustre_cfg *lcfg,
-                                char *devname, char *comment)
+				char *logname, struct llog_cfg_rec *lcr,
+				char *devname, char *comment)
 {
-        struct llog_handle *llh = NULL;
-        int rc;
-        ENTRY;
+	struct llog_handle *llh = NULL;
+	int rc;
 
-        if (!lcfg)
-                RETURN(-ENOMEM);
+	ENTRY;
 
 	rc = record_start_log(env, mgs, &llh, logname);
-        if (rc)
-                RETURN(rc);
+	if (rc)
+		RETURN(rc);
 
         /* FIXME These should be a single journal transaction */
 	rc = record_marker(env, llh, fsdb, CM_START, devname, comment);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_lcfg(env, llh, lcfg);
+	rc = llog_write(env, llh, &lcr->lcr_hdr, LLOG_NEXT_IDX);
 	if (rc)
 		GOTO(out_end, rc);
 	rc = record_marker(env, llh, fsdb, CM_END, devname, comment);
@@ -1466,79 +1439,76 @@ out_end:
 }
 
 /* write the lcfg in all logs for the given fs */
-int mgs_write_log_direct_all(const struct lu_env *env,
-			     struct mgs_device *mgs,
-			     struct fs_db *fsdb,
-			     struct mgs_target_info *mti,
-			     struct lustre_cfg *lcfg,
-			     char *devname, char *comment,
-			     int server_only)
+int mgs_write_log_direct_all(const struct lu_env *env, struct mgs_device *mgs,
+			     struct fs_db *fsdb, struct mgs_target_info *mti,
+			     struct llog_cfg_rec *lcr, char *devname,
+			     char *comment, int server_only)
 {
-	cfs_list_t list;
-	struct mgs_direntry *dirent, *n;
-        char *fsname = mti->mti_fsname;
-        char *logname;
-        int rc = 0, len = strlen(fsname);
-        ENTRY;
+	struct list_head	 log_list;
+	struct mgs_direntry	*dirent, *n;
+	char			*fsname = mti->mti_fsname;
+	char			*logname;
+	int			 rc = 0, len = strlen(fsname);
 
-        /* We need to set params for any future logs
-           as well. FIXME Append this file to every new log.
-           Actually, we should store as params (text), not llogs.  Or
-           in a database. */
+	ENTRY;
+	/* We need to set params for any future logs
+	 * as well.
+	 * FIXME Append this file to every new log.
+	 * Actually, we should store as params (text), not llogs,
+	 * or in a database. */
 	rc = name_create(&logname, fsname, "-params");
 	if (rc)
 		RETURN(rc);
 	if (mgs_log_is_empty(env, mgs, logname)) {
 		struct llog_handle *llh = NULL;
+
 		rc = record_start_log(env, mgs, &llh, logname);
 		if (rc == 0)
 			record_end_log(env, &llh);
-        }
-        name_destroy(&logname);
-        if (rc)
-                RETURN(rc);
-
-        /* Find all the logs in the CONFIGS directory */
-	rc = class_dentry_readdir(env, mgs, &list);
+	}
+	name_destroy(&logname);
 	if (rc)
-                RETURN(rc);
+		RETURN(rc);
 
-        /* Could use fsdb index maps instead of directory listing */
-	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
-		cfs_list_del(&dirent->list);
-                /* don't write to sptlrpc rule log */
-		if (strstr(dirent->name, "-sptlrpc") != NULL)
+	/* Find all the logs in the CONFIGS directory */
+	rc = class_dentry_readdir(env, mgs, &log_list);
+	if (rc)
+		RETURN(rc);
+
+	/* Could use fsdb index maps instead of directory listing */
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		list_del_init(&dirent->mde_list);
+		/* don't write to sptlrpc rule log */
+		if (strstr(dirent->mde_name, "-sptlrpc") != NULL)
 			goto next;
 
 		/* caller wants write server logs only */
-		if (server_only && strstr(dirent->name, "-client") != NULL)
+		if (server_only && strstr(dirent->mde_name, "-client") != NULL)
 			goto next;
 
-		if (strncmp(fsname, dirent->name, len) == 0) {
-			CDEBUG(D_MGS, "Changing log %s\n", dirent->name);
-                        /* Erase any old settings of this same parameter */
-			rc = mgs_modify(env, mgs, fsdb, mti, dirent->name,
-					devname, comment, CM_SKIP);
-			if (rc < 0)
-				CERROR("%s: Can't modify llog %s: rc = %d\n",
-				       mgs->mgs_obd->obd_name, dirent->name,rc);
-                        /* Write the new one */
-                        if (lcfg) {
-				rc = mgs_write_log_direct(env, mgs, fsdb,
-							  dirent->name,
-							  lcfg, devname,
-							  comment);
-                                if (rc)
-					CERROR("%s: writing log %s: rc = %d\n",
-					       mgs->mgs_obd->obd_name,
-					       dirent->name, rc);
-                        }
-                }
+		if (strncmp(fsname, dirent->mde_name, len) != 0)
+			goto next;
+
+		CDEBUG(D_MGS, "Changing log %s\n", dirent->mde_name);
+		/* Erase any old settings of this same parameter */
+		rc = mgs_modify(env, mgs, fsdb, mti, dirent->mde_name,
+				devname, comment, CM_SKIP);
+		if (rc < 0)
+			CERROR("%s: Can't modify llog %s: rc = %d\n",
+			       mgs->mgs_obd->obd_name, dirent->mde_name, rc);
+		if (lcr == NULL)
+			goto next;
+		/* Write the new one */
+		rc = mgs_write_log_direct(env, mgs, fsdb, dirent->mde_name,
+					  lcr, devname, comment);
+		if (rc != 0)
+			CERROR("%s: writing log %s: rc = %d\n",
+			       mgs->mgs_obd->obd_name, dirent->mde_name, rc);
 next:
 		mgs_direntry_free(dirent);
-        }
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
@@ -2721,7 +2691,7 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 {
 	char comment[MTI_NAME_MAXLEN];
 	char *tmp;
-	struct lustre_cfg *lcfg;
+	struct llog_cfg_rec *lcr;
 	int rc, del;
 
 	/* Erase any old settings of this same parameter */
@@ -2729,7 +2699,7 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	comment[MTI_NAME_MAXLEN - 1] = 0;
 	/* But don't try to match the value. */
 	tmp = strchr(comment, '=');
-	if (tmp)
+	if (tmp != NULL)
 		*tmp = 0;
 	/* FIXME we should skip settings that are the same as old values */
 	rc = mgs_modify(env, mgs, fsdb, mti, logname, tgtname, comment,CM_SKIP);
@@ -2751,13 +2721,14 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	if (mti->mti_flags & LDD_F_PARAM2)
 		lustre_cfg_bufs_set_string(bufs, 2, LCTL_UPCALL);
 
-	lcfg = lustre_cfg_new((mti->mti_flags & LDD_F_PARAM2) ?
-			      LCFG_SET_PARAM : LCFG_PARAM, bufs);
-
-	if (!lcfg)
+	lcr = lustre_cfg_rec_new((mti->mti_flags & LDD_F_PARAM2) ?
+				 LCFG_SET_PARAM : LCFG_PARAM, bufs);
+	if (lcr == NULL)
 		return -ENOMEM;
-	rc = mgs_write_log_direct(env, mgs, fsdb, logname,lcfg,tgtname,comment);
-	lustre_cfg_free(lcfg);
+
+	rc = mgs_write_log_direct(env, mgs, fsdb, logname, lcr, tgtname,
+				  comment);
+	lustre_cfg_rec_free(lcr);
 	return rc;
 }
 
@@ -2782,8 +2753,9 @@ static int mgs_write_log_sys(const struct lu_env *env,
 			     struct mgs_device *mgs, struct fs_db *fsdb,
 			     struct mgs_target_info *mti, char *sys, char *ptr)
 {
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-	struct lustre_cfg *lcfg;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct lustre_cfg	*lcfg;
+	struct llog_cfg_rec	*lcr;
 	char *tmp, sep;
 	int rc, cmd, convert = 1;
 
@@ -2814,7 +2786,11 @@ static int mgs_write_log_sys(const struct lu_env *env,
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, sys);
 	if (!convert && *tmp != '\0')
 		lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 2, tmp);
-	lcfg = lustre_cfg_new(cmd, &mgi->mgi_bufs);
+	lcr = lustre_cfg_rec_new(cmd, &mgi->mgi_bufs);
+	if (lcr == NULL)
+		return -ENOMEM;
+
+	lcfg = &lcr->lcr_cfg;
 	lcfg->lcfg_num = convert ? simple_strtoul(tmp, NULL, 0) : 0;
 	/* truncate the comment to the parameter name */
 	ptr = tmp - 1;
@@ -2822,7 +2798,7 @@ static int mgs_write_log_sys(const struct lu_env *env,
 	*ptr = '\0';
 	/* modify all servers and clients */
 	rc = mgs_write_log_direct_all(env, mgs, fsdb, mti,
-				      *tmp == '\0' ? NULL : lcfg,
+				      *tmp == '\0' ? NULL : lcr,
 				      mti->mti_fsname, sys, 0);
 	if (rc == 0 && *tmp != '\0') {
 		switch (cmd) {
@@ -2839,7 +2815,7 @@ static int mgs_write_log_sys(const struct lu_env *env,
 		}
 	}
 	*ptr = sep;
-	lustre_cfg_free(lcfg);
+	lustre_cfg_rec_free(lcr);
 	return rc;
 }
 
@@ -2849,7 +2825,7 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 			       char *quota, char *ptr)
 {
 	struct mgs_thread_info	*mgi = mgs_env_info(env);
-	struct lustre_cfg	*lcfg;
+	struct llog_cfg_rec	*lcr;
 	char			*tmp;
 	char			 sep;
 	int			 rc, cmd = LCFG_PARAM;
@@ -2876,7 +2852,10 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, mti->mti_fsname);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, quota);
-	lcfg = lustre_cfg_new(cmd, &mgi->mgi_bufs);
+	lcr = lustre_cfg_rec_new(cmd, &mgi->mgi_bufs);
+	if (lcr == NULL)
+		return -ENOMEM;
+
 	/* truncate the comment to the parameter name */
 	ptr = tmp - 1;
 	sep = *ptr;
@@ -2887,10 +2866,10 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 	 *     log once we cleanup the config log for global param. */
 	/* modify all servers */
 	rc = mgs_write_log_direct_all(env, mgs, fsdb, mti,
-				      *tmp == '\0' ? NULL : lcfg,
+				      *tmp == '\0' ? NULL : lcr,
 				      mti->mti_fsname, quota, 1);
 	*ptr = sep;
-	lustre_cfg_free(lcfg);
+	lustre_cfg_rec_free(lcr);
 	return rc < 0 ? rc : 0;
 }
 
@@ -2900,61 +2879,63 @@ static int mgs_srpc_set_param_disk(const struct lu_env *env,
                                    struct mgs_target_info *mti,
                                    char *param)
 {
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-        struct llog_handle     *llh = NULL;
-        char                   *logname;
-        char                   *comment, *ptr;
-        struct lustre_cfg      *lcfg;
-        int                     rc, len;
-        ENTRY;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct llog_cfg_rec	*lcr;
+	struct llog_handle	*llh = NULL;
+	char			*logname;
+	char			*comment, *ptr;
+	int			 rc, len;
 
-        /* get comment */
-        ptr = strchr(param, '=');
-        LASSERT(ptr);
-        len = ptr - param;
+	ENTRY;
 
-        OBD_ALLOC(comment, len + 1);
-        if (comment == NULL)
-                RETURN(-ENOMEM);
-        strncpy(comment, param, len);
-        comment[len] = '\0';
+	/* get comment */
+	ptr = strchr(param, '=');
+	LASSERT(ptr != NULL);
+	len = ptr - param;
 
-        /* prepare lcfg */
+	OBD_ALLOC(comment, len + 1);
+	if (comment == NULL)
+		RETURN(-ENOMEM);
+	strncpy(comment, param, len);
+	comment[len] = '\0';
+
+	/* prepare lcfg */
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, mti->mti_svname);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, param);
-	lcfg = lustre_cfg_new(LCFG_SPTLRPC_CONF, &mgi->mgi_bufs);
-        if (lcfg == NULL)
-                GOTO(out_comment, rc = -ENOMEM);
+	lcr = lustre_cfg_rec_new(LCFG_SPTLRPC_CONF, &mgi->mgi_bufs);
+	if (lcr == NULL)
+		GOTO(out_comment, rc = -ENOMEM);
 
-        /* construct log name */
-        rc = name_create(&logname, mti->mti_fsname, "-sptlrpc");
-        if (rc)
-                GOTO(out_lcfg, rc);
+	/* construct log name */
+	rc = name_create(&logname, mti->mti_fsname, "-sptlrpc");
+	if (rc < 0)
+		GOTO(out_lcfg, rc);
 
 	if (mgs_log_is_empty(env, mgs, logname)) {
 		rc = record_start_log(env, mgs, &llh, logname);
-                if (rc)
-                        GOTO(out, rc);
+		if (rc < 0)
+			GOTO(out, rc);
 		record_end_log(env, &llh);
-        }
+	}
 
-        /* obsolete old one */
+	/* obsolete old one */
 	rc = mgs_modify(env, mgs, fsdb, mti, logname, mti->mti_svname,
 			comment, CM_SKIP);
 	if (rc < 0)
 		GOTO(out, rc);
-        /* write the new one */
-	rc = mgs_write_log_direct(env, mgs, fsdb, logname, lcfg,
-                                  mti->mti_svname, comment);
+	/* write the new one */
+	rc = mgs_write_log_direct(env, mgs, fsdb, logname, lcr,
+				  mti->mti_svname, comment);
 	if (rc)
-		CERROR("err %d writing log %s\n", rc, logname);
+		CERROR("%s: error writing log %s: rc = %d\n",
+		       mgs->mgs_obd->obd_name, logname, rc);
 out:
-        name_destroy(&logname);
+	name_destroy(&logname);
 out_lcfg:
-        lustre_cfg_free(lcfg);
+	lustre_cfg_rec_free(lcr);
 out_comment:
-        OBD_FREE(comment, len + 1);
-        RETURN(rc);
+	OBD_FREE(comment, len + 1);
+	RETURN(rc);
 }
 
 static int mgs_srpc_set_param_udesc_mem(struct fs_db *fsdb,
@@ -3142,8 +3123,7 @@ static int mgs_srpc_read_handler(const struct lu_env *env,
                 RETURN(-EINVAL);
         }
 
-        cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) -
-                  sizeof(struct llog_rec_tail);
+	cfg_len = REC_DATA_LEN(rec);
 
         rc = lustre_cfg_sanity_check(lcfg, cfg_len);
         if (rc) {
@@ -3569,27 +3549,26 @@ int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs,
 	mutex_lock(&fsdb->fsdb_mutex);
         rc = mgs_write_log_add_failnid(obd, fsdb, mti);
 	mutex_unlock(&fsdb->fsdb_mutex);
+	char	*buf, *params;
+	int	 rc = -EINVAL;
 
         RETURN(rc);
 #endif
         return 0;
 }
 
-int mgs_write_log_target(const struct lu_env *env,
-			 struct mgs_device *mgs,
-                         struct mgs_target_info *mti,
-                         struct fs_db *fsdb)
+int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
+			 struct mgs_target_info *mti, struct fs_db *fsdb)
 {
-        int rc = -EINVAL;
-        char *buf, *params;
-        ENTRY;
+	char	*buf, *params;
+	int	 rc = -EINVAL;
 
-        /* set/check the new target index */
+	ENTRY;
+
+	/* set/check the new target index */
 	rc = mgs_set_index(env, mgs, mti);
-        if (rc < 0) {
-                CERROR("Can't get index (%d)\n", rc);
-                RETURN(rc);
-        }
+	if (rc < 0)
+		RETURN(rc);
 
 	if (rc == EALREADY) {
 		LCONSOLE_WARN("Found index %d for %s, updating log\n",
@@ -3685,14 +3664,14 @@ int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs, char *name)
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsname)
 {
 	struct fs_db *fsdb;
-	cfs_list_t list;
+	struct list_head log_list;
 	struct mgs_direntry *dirent, *n;
 	int rc, len = strlen(fsname);
 	char *suffix;
 	ENTRY;
 
 	/* Find all the logs in the CONFIGS directory */
-	rc = class_dentry_readdir(env, mgs, &list);
+	rc = class_dentry_readdir(env, mgs, &log_list);
 	if (rc)
 		RETURN(rc);
 
@@ -3705,15 +3684,15 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsnam
 
 	mutex_unlock(&mgs->mgs_mutex);
 
-	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
-		cfs_list_del(&dirent->list);
-		suffix = strrchr(dirent->name, '-');
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		list_del_init(&dirent->mde_list);
+		suffix = strrchr(dirent->mde_name, '-');
 		if (suffix != NULL) {
-			if ((len == suffix - dirent->name) &&
-			    (strncmp(fsname, dirent->name, len) == 0)) {
+			if ((len == suffix - dirent->mde_name) &&
+			    (strncmp(fsname, dirent->mde_name, len) == 0)) {
 				CDEBUG(D_MGS, "Removing log %s\n",
-				       dirent->name);
-				mgs_erase_log(env, mgs, dirent->name);
+				       dirent->mde_name);
+				mgs_erase_log(env, mgs, dirent->mde_name);
 			}
 		}
 		mgs_direntry_free(dirent);
@@ -3726,7 +3705,7 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsnam
 int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 		  struct obd_ioctl_data *data)
 {
-	cfs_list_t		 list;
+	struct list_head	 log_list;
 	struct mgs_direntry	*dirent, *n;
 	char			*out, *suffix;
 	int			 l, remains, rc;
@@ -3734,21 +3713,18 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 	ENTRY;
 
 	/* Find all the logs in the CONFIGS directory */
-	rc = class_dentry_readdir(env, mgs, &list);
-	if (rc) {
-		CERROR("%s: can't read %s dir = %d\n",
-		       mgs->mgs_obd->obd_name, MOUNT_CONFIGS_DIR, rc);
+	rc = class_dentry_readdir(env, mgs, &log_list);
+	if (rc)
 		RETURN(rc);
-	}
 
 	out = data->ioc_bulk;
 	remains = data->ioc_inllen1;
-	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
-		cfs_list_del(&dirent->list);
-		suffix = strrchr(dirent->name, '-');
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		list_del_init(&dirent->mde_list);
+		suffix = strrchr(dirent->mde_name, '-');
 		if (suffix != NULL) {
 			l = snprintf(out, remains, "config log: $%s\n",
-				     dirent->name);
+				     dirent->mde_name);
 			out += l;
 			remains -= l;
 		}

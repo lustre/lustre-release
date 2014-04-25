@@ -185,13 +185,12 @@ struct llog_process_cat_data {
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle);
 int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-		     void *buf, struct thandle *th);
+		     struct thandle *th);
 int llog_cat_declare_add_rec(const struct lu_env *env,
 			     struct llog_handle *cathandle,
 			     struct llog_rec_hdr *rec, struct thandle *th);
 int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
-		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-		 void *buf);
+		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie);
 int llog_cat_cancel_records(const struct lu_env *env,
 			    struct llog_handle *cathandle, int count,
 			    struct llog_cookie *cookies);
@@ -290,8 +289,8 @@ struct llog_operations {
 	int (*lop_write_rec)(const struct lu_env *env,
 			     struct llog_handle *loghandle,
 			     struct llog_rec_hdr *rec,
-			     struct llog_cookie *cookie, int cookiecount,
-			     void *buf, int idx, struct thandle *th);
+			     struct llog_cookie *cookie,
+			     int idx, struct thandle *th);
 	/**
 	 * Add new record in llog catalog. Does the same as llog_write_rec()
 	 * but using llog catalog.
@@ -301,7 +300,7 @@ struct llog_operations {
 			       struct llog_rec_hdr *rec, struct thandle *th);
 	int (*lop_add)(const struct lu_env *env, struct llog_handle *lgh,
 		       struct llog_rec_hdr *rec, struct llog_cookie *cookie,
-		       void *buf, struct thandle *th);
+		       struct thandle *th);
 };
 
 /* In-memory descriptor for a log object or log catalog */
@@ -551,6 +550,20 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
 	RETURN(rc);
 }
 
+struct llog_cfg_rec {
+	struct llog_rec_hdr	lcr_hdr;
+	struct lustre_cfg	lcr_cfg;
+	struct llog_rec_tail	lcr_tail;
+};
+
+struct llog_cfg_rec *lustre_cfg_rec_new(int cmd, struct lustre_cfg_bufs *bufs);
+void lustre_cfg_rec_free(struct llog_cfg_rec *lcr);
+
+enum {
+	LLOG_NEXT_IDX = -1,
+	LLOG_HEADER_IDX = 0,
+};
+
 /* llog.c */
 int llog_exist(struct llog_handle *loghandle);
 int llog_declare_create(const struct lu_env *env,
@@ -563,10 +576,10 @@ int llog_declare_write_rec(const struct lu_env *env,
 			   struct thandle *th);
 int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		   struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
-		   int numcookies, void *buf, int idx, struct thandle *th);
+		   int idx, struct thandle *th);
 int llog_add(const struct lu_env *env, struct llog_handle *lgh,
 	     struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
-	     void *buf, struct thandle *th);
+	     struct thandle *th);
 int llog_declare_add(const struct lu_env *env, struct llog_handle *lgh,
 		     struct llog_rec_hdr *rec, struct thandle *th);
 int lustre_process_log(struct super_block *sb, char *logname,
@@ -579,8 +592,7 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	       struct llog_logid *logid, char *name);
 int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
-	       struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
-	       int cookiecount, void *buf, int idx);
+	       struct llog_rec_hdr *rec, int idx);
 
 /** @} log */
 

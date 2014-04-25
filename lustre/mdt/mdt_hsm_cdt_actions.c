@@ -161,7 +161,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 		hai->hai_cookie = cdt->cdt_last_cookie;
 	}
 	larr->arr_hai.hai_cookie = hai->hai_cookie;
-	rc = llog_cat_add(env, lctxt->loc_handle, &larr->arr_hdr, NULL, NULL);
+	rc = llog_cat_add(env, lctxt->loc_handle, &larr->arr_hdr, NULL);
 	if (rc > 0)
 		rc = 0;
 
@@ -313,7 +313,7 @@ int mdt_agent_llog_update_rec(const struct lu_env *env,
 	larr->arr_hdr.lrh_id = 0;
 	larr->arr_hdr.lrh_index = 0;
 	rc = llog_cat_add(env, llh->u.phd.phd_cat_handle, &larr->arr_hdr,
-			  NULL, NULL);
+			  NULL);
 	larr->arr_hdr = saved_hdr;
 	RETURN(rc);
 }

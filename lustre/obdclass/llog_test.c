@@ -230,7 +230,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	lgr.lgr_hdr.lrh_type = LLOG_GEN_REC;
 
 	CWARN("3a: write one create_rec\n");
-	rc = llog_write(env, llh,  &lgr.lgr_hdr, NULL, 0, NULL, -1);
+	rc = llog_write(env, llh,  &lgr.lgr_hdr, LLOG_NEXT_IDX);
 	num_recs++;
 	if (rc < 0) {
 		CERROR("3a: write one log record failed: %d\n", rc);
@@ -241,30 +241,9 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	if (rc)
 		RETURN(rc);
 
-	CWARN("3b: write 10 cfg log records with 8 bytes bufs\n");
-	for (i = 0; i < 10; i++) {
-		struct llog_rec_hdr	hdr;
-		char			buf[8];
-
-		hdr.lrh_len = 8;
-		hdr.lrh_type = OBD_CFG_REC;
-		memset(buf, 0, sizeof buf);
-		rc = llog_write(env, llh, &hdr, NULL, 0, buf, -1);
-		if (rc < 0) {
-			CERROR("3b: write 10 records failed at #%d: %d\n",
-			       i + 1, rc);
-			RETURN(rc);
-		}
-		num_recs++;
-	}
-
-	rc = verify_handle("3b", llh, num_recs);
-	if (rc)
-		RETURN(rc);
-
 	CWARN("3c: write 1000 more log records\n");
 	for (i = 0; i < 1000; i++) {
-		rc = llog_write(env, llh, &lgr.lgr_hdr, NULL, 0, NULL, -1);
+		rc = llog_write(env, llh, &lgr.lgr_hdr, LLOG_NEXT_IDX);
 		if (rc < 0) {
 			CERROR("3c: write 1000 records failed at #%d: %d\n",
 			       i + 1, rc);
@@ -277,23 +256,20 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	if (rc)
 		RETURN(rc);
 
-	CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+	CWARN("3d: write records with variable size until BITMAP_SIZE, "
+	      "return -ENOSPC\n");
 	for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
-		struct llog_rec_hdr	hdr;
-		char			buf_even[24];
-		char			buf_odd[32];
+		char			 buf[64];
+		struct llog_rec_hdr	*hdr = (void *)&buf;
 
-		memset(buf_odd, 0, sizeof buf_odd);
-		memset(buf_even, 0, sizeof buf_even);
-		if ((i % 2) == 0) {
-			hdr.lrh_len = 24;
-			hdr.lrh_type = OBD_CFG_REC;
-			rc = llog_write(env, llh, &hdr, NULL, 0, buf_even, -1);
-		} else {
-			hdr.lrh_len = 32;
-			hdr.lrh_type = OBD_CFG_REC;
-			rc = llog_write(env, llh, &hdr, NULL, 0, buf_odd, -1);
-		}
+		memset(buf, 0, sizeof buf);
+		if ((i % 2) == 0)
+			hdr->lrh_len = 40;
+		else
+			hdr->lrh_len = 64;
+		hdr->lrh_type = OBD_CFG_REC;
+		rc = llog_write(env, llh, hdr, LLOG_NEXT_IDX);
+
 		if (rc == -ENOSPC) {
 			break;
 		} else if (rc < 0) {
@@ -326,7 +302,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 	struct llog_ctxt	*ctxt;
 	int			 num_recs = 0;
 	char			*buf;
-	struct llog_rec_hdr	 rec;
+	struct llog_rec_hdr	*rec;
 
 	ENTRY;
 
@@ -353,7 +329,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 	cat_logid = cath->lgh_id;
 
 	CWARN("4b: write 1 record into the catalog\n");
-	rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie, NULL);
+	rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie);
 	if (rc != 1) {
 		CERROR("4b: write 1 catalog record failed at: %d\n", rc);
 		GOTO(out, rc);
@@ -381,7 +357,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 
 	CWARN("4d: write %d more log records\n", LLOG_TEST_RECNUM);
 	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
-		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL, NULL);
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
 		if (rc) {
 			CERROR("4d: write %d records failed at #%d: %d\n",
 			       LLOG_TEST_RECNUM, i + 1, rc);
@@ -396,15 +372,15 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out, rc);
 
 	CWARN("4e: add 5 large records, one record per block\n");
-	buflen = LLOG_CHUNK_SIZE - sizeof(struct llog_rec_hdr) -
-		 sizeof(struct llog_rec_tail);
+	buflen = LLOG_CHUNK_SIZE;
 	OBD_ALLOC(buf, buflen);
 	if (buf == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < 5; i++) {
-		rec.lrh_len = buflen;
-		rec.lrh_type = OBD_CFG_REC;
-		rc = llog_cat_add(env, cath, &rec, NULL, buf);
+		rec = (void *)buf;
+		rec->lrh_len = buflen;
+		rec->lrh_type = OBD_CFG_REC;
+		rc = llog_cat_add(env, cath, rec, NULL);
 		if (rc) {
 			CERROR("4e: write 5 records failed at #%d: %d\n",
 			       i + 1, rc);
@@ -559,7 +535,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 	}
 
 	CWARN("5d: add 1 record to the log with many canceled empty pages\n");
-	rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL, NULL);
+	rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL);
 	if (rc) {
 		CERROR("5d: add record to the log with many canceled empty "
 		       "pages failed\n");
@@ -744,8 +720,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		GOTO(out_close, rc);
 	}
 	for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr); i++) {
-		rc = llog_write(env, llh, &llog_records.lrh, NULL, 0,
-				NULL, -1);
+		rc = llog_write(env, llh, &llog_records.lrh, LLOG_NEXT_IDX);
 		if (rc == -ENOSPC) {
 			break;
 		} else if (rc < 0) {
@@ -1000,7 +975,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	orig_counter = plain_counter;
 
 	for (i = 0; i < 100; i++) {
-		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL, NULL);
+		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL);
 		if (rc) {
 			CERROR("5a: add record failed\n");
 			GOTO(out, rc);
@@ -1035,7 +1010,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	}
 
 	for (i = 0; i < 100; i++) {
-		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL, NULL);
+		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL);
 		if (rc) {
 			CERROR("8b: add record failed\n");
 			GOTO(out, rc);

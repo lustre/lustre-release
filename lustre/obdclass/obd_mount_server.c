@@ -698,16 +698,18 @@ static int lustre_lwp_add_conn(struct lustre_cfg *cfg,
 				   lustre_cfg_string(cfg, 1));
 
 	lcfg = lustre_cfg_new(LCFG_ADD_CONN, bufs);
-
+	if (lcfg == NULL)
+		GOTO(out_cfg, rc = -ENOMEM);
 	rc = class_add_conn(lwp, lcfg);
 	if (rc)
 		CERROR("%s: can't add conn: rc = %d\n", lwpname, rc);
 
-out:
-	if (bufs != NULL)
-		OBD_FREE_PTR(bufs);
 	if (lcfg != NULL)
 		lustre_cfg_free(lcfg);
+out_cfg:
+	if (bufs != NULL)
+		OBD_FREE_PTR(bufs);
+out:
 	if (lwpname != NULL)
 		OBD_FREE(lwpname, MTI_NAME_MAXLEN);
 	RETURN(rc);
