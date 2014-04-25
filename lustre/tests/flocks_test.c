@@ -62,9 +62,10 @@ int t_fcntl(int fd, int cmd, ...)
                 va_end(ap);
                 rc = fcntl(fd, cmd);
                 if (rc == -1) {
+			rc = -errno;
                         fprintf(stderr, "fcntl GETFL failed: %s\n",
                                 strerror(errno));
-                        return(1);
+			return rc;
                 }
                 break;
         case F_SETFL:
@@ -72,9 +73,10 @@ int t_fcntl(int fd, int cmd, ...)
                 va_end(ap);
                 rc = fcntl(fd, cmd, arg);
                 if (rc == -1) {
+			rc = -errno;
                         fprintf(stderr, "fcntl SETFL %ld failed: %s\n",
                                 arg, strerror(errno));
-                        return(1);
+			return rc ;
                 }
                 break;
         case F_GETLK:
@@ -84,9 +86,10 @@ int t_fcntl(int fd, int cmd, ...)
                 va_end(ap);
                 rc = fcntl(fd, cmd, lock);
                 if (rc == -1) {
+			rc = -errno;
                         fprintf(stderr, "fcntl cmd %d failed: %s\n",
                                 cmd, strerror(errno));
-                        return(1);
+			return rc ;
                 }
                 break;
         case F_DUPFD:
@@ -94,15 +97,16 @@ int t_fcntl(int fd, int cmd, ...)
                 va_end(ap);
                 rc = fcntl(fd, cmd, arg);
                 if (rc == -1) {
+			rc = -errno;
                         fprintf(stderr, "fcntl F_DUPFD %d failed: %s\n",
                                 (int)arg, strerror(errno));
-                        return(1);
+			return rc;
                 }
                 break;
         default:
                 va_end(ap);
                 fprintf(stderr, "fcntl cmd %d not supported\n", cmd);
-                return(1);
+		return rc;
         }
         return rc;
 }
@@ -149,7 +153,7 @@ int t1(int argc, char *argv[])
         }
 
         if ((fd = open(argv[4], O_RDWR)) < 0) {
-                fprintf(stderr, "Couldn't open file: %s\n", argv[3]);
+		fprintf(stderr, "Couldn't open file: %s\n", argv[4]);
                 return EXIT_FAILURE;
         }
 
@@ -249,7 +253,7 @@ int t2(int argc, char* argv[])
 
         t_fcntl(fd, F_SETFL, O_APPEND);
         rc = t_fcntl(fd, F_GETFL);
-        if ((rc & O_APPEND) == 0) {
+	if ((rc < 0) || (rc & O_APPEND) == 0) {
                 fprintf(stderr, "error get flag: ret %x\n", rc);
 		rc = EXIT_FAILURE;
 		goto out;
@@ -296,7 +300,7 @@ int t3(int argc, char *argv[])
         }
 
         if ((fd = open(argv[2], O_RDWR)) < 0) {
-                fprintf(stderr, "Couldn't open file: %s\n", argv[1]);
+		fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
                 return EXIT_FAILURE;
         }
         if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
@@ -305,7 +309,7 @@ int t3(int argc, char *argv[])
                 goto out;
         }
         if ((fd2 = open(argv[2], O_RDWR)) < 0) {
-                fprintf(stderr, "Couldn't open file: %s\n", argv[1]);
+		fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
                 rc = EXIT_FAILURE;
                 goto out;
         }
@@ -438,6 +442,90 @@ out:
 	return rc;
 }
 
+#define T5_USAGE							      \
+	"Usage: ./flocks_test 5 set|get|unlock [read|write] [sleep N] file1\n"\
+"       set: F_SETLKW F_WRLCK\n"				              \
+"       get: F_GETLK F_WRLCK  (conflict)\n"			              \
+"       unlock: F_SETLKW F_UNLCK\n"				              \
+"       read|write: lock mode, write by default\n"		              \
+"       sleep N: sleep for N secs after fcntl\n"		              \
+"       file1: fcntl is called for this file\n"
+
+int t5(int argc, char *argv[])
+{
+	struct flock lock = {
+		.l_type = F_WRLCK,
+		.l_whence = SEEK_SET,
+	};
+
+	int setlk = 0, getlk = 0, unlk = 0, secs = 0;
+	int pos;
+	int fd;
+	int rc = 0;
+
+	if (argc < 4 || argc > 7) {
+		fprintf(stderr, T5_USAGE);
+		return EXIT_FAILURE;
+	}
+
+	if (!strncmp(argv[2], "set", 4))
+		setlk = 1;
+	else if (!strncmp(argv[2], "get", 4))
+		getlk = 1;
+	else if (!strncmp(argv[2], "unlock", 7))
+		unlk = 1;
+	else {
+		fprintf(stderr, "Wrong 2nd argument: %s\n", argv[2]);
+		return EXIT_FAILURE;
+	}
+
+	pos = 3;
+
+	if (!strncmp(argv[pos], "read", 5)) {
+		lock.l_type = F_RDLCK;
+		pos++;
+	} else if (!strncmp(argv[pos], "write", 6)) {
+		lock.l_type = F_WRLCK;
+		pos++;
+	}
+
+	if (!strncmp(argv[pos], "sleep", 6)) {
+		secs = atoi(argv[pos + 1]);
+		if (secs < 0 || secs > 10) {
+			fprintf(stderr, "Sleep argument is wrong: %s\n",
+				argv[pos + 1]);
+			return EXIT_FAILURE;
+		}
+		pos += 2;
+	}
+
+	fd = open(argv[pos], O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "Couldn't open file: %s\n", argv[pos]);
+		return EXIT_FAILURE;
+	}
+
+	fprintf(stderr, "\nFLOCKS_TEST 5: %s %s flock\n",
+		setlk ? "SET" : getlk ? "GET" : "UNLOCK",
+		lock.l_type == F_WRLCK ? "write" : "read");
+
+	if (setlk) {
+		rc = t_fcntl(fd, F_SETLKW, &lock);
+	} else if (getlk) {
+		rc = t_fcntl(fd, F_GETLK, &lock);
+	} else if (unlk) {
+		lock.l_type = F_UNLCK;
+		rc = t_fcntl(fd, F_SETLKW, &lock);
+	}
+
+	if (secs)
+		sleep(secs);
+
+	close(fd);
+	return rc < 0 ? -rc : 0;
+
+}
+
 /** ==============================================================
  * program entry
  */
@@ -470,7 +558,10 @@ int main(int argc, char* argv[])
 	case 4:
 		rc = t4(argc, argv);
 		break;
-        default:
+	case 5:
+		rc = t5(argc, argv);
+		break;
+	default:
                 fprintf(stderr, "unknow test number %s\n", argv[1]);
                 break;
         }

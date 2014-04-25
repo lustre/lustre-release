@@ -2281,7 +2281,7 @@ client_evicted() {
     ! client_up $1
 }
 
-client_reconnect() {
+client_reconnect_try() {
     uname -n >> $MOUNT/recon
     if [ -z "$CLIENTS" ]; then
         df $MOUNT; uname -n >> $MOUNT/recon
@@ -2292,6 +2292,14 @@ client_reconnect() {
     cat $MOUNT/recon
     ls -l $MOUNT/recon > /dev/null
     rm $MOUNT/recon
+}
+
+client_reconnect() {
+	# one client_reconnect_try call does not always do the job...
+	while true ; do
+		client_reconnect_try && break
+		sleep 1
+	done
 }
 
 affected_facets () {
@@ -4395,6 +4403,13 @@ lru_resize_enable()
 lru_resize_disable()
 {
     lctl set_param ldlm.namespaces.*$1*.lru_size $(default_lru_size)
+}
+
+flock_is_enabled()
+{
+	local RC=0
+	[ -z "$(mount | grep "$MOUNT.*flock" | grep -v noflock)" ] && RC=1
+	return $RC
 }
 
 pgcache_empty() {

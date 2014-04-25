@@ -1833,6 +1833,110 @@ test_112a() {
 }
 run_test 112a "bulk resend while orignal request is in progress"
 
+# parameters: fail_loc CMD RC
+test_120_reply() {
+	local PID
+	local PID2
+	local rc=5
+	local fail
+
+	#define OBD_FAIL_LDLM_CP_CB_WAIT2	0x320
+	#define OBD_FAIL_LDLM_CP_CB_WAIT3	0x321
+	#define OBD_FAIL_LDLM_CP_CB_WAIT4	0x322
+	#define OBD_FAIL_LDLM_CP_CB_WAIT5	0x323
+
+	echo
+	echo -n "** FLOCK REPLY vs. EVICTION race, lock $2"
+	[ "$1" = "CLEANUP" ] &&
+		fail=0x80000320 && echo ", $1 cp first"
+	[ "$1" = "REPLY" ] &&
+		fail=0x80000321 && echo ", $1 cp first"
+	[ "$1" = "DEADLOCK CLEANUP" ] &&
+		fail=0x80000322 && echo " DEADLOCK, CLEANUP cp first"
+	[ "$1" = "DEADLOCK REPLY" ] &&
+		fail=0x80000323 && echo " DEADLOCK, REPLY cp first"
+
+	if [ x"$2" = x"get" ]; then
+		#for TEST lock, take a conflict in advance
+		# sleep longer than evictor to not confuse fail_loc: 2+2+4
+		echo "** Taking conflict **"
+		flocks_test 5 set read sleep 10 $DIR/$tfile &
+		PID2=$!
+
+		sleep 2
+	fi
+
+	$LCTL set_param fail_loc=$fail
+
+	flocks_test 5 $2 write $DIR/$tfile &
+	PID=$!
+
+	sleep 2
+	echo "** Evicting and re-connecting client **"
+	mds_evict_client
+
+	client_reconnect
+
+	if [ x"$2" = x"get" ]; then
+		wait $PID2
+	fi
+
+	wait $PID
+	rc=$?
+
+	# check if the return value is allowed
+	[ $rc -eq $3 ] && rc=0
+
+	$LCTL set_param fail_loc=0
+	return $rc
+}
+
+# a lock is taken, unlock vs. cleanup_resource() race for destroying
+# the ORIGINAL lock.
+test_120_destroy()
+{
+	local PID
+
+	flocks_test 5 set write sleep 4 $DIR/$tfile &
+	PID=$!
+	sleep 2
+
+	# let unlock to sleep in CP CB
+	$LCTL set_param fail_loc=$1
+	sleep 4
+
+	# let cleanup to cleep in CP CB
+	mds_evict_client
+
+	client_reconnect
+
+	wait $PID
+	rc=$?
+
+	$LCTL set_param fail_loc=0
+	return $rc
+}
+
+test_120() {
+	flock_is_enabled || { skip "mount w/o flock enabled" && return; }
+	touch $DIR/$tfile
+
+	test_120_reply "CLEANUP" set 5 || error "SET race failed"
+	test_120_reply "CLEANUP" get 5 || error "GET race failed"
+	test_120_reply "CLEANUP" unlock 5 || error "UNLOCK race failed"
+
+	test_120_reply "REPLY" set 5 || error "SET race failed"
+	test_120_reply "REPLY" get 5 || error "GET race failed"
+	test_120_reply "REPLY" unlock 5 || error "UNLOCK race failed"
+
+	# DEADLOCK tests
+	test_120_reply "DEADLOCK CLEANUP" set 5 || error "DEADLOCK race failed"
+	test_120_reply "DEADLOCK REPLY" set 35 || error "DEADLOCK race failed"
+
+	test_120_destroy 0x320 || error "unlock-cleanup race failed"
+}
+run_test 120 "flock race: completion vs. evict"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
