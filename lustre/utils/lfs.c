@@ -885,7 +885,10 @@ static int lfs_find(int argc, char **argv)
 {
         int c, ret;
         time_t t;
-        struct find_param param = { .maxdepth = -1, .quiet = 1 };
+	struct find_param param = {
+		.fp_max_depth = -1,
+		.quiet = 1,
+	};
         struct option long_opts[] = {
                 {"atime",        required_argument, 0, 'A'},
                 {"stripe-count", required_argument, 0, 'c'},
@@ -964,24 +967,24 @@ static int lfs_find(int argc, char **argv)
                         if (strcmp(optarg, "!") == 0)
                                 neg_opt = 2;
                         break;
-                case 'A':
-                        xtime = &param.atime;
-                        xsign = &param.asign;
-                        param.exclude_atime = !!neg_opt;
-                        /* no break, this falls through to 'C' for ctime */
-                case 'C':
-                        if (c == 'C') {
-                                xtime = &param.ctime;
-                                xsign = &param.csign;
-                                param.exclude_ctime = !!neg_opt;
-                        }
-                        /* no break, this falls through to 'M' for mtime */
-                case 'M':
-                        if (c == 'M') {
-                                xtime = &param.mtime;
-                                xsign = &param.msign;
-                                param.exclude_mtime = !!neg_opt;
-                        }
+		case 'A':
+			xtime = &param.fp_atime;
+			xsign = &param.fp_asign;
+			param.fp_exclude_atime = !!neg_opt;
+			/* no break, this falls through to 'C' for ctime */
+		case 'C':
+			if (c == 'C') {
+				xtime = &param.fp_ctime;
+				xsign = &param.fp_csign;
+				param.fp_exclude_ctime = !!neg_opt;
+			}
+			/* no break, this falls through to 'M' for mtime */
+		case 'M':
+			if (c == 'M') {
+				xtime = &param.fp_mtime;
+				xsign = &param.fp_msign;
+				param.fp_exclude_mtime = !!neg_opt;
+			}
                         ret = set_time(&t, xtime, optarg);
                         if (ret == INT_MAX) {
                                 ret = -1;
@@ -1009,14 +1012,14 @@ static int lfs_find(int argc, char **argv)
                         param.check_stripecount = 1;
                         param.exclude_stripecount = !!neg_opt;
                         break;
-                case 'D':
-                        param.maxdepth = strtol(optarg, 0, 0);
-                        break;
-                case 'g':
-                case 'G':
-                        ret = name2id(&param.gid, optarg, GROUP);
-                        if (ret) {
-                                param.gid = strtoul(optarg, &endptr, 10);
+		case 'D':
+			param.fp_max_depth = strtol(optarg, 0, 0);
+			break;
+		case 'g':
+		case 'G':
+			ret = name2id(&param.fp_gid, optarg, GROUP);
+			if (ret) {
+				param.fp_gid = strtoul(optarg, &endptr, 10);
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
@@ -1024,8 +1027,8 @@ static int lfs_find(int argc, char **argv)
                                         goto err;
                                 }
                         }
-                        param.exclude_gid = !!neg_opt;
-                        param.check_gid = 1;
+			param.fp_exclude_gid = !!neg_opt;
+			param.fp_check_gid = 1;
                         break;
 		case 'L':
 			ret = name2layout(&param.layout, optarg);
@@ -1036,9 +1039,9 @@ static int lfs_find(int argc, char **argv)
 			break;
                 case 'u':
                 case 'U':
-                        ret = name2id(&param.uid, optarg, USER);
-                        if (ret) {
-                                param.uid = strtoul(optarg, &endptr, 10);
+			ret = name2id(&param.fp_uid, optarg, USER);
+			if (ret) {
+				param.fp_uid = strtoul(optarg, &endptr, 10);
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
@@ -1046,8 +1049,8 @@ static int lfs_find(int argc, char **argv)
                                         goto err;
                                 }
                         }
-                        param.exclude_uid = !!neg_opt;
-                        param.check_uid = 1;
+			param.fp_exclude_uid = !!neg_opt;
+			param.fp_check_uid = 1;
                         break;
                 case FIND_POOL_OPT:
                         if (strlen(optarg) > LOV_MAXPOOLNAME) {
@@ -1179,25 +1182,37 @@ err_free:
 			param.check_stripesize = 1;
 			param.exclude_stripesize = !!neg_opt;
 			break;
-                case 't':
-                        param.exclude_type = !!neg_opt;
-                        switch(optarg[0]) {
-                        case 'b': param.type = S_IFBLK; break;
-                        case 'c': param.type = S_IFCHR; break;
-                        case 'd': param.type = S_IFDIR; break;
-                        case 'f': param.type = S_IFREG; break;
-                        case 'l': param.type = S_IFLNK; break;
-                        case 'p': param.type = S_IFIFO; break;
-                        case 's': param.type = S_IFSOCK; break;
-#ifdef S_IFDOOR /* Solaris only */
-                        case 'D': param.type = S_IFDOOR; break;
-#endif
-                        default: fprintf(stderr, "error: %s: bad type '%s'\n",
-                                         argv[0], optarg);
-                                 ret = CMD_HELP;
-                                 goto err;
-                        };
-                        break;
+		case 't':
+			param.fp_exclude_type = !!neg_opt;
+			switch (optarg[0]) {
+			case 'b':
+				param.fp_type = S_IFBLK;
+				break;
+			case 'c':
+				param.fp_type = S_IFCHR;
+				break;
+			case 'd':
+				param.fp_type = S_IFDIR;
+				break;
+			case 'f':
+				param.fp_type = S_IFREG;
+				break;
+			case 'l':
+				param.fp_type = S_IFLNK;
+				break;
+			case 'p':
+				param.fp_type = S_IFIFO;
+				break;
+			case 's':
+				param.fp_type = S_IFSOCK;
+				break;
+			default:
+				fprintf(stderr, "error: %s: bad type '%s'\n",
+					argv[0], optarg);
+				ret = CMD_HELP;
+				goto err;
+			};
+			break;
                 default:
                         ret = CMD_HELP;
                         goto err;
@@ -1282,7 +1297,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	};
 	int c, rc;
 
-	param->maxdepth = 1;
+	param->fp_max_depth = 1;
 	optind = 0;
 	while ((c = getopt_long(argc, argv, "cdDghiLMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
@@ -1300,7 +1315,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			param->quiet++;
 			break;
 		case 'd':
-			param->maxdepth = 0;
+			param->fp_max_depth = 0;
 			break;
 		case 'D':
 			param->get_default_lmv = 1;
@@ -1319,7 +1334,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 #endif
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_COUNT;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
@@ -1332,7 +1347,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'S':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_SIZE;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
@@ -1348,30 +1363,30 @@ static int lfs_getstripe_internal(int argc, char **argv,
 #endif
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_OFFSET;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 		case 'p':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_POOL;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 		case 'g':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_GENERATION;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 		case 'L':
 			if (!(param->verbose & VERBOSE_DETAIL)) {
 				param->verbose |= VERBOSE_LAYOUT;
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			}
 			break;
 		case 'M':
 			if (!(param->verbose & VERBOSE_DETAIL))
-				param->maxdepth = 0;
+				param->fp_max_depth = 0;
 			param->verbose |= VERBOSE_MDTINDEX;
 			break;
 		case 'R':
@@ -1386,7 +1401,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		return CMD_HELP;
 
 	if (param->recursive)
-		param->maxdepth = -1;
+		param->fp_max_depth = -1;
 
 	if (!param->verbose)
 		param->verbose = VERBOSE_ALL;
@@ -1601,7 +1616,10 @@ static int lfs_rmentry(int argc, char **argv)
 
 static int lfs_mv(int argc, char **argv)
 {
-	struct  find_param param = { .maxdepth = -1, .mdtindex = -1};
+	struct  find_param param = {
+		.fp_max_depth = -1,
+		.mdtindex = -1,
+	};
 	char   *end;
 	int     c;
 	int     rc = 0;

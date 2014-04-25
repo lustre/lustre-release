@@ -128,42 +128,43 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 				 VERBOSE_LAYOUT)
 
 struct find_param {
-	unsigned int		 maxdepth;
-	time_t			 atime;
-	time_t			 mtime;
-	time_t			 ctime;
-	/* cannot be bitfields due to using pointers to */
-	int			 asign;
-	/* access them during argument parsing. */
-	int			 csign;
-	int			 msign;
-	int			 type;
+	unsigned int		 fp_max_depth;
+	dev_t			 fp_dev;
+	mode_t			 fp_type; /* S_IFIFO,... */
+	uid_t			 fp_uid;
+	gid_t			 fp_gid;
+	time_t			 fp_atime;
+	time_t			 fp_mtime;
+	time_t			 fp_ctime;
+	/* {a,m,c}sign cannot be bitfields due to using pointers to
+	 * access them during argument parsing. */
+	int			 fp_asign;
+	int			 fp_msign;
+	int			 fp_csign;
 	/* these need to be signed values */
 	int			 size_sign:2,
 				 stripesize_sign:2,
 				 stripecount_sign:2;
 	unsigned long long	 size;
 	unsigned long long	 size_units;
-	uid_t			 uid;
-	gid_t			 gid;
 
 	unsigned long		 zeroend:1,
 				 recursive:1,
 				 exclude_pattern:1,
-				 exclude_type:1,
+				 fp_exclude_type:1,
 				 exclude_obd:1,
 				 exclude_mdt:1,
-				 exclude_gid:1,
-				 exclude_uid:1,
-				 check_gid:1,		/* group ID */
-				 check_uid:1,		/* user ID */
+				 fp_exclude_gid:1,
+				 fp_exclude_uid:1,
+				 fp_check_gid:1,
+				 fp_check_uid:1,
 				 check_pool:1,		/* LOV pool name */
 				 check_size:1,		/* file size */
 				 exclude_pool:1,
 				 exclude_size:1,
-				 exclude_atime:1,
-				 exclude_mtime:1,
-				 exclude_ctime:1,
+				 fp_exclude_atime:1,
+				 fp_exclude_mtime:1,
+				 fp_exclude_ctime:1,
 				 get_lmv:1,	/* get MDT list from LMV */
 				 raw:1,		/* do not fill in defaults */
 				 check_stripesize:1,	/* LOV stripe size */
@@ -180,8 +181,6 @@ struct find_param {
 
 	/* regular expression */
 	char			*pattern;
-
-	char			*print_fmt;
 
 	struct  obd_uuid	*obduuid;
 	int			 num_obds;
@@ -213,12 +212,7 @@ struct find_param {
 	unsigned long		 got_uuids:1,
 				 obds_printed:1,
 				 have_fileinfo:1; /* file attrs and LOV xattr */
-	unsigned int		 depth;
-	dev_t			 st_dev;
-	__u64			 padding1;
-	__u64			 padding2;
-	__u64			 padding3;
-	__u64			 padding4;
+	unsigned int		 fp_depth;
 };
 
 extern int llapi_ostlist(char *path, struct find_param *param);

@@ -75,47 +75,6 @@
 #include <lustre_ioctl.h>
 #include "lustreapi_internal.h"
 
-static unsigned llapi_dir_filetype_table[] = {
-        [DT_UNKNOWN]= 0,
-        [DT_FIFO]= S_IFIFO,
-        [DT_CHR] = S_IFCHR,
-        [DT_DIR] = S_IFDIR,
-        [DT_BLK] = S_IFBLK,
-        [DT_REG] = S_IFREG,
-        [DT_LNK] = S_IFLNK,
-        [DT_SOCK]= S_IFSOCK,
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-        [DT_DOOR]= S_IFDOOR,
-#endif
-};
-
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-static const int DT_MAX = DT_DOOR;
-#else
-static const int DT_MAX = DT_SOCK;
-#endif
-
-static unsigned llapi_filetype_dir_table[] = {
-        [0]= DT_UNKNOWN,
-        [S_IFIFO]= DT_FIFO,
-        [S_IFCHR] = DT_CHR,
-        [S_IFDIR] = DT_DIR,
-        [S_IFBLK] = DT_BLK,
-        [S_IFREG] = DT_REG,
-        [S_IFLNK] = DT_LNK,
-        [S_IFSOCK]= DT_SOCK,
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-        [S_IFDOOR]= DT_DOOR,
-#endif
-};
-
-#if defined(DT_DOOR) && defined(S_IFDOOR)
-static const int S_IFMAX = DT_DOOR;
-#else
-static const int S_IFMAX = DT_SOCK;
-#endif
-
-/* liblustreapi message level */
 static int llapi_msg_level = LLAPI_MSG_MAX;
 
 void llapi_msg_set_level(int level)
@@ -1498,9 +1457,10 @@ static void find_param_fini(struct find_param *param)
 static int cb_common_fini(char *path, DIR *parent, DIR **dirp, void *data,
 			  struct dirent64 *de)
 {
-        struct find_param *param = (struct find_param *)data;
-        param->depth--;
-        return 0;
+	struct find_param *param = data;
+	param->fp_depth--;
+
+	return 0;
 }
 
 /* set errno upon failure */
@@ -1649,11 +1609,9 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 
 			ret = get_lmd_info(path, d, NULL, param->lmd,
 					   param->lumlen);
-                        if (ret == 0) {
-				dent->d_type =
-					llapi_filetype_dir_table[st->st_mode &
-								 S_IFMT];
-			}
+			if (ret == 0)
+				dent->d_type = IFTODT(st->st_mode);
+
                         if (ret == -ENOENT)
                                 continue;
 		}
@@ -1715,7 +1673,8 @@ static int param_callback(char *path, semantic_func_t sem_init,
         ret = common_param_init(param, buf);
         if (ret)
                 goto out;
-        param->depth = 0;
+
+	param->fp_depth = 0;
 
         ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, sem_init,
                                       sem_fini, param, NULL);
@@ -2506,7 +2465,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, NULL,
                                        param->lmd->lmd_lmm.lmm_objects,
                                        path, is_dir,
-                                       param->obdindex, param->maxdepth,
+				       param->obdindex, param->fp_max_depth,
                                        param->verbose, param->raw);
                 break;
         case LOV_USER_MAGIC_V3: {
@@ -2519,7 +2478,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
                 objects = lmmv3->lmm_objects;
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
                                        objects, path, is_dir,
-                                       param->obdindex, param->maxdepth,
+				       param->obdindex, param->fp_max_depth,
                                        param->verbose, param->raw);
                 break;
         }
@@ -2531,7 +2490,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
 		strncpy(pool_name, lum->lum_pool_name, LOV_MAXPOOLNAME);
 		lmv_dump_user_lmm(lum, pool_name, path,
-				  param->obdindex, param->maxdepth,
+				  param->obdindex, param->fp_max_depth,
 				  param->verbose);
 		break;
 	}
@@ -2669,46 +2628,46 @@ static int find_value_cmp(unsigned long long file, unsigned long long limit,
  * updated timestamps. */
 static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 {
-        int ret;
-        int rc = 1;
+	int rc = 1;
+	int rc2;
 
-        /* Check if file is accepted. */
-        if (param->atime) {
-                ret = find_value_cmp(st->st_atime, param->atime,
-                                     param->asign, param->exclude_atime,
-                                     24 * 60 * 60, mds);
-                if (ret < 0)
-                        return ret;
-                rc = ret;
-        }
+	/* Check if file is accepted. */
+	if (param->fp_atime) {
+		rc2 = find_value_cmp(st->st_atime, param->fp_atime,
+				     param->fp_asign, param->fp_exclude_atime,
+				     24 * 60 * 60, mds);
+		if (rc2 < 0)
+			return rc2;
+		rc = rc2;
+	}
 
-        if (param->mtime) {
-                ret = find_value_cmp(st->st_mtime, param->mtime,
-                                     param->msign, param->exclude_mtime,
-                                     24 * 60 * 60, mds);
-                if (ret < 0)
-                        return ret;
+	if (param->fp_mtime) {
+		rc2 = find_value_cmp(st->st_mtime, param->fp_mtime,
+				     param->fp_msign, param->fp_exclude_mtime,
+				     24 * 60 * 60, mds);
+		if (rc2 < 0)
+			return rc2;
 
-                /* If the previous check matches, but this one is not yet clear,
-                 * we should return 0 to do an RPC on OSTs. */
-                if (rc == 1)
-                        rc = ret;
-        }
+		/* If the previous check matches, but this one is not yet clear,
+		 * we should return 0 to do an RPC on OSTs. */
+		if (rc == 1)
+			rc = rc2;
+	}
 
-        if (param->ctime) {
-                ret = find_value_cmp(st->st_ctime, param->ctime,
-                                     param->csign, param->exclude_ctime,
-                                     24 * 60 * 60, mds);
-                if (ret < 0)
-                        return ret;
+	if (param->fp_ctime) {
+		rc2 = find_value_cmp(st->st_ctime, param->fp_ctime,
+				     param->fp_csign, param->fp_exclude_ctime,
+				     24 * 60 * 60, mds);
+		if (rc2 < 0)
+			return rc2;
 
-                /* If the previous check matches, but this one is not yet clear,
-                 * we should return 0 to do an RPC on OSTs. */
-                if (rc == 1)
-                        rc = ret;
-        }
+		/* If the previous check matches, but this one is not yet clear,
+		 * we should return 0 to do an RPC on OSTs. */
+		if (rc == 1)
+			rc = rc2;
+	}
 
-        return rc;
+	return rc;
 }
 
 /**
@@ -2833,31 +2792,32 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
                         goto decided;
         }
 
-        /* See if we can check the file type from the dirent. */
-        if (param->type && de != NULL && de->d_type != DT_UNKNOWN &&
-            de->d_type < DT_MAX) {
-                checked_type = 1;
-                if (llapi_dir_filetype_table[de->d_type] == param->type) {
-                        if (param->exclude_type)
-                                goto decided;
-                } else {
-                        if (!param->exclude_type)
-                                goto decided;
-                }
-        }
+	/* See if we can check the file type from the dirent. */
+	if (param->fp_type != 0 && de != NULL && de->d_type != DT_UNKNOWN) {
+		checked_type = 1;
+
+		if (DTTOIF(de->d_type) == param->fp_type) {
+			if (param->fp_exclude_type)
+				goto decided;
+		} else {
+			if (!param->fp_exclude_type)
+				goto decided;
+		}
+	}
 
         ret = 0;
 
         /* Request MDS for the stat info if some of these parameters need
          * to be compared. */
-	if (param->obduuid   || param->mdtuuid || param->check_uid ||
-	    param->check_gid || param->check_pool || param->atime   ||
-	    param->ctime     || param->mtime || param->check_size ||
+	if (param->obduuid || param->mdtuuid ||
+	    param->fp_check_uid || param->fp_check_gid ||
+	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
+	    param->check_pool || param->check_size ||
 	    param->check_stripecount || param->check_stripesize ||
 	    param->check_layout)
 		decision = 0;
 
-        if (param->type && checked_type == 0)
+	if (param->fp_type != 0 && checked_type == 0)
                 decision = 0;
 
         if (param->have_fileinfo == 0 && decision == 0) {
@@ -2907,20 +2867,20 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
                 }
         }
 
-        if (param->type && !checked_type) {
-                if ((st->st_mode & S_IFMT) == param->type) {
-                        if (param->exclude_type)
-                                goto decided;
-                } else {
-                        if (!param->exclude_type)
-                                goto decided;
-                }
-        }
+	if (param->fp_type && !checked_type) {
+		if ((st->st_mode & S_IFMT) == param->fp_type) {
+			if (param->fp_exclude_type)
+				goto decided;
+		} else {
+			if (!param->fp_exclude_type)
+				goto decided;
+		}
+	}
 
         /* Prepare odb. */
         if (param->obduuid || param->mdtuuid) {
                 if (lustre_fs && param->got_uuids &&
-                    param->st_dev != st->st_dev) {
+		    param->fp_dev != st->st_dev) {
                         /* A lustre/lustre mount point is crossed. */
                         param->got_uuids = 0;
                         param->obds_printed = 0;
@@ -2933,7 +2893,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
                         if (ret)
                                 return ret;
 
-                        param->st_dev = st->st_dev;
+			param->fp_dev = st->st_dev;
                 } else if (!lustre_fs && param->got_uuids) {
                         /* A lustre/non-lustre mount point is crossed. */
                         param->got_uuids = 0;
@@ -2999,25 +2959,25 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
                 }
         }
 obd_matches:
-        if (param->check_uid) {
-                if (st->st_uid == param->uid) {
-                        if (param->exclude_uid)
-                                goto decided;
-                } else {
-                        if (!param->exclude_uid)
-                                goto decided;
+	if (param->fp_check_uid) {
+		if (st->st_uid == param->fp_uid) {
+			if (param->fp_exclude_uid)
+				goto decided;
+	} else {
+			if (!param->fp_exclude_uid)
+				goto decided;
                 }
         }
 
-        if (param->check_gid) {
-                if (st->st_gid == param->gid) {
-                        if (param->exclude_gid)
-                                goto decided;
-                } else {
-                        if (!param->exclude_gid)
-                                goto decided;
-                }
-        }
+	if (param->fp_check_gid) {
+		if (st->st_gid == param->fp_gid) {
+			if (param->fp_exclude_gid)
+				goto decided;
+		} else {
+			if (!param->fp_exclude_gid)
+				goto decided;
+		}
+	}
 
         if (param->check_pool) {
                 struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
@@ -3038,9 +2998,9 @@ obd_matches:
                 }
         }
 
-        /* Check the time on mds. */
-        decision = 1;
-        if (param->atime || param->ctime || param->mtime) {
+	/* Check the time on mds. */
+	decision = 1;
+	if (param->fp_atime || param->fp_mtime || param->fp_ctime) {
                 int for_mds;
 
                 for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
@@ -3118,11 +3078,12 @@ obd_matches:
 
 decided:
         /* Do not get down anymore? */
-        if (param->depth == param->maxdepth)
-                return 1;
+	if (param->fp_depth == param->fp_max_depth)
+		return 1;
 
-        param->depth++;
-        return 0;
+	param->fp_depth++;
+
+	return 0;
 }
 
 static int cb_mv_init(char *path, DIR *parent, DIR **dirp,
@@ -3279,12 +3240,13 @@ static int cb_get_mdt_index(char *path, DIR *parent, DIR **dirp, void *data,
                              path, mdtidx);
 
 out:
-        /* Do not get down anymore? */
-        if (param->depth == param->maxdepth)
-                return 1;
+	/* Do not get down anymore? */
+	if (param->fp_depth == param->fp_max_depth)
+		return 1;
 
-        param->depth++;
-        return 0;
+	param->fp_depth++;
+
+	return 0;
 }
 
 static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
@@ -3385,12 +3347,13 @@ dump:
                 llapi_lov_dump_user_lmm(param, path, d ? 1 : 0);
 
 out:
-        /* Do not get down anymore? */
-        if (param->depth == param->maxdepth)
-                return 1;
+	/* Do not get down anymore? */
+	if (param->fp_depth == param->fp_max_depth)
+		return 1;
 
-        param->depth++;
-        return 0;
+	param->fp_depth++;
+
+	return 0;
 }
 
 int llapi_getstripe(char *path, struct find_param *param)
