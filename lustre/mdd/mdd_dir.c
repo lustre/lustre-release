@@ -57,6 +57,17 @@ static struct lu_name lname_dotdot = {
         sizeof(dotdot) - 1
 };
 
+static inline int
+mdd_name_check(struct mdd_device *m, const struct lu_name *ln)
+{
+	if (!lu_name_is_valid(ln))
+		return -EINVAL;
+	else if (ln->ln_namelen > m->mdd_dt_conf.ddp_max_name_len)
+		return -ENAMETOOLONG;
+	else
+		return 0;
+}
+
 /* Get FID from name and parent */
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
@@ -80,10 +91,6 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	} else if (!mdd_object_exists(mdd_obj)) {
 		RETURN(-ESTALE);
 	}
-
-	/* The common filename length check. */
-	if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
-		RETURN(-ENAMETOOLONG);
 
 	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
 					    MOR_TGT_PARENT);
@@ -498,8 +505,9 @@ static int mdd_link_sanity_check(const struct lu_env *env,
                 RETURN(-ESTALE);
 
         /* Local ops, no lookup before link, check filename length here. */
-        if (lname && (lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
-                RETURN(-ENAMETOOLONG);
+	rc = mdd_name_check(m, lname);
+	if (rc < 0)
+		RETURN(rc);
 
         if (mdd_is_immutable(src_obj) || mdd_is_append(src_obj))
                 RETURN(-EPERM);
@@ -1841,6 +1849,10 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		}
 	}
 
+	rc = mdd_name_check(m, lname);
+	if (rc < 0)
+		RETURN(rc);
+
 	switch (cattr->la_mode & S_IFMT) {
         case S_IFLNK: {
                 unsigned int symlen = strlen(spec->u.sp_symname) + 1;
@@ -2586,6 +2598,10 @@ static int mdd_rename(const struct lu_env *env,
 	rc = mdd_rename_sanity_check(env, mdd_spobj, pattr, mdd_tpobj, tpattr,
 				     mdd_sobj, cattr, mdd_tobj, tattr);
 	if (rc)
+		GOTO(out_pending, rc);
+
+	rc = mdd_name_check(mdd, ltname);
+	if (rc < 0)
 		GOTO(out_pending, rc);
 
         handle = mdd_trans_create(env, mdd);

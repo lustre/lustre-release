@@ -1293,8 +1293,9 @@ static inline bool lu_name_is_valid(const struct lu_name *ln)
 {
 	return ln->ln_name != NULL &&
 	       ln->ln_namelen > 0 &&
-	       ln->ln_name[0] != '\0' &&
-	       ln->ln_name[ln->ln_namelen] == '\0';
+	       ln->ln_name[ln->ln_namelen] == '\0' &&
+	       strlen(ln->ln_name) == ln->ln_namelen &&
+	       memchr(ln->ln_name, '/', ln->ln_namelen) == NULL;
 }
 
 #define DNAME "%.*s"
