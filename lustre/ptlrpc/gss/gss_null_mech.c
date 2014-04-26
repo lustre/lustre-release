@@ -77,7 +77,7 @@ __u32 gss_copy_reverse_context_null(struct gss_ctx *gss_context_old,
 		return GSS_S_FAILURE;
 
 	null_context_old = gss_context_old->internal_ctx_id;
-	memcpy(null_context_new, null_context_old, sizeof *null_context_new);
+	memcpy(null_context_new, null_context_old, sizeof(*null_context_new));
 	gss_context_new->internal_ctx_id = null_context_new;
 	CDEBUG(D_SEC, "succesfully copied reverse null context\n");
 

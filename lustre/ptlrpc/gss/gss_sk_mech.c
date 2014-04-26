@@ -77,7 +77,7 @@ __u32 gss_copy_reverse_context_sk(struct gss_ctx *gss_context_old,
 		return GSS_S_FAILURE;
 
 	sk_context_old = gss_context_old->internal_ctx_id;
-	memcpy(sk_context_new, sk_context_old, sizeof *sk_context_new);
+	memcpy(sk_context_new, sk_context_old, sizeof(*sk_context_new));
 	gss_context_new->internal_ctx_id = sk_context_new;
 	CDEBUG(D_SEC, "succesfully copied reverse sk context\n");
 
