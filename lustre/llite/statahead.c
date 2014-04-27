@@ -1648,10 +1648,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
 	       sai, parent->d_name.len, parent->d_name.name);
 
 	/* The sai buffer already has one reference taken at allocation time,
-	 * but as soon as we expose the sai by attaching it to the lli that default
-	 * reference can be dropped by another thread calling ll_stop_statahead.
-	 * We need to take a local reference to protect the sai buffer while we intend
-	 * to access it. */
+	 * but as soon as we expose the sai by attaching it to the lli that
+	 * default reference can be dropped by another thread calling
+	 * ll_stop_statahead. We need to take a local reference to protect
+	 * the sai buffer while we intend to access it. */
         ll_sai_get(sai);
         lli->lli_sai = sai;
 
