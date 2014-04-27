@@ -390,7 +390,7 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req)
 
 struct kmem_cache *request_cache;
 
-int ptlrpc_request_cache_init()
+int ptlrpc_request_cache_init(void)
 {
 	request_cache = kmem_cache_create("ptlrpc_cache",
 					  sizeof(struct ptlrpc_request),
@@ -398,7 +398,7 @@ int ptlrpc_request_cache_init()
 	return request_cache == NULL ? -ENOMEM : 0;
 }
 
-void ptlrpc_request_cache_fini()
+void ptlrpc_request_cache_fini(void)
 {
 	kmem_cache_destroy(request_cache);
 }
