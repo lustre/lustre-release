@@ -605,15 +605,16 @@ int mdt_fix_reply(struct mdt_thread_info *info)
         /* MDT_MD buffer may be bigger than packed value, let's shrink all
          * buffers before growing it */
 	if (info->mti_big_lmm_used) {
-                LASSERT(req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER));
-
-                /* free big lmm if md_size is not needed */
-		if (md_size == 0) {
-			info->mti_big_lmm_used = 0;
-		} else {
+		/* big_lmm buffer may be used even without packing the result
+		 * into reply, just for internal server needs */
+		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
 			md_packed = req_capsule_get_size(pill, &RMF_MDT_MD,
 							 RCL_SERVER);
-			LASSERT(md_packed > 0);
+
+		/* free big lmm if md_size is not needed */
+		if (md_size == 0 || md_packed == 0) {
+			info->mti_big_lmm_used = 0;
+		} else {
 			/* buffer must be allocated separately */
 			LASSERT(info->mti_attr.ma_lmm !=
 				req_capsule_server_get(pill, &RMF_MDT_MD));
