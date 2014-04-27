@@ -1016,11 +1016,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 unlock_child:
 	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo);
 	mdt_object_unlock(info, mc, child_lh, rc);
-
-	/* Since we do not need reply md striped dir info to client, so
-	 * reset mti_big_lmm_used to avoid confusing mdt_fix_reply */
-	if (info->mti_big_lmm_used)
-		info->mti_big_lmm_used = 0;
 put_child:
 	mdt_object_put(info->mti_env, mc);
 unlock_parent:
