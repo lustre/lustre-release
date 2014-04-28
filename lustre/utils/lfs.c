@@ -73,7 +73,6 @@
 #include <lustre/lustreapi.h>
 
 #include <libcfs/libcfsutil.h>
-#include <obd.h>
 #include "obdctl.h"
 
 /* all functions */

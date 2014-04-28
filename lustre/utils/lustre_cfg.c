@@ -52,11 +52,8 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
-#include <lustre_lib.h>
 #include <lustre_cfg.h>
 #include <lustre/lustre_idl.h>
-#include <lustre_dlm.h>
-#include <obd.h>          /* for struct lov_stripe_md */
 #include <lustre/lustre_build_version.h>
 
 #include <unistd.h>
@@ -304,11 +301,6 @@ int jt_lcfg_add_uuid(int argc, char **argv)
         }
 
         return do_add_uuid(argv[0], argv[1], nid);
-}
-
-int obd_add_uuid(char *uuid, lnet_nid_t nid)
-{
-        return do_add_uuid("obd_add_uuid", uuid, nid);
 }
 
 int jt_lcfg_del_uuid(int argc, char **argv)

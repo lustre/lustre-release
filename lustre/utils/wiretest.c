@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 #include <liblustre.h>
-#include <lustre_lib.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>
 

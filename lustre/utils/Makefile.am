@@ -18,8 +18,6 @@ bin_scripts = llstat llobdstat plot-llstat llbackup
 EXTRA_PROGRAMS = wirecheck
 
 if UTILS
-noinst_PROGRAMS = obdio obdbarrier
-
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl wiretest l_getidentity llverfs llverdev \
@@ -109,8 +107,6 @@ if LDISKFS_ENABLED
 libiam_a_SOURCES = libiam.c
 endif
 
-obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
-obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 req_layout_SOURCES = req-layout.c
 
 llog_reader_SOURCES = llog_reader.c

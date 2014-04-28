@@ -49,6 +49,7 @@
 #endif
 
 #include <obd_support.h>
+#include <lustre_ioctl.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>

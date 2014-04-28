@@ -222,6 +222,7 @@ int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 int obd_llog_finish(struct obd_device *obd, int count);
 
 /* llog_ioctl.c */
+struct obd_ioctl_data;
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data);
 int llog_catalog_list(const struct lu_env *env, struct dt_device *d,

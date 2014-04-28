@@ -69,12 +69,6 @@
 #endif
 #endif
 
-/* This macro is only for compatibility reasons with older Linux Lustre user
- * tools. New ioctls should NOT use this macro as the ioctl "size". Instead
- * the ioctl should get a "size" argument which is the actual data type used
- * by the ioctl, to ensure the ioctl interface is versioned correctly. */
-#define OBD_IOC_DATA_TYPE               long
-
 #define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |                \
                            sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
                            sigmask(SIGALRM))

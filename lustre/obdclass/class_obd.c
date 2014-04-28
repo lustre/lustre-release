@@ -53,6 +53,7 @@
 # include <dt_object.h>
 # include <md_object.h>
 #endif /* HAVE_SERVER_SUPPORT */
+#include <lustre_ioctl.h>
 #include "llog_internal.h"
 
 #ifndef __KERNEL__
@@ -356,12 +357,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
-        }
-
-        case OBD_IOC_CLOSE_UUID: {
-                CDEBUG(D_IOCTL, "closing all connections to uuid %s (NOOP)\n",
-                       data->ioc_inlbuf1);
-                GOTO(out, err = 0);
         }
 
         case OBD_IOC_GETDEVICE: {

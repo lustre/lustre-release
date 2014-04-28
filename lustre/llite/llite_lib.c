@@ -45,6 +45,7 @@
 #include <linux/version.h>
 #include <linux/mm.h>
 
+#include <lustre_ioctl.h>
 #include <lustre_lite.h>
 #include <lustre_ha.h>
 #include <lustre_dlm.h>

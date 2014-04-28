@@ -59,6 +59,7 @@
 
 #include <lnet/lnetctl.h>
 #include <libcfs/libcfsutil.h>
+#include <lustre_ioctl.h>
 #include "obdctl.h"
 
 static char cmdname[512];

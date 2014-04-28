@@ -71,8 +71,8 @@
 
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
-#include <obd.h>
 #include <lustre/lustreapi.h>
+#include <lustre_ioctl.h>
 #include "lustreapi_internal.h"
 
 static unsigned llapi_dir_filetype_table[] = {
@@ -296,7 +296,7 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 				stripe_size, page_size);
 		return rc;
 	}
-	if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
+	if (stripe_offset < -1) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
 				stripe_offset);
@@ -3564,7 +3564,7 @@ int llapi_quotacheck(char *mnt, int check_type)
                 return rc;
         }
 
-        rc = ioctl(dirfd(root), LL_IOC_QUOTACHECK, check_type);
+	rc = ioctl(dirfd(root), OBD_IOC_QUOTACHECK, check_type);
         if (rc < 0)
                 rc = -errno;
 
@@ -3586,7 +3586,7 @@ int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk)
         }
 
         while (1) {
-                rc = ioctl(dirfd(root), LL_IOC_POLL_QUOTACHECK, qchk);
+		rc = ioctl(dirfd(root), OBD_IOC_POLL_QUOTACHECK, qchk);
                 if (!rc)
                         break;
                 sleep(poll_intvl);
@@ -3610,7 +3610,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
                 return rc;
         }
 
-        rc = ioctl(dirfd(root), LL_IOC_QUOTACTL, qctl);
+	rc = ioctl(dirfd(root), OBD_IOC_QUOTACTL, qctl);
         if (rc < 0)
                 rc = -errno;
 

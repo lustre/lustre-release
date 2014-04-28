@@ -47,6 +47,7 @@
 #include <linux/file.h>
 #include "llite_internal.h"
 #include <lustre/ll_fiemap.h>
+#include <lustre_ioctl.h>
 
 #include "cl_object.h"
 

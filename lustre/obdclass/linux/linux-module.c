@@ -75,6 +75,7 @@
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include <lprocfs_status.h>
+#include <lustre_ioctl.h>
 #include <lustre_ver.h>
 #include <lustre/lustre_build_version.h>
 #ifdef __KERNEL__

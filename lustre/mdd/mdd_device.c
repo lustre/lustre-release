@@ -44,6 +44,7 @@
 
 #include <linux/module.h>
 #include <obd_class.h>
+#include <lustre_ioctl.h>
 #include <lustre_mds.h>
 #include <obd_support.h>
 #include <lu_object.h>

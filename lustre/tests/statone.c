@@ -39,8 +39,7 @@
 #include <fcntl.h>
 
 #include <liblustre.h>
-#include <lustre_lib.h>
-#include <obd.h>
+#include <lustre_ioctl.h>
 
 int main(int argc, char **argv)
 {

@@ -51,8 +51,8 @@
 #include <lustre/lustre_idl.h>
 #include <obd_support.h>
 #include <obd_class.h>
+#include <lustre_ioctl.h>
 #include <lustre_lib.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
@@ -1274,8 +1274,8 @@ out_rmdir:
 	}
 	case LL_IOC_LOV_SWAP_LAYOUTS:
 		RETURN(-EPERM);
-        case LL_IOC_OBD_STATFS:
-                RETURN(ll_obd_statfs(inode, (void *)arg));
+	case IOC_OBD_STATFS:
+		RETURN(ll_obd_statfs(inode, (void *)arg));
         case LL_IOC_LOV_GETSTRIPE:
         case LL_IOC_MDC_GETINFO:
         case IOC_MDC_GETFILEINFO:
@@ -1426,10 +1426,7 @@ out_rmdir:
                 OBD_FREE_LARGE(lmm, lmmsize);
                 return rc;
         }
-        case OBD_IOC_LLOG_CATINFO: {
-		RETURN(-EOPNOTSUPP);
-        }
-        case OBD_IOC_QUOTACHECK: {
+	case OBD_IOC_QUOTACHECK: {
                 struct obd_quotactl *oqctl;
                 int error = 0;
 
@@ -1454,7 +1451,7 @@ out_rmdir:
                 OBD_FREE_PTR(oqctl);
                 return error ?: rc;
         }
-        case OBD_IOC_POLL_QUOTACHECK: {
+	case OBD_IOC_POLL_QUOTACHECK: {
                 struct if_quotacheck *check;
 
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
@@ -1542,7 +1539,7 @@ out_rmdir:
 #else
 #warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0) */
-        case LL_IOC_QUOTACTL: {
+	case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
 
                 OBD_ALLOC_PTR(qctl);

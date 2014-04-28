@@ -53,6 +53,7 @@
  * struct OBD_{ALLOC,FREE}*()
  */
 #include <obd_support.h>
+#include <lustre_ioctl.h>
 /* struct ptlrpc_request */
 #include <lustre_net.h>
 /* struct obd_export */

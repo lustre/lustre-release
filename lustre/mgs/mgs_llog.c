@@ -46,6 +46,7 @@
 #define D_MGS D_CONFIG
 
 #include <obd.h>
+#include <lustre_ioctl.h>
 #include <lustre_param.h>
 #include <lustre_sec.h>
 #include <lustre_quota.h>

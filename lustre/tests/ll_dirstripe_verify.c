@@ -52,8 +52,6 @@
 #include <dirent.h>
 
 #include <liblustre.h>
-#include <obd.h>
-#include <lustre_lib.h>
 #include <lustre/lustreapi.h>
 
 #include <lnet/lnetctl.h>

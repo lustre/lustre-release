@@ -47,15 +47,6 @@
 #error Unsupported operating system.
 #endif
 
-#define IOC_OSC_TYPE         'h'
-#define IOC_OSC_MIN_NR       20
-#define IOC_OSC_SET_ACTIVE   _IOWR(IOC_OSC_TYPE, 21, struct obd_device *)
-#define IOC_OSC_MAX_NR       50
-
-#define IOC_MDC_TYPE         'i'
-#define IOC_MDC_MIN_NR       20
-#define IOC_MDC_MAX_NR       50
-
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <libcfs/bitmap.h>
@@ -711,7 +702,6 @@ struct obd_llog_group {
 
 /* corresponds to one of the obd's */
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
-#define OBD_DEV_BY_DEVNAME      0xffffd0de
 
 struct obd_device {
 	struct obd_type		*obd_type;

@@ -47,6 +47,7 @@
 #endif
 
 #include <lustre_acl.h>
+#include <lustre_ioctl.h>
 #include <obd_class.h>
 #include <lustre_lmv.h>
 #include <lustre_fid.h>

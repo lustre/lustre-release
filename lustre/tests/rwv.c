@@ -44,7 +44,6 @@
 #include <unistd.h>
 
 #include <liblustre.h>
-#include <obd.h> /* needed for lov_stripe_md_size */
 #include <lustre/lustreapi.h>
 
 #define ACT_NONE        0

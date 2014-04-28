@@ -64,7 +64,7 @@
 
 #include "obdctl.h"
 
-#include <obd.h>          /* for struct lov_stripe_md */
+#include <lustre_ioctl.h>
 #include <lustre/lustre_build_version.h>
 
 #include <lnet/lnetctl.h>
@@ -109,13 +109,6 @@ const int nthreads = 1;
 #endif
 
 static int cur_device = -1;
-
-struct lov_oinfo lov_oinfos[LOV_MAX_STRIPE_COUNT];
-
-struct lsm_buffer {
-        struct lov_stripe_md lsm;
-        struct lov_oinfo *ptrs[LOV_MAX_STRIPE_COUNT];
-} lsm_buffer;
 
 static int l2_ioctl(int dev_id, int opc, void *buf)
 {
@@ -279,75 +272,6 @@ int parse_devname(char *func, char *name)
                 }
         }
         return ret;
-}
-
-static void
-reset_lsmb (struct lsm_buffer *lsmb)
-{
-        memset (&lsmb->lsm, 0, sizeof (lsmb->lsm));
-        memset(lov_oinfos, 0, sizeof(lov_oinfos));
-        lsmb->lsm.lsm_magic = LOV_MAGIC;
-}
-
-static int
-parse_lsm (struct lsm_buffer *lsmb, char *string)
-{
-        struct lov_stripe_md *lsm = &lsmb->lsm;
-        char                 *end;
-        int                   i;
-
-        /*
-         * object_id[=size#count[@offset:id]*]
-         */
-
-        reset_lsmb (lsmb);
-
-	ostid_set_id(&lsm->lsm_oi, strtoull(string, &end, 0));
-	if (end == string)
-		return -1;
-	string = end;
-
-        if (*string == 0)
-                return (0);
-
-        if (*string != '=')
-                return (-1);
-        string++;
-
-        lsm->lsm_stripe_size = strtoul (string, &end, 0);
-        if (end == string)
-                return (-1);
-        string = end;
-
-        if (*string != '#')
-                return (-1);
-        string++;
-
-        lsm->lsm_stripe_count = strtoul (string, &end, 0);
-        if (end == string)
-                return (-1);
-        string = end;
-
-        if (*string == 0)               /* don't have to specify obj ids */
-                return (0);
-
-	for (i = 0; i < lsm->lsm_stripe_count; i++) {
-		if (*string != '@')
-			return (-1);
-		string++;
-		lsm->lsm_oinfo[i]->loi_ost_idx = strtoul(string, &end, 0);
-		if (*end != ':')
-			return (-1);
-		string = end + 1;
-		ostid_set_id(&lsm->lsm_oinfo[i]->loi_oi,
-			     strtoull(string, &end, 0));
-		string = end;
-	}
-
-        if (*string != 0)
-                return (-1);
-
-        return (0);
 }
 
 char *jt_cmdname(char *func)
@@ -1515,25 +1439,19 @@ int jt_obd_test_md_getattr(int argc, char **argv)
         return jt_obd_md_common(argc, argv, ECHO_MD_GETATTR);
 }
 
-/* Create one or more objects, arg[4] may describe stripe meta-data.  If
- * not, defaults assumed.  This echo-client instance stashes the stripe
- * object ids.  Use get_stripe on this node to print full lsm and
- * set_stripe on another node to cut/paste between nodes.
- */
-/* create <count> [<file_create_mode>] [q|v|# verbosity] [striping] */
 int jt_obd_create(int argc, char **argv)
 {
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data data;
-        struct timeval next_time;
-        __u64 count = 1, next_count, base_id = 1;
-        int verbose = 1, mode = 0100644, rc = 0, i, valid_lsm = 0;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+	struct timeval next_time;
+	__u64 count = 1, next_count, base_id = 1;
+	int verbose = 1, mode = 0100644, rc = 0, i;
         char *end;
 
         memset(&data, 0, sizeof(data));
         data.ioc_dev = cur_device;
-        if (argc < 2 || argc > 5)
-                return CMD_HELP;
+	if (argc < 2 || argc > 4)
+		return CMD_HELP;
 
         count = strtoull(argv[1], &end, 0);
         if (*end) {
@@ -1559,19 +1477,6 @@ int jt_obd_create(int argc, char **argv)
                         return CMD_HELP;
         }
 
-	if (argc < 5) {
-		reset_lsmb(&lsm_buffer);       /* will set default */
-	} else {
-		rc = parse_lsm(&lsm_buffer, argv[4]);
-		if (rc != 0) {
-			fprintf(stderr, "error: %s: invalid lsm '%s'\n",
-				jt_cmdname(argv[0]), argv[4]);
-			return CMD_HELP;
-		}
-		base_id = ostid_id(&lsm_buffer.lsm.lsm_oi);
-		valid_lsm = 1;
-	}
-
         printf("%s: "LPD64" objects\n", jt_cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
@@ -1585,10 +1490,6 @@ int jt_obd_create(int argc, char **argv)
 		data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
 					 OBD_MD_FLID | OBD_MD_FLUID |
 					 OBD_MD_FLGID | OBD_MD_FLGROUP;
-		if (valid_lsm) {
-			data.ioc_plen1 = sizeof lsm_buffer;
-			data.ioc_pbuf1 = (char *)&lsm_buffer;
-		}
 
                 memset(buf, 0, sizeof(rawbuf));
                 rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -2322,74 +2223,6 @@ out:
         return rc;
 }
 
-int jt_obd_ldlm_regress_start(int argc, char **argv)
-{
-        int rc;
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        char argstring[200];
-        int i, count = sizeof(argstring) - 1;
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        if (argc > 5)
-                return CMD_HELP;
-
-        argstring[0] = '\0';
-        for (i = 1; i < argc; i++) {
-                strncat(argstring, " ", count);
-                count--;
-                strncat(argstring, argv[i], count);
-                count -= strlen(argv[i]);
-        }
-
-        if (strlen(argstring)) {
-                data.ioc_inlbuf1 = argstring;
-                data.ioc_inllen1 = strlen(argstring) + 1;
-        }
-
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, IOC_LDLM_REGRESS_START, buf);
-        if (rc)
-                fprintf(stderr, "error: %s: test failed: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-
-        return rc;
-}
-
-int jt_obd_ldlm_regress_stop(int argc, char **argv)
-{
-        int rc;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data data;
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-
-        if (argc != 1)
-                return CMD_HELP;
-
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, IOC_LDLM_REGRESS_STOP, buf);
-
-        if (rc)
-                fprintf(stderr, "error: %s: test failed: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-        return rc;
-}
-
 static int do_activate(int argc, char **argv, int flag)
 {
         struct obd_ioctl_data data;
@@ -3117,18 +2950,13 @@ static void signal_server(int sig)
 
 int obd_initialize(int argc, char **argv)
 {
-        int i;
+	if (shmem_setup() != 0)
+		return -1;
 
-        for (i = 0; i < LOV_MAX_STRIPE_COUNT; i++)
-                lsm_buffer.lsm.lsm_oinfo[i] = lov_oinfos + i;
+	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
+			 OBD_DEV_MAJOR, OBD_DEV_MINOR);
 
-        if (shmem_setup() != 0)
-                return -1;
-
-        register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
-                         OBD_DEV_MAJOR, OBD_DEV_MINOR);
-
-        return 0;
+	return 0;
 }
 
 void obd_finalize(int argc, char **argv)

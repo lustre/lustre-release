@@ -64,6 +64,7 @@ EXTRA_DIST = \
 	lustre_handles.h \
 	lustre_idmap.h \
 	lustre_import.h \
+	lustre_ioctl.h \
 	lustre_lfsck.h \
 	lustre_lib.h \
 	lustre_linkea.h \

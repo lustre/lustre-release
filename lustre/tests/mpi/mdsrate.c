@@ -221,7 +221,7 @@ sigalrm_handler(int signum)
 #elif defined(USE_MDC_LOOKUP)
 #include <config.h>
 #include <liblustre.h>
-#include <linux/lustre_lib.h>
+#include <lustre_ioctl.h>
 
 int llapi_file_lookup(int dirfd, const char *name)
 {

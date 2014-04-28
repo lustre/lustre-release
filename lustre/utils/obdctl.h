@@ -41,10 +41,7 @@
 #include <liblustre.h>
 #endif
 
-#include <lustre_lib.h>
 #include <lustre/lustre_idl.h>
-#include <lustre_dlm.h>
-#include <lustre_cfg.h>
 
 #define MAX_IOC_BUFLEN 8192
 
@@ -101,6 +98,7 @@ int jt_llog_cancel(int argc, char **argv);
 int jt_llog_remove(int argc, char **argv);
 int jt_llog_check(int argc, char **argv);
 
+struct lustre_cfg;
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg);
 int parse_devname(char *func, char *name);
@@ -125,8 +123,6 @@ int jt_lcfg_mgsparam(int argc, char **argv);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
-
-int obd_add_uuid(char *uuid, lnet_nid_t nid);
 
 int jt_blockdev_attach(int argc, char **argv);
 int jt_blockdev_detach(int argc, char **argv);
