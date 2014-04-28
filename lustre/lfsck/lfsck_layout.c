@@ -1460,6 +1460,7 @@ static int lfsck_layout_master_notify_others(const struct lu_env *env,
 			break;
 
 		/* link other MDT targets locallly. */
+		ltds = &lfsck->li_mdt_descs;
 		spin_lock(&ltds->ltd_lock);
 		cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
 			ltd = LTD_TGT(ltds, idx);
@@ -5288,6 +5289,10 @@ static void lfsck_layout_master_data_release(const struct lu_env *env,
 				 ltd_layout_list) {
 		list_del_init(&ltd->ltd_layout_list);
 	}
+	spin_unlock(&ltds->ltd_lock);
+
+	ltds = &lfsck->li_mdt_descs;
+	spin_lock(&ltds->ltd_lock);
 	list_for_each_entry_safe(ltd, next, &llmd->llmd_mdt_phase1_list,
 				 ltd_layout_phase_list) {
 		list_del_init(&ltd->ltd_layout_phase_list);
