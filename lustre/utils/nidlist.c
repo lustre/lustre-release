@@ -209,20 +209,24 @@ static char *nl_nid_lookup_ipaddr(char *nid)
                                         if ((p = strchr(name, '.')))
                                                 *p = '\0';
 					len = strlen(name) + 2;
-					if (lnet)
+					if (lnet != NULL)
 						len += strlen(lnet);
-                                        if (!(res = malloc(len)))
-                                                nl_oom();
-                                        snprintf(res, len, "%s@%s", name, lnet);
-                                        break;
-                                }
-                        }
-                        freeaddrinfo(ai);
-                }
-        }
-        free(addr);
+					if (!(res = malloc(len)))
+						nl_oom();
+					if (lnet != NULL)
+						snprintf(res, len, "%s@%s",
+							 name, lnet);
+					else
+						snprintf(res, len, "%s", name);
+					break;
+				}
+			}
+			freeaddrinfo(ai);
+		}
+	}
+	free(addr);
 
-        return res;
+	return res;
 }
 
 void nl_lookup_ip(NIDList nl)

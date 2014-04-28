@@ -270,22 +270,20 @@ int jt_obd_cleanup(int argc, char **argv)
 static
 int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 {
-        int rc;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
+	int rc;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
 
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-        if (uuid)
-                lustre_cfg_bufs_set_string(&bufs, 1, uuid);
+	lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+	if (uuid != NULL)
+		lustre_cfg_bufs_set_string(&bufs, 1, uuid);
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
 	if (lcfg == NULL) {
 		rc = -ENOMEM;
 	} else {
 		lcfg->lcfg_nid = nid;
-		/* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it
-		 * doesn't work without crashing (bz 10130) */
-		lcfg->lcfg_nal = 0x5a;
+
 		rc = lcfg_ioctl(func, OBD_DEV_ID, lcfg);
 		lustre_cfg_free(lcfg);
 	}
@@ -295,8 +293,10 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
                 return -1;
         }
 
-        printf ("Added uuid %s: %s\n", uuid, libcfs_nid2str(nid));
-        return 0;
+	if (uuid != NULL)
+		printf("Added uuid %s: %s\n", uuid, libcfs_nid2str(nid));
+
+	return 0;
 }
 
 int jt_lcfg_add_uuid(int argc, char **argv)
