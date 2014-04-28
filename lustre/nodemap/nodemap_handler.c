@@ -115,11 +115,11 @@ static void *nodemap_hs_key(cfs_hlist_node_t *hnode)
 static int nodemap_hs_keycmp(const void *key,
 			     cfs_hlist_node_t *compared_hnode)
 {
-	struct lu_nodemap *nodemap;
+	char *nodemap_name;
 
-	nodemap = nodemap_hs_key(compared_hnode);
+	nodemap_name = nodemap_hs_key(compared_hnode);
 
-	return !strcmp(key, nodemap->nm_name);
+	return !strcmp(key, nodemap_name);
 }
 
 static void *nodemap_hs_hashobject(cfs_hlist_node_t *hnode)
