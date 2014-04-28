@@ -59,21 +59,17 @@ static char * skiptowhitespace(char * s)
 
 static int line2args(char *line, char **argv, int maxargs)
 {
-        char *arg;
-        int i = 0;
+	char *arg;
+	int i = 0;
 
-        arg = strtok(line, " \t");
-        if ( arg ) {
-                argv[i] = arg;
-                i++;
-        } else
-                return 0;
+	arg = strtok(line, " \t");
+	if (arg == NULL || maxargs < 1)
+		return 0;
 
-        while( (arg = strtok(NULL, " \t")) && (i <= maxargs)) {
-                argv[i] = arg;
-                i++;
-        }
-        return i;
+	argv[i++] = arg;
+	while ((arg = strtok(NULL, " \t")) != NULL && i < maxargs)
+		argv[i++] = arg;
+	return i;
 }
 
 /* find a command -- return it if unique otherwise print alternatives */
