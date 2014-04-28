@@ -974,7 +974,7 @@ static int write_file(const char *path, const char *buf)
 
 static int set_blockdev_scheduler(const char *path, const char *scheduler)
 {
-	char buf[PATH_MAX], *c;
+	char buf[PATH_MAX], *s, *e, orig_sched[50];
 	int rc;
 
 	/* Before setting the scheduler, we need to check to see if it's
@@ -991,18 +991,21 @@ static int set_blockdev_scheduler(const char *path, const char *scheduler)
 	}
 
 	/* The expected format of buf: noop anticipatory deadline [cfq] */
-	c = strchr(buf, '[');
+	s = strchr(buf, '[');
+	e = strchr(buf, ']');
 
-	/* If c is NULL, the format is not what we expect. Play it safe
-	 * and error out. */
-	if (c == NULL) {
+	/* If the format is not what we expect. Play it safe and error out. */
+	if (s == NULL || e == NULL) {
 		if (verbose)
 			fprintf(stderr, "%s: cannot parse scheduler "
 					"options for '%s'\n", progname, path);
 		return -EINVAL;
 	}
 
-	if (strncmp(c+1, "noop", 4) == 0)
+	snprintf(orig_sched, e - s, "%s", s + 1);
+
+	if (strcmp(orig_sched, "noop") == 0 ||
+	    strcmp(orig_sched, scheduler) == 0)
 		return 0;
 
 	rc = write_file(path, scheduler);
@@ -1012,6 +1015,9 @@ static int set_blockdev_scheduler(const char *path, const char *scheduler)
 					"'%s': %s\n", progname, path,
 					strerror(errno));
 		return rc;
+	} else {
+		fprintf(stderr, "%s: change scheduler of %s from %s to %s\n",
+			progname, path, orig_sched, scheduler);
 	}
 
 	return rc;
@@ -1168,6 +1174,9 @@ set_params:
 			/* No MAX_SECTORS_KB_PATH isn't necessary an
 			 * error for some device. */
 			rc = 0;
+		} else {
+			fprintf(stderr, "%s: set %s to %s\n", progname,
+				real_path, buf);
 		}
 	}
 
