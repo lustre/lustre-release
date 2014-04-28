@@ -497,13 +497,15 @@ int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
 }
 
 /* reenqueue any lost locks */
-#define RQ_RUNNING 0x1
-#define RQ_NOW     0x2
-#define RQ_LATER   0x4
-#define RQ_STOP    0x8
+#define RQ_RUNNING	0x1
+#define RQ_NOW		0x2
+#define RQ_LATER	0x4
+#define RQ_STOP		0x8
+#define RQ_PRECLEANUP	0x10
 static int                    rq_state = 0;
 static wait_queue_head_t      rq_waitq;
 static DECLARE_COMPLETION(rq_exit);
+static DECLARE_COMPLETION(rq_start);
 
 static void do_requeue(struct config_llog_data *cld)
 {
@@ -535,12 +537,13 @@ static void do_requeue(struct config_llog_data *cld)
 
 static int mgc_requeue_thread(void *data)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	bool first = true;
+	ENTRY;
 
-        CDEBUG(D_MGC, "Starting requeue thread\n");
+	CDEBUG(D_MGC, "Starting requeue thread\n");
 
-        /* Keep trying failed locks periodically */
+	/* Keep trying failed locks periodically */
 	spin_lock(&config_list_lock);
 	rq_state |= RQ_RUNNING;
 	while (1) {
@@ -554,13 +557,19 @@ static int mgc_requeue_thread(void *data)
 		rq_state &= ~(RQ_NOW | RQ_LATER);
 		spin_unlock(&config_list_lock);
 
+		if (first) {
+			first = false;
+			complete(&rq_start);
+		}
+
 		/* Always wait a few seconds to allow the server who
 		   caused the lock revocation to finish its setup, plus some
 		   random so everyone doesn't try to reconnect at once. */
 		to = MGC_TIMEOUT_MIN_SECONDS * HZ;
 		to += rand * HZ / 100; /* rand is centi-seconds */
 		lwi = LWI_TIMEOUT(to, NULL, NULL);
-		l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi);
+		l_wait_event(rq_waitq, rq_state & (RQ_STOP | RQ_PRECLEANUP),
+			     &lwi);
 
                 /*
                  * iterate & processing through the list. for each cld, process
@@ -573,6 +582,7 @@ static int mgc_requeue_thread(void *data)
                 cld_prev = NULL;
 
 		spin_lock(&config_list_lock);
+		rq_state &= ~RQ_PRECLEANUP;
 		cfs_list_for_each_entry(cld, &config_llog_list,
 					cld_list_chain) {
 			if (!cld->cld_lostlock)
@@ -845,33 +855,35 @@ static int mgc_llog_fini(const struct lu_env *env, struct obd_device *obd)
 static cfs_atomic_t mgc_count = CFS_ATOMIC_INIT(0);
 static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	int temp;
+	ENTRY;
 
-        switch (stage) {
-        case OBD_CLEANUP_EARLY:
-                break;
-        case OBD_CLEANUP_EXPORTS:
-                if (cfs_atomic_dec_and_test(&mgc_count)) {
-                        int running;
-                        /* stop requeue thread */
-			spin_lock(&config_list_lock);
-			running = rq_state & RQ_RUNNING;
-			if (running)
-				rq_state |= RQ_STOP;
-			spin_unlock(&config_list_lock);
-			if (running) {
-				wake_up(&rq_waitq);
-				wait_for_completion(&rq_exit);
-                        }
-                }
-                obd_cleanup_client_import(obd);
+	switch (stage) {
+	case OBD_CLEANUP_EARLY:
+		break;
+	case OBD_CLEANUP_EXPORTS:
+		if (atomic_dec_and_test(&mgc_count)) {
+			LASSERT(rq_state & RQ_RUNNING);
+			/* stop requeue thread */
+			temp = RQ_STOP;
+		} else {
+			/* wakeup requeue thread to clean our cld */
+			temp = RQ_NOW | RQ_PRECLEANUP;
+		}
+		spin_lock(&config_list_lock);
+		rq_state |= temp;
+		spin_unlock(&config_list_lock);
+		wake_up(&rq_waitq);
+		if (temp & RQ_STOP)
+			wait_for_completion(&rq_exit);
+		obd_cleanup_client_import(obd);
 		rc = mgc_llog_fini(NULL, obd);
-                if (rc != 0)
-                        CERROR("failed to cleanup llogging subsystems\n");
-                break;
-        }
-        RETURN(rc);
+		if (rc != 0)
+			CERROR("failed to cleanup llogging subsystems\n");
+		break;
+	}
+	RETURN(rc);
 }
 
 static int mgc_cleanup(struct obd_device *obd)
@@ -932,7 +944,8 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		}
 		/* rc is the task_struct pointer of mgc_requeue_thread. */
 		rc = 0;
-        }
+		wait_for_completion(&rq_start);
+	}
 
         RETURN(rc);
 
