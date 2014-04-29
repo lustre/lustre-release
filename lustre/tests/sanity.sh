@@ -6608,6 +6608,8 @@ test_103 () {
 	echo "LU-2561 newly created file is same size as directory..."
 	run_acl_subtest 2561 || error "LU-2561 test failed"
 
+	run_acl_subtest 4924 || error "LU-4924 test failed"
+
 	cd $SAVE_PWD
 	umask $SAVE_UMASK
 
