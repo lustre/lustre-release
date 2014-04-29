@@ -554,9 +554,8 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	env = lcc->lcc_env;
 	io  = lcc->lcc_io;
 
-	if (likely(to == PAGE_SIZE)) /* LU-4873 */
-		/* To avoid deadlock, try to lock page first. */
-		vmpage = grab_cache_page_nowait(mapping, index);
+	/* To avoid deadlock, try to lock page first. */
+	vmpage = grab_cache_page_nowait(mapping, index);
 	if (unlikely(vmpage == NULL ||
 		     PageDirty(vmpage) || PageWriteback(vmpage))) {
 		struct ccc_io *cio = ccc_env_io(env);
@@ -664,6 +663,11 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		else
 			LASSERT(from == 0);
 		cio->u.write.cui_to = from + copied;
+
+		/* To address the deadlock in balance_dirty_pages() where
+		 * this dirty page may be written back in the same thread. */
+		if (PageDirty(vmpage))
+			unplug = true;
 
 		/* We may have one full RPC, commit it soon */
 		if (plist->pl_nr >= PTLRPC_MAX_BRW_PAGES)
