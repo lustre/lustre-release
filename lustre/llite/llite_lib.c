@@ -528,9 +528,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         md_free_lustre_md(sbi->ll_md_exp, &lmd);
         ptlrpc_req_finished(request);
 
-        if (root == NULL || IS_ERR(root)) {
-                if (lmd.lsm)
-                        obd_free_memmd(sbi->ll_dt_exp, &lmd.lsm);
+	if (IS_ERR(root)) {
+		if (lmd.lsm)
+			obd_free_memmd(sbi->ll_dt_exp, &lmd.lsm);
 #ifdef CONFIG_FS_POSIX_ACL
                 if (lmd.posix_acl) {
                         posix_acl_release(lmd.posix_acl);
@@ -1311,11 +1311,12 @@ static inline int lli_lsm_md_eq(const struct lmv_stripe_md *lsm_md1,
 		      lsm_md2->lsm_md_pool_name) == 0;
 }
 
-static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
+static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lmv_stripe_md *lsm = md->lmv;
-	int idx;
+	int	idx;
+	int	rc;
 	ENTRY;
 
 	LASSERT(S_ISDIR(inode->i_mode));
@@ -1325,7 +1326,7 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	/* no striped information from request. */
 	if (lsm == NULL) {
 		if (lli->lli_lsm_md == NULL) {
-			RETURN_EXIT;
+			RETURN(0);
 		} else if (lli->lli_lsm_md->lsm_md_magic == LMV_MAGIC_MIGRATE) {
 			/* migration is done, the temporay MIGRATE layout has
 			 * been removed */
@@ -1333,32 +1334,28 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 			       PFID(ll_inode2fid(inode)));
 			lmv_free_memmd(lli->lli_lsm_md);
 			lli->lli_lsm_md = NULL;
-			RETURN_EXIT;
+			RETURN(0);
 		} else {
 			/* The lustre_md from req does not include stripeEA,
 			 * see ll_md_setattr */
-			RETURN_EXIT;
+			RETURN(0);
 		}
 	}
 
 	/* set the directory layout */
 	if (lli->lli_lsm_md == NULL) {
-		int rc;
 
 		rc = ll_init_lsm_md(inode, md);
-		if (rc != 0) {
-			CERROR("%s: init "DFID" failed: rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0),
-			       PFID(&lli->lli_fid), rc);
-			return;
-		}
+		if (rc != 0)
+			RETURN(rc);
+
 		lli->lli_lsm_md = lsm;
 		/* set lsm_md to NULL, so the following free lustre_md
 		 * will not free this lsm */
 		md->lmv = NULL;
 		CDEBUG(D_INODE, "Set lsm %p magic %x to "DFID"\n", lsm,
 		       lsm->lsm_md_magic, PFID(ll_inode2fid(inode)));
-		RETURN_EXIT;
+		RETURN(0);
 	}
 
 	/* Compare the old and new stripe information */
@@ -1382,7 +1379,7 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		       lli->lli_lsm_md->lsm_md_layout_version,
 		       lsm->lsm_md_pool_name,
 		       lli->lli_lsm_md->lsm_md_pool_name);
-		return;
+		RETURN(-EIO);
 	}
 
 	for (idx = 0; idx < lli->lli_lsm_md->lsm_md_stripe_count; idx++) {
@@ -1393,14 +1390,14 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 			       ll_get_fsname(inode->i_sb, NULL, 0), idx,
 			     PFID(&lli->lli_lsm_md->lsm_md_oinfo[idx].lmo_fid),
 			       PFID(&lsm->lsm_md_oinfo[idx].lmo_fid));
-			return;
+			RETURN(-EIO);
 		}
 	}
 
-	md_update_lsm_md(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
-			 md->body, ll_md_blocking_ast);
+	rc = md_update_lsm_md(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
+			      md->body, ll_md_blocking_ast);
 
-	RETURN_EXIT;
+	RETURN(rc);
 }
 
 void ll_clear_inode(struct inode *inode)
@@ -1463,7 +1460,7 @@ void ll_clear_inode(struct inode *inode)
 	ll_clear_inode_capas(inode);
 	if (S_ISDIR(inode->i_mode))
 		ll_dir_clear_lsm_md(inode);
-	else
+	else if (S_ISREG(inode->i_mode) && !is_bad_inode(inode))
 		LASSERT(list_empty(&lli->lli_agl_list));
 
 	/*
@@ -1530,10 +1527,10 @@ int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
         op_data->op_handle = md.body->handle;
         op_data->op_ioepoch = md.body->ioepoch;
 
-        ll_update_inode(inode, &md);
-        ptlrpc_req_finished(request);
+	rc = ll_update_inode(inode, &md);
+	ptlrpc_req_finished(request);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* Close IO epoch and send Size-on-MDS attribute update. */
@@ -1909,7 +1906,7 @@ void ll_inode_size_unlock(struct inode *inode)
 	mutex_unlock(&lli->lli_size_mutex);
 }
 
-void ll_update_inode(struct inode *inode, struct lustre_md *md)
+int ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct mdt_body *body = md->body;
@@ -1927,8 +1924,13 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 			lli->lli_maxbytes = MAX_LFS_FILESIZE;
 	}
 
-	if (S_ISDIR(inode->i_mode))
-		ll_update_lsm_md(inode, md);
+	if (S_ISDIR(inode->i_mode)) {
+		int	rc;
+
+		rc = ll_update_lsm_md(inode, md);
+		if (rc != 0)
+			return rc;
+	}
 
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
                 if (body->valid & OBD_MD_FLRMTPERM)
@@ -2064,12 +2066,15 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 		if (body->t_state & MS_RESTORE)
 			lli->lli_flags |= LLIF_FILE_RESTORING;
 	}
+
+	return 0;
 }
 
-void ll_read_inode2(struct inode *inode, void *opaque)
+int ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct lustre_md *md = opaque;
         struct ll_inode_info *lli = ll_i2info(inode);
+	int	rc;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
@@ -2085,7 +2090,9 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
         inode->i_rdev = 0;
-        ll_update_inode(inode, md);
+	rc = ll_update_inode(inode, md);
+	if (rc != 0)
+		RETURN(rc);
 
         /* OIDEBUG(inode); */
 
@@ -2114,6 +2121,8 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
                 EXIT;
         }
+
+	return 0;
 }
 
 void ll_delete_inode(struct inode *inode)
@@ -2356,10 +2365,12 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        if (*inode) {
-                ll_update_inode(*inode, &md);
-        } else {
-                LASSERT(sb != NULL);
+	if (*inode) {
+		rc = ll_update_inode(*inode, &md);
+		if (rc != 0)
+			GOTO(out, rc);
+	} else {
+		LASSERT(sb != NULL);
 
                 /*
                  * At this point server returns to client's same fid as client
@@ -2370,7 +2381,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 		*inode = ll_iget(sb, cl_fid_build_ino(&md.body->fid1,
 					     sbi->ll_flags & LL_SBI_32BIT_API),
 				 &md);
-                if (*inode == NULL || IS_ERR(*inode)) {
+		if (IS_ERR(*inode)) {
 #ifdef CONFIG_FS_POSIX_ACL
                         if (md.posix_acl) {
                                 posix_acl_release(md.posix_acl);
