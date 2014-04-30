@@ -34,13 +34,6 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-noinst_LIBRARIES = libfid.a
-libfid_a_SOURCES = fid_request.c fid_internal.h
-libfid_a_CPPFLAGS = $(LLCPPFLAGS)
-libfid_a_CFLAGS = $(LLCFLAGS)
-endif
-
 if MODULES
 modulefs_DATA = fid$(KMODEXT)
 endif

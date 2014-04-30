@@ -42,13 +42,8 @@
 
 #define DEBUG_SUBSYSTEM S_FID
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
+#include <linux/module.h>
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -575,7 +570,6 @@ int client_fid_fini(struct obd_device *obd)
 }
 EXPORT_SYMBOL(client_fid_fini);
 
-#ifdef __KERNEL__
 struct proc_dir_entry *seq_type_proc_dir;
 
 static int __init fid_mod_init(void)
@@ -610,4 +604,3 @@ MODULE_DESCRIPTION("Lustre FID Module");
 MODULE_LICENSE("GPL");
 
 cfs_module(fid, "0.1.0", fid_mod_init, fid_mod_exit);
-#endif /* __KERNEL__ */

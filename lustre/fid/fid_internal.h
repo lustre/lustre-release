@@ -43,9 +43,8 @@
 #include <lustre/lustre_idl.h>
 #include <libcfs/libcfs.h>
 
-#ifdef __KERNEL__
-# ifdef HAVE_SERVER_SUPPORT
-#  define HAVE_SEQ_SERVER
+#ifdef HAVE_SERVER_SUPPORT
+# define HAVE_SEQ_SERVER
 
 struct req_capsule;
 
@@ -61,9 +60,9 @@ enum {
 
 extern struct lu_context_key seq_thread_key;
 
-#  ifdef LPROCFS
+# ifdef LPROCFS
 extern struct lprocfs_seq_vars seq_server_proc_list[];
-#  endif
+# endif
 
 /* Store API functions. */
 struct dt_device;
@@ -98,8 +97,6 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
 # ifdef LPROCFS
 extern struct lprocfs_seq_vars seq_client_proc_list[];
 # endif
-
-#endif /* __KERNEL__ */
 
 extern struct proc_dir_entry *seq_type_proc_dir;
 
