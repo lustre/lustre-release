@@ -1337,7 +1337,6 @@ ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
 }
 
 /* llite ioctl register support rountine */
-#ifdef __KERNEL__
 enum llioc_iter {
         LLIOC_CONT = 0,
         LLIOC_STOP
@@ -1378,7 +1377,6 @@ typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode,
 void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
 void ll_iocontrol_unregister(void *magic);
 
-#endif
 
 /* lclient compat stuff */
 #define cl_inode_info ll_inode_info

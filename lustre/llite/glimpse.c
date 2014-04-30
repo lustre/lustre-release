@@ -45,31 +45,15 @@
 #include <obd_support.h>
 #include <obd.h>
 
-#ifdef __KERNEL__
-# include <lustre_dlm.h>
-# include <lustre_lite.h>
-# include <lustre_mdc.h>
-# include <linux/pagemap.h>
-# include <linux/file.h>
-#else
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/queue.h>
-#include <fcntl.h>
-#include <liblustre.h>
-#endif
+#include <lustre_dlm.h>
+#include <lustre_lite.h>
+#include <lustre_mdc.h>
+#include <linux/pagemap.h>
+#include <linux/file.h>
 
 #include "cl_object.h"
 #include "lclient.h"
-#ifdef __KERNEL__
-# include "../llite/llite_internal.h"
-#else
-# include "../liblustre/llite_lib.h"
-#endif
+#include "llite_internal.h"
 
 static const struct cl_lock_descr whole_file = {
         .cld_start = 0,
@@ -86,7 +70,6 @@ static const struct cl_lock_descr whole_file = {
 blkcnt_t dirty_cnt(struct inode *inode)
 {
         blkcnt_t cnt = 0;
-#ifdef __KERNEL__
         struct ccc_object *vob = cl_inode2ccc(inode);
         void              *results[1];
 
@@ -97,7 +80,6 @@ blkcnt_t dirty_cnt(struct inode *inode)
 	if (cnt == 0 && atomic_read(&vob->cob_mmap_cnt) > 0)
 		cnt = 1;
 
-#endif
         return (cnt > 0) ? 1 : 0;
 }
 

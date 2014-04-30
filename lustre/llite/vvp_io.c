@@ -41,9 +41,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#ifndef __KERNEL__
-# error This file is kernel only.
-#endif
 
 #include <obd.h>
 #include <lustre_lite.h>

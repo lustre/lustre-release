@@ -41,9 +41,6 @@
 #ifndef VVP_INTERNAL_H
 #define VVP_INTERNAL_H
 
-#ifndef __KERNEL__
-# error This file is kernel only.
-#endif
 
 #include <cl_object.h>
 #include "llite_internal.h"

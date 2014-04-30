@@ -41,26 +41,14 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/fs.h>
-# include <linux/sched.h>
-# include <linux/mm.h>
-# include <linux/quotaops.h>
-# include <linux/highmem.h>
-# include <linux/pagemap.h>
-# include <linux/rbtree.h>
-#else /* __KERNEL__ */
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/queue.h>
-#include <fcntl.h>
-# include <liblustre.h>
-#endif
+#include <libcfs/libcfs.h>
+#include <linux/fs.h>
+#include <linux/sched.h>
+#include <linux/mm.h>
+#include <linux/quotaops.h>
+#include <linux/highmem.h>
+#include <linux/pagemap.h>
+#include <linux/rbtree.h>
 
 #include <obd.h>
 #include <obd_support.h>
@@ -73,11 +61,7 @@
 
 #include <lclient.h>
 
-#ifdef __KERNEL__
-#include "../llite/llite_internal.h"
-#else
-#include "../liblustre/llite_lib.h"
-#endif
+#include "llite_internal.h"
 
 static const struct cl_req_operations ccc_req_ops;
 
@@ -961,10 +945,8 @@ void ccc_req_attr_set(const struct lu_env *env,
 	obdo_set_parent_fid(oa, &cl_i2info(inode)->lli_fid);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
-#ifdef __KERNEL__
 	memcpy(attr->cra_jobid, cl_i2info(inode)->lli_jobid,
 	       JOBSTATS_JOBID_SIZE);
-#endif
 }
 
 static const struct cl_req_operations ccc_req_ops = {
@@ -1156,9 +1138,7 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
                  * there is no clob in cache with the given fid, so it is
                  * unnecessary to perform lookup-alloc-lookup-insert, just
                  * alloc and insert directly. */
-#ifdef __KERNEL__
                 LASSERT(inode->i_state & I_NEW);
-#endif
                 conf.coc_lu.loc_flags = LOC_F_NEW;
                 clob = cl_object_find(env, lu2cl_dev(site->ls_top_dev),
                                       fid, &conf);
