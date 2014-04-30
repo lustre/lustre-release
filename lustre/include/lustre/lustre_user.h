@@ -49,7 +49,6 @@
 #ifndef __KERNEL__
 #include <stdio.h>
 #include <libcfs/posix/posix-types.h>
-#include <stdio.h>
 #endif
 #include <lustre/ll_fiemap.h>
 #if defined(__linux__)
