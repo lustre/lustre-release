@@ -12641,6 +12641,19 @@ test_238() {
 }
 run_test 238 "Verify linkea consistency"
 
+test_239() {
+	local list=$(comma_list $(mdts_nodes))
+
+	mkdir -p $DIR/$tdir
+	createmany -o $DIR/$tdir/f- 5000
+	unlinkmany $DIR/$tdir/f- 5000
+	do_nodes $list "lctl set_param -n osp*.*.sync_changes 1"
+	changes=$(do_nodes $list "lctl get_param -n osc.*MDT*.sync_changes \
+			osc.*MDT*.sync_in_flight" | calc_sum)
+	[ "$changes" -eq 0 ] || error "$changes not synced"
+}
+run_test 239 "osp_sync test"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK

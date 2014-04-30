@@ -151,6 +151,8 @@ static inline int osp_sync_can_process_new(struct osp_device *d,
 {
 	LASSERT(d);
 
+	if (unlikely(atomic_read(&d->opd_syn_barrier) > 0))
+		return 0;
 	if (!osp_sync_low_in_progress(d))
 		return 0;
 	if (!osp_sync_low_in_flight(d))
@@ -399,6 +401,8 @@ static int osp_sync_interpret(const struct lu_env *env,
 	spin_lock(&d->opd_syn_lock);
 	d->opd_syn_rpc_in_flight--;
 	spin_unlock(&d->opd_syn_lock);
+	if (unlikely(atomic_read(&d->opd_syn_barrier) > 0))
+		wake_up(&d->opd_syn_barrier_waitq);
 	CDEBUG(D_OTHER, "%s: %d in flight, %d in progress\n",
 	       d->opd_obd->obd_name, d->opd_syn_rpc_in_flight,
 	       d->opd_syn_rpc_in_progress);
@@ -709,8 +713,10 @@ static int osp_sync_process_record(const struct lu_env *env,
 			 * NOTE: it's possible to meet same id if
 			 * OST stores few stripes of same file
 			 */
-			if (rec->lrh_id > d->opd_syn_last_processed_id)
+			if (rec->lrh_id > d->opd_syn_last_processed_id) {
 				d->opd_syn_last_processed_id = rec->lrh_id;
+				wake_up(&d->opd_syn_barrier_waitq);
+			}
 
 			d->opd_syn_changes--;
 		}
@@ -1148,6 +1154,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 	d->opd_syn_max_rpc_in_progress = OSP_MAX_IN_PROGRESS;
 	spin_lock_init(&d->opd_syn_lock);
 	init_waitqueue_head(&d->opd_syn_waitq);
+	init_waitqueue_head(&d->opd_syn_barrier_waitq);
 	init_waitqueue_head(&d->opd_syn_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&d->opd_syn_committed_there);
 

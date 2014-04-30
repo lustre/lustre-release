@@ -117,7 +117,26 @@ static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
 
 	return seq_printf(m, "%lu\n", osp->opd_syn_changes);
 }
-LPROC_SEQ_FOPS_RO(osp_syn_changes);
+
+static ssize_t osp_syn_changes_seq_write(struct file *file, const char *buffer,
+					 size_t count, loff_t *off)
+{
+	struct seq_file		*m	= file->private_data;
+	struct obd_device	*dev	= m->private;
+	struct osp_device	*osp	= lu2osp_dev(dev->obd_lu_dev);
+	struct lu_env		 env;
+	int			 rc;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		return rc;
+
+	rc = dt_sync(&env, &osp->opd_dt_dev);
+	lu_env_fini(&env);
+
+	return rc == 0 ? count : rc;
+}
+LPROC_SEQ_FOPS(osp_syn_changes);
 
 static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
 {

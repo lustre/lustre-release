@@ -1869,11 +1869,6 @@ test_18d() {
 		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 ||
 		error "(3.0) MDS1 is not the expected 'scanning-phase2'"
 
-	# LU-3469: before osp_sync() is enabled, wait for a while to guarantee
-	# that former async repair operations have been executed on the OST(s).
-	sync
-	sleep 2
-
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 
 	for k in $(seq $MDSCOUNT); do

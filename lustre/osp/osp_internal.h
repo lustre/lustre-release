@@ -174,6 +174,9 @@ struct osp_device {
 	unsigned long			 opd_syn_last_processed_id;
 	struct osp_id_tracker		*opd_syn_tracker;
 	struct list_head		 opd_syn_ontrack;
+	/* stop processing new requests until barrier=0 */
+	atomic_t			 opd_syn_barrier;
+	wait_queue_head_t		 opd_syn_barrier_waitq;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own

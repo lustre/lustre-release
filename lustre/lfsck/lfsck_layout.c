@@ -3559,6 +3559,9 @@ static int lfsck_layout_assistant(void *args)
 				com->lc_time_last_checkpoint +
 				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
 
+			/* flush all async updating before handling orphan. */
+			dt_sync(env, lfsck->li_next);
+
 			while (llmd->llmd_in_double_scan) {
 				struct lfsck_tgt_descs	*ltds =
 							&lfsck->li_ost_descs;
