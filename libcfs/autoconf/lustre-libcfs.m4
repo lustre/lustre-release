@@ -422,7 +422,7 @@ tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_CACHE_CHECK([if userspace '__u64' is 'long long' type],
 lb_cv_compile_userspace_u64_long_long, [
-AC_COMPILE_IFELSE([
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <stdio.h>
 	#include <linux/types.h>
 	#include <linux/stddef.h>
@@ -433,7 +433,7 @@ AC_COMPILE_IFELSE([
 		data2 = data1;
 		return 0;
 	}
-],
+])],
 	[lb_cv_compile_userspace_u64_long_long="yes"],
 	[lb_cv_compile_userspace_u64_long_long="no"])
 ])
