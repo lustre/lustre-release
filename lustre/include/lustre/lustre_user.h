@@ -61,12 +61,6 @@
 #error Unsupported operating system.
 #endif
 
-#ifdef __cplusplus
-#define LUSTRE_ANONYMOUS_UNION_NAME u
-#else
-#define LUSTRE_ANONYMOUS_UNION_NAME
-#endif
-
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
@@ -194,12 +188,12 @@ struct lustre_mdt_attrs {
  */
 struct ost_id {
 	union {
-		struct ostid {
+		struct {
 			__u64	oi_id;
 			__u64	oi_seq;
 		} oi;
 		struct lu_fid oi_fid;
-	} LUSTRE_ANONYMOUS_UNION_NAME;
+	};
 };
 
 #define DOSTID LPX64":"LPU64
