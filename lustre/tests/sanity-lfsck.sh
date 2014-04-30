@@ -1688,11 +1688,11 @@ test_18b() {
 	fi
 
 	echo "Move the files from ./lustre/lost+found/MDTxxxx to namespace"
-	mv $MOUNT/.lustre/lost+found/MDT0000/R-${fid1} $DIR/$tdir/a1/f1 ||
-	error "(5) Fail to move $MOUNT/.lustre/lost+found/MDT0000/R-${fid1}"
+	mv $MOUNT/.lustre/lost+found/MDT0000/${fid1}-R-0 $DIR/$tdir/a1/f1 ||
+	error "(5) Fail to move $MOUNT/.lustre/lost+found/MDT0000/${fid1}-R-0"
 
 	if [ $MDSCOUNT -ge 2 ]; then
-		local name=$MOUNT/.lustre/lost+found/MDT0001/R-${fid2}
+		local name=$MOUNT/.lustre/lost+found/MDT0001/${fid2}-R-0
 		mv $name $DIR/$tdir/a2/f2 || error "(6) Fail to move $name"
 	fi
 
@@ -1808,11 +1808,11 @@ test_18c() {
 	fi
 
 	echo "There should be some stub under .lustre/lost+found/MDT0001/"
-	ls -ail $MOUNT/.lustre/lost+found/MDT0001/N-* &&
+	ls -ail $MOUNT/.lustre/lost+found/MDT0001/*-N-0 &&
 		error "(6) .lustre/lost+found/MDT0001/ should be empty"
 
 	echo "There should be some stub under .lustre/lost+found/MDT0000/"
-	ls -ail $MOUNT/.lustre/lost+found/MDT0000/N-* ||
+	ls -ail $MOUNT/.lustre/lost+found/MDT0000/*-N-0 ||
 		error "(7) .lustre/lost+found/MDT0000/ should not be empty"
 }
 run_test 18c "Find out orphan OST-object and repair it (3)"
@@ -2001,7 +2001,7 @@ test_18e() {
 		error "(6) Expect 1 orphan has been fixed, but got: $repaired"
 
 	echo "There should be stub file under .lustre/lost+found/MDT0000/"
-	local cname=$(ls $MOUNT/.lustre/lost+found/MDT0000/C-*)
+	local cname=$(ls $MOUNT/.lustre/lost+found/MDT0000/*-C-0)
 	[ ! -z $name ] ||
 		error "(7) .lustre/lost+found/MDT0000/ should not be empty"
 
@@ -2201,9 +2201,9 @@ test_20() {
 	LOV_PATTERN_F_HOLE=0x40000000
 
 	#
-	# R-${fid0} is the old f0
+	# ${fid0}-R-0 is the old f0
 	#
-	local name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid0}"
+	local name="$MOUNT/.lustre/lost+found/MDT0000/${fid0}-R-0"
 	echo "Check $name, which is the old f0"
 
 	$LFS getstripe -v $name || error "(5.1) cannot getstripe on $name"
@@ -2236,9 +2236,9 @@ test_20() {
 	rm -f $name || error "(5.9) cannot unlink $name"
 
 	#
-	# R-${fid1} contains the old f1's stripe1 (and stripe2 if OSTs > 2)
+	# ${fid1}-R-0 contains the old f1's stripe1 (and stripe2 if OSTs > 2)
 	#
-	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid1}"
+	name="$MOUNT/.lustre/lost+found/MDT0000/${fid1}-R-0"
 	if [ $OSTCOUNT -gt 2 ]; then
 		echo "Check $name, it contains the old f1's stripe1 and stripe2"
 	else
@@ -2292,9 +2292,9 @@ test_20() {
 	rm -f $name || error "(6.13) cannot unlink $name"
 
 	#
-	# R-${fid2} it contains the old f2's stripe0 (and stripe2 if OSTs > 2)
+	# ${fid2}-R-0 it contains the old f2's stripe0 (and stripe2 if OSTs > 2)
 	#
-	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid2}"
+	name="$MOUNT/.lustre/lost+found/MDT0000/${fid2}-R-0"
 	if [ $OSTCOUNT -gt 2 ]; then
 		echo "Check $name, it contains the old f2's stripe0 and stripe2"
 	else
@@ -2368,9 +2368,9 @@ test_20() {
 	[ $OSTCOUNT -le 2 ] && return
 
 	#
-	# R-${fid3} should contains the old f3's stripe0 and stripe1
+	# ${fid3}-R-0 should contains the old f3's stripe0 and stripe1
 	#
-	name="$MOUNT/.lustre/lost+found/MDT0000/R-${fid3}"
+	name="$MOUNT/.lustre/lost+found/MDT0000/${fid3}-R-0"
 	echo "Check $name, which contains the old f3's stripe0 and stripe1"
 
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
