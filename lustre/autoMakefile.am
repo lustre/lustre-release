@@ -45,7 +45,7 @@ ALWAYS_SUBDIRS = include obdclass ldlm ptlrpc obdecho \
 SERVER_SUBDIRS = ost mgs mdt mdd ofd osd-zfs osd-ldiskfs \
 	quota osp lod target lfsck nodemap
 
-CLIENT_SUBDIRS = mdc lmv llite lclient lov osc
+CLIENT_SUBDIRS = mdc lmv llite lov osc
 
 SUBDIRS := $(ALWAYS_SUBDIRS)
 

@@ -50,8 +50,7 @@ install-exec-hook:
 endif
 
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
-		     lutil.c lutil.h llite_lib.h llite_cl.c \
-                     ../lclient/lcommon_cl.c ../lclient/glimpse.c ../lclient/lcommon_misc.c
+		     lutil.c lutil.h llite_lib.h llite_cl.c
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \

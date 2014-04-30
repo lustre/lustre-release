@@ -1961,7 +1961,6 @@ lustre/fid/Makefile
 lustre/fid/autoMakefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
-lustre/lclient/Makefile
 lustre/lov/Makefile
 lustre/lov/autoMakefile
 lustre/mdc/Makefile
