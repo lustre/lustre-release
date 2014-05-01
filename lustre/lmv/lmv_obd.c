@@ -35,7 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LMV
-#ifdef __KERNEL__
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -45,9 +44,6 @@
 #include <linux/math64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <lustre/lustre_idl.h>
 #include <obd_support.h>
@@ -3130,7 +3126,6 @@ int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 	lsm = *lsmp;
 	/* Free memmd */
 	if (lsm != NULL && lmm == NULL) {
-#ifdef __KERNEL__
 		int i;
 		for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
 			/* For migrating inode, the master stripe and master
@@ -3140,7 +3135,6 @@ int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 			      i == 0) && lsm->lsm_md_oinfo[i].lmo_root != NULL)
 				iput(lsm->lsm_md_oinfo[i].lmo_root);
 		}
-#endif
 		lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
 		OBD_FREE(lsm, lsm_size);
 		*lsmp = NULL;
@@ -3593,7 +3587,6 @@ int lmv_update_lsm_md(struct obd_export *exp, struct lmv_stripe_md *lsm,
 int lmv_merge_attr(struct obd_export *exp, const struct lmv_stripe_md *lsm,
 		   struct cl_attr *attr)
 {
-#ifdef __KERNEL__
 	int i;
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
@@ -3622,7 +3615,6 @@ int lmv_merge_attr(struct obd_export *exp, const struct lmv_stripe_md *lsm,
 		if (attr->cat_mtime < LTIME_S(inode->i_mtime))
 			attr->cat_mtime = LTIME_S(inode->i_mtime);
 	}
-#endif
 	return 0;
 }
 
@@ -3692,7 +3684,6 @@ int __init lmv_init(void)
 				   LUSTRE_LMV_NAME, NULL);
 }
 
-#ifdef __KERNEL__
 static void lmv_exit(void)
 {
         class_unregister_type(LUSTRE_LMV_NAME);
@@ -3704,4 +3695,3 @@ MODULE_LICENSE("GPL");
 
 module_init(lmv_init);
 module_exit(lmv_exit);
-#endif

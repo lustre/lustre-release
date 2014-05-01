@@ -35,7 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LMV
-#ifdef __KERNEL__
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -45,9 +44,6 @@
 #include <linux/seq_file.h>
 #include <linux/namei.h>
 #include <linux/lustre_intent.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
@@ -156,7 +152,6 @@ out:
 	return rc;
 }
 
-#ifdef __KERNEL__
 int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 			  struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
@@ -306,17 +301,6 @@ cleanup:
 	RETURN(rc);
 }
 
-#else
-
-int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
-			  struct lmv_stripe_md *lsm,
-			  ldlm_blocking_callback cb_blocking,
-			  int extra_lock_flags)
-{
-	return 0;
-}
-
-#endif
 
 /*
  * IT_OPEN is intended to open (and create, possible) an object. Parent (pid)

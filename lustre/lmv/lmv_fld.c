@@ -35,7 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LMV
-#ifdef __KERNEL__
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -43,9 +42,6 @@
 #include <linux/pagemap.h>
 #include <linux/math64.h>
 #include <linux/seq_file.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
