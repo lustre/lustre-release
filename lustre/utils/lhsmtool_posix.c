@@ -1384,10 +1384,20 @@ static char *path_concat(const char *dirname, const char *basename)
 
 static int ct_import_fid(const lustre_fid *import_fid)
 {
-	char fid_path[PATH_MAX];
+	char	fid_path[PATH_MAX];
+	int	rc;
+
+	ct_path_lustre(fid_path, sizeof(fid_path), opt.o_mnt, import_fid);
+	rc = access(fid_path, F_OK);
+	if (rc == 0 || errno != ENOENT) {
+		rc = (errno == 0) ? -EEXIST : -errno;
+		CT_ERROR(rc, "cannot import '"DFID"'", PFID(import_fid));
+		return rc;
+	}
 
 	ct_path_archive(fid_path, sizeof(fid_path), opt.o_hsm_root,
 			import_fid);
+
 	CT_TRACE("Resolving "DFID" to %s", PFID(import_fid), fid_path);
 
 	return ct_import_one(fid_path, opt.o_dst);
