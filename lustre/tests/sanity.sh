@@ -10493,7 +10493,7 @@ test_171() { # bug20592
 }
 run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
 
-# it would be good to share it with obdfilter-survey/libecho code
+# it would be good to share it with obdfilter-survey/iokit-libecho code
 setup_obdecho_osc () {
         local rc=0
         local ost_nid=$1

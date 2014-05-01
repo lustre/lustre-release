@@ -1,26 +1,26 @@
 #!/usr/bin/perl -w
 # Report generation for ost-survey.pl
 # ===================================
-#        The plot-ost.pl script is used to generate csv file and
+# The iokit-plot-ost script is used to generate csv file and
 # instructions files for gnuplot from the output of ost-survey.pl script.
 #
-#        The plot-ost.pl also creates .scr file that contains instructions
+# iokit-plot-ost also creates .scr file that contains instructions
 # for gnuplot to plot the graph. After generating .dat and .scr files this
 # script invokes gnuplot to display graph.
 #
 # Syntax:
-# $ plot-ost.pl <log_filename>
-# Note:  1. This script may need modifications whenever there will be 
+# $ iokit-plot-ost <log_filename>
+# Note:  1. This script may need modifications whenever there will be
 #	    modifications in output format of ost-survey.pl script.
 #	 2. Gnuplot version 4.0 or above is required.
 
-# arg 0 is filename 
+# arg 0 is filename
 sub usages_msg(){
 	print "Usage: $0 <log_filename> \n";
 	print "       $0 produces graphs from the output of ost-survey.pl\n";
 	print "       using gnuplot.\n";
 	print "e.g.# perl ost-survey /mnt/lustre > ost-log; perl $0 ost-log\n";
-        exit 1;
+	exit 1;
 }
 
 my $count = 0; 		# count for number of rows in csv(.dat) file.
@@ -28,7 +28,7 @@ my @line;		# To store recently read line from log file
 my $flag = 0;
 my @GraphTitle;
 if ( !$ARGV[0] ) {
-	usages_msg(); 	
+	usages_msg();
 }
 
 $file = $ARGV[0];
@@ -40,7 +40,7 @@ LABLE:while ( <PFILE> ) {
 	chomp;
 	@line = split( /\s+/ ); # splits line into tokens
 	# This comparison may be changed if there will be changes log file.
-	if ( $line[0] eq "Ost#" ) { 
+	if ( $line[0] eq "Ost#" ) {
 		print DATAFILE "$line[0] $line[1] $line[2]\n";
 		$flag = 1;
 		<PFILE>; # skip the "---------" line from result file.
@@ -59,8 +59,8 @@ while ( <PFILE> )  {
 	chomp;
 	@line = split( /\s+/ ); # splits line into tokens
 	if ( $line[1] ne "Inactive" ) {
-                print DATAFILE "$count $line[1] $line[2]\n";
-        }
+		print DATAFILE "$count $line[1] $line[2]\n";
+	}
 	$count = $count + 1;
 }
 close PFILE;

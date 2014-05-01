@@ -1,3 +1,3 @@
-bin_SCRIPTS = plot-sgpdd sgpdd-survey
+bin_SCRIPTS = iokit-plot-sgpdd sgpdd-survey
 CLEANFILE = $(bin_SCRIPTS)
-EXTRA_DIST = README.sgpdd-survey plot-sgpdd sgpdd-survey
+EXTRA_DIST = README.sgpdd-survey iokit-plot-sgpdd sgpdd-survey

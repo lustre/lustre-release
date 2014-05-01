@@ -23,21 +23,21 @@ PERCH_OST_LIST="nid00128 nid00131 nid00136 nid00139 nid00008 nid00011 nid00012"
 
 MDS_LIST=${PERCH_MDS_LIST}
 OST_LIST=${PERCH_OST_LIST}
-export TARGETS="${MDS_LIST} ${OST_LIST}" 
+export TARGETS="${MDS_LIST} ${OST_LIST}"
 
-#script var 
+#script var
 #case $TARGET in
-#	oss*)     
-#		VMSTAT_INTERVAL=0 
-#		SERVICE_INTERVAL=2 
-#		SDIO_INTERVAL=0  
+#	oss*)
+#		VMSTAT_INTERVAL=0
+#		SERVICE_INTERVAL=2
+#		SDIO_INTERVAL=0
 #	;;
 #	client*)  ALEX_SCRIPT_CLIENT_VAR1="hello!"
 #	;;
 #esac
 
-#FIXME: diff these parameters according to client/MDS/OSS 
-VMSTAT_INTERVAL=${VMSTAT_INTERVAL:-1} 
+#FIXME: diff these parameters according to client/MDS/OSS
+VMSTAT_INTERVAL=${VMSTAT_INTERVAL:-1}
 SERVICE_INTERVAL=${SERVICE_INTERVAL:-0}
 SDIO_INTERVAL=${SDIO_INTERVAL:-0}
 BRW_INTERVAL=${BRW_INTERVAL:-0}
@@ -47,7 +47,7 @@ JBD_INTERVAL=${JBD_INTERVAL:-1}
 
 #some environment var
 TMP=${TMP:-"/tmp"}
-SCRIPT=${SCRIPT:-"lstats.sh"}
+SCRIPT=${SCRIPT:-"iokit-lstats"}
 #Remote ssh script
 DSH=${DSH:-ssh}
 DCP=${DCP:-scp}

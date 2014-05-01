@@ -36,7 +36,7 @@ set -e
 #  client systems on which this test runs.]
 
 # include library 
-source $(dirname $0)/libecho
+source $(dirname $0)/iokit-libecho
 
 # The following variables can be set in the environment, or on the
 # command line

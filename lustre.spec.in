@@ -475,25 +475,25 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %if %{with lustre_iokit}
 %files -n lustre-iokit
 %defattr(-, root, root)
+%{_bindir}/iokit-config
+%{_bindir}/iokit-gather-stats
+%{_bindir}/iokit-libecho
+%{_bindir}/iokit-lstats
+%{_bindir}/iokit-parse-ior
+%{_bindir}/iokit-plot-obdfilter
+%{_bindir}/iokit-plot-ost
+%{_bindir}/iokit-plot-sgpdd
 %{_bindir}/ior-survey
-%{_bindir}/parse-ior
-%{_bindir}/libecho
+%{_bindir}/mds-survey
 %{_bindir}/obdfilter-survey
-%{_bindir}/plot-obdfilter
-%{_bindir}/plot-ost
 %{_bindir}/ost-survey
 %{_bindir}/sgpdd-survey
-%{_bindir}/plot-sgpdd
-%{_bindir}/lstats.sh
-%{_bindir}/gather_stats_everywhere.sh
-%{_bindir}/config.sh
-%{_bindir}/mds-survey
-%doc lustre-iokit/obdfilter-survey/README.obdfilter-survey
 %doc lustre-iokit/ior-survey/README.ior-survey
-%doc lustre-iokit/ost-survey/README.ost-survey
 %doc lustre-iokit/mds-survey/README.mds-survey
+%doc lustre-iokit/obdfilter-survey/README.obdfilter-survey
+%doc lustre-iokit/ost-survey/README.ost-survey
 %doc lustre-iokit/sgpdd-survey/README.sgpdd-survey
-%doc lustre-iokit/stats-collect/README.lstats.sh
+%doc lustre-iokit/stats-collect/README.iokit-lstats
 %endif
 
 %if %{defined rpm_post_base}

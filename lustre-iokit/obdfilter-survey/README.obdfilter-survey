@@ -16,9 +16,9 @@ components.
 
    You need to tell the script all the names of the obdfilter instances.
    These should be up and running already .  If some are on different
-   nodes, you need to specify their hostnames too (e.g. node1:ost1). 
+   nodes, you need to specify their hostnames too (e.g. node1:ost1).
    --OR--
-   You just need to pass parameter case=disk to the script. The script will 
+   You just need to pass parameter case=disk to the script. The script will
    automatically detect the local obdfilter instances.
 
    All the obdfilter instances are driven directly.  The script
@@ -30,10 +30,10 @@ components.
    Here the script drives one or more instances of obdecho server via instances
    of echo_client running on 1 or more nodes.
 
-   You just need to pass parameters case=network and 
-   targets="<hostname/ip_of_server>" to the script. The script will do the 
-   required setup for network case. 
-   
+   You just need to pass parameters case=network and
+   targets="<hostname/ip_of_server>" to the script. The script will do the
+   required setup for network case.
+
 3. The Stripe F/S over the Network.
 
    Here the script drives one or more instances of obdfilter via instances
@@ -48,7 +48,7 @@ components.
 Note that the script is _NOT_ scalable to 100s of nodes since it is only
 intended to measure individual servers, not the scalability of the system
 as a whole.
-   
+
 Running
 -------
 
@@ -71,13 +71,13 @@ e.g. : $ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey
 --OR--
 
 2. Manual run:
-- You do not need to specify and MDS or LOV 
+- You do not need to specify and MDS or LOV
 - List all OSTs that you wish to test
 - On all OSS machines:
   Remember, write tests are destructive! This test should be run prior to
 startup of your actual Lustre filesystem. If that is the case, you will not
 need to reformat to restart Lustre - however, if the test is terminated before
-completion, you may have to remove objects from the disk. 
+completion, you may have to remove objects from the disk.
 
 - Determine the obdfilter instance names on all the clients, column 4
 of 'lctl dl'.  For example:
@@ -91,7 +91,7 @@ oss02:   0 UP obdfilter oss02-sdi oss02-sdi_UUID 3
 Here the obdfilter instance names are oss01-sdb, oss01-sdd, oss02-sdi.
 
 Since you are driving obdfilter instances directly, set the shell array
-variable 'targets' to the names of the obdfilter instances. 
+variable 'targets' to the names of the obdfilter instances.
 
 Example:
 
@@ -104,17 +104,17 @@ For the second case i.e. obdfilter-survey over network, following setup
 is to be done.
 - Install all lustre modules including obdecho.
 - Start lctl and check for the device list. The device list must be empty.
-- It is suggested that there should be passwordless enrty between client 
-  and server machine to avoid typing password. 
+- It is suggested that there should be passwordless enrty between client
+  and server machine to avoid typing password.
 1. Automated run:
-   To run obdfilter-surevy against network you just need to pass parameter 
+   To run obdfilter-surevy against network you just need to pass parameter
    case=netdisk and targets="<hostname/ip_of_server>" to the script.
- 
-e.g. $ nobjhi=2 thrhi=2 size=1024 targets="<hostname/ip_of_server>" \
-       case=network sh obdfilter-survey
 
-On server side you can see the stats at : 
-        /proc/fs/lustre/obdecho/<echo_srv>/stats
+e.g. $ nobjhi=2 thrhi=2 size=1024 targets="<hostname/ip_of_server>" \
+   case=network sh obdfilter-survey
+
+On server side you can see the stats at:
+   /proc/fs/lustre/obdecho/<echo_srv>/stats
 where, 'echo_srv' is the obdecho server created through script.
 
 NOTE: In network test only automated run is supported.
@@ -132,7 +132,7 @@ e.g. : $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
 While running manually you need to tell the script all the names of the
 echo_client instances, which should already be up and running.
 e.g. $ nobjhi=2 thrhi=2 size=1024 targets="<osc_name> ..." \
-       sh obdfilter-survey
+   sh obdfilter-survey
 
 
 Output files:
@@ -162,7 +162,7 @@ Script output
 
 The summary file and stdout contain lines like...
 
-ost 8 sz 67108864K rsz 1024 obj    8 thr    8 write  613.54 [ 64.00, 82.00] 
+ost 8 sz 67108864K rsz 1024 obj    8 thr    8 write  613.54 [ 64.00, 82.00]
 
 ost 8          is the total number of OSTs under test.
 sz 67108864K   is the total amount of data read or written (in KB).
@@ -170,11 +170,11 @@ rsz 1024       is the record size (size of each echo_client I/O, in KB).
 obj    8       is the total number of objects over all OSTs
 thr    8       is the total number of threads over all OSTs and objects
 write          is the test name.  If more tests have been specified they
-               all appear on the same line.
+	       all appear on the same line.
 613.54         is the aggregate bandwidth over all OSTs measured by
 	       dividing the total number of MB by the elapsed time.
 [64.00, 82.00] are the minimum and maximum instantaneous bandwidths seen on
-               any individual OST.  
+	       any individual OST.
 
 Note that although the numbers of threads and objects are specifed per-OST
 in the customization section of the script, results are reported aggregated
@@ -185,7 +185,7 @@ Visualising Results
 -------------------
 
 I've found it most useful to import the summary data (it's fixed width)
-into gnuplot, Excel (or any graphing package) and graph bandwidth v. 
+into gnuplot, Excel (or any graphing package) and graph bandwidth v.
 # threads for varying numbers of concurrent regions.  This shows how
 the OSS performs for a given number of concurrently accessed objects
 (i.e. files) with varying numbers of I/Os in flight.
@@ -194,5 +194,5 @@ It is also extremely useful to record average disk I/O sizes during each
 test.  These numbers help find pathologies in file the file system block
 allocator and the block device elevator.
 
-The included plot-obdfilter script is an example of processing the output
-files to a .csv format and plotting graph using gnuplot.
+The included iokit-plot-obdfilter script is an example of processing the
+output files to a .csv format and plotting graph using gnuplot.

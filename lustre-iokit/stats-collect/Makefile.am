@@ -1,3 +1,3 @@
-bin_SCRIPTS = config.sh gather_stats_everywhere.sh lstats.sh
+bin_SCRIPTS = iokit-config iokit-gather-stats iokit-lstats
 CLEANFILE = $(bin_SCRIPTS)
-EXTRA_DIST = README.lstats.sh config.sh gather_stats_everywhere.sh lstats.sh
+EXTRA_DIST = README.iokit-lstats iokit-config iokit-gather-stats iokit-lstats

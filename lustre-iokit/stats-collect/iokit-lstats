@@ -1,10 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 
 #
 # very short example:
 #
 # to start collection:
-#   VMSTAT_INTERVAL=0 SERVICE_INTERVAL=2 SDIO_INTERVAL=0 lstats.sh start
+#   VMSTAT_INTERVAL=0 SERVICE_INTERVAL=2 SDIO_INTERVAL=0 iokit-lstats start
 #
 # where value of interval means:
 #   0 - gather stats at start and stop only
@@ -13,10 +13,10 @@
 # XXX can be: VMSTAT, SERVICE, BRW, SDIO, MBALLOC, IO, JBD
 #
 # to stop collection:
-#   lstats.sh stop
+#   iokit-lstats stop
 #
 # to fetch collected stats:
-#   lstats.sh fetch >file
+#   iokit-lstats fetch >file
 # in file you'll get a tarbal containing directory with stats
 # directory's name consists of hostname and date,
 # like: stats-bzzz-2007-05-13-22.52.31
@@ -39,17 +39,17 @@ STIMEPREFIX=${STIMEPREFIX:-${PREFIX}time.}
 
 function ls_grab_control()
 {
-	OCOMM=`ps -p $$ -o comm=`
+	OCOMM=$(ps -p $$ -o comm=)
 	if [ "$OCOMM" == "" ]; then
 		echo "Can't fetch process name"
 		exit
 	fi
 
 	# check for running master first
-	PID=`cat $PIDFILE 2>/dev/null`
+	PID=$(cat $PIDFILE 2>/dev/null)
 #echo "check master $PID"
 	if [ "x$PID" != "x" ]; then
-		COMM=`ps -p $PID -o comm=`
+		COMM=$(ps -p $PID -o comm=)
 		if [ "$COMM" == "$OCOMM" ]; then
 			echo "Master is already running by $PID"
 			return 1
@@ -59,7 +59,7 @@ function ls_grab_control()
 	# XXX: race -- two process can do this at same time, use rename instead
 	echo $$ >${PIDFILE}.$$
 	mv ${PIDFILE}.$$ ${PIDFILE}
-	a=`cat ${PIDFILE}`
+	a=$(cat ${PIDFILE})
 	if [ "$$" != "$a" ]; then
 		echo "Some one $a won the race"
 		return 1
@@ -115,7 +115,7 @@ function run_collector()
 	shift
 
 	read pid NN </proc/self/stat
-	stime=`ps -p $pid -o bsdstart=`
+	stime=$(ps -p $pid -o bsdstart=)
 	echo -n "$pid " >>$STATPIDS
 	echo -n "$stime" >>${STIMEPREFIX}${pid}
 
@@ -134,7 +134,7 @@ function run_collector()
 # - N       - collect each N seconds
 function vmstat_collector()
 {
-	echo "vmstat " `date`
+	echo "vmstat " $(date)
 
 	if let "VMSTAT_INTERVAL==0"; then
 		date
@@ -170,7 +170,7 @@ function brw_collector()
 {
 	local filter=$1
 
-	echo "brw_* for $filter " `date`
+	echo "brw_* for $filter " $(date)
 
 	# clear old stats
 	for i in /proc/fs/lustre/obdfilter/${filter}/brw_*; do
@@ -200,7 +200,7 @@ function brw_start()
 
 	# find all obdfilters
 	for i in /proc/fs/lustre/obdfilter/*; do
-		filter=`basename $i`
+		local filter=$(basename $i)
 		if [ "$filter" == "num_refs" ]; then
 			continue;
 		fi
@@ -221,7 +221,7 @@ function service_collector()
 	local target=$2
 	local srv=$3
 
-	echo "service stats for ${target}/${srv} " `date`
+	echo "service stats for ${target}/${srv} " $(date)
 
 	# clear old stats
 	echo 0 >$file
@@ -249,12 +249,12 @@ function service_start()
 
 	# find all OSTs and MDTs
 	for i in /proc/fs/lustre/ost/* /proc/fs/lustre/mdt/*; do
-		target=`basename $i`
+		target=$(basename $i)
 		if [ "$target" == "num_refs" ]; then
 			continue;
 		fi
 		for j in ${i}/*; do
-			srv=`basename $j`
+			srv=$(basename $j)
 			if [ "$srv" == "uuid" ]; then
 				continue;
 			fi
@@ -265,7 +265,7 @@ function service_start()
 
 	# find all LDLM services
 	for i in /proc/fs/lustre/ldlm/services/*; do
-		srv=`basename $i`
+		srv=$(basename $i)
 		run_collector "service" service_collector ${i}/stats "ldlm" $srv &
 	done
 
@@ -284,7 +284,7 @@ function client_collector()
 	local target=$2
 	local srv=$3
 
-	echo "client stats for ${target}/${srv} " `date`
+	echo "client stats for ${target}/${srv} " $(date)
 
 	# clear old stats
 	echo 0 >$file
@@ -310,14 +310,14 @@ function client_start()
 		return;
 	fi
 
-	# find all osc 
+	# find all osc
 	for i in /proc/fs/lustre/osc/* ; do
-		target=`basename $i`
+		local target=$(basename $i)
 		if [ "$target" == "num_refs" ]; then
 			continue;
 		fi
 		for j in ${i}/*; do
-			stats=`basename $j`
+			local stats=$(basename $j)
 			if [ "$stats" == "stats" -o "$stats" == "rpc_stats" ]; then
 				run_collector "osc-${stats}" client_collector \
 					${j} $target $stats &
@@ -326,9 +326,9 @@ function client_start()
 	done
 	# find all llite stats
 	for i in /proc/fs/lustre/llite/* ; do
-		target=`basename $i`
+		target=$(basename $i)
 		for j in ${i}/*; do
-			stats=`basename $j`
+			stats=$(basename $j)
 			if [ "$stats" == "stats" -o "$stats" == "vfs_ops_stats" ]; then
 				run_collector "llite-${stats}" client_collector \
 					${j} $target ${stats} &
@@ -347,12 +347,12 @@ function client_start()
 function sdio_collector()
 {
 	local obd=$1
-	local uuid=`cat $obd/uuid`
-	local tmp=`cat $obd/mntdev`
-	local disk=`basename $tmp`
+	local uuid=$(cat $obd/uuid)
+	local tmp=$(cat $obd/mntdev)
+	local disk=$(basename $tmp)
 	local file="/proc/scsi/sd_iostats/${disk}"
 
-	echo "sd_iostats for ${uuid}/${disk} " `date`
+	echo "sd_iostats for ${uuid}/${disk} " $(date)
 
 	# clear old stats
 	echo 0 >$file
@@ -380,15 +380,15 @@ function sdio_start()
 
 	# find all obdfilters and MDSs
 	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		obd=`basename $i`
+		local obd=$(basename $i)
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
 		if [ ! -f ${i}/mntdev ]; then
 			continue;
 		fi
-		tmp=`cat ${i}/mntdev`
-		disk=`basename $tmp`
+		local tmp=$(cat ${i}/mntdev)
+		local disk=$(basename $tmp)
 		if [ ! -f /proc/scsi/sd_iostats/${disk} ]; then
 			continue;
 		fi
@@ -406,12 +406,12 @@ function sdio_start()
 function mballoc_collector()
 {
 	local obd=$1
-	local uuid=`cat $obd/uuid`
-	local tmp=`cat $obd/mntdev`
-	local disk=`basename $tmp`
+	local uuid=$(cat $obd/uuid)
+	local tmp=$(cat $obd/mntdev)
+	local disk=$(basename $tmp)
 	local file="/proc/fs/ldiskfs*/${disk}/mb_history"
 
-	echo "mballoc history for ${uuid}/${disk} " `date`
+	echo "mballoc history for ${uuid}/${disk} " $(date)
 
 	# log allocations only
 	for i in $file; do
@@ -438,15 +438,15 @@ function mballoc_start()
 
 	# find all obdfilters and MDSs
 	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		obd=`basename $i`
+		obd=$(basename $i)
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
 		if [ ! -f ${i}/mntdev ]; then
 			continue;
 		fi
-		tmp=`cat ${i}/mntdev`
-		disk=`basename $tmp`
+		tmp=$(cat ${i}/mntdev)
+		disk=$(basename $tmp)
 		if [ ! -f /proc/fs/ldiskfs*/${disk}/mb_history ]; then
 			continue;
 		fi
@@ -464,12 +464,12 @@ function mballoc_start()
 function io_collector()
 {
 	local obd=$1
-	local uuid=`cat $obd/uuid`
-	local tmp=`cat $obd/mntdev`
-	local disk=`basename $tmp`
+	local uuid=$(cat $obd/uuid)
+	local tmp=$(cat $obd/mntdev)
+	local disk=$(basename $tmp)
 	local file="/sys/block/${disk}/stat"
 
-	echo "iostats for ${uuid}/${disk} " `date`
+	echo "iostats for ${uuid}/${disk} " $(date)
 
 	if let "IO_INTERVAL==0"; then
 		cat $file
@@ -494,15 +494,15 @@ function io_start()
 
 	# find all obdfilters and MDSs
 	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		obd=`basename $i`
+		local obd=$(basename $i)
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
 		if [ ! -f ${i}/mntdev ]; then
 			continue;
 		fi
-		tmp=`cat ${i}/mntdev`
-		disk=`basename $tmp`
+		local tmp=$(cat ${i}/mntdev)
+		local disk=$(basename $tmp)
 		if [ ! -f /sys/block/${disk}/stat ]; then
 			continue;
 		fi
@@ -520,12 +520,12 @@ function io_start()
 function jbd_collector()
 {
 	local obd=$1
-	local uuid=`cat $obd/uuid`
-	local tmp=`cat $obd/mntdev`
-	local disk=`basename $tmp`
+	local uuid=$(cat $obd/uuid)
+	local tmp=$(cat $obd/mntdev)
+	local disk=$(basename $tmp)
 	local file="/proc/fs/jbd/${disk}/history"
 
-	echo "jbd history for ${uuid}/${disk} " `date`
+	echo "jbd history for ${uuid}/${disk} " $(date)
 
 	if let "JBD_INTERVAL==0"; then
 		idle_collector
@@ -547,15 +547,15 @@ function jbd_start()
 
 	# find all obdfilters and MDSs
 	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		obd=`basename $i`
+		local obd=$(basename $i)
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
 		if [ ! -f ${i}/mntdev ]; then
 			continue;
 		fi
-		tmp=`cat ${i}/mntdev`
-		disk=`basename $tmp`
+		local tmp=$(cat ${i}/mntdev)
+		local disk=$(basename $tmp)
 		if [ ! -f /proc/fs/jbd/${disk}/history ]; then
 			continue;
 		fi
@@ -572,12 +572,12 @@ function ls_start()
 		exit
 	fi
 
-	PID=`cat $STATPIDS 2>/dev/null`
+	local PID=$(cat $STATPIDS 2>/dev/null)
 	if [ "x$PID" != "x" ]; then
 		for i in $PID; do
-			i=`echo $i | sed 's/^[^:]*://'`
-			TO=`cat ${STIMEPREFIX}$i`
-			TN=`ps -p $i -o bsdstart=`
+			local i=$(echo $i | sed 's/^[^:]*://')
+			local TO=$(cat ${STIMEPREFIX}$i)
+			local TN=$(ps -p $i -o bsdstart=)
 			if [ "$TO" != "" -a "$TO" == "$TN" ]; then
 				echo "Some slave is already running by $i"
 				exit
@@ -609,13 +609,13 @@ function ls_stop()
 		exit
 	fi
 
-	PID=`cat $STATPIDS 2>/dev/null`
+	local PID=$(cat $STATPIDS 2>/dev/null)
 	if [ "x$PID" != "x" ]; then
-		pids2wait=""
+		local pids2wait=""
 		for i in $PID; do
-			i=`echo $i | sed 's/^[^:]*://'`
-			TO=`cat ${STIMEPREFIX}$i 2>/dev/null`
-			TN=`ps -p $i -o bsdstart=`
+			local i=$(echo $i | sed 's/^[^:]*://')
+			local TO=$(cat ${STIMEPREFIX}$i 2>/dev/null)
+			local TN=$(ps -p $i -o bsdstart=)
 			if [ "$TO" == "" -o "$TO" != "$TN" ]; then
 				echo "No collector with $i found"
 				continue
@@ -625,11 +625,11 @@ function ls_stop()
 		done
 #echo "XXX: wait collectors $pids2wait"
 		for i in $pids2wait; do
-			TO=`cat ${STIMEPREFIX}$i 2>/dev/null`
-			TN=`ps -p $i -o bsdstart=`
+			TO=$(cat ${STIMEPREFIX}$i 2>/dev/null)
+			TN=$(ps -p $i -o bsdstart=)
 			while [ "$TO" != "" -a "$TO" == "$TN" ]; do
 				sleep 1
-				TN=`ps -p $i -o bsdstart=`
+				TN=$(ps -p $i -o bsdstart=)
 			done
 		done
 	fi
@@ -643,14 +643,13 @@ function ls_stop()
 # current version is silly - just finds all *out* files in $TMP
 ls_fetch()
 {
-	if [ "X${GLOBAL_TIMESTAMP}" = "X" ]
-	then
-		local date=`date +%F-%H.%M.%S`
+	if [ "X${GLOBAL_TIMESTAMP}" = "X" ]; then
+		local date=$(date +%F-%H.%M.%S)
 	else
-		local date=${GLOBAL_TIMESTAMP}
+		date=${GLOBAL_TIMESTAMP}
 	fi
 
-	local hostname=`hostname -s`
+	local hostname=$(hostname -s)
 	local name="stats-$hostname-$date"
 
 	stats=${OUTPREFIX}*
@@ -672,7 +671,6 @@ ls_fetch()
 		echo "No stats found"
 	fi
 	rm -rf ${TMP}/${name}*
-		
 }
 
 #

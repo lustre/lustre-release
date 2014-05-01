@@ -1,17 +1,17 @@
 #!/usr/bin/perl -w
 
-# arg 0 is filename 
+# arg 0 is filename
 
 sub usages_msg(){
-	print "Usage: $0 <results_filename>\n";
-	print "  parses and plots IOR results using gnuplot, and generates a .dat file for\n";
-	print "  simple graphing in spreadhseets\n";
-	print "e.g.> perl parse-ior.pl ior-log\n";
-        exit 1;
+	print "Usage: $0 <results_filename>\n"
+	print "  parses and plots IOR results using gnuplot, and generates a .dat file for\n"
+	print "  simple graphing in spreadhseets\n"
+	print "e.g.> perl iokit-parse-ior ior-log\n"
+	exit 1;
 }
- 
+
 if ( !$ARGV[0] ) {
-	usages_msg(); 	
+	usages_msg()
 }
 $file = $ARGV[0];
 
@@ -25,19 +25,19 @@ while ( <PFILE> ) {
 	@line = split( /\s+/ ); # splits line into tokens
 	if ( $line[0] ) {
 		# This comparison will be changed if there will be changes log file.
-		if( $line[0] eq "access" && $line[1] eq "bw(MiB/s)" ) { 
+		if ( $line[0] eq "access" && $line[1] eq "bw(MiB/s)" ) {
 			print DATAFILE "$count $line[1] $line[4] $line[5] $line[6] br(MiB/s) ropen(s) rd(s) rclose(s)\n";
-			$count = $count + 1;			
-		}		
-		# Two columns from output file are skiped since 
+			$count = $count + 1;
+		}
+		# Two columns from output file are skiped since
 		# they are constant and may not be so useful while graphing results.
-		if( $line[0] eq "write" ) {
+		if ( $line[0] eq "write" ) {
 			print DATAFILE "$count $line[1] $line[4] $line[5] $line[6] ";
-		}		
-		if( $line[0] eq "read" ) {
+		}
+		if ( $line[0] eq "read" ) {
 			print DATAFILE "$line[1] $line[4] $line[5] $line[6]\n";
 			$count = $count + 1;
-		}		
+		}
 	}
 }
 close PFILE;

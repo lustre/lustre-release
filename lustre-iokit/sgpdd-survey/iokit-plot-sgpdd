@@ -1,21 +1,21 @@
 #!/usr/bin/perl -w
-# Report generation for plot-sgpdd
-# ================================
-#        The plot-sgpdd script is used to generate csv file and
+# Report generation for iokit-plot-sgpdd
+# ======================================
+# The iokit-plot-sgpdd script is used to generate csv file and
 # instructions files for gnuplot from the output of sgpdd-survey script.
 #
-#        The plot-sgpdd also creates .scr file that contains instructions
+# iokit-plot-sgpdd also creates .scr file that contains instructions
 # for gnuplot to plot the graph. After generating .dat and .scr files this
 # script invokes gnuplot to display graph.
 #
 # Syntax:
 # $ sgpdd-survey > log_filename
-# $ plot-sgpdd <log_filename>
+# $ iokit-plot-sgpdd <log_filename>
 # [Note: 1. This script may need modifications whenever there will be
 #           modifications in output format of sgpdd-survey script.
 #        2. Gnuplot version 4.0 or above is required.]
 
-sub usage() 
+sub usage()
 {
 	print STDERR "Usage: $0 [options] <log_filename>\n";
 	print STDERR "  $0 parses and plots graphs from the output of sgpdd-survey\n";
@@ -33,8 +33,8 @@ system ("which gnuplot > /dev/null") == 0 or die "gnuplot does not exist, please
 
 # check whether gnuplot supports png
 $pngsupport = "ldd `which gnuplot` | grep -q libpng";
-system ("$pngsupport") == 0 or die "gnuplot installed does not support png.
-	Please install gnuplot to support png and try again.\n"; 
+system ("$pngsupport") == 0 or die "gnuplot installed does not support PNG.
+	Please install gnuplot to support PNG and try again.\n";
 
 my @GraphTitle;
 
@@ -44,7 +44,7 @@ sub write_scr_file() {
 	my $rwlabel = $_[1];
 	print "generating plot $file-$rsz-$op.png\n";
 	open ( SCRFILE, "> $file-$rsz-$op.scr" ) or die "Can't open scr file for writing";
-	
+
 	if ($opt_rdtitle || $opt_wrtitle) {
 		if ($op eq "rd") {
 			print SCRFILE "set title \"@GraphTitle\\n$rwlabel, " .
@@ -63,8 +63,8 @@ sub write_scr_file() {
 	print SCRFILE "set logscale x\n";
 	print SCRFILE "set grid\n";
 	print SCRFILE "set key right bottom\n";
-        print SCRFILE "set terminal png\n";
-        print SCRFILE "set output \"/dev/null\"\n";
+	print SCRFILE "set terminal png\n";
+	print SCRFILE "set output \"/dev/null\"\n";
 	if ($opt_y != 0) {
 		print SCRFILE "set yrange [ 0:$opt_y ]\n";
 	} else {
@@ -155,7 +155,7 @@ $cnt = 0;
 @operations = ();
 # Command line parameter parsing
 use Getopt::Long;
-GetOptions ('help' => \$opt_help, 'rt=s' => \$opt_rdtitle, 'wt=s' => \$opt_wrtitle, 'y=i' => \$opt_y) or usage(); 
+GetOptions ('help' => \$opt_help, 'rt=s' => \$opt_rdtitle, 'wt=s' => \$opt_wrtitle, 'y=i' => \$opt_y) or usage();
 if ($opt_help) {
 	usage();
 }

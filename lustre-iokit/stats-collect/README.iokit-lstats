@@ -1,0 +1,60 @@
+Overview
+--------
+These scripts will be used to collect application profiling info from
+lustre clients and servers.  It will be run on a single (control)
+node, and collect all the profile info and create a tarball on the
+control node.
+
+iokit-lstats : script for single node, will be run on each profile node
+iokit-gather-stats : collect stats script
+iokit-config : customized configuration description
+
+Requirements
+-------
+1) Lustre is installed and setup on your cluster.
+2) ssh/scp to these nodes works without requiring a password.
+
+Configuration
+------
+Configuration is very simple for this script, all of the profiling
+config VARs are in iokit-config
+
+XXXX_INTERVAL: the profiling interval
+where value of interval means:
+   0 - gather stats at start and stop only
+   N - gather stats every N seconds
+if some XXX_INTERVAL isn't specified, related stats won't be collected
+XXX can be: VMSTAT, SERVICE, BRW, SDIO, MBALLOC, IO, JBD, CLIENT
+
+
+Running
+--------
+The iokit-gather-stats should be run in three phases:
+
+   a) sh iokit-gather-stats iokit-config start
+     It will start stats collection on each node specified in iokit-config
+
+   b) sh iokit-gather-stats iokit-config stop <log_name>
+     It will stop collect stats on each node. If <log_name> is provided,
+     it will create a profile tarball /tmp/<log_name>.tar.gz
+
+   c) sh iokit-gather-stats iokit-config analyse log_tarball.tar.gz csv
+     It will analyse the log_tarball and create a csv tarball for this
+     profiling tarball.
+
+
+Example
+-------
+When you want collect your profile info, you should
+   1) start the collect profile daemon on each node.
+	sh iokit-gather-stats iokit-config start
+
+   2) run your test.
+
+   3) stop the collect profile daemon on each node, cleanup the tmp
+      file and create a profiling tarball.
+	sh iokit-gather-stats iokit-config stop log_tarball
+
+   4) create a csv file according to the profile.
+	sh iokit-gather-stats iokit-config analyse log_tarball.tar.gz csv
+

@@ -81,7 +81,7 @@ with varying queue depth.  If the series (varying numbers of concurrent
 regions) all seem to land on top of each other, it shows the device is
 phased by seeks at the given record size.
 
-The included script "plot-sgpdd" will process output files and create
-.dat (similar to csv) files for spreadsheet import. It also plots the 
-results directly using gnuplot and creates .png files.
+The included script "iokit-plot-sgpdd" will process output files and
+create .dat (similar to csv) files for spreadsheet import. It also plots
+the results directly using gnuplot and creates .png files.
 
