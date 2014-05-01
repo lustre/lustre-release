@@ -48,13 +48,34 @@
 #if !defined(HAVE_FHANDLE_GLIBC_SUPPORT) && defined(HAVE_FHANDLE_SYSCALLS)
 /* Because the kernel supports this functions doesn't mean that glibc does.
  * Just in case we define what we need */
-struct file_handle
-{
-	unsigned int handle_bytes;
+struct file_handle {
+	__u32 handle_bytes;
 	int handle_type;
-	/* File identifier.  */
+	/* file identifier */
 	unsigned char f_handle[0];
 };
+
+#if defined(_ASM_X86_UNISTD_64_H)
+
+#ifndef __NR_name_to_handle_at
+#define __NR_name_to_handle_at 303
+#endif
+
+#ifndef __NR_open_by_handle_at
+#define __NR_open_by_handle_at 304
+#endif
+
+#elif defined(_ASM_X86_UNISTD_32_H)
+
+#ifndef __NR_name_to_handle_at
+#define __NR_name_to_handle_at 341
+#endif
+
+#ifndef __NR_open_by_handle_at
+#define __NR_open_by_handle_at 342
+#endif
+
+#else
 
 #ifndef __NR_name_to_handle_at
 #define __NR_name_to_handle_at 264
@@ -62,6 +83,9 @@ struct file_handle
 
 #ifndef __NR_open_by_handle_at
 #define __NR_open_by_handle_at 265
+#endif
+
+
 #endif
 
 static inline int
