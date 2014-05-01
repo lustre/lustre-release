@@ -2,6 +2,7 @@
 /*.xml
 /Makefile.in
 /XMLCONFIG
+/badarea_io
 /check_fhandle_syscalls
 /checkfiemap
 /checkstat

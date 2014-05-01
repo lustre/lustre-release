@@ -31,7 +31,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <libzfs.h>
-#include <dlfcn.h>
 
 /* Persistent mount data is stored in these user attributes */
 #define LDD_PREFIX		"lustre:"
@@ -104,83 +103,7 @@ static int osd_zfs_setup = 0;
 
 static libzfs_handle_t *g_zfs;
 
-/* dynamic linking handles for libzfs & libnvpair */
-static void *handle_libzfs;
-static void *handle_nvpair;
-
-/* symbol table looked up with dlsym */
-struct zfs_symbols {
-	libzfs_handle_t *(*libzfs_init)(void);
-	void		(*libzfs_fini)(libzfs_handle_t *);
-	int		(*libzfs_load_module)(char *);
-	zfs_handle_t*	(*zfs_open)(libzfs_handle_t *, const char *, int);
-	int		(*zfs_destroy)(zfs_handle_t *, boolean_t);
-	void		(*zfs_close)(zfs_handle_t *);
-	int	(*zfs_prop_set)(zfs_handle_t*, const char*, const char*);
-	nvlist_t*	(*zfs_get_user_props)  (zfs_handle_t *);
-	int		(*zfs_name_valid)(const char *, zfs_type_t);
-	zpool_handle_t*	(*zpool_open)(libzfs_handle_t *, const char *);
-	void		(*zpool_close)(zpool_handle_t *zhp);
-	int		(*nvlist_lookup_string)(nvlist_t*, const char*, char**);
-	int	(*nvlist_lookup_nvlist)(nvlist_t *, const char *, nvlist_t **);
-	nvpair_t *	(*nvlist_next_nvpair)(nvlist_t *, nvpair_t *);
-	char *		(*nvpair_name)(nvpair_t *);
-};
-
-static struct zfs_symbols sym;
 void zfs_fini(void);
-
-#define DLSYM(handle, func)                                        \
-	do {                                                       \
-		sym.func = (typeof(sym.func))dlsym(handle, #func); \
-	} while(0)
-
-/* populate the symbol table after a successful call to dlopen() */
-static int zfs_populate_symbols(void)
-{
-	char *error;
-
-	dlerror(); /* Clear any existing error */
-
-	DLSYM(handle_libzfs, libzfs_init);
-#define libzfs_init (*sym.libzfs_init)
-	DLSYM(handle_libzfs, libzfs_fini);
-#define libzfs_fini (*sym.libzfs_fini)
-	DLSYM(handle_libzfs, libzfs_load_module);
-#define libzfs_load_module (*sym.libzfs_load_module)
-	DLSYM(handle_libzfs, zfs_open);
-#define zfs_open (*sym.zfs_open)
-	DLSYM(handle_libzfs, zfs_destroy);
-#define zfs_destroy (*sym.zfs_destroy)
-	DLSYM(handle_libzfs, zfs_close);
-#define zfs_close (*sym.zfs_close)
-	DLSYM(handle_libzfs, zfs_prop_set);
-#define zfs_prop_set (*sym.zfs_prop_set)
-	DLSYM(handle_libzfs, zfs_get_user_props);
-#define zfs_get_user_props (*sym.zfs_get_user_props)
-	DLSYM(handle_libzfs, zfs_name_valid);
-#define zfs_name_valid (*sym.zfs_name_valid)
-	DLSYM(handle_libzfs, zpool_open);
-#define zpool_open (*sym.zpool_open)
-	DLSYM(handle_libzfs, zpool_close);
-#define zpool_close (*sym.zpool_close)
-	DLSYM(handle_nvpair, nvlist_lookup_string);
-#define nvlist_lookup_string (*sym.nvlist_lookup_string)
-	DLSYM(handle_nvpair, nvlist_lookup_nvlist);
-#define nvlist_lookup_nvlist (*sym.nvlist_lookup_nvlist)
-	DLSYM(handle_nvpair, nvlist_next_nvpair);
-#define nvlist_next_nvpair (*sym.nvlist_next_nvpair)
-	DLSYM(handle_nvpair, nvpair_name);
-#define nvpair_name (*sym.nvpair_name)
-
-	error = dlerror();
-	if (error != NULL) {
-		fatal();
-		fprintf(stderr, "%s\n", error);
-		return EINVAL;
-	}
-	return 0;
-}
 
 static int zfs_set_prop_int(zfs_handle_t *zhp, char *prop, void *val)
 {
@@ -635,6 +558,12 @@ out:
 	return ret;
 }
 
+int zfs_enable_quota(struct mkfs_opts *mop)
+{
+	fprintf(stderr, "this option is not only valid for zfs\n");
+	return ENOSYS;
+}
+
 int zfs_prepare_lustre(struct mkfs_opts *mop,
 		char *default_mountopts, int default_len,
 		char *always_mountopts, int always_len)
@@ -692,20 +621,6 @@ int zfs_init(void)
 	 * spamming ldiskfs users. An error message will still be printed if
 	 * someone tries to do some real work involving a ZFS backend */
 
-	handle_libzfs = dlopen("libzfs.so.1", RTLD_LAZY);
-	if (handle_libzfs == NULL)
-		return EINVAL;
-
-	handle_nvpair = dlopen("libnvpair.so.1", RTLD_LAZY);
-	if (handle_nvpair == NULL) {
-		ret = EINVAL;
-		goto out;
-	}
-
-	ret = zfs_populate_symbols();
-	if (ret)
-		goto out;
-
 	if (libzfs_load_module("zfs") != 0) {
 		/* The ZFS modules are not installed */
 		ret = EINVAL;
@@ -730,14 +645,5 @@ void zfs_fini(void)
 		libzfs_fini(g_zfs);
 		g_zfs = NULL;
 	}
-	if (handle_nvpair) {
-		dlclose(handle_nvpair);
-		handle_nvpair = NULL;
-	}
-	if (handle_libzfs) {
-		dlclose(handle_libzfs);
-		handle_libzfs = NULL;
-	}
-
 	osd_zfs_setup = 0;
 }

@@ -94,6 +94,7 @@ BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 Requires: %{name}-modules = %{version}
+BuildRequires: libtool
 %if %{with servers}
 Requires: lustre-osd
 %endif
@@ -284,6 +285,10 @@ CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-modules"
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-modules"
 %endif
 
+%if %{without zfs}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --without-zfs"
+%endif
+
 # if %%kdir was given, make sure it's not in the configure arguments
 if [ -n "%kdir" ]; then
 	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux=[^ ][^ ]* \?//')
@@ -348,6 +353,8 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
   echo '%{_libdir}/lustre/snmp' >>lustre.files
   echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
+
+find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@/ -name \*.la -delete
 
 %if %{with lustre_tests}
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
@@ -435,6 +442,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
+%{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
 %endif
@@ -444,6 +452,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %files osd-zfs
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
+%{_libdir}/@PACKAGE@/mount_osd_zfs.so
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
 %endif

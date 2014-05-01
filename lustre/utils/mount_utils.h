@@ -123,13 +123,6 @@ int check_mountfsoptions(char *mountopts, char *wanted_mountopts, int justwarn);
 void trim_mountfsoptions(char *s);
 __u64 get_device_size(char* device);
 
-int is_block(char *devname);
-void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
-int make_lustre_backfs(struct mkfs_opts *mop);
-int write_local_files(struct mkfs_opts *mop);
-int read_local_files(struct mkfs_opts *mop);
-int is_lustre_target(struct mkfs_opts *mop);
-
 /* loopback helper functions */
 int file_create(char *path, __u64 size);
 int loop_format(struct mkfs_opts *mop);
@@ -150,31 +143,23 @@ int osd_enable_quota(struct mkfs_opts *mop);
 int osd_init(void);
 void osd_fini(void);
 
-int ldiskfs_write_ldd(struct mkfs_opts *mop);
-int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *ldd);
-int ldiskfs_is_lustre(char *dev, unsigned *mount_type);
-int ldiskfs_make_lustre(struct mkfs_opts *mop);
-int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
-			   char *default_mountopts, int default_len,
-			   char *always_mountopts, int always_len);
-int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop);
-int ldiskfs_label_lustre(struct mount_opts *mop);
-int ldiskfs_enable_quota(struct mkfs_opts *mop);
-int ldiskfs_init(void);
-void ldiskfs_fini(void);
+struct module_backfs_ops {
+	int	(*init)(void);
+	void	(*fini)(void);
+	int	(*read_ldd)(char *ds,  struct lustre_disk_data *ldd);
+	int	(*write_ldd)(struct mkfs_opts *mop);
+	int	(*is_lustre)(char *dev, enum ldd_mount_type *mount_type);
+	int	(*make_lustre)(struct mkfs_opts *mop);
+	int	(*prepare_lustre)(struct mkfs_opts *mop,
+				  char *default_mountopts, int default_len,
+				  char *always_mountopts, int always_len);
+	int	(*tune_lustre)(char *dev, struct mount_opts *mop);
+	int	(*label_lustre)(struct mount_opts *mop);
+	int	(*enable_quota)(struct mkfs_opts *mop);
+	void   *dl_handle;
+};
 
-#ifdef HAVE_ZFS_OSD
-int zfs_write_ldd(struct mkfs_opts *mop);
-int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd);
-int zfs_is_lustre(char *dev, unsigned *mount_type);
-int zfs_make_lustre(struct mkfs_opts *mop);
-int zfs_prepare_lustre(struct mkfs_opts *mop,
-		       char *default_mountopts, int default_len,
-		       char *always_mountopts, int always_len);
-int zfs_tune_lustre(char *dev, struct mount_opts *mop);
-int zfs_label_lustre(struct mount_opts *mop);
-int zfs_init(void);
-void zfs_fini(void);
-#endif
+struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
+void unload_backfs_ops(struct module_backfs_ops *ops);
 
 #endif
