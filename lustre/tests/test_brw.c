@@ -47,7 +47,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 
 #define READ  1
 #define WRITE 2

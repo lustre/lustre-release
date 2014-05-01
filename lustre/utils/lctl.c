@@ -45,6 +45,7 @@
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
 #include <libcfs/libcfsutil.h>
+#include <lustre/lustre_idl.h>
 
 static int jt_quit(int argc, char **argv) {
         Parser_quit(argc, argv);

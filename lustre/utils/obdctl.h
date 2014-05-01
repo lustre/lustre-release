@@ -37,12 +37,6 @@
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
-
-#include <lustre/lustre_idl.h>
-
 #define MAX_IOC_BUFLEN 8192
 
 /* obd.c */

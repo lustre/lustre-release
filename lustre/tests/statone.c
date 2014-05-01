@@ -38,7 +38,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre_ioctl.h>
 
 int main(int argc, char **argv)

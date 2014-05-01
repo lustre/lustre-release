@@ -39,11 +39,23 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <endian.h>
 #include <fcntl.h>
 
 #include <time.h>
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_cfg.h>
+
+static inline int ext2_test_bit(int nr, const void *addr)
+{
+#if __BYTE_ORDER == __BIG_ENDIAN
+	const unsigned char *tmp = addr;
+	return (tmp[nr >> 3] >> (nr & 7)) & 1;
+#else
+	return test_bit(nr, addr);
+#endif
+}
 
 int llog_pack_buffer(int fd, struct llog_log_hdr **llog_buf,
                      struct llog_rec_hdr ***recs, int *recs_number);

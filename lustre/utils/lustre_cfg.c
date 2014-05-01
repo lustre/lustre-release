@@ -49,9 +49,7 @@
 #include <ctype.h>
 #include <glob.h>
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
+#include <libcfs/libcfs.h>
 #include <lustre_cfg.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_build_version.h>

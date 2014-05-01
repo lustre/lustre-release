@@ -33,11 +33,7 @@
  * Lustre is a trademark of Oracle Corporation, Inc.
  */
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#else
 #include <libcfs/libcfs.h>
-#endif
 
 unsigned long cfs_fail_loc = 0;
 unsigned int cfs_fail_val = 0;

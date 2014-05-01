@@ -44,7 +44,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 
 #define __REQ_LAYOUT_USER__ (1)

@@ -45,7 +45,7 @@
 #include <limits.h>
 #include <sys/ioctl.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre_ioctl.h>
 
 struct option longopts[] = {

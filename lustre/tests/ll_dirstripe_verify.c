@@ -51,11 +51,7 @@
 #include <errno.h>
 #include <dirent.h>
 
-#include <liblustre.h>
 #include <lustre/lustreapi.h>
-
-#include <lnet/lnetctl.h>
-
 
 #define MAX_LOV_UUID_COUNT      1000
 union {

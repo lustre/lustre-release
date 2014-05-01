@@ -48,7 +48,7 @@
 #include <libgen.h>
 #include <syslog.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #include <lustre/lustre_idl.h>
 

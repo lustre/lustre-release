@@ -53,8 +53,9 @@
 #include <unistd.h>
 #endif
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lnet/lnetctl.h>
+#include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 

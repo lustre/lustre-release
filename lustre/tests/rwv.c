@@ -43,7 +43,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 
 #define ACT_NONE        0

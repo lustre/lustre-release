@@ -69,7 +69,8 @@
 
 #include <lnet/lnetctl.h>
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
 #include <libcfs/libcfsutil.h>

@@ -64,14 +64,13 @@
 #include <lustre/lustre_idl.h>
 /* obd2cli_tgt() (required by DEBUG_REQ()) */
 #include <obd.h>
+#include <lustre_debug.h>
+#include <lustre_update.h>
+#endif /* !__REQ_LAYOUT_USER__ */
 
-/* __REQ_LAYOUT_USER__ */
-#endif
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
-#include <lustre_update.h>
 #include <lustre_acl.h>
-#include <lustre_debug.h>
 
 /*
  * RQFs (see below) refer to two struct req_msg_field arrays describing the

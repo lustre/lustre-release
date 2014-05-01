@@ -41,7 +41,7 @@
 #include <unistd.h>
 #endif
 
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 
 /** Quick-n'-dirty JSON string escape routine.

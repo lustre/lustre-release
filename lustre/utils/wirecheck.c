@@ -37,7 +37,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>
 
@@ -1750,25 +1750,6 @@ check_getinfo_fid2path(void)
 }
 
 static void
-check_posix_acl_xattr_entry(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT_TYPEDEF(posix_acl_xattr_entry);
-	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_tag);
-	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_perm);
-	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_id);
-}
-
-static void
-check_posix_acl_xattr_header(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
-	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
-	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
-}
-
-static void
 check_ll_user_fiemap(void)
 {
 	BLANK_LINE();
@@ -2471,13 +2452,6 @@ main(int argc, char **argv)
 	check_getinfo_fid2path();
 	check_ll_user_fiemap();
 	check_ll_fiemap_extent();
-	printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
-#ifndef LIBLUSTRE_POSIX_ACL
-#error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
-#endif
-	check_posix_acl_xattr_entry();
-	check_posix_acl_xattr_header();
-	printf("#endif\n");
 	check_link_ea_header();
 	check_link_ea_entry();
 	check_layout_intent();

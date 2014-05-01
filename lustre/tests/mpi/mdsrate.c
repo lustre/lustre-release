@@ -220,7 +220,7 @@ sigalrm_handler(int signum)
 #define HAVE_MDC_LOOKUP
 #elif defined(USE_MDC_LOOKUP)
 #include <config.h>
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include <lustre_ioctl.h>
 
 int llapi_file_lookup(int dirfd, const char *name)

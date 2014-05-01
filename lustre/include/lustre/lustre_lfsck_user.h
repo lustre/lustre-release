@@ -32,6 +32,7 @@
 
 #ifndef _LUSTRE_LFSCK_USER_H
 # define _LUSTRE_LFSCK_USER_H
+# include <lustre/lustre_user.h>
 
 enum lfsck_param_flags {
 	/* Reset LFSCK iterator position to the device beginning. */

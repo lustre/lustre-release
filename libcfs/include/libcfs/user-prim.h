@@ -122,6 +122,9 @@ void cond_resched(void);
 
 static inline void schedule(void)			{}
 static inline void schedule_timeout(int64_t t)	{}
+static inline void set_current_state(int state)
+{
+}
 
 /*
  * Lproc
