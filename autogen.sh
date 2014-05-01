@@ -39,6 +39,7 @@ done
 
 PWD_SAVE=$PWD
 
+run_cmd "libtoolize -q"
 run_cmd "aclocal -I $PWD/config $ACLOCAL_FLAGS"
 run_cmd "autoheader"
 run_cmd "automake -a -c"

@@ -46,12 +46,15 @@
 #include <lustre_ver.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <dlfcn.h>
 
 extern char *progname;
 extern int verbose;
 
 #define vprint(fmt, arg...) if (verbose > 0) printf(fmt, ##arg)
 #define verrprint(fmt, arg...) if (verbose >= 0) fprintf(stderr, fmt, ##arg)
+
+static struct module_backfs_ops *backfs_ops[LDD_MT_LAST];
 
 void fatal(void)
 {
@@ -407,31 +410,114 @@ int loop_format(struct mkfs_opts *mop)
 	return 0;
 }
 
+#define DLSYM(prefix, sym, func)					\
+	do {								\
+		char _fname[64];					\
+		snprintf(_fname, sizeof(_fname), "%s_%s", prefix, #func); \
+		sym->func = (typeof(sym->func))dlsym(sym->dl_handle, _fname); \
+	} while (0)
+
+/**
+ * Load plugin for a given mount_type from ${pkglibdir}/mount_osd_FSTYPE.so and
+ * return struct of function pointers (will be freed in unloack_backfs_module).
+ *
+ * \param[in] mount_type	Mount type to load module for.
+ * \retval Value of backfs_ops struct
+ * \retval NULL if no module exists
+ */
+struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
+{
+	void *handle;
+	char *error, filename[512], fsname[512], *name;
+	struct module_backfs_ops *ops;
+
+	/* This deals with duplicate ldd_mount_types resolving to same OSD layer
+	 * plugin (e.g. ext3/ldiskfs/ldiskfs2 all being ldiskfs) */
+	strncpy(fsname, mt_type(mount_type), sizeof(fsname));
+	name = fsname + sizeof("osd-") - 1;
+
+	/* change osd- to osd_ */
+	fsname[sizeof("osd-") - 2] = '_';
+
+	snprintf(filename, sizeof(filename), PLUGIN_DIR"/mount_%s.so", fsname);
+
+	handle = dlopen(filename, RTLD_LAZY);
+	if (handle == NULL)
+		/* Do not clutter up console with missing types */
+		return NULL;
+
+	ops = malloc(sizeof(*ops));
+	if (ops == NULL) {
+		dlclose(handle);
+		return NULL;
+	}
+
+	ops->dl_handle = handle;
+	dlerror(); /* Clear any existing error */
+
+	DLSYM(name, ops, init);
+	DLSYM(name, ops, fini);
+	DLSYM(name, ops, read_ldd);
+	DLSYM(name, ops, write_ldd);
+	DLSYM(name, ops, is_lustre);
+	DLSYM(name, ops, make_lustre);
+	DLSYM(name, ops, prepare_lustre);
+	DLSYM(name, ops, tune_lustre);
+	DLSYM(name, ops, label_lustre);
+	DLSYM(name, ops, enable_quota);
+
+	error = dlerror();
+	if (error != NULL) {
+		fatal();
+		fprintf(stderr, "%s\n", error);
+		dlclose(handle);
+		free(ops);
+		return NULL;
+	}
+	return ops;
+}
+
+/**
+ * Unload plugin and free backfs_ops structure. Must be called the same number
+ * of times as load_backfs_module is.
+ */
+void unload_backfs_module(struct module_backfs_ops *ops)
+{
+	if (ops == NULL)
+		return;
+
+	dlclose(ops->dl_handle);
+	free(ops);
+}
+
+/* Return true if backfs_ops has operations for the given mount_type. */
+int backfs_mount_type_okay(enum ldd_mount_type mount_type)
+{
+	if (unlikely(mount_type >= LDD_MT_LAST || mount_type < 0)) {
+		fatal();
+		fprintf(stderr, "fs type out of range %d\n", mount_type);
+		return 0;
+	}
+	if (backfs_ops[mount_type] == NULL) {
+		fatal();
+		fprintf(stderr, "unhandled fs type %d '%s'\n",
+			mount_type, mt_str(mount_type));
+		return 0;
+	}
+	return 1;
+}
+
 /* Write the server config files */
 int osd_write_ldd(struct mkfs_opts *mop)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_write_ldd(mop);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_write_ldd(mop);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->write_ldd(mop);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -441,25 +527,11 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd)
 {
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_read_ldd(dev, ldd);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_read_ldd(dev, ldd);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->read_ldd(dev, ldd);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -467,20 +539,17 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd)
 /* Was this device formatted for Lustre */
 int osd_is_lustre(char *dev, unsigned *mount_type)
 {
+	int i;
+
 	vprint("checking for existing Lustre data: ");
 
-#ifdef HAVE_LDISKFS_OSD
-	if (ldiskfs_is_lustre(dev, mount_type)) {
-		vprint("found\n");
-		return 1;
+	for (i = 0; i < LDD_MT_LAST; ++i) {
+		if (backfs_ops[i] != NULL &&
+		    backfs_ops[i]->is_lustre(dev, mount_type)) {
+			vprint("found\n");
+			return 1;
+		}
 	}
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	if (zfs_is_lustre(dev, mount_type)) {
-		vprint("found\n");
-		return 1;
-	}
-#endif /* HAVE_ZFS_OSD */
 
 	vprint("not found\n");
 	return 0;
@@ -492,25 +561,11 @@ int osd_make_lustre(struct mkfs_opts *mop)
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_make_lustre(mop);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_make_lustre(mop);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->make_lustre(mop);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -522,29 +577,13 @@ int osd_prepare_lustre(struct mkfs_opts *mop,
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_prepare_lustre(mop,
-					     default_mountopts, default_len,
-					     always_mountopts, always_len);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_prepare_lustre(mop,
-					 default_mountopts, default_len,
-					 always_mountopts, always_len);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->prepare_lustre(mop,
+			default_mountopts, default_len,
+			always_mountopts, always_len);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -554,25 +593,11 @@ int osd_tune_lustre(char *dev, struct mount_opts *mop)
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_tune_lustre(dev, mop);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_tune_lustre(dev, mop);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-				ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->tune_lustre(dev, mop);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -582,25 +607,11 @@ int osd_label_lustre(struct mount_opts *mop)
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_label_lustre(mop);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		ret = zfs_label_lustre(mop);
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->label_lustre(mop);
+
+	else
 		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
@@ -611,59 +622,41 @@ int osd_enable_quota(struct mkfs_opts *mop)
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
 
-	switch (ldd->ldd_mount_type) {
-#ifdef HAVE_LDISKFS_OSD
-	case LDD_MT_EXT3:
-	case LDD_MT_LDISKFS:
-	case LDD_MT_LDISKFS2:
-		ret = ldiskfs_enable_quota(mop);
-		break;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	case LDD_MT_ZFS:
-		fprintf(stderr, "this option is only valid for ldiskfs\n");
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->enable_quota(mop);
+
+	else
 		ret = EINVAL;
-		break;
-#endif /* HAVE_ZFS_OSD */
-	default:
-		fatal();
-		fprintf(stderr, "unknown fs type %d '%s'\n",
-			ldd->ldd_mount_type, MT_STR(ldd));
-		ret = EINVAL;
-		break;
-	}
 
 	return ret;
 }
 
 int osd_init(void)
 {
-	int ret = 0;
+	int i, ret = 0;
 
-#ifdef HAVE_LDISKFS_OSD
-	ret = ldiskfs_init();
-	if (ret)
-		return ret;
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	ret = zfs_init();
-	/* we want to be able to set up a ldiskfs-based filesystem w/o
-	 * the ZFS modules installed, see ORI-425 */
-	if (ret)
-		ret = 0;
-#endif /* HAVE_ZFS_OSD */
+	for (i = 0; i < LDD_MT_LAST; ++i) {
+		backfs_ops[i] = load_backfs_module(i);
+		if (backfs_ops[i] != NULL)
+			ret = backfs_ops[i]->init();
+		if (ret)
+			break;
+	}
 
 	return ret;
 }
 
 void osd_fini(void)
 {
-#ifdef HAVE_LDISKFS_OSD
-	ldiskfs_fini();
-#endif /* HAVE_LDISKFS_OSD */
-#ifdef HAVE_ZFS_OSD
-	zfs_fini();
-#endif /* HAVE_ZFS_OSD */
+	int i;
+
+	for (i = 0; i < LDD_MT_LAST; ++i) {
+		if (backfs_ops[i] != NULL) {
+			backfs_ops[i]->fini();
+			unload_backfs_module(backfs_ops[i]);
+			backfs_ops[i] = NULL;
+		}
+	}
 }
 
 __u64 get_device_size(char* device)

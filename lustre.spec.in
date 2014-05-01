@@ -99,6 +99,7 @@ BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 Requires: %{name}-modules = %{version}
+BuildRequires: libtool
 %if %{with servers}
 Requires: lustre-osd
 %endif
@@ -415,6 +416,8 @@ if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ;
   echo '%attr(-, root, root) %{_includedir}/linux/lustre_types.h' >>lustre.files
 fi
 
+find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@/ -name \*.la -delete
+
 %if %{with lustre_tests}
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
 echo '%attr(-, root, root) %{_bindir}/mcreate' >>lustre-tests.files
@@ -477,6 +480,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/fsfilt_ldiskfs.ko
 %attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
+%attr(-, root, root) %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
 %endif
@@ -484,7 +488,9 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 
 %if %{with zfs}
 %files osd-zfs
-%attr(-, root, root) %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
+%defattr(-,root,root)
+%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
+%{_libdir}/@PACKAGE@/mount_osd_zfs.so
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
 %endif

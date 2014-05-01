@@ -19,6 +19,7 @@
 .*.cmd
 .*.d
 .*.flags
+.libs
 .tmp_versions
 .Xrefs
 *~
@@ -28,6 +29,8 @@
 *.dSYM
 *.i
 *.ko
+*.la
+*.lo
 *.mod.c
 *.o
 *.orig
@@ -67,6 +70,7 @@ TAGS
 /config.h
 /config.h.in
 /INSTALL
+/libtool
 /lustre.spec
 /lustre*.tar.gz
 /mkinstalldirs

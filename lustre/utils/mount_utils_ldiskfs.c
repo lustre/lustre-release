@@ -102,7 +102,7 @@ extern char *progname;
  * Concatenate context of the temporary mount point iff selinux is enabled
  */
 #ifdef HAVE_SELINUX
-void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
+static void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
 {
 	security_context_t fcontext;
 
@@ -120,6 +120,122 @@ void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
 	}
 }
 #endif
+
+/* return canonicalized absolute pathname, even if the target file does not
+ * exist, unlike realpath */
+static char *absolute_path(char *devname)
+{
+	char  buf[PATH_MAX + 1] = "";
+	char *path;
+	char *ptr;
+	int len;
+
+	path = malloc(sizeof(buf));
+	if (path == NULL)
+		return NULL;
+
+	if (devname[0] != '/') {
+		if (getcwd(buf, sizeof(buf) - 1) == NULL) {
+			free(path);
+			return NULL;
+		}
+		len = snprintf(path, sizeof(buf), "%s/%s", buf, devname);
+		if (len >= sizeof(buf)) {
+			free(path);
+			return NULL;
+		}
+	} else {
+		len = snprintf(path, sizeof(buf), "%s", devname);
+		if (len >= sizeof(buf)) {
+			free(path);
+			return NULL;
+		}
+	}
+
+	/* truncate filename before calling realpath */
+	ptr = strrchr(path, '/');
+	if (ptr == NULL) {
+		free(path);
+		return NULL;
+	}
+	*ptr = '\0';
+	if (buf != realpath(path, buf)) {
+		free(path);
+		return NULL;
+	}
+	/* add the filename back */
+	len = snprintf(path, PATH_MAX, "%s/%s", buf, ptr+1);
+	if (len >= PATH_MAX) {
+		free(path);
+		return NULL;
+	}
+	return path;
+}
+
+/* Determine if a device is a block device (as opposed to a file) */
+static int is_block(char *devname)
+{
+	struct stat st;
+	int	ret = 0;
+	char	*devpath;
+
+	devpath = absolute_path(devname);
+	if (devpath == NULL) {
+		fprintf(stderr, "%s: failed to resolve path to %s\n",
+			progname, devname);
+		return -1;
+	}
+
+	ret = access(devname, F_OK);
+	if (ret != 0) {
+		if (strncmp(devpath, "/dev/", 5) == 0) {
+			/* nobody sane wants to create a loopback file under
+			 * /dev. Let's just report the device doesn't exist */
+			fprintf(stderr, "%s: %s apparently does not exist\n",
+				progname, devpath);
+			ret = -1;
+			goto out;
+		}
+		ret = 0;
+		goto out;
+	}
+	ret = stat(devpath, &st);
+	if (ret != 0) {
+		fprintf(stderr, "%s: cannot stat %s\n", progname, devpath);
+		goto out;
+	}
+	ret = S_ISBLK(st.st_mode);
+out:
+	free(devpath);
+	return ret;
+}
+
+static int is_feature_enabled(const char *feature, const char *devpath)
+{
+	char cmd[PATH_MAX];
+	FILE *fp;
+	char enabled_features[4096] = "";
+	int ret = 1;
+
+	snprintf(cmd, sizeof(cmd), "%s -R features %s 2>&1",
+		 DEBUGFS, devpath);
+
+	/* Using popen() instead of run_command() since debugfs does
+	 * not return proper error code if command is not supported */
+	fp = popen(cmd, "r");
+	if (!fp) {
+		fprintf(stderr, "%s: %s\n", progname, strerror(errno));
+		return 0;
+	}
+
+	ret = fread(enabled_features, 1, sizeof(enabled_features) - 1, fp);
+	enabled_features[ret] = '\0';
+	pclose(fp);
+
+	if (strstr(enabled_features, feature))
+		return 1;
+	return 0;
+}
 
 /* Write the server config files */
 int ldiskfs_write_ldd(struct mkfs_opts *mop)
@@ -276,7 +392,7 @@ int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 
 /* Display the need for the latest e2fsprogs to be installed. make_backfs
  * indicates if the caller is make_lustre_backfs() or not. */
-void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
+static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 {
 	static int msg_displayed;
 
@@ -825,7 +941,7 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 	return 0;
 }
 
-int read_file(const char *path, char *buf, int size)
+static int read_file(const char *path, char *buf, int size)
 {
 	FILE *fd;
 
@@ -843,7 +959,7 @@ int read_file(const char *path, char *buf, int size)
 	return 0;
 }
 
-int write_file(const char *path, const char *buf)
+static int write_file(const char *path, const char *buf)
 {
 	FILE *fd;
 
@@ -856,7 +972,7 @@ int write_file(const char *path, const char *buf)
 	return 0;
 }
 
-int set_blockdev_scheduler(const char *path, const char *scheduler)
+static int set_blockdev_scheduler(const char *path, const char *scheduler)
 {
 	char buf[PATH_MAX], *c;
 	int rc;
@@ -904,7 +1020,7 @@ int set_blockdev_scheduler(const char *path, const char *scheduler)
 /* This is to tune the kernel for good SCSI performance.
  * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
  * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-int set_blockdev_tunables(char *source, struct mount_opts *mop)
+static int set_blockdev_tunables(char *source, struct mount_opts *mop)
 {
 	glob_t glob_info = { 0 };
 	struct stat stat_buf;
@@ -1110,118 +1226,6 @@ int ldiskfs_label_lustre(struct mount_opts *mop)
 	rc = run_command(label_cmd, sizeof(label_cmd));
 
 	return rc;
-}
-
-/* return canonicalized absolute pathname, even if the target file does not
- * exist, unlike realpath */
-static char *absolute_path(char *devname)
-{
-	char  buf[PATH_MAX + 1];
-	char *path;
-	char *ptr;
-
-	path = malloc(PATH_MAX + 1);
-	if (path == NULL)
-		return NULL;
-
-	if (devname[0] != '/') {
-		if (getcwd(buf, sizeof(buf) - 1) == NULL) {
-			free(path);
-			return NULL;
-		}
-		strcat(buf, "/");
-		if (strlen(devname) > sizeof(buf)-strlen(buf)-1) {
-			free(path);
-			return NULL;
-		}
-		strncat(buf, devname, sizeof(buf)-strlen(buf)-1);
-	} else {
-		if (strlen(devname) > sizeof(buf)-1) {
-			free(path);
-			return NULL;
-		}
-		strncpy(buf, devname, sizeof(buf));
-	}
-	/* truncate filename before calling realpath */
-	ptr = strrchr(buf, '/');
-	if (ptr == NULL) {
-		free(path);
-		return NULL;
-	}
-	*ptr = '\0';
-	if (path != realpath(buf, path)) {
-		free(path);
-		return NULL;
-	}
-	/* add the filename back */
-	strcat(path, "/");
-	strcat(path, ptr + 1);
-	return path;
-}
-
-/* Determine if a device is a block device (as opposed to a file) */
-int is_block(char* devname)
-{
-	struct stat st;
-	int	ret = 0;
-	char	*devpath;
-
-	devpath = absolute_path(devname);
-	if (devpath == NULL) {
-		fprintf(stderr, "%s: failed to resolve path to %s\n",
-			progname, devname);
-		return -1;
-	}
-
-	ret = access(devname, F_OK);
-	if (ret != 0) {
-		if (strncmp(devpath, "/dev/", 5) == 0) {
-			/* nobody sane wants to create a loopback file under
-			 * /dev. Let's just report the device doesn't exist */
-			fprintf(stderr, "%s: %s apparently does not exist\n",
-				progname, devpath);
-			ret = -1;
-			goto out;
-		}
-		ret = 0;
-		goto out;
-	}
-	ret = stat(devpath, &st);
-	if (ret != 0) {
-		fprintf(stderr, "%s: cannot stat %s\n", progname, devpath);
-		goto out;
-	}
-	ret = S_ISBLK(st.st_mode);
-out:
-	free(devpath);
-	return ret;
-}
-
-static int is_feature_enabled(const char *feature, const char *devpath)
-{
-	char cmd[PATH_MAX];
-	FILE *fp;
-	char enabled_features[4096] = "";
-	int ret = 1;
-
-	snprintf(cmd, sizeof(cmd), "%s -R features %s 2>&1",
-		 DEBUGFS, devpath);
-
-	/* Using popen() instead of run_command() since debugfs does
-	 * not return proper error code if command is not supported */
-	fp = popen(cmd, "r");
-	if (!fp) {
-		fprintf(stderr, "%s: %s\n", progname, strerror(errno));
-		return 0;
-	}
-
-	ret = fread(enabled_features, 1, sizeof(enabled_features) - 1, fp);
-	enabled_features[ret] = '\0';
-	pclose(fp);
-
-	if (strstr(enabled_features, feature))
-		return 1;
-	return 0;
 }
 
 /* Enable quota accounting */
