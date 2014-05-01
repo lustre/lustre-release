@@ -36,69 +36,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-noinst_LIBRARIES = liblov.a
-liblov_a_SOURCES = lov_cl_internal.h \
-        lov_internal.h \
-        lov_dev.c \
-        lov_ea.c \
-        lov_io.c \
-        lov_lock.c \
-        lov_merge.c \
-        lov_obd.c \
-        lov_object.c \
-        lov_offset.c \
-        lov_pack.c \
-        lov_page.c \
-        lov_pool.c \
-        lov_request.c \
-        lovsub_dev.c \
-        lovsub_io.c \
-        lovsub_lock.c \
-        lovsub_object.c \
-        lovsub_page.c
-
-liblov_a_CPPFLAGS = $(LLCPPFLAGS)
-liblov_a_CFLAGS = $(LLCFLAGS)
-endif
-
 if MODULES
-if LINUX
 modulefs_DATA = lov$(KMODEXT)
-endif
-
-if DARWIN
-macos_PROGRAMS = lov
-
-lov_SOURCES =		\
-	lov_pool.c	\
-	lov_obd.c	\
-	lov_pack.c	\
-	lov_request.c	\
-	lov_merge.c	\
-	lov_dev.c	\
-	lov_object.c	\
-	lov_page.c	\
-	lov_lock.c	\
-	lov_io.c	\
-	lovsub_dev.c	\
-	lovsub_object.c	\
-	lovsub_page.c	\
-	lovsub_lock.c	\
-	lovsub_io.c	\
-	lov_offset.c	\
-	lov_internal.h
-
-lov_CFLAGS := $(EXTRA_KCFLAGS)
-lov_LDFLAGS := $(EXTRA_KLDFLAGS)
-lov_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # DARWIN
-
 endif # MODULES
 
 install-data-hook: $(install_data_hook)

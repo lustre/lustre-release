@@ -42,11 +42,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre_ioctl.h>
@@ -2467,7 +2463,6 @@ int __init lov_init(void)
         RETURN(rc);
 }
 
-#ifdef __KERNEL__
 static void /*__exit*/ lov_exit(void)
 {
 	class_unregister_type(LUSTRE_LOV_NAME);
@@ -2480,4 +2475,3 @@ MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
 MODULE_LICENSE("GPL");
 
 cfs_module(lov, LUSTRE_VERSION_STRING, lov_init, lov_exit);
-#endif

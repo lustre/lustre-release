@@ -36,11 +36,7 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>

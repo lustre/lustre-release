@@ -36,11 +36,7 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd_class.h>
 #include "lov_internal.h"
@@ -63,9 +59,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	int rc = 0;
 
 	assert_spin_locked(&lsm->lsm_lock);
-#ifdef __KERNEL__
 	LASSERT(lsm->lsm_lock_owner == current_pid());
-#endif
 
 	CDEBUG(D_INODE, "MDT ID "DOSTID" initial value: s="LPU64" m="LPU64
 	       " a="LPU64" c="LPU64" b="LPU64"\n", POSTID(&lsm->lsm_oi),

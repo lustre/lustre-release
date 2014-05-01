@@ -46,12 +46,7 @@
 #ifndef LOV_CL_INTERNAL_H
 #define LOV_CL_INTERNAL_H
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <cl_object.h>
 #include "lov_internal.h"

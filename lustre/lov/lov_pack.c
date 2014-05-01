@@ -41,9 +41,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <lustre_net.h>
 #include <obd.h>
