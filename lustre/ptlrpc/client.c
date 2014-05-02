@@ -53,6 +53,7 @@
 #include "ptlrpc_internal.h"
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req);
+static int ptlrpcd_check_work(struct ptlrpc_request *req);
 
 /**
  * Initialize passed in client structure \a cl.
@@ -1829,7 +1830,11 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 ptlrpc_req_interpret(env, req, req->rq_status);
 
-                ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
+		if (ptlrpcd_check_work(req)) {
+			cfs_atomic_dec(&set->set_remaining);
+			continue;
+		}
+		ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
 
 		CDEBUG(req->rq_reqmsg != NULL ? D_RPCTRACE : 0,
 			"Completed RPC pname:cluuid:pid:xid:nid:"
@@ -3023,22 +3028,50 @@ EXPORT_SYMBOL(ptlrpc_sample_next_xid);
  *    have delay before it really runs by ptlrpcd thread.
  */
 struct ptlrpc_work_async_args {
-        __u64   magic;
-        int   (*cb)(const struct lu_env *, void *);
-        void   *cbdata;
+	int   (*cb)(const struct lu_env *, void *);
+	void   *cbdata;
 };
 
-#define PTLRPC_WORK_MAGIC 0x6655436b676f4f44ULL /* magic code */
+static void ptlrpcd_add_work_req(struct ptlrpc_request *req)
+{
+	/* re-initialize the req */
+	req->rq_timeout		= obd_timeout;
+	req->rq_sent		= cfs_time_current_sec();
+	req->rq_deadline	= req->rq_sent + req->rq_timeout;
+	req->rq_reply_deadline	= req->rq_deadline;
+	req->rq_phase		= RQ_PHASE_INTERPRET;
+	req->rq_next_phase	= RQ_PHASE_COMPLETE;
+	req->rq_xid		= ptlrpc_next_xid();
+	req->rq_import_generation = req->rq_import->imp_generation;
+
+	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+}
 
 static int work_interpreter(const struct lu_env *env,
-                            struct ptlrpc_request *req, void *data, int rc)
+			    struct ptlrpc_request *req, void *data, int rc)
 {
-        struct ptlrpc_work_async_args *arg = data;
+	struct ptlrpc_work_async_args *arg = data;
 
-        LASSERT(arg->magic == PTLRPC_WORK_MAGIC);
-        LASSERT(arg->cb != NULL);
+	LASSERT(ptlrpcd_check_work(req));
+	LASSERT(arg->cb != NULL);
 
-        return arg->cb(env, arg->cbdata);
+	rc = arg->cb(env, arg->cbdata);
+
+	cfs_list_del_init(&req->rq_set_chain);
+	req->rq_set = NULL;
+
+	if (cfs_atomic_dec_return(&req->rq_refcount) > 1) {
+		cfs_atomic_set(&req->rq_refcount, 2);
+		ptlrpcd_add_work_req(req);
+	}
+	return rc;
+}
+
+static int worker_format;
+
+static int ptlrpcd_check_work(struct ptlrpc_request *req)
+{
+	return req->rq_pill.rc_fmt == (void *)&worker_format;
 }
 
 /**
@@ -3072,6 +3105,7 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
         req->rq_receiving_reply = 0;
         req->rq_must_unlink = 0;
         req->rq_no_delay = req->rq_no_resend = 1;
+	req->rq_pill.rc_fmt = (void *)&worker_format;
 
 	spin_lock_init(&req->rq_lock);
 	CFS_INIT_LIST_HEAD(&req->rq_list);
@@ -3081,11 +3115,10 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
 	CFS_INIT_LIST_HEAD(&req->rq_exp_list);
 	init_waitqueue_head(&req->rq_reply_waitq);
 	init_waitqueue_head(&req->rq_set_waitq);
-	cfs_atomic_set(&req->rq_refcount, 1);
+	atomic_set(&req->rq_refcount, 1);
 
 	CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
 	args = ptlrpc_req_async_args(req);
-	args->magic  = PTLRPC_WORK_MAGIC;
 	args->cb     = cb;
 	args->cbdata = cbdata;
 
@@ -3104,7 +3137,7 @@ EXPORT_SYMBOL(ptlrpcd_destroy_work);
 
 int ptlrpcd_queue_work(void *handler)
 {
-        struct ptlrpc_request *req = handler;
+	struct ptlrpc_request *req = handler;
 
         /*
          * Check if the req is already being queued.
@@ -3114,26 +3147,9 @@ int ptlrpcd_queue_work(void *handler)
          * for this purpose. This is okay because the caller should use this
          * req as opaque data. - Jinshan
          */
-        LASSERT(cfs_atomic_read(&req->rq_refcount) > 0);
-        if (cfs_atomic_read(&req->rq_refcount) > 1)
-                return -EBUSY;
-
-        if (cfs_atomic_inc_return(&req->rq_refcount) > 2) { /* race */
-                cfs_atomic_dec(&req->rq_refcount);
-                return -EBUSY;
-        }
-
-        /* re-initialize the req */
-        req->rq_timeout        = obd_timeout;
-        req->rq_sent           = cfs_time_current_sec();
-        req->rq_deadline       = req->rq_sent + req->rq_timeout;
-        req->rq_reply_deadline = req->rq_deadline;
-        req->rq_phase          = RQ_PHASE_INTERPRET;
-        req->rq_next_phase     = RQ_PHASE_COMPLETE;
-        req->rq_xid            = ptlrpc_next_xid();
-        req->rq_import_generation = req->rq_import->imp_generation;
-
-        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
-        return 0;
+	LASSERT(cfs_atomic_read(&req->rq_refcount) > 0);
+	if (cfs_atomic_inc_return(&req->rq_refcount) == 2)
+		ptlrpcd_add_work_req(req);
+	return 0;
 }
 EXPORT_SYMBOL(ptlrpcd_queue_work);
