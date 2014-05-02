@@ -225,7 +225,7 @@ int mdt_hsm_state_get(struct tgt_session_info *tsi)
 		GOTO(out_unlock, rc);
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
 				 req_capsule_client_get(info->mti_pill,
 				 &RMF_CAPA1));
 
@@ -285,7 +285,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 		GOTO(out_ucred, rc);
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
 			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
 
 	/* Non-root users are forbidden to set or clear flags which are
@@ -312,7 +312,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 		if (!(ma->ma_hsm.mh_flags & HS_EXISTS)) {
 			CDEBUG(D_HSM, "Could not set an archive number for "
 			       DFID "if HSM EXISTS flag is not set.\n",
-			       PFID(&info->mti_body->fid1));
+			       PFID(&info->mti_body->mbo_fid1));
 			GOTO(out_unlock, rc);
 		}
 		ma->ma_hsm.mh_arch_id = hss->hss_archive_id;
@@ -331,7 +331,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	    (flags & HS_LOST     && !(flags & HS_ARCHIVED))) {
 		CDEBUG(D_HSM, "Incompatible flag change on "DFID
 			      "flags="LPX64"\n",
-		       PFID(&info->mti_body->fid1), flags);
+		       PFID(&info->mti_body->mbo_fid1), flags);
 		GOTO(out_ucred, rc = -EINVAL);
 	}
 
@@ -382,7 +382,7 @@ int mdt_hsm_action(struct tgt_session_info *tsi)
 		GOTO(out, rc = err_serious(rc));
 
 	if (req_capsule_get_size(tsi->tsi_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
 				 req_capsule_client_get(info->mti_pill,
 							&RMF_CAPA1));
 
@@ -405,7 +405,7 @@ int mdt_hsm_action(struct tgt_session_info *tsi)
 	hai->hai_action = HSMA_NONE;
 	hai->hai_cookie = 0;
 	hai->hai_gid = 0;
-	hai->hai_fid = info->mti_body->fid1;
+	hai->hai_fid = info->mti_body->mbo_fid1;
 	hai->hai_len = sizeof(*hai);
 
 	rc = mdt_hsm_get_actions(info, hal);

@@ -76,29 +76,29 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 
 	tsi->tsi_mdt_body = body;
 
-	if (!(body->valid & OBD_MD_FLID))
+	if (!(body->mbo_valid & OBD_MD_FLID))
 		RETURN(0);
 
 	/* mdc_pack_body() doesn't check if fid is zero and set OBD_ML_FID
 	 * in any case in pre-2.5 clients. Fix that here if needed */
-	if (unlikely(fid_is_zero(&body->fid1)))
+	if (unlikely(fid_is_zero(&body->mbo_fid1)))
 		RETURN(0);
 
-	if (!fid_is_sane(&body->fid1)) {
+	if (!fid_is_sane(&body->mbo_fid1)) {
 		CERROR("%s: invalid FID: "DFID"\n", tgt_name(tsi->tsi_tgt),
-		       PFID(&body->fid1));
+		       PFID(&body->mbo_fid1));
 		RETURN(-EINVAL);
 	}
 
 	obj = lu_object_find(tsi->tsi_env,
 			     &tsi->tsi_tgt->lut_bottom->dd_lu_dev,
-			     &body->fid1, NULL);
+			     &body->mbo_fid1, NULL);
 	if (!IS_ERR(obj)) {
 		if ((flags & HABEO_CORPUS) && !lu_object_exists(obj)) {
 			lu_object_put(tsi->tsi_env, obj);
 			/* for capability renew ENOENT will be handled in
 			 * mdt_renew_capa */
-			if (body->valid & OBD_MD_FLOSSCAPA)
+			if (body->mbo_valid & OBD_MD_FLOSSCAPA)
 				rc = 0;
 			else
 				rc = -ENOENT;
@@ -110,7 +110,7 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 		rc = PTR_ERR(obj);
 	}
 
-	tsi->tsi_fid = body->fid1;
+	tsi->tsi_fid = body->mbo_fid1;
 
 	RETURN(rc);
 }
@@ -398,7 +398,7 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 					  RCL_SERVER))
 			req_capsule_set_size(tsi->tsi_pill, &RMF_MDT_MD,
 					     RCL_SERVER,
-					     tsi->tsi_mdt_body->eadatasize);
+					     tsi->tsi_mdt_body->mbo_eadatasize);
 		if (req_capsule_has_field(tsi->tsi_pill, &RMF_LOGCOOKIES,
 					  RCL_SERVER))
 			req_capsule_set_size(tsi->tsi_pill, &RMF_LOGCOOKIES,

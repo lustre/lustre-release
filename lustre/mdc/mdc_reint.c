@@ -193,8 +193,8 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 LASSERT(epoch != NULL);
                 LASSERT(body != NULL);
-                epoch->handle = body->handle;
-                epoch->ioepoch = body->ioepoch;
+		epoch->handle = body->mbo_handle;
+		epoch->ioepoch = body->mbo_ioepoch;
                 req->rq_replay_cb = mdc_replay_open;
         /** bug 3633, open may be committed and estale answer is not error */
         } else if (rc == -ESTALE && (op_data->op_flags & MF_SOM_CHANGE)) {
@@ -310,7 +310,7 @@ rebuild:
 
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body);
-                if (body->valid & OBD_MD_FLMDSCAPA) {
+		if (body->mbo_valid & OBD_MD_FLMDSCAPA) {
                         capa = req_capsule_server_get(&req->rq_pill,
                                                       &RMF_CAPA1);
                         if (capa == NULL)

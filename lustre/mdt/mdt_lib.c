@@ -155,7 +155,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	if (type == BODY_INIT) {
 		struct mdt_body *body = (struct mdt_body *)buf;
 
-		ucred->uc_suppgids[0] = body->suppgid;
+		ucred->uc_suppgids[0] = body->mbo_suppgid;
 		ucred->uc_suppgids[1] = -1;
 	}
 
@@ -421,11 +421,11 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
 	LASSERT(uc != NULL);
 	uc->uc_valid = UCRED_INVALID;
-	uc->uc_o_uid = uc->uc_uid = body->uid;
-	uc->uc_o_gid = uc->uc_gid = body->gid;
-	uc->uc_o_fsuid = uc->uc_fsuid = body->fsuid;
-	uc->uc_o_fsgid = uc->uc_fsgid = body->fsgid;
-	uc->uc_suppgids[0] = body->suppgid;
+	uc->uc_o_uid = uc->uc_uid = body->mbo_uid;
+	uc->uc_o_gid = uc->uc_gid = body->mbo_gid;
+	uc->uc_o_fsuid = uc->uc_fsuid = body->mbo_fsuid;
+	uc->uc_o_fsgid = uc->uc_fsgid = body->mbo_fsgid;
+	uc->uc_suppgids[0] = body->mbo_suppgid;
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
@@ -448,9 +448,9 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
 	/* remove fs privilege for non-root user. */
 	if (uc->uc_fsuid)
-		uc->uc_cap = body->capability & ~CFS_CAP_FS_MASK;
+		uc->uc_cap = body->mbo_capability & ~CFS_CAP_FS_MASK;
 	else
-		uc->uc_cap = body->capability;
+		uc->uc_cap = body->mbo_capability;
 	uc->uc_valid = UCRED_OLD;
 
 	RETURN(0);
@@ -601,12 +601,13 @@ int mdt_fix_reply(struct mdt_thread_info *info)
         body = req_capsule_server_get(pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
 
-        if (body->valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE | OBD_MD_LINKNAME))
-                md_size = body->eadatasize;
-        else
-                md_size = 0;
+	if (body->mbo_valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE |
+			       OBD_MD_LINKNAME))
+		md_size = body->mbo_eadatasize;
+	else
+		md_size = 0;
 
-        acl_size = body->aclsize;
+	acl_size = body->mbo_aclsize;
 
         /* this replay - not send info to client */
 	if (info->mti_spec.no_create) {
@@ -615,10 +616,10 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 	}
 
         CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d"
-                        " MDSCAPA = %llx, OSSCAPA = %llx\n",
-                        md_size, acl_size,
-                        (unsigned long long)(body->valid & OBD_MD_FLMDSCAPA),
-                        (unsigned long long)(body->valid & OBD_MD_FLOSSCAPA));
+	       " MDSCAPA = %llx, OSSCAPA = %llx\n",
+	       md_size, acl_size,
+	       (unsigned long long)(body->mbo_valid & OBD_MD_FLMDSCAPA),
+	       (unsigned long long)(body->mbo_valid & OBD_MD_FLOSSCAPA));
 /*
             &RMF_MDT_BODY,
             &RMF_MDT_MD,
@@ -657,12 +658,12 @@ int mdt_fix_reply(struct mdt_thread_info *info)
                                    acl_size, RCL_SERVER);
 
         if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
-            !(body->valid & OBD_MD_FLMDSCAPA))
-                req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
+	    !(body->mbo_valid & OBD_MD_FLMDSCAPA))
+		req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
 
-        if (req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-            !(body->valid & OBD_MD_FLOSSCAPA))
-                req_capsule_shrink(pill, &RMF_CAPA2, 0, RCL_SERVER);
+	if (req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
+	    !(body->mbo_valid & OBD_MD_FLOSSCAPA))
+		req_capsule_shrink(pill, &RMF_CAPA2, 0, RCL_SERVER);
 
         /*
          * Some more field should be shrinked if needed.
@@ -681,7 +682,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
                         /* we can't answer with proper LOV EA, drop flags,
                          * the rc is also returned so this request is
                          * considered as failed */
-                        body->valid &= ~(OBD_MD_FLDIREA | OBD_MD_FLEASIZE);
+			body->mbo_valid &= ~(OBD_MD_FLDIREA | OBD_MD_FLEASIZE);
                         /* don't return transno along with error */
                         lustre_msg_set_transno(pill->rc_req->rq_repmsg, 0);
                 } else {
@@ -731,11 +732,11 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 		CERROR("No need in LOV EA upon unlink\n");
 		dump_stack();
         }
-	repbody->eadatasize = 0;
+	repbody->mbo_eadatasize = 0;
 
 	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
-	    repbody->valid & OBD_MD_FLEASIZE) {
+	    repbody->mbo_valid & OBD_MD_FLEASIZE) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
@@ -745,7 +746,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
                 if (rc)
                         RETURN(rc);
 
-                repbody->valid |= OBD_MD_FLOSSCAPA;
+		repbody->mbo_valid |= OBD_MD_FLOSSCAPA;
         }
 
         RETURN(0);

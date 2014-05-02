@@ -603,9 +603,9 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 	LASSERT(body != NULL);
 
-	lmm_size = body->eadatasize;
+	lmm_size = body->mbo_eadatasize;
 
-	if (!(body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) ||
+	if (!(body->mbo_valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) ||
 	    lmm_size == 0) {
 		GOTO(out, rc = -ENODATA);
 	}
@@ -1365,21 +1365,21 @@ out_rmdir:
                         struct lov_user_mds_data *lmdp;
                         lstat_t st = { 0 };
 
-                        st.st_dev     = inode->i_sb->s_dev;
-                        st.st_mode    = body->mode;
-                        st.st_nlink   = body->nlink;
-                        st.st_uid     = body->uid;
-                        st.st_gid     = body->gid;
-                        st.st_rdev    = body->rdev;
-                        st.st_size    = body->size;
-			st.st_blksize = PAGE_CACHE_SIZE;
-                        st.st_blocks  = body->blocks;
-                        st.st_atime   = body->atime;
-                        st.st_mtime   = body->mtime;
-                        st.st_ctime   = body->ctime;
-                        st.st_ino     = inode->i_ino;
+			st.st_dev	= inode->i_sb->s_dev;
+			st.st_mode	= body->mbo_mode;
+			st.st_nlink	= body->mbo_nlink;
+			st.st_uid	= body->mbo_uid;
+			st.st_gid	= body->mbo_gid;
+			st.st_rdev	= body->mbo_rdev;
+			st.st_size	= body->mbo_size;
+			st.st_blksize	= PAGE_CACHE_SIZE;
+			st.st_blocks	= body->mbo_blocks;
+			st.st_atime	= body->mbo_atime;
+			st.st_mtime	= body->mbo_mtime;
+			st.st_ctime	= body->mbo_ctime;
+			st.st_ino	= inode->i_ino;
 
-                        lmdp = (struct lov_user_mds_data *)arg;
+			lmdp = (struct lov_user_mds_data *)arg;
 			if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
                                 GOTO(out_req, rc = -EFAULT);
                 }

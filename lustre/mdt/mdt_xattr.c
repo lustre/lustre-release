@@ -63,7 +63,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 RETURN(-ENOMEM);
 
-	valid = info->mti_body->valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
+	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
         /* Determine how many bytes we need */
         if (valid == OBD_MD_FLXATTR) {
@@ -86,11 +86,12 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		/* N.B. eadatasize = 0 is not valid for FLXATTRALL */
 		/* We could calculate accurate sizes, but this would
 		 * introduce a lot of overhead, let's do it later... */
-		size = info->mti_body->eadatasize;
+		size = info->mti_body->mbo_eadatasize;
 		req_capsule_set_size(pill, &RMF_EAVALS, RCL_SERVER, size);
 		req_capsule_set_size(pill, &RMF_EAVALS_LENS, RCL_SERVER, size);
-        } else {
-                CDEBUG(D_INFO, "Valid bits: "LPX64"\n", info->mti_body->valid);
+	} else {
+		CDEBUG(D_INFO, "Valid bits: "LPX64"\n",
+		       info->mti_body->mbo_valid);
                 RETURN(-EINVAL);
         }
 
@@ -102,7 +103,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         }
 
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
-                             info->mti_body->eadatasize == 0 ? 0 : size);
+			     info->mti_body->mbo_eadatasize == 0 ? 0 : size);
         rc = req_capsule_server_pack(pill);
         if (rc) {
                 LASSERT(rc < 0);
@@ -131,10 +132,10 @@ mdt_getxattr_one(struct mdt_thread_info *info,
 		GOTO(out, rc);
 	}
 
-	if (info->mti_body->valid &
+	if (info->mti_body->mbo_valid &
 	    (OBD_MD_FLRMTLSETFACL | OBD_MD_FLRMTLGETFACL))
 		flags = CFS_IC_ALL;
-	else if (info->mti_body->valid & OBD_MD_FLRMTRGETFACL)
+	else if (info->mti_body->mbo_valid & OBD_MD_FLRMTRGETFACL)
 		flags = CFS_IC_MAPPED;
 
 	if (rc > 0 && flags != CFS_IC_NOTHING) {
@@ -191,7 +192,7 @@ static int mdt_getxattr_all(struct mdt_thread_info *info,
 	/* Fill out EAVALS and EAVALS_LENS */
 	for (b = eadatahead; b < eadatatail; b += strlen(b) + 1, v += rc) {
 		buf->lb_buf = v;
-		buf->lb_len = reqbody->eadatasize - eavallen;
+		buf->lb_len = reqbody->mbo_eadatasize - eavallen;
 		rc = mdt_getxattr_one(info, b, next, buf, med, uc);
 		if (rc < 0)
 			GOTO(out, rc);
@@ -201,8 +202,8 @@ static int mdt_getxattr_all(struct mdt_thread_info *info,
 		eavallen += rc;
 	}
 
-	repbody->aclsize = eavallen;
-	repbody->max_mdsize = eavallens;
+	repbody->mbo_aclsize = eavallen;
+	repbody->mbo_max_mdsize = eavallens;
 
 	req_capsule_shrink(info->mti_pill, &RMF_EAVALS, eavallen, RCL_SERVER);
 	req_capsule_shrink(info->mti_pill, &RMF_EAVALS_LENS,
@@ -232,7 +233,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         LASSERT(info->mti_object != NULL);
 	LASSERT(lu_object_assert_exists(&info->mti_object->mot_obj));
 
-        CDEBUG(D_INODE, "getxattr "DFID"\n", PFID(&info->mti_body->fid1));
+	CDEBUG(D_INODE, "getxattr "DFID"\n", PFID(&info->mti_body->mbo_fid1));
 
         reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
@@ -244,7 +245,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         next = mdt_object_child(info->mti_object);
 
-        if (info->mti_body->valid & OBD_MD_FLRMTRGETFACL) {
+	if (info->mti_body->mbo_valid & OBD_MD_FLRMTRGETFACL) {
                 if (unlikely(!remote))
                         GOTO(out, rc = err_serious(-EINVAL));
 
@@ -267,14 +268,14 @@ int mdt_getxattr(struct mdt_thread_info *info)
         LASSERT(repbody != NULL);
 
         /* No need further getxattr. */
-        if (easize == 0 || reqbody->eadatasize == 0)
-                GOTO(out, rc = easize);
+	if (easize == 0 || reqbody->mbo_eadatasize == 0)
+		GOTO(out, rc = easize);
 
-        buf = &info->mti_buf;
-        buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_EADATA);
-        buf->lb_len = easize;
+	buf = &info->mti_buf;
+	buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_EADATA);
+	buf->lb_len = easize;
 
-	valid = info->mti_body->valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
+	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
 	if (valid == OBD_MD_FLXATTR) {
 		char *xattr_name = req_capsule_client_get(info->mti_pill,
@@ -296,7 +297,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 out:
 	if (rc >= 0) {
 		mdt_counter_incr(req, LPROC_MDT_GETXATTR);
-		repbody->eadatasize = rc;
+		repbody->mbo_eadatasize = rc;
 		rc = 0;
 	}
 	mdt_exit_ucred(info);

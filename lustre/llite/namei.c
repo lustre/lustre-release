@@ -78,46 +78,47 @@ static int ll_d_mountpoint(struct dentry *dparent, struct dentry *dchild,
 /* called from iget5_locked->find_inode() under inode_lock spinlock */
 static int ll_test_inode(struct inode *inode, void *opaque)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lustre_md     *md = opaque;
+	struct ll_inode_info	*lli = ll_i2info(inode);
+	struct lustre_md	*md = opaque;
 
-        if (unlikely(!(md->body->valid & OBD_MD_FLID))) {
-                CERROR("MDS body missing FID\n");
-                return 0;
-        }
+	if (unlikely(!(md->body->mbo_valid & OBD_MD_FLID))) {
+		CERROR("MDS body missing FID\n");
+		return 0;
+	}
 
-        if (!lu_fid_eq(&lli->lli_fid, &md->body->fid1))
-                return 0;
+	if (!lu_fid_eq(&lli->lli_fid, &md->body->mbo_fid1))
+		return 0;
 
-        return 1;
+	return 1;
 }
 
 static int ll_set_inode(struct inode *inode, void *opaque)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct mdt_body *body = ((struct lustre_md *)opaque)->body;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct mdt_body *body = ((struct lustre_md *)opaque)->body;
 
-        if (unlikely(!(body->valid & OBD_MD_FLID))) {
-                CERROR("MDS body missing FID\n");
-                return -EINVAL;
-        }
+	if (unlikely(!(body->mbo_valid & OBD_MD_FLID))) {
+		CERROR("MDS body missing FID\n");
+		return -EINVAL;
+	}
 
-        lli->lli_fid = body->fid1;
-        if (unlikely(!(body->valid & OBD_MD_FLTYPE))) {
-                CERROR("Can not initialize inode "DFID" without object type: "
-                       "valid = "LPX64"\n", PFID(&lli->lli_fid), body->valid);
-                return -EINVAL;
-        }
+	lli->lli_fid = body->mbo_fid1;
+	if (unlikely(!(body->mbo_valid & OBD_MD_FLTYPE))) {
+		CERROR("Can not initialize inode "DFID" without object type: "
+		       "valid = "LPX64"\n",
+		       PFID(&lli->lli_fid), body->mbo_valid);
+		return -EINVAL;
+	}
 
-        inode->i_mode = (inode->i_mode & ~S_IFMT) | (body->mode & S_IFMT);
-        if (unlikely(inode->i_mode == 0)) {
-                CERROR("Invalid inode "DFID" type\n", PFID(&lli->lli_fid));
-                return -EINVAL;
-        }
+	inode->i_mode = (inode->i_mode & ~S_IFMT) | (body->mbo_mode & S_IFMT);
+	if (unlikely(inode->i_mode == 0)) {
+		CERROR("Invalid inode "DFID" type\n", PFID(&lli->lli_fid));
+		return -EINVAL;
+	}
 
-        ll_lli_init(lli);
+	ll_lli_init(lli);
 
-        return 0;
+	return 0;
 }
 
 
@@ -158,7 +159,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 	} else if (!(inode->i_state & (I_FREEING | I_CLEAR))) {
 		rc = ll_update_inode(inode, md);
 		CDEBUG(D_VFSTRACE, "got inode: "DFID"(%p): rc = %d\n",
-		       PFID(&md->body->fid1), inode, rc);
+		       PFID(&md->body->mbo_fid1), inode, rc);
 		if (rc != 0) {
 			make_bad_inode(inode);
 			iput(inode);
@@ -887,20 +888,21 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
 
 void ll_update_times(struct ptlrpc_request *request, struct inode *inode)
 {
-        struct mdt_body *body = req_capsule_server_get(&request->rq_pill,
-                                                       &RMF_MDT_BODY);
+	struct mdt_body *body = req_capsule_server_get(&request->rq_pill,
+						       &RMF_MDT_BODY);
 
-        LASSERT(body);
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(inode->i_mtime)) {
+	LASSERT(body);
+	if (body->mbo_valid & OBD_MD_FLMTIME &&
+	    body->mbo_mtime > LTIME_S(inode->i_mtime)) {
 		CDEBUG(D_INODE, "setting fid "DFID" mtime from %lu to "LPU64
-				"\n", PFID(ll_inode2fid(inode)),
-				LTIME_S(inode->i_mtime), body->mtime);
-                LTIME_S(inode->i_mtime) = body->mtime;
-        }
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime > LTIME_S(inode->i_ctime))
-                LTIME_S(inode->i_ctime) = body->ctime;
+		       "\n", PFID(ll_inode2fid(inode)),
+		       LTIME_S(inode->i_mtime), body->mbo_mtime);
+		LTIME_S(inode->i_mtime) = body->mbo_mtime;
+	}
+
+	if (body->mbo_valid & OBD_MD_FLCTIME &&
+	    body->mbo_ctime > LTIME_S(inode->i_ctime))
+		LTIME_S(inode->i_ctime) = body->mbo_ctime;
 }
 
 static int ll_new_node(struct inode *dir, struct qstr *name,
@@ -1195,11 +1197,11 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         ENTRY;
 
         /* req is swabbed so this is safe */
-        body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-        if (!(body->valid & OBD_MD_FLEASIZE))
-                RETURN(0);
+	body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
+	if (!(body->mbo_valid & OBD_MD_FLEASIZE))
+		RETURN(0);
 
-        if (body->eadatasize == 0) {
+	if (body->mbo_eadatasize == 0) {
                 CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
                 GOTO(out, rc = -EPROTO);
         }
@@ -1208,11 +1210,11 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
          * to this file. Use this EA to unlink the objects on the OST.
          * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
          * check it is complete and sensible. */
-        eadata = req_capsule_server_sized_get(&request->rq_pill, &RMF_MDT_MD,
-                                              body->eadatasize);
-        LASSERT(eadata != NULL);
+	eadata = req_capsule_server_sized_get(&request->rq_pill, &RMF_MDT_MD,
+					      body->mbo_eadatasize);
+	LASSERT(eadata != NULL);
 
-        rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->eadatasize);
+	rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->mbo_eadatasize);
         if (rc < 0) {
                 CERROR("obd_unpackmd: %d\n", rc);
                 GOTO(out, rc);
@@ -1224,10 +1226,10 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
 	oa->o_oi = lsm->lsm_oi;
-        oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+	oa->o_mode = body->mbo_mode & S_IFMT;
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
-        if (body->valid & OBD_MD_FLCOOKIE) {
+	if (body->mbo_valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =
                         req_capsule_server_sized_get(&request->rq_pill,
@@ -1236,11 +1238,11 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                                                      lsm->lsm_stripe_count);
                 if (oti.oti_logcookies == NULL) {
                         oa->o_valid &= ~OBD_MD_FLCOOKIE;
-                        body->valid &= ~OBD_MD_FLCOOKIE;
-                }
-        }
+			body->mbo_valid &= ~OBD_MD_FLCOOKIE;
+		}
+	}
 
-        if (body->valid & OBD_MD_FLOSSCAPA) {
+	if (body->mbo_valid & OBD_MD_FLOSSCAPA) {
                 rc = md_unpack_capa(ll_i2mdexp(dir), request, &RMF_CAPA2, &oc);
                 if (rc)
                         GOTO(out_free_memmd, rc);

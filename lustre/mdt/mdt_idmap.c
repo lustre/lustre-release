@@ -279,30 +279,34 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
         if (!exp_connect_rmtclient(info->mti_exp))
                 return;
 
-        if (body->valid & OBD_MD_FLUID) {
-                uid_t uid = lustre_idmap_lookup_uid(uc, idmap, 1, body->uid);
+	if (body->mbo_valid & OBD_MD_FLUID) {
+		uid_t uid;
 
-                if (uid == CFS_IDMAP_NOTFOUND) {
-                        uid = NOBODY_UID;
-                        if (body->valid & OBD_MD_FLMODE)
-                                body->mode = (body->mode & ~S_IRWXU) |
-                                             ((body->mode & S_IRWXO) << 6);
-                }
+		uid = lustre_idmap_lookup_uid(uc, idmap, 1, body->mbo_uid);
 
-                body->uid = uid;
-        }
+		if (uid == CFS_IDMAP_NOTFOUND) {
+			uid = NOBODY_UID;
+			if (body->mbo_valid & OBD_MD_FLMODE)
+				body->mbo_mode = (body->mbo_mode & ~S_IRWXU) |
+					     ((body->mbo_mode & S_IRWXO) << 6);
+		}
 
-        if (body->valid & OBD_MD_FLGID) {
-                gid_t gid = lustre_idmap_lookup_gid(uc, idmap, 1, body->gid);
+		body->mbo_uid = uid;
+	}
 
-                if (gid == CFS_IDMAP_NOTFOUND) {
-                        gid = NOBODY_GID;
-                        if (body->valid & OBD_MD_FLMODE)
-                                body->mode = (body->mode & ~S_IRWXG) |
-                                             ((body->mode & S_IRWXO) << 3);
-                }
+	if (body->mbo_valid & OBD_MD_FLGID) {
+		gid_t gid;
 
-                body->gid = gid;
+		gid = lustre_idmap_lookup_gid(uc, idmap, 1, body->mbo_gid);
+
+		if (gid == CFS_IDMAP_NOTFOUND) {
+			gid = NOBODY_GID;
+			if (body->mbo_valid & OBD_MD_FLMODE)
+				body->mbo_mode = (body->mbo_mode & ~S_IRWXG) |
+					     ((body->mbo_mode & S_IRWXO) << 3);
+		}
+
+		body->mbo_gid = gid;
         }
 }
 

@@ -398,25 +398,25 @@ getxattr_nocache:
 
 		/* only detect the xattr size */
 		if (size == 0)
-			GOTO(out, rc = body->eadatasize);
+			GOTO(out, rc = body->mbo_eadatasize);
 
-		if (size < body->eadatasize) {
+		if (size < body->mbo_eadatasize) {
 			CERROR("server bug: replied size %u > %u\n",
-				body->eadatasize, (int)size);
+				body->mbo_eadatasize, (int)size);
 			GOTO(out, rc = -ERANGE);
 		}
 
-		if (body->eadatasize == 0)
+		if (body->mbo_eadatasize == 0)
 			GOTO(out, rc = -ENODATA);
 
 		/* do not need swab xattr data */
 		xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
-							body->eadatasize);
+							body->mbo_eadatasize);
 		if (!xdata)
 			GOTO(out, rc = -EFAULT);
 
-		memcpy(buffer, xdata, body->eadatasize);
-		rc = body->eadatasize;
+		memcpy(buffer, xdata, body->mbo_eadatasize);
+		rc = body->mbo_eadatasize;
 	}
 
 #ifdef CONFIG_FS_POSIX_ACL

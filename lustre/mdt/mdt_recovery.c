@@ -273,7 +273,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 			rc = -EIO;
 
 		req->rq_status = rc;
-		body->valid |= OBD_MD_MDS;
+		body->mbo_valid |= OBD_MD_MDS;
 	}
 	mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
 			   mdt_object_fid(child));
@@ -318,7 +318,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 struct mdt_body *repbody;
 
                 repbody = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-                repbody->ioepoch = obj->mot_ioepoch;
+		repbody->mbo_ioepoch = obj->mot_ioepoch;
 		spin_lock(&med->med_open_lock);
 		cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
 			if (mfd->mfd_xid == req->rq_xid)
@@ -326,7 +326,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 		}
 		LASSERT(&mfd->mfd_list != &med->med_open_head);
 		spin_unlock(&med->med_open_lock);
-		repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+		repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
 	}
 
 	mdt_object_put(mti->mti_env, obj);

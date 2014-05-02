@@ -1241,7 +1241,7 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 		struct lmv_stripe_md *lsm = md->lmv;
 
 		inode->i_mode = (inode->i_mode & ~S_IFMT) |
-				(body->mode & S_IFMT);
+				(body->mbo_mode & S_IFMT);
 		LASSERTF(S_ISDIR(inode->i_mode), "Not slave inode "DFID"\n",
 			 PFID(fid));
 
@@ -1260,7 +1260,7 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 
 		LASSERT(lsm != NULL);
 		/* master object FID */
-		lli->lli_pfid = body->fid1;
+		lli->lli_pfid = body->mbo_fid1;
 		CDEBUG(D_INODE, "lli %p slave "DFID" master "DFID"\n",
 		       lli, PFID(fid), PFID(&lli->lli_pfid));
 		unlock_new_inode(inode);
@@ -1536,8 +1536,8 @@ int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
 	op_data->op_attr.ia_valid = ia_valid;
 
         /* Extract epoch data if obtained. */
-        op_data->op_handle = md.body->handle;
-        op_data->op_ioepoch = md.body->ioepoch;
+	op_data->op_handle = md.body->mbo_handle;
+	op_data->op_ioepoch = md.body->mbo_ioepoch;
 
 	rc = ll_update_inode(inode, &md);
 	ptlrpc_req_finished(request);
@@ -1927,7 +1927,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	struct lov_stripe_md *lsm = md->lsm;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
-	LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
+	LASSERT((lsm != NULL) == ((body->mbo_valid & OBD_MD_FLEASIZE) != 0));
 	if (lsm != NULL) {
 		if (!lli->lli_has_smd &&
 		    !(sbi->ll_flags & LL_SBI_LAYOUT_LOCK))
@@ -1947,11 +1947,11 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	}
 
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
-                if (body->valid & OBD_MD_FLRMTPERM)
-                        ll_update_remote_perm(inode, md->remote_perm);
-        }
+		if (body->mbo_valid & OBD_MD_FLRMTPERM)
+			ll_update_remote_perm(inode, md->remote_perm);
+	}
 #ifdef CONFIG_FS_POSIX_ACL
-	else if (body->valid & OBD_MD_FLACL) {
+	else if (body->mbo_valid & OBD_MD_FLACL) {
 		spin_lock(&lli->lli_lock);
 		if (lli->lli_posix_acl)
 			posix_acl_release(lli->lli_posix_acl);
@@ -1959,66 +1959,74 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		spin_unlock(&lli->lli_lock);
 	}
 #endif
-	inode->i_ino = cl_fid_build_ino(&body->fid1,
+	inode->i_ino = cl_fid_build_ino(&body->mbo_fid1,
 					sbi->ll_flags & LL_SBI_32BIT_API);
-	inode->i_generation = cl_fid_build_gen(&body->fid1);
+	inode->i_generation = cl_fid_build_gen(&body->mbo_fid1);
 
-        if (body->valid & OBD_MD_FLATIME) {
-                if (body->atime > LTIME_S(inode->i_atime))
-                        LTIME_S(inode->i_atime) = body->atime;
-                lli->lli_lvb.lvb_atime = body->atime;
-        }
-        if (body->valid & OBD_MD_FLMTIME) {
-                if (body->mtime > LTIME_S(inode->i_mtime)) {
-                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
-                               "to "LPU64"\n", inode->i_ino,
-                               LTIME_S(inode->i_mtime), body->mtime);
-                        LTIME_S(inode->i_mtime) = body->mtime;
-                }
-                lli->lli_lvb.lvb_mtime = body->mtime;
-        }
-        if (body->valid & OBD_MD_FLCTIME) {
-                if (body->ctime > LTIME_S(inode->i_ctime))
-                        LTIME_S(inode->i_ctime) = body->ctime;
-                lli->lli_lvb.lvb_ctime = body->ctime;
-        }
-        if (body->valid & OBD_MD_FLMODE)
-                inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
-        if (body->valid & OBD_MD_FLTYPE)
-                inode->i_mode = (inode->i_mode & ~S_IFMT)|(body->mode & S_IFMT);
-        LASSERT(inode->i_mode != 0);
-        if (S_ISREG(inode->i_mode)) {
-                inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS + 1, LL_MAX_BLKSIZE_BITS);
-        } else {
-                inode->i_blkbits = inode->i_sb->s_blocksize_bits;
-        }
-	if (body->valid & OBD_MD_FLUID)
-		inode->i_uid = make_kuid(&init_user_ns, body->uid);
-	if (body->valid & OBD_MD_FLGID)
-		inode->i_gid = make_kgid(&init_user_ns, body->gid);
-	if (body->valid & OBD_MD_FLFLAGS)
-		inode->i_flags = ll_ext_to_inode_flags(body->flags);
-	if (body->valid & OBD_MD_FLNLINK)
-		set_nlink(inode, body->nlink);
-	if (body->valid & OBD_MD_FLRDEV)
-		inode->i_rdev = old_decode_dev(body->rdev);
+	if (body->mbo_valid & OBD_MD_FLATIME) {
+		if (body->mbo_atime > LTIME_S(inode->i_atime))
+			LTIME_S(inode->i_atime) = body->mbo_atime;
+		lli->lli_lvb.lvb_atime = body->mbo_atime;
+	}
 
-	if (body->valid & OBD_MD_FLID) {
+	if (body->mbo_valid & OBD_MD_FLMTIME) {
+		if (body->mbo_mtime > LTIME_S(inode->i_mtime)) {
+			CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+			       "to "LPU64"\n", inode->i_ino,
+			       LTIME_S(inode->i_mtime), body->mbo_mtime);
+			LTIME_S(inode->i_mtime) = body->mbo_mtime;
+		}
+		lli->lli_lvb.lvb_mtime = body->mbo_mtime;
+	}
+
+	if (body->mbo_valid & OBD_MD_FLCTIME) {
+		if (body->mbo_ctime > LTIME_S(inode->i_ctime))
+			LTIME_S(inode->i_ctime) = body->mbo_ctime;
+		lli->lli_lvb.lvb_ctime = body->mbo_ctime;
+	}
+
+	if (body->mbo_valid & OBD_MD_FLMODE)
+		inode->i_mode = (inode->i_mode & S_IFMT) |
+				(body->mbo_mode & ~S_IFMT);
+
+	if (body->mbo_valid & OBD_MD_FLTYPE)
+		inode->i_mode = (inode->i_mode & ~S_IFMT) |
+				(body->mbo_mode & S_IFMT);
+
+	LASSERT(inode->i_mode != 0);
+	if (S_ISREG(inode->i_mode))
+		inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS + 1,
+				       LL_MAX_BLKSIZE_BITS);
+	else
+		inode->i_blkbits = inode->i_sb->s_blocksize_bits;
+
+	if (body->mbo_valid & OBD_MD_FLUID)
+		inode->i_uid = make_kuid(&init_user_ns, body->mbo_uid);
+	if (body->mbo_valid & OBD_MD_FLGID)
+		inode->i_gid = make_kgid(&init_user_ns, body->mbo_gid);
+	if (body->mbo_valid & OBD_MD_FLFLAGS)
+		inode->i_flags = ll_ext_to_inode_flags(body->mbo_flags);
+	if (body->mbo_valid & OBD_MD_FLNLINK)
+		set_nlink(inode, body->mbo_nlink);
+	if (body->mbo_valid & OBD_MD_FLRDEV)
+		inode->i_rdev = old_decode_dev(body->mbo_rdev);
+
+	if (body->mbo_valid & OBD_MD_FLID) {
 		/* FID shouldn't be changed! */
 		if (fid_is_sane(&lli->lli_fid)) {
-			LASSERTF(lu_fid_eq(&lli->lli_fid, &body->fid1),
+			LASSERTF(lu_fid_eq(&lli->lli_fid, &body->mbo_fid1),
 				 "Trying to change FID "DFID
 				 " to the "DFID", inode "DFID"(%p)\n",
-				 PFID(&lli->lli_fid), PFID(&body->fid1),
+				 PFID(&lli->lli_fid), PFID(&body->mbo_fid1),
 				 PFID(ll_inode2fid(inode)), inode);
 		} else {
-			lli->lli_fid = body->fid1;
+			lli->lli_fid = body->mbo_fid1;
 		}
 	}
 
-        LASSERT(fid_seq(&lli->lli_fid) != 0);
+	LASSERT(fid_seq(&lli->lli_fid) != 0);
 
-        if (body->valid & OBD_MD_FLSIZE) {
+	if (body->mbo_valid & OBD_MD_FLSIZE) {
                 if (exp_connect_som(ll_i2mdexp(inode)) &&
 		    S_ISREG(inode->i_mode)) {
                         struct lustre_handle lockh;
@@ -2045,7 +2053,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 } else {
                                         /* Use old size assignment to avoid
                                          * deadlock bz14138 & bz14326 */
-                                        i_size_write(inode, body->size);
+					i_size_write(inode, body->mbo_size);
 					spin_lock(&lli->lli_lock);
                                         lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
 					spin_unlock(&lli->lli_lock);
@@ -2055,29 +2063,30 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
                 } else {
                         /* Use old size assignment to avoid
                          * deadlock bz14138 & bz14326 */
-                        i_size_write(inode, body->size);
+			i_size_write(inode, body->mbo_size);
 
 			CDEBUG(D_VFSTRACE,
 			       "inode="DFID", updating i_size %llu\n",
 			       PFID(ll_inode2fid(inode)),
-			       (unsigned long long)body->size);
-                }
+			       (unsigned long long)body->mbo_size);
+		}
 
-                if (body->valid & OBD_MD_FLBLOCKS)
-                        inode->i_blocks = body->blocks;
-        }
+		if (body->mbo_valid & OBD_MD_FLBLOCKS)
+			inode->i_blocks = body->mbo_blocks;
+	}
 
-        if (body->valid & OBD_MD_FLMDSCAPA) {
-                LASSERT(md->mds_capa);
-                ll_add_capa(inode, md->mds_capa);
-        }
-        if (body->valid & OBD_MD_FLOSSCAPA) {
-                LASSERT(md->oss_capa);
-                ll_add_capa(inode, md->oss_capa);
-        }
+	if (body->mbo_valid & OBD_MD_FLMDSCAPA) {
+		LASSERT(md->mds_capa);
+		ll_add_capa(inode, md->mds_capa);
+	}
 
-	if (body->valid & OBD_MD_TSTATE) {
-		if (body->t_state & MS_RESTORE)
+	if (body->mbo_valid & OBD_MD_FLOSSCAPA) {
+		LASSERT(md->oss_capa);
+		ll_add_capa(inode, md->oss_capa);
+	}
+
+	if (body->mbo_valid & OBD_MD_TSTATE) {
+		if (body->mbo_t_state & MS_RESTORE)
 			lli->lli_flags |= LLIF_FILE_RESTORING;
 	}
 
@@ -2203,7 +2212,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 
-                flags = body->flags;
+		flags = body->mbo_flags;
 
                 ptlrpc_req_finished(req);
 
@@ -2390,9 +2399,9 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                  * At this point server returns to client's same fid as client
                  * generated for creating. So using ->fid1 is okay here.
                  */
-                LASSERT(fid_is_sane(&md.body->fid1));
+		LASSERT(fid_is_sane(&md.body->mbo_fid1));
 
-		*inode = ll_iget(sb, cl_fid_build_ino(&md.body->fid1,
+		*inode = ll_iget(sb, cl_fid_build_ino(&md.body->mbo_fid1,
 					     sbi->ll_flags & LL_SBI_32BIT_API),
 				 &md);
 		if (IS_ERR(*inode)) {

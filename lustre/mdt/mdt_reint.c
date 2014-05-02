@@ -64,7 +64,7 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
 
         /* for cross-ref mkdir, mds capa has been fetched from remote obj, then
          * we won't go to below*/
-        if (repbody->valid & OBD_MD_FLMDSCAPA)
+	if (repbody->mbo_valid & OBD_MD_FLMDSCAPA)
                 RETURN(rc);
 
 	if (rc == 0 && info->mti_mdt->mdt_lut.lut_mds_capa &&
@@ -77,7 +77,7 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
                 rc = mo_capa_get(info->mti_env, mdt_object_child(object), capa,
                                  0);
                 if (rc == 0)
-                        repbody->valid |= OBD_MD_FLMDSCAPA;
+			repbody->mbo_valid |= OBD_MD_FLMDSCAPA;
         }
 
         RETURN(rc);
@@ -699,7 +699,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 }
 
                 mdt_ioepoch_open(info, mo, 0);
-                repbody->ioepoch = mo->mot_ioepoch;
+		repbody->mbo_ioepoch = mo->mot_ioepoch;
 
                 mdt_object_get(info->mti_env, mo);
                 mdt_mfd_set_mode(mfd, MDS_FMODE_TRUNC);
@@ -709,7 +709,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		spin_lock(&med->med_open_lock);
 		cfs_list_add(&mfd->mfd_list, &med->med_open_head);
 		spin_unlock(&med->med_open_lock);
-                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+		repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
         }
 
         som_au = info->mti_ioepoch && info->mti_ioepoch->flags & MF_SOM_CHANGE;
@@ -789,7 +789,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
                 if (rc)
                         GOTO(out_put, rc);
-                repbody->valid |= OBD_MD_FLOSSCAPA;
+		repbody->mbo_valid |= OBD_MD_FLOSSCAPA;
         }
 
         EXIT;
@@ -985,8 +985,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 				MDT_CROSS_LOCK);
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
-		repbody->fid1 = *mdt_object_fid(mc);
-		repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
+		repbody->mbo_fid1 = *mdt_object_fid(mc);
+		repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
 		GOTO(unlock_child, rc = -EREMOTE);
 	} else if (info->mti_spec.sp_rm_entry) {
 		rc = -EPERM;
