@@ -1289,13 +1289,28 @@ struct lu_name {
         int            ln_namelen;
 };
 
+/**
+ * Validate names (path components)
+ *
+ * To be valid \a name must be non-empty, '\0' terminated of length \a
+ * name_len, and not contain '/'. The maximum length of a name (before
+ * say -ENAMETOOLONG will be returned) is really controlled by llite
+ * and the server. We only check for something insane coming from bad
+ * integer handling here.
+ */
+static inline bool lu_name_is_valid_2(const char *name, size_t name_len)
+{
+	return name != NULL &&
+	       name_len > 0 &&
+	       name_len < INT_MAX &&
+	       name[name_len] == '\0' &&
+	       strlen(name) == name_len &&
+	       memchr(name, '/', name_len) == NULL;
+}
+
 static inline bool lu_name_is_valid(const struct lu_name *ln)
 {
-	return ln->ln_name != NULL &&
-	       ln->ln_namelen > 0 &&
-	       ln->ln_name[ln->ln_namelen] == '\0' &&
-	       strlen(ln->ln_name) == ln->ln_namelen &&
-	       memchr(ln->ln_name, '/', ln->ln_namelen) == NULL;
+	return lu_name_is_valid_2(ln->ln_name, ln->ln_namelen);
 }
 
 #define DNAME "%.*s"

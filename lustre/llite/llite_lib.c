@@ -2513,8 +2513,17 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 {
         LASSERT(i1 != NULL);
 
-        if (namelen > ll_i2sbi(i1)->ll_namelen)
-                return ERR_PTR(-ENAMETOOLONG);
+	if (name == NULL) {
+		/* Do not reuse namelen for something else. */
+		if (namelen != 0)
+			return ERR_PTR(-EINVAL);
+	} else {
+		if (namelen > ll_i2sbi(i1)->ll_namelen)
+			return ERR_PTR(-ENAMETOOLONG);
+
+		if (!lu_name_is_valid_2(name, namelen))
+			return ERR_PTR(-EINVAL);
+	}
 
         if (op_data == NULL)
                 OBD_ALLOC_PTR(op_data);

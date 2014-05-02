@@ -131,6 +131,38 @@ void mdc_pack_body(struct ptlrpc_request *req,
         }
 }
 
+/**
+ * Pack a name (path component) into a request
+ *
+ * \param[in]	req		request
+ * \param[in]	field		request field (usually RMF_NAME)
+ * \param[in]	name		path component
+ * \param[in]	name_len	length of path component
+ *
+ * \a field must be present in \a req and of size \a name_len + 1.
+ *
+ * \a name must be '\0' terminated of length \a name_len and represent
+ * a single path component (not contain '/').
+ */
+static void mdc_pack_name(struct ptlrpc_request *req,
+			  const struct req_msg_field *field,
+			  const char *name, size_t name_len)
+{
+	char *buf;
+	size_t buf_size;
+	size_t cpy_len;
+
+	buf = req_capsule_client_get(&req->rq_pill, field);
+	buf_size = req_capsule_get_size(&req->rq_pill, field, RCL_CLIENT);
+
+	LASSERT(name != NULL && name_len != 0 &&
+		buf != NULL && buf_size == name_len + 1);
+
+	cpy_len = strlcpy(buf, name, buf_size);
+
+	LASSERT(cpy_len == name_len && lu_name_is_valid_2(buf, cpy_len));
+}
+
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff,
                       __u32 size, const struct lu_fid *fid, struct obd_capa *oc)
 {
@@ -179,9 +211,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
 	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
-	tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-	LOGL0(op_data->op_name, op_data->op_namelen, tmp);
-
+	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 	if (data) {
 		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
 		memcpy(tmp, data, datalen);
@@ -255,8 +285,9 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		 * will be packed from the data in reply message. */
 
 		if (op_data->op_name) {
-			tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-			LOGL0(op_data->op_name, op_data->op_namelen, tmp);
+			mdc_pack_name(req, &RMF_NAME, op_data->op_name,
+				      op_data->op_namelen);
+
 			if (op_data->op_bias & MDS_CREATE_VOLATILE)
 				cr_flags |= MDS_OPEN_VOLATILE;
 		}
@@ -395,7 +426,6 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
 	struct mdt_rec_unlink *rec;
-	char *tmp;
 
 	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_unlink));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -416,15 +446,12 @@ void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-        LASSERT(tmp != NULL);
-        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
+	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 }
 
 void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
         struct mdt_rec_link *rec;
-        char *tmp;
 
         CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_link));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -444,15 +471,13 @@ void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
+	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 }
 
 void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
         struct mdt_rec_rename *rec;
-        char *tmp;
 
         CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -474,13 +499,10 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-        LOGL0(old, oldlen, tmp);
+	mdc_pack_name(req, &RMF_NAME, old, oldlen);
 
-        if (new) {
-                tmp = req_capsule_client_get(&req->rq_pill, &RMF_SYMTGT);
-                LOGL0(new, newlen, tmp);
-        }
+	if (new != NULL)
+		mdc_pack_name(req, &RMF_SYMTGT, new, newlen);
 }
 
 void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
@@ -504,11 +526,9 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
-        if (op_data->op_name) {
-                char *tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-                LOGL0(op_data->op_name, op_data->op_namelen, tmp);
-
-        }
+	if (op_data->op_name != NULL)
+		mdc_pack_name(req, &RMF_NAME, op_data->op_name,
+			      op_data->op_namelen);
 }
 
 static void mdc_hsm_release_pack(struct ptlrpc_request *req,
