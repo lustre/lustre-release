@@ -64,25 +64,6 @@ AC_DEFINE_UNQUOTED(CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE,
 ]) # LC_CONFIG_OBD_BUFFER_SIZE
 
 #
-# LC_READLINK_SSIZE_T
-#
-AC_DEFUN([LC_READLINK_SSIZE_T], [
-AC_CACHE_CHECK([if readlink returns ssize_t],
-lb_cv_compile_readlink_ssize_t, [
-AC_TRY_COMPILE([
-	#include <unistd.h>
-], [
-	ssize_t readlink(const char *, char *, size_t);
-],
-	[lb_cv_compile_readlink_ssize_t="yes"],
-	[lb_cv_compile_readlink_ssize_t="no"])
-])
-AS_IF([test "x$lb_cv_compile_readlink_ssize_t" = xyes],
-	[AC_DEFINE(HAVE_POSIX_1003_READLINK, 1,
-		[readlink returns ssize_t])])
-]) # LC_READLINK_SSIZE_T
-
-#
 # LC_GLIBC_SUPPORT_FHANDLES
 #
 AC_DEFUN([LC_GLIBC_SUPPORT_FHANDLES], [
@@ -170,20 +151,6 @@ AC_MSG_RESULT([$enable_checksum])
 AS_IF([test "x$enable_checksum" != xno],
 	[AC_DEFINE(ENABLE_CHECKSUM, 1, [do data checksums])])
 ]) # LC_CONFIG_CHECKSUM
-
-#
-# LC_CONFIG_LIBLUSTRE_RECOVERY
-#
-AC_DEFUN([LC_CONFIG_LIBLUSTRE_RECOVERY], [
-AC_MSG_CHECKING([whether to enable liblustre recovery support])
-AC_ARG_ENABLE([liblustre-recovery],
-	AC_HELP_STRING([--disable-liblustre-recovery],
-		[disable liblustre recovery support]),
-	[], [enable_liblustre_recovery="yes"])
-AC_MSG_RESULT([$enable_liblustre_recovery])
-AS_IF([test "x$enable_liblustre_recovery" != xno],
-	[AC_DEFINE(ENABLE_LIBLUSTRE_RECOVERY, 1, [Liblustre Can Recover])])
-]) # LC_CONFIG_LIBLUSTRE_RECOVERY
 
 #
 # LC_CONFIG_HEALTH_CHECK_WRITE
@@ -1478,7 +1445,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	LC_CONFIG_PINGER
 	LC_CONFIG_CHECKSUM
-	LC_CONFIG_LIBLUSTRE_RECOVERY
 	LC_CONFIG_HEALTH_CHECK_WRITE
 	LC_CONFIG_LRU_RESIZE
 	LC_LLITE_LLOOP_MODULE
@@ -1607,93 +1573,6 @@ AC_ARG_ENABLE([client],
 	[], [enable_client="yes"])
 AC_MSG_RESULT([$enable_client])
 ]) # LC_CONFIG_CLIENT
-
-#
-# LC_CONFIG_LIBLUSTRE
-#
-# whether to build liblustre
-#
-AC_DEFUN([LC_CONFIG_LIBLUSTRE], [
-AC_MSG_CHECKING([whether to build Lustre library])
-AC_ARG_ENABLE([liblustre],
-	AC_HELP_STRING([--enable-liblustre],
-		[enable building of Lustre library]),
-	[], [])
-AC_MSG_RESULT([$enable_liblustre])
-
-# only build sysio if liblustre is built
-with_sysio="$enable_liblustre"
-
-AC_MSG_CHECKING([whether to build liblustre tests])
-AC_ARG_ENABLE([liblustre-tests],
-	AC_HELP_STRING([--enable-liblustre-tests],
-		[enable liblustre tests, if --disable-tests is used]),
-	[], [enable_liblustre_tests=$enable_tests])
-AS_IF([test "x$enable_liblustre" != xyes], [enable_liblustre_tests="no"])
-AC_MSG_RESULT([$enable_liblustre_tests])
-
-AC_MSG_CHECKING([whether to enable liblustre acl])
-AC_ARG_ENABLE([liblustre-acl],
-	AC_HELP_STRING([--disable-liblustre-acl],
-		[disable ACL support for liblustre]),
-	[], [enable_liblustre_acl="yes"])
-AC_MSG_RESULT([$enable_liblustre_acl])
-
-AS_IF([test "x$enable_liblustre_acl" = xyes],
-	[AC_DEFINE(LIBLUSTRE_POSIX_ACL, 1,
-		[Liblustre Support ACL-enabled MDS])])
-
-#
-# --enable-mpitest
-#
-AC_ARG_ENABLE(mpitests,
-	AC_HELP_STRING([--enable-mpitests=yes|no|mpicc wrapper],
-		[include mpi tests]),
-	[
-	enable_mpitests="yes"
-	case $enableval in
-	yes)
-		MPICC_WRAPPER=mpicc
-		;;
-	no)
-		enable_mpitests=no
-		;;
-	*)
-		MPICC_WRAPPER=$enableval
-		;;
-	esac
-	], [
-	MPICC_WRAPPER=mpicc
-	enable_mpitests=yes
-	])
-
-AS_IF([test "x$enable_mpitests" != xno], [
-	oldcc=$CC
-	CC=$MPICC_WRAPPER
-	AC_MSG_CHECKING([whether mpitests can be built])
-	AC_LINK_IFELSE([
-		AC_LANG_PROGRAM([[
-			#include <mpi.h>
-		]],[[
-			int flag;
-			MPI_Initialized(&flag);
-		]])
-	], [
-		AC_MSG_RESULT([yes])
-	], [
-		AC_MSG_RESULT([no])
-		enable_mpitests=no
-	])
-	CC=$oldcc
-])
-AC_SUBST(MPICC_WRAPPER)
-
-AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
-ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
-
-LC_CONFIG_PINGER
-LC_CONFIG_LIBLUSTRE_RECOVERY
-])
 
 #
 # LC_CONFIG_QUOTA
@@ -1837,23 +1716,18 @@ AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
 # maximum MDS thread count
 LC_MDS_MAX_THREADS
 
-# include/liblustre.h
+# libcfs/include/libcfs/posix/libcfs.h
+# lustre/utils/llverdev.c
 AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
-# liblustre/llite_lib.h
-AC_CHECK_HEADERS([xtio.h file.h])
-
-# liblustre/dir.c
+# libcfs/include/libcfs/linux/linux-prim.h, ...
 AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 
-# liblustre/lutil.c
-AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
+# libcfs/libcfs/user-tcpip.c
+AC_CHECK_HEADERS([netinet/in.h])
 AC_CHECK_FUNCS([inet_ntoa])
 
-# libsysio/src/readlink.c
-LC_READLINK_SSIZE_T
-
-# libcfs prng.c - depends on linux/types.h from liblustre/dir.c
+# libcfs/include/libcfs/linux/linux-prim.h
 AC_CHECK_HEADERS([linux/random.h], [], [],
 		 [#ifdef HAVE_LINUX_TYPES_H
 		  #include <linux/types.h>
@@ -1958,8 +1832,7 @@ AS_IF([test "x$enable_pgstat_track" = xyes],
 # AM_CONDITIONALS for lustre
 #
 AC_DEFUN([LC_CONDITIONALS], [
-AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
-AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
+AM_CONDITIONAL(LIBLUSTRE, false)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
@@ -2003,9 +1876,6 @@ lustre/kernel_patches/targets/3.x-fc18.target
 lustre/ldlm/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile
-lustre/liblustre/Makefile
-lustre/liblustre/tests/Makefile
-lustre/liblustre/tests/mpi/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
 lustre/lclient/Makefile

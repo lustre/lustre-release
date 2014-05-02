@@ -654,40 +654,6 @@ AS_IF([test "x$enable_libwrap" = xyes], [
 ])
 AC_SUBST(LIBWRAP)
 
-# ----------------------------------------
-# some tests for catamount-like systems
-# ----------------------------------------
-AC_MSG_CHECKING([whether to initialize libsysio])
-AC_ARG_ENABLE([sysio_init],
-	AC_HELP_STRING([--disable-sysio-init],
-		[call sysio init functions when initializing liblustre]),
-	[], [enable_sysio_init="yes"])
-AC_MSG_RESULT([$enable_sysio_init])
-AS_IF([test "x$enable_sysio_init" != xno],
-	[AC_DEFINE([INIT_SYSIO], 1, [call sysio init functions])])
-
-AC_MSG_CHECKING([whether to use /dev/urandom for liblustre])
-AC_ARG_ENABLE([urandom],
-	AC_HELP_STRING([--disable-urandom],
-		[disable use of /dev/urandom for liblustre]),
-	[], [enable_urandom="yes"])
-AC_MSG_RESULT([$enable_urandom])
-AS_IF([test "x$enable_urandom" != xno],
-	[AC_DEFINE([LIBLUSTRE_USE_URANDOM], 1,
-		[use /dev/urandom for random data])])
-
-# -------- check for -lcap support ----
-
-AS_IF([test "x$enable_liblustre" = xyes], [
-	CAP_LIBS=""
-	AC_CHECK_LIB([cap], [cap_get_proc],
-		[
-			CAP_LIBS="-lcap"
-			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
-		])
-	AC_SUBST(CAP_LIBS)
-])
-
 LN_CONFIG_MAX_PAYLOAD
 LN_CONFIG_USOCKLND
 ]) # LN_CONFIGURE

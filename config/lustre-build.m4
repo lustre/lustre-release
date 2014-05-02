@@ -173,44 +173,6 @@ AS_IF([test "x${!lb_pathvar}" != x -a "x${!lb_pathvar}" != xno], [
 ]) # LB_ARG_LIBS_INCLUDES
 
 #
-# LB_PATH_LIBSYSIO
-#
-# Handle internal/external libsysio
-#
-AC_DEFUN([LB_PATH_LIBSYSIO], [
-AC_MSG_CHECKING([location of libsysio])
-AC_ARG_WITH([sysio],
-	AC_HELP_STRING([--with-sysio=path],
-		[set path to libsysio source (default is included libsysio)]),
-	[], [
-		AS_IF([test "x$lb_target_os" = xlinux],
-			[with_sysio="yes"],
-			[with_sysio="no"])
-	])
-AS_IF([test "x$with_sysio" = xyes], [
-		AC_MSG_RESULT([internal])
-		LB_CHECK_FILE([$srcdir/libsysio/src/rmdir.c], [], [
-			AC_MSG_ERROR([A complete internal libsysio was not found.])
-		])
-		LIBSYSIO_SUBDIR="libsysio"
-		SYSIO="$PWD/libsysio"
-	], [test "x$with_sysio" = xno], [
-		AC_MSG_RESULT([disabled])
-	], [
-		AC_MSG_RESULT([$with_sysio])
-		LB_CHECK_FILE([$with_sysio/lib/libsysio.a], [], [
-			AC_MSG_ERROR([A complete (built) external libsysio was not found.])
-		])
-		LIBSYSIO_SUBDIR=""
-		SYSIO=$with_sysio
-		with_sysio="yes"
-	])
-enable_sysio=$with_sysio
-# We have to configure even if we don't build here for make dist to work
-AC_CONFIG_SUBDIRS([libsysio])
-]) # LB_PATH_LIBSYSIO
-
-#
 # LB_PATH_LUSTREIOKIT
 #
 # We no longer handle external lustre-iokit
@@ -336,7 +298,6 @@ AS_IF([test "x$enable_dist" != xno], [
 	enable_utils="no"
 	enable_tests="no"
 	enable_modules="no"
-	enable_liblustre="no"
 ])
 ]) # LB_CONFIG_DIST
 
@@ -485,17 +446,6 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL(HAVE_PCLMULQDQ, test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om")
 AS_IF([test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om"],
 	[AC_DEFINE(HAVE_PCLMULQDQ, 1, [have PCLMULQDQ instruction])])
-
-# this lets lustre cancel libsysio, per-branch or if liblustre is
-# disabled
-AS_IF([test "x$LIBSYSIO_SUBDIR" = xlibsysio], [
-	AS_IF([test "x$with_sysio" != xyes], [
-		SYSIO=""
-		LIBSYSIO_SUBDIR=""
-	])
-])
-AC_SUBST(LIBSYSIO_SUBDIR)
-AC_SUBST(SYSIO)
 
 LB_DARWIN_CONDITIONALS
 
@@ -703,13 +653,11 @@ LC_QUOTA
 
 LN_CONFIG_USERSPACE
 
-LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LUSTREIOKIT
 
 LB_DEFINE_E2FSPROGS_NAMES
 
-LC_CONFIG_LIBLUSTRE
 LIBCFS_CONFIGURE
 LN_CONFIGURE
 LC_CONFIGURE

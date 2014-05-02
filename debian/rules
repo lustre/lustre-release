@@ -100,10 +100,8 @@ autogen-stamp: patch-stamp
 			exit 1; \
 		fi; \
 		cp /usr/share/misc/config.sub config.sub; \
-		cp /usr/share/misc/config.sub libsysio/config.sub; \
 		cp /usr/share/misc/config.sub ldiskfs/config.sub; \
 		cp /usr/share/misc/config.guess config.guess; \
-		cp /usr/share/misc/config.guess libsysio/config.guess; \
 		cp /usr/share/misc/config.guess ldiskfs/config.guess; \
 		sh build/autogen.sh; \
 	fi; \
@@ -115,10 +113,9 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	# touch files to same date, to avoid auto*
 	find . -type f -print0 | xargs -0 touch -r COPYING; \
 	if [ "$(BUILDDIR)" != "." ]; then \
-		mkdir -p $(BUILDDIR)/build $(BUILDDIR)/lustre/contrib $(BUILDDIR)/libsysio; \
+		mkdir -p $(BUILDDIR)/build $(BUILDDIR)/lustre/contrib; \
 		cp build/Makefile $(BUILDDIR)/build/; \
 		cp lustre/contrib/mpich-*.patch $(BUILDDIR)/lustre/contrib/; \
-		ln -s ../../../libsysio/include $(BUILDDIR)/libsysio/; \
 	fi
 	( cd $(BUILDDIR) && \
 	 $(SRCDIR)/configure --disable-dependency-tracking \
@@ -346,7 +343,6 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-dependency-tracking \
 		    --disable-doc  \
 		    --disable-utils \
-		    --disable-liblustre \
 		    --disable-snmp \
 		    --disable-zerocopy \
 		    --disable-tests \

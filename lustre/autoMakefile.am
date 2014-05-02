@@ -47,8 +47,6 @@ SERVER_SUBDIRS = ost mgs mdt mdd ofd osd-zfs osd-ldiskfs \
 
 CLIENT_SUBDIRS = mdc lmv llite lclient lov osc
 
-LIBLUSTRE_SUBDIRS = liblustre
-
 SUBDIRS := $(ALWAYS_SUBDIRS)
 
 if SERVER
@@ -59,16 +57,7 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
-# this needs to be after the client subdirs
-if LIBLUSTRE
-if !CLIENT
-SUBDIRS += $(CLIENT_SUBDIRS)
-endif
-SUBDIRS += $(LIBLUSTRE_SUBDIRS)
-endif
-
-DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
-	$(LIBLUSTRE_SUBDIRS)
+DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)
 
 EXTRA_DIST = BUGS kernel_patches BUILDING
 

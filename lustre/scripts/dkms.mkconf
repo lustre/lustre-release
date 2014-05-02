@@ -33,7 +33,6 @@ PRE_BUILD="configure
   --with-zfs=\${dkms_tree}/zfs/\${ZFS_VERSION}/build
   --with-zfs-obj=\${dkms_tree}/zfs/\${ZFS_VERSION}/\${kernelver}/\${arch}
   --without-ldiskfs
-  --without-sysio
   --without-lustre-iokit
   --disable-snmp
   --disable-doc

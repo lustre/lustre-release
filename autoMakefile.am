@@ -1,5 +1,18 @@
-SUBDIRS := @LDISKFS_SUBDIR@ . @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ @LUSTREIOKIT_SUBDIR@ @LIBCFS_SUBDIR@ lnet lustre
-DIST_SUBDIRS := ldiskfs @SNMP_DIST_SUBDIR@ libsysio lustre-iokit @LIBCFS_SUBDIR@ lnet lustre config contrib
+SUBDIRS := @LDISKFS_SUBDIR@ \
+	. \
+	@SNMP_SUBDIR@ \
+	@LUSTREIOKIT_SUBDIR@ \
+	@LIBCFS_SUBDIR@ \
+	lnet \
+	lustre
+
+DIST_SUBDIRS := ldiskfs \
+	@SNMP_DIST_SUBDIR@ \
+	lustre-iokit \
+	@LIBCFS_SUBDIR@ \
+	lnet \
+	lustre \
+	config contrib
 
 AUTOMAKE_OPTIONS = foreign
 

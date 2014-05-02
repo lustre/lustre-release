@@ -270,9 +270,9 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 %define optflags -g -O2 -Werror
 CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
 %if %{with lustre_tests}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests --enable-liblustre-tests"
+CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests"
 %else
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests --disable-liblustre-tests"
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests"
 %endif
 %if %{without lustre_iokit}
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-iokit"
@@ -309,8 +309,6 @@ make %{?_smp_mflags} -s %{?make_args}
 
 %install
 make install DESTDIR=$RPM_BUILD_ROOT
-# hack to avoid changing the libsysio code for "make install"
-rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 
 :> lustre.files
 
@@ -342,11 +340,6 @@ chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
 
-if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
-  echo '%{_libdir}/liblustre.a' >>lustre.files
-  echo '%{_libdir}/liblustre.so' >>lustre.files
-fi
-
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
   echo '%{_libdir}/libiam.a' >>lustre.files
 fi
@@ -363,9 +356,6 @@ echo '%{_bindir}/munlink' >>lustre-tests.files
 %if %{with lustre_modules}
 echo '%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
 %endif
-if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests ] ; then
-  echo '%{_libdir}/lustre/liblustre/tests/*' >>lustre-tests.files
-fi
 %endif
 
 %if %{defined cross_path}

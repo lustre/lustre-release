@@ -12,7 +12,3 @@ aclocal -I $PWD/config $ACLOCAL_FLAGS
 autoheader
 automake -a -c
 autoconf
-
-cd libsysio
-echo "bootstrapping in libsysio..."
-sh autogen.sh
