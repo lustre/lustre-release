@@ -20,10 +20,38 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2013, Intel Corporation.
+ * Copyright (c) 2014, Intel Corporation.
  */
 /*
  * lustre/osp/osp_trans.c
+ *
+ *
+ * 1. OSP (Object Storage Proxy) transaction methods
+ *
+ * Implement OSP layer transaction related interfaces for the dt_device API
+ * dt_device_operations.
+ *
+ *
+ * 2. Handle asynchronous idempotent operations
+ *
+ * The OSP uses OUT (Object Unified Target) RPC to talk with other server
+ * (MDT or OST) for kinds of operations, such as create, unlink, insert,
+ * delete, lookup, set_(x)attr, get_(x)attr, and etc. To reduce the number
+ * of RPCs, we allow multiple operations to be packaged together in single
+ * OUT RPC.
+ *
+ * For the asynchronous idempotent operations, such as get_(x)attr, related
+ * RPCs will be inserted into a osp_device based shared asynchronous request
+ * queue - osp_device::opd_async_requests. When the queue is full, all the
+ * requests in the queue will be packaged into a single OUT RPC and given to
+ * the ptlrpcd daemon (for sending), then the queue is purged and other new
+ * requests can be inserted into it.
+ *
+ * When the asynchronous idempotent operation inserts the request into the
+ * shared queue, it will register an interpreter. When the packaged OUT RPC
+ * is replied (or failed to be sent out), all the registered interpreters
+ * will be called one by one to handle each own result.
+ *
  *
  * Author: Di Wang <di.wang@intel.com>
  * Author: Fan, Yong <fan.yong@intel.com>
@@ -38,41 +66,78 @@ struct osp_async_update_args {
 	bool			  oaua_flow_control;
 };
 
-struct osp_async_update_item {
-	struct list_head		 oaui_list;
-	struct osp_object		*oaui_obj;
-	void				*oaui_data;
-	osp_async_update_interpterer_t	 oaui_interpterer;
+struct osp_async_request {
+	/* list in the dt_update_request::dur_cb_items */
+	struct list_head		 oar_list;
+
+	/* The target of the async update request. */
+	struct osp_object		*oar_obj;
+
+	/* The data used by oar_interpreter. */
+	void				*oar_data;
+
+	/* The interpreter function called after the async request handled. */
+	osp_async_request_interpreter_t	 oar_interpreter;
 };
 
-static struct osp_async_update_item *
-osp_async_update_item_init(struct osp_object *obj, void *data,
-			   osp_async_update_interpterer_t interpterer)
+/**
+ * Allocate an asynchronous request and initialize it with the given parameters.
+ *
+ * \param[in] obj		pointer to the operation target
+ * \param[in] data		pointer to the data used by the interpreter
+ * \param[in] interpreter	pointer to the interpreter function
+ *
+ * \retval			pointer to the asychronous request
+ * \retval			NULL if the allocation failed
+ */
+static struct osp_async_request *
+osp_async_request_init(struct osp_object *obj, void *data,
+		       osp_async_request_interpreter_t interpreter)
 {
-	struct osp_async_update_item *oaui;
+	struct osp_async_request *oar;
 
-	OBD_ALLOC_PTR(oaui);
-	if (oaui == NULL)
+	OBD_ALLOC_PTR(oar);
+	if (oar == NULL)
 		return NULL;
 
 	lu_object_get(osp2lu_obj(obj));
-	INIT_LIST_HEAD(&oaui->oaui_list);
-	oaui->oaui_obj = obj;
-	oaui->oaui_data = data;
-	oaui->oaui_interpterer = interpterer;
+	INIT_LIST_HEAD(&oar->oar_list);
+	oar->oar_obj = obj;
+	oar->oar_data = data;
+	oar->oar_interpreter = interpreter;
 
-	return oaui;
+	return oar;
 }
 
-static void osp_async_update_item_fini(const struct lu_env *env,
-				       struct osp_async_update_item *oaui)
+/**
+ * Destroy the asychronous request.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] oar	pointer to asychronous request
+ */
+static void osp_async_request_fini(const struct lu_env *env,
+				   struct osp_async_request *oar)
 {
-	LASSERT(list_empty(&oaui->oaui_list));
+	LASSERT(list_empty(&oar->oar_list));
 
-	lu_object_put(env, osp2lu_obj(oaui->oaui_obj));
-	OBD_FREE_PTR(oaui);
+	lu_object_put(env, osp2lu_obj(oar->oar_obj));
+	OBD_FREE_PTR(oar);
 }
 
+/**
+ * Interpret the packaged OUT RPC results.
+ *
+ * For every packaged sub-request, call its registered interpreter function.
+ * Then destroy the sub-request.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] req	pointer to the RPC
+ * \param[in] arg	pointer to data used by the interpreter
+ * \param[in] rc	the RPC return value
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_async_update_interpret(const struct lu_env *env,
 				      struct ptlrpc_request *req,
 				      void *arg, int rc)
@@ -80,8 +145,8 @@ static int osp_async_update_interpret(const struct lu_env *env,
 	struct object_update_reply	*reply	= NULL;
 	struct osp_async_update_args	*oaua	= arg;
 	struct dt_update_request	*dt_update = oaua->oaua_update;
-	struct osp_async_update_item	*oaui;
-	struct osp_async_update_item	*next;
+	struct osp_async_request	*oar;
+	struct osp_async_request	*next;
 	int				 count	= 0;
 	int				 index  = 0;
 	int				 rc1	= 0;
@@ -90,7 +155,8 @@ static int osp_async_update_interpret(const struct lu_env *env,
 		obd_put_request_slot(
 				&dt2osp_dev(dt_update->dur_dt)->opd_obd->u.cli);
 
-	if (rc == 0 || req->rq_repmsg != NULL) {
+	/* Unpack the results from the reply message. */
+	if (req->rq_repmsg != NULL) {
 		reply = req_capsule_server_sized_get(&req->rq_pill,
 						     &RMF_OUT_UPDATE_REPLY,
 						     OUT_UPDATE_REPLY_SIZE);
@@ -102,9 +168,13 @@ static int osp_async_update_interpret(const struct lu_env *env,
 		rc1 = rc;
 	}
 
-	list_for_each_entry_safe(oaui, next, &dt_update->dur_cb_items,
-				 oaui_list) {
-		list_del_init(&oaui->oaui_list);
+	list_for_each_entry_safe(oar, next, &dt_update->dur_cb_items,
+				 oar_list) {
+		list_del_init(&oar->oar_list);
+
+		/* The peer may only have handled some requests (indicated
+		 * by the 'count') in the packaged OUT RPC, we can only get
+		 * results for the handled part. */
 		if (index < count && reply->ourp_lens[index] > 0) {
 			struct object_update_result *result;
 
@@ -119,9 +189,9 @@ static int osp_async_update_interpret(const struct lu_env *env,
 				rc1 = -EINVAL;
 		}
 
-		oaui->oaui_interpterer(env, reply, req, oaui->oaui_obj,
-				       oaui->oaui_data, index, rc1);
-		osp_async_update_item_fini(env, oaui);
+		oar->oar_interpreter(env, reply, req, oar->oar_obj,
+				       oar->oar_data, index, rc1);
+		osp_async_request_fini(env, oar);
 		index++;
 	}
 
@@ -130,9 +200,20 @@ static int osp_async_update_interpret(const struct lu_env *env,
 	return 0;
 }
 
-int osp_unplug_async_update(const struct lu_env *env,
-			    struct osp_device *osp,
-			    struct dt_update_request *update)
+/**
+ * Pack all the requests in the shared asynchronous idempotent request queue
+ * into a single OUT RPC that will be given to the background ptlrpcd daemon.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] osp	pointer to the OSP device
+ * \param[in] update	pointer to the shared queue
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int osp_unplug_async_request(const struct lu_env *env,
+			     struct osp_device *osp,
+			     struct dt_update_request *update)
 {
 	struct osp_async_update_args	*args;
 	struct ptlrpc_request		*req = NULL;
@@ -141,15 +222,15 @@ int osp_unplug_async_update(const struct lu_env *env,
 	rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
 				 update->dur_req, &req);
 	if (rc != 0) {
-		struct osp_async_update_item *oaui;
-		struct osp_async_update_item *next;
+		struct osp_async_request *oar;
+		struct osp_async_request *next;
 
-		list_for_each_entry_safe(oaui, next,
-					 &update->dur_cb_items, oaui_list) {
-			list_del_init(&oaui->oaui_list);
-			oaui->oaui_interpterer(env, NULL, NULL, oaui->oaui_obj,
-					       oaui->oaui_data, 0, rc);
-			osp_async_update_item_fini(env, oaui);
+		list_for_each_entry_safe(oar, next,
+					 &update->dur_cb_items, oar_list) {
+			list_del_init(&oar->oar_list);
+			oar->oar_interpreter(env, NULL, NULL, oar->oar_obj,
+					       oar->oar_data, 0, rc);
+			osp_async_request_fini(env, oar);
 		}
 		out_destroy_update_req(update);
 	} else {
@@ -164,8 +245,19 @@ int osp_unplug_async_update(const struct lu_env *env,
 	return rc;
 }
 
-/* with osp::opd_async_requests_mutex held */
-struct dt_update_request *
+/**
+ * Find or create (if NOT exist or purged) the shared asynchronous idempotent
+ * request queue - osp_device::opd_async_requests.
+ *
+ * If the osp_device::opd_async_requests is not NULL, then return it directly;
+ * otherwise create new dt_update_request and attach it to opd_async_requests.
+ *
+ * \param[in] osp	pointer to the OSP device
+ *
+ * \retval		pointer to the shared queue
+ * \retval		negative error number on failure
+ */
+static struct dt_update_request *
 osp_find_or_create_async_update_request(struct osp_device *osp)
 {
 	struct dt_update_request *update = osp->opd_async_requests;
@@ -180,30 +272,58 @@ osp_find_or_create_async_update_request(struct osp_device *osp)
 	return update;
 }
 
-/* with osp::opd_async_requests_mutex held */
-int osp_insert_async_update(const struct lu_env *env,
-			    struct dt_update_request *update, int op,
-			    struct osp_object *obj, int count,
-			    int *lens, const char **bufs, void *data,
-			    osp_async_update_interpterer_t interpterer)
+/**
+ * Insert an asynchronous idempotent request to the shared request queue that
+ * is attached to the osp_device.
+ *
+ * This function generates a new osp_async_request with the given parameters,
+ * then tries to insert the request into the osp_device-based shared request
+ * queue. If the queue is full, then triggers the packaged OUT RPC to purge
+ * the shared queue firstly, and then re-tries.
+ *
+ * NOTE: must hold the osp::opd_async_requests_mutex to serialize concurrent
+ *	 osp_insert_async_request call from others.
+ *
+ * \param[in] env		pointer to the thread context
+ * \param[in] op		operation type, see 'enum update_type'
+ * \param[in] obj		pointer to the operation target
+ * \param[in] count		array size of the subsequent @lens and @bufs
+ * \param[in] lens		buffer length array for the subsequent @bufs
+ * \param[in] bufs		the buffers to compose the request
+ * \param[in] data		pointer to the data used by the interpreter
+ * \param[in] interpreter	pointer to the interpreter function
+ *
+ * \retval			0 for success
+ * \retval			negative error number on failure
+ */
+int osp_insert_async_request(const struct lu_env *env,
+			     int op, struct osp_object *obj, int count,
+			     int *lens, const char **bufs, void *data,
+			     osp_async_request_interpreter_t interpreter)
 {
-	struct osp_async_update_item *oaui;
+	struct osp_async_request     *oar;
 	struct osp_device	     *osp = lu2osp_dev(osp2lu_obj(obj)->lo_dev);
+	struct dt_update_request     *update;
 	int			      rc  = 0;
 	ENTRY;
 
-	oaui = osp_async_update_item_init(obj, data, interpterer);
-	if (oaui == NULL)
+	oar = osp_async_request_init(obj, data, interpreter);
+	if (oar == NULL)
 		RETURN(-ENOMEM);
+
+	update = osp_find_or_create_async_update_request(osp);
+	if (IS_ERR(update))
+		GOTO(out, rc = PTR_ERR(update));
 
 again:
 	rc = out_insert_update(env, update, op, lu_object_fid(osp2lu_obj(obj)),
 			       count, lens, bufs);
+	/* The queue is full. */
 	if (rc == -E2BIG) {
 		osp->opd_async_requests = NULL;
 		mutex_unlock(&osp->opd_async_requests_mutex);
 
-		rc = osp_unplug_async_update(env, osp, update);
+		rc = osp_unplug_async_request(env, osp, update);
 		mutex_lock(&osp->opd_async_requests_mutex);
 		if (rc != 0)
 			GOTO(out, rc);
@@ -216,27 +336,49 @@ again:
 	}
 
 	if (rc == 0)
-		list_add_tail(&oaui->oaui_list, &update->dur_cb_items);
+		list_add_tail(&oar->oar_list, &update->dur_cb_items);
 
 	GOTO(out, rc);
 
 out:
 	if (rc != 0)
-		osp_async_update_item_fini(env, oaui);
+		osp_async_request_fini(env, oar);
 
 	return rc;
 }
 
 /**
- * If the transaction creation goes to OSP, it means the update
- * in this transaction only includes remote UPDATE. It is only
- * used by LFSCK right now.
- **/
+ * The OSP layer dt_device_operations::dt_trans_create() interface
+ * to create a transaction.
+ *
+ * There are two kinds of transactions that will involve OSP:
+ *
+ * 1) If the transaction only contains the updates on remote server
+ *    (MDT or OST), such as re-generating the lost OST-object for
+ *    LFSCK, then it is a remote transaction. For remote transaction,
+ *    the upper layer caller (such as the LFSCK engine) will call the
+ *    dt_trans_create() (with the OSP dt_device as the parameter),
+ *    then the call will be directed to the osp_trans_create() that
+ *    creates the transaction handler and returns it to the caller.
+ *
+ * 2) If the transcation contains both local and remote updates,
+ *    such as cross MDTs create under DNE mode, then the upper layer
+ *    caller will not trigger osp_trans_create(). Instead, it will
+ *    call dt_trans_create() on other dt_device, such as LOD that
+ *    will generate the transaction handler. Such handler will be
+ *    used by the whole transaction in subsequent sub-operations.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] d		pointer to the OSP dt_device
+ *
+ * \retval		pointer to the transaction handler
+ * \retval		negative error number on failure
+ */
 struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 {
-	struct thandle *th = NULL;
-	struct thandle_update *tu = NULL;
-	int rc = 0;
+	struct thandle		*th = NULL;
+	struct thandle_update	*tu = NULL;
+	int			 rc = 0;
 
 	OBD_ALLOC_PTR(th);
 	if (unlikely(th == NULL))
@@ -267,17 +409,33 @@ out:
 	return th;
 }
 
+/**
+ * Trigger the request for remote updates.
+ *
+ * If the transaction is a remote transaction, then related remote updates
+ * will be sent asynchronously; otherwise, the cross MDTs transaction will
+ * be synchronized.
+ *
+ * Please refer to osp_trans_create() for transaction type.
+ *
+ * \param[in] env		pointer to the thread context
+ * \param[in] osp		pointer to the OSP device
+ * \param[in] dt_update		pointer to the dt_update_request
+ * \param[in] th		pointer to the transaction handler
+ * \param[in] flow_control	whether need to control the flow
+ *
+ * \retval			0 for success
+ * \retval			negative error number on failure
+ */
 static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 			     struct dt_update_request *dt_update,
 			     struct thandle *th, bool flow_control)
 {
 	struct thandle_update	*tu = th->th_update;
-	int			rc = 0;
+	int			 rc = 0;
 
 	LASSERT(tu != NULL);
 
-	/* If the transaction only includes remote update, it should
-	 * still be asynchronous */
 	if (is_only_remote_trans(th)) {
 		struct osp_async_update_args	*args;
 		struct ptlrpc_request		*req;
@@ -296,8 +454,6 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 			out_destroy_update_req(dt_update);
 		}
 	} else {
-		/* Before we support async update, the cross MDT transaction
-		 * has to been synchronized */
 		th->th_sync = 1;
 		rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import,
 				     dt_update, NULL);
@@ -306,12 +462,39 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 	return rc;
 }
 
+/**
+ * The OSP layer dt_device_operations::dt_trans_start() interface
+ * to start the transaction.
+ *
+ * If the transaction is a remote transaction, then related remote
+ * updates will be triggered in the osp_trans_stop(); otherwise the
+ * transaction contains both local and remote update(s), then when
+ * the OUT RPC will be triggered depends on the operation, and is
+ * indicated by the dt_device::tu_sent_after_local_trans, for example:
+ *
+ * 1) If it is remote create, it will send the remote req after local
+ * transaction. i.e. create the object locally first, then insert the
+ * remote name entry.
+ *
+ * 2) If it is remote unlink, it will send the remote req before the
+ * local transaction, i.e. delete the name entry remotely first, then
+ * destroy the local object.
+ *
+ * Please refer to osp_trans_create() for transaction type.
+ *
+ * \param[in] env		pointer to the thread context
+ * \param[in] dt		pointer to the OSP dt_device
+ * \param[in] th		pointer to the transaction handler
+ *
+ * \retval			0 for success
+ * \retval			negative error number on failure
+ */
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th)
 {
-	struct thandle_update *tu = th->th_update;
-	struct dt_update_request *dt_update;
-	int rc = 0;
+	struct thandle_update		*tu = th->th_update;
+	struct dt_update_request	*dt_update;
+	int				 rc = 0;
 
 	if (tu == NULL)
 		return rc;
@@ -321,19 +504,6 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 	if (dt_update == NULL)
 		return rc;
 
-	/* Note: some updates needs to send before local transaction,
-	 * some needs to send after local transaction.
-	 *
-	 * If the transaction only includes remote updates, it will
-	 * send updates to remote MDT in osp_trans_stop.
-	 *
-	 * If it is remote create, it will send the remote req after
-	 * local transaction. i.e. create the object locally first,
-	 * then insert the name entry.
-	 *
-	 * If it is remote unlink, it will send the remote req before
-	 * the local transaction, i.e. delete the name entry remote
-	 * first, then destroy the local object. */
 	if (!is_only_remote_trans(th) && !tu->tu_sent_after_local_trans)
 		rc = osp_trans_trigger(env, dt2osp_dev(dt), dt_update, th,
 				       false);
@@ -341,15 +511,36 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 	return rc;
 }
 
+/**
+ * The OSP layer dt_device_operations::dt_trans_stop() interface
+ * to stop the transaction.
+ *
+ * If the transaction is a remote transaction, or the update handler
+ * is marked as 'tu_sent_after_local_trans', then related remote
+ * updates will be triggered here via osp_trans_trigger().
+ *
+ * For synchronous mode update or any failed update, the request
+ * will be destroyed explicitly when the osp_trans_stop().
+ *
+ * Please refer to osp_trans_create() for transaction type.
+ *
+ * \param[in] env		pointer to the thread context
+ * \param[in] dt		pointer to the OSP dt_device
+ * \param[in] th		pointer to the transaction handler
+ *
+ * \retval			0 for success
+ * \retval			negative error number on failure
+ */
 int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		   struct thandle *th)
 {
 	struct thandle_update		*tu = th->th_update;
 	struct dt_update_request	*dt_update;
-	int rc = 0;
+	int				 rc = 0;
 
 	LASSERT(tu != NULL);
-        LASSERT(tu != LP_POISON);
+	LASSERT(tu != LP_POISON);
+
 	/* Check whether there are updates related with this OSP */
 	dt_update = out_find_update(tu, dt);
 	if (dt_update == NULL) {

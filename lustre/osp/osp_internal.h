@@ -494,27 +494,24 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 	return imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_FID;
 }
 
-typedef int (*osp_async_update_interpterer_t)(const struct lu_env *env,
-					      struct object_update_reply *reply,
-					      struct ptlrpc_request *req,
-					      struct osp_object *obj,
-					      void *data, int index, int rc);
+typedef int (*osp_async_request_interpreter_t)(const struct lu_env *env,
+					       struct object_update_reply *rep,
+					       struct ptlrpc_request *req,
+					       struct osp_object *obj,
+					       void *data, int index, int rc);
 
 /* osp_dev.c */
 void osp_update_last_id(struct osp_device *d, obd_id objid);
 extern struct llog_operations osp_mds_ost_orig_logops;
 
 /* osp_trans.c */
-struct dt_update_request *
-osp_find_or_create_async_update_request(struct osp_device *osp);
-int osp_insert_async_update(const struct lu_env *env,
-			    struct dt_update_request *update, int op,
-			    struct osp_object *obj, int count,
-			    int *lens, const char **bufs, void *data,
-			    osp_async_update_interpterer_t interpterer);
-int osp_unplug_async_update(const struct lu_env *env,
-			    struct osp_device *osp,
-			    struct dt_update_request *update);
+int osp_insert_async_request(const struct lu_env *env,
+			     int op, struct osp_object *obj, int count,
+			     int *lens, const char **bufs, void *data,
+			     osp_async_request_interpreter_t interpterer);
+int osp_unplug_async_request(const struct lu_env *env,
+			     struct osp_device *osp,
+			     struct dt_update_request *update);
 struct thandle *osp_trans_create(const struct lu_env *env,
 				 struct dt_device *d);
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
