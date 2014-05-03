@@ -263,8 +263,9 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                             pb->pb_ino, pb->pb_name.name, pb->pb_name.len,
                             0, LUSTRE_OPC_ANY);
 
-	rc = md_intent_lock(exp, &op_data, it, &req, &llu_md_blocking_ast,
-			    LDLM_FL_CANCEL_ON_BLOCK);
+        rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
+                            &req, llu_md_blocking_ast,
+                            LDLM_FL_CANCEL_ON_BLOCK);
         /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -428,8 +429,9 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                             pnode->p_base->pb_name.name,
                             pnode->p_base->pb_name.len, flags, opc);
 
-	rc = md_intent_lock(llu_i2mdexp(parent), &op_data, it, &req,
-			    &llu_md_blocking_ast, LDLM_FL_CANCEL_ON_BLOCK);
+        rc = md_intent_lock(llu_i2mdexp(parent), &op_data, NULL, 0, it,
+                            flags, &req, llu_md_blocking_ast,
+                            LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)
                 GOTO(out, rc);
 

@@ -263,22 +263,20 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         }
 }
 
-static struct ptlrpc_request *
-mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
-		     struct md_op_data *op_data)
+static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
+                                                   struct lookup_intent *it,
+                                                   struct md_op_data *op_data,
+                                                   void *lmm, int lmmsize,
+                                                   void *cb_data)
 {
-	struct ptlrpc_request	*req;
-	struct obd_device	*obddev = class_exp2obd(exp);
-	struct ldlm_intent	*lit;
-	const void		*lmm = op_data->op_data;
-	int			 lmmsize = op_data->op_data_size;
-	struct list_head	 cancels;
-	int count = 0;
-	int mode;
-	int rc;
+        struct ptlrpc_request *req;
+        struct obd_device     *obddev = class_exp2obd(exp);
+        struct ldlm_intent    *lit;
+        CFS_LIST_HEAD(cancels);
+        int                    count = 0;
+        int                    mode;
+        int                    rc;
         ENTRY;
-
-	INIT_LIST_HEAD(&cancels);
 
         it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
@@ -329,8 +327,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
-	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
-			     max(lmmsize, obddev->u.cli.cl_default_mds_easize));
+        req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+                             max(lmmsize, obddev->u.cli.cl_default_mds_easize));
 
 	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
 	if (rc < 0) {
@@ -779,11 +777,10 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 
 /* We always reserve enough space in the reply packet for a stripe MD, because
  * we don't know in advance the file type. */
-int mdc_enqueue(struct obd_export *exp,
-		struct ldlm_enqueue_info *einfo,
-		const union ldlm_policy_data *policy,
-		struct lookup_intent *it, struct md_op_data *op_data,
-		struct lustre_handle *lockh, __u64 extra_lock_flags)
+int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+                struct lookup_intent *it, struct md_op_data *op_data,
+                struct lustre_handle *lockh, void *lmm, int lmmsize,
+		struct ptlrpc_request **reqp, __u64 extra_lock_flags)
 {
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req = NULL;
@@ -798,6 +795,7 @@ int mdc_enqueue(struct obd_export *exp,
 			    { .l_inodebits = { MDS_INODELOCK_LAYOUT } };
 	static const ldlm_policy_data_t getxattr_policy = {
 			      .l_inodebits = { MDS_INODELOCK_XATTR } };
+        ldlm_policy_data_t const *policy = &lookup_policy;
         int                    generation, resends = 0;
         struct ldlm_reply     *lockrep;
 	enum lvb_type	       lvb_type = 0;
@@ -805,33 +803,38 @@ int mdc_enqueue(struct obd_export *exp,
 
         LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
                  einfo->ei_type);
+
         fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 
-	if (it != NULL) {
-		LASSERT(policy == NULL);
-
+	if (it) {
 		saved_flags |= LDLM_FL_HAS_INTENT;
-		if (it->it_op & (IT_OPEN | IT_UNLINK | IT_GETATTR | IT_READDIR))
+		if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
 			policy = &update_policy;
 		else if (it->it_op & IT_LAYOUT)
 			policy = &layout_policy;
 		else if (it->it_op & (IT_GETXATTR | IT_SETXATTR))
 			policy = &getxattr_policy;
-		else
-			policy = &lookup_policy;
 	}
+
+        LASSERT(reqp == NULL);
 
         generation = obddev->u.cli.cl_import->imp_generation;
 resend:
         flags = saved_flags;
-	if (it == NULL) {
-		/* The only way right now is FLOCK. */
-		LASSERTF(einfo->ei_type == LDLM_FLOCK, "lock type %d\n",
-			 einfo->ei_type);
-		res_id.name[3] = LDLM_FLOCK;
-	} else if (it->it_op & IT_OPEN) {
-		LASSERT(einfo->ei_cbdata == NULL);
-		req = mdc_intent_open_pack(exp, it, op_data);
+        if (!it) {
+                /* The only way right now is FLOCK, in this case we hide flock
+                   policy as lmm, but lmmsize is 0 */
+                LASSERT(lmm && lmmsize == 0);
+                LASSERTF(einfo->ei_type == LDLM_FLOCK, "lock type %d\n",
+                         einfo->ei_type);
+                policy = (ldlm_policy_data_t *)lmm;
+                res_id.name[3] = LDLM_FLOCK;
+        } else if (it->it_op & IT_OPEN) {
+                req = mdc_intent_open_pack(exp, it, op_data, lmm, lmmsize,
+                                           einfo->ei_cbdata);
+                policy = &update_policy;
+                einfo->ei_cbdata = NULL;
+                lmm = NULL;
 	} else if (it->it_op & IT_UNLINK) {
 		req = mdc_intent_unlink_pack(exp, it, op_data);
 	} else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
@@ -1151,8 +1154,10 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
  * child lookup.
  */
 int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
-		    struct lookup_intent *it, struct ptlrpc_request **reqp,
-		    ldlm_blocking_callback cb_blocking, __u64 extra_lock_flags)
+                    void *lmm, int lmmsize, struct lookup_intent *it,
+                    int lookup_flags, struct ptlrpc_request **reqp,
+                    ldlm_blocking_callback cb_blocking,
+		    __u64 extra_lock_flags)
 {
 	struct ldlm_enqueue_info einfo = {
 		.ei_type	= LDLM_IBITS,
@@ -1193,13 +1198,12 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 			RETURN(rc);
 		}
 	}
-
-	rc = mdc_enqueue(exp, &einfo, NULL, it, op_data, &lockh,
+	rc = mdc_enqueue(exp, &einfo, it, op_data, &lockh, lmm, lmmsize, NULL,
 			 extra_lock_flags);
 	if (rc < 0)
 		RETURN(rc);
 
-	*reqp = it->d.lustre.it_data;
+        *reqp = it->d.lustre.it_data;
         rc = mdc_finish_intent_lock(exp, *reqp, op_data, it, &lockh);
         RETURN(rc);
 }
