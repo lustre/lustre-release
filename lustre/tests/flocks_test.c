@@ -371,7 +371,8 @@ int t4(int argc, char *argv[])
 	};
 
 	int fd, fd2;
-	int pid;
+	pid_t child_pid;
+	int child_status;
 	int rc = EXIT_SUCCESS;
 
 	if (argc != 4) {
@@ -389,18 +390,19 @@ int t4(int argc, char *argv[])
 		goto out;
 	}
 
-	pid = fork();
-	if (pid == -1) {
+	child_pid = fork();
+	if (child_pid < 0) {
 		perror("fork");
 		rc = EXIT_FAILURE;
 		goto out;
 	}
 
-	if (pid == 0) {
+	if (child_pid == 0) {
 		printf("%d: get lock1\n", getpid());
 		fflush(stdout);
 		if (t_fcntl(fd, F_SETLKW, &lock) < 0) {
-			perror("first flock failed");
+			fprintf(stderr, "%d: cannot get lock1: %s\n",
+				getpid(), strerror(errno));
 			rc = EXIT_FAILURE;
 			goto out_child;
 		}
@@ -409,8 +411,14 @@ int t4(int argc, char *argv[])
 		printf("%d: get lock2\n", getpid());
 		fflush(stdout);
 		if (t_fcntl(fd2, F_SETLKW, &lock) < 0) {
-			perror("first flock failed");
-			rc = EXIT_FAILURE;
+			fprintf(stderr, "%d: cannot get lock2: %s\n",
+				getpid(), strerror(errno));
+
+			if (errno == EDEADLK)
+				rc = EXIT_SUCCESS;
+			else
+				rc = EXIT_FAILURE;
+
 			goto out_child;
 		}
 		printf("%d: done\n", getpid());
@@ -421,7 +429,8 @@ out_child:
 		printf("%d: get lock2\n", getpid());
 		fflush(stdout);
 		if (t_fcntl(fd2, F_SETLKW, &lock) < 0) {
-			perror("first flock failed");
+			fprintf(stderr, "%d: cannot get lock2: %s\n",
+				getpid(), strerror(errno));
 			rc = EXIT_FAILURE;
 			goto out;
 		}
@@ -430,11 +439,41 @@ out_child:
 		printf("%d: get lock1\n", getpid());
 		fflush(stdout);
 		if (t_fcntl(fd, F_SETLKW, &lock) < 0) {
-			perror("first flock failed");
-			rc = EXIT_FAILURE;
-			goto out;
+			fprintf(stderr, "%d: cannot get lock1: %s\n",
+				getpid(), strerror(errno));
+
+			if (errno != EDEADLK) {
+				rc = EXIT_FAILURE;
+				goto out;
+			}
 		}
 		printf("%d: done\n", getpid());
+	}
+
+	sleep(1);
+
+	if (close(fd) < 0) {
+		fprintf(stderr, "%d: error closing file1: %s\n",
+			getpid(), strerror(errno));
+		rc = EXIT_FAILURE;
+	}
+
+	if (close(fd2) < 0) {
+		fprintf(stderr, "%d: error closing file2: %s\n",
+			getpid(), strerror(errno));
+		rc = EXIT_FAILURE;
+	}
+
+	if (waitpid(child_pid, &child_status, 0) < 0) {
+		fprintf(stderr, "%d: cannot get termination status of %d: %s\n",
+			getpid(), child_pid, strerror(errno));
+		rc = EXIT_FAILURE;
+	} else if (!WIFEXITED(child_status)) {
+		fprintf(stderr, "%d: child %d terminated with status %d\n",
+			getpid(), child_pid, child_status);
+		rc = EXIT_FAILURE;
+	} else {
+		rc = WEXITSTATUS(child_status);
 	}
 
 out:
