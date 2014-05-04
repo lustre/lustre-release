@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
                 switch(c) {
                 case 'a':
                         append_max = strtoul(optarg, &end, 0);
-                        if (append_max == 0 || *end) {
+			if (append_max < 2 || *end) {
                                 fprintf(stderr, "%s: bad append option '%s'\n",
                                         prog, optarg);
                                 usage(prog);
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
                         break;
                 case 'w':
                         write_max = strtoul(optarg, &end, 0);
-                        if (write_max == 0 || *end) {
+			if (write_max < 2 || *end) {
                                 fprintf(stderr, "%s: bad write option '%s'\n",
                                         prog, optarg);
                                 usage(prog);
@@ -303,7 +303,8 @@ int main(int argc, char *argv[])
                 if (rank == 0) {
                         write_size = (rand() % (write_max - 1)) + 1;
                         append_size = (rand() % (append_max - 1)) + 1;
-                        trunc_size = (rand() % ((trunc_max?: append_size)-1))+1;
+			trunc_size = (append_size == 1) ? 1 :
+				     (rand() % ((trunc_max?: append_size)-1))+1;
                         trunc_offset = write_size + trunc_size;
 
                         if (verbose || n % 1000 == 0)
