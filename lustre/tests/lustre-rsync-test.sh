@@ -207,6 +207,49 @@ test_1() {
 }
 run_test 1 "Simple Replication"
 
+# Test 1a - test create/delete operations in ROOT directory
+test_1a() { # LU-5005
+	rm -rf $TGT/root-* 2> /dev/null
+	rm -rf $DIR/root-* 2> /dev/null
+	init_changelog
+
+	# Directory create
+	mkdir $DIR/root-dir
+
+	# File create
+	touch $DIR/root-file
+	touch $DIR/root-file2
+
+	# File rename
+	mv $DIR/root-file2 $DIR/root-file3
+
+	# File and directory delete
+	touch $DIR/root-file4
+	mkdir $DIR/root-dir1
+	rm $DIR/root-file4
+	rm -rf $DIR/root-dir1
+
+	# Replicate
+	local LRSYNC_LOG=$(generate_logname "lrsync_log")
+	echo "Replication"
+	$LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG \
+		-D $LRSYNC_LOG
+
+	# Verify
+	stat $TGT/root-dir || error "Dir create not replicated"
+	stat $TGT/root-file || error "File create not replicated"
+	stat $TGT/root-file2 && error "Rename not replicated (src)"
+	stat $TGT/root-file3 || error "Rename not replicated (tgt)"
+	stat $TGT/root-dir1 && error "Dir delete not replicated"
+	stat $TGT/root-file4 && error "File delete not replicated"
+
+	fini_changelog
+	rm -fr $TGT/root-*
+	rm -fr $DIR/root-*
+	return 0
+}
+run_test 1a "Replicate create/delete operations in ROOT directory"
+
 # Test 2a - Replicate files created by dbench
 test_2a() {
 	init_src

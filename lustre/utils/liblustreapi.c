@@ -4156,9 +4156,13 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
                 if (rc != -ENOENT)
                         llapi_error(LLAPI_MSG_ERROR, rc, "ioctl err %d", rc);
         } else {
-                memcpy(buf, gf->gf_path, gf->gf_pathlen);
-                *recno = gf->gf_recno;
-                *linkno = gf->gf_linkno;
+		memcpy(buf, gf->gf_path, gf->gf_pathlen);
+		if (buf[0] == '\0') { /* ROOT path */
+			buf[0] = '/';
+			buf[1] = '\0';
+		}
+		*recno = gf->gf_recno;
+		*linkno = gf->gf_linkno;
         }
 
         free(gf);
