@@ -332,8 +332,11 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 	if (!cp->cpg_defer_uptodate && !PageUptodate(vmpage)) {
 		CDEBUG(D_READA, "page index %lu, max_index: %lu\n",
 		       ccc_index(cp), *max_index);
-		if (*max_index == 0 || ccc_index(cp) > *max_index)
-			rc = cl_page_is_under_lock(env, io, page, max_index);
+		/* Disable the optimization on prefetching maximum readahead
+		 * index because there is a race with lock cancellation. This
+		 * optimization will be revived later.
+		 * if (*max_index == 0 || ccc_index(cp) > *max_index) */
+		rc = cl_page_is_under_lock(env, io, page, max_index);
 		if (rc == 0) {
 			cp->cpg_defer_uptodate = 1;
 			cp->cpg_ra_used = 0;
