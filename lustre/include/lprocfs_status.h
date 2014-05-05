@@ -604,16 +604,17 @@ extern int lprocfs_add_clear_entry(struct obd_device * obd,
 #ifdef HAVE_SERVER_SUPPORT
 extern int lprocfs_exp_setup(struct obd_export *exp,
                              lnet_nid_t *peer_nid, int *newnid);
-#endif
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
-extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
-                                                char *name,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-						read_proc_t *read_proc,
-						write_proc_t *write_proc,
+#else
+static inline int lprocfs_exp_cleanup(struct obd_export *exp)
+{ return 0; }
 #endif
-                                                void *data,
-                                                struct file_operations *fops);
+extern struct proc_dir_entry *
+lprocfs_add_simple(struct proc_dir_entry *root, char *name,
+#ifndef HAVE_ONLY_PROCFS_SEQ
+		   read_proc_t *read_proc, write_proc_t *write_proc,
+#endif
+		   void *data, const struct file_operations *fops);
 extern struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
                     const char *format, ...);
@@ -666,9 +667,9 @@ extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_seq_obd_setup(struct obd_device *dev);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
-extern struct file_operations lprocfs_evict_client_fops;
+extern const struct file_operations lprocfs_evict_client_fops;
 #endif
-extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, const char *name,
+extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 			      mode_t mode,
 			      const struct file_operations *seq_fops,
 			      void *data);
@@ -742,6 +743,10 @@ lprocfs_timeouts_seq_write(struct file *file, const char *buffer,
 			   size_t count, loff_t *off);
 #ifndef HAVE_ONLY_PROCFS_SEQ
 #ifdef HAVE_SERVER_SUPPORT
+extern ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
+				 size_t size, loff_t *ppos);
+extern ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
+				  size_t size, loff_t *ppos);
 extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 #endif
@@ -1126,12 +1131,12 @@ static inline int lprocfs_exp_setup(struct obd_export *exp,lnet_nid_t *peer_nid,
 #endif
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
-static inline cfs_proc_dir_entry_t *
+static inline struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 #ifndef HAVE_ONLY_PROCFS_SEQ
 		   read_proc_t *read_proc, write_proc_t *write_proc,
 #endif
-		   void *data, struct file_operations *fops)
+		   void *data, const struct file_operations *fops)
 {return 0; }
 static inline struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
