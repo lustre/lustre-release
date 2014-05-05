@@ -429,14 +429,15 @@ struct lov_obd {
 							   array */
 	struct mutex		lov_lock;
 	struct obd_connect_data	lov_ocd;
+	struct proc_dir_entry  *targets_proc_entry;
 	atomic_t		lov_refcount;
 	__u32			lov_death_row;	/* tgts scheduled to be deleted */
 	__u32			lov_tgt_size;	/* size of tgts array */
 	int			lov_connects;
 	int			lov_pool_count;
 	cfs_hash_t	       *lov_pools_hash_body; /* used for key access */
-	cfs_list_t		lov_pool_list;	/* used for sequential access */
-	cfs_proc_dir_entry_t   *lov_pool_proc_entry;
+	struct list_head	lov_pool_list;	/* used for sequential access */
+	struct proc_dir_entry  *lov_pool_proc_entry;
 	enum lustre_sec_part	lov_sp_me;
 
 	/* Cached LRU and unstable data from upper layer */
@@ -470,6 +471,7 @@ struct lmv_obd {
 	struct lmv_desc		desc;
 	struct obd_uuid		cluuid;
 	struct obd_export	*exp;
+	struct proc_dir_entry	*targets_proc_entry;
 
 	struct mutex		init_mutex;
 	int			connected;
