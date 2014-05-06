@@ -296,13 +296,13 @@ int main(int argc, char **argv)
 			commands++;
 			switch (*commands) {
 			case 'U':
-				flags = F_UNLCK;
+				flags = LL_LEASE_UNLCK;
 				break;
 			case 'R':
-				flags = F_RDLCK;
+				flags = LL_LEASE_RDLCK;
 				break;
 			case 'W':
-				flags = F_WRLCK;
+				flags = LL_LEASE_WRLCK;
 				break;
 			default:
 				errx(-1, "unknown mode: %c", *commands);
@@ -312,16 +312,16 @@ int main(int argc, char **argv)
 			if (rc < 0)
 				err(errno, "apply lease error");
 
-			if (flags != F_UNLCK)
+			if (flags != LL_LEASE_UNLCK)
 				break;
 
 			/* F_UNLCK, interpret return code */
 			if (rc > 0) {
-				const char *str = "Unknown";
-				if (rc == FMODE_READ)
-					str = "FMODE_READ";
-				else if (rc == FMODE_WRITE)
-					str = "FMODE_WRITE";
+				const char *str = "unknown";
+				if (rc == LL_LEASE_RDLCK)
+					str = "read";
+				else if (rc == LL_LEASE_WRLCK)
+					str = "write";
 				fprintf(stdout, "%s lease(%d) released.\n",
 					str, rc);
 			} else if (rc == 0) {
@@ -335,12 +335,12 @@ int main(int argc, char **argv)
 
 			rc = ioctl(fd, LL_IOC_GET_LEASE);
 			if (rc > 0) {
-				const char *str = "Unknown";
+				const char *str = "unknown";
 
-				if (rc == FMODE_READ)
-					str = "FMODE_READ";
-				else if (rc == FMODE_WRITE)
-					str = "FMODE_WRITE";
+				if (rc == LL_LEASE_RDLCK)
+					str = "read";
+				else if (rc == LL_LEASE_WRLCK)
+					str = "write";
 				fprintf(stdout, "%s lease(%d) has applied.\n",
 					str, rc);
 				if (*commands == '-')

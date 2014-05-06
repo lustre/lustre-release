@@ -2320,6 +2320,12 @@ out:
 	RETURN(rc);
 }
 
+static inline long ll_lease_type_from_fmode(fmode_t fmode)
+{
+	return ((fmode & FMODE_READ) ? LL_LEASE_RDLCK : 0) |
+	       ((fmode & FMODE_WRITE) ? LL_LEASE_WRLCK : 0);
+}
+
 static long
 ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -2530,20 +2536,20 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		struct ll_inode_info *lli = ll_i2info(inode);
 		struct obd_client_handle *och = NULL;
 		bool lease_broken;
-		fmode_t mode = 0;
+		fmode_t fmode;
 
 		switch (arg) {
-		case F_WRLCK:
+		case LL_LEASE_WRLCK:
 			if (!(file->f_mode & FMODE_WRITE))
 				RETURN(-EPERM);
-			mode = FMODE_WRITE;
+			fmode = FMODE_WRITE;
 			break;
-		case F_RDLCK:
+		case LL_LEASE_RDLCK:
 			if (!(file->f_mode & FMODE_READ))
 				RETURN(-EPERM);
-			mode = FMODE_READ;
+			fmode = FMODE_READ;
 			break;
-		case F_UNLCK:
+		case LL_LEASE_UNLCK:
 			mutex_lock(&lli->lli_och_mutex);
 			if (fd->fd_lease_och != NULL) {
 				och = fd->fd_lease_och;
@@ -2551,25 +2557,26 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			}
 			mutex_unlock(&lli->lli_och_mutex);
 
-			if (och != NULL) {
-				mode = och->och_flags &(FMODE_READ|FMODE_WRITE);
-				rc = ll_lease_close(och, inode, &lease_broken);
-				if (rc == 0 && lease_broken)
-					mode = 0;
-			} else {
-				rc = -ENOLCK;
-			}
+			if (och == NULL)
+				RETURN(-ENOLCK);
 
-			/* return the type of lease or error */
-			RETURN(rc < 0 ? rc : (int)mode);
+			fmode = och->och_flags;
+			rc = ll_lease_close(och, inode, &lease_broken);
+			if (rc < 0)
+				RETURN(rc);
+
+			if (lease_broken)
+				fmode = 0;
+
+			RETURN(ll_lease_type_from_fmode(fmode));
 		default:
 			RETURN(-EINVAL);
 		}
 
-		CDEBUG(D_INODE, "Set lease with mode %d\n", mode);
+		CDEBUG(D_INODE, "Set lease with mode %u\n", fmode);
 
 		/* apply for lease */
-		och = ll_lease_open(inode, file, mode, 0);
+		och = ll_lease_open(inode, file, fmode, 0);
 		if (IS_ERR(och))
 			RETURN(PTR_ERR(och));
 
@@ -2590,8 +2597,8 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case LL_IOC_GET_LEASE: {
 		struct ll_inode_info *lli = ll_i2info(inode);
 		struct ldlm_lock *lock = NULL;
+		fmode_t fmode = 0;
 
-		rc = 0;
 		mutex_lock(&lli->lli_och_mutex);
 		if (fd->fd_lease_och != NULL) {
 			struct obd_client_handle *och = fd->fd_lease_och;
@@ -2600,14 +2607,15 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (lock != NULL) {
 				lock_res_and_lock(lock);
 				if (!ldlm_is_cancel(lock))
-					rc = och->och_flags &
-						(FMODE_READ | FMODE_WRITE);
+					fmode = och->och_flags;
+
 				unlock_res_and_lock(lock);
 				LDLM_LOCK_PUT(lock);
 			}
 		}
 		mutex_unlock(&lli->lli_och_mutex);
-		RETURN(rc);
+
+		RETURN(ll_lease_type_from_fmode(fmode));
 	}
 	case LL_IOC_HSM_IMPORT: {
 		struct hsm_user_import *hui;
