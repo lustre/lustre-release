@@ -38,6 +38,7 @@ export PATH=$PATH:/sbin
 
 TMP=${TMP:-/tmp}
 
+CC=${CC:-cc}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFS=${LFS:-lfs}
@@ -69,6 +70,7 @@ CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
@@ -12771,6 +12773,63 @@ test_300g() {
 	rmdir $DIR/$tdir/striped_dir/* || error "rmdir3 failed"
 }
 run_test 300g "check default striped directory for striped directory"
+
+test_400a() { # LU-1606, was conf-sanity test_74
+	local extra_flags=''
+	local out=$TMP/$tfile
+	local prefix=/usr/include/lustre
+	local prog
+
+	if ! which $CC > /dev/null 2>&1; then
+		skip_env "$CC is not installed"
+		return 0
+	fi
+
+	if ! [[ -d $prefix ]]; then
+		# Assume we're running in tree and fixup the include path.
+		extra_flags+=" -I$LUSTRE/../libcfs/include"
+		extra_flags+=" -I$LUSTRE/include"
+		extra_flags+=" -L$LUSTRE/utils"
+	fi
+
+	for prog in $LUSTRE_TESTS_API_DIR/*.c; do
+		$CC -Wall -Werror $extra_flags -llustreapi -o $out $prog ||
+			error "client api broken"
+	done
+}
+run_test 400a "Lustre client api program can compile and link"
+
+test_400b() { # LU-1606, LU-5011
+	local header
+	local out=$TMP/$tfile
+	local prefix=/usr/include/lustre
+
+	# We use a hard coded prefix so that this test will not fail
+	# when run in tree. There are headers in lustre/include/lustre/
+	# that are not packaged (like lustre_idl.h) and have more
+	# complicated include dependencies (like config.h and lnet/types.h).
+	# Since this test about correct packaging we just skip them when
+	# they don't exist (see below) rather than try to fixup cppflags.
+
+	if ! which $CC > /dev/null 2>&1; then
+		skip_env "$CC is not installed"
+		return 0
+	fi
+
+	for header in $prefix/*.h; do
+		if ! [[ -f "$header" ]]; then
+			continue
+		fi
+
+		if [[ "$(basename $header)" == liblustreapi.h ]]; then
+			continue # liblustreapi.h is deprecated.
+		fi
+
+		$CC -Wall -Werror -include $header -c -x c /dev/null -o $out ||
+			error "cannot compile '$header'"
+	done
+}
+run_test 400b "packaged headers can be compiled"
 
 #
 # tests that do cleanup/setup should be run at the end

@@ -49,7 +49,6 @@ PTLDEBUG=${PTLDEBUG:--1}
 SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
-LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 export MULTIOP=${MULTIOP:-multiop}
 
 . $LUSTRE/tests/test-framework.sh
@@ -4408,17 +4407,6 @@ test_73() { #LU-3006
 	reformat
 }
 run_test 73 "failnode to update from mountdata properly"
-
-test_74() { # LU-1606
-	for TESTPROG in $LUSTRE_TESTS_API_DIR/*.c; do
-		gcc -Wall -Werror $LUSTRE_TESTS_API_DIR/simple_test.c \
-			-I$LUSTRE/include \
-			-L$LUSTRE/utils -llustreapi ||
-				error "client api broken"
-	done
-	cleanup || return $?
-}
-run_test 74 "Lustre client api program can compile and link"
 
 test_75() { # LU-2374
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
