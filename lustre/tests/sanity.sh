@@ -12050,6 +12050,14 @@ test_230b() {
 
 	cp /etc/passwd $migrate_dir/$tfile
 	cp /etc/passwd $other_dir/$tfile
+	chattr +SAD $migrate_dir
+	chattr +SAD $migrate_dir/$tfile
+
+	local old_dir_flag=$(lsattr -a $migrate_dir | awk '/\/\.$/ {print $1}')
+	local old_file_flag=$(lsattr $migrate_dir/$tfile | awk '{print $1}')
+	local old_dir_mode=$(stat -c%f $migrate_dir)
+	local old_file_mode=$(stat -c%f $migrate_dir/$tfile)
+
 	mkdir -p $migrate_dir/dir_default_stripe2
 	$SETSTRIPE -c 2 $migrate_dir/dir_default_stripe2
 	$SETSTRIPE -c 2 $migrate_dir/${tfile}_stripe2
@@ -12078,6 +12086,22 @@ test_230b() {
 	mdt_index=$($LFS getstripe -M $migrate_dir/$tfile)
 	[ $mdt_index == 0 ] ||
 		error "$file is not on MDT${MDTIDX}"
+
+	local new_dir_flag=$(lsattr -a $migrate_dir | awk '/\/\.$/ {print $1}')
+	[ "$old_dir_flag" = "$new_dir_flag" ] ||
+		error " expect $old_dir_flag get $new_dir_flag"
+
+	local new_file_flag=$(lsattr $migrate_dir/$tfile | awk '{print $1}')
+	[ "$old_file_flag" = "$new_file_flag" ] ||
+		error " expect $old_file_flag get $new_file_flag"
+
+	local new_dir_mode=$(stat -c%f $migrate_dir)
+	[ "$old_dir_mode" = "$new_dir_mode" ] ||
+		error "expect mode $old_dir_mode get $new_dir_mode"
+
+	local new_file_mode=$(stat -c%f $migrate_dir/$tfile)
+	[ "$old_file_mode" = "$new_file_mode" ] ||
+		error "expect mode $old_file_mode get $new_file_mode"
 
 	diff /etc/passwd $migrate_dir/$tfile ||
 		error "$tfile different after migration"
@@ -12119,6 +12143,22 @@ test_230b() {
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
 	done
+
+	local new_dir_flag=$(lsattr -a $migrate_dir | awk '/\/\.$/ {print $1}')
+	[ "$old_dir_flag" = "$new_dir_flag" ] ||
+		error " expect $old_dir_flag get $new_dir_flag"
+
+	local new_file_flag=$(lsattr $migrate_dir/$tfile | awk '{print $1}')
+	[ "$old_file_flag" = "$new_file_flag" ] ||
+		error " expect $old_file_flag get $new_file_flag"
+
+	local new_dir_mode=$(stat -c%f $migrate_dir)
+	[ "$old_dir_mode" = "$new_dir_mode" ] ||
+		error "expect mode $old_dir_mode get $new_dir_mode"
+
+	local new_file_mode=$(stat -c%f $migrate_dir/$tfile)
+	[ "$old_file_mode" = "$new_file_mode" ] ||
+		error "expect mode $old_file_mode get $new_file_mode"
 
 	diff /etc/passwd ${migrate_dir}/$tfile ||
 		error "$tfile different after migration"

@@ -3214,7 +3214,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 		return rc;
 
 	la_flag->la_valid = LA_FLAGS;
-	la_flag->la_flags = LUSTRE_IMMUTABLE_FL;
+	la_flag->la_flags = la->la_flags | LUSTRE_IMMUTABLE_FL;
 	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_declare_attr_set(env, mdd_sobj, la_flag, handle);
 
@@ -3328,7 +3328,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	 * IMMUTALBE flag and MIGRATE EA, it need to clear IMMUTABLE
 	 * flag and approve the migration */
 	la_flag->la_valid = LA_FLAGS;
-	la_flag->la_flags = LUSTRE_IMMUTABLE_FL;
+	la_flag->la_flags = la->la_flags | LUSTRE_IMMUTABLE_FL;
 	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_attr_set(env, mdd_sobj, la_flag, handle,
 			  mdd_object_capa(env, mdd_sobj));
