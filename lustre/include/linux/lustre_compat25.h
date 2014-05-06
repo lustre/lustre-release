@@ -342,4 +342,10 @@ static inline struct dentry *d_make_root(struct inode *root)
 #define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d)
 #endif
 
+#ifdef HAVE_VFS_UNLINK_3ARGS
+#define ll_vfs_unlink(a, b) vfs_unlink(a, b, NULL)
+#else
+#define ll_vfs_unlink(a, b) vfs_unlink(a, b)
+#endif
+
 #endif /* _COMPAT25_H */

@@ -1104,7 +1104,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		/* If the src object has never been modified, then remove it. */
 		if (inode->i_size == 0 && inode->i_mode & S_ISUID &&
 		    inode->i_mode & S_ISGID) {
-			rc = vfs_unlink(src_parent, src_child);
+			rc = ll_vfs_unlink(src_parent, src_child);
 			if (unlikely(rc == -ENOENT))
 				rc = 0;
 		}
