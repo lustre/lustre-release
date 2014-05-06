@@ -2144,6 +2144,9 @@ test_34() {
 	USED=$(getquota -g $TSTID global curspace)
 	[ $USED -ne 0 ] && error "Used space ($USED) for group $TSTID isn't 0."
 
+	local USED=$(getquota -u $TSTID2 global curspace)
+	[ $USED -ne 0 ] && error "Used space ($USED) for user $TSTID2 isn't 0."
+
 	echo "Write file..."
 	$DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
 		error "write failed"
@@ -2179,6 +2182,24 @@ test_34() {
 	USED=$(getquota -g $TSTID global curinodes)
 	[ $USED -eq 1 ] ||
 		error "Used inodes for group $TSTID is $USED, expected 1"
+
+	# chown won't change the ost object group. LU-4345 */
+	echo "chown the file to user $TSTID2"
+	chown $TSTID2 $DIR/$tdir/$tfile || error "chown to $TSTID2 failed"
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
+
+	echo "Verify disk usage for user $TSTID2/$TSTID and group $TSTID"
+	USED=$(getquota -u $TSTID2 global curspace)
+	[ $USED -lt $BLK_CNT ] &&
+		error "Used space for user $TSTID2 is $USED, expected $BLK_CNT"
+	USED=$(getquota -u $TSTID global curspace)
+	[ $USED -ne 0 ] &&
+		error "Used space for user $TSTID is $USED, expected 0"
+	USED=$(getquota -g $TSTID global curspace)
+	[ $USED -lt $BLK_CNT ] &&
+		error "Used space for group $TSTID is $USED, expected $BLK_CNT"
 
 	cleanup_quota_test
 }
