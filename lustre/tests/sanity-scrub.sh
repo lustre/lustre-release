@@ -52,6 +52,9 @@ check_and_setup_lustre
 [[ $(lustre_version_code ost1) -lt $(version_code 2.4.50) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14"
 
+[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.59) ]] &&
+	SCRUB_ONLY="-t scrub"
+
 build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
@@ -63,7 +66,8 @@ scrub_start() {
 	local n
 
 	for n in $(seq $MDSCOUNT); do
-		do_facet mds$n $LCTL lfsck_start -M $(facet_svc mds$n) "$@" ||
+		do_facet mds$n $LCTL lfsck_start -M $(facet_svc mds$n) \
+			$SCRUB_ONLY "$@" ||
 			error "($error_id) Failed to start OI scrub on mds$n"
 	done
 }
@@ -85,8 +89,8 @@ scrub_status() {
 		osd-ldiskfs.$(facet_svc mds$n).oi_scrub
 }
 
-START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV}"
-START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV}"
+START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV} $SCRUB_ONLY"
+START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV} $SCRUB_ONLY"
 STOP_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
 SHOW_SCRUB="do_facet $SINGLEMDS \
 		$LCTL get_param -n osd-ldiskfs.${MDT_DEV}.oi_scrub"
