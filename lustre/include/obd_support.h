@@ -347,6 +347,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_AGL_NOLOCK         0x31b
 #define OBD_FAIL_LDLM_OST_LVB		 0x31c
 #define OBD_FAIL_LDLM_ENQUEUE_HANG	 0x31d
+#define OBD_FAIL_LDLM_PAUSE_CANCEL2      0x31f
 #define OBD_FAIL_LDLM_CP_CB_WAIT2        0x320
 #define OBD_FAIL_LDLM_CP_CB_WAIT3        0x321
 #define OBD_FAIL_LDLM_CP_CB_WAIT4        0x322

@@ -187,6 +187,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
         int rc;
         ENTRY;
 
+	LASSERT(lock->l_granted_mode != lock->l_req_mode);
         LASSERT(cfs_list_empty(&res->lr_converting));
         check_res_locked(res);
 

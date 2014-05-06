@@ -4317,20 +4317,20 @@ drop_request() {
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
-    RC=0
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x122
-    do_facet client "$@" || RC=$?
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
-    return $RC
+	RC=0
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x122
+	eval "$@" || RC=$?
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	return $RC
 }
 
 drop_reint_reply() {
 # OBD_FAIL_MDS_REINT_NET_REP
-    RC=0
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x119
-    do_facet client "$@" || RC=$?
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
-    return $RC
+	RC=0
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x119
+	eval "$@" || RC=$?
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	return $RC
 }
 
 drop_update_reply() {
@@ -4382,9 +4382,24 @@ drop_bl_callback() {
 drop_ldlm_reply() {
 #define OBD_FAIL_LDLM_REPLY              0x30c
     RC=0
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x30c
+    local list=$(comma_list $(mdts_nodes) $(osts_nodes))
+    do_nodes $list lctl set_param fail_loc=0x30c
+
     do_facet client "$@" || RC=$?
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
+
+    do_nodes $list lctl set_param fail_loc=0
+    return $RC
+}
+
+drop_ldlm_reply_once() {
+#define OBD_FAIL_LDLM_REPLY              0x30c
+    RC=0
+    local list=$(comma_list $(mdts_nodes) $(osts_nodes))
+    do_nodes $list lctl set_param fail_loc=0x8000030c
+
+    do_facet client "$@" || RC=$?
+
+    do_nodes $list lctl set_param fail_loc=0
     return $RC
 }
 

@@ -1123,11 +1123,11 @@ test_56() { # b=11277
 #define OBD_FAIL_MDS_RESEND      0x136
         touch $DIR/$tfile
         do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000136"
-        stat $DIR/$tfile
+        stat $DIR/$tfile || error "stat failed"
         do_facet $SINGLEMDS "lctl set_param fail_loc=0"
         rm -f $DIR/$tfile
 }
-run_test 56 "do not allow reconnect to busy exports"
+run_test 56 "do not fail on getattr resend"
 
 test_57_helper() {
         # no oscs means no client or mdt 
@@ -1944,6 +1944,36 @@ test_120() {
 	test_120_destroy 0x320 || error "unlock-cleanup race failed"
 }
 run_test 120 "flock race: completion vs. evict"
+
+test_113() {
+	local BEFORE=$(date +%s)
+	local EVICT
+
+	# modify dir so that next revalidate would not obtain UPDATE lock
+	touch $DIR
+
+	# drop 1 reply with UPDATE lock,
+	# resend should not create 2nd lock on server
+	mcreate $DIR/$tfile || error "mcreate failed: $?"
+	drop_ldlm_reply_once "stat $DIR/$tfile" || error "stat failed: $?"
+
+	# 2 BL AST will be sent to client, both must find the same lock,
+	# race them to not get EINVAL for 2nd BL AST
+	#define OBD_FAIL_LDLM_PAUSE_CANCEL2      0x31f
+	$LCTL set_param fail_loc=0x8000031f
+
+	$LCTL set_param ldlm.namespaces.*.early_lock_cancel=0 > /dev/null
+	chmod 0777 $DIR/$tfile || error "chmod failed: $?"
+	$LCTL set_param ldlm.namespaces.*.early_lock_cancel=1 > /dev/null
+
+	# let the client reconnect
+	client_reconnect
+	EVICT=$($LCTL get_param mdc.$FSNAME-MDT*.state |
+	   awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+
+	[ -z "$EVICT" ] || [[ $EVICT -le $BEFORE ]] || error "eviction happened"
+}
+run_test 113 "ldlm enqueue dropped reply should not cause deadlocks"
 
 complete $SECONDS
 check_and_cleanup_lustre
