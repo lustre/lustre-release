@@ -1869,7 +1869,7 @@ void nrs_tbf_lprocfs_fini(struct ptlrpc_service *svc)
 	if (svc->srv_procroot == NULL)
 		return;
 
-	lprocfs_remove_proc_entry("nrs_tbf_quantum", svc->srv_procroot);
+	lprocfs_remove_proc_entry("nrs_tbf_rule", svc->srv_procroot);
 }
 
 #endif /* LPROCFS */
