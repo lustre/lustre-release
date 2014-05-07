@@ -174,14 +174,9 @@ static void *pool_key(cfs_hlist_node_t *hnode)
  * \retval		0 if \a key is the same as the key of \a compared
  * \retval		1 if \a key is different from the key of \a compared
  */
-static int pool_hashkey_keycmp(const void *key, cfs_hlist_node_t *compared_hnode)
+static int pool_hashkey_keycmp(const void *key, cfs_hlist_node_t *compared)
 {
-	char *pool_name;
-	struct pool_desc *pool;
-
-	pool_name = (char *)key;
-	pool = cfs_hlist_entry(compared_hnode, struct pool_desc, pool_hash);
-	return !strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
+	return !strncmp(key, pool_key(compared), LOV_MAXPOOLNAME);
 }
 
 /**
