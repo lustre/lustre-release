@@ -132,11 +132,7 @@ static void pool_putref_locked(struct pool_desc *pool)
 /**
  * Hash the pool name for use by the cfs_hash handlers.
  *
- * hash function using a Rotating Hash algorithm
- * Knuth, D. The Art of Computer Programming,
- * Volume 3: Sorting and Searching,
- * Chapter 6.4.
- * Addison Wesley, 1973
+ * Use the standard DJB2 hash function for ASCII strings in Lustre.
  *
  * \param[in] hash_body	hash structure where this key is embedded (unused)
  * \param[in] key	key to be hashed (in this case the pool name)
@@ -146,18 +142,7 @@ static void pool_putref_locked(struct pool_desc *pool)
  */
 static __u32 pool_hashfn(cfs_hash_t *hash_body, const void *key, unsigned mask)
 {
-	int i;
-	__u32 result;
-	char *poolname;
-
-	result = 0;
-	poolname = (char *)key;
-	for (i = 0; i < LOV_MAXPOOLNAME; i++) {
-		if (poolname[i] == '\0')
-			break;
-		result = (result << 4) ^ (result >> 28) ^ poolname[i];
-	}
-	return result % mask;
+	return cfs_hash_djb2_hash(key, strnlen(key, LOV_MAXPOOLNAME), mask);
 }
 
 /**
