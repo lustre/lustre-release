@@ -1368,7 +1368,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 		GOTO(out, rc = -ENODEV);
 
 	/*
-	 * Asking underlaying tgt layer to allocate new fid.
+	 * Asking underlying tgt layer to allocate new fid.
 	 */
 	rc = obd_fid_alloc(NULL, tgt->ltd_exp, fid, NULL);
 	if (rc > 0) {

@@ -1872,8 +1872,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                  */
 		rc = __mdd_lookup(env, pobj, pattr, lname, fid,
 				  MAY_WRITE | MAY_EXEC);
-                if (rc != -ENOENT)
-                        RETURN(rc ? : -EEXIST);
+		if (rc != -ENOENT)
+			RETURN(rc ? : -EEXIST);
 	} else {
 		rc = mdd_may_create(env, obj, pattr, NULL, true, false);
 		if (rc != 0)

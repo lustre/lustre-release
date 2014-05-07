@@ -260,12 +260,12 @@ static struct dt_index_operations lod_index_ops = {
  * \param[in] env	execution environment.
  * \param[in] dt	the striped directory object to be iterated.
  * \param[in] attr	the attribute of iterator, mostly used to indicate
- * 			the entry attribute in the object to be iterated.
+ *                      the entry attribute in the object to be iterated.
  * \param[in] capa	capability(useless in current implementation)
  *
  * \retval	initialized iterator(dt_it) if successful initialize the
- * 		iteration. lit_stripe_index will be used to indicate the
- * 		current iterate position among stripes.
+ *              iteration. lit_stripe_index will be used to indicate the
+ *              current iterate position among stripes.
  * \retval	ERR pointer if initialization is failed.
  */
 static struct dt_it *lod_striped_it_init(const struct lu_env *env,
@@ -538,7 +538,7 @@ static int lod_striped_it_key_size(const struct lu_env *env,
  * \param[in] env	execution environment.
  * \param[in] di	the iterator for striped directory.
  * \param[in] attr	the attribute of iterator, mostly used to indicate
- * 			the entry attribute in the object to be iterated.
+ *                      the entry attribute in the object to be iterated.
  * \param[out] rec	hold the return record.
  *
  * \retval	0 if successfully get the entry.
@@ -568,7 +568,7 @@ static int lod_striped_it_rec(const struct lu_env *env, const struct dt_it *di,
  * \param[in] env	execution environment.
  * \param[in] di	the iterator for striped directory.
  * \param[in] attr	the attribute of iterator, mostly used to indicate
- * 			the entry attribute in the object to be iterated.
+ *                      the entry attribute in the object to be iterated.
  *
  * \retval	rec_size if successfully get the entry size.
  * \retval	negative error if can not get entry size.

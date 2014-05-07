@@ -978,9 +978,9 @@ static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
 	ENTRY;
 
 	if (it->ozi_pos <= 1)
-		namelen = cpu_to_le16(1);
+		namelen = 1;
 	else if (it->ozi_pos == 2)
-		namelen = cpu_to_le16(2);
+		namelen = 2;
 
 	if (namelen > 0) {
 		rc = lu_dirent_calc_size(namelen, attr);

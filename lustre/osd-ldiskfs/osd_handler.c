@@ -5412,10 +5412,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
  * \param[in] env	execution environment
  * \param[in] di	iterator's in memory structure
  * \param[in] attr	attribute of the entry, only requires LUDA_TYPE to
- * 			calculate the lu_dirent size.
+ *                      calculate the lu_dirent size.
  *
  * \retval	record size(in bytes & in memory) of the current lu_dirent
- * 		entry.
+ *              entry.
  */
 static int osd_it_ea_rec_size(const struct lu_env *env, const struct dt_it *di,
 			      __u32 attr)

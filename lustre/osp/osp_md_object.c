@@ -532,7 +532,7 @@ static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
 	int			reclen;
 
-	reclen = lu_dirent_calc_size(ent->lde_namelen, attr);
+	reclen = lu_dirent_calc_size(le16_to_cpu(ent->lde_namelen), attr);
 	memcpy(rec, ent, reclen);
 	return 0;
 }
