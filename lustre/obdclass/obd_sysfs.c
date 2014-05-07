@@ -121,6 +121,7 @@ LUSTRE_STATIC_UINT_ATTR(at_max, &at_max);
 LUSTRE_STATIC_UINT_ATTR(at_extra, &at_extra);
 LUSTRE_STATIC_UINT_ATTR(at_early_margin, &at_early_margin);
 LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
+LUSTRE_STATIC_UINT_ATTR(lbug_on_eviction, &obd_lbug_on_eviction);
 
 #ifdef HAVE_SERVER_SUPPORT
 LUSTRE_STATIC_UINT_ATTR(ldlm_timeout, &ldlm_timeout);
@@ -351,6 +352,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_sattr_bulk_timeout.u.attr,
 #endif
+	&lustre_sattr_lbug_on_eviction.u.attr,
 	NULL,
 };
 

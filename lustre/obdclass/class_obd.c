@@ -69,6 +69,8 @@ unsigned int obd_dump_on_timeout;
 EXPORT_SYMBOL(obd_dump_on_timeout);
 unsigned int obd_dump_on_eviction;
 EXPORT_SYMBOL(obd_dump_on_eviction);
+unsigned int obd_lbug_on_eviction;
+EXPORT_SYMBOL(obd_lbug_on_eviction);
 unsigned long obd_max_dirty_pages;
 EXPORT_SYMBOL(obd_max_dirty_pages);
 atomic_long_t obd_dirty_pages;
