@@ -7683,12 +7683,16 @@ test_120e() {
         cancel_lru_locks osc
         dd if=$DIR/$tdir/f1 of=/dev/null
         stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
+	# XXX client can not do early lock cancel of OST lock
+	# during unlink (LU-4206), so cancel osc lock now.
+	cancel_lru_locks osc
 	can1=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
 	       awk '/ldlm_cancel/ {print $2}')
 	blk1=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
 	unlink $DIR/$tdir/f1
+	sleep 5
 	can2=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
 	       awk '/ldlm_cancel/ {print $2}')
@@ -7710,19 +7714,23 @@ test_120f() {
         lru_resize_disable osc
 	test_mkdir -p -c1 $DIR/$tdir/d1
 	test_mkdir -p -c1 $DIR/$tdir/d2
-        dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
-        dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
-        cancel_lru_locks mdc
-        cancel_lru_locks osc
-        dd if=$DIR/$tdir/d1/f1 of=/dev/null
-        dd if=$DIR/$tdir/d2/f2 of=/dev/null
-        stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
+	dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
+	dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	dd if=$DIR/$tdir/d1/f1 of=/dev/null
+	dd if=$DIR/$tdir/d2/f2 of=/dev/null
+	stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
+	# XXX client can not do early lock cancel of OST lock
+	# during rename (LU-4206), so cancel osc lock now.
+	cancel_lru_locks osc
 	can1=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
 	       awk '/ldlm_cancel/ {print $2}')
 	blk1=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	mv $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
+	mrename $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2
+	sleep 5
 	can2=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
 	       awk '/ldlm_cancel/ {print $2}')
