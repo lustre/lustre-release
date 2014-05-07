@@ -164,33 +164,33 @@ cfs_hash_ops_t pool_hash_operations = {
  * pos is from 0 to (pool->pool_obds.op_count - 1)
  */
 #define POOL_IT_MAGIC 0xB001CEA0
-struct pool_iterator {
-	int magic;
-	struct pool_desc *pool;
-	int idx;        /* from 0 to pool_tgt_size - 1 */
+struct lod_pool_iterator {
+	int		  lpi_magic;
+	int		  lpi_idx;	/* from 0 to pool_tgt_size - 1 */
+	struct pool_desc *lpi_pool;
 };
 
 static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 {
-	struct pool_iterator *iter = (struct pool_iterator *)s->private;
+	struct lod_pool_iterator *iter = s->private;
 	int prev_idx;
 
-	LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X", iter->magic);
+	LASSERTF(iter->lpi_magic == POOL_IT_MAGIC, "%08X", iter->lpi_magic);
 
 	/* test if end of file */
-	if (*pos >= pool_tgt_count(iter->pool))
+	if (*pos >= pool_tgt_count(iter->lpi_pool))
 		return NULL;
 
 	/* iterate to find a non empty entry */
-	prev_idx = iter->idx;
-	down_read(&pool_tgt_rw_sem(iter->pool));
-	iter->idx++;
-	if (iter->idx == pool_tgt_count(iter->pool)) {
-		iter->idx = prev_idx; /* we stay on the last entry */
-		up_read(&pool_tgt_rw_sem(iter->pool));
+	prev_idx = iter->lpi_idx;
+	down_read(&pool_tgt_rw_sem(iter->lpi_pool));
+	iter->lpi_idx++;
+	if (iter->lpi_idx == pool_tgt_count(iter->lpi_pool)) {
+		iter->lpi_idx = prev_idx; /* we stay on the last entry */
+		up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 		return NULL;
 	}
-	up_read(&pool_tgt_rw_sem(iter->pool));
+	up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	(*pos)++;
 	/* return != NULL to continue */
 	return iter;
@@ -198,8 +198,8 @@ static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 
 static void *pool_proc_start(struct seq_file *s, loff_t *pos)
 {
-	struct pool_desc *pool = (struct pool_desc *)s->private;
-	struct pool_iterator *iter;
+	struct pool_desc *pool = s->private;
+	struct lod_pool_iterator *iter;
 
 	lod_pool_getref(pool);
 	if ((pool_tgt_count(pool) == 0) ||
@@ -213,9 +213,9 @@ static void *pool_proc_start(struct seq_file *s, loff_t *pos)
 	OBD_ALLOC_PTR(iter);
 	if (!iter)
 		return ERR_PTR(-ENOMEM);
-	iter->magic = POOL_IT_MAGIC;
-	iter->pool = pool;
-	iter->idx = 0;
+	iter->lpi_magic = POOL_IT_MAGIC;
+	iter->lpi_pool = pool;
+	iter->lpi_idx = 0;
 
 	/* we use seq_file private field to memorized iterator so
 	 * we can free it at stop() */
@@ -236,16 +236,16 @@ static void *pool_proc_start(struct seq_file *s, loff_t *pos)
 
 static void pool_proc_stop(struct seq_file *s, void *v)
 {
-	struct pool_iterator *iter = (struct pool_iterator *)s->private;
+	struct lod_pool_iterator *iter = s->private;
 
 	/* in some cases stop() method is called 2 times, without
 	 * calling start() method (see seq_read() from fs/seq_file.c)
 	 * we have to free only if s->private is an iterator */
-	if ((iter) && (iter->magic == POOL_IT_MAGIC)) {
+	if (iter != NULL && (iter->lpi_magic == POOL_IT_MAGIC)) {
 		/* we restore s->private so next call to pool_proc_start()
 		 * will work */
-		s->private = iter->pool;
-		lod_pool_putref(iter->pool);
+		s->private = iter->lpi_pool;
+		lod_pool_putref(iter->lpi_pool);
 		OBD_FREE_PTR(iter);
 	}
 	return;
@@ -253,16 +253,16 @@ static void pool_proc_stop(struct seq_file *s, void *v)
 
 static int pool_proc_show(struct seq_file *s, void *v)
 {
-	struct pool_iterator *iter = (struct pool_iterator *)v;
+	struct lod_pool_iterator *iter = v;
 	struct lod_tgt_desc  *osc_desc;
 
-	LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X", iter->magic);
-	LASSERT(iter->pool != NULL);
-	LASSERT(iter->idx <= pool_tgt_count(iter->pool));
+	LASSERTF(iter->lpi_magic == POOL_IT_MAGIC, "%08X", iter->lpi_magic);
+	LASSERT(iter->lpi_pool != NULL);
+	LASSERT(iter->lpi_idx <= pool_tgt_count(iter->lpi_pool));
 
-	down_read(&pool_tgt_rw_sem(iter->pool));
-	osc_desc = pool_tgt(iter->pool, iter->idx);
-	up_read(&pool_tgt_rw_sem(iter->pool));
+	down_read(&pool_tgt_rw_sem(iter->lpi_pool));
+	osc_desc = pool_tgt(iter->lpi_pool, iter->lpi_idx);
+	up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	if (osc_desc)
 		seq_printf(s, "%s\n", obd_uuid2str(&(osc_desc->ltd_uuid)));
 
@@ -469,11 +469,13 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 						       new_pool,
 						       &pool_proc_operations);
 	if (IS_ERR(new_pool->pool_proc_entry)) {
-		CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
+		CDEBUG(D_CONFIG, "%s: cannot add proc entry "LOV_POOLNAMEF"\n",
+		       obd->obd_name, poolname);
 		new_pool->pool_proc_entry = NULL;
 		lod_pool_putref(new_pool);
 	}
-	CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool, new_pool->pool_proc_entry);
+	CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool,
+	       new_pool->pool_proc_entry);
 #endif
 
 	spin_lock(&obd->obd_dev_lock);
@@ -655,11 +657,13 @@ struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname)
 	if (poolname[0] != '\0') {
 		pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
 		if (pool == NULL)
-			CWARN("Request for an unknown pool ("LOV_POOLNAMEF")\n",
-			      poolname);
-		if ((pool != NULL) && (pool_tgt_count(pool) == 0)) {
-			CWARN("Request for an empty pool ("LOV_POOLNAMEF")\n",
-			      poolname);
+			CDEBUG(D_CONFIG, "%s: request for an unknown pool ("
+			       LOV_POOLNAMEF")\n",
+			       lod->lod_child_exp->exp_obd->obd_name, poolname);
+		if (pool != NULL && pool_tgt_count(pool) == 0) {
+			CDEBUG(D_CONFIG, "%s: request for an empty pool ("
+			       LOV_POOLNAMEF")\n",
+			       lod->lod_child_exp->exp_obd->obd_name, poolname);
 			/* pool is ignored, so we remove ref on it */
 			lod_pool_putref(pool);
 			pool = NULL;
