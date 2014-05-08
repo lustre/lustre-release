@@ -1085,13 +1085,16 @@ const value_string lustre_llog_hdr_llh_flags[]= {
 };
 
 const value_string lustre_mds_flags_vals[] = {
-  {0x1,        "LUSTRE_BFLAG_UNCOMMITTED_WRITES"},
-  {0x80000000, "LUSTRE_BFLAG_EXT_FLAGS"},   /* == EXT3_RESERVED_FL */
   {0x00000008, "LUSTRE_SYNC_FL        "},   /* Synchronous updates */
   {0x00000010, "LUSTRE_IMMUTABLE_FL   "},   /* Immutable file */
   {0x00000020, "LUSTRE_APPEND_FL      "},   /* writes to file may only append */
+  {0x00000040, "LUSTRE_NODUMP_FL      "},   /* do not dump file */
   {0x00000080, "LUSTRE_NOATIME_FL     "},   /* do not update atime */
+  {0x00001000, "LUSTRE_INDEX_FL       "},   /* hash-indexed directory */
   {0x00010000, "LUSTRE_DIRSYNC_FL     "},   /* dirsync behaviour (dir only) */
+  {0x00020000, "LUSTRE_TOPDIR_FL      "},   /* Top of directory hierarchies */
+  {0x00100000, "LUSTRE_DIRECTIO_FL    "},   /* Use direct i/o */
+  {0x10000000, "LUSTRE_INLINE_DATA_FL "},   /* Inode has inline data. */
   { 0, NULL }
 };
 

@@ -2151,15 +2151,18 @@ enum {
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
 
-#define LUSTRE_BFLAG_UNCOMMITTED_WRITES   0x1
-
 /* these should be identical to their EXT4_*_FL counterparts, they are
  * redefined here only to avoid dragging in fs/ext4/ext4.h */
-#define LUSTRE_SYNC_FL         0x00000008 /* Synchronous updates */
-#define LUSTRE_IMMUTABLE_FL    0x00000010 /* Immutable file */
-#define LUSTRE_APPEND_FL       0x00000020 /* writes to file may only append */
-#define LUSTRE_NOATIME_FL      0x00000080 /* do not update atime */
-#define LUSTRE_DIRSYNC_FL      0x00010000 /* dirsync behaviour (dir only) */
+#define LUSTRE_SYNC_FL		0x00000008 /* Synchronous updates */
+#define LUSTRE_IMMUTABLE_FL	0x00000010 /* Immutable file */
+#define LUSTRE_APPEND_FL	0x00000020 /* writes to file may only append */
+#define LUSTRE_NODUMP_FL	0x00000040 /* do not dump file */
+#define LUSTRE_NOATIME_FL	0x00000080 /* do not update atime */
+#define LUSTRE_INDEX_FL		0x00001000 /* hash-indexed directory */
+#define LUSTRE_DIRSYNC_FL	0x00010000 /* dirsync behaviour (dir only) */
+#define LUSTRE_TOPDIR_FL	0x00020000 /* Top of directory hierarchies*/
+#define LUSTRE_DIRECTIO_FL	0x00100000 /* Use direct i/o */
+#define LUSTRE_INLINE_DATA_FL	0x10000000 /* Inode has inline data. */
 
 #ifdef __KERNEL__
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
@@ -2216,7 +2219,7 @@ struct mdt_body {
 	__u32	mbo_mode;
 	__u32	mbo_uid;
 	__u32	mbo_gid;
-	__u32	mbo_flags;
+	__u32	mbo_flags;   /* LUSTRE_*_FL file attributes */
 	__u32	mbo_rdev;
 	__u32	mbo_nlink; /* #bytes to read in the case of MDS_READPAGE */
 	__u32	mbo_unused2; /* was "generation" until 2.4.0 */
