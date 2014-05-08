@@ -1687,7 +1687,7 @@ test_110a () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	drop_request "$LFS mkdir -i $MDTIDX $remote_dir" ||
+	drop_request "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
 					error "lfs mkdir failed"
 	local diridx=$($GETSTRIPE -M $remote_dir)
 	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
@@ -1702,7 +1702,7 @@ test_110b () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	drop_reint_reply "$LFS mkdir -i $MDTIDX $remote_dir" ||
+	drop_reint_reply "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
 					error "lfs mkdir failed"
 
 	diridx=$($GETSTRIPE -M $remote_dir)
@@ -1718,7 +1718,7 @@ test_110c () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	drop_update_reply $MDTIDX "$LFS mkdir -i $MDTIDX $remote_dir" ||
+	drop_update_reply $MDTIDX "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
 						error "lfs mkdir failed"
 
 	diridx=$($GETSTRIPE -M $remote_dir)
@@ -1734,7 +1734,7 @@ test_110d () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+	$LFS mkdir -i $MDTIDX -c2 $remote_dir || error "lfs mkdir failed"
 
 	drop_request "rm -rf $remote_dir" || error "rm remote dir failed"
 
@@ -1750,7 +1750,7 @@ test_110e () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	$LFS mkdir -i $MDTIDX $remote_dir  || error "lfs mkdir failed"
+	$LFS mkdir -i $MDTIDX -c2 $remote_dir  || error "lfs mkdir failed"
 	drop_reint_reply "rm -rf $remote_dir" || error "rm remote dir failed"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
@@ -1765,7 +1765,7 @@ test_110f () {
 	local MDTIDX=1
 
 	mkdir -p $DIR/$tdir
-	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+	$LFS mkdir -i $MDTIDX -c2 $remote_dir || error "lfs mkdir failed"
 	drop_update_reply $MDTIDX "rm -rf $remote_dir" ||
 					error "rm remote dir failed"
 
@@ -1780,7 +1780,7 @@ test_110g () {
 
 	mkdir -p $remote_dir
 
-	createmany -o $remote_dir/f 5000
+	createmany -o $remote_dir/f 100
 
 	#define OBD_FAIL_MIGRATE_NET_REP	0x1702
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1702

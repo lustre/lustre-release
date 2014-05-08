@@ -2822,6 +2822,77 @@ test_90() { # bug 19494
 }
 run_test 90 "lfs find identifies the missing striped file segments"
 
+striped_dir_check_100() {
+	local striped_dir=$DIR/$tdir/striped_dir
+	local stripe_count=$($LFS getdirstripe -c $striped_dir)
+
+	$LFS getdirstripe $striped_dir
+	[ $stripe_count -eq 2 ] || error "$stripe_count != 2"
+
+	createmany -o $striped_dir/f-%d 20 ||
+		error "creation failed under striped dir"
+}
+
+test_100a() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local striped_dir=$DIR/$tdir/striped_dir
+	local MDTIDX=1
+
+	mkdir $DIR/$tdir
+
+	#To make sure MDT1 and MDT0 are connected
+	#otherwise it may create single stripe dir here
+	$LFS setdirstripe -i1 $DIR/$tdir/remote_dir
+
+	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
+	do_facet mds$((MDTIDX+1)) lctl set_param fail_loc=0x1701
+	$LFS setdirstripe -i0 -c2 $striped_dir &
+	local CLIENT_PID=$!
+
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "striped dir creation failed"
+
+	striped_dir_check_100 || error "striped dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 100a "DNE: create striped dir, drop update rep from MDT1, fail MDT1"
+
+test_100b() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local striped_dir=$DIR/$tdir/striped_dir
+	local MDTIDX=1
+
+	mkdir $DIR/$tdir
+
+	#To make sure MDT1 and MDT0 are connected
+	#otherwise it may create single stripe dir here
+	$LFS setdirstripe -i1 $DIR/$tdir/remote_dir
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds$MDTIDX lctl set_param fail_loc=0x119
+	$LFS mkdir -i0 -c2 $striped_dir &
+
+	local CLIENT_PID=$!
+	fail mds$MDTIDX
+
+	wait $CLIENT_PID || error "striped dir creation failed"
+
+	striped_dir_check_100 || error "striped dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 100b "DNE: create striped dir, fail MDT0"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
