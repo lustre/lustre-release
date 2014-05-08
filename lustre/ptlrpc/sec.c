@@ -369,31 +369,46 @@ static int import_sec_check_expire(struct obd_import *imp)
         return sptlrpc_import_sec_adapt(imp, NULL, 0);
 }
 
+/**
+ * Get and validate the client side ptlrpc security facilities from
+ * \a imp. There is a race condition on client reconnect when the import is
+ * being destroyed while there are outstanding client bound requests. In
+ * this case do not output any error messages if import secuity is not
+ * found.
+ *
+ * \param[in] imp obd import associated with client
+ * \param[out] sec client side ptlrpc security
+ *
+ * \retval 0 if security retrieved successfully
+ * \retval -ve errno if there was a problem
+ */
 static int import_sec_validate_get(struct obd_import *imp,
-                                   struct ptlrpc_sec **sec)
+				   struct ptlrpc_sec **sec)
 {
-        int     rc;
+	int     rc;
 
-        if (unlikely(imp->imp_sec_expire)) {
-                rc = import_sec_check_expire(imp);
-                if (rc)
-                        return rc;
-        }
+	if (unlikely(imp->imp_sec_expire)) {
+		rc = import_sec_check_expire(imp);
+		if (rc)
+			return rc;
+	}
 
-        *sec = sptlrpc_import_sec_ref(imp);
-        if (*sec == NULL) {
-                CERROR("import %p (%s) with no sec\n",
-                       imp, ptlrpc_import_state_name(imp->imp_state));
-                return -EACCES;
-        }
+	*sec = sptlrpc_import_sec_ref(imp);
+	/* Only output an error when the import is still active */
+	if (*sec == NULL) {
+		if (list_empty(&imp->imp_zombie_chain))
+			CERROR("import %p (%s) with no sec\n",
+				imp, ptlrpc_import_state_name(imp->imp_state));
+		return -EACCES;
+	}
 
-        if (unlikely((*sec)->ps_dying)) {
-                CERROR("attempt to use dying sec %p\n", sec);
-                sptlrpc_sec_put(*sec);
-                return -EACCES;
-        }
+	if (unlikely((*sec)->ps_dying)) {
+		CERROR("attempt to use dying sec %p\n", sec);
+		sptlrpc_sec_put(*sec);
+		return -EACCES;
+	}
 
-        return 0;
+	return 0;
 }
 
 /**
