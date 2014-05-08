@@ -216,7 +216,8 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 {
 	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
 	struct l_wait_info	 lwi	= { 0 };
-	long			 rc;
+	struct task_struct	*task;
+	int			 rc;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	if (unlikely(thread_is_running(thread))) {
@@ -227,10 +228,11 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 
 	thread_set_flags(thread, 0);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
-	rc = PTR_ERR(kthread_run(ofd_inconsistency_verification_main, ofd,
-				 "inconsistency_verification"));
-	if (IS_ERR_VALUE(rc)) {
-		CERROR("%s: cannot start self_repair thread: rc = %ld\n",
+	task = kthread_run(ofd_inconsistency_verification_main, ofd,
+			   "inconsistency_verification");
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("%s: cannot start self_repair thread: rc = %d\n",
 		       ofd_obd(ofd)->obd_name, rc);
 	} else {
 		rc = 0;

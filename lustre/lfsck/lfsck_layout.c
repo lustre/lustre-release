@@ -4312,7 +4312,8 @@ static int lfsck_layout_master_prep(const struct lu_env *env,
 	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
 	struct lfsck_thread_args	*lta;
-	long				 rc;
+	struct task_struct		*task;
+	int				 rc;
 	ENTRY;
 
 	rc = lfsck_layout_prep(env, com, lsp->lsp_start);
@@ -4331,10 +4332,11 @@ static int lfsck_layout_master_prep(const struct lu_env *env,
 	if (IS_ERR(lta))
 		RETURN(PTR_ERR(lta));
 
-	rc = PTR_ERR(kthread_run(lfsck_layout_assistant, lta, "lfsck_layout"));
-	if (IS_ERR_VALUE(rc)) {
+	task = kthread_run(lfsck_layout_assistant, lta, "lfsck_layout");
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
 		CERROR("%s: Cannot start LFSCK layout assistant thread: "
-		       "rc = %ld\n", lfsck_lfsck2name(lfsck), rc);
+		       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);
 		lfsck_thread_args_fini(lta);
 	} else {
 		struct l_wait_info lwi = { 0 };

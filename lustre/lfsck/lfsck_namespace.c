@@ -1543,7 +1543,8 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 	struct lfsck_instance		*lfsck = com->lc_lfsck;
 	struct lfsck_namespace		*ns    = com->lc_file_ram;
 	struct lfsck_thread_args	*lta;
-	long				 rc;
+	struct task_struct		*task;
+	int				 rc;
 	ENTRY;
 
 	if (unlikely(ns->ln_status != LS_SCANNING_PHASE2))
@@ -1554,10 +1555,11 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 		RETURN(PTR_ERR(lta));
 
 	atomic_inc(&lfsck->li_double_scan_count);
-	rc = PTR_ERR(kthread_run(lfsck_namespace_double_scan_main, lta,
-				 "lfsck_namespace"));
-	if (IS_ERR_VALUE(rc)) {
-		CERROR("%s: cannot start LFSCK namespace thread: rc = %ld\n",
+	task = kthread_run(lfsck_namespace_double_scan_main, lta,
+			   "lfsck_namespace");
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("%s: cannot start LFSCK namespace thread: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), rc);
 		atomic_dec(&lfsck->li_double_scan_count);
 		lfsck_thread_args_fini(lta);
