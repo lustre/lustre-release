@@ -11,7 +11,7 @@ ldiskfs build process and SHOULD NOT be applied to the kernel directly.
 Servers running only ZFS OSDs DO NOT need any patches.
 
 PATCH SERIES FOR SERVER KERNELS:
-2.6-rhel6.series	2.6.32-431.5.1.el6
+2.6-rhel6.series	2.6.32-431.17.1.el6
 
 Clients since 2.6.18 DO NOT need any patches.
 See lustre/ChangeLog for supported client kernel versions.
