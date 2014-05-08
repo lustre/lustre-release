@@ -828,8 +828,11 @@ static int client_lwp_config_process(const struct lu_env *env,
 			*ptr = '-';
 			break;
 		}
-
 		*ptr = '-';
+
+		if (IS_MDT(lsi) && idx != 0)
+			break;
+
 		rc = lustre_lwp_add_conn(lcfg, lsi, idx);
 		break;
 	}
