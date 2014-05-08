@@ -180,7 +180,7 @@ testname2type () {
 # for "echo_client + osc" case, "BRW" mode should be used
 testcase2mode() {
     case $case in
-    disk) echo "p$1";;
+    disk) echo "p";;
     *)    echo "g";;
     esac
 }
@@ -508,7 +508,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 		        "$lctl > $tmpfi 2>&1 \\
                          --threads $thr -$snap $devno \\
                          test_brw $count `testname2type $test` q $pages \\
-                         ${thr_per_obj}t${first_obj} `testcase2mode $pages` &"
+                         ${thr_per_obj}t${first_obj} `testcase2mode`$pages &"
                 done
                 pidcount=0
                 for host in ${unique_hosts[@]}; do

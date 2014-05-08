@@ -50,7 +50,7 @@ get_targets () {
                 for d in $devs; do
                         # if oss is local -- obdfilter-survey needs dev wo/ host
                         target=$d
-                        [[ $oss = `hostname` && "$1" == "netdisk" ]] || target=$nid:$target
+                        [[ $oss = `hostname` && "$1" == "disk" ]] || target=$nid:$target
                         targets="$targets $target"
                 done
         done

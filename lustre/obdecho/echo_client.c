@@ -2605,7 +2605,7 @@ static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
         struct obdo *oa = &data->ioc_obdo1;
         struct echo_object *eco;
         int rc;
-        int async = 1;
+        int async = 0;
         long test_mode;
         ENTRY;
 
@@ -2619,13 +2619,13 @@ static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
 
 	/* OFD/obdfilter works only via prep/commit */
         test_mode = (long)data->ioc_pbuf1;
-        if (test_mode == 1)
-                async = 0;
-
         if (ed->ed_next == NULL && test_mode != 3) {
                 test_mode = 3;
                 data->ioc_plen1 = data->ioc_count;
         }
+
+	if (test_mode == 3)
+		async = 1;
 
         /* Truncate batch size to maximum */
         if (data->ioc_plen1 > PTLRPC_MAX_BRW_SIZE)
