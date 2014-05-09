@@ -2843,6 +2843,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	ofd_slc_set(m);
 	m->ofd_grant_compat_disable = 0;
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
+	m->ofd_brw_size = ONE_MB_BRW_SIZE;
 
 	/* statfs data */
 	spin_lock_init(&m->ofd_osfs_lock);

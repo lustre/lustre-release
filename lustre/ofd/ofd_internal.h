@@ -164,6 +164,9 @@ struct ofd_device {
 	/* number of clients using grants */
 	int			 ofd_tot_granted_clients;
 
+	/* preferred BRW size, decided by storage type and capability */
+	__u32			 ofd_brw_size;
+
 	/* ofd mod data: ofd_device wide values */
 	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */
 	cfs_duration_t		 ofd_fmd_max_age; /* time to fmd expiry */

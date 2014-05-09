@@ -173,6 +173,25 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	else if (data->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN)
 		RETURN(-EPROTO);
 
+	/* Determine optimal brw size before calculating grant */
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
+		data->ocd_brw_size = 65536;
+	} else if (OCD_HAS_FLAG(data, BRW_SIZE)) {
+		data->ocd_brw_size = min(data->ocd_brw_size, ofd->ofd_brw_size);
+		if (data->ocd_brw_size == 0) {
+			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+			       " ocd_version: %x ocd_grant: %d ocd_index: %u "
+			       "ocd_brw_size is unexpectedly zero, "
+			       "network data corruption?"
+			       "Refusing connection of this client\n",
+			       exp->exp_obd->obd_name,
+			       exp->exp_client_uuid.uuid,
+			       exp, data->ocd_connect_flags, data->ocd_version,
+			       data->ocd_grant, data->ocd_index);
+			RETURN(-EPROTO);
+		}
+	}
+
 	if (OCD_HAS_FLAG(data, GRANT_PARAM)) {
 		/* client is reporting its page size, for future use */
 		exp->exp_filter_data.fed_pagebits = data->ocd_grant_blkbits;
@@ -186,8 +205,12 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		data->ocd_grant_max_blks = ofd->ofd_dt_conf.ddp_max_extent_blks;
 	}
 
-	if (OCD_HAS_FLAG(data, GRANT))
+	if (OCD_HAS_FLAG(data, GRANT)) {
+		/* Save connect_data we have so far because ofd_grant_connect()
+		 * uses it to calculate grant. */
+		exp->exp_connect_data = *data;
 		ofd_grant_connect(env, exp, data, new_connection);
+	}
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
 		struct lr_server_data *lsd = &ofd->ofd_lut.lut_lsd;
@@ -208,24 +231,6 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 			/* sync is not needed here as lut_client_add will
 			 * set exp_need_sync flag */
 			tgt_server_data_update(env, &ofd->ofd_lut, 0);
-		}
-	}
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
-		data->ocd_brw_size = 65536;
-	} else if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
-		data->ocd_brw_size = min(data->ocd_brw_size,
-					 (__u32)DT_MAX_BRW_SIZE);
-		if (data->ocd_brw_size == 0) {
-			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
-			       " ocd_version: %x ocd_grant: %d ocd_index: %u "
-			       "ocd_brw_size is unexpectedly zero, "
-			       "network data corruption?"
-			       "Refusing connection of this client\n",
-			       exp->exp_obd->obd_name,
-			       exp->exp_client_uuid.uuid,
-			       exp, data->ocd_connect_flags, data->ocd_version,
-			       data->ocd_grant, data->ocd_index);
-			RETURN(-EPROTO);
 		}
 	}
 
