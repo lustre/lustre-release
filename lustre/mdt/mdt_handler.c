@@ -4666,7 +4666,6 @@ static int mdt_process_config(const struct lu_env *env,
 
 	switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
-		struct lprocfs_static_vars  lvars;
 		struct obd_device	   *obd = d->ld_obd;
 
 		/* For interoperability */
@@ -4701,14 +4700,13 @@ static int mdt_process_config(const struct lu_env *env,
 			}
 		}
 
-		lprocfs_mdt_init_vars(&lvars);
-		rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars,
-					      cfg, obd);
+		rc = class_process_proc_seq_param(PARAM_MDT, obd->obd_vars,
+							cfg, obd);
 		if (rc > 0 || rc == -ENOSYS) {
 			/* is it an HSM var ? */
-			rc = class_process_proc_param(PARAM_HSM,
-						      hsm_cdt_get_proc_vars(),
-						      cfg, obd);
+			rc = class_process_proc_seq_param(PARAM_HSM,
+							hsm_cdt_get_proc_vars(),
+							cfg, obd);
 			if (rc > 0 || rc == -ENOSYS)
 				/* we don't understand; pass it on */
 				rc = next->ld_ops->ldo_process_config(env, next,
@@ -5932,7 +5930,6 @@ static struct lu_device_type mdt_device_type = {
 
 static int __init mdt_mod_init(void)
 {
-	struct lprocfs_static_vars lvars;
 	int rc;
 
 	CLASSERT(sizeof("0x0123456789ABCDEF:0x01234567:0x01234567") ==
@@ -5947,10 +5944,9 @@ static int __init mdt_mod_init(void)
 	if (rc)
 		GOTO(lu_fini, rc);
 
-	lprocfs_mdt_init_vars(&lvars);
 	rc = class_register_type(&mdt_obd_device_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				 lvars.module_vars,
+				 NULL,
 #endif
 				 LUSTRE_MDT_NAME, &mdt_device_type);
 	if (rc)

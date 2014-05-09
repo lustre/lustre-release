@@ -756,9 +756,6 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
 struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi);
 
-extern struct lprocfs_vars lprocfs_mds_module_vars[];
-extern struct lprocfs_vars lprocfs_mds_obd_vars[];
-
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh);
 
@@ -896,13 +893,12 @@ int mdt_hsm_cdt_fini(struct mdt_device *mdt);
 int mdt_hsm_cdt_wakeup(struct mdt_device *mdt);
 
 /* coordinator control /proc interface */
-int lprocfs_wr_hsm_cdt_control(struct file *file, const char *buffer,
-			       unsigned long count, void *data);
-int lprocfs_rd_hsm_cdt_control(char *page, char **start, off_t off,
-			       int count, int *eof, void *data);
+ssize_t mdt_hsm_cdt_control_seq_write(struct file *file, const char *buffer,
+					size_t count, loff_t *off);
+int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data);
 int hsm_cdt_procfs_init(struct mdt_device *mdt);
 void hsm_cdt_procfs_fini(struct mdt_device *mdt);
-struct lprocfs_vars *hsm_cdt_get_proc_vars(void);
+struct lprocfs_seq_vars *hsm_cdt_get_proc_vars(void);
 /* md_hsm helpers */
 struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,
@@ -1042,8 +1038,6 @@ enum {
 };
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
 void mdt_stats_counter_init(struct lprocfs_stats *stats);
-void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
-void lprocfs_mds_init_vars(struct lprocfs_static_vars *lvars);
 int mdt_procfs_init(struct mdt_device *mdt, const char *name);
 void mdt_procfs_fini(struct mdt_device *mdt);
 

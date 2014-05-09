@@ -513,9 +513,6 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	struct mdt_device		*mdt;
 	ENTRY;
 
-	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
-		RETURN(-ENOENT);
-
 	rc = seq_open(file, &mdt_hsm_actions_proc_ops);
 	if (rc)
 		RETURN(rc);
@@ -532,7 +529,7 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	/* mdt is saved in proc_dir_entry->data by
 	 * mdt_coordinator_procfs_init() calling lprocfs_register()
 	 */
-	mdt = (struct mdt_device *)PDE(inode)->data;
+	mdt = (struct mdt_device *)PDE_DATA(inode);
 	aai->aai_mdt = mdt;
 	s = file->private_data;
 	s->private = aai;

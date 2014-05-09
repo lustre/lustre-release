@@ -45,7 +45,7 @@
 #include <lustre_log.h>
 #include "mdt_internal.h"
 
-static struct lprocfs_vars lprocfs_mdt_hsm_vars[];
+static struct lprocfs_seq_vars lprocfs_mdt_hsm_vars[];
 
 /**
  * get obj and HSM attributes on a fid
@@ -392,7 +392,7 @@ int hsm_cdt_procfs_init(struct mdt_device *mdt)
 	ENTRY;
 
 	/* init /proc entries, failure is not critical */
-	cdt->cdt_proc_dir = lprocfs_register("hsm",
+	cdt->cdt_proc_dir = lprocfs_seq_register("hsm",
 					     mdt2obd_dev(mdt)->obd_proc_entry,
 					     lprocfs_mdt_hsm_vars, mdt);
 	if (IS_ERR(cdt->cdt_proc_dir)) {
@@ -424,7 +424,7 @@ void  hsm_cdt_procfs_fini(struct mdt_device *mdt)
  * \param none
  * \retval var vector
  */
-struct lprocfs_vars *hsm_cdt_get_proc_vars(void)
+struct lprocfs_seq_vars *hsm_cdt_get_proc_vars(void)
 {
 	return lprocfs_mdt_hsm_vars;
 }
@@ -1785,22 +1785,17 @@ static __u64 hsm_policy_str2bit(const char *name)
  * \param hexa [IN] print mask before bit names
  * \param buffer [OUT] string
  * \param count [IN] size of buffer
- * \retval size filled in buffer
  */
-static int hsm_policy_bit2str(const __u64 mask, const bool hexa, char *buffer,
-			      int count)
+static void hsm_policy_bit2str(struct seq_file *m, const __u64 mask,
+				const bool hexa)
 {
-	int	 i, j, sz;
-	char	*ptr;
+	int	 i, j;
 	__u64	 bit;
 	ENTRY;
 
-	ptr = buffer;
-	if (hexa) {
-		sz = snprintf(buffer, count, "("LPX64") ", mask);
-		ptr += sz;
-		count -= sz;
-	}
+	if (hexa)
+		seq_printf(m, "("LPX64") ", mask);
+
 	for (i = 0; i < CDT_POLICY_SHIFT_COUNT; i++) {
 		bit = (1ULL << i);
 
@@ -1809,48 +1804,37 @@ static int hsm_policy_bit2str(const __u64 mask, const bool hexa, char *buffer,
 				break;
 		}
 		if (bit & mask)
-			sz = snprintf(ptr, count, "[%s] ",
-				      hsm_policy_names[j].name);
+			seq_printf(m, "[%s] ", hsm_policy_names[j].name);
 		else
-			sz = snprintf(ptr, count, "%s ",
-				      hsm_policy_names[j].name);
-
-		ptr += sz;
-		count -= sz;
+			seq_printf(m, "%s ", hsm_policy_names[j].name);
 	}
 	/* remove last ' ' */
-	*ptr = '\0';
-	ptr--;
-	RETURN(ptr - buffer);
+	m->count--;
+	seq_putc(m, '\0');
 }
 
 /* methods to read/write HSM policy flags */
-static int lprocfs_rd_hsm_policy(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
+static int mdt_hsm_policy_seq_show(struct seq_file *m, void *data)
 {
-	struct mdt_device	*mdt = data;
+	struct mdt_device	*mdt = m->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	int			 sz;
 	ENTRY;
 
-	sz = hsm_policy_bit2str(cdt->cdt_policy, false, page, count);
-	page[sz] = '\n';
-	sz++;
-	page[sz] = '\0';
-	*eof = 1;
-	RETURN(sz);
+	hsm_policy_bit2str(m, cdt->cdt_policy, false);
+	RETURN(0);
 }
 
-static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
-				 unsigned long count, void *data)
+static ssize_t
+mdt_hsm_policy_seq_write(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *off)
 {
-	struct mdt_device	*mdt = data;
+	struct seq_file		*m = file->private_data;
+	struct mdt_device	*mdt = m->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	char			*start, *token, sign;
 	char			*buf;
 	__u64			 policy;
 	__u64			 add_mask, remove_mask, set_mask;
-	int			 sz;
 	int			 rc;
 	ENTRY;
 
@@ -1883,18 +1867,10 @@ static int lprocfs_wr_hsm_policy(struct file *file, const char *buffer,
 
 		policy = hsm_policy_str2bit(token);
 		if (policy == 0) {
-			char *msg;
-
-			sz = PAGE_SIZE;
-			OBD_ALLOC(msg, sz);
-			if (!msg)
-				GOTO(out, rc = -ENOMEM);
-
-			hsm_policy_bit2str(0, false, msg, sz);
 			CWARN("%s: '%s' is unknown, "
-			      "supported policies are: %s\n", mdt_obd_name(mdt),
-			      token, msg);
-			OBD_FREE(msg, sz);
+			      "supported policies are:\n", mdt_obd_name(mdt),
+			      token);
+			hsm_policy_bit2str(m, 0, false);
 			GOTO(out, rc = -EINVAL);
 		}
 		switch (sign) {
@@ -1933,25 +1909,25 @@ out:
 	OBD_FREE(buf, count + 1);
 	RETURN(rc);
 }
+LPROC_SEQ_FOPS(mdt_hsm_policy);
 
 #define GENERATE_PROC_METHOD(VAR)					\
-static int lprocfs_rd_hsm_##VAR(char *page, char **start, off_t off,	\
-				int count, int *eof, void *data)	\
+static int mdt_hsm_##VAR##_seq_show(struct seq_file *m, void *data)	\
 {									\
-	struct mdt_device	*mdt = data;				\
+	struct mdt_device	*mdt = m->private;			\
 	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
-	int			 sz;					\
 	ENTRY;								\
 									\
-	sz = snprintf(page, count, LPU64"\n", (__u64)cdt->VAR);		\
-	*eof = 1;							\
-	RETURN(sz);							\
+	seq_printf(m, LPU64"\n", (__u64)cdt->VAR);			\
+	RETURN(0);							\
 }									\
-static int lprocfs_wr_hsm_##VAR(struct file *file, const char *buffer,	\
-				unsigned long count, void *data)	\
+static ssize_t								\
+mdt_hsm_##VAR##_seq_write(struct file *file, const char __user *buffer,	\
+			  size_t count, loff_t *off)			\
 									\
 {									\
-	struct mdt_device	*mdt = data;				\
+	struct seq_file		*m = file->private_data;		\
+	struct mdt_device	*mdt = m->private;			\
 	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
 	int			 val;					\
 	int			 rc;					\
@@ -1965,7 +1941,7 @@ static int lprocfs_wr_hsm_##VAR(struct file *file, const char *buffer,	\
 		RETURN(count);						\
 	}								\
 	RETURN(-EINVAL);						\
-}
+}									\
 
 GENERATE_PROC_METHOD(cdt_loop_period)
 GENERATE_PROC_METHOD(cdt_grace_delay)
@@ -1984,10 +1960,12 @@ GENERATE_PROC_METHOD(cdt_default_archive_id)
 #define CDT_HELP_CMD     "help"
 #define CDT_MAX_CMD_LEN  10
 
-int lprocfs_wr_hsm_cdt_control(struct file *file, const char __user *buffer,
-			       unsigned long count, void *data)
+ssize_t
+mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct mdt_device	*mdt = mdt_dev(obd->obd_lu_dev);
 	struct coordinator	*cdt = &(mdt->mdt_coordinator);
 	int			 rc, usage = 0;
@@ -2051,83 +2029,71 @@ int lprocfs_wr_hsm_cdt_control(struct file *file, const char __user *buffer,
 	RETURN(count);
 }
 
-int lprocfs_rd_hsm_cdt_control(char *page, char **start, off_t off,
-			       int count, int *eof, void *data)
+int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
+	struct obd_device	*obd = m->private;
 	struct coordinator	*cdt;
-	int			 sz;
 	ENTRY;
 
 	cdt = &(mdt_dev(obd->obd_lu_dev)->mdt_coordinator);
-	*eof = 1;
 
 	if (cdt->cdt_state == CDT_INIT)
-		sz = snprintf(page, count, "init\n");
+		seq_printf(m, "init\n");
 	else if (cdt->cdt_state == CDT_RUNNING)
-		sz = snprintf(page, count, "enabled\n");
+		seq_printf(m, "enabled\n");
 	else if (cdt->cdt_state == CDT_STOPPING)
-		sz = snprintf(page, count, "stopping\n");
+		seq_printf(m, "stopping\n");
 	else if (cdt->cdt_state == CDT_STOPPED)
-		sz = snprintf(page, count, "stopped\n");
+		seq_printf(m, "stopped\n");
 	else if (cdt->cdt_state == CDT_DISABLE)
-		sz = snprintf(page, count, "disabled\n");
+		seq_printf(m, "disabled\n");
 	else
-		sz = snprintf(page, count, "unknown\n");
+		seq_printf(m, "unknown\n");
 
-	RETURN(sz);
+	RETURN(0);
 }
 
 static int
-lprocfs_rd_hsm_request_mask(char *page, char **start, off_t off,
-			    int count, int *eof, __u64 mask)
+mdt_hsm_request_mask_show(struct seq_file *m, __u64 mask)
 {
 	int i, rc = 0;
 	ENTRY;
 
 	for (i = 0; i < 8 * sizeof(mask); i++) {
 		if (mask & (1UL << i))
-			rc += snprintf(page + rc, count - rc, "%s%s",
-				       rc == 0 ? "" : " ",
-				       hsm_copytool_action2name(i));
+			rc += seq_printf(m, "%s%s", rc == 0 ? "" : " ",
+					hsm_copytool_action2name(i));
 	}
-
-	rc += snprintf(page + rc, count - rc, "\n");
+	rc += seq_printf(m, "\n");
 
 	RETURN(rc);
 }
 
 static int
-lprocfs_rd_hsm_user_request_mask(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
+mdt_hsm_user_request_mask_seq_show(struct seq_file *m, void *data)
 {
-	struct mdt_device *mdt = data;
+	struct mdt_device *mdt = m->private;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
-					   cdt->cdt_user_request_mask);
+	return mdt_hsm_request_mask_show(m, cdt->cdt_user_request_mask);
 }
 
 static int
-lprocfs_rd_hsm_group_request_mask(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+mdt_hsm_group_request_mask_seq_show(struct seq_file *m, void *data)
 {
-	struct mdt_device *mdt = data;
+	struct mdt_device *mdt = m->private;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
-					   cdt->cdt_group_request_mask);
+	return mdt_hsm_request_mask_show(m, cdt->cdt_group_request_mask);
 }
 
 static int
-lprocfs_rd_hsm_other_request_mask(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+mdt_hsm_other_request_mask_seq_show(struct seq_file *m, void *data)
 {
-	struct mdt_device *mdt = data;
+	struct mdt_device *mdt = m->private;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_rd_hsm_request_mask(page, start, off, count, eof,
-					   cdt->cdt_other_request_mask);
+	return mdt_hsm_request_mask_show(m, cdt->cdt_other_request_mask);
 }
 
 static inline enum hsm_copytool_action
@@ -2147,9 +2113,9 @@ hsm_copytool_name2action(const char *name)
 		return -1;
 }
 
-static int
-lprocfs_wr_hsm_request_mask(struct file *file, const char __user *user_buf,
-			    unsigned long user_count, __u64 *mask)
+static ssize_t
+mdt_write_hsm_request_mask(struct file *file, const char __user *user_buf,
+			    size_t user_count, __u64 *mask)
 {
 	char *buf, *pos, *name;
 	size_t buf_size;
@@ -2193,69 +2159,76 @@ out:
 	RETURN(rc);
 }
 
-static int
-lprocfs_wr_hsm_user_request_mask(struct file *file, const char __user *buf,
-				 unsigned long count, void *data)
+static ssize_t
+mdt_hsm_user_request_mask_seq_write(struct file *file, const char __user *buf,
+					size_t count, loff_t *off)
 {
-	struct mdt_device *mdt = data;
+	struct seq_file		*m = file->private_data;
+	struct mdt_device	*mdt = m->private;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_wr_hsm_request_mask(file, buf, count,
+	return mdt_write_hsm_request_mask(file, buf, count,
 					   &cdt->cdt_user_request_mask);
 }
 
-static int
-lprocfs_wr_hsm_group_request_mask(struct file *file, const char __user *buf,
-				  unsigned long count, void *data)
+static ssize_t
+mdt_hsm_group_request_mask_seq_write(struct file *file, const char __user *buf,
+					size_t count, loff_t *off)
 {
-	struct mdt_device *mdt = data;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct seq_file		*m = file->private_data;
+	struct mdt_device	*mdt = m->private;
+	struct coordinator	*cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_wr_hsm_request_mask(file, buf, count,
+	return mdt_write_hsm_request_mask(file, buf, count,
 					   &cdt->cdt_group_request_mask);
 }
 
-static int
-lprocfs_wr_hsm_other_request_mask(struct file *file, const char __user *buf,
-				  unsigned long count, void *data)
+static ssize_t
+mdt_hsm_other_request_mask_seq_write(struct file *file, const char __user *buf,
+					size_t count, loff_t *off)
 {
-	struct mdt_device *mdt = data;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct seq_file		*m = file->private_data;
+	struct mdt_device	*mdt = m->private;
+	struct coordinator	*cdt = &mdt->mdt_coordinator;
 
-	return lprocfs_wr_hsm_request_mask(file, buf, count,
+	return mdt_write_hsm_request_mask(file, buf, count,
 					   &cdt->cdt_other_request_mask);
 }
 
-static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
-	{ "agents",			NULL, NULL, NULL, &mdt_hsm_agent_fops,
-					0 },
-	{ "actions",			NULL, NULL, NULL, &mdt_hsm_actions_fops,
-					0444 },
-	{ "default_archive_id",		lprocfs_rd_hsm_cdt_default_archive_id,
-					lprocfs_wr_hsm_cdt_default_archive_id,
-					NULL, NULL, 0 },
-	{ "grace_delay",		lprocfs_rd_hsm_cdt_grace_delay,
-					lprocfs_wr_hsm_cdt_grace_delay,
-					NULL, NULL, 0 },
-	{ "loop_period",		lprocfs_rd_hsm_cdt_loop_period,
-					lprocfs_wr_hsm_cdt_loop_period,
-					NULL, NULL, 0 },
-	{ "max_requests",		lprocfs_rd_hsm_cdt_max_requests,
-					lprocfs_wr_hsm_cdt_max_requests,
-					NULL, NULL, 0 },
-	{ "policy",			lprocfs_rd_hsm_policy,
-					lprocfs_wr_hsm_policy,
-					NULL, NULL, 0 },
-	{ "active_request_timeout",	lprocfs_rd_hsm_cdt_active_req_timeout,
-					lprocfs_wr_hsm_cdt_active_req_timeout,
-					NULL, NULL, 0 },
-	{ "active_requests",		NULL, NULL, NULL,
-					&mdt_hsm_active_requests_fops, 0 },
-	{ "user_request_mask",		lprocfs_rd_hsm_user_request_mask,
-					lprocfs_wr_hsm_user_request_mask, },
-	{ "group_request_mask", 	lprocfs_rd_hsm_group_request_mask,
-					lprocfs_wr_hsm_group_request_mask, },
-	{ "other_request_mask",		lprocfs_rd_hsm_other_request_mask,
-					lprocfs_wr_hsm_other_request_mask, },
+LPROC_SEQ_FOPS(mdt_hsm_cdt_loop_period);
+LPROC_SEQ_FOPS(mdt_hsm_cdt_grace_delay);
+LPROC_SEQ_FOPS(mdt_hsm_cdt_active_req_timeout);
+LPROC_SEQ_FOPS(mdt_hsm_cdt_max_requests);
+LPROC_SEQ_FOPS(mdt_hsm_cdt_default_archive_id);
+LPROC_SEQ_FOPS(mdt_hsm_user_request_mask);
+LPROC_SEQ_FOPS(mdt_hsm_group_request_mask);
+LPROC_SEQ_FOPS(mdt_hsm_other_request_mask);
+
+static struct lprocfs_seq_vars lprocfs_mdt_hsm_vars[] = {
+	{ .name	=	"agents",
+	  .fops	=	&mdt_hsm_agent_fops			},
+	{ .name	=	"actions",
+	  .fops	=	&mdt_hsm_actions_fops,
+	  .proc_mode =	0444					},
+	{ .name	=	"default_archive_id",
+	  .fops	=	&mdt_hsm_cdt_default_archive_id_fops	},
+	{ .name	=	"grace_delay",
+	  .fops	=	&mdt_hsm_cdt_grace_delay_fops		},
+	{ .name	=	"loop_period",
+	  .fops	=	&mdt_hsm_cdt_loop_period_fops		},
+	{ .name	=	"max_requests",
+	  .fops	=	&mdt_hsm_cdt_max_requests_fops		},
+	{ .name	=	"policy",
+	  .fops	=	&mdt_hsm_policy_fops			},
+	{ .name	=	"active_request_timeout",
+	  .fops	=	&mdt_hsm_cdt_active_req_timeout_fops	},
+	{ .name	=	"active_requests",
+	  .fops	=	&mdt_hsm_active_requests_fops		},
+	{ .name	=	"user_request_mask",
+	  .fops	=	&mdt_hsm_user_request_mask_fops,	},
+	{ .name	=	"group_request_mask",
+	  .fops	=	&mdt_hsm_group_request_mask_fops,	},
+	{ .name	=	"other_request_mask",
+	  .fops	=	&mdt_hsm_other_request_mask_fops,	},
 	{ 0 }
 };
