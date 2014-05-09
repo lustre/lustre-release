@@ -128,18 +128,20 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned nfrags, unsigned max_brw,
 		(ptlrpc_is_bulk_desc_kvec(type) &&
 		 ops->add_iov_frag != NULL));
 
-	if (type & PTLRPC_BULK_BUF_KIOV) {
-		OBD_ALLOC(desc,
-			  offsetof(struct ptlrpc_bulk_desc,
-				   bd_u.bd_kiov.bd_vec[nfrags]));
-	} else {
-		OBD_ALLOC(desc,
-			  offsetof(struct ptlrpc_bulk_desc,
-				   bd_u.bd_kvec.bd_kvec[nfrags]));
-	}
-
-	if (!desc)
+	OBD_ALLOC_PTR(desc);
+	if (desc == NULL)
 		return NULL;
+	if (type & PTLRPC_BULK_BUF_KIOV) {
+		OBD_ALLOC_LARGE(GET_KIOV(desc),
+				nfrags * sizeof(*GET_KIOV(desc)));
+		if (GET_KIOV(desc) == NULL)
+			goto out;
+	} else {
+		OBD_ALLOC_LARGE(GET_KVEC(desc),
+				nfrags * sizeof(*GET_KVEC(desc)));
+		if (GET_KVEC(desc) == NULL)
+			goto out;
+	}
 
 	spin_lock_init(&desc->bd_lock);
 	init_waitqueue_head(&desc->bd_waitq);
@@ -157,6 +159,9 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned nfrags, unsigned max_brw,
 		LNetInvalidateHandle(&desc->bd_mds[i]);
 
 	return desc;
+out:
+	OBD_FREE_PTR(desc);
+	return NULL;
 }
 
 /**
@@ -271,13 +276,12 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 		desc->bd_frag_ops->release_frags(desc);
 
 	if (ptlrpc_is_bulk_desc_kiov(desc->bd_type))
-		OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
-					bd_u.bd_kiov.bd_vec[desc->bd_max_iov]));
+		OBD_FREE_LARGE(GET_KIOV(desc),
+			desc->bd_max_iov * sizeof(*GET_KIOV(desc)));
 	else
-		OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
-					bd_u.bd_kvec.bd_kvec[desc->
-						bd_max_iov]));
-
+		OBD_FREE_LARGE(GET_KVEC(desc),
+			desc->bd_max_iov * sizeof(*GET_KVEC(desc)));
+	OBD_FREE_PTR(desc);
 	EXIT;
 }
 EXPORT_SYMBOL(ptlrpc_free_bulk);

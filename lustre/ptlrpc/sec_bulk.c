@@ -560,7 +560,7 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
 	if (GET_ENC_KIOV(desc) != NULL)
 		return 0;
 
-	OBD_ALLOC(GET_ENC_KIOV(desc),
+	OBD_ALLOC_LARGE(GET_ENC_KIOV(desc),
 		  desc->bd_iov_count * sizeof(*GET_ENC_KIOV(desc)));
 	if (GET_ENC_KIOV(desc) == NULL)
 		return -ENOMEM;
@@ -614,8 +614,8 @@ again:
 				 * will put request back in queue. */
 				page_pools.epp_st_outofmem++;
 				spin_unlock(&page_pools.epp_lock);
-				OBD_FREE(GET_ENC_KIOV(desc),
-					 desc->bd_iov_count *
+				OBD_FREE_LARGE(GET_ENC_KIOV(desc),
+					       desc->bd_iov_count *
 						sizeof(*GET_ENC_KIOV(desc)));
 				GET_ENC_KIOV(desc) = NULL;
 				return -ENOMEM;
@@ -716,7 +716,7 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
 	spin_unlock(&page_pools.epp_lock);
 
-	OBD_FREE(GET_ENC_KIOV(desc),
+	OBD_FREE_LARGE(GET_ENC_KIOV(desc),
 		 desc->bd_iov_count * sizeof(*GET_ENC_KIOV(desc)));
 	GET_ENC_KIOV(desc) = NULL;
 }

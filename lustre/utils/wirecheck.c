@@ -775,6 +775,7 @@ check_obd_ioobj(void)
 	CHECK_MEMBER(obd_ioobj, ioo_oid);
 	CHECK_MEMBER(obd_ioobj, ioo_max_brw);
 	CHECK_MEMBER(obd_ioobj, ioo_bufcnt);
+	CHECK_VALUE(IOOBJ_MAX_BRW_BITS);
 }
 
 static void
