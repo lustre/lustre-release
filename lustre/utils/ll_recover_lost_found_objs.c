@@ -66,19 +66,19 @@ int verbose;
 bool dry_run;
 
 struct obd_group_info {
-	__u64		grp_last_id;
-	__u64		grp_seq;
-	cfs_list_t	grp_list;
+	__u64			grp_last_id;
+	__u64			grp_seq;
+	struct list_head	grp_list;
 };
 
-cfs_list_t grp_info_list;
+struct list_head grp_info_list;
 
-static void grp_info_list_destroy(cfs_list_t *list)
+static void grp_info_list_destroy(struct list_head *list)
 {
 	struct obd_group_info *grp, *tmp;
 
-	cfs_list_for_each_entry_safe(grp, tmp, list, grp_list) {
-		cfs_list_del_init(&grp->grp_list);
+	list_for_each_entry_safe(grp, tmp, list, grp_list) {
+		list_del_init(&grp->grp_list);
 		free(grp);
 	}
 }
@@ -189,18 +189,18 @@ static __u64 read_last_id(char *file_path)
 	return le64_to_cpu(last_id);
 }
 
-struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
+struct obd_group_info *find_or_create_grp(struct list_head *list, __u64 seq,
 					  const char *mount)
 {
 	struct obd_group_info	*grp;
-	cfs_list_t		*entry;
+	struct list_head	*entry;
 	char			tmp_path[PATH_MAX];
 	char			seq_name[32];
 	int			retval;
 	__u64			tmp_last_id;
 
-	cfs_list_for_each(entry, list) {
-		grp = (struct obd_group_info *)cfs_list_entry(entry,
+	list_for_each(entry, list) {
+		grp = (struct obd_group_info *)list_entry(entry,
 						struct obd_group_info,
 						grp_list);
 		if (grp->grp_seq == seq)
@@ -247,7 +247,7 @@ struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
 	grp->grp_last_id = tmp_last_id;
 	grp->grp_seq = seq;
 
-	cfs_list_add(&grp->grp_list, list);
+	list_add(&grp->grp_list, list);
 	return grp;
 }
 

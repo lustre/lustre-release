@@ -76,10 +76,10 @@ struct qsd_instance {
 	struct qsd_fsinfo	*qsd_fsinfo;
 
 	/* link into qfs_qsd_list of qfs_fsinfo */
-	cfs_list_t		 qsd_link;
+	struct list_head	 qsd_link;
 
 	/* list of lqe entry which might need quota space adjustment */
-	cfs_list_t		 qsd_adjust_list;
+	struct list_head	 qsd_adjust_list;
 
 	/* lock protecting adjust list */
 	spinlock_t		 qsd_adjust_lock;
@@ -88,7 +88,7 @@ struct qsd_instance {
 	struct ptlrpc_thread	 qsd_upd_thread;
 
 	/* list of update tasks */
-	cfs_list_t		 qsd_upd_list;
+	struct list_head	 qsd_upd_list;
 
 	/* r/w spinlock protecting:
 	 * - the state flags
@@ -163,9 +163,9 @@ struct qsd_qtype_info {
 	struct lprocfs_stats	*qqi_stats;
 
 	/* deferred update for the global index copy */
-	cfs_list_t		 qqi_deferred_glb;
+	struct list_head	 qqi_deferred_glb;
 	/* deferred update for the slave index copy */
-	cfs_list_t		 qqi_deferred_slv;
+	struct list_head	 qqi_deferred_slv;
 
 	/* Various flags representing the current state of the slave for this
 	 * quota type. */
@@ -191,11 +191,11 @@ struct qsd_fsinfo {
 	unsigned int		qfs_enabled[LQUOTA_NR_RES];
 
 	/* list of all qsd_instance for this fs */
-	cfs_list_t		qfs_qsd_list;
+	struct list_head	qfs_qsd_list;
 	struct mutex		qfs_mutex;
 
 	/* link to the global quota fsinfo list.  */
-	cfs_list_t		qfs_link;
+	struct list_head	qfs_link;
 
 	/* reference count */
 	int			qfs_ref;
@@ -228,7 +228,7 @@ static inline void qqi_putref(struct qsd_qtype_info *qqi)
 
 /* udpate record for slave & global index copy */
 struct qsd_upd_rec {
-	cfs_list_t		qur_link; /* link into qsd_upd_list */
+	struct list_head	qur_link; /* link into qsd_upd_list */
 	union lquota_id		qur_qid;
 	union lquota_rec	qur_rec;
 	struct qsd_qtype_info  *qur_qqi;

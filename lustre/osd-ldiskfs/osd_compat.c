@@ -375,7 +375,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	dev->od_ost_map->om_subdir_count = rc;
         rc = 0;
 
-	CFS_INIT_LIST_HEAD(&dev->od_ost_map->om_seq_list);
+	INIT_LIST_HEAD(&dev->od_ost_map->om_seq_list);
 	rwlock_init(&dev->od_ost_map->om_seq_list_lock);
 	mutex_init(&dev->od_ost_map->om_dir_init_mutex);
 
@@ -422,7 +422,7 @@ static void osd_seq_free(struct osd_obj_map *map,
 {
 	int j;
 
-	cfs_list_del_init(&osd_seq->oos_seq_list);
+	list_del_init(&osd_seq->oos_seq_list);
 
 	if (osd_seq->oos_dirs) {
 		for (j = 0; j < osd_seq->oos_subdir_count; j++) {
@@ -450,9 +450,8 @@ static void osd_ost_fini(struct osd_device *osd)
 		return;
 
 	write_lock(&map->om_seq_list_lock);
-	cfs_list_for_each_entry_safe(osd_seq, tmp,
-				     &map->om_seq_list,
-				     oos_seq_list) {
+	list_for_each_entry_safe(osd_seq, tmp, &map->om_seq_list,
+				 oos_seq_list) {
 		osd_seq_free(map, osd_seq);
 	}
 	write_unlock(&map->om_seq_list_lock);
@@ -483,7 +482,7 @@ struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map, obd_seq seq)
 {
 	struct osd_obj_seq *osd_seq;
 
-	cfs_list_for_each_entry(osd_seq, &map->om_seq_list, oos_seq_list) {
+	list_for_each_entry(osd_seq, &map->om_seq_list, oos_seq_list) {
 		if (osd_seq->oos_seq == seq)
 			return osd_seq;
 	}
@@ -828,7 +827,7 @@ static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 	if (osd_seq == NULL)
 		GOTO(cleanup, rc = -ENOMEM);
 
-	CFS_INIT_LIST_HEAD(&osd_seq->oos_seq_list);
+	INIT_LIST_HEAD(&osd_seq->oos_seq_list);
 	osd_seq->oos_seq = seq;
 	/* Init subdir count to be 32, but each seq can have
 	 * different subdir count */
@@ -838,7 +837,7 @@ static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 		GOTO(cleanup, rc);
 
 	write_lock(&map->om_seq_list_lock);
-	cfs_list_add(&osd_seq->oos_seq_list, &map->om_seq_list);
+	list_add(&osd_seq->oos_seq_list, &map->om_seq_list);
 	write_unlock(&map->om_seq_list_lock);
 
 cleanup:

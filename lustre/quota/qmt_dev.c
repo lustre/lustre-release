@@ -237,7 +237,7 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	/* set up and start rebalance thread */
 	thread_set_flags(&qmt->qmt_reba_thread, SVC_STOPPED);
 	init_waitqueue_head(&qmt->qmt_reba_thread.t_ctl_waitq);
-	CFS_INIT_LIST_HEAD(&qmt->qmt_reba_list);
+	INIT_LIST_HEAD(&qmt->qmt_reba_list);
 	spin_lock_init(&qmt->qmt_reba_lock);
 	rc = qmt_start_reba_thread(qmt);
 	if (rc) {

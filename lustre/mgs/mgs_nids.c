@@ -57,20 +57,20 @@ static unsigned int ir_timeout;
 
 static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
 {
-        struct mgs_nidtbl_target *tgt;
-        int version = 0;
+	struct mgs_nidtbl_target *tgt;
+	int version = 0;
 
 	LASSERT(mutex_is_locked(&tbl->mn_lock));
-        cfs_list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
-                if (!tgt->mnt_version)
-                        continue;
+	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
+		if (!tgt->mnt_version)
+			continue;
 
-                if (version >= tgt->mnt_version)
-                        return 0;
+		if (version >= tgt->mnt_version)
+			return 0;
 
-                version = tgt->mnt_version;
-        }
-        return 1;
+		version = tgt->mnt_version;
+	}
+	return 1;
 }
 
 /**
@@ -113,7 +113,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
          * otherwise, it's for clients, then llog entries for both OSTs and
          * MDTs will be returned.
          */
-        cfs_list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
+	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
                 int entry_len = sizeof(*entry);
 
                 if (tgt->mnt_version < version)
@@ -332,10 +332,11 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
         type &= ~LDD_F_SV_TYPE_MGS;
         LASSERT(type != 0);
 
-        tbl = &fsdb->fsdb_nidtbl;
+	tbl = &fsdb->fsdb_nidtbl;
 	mutex_lock(&tbl->mn_lock);
-        cfs_list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
-                struct mgs_target_info *info = &tgt->mnt_mti;
+	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
+		struct mgs_target_info *info = &tgt->mnt_mti;
+
                 if (type == tgt->mnt_type &&
                     mti->mti_stripe_index == info->mti_stripe_index) {
                         found = true;
@@ -347,21 +348,21 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
                 if (tgt == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                CFS_INIT_LIST_HEAD(&tgt->mnt_list);
-                tgt->mnt_fs      = tbl;
-                tgt->mnt_version = 0;       /* 0 means invalid */
-                tgt->mnt_type    = type;
+		INIT_LIST_HEAD(&tgt->mnt_list);
+		tgt->mnt_fs	 = tbl;
+		tgt->mnt_version = 0;	/* 0 means invalid */
+		tgt->mnt_type	 = type;
 
-                ++tbl->mn_nr_targets;
-        }
+		++tbl->mn_nr_targets;
+	}
 
-        tgt->mnt_version = ++tbl->mn_version;
-        tgt->mnt_mti     = *mti;
+	tgt->mnt_version = ++tbl->mn_version;
+	tgt->mnt_mti     = *mti;
 
-        cfs_list_move_tail(&tgt->mnt_list, &tbl->mn_targets);
+	list_move_tail(&tgt->mnt_list, &tbl->mn_targets);
 
 	rc = nidtbl_update_version(env, fsdb->fsdb_mgs, tbl);
-        EXIT;
+	EXIT;
 
 out:
 	mutex_unlock(&tbl->mn_lock);
@@ -374,17 +375,17 @@ out:
 static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 {
         struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
-        CFS_LIST_HEAD(head);
+	struct list_head head = LIST_HEAD_INIT(head);
 
 	mutex_lock(&tbl->mn_lock);
         tbl->mn_nr_targets = 0;
-        cfs_list_splice_init(&tbl->mn_targets, &head);
+	list_splice_init(&tbl->mn_targets, &head);
 	mutex_unlock(&tbl->mn_lock);
 
-        while (!cfs_list_empty(&head)) {
+	while (!list_empty(&head)) {
                 struct mgs_nidtbl_target *tgt;
                 tgt = list_entry(head.next, struct mgs_nidtbl_target, mnt_list);
-                cfs_list_del(&tgt->mnt_list);
+		list_del(&tgt->mnt_list);
                 OBD_FREE_PTR(tgt);
         }
 }
@@ -394,7 +395,7 @@ static int mgs_nidtbl_init_fs(const struct lu_env *env, struct fs_db *fsdb)
         struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
 	int rc;
 
-        CFS_INIT_LIST_HEAD(&tbl->mn_targets);
+	INIT_LIST_HEAD(&tbl->mn_targets);
 	mutex_init(&tbl->mn_lock);
         tbl->mn_nr_targets = 0;
         tbl->mn_fsdb = fsdb;
@@ -480,7 +481,7 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 			    mgs->mgs_start_time + ir_timeout))
 		fsdb->fsdb_ir_state = IR_STARTUP;
 	fsdb->fsdb_nonir_clients = 0;
-	CFS_INIT_LIST_HEAD(&fsdb->fsdb_clients);
+	INIT_LIST_HEAD(&fsdb->fsdb_clients);
 
 	/* start notify thread */
 	fsdb->fsdb_mgs = mgs;
@@ -508,7 +509,7 @@ void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 
 	mgs_nidtbl_fini_fs(fsdb);
 
-	LASSERT(cfs_list_empty(&fsdb->fsdb_clients));
+	LASSERT(list_empty(&fsdb->fsdb_clients));
 
 	fsdb->fsdb_notify_stop = 1;
 	wake_up(&fsdb->fsdb_notify_waitq);
@@ -873,8 +874,8 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
         if (new_fsc == NULL)
                 RETURN(-ENOMEM);
 
-	CFS_INIT_LIST_HEAD(&new_fsc->mfc_export_list);
-	CFS_INIT_LIST_HEAD(&new_fsc->mfc_fsdb_list);
+	INIT_LIST_HEAD(&new_fsc->mfc_export_list);
+	INIT_LIST_HEAD(&new_fsc->mfc_fsdb_list);
 	new_fsc->mfc_fsdb       = fsdb;
 	new_fsc->mfc_export     = class_export_get(exp);
 	new_fsc->mfc_ir_capable = !!(exp_connect_flags(exp) &
@@ -885,7 +886,7 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 
 	/* tend to find it in export list because this list is shorter. */
 	spin_lock(&data->med_lock);
-        cfs_list_for_each_entry(fsc, &data->med_clients, mfc_export_list) {
+	list_for_each_entry(fsc, &data->med_clients, mfc_export_list) {
                 if (strcmp(fsname, fsc->mfc_fsdb->fsdb_name) == 0) {
                         found = true;
                         break;
@@ -896,10 +897,10 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
                 new_fsc = NULL;
 
                 /* add it into export list. */
-                cfs_list_add(&fsc->mfc_export_list, &data->med_clients);
+		list_add(&fsc->mfc_export_list, &data->med_clients);
 
                 /* add into fsdb list. */
-                cfs_list_add(&fsc->mfc_fsdb_list, &fsdb->fsdb_clients);
+		list_add(&fsc->mfc_fsdb_list, &fsdb->fsdb_clients);
                 if (!fsc->mfc_ir_capable) {
                         ++fsdb->fsdb_nonir_clients;
                         if (fsdb->fsdb_ir_state == IR_FULL)
@@ -921,19 +922,19 @@ void mgs_fsc_cleanup(struct obd_export *exp)
 {
 	struct mgs_export_data *data = &exp->u.eu_mgs_data;
 	struct mgs_fsc *fsc, *tmp;
-	CFS_LIST_HEAD(head);
+	struct list_head head = LIST_HEAD_INIT(head);
 
 	spin_lock(&data->med_lock);
-	cfs_list_splice_init(&data->med_clients, &head);
+	list_splice_init(&data->med_clients, &head);
 	spin_unlock(&data->med_lock);
 
-	cfs_list_for_each_entry_safe(fsc, tmp, &head, mfc_export_list) {
+	list_for_each_entry_safe(fsc, tmp, &head, mfc_export_list) {
 		struct fs_db *fsdb = fsc->mfc_fsdb;
 
 		LASSERT(fsc->mfc_export == exp);
 
 		mutex_lock(&fsdb->fsdb_mutex);
-		cfs_list_del_init(&fsc->mfc_fsdb_list);
+		list_del_init(&fsc->mfc_fsdb_list);
 		if (fsc->mfc_ir_capable == 0) {
 			--fsdb->fsdb_nonir_clients;
 			LASSERT(fsdb->fsdb_ir_state != IR_FULL);
@@ -942,7 +943,7 @@ void mgs_fsc_cleanup(struct obd_export *exp)
 				fsdb->fsdb_ir_state = IR_FULL;
 		}
 		mutex_unlock(&fsdb->fsdb_mutex);
-		cfs_list_del_init(&fsc->mfc_export_list);
+		list_del_init(&fsc->mfc_export_list);
 		class_export_put(fsc->mfc_export);
 		OBD_FREE_PTR(fsc);
 	}
@@ -953,15 +954,15 @@ void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb)
 {
         struct mgs_fsc *fsc, *tmp;
 
-        cfs_list_for_each_entry_safe(fsc, tmp, &fsdb->fsdb_clients,
+	list_for_each_entry_safe(fsc, tmp, &fsdb->fsdb_clients,
                                      mfc_fsdb_list) {
                 struct mgs_export_data *data = &fsc->mfc_export->u.eu_mgs_data;
 
                 LASSERT(fsdb == fsc->mfc_fsdb);
-                cfs_list_del_init(&fsc->mfc_fsdb_list);
+		list_del_init(&fsc->mfc_fsdb_list);
 
 		spin_lock(&data->med_lock);
-		cfs_list_del_init(&fsc->mfc_export_list);
+		list_del_init(&fsc->mfc_export_list);
 		spin_unlock(&data->med_lock);
                 class_export_put(fsc->mfc_export);
                 OBD_FREE_PTR(fsc);

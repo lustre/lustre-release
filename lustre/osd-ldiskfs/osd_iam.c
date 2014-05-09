@@ -157,11 +157,11 @@
  *
  * No locking. Callers synchronize.
  */
-static CFS_LIST_HEAD(iam_formats);
+static struct list_head iam_formats = LIST_HEAD_INIT(iam_formats);
 
 void iam_format_register(struct iam_format *fmt)
 {
-        cfs_list_add(&fmt->if_linkage, &iam_formats);
+	list_add(&fmt->if_linkage, &iam_formats);
 }
 EXPORT_SYMBOL(iam_format_register);
 
@@ -222,7 +222,7 @@ static int iam_format_guess(struct iam_container *c)
         }
 
         result = -ENOENT;
-        cfs_list_for_each_entry(fmt, &iam_formats, if_linkage) {
+	list_for_each_entry(fmt, &iam_formats, if_linkage) {
                 result = fmt->if_guess(c);
                 if (result == 0)
                         break;

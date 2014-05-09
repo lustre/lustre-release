@@ -43,40 +43,40 @@ static unsigned lqe64_hash_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 	return cfs_hash_u64_hash(*((__u64 *)key), mask);
 }
 
-static void *lqe64_hash_key(cfs_hlist_node_t *hnode)
+static void *lqe64_hash_key(struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	return &lqe->lqe_id.qid_uid;
 }
 
-static int lqe64_hash_keycmp(const void *key, cfs_hlist_node_t *hnode)
+static int lqe64_hash_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	return (lqe->lqe_id.qid_uid == *((__u64*)key));
 }
 
-static void *lqe_hash_object(cfs_hlist_node_t *hnode)
+static void *lqe_hash_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	return hlist_entry(hnode, struct lquota_entry, lqe_hash);
 }
 
-static void lqe_hash_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void lqe_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_getref(lqe);
 }
 
-static void lqe_hash_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void lqe_hash_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_putref(lqe);
 }
 
-static void lqe_hash_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void lqe_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	CERROR("Should not have any item left!\n");
 }
@@ -115,12 +115,12 @@ struct lqe_iter_data {
 };
 
 static int lqe_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-		       cfs_hlist_node_t *hnode, void *data)
+		       struct hlist_node *hnode, void *data)
 {
 	struct lqe_iter_data *d = (struct lqe_iter_data *)data;
 	struct lquota_entry  *lqe;
 
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
 
 	/* Only one reference held by hash table, and nobody else can
@@ -332,7 +332,7 @@ struct lquota_entry *lqe_locate(const struct lu_env *env,
 	atomic_set(&new->lqe_ref, 1); /* hold 1 for caller */
 	new->lqe_id     = *qid;
 	new->lqe_site   = site;
-	CFS_INIT_LIST_HEAD(&new->lqe_link);
+	INIT_LIST_HEAD(&new->lqe_link);
 
 	/* quota settings need to be updated from disk, that's why
 	 * lqe->lqe_uptodate isn't set yet */

@@ -138,7 +138,7 @@ struct lquota_slv_entry {
  * A lquota_entry structure belong to a single lquota_site */
 struct lquota_entry {
 	/* link to site hash table */
-	cfs_hlist_node_t	 lqe_hash;
+	struct hlist_node	 lqe_hash;
 
 	/* quota identifier associated with this entry */
 	union lquota_id		 lqe_id;
@@ -152,7 +152,7 @@ struct lquota_entry {
 	/* linked to list of lqes which:
 	 * - need quota space adjustment on slave
 	 * - need glimpse to be sent on master */
-	cfs_list_t		 lqe_link;
+	struct list_head	 lqe_link;
 
 	/* current quota settings/usage of this ID */
 	__u64		lqe_granted; /* granted limit, inodes or kbytes */

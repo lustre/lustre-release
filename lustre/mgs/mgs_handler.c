@@ -575,7 +575,7 @@ static inline int mgs_init_export(struct obd_export *exp)
 
 	/* init mgs_export_data for fsc */
 	spin_lock_init(&data->med_lock);
-	CFS_INIT_LIST_HEAD(&data->med_clients);
+	INIT_LIST_HEAD(&data->med_clients);
 
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;

@@ -53,12 +53,12 @@
  */
 struct mgs_nidtbl;
 struct mgs_nidtbl_target {
-        cfs_list_t              mnt_list;
-        struct mgs_nidtbl      *mnt_fs;
-        u64                     mnt_version;
-        int                     mnt_type; /* OST or MDT */
-        cfs_time_t              mnt_last_active;
-        struct mgs_target_info  mnt_mti;
+	struct list_head	mnt_list;
+	struct mgs_nidtbl      *mnt_fs;
+	u64			mnt_version;
+	int			mnt_type;	/* OST or MDT */
+	cfs_time_t		mnt_last_active;
+	struct mgs_target_info	mnt_mti;
 };
 
 enum {
@@ -78,30 +78,30 @@ struct fs_db;
  * maintain fs client nodes of mgs.
  */
 struct mgs_fsc {
-        struct fs_db      *mfc_fsdb;
+	struct fs_db		*mfc_fsdb;
         /**
          * Where the fs client comes from.
          */
-        struct obd_export *mfc_export;
+	struct obd_export	*mfc_export;
         /**
          * list of fs clients from the same export,
          * protected by mgs_export_data->med_lock
          */
-        cfs_list_t         mfc_export_list;
+	struct list_head	mfc_export_list;
         /**
          * list of fs clients in the same fsdb, protected by fsdb->fsdb_mutex
          */
-        cfs_list_t        mfc_fsdb_list;
-        unsigned          mfc_ir_capable:1;
+	struct list_head	mfc_fsdb_list;
+	unsigned		mfc_ir_capable:1;
 };
 
 struct mgs_nidtbl {
-        struct fs_db *mn_fsdb;
-        struct file  *mn_version_file;
-	struct mutex	mn_lock;
-        u64           mn_version;
-        int           mn_nr_targets;
-        cfs_list_t    mn_targets;
+	struct fs_db		*mn_fsdb;
+	struct file		*mn_version_file;
+	struct mutex		 mn_lock;
+	u64			 mn_version;
+	int			 mn_nr_targets;
+	struct list_head	 mn_targets;
 };
 
 struct mgs_tgt_srpc_conf {
@@ -121,23 +121,23 @@ struct mgs_tgt_srpc_conf {
 #define FSDB_REVOKING_PARAMS	(6)  /* DLM lock is being revoked */
 
 struct fs_db {
-        char              fsdb_name[9];
-        cfs_list_t        fsdb_list;           /* list of databases */
+	char		  fsdb_name[9];
+	struct list_head  fsdb_list;		/* list of databases */
 	struct mutex	  fsdb_mutex;
-        void             *fsdb_ost_index_map;  /* bitmap of used indicies */
-        void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
-        int               fsdb_mdt_count;
-        char             *fsdb_clilov;       /* COMPAT_146 client lov name */
-        char             *fsdb_clilmv;
-        unsigned long     fsdb_flags;
-        __u32             fsdb_gen;
+	void		 *fsdb_ost_index_map;	/* bitmap of used indicies */
+	void		 *fsdb_mdt_index_map;	/* bitmap of used indicies */
+	int		  fsdb_mdt_count;
+	char		 *fsdb_clilov;	/* COMPAT_146 client lov name */
+	char		 *fsdb_clilmv;
+	unsigned long	  fsdb_flags;
+	__u32		  fsdb_gen;
 
         /* in-memory copy of the srpc rules, guarded by fsdb_lock */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
 
         /* list of fs clients, mgs_fsc. protected by mgs_mutex */
-        cfs_list_t           fsdb_clients;
+	struct list_head     fsdb_clients;
         int                  fsdb_nonir_clients;
         int                  fsdb_ir_state;
 
@@ -146,10 +146,10 @@ struct fs_db {
 
 	/* async thread to notify clients */
 	struct mgs_device    *fsdb_mgs;
-	wait_queue_head_t    fsdb_notify_waitq;
-	struct completion    fsdb_notify_comp;
-	cfs_time_t           fsdb_notify_start;
-	atomic_t         fsdb_notify_phase;
+	wait_queue_head_t     fsdb_notify_waitq;
+	struct completion     fsdb_notify_comp;
+	cfs_time_t            fsdb_notify_start;
+	atomic_t	      fsdb_notify_phase;
 	volatile unsigned int fsdb_notify_async:1,
                              fsdb_notify_stop:1;
         /* statistic data */
@@ -165,7 +165,7 @@ struct mgs_device {
 	struct obd_export		*mgs_bottom_exp;
 	struct dt_object		*mgs_configs_dir;
 	struct dt_object		*mgs_nidtbl_dir;
-	cfs_list_t			 mgs_fs_db_list;
+	struct list_head		 mgs_fs_db_list;
 	spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
 	cfs_proc_dir_entry_t		*mgs_proc_live;
 	cfs_proc_dir_entry_t            *mgs_proc_osd;

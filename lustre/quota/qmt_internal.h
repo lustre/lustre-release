@@ -68,7 +68,7 @@ struct qmt_device {
 	cfs_hash_t		*qmt_pool_hash;
 
 	/* List of pools managed by this master target */
-	cfs_list_t		 qmt_pool_list;
+	struct list_head	 qmt_pool_list;
 
 	/* procfs root directory for this qmt */
 	cfs_proc_dir_entry_t	*qmt_proc;
@@ -77,7 +77,7 @@ struct qmt_device {
 	struct ptlrpc_thread	 qmt_reba_thread;
 
 	/* list of lqe entry which need space rebalancing */
-	cfs_list_t		 qmt_reba_list;
+	struct list_head	 qmt_reba_list;
 
 	/* lock protecting rebalancing list */
 	spinlock_t		 qmt_reba_lock;
@@ -96,10 +96,10 @@ struct qmt_device {
  */
 struct qmt_pool_info {
 	/* link to qmt's pool hash */
-	cfs_hlist_node_t	 qpi_hash;
+	struct hlist_node	 qpi_hash;
 
 	/* chained list of all pools managed by the same qmt */
-	cfs_list_t		 qpi_linkage;
+	struct list_head	 qpi_linkage;
 
 	/* Pool key composed of pool_id | (pool_type << 16)
 	 * Only pool ID 0 is supported for now and the pool type is either

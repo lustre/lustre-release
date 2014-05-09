@@ -281,8 +281,8 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 	qsd->qsd_type_array[qtype] = NULL;
 
 	/* all deferred work lists should be empty */
-	LASSERT(cfs_list_empty(&qqi->qqi_deferred_glb));
-	LASSERT(cfs_list_empty(&qqi->qqi_deferred_slv));
+	LASSERT(list_empty(&qqi->qqi_deferred_glb));
+	LASSERT(list_empty(&qqi->qqi_deferred_slv));
 
 	/* shutdown lquota site */
 	if (qqi->qqi_site != NULL && !IS_ERR(qqi->qqi_site)) {
@@ -383,8 +383,8 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	qqi->qqi_reint        = false;
 	init_waitqueue_head(&qqi->qqi_reint_thread.t_ctl_waitq);
 	thread_set_flags(&qqi->qqi_reint_thread, SVC_STOPPED);
-	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
-	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
+	INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
+	INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
 
 	/* open accounting object */
 	LASSERT(qqi->qqi_acct_obj == NULL);
@@ -514,7 +514,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	if (qsd->qsd_fsinfo != NULL) {
 		mutex_lock(&qsd->qsd_fsinfo->qfs_mutex);
 		/* remove from the list of fsinfo */
-		cfs_list_del_init(&qsd->qsd_link);
+		list_del_init(&qsd->qsd_link);
 		mutex_unlock(&qsd->qsd_fsinfo->qfs_mutex);
 		qsd_put_fsinfo(qsd->qsd_fsinfo);
 		qsd->qsd_fsinfo = NULL;
@@ -573,12 +573,12 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 
 	/* generic initializations */
 	rwlock_init(&qsd->qsd_lock);
-	CFS_INIT_LIST_HEAD(&qsd->qsd_link);
+	INIT_LIST_HEAD(&qsd->qsd_link);
 	thread_set_flags(&qsd->qsd_upd_thread, SVC_STOPPED);
 	init_waitqueue_head(&qsd->qsd_upd_thread.t_ctl_waitq);
-	CFS_INIT_LIST_HEAD(&qsd->qsd_upd_list);
+	INIT_LIST_HEAD(&qsd->qsd_upd_list);
 	spin_lock_init(&qsd->qsd_adjust_lock);
-	CFS_INIT_LIST_HEAD(&qsd->qsd_adjust_list);
+	INIT_LIST_HEAD(&qsd->qsd_adjust_list);
 	qsd->qsd_prepared = false;
 	qsd->qsd_started = false;
 

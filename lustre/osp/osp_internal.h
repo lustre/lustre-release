@@ -59,8 +59,8 @@ struct osp_id_tracker {
 	/* callback is register once per diskfs -- that's the whole point */
 	struct dt_txn_callback	 otr_tx_cb;
 	/* single node can run many clusters */
-	cfs_list_t		 otr_wakeup_list;
-	cfs_list_t		 otr_list;
+	struct list_head	 otr_wakeup_list;
+	struct list_head	 otr_list;
 	/* underlying shared device */
 	struct dt_device	*otr_dev;
 	/* how many users of this tracker */
@@ -154,7 +154,7 @@ struct osp_device {
 	struct ptlrpc_thread		 opd_syn_thread;
 	wait_queue_head_t		 opd_syn_waitq;
 	/* list of remotely committed rpc */
-	cfs_list_t			 opd_syn_committed_there;
+	struct list_head		 opd_syn_committed_there;
 	/* number of changes being under sync */
 	int				 opd_syn_sync_in_progress;
 	/* number of RPCs in flight - flow control */
@@ -173,7 +173,7 @@ struct osp_device {
 	/* last processed (taken from llog) id */
 	unsigned long			 opd_syn_last_processed_id;
 	struct osp_id_tracker		*opd_syn_tracker;
-	cfs_list_t			 opd_syn_ontrack;
+	struct list_head		 opd_syn_ontrack;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own

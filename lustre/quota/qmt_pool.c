@@ -91,40 +91,40 @@ static unsigned qpi_hash_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 	return cfs_hash_u32_hash(*((__u32 *)key), mask);
 }
 
-static void *qpi_hash_key(cfs_hlist_node_t *hnode)
+static void *qpi_hash_key(struct hlist_node *hnode)
 {
 	struct qmt_pool_info *pool;
-	pool = cfs_hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
+	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
 	return &pool->qpi_key;
 }
 
-static int qpi_hash_keycmp(const void *key, cfs_hlist_node_t *hnode)
+static int qpi_hash_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct qmt_pool_info *pool;
-	pool = cfs_hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
+	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
 	return pool->qpi_key == *((__u32 *)key);
 }
 
-static void *qpi_hash_object(cfs_hlist_node_t *hnode)
+static void *qpi_hash_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
+	return hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
 }
 
-static void qpi_hash_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void qpi_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct qmt_pool_info *pool;
-	pool = cfs_hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
+	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
 	qpi_getref(pool);
 }
 
-static void qpi_hash_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void qpi_hash_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct qmt_pool_info *pool;
-	pool = cfs_hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
+	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
 	qpi_putref_locked(pool);
 }
 
-static void qpi_hash_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void qpi_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	CERROR("Should not have any item left!\n");
 }
@@ -199,7 +199,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	OBD_ALLOC_PTR(pool);
 	if (pool == NULL)
 		RETURN(-ENOMEM);
-	CFS_INIT_LIST_HEAD(&pool->qpi_linkage);
+	INIT_LIST_HEAD(&pool->qpi_linkage);
 
 	/* assign key used by hash functions */
 	pool->qpi_key = pool_id + (pool_type << 16);
@@ -238,7 +238,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	}
 
 	/* add to qmt pool list */
-	cfs_list_add_tail(&pool->qpi_linkage, &qmt->qmt_pool_list);
+	list_add_tail(&pool->qpi_linkage, &qmt->qmt_pool_list);
 	EXIT;
 out:
 	if (rc)
@@ -294,7 +294,7 @@ static void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 		pool->qpi_qmt = NULL;
 	}
 
-	LASSERT(cfs_list_empty(&pool->qpi_linkage));
+	LASSERT(list_empty(&pool->qpi_linkage));
 	OBD_FREE_PTR(pool);
 }
 
@@ -345,27 +345,27 @@ static struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
 {
 	struct qmt_pool_info	*pool;
-	cfs_list_t		*pos, *n;
+	struct list_head	*pos, *n;
 	ENTRY;
 
 	if (qmt->qmt_pool_hash == NULL)
 		RETURN_EXIT;
 
 	/* parse list of pool and destroy each element */
-	cfs_list_for_each_safe(pos, n, &qmt->qmt_pool_list) {
-		pool = cfs_list_entry(pos, struct qmt_pool_info,
-				      qpi_linkage);
+	list_for_each_safe(pos, n, &qmt->qmt_pool_list) {
+		pool = list_entry(pos, struct qmt_pool_info,
+				  qpi_linkage);
 		/* remove from hash */
 		cfs_hash_del(qmt->qmt_pool_hash, &pool->qpi_key,
 			     &pool->qpi_hash);
 
 		/* remove from list */
-		cfs_list_del_init(&pool->qpi_linkage);
+		list_del_init(&pool->qpi_linkage);
 
 		/* release extra reference taken in qmt_pool_alloc */
 		qpi_putref(env, pool);
 	}
-	LASSERT(cfs_list_empty(&qmt->qmt_pool_list));
+	LASSERT(list_empty(&qmt->qmt_pool_list));
 
 	cfs_hash_putref(qmt->qmt_pool_hash);
 	qmt->qmt_pool_hash = NULL;
@@ -404,7 +404,7 @@ int qmt_pool_init(const struct lu_env *env, struct qmt_device *qmt)
 	}
 
 	/* initialize pool list */
-	CFS_INIT_LIST_HEAD(&qmt->qmt_pool_list);
+	INIT_LIST_HEAD(&qmt->qmt_pool_list);
 
 	/* Instantiate pool master for the default data and metadata pool (both
 	 * have pool ID equals to 0).
@@ -451,7 +451,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 	struct qmt_pool_info	*pool;
 	struct dt_device	*dev = NULL;
 	dt_obj_version_t	 version;
-	cfs_list_t		*pos;
+	struct list_head	*pos;
 	int			 rc = 0, qtype;
 	ENTRY;
 
@@ -459,13 +459,13 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 
 	/* iterate over each pool in the hash and allocate a quota site for each
 	 * one. This involves creating a global index file on disk */
-	cfs_list_for_each(pos, &qmt->qmt_pool_list) {
+	list_for_each(pos, &qmt->qmt_pool_list) {
 		struct dt_object	*obj;
 		int			 pool_type, pool_id;
 		struct lquota_entry	*lqe;
 
-		pool = cfs_list_entry(pos, struct qmt_pool_info,
-				      qpi_linkage);
+		pool = list_entry(pos, struct qmt_pool_info,
+				  qpi_linkage);
 
 		pool_id   = pool->qpi_key & 0x0000ffff;
 		pool_type = pool->qpi_key >> 16;

@@ -457,19 +457,19 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 			    struct ldlm_resource *res, union ldlm_gl_desc *desc,
 			    qmt_glimpse_cb_t cb, void *arg)
 {
-	cfs_list_t	*tmp, *pos;
-	CFS_LIST_HEAD(gl_list);
+	struct list_head *tmp, *pos;
+	struct list_head gl_list = LIST_HEAD_INIT(gl_list);
 	int		 rc = 0;
 	ENTRY;
 
 	lock_res(res);
 	/* scan list of granted locks */
-	cfs_list_for_each(pos, &res->lr_granted) {
+	list_for_each(pos, &res->lr_granted) {
 		struct ldlm_glimpse_work	*work;
 		struct ldlm_lock		*lock;
 		struct obd_uuid			*uuid;
 
-		lock = cfs_list_entry(pos, struct ldlm_lock, l_res_link);
+		lock = list_entry(pos, struct ldlm_lock, l_res_link);
 		LASSERT(lock->l_export);
 		uuid = &lock->l_export->exp_client_uuid;
 
@@ -493,7 +493,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 			continue;
 		}
 
-		cfs_list_add_tail(&work->gl_list, &gl_list);
+		list_add_tail(&work->gl_list, &gl_list);
 		work->gl_lock  = LDLM_LOCK_GET(lock);
 		work->gl_flags = 0;
 		work->gl_desc  = desc;
@@ -501,7 +501,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 	}
 	unlock_res(res);
 
-	if (cfs_list_empty(&gl_list)) {
+	if (list_empty(&gl_list)) {
 		CDEBUG(D_QUOTA, "%s: nobody to notify\n", qmt->qmt_svname);
 		RETURN(0);
 	}
@@ -509,12 +509,12 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 	/* issue glimpse callbacks to all connected slaves */
 	rc = ldlm_glimpse_locks(res, &gl_list);
 
-	cfs_list_for_each_safe(pos, tmp, &gl_list) {
+	list_for_each_safe(pos, tmp, &gl_list) {
 		struct ldlm_glimpse_work *work;
 
-		work = cfs_list_entry(pos, struct ldlm_glimpse_work, gl_list);
+		work = list_entry(pos, struct ldlm_glimpse_work, gl_list);
 
-		cfs_list_del(&work->gl_list);
+		list_del(&work->gl_list);
 		CERROR("%s: failed to notify %s of new quota settings\n",
 		       qmt->qmt_svname,
 		       obd_uuid2str(&work->gl_lock->l_export->exp_client_uuid));
@@ -681,8 +681,8 @@ void qmt_id_lock_notify(struct qmt_device *qmt, struct lquota_entry *lqe)
 
 	lqe_getref(lqe);
 	spin_lock(&qmt->qmt_reba_lock);
-	if (!qmt->qmt_stopping && cfs_list_empty(&lqe->lqe_link)) {
-		cfs_list_add_tail(&lqe->lqe_link, &qmt->qmt_reba_list);
+	if (!qmt->qmt_stopping && list_empty(&lqe->lqe_link)) {
+		list_add_tail(&lqe->lqe_link, &qmt->qmt_reba_list);
 		added = true;
 	}
 	spin_unlock(&qmt->qmt_reba_lock);
@@ -730,13 +730,13 @@ static int qmt_reba_thread(void *arg)
 
 	while (1) {
 		l_wait_event(thread->t_ctl_waitq,
-			     !cfs_list_empty(&qmt->qmt_reba_list) ||
+			     !list_empty(&qmt->qmt_reba_list) ||
 			     !thread_is_running(thread), &lwi);
 
 		spin_lock(&qmt->qmt_reba_lock);
-		cfs_list_for_each_entry_safe(lqe, tmp, &qmt->qmt_reba_list,
-					     lqe_link) {
-			cfs_list_del_init(&lqe->lqe_link);
+		list_for_each_entry_safe(lqe, tmp, &qmt->qmt_reba_list,
+					 lqe_link) {
+			list_del_init(&lqe->lqe_link);
 			spin_unlock(&qmt->qmt_reba_lock);
 
 			if (thread_is_running(thread))
@@ -799,5 +799,5 @@ void qmt_stop_reba_thread(struct qmt_device *qmt)
 		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
 			     &lwi);
 	}
-	LASSERT(cfs_list_empty(&qmt->qmt_reba_list));
+	LASSERT(list_empty(&qmt->qmt_reba_list));
 }

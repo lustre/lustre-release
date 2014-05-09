@@ -170,7 +170,7 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	memset(it, 0, sizeof(*it));
 	lu_object_get(lo);
 	it->oiq_obj = obj;
-	CFS_INIT_LIST_HEAD(&it->oiq_list);
+	INIT_LIST_HEAD(&it->oiq_list);
 
 	/* LUSTRE_DQTREEOFF is the initial offset where the tree can be found */
 	it->oiq_blk[0] = LUSTRE_DQTREEOFF;
@@ -194,8 +194,8 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 
 	lu_object_put(env, &it->oiq_obj->oo_dt.do_lu);
 
-	cfs_list_for_each_entry_safe(leaf, tmp, &it->oiq_list, oql_link) {
-		cfs_list_del_init(&leaf->oql_link);
+	list_for_each_entry_safe(leaf, tmp, &it->oiq_list, oql_link) {
+		list_del_init(&leaf->oql_link);
 		OBD_FREE_PTR(leaf);
 	}
 	EXIT;
@@ -262,9 +262,9 @@ static int osd_it_add_processed(struct osd_it_quota *it, int depth)
 	OBD_ALLOC_PTR(leaf);
 	if (leaf == NULL)
 		RETURN(-ENOMEM);
-	CFS_INIT_LIST_HEAD(&leaf->oql_link);
+	INIT_LIST_HEAD(&leaf->oql_link);
 	leaf->oql_blk = it->oiq_blk[depth];
-	cfs_list_add_tail(&leaf->oql_link, &it->oiq_list);
+	list_add_tail(&leaf->oql_link, &it->oiq_list);
 	RETURN(0);
 }
 

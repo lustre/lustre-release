@@ -146,21 +146,21 @@ struct osd_obj_seq {
 	struct dentry	 *oos_root;	   /* O/<seq> */
 	struct dentry	 **oos_dirs;	   /* O/<seq>/d0-dXX */
 	obd_seq		 oos_seq;	   /* seq number */
-	cfs_list_t	 oos_seq_list;     /* list to seq_list */
+	struct list_head oos_seq_list;     /* list to seq_list */
 };
 
 struct osd_obj_map {
 	struct dentry	 *om_root;	  /* dentry for /O */
 	rwlock_t	 om_seq_list_lock; /* lock for seq_list */
-	cfs_list_t	 om_seq_list;      /* list head for seq */
+	struct list_head om_seq_list;      /* list head for seq */
 	int		 om_subdir_count;
 	struct mutex	 om_dir_init_mutex;
 };
 
 struct osd_mdobj {
 	struct dentry	*om_root;      /* AGENT/<index> */
-	obd_seq		om_index;     /* mdt index */
-	cfs_list_t	om_list;      /* list to omm_list */
+	obd_seq		 om_index;     /* mdt index */
+	struct list_head om_list;      /* list to omm_list */
 };
 
 struct osd_mdobj_map {
@@ -176,7 +176,7 @@ struct osd_mdobj_map {
 struct osd_inconsistent_item {
 	/* link into osd_scrub::os_inconsistent_items,
 	 * protected by osd_scrub::os_lock. */
-	cfs_list_t	       oii_list;
+	struct list_head       oii_list;
 
 	/* The right FID <=> ino#/gen mapping. */
 	struct osd_idmap_cache oii_cache;
@@ -243,9 +243,9 @@ struct osd_device {
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;
         struct lustre_capa_key   *od_capa_keys;
-        cfs_hlist_head_t         *od_capa_hash;
+	struct hlist_head	 *od_capa_hash;
 
-        cfs_proc_dir_entry_t     *od_proc_entry;
+	struct proc_dir_entry	 *od_proc_entry;
         struct lprocfs_stats     *od_stats;
 
 	spinlock_t		  od_osfs_lock;
@@ -267,7 +267,7 @@ struct osd_device {
 	struct mutex		  od_otable_mutex;
 	struct osd_otable_it	 *od_otable_it;
 	struct osd_scrub	  od_scrub;
-	cfs_list_t		  od_ios_list;
+	struct list_head		  od_ios_list;
 
 	/* service name associated with the osd device */
 	char                      od_svname[MAX_OBD_NAME];
@@ -313,7 +313,7 @@ struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
         struct ldiskfs_journal_cb_entry ot_jcb;
-        cfs_list_t              ot_dcb_list;
+	struct list_head              ot_dcb_list;
 	/* Link to the device, for debugging. */
 	struct lu_ref_link      ot_dev_link;
         unsigned short          ot_credits;
@@ -427,7 +427,7 @@ struct osd_it_iam {
 };
 
 struct osd_quota_leaf {
-	cfs_list_t	oql_link;
+	struct list_head	oql_link;
 	uint		oql_blk;
 };
 
@@ -445,7 +445,7 @@ struct osd_it_quota {
 	/** the record index in the leaf/index block */
 	uint			 oiq_index[LUSTRE_DQTREEDEPTH + 1];
 	/** list of already processed leaf blocks */
-	cfs_list_t		 oiq_list;
+	struct list_head	 oiq_list;
 };
 
 #define MAX_BLOCKS_PER_PAGE (PAGE_CACHE_SIZE / 512)

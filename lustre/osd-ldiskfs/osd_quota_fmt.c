@@ -227,7 +227,7 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 	ENTRY;
 
 	/* check if the leaf block has been processed before */
-	cfs_list_for_each_entry(leaf, &it->oiq_list, oql_link) {
+	list_for_each_entry(leaf, &it->oiq_list, oql_link) {
 		if (leaf->oql_blk == blk)
 			RETURN(1);
 	}

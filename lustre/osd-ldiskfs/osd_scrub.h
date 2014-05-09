@@ -187,7 +187,7 @@ struct osd_scrub {
 	struct lvfs_run_ctxt    os_ctxt;
 	struct ptlrpc_thread    os_thread;
 	struct osd_idmap_cache  os_oic;
-	cfs_list_t		os_inconsistent_items;
+	struct list_head	os_inconsistent_items;
 
 	/* write lock for scrub prep/update/post/checkpoint,
 	 * read lock for scrub dump. */

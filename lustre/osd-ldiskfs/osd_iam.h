@@ -1094,7 +1094,7 @@ struct iam_format {
         /*
          * Linkage into global list of container formats.
          */
-        cfs_list_t if_linkage;
+	struct list_head if_linkage;
 };
 
 void iam_format_register(struct iam_format *fmt);

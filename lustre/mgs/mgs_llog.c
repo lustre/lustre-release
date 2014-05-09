@@ -314,10 +314,10 @@ static void mgs_free_fsdb_srpc(struct fs_db *fsdb)
 struct fs_db *mgs_find_fsdb(struct mgs_device *mgs, char *fsname)
 {
         struct fs_db *fsdb;
-        cfs_list_t *tmp;
+	struct list_head *tmp;
 
-        cfs_list_for_each(tmp, &mgs->mgs_fs_db_list) {
-                fsdb = cfs_list_entry(tmp, struct fs_db, fsdb_list);
+	list_for_each(tmp, &mgs->mgs_fs_db_list) {
+		fsdb = list_entry(tmp, struct fs_db, fsdb_list);
                 if (strcmp(fsdb->fsdb_name, fsname) == 0)
                         return fsdb;
         }
@@ -369,7 +369,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 		lproc_mgs_add_live(mgs, fsdb);
         }
 
-        cfs_list_add(&fsdb->fsdb_list, &mgs->mgs_fs_db_list);
+	list_add(&fsdb->fsdb_list, &mgs->mgs_fs_db_list);
 
         RETURN(fsdb);
 err:
@@ -385,10 +385,10 @@ err:
 
 static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
 {
-        /* wait for anyone with the sem */
+	/* wait for anyone with the sem */
 	mutex_lock(&fsdb->fsdb_mutex);
 	lproc_mgs_del_live(mgs, fsdb);
-        cfs_list_del(&fsdb->fsdb_list);
+	list_del(&fsdb->fsdb_list);
 
         /* deinitialize fsr */
 	mgs_ir_fini_fs(mgs, fsdb);
@@ -406,21 +406,22 @@ static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
 
 int mgs_init_fsdb_list(struct mgs_device *mgs)
 {
-        CFS_INIT_LIST_HEAD(&mgs->mgs_fs_db_list);
+	INIT_LIST_HEAD(&mgs->mgs_fs_db_list);
         return 0;
 }
 
 int mgs_cleanup_fsdb_list(struct mgs_device *mgs)
 {
-        struct fs_db *fsdb;
-        cfs_list_t *tmp, *tmp2;
+	struct fs_db *fsdb;
+	struct list_head *tmp, *tmp2;
+
 	mutex_lock(&mgs->mgs_mutex);
-        cfs_list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
-                fsdb = cfs_list_entry(tmp, struct fs_db, fsdb_list);
+	list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
+		fsdb = list_entry(tmp, struct fs_db, fsdb_list);
 		mgs_free_fsdb(mgs, fsdb);
-        }
+	}
 	mutex_unlock(&mgs->mgs_mutex);
-        return 0;
+	return 0;
 }
 
 int mgs_find_or_make_fsdb(const struct lu_env *env,

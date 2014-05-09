@@ -586,7 +586,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	id = &info->oti_id;
-	if (!cfs_list_empty(&scrub->os_inconsistent_items)) {
+	if (!list_empty(&scrub->os_inconsistent_items)) {
 		/* Search order: 2. OI scrub pending list. */
 		result = osd_oii_lookup(dev, fid, id);
 		if (result == 0)
@@ -912,11 +912,11 @@ static void osd_trans_commit_cb(struct super_block *sb,
         dt_txn_hook_commit(th);
 
 	/* call per-transaction callbacks if any */
-	cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
+	list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
 		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
 			 "commit callback entry: magic=%x name='%s'\n",
 			 dcb->dcb_magic, dcb->dcb_name);
-		cfs_list_del_init(&dcb->dcb_linkage);
+		list_del_init(&dcb->dcb_linkage);
 		dcb->dcb_func(NULL, th, dcb, error);
 	}
 
@@ -954,7 +954,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 		atomic_set(&th->th_refc, 1);
 		th->th_alloc_size = sizeof(*oh);
 		oti->oti_dev = osd_dt_dev(d);
-		CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
+		INIT_LIST_HEAD(&oh->ot_dcb_list);
 		osd_th_alloced(oh);
 
 		memset(oti->oti_declare_ops, 0,
@@ -1165,7 +1165,7 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 
 	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
 	LASSERT(&dcb->dcb_func != NULL);
-	cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
+	list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
 
 	return 0;
 }
@@ -5850,7 +5850,7 @@ static int osd_device_init0(const struct lu_env *env,
 	/* self-repair LMA by default */
 	o->od_lma_self_repair = 1;
 
-	CFS_INIT_LIST_HEAD(&o->od_ios_list);
+	INIT_LIST_HEAD(&o->od_ios_list);
 	/* setup scrub, including OI files initialization */
 	rc = osd_scrub_setup(env, o);
 	if (rc < 0)

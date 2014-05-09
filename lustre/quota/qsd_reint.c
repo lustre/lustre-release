@@ -553,12 +553,12 @@ void qsd_stop_reint_thread(struct qsd_qtype_info *qqi)
 }
 
 static int qsd_entry_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-			     cfs_hlist_node_t *hnode, void *data)
+			     struct hlist_node *hnode, void *data)
 {
 	struct lquota_entry	*lqe;
 	int			*pending = (int *)data;
 
-	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
 
 	lqe_read_lock(lqe);
@@ -579,9 +579,9 @@ static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
 
 	/* any pending quota adjust? */
 	spin_lock(&qsd->qsd_adjust_lock);
-	cfs_list_for_each_entry_safe(lqe, n, &qsd->qsd_adjust_list, lqe_link) {
+	list_for_each_entry_safe(lqe, n, &qsd->qsd_adjust_list, lqe_link) {
 		if (lqe2qqi(lqe) == qqi) {
-			cfs_list_del_init(&lqe->lqe_link);
+			list_del_init(&lqe->lqe_link);
 			lqe_putref(lqe);
 		}
 	}
@@ -589,7 +589,7 @@ static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
 
 	/* any pending updates? */
 	read_lock(&qsd->qsd_lock);
-	cfs_list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
+	list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
 		if (upd->qur_qqi == qqi) {
 			read_unlock(&qsd->qsd_lock);
 			CDEBUG(D_QUOTA, "%s: pending %s updates for type:%d.\n",
