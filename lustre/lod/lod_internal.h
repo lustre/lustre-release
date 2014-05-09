@@ -290,7 +290,8 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 			   struct lov_ost_data_v1 *objs);
 int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th);
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf, int specific);
+int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
+			bool is_from_disk);
 int lod_generate_and_set_lovea(const struct lu_env *env,
 			       struct lod_object *mo, struct thandle *th);
 

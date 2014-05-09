@@ -477,12 +477,6 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                 if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
                         return -ENODATA;
 
-                if (size == 0 && S_ISDIR(inode->i_mode)) {
-                        /* XXX directory EA is fix for now, optimize to save
-                         * RPC transfer */
-                        GOTO(out, rc = sizeof(struct lov_user_md));
-                }
-
 		lsm = ccc_inode_lsm_get(inode);
 		if (lsm == NULL) {
                         if (S_ISDIR(inode->i_mode)) {
