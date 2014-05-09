@@ -254,8 +254,7 @@ static int ll_get_name(struct dentry *dentry, char *name,
 		GOTO(out, rc = PTR_ERR(op_data));
 
 	op_data->op_hash_offset = 0;
-	op_data->op_max_pages =
-		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 	mutex_lock(&dir->i_mutex);
 #ifdef HAVE_DIR_CONTEXT
 	rc = ll_dir_read(dir, op_data, &lgd.ctx);

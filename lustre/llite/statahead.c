@@ -1090,8 +1090,7 @@ static int ll_statahead_thread(void *arg)
 		RETURN(PTR_ERR(op_data));
 
 	op_data->op_hash_offset = 0;
-	op_data->op_max_pages =
-		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
 	if (sbi->ll_flags & LL_SBI_AGL_ENABLED)
 		ll_start_agl(parent, sai);
@@ -1365,8 +1364,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	 */
 	op_data->op_stripe_offset = 0;
 	op_data->op_hash_offset = 0;
-	op_data->op_max_pages =
-		ll_i2sbi(dir)->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
 	for (ent = ll_dir_entry_start(dir, op_data, &page);
 	     ent != NULL && !IS_ERR(ent);

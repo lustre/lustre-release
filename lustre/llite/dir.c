@@ -316,7 +316,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		GOTO(out, rc = PTR_ERR(op_data));
 
 	op_data->op_hash_offset = pos;
-	op_data->op_max_pages = sbi->ll_md_brw_size >> PAGE_CACHE_SHIFT;
+	op_data->op_max_pages = sbi->ll_md_brw_pages;
 #ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
 	rc = ll_dir_read(inode, op_data, ctx);
