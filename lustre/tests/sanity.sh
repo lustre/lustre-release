@@ -10217,6 +10217,36 @@ test_162() {
 }
 run_test 162 "path lookup sanity"
 
+test_162b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	$LFS setdirstripe -i0 -c$MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+				error "create striped dir failed"
+
+	local FID=$($LFS getdirstripe $DIR/$tdir/striped_dir |
+					tail -n 1 | awk '{print $2}')
+	stat $MOUNT/.lustre/fid/$FID && error "sub_stripe can be accessed"
+
+	touch $DIR/$tdir/striped_dir/f{0..4} || error "touch f0..4 failed"
+	mkdir $DIR/$tdir/striped_dir/d{0..4} || error "mkdir d0..4 failed"
+
+	# regular file
+	for ((i=0;i<5;i++)); do
+		FID=$($LFS path2fid $DIR/$tdir/striped_dir/f$i | tr -d '[]') ||
+			error "get fid for f$i failed"
+		check_path "$tdir/striped_dir/f$i" $FSNAME $FID --link 0
+
+		FID=$($LFS path2fid $DIR/$tdir/striped_dir/d$i | tr -d '[]') ||
+			error "get fid for d$i failed"
+		check_path "$tdir/striped_dir/d$i" $FSNAME $FID --link 0
+	done
+
+	return 0
+}
+run_test 162b "striped directory path lookup sanity"
+
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"

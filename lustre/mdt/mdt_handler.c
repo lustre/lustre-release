@@ -5340,19 +5340,46 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	--ptr;
 	pli->pli_fidcount = 0;
 	pli->pli_fids[0] = *(struct lu_fid *)mdt_object_fid(pli->pli_mdt_obj);
-
+	*tmpfid = pli->pli_fids[0];
 	/* root FID only exists on MDT0, and fid2path should also ends at MDT0,
 	 * so checking root_fid can only happen on MDT0. */
 	while (!lu_fid_eq(&mdt->mdt_md_root_fid,
 			  &pli->pli_fids[pli->pli_fidcount])) {
-		mdt_obj = mdt_object_find(info->mti_env, mdt,
-					  &pli->pli_fids[pli->pli_fidcount]);
+		struct lu_buf		lmv_buf;
+
+		mdt_obj = mdt_object_find(info->mti_env, mdt, tmpfid);
 		if (IS_ERR(mdt_obj))
 			GOTO(out, rc = PTR_ERR(mdt_obj));
+
 		if (mdt_object_remote(mdt_obj)) {
 			mdt_object_put(info->mti_env, mdt_obj);
 			GOTO(remote_out, rc = -EREMOTE);
 		}
+
+		lmv_buf.lb_buf = info->mti_xattr_buf;
+		lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
+
+		/* Check if it is slave stripes */
+		rc = mo_xattr_get(info->mti_env, mdt_object_child(mdt_obj),
+				  &lmv_buf, XATTR_NAME_LMV);
+		if (rc > 0) {
+			union lmv_mds_md *lmm = lmv_buf.lb_buf;
+
+			/* For slave stripes, get its master */
+			if (le32_to_cpu(lmm->lmv_magic) == LMV_MAGIC_STRIPE) {
+				struct lmv_mds_md_v1 *lmm1 = &lmm->lmv_md_v1;
+
+				fid_le_to_cpu(tmpfid, &lmm1->lmv_master_fid);
+				if (!fid_is_sane(tmpfid)) {
+					mdt_object_put(info->mti_env, mdt_obj);
+					GOTO(out, rc = -EINVAL);
+				}
+				mdt_object_put(info->mti_env, mdt_obj);
+				pli->pli_fids[pli->pli_fidcount] = *tmpfid;
+				continue;
+			}
+		}
+
 		if (!mdt_object_exists(mdt_obj)) {
 			mdt_object_put(info->mti_env, mdt_obj);
 			GOTO(out, rc = -ENOENT);
