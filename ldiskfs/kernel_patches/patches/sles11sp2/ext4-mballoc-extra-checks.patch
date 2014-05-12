@@ -1,8 +1,8 @@
 ---
  fs/ext4/ext4.h    |    1 
- fs/ext4/mballoc.c |  108 ++++++++++++++++++++++++++++++++++++++++++++++--------
+ fs/ext4/mballoc.c |  109 ++++++++++++++++++++++++++++++++++++++++++++++--------
  fs/ext4/mballoc.h |    2 -
- 3 files changed, 95 insertions(+), 16 deletions(-)
+ 3 files changed, 96 insertions(+), 16 deletions(-)
 
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
@@ -102,7 +102,7 @@
  
  out:
  	if (bh) {
-@@ -2143,9 +2151,11 @@ static void *ext4_mb_seq_groups_next(str
+@@ -2148,9 +2156,11 @@ static void *ext4_mb_seq_groups_next(str
  static int ext4_mb_seq_groups_show(struct seq_file *seq, void *v)
  {
  	struct super_block *sb = seq->private;
@@ -114,7 +114,7 @@
  	struct ext4_buddy e4b;
  	struct sg {
  		struct ext4_group_info info;
-@@ -2154,10 +2164,10 @@ static int ext4_mb_seq_groups_show(struc
+@@ -2159,10 +2169,10 @@ static int ext4_mb_seq_groups_show(struc
  
  	group--;
  	if (group == 0)
@@ -127,7 +127,7 @@
  			   "2^0", "2^1", "2^2", "2^3", "2^4", "2^5", "2^6",
  			   "2^7", "2^8", "2^9", "2^10", "2^11", "2^12", "2^13");
  
-@@ -2168,13 +2178,20 @@ static int ext4_mb_seq_groups_show(struc
+@@ -2173,13 +2183,20 @@ static int ext4_mb_seq_groups_show(struc
  		seq_printf(seq, "#%-5u: I/O error\n", group);
  		return 0;
  	}
@@ -150,7 +150,7 @@
  	for (i = 0; i <= 13; i++)
  		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
  				sg.info.bb_counters[i] : 0);
-@@ -3411,23 +3428,68 @@ static void ext4_mb_generate_from_freeli
+@@ -3417,23 +3434,68 @@ static void ext4_mb_generate_from_freeli
  }
  
  /*
@@ -220,7 +220,7 @@
  	/* all form of preallocation discards first load group,
  	 * so the only competing code is preallocation use.
  	 * we don't need any locking here
-@@ -3443,14 +3505,23 @@ void ext4_mb_generate_from_pa(struct sup
+@@ -3449,14 +3511,23 @@ void ext4_mb_generate_from_pa(struct sup
  					     &groupnr, &start);
  		len = pa->pa_len;
  		spin_unlock(&pa->pa_lock);
@@ -245,7 +245,7 @@
  }
  
  static void ext4_mb_pa_callback(struct rcu_head *head)
-@@ -3509,6 +3580,7 @@ static void ext4_mb_put_pa(struct ext4_a
+@@ -3515,6 +3586,7 @@ static void ext4_mb_put_pa(struct ext4_a
  	 */
  	ext4_lock_group(sb, grp);
  	list_del(&pa->pa_group_list);
@@ -253,7 +253,7 @@
  	ext4_unlock_group(sb, grp);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3600,6 +3672,7 @@ ext4_mb_new_inode_pa(struct ext4_allocat
+@@ -3606,6 +3678,7 @@ ext4_mb_new_inode_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -261,7 +261,7 @@
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3661,6 +3734,7 @@ ext4_mb_new_group_pa(struct ext4_allocat
+@@ -3667,6 +3740,7 @@ ext4_mb_new_group_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -269,7 +269,7 @@
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	/*
-@@ -3829,6 +3903,8 @@ repeat:
+@@ -3835,6 +3909,8 @@ repeat:
  
  		spin_unlock(&pa->pa_lock);
  
@@ -278,7 +278,7 @@
  		list_del(&pa->pa_group_list);
  		list_add(&pa->u.pa_tmp_list, &list);
  	}
-@@ -3962,7 +4038,7 @@ repeat:
+@@ -3968,7 +4044,7 @@ repeat:
  		if (err) {
  			ext4_error(sb, "Error loading buddy information for %u",
  					group);
@@ -287,7 +287,7 @@
  		}
  
  		bitmap_bh = ext4_read_block_bitmap(sb, group);
-@@ -3974,6 +4050,8 @@ repeat:
+@@ -3980,6 +4056,8 @@ repeat:
  		}
  
  		ext4_lock_group(sb, group);
@@ -296,6 +296,14 @@
  		list_del(&pa->pa_group_list);
  		ext4_mb_release_inode_pa(&e4b, bitmap_bh, pa);
  		ext4_unlock_group(sb, group);
+@@ -4240,6 +4318,7 @@ ext4_mb_discard_lg_preallocations(struct
+ 		}
+ 		ext4_lock_group(sb, group);
+ 		list_del(&pa->pa_group_list);
++		ext4_get_group_info(sb, group)->bb_prealloc_nr--;
+ 		ext4_mb_release_group_pa(&e4b, pa);
+ 		ext4_unlock_group(sb, group);
+
 --- a/fs/ext4/mballoc.h
 +++ b/fs/ext4/mballoc.h
 @@ -87,7 +87,7 @@ extern u8 mb_enable_debug;
