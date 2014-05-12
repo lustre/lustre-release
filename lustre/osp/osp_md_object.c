@@ -340,7 +340,6 @@ static int osp_md_declare_object_create(const struct lu_env *env,
 	int			buf_count;
 	int			rc;
 
-
 	update = osp_find_create_update_loc(th, dt);
 	if (IS_ERR(update)) {
 		CERROR("%s: Get OSP update buf failed: rc = %d\n",

@@ -244,6 +244,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	if (!o->opo_reserved) {
 		/* special case, id was assigned outside of transaction
 		 * see comments in osp_declare_attr_set */
+		LASSERT(d->opd_pre != NULL);
 		spin_lock(&d->opd_pre_lock);
 		osp_update_last_fid(d, fid);
 		spin_unlock(&d->opd_pre_lock);
@@ -267,6 +268,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* we might have lost precreated objects */
 	if (unlikely(d->opd_gap_count) > 0) {
+		LASSERT(d->opd_pre != NULL);
 		spin_lock(&d->opd_pre_lock);
 		if (d->opd_gap_count > 0) {
 			int count = d->opd_gap_count;
@@ -402,6 +404,7 @@ static void osp_object_release(const struct lu_env *env, struct lu_object *o)
 	 * this may require lu_object_put() in LOD
 	 */
 	if (unlikely(po->opo_reserved)) {
+		LASSERT(d->opd_pre != NULL);
 		LASSERT(d->opd_pre_reserved > 0);
 		spin_lock(&d->opd_pre_lock);
 		d->opd_pre_reserved--;

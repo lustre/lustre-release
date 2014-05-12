@@ -65,6 +65,34 @@ struct osp_id_tracker {
 	cfs_atomic_t		 otr_refcount;
 };
 
+struct osp_precreate {
+	/*
+	 * Precreation pool
+	 */
+	spinlock_t			 osp_pre_lock;
+
+	/* last fid to assign in creation */
+	struct lu_fid			 osp_pre_used_fid;
+	/* last created id OST reported, next-created - available id's */
+	struct lu_fid			 osp_pre_last_created_fid;
+	/* how many ids are reserved in declare, we shouldn't block in create */
+	__u64				 osp_pre_reserved;
+	/* thread waits for signals about pool going empty */
+	wait_queue_head_t		 osp_pre_waitq;
+	/* consumers (who needs new ids) wait here */
+	wait_queue_head_t		 osp_pre_user_waitq;
+	/* current precreation status: working, failed, stopping? */
+	int				 osp_pre_status;
+	/* how many to precreate next time */
+	int				 osp_pre_grow_count;
+	int				 osp_pre_min_grow_count;
+	int				 osp_pre_max_grow_count;
+	/* whether to grow precreation window next time or not */
+	int				 osp_pre_grow_slow;
+	/* cleaning up orphans or recreating missing objects */
+	int				 osp_pre_recovering;
+};
+
 struct osp_device {
 	struct dt_device		 opd_dt_dev;
 	/* corresponded OST index */
@@ -105,33 +133,10 @@ struct osp_device {
 	 * reported via ->ldo_recovery_complete() */
 	int				 opd_recovery_completed;
 
-	/*
-	 * Precreation pool
-	 */
-	spinlock_t			 opd_pre_lock;
-
-	/* last fid to assign in creation */
-	struct lu_fid			 opd_pre_used_fid;
-	/* last created id OST reported, next-created - available id's */
-	struct lu_fid			 opd_pre_last_created_fid;
-	/* how many ids are reserved in declare, we shouldn't block in create */
-	__u64				 opd_pre_reserved;
+	/* precreate structure for OSP */
+	struct osp_precreate		*opd_pre;
 	/* dedicate precreate thread */
 	struct ptlrpc_thread		 opd_pre_thread;
-	/* thread waits for signals about pool going empty */
-	wait_queue_head_t		 opd_pre_waitq;
-	/* consumers (who needs new ids) wait here */
-	wait_queue_head_t		 opd_pre_user_waitq;
-	/* current precreation status: working, failed, stopping? */
-	int				 opd_pre_status;
-	/* how many to precreate next time */
-	int				 opd_pre_grow_count;
-	int				 opd_pre_min_grow_count;
-	int				 opd_pre_max_grow_count;
-	/* whether to grow precreation window next time or not */
-	int				 opd_pre_grow_slow;
-	/* cleaning up orphans or recreating missing objects */
-	int				 opd_pre_recovering;
 
 	/*
 	 * OST synchronization
@@ -180,6 +185,19 @@ struct osp_device {
 
 	cfs_proc_dir_entry_t		*opd_symlink;
 };
+
+#define opd_pre_lock			opd_pre->osp_pre_lock
+#define opd_pre_used_fid		opd_pre->osp_pre_used_fid
+#define opd_pre_last_created_fid	opd_pre->osp_pre_last_created_fid
+#define opd_pre_reserved		opd_pre->osp_pre_reserved
+#define opd_pre_waitq			opd_pre->osp_pre_waitq
+#define opd_pre_user_waitq		opd_pre->osp_pre_user_waitq
+#define opd_pre_status			opd_pre->osp_pre_status
+#define opd_pre_grow_count		opd_pre->osp_pre_grow_count
+#define opd_pre_min_grow_count		opd_pre->osp_pre_min_grow_count
+#define opd_pre_max_grow_count		opd_pre->osp_pre_max_grow_count
+#define opd_pre_grow_slow		opd_pre->osp_pre_grow_slow
+#define opd_pre_recovering		opd_pre->osp_pre_recovering
 
 extern struct kmem_cache *osp_object_kmem;
 
@@ -413,6 +431,7 @@ void osp_statfs_need_now(struct osp_device *d);
 int osp_reset_last_used(const struct lu_env *env, struct osp_device *osp);
 int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 				 struct lu_fid *fid, int sync);
+int osp_init_pre_fid(struct osp_device *osp);
 
 /* lproc_osp.c */
 void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);

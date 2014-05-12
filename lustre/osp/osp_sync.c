@@ -348,6 +348,8 @@ static int osp_sync_interpret(const struct lu_env *env,
 	       rc, (unsigned) req->rq_transno);
 	LASSERT(rc || req->rq_transno);
 
+	LASSERT(d->opd_pre != NULL);
+
 	if (rc == -ENOENT) {
 		/*
 		 * we tried to destroy object or update attributes,
@@ -664,6 +666,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	 * notice: we do this upon commit as well because some backends
 	 * (like DMU) do not release space right away.
 	 */
+	LASSERT(d->opd_pre != NULL);
 	if (unlikely(d->opd_pre_status == -ENOSPC))
 		osp_statfs_need_now(d);
 

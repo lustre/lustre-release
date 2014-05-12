@@ -201,7 +201,7 @@ static int osp_rd_create_count(char *page, char **start, off_t off, int count,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, "%d\n", osp->opd_pre_grow_count);
@@ -214,7 +214,7 @@ static int osp_wr_create_count(struct file *file, const char *buffer,
 	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
 	int			 val, rc, i;
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
@@ -249,7 +249,7 @@ static int osp_rd_max_create_count(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, "%d\n", osp->opd_pre_max_grow_count);
@@ -262,7 +262,7 @@ static int osp_wr_max_create_count(struct file *file, const char *buffer,
 	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
 	int			 val, rc;
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
@@ -288,7 +288,7 @@ static int osp_rd_prealloc_next_id(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, "%u\n",
@@ -301,7 +301,7 @@ static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, "%u\n",
@@ -314,7 +314,7 @@ static int osp_rd_prealloc_next_seq(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, LPX64"\n",
@@ -327,7 +327,7 @@ static int osp_rd_prealloc_last_seq(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, LPX64"\n",
@@ -340,7 +340,7 @@ static int osp_rd_prealloc_reserved(char *page, char **start, off_t off,
 	struct obd_device *obd = data;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
 	return snprintf(page, count, LPU64"\n", osp->opd_pre_reserved);
@@ -389,7 +389,7 @@ static int osp_rd_pre_status(char *page, char **start, off_t off,
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
 	int			 rc;
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
 	rc = snprintf(page, count, "%d\n", osp->opd_pre_status);
