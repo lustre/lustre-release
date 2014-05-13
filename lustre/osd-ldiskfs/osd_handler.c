@@ -1151,6 +1151,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	 */
 	wait_event(iobuf->dr_wait,
 		       atomic_read(&iobuf->dr_numreqs) == 0);
+	osd_fini_iobuf(oti->oti_dev, iobuf);
 	if (!rc)
 		rc = iobuf->dr_error;
 
