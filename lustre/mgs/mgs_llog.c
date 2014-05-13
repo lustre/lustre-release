@@ -1447,29 +1447,9 @@ int mgs_write_log_direct_all(const struct lu_env *env, struct mgs_device *mgs,
 	struct list_head	 log_list;
 	struct mgs_direntry	*dirent, *n;
 	char			*fsname = mti->mti_fsname;
-	char			*logname;
 	int			 rc = 0, len = strlen(fsname);
 
 	ENTRY;
-	/* We need to set params for any future logs
-	 * as well.
-	 * FIXME Append this file to every new log.
-	 * Actually, we should store as params (text), not llogs,
-	 * or in a database. */
-	rc = name_create(&logname, fsname, "-params");
-	if (rc)
-		RETURN(rc);
-	if (mgs_log_is_empty(env, mgs, logname)) {
-		struct llog_handle *llh = NULL;
-
-		rc = record_start_log(env, mgs, &llh, logname);
-		if (rc == 0)
-			record_end_log(env, &llh);
-	}
-	name_destroy(&logname);
-	if (rc)
-		RETURN(rc);
-
 	/* Find all the logs in the CONFIGS directory */
 	rc = class_dentry_readdir(env, mgs, &log_list);
 	if (rc)
