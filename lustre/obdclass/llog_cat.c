@@ -518,6 +518,7 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
         struct llog_process_data *d = data;
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
         struct llog_handle *llh;
+	struct llog_log_hdr *hdr;
         int rc;
 
         ENTRY;
@@ -537,6 +538,18 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
 		RETURN(rc);
 	}
 
+	/* clean old empty llogs, do not consider current llog in use */
+	hdr = llh->lgh_hdr;
+	if ((hdr->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+	    hdr->llh_count == 1 &&
+	    llh != cat_llh->u.chd.chd_current_log) {
+		rc = llog_destroy(env, llh);
+		if (rc)
+			CERROR("%s: fail to destroy empty log: rc = %d\n",
+			       llh->lgh_ctxt->loc_obd->obd_name, rc);
+		GOTO(out, rc = LLOG_DEL_PLAIN);
+	}
+
 	if (rec->lrh_index < d->lpd_startcat) {
 		/* Skip processing of the logs until startcat */
 		rc = 0;
@@ -554,6 +567,7 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
 					  NULL, false);
 	}
 
+out:
 	/* The empty plain log was destroyed while processing */
 	if (rc == LLOG_DEL_PLAIN)
 		rc = llog_cat_cleanup(env, cat_llh, llh,
@@ -620,6 +634,7 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 	struct llog_process_data *d = data;
 	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 	struct llog_handle *llh;
+	struct llog_log_hdr *hdr;
 	int rc;
 
 	if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
@@ -638,8 +653,21 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 		RETURN(rc);
 	}
 
+	/* clean old empty llogs, do not consider current llog in use */
+	hdr = llh->lgh_hdr;
+	if ((hdr->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+	    hdr->llh_count == 1 &&
+	    llh != cat_llh->u.chd.chd_current_log) {
+		rc = llog_destroy(env, llh);
+		if (rc)
+			CERROR("%s: fail to destroy empty log: rc = %d\n",
+			       llh->lgh_ctxt->loc_obd->obd_name, rc);
+		GOTO(out, rc = LLOG_DEL_PLAIN);
+	}
+
 	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
 
+out:
 	/* The empty plain was destroyed while processing */
 	if (rc == LLOG_DEL_PLAIN)
 		rc = llog_cat_cleanup(env, cat_llh, llh,
@@ -809,10 +837,6 @@ int llog_cat_init_and_process(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	rc = llog_process_or_fork(env, llh, cat_cancel_cb, NULL, NULL, false);
-	if (rc)
-		CERROR("%s: llog_process() with cat_cancel_cb failed: rc = "
-		       "%d\n", llh->lgh_ctxt->loc_obd->obd_name, rc);
 	RETURN(0);
 }
 EXPORT_SYMBOL(llog_cat_init_and_process);
