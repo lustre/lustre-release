@@ -379,6 +379,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
         if (iobuf->dr_rw == 0) {
 		wait_event(iobuf->dr_wait,
                                cfs_atomic_read(&iobuf->dr_numreqs) == 0);
+		osd_fini_iobuf(osd, iobuf);
         }
 
         if (rc == 0)
@@ -496,14 +497,7 @@ cleanup:
 static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
                         struct niobuf_local *lnb, int npages)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-        struct osd_device      *d = osd_obj2dev(osd_dt_obj(dt));
         int                     i;
-
-        /* to do IO stats, notice we do this here because
-         * osd_do_bio() doesn't wait for write to complete */
-        osd_fini_iobuf(d, iobuf);
 
         for (i = 0; i < npages; i++) {
                 if (lnb[i].page == NULL)
@@ -808,7 +802,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 rc = osd_do_bio(osd, inode, iobuf);
                 /* we don't do stats here as in read path because
                  * write is async: we'll do this in osd_put_bufs() */
-        }
+	} else {
+		osd_fini_iobuf(osd, iobuf);
+	}
 
         if (unlikely(rc != 0)) {
                 /* if write fails, we should drop pages from the cache */

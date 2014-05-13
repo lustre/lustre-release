@@ -1090,5 +1090,7 @@ static inline int fid_is_internal(const struct lu_fid *fid)
 void ldiskfs_inc_count(handle_t *handle, struct inode *inode);
 void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
 
+void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
+
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */
