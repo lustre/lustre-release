@@ -160,7 +160,7 @@ static inline void lfsck_pack_rfa(struct lfsck_request *lr,
 {
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_FID_ACCESSED;
-	lr->lr_active = LT_LAYOUT;
+	lr->lr_active = LFSCK_TYPE_LAYOUT;
 	lr->lr_fid = *fid;
 }
 

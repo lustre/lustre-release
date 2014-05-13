@@ -262,7 +262,7 @@ static int mdd_lfsck_namespace_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(mdd != NULL);
 
-	return lfsck_dump(m, mdd->mdd_bottom, LT_NAMESPACE);
+	return lfsck_dump(m, mdd->mdd_bottom, LFSCK_TYPE_NAMESPACE);
 }
 LPROC_SEQ_FOPS_RO(mdd_lfsck_namespace);
 
@@ -272,7 +272,7 @@ static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(mdd != NULL);
 
-	return lfsck_dump(m, mdd->mdd_bottom, LT_LAYOUT);
+	return lfsck_dump(m, mdd->mdd_bottom, LFSCK_TYPE_LAYOUT);
 }
 LPROC_SEQ_FOPS_RO(mdd_lfsck_layout);
 

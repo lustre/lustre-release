@@ -27,7 +27,7 @@
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, 2013, Intel Corporation.
+ * Copyright (c) 2011, 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -39,6 +39,7 @@
 #include <sys/wait.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
+#include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
 
 #define BLANK_LINE()						\
@@ -2053,6 +2054,11 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_fid3);
 	CHECK_MEMBER(lfsck_request, lr_padding_2);
 	CHECK_MEMBER(lfsck_request, lr_padding_3);
+
+	CHECK_VALUE_X(LFSCK_TYPE_SCRUB);
+	CHECK_VALUE_X(LFSCK_TYPE_LAYOUT);
+	CHECK_VALUE_X(LFSCK_TYPE_DNE);
+	CHECK_VALUE_X(LFSCK_TYPE_NAMESPACE);
 
 	CHECK_VALUE(LE_LASTID_REBUILDING);
 	CHECK_VALUE(LE_LASTID_REBUILT);

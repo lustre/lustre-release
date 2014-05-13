@@ -150,7 +150,7 @@ static int ofd_inconsistency_verification_main(void *args)
 		GOTO(out, rc = -ENOMEM);
 
 	lr->lr_event = LE_PAIRS_VERIFY;
-	lr->lr_active = LT_LAYOUT;
+	lr->lr_active = LFSCK_TYPE_LAYOUT;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	while (1) {

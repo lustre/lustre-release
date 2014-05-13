@@ -27,7 +27,7 @@
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, 2012, Intel Corporation.
+ * Copyright (c) 2011, 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
+#include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
 
 #undef LASSERT
@@ -4622,6 +4623,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_request, lr_padding_3));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_3) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_3));
+	LASSERTF(LFSCK_TYPE_SCRUB == 0x00000000UL, "found 0x%.8xUL\n",
+		(unsigned)LFSCK_TYPE_SCRUB);
+	LASSERTF(LFSCK_TYPE_LAYOUT == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)LFSCK_TYPE_LAYOUT);
+	LASSERTF(LFSCK_TYPE_DNE == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)LFSCK_TYPE_DNE);
+	LASSERTF(LFSCK_TYPE_NAMESPACE == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)LFSCK_TYPE_NAMESPACE);
 	LASSERTF(LE_LASTID_REBUILDING == 1, "found %lld\n",
 		 (long long)LE_LASTID_REBUILDING);
 	LASSERTF(LE_LASTID_REBUILT == 2, "found %lld\n",

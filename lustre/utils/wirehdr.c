@@ -27,7 +27,7 @@
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, 2012, Intel Corporation.
+ * Copyright (c) 2011, 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
+#include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
 
 #undef LASSERT

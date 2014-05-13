@@ -27,7 +27,7 @@
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, 2013, Intel Corporation.
+ * Copyright (c) 2011, 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -49,4 +49,5 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
+#include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>

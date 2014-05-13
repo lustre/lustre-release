@@ -68,69 +68,69 @@ static struct option long_opt_stop[] = {
 };
 
 struct lfsck_type_name {
-	char		*name;
-	int		 namelen;
-	enum lfsck_type  type;
+	char		*ltn_name;
+	enum lfsck_type  ltn_type;
 };
 
 static struct lfsck_type_name lfsck_types_names[] = {
-	{ "layout",     6,	LT_LAYOUT },
-	{ "namespace",	9,	LT_NAMESPACE},
-	{ 0,		0,	0 }
+	{ "scrub",	LFSCK_TYPE_SCRUB },
+	{ "layout",	LFSCK_TYPE_LAYOUT },
+/*	{ "dne",	LFSCK_TYPE_DNE }, */
+	{ "namespace",	LFSCK_TYPE_NAMESPACE },
+	{ "default",	LFSCK_TYPES_DEF },
+	{ "all",	LFSCK_TYPES_SUPPORTED },
+	{ NULL,		0 }
 };
 
-static inline int lfsck_name2type(const char *name, int namelen)
+static enum lfsck_type lfsck_name2type(const char *name)
 {
-	int i = 0;
+	int i;
 
-	while (lfsck_types_names[i].name != NULL) {
-		if (namelen == lfsck_types_names[i].namelen &&
-		    strncmp(lfsck_types_names[i].name, name, namelen) == 0)
-			return lfsck_types_names[i].type;
-		i++;
+	for (i = 0; lfsck_types_names[i].ltn_name != NULL; i++) {
+		if (strcmp(lfsck_types_names[i].ltn_name, name) == 0)
+			return lfsck_types_names[i].ltn_type;
 	}
-	return 0;
+	return -1;
 }
 
 static void usage_start(void)
 {
-	fprintf(stderr, "Start LFSCK.\n"
-		"SYNOPSIS:\n"
-		"lfsck_start <-M | --device [MDT,OST]_device>\n"
+	fprintf(stderr, "start LFSCK\n"
+		"usage:\n"
+		"lfsck_start <-M | --device {MDT,OST}_device>\n"
 		"	     [-A | --all] [-c | --create_ostobj [on | off]]\n"
 		"	     [-e | --error {continue | abort}] [-h | --help]\n"
 		"	     [-n | --dryrun [on | off]] [-o | --orphan]\n"
-		"	     [-r | --reset] [-s | --speed speed_limit]\n"
-		"	     [-t | --type lfsck_type[,lfsck_type...]]\n"
+		"            [-r | --reset] [-s | --speed ops_per_sec_limit]\n"
+		"            [-t | --type check_type[,check_type...]]\n"
 		"	     [-w | --window_size size]\n"
-		"OPTIONS:\n"
-		"-M: The device to start LFSCK/scrub on.\n"
-		"-A: Start LFSCK on all MDT devices.\n"
-		"-c: Create the lost OST-object for dangling LOV EA: "
-		    "'off'(default) or 'on'.\n"
-		"-e: Error handle, 'continue'(default) or 'abort'.\n"
-		"-h: Help information.\n"
-		"-n: Check without modification. 'off'(default) or 'on'.\n"
-		"-o: Handle orphan objects.\n"
-		"-r: Reset scanning start position to the device beginning.\n"
-		"    The non-specified parameters will be reset as default.\n"
-		"-s: How many items can be scanned at most per second. "
-		    "'%d' means no limit (default).\n"
-		"-t: The LFSCK type(s) to be started.\n"
-		"-w: The window size for async requests pipeline.\n",
+		"options:\n"
+		"-M: device to start LFSCK/scrub on\n"
+		"-A: start LFSCK on all MDT devices\n"
+		"-c: create the lost OST-object for dangling LOV EA "
+		    "(default 'off', or 'on')\n"
+		"-e: error handle mode (default 'continue', or 'abort')\n"
+		"-h: this help message\n"
+		"-n: check with no modification (default 'off', or 'on')\n"
+		"-o: repair orphan objects\n"
+		"-r: reset scanning to the start of the device\n"
+		"-s: maximum items to be scanned per second "
+		    "(default '%d' = no limit)\n"
+		"-t: check type(s) to be performed (default all)\n"
+		"-w: window size for async requests pipeline\n",
 		LFSCK_SPEED_NO_LIMIT);
 }
 
 static void usage_stop(void)
 {
-	fprintf(stderr, "Stop LFSCK.\n"
-		"SYNOPSIS:\n"
-		"lfsck_stop <-M | --device [MDT,OST]_device>\n"
-		"[-A | --all] [-h | --help]\n"
-		"OPTIONS:\n"
-		"-M: The device to stop LFSCK/scrub on.\n"
-		"-A: Stop LFSCK on all MDT devices.\n"
-		"-h: Help information.\n");
+	fprintf(stderr, "stop LFSCK\n"
+		"usage:\n"
+		"lfsck_stop <-M | --device {MDT,OST}_device>\n"
+		"           [-A | --all] [-h | --help]\n"
+		"options:\n"
+		"-M: device to stop LFSCK/scrub on\n"
+		"-A: stop LFSCK on all MDT devices\n"
+		"-h: this help message\n");
 }
 
 static int lfsck_pack_dev(struct obd_ioctl_data *data, char *device, char *arg)
@@ -157,13 +157,13 @@ int jt_lfsck_start(int argc, char **argv)
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
 	char *optstring = "Ac::e:hM:n::ors:t:w:";
-	int opt, index, rc, val, i, type;
+	int opt, index, rc, val, i;
 
 	memset(&data, 0, sizeof(data));
 	memset(&start, 0, sizeof(start));
 	memset(device, 0, MAX_OBD_NAME);
 	start.ls_version = LFSCK_VERSION_V1;
-	start.ls_active = LFSCK_TYPES_DEF;
+	start.ls_active = LFSCK_TYPES_ALL;
 
 	/* Reset the 'optind' for the case of getopt_long() called multiple
 	 * times under the same lctl. */
@@ -178,11 +178,11 @@ int jt_lfsck_start(int argc, char **argv)
 			if (optarg == NULL || strcmp(optarg, "on") == 0) {
 				start.ls_flags |= LPF_CREATE_OSTOBJ;
 			} else if (strcmp(optarg, "off") != 0) {
-				fprintf(stderr, "Invalid switch: %s. "
-					"The valid switch should be: 'on' "
-					"or 'off' (default) without blank, "
-					"or empty. For example: '-non' or "
-					"'-noff' or '-n'.\n", optarg);
+				fprintf(stderr, "invalid switch: -c '%s'. "
+					"valid switches are:\n"
+					"empty ('on'), or 'off' without space. "
+					"For example:\n"
+					"'-c', '-con', '-coff'\n", optarg);
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_CREATE_OSTOBJ;
@@ -191,9 +191,9 @@ int jt_lfsck_start(int argc, char **argv)
 			if (strcmp(optarg, "abort") == 0) {
 				start.ls_flags |= LPF_FAILOUT;
 			} else if (strcmp(optarg, "continue") != 0) {
-				fprintf(stderr, "Invalid error handler: %s. "
-					"The valid value should be: 'continue'"
-					"(default) or 'abort'.\n", optarg);
+				fprintf(stderr, "invalid error mode: -e '%s'."
+					"valid modes are: "
+					"'continue' or 'abort'.\n", optarg);
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_ERROR_HANDLE;
@@ -210,11 +210,11 @@ int jt_lfsck_start(int argc, char **argv)
 			if (optarg == NULL || strcmp(optarg, "on") == 0) {
 				start.ls_flags |= LPF_DRYRUN;
 			} else if (strcmp(optarg, "off") != 0) {
-				fprintf(stderr, "Invalid switch: %s. "
-					"The valid switch should be: 'on' "
-					"or 'off' (default) without blank, "
-					"or empty. For example: '-non' or "
-					"'-noff' or '-n'.\n", optarg);
+				fprintf(stderr, "invalid switch: -n '%s'. "
+					"valid switches are:\n"
+					"empty ('on'), or 'off' without space. "
+					"For example:\n"
+					"'-n', '-non', '-noff'\n", optarg);
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_DRYRUN;
@@ -232,44 +232,27 @@ int jt_lfsck_start(int argc, char **argv)
 			start.ls_valid |= LSV_SPEED_LIMIT;
 			break;
 		case 't': {
-			char *str = optarg, *p, c;
+			char *typename;
 
-			start.ls_active = 0;
-			while (*str) {
-				while (*str == ' ' || *str == ',')
-					str++;
+			if (start.ls_active == LFSCK_TYPES_ALL)
+				start.ls_active = 0;
+			while ((typename = strsep(&optarg, ",")) != NULL) {
+				enum lfsck_type type;
 
-				if (*str == 0)
-					break;
-
-				p = str;
-				while (*p != 0 && *p != ' ' && *p != ',')
-					p++;
-
-				c = *p;
-				*p = 0;
-				type = lfsck_name2type(str, strlen(str));
-				if (type == 0) {
-					fprintf(stderr, "Invalid type (%s).\n"
-						"The valid value should be "
-						"'layout' or 'namespace'.\n",
-						str);
-					*p = c;
-					return -EINVAL;
-				}
-
-				*p = c;
-				str = p;
-
+				type = lfsck_name2type(typename);
+				if (type == -1)
+					goto bad_type;
 				start.ls_active |= type;
 			}
-			if (start.ls_active == 0) {
-				fprintf(stderr, "Miss LFSCK type(s).\n"
-					"The valid value should be "
-					"'layout' or 'namespace'.\n");
-				return -EINVAL;
-			}
 			break;
+bad_type:
+			fprintf(stderr, "invalid check type -t '%s'. "
+				"valid types are:\n", typename);
+			for (i = 0; lfsck_types_names[i].ltn_name != NULL; i++)
+				fprintf(stderr, "%s%s", i != 0 ? "," : "",
+					lfsck_types_names[i].ltn_name);
+			fprintf(stderr, "\n");
+			return -EINVAL;
 		}
 		case 'w':
 			val = atoi(optarg);
@@ -293,6 +276,9 @@ int jt_lfsck_start(int argc, char **argv)
 			return -EINVAL;
 		}
 	}
+
+	if (start.ls_active == LFSCK_TYPES_ALL)
+		start.ls_active = LFSCK_TYPES_DEF;
 
 	if (data.ioc_inlbuf4 == NULL) {
 		if (lcfg_get_devname() != NULL) {
@@ -322,22 +308,17 @@ int jt_lfsck_start(int argc, char **argv)
 	}
 
 	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	if (start.ls_active == 0) {
-		printf("Started LFSCK on the device %s", device);
-	} else {
-		printf("Started LFSCK on the device %s:", device);
-		i = 0;
-		while (lfsck_types_names[i].name != NULL) {
-			if (start.ls_active & lfsck_types_names[i].type) {
-				printf(" %s", lfsck_types_names[i].name);
-				start.ls_active &= ~lfsck_types_names[i].type;
-			}
-			i++;
+	printf("Started LFSCK on the device %s: scrub", device);
+	for (i = 0; lfsck_types_names[i].ltn_name != NULL; i++) {
+		if (start.ls_active & lfsck_types_names[i].ltn_type) {
+			printf(" %s", lfsck_types_names[i].ltn_name);
+			start.ls_active &= ~lfsck_types_names[i].ltn_type;
 		}
-		if (start.ls_active != 0)
-			printf(" unknown(0x%x)", start.ls_active);
 	}
-	printf(".\n");
+	if (start.ls_active != 0)
+		printf(" unknown(0x%x)", start.ls_active);
+	printf("\n");
+
 	return 0;
 }
 

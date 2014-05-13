@@ -2248,9 +2248,10 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 
 	mutex_lock(&lfsck->li_mutex);
 	spin_lock(&lfsck->li_lock);
+	/* no error if LFSCK is already stopped, or was never started */
 	if (thread_is_init(thread) || thread_is_stopped(thread)) {
 		spin_unlock(&lfsck->li_lock);
-		GOTO(out, rc = -EALREADY);
+		GOTO(out, rc = 0);
 	}
 
 	if (stop != NULL) {
@@ -2635,7 +2636,7 @@ unlock:
 		spin_lock(&ltds->ltd_lock);
 		ltd->ltd_dead = 1;
 		spin_unlock(&ltds->ltd_lock);
-		lfsck_stop_notify(env, lfsck, ltds, ltd, LT_LAYOUT);
+		lfsck_stop_notify(env, lfsck, ltds, ltd, LFSCK_TYPE_LAYOUT);
 		lfsck_tgt_put(ltd);
 	}
 

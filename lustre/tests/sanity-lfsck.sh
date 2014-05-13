@@ -42,7 +42,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
 
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
 # bug number for skipped test:        LU-4970
@@ -2406,6 +2406,33 @@ test_20() {
 	rm -f $name || error "(8.9) cannot unlink $name"
 }
 run_test 20 "Handle the orphan with dummy LOV EA slot properly"
+
+test_21() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.59) ]] &&
+		skip "ignore the test if MDS is older than 2.5.59" && exit 0
+
+	check_mount_and_prep
+	createmany -o $DIR/$tdir/f 100 || error "(0) Fail to create 100 files"
+
+	echo "Start all LFSCK components by default (-s 1)"
+	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -s 1 -r ||
+		error "Fail to start LFSCK"
+
+	echo "namespace LFSCK should be in 'scanning-phase1' status"
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "Expect namespace 'scanning-phase1', but got '$STATUS'"
+
+	echo "layout LFSCK should be in 'scanning-phase1' status"
+	STATUS=$($SHOW_LAYOUT | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "Expect layout 'scanning-phase1', but got '$STATUS'"
+
+	echo "Stop all LFSCK components by default"
+	do_facet mds1 $LCTL lfsck_stop -M ${FSNAME}-MDT0000 ||
+		error "Fail to stop LFSCK"
+}
+run_test 21 "run all LFSCK components by default"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

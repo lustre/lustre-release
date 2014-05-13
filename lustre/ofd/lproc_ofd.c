@@ -535,7 +535,7 @@ static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return lfsck_dump(m, ofd->ofd_osd, LT_LAYOUT);
+	return lfsck_dump(m, ofd->ofd_osd, LFSCK_TYPE_LAYOUT);
 }
 LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
 

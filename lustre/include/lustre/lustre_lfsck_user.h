@@ -58,22 +58,25 @@ enum lfsck_param_flags {
 };
 
 enum lfsck_type {
-	/* For MDT-OST consistency check/repair. */
-	LT_LAYOUT	= 0x0001,
+	/* For MDT and OST internal OSD consistency check/repair. */
+	LFSCK_TYPE_SCRUB	= 0x0000,
 
-	/* For MDT-MDT consistency check/repair. */
-	LT_DNE  	= 0x0002,
+	/* For MDT-OST (layout, object) consistency check/repair. */
+	LFSCK_TYPE_LAYOUT	= 0x0001,
 
-	/* For FID-in-dirent and linkEA consistency check/repair. */
-	LT_NAMESPACE	= 0x0004,
+	/* For MDT-MDT (remote object) consistency check/repair. */
+	LFSCK_TYPE_DNE		= 0x0002,
+
+	/* For MDT (FID-in-dirent, linkEA) consistency check/repair. */
+	LFSCK_TYPE_NAMESPACE	= 0x0004,
+	LFSCK_TYPES_SUPPORTED	= (LFSCK_TYPE_SCRUB | LFSCK_TYPE_LAYOUT |
+				   LFSCK_TYPE_NAMESPACE),
+	LFSCK_TYPES_DEF		= LFSCK_TYPES_SUPPORTED,
+	LFSCK_TYPES_ALL		= ((__u16)(~0))
 };
 
 #define LFSCK_VERSION_V1	1
 #define LFSCK_VERSION_V2	2
-
-#define LFSCK_TYPES_ALL 	((__u16)(~0))
-#define LFSCK_TYPES_DEF 	((__u16)0)
-#define LFSCK_TYPES_SUPPORTED	(LT_LAYOUT | LT_NAMESPACE)
 
 #define LFSCK_SPEED_NO_LIMIT	0
 #define LFSCK_SPEED_LIMIT_DEF	LFSCK_SPEED_NO_LIMIT
@@ -81,7 +84,7 @@ enum lfsck_type {
 #define LFSCK_ASYNC_WIN_MAX	((__u16)(~0))
 
 enum lfsck_start_valid {
-	LSV_SPEED_LIMIT 	= 0x00000001,
+	LSV_SPEED_LIMIT		= 0x00000001,
 	LSV_ERROR_HANDLE	= 0x00000002,
 	LSV_DRYRUN		= 0x00000004,
 	LSV_ASYNC_WINDOWS	= 0x00000008,
