@@ -38,7 +38,7 @@
  * Author: Mikhail Pershin <tappro@sun.com>
  */
 
-#define DEBUG_SUBSYSTEM S_CLASS
+#define DEBUG_SUBSYSTEM S_OSD
 
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>

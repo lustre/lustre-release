@@ -41,7 +41,7 @@
  * Author: Mike Pershin <tappro@whamcloud.com>
  */
 
-#define DEBUG_SUBSYSTEM S_CLASS
+#define DEBUG_SUBSYSTEM S_OSD
 
 #include <obd.h>
 #include <obd_class.h>

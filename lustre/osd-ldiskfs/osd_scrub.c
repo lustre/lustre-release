@@ -35,7 +35,7 @@
  * Author: Fan Yong <yong.fan@whamcloud.com>
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LFSCK
 
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>
@@ -80,6 +80,11 @@ static inline int osd_scrub_has_window(struct osd_scrub *scrub,
 	return scrub->os_pos_current < ooc->ooc_pos_preload + SCRUB_WINDOW_SIZE;
 }
 
+static inline const char *osd_scrub2name(struct osd_scrub *scrub)
+{
+	return LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name;
+}
+
 /**
  * update/insert/delete the specified OI mapping (@fid @id) according to the ops
  *
@@ -107,8 +112,9 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 				osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 	if (IS_ERR(th)) {
 		rc = PTR_ERR(th);
-		CERROR("%s: fail to start trans for scrub %d: rc = %d\n",
-		       osd_name(dev), ops, rc);
+		CDEBUG(D_LFSCK, "%s: fail to start trans for scrub op %d "
+		       DFID" => %u/%u: rc = %d\n", osd_name(dev), ops,
+		       PFID(fid), id->oii_ino, id->oii_gen, rc);
 		RETURN(rc);
 	}
 
@@ -171,7 +177,12 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 	}
 
 	ldiskfs_journal_stop(th);
-	return rc;
+	if (rc < 0)
+		CDEBUG(D_LFSCK, "%s: fail to refresh OI map for scrub op %d "
+		       DFID" => %u/%u: rc = %d\n", osd_name(dev), ops,
+		       PFID(fid), id->oii_ino, id->oii_gen, rc);
+
+	RETURN(rc);
 }
 
 /* OI_scrub file ops */
@@ -260,7 +271,8 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
-	CDEBUG(D_LFSCK, "Reset OI scrub file, flags = "LPX64"\n", flags);
+	CDEBUG(D_LFSCK, "%.16s: reset OI scrub file, flags = "LPX64"\n",
+	       osd_scrub2name(scrub), flags);
 	memcpy(sf->sf_uuid, uuid, 16);
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
@@ -281,7 +293,6 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 static int osd_scrub_file_load(struct osd_scrub *scrub)
 {
 	loff_t	pos  = 0;
-	char   *name = LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name;
 	int	len  = sizeof(scrub->os_file_disk);
 	int	rc;
 
@@ -291,16 +302,18 @@ static int osd_scrub_file_load(struct osd_scrub *scrub)
 
 		osd_scrub_file_to_cpu(sf, &scrub->os_file_disk);
 		if (sf->sf_magic != SCRUB_MAGIC_V1) {
-			CWARN("%.16s: invalid scrub magic 0x%x != 0x%x\n,",
-			      name, sf->sf_magic, SCRUB_MAGIC_V1);
+			CDEBUG(D_LFSCK, "%.16s: invalid scrub magic "
+			       "0x%x != 0x%x\n", osd_scrub2name(scrub),
+			       sf->sf_magic, SCRUB_MAGIC_V1);
 			/* Process it as new scrub file. */
 			rc = -ENOENT;
 		} else {
 			rc = 0;
 		}
 	} else if (rc != 0) {
-		CERROR("%.16s: fail to load scrub file, expected = %d, "
-		       "rc = %d\n", name, len, rc);
+		CDEBUG(D_LFSCK, "%.16s: fail to load scrub file, "
+		       "expected = %d: rc = %d\n",
+		       osd_scrub2name(scrub), len, rc);
 		if (rc > 0)
 			rc = -EFAULT;
 	} else {
@@ -326,8 +339,8 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC, credits);
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);
-		CERROR("%.16s: fail to start trans for scrub store, rc = %d\n",
-		       LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name,rc);
+		CDEBUG(D_LFSCK, "%.16s: fail to start trans for scrub store: "
+		       "rc = %d\n", osd_scrub2name(scrub), rc);
 		return rc;
 	}
 
@@ -336,10 +349,10 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 				      len, 0, &pos, jh);
 	ldiskfs_journal_stop(jh);
 	if (rc != 0)
-		CERROR("%.16s: fail to store scrub file, expected = %d, "
-		       "rc = %d\n",
-		       LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name,
-		       len, rc);
+		CDEBUG(D_LFSCK, "%.16s: fail to store scrub file, "
+		       "expected = %d: rc = %d\n",
+		       osd_scrub2name(scrub), len, rc);
+
 	scrub->os_time_last_checkpoint = cfs_time_current();
 	scrub->os_time_next_checkpoint = scrub->os_time_last_checkpoint +
 				cfs_time_seconds(SCRUB_CHECKPOINT_INTERVAL);
@@ -376,9 +389,8 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 				osd_dto_credits_noquota[DTO_XATTR_SET] * 3);
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);
-		CERROR("%s: fail to start trans for convert ff: "DFID
-		       ": rc = %d\n",
-		       osd_name(dev), PFID(fid), rc);
+		CDEBUG(D_LFSCK, "%s: fail to start trans for convert ff "
+		       DFID": rc = %d\n", osd_name(dev), PFID(fid), rc);
 		RETURN(rc);
 	}
 
@@ -420,6 +432,9 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 
 stop:
 	ldiskfs_journal_stop(jh);
+	if (rc < 0)
+		CDEBUG(D_LFSCK, "%s: fail to convert ff "DFID": rc = %d\n",
+		       osd_name(dev), PFID(fid), rc);
 	return rc;
 }
 
@@ -735,10 +750,6 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 	sf->sf_run_time += cfs_duration_sec(cfs_time_current() + HALF_SEC -
 					    scrub->os_time_last_checkpoint);
 	result = osd_scrub_file_store(scrub);
-	if (result < 0)
-		CERROR("%.16s: fail to osd_scrub_post, rc = %d\n",
-		       LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name,
-		       result);
 	up_write(&scrub->os_rwsem);
 
 	EXIT;
@@ -901,8 +912,9 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		if (rc == -ENOENT || rc == -ESTALE)
 			RETURN(SCRUB_NEXT_CONTINUE);
 
-		CERROR("%.16s: fail to read inode, ino# = %u, rc = %d\n",
-		       LDISKFS_SB(sb)->s_es->s_volume_name, pos, rc);
+		CDEBUG(D_LFSCK, "%.16s: fail to read inode, ino# = %u: "
+		       "rc = %d\n", LDISKFS_SB(sb)->s_es->s_volume_name,
+		       pos, rc);
 		RETURN(rc);
 	}
 
@@ -1054,8 +1066,8 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 
 	rc = osd_scrub_checkpoint(scrub);
 	if (rc != 0) {
-		CERROR("%.16s: fail to checkpoint, pos = %u, rc = %d\n",
-		       LDISKFS_SB(param->sb)->s_es->s_volume_name,
+		CDEBUG(D_LFSCK, "%.16s: fail to checkpoint, pos = %u: "
+		       "rc = %d\n", osd_scrub2name(scrub),
 		       scrub->os_pos_current, rc);
 		/* Continue, as long as the scrub itself can go ahead. */
 	}
@@ -1152,7 +1164,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 		param.gbase = 1 + param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
 		param.bitmap = ldiskfs_read_inode_bitmap(param.sb, param.bg);
 		if (param.bitmap == NULL) {
-			CERROR("%.16s: fail to read bitmap for %u, "
+			CDEBUG(D_LFSCK, "%.16s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
 			       LDISKFS_SB(param.sb)->s_es->s_volume_name,
 			       (__u32)param.bg);
@@ -1206,10 +1218,6 @@ static int osd_otable_it_preload(const struct lu_env *env,
 	if (rc == SCRUB_IT_ALL)
 		it->ooi_all_cached = 1;
 
-	CDEBUG(D_LFSCK, "OSD pre-loaded: max = %u, preload = %u, rc = %d\n",
-	       le32_to_cpu(LDISKFS_SB(osd_sb(dev))->s_es->s_inodes_count),
-	       ooc->ooc_pos_preload, rc);
-
 	if (scrub->os_waiting && osd_scrub_has_window(scrub, ooc)) {
 		spin_lock(&scrub->os_lock);
 		scrub->os_waiting = 0;
@@ -1226,21 +1234,20 @@ static int osd_scrub_main(void *args)
 	struct osd_device    *dev    = (struct osd_device *)args;
 	struct osd_scrub     *scrub  = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
-	struct super_block   *sb     = osd_sb(dev);
 	int		      rc;
 	ENTRY;
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc != 0) {
-		CERROR("%.16s: OI scrub, fail to init env, rc = %d\n",
-		       LDISKFS_SB(sb)->s_es->s_volume_name, rc);
+		CDEBUG(D_LFSCK, "%.16s: OI scrub fail to init env: rc = %d\n",
+		       osd_scrub2name(scrub), rc);
 		GOTO(noenv, rc);
 	}
 
 	rc = osd_scrub_prep(dev);
 	if (rc != 0) {
-		CERROR("%.16s: OI scrub, fail to scrub prep, rc = %d\n",
-		       LDISKFS_SB(sb)->s_es->s_volume_name, rc);
+		CDEBUG(D_LFSCK, "%.16s: OI scrub fail to scrub prep: rc = %d\n",
+		       osd_scrub2name(scrub), rc);
 		GOTO(out, rc);
 	}
 
@@ -1258,8 +1265,9 @@ static int osd_scrub_main(void *args)
 		scrub->os_pos_current = ooc->ooc_pos_preload;
 	}
 
-	CDEBUG(D_LFSCK, "OI scrub: flags = 0x%x, pos = %u\n",
-	       scrub->os_start_flags, scrub->os_pos_current);
+	CDEBUG(D_LFSCK, "%.16s: OI scrub start, flags = 0x%x, pos = %u\n",
+	       osd_scrub2name(scrub), scrub->os_start_flags,
+	       scrub->os_pos_current);
 
 	rc = osd_inode_iteration(osd_oti_get(&env), dev, ~0U, false);
 	if (unlikely(rc == SCRUB_IT_CRASH))
@@ -1268,8 +1276,8 @@ static int osd_scrub_main(void *args)
 
 post:
 	osd_scrub_post(scrub, rc);
-	CDEBUG(D_LFSCK, "OI scrub: stop, rc = %d, pos = %u\n",
-	       rc, scrub->os_pos_current);
+	CDEBUG(D_LFSCK, "%.16s: OI scrub: stop, pos = %u: rc = %d\n",
+	       osd_scrub2name(scrub), scrub->os_pos_current, rc);
 
 out:
 	while (!list_empty(&scrub->os_inconsistent_items)) {
@@ -1457,9 +1465,6 @@ osd_ios_lookup_one_len(const char *name, struct dentry *parent, int namelen)
 {
 	struct dentry *dentry;
 
-	CDEBUG(D_LFSCK, "init lookup one: parent = %.*s, name = %.*s\n",
-	       parent->d_name.len, parent->d_name.name, namelen, name);
-
 	dentry = ll_lookup_one_len(name, parent, namelen);
 	if (!IS_ERR(dentry) && dentry->d_inode == NULL) {
 		dput(dentry);
@@ -1509,11 +1514,13 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	int			 rc;
 	ENTRY;
 
-	CDEBUG(D_LFSCK, "init scan one: ino = %ld\n", inode->i_ino);
-
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
-	if (rc != 0 && rc != -ENODATA)
+	if (rc != 0 && rc != -ENODATA) {
+		CDEBUG(D_LFSCK, "%s: fail to get lma for init OI scrub: "
+		       "rc = %d\n", osd_name(dev), rc);
+
 		RETURN(rc);
+	}
 
 	osd_id_gen(id, inode->i_ino, inode->i_generation);
 	if (rc == -ENODATA) {
@@ -1522,8 +1529,12 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 		else
 			tfid = *fid;
 		rc = osd_ea_fid_set(info, inode, &tfid, 0, 0);
-		if (rc != 0)
+		if (rc != 0) {
+			CDEBUG(D_LFSCK, "%s: fail to set LMA for init OI "
+			      "scrub: rc = %d\n", osd_name(dev), rc);
+
 			RETURN(rc);
+		}
 	} else {
 		if (lma->lma_compat & LMAC_NOT_IN_OI)
 			RETURN(0);
@@ -1590,7 +1601,7 @@ static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
 	scrub->os_lf_scanned++;
 	child = osd_ios_lookup_one_len(name, parent, namelen);
 	if (IS_ERR(child)) {
-		CWARN("%s: cannot lookup child '%.*s': rc = %d\n",
+		CDEBUG(D_LFSCK, "%s: cannot lookup child '%.*s': rc = %d\n",
 		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
 		RETURN(0);
 	}
@@ -1600,8 +1611,8 @@ static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
 		rc = osd_ios_new_item(dev, child, osd_ios_general_scan,
 				      osd_ios_lf_fill);
 		if (rc != 0)
-			CWARN("%s: cannot add child '%.*s': rc = %d\n",
-			      osd_name(dev), namelen, name, rc);
+			CDEBUG(D_LFSCK, "%s: cannot add child '%.*s': "
+			      "rc = %d\n", osd_name(dev), namelen, name, rc);
 		GOTO(put, rc);
 	}
 
@@ -1616,8 +1627,9 @@ static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
 			       "/lost+found.\n", namelen, name, PFID(fid));
 			scrub->os_lf_repaired++;
 		} else {
-			CWARN("%s: cannot rename for '%.*s' "DFID": rc = %d\n",
-			      osd_name(dev), namelen, name, PFID(fid), rc);
+			CDEBUG(D_LFSCK, "%s: cannot rename for '%.*s' "
+			       DFID": rc = %d\n",
+			       osd_name(dev), namelen, name, PFID(fid), rc);
 		}
 	}
 
@@ -2029,7 +2041,7 @@ again:
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%.16s: cannot start iteration thread: rc = %d\n",
-		       LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name, rc);
+		       osd_scrub2name(scrub), rc);
 		RETURN(rc);
 	}
 

@@ -41,7 +41,7 @@
  *         Pravin Shelar <pravin.shelar@sun.com> : Added fid in dirent
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_OSD
 
 #include <linux/module.h>
 
@@ -5006,22 +5006,12 @@ osd_dirent_update(handle_t *jh, struct super_block *sb,
 	LASSERT(de->rec_len >= de->name_len + sizeof(struct osd_fid_pack));
 
 	rc = ldiskfs_journal_get_write_access(jh, bh);
-	if (rc != 0) {
-		CERROR("%.16s: fail to write access for update dirent: "
-		       "name = %.*s, rc = %d\n",
-		       LDISKFS_SB(sb)->s_es->s_volume_name,
-		       ent->oied_namelen, ent->oied_name, rc);
+	if (rc != 0)
 		RETURN(rc);
-	}
 
 	rec = (struct osd_fid_pack *)(de->name + de->name_len + 1);
 	fid_cpu_to_be((struct lu_fid *)rec->fp_area, fid);
 	rc = ldiskfs_journal_dirty_metadata(jh, bh);
-	if (rc != 0)
-		CERROR("%.16s: fail to dirty metadata for update dirent: "
-		       "name = %.*s, rc = %d\n",
-		       LDISKFS_SB(sb)->s_es->s_volume_name,
-		       ent->oied_namelen, ent->oied_name, rc);
 
 	RETURN(rc);
 }
@@ -5070,13 +5060,8 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	if (osd_dirent_has_space(de->rec_len, ent->oied_namelen,
 				 dir->i_sb->s_blocksize)) {
 		rc = ldiskfs_journal_get_write_access(jh, bh);
-		if (rc != 0) {
-			CERROR("%.16s: fail to write access for reinsert "
-			       "dirent: name = %.*s, rc = %d\n",
-			       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-			       ent->oied_namelen, ent->oied_name, rc);
+		if (rc != 0)
 			RETURN(rc);
-		}
 
 		de->name[de->name_len] = 0;
 		rec = (struct osd_fid_pack *)(de->name + de->name_len + 1);
@@ -5085,23 +5070,13 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 		de->file_type |= LDISKFS_DIRENT_LUFID;
 
 		rc = ldiskfs_journal_dirty_metadata(jh, bh);
-		if (rc != 0)
-			CERROR("%.16s: fail to dirty metadata for reinsert "
-			       "dirent: name = %.*s, rc = %d\n",
-			       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-			       ent->oied_namelen, ent->oied_name, rc);
 
 		RETURN(rc);
 	}
 
 	rc = ldiskfs_delete_entry(jh, dir, de, bh);
-	if (rc != 0) {
-		CERROR("%.16s: fail to delete entry for reinsert dirent: "
-		       "name = %.*s, rc = %d\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-		       ent->oied_namelen, ent->oied_name, rc);
+	if (rc != 0)
 		RETURN(rc);
-	}
 
 	dentry = osd_child_dentry_by_inode(env, dir, ent->oied_name,
 					   ent->oied_namelen);
@@ -5113,10 +5088,11 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	/* It is too bad, we cannot reinsert the name entry back.
 	 * That means we lose it! */
 	if (rc != 0)
-		CERROR("%.16s: fail to insert entry for reinsert dirent: "
-		       "name = %.*s, rc = %d\n",
+		CDEBUG(D_LFSCK, "%.16s: fail to reinsert the dirent, "
+		       "dir = %lu/%u, name = %.*s, "DFID": rc = %d\n",
 		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-		       ent->oied_namelen, ent->oied_name, rc);
+		       dir->i_ino, dir->i_generation,
+		       ent->oied_namelen, ent->oied_name, PFID(fid), rc);
 
 	RETURN(rc);
 }
@@ -5177,10 +5153,11 @@ again:
 		jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, credits);
 		if (IS_ERR(jh)) {
 			rc = PTR_ERR(jh);
-			CERROR("%.16s: fail to start trans for dirent "
-			       "check_repair: credits %d, name %.*s, rc %d\n",
-			       devname, credits, ent->oied_namelen,
-			       ent->oied_name, rc);
+			CDEBUG(D_LFSCK, "%.16s: fail to start trans for dirent "
+			       "check_repair, dir = %lu/%u, credits = %d, "
+			       "name = %.*s: rc = %d\n",
+			       devname, dir->i_ino, dir->i_generation, credits,
+			       ent->oied_namelen, ent->oied_name, rc);
 			RETURN(rc);
 		}
 
@@ -5224,6 +5201,12 @@ again:
 		if (rc == -ENOENT || rc == -ESTALE) {
 			*attr |= LUDA_IGNORE;
 			rc = 0;
+		} else {
+			CDEBUG(D_LFSCK, "%.16s: fail to iget for dirent "
+			       "check_repair, dir = %lu/%u, name = %.*s: "
+			       "rc = %d\n",
+			       devname, dir->i_ino, dir->i_generation,
+			       ent->oied_namelen, ent->oied_name, rc);
 		}
 
 		GOTO(out_journal, rc);
@@ -5265,6 +5248,13 @@ again:
 			rc = osd_dirent_update(jh, sb, ent, fid, bh, de);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
+			else
+				CDEBUG(D_LFSCK, "%.16s: fail to update FID "
+				       "in the dirent, dir = %lu/%u, "
+				       "name = %.*s, "DFID": rc = %d\n",
+				       devname, dir->i_ino, dir->i_generation,
+				       ent->oied_namelen, ent->oied_name,
+				       PFID(fid), rc);
 		} else {
 			/* Do not repair under dryrun mode. */
 			if (*attr & LUDA_VERIFY_DRYRUN) {
@@ -5291,6 +5281,13 @@ again:
 						 fid, bh, de, hlock);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
+			else
+				CDEBUG(D_LFSCK, "%.16s: fail to append FID "
+				       "after the dirent, dir = %lu/%u, "
+				       "name = %.*s, "DFID": rc = %d\n",
+				       devname, dir->i_ino, dir->i_generation,
+				       ent->oied_namelen, ent->oied_name,
+				       PFID(fid), rc);
 		}
 	} else if (rc == -ENODATA) {
 		/* Do not repair under dryrun mode. */
@@ -5323,6 +5320,13 @@ again:
 			rc = osd_ea_fid_set(info, inode, fid, 0, 0);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
+			else
+				CDEBUG(D_LFSCK, "%.16s: fail to set LMA for "
+				       "update dirent, dir = %lu/%u, "
+				       "name = %.*s, "DFID": rc = %d\n",
+				       devname, dir->i_ino, dir->i_generation,
+				       ent->oied_namelen, ent->oied_name,
+				       PFID(fid), rc);
 		} else {
 			lu_igif_build(fid, inode->i_ino, inode->i_generation);
 			/* It is probably IGIF object. Only aappend the
@@ -5331,6 +5335,13 @@ again:
 						 fid, bh, de, hlock);
 			if (rc == 0)
 				*attr |= LUDA_UPGRADE;
+			else
+				CDEBUG(D_LFSCK, "%.16s: fail to append IGIF "
+				       "after the dirent, dir = %lu/%u, "
+				       "name = %.*s, "DFID": rc = %d\n",
+				       devname, dir->i_ino, dir->i_generation,
+				       ent->oied_namelen, ent->oied_name,
+				       PFID(fid), rc);
 		}
 	}
 

@@ -270,16 +270,8 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 	bool				 wakeup = false;
 
 	OBD_ALLOC_PTR(oii);
-	if (oii == NULL) {
-		CERROR("%s: cannot alloc memory for verify OST-object "
-		       "consistency for "DFID", client given PFID "DFID
-		       ", local stored PFID "DFID"\n",
-		       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-		       oa->o_parent_seq, oa->o_parent_oid, oa->o_stripe_idx,
-		       PFID(&fo->ofo_pfid));
-
+	if (oii == NULL)
 		return;
-	}
 
 	INIT_LIST_HEAD(&oii->oii_list);
 	lu_object_get(&fo->ofo_obj.do_lu);

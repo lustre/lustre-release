@@ -514,7 +514,7 @@ test_6a() {
 	local POS1=$($SHOW_NAMESPACE |
 		     awk '/^latest_start_position/ { print $2 }' |
 		     tr -d ',')
-	[ $POS0 -lt $POS1 ] ||
+	[[ $POS0 -lt $POS1 ]] ||
 		error "(7) Expect larger than: $POS0, but got $POS1"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
@@ -572,10 +572,10 @@ test_6b() {
 		       awk '/^latest_start_position/ { print $4 }')
 
 	if [ "$D_POS0" == "N/A" -o "$D_POS1" == "N/A" ]; then
-		[ $O_POS0 -lt $O_POS1 ] ||
+		[[ $O_POS0 -lt $O_POS1 ]] ||
 			error "(7.1) $O_POS1 is not larger than $O_POS0"
 	else
-		[ $D_POS0 -lt $D_POS1 ] ||
+		[[ $D_POS0 -lt $D_POS1 ]] ||
 			error "(7.2) $D_POS1 is not larger than $D_POS0"
 	fi
 

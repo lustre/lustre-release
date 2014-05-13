@@ -40,7 +40,7 @@
  * Author: Nikita Danilov <nikita@clusterfs.com>
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_OSD
 
 #include <linux/module.h>
 
