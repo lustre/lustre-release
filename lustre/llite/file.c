@@ -3542,13 +3542,13 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	sbi = ll_i2sbi(inode);
 	squash = &sbi->ll_squash;
 	if (unlikely(squash->rsi_uid != 0 &&
-		     current_fsuid() == 0 &&
+		     uid_eq(current_fsuid(), GLOBAL_ROOT_UID) &&
 		     !(sbi->ll_flags & LL_SBI_NOROOTSQUASH))) {
 			squash_id = true;
 	}
 	if (squash_id) {
 		CDEBUG(D_OTHER, "squash creds (%d:%d)=>(%d:%d)\n",
-		       current_fsuid(), current_fsgid(),
+		       __kuid_val(current_fsuid()), __kgid_val(current_fsgid()),
 		       squash->rsi_uid, squash->rsi_gid);
 
 		/* update current process's credentials
@@ -3557,8 +3557,8 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 		if (cred == NULL)
 			RETURN(-ENOMEM);
 
-		cred->fsuid = squash->rsi_uid;
-		cred->fsgid = squash->rsi_gid;
+		cred->fsuid = make_kuid(&init_user_ns, squash->rsi_uid);
+		cred->fsgid = make_kgid(&init_user_ns, squash->rsi_gid);
 		for (cap = 0; cap < sizeof(cfs_cap_t) * 8; cap++) {
 			if ((1 << cap) & CFS_CAP_FS_MASK)
 				cap_lower(cred->cap_effective, cap);

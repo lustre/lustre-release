@@ -51,6 +51,9 @@ typedef gid_t kgid_t;
 #define INVALID_UID     -1
 #define INVALID_GID     -1
 
+#define GLOBAL_ROOT_UID	 0
+#define GLOBAL_ROOT_GID	 0
+
 #ifndef __KERNEL__
 struct user_namespace {
 	unsigned int pad;
