@@ -25,7 +25,28 @@
 /*
  * lustre/osp/osp_md_object.c
  *
- * Lustre MDT Proxy Device
+ * OST/MDT proxy device (OSP) Metadata methods
+ *
+ * This file implements methods for remote MD object, which include
+ * dt_object_operations, dt_index_operations and dt_body_operations.
+ *
+ * If there are multiple MDTs in one filesystem, one operation might
+ * include modifications in several MDTs. In such cases, clients
+ * send the RPC to the master MDT, then the operation is decomposed into
+ * object updates which will be dispatched to OSD or OSP. The local updates
+ * go to local OSD and the remote updates go to OSP. In OSP, these remote
+ * object updates will be packed into an update RPC, sent to the remote MDT
+ * and handled by Object Update Target (OUT).
+ *
+ * In DNE phase I, because of missing complete recovery solution, updates
+ * will be executed in order and synchronously.
+ *     1. The transaction is created.
+ *     2. In transaction declare, it collects and packs remote
+ *        updates (in osp_md_declare_xxx()).
+ *     3. In transaction start, it sends these remote updates
+ *        to remote MDTs, which will execute these updates synchronously.
+ *     4. In transaction execute phase, the local updates will be executed
+ *        synchronously.
  *
  * Author: Di Wang <di.wang@intel.com>
  */
@@ -38,6 +59,24 @@
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
+/**
+ * Implementation of dt_object_operations::do_declare_create
+ *
+ * Insert object create update into the RPC, which will be sent during
+ * transaction start. Note: if the object has already been created,
+ * we must add object destroy updates ahead of create updates, so it will
+ * destroy then recreate the object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	remote object to be created
+ * \param[in] attr	attribute of the created object
+ * \param[in] hint	creation hint
+ * \param[in] dof	creation format information
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 int osp_md_declare_object_create(const struct lu_env *env,
 				 struct dt_object *dt,
 				 struct lu_attr *attr,
@@ -128,6 +167,22 @@ out:
 	return rc;
 }
 
+/**
+ * Implementation of dt_object_operations::do_create
+ *
+ * It sets necessary flags for created object. In DNE phase I,
+ * remote updates are actually executed during transaction start,
+ * i.e. the object has already been created when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be created
+ * \param[in] attr	attribute of the created object
+ * \param[in] hint	creation hint
+ * \param[in] dof	creation format information
+ * \param[in] th	the transaction handle
+ *
+ * \retval		only return 0 for now
+ */
 int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_attr *attr, struct dt_allocation_hint *hint,
 			 struct dt_object_format *dof, struct thandle *th)
@@ -143,6 +198,20 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	return 0;
 }
 
+/**
+ * Implementation of dt_object_operations::do_declare_ref_del
+ *
+ * Declare decreasing the reference count of the remote object, i.e. insert
+ * decreasing object reference count update into the RPC, which will be sent
+ * during transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to decrease the reference count.
+ * \param[in] th	the transaction handle of refcount decrease.
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 static int osp_md_declare_object_ref_del(const struct lu_env *env,
 					 struct dt_object *dt,
 					 struct thandle *th)
@@ -166,6 +235,19 @@ static int osp_md_declare_object_ref_del(const struct lu_env *env,
 	return rc;
 }
 
+/**
+ * Implementation of dt_object_operations::do_ref_del
+ *
+ * Do nothing in this method for now. In DNE phase I, remote updates are
+ * actually executed during transaction start, i.e. the object reference
+ * count has already been decreased when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to decrease the reference count
+ * \param[in] th	the transaction handle
+ *
+ * \retval		only return 0 for now
+ */
 static int osp_md_object_ref_del(const struct lu_env *env,
 				 struct dt_object *dt,
 				 struct thandle *th)
@@ -176,6 +258,19 @@ static int osp_md_object_ref_del(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implementation of dt_object_operations::do_declare_ref_del
+ *
+ * Declare increasing the reference count of the remote object,
+ * i.e. insert increasing object reference count update into RPC.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object on which to increase the reference count.
+ * \param[in] th	the transaction handle.
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 static int osp_md_declare_ref_add(const struct lu_env *env,
 				  struct dt_object *dt, struct thandle *th)
 {
@@ -198,8 +293,20 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
 	return rc;
 }
 
-static int osp_md_object_ref_add(const struct lu_env *env,
-				 struct dt_object *dt,
+/**
+ * Implementation of dt_object_operations::do_ref_add
+ *
+ * Do nothing in this method for now. In DNE phase I, remote updates are
+ * actually executed during transaction start, i.e. the object reference
+ * count has already been increased when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object on which to increase the reference count
+ * \param[in] th	the transaction handle
+ *
+ * \retval		only return 0 for now
+ */
+static int osp_md_object_ref_add(const struct lu_env *env, struct dt_object *dt,
 				 struct thandle *th)
 {
 	CDEBUG(D_INFO, "ref add object "DFID"\n",
@@ -208,6 +315,20 @@ static int osp_md_object_ref_add(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implementation of dt_object_operations::do_ah_init
+ *
+ * Initialize the allocation hint for object creation, which is usually called
+ * before the creation, and these hints (parent and child mode) will be sent to
+ * the remote Object Update Target (OUT) and used in the object create process,
+ * same as OSD object creation.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ah	the hint to be initialized
+ * \param[in] parent	the parent of the object
+ * \param[in] child	the object to be created
+ * \param[in] child_mode the mode of the created object
+ */
 static void osp_md_ah_init(const struct lu_env *env,
 			   struct dt_allocation_hint *ah,
 			   struct dt_object *parent,
@@ -220,6 +341,20 @@ static void osp_md_ah_init(const struct lu_env *env,
 	ah->dah_mode = child_mode;
 }
 
+/**
+ * Implementation of dt_object_operations::do_declare_attr_get
+ *
+ * Declare setting attributes of the remote object, i.e. insert remote
+ * object attr_set update into RPC.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object on which to set attributes
+ * \param[in] attr	attributes to be set
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_attr *attr, struct thandle *th)
 {
@@ -252,6 +387,21 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implementation of dt_object_operations::do_attr_set
+ *
+ * Do nothing in this method for now. In DNE phase I, remote updates
+ * are actually executed during transaction start, i.e. object attributes
+ * have already been set when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to set attributes
+ * \param[in] attr	attributes to be set
+ * \param[in] th	the transaction handle
+ * \param[in] capa	capability of setting attributes (not yet implemented).
+ *
+ * \retval		only return 0 for now
+ */
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 		    const struct lu_attr *attr, struct thandle *th,
 		    struct lustre_capa *capa)
@@ -262,6 +412,18 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
+/**
+ * Implementation of dt_object_operations::do_read_lock
+ *
+ * osp_md_object_{read,write}_lock() will only lock the remote object in the
+ * local cache, which uses the semaphore (opo_sem) inside the osp_object to
+ * lock the object. Note: it will not lock the object in the whole cluster,
+ * which relies on the LDLM lock.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be locked
+ * \param[in] role	lock role from MDD layer, see mdd_object_role().
+ */
 static void osp_md_object_read_lock(const struct lu_env *env,
 				    struct dt_object *dt, unsigned role)
 {
@@ -273,6 +435,15 @@ static void osp_md_object_read_lock(const struct lu_env *env,
 	LASSERT(obj->opo_owner == NULL);
 }
 
+/**
+ * Implementation of dt_object_operations::do_write_lock
+ *
+ * Lock the remote object in write mode.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be locked
+ * \param[in] role	lock role from MDD layer, see mdd_object_role().
+ */
 static void osp_md_object_write_lock(const struct lu_env *env,
 				     struct dt_object *dt, unsigned role)
 {
@@ -284,6 +455,14 @@ static void osp_md_object_write_lock(const struct lu_env *env,
 	obj->opo_owner = env;
 }
 
+/**
+ * Implementation of dt_object_operations::do_read_unlock
+ *
+ * Unlock the read lock of remote object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be unlocked
+ */
 static void osp_md_object_read_unlock(const struct lu_env *env,
 				      struct dt_object *dt)
 {
@@ -292,6 +471,14 @@ static void osp_md_object_read_unlock(const struct lu_env *env,
 	up_read(&obj->opo_sem);
 }
 
+/**
+ * Implementation of dt_object_operations::do_write_unlock
+ *
+ * Unlock the write lock of remote object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be unlocked
+ */
 static void osp_md_object_write_unlock(const struct lu_env *env,
 				       struct dt_object *dt)
 {
@@ -302,6 +489,14 @@ static void osp_md_object_write_unlock(const struct lu_env *env,
 	up_write(&obj->opo_sem);
 }
 
+/**
+ * Implementation of dt_object_operations::do_write_locked
+ *
+ * Test if the object is locked in write mode.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be tested
+ */
 static int osp_md_object_write_locked(const struct lu_env *env,
 				      struct dt_object *dt)
 {
@@ -310,6 +505,21 @@ static int osp_md_object_write_locked(const struct lu_env *env,
 	return obj->opo_owner == env;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_lookup
+ *
+ * Look up record by key under a remote index object. It packs lookup update
+ * into RPC, sends to the remote OUT and waits for the lookup result.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	index object to lookup
+ * \param[out] rec	record in which to return lookup result
+ * \param[in] key	key of index which will be looked up
+ * \param[in] capa	capability of lookup (not yet implemented)
+ *
+ * \retval		1 if the lookup succeeds.
+ * \retval              negative errno if the lookup fails.
+ */
 static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 			       struct dt_rec *rec, const struct dt_key *key,
 			       struct lustre_capa *capa)
@@ -358,7 +568,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 	rc = object_update_result_data_get(reply, lbuf, 0);
 	if (rc < 0)
-		GOTO(out, rc = size);
+		GOTO(out, rc);
 
 	if (lbuf->lb_len != sizeof(*fid)) {
 		CERROR("%s: lookup "DFID" %s wrong size %d\n",
@@ -391,6 +601,21 @@ out:
 	return rc;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_declare_insert
+ *
+ * Declare the index insert of the remote object, i.e. pack index insert update
+ * into the RPC, which will be sent during transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to insert index
+ * \param[in] rec	record of the index which will be inserted
+ * \param[in] key	key of the index which will be inserted
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 static int osp_md_declare_insert(const struct lu_env *env,
 				 struct dt_object *dt,
 				 const struct dt_rec *rec,
@@ -430,6 +655,23 @@ static int osp_md_declare_insert(const struct lu_env *env,
 	return rc;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_insert
+ *
+ * Do nothing in this method for now. In DNE phase I, remote updates
+ * are actually executed during transaction start, i.e. the index has
+ * already been inserted when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to insert index
+ * \param[in] rec	record of the index to be inserted
+ * \param[in] key	key of the index to be inserted
+ * \param[in] th	the transaction handle
+ * \param[in] capa	capability of insert (not yet implemented)
+ * \param[in] ignore_quota quota enforcement for insert
+ *
+ * \retval		only return 0 for now
+ */
 static int osp_md_index_insert(const struct lu_env *env,
 			       struct dt_object *dt,
 			       const struct dt_rec *rec,
@@ -441,6 +683,20 @@ static int osp_md_index_insert(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_declare_delete
+ *
+ * Declare the index delete of the remote object, i.e. insert index delete
+ * update into the RPC, which will be sent during transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to delete index
+ * \param[in] key	key of the index
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 static int osp_md_declare_delete(const struct lu_env *env,
 				 struct dt_object *dt,
 				 const struct dt_key *key,
@@ -467,6 +723,21 @@ static int osp_md_declare_delete(const struct lu_env *env,
 	return rc;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_delete
+ *
+ * Do nothing in this method for now. Because in DNE phase I, remote updates
+ * are actually executed during transaction start, i.e. the index has already
+ * been deleted when calling this method.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to delete index
+ * \param[in] key	key of the index which will be deleted
+ * \param[in] th	the transaction handle
+ * \param[in] capa	capability of delete (not yet implemented)
+ *
+ * \retval		only return 0 for now
+ */
 static int osp_md_index_delete(const struct lu_env *env,
 			       struct dt_object *dt,
 			       const struct dt_key *key,
@@ -479,6 +750,20 @@ static int osp_md_index_delete(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_it.next
+ *
+ * Advance the pointer of the iterator to the next entry. It shares a similar
+ * internal implementation with osp_orphan_it_next(), which is being used for
+ * remote orphan index object. This method will be used for remote directory.
+ *
+ * \param[in] env	execution environment
+ * \param[in] di	iterator of this iteration
+ *
+ * \retval		0 if the pointer is advanced successfuly.
+ * \retval		1 if it reaches to the end of the index object.
+ * \retval		negative errno if the pointer cannot be advanced.
+ */
 int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
@@ -516,6 +801,18 @@ again:
 	RETURN(rc);
 }
 
+/**
+ * Implementation of dt_index_operations::dio_it.key
+ *
+ * Get the key at current iterator poisiton. These iteration methods
+ * (dio_it) will only be used for iterating the remote directory, so
+ * the key is the name of the directory entry.
+ *
+ * \param[in] env	execution environment
+ * \param[in] di	iterator of this iteration
+ *
+ * \retval		name of the current entry
+ */
 static struct dt_key *osp_it_key(const struct lu_env *env,
 				 const struct dt_it *di)
 {
@@ -525,6 +822,19 @@ static struct dt_key *osp_it_key(const struct lu_env *env,
 	return (struct dt_key *)ent->lde_name;
 }
 
+/**
+ * Implementation of dt_index_operations::dio_it.key_size
+ *
+ * Get the key size at current iterator poisiton. These iteration methods
+ * (dio_it) will only be used for iterating the remote directory, so the key
+ * size is the name size of the directory entry.
+ *
+ * \param[in] env	execution environment
+ * \param[in] di	iterator of this iteration
+ *
+ * \retval		name size of the current entry
+ */
+
 static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
@@ -533,6 +843,21 @@ static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	return (int)le16_to_cpu(ent->lde_namelen);
 }
 
+/**
+ * Implementation of dt_index_operations::dio_it.rec
+ *
+ * Get the record at current iterator position. These iteration methods
+ * (dio_it) will only be used for iterating the remote directory, so it
+ * uses lu_dirent_calc_size() to calculate the record size.
+ *
+ * \param[in] env	execution environment
+ * \param[in] di	iterator of this iteration
+ * \param[out] rec	the record to be returned
+ * \param[in] attr	attributes of the index object, so it knows
+ *                      how to pack the entry.
+ *
+ * \retval		only return 0 for now
+ */
 static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 			       struct dt_rec *rec, __u32 attr)
 {
@@ -546,6 +871,8 @@ static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 }
 
 /**
+ * Implementation of dt_index_operations::dio_it.load
+ *
  * Locate the iteration cursor to the specified position (cookie).
  *
  * \param[in] env	pointer to the thread context
@@ -595,6 +922,20 @@ const struct dt_index_operations osp_md_index_ops = {
 	}
 };
 
+/**
+ * Implementation of dt_object_operations::do_index_try
+ *
+ * Try to initialize the index API pointer for the given object. This
+ * is the entry point of the index API, i.e. we must call this method
+ * to initialize the index object before calling other index methods.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	index object to be initialized
+ * \param[in] feat	the index feature of the object
+ *
+ * \retval		0 if the initialization succeeds.
+ * \retval              negative errno if the initialization fails.
+ */
 static int osp_md_index_try(const struct lu_env *env,
 			    struct dt_object *dt,
 			    const struct dt_index_features *feat)
@@ -603,6 +944,21 @@ static int osp_md_index_try(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implementation of dt_object_operations::do_object_lock
+ *
+ * Enqueue a lock (by ldlm_cli_enqueue()) of remote object on the remote MDT,
+ * which will lock the object in the global namespace.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be locked
+ * \param[out] lh	lock handle
+ * \param[in] einfo	enqueue information
+ * \param[in] policy	lock policy
+ *
+ * \retval		ELDLM_OK if locking the object succeeds.
+ * \retval		negative errno if locking fails.
+ */
 static int osp_md_object_lock(const struct lu_env *env,
 			      struct dt_object *dt,
 			      struct lustre_handle *lh,
@@ -640,6 +996,18 @@ static int osp_md_object_lock(const struct lu_env *env,
 	return rc == ELDLM_OK ? 0 : -EIO;
 }
 
+/**
+ * Implementation of dt_object_operations::do_object_unlock
+ *
+ * Cancel a lock of a remote object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be unlocked
+ * \param[in] einfo	lock enqueue information
+ * \param[in] policy	lock policy
+ *
+ * \retval		Only return 0 for now.
+ */
 static int osp_md_object_unlock(const struct lu_env *env,
 				struct dt_object *dt,
 				struct ldlm_enqueue_info *einfo,
@@ -681,6 +1049,21 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_object_unlock     = osp_md_object_unlock,
 };
 
+/**
+ * Implementation of dt_body_operations::dbo_declare_write
+ *
+ * Declare an object write. In DNE phase I, it will pack the write
+ * object update into the RPC.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be written
+ * \param[in] buf	buffer to write which includes an embedded size field
+ * \param[in] pos	offet in the object to start writing at
+ * \param[in] th	transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
 static ssize_t osp_md_declare_write(const struct lu_env *env,
 				    struct dt_object *dt,
 				    const struct lu_buf *buf,
@@ -711,6 +1094,23 @@ static ssize_t osp_md_declare_write(const struct lu_env *env,
 
 }
 
+/**
+ * Implementation of dt_body_operations::dbo_write
+ *
+ * Return the buffer size. In DNE phase I, remote updates
+ * are actually executed during transaction start, the buffer has
+ * already been written when this method is being called.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be written
+ * \param[in] buf	buffer to write which includes an embedded size field
+ * \param[in] pos	offet in the object to start writing at
+ * \param[in] th	transaction handle
+ * \param[in] capa	capability of the write (not yet implemented)
+ * \param[in] ignore_quota quota enforcement for this write
+ *
+ * \retval		the buffer size in bytes.
+ */
 static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
 			    struct thandle *handle,
