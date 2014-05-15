@@ -60,6 +60,7 @@ static int mgs_connect(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	CFS_FAIL_TIMEOUT(OBD_FAIL_MGS_CONNECT_NET, cfs_fail_val);
 	rc = tgt_connect(tsi);
 	if (rc)
 		RETURN(rc);

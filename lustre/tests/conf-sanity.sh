@@ -4682,6 +4682,22 @@ test_78() {
 }
 run_test 78 "run resize2fs on MDT and OST filesystems"
 
+test_80() {
+	start_mds
+	start_ost
+	uuid=$(do_facet ost1 lctl get_param -n mgc.*.uuid)
+#define OBD_FAIL_MGS_PAUSE_TARGET_CON       0x906
+	do_facet ost1 "lctl set_param fail_val=10 fail_loc=0x906"
+	do_facet mgs "lctl set_param fail_val=10 fail_loc=0x906"
+	do_facet mgs "lctl set_param -n mgs/MGS/evict_client $uuid"
+	sleep 30
+	start_ost2
+
+	do_facet ost1 "lctl set_param fail_loc=0"
+	stopall
+}
+run_test 80 "mgc import reconnect race"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
