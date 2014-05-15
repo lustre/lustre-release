@@ -44,6 +44,7 @@
 #include <lustre_fid.h>
 #include <lustre_lmv.h>
 #include <md_object.h>
+#include <lustre_linkea.h>
 
 #include "lod_internal.h"
 
@@ -1431,8 +1432,11 @@ next:
 		GOTO(out_put, rc = -EINVAL);
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		struct dt_object *dto = stripe[i];
-		char		 *stripe_name = info->lti_key;
+		struct dt_object	*dto		= stripe[i];
+		char			*stripe_name	= info->lti_key;
+		struct lu_name		*sname;
+		struct linkea_data	 ldata		= { 0 };
+		struct lu_buf		 linkea_buf;
 
 		rc = dt_declare_create(env, dto, attr, NULL, dof, th);
 		if (rc != 0)
@@ -1499,6 +1503,23 @@ next:
 
 		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
 			PFID(lu_object_fid(&dto->do_lu)), i);
+
+		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
+		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
+		if (rc != 0)
+			GOTO(out_put, rc);
+
+		rc = linkea_add_buf(&ldata, sname, lu_object_fid(&dt->do_lu));
+		if (rc != 0)
+			GOTO(out_put, rc);
+
+		linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+		linkea_buf.lb_len = ldata.ld_leh->leh_len;
+		rc = dt_declare_xattr_set(env, dto, &linkea_buf,
+					  XATTR_NAME_LINK, 0, th);
+		if (rc != 0)
+			GOTO(out_put, rc);
+
 		rc = dt_declare_insert(env, dt_object_child(dt),
 		     (const struct dt_rec *)lu_object_fid(&dto->do_lu),
 		     (const struct dt_key *)stripe_name, th);
@@ -1890,8 +1911,11 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 	slave_lmv_buf.lb_len = sizeof(*slave_lmm);
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		struct dt_object *dto;
-		char		 *stripe_name = info->lti_key;
+		struct dt_object	*dto;
+		char			*stripe_name	= info->lti_key;
+		struct lu_name		*sname;
+		struct linkea_data	 ldata		= { 0 };
+		struct lu_buf		 linkea_buf;
 
 		dto = lo->ldo_stripe[i];
 		dt_write_lock(env, dto, MOR_TGT_CHILD);
@@ -1954,6 +1978,23 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 
 		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
 			 PFID(lu_object_fid(&dto->do_lu)), i);
+
+		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
+		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		rc = linkea_add_buf(&ldata, sname, lu_object_fid(&dt->do_lu));
+		if (rc != 0)
+			GOTO(out, rc);
+
+		linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+		linkea_buf.lb_len = ldata.ld_leh->leh_len;
+		rc = dt_xattr_set(env, dto, &linkea_buf, XATTR_NAME_LINK,
+				  0, th, BYPASS_CAPA);
+		if (rc != 0)
+			GOTO(out, rc);
+
 		rc = dt_insert(env, dt_object_child(dt),
 		     (const struct dt_rec *)lu_object_fid(&dto->do_lu),
 		     (const struct dt_key *)stripe_name, th, capa, 0);

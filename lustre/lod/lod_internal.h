@@ -278,11 +278,11 @@ struct lod_thread_info {
 	struct lu_attr    lti_attr;
 	struct lod_it	  lti_it;
 	struct ldlm_res_id lti_res_id;
-
-	/* used to hold lu_dirent, NAME_MAX + sizeof(struct lu_dirent) */
-	char		  lti_key[NAME_MAX + sizeof(struct lu_dirent)];
-
+	/* used to hold lu_dirent, sizeof(struct lu_dirent) + NAME_MAX */
+	char		  lti_key[sizeof(struct lu_dirent) + NAME_MAX];
 	struct dt_object_format lti_format;
+	struct lu_name	  lti_name;
+	struct lu_buf	  lti_linkea_buf;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
@@ -356,6 +356,17 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 	info = lu_context_key_get(&env->le_ctx, &lod_thread_key);
 	LASSERT(info);
 	return info;
+}
+
+static inline struct lu_name *
+lod_name_get(const struct lu_env *env, const void *area, int len)
+{
+	struct lu_name *lname;
+
+	lname = &lod_env_info(env)->lti_name;
+	lname->ln_name = area;
+	lname->ln_namelen = len;
+	return lname;
 }
 
 #define lod_foreach_ost(__dev, index)	\
