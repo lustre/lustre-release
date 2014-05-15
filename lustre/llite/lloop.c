@@ -192,10 +192,15 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
         struct cl_object     *obj = ll_i2info(inode)->lli_clob;
         pgoff_t               offset;
         int                   ret;
-        int                   i;
+#ifdef HAVE_BVEC_ITER
+	struct bvec_iter      iter;
+	struct bio_vec        bvec;
+#else
+	int		      iter;
+	struct bio_vec	     *bvec;
+#endif
         int                   rw;
         obd_count             page_count = 0;
-        struct bio_vec       *bvec;
         struct bio           *bio;
         ssize_t               bytes;
 
@@ -218,18 +223,30 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
         for (bio = head; bio != NULL; bio = bio->bi_next) {
                 LASSERT(rw == bio->bi_rw);
 
-                offset = (pgoff_t)(bio->bi_sector << 9) + lo->lo_offset;
-                bio_for_each_segment(bvec, bio, i) {
-                        BUG_ON(bvec->bv_offset != 0);
+#ifdef HAVE_BVEC_ITER
+		offset = (pgoff_t)(bio->bi_iter.bi_sector << 9) + lo->lo_offset;
+		bio_for_each_segment(bvec, bio, iter) {
+			BUG_ON(bvec.bv_offset != 0);
+			BUG_ON(bvec.bv_len != PAGE_CACHE_SIZE);
+
+			pages[page_count] = bvec.bv_page;
+			offsets[page_count] = offset;
+			page_count++;
+			offset += bvec.bv_len;
+#else
+		offset = (pgoff_t)(bio->bi_sector << 9) + lo->lo_offset;
+		bio_for_each_segment(bvec, bio, iter) {
+			BUG_ON(bvec->bv_offset != 0);
 			BUG_ON(bvec->bv_len != PAGE_CACHE_SIZE);
 
-                        pages[page_count] = bvec->bv_page;
-                        offsets[page_count] = offset;
-                        page_count++;
-                        offset += bvec->bv_len;
-                }
-                LASSERT(page_count <= LLOOP_MAX_SEGMENTS);
-        }
+			pages[page_count] = bvec->bv_page;
+			offsets[page_count] = offset;
+			page_count++;
+			offset += bvec->bv_len;
+#endif
+		}
+		LASSERT(page_count <= LLOOP_MAX_SEGMENTS);
+	}
 
         ll_stats_ops_tally(ll_i2sbi(inode),
                         (rw == WRITE) ? LPROC_LL_BRW_WRITE : LPROC_LL_BRW_READ,
@@ -310,12 +327,17 @@ static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
         rw = first->bi_rw;
         bio = &lo->lo_bio;
         while (*bio && (*bio)->bi_rw == rw) {
-                CDEBUG(D_INFO, "bio sector %llu size %u count %u vcnt%u \n",
-                       (unsigned long long)(*bio)->bi_sector, (*bio)->bi_size,
-                       page_count, (*bio)->bi_vcnt);
-                if (page_count + (*bio)->bi_vcnt > LLOOP_MAX_SEGMENTS)
-                        break;
-
+#ifdef HAVE_BVEC_ITER
+		CDEBUG(D_INFO, "bio sector %llu size %u count %u vcnt%u \n",
+		       (unsigned long long)(*bio)->bi_iter.bi_sector,
+		       (*bio)->bi_iter.bi_size, page_count, (*bio)->bi_vcnt);
+#else
+		CDEBUG(D_INFO, "bio sector %llu size %u count %u vcnt%u \n",
+		       (unsigned long long)(*bio)->bi_sector, (*bio)->bi_size,
+		       page_count, (*bio)->bi_vcnt);
+#endif
+		if (page_count + (*bio)->bi_vcnt > LLOOP_MAX_SEGMENTS)
+			break;
 
                 page_count += (*bio)->bi_vcnt;
                 count++;
@@ -345,8 +367,14 @@ loop_make_request(struct request_queue *q, struct bio *old_bio)
         if (!lo)
                 goto err;
 
-        CDEBUG(D_INFO, "submit bio sector %llu size %u\n",
-               (unsigned long long)old_bio->bi_sector, old_bio->bi_size);
+#ifdef HAVE_BVEC_ITER
+	CDEBUG(D_INFO, "submit bio sector %llu size %u\n",
+	       (unsigned long long)old_bio->bi_iter.bi_sector,
+	       old_bio->bi_iter.bi_size);
+#else
+	CDEBUG(D_INFO, "submit bio sector %llu size %u\n",
+	       (unsigned long long)old_bio->bi_sector, old_bio->bi_size);
+#endif
 
 	spin_lock_irq(&lo->lo_lock);
 	inactive = (lo->lo_state != LLOOP_BOUND);

@@ -1435,6 +1435,25 @@ vfs_unlink_3args, [
 ]) # LC_VFS_UNLINK_3ARGS
 
 #
+# LC_HAVE_BVEC_ITER
+#
+# 3.14 move some of its data in struct bio into the new
+# struct bvec_iter
+#
+AC_DEFUN([LC_HAVE_BVEC_ITER], [
+LB_CHECK_COMPILE([if Linux kernel has struct bvec_iter],
+have_bvec_iter, [
+	#include <linux/bio.h>
+],[
+	struct bvec_iter iter;
+	iter.bi_bvec_done = 0;
+], [
+	AC_DEFINE(HAVE_BVEC_ITER, 1,
+		[kernel has struct bvec_iter])
+])
+]) # LC_HAVE_BVEC_ITER
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -1550,6 +1569,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.13
 	LC_VFS_RENAME_5ARGS
 	LC_VFS_UNLINK_3ARGS
+
+	# 3.14
+	LC_HAVE_BVEC_ITER
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
