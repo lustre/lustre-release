@@ -500,6 +500,12 @@ int mdt_attr_get_eabuf_size(struct mdt_thread_info *info, struct mdt_object *o)
 	if (S_ISDIR(lu_object_attr(&mdt_object_child(o)->mo_lu))) {
 		rc2 = mo_xattr_get(env, mdt_object_child(o), &LU_BUF_NULL,
 				   XATTR_NAME_LMV);
+
+		if (rc2 == -ENODATA)
+			rc2 = mo_xattr_get(env, mdt_object_child(o),
+					   &LU_BUF_NULL,
+					   XATTR_NAME_DEFAULT_LMV);
+
 		if ((rc2 < 0 && rc2 != -ENODATA) || (rc2 > rc))
 			rc = rc2;
 	}

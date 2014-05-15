@@ -2457,7 +2457,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		separator = "\n";
 	}
 
-	if (!(verbose & VERBOSE_OBJID))
+	if (!(verbose & VERBOSE_OBJID) || lum->lum_magic == LMV_USER_MAGIC)
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 

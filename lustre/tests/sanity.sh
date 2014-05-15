@@ -12840,6 +12840,10 @@ test_300g() {
 	$LFS setdirstripe -D -c $MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
 		error "set default stripe on striped dir error"
 
+	stripe_count=$($LFS getdirstripe -D -c $DIR/$tdir/striped_dir)
+	[ $stripe_count -eq $MDSCOUNT ] ||
+		error "default stripe wrong expect $MDSCOUNT get $stripe_count"
+
 	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
 
 	for dir in $(find $DIR/$tdir/striped_dir/*); do
