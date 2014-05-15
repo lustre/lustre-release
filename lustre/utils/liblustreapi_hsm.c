@@ -910,10 +910,12 @@ static int ct_open_by_fid(const struct hsm_copytool_private *ct,
 			  const struct lu_fid *fid, int open_flags)
 {
 	char fid_name[FID_NOBRACE_LEN + 1];
+	int fd;
 
 	snprintf(fid_name, sizeof(fid_name), DFID_NOBRACE, PFID(fid));
 
-	return openat(ct->open_by_fid_fd, fid_name, open_flags);
+	fd = openat(ct->open_by_fid_fd, fid_name, open_flags);
+	return fd < 0 ? -errno : fd;
 }
 
 static int ct_stat_by_fid(const struct hsm_copytool_private *ct,
@@ -921,10 +923,12 @@ static int ct_stat_by_fid(const struct hsm_copytool_private *ct,
 			  struct stat *buf)
 {
 	char fid_name[FID_NOBRACE_LEN + 1];
+	int rc;
 
 	snprintf(fid_name, sizeof(fid_name), DFID_NOBRACE, PFID(fid));
 
-	return fstatat(ct->open_by_fid_fd, fid_name, buf, 0);
+	rc = fstatat(ct->open_by_fid_fd, fid_name, buf, 0);
+	return rc ? -errno : 0;
 }
 
 /** Create the destination volatile file for a restore operation.
@@ -1195,17 +1199,20 @@ int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
 int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 {
 	const struct hsm_action_item	*hai = &hcp->copy.hc_hai;
+	int fd;
 
 	if (hcp->magic != CP_PRIV_MAGIC)
 		return -EINVAL;
 
-	if (hai->hai_action == HSMA_ARCHIVE)
+	if (hai->hai_action == HSMA_ARCHIVE) {
 		return ct_open_by_fid(hcp->ct_priv, &hai->hai_dfid,
 				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
-	else if (hai->hai_action == HSMA_RESTORE)
-		return dup(hcp->data_fd);
-	else
+	} else if (hai->hai_action == HSMA_RESTORE) {
+		fd = dup(hcp->data_fd);
+		return fd < 0 ? -errno : fd;
+	} else {
 		return -EINVAL;
+	}
 }
 
 /**
@@ -1239,9 +1246,9 @@ int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 				  stripe_pattern | LOV_PATTERN_F_RELEASED,
 				  pool_name);
 	if (fd < 0) {
-		llapi_error(LLAPI_MSG_ERROR, -errno,
+		llapi_error(LLAPI_MSG_ERROR, fd,
 			    "cannot create '%s' for import", dst);
-		return -errno;
+		return fd;
 	}
 
 	/* Get the new fid in Lustre. Caller needs to use this fid
@@ -1264,8 +1271,8 @@ int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 	hui.hui_mtime_ns = st->st_mtim.tv_nsec;
 	rc = ioctl(fd, LL_IOC_HSM_IMPORT, &hui);
 	if (rc != 0) {
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot import '%s'", dst);
 		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot import '%s'", dst);
 		goto out_unlink;
 	}
 

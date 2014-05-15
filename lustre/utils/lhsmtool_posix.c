@@ -485,8 +485,8 @@ static int ct_restore_stripe(const char *src, const char *dst, int dst_fd,
 	rc = fsetxattr(dst_fd, XATTR_LUSTRE_LOV, lovea, lovea_size,
 		       XATTR_CREATE);
 	if (rc < 0) {
-		CT_ERROR(errno, "cannot set lov EA on '%s'", dst);
 		rc = -errno;
+		CT_ERROR(rc, "cannot set lov EA on '%s'", dst);
 	}
 
 	return rc;
@@ -875,7 +875,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 
 	src_fd = llapi_hsm_action_get_fd(hcp);
 	if (src_fd < 0) {
-		rc = -errno;
+		rc = src_fd;
 		CT_ERROR(rc, "cannot open '%s' for read", src);
 		goto fini_major;
 	}
@@ -1128,6 +1128,11 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	}
 
 	dst_fd = llapi_hsm_action_get_fd(hcp);
+	if (dst_fd < 0) {
+		rc = dst_fd;
+		CT_ERROR(rc, "cannot open '%s' for write", dst);
+		goto fini;
+	}
 
 	if (set_lovea) {
 		/* the layout cannot be allocated through .fid so we have to
