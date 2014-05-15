@@ -73,7 +73,6 @@ extern unsigned int at_history;
 extern int at_early_margin;
 extern int at_extra;
 extern unsigned int obd_max_dirty_pages;
-extern atomic_t obd_unstable_pages;
 extern atomic_t obd_dirty_pages;
 extern atomic_t obd_dirty_transit_pages;
 extern unsigned int obd_alloc_fail_rate;
