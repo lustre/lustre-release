@@ -1306,6 +1306,13 @@ static int mdt_rename_sanity(struct mdt_thread_info *info,
 		LASSERT(fid_is_sane(&dst_fid));
 		dst = mdt_object_find(info->mti_env, info->mti_mdt, &dst_fid);
 		if (!IS_ERR(dst)) {
+			/* XXX: this object might not be protected by LDLM lock
+			 * here, (see mdt_rename_parents_lock), but LOHA_EXISTS
+			 * will not change once it is being set, but LFSCK might
+			 * change this later.(LU-5069) */
+			if (!mdt_object_exists(dst))
+				RETURN(-ESTALE);
+
 			rc = mdo_is_subdir(info->mti_env,
 					   mdt_object_child(dst), fid,
 					   &dst_fid);
