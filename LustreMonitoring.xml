@@ -190,7 +190,7 @@ Working with Changelogs</title>
         </title>
         <para>Because changelog records take up space on the MDT, the system administration must register changelog users. The registrants specify which records they are &quot;done with&quot;, and the system purges up to the greatest common record.</para>
         <para>To register a new changelog user, run:</para>
-        <screen>lctl --device /dev/<replaceable>mdt_device</replaceable> changelog_register
+        <screen>lctl --device <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> changelog_register
 </screen>
         <para>Changelog entries are not purged beyond a registered user&apos;s set point (see <literal>lfs changelog_clear</literal>).</para>
       </section>
