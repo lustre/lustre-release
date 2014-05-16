@@ -1164,7 +1164,7 @@ unlock:
 }
 
 static struct dentry *
-osd_object_spec_find(struct osd_thread_info *info, struct osd_device *osd,
+osd_obj_spec_find(struct osd_thread_info *info, struct osd_device *osd,
 		     const struct lu_fid *fid, char **name)
 {
 	struct dentry *root = ERR_PTR(-ENOENT);
@@ -1195,11 +1195,11 @@ int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			struct thandle *th)
 {
 	struct dentry	*root;
-	char		*name;
+	char		*name = NULL;
 	int		 rc;
 	ENTRY;
 
-	root = osd_object_spec_find(info, osd, fid, &name);
+	root = osd_obj_spec_find(info, osd, fid, &name);
 	if (!IS_ERR(root)) {
 		rc = osd_obj_update_entry(info, osd, root, name, fid, id, th);
 	} else {
@@ -1220,7 +1220,7 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 	int		 rc;
 	ENTRY;
 
-	root = osd_object_spec_find(info, osd, fid, &name);
+	root = osd_obj_spec_find(info, osd, fid, &name);
 	if (!IS_ERR(root)) {
 		rc = osd_obj_add_entry(info, osd, root, name, id, th);
 	} else {
@@ -1238,7 +1238,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	struct dentry	*root;
 	struct dentry	*dentry;
 	struct inode	*inode;
-	char		*name;
+	char		*name = NULL;
 	int		rc = -ENOENT;
 	ENTRY;
 

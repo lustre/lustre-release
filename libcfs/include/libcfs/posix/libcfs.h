@@ -273,7 +273,9 @@ static inline int module_refcount(struct module *m)
  ***************************************************************************/
 
 struct shrinker {
-        ;
+	/* Need padding due to certain versions of gcc (4.3) which will not
+	 * build with an empty structure. */
+	int pad;
 };
 
 #define DEFAULT_SEEKS (0)
