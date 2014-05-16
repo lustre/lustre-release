@@ -212,19 +212,20 @@ run_test 3 "mkdir; touch; rmdir; check dir ====================="
 # LU-4471 - failed rmdir on remote directories still removes directory on MDT0
 test_4() {
 	local MDTIDX=1
-	local remote_dir=remote_dir
 
 	[ $MDSCOUNT -ge 2 ] && skip "skip now for LU-4690" && return #LU-4690
-	test_mkdir $DIR/$remote_dir ||
+	test_mkdir $DIR/$tdir ||
 		error "Create remote directory failed"
 
-	touch $DIR/$remote_dir/$tfile ||
+	touch $DIR/$tdir/$tfile ||
 		error "Create file under remote directory failed"
 
-	rmdir $DIR/$remote_dir &&
-		error "Expect error removing in-use dir $DIR/$remote_dir"
+	rmdir $DIR/$tdir &&
+		error "Expect error removing in-use dir $DIR/$tdir"
 
-	test -d $DIR/$remote_dir || error "Remote directory disappeared"
+	test -d $DIR/$tdir || error "Remote directory disappeared"
+
+	rm -rf $DIR/$tdir || error "remove remote dir error"
 }
 run_test 4 "mkdir; touch dir/file; rmdir; checkdir (expect error)"
 
@@ -446,14 +447,14 @@ test_17e() {
 run_test 17e "symlinks: create recursive symlink (should return error) ===="
 
 test_17f() {
-	test_mkdir -p $DIR/d17f
-	ln -s 1234567890/2234567890/3234567890/4234567890 $DIR/d17f/111
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890 $DIR/d17f/222
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890 $DIR/d17f/333
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890 $DIR/d17f/444
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890 $DIR/d17f/555
-	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890/aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/eeeeeeeeee/ffffffffff/ $DIR/d17f/666
-	ls -l  $DIR/d17f
+	test_mkdir -p $DIR/$tdir
+	ln -s 1234567890/2234567890/3234567890/4234567890 $DIR/$tdir/111
+	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890 $DIR/$tdir/222
+	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890 $DIR/$tdir/333
+	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890 $DIR/$tdir/444
+	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890 $DIR/$tdir/555
+	ln -s 1234567890/2234567890/3234567890/4234567890/5234567890/6234567890/7234567890/8234567890/9234567890/a234567890/b234567890/c234567890/d234567890/f234567890/aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/eeeeeeeeee/ffffffffff/ $DIR/$tdir/666
+	ls -l  $DIR/$tdir
 }
 run_test 17f "symlinks: long and very long symlink name ========================"
 
@@ -709,7 +710,7 @@ test_17o() {
 run_test 17o "stat file with incompat LMA feature"
 
 test_18() {
-	touch $DIR/f || error "Failed to touch $DIR/f: $?"
+	touch $DIR/$tfile || error "Failed to touch $DIR/$tfile: $?"
 	ls $DIR || error "Failed to ls $DIR: $?"
 }
 run_test 18 "touch .../f ; ls ... =============================="
@@ -1012,7 +1013,6 @@ test_24t() {
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_24u() { # bug12192
-	rm -rf $DIR/$tfile
 	$MULTIOP $DIR/$tfile C2w$((2048 * 1024))c || error
 	$CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
 }
@@ -1077,7 +1077,7 @@ test_24w() { # bug21506
         dd if=/dev/zero bs=$SZ1 count=1 >> $DIR/$tfile || return 2
         dd if=$DIR/$tfile of=$DIR/${tfile}_left bs=1M skip=4097 || return 3
         SZ2=`ls -l $DIR/${tfile}_left | awk '{print $5}'`
-        [ "$SZ1" = "$SZ2" ] || \
+	[[ "$SZ1" -eq "$SZ2" ]] ||
                 error "Error reading at the end of the file $tfile"
 }
 run_test 24w "Reading a file larger than 4Gb"
@@ -2371,7 +2371,6 @@ test_32n() {
 run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======"
 
 test_32o() {
-	rm -fr $DIR/d32o $DIR/$tfile
 	touch $DIR/$tfile
 	test_mkdir -p $DIR/d32o/tmp
 	TMP_DIR=$DIR/d32o/tmp
@@ -4018,27 +4017,39 @@ find_loop_dev() {
 	done
 }
 
+cleanup_54c() {
+	loopdev="$DIR/loop54c"
+
+	trap 0
+	$UMOUNT -d $DIR/$tdir || rc=$?
+	losetup -d $loopdev || true
+	losetup -d $LOOPDEV || true
+	rm -rf $loopdev $DIR/$tfile $DIR/$tdir
+	return $rc
+}
+
 test_54c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	tfile="$DIR/f54c"
-	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
 
 	find_loop_dev
 	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
+	trap cleanup_54c EXIT
 	mknod $loopdev b 7 $LOOPNUM
-	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
-	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
-	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
+	echo "make a loop file system with $DIR/$tfile on $loopdev ($LOOPNUM)."
+	dd if=/dev/zero of=$DIR/$tfile bs=$(get_page_size client) seek=1024 count=1 > /dev/null
+	losetup $loopdev $DIR/$tfile ||
+		error "can't set up $loopdev for $DIR/$tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
-	test_mkdir -p $tdir
-	mount -t ext2 $loopdev $tdir || error "error mounting $loopdev on $tdir"
-	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
-	df $tdir
-	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	$UMOUNT -d $tdir
-	losetup -d $loopdev
-	rm $loopdev
+	test_mkdir -p $DIR/$tdir
+	mount -t ext2 $loopdev $DIR/$tdir ||
+		error "error mounting $loopdev on $DIR/$tdir"
+	dd if=/dev/zero of=$DIR/$tdir/tmp bs=$(get_page_size client) count=30 ||
+		error "dd write"
+	df $DIR/$tdir
+	dd if=$DIR/$tdir/tmp of=/dev/zero bs=$(get_page_size client) count=30 ||
+		error "dd read"
+	cleanup_54c
 }
 run_test 54c "block device works in lustre ====================="
 
@@ -5253,8 +5264,6 @@ test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
 		skip_env "User $RUNAS_ID does not exist - skipping"
 		return 0
 	}
-	# We had better clear the $DIR to get enough space for dd
-	rm -rf $DIR/*
 	touch $DIR/$tfile
 	chmod 777 $DIR/$tfile
 	chmod ug+s $DIR/$tfile
@@ -6166,7 +6175,7 @@ cleanup_test102() {
 }
 
 test_102a() {
-	local testfile=$DIR/xattr_testfile
+	local testfile=$DIR/$tfile
 
 	touch $testfile
 
