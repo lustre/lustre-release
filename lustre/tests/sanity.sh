@@ -4491,31 +4491,41 @@ test_56s() { # LU-611
 	EXPECTED=$(((NUMDIRS + 1) * NUMFILES))
 	CMD="$LFIND -stripe-count $OSTCOUNT -type f $TDIR"
 	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
 
 	EXPECTED=$(((NUMDIRS + 1) * NUMFILES + EXTRA))
 	CMD="$LFIND -stripe-count +0 -type f $TDIR"
 	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
 
 	EXPECTED=$ONESTRIPE
 	CMD="$LFIND -stripe-count 1 -type f $TDIR"
 	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
 
 	CMD="$LFIND -stripe-count -2 -type f $TDIR"
 	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
 
 	EXPECTED=0
 	CMD="$LFIND -stripe-count $((OSTCOUNT + 1)) -type f $TDIR"
 	NUMS=$($CMD | wc -l)
-	[ $NUMS -eq $EXPECTED ] ||
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
 		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
 }
 run_test 56s "check lfs find -stripe-count works"
 
