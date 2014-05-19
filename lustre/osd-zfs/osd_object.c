@@ -1226,10 +1226,6 @@ int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
 	int	 rc;
 
 	LASSERT(tag);
-	spin_lock(&uos->lock);
-	uos->objects++;
-	spin_unlock(&uos->lock);
-
 	/* Assert that the transaction has been assigned to a
 	   transaction group. */
 	LASSERT(tx->tx_txg != 0);
@@ -1238,14 +1234,24 @@ int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
 	oid = dmu_object_alloc(uos->os, DMU_OT_PLAIN_FILE_CONTENTS, 0,
 			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
 	rc = -sa_buf_hold(uos->os, oid, tag, dbp);
-	if (rc)
-		return rc;
+	LASSERTF(rc == 0, "sa_buf_hold "LPU64" failed: %d\n", oid, rc);
 
 	LASSERT(la->la_valid & LA_MODE);
 	la->la_size = 0;
 	la->la_nlink = 1;
 
-	return __osd_attr_init(env, uos, oid, tx, la, parent);
+	rc = __osd_attr_init(env, uos, oid, tx, la, parent);
+	if (rc != 0) {
+		sa_buf_rele(*dbp, tag);
+		*dbp = NULL;
+		dmu_object_free(uos->os, oid, tx);
+		return rc;
+	}
+
+	spin_lock(&uos->lock);
+	uos->objects++;
+	spin_unlock(&uos->lock);
+	return 0;
 }
 
 /*
