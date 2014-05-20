@@ -4,10 +4,10 @@ TBD Intel Corporation
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.17.1.el6 (RHEL6.5)
-         3.0.101-0.21        (SLES11 SP3)
+         3.0.101-0.29        (SLES11 SP3)
        * Client known to build on unpatched kernels:
          2.6.32-431.17.1.el6 (RHEL6.5)
-         3.0.101-0.21        (SLES11 SP3)
+         3.0.101-0.29        (SLES11 SP3)
          3.6.10-4.fc18       (FC18)
          3.10                (kernel.org)
        * Recommended e2fsprogs version: 1.42.9.wc1 or newer
