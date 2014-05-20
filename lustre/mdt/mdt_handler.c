@@ -3235,6 +3235,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			     struct ldlm_lock **lockp,
 			     __u64 flags)
 {
+	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_LAYOUT];
 	struct layout_intent *layout;
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
@@ -3249,6 +3250,9 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
+
+	/* Get lock from request for possible resent case. */
+	mdt_intent_fixup_resent(info, *lockp, lhc, flags);
 
 	obj = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(obj))
@@ -3272,11 +3276,14 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (rc != 0)
 		RETURN(-EINVAL);
 
+	if (lustre_handle_is_used(&lhc->mlh_reg_lh))
+		rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
+
 	layout = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
 	LASSERT(layout != NULL);
 	if (layout->li_opc == LAYOUT_INTENT_ACCESS)
-		/* return to normal ldlm handling */
-		RETURN(0);
+		/* return to normal/resent ldlm handling */
+		RETURN(rc);
 
 	CERROR("%s: Unsupported layout intent (%d)\n",
 		mdt_obd_name(info->mti_mdt), layout->li_opc);
