@@ -401,13 +401,21 @@ fetch_url() {
     local url="$1"
     local target="$2"
 
+    if [ -z "$target" ]; then
+        fatal 1 "fetch_url() called without a target to fetch to"
+    fi
+
+    if [ -d $target ]; then
+        target+="/${url##*/}"
+    fi
+
     local rc=0
     if which wget >/dev/null 2>&1; then
         if ! wget -nv "$url" -O "$target"; then
             rc=${PIPESTATUS[0]}
         fi
     elif which curl >/dev/null 2>&1; then
-        if ! curl -L -s -o "$target" "$url"; then
+        if ! curl -n -L -s -o "$target" "$url"; then
             rc=${PIPESTATUS[0]}
         fi
     else

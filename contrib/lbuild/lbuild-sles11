@@ -91,12 +91,19 @@ find_linux_rpm-sles11() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
-    # what, oh what, do we do for sles11?
-    # if anyone knows how we get an arbitrary (kernel-source and
-    # kernel-default-base in this case) from the Suse update mechanism,
-    # please feel free to fix this
-
-    fatal 1 "I don't know how to get packages for SLES11"
+    local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+    local site="https://nu.novell.com/repo/\$RCE/SLES11-SP${PLEV}-Updates/sle-11-$(resolve_arch $TARGET_ARCH)/rpm/$(resolve_arch $TARGET_ARCH)"
+    case $prefix in
+        -devel)
+            fetch_url "$site/kernel-default-base-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+            fetch_url "$site/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+            echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
+            ;;
+        -source)
+            fetch_url "$site/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+            echo "kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
+            ;;
+    esac
 
     return 0
 
