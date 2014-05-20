@@ -1017,13 +1017,13 @@ static int osp_precreate_timeout_condition(void *data)
 {
 	struct osp_device *d = data;
 
-	LCONSOLE_WARN("%s: slow creates, last="DFID", next="DFID", "
-		      "reserved="LPU64", syn_changes=%lu, "
-		      "syn_rpc_in_progress=%d, status=%d\n",
-		      d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
-		      PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,
-		      d->opd_syn_changes, d->opd_syn_rpc_in_progress,
-		      d->opd_pre_status);
+	CDEBUG(D_HA, "%s: slow creates, last="DFID", next="DFID", "
+	      "reserved="LPU64", syn_changes=%lu, "
+	      "syn_rpc_in_progress=%d, status=%d\n",
+	      d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
+	      PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,
+	      d->opd_syn_changes, d->opd_syn_rpc_in_progress,
+	      d->opd_pre_status);
 
 	return 1;
 }

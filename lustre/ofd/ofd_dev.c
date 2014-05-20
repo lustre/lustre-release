@@ -1379,11 +1379,10 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			       count, seq, next_id);
 
 			if (cfs_time_after(jiffies, enough_time)) {
-				LCONSOLE_WARN("%s: Slow creates, %d/%d objects"
-					      " created at a rate of %d/s\n",
-					      ofd_name(ofd), created,
-					      diff + created,
-					      created / DISK_TIMEOUT);
+				CDEBUG(D_HA, "%s: Slow creates, %d/%d objects"
+				      " created at a rate of %d/s\n",
+				      ofd_name(ofd), created, diff + created,
+				      created / DISK_TIMEOUT);
 				break;
 			}
 
