@@ -487,6 +487,9 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		*oid = info->oti_zde.lzd_reg.zde_dnode;
 	}
 
+	if (rc == 0)
+		dmu_prefetch(dev->od_objset.os, *oid, 0, 0);
+
 	RETURN(rc);
 }
 
