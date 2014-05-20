@@ -1452,101 +1452,101 @@ int class_config_llog_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
 			      struct llog_rec_hdr *rec, void *data)
 {
-        struct config_llog_instance *clli = data;
-        int cfg_len = rec->lrh_len;
-        char *cfg_buf = (char*) (rec + 1);
-        int rc = 0;
-        ENTRY;
+	struct config_llog_instance *cfg = data;
+	int cfg_len = rec->lrh_len;
+	char *cfg_buf = (char *) (rec + 1);
+	int rc = 0;
+	ENTRY;
 
-        //class_config_dump_handler(handle, rec, data);
+	/* class_config_dump_handler(handle, rec, data); */
 
-        switch (rec->lrh_type) {
-        case OBD_CFG_REC: {
-                struct lustre_cfg *lcfg, *lcfg_new;
-                struct lustre_cfg_bufs bufs;
-                char *inst_name = NULL;
-                int inst_len = 0;
-                int inst = 0, swab = 0;
+	switch (rec->lrh_type) {
+	case OBD_CFG_REC: {
+		struct lustre_cfg *lcfg, *lcfg_new;
+		struct lustre_cfg_bufs bufs;
+		char *inst_name = NULL;
+		int inst_len = 0;
+		int inst = 0, swab = 0;
 
-                lcfg = (struct lustre_cfg *)cfg_buf;
-                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
-                        lustre_swab_lustre_cfg(lcfg);
-                        swab = 1;
-                }
+		lcfg = (struct lustre_cfg *)cfg_buf;
+		if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
+			lustre_swab_lustre_cfg(lcfg);
+			swab = 1;
+		}
 
-                rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
-                if (rc)
-                        GOTO(out, rc);
+		rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+		if (rc)
+			GOTO(out, rc);
 
                 /* Figure out config state info */
-                if (lcfg->lcfg_command == LCFG_MARKER) {
-                        struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        lustre_swab_cfg_marker(marker, swab,
-                                               LUSTRE_CFG_BUFLEN(lcfg, 1));
-                        CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
-                               clli->cfg_flags, marker->cm_flags);
-                        if (marker->cm_flags & CM_START) {
+		if (lcfg->lcfg_command == LCFG_MARKER) {
+			struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+			lustre_swab_cfg_marker(marker, swab,
+					       LUSTRE_CFG_BUFLEN(lcfg, 1));
+			CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
+			       cfg->cfg_flags, marker->cm_flags);
+			if (marker->cm_flags & CM_START) {
                                 /* all previous flags off */
-                                clli->cfg_flags = CFG_F_MARKER;
+				cfg->cfg_flags = CFG_F_MARKER;
 				server_name2index(marker->cm_tgtname,
-						  &clli->cfg_lwp_idx, NULL);
-                                if (marker->cm_flags & CM_SKIP) {
-                                        clli->cfg_flags |= CFG_F_SKIP;
-                                        CDEBUG(D_CONFIG, "SKIP #%d\n",
-                                               marker->cm_step);
-                                } else if ((marker->cm_flags & CM_EXCLUDE) ||
-                                           (clli->cfg_sb &&
-                                            lustre_check_exclusion(clli->cfg_sb,
-                                                         marker->cm_tgtname))) {
-                                        clli->cfg_flags |= CFG_F_EXCLUDE;
-                                        CDEBUG(D_CONFIG, "EXCLUDE %d\n",
-                                               marker->cm_step);
-                                }
-                        } else if (marker->cm_flags & CM_END) {
-                                clli->cfg_flags = 0;
-                        }
-                }
-                /* A config command without a start marker before it is
-                   illegal (post 146) */
-                if (!(clli->cfg_flags & CFG_F_COMPAT146) &&
-                    !(clli->cfg_flags & CFG_F_MARKER) &&
-                    (lcfg->lcfg_command != LCFG_MARKER)) {
-                        CWARN("Config not inside markers, ignoring! "
-                              "(inst: %p, uuid: %s, flags: %#x)\n",
-                              clli->cfg_instance,
-                              clli->cfg_uuid.uuid, clli->cfg_flags);
-                        clli->cfg_flags |= CFG_F_SKIP;
-                }
-                if (clli->cfg_flags & CFG_F_SKIP) {
-                        CDEBUG(D_CONFIG, "skipping %#x\n",
-                               clli->cfg_flags);
-                        rc = 0;
-                        /* No processing! */
-                        break;
-                }
+						  &cfg->cfg_lwp_idx, NULL);
+				if (marker->cm_flags & CM_SKIP) {
+					cfg->cfg_flags |= CFG_F_SKIP;
+					CDEBUG(D_CONFIG, "SKIP #%d\n",
+					       marker->cm_step);
+				} else if ((marker->cm_flags & CM_EXCLUDE) ||
+					   (cfg->cfg_sb &&
+					   lustre_check_exclusion(cfg->cfg_sb,
+							marker->cm_tgtname))) {
+					cfg->cfg_flags |= CFG_F_EXCLUDE;
+					CDEBUG(D_CONFIG, "EXCLUDE %d\n",
+					       marker->cm_step);
+				}
+			} else if (marker->cm_flags & CM_END) {
+				cfg->cfg_flags = 0;
+			}
+		}
+		/* A config command without a start marker before it is
+		   illegal (post 146) */
+		if (!(cfg->cfg_flags & CFG_F_COMPAT146) &&
+		    !(cfg->cfg_flags & CFG_F_MARKER) &&
+		    (lcfg->lcfg_command != LCFG_MARKER)) {
+			CWARN("Config not inside markers, ignoring! "
+			      "(inst: %p, uuid: %s, flags: %#x)\n",
+				cfg->cfg_instance,
+				cfg->cfg_uuid.uuid, cfg->cfg_flags);
+			cfg->cfg_flags |= CFG_F_SKIP;
+		}
+		if (cfg->cfg_flags & CFG_F_SKIP) {
+			CDEBUG(D_CONFIG, "skipping %#x\n",
+			       cfg->cfg_flags);
+			rc = 0;
+			/* No processing! */
+			break;
+		}
 
                 /*
                  * For interoperability between 1.8 and 2.0,
                  * rename "mds" obd device type to "mdt".
                  */
-                {
-                        char *typename = lustre_cfg_string(lcfg, 1);
-                        char *index = lustre_cfg_string(lcfg, 2);
+		{
+			char *typename = lustre_cfg_string(lcfg, 1);
+			char *index = lustre_cfg_string(lcfg, 2);
 
-                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
-                             strcmp(typename, "mds") == 0)) {
-                                CWARN("For 1.8 interoperability, rename obd "
-                                       "type from mds to mdt\n");
-                                typename[2] = 't';
-                        }
-                        if ((lcfg->lcfg_command == LCFG_SETUP && index &&
-                             strcmp(index, "type") == 0)) {
-                                CDEBUG(D_INFO, "For 1.8 interoperability, "
-                                       "set this index to '0'\n");
-                                index[0] = '0';
-                                index[1] = 0;
-                        }
-                }
+			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+			    strcmp(typename, "mds") == 0)) {
+				CWARN("For 1.8 interoperability, rename obd "
+					"type from mds to mdt\n");
+				typename[2] = 't';
+			}
+			if ((lcfg->lcfg_command == LCFG_SETUP && index &&
+			    strcmp(index, "type") == 0)) {
+				CDEBUG(D_INFO, "For 1.8 interoperability, "
+				       "set this index to '0'\n");
+				index[0] = '0';
+				index[1] = 0;
+			}
+		}
 
 #ifdef HAVE_SERVER_SUPPORT
 		/* newer MDS replaces LOV/OSC with LOD/OSP */
@@ -1555,26 +1555,26 @@ int class_config_llog_handler(const struct lu_env *env,
 
 			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
 			    strcmp(typename, LUSTRE_LOV_NAME) == 0) &&
-			    IS_MDT(s2lsi(clli->cfg_sb))) {
+			    cfg->cfg_sb && IS_MDT(s2lsi(cfg->cfg_sb))) {
 				CDEBUG(D_CONFIG,
 				       "For 2.x interoperability, rename obd "
 				       "type from lov to lod (%s)\n",
-				       s2lsi(clli->cfg_sb)->lsi_svname);
+				       s2lsi(cfg->cfg_sb)->lsi_svname);
 				strcpy(typename, LUSTRE_LOD_NAME);
 			}
 			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
 			    strcmp(typename, LUSTRE_OSC_NAME) == 0) &&
-			    IS_MDT(s2lsi(clli->cfg_sb))) {
+			    cfg->cfg_sb && IS_MDT(s2lsi(cfg->cfg_sb))) {
 				CDEBUG(D_CONFIG,
 				       "For 2.x interoperability, rename obd "
 				       "type from osc to osp (%s)\n",
-				       s2lsi(clli->cfg_sb)->lsi_svname);
+				       s2lsi(cfg->cfg_sb)->lsi_svname);
 				strcpy(typename, LUSTRE_OSP_NAME);
 			}
 		}
 #endif /* HAVE_SERVER_SUPPORT */
 
-		if (clli->cfg_flags & CFG_F_EXCLUDE) {
+		if (cfg->cfg_flags & CFG_F_EXCLUDE) {
 			CDEBUG(D_CONFIG, "cmd: %x marked EXCLUDED\n",
 			       lcfg->lcfg_command);
 			if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD)
@@ -1582,31 +1582,31 @@ int class_config_llog_handler(const struct lu_env *env,
 				lcfg->lcfg_command = LCFG_LOV_ADD_INA;
 		}
 
-                lustre_cfg_bufs_init(&bufs, lcfg);
+		lustre_cfg_bufs_init(&bufs, lcfg);
 
-                if (clli && clli->cfg_instance &&
-                    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
-                        inst = 1;
-                        inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
-                                   sizeof(clli->cfg_instance) * 2 + 4;
-                        OBD_ALLOC(inst_name, inst_len);
-                        if (inst_name == NULL)
-                                GOTO(out, rc = -ENOMEM);
-                        sprintf(inst_name, "%s-%p",
-                                lustre_cfg_string(lcfg, 0),
-                                clli->cfg_instance);
-                        lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
-                        CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n",
-                               lcfg->lcfg_command, inst_name);
-                }
+		if (cfg->cfg_instance &&
+		    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
+			inst = 1;
+			inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
+				   sizeof(cfg->cfg_instance) * 2 + 4;
+			OBD_ALLOC(inst_name, inst_len);
+			if (inst_name == NULL)
+				GOTO(out, rc = -ENOMEM);
+			snprintf(inst_name, inst_len, "%s-%p",
+				lustre_cfg_string(lcfg, 0),
+				cfg->cfg_instance);
+			lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
+			CDEBUG(D_CONFIG, "cmd %x, instance name: %s\n",
+			       lcfg->lcfg_command, inst_name);
+		}
 
                 /* we override the llog's uuid for clients, to insure they
                 are unique */
-                if (clli && clli->cfg_instance != NULL &&
-                    lcfg->lcfg_command == LCFG_ATTACH) {
-                        lustre_cfg_bufs_set_string(&bufs, 2,
-                                                   clli->cfg_uuid.uuid);
-                }
+		if (cfg->cfg_instance != NULL &&
+		    lcfg->lcfg_command == LCFG_ATTACH) {
+			lustre_cfg_bufs_set_string(&bufs, 2,
+						   cfg->cfg_uuid.uuid);
+		}
                 /*
                  * sptlrpc config record, we expect 2 data segments:
                  *  [0]: fs_name/target_name,
@@ -1614,59 +1614,59 @@ int class_config_llog_handler(const struct lu_env *env,
                  * moving them to index [1] and [2], and insert MGC's
                  * obdname at index [0].
                  */
-                if (clli && clli->cfg_instance == NULL &&
-                    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
-                        lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
-                                            bufs.lcfg_buflen[1]);
-                        lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
-                                            bufs.lcfg_buflen[0]);
-                        lustre_cfg_bufs_set_string(&bufs, 0,
-                                                   clli->cfg_obdname);
-                }
+		if (cfg->cfg_instance == NULL &&
+		    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
+			lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
+					    bufs.lcfg_buflen[1]);
+			lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
+					    bufs.lcfg_buflen[0]);
+			lustre_cfg_bufs_set_string(&bufs, 0,
+						   cfg->cfg_obdname);
+		}
 
-                lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
+		lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
 		if (lcfg_new == NULL)
 			GOTO(out, rc = -ENOMEM);
 
-                lcfg_new->lcfg_num   = lcfg->lcfg_num;
-                lcfg_new->lcfg_flags = lcfg->lcfg_flags;
+		lcfg_new->lcfg_num   = lcfg->lcfg_num;
+		lcfg_new->lcfg_flags = lcfg->lcfg_flags;
 
                 /* XXX Hack to try to remain binary compatible with
                  * pre-newconfig logs */
-                if (lcfg->lcfg_nal != 0 &&      /* pre-newconfig log? */
-                    (lcfg->lcfg_nid >> 32) == 0) {
-                        __u32 addr = (__u32)(lcfg->lcfg_nid & 0xffffffff);
+		if (lcfg->lcfg_nal != 0 &&      /* pre-newconfig log? */
+		    (lcfg->lcfg_nid >> 32) == 0) {
+			__u32 addr = (__u32)(lcfg->lcfg_nid & 0xffffffff);
 
-                        lcfg_new->lcfg_nid =
-                                LNET_MKNID(LNET_MKNET(lcfg->lcfg_nal, 0), addr);
-                        CWARN("Converted pre-newconfig NAL %d NID %x to %s\n",
-                              lcfg->lcfg_nal, addr,
-                              libcfs_nid2str(lcfg_new->lcfg_nid));
-                } else {
-                        lcfg_new->lcfg_nid = lcfg->lcfg_nid;
-                }
+			lcfg_new->lcfg_nid =
+				LNET_MKNID(LNET_MKNET(lcfg->lcfg_nal, 0), addr);
+			CWARN("Converted pre-newconfig NAL %d NID %x to %s\n",
+			      lcfg->lcfg_nal, addr,
+			      libcfs_nid2str(lcfg_new->lcfg_nid));
+		} else {
+			lcfg_new->lcfg_nid = lcfg->lcfg_nid;
+		}
 
-                lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
+		lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
 
 		rc = class_process_config(lcfg_new);
-                lustre_cfg_free(lcfg_new);
+		lustre_cfg_free(lcfg_new);
 
-                if (inst)
-                        OBD_FREE(inst_name, inst_len);
-                break;
-        }
-        default:
-                CERROR("Unknown llog record type %#x encountered\n",
-                       rec->lrh_type);
-                break;
-        }
+		if (inst)
+			OBD_FREE(inst_name, inst_len);
+		break;
+	}
+	default:
+		CERROR("Unknown llog record type %#x encountered\n",
+			rec->lrh_type);
+		break;
+	}
 out:
-        if (rc) {
+	if (rc) {
 		CERROR("%s: cfg command failed: rc = %d\n",
-		       handle->lgh_ctxt->loc_obd->obd_name, rc);
+			handle->lgh_ctxt->loc_obd->obd_name, rc);
 		class_config_dump_handler(NULL, handle, rec, data);
-        }
-        RETURN(rc);
+	}
+	RETURN(rc);
 }
 EXPORT_SYMBOL(class_config_llog_handler);
 

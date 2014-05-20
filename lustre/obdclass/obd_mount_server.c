@@ -781,7 +781,7 @@ static int client_lwp_config_process(const struct lu_env *env,
 				     struct llog_handle *handle,
 				     struct llog_rec_hdr *rec, void *data)
 {
-	struct config_llog_instance *clli = data;
+	struct config_llog_instance *cfg = data;
 	int			     cfg_len = rec->lrh_len;
 	char			    *cfg_buf = (char *) (rec + 1);
 	struct lustre_cfg	    *lcfg = NULL;
@@ -795,8 +795,9 @@ static int client_lwp_config_process(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	LASSERT(clli->cfg_sb != NULL);
-	lsi = s2lsi(clli->cfg_sb);
+	if (cfg->cfg_sb == NULL)
+		GOTO(out, rc = -EINVAL);
+	lsi = s2lsi(cfg->cfg_sb);
 
 	lcfg = (struct lustre_cfg *)cfg_buf;
 	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
@@ -818,35 +819,35 @@ static int client_lwp_config_process(const struct lu_env *env,
 		    marker->cm_flags & CM_EXCLUDE)
 			GOTO(out, rc = 0);
 
-		if (!tgt_is_mdt(marker->cm_tgtname, &clli->cfg_lwp_idx))
+		if (!tgt_is_mdt(marker->cm_tgtname, &cfg->cfg_lwp_idx))
 			GOTO(out, rc = 0);
 
-		if (IS_MDT(lsi) && clli->cfg_lwp_idx != 0)
+		if (IS_MDT(lsi) && cfg->cfg_lwp_idx != 0)
 			GOTO(out, rc = 0);
 
 		if (!strncmp(marker->cm_comment, "add mdc", 7) ||
 		    !strncmp(marker->cm_comment, "add failnid", 11)) {
 			if (marker->cm_flags & CM_START) {
-				clli->cfg_flags = CFG_F_MARKER;
+				cfg->cfg_flags = CFG_F_MARKER;
 				/* This hack is to differentiate the
 				 * ADD_UUID is come from "add mdc" record
 				 * or from "add failnid" record. */
 				if (!strncmp(marker->cm_comment,
 					     "add failnid", 11))
-					clli->cfg_flags |= CFG_F_SKIP;
+					cfg->cfg_flags |= CFG_F_SKIP;
 			} else if (marker->cm_flags & CM_END) {
-				clli->cfg_flags = 0;
+				cfg->cfg_flags = 0;
 			}
 		}
 		break;
 	}
 	case LCFG_ADD_UUID: {
-		if (clli->cfg_flags == CFG_F_MARKER) {
-			rc = lustre_lwp_setup(lcfg, lsi, clli->cfg_lwp_idx);
+		if (cfg->cfg_flags == CFG_F_MARKER) {
+			rc = lustre_lwp_setup(lcfg, lsi, cfg->cfg_lwp_idx);
 			/* XXX: process only the first nid as
 			 * we don't need another instance of lwp */
-			clli->cfg_flags |= CFG_F_SKIP;
-		} else if (clli->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
+			cfg->cfg_flags |= CFG_F_SKIP;
+		} else if (cfg->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
 			rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
 					    lcfg->lcfg_nid);
 			if (rc)
