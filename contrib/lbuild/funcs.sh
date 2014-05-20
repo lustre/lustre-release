@@ -57,7 +57,7 @@ find_linux_rpms() {
     local prefix="$1"
     local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
-    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}"
     local kernel_rpms=$(find_linux_rpm "$prefix" "$pathtorpms")
     # call a distro specific hook, if available
     if type -p find_linux_rpms-$DISTRO; then
@@ -88,7 +88,7 @@ find_linux_rpm() {
     local pathtorpms=${2:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
 
     local found_rpm=""
-    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}"
     local ret=1
     if [ -d "$pathtorpms" ]; then
         local rpm
@@ -153,8 +153,7 @@ autodetect_distro() {
         # try some heuristics
         if [ -f /etc/SuSE-release ]; then
             name=sles
-            version=$(grep ^VERSION /etc/SuSE-release)
-            version=${version#*= }
+            version=$(sed -n -e 's/^VERSION = //p' /etc/SuSE-release)
         elif [ -f /etc/redhat-release ]; then
             #name=$(head -1 /etc/redhat-release)
             name=rhel
@@ -182,12 +181,11 @@ autodetect_target() {
          rhel6) target="2.6-rhel6";;
         sles10) target="2.6-sles10";;
         sles11) target="$(uname -r | cut -d . -f 1,2)-sles11"
-		local PLEV=$(grep PATCHLEVEL /etc/SuSE-release | \
-			     sed -e 's/.*= *//')
-		if [ "$PLEV" = "3" ]; then
-			target=${target}sp3
-		fi
-		;;
+                local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+                if [ "$PLEV" = "3" ]; then
+                        target=${target}sp3
+                fi
+                ;;
           fc15) target="2.6-fc15";;
           fc18) target="3.x-fc18";;
             *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
