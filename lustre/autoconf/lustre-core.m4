@@ -1597,6 +1597,49 @@ AC_MSG_RESULT([$enable_client])
 ]) # LC_CONFIG_CLIENT
 
 #
+# --enable-mpitests
+#
+AC_DEFUN([LB_CONFIG_MPITESTS], [
+AC_ARG_ENABLE([mpitests],
+	AC_HELP_STRING([--enable-mpitests==yes|no|mpicc wrapper],
+		       [include mpi tests]), [
+		enable_mpitests=yes
+		case $enableval in
+		yes)
+			MPICC_WRAPPER=mpicc
+			;;
+		no)
+			enable_mpitests=no
+			;;
+		*)
+			MPICC_WRAPPER=$enableval
+			;;
+		esac
+	], [
+		enable_mpitests="yes"
+		MPICC_WRAPPER=mpicc
+	])
+
+	if test x$enable_mpitests != xno; then
+		oldcc=$CC
+		CC=$MPICC_WRAPPER
+		AC_CACHE_CHECK([whether mpitests can be built],
+				lb_cv_mpi_tests, [
+		AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+			#include <mpi.h>
+			int main(void) {
+				int flag;
+				MPI_Initialized(&flag);
+				return 0;
+			}
+		])], [], [enable_mpitests="no"])
+		])
+		CC=$oldcc
+	fi
+	AC_SUBST(MPICC_WRAPPER)
+]) # LB_CONFIG_MPITESTS
+
+#
 # LC_CONFIG_QUOTA
 #
 # whether to enable quota support global control
