@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,7 +23,7 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -35,39 +31,33 @@
  *
  * lustre/ofd/ofd_fs.c
  *
- * Author: Alexey Zhuravlev <bzzz@whamcloud.com>
- * Author: Mikhail Pershin <tappro@whamcloud.com>
+ * This file provides helper functions to handle various data stored on disk.
+ * It uses OSD API and works with any OSD.
+ *
+ * Note: this file contains also functions for sequence handling, they are
+ * placed here improperly and will be moved to the ofd_dev.c and ofd_internal.h,
+ * this comment is to be removed after that.
+ *
+ * Author: Alexey Zhuravlev <alexey.zhuravlev@intel.com>
+ * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include "ofd_internal.h"
 
-int ofd_record_write(const struct lu_env *env, struct ofd_device *ofd,
-		     struct dt_object *dt, struct lu_buf *buf, loff_t *off)
-{
-	struct thandle	*th;
-	int		 rc;
-
-	ENTRY;
-
-	LASSERT(dt);
-
-	th = dt_trans_create(env, ofd->ofd_osd);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
-
-	rc = dt_declare_record_write(env, dt, buf, *off, th);
-	if (rc == 0) {
-		rc = dt_trans_start_local(env, ofd->ofd_osd, th);
-		if (rc == 0)
-			rc = dt_record_write(env, dt, buf, off, th);
-	}
-	dt_trans_stop(env, ofd->ofd_osd, th);
-
-	RETURN(rc);
-}
-
+/**
+ * Restrict precreate batch count by its upper limit.
+ *
+ * The precreate batch count is a number of precreates to do in
+ * single transaction. It has upper limit - ofd_device::ofd_precreate_batch
+ * value which shouldn't be exceeded.
+ *
+ * \param[in] ofd	OFD device
+ * \param[in] int	number of updates in the batch
+ *
+ * \retval		\a batch limited by ofd_device::ofd_precreate_batch
+ */
 int ofd_precreate_batch(struct ofd_device *ofd, int batch)
 {
 	int count;
@@ -79,12 +69,24 @@ int ofd_precreate_batch(struct ofd_device *ofd, int batch)
 	return count;
 }
 
+/**
+ * Get ofd_seq for \a seq.
+ *
+ * Function finds appropriate structure by \a seq number and
+ * increases the reference counter of that structure.
+ *
+ * \param[in] ofd	OFD device
+ * \param[in] seq	sequence number, FID sequence number usually
+ *
+ * \retval		pointer to the requested ofd_seq structure
+ * \retval		NULL if ofd_seq is not found
+ */
 struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq)
 {
 	struct ofd_seq *oseq;
 
 	read_lock(&ofd->ofd_seq_list_lock);
-	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
+	list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
 		if (ostid_seq(&oseq->os_oi) == seq) {
 			atomic_inc(&oseq->os_refc);
 			read_unlock(&ofd->ofd_seq_list_lock);
@@ -95,35 +97,40 @@ struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq)
 	return NULL;
 }
 
-static void ofd_seq_destroy(const struct lu_env *env,
-			    struct ofd_seq *oseq)
-{
-	LASSERT(cfs_list_empty(&oseq->os_list));
-	LASSERT(oseq->os_lastid_obj != NULL);
-	lu_object_put(env, &oseq->os_lastid_obj->do_lu);
-	OBD_FREE_PTR(oseq);
-}
-
+/**
+ * Drop a reference to ofd_seq.
+ *
+ * The paired function to the ofd_seq_get(). It decrease the reference counter
+ * of the ofd_seq structure and free it if that reference was last one.
+ *
+ * \param[in] env	execution environment
+ * \param[in] oseq	ofd_seq structure to put
+ */
 void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq)
 {
-	if (atomic_dec_and_test(&oseq->os_refc))
-		ofd_seq_destroy(env, oseq);
-}
-
-static void ofd_seq_delete(const struct lu_env *env, struct ofd_seq *oseq)
-{
-	cfs_list_del_init(&oseq->os_list);
-	ofd_seq_put(env, oseq);
+	if (atomic_dec_and_test(&oseq->os_refc)) {
+		LASSERT(list_empty(&oseq->os_list));
+		LASSERT(oseq->os_lastid_obj != NULL);
+		lu_object_put(env, &oseq->os_lastid_obj->do_lu);
+		OBD_FREE_PTR(oseq);
+	}
 }
 
 /**
- * Add a new sequence to the OFD device.
+ * Add a new ofd_seq to the given OFD device.
  *
- * \param ofd OFD device
- * \param new_seq new sequence to be added
+ * First it checks if there is already existent ofd_seq with the same
+ * sequence number as used by \a new_seq.
+ * If such ofd_seq is not found then the \a new_seq is added to the list
+ * of all ofd_seq structures else the \a new_seq is dropped and the found
+ * ofd_seq is returned back.
  *
- * \retval the seq to be added or the existing seq
- **/
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] new_seq	new ofd_seq to be added
+ *
+ * \retval		ofd_seq structure
+ */
 static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 				   struct ofd_device *ofd,
 				   struct ofd_seq *new_seq)
@@ -131,7 +138,7 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 	struct ofd_seq *os = NULL;
 
 	write_lock(&ofd->ofd_seq_list_lock);
-	cfs_list_for_each_entry(os, &ofd->ofd_seq_list, os_list) {
+	list_for_each_entry(os, &ofd->ofd_seq_list, os_list) {
 		if (ostid_seq(&os->os_oi) == ostid_seq(&new_seq->os_oi)) {
 			atomic_inc(&os->os_refc);
 			write_unlock(&ofd->ofd_seq_list_lock);
@@ -141,12 +148,19 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 		}
 	}
 	atomic_inc(&new_seq->os_refc);
-	cfs_list_add_tail(&new_seq->os_list, &ofd->ofd_seq_list);
+	list_add_tail(&new_seq->os_list, &ofd->ofd_seq_list);
 	ofd->ofd_seq_count++;
 	write_unlock(&ofd->ofd_seq_list_lock);
 	return new_seq;
 }
 
+/**
+ * Get last object ID for the given sequence.
+ *
+ * \param[in] ofd_seq	OFD sequence structure
+ *
+ * \retval		the last object ID for this sequence
+ */
 obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
 {
 	obd_id id;
@@ -158,6 +172,12 @@ obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
 	return id;
 }
 
+/**
+ * Set new last object ID for the given sequence.
+ *
+ * \param[in] oseq	OFD sequence
+ * \param[in] id	the new OID to set
+ */
 void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id)
 {
 	spin_lock(&oseq->os_last_oid_lock);
@@ -166,11 +186,28 @@ void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id)
 	spin_unlock(&oseq->os_last_oid_lock);
 }
 
+/**
+ * Update last used OID on disk for the given sequence.
+ *
+ * The last used object ID is stored persistently on disk and
+ * must be written when updated. This function writes the sequence data.
+ * The format is just an object ID of the latest used object FID.
+ * Each ID is stored in per-sequence file.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] oseq	ofd_seq structure with data to write
+ *
+ * \retval		0 on successful write of data from \a oseq
+ * \retval		negative value on error
+ */
 int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 			   struct ofd_seq *oseq)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	obd_id			 tmp;
+	struct dt_object	*obj = oseq->os_lastid_obj;
+	struct thandle		*th;
 	int			 rc;
 
 	ENTRY;
@@ -181,15 +218,44 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 	info->fti_buf.lb_len = sizeof(tmp);
 	info->fti_off = 0;
 
-	rc = ofd_record_write(env, ofd, oseq->os_lastid_obj, &info->fti_buf,
-			      &info->fti_off);
+	LASSERT(obj != NULL);
+
+	th = dt_trans_create(env, ofd->ofd_osd);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_record_write(env, obj, &info->fti_buf,
+				     info->fti_off, th);
+	if (rc < 0)
+		GOTO(out, rc);
+	rc = dt_trans_start_local(env, ofd->ofd_osd, th);
+	if (rc < 0)
+		GOTO(out, rc);
+	rc = dt_record_write(env, obj, &info->fti_buf, &info->fti_off,
+			     th);
+	if (rc < 0)
+		GOTO(out, rc);
 
 	CDEBUG(D_INODE, "%s: write last_objid "DOSTID": rc = %d\n",
 	       ofd_name(ofd), POSTID(&oseq->os_oi), rc);
-
-	RETURN(rc);
+	EXIT;
+out:
+	dt_trans_stop(env, ofd->ofd_osd, th);
+	return rc;
 }
 
+/**
+ * Deregister LWP items for FLDB and SEQ client on OFD.
+ *
+ * LWP is lightweight proxy - simplified connection between
+ * servers. It is used for FID Location Database (FLDB) and
+ * sequence (SEQ) client-server interations.
+ *
+ * This function is used during server cleanup process to free
+ * LWP items that were previously set up upon OFD start.
+ *
+ * \param[in]     ofd	OFD device
+ */
 static void ofd_deregister_seq_exp(struct ofd_device *ofd)
 {
 	struct seq_server_site	*ss = &ofd->ofd_seq_site;
@@ -205,40 +271,64 @@ static void ofd_deregister_seq_exp(struct ofd_device *ofd)
 	}
 }
 
-static int ofd_fld_fini(const struct lu_env *env,
-			struct ofd_device *ofd)
+/**
+ * Stop FLDB server on OFD.
+ *
+ * This function is part of OFD cleanup process.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ *
+ */
+static void ofd_fld_fini(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct seq_server_site *ss = &ofd->ofd_seq_site;
-	ENTRY;
 
-	if (ss && ss->ss_server_fld) {
+	if (ss != NULL && ss->ss_server_fld != NULL) {
 		fld_server_fini(env, ss->ss_server_fld);
 		OBD_FREE_PTR(ss->ss_server_fld);
 		ss->ss_server_fld = NULL;
 	}
-
-	RETURN(0);
 }
 
+/**
+ * Free sequence structures on OFD.
+ *
+ * This function is part of OFD cleanup process, it goes through
+ * the list of ofd_seq structures stored in ofd_device structure
+ * and frees them.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ */
 void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd)
 {
-	struct ofd_seq  *oseq;
-	struct ofd_seq  *tmp;
-	cfs_list_t       dispose;
+	struct ofd_seq		*oseq;
+	struct ofd_seq		*tmp;
+	struct list_head	 dispose;
 
-	CFS_INIT_LIST_HEAD(&dispose);
+	INIT_LIST_HEAD(&dispose);
 	write_lock(&ofd->ofd_seq_list_lock);
-	cfs_list_for_each_entry_safe(oseq, tmp, &ofd->ofd_seq_list, os_list) {
-		cfs_list_move(&oseq->os_list, &dispose);
-	}
+	list_for_each_entry_safe(oseq, tmp, &ofd->ofd_seq_list, os_list)
+		list_move(&oseq->os_list, &dispose);
 	write_unlock(&ofd->ofd_seq_list_lock);
 
-	while (!cfs_list_empty(&dispose)) {
+	while (!list_empty(&dispose)) {
 		oseq = container_of0(dispose.next, struct ofd_seq, os_list);
-		ofd_seq_delete(env, oseq);
+		list_del_init(&oseq->os_list);
+		ofd_seq_put(env, oseq);
 	}
 }
 
+/**
+ * Stop FLDB and SEQ services on OFD.
+ *
+ * This function is part of OFD cleanup process.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ *
+ */
 void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 {
 	int rc;
@@ -249,18 +339,25 @@ void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 	if (rc != 0)
 		CERROR("%s: fid fini error: rc = %d\n", ofd_name(ofd), rc);
 
-	rc = ofd_fld_fini(env, ofd);
-	if (rc != 0)
-		CERROR("%s: fld fini error: rc = %d\n", ofd_name(ofd), rc);
+	ofd_fld_fini(env, ofd);
 
 	ofd_seqs_free(env, ofd);
 
-	LASSERT(cfs_list_empty(&ofd->ofd_seq_list));
+	LASSERT(list_empty(&ofd->ofd_seq_list));
 }
 
 /**
+ * Return ofd_seq structure filled with valid data.
  *
- * \retval the seq with seq number or errno (never NULL)
+ * This function gets the ofd_seq by sequence number and read
+ * corresponding data from disk.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] seq	sequence number
+ *
+ * \retval		ofd_seq structure filled with data
+ * \retval		ERR_PTR pointer on error
  */
 struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 			     obd_seq seq)
@@ -299,7 +396,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	oseq->os_lastid_obj = dob;
 
-	CFS_INIT_LIST_HEAD(&oseq->os_list);
+	INIT_LIST_HEAD(&oseq->os_list);
 	mutex_init(&oseq->os_create_lock);
 	spin_lock_init(&oseq->os_last_oid_lock);
 	ostid_set_seq(&oseq->os_oi, seq);
@@ -339,11 +436,22 @@ cleanup:
 	return ERR_PTR(rc);
 }
 
+/**
+ * initialize local FLDB server.
+ *
+ * \param[in] env	execution environment
+ * \param[in] uuid	unique name for this FLDS server
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 on successful initialization
+ * \retval		negative value on error
+ */
 static int ofd_fld_init(const struct lu_env *env, const char *uuid,
 			struct ofd_device *ofd)
 {
 	struct seq_server_site *ss = &ofd->ofd_seq_site;
 	int rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(ss->ss_server_fld);
@@ -352,7 +460,7 @@ static int ofd_fld_init(const struct lu_env *env, const char *uuid,
 
 	rc = fld_server_init(env, ss->ss_server_fld, ofd->ofd_osd, uuid,
 			     LU_SEQ_RANGE_OST);
-	if (rc) {
+	if (rc < 0) {
 		OBD_FREE_PTR(ss->ss_server_fld);
 		ss->ss_server_fld = NULL;
 		RETURN(rc);
@@ -361,37 +469,61 @@ static int ofd_fld_init(const struct lu_env *env, const char *uuid,
 }
 
 /**
- * It will retrieve its FLDB entries from MDT0, and it only happens
- * when upgrading existent FS to 2.6.
- **/
+ * Update local FLDB copy from master server.
+ *
+ * This callback is called when LWP is connected to the server.
+ * It retrieves its FLDB entries from MDT0, and it only happens
+ * when upgrading the existing file system to 2.6.
+ *
+ * \param[in] data	OFD device
+ *
+ * \retval		0 on successful FLDB update
+ * \retval		negative value in case if failure
+ */
 static int ofd_register_lwp_callback(void *data)
 {
-	struct lu_env		env;
+	struct lu_env		*env;
 	struct ofd_device	*ofd = data;
 	struct lu_server_fld	*fld = ofd->ofd_seq_site.ss_server_fld;
 	int			rc;
+
 	ENTRY;
 
 	if (!likely(fld->lsf_new))
 		RETURN(0);
 
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	if (rc) {
-		CERROR("%s: cannot init env: rc = %d\n", ofd_name(ofd), rc);
-		RETURN(rc);
-	}
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		RETURN(-ENOMEM);
 
-	rc = fld_update_from_controller(&env, fld);
-	if (rc != 0) {
+	rc = lu_env_init(env, LCT_DT_THREAD);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	rc = fld_update_from_controller(env, fld);
+	if (rc < 0) {
 		CERROR("%s: cannot update controller: rc = %d\n",
 		       ofd_name(ofd), rc);
 		GOTO(out, rc);
 	}
+	EXIT;
 out:
-	lu_env_fini(&env);
-	RETURN(rc);
+	lu_env_fini(env);
+	OBD_FREE_PTR(env);
+	return rc;
 }
 
+/**
+ * Get LWP exports from LWP connection for local FLDB server and SEQ client.
+ *
+ * This function is part of setup process and initialize FLDB server and SEQ
+ * client, so they may work with remote servers.
+ *
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 on successful export get
+ * \retval		negative value on error
+ */
 static int ofd_register_seq_exp(struct ofd_device *ofd)
 {
 	struct seq_server_site	*ss = &ofd->ofd_seq_site;
@@ -426,7 +558,17 @@ out_free:
 	return rc;
 }
 
-/* object sequence management */
+/**
+ * Initialize SEQ and FLD service on OFD.
+ *
+ * This is part of OFD setup process.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 on successful services initialization
+ * \retval		negative value on error
+ */
 int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 {
 	int rc;
@@ -438,23 +580,36 @@ int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 	}
 
 	rc = ofd_fld_init(env, ofd_name(ofd), ofd);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("%s: Can't init fld, rc %d\n", ofd_name(ofd), rc);
 		return rc;
 	}
 
 	rc = ofd_register_seq_exp(ofd);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("%s: Can't init seq exp, rc %d\n", ofd_name(ofd), rc);
 		return rc;
 	}
 
 	rwlock_init(&ofd->ofd_seq_list_lock);
-	CFS_INIT_LIST_HEAD(&ofd->ofd_seq_list);
+	INIT_LIST_HEAD(&ofd->ofd_seq_list);
 	ofd->ofd_seq_count = 0;
 	return rc;
 }
 
+/**
+ * Initialize storage for the OFD.
+ *
+ * This function sets up service files for OFD. Currently, the only
+ * service file is "health_check".
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] obd	OBD device (unused now)
+ *
+ * \retval		0 on successful setup
+ * \retval		negative value on error
+ */
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd)
 {
@@ -463,6 +618,10 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	int			 rc = 0;
 
 	ENTRY;
+
+	rc = ofd_seqs_init(env, ofd);
+	if (rc)
+		GOTO(out_hc, rc);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
 		RETURN (-ENOENT);
@@ -480,10 +639,6 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 
 	ofd->ofd_health_check_file = fo;
 
-	rc = ofd_seqs_init(env, ofd);
-	if (rc)
-		GOTO(out_hc, rc);
-
 	RETURN(0);
 out_hc:
 	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
@@ -491,19 +646,26 @@ out:
 	return rc;
 }
 
+/**
+ * Cleanup service files on OFD.
+ *
+ * This function syncs whole OFD device and close "health check" file.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ */
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 {
-	int i;
+	int rc;
 
 	ENTRY;
 
-	ofd_info_init(env, NULL);
-
 	ofd_seqs_fini(env, ofd);
 
-	i = dt_sync(env, ofd->ofd_osd);
-	if (i)
-		CERROR("can't sync: %d\n", i);
+	rc = dt_sync(env, ofd->ofd_osd);
+	if (rc < 0)
+		CWARN("%s: can't sync OFD upon cleanup: %d\n",
+		      ofd_name(ofd), rc);
 
 	if (ofd->ofd_health_check_file) {
 		lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
