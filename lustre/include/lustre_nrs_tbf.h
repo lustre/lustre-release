@@ -138,18 +138,10 @@ struct nrs_tbf_ops {
 	int (*o_rule_init)(struct ptlrpc_nrs_policy *,
 			   struct nrs_tbf_rule *,
 			   struct nrs_tbf_cmd *);
-	int (*o_rule_dump)(struct nrs_tbf_rule *,
-			   char *,
-			   int);
+	int (*o_rule_dump)(struct nrs_tbf_rule *, struct seq_file *);
 	int (*o_rule_match)(struct nrs_tbf_rule *,
 			    struct nrs_tbf_client *);
 	void (*o_rule_fini)(struct nrs_tbf_rule *);
-};
-
-struct nrs_tbf_dump {
-	char				*td_buff;
-	int				 td_size;
-	int				 td_length;
 };
 
 #define NRS_TBF_TYPE_JOBID	"jobid"

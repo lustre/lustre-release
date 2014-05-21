@@ -88,8 +88,8 @@ static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
 static void nrs_tbf_rule_fini(struct nrs_tbf_rule *rule)
 {
 	LASSERT(atomic_read(&rule->tr_ref) == 0);
-	LASSERT(cfs_list_empty(&rule->tr_cli_list));
-	LASSERT(cfs_list_empty(&rule->tr_linkage));
+	LASSERT(list_empty(&rule->tr_cli_list));
+	LASSERT(list_empty(&rule->tr_linkage));
 
 	rule->tr_head->th_ops->o_rule_fini(rule);
 	OBD_FREE_PTR(rule);
@@ -150,26 +150,26 @@ nrs_tbf_cli_reset(struct nrs_tbf_head *head,
 		  struct nrs_tbf_rule *rule,
 		  struct nrs_tbf_client *cli)
 {
-	if (!cfs_list_empty(&cli->tc_linkage)) {
+	if (!list_empty(&cli->tc_linkage)) {
 		LASSERT(rule != cli->tc_rule);
 		nrs_tbf_cli_rule_put(cli);
 	}
 	LASSERT(cli->tc_rule == NULL);
-	LASSERT(cfs_list_empty(&cli->tc_linkage));
+	LASSERT(list_empty(&cli->tc_linkage));
 	/* Rule's ref is added before called */
 	cli->tc_rule = rule;
-	cfs_list_add_tail(&cli->tc_linkage, &rule->tr_cli_list);
+	list_add_tail(&cli->tc_linkage, &rule->tr_cli_list);
 	nrs_tbf_cli_reset_value(head, cli);
 }
 
 static int
-nrs_tbf_rule_dump(struct nrs_tbf_rule *rule, char *buff, int length)
+nrs_tbf_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
-	return rule->tr_head->th_ops->o_rule_dump(rule, buff, length);
+	return rule->tr_head->th_ops->o_rule_dump(rule, m);
 }
 
 static int
-nrs_tbf_rule_dump_all(struct nrs_tbf_head *head, char *buff, int length)
+nrs_tbf_rule_dump_all(struct nrs_tbf_head *head, struct seq_file *m)
 {
 	struct nrs_tbf_rule *rule;
 	int rc = 0;
@@ -177,9 +177,13 @@ nrs_tbf_rule_dump_all(struct nrs_tbf_head *head, char *buff, int length)
 	LASSERT(head != NULL);
 	spin_lock(&head->th_rule_lock);
 	/* List the rules from newest to oldest */
-	cfs_list_for_each_entry(rule, &head->th_list, tr_linkage) {
+	list_for_each_entry(rule, &head->th_list, tr_linkage) {
 		LASSERT((rule->tr_flags & NTRS_STOPPING) == 0);
-		rc += nrs_tbf_rule_dump(rule, buff + rc, length - rc);
+		rc = nrs_tbf_rule_dump(rule, m);
+		if (rc) {
+			rc = -ENOSPC;
+			break;
+		}
 	}
 	spin_unlock(&head->th_rule_lock);
 
@@ -816,13 +820,11 @@ static int nrs_tbf_jobid_rule_init(struct ptlrpc_nrs_policy *policy,
 }
 
 static int
-nrs_tbf_jobid_rule_dump(struct nrs_tbf_rule *rule, char *buff, int length)
+nrs_tbf_jobid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
-	return snprintf(buff, length, "%s {%s} %llu, ref %d\n",
-			rule->tr_name,
-			rule->tr_jobids_str,
-			rule->tr_rpc_rate,
-			atomic_read(&rule->tr_ref) - 1);
+	return seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
+			  rule->tr_jobids_str, rule->tr_rpc_rate,
+			  atomic_read(&rule->tr_ref) - 1);
 }
 
 static int
@@ -1023,13 +1025,11 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 }
 
 static int
-nrs_tbf_nid_rule_dump(struct nrs_tbf_rule *rule, char *buff, int length)
+nrs_tbf_nid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
-	return snprintf(buff, length, "%s {%s} %llu, ref %d\n",
-			rule->tr_name,
-			rule->tr_nids_str,
-			rule->tr_rpc_rate,
-			atomic_read(&rule->tr_ref) - 1);
+	return seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
+			  rule->tr_nids_str, rule->tr_rpc_rate,
+			  atomic_read(&rule->tr_ref) - 1);
 }
 
 static int
@@ -1220,26 +1220,13 @@ int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
 	 */
 	case NRS_CTL_TBF_RD_RULE: {
 		struct nrs_tbf_head *head = policy->pol_private;
+		struct seq_file *m = (struct seq_file *) arg;
 		struct ptlrpc_service_part *svcpt;
-		struct nrs_tbf_dump *dump;
-		int length;
-
-		dump = (struct nrs_tbf_dump *)arg;
 
 		svcpt = policy->pol_nrs->nrs_svcpt;
-		length = snprintf(dump->td_buff, dump->td_size,
-				  "CPT %d:\n",
-				  svcpt->scp_cpt);
-		dump->td_length += length;
-		dump->td_buff += length;
-		dump->td_size -= length;
+		seq_printf(m, "CPT %d:\n", svcpt->scp_cpt);
 
-		length = nrs_tbf_rule_dump_all(head,
-					       dump->td_buff,
-					       dump->td_size);
-		dump->td_length += length;
-		dump->td_buff += length;
-		dump->td_size -= length;
+		rc = nrs_tbf_rule_dump_all(head, m);
 		}
 		break;
 
@@ -1572,31 +1559,23 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
  */
 #define LPROCFS_NRS_RATE_MAX		65535
 
-static int ptlrpc_lprocfs_rd_nrs_tbf_rule(char *page, char **start,
-					   off_t off, int count, int *eof,
-					   void *data)
+static int
+ptlrpc_lprocfs_nrs_tbf_rule_seq_show(struct seq_file *m, void *data)
 {
-	struct ptlrpc_service	    *svc = data;
+	struct ptlrpc_service	    *svc = m->private;
 	int			     rc;
-	int			     rc2;
-	struct nrs_tbf_dump	     dump;
 
-	rc2 = snprintf(page, count, "regular_requests:\n");
+	seq_printf(m, "regular_requests:\n");
 	/**
 	 * Perform two separate calls to this as only one of the NRS heads'
 	 * policies may be in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED or
 	 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPING state.
 	 */
-	dump.td_length = 0;
-	dump.td_buff = page + rc2;
-	dump.td_size = count - rc2;
 	rc = ptlrpc_nrs_policy_control(svc, PTLRPC_NRS_QUEUE_REG,
 				       NRS_POL_NAME_TBF,
 				       NRS_CTL_TBF_RD_RULE,
-				       false, &dump);
+				       false, m);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += dump.td_length;
 		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1608,17 +1587,12 @@ static int ptlrpc_lprocfs_rd_nrs_tbf_rule(char *page, char **start,
 	if (!nrs_svc_has_hp(svc))
 		goto no_hp;
 
-	rc2 += snprintf(page + rc2, count - rc2, "high_priority_requests:\n");
-	dump.td_length = 0;
-	dump.td_buff = page + rc2;
-	dump.td_size = count - rc2;
+	seq_printf(m, "high_priority_requests:\n");
 	rc = ptlrpc_nrs_policy_control(svc, PTLRPC_NRS_QUEUE_HP,
 				       NRS_POL_NAME_TBF,
 				       NRS_CTL_TBF_RD_RULE,
-				       false, &dump);
+				       false, m);
 	if (rc == 0) {
-		*eof = 1;
-		rc2 += dump.td_length;
 		/**
 		 * Ignore -ENODEV as the high priority NRS head's policy may be
 		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
@@ -1629,7 +1603,7 @@ static int ptlrpc_lprocfs_rd_nrs_tbf_rule(char *page, char **start,
 
 no_hp:
 
-	return rc2 ? : rc;
+	return rc;
 }
 
 static int nrs_tbf_id_parse(struct nrs_tbf_cmd *cmd, char **val)
@@ -1762,11 +1736,12 @@ out:
 
 extern struct nrs_core nrs_core;
 #define LPROCFS_WR_NRS_TBF_MAX_CMD (4096)
-static int ptlrpc_lprocfs_wr_nrs_tbf_rule(struct file *file,
-					  const char *buffer,
-					  unsigned long count, void *data)
+static ssize_t
+ptlrpc_lprocfs_nrs_tbf_rule_seq_write(struct file *file, const char *buffer,
+				      size_t count, loff_t *off)
 {
-	struct ptlrpc_service	  *svc = data;
+	struct seq_file		  *m = file->private_data;
+	struct ptlrpc_service	  *svc = m->private;
 	char			  *kernbuf;
 	char			  *val;
 	int			   rc;
@@ -1830,7 +1805,7 @@ out_free_kernbuff:
 out:
 	return rc ? rc : count;
 }
-
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
 
 /**
  * Initializes a TBF policy's lprocfs interface for service \a svc
@@ -1842,11 +1817,9 @@ out:
  */
 int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 {
-	int	rc;
-	struct lprocfs_vars nrs_tbf_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_tbf_lprocfs_vars[] = {
 		{ .name		= "nrs_tbf_rule",
-		  .read_fptr	= ptlrpc_lprocfs_rd_nrs_tbf_rule,
-		  .write_fptr	= ptlrpc_lprocfs_wr_nrs_tbf_rule,
+		  .fops		= &ptlrpc_lprocfs_nrs_tbf_rule_fops,
 		  .data = svc },
 		{ NULL }
 	};
@@ -1854,9 +1827,8 @@ int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 	if (svc->srv_procroot == NULL)
 		return 0;
 
-	rc = lprocfs_add_vars(svc->srv_procroot, nrs_tbf_lprocfs_vars, NULL);
-
-	return rc;
+	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_tbf_lprocfs_vars,
+				    NULL);
 }
 
 /**
