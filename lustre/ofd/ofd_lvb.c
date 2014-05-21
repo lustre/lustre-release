@@ -154,7 +154,7 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 	lvb = res->lr_lvb_data;
 	if (lvb == NULL) {
 		CERROR("%s: no LVB data for "DFID"\n",
-		       ofd_obd(ofd)->obd_name, PFID(&info->fti_fid));
+		       ofd_name(ofd), PFID(&info->fti_fid));
 		GOTO(out_env, rc = 0);
 	}
 

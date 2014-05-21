@@ -81,7 +81,7 @@ static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
 	obd = class_name2obd(next);
 	if (obd == NULL) {
 		CERROR("%s: can't locate next device: %s\n",
-		       m->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name, next);
+		       ofd_name(m), next);
 		GOTO(out, rc = -ENOTCONN);
 	}
 
@@ -91,7 +91,7 @@ static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
 	rc = obd_connect(NULL, exp, obd, &obd->obd_uuid, data, NULL);
 	if (rc) {
 		CERROR("%s: cannot connect to next dev %s: rc = %d\n",
-		       m->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name, next, rc);
+		       ofd_name(m), next, rc);
 		GOTO(out, rc);
 	}
 
@@ -405,7 +405,7 @@ static int ofd_lfsck_out_notify(const struct lu_env *env, void *data,
 	}
 	default:
 		CERROR("%s: unknown lfsck event: rc = %d\n",
-		       ofd_obd(ofd)->obd_name, event);
+		       ofd_name(ofd), event);
 		return -EINVAL;
 	}
 

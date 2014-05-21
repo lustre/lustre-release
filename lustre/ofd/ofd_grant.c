@@ -955,7 +955,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	    (ofd->ofd_osfs.os_blocks >> 10)) {
 		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_RPCTRACE, "%s: not enough space for create "LPU64"\n",
-		       ofd_obd(ofd)->obd_name,
+		       ofd_name(ofd),
 		       ofd->ofd_osfs.os_bavail * ofd->ofd_osfs.os_blocks);
 		RETURN(-ENOSPC);
 	}

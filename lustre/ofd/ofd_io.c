@@ -74,8 +74,7 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: fail to verify OST local stored "
 			       "PFID xattr for "DFID", the client given PFID "
 			       DFID", OST local stored PFID "DFID": rc = %d\n",
-			       ofd_obd(ofd)->obd_name,
-			       PFID(&fo->ofo_header.loh_fid),
+			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid), rc);
 		else
 			fo->ofo_pfid_verified = 1;
@@ -88,16 +87,14 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: fail to verify the client given "
 			       "PFID for "DFID", the client given PFID "DFID
 			       ", local stored PFID "DFID": rc = %d\n",
-			       ofd_obd(ofd)->obd_name,
-			       PFID(&fo->ofo_header.loh_fid),
+			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid), rc);
 		else
 			CDEBUG(D_LFSCK, "%s: both the client given PFID and "
 			       "the OST local stored PFID are stale for the "
 			       "OST-object "DFID", client given PFID is "DFID
 			       ", local stored PFID is "DFID"\n",
-			       ofd_obd(ofd)->obd_name,
-			       PFID(&fo->ofo_header.loh_fid),
+			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid));
 		break;
 	case LPVS_INCONSISTENT_TOFIX:
@@ -107,15 +104,13 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: fixed the staled OST PFID xattr "
 			       "for "DFID", with the client given PFID "DFID
 			       ", the old stored PFID "DFID"\n",
-			       ofd_obd(ofd)->obd_name,
-			       PFID(&fo->ofo_header.loh_fid),
+			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid));
 		} else {
 			CDEBUG(D_LFSCK, "%s: fail to fix the OST PFID xattr "
 			       "for "DFID", client given PFID "DFID", local "
 			       "stored PFID "DFID": rc = %d\n",
-			       ofd_obd(ofd)->obd_name,
-			       PFID(&fo->ofo_header.loh_fid),
+			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid), rc);
 		}
 		*pfid = oii->oii_pfid;
@@ -233,7 +228,7 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start self_repair thread: rc = %d\n",
-		       ofd_obd(ofd)->obd_name, rc);
+		       ofd_name(ofd), rc);
 	} else {
 		rc = 0;
 		l_wait_event(thread->t_ctl_waitq,
@@ -279,7 +274,7 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 		CERROR("%s: cannot alloc memory for verify OST-object "
 		       "consistency for "DFID", client given PFID "DFID
 		       ", local stored PFID "DFID"\n",
-		       ofd_obd(ofd)->obd_name, PFID(&fo->ofo_header.loh_fid),
+		       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 		       oa->o_parent_seq, oa->o_parent_oid, oa->o_stripe_idx,
 		       PFID(&fo->ofo_pfid));
 
