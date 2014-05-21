@@ -111,7 +111,6 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
-	client_adjust_max_dirty(cli);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         LPROCFS_CLIMP_EXIT(dev);
@@ -512,7 +511,6 @@ static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
 	}
 	client_obd_list_lock(&cli->cl_loi_list_lock);
 	cli->cl_max_pages_per_rpc = val;
-	client_adjust_max_dirty(cli);
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
 	LPROCFS_CLIMP_EXIT(dev);

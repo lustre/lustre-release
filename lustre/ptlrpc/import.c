@@ -1148,7 +1148,6 @@ finish:
 
                 LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
                         (cli->cl_max_pages_per_rpc > 0));
-		client_adjust_max_dirty(cli);
         }
 
 out:
