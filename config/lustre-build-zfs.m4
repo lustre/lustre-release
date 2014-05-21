@@ -22,6 +22,11 @@ dnl # --with-zfs-devel=path
 dnl #                 - User provided directory where zfs development headers
 dnl #                   are located. This option is typically used when user
 dnl #                   uses rpm2cpio to unpack src rpm.
+dnl #                   Assumes layout of:
+dnl #                     ${zfs-devel-path}/usr/include/libzfs
+dnl #                     ${zfs-devel-path}/usr/include/libspl
+dnl #                     ${zfs-devel-path}/lib64/libzfs.so.* or
+dnl #                     ${zfs-devel-path}/lib/libzfs.so.*
 dnl #
 dnl # --with-zfs=path - Enable zfs support and use the zfs headers in the
 dnl #                   provided path.  No autodetection is performed and
@@ -277,12 +282,13 @@ AC_DEFUN([LB_ZFS_DEVEL], [
 	AC_MSG_CHECKING([user provided zfs devel headers])
 	AS_IF([test ! -z "${zfsdevel}"], [
 		AS_IF([test -d "${zfsdevel}/usr/include/libspl" && test -d "${zfsdevel}/usr/include/libzfs"], [
-			zfslib="-I $zfsdevel/usr/include/libspl -I $zfsdevel/usr/include/libzfs"
+			zfsinc="-I $zfsdevel/usr/include/libspl -I $zfsdevel/usr/include/libzfs"
+			zfslib="-L$zfsdevel/lib64 -L$zfsdevel/lib"
 		], [
 			AC_MSG_ERROR([Path to development headers directory does not exist])
 		])
 	])
-	AC_MSG_RESULT([$zfslib])
+	AC_MSG_RESULT([$zfsinc])
 ])
 
 AC_DEFUN([LB_ZFS_USER], [
@@ -290,20 +296,23 @@ AC_DEFUN([LB_ZFS_USER], [
 	dnl # Detect user space zfs development headers.
 	dnl #
 	AC_MSG_CHECKING([zfs devel headers])
-	AS_IF([test -z "${zfslib}"], [
+	AS_IF([test -z "${zfsinc}"], [
         	AS_IF([test -e "${zfssrc}/include/libzfs.h" && test -e "${zfssrc}/lib/libspl/include"], [
-                	zfslib="-I $zfssrc/lib/libspl/include -I $zfssrc/include"
+                	zfsinc="-I $zfssrc/lib/libspl/include -I $zfssrc/include"
+			zfslib="-L$zfssrc/lib/libzfs/.libs/"
 		], [test -d /usr/include/libzfs && test -d /usr/include/libspl], [
-			zfslib="-I /usr/include/libspl -I /usr/include/libzfs"
+			zfsinc="-I/usr/include/libspl -I /usr/include/libzfs"
+			zfslib=""
 		], [
-			zfslib="[Not Found]"
+			zfsinc="[Not Found]"
+			zfslib=""
 			enable_zfs=no
 		])
 	])
-	AC_MSG_RESULT([$zfslib])
+	AC_MSG_RESULT([$zfsinc])
 
-	ZFS_LIBZFS_INCLUDE=${zfslib}
-	ZFS_LIBZFS_LDFLAGS=-lzfs
+	ZFS_LIBZFS_INCLUDE=${zfsinc}
+	ZFS_LIBZFS_LDFLAGS="-lzfs ${zfslib}"
 	AC_SUBST(ZFS_LIBZFS_INCLUDE)
 	AC_SUBST(ZFS_LIBZFS_LDFLAGS)
 ])
