@@ -427,8 +427,9 @@ test_19a() {
 
 	# let the client reconnect
 	client_reconnect
-	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state | \
-	    awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+		awk -F"[ [,]" '/EVICTED ]$/ \
+			{ if (mx<$5) {mx=$5;} } END { print mx }')
 
 	[ ! -z "$EVICT" ] && [[ $EVICT -gt $BEFORE ]] ||
 		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
@@ -456,8 +457,9 @@ test_19b() {
 
 	# let the client reconnect
 	client_reconnect
-	EVICT=$(do_facet client $LCTL get_param osc.$FSNAME-OST*.state | \
-	    awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+	EVICT=$(do_facet client $LCTL get_param osc.$FSNAME-OST*.state |
+		awk -F"[ [,]" '/EVICTED ]$/ \
+			{ if (mx<$5) {mx=$5;} } END { print mx }')
 
 	[ ! -z "$EVICT" ] && [[ $EVICT -gt $BEFORE ]] ||
 		(do_facet client $LCTL get_param osc.$FSNAME-OST*.state;
