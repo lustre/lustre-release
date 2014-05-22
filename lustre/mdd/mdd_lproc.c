@@ -49,56 +49,14 @@
 #include <libcfs/libcfs_string.h>
 #include "mdd_internal.h"
 
-int mdd_procfs_init(struct mdd_device *mdd, const char *name)
+static ssize_t
+mdd_atime_diff_seq_write(struct file *file, const char *buffer,
+			 size_t count, loff_t *off)
 {
-        struct lprocfs_static_vars lvars;
-        struct obd_type     *type;
-        int                  rc;
-        ENTRY;
-
-	/* at the moment there is no linkage between lu_type
-	 * and obd_type, so we lookup obd_type this way */
-	type = class_search_type(LUSTRE_MDD_NAME);
-
-        LASSERT(name != NULL);
-        LASSERT(type != NULL);
-
-        /* Find the type procroot and add the proc entry for this device */
-        lprocfs_mdd_init_vars(&lvars);
-        mdd->mdd_proc_entry = lprocfs_register(name, type->typ_procroot,
-                                               lvars.obd_vars, mdd);
-        if (IS_ERR(mdd->mdd_proc_entry)) {
-                rc = PTR_ERR(mdd->mdd_proc_entry);
-                CERROR("Error %d setting up lprocfs for %s\n",
-                       rc, name);
-                mdd->mdd_proc_entry = NULL;
-                GOTO(out, rc);
-        }
-
-	rc = 0;
-
-        EXIT;
-out:
-        if (rc)
-               mdd_procfs_fini(mdd);
-        return rc;
-}
-
-int mdd_procfs_fini(struct mdd_device *mdd)
-{
-        if (mdd->mdd_proc_entry) {
-                 lprocfs_remove(&mdd->mdd_proc_entry);
-                 mdd->mdd_proc_entry = NULL;
-        }
-        RETURN(0);
-}
-
-static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
-                                 unsigned long count, void *data)
-{
-        struct mdd_device *mdd = data;
-        char kernbuf[20], *end;
-        unsigned long diff = 0;
+	struct seq_file *m = file->private_data;
+	struct mdd_device *mdd = m->private;
+	char kernbuf[20], *end;
+	unsigned long diff = 0;
 
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
@@ -116,37 +74,34 @@ static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data)
+static int mdd_atime_diff_seq_show(struct seq_file *m, void *data)
 {
-        struct mdd_device *mdd = data;
+	struct mdd_device *mdd = m->private;
 
-        *eof = 1;
-        return snprintf(page, count, "%lu\n", mdd->mdd_atime_diff);
+	return seq_printf(m, "%lu\n", mdd->mdd_atime_diff);
 }
-
+LPROC_SEQ_FOPS(mdd_atime_diff);
 
 /**** changelogs ****/
-static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
-                                     int count, int *eof, void *data)
+static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
 {
-        struct mdd_device *mdd = data;
-        int i = 0, rc = 0;
+	struct mdd_device *mdd = m->private;
+	int i = 0;
 
-        *eof = 1;
-        while (i < CL_LAST) {
-                if (mdd->mdd_cl.mc_mask & (1 << i))
-                        rc += snprintf(page + rc, count - rc, "%s ",
-                                       changelog_type2str(i));
-                i++;
-        }
-        return rc;
+	while (i < CL_LAST) {
+		if (mdd->mdd_cl.mc_mask & (1 << i))
+			seq_printf(m, "%s ", changelog_type2str(i));
+		i++;
+	}
+	return 0;
 }
 
-static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
-				     unsigned long count, void *data)
+static ssize_t
+mdd_changelog_mask_seq_write(struct file *file, const char *buffer,
+			     size_t count, loff_t *off)
 {
-	struct mdd_device *mdd = data;
+	struct seq_file *m = file->private_data;
+	struct mdd_device *mdd = m->private;
 	char *kernbuf;
 	int rc;
 	ENTRY;
@@ -168,44 +123,31 @@ out:
 	OBD_FREE(kernbuf, PAGE_CACHE_SIZE);
 	return rc;
 }
-
-struct cucb_data {
-        char *page;
-        int count;
-        int idx;
-};
+LPROC_SEQ_FOPS(mdd_changelog_mask);
 
 static int lprocfs_changelog_users_cb(const struct lu_env *env,
 				      struct llog_handle *llh,
 				      struct llog_rec_hdr *hdr, void *data)
 {
-        struct llog_changelog_user_rec *rec;
-        struct cucb_data *cucb = (struct cucb_data *)data;
+	struct llog_changelog_user_rec *rec;
+	struct seq_file *m = data;
 
-        LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
-        rec = (struct llog_changelog_user_rec *)hdr;
+	rec = (struct llog_changelog_user_rec *)hdr;
 
-        cucb->idx += snprintf(cucb->page + cucb->idx, cucb->count - cucb->idx,
-                              CHANGELOG_USER_PREFIX"%-3d "LPU64"\n",
-                              rec->cur_id, rec->cur_endrec);
-        if (cucb->idx >= cucb->count)
-                return -ENOSPC;
-
-        return 0;
+	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d "LPU64"\n",
+		   rec->cur_id, rec->cur_endrec);
+	return 0;
 }
 
-static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
+static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_env		 env;
-	struct mdd_device	*mdd = data;
+	struct mdd_device	*mdd = m->private;
 	struct llog_ctxt	*ctxt;
-	struct cucb_data	 cucb;
 	__u64			 cur;
 	int			 rc;
-
-        *eof = 1;
 
         ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
@@ -223,37 +165,32 @@ static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
 	cur = mdd->mdd_cl.mc_index;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
-        cucb.count = count;
-        cucb.page = page;
-        cucb.idx = 0;
-
-        cucb.idx += snprintf(cucb.page + cucb.idx, cucb.count - cucb.idx,
-                              "current index: "LPU64"\n", cur);
-
-        cucb.idx += snprintf(cucb.page + cucb.idx, cucb.count - cucb.idx,
-                              "%-5s %s\n", "ID", "index");
+	seq_printf(m, "current index: "LPU64"\n", cur);
+	seq_printf(m, "%-5s %s\n", "ID", "index");
 
 	llog_cat_process(&env, ctxt->loc_handle, lprocfs_changelog_users_cb,
-			 &cucb, 0, 0);
+			 m, 0, 0);
 
 	lu_env_fini(&env);
 	llog_ctxt_put(ctxt);
-	return cucb.idx;
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(mdd_changelog_users);
+
+static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
+{
+	struct mdd_device *mdd = m->private;
+
+	LASSERT(mdd != NULL);
+	return seq_printf(m, "%d\n", mdd->mdd_sync_permission);
 }
 
-static int lprocfs_rd_sync_perm(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
+static ssize_t
+mdd_sync_perm_seq_write(struct file *file, const char *buffer,
+			size_t count, loff_t *off)
 {
-        struct mdd_device *mdd = data;
-
-        LASSERT(mdd != NULL);
-        return snprintf(page, count, "%d\n", mdd->mdd_sync_permission);
-}
-
-static int lprocfs_wr_sync_perm(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
-{
-        struct mdd_device *mdd = data;
+	struct seq_file *m = file->private_data;
+	struct mdd_device *mdd = m->private;
         int val, rc;
 
         LASSERT(mdd != NULL);
@@ -264,22 +201,22 @@ static int lprocfs_wr_sync_perm(struct file *file, const char *buffer,
         mdd->mdd_sync_permission = !!val;
         return count;
 }
+LPROC_SEQ_FOPS(mdd_sync_perm);
 
-static int lprocfs_rd_lfsck_speed_limit(char *page, char **start, off_t off,
-					int count, int *eof, void *data)
+static int mdd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
 {
-	struct mdd_device *mdd = data;
+	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	*eof = 1;
-
-	return lfsck_get_speed(mdd->mdd_bottom, page, count);
+	return lfsck_get_speed(m, mdd->mdd_bottom);
 }
 
-static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
-					unsigned long count, void *data)
+static ssize_t
+mdd_lfsck_speed_limit_seq_write(struct file *file, const char *buffer,
+				size_t count, loff_t *off)
 {
-	struct mdd_device *mdd = data;
+	struct seq_file *m = file->private_data;
+	struct mdd_device *mdd = m->private;
 	__u32 val;
 	int rc;
 
@@ -291,25 +228,22 @@ static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
 	rc = lfsck_set_speed(mdd->mdd_bottom, val);
 	return rc != 0 ? rc : count;
 }
+LPROC_SEQ_FOPS(mdd_lfsck_speed_limit);
 
-static int lprocfs_rd_lfsck_async_windows(char *page, char **start, off_t off,
-					  int count, int *eof, void *data)
+static int mdd_lfsck_async_windows_seq_show(struct seq_file *m, void *data)
 {
-	struct mdd_device *mdd = data;
-	int		   rc;
+	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	*eof = 1;
-
-	rc = lfsck_get_windows(mdd->mdd_bottom, page, count);
-
-	return rc != 0 ? rc : count;
+	return lfsck_get_windows(m, mdd->mdd_bottom);
 }
 
-static int lprocfs_wr_lfsck_async_windows(struct file *file, const char *buffer,
-					  unsigned long count, void *data)
+static ssize_t
+mdd_lfsck_async_windows_seq_write(struct file *file, const char *buffer,
+				  size_t count, loff_t *off)
 {
-	struct mdd_device *mdd = data;
+	struct seq_file   *m = file->private_data;
+	struct mdd_device *mdd = m->private;
 	__u32		   val;
 	int		   rc;
 
@@ -320,54 +254,84 @@ static int lprocfs_wr_lfsck_async_windows(struct file *file, const char *buffer,
 
 	return rc != 0 ? rc : count;
 }
+LPROC_SEQ_FOPS(mdd_lfsck_async_windows);
 
-static int lprocfs_rd_lfsck_namespace(char *page, char **start, off_t off,
-				      int count, int *eof, void *data)
+static int mdd_lfsck_namespace_seq_show(struct seq_file *m, void *data)
 {
-	struct mdd_device *mdd = data;
-	int rc;
+	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	*eof = 1;
 
-	rc = lfsck_dump(mdd->mdd_bottom, page, count, LT_NAMESPACE);
-	return rc;
+	return lfsck_dump(m, mdd->mdd_bottom, LT_NAMESPACE);
 }
+LPROC_SEQ_FOPS_RO(mdd_lfsck_namespace);
 
-static int lprocfs_rd_lfsck_layout(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
-	struct mdd_device *mdd = data;
+	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	*eof = 1;
 
-	return lfsck_dump(mdd->mdd_bottom, page, count, LT_LAYOUT);
+	return lfsck_dump(m, mdd->mdd_bottom, LT_LAYOUT);
 }
+LPROC_SEQ_FOPS_RO(mdd_lfsck_layout);
 
-static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
-        { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
-        { "changelog_mask",  lprocfs_rd_changelog_mask,
-                             lprocfs_wr_changelog_mask, 0 },
-        { "changelog_users", lprocfs_rd_changelog_users, 0, 0},
-        { "sync_permission", lprocfs_rd_sync_perm, lprocfs_wr_sync_perm, 0 },
-	{ "lfsck_speed_limit", lprocfs_rd_lfsck_speed_limit,
-			       lprocfs_wr_lfsck_speed_limit, 0 },
-	{ "lfsck_async_windows", lprocfs_rd_lfsck_async_windows,
-				 lprocfs_wr_lfsck_async_windows, 0 },
-	{ "lfsck_namespace", lprocfs_rd_lfsck_namespace, 0, 0 },
-	{ "lfsck_layout", lprocfs_rd_lfsck_layout, 0, 0 },
+static struct lprocfs_seq_vars lprocfs_mdd_obd_vars[] = {
+	{ .name =	"atime_diff",
+	  .fops =	&mdd_atime_diff_fops		},
+	{ .name =	"changelog_mask",
+	  .fops =	&mdd_changelog_mask_fops	},
+	{ .name =	"changelog_users",
+	  .fops =	&mdd_changelog_users_fops	},
+	{ .name =	"sync_permission",
+	  .fops =	&mdd_sync_perm_fops		},
+	{ .name =	"lfsck_speed_limit",
+	  .fops =	&mdd_lfsck_speed_limit_fops	},
+	{ .name =	"lfsck_async_windows",
+	  .fops =	&mdd_lfsck_async_windows_fops	},
+	{ .name =	"lfsck_namespace",
+	  .fops =	&mdd_lfsck_namespace_fops	},
+	{ .name	=	"lfsck_layout",
+	  .fops	=	&mdd_lfsck_layout_fops		},
 	{ 0 }
 };
 
-static struct lprocfs_vars lprocfs_mdd_module_vars[] = {
-        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
-        { 0 }
-};
-
-void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars)
+int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
-        lvars->module_vars  = lprocfs_mdd_module_vars;
-        lvars->obd_vars     = lprocfs_mdd_obd_vars;
+	struct obd_device *obd = class_name2obd(name);
+	struct obd_type   *type;
+	int		   rc;
+	ENTRY;
+
+	/* at the moment there is no linkage between lu_type
+	 * and obd_type, so we lookup obd_type this way */
+	type = class_search_type(LUSTRE_MDD_NAME);
+
+	LASSERT(name != NULL);
+	LASSERT(type != NULL);
+	LASSERT(obd  != NULL);
+
+	/* Find the type procroot and add the proc entry for this device */
+	obd->obd_vars = lprocfs_mdd_obd_vars;
+	mdd->mdd_proc_entry = lprocfs_seq_register(name, type->typ_procroot,
+						   obd->obd_vars, mdd);
+	if (IS_ERR(mdd->mdd_proc_entry)) {
+		rc = PTR_ERR(mdd->mdd_proc_entry);
+		CERROR("Error %d setting up lprocfs for %s\n",
+		       rc, name);
+		mdd->mdd_proc_entry = NULL;
+		GOTO(out, rc);
+	}
+	rc = 0;
+	EXIT;
+out:
+	if (rc)
+		mdd_procfs_fini(mdd);
+	return rc;
 }
 
+void mdd_procfs_fini(struct mdd_device *mdd)
+{
+	if (mdd->mdd_proc_entry)
+		lprocfs_remove(&mdd->mdd_proc_entry);
+}

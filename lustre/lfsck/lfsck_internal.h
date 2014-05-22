@@ -303,8 +303,7 @@ struct lfsck_operations {
 
 	int (*lfsck_dump)(const struct lu_env *env,
 			  struct lfsck_component *com,
-			  char *buf,
-			  int len);
+			  struct seq_file *m);
 
 	int (*lfsck_double_scan)(const struct lu_env *env,
 				 struct lfsck_component *com);
@@ -591,10 +590,10 @@ void lfsck_component_cleanup(const struct lu_env *env,
 			     struct lfsck_component *com);
 void lfsck_instance_cleanup(const struct lu_env *env,
 			    struct lfsck_instance *lfsck);
-int lfsck_bits_dump(char **buf, int *len, int bits, const char *names[],
+int lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
 		    const char *prefix);
-int lfsck_time_dump(char **buf, int *len, __u64 time, const char *prefix);
-int lfsck_pos_dump(char **buf, int *len, struct lfsck_position *pos,
+int lfsck_time_dump(struct seq_file *m, __u64 time, const char *prefix);
+int lfsck_pos_dump(struct seq_file *m, struct lfsck_position *pos,
 		   const char *prefix);
 void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lfsck_position *pos, bool init);

@@ -239,8 +239,7 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 
 	switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
-		struct lprocfs_static_vars lvars;
-
+		struct obd_device	*obd = ofd_obd(m);
 		/* For interoperability */
 		struct cfg_interop_param   *ptr = NULL;
 		struct lustre_cfg	   *old_cfg = NULL;
@@ -278,8 +277,7 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			break;
 		}
 
-		lprocfs_ofd_init_vars(&lvars);
-		rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, cfg,
+		rc = class_process_proc_seq_param(PARAM_OST, obd->obd_vars, cfg,
 					      d->ld_obd);
 		if (rc > 0 || rc == -ENOSYS) {
 			CDEBUG(D_CONFIG, "pass param %s down the stack.\n",
@@ -485,9 +483,10 @@ static struct lu_device_operations ofd_lu_ops = {
 	.ldo_prepare		= ofd_prepare,
 };
 
+LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
+
 static int ofd_procfs_init(struct ofd_device *ofd)
 {
-	struct lprocfs_static_vars	 lvars;
 	struct obd_device		*obd = ofd_obd(ofd);
 	cfs_proc_dir_entry_t		*entry;
 	int				 rc = 0;
@@ -496,8 +495,8 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 
 	/* lprocfs must be setup before the ofd so state can be safely added
 	 * to /proc incrementally as the ofd is setup */
-	lprocfs_ofd_init_vars(&lvars);
-	rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+	obd->obd_vars = lprocfs_ofd_obd_vars;
+	rc = lprocfs_seq_obd_setup(obd);
 	if (rc) {
 		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
 		       obd->obd_name, rc);
@@ -513,7 +512,8 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 
 	obd->obd_uses_nid_stats = 1;
 
-	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
+	entry = lprocfs_seq_register("exports", obd->obd_proc_entry, NULL,
+				     NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CERROR("%s: error %d setting up lprocfs for %s\n",
@@ -523,8 +523,10 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	obd->obd_proc_exports_entry = entry;
 
 	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-				   lprocfs_nid_stats_clear_read,
-				   lprocfs_nid_stats_clear_write, obd, NULL);
+#ifndef HAVE_ONLY_PROCFS_SEQ
+				   NULL, NULL,
+#endif
+				   obd, &lprocfs_nid_stats_clear_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CERROR("%s: add proc entry 'clear' failed: %d.\n",
@@ -537,10 +539,8 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
 				    ofd_stats_counter_init);
 	if (rc)
-		GOTO(remove_entry_clear, rc);
+		GOTO(obd_cleanup, rc);
 	RETURN(0);
-remove_entry_clear:
-	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 obd_cleanup:
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_obd_stats(obd);
@@ -548,51 +548,46 @@ obd_cleanup:
 	return rc;
 }
 
+/**
+ * ofd_procfs_add_brw_stats_symlink - expose osd stats to ofd layer
+ *
+ * The osd interfaces to the backend file system exposes useful data
+ * such as brw_stats and read or write cache states. This same data
+ * needs to be exposed into the obdfilter (ofd) layer to maintain
+ * backwards compatibility. This function creates the symlinks in the
+ * proc layer to enable this.
+ */
 static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct obd_device	*osd_obd = ofd->ofd_osd_exp->exp_obd;
-	cfs_proc_dir_entry_t	*osd_root = osd_obd->obd_type->typ_procroot;
-	cfs_proc_dir_entry_t	*osd_dir;
 
-	osd_dir = lprocfs_srch(osd_root, obd->obd_name);
-	if (osd_dir == NULL)
+	if (obd->obd_proc_entry == NULL)
 		return;
 
-	if (lprocfs_srch(osd_dir, "brw_stats") != NULL)
-		lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
-				    "../../%s/%s/brw_stats",
-				    osd_root->name, osd_dir->name);
+	lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
+			    "../../%s/%s/brw_stats",
+			    osd_obd->obd_type->typ_name, obd->obd_name);
 
-	if (lprocfs_srch(osd_dir, "read_cache_enable") != NULL)
-		lprocfs_add_symlink("read_cache_enable", obd->obd_proc_entry,
-				    "../../%s/%s/read_cache_enable",
-				    osd_root->name, osd_dir->name);
+	lprocfs_add_symlink("read_cache_enable", obd->obd_proc_entry,
+			    "../../%s/%s/read_cache_enable",
+			    osd_obd->obd_type->typ_name, obd->obd_name);
 
-	if (lprocfs_srch(osd_dir, "readcache_max_filesize") != NULL)
-		lprocfs_add_symlink("readcache_max_filesize",
-				    obd->obd_proc_entry,
-				    "../../%s/%s/readcache_max_filesize",
-				    osd_root->name, osd_dir->name);
+	lprocfs_add_symlink("readcache_max_filesize",
+			    obd->obd_proc_entry,
+			    "../../%s/%s/readcache_max_filesize",
+			    osd_obd->obd_type->typ_name, obd->obd_name);
 
-	if (lprocfs_srch(osd_dir, "writethrough_cache_enable") != NULL)
-		lprocfs_add_symlink("writethrough_cache_enable",
-				    obd->obd_proc_entry,
-				    "../../%s/%s/writethrough_cache_enable",
-				    osd_root->name, osd_dir->name);
+	lprocfs_add_symlink("writethrough_cache_enable",
+			    obd->obd_proc_entry,
+			    "../../%s/%s/writethrough_cache_enable",
+			    osd_obd->obd_type->typ_name, obd->obd_name);
 }
 
 static void ofd_procfs_fini(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 
-	lprocfs_remove_proc_entry("writethrough_cache_enable",
-				  obd->obd_proc_entry);
-	lprocfs_remove_proc_entry("readcache_max_filesize",
-				  obd->obd_proc_entry);
-	lprocfs_remove_proc_entry("read_cache_enable", obd->obd_proc_entry);
-	lprocfs_remove_proc_entry("brw_stats", obd->obd_proc_entry);
-	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 	lprocfs_free_per_client_stats(obd);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_obd_stats(obd);
@@ -2384,7 +2379,6 @@ static struct lu_device_type ofd_device_type = {
 
 int __init ofd_init(void)
 {
-	struct lprocfs_static_vars	lvars;
 	int				rc;
 
 	rc = lu_kmem_init(ofd_caches);
@@ -2397,11 +2391,9 @@ int __init ofd_init(void)
 		return(rc);
 	}
 
-	lprocfs_ofd_init_vars(&lvars);
-
 	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
 #ifndef HAVE_ONLY_PROCFS_SEQ
-				 lvars.module_vars,
+				 NULL,
 #endif
 				 LUSTRE_OST_NAME, &ofd_device_type);
 	return rc;

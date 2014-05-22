@@ -148,12 +148,12 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 int lfsck_query(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_request *lr);
 
-int lfsck_get_speed(struct dt_device *key, void *buf, int len);
+int lfsck_get_speed(struct seq_file *m, struct dt_device *key);
 int lfsck_set_speed(struct dt_device *key, int val);
-int lfsck_get_windows(struct dt_device *key, void *buf, int len);
+int lfsck_get_windows(struct seq_file *m, struct dt_device *key);
 int lfsck_set_windows(struct dt_device *key, int val);
 
-int lfsck_dump(struct dt_device *key, void *buf, int len, enum lfsck_type type);
+int lfsck_dump(struct seq_file *m, struct dt_device *key, enum lfsck_type type);
 
 static inline void lfsck_pack_rfa(struct lfsck_request *lr,
 				  const struct lu_fid *fid)

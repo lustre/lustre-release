@@ -47,81 +47,75 @@
 
 #ifdef LPROCFS
 
-static int lprocfs_ofd_rd_seqs(char *page, char **start, off_t off,
-				int count, int *eof, void *data)
+static int ofd_seqs_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	*eof = 1;
-	return snprintf(page, count, "%u\n", ofd->ofd_seq_count);
+	return seq_printf(m, "%u\n", ofd->ofd_seq_count);
 }
+LPROC_SEQ_FOPS_RO(ofd_seqs);
 
-static int lprocfs_ofd_rd_tot_dirty(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	*eof = 1;
-	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_dirty);
+	return seq_printf(m, LPU64"\n", ofd->ofd_tot_dirty);
 }
+LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
 
-static int lprocfs_ofd_rd_tot_granted(char *page, char **start, off_t off,
-				      int count, int *eof, void *data)
+static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	*eof = 1;
-	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_granted);
+	return seq_printf(m, LPU64"\n", ofd->ofd_tot_granted);
 }
+LPROC_SEQ_FOPS_RO(ofd_tot_granted);
 
-static int lprocfs_ofd_rd_tot_pending(char *page, char **start, off_t off,
-				      int count, int *eof, void *data)
+static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	*eof = 1;
-	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_pending);
+	return seq_printf(m, LPU64"\n", ofd->ofd_tot_pending);
 }
+LPROC_SEQ_FOPS_RO(ofd_tot_pending);
 
-static int lprocfs_ofd_rd_grant_precreate(char *page, char **start, off_t off,
-					  int count, int *eof, void *data)
+static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 
 	LASSERT(obd != NULL);
-	*eof = 1;
-	return snprintf(page, count, "%ld\n",
-			obd->obd_self_export->exp_filter_data.fed_grant);
+	return seq_printf(m, "%ld\n",
+			  obd->obd_self_export->exp_filter_data.fed_grant);
 }
+LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
 
-static int lprocfs_ofd_rd_grant_ratio(char *page, char **start, off_t off,
-				      int count, int *eof, void *data)
+static int ofd_grant_ratio_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	*eof = 1;
-	return snprintf(page, count, "%d%%\n",
-			(int) ofd_grant_reserved(ofd, 100));
+	return seq_printf(m, "%d%%\n",
+			  (int) ofd_grant_reserved(ofd, 100));
 }
 
-static int lprocfs_ofd_wr_grant_ratio(struct file *file,
-				      const char __user *buffer,
-				      unsigned long count, void *data)
+static ssize_t
+ofd_grant_ratio_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
-	struct obd_device	*obd = (struct obd_device *)data;
+	struct seq_file         *m = file->private_data;
+	struct obd_device       *obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val;
 	int			 rc;
@@ -145,24 +139,24 @@ static int lprocfs_ofd_wr_grant_ratio(struct file *file,
 	spin_unlock(&ofd->ofd_grant_lock);
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_grant_ratio);
 
-static int lprocfs_ofd_rd_precreate_batch(char *page, char **start, off_t off,
-					  int count, int *eof, void *data)
+static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	*eof = 1;
-	return snprintf(page, count, "%d\n", ofd->ofd_precreate_batch);
+	return seq_printf(m, "%d\n", ofd->ofd_precreate_batch);
 }
 
-static int lprocfs_ofd_wr_precreate_batch(struct file *file,
-					  const char __user *buffer,
-					  unsigned long count, void *data)
+static ssize_t
+ofd_precreate_batch_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
 {
-	struct obd_device *obd = (struct obd_device *)data;
+	struct seq_file	  *m = file->private_data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	int val;
 	int rc;
@@ -179,11 +173,11 @@ static int lprocfs_ofd_wr_precreate_batch(struct file *file,
 	spin_unlock(&ofd->ofd_batch_lock);
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_precreate_batch);
 
-static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd;
 	struct ofd_seq		*oseq = NULL;
 	int			retval = 0, rc;
@@ -201,35 +195,32 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 		      fid_idif_seq(ostid_id(&oseq->os_oi),
 				   ofd->ofd_lut.lut_lsd.lsd_osd_index) :
 		      ostid_seq(&oseq->os_oi);
-		rc = snprintf(page, count, DOSTID"\n", seq,
-			      ostid_id(&oseq->os_oi));
+		rc = seq_printf(m, DOSTID"\n", seq, ostid_id(&oseq->os_oi));
 		if (rc < 0) {
 			retval = rc;
 			break;
 		}
-		page += rc;
-		count -= rc;
 		retval += rc;
 	}
 	read_unlock(&ofd->ofd_seq_list_lock);
 	return retval;
 }
+LPROC_SEQ_FOPS_RO(ofd_last_id);
 
-int lprocfs_ofd_rd_fmd_max_num(char *page, char **start, off_t off,
-			       int count, int *eof, void *data)
+static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 rc;
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	rc = snprintf(page, count, "%u\n", ofd->ofd_fmd_max_num);
-	return rc;
+	return seq_printf(m, "%u\n", ofd->ofd_fmd_max_num);
 }
 
-int lprocfs_ofd_wr_fmd_max_num(struct file *file, const char __user *buffer,
-			       unsigned long count, void *data)
+static ssize_t
+ofd_fmd_max_num_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val;
 	int			 rc;
@@ -244,22 +235,22 @@ int lprocfs_ofd_wr_fmd_max_num(struct file *file, const char __user *buffer,
 	ofd->ofd_fmd_max_num = val;
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_fmd_max_num);
 
-int lprocfs_ofd_rd_fmd_max_age(char *page, char **start, off_t off,
-			       int count, int *eof, void *data)
+static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 rc;
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	rc = snprintf(page, count, "%ld\n", ofd->ofd_fmd_max_age / HZ);
-	return rc;
+	return seq_printf(m, "%ld\n", ofd->ofd_fmd_max_age / HZ);
 }
 
-int lprocfs_ofd_wr_fmd_max_age(struct file *file, const char __user *buffer,
-			       unsigned long count, void *data)
+static ssize_t
+ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val;
 	int			 rc;
@@ -274,22 +265,22 @@ int lprocfs_ofd_wr_fmd_max_age(struct file *file, const char __user *buffer,
 	ofd->ofd_fmd_max_age = val * HZ;
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_fmd_max_age);
 
-static int lprocfs_ofd_rd_capa(char *page, char **start, off_t off,
-			       int count, int *eof, void *data)
+static int ofd_capa_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
-	int			 rc;
+	struct obd_device	*obd = m->private;
 
-	rc = snprintf(page, count, "capability on: %s\n",
-		      obd->u.filter.fo_fl_oss_capa ? "oss" : "");
-	return rc;
+	return seq_printf(m, "capability on: %s\n",
+			  obd->u.filter.fo_fl_oss_capa ? "oss" : "");
 }
 
-static int lprocfs_ofd_wr_capa(struct file *file, const char __user *buffer,
-			       unsigned long count, void *data)
+static ssize_t
+ofd_capa_seq_write(struct file *file, const char *__user buffer, size_t count,
+		   loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	int			 val, rc;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
@@ -308,28 +299,29 @@ static int lprocfs_ofd_wr_capa(struct file *file, const char __user *buffer,
 		      val ? "enabled" : "disabled");
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_capa);
 
-static int lprocfs_ofd_rd_capa_count(char *page, char **start, off_t off,
-				     int count, int *eof, void *data)
+static int ofd_capa_count_seq_show(struct seq_file *m, void *data)
 {
-	return snprintf(page, count, "%d %d\n",
-			capa_count[CAPA_SITE_CLIENT],
-			capa_count[CAPA_SITE_SERVER]);
+	return seq_printf(m, "%d %d\n", capa_count[CAPA_SITE_CLIENT],
+			  capa_count[CAPA_SITE_SERVER]);
 }
+LPROC_SEQ_FOPS_RO(ofd_capa_count);
 
-int lprocfs_ofd_rd_degraded(char *page, char **start, off_t off,
-			    int count, int *eof, void *data)
+static int ofd_degraded_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return snprintf(page, count, "%u\n", ofd->ofd_raid_degraded);
+	return seq_printf(m, "%u\n", ofd->ofd_raid_degraded);
 }
 
-int lprocfs_ofd_wr_degraded(struct file *file, const char __user *buffer,
-			    unsigned long count, void *data)
+static ssize_t
+ofd_degraded_seq_write(struct file *file, const char __user *buffer,
+		       size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val, rc;
 
@@ -340,38 +332,37 @@ int lprocfs_ofd_wr_degraded(struct file *file, const char __user *buffer,
 	spin_lock(&ofd->ofd_flags_lock);
 	ofd->ofd_raid_degraded = !!val;
 	spin_unlock(&ofd->ofd_flags_lock);
-
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_degraded);
 
-int lprocfs_ofd_rd_fstype(char *page, char **start, off_t off, int count,
-			  int *eof, void *data)
+static int ofd_fstype_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	struct lu_device  *d;
 
 	LASSERT(ofd->ofd_osd);
 	d = &ofd->ofd_osd->dd_lu_dev;
 	LASSERT(d->ld_type);
-	return snprintf(page, count, "%s\n", d->ld_type->ldt_name);
+	return seq_printf(m, "%s\n", d->ld_type->ldt_name);
 }
+LPROC_SEQ_FOPS_RO(ofd_fstype);
 
-int lprocfs_ofd_rd_syncjournal(char *page, char **start, off_t off,
-			       int count, int *eof, void *data)
+static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 rc;
 
-	rc = snprintf(page, count, "%u\n", ofd->ofd_syncjournal);
-	return rc;
+	return seq_printf(m, "%u\n", ofd->ofd_syncjournal);
 }
 
-int lprocfs_ofd_wr_syncjournal(struct file *file, const char __user *buffer,
-			       unsigned long count, void *data)
+static ssize_t
+ofd_syncjournal_seq_write(struct file *file, const char __user *buffer,
+			  size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val;
 	int			 rc;
@@ -390,6 +381,7 @@ int lprocfs_ofd_wr_syncjournal(struct file *file, const char __user *buffer,
 
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_syncjournal);
 
 /* This must be longer than the longest string below */
 #define SYNC_STATES_MAXLEN 16
@@ -397,23 +389,21 @@ static char *sync_on_cancel_states[] = {"never",
 					"blocking",
 					"always" };
 
-int lprocfs_ofd_rd_sync_lock_cancel(char *page, char **start, off_t off,
-				    int count, int *eof, void *data)
+static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
+	struct obd_device	*obd = m->private;
 	struct lu_target	*tgt = obd->u.obt.obt_lut;
-	int			 rc;
 
-	rc = snprintf(page, count, "%s\n",
-		      sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
-	return rc;
+	return seq_printf(m, "%s\n",
+			  sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
 }
 
-int lprocfs_ofd_wr_sync_lock_cancel(struct file *file,
-				    const char __user *buffer,
-				    unsigned long count, void *data)
+static ssize_t
+ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct lu_target	*tgt = obd->u.obt.obt_lut;
 	char			 kernbuf[SYNC_STATES_MAXLEN];
 	int			 val = -1;
@@ -455,23 +445,23 @@ int lprocfs_ofd_wr_sync_lock_cancel(struct file *file,
 	spin_unlock(&tgt->lut_flags_lock);
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
 
-int lprocfs_ofd_rd_grant_compat_disable(char *page, char **start, off_t off,
-					int count, int *eof, void *data)
+static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 rc;
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	rc = snprintf(page, count, "%u\n", ofd->ofd_grant_compat_disable);
-	return rc;
+	return seq_printf(m, "%u\n", ofd->ofd_grant_compat_disable);
 }
 
-int lprocfs_ofd_wr_grant_compat_disable(struct file *file,
-					const char __user *buffer,
-					unsigned long count, void *data)
+static ssize_t
+ofd_grant_compat_disable_seq_write(struct file *file,
+				   const char __user *buffer,
+				   size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	int			 val;
 	int			 rc;
@@ -489,42 +479,43 @@ int lprocfs_ofd_wr_grant_compat_disable(struct file *file,
 
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_grant_compat_disable);
 
-int lprocfs_ofd_rd_soft_sync_limit(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int ofd_soft_sync_limit_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 
-	return lprocfs_rd_uint(page, start, off, count, eof,
-			       &ofd->ofd_soft_sync_limit);
+	return lprocfs_uint_seq_show(m, &ofd->ofd_soft_sync_limit);
 }
 
-int lprocfs_ofd_wr_soft_sync_limit(struct file *file, const char __user *buffer,
-				   unsigned long count, void *data)
+static ssize_t
+ofd_soft_sync_limit_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
+	struct seq_file	  *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return lprocfs_uint_seq_write(file, buffer, count,
+				      (loff_t *) &ofd->ofd_soft_sync_limit);
+}
+LPROC_SEQ_FOPS(ofd_soft_sync_limit);
+
+static int ofd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device       *obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 
-	return lprocfs_wr_uint(file, buffer, count, &ofd->ofd_soft_sync_limit);
+	return lfsck_get_speed(m, ofd->ofd_osd);
 }
 
-static int lprocfs_rd_lfsck_speed_limit(char *page, char **start, off_t off,
-					int count, int *eof, void *data)
+static ssize_t
+ofd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-
-	*eof = 1;
-
-	return lfsck_get_speed(ofd->ofd_osd, page, count);
-}
-
-static int lprocfs_wr_lfsck_speed_limit(struct file *file,
-					const char __user *buffer,
-					unsigned long count, void *data)
-{
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	__u32			 val;
 	int			 rc;
@@ -537,38 +528,35 @@ static int lprocfs_wr_lfsck_speed_limit(struct file *file,
 
 	return rc != 0 ? rc : count;
 }
+LPROC_SEQ_FOPS(ofd_lfsck_speed_limit);
 
-static int lprocfs_rd_lfsck_layout(char *page, char **start, off_t off,
-				   int count, int *eof, void *data)
+static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	*eof = 1;
+	return lfsck_dump(m, ofd->ofd_osd, LT_LAYOUT);
+}
+LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
 
-	return lfsck_dump(ofd->ofd_osd, page, count, LT_LAYOUT);
+static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return seq_printf(m,
+			  "switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
+			  ofd->ofd_lfsck_verify_pfid ? "on" : "off",
+			  ofd->ofd_inconsistency_self_detected,
+			  ofd->ofd_inconsistency_self_repaired);
 }
 
-static int lprocfs_rd_lfsck_verify_pfid(char *page, char **start, off_t off,
-					int count, int *eof, void *data)
+static ssize_t
+ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
 {
-	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-
-	*eof = 1;
-
-	return snprintf(page, count,
-			"switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
-			ofd->ofd_lfsck_verify_pfid ? "on" : "off",
-			ofd->ofd_inconsistency_self_detected,
-			ofd->ofd_inconsistency_self_repaired);
-}
-
-static int lprocfs_wr_lfsck_verify_pfid(struct file *file,
-					const char __user *buffer,
-					unsigned long count, void *data)
-{
-	struct obd_device	*obd = data;
+	struct seq_file		*m = file->private_data;
+	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	__u32			 val;
 	int			 rc;
@@ -581,74 +569,100 @@ static int lprocfs_wr_lfsck_verify_pfid(struct file *file,
 
 	return count;
 }
+LPROC_SEQ_FOPS(ofd_lfsck_verify_pfid);
 
-static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
-	{ "uuid",		 lprocfs_rd_uuid, 0, 0 },
-	{ "blocksize",		 lprocfs_rd_blksize, 0, 0 },
-	{ "kbytestotal",	 lprocfs_rd_kbytestotal, 0, 0 },
-	{ "kbytesfree",		 lprocfs_rd_kbytesfree, 0, 0 },
-	{ "kbytesavail",	 lprocfs_rd_kbytesavail, 0, 0 },
-	{ "filestotal",		 lprocfs_rd_filestotal, 0, 0 },
-	{ "filesfree",		 lprocfs_rd_filesfree, 0, 0 },
-	{ "seqs_allocated",	 lprocfs_ofd_rd_seqs, 0, 0 },
-	{ "fstype",		 lprocfs_ofd_rd_fstype, 0, 0 },
-	{ "last_id",		 lprocfs_ofd_rd_last_id, 0, 0 },
-	{ "tot_dirty",		 lprocfs_ofd_rd_tot_dirty,   0, 0 },
-	{ "tot_pending",	 lprocfs_ofd_rd_tot_pending, 0, 0 },
-	{ "tot_granted",	 lprocfs_ofd_rd_tot_granted, 0, 0 },
-	{ "grant_precreate",	 lprocfs_ofd_rd_grant_precreate, 0, 0 },
-	{ "grant_ratio",	 lprocfs_ofd_rd_grant_ratio,
-				 lprocfs_ofd_wr_grant_ratio, 0, 0 },
-	{ "precreate_batch",	 lprocfs_ofd_rd_precreate_batch,
-				 lprocfs_ofd_wr_precreate_batch, 0 },
-	{ "recovery_status",	 lprocfs_obd_rd_recovery_status, 0, 0 },
-	{ "recovery_time_soft",	 lprocfs_obd_rd_recovery_time_soft,
-				 lprocfs_obd_wr_recovery_time_soft, 0},
-	{ "recovery_time_hard",  lprocfs_obd_rd_recovery_time_hard,
-				 lprocfs_obd_wr_recovery_time_hard, 0},
-	{ "evict_client",	 0, lprocfs_wr_evict_client, 0,
-				 &lprocfs_evict_client_fops},
-	{ "num_exports",	 lprocfs_rd_num_exports,   0, 0 },
-	{ "degraded",		 lprocfs_ofd_rd_degraded,
-				 lprocfs_ofd_wr_degraded, 0},
-	{ "sync_journal",	 lprocfs_ofd_rd_syncjournal,
-				 lprocfs_ofd_wr_syncjournal, 0 },
-	{ "sync_on_lock_cancel", lprocfs_ofd_rd_sync_lock_cancel,
-				 lprocfs_ofd_wr_sync_lock_cancel, 0 },
-	{ "instance",		 lprocfs_target_rd_instance, 0 },
-	{ "ir_factor",		 lprocfs_obd_rd_ir_factor,
-				 lprocfs_obd_wr_ir_factor, 0},
-	{ "grant_compat_disable", lprocfs_ofd_rd_grant_compat_disable,
-				  lprocfs_ofd_wr_grant_compat_disable, 0 },
-	{ "client_cache_count",	 lprocfs_ofd_rd_fmd_max_num,
-				 lprocfs_ofd_wr_fmd_max_num, 0 },
-	{ "client_cache_seconds", lprocfs_ofd_rd_fmd_max_age,
-				  lprocfs_ofd_wr_fmd_max_age, 0 },
-	{ "capa",		 lprocfs_ofd_rd_capa,
-				 lprocfs_ofd_wr_capa, 0 },
-	{ "capa_count",		 lprocfs_ofd_rd_capa_count, 0, 0 },
-	{ "job_cleanup_interval", lprocfs_rd_job_interval,
-				  lprocfs_wr_job_interval, 0},
-	{ "soft_sync_limit",	 lprocfs_ofd_rd_soft_sync_limit,
-				 lprocfs_ofd_wr_soft_sync_limit, 0},
-	{ "lfsck_speed_limit",	lprocfs_rd_lfsck_speed_limit,
-				lprocfs_wr_lfsck_speed_limit, 0 },
-	{ "lfsck_layout",	lprocfs_rd_lfsck_layout, 0, 0 },
-	{ "lfsck_verify_pfid",	lprocfs_rd_lfsck_verify_pfid,
-				lprocfs_wr_lfsck_verify_pfid, 0 },
+LPROC_SEQ_FOPS_RO_TYPE(ofd, uuid);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, blksize);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytestotal);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytesfree);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytesavail);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, filestotal);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, filesfree);
+
+LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_hard);
+LPROC_SEQ_FOPS_WO_TYPE(ofd, evict_client);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, num_exports);
+LPROC_SEQ_FOPS_RO_TYPE(ofd, target_instance);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
+
+struct lprocfs_seq_vars lprocfs_ofd_obd_vars[] = {
+	{ .name =	"uuid",
+	  .fops =	&ofd_uuid_fops			},
+	{ .name =	"blocksize",
+	  .fops =	&ofd_blksize_fops		},
+	{ .name =	"kbytestotal",
+	  .fops =	&ofd_kbytestotal_fops		},
+	{ .name =	"kbytesfree",
+	  .fops =	&ofd_kbytesfree_fops		},
+	{ .name =	"kbytesavail",
+	  .fops =	&ofd_kbytesavail_fops		},
+	{ .name =	"filestotal",
+	  .fops =	&ofd_filestotal_fops		},
+	{ .name =	"filesfree",
+	  .fops =	&ofd_filesfree_fops		},
+	{ .name =	"seqs_allocated",
+	  .fops =	&ofd_seqs_fops			},
+	{ .name =	"fstype",
+	  .fops =	&ofd_fstype_fops		},
+	{ .name =	"last_id",
+	  .fops =	&ofd_last_id_fops		},
+	{ .name =	"tot_dirty",
+	  .fops =	&ofd_tot_dirty_fops		},
+	{ .name =	"tot_pending",
+	  .fops =	&ofd_tot_pending_fops		},
+	{ .name =	"tot_granted",
+	  .fops =	&ofd_tot_granted_fops		},
+	{ .name =	"grant_precreate",
+	  .fops =	&ofd_grant_precreate_fops	},
+	{ .name =	"grant_ratio",
+	  .fops =	&ofd_grant_ratio_fops		},
+	{ .name =	"precreate_batch",
+	  .fops =	&ofd_precreate_batch_fops	},
+	{ .name =	"recovery_status",
+	  .fops =	&ofd_recovery_status_fops	},
+	{ .name =	"recovery_time_soft",
+	  .fops =	&ofd_recovery_time_soft_fops	},
+	{ .name =	"recovery_time_hard",
+	  .fops =	&ofd_recovery_time_hard_fops	},
+	{ .name =	"evict_client",
+	  .fops =	&ofd_evict_client_fops		},
+	{ .name =	"num_exports",
+	  .fops =	&ofd_num_exports_fops		},
+	{ .name =	"degraded",
+	  .fops =	&ofd_degraded_fops		},
+	{ .name =	"sync_journal",
+	  .fops =	&ofd_syncjournal_fops		},
+	{ .name =	"sync_on_lock_cancel",
+	  .fops =	&ofd_sync_lock_cancel_fops	},
+	{ .name =	"instance",
+	  .fops =	&ofd_target_instance_fops	},
+	{ .name =	"ir_factor",
+	  .fops =	&ofd_ir_factor_fops		},
+	{ .name =	"grant_compat_disable",
+	  .fops =	&ofd_grant_compat_disable_fops	},
+	{ .name =	"client_cache_count",
+	  .fops =	&ofd_fmd_max_num_fops		},
+	{ .name =	"client_cache_seconds",
+	  .fops =	&ofd_fmd_max_age_fops		},
+	{ .name =	"capa",
+	  .fops =	&ofd_capa_fops			},
+	{ .name =	"capa_count",
+	  .fops =	&ofd_capa_count_fops		},
+	{ .name =	"job_cleanup_interval",
+	  .fops =	&ofd_job_interval_fops		},
+	{ .name =	"soft_sync_limit",
+	  .fops =	&ofd_soft_sync_limit_fops	},
+	{ .name =	"lfsck_speed_limit",
+	  .fops =	&ofd_lfsck_speed_limit_fops	},
+	{ .name =	"lfsck_layout",
+	  .fops =	&ofd_lfsck_layout_fops		},
+	{ .name	=	"lfsck_verify_pfid",
+	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
 	{ 0 }
 };
-
-static struct lprocfs_vars lprocfs_ofd_module_vars[] = {
-	{ "num_refs",	  lprocfs_rd_numrefs,	0, 0 },
-	{ 0 }
-};
-
-void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars)
-{
-	lvars->module_vars  = lprocfs_ofd_module_vars;
-	lvars->obd_vars     = lprocfs_ofd_obd_vars;
-}
 
 void ofd_stats_counter_init(struct lprocfs_stats *stats)
 {
