@@ -66,6 +66,7 @@
 struct hsm_copytool_private {
 	int			 magic;
 	char			*mnt;
+	struct kuc_hdr		*kuch;
 	int			 mnt_fd;
 	int			 open_by_fid_fd;
 	lustre_kernelcomm	 kuc;
@@ -673,6 +674,12 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		goto out_err;
 	}
 
+	ct->kuch = malloc(HAL_MAXSIZE + sizeof(*ct->kuch));
+	if (ct->kuch == NULL) {
+		rc = -ENOMEM;
+		goto out_err;
+	}
+
 	ct->mnt_fd = open(ct->mnt, O_RDONLY);
 	if (ct->mnt_fd < 0) {
 		rc = -errno;
@@ -743,8 +750,9 @@ out_err:
 	if (!(ct->open_by_fid_fd < 0))
 		close(ct->open_by_fid_fd);
 
-	if (ct->mnt != NULL)
-		free(ct->mnt);
+	free(ct->mnt);
+
+	free(ct->kuch);
 
 	free(ct);
 
@@ -779,6 +787,7 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	close(ct->open_by_fid_fd);
 	close(ct->mnt_fd);
 	free(ct->mnt);
+	free(ct->kuch);
 	free(ct);
 	*priv = NULL;
 
@@ -791,6 +800,8 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
  * \param msgsize Number of bytes in the message, will be set here
  * \return 0 valid message received; halh and msgsize are set
  *	   <0 error code
+ * Note: The application must not call llapi_hsm_copytool_recv until it has
+ * cleared the data in ct->kuch from the previous call.
  */
 int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 			    struct hsm_action_list **halh, int *msgsize)
@@ -805,21 +816,19 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 	if (halh == NULL || msgsize == NULL)
 		return -EINVAL;
 
-	kuch = malloc(HAL_MAXSIZE + sizeof(*kuch));
-	if (kuch == NULL)
-		return -ENOMEM;
+	kuch = ct->kuch;
 
 	rc = libcfs_ukuc_msg_get(&ct->kuc, (char *)kuch,
 				 HAL_MAXSIZE + sizeof(*kuch),
 				 KUC_TRANSPORT_HSM);
 	if (rc < 0)
-		goto out_free;
+		goto out_err;
 
 	/* Handle generic messages */
 	if (kuch->kuc_transport == KUC_TRANSPORT_GENERIC &&
 	    kuch->kuc_msgtype == KUC_MSG_SHUTDOWN) {
 		rc = -ESHUTDOWN;
-		goto out_free;
+		goto out_err;
 	}
 
 	if (kuch->kuc_transport != KUC_TRANSPORT_HSM ||
@@ -828,14 +837,14 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 				  "Unknown HSM message type %d:%d\n",
 				  kuch->kuc_transport, kuch->kuc_msgtype);
 		rc = -EPROTO;
-		goto out_free;
+		goto out_err;
 	}
 
 	if (kuch->kuc_msglen < sizeof(*kuch) + sizeof(*hal)) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR, "Short HSM message %d",
 				  kuch->kuc_msglen);
 		rc = -EPROTO;
-		goto out_free;
+		goto out_err;
 	}
 
 	/* Our message is a hsm_action_list. Use pointer math to skip
@@ -854,25 +863,17 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 				  hal->hal_archive_id, ct->archives);
 		rc = -EAGAIN;
 
-		goto out_free;
+		goto out_err;
 	}
 
 	*halh = hal;
 	*msgsize = kuch->kuc_msglen - sizeof(*kuch);
 	return 0;
 
-out_free:
+out_err:
 	*halh = NULL;
 	*msgsize = 0;
-	free(kuch);
 	return rc;
-}
-
-/** Release the action list when done with it. */
-void llapi_hsm_action_list_free(struct hsm_action_list **hal)
-{
-	/* Reuse the llapi_changelog_free function */
-	llapi_changelog_free((struct changelog_ext_rec **)hal);
 }
 
 /** Get parent path from mount point and fid.
