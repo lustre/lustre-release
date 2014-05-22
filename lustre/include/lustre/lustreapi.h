@@ -336,7 +336,6 @@ extern int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
 extern int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct);
 extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
 				   struct hsm_action_list **hal, int *msgsize);
-extern void llapi_hsm_action_list_free(struct hsm_action_list **hal);
 extern int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 				  const struct hsm_copytool_private *ct,
 				  const struct hsm_action_item *hai,

@@ -1811,8 +1811,6 @@ static int ct_run(void)
 			hai = hai_next(hai);
 		}
 
-		llapi_hsm_action_list_free(&hal);
-
 		if (opt.o_abort_on_error && err_major)
 			break;
 	}
