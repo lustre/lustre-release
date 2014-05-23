@@ -14,8 +14,8 @@
  * included in the COPYING file that accompanied this code.
 
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ * version 2 along with this program; If not, see
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -23,10 +23,13 @@
  * Copyright  2009 Sun Microsystems, Inc. All rights reserved
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014, Intel Corporation.
  */
 /*
  * lustre/lod/lod_lov.c
+ *
+ * A set of helpers to maintain Logical Object Volume (LOV)
+ * Extended Attribute (EA) and known OST targets
  *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  */
@@ -39,12 +42,14 @@
 
 #include "lod_internal.h"
 
-/*
- * Keep a refcount of lod->ltd_tgts usage to prevent racing with
- * addition/deletion. Any function that expects lov_tgts to remain stationary
- * must take a ref.
+/**
+ * Increase reference count on the target table.
  *
- * \param lod - is the lod device from which we want to grab a reference
+ * Increase reference count on the target table usage to prevent racing with
+ * addition/deletion. Any function that expects the table to remain
+ * stationary must take a ref.
+ *
+ * \param[in] ltd	target table (lod_ost_descs or lod_mdt_descs)
  */
 void lod_getref(struct lod_tgt_descs *ltd)
 {
@@ -54,12 +59,15 @@ void lod_getref(struct lod_tgt_descs *ltd)
 	mutex_unlock(&ltd->ltd_mutex);
 }
 
-/*
- * Companion of lod_getref() to release a reference on the lod table.
- * If this is the last reference and the ost entry was scheduled for deletion,
- * the descriptor is removed from the array.
+/**
+ * Decrease reference count on the target table.
  *
- * \param lod - is the lod device from which we release a reference
+ * Companion of lod_getref() to release a reference on the target table.
+ * If this is the last reference and the OST entry was scheduled for deletion,
+ * the descriptor is removed from the table.
+ *
+ * \param[in] lod	LOD device from which we release a reference
+ * \param[in] ltd	target table (lod_ost_descs or lod_mdt_descs)
  */
 void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 {
@@ -123,6 +131,20 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	}
 }
 
+/**
+ * Expand size of target table.
+ *
+ * When the target table is full, we have to extend the table. To do so,
+ * we allocate new memory with some reserve, move data from the old table
+ * to the new one and release memory consumed by the old table.
+ * Notice we take ltd_rw_sem exclusively to ensure atomic switch.
+ *
+ * \param[in] ltd		target table
+ * \param[in] newsize		new size of the table
+ *
+ * \retval			0 on success
+ * \retval			-ENOMEM if reallocation failed
+ */
 static int ltd_bitmap_resize(struct lod_tgt_descs *ltd, __u32 newsize)
 {
 	cfs_bitmap_t *new_bitmap, *old_bitmap = NULL;
@@ -163,16 +185,23 @@ out:
 	return rc;
 }
 
-/*
- * Connect LOD to a new OSP and add it to the device table.
+/**
+ * Connect LOD to a new OSP and add it to the target table.
  *
- * \param env - is the environment passed by the caller
- * \param lod - is the LOD device to be connected to the new OSP
- * \param osp - is the name of OSP device name about to be added
- * \param index - is the OSP index
- * \param gen - is the generation number
- * \param tgt_index - is the group of the OSP.
- * \param type - is the type of device (mdc or osc)
+ * Connect to the OSP device passed, initialize all the internal
+ * structures related to the device and add it to the target table.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lod		LOD device to be connected to the new OSP
+ * \param[in] osp		name of OSP device name to be added
+ * \param[in] index		index of the new target
+ * \param[in] gen		target's generation number
+ * \param[in] tgt_index		OSP's group
+ * \param[in] type		type of device (mdc or osc)
+ * \param[in] active		state of OSP: 0 - inactive, 1 - active
+ *
+ * \retval			0 if added successfully
+ * \retval			negative error number on failure
  */
 int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		   char *osp, unsigned index, unsigned gen, int tgt_index,
@@ -375,8 +404,18 @@ out_free:
 	return rc;
 }
 
-/*
- * helper function to schedule OST removal from the device table
+/**
+ * Schedule target removal from the target table.
+ *
+ * Mark the device as dead. The device is not removed here because it may
+ * still be in use. The device will be removed in lod_putref() when the
+ * last reference is released.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lod		LOD device the target table belongs to
+ * \param[in] ltd		target table
+ * \param[in] idx		index of the target
+ * \param[in] for_ost		type of the target: 0 - MDT, 1 - OST
  */
 static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 			     struct lod_tgt_descs *ltd, unsigned idx,
@@ -393,6 +432,18 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 	}
 }
 
+/**
+ * Schedule removal of all the targets from the given target table.
+ *
+ * See more details in the description for __lod_del_device()
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lod		LOD device the target table belongs to
+ * \param[in] ltd		target table
+ * \param[in] for_ost		type of the target: MDT or OST
+ *
+ * \retval			0 always
+ */
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd, bool for_ost)
 {
@@ -415,18 +466,22 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 	return 0;
 }
 
-/*
- * Add support for administratively disabled OST (through the MGS).
- * Schedule a target for deletion.  Disconnection and real removal from the
- * table takes place in lod_putref() once the last table user release its
- * reference.
+/**
+ * Remove device by name.
  *
- * \param env - is the environment passed by the caller
- * \param lod - is the lod device currently connected to the OSP about to be
- *              removed
- * \param osp - is the name of OSP device about to be removed
- * \param idx - is the OSP index
- * \param gen - is the generation number, not used currently
+ * Remove a device identified by \a osp from the target table. Given
+ * the device can be in use, the real deletion happens in lod_putref().
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lod		LOD device to be connected to the new OSP
+ * \param[in] ltd		target table
+ * \param[in] osp		name of OSP device to be removed
+ * \param[in] idx		index of the target
+ * \param[in] gen		generation number, not used currently
+ * \param[in] for_ost		type of the target: 0 - MDT, 1 - OST
+ *
+ * \retval			0 if the device was scheduled for removal
+ * \retval			-EINVAL if no device was found
  */
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
@@ -481,6 +536,20 @@ out:
 	return(rc);
 }
 
+/**
+ * Resize per-thread storage to hold specified size.
+ *
+ * A helper function to resize per-thread temporary storage. This storage
+ * is used to process LOV/LVM EAs and may be quite large. We do not want to
+ * allocate/release it every time, so instead we put it into the env and
+ * reallocate on demand. The memory is released when the correspondent thread
+ * is finished.
+ *
+ * \param[in] info		LOD-specific storage in the environment
+ * \param[in] size		new size to grow the buffer to
+
+ * \retval			0 on success, -ENOMEM if reallocation failed
+ */
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 {
 	__u32 round = size_roundup_power2(size);
@@ -504,8 +573,21 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 	RETURN(0);
 }
 
-/*
- * generate and write LOV EA for given striped object
+/**
+ * Make LOV EA for striped object.
+ *
+ * Generate striping information and store it in the LOV EA of the given
+ * object. The caller must ensure nobody else is calling the function
+ * against the object concurrently. The transaction must be started.
+ * FLDB service must be running as well; it's used to map FID to the target,
+ * which is stored in LOV EA.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[in] th		transaction handle
+ *
+ * \retval			0 if LOV EA is stored successfully
+ * \retval			negative error number on failure
  */
 int lod_generate_and_set_lovea(const struct lu_env *env,
 			       struct lod_object *lo, struct thandle *th)
@@ -599,6 +681,20 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * Get LOV EA.
+ *
+ * Fill lti_ea_store buffer in the environment with a value for the given
+ * EA. The buffer is reallocated if the value doesn't fit.
+ *
+ * \param[in,out] env		execution environment for this thread
+ *				.lti_ea_store buffer is filled with EA's value
+ * \param[in] lo		LOD object
+ * \param[in] name		name of the EA
+ *
+ * \retval			0 if EA is fetched successfully
+ * \retval			negative error number on failure
+ */
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 	       const char *name)
 {
@@ -642,6 +738,22 @@ repeat:
 	RETURN(rc);
 }
 
+/**
+ * Store default striping.
+ *
+ * Store default striping for the files in the given directory. The data
+ * are stored in the LOD-object representing the directory (ldo_def_* fields).
+ * If default striping matches virtual fs-wide default striping, then we
+ * store nothing. This mean that the files in the directory will be created
+ * with filesystem-wide default striping. The transaction must be started.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] dt		dt object representing directory in LOD layer
+ * \param[in] th		transaction handle
+ *
+ * \retval			0 if stored successfully or no need to store
+ * \retval			negative error number on failure
+ */
 int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th)
 {
@@ -690,6 +802,15 @@ int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
+/**
+ * Verify the target index is present in the current configuration.
+ *
+ * \param[in] md		LOD device where the target table is stored
+ * \param[in] idx		target's index
+ *
+ * \retval			0 if the index is present
+ * \retval			-EINVAL if not
+ */
 static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 {
 	if (unlikely(idx >= md->lod_ost_descs.ltd_tgts_size ||
@@ -714,9 +835,21 @@ static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 	return 0;
 }
 
-/*
- * allocate array of objects pointers, find/create objects
- * stripenr and other fields should be initialized by this moment
+/**
+ * Instantiate objects for stripes.
+ *
+ * Allocate and initialize LU-objects representing the stripes. The number
+ * of the stripes (ldo_stripenr) must be initialized already. The caller
+ * must ensure nobody else is calling the function on the object at the same
+ * time. FLDB service must be running to be able to map a FID to the targets
+ * and find appropriate device representing that target.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in,out] lo		LOD object
+ * \param[in] objs		an array of IDs to creates the objects from
+ *
+ * \retval			0 if the objects are instantiated successfully
+ * \retval			negative error number on failure
  */
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 			   struct lov_ost_data_v1 *objs)
@@ -793,8 +926,18 @@ out:
 	RETURN(rc);
 }
 
-/*
- * Parse striping information stored in lti_ea_store
+/**
+ * Instantiate objects for striping.
+ *
+ * Parse striping information in \a buf and instantiate the objects
+ * representing the stripes.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[in] buf		buffer storing LOV EA to parse
+ *
+ * \retval			0 if parsing and objects creation succeed
+ * \retval			negative error number on failure
  */
 int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		       const struct lu_buf *buf)
@@ -844,6 +987,19 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Initialize the object representing the stripes.
+ *
+ * Unless the stripes are initialized already, fetch LOV (for regular
+ * objects) or LMV (for directory objects) EA and call lod_parse_striping()
+ * to instantiate the objects representing the stripes.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in,out] lo		LOD object
+ *
+ * \retval			0 if parsing and object creation succeed
+ * \retval			negative error number on failure
+ */
 int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
@@ -905,8 +1061,20 @@ out:
 }
 
 /**
- * Load and parse striping information, create in-core representation for the
- * stripes
+ * A generic function to initialize the stripe objects.
+ *
+ * A protected version of lod_load_striping_locked() - load the striping
+ * information from storage, parse that and instantiate LU objects to
+ * represent the stripes.  The LOD object \a lo supplies a pointer to the
+ * next sub-object in the LU stack so we can lock it. Also use \a lo to
+ * return an array of references to the newly instantiated objects.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in,out] lo		LOD object, where striping is stored and
+ *				which gets an array of references
+ *
+ * \retval			0 if parsing and object creation succeed
+ * \retval			negative error number on failure
  **/
 int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 {
@@ -921,7 +1089,23 @@ int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 	return rc;
 }
 
-/* verify the striping information for directory */
+/**
+ * Verify striping.
+ *
+ * Check the validity of all fields including the magic, stripe size,
+ * stripe count, stripe offset and that the pool is present.  Also check
+ * that each target index points to an existing target. The additional
+ * \a is_from_disk turns additional checks. In some cases zero fields
+ * are allowed (like pattern=0).
+ *
+ * \param[in] d			LOD device
+ * \param[in] buf		buffer with LOV EA to verify
+ * \param[in] is_from_disk	0 - from user, allow some fields to be 0
+ *				1 - from disk, do not allow
+ *
+ * \retval			0 if the striping is valid
+ * \retval			-EINVAL if striping is invalid
+ */
 int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 			bool is_from_disk)
 {
@@ -1084,6 +1268,11 @@ void lod_fix_desc_qos_maxage(__u32 *val)
 		*val = LOV_DESC_QOS_MAXAGE_DEFAULT;
 }
 
+/**
+ * Used to fix insane default striping.
+ *
+ * \param[in] desc	striping description
+ */
 void lod_fix_desc(struct lov_desc *desc)
 {
 	lod_fix_desc_stripe_size(&desc->ld_default_stripe_size);
@@ -1092,6 +1281,15 @@ void lod_fix_desc(struct lov_desc *desc)
 	lod_fix_desc_qos_maxage(&desc->ld_qos_maxage);
 }
 
+/**
+ * Initialize the structures used to store pools and default striping.
+ *
+ * \param[in] lod	LOD device
+ * \param[in] lcfg	configuration structure storing default striping.
+ *
+ * \retval		0 if initialization succeeds
+ * \retval		negative error number on failure
+ */
 int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 {
 	struct obd_device	   *obd;
@@ -1176,6 +1374,13 @@ out_hash:
 	return rc;
 }
 
+/**
+ * Release the structures describing the pools.
+ *
+ * \param[in] lod	LOD device from which we release the structures
+ *
+ * \retval		0 always
+ */
 int lod_pools_fini(struct lod_device *lod)
 {
 	struct obd_device   *obd = lod2obd(lod);
@@ -1197,4 +1402,3 @@ int lod_pools_fini(struct lod_device *lod)
 
 	RETURN(0);
 }
-
