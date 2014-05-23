@@ -1349,6 +1349,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_OPEN_BY_FID	0x20000000000000ULL /* open by fid won't pack
 						       name in request */
 #define OBD_CONNECT_LFSCK      0x40000000000000ULL/* support online LFSCK */
+#define OBD_CONNECT_UNLINK_CLOSE 0x100000000000000ULL/* close file in unlink */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
