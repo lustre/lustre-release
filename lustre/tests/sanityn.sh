@@ -2549,6 +2549,7 @@ run_test 75 "osc: upcall after unuse lock==================="
 test_76() { #LU-946
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
 		skip "Need MDS version at least 2.5.53" && return
+	[ $MDSCOUNT -ge 2 ] && skip "skip now for LU-4573" && return #LU-4573
 
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local fcount=2048

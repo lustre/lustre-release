@@ -1411,6 +1411,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
 		OLF_SHOW_NAME, NULL, NULL },
 
+	/* SLAVE_LOG, llog for destroy slave stripes of striped dir */
+	{ "SLAVE_LOG", { FID_SEQ_LOCAL_FILE, SLAVE_LLOG_CATALOGS_OID, 0 },
+	       OLF_SHOW_NAME, NULL, NULL },
+
 	/* lost+found */
 	{ "lost+found", { 0, 0, 0 }, OLF_SCAN_SUBITEMS | OLF_NO_OI,
 		osd_ios_general_scan, osd_ios_lf_fill },

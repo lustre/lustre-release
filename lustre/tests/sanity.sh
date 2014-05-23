@@ -792,9 +792,9 @@ test_24c() {
 run_test 24c "rename directory to non-existent target"
 
 test_24d() {
-	test_mkdir $DIR/$tdir
-	test_mkdir $DIR/$tdir/d$testnum.1
-	test_mkdir $DIR/$tdir/d$testnum.2
+	test_mkdir -c1 $DIR/$tdir
+	test_mkdir -c1 $DIR/$tdir/d$testnum.1
+	test_mkdir -c1 $DIR/$tdir/d$testnum.2
 	mrename $DIR/$tdir/d$testnum.1 $DIR/$tdir/d$testnum.2
 	$CHECKSTAT -a $DIR/$tdir/d$testnum.1 || error "d$testnum.1 exists"
 	$CHECKSTAT -t dir $DIR/$tdir/d$testnum.2 || error "d$testnum.2 not dir"
@@ -833,10 +833,10 @@ test_24g() {
 run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R7b/e ======"
 
 test_24h() {
-	test_mkdir $DIR/R8a
-	test_mkdir $DIR/R8b
-	test_mkdir $DIR/R8a/d
-	test_mkdir $DIR/R8b/e
+	test_mkdir -c1 $DIR/R8a
+	test_mkdir -c1 $DIR/R8b
+	test_mkdir -c1 $DIR/R8a/d
+	test_mkdir -c1 $DIR/R8b/e
 	mrename $DIR/R8a/d $DIR/R8b/e
 	$CHECKSTAT -a $DIR/R8a/d || error
 	$CHECKSTAT -t dir $DIR/R8b/e || error
@@ -2044,76 +2044,74 @@ test_31f() { # bug 4554
 run_test 31f "remove of open directory with open-unlink file ==="
 
 test_31g() {
-        echo "-- cross directory link --"
-        test_mkdir $DIR/d31ga
-        test_mkdir $DIR/d31gb
-        touch $DIR/d31ga/f
-        ln $DIR/d31ga/f $DIR/d31gb/g
-        $CHECKSTAT -t file $DIR/d31ga/f || error "source"
-        [ `stat -c%h $DIR/d31ga/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31gb/g || error "target"
-        [ `stat -c%h $DIR/d31gb/g` == '2' ] || error "target nlink"
+	echo "-- cross directory link --"
+	test_mkdir -c1 $DIR/${tdir}ga
+	test_mkdir -c1 $DIR/${tdir}gb
+	touch $DIR/${tdir}ga/f
+	ln $DIR/${tdir}ga/f $DIR/${tdir}gb/g
+	$CHECKSTAT -t file $DIR/${tdir}ga/f || error "source"
+	[ `stat -c%h $DIR/${tdir}ga/f` == '2' ] || error "source nlink"
+	$CHECKSTAT -t file $DIR/${tdir}gb/g || error "target"
+	[ `stat -c%h $DIR/${tdir}gb/g` == '2' ] || error "target nlink"
 }
 run_test 31g "cross directory link==============="
 
 test_31h() {
-        echo "-- cross directory link --"
-        test_mkdir $DIR/d31h
-        test_mkdir $DIR/d31h/dir
-        touch $DIR/d31h/f
-        ln $DIR/d31h/f $DIR/d31h/dir/g
-        $CHECKSTAT -t file $DIR/d31h/f || error "source"
-        [ `stat -c%h $DIR/d31h/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31h/dir/g || error "target"
-        [ `stat -c%h $DIR/d31h/dir/g` == '2' ] || error "target nlink"
+	echo "-- cross directory link --"
+	test_mkdir -c1 $DIR/${tdir}
+	test_mkdir -c1 $DIR/${tdir}/dir
+	touch $DIR/${tdir}/f
+	ln $DIR/${tdir}/f $DIR/${tdir}/dir/g
+	$CHECKSTAT -t file $DIR/${tdir}/f || error "source"
+	[ `stat -c%h $DIR/${tdir}/f` == '2' ] || error "source nlink"
+	$CHECKSTAT -t file $DIR/${tdir}/dir/g || error "target"
+	[ `stat -c%h $DIR/${tdir}/dir/g` == '2' ] || error "target nlink"
 }
 run_test 31h "cross directory link under child==============="
 
 test_31i() {
-        echo "-- cross directory link --"
-        test_mkdir $DIR/d31i
-        test_mkdir $DIR/d31i/dir
-        touch $DIR/d31i/dir/f
-        ln $DIR/d31i/dir/f $DIR/d31i/g
-        $CHECKSTAT -t file $DIR/d31i/dir/f || error "source"
-        [ `stat -c%h $DIR/d31i/dir/f` == '2' ] || error "source nlink"
-        $CHECKSTAT -t file $DIR/d31i/g || error "target"
-        [ `stat -c%h $DIR/d31i/g` == '2' ] || error "target nlink"
+	echo "-- cross directory link --"
+	test_mkdir -c1 $DIR/$tdir
+	test_mkdir -c1 $DIR/$tdir/dir
+	touch $DIR/$tdir/dir/f
+	ln $DIR/$tdir/dir/f $DIR/$tdir/g
+	$CHECKSTAT -t file $DIR/$tdir/dir/f || error "source"
+	[ `stat -c%h $DIR/$tdir/dir/f` == '2' ] || error "source nlink"
+	$CHECKSTAT -t file $DIR/$tdir/g || error "target"
+	[ `stat -c%h $DIR/$tdir/g` == '2' ] || error "target nlink"
 }
 run_test 31i "cross directory link under parent==============="
 
-
 test_31j() {
-        test_mkdir $DIR/d31j
-        test_mkdir $DIR/d31j/dir1
-        ln $DIR/d31j/dir1 $DIR/d31j/dir2 && error "ln for dir"
-        link $DIR/d31j/dir1 $DIR/d31j/dir3 && error "link for dir"
-        mlink $DIR/d31j/dir1 $DIR/d31j/dir4 && error "mlink for dir"
-        mlink $DIR/d31j/dir1 $DIR/d31j/dir1 && error "mlink to the same dir"
+	test_mkdir -c1 -p $DIR/$tdir
+	test_mkdir -c1 -p $DIR/$tdir/dir1
+	ln $DIR/$tdir/dir1 $DIR/$tdir/dir2 && error "ln for dir"
+	link $DIR/$tdir/dir1 $DIR/$tdir/dir3 && error "link for dir"
+	mlink $DIR/$tdir/dir1 $DIR/$tdir/dir4 && error "mlink for dir"
+	mlink $DIR/$tdir/dir1 $DIR/$tdir/dir1 && error "mlink to the same dir"
 	return 0
 }
 run_test 31j "link for directory==============="
 
-
 test_31k() {
-        test_mkdir $DIR/d31k
-        touch $DIR/d31k/s
-        touch $DIR/d31k/exist
-        mlink $DIR/d31k/s $DIR/d31k/t || error "mlink"
-        mlink $DIR/d31k/s $DIR/d31k/exist && error "mlink to exist file"
-        mlink $DIR/d31k/s $DIR/d31k/s && error "mlink to the same file"
-        mlink $DIR/d31k/s $DIR/d31k && error "mlink to parent dir"
-        mlink $DIR/d31k $DIR/d31k/s && error "mlink parent dir to target"
-        mlink $DIR/d31k/not-exist $DIR/d31k/foo && error "mlink non-existing to new"
-        mlink $DIR/d31k/not-exist $DIR/d31k/s && error "mlink non-existing to exist"
+        test_mkdir -c1 -p $DIR/$tdir
+        touch $DIR/$tdir/s
+        touch $DIR/$tdir/exist
+        mlink $DIR/$tdir/s $DIR/$tdir/t || error "mlink"
+        mlink $DIR/$tdir/s $DIR/$tdir/exist && error "mlink to exist file"
+        mlink $DIR/$tdir/s $DIR/$tdir/s && error "mlink to the same file"
+        mlink $DIR/$tdir/s $DIR/$tdir && error "mlink to parent dir"
+        mlink $DIR/$tdir $DIR/$tdir/s && error "mlink parent dir to target"
+        mlink $DIR/$tdir/not-exist $DIR/$tdir/foo && error "mlink non-existing to new"
+        mlink $DIR/$tdir/not-exist $DIR/$tdir/s && error "mlink non-existing to exist"
 	return 0
 }
 run_test 31k "link to file: the same, non-existing, dir==============="
 
 test_31m() {
-        test_mkdir $DIR/d31m
+        mkdir $DIR/d31m
         touch $DIR/d31m/s
-        test_mkdir $DIR/d31m2
+        mkdir $DIR/d31m2
         touch $DIR/d31m2/exist
         mlink $DIR/d31m/s $DIR/d31m2/t || error "mlink"
         mlink $DIR/d31m/s $DIR/d31m2/exist && error "mlink to exist file"
@@ -3990,6 +3988,16 @@ find_loop_dev() {
 	done
 }
 
+cleanup_54c() {
+	loopdev="$DIR/loop54c"
+
+	trap 0
+	$UMOUNT -d $tdir || rc=$?
+	losetup -d $loopdev || true
+	rm $loopdev
+	return $rc
+}
+
 test_54c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	tfile="$DIR/f54c"
@@ -4000,17 +4008,16 @@ test_54c() {
 	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
 	mknod $loopdev b 7 $LOOPNUM
 	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
-	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
+	dd if=/dev/zero of=$tfile bs=$(get_page_size client) seek=1024 count=1 > /dev/null
 	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
+	trap cleanup_54c EXIT
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
 	test_mkdir -p $tdir
 	mount -t ext2 $loopdev $tdir || error "error mounting $loopdev on $tdir"
 	dd if=/dev/zero of=$tdir/tmp bs=`page_size` count=30 || error "dd write"
 	df $tdir
 	dd if=$tdir/tmp of=/dev/zero bs=`page_size` count=30 || error "dd read"
-	$UMOUNT -d $tdir
-	losetup -d $loopdev
-	rm $loopdev
+	cleanup_54c
 }
 run_test 54c "block device works in lustre ====================="
 
@@ -4093,23 +4100,24 @@ run_test 56a "check $GETSTRIPE"
 NUMFILES=3
 NUMDIRS=3
 setup_56() {
-        local LOCAL_NUMFILES="$1"
-        local LOCAL_NUMDIRS="$2"
-        local MKDIR_PARAMS="$3"
+	local LOCAL_NUMFILES="$1"
+	local LOCAL_NUMDIRS="$2"
+	local MKDIR_PARAMS="$3"
+	local DIR_STRIPE_PARAMS="$4"
 
-        if [ ! -d "$TDIR" ] ; then
-                test_mkdir -p $TDIR
-                [ "$MKDIR_PARAMS" ] && $SETSTRIPE $MKDIR_PARAMS $TDIR
-                for i in `seq 1 $LOCAL_NUMFILES` ; do
-                        touch $TDIR/file$i
-                done
-                for i in `seq 1 $LOCAL_NUMDIRS` ; do
-                        test_mkdir $TDIR/dir$i
-                        for j in `seq 1 $LOCAL_NUMFILES` ; do
-                                touch $TDIR/dir$i/file$j
-                        done
-                done
-        fi
+	if [ ! -d "$TDIR" ] ; then
+		test_mkdir -p $DIR_STRIPE_PARAMS $TDIR
+		[ "$MKDIR_PARAMS" ] && $SETSTRIPE $MKDIR_PARAMS $TDIR
+		for i in `seq 1 $LOCAL_NUMFILES` ; do
+			touch $TDIR/file$i
+		done
+		for i in `seq 1 $LOCAL_NUMDIRS` ; do
+			test_mkdir $DIR_STRIPE_PARAMS $TDIR/dir$i
+			for j in `seq 1 $LOCAL_NUMFILES` ; do
+				touch $TDIR/dir$i/file$j
+			done
+		done
+	fi
 }
 
 setup_56_special() {
@@ -4237,7 +4245,6 @@ run_test 56n "check lfs find -type l ============================="
 test_56o() {
 	TDIR=$DIR/${tdir}o
 	setup_56 $NUMFILES $NUMDIRS
-
 	utime $TDIR/file1 > /dev/null || error "utime (1)"
 	utime $TDIR/file2 > /dev/null || error "utime (2)"
 	utime $TDIR/dir1 > /dev/null || error "utime (3)"
@@ -4528,7 +4535,7 @@ test_56w() {
 	TDIR=$DIR/${tdir}w
 
     rm -rf $TDIR || error "remove $TDIR failed"
-    setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT"
+    setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT" "-c1"
 
     local stripe_size
     stripe_size=$($GETSTRIPE -S -d $TDIR) ||
@@ -7368,7 +7375,7 @@ run_test 119d "The DIO path should try to send a new rpc once one is completed"
 
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
 
@@ -7378,12 +7385,16 @@ test_120a() {
 	# asynchronous object destroy at MDT could cause bl ast to client
 	cancel_lru_locks osc
 
-        stat $DIR/$tdir > /dev/null
-        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
-        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
-        test_mkdir $DIR/$tdir/d1
-        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
-        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
+	stat $DIR/$tdir > /dev/null
+	can1=$(lctl get_param -n ldlm.services.ldlm_canceld.stats |
+					awk '/ldlm_cancel/ {print $2}')
+	blk1=$(lctl get_param -n ldlm.services.ldlm_cbd.stats |
+					awk '/ldlm_bl_callback/ {print $2}')
+	test_mkdir -c1 $DIR/$tdir/d1
+        can2=$(lctl get_param -n ldlm.services.ldlm_canceld.stats |
+					awk '/ldlm_cancel/ {print $2}')
+	blk2=$(lctl get_param -n ldlm.services.ldlm_cbd.stats |
+					awk '/ldlm_bl_callback/ {print $2}')
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
@@ -7393,8 +7404,8 @@ run_test 120a "Early Lock Cancel: mkdir test"
 
 test_120b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
-        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
+        test_mkdir $DIR/$tdir
+        [ -z "$(lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel)" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
@@ -7414,13 +7425,13 @@ run_test 120b "Early Lock Cancel: create test"
 
 test_120c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
-        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
-               skip "no early lock cancel on server" && return 0
+	test_mkdir -c1 $DIR/$tdir
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel)" ] && \
+	       skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
-	test_mkdir -p $DIR/$tdir/d1
-	test_mkdir -p $DIR/$tdir/d2
+	test_mkdir -p -c1 $DIR/$tdir/d1
+	test_mkdir -p -c1 $DIR/$tdir/d2
         touch $DIR/$tdir/d1/f1
         cancel_lru_locks mdc
         stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 > /dev/null
@@ -7438,9 +7449,9 @@ run_test 120c "Early Lock Cancel: link test"
 
 test_120d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
-        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
-               skip "no early lock cancel on server" && return 0
+	test_mkdir -p -c1 $DIR/$tdir
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel)" ] && \
+	       skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
         lru_resize_disable osc
         touch $DIR/$tdir
@@ -7460,7 +7471,7 @@ run_test 120d "Early Lock Cancel: setattr test"
 
 test_120e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p $DIR/$tdir
+        test_mkdir -p -c1 $DIR/$tdir
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
         lru_resize_disable mdc
@@ -7490,11 +7501,11 @@ test_120f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
         [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
                skip "no early lock cancel on server" && return 0
-        test_mkdir -p $DIR/$tdir
+        test_mkdir -p -c1 $DIR/$tdir
         lru_resize_disable mdc
         lru_resize_disable osc
-	test_mkdir -p $DIR/$tdir/d1
-	test_mkdir -p $DIR/$tdir/d2
+	test_mkdir -p -c1 $DIR/$tdir/d1
+	test_mkdir -p -c1 $DIR/$tdir/d2
         dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
         dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
         cancel_lru_locks mdc
@@ -7981,7 +7992,6 @@ test_129() {
 		return
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
 	ENOSPC=28
 	EFBIG=27
 
@@ -7995,6 +8005,9 @@ test_129() {
 	set_dir_limits $MAX
 	local I=$(stat -c%s "$DIR/$tdir")
 	local J=0
+	local STRIPE_COUNT=1
+	[ $MDSCOUNT -ge 2 ] && STRIPE_COUNT=$($LFS getdirstripe -c $DIR/$tdir)
+	MAX=$((MAX*STRIPE_COUNT))
 	while [ ! $I -gt $MAX ]; do
 		$MULTIOP $DIR/$tdir/$J Oc
 		rc=$?
@@ -8027,7 +8040,7 @@ test_129() {
 	done
 
 	set_dir_limits 0
-	error "exceeded dir size limit $MAX x $MDSCOUNT $MAX : $I bytes"
+	error "exceeded dir size limit $MAX($MDSCOUNT) : $I bytes"
 }
 run_test 129 "test directory size limit ========================"
 
@@ -9017,8 +9030,10 @@ dot_lustre_fid_permission_check() {
 	rm -f $test_dir/$tfile.1
 	echo "truncate fid $fid"
 	$TRUNCATE $ffid 777 || error "truncate $ffid failed."
-	echo "link fid $fid"
-	ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
+	if [ $MDSCOUNT -lt 2 ]; then #FIXME when cross-MDT hard link is working
+		echo "link fid $fid"
+		ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
+	fi
 	if [ -n $(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl) ]; then
 		echo "setfacl fid $fid"
 		setfacl -R -m u:bin:rwx $ffid || error "setfacl $ffid failed."
@@ -9169,7 +9184,7 @@ test_154b() {
 	local rc=0
 
 	mkdir -p $DIR/$tdir
-	$LFS mkdir -i $MDTIDX $remote_dir ||
+	$LFS mkdir -i $MDTIDX -c $MDSCOUNT $remote_dir ||
 		error "create remote directory failed"
 
 	cp /etc/hosts $remote_dir/$tfile
@@ -9672,14 +9687,14 @@ run_test 160b "Verify that very long rename doesn't crash in changelog"
 
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-    test_mkdir -p $DIR/$tdir
-    cp /etc/hosts $DIR/$tdir/$tfile
-    test_mkdir $DIR/$tdir/foo1
-    test_mkdir $DIR/$tdir/foo2
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/sofia
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
-    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
+	test_mkdir -p -c1 $DIR/$tdir
+	cp /etc/hosts $DIR/$tdir/$tfile
+	test_mkdir -c1 $DIR/$tdir/foo1
+	test_mkdir -c1 $DIR/$tdir/foo2
+	ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/sofia
+	ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
+	ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
+	ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
 	local FID=$($LFS path2fid $DIR/$tdir/$tfile | tr -d '[]')
 	if [ "$($LFS fid2path $DIR $FID | wc -l)" != "5" ]; then
 		$LFS fid2path $DIR $FID
@@ -10207,7 +10222,7 @@ test_184a() {
 	check_swap_layouts_support && return 0
 
 	dir0=$DIR/$tdir/$testnum
-	test_mkdir -p $dir0 || error "creating dir $dir0"
+	test_mkdir -p -c1 $dir0 || error "creating dir $dir0"
 	ref1=/etc/passwd
 	ref2=/etc/group
 	file1=$dir0/f1
@@ -11903,7 +11918,7 @@ run_test 235 "LU-1715: flock deadlock detection does not work properly"
 #LU-2935
 test_236() {
 	check_swap_layouts_support && return 0
-	test_mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	test_mkdir -p -c1 $DIR/$tdir || error "mkdir $tdir failed"
 
 	local ref1=/etc/passwd
 	local ref2=/etc/group
@@ -11939,6 +11954,236 @@ test_237() {
 		error "check_fhandle_syscalls failed"
 }
 run_test 237 "Verify name_to_handle_at/open_by_handle_at syscalls"
+
+test_striped_dir() {
+	local mdt_index=$1
+	local stripe_count
+	local stripe_index
+
+	mkdir -p $DIR/$tdir
+	$LFS setdirstripe -i $mdt_index -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
+	if [ "$stripe_count" != "2" ]; then
+		error "stripe_count is $stripe_count, expect 2"
+	fi
+
+	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir)
+	if [ "$stripe_index" != "$mdt_index" ]; then
+		error "stripe_index is $stripe_index, expect $mdt_index"
+	fi
+
+	[ $(stat -c%h $DIR/$tdir/striped_dir) == '2' ] ||
+		error "nlink error after create striped dir"
+
+	mkdir $DIR/$tdir/striped_dir/a
+	mkdir $DIR/$tdir/striped_dir/b
+
+	stat $DIR/$tdir/striped_dir/a ||
+		error "create dir under striped dir failed"
+	stat $DIR/$tdir/striped_dir/b ||
+		error "create dir under striped dir failed"
+
+	[ $(stat -c%h $DIR/$tdir/striped_dir) == '4' ] ||
+		error "nlink error after mkdir"
+
+	rmdir $DIR/$tdir/striped_dir/a
+	[ $(stat -c%h $DIR/$tdir/striped_dir) == '3' ] ||
+		error "nlink error after rmdir"
+
+	rmdir $DIR/$tdir/striped_dir/b
+	[ $(stat -c%h $DIR/$tdir/striped_dir) == '2' ] ||
+		error "nlink error after rmdir"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "rmdir striped dir error"
+	true
+}
+
+test_300a() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	test_striped_dir 0 || error "failed on striped dir on MDT0"
+	test_striped_dir 1 || error "failed on striped dir on MDT0"
+}
+run_test 300a "basic striped dir sanity test"
+
+test_300b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local i
+	local mtime1
+	local mtime2
+	local mtime3
+
+	test_mkdir $DIR/$tdir || error "mkdir fail"
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+	for ((i=0; i<10; i++)); do
+		mtime1=$(stat -c %Y $DIR/$tdir/striped_dir)
+		sleep 1
+		touch $DIR/$tdir/striped_dir/file_$i ||
+					error "touch error $i"
+		mtime2=$(stat -c %Y $DIR/$tdir/striped_dir)
+		[ $mtime1 -eq $mtime2 ] &&
+			error "mtime not change after create"
+		sleep 1
+		rm -f $DIR/$tdir/striped_dir/file_$i ||
+					error "unlink error $i"
+		mtime3=$(stat -c %Y $DIR/$tdir/striped_dir)
+		[ $mtime2 -eq $mtime3 ] &&
+			error "mtime did not change after unlink"
+	done
+	true
+}
+run_test 300b "check ctime/mtime for striped dir"
+
+test_300c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local file_count
+
+	mkdir -p $DIR/$tdir
+	$LFS setdirstripe -i 0 -c 2 $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/striped_dir ||
+		error "chown striped dir failed"
+
+	$RUNAS createmany -o $DIR/$tdir/striped_dir/f 5000 ||
+		error "create 5k files failed"
+
+	file_count=$(ls $DIR/$tdir/striped_dir | wc -l)
+
+	[ "$file_count" = 5000 ] || error "file count $file_count != 5000"
+
+	rm -rf $DIR/$tdir
+}
+run_test 300c "chown && check ls under striped directory"
+
+test_300d() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_count
+	local file
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 2 $DIR/$tdir
+
+	#local striped directory
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+	createmany -o $DIR/$tdir/striped_dir/f 10 ||
+		error "create 10 files failed"
+
+	#remote striped directory
+	$LFS setdirstripe -i 1 -c 2 $DIR/$tdir/remote_striped_dir ||
+		error "set striped dir error"
+	createmany -o $DIR/$tdir/remote_striped_dir/f 10 ||
+		error "create 10 files failed"
+
+	for file in $(find $DIR/$tdir); do
+		stripe_count=$($GETSTRIPE -c $file)
+		[ $stripe_count -eq 2 ] ||
+			error "wrong stripe $stripe_count for $file"
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 300d "check default stripe under striped directory"
+
+test_300e() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_count
+	local file
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	touch $DIR/$tdir/striped_dir/a
+	touch $DIR/$tdir/striped_dir/b
+	touch $DIR/$tdir/striped_dir/c
+
+	mkdir $DIR/$tdir/striped_dir/dir_a
+	mkdir $DIR/$tdir/striped_dir/dir_b
+	mkdir $DIR/$tdir/striped_dir/dir_c
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_a ||
+		error "set striped dir under striped dir error"
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_b ||
+		error "set striped dir under striped dir error"
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_c ||
+		error "set striped dir under striped dir error"
+
+	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir/b &&
+		error "rename file under striped dir should fail"
+
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_b &&
+		error "rename dir under striped dir should fail"
+
+	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir/stp_b &&
+		error "rename dir under different stripes should fail"
+
+	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir/c ||
+		error "rename file under striped dir should succeed"
+
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_c ||
+		error "rename dir under striped dir should succeed"
+
+	rm -rf $DIR/$tdir
+}
+run_test 300e "check rename under striped directory"
+
+test_300f() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_count
+	local file
+
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir1 ||
+		error "set striped dir error"
+
+	touch $DIR/$tdir/striped_dir/a
+	mkdir $DIR/$tdir/striped_dir/dir_a
+	$LFS setdirstripe -i 0 -c 2 $DIR/$tdir/striped_dir/stp_a ||
+		error "create striped dir under striped dir fails"
+
+	touch $DIR/$tdir/striped_dir1/b
+	mkdir $DIR/$tdir/striped_dir1/dir_b
+	$LFS setdirstripe -i 0 -c 2 $DIR/$tdir/striped_dir/stp_b ||
+		error "create striped dir under striped dir fails"
+
+	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir1/b &&
+		error "rename file under different striped dir should fail"
+
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir1/dir_b &&
+		error "rename dir under different striped dir should fail"
+
+	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir1/stp_b &&
+		error "rename striped dir under diff striped dir should fail"
+
+	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir1/a ||
+		error "rename file under diff striped dirs fails"
+
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir1/dir_a ||
+		error "rename dir under diff striped dirs fails"
+
+	rm -rf $DIR/$tdir
+}
+run_test 300f "check rename cross striped directory"
 
 #
 # tests that do cleanup/setup should be run at the end

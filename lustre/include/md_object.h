@@ -180,6 +180,7 @@ struct md_op_spec {
         const struct dt_index_features *sp_feat;
 };
 
+union ldlm_policy_data;
 /**
  * Operations implemented for each md object (both directory and leaf).
  */
@@ -255,7 +256,11 @@ struct md_object_operations {
 	int (*moo_object_lock)(const struct lu_env *env, struct md_object *obj,
 			       struct lustre_handle *lh,
 			       struct ldlm_enqueue_info *einfo,
-			       void *policy);
+			       union ldlm_policy_data *policy);
+	int (*moo_object_unlock)(const struct lu_env *env,
+				 struct md_object *obj,
+				 struct ldlm_enqueue_info *einfo,
+				 union ldlm_policy_data *policy);
 };
 
 /**
@@ -670,10 +675,19 @@ static inline int mo_object_lock(const struct lu_env *env,
 				 struct md_object *m,
 				 struct lustre_handle *lh,
 				 struct ldlm_enqueue_info *einfo,
-				 void *policy)
+				 union ldlm_policy_data *policy)
 {
 	LASSERT(m->mo_ops->moo_object_lock);
 	return m->mo_ops->moo_object_lock(env, m, lh, einfo, policy);
+}
+
+static inline int mo_object_unlock(const struct lu_env *env,
+				   struct md_object *m,
+				   struct ldlm_enqueue_info *einfo,
+				   union ldlm_policy_data *policy)
+{
+	LASSERT(m->mo_ops->moo_object_unlock);
+	return m->mo_ops->moo_object_unlock(env, m, einfo, policy);
 }
 
 static inline int mdo_lookup(const struct lu_env *env,

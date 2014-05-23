@@ -2039,11 +2039,20 @@ static int mdd_object_lock(const struct lu_env *env,
 			   struct md_object *obj,
 			   struct lustre_handle *lh,
 			   struct ldlm_enqueue_info *einfo,
-			   void *policy)
+			   ldlm_policy_data_t *policy)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	return dt_object_lock(env, mdd_object_child(mdd_obj), lh,
 			      einfo, policy);
+}
+
+static int mdd_object_unlock(const struct lu_env *env,
+			     struct md_object *obj,
+			     struct ldlm_enqueue_info *einfo,
+			     ldlm_policy_data_t *policy)
+{
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	return dt_object_unlock(env, mdd_object_child(mdd_obj), einfo, policy);
 }
 
 const struct md_object_operations mdd_obj_ops = {
@@ -2063,4 +2072,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_capa_get		= mdd_capa_get,
 	.moo_object_sync	= mdd_object_sync,
 	.moo_object_lock	= mdd_object_lock,
+	.moo_object_unlock	= mdd_object_unlock,
 };

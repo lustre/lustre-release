@@ -429,7 +429,8 @@ out_close:
 EXPORT_SYMBOL(llog_ioctl);
 
 int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
-		      int count, struct obd_ioctl_data *data)
+		      int count, struct obd_ioctl_data *data,
+		      const struct lu_fid *fid)
 {
 	int			 size, i;
 	struct llog_catid	*idarray;
@@ -440,7 +441,7 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 	ENTRY;
 
 	if (count == 0) { /* get total number of logs */
-		rc = llog_osd_get_cat_list(env, d, 0, 0, NULL);
+		rc = llog_osd_get_cat_list(env, d, 0, 0, NULL, fid);
 		if (rc < 0)
 			RETURN(rc);
 		count = rc;
@@ -452,7 +453,7 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 	if (!idarray)
 		RETURN(-ENOMEM);
 
-	rc = llog_osd_get_cat_list(env, d, 0, count, idarray);
+	rc = llog_osd_get_cat_list(env, d, 0, count, idarray, fid);
 	if (rc)
 		GOTO(out, rc);
 

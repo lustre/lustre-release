@@ -253,6 +253,12 @@ update:
 				if (req != NULL)
 					ptlrpc_req_finished(req);
 
+				if (it.d.lustre.it_lock_mode && lockh) {
+					ldlm_lock_decref(lockh,
+						 it.d.lustre.it_lock_mode);
+					it.d.lustre.it_lock_mode = 0;
+				}
+
 				GOTO(cleanup, rc = -EIO);
 			}
 

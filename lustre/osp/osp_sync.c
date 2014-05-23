@@ -348,8 +348,6 @@ static int osp_sync_interpret(const struct lu_env *env,
 	       rc, (unsigned) req->rq_transno);
 	LASSERT(rc || req->rq_transno);
 
-	LASSERT(d->opd_pre != NULL);
-
 	if (rc == -ENOENT) {
 		/*
 		 * we tried to destroy object or update attributes,
@@ -386,7 +384,8 @@ static int osp_sync_interpret(const struct lu_env *env,
 		}
 
 		wake_up(&d->opd_syn_waitq);
-	} else if (unlikely(d->opd_pre_status == -ENOSPC)) {
+	} else if (d->opd_pre != NULL &&
+		   unlikely(d->opd_pre_status == -ENOSPC)) {
 		/*
 		 * if current status is -ENOSPC (lack of free space on OST)
 		 * then we should poll OST immediately once object destroy
@@ -524,31 +523,100 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 	RETURN(0);
 }
 
-static int osp_sync_new_unlink64_job(struct osp_device *d,
+static int osp_prep_unlink_update_req(const struct lu_env *env,
+				      struct osp_device *osp,
+				      struct llog_handle *llh,
+				      struct llog_rec_hdr *h,
+				      struct ptlrpc_request **reqp)
+{
+	struct llog_unlink64_rec	*rec = (struct llog_unlink64_rec *)h;
+	struct update_request		*update = NULL;
+	struct ptlrpc_request		*req;
+	const char			*buf;
+	struct llog_cookie		lcookie;
+	int				size;
+	int				rc;
+	ENTRY;
+
+	update = out_create_update_req(&osp->opd_dt_dev);
+	if (IS_ERR(update))
+		RETURN(PTR_ERR(update));
+
+	/* This can only happens for unlink slave directory, so decrease
+	 * ref for ".." and "." */
+	rc = out_insert_update(env, update, OBJ_REF_DEL, &rec->lur_fid, 0,
+			       NULL, NULL);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = out_insert_update(env, update, OBJ_REF_DEL, &rec->lur_fid, 0,
+			       NULL, NULL);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	lcookie.lgc_lgl = llh->lgh_id;
+	lcookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
+	lcookie.lgc_index = h->lrh_index;
+	size = sizeof(lcookie);
+	buf = (const char *)&lcookie;
+
+	rc = out_insert_update(env, update, OBJ_DESTROY, &rec->lur_fid, 1,
+			       &size, &buf);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
+				 update->ur_buf, UPDATE_BUFFER_SIZE, &req);
+
+	INIT_LIST_HEAD(&req->rq_exp_list);
+	req->rq_svc_thread = (void *)OSP_JOB_MAGIC;
+
+	req->rq_interpret_reply = osp_sync_interpret;
+	req->rq_commit_cb = osp_sync_request_commit_cb;
+	req->rq_cb_data = osp;
+
+	ptlrpc_request_set_replen(req);
+	*reqp = req;
+out:
+	if (update != NULL)
+		out_destroy_update_req(update);
+
+	RETURN(rc);
+}
+
+static int osp_sync_new_unlink64_job(const struct lu_env *env,
+				     struct osp_device *d,
 				     struct llog_handle *llh,
 				     struct llog_rec_hdr *h)
 {
 	struct llog_unlink64_rec	*rec = (struct llog_unlink64_rec *)h;
-	struct ptlrpc_request		*req;
+	struct ptlrpc_request		*req = NULL;
 	struct ost_body			*body;
 	int				 rc;
 
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_UNLINK64_REC);
 
-	req = osp_sync_new_job(d, llh, h, OST_DESTROY, &RQF_OST_DESTROY);
-	if (IS_ERR(req))
-		RETURN(PTR_ERR(req));
+	if (d->opd_connect_mdt) {
+		rc = osp_prep_unlink_update_req(env, d, llh, h, &req);
+		if (rc != 0)
+			RETURN(rc);
+	} else {
+		req = osp_sync_new_job(d, llh, h, OST_DESTROY,
+				       &RQF_OST_DESTROY);
+		if (IS_ERR(req))
+			RETURN(PTR_ERR(req));
 
-	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-	if (body == NULL)
-		RETURN(-EFAULT);
-	rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
-	if (rc < 0)
-		RETURN(rc);
-	body->oa.o_misc = rec->lur_count;
-	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID | OBD_MD_FLOBJCOUNT;
-
+		body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+		if (body == NULL)
+			RETURN(-EFAULT);
+		rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
+		if (rc < 0)
+			RETURN(rc);
+		body->oa.o_misc = rec->lur_count;
+		body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
+				   OBD_MD_FLOBJCOUNT;
+	}
 	osp_sync_send_new_rpc(d, req);
 	RETURN(0);
 }
@@ -601,7 +669,7 @@ static int osp_sync_process_record(const struct lu_env *env,
 		rc = osp_sync_new_unlink_job(d, llh, rec);
 		break;
 	case MDS_UNLINK64_REC:
-		rc = osp_sync_new_unlink64_job(d, llh, rec);
+		rc = osp_sync_new_unlink64_job(env, d, llh, rec);
 		break;
 	case MDS_SETATTR64_REC:
 		rc = osp_sync_new_setattr_job(d, llh, rec);
@@ -666,8 +734,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	 * notice: we do this upon commit as well because some backends
 	 * (like DMU) do not release space right away.
 	 */
-	LASSERT(d->opd_pre != NULL);
-	if (unlikely(d->opd_pre_status == -ENOSPC))
+	if (d->opd_pre != NULL && unlikely(d->opd_pre_status == -ENOSPC))
 		osp_statfs_need_now(d);
 
 	/*
@@ -689,17 +756,35 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	spin_unlock(&d->opd_syn_lock);
 
 	cfs_list_for_each_entry_safe(req, tmp, &list, rq_exp_list) {
+		struct llog_cookie *lcookie = NULL;
+
 		LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
 		cfs_list_del_init(&req->rq_exp_list);
 
-		body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-		LASSERT(body);
-
+		if (d->opd_connect_mdt) {
+			struct update_buf *ubuf;
+			struct update *update;
+			ubuf = req_capsule_client_get(&req->rq_pill,
+						      &RMF_UPDATE);
+			LASSERT(ubuf != NULL &&
+				ubuf->ub_magic == UPDATE_BUFFER_MAGIC);
+			/* 1st/2nd is for decref . and .., 3rd one is for
+			 * destroy, where the log cookie is stored.
+			 * See osp_prep_unlink_update_req */
+			update = update_buf_get(ubuf, 2, NULL);
+			LASSERT(update != NULL);
+			lcookie = update_param_buf(update, 0, NULL);
+			LASSERT(lcookie != NULL);
+		} else {
+			body = req_capsule_client_get(&req->rq_pill,
+						      &RMF_OST_BODY);
+			LASSERT(body);
+			lcookie = &body->oa.o_lcookie;
+		}
 		/* import can be closing, thus all commit cb's are
 		 * called we can check committness directly */
 		if (req->rq_transno <= imp->imp_peer_committed_transno) {
-			rc = llog_cat_cancel_records(env, llh, 1,
-						     &body->oa.o_lcookie);
+			rc = llog_cat_cancel_records(env, llh, 1, lcookie);
 			if (rc)
 				CERROR("%s: can't cancel record: %d\n",
 				       obd->obd_name, rc);
@@ -903,11 +988,12 @@ out:
 
 static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 {
-	struct osp_thread_info *osi = osp_env_info(env);
-	struct llog_handle     *lgh = NULL;
-	struct obd_device      *obd = d->opd_obd;
-	struct llog_ctxt       *ctxt;
-	int                     rc;
+	struct osp_thread_info	*osi = osp_env_info(env);
+	struct lu_fid		*fid = &osi->osi_fid;
+	struct llog_handle	*lgh = NULL;
+	struct obd_device	*obd = d->opd_obd;
+	struct llog_ctxt	*ctxt;
+	int			rc;
 
 	ENTRY;
 
@@ -919,8 +1005,13 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = d->opd_storage;
 
+	if (d->opd_connect_mdt)
+		lu_local_obj_fid(fid, SLAVE_LLOG_CATALOGS_OID);
+	else
+		lu_local_obj_fid(fid, LLOG_CATALOGS_OID);
+
 	rc = llog_osd_get_cat_list(env, d->opd_storage, d->opd_index, 1,
-				   &osi->osi_cid);
+				   &osi->osi_cid, fid);
 	if (rc) {
 		CERROR("%s: can't get id from catalogs: rc = %d\n",
 		       obd->obd_name, rc);
@@ -965,7 +1056,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 		GOTO(out_close, rc);
 
 	rc = llog_osd_put_cat_list(env, d->opd_storage, d->opd_index, 1,
-				   &osi->osi_cid);
+				   &osi->osi_cid, fid);
 	if (rc)
 		GOTO(out_close, rc);
 

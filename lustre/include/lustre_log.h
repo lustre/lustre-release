@@ -230,7 +230,8 @@ int obd_llog_finish(struct obd_device *obd, int count);
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data);
 int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
-		      int count, struct obd_ioctl_data *data);
+		      int count, struct obd_ioctl_data *data,
+		      const struct lu_fid *fid);
 
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
@@ -337,11 +338,11 @@ struct llog_handle {
 /* llog_osd.c */
 extern struct llog_operations llog_osd_ops;
 int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
-			  int idx, int count,
-			  struct llog_catid *idarray);
+			  int idx, int count, struct llog_catid *idarray,
+			  const struct lu_fid *fid);
 int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
-			  int idx, int count,
-			  struct llog_catid *idarray);
+			  int idx, int count, struct llog_catid *idarray,
+			  const struct lu_fid *fid);
 
 #define LLOG_CTXT_FLAG_UNINITIALIZED     0x00000001
 #define LLOG_CTXT_FLAG_STOP		 0x00000002

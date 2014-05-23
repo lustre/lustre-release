@@ -210,8 +210,7 @@ int out_insert_update(const struct lu_env *env, struct update_request *update,
 	int                   update_length;
 	ENTRY;
 
-	obj_update = (struct update *)((char *)ubuf +
-		      cfs_size_round(update_buf_size(ubuf)));
+	obj_update = (struct update *)((char *)ubuf + update_buf_size(ubuf));
 
 	/* Check update size to make sure it can fit into the buffer */
 	update_length = cfs_size_round(offsetof(struct update,

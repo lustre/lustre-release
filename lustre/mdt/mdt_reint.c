@@ -47,6 +47,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"
+#include <lustre_lmv.h>
 
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
                                      struct md_attr *ma)
@@ -407,12 +408,61 @@ put_parent:
 	RETURN(rc);
 }
 
+static int mdt_unlock_slaves(struct mdt_thread_info *mti,
+			     struct mdt_object *obj, __u64 ibits,
+			     struct ldlm_enqueue_info *einfo)
+{
+	ldlm_policy_data_t	*policy = &mti->mti_policy;
+	int			rc;
+	ENTRY;
+
+	if (!S_ISDIR(obj->mot_header.loh_attr))
+		RETURN(0);
+
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+
+	rc = mo_object_unlock(mti->mti_env, mdt_object_child(obj), einfo,
+			      policy);
+	RETURN(rc);
+}
+
+/**
+ * Lock slave stripes if necessary, the lock handles of slave stripes
+ * will be stored in einfo->ei_cbdata.
+ **/
+static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
+			   ldlm_mode_t mode, __u64 ibits,
+			   struct ldlm_enqueue_info *einfo)
+{
+	ldlm_policy_data_t	*policy = &mti->mti_policy;
+	int			rc;
+	ENTRY;
+
+	if (!S_ISDIR(obj->mot_header.loh_attr))
+		RETURN(0);
+
+	memset(einfo, 0, sizeof(*einfo));
+	einfo->ei_type = LDLM_IBITS;
+	einfo->ei_mode = mode;
+	einfo->ei_cb_bl = mdt_remote_blocking_ast;
+	einfo->ei_cb_cp = ldlm_completion_ast;
+	einfo->ei_enq_slave = 1;
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+
+	rc = mo_object_lock(mti->mti_env, mdt_object_child(obj), NULL, einfo,
+			    policy);
+	RETURN(rc);
+}
+
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                  struct md_attr *ma, int flags)
 {
         struct mdt_lock_handle  *lh;
         int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
         __u64 lockpart = MDS_INODELOCK_UPDATE;
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
         int rc;
         ENTRY;
 
@@ -432,6 +482,10 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
         rc = mdt_object_lock(info, mo, lh, lockpart, MDT_LOCAL_LOCK);
         if (rc != 0)
                 RETURN(rc);
+
+	rc = mdt_lock_slaves(info, mo, LCK_EX, lockpart, einfo);
+	if (rc != 0)
+		GOTO(out_unlock, rc);
 
         if (mdt_object_exists(mo) == 0)
                 GOTO(out_unlock, rc = -ENOENT);
@@ -468,6 +522,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
         EXIT;
 out_unlock:
+	mdt_unlock_slaves(info, mo, lockpart, einfo);
         mdt_object_unlock(info, mo, lh, rc);
         return rc;
 }
@@ -724,8 +779,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         struct mdt_object       *mc;
         struct mdt_lock_handle  *parent_lh;
         struct mdt_lock_handle  *child_lh;
-        int                      rc;
-	int			 no_name = 0;
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
+	int			rc;
+	int			no_name = 0;
 	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, "unlink "DFID"/"DNAME"", PFID(rr->rr_fid1),
@@ -739,6 +795,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1))
 		RETURN(-EPERM);
+
         /*
 	 * step 1: Found the parent.
          */
@@ -801,8 +858,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	if (fid_is_obf(child_fid) || fid_is_dot_lustre(child_fid))
 		GOTO(unlock_parent, rc = -EPERM);
-
-        mdt_reint_init_ma(info, ma);
 
 	/* We will lock the child regardless it is local or remote. No harm. */
 	mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
@@ -874,17 +929,22 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			     MDT_CROSS_LOCK);
 	if (rc != 0)
 		GOTO(put_child, rc);
-
-        mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
-                       OBD_FAIL_MDS_REINT_UNLINK_WRITE);
-        /* save version when object is locked */
-        mdt_version_get_save(info, mc, 1);
 	/*
 	 * Now we can only make sure we need MA_INODE, in mdd layer, will check
 	 * whether need MA_LOV and MA_COOKIE.
 	 */
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;
+
+	rc = mdt_lock_slaves(info, mc, LCK_EX, MDS_INODELOCK_UPDATE, einfo);
+	if (rc != 0)
+		GOTO(unlock_child, rc);
+
+	mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
+		       OBD_FAIL_MDS_REINT_UNLINK_WRITE);
+	/* save version when object is locked */
+	mdt_version_get_save(info, mc, 1);
+
 	mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
 
 	mutex_lock(&mc->mot_lov_mutex);
@@ -919,8 +979,15 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         }
 
         EXIT;
+
 unlock_child:
+	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, einfo);
 	mdt_object_unlock(info, mc, child_lh, rc);
+
+	/* Since we do not need reply md striped dir info to client, so
+	 * reset mti_big_lmm_used to avoid confusing mdt_fix_reply */
+	if (info->mti_big_lmm_used)
+		info->mti_big_lmm_used = 0;
 put_child:
 	mdt_object_put(info->mti_env, mc);
 unlock_parent:

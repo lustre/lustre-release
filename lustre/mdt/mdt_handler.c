@@ -483,7 +483,7 @@ void mdt_client_compatibility(struct mdt_thread_info *info)
 }
 
 static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
-			     char *name)
+			     const char *name)
 {
 	const struct lu_env *env = info->mti_env;
 	int rc;
@@ -522,7 +522,7 @@ static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 }
 
 static int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
-			  struct md_attr *ma, char *name)
+			  struct md_attr *ma, const char *name)
 {
 	struct md_object *next = mdt_object_child(o);
 	struct lu_buf    *buf = &info->mti_buf;
@@ -2272,8 +2272,9 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(rc);
 }
 
-int mdt_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-			void *data, int flag)
+/* Used for cross-MDT lock */
+int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+			    void *data, int flag)
 {
 	struct lustre_handle lockh;
 	int		  rc;
@@ -2312,8 +2313,9 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
 	einfo->ei_mode = mode;
-	einfo->ei_cb_bl = mdt_md_blocking_ast;
+	einfo->ei_cb_bl = mdt_remote_blocking_ast;
 	einfo->ei_cb_cp = ldlm_completion_ast;
+	einfo->ei_enq_slave = 0;
 
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
@@ -5642,9 +5644,15 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = mdt_ioc_version_get(mti, karg);
                 break;
         }
-	case OBD_IOC_CATLOGLIST:
-		rc = llog_catalog_list(&env, mdt->mdt_bottom, 0, karg);
+	case OBD_IOC_CATLOGLIST: {
+		struct mdt_thread_info *mti;
+
+		mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+		lu_local_obj_fid(&mti->mti_tmp_fid1, LLOG_CATALOGS_OID);
+		rc = llog_catalog_list(&env, mdt->mdt_bottom, 0, karg,
+				       &mti->mti_tmp_fid1);
 		break;
+	 }
 	default:
 		rc = -EOPNOTSUPP;
 		CERROR("%s: Not supported cmd = %d, rc = %d\n",

@@ -1352,7 +1352,7 @@ next:
 		lu_object_put(env, &dt_obj->do_lu);
 		if (rc < 0)
 			GOTO(out, rc);
-		off += cfs_size_round(update_size(update));
+		off += update_size(update);
 	}
 out:
 	rc1 = out_tx_end(env, ta);

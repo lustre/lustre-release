@@ -278,6 +278,8 @@ enum dt_format_type dt_mode_to_dft(__u32 mode);
 
 typedef __u64 dt_obj_version_t;
 
+union ldlm_policy_data;
+
 /**
  * Per-dt-object operations.
  */
@@ -467,7 +469,11 @@ struct dt_object_operations {
 	int (*do_object_lock)(const struct lu_env *env, struct dt_object *dt,
 			      struct lustre_handle *lh,
 			      struct ldlm_enqueue_info *einfo,
-			      void *policy);
+			      union ldlm_policy_data *policy);
+
+	int (*do_object_unlock)(const struct lu_env *env, struct dt_object *dt,
+				struct ldlm_enqueue_info *einfo,
+				union ldlm_policy_data *policy);
 };
 
 /**
@@ -936,12 +942,23 @@ int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
 static inline int dt_object_lock(const struct lu_env *env,
 				 struct dt_object *o, struct lustre_handle *lh,
 				 struct ldlm_enqueue_info *einfo,
-				 void *policy)
+				 union ldlm_policy_data *policy)
 {
-	LASSERT(o);
-	LASSERT(o->do_ops);
-	LASSERT(o->do_ops->do_object_lock);
+	LASSERT(o != NULL);
+	LASSERT(o->do_ops != NULL);
+	LASSERT(o->do_ops->do_object_lock != NULL);
 	return o->do_ops->do_object_lock(env, o, lh, einfo, policy);
+}
+
+static inline int dt_object_unlock(const struct lu_env *env,
+				   struct dt_object *o,
+				   struct ldlm_enqueue_info *einfo,
+				   union ldlm_policy_data *policy)
+{
+	LASSERT(o != NULL);
+	LASSERT(o->do_ops != NULL);
+	LASSERT(o->do_ops->do_object_unlock != NULL);
+	return o->do_ops->do_object_unlock(env, o, einfo, policy);
 }
 
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,

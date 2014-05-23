@@ -610,23 +610,22 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      struct dt_object *dt,
 			      struct lustre_handle *lh,
 			      struct ldlm_enqueue_info *einfo,
-			      void *policy)
+			      ldlm_policy_data_t *policy)
 {
-	struct osp_thread_info *info = osp_env_info(env);
-	struct ldlm_res_id     *res_id = &info->osi_resid;
-	struct dt_device       *dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
-	struct osp_device      *osp = dt2osp_dev(dt_dev);
-	struct ptlrpc_request  *req = NULL;
-	int                     rc = 0;
-	__u64                   flags = 0;
-	ldlm_mode_t             mode;
+	struct osp_thread_info	*info = osp_env_info(env);
+	struct ldlm_res_id	*res_id = &info->osi_resid;
+	struct dt_device	*dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
+	struct osp_device	*osp = dt2osp_dev(dt_dev);
+	struct ptlrpc_request	*req;
+	int			rc = 0;
+	__u64			flags = 0;
+	ldlm_mode_t		mode;
 
 	fid_build_reg_res_name(lu_object_fid(&dt->do_lu), res_id);
 
 	mode = ldlm_lock_match(osp->opd_obd->obd_namespace,
 			       LDLM_FL_BLOCK_GRANTED, res_id,
-			       einfo->ei_type,
-			       (ldlm_policy_data_t *)policy,
+			       einfo->ei_type, policy,
 			       einfo->ei_mode, lh, 0);
 	if (mode > 0)
 		return ELDLM_OK;
@@ -642,6 +641,19 @@ static int osp_md_object_lock(const struct lu_env *env,
 	ptlrpc_req_finished(req);
 
 	return rc == ELDLM_OK ? 0 : -EIO;
+}
+
+static int osp_md_object_unlock(const struct lu_env *env,
+				struct dt_object *dt,
+				struct ldlm_enqueue_info *einfo,
+				ldlm_policy_data_t *policy)
+{
+	struct lustre_handle	*lockh = einfo->ei_cbdata;
+
+	/* unlock finally */
+	ldlm_lock_decref(lockh, einfo->ei_mode);
+
+	return 0;
 }
 
 struct dt_object_operations osp_md_obj_ops = {
@@ -667,4 +679,5 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_xattr_set         = osp_xattr_set,
 	.do_index_try         = osp_md_index_try,
 	.do_object_lock       = osp_md_object_lock,
+	.do_object_unlock     = osp_md_object_unlock,
 };

@@ -6702,24 +6702,41 @@ test_mkdir() {
 	local parent
 	local child
 	local path
+	local p_option
+	local option2
+	local stripe_count=2
 	local rc=0
 
 	case $# in
 		1) path=$1;;
 		2) option=$1
 		   path=$2;;
+		3) option=$1
+		   option2=$2
+		   path=$3;;
 		*) error "Only creating single directory is supported";;
 	esac
 
 	child=$(basename $path)
 	parent=$(dirname $path)
 
-	if [ "$option" == "-p" -a -d $parent/$child ]; then
-		return $rc
+	if [ "$option" == "-p" -o "$option2" == "-p" ]; then
+		if [ -d $parent/$child ]; then
+			return $rc
+		fi
+		p_option="-p"
+	fi
+
+	if [ "${option:0:2}" == "-c" ]; then
+		stripe_count=$(echo $option | sed 's/^-c//')
+	fi
+
+	if [ "${option2:0:2}" == "-c" ]; then
+		stripe_count=$(echo $option2 | sed 's/^-c//')
 	fi
 
 	if [ ! -d ${parent} ]; then
-		if [ "$option" == "-p" ]; then
+		if [ "$p_option" == "-p" ]; then
 			mkdir -p ${parent}
 		else
 			return 1
@@ -6727,18 +6744,14 @@ test_mkdir() {
 	fi
 
 	if [ $MDSCOUNT -le 1 ]; then
-		mkdir $option $parent/$child || rc=$?
+		mkdir $p_option $parent/$child || rc=$?
 	else
 		local mdt_idx=$($LFS getstripe -M $parent)
 		local test_num=$(echo $testnum | sed -e 's/[^0-9]*//g')
 
-		if [ "$mdt_idx" -ne 0 ]; then
-			mkdir $option $parent/$child || rc=$?
-		else
-			mdt_idx=$((test_num % MDSCOUNT))
-			echo "mkdir $mdt_idx for $parent/$child"
-			$LFS setdirstripe -i $mdt_idx $parent/$child || rc=$?
-		fi
+		mdt_idx=$((test_num % MDSCOUNT))
+		echo "striped dir -i$mdt_idx -c$stripe_count $path"
+		$LFS setdirstripe -i$mdt_idx -c$stripe_count $path || rc=$?
 	fi
 	return $rc
 }
