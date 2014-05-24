@@ -495,6 +495,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		d->opd_pre_grow_slow = 0;
 	}
 
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	fid_to_ostid(fid, &body->oa.o_oi);
+
 	d->opd_pre_last_created_fid = *fid;
 	spin_unlock(&d->opd_pre_lock);
 
