@@ -70,7 +70,6 @@
                                          * by the request interpret routine */
 #define OBD_STATFS_FOR_MDT0	0x0008	/* The statfs is only for retrieving
 					 * information from MDT0. */
-#define OBD_FL_PUNCH    0x00000001      /* To indicate it is punch operation */
 
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
@@ -334,14 +333,10 @@ static inline struct lr_server_data *class_server_data(struct obd_device *obd)
 }
 #endif
 
-void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
-void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
-void obdo_from_iattr(struct obdo *oa, struct iattr *attr,
-                     unsigned int ia_valid);
-void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
-void md_from_obdo(struct md_op_data *op_data, struct obdo *oa, obd_flag valid);
-void obdo_from_md(struct obdo *oa, struct md_op_data *op_data,
-                  unsigned int valid);
+void obdo_cpy_md(struct obdo *dst, const struct obdo *src, obd_flag valid);
+void obdo_to_ioobj(const struct obdo *oa, struct obd_ioobj *ioobj);
+void md_from_obdo(struct md_op_data *op_data, const struct obdo *oa,
+		  obd_flag valid);
 
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
@@ -787,21 +782,6 @@ static inline int obd_free_memmd(struct obd_export *exp,
         rc = obd_unpackmd(exp, mem_tgt, NULL, 0);
         *mem_tgt = NULL;
         return rc;
-}
-
-static inline int obd_create_async(struct obd_export *exp,
-                                   struct obd_info *oinfo,
-                                   struct lov_stripe_md **ea,
-                                   struct obd_trans_info *oti)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, create_async);
-        EXP_COUNTER_INCREMENT(exp, create_async);
-
-        rc = OBP(exp->exp_obd, create_async)(exp, oinfo, ea, oti);
-        RETURN(rc);
 }
 
 static inline int obd_create(const struct lu_env *env, struct obd_export *exp,
@@ -1336,34 +1316,6 @@ static inline int obd_find_cbdata(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, const struct lu_fid *fid,
-                          struct obd_capa *oc, struct obd_client_handle *handle,
-                          int flag)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, pin);
-        EXP_COUNTER_INCREMENT(exp, pin);
-
-        rc = OBP(exp->exp_obd, pin)(exp, fid, oc, handle, flag);
-        RETURN(rc);
-}
-
-static inline int obd_unpin(struct obd_export *exp,
-                            struct obd_client_handle *handle, int flag)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, unpin);
-        EXP_COUNTER_INCREMENT(exp, unpin);
-
-        rc = OBP(exp->exp_obd, unpin)(exp, handle, flag);
-        RETURN(rc);
-}
-
-
 static inline void obd_import_event(struct obd_device *obd,
                                     struct obd_import *imp,
                                     enum obd_import_event event)
@@ -1381,20 +1333,6 @@ static inline void obd_import_event(struct obd_device *obd,
         EXIT;
 }
 
-static inline int obd_llog_connect(struct obd_export *exp,
-                                   struct llogd_conn_body *body)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, llog_connect, 0);
-        EXP_COUNTER_INCREMENT(exp, llog_connect);
-
-        rc = OBP(exp->exp_obd, llog_connect)(exp, body);
-        RETURN(rc);
-}
-
-
 static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
                              enum obd_notify_event ev,
@@ -1404,11 +1342,7 @@ static inline int obd_notify(struct obd_device *obd,
         ENTRY;
         OBD_CHECK_DEV(obd);
 
-        /* the check for async_recov is a complete hack - I'm hereby
-           overloading the meaning to also mean "this was called from
-           mds_postsetup".  I know that my mds is able to handle notifies
-           by this point, and it needs to get them to execute mds_postrecov. */
-        if (!obd->obd_set_up && !obd->obd_async_recov) {
+	if (!obd->obd_set_up) {
                 CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
@@ -1517,82 +1451,6 @@ static inline int obd_register_observer(struct obd_device *obd,
 	up_write(&obd->obd_observer_link_sem);
         RETURN(0);
 }
-
-static inline int obd_pin_observer(struct obd_device *obd,
-                                   struct obd_device **observer)
-{
-        ENTRY;
-	down_read(&obd->obd_observer_link_sem);
-        if (!obd->obd_observer) {
-                *observer = NULL;
-		up_read(&obd->obd_observer_link_sem);
-                RETURN(-ENOENT);
-        }
-        *observer = obd->obd_observer;
-        RETURN(0);
-}
-
-static inline int obd_unpin_observer(struct obd_device *obd)
-{
-        ENTRY;
-	up_read(&obd->obd_observer_link_sem);
-        RETURN(0);
-}
-
-#if 0
-static inline int obd_register_page_removal_cb(struct obd_export *exp,
-                                               obd_page_removal_cb_t cb,
-                                               obd_pin_extent_cb pin_cb)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, register_page_removal_cb, 0);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, register_page_removal_cb);
-
-        rc = OBP(exp->exp_obd, register_page_removal_cb)(exp, cb, pin_cb);
-        RETURN(rc);
-}
-
-static inline int obd_unregister_page_removal_cb(struct obd_export *exp,
-                                                 obd_page_removal_cb_t cb)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, unregister_page_removal_cb, 0);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, unregister_page_removal_cb);
-
-        rc = OBP(exp->exp_obd, unregister_page_removal_cb)(exp, cb);
-        RETURN(rc);
-}
-
-static inline int obd_register_lock_cancel_cb(struct obd_export *exp,
-                                              obd_lock_cancel_cb cb)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, register_lock_cancel_cb, 0);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, register_lock_cancel_cb);
-
-        rc = OBP(exp->exp_obd, register_lock_cancel_cb)(exp, cb);
-        RETURN(rc);
-}
-
-static inline int obd_unregister_lock_cancel_cb(struct obd_export *exp,
-                                                 obd_lock_cancel_cb cb)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_DT_OP(exp->exp_obd, unregister_lock_cancel_cb, 0);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, unregister_lock_cancel_cb);
-
-        rc = OBP(exp->exp_obd, unregister_lock_cancel_cb)(exp, cb);
-        RETURN(rc);
-}
-#endif
 
 /* metadata helpers */
 static inline int md_getstatus(struct obd_export *exp,
@@ -1748,19 +1606,6 @@ static inline int md_rename(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static inline int md_is_subdir(struct obd_export *exp,
-                               const struct lu_fid *pfid,
-                               const struct lu_fid *cfid,
-                               struct ptlrpc_request **request)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, is_subdir);
-        EXP_MD_COUNTER_INCREMENT(exp, is_subdir);
-        rc = MDP(exp->exp_obd, is_subdir)(exp, pfid, cfid, request);
-        RETURN(rc);
-}
-
 static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
                              void *ea, int ealen, void *ea2, int ea2len,
                              struct ptlrpc_request **request,
@@ -1784,18 +1629,6 @@ static inline int md_fsync(struct obd_export *exp, const struct lu_fid *fid,
 	EXP_MD_COUNTER_INCREMENT(exp, fsync);
 	rc = MDP(exp->exp_obd, fsync)(exp, fid, oc, request);
 	RETURN(rc);
-}
-
-static inline int md_readpage(struct obd_export *exp, struct md_op_data *opdata,
-                              struct page **pages,
-                              struct ptlrpc_request **request)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, readpage);
-        EXP_MD_COUNTER_INCREMENT(exp, readpage);
-        rc = MDP(exp->exp_obd, readpage)(exp, opdata, pages, request);
-        RETURN(rc);
 }
 
 static inline int md_read_entry(struct obd_export *exp,
@@ -2057,16 +1890,6 @@ do {                                                                          \
         OBD_SLAB_FREE_PTR((ptr), obdo_cachep);                                \
 } while(0)
 
-
-static inline void obdo2fid(struct obdo *oa, struct lu_fid *fid)
-{
-        /* something here */
-}
-
-static inline void fid2obdo(struct lu_fid *fid, struct obdo *oa)
-{
-        /* something here */
-}
 
 typedef int (*register_lwp_cb)(void *data);
 

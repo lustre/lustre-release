@@ -1187,8 +1187,6 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 	struct obd_device *obd = exp->exp_obd;
 
 	spin_lock(&obd->obd_recovery_task_lock);
-	if (exp->exp_delayed)
-		obd->obd_delayed_clients--;
 	if (obd->obd_recovering) {
 		if (exp->exp_in_recovery) {
 			spin_lock(&exp->exp_lock);

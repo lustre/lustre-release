@@ -458,12 +458,6 @@ int osd_bufs_get(const struct lu_env *env, struct dt_object *d, loff_t pos,
         osd_map_remote_to_local(pos, len, &npages, lnb);
 
         for (i = 0; i < npages; i++, lnb++) {
-
-                /* We still set up for ungranted pages so that granted pages
-                 * can be written to disk as they were promised, and portals
-                 * needs to keep the pages all aligned properly. */
-                lnb->dentry = (void *) obj;
-
 		lnb->page = osd_get_page(d, lnb->lnb_file_offset, rw);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);

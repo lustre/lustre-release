@@ -50,8 +50,6 @@ void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
 void mdc_pack_capa(struct ptlrpc_request *req,
 		   const struct req_msg_field *field, struct obd_capa *oc);
 int mdc_pack_req(struct ptlrpc_request *req, int version, int opc);
-void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
-                        const struct lu_fid *cfid, int flags);
 void mdc_swap_layouts_pack(struct ptlrpc_request *req,
 			   struct md_op_data *op_data);
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, __u32 size,

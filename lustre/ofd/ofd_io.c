@@ -584,7 +584,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		LASSERT(oti != NULL);
 		info = ofd_info_init(env, exp);
 		ofd_oti2info(info, oti);
-		jobid = oti->oti_jobid;
+		jobid = NULL;
 	} else {
 		info = tsi2ofd_info(tsi);
 		jobid = tsi->tsi_jobid;

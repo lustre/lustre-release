@@ -503,11 +503,10 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	*ea = lsm;
 
         if (oti != NULL) {
-                oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
-
                 if (oa->o_valid & OBD_MD_FLCOOKIE) {
-                        if (!oti->oti_logcookies)
-                                oti_alloc_cookies(oti, 1);
+			if (oti->oti_logcookies == NULL)
+				oti->oti_logcookies = &oti->oti_onecookie;
+
                         *oti->oti_logcookies = oa->o_lcookie;
                 }
         }

@@ -83,21 +83,6 @@ void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field
         DEBUG_CAPA(D_SEC, c, "pack");
 }
 
-void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
-                        const struct lu_fid *cfid, int flags)
-{
-        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
-                                                    &RMF_MDT_BODY);
-
-        if (pfid) {
-                b->fid1 = *pfid;
-                b->valid = OBD_MD_FLID;
-        }
-        if (cfid)
-                b->fid2 = *cfid;
-        b->flags = flags;
-}
-
 void mdc_swap_layouts_pack(struct ptlrpc_request *req,
 			   struct md_op_data *op_data)
 {

@@ -200,19 +200,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 }
 EXPORT_SYMBOL(obd_alloc_fail);
 
-static inline void obd_data2conn(struct lustre_handle *conn,
-                                 struct obd_ioctl_data *data)
-{
-        memset(conn, 0, sizeof *conn);
-        conn->cookie = data->ioc_cookie;
-}
-
-static inline void obd_conn2data(struct obd_ioctl_data *data,
-                                 struct lustre_handle *conn)
-{
-        data->ioc_cookie = conn->cookie;
-}
-
 int class_resolve_dev_name(__u32 len, const char *name)
 {
         int rc;
@@ -685,7 +672,6 @@ EXPORT_SYMBOL(obd_pages_max);
 #ifdef __KERNEL__
 static void cleanup_obdclass(void)
 {
-        int i;
         int lustre_unregister_fs(void);
         __u64 memory_leaked, pages_leaked;
         __u64 memory_max, pages_max;
@@ -694,15 +680,6 @@ static void cleanup_obdclass(void)
         lustre_unregister_fs();
 
 	misc_deregister(&obd_psdev);
-	for (i = 0; i < class_devno_max(); i++) {
-		struct obd_device *obd = class_num2obd(i);
-		if (obd && obd->obd_set_up &&
-		    OBT(obd) && OBP(obd, detach)) {
-			/* XXX should this call generic detach otherwise? */
-			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			OBP(obd, detach)(obd);
-		}
-	}
 	llog_info_fini();
 #ifdef HAVE_SERVER_SUPPORT
 	lu_ucred_global_fini();

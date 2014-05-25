@@ -313,34 +313,6 @@ int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static int mdc_is_subdir(struct obd_export *exp,
-                         const struct lu_fid *pfid,
-                         const struct lu_fid *cfid,
-                         struct ptlrpc_request **request)
-{
-        struct ptlrpc_request  *req;
-        int                     rc;
-
-        ENTRY;
-
-        *request = NULL;
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_IS_SUBDIR, LUSTRE_MDS_VERSION,
-                                        MDS_IS_SUBDIR);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        mdc_is_subdir_pack(req, pfid, cfid, 0);
-        ptlrpc_request_set_replen(req);
-
-        rc = ptlrpc_queue_wait(req);
-        if (rc && rc != -EREMOTE)
-                ptlrpc_req_finished(req);
-        else
-                *request = req;
-        RETURN(rc);
-}
-
 static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                             const struct lu_fid *fid,
                             struct obd_capa *oc, int opcode, obd_valid valid,
@@ -2916,93 +2888,6 @@ int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
         RETURN(rc);
 }
 
-static int mdc_pin(struct obd_export *exp, const struct lu_fid *fid,
-                   struct obd_capa *oc, struct obd_client_handle *handle,
-                   int flags)
-{
-        struct ptlrpc_request *req;
-        struct mdt_body       *body;
-        int                    rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_PIN);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        mdc_set_capa_size(req, &RMF_CAPA1, oc);
-
-        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_PIN);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        mdc_pack_body(req, fid, oc, 0, 0, -1, flags);
-
-        ptlrpc_request_set_replen(req);
-
-        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        if (rc) {
-                CERROR("Pin failed: %d\n", rc);
-                GOTO(err_out, rc);
-        }
-
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        if (body == NULL)
-                GOTO(err_out, rc = -EPROTO);
-
-        handle->och_fh = body->handle;
-        handle->och_magic = OBD_CLIENT_HANDLE_MAGIC;
-
-        handle->och_mod = obd_mod_alloc();
-        if (handle->och_mod == NULL) {
-                DEBUG_REQ(D_ERROR, req, "can't allocate md_open_data");
-                GOTO(err_out, rc = -ENOMEM);
-        }
-        handle->och_mod->mod_open_req = req; /* will be dropped by unpin */
-
-        RETURN(0);
-
-err_out:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
-}
-
-static int mdc_unpin(struct obd_export *exp, struct obd_client_handle *handle,
-                     int flag)
-{
-        struct ptlrpc_request *req;
-        struct mdt_body       *body;
-        int                    rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_MDS_UNPIN,
-                                        LUSTRE_MDS_VERSION, MDS_UNPIN);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        body = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
-        body->handle = handle->och_fh;
-        body->flags = flag;
-
-        ptlrpc_request_set_replen(req);
-
-        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-
-        if (rc != 0)
-                CERROR("Unpin failed: %d\n", rc);
-
-        ptlrpc_req_finished(req);
-        ptlrpc_req_finished(handle->och_mod->mod_open_req);
-
-        obd_mod_put(handle->och_mod);
-        RETURN(rc);
-}
-
 int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
 	      struct obd_capa *oc, struct ptlrpc_request **request)
 {
@@ -3404,8 +3289,6 @@ struct obd_ops mdc_obd_ops = {
         .o_iocontrol        = mdc_iocontrol,
         .o_set_info_async   = mdc_set_info_async,
         .o_statfs           = mdc_statfs,
-        .o_pin              = mdc_pin,
-        .o_unpin            = mdc_unpin,
 	.o_fid_init	    = client_fid_init,
 	.o_fid_fini	    = client_fid_fini,
         .o_fid_alloc        = mdc_fid_alloc,
@@ -3431,7 +3314,6 @@ struct md_ops mdc_md_ops = {
         .m_getattr_name     = mdc_getattr_name,
         .m_intent_lock      = mdc_intent_lock,
         .m_link             = mdc_link,
-        .m_is_subdir        = mdc_is_subdir,
         .m_rename           = mdc_rename,
         .m_setattr          = mdc_setattr,
         .m_setxattr         = mdc_setxattr,

@@ -1164,35 +1164,6 @@ out:
 	return rc;
 }
 
-static int mdt_is_subdir(struct tgt_session_info *tsi)
-{
-	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
-        struct mdt_object     *o = info->mti_object;
-        struct req_capsule    *pill = info->mti_pill;
-        const struct mdt_body *body = info->mti_body;
-        struct mdt_body       *repbody;
-        int                    rc;
-        ENTRY;
-
-        LASSERT(o != NULL);
-
-        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-
-	/*
-	 * We save last checked parent fid to @repbody->fid1 for remote
-	 * directory case.
-	 */
-	LASSERT(fid_is_sane(&body->fid2));
-	LASSERT(mdt_object_exists(o) && !mdt_object_remote(o));
-	rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
-			   &body->fid2, &repbody->fid1);
-	if (rc == 0 || rc == -EREMOTE)
-		repbody->valid |= OBD_MD_FLID;
-
-	mdt_thread_info_fini(info);
-	RETURN(rc);
-}
-
 static int mdt_swap_layouts(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info;
@@ -4257,7 +4228,6 @@ TGT_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING,
 							mdt_done_writing),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_READPAGE,	mdt_readpage),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_SYNC,	mdt_sync),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_IS_SUBDIR,	mdt_is_subdir),
 TGT_MDT_HDL(0,				MDS_QUOTACTL,	mdt_quotactl),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_PROGRESS,
 							mdt_hsm_progress),

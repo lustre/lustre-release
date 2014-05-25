@@ -2131,8 +2131,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	spin_lock_init(&m->ofd_inconsistency_lock);
 
 	spin_lock_init(&m->ofd_batch_lock);
-	rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
-	sptlrpc_rule_set_init(&obd->u.filter.fo_sptlrpc_rset);
 	init_rwsem(&m->ofd_lastid_rwsem);
 
 	obd->u.filter.fo_fl_oss_capa = 0;

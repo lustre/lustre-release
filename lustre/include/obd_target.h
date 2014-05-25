@@ -53,14 +53,11 @@ struct obd_device_target {
 struct filter_obd {
 	/* NB this field MUST be first */
 	struct obd_device_target	fo_obt;
-	rwlock_t			fo_sptlrpc_lock;
-	struct sptlrpc_rule_set		fo_sptlrpc_rset;
 
 	/* capability related */
 	unsigned int			fo_fl_oss_capa;
 	cfs_list_t			fo_capa_keys;
 	cfs_hlist_head_t	       *fo_capa_hash;
-	int				fo_sec_level;
 };
 
 struct echo_obd {

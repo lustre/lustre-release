@@ -55,7 +55,6 @@ int proc_obd_timeout SYSCTL_HANDLER_ARGS;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;
 extern unsigned int ldlm_timeout;
-extern unsigned int obd_sync_filter;
 extern atomic_t obd_memory;
 
 int read_build_version SYSCTL_HANDLER_ARGS;
