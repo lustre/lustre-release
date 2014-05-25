@@ -933,6 +933,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle	*oh;
 	struct osa_attr		*osa = &osd_oti_get(env)->oti_osa;
 	sa_bulk_attr_t		*bulk;
+	__u64			 valid = la->la_valid;
 	int			 cnt;
 	int			 rc = 0;
 
@@ -947,7 +948,11 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	   transaction group. */
 	LASSERT(oh->ot_tx->tx_txg != 0);
 
-	if (la->la_valid == 0)
+	/* Only allow set size for regular file */
+	if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
+		valid &= ~(LA_SIZE | LA_BLOCKS);
+
+	if (valid == 0)
 		RETURN(0);
 
 	OBD_ALLOC(bulk, sizeof(sa_bulk_attr_t) * 10);
@@ -955,7 +960,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-ENOMEM);
 
 	/* do both accounting updates outside oo_attr_lock below */
-	if ((la->la_valid & LA_UID) && (la->la_uid != obj->oo_attr.la_uid)) {
+	if ((valid & LA_UID) && (la->la_uid != obj->oo_attr.la_uid)) {
 		/* Update user accounting. Failure isn't fatal, but we still
 		 * log an error message */
 		rc = -zap_increment_int(osd->od_objset.os, osd->od_iusr_oid,
@@ -970,7 +975,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 				"%d (%d)\n", osd->od_svname,
 				obj->oo_attr.la_uid, rc);
 	}
-	if ((la->la_valid & LA_GID) && (la->la_gid != obj->oo_attr.la_gid)) {
+	if ((valid & LA_GID) && (la->la_gid != obj->oo_attr.la_gid)) {
 		/* Update group accounting. Failure isn't fatal, but we still
 		 * log an error message */
 		rc = -zap_increment_int(osd->od_objset.os, osd->od_igrp_oid,
@@ -988,22 +993,22 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	write_lock(&obj->oo_attr_lock);
 	cnt = 0;
-	if (la->la_valid & LA_ATIME) {
+	if (valid & LA_ATIME) {
 		osa->atime[0] = obj->oo_attr.la_atime = la->la_atime;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_ATIME(uos), NULL,
 				 osa->atime, 16);
 	}
-	if (la->la_valid & LA_MTIME) {
+	if (valid & LA_MTIME) {
 		osa->mtime[0] = obj->oo_attr.la_mtime = la->la_mtime;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MTIME(uos), NULL,
 				 osa->mtime, 16);
 	}
-	if (la->la_valid & LA_CTIME) {
+	if (valid & LA_CTIME) {
 		osa->ctime[0] = obj->oo_attr.la_ctime = la->la_ctime;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CTIME(uos), NULL,
 				 osa->ctime, 16);
 	}
-	if (la->la_valid & LA_MODE) {
+	if (valid & LA_MODE) {
 		/* mode is stored along with type, so read it first */
 		obj->oo_attr.la_mode = (obj->oo_attr.la_mode & S_IFMT) |
 			(la->la_mode & ~S_IFMT);
@@ -1011,22 +1016,22 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MODE(uos), NULL,
 				 &osa->mode, 8);
 	}
-	if (la->la_valid & LA_SIZE) {
+	if (valid & LA_SIZE) {
 		osa->size = obj->oo_attr.la_size = la->la_size;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_SIZE(uos), NULL,
 				 &osa->size, 8);
 	}
-	if (la->la_valid & LA_NLINK) {
+	if (valid & LA_NLINK) {
 		osa->nlink = obj->oo_attr.la_nlink = la->la_nlink;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(uos), NULL,
 				 &osa->nlink, 8);
 	}
-	if (la->la_valid & LA_RDEV) {
+	if (valid & LA_RDEV) {
 		osa->rdev = obj->oo_attr.la_rdev = la->la_rdev;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(uos), NULL,
 				 &osa->rdev, 8);
 	}
-	if (la->la_valid & LA_FLAGS) {
+	if (valid & LA_FLAGS) {
 		osa->flags = attrs_fs2zfs(la->la_flags);
 		/* many flags are not supported by zfs, so ensure a good cached
 		 * copy */
@@ -1034,17 +1039,17 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(uos), NULL,
 				 &osa->flags, 8);
 	}
-	if (la->la_valid & LA_UID) {
+	if (valid & LA_UID) {
 		osa->uid = obj->oo_attr.la_uid = la->la_uid;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_UID(uos), NULL,
 				 &osa->uid, 8);
 	}
-	if (la->la_valid & LA_GID) {
+	if (valid & LA_GID) {
 		osa->gid = obj->oo_attr.la_gid = la->la_gid;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GID(uos), NULL,
 				 &osa->gid, 8);
 	}
-	obj->oo_attr.la_valid |= la->la_valid;
+	obj->oo_attr.la_valid |= valid;
 	write_unlock(&obj->oo_attr_lock);
 
 	rc = osd_object_sa_bulk_update(obj, bulk, cnt, oh);

@@ -136,6 +136,7 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 
 	if (mode_change) {
 		la->la_mode = mode;
+		la->la_valid = LA_MODE;
 		rc = mdo_declare_attr_set(env, obj, la, handle);
 	}
 

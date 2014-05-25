@@ -1871,11 +1871,16 @@ static int osd_declare_attr_set(const struct lu_env *env,
 }
 
 static int osd_inode_setattr(const struct lu_env *env,
-                             struct inode *inode, const struct lu_attr *attr)
+			     struct inode *inode, const struct lu_attr *attr)
 {
-        __u64 bits;
+	__u64 bits = attr->la_valid;
 
-        bits = attr->la_valid;
+	/* Only allow set size for regular file */
+	if (!S_ISREG(inode->i_mode))
+		bits &= ~(LA_SIZE | LA_BLOCKS);
+
+	if (bits == 0)
+		return 0;
 
         if (bits & LA_ATIME)
                 inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
