@@ -5331,44 +5331,21 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		if (IS_ERR(mdt_obj))
 			GOTO(out, rc = PTR_ERR(mdt_obj));
 
-		if (mdt_object_remote(mdt_obj)) {
-			mdt_object_put(info->mti_env, mdt_obj);
-			GOTO(remote_out, rc = -EREMOTE);
-		}
-
-		lmv_buf.lb_buf = info->mti_xattr_buf;
-		lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
-
-		/* Check if it is slave stripes */
-		rc = mo_xattr_get(info->mti_env, mdt_object_child(mdt_obj),
-				  &lmv_buf, XATTR_NAME_LMV);
-		if (rc > 0) {
-			union lmv_mds_md *lmm = lmv_buf.lb_buf;
-
-			/* For slave stripes, get its master */
-			if (le32_to_cpu(lmm->lmv_magic) == LMV_MAGIC_STRIPE) {
-				struct lmv_mds_md_v1 *lmm1 = &lmm->lmv_md_v1;
-
-				fid_le_to_cpu(tmpfid, &lmm1->lmv_master_fid);
-				if (!fid_is_sane(tmpfid)) {
-					mdt_object_put(info->mti_env, mdt_obj);
-					GOTO(out, rc = -EINVAL);
-				}
-				mdt_object_put(info->mti_env, mdt_obj);
-				pli->pli_fids[pli->pli_fidcount] = *tmpfid;
-				continue;
-			}
-		}
-
 		if (!mdt_object_exists(mdt_obj)) {
 			mdt_object_put(info->mti_env, mdt_obj);
 			GOTO(out, rc = -ENOENT);
 		}
 
+		if (mdt_object_remote(mdt_obj)) {
+			mdt_object_put(info->mti_env, mdt_obj);
+			GOTO(remote_out, rc = -EREMOTE);
+		}
+
 		rc = mdt_links_read(info, mdt_obj, &ldata);
-		mdt_object_put(info->mti_env, mdt_obj);
-		if (rc != 0)
+		if (rc != 0) {
+			mdt_object_put(info->mti_env, mdt_obj);
 			GOTO(out, rc);
+		}
 
 		leh = buf->lb_buf;
 		lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
@@ -5388,6 +5365,26 @@ static int mdt_path_current(struct mdt_thread_info *info,
 				/* indicate to user there are more links */
 				pli->pli_linkno++;
 		}
+
+		lmv_buf.lb_buf = info->mti_xattr_buf;
+		lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
+		/* Check if it is slave stripes */
+		rc = mo_xattr_get(info->mti_env, mdt_object_child(mdt_obj),
+				  &lmv_buf, XATTR_NAME_LMV);
+		mdt_object_put(info->mti_env, mdt_obj);
+		if (rc > 0) {
+			union lmv_mds_md *lmm = lmv_buf.lb_buf;
+
+			/* For slave stripes, get its master */
+			if (le32_to_cpu(lmm->lmv_magic) == LMV_MAGIC_STRIPE) {
+				pli->pli_fids[pli->pli_fidcount] = *tmpfid;
+				continue;
+			}
+		} else if (rc < 0 && rc != -ENODATA) {
+			GOTO(out, rc);
+		}
+
+		rc = 0;
 
 		/* Pack the name in the end of the buffer */
 		ptr -= tmpname->ln_namelen;

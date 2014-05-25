@@ -158,7 +158,8 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 	struct dt_object		*dir	= lfsck->li_obj_dir;
 	const struct dt_it_ops		*iops	= &dir->do_index_ops->dio_it;
 	struct dt_it			*di	= lfsck->li_di_dir;
-	struct lu_dirent		*ent	= &info->lti_ent;
+	struct lu_dirent		*ent	=
+			(struct lu_dirent *)info->lti_key;
 	struct lu_fid			*fid	= &info->lti_fid;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct ptlrpc_thread		*thread = &lfsck->li_thread;

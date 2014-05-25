@@ -515,14 +515,18 @@ again:
 static struct dt_key *osp_it_key(const struct lu_env *env,
 				 const struct dt_it *di)
 {
-	LBUG();
-	return NULL;
+	struct osp_it		*it = (struct osp_it *)di;
+	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
+
+	return (struct dt_key *)ent->lde_name;
 }
 
 static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 {
-	LBUG();
-	return 0;
+	struct osp_it		*it = (struct osp_it *)di;
+	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
+
+	return (int)le16_to_cpu(ent->lde_namelen);
 }
 
 static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
@@ -537,11 +541,33 @@ static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 	return 0;
 }
 
+/**
+ * Locate the iteration cursor to the specified position (cookie).
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] di	pointer to the iteration structure
+ * \param[in] hash	the specified position
+ *
+ * \retval		positive number for locating to the exactly position
+ *			or the next
+ * \retval		0 for arriving at the end of the iteration
+ * \retval		negative error number on failure
+ */
 static int osp_it_load(const struct lu_env *env, const struct dt_it *di,
 		       __u64 hash)
 {
-	LBUG();
-	return 0;
+	struct osp_it	*it	= (struct osp_it *)di;
+	int		 rc;
+
+	it->ooi_next = hash;
+	rc = osp_md_index_it_next(env, (struct dt_it *)di);
+	if (rc == 1)
+		return 0;
+
+	if (rc == 0)
+		return 1;
+
+	return rc;
 }
 
 const struct dt_index_operations osp_md_index_ops = {

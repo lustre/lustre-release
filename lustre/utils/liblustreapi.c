@@ -3335,6 +3335,8 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 
 		ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
 			    (void *)&param->lmd->lmd_lmm);
+	} else {
+		return 0;
 	}
 
         if (ret) {

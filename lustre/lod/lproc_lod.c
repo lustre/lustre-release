@@ -437,6 +437,43 @@ LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytesavail);
 LPROC_SEQ_FOPS_RO_TYPE(lod, dt_filestotal);
 LPROC_SEQ_FOPS_RO_TYPE(lod, dt_filesfree);
 
+static int lod_lmv_failout_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *dev = m->private;
+	struct lod_device *lod;
+
+	LASSERT(dev != NULL);
+	lod = lu2lod_dev(dev->obd_lu_dev);
+
+	return seq_printf(m, "%d\n", lod->lod_lmv_failout ? 1 : 0);
+}
+
+static ssize_t
+lod_lmv_failout_seq_write(struct file *file, const char *buffer,
+			  size_t count, loff_t *off)
+{
+	struct seq_file		*m	= file->private_data;
+	struct obd_device	*dev	= m->private;
+	struct lod_device	*lod;
+	int			 val	= 0;
+	int			 rc;
+
+	LASSERT(dev != NULL);
+	lod = lu2lod_dev(dev->obd_lu_dev);
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc != 0)
+		return rc;
+
+	if (val != 0)
+		lod->lod_lmv_failout = 1;
+	else
+		lod->lod_lmv_failout = 0;
+
+	return count;
+}
+LPROC_SEQ_FOPS(lod_lmv_failout);
+
 static struct lprocfs_seq_vars lprocfs_lod_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&lod_uuid_fops		},
@@ -460,6 +497,8 @@ static struct lprocfs_seq_vars lprocfs_lod_obd_vars[] = {
 	  .fops	=	&lod_qos_thresholdrr_fops },
 	{ .name	=	"qos_maxage",
 	  .fops	=	&lod_qos_maxage_fops	},
+	{ .name	=	"lmv_failout",
+	  .fops	=	&lod_lmv_failout_fops	},
 	{ 0 }
 };
 

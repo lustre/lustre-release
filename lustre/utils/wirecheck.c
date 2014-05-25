@@ -691,6 +691,29 @@ check_lov_mds_md_v3(void)
 }
 
 static void
+check_lmv_mds_md_v1(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lmv_mds_md_v1);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_magic);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_stripe_count);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_master_mdt_index);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_hash_type);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_layout_version);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding1);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding2);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding3);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_pool_name[LOV_MAXPOOLNAME]);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_stripe_fids[0]);
+
+	CHECK_CDEFINE(LMV_MAGIC_V1);
+	CHECK_CDEFINE(LMV_MAGIC_STRIPE);
+	CHECK_CDEFINE(LMV_HASH_TYPE_MASK);
+	CHECK_CDEFINE(LMV_HASH_FLAG_MIGRATION);
+	CHECK_CDEFINE(LMV_HASH_FLAG_DEAD);
+}
+
+static void
 check_obd_statfs(void)
 {
 	BLANK_LINE();
@@ -2412,6 +2435,7 @@ main(int argc, char **argv)
 	check_lov_ost_data_v1();
 	check_lov_mds_md_v1();
 	check_lov_mds_md_v3();
+	check_lmv_mds_md_v1();
 	check_obd_statfs();
 	check_obd_ioobj();
 	check_obd_quotactl();

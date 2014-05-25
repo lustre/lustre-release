@@ -3376,11 +3376,11 @@ static int mdd_migrate_create(const struct lu_env *env,
 	}
 
 	mgr_ea = (struct lmv_mds_md_v1 *)info->mti_xattr_buf;
+	memset(mgr_ea, 0, sizeof(mgr_ea));
 	mgr_ea->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 	mgr_ea->lmv_stripe_count = cpu_to_le32(2);
 	mgr_ea->lmv_master_mdt_index = mdd_seq_site(mdd)->ss_node_id;
 	mgr_ea->lmv_hash_type = cpu_to_le32(LMV_HASH_FLAG_MIGRATION);
-	fid_cpu_to_le(&mgr_ea->lmv_master_fid, mdd_object_fid(mdd_sobj));
 	fid_cpu_to_le(&mgr_ea->lmv_stripe_fids[0], mdd_object_fid(mdd_sobj));
 	fid_cpu_to_le(&mgr_ea->lmv_stripe_fids[1], mdd_object_fid(mdd_tobj));
 

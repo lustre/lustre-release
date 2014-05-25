@@ -557,10 +557,8 @@ struct lfsck_thread_info {
 		char			lti_lma_old[LMA_OLD_SIZE];
 	};
 	struct dt_object_format lti_dof;
-	/* lti_ent and lti_key must be conjoint,
-	 * then lti_ent::lde_name will be lti_key. */
-	struct lu_dirent	lti_ent;
-	char			lti_key[NAME_MAX + 16];
+	/* There will be '\0' at the end of the name. */
+	char		lti_key[sizeof(struct lu_dirent) + NAME_MAX + 1];
 	char			lti_tmpbuf[LFSCK_TMPBUF_LEN];
 	struct lfsck_request	lti_lr;
 	struct lfsck_async_interpret_args lti_laia;

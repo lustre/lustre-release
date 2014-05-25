@@ -28,13 +28,14 @@
 /*
  * lustre/lod/lod_lov.c
  *
- * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com> 
+ * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <obd_class.h>
 #include <lustre_lfsck.h>
+#include <lustre_lmv.h>
 
 #include "lod_internal.h"
 
@@ -843,6 +844,7 @@ out:
 int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
+	struct lu_buf		*buf  = &info->lti_buf;
 	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
 	int			 rc = 0;
 	ENTRY;
@@ -866,20 +868,34 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		 * there is LOV EA (striping information) in this object
 		 * let's parse it and create in-core objects for the stripes
 		 */
-		info->lti_buf.lb_buf = info->lti_ea_store;
-		info->lti_buf.lb_len = info->lti_ea_store_size;
-		rc = lod_parse_striping(env, lo, &info->lti_buf);
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		rc = lod_parse_striping(env, lo, buf);
 	} else if (S_ISDIR(lu_object_attr(lod2lu_obj(lo)))) {
 		rc = lod_get_lmv_ea(env, lo);
-		if (rc <= 0)
-			GOTO(out, rc);
+		if (rc < sizeof(struct lmv_mds_md_v1))
+			GOTO(out, rc = rc > 0 ? -EINVAL : rc);
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		if (rc == sizeof(struct lmv_mds_md_v1)) {
+			rc = lod_load_lmv_shards(env, lo, buf, true);
+			if (buf->lb_buf != info->lti_ea_store) {
+				OBD_FREE_LARGE(info->lti_ea_store,
+					       info->lti_ea_store_size);
+				info->lti_ea_store = buf->lb_buf;
+				info->lti_ea_store_size = buf->lb_len;
+			}
+
+			if (rc < 0)
+				GOTO(out, rc);
+		}
+
 		/*
 		 * there is LOV EA (striping information) in this object
 		 * let's parse it and create in-core objects for the stripes
 		 */
-		info->lti_buf.lb_buf = info->lti_ea_store;
-		info->lti_buf.lb_len = info->lti_ea_store_size;
-		rc = lod_parse_dir_striping(env, lo, &info->lti_buf);
+		rc = lod_parse_dir_striping(env, lo, buf);
 	}
 out:
 	RETURN(rc);

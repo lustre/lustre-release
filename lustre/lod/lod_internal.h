@@ -158,7 +158,8 @@ struct lod_device {
 	spinlock_t	      lod_connects_lock;
 	int		      lod_connects;
 	unsigned int	      lod_recovery_completed:1,
-			      lod_initialized:1;
+			      lod_initialized:1,
+			      lod_lmv_failout:1;
 
 	/* lov settings descriptor storing static information */
 	struct lov_desc	      lod_desc;
@@ -457,6 +458,8 @@ int lod_procfs_init(struct lod_device *lod);
 void lod_procfs_fini(struct lod_device *lod);
 
 /* lod_object.c */
+int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
+			struct lu_buf *buf, bool resize);
 int lod_object_set_pool(struct lod_object *o, char *pool);
 int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
 			       struct lu_attr *attr,

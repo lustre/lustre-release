@@ -1378,12 +1378,11 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		struct lmv_stripe_md	*old_lsm = lli->lli_lsm_md;
 		int			idx;
 
-		CERROR("%s: lmv layout mismatch "DFID"(%p)/"DFID"(%p)"
+		CERROR("%s: inode "DFID"(%p)'s lmv layout mismatch (%p)/(%p)"
 		       "magic:0x%x/0x%x stripe count: %d/%d master_mdt: %d/%d"
 		       "hash_type:0x%x/0x%x layout: 0x%x/0x%x pool:%s/%s\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(&lsm->lsm_md_master_fid), lsm,
-		       PFID(&old_lsm->lsm_md_master_fid), old_lsm,
+		       ll_get_fsname(inode->i_sb, NULL, 0), PFID(&lli->lli_fid),
+		       inode, lsm, old_lsm,
 		       lsm->lsm_md_magic, old_lsm->lsm_md_magic,
 		       lsm->lsm_md_stripe_count,
 		       old_lsm->lsm_md_stripe_count,

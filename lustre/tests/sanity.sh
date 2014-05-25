@@ -10340,25 +10340,30 @@ test_162() {
 	test_mkdir -p -c1 $DIR/$tdir/d2/p/q/r
 	# regular file
 	FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[]')
-	check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0
+	check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0 ||
+		error "check path $tdir/d2/$tfile failed"
 
 	# softlink
 	ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
 	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[]')
-	check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0
+	check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0 ||
+		error "check path $tdir/d2/p/q/r/slink failed"
 
 	# softlink to wrong file
 	ln -s /this/is/garbage $DIR/$tdir/d2/p/q/r/slink.wrong
 	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink.wrong | tr -d '[]')
-	check_path "$tdir/d2/p/q/r/slink.wrong" $FSNAME $FID --link 0
+	check_path "$tdir/d2/p/q/r/slink.wrong" $FSNAME $FID --link 0 ||
+		error "check path $tdir/d2/p/q/r/slink.wrong failed"
 
 	# hardlink
 	ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
 	mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
 	FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[]')
 	# fid2path dir/fsname should both work
-	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
-	check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1 ||
+		error "check path $tdir/d2/a/b/c/new_file failed"
+	check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0 ||
+		error "check path $DIR/$tdir/d2/p/q/r/hlink failed"
 
 	# hardlink count: check that there are 2 links
 	# Doesnt work with CMD yet: 17935
@@ -10367,7 +10372,8 @@ test_162() {
 
 	# hardlink indexing: remove the first link
 	rm $DIR/$tdir/d2/p/q/r/hlink
-	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0 ||
+		error "check path $DIR/$tdir/d2/a/b/c/new_file failed"
 
 	return 0
 }
@@ -10392,11 +10398,13 @@ test_162b() {
 	for ((i=0;i<5;i++)); do
 		FID=$($LFS path2fid $DIR/$tdir/striped_dir/f$i | tr -d '[]') ||
 			error "get fid for f$i failed"
-		check_path "$tdir/striped_dir/f$i" $FSNAME $FID --link 0
+		check_path "$tdir/striped_dir/f$i" $FSNAME $FID --link 0 ||
+			error "check path $tdir/striped_dir/f$i failed"
 
 		FID=$($LFS path2fid $DIR/$tdir/striped_dir/d$i | tr -d '[]') ||
 			error "get fid for d$i failed"
-		check_path "$tdir/striped_dir/d$i" $FSNAME $FID --link 0
+		check_path "$tdir/striped_dir/d$i" $FSNAME $FID --link 0 ||
+			error "check path $tdir/striped_dir/d$i failed"
 	done
 
 	return 0
