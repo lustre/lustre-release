@@ -1029,7 +1029,6 @@ int mdd_links_rename(const struct lu_env *env,
 		     struct linkea_data *ldata,
 		     int first, int check)
 {
-	int rc2 = 0;
 	int rc = 0;
 	ENTRY;
 
@@ -1047,9 +1046,7 @@ int mdd_links_rename(const struct lu_env *env,
 		rc = mdd_links_write(env, mdd_obj, ldata, handle);
 	EXIT;
 out:
-	if (rc == 0)
-		rc = rc2;
-	if (rc) {
+	if (rc != 0) {
 		int error = 1;
 		if (rc == -EOVERFLOW || rc == -ENOSPC)
 			error = 0;
@@ -1084,10 +1081,10 @@ static inline int mdd_links_add(const struct lu_env *env,
 				const struct lu_fid *pfid,
 				const struct lu_name *lname,
 				struct thandle *handle,
-				struct linkea_data *data, int first)
+				struct linkea_data *ldata, int first)
 {
 	return mdd_links_rename(env, mdd_obj, NULL, NULL,
-				pfid, lname, handle, data, first, 0);
+				pfid, lname, handle, ldata, first, 0);
 }
 
 static inline int mdd_links_del(const struct lu_env *env,
@@ -2011,7 +2008,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			GOTO(out, rc);
 	}
 
-	if (spec->sp_cr_flags & MDS_OPEN_VOLATILE) {
+	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
 		rc = orph_declare_index_insert(env, c, attr->la_mode, handle);
 		if (rc)
 			GOTO(out, rc);
@@ -2031,11 +2028,11 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		rc = mdo_declare_attr_set(env, p, la, handle);
 		if (rc)
 			return rc;
-	}
 
-        rc = mdd_declare_changelog_store(env, mdd, name, handle);
-        if (rc)
-                return rc;
+		rc = mdd_declare_changelog_store(env, mdd, name, handle);
+		if (rc)
+			return rc;
+	}
 
 	/* XXX: For remote create, it should indicate the remote RPC
 	 * will be sent after local transaction is finished, which
@@ -2314,9 +2311,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
 		mdd_write_lock(env, son, MOR_TGT_CHILD);
 		rc = __mdd_orphan_add(env, son, handle);
-		mdd_write_unlock(env, son);
-		if (rc != 0)
-			GOTO(err_created, rc);
+		GOTO(out_volatile, rc);
 	} else {
 		rc = __mdd_index_insert(env, mdd_pobj, mdo2fid(son),
 					name, S_ISDIR(attr->la_mode), handle,
@@ -2353,29 +2348,37 @@ err_created:
 		mdd_write_lock(env, son, MOR_TGT_CHILD);
 		if (S_ISDIR(attr->la_mode)) {
 			/* Drop the reference, no need to delete "."/"..",
-			 * because the object to be destroied directly. */
+			 * because the object is to be destroyed directly. */
 			rc2 = mdo_ref_del(env, son, handle);
 			if (rc2 != 0) {
 				mdd_write_unlock(env, son);
 				goto out_stop;
 			}
 		}
+out_volatile:
+		/* For volatile files drop one link immediately, since there is
+		 * no filename in the namespace, and save any error returned. */
 		rc2 = mdo_ref_del(env, son, handle);
 		if (rc2 != 0) {
 			mdd_write_unlock(env, son);
+			if (unlikely(rc == 0))
+				rc = rc2;
 			goto out_stop;
 		}
 
-		mdo_destroy(env, son, handle);
+		/* Don't destroy the volatile object on success */
+		if (likely(rc != 0))
+			mdo_destroy(env, son, handle);
 		mdd_write_unlock(env, son);
-        }
+	}
 
-	if (rc == 0 && fid_is_namespace_visible(mdo2fid(son)))
+	if (rc == 0 && fid_is_namespace_visible(mdo2fid(son)) &&
+	    likely((spec->sp_cr_flags & MDS_OPEN_VOLATILE) == 0))
 		rc = mdd_changelog_ns_store(env, mdd,
-			S_ISDIR(attr->la_mode) ? CL_MKDIR :
-			S_ISREG(attr->la_mode) ? CL_CREATE :
-			S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-			0, son, mdd_pobj, lname, handle);
+				S_ISDIR(attr->la_mode) ? CL_MKDIR :
+				S_ISREG(attr->la_mode) ? CL_CREATE :
+				S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
+				0, son, mdd_pobj, lname, handle);
 out_stop:
 	rc2 = mdd_trans_stop(env, mdd, rc, handle);
 	if (rc == 0)
@@ -2385,11 +2388,11 @@ out_free:
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
 
-        /* The child object shouldn't be cached anymore */
-        if (rc)
+	/* The child object shouldn't be cached anymore */
+	if (rc)
 		set_bit(LU_OBJECT_HEARD_BANSHEE,
-                            &child->mo_lu.lo_header->loh_flags);
-        return rc;
+			&child->mo_lu.lo_header->loh_flags);
+	return rc;
 }
 
 /*
