@@ -342,8 +342,9 @@ enum lma_incompat {
 	LMAI_AGENT		= 0x00000002, /* agent inode */
 	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
 						 is on the remote MDT */
+	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
 };
-#define LMA_INCOMPAT_SUPP	(LMAI_AGENT | LMAI_REMOTE_PARENT)
+#define LMA_INCOMPAT_SUPP	(LMAI_AGENT | LMAI_REMOTE_PARENT | LMAI_STRIPED)
 
 extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,

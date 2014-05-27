@@ -3011,6 +3011,22 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	if (fl & LU_XATTR_CREATE)
 		fs_flags |= XATTR_CREATE;
 
+	if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+		int			 rc;
+
+		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+		if (rc != 0)
+			RETURN(rc);
+
+		lma->lma_incompat |= LMAI_STRIPED;
+		lustre_lma_swab(lma);
+		rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma,
+				     sizeof(*lma), XATTR_REPLACE);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
 	return __osd_xattr_set(info, inode, name, buf->lb_buf, buf->lb_len,
 			       fs_flags);
 }
