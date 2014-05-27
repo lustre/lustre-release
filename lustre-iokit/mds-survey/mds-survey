@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 ######################################################################
 # customize per survey
@@ -9,12 +7,12 @@
 #
 # How to run test:
 # case 1 (stripe_count=0 default):
-#   $ thrhi=8 dir_count=4 sh mds-survey
-#   one can also run test with user defined targets as follows,
-#   $ thrhi=8 dir_count=4 file_count=50000 targets="lustre-MDT0000" sh mds-survey
+#  $ thrhi=8 dir_count=4 sh mds-survey
+#  one can also run test with user defined targets as follows,
+#  $ thrhi=8 dir_count=4 file_count=50000 targets="lustre-MDT0000" sh mds-survey
 # case 2 (stripe_count > 0, must have ost mounted):
-#   $ thrhi=8 dir_count=4 file_count=50000 stripe_count=2
-#   targets="lustre-MDT0000" sh mds-survey
+#  $ thrhi=8 dir_count=4 file_count=50000 stripe_count=2
+#  targets="lustre-MDT0000" sh mds-survey
 # [ NOTE: It is advised to have automated login (passwordless entry) on server ]
 
 # include library
@@ -58,159 +56,194 @@ basedir="tests"
 mdtbasedir="MDT%04x-"
 
 create_directories () {
-    local host=$1
-    local devno=$2
-    local ndir=$3
-    local rfile=$4
-    local mdtidx=$5
-    local idx
+	local host=$1
+	local devno=$2
+	local ndir=$3
+	local rfile=$4
+	local mdtidx=$5
+	local idx
 
-    for ((idx = 0; idx < $ndir; idx++)); do
-        if (( idx == 0 )); then
-            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
-        else
-            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
-        fi
-        remote_shell $host $lctl --device $devno test_mkdir /$dirname > $rfile 2>&1
-        while read line; do
-            echo "$line" | grep -q 'error: test_mkdir'
-            if [ $?  -eq 0 ]; then
-                cat $rfile >&2
-                echo "ERROR: fail test_mkdir" >&2
-                echo "ERROR"
-                return
-            fi
-        done < $rfile
-    done
-    echo $basedir
+	for ((idx = 0; idx < $ndir; idx++)); do
+		if (( idx == 0 )); then
+			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
+		else
+			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
+		fi
+		remote_shell $host $lctl --device $devno test_mkdir /$dirname > $rfile 2>&1
+		while read line; do
+			echo "$line" | grep -q 'error: test_mkdir'
+			if [ $?  -eq 0 ]; then
+				cat $rfile >&2
+				echo "ERROR: fail test_mkdir" >&2
+				echo "ERROR"
+				return
+			fi
+		done < $rfile
+	done
+	echo $basedir
 }
 
 destroy_directories () {
-    local host=$1
-    local devno=$2
-    local ndir=$3
-    local rfile=$4
-    local mdtidx=$5
-    local idx
+	local host=$1
+	local devno=$2
+	local ndir=$3
+	local rfile=$4
+	local mdtidx=$5
+	local idx
 
-    for ((idx = 0; idx < $ndir; idx++)); do
-        if (( idx == 0 )); then
-            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
-        else
-            dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
-        fi
-        remote_shell $host $lctl --device $devno test_rmdir /$dirname > $rfile 2>&1
-    done
+	for ((idx = 0; idx < $ndir; idx++)); do
+		if (( idx == 0 )); then
+			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}"
+		else
+			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
+		fi
+		remote_shell $host $lctl --device $devno test_rmdir /$dirname > $rfile 2>&1
+	done
 }
 
 get_stats () {
-    local rfile=$1
-    gawk < $rfile                                                               \
-    '/starting/ { n=0; next }                                                   \
-     /error/ {n = -1; exit}                                                     \
-     /^Total: total [0-9]+ threads [0-9]+ sec [0-9\.]+ [0-9]+\.[0-9]+\/second$/ \
-     { ave = strtonum($8); n++; next}                                           \
-     /^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/                           \
-     {    n++; v = strtonum($3);                                                \
-          if (n == 1 || v < min) min = v;                                       \
-          if (n == 1 || v > max) max = v;                                       \
-          next;                                                                 \
-     }                                                                          \
-     {    if (n != 0) {n = -1; exit } }                                         \
-     END { if (n == 1) { min = ave; max = ave; }                                \
-           printf "%d %f %f %f\n", n, ave, min, max}'
+	local rfile=$1
+
+	gawk < $rfile							\
+	'/starting/ {							\
+		n = 0; next;						\
+	}								\
+	/error/ {							\
+		n = -1;							\
+		exit;							\
+	}								\
+	/^Total: total [0-9]+ threads [0-9]+ sec [0-9\.]+ [0-9]+\.[0-9]+\/second$/ { \
+		ave = strtonum($8);					\
+		n++;							\
+		next;							\
+	}								\
+	/^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/ {		\
+		n++; v = strtonum($3);					\
+		if (n == 1 || v < min) min = v;				\
+		if (n == 1 || v > max) max = v;				\
+		next;							\
+	}								\
+	{								\
+		if (n != 0) {						\
+			n = -1;						\
+			exit;						\
+		}							\
+	}								\
+	END {								\
+		if (n == 1) {						\
+			min = ave;					\
+			max = ave;					\
+		}							\
+		printf "%d %f %f %f\n", n, ave, min, max		\
+	}'
 }
 
 get_global_stats () {
-    local rfile=$1
-    awk < $rfile                                               \
-    'BEGIN {n = 0;}                                            \
-    {    n++;                                                  \
-         if (n == 1) { err = $1; ave = $2; min = $3; max = $4} \
-         else                                                  \
-         { if ($1 < err) err = $1;                             \
-           ave += $2;                                          \
-           if ($3 < min) min = $3;                             \
-           if ($4 > max) max = $4;                             \
-         }                                                     \
-    }                                                          \
-    END { if (n == 0) err = 0;                                 \
-          printf "%d %f %f %f\n", err, ave/n, min, max}'
+	local rfile=$1
+
+	awk < $rfile							\
+	'BEGIN {							\
+		n = 0;							\
+	}								\
+	{								\
+		n++;							\
+		if (n == 1) {						\
+			err = $1;					\
+			ave = $2;					\
+			min = $3;					\
+			max = $4;					\
+		} else {						\
+			if ($1 < err)					\
+				err = $1;				\
+			ave += $2;					\
+			if ($3 < min)					\
+				min = $3;				\
+			if ($4 > max)					\
+				max = $4;				\
+		}							\
+	}								\
+	END {								\
+		if (n == 0)						\
+			err = 0;					\
+		printf "%d %f %f %f\n", err, ave/n, min, max		\
+	}'
 }
 
 print_summary () {
-    if [ "$1" = "-n" ]; then
-        minusn=$1; shift
-    else
-        minusn=""
-    fi
-    echo $minusn "$*" >> $rsltf
-    echo $minusn "$*"
+	if [ "$1" = "-n" ]; then
+		minusn=$1; shift
+	else
+		minusn=""
+	fi
+	echo $minusn "$*" >> $rsltf
+	echo $minusn "$*"
 }
 
 declare -a tests
 count=0
 for name in $tests_str; do
-    tests[$count]=$name
-    count=$((count+1))
+	tests[$count]=$name
+	count=$((count+1))
 done
 
 # hide a little trick to unset this from the command line
 if [ "$lustre_root" == " " ]; then
-    unset lustre_root
+	unset lustre_root
 fi
 
 if [ -z "$lustre_root" ]; then
-    lctl=lctl
+	lctl=lctl
 else
-    lctl=${lustre_root}/utils/lctl
+	lctl=${lustre_root}/utils/lctl
 fi
 
 declare -a client_names
 declare -a host_names
 declare -a client_indexes
 if [ -z "$targets" ]; then
-    targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
-            \$3 == \"mdt\") {print \$4} }")
-    if [ -z "$targets" ]; then
-        echo "Can't find any MDT to test.  Please set targets=..."
-        exit 1
-    fi
+	targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
+					       \$3 == \"mdt\") {print \$4} }")
+	if [ -z "$targets" ]; then
+		echo "Can't find any MDT to test.  Please set targets=..."
+		exit 1
+	fi
 fi
 
 # split out hostnames from mdt names
 ndevs=0
 for trgt in $targets; do
-    str=(`split_hostname $trgt`)
-    host_names[$ndevs]=${str[0]}
-    client_names[$ndevs]=${str[1]}
-    client_indexes[$ndevs]=0x$(echo ${str[1]} |
-            sed 's/.*MDT\([0-9a-f][0-9a-f][0-9a-f][0-9a-f]\).*/\1/')
-    ndevs=$((ndevs+1))
+	str=($(split_hostname $trgt))
+	host_names[$ndevs]=${str[0]}
+	client_names[$ndevs]=${str[1]}
+	client_indexes[$ndevs]=0x$(echo ${str[1]} |
+		sed 's/.*MDT\([0-9a-f][0-9a-f][0-9a-f][0-9a-f]\).*/\1/')
+	ndevs=$((ndevs+1))
 done
 
 # check for ost
 if (( $stripe_count > 0 )); then
-    for ((i=0; i < $ndevs; i++)); do
-        host=${host_names[$i]}
-        obd=$(remote_shell $host $lctl device_list | awk "{if (\$2 == \"UP\" &&
-            (\$3 == \"osc\" || \$3 == \"osp\")) { print \$4 } }")
-        if [ -z "$obd" ]; then
-            echo "Need obdfilter to test stripe_count"
-            exit 1
-        fi
-    done
+	for ((i=0; i < $ndevs; i++)); do
+		host=${host_names[$i]}
+		obd=$(remote_shell $host $lctl device_list |
+		      awk "{ if (\$2 == \"UP\" &&
+				 (\$3 == \"osc\" || \$3 == \"osp\"))
+				{ print \$4 } }")
+		if [ -z "$obd" ]; then
+			echo "Need obdfilter to test stripe_count"
+			exit 1
+		fi
+	done
 fi
 
 # check and insert obdecho module
 if ! lsmod | grep obdecho > /dev/null; then
-    modprobe obdecho
+	modprobe obdecho
 fi
 count=${#tests[@]}
 if [ $count -eq 0 -o "${tests[0]}" != "create" -o "${tests[(($count - 1))]}" != "destroy" ]; then
-    echo "tests: ${tests[@]}"
-    echo "First test must be 'create', and last test must be 'destroy'" 1>&2
-    exit 1
+	echo "tests: ${tests[@]}"
+	echo "First test must be 'create', and last test must be 'destroy'" 1>&2
+	exit 1
 fi
 
 rsltf="${rslt}.summary"
@@ -222,147 +255,150 @@ echo -n > $workf
 
 # get vmstat started
 # disable portals debug and get obdecho loaded on all relevant hosts
-unique_hosts=(`unique ${host_names[@]}`)
+unique_hosts=($(unique ${host_names[@]}))
 load_obdechos
 pidcount=0
 for host in ${unique_hosts[@]}; do
-    host_vmstatf=${vmstatf}_${host}
-    echo -n > $host_vmstatf
-    remote_shell $host "vmstat 5 >> $host_vmstatf" &> /dev/null &
-    pid=$!
-    vmstatpids[$pidcount]=$pid
-    pidcount=$((pidcount+1))
+	host_vmstatf=${vmstatf}_${host}
+	echo -n > $host_vmstatf
+	remote_shell $host "vmstat 5 >> $host_vmstatf" &> /dev/null &
+	pid=$!
+	vmstatpids[$pidcount]=$pid
+	pidcount=$((pidcount+1))
 done
 # get all the echo_client device numbers and names
 for ((i=0; i < $ndevs; i++)); do
-    host=${host_names[$i]}
-    devno=(`get_ec_devno $host "${client_names[$i]}" "${client_names[$i]}" "mdt" $layer`)
-    if ((${#devno[@]} != 3)); then
-        exit 1
-    fi
-    devnos[$i]=${devno[0]}
-    client_names[$i]=${devno[1]}
-    do_teardown_ec[$i]=${devno[2]}
+	host=${host_names[$i]}
+	devno=($(get_ec_devno $host "${client_names[$i]}" "${client_names[$i]}" "mdt" $layer))
+	if ((${#devno[@]} != 3)); then
+		exit 1
+	fi
+	devnos[$i]=${devno[0]}
+	client_names[$i]=${devno[1]}
+	do_teardown_ec[$i]=${devno[2]}
 done
 if (($ndevs <= 0 || ${#host_names[@]} <= 0)); then
-    echo "no devices or hosts specified"
-    cleanup 0
+	echo "no devices or hosts specified"
+	cleanup 0
 fi
 print_summary "$(date) $0 from $(hostname)"
 # create directories
 tmpf="${workf}_tmp"
 for ((idx = 0; idx < $ndevs; idx++)); do
-    host=${host_names[$idx]}
-    devno=${devnos[$idx]}
-    client_name="${host}:${client_names[$idx]}"
-    mdtidx=${client_indexes[$idx]}
-    echo "=============> Create $dir_count directories on $client_name" >> $workf
-    destroy_directories $host $devno $dir_count $tmpf $mdtidx
-    ret=`create_directories $host $devno $dir_count $tmpf $mdtidx`
-    cat $tmpf >> $workf
-    rm $tmpf
-    if [ $ret = "ERROR" ]; then
-        print_summary "created directories on $client_name failed"
-        cleanup 1
-    fi
+	host=${host_names[$idx]}
+	devno=${devnos[$idx]}
+	client_name="${host}:${client_names[$idx]}"
+	mdtidx=${client_indexes[$idx]}
+	echo "=======> Create $dir_count directories on $client_name" >> $workf
+	destroy_directories $host $devno $dir_count $tmpf $mdtidx
+	ret=$(create_directories $host $devno $dir_count $tmpf $mdtidx)
+	cat $tmpf >> $workf
+	rm $tmpf
+	if [ $ret = "ERROR" ]; then
+		print_summary "created directories on $client_name failed"
+		cleanup 1
+	fi
 done
 
 snap=1
 status=0
 for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
-    thr_per_dir=$((${thr}/${dir_count}))
-    # skip if no enough thread
-    if (( thr_per_dir <= 0 )); then
-        continue
-    fi
-    file_count_per_thread=$((${file_count}/${thr}))
-    str=`printf 'mdt %1d file %7d dir %4d thr %4d ' \
-    $ndevs $file_count $dir_count $thr`
-    echo "=======================> $str" >> $workf
-    print_summary -n "$str"
-    # run tests
-    for test in ${tests[@]}; do
-        declare -a pidarray
-        for host in ${unique_hosts[@]}; do
-            echo "starting run for config: $config test: $test file: \
-            $file_count threads: $thr directories: $dir_count" >> ${vmstatf}_${host}
-        done
-        print_summary -n "$test "
-        # create per-host script files
-        for host in ${unique_hosts[@]}; do
-            echo -n > ${cmdsf}_${host}
-        done
-        for ((idx = 0; idx < $ndevs; idx++)); do
-            host=${host_names[$idx]}
-            devno=${devnos[$idx]}
-            dirname="$(printf "${mdtbasedir}" ${client_indexes[$idx]})$basedir"
-            tmpfi="${tmpf}_$idx"
-            [ "$test" = "create" ] && test="create -c $stripe_count"
-            echo >> ${cmdsf}_${host}                                                     \
-                "$lctl > $tmpfi 2>&1                                                     \
-                 --threads $thr -$snap $devno test_$test -d /$dirname -D $dir_count      \
-                 -b $start_number -n $file_count_per_thread"
-        done
-        pidcount=0
-        for host in ${unique_hosts[@]}; do
-            echo "wait" >> ${cmdsf}_${host}
-            pidarray[$pidcount]=0
-            pidcount=$((pidcount+1))
-        done
-        pidcount=0
-        for host in ${unique_hosts[@]}; do
-            remote_shell $host bash < ${cmdsf}_${host} &
-            pidarray[$pidcount]=$!
-            pidcount=$((pidcount+1))
-        done
-        pidcount=0
-        for host in ${unique_hosts[@]}; do
-            wait ${pidarray[$pidcount]}
-            pidcount=$((pidcount+1))
-        done
-        #wait
-        # clean up per-host script files
-        for host in ${unique_hosts[@]}; do
-            rm ${cmdsf}_${host}
-        done
+	thr_per_dir=$((${thr}/${dir_count}))
+	# skip if no enough thread
+	if (( thr_per_dir <= 0 )); then
+		continue
+	fi
+	file_count_per_thread=$((${file_count}/${thr}))
+	str=$(printf 'mdt %1d file %7d dir %4d thr %4d ' \
+	      $ndevs $file_count $dir_count $thr)
+	echo "=======> $str" >> $workf
+	print_summary -n "$str"
+	# run tests
+	for test in ${tests[@]}; do
+		declare -a pidarray
+		for host in ${unique_hosts[@]}; do
+			echo "starting run for config: $config test: $test " \
+			     "file: $file_count threads: $thr " \
+			     "directories: $dir_count" >> ${vmstatf}_${host}
+		done
+		print_summary -n "$test "
+		# create per-host script files
+		for host in ${unique_hosts[@]}; do
+			echo -n > ${cmdsf}_${host}
+		done
+		for ((idx = 0; idx < $ndevs; idx++)); do
+			host=${host_names[$idx]}
+			devno=${devnos[$idx]}
+			dirname="$(printf "${mdtbasedir}" ${client_indexes[$idx]})$basedir"
+			tmpfi="${tmpf}_$idx"
+			[ "$test" = "create" ] && test="create -c $stripe_count"
+			echo >> ${cmdsf}_${host}			\
+				"$lctl > $tmpfi 2>&1			\
+				--threads $thr -$snap $devno test_$test \
+				-d /$dirname -D $dir_count		\
+				-b $start_number -n $file_count_per_thread"
+		done
+		pidcount=0
+		for host in ${unique_hosts[@]}; do
+			echo "wait" >> ${cmdsf}_${host}
+			pidarray[$pidcount]=0
+			pidcount=$((pidcount+1))
+		done
+		pidcount=0
+		for host in ${unique_hosts[@]}; do
+			remote_shell $host bash < ${cmdsf}_${host} &
+			pidarray[$pidcount]=$!
+			pidcount=$((pidcount+1))
+		done
+		pidcount=0
+		for host in ${unique_hosts[@]}; do
+			wait ${pidarray[$pidcount]}
+			pidcount=$((pidcount+1))
+		done
+		#wait
+		# clean up per-host script files
+		for host in ${unique_hosts[@]}; do
+			rm ${cmdsf}_${host}
+		done
 
-        # collect/check individual MDT stats
-        echo -n > $tmpf
-        for ((idx = 0; idx < $ndevs; idx++)); do
-            client_name="${host_names[$idx]}:${client_names[$idx]}"
-            tmpfi="${tmpf}_$idx"
-            echo "=============> $test $client_name" >> $workf
-            host="${host_names[$idx]}"
-            remote_shell $host cat $tmpfi > ${tmpfi}_local
-            cat ${tmpfi}_local >> $workf
-            get_stats ${tmpfi}_local >> $tmpf
-            rm -f $tmpfi ${tmpfi}_local
-        done
-        # compute/display global min/max stats
-        echo "=============> $test global" >> $workf
-        cat $tmpf >> $workf
-        stats=(`get_global_stats $tmpf`)
-        rm $tmpf
-        if ((stats[0] <= 0)); then
-            str=`printf "%17s " ERROR`
-            status=1
-        else
-            str=`awk "BEGIN {printf \"%7.2f [ %7.2f, %7.2f] \", \
-            ${stats[1]}, ${stats[2]}, ${stats[3]}; exit}"`
-        fi
-        print_summary -n "$str"
-    done
-    print_summary ""
+		# collect/check individual MDT stats
+		echo -n > $tmpf
+		for ((idx = 0; idx < $ndevs; idx++)); do
+			client_name="${host_names[$idx]}:${client_names[$idx]}"
+			tmpfi="${tmpf}_$idx"
+			echo "=============> $test $client_name" >> $workf
+			host="${host_names[$idx]}"
+			remote_shell $host cat $tmpfi > ${tmpfi}_local
+			cat ${tmpfi}_local >> $workf
+			get_stats ${tmpfi}_local >> $tmpf
+			rm -f $tmpfi ${tmpfi}_local
+		done
+		# compute/display global min/max stats
+		echo "=============> $test global" >> $workf
+		cat $tmpf >> $workf
+		stats=($(get_global_stats $tmpf))
+		rm $tmpf
+		if ((stats[0] <= 0)); then
+			str=$(printf "%17s " ERROR)
+			status=1
+		else
+			str=$(awk "BEGIN {printf \"%7.2f [ %7.2f, %7.2f] \", \
+			      ${stats[1]}, ${stats[2]}, ${stats[3]}; exit}")
+		fi
+		print_summary -n "$str"
+	done
+	print_summary ""
 done
+
 # destroy directories
 tmpf="${workf}_tmp"
 for ((idx = 0; idx < $ndevs; idx++)); do
-    host=${host_names[$idx]}
-    devno=${devnos[$idx]}
-    mdtidx=${client_indexes[$idx]}
-    client_name="${host}:${client_names[$idx]}"
-    echo "=============> Destroy $dir_count directories on $client_name" >> $workf
-    destroy_directories $host $devno $dir_count $tmpf $mdtidx
+	host=${host_names[$idx]}
+	devno=${devnos[$idx]}
+	mdtidx=${client_indexes[$idx]}
+	client_name="${host}:${client_names[$idx]}"
+	echo "====> Destroy $dir_count directories on $client_name" >> $workf
+	destroy_directories $host $devno $dir_count $tmpf $mdtidx
 done
 
 cleanup $status
