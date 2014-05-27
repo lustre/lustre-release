@@ -2695,14 +2695,9 @@ run_test 75 "osc: upcall after unuse lock==================="
 test_76() { #LU-946
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
 		skip "Need MDS version at least 2.5.53" && return
-	[ $MDSCOUNT -ge 2 ] && skip "skip now for LU-4573" && return #LU-4573
 
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local fcount=2048
-	local fd
-	local cmd
-	local mdt_idx
-	local mds_idx
 	declare -a fd_list
 	declare -a fid_list
 
@@ -2714,29 +2709,24 @@ test_76() { #LU-946
 
 	rm -rf $DIR/$tdir
 	test_mkdir -p $DIR/$tdir
-	if [ $MDSCOUNT -gt 1 ]; then
-		mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
-	else
-		mdt_idx=0
-	fi
-	mds_idx=$((mdt_idx + 1))
-	proc_ofile="mdt.*$mdt_idx.exports.'$nid'.open_files"
 
+	# drop all open locks and close any cached "open" files on the client
 	cancel_lru_locks mdc
 
 	echo -n "open files "
 	ulimit -n 8096
-	for (( i = 0; i < $fcount; i++ )) ; do
+	for ((i = 0; i < $fcount; i++)); do
 		touch $DIR/$tdir/f_$i
-		fd=$(free_fd)
-		cmd="exec $fd<$DIR/$tdir/f_$i"
+		local fd=$(free_fd)
+		local cmd="exec $fd<$DIR/$tdir/f_$i"
 		eval $cmd
 		fd_list[i]=$fd
 		echo -n "."
 	done
 	echo
 
-	fid_list=($(do_facet mds$mds_idx $LCTL get_param -n $proc_ofile))
+	local get_open_fids="$LCTL get_param -n mdt.*.exports.'$nid'.open_files"
+	local fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $get_open_fids))
 
 	# Possible errors in openfiles FID list.
 	# 1. Missing FIDs. Check 1
