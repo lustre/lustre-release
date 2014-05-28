@@ -603,7 +603,7 @@ test_17m() {
 	stop mds${mds_index}
 	do_facet mds${mds_index} $cmd || rc=$?
 
-	start mds${mds_index} $devname $MDS_MOUNT_OPTS
+	start mds${mds_index} $devname $MDS_MOUNT_OPTS || error "start failed"
 	df $MOUNT > /dev/null 2>&1
 	[ $rc -ne 0 ] && error "e2fsck should not report error upon "\
 		"short/long symlink MDT: rc=$rc"
@@ -628,7 +628,8 @@ check_fs_consistency_17n() {
 		stop mds${mdt_index}
 		do_facet mds${mdt_index} $cmd || rc=$?
 
-		start mds${mdt_index} $devname $MDS_MOUNT_OPTS
+		start mds${mdt_index} $devname $MDS_MOUNT_OPTS ||
+			error "mount mds${mdt_index} failed"
 		df $MOUNT > /dev/null 2>&1
 		[ $rc -ne 0 ] && break
 	done
@@ -707,7 +708,8 @@ test_17o() {
 
 	touch $WDIR/$tfile
 	stop mds${mdt_index}
-	start mds${mdt_index} $mdtdevname $MDS_MOUNT_OPTS
+	start mds${mdt_index} $mdtdevname $MDS_MOUNT_OPTS ||
+		error "mount mds${mdt_index} failed"
 
 	#define OBD_FAIL_OSD_LMA_INCOMPAT 0x194
 	do_facet mds${mdt_index} lctl set_param fail_loc=0x194
