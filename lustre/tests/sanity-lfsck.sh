@@ -44,6 +44,10 @@ setupall
 [[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19"
 
+[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+# bug number for skipped test:        LU-4970
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 14"
+
 build_test_filter
 
 $LCTL set_param debug=+lfsck > /dev/null || true
