@@ -459,8 +459,23 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	snprintf(filename, sizeof(filename), PLUGIN_DIR"/mount_%s.so", fsname);
 
 	handle = dlopen(filename, RTLD_LAZY);
+
+	/* Check for $LUSTRE environment variable from test-framework.
+	 * This allows using locally built modules to be used.
+	 */
+	if (handle == NULL) {
+		char *dirname;
+		dirname = getenv("LUSTRE");
+		if (dirname) {
+			snprintf(filename, sizeof(filename),
+				 "%s/utils/.libs/mount_%s.so",
+				 dirname, fsname);
+			handle = dlopen(filename, RTLD_LAZY);
+		}
+	}
+
+	/* Do not clutter up console with missing types */
 	if (handle == NULL)
-		/* Do not clutter up console with missing types */
 		return NULL;
 
 	ops = malloc(sizeof(*ops));
