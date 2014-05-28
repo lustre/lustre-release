@@ -1273,6 +1273,8 @@ test_14() {
 	createmany -o $DIR/$tdir/f $((count + 32))
 	do_facet ost1 $LCTL set_param fail_loc=0
 
+	start_full_debug_logging
+
 	# exhaust other pre-created dangling cases
 	count=$(precreated_ost_obj_count 0 0)
 	createmany -o $DIR/$tdir/a $count ||
@@ -1316,6 +1318,7 @@ test_14() {
 
 	echo "'ls' should success after layout LFSCK repairing"
 	ls -ail $DIR/$tdir > /dev/null || error "(9) ls should success."
+	stop_full_debug_logging
 }
 run_test 14 "LFSCK can repair MDT-object with dangling reference"
 
