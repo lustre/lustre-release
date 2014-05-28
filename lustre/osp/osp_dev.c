@@ -859,16 +859,15 @@ static int osp_reconnect(const struct lu_env *env,
 	return 0;
 }
 
-static int osp_prepare_fid_client(struct osp_device *osp)
+static void osp_prepare_fid_client(struct osp_device *osp)
 {
 	LASSERT(osp->opd_obd->u.cli.cl_seq != NULL);
 	if (osp->opd_obd->u.cli.cl_seq->lcs_exp != NULL)
-		return 0;
+		return;
 
 	LASSERT(osp->opd_exp != NULL);
 	osp->opd_obd->u.cli.cl_seq->lcs_exp =
 				class_export_get(osp->opd_exp);
-	return 0;
 }
 
 /*
@@ -1053,15 +1052,15 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 	case IMP_EVENT_ACTIVE:
 		d->opd_imp_active = 1;
 
-		if (osp_prepare_fid_client(d) != 0)
-			break;
-
 		if (d->opd_got_disconnected)
 			d->opd_new_connection = 1;
 		d->opd_imp_connected = 1;
 		d->opd_imp_seen_connected = 1;
 		if (d->opd_connect_mdt)
 			break;
+
+		osp_prepare_fid_client(d);
+
 		wake_up(&d->opd_pre_waitq);
 		__osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");
