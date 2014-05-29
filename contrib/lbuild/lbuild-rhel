@@ -159,12 +159,6 @@ find_linux_devel_paths() {
     LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}${ARCH}
     # RHEL doesn't have the -obj tree
     LINUXOBJ=""
-    # XXX - i don't think we need this any more
-    #LINUXRELEASE=$(find_linux_release "$LINUX")
-    #if [ -z "$LINUXRELEASE" ]; then
-    #    echo "Failed to find linux release in $LINUX"
-    #    return 255
-    #fi
 
     return 0
 }
