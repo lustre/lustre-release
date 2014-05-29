@@ -533,7 +533,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 			  struct page **pagep, void **fsdata)
 {
 	struct ll_cl_context *lcc;
-	struct lu_env  *env;
+	const struct lu_env  *env;
 	struct cl_io   *io;
 	struct cl_page *page;
 
@@ -547,9 +547,9 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 
 	CDEBUG(D_VFSTRACE, "Writing %lu of %d to %d bytes\n", index, from, len);
 
-	lcc = ll_cl_init(file, NULL);
-	if (IS_ERR(lcc))
-		GOTO(out, result = PTR_ERR(lcc));
+	lcc = ll_cl_find(file);
+	if (lcc == NULL)
+		GOTO(out, result = -EIO);
 
 	env = lcc->lcc_env;
 	io  = lcc->lcc_io;
@@ -619,8 +619,6 @@ out:
 			unlock_page(vmpage);
 			page_cache_release(vmpage);
 		}
-		if (!IS_ERR(lcc))
-			ll_cl_fini(lcc);
 	} else {
 		*pagep = vmpage;
 		*fsdata = lcc;
@@ -633,7 +631,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 			struct page *vmpage, void *fsdata)
 {
 	struct ll_cl_context *lcc = fsdata;
-	struct lu_env *env;
+	const struct lu_env *env;
 	struct cl_io *io;
 	struct ccc_io *cio;
 	struct cl_page *page;
@@ -678,15 +676,17 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	} else {
 		cl_page_disown(env, io, page);
 
+		lcc->lcc_page = NULL;
+		lu_ref_del(&page->cp_reference, "cl_io", io);
+		cl_page_put(env, page);
+
 		/* page list is not contiguous now, commit it now */
 		unplug = true;
 	}
-
 	if (unplug ||
 	    file->f_flags & O_SYNC || IS_SYNC(file->f_dentry->d_inode))
 		result = vvp_io_write_commit(env, io);
 
-	ll_cl_fini(lcc);
 	RETURN(result >= 0 ? copied : result);
 }
 

@@ -62,83 +62,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/**
- * Finalizes cl-data before exiting typical address_space operation. Dual to
- * ll_cl_init().
- */
-void ll_cl_fini(struct ll_cl_context *lcc)
-{
-        struct lu_env  *env  = lcc->lcc_env;
-        struct cl_io   *io   = lcc->lcc_io;
-        struct cl_page *page = lcc->lcc_page;
-
-        LASSERT(lcc->lcc_cookie == current);
-        LASSERT(env != NULL);
-
-        if (page != NULL) {
-                lu_ref_del(&page->cp_reference, "cl_io", io);
-                cl_page_put(env, page);
-        }
-
-        cl_env_put(env, &lcc->lcc_refcheck);
-}
-
-/**
- * Initializes common cl-data at the typical address_space operation entry
- * point.
- */
-struct ll_cl_context *ll_cl_init(struct file *file, struct page *vmpage)
-{
-        struct ll_cl_context *lcc;
-        struct lu_env    *env;
-        struct cl_io     *io;
-        struct cl_object *clob;
-        struct ccc_io    *cio;
-
-        int refcheck;
-        int result = 0;
-
-	clob = ll_i2info(file->f_dentry->d_inode)->lli_clob;
-	LASSERT(clob != NULL);
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                return ERR_PTR(PTR_ERR(env));
-
-        lcc = &vvp_env_info(env)->vti_io_ctx;
-        memset(lcc, 0, sizeof(*lcc));
-        lcc->lcc_env = env;
-        lcc->lcc_refcheck = refcheck;
-        lcc->lcc_cookie = current;
-
-        cio = ccc_env_io(env);
-        io = cio->cui_cl.cis_io;
-        lcc->lcc_io = io;
-	if (io == NULL)
-		result = -EIO;
-	if (result == 0 && vmpage != NULL) {
-                struct cl_page   *page;
-
-                LASSERT(io != NULL);
-                LASSERT(io->ci_state == CIS_IO_GOING);
-                LASSERT(cio->cui_fd == LUSTRE_FPRIVATE(file));
-                page = cl_page_find(env, clob, vmpage->index, vmpage,
-                                    CPT_CACHEABLE);
-                if (!IS_ERR(page)) {
-                        lcc->lcc_page = page;
-                        lu_ref_add(&page->cp_reference, "cl_io", io);
-                        result = 0;
-                } else
-                        result = PTR_ERR(page);
-        }
-        if (result) {
-                ll_cl_fini(lcc);
-                lcc = ERR_PTR(result);
-        }
-
-        return lcc;
-}
-
 struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt)
 {
         __u64 opc;
@@ -1172,33 +1095,87 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	RETURN(result);
 }
 
+struct ll_cl_context *ll_cl_find(struct file *file)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_cl_context *lcc;
+	struct ll_cl_context *found = NULL;
+
+	read_lock(&fd->fd_lock);
+	list_for_each_entry(lcc, &fd->fd_lccs, lcc_list) {
+		if (lcc->lcc_cookie == current) {
+			found = lcc;
+			break;
+		}
+	}
+	read_unlock(&fd->fd_lock);
+
+	return found;
+}
+
+void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_cl_context *lcc = &vvp_env_info(env)->vti_io_ctx;
+
+	memset(lcc, 0, sizeof(*lcc));
+	INIT_LIST_HEAD(&lcc->lcc_list);
+	lcc->lcc_cookie = current;
+	lcc->lcc_env = env;
+	lcc->lcc_io = io;
+
+	write_lock(&fd->fd_lock);
+	list_add(&lcc->lcc_list, &fd->fd_lccs);
+	write_unlock(&fd->fd_lock);
+}
+
+void ll_cl_remove(struct file *file, const struct lu_env *env)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_cl_context *lcc = &vvp_env_info(env)->vti_io_ctx;
+
+	write_lock(&fd->fd_lock);
+	list_del_init(&lcc->lcc_list);
+	write_unlock(&fd->fd_lock);
+}
+
 int ll_readpage(struct file *file, struct page *vmpage)
 {
-        struct ll_cl_context *lcc;
-        int result;
-        ENTRY;
+	struct cl_object *clob = ll_i2info(file->f_dentry->d_inode)->lli_clob;
+	struct ll_cl_context *lcc;
+	const struct lu_env  *env;
+	struct cl_io   *io;
+	struct cl_page *page;
+	int result;
+	ENTRY;
 
-        lcc = ll_cl_init(file, vmpage);
-        if (!IS_ERR(lcc)) {
-                struct lu_env  *env  = lcc->lcc_env;
-                struct cl_io   *io   = lcc->lcc_io;
-                struct cl_page *page = lcc->lcc_page;
+	lcc = ll_cl_find(file);
+	if (lcc == NULL) {
+		unlock_page(vmpage);
+		RETURN(-EIO);
+	}
 
-                LASSERT(page->cp_type == CPT_CACHEABLE);
-                if (likely(!PageUptodate(vmpage))) {
-                        cl_page_assume(env, io, page);
-                        result = cl_io_read_page(env, io, page);
-                } else {
-                        /* Page from a non-object file. */
-                        unlock_page(vmpage);
-                        result = 0;
-                }
-                ll_cl_fini(lcc);
-        } else {
-                unlock_page(vmpage);
-                result = PTR_ERR(lcc);
+	env = lcc->lcc_env;
+	io  = lcc->lcc_io;
+	LASSERT(io != NULL);
+	LASSERT(io->ci_state == CIS_IO_GOING);
+	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);
+	if (!IS_ERR(page)) {
+		LASSERT(page->cp_type == CPT_CACHEABLE);
+		if (likely(!PageUptodate(vmpage))) {
+			cl_page_assume(env, io, page);
+			result = cl_io_read_page(env, io, page);
+		} else {
+			/* Page from a non-object file. */
+			unlock_page(vmpage);
+			result = 0;
+		}
+		cl_page_put(env, page);
+	} else {
+		unlock_page(vmpage);
+		result = PTR_ERR(page);
         }
-        RETURN(result);
+	RETURN(result);
 }
 
 int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,

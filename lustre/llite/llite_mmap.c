@@ -318,7 +318,12 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 		vio->u.fault.ft_vmpage    = NULL;
 		vio->u.fault.fault.ft_vmf = vmf;
 
+		/* May call ll_readpage() */
+		ll_cl_add(vma->vm_file, env, io);
+
 		result = cl_io_loop(env, io);
+
+		ll_cl_remove(vma->vm_file, env);
 
 		fault_ret = vio->u.fault.fault.ft_flags;
 		vmpage = vio->u.fault.ft_vmpage;

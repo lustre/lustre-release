@@ -543,6 +543,10 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 	ll_readahead_init(inode, &fd->fd_ras);
 	fd->fd_omode = it->it_flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
 
+	/* ll_cl_context initialize */
+	rwlock_init(&fd->fd_lock);
+	INIT_LIST_HEAD(&fd->fd_lccs);
+
 	RETURN(0);
 }
 
@@ -1160,8 +1164,10 @@ restart:
                 struct ccc_io *cio = ccc_env_io(env);
                 int write_mutex_locked = 0;
 
-                cio->cui_fd  = LUSTRE_FPRIVATE(file);
-                vio->cui_io_subtype = args->via_io_subtype;
+		cio->cui_fd  = LUSTRE_FPRIVATE(file);
+		vio->cui_io_subtype = args->via_io_subtype;
+
+		ll_cl_add(file, env, io);
 
                 switch (vio->cui_io_subtype) {
                 case IO_NORMAL:
@@ -1191,6 +1197,7 @@ restart:
 			up_read(&lli->lli_trunc_sem);
 		if (write_mutex_locked)
 			mutex_unlock(&lli->lli_write_mutex);
+		ll_cl_remove(file, env);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
