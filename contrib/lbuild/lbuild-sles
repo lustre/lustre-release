@@ -4,7 +4,7 @@
 # to build built
 BUILD_GEN+=".1" #LU-3337 add missing build files for sles11sp2 server
 
-DEVEL_KERNEL_TYPE="source"
+DEVEL_KERNEL_TYPE="default-devel"
 RPM_HELPERS_DIR="/usr/lib/rpm"
 
 prepare_and_build_srpm() {
@@ -112,13 +112,6 @@ find_linux_devel_paths() {
 
     LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
     LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
-    # XXX this has been commented out in th rhel5 build file for a while
-    # as it says there, it's probably not needed anymore and can be deleted
-    #LINUXRELEASE=$(find_linux_release "$LINUXOBJ")
-    #if [ -z "$LINUXRELEASE" ]; then
-    #    echo "Failed to find linux release in $LINUXOBJ"
-    #    return 255
-    #fi
 
     return 0
 }

@@ -67,17 +67,18 @@ unpack_linux_devel_rpm-sles11() {
     local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
 
     # this is a hack that should go away when the modified lustre kernel
-    # Provides kernel-default-base                        vvvvvvvvv
-    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-base = $wanted_kernel"); then
-        fatal 1 "Could not find the kernel-default-base in $rpmdir/"
+    # Provides kernel-default-devel                       vvvvvvvvv
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
     fi
 
     if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
-    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
-        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
+    # SLES also needs the kernel-source together with the kernel-default-devel
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-source = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-source in $rpmdir/"
     fi
 
     if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
@@ -93,17 +94,14 @@ find_linux_rpm-sles11() {
 
     local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
     local site="https://nu.novell.com/repo/\$RCE/SLES11-SP${PLEV}-Updates/sle-11-$(resolve_arch $TARGET_ARCH)/rpm/$(resolve_arch $TARGET_ARCH)"
-    case $prefix in
-        -devel)
-            fetch_url "$site/kernel-default-base-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
-            fetch_url "$site/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
-            echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
-            ;;
-        -source)
-            fetch_url "$site/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
-            echo "kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
-            ;;
-    esac
+    if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
+        fetch_url "$site/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    # SLES also needs the kernel-source along with kernel-devel
+    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
+        fetch_url "$site/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
 
     return 0
 
