@@ -311,37 +311,38 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                         return -EINVAL;
 
 		res->lnb_file_offset = offset;
-		res->len = plen;
-		LASSERT((res->lnb_file_offset & ~CFS_PAGE_MASK) + res->len <=
-			PAGE_CACHE_SIZE);
+		res->lnb_len = plen;
+		LASSERT((res->lnb_file_offset & ~CFS_PAGE_MASK) +
+			res->lnb_len <= PAGE_CACHE_SIZE);
 
 		if (ispersistent &&
 		    ((res->lnb_file_offset >> PAGE_CACHE_SHIFT) <
 		      ECHO_PERSISTENT_PAGES)) {
-			res->page =
+			res->lnb_page =
 				echo_persistent_pages[res->lnb_file_offset >>
 						      PAGE_CACHE_SHIFT];
 			/* Take extra ref so __free_pages() can be called OK */
-			get_page (res->page);
+			get_page(res->lnb_page);
 		} else {
-                        OBD_PAGE_ALLOC(res->page, gfp_mask);
-                        if (res->page == NULL) {
-                                CERROR("can't get page for id " DOSTID"\n",
-                                       POSTID(&obj->ioo_oid));
-                                return -ENOMEM;
-                        }
-                }
+			OBD_PAGE_ALLOC(res->lnb_page, gfp_mask);
+			if (res->lnb_page == NULL) {
+				CERROR("can't get page for id " DOSTID"\n",
+				       POSTID(&obj->ioo_oid));
+				return -ENOMEM;
+			}
+		}
 
-                CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
-		       res->page, res->lnb_file_offset, res->len);
+		CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
+		       res->lnb_page, res->lnb_file_offset, res->lnb_len);
 
-                if (cmd & OBD_BRW_READ)
-                        res->rc = res->len;
+		if (cmd & OBD_BRW_READ)
+			res->lnb_rc = res->lnb_len;
 
 		if (debug_setup)
-			echo_page_debug_setup(res->page, cmd,
+			echo_page_debug_setup(res->lnb_page, cmd,
 					      ostid_id(&obj->ioo_oid),
-					      res->lnb_file_offset, res->len);
+					      res->lnb_file_offset,
+					      res->lnb_len);
 
                 offset += plen;
                 len -= plen;
@@ -367,7 +368,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 	int     i;
 
 	for (i = 0; i < count; i++, (*pgs) ++, res++) {
-		struct page *page = res->page;
+		struct page *page = res->lnb_page;
 		void       *addr;
 
 		if (page == NULL) {
@@ -380,13 +381,13 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 		addr = kmap(page);
 
 		CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
-		       res->page, addr, res->lnb_file_offset);
+		       res->lnb_page, addr, res->lnb_file_offset);
 
 		if (verify) {
 			int vrc = echo_page_debug_check(page,
 							ostid_id(&obj->ioo_oid),
 							res->lnb_file_offset,
-							res->len);
+							res->lnb_len);
 			/* check all the pages always */
 			if (vrc != 0 && rc == 0)
 				rc = vrc;
@@ -467,15 +468,15 @@ preprw_cleanup:
          */
         CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
         for (i = 0; i < *pages; i++) {
-		kunmap(res[i].page);
-                /* NB if this is a persistent page, __free_pages will just
-                 * lose the extra ref gained above */
-                OBD_PAGE_FREE(res[i].page);
-                res[i].page = NULL;
+		kunmap(res[i].lnb_page);
+		/* NB if this is a persistent page, __free_pages will just
+		 * lose the extra ref gained above */
+		OBD_PAGE_FREE(res[i].lnb_page);
+		res[i].lnb_page = NULL;
 		atomic_dec(&obd->u.echo.eo_prep);
-        }
+	}
 
-        return rc;
+	return rc;
 }
 
 static int echo_commitrw(const struct lu_env *env, int cmd,
@@ -547,7 +548,7 @@ commitrw_cleanup:
                niocount - pgs - 1, objcount);
 
         while (pgs < niocount) {
-		struct page *page = res[pgs++].page;
+		struct page *page = res[pgs++].lnb_page;
 
                 if (page == NULL)
                         continue;

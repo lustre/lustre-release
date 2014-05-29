@@ -1739,7 +1739,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	nob = 0;
 	for (i = 0; i < npages; i++) {
-		int page_rc = local_nb[i].rc;
+		int page_rc = local_nb[i].lnb_rc;
 
 		if (page_rc < 0) {
 			rc = page_rc;
@@ -1748,16 +1748,16 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 		nob += page_rc;
 		if (page_rc != 0) { /* some data! */
-			LASSERT(local_nb[i].page != NULL);
-			ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].page,
+			LASSERT(local_nb[i].lnb_page != NULL);
+			ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].lnb_page,
 						    local_nb[i].lnb_page_offset,
 						    page_rc);
 		}
 
-		if (page_rc != local_nb[i].len) { /* short read */
+		if (page_rc != local_nb[i].lnb_len) { /* short read */
 			/* All subsequent pages should be 0 */
 			while (++i < npages)
-				LASSERT(local_nb[i].rc == 0);
+				LASSERT(local_nb[i].lnb_rc == 0);
 			break;
 		}
 	}
@@ -1872,7 +1872,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 			   POSTID(&body->oa.o_oi),
 			   local_nb[0].lnb_file_offset,
 			   local_nb[npages-1].lnb_file_offset +
-			   local_nb[npages-1].len - 1,
+			   local_nb[npages - 1].lnb_len - 1,
 			   client_cksum, server_cksum);
 }
 
@@ -2008,9 +2008,9 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	/* NB Having prepped, we must commit... */
 	for (i = 0; i < npages; i++)
-		ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].page,
+		ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].lnb_page,
 					    local_nb[i].lnb_page_offset,
-					    local_nb[i].len);
+					    local_nb[i].lnb_len);
 
 	rc = sptlrpc_svc_prep_bulk(req, desc);
 	if (rc != 0)
@@ -2077,9 +2077,9 @@ skip_transfer:
 			rcs[i] = 0;
 			do {
 				LASSERT(j < npages);
-				if (local_nb[j].rc < 0)
-					rcs[i] = local_nb[j].rc;
-				len -= local_nb[j].len;
+				if (local_nb[j].lnb_rc < 0)
+					rcs[i] = local_nb[j].lnb_rc;
+				len -= local_nb[j].lnb_len;
 				j++;
 			} while (len > 0);
 			LASSERT(len == 0);
