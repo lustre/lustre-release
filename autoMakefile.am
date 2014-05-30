@@ -89,10 +89,10 @@ dist-hook:
 			-name CVS -o \
 			-name .svn -o \
 			-name .git -o \
-			-name .#* | xargs rm -rf
+			-name .#* -exec rm -rf {} \;
 	$(MAKE) $(AM_MAKEFLAGS) \
-	  top_distdir="$(top_distdir)" distdir="$(distdir)" \
-	  module-dist-hook
+		top_distdir="$(top_distdir)" distdir="$(distdir)" \
+		module-dist-hook
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Makefile 			\

@@ -34,38 +34,41 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-sbinscripts = lc_servip lustre_up14 lustre_rmmod lhbadm ldev
-sbinscripts += lustre_routes_config lustre_routes_conversion
-
 # These are scripts that are generated from .in files
-genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman \
-    lc_md lc_lvm lustre_start
+genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start
+
+sbin_SCRIPTS = lustre_rmmod
 
 if INIT_SCRIPTS
 initdir = $(sysconfdir)/init.d
-init_SCRIPTS = lnet
+init_SCRIPTS  = lnet
 if SERVER
 init_SCRIPTS += lustre
 endif
 endif
 
+if UTILS
+sbin_SCRIPTS += ldev lustre_routes_config lustre_routes_conversion
+bin_SCRIPTS   = lfs_migrate
+
 if SERVER
+sbin_SCRIPTS += $(genscripts) lc_mon lhbadm lc_servip
+bin_SCRIPTS  += lustre_req_history
+
 hadir = $(sysconfdir)/ha.d/resource.d
 ha_SCRIPTS = Lustre.ha_v2
-endif
-
-sbin_SCRIPTS = $(genscripts) $(sbinscripts)
-bin_SCRIPTS = lustre_req_history lfs_migrate
-
-EXTRA_DIST = license-status version_tag.pl version_tag-git.pl \
-	     version_tag-none.pl lc_common \
-	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
-	     $(bin_SCRIPTS) lustre lnet lhbadm \
-	     haconfig ldev Lustre.ha_v2 dkms.mkconf
 
 scriptlibdir = @libexecdir@/@PACKAGE@
 scriptlib_SCRIPTS = haconfig
 scriptlib_DATA = lc_common
+endif # SERVER
+endif # UTILS
+
+EXTRA_DIST = license-status version_tag.pl version_tag-git.pl \
+	     version_tag-none.pl lustre_rmmod ldev lc_mon lhbadm \
+	     lc_servip lustre_routes_config lustre_routes_conversion \
+	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
+	     lustre lnet lc_common haconfig Lustre.ha_v2 dkms.mkconf
 
 CLEANFILES = $(genscripts)
 

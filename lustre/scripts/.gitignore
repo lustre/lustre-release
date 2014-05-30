@@ -1,8 +1,6 @@
 /lustre.spec
 /Makefile.in
 /version_tag.pl
-/lustre_createcsv.sh
-/lustre_config.sh
 /lc_net.sh
 /lc_modprobe.sh
 /lc_hb.sh
@@ -15,8 +13,6 @@
 /lc_md
 /lc_modprobe
 /lc_net
-/lustre_config
-/lustre_createcsv
 /lustre
 /lustre_start
 /tree_status.pl

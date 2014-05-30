@@ -15,25 +15,32 @@ LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
 	     $(top_builddir)/libcfs/libcfs/libcfsutil.a \
 	     $(top_builddir)/libcfs/libcfs/libcfs.a
 
-bin_scripts = llstat llobdstat plot-llstat llbackup
-
+if TESTS
 EXTRA_PROGRAMS = wirecheck
+endif
 
 if UTILS
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = lctl wiretest l_getidentity llverfs llverdev \
-	llog_reader lr_reader lustre_rsync \
-	ll_recover_lost_found_objs ltrack_stats ll_decode_filter_fid
+bin_SCRIPTS   = llstat llobdstat plot-llstat
+bin_PROGRAMS  = lfs
+sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ltrack_stats
+
+if TESTS
+bin_PROGRAMS  += req_layout
+sbin_PROGRAMS += wiretest
+if LIBPTHREAD
+sbin_PROGRAMS += loadgen
+endif
+endif # TESTS
+
 if SERVER
-sbin_PROGRAMS += mkfs.lustre tunefs.lustre
+sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader \
+	ll_recover_lost_found_objs ll_decode_filter_fid llog_reader
 endif
 if LIBPTHREAD
-sbin_PROGRAMS += loadgen lhsmtool_posix
+sbin_PROGRAMS += lhsmtool_posix
 endif
-bin_PROGRAMS = lfs req_layout
-bin_SCRIPTS = $(bin_scripts)
-sbin_SCRIPTS = $(sbin_scripts)
 
 pkglib_LTLIBRARIES =
 lib_LIBRARIES = liblustreapi.a
@@ -90,6 +97,7 @@ liblustreapitmp_a_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			    liblustreapi_lease.c \
 			    $(L_IOCTL) $(L_KERNELCOMM) $(L_STRING)
 
+if UTILS
 # build static and shared lib lustreapi
 liblustreapi.a : liblustreapitmp.a
 	rm -f liblustreapi.a liblustreapi.so
@@ -106,6 +114,7 @@ install-exec-hook: liblustreapi.so
 	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f; \
 	  else :; fi; \
 	done
+endif
 
 if LDISKFS_ENABLED
 libiam_a_SOURCES = libiam.c
@@ -171,9 +180,9 @@ wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
 
 wiretest_SOURCES = wiretest.c
 
-endif
+endif # UTILS
 
-EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
+EXTRA_DIST = llstat llobdstat plot-llstat
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

@@ -5,6 +5,7 @@
 %bcond_without ldiskfs
 %bcond_with zfs
 %bcond_without lustre_tests
+%bcond_without lustre_utils
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
 
@@ -279,11 +280,19 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # build failures
 %define optflags -g -O2 -Werror
 CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
+
 %if %{with lustre_tests}
 CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests"
 %else
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests"
 %endif
+
+%if %{with lustre_utils}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-utils"
+%else
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-utils"
+%endif
+
 %if %{without lustre_iokit}
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-iokit"
 %endif
@@ -292,6 +301,14 @@ CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-iokit"
 CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-modules"
 %else
 CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-modules"
+%endif
+
+%if %{without servers}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-server"
+%endif
+
+%if %{without ldiskfs}
+CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-ldiskfs"
 %endif
 
 %if %{without zfs}
@@ -330,9 +347,11 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # The .ha_v2 extension identifies the heartbeat resource agent as using
 # legacy syntax. Install a compatibility symlink to avoid conflicts when
 # newer-style agents are added.
+%if %{with lustre_utils}
 ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
+%endif
 
 if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lustre ]; then
 	echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
@@ -352,7 +371,7 @@ ln -s $RPM_BUILD_ROOT%{_prefix}/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
 chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
-find $RPM_BUILD_ROOT -name '*.so' | xargs chmod +x
+find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
   echo '%{_libdir}/libiam.a' >>lustre.files
@@ -363,12 +382,16 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
   echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
-find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@/ -name \*.la -delete
+find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@/ -name \*.la -type f -delete
 
 %if %{with lustre_tests}
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
+echo '%{_bindir}/req_layout' >>lustre-tests.files
+echo '%{_sbindir}/wirecheck' >>lustre-tests.files
+echo '%{_sbindir}/wiretest' >>lustre-tests.files
+echo '%{_sbindir}/loadgen' >>lustre-tests.files
 %if %{with lustre_modules}
 echo '%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
 %endif
@@ -394,34 +417,40 @@ if [ -f $POST_SCRIPT ]; then
 fi
 %endif
 %else
+%if %{with lustre_modules}
 # mark modules executable for find-debuginfo.sh
-find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" -type f | \
-	xargs --no-run-if-empty chmod u+x
+find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
+    -name \*.ko -type f -exec chmod u+x {} \;
+%endif
 %endif
 
 %files -f lustre.files
 %defattr(-,root,root)
-%{?rootdir}/sbin/mount.lustre
 %{_sbindir}/*
-%{_bindir}/lfs
-%{_bindir}/lfs_migrate
-%{_bindir}/llbackup
+%if %{with lustre_utils}
+%if %{with servers}
+%{_libexecdir}/lustre/lc_common
+%{_libexecdir}/lustre/haconfig
+%{_bindir}/lustre_req_history
+%endif
+
 %{_bindir}/llobdstat
 %{_bindir}/llstat
-%{_bindir}/lustre_req_history
 %{_bindir}/plot-llstat
-%{_bindir}/req_layout
+
+%{_bindir}/lfs
+%{_bindir}/lfs_migrate
+%{?rootdir}/sbin/mount.lustre
 %{_libdir}/libptlctl.a
 %{_libdir}/libcfsutil.a
 %{_libdir}/liblustreapi.a
 %{_libdir}/liblustreapi.so
 %{_mandir}/man?/*
-%{_datadir}/lustre
 %{_includedir}/lustre
 %{_includedir}/libcfs
 %{_includedir}/linux/lustre_user.h
-%{_libexecdir}/lustre/lc_common
-%{_libexecdir}/lustre/haconfig
+%endif
+%{_datadir}/lustre
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %config(noreplace) %{_sysconfdir}/ldev.conf
 
@@ -451,7 +480,9 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
+%if %{with lustre_utils}
 %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
+%endif
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
 %endif
@@ -461,7 +492,9 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} -name "*.ko" 
 %files osd-zfs
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
+%if %{with lustre_utils}
 %{_libdir}/@PACKAGE@/mount_osd_zfs.so
+%endif
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
 %endif

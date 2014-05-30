@@ -34,26 +34,13 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-## $(srcdir)/../ for <portals/*.h>, ../../ for generated <config.h>
-#COMPILE = $(CC) -Wall -g -I$(srcdir)/../include -I../../include
-#LINK = $(CC) -o $@
-
 AM_CFLAGS = $(LLCFLAGS)
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
-lib_LIBRARIES = libptlctl.a
-
-libptlctl_a_SOURCES = portals.c debug.c
-
-sbin_PROGRAMS =
-
 if UTILS
-sbin_PROGRAMS += routerstat wirecheck lst
-endif
-
-wirecheck_SOURCES = wirecheck.c
+sbin_PROGRAMS = routerstat lst
 
 routerstat_SOURCES = routerstat.c
 
@@ -61,9 +48,20 @@ lst_SOURCES = lst.c
 lst_LDADD = -L. -lptlctl $(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
 lst_DEPENDENCIES = libptlctl.a
 
+if TESTS
+sbin_PROGRAMS += wirecheck
+
+wirecheck_SOURCES = wirecheck.c
+endif
+
+lib_LIBRARIES = libptlctl.a
+
+libptlctl_a_SOURCES = portals.c debug.c
+endif # UTILS
+
 LND_LIBS =
 if BUILD_USOCKLND
-LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
+LND_LIBS += $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
 endif
 
 EXTRA_DIST = genlib.sh
