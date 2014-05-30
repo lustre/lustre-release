@@ -1542,15 +1542,16 @@ int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
 	LASSERT(!lustre_handle_is_used(lh));
 
-	if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
+	if (nrbufs == 0 || !(nb[0].rnb_flags & OBD_BRW_SRVLOCK))
 		RETURN(0);
 
 	for (i = 1; i < nrbufs; i++)
-		if (!(nb[i].flags & OBD_BRW_SRVLOCK))
+		if (!(nb[i].rnb_flags & OBD_BRW_SRVLOCK))
 			RETURN(-EFAULT);
 
-	RETURN(tgt_extent_lock(ns, res_id, nb[0].offset,
-			       nb[nrbufs - 1].offset + nb[nrbufs - 1].len - 1,
+	RETURN(tgt_extent_lock(ns, res_id, nb[0].rnb_offset,
+			       nb[nrbufs - 1].rnb_offset +
+			       nb[nrbufs - 1].rnb_len - 1,
 			       lh, mode, &flags));
 }
 EXPORT_SYMBOL(tgt_brw_lock);
@@ -1561,8 +1562,10 @@ void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 	ENTRY;
 
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
-	LASSERT((obj->ioo_bufcnt > 0 && (niob[0].flags & OBD_BRW_SRVLOCK)) ==
+	LASSERT((obj->ioo_bufcnt > 0 &&
+		 (niob[0].rnb_flags & OBD_BRW_SRVLOCK)) ==
 		lustre_handle_is_used(lh));
+
 	if (lustre_handle_is_used(lh))
 		tgt_extent_unlock(lh, mode);
 	EXIT;
@@ -1945,7 +1948,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 			sizeof(*remote_nb))
 		RETURN(err_serious(-EPROTO));
 
-	if ((remote_nb[0].flags & OBD_BRW_MEMALLOC) &&
+	if ((remote_nb[0].rnb_flags & OBD_BRW_MEMALLOC) &&
 	    (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
 		memory_pressure_set();
 
@@ -2071,7 +2074,7 @@ skip_transfer:
 
 		/* set per-requested niobuf return codes */
 		for (i = j = 0; i < niocount; i++) {
-			int len = remote_nb[i].len;
+			int len = remote_nb[i].rnb_len;
 
 			nob += len;
 			rcs[i] = 0;

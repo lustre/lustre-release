@@ -616,9 +616,4 @@ static inline void ofd_prepare_fidea(struct filter_fid *ff,
 	ff->ff_parent.f_ver = cpu_to_le32(oa->o_stripe_idx);
 }
 
-/* niobuf_remote has no rnb_ prefix in master */
-#define rnb_offset offset
-#define rnb_flags  flags
-#define rnb_len    len
-
 #endif /* _OFD_INTERNAL_H */

@@ -1842,9 +1842,9 @@ static int ofd_rw_hpreq_lock_match(struct ptlrpc_request *req,
 	rnb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
 	LASSERT(rnb != NULL);
 
-	ext.start = rnb->offset;
+	ext.start = rnb->rnb_offset;
 	rnb += ioo->ioo_bufcnt - 1;
-	ext.end = rnb->offset + rnb->len - 1;
+	ext.end = rnb->rnb_offset + rnb->rnb_len - 1;
 
 	LASSERT(lock->l_resource != NULL);
 	if (!ostid_res_name_eq(&ioo->ioo_oid, &lock->l_resource->lr_name))
@@ -1894,11 +1894,11 @@ static int ofd_rw_hpreq_check(struct ptlrpc_request *req)
 
 	rnb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
 	LASSERT(rnb != NULL);
-	LASSERT(!(rnb->flags & OBD_BRW_SRVLOCK));
+	LASSERT(!(rnb->rnb_flags & OBD_BRW_SRVLOCK));
 
-	start = rnb->offset;
+	start = rnb->rnb_offset;
 	rnb += ioo->ioo_bufcnt - 1;
-	end = rnb->offset + rnb->len - 1;
+	end = rnb->rnb_offset + rnb->rnb_len - 1;
 
 	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks: "DFID
 				   " ("LPU64"->"LPU64")\n",
@@ -2004,7 +2004,7 @@ static void ofd_hp_brw(struct tgt_session_info *tsi)
 		LASSERT(rnb != NULL); /* must exist after request preprocessing */
 
 		/* no high priority if server lock is needed */
-		if (rnb->flags & OBD_BRW_SRVLOCK)
+		if (rnb->rnb_flags & OBD_BRW_SRVLOCK)
 			return;
 	}
 	tgt_ses_req(tsi)->rq_ops = &ofd_hpreq_rw;

@@ -854,9 +854,9 @@ check_niobuf_remote(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(niobuf_remote);
-	CHECK_MEMBER(niobuf_remote, offset);
-	CHECK_MEMBER(niobuf_remote, len);
-	CHECK_MEMBER(niobuf_remote, flags);
+	CHECK_MEMBER(niobuf_remote, rnb_offset);
+	CHECK_MEMBER(niobuf_remote, rnb_len);
+	CHECK_MEMBER(niobuf_remote, rnb_flags);
 
 	CHECK_DEFINE_X(OBD_BRW_READ);
 	CHECK_DEFINE_X(OBD_BRW_WRITE);

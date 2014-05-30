@@ -1237,15 +1237,15 @@ static inline struct obd_capa *dt_capa_get(const struct lu_env *env,
 }
 
 static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
-                              struct niobuf_remote *rnb,
-                              struct niobuf_local *lnb, int rw,
-                              struct lustre_capa *capa)
+			      struct niobuf_remote *rnb,
+			      struct niobuf_local *lnb, int rw,
+			      struct lustre_capa *capa)
 {
-        LASSERT(d);
-        LASSERT(d->do_body_ops);
-        LASSERT(d->do_body_ops->dbo_bufs_get);
-        return d->do_body_ops->dbo_bufs_get(env, d, rnb->offset,
-                                            rnb->len, lnb, rw, capa);
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_bufs_get);
+	return d->do_body_ops->dbo_bufs_get(env, d, rnb->rnb_offset,
+					    rnb->rnb_len, lnb, rw, capa);
 }
 
 static inline int dt_bufs_put(const struct lu_env *env, struct dt_object *d,

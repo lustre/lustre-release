@@ -396,7 +396,7 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 		lnb->lnb_file_offset = offset;
 		lnb->lnb_page_offset = poff;
 		lnb->lnb_len = plen;
-		/* lnb->lnb_flags = rnb->flags; */
+		/* lnb->lnb_flags = rnb->rnb_flags; */
 		lnb->lnb_flags = 0;
 		lnb->lnb_page = NULL;
 		lnb->lnb_rc = 0;

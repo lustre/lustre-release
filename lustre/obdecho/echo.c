@@ -298,8 +298,8 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 			   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
 			   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
 	struct niobuf_local *res = lb;
-	obd_off offset = nb->offset;
-	int len = nb->len;
+	obd_off offset = nb->rnb_offset;
+	int len = nb->rnb_len;
 
 	while (len > 0) {
 		int plen = PAGE_CACHE_SIZE - (offset & (PAGE_CACHE_SIZE-1));
@@ -360,8 +360,8 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 			    struct niobuf_local *lb, int verify)
 {
 	struct niobuf_local *res = lb;
-	obd_off start  = rb->offset >> PAGE_CACHE_SHIFT;
-	obd_off end    = (rb->offset + rb->len + PAGE_CACHE_SIZE - 1) >>
+	obd_off start  = rb->rnb_offset >> PAGE_CACHE_SHIFT;
+	obd_off end    = (rb->rnb_offset + rb->rnb_len + PAGE_CACHE_SIZE - 1) >>
 			 PAGE_CACHE_SHIFT;
 	int     count  = (int)(end - start);
 	int     rc     = 0;
@@ -442,7 +442,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
                         if (rc)
                                 GOTO(preprw_cleanup, rc);
 
-                        tot_bytes += nb->len;
+			tot_bytes += nb->rnb_len;
                 }
         }
 
