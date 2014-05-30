@@ -39,7 +39,6 @@
 #include <lustre/lustre_idl.h>
 #include <lu_object.h>
 #include <dt_object.h>
-#include <lustre_linkea.h>
 #include <lustre_fid.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -1993,6 +1992,9 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	struct lu_buf			*pbuf	= NULL;
 	struct lu_buf			*ea_buf = &info->lti_big_buf;
 	struct lustre_handle		 lh	= { 0 };
+	struct linkea_data		 ldata	= { 0 };
+	struct lu_buf			 linkea_buf;
+	const struct lu_name		*pname;
 	int				 buflen = ea_buf->lb_len;
 	int				 idx	= 0;
 	int				 rc	= 0;
@@ -2039,6 +2041,16 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(put, rc);
 	} while (rc == 0);
+
+	rc = linkea_data_new(&ldata,
+			     &lfsck_env_info(env)->lti_linkea_buf);
+	if (rc != 0)
+		GOTO(put, rc);
+
+	pname = lfsck_name_get_const(env, name, strlen(name));
+	rc = linkea_add_buf(&ldata, pname, lfsck_dto2fid(lfsck->li_lpf_obj));
+	if (rc != 0)
+		GOTO(put, rc);
 
 	memset(la, 0, sizeof(*la));
 	la->la_uid = rec->lor_uid;
@@ -2102,6 +2114,14 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
+	/* 5a. insert linkEA for parent. */
+	linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+	linkea_buf.lb_len = ldata.ld_leh->leh_len;
+	rc = dt_declare_xattr_set(env, pobj, &linkea_buf,
+				  XATTR_NAME_LINK, 0, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
 	rc = dt_trans_start(env, next, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2130,6 +2150,12 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	rc = dt_insert(env, lfsck->li_lpf_obj,
 		       (const struct dt_rec *)pfid,
 		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* 5b. insert linkEA for parent. */
+	rc = dt_xattr_set(env, pobj, &linkea_buf,
+			  XATTR_NAME_LINK, 0, th, BYPASS_CAPA);
 
 	GOTO(stop, rc);
 

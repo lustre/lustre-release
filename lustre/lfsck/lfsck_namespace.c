@@ -34,7 +34,6 @@
 #include <lu_object.h>
 #include <dt_object.h>
 #include <md_object.h>
-#include <lustre_linkea.h>
 #include <lustre_fid.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -1606,6 +1605,86 @@ static struct lfsck_operations lfsck_namespace_ops = {
 	.lfsck_in_notify	= lfsck_namespace_in_notify,
 	.lfsck_query		= lfsck_namespace_query,
 };
+
+/**
+ * Verify the specified linkEA entry for the given directory object.
+ * If the object has no such linkEA entry or it has more other linkEA
+ * entries, then re-generate the linkEA with the given information.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dev	pointer to the dt_device
+ * \param[in] obj	pointer to the dt_object to be handled
+ * \param[in] cname	the name for the child in the parent directory
+ * \param[in] pfid	the parent directory's FID for the linkEA
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
+			struct dt_object *obj, const struct lu_name *cname,
+			const struct lu_fid *pfid)
+{
+	struct linkea_data	 ldata	= { 0 };
+	struct lu_buf		 linkea_buf;
+	struct thandle		*th;
+	int			 rc;
+	int			 fl	= LU_XATTR_CREATE;
+	bool			 dirty	= false;
+	ENTRY;
+
+	LASSERT(S_ISDIR(lfsck_object_type(obj)));
+
+	rc = lfsck_links_read(env, obj, &ldata);
+	if (rc == -ENODATA) {
+		dirty = true;
+	} else if (rc == 0) {
+		fl = LU_XATTR_REPLACE;
+		if (ldata.ld_leh->leh_reccount != 1) {
+			dirty = true;
+		} else {
+			rc = linkea_links_find(&ldata, cname, pfid);
+			if (rc != 0)
+				dirty = true;
+		}
+	}
+
+	if (!dirty)
+		RETURN(rc);
+
+	rc = linkea_data_new(&ldata, &lfsck_env_info(env)->lti_linkea_buf);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = linkea_add_buf(&ldata, cname, pfid);
+	if (rc != 0)
+		RETURN(rc);
+
+	linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
+	linkea_buf.lb_len = ldata.ld_leh->leh_len;
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+				  XATTR_NAME_LINK, fl, th);
+	if (rc != 0)
+		GOTO(stop, rc = PTR_ERR(th));
+
+	rc = dt_trans_start_local(env, dev, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	dt_write_lock(env, obj, 0);
+	rc = dt_xattr_set(env, obj, &linkea_buf,
+			  XATTR_NAME_LINK, fl, th, BYPASS_CAPA);
+	dt_write_unlock(env, obj);
+
+	GOTO(stop, rc);
+
+stop:
+	dt_trans_stop(env, dev, th);
+	return rc;
+}
 
 int lfsck_namespace_setup(const struct lu_env *env,
 			  struct lfsck_instance *lfsck)

@@ -45,6 +45,7 @@
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include <md_object.h>
+#include <lustre_linkea.h>
 
 #define HALF_SEC			(HZ >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
@@ -637,6 +638,9 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lfsck_start *start, bool reset);
 
 /* lfsck_namespace.c */
+int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
+			struct dt_object *obj, const struct lu_name *cname,
+			const struct lu_fid *pfid);
 int lfsck_namespace_setup(const struct lu_env *env,
 			  struct lfsck_instance *lfsck);
 
