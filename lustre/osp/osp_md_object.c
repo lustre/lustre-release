@@ -397,13 +397,20 @@ static int osp_md_declare_insert(const struct lu_env *env,
 				 const struct dt_key *key,
 				 struct thandle *th)
 {
-	struct dt_update_request *update;
-	struct lu_fid		 *fid;
-	struct lu_fid		 *rec_fid = (struct lu_fid *)rec;
-	int			 size[2] = {strlen((char *)key) + 1,
-						  sizeof(*rec_fid)};
-	const char		 *bufs[2] = {(char *)key, (char *)rec_fid};
-	int			 rc;
+	struct osp_thread_info	   *info = osp_env_info(env);
+	struct dt_update_request   *update;
+	struct dt_insert_rec	   *rec1 = (struct dt_insert_rec *)rec;
+	struct lu_fid		   *fid =
+				(struct lu_fid *)lu_object_fid(&dt->do_lu);
+	struct lu_fid		   *rec_fid = &info->osi_fid;
+	__u32			    type = cpu_to_le32(rec1->rec_type);
+	int			    size[3] = {	strlen((char *)key) + 1,
+						sizeof(*rec_fid),
+						sizeof(type) };
+	const char		   *bufs[3] = { (char *)key,
+						(char *)rec_fid,
+						(char *)&type };
+	int			    rc;
 
 	update = out_find_create_update_loc(th, dt);
 	if (IS_ERR(update)) {
@@ -413,14 +420,11 @@ static int osp_md_declare_insert(const struct lu_env *env,
 		return PTR_ERR(update);
 	}
 
-	fid = (struct lu_fid *)lu_object_fid(&dt->do_lu);
-
-	CDEBUG(D_INFO, "%s: insert index of "DFID" %s: "DFID"\n",
+	CDEBUG(D_INFO, "%s: insert index of "DFID" %s: "DFID", %u\n",
 	       dt->do_lu.lo_dev->ld_obd->obd_name,
-	       PFID(fid), (char *)key, PFID(rec_fid));
+	       PFID(fid), (char *)key, PFID(rec1->rec_fid), rec1->rec_type);
 
-	fid_cpu_to_le(rec_fid, rec_fid);
-
+	fid_cpu_to_le(rec_fid, rec1->rec_fid);
 	rc = out_insert_update(env, update, OUT_INDEX_INSERT, fid,
 			       ARRAY_SIZE(size), size, bufs);
 	return rc;

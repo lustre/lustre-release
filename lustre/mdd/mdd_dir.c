@@ -588,7 +588,8 @@ static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *
 
 static int __mdd_index_insert_only(const struct lu_env *env,
 				   struct mdd_object *pobj,
-				   const struct lu_fid *lf, const char *name,
+				   const struct lu_fid *lf, __u32 type,
+				   const char *name,
 				   struct thandle *handle,
 				   struct lustre_capa *capa)
 {
@@ -597,12 +598,15 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 	ENTRY;
 
 	if (dt_try_as_dir(env, next)) {
-		struct lu_ucred  *uc = lu_ucred_check(env);
-		int ignore_quota;
+		struct dt_insert_rec	*rec = &mdd_env_info(env)->mti_dt_rec;
+		struct lu_ucred		*uc  = lu_ucred_check(env);
+		int			 ignore_quota;
 
+		rec->rec_fid = lf;
+		rec->rec_type = type;
 		ignore_quota = uc ? uc->uc_cap & CFS_CAP_SYS_RESOURCE_MASK : 1;
 		rc = next->do_index_ops->dio_insert(env, next,
-						    (struct dt_rec*)lf,
+						    (const struct dt_rec *)rec,
 						    (const struct dt_key *)name,
 						    handle, capa, ignore_quota);
 	} else {
@@ -613,19 +617,21 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 
 /* insert named index, add reference if isdir */
 static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
-                              const struct lu_fid *lf, const char *name, int is_dir,
-                              struct thandle *handle, struct lustre_capa *capa)
+			      const struct lu_fid *lf, __u32 type,
+			      const char *name, struct thandle *handle,
+			      struct lustre_capa *capa)
 {
-        int               rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        rc = __mdd_index_insert_only(env, pobj, lf, name, handle, capa);
-        if (rc == 0 && is_dir) {
-                mdd_write_lock(env, pobj, MOR_TGT_PARENT);
-                mdo_ref_add(env, pobj, handle);
-                mdd_write_unlock(env, pobj);
-        }
-        RETURN(rc);
+	rc = __mdd_index_insert_only(env, pobj, lf, type, name, handle, capa);
+	if (rc == 0 && S_ISDIR(type)) {
+		mdd_write_lock(env, pobj, MOR_TGT_PARENT);
+		mdo_ref_add(env, pobj, handle);
+		mdd_write_unlock(env, pobj);
+	}
+
+	RETURN(rc);
 }
 
 /* delete named index, drop reference if isdir */
@@ -1229,18 +1235,19 @@ static inline int mdd_declare_links_del(const struct lu_env *env,
 }
 
 static int mdd_declare_link(const struct lu_env *env,
-                            struct mdd_device *mdd,
-                            struct mdd_object *p,
-                            struct mdd_object *c,
-                            const struct lu_name *name,
+			    struct mdd_device *mdd,
+			    struct mdd_object *p,
+			    struct mdd_object *c,
+			    const struct lu_name *name,
 			    struct thandle *handle,
 			    struct lu_attr *la,
 			    struct linkea_data *data)
 {
-        int rc;
+	int rc;
 
-        rc = mdo_declare_index_insert(env, p, mdo2fid(c), name->ln_name,handle);
-        if (rc)
+	rc = mdo_declare_index_insert(env, p, mdo2fid(c), mdd_object_type(c),
+				      name->ln_name, handle);
+	if (rc != 0)
                 return rc;
 
         rc = mdo_declare_ref_add(env, c, handle);
@@ -1320,7 +1327,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
 
 	rc = __mdd_index_insert_only(env, mdd_tobj, mdo2fid(mdd_sobj),
-				     name, handle,
+				     mdd_object_type(mdd_sobj), name, handle,
 				     mdd_object_capa(env, mdd_tobj));
 	if (rc != 0) {
 		mdo_ref_del(env, mdd_sobj, handle);
@@ -1627,6 +1634,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		if (rc != 0) {
 			__mdd_index_insert_only(env, mdd_pobj,
 						mdo2fid(mdd_cobj),
+						mdd_object_type(mdd_cobj),
 						name, handle,
 						mdd_object_capa(env, mdd_pobj));
 			GOTO(cleanup, rc);
@@ -1802,7 +1810,7 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 					 struct lu_attr *attr,
 					 struct thandle *handle)
 {
-        int rc;
+	int rc;
 	ENTRY;
 
 	/*
@@ -1817,13 +1825,13 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 	attr->la_valid |= LA_MODE | LA_TYPE;
 	if (rc == 0 && S_ISDIR(attr->la_mode)) {
 		rc = mdo_declare_index_insert(env, child, mdo2fid(child),
-					      dot, handle);
-                if (rc == 0)
-                        rc = mdo_declare_ref_add(env, child, handle);
+					      S_IFDIR, dot, handle);
+		if (rc == 0)
+			rc = mdo_declare_ref_add(env, child, handle);
 
 		rc = mdo_declare_index_insert(env, child, mdo2fid(parent),
-					      dotdot, handle);
-        }
+					      S_IFDIR, dotdot, handle);
+	}
 
 	RETURN(rc);
 }
@@ -1851,14 +1859,14 @@ static int mdd_object_initialize(const struct lu_env *env,
                 /* Add "." and ".." for newly created dir */
                 mdo_ref_add(env, child, handle);
                 rc = __mdd_index_insert_only(env, child, mdo2fid(child),
-                                             dot, handle, BYPASS_CAPA);
-                if (rc == 0)
-                        rc = __mdd_index_insert_only(env, child, pfid,
-                                                     dotdot, handle,
-                                                     BYPASS_CAPA);
-                if (rc != 0)
-                        mdo_ref_del(env, child, handle);
-        }
+					     S_IFDIR, dot, handle, BYPASS_CAPA);
+		if (rc == 0)
+			rc = __mdd_index_insert_only(env, child, pfid, S_IFDIR,
+						     dotdot, handle,
+						     BYPASS_CAPA);
+		if (rc != 0)
+			mdo_ref_del(env, child, handle);
+	}
 
 	RETURN(rc);
 }
@@ -2061,10 +2069,11 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 	} else {
 		struct lu_attr	*la = &mdd_env_info(env)->mti_la_for_fix;
 
-		rc = mdo_declare_index_insert(env, p, mdo2fid(c), name->ln_name,
-					      handle);
-		if (rc)
+		rc = mdo_declare_index_insert(env, p, mdo2fid(c), attr->la_mode,
+					      name->ln_name, handle);
+		if (rc != 0)
 			return rc;
+
 		rc = mdd_declare_links_add(env, c, handle, ldata);
 		if (rc)
 			return rc;
@@ -2360,7 +2369,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_volatile, rc);
 	} else {
 		rc = __mdd_index_insert(env, mdd_pobj, mdo2fid(son),
-					name, S_ISDIR(attr->la_mode), handle,
+					attr->la_mode, name, handle,
 					mdd_object_capa(env, mdd_pobj));
 		if (rc != 0)
 			GOTO(err_created, rc);
@@ -2562,21 +2571,22 @@ static int mdd_declare_rename(const struct lu_env *env,
 		if (mdd_spobj != mdd_tpobj) {
 			rc = mdo_declare_index_delete(env, mdd_sobj, dotdot,
 						      handle);
-			if (rc)
+			if (rc != 0)
 				return rc;
 
 			rc = mdo_declare_index_insert(env, mdd_sobj,
 						      mdo2fid(mdd_tpobj),
-						      dotdot, handle);
-			if (rc)
+						      S_IFDIR, dotdot, handle);
+			if (rc != 0)
 				return rc;
 		}
-                /* new target child can be directory,
-                 * counted by target dir's nlink */
-                rc = mdo_declare_ref_add(env, mdd_tpobj, handle);
-                if (rc)
-                        return rc;
-        }
+
+		/* new target child can be directory,
+		 * counted by target dir's nlink */
+		rc = mdo_declare_ref_add(env, mdd_tpobj, handle);
+		if (rc != 0)
+			return rc;
+	}
 
 	la->la_valid = LA_CTIME | LA_MTIME;
 	rc = mdo_declare_attr_set(env, mdd_spobj, la, handle);
@@ -2596,11 +2606,12 @@ static int mdd_declare_rename(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-        /* new name */
-        rc = mdo_declare_index_insert(env, mdd_tpobj, mdo2fid(mdd_sobj),
-                        tname->ln_name, handle);
-        if (rc)
-                return rc;
+	/* new name */
+	rc = mdo_declare_index_insert(env, mdd_tpobj, mdo2fid(mdd_sobj),
+				      mdd_object_type(mdd_sobj),
+				      tname->ln_name, handle);
+	if (rc != 0)
+		return rc;
 
         /* name from target dir (old name), we declare it unconditionally
          * as mdd_rename() calls delete unconditionally as well. so just
@@ -2740,12 +2751,13 @@ static int mdd_rename(const struct lu_env *env,
         if (is_dir && mdd_sobj && !lu_fid_eq(spobj_fid, tpobj_fid)) {
                 rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
                                         mdd_object_capa(env, mdd_sobj));
-                if (rc)
-                        GOTO(fixup_spobj2, rc);
+		if (rc != 0)
+			GOTO(fixup_spobj2, rc);
 
-                rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, dotdot,
-                                      handle, mdd_object_capa(env, mdd_sobj));
-                if (rc)
+		rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, S_IFDIR,
+					     dotdot, handle,
+					     mdd_object_capa(env, mdd_sobj));
+		if (rc != 0)
                         GOTO(fixup_spobj, rc);
         }
 
@@ -2765,9 +2777,9 @@ static int mdd_rename(const struct lu_env *env,
         }
 
         /* Insert new fid with target name into target dir */
-        rc = __mdd_index_insert(env, mdd_tpobj, lf, tname, is_dir, handle,
-                                mdd_object_capa(env, mdd_tpobj));
-        if (rc)
+	rc = __mdd_index_insert(env, mdd_tpobj, lf, cattr->la_mode,
+				tname, handle, mdd_object_capa(env, mdd_tpobj));
+	if (rc != 0)
                 GOTO(fixup_tpobj, rc);
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
@@ -2897,15 +2909,14 @@ fixup_tpobj:
 					mdo_ref_add(env, mdd_tobj, handle);
 			}
 
-                        rc2 = __mdd_index_insert(env, mdd_tpobj,
-                                         mdo2fid(mdd_tobj), tname,
-                                         is_dir, handle,
-                                         BYPASS_CAPA);
-
-                        if (rc2)
-                                CWARN("tp obj fix error %d\n",rc2);
-                }
-        }
+			rc2 = __mdd_index_insert(env, mdd_tpobj,
+						  mdo2fid(mdd_tobj),
+						  mdd_object_type(mdd_tobj),
+						  tname, handle, BYPASS_CAPA);
+			if (rc2 != 0)
+				CWARN("tp obj fix error: rc = %d\n", rc2);
+		}
+	}
 
 fixup_spobj:
 	if (rc && is_dir && mdd_sobj && mdd_spobj != mdd_tpobj) {
@@ -2917,32 +2928,36 @@ fixup_spobj:
 			       mdd2obd_dev(mdd)->obd_name, rc2);
 
 
-		rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid,
+		rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid, S_IFDIR,
 					      dotdot, handle, BYPASS_CAPA);
-		if (rc2)
+		if (rc2 != 0)
 			CWARN("%s: sp obj dotdot insert error: rc = %d\n",
 			      mdd2obd_dev(mdd)->obd_name, rc2);
 	}
 
 fixup_spobj2:
-        if (rc) {
-                rc2 = __mdd_index_insert(env, mdd_spobj,
-                                         lf, sname, is_dir, handle, BYPASS_CAPA);
-                if (rc2)
-                        CWARN("sp obj fix error %d\n",rc2);
-        }
+	if (rc != 0) {
+		rc2 = __mdd_index_insert(env, mdd_spobj, lf,
+					 mdd_object_type(mdd_sobj), sname,
+					 handle, BYPASS_CAPA);
+		if (rc2 != 0)
+			CWARN("sp obj fix error: rc = %d\n", rc2);
+	}
+
 cleanup:
 	if (tobj_locked)
 		mdd_write_unlock(env, mdd_tobj);
+
 cleanup_unlocked:
-        if (rc == 0)
+	if (rc == 0)
 		rc = mdd_changelog_ext_ns_store(env, mdd, CL_RENAME, cl_flags,
 						mdd_tobj, tpobj_fid, lf,
 						spobj_fid, ltname, lsname,
 						handle);
 
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	mdd_trans_stop(env, mdd, rc, handle);
+
 out_pending:
 	mdd_object_put(env, mdd_sobj);
 	return rc;
@@ -3109,13 +3124,14 @@ static int mdd_update_linkea_internal(const struct lu_env *env,
 			/* Insert new fid with target name into target dir */
 			rc = mdo_declare_index_delete(env, pobj, lname.ln_name,
 						      handle);
-			if (rc)
+			if (rc != 0)
 				GOTO(next_put, rc);
 
 			rc = mdo_declare_index_insert(env, pobj,
-						      mdd_object_fid(mdd_tobj),
-						      lname.ln_name, handle);
-			if (rc)
+					mdd_object_fid(mdd_tobj),
+					mdd_object_type(mdd_tobj),
+					lname.ln_name, handle);
+			if (rc != 0)
 				GOTO(next_put, rc);
 
 			rc = mdo_declare_ref_add(env, mdd_tobj, handle);
@@ -3133,10 +3149,11 @@ static int mdd_update_linkea_internal(const struct lu_env *env,
 				GOTO(next_put, rc);
 
 			rc = __mdd_index_insert(env, pobj,
-						mdd_object_fid(mdd_tobj),
-						lname.ln_name, 0, handle,
-						mdd_object_capa(env, pobj));
-			if (rc)
+					mdd_object_fid(mdd_tobj),
+					mdd_object_type(mdd_tobj),
+					lname.ln_name, handle,
+					mdd_object_capa(env, pobj));
+			if (rc != 0)
 				GOTO(next_put, rc);
 
 			mdd_write_lock(env, mdd_tobj, MOR_SRC_CHILD);
@@ -3516,7 +3533,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 		if (IS_ERR(child))
 			GOTO(out, rc = PTR_ERR(child));
 
-		is_dir = S_ISDIR(lu_object_attr(&child->mod_obj.mo_lu));
+		is_dir = S_ISDIR(mdd_object_type(child));
 
 		snprintf(name, ent->lde_namelen + 1, "%s", ent->lde_name);
 
@@ -3543,6 +3560,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 		if (likely(!target_exist)) {
 			rc = mdo_declare_index_insert(env, mdd_tobj,
 						      &ent->lde_fid,
+						      mdd_object_type(child),
 						      name, handle);
 			if (rc != 0)
 				GOTO(out_put, rc);
@@ -3571,7 +3589,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 
 			rc = mdo_declare_index_insert(env, child,
 						      mdd_object_fid(mdd_tobj),
-							      dotdot, handle);
+						      S_IFDIR, dotdot, handle);
 			if (rc != 0)
 				GOTO(out_put, rc);
 		}
@@ -3592,7 +3610,8 @@ static int mdd_migrate_entries(const struct lu_env *env,
 
 		if (likely(!target_exist)) {
 			rc = __mdd_index_insert(env, mdd_tobj, &ent->lde_fid,
-						name, is_dir, handle,
+						mdd_object_type(child),
+						name, handle,
 						mdd_object_capa(env, mdd_tobj));
 			if (rc != 0)
 				GOTO(out_put, rc);
@@ -3617,7 +3636,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 				GOTO(out_put, rc);
 
 			rc = __mdd_index_insert_only(env, child,
-					 mdd_object_fid(mdd_tobj),
+					 mdd_object_fid(mdd_tobj), S_IFDIR,
 					 dotdot, handle,
 					 mdd_object_capa(env, child));
 			if (rc != 0)
@@ -3715,6 +3734,7 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 
 	/* new name */
 	rc = mdo_declare_index_insert(env, mdd_pobj, mdo2fid(mdd_tobj),
+				      mdd_object_type(mdd_tobj),
 				      lname->ln_name, handle);
 	if (rc != 0)
 		return rc;
@@ -3831,8 +3851,9 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	}
 
 	/* Insert new fid with target name into target dir */
-	rc = __mdd_index_insert(env, mdd_pobj, mdd_object_fid(mdd_tobj), name,
-				is_dir, handle, mdd_object_capa(env, mdd_pobj));
+	rc = __mdd_index_insert(env, mdd_pobj, mdd_object_fid(mdd_tobj),
+				mdd_object_type(mdd_tobj), name,
+				handle, mdd_object_capa(env, mdd_pobj));
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 

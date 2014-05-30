@@ -109,20 +109,21 @@ static inline void mdd_orphan_write_unlock(const struct lu_env *env,
 }
 
 static inline int mdd_orphan_insert_obj(const struct lu_env *env,
-                                        struct mdd_device *mdd,
-                                        struct mdd_object *obj,
-                                        __u32 op,
-                                        struct thandle *th)
+					struct mdd_device *mdd,
+					struct mdd_object *obj,
+					__u32 op, struct thandle *th)
 {
-        struct dt_object        *dor    = mdd->mdd_orphans;
-        const struct lu_fid     *lf     = mdo2fid(obj);
-        struct dt_key           *key    = orph_key_fill(env, lf, op);
-        ENTRY;
+	struct dt_insert_rec	*rec	= &mdd_env_info(env)->mti_dt_rec;
+	struct dt_object	*dor	= mdd->mdd_orphans;
+	const struct lu_fid	*lf	= mdo2fid(obj);
+	struct dt_key		*key	= orph_key_fill(env, lf, op);
 
-        return  dor->do_index_ops->dio_insert(env, dor,
-                                              (struct dt_rec *)lf,
-                                              key, th,
-                                              BYPASS_CAPA, 1);
+	rec->rec_fid = lf;
+	rec->rec_type = mdd_object_type(obj);
+
+	return  dor->do_index_ops->dio_insert(env, dor,
+					      (const struct dt_rec *)rec,
+					      key, th, BYPASS_CAPA, 1);
 }
 
 static inline int mdd_orphan_delete_obj(const struct lu_env *env,
@@ -158,14 +159,18 @@ int orph_declare_index_insert(const struct lu_env *env,
 			      struct mdd_object *obj,
 			      umode_t mode, struct thandle *th)
 {
+	struct dt_insert_rec	*rec = &mdd_env_info(env)->mti_dt_rec;
 	struct mdd_device	*mdd = mdo2mdd(&obj->mod_obj);
 	struct dt_key		*key;
 	int			rc;
 
 	key = orph_key_fill(env, mdo2fid(obj), ORPH_OP_UNLINK);
 
-	rc = dt_declare_insert(env, mdd->mdd_orphans, NULL, key, th);
-	if (rc)
+	rec->rec_fid = mdo2fid(obj);
+	rec->rec_type = mode;
+	rc = dt_declare_insert(env, mdd->mdd_orphans,
+			       (const struct dt_rec *)rec, key, th);
+	if (rc != 0)
 		return rc;
 
 	rc = mdo_declare_ref_add(env, obj, th);
@@ -187,21 +192,23 @@ int orph_declare_index_insert(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdo_declare_index_insert(env, obj, NULL, dotdot, th);
+	rc = mdo_declare_index_insert(env, obj,
+				      lu_object_fid(&mdd->mdd_orphans->do_lu),
+				      S_IFDIR, dotdot, th);
 
 	return rc;
 }
 
 static int orph_index_insert(const struct lu_env *env,
-                             struct mdd_object *obj,
-                             __u32 op,
-                             struct thandle *th)
+			     struct mdd_object *obj,
+			     __u32 op, struct thandle *th)
 {
-        struct mdd_device       *mdd    = mdo2mdd(&obj->mod_obj);
-        struct dt_object        *dor    = mdd->mdd_orphans;
-        const struct lu_fid     *lf_dor = lu_object_fid(&dor->do_lu);
-        struct dt_object        *next   = mdd_object_child(obj);
-        int rc;
+	struct mdd_device	*mdd	= mdo2mdd(&obj->mod_obj);
+	struct dt_object	*dor	= mdd->mdd_orphans;
+	const struct lu_fid	*lf_dor	= lu_object_fid(&dor->do_lu);
+	struct dt_object	*next	= mdd_object_child(obj);
+	struct dt_insert_rec	*rec	= &mdd_env_info(env)->mti_dt_rec;
+	int			 rc;
         ENTRY;
 
         LASSERT(mdd_write_locked(env, obj) != 0);
@@ -228,8 +235,9 @@ static int orph_index_insert(const struct lu_env *env,
                                        (const struct dt_key *)dotdot,
                                        th, BYPASS_CAPA);
 
-        next->do_index_ops->dio_insert(env, next,
-                                       (struct dt_rec *)lf_dor,
+	rec->rec_fid = lf_dor;
+	rec->rec_type = S_IFDIR;
+	next->do_index_ops->dio_insert(env, next, (const struct dt_rec *)rec,
                                        (const struct dt_key *)dotdot,
                                        th, BYPASS_CAPA, 1);
 

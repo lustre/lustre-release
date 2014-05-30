@@ -494,7 +494,7 @@ static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
 }
 
 static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
-			  struct lu_fid *fid)
+			  const struct lu_fid *fid)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	ENTRY;
@@ -537,7 +537,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object   *parent = osd_dt_obj(dt);
 	struct osd_device   *osd = osd_obj2dev(parent);
-	struct lu_fid       *fid = (struct lu_fid *)rec;
+	struct dt_insert_rec *rec1 = (struct dt_insert_rec *)rec;
+	const struct lu_fid *fid = rec1->rec_fid;
 	struct osd_thandle  *oh;
 	struct osd_object   *child = NULL;
 	__u32                attr;
@@ -564,7 +565,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(rc == 1)) {
 		/* Insert remote entry */
 		memset(&oti->oti_zde.lzd_reg, 0, sizeof(oti->oti_zde.lzd_reg));
-		oti->oti_zde.lzd_reg.zde_type = IFTODT(S_IFDIR & S_IFMT);
+		oti->oti_zde.lzd_reg.zde_type = IFTODT(rec1->rec_type & S_IFMT);
 	} else {
 		/*
 		 * To simulate old Orion setups with ./..  stored in the

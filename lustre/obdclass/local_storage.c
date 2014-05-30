@@ -301,6 +301,7 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 {
 	struct dt_thread_info	*dti	= dt_info(env);
 	struct lu_object_conf	*conf	= &dti->dti_conf;
+	struct dt_insert_rec	*rec	= &dti->dti_dt_rec;
 	struct dt_object	*dto;
 	struct thandle		*th;
 	int			 rc;
@@ -331,7 +332,10 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 		dt_declare_ref_add(env, parent, th);
 	}
 
-	rc = dt_declare_insert(env, parent, (void *)fid, (void *)name, th);
+	rec->rec_fid = fid;
+	rec->rec_type = dto->do_lu.lo_header->loh_attr;
+	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
+			       (const struct dt_key *)name, th);
 	if (rc)
 		GOTO(trans_stop, rc);
 
@@ -353,20 +357,27 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 	if (dti->dti_dof.dof_type == DFT_DIR) {
 		if (!dt_try_as_dir(env, dto))
 			GOTO(destroy, rc = -ENOTDIR);
+
+		rec->rec_type = S_IFDIR;
+		rec->rec_fid = fid;
 		/* Add "." and ".." for newly created dir */
-		rc = dt_insert(env, dto, (void *)fid, (void *)".", th,
-			       BYPASS_CAPA, 1);
-		if (rc)
+		rc = dt_insert(env, dto, (const struct dt_rec *)rec,
+			       (const struct dt_key *)".", th, BYPASS_CAPA, 1);
+		if (rc != 0)
 			GOTO(destroy, rc);
+
 		dt_ref_add(env, dto, th);
-		rc = dt_insert(env, dto, (void *)lu_object_fid(&parent->do_lu),
-			       (void *)"..", th, BYPASS_CAPA, 1);
-		if (rc)
+		rec->rec_fid = lu_object_fid(&parent->do_lu);
+		rc = dt_insert(env, dto, (const struct dt_rec *)rec,
+			       (const struct dt_key *)"..", th, BYPASS_CAPA, 1);
+		if (rc != 0)
 			GOTO(destroy, rc);
 	}
 
+	rec->rec_fid = fid;
+	rec->rec_type = dto->do_lu.lo_header->loh_attr;
 	dt_write_lock(env, parent, 0);
-	rc = dt_insert(env, parent, (const struct dt_rec *)fid,
+	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
 	if (dti->dti_dof.dof_type == DFT_DIR)
 		dt_ref_add(env, parent, th);
@@ -629,8 +640,11 @@ int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
 
 	rc = dt_ref_del(env, dto, th);
 	if (rc < 0) {
-		rc = dt_insert(env, parent,
-			       (const struct dt_rec *)&dti->dti_fid,
+		struct dt_insert_rec *rec = &dti->dti_dt_rec;
+
+		rec->rec_fid = &dti->dti_fid;
+		rec->rec_type = dto->do_lu.lo_header->loh_attr;
+		rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 			       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
 		GOTO(unlock, rc);
 	}

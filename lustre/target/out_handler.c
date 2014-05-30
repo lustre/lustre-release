@@ -899,9 +899,10 @@ static int out_obj_index_insert(const struct lu_env *env,
 {
 	int rc;
 
-	CDEBUG(D_INFO, "%s: index insert "DFID" name: %s fid "DFID"\n",
+	CDEBUG(D_INFO, "%s: index insert "DFID" name: %s fid "DFID", type %u\n",
 	       dt_obd_name(th->th_dev), PFID(lu_object_fid(&dt_obj->do_lu)),
-	       (char *)key, PFID((struct lu_fid *)rec));
+	       (char *)key, PFID(((struct dt_insert_rec *)rec)->rec_fid),
+	       ((struct dt_insert_rec *)rec)->rec_type);
 
 	if (dt_try_as_dir(env, dt_obj) == 0)
 		return -ENOTDIR;
@@ -940,7 +941,8 @@ static int out_tx_index_insert_exec(const struct lu_env *env,
 	struct dt_object *dt_obj = arg->object;
 	int rc;
 
-	rc = out_obj_index_insert(env, dt_obj, arg->u.insert.rec,
+	rc = out_obj_index_insert(env, dt_obj,
+				  (const struct dt_rec *)&arg->u.insert.rec,
 				  arg->u.insert.key, th);
 
 	CDEBUG(D_INFO, "%s: insert idx insert reply %p index %d: rc = %d\n",
@@ -959,7 +961,8 @@ static int out_tx_index_insert_undo(const struct lu_env *env,
 
 static int __out_tx_index_insert(const struct lu_env *env,
 				 struct dt_object *dt_obj,
-				 char *name, struct lu_fid *fid,
+				 const struct dt_rec *rec,
+				 const struct dt_key *key,
 				 struct thandle_exec_args *ta,
 				 struct object_update_reply *reply,
 				 int index, const char *file, int line)
@@ -973,8 +976,7 @@ static int __out_tx_index_insert(const struct lu_env *env,
 		return rc;
 	}
 
-	rc = dt_declare_insert(env, dt_obj, (struct dt_rec *)fid,
-			       (struct dt_key *)name, ta->ta_handle);
+	rc = dt_declare_insert(env, dt_obj, rec, key, ta->ta_handle);
 	if (rc != 0)
 		return rc;
 
@@ -987,22 +989,23 @@ static int __out_tx_index_insert(const struct lu_env *env,
 	arg->object = dt_obj;
 	arg->reply = reply;
 	arg->index = index;
-	arg->u.insert.rec = (struct dt_rec *)fid;
-	arg->u.insert.key = (struct dt_key *)name;
+	arg->u.insert.rec = *(const struct dt_insert_rec *)rec;
+	arg->u.insert.key = key;
 
 	return 0;
 }
 
 static int out_index_insert(struct tgt_session_info *tsi)
 {
-	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
-	struct object_update	*update = tti->tti_u.update.tti_update;
-	struct dt_object  *obj = tti->tti_u.update.tti_dt_object;
-	struct lu_fid	  *fid;
-	char		  *name;
-	int		   rc = 0;
-	int		   size;
-
+	struct tgt_thread_info	*tti	= tgt_th_info(tsi->tsi_env);
+	struct object_update	*update	= tti->tti_u.update.tti_update;
+	struct dt_object	*obj	= tti->tti_u.update.tti_dt_object;
+	struct dt_insert_rec	*rec	= &tti->tti_rec;
+	struct lu_fid		*fid;
+	char			*name;
+	__u32			*ptype;
+	int			 rc	= 0;
+	int			 size;
 	ENTRY;
 
 	name = object_update_param_get(update, 0, NULL);
@@ -1028,8 +1031,21 @@ static int out_index_insert(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
-	rc = out_tx_index_insert(tsi->tsi_env, obj, name, fid,
-				 &tti->tti_tea,
+	ptype = object_update_param_get(update, 2, &size);
+	if (ptype == NULL || size != sizeof(*ptype)) {
+		CERROR("%s: invalid type for index insert: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), -EPROTO);
+		RETURN(err_serious(-EPROTO));
+	}
+
+	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
+		__swab32s(ptype);
+
+	rec->rec_fid = fid;
+	rec->rec_type = *ptype;
+
+	rc = out_tx_index_insert(tsi->tsi_env, obj, (const struct dt_rec *)rec,
+				 (const struct dt_key *)name, &tti->tti_tea,
 				 tti->tti_u.update.tti_update_reply,
 				 tti->tti_u.update.tti_update_reply_index);
 	RETURN(rc);
@@ -1043,7 +1059,7 @@ static int out_tx_index_delete_exec(const struct lu_env *env,
 
 	rc = out_obj_index_delete(env, arg->object, arg->u.insert.key, th);
 
-	CDEBUG(D_INFO, "%s: insert idx insert reply %p index %d: rc = %d\n",
+	CDEBUG(D_INFO, "%s: delete idx insert reply %p index %d: rc = %d\n",
 	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
 
 	object_update_result_insert(arg->reply, NULL, 0, arg->index, rc);
@@ -1061,7 +1077,8 @@ static int out_tx_index_delete_undo(const struct lu_env *env,
 }
 
 static int __out_tx_index_delete(const struct lu_env *env,
-				 struct dt_object *dt_obj, char *name,
+				 struct dt_object *dt_obj,
+				 const struct dt_key *key,
 				 struct thandle_exec_args *ta,
 				 struct object_update_reply *reply,
 				 int index, const char *file, int line)
@@ -1075,8 +1092,7 @@ static int __out_tx_index_delete(const struct lu_env *env,
 	}
 
 	LASSERT(ta->ta_handle != NULL);
-	rc = dt_declare_delete(env, dt_obj, (struct dt_key *)name,
-			       ta->ta_handle);
+	rc = dt_declare_delete(env, dt_obj, key, ta->ta_handle);
 	if (rc != 0)
 		return rc;
 
@@ -1089,7 +1105,7 @@ static int __out_tx_index_delete(const struct lu_env *env,
 	arg->object = dt_obj;
 	arg->reply = reply;
 	arg->index = index;
-	arg->u.insert.key = (struct dt_key *)name;
+	arg->u.insert.key = key;
 	return 0;
 }
 
@@ -1111,7 +1127,8 @@ static int out_index_delete(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
-	rc = out_tx_index_delete(tsi->tsi_env, obj, name, &tti->tti_tea,
+	rc = out_tx_index_delete(tsi->tsi_env, obj, (const struct dt_key *)name,
+				 &tti->tti_tea,
 				 tti->tti_u.update.tti_update_reply,
 				 tti->tti_u.update.tti_update_reply_index);
 	RETURN(rc);

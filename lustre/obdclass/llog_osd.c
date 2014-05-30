@@ -1020,6 +1020,7 @@ static int llog_osd_declare_create(const struct lu_env *env,
 				   struct llog_handle *res, struct thandle *th)
 {
 	struct llog_thread_info		*lgi = llog_info(env);
+	struct dt_insert_rec		*rec = &lgi->lgi_dt_rec;
 	struct local_oid_storage	*los;
 	struct dt_object		*o;
 	int				 rc;
@@ -1051,8 +1052,10 @@ static int llog_osd_declare_create(const struct lu_env *env,
 		if (IS_ERR(llog_dir))
 			RETURN(PTR_ERR(llog_dir));
 		logid_to_fid(&res->lgh_id, &lgi->lgi_fid);
+		rec->rec_fid = &lgi->lgi_fid;
+		rec->rec_type = S_IFREG;
 		rc = dt_declare_insert(env, llog_dir,
-				       (struct dt_rec *)&lgi->lgi_fid,
+				       (struct dt_rec *)rec,
 				       (struct dt_key *)res->lgh_name, th);
 		lu_object_put(env, &llog_dir->do_lu);
 		if (rc)
@@ -1080,6 +1083,7 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 			   struct thandle *th)
 {
 	struct llog_thread_info *lgi = llog_info(env);
+	struct dt_insert_rec	*rec = &lgi->lgi_dt_rec;
 	struct local_oid_storage *los;
 	struct dt_object        *o;
 	int                      rc = 0;
@@ -1115,9 +1119,10 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 			RETURN(PTR_ERR(llog_dir));
 
 		logid_to_fid(&res->lgh_id, &lgi->lgi_fid);
+		rec->rec_fid = &lgi->lgi_fid;
+		rec->rec_type = S_IFREG;
 		dt_read_lock(env, llog_dir, 0);
-		rc = dt_insert(env, llog_dir,
-			       (struct dt_rec *)&lgi->lgi_fid,
+		rc = dt_insert(env, llog_dir, (struct dt_rec *)rec,
 			       (struct dt_key *)res->lgh_name,
 			       th, BYPASS_CAPA, 1);
 		dt_read_unlock(env, llog_dir);

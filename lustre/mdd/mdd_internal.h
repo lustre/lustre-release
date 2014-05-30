@@ -160,6 +160,7 @@ struct mdd_thread_info {
 	struct dt_object_format   mti_dof;
 	struct linkea_data	  mti_link_data;
 	struct md_op_spec	  mti_spec;
+	struct dt_insert_rec	  mti_dt_rec;
 };
 
 extern const char orph_index_name[];
@@ -614,32 +615,39 @@ int mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
 
 static inline
 int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
-                             const struct lu_fid *fid, const char *name,
-                             struct thandle *handle)
+			     const struct lu_fid *fid, __u32 type,
+			     const char *name, struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        int              rc = 0;
+	struct dt_object *next	= mdd_object_child(obj);
+	int		  rc	= 0;
 
-        /*
-         * if the object doesn't exist yet, then it's supposed to be created
-         * and declaration of the creation should be enough to insert ./..
-         */
+	/*
+	 * if the object doesn't exist yet, then it's supposed to be created
+	 * and declaration of the creation should be enough to insert ./..
+	 */
+
 	 /* FIXME: remote object should not be awared by MDD layer, but local
 	  * creation does not declare insert ./.. (comments above), which
 	  * is required by remote directory creation.
 	  * This remote check should be removed when mdd_object_exists check is
 	  * removed.
 	  */
-	 if (mdd_object_exists(obj) || mdd_object_remote(obj)) {
-                rc = -ENOTDIR;
-                if (dt_try_as_dir(env, next))
-                        rc = dt_declare_insert(env, next,
-                                               (struct dt_rec *)fid,
-                                               (const struct dt_key *)name,
-                                               handle);
-        }
+	if (mdd_object_exists(obj) || mdd_object_remote(obj)) {
+		rc = -ENOTDIR;
+		if (dt_try_as_dir(env, next)) {
+			struct dt_insert_rec *rec =
+					&mdd_env_info(env)->mti_dt_rec;
 
-        return rc;
+			rec->rec_fid = fid;
+			rec->rec_type = type;
+			rc = dt_declare_insert(env, next,
+					       (const struct dt_rec *)rec,
+					       (const struct dt_key *)name,
+					       handle);
+		}
+	 }
+
+	 return rc;
 }
 
 static inline

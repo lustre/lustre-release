@@ -1979,6 +1979,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 					__u32 ea_off)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
+	struct dt_insert_rec		*dtrec	= &info->lti_dt_rec;
 	char				*name	= info->lti_key;
 	struct lu_attr			*la	= &info->lti_la;
 	struct dt_object_format 	*dof	= &info->lti_dof;
@@ -2108,8 +2109,10 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	/* 4a. Insert the MDT-object to .lustre/lost+found/MDTxxxx/ */
+	dtrec->rec_fid = pfid;
+	dtrec->rec_type = S_IFREG;
 	rc = dt_declare_insert(env, lfsck->li_lpf_obj,
-			       (const struct dt_rec *)pfid,
+			       (const struct dt_rec *)dtrec,
 			       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2147,8 +2150,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	/* 4b. Insert the MDT-object to .lustre/lost+found/MDTxxxx/ */
-	rc = dt_insert(env, lfsck->li_lpf_obj,
-		       (const struct dt_rec *)pfid,
+	rc = dt_insert(env, lfsck->li_lpf_obj, (const struct dt_rec *)dtrec,
 		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
 	if (rc != 0)
 		GOTO(stop, rc);

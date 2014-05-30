@@ -284,6 +284,7 @@ struct lod_thread_info {
 	struct dt_object_format lti_format;
 	struct lu_name	  lti_name;
 	struct lu_buf	  lti_linkea_buf;
+	struct dt_insert_rec lti_dt_rec;
 };
 
 extern const struct lu_device_operations lod_lu_ops;

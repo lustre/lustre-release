@@ -2571,9 +2571,9 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
  * its inmemory API.
  */
 void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
-				  const struct dt_rec *fid)
+				  const struct lu_fid *fid)
 {
-	if (!fid_is_namespace_visible((const struct lu_fid *)fid) ||
+	if (!fid_is_namespace_visible(fid) ||
 	    OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
 		param->edp_magic = 0;
 		return;
@@ -2610,9 +2610,9 @@ static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
 
 static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 					struct inode *dir,
-					struct inode  *parent_dir,
-					const struct dt_rec *dot_fid,
-					const struct dt_rec *dot_dot_fid,
+					struct inode *parent_dir,
+					const struct lu_fid *dot_fid,
+					const struct lu_fid *dot_dot_fid,
 					struct osd_thandle *oth)
 {
 	struct ldiskfs_dentry_param *dot_ldp;
@@ -2634,6 +2634,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 						  struct osd_device *osd,
 						  struct osd_object *pobj,
 						  const struct lu_fid *fid,
+						  __u32 type,
 						  struct thandle *th)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
@@ -2646,9 +2647,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-	/* FIXME: Insert index api needs to know the mode of
-	 * the remote object. Just use S_IFDIR for now */
-	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, S_IFDIR);
+	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type);
 	if (IS_ERR(local)) {
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));
@@ -2663,9 +2662,12 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 		RETURN(ERR_PTR(rc));
 	}
 
+	if (!S_ISDIR(type))
+		RETURN(local);
+
 	rc = osd_add_dot_dotdot_internal(info, local, pobj->oo_inode,
-		(const struct dt_rec *)lu_object_fid(&pobj->oo_dt.do_lu),
-		(const struct dt_rec *)fid, oh);
+					 lu_object_fid(&pobj->oo_dt.do_lu),
+					 fid, oh);
 	if (rc != 0) {
 		CERROR("%s: "DFID" add dot dotdot error: rc = %d\n",
 			osd_name(osd), PFID(fid), rc);
@@ -3569,7 +3571,7 @@ static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
 }
 
 static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
-			  struct lu_fid *fid)
+			  const struct lu_fid *fid)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	ENTRY;
@@ -3909,9 +3911,9 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
  * \retval -ve, on error
  */
 static int __osd_ea_add_rec(struct osd_thread_info *info,
-                            struct osd_object *pobj, struct inode  *cinode,
-                            const char *name, const struct dt_rec *fid,
-                            struct htree_lock *hlock, struct thandle *th)
+			    struct osd_object *pobj, struct inode  *cinode,
+			    const char *name, const struct lu_fid *fid,
+			    struct htree_lock *hlock, struct thandle *th)
 {
         struct ldiskfs_dentry_param *ldp;
         struct dentry               *child;
@@ -3950,11 +3952,11 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
  * \retval -ve, on error
  */
 static int osd_add_dot_dotdot(struct osd_thread_info *info,
-                              struct osd_object *dir,
-                              struct inode  *parent_dir, const char *name,
-                              const struct dt_rec *dot_fid,
-                              const struct dt_rec *dot_dot_fid,
-                              struct thandle *th)
+			      struct osd_object *dir,
+			      struct inode *parent_dir, const char *name,
+			      const struct lu_fid *dot_fid,
+			      const struct lu_fid *dot_dot_fid,
+			      struct thandle *th)
 {
         struct inode                *inode = dir->oo_inode;
         struct osd_thandle          *oth;
@@ -3982,8 +3984,8 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 		}
 
 		result = osd_add_dot_dotdot_internal(info, dir->oo_inode,
-						parent_dir, dot_fid,
-						dot_dot_fid, oth);
+						     parent_dir, dot_fid,
+						     dot_dot_fid, oth);
 		if (result == 0)
 			dir->oo_compat_dotdot_created = 1;
 	}
@@ -3997,8 +3999,8 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
  * value, return by respective functions.
  */
 static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
-                          struct inode *cinode, const char *name,
-                          const struct dt_rec *fid, struct thandle *th)
+			  struct inode *cinode, const char *name,
+			  const struct lu_fid *fid, struct thandle *th)
 {
         struct osd_thread_info *info   = osd_oti_get(env);
         struct htree_lock      *hlock;
@@ -4013,9 +4015,10 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
                                            pobj->oo_inode, 0);
                 } else {
 			down_write(&pobj->oo_ext_idx_sem);
-                }
-                rc = osd_add_dot_dotdot(info, pobj, cinode, name,
-                     (struct dt_rec *)lu_object_fid(&pobj->oo_dt.do_lu),
+		}
+
+		rc = osd_add_dot_dotdot(info, pobj, cinode, name,
+					lu_object_fid(&pobj->oo_dt.do_lu),
                                         fid, th);
         } else {
                 if (hlock != NULL) {
@@ -4028,11 +4031,10 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 		if (OBD_FAIL_CHECK(OBD_FAIL_FID_INDIR)) {
 			struct lu_fid *tfid = &info->oti_fid;
 
-			*tfid = *(const struct lu_fid *)fid;
+			*tfid = *fid;
 			tfid->f_ver = ~0;
 			rc = __osd_ea_add_rec(info, pobj, cinode, name,
-					      (const struct dt_rec *)tfid,
-					      hlock, th);
+					      tfid, hlock, th);
 		} else {
 			rc = __osd_ea_add_rec(info, pobj, cinode, name, fid,
 					      hlock, th);
@@ -4359,7 +4361,8 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_device	*osd = osd_dev(dt->do_lu.lo_dev);
-	struct lu_fid		*fid = (struct lu_fid *) rec;
+	struct dt_insert_rec	*rec1	= (struct dt_insert_rec *)rec;
+	const struct lu_fid	*fid	= rec1->rec_fid;
 	const char		*name = (const char *)key;
 	struct osd_thread_info	*oti   = osd_oti_get(env);
 	struct osd_inode_id	*id    = &oti->oti_id;
@@ -4368,14 +4371,14 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	int			rc;
 	ENTRY;
 
-        LASSERT(osd_invariant(obj));
+	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(th != NULL);
+	LASSERT(th != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
-                RETURN(-EACCES);
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
+		RETURN(-EACCES);
 
 	LASSERTF(fid_is_sane(fid), "fid"DFID" is insane!", PFID(fid));
 
@@ -4406,8 +4409,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 			child_inode = igrab(omm->omm_remote_parent->d_inode);
 		} else {
 			child_inode = osd_create_local_agent_inode(env, osd,
-								   obj, fid,
-								   th);
+					obj, fid, rec1->rec_type & S_IFMT, th);
 			if (IS_ERR(child_inode))
 				RETURN(PTR_ERR(child_inode));
 		}
@@ -4424,7 +4426,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 		child_inode = igrab(child->oo_inode);
 	}
 
-	rc = osd_ea_add_rec(env, obj, child_inode, name, rec, th);
+	rc = osd_ea_add_rec(env, obj, child_inode, name, fid, th);
 
 	CDEBUG(D_INODE, "parent %lu insert %s:%lu rc = %d\n",
 	       obj->oo_inode->i_ino, name, child_inode->i_ino, rc);
@@ -5094,7 +5096,7 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	dentry = osd_child_dentry_by_inode(env, dir, ent->oied_name,
 					   ent->oied_namelen);
 	ldp = (struct ldiskfs_dentry_param *)osd_oti_get(env)->oti_ldp;
-	osd_get_ldiskfs_dirent_param(ldp, (const struct dt_rec *)fid);
+	osd_get_ldiskfs_dirent_param(ldp, fid);
 	dentry->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(dir);
 	rc = osd_ldiskfs_add_entry(jh, dentry, inode, hlock);
