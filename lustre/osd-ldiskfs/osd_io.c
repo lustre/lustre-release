@@ -1036,7 +1036,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	/* make sure the over quota flags were not set */
 	lnb[0].flags &= ~(OBD_BRW_OVER_USRQUOTA | OBD_BRW_OVER_GRPQUOTA);
 
-	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid,
+	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   quota_space, oh, true, true, &flags,
 				   ignore_quota);
 
@@ -1446,8 +1446,9 @@ out:
 	 * as llog or last_rcvd files. We needn't enforce quota on those
 	 * objects, so always set the lqi_space as 0. */
 	if (inode != NULL)
-		rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid,
-					   0, oh, true, true, NULL, false);
+		rc = osd_declare_inode_qid(env, i_uid_read(inode),
+					   i_gid_read(inode), 0, oh, true,
+					   true, NULL, false);
 	RETURN(rc);
 }
 
@@ -1611,8 +1612,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);
 
-	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
-				   true, true, NULL, false);
+	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
+				   0, oh, true, true, NULL, false);
 	RETURN(rc);
 }
 

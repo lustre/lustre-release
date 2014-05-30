@@ -726,6 +726,28 @@ static inline bool is_quota_glb_feat(const struct dt_index_features *feat)
 		feat == &dt_quota_bgrp_features) ? true : false;
 }
 
+#ifndef HAVE_I_UID_READ
+static inline uid_t i_uid_read(const struct inode *inode)
+{
+	return inode->i_uid;
+}
+
+static inline gid_t i_gid_read(const struct inode *inode)
+{
+	return inode->i_gid;
+}
+
+static inline void i_uid_write(struct inode *inode, uid_t uid)
+{
+	inode->i_uid = uid;
+}
+
+static inline void i_gid_write(struct inode *inode, gid_t gid)
+{
+	inode->i_gid = gid;
+}
+#endif
+
 /*
  * Invariants, assertions.
  */

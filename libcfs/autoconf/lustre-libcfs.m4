@@ -219,12 +219,29 @@ shrink_control, [
 #
 # LIBCFS_PROCESS_NAMESPACE
 #
-# 3.4 introduced process namespace
+# 3.5 introduced process namespace
 AC_DEFUN([LIBCFS_PROCESS_NAMESPACE], [
 LB_CHECK_LINUX_HEADER([linux/uidgid.h], [
 	AC_DEFINE(HAVE_UIDGID_HEADER, 1,
 		[uidgid.h is present])])
 ]) # LIBCFS_PROCESS_NAMESPACE
+
+#
+# LIBCFS_I_UID_READ
+#
+# 3.5 added helpers to read the new uid/gid types from VFS structures
+# SLE11 SP3 has uidgid.h but not the helpers
+#
+AC_DEFUN([LIBCFS_I_UID_READ], [
+LB_CHECK_COMPILE([if 'i_uid_read' is present],
+i_uid_read, [
+	#include <linux/fs.h>
+],[
+	i_uid_read(NULL);
+],[
+	AC_DEFINE(HAVE_I_UID_READ, 1, [i_uid_read is present])
+])
+]) # LIBCFS_I_UID_READ
 
 #
 # LIBCFS_SOCK_ALLOC_FILE
@@ -331,8 +348,9 @@ LIBCFS_DUMP_TRACE_ADDRESS
 LC_SHRINK_CONTROL
 # 3.0
 LIBCFS_STACKTRACE_WARNING
-# 3.4
+# 3.5
 LIBCFS_PROCESS_NAMESPACE
+LIBCFS_I_UID_READ
 # 3.7
 LIBCFS_SOCK_ALLOC_FILE
 # 3.8
