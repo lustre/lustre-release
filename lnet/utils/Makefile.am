@@ -41,43 +41,19 @@
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
-if LIBLUSTRE
-noinst_LIBRARIES = libuptlctl.a
-endif
-
-libuptlctl_a_SOURCES = portals.c debug.c
-libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
-libuptlctl_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
-
-sbin_PROGRAMS = debugctl
-
 lib_LIBRARIES = libptlctl.a
-
-if LIBLUSTRE
-noinst_LIBRARIES += liblst.a
-liblst_a_SOURCES =
-endif
 
 libptlctl_a_SOURCES = portals.c debug.c
 
+sbin_PROGRAMS =
+
 if UTILS
-sbin_PROGRAMS += ptlctl routerstat wirecheck lst
-if LIBLUSTRE
-sbin_PROGRAMS += lstclient
-endif
+sbin_PROGRAMS += routerstat wirecheck lst
 endif
 
 wirecheck_SOURCES = wirecheck.c
 
-ptlctl_SOURCES = ptlctl.c
-ptlctl_LDADD =  -L. -lptlctl $(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
-ptlctl_DEPENDENCIES = libptlctl.a
-
 routerstat_SOURCES = routerstat.c
-
-debugctl_SOURCES = debugctl.c
-debugctl_LDADD = -L. -lptlctl $(LIBCFSUTIL) $(LIBREADLINE) $(LIBEFENCE)
-debugctl_DEPENDENCIES = libptlctl.a
 
 lst_SOURCES = lst.c
 lst_LDADD = -L. -lptlctl $(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
@@ -86,20 +62,6 @@ lst_DEPENDENCIES = libptlctl.a
 LND_LIBS =
 if BUILD_USOCKLND
 LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
-endif
-
-if LIBLUSTRE
-LIB_SELFTEST = $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a
-
-export AR
-export RANLIB
-
-liblst.a : $(LIB_SELFTEST) $(LND_LIBS)
-	sh $(srcdir)/genlib.sh "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)"
-
-lstclient_SOURCES = lstclient.c
-lstclient_LDADD = -L. -lptlctl -llst $(LIBREADLINE) $(LIBEFENCE) $(PTHREAD_LIBS)
-lstclient_DEPENDENCIES = libptlctl.a liblst.a
 endif
 
 EXTRA_DIST = genlib.sh

@@ -15,7 +15,6 @@ LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
 	     $(top_builddir)/libcfs/libcfs/libcfsutil.a \
 	     $(top_builddir)/libcfs/libcfs/libcfs.a
 
-sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup
 
 EXTRA_PROGRAMS = wirecheck
@@ -24,7 +23,7 @@ if UTILS
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl wiretest l_getidentity llverfs llverdev \
-	llog_reader lr_reader lshowmount lustre_rsync \
+	llog_reader lr_reader lustre_rsync \
 	ll_recover_lost_found_objs ltrack_stats ll_decode_filter_fid
 if SERVER
 sbin_PROGRAMS += mkfs.lustre tunefs.lustre
@@ -63,8 +62,6 @@ lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
 ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
 ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
-
-lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

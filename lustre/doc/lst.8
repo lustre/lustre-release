@@ -36,27 +36,15 @@ There are two types of nodes for LNET self-test: the console node and
 test nodes. Both node types require all previously-specified modules
 to be loaded. (The userspace test node does not require these modules.)
 .LP
-Test nodes can be in either kernel or userspace.  A console user can
-invite a kernel test node to join the test session by running
-.I "lst add_group NID",
-but the user cannot actively add a userspace test node to the
-test-session.  However, the console user can passively accept a test
-node to the test session while the test node runs lstclient to connect
-to the console.
-.SH UTILITIES
-LNET self-test has two user utilities, lst and lstclient.
+A console user can invite a test node to join the test session by running
+lst add_group \fINID\fR.
 .LP
+.SH UTILITIES
 .B lst
 is the user interface for the self-test console (run on console node).
 It provides a list of commands to control the entire test system,
 such as create session, create test groups, etc.
 .LP
-.B lstclient
-is the userspace self-test program, which is linked with userspace
-LNDs and LNET. A user can use lstclient to join a self-test session:
-.nf
-lstclient -sesid CONSOLE_NID group NAME
-.fi
 .SH EXAMPLE SCRIPT
 Below is a sample LNET self-test script which simulates the traffic
 pattern of a set of Lustre servers on a TCP network, accessed by Lustre
