@@ -173,6 +173,10 @@ AS_IF([test "$lb_cv_cross" = x86_64-k1om-linux -o \
 		AC_MSG_WARN([Disabling server (not supported for $lb_cv_cross).])
 		enable_server="no"
 	])
+	AS_IF([test "x$enable_mpitests" != xno], [
+		AC_MSG_WARN([Disabling MPI tests (not supported for $lb_cv_cross).])
+		enable_mpitests="no"
+	])
 ])
 AC_SUBST(CROSS_VARS)
 AC_SUBST(CROSS_PATH)

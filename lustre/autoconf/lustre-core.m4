@@ -1601,15 +1601,15 @@ AC_MSG_RESULT([$enable_client])
 #
 AC_DEFUN([LB_CONFIG_MPITESTS], [
 AC_ARG_ENABLE([mpitests],
-	AC_HELP_STRING([--enable-mpitests==yes|no|mpicc wrapper],
+	AC_HELP_STRING([--enable-mpitests=<yes|no|mpicc wrapper>],
 		       [include mpi tests]), [
-		enable_mpitests=yes
+		enable_mpitests="yes"
 		case $enableval in
 		yes)
-			MPICC_WRAPPER=mpicc
+			MPICC_WRAPPER="mpicc"
 			;;
 		no)
-			enable_mpitests=no
+			enable_mpitests="no"
 			;;
 		*)
 			MPICC_WRAPPER=$enableval
@@ -1617,22 +1617,22 @@ AC_ARG_ENABLE([mpitests],
 		esac
 	], [
 		enable_mpitests="yes"
-		MPICC_WRAPPER=mpicc
+		MPICC_WRAPPER="mpicc"
 	])
 
-	if test x$enable_mpitests != xno; then
+	if test "x$enable_mpitests" != "xno"; then
 		oldcc=$CC
 		CC=$MPICC_WRAPPER
 		AC_CACHE_CHECK([whether mpitests can be built],
-				lb_cv_mpi_tests, [
-		AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+		lb_cv_mpi_tests, [AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 			#include <mpi.h>
 			int main(void) {
 				int flag;
 				MPI_Initialized(&flag);
 				return 0;
 			}
-		])], [], [enable_mpitests="no"])
+		])], [lb_cv_mpi_tests="yes"], [lb_cv_mpi_tests="no"
+			enable_mpitests=$lb_cv_mpi_tests])
 		])
 		CC=$oldcc
 	fi
