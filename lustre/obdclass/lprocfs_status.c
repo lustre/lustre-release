@@ -2487,7 +2487,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
 		}
 	}
         /* Specified units override the multiplier */
-        if (units)
+	if (units > 1)
                 mult = mult < 0 ? -units : units;
 
         frac *= mult;
