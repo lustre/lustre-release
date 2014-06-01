@@ -819,7 +819,7 @@ int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
 
 static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 				       int pages, unsigned long *blocks,
-				       int create, struct mutex *optional_mutex)
+				       int create)
 {
 	int rc;
 
@@ -828,11 +828,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 						     blocks, create);
 		return rc;
 	}
-	if (optional_mutex != NULL)
-		mutex_lock(optional_mutex);
 	rc = osd_ldiskfs_map_bm_inode_pages(inode, page, pages, blocks, create);
-	if (optional_mutex != NULL)
-		mutex_unlock(optional_mutex);
 
 	return rc;
 }
@@ -907,8 +903,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         if (iobuf->dr_npages) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
 						 iobuf->dr_npages,
-						 iobuf->dr_blocks,
-						 0, NULL);
+						 iobuf->dr_blocks, 0);
                 if (likely(rc == 0)) {
                         rc = osd_do_bio(osd, inode, iobuf);
                         /* do IO stats for preparation reads */
@@ -1111,8 +1106,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
         } else if (iobuf->dr_npages > 0) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
 						 iobuf->dr_npages,
-						 iobuf->dr_blocks,
-						 1, NULL);
+						 iobuf->dr_blocks, 1);
         } else {
                 /* no pages to write, no transno is needed */
                 thandle->th_local = 1;
@@ -1201,8 +1195,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         if (iobuf->dr_npages) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
 						 iobuf->dr_npages,
-						 iobuf->dr_blocks,
-						 0, NULL);
+						 iobuf->dr_blocks, 0);
                 rc = osd_do_bio(osd, inode, iobuf);
 
                 /* IO stats will be done in osd_bufs_put() */
