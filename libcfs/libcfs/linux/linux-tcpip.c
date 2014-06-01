@@ -374,19 +374,13 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
         LASSERT (ticks > 0);
 
         for (;;) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
+		struct kvec  iov = {
+			.iov_base = buffer,
+			.iov_len  = nob
+		};
+		struct msghdr msg = {
+			.msg_flags      = 0
+		};
 
                 /* Set receive timeout to remaining time */
                 tv = (struct timeval) {
@@ -403,11 +397,9 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
                         return rc;
                 }
 
-                set_fs(KERNEL_DS);
-                then = jiffies;
-                rc = sock_recvmsg(sock, &msg, iov.iov_len, 0);
-                ticks -= jiffies - then;
-                set_fs(oldmm);
+		then = jiffies;
+		rc = kernel_recvmsg(sock, &msg, &iov, 1, nob, 0);
+		ticks -= jiffies - then;
 
                 if (rc < 0)
                         return rc;
