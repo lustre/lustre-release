@@ -300,20 +300,14 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
         /* Caller may pass a zero timeout if she thinks the socket buffer is
          * empty enough to take the whole message immediately */
 
-        for (;;) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = (timeout == 0) ? MSG_DONTWAIT : 0
-                };
+	for (;;) {
+		struct kvec  iov = {
+			.iov_base = buffer,
+			.iov_len  = nob
+		};
+		struct msghdr msg = {
+			.msg_flags	= (timeout == 0) ? MSG_DONTWAIT : 0
+		};
 
                 if (timeout != 0) {
                         /* Set send timeout to remaining time */
@@ -333,11 +327,9 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
                         }
                 }
 
-                set_fs (KERNEL_DS);
-                then = jiffies;
-                rc = sock_sendmsg (sock, &msg, iov.iov_len);
-                ticks -= jiffies - then;
-                set_fs (oldmm);
+		then = jiffies;
+		rc = kernel_sendmsg(sock, &msg, &iov, 1, nob);
+		ticks -= jiffies - then;
 
                 if (rc == nob)
                         return 0;
