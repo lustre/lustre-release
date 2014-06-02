@@ -68,6 +68,23 @@ ext_pblock, [
 ]) # LB_EXT_PBLOCK
 
 #
+# LB_EXT4_JOURNAL_START_3ARGS
+#
+# 3.9 added a type argument to ext4_journal_start and friends
+#
+AC_DEFUN([LB_EXT4_JOURNAL_START_3ARGS], [
+LB_CHECK_COMPILE([if ext4_journal_start takes 3 arguments],
+ext4_journal_start, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+],[
+	ext4_journal_start(NULL, 0, 0);
+],[
+	AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1, [ext4_journal_start takes 3 arguments])
+])
+]) # LB_EXT4_JOURNAL_START_3ARGS
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -144,6 +161,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LDISKFS_AC_PATCH_PROGRAM
 	LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 	LB_EXT_PBLOCK
+	LB_EXT4_JOURNAL_START_3ARGS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
