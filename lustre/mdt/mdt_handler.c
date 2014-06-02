@@ -2878,6 +2878,11 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
+	    cfs_fail_val ==
+	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id)
+		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE, HZ * 3);
+
 	rc = tgt_connect(tsi);
 	if (rc != 0)
 		RETURN(rc);
@@ -4901,12 +4906,14 @@ static int mdt_connect_internal(struct obd_export *exp,
 	data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
 	data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
-	/* If no known bits (which should not happen, probably,
-	   as everybody should support LOOKUP and UPDATE bits at least)
-	   revert to compat mode with plain locks. */
-	if (!data->ocd_ibits_known &&
-	    data->ocd_connect_flags & OBD_CONNECT_IBITS)
-		data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
+	if (!(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
+	    !(data->ocd_connect_flags & OBD_CONNECT_IBITS)) {
+		CWARN("%s: client %s does not support ibits lock, either "
+		      "very old or an invalid client: flags "LPX64"\n",
+		      mdt_obd_name(mdt), exp->exp_client_uuid.uuid,
+		      data->ocd_connect_flags);
+		return -EBADE;
+	}
 
 	if (!mdt->mdt_opts.mo_acl)
 		data->ocd_connect_flags &= ~OBD_CONNECT_ACL;

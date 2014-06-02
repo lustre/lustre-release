@@ -12717,6 +12717,26 @@ test_239() {
 }
 run_test 239 "osp_sync test"
 
+test_240() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir -p $DIR/$tdir
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 ||
+		error "failed to mkdir $DIR/$tdir/d0 on MDT0"
+	$LFS mkdir -i 1 $DIR/$tdir/d0/d1 ||
+		error "failed to mkdir $DIR/$tdir/d0/d1 on MDT1"
+
+	umount_client $MOUNT || error "umount failed"
+	#define OBD_FAIL_TGT_DELAY_CONDITIONAL	 0x713
+	do_facet mds2 lctl set_param fail_loc=0x713 fail_val=1
+	mount_client $MOUNT || error "failed to mount client"
+
+	echo "stat $DIR/$tdir/d0/d1, should not fail/ASSERT"
+	stat $DIR/$tdir/d0/d1 || error "fail to stat $DIR/$tdir/d0/d1"
+}
+run_test 240 "race between ldlm enqueue and the connection RPC (no ASSERT)"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
