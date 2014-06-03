@@ -1148,7 +1148,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
         struct timeval start, end;
         unsigned long timediff;
-        int rc = 0, i, m = 0, cache = 0;
+	int rc = 0, i, m = 0, cache = 0, cache_hits = 0, cache_misses = 0;
 
         LASSERT(inode);
 
@@ -1176,21 +1176,29 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
                         lnb[i].rc = lnb[i].len;
                 m += lnb[i].len;
 
-                lprocfs_counter_add(osd->od_stats, LPROC_OSD_CACHE_ACCESS, 1);
-                if (PageUptodate(lnb[i].page)) {
-                        lprocfs_counter_add(osd->od_stats,
-                                            LPROC_OSD_CACHE_HIT, 1);
-                } else {
-                        lprocfs_counter_add(osd->od_stats,
-                                            LPROC_OSD_CACHE_MISS, 1);
-                        osd_iobuf_add_page(iobuf, lnb[i].page);
-                }
+		if (PageUptodate(lnb[i].page)) {
+			cache_hits++;
+		} else {
+			cache_misses++;
+			osd_iobuf_add_page(iobuf, lnb[i].page);
+		}
+
 		if (cache == 0)
 			generic_error_remove_page(inode->i_mapping,lnb[i].page);
 	}
 	do_gettimeofday(&end);
 	timediff = cfs_timeval_sub(&end, &start, NULL);
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
+
+	if (cache_hits != 0)
+		lprocfs_counter_add(osd->od_stats, LPROC_OSD_CACHE_HIT,
+				    cache_hits);
+	if (cache_misses != 0)
+		lprocfs_counter_add(osd->od_stats, LPROC_OSD_CACHE_MISS,
+				    cache_misses);
+	if (cache_hits + cache_misses != 0)
+		lprocfs_counter_add(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
+				    cache_hits + cache_misses);
 
         if (iobuf->dr_npages) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
