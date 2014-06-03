@@ -440,28 +440,6 @@ static int ll_intent_file_open(struct file *file, void *lmm, int lmmsize,
 	op_data->op_data = lmm;
 	op_data->op_data_size = lmmsize;
 
-	if (parent == de) {
-		/*
-		 * Fixup for NFS export open.
-		 *
-		 * We're called in the context of NFS export, and parent
-		 * unknown, use parent fid saved in lli_pfid which will
-		 * be used by MDS to create data.
-		 */
-		struct ll_inode_info *lli = ll_i2info(de->d_inode);
-
-		spin_lock(&lli->lli_lock);
-		op_data->op_fid1 = lli->lli_pfid;
-		spin_unlock(&lli->lli_lock);
-
-		LASSERT(fid_is_sane(&op_data->op_fid1));
-		/** We ignore parent's capability temporary. */
-		if (op_data->op_capa1 != NULL) {
-			capa_put(op_data->op_capa1);
-			op_data->op_capa1 = NULL;
-		}
-	}
-
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
 			    &ll_md_blocking_ast, 0);
 	ll_finish_md_op_data(op_data);

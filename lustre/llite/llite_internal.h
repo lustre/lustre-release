@@ -135,34 +135,33 @@ struct ll_inode_info {
 	struct hlist_head		*lli_remote_perms;
 	struct mutex			lli_rmtperm_mutex;
 
-        /* identifying fields for both metadata and data stacks. */
-        struct lu_fid                   lli_fid;
-        /* Parent fid for accessing default stripe data on parent directory
-         * for allocating OST objects after a mknod() and later open-by-FID. */
-        struct lu_fid                   lli_pfid;
+	/* identifying fields for both metadata and data stacks. */
+	struct lu_fid			lli_fid;
+	/* master inode fid for stripe directory */
+	struct lu_fid			lli_pfid;
 
 	struct list_head		lli_close_list;
 	struct list_head		lli_oss_capas;
 	/* open count currently used by capability only, indicate whether
 	 * capability needs renewal */
-	atomic_t                    lli_open_count;
-	struct obd_capa                *lli_mds_capa;
-	cfs_time_t                      lli_rmtperm_time;
+	atomic_t			lli_open_count;
+	struct obd_capa		       *lli_mds_capa;
+	cfs_time_t			lli_rmtperm_time;
 
-        /* handle is to be sent to MDS later on done_writing and setattr.
-         * Open handle data are needed for the recovery to reconstruct
-         * the inode state on the MDS. XXX: recovery is not ready yet. */
-        struct obd_client_handle       *lli_pending_och;
+	/* handle is to be sent to MDS later on done_writing and setattr.
+	 * Open handle data are needed for the recovery to reconstruct
+	 * the inode state on the MDS. XXX: recovery is not ready yet. */
+	struct obd_client_handle       *lli_pending_och;
 
-        /* We need all three because every inode may be opened in different
-         * modes */
-        struct obd_client_handle       *lli_mds_read_och;
-        struct obd_client_handle       *lli_mds_write_och;
-        struct obd_client_handle       *lli_mds_exec_och;
-        __u64                           lli_open_fd_read_count;
-        __u64                           lli_open_fd_write_count;
-        __u64                           lli_open_fd_exec_count;
-        /* Protects access to och pointers and their usage counters */
+	/* We need all three because every inode may be opened in different
+	 * modes */
+	struct obd_client_handle       *lli_mds_read_och;
+	struct obd_client_handle       *lli_mds_write_och;
+	struct obd_client_handle       *lli_mds_exec_och;
+	__u64				lli_open_fd_read_count;
+	__u64				lli_open_fd_write_count;
+	__u64				lli_open_fd_exec_count;
+	/* Protects access to och pointers and their usage counters */
 	struct mutex			lli_och_mutex;
 
 	struct inode			lli_vfs_inode;

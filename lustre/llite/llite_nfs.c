@@ -142,19 +142,6 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 		RETURN(result);
 	}
 
-	/**
-	 * In case d_obtain_alias() found a disconnected dentry, always update
-	 * lli_pfid to allow later operation (normally open) have parent fid,
-	 * which may be used by MDS to create data.
-	 */
-	if (parent != NULL) {
-		struct ll_inode_info *lli = ll_i2info(inode);
-
-		spin_lock(&lli->lli_lock);
-		lli->lli_pfid = *parent;
-		spin_unlock(&lli->lli_lock);
-	}
-
         RETURN(result);
 }
 
