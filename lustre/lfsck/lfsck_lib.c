@@ -2636,7 +2636,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 {
 	struct lfsck_instance	*lfsck;
 	struct lfsck_tgt_descs	*ltds;
-	struct lfsck_tgt_desc	*ltd	= NULL;
+	struct lfsck_tgt_desc	*ltd;
 	struct list_head	*head;
 
 	if (for_ost)
@@ -2655,6 +2655,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		}
 	}
 
+	ltd = NULL;
 	lfsck = __lfsck_instance_find(key, true, false);
 	spin_unlock(&lfsck_instance_lock);
 	if (unlikely(lfsck == NULL))
