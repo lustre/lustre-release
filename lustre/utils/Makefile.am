@@ -11,9 +11,11 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 MNTMODLDFLAGS := -rdynamic -ldl
 MNTMODCFLAGS := -DPLUGIN_DIR=\"${pkglibdir}\"
 
+LIBCFSUTIL := $(top_builddir)/libcfs/libcfs/libcfsutil.a
+
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
-	     $(top_builddir)/libcfs/libcfs/libcfsutil.a \
-	     $(top_builddir)/libcfs/libcfs/libcfs.a
+	     $(top_builddir)/libcfs/libcfs/libcfs.a \
+	     $(LIBCFSUTIL)
 
 sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup
@@ -48,9 +50,9 @@ lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
 lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
-lfs_SOURCES = lfs.c obd.c lustre_cfg.c
-lfs_LDADD := liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
-lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+lfs_SOURCES = lfs.c
+lfs_LDADD := liblustreapi.a $(LIBCFSUTIL) $(LIBREADLINE)
+lfs_DEPENDENCIES := liblustreapi.a
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)

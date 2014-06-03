@@ -248,9 +248,6 @@ extern int llapi_search_mounts(const char *pathname, int index,
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern int llapi_getname(const char *path, char *buf, size_t size);
 
-extern void llapi_ping_target(char *obd_type, char *obd_name,
-                              char *obd_uuid, void *args);
-
 extern int llapi_search_rootpath(char *pathname, const char *fsname);
 extern int llapi_nodemap_exists(const char *name);
 extern int llapi_mv(char *path, struct find_param *param);

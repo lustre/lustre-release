@@ -67,10 +67,8 @@
 
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfsutil.h>
-#include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
 #include <lustre_ver.h>
-#include "obdctl.h"
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -2029,9 +2027,7 @@ static int lfs_check(int argc, char **argv)
                 return rc;
         }
 
-        rc = llapi_target_iterate(num_types, obd_types,
-                                  mntdir, llapi_ping_target);
-
+	rc = llapi_target_check(num_types, obd_types, mntdir);
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
                                 argv[0],argv[1]);
@@ -3849,10 +3845,6 @@ int main(int argc, char **argv)
 
         setlinebuf(stdout);
 
-        ptl_initialize(argc, argv);
-        if (obd_initialize(argc, argv) < 0)
-                exit(2);
-
         Parser_init("lfs > ", cmdlist);
 
         if (argc > 1) {
@@ -3861,7 +3853,6 @@ int main(int argc, char **argv)
                 rc = Parser_commands();
         }
 
-        obd_finalize(argc, argv);
         return rc < 0 ? -rc : rc;
 }
 
