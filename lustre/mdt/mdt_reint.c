@@ -1118,6 +1118,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (rc)
                 GOTO(out_unlock_parent, rc);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
+
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
@@ -1878,6 +1880,10 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 			       PFID(new_fid));
 			GOTO(out_put_new, rc = -EXDEV);
 		}
+
+		if (S_ISDIR(lu_object_attr(&mnew->mot_obj)) &&
+		    !S_ISDIR(lu_object_attr(&mold->mot_obj)))
+			GOTO(out_put_new, rc = -EISDIR);
 
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
 		mdt_lock_reg_init(lh_oldp, LCK_EX);
