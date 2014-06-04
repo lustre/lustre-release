@@ -12626,6 +12626,13 @@ run_test 237 "Verify name_to_handle_at/open_by_handle_at syscalls"
 
 # LU-4659 linkea consistency
 test_238() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.57) ]] ||
+		[[ $server_version -gt $(version_code 2.5.1) &&
+		   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.58 or 2.5.2+"; return; }
+
 	touch $DIR/$tfile
 	ln $DIR/$tfile $DIR/$tfile.lnk
 	touch $DIR/$tfile.new
