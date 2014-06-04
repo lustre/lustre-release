@@ -88,6 +88,10 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define module_init(a)     late_initcall(a)
 #endif
 
+#ifndef MODULE_ALIAS_FS
+#define MODULE_ALIAS_FS(name)
+#endif
+
 #define LTIME_S(time)                   (time.tv_sec)
 
 #ifdef HAVE_GENERIC_PERMISSION_2ARGS
