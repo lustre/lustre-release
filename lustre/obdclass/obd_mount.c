@@ -1294,7 +1294,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
         if (lmd_is_client(lmd)) {
                 CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
-                if (!client_fill_super) {
+		if (client_fill_super == NULL)
+			request_module("lustre");
+		if (client_fill_super == NULL) {
                         LCONSOLE_ERROR_MSG(0x165, "Nothing registered for "
                                            "client mount! Is the 'lustre' "
                                            "module loaded?\n");
@@ -1400,6 +1402,7 @@ struct file_system_type lustre_fs_type = {
 	.fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV |
 			FS_HAS_FIEMAP | FS_RENAME_DOES_D_MOVE,
 };
+MODULE_ALIAS_FS("lustre");
 
 int lustre_register_fs(void)
 {
