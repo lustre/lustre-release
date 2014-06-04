@@ -488,7 +488,7 @@ static inline int ofd_grant_prohibit(struct obd_export *exp,
 
 void ofd_grant_sanity_check(struct obd_device *obd, const char *func);
 long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       obd_size want, bool conservative);
+		       obd_size want, bool new_conn);
 void ofd_grant_discard(struct obd_export *exp);
 void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa);

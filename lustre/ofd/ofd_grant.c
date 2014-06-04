@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,15 +23,31 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
- *
+ */
+/*
  * lustre/ofd/ofd_grant.c
  *
- * Author: Johann Lombardi <johann@whamcloud..com>
+ * This file provides code related to grant space management on Object Storage
+ * Targets (OSTs). Grant is a mechanism used by client nodes to reserve disk
+ * space on OSTs for the data writeback cache. The Lustre client is thus assured
+ * that enough space will be available when flushing dirty pages asynchronously.
+ * Each client node is granted an initial amount of reserved space at connect
+ * time and gets additional space back from OST in bulk write reply.
+ *
+ * This file handles the core logic for:
+ * - grant allocation strategy
+ * - maintaining per-client as well as global grant space accounting
+ * - processing grant information packed in incoming requests
+ * - allocating server-side grant space for synchronous write RPCs which did not
+ *   consume grant on the client side (OBD_BRW_FROM_GRANT flag not set). If not
+ *   enough space is available, such RPCs fail with ENOSPC
+ *
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -84,24 +96,31 @@ static inline obd_size ofd_grant_chunk(struct obd_export *exp,
 }
 
 /**
- * Perform extra sanity checks for grant accounting. This is done at connect,
- * disconnect, and statfs RPC time, so it shouldn't be too bad. We can
- * always get rid of it or turn it off when we know accounting is good.
+ * Perform extra sanity checks for grant accounting.
  *
- * \param obd - is the device to check
- * \param func - is the function to call if an inconsistency is found
+ * This function scans the export list, sanity checks per-export grant counters
+ * and verifies accuracy of global grant accounting. If an inconsistency is
+ * found, a CERROR is printed with the function name \func that was passed as
+ * argument. LBUG is only called in case of serious counter corruption (i.e.
+ * value larger than the device size).
+ * Those sanity checks can be pretty expensive and are disabled if the OBD
+ * device has more than 100 connected exports.
+ *
+ * \param[in] obd	OBD device for which grant accounting should be
+ *			verified
+ * \param[in] func	caller's function name
  */
 void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 {
-	struct filter_export_data	*fed;
-	struct ofd_device		*ofd = ofd_dev(obd->obd_lu_dev);
-	struct obd_export		*exp;
-	obd_size			 maxsize;
-	obd_size			 tot_dirty = 0;
-	obd_size			 tot_pending = 0;
-	obd_size			 tot_granted = 0;
-	obd_size			 fo_tot_dirty, fo_tot_pending;
-	obd_size			 fo_tot_granted;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_export	*exp;
+	obd_size		 maxsize;
+	obd_size		 tot_dirty = 0;
+	obd_size		 tot_pending = 0;
+	obd_size		 tot_granted = 0;
+	obd_size		 fo_tot_granted;
+	obd_size		 fo_tot_pending;
+	obd_size		 fo_tot_dirty;
 
 	if (cfs_list_empty(&obd->obd_exports))
 		return;
@@ -116,7 +135,8 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 	spin_lock(&obd->obd_dev_lock);
 	spin_lock(&ofd->ofd_grant_lock);
 	cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
-		int error = 0;
+		struct filter_export_data	*fed;
+		int				 error = 0;
 
 		fed = &exp->exp_filter_data;
 
@@ -180,15 +200,19 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 }
 
 /**
- * Get fresh statfs information from the OSD layer if the cache is older than 1s
- * or if force is set. The OSD layer is in charge of estimating data & metadata
- * overhead.
+ * Update cached statfs information from the OSD layer
  *
- * \param env - is the lu environment passed by the caller
- * \param exp - export used to print client info in debug messages
- * \param force - is used to force a refresh of statfs information
- * \param from_cache - returns whether the statfs information are
- *		     taken from cache
+ * Refresh statfs information cached in ofd::ofd_osfs if the cache is older
+ * than 1s or if force is set. The OSD layer is in charge of estimating data &
+ * metadata overhead.
+ * This function can sleep so it should not be called with any spinlock held.
+ *
+ * \param[in] env		LU environment passed by the caller
+ * \param[in] exp		export used to print client info in debug
+ *				messages
+ * \param[in] force		force a refresh of statfs information
+ * \param[out] from_cache	returns whether the statfs information are
+ *				taken from cache
  */
 static void ofd_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 			     int force, int *from_cache)
@@ -218,19 +242,25 @@ static void ofd_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Figure out how much space is available on the backend filesystem.
+ * Figure out how much space is available on the backend filesystem after
+ * removing grant space already booked by clients.
+ *
  * This is done by accessing cached statfs data previously populated by
  * ofd_grant_statfs(), from which we withdraw the space already granted to
  * clients and the reserved space.
+ * Caller must hold ofd_grant_lock spinlock.
  *
- * \param exp - export which received the write request
+ * \param[in] exp	export associated with the device for which the amount
+ *			of available space is requested
+ * \retval		amount of non-allocated space, in bytes
  */
 static obd_size ofd_grant_space_left(struct obd_export *exp)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct ofd_device	*ofd = ofd_exp(exp);
 	obd_size		 tot_granted;
-	obd_size		 left, avail;
+	obd_size		 left;
+	obd_size		 avail;
 	obd_size		 unstable;
 
 	ENTRY;
@@ -282,13 +312,16 @@ static obd_size ofd_grant_space_left(struct obd_export *exp)
 }
 
 /**
+ * Process grant information from obdo structure packed in incoming BRW
+ *
  * Grab the dirty and seen grant announcements from the incoming obdo.
  * We will later calculate the client's new grant and return it.
  * Caller must hold ofd_grant_lock spinlock.
  *
- * \param env - is the lu environment supplying osfs storage
- * \param exp - is the export for which we received the request
- * \paral oa - is the incoming obdo sent by the client
+ * \param[in] env	LU environment supplying osfs storage
+ * \param[in] exp	export for which we received the request
+ * \param[in,out] oa	incoming obdo sent by the client
+ *
  */
 static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 			       struct obdo *oa)
@@ -296,7 +329,9 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	struct filter_export_data	*fed;
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct obd_device		*obd = exp->exp_obd;
-	long				 dirty, dropped, grant_chunk;
+	long				 dirty;
+	long				 dropped;
+	long				 grant_chunk;
 	ENTRY;
 
 	assert_spin_locked(&ofd->ofd_grant_lock);
@@ -359,18 +394,21 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Called when the client is able to release some grants. Proceed with the
- * shrink request when there is less ungranted space remaining
- * than the amount all of the connected clients would consume if they
- * used their full grant.
+ * Grant shrink request handler.
  *
- * \param exp - is the export for which we received the request
- * \paral oa - is the incoming obdo sent by the client
- * \param left_space - is the remaining free space with space already granted
- *		     taken out
+ * Client nodes can explicitly release grant space (i.e. process called grant
+ * shrinking). This function proceeds with the shrink request when there is
+ * less ungranted space remaining than the amount all of the connected clients
+ * would consume if they used their full grant.
+ * Caller must hold ofd_grant_lock spinlock.
+ *
+ * \param[in] exp		export releasing grant space
+ * \param[in,out] oa		incoming obdo sent by the client
+ * \param[in] left_space	remaining free space with space already granted
+ *				taken out
  */
-static void ofd_grant_shrink(struct obd_export *exp,
-			     struct obdo *oa, obd_size left_space)
+static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
+			     obd_size left_space)
 {
 	struct filter_export_data	*fed;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -399,12 +437,27 @@ static void ofd_grant_shrink(struct obd_export *exp,
 
 /**
  * Calculate how much space is required to write a given network buffer
+ *
+ * This function takes block alignment into account to estimate how much on-disk
+ * space will be required to successfully write the whole niobuf.
+ * Estimated space is inflated if the export does not support
+ * OBD_CONNECT_GRANT_PARAM and if the backend filesystem has a block size
+ * larger than the minimal supported page size (i.e. 4KB).
+ *
+ * \param[in] exp	export associated which the write request
+ * \param[in] ofd	ofd device handling the request
+ * \param[in] rnb	network buffer to estimate size of
+ *
+ * \retval		space (in bytes) that will be consumed to write the
+ *			network buffer
  */
 static inline int ofd_grant_rnb_size(struct obd_export *exp,
 				     struct ofd_device *ofd,
 				     struct niobuf_remote *rnb)
 {
-	obd_size blocksize, bytes, end;
+	obd_size blocksize;
+	obd_size bytes;
+	obd_size end;
 
 	if (exp && ofd_grant_compat(exp, ofd))
 		blocksize = 1ULL << COMPAT_BSIZE_SHIFT;
@@ -424,24 +477,28 @@ static inline int ofd_grant_rnb_size(struct obd_export *exp,
 	return bytes;
 }
 
-
 /**
+ * Validate grant accounting for each incoming remote network buffer.
+ *
  * When clients have dirtied as much space as they've been granted they
- * fall through to sync writes.  These sync writes haven't been expressed
+ * fall through to sync writes. These sync writes haven't been expressed
  * in grants and need to error with ENOSPC when there isn't room in the
- * filesystem for them after grants are taken into account.  However,
+ * filesystem for them after grants are taken into account. However,
  * writeback of the dirty data that was already granted space can write
  * right on through.
+ * The OBD_BRW_GRANTED flag will be set in the rnb_flags of each network
+ * buffer which has been granted enough space to proceed. Buffers without
+ * this flag will fail to be written with -ENOSPC (see ofd_preprw_write().
  * Caller must hold ofd_grant_lock spinlock.
  *
- * \param env - is the lu environment passed by the caller
- * \param exp - is the export identifying the client which sent the RPC
- * \param oa  - is the incoming obdo in which we should return the pack the
- *	      additional grant
- * \param rnb - is the list of network buffers
- * \param niocont - is the number of network buffers in the list
- * \param left - is the remaining free space with space already granted
- *	       taken out
+ * \param[in] env	LU environment passed by the caller
+ * \param[in] exp	export identifying the client which sent the RPC
+ * \param[in] oa	incoming obdo in which we should return the pack the
+ *			additional grant
+ * \param[in,out] rnb	the list of network buffers
+ * \param[in] niocont	the number of network buffers in the list
+ * \param[in] left	the remaining free space with space already granted
+ *			taken out
  */
 static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa, struct niobuf_remote *rnb,
@@ -579,19 +636,27 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
+ * Allocate additional grant space to a client
+ *
  * Calculate how much grant space to return to client, based on how much space
  * is currently free and how much of that is already granted.
  * Caller must hold ofd_grant_lock spinlock.
  *
- * \param exp - is the export of the client which sent the request
- * \param curgrant - is the current grant claimed by the client
- * \param want - is how much grant space the client would like to have
- * \param left - is the remaining free space with granted space taken out
- * \param conservative - is how server grants, if true, a certain amount, else
- *        server will grant as client requested.
+ * \param[in] exp		export of the client which sent the request
+ * \param[in] curgrant		current grant claimed by the client
+ * \param[in] want		how much grant space the client would like to
+ *				have
+ * \param[in] left		remaining free space with granted space taken
+ *				out
+ * \param[in] conservative	if set to true, the server should be cautious
+ *				and limit how much space is granted back to the
+ *				client. Otherwise, the server should try hard to
+ *				satisfy the client request.
+ *
+ * \retval			amount of grant space allocated
  */
-static long ofd_grant(struct obd_export *exp, obd_size curgrant,
-		      obd_size want, obd_size left, bool conservative)
+static long ofd_grant_alloc(struct obd_export *exp, obd_size curgrant,
+			    obd_size want, obd_size left, bool conservative)
 {
 	struct obd_device		*obd = exp->exp_obd;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -672,17 +737,23 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 }
 
 /**
- * Client connection or reconnection.
+ * Handle grant space allocation on client connection & reconnection.
  *
- * \param env - is the lu environment provided by the caller
- * \param exp - is the client's export which is reconnecting
- * \param want - is how much the client would like to get
- * \param conservative - is how server grants to client, if true server will
- *        only grant certain amount, else server will grant client requested
- *        amount.
+ * A new non-readonly connection gets an initial grant allocation equals to
+ * ofd_grant_chunk() (i.e. twice the max BRW size in most of the cases).
+ * On reconnection, grant counters between client & OST are resynchronized
+ * and additional space might be granted back if possible.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] exp	client's export which is (re)connecting
+ * \param[in] want	how much grant space the client would like to get
+ * \param[in] new_conn	must set to true if this is a new connection and false
+ *			for a reconnection
+ *
+ * \retval		amount of grant space currently owned by the client
  */
 long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       obd_size want, bool conservative)
+		       obd_size want, bool new_conn)
 {
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
@@ -713,8 +784,9 @@ refresh:
 		goto refresh;
 	}
 
-	ofd_grant(exp, ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant),
-		  want, left, conservative);
+	ofd_grant_alloc(exp,
+			ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant),
+			want, left, new_conn);
 
 	/* return to client its current grant */
 	grant = ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant);
@@ -730,12 +802,14 @@ refresh:
 }
 
 /**
+ * Release all grant space attached to a given export.
+ *
  * Remove a client from the grant accounting totals.  We also remove
  * the export from the obd device under the osfs and dev locks to ensure
  * that the ofd_grant_sanity_check() calculations are always valid.
  * The client should do something similar when it invalidates its import.
  *
- * \param exp - is the client's export to remove from grant accounting
+ * \param[in] exp	client's export to remove from grant accounting
  */
 void ofd_grant_discard(struct obd_export *exp)
 {
@@ -766,13 +840,17 @@ void ofd_grant_discard(struct obd_export *exp)
 }
 
 /**
- * Called at prepare time when handling read request. This function extracts
- * incoming grant information from the obdo and processes the grant shrink
- * request, if any.
+ * Process grant information from incoming bulk read request.
  *
- * \param env - is the lu environment provided by the caller
- * \param exp - is the export of the client which sent the request
- * \paral oa - is the incoming obdo sent by the client
+ * Extract grant information packed in obdo structure (OBD_MD_FLGRANT set in
+ * o_valid). Bulk reads usually comes with grant announcements (number of dirty
+ * blocks, remaining amount of grant space, ...) and could also include a grant
+ * shrink request. Unlike bulk write, no additional grant space is returned on
+ * bulk read request.
+ *
+ * \param[in] env	is the lu environment provided by the caller
+ * \param[in] exp	is the export of the client which sent the request
+ * \paral[in,out] oa	is the incoming obdo sent by the client
  */
 void ofd_grant_prepare_read(const struct lu_env *env,
 			    struct obd_export *exp, struct obdo *oa)
@@ -829,14 +907,25 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 }
 
 /**
- * Called at write prepare time to handle incoming grant, check that we have
- * enough space and grant some space back to the client if possible.
+ * Process grant information from incoming bulk write request.
  *
- * \param env - is the lu environment provided by the caller
- * \param exp - is the export of the client which sent the request
- * \paral oa - is the incoming obdo sent by the client
- * \param rnb - is the list of network buffers
- * \param niocont - is the number of network buffers in the list
+ * This function extracts client's grant announcements from incoming bulk write
+ * request and attempts to allocate grant space for network buffers that need it
+ * (i.e. OBD_BRW_FROM_GRANT not set in rnb_fags).
+ * Network buffers which aren't granted the OBD_BRW_GRANTED flag should not
+ * proceed further and should fail with -ENOSPC.
+ * Whenever possible, additional grant space will be returned to the client
+ * in the bulk write reply.
+ * ofd_grant_prepare_write() must be called before writting any buffers to
+ * the backend storage. This function works in pair with ofd_grant_commit()
+ * which must be invoked once all buffers have been written to disk in order
+ * to release space from the pending grant counter.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] exp	export of the client which sent the request
+ * \param[in] oa	incoming obdo sent by the client
+ * \param[in] rnb	list of network buffers
+ * \param[in] niocont	number of network buffers in the list
  */
 void ofd_grant_prepare_write(const struct lu_env *env,
 			     struct obd_export *exp, struct obdo *oa,
@@ -913,19 +1002,28 @@ refresh:
 		ofd_grant_shrink(exp, oa, left);
 	else
 		/* grant more space back to the client if possible */
-		oa->o_grant = ofd_grant(exp, oa->o_grant, oa->o_undirty, left,
-					true);
+		oa->o_grant = ofd_grant_alloc(exp, oa->o_grant, oa->o_undirty,
+					      left, true);
 	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
- * Called during object precreation to consume grant space.
- * More space is granted for precreation if possible.
+ * Consume grant space reserved for object creation.
  *
- * \param env - is the lu environment provided by the caller
- * \param exp - is the export holding the grant space for precreation (= self
- *	      export currently)
- * \paral nr - is the number of objects the caller wants to create objects
+ * Grant space is allocated to the local self export for object precreation.
+ * This is required to prevent object precreation from consuming grant space
+ * allocated to client nodes for the data writeback cache.
+ * This function consumes enough space to create \a nr objects and allocates
+ * more grant space to the self export for future precreation requests, if
+ * possible.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] exp	export holding the grant space for precreation (= self
+ *			export currently)
+ * \param[in] nr	number of objects to be created
+ *
+ * \retval 0		for success
+ * \retval -ENOSPC	on failure
  */
 int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 {
@@ -1002,17 +1100,19 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 		/* always try to book enough space to handle a large precreate
 		 * request */
 		wanted -= fed->fed_grant;
-		ofd_grant(exp, fed->fed_grant, wanted, left, false);
+		ofd_grant_alloc(exp, fed->fed_grant, wanted, left, false);
 	}
 	spin_unlock(&ofd->ofd_grant_lock);
 	RETURN(0);
 }
 
 /**
- * Called at commit time to update pending grant counter for writes in flight
+ * Release grant space added to the pending counter by ofd_grant_prepare_write()
  *
- * \param env - is the lu environment provided by the caller
- * \param exp - is the export of the client which sent the request
+ * Update pending grant counter once buffers have been written to the disk.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] exp	export of the client which sent the request
  */
 void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 		      int rc)
