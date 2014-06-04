@@ -419,14 +419,15 @@ static int orph_key_test_and_del(const struct lu_env *env,
  * have to be referenced (opened) by some client during recovery, or they
  * will be deleted here (for clients that did not complete recovery).
  *
- * \param mdd  MDD device finishing recovery
+ * \param thread  info about orphan cleanup thread
  *
  * \retval 0   success
  * \retval -ve error
  */
 static int orph_index_iterate(const struct lu_env *env,
-			      struct mdd_device *mdd)
+			      struct mdd_generic_thread *thread)
 {
+	struct mdd_device *mdd = (struct mdd_device *)thread->mgt_data;
 	struct dt_object *dor = mdd->mdd_orphans;
 	struct lu_dirent *ent = &mdd_env_info(env)->mti_ent;
 	const struct dt_it_ops *iops;
@@ -437,7 +438,6 @@ static int orph_index_iterate(const struct lu_env *env,
         __u64             cookie;
         ENTRY;
 
-        /* In recovery phase, do not need for any lock here */
         iops = &dor->do_index_ops->dio_it;
         it = iops->init(env, dor, LUDA_64BITHASH, BYPASS_CAPA);
         if (IS_ERR(it)) {
@@ -458,6 +458,9 @@ static int orph_index_iterate(const struct lu_env *env,
         }
 
 	do {
+		if (thread->mgt_abort)
+			break;
+
 		key_sz = iops->key_size(env, it);
 		/* filter out "." and ".." entries from PENDING dir. */
 		if (key_sz < 8)
@@ -557,13 +560,59 @@ void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd)
         EXIT;
 }
 
+static int __mdd_orphan_cleanup(void *args)
+{
+	struct mdd_generic_thread *thread = (struct mdd_generic_thread *)args;
+	struct lu_env		  *env = NULL;
+	int			   rc;
+	ENTRY;
+
+	complete(&thread->mgt_started);
+
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = lu_env_init(env, LCT_MD_THREAD);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = orph_index_iterate(env, thread);
+
+	lu_env_fini(env);
+	GOTO(out, rc);
+out:
+	if (env)
+		OBD_FREE_PTR(env);
+	complete(&thread->mgt_finished);
+	return rc;
+}
+
 /**
  *  Iterate orphan index to cleanup orphan objects after recovery is done.
  *  \param d   mdd device in recovery.
  */
-int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
+int mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
 {
-        return orph_index_iterate(env, d);
+	int rc = -ENOMEM;
+	char *name = NULL;
+
+	OBD_ALLOC(name, MTI_NAME_MAXLEN);
+	if (name == NULL)
+		goto out;
+
+	snprintf(name, MTI_NAME_MAXLEN, "orph_cleanup_%s",
+		 mdd2obd_dev(d)->obd_name);
+
+	rc = mdd_generic_thread_start(&d->mdd_orph_cleanup_thread,
+				      __mdd_orphan_cleanup, (void *)d, name);
+out:
+	if (rc)
+		CERROR("%s: start orphan cleanup thread failed:%d\n",
+		       mdd2obd_dev(d)->obd_name, rc);
+	if (name)
+		OBD_FREE(name, MTI_NAME_MAXLEN);
+	return rc;
 }
 
 /**

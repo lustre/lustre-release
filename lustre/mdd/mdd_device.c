@@ -786,6 +786,7 @@ static int mdd_hsm_actions_llog_fini(const struct lu_env *env,
 static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 				struct lustre_cfg *cfg)
 {
+	mdd_generic_thread_stop(&m->mdd_orph_cleanup_thread);
 	lfsck_degister(env, m->mdd_bottom);
 	mdd_hsm_actions_llog_fini(env, m);
 	mdd_changelog_fini(env, m);
@@ -855,7 +856,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
 	next = &mdd->mdd_child->dd_lu_dev;
 
         /* XXX: orphans handling. */
-        __mdd_orphan_cleanup(env, mdd);
+        mdd_orphan_cleanup(env, mdd);
         rc = next->ld_ops->ldo_recovery_complete(env, next);
 
         RETURN(rc);
@@ -1491,6 +1492,35 @@ static void mdd_key_fini(const struct lu_context *ctx,
 
 /* context key: mdd_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdd, LCT_MD_THREAD);
+
+int mdd_generic_thread_start(struct mdd_generic_thread *thread,
+			     int (*func)(void *), void *data, char *name)
+{
+	struct task_struct	*task;
+
+	LASSERT(thread->mgt_init == false);
+	init_completion(&thread->mgt_started);
+	init_completion(&thread->mgt_finished);
+	thread->mgt_data = data;
+	thread->mgt_abort = false;
+	thread->mgt_init = true;
+
+	task = kthread_run(func, thread, name);
+	if (IS_ERR(task)) {
+		complete(&thread->mgt_finished);
+		return PTR_ERR(task);
+	}
+	wait_for_completion(&thread->mgt_started);
+	return 0;
+}
+
+void mdd_generic_thread_stop(struct mdd_generic_thread *thread)
+{
+	if (thread->mgt_init == true) {
+		thread->mgt_abort = true;
+		wait_for_completion(&thread->mgt_finished);
+	}
+}
 
 static int __init mdd_mod_init(void)
 {

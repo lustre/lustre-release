@@ -87,6 +87,14 @@ struct mdd_dot_lustre_objs {
         struct mdd_object *mdd_obf;
 };
 
+struct mdd_generic_thread {
+	struct completion	mgt_started;
+	struct completion	mgt_finished;
+	void		       *mgt_data;
+	bool			mgt_abort;
+	bool			mgt_init;
+};
+
 struct mdd_device {
         struct md_device                 mdd_md_dev;
 	struct obd_export               *mdd_child_exp;
@@ -104,6 +112,7 @@ struct mdd_device {
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
 	struct local_oid_storage	*mdd_los;
+	struct mdd_generic_thread	 mdd_orph_cleanup_thread;
 };
 
 enum mod_flags {
@@ -328,7 +337,7 @@ struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len);
 
-int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
+int mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
 int __mdd_orphan_add(const struct lu_env *, struct mdd_object *,
                      struct thandle *);
 int __mdd_orphan_del(const struct lu_env *, struct mdd_object *,
@@ -439,6 +448,9 @@ int mdd_permission(const struct lu_env *env,
                    struct md_attr *ma, int mask);
 int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                  struct lustre_capa *capa, int renewal);
+int mdd_generic_thread_start(struct mdd_generic_thread *thread,
+			     int (*func)(void *), void *data, char *name);
+void mdd_generic_thread_stop(struct mdd_generic_thread *thread);
 
 /* mdd_prepare.c */
 int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
