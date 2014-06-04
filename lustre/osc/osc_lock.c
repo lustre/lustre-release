@@ -793,8 +793,11 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
         int result;
         int dlmrc;
 
-        /* first, do dlm part of the work */
-        dlmrc = ldlm_completion_ast_async(dlmlock, flags, data);
+	/* first, do dlm part of the work */
+	dlmrc = ldlm_completion_ast_async(dlmlock, flags, data);
+	if (flags == LDLM_FL_WAIT_NOREPROC)
+		return dlmrc;
+
         /* then, notify cl_lock */
         env = cl_env_nested_get(&nest);
         if (!IS_ERR(env)) {
