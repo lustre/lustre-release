@@ -3737,6 +3737,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 			/* If allocated buffer was too small, gets something
 			 * bigger */
 			if (nbfile_alloc <= hur->hur_request.hr_itemcount) {
+				ssize_t size;
 				nbfile_alloc = nbfile_alloc * 2 + 1;
 				oldhur = hur;
 				hur = llapi_hsm_user_request_alloc(nbfile_alloc,
@@ -3750,7 +3751,16 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 					fclose(fp);
 					goto out_free;
 				}
-				memcpy(hur, oldhur, hur_len(oldhur));
+				size = hur_len(oldhur);
+				if (size < 0) {
+					fprintf(stderr, "Cannot allocate "
+						"the requested size\n");
+					hur = oldhur;
+					rc = -E2BIG;
+					fclose(fp);
+					goto out_free;
+				}
+				memcpy(hur, oldhur, size);
 				free(oldhur);
 			}
 
