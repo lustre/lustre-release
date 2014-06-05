@@ -2441,8 +2441,8 @@ run_test 54 "rename locking"
 test_55a() {
 	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
 
-#define OBD_FAIL_MDS_RENAME              0x153
-	do_facet mds $LCTL set_param fail_loc=0x80000153
+#define OBD_FAIL_MDS_RENAME4              0x156
+	do_facet mds $LCTL set_param fail_loc=0x80000156
 
 	mv -T $DIR/d1/d2 $DIR/d3/d2 &
 	PID1=$!
@@ -2459,8 +2459,8 @@ test_55b()
 {
 	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
 
-#define OBD_FAIL_MDS_RENAME              0x155
-	do_facet mds $LCTL set_param fail_loc=0x80000155
+#define OBD_FAIL_MDS_RENAME4             0x156
+	do_facet mds $LCTL set_param fail_loc=0x80000156
 
 	mv -T $DIR/d1/d2 $DIR/d3/d2 &
 	PID1=$!
@@ -2469,9 +2469,37 @@ test_55b()
 	rm -r $DIR2/d1
 	wait $PID1 && error "(2) mv succeeded"
 
-	rm -rf $DIR/d1
+	rm -rf $DIR/d3
 }
 run_test 55b "rename vs unlink source dir"
+
+test_55c()
+{
+	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+
+#define OBD_FAIL_MDS_RENAME4              0x156
+	do_facet mds $LCTL set_param fail_loc=0x156
+
+	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	PID1=$!
+	sleep 1
+
+	# while rename is sleeping, open and remove d3
+	$MULTIOP $DIR2/d3 D_c &
+	PID2=$!
+	sleep 1
+	rm -rf $DIR2/d3
+	sleep 5
+
+	# while rename is sleeping 2nd time, close d3
+	kill -USR1 $PID2
+	wait $PID2 || error "(3) multiop failed"
+
+	wait $PID1 && error "(2) mv succeeded"
+
+	rm -rf $DIR/d1
+}
+run_test 55c "rename vs unlink orphan target dir"
 
 test_55d()
 {
