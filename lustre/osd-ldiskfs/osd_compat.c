@@ -66,6 +66,8 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	newctxt->pwdmnt = dev->od_mnt;
 	newctxt->pwd = dev->od_mnt->mnt_root;
 	newctxt->fs = get_ds();
+	newctxt->umask = current_umask();
+	newctxt->dt = NULL;
 
 	push_ctxt(save, newctxt);
 }
