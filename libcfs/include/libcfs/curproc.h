@@ -45,6 +45,9 @@
 
 #if !defined(HAVE_UIDGID_HEADER) || !defined(__KERNEL__)
 
+#ifndef _LINUX_UIDGID_H
+#define _LINUX_UIDGID_H
+
 typedef uid_t kuid_t;
 typedef gid_t kgid_t;
 
@@ -106,6 +109,8 @@ static inline bool gid_valid(kgid_t gid)
 {
 	return (gid != INVALID_GID);
 }
+#endif /* _LINUX_UIDGID_H */
+
 #endif
 
 int cfs_get_environ(const char *key, char *value, int *val_len);
