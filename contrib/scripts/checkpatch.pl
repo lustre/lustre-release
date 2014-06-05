@@ -404,7 +404,7 @@ my %dep_functions = (
 	'cfs_inode_t',			'struct inode',
 
 	'CFS_INIT_LIST_HEAD',		'INIT_LIST_HEAD',
-	'CFS_LIST_HEAD',		'LIST_HEAD',
+	'CFS_LIST_HEAD',		'struct list_head foo = LIST_HEAD_INIT(foo);',
 	'CFS_LIST_HEAD_INIT',		'LIST_HEAD_INIT',
 	'cfs_list_add',			'list_add',
 	'cfs_list_add_tail',		'list_add_tail',
