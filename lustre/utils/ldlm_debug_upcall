@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# usage: debug_upcall.sh <lctl-dk-log-file>
+#
+# Dumps locks to the Lustre kernel ring buffer and then appends the contents of
+# the Lustre kernel ring buffer to the given debug log file.
+#
+# This is meant to be set as the debug_log_upcall, which is called by Lustre
+# after dumping logs with libcfs_debug_dumplog_internal().  Lustre passes the
+# upcall the name of the file to which the trace buffer was dumped.
+#
+# To set the Lustre debug_upcall to this script, set the debug_upcall to the
+# path to this script using "lctl set_param" as follows:
+#
+# # lctl set_param debug_log_upcall=/path/to/this/script
+
+debugLogFile="$1"
+
+# Enable dlmtrace to get locks dumped, but save the old state first
+oldDebug=$(lctl get_param -n debug)
+lctl set_param debug=+dlmtrace
+lctl set_param ldlm.dump_namespaces=1
+
+# Dump logs in raw form
+tmpLockDump=$(mktemp /tmp/lustre-ldlm-dump.XXXXX)
+lctl dk $tmpLockDump 1
+# Remove the line indicating how many lines were dumped
+sed '/^Debug log:/d' $tmpLockDump >> $debugLogFile
+rm $tmpLockDump
+
+# Restore the old debug state
+lctl set_param debug="$oldDebug"

@@ -24,6 +24,7 @@ if UTILS
 rootsbin_PROGRAMS = mount.lustre
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
+sbin_SCRIPTS  = ldlm_debug_upcall
 sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ltrack_stats
 
 if TESTS
@@ -173,7 +174,7 @@ wiretest_SOURCES = wiretest.c
 
 endif # UTILS
 
-EXTRA_DIST = llstat llobdstat plot-llstat
+EXTRA_DIST = llstat llobdstat plot-llstat ldlm_debug_upcall
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
