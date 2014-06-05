@@ -1080,16 +1080,16 @@ wait:
 	if (scrub->os_full_speed || rc == SCRUB_NEXT_CONTINUE)
 		return 0;
 
-	if (osd_scrub_has_window(scrub, ooc)) {
+	if (ooc != NULL && osd_scrub_has_window(scrub, ooc)) {
 		*noslot = 0;
 		return 0;
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     osd_scrub_wakeup(scrub, it),
-		     &lwi);
+	if (it != NULL)
+		l_wait_event(thread->t_ctl_waitq, osd_scrub_wakeup(scrub, it),
+			     &lwi);
 
-	if (osd_scrub_has_window(scrub, ooc))
+	if (ooc != NULL && osd_scrub_has_window(scrub, ooc))
 		*noslot = 0;
 	else
 		*noslot = 1;
