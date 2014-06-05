@@ -885,6 +885,7 @@ run_test 14 "OI scrub can repair objects under lost+found"
 test_15() {
 	# skip test_15 for LU-4182
 	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return
+	local server_version=$(lustre_version_code $SINGLEMDS)
 	scrub_prep 20
 	scrub_backup_restore 1
 	echo "starting MDTs with OI scrub disabled"
@@ -893,14 +894,22 @@ test_15() {
 	scrub_check_flags 4 inconsistent
 
 	# run under dryrun mode
-	scrub_start 5 --dryrun
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 5 --dryrun on
+	else
+		scrub_start 5 --dryrun
+	fi
 	scrub_check_status 6 completed
 	scrub_check_flags 7 inconsistent
 	scrub_check_params 8 dryrun
 	scrub_check_repaired 9 20
 
 	# run under dryrun mode again
-	scrub_start 10 --dryrun
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 10 --dryrun on
+	else
+		scrub_start 10 --dryrun
+	fi
 	scrub_check_status 11 completed
 	scrub_check_flags 12 inconsistent
 	scrub_check_params 13 dryrun
@@ -911,14 +920,22 @@ test_15() {
 	# Lustre-2.x (x <= 5) used "-n off" to disable dryrun which does not
 	# work under Lustre-2.y (y >= 6), the test script should be fixed as
 	# "-noff" or "--dryrun=off" or nothing by default.
-	scrub_start 15
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 15 --dryrun off
+	else
+		scrub_start 15
+	fi
 	scrub_check_status 16 completed
 	scrub_check_flags 17 ""
 	scrub_check_params 18 ""
 	scrub_check_repaired 19 20
 
 	# run under normal mode again
-	scrub_start 20
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 20 --dryrun off
+	else
+		scrub_start 20
+	fi
 	scrub_check_status 21 completed
 	scrub_check_flags 22 ""
 	scrub_check_params 23 ""
