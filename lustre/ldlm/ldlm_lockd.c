@@ -339,7 +339,7 @@ static void waiting_locks_callback(unsigned long unused)
                 ldlm_lock_to_ns(lock)->ns_timeouts++;
                 LDLM_ERROR(lock, "lock callback timer expired after %lds: "
                            "evicting client at %s ",
-                           cfs_time_current_sec()- lock->l_last_activity,
+			   cfs_time_current_sec() - lock->l_last_activity,
                            libcfs_nid2str(
                                    lock->l_export->exp_connection->c_peer.nid));
 
@@ -863,6 +863,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
+	lock->l_last_activity = cfs_time_current_sec();
+
         if (lock->l_export && lock->l_export->exp_nid_stats &&
             lock->l_export->exp_nid_stats->nid_ldlm_stats)
                 lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
@@ -954,6 +956,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
                    total_enqueue_wait);
+
+	lock->l_last_activity = cfs_time_current_sec();
 
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
@@ -1070,6 +1074,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         /* ptlrpc_request_alloc_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
+
+	lock->l_last_activity = cfs_time_current_sec();
 
 	req->rq_interpret_reply = ldlm_cb_interpret;
 
