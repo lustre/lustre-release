@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,7 +23,7 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2012, 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -35,7 +31,15 @@
  *
  * lustre/ofd/ofd_capa.c
  *
- * Author: Lai Siyao <laisiyao@whamcloud.com>
+ * This file provides helper functions for Lustre capability key management and
+ * capability authentication. A capability is a token of authority, which is
+ * distributed by MDT to client upon open/lookup/getattr/setattr and unlink
+ * (this is not needed for new servers because destroying objects on OST is
+ * originated from MDT, which doesn't need capability), and will be packed
+ * into subsequent requests to MDT and OST. Capability key is shared by MDT and
+ * OST, which is used to sign and authenticate capability (HMAC algorithm).
+ *
+ * Author: Lai Siyao <lai.siyao@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -47,6 +51,18 @@ static inline __u32 ofd_ck_keyid(struct filter_capa_key *key)
 	return key->k_key.lk_keyid;
 }
 
+/**
+ * Update capability key
+ *
+ * A new capability key is received from MDT, because MDT only uses the
+ * latest key to sign capability, OFD caches the latest two keys in case client
+ * still helds capability signed with old key.
+ *
+ * \param[in] ofd	OFD device
+ * \param[in] new	new capability key
+ * \retval		0 on success
+ * \retval		negative number on error
+ */
 int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
@@ -54,7 +70,7 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 	int			 i;
 
 	spin_lock(&capa_lock);
-	cfs_list_for_each_entry(k, &obd->u.filter.fo_capa_keys, k_list) {
+	list_for_each_entry(k, &obd->u.filter.fo_capa_keys, k_list) {
 		if (k->k_key.lk_seq != new->lk_seq)
 			continue;
 
@@ -95,14 +111,30 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 
 	spin_lock(&capa_lock);
 	k->k_key = *new;
-	if (cfs_list_empty(&k->k_list))
-		cfs_list_add(&k->k_list, &obd->u.filter.fo_capa_keys);
+	if (list_empty(&k->k_list))
+		list_add(&k->k_list, &obd->u.filter.fo_capa_keys);
 	spin_unlock(&capa_lock);
 
 	DEBUG_CAPA_KEY(D_SEC, new, "new");
 	RETURN(0);
 }
 
+/**
+ * Authenticate capability
+ *
+ * OFD authenticate the capability packed in client request. Firstly, it will
+ * lookup from local cache, if found, compare with it, otherwise sign it with
+ * capability key to validate it. If the capability is valid, it will be added
+ * into local cache for later use.
+ *
+ * \param[in] exp	export for the client
+ * \param[in] fid	master fid (on MDT) of the file
+ * \param[in] seq	OST sequence extracted from master fid
+ * \param[in] capa	capability extracted from client request
+ * \param[in] opc	opcode the caller requested
+ * \retval		0 on success
+ * \retval		negative number on error
+ */
 int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
 		  obd_seq seq, struct lustre_capa *capa, __u64 opc)
 {
@@ -169,7 +201,7 @@ int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
 	}
 
 	spin_lock(&capa_lock);
-	cfs_list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
+	list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
 		if (k->k_key.lk_seq == seq) {
 			keys_ready = 1;
 			if (k->k_key.lk_keyid == capa_keyid(capa)) {
@@ -217,14 +249,21 @@ int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
 	RETURN(0);
 }
 
+/**
+ * Free capability keys
+ *
+ * OFD free cached capability keys when OFD device is destroyed.
+ *
+ *  \param[in] ofd	OFD device
+ */
 void ofd_free_capa_keys(struct ofd_device *ofd)
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct filter_capa_key	*key, *n;
 
 	spin_lock(&capa_lock);
-	cfs_list_for_each_entry_safe(key, n, &obd->u.filter.fo_capa_keys, k_list) {
-		cfs_list_del_init(&key->k_list);
+	list_for_each_entry_safe(key, n, &obd->u.filter.fo_capa_keys, k_list) {
+		list_del_init(&key->k_list);
 		OBD_FREE_PTR(key);
 	}
 	spin_unlock(&capa_lock);
