@@ -2802,6 +2802,13 @@ static int osd_object_ref_add(const struct lu_env *env,
 	 * This also has to properly handle the case of inodes with nlink == 0
 	 * in case they are being linked into the PENDING directory
 	 */
+#ifdef I_LINKABLE
+	/* This is necessary to increment from i_nlink == 0 */
+	spin_lock(&inode->i_lock);
+	inode->i_state |= I_LINKABLE;
+	spin_unlock(&inode->i_lock);
+#endif
+
 	spin_lock(&obj->oo_guard);
 	ldiskfs_inc_count(oh->ot_handle, inode);
 	if (!S_ISDIR(inode->i_mode))
