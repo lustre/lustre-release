@@ -473,9 +473,12 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		GOTO(out_req, rc = -EPROTO);
 
 	ostid_to_fid(fid, &body->oa.o_oi, d->opd_index);
-	LASSERTF(osp_fid_diff(fid, &d->opd_pre_used_fid) > 0,
-		 "reply fid "DFID" pre used fid "DFID"\n", PFID(fid),
-		 PFID(&d->opd_pre_used_fid));
+	if (osp_fid_diff(fid, &d->opd_pre_used_fid) <= 0) {
+		CERROR("%s: precreate fid "DFID" < local used fid "DFID
+		       ": rc = %d\n", d->opd_obd->obd_name,
+		       PFID(fid), PFID(&d->opd_pre_used_fid), -ESTALE);
+		GOTO(out_req, rc = -ESTALE);
+	}
 
 	diff = osp_fid_diff(fid, &d->opd_pre_last_created_fid);
 
