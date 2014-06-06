@@ -1,21 +1,35 @@
 .\" -*- nroff -*-
 .\" Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 .\"
-.\" Copyright (c) 2011, 2012, Intel Corporation.
+.\" Copyright (c) 2011, 2012, 2014, Intel Corporation.
 .\"
 .\" This file may be copied under the terms of the GNU Public License.
 .\"
-.TH mkfs.lustre 8 "2008 Mar 15" Lustre "configuration utilities"
+.TH mkfs.lustre 8 "2014 Jun 10" Lustre "configuration utilities"
 .SH NAME
 mkfs.lustre \- format a disk for a Lustre service
 .SH SYNOPSIS
 .br
-.BR mkfs.lustre { --ost | --mdt | --mgs }
-.I [options] 
+.B mkfs.lustre
+.RB { --ost | --mdt | --mgs }
+.BR --fsname= <\fIname\fR>
+.RI [ options ]
 .I device
 .br
-.B <target_type>
-is one of
+.B mkfs.lustre
+.RB { --ost | --mdt | --mgs }
+.B --backfstype=zfs
+.BR --fsname= <\fIname\fR>
+.RI [ options "] <" pool_name >/< dataset_name "> [<" zpool_specification >]
+
+.SH DESCRIPTION
+.B mkfs.lustre
+is used to format a disk device for use as part of a Lustre
+filesystem. After formatting, a disk can be mounted with
+.B mount -t lustre ...
+to start the Lustre service defined by this command.
+
+.SH OPTIONS
 .TP
 .BI \--ost
 object storage target
@@ -24,20 +38,25 @@ object storage target
 metadata storage target
 .TP
 .BI \--mgs
-configuration management service - one per site.  This service can be
-combined with one 
+configuration management service, one per site or filesystem.  This service can
+be combined with one
 .BI \--mdt
-service by specifying both types
-.SH DESCRIPTION
-.B mkfs.lustre
-is used to format a disk device for use as part of a Lustre
-filesystem. After formatting, a disk can be mounted to start the Lustre
-service defined by this command.
-
-.SH OPTIONS
+service by specifying both types.
 .TP
 .BI \--backfstype= fstype
-Force a particular format for the backing fs (ext3, ldiskfs)
+Force a particular format for the backing fs (ldiskfs, zfs).
+.br
+.IR zpool_specification " = [[<" vdev_type ">] <" device "> [<" device "> ...] [<" vdev_type ">] ...]"
+.br
+.IR vdev_type " ="
+.RB { mirror , raidz , raidz2 , raidz3 , cache }
+.br
+.IR device " = { " "Linux block device" " }"
+
+If no vdev_type is given, then the devices are used in a round-robin
+(striped) manner. See
+.BR zpool (8)
+for more details.
 .TP
 .BI \--comment= comment
 Set user comment about this disk, ignored by Lustre.
@@ -48,7 +67,7 @@ Set device size for loop devices
 .BI \--dryrun
 Only print what would be done; does not affect the disk
 .TP
-.BI \--failnode= nid,...  
+.BI \--failnode= nid,...
 Set the NID(s) of a failover partner. This option can be repeated as desired.
 Cannot be used with --servicenode.
 .TP
@@ -56,12 +75,12 @@ Cannot be used with --servicenode.
 Set the NID(s) of all service partner. This option treats all nodes as equal
 service nodes. Cannot be used with --failnode.
 .TP
-.BI \--fsname= filesystem_name  
-The Lustre filesystem this service will be part of.  The maximum
-filesystem_name length is 8 characters. Default is 'lustre'
+.BI \--fsname= filesystem_name
+The Lustre filesystem this service will be part of. The maximum filesystem_name
+length is 8 characters. Required for all targets other than MGS.
 .TP
 .BI \--index= index
-Force a particular OST or MDT index 
+Specify a particular OST or MDT index. Required for all targets other than the MGS.
 .TP
 .BI \--mkfsoptions= opts
 Format options for the backing fs. For example, ext3 options could be set here.
@@ -79,13 +98,13 @@ MGS/MDT: \fIerrors=remount-ro,user_xattr\fR.
 .BI \--network= net,...
 Network(s) to restrict this ost/mdt to. This option can be repeated as desired.
 .TP
-.BI \--mgsnode= nid,...  
+.BI \--mgsnode= nid,...
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .TP
 .BI \--param " key=value"
-Set permanent parameter 
-.I key 
-to value 
+Set permanent parameter
+.I key
+to value
 .IR value .
 This option can be repeated as desired.  Typical options might include:
 .RS
@@ -97,11 +116,11 @@ System obd timeout
 .RS
 Default stripe size
 .RE
-.I \--param lov.stripecount=2       
+.I \--param lov.stripecount=2
 .RS
 Default stripe count
 .RE
-.I \--param failover.mode=failout    
+.I \--param failover.mode=failout
 .RS
 Return errors instead of waiting for recovery
 .RE
@@ -110,7 +129,7 @@ Return errors instead of waiting for recovery
 .BI \--quiet
 Print less information.
 .TP
-.BI \--reformat 
+.BI \--reformat
 Reformat an existing Lustre disk as a new target
 .TP
 .BI \--replace
@@ -128,26 +147,31 @@ Print more information.
 
 .SH EXAMPLES
 .TP
-.B mkfs.lustre --fsname=testfs --mdt --mgs /dev/sda1
+.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs /dev/sda1
 Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21
 .TP
-.B mkfs.lustre --fsname=testfs --ost --mgsnode=cfs21@tcp0 /dev/sdb
+.B mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0 /dev/sdb
 OST for filesystem 'testfs' on any node using the above MGS.
 .TP
 .B mkfs.lustre --mgs /dev/sda1
 Standalone MGS on e.g. node cfs22
 .TP
-.B mkfs.lustre --fsname=myfs1 --mdt --mgsnode=cfs22@tcp0 /dev/sda2
+.B mkfs.lustre --fsname=myfs1 --index=0 --mdt --mgsnode=cfs22@tcp0 /dev/sda2
 MDT for filesystem 'myfs1' on any node, using the above MGS
+.TP
+.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs zfspool/mdt1 mirror /dev/sdb /dev/sdc mirror /dev/sdd /dev/sde
+Create zfs pool 'zfspool' on two root vdevs each a mirror of two disks and create mdt/mgs on
+filesystem 'zfspool/mdt1'.
 
 .SH AVAILABILITY
 .B mkfs.lustre
-is part of the 
-.BR Lustre (7) 
+is part of the
+.BR lustre (7)
 filesystem package.
 .SH SEE ALSO
 .BR lustre (7),
 .BR mount.lustre (8),
 .BR tunefs.lustre (8),
 .BR lctl (8),
-.BR lfs (1)
+.BR lfs (1),
+.BR zpool (8)
