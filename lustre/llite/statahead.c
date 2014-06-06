@@ -1077,8 +1077,8 @@ static int ll_statahead_thread(void *arg)
 	struct md_op_data	 *op_data;
 	struct ll_dir_chain       chain;
 	struct l_wait_info        lwi    = { 0 };
-	struct lu_dirent	 *ent;
 	struct page		*page = NULL;
+	__u64			pos = 0;
 	ENTRY;
 
 	thread->t_pid = current_pid();
@@ -1090,7 +1090,6 @@ static int ll_statahead_thread(void *arg)
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	op_data->op_hash_offset = 0;
 	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
 	if (sbi->ll_flags & LL_SBI_AGL_ENABLED)
@@ -1107,138 +1106,168 @@ static int ll_statahead_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 
 	ll_dir_chain_init(&chain);
-	for (ent = ll_dir_entry_start(dir, op_data, &page);
-	     ent != NULL && !IS_ERR(ent);
-	     ent = ll_dir_entry_next(dir, op_data, ent, &page)) {
-		__u64 hash;
-		int namelen;
-		char *name;
+	page = ll_get_dir_page(dir, op_data, pos, &chain);
+	while (1) {
+		struct lu_dirpage *dp;
+		struct lu_dirent  *ent;
 
-		hash = le64_to_cpu(ent->lde_hash);
-		if (unlikely(hash < op_data->op_hash_offset))
-			/*
-			 * Skip until we find target hash value.
-			 */
-			continue;
-
-		namelen = le16_to_cpu(ent->lde_namelen);
-		if (unlikely(namelen == 0))
-			/*
-			 * Skip dummy record.
-			 */
-			continue;
-
-		name = ent->lde_name;
-		if (name[0] == '.') {
-			if (namelen == 1) {
-				/*
-				 * skip "."
-				 */
-				continue;
-			} else if (name[1] == '.' && namelen == 2) {
-				/*
-				 * skip ".."
-				 */
-				continue;
-			} else if (!sai->sai_ls_all) {
-				/*
-				 * skip hidden files.
-				 */
-				sai->sai_skip_hidden++;
-				continue;
-			}
+		if (IS_ERR(page)) {
+			rc = PTR_ERR(page);
+			CDEBUG(D_READA, "error reading dir "DFID" at "LPU64
+			       "/"LPU64" opendir_pid = %u: rc = %d\n",
+			       PFID(ll_inode2fid(dir)), pos, sai->sai_index,
+			       plli->lli_opendir_pid, rc);
+			GOTO(out, rc);
 		}
 
-		/*
-		 * don't stat-ahead first entry.
-		 */
-		if (unlikely(++first == 1))
-			continue;
+		dp = page_address(page);
+		for (ent = lu_dirent_start(dp); ent != NULL;
+		     ent = lu_dirent_next(ent)) {
+			__u64 hash;
+			int namelen;
+			char *name;
+
+			hash = le64_to_cpu(ent->lde_hash);
+			if (unlikely(hash < pos))
+				/*
+				 * Skip until we find target hash value.
+				 */
+				continue;
+
+			namelen = le16_to_cpu(ent->lde_namelen);
+			if (unlikely(namelen == 0))
+				/*
+				 * Skip dummy record.
+				 */
+				continue;
+
+			name = ent->lde_name;
+			if (name[0] == '.') {
+				if (namelen == 1) {
+					/*
+					 * skip "."
+					 */
+					continue;
+				} else if (name[1] == '.' && namelen == 2) {
+					/*
+					 * skip ".."
+					 */
+					continue;
+				} else if (!sai->sai_ls_all) {
+					/*
+					 * skip hidden files.
+					 */
+					sai->sai_skip_hidden++;
+					continue;
+				}
+			}
+
+			/*
+			 * don't stat-ahead first entry.
+			 */
+			if (unlikely(++first == 1))
+				continue;
 
 keep_it:
-		l_wait_event(thread->t_ctl_waitq,
-			     !sa_sent_full(sai) ||
-			     !sa_received_empty(sai) ||
-			     !agl_list_empty(sai) ||
-			     !thread_is_running(thread),
-			     &lwi);
+			l_wait_event(thread->t_ctl_waitq,
+				     !sa_sent_full(sai) ||
+				     !sa_received_empty(sai) ||
+				     !agl_list_empty(sai) ||
+				     !thread_is_running(thread),
+				     &lwi);
 
 interpret_it:
-		while (!sa_received_empty(sai))
-			ll_post_statahead(sai);
+			while (!sa_received_empty(sai))
+				ll_post_statahead(sai);
 
-		if (unlikely(!thread_is_running(thread)))
-			GOTO(out, rc = 0);
+			if (unlikely(!thread_is_running(thread))) {
+				ll_release_page(dir, page, false);
+				GOTO(out, rc = 0);
+			}
 
-		/* If no window for metadata statahead, but there are
-		 * some AGL entries to be triggered, then try to help
-		 * to process the AGL entries. */
-		if (sa_sent_full(sai)) {
+			/* If no window for metadata statahead, but there are
+			 * some AGL entries to be triggered, then try to help
+			 * to process the AGL entries. */
+			if (sa_sent_full(sai)) {
+				spin_lock(&plli->lli_agl_lock);
+				while (!agl_list_empty(sai)) {
+					clli = agl_first_entry(sai);
+					list_del_init(&clli->lli_agl_list);
+					spin_unlock(&plli->lli_agl_lock);
+					ll_agl_trigger(&clli->lli_vfs_inode,
+						       sai);
+
+					if (!sa_received_empty(sai))
+						goto interpret_it;
+
+					if (unlikely(
+						!thread_is_running(thread))) {
+						ll_release_page(dir, page,
+								false);
+						GOTO(out, rc = 0);
+					}
+
+					if (!sa_sent_full(sai))
+						goto do_it;
+
+					spin_lock(&plli->lli_agl_lock);
+				}
+				spin_unlock(&plli->lli_agl_lock);
+
+				goto keep_it;
+			}
+do_it:
+			ll_statahead_one(parent, name, namelen);
+		}
+
+		pos = le64_to_cpu(dp->ldp_hash_end);
+		if (pos == MDS_DIR_END_OFF) {
+			/*
+			 * End of directory reached.
+			 */
+			ll_release_page(dir, page, false);
+			while (1) {
+				l_wait_event(thread->t_ctl_waitq,
+					     !sa_received_empty(sai) ||
+					    sai->sai_sent == sai->sai_replied ||
+					     !thread_is_running(thread),
+					     &lwi);
+
+				while (!sa_received_empty(sai))
+					ll_post_statahead(sai);
+
+				if (unlikely(!thread_is_running(thread)))
+					GOTO(out, rc = 0);
+
+				if (sai->sai_sent == sai->sai_replied &&
+				    sa_received_empty(sai))
+					break;
+			}
+
 			spin_lock(&plli->lli_agl_lock);
-			while (!agl_list_empty(sai)) {
+			while (!agl_list_empty(sai) &&
+			       thread_is_running(thread)) {
 				clli = agl_first_entry(sai);
 				list_del_init(&clli->lli_agl_list);
 				spin_unlock(&plli->lli_agl_lock);
-				ll_agl_trigger(&clli->lli_vfs_inode,
-					       sai);
-
-				if (!sa_received_empty(sai))
-					goto interpret_it;
-
-				if (unlikely(
-					!thread_is_running(thread)))
-					GOTO(out, rc = 0);
-
-				if (!sa_sent_full(sai))
-					goto do_it;
-
+				ll_agl_trigger(&clli->lli_vfs_inode, sai);
 				spin_lock(&plli->lli_agl_lock);
 			}
 			spin_unlock(&plli->lli_agl_lock);
 
-			goto keep_it;
-		}
-
-do_it:
-		ll_statahead_one(parent, name, namelen);
-	}
-
-	if (page != NULL) {
-		kunmap(page);
-		page_cache_release(page);
-	}
-
-	 /*
-	 * End of directory reached.
-	 */
-	while (1) {
-		l_wait_event(thread->t_ctl_waitq,
-			     !sa_received_empty(sai) ||
-			     sai->sai_sent == sai->sai_replied ||
-			     !thread_is_running(thread),
-			     &lwi);
-
-		while (!sa_received_empty(sai))
-			ll_post_statahead(sai);
-
-		if (unlikely(!thread_is_running(thread)))
 			GOTO(out, rc = 0);
-
-		if (sai->sai_sent == sai->sai_replied &&
-		    sa_received_empty(sai))
-			break;
+		} else {
+			/*
+			 * chain is exhausted.
+			 * Normal case: continue to the next page.
+			 */
+			ll_release_page(dir, page, le32_to_cpu(dp->ldp_flags) &
+					      LDF_COLLIDE);
+			sai->sai_in_readpage = 1;
+			page = ll_get_dir_page(dir, op_data, pos, &chain);
+			sai->sai_in_readpage = 0;
+		}
 	}
-
-	spin_lock(&plli->lli_agl_lock);
-	while (!agl_list_empty(sai) &&
-	       thread_is_running(thread)) {
-		clli = agl_first_entry(sai);
-		list_del_init(&clli->lli_agl_list);
-		spin_unlock(&plli->lli_agl_lock);
-		ll_agl_trigger(&clli->lli_vfs_inode, sai);
-		spin_lock(&plli->lli_agl_lock);
-	}
-	spin_unlock(&plli->lli_agl_lock);
 out:
 	EXIT;
 	ll_finish_md_op_data(op_data);
@@ -1349,88 +1378,117 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	struct qstr          *target = &dentry->d_name;
 	struct md_op_data    *op_data;
 	int                   dot_de;
-	struct lu_dirent     *ent;
 	struct page	     *page = NULL;
 	int                   rc     = LS_NONE_FIRST_DE;
+	__u64		      pos = 0;
 	ENTRY;
-
-	ll_dir_chain_init(&chain);
 
 	op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
 				     LUSTRE_OPC_ANY, dir);
 	if (IS_ERR(op_data))
-		GOTO(out, rc = PTR_ERR(op_data));
+		RETURN(PTR_ERR(op_data));
 	/**
 	 *FIXME choose the start offset of the readdir
 	 */
 	op_data->op_stripe_offset = 0;
-	op_data->op_hash_offset = 0;
 	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
-	for (ent = ll_dir_entry_start(dir, op_data, &page);
-	     ent != NULL && !IS_ERR(ent);
-	     ent = ll_dir_entry_next(dir, op_data, ent, &page)) {
-		__u64 hash;
-		int namelen;
-		char *name;
+	ll_dir_chain_init(&chain);
+	page = ll_get_dir_page(dir, op_data, 0, &chain);
 
-		hash = le64_to_cpu(ent->lde_hash);
-		/* The ll_get_dir_page() can return any page containing
-		 * the given hash which may be not the start hash. */
-		if (unlikely(hash < op_data->op_hash_offset))
-			continue;
+	while (1) {
+		struct lu_dirpage *dp;
+		struct lu_dirent  *ent;
 
-		namelen = le16_to_cpu(ent->lde_namelen);
-		if (unlikely(namelen == 0))
-			/*
-			 * skip dummy record.
-			 */
-			continue;
+		if (IS_ERR(page)) {
+			struct ll_inode_info *lli = ll_i2info(dir);
 
-		name = ent->lde_name;
-		if (name[0] == '.') {
-			if (namelen == 1)
+			rc = PTR_ERR(page);
+			CERROR("%s: reading dir "DFID" at "LPU64
+			       "opendir_pid = %u : rc = %d\n",
+			       ll_get_fsname(dir->i_sb, NULL, 0),
+			       PFID(ll_inode2fid(dir)), pos,
+			       lli->lli_opendir_pid, rc);
+			break;
+		}
+
+		dp = page_address(page);
+		for (ent = lu_dirent_start(dp); ent != NULL;
+		     ent = lu_dirent_next(ent)) {
+			__u64 hash;
+			int namelen;
+			char *name;
+
+			hash = le64_to_cpu(ent->lde_hash);
+			/* The ll_get_dir_page() can return any page containing
+			 * the given hash which may be not the start hash. */
+			if (unlikely(hash < pos))
+				continue;
+
+			namelen = le16_to_cpu(ent->lde_namelen);
+			if (unlikely(namelen == 0))
 				/*
-				 * skip "."
+				 * skip dummy record.
 				 */
 				continue;
-			else if (name[1] == '.' && namelen == 2)
-				/*
-				 * skip ".."
-				 */
+
+			name = ent->lde_name;
+			if (name[0] == '.') {
+				if (namelen == 1)
+					/*
+					 * skip "."
+					 */
+					continue;
+				else if (name[1] == '.' && namelen == 2)
+					/*
+					 * skip ".."
+					 */
+					continue;
+				else
+					dot_de = 1;
+			} else {
+				dot_de = 0;
+			}
+
+			if (dot_de && target->name[0] != '.') {
+				CDEBUG(D_READA, "%.*s skip hidden file %.*s\n",
+				       target->len, target->name,
+				       namelen, name);
 				continue;
+			}
+
+			if (target->len != namelen ||
+			    memcmp(target->name, name, namelen) != 0)
+				rc = LS_NONE_FIRST_DE;
+			else if (!dot_de)
+				rc = LS_FIRST_DE;
 			else
-				dot_de = 1;
+				rc = LS_FIRST_DOT_DE;
+
+			ll_release_page(dir, page, false);
+			GOTO(out, rc);
+		}
+		pos = le64_to_cpu(dp->ldp_hash_end);
+		if (pos == MDS_DIR_END_OFF) {
+			/*
+			 * End of directory reached.
+			 */
+			ll_release_page(dir, page, false);
+			GOTO(out, rc);
 		} else {
-			dot_de = 0;
+			/*
+			 * chain is exhausted
+			 * Normal case: continue to the next page.
+			 */
+			ll_release_page(dir, page, le32_to_cpu(dp->ldp_flags) &
+					      LDF_COLLIDE);
+			page = ll_get_dir_page(dir, op_data, pos, &chain);
 		}
-
-		if (dot_de && target->name[0] != '.') {
-			CDEBUG(D_READA, "%.*s skip hidden file %.*s\n",
-			       target->len, target->name,
-			       namelen, name);
-			continue;
-		}
-
-		if (target->len != namelen ||
-		    memcmp(target->name, name, namelen) != 0)
-			rc = LS_NONE_FIRST_DE;
-		else if (!dot_de)
-			rc = LS_FIRST_DE;
-		else
-			rc = LS_FIRST_DOT_DE;
-
-		break;
 	}
-        EXIT;
-
-	if (page != NULL) {
-		kunmap(page);
-		page_cache_release(page);
-	}
-	ll_finish_md_op_data(op_data);
+	EXIT;
 out:
 	ll_dir_chain_fini(&chain);
+	ll_finish_md_op_data(op_data);
         return rc;
 }
 
@@ -1545,6 +1603,11 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                         ll_sai_unplug(sai, entry);
                         RETURN(entry ? 1 : -EAGAIN);
                 }
+
+		/* if statahead is busy in readdir, help it do post-work */
+		while (!ll_sa_entry_stated(entry) &&
+		       sai->sai_in_readpage && !sa_received_empty(sai))
+			ll_post_statahead(sai);
 
                 if (!ll_sa_entry_stated(entry)) {
                         sai->sai_index_wait = entry->se_index;

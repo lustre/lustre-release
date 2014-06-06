@@ -1631,17 +1631,18 @@ static inline int md_fsync(struct obd_export *exp, const struct lu_fid *fid,
 	RETURN(rc);
 }
 
-static inline int md_read_entry(struct obd_export *exp,
-				struct md_op_data *op_data,
-				struct md_callback *cb_op,
-				struct lu_dirent **ld,
-				struct page **ppage)
+static inline int md_read_page(struct obd_export *exp,
+			       struct md_op_data *op_data,
+			       struct md_callback *cb_op,
+			       __u64  hash_offset,
+			       struct page **ppage)
 {
 	int rc;
 	ENTRY;
-	EXP_CHECK_MD_OP(exp, read_entry);
-	EXP_MD_COUNTER_INCREMENT(exp, read_entry);
-	rc = MDP(exp->exp_obd, read_entry)(exp, op_data, cb_op, ld, ppage);
+	EXP_CHECK_MD_OP(exp, read_page);
+	EXP_MD_COUNTER_INCREMENT(exp, read_page);
+	rc = MDP(exp->exp_obd, read_page)(exp, op_data, cb_op, hash_offset,
+					  ppage);
 	RETURN(rc);
 }
 

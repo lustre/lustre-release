@@ -98,7 +98,6 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        op_data.op_hash_offset = hash_x_index(page->index, 0);
         op_data.op_npages = 1;
         rc = md_readpage(sbi->ll_md_exp, &op_data, &page, &request);
         if (!rc) {

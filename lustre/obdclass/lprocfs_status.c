@@ -2136,7 +2136,7 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_MD_OP_INIT(num_private_stats, stats, rename);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, setattr);
 	LPROCFS_MD_OP_INIT(num_private_stats, stats, fsync);
-	LPROCFS_MD_OP_INIT(num_private_stats, stats, read_entry);
+	LPROCFS_MD_OP_INIT(num_private_stats, stats, read_page);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, unlink);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, setxattr);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getxattr);

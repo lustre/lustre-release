@@ -239,6 +239,7 @@ static int ll_get_name(struct dentry *dentry, char *name,
 		.lgd_found = 0,
 	};
 	struct md_op_data *op_data;
+	__u64	pos = 0;
 	int rc;
 	ENTRY;
 
@@ -253,13 +254,12 @@ static int ll_get_name(struct dentry *dentry, char *name,
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
-	op_data->op_hash_offset = 0;
 	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 	mutex_lock(&dir->i_mutex);
 #ifdef HAVE_DIR_CONTEXT
-	rc = ll_dir_read(dir, op_data, &lgd.ctx);
+	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx);
 #else
-	rc = ll_dir_read(dir, op_data, &lgd, ll_nfs_get_name_filldir);
+	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir);
 #endif
 	mutex_unlock(&dir->i_mutex);
 	ll_finish_md_op_data(op_data);

@@ -720,23 +720,18 @@ static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 extern const struct file_operations ll_dir_operations;
 extern const struct inode_operations ll_dir_inode_operations;
 #ifdef HAVE_DIR_CONTEXT
-int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 		struct dir_context *ctx);
 #else
-int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir);
 #endif
 int ll_get_mdt_idx(struct inode *inode);
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
+struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
+			     __u64 offset, struct ll_dir_chain *chain);
+void ll_release_page(struct inode *inode, struct page *page, bool remove);
 
-struct lu_dirent *ll_dir_entry_start(struct inode *dir,
-				     struct md_op_data *op_data,
-				     struct page **ppage);
-
-struct lu_dirent *ll_dir_entry_next(struct inode *dir,
-				    struct md_op_data *op_data,
-				    struct lu_dirent *ent,
-				    struct page **ppage);
 /* llite/namei.c */
 extern const struct inode_operations ll_special_inode_operations;
 
@@ -1239,7 +1234,8 @@ struct ll_statahead_info {
         unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
 	unsigned int		sai_ls_all:1,   /* "ls -al", do stat-ahead for
 						 * hidden entries */
-				sai_agl_valid:1;/* AGL is valid for the dir */
+				sai_agl_valid:1,/* AGL is valid for the dir */
+				sai_in_readpage:1;/* statahead is in readdir()*/
 	wait_queue_head_t	sai_waitq;	/* stat-ahead wait queue */
 	struct ptlrpc_thread	sai_thread;	/* stat-ahead thread */
 	struct ptlrpc_thread	sai_agl_thread;	/* AGL thread */

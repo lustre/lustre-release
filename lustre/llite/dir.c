@@ -139,148 +139,146 @@
  * lmv_adjust_dirpages().
  *
  */
-/**
- * The following three APIs will be used by llite to iterate directory
- * entries from MDC dir page caches.
- *
- * ll_dir_entry_start(next) will lookup(return) entry by op_hash_offset.
- * To avoid extra memory allocation, the @entry will be pointed to
- * the dir entries in MDC page directly, so these pages can not be released
- * until the entry has been accessed in ll_readdir(or statahead).
- *
- * The iterate process will be
- *
- * ll_dir_entry_start: locate the page in MDC, and return the first entry.
- * 		       hold the page.
- *
- * ll_dir_entry_next: return the next entry in the current page, if it reaches
- * 		      to the end, release current page.
- *
- * ll_dir_entry_end: release the last page.
- **/
-struct lu_dirent *ll_dir_entry_start(struct inode *dir,
-				     struct md_op_data *op_data,
-				     struct page **ppage)
+struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
+			     __u64 offset, struct ll_dir_chain *chain)
 {
-	struct lu_dirent *entry = NULL;
-	struct md_callback cb_op;
-	int rc;
-	ENTRY;
+	struct md_callback	cb_op;
+	struct page		*page;
+	int			rc;
 
-	LASSERT(*ppage == NULL);
 	cb_op.md_blocking_ast = ll_md_blocking_ast;
-	op_data->op_cli_flags &= ~CLI_NEXT_ENTRY;
-	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
+	rc = md_read_page(ll_i2mdexp(dir), op_data, &cb_op, offset, &page);
 	if (rc != 0)
-		entry = ERR_PTR(rc);
-	RETURN(entry);
+		return ERR_PTR(rc);
+
+	return page;
 }
 
-struct lu_dirent *ll_dir_entry_next(struct inode *dir,
-				    struct md_op_data *op_data,
-				    struct lu_dirent *ent,
-				    struct page **ppage)
+void ll_release_page(struct inode *inode, struct page *page,
+		     bool remove)
 {
-	struct lu_dirent *entry = NULL;
-	struct md_callback cb_op;
-	int rc;
-	ENTRY;
+	kunmap(page);
 
-	op_data->op_hash_offset = le64_to_cpu(ent->lde_hash);
+	/* Always remove the page for striped dir, because the page is
+	 * built from temporarily in LMV layer */
+	if (inode != NULL && S_ISDIR(inode->i_mode) &&
+	    ll_i2info(inode)->lli_lsm_md != NULL) {
+		__free_page(page);
+		return;
+	}
 
-	/* release last page */
-	LASSERT(*ppage != NULL);
-	kunmap(*ppage);
-	page_cache_release(*ppage);
-
-	cb_op.md_blocking_ast = ll_md_blocking_ast;
-	op_data->op_cli_flags |= CLI_NEXT_ENTRY;
-	rc = md_read_entry(ll_i2mdexp(dir), op_data, &cb_op, &entry, ppage);
-	if (rc != 0)
-		entry = ERR_PTR(rc);
-
-	RETURN(entry);
+	if (remove) {
+		lock_page(page);
+		if (likely(page->mapping != NULL))
+			truncate_complete_page(page->mapping, page);
+		unlock_page(page);
+	}
+	page_cache_release(page);
 }
 
 #ifdef HAVE_DIR_CONTEXT
-int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		struct dir_context *ctx)
 {
 #else
-int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
+int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir)
 {
 #endif
-	struct ll_sb_info	*sbi = ll_i2sbi(inode);
-	struct ll_dir_chain	chain;
-	struct lu_dirent	*ent;
-	int			api32 = ll_need_32bit_api(sbi);
-	int			hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
-	int			done = 0;
-	int			rc = 0;
-	__u64			hash = MDS_DIR_END_OFF;
-	struct page		*page = NULL;
+	struct ll_sb_info    *sbi        = ll_i2sbi(inode);
+	__u64                 pos        = *ppos;
+	bool                  is_api32 = ll_need_32bit_api(sbi);
+	bool                  is_hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
+	struct page          *page;
+	struct ll_dir_chain   chain;
+	bool                  done = false;
+	int                   rc = 0;
 	ENTRY;
 
-        ll_dir_chain_init(&chain);
-	for (ent = ll_dir_entry_start(inode, op_data, &page);
-	     ent != NULL && !IS_ERR(ent) && !done;
-	     ent = ll_dir_entry_next(inode, op_data, ent, &page)) {
-		__u16          type;
-		int            namelen;
-		struct lu_fid  fid;
-		__u64          lhash;
-		__u64          ino;
+	ll_dir_chain_init(&chain);
 
-		hash = le64_to_cpu(ent->lde_hash);
-		if (hash < op_data->op_hash_offset)
-			/*
-			 * Skip until we find target hash
-			 * value.
-			 */
-			continue;
-		namelen = le16_to_cpu(ent->lde_namelen);
-		if (namelen == 0)
-			/*
-			 * Skip dummy record.
-			 */
-			continue;
+	page = ll_get_dir_page(inode, op_data, pos, &chain);
 
-		if (api32 && hash64)
-			lhash = hash >> 32;
-		else
-			lhash = hash;
-		fid_le_to_cpu(&fid, &ent->lde_fid);
-		ino = cl_fid_build_ino(&fid, api32);
-		type = ll_dirent_type_get(ent);
+	while (rc == 0 && !done) {
+		struct lu_dirpage *dp;
+		struct lu_dirent  *ent;
+		__u64 hash;
+		__u64 next;
 
-#ifdef HAVE_DIR_CONTEXT
-		/* For 'll_nfs_get_name_filldir()', it will try
-		 * to access the 'ent' through its 'lde_name',
-		 * so the parameter 'name' for 'filldir()' must
-		 * be part of the 'ent'. */
-		done = !dir_emit(ctx, ent->lde_name, namelen, ino, type);
-#else
-		done = filldir(cookie, ent->lde_name, namelen, lhash,
-			       ino, type);
-#endif
-		if (done) {
-			if (op_data->op_hash_offset != MDS_DIR_END_OFF)
-				op_data->op_hash_offset = hash;
+		if (IS_ERR(page)) {
+			rc = PTR_ERR(page);
 			break;
+		}
+
+		hash = MDS_DIR_END_OFF;
+		dp = page_address(page);
+		for (ent = lu_dirent_start(dp); ent != NULL && !done;
+		     ent = lu_dirent_next(ent)) {
+			__u16          type;
+			int            namelen;
+			struct lu_fid  fid;
+			__u64          lhash;
+			__u64          ino;
+
+			hash = le64_to_cpu(ent->lde_hash);
+			if (hash < pos)
+				/*
+				 * Skip until we find target hash
+				 * value.
+				 */
+				continue;
+
+			namelen = le16_to_cpu(ent->lde_namelen);
+			if (namelen == 0)
+				/*
+				 * Skip dummy record.
+				 */
+				continue;
+
+			if (is_api32 && is_hash64)
+				lhash = hash >> 32;
+			else
+				lhash = hash;
+			fid_le_to_cpu(&fid, &ent->lde_fid);
+			ino = cl_fid_build_ino(&fid, is_api32);
+			type = ll_dirent_type_get(ent);
+			/* For 'll_nfs_get_name_filldir()', it will try
+			 * to access the 'ent' through its 'lde_name',
+			 * so the parameter 'name' for 'filldir()' must
+			 * be part of the 'ent'. */
+			done = filldir(cookie, ent->lde_name, namelen, lhash,
+				       ino, type);
+		}
+
+		if (done) {
+			pos = hash;
+			ll_release_page(inode, page, false);
+			break;
+		}
+
+		next = le64_to_cpu(dp->ldp_hash_end);
+		pos = next;
+		if (pos == MDS_DIR_END_OFF) {
+			/*
+			 * End of directory reached.
+			 */
+			done = 1;
+			ll_release_page(inode, page, false);
+		} else {
+			/*
+			 * Normal case: continue to the next
+			 * page.
+			 */
+			ll_release_page(inode, page,
+					le32_to_cpu(dp->ldp_flags) &
+					LDF_COLLIDE);
+			next = pos;
+			page = ll_get_dir_page(inode, op_data, pos,
+					       &chain);
 		}
 	}
 
-	if (IS_ERR(ent))
-		rc = PTR_ERR(ent);
-	else if (ent == NULL)
-		op_data->op_hash_offset = MDS_DIR_END_OFF;
-
-	if (page != NULL) {
-		kunmap(page);
-		page_cache_release(page);
-	}
-
+	*ppos = pos;
 	ll_dir_chain_fini(&chain);
 	RETURN(rc);
 }
@@ -338,21 +336,22 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		 * object */
 		if (fid_is_zero(&op_data->op_fid3)) {
 			rc = ll_dir_get_parent_fid(inode, &op_data->op_fid3);
-			if (rc != 0)
+			if (rc != 0) {
+				ll_finish_md_op_data(op_data);
 				RETURN(rc);
+			}
 		}
 	}
-	op_data->op_hash_offset = pos;
 	op_data->op_max_pages = sbi->ll_md_brw_pages;
 #ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
-	rc = ll_dir_read(inode, op_data, ctx);
+	rc = ll_dir_read(inode, &pos, op_data, ctx);
 	pos = ctx->pos;
 #else
-	rc = ll_dir_read(inode, op_data, cookie, filldir);
+	rc = ll_dir_read(inode, &pos, op_data, cookie, filldir);
 #endif
 	if (lfd != NULL)
-		lfd->lfd_pos = op_data->op_hash_offset;
+		lfd->lfd_pos = pos;
 
 	if (pos == MDS_DIR_END_OFF) {
 		if (api32)
@@ -361,9 +360,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 			pos = LL_DIR_END_OFF;
 	} else {
 		if (api32 && hash64)
-			pos = op_data->op_hash_offset >> 32;
-		else
-			pos = op_data->op_hash_offset;
+			pos = pos >> 32;
 	}
 #ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;

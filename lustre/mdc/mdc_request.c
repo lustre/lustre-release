@@ -1221,8 +1221,8 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				/*
 				 * upon hash collision, remove this page,
 				 * otherwise put page reference, and
-				 * ll_get_dir_page() will issue RPC to fetch
-				 * the page we want.
+				 * mdc_read_page_remote() will issue RPC to
+				 * fetch the page we want.
 				 */
 				kunmap(page);
 				mdc_release_page(page,
@@ -1380,15 +1380,8 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	ENTRY;
 
 	LASSERT(max_pages > 0 && max_pages <= PTLRPC_MAX_BRW_PAGES);
-	if (op_data->op_mea1 != NULL) {
-		__u32 index = op_data->op_stripe_offset;
-
-		inode = op_data->op_mea1->lsm_md_oinfo[index].lmo_root;
-		fid = &op_data->op_mea1->lsm_md_oinfo[index].lmo_fid;
-	} else {
-		inode = op_data->op_data;
-		fid = &op_data->op_fid1;
-	}
+	inode = op_data->op_data;
+	fid = &op_data->op_fid1;
 	LASSERT(inode != NULL);
 
 	OBD_ALLOC(page_pool, sizeof(page_pool[0]) * max_pages);
@@ -1468,9 +1461,21 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 /**
  * Read dir page from cache first, if it can not find it, read it from
  * server and add into the cache.
+ *
+ * \param[in] exp	MDC export
+ * \param[in] op_data	client MD stack parameters, transfering parameters
+ *                      between different layers on client MD stack.
+ * \param[in] cb_op	callback required for ldlm lock enqueue during
+ *                      read page
+ * \param[in] hash_offset the hash offset of the page to be read
+ * \param[in] ppage	the page to be read
+ *
+ * retval		= 0 get the page successfully
+ *                      errno(<0) get the page failed
  */
 static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
-			 struct md_callback *cb_op, struct page **ppage)
+			 struct md_callback *cb_op, __u64 hash_offset,
+			 struct page **ppage)
 {
 	struct lookup_intent	it = { .it_op = IT_READDIR };
 	struct page		*page;
@@ -1505,7 +1510,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	rc = 0;
 	mdc_set_lock_data(exp, &it.d.lustre.it_lock_handle, dir, NULL);
 
-	rp_param.rp_off = op_data->op_hash_offset;
+	rp_param.rp_off = hash_offset;
 	rp_param.rp_hash64 = op_data->op_cli_flags & CLI_HASH64;
 	page = mdc_page_locate(mapping, &rp_param.rp_off, &start, &end,
 			       rp_param.rp_hash64);
@@ -1567,11 +1572,11 @@ hash_collision:
 	if (BITS_PER_LONG == 32 && rp_param.rp_hash64) {
 		start = le64_to_cpu(dp->ldp_hash_start) >> 32;
 		end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
-		rp_param.rp_off = op_data->op_hash_offset >> 32;
+		rp_param.rp_off = hash_offset >> 32;
 	} else {
 		start = le64_to_cpu(dp->ldp_hash_start);
 		end   = le64_to_cpu(dp->ldp_hash_end);
-		rp_param.rp_off = op_data->op_hash_offset;
+		rp_param.rp_off = hash_offset;
 	}
 	if (end == start) {
 		LASSERT(start == rp_param.rp_off);
@@ -1579,7 +1584,7 @@ hash_collision:
 #if BITS_PER_LONG == 32
 		CWARN("Real page-wide hash collision at ["LPU64" "LPU64"] with "
 		      "hash "LPU64"\n", le64_to_cpu(dp->ldp_hash_start),
-		      le64_to_cpu(dp->ldp_hash_end), op_data->op_hash_offset);
+		      le64_to_cpu(dp->ldp_hash_end), hash_offset);
 #endif
 
 		/*
@@ -1600,102 +1605,6 @@ fail:
 	mdc_release_page(page, 1);
 	rc = -EIO;
 	goto out_unlock;
-}
-
-/**
- * Read one directory entry from the cache.
- */
-int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **entp,
-		   struct page **ppage)
-{
-	struct page		*page = NULL;
-	struct lu_dirpage	*dp;
-	struct lu_dirent	*ent;
-	int			rc = 0;
-	__u32			same_hash_count;
-	__u64			hash_offset = op_data->op_hash_offset;
-	ENTRY;
-
-	CDEBUG(D_INFO, DFID " offset = "LPU64", flags %#x\n",
-	       PFID(&op_data->op_fid1), op_data->op_hash_offset,
-	       op_data->op_cli_flags);
-
-	*ppage = NULL;
-	*entp = NULL;
-
-	if (op_data->op_hash_offset == MDS_DIR_END_OFF)
-		RETURN(0);
-
-	rc = mdc_read_page(exp, op_data, cb_op, &page);
-	if (rc != 0)
-		RETURN(rc);
-
-	/* same_hash_count means how many entries with this
-	 * hash value has been read */
-	same_hash_count = op_data->op_same_hash_offset + 1;
-	dp = page_address(page);
-	for (ent = lu_dirent_start(dp); ent != NULL;
-	     ent = lu_dirent_next(ent)) {
-		/* Skip dummy entry */
-		if (le16_to_cpu(ent->lde_namelen) == 0)
-			continue;
-
-		if (le64_to_cpu(ent->lde_hash) <
-				op_data->op_hash_offset)
-			continue;
-
-		if (unlikely(le64_to_cpu(ent->lde_hash) ==
-				op_data->op_hash_offset)) {
-			/* If it is not for next entry, which usually from
-			 * ll_dir_entry_start, return this entry. */
-			if (!(op_data->op_cli_flags & CLI_NEXT_ENTRY))
-				break;
-
-			/* Keep reading until all of entries being read are
-			 * skipped. */
-			if (same_hash_count > 0) {
-				same_hash_count--;
-				continue;
-			}
-		}
-		break;
-	}
-
-	/* If it can not find entry in current page, try next page. */
-	if (ent == NULL) {
-		if (le64_to_cpu(dp->ldp_hash_end) == MDS_DIR_END_OFF) {
-			op_data->op_same_hash_offset = 0;
-			mdc_release_page(page,
-				 le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
-			RETURN(0);
-		}
-
-		op_data->op_hash_offset = le64_to_cpu(dp->ldp_hash_end);
-		mdc_release_page(page,
-				 le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
-		rc = mdc_read_page(exp, op_data, cb_op, &page);
-		if (rc != 0)
-			RETURN(rc);
-
-		if (page != NULL) {
-			dp = page_address(page);
-			ent = lu_dirent_start(dp);
-		}
-	}
-
-	/* If the next hash is the same as the current hash, increase
-	 * the op_same_hash_offset to resolve the same hash conflict */
-	if (ent != NULL && op_data->op_cli_flags & CLI_NEXT_ENTRY) {
-		if (unlikely(le64_to_cpu(ent->lde_hash) == hash_offset))
-			op_data->op_same_hash_offset++;
-		else
-			op_data->op_same_hash_offset = 0;
-	}
-
-	*ppage = page;
-	*entp = ent;
-	RETURN(rc);
 }
 
 #else /* __KERNEL__ */
@@ -1725,7 +1634,7 @@ static struct page
 
 
 static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
-			struct md_callback *cb_op,
+			struct md_callback *cb_op, __u64 hash_offset,
 			struct page **ppage)
 {
 	struct page *page;
@@ -1734,7 +1643,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 
 	/* No local cache for liblustre, always read entry remotely */
 	lmo = &op_data->op_mea1->lsm_md_oinfo[op_data->op_stripe_offset];
-	page = mdc_read_page_remote(exp, lmo, op_data->op_hash_offset,
+	page = mdc_read_page_remote(exp, lmo, hash_offset,
 				    op_data->op_capa1);
 	if (IS_ERR(page))
 		return PTR_ERR(page);
@@ -1742,35 +1651,6 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	*ppage = page;
 
 	return rc;
-}
-
-int mdc_read_entry(struct obd_export *exp, struct md_op_data *op_data,
-		   struct md_callback *cb_op, struct lu_dirent **entp,
-		   struct page **ppage)
-{
-	struct page		*page = NULL;
-	struct lu_dirpage	*dp;
-	struct lu_dirent	*ent;
-	int			rc;
-	ENTRY;
-
-	rc = mdc_read_page(exp, op_data, cb_op, &page);
-	if (rc != 0)
-		RETURN(rc);
-
-	dp = page_address(page);
-	if (le64_to_cpu(dp->ldp_hash_end) < op_data->op_hash_offset)
-		GOTO(out, *entp = NULL);
-
-	for (ent = lu_dirent_start(dp); ent != NULL;
-	     ent = lu_dirent_next(ent))
-		if (le64_to_cpu(ent->lde_hash) >= op_data->op_hash_offset)
-			break;
-	*entp = ent;
-out:
-
-	OBD_PAGE_FREE(page);
-	RETURN(rc);
 }
 
 #endif
@@ -3318,7 +3198,7 @@ struct md_ops mdc_md_ops = {
         .m_setxattr         = mdc_setxattr,
         .m_getxattr         = mdc_getxattr,
 	.m_fsync		= mdc_fsync,
-	.m_read_entry		= mdc_read_entry,
+	.m_read_page		= mdc_read_page,
         .m_unlink           = mdc_unlink,
         .m_cancel_unused    = mdc_cancel_unused,
         .m_init_ea_size     = mdc_init_ea_size,
