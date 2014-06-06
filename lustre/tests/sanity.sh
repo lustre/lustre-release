@@ -4069,6 +4069,23 @@ test_51d() {
 }
 run_test 51d "check object distribution ===================="
 
+test_51e() {
+	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
+	test_mkdir -c1 $DIR/$tdir	|| error "create $tdir failed"
+	test_mkdir -c1 $DIR/$tdir/d0	|| error "create d0 failed"
+
+	touch $DIR/$tdir/d0/foo
+	createmany -l $DIR/$tdir/d0/foo $DIR/$tdir/d0/f- 65001 &&
+		error "file exceed 65000 nlink limit!"
+	unlinkmany $DIR/$tdir/d0/f- 65001
+	return 0
+}
+run_test 51e "check file nlink limit"
+
 test_52a() {
 	[ -f $DIR/$tdir/foo ] && chattr -a $DIR/$tdir/foo
 	test_mkdir -p $DIR/$tdir

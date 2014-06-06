@@ -355,9 +355,8 @@ int mdd_permission(const struct lu_env *env,
 	rc = mdd_permission_internal_locked(env, mdd_cobj, cattr, mask,
 					MOR_TGT_CHILD);
 
-	if (!rc && (check_create || check_link))
-		rc = mdd_may_create(env, mdd_pobj, pattr, mdd_cobj, true,
-				    check_link);
+	if (!rc && check_create)
+		rc = mdd_may_create(env, mdd_pobj, pattr, mdd_cobj, true);
 
 	if (!rc && check_unlink)
 		rc = mdd_may_unlink(env, mdd_pobj, pattr, cattr);

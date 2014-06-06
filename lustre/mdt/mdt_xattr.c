@@ -127,10 +127,8 @@ mdt_getxattr_one(struct mdt_thread_info *info,
 	CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
 	rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
-	if (rc < 0) {
-		CERROR("getxattr failed: %d\n", rc);
+	if (rc < 0)
 		GOTO(out, rc);
-	}
 
 	if (info->mti_body->mbo_valid &
 	    (OBD_MD_FLRMTLSETFACL | OBD_MD_FLRMTLGETFACL))

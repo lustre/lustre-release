@@ -295,6 +295,20 @@ static int mdd_dir_is_empty(const struct lu_env *env,
 	RETURN(result);
 }
 
+/**
+ * Determine if the target object can be hard linked, and right now it only
+ * checks if the link count reach the maximum limit. Note: for ldiskfs, the
+ * directory nlink count might exceed the maximum link count(see
+ * osd_object_ref_add), so it only check nlink for non-directories.
+ *
+ * \param[in] env	thread environment
+ * \param[in] obj	object being linked to
+ * \param[in] la	attributes of \a obj
+ *
+ * \retval		0 if \a obj can be hard linked
+ * \retval		negative error if \a obj is a directory or has too
+ *			many links
+ */
 static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
 			  const struct lu_attr *la)
 {
@@ -303,25 +317,31 @@ static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
 
 	LASSERT(la != NULL);
 
-	if (!S_ISDIR(la->la_mode))
-		RETURN(0);
-
-	/*
-	 * Subdir count limitation can be broken through.
-	 */
-	if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+	/* Subdir count limitation can be broken through
+	 * (see osd_object_ref_add), so only check non-directory here. */
+	if (!S_ISDIR(la->la_mode) &&
+	    la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
 		RETURN(-EMLINK);
-	else
-		RETURN(0);
+
+	RETURN(0);
 }
 
-/*
+/**
  * Check whether it may create the cobj under the pobj.
- * cobj maybe NULL
+ *
+ * \param[in] env	execution environment
+ * \param[in] pobj	the parent directory
+ * \param[in] pattr	the attribute of the parent directory
+ * \param[in] cobj	the child to be created
+ * \param[in] check_perm	if check WRITE|EXEC permission for parent
+ *
+ * \retval		= 0 create the child under this dir is allowed
+ * \retval              negative errno create the child under this dir is
+ *                      not allowed
  */
-int mdd_may_create(const struct lu_env *env,
-		   struct mdd_object *pobj, const struct lu_attr *pattr,
-		   struct mdd_object *cobj, bool check_perm, bool check_nlink)
+int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
+		   const struct lu_attr *pattr, struct mdd_object *cobj,
+		   bool check_perm)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
 	struct lu_buf	*xbuf;
@@ -351,9 +371,6 @@ int mdd_may_create(const struct lu_env *env,
 		rc = mdd_permission_internal_locked(env, pobj, pattr,
 						    MAY_WRITE | MAY_EXEC,
 						    MOR_TGT_PARENT);
-	if (!rc && check_nlink)
-		rc = __mdd_may_link(env, pobj, pattr);
-
 	RETURN(rc);
 }
 
@@ -498,9 +515,20 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
 	RETURN(rc);
 }
 
-/*
- * tgt maybe NULL
- * has mdd_write_lock on src already, but not on tgt yet
+/**
+ * Check whether it can create the link file(linked to @src_obj) under
+ * the target directory(@tgt_obj), and src_obj has been locked by
+ * mdd_write_lock.
+ *
+ * \param[in] env	execution environment
+ * \param[in] tgt_obj	the target directory
+ * \param[in] tattr	attributes of target directory
+ * \param[in] lname	the link name
+ * \param[in] src_obj	source object for link
+ * \param[in] cattr	attributes for source object
+ *
+ * \retval		= 0 it is allowed to create the link file under tgt_obj
+ * \retval              negative error not allowed to create the link file
  */
 static int mdd_link_sanity_check(const struct lu_env *env,
 				 struct mdd_object *tgt_obj,
@@ -531,11 +559,9 @@ static int mdd_link_sanity_check(const struct lu_env *env,
                 RETURN(-EPERM);
 
 	LASSERT(src_obj != tgt_obj);
-	if (tgt_obj) {
-		rc = mdd_may_create(env, tgt_obj, tattr, NULL, true, false);
-		if (rc)
-			RETURN(rc);
-	}
+	rc = mdd_may_create(env, tgt_obj, tattr, NULL, true);
+	if (rc != 0)
+		RETURN(rc);
 
 	rc = __mdd_may_link(env, src_obj, cattr);
 
@@ -1837,7 +1863,23 @@ static int mdd_object_initialize(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* has not lock on pobj yet */
+/**
+ * This function checks whether it can create a file/dir under the
+ * directory(@pobj). The directory(@pobj) is not being locked by
+ * mdd lock.
+ *
+ * \param[in] env	execution environment
+ * \param[in] pobj	the directory to create files
+ * \param[in] pattr	the attributes of the directory
+ * \param[in] lname	the name of the created file/dir
+ * \param[in] cattr	the attributes of the file/dir
+ * \param[in] spec	create specification
+ *
+ * \retval		= 0 it is allowed to create file/dir under
+ *                      the directory
+ * \retval              negative error not allowed to create file/dir
+ *                      under the directory
+ */
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
 				   const struct lu_attr *pattr,
@@ -1849,6 +1891,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	struct lu_fid     *fid       = &info->mti_fid;
 	struct mdd_object *obj       = md2mdd_obj(pobj);
 	struct mdd_device *m         = mdo2mdd(pobj);
+	bool		check_perm = true;
 	int rc;
 	ENTRY;
 
@@ -1871,11 +1914,14 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 				  MAY_WRITE | MAY_EXEC);
 		if (rc != -ENOENT)
 			RETURN(rc ? : -EEXIST);
-	} else {
-		rc = mdd_may_create(env, obj, pattr, NULL, true, false);
-		if (rc != 0)
-			RETURN(rc);
+
+		/* Permission is already being checked in mdd_lookup */
+		check_perm = false;
 	}
+
+	rc = mdd_may_create(env, obj, pattr, NULL, check_perm);
+	if (rc != 0)
+		RETURN(rc);
 
         /* sgid check */
 	if (pattr->la_mode & S_ISGID) {
@@ -2466,9 +2512,9 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * processed in cld_rename before mdd_rename and enable
 	 * MDS_PERM_BYPASS).
 	 * So check may_create, but not check may_unlink. */
-	if (!tobj)
+	if (tobj == NULL)
 		rc = mdd_may_create(env, tgt_pobj, tpattr, NULL,
-				    (src_pobj != tgt_pobj), false);
+				    (src_pobj != tgt_pobj));
 	else
 		rc = mdd_may_delete(env, tgt_pobj, tpattr, tobj, tattr, cattr,
 				    (src_pobj != tgt_pobj), 1);

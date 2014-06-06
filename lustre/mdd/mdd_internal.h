@@ -199,7 +199,7 @@ int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
                   const struct lu_fid *fid, struct lu_fid *sfid);
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, struct mdd_object *cobj,
-		   bool check_perm, bool check_nlink);
+		   bool check_perm);
 int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, const struct lu_attr *attr);
 int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,

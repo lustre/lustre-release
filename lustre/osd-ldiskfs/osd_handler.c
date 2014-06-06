@@ -2804,7 +2804,8 @@ static int osd_object_ref_add(const struct lu_env *env,
 	 */
 	spin_lock(&obj->oo_guard);
 	ldiskfs_inc_count(oh->ot_handle, inode);
-	LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
+	if (!S_ISDIR(inode->i_mode))
+		LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
 	spin_unlock(&obj->oo_guard);
 
 	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
