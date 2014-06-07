@@ -43,7 +43,8 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 \
 	llapi_file_create.3 llapi_file_get_stripe.3 lustreapi.7 \
 	lustre_rsync.8 lfs_migrate.1 lhbadm.8 ldev.8 ldev.conf.5 nids.5 \
 	lfs-hsm.1 llapi_hsm_state_get.3 llapi_hsm_state_set.3 \
-	lustre_routes_config.8 lustre_routes_conversion.8
+	lustre_routes_config.8 lustre_routes_conversion.8 \
+	lfs-setdirstripe.1 lfs-mkdir.1 lfs-getdirstripe.1
 SERVER_MANFILES = mkfs.lustre.8 tunefs.lustre.8
 
 if SERVER

@@ -1580,7 +1580,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 	if (sem_init && (ret = sem_init(path, parent ?: p, &d, data, de)))
 		goto err;
 
-	if (!d || (param->get_lmv && !param->recursive))
+	if (d == NULL)
 		goto out;
 
 	while ((dent = readdir64(d)) != NULL) {
@@ -2393,17 +2393,26 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	char *separator = "";
 
 	if (obdindex != OBD_NOT_FOUND) {
-		for (i = 0; i < lum->lum_stripe_count; i++) {
-			if (obdindex == objects[i].lum_mds) {
-				llapi_printf(LLAPI_MSG_NORMAL, "%s%s\n", prefix,
-					     path);
+		if (lum->lum_stripe_count == 0) {
+			if (obdindex == lum->lum_stripe_offset)
 				obdstripe = 1;
-				break;
+		} else {
+			for (i = 0; i < lum->lum_stripe_count; i++) {
+				if (obdindex == objects[i].lum_mds) {
+					llapi_printf(LLAPI_MSG_NORMAL,
+						     "%s%s\n", prefix,
+						     path);
+					obdstripe = 1;
+					break;
+				}
 			}
 		}
 	} else {
 		obdstripe = 1;
 	}
+
+	if (!obdstripe)
+		return;
 
 	/* show all information default */
 	if (!verbose) {
@@ -2422,7 +2431,10 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lum_stripe_count);
-		separator = "\n";
+		if (verbose & VERBOSE_OFFSET)
+			separator = " ";
+		else
+			separator = "\n";
 	}
 
 	if (verbose & VERBOSE_OFFSET) {
@@ -3286,16 +3298,9 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 				     (void *)&param->lmd->lmd_lmm);
 		}
 
-	} else if (parent) {
+	} else if (parent && !param->get_lmv && !param->get_default_lmv) {
 		char *fname = strrchr(path, '/');
 		fname = (fname == NULL ? path : fname + 1);
-
-		if (param->get_lmv) {
-			llapi_printf(LLAPI_MSG_NORMAL,
-				     "%s get dirstripe information for file\n",
-				     path);
-			goto out;
-		}
 
 		strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
 
