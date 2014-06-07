@@ -32,8 +32,25 @@
 #define _LUSTRE_UPDATE_H
 #include <lustre_net.h>
 
-#define OUT_UPDATE_INIT_BUFFER_SIZE	8192
-#define OUT_UPDATE_REPLY_SIZE	8192
+#define OUT_UPDATE_INIT_BUFFER_SIZE	4096
+#define OUT_UPDATE_REPLY_SIZE		8192
+
+struct dt_object;
+struct dt_object_hint;
+struct dt_object_format;
+struct dt_allocation_hint;
+struct dt_key;
+struct dt_rec;
+struct thandle;
+
+struct update_buffer {
+	struct object_update_request	*ub_req;
+	size_t				ub_req_size;
+};
+
+/**
+ * Tracking the updates being executed on this dt_device.
+ */
 struct dt_update_request {
 	struct dt_device		*dur_dt;
 	/* attached itself to thandle */
@@ -43,33 +60,10 @@ struct dt_update_request {
 	int				dur_rc;
 	/* Current batch(transaction) id */
 	__u64				dur_batchid;
-	/* Holding the update req */
-	struct object_update_request	*dur_req;
-	int				dur_req_len;
+	/* Holding object updates */
+	struct update_buffer		dur_buf;
 	struct list_head		dur_cb_items;
 };
-
-static inline unsigned long
-object_update_param_size(const struct object_update_param *param)
-{
-	return cfs_size_round(sizeof(*param) + param->oup_len);
-}
-
-static inline unsigned long
-object_update_size(const struct object_update *update)
-{
-	const struct	object_update_param *param;
-	unsigned long	size;
-	size_t		i;
-
-	size = offsetof(struct object_update, ou_params[0]);
-	for (i = 0; i < update->ou_params_count; i++) {
-		param = (struct object_update_param *)((char *)update + size);
-		size += object_update_param_size(param);
-	}
-
-	return size;
-}
 
 static inline void
 *object_update_param_get(const struct object_update *update, size_t index,
@@ -111,57 +105,11 @@ object_update_request_size(const struct object_update_request *our)
 	return size;
 }
 
-static inline struct object_update
-*object_update_request_get(const struct object_update_request *our,
-			   size_t index, size_t *size)
-{
-	void	*ptr;
-	size_t	i;
-
-	if (index >= our->ourq_count)
-		return NULL;
-
-	ptr = (char *)our + offsetof(struct object_update_request,
-				     ourq_updates[0]);
-	for (i = 0; i < index; i++)
-		ptr += object_update_size((struct object_update *)ptr);
-
-	if (size != NULL)
-		*size = object_update_size((struct object_update *)ptr);
-
-	return ptr;
-}
-
 static inline void
 object_update_reply_init(struct object_update_reply *reply, size_t count)
 {
 	reply->ourp_magic = UPDATE_REPLY_MAGIC;
 	reply->ourp_count = count;
-}
-
-static inline struct object_update_result
-*object_update_result_get(const struct object_update_reply *reply,
-			  size_t index, size_t *size)
-{
-	char *ptr;
-	size_t count = reply->ourp_count;
-	size_t i;
-
-	if (index >= count)
-		return NULL;
-
-	ptr = (char *)reply +
-	      cfs_size_round(offsetof(struct object_update_reply,
-				      ourp_lens[count]));
-	for (i = 0; i < index; i++) {
-		LASSERT(reply->ourp_lens[i] > 0);
-		ptr += cfs_size_round(reply->ourp_lens[i]);
-	}
-
-	if (size != NULL)
-		*size = reply->ourp_lens[index];
-
-	return (struct object_update_result *)ptr;
 }
 
 static inline void
@@ -218,4 +166,58 @@ static inline void update_inc_batchid(struct dt_update_request *update)
 	update->dur_batchid++;
 }
 
+/* target/out_lib.c */
+struct thandle_update;
+struct dt_update_request *out_find_update(struct thandle_update *tu,
+					  struct dt_device *dt_dev);
+void dt_update_request_destroy(struct dt_update_request *update);
+struct dt_update_request *dt_update_request_create(struct dt_device *dt);
+struct dt_update_request *dt_update_request_find_or_create(struct thandle *th,
+							  struct dt_object *dt);
+int out_prep_update_req(const struct lu_env *env, struct obd_import *imp,
+			const struct object_update_request *ureq,
+			struct ptlrpc_request **reqp);
+int out_remote_sync(const struct lu_env *env, struct obd_import *imp,
+		    struct dt_update_request *update,
+		    struct ptlrpc_request **reqp);
+int out_update_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		    enum update_type op, const struct lu_fid *fid,
+		    int params_count, __u16 *param_sizes, const void **bufs,
+		    __u64 batchid);
+int out_create_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		    const struct lu_fid *fid, struct lu_attr *attr,
+		    struct dt_allocation_hint *hint,
+		    struct dt_object_format *dof, __u64 batchid);
+int out_object_destroy_pack(const struct lu_env *env,
+			    struct update_buffer *ubuf,
+			    const struct lu_fid *fid, __u64 batchid);
+int out_index_delete_pack(const struct lu_env *env, struct update_buffer *ubuf,
+			  const struct lu_fid *fid, const struct dt_key *key,
+			  __u64 batchid);
+int out_index_insert_pack(const struct lu_env *env, struct update_buffer *ubuf,
+			  const struct lu_fid *fid, const struct dt_rec *rec,
+			  const struct dt_key *key, __u64 batchid);
+int out_xattr_set_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		       const struct lu_fid *fid, const struct lu_buf *buf,
+		       const char *name, int flag, __u64 batchid);
+int out_xattr_del_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		       const struct lu_fid *fid, const char *name,
+		       __u64 batchid);
+int out_attr_set_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		      const struct lu_fid *fid, const struct lu_attr *attr,
+		      __u64 batchid);
+int out_ref_add_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		     const struct lu_fid *fid, __u64 batchid);
+int out_ref_del_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		     const struct lu_fid *fid, __u64 batchid);
+int out_write_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		   const struct lu_fid *fid, const struct lu_buf *buf,
+		   loff_t pos, __u64 batchid);
+int out_attr_get_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		      const struct lu_fid *fid);
+int out_index_lookup_pack(const struct lu_env *env, struct update_buffer *ubuf,
+			  const struct lu_fid *fid, struct dt_rec *rec,
+			  const struct dt_key *key);
+int out_xattr_get_pack(const struct lu_env *env, struct update_buffer *ubuf,
+		       const struct lu_fid *fid, const char *name);
 #endif

@@ -51,7 +51,6 @@
 #include <lustre_net.h>
 #include <obd_cksum.h>
 #include <lustre/ll_fiemap.h>
-#include <lustre_update.h>
 
 static inline int lustre_msg_hdr_size_v2(int count)
 {

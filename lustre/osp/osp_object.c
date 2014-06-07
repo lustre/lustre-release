@@ -330,12 +330,12 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		spin_unlock(&obj->opo_lock);
 	}
 
-	update = out_create_update_req(dev);
+	update = dt_update_request_create(dev);
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = out_insert_update(env, update, OUT_ATTR_GET,
-			       lu_object_fid(&dt->do_lu), 0, NULL, NULL);
+	rc = out_attr_get_pack(env, &update->dur_buf,
+			       lu_object_fid(&dt->do_lu));
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
 		       dev->dd_lu_dev.ld_obd->obd_name,
@@ -376,7 +376,7 @@ out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	out_destroy_update_req(update);
+	dt_update_request_destroy(update);
 
 	return rc;
 }
@@ -597,7 +597,7 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*obj	 = dt2osp_obj(dt);
 	struct osp_device	*osp	 = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_xattr_entry	*oxe;
-	int			 namelen = strlen(name);
+	__u16			 namelen = strlen(name);
 	int			 rc	 = 0;
 
 	LASSERT(buf != NULL);
@@ -619,7 +619,7 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	mutex_lock(&osp->opd_async_requests_mutex);
 	rc = osp_insert_async_request(env, OUT_XATTR_GET, obj, 1,
-				      &namelen, &name, oxe,
+				      &namelen, (const void **)&name, oxe,
 				      osp_xattr_get_interpterer);
 	if (rc != 0) {
 		mutex_unlock(&osp->opd_async_requests_mutex);
@@ -633,8 +633,8 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		 *
 		 *	We will improve it in the future. */
 		update = osp->opd_async_requests;
-		if (update != NULL && update->dur_req != NULL &&
-		    update->dur_req->ourq_count > 0) {
+		if (update != NULL && update->dur_buf.ub_req != NULL &&
+		    update->dur_buf.ub_req->ourq_count > 0) {
 			osp->opd_async_requests = NULL;
 			mutex_unlock(&osp->opd_async_requests_mutex);
 			rc = osp_unplug_async_request(env, osp, update);
@@ -659,7 +659,6 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct object_update_reply *reply;
 	struct osp_xattr_entry	*oxe	= NULL;
 	const char		*dname  = dt->do_lu.lo_dev->ld_obd->obd_name;
-	int			 namelen;
 	int			 rc	= 0;
 	ENTRY;
 
@@ -700,17 +699,15 @@ unlock:
 		spin_unlock(&obj->opo_lock);
 	}
 
-	update = out_create_update_req(dev);
+	update = dt_update_request_create(dev);
 	if (IS_ERR(update))
 		GOTO(out, rc = PTR_ERR(update));
 
-	namelen = strlen(name) + 1;
-	rc = out_insert_update(env, update, OUT_XATTR_GET,
-			       lu_object_fid(&dt->do_lu), 1, &namelen, &name);
+	rc = out_xattr_get_pack(env, &update->dur_buf,
+				lu_object_fid(&dt->do_lu), name);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
 		       dname, PFID(lu_object_fid(&dt->do_lu)), rc);
-
 		GOTO(out, rc);
 	}
 
@@ -815,7 +812,7 @@ out:
 		ptlrpc_req_finished(req);
 
 	if (update != NULL && !IS_ERR(update))
-		out_destroy_update_req(update);
+		dt_update_request_destroy(update);
 
 	if (oxe != NULL)
 		osp_oac_xattr_put(oxe);
@@ -827,21 +824,15 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			   const struct lu_buf *buf, const char *name,
 			   int flag, struct thandle *th)
 {
+	struct osp_object	*o = dt2osp_obj(dt);
 	struct dt_update_request *update;
-	struct lu_fid		 *fid;
-	int			 sizes[3]	= { strlen(name),
-						    buf->lb_len,
-						    sizeof(int) };
-	char			 *bufs[3]	= { (char *)name,
-						    (char *)buf->lb_buf };
-	struct osp_xattr_entry	 *oxe;
-	struct osp_object	 *o		= dt2osp_obj(dt);
-	int			 rc;
+	struct osp_xattr_entry	*oxe;
+	int			rc;
 	ENTRY;
 
 	LASSERT(buf->lb_len > 0 && buf->lb_buf != NULL);
 
-	update = out_find_create_update_loc(th, dt);
+	update = dt_update_request_find_or_create(th, dt);
 	if (IS_ERR(update)) {
 		CERROR("%s: Get OSP update buf failed "DFID": rc = %d\n",
 		       dt->do_lu.lo_dev->ld_obd->obd_name,
@@ -851,12 +842,9 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(PTR_ERR(update));
 	}
 
-	flag = cpu_to_le32(flag);
-	bufs[2] = (char *)&flag;
-
-	fid = (struct lu_fid *)lu_object_fid(&dt->do_lu);
-	rc = out_insert_update(env, update, OUT_XATTR_SET, fid,
-			       ARRAY_SIZE(sizes), sizes, (const char **)bufs);
+	rc = out_xattr_set_pack(env, &update->dur_buf,
+				lu_object_fid(&dt->do_lu),
+				buf, name, flag, update->dur_batchid);
 	if (rc != 0 || o->opo_ooa == NULL)
 		RETURN(rc);
 
@@ -940,17 +928,17 @@ static int __osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	const struct lu_fid	 *fid;
 	struct osp_object	 *o	= dt2osp_obj(dt);
 	struct osp_xattr_entry	 *oxe;
-	int			  size	= strlen(name);
 	int			  rc;
 
-	update = out_find_create_update_loc(th, dt);
+	update = dt_update_request_find_or_create(th, dt);
 	if (IS_ERR(update))
 		return PTR_ERR(update);
 
 	fid = lu_object_fid(&dt->do_lu);
 
-	rc = out_insert_update(env, update, OUT_XATTR_DEL, fid, 1, &size,
-			       (const char **)&name);
+	rc = out_xattr_del_pack(env, &update->dur_buf, fid, name,
+				update->dur_batchid);
+
 	if (rc != 0 || o->opo_ooa == NULL)
 		return rc;
 
