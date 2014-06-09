@@ -661,27 +661,15 @@ int main(int argc, char *const argv[])
 		mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
 		mop.mo_ldd.ldd_svindex = 0;
 	}
-
-#if 0
-        /*
-         * Comment out these 2 checks temporarily, since for multi-MDSes
-         * in single node only 1 mds node could have mgs service
-         */
-        if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
-                verrprint("No management node specified, adding MGS to this "
-                          "MDT\n");
-                ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
-        }
-        if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
-                fatal();
-                if (IS_MDT(ldd))
-                        fprintf(stderr, "Must specify --mgs or --mgsnode=\n");
-                else
-                        fprintf(stderr, "Must specify --mgsnode=\n");
-                ret = EINVAL;
-                goto out;
-        }
-#endif
+	if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
+		fatal();
+		if (IS_MDT(ldd))
+			fprintf(stderr, "Must specify --mgs or --mgsnode\n");
+		else
+			fprintf(stderr, "Must specify --mgsnode\n");
+		ret = EINVAL;
+		goto out;
+	}
 	if ((IS_MDT(ldd) || IS_OST(ldd)) && mop.mo_ldd.ldd_fsname[0] == '\0') {
 		fatal();
 		fprintf(stderr, "Must specify --fsname for MDT/OST device\n");

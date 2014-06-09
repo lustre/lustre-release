@@ -4682,6 +4682,52 @@ test_78() {
 }
 run_test 78 "run resize2fs on MDT and OST filesystems"
 
+test_79() { # LU-4227
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.59) ]] ||
+		{ skip "Need MDS version at least 2.5.59"; return 0; }
+
+	local mdsdev1=$(mdsdevname 1)
+	local mdsvdev1=$(mdsvdevname 1)
+	local mdsdev2=$(mdsdevname 2)
+	local mdsvdev2=$(mdsvdevname 2)
+	local ostdev1=$(ostdevname 1)
+	local ostvdev1=$(ostvdevname 1)
+	local opts_mds1="$(mkfs_opts mds1 $mdsdev1) --reformat"
+	local opts_mds2="$(mkfs_opts mds2 $mdsdev2) --reformat"
+	local opts_ost1="$(mkfs_opts ost1 $ostdev1) --reformat"
+	local mgsnode_opt
+
+	# remove --mgs/--mgsnode from mkfs.lustre options
+	opts_mds1=$(echo $opts_mds1 | sed -e "s/--mgs//")
+
+	mgsnode_opt=$(echo $opts_mds2 |
+		awk '{ for ( i = 1; i < NF; i++ )
+			if ( $i ~ "--mgsnode" ) { print $i; break } }')
+	[ -n $mgsnode_opt ] &&
+		opts_mds2=$(echo $opts_mds2 | sed -e "s/$mgsnode_opt//")
+
+	mgsnode_opt=$(echo $opts_ost1 |
+		awk '{ for ( i = 1; i < NF; i++ )
+			if ( $i ~ "--mgsnode" ) { print $i; break } }')
+	[ -n $mgsnode_opt ] &&
+		opts_ost1=$(echo $opts_ost1 | sed -e "s/$mgsnode_opt//")
+
+	# -MGS, format a mdt without --mgs option
+	add mds1 $opts_mds1 $mdsdev1 $mdsvdev1 &&
+		error "Must specify --mgs when formatting mdt combined with mgs"
+
+	# +MGS, format a mdt/ost without --mgsnode option
+	add mds1 $(mkfs_opts mds1 $mdsdev1) --reformat $mdsdev1 $mdsvdev1 \
+		> /dev/null || error "start mds1 failed"
+	add mds2 $opts_mds2 $mdsdev2 $mdsvdev2 &&
+		error "Must specify --mgsnode when formatting a mdt"
+	add ost1 $opts_ost1 $ostdev1 $ostvdev2 &&
+		error "Must specify --mgsnode when formatting an ost"
+
+	return 0
+}
+run_test 79 "format MDT/OST without mgs option (should return errors)"
+
 test_80() {
 	start_mds
 	start_ost
