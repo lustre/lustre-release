@@ -159,6 +159,8 @@ out:
  * changed between declare and create.
  * Because the fld entry can only be increamental, so we will only check
  * whether it can be merged from the left.
+ *
+ * Caller must hold fld->lsf_lock
  **/
 int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 		     const struct lu_seq_range *new_range, struct thandle *th)
@@ -261,6 +263,19 @@ int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
         RETURN(rc);
 }
 
+/**
+ * insert entry in fld store.
+ *
+ * \param  env    relevant lu_env
+ * \param  fld    fld store
+ * \param  range  range to be inserted
+ *
+ * \retval  0  success
+ * \retval  -ve error
+ *
+ * Caller must hold fld->lsf_lock
+ **/
+
 int fld_insert_entry(const struct lu_env *env,
 		     struct lu_server_fld *fld,
 		     const struct lu_seq_range *range)
@@ -268,6 +283,8 @@ int fld_insert_entry(const struct lu_env *env,
 	struct thandle *th;
 	int rc;
 	ENTRY;
+
+	LASSERT(mutex_is_locked(&fld->lsf_lock));
 
 	th = dt_trans_create(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev));
 	if (IS_ERR(th))

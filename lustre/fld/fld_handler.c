@@ -180,7 +180,10 @@ int fld_update_from_controller(const struct lu_env *env,
 			if (lsra->lsra_lsr[i].lsr_index != index)
 				GOTO(out, rc = -EINVAL);
 
+			mutex_lock(&fld->lsf_lock);
 			rc1 = fld_insert_entry(env, fld, &lsra->lsra_lsr[i]);
+			mutex_unlock(&fld->lsf_lock);
+
 			if (rc1 != 0)
 				GOTO(out, rc = rc1);
 		}
