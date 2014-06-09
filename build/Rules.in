@@ -8,10 +8,6 @@
 #
 # and autoMakefile.am:
 #
-# if LIBLUSTRE
-# <liblustre rules>
-# endif
-#
 # if MODULES
 # modulefs_DATA = <module-name>$(KMODEXT)
 # endif
