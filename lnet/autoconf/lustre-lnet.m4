@@ -625,13 +625,10 @@ AC_MSG_RESULT([$enable_readline])
 
 LIBREADLINE=""
 AS_IF([test "x$enable_readline" = xyes], [
-	LIBS_save="$LIBS"
-	LIBS="-lncurses $LIBS"
 	AC_CHECK_LIB([readline], [readline], [
-		LIBREADLINE="-lreadline -lncurses"
+		LIBREADLINE="-lreadline"
 		AC_DEFINE(HAVE_LIBREADLINE, 1,
 			[readline library is available])])
-	LIBS="$LIBS_save"
 ])
 AC_SUBST(LIBREADLINE)
 

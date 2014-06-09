@@ -63,7 +63,7 @@ export AR
 export RANLIB
 
 liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS)
-	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)" "$(CAP_LIBS)" "$(ZLIB)"
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)" "$(CAP_LIBS)"
 
 EXTRA_DIST = genlib.sh
 

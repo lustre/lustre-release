@@ -1802,26 +1802,6 @@ AC_CHECK_HEADERS([linux/random.h], [], [],
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
 
-# check for -lz support
-ZLIB=""
-AC_CHECK_LIB([z], [adler32],
-	[AC_CHECK_HEADERS([zlib.h], [
-		ZLIB="-lz"
-		AC_DEFINE([HAVE_ADLER], 1,
-			[support alder32 checksum type])
-	], [
-		AC_MSG_WARN([
-
-No zlib-devel package found, unable to use adler32 checksum
-])
-])], [
-	AC_MSG_WARN([
-
-No zlib package found, unable to use adler32 checksum
-])
-])
-AC_SUBST(ZLIB)
-
 SELINUX=""
 AC_CHECK_LIB([selinux], [is_selinux_enabled],
 	[AC_CHECK_HEADERS([selinux.h],

@@ -26,7 +26,6 @@ LIBS=$2
 LND_LIBS=$3
 PTHREAD_LIBS=$4
 CAP_LIBS=$5
-ZLIB=$6
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -108,8 +107,8 @@ else
 #./llite_lib.o: In function `liblustre_process_log':
 #/home/brian/rpm/BUILD/lustre-1.8.2.50/lustre/liblustre/llite_lib.c:234: undefined reference to `__stack_chk_fail_local'
 # due to the use of SSP
-#$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
-	$LD $LDFLAGS -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS $ZLIB
+#$LD -shared -nostdlib -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
+	$LD $LDFLAGS -shared -o $CWD/liblustre.so $ALL_OBJS $CAP_LIBS $PTHREAD_LIBS
 fi
 
 rm -rf $sysio_tmp

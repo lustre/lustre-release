@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir
 AM_CFLAGS = $(LLCFLAGS)
 AM_LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
-LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS) $(ZLIB)
+LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS)
 
 if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a

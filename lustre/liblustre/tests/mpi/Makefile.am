@@ -3,7 +3,7 @@
 AM_CPPFLAGS = -I$(SYSIO)/include $(LLCPPFLAGS) -I$(top_srcdir)/lnet/ulnds
 AM_CFLAGS = $(LLCFLAGS)
 
-LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS) $(ZLIB)
+LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS)
 
 CC = @MPICC_WRAPPER@
 
