@@ -435,8 +435,8 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 
 	lock = ldlm_lock_create(ns, res_id, type, mode, &cbs, data, lvb_len,
 				lvb_type);
-        if (unlikely(!lock))
-                GOTO(out_nolock, err = -ENOMEM);
+	if (IS_ERR(lock))
+		GOTO(out_nolock, err = PTR_ERR(lock));
 
         ldlm_lock2handle(lock, lockh);
 
@@ -753,19 +753,19 @@ static inline int ldlm_format_handles_avail(struct obd_import *imp,
  * that needs to be performed.
  */
 int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
-                      int version, int opc, int canceloff,
-                      cfs_list_t *cancels, int count)
-{
-        struct ldlm_namespace   *ns = exp->exp_obd->obd_namespace;
-        struct req_capsule      *pill = &req->rq_pill;
-        struct ldlm_request     *dlm = NULL;
-        int flags, avail, to_free, pack = 0;
-        CFS_LIST_HEAD(head);
-        int rc;
-        ENTRY;
+		      int version, int opc, int canceloff,
+		      struct list_head *cancels, int count)
+	{
+	struct ldlm_namespace	*ns = exp->exp_obd->obd_namespace;
+	struct req_capsule	*pill = &req->rq_pill;
+	struct ldlm_request	*dlm = NULL;
+	struct list_head	head = LIST_HEAD_INIT(head);
+	int flags, avail, to_free, pack = 0;
+	int rc;
+	ENTRY;
 
-        if (cancels == NULL)
-                cancels = &head;
+	if (cancels == NULL)
+		cancels = &head;
 	if (ns_connect_cancelset(ns)) {
                 /* Estimate the amount of available space in the request. */
                 req_capsule_filled_sizes(pill, RCL_CLIENT);
@@ -893,8 +893,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 		lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
 					einfo->ei_mode, &cbs, einfo->ei_cbdata,
 					lvb_len, lvb_type);
-		if (lock == NULL)
-			RETURN(-ENOMEM);
+		if (IS_ERR(lock))
+			RETURN(PTR_ERR(lock));
                 /* for the local lock, add the reference */
                 ldlm_lock_addref_internal(lock, einfo->ei_mode);
                 ldlm_lock2handle(lock, lockh);
@@ -1343,13 +1343,13 @@ EXPORT_SYMBOL(ldlm_cli_update_pool);
 int ldlm_cli_cancel(struct lustre_handle *lockh,
 		    ldlm_cancel_flags_t cancel_flags)
 {
-        struct obd_export *exp;
+	struct obd_export *exp;
 	int avail, flags, count = 1;
 	__u64 rc = 0;
-        struct ldlm_namespace *ns;
-        struct ldlm_lock *lock;
-        CFS_LIST_HEAD(cancels);
-        ENTRY;
+	struct ldlm_namespace *ns;
+	struct ldlm_lock *lock;
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	ENTRY;
 
         /* concurrent cancels on the same handle can happen */
         lock = ldlm_handle2lock_long(lockh, LDLM_FL_CANCELING);
@@ -1392,10 +1392,10 @@ EXPORT_SYMBOL(ldlm_cli_cancel);
  * Return the number of cancelled locks.
  */
 int ldlm_cli_cancel_list_local(cfs_list_t *cancels, int count,
-                               ldlm_cancel_flags_t flags)
+			       ldlm_cancel_flags_t flags)
 {
-        CFS_LIST_HEAD(head);
-        struct ldlm_lock *lock, *next;
+	struct list_head head = LIST_HEAD_INIT(head);
+	struct ldlm_lock *lock, *next;
 	int left = 0, bl_ast = 0;
 	__u64 rc;
 
@@ -1793,7 +1793,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr,
 		    ldlm_cancel_flags_t cancel_flags,
 		    int flags)
 {
-	CFS_LIST_HEAD(cancels);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
 	int count, rc;
 	ENTRY;
 
@@ -1931,36 +1931,36 @@ EXPORT_SYMBOL(ldlm_cli_cancel_list);
  * If flags & LDLM_FL_LOCAL_ONLY, throw the locks away without trying
  * to notify the server. */
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
-                                    const struct ldlm_res_id *res_id,
-                                    ldlm_policy_data_t *policy,
-                                    ldlm_mode_t mode,
-                                    ldlm_cancel_flags_t flags,
-                                    void *opaque)
+				    const struct ldlm_res_id *res_id,
+				    ldlm_policy_data_t *policy,
+				    ldlm_mode_t mode,
+				    ldlm_cancel_flags_t flags,
+				    void *opaque)
 {
-        struct ldlm_resource *res;
-        CFS_LIST_HEAD(cancels);
-        int count;
-        int rc;
-        ENTRY;
+	struct ldlm_resource *res;
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	int count;
+	int rc;
+	ENTRY;
 
-        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
-        if (res == NULL) {
-                /* This is not a problem. */
-                CDEBUG(D_INFO, "No resource "LPU64"\n", res_id->name[0]);
-                RETURN(0);
-        }
+	res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
+	if (IS_ERR(res)) {
+		/* This is not a problem. */
+		CDEBUG(D_INFO, "No resource "LPU64"\n", res_id->name[0]);
+		RETURN(0);
+	}
 
-        LDLM_RESOURCE_ADDREF(res);
-        count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
-                                           0, flags | LCF_BL_AST, opaque);
-        rc = ldlm_cli_cancel_list(&cancels, count, NULL, flags);
-        if (rc != ELDLM_OK)
+	LDLM_RESOURCE_ADDREF(res);
+	count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
+					   0, flags | LCF_BL_AST, opaque);
+	rc = ldlm_cli_cancel_list(&cancels, count, NULL, flags);
+	if (rc != ELDLM_OK)
 		CERROR("canceling unused lock "DLDLMRES": rc = %d\n",
 		       PLDLMRES(res), rc);
 
-        LDLM_RESOURCE_DELREF(res);
-        ldlm_resource_putref(res);
-        RETURN(0);
+	LDLM_RESOURCE_DELREF(res);
+	ldlm_resource_putref(res);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_cli_cancel_unused_resource);
 
@@ -2094,27 +2094,24 @@ EXPORT_SYMBOL(ldlm_namespace_foreach);
  *       < 0:  errors
  */
 int ldlm_resource_iterate(struct ldlm_namespace *ns,
-                          const struct ldlm_res_id *res_id,
-                          ldlm_iterator_t iter, void *data)
+			  const struct ldlm_res_id *res_id,
+			  ldlm_iterator_t iter, void *data)
 {
-        struct ldlm_resource *res;
-        int rc;
-        ENTRY;
+	struct ldlm_resource *res;
+	int rc;
+	ENTRY;
 
-        if (ns == NULL) {
-                CERROR("must pass in namespace\n");
-                LBUG();
-        }
+	LASSERTF(ns != NULL, "must pass in namespace\n");
 
-        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
-        if (res == NULL)
-                RETURN(0);
+	res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
+	if (IS_ERR(res))
+		RETURN(0);
 
-        LDLM_RESOURCE_ADDREF(res);
-        rc = ldlm_resource_foreach(res, iter, data);
-        LDLM_RESOURCE_DELREF(res);
-        ldlm_resource_putref(res);
-        RETURN(rc);
+	LDLM_RESOURCE_ADDREF(res);
+	rc = ldlm_resource_foreach(res, iter, data);
+	LDLM_RESOURCE_DELREF(res);
+	ldlm_resource_putref(res);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_resource_iterate);
 
@@ -2286,27 +2283,27 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
  */
 static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 {
-        int canceled;
-        CFS_LIST_HEAD(cancels);
+	int canceled;
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
 
-        CDEBUG(D_DLMTRACE, "Dropping as many unused locks as possible before"
-                           "replay for namespace %s (%d)\n",
-                           ldlm_ns_name(ns), ns->ns_nr_unused);
+	CDEBUG(D_DLMTRACE, "Dropping as many unused locks as possible before"
+			   "replay for namespace %s (%d)\n",
+			   ldlm_ns_name(ns), ns->ns_nr_unused);
 
-        /* We don't need to care whether or not LRU resize is enabled
-         * because the LDLM_CANCEL_NO_WAIT policy doesn't use the
-         * count parameter */
-        canceled = ldlm_cancel_lru_local(ns, &cancels, ns->ns_nr_unused, 0,
-                                         LCF_LOCAL, LDLM_CANCEL_NO_WAIT);
+	/* We don't need to care whether or not LRU resize is enabled
+	 * because the LDLM_CANCEL_NO_WAIT policy doesn't use the
+	 * count parameter */
+	canceled = ldlm_cancel_lru_local(ns, &cancels, ns->ns_nr_unused, 0,
+					 LCF_LOCAL, LDLM_CANCEL_NO_WAIT);
 
-        CDEBUG(D_DLMTRACE, "Canceled %d unused locks from namespace %s\n",
-                           canceled, ldlm_ns_name(ns));
+	CDEBUG(D_DLMTRACE, "Canceled %d unused locks from namespace %s\n",
+			   canceled, ldlm_ns_name(ns));
 }
 
 int ldlm_replay_locks(struct obd_import *imp)
 {
 	struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-	CFS_LIST_HEAD(list);
+	struct list_head list = LIST_HEAD_INIT(list);
 	struct ldlm_lock *lock, *next;
 	int rc = 0;
 

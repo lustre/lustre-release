@@ -1240,13 +1240,13 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 }
         }
 
-        /* The lock's callback data might be set in the policy function */
-        lock = ldlm_lock_create(ns, &dlm_req->lock_desc.l_resource.lr_name,
-                                dlm_req->lock_desc.l_resource.lr_type,
-                                dlm_req->lock_desc.l_req_mode,
+	/* The lock's callback data might be set in the policy function */
+	lock = ldlm_lock_create(ns, &dlm_req->lock_desc.l_resource.lr_name,
+				dlm_req->lock_desc.l_resource.lr_type,
+				dlm_req->lock_desc.l_req_mode,
 				cbs, NULL, 0, LVB_T_NONE);
-        if (!lock)
-                GOTO(out, rc = -ENOMEM);
+	if (IS_ERR(lock))
+		GOTO(out, rc = PTR_ERR(lock));
 
         lock->l_last_activity = cfs_time_current_sec();
         lock->l_remote_handle = dlm_req->lock_handle[0];
@@ -1383,11 +1383,11 @@ existing_lock:
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
          * ldlm_reprocess_all.  If this moves, revisit that code. -phil */
-        if (lock) {
-                LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
-                           "(err=%d, rc=%d)", err, rc);
+	if (!IS_ERR(lock)) {
+		LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
+			   "(err=%d, rc=%d)", err, rc);
 
-                if (rc == 0) {
+		if (rc == 0) {
 			if (req_capsule_has_field(&req->rq_pill, &RMF_DLM_LVB,
 						  RCL_SERVER) &&
 			    ldlm_lvbo_size(lock) > 0) {

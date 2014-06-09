@@ -546,9 +546,9 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         type = oldres->lr_type;
         unlock_res_and_lock(lock);
 
-        newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
-        if (newres == NULL)
-                RETURN(-ENOMEM);
+	newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
+	if (IS_ERR(newres))
+		RETURN(PTR_ERR(newres));
 
         lu_ref_add(&newres->lr_reference, "lock", lock);
         /*
@@ -1354,11 +1354,11 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
                 mode = old_lock->l_req_mode;
         }
 
-        res = ldlm_resource_get(ns, NULL, res_id, type, 0);
-        if (res == NULL) {
-                LASSERT(old_lock == NULL);
-                RETURN(0);
-        }
+	res = ldlm_resource_get(ns, NULL, res_id, type, 0);
+	if (IS_ERR(res)) {
+		LASSERT(old_lock == NULL);
+		RETURN(0);
+	}
 
         LDLM_RESOURCE_ADDREF(res);
         lock_res(res);
@@ -1596,61 +1596,60 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
  * Returns a referenced lock
  */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
-                                   const struct ldlm_res_id *res_id,
-                                   ldlm_type_t type,
-                                   ldlm_mode_t mode,
-                                   const struct ldlm_callback_suite *cbs,
+				   const struct ldlm_res_id *res_id,
+				   ldlm_type_t type,
+				   ldlm_mode_t mode,
+				   const struct ldlm_callback_suite *cbs,
 				   void *data, __u32 lvb_len,
 				   enum lvb_type lvb_type)
 {
-        struct ldlm_lock *lock;
-        struct ldlm_resource *res;
-        ENTRY;
+	struct ldlm_lock	*lock;
+	struct ldlm_resource	*res;
+	int			rc;
+	ENTRY;
 
-        res = ldlm_resource_get(ns, NULL, res_id, type, 1);
-        if (res == NULL)
-                RETURN(NULL);
+	res = ldlm_resource_get(ns, NULL, res_id, type, 1);
+	if (IS_ERR(res))
+		RETURN(ERR_CAST(res));
 
-        lock = ldlm_lock_new(res);
-
-        if (lock == NULL)
-                RETURN(NULL);
+	lock = ldlm_lock_new(res);
+	if (lock == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
 
 	lock->l_req_mode = mode;
 	lock->l_ast_data = data;
 	lock->l_pid = current_pid();
 	if (ns_is_server(ns))
 		ldlm_set_ns_srv(lock);
-        if (cbs) {
-                lock->l_blocking_ast = cbs->lcs_blocking;
-                lock->l_completion_ast = cbs->lcs_completion;
-                lock->l_glimpse_ast = cbs->lcs_glimpse;
-        }
+	if (cbs) {
+		lock->l_blocking_ast = cbs->lcs_blocking;
+		lock->l_completion_ast = cbs->lcs_completion;
+		lock->l_glimpse_ast = cbs->lcs_glimpse;
+	}
 
-        lock->l_tree_node = NULL;
-        /* if this is the extent lock, allocate the interval tree node */
-        if (type == LDLM_EXTENT) {
-                if (ldlm_interval_alloc(lock) == NULL)
-                        GOTO(out, 0);
-        }
+	lock->l_tree_node = NULL;
+	/* if this is the extent lock, allocate the interval tree node */
+	if (type == LDLM_EXTENT)
+		if (ldlm_interval_alloc(lock) == NULL)
+			GOTO(out, rc = -ENOMEM);
 
-        if (lvb_len) {
-                lock->l_lvb_len = lvb_len;
-                OBD_ALLOC_LARGE(lock->l_lvb_data, lvb_len);
-                if (lock->l_lvb_data == NULL)
-                        GOTO(out, 0);
-        }
+	if (lvb_len) {
+		lock->l_lvb_len = lvb_len;
+		OBD_ALLOC_LARGE(lock->l_lvb_data, lvb_len);
+		if (lock->l_lvb_data == NULL)
+			GOTO(out, rc = -ENOMEM);
+	}
 
 	lock->l_lvb_type = lvb_type;
-        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
-                GOTO(out, 0);
+	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
+		GOTO(out, rc = -ENOENT);
 
-        RETURN(lock);
+	RETURN(lock);
 
 out:
-        ldlm_lock_destroy(lock);
-        LDLM_LOCK_RELEASE(lock);
-        return NULL;
+	ldlm_lock_destroy(lock);
+	LDLM_LOCK_RELEASE(lock);
+	RETURN(ERR_PTR(rc));
 }
 
 /**

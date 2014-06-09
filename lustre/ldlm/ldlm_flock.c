@@ -516,20 +516,20 @@ reprocess:
                 /* XXX - if ldlm_lock_new() can sleep we should
                  * release the lr_lock, allocate the new lock,
                  * and restart processing this lock. */
-                if (!new2) {
-                        unlock_res_and_lock(req);
+		if (new2 == NULL) {
+			unlock_res_and_lock(req);
 			new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
 						lock->l_granted_mode, &null_cbs,
 						NULL, 0, LVB_T_NONE);
-                        lock_res_and_lock(req);
-                        if (!new2) {
-                                ldlm_flock_destroy(req, lock->l_granted_mode,
-                                                   *flags);
-                                *err = -ENOLCK;
-                                RETURN(LDLM_ITER_STOP);
-                        }
-                        goto reprocess;
-                }
+			lock_res_and_lock(req);
+			if (IS_ERR(new2)) {
+				ldlm_flock_destroy(req, lock->l_granted_mode,
+						   *flags);
+				*err = PTR_ERR(new2);
+				RETURN(LDLM_ITER_STOP);
+			}
+			goto reprocess;
+		}
 
                 splitted = 1;
 

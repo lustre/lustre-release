@@ -557,7 +557,7 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 	fid_build_reg_res_name(&qti->qti_fid, &qti->qti_resid);
 	res = ldlm_resource_get(pool->qpi_qmt->qmt_ns, NULL, &qti->qti_resid,
 				LDLM_PLAIN, 0);
-	if (res == NULL) {
+	if (IS_ERR(res)) {
 		/* this might happen if no slaves have enqueued global quota
 		 * locks yet */
 		LQUOTA_DEBUG(lqe, "failed to lookup ldlm resource associated "
@@ -610,7 +610,7 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	fid_build_quota_res_name(&qti->qti_fid, &lqe->lqe_id, &qti->qti_resid);
 	res = ldlm_resource_get(qmt->qmt_ns, NULL, &qti->qti_resid, LDLM_PLAIN,
 				0);
-	if (res == NULL) {
+	if (IS_ERR(res)) {
 		/* this might legitimately happens if slaves haven't had the
 		 * opportunity to enqueue quota lock yet. */
 		LQUOTA_DEBUG(lqe, "failed to lookup ldlm resource for per-ID "

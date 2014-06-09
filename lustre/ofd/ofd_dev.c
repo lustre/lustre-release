@@ -1122,7 +1122,7 @@ out:
 		 * to go... deadlock! */
 		res = ldlm_resource_get(ofd->ofd_namespace, NULL,
 					&tsi->tsi_resid, LDLM_EXTENT, 0);
-		if (res != NULL) {
+		if (!IS_ERR(res)) {
 			ldlm_res_lvbo_update(res, NULL, 0);
 			ldlm_resource_putref(res);
 		}
@@ -1683,7 +1683,7 @@ out:
 		 * to go... deadlock! */
 		res = ldlm_resource_get(ns, NULL, &tsi->tsi_resid,
 				        LDLM_EXTENT, 0);
-		if (res != NULL) {
+		if (!IS_ERR(res)) {
 			ldlm_res_lvbo_update(res, NULL, 0);
 			ldlm_resource_putref(res);
 		}

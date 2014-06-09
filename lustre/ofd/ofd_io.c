@@ -1025,7 +1025,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			ost_fid_build_resid(fid, &info->fti_resid);
 			rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
 					       LDLM_EXTENT, 0);
-			if (rs != NULL) {
+			if (!IS_ERR(rs)) {
 				ns->ns_lvbo->lvbo_update(rs, NULL, 1);
 				ldlm_resource_putref(rs);
 			}

@@ -1072,11 +1072,11 @@ struct ldlm_resource *
 ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                   const struct ldlm_res_id *name, ldlm_type_t type, int create)
 {
-        cfs_hlist_node_t     *hnode;
-        struct ldlm_resource *res;
-        cfs_hash_bd_t         bd;
-        __u64                 version;
-	int		      ns_refcount = 0;
+	struct hlist_node	*hnode;
+	struct ldlm_resource	*res = NULL;
+	cfs_hash_bd_t		bd;
+	__u64			version;
+	int			ns_refcount = 0;
 
         LASSERT(ns != NULL);
         LASSERT(parent == NULL);
@@ -1087,42 +1087,31 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         hnode = cfs_hash_bd_lookup_locked(ns->ns_rs_hash, &bd, (void *)name);
         if (hnode != NULL) {
                 cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 0);
-                res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
-		/* Synchronize with regard to resource creation. */
-                if (ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-			mutex_lock(&res->lr_lvb_mutex);
-			mutex_unlock(&res->lr_lvb_mutex);
-                }
+		GOTO(lvbo_init, res);
+	}
 
-		if (unlikely(res->lr_lvb_len < 0)) {
-			ldlm_resource_putref(res);
-			res = NULL;
-		}
-                return res;
-        }
+	version = cfs_hash_bd_version_get(&bd);
+	cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 0);
 
-        version = cfs_hash_bd_version_get(&bd);
-        cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 0);
+	if (create == 0)
+		return ERR_PTR(-ENOENT);
 
-        if (create == 0)
-                return NULL;
+	LASSERTF(type >= LDLM_MIN_TYPE && type < LDLM_MAX_TYPE,
+		 "type: %d\n", type);
+	res = ldlm_resource_new();
+	if (res == NULL)
+		return ERR_PTR(-ENOMEM);
 
-        LASSERTF(type >= LDLM_MIN_TYPE && type < LDLM_MAX_TYPE,
-                 "type: %d\n", type);
-        res = ldlm_resource_new();
-        if (!res)
-                return NULL;
+	res->lr_ns_bucket  = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
+	res->lr_name       = *name;
+	res->lr_type       = type;
+	res->lr_most_restr = LCK_NL;
 
-        res->lr_ns_bucket  = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
-        res->lr_name       = *name;
-        res->lr_type       = type;
-        res->lr_most_restr = LCK_NL;
+	cfs_hash_bd_lock(ns->ns_rs_hash, &bd, 1);
+	hnode = (version == cfs_hash_bd_version_get(&bd)) ? NULL :
+		cfs_hash_bd_lookup_locked(ns->ns_rs_hash, &bd, (void *)name);
 
-        cfs_hash_bd_lock(ns->ns_rs_hash, &bd, 1);
-        hnode = (version == cfs_hash_bd_version_get(&bd)) ?  NULL :
-                cfs_hash_bd_lookup_locked(ns->ns_rs_hash, &bd, (void *)name);
-
-        if (hnode != NULL) {
+	if (hnode != NULL) {
 		/* Someone won the race and already added the resource. */
 		cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
 		/* Clean lu_ref for failed resource. */
@@ -1130,8 +1119,8 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 		/* We have taken lr_lvb_mutex. Drop it. */
 		mutex_unlock(&res->lr_lvb_mutex);
 		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
-
-		res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
+lvbo_init:
+		res = hlist_entry(hnode, struct ldlm_resource, lr_hash);
 		/* Synchronize with regard to resource creation. */
 		if (ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
 			mutex_lock(&res->lr_lvb_mutex);
@@ -1140,7 +1129,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
 		if (unlikely(res->lr_lvb_len < 0)) {
 			ldlm_resource_putref(res);
-			res = NULL;
+			res = ERR_PTR(res->lr_lvb_len);
 		}
 		return res;
 	}
@@ -1166,7 +1155,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 			res->lr_lvb_len = rc;
 			mutex_unlock(&res->lr_lvb_mutex);
 			ldlm_resource_putref(res);
-			return NULL;
+			return ERR_PTR(rc);
 		}
 	}
 

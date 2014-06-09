@@ -745,7 +745,7 @@ out:
 		 * for 2nd lu_object_find() waiting for the first reference
 		 * to go... deadlock! */
 		res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
-		if (res != NULL) {
+		if (!IS_ERR(res)) {
 			ldlm_res_lvbo_update(res, NULL, 0);
 			ldlm_resource_putref(res);
 		}

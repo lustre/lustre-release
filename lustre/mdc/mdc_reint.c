@@ -75,11 +75,11 @@ int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
                             __u64 bits)
 {
 	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        ldlm_policy_data_t policy = {{0}};
-        struct ldlm_res_id res_id;
-        struct ldlm_resource *res;
-        int count;
-        ENTRY;
+	ldlm_policy_data_t policy = { {0} };
+	struct ldlm_res_id res_id;
+	struct ldlm_resource *res;
+	int count;
+	ENTRY;
 
 	/* Return, i.e. cancel nothing, only if ELC is supported (flag in
 	 * export) but disabled through procfs (flag in NS).
@@ -90,19 +90,19 @@ int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
 	if (exp_connect_cancelset(exp) && !ns_connect_cancelset(ns))
 		RETURN(0);
 
-        fid_build_reg_res_name(fid, &res_id);
-        res = ldlm_resource_get(exp->exp_obd->obd_namespace,
-                                NULL, &res_id, 0, 0);
-        if (res == NULL)
-                RETURN(0);
-        LDLM_RESOURCE_ADDREF(res);
-        /* Initialize ibits lock policy. */
-        policy.l_inodebits.bits = bits;
-        count = ldlm_cancel_resource_local(res, cancels, &policy,
-                                           mode, 0, 0, NULL);
-        LDLM_RESOURCE_DELREF(res);
-        ldlm_resource_putref(res);
-        RETURN(count);
+	fid_build_reg_res_name(fid, &res_id);
+	res = ldlm_resource_get(exp->exp_obd->obd_namespace,
+				NULL, &res_id, 0, 0);
+	if (IS_ERR(res))
+		RETURN(0);
+	LDLM_RESOURCE_ADDREF(res);
+	/* Initialize ibits lock policy. */
+	policy.l_inodebits.bits = bits;
+	count = ldlm_cancel_resource_local(res, cancels, &policy,
+					   mode, 0, 0, NULL);
+	LDLM_RESOURCE_DELREF(res);
+	ldlm_resource_putref(res);
+	RETURN(count);
 }
 
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
