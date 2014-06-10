@@ -1776,10 +1776,11 @@ enum tgt_type {
 static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,
                                   int *ost_count, enum tgt_type type)
 {
-        struct obd_uuid name;
-        char buf[1024];
-        FILE *fp;
-        int rc = 0, index = 0;
+	struct obd_uuid name;
+	char buf[1024];
+	char format[32];
+	FILE *fp;
+	int rc = 0, index = 0;
 
         /* Get the lov name */
         if (type == LOV_TYPE) {
@@ -1802,9 +1803,11 @@ static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,
                 return rc;
         }
 
-        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                if (uuidp && (index < *ost_count)) {
-                        if (sscanf(buf, "%d: %s", &index, uuidp[index].uuid) <2)
+	snprintf(format, sizeof(format),
+		 "%%d: %%%zus", sizeof(uuidp[0].uuid) - 1);
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		if (uuidp && (index < *ost_count)) {
+			if (sscanf(buf, format, &index, uuidp[index].uuid) < 2)
                                 break;
                 }
                 index++;
@@ -1872,11 +1875,11 @@ int llapi_uuid_match(char *real_uuid, char *search_uuid)
  * returned in param->obdindex */
 static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 {
-        struct obd_uuid obd_uuid;
-        char uuid[sizeof(struct obd_uuid)];
-        char buf[1024];
-        FILE *fp;
-        int rc = 0, index;
+	struct obd_uuid obd_uuid;
+	char buf[1024];
+	char format[32];
+	FILE *fp;
+	int rc = 0;
 
         if (param->got_uuids)
                 return rc;
@@ -1912,12 +1915,17 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
                 llapi_printf(LLAPI_MSG_NORMAL, "%s:\n",
                              param->get_lmv ? "MDTS" : "OBDS:");
 
-        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                if (sscanf(buf, "%d: %s", &index, uuid) < 2)
-                        break;
+	snprintf(format, sizeof(format),
+		 "%%d: %%%zus", sizeof(obd_uuid.uuid) - 1);
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		int index;
 
-                if (param->obduuid) {
-                        if (llapi_uuid_match(uuid, param->obduuid->uuid)) {
+		if (sscanf(buf, format, &index, obd_uuid.uuid) < 2)
+			break;
+
+		if (param->obduuid) {
+			if (llapi_uuid_match(obd_uuid.uuid,
+					     param->obduuid->uuid)) {
                                 param->obdindex = index;
                                 break;
                         }

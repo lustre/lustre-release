@@ -434,12 +434,6 @@ static int read_mapping_db(void)
         while ((line = fgets(linebuf, MAX_LINE_LEN, f)) != NULL) {
                 char *name;
 
-                if (strlen(line) >= MAX_LINE_LEN) {
-                        printerr(0, "invalid mapping db: line too long (%d)\n",
-                                 strlen(line));
-                        continue;
-                }
-
                 if (sscanf(line, "%s %s %s", princ, nid_str, dest) != 3) {
                         printerr(0, "mapping db: syntax error\n");
                         continue;

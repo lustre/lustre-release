@@ -262,9 +262,12 @@ int parse_perm(__u32 *perm, __u32 *noperm, char *str)
         return 0;
 }
 
-int parse_perm_line(struct identity_downcall_data *data, char *line)
+static int
+parse_perm_line(struct identity_downcall_data *data, char *line, size_t size)
 {
-        char uid_str[256], nid_str[256], perm_str[256];
+	char uid_str[size];
+	char nid_str[size];
+	char perm_str[size];
         lnet_nid_t nid;
         __u32 perm, noperm;
         int rc, i;
@@ -275,7 +278,7 @@ int parse_perm_line(struct identity_downcall_data *data, char *line)
                 return -1;
         }
 
-        rc = sscanf(line, "%s %s %s", nid_str, uid_str, perm_str);
+	rc = sscanf(line, "%s %s %s", nid_str, uid_str, perm_str);
         if (rc != 3) {
                 errlog("can't parse line %s\n", line);
                 return -1;
@@ -355,8 +358,8 @@ int parse_perm_line(struct identity_downcall_data *data, char *line)
 
 int get_perms(struct identity_downcall_data *data)
 {
-        FILE *fp;
-        char line[1024];
+	FILE *fp;
+	char line[PATH_MAX];
 
         fp = fopen(PERM_PATHNAME, "r");
         if (fp == NULL) {
@@ -370,11 +373,11 @@ int get_perms(struct identity_downcall_data *data)
                 }
         }
 
-        while (fgets(line, 1024, fp)) {
+	while (fgets(line, sizeof(line), fp)) {
                 if (comment_line(line))
                         continue;
 
-                if (parse_perm_line(data, line)) {
+		if (parse_perm_line(data, line, sizeof(line))) {
                         errlog("parse line %s failed!\n", line);
                         data->idd_err = EINVAL;
                         fclose(fp);

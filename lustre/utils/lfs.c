@@ -3030,10 +3030,10 @@ static int flushctx_ioctl(char *mp)
 
 static int lfs_flushctx(int argc, char **argv)
 {
-        int     kdestroy = 0, c;
-	FILE   *proc = NULL;
-        char    procline[PATH_MAX], *line;
-        int     rc = 0;
+	int     kdestroy = 0, c;
+	char    mntdir[PATH_MAX] = {'\0'};
+	int     index = 0;
+	int     rc = 0;
 
         optind = 0;
         while ((c = getopt(argc, argv, "k")) != -1) {
@@ -3049,46 +3049,24 @@ static int lfs_flushctx(int argc, char **argv)
         }
 
         if (kdestroy) {
-            int rc;
             if ((rc = system("kdestroy > /dev/null")) != 0) {
                 rc = WEXITSTATUS(rc);
                 fprintf(stderr, "error destroying tickets: %d, continuing\n", rc);
             }
         }
 
-        if (optind >= argc) {
-                /* flush for all mounted lustre fs. */
-                proc = fopen("/proc/mounts", "r");
-                if (!proc) {
-                        fprintf(stderr, "error: %s: can't open /proc/mounts\n",
-                                argv[0]);
-                        return -1;
-                }
+	if (optind >= argc) {
+		/* flush for all mounted lustre fs. */
+		while (!llapi_search_mounts(NULL, index++, mntdir, NULL)) {
+			/* Check if we have a mount point */
+			if (mntdir[0] == '\0')
+				continue;
 
-                while ((line = fgets(procline, PATH_MAX, proc)) != NULL) {
-                        char dev[PATH_MAX];
-                        char mp[PATH_MAX];
-                        char fs[PATH_MAX];
-
-                        if (sscanf(line, "%s %s %s", dev, mp, fs) != 3) {
-                                fprintf(stderr, "%s: unexpected format in "
-                                                "/proc/mounts\n",
-                                        argv[0]);
+			if (flushctx_ioctl(mntdir))
 				rc = -1;
-				goto out;
-                        }
 
-                        if (strcmp(fs, "lustre") != 0)
-                                continue;
-                        /* we use '@' to determine it's a client. are there
-                         * any other better way?
-                         */
-                        if (strchr(dev, '@') == NULL)
-                                continue;
-
-                        if (flushctx_ioctl(mp))
-                                rc = -1;
-                }
+			mntdir[0] = '\0'; /* avoid matching in next loop */
+		}
         } else {
                 /* flush fs as specified */
                 while (optind < argc) {
@@ -3096,10 +3074,6 @@ static int lfs_flushctx(int argc, char **argv)
                                 rc = -1;
                 }
         }
-
-out:
-	if (proc != NULL)
-		fclose(proc);
         return rc;
 }
 
