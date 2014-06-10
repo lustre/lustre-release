@@ -1896,12 +1896,10 @@ static struct ptlrpc_request *target_next_final_ping(struct obd_device *obd)
 	return req;
 }
 
-static int handle_recovery_req(struct ptlrpc_thread *thread,
-                               struct ptlrpc_request *req,
-                               svc_handler_t handler)
+static void handle_recovery_req(struct ptlrpc_thread *thread,
+				struct ptlrpc_request *req,
+				svc_handler_t handler)
 {
-	int rc;
-
 	ENTRY;
 
 	/**
@@ -1909,7 +1907,7 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
 	 * it after that, discard such request silently
 	 */
 	if (req->rq_export->exp_disconnected)
-		GOTO(reqcopy_put, rc = 0);
+		RETURN_EXIT;
 
 	req->rq_session.lc_thread = thread;
 	req->rq_svc_thread = thread;
@@ -1948,8 +1946,7 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                 }
                 extend_recovery_timer(class_exp2obd(req->rq_export), to, true);
         }
-reqcopy_put:
-        RETURN(rc);
+	EXIT;
 }
 
 static int target_recovery_thread(void *arg)
