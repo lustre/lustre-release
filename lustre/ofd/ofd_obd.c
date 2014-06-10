@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,7 +23,7 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -35,9 +31,14 @@
  *
  * lustre/ofd/ofd_obd.c
  *
- * Author: Andreas Dilger <adilger@whamcloud.com>
- * Author: Alex Zhuravlev <bzzz@whamcloud.com>
- * Author: Mike Pershin <tappro@whamcloud.com>
+ * This file contains OBD API methods for OBD Filter Device (OFD) which are
+ * used for export handling, configuration purposes and recovery.
+ * Several methods are used by ECHO client only since it still uses OBD API.
+ * Such methods have _echo_ prefix in name.
+ *
+ * Author: Andreas Dilger <andreas.dilger@intel.com>
+ * Author: Alexey Zhuravlev <alexey.zhuravlev@intel.com>
+ * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -49,6 +50,19 @@
 #include <lustre_quota.h>
 #include <lustre_lfsck.h>
 
+/**
+ * Initialize OFD per-export statistics.
+ *
+ * This function sets up procfs entries for various OFD export counters. These
+ * counters are for per-client statistics tracked on the server.
+ *
+ * \param[in] ofd	 OFD device
+ * \param[in] exp	 OBD export
+ * \param[in] client_nid NID of client
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp, void *client_nid)
 {
@@ -105,6 +119,31 @@ clean:
 	return rc;
 }
 
+/**
+ * Match client and OST server connection feature flags.
+ *
+ * Compute the compatibility flags for a connection request based on
+ * features mutually supported by client and server.
+ *
+ * The obd_export::exp_connect_data.ocd_connect_flags field in \a exp
+ * must not be updated here, otherwise a partially initialized value may
+ * be exposed. After the connection request is successfully processed,
+ * the top-level tgt_connect() request handler atomically updates the export
+ * connect flags from the obd_connect_data::ocd_connect_flags field of the
+ * reply. \see tgt_connect().
+ *
+ * \param[in] env		execution environment
+ * \param[in] exp		the obd_export associated with this
+ *				client/target pair
+ * \param[in] data		stores data for this connect request
+ * \param[in] new_connection	is this connection new or not
+ *
+ * \retval		0 if success
+ * \retval		-EPROTO client and server feature requirements are
+ *			incompatible
+ * \retval		-EBADF  OST index in connect request doesn't match
+ *			real OST index
+ */
 static int ofd_parse_connect_data(const struct lu_env *env,
 				  struct obd_export *exp,
 				  struct obd_connect_data *data,
@@ -239,6 +278,22 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	RETURN(0);
 }
 
+/**
+ * Re-initialize export upon client reconnection.
+ *
+ * This function parses connection data from reconnect and resets
+ * export statistics.
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export
+ * \param[in] obd	OFD device
+ * \param[in] cluuid	NID of client
+ * \param[in] data	connection data from request
+ * \param[in] localdata	client NID
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
 			     struct obd_connect_data *data, void *localdata)
@@ -260,6 +315,23 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
+/**
+ * Initialize new client connection.
+ *
+ * This function handles new connection to the OFD. The new export is
+ * created (in context of class_connect()) and persistent client data is
+ * initialized on storage.
+ *
+ * \param[in] env	execution environment
+ * \param[out] _exp	stores pointer to new export
+ * \param[in] obd	OFD device
+ * \param[in] cluuid	client UUID
+ * \param[in] data	connection data from request
+ * \param[in] localdata	client NID
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
@@ -310,6 +382,17 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Disconnect a connected client.
+ *
+ * This function terminates the client connection. The client export is
+ * disconnected (cleaned up) and client data on persistent storage is removed.
+ *
+ * \param[in] exp	OBD export
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_obd_disconnect(struct obd_export *exp)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
@@ -343,6 +426,17 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Implementation of obd_ops::o_init_export.
+ *
+ * This function is called from class_new_export() and initializes
+ * the OFD-specific data for new export.
+ *
+ * \param[in] exp	OBD export
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_init_export(struct obd_export *exp)
 {
 	int rc;
@@ -368,6 +462,17 @@ static int ofd_init_export(struct obd_export *exp)
 	return rc;
 }
 
+/**
+ * Implementation of obd_ops::o_destroy_export.
+ *
+ * This function is called from class_export_destroy() to cleanup
+ * the OFD-specific data for export being destroyed.
+ *
+ * \param[in] exp	OBD export
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_destroy_export(struct obd_export *exp)
 {
 	struct ofd_device *ofd = ofd_exp(exp);
@@ -407,6 +512,18 @@ static int ofd_destroy_export(struct obd_export *exp)
 	return 0;
 }
 
+/**
+ * Notify all devices in server stack about recovery completion.
+ *
+ * This function calls ldo_recovery_complete() for all lower devices in the
+ * server stack so they will be prepared for normal operations.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 {
 	struct lu_device *ldev = &ofd->ofd_dt_dev.dd_lu_dev;
@@ -425,6 +542,17 @@ int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 	return ldev->ld_ops->ldo_recovery_complete(env, ldev);
 }
 
+/**
+ * Implementation of obd_ops::o_postrecov.
+ *
+ * This function is called from target_finish_recovery() upon recovery
+ * completion.
+ *
+ * \param[in] obd	OBD device of OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_obd_postrecov(struct obd_device *obd)
 {
 	struct lu_env		 env;
@@ -444,9 +572,24 @@ int ofd_obd_postrecov(struct obd_device *obd)
 	RETURN(rc);
 }
 
-/* This is not called from request handler, check ofd_set_info_hdl() instead
- * this OBD functions is only used by class_notify_sptlrpc_conf() locally
- * by direct obd_set_info_async() call */
+/**
+ * Implementation of obd_ops::o_set_info_async.
+ *
+ * This function is not called from request handler, it is only used by
+ * class_notify_sptlrpc_conf() locally by direct obd_set_info_async() call.
+ * \see  ofd_set_info_hdl() for request handler function.
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of OFD device
+ * \param[in] keylen	length of \a key
+ * \param[in] key	key name
+ * \param[in] vallen	length of \a val
+ * \param[in] val	the \a key value
+ * \param[in] set	not used in OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 			      __u32 keylen, void *key, __u32 vallen, void *val,
 			      struct ptlrpc_request_set *set)
@@ -470,7 +613,25 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
-/* used by nrs_orr_range_fill_physical() in ptlrpc, see LU-3239 */
+/**
+ * Implementation of obd_ops::o_get_info.
+ *
+ * This function is not called from request handler, it is only used by
+ * direct call from nrs_orr_range_fill_physical() in ptlrpc, see LU-3239.
+ *
+ * \see  ofd_get_info_hdl() for request handler function.
+ *
+ * \param[in]  env	execution environment
+ * \param[in]  exp	OBD export of OFD device
+ * \param[in]  keylen	length of \a key
+ * \param[in]  key	key name
+ * \param[out] vallen	length of key value
+ * \param[out] val	the key value to return
+ * \param[in]  lsm	not used in OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 			__u32 keylen, void *key, __u32 *vallen, void *val,
 			struct lov_stripe_md *lsm)
@@ -507,7 +668,21 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
-/** helper function for statfs, also used by grant code */
+/**
+ * Get file system statistics of OST server.
+ *
+ * Helper function for ofd_statfs(), also used by grant code.
+ * Implements caching for statistics to avoid calling OSD device each time.
+ *
+ * \param[in]  env	  execution environment
+ * \param[in]  ofd	  OFD device
+ * \param[out] osfs	  statistic data to return
+ * \param[in]  max_age	  maximum age for cached data
+ * \param[in]  from_cache show that data was get from cache or not
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
                         struct obd_statfs *osfs, __u64 max_age, int *from_cache)
 {
@@ -602,6 +777,27 @@ out:
 	return rc;
 }
 
+/**
+ * Implementation of obd_ops::o_statfs.
+ *
+ * This function returns information about a storage file system.
+ * It is called from several places by using the OBD API as well as
+ * by direct call, e.g. from request handler.
+ *
+ * \see  ofd_statfs_hdl() for request handler function.
+ *
+ * Report also the state of the OST to the caller in osfs->os_state
+ * (OS_STATE_READONLY, OS_STATE_DEGRADED).
+ *
+ * \param[in]  env	execution environment
+ * \param[in]  exp	OBD export of OFD device
+ * \param[out] osfs	statistic data to return
+ * \param[in]  max_age	maximum age for cached data
+ * \param[in]  flags	not used in OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
@@ -674,7 +870,20 @@ out:
 	return rc;
 }
 
-/* needed by echo client only for now, RPC handler uses ofd_setattr_hdl() */
+/**
+ * Implementation of obd_ops::o_setattr.
+ *
+ * This function is only used by ECHO client when it is run on top of OFD,
+ * \see  ofd_setattr_hdl() for request handler function.
+
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of OFD device
+ * \param[in] oinfo	obd_info with setattr parameters
+ * \param[in] oti	not used in OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 		     struct obd_info *oinfo, struct obd_trans_info *oti)
 {
@@ -754,6 +963,21 @@ out:
 	return rc;
 }
 
+/**
+ * Destroy OFD object by its FID.
+ *
+ * Supplemental function to destroy object by FID, it is used by request
+ * handler and by ofd_echo_destroy() below to find object by FID, lock it
+ * and call ofd_object_destroy() finally.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] fid	FID of object
+ * \param[in] orphan	set if object being destroyed is an orphan
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan)
 {
@@ -793,7 +1017,27 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 	RETURN(rc);
 }
 
-/* needed by echo client only for now, RPC handler uses ofd_destroy_hdl() */
+/**
+ * Implementation of obd_ops::o_destroy.
+ *
+ * This function is only used by ECHO client when it is run on top of OFD,
+ * \see  ofd_destroy_hdl() for request handler function.
+
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of OFD device
+ * \param[in] oa	obdo structure with FID
+ * \param[in] md	not used in OFD
+ * \param[in] oti	not used in OFD
+ * \param[in] md_exp	not used in OFD
+ * \param[in] capa	not used in OFD
+ *
+ * Note: this is OBD API method which is common API for server OBDs and
+ * client OBDs. Thus some parameters used in client OBDs may not be used
+ * on server OBDs and vice versa.
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
 		     struct obdo *oa, struct lov_stripe_md *md,
 		     struct obd_trans_info *oti, struct obd_export *md_exp,
@@ -824,8 +1068,26 @@ out:
 	return rc;
 }
 
-/* needed by echo client only for now, RPC handler uses ofd_create_hdl()
- * It is much simpler and just create objects */
+/**
+ * Implementation of obd_ops::o_create.
+ *
+ * This function is only used by ECHO client when it is run on top of OFD
+ * and just creates an object.
+ * \see  ofd_create_hdl() for request handler function.
+ *
+ * \param[in]  env	execution environment
+ * \param[in]  exp	OBD export of OFD device
+ * \param[in]  oa	obdo structure with FID sequence to use
+ * \param[out] ea	contains object ID/SEQ to return
+ * \param[in]  oti	not used in OFD
+ *
+ * Note: this is OBD API method which is common API for server OBDs and
+ * client OBDs. Thus some parameters used in client OBDs may not be used
+ * on server OBDs and vice versa.
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 		    struct obdo *oa, struct lov_stripe_md **ea,
 		    struct obd_trans_info *oti)
@@ -898,7 +1160,21 @@ out_sem:
 	RETURN(rc);
 }
 
-/* needed by echo client only for now, RPC handler uses ofd_getattr_hdl() */
+/**
+ * Implementation of obd_ops::o_getattr.
+ *
+ * This function is only used by ECHO client when it is run on top of OFD
+ * and returns attributes of object.
+ * \see  ofd_getattr_hdl() for request handler function.
+ *
+ * \param[in]	  env	execution environment
+ * \param[in]	  exp	OBD export of OFD device
+ * \param[in,out] oinfo	contains FID of object to get attributes from and
+ *			is used to return attributes back
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
 		     struct obd_info *oinfo)
 {
@@ -938,6 +1214,19 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Get object version for OBD_IOC_GET_OBJ_VERSION ioctl.
+ *
+ * This is supplemental function for ofd_iocontrol() to return object
+ * version for lctl tool.
+ *
+ * \param[in]  env	execution environment
+ * \param[in]  ofd	OFD device
+ * \param[out] karg	ioctl data
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 static int ofd_ioc_get_obj_version(const struct lu_env *env,
 				   struct ofd_device *ofd, void *karg)
 {
@@ -996,6 +1285,21 @@ out:
 	return rc;
 }
 
+/**
+ * Implementation of obd_ops::o_iocontrol.
+ *
+ * This is OFD ioctl handling function which is primary interface for
+ * Lustre tools like lfs, lctl and lfsck.
+ *
+ * \param[in]	  cmd	ioctl command
+ * \param[in]	  exp	OBD export of OFD
+ * \param[in]	  len	not used
+ * \param[in,out] karg	buffer with data
+ * \param[in]	  uarg	not used
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		  void *karg, void *uarg)
 {
@@ -1066,6 +1370,18 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	RETURN(rc);
 }
 
+/**
+ * Implementation of obd_ops::o_precleanup.
+ *
+ * This function stops device activity before shutting it down. It is called
+ * from a cleanup function upon forceful device cleanup. For OFD there are no
+ * special actions, it just invokes target_recovery_cleanup().
+ *
+ * \param[in] obd	OBD device of OFD
+ * \param[in] stage	cleanup stage
+ *
+ * \retval		0
+ */
 static int ofd_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
 	int rc = 0;
@@ -1082,12 +1398,44 @@ static int ofd_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 	RETURN(rc);
 }
 
+/**
+ * Implementation of obd_ops::o_ping.
+ *
+ * This is OFD-specific part of OBD_PING request handling.
+ * It controls Filter Modification Data (FMD) expiration each time PING is
+ * received.
+ *
+ * \see  ofd_fmd_expire() and ofd_fmd.c for details
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of client
+ *
+ * \retval		0
+ */
 static int ofd_ping(const struct lu_env *env, struct obd_export *exp)
 {
 	ofd_fmd_expire(exp);
 	return 0;
 }
 
+/**
+ * Implementation of obd_ops::o_health_check.
+ *
+ * This function checks the OFD device health - ability to respond on
+ * incoming requests. There are two health_check methods:
+ * - get statfs from the OSD. It checks just responsiveness of
+ *   bottom device
+ * - do write attempt on bottom device to check it is fully operational and
+ *   is not stuck. This is expensive method and requires special configuration
+ *   option --enable-health-write while building Lustre, it is turned off
+ *   by default.
+ *
+ * \param[in] nul	not used
+ * \param[in] obd	OBD device of OFD
+ *
+ * \retval		0 if successful
+ * \retval		negative value in case of error
+ */
 static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 {
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
@@ -1144,36 +1492,6 @@ out:
 	return !!rc;
 }
 
-/*
- * Handle quota control requests to consult current usage/limit.
- *
- * \param obd - is the obd device associated with the ofd
- * \param exp - is the client's export
- * \param oqctl - is the obd_quotactl request to be processed
- */
-static int ofd_quotactl(struct obd_device *obd, struct obd_export *exp,
-			struct obd_quotactl *oqctl)
-{
-	struct ofd_device  *ofd = ofd_dev(obd->obd_lu_dev);
-	struct lu_env       env;
-	int                 rc;
-	ENTRY;
-
-	/* report success for quota on/off for interoperability with current MDT
-	 * stack */
-	if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF)
-		RETURN(0);
-
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	if (rc)
-		RETURN(rc);
-
-	rc = lquotactl_slv(&env, ofd->ofd_osd, oqctl);
-	lu_env_fini(&env);
-
-	RETURN(rc);
-}
-
 struct obd_ops ofd_obd_ops = {
 	.o_owner		= THIS_MODULE,
 	.o_connect		= ofd_obd_connect,
@@ -1193,7 +1511,6 @@ struct obd_ops ofd_obd_ops = {
 	.o_precleanup		= ofd_precleanup,
 	.o_ping			= ofd_ping,
 	.o_health_check		= ofd_health_check,
-	.o_quotactl		= ofd_quotactl,
 	.o_set_info_async	= ofd_set_info_async,
 	.o_get_info		= ofd_get_info,
 };
