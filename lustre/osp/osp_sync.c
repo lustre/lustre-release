@@ -484,10 +484,12 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	LASSERT(h->lrh_type == MDS_SETATTR64_REC);
 
 	/* lsr_valid can only be 0 or LA_UID/GID set */
-	if (!rec->lsr_valid && !(rec->lsr_valid & ~(LA_UID | LA_GID))) {
+	if ((rec->lsr_valid & ~(LA_UID | LA_GID)) != 0) {
 		CERROR("%s: invalid setattr record, lsr_valid:"LPU64"\n",
 		       d->opd_obd->obd_name, rec->lsr_valid);
-		RETURN(-EINVAL);
+		/* return 0 so that sync thread can continue processing
+		 * other records. */
+		RETURN(0);
 	}
 
 	req = osp_sync_new_job(d, llh, h, OST_SETATTR, &RQF_OST_SETATTR);
