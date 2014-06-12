@@ -857,8 +857,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 	if (lo->ldo_dir_slave_stripe)
 		GOTO(out, rc = 0);
 
-	/* only regular files can be striped */
-	if (lu_object_attr(lod2lu_obj(lo)) & S_IFREG) {
+	if (S_ISREG(lu_object_attr(lod2lu_obj(lo)))) {
 		rc = lod_get_lov_ea(env, lo);
 		if (rc <= 0)
 			GOTO(out, rc);
@@ -869,7 +868,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		info->lti_buf.lb_buf = info->lti_ea_store;
 		info->lti_buf.lb_len = info->lti_ea_store_size;
 		rc = lod_parse_striping(env, lo, &info->lti_buf);
-	} else if (lu_object_attr(lod2lu_obj(lo)) & S_IFDIR) {
+	} else if (S_ISDIR(lu_object_attr(lod2lu_obj(lo)))) {
 		rc = lod_get_lmv_ea(env, lo);
 		if (rc <= 0)
 			GOTO(out, rc);
