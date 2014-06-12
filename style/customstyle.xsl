@@ -25,11 +25,13 @@
 <xsl:template name='textdecoration_1'>
 	<xsl:param name='version'/>
 	<xsl:param name='chunkid'/>
-	<div class='versioncontent'>
+	<div class='versionbox'>
 		<span class='versionlabel'>
 			<xsl:value-of select='$version'/>
 		</span>
-		<xsl:apply-templates/>
+		<span class='versioncontent'>
+			<xsl:apply-templates/>
+		</span>
 	</div>
 </xsl:template>
 
@@ -43,55 +45,55 @@
 	<xsl:choose>
 		<xsl:when test="@condition = 'l21'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.1'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.1'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l22'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.2'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.2'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l23'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.3'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.3'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l24'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.4'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.4'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l25'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.5'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.5'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l26'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.6'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.6'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l27'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.7'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.7'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l28'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.8'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.8'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>
 		<xsl:when test="@condition = 'l29'">
 			<xsl:call-template name='textdecoration_1'>
-				<xsl:with-param name='version' select="'introduced in Lustre 2.9'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.9'"/>
 				<xsl:with-param name='chunkid' select="$id"/>
 			</xsl:call-template>
 		</xsl:when>

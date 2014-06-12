@@ -3,6 +3,10 @@ pre.programlisting, pre.screen
     padding: 5px;
 }
 
+div.versionbox {
+  border: 1px solid gray;
+}
+
 span.versionlabel {
   display: inline-block;
   position: relative;
@@ -11,8 +15,9 @@ span.versionlabel {
   background-color: white;
   border: 1px solid gray;
 }
-div.versioncontent {
-  border: 1px solid gray;
+
+span.versioncontent {
+  margin-left: 15px;
 }
 
 span.floatright {
