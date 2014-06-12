@@ -893,7 +893,8 @@ int lustre_check_exclusion(struct super_block *sb, char *svname)
 static int lmd_make_exclusion(struct lustre_mount_data *lmd, const char *ptr)
 {
 	const char *s1 = ptr, *s2;
-	__u32 index, *exclude_list;
+	__u32 *exclude_list;
+	__u32 index = 0;
 	int rc = 0, devmax;
 	ENTRY;
 
