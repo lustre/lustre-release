@@ -1181,7 +1181,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 	spin_lock_irq(&mapping->tree_lock);
 	found = radix_tree_gang_lookup(&mapping->page_tree,
 				       (void **)&page, offset, 1);
-	if (found > 0) {
+	if (found > 0 && !radix_tree_exceptional_entry(page)) {
 		struct lu_dirpage *dp;
 
 		page_cache_get(page);
