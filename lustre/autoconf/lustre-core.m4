@@ -867,6 +867,22 @@ LB_CHECK_EXPORT([generic_file_llseek_size], [fs/read_write.c],
 ]) # LC_FILE_LLSEEK_SIZE
 
 #
+# LC_RADIX_EXCEPTION_ENTRY
+# 3.1 adds radix_tree_exception_entry.
+#
+AC_DEFUN([LC_RADIX_EXCEPTION_ENTRY], [
+LB_CHECK_COMPILE([radix_tree_exceptional_entry exist],
+radix_tree_exceptional_entry, [
+	#include <linux/radix-tree.h>
+],[
+	radix_tree_exceptional_entry(NULL);
+],[
+	AC_DEFINE(HAVE_RADIX_EXCEPTION_ENTRY, 1,
+		[radix_tree_exceptional_entry exist])
+])
+]) # LC_RADIX_EXCEPTION_ENTRY
+
+#
 # LC_HAVE_VOID_MAKE_REQUEST_FN
 #
 # 3.2 request_queue.make_request_fn defined as function returns with void
@@ -1516,6 +1532,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_IOP_GET_ACL
 	LC_FILE_LLSEEK_SIZE
 	LC_INODE_PERMISION_2ARGS
+	LC_RADIX_EXCEPTION_ENTRY
 
 	# 3.2
 	LC_HAVE_VOID_MAKE_REQUEST_FN

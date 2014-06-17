@@ -352,4 +352,11 @@ static inline struct dentry *d_make_root(struct inode *root)
 #define ll_vfs_unlink(a, b) vfs_unlink(a, b)
 #endif
 
+#ifndef HAVE_RADIX_EXCEPTION_ENTRY
+static inline int radix_tree_exceptional_entry(void *arg)
+{
+	return 0;
+}
+#endif
+
 #endif /* _COMPAT25_H */
