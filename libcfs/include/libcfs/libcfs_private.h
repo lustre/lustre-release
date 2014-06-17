@@ -549,6 +549,7 @@ int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
 void        cfs_free_nidlist(cfs_list_t *list);
 int         cfs_parse_nidlist(char *str, int len, cfs_list_t *list);
+int	    cfs_print_nidlist(char *buffer, int count, cfs_list_t *list);
 int         cfs_match_nid(lnet_nid_t nid, cfs_list_t *list);
 
 /** \addtogroup lnet_addr
