@@ -1233,22 +1233,30 @@ test_30b() {
 	NEW=$(echo $OSTNID | sed "s/$ORIGVAL/$NEWVAL@/")
 	echo "Using fake nid $NEW"
 
-	TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
+	TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+		grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
 	set_conf_param_and_check client "$TEST" \
 		"$FSNAME-OST0000.failover.node" $NEW ||
 		error "didn't add failover nid $NEW"
-	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+		grep failover_nids)
 	echo $NIDS
-	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	# The NIDS value is the failover nid strings and "[" and "]". So
+	# we need to subtract the space taken by the delimiters. This has
+	# changed from earlier version of Lustre but this test is run only
+	# locally so this change will not break interop. See LU-3386
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 3))
 	echo "should have 2 failover nids: $NIDCOUNT"
 	[ $NIDCOUNT -eq 2 ] || error "Failover nid not added"
-	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" || error "conf_param delete failed"
+	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" ||
+		error "conf_param delete failed"
 	umount_client $MOUNT
 	mount_client $MOUNT || return 3
 
-	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
+	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+		grep failover_nids)
 	echo $NIDS
-	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
+	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 3))
 	echo "only 1 final nid should remain: $NIDCOUNT"
 	[ $NIDCOUNT -eq 1 ] || error "Failover nids not removed"
 
