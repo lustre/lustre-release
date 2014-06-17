@@ -231,10 +231,8 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(&bufs, 1, flags);
 	lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-	if (!lcfg) {
-		CERROR("Cannot alloc lcfg!\n");
+	if (lcfg == NULL)
 		RETURN_EXIT;
-	}
 
 	LASSERT(top);
 	top->ld_ops->ldo_process_config(env, top, lcfg);

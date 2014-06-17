@@ -115,6 +115,8 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
 	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
+	if (lcfg == NULL)
+		RETURN(-ENOMEM);
 
 	rc = mgs_setparam(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg,
 			  mgi->mgi_fsname);

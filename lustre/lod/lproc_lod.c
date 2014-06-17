@@ -514,6 +514,9 @@ lod_qos_maxage_seq_write(struct file *file, const char *buffer,
 	sprintf(str, "%smaxage=%d", PARAM_OSP, val);
 	lustre_cfg_bufs_set_string(&bufs, 1, str);
 	lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+	if (lcfg == NULL)
+		return -ENOMEM;
+
 	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, i) {
 		next = &OST_TGT(lod,i)->ltd_ost->dd_lu_dev;

@@ -1016,7 +1016,6 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 	lustre_cfg_bufs_set_string(bufs, 1, new_param);
 
 	new_cfg = lustre_cfg_new(cfg->lcfg_command, bufs);
-
 	OBD_FREE(new_param, new_len);
 	OBD_FREE_PTR(bufs);
 	if (new_cfg == NULL)
@@ -1889,11 +1888,11 @@ int class_manual_cleanup(struct obd_device *obd)
         CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n",
                obd->obd_name, flags);
 
-        lustre_cfg_bufs_reset(&bufs, obd->obd_name);
-        lustre_cfg_bufs_set_string(&bufs, 1, flags);
-        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-        if (!lcfg)
-                RETURN(-ENOMEM);
+	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+	lustre_cfg_bufs_set_string(&bufs, 1, flags);
+	lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+	if (lcfg == NULL)
+		RETURN(-ENOMEM);
 
         rc = class_process_config(lcfg);
         if (rc) {

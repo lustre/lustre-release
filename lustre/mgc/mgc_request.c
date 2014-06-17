@@ -1528,12 +1528,11 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
                 lustre_cfg_bufs_set_string(&bufs, 1, params);
 
-                rc = -ENOMEM;
-                lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-                if (lcfg == NULL) {
-                        CERROR("mgc: cannot allocate memory\n");
-                        break;
-                }
+		lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+		if (lcfg == NULL) {
+			rc = -ENOMEM;
+			break;
+		}
 
                 CDEBUG(D_INFO, "ir apply logs "LPD64"/"LPD64" for %s -> %s\n",
                        prev_version, max_version, obdname, params);

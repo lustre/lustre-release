@@ -3869,10 +3869,9 @@ static void mdt_stack_pre_fini(const struct lu_env *env,
 	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
 	lustre_cfg_bufs_set_string(bufs, 1, NULL);
 	lcfg = lustre_cfg_new(LCFG_PRE_CLEANUP, bufs);
-	if (!lcfg) {
-		CERROR("%s: cannot alloc lcfg\n", mdt_obd_name(m));
-		return;
-	}
+	if (lcfg == NULL)
+		RETURN_EXIT;
+
 	top->ld_ops->ldo_process_config(env, top, lcfg);
 	lustre_cfg_free(lcfg);
 	EXIT;
@@ -3905,10 +3904,9 @@ static void mdt_stack_fini(const struct lu_env *env,
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(bufs, 1, flags);
 	lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
-	if (!lcfg) {
-		CERROR("Cannot alloc lcfg!\n");
-		return;
-	}
+	if (lcfg == NULL)
+		RETURN_EXIT;
+
 	LASSERT(top);
 	top->ld_ops->ldo_process_config(env, top, lcfg);
 	lustre_cfg_free(lcfg);
@@ -4032,7 +4030,7 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
 	lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
-	if (!lcfg)
+	if (lcfg == NULL)
 		GOTO(free_bufs, rc = -ENOMEM);
 
 	rc = class_attach(lcfg);
@@ -4054,6 +4052,8 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
 	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
+	if (lcfg == NULL)
+		GOTO(class_detach, rc = -ENOMEM);
 
 	rc = class_setup(obd, lcfg);
 	if (rc)
@@ -4160,7 +4160,7 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
 	lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
-	if (!lcfg)
+	if (lcfg == NULL)
 		GOTO(cleanup_mem, rc = -ENOMEM);
 
 	rc = class_attach(lcfg);
@@ -4185,6 +4185,8 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 				   mdt->mdt_bottom->dd_lu_dev.ld_obd->obd_name);
 
 	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
+	if (lcfg == NULL)
+		GOTO(class_detach, rc = -ENOMEM);
 
 	rc = class_setup(obd, lcfg);
 	if (rc)
