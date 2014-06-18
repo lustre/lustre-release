@@ -296,8 +296,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                descr->cld_mode, descr->cld_start,
                                descr->cld_end);
 
-                        if (result < 0)
-                                RETURN(result);
+			if (result < 0) {
+				up_read(&mm->mmap_sem);
+				RETURN(result);
+			}
 
                         if (vma->vm_end - addr >= count)
                                 break;
