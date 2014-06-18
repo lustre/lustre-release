@@ -431,31 +431,3 @@ struct posix_acl *posix_acl_alloc(int count, int flags)
         static struct posix_acl acl;
         return &acl;
 }
-
-/*
- * XXX Liang: I've not converted all of them, 
- * more is needed? 
- */
-int cfs_oflags2univ(int flags) 
-{
-        int f;
-
-        f = flags & O_NOACCESS;
-        f |= (flags & O_CREAT) ? CFS_O_CREAT: 0;
-        f |= (flags & O_TRUNC) ? CFS_O_TRUNC: 0;
-        f |= (flags & O_EXCL) ? CFS_O_EXCL: 0;
-        f |= (flags & O_NONBLOCK) ? CFS_O_NONBLOCK: 0;
-        f |= (flags & O_APPEND) ? CFS_O_APPEND: 0;
-        f |= (flags & O_NOFOLLOW) ? CFS_O_NOFOLLOW: 0;
-        f |= (flags & O_SYNC)? CFS_O_SYNC: 0;
-        return f;
-}
-
-/*
- * XXX Liang: we don't need it in OSX.
- * But it should be implemented anyway.
- */
-int cfs_univ2oflags(int flags)
-{
-        return flags;
-}
