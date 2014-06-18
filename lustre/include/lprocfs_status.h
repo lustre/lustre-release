@@ -797,6 +797,12 @@ int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
                                      unsigned long count, void *data);
 int lprocfs_target_rd_instance(char *page, char **start, off_t off,
                                int count, int *eof, void *data);
+struct root_squash_info;
+int lprocfs_wr_root_squash(const char *buffer, unsigned long count,
+			   struct root_squash_info *squash, char *name);
+int lprocfs_wr_nosquash_nids(const char *buffer, unsigned long count,
+			     struct root_squash_info *squash, char *name);
+
 
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start,

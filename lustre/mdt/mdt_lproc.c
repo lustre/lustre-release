@@ -681,164 +681,58 @@ static int lprocfs_wr_cos(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_rd_root_squash(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-        return snprintf(page, count, "%u:%u\n", mdt->mdt_squash_uid,
-                        mdt->mdt_squash_gid);
-}
-
-static int safe_strtoul(const char *str, char **endp, unsigned long *res)
-{
-        char n[24];
-
-        *res = simple_strtoul(str, endp, 0);
-        if (str == *endp)
-                return 1;
-
-        sprintf(n, "%lu", *res);
-        if (strncmp(n, str, *endp - str))
-                /* overflow */
-                return 1;
-        return 0;
-}
-
-static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
-				  unsigned long count, void *data)
+static int lprocfs_rd_mdt_root_squash(char *page, char **start, off_t off,
+				      int count, int *eof, void *data)
 {
 	struct obd_device *obd = data;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct root_squash_info *squash = &mdt->mdt_squash;
+
+	return snprintf(page, count, "%u:%u\n", squash->rsi_uid,
+			squash->rsi_gid);
+}
+
+static int lprocfs_wr_mdt_root_squash(struct file *file, const char *buffer,
+				      unsigned long count, void *data)
+{
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct root_squash_info *squash = &mdt->mdt_squash;
+
+	return lprocfs_wr_root_squash(buffer, count, squash,
+				      mdt_obd_name(mdt));
+}
+
+static int lprocfs_rd_mdt_nosquash_nids(char *page, char **start, off_t off,
+					int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct root_squash_info *squash = &mdt->mdt_squash;
 	int rc;
-	char kernbuf[50], *tmp, *end, *errmsg;
-	unsigned long uid, gid;
-	int nouid, nogid;
-	ENTRY;
 
-	if (count >= sizeof(kernbuf)) {
-		errmsg = "string too long";
-		GOTO(failed, rc = -EINVAL);
-	}
-	if (copy_from_user(kernbuf, buffer, count)) {
-		errmsg = "bad address";
-		GOTO(failed, rc = -EFAULT);
-	}
-	kernbuf[count] = '\0';
-
-	nouid = nogid = 0;
-	if (safe_strtoul(buffer, &tmp, &uid)) {
-		uid = mdt->mdt_squash_uid;
-		nouid = 1;
-	}
-
-	/* skip ':' */
-	if (*tmp == ':') {
-		tmp++;
-		if (safe_strtoul(tmp, &end, &gid)) {
-			gid = mdt->mdt_squash_gid;
-			nogid = 1;
-		}
+	down_read(&squash->rsi_sem);
+	if (!cfs_list_empty(&squash->rsi_nosquash_nids)) {
+		rc = cfs_print_nidlist(page, count,
+				       &squash->rsi_nosquash_nids);
+		rc += snprintf(page + rc, count - rc, "\n");
 	} else {
-		gid = mdt->mdt_squash_gid;
-		nogid = 1;
+		rc = snprintf(page, count, "NONE\n");
 	}
+	up_read(&squash->rsi_sem);
 
-	mdt->mdt_squash_uid = uid;
-	mdt->mdt_squash_gid = gid;
-
-	if (nouid && nogid) {
-		errmsg = "needs uid:gid format";
-		GOTO(failed, rc = -EINVAL);
-	}
-
-	LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
-		      mdt_obd_name(mdt),
-		      mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
-	RETURN(count);
-
-failed:
-	CWARN("%s: failed to set root_squash to \"%s\", %s: rc %d\n",
-	      mdt_obd_name(mdt), buffer, errmsg, rc);
-	RETURN(rc);
+	return rc;
 }
 
-static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-        if (mdt->mdt_nosquash_str)
-                return snprintf(page, count, "%s\n", mdt->mdt_nosquash_str);
-        return snprintf(page, count, "NONE\n");
-}
-
-static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
-				    unsigned long count, void *data)
+static int lprocfs_wr_mdt_nosquash_nids(struct file *file, const char *buffer,
+					unsigned long count, void *data)
 {
 	struct obd_device *obd = data;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int rc;
-	char *kernbuf, *errmsg;
-	cfs_list_t tmp;
-	ENTRY;
+	struct root_squash_info *squash = &mdt->mdt_squash;
 
-	OBD_ALLOC(kernbuf, count + 1);
-	if (kernbuf == NULL) {
-		errmsg = "no memory";
-		GOTO(failed, rc = -ENOMEM);
-	}
-	if (copy_from_user(kernbuf, buffer, count)) {
-		errmsg = "bad address";
-		GOTO(failed, rc = -EFAULT);
-	}
-	kernbuf[count] = '\0';
-
-	if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
-		/* empty string is special case */
-		down_write(&mdt->mdt_squash_sem);
-		if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
-			cfs_free_nidlist(&mdt->mdt_nosquash_nids);
-			OBD_FREE(mdt->mdt_nosquash_str,
-				 mdt->mdt_nosquash_strlen);
-			mdt->mdt_nosquash_str = NULL;
-			mdt->mdt_nosquash_strlen = 0;
-		}
-		up_write(&mdt->mdt_squash_sem);
-		LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
-			      mdt_obd_name(mdt));
-		OBD_FREE(kernbuf, count + 1);
-		RETURN(count);
-	}
-
-	CFS_INIT_LIST_HEAD(&tmp);
-	if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
-		errmsg = "can't parse";
-		GOTO(failed, rc = -EINVAL);
-	}
-
-	down_write(&mdt->mdt_squash_sem);
-	if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
-		cfs_free_nidlist(&mdt->mdt_nosquash_nids);
-		OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
-	}
-	mdt->mdt_nosquash_str = kernbuf;
-	mdt->mdt_nosquash_strlen = count + 1;
-	cfs_list_splice(&tmp, &mdt->mdt_nosquash_nids);
-
-	LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
-		      mdt_obd_name(mdt), kernbuf);
-	up_write(&mdt->mdt_squash_sem);
-	RETURN(count);
-
-failed:
-	CWARN("%s: failed to set nosquash_nids to \"%s\", %s: rc %d\n",
-	      mdt_obd_name(mdt), kernbuf, errmsg, rc);
-	if (kernbuf)
-		OBD_FREE(kernbuf, count + 1);
-	RETURN(rc);
+	return lprocfs_wr_nosquash_nids(buffer, count, squash,
+					mdt_obd_name(mdt));
 }
 
 static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
@@ -998,11 +892,11 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 					NULL, NULL, 0 },
 	{ "commit_on_sharing",		lprocfs_rd_cos, lprocfs_wr_cos,
 					NULL, NULL, 0 },
-	{ "root_squash",		lprocfs_rd_root_squash,
-					lprocfs_wr_root_squash,
+	{ "root_squash",		lprocfs_rd_mdt_root_squash,
+					lprocfs_wr_mdt_root_squash,
 					NULL, NULL, 0 },
-	{ "nosquash_nids",		lprocfs_rd_nosquash_nids,
-					lprocfs_wr_nosquash_nids,
+	{ "nosquash_nids",		lprocfs_rd_mdt_nosquash_nids,
+					lprocfs_wr_mdt_nosquash_nids,
 					NULL, NULL, 0 },
 	{ "som",			lprocfs_rd_mdt_som,
 					lprocfs_wr_mdt_som,

@@ -3402,9 +3402,22 @@ static int mgs_write_log_param(const struct lu_env *env,
 		if (rc)
 			GOTO(end, rc);
 
-                CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
+		/* Forbid direct update of llite root squash parameters.
+		 * These parameters are indirectly set via the MDT settings.
+		 * See (LU-1778) */
+		if ((class_match_param(ptr, PARAM_LLITE, &tmp) == 0) &&
+		    ((memcmp(tmp, "root_squash=", 12) == 0) ||
+		     (memcmp(tmp, "nosquash_nids=", 14) == 0))) {
+			LCONSOLE_ERROR("%s: root squash parameters can only "
+				"be updated through MDT component\n",
+				mti->mti_fsname);
+			name_destroy(&cname);
+			GOTO(end, rc = -EINVAL);
+		}
 
-                /* Modify client */
+		CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
+
+		/* Modify client */
 		rc = name_create(&logname, mti->mti_fsname, "-client");
 		if (rc) {
 			name_destroy(&cname);
@@ -3440,13 +3453,13 @@ static int mgs_write_log_param(const struct lu_env *env,
 				}
 			}
 		}
-                name_destroy(&logname);
-                name_destroy(&cname);
-                GOTO(end, rc);
-        }
+		name_destroy(&logname);
+		name_destroy(&cname);
+		GOTO(end, rc);
+	}
 
-        /* All mdt. params in proc */
-        if (class_match_param(ptr, PARAM_MDT, NULL) == 0) {
+	/* All mdt. params in proc */
+	if (class_match_param(ptr, PARAM_MDT, &tmp) == 0) {
                 int i;
                 __u32 idx;
 
@@ -3472,20 +3485,56 @@ static int mgs_write_log_param(const struct lu_env *env,
 					goto active_err;
 				rc = mgs_wlp_lcfg(env, mgs, fsdb, mti,
 						  logname, &mgi->mgi_bufs,
-                                                  logname, ptr);
-                                name_destroy(&logname);
-                                if (rc)
-                                        goto active_err;
-                        }
-                } else {
+						  logname, ptr);
+				name_destroy(&logname);
+				if (rc)
+					goto active_err;
+			}
+		} else {
+			if ((memcmp(tmp, "root_squash=", 12) == 0) ||
+			    (memcmp(tmp, "nosquash_nids=", 14) == 0)) {
+				LCONSOLE_ERROR("%s: root squash parameters "
+					"cannot be applied to a single MDT\n",
+					mti->mti_fsname);
+				GOTO(end, rc = -EINVAL);
+			}
 			rc = mgs_wlp_lcfg(env, mgs, fsdb, mti,
 					  mti->mti_svname, &mgi->mgi_bufs,
-                                          mti->mti_svname, ptr);
-                        if (rc)
-                                goto active_err;
-                }
-                GOTO(end, rc);
-        }
+					  mti->mti_svname, ptr);
+			if (rc)
+				goto active_err;
+		}
+
+		/* root squash settings are also applied to llite
+		 * config log (see LU-1778) */
+		if (rc == 0 &&
+		    ((memcmp(tmp, "root_squash=", 12) == 0) ||
+		     (memcmp(tmp, "nosquash_nids=", 14) == 0))) {
+			char *cname;
+			char *ptr2;
+
+			rc = name_create(&cname, mti->mti_fsname, "-client");
+			if (rc)
+				GOTO(end, rc);
+			rc = name_create(&logname, mti->mti_fsname, "-client");
+			if (rc) {
+				name_destroy(&cname);
+				GOTO(end, rc);
+			}
+			rc = name_create(&ptr2, PARAM_LLITE, tmp);
+			if (rc) {
+				name_destroy(&cname);
+				name_destroy(&logname);
+				GOTO(end, rc);
+			}
+			rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname,
+					  &mgi->mgi_bufs, cname, ptr2);
+			name_destroy(&ptr2);
+			name_destroy(&logname);
+			name_destroy(&cname);
+		}
+		GOTO(end, rc);
+	}
 
 	/* All mdd., ost. and osd. params in proc */
 	if ((class_match_param(ptr, PARAM_MDD, NULL) == 0) ||

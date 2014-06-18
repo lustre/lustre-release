@@ -45,6 +45,7 @@
 #include <lustre_lite.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
+#include <linux/sched.h>
 #include "llite_internal.h"
 #include <lustre/ll_fiemap.h>
 
@@ -3340,8 +3341,14 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 # endif
 #endif
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	struct ll_sb_info *sbi;
+	struct root_squash_info *squash;
+	struct cred *cred = NULL;
+	const struct cred *old_cred = NULL;
+	cfs_cap_t cap;
+	bool squash_id = false;
+	ENTRY;
 
 #ifdef MAY_NOT_BLOCK
 	if (mask & MAY_NOT_BLOCK)
@@ -3366,11 +3373,46 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), inode mode %x mask %o\n",
 	       inode->i_ino, inode->i_generation, inode, inode->i_mode, mask);
 
-	if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
-		return lustre_check_remote_perm(inode, mask);
+	/* squash fsuid/fsgid if needed */
+	sbi = ll_i2sbi(inode);
+	squash = &sbi->ll_squash;
+	if (unlikely(squash->rsi_uid != 0 &&
+		     current_fsuid() == 0 &&
+		     !(sbi->ll_flags & LL_SBI_NOROOTSQUASH))) {
+			squash_id = true;
+	}
+	if (squash_id) {
+		CDEBUG(D_OTHER, "squash creds (%d:%d)=>(%d:%d)\n",
+		       current_fsuid(), current_fsgid(),
+		       squash->rsi_uid, squash->rsi_gid);
 
-	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
-	rc = ll_generic_permission(inode, mask, flags, ll_check_acl);
+		/* update current process's credentials
+		 * and FS capability */
+		cred = prepare_creds();
+		if (cred == NULL)
+			RETURN(-ENOMEM);
+
+		cred->fsuid = squash->rsi_uid;
+		cred->fsgid = squash->rsi_gid;
+		for (cap = 0; cap < sizeof(cfs_cap_t) * 8; cap++) {
+			if ((1 << cap) & CFS_CAP_FS_MASK)
+				cap_lower(cred->cap_effective, cap);
+		}
+		old_cred = override_creds(cred);
+	}
+
+	ll_stats_ops_tally(sbi, LPROC_LL_INODE_PERM, 1);
+
+	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+		rc = lustre_check_remote_perm(inode, mask);
+	else
+		rc = ll_generic_permission(inode, mask, flags, ll_check_acl);
+
+	/* restore current process's credentials and FS capability */
+	if (squash_id) {
+		revert_creds(old_cred);
+		put_cred(cred);
+	}
 
 	RETURN(rc);
 }

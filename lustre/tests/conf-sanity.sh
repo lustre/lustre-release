@@ -2662,16 +2662,30 @@ run_test 42 "allow client/server mount/unmount with invalid config param"
 
 test_43() {
 	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
+
+	ID1=${ID1:-501}
+	USER1=$(cat /etc/passwd | grep :$ID1:$ID1: | cut -d: -f1)
+	[ -z "$USER1" ] && skip_env "missing user with uid=$ID1 gid=$ID1" &&
+		return
+
 	setup
 	chmod ugo+x $DIR || error "chmod 0 failed"
 	set_conf_param_and_check mds					\
 		"lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
 		"$FSNAME.mdt.root_squash"				\
 		"0:0"
+	wait_update $HOSTNAME						\
+		"lctl get_param -n llite.${FSNAME}*.root_squash"	\
+		"0:0" ||
+		error "check llite root_squash failed!"
 	set_conf_param_and_check mds					\
 		"lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
 		"$FSNAME.mdt.nosquash_nids"				\
 		"NONE"
+	wait_update $HOSTNAME						\
+		"lctl get_param -n llite.${FSNAME}*.nosquash_nids"	\
+		"NONE" ||
+		error "check llite nosquash_nids failed!"
 
     #
     # create set of test files
@@ -2687,6 +2701,10 @@ test_43() {
     chmod go-rwx $DIR/$tdir-rootdir   || error "chmod 3 failed"
     touch $DIR/$tdir-rootdir/tfile-1  || error "touch failed"
 
+	echo "777" > $DIR/$tfile-user1file || error "write 7 failed"
+	chmod go-rw $DIR/$tfile-user1file  || error "chmod 7 failed"
+	chown $ID1.$ID1 $DIR/$tfile-user1file || error "chown failed"
+
 	#
 	# check root_squash:
 	#   set root squash UID:GID to RUNAS_ID
@@ -2696,6 +2714,10 @@ test_43() {
 		"lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
 		"$FSNAME.mdt.root_squash"				\
 		"$RUNAS_ID:$RUNAS_ID"
+	wait_update $HOSTNAME						\
+		"lctl get_param -n llite.${FSNAME}*.root_squash"	\
+		"$RUNAS_ID:$RUNAS_ID" ||
+		error "check llite root_squash failed!"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-userfile)
     dd if=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
@@ -2703,7 +2725,7 @@ test_43() {
     echo "$ST: root read permission is granted - ok"
 
     echo "444" | \
-    dd conv=notrunc if=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
+    dd conv=notrunc of=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
         error "$ST: root write permission is denied"
     echo "$ST: root write permission is granted - ok"
 
@@ -2726,6 +2748,31 @@ test_43() {
         error "$ST: root create permission is granted"
     echo "$ST: root create permission is denied - ok"
 
+
+	# LU-1778
+	# check root_squash is enforced independently
+	# of client cache content
+	#
+	# access file by USER1, keep access open
+	# root should be denied access to user file
+
+	runas -u $ID1 tail -f $DIR/$tfile-user1file 1>/dev/null 2>&1 &
+	pid=$!
+	sleep 1
+
+	ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-user1file)
+	dd if=$DIR/$tfile-user1file 1>/dev/null 2>&1 &&
+	    { kill $pid; error "$ST: root read permission is granted"; }
+	echo "$ST: root read permission is denied - ok"
+
+	echo "777" | \
+	dd conv=notrunc of=$DIR/$tfile-user1file 1>/dev/null 2>&1 &&
+	    { kill $pid; error "$ST: root write permission is granted"; }
+	echo "$ST: root write permission is denied - ok"
+
+	kill $pid
+	wait $pid
+
 	#
 	# check nosquash_nids:
 	#   put client's NID into nosquash_nids list,
@@ -2738,6 +2785,10 @@ test_43() {
 		"lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
 		"$FSNAME-MDTall.mdt.nosquash_nids"			\
 		"$NIDLIST"
+	wait_update $HOSTNAME						\
+		"lctl get_param -n llite.${FSNAME}*.nosquash_nids"	\
+		"$NIDLIST" ||
+		error "check llite nosquash_nids failed!"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
     dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null || \

@@ -4878,12 +4878,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
 	mdt_quota_fini(env, m);
 
-        cfs_free_nidlist(&m->mdt_nosquash_nids);
-        if (m->mdt_nosquash_str) {
-                OBD_FREE(m->mdt_nosquash_str, m->mdt_nosquash_strlen);
-                m->mdt_nosquash_str = NULL;
-                m->mdt_nosquash_strlen = 0;
-        }
+	cfs_free_nidlist(&m->mdt_squash.rsi_nosquash_nids);
 
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_PAUSE_LFSCK, 0, NULL);
 
@@ -5002,12 +4997,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
-        m->mdt_squash_uid = 0;
-        m->mdt_squash_gid = 0;
-        CFS_INIT_LIST_HEAD(&m->mdt_nosquash_nids);
-        m->mdt_nosquash_str = NULL;
-        m->mdt_nosquash_strlen = 0;
-	init_rwsem(&m->mdt_squash_sem);
+	m->mdt_squash.rsi_uid = 0;
+	m->mdt_squash.rsi_gid = 0;
+	CFS_INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
+	init_rwsem(&m->mdt_squash.rsi_sem);
 	spin_lock_init(&m->mdt_osfs_lock);
 	m->mdt_osfs_age = cfs_time_shift_64(-1000);
 	m->mdt_enable_remote_dir = 0;

@@ -2699,6 +2699,138 @@ int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_max_pages_per_rpc);
 
+int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
+			   struct root_squash_info *squash, char *name)
+{
+	int rc;
+	char kernbuf[64], *tmp, *errmsg;
+	unsigned long uid, gid;
+	ENTRY;
+
+	if (count >= sizeof(kernbuf)) {
+		errmsg = "string too long";
+		GOTO(failed_noprint, rc = -EINVAL);
+	}
+	if (copy_from_user(kernbuf, buffer, count)) {
+		errmsg = "bad address";
+		GOTO(failed_noprint, rc = -EFAULT);
+	}
+	kernbuf[count] = '\0';
+
+	/* look for uid gid separator */
+	tmp = strchr(kernbuf, ':');
+	if (tmp == NULL) {
+		errmsg = "needs uid:gid format";
+		GOTO(failed, rc = -EINVAL);
+	}
+	*tmp = '\0';
+	tmp++;
+
+	/* parse uid */
+	if (kstrtoul(kernbuf, 0, &uid) != 0) {
+		errmsg = "bad uid";
+		GOTO(failed, rc = -EINVAL);
+	}
+
+	/* parse gid */
+	if (kstrtoul(tmp, 0, &gid) != 0) {
+		errmsg = "bad gid";
+		GOTO(failed, rc = -EINVAL);
+	}
+
+	squash->rsi_uid = uid;
+	squash->rsi_gid = gid;
+
+	LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
+		      name, squash->rsi_uid, squash->rsi_gid);
+	RETURN(count);
+
+failed:
+	if (tmp != NULL) {
+		tmp--;
+		*tmp = ':';
+	}
+	CWARN("%s: failed to set root_squash to \"%s\", %s, rc = %d\n",
+	      name, kernbuf, errmsg, rc);
+	RETURN(rc);
+failed_noprint:
+	CWARN("%s: failed to set root_squash due to %s, rc = %d\n",
+	      name, errmsg, rc);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lprocfs_wr_root_squash);
+
+
+int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
+			     struct root_squash_info *squash, char *name)
+{
+	int rc;
+	char *kernbuf = NULL;
+	char *errmsg;
+	cfs_list_t tmp;
+	ENTRY;
+
+	if (count > 4096) {
+		errmsg = "string too long";
+		GOTO(failed, rc = -EINVAL);
+	}
+
+	OBD_ALLOC(kernbuf, count + 1);
+	if (kernbuf == NULL) {
+		errmsg = "no memory";
+		GOTO(failed, rc = -ENOMEM);
+	}
+	if (copy_from_user(kernbuf, buffer, count)) {
+		errmsg = "bad address";
+		GOTO(failed, rc = -EFAULT);
+	}
+	kernbuf[count] = '\0';
+
+	if (count > 0 && kernbuf[count - 1] == '\n')
+		kernbuf[count - 1] = '\0';
+
+	if (strcmp(kernbuf, "NONE") == 0 || strcmp(kernbuf, "clear") == 0) {
+		/* empty string is special case */
+		down_write(&squash->rsi_sem);
+		if (!cfs_list_empty(&squash->rsi_nosquash_nids))
+			cfs_free_nidlist(&squash->rsi_nosquash_nids);
+		up_write(&squash->rsi_sem);
+		LCONSOLE_INFO("%s: nosquash_nids is cleared\n", name);
+		OBD_FREE(kernbuf, count + 1);
+		RETURN(count);
+	}
+
+	CFS_INIT_LIST_HEAD(&tmp);
+	if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
+		errmsg = "can't parse";
+		GOTO(failed, rc = -EINVAL);
+	}
+	LCONSOLE_INFO("%s: nosquash_nids set to %s\n",
+		      name, kernbuf);
+	OBD_FREE(kernbuf, count + 1);
+	kernbuf = NULL;
+
+	down_write(&squash->rsi_sem);
+	if (!cfs_list_empty(&squash->rsi_nosquash_nids))
+		cfs_free_nidlist(&squash->rsi_nosquash_nids);
+	cfs_list_splice(&tmp, &squash->rsi_nosquash_nids);
+	up_write(&squash->rsi_sem);
+
+	RETURN(count);
+
+failed:
+	if (kernbuf) {
+		CWARN("%s: failed to set nosquash_nids to \"%s\", %s rc = %d\n",
+		      name, kernbuf, errmsg, rc);
+		OBD_FREE(kernbuf, count + 1);
+	} else {
+		CWARN("%s: failed to set nosquash_nids due to %s rc = %d\n",
+		      name, errmsg, rc);
+	}
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lprocfs_wr_nosquash_nids);
+
 #ifdef HAVE_SERVER_SUPPORT
 int lprocfs_target_rd_instance(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
