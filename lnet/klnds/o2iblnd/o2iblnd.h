@@ -63,12 +63,13 @@
 #include <linux/pci-dma.h>
 #endif
 
-#include <net/sock.h>
-#include <linux/in.h>
-
 #ifdef HAVE_COMPAT_RDMA
 #include <linux/compat-2.6.h>
 #endif
+
+#include <net/sock.h>
+#include <linux/in.h>
+
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
 #include <rdma/ib_verbs.h>
