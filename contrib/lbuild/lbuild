@@ -955,6 +955,11 @@ build_lustre() {
 
     pushd lustre >/dev/null
 
+    if ! build_lustre_dkms; then
+        popd >/dev/null # pushd lustre
+        return 255
+    fi
+
     echo "Building Lustre RPMs for: $BUILD_ARCHS..."
     local targets arch
     for arch in $BUILD_ARCHS; do
@@ -1030,6 +1035,15 @@ build_lustre() {
     fi
     popd >/dev/null
 
+}
+
+build_lustre_dkms() {
+    local ver=$(eval echo  $(awk '/LUSTRE_VERSION_STRING/ {print $3}'  lustre/include/lustre_ver.h))
+    echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
+    ./configure --enable-dist || return 255
+    $RPMBUILD --define="_topdir $TOPDIR" -bs lustre-dkms.spec || return 255
+    $RPMBUILD --rebuild --define="_topdir $TOPDIR" $TOPDIR/SRPMS/lustre-dkms-$ver-*.src.rpm || return 255
+    return 0
 }
 
 ###
