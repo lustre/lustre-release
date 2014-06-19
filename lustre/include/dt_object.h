@@ -1776,19 +1776,6 @@ static inline struct dt_object *lu2dt_obj(struct lu_object *o)
 	return container_of0(o, struct dt_object, do_lu);
 }
 
-struct thandle_update {
-	/* In DNE, one transaction can be disassembled into
-	 * updates on several different MDTs, and these updates
-	 * will be attached to tu_remote_update_list per target.
-	 * Only single thread will access the list, no need lock
-	 */
-	struct list_head	tu_remote_update_list;
-
-	/* sent after or before local transaction */
-	unsigned int		tu_sent_after_local_trans:1,
-				tu_only_remote_trans:1;
-};
-
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
@@ -1807,9 +1794,8 @@ struct thandle {
 	/** the dt device on which the transactions are executed */
 	struct dt_device *th_dev;
 
-	atomic_t	th_refc;
-	/* the size of transaction */
-	int		th_alloc_size;
+	/* In some callback function, it needs to access the top_th directly */
+	struct thandle *th_top;
 
 	/** context for this transaction, tag is LCT_TX_HANDLE */
 	struct lu_context th_ctx;
@@ -1822,27 +1808,11 @@ struct thandle {
 	__s32             th_result;
 
 	/** whether we need sync commit */
-	unsigned int		th_sync:1;
-
+	unsigned int		th_sync:1,
 	/* local transation, no need to inform other layers */
-	unsigned int		th_local:1;
-
-	struct thandle_update	*th_update;
+				th_local:1;
 };
 
-static inline void thandle_get(struct thandle *thandle)
-{
-	atomic_inc(&thandle->th_refc);
-}
-
-static inline void thandle_put(struct thandle *thandle)
-{
-	if (atomic_dec_and_test(&thandle->th_refc)) {
-		if (thandle->th_update != NULL)
-			OBD_FREE_PTR(thandle->th_update);
-		OBD_FREE(thandle, thandle->th_alloc_size);
-	}
-}
 /**
  * Transaction call-backs.
  *
@@ -1917,6 +1887,18 @@ dt_locate(const struct lu_env *env, struct dt_device *dev,
 {
 	return dt_locate_at(env, dev, fid,
 			    dev->dd_lu_dev.ld_site->ls_top_dev, NULL);
+}
+
+static inline struct dt_object *
+dt_object_locate(struct dt_object *dto, struct dt_device *dt_dev)
+{
+	struct lu_object *lo;
+
+	list_for_each_entry(lo, &dto->do_lu.lo_header->loh_layers, lo_linkage) {
+		if (lo->lo_dev == &dt_dev->dd_lu_dev)
+			return container_of(lo, struct dt_object, do_lu);
+	}
+	return NULL;
 }
 
 int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
@@ -2349,6 +2331,27 @@ static inline int dt_read_prep(const struct lu_env *env, struct dt_object *d,
         LASSERT(d->do_body_ops);
         LASSERT(d->do_body_ops->dbo_read_prep);
         return d->do_body_ops->dbo_read_prep(env, d, lnb, n);
+}
+
+static inline int dt_declare_write(const struct lu_env *env,
+				   struct dt_object *dt,
+				   const struct lu_buf *buf, loff_t pos,
+				   struct thandle *th)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_declare_write);
+	return dt->do_body_ops->dbo_declare_write(env, dt, buf, pos, th);
+}
+
+static inline ssize_t dt_write(const struct lu_env *env, struct dt_object *dt,
+			       const struct lu_buf *buf, loff_t *pos,
+			       struct thandle *th, int rq)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_write);
+	return dt->do_body_ops->dbo_write(env, dt, buf, pos, th, rq);
 }
 
 static inline int dt_declare_punch(const struct lu_env *env,

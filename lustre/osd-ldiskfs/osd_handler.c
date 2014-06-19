@@ -959,7 +959,7 @@ static void osd_trans_commit_cb(struct super_block *sb,
 
         lu_context_exit(&th->th_ctx);
         lu_context_fini(&th->th_ctx);
-	thandle_put(th);
+	OBD_FREE_PTR(oh);
 }
 
 static struct thandle *osd_trans_create(const struct lu_env *env,
@@ -984,8 +984,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 		th->th_result = 0;
 		th->th_tags = LCT_TX_HANDLE;
 		oh->ot_credits = 0;
-		atomic_set(&th->th_refc, 1);
-		th->th_alloc_size = sizeof(*oh);
 		INIT_LIST_HEAD(&oh->ot_dcb_list);
 		osd_th_alloced(oh);
 
@@ -1169,7 +1167,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			CERROR("%s: failed to stop transaction: rc = %d\n",
 			       osd_name(osd), rc);
 	} else {
-		thandle_put(&oh->ot_super);
+		OBD_FREE_PTR(oh);
 	}
 
 	/* inform the quota slave device that the transaction is stopping */

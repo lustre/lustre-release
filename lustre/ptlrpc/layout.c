@@ -61,7 +61,6 @@
 /* obd2cli_tgt() (required by DEBUG_REQ()) */
 #include <obd.h>
 #include <lustre_debug.h>
-#include <lustre_update.h>
 #endif /* !__REQ_LAYOUT_USER__ */
 
 /* struct ptlrpc_request, lustre_msg* */

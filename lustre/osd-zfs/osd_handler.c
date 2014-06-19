@@ -166,7 +166,7 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	th->th_dev = NULL;
 	lu_context_exit(&th->th_ctx);
 	lu_context_fini(&th->th_ctx);
-	thandle_put(&oh->ot_super);
+	OBD_FREE_PTR(oh);
 
 	EXIT;
 }
@@ -248,7 +248,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		/* there won't be any commit, release reserved quota space now,
 		 * if any */
 		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
-		thandle_put(&oh->ot_super);
+		OBD_FREE_PTR(oh);
 		RETURN(0);
 	}
 
@@ -308,8 +308,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	th->th_dev = dt;
 	th->th_result = 0;
 	th->th_tags = LCT_TX_HANDLE;
-	atomic_set(&th->th_refc, 1);
-	th->th_alloc_size = sizeof(*oh);
 	RETURN(th);
 }
 

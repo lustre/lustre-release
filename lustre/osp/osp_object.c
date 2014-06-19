@@ -1121,16 +1121,8 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(buf->lb_len > 0 && buf->lb_buf != NULL);
-
-	update = dt_update_request_find_or_create(th, dt);
-	if (IS_ERR(update)) {
-		CERROR("%s: Get OSP update buf failed "DFID": rc = %d\n",
-		       dt->do_lu.lo_dev->ld_obd->obd_name,
-		       PFID(lu_object_fid(&dt->do_lu)),
-		       (int)PTR_ERR(update));
-
-		RETURN(PTR_ERR(update));
-	}
+	update = thandle_to_dt_update_request(th);
+	LASSERT(update != NULL);
 
 	rc = out_xattr_set_pack(env, &update->dur_buf,
 				lu_object_fid(&dt->do_lu),
@@ -1266,9 +1258,8 @@ static int __osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	struct osp_xattr_entry	 *oxe;
 	int			  rc;
 
-	update = dt_update_request_find_or_create(th, dt);
-	if (IS_ERR(update))
-		return PTR_ERR(update);
+	update = thandle_to_dt_update_request(th);
+	LASSERT(update != NULL);
 
 	fid = lu_object_fid(&dt->do_lu);
 
@@ -1388,6 +1379,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object	*o = dt2osp_obj(dt);
 	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
+	struct thandle		*local_th;
 	int			 rc = 0;
 
 	ENTRY;
@@ -1416,13 +1408,19 @@ static int osp_declare_object_create(const struct lu_env *env,
 	 */
 	/* rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th); */
 
+	local_th = osp_get_storage_thandle(env, th, d);
+	if (IS_ERR(local_th))
+		RETURN(PTR_ERR(local_th));
+
 	if (unlikely(!fid_is_zero(fid))) {
 		/* replay case: caller knows fid */
 		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
 		osi->osi_lb.lb_len = sizeof(osi->osi_id);
 		osi->osi_lb.lb_buf = NULL;
+
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
-					     &osi->osi_lb, osi->osi_off, th);
+					     &osi->osi_lb, osi->osi_off,
+					     local_th);
 		RETURN(rc);
 	}
 
@@ -1447,7 +1445,8 @@ static int osp_declare_object_create(const struct lu_env *env,
 		osi->osi_lb.lb_len = sizeof(osi->osi_id);
 		osi->osi_lb.lb_buf = NULL;
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
-					     &osi->osi_lb, osi->osi_off, th);
+					     &osi->osi_lb, osi->osi_off,
+					     local_th);
 	} else {
 		/* not needed in the cache anymore */
 		set_bit(LU_OBJECT_HEARD_BANSHEE,
@@ -1487,6 +1486,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*o = dt2osp_obj(dt);
 	int			rc = 0;
 	struct lu_fid		*fid = &osi->osi_fid;
+	struct thandle		*local_th;
 	ENTRY;
 
 	if (is_only_remote_trans(th) &&
@@ -1529,6 +1529,9 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	if (osp_precreate_end_seq(env, d) && osp_is_fid_client(d))
 		th->th_sync = 1;
 
+	local_th = osp_get_storage_thandle(env, th, d);
+	if (IS_ERR(local_th))
+		RETURN(PTR_ERR(local_th));
 	/*
 	 * it's OK if the import is inactive by this moment - id was created
 	 * by OST earlier, we just need to maintain it consistently on the disk
@@ -1563,7 +1566,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 			   &d->opd_last_used_fid.f_oid, d->opd_index);
 
 	rc = dt_record_write(env, d->opd_last_used_oid_file, &osi->osi_lb,
-			     &osi->osi_off, th);
+			     &osi->osi_off, local_th);
 
 	CDEBUG(D_HA, "%s: Wrote last used FID: "DFID", index %d: %d\n",
 	       d->opd_obd->obd_name, PFID(fid), d->opd_index, rc);

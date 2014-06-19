@@ -2038,6 +2038,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
 	struct lu_fid			 tfid;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct dt_object		*dto;
 	struct dt_device		*dev	= lfsck->li_next;
 	struct thandle			*th	= NULL;
 	struct lfsck_lock_handle        *llh    = &info->lti_llh;
@@ -2061,14 +2062,15 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
-	rc = dt_declare_delete(env, parent, (const struct dt_key *)name, th);
+	dto = dt_object_locate(parent, th->th_dev);
+	rc = dt_declare_delete(env, dto, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	if (update) {
 		rec->rec_type = lfsck_object_type(child) & S_IFMT;
 		rec->rec_fid = cfid;
-		rc = dt_declare_insert(env, parent,
+		rc = dt_declare_insert(env, dto,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)name2, th);
 		if (rc != 0)
@@ -2076,7 +2078,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	}
 
 	if (dec) {
-		rc = dt_declare_ref_del(env, parent, th);
+		rc = dt_declare_ref_del(env, dto, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
@@ -2085,8 +2087,9 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	dt_write_lock(env, parent, 0);
-	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
+
+	dt_write_lock(env, dto, 0);
+	rc = dt_lookup(env, dto, (struct dt_rec *)&tfid,
 		       (const struct dt_key *)name);
 	/* Someone has removed the bad name entry by race. */
 	if (rc == -ENOENT)
@@ -2103,12 +2106,12 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(unlock2, rc = 1);
 
-	rc = dt_delete(env, parent, (const struct dt_key *)name, th);
+	rc = dt_delete(env, dto, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
 	if (update) {
-		rc = dt_insert(env, parent,
+		rc = dt_insert(env, dto,
 			       (const struct dt_rec *)rec,
 			       (const struct dt_key *)name2, th, 1);
 		if (rc != 0)
@@ -2116,7 +2119,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	}
 
 	if (dec) {
-		rc = dt_ref_del(env, parent, th);
+		rc = dt_ref_del(env, dto, th);
 		if (rc != 0)
 			GOTO(unlock2, rc);
 	}

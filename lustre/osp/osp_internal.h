@@ -296,11 +296,35 @@ struct osp_it {
 	struct page		 **ooi_pages;
 };
 
+struct osp_thandle {
+	struct thandle		 ot_super;
+	struct dt_update_request *ot_dur;
+	bool			 ot_send_updates_after_local_trans:1;
+
+	/* OSP will use this thandle to update last oid*/
+	struct thandle		*ot_storage_th;
+};
+
+static inline struct osp_thandle *
+thandle_to_osp_thandle(struct thandle *th)
+{
+	return container_of(th, struct osp_thandle, ot_super);
+}
+
+static inline struct dt_update_request *
+thandle_to_dt_update_request(struct thandle *th)
+{
+	struct osp_thandle *oth;
+
+	oth = thandle_to_osp_thandle(th);
+	return oth->ot_dur;
+}
+
 /* The transaction only include the updates on the remote node, and
  * no local updates at all */
 static inline bool is_only_remote_trans(struct thandle *th)
 {
-	return th->th_dev != NULL && th->th_dev->dd_ops == &osp_dt_ops;
+	return th->th_top == NULL;
 }
 
 static inline void osp_objid_buf_prep(struct lu_buf *buf, loff_t *off,
@@ -534,12 +558,17 @@ struct thandle *osp_trans_create(const struct lu_env *env,
 				 struct dt_device *d);
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th);
+
 int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 			const struct object_update_request *ureq,
 			struct ptlrpc_request **reqp);
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct dt_update_request *update,
 		    struct ptlrpc_request **reqp, bool rpc_lock);
+
+struct thandle *osp_get_storage_thandle(const struct lu_env *env,
+					struct thandle *th,
+					struct osp_device *osp);
 /* osp_object.c */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		 struct lu_attr *attr);

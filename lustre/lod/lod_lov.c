@@ -667,10 +667,12 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 
 	info->lti_buf.lb_buf = lmm;
 	info->lti_buf.lb_len = lmm_size;
-	rc = dt_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV, 0,
-			  th);
-	if (rc < 0)
+	rc = lod_sub_object_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV,
+				      0, th);
+	if (rc < 0) {
 		lod_object_free_striping(env, lo);
+		RETURN(rc);
+	}
 
 	RETURN(rc);
 }

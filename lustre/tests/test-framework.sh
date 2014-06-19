@@ -1193,6 +1193,12 @@ mount_facet() {
     else
         set_default_debug_facet $facet
 
+	if [[ $facet == mds* ]]; then
+		do_facet $facet \
+			lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 \
+				2>/dev/null
+	fi
+
 		label=$(devicelabel ${facet} ${!dev})
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}

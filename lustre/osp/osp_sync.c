@@ -243,13 +243,17 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(o->opo_obj.do_lu.lo_dev);
 	struct llog_ctxt	*ctxt;
+	struct thandle		*storage_th;
 	int			 rc;
 
 	ENTRY;
 
 	/* it's a layering violation, to access internals of th,
 	 * but we can do this as a sanity check, for a while */
-	LASSERT(th->th_dev == d->opd_storage);
+	LASSERT(th->th_top != NULL);
+	storage_th = thandle_get_sub_by_dt(env, th->th_top, d->opd_storage);
+	if (IS_ERR(storage_th))
+		RETURN(PTR_ERR(storage_th));
 
 	switch (type) {
 	case MDS_UNLINK64_REC:
@@ -263,12 +267,13 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	}
 
 	/* we want ->dt_trans_start() to allocate per-thandle structure */
-	th->th_tags |= LCT_OSP_THREAD;
+	storage_th->th_tags |= LCT_OSP_THREAD;
 
 	ctxt = llog_get_context(d->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
 	LASSERT(ctxt);
 
-	rc = llog_declare_add(env, ctxt->loc_handle, &osi->osi_hdr, th);
+	rc = llog_declare_add(env, ctxt->loc_handle, &osi->osi_hdr,
+			      storage_th);
 	llog_ctxt_put(ctxt);
 
 	RETURN(rc);
@@ -303,13 +308,17 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct llog_ctxt	*ctxt;
 	struct osp_txn_info	*txn;
+	struct thandle		*storage_th;
 	int			 rc;
 
 	ENTRY;
 
 	/* it's a layering violation, to access internals of th,
 	 * but we can do this as a sanity check, for a while */
-	LASSERT(th->th_dev == d->opd_storage);
+	LASSERT(th->th_top != NULL);
+	storage_th = thandle_get_sub_by_dt(env, th->th_top, d->opd_storage);
+	if (IS_ERR(storage_th))
+		RETURN(PTR_ERR(storage_th));
 
 	switch (type) {
 	case MDS_UNLINK64_REC:
@@ -335,7 +344,7 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		LBUG();
 	}
 
-	txn = osp_txn_info(&th->th_ctx);
+	txn = osp_txn_info(&storage_th->th_ctx);
 	LASSERT(txn);
 
 	txn->oti_current_id = osp_sync_id_get(d, txn->oti_current_id);
@@ -346,7 +355,7 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		RETURN(-ENOMEM);
 
 	rc = llog_add(env, ctxt->loc_handle, &osi->osi_hdr, &osi->osi_cookie,
-		      th);
+		      storage_th);
 	llog_ctxt_put(ctxt);
 
 	if (likely(rc >= 0)) {

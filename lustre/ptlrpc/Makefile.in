@@ -20,6 +20,7 @@ ptlrpc_objs += nrs_tbf.o errno.o
 target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
 target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
 target_objs += $(TARGET)out_lib.o
+target_objs += $(TARGET)update_trans.o
 
 nodemap_objs = nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o

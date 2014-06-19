@@ -38,22 +38,8 @@
 
 #define OUT_UPDATE_BUFFER_SIZE_ADD	4096
 #define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /* 1MB update size now */
-
-struct dt_update_request*
-out_find_update(struct thandle_update *tu, struct dt_device *dt_dev)
-{
-	struct dt_update_request   *dt_update;
-
-	list_for_each_entry(dt_update, &tu->tu_remote_update_list,
-			    dur_list) {
-		if (dt_update->dur_dt == dt_dev)
-			return dt_update;
-	}
-	return NULL;
-}
-EXPORT_SYMBOL(out_find_update);
-
-static struct object_update_request *object_update_request_alloc(size_t size)
+static inline struct object_update_request *
+object_update_request_alloc(size_t size)
 {
 	struct object_update_request *ourq;
 
@@ -67,31 +53,19 @@ static struct object_update_request *object_update_request_alloc(size_t size)
 	RETURN(ourq);
 }
 
-static void object_update_request_free(struct object_update_request *ourq,
-				       size_t ourq_size)
+static inline void
+object_update_request_free(struct object_update_request *ourq,
+			   size_t ourq_size)
 {
 	if (ourq != NULL)
 		OBD_FREE_LARGE(ourq, ourq_size);
 }
 
-void dt_update_request_destroy(struct dt_update_request *dt_update)
-{
-	if (dt_update == NULL)
-		return;
-
-	list_del(&dt_update->dur_list);
-
-	object_update_request_free(dt_update->dur_buf.ub_req,
-				   dt_update->dur_buf.ub_req_size);
-	OBD_FREE_PTR(dt_update);
-}
-EXPORT_SYMBOL(dt_update_request_destroy);
-
 /**
  * Allocate and initialize dt_update_request
  *
  * dt_update_request is being used to track updates being executed on
- * this dt_device(OSD or OSP). The update buffer will be 8k initially,
+ * this dt_device(OSD or OSP). The update buffer will be 4k initially,
  * and increased if needed.
  *
  * \param [in] dt	dt device
@@ -117,7 +91,6 @@ struct dt_update_request *dt_update_request_create(struct dt_device *dt)
 	dt_update->dur_buf.ub_req = ourq;
 	dt_update->dur_buf.ub_req_size = OUT_UPDATE_INIT_BUFFER_SIZE;
 
-	INIT_LIST_HEAD(&dt_update->dur_list);
 	dt_update->dur_dt = dt;
 	dt_update->dur_batchid = 0;
 	INIT_LIST_HEAD(&dt_update->dur_cb_items);
@@ -127,53 +100,22 @@ struct dt_update_request *dt_update_request_create(struct dt_device *dt)
 EXPORT_SYMBOL(dt_update_request_create);
 
 /**
- * Find or create dt_update_request.
+ * Destroy dt_update_request
  *
- * Find or create one loc in th_dev/dev_obj_update for the update,
- * Because only one thread can access this thandle, no need
- * lock now.
- *
- * \param[in] th	transaction handle
- * \param[in] dt	lookup update request by dt_object
- *
- * \retval		pointer of dt_update_request if it can be created
- *                      or found.
- * \retval		ERR_PTR(errno) if it can not be created or found.
+ * \param [in] dt_update	dt_update_request being destroyed
  */
-struct dt_update_request *
-dt_update_request_find_or_create(struct thandle *th, struct dt_object *dt)
+void dt_update_request_destroy(struct dt_update_request *dt_update)
 {
-	struct dt_device	*dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
-	struct thandle_update	*tu = th->th_update;
-	struct dt_update_request *update;
-	ENTRY;
+	if (dt_update == NULL)
+		return;
 
-	if (tu == NULL) {
-		OBD_ALLOC_PTR(tu);
-		if (tu == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
+	object_update_request_free(dt_update->dur_buf.ub_req,
+				   dt_update->dur_buf.ub_req_size);
+	OBD_FREE_PTR(dt_update);
 
-		INIT_LIST_HEAD(&tu->tu_remote_update_list);
-		tu->tu_sent_after_local_trans = 0;
-		th->th_update = tu;
-	}
-
-	update = out_find_update(tu, dt_dev);
-	if (update != NULL)
-		RETURN(update);
-
-	update = dt_update_request_create(dt_dev);
-	if (IS_ERR(update))
-		RETURN(update);
-
-	list_add_tail(&update->dur_list, &tu->tu_remote_update_list);
-
-	if (!tu->tu_only_remote_trans)
-		thandle_get(th);
-
-	RETURN(update);
+	return;
 }
-EXPORT_SYMBOL(dt_update_request_find_or_create);
+EXPORT_SYMBOL(dt_update_request_destroy);
 
 /**
  * resize update buffer
@@ -223,9 +165,9 @@ static int update_buffer_resize(struct update_buffer *ubuf, size_t new_size)
  * \param[in] batchid	batchid(transaction no) of this update
  *
  * \retval		0 pack update succeed.
- *                      negative errno pack update failed.
+ * \retval              negative errno pack update failed.
  **/
-static struct object_update*
+static struct object_update *
 out_update_header_pack(const struct lu_env *env, struct update_buffer *ubuf,
 		       enum update_type op, const struct lu_fid *fid,
 		       int params_count, __u16 *param_sizes, __u64 batchid)

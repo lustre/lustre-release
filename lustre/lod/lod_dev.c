@@ -533,13 +533,15 @@ static int lod_statfs(const struct lu_env *env,
  * see include/dt_object.h for the details.
  */
 static struct thandle *lod_trans_create(const struct lu_env *env,
-					struct dt_device *dev)
+					struct dt_device *dt)
 {
 	struct thandle *th;
 
-	th = dt_trans_create(env, dt2lod_dev(dev)->lod_child);
+	th = top_trans_create(env, dt2lod_dev(dt)->lod_child);
 	if (IS_ERR(th))
 		return th;
+
+	th->th_dev = dt;
 
 	return th;
 }
@@ -552,25 +554,10 @@ static struct thandle *lod_trans_create(const struct lu_env *env,
  *
  * see include/dt_object.h for the details.
  */
-static int lod_trans_start(const struct lu_env *env, struct dt_device *dev,
+static int lod_trans_start(const struct lu_env *env, struct dt_device *dt,
 			   struct thandle *th)
 {
-	struct lod_device *lod = dt2lod_dev((struct dt_device *) dev);
-	int rc = 0;
-
-	if (unlikely(th->th_update != NULL)) {
-		struct thandle_update *tu = th->th_update;
-		struct dt_update_request *update;
-
-		list_for_each_entry(update, &tu->tu_remote_update_list,
-				    dur_list) {
-			LASSERT(update->dur_dt != NULL);
-			rc = dt_trans_start(env, update->dur_dt, th);
-			if (rc != 0)
-				return rc;
-		}
-	}
-	return dt_trans_start(env, lod->lod_child, th);
+	return top_trans_start(env, dt2lod_dev(dt)->lod_child, th);
 }
 
 /**
@@ -584,31 +571,7 @@ static int lod_trans_start(const struct lu_env *env, struct dt_device *dev,
 static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	struct thandle_update		*tu = th->th_update;
-	struct dt_update_request	*update;
-	struct dt_update_request	*tmp;
-	int				rc2 = 0;
-	int				rc;
-	ENTRY;
-
-	thandle_get(th);
-	rc = dt_trans_stop(env, th->th_dev, th);
-	if (likely(tu == NULL)) {
-		thandle_put(th);
-		RETURN(rc);
-	}
-
-	list_for_each_entry_safe(update, tmp,
-				 &tu->tu_remote_update_list,
-				 dur_list) {
-		/* update will be freed inside dt_trans_stop */
-		rc2 = dt_trans_stop(env, update->dur_dt, th);
-		if (unlikely(rc2 != 0 && rc == 0))
-			rc = rc2;
-	}
-	thandle_put(th);
-
-	RETURN(rc);
+	return top_trans_stop(env, dt2lod_dev(dt)->lod_child, th);
 }
 
 /**
