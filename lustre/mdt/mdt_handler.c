@@ -3261,8 +3261,10 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (mdt_object_exists(obj) && !mdt_object_remote(obj)) {
 		/* get the length of lsm */
 		rc = mdt_attr_get_eabuf_size(info, obj);
-		if (rc < 0)
+		if (rc < 0) {
+			mdt_object_put(info->mti_env, obj);
 			RETURN(rc);
+		}
 
 		if (rc > info->mti_mdt->mdt_max_mdsize)
 			info->mti_mdt->mdt_max_mdsize = rc;

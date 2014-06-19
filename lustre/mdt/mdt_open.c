@@ -1461,9 +1461,9 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
                         ma->ma_need |= MA_PFID;
         }
 
-        o = mdt_object_find(env, mdt, rr->rr_fid2);
-        if (IS_ERR(o))
-                RETURN(rc = PTR_ERR(o));
+	o = mdt_object_find(env, mdt, rr->rr_fid2);
+	if (IS_ERR(o))
+		GOTO(out_parent_put, rc = PTR_ERR(o));
 
 	if (mdt_object_remote(o)) {
 		CDEBUG(D_INFO, "%s: "DFID" is on remote MDT.\n",
@@ -1526,6 +1526,7 @@ out_unlock:
 	mdt_object_open_unlock(info, o, lhc, ibits, rc);
 out:
 	mdt_object_put(env, o);
+out_parent_put:
 	if (parent != NULL)
 		mdt_object_put(env, parent);
 	return rc;
