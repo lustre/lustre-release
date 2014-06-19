@@ -92,6 +92,12 @@ int llog_origin_handle_open(struct ptlrpc_request *req)
 		CDEBUG(D_INFO, "%s: opening log %s\n", obd->obd_name, name);
 	}
 
+	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
+		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d name=%s\n",
+		       obd->obd_name, body->lgd_ctxt_idx, name);
+		RETURN(-EPROTO);
+	}
+
 	ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL) {
 		CDEBUG(D_WARNING, "%s: no ctxt. group=%p idx=%d name=%s\n",
@@ -139,6 +145,12 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
 		CERROR("%s: wrong llog flags %x\n",
 		       req->rq_export->exp_obd->obd_name, body->lgd_llh_flags);
 
+	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
+		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d\n",
+		       req->rq_export->exp_obd->obd_name, body->lgd_ctxt_idx);
+		RETURN(-EPROTO);
+	}
+
 	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL)
 		RETURN(-ENODEV);
@@ -170,6 +182,12 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc)
 		RETURN(err_serious(-ENOMEM));
+
+	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
+		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d\n",
+		       req->rq_export->exp_obd->obd_name, body->lgd_ctxt_idx);
+		RETURN(-EPROTO);
+	}
 
 	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL)
@@ -226,6 +244,12 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 	if (rc)
 		RETURN(err_serious(-ENOMEM));
 
+	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
+		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d\n",
+		       req->rq_export->exp_obd->obd_name, body->lgd_ctxt_idx);
+		RETURN(-EPROTO);
+	}
+
 	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL)
 		RETURN(-ENODEV);
@@ -277,6 +301,12 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc)
 		RETURN(err_serious(-ENOMEM));
+
+	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
+		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d\n",
+		       req->rq_export->exp_obd->obd_name, body->lgd_ctxt_idx);
+		RETURN(-EPROTO);
+	}
 
 	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
 	if (ctxt == NULL)

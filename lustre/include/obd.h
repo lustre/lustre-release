@@ -199,21 +199,6 @@ struct brw_page {
 	obd_flag flag;
 };
 
-/* llog contexts */
-enum llog_ctxt_id {
-	LLOG_CONFIG_ORIG_CTXT  =  0,
-	LLOG_CONFIG_REPL_CTXT,
-	LLOG_MDS_OST_ORIG_CTXT,
-	LLOG_SIZE_ORIG_CTXT,
-	LLOG_SIZE_REPL_CTXT,
-	LLOG_TEST_ORIG_CTXT,
-	LLOG_CHANGELOG_ORIG_CTXT,	/**< changelog generation on mdd */
-	LLOG_CHANGELOG_REPL_CTXT,	/**< changelog access on clients */
-	LLOG_CHANGELOG_USER_ORIG_CTXT,	/**< for multiple changelog consumers */
-	LLOG_AGENT_ORIG_CTXT,		/**< agent requests generation on cdt */
-	LLOG_MAX_CTXTS
-};
-
 struct timeout_item {
         enum timeout_event ti_event;
         cfs_time_t         ti_timeout;
