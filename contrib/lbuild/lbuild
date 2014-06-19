@@ -545,7 +545,7 @@ download_ofed() {
         OFED_BASE_VERSION=${OFED_VERSION%.*}
     fi
 
-    local location="http://www.openfabrics.org/downloads/OFED/ofed-${OFED_BASE_VERSION}/"
+    local location="https://www.openfabrics.org/downloads/OFED/ofed-${OFED_BASE_VERSION}/"
 
     if [[ $OFED_VERSION = *-[rR][cC][0-9] ]]; then
         local Mmv
