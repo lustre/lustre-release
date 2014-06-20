@@ -3603,13 +3603,6 @@ static int mdd_migrate_entries(const struct lu_env *env,
 						name, handle);
 			if (rc != 0)
 				GOTO(out_put, rc);
-
-			if (is_dir) {
-				rc = mdo_ref_add(env, mdd_tobj, handle);
-				if (rc != 0)
-					GOTO(out_put, rc);
-
-			}
 		}
 
 		rc = __mdd_index_delete(env, mdd_sobj, name, is_dir, handle);
@@ -3721,6 +3714,10 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 	rc = mdo_declare_index_insert(env, mdd_pobj, mdo2fid(mdd_tobj),
 				      mdd_object_type(mdd_tobj),
 				      lname->ln_name, handle);
+	if (rc != 0)
+		return rc;
+
+	rc = mdd_declare_links_add(env, mdd_tobj, handle, NULL, MLAO_IGNORE);
 	if (rc != 0)
 		return rc;
 

@@ -2732,6 +2732,14 @@ static int lod_xattr_set(const struct lu_env *env,
 
 			rc = lod_sub_object_xattr_set(env, next, buf, name,
 						      fl, th);
+		} else if (dt_object_remote(dt)) {
+			/* This only happens during migration, see
+			 * mdd_migrate_create(), in which Master MDT will
+			 * create a remote target object, and only set
+			 * (migrating) stripe EA on the remote object,
+			 * and does not need creating each stripes. */
+			rc = lod_sub_object_xattr_set(env, next, buf, name,
+						      fl, th);
 		} else {
 			rc = lod_striping_create(env, dt, NULL, NULL, th);
 		}

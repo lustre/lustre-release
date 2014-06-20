@@ -720,82 +720,6 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 }
 
 /**
- * Prepare OUT-based object destroy RPC.
- *
- * The function allocates a new RPC with OUT format. Then initializes the RPC
- * to contain OUT_DESTROY update against the object specified in the llog
- * record provided by the caller.
- *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- * \param[in] llh	llog handle where the record is stored
- * \param[in] h		llog record
- * \param[out] reqp	request prepared
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
- */
-static int osp_prep_unlink_update_req(const struct lu_env *env,
-				      struct osp_device *osp,
-				      struct llog_handle *llh,
-				      struct llog_rec_hdr *h,
-				      struct ptlrpc_request **reqp)
-{
-	struct llog_unlink64_rec	*rec = (struct llog_unlink64_rec *)h;
-	struct dt_update_request	*update = NULL;
-	struct ptlrpc_request		*req;
-	struct llog_cookie		lcookie;
-	const void			*buf;
-	__u16				size;
-	int				rc;
-	ENTRY;
-
-	update = dt_update_request_create(&osp->opd_dt_dev);
-	if (IS_ERR(update))
-		RETURN(PTR_ERR(update));
-
-	/* This can only happens for unlink slave directory, so decrease
-	 * ref for ".." and "." */
-	rc = out_update_pack(env, &update->dur_buf, OUT_REF_DEL, &rec->lur_fid,
-			     0, NULL, NULL, 0);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	rc = out_update_pack(env, &update->dur_buf, OUT_REF_DEL, &rec->lur_fid,
-			     0, NULL, NULL, 0);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	lcookie.lgc_lgl = llh->lgh_id;
-	lcookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
-	lcookie.lgc_index = h->lrh_index;
-	size = sizeof(lcookie);
-	buf = &lcookie;
-
-	rc = out_update_pack(env, &update->dur_buf, OUT_DESTROY, &rec->lur_fid,
-			     1, &size, &buf, 0);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	rc = osp_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
-				 update->dur_buf.ub_req, &req);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	req->rq_interpret_reply = osp_sync_interpret;
-	req->rq_commit_cb = osp_sync_request_commit_cb;
-	req->rq_cb_data = osp;
-
-	ptlrpc_request_set_replen(req);
-	*reqp = req;
-out:
-	if (update != NULL)
-		dt_update_request_destroy(update);
-
-	RETURN(rc);
-}
-
-/**
  * Generate a request for unlink change.
  *
  * The function prepares a new RPC, initializes it with unlink(destroy)
@@ -826,27 +750,20 @@ static int osp_sync_new_unlink64_job(const struct lu_env *env,
 
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_UNLINK64_REC);
+	req = osp_sync_new_job(d, llh, h, OST_DESTROY,
+			       &RQF_OST_DESTROY);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
 
-	if (d->opd_connect_mdt) {
-		rc = osp_prep_unlink_update_req(env, d, llh, h, &req);
-		if (rc != 0)
-			RETURN(rc);
-	} else {
-		req = osp_sync_new_job(d, llh, h, OST_DESTROY,
-				       &RQF_OST_DESTROY);
-		if (IS_ERR(req))
-			RETURN(PTR_ERR(req));
-
-		body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-		if (body == NULL)
-			RETURN(-EFAULT);
-		rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
-		if (rc < 0)
-			RETURN(rc);
-		body->oa.o_misc = rec->lur_count;
-		body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
-				   OBD_MD_FLOBJCOUNT;
-	}
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	if (body == NULL)
+		RETURN(-EFAULT);
+	rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
+	if (rc < 0)
+		RETURN(rc);
+	body->oa.o_misc = rec->lur_count;
+	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
+			   OBD_MD_FLOBJCOUNT;
 	osp_sync_send_new_rpc(d, req);
 	RETURN(1);
 }
@@ -1028,27 +945,10 @@ static void osp_sync_process_committed(const struct lu_env *env,
 
 		req = container_of((void *)jra, struct ptlrpc_request,
 				   rq_async_args);
-		if (d->opd_connect_mdt) {
-			struct object_update_request *ureq;
-			struct object_update *update;
-			ureq = req_capsule_client_get(&req->rq_pill,
-						      &RMF_OUT_UPDATE);
-			LASSERT(ureq != NULL &&
-				ureq->ourq_magic == UPDATE_REQUEST_MAGIC);
-
-			/* 1st/2nd is for decref . and .., 3rd one is for
-			 * destroy, where the log cookie is stored.
-			 * See osp_prep_unlink_update_req */
-			update = object_update_request_get(ureq, 2, NULL);
-			LASSERT(update != NULL);
-			lcookie = object_update_param_get(update, 0, NULL);
-			LASSERT(lcookie != NULL);
-		} else {
-			body = req_capsule_client_get(&req->rq_pill,
-						      &RMF_OST_BODY);
-			LASSERT(body);
-			lcookie = &body->oa.o_lcookie;
-		}
+		body = req_capsule_client_get(&req->rq_pill,
+					      &RMF_OST_BODY);
+		LASSERT(body);
+		lcookie = &body->oa.o_lcookie;
 		/* import can be closing, thus all commit cb's are
 		 * called we can check committness directly */
 		if (req->rq_transno <= imp->imp_peer_committed_transno) {
@@ -1308,10 +1208,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = d->opd_storage;
 
-	if (d->opd_connect_mdt)
-		lu_local_obj_fid(fid, SLAVE_LLOG_CATALOGS_OID);
-	else
-		lu_local_obj_fid(fid, LLOG_CATALOGS_OID);
+	lu_local_obj_fid(fid, LLOG_CATALOGS_OID);
 
 	rc = llog_osd_get_cat_list(env, d->opd_storage, d->opd_index, 1,
 				   &osi->osi_cid, fid);

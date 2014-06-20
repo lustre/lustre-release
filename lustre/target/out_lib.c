@@ -38,85 +38,6 @@
 
 #define OUT_UPDATE_BUFFER_SIZE_ADD	4096
 #define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /* 1MB update size now */
-static inline struct object_update_request *
-object_update_request_alloc(size_t size)
-{
-	struct object_update_request *ourq;
-
-	OBD_ALLOC_LARGE(ourq, size);
-	if (ourq == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
-
-	ourq->ourq_magic = UPDATE_REQUEST_MAGIC;
-	ourq->ourq_count = 0;
-
-	RETURN(ourq);
-}
-
-static inline void
-object_update_request_free(struct object_update_request *ourq,
-			   size_t ourq_size)
-{
-	if (ourq != NULL)
-		OBD_FREE_LARGE(ourq, ourq_size);
-}
-
-/**
- * Allocate and initialize dt_update_request
- *
- * dt_update_request is being used to track updates being executed on
- * this dt_device(OSD or OSP). The update buffer will be 4k initially,
- * and increased if needed.
- *
- * \param [in] dt	dt device
- *
- * \retval		dt_update_request being allocated if succeed
- * \retval		ERR_PTR(errno) if failed
- */
-struct dt_update_request *dt_update_request_create(struct dt_device *dt)
-{
-	struct dt_update_request *dt_update;
-	struct object_update_request *ourq;
-
-	OBD_ALLOC_PTR(dt_update);
-	if (!dt_update)
-		return ERR_PTR(-ENOMEM);
-
-	ourq = object_update_request_alloc(OUT_UPDATE_INIT_BUFFER_SIZE);
-	if (IS_ERR(ourq)) {
-		OBD_FREE_PTR(dt_update);
-		return ERR_CAST(ourq);
-	}
-
-	dt_update->dur_buf.ub_req = ourq;
-	dt_update->dur_buf.ub_req_size = OUT_UPDATE_INIT_BUFFER_SIZE;
-
-	dt_update->dur_dt = dt;
-	dt_update->dur_batchid = 0;
-	INIT_LIST_HEAD(&dt_update->dur_cb_items);
-
-	return dt_update;
-}
-EXPORT_SYMBOL(dt_update_request_create);
-
-/**
- * Destroy dt_update_request
- *
- * \param [in] dt_update	dt_update_request being destroyed
- */
-void dt_update_request_destroy(struct dt_update_request *dt_update)
-{
-	if (dt_update == NULL)
-		return;
-
-	object_update_request_free(dt_update->dur_buf.ub_req,
-				   dt_update->dur_buf.ub_req_size);
-	OBD_FREE_PTR(dt_update);
-
-	return;
-}
-EXPORT_SYMBOL(dt_update_request_destroy);
-
 /**
  * resize update buffer
  *
@@ -217,11 +138,11 @@ out_update_header_pack(const struct lu_env *env, struct update_buffer *ubuf,
 		param = (struct object_update_param *)((char *)param +
 			 object_update_param_size(param));
 	}
-	ureq->ourq_count++;
 
 	CDEBUG(D_INFO, "%p "DFID" idx %u: op %d params %d:%d\n",
 	       ureq, PFID(fid), ureq->ourq_count, op, params_count,
 	       (int)update_size);
+	ureq->ourq_count++;
 
 	RETURN(obj_update);
 }

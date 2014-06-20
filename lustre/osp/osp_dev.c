@@ -501,9 +501,10 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 
 	rc = osp_disconnect(d);
 
-	osp_sync_fini(d);
-
 	if (!d->opd_connect_mdt) {
+		/* stop sync thread */
+		osp_sync_fini(d);
+
 		/* stop precreate thread */
 		osp_precreate_fini(d);
 
@@ -688,6 +689,10 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	int		   rc = 0;
 	unsigned long	   start = cfs_time_current();
 	ENTRY;
+
+	/* No Sync between MDTs yet. */
+	if (d->opd_connect_mdt)
+		RETURN(0);
 
 	if (unlikely(d->opd_imp_active == 0))
 		RETURN(-ENOTCONN);
@@ -1046,16 +1051,16 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		rc = osp_init_precreate(osp);
 		if (rc)
 			GOTO(out_last_used, rc);
-	}
 
-	/*
-	 * Initialize synhronization mechanism taking
-	 * care of propogating changes to OST in near
-	 * transactional manner.
-	 */
-	rc = osp_sync_init(env, osp);
-	if (rc)
-		GOTO(out_precreat, rc);
+		/*
+		 * Initialize synhronization mechanism taking
+		 * care of propogating changes to OST in near
+		 * transactional manner.
+		 */
+		rc = osp_sync_init(env, osp);
+		if (rc < 0)
+			GOTO(out_precreat, rc);
+	}
 
 	/*
 	 * Initiate connect to OST
@@ -1073,8 +1078,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	RETURN(0);
 
 out:
-	/* stop sync thread */
-	osp_sync_fini(osp);
+	if (!osp->opd_connect_mdt)
+		/* stop sync thread */
+		osp_sync_fini(osp);
 out_precreat:
 	/* stop precreate thread */
 	if (!osp->opd_connect_mdt)
