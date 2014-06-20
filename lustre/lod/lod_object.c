@@ -2028,8 +2028,7 @@ int lod_dir_striping_create_internal(const struct lu_env *env,
 	int			rc;
 	ENTRY;
 
-	if (lo->ldo_dir_def_striping_set &&
-	    !LMVEA_DELETE_VALUES(lo->ldo_stripenr,
+	if (!LMVEA_DELETE_VALUES(lo->ldo_stripenr,
 				 lo->ldo_dir_stripe_offset)) {
 		struct lmv_user_md_v1 *v1 = info->lti_ea_store;
 		int stripe_count = lo->ldo_stripenr;
@@ -2480,7 +2479,7 @@ static void lod_ah_init(const struct lu_env *env,
 			       lc->ldo_dir_def_hash_type);
 		}
 
-		/* If the directory is specified with certain stripes */
+		/* It should always honour the specified stripes */
 		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0) {
 			const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
 
@@ -2499,6 +2498,7 @@ static void lod_ah_init(const struct lu_env *env,
 				       lc->ldo_stripenr,
 				       (int)lc->ldo_dir_stripe_offset);
 			}
+		/* then check whether there is default stripes from parent */
 		} else if (lp->ldo_dir_def_striping_set) {
 			/* If there are default dir stripe from parent */
 			lc->ldo_stripenr = lp->ldo_dir_def_stripenr;

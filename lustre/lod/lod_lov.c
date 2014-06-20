@@ -780,6 +780,7 @@ out:
 				lu_object_put(env, &stripe[i]->do_lu);
 
 		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+		lo->ldo_stripenr = 0;
 	} else {
 		lo->ldo_stripe = stripe;
 		lo->ldo_stripes_allocated = stripe_len;
