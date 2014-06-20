@@ -284,8 +284,8 @@ extern int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
 				  __u32 archive_id);
 extern int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 			       __u32 archive_id);
-extern int llapi_hsm_register_event_fifo(char *path);
-extern int llapi_hsm_unregister_event_fifo(char *path);
+extern int llapi_hsm_register_event_fifo(const char *path);
+extern int llapi_hsm_unregister_event_fifo(const char *path);
 extern void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
 				const char *fmt, va_list args);
 
