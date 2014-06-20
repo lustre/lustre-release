@@ -46,6 +46,7 @@
 #include <libcfs/libcfs.h>
 #include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
+#include <lustre/lustreapi.h>
 #include <lustre_cfg.h>
 
 static inline int ext2_test_bit(int nr, const void *addr)
@@ -106,12 +107,14 @@ int main(int argc, char **argv)
 
         fd = open(argv[1],O_RDONLY);
         if (fd < 0){
-                printf("Could not open the file %s\n", argv[1]);
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "Could not open the file %s.",
+			    argv[1]);
                 goto out;
         }
         rc = llog_pack_buffer(fd, &llog_buf, &recs_buf, &rec_number);
         if (rc < 0) {
-                printf("Could not pack buffer; rc=%d\n", rc);
+		llapi_error(LLAPI_MSG_ERROR, rc, "Could not pack buffer.");
                 goto out_fd;
         }
 
@@ -140,23 +143,29 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 
         rc = fstat(fd,&st);
         if (rc < 0){
-                printf("Get file stat error.\n");
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "Got file stat error.");
                 goto out;
         }
         file_size = st.st_size;
+	if (file_size == 0) {
+		rc = -1;
+		llapi_error(LLAPI_MSG_ERROR, rc, "File is empty.");
+		goto out;
+	}
 
         file_buf = malloc(file_size);
         if (file_buf == NULL){
-                printf("Memory Alloc for file_buf error.\n");
                 rc = -ENOMEM;
+		llapi_error(LLAPI_MSG_ERROR, rc, "Memory Alloc for file_buf.");
                 goto out;
         }
         *llog = (struct llog_log_hdr*)file_buf;
 
         rd = read(fd,file_buf,file_size);
         if (rd < file_size){
-                printf("Read file error.\n");
                 rc = -EIO; /*FIXME*/
+		llapi_error(LLAPI_MSG_ERROR, rc, "Read file error.");
                 goto clear_file_buf;
         }
 
@@ -165,8 +174,8 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 
         recs_buf = malloc(recs_num * sizeof(struct llog_rec_hdr *));
         if (recs_buf == NULL){
-                printf("Memory Alloc for recs_buf error.\n");
                 rc = -ENOMEM;
+		llapi_error(LLAPI_MSG_ERROR, rc, "Memory Alloc for recs_buf.");
                 goto clear_file_buf;
         }
         recs_pr = (struct llog_rec_hdr **)recs_buf;
@@ -175,8 +184,19 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
         i = 0;
 
         while (i < recs_num){
-                struct llog_rec_hdr *cur_rec = (struct llog_rec_hdr*)ptr;
-                int idx = le32_to_cpu(cur_rec->lrh_index);
+		struct llog_rec_hdr *cur_rec;
+		int idx;
+
+		if (ptr + sizeof(struct llog_rec_hdr) >
+		    file_buf + file_size) {
+			rc = -EINVAL;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "The log is corrupt (too big at %d)", i);
+			goto clear_recs_buf;
+		}
+
+		cur_rec = (struct llog_rec_hdr *)ptr;
+		idx = le32_to_cpu(cur_rec->lrh_index);
                 recs_pr[i] = cur_rec;
 
                 if (ext2_test_bit(idx, (*llog)->llh_bitmap)) {
