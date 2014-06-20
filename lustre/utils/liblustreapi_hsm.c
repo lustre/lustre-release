@@ -114,7 +114,7 @@ enum ct_event {
 };
 
 /* initialized in llapi_hsm_register_event_fifo() */
-int llapi_hsm_event_fd = -1;
+static int llapi_hsm_event_fd = -1;
 
 static inline const char *llapi_hsm_ct_ev2str(int type)
 {
