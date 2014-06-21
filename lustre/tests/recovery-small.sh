@@ -149,21 +149,50 @@ test_9() {
 run_test 9 "pause bulk on OST (bug 1420)"
 
 #bug 1521
-test_10() {
-	do_facet client mcreate $DIR/$tfile ||
-		{ error "mcreate failed: $?"; return 1; }
-	drop_bl_callback "chmod 0777 $DIR/$tfile"  || echo "evicted as expected"
-	# wait for the mds to evict the client
-	#echo "sleep $(($TIMEOUT*2))"
-	#sleep $(($TIMEOUT*2))
-	do_facet client touch $DIR/$tfile || echo "touch failed, evicted"
-	do_facet client checkstat -v -p 0777 $DIR/$tfile ||
-		{ error "client checkstat failed: $?"; return 3; }
-	do_facet client "munlink $DIR/$tfile"
-	# allow recovery to complete
-	client_up || client_up || sleep $TIMEOUT
+test_10a() {
+	local before=$(date +%s)
+	local evict
+
+	do_facet client "stat $DIR > /dev/null"  ||
+		error "failed to stat $DIR: $?"
+	drop_bl_callback "chmod 0777 $DIR" ||
+		error "failed to chmod $DIR: $?"
+
+	# let the client reconnect
+	client_reconnect
+	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+	[ ! -z "$evict" ] && [[ $evict -gt $before ]] ||
+		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
+		    error "no eviction: $evict before:$before")
+
+	do_facet client checkstat -v -p 0777 $DIR ||
+		error "client checkstat failed: $?"
 }
-run_test 10 "finish request on server after client eviction (bug 1521)"
+run_test 10a "finish request on server after client eviction (bug 1521)"
+
+test_10b() {
+	local before=$(date +%s)
+	local evict
+
+	do_facet client "stat $DIR > /dev/null"  ||
+		error "failed to stat $DIR: $?"
+	drop_bl_callback_once "chmod 0777 $DIR" ||
+		error "failed to chmod $DIR: $?"
+
+	# let the client reconnect
+	client_reconnect
+	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
+		    error "eviction happened: $evict before:$before")
+
+	do_facet client checkstat -v -p 0777 $DIR ||
+ 		error "client checkstat failed: $?"
+}
+run_test 10b "re-send BL AST"
 
 #bug 2460
 # wake up a thread waiting for completion after eviction
@@ -177,7 +206,8 @@ test_11(){
 
 	do_facet client $MULTIOP $DIR/$tfile or  ||
 		{ error "multiop read failed: $?"; return 3; }
-	drop_bl_callback $MULTIOP $DIR/$tfile Ow || echo "evicted as expected"
+	drop_bl_callback_once $MULTIOP $DIR/$tfile Ow ||
+		echo "evicted as expected"
 
 	do_facet client munlink $DIR/$tfile ||
 		{ error "munlink failed: $?"; return 4; }
@@ -492,7 +522,7 @@ test_19c() {
 	# let the client reconnect
 	sleep 5
 	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
-	   awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
 
 	[ -z "$EVICT" ] || [[ $EVICT -le $BEFORE ]] || error "eviction happened"
 }
@@ -911,7 +941,8 @@ run_test 27 "fail LOV while using OSC's"
 
 test_28() {      # bug 6086 - error adding new clients
 	do_facet client mcreate $DIR/$tfile       || return 1
-	drop_bl_callback "chmod 0777 $DIR/$tfile" ||echo "evicted as expected"
+	drop_bl_callback_once "chmod 0777 $DIR/$tfile" ||
+		echo "evicted as expected"
 	#define OBD_FAIL_MDS_CLIENT_ADD 0x12f
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012f"
 	# fail once (evicted), reconnect fail (fail_loc), ok
@@ -1163,10 +1194,10 @@ test_58() { # bug 11546
         pid=$!
         sleep 1
         lctl set_param fail_loc=0
-        drop_bl_callback rm -f $DIR/$tfile
+        drop_bl_callback_once rm -f $DIR/$tfile
         wait $pid
         # the first 'df' could tigger the eviction caused by
-        # 'drop_bl_callback', and it's normal case.
+        # 'drop_bl_callback_once', and it's normal case.
         # but the next 'df' should return successfully.
         do_facet client "df $DIR" || do_facet client "df $DIR"
 }
@@ -1969,7 +2000,7 @@ test_113() {
 	# let the client reconnect
 	client_reconnect
 	EVICT=$($LCTL get_param mdc.$FSNAME-MDT*.state |
-	   awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
 
 	[ -z "$EVICT" ] || [[ $EVICT -le $BEFORE ]] || error "eviction happened"
 }

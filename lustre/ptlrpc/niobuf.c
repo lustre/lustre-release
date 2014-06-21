@@ -709,9 +709,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         lustre_msghdr_set_flags(request->rq_reqmsg,
                                 request->rq_import->imp_msghdr_flags);
 
-        if (request->rq_resend)
-                lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
+	if (request->rq_resend) {
+		lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
 
+		if (request->rq_resend_cb != NULL)
+			request->rq_resend_cb(request, &request->rq_async_args);
+	}
         if (request->rq_memalloc)
                 mpflag = cfs_memory_pressure_get_and_set();
 

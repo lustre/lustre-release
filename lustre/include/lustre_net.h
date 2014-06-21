@@ -716,6 +716,9 @@ enum rq_phase {
 typedef int (*ptlrpc_interpterer_t)(const struct lu_env *env,
                                     struct ptlrpc_request *req,
                                     void *arg, int rc);
+/** Type of request resend call-back */
+typedef void (*ptlrpc_resend_cb_t)(struct ptlrpc_request *req,
+				   void *arg);
 
 /**
  * Definition of request pool structure.
@@ -2026,6 +2029,8 @@ struct ptlrpc_request {
         struct ptlrpc_request_set *rq_set;
         /** Async completion handler, called when reply is received */
         ptlrpc_interpterer_t rq_interpret_reply;
+	/** Resend handler, called when request is resend to update RPC data */
+	ptlrpc_resend_cb_t rq_resend_cb;
         /** Async completion context */
         union ptlrpc_async_args rq_async_args;
 

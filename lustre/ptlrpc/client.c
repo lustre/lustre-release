@@ -1075,9 +1075,9 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 			  D_HA : D_ERROR, req, "IMP_CLOSED ");
 		*status = -EIO;
         } else if (ptlrpc_send_limit_expired(req)) {
-                /* probably doesn't need to be a D_ERROR after initial testing */
-                DEBUG_REQ(D_ERROR, req, "send limit expired ");
-                *status = -EIO;
+		/* probably doesn't need to be a D_ERROR after initial testing*/
+		DEBUG_REQ(D_HA, req, "send limit expired ");
+		*status = -ETIMEDOUT;
 	} else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
 		   imp->imp_state == LUSTRE_IMP_CONNECTING) {
 		/* allow CONNECT even if import is invalid */ ;
