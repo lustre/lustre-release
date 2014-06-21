@@ -901,6 +901,8 @@ static const char *obd_connect_names[] = {
 	"unknown",
 	"unlink_close",
 	"unknown",
+	"dir_stripe",
+	"unknown",
 	NULL
 };
 

@@ -1350,6 +1350,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 						       name in request */
 #define OBD_CONNECT_LFSCK      0x40000000000000ULL/* support online LFSCK */
 #define OBD_CONNECT_UNLINK_CLOSE 0x100000000000000ULL/* close file in unlink */
+#define OBD_CONNECT_DIR_STRIPE	 0x400000000000000ULL /* striped DNE dir */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
@@ -1395,7 +1396,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 				OBD_CONNECT_PINGLESS | OBD_CONNECT_MAX_EASIZE |\
 				OBD_CONNECT_FLOCK_DEAD | \
 				OBD_CONNECT_DISP_STRIPE | OBD_CONNECT_LFSCK | \
-				OBD_CONNECT_OPEN_BY_FID)
+				OBD_CONNECT_OPEN_BY_FID | \
+				OBD_CONNECT_DIR_STRIPE)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
