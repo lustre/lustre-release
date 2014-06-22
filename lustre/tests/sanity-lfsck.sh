@@ -1739,8 +1739,7 @@ test_18c() {
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		$LFS mkdir -i 1 $DIR/$tdir/a2
-		$LFS setstripe -c 2 -i 1 -s 1M $DIR/$tdir/a2
-		do_facet ost2 $LCTL set_param fail_loc=0x1617
+		$LFS setstripe -c 1 -i 0 -s 1M $DIR/$tdir/a2
 		dd if=/dev/zero of=$DIR/$tdir/a2/f2 bs=1M count=2
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
@@ -1790,7 +1789,7 @@ test_18c() {
 	done
 
 	if [ $MDSCOUNT -ge 2 ]; then
-		expected=3
+		expected=2
 	else
 		expected=1
 	fi
@@ -1809,7 +1808,7 @@ test_18c() {
 			error "(5) Expect 0 fixed on mds2, but got: $repaired"
 	fi
 
-	echo "There should be some stub under .lustre/lost+found/MDT0001/"
+	echo "There should NOT be some stub under .lustre/lost+found/MDT0001/"
 	ls -ail $MOUNT/.lustre/lost+found/MDT0001/*-N-0 &&
 		error "(6) .lustre/lost+found/MDT0001/ should be empty"
 
