@@ -729,6 +729,21 @@ test_8()
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(14) Fail to start MDS!"
 
+	local timeout=$(max_recovery_time)
+	local timer=0
+
+	while [ $timer -lt $timeout ]; do
+		STATUS=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status |
+			awk '/^status/ { print \\\$2 }'")
+		[ "$STATUS" != "RECOVERING" ] && break;
+		sleep 1
+		timer=$((timer + 1))
+	done
+
+	[ $timer != $timeout ] ||
+		error "(14.1) recovery timeout"
+
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "crashed" ] ||
 		error "(15) Expect 'crashed', but got '$STATUS'"
@@ -750,6 +765,19 @@ test_8()
 	echo "start $SINGLEMDS"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(19) Fail to start MDS!"
+
+	timer=0
+	while [ $timer -lt $timeout ]; do
+		STATUS=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status |
+			awk '/^status/ { print \\\$2 }'")
+		[ "$STATUS" != "RECOVERING" ] && break;
+		sleep 1
+		timer=$((timer + 1))
+	done
+
+	[ $timer != $timeout ] ||
+		error "(19.1) recovery timeout"
 
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "paused" ] ||
