@@ -2276,7 +2276,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_count:  ",
 				     space, prefix);
 		if (is_dir) {
-			if (!is_raw && lum->lmm_stripe_count == 0) {
+			if (!is_raw && lum->lmm_stripe_count == 0 &&
+			    lov_pattern(lum->lmm_pattern) != LOV_PATTERN_MDT) {
 				unsigned int scount;
 				rc = sattr_cache_get_defaults(NULL, path,
 							      &scount, NULL,
@@ -2329,13 +2330,13 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			separator = "\n";
 	}
 
-	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
+	if ((verbose & VERBOSE_LAYOUT)) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_LAYOUT)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
 				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
-		separator = "\n";
+		separator = is_dir ? " " : "\n";
 	}
 
 	if ((verbose & VERBOSE_GENERATION) && !is_dir) {

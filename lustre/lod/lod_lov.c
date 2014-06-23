@@ -1705,14 +1705,36 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 				     le32_to_cpu(ent->lcme_offset);
 			tmp.lb_len = le32_to_cpu(ent->lcme_size);
 
-			/* Check DoM entry is always the first one */
+			/* Checks for DoM entry in composite layout. */
 			lum = tmp.lb_buf;
 			if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
-			    LOV_PATTERN_MDT && i > 0) {
-				CDEBUG(D_LAYOUT, "invalid DoM layout entry "
-				       "found at %i index\n", i);
-				RETURN(-EINVAL);
-
+			    LOV_PATTERN_MDT) {
+				/* DoM component can be only the first entry */
+				if (i > 0) {
+					CDEBUG(D_LAYOUT, "invalid DoM layout "
+					       "entry found at %i index\n", i);
+					RETURN(-EINVAL);
+				}
+				stripe_size = le32_to_cpu(lum->lmm_stripe_size);
+				/* There is just one stripe on MDT and it must
+				 * cover whole component size. */
+				if (stripe_size != prev_end) {
+					CDEBUG(D_LAYOUT, "invalid DoM layout "
+					       "stripe size %u != %llu "
+					       "(component size)\n",
+					       stripe_size, prev_end);
+					RETURN(-EINVAL);
+				}
+				/* Check stripe size againts per-MDT limit */
+				if (stripe_size > d->lod_dom_max_stripesize) {
+					CDEBUG(D_LAYOUT, "DoM component size "
+					       "%u is bigger than MDT limit "
+					       "%u, check dom_max_stripesize"
+					       " parameter\n",
+					       stripe_size,
+					       d->lod_dom_max_stripesize);
+					RETURN(-EINVAL);
+				}
 			}
 			rc = lod_verify_v1v3(d, &tmp, is_from_disk);
 			if (rc)

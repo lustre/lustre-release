@@ -3925,6 +3925,7 @@ active_err:
 
 	/* All mdd., ost. and osd. params in proc */
 	if ((class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
+	    (class_match_param(ptr, PARAM_LOD, NULL) == 0) ||
 	    (class_match_param(ptr, PARAM_OST, NULL) == 0) ||
 	    (class_match_param(ptr, PARAM_OSD, NULL) == 0)) {
 		CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
