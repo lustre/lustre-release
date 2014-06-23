@@ -894,7 +894,6 @@ cfs_parse_nidlist(char *str, int len, struct list_head *nidlist)
 	struct cfs_lstr src;
 	struct cfs_lstr res;
 	int rc;
-	ENTRY;
 
 	src.ls_str = str;
 	src.ls_len = len;
@@ -903,15 +902,15 @@ cfs_parse_nidlist(char *str, int len, struct list_head *nidlist)
 		rc = cfs_gettok(&src, ' ', &res);
 		if (rc == 0) {
 			cfs_free_nidlist(nidlist);
-			RETURN(0);
+			return 0;
 		}
 		rc = parse_nidrange(&res, nidlist);
 		if (rc == 0) {
 			cfs_free_nidlist(nidlist);
-			RETURN(0);
+			return 0;
 		}
 	}
-	RETURN(1);
+	return 1;
 }
 
 /*
@@ -943,7 +942,6 @@ int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
 {
 	struct nidrange *nr;
 	struct addrrange *ar;
-	ENTRY;
 
 	list_for_each_entry(nr, nidlist, nr_link) {
 		if (nr->nr_netstrfns->nf_type != LNET_NETTYP(LNET_NIDNET(nid)))
@@ -951,13 +949,13 @@ int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
 		if (nr->nr_netnum != LNET_NETNUM(LNET_NIDNET(nid)))
 			continue;
 		if (nr->nr_all)
-			RETURN(1);
+			return 1;
 		list_for_each_entry(ar, &nr->nr_addrranges, ar_link)
 			if (nr->nr_netstrfns->nf_match_addr(LNET_NIDADDR(nid),
 							&ar->ar_numaddr_ranges))
-				RETURN(1);
+				return 1;
 	}
-	RETURN(0);
+	return 0;
 }
 
 static int
@@ -1043,10 +1041,9 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 {
 	int i = 0;
 	struct nidrange *nr;
-	ENTRY;
 
 	if (count <= 0)
-		RETURN(0);
+		return 0;
 
 	list_for_each_entry(nr, nidlist, nr_link) {
 		if (i != 0)
@@ -1061,7 +1058,7 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 						  &nr->nr_addrranges, nr);
 		}
 	}
-	RETURN(i);
+	return i;
 }
 
 /**

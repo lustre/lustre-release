@@ -1235,31 +1235,50 @@ int lr_read_log()
                 return 0;
 
         s = calloc(1, read_size);
-        if (s == NULL)
-                GOTO(out, rc = -ENOMEM);
+	if (s == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
-        fd = open(statuslog, O_RDONLY);
-        if (fd == -1)
-                GOTO(out, rc = -errno);
-        size = read(fd, s, read_size);
-        if (size != read_size)
-                GOTO(out, rc = -EINVAL);
-        if (read_size < s->ls_size) {
-                read_size = s->ls_size;
-                s = lr_grow_buf(s, read_size);
-                if (s == NULL)
-                        GOTO(out, rc = -ENOMEM);
-                if (lseek(fd, 0, SEEK_SET) == -1)
-                        GOTO(out, rc = -errno);
-                size = read(fd, s, read_size);
-                if (size != read_size)
-                        GOTO(out, rc = -EINVAL);
-        }
+	fd = open(statuslog, O_RDONLY);
+	if (fd == -1) {
+		rc = -errno;
+		goto out;
+	}
 
-        while (read(fd, &rec, sizeof(rec)) != 0) {
-                tmp = calloc(1, sizeof(*tmp));
-                if (!tmp)
-                        GOTO(out, rc = -ENOMEM);
+	size = read(fd, s, read_size);
+	if (size != read_size) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	if (read_size < s->ls_size) {
+		read_size = s->ls_size;
+		s = lr_grow_buf(s, read_size);
+		if (s == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+
+		if (lseek(fd, 0, SEEK_SET) == -1) {
+			rc = -ENOMEM;
+			goto out;
+		}
+
+		size = read(fd, s, read_size);
+		if (size != read_size) {
+			rc = -EINVAL;
+			goto out;
+		}
+	}
+
+	while (read(fd, &rec, sizeof(rec)) != 0) {
+		tmp = calloc(1, sizeof(*tmp));
+		if (!tmp) {
+			rc = -ENOMEM;
+			goto out;
+		}
+
                 tmp->pc_log = rec;
                 tmp->pc_next = parents;
                 parents = tmp;
@@ -1269,8 +1288,11 @@ int lr_read_log()
         if (status->ls_num_targets == 0) {
                 if (status->ls_size != s->ls_size) {
                         status = lr_grow_buf(status, s->ls_size);
-                        if (status == NULL)
-                                GOTO(out, rc = -ENOMEM);
+			if (status == NULL) {
+				rc = -ENOMEM;
+				goto out;
+			}
+
                         status->ls_size = s->ls_size;
                 }
                 status->ls_num_targets = s->ls_num_targets;

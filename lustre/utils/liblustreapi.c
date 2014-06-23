@@ -436,7 +436,7 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
 	if (fp == NULL) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: opening "DEVICES_LIST);
-		GOTO(out, rc);
+		goto out;
 	}
 
 	if (fsname == NULL && file_path != NULL) {
@@ -445,12 +445,14 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "'%s' is not on a Lustre filesystem",
 				    file_path);
-			GOTO(out, rc);
+			goto out;
 		}
 	} else if (fsname != NULL) {
 		rc = strlcpy(fs, fsname, sizeof(fs));
-		if (rc >= sizeof(fs))
-			GOTO(out, rc = -E2BIG);
+		if (rc >= sizeof(fs)) {
+			rc = -E2BIG;
+			goto out;
+		}
 	}
 
 	while (fgets(devices, sizeof(devices) - 1, fp) != NULL) {
@@ -466,8 +468,11 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
 			if (strcmp(tmp, fs))
 				continue;
 			rc = strlcpy(dev, tmp, sizeof(dev));
-			if (rc >= sizeof(dev))
-				GOTO(out, rc = -E2BIG);
+			if (rc >= sizeof(dev)) {
+				rc = -E2BIG;
+				goto out;
+			}
+
 			tmp = strchr(dev, ' ');
 			if (tmp != NULL)
 				*tmp = '\0';
@@ -477,13 +482,18 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
 
 	if (dev[0] == '*' && strlen(fs)) {
 		rc = snprintf(dev, sizeof(dev), "%s-*", fs);
-		if (rc >= sizeof(dev))
-			GOTO(out, rc = -E2BIG);
+		if (rc >= sizeof(dev)) {
+			rc = -E2BIG;
+			goto out;
+		}
 	}
 	rc = snprintf(devices, sizeof(devices), "%s/%s/%s", obd_type, dev,
 		      param_name);
-	if (rc >= sizeof(devices))
-		GOTO(out, rc = -E2BIG);
+	if (rc >= sizeof(devices)) {
+		rc = -E2BIG;
+		goto out;
+	}
+
 	fclose(fp);
 	return get_param(devices, value, val_len);
 out:

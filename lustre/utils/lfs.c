@@ -1115,8 +1115,11 @@ static int lfs_find(int argc, char **argv)
                                 tmp = realloc(param.mdtuuid,
                                               param.num_alloc_mdts *
                                               sizeof(*param.mdtuuid));
-                                if (tmp == NULL)
-                                        GOTO(err_free, ret = -ENOMEM);
+				if (tmp == NULL) {
+					ret = -ENOMEM;
+					goto err_free;
+				}
+
                                 param.mdtuuid = tmp;
                         } else {
                                 param.exclude_obd = !!neg_opt;
@@ -1124,8 +1127,11 @@ static int lfs_find(int argc, char **argv)
                                 tmp = realloc(param.obduuid,
                                               param.num_alloc_obds *
                                               sizeof(*param.obduuid));
-                                if (tmp == NULL)
-                                        GOTO(err_free, ret = -ENOMEM);
+				if (tmp == NULL) {
+					ret = -ENOMEM;
+					goto err_free;
+				}
+
                                 param.obduuid = tmp;
                         }
                         for (token = buf; token && *token; token = next) {
@@ -1143,8 +1149,12 @@ static int lfs_find(int argc, char **argv)
                                         *p = 0;
                                         next = p+1;
                                 }
-				if (strlen(token) > sizeof(puuid->uuid)-1)
-					GOTO(err_free, ret = -E2BIG);
+
+				if (strlen(token) > sizeof(puuid->uuid) - 1) {
+					ret = -E2BIG;
+					goto err_free;
+				}
+
 				strncpy(puuid->uuid, token,
 					sizeof(puuid->uuid));
                         }
