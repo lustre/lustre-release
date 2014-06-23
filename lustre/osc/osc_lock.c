@@ -54,8 +54,6 @@
  *  @{ 
  */
 
-#define _PAGEREF_MAGIC  (-10000000)
-
 /*****************************************************************************
  *
  * Type conversions.
@@ -252,9 +250,6 @@ static void osc_lock_fini(const struct lu_env *env,
          */
         osc_lock_unhold(ols);
         LASSERT(ols->ols_lock == NULL);
-        LASSERT(cfs_atomic_read(&ols->ols_pageref) == 0 ||
-                cfs_atomic_read(&ols->ols_pageref) == _PAGEREF_MAGIC);
-
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }
 
@@ -910,14 +905,92 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
         return result;
 }
 
-static unsigned long osc_lock_weigh(const struct lu_env *env,
-                                    const struct cl_lock_slice *slice)
+static int weigh_cb(const struct lu_env *env, struct cl_io *io,
+		    struct cl_page *page, void *cbdata)
 {
-        /*
-         * don't need to grab coh_page_guard since we don't care the exact #
-         * of pages..
-         */
-        return cl_object_header(slice->cls_obj)->coh_pages;
+#if defined(__KERNEL__)
+	struct page *vmpage = cl_page_vmpage(env, page);
+
+	if (PageLocked(vmpage) || PageDirty(vmpage) || PageWriteback(vmpage)) {
+		(*(unsigned long *)cbdata)++;
+		return CLP_GANG_ABORT;
+	}
+#endif
+
+	return CLP_GANG_OKAY;
+}
+
+static unsigned long osc_lock_weight(const struct lu_env *env,
+				     const struct osc_lock *ols)
+{
+	struct cl_io *io = &osc_env_info(env)->oti_io;
+	struct cl_lock_descr *descr = &ols->ols_cl.cls_lock->cll_descr;
+	struct cl_object *obj = ols->ols_cl.cls_obj;
+	unsigned long npages = 0;
+	int result;
+	ENTRY;
+
+	io->ci_obj = cl_object_top(obj);
+	io->ci_ignore_layout = 1;
+	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
+	if (result != 0)
+		RETURN(result);
+
+	do {
+		result = cl_page_gang_lookup(env, obj, io,
+					     descr->cld_start, descr->cld_end,
+					     weigh_cb, (void *)&npages);
+		if (result == CLP_GANG_ABORT)
+			break;
+		if (result == CLP_GANG_RESCHED)
+			cond_resched();
+	} while (result != CLP_GANG_OKAY);
+	cl_io_fini(env, io);
+
+	return npages;
+}
+
+/**
+ * Get the weight of dlm lock for early cancellation.
+ */
+unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
+{
+	struct cl_env_nest       nest;
+	struct lu_env           *env;
+	struct osc_lock         *lock;
+	unsigned long            weight;
+	ENTRY;
+
+	might_sleep();
+	/*
+	 * osc_ldlm_weigh_ast has a complex context since it might be called
+	 * because of lock canceling, or from user's input. We have to make
+	 * a new environment for it. Probably it is implementation safe to use
+	 * the upper context because cl_lock_put don't modify environment
+	 * variables. But just in case ..
+	 */
+	env = cl_env_nested_get(&nest);
+	if (IS_ERR(env))
+		/* Mostly because lack of memory, do not eliminate this lock */
+		RETURN(1);
+
+	LASSERT(dlmlock->l_resource->lr_type == LDLM_EXTENT);
+	lock = osc_ast_data_get(dlmlock);
+	if (lock == NULL) {
+		/* cl_lock was destroyed because of memory pressure.
+		 * It is much reasonable to assign this type of lock
+		 * a lower cost.
+		 */
+		GOTO(out, weight = 0);
+	}
+
+	weight = osc_lock_weight(env, lock);
+	osc_ast_data_put(env, lock);
+	EXIT;
+
+out:
+	cl_env_nested_put(&nest, env);
+	return weight;
 }
 
 static void osc_lock_build_einfo(const struct lu_env *env,
@@ -1555,7 +1628,6 @@ static const struct cl_lock_operations osc_lock_ops = {
         .clo_delete  = osc_lock_delete,
         .clo_state   = osc_lock_state,
         .clo_cancel  = osc_lock_cancel,
-        .clo_weigh   = osc_lock_weigh,
         .clo_print   = osc_lock_print,
         .clo_fits_into = osc_lock_fits_into,
 };
@@ -1656,7 +1728,6 @@ int osc_lock_init(const struct lu_env *env,
 		__u32 enqflags = lock->cll_descr.cld_enq_flags;
 
 		osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
-		cfs_atomic_set(&clk->ols_pageref, 0);
 		clk->ols_state = OLS_NEW;
 
 		clk->ols_flags = osc_enq2ldlm_flags(enqflags);
@@ -1681,28 +1752,6 @@ int osc_lock_init(const struct lu_env *env,
 	} else
 		result = -ENOMEM;
 	return result;
-}
-
-int osc_dlm_lock_pageref(struct ldlm_lock *dlm)
-{
-	struct osc_lock *olock;
-	int              rc = 0;
-
-	spin_lock(&osc_ast_guard);
-        olock = dlm->l_ast_data;
-        /*
-         * there's a very rare race with osc_page_addref_lock(), but that
-         * doesn't matter because in the worst case we don't cancel a lock
-         * which we actually can, that's no harm.
-         */
-        if (olock != NULL &&
-            cfs_atomic_add_return(_PAGEREF_MAGIC,
-                                  &olock->ols_pageref) != _PAGEREF_MAGIC) {
-                cfs_atomic_sub(_PAGEREF_MAGIC, &olock->ols_pageref);
-                rc = 1;
-        }
-	spin_unlock(&osc_ast_guard);
-	return rc;
 }
 
 /** @} osc */

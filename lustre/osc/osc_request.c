@@ -3451,21 +3451,18 @@ static int osc_import_event(struct obd_device *obd,
  */
 static int osc_cancel_for_recovery(struct ldlm_lock *lock)
 {
-        check_res_locked(lock->l_resource);
+	/*
+	 * Cancel all unused extent lock in granted mode LCK_PR or LCK_CR.
+	 *
+	 * XXX as a future improvement, we can also cancel unused write lock
+	 * if it doesn't have dirty data and active mmaps.
+	 */
+	if (lock->l_resource->lr_type == LDLM_EXTENT &&
+	    (lock->l_granted_mode == LCK_PR || lock->l_granted_mode == LCK_CR)&&
+	    osc_ldlm_weigh_ast(lock) == 0)
+		RETURN(1);
 
-        /*
-         * Cancel all unused extent lock in granted mode LCK_PR or LCK_CR.
-         *
-         * XXX as a future improvement, we can also cancel unused write lock
-         * if it doesn't have dirty data and active mmaps.
-         */
-        if (lock->l_resource->lr_type == LDLM_EXTENT &&
-            (lock->l_granted_mode == LCK_PR ||
-             lock->l_granted_mode == LCK_CR) &&
-            (osc_dlm_lock_pageref(lock) == 0))
-                RETURN(1);
-
-        RETURN(0);
+	RETURN(0);
 }
 
 static int brw_queue_work(const struct lu_env *env, void *data)

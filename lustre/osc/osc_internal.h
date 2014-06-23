@@ -132,6 +132,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 int osc_lru_shrink(struct client_obd *cli, int target);
 
 extern spinlock_t osc_ast_guard;
+unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock);
 
 int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -185,8 +186,6 @@ static inline struct osc_device *obd2osc_dev(const struct obd_device *d)
 {
         return container_of0(d->obd_lu_dev, struct osc_device, od_cl.cd_lu_dev);
 }
-
-int osc_dlm_lock_pageref(struct ldlm_lock *dlm);
 
 extern struct kmem_cache *osc_quota_kmem;
 struct osc_quota_info {

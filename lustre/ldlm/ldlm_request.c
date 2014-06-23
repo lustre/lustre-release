@@ -1449,23 +1449,22 @@ static ldlm_policy_res_t ldlm_cancel_no_wait_policy(struct ldlm_namespace *ns,
                                                     int count)
 {
         ldlm_policy_res_t result = LDLM_POLICY_CANCEL_LOCK;
-        ldlm_cancel_for_recovery cb = ns->ns_cancel_for_recovery;
-        lock_res_and_lock(lock);
 
         /* don't check added & count since we want to process all locks
          * from unused list */
         switch (lock->l_resource->lr_type) {
                 case LDLM_EXTENT:
                 case LDLM_IBITS:
-                        if (cb && cb(lock))
+                        if (ns->ns_cancel != NULL && ns->ns_cancel(lock) != 0)
                                 break;
                 default:
                         result = LDLM_POLICY_SKIP_LOCK;
+			lock_res_and_lock(lock);
                         lock->l_flags |= LDLM_FL_SKIPPED;
+			unlock_res_and_lock(lock);
                         break;
         }
 
-        unlock_res_and_lock(lock);
         RETURN(result);
 }
 
@@ -1483,20 +1482,20 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
                                                  int unused, int added,
                                                  int count)
 {
-        cfs_time_t cur = cfs_time_current();
-        struct ldlm_pool *pl = &ns->ns_pool;
-        __u64 slv, lvf, lv;
-        cfs_time_t la;
+	cfs_time_t cur = cfs_time_current();
+	struct ldlm_pool *pl = &ns->ns_pool;
+	__u64 slv, lvf, lv;
+	cfs_time_t la;
 
 	/* Stop LRU processing when we reach past @count or have checked all
 	 * locks in LRU. */
-        if (count && added >= count)
-                return LDLM_POLICY_KEEP_LOCK;
+	if (count && added >= count)
+		return LDLM_POLICY_KEEP_LOCK;
 
-        slv = ldlm_pool_get_slv(pl);
-        lvf = ldlm_pool_get_lvf(pl);
-        la = cfs_duration_sec(cfs_time_sub(cur,
-                              lock->l_last_used));
+	slv = ldlm_pool_get_slv(pl);
+	lvf = ldlm_pool_get_lvf(pl);
+	la = cfs_duration_sec(cfs_time_sub(cur,
+			      lock->l_last_used));
 	lv = lvf * la * unused;
 
 	/* Inform pool about current CLV to see it via proc. */
@@ -1504,8 +1503,13 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
 
 	/* Stop when SLV is not yet come from server or lv is smaller than
 	 * it is. */
-	return (slv == 0 || lv < slv) ?
-		LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
+	if (slv == 0 || lv < slv)
+		return LDLM_POLICY_KEEP_LOCK;
+
+	if (ns->ns_cancel != NULL && ns->ns_cancel(lock) == 0)
+		return LDLM_POLICY_KEEP_LOCK;
+
+	return LDLM_POLICY_CANCEL_LOCK;
 }
 
 /**
@@ -1542,12 +1546,17 @@ static ldlm_policy_res_t ldlm_cancel_aged_policy(struct ldlm_namespace *ns,
 						 int unused, int added,
 						 int count)
 {
-	/* Stop LRU processing if young lock is found and we reach past count */
-        return ((added >= count) &&
-                cfs_time_before(cfs_time_current(),
-                                cfs_time_add(lock->l_last_used,
-                                             ns->ns_max_age))) ?
-                LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
+        if (added >= count)
+		return LDLM_POLICY_KEEP_LOCK;
+
+	if (cfs_time_before(cfs_time_current(),
+			    cfs_time_add(lock->l_last_used, ns->ns_max_age)))
+                return LDLM_POLICY_KEEP_LOCK;
+
+        if (ns->ns_cancel != NULL && ns->ns_cancel(lock) == 0)
+                return LDLM_POLICY_KEEP_LOCK;
+
+	return LDLM_POLICY_CANCEL_LOCK;
 }
 
 /**
