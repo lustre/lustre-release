@@ -3807,6 +3807,9 @@ cleanup2:
 		rc = rc1;
 	}
 
+	/* flush all async updating before exit. */
+	dt_sync(env, lfsck->li_next);
+
 	/* Under force exit case, some requests may be just freed without
 	 * verification, those objects should be re-handled when next run.
 	 * So not update the on-disk tracing file under such case. */
