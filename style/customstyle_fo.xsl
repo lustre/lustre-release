@@ -187,6 +187,10 @@
 			<xsl:when test="@condition='l23'">L 2.3</xsl:when>
 			<xsl:when test="@condition='l24'">L 2.4</xsl:when>
 			<xsl:when test="@condition='l25'">L 2.5</xsl:when>
+			<xsl:when test="@condition='l26'">L 2.6</xsl:when>
+			<xsl:when test="@condition='l27'">L 2.7</xsl:when>
+			<xsl:when test="@condition='l28'">L 2.8</xsl:when>
+			<xsl:when test="@condition='l29'">L 2.9</xsl:when>
 			<xsl:otherwise></xsl:otherwise>
 		</xsl:choose>
 	</xsl:variable>
