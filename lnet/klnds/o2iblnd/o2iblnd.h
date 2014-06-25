@@ -1157,11 +1157,6 @@ int  kiblnd_pmr_pool_map(kib_pmr_poolset_t *pps, kib_hca_dev_t *hdev,
                          kib_rdma_desc_t *rd, __u64 *iova, kib_phys_mr_t **pp_pmr);
 void kiblnd_pmr_pool_unmap(kib_phys_mr_t *pmr);
 
-int  kiblnd_startup (lnet_ni_t *ni);
-void kiblnd_shutdown (lnet_ni_t *ni);
-int  kiblnd_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg);
-void kiblnd_query (struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when);
-
 int  kiblnd_tunables_init(void);
 void kiblnd_tunables_fini(void);
 
@@ -1171,7 +1166,6 @@ int  kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name);
 int  kiblnd_failover_thread (void *arg);
 
 int  kiblnd_alloc_pages(kib_pages_t **pp, int cpt, int npages);
-void kiblnd_free_pages (kib_pages_t *p);
 
 int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
                         struct rdma_cm_event *event);
