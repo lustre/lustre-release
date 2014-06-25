@@ -63,6 +63,10 @@
 #include <linux/pci-dma.h>
 #endif
 
+#ifdef HAVE_COMPAT_RDMA
+#include <linux/compat-2.6.h>
+#endif
+
 #include <net/sock.h>
 #include <linux/in.h>
 
@@ -73,9 +77,6 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet-sysctl.h>
 
-#ifdef HAVE_COMPAT_RDMA
-#include <linux/compat-2.6.h>
-#endif
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
 #include <rdma/ib_verbs.h>
