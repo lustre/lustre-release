@@ -76,7 +76,8 @@ STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
 SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
-PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config ioctl super"}
+PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config \
+		      ioctl super lfsck"}
 SUBSYSTEM=${SUBSYSTEM:-"all -lnet -lnd -pinger"}
 
 # promise 2MB for every cpu
