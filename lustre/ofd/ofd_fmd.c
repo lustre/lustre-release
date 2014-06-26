@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,13 +23,27 @@
  * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- *  lustre/ofd/filter_fmd.c
+ * lustre/ofd/ofd_fmd.c
+ *
+ * This file provides functions to handle Filter Modification Data (FMD).
+ * The FMD is responsible for file attributes to be applied in
+ * Transaction ID (XID) order, so older requests can't re-write newer
+ * attributes.
+ *
+ * FMD is organized as per-client list and identified by FID of object. Each
+ * FMD stores FID of object and the highest received XID of modification
+ * request for this object.
+ *
+ * FMD can expire if there are no updates for a long time to keep the list
+ * reasonably small.
+ *
+ * Author: Andreas Dilger <andreas.dilger@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -42,7 +52,14 @@
 
 static struct kmem_cache *ll_fmd_cachep;
 
-/* drop fmd reference, free it if last ref. must be called with fed_lock held.*/
+/**
+ * Drop FMD reference and free it if reference drops to zero.
+ *
+ * Must be called with fed_lock held.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fmd	FMD to put
+ */
 static inline void ofd_fmd_put_nolock(struct obd_export *exp,
 				      struct ofd_mod_data *fmd)
 {
@@ -58,7 +75,12 @@ static inline void ofd_fmd_put_nolock(struct obd_export *exp,
 	}
 }
 
-/* drop fmd reference, free it if last ref */
+/**
+ * Wrapper to drop FMD reference with fed_lock held.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fmd	FMD to put
+ */
 void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
 {
 	struct filter_export_data *fed = &exp->exp_filter_data;
@@ -71,8 +93,21 @@ void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
 	spin_unlock(&fed->fed_lock);
 }
 
-/* expire entries from the end of the list if there are too many
- * or they are too old */
+/**
+ * Expire FMD entries.
+ *
+ * Expire entries from the FMD list if there are too many
+ * of them or they are too old.
+ *
+ * This function must be called with fed_lock held.
+ *
+ * The \a keep FMD is not to be expired in any case. This parameter is used
+ * by ofd_fmd_find_nolock() to prohibit a FMD that was just found from
+ * expiring.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] keep	FMD to keep always
+ */
 static void ofd_fmd_expire_nolock(struct obd_export *exp,
 				  struct ofd_mod_data *keep)
 {
@@ -95,6 +130,13 @@ static void ofd_fmd_expire_nolock(struct obd_export *exp,
 	}
 }
 
+/**
+ * Expire FMD entries.
+ *
+ * This is a wrapper to call ofd_fmd_expire_nolock() with the required lock.
+ *
+ * \param[in] exp	OBD export
+ */
 void ofd_fmd_expire(struct obd_export *exp)
 {
 	struct filter_export_data *fed = &exp->exp_filter_data;
@@ -104,8 +146,19 @@ void ofd_fmd_expire(struct obd_export *exp)
 	spin_unlock(&fed->fed_lock);
 }
 
-/* find specified fid in fed_fmd_list.
- * caller must hold fed_lock and take fmd reference itself */
+/**
+ * Find FMD by specified FID.
+ *
+ * Function finds FMD entry by FID in the filter_export_data::fed_fmd_list.
+ *
+ * Caller must hold filter_export_data::fed_lock and take FMD reference.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to find
+ *
+ * \retval		struct ofd_mod_data found by FID
+ * \retval		NULL is FMD is not found
+ */
 static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
 						const struct lu_fid *fid)
 {
@@ -132,7 +185,17 @@ static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
 	return found;
 }
 
-/* Find fmd based on fid or return NULL if not found. */
+/**
+ * Find FMD by specified FID with locking.
+ *
+ * Wrapper to the ofd_fmd_find_nolock() with correct locks.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to find
+ *
+ * \retval		struct ofd_mod_data found by FID
+ * \retval		NULL indicates FMD is not found
+ */
 struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
 				  const struct lu_fid *fid)
 {
@@ -148,11 +211,20 @@ struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
 	return fmd;
 }
 
-/* Find fmd based on FID, or create a new one if none is found.
+/**
+ * Find FMD by FID or create a new one if none is found.
+ *
  * It is possible for this function to return NULL under memory pressure,
- * or if fid = 0 is passed (which will only cause old entries to expire).
- * Currently this is not fatal because any fmd state is transient and
- * may also be freed when it gets sufficiently old. */
+ * or if the passed FID is zero (which will only cause old entries to expire).
+ * Currently this is not fatal because any FMD state is transient and
+ * may also be freed when it gets sufficiently old.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to find
+ *
+ * \retval		struct ofd_mod_data found by FID
+ * \retval		NULL indicates FMD is not found
+ */
 struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fid)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
@@ -188,10 +260,21 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fi
 }
 
 #ifdef DO_FMD_DROP
-/* drop fmd list reference so it will disappear when last reference is put.
- * This isn't so critical because it would in fact only affect the one client
- * that is doing the unlink and at worst we have an stale entry referencing
- * an object that should never be used again. */
+/**
+ * Drop FMD list reference so it will disappear when last reference is dropped
+ * to zero.
+ *
+ * This function is called from ofd_object_destroy() and may only affect
+ * the one client that is doing the unlink and at worst we have an stale entry
+ * referencing an object that should never be used again.
+ *
+ * NB: this function is used only if DO_FMD_DROP is defined. It is not
+ * currently defined, so FMD drop doesn't happen and FMD are dropped only
+ * when expired.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to drop
+ */
 void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
@@ -207,7 +290,13 @@ void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 }
 #endif
 
-/* remove all entries from fmd list */
+/**
+ * Remove all entries from FMD list.
+ *
+ * Cleanup function to free all FMD enries on the given export.
+ *
+ * \param[in] exp	OBD export
+ */
 void ofd_fmd_cleanup(struct obd_export *exp)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
@@ -225,6 +314,12 @@ void ofd_fmd_cleanup(struct obd_export *exp)
 	spin_unlock(&fed->fed_lock);
 }
 
+/**
+ * Initialize FMD subsystem.
+ *
+ * This function is called upon OFD setup and initialize memory to be used
+ * by FMD entries.
+ */
 int ofd_fmd_init(void)
 {
 	ll_fmd_cachep = kmem_cache_create("ll_fmd_cache",
@@ -236,6 +331,12 @@ int ofd_fmd_init(void)
 		return 0;
 }
 
+/**
+ * Stop FMD subsystem.
+ *
+ * This function is called upon OFD cleanup and destroy memory used
+ * by FMD entries.
+ */
 void ofd_fmd_exit(void)
 {
 	if (ll_fmd_cachep) {
