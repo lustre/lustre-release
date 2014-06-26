@@ -757,62 +757,11 @@ static int lod_attr_get(const struct lu_env *env,
 			struct lu_attr *attr,
 			struct lustre_capa *capa)
 {
-	struct lod_object *lo = lod_dt_obj(dt);
-	int i;
-	int rc;
-	ENTRY;
-
-	rc = dt_attr_get(env, dt_object_child(dt), attr, capa);
-	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr) || rc != 0)
-		RETURN(rc);
-
-	rc = lod_load_striping_locked(env, lo);
-	if (rc)
-		RETURN(rc);
-
-	if (lo->ldo_stripenr == 0)
-		RETURN(rc);
-
-	attr->la_nlink = 2;
-	attr->la_size = 0;
-	for (i = 0; i < lo->ldo_stripenr; i++) {
-		struct lu_attr *sub_attr = &lod_env_info(env)->lti_attr;
-
-		LASSERT(lo->ldo_stripe[i]);
-		if (dt_object_exists(lo->ldo_stripe[i]))
-			continue;
-
-		rc = dt_attr_get(env, lo->ldo_stripe[i], sub_attr, capa);
-		if (rc != 0)
-			break;
-
-		/* -2 for . and .. on each stripe */
-		if (sub_attr->la_valid & LA_NLINK && attr->la_valid & LA_NLINK)
-			attr->la_nlink += sub_attr->la_nlink - 2;
-		if (sub_attr->la_valid & LA_SIZE && attr->la_valid & LA_SIZE)
-			attr->la_size += sub_attr->la_size;
-
-		if (sub_attr->la_valid & LA_ATIME &&
-		    attr->la_valid & LA_ATIME &&
-		    attr->la_atime < sub_attr->la_atime)
-			attr->la_atime = sub_attr->la_atime;
-
-		if (sub_attr->la_valid & LA_CTIME &&
-		    attr->la_valid & LA_CTIME &&
-		    attr->la_ctime < sub_attr->la_ctime)
-			attr->la_ctime = sub_attr->la_ctime;
-
-		if (sub_attr->la_valid & LA_MTIME &&
-		    attr->la_valid & LA_MTIME &&
-		    attr->la_mtime < sub_attr->la_mtime)
-			attr->la_mtime = sub_attr->la_mtime;
-	}
-
-	CDEBUG(D_INFO, DFID" stripe_count %d nlink %u size "LPU64"\n",
-	       PFID(lu_object_fid(&dt->do_lu)), lo->ldo_stripenr,
-	       attr->la_nlink, attr->la_size);
-
-	RETURN(rc);
+	/* Note: for striped directory, client will merge attributes
+	 * from all of the sub-stripes see lmv_merge_attr(), and there
+	 * no MDD logic depend on directory nlink/size/time, so we can
+	 * always use master inode nlink and size for now. */
+	return dt_attr_get(env, dt_object_child(dt), attr, capa);
 }
 
 /**
