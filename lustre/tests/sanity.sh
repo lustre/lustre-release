@@ -13004,6 +13004,46 @@ test_300g() {
 }
 run_test 300g "check default striped directory for striped directory"
 
+test_300h() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_count
+	local file
+
+	mkdir $DIR/$tdir
+
+	$LFS setdirstripe -i 0 -c$MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+		error "set striped dir error"
+
+	createmany -o $DIR/$tdir/striped_dir/f- 10 ||
+		error "create files under striped dir failed"
+
+	# unfortunately, we need to umount to clear dir layout cache for now
+	# once we fully implement dir layout, we can drop this
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+
+	#set the stripe to be unknown hash type
+	#define OBD_FAIL_UNKNOWN_LMV_STRIPE	0x1901
+	$LCTL set_param fail_loc=0x1901
+	for ((i = 0; i < 10; i++)); do
+		$CHECKSTAT -t file $DIR/$tdir/striped_dir/f-$i ||
+			error "stat f-$i failed"
+		rm $DIR/$tdir/striped_dir/f-$i || error "unlink f-$i failed"
+	done
+
+	touch $DIR/$tdir/striped_dir/f0 &&
+		error "create under striped dir with unknown hash should fail"
+
+	$LCTL set_param fail_loc=0
+
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+
+	return 0
+}
+run_test 300h "client handle unknown hash type striped directory"
+
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''
 	local out=$TMP/$tfile

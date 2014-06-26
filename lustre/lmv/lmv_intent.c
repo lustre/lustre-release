@@ -422,9 +422,25 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	int			rc = 0;
 	ENTRY;
 
+	/* If it returns ERR_PTR(-EBADFD) then it is an unknown hash type
+	 * it will try all stripes to locate the object */
 	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
-	if (IS_ERR(tgt))
+	if (IS_ERR(tgt) && (PTR_ERR(tgt) != -EBADFD))
 		RETURN(PTR_ERR(tgt));
+
+	/* Both migrating dir and unknown hash dir need to try
+	 * all of sub-stripes */
+	if (lsm != NULL && !lmv_is_known_hash_type(lsm)) {
+		struct lmv_oinfo *oinfo;
+
+		oinfo = &lsm->lsm_md_oinfo[0];
+
+		op_data->op_fid1 = oinfo->lmo_fid;
+		op_data->op_mds = oinfo->lmo_mds;
+		tgt = lmv_get_target(lmv, oinfo->lmo_mds, NULL);
+		if (IS_ERR(tgt))
+			RETURN(PTR_ERR(tgt));
+	}
 
 	if (!fid_is_sane(&op_data->op_fid2))
 		fid_zero(&op_data->op_fid2);
@@ -454,26 +470,38 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		}
 		RETURN(rc);
 	} else if (it_disposition(it, DISP_LOOKUP_NEG) && lsm != NULL &&
-		   lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION) {
-		/* For migrating directory, if it can not find the child in
-		 * the source directory(master stripe), try the targeting
-		 * directory(stripe 1) */
-		tgt = lmv_find_target(lmv, &lsm->lsm_md_oinfo[1].lmo_fid);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
+		   lmv_need_try_all_stripes(lsm)) {
+		/* For migrating and unknown hash type directory, it will
+		 * try to target the entry on other stripes */
+		int stripe_index;
 
-		ptlrpc_req_finished(*reqp);
-		it->d.lustre.it_data = NULL;
-		*reqp = NULL;
+		for (stripe_index = 1;
+		     stripe_index < lsm->lsm_md_stripe_count &&
+		     it_disposition(it, DISP_LOOKUP_NEG); stripe_index++) {
+			struct lmv_oinfo *oinfo;
 
-		CDEBUG(D_INODE, "For migrating dir, try target dir "DFID"\n",
-		       PFID(&lsm->lsm_md_oinfo[1].lmo_fid));
+			/* release the previous request */
+			ptlrpc_req_finished(*reqp);
+			it->d.lustre.it_data = NULL;
+			*reqp = NULL;
 
-		op_data->op_fid1 = lsm->lsm_md_oinfo[1].lmo_fid;
-		it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
-		rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp,
-				    cb_blocking, extra_lock_flags);
+			oinfo = &lsm->lsm_md_oinfo[stripe_index];
+			tgt = lmv_find_target(lmv, &oinfo->lmo_fid);
+			if (IS_ERR(tgt))
+				RETURN(PTR_ERR(tgt));
+
+			CDEBUG(D_INODE, "Try other stripes " DFID"\n",
+			       PFID(&oinfo->lmo_fid));
+
+			op_data->op_fid1 = oinfo->lmo_fid;
+			it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+			rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp,
+					    cb_blocking, extra_lock_flags);
+			if (rc != 0)
+				RETURN(rc);
+		}
 	}
+
 	/*
 	 * MDS has returned success. Probably name has been resolved in
 	 * remote inode. Let's check this.
