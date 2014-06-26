@@ -286,6 +286,9 @@ typedef int (*ldlm_cancel_cbt)(struct ldlm_lock *lock);
  * Currently LVBs are used by:
  *  - OSC-OST code to maintain current object size/times
  *  - layout lock code to return the layout when the layout lock is granted
+ *
+ * To ensure delayed LVB initialization, it is highly recommended to use the set
+ * of ldlm_[res_]lvbo_[init,update,fill]() functions.
  */
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
@@ -956,6 +959,8 @@ struct ldlm_resource {
 	 */
 	struct mutex		lr_lvb_mutex;
 	int			lr_lvb_len;
+	/** is lvb initialized ? */
+	bool			lr_lvb_initialized;
 	/** protected by lr_lock */
 	void			*lr_lvb_data;
 
@@ -1006,11 +1011,32 @@ ldlm_lock_to_ns_at(struct ldlm_lock *lock)
 static inline int ldlm_lvbo_init(struct ldlm_resource *res)
 {
 	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
+	int rc = 0;
 
-	if (ns->ns_lvbo != NULL && ns->ns_lvbo->lvbo_init != NULL)
-		return ns->ns_lvbo->lvbo_init(res);
+	if (ns->ns_lvbo == NULL || ns->ns_lvbo->lvbo_init == NULL ||
+	    res->lr_lvb_initialized)
+		return 0;
 
-	return 0;
+	mutex_lock(&res->lr_lvb_mutex);
+	/* Did we lose the race? */
+	if (res->lr_lvb_initialized) {
+		mutex_unlock(&res->lr_lvb_mutex);
+		return 0;
+	}
+	rc = ns->ns_lvbo->lvbo_init(res);
+	if (rc < 0) {
+		CDEBUG(D_DLMTRACE, "lvbo_init failed for resource : rc = %d\n",
+		       rc);
+		if (res->lr_lvb_data != NULL) {
+			OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+			res->lr_lvb_data = NULL;
+		}
+		res->lr_lvb_len = rc;
+	} else {
+		res->lr_lvb_initialized = true;
+	}
+	mutex_unlock(&res->lr_lvb_mutex);
+	return rc;
 }
 
 static inline int ldlm_lvbo_size(struct ldlm_lock *lock)
@@ -1026,9 +1052,17 @@ static inline int ldlm_lvbo_size(struct ldlm_lock *lock)
 static inline int ldlm_lvbo_fill(struct ldlm_lock *lock, void *buf, int len)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	int rc;
 
 	if (ns->ns_lvbo != NULL) {
 		LASSERT(ns->ns_lvbo->lvbo_fill != NULL);
+		/* init lvb now if not already */
+		rc = ldlm_lvbo_init(lock->l_resource);
+		if (rc < 0) {
+			CERROR("lock %p: delayed lvb init failed (rc %d)",
+			       lock, rc);
+			return rc;
+		}
 		return ns->ns_lvbo->lvbo_fill(lock, buf, len);
 	}
 	return 0;
@@ -1245,6 +1279,15 @@ ldlm_handle2lock_long(const struct lustre_handle *h, __u64 flags)
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
                                        struct ptlrpc_request *r, int increase)
 {
+	int rc;
+
+	/* delayed lvb init may be required */
+	rc = ldlm_lvbo_init(res);
+	if (rc < 0) {
+		CERROR("delayed lvb init failed (rc %d)\n", rc);
+		return rc;
+	}
+
         if (ldlm_res_to_ns(res)->ns_lvbo &&
             ldlm_res_to_ns(res)->ns_lvbo->lvbo_update) {
                 return ldlm_res_to_ns(res)->ns_lvbo->lvbo_update(res, r,

@@ -445,6 +445,12 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 	if (IS_ERR(lock))
 		GOTO(out_nolock, err = PTR_ERR(lock));
 
+	err = ldlm_lvbo_init(lock->l_resource);
+	if (err < 0) {
+		LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", err);
+		GOTO(out, err);
+	}
+
         ldlm_lock2handle(lock, lockh);
 
         /* NB: we don't have any lock now (lock_res_and_lock)

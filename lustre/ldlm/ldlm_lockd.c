@@ -1173,6 +1173,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = NULL;
         void *cookie = NULL;
         int rc = 0;
+	struct ldlm_resource *res = NULL;
         ENTRY;
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
@@ -1267,6 +1268,21 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         lock->l_last_activity = cfs_time_current_sec();
         lock->l_remote_handle = dlm_req->lock_handle[0];
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
+
+	/* Initialize resource lvb but not for a lock being replayed since
+	 * Client already got lvb sent in this case.
+	 * This must occur early since some policy methods assume resource
+	 * lvb is available (lr_lvb_data != NULL).
+	 */
+	res = lock->l_resource;
+	if (!(flags & LDLM_FL_REPLAY)) {
+		/* non-replayed lock, delayed lvb init may need to be done */
+		rc = ldlm_lvbo_init(res);
+		if (rc < 0) {
+			LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", rc);
+			GOTO(out, rc);
+		}
+	}
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
         /* Don't enqueue a lock onto the export if it is been disonnected
@@ -1416,7 +1432,9 @@ existing_lock:
 					 req, lock);
 				buflen = req_capsule_get_size(&req->rq_pill,
 						&RMF_DLM_LVB, RCL_SERVER);
-				if (buflen > 0) {
+				/* non-replayed lock, delayed lvb init may
+				 * need to be occur now */
+				if ((buflen > 0) && !(flags & LDLM_FL_REPLAY)) {
 					buflen = ldlm_lvbo_fill(lock, buf,
 								buflen);
 					if (buflen >= 0)
@@ -1426,11 +1444,22 @@ existing_lock:
 							buflen, RCL_SERVER);
 					else
 						rc = buflen;
+				} else if (flags & LDLM_FL_REPLAY) {
+					/* no LVB resend upon replay */
+					if (buflen > 0)
+						req_capsule_shrink(
+							&req->rq_pill,
+							&RMF_DLM_LVB,
+							0, RCL_SERVER);
+					else
+						rc = buflen;
 				} else {
 					rc = buflen;
 				}
 			}
-                } else {
+		}
+
+		if (rc != 0) {
                         lock_res_and_lock(lock);
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy_nolock(lock);
