@@ -316,7 +316,7 @@ ktime_get_ts64, [
 #
 # Linux kernel 3.12 introduced struct kernel_param_ops
 # This has been backported to all lustre supported
-# clients expect RHEL6. We have to handle the differences.
+# clients except RHEL6. We have to handle the differences.
 #
 AC_DEFUN([LIBCFS_KERNEL_PARAM_OPS],[
 LB_CHECK_COMPILE([does 'struct kernel_param_ops' exist],
@@ -324,6 +324,8 @@ kernel_param_ops, [
 	#include <linux/module.h>
 ],[
 	struct kernel_param_ops ops;
+
+	ops.set = NULL;
 ],[
 	AC_DEFINE(HAVE_KERNEL_PARAM_OPS, 1,
 		['struct kernel_param_ops' is available])
@@ -417,7 +419,9 @@ shrinker_count_objects, [
 	#include <linux/mmzone.h>
 	#include <linux/shrinker.h>
 ],[
-	((struct shrinker*)0)->count_objects(NULL, NULL);
+	struct shrinker shrinker;
+
+	shrinker.count_objects = NULL;
 ],[
 	AC_DEFINE(HAVE_SHRINKER_COUNT, 1,
 		[shrinker has count_objects member])
@@ -539,7 +543,7 @@ ktime_to_timespec64, [
 	#include <linux/ktime.h>
 ],[
 	struct timespec64 ts;
-	ktime_t now;
+	ktime_t now = { };
 
 	ts = ktime_to_timespec64(now);
 ],[
@@ -556,7 +560,7 @@ LB_CHECK_COMPILE([does function 'timespec64_sub' exist],
 timespec64_sub, [
 	#include <linux/time.h>
 ],[
-	struct timespec64 later,earlier,diff;
+	struct timespec64 later = { }, earlier = { }, diff;
 
 	diff = timespec64_sub(later, earlier);
 ],[
@@ -845,6 +849,8 @@ wait_queue_entry, [
 	#include <linux/wait.h>
 ],[
 	wait_queue_entry_t e;
+
+	e.flags = 0;
 ],[
 	AC_DEFINE(HAVE_WAIT_QUEUE_ENTRY, 1,
 		['wait_queue_entry_t' is available])

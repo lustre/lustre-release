@@ -508,8 +508,8 @@ LB_CHECK_COMPILE([if '__add_wait_queue_exclusive' exists],
 __add_wait_queue_exclusive, [
 	#include <linux/wait.h>
 ],[
-	wait_queue_head_t queue;
-	wait_queue_t wait;
+	wait_queue_head_t queue = { };
+	wait_queue_t wait = { };
 
 	__add_wait_queue_exclusive(&queue, &wait);
 ],[
@@ -530,7 +530,10 @@ fs_struct_rwlock, [
 	#include <linux/spinlock.h>
 	#include <linux/fs_struct.h>
 ],[
-	((struct fs_struct *)0)->lock = (rwlock_t){ 0 };
+	struct fs_struct fss = { };
+	rwlock_t rwl = { };
+
+	fss.lock = rwl;
 ],[
 	AC_DEFINE(HAVE_FS_STRUCT_RWLOCK, 1, [fs_struct.lock use rwlock])
 ])
@@ -759,8 +762,10 @@ LB_CHECK_COMPILE([if 'file_system_type' has 'mount' field],
 file_system_type_mount, [
 	#include <linux/fs.h>
 ],[
-	struct file_system_type fst;
-	void *i = (void *) fst.mount;
+	struct file_system_type fst = { };
+	void *mount;
+
+	mount = (void *)fst.mount;
 ],[
 	AC_DEFINE(HAVE_FSTYPE_MOUNT, 1,
 		[struct file_system_type has mount field])
@@ -809,7 +814,7 @@ LB_CHECK_COMPILE([if 'dirty_inode' super_operation takes flag],
 dirty_inode_super_operation_flag, [
 	#include <linux/fs.h>
 ],[
-	struct inode *inode;
+	struct inode *inode = NULL;
 	inode->i_sb->s_op->dirty_inode(NULL, 0);
 ],[
 	AC_DEFINE(HAVE_DIRTY_INODE_HAS_FLAG, 1,
@@ -1021,7 +1026,7 @@ address_space_ops_migratepage_4args, [
 	#include <linux/migrate_mode.h>
 #endif
 ],[
-	struct address_space_operations aops;
+	struct address_space_operations aops = { };
 	aops.migratepage(NULL, NULL, NULL, MIGRATE_ASYNC);
 ],[
 	AC_DEFINE(HAVE_MIGRATEPAGE_4ARGS, 1,
@@ -1394,9 +1399,10 @@ LB_CHECK_COMPILE([if 'bio_end_sector' is defined],
 bio_end_sector, [
 	#include <linux/bio.h>
 ],[
-	struct bio bio;
+	struct bio bio = { };
+	unsigned long long end;
 
-	bio_end_sector(&bio);
+	end = bio_end_sector(&bio);
 ],[
 	AC_DEFINE(HAVE_BIO_END_SECTOR, 1,
 		  [bio_end_sector is defined])
@@ -1411,7 +1417,7 @@ LB_CHECK_COMPILE([if 'is_sxid' is defined],
 is_sxid, [
 	#include <linux/fs.h>
 ],[
-	struct inode inode;
+	struct inode inode = { };
 
 	is_sxid(inode.i_mode);
 ],[
@@ -1456,9 +1462,10 @@ proc_remove, [
 AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
 LB_CHECK_COMPILE([if get_projid exists],
 get_projid, [
+	struct inode;
 	#include <linux/quota.h>
 ],[
-	struct dquot_operations ops;
+	struct dquot_operations ops = { };
 
 	ops.get_projid(NULL, NULL);
 ],[
@@ -1517,6 +1524,7 @@ dir_context, [
 #error "back to use readdir in kabi_extand mode"
 #else
 	struct dir_context ctx;
+
 	ctx.pos = 0;
 #endif
 ],[
@@ -1548,12 +1556,14 @@ d_compare_5args, [
 # 3.11 need to access d_count to get dentry reference count
 #
 AC_DEFUN([LC_HAVE_DCOUNT], [
-LB_CHECK_COMPILE([if 'd_count' exist],
+LB_CHECK_COMPILE([if 'd_count' exists],
 d_count, [
 	#include <linux/dcache.h>
 ],[
-	struct dentry de;
-	d_count(&de);
+	struct dentry de = { };
+	int count;
+
+	count = d_count(&de);
 ],[
 	AC_DEFINE(HAVE_D_COUNT, 1,
 		[d_count exist])
@@ -1731,6 +1741,7 @@ have_bvec_iter, [
 	#include <linux/bio.h>
 ],[
 	struct bvec_iter iter;
+
 	iter.bi_bvec_done = 0;
 ], [
 	AC_DEFINE(HAVE_BVEC_ITER, 1,
@@ -1768,7 +1779,7 @@ have_bi_cnt, [
 	#include <asm/atomic.h>
 	#include <linux/bio.h>
 ],[
-	struct bio bio;
+	struct bio bio = { };
 	int cnt;
 	cnt = atomic_read(&bio.bi_cnt);
 ], [
@@ -1788,7 +1799,8 @@ have_bi_rw, [
 	#include <linux/bio.h>
 ],[
 	struct bio bio;
-	bio.bi_rw;
+
+	bio.bi_rw = 0;
 ], [
 	AC_DEFINE(HAVE_BI_RW, 1,
 		[struct bio has bi_rw])
@@ -1896,7 +1908,7 @@ LB_CHECK_COMPILE([if direct IO uses iov_iter],
 direct_io_iter, [
 	#include <linux/fs.h>
 ],[
-	struct address_space_operations ops;
+	struct address_space_operations ops = { };
 	struct iov_iter *iter = NULL;
 	loff_t offset = 0;
 
@@ -1986,6 +1998,8 @@ key_match, [
 	#include <linux/key-type.h>
 ],[
 	struct key_match_data data;
+
+	data.raw_data = NULL;
 ],[
 	AC_DEFINE(HAVE_KEY_MATCH_DATA, 1,
 		[struct key_match_data exist])
@@ -2051,7 +2065,7 @@ LB_CHECK_COMPILE([if struct kiocb has ki_nbytes field],
 ki_nbytes, [
 	#include <linux/fs.h>
 ],[
-	struct kiocb iocb;
+	struct kiocb iocb = { };
 
 	iocb.ki_nbytes = 0;
 ],[
@@ -2320,7 +2334,9 @@ LB_CHECK_COMPILE([if 'struct key' has 'payload.data' as an array],
 key_payload_data_array, [
 	#include <linux/key.h>
 ],[
-	((struct key *)0)->payload.data[0] = NULL;
+	struct key key = { };
+
+	key.payload.data[0] = NULL;
 ],[
 	AC_DEFINE(HAVE_KEY_PAYLOAD_DATA_ARRAY, 1, [payload.data is an array])
 ])
@@ -2451,10 +2467,11 @@ LB_CHECK_COMPILE([if '->direct_IO()' taken 2 arguments],
 direct_io_2args, [
 	#include <linux/fs.h>
 ],[
-	struct address_space_operations ops;
+	struct address_space_operations ops = { };
 	struct iov_iter *iter = NULL;
 	struct kiocb *iocb = NULL;
 	int rc;
+
 	rc = ops.direct_IO(iocb, iter);
 ],[
 	AC_DEFINE(HAVE_DIRECTIO_2ARGS, 1,
@@ -2475,6 +2492,7 @@ generic_write_sync_2args, [
 ],[
 	struct kiocb *iocb = NULL;
 	ssize_t rc;
+
 	rc = generic_write_sync(iocb, 0);
 ],[
 	AC_DEFINE(HAVE_GENERIC_WRITE_SYNC_2ARGS, 1,

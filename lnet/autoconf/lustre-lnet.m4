@@ -36,12 +36,9 @@ AS_IF([test "x$enable_affinity" = xyes], [
 	set_cpus_allowed_ptr, [
 		#include <linux/sched.h>
 	],[
-		struct task_struct *t;
-		#if HAVE_CPUMASK_T
-		cpumask_t     m;
-		#else
-		unsigned long m;
-		#endif
+		struct task_struct *t = NULL;
+		cpumask_t m = { };
+
 		set_cpus_allowed_ptr(t, &m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1,
@@ -281,7 +278,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			#endif
 			#include <linux/kthread.h>
 		],[
-			struct kthread_work	*kth_wrk __attribute__ ((unused));
+			struct kthread_work *kth_wrk = NULL;
 			flush_kthread_work(kth_wrk);
 		],[
 			AC_DEFINE(HAVE_KTHREAD_WORK, 1, [kthread_worker found])
@@ -690,8 +687,8 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 AC_DEFUN([LN_EXPORT_KMAP_TO_PAGE], [
 LB_CHECK_EXPORT([kmap_to_page], [mm/highmem.c],
-        [AC_DEFINE(HAVE_KMAP_TO_PAGE, 1,
-                [kmap_to_page is exported by the kernel])])
+	[AC_DEFINE(HAVE_KMAP_TO_PAGE, 1,
+		[kmap_to_page is exported by the kernel])])
 ]) # LN_EXPORT_KMAP_TO_PAG
 
 #
