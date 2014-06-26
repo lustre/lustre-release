@@ -6578,7 +6578,7 @@ run_acl_subtest()
     return $?
 }
 
-test_103 () {
+test_103a() {
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] &&
 		skip "must have acl enabled" && return
@@ -6639,7 +6639,43 @@ test_103 () {
 		fi
 	done
 }
-run_test 103 "acl test ========================================="
+run_test 103a "acl test ========================================="
+
+test_103b() {
+        local noacl=false
+        local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
+        local mountopts=$MDS_MOUNT_OPTS
+
+        if [[ "$MDS_MOUNT_OPTS" =~ "noacl" ]]; then
+                noacl=true
+        else
+                # stop the MDT
+                stop $SINGLEMDS || error "failed to stop MDT."
+                # remount the MDT
+                if [ -z "$MDS_MOUNT_OPTS" ]; then
+                        MDS_MOUNT_OPTS="-o noacl"
+                else
+                        MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl"
+                fi
+                start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS ||
+                        error "failed to start MDT."
+                MDS_MOUNT_OPTS=$mountopts
+        fi
+
+        touch $DIR/$tfile
+        setfacl -m u:bin:rw $DIR/$tfile && error "setfacl should fail"
+
+        if ! $noacl; then
+                # stop the MDT
+                stop $SINGLEMDS || error "failed to stop MDT."
+                # remount the MDT
+                start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS ||
+                        error "failed to start MDT."
+        fi
+
+        rm -f $DIR/$tfile
+}
+run_test 103b "MDS mount option \"noacl\" ======================="
 
 test_104a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

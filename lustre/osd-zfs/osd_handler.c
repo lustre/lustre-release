@@ -333,19 +333,23 @@ static void osd_conf_get(const struct lu_env *env,
 			 const struct dt_device *dev,
 			 struct dt_device_param *param)
 {
+	struct osd_device *osd = osd_dt_dev(dev);
+
 	/*
 	 * XXX should be taken from not-yet-existing fs abstraction layer.
 	 */
-	param->ddp_max_name_len  = MAXNAMELEN;
-	param->ddp_max_nlink     = 1 << 31; /* it's 8byte on a disk */
-	param->ddp_block_shift   = 12; /* XXX */
-	param->ddp_mount_type    = LDD_MT_ZFS;
+	param->ddp_max_name_len	= MAXNAMELEN;
+	param->ddp_max_nlink	= 1 << 31; /* it's 8byte on a disk */
+	param->ddp_block_shift	= 12; /* XXX */
+	param->ddp_mount_type	= LDD_MT_ZFS;
 
-	param->ddp_mntopts        = MNTOPT_USERXATTR | MNTOPT_ACL;
-	param->ddp_max_ea_size    = DXATTR_MAX_ENTRY_SIZE;
+	param->ddp_mntopts	= MNTOPT_USERXATTR;
+	if (osd->od_posix_acl)
+		param->ddp_mntopts |= MNTOPT_ACL;
+	param->ddp_max_ea_size	= DXATTR_MAX_ENTRY_SIZE;
 
 	/* for maxbytes, report same value as ZPL */
-	param->ddp_maxbytes      = MAX_LFS_FILESIZE;
+	param->ddp_maxbytes	= MAX_LFS_FILESIZE;
 
 	/* Default reserved fraction of the available space that should be kept
 	 * for error margin. Unfortunately, there are many factors that can
@@ -516,6 +520,7 @@ static int osd_mount(const struct lu_env *env,
 	char			*dev  = lustre_cfg_string(cfg, 1);
 	dmu_buf_t		*rootdb;
 	dsl_pool_t		*dp;
+	const char		*opts;
 	int			 rc;
 	ENTRY;
 
@@ -596,6 +601,12 @@ static int osd_mount(const struct lu_env *env,
 		o->od_quota_slave = NULL;
 		GOTO(err, rc);
 	}
+
+	/* parse mount option "noacl", and enable ACL by default */
+	opts = lustre_cfg_string(cfg, 3);
+	if (opts == NULL || strstr(opts, "noacl") == NULL)
+		o->od_posix_acl = 1;
+
 err:
 	RETURN(rc);
 }

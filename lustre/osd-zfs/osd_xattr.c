@@ -68,6 +68,7 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
+#include <linux/posix_acl_xattr.h>
 
 /*
  * Copy an extended attribute into the buffer provided, or compute the
@@ -244,6 +245,11 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_db != NULL);
 	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt));
+
+	if (!osd_obj2dev(obj)->od_posix_acl &&
+	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
+	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+		RETURN(-EOPNOTSUPP);
 
 	down(&obj->oo_guard);
 	rc = __osd_xattr_get(env, obj, buf, name, &size);
@@ -589,6 +595,11 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_db);
 
+	if (!osd_obj2dev(obj)->od_posix_acl &&
+	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
+	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+		RETURN(-EOPNOTSUPP);
+
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
 	down(&obj->oo_guard);
@@ -727,6 +738,11 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
+	if (!osd_obj2dev(obj)->od_posix_acl &&
+	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
+	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+		RETURN(-EOPNOTSUPP);
+
 	down(&obj->oo_guard);
 	rc = __osd_xattr_del(env, obj, name, oh);
 	up(&obj->oo_guard);
@@ -751,12 +767,19 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 	LASSERT(obj->oo_sa_xattr);
 
 	while ((nvp = nvlist_next_nvpair(obj->oo_sa_xattr, nvp)) != NULL) {
+		const char *name = nvpair_name(nvp);
+
+		if (!osd_obj2dev(obj)->od_posix_acl &&
+		    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
+		     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+			continue;
+
 		len = strlen(nvpair_name(nvp));
 		if (lb->lb_buf != NULL) {
 			if (len + 1 > remain)
 				return -ERANGE;
 
-			memcpy(lb->lb_buf, nvpair_name(nvp), len);
+			memcpy(lb->lb_buf, name, len);
 			lb->lb_buf += len;
 			*((char *)lb->lb_buf) = '\0';
 			lb->lb_buf++;
@@ -800,6 +823,13 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 
 	while ((rc = -udmu_zap_cursor_retrieve_key(env, zc, oti->oti_key,
 						MAXNAMELEN)) == 0) {
+		if (!osd_obj2dev(obj)->od_posix_acl &&
+		    (!strcmp(oti->oti_key, POSIX_ACL_XATTR_ACCESS) ||
+		     !strcmp(oti->oti_key, POSIX_ACL_XATTR_DEFAULT))) {
+			zap_cursor_advance(zc);
+			continue;
+		}
+
 		rc = strlen(oti->oti_key);
 		if (lb->lb_buf != NULL) {
 			if (rc + 1 > remain)
