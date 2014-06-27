@@ -12460,11 +12460,16 @@ test_234() {
 	touch $DIR/$tdir/$tfile || error "touch failed"
 	# OBD_FAIL_LLITE_XATTR_ENOMEM
 	$LCTL set_param fail_loc=0x1405
-	if [ ! -f /etc/SuSE-release ]; then
+	# output of the form: attr 2 4 44 3 fc13 x86_64
+	V=($(IFS=".-" rpm -q attr))
+	if [[ ${V[1]} > 2 || ${V[2]} > 4 || ${V[3]} > 44 ||
+	      ${V[1]} = 2 && ${V[2]} = 4 && ${V[3]} = 44 && ${V[4]} > 6 ]]; then
 		# attr pre-2.4.44-7 had a bug with rc
-		# LU-3703 - SLES clients have older attr
+		# LU-3703 - SLES 11 and FC13 clients have older attr
 		getfattr -n user.attr $DIR/$tdir/$tfile &&
 			error "getfattr should have failed with ENOMEM"
+	else
+		skip "LU-3703: attr version $(getfattr --version) too old"
 	fi
 	$LCTL set_param fail_loc=0x0
 	rm -rf $DIR/$tdir
