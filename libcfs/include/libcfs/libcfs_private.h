@@ -320,6 +320,8 @@ int libcfs_debug_cleanup(void);
 /* !__KERNEL__ */
 #endif
 
+struct cfs_cpt_table;
+
 /*
  * allocate per-cpu-partition data, returned value is an array of pointers,
  * variable can be indexed by CPU ID.
@@ -474,11 +476,7 @@ struct cfs_percpt_lock {
 };
 
 /* return number of private locks */
-static inline int
-cfs_percpt_lock_num(struct cfs_percpt_lock *pcl)
-{
-	return cfs_cpt_number(pcl->pcl_cptab);
-}
+#define cfs_percpt_lock_num(pcl)	cfs_cpt_number(pcl->pcl_cptab)
 
 #else /* !__KERNEL__ */
 

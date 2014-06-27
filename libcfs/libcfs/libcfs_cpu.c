@@ -58,7 +58,7 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 	LIBCFS_ALLOC(cptab, sizeof(*cptab));
 	if (cptab != NULL) {
 		cptab->ctb_version = CFS_CPU_VERSION_MAGIC;
-		set_bit(0, &cptab->ctb_nodemask);
+		node_set(0, cptab->ctb_nodemask);
 		cptab->ctb_nparts  = ncpt;
 	}
 

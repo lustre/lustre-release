@@ -36,6 +36,13 @@
 #ifndef _LIBCFS_BITMAP_H_
 #define _LIBCFS_BITMAP_H_
 
+#if !defined(__linux__) || !defined(__KERNEL__)
+#define DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
+#define BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof(long))
+
+#define DECLARE_BITMAP(name, bits) \
+	unsigned long name[BITS_TO_LONGS(bits)]
+#endif
 
 typedef struct {
         int             size;
@@ -48,18 +55,18 @@ typedef struct {
 static inline
 cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
 {
-        cfs_bitmap_t *ptr;
+	cfs_bitmap_t *ptr;
 
-        OBD_ALLOC(ptr, CFS_BITMAP_SIZE(size));
-        if (ptr == NULL)
-                RETURN(ptr);
+	LIBCFS_ALLOC(ptr, CFS_BITMAP_SIZE(size));
+	if (ptr == NULL)
+		RETURN(ptr);
 
-        ptr->size = size;
+	ptr->size = size;
 
-        RETURN (ptr);
+	RETURN(ptr);
 }
 
-#define CFS_FREE_BITMAP(ptr)        OBD_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
+#define CFS_FREE_BITMAP(ptr)	LIBCFS_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
 
 static inline
 void cfs_bitmap_set(cfs_bitmap_t *bitmap, int nbit)
