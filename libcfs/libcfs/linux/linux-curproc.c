@@ -130,21 +130,24 @@ int cfs_capable(cfs_cap_t cap)
         return capable(cfs_cap_unpack(cap));
 }
 
-static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
+static int cfs_access_process_vm(struct task_struct *tsk,
+				 struct mm_struct *mm,
+				 unsigned long addr,
 				 void *buf, int len, int write)
 {
 	/* Just copied from kernel for the kernels which doesn't
 	 * have access_process_vm() exported */
-	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 	struct page *page;
 	void *old_buf = buf;
 
-	mm = get_task_mm(tsk);
-	if (!mm)
-		return 0;
+	/* Avoid deadlocks on mmap_sem if called from sys_mmap_pgoff(),
+	 * which is already holding mmap_sem for writes.  If some other
+	 * thread gets the write lock in the meantime, this thread will
+	 * block, but at least it won't deadlock on itself.  LU-1735 */
+	if (down_read_trylock(&mm->mmap_sem) == 0)
+		return -EDEADLK;
 
-	down_read(&mm->mmap_sem);
 	/* ignore errors, just check how much was sucessfully transfered */
 	while (len) {
 		int bytes, rc, offset;
@@ -176,7 +179,6 @@ static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
 		addr += bytes;
 	}
 	up_read(&mm->mmap_sem);
-	mmput(mm);
 
 	return buf - old_buf;
 }
@@ -202,15 +204,6 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 		RETURN(-EINVAL);
 	}
 
-	/* Avoid deadlocks on mmap_sem if called from sys_mmap_pgoff(),
-	 * which is already holding mmap_sem for writes.  If some other
-	 * thread gets the write lock in the meantime, this thread will
-	 * block, but at least it won't deadlock on itself.  LU-1735 */
-	if (down_read_trylock(&mm->mmap_sem) == 0)
-		GOTO(out, rc = -EDEADLK);
-
-	up_read(&mm->mmap_sem);
-
 	addr = mm->env_start;
 	while (addr < mm->env_end) {
 		int this_len, retval, scan_len;
@@ -219,9 +212,11 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 		memset(buffer, 0, buf_len);
 
 		this_len = min_t(int, mm->env_end - addr, buf_len);
-		retval = cfs_access_process_vm(current, addr, buffer,
+		retval = cfs_access_process_vm(current, mm, addr, buffer,
 					       this_len, 0);
-		if (retval != this_len)
+		if (retval < 0)
+			GOTO(out, rc = retval);
+		else if (retval != this_len)
 			break;
 
 		addr += retval;
