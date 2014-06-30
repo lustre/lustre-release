@@ -424,15 +424,15 @@ void ptlrpc_request_cache_free(struct ptlrpc_request *req)
  */
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
 {
-	cfs_list_t *l, *tmp;
+	struct list_head *l, *tmp;
 	struct ptlrpc_request *req;
 
 	LASSERT(pool != NULL);
 
 	spin_lock(&pool->prp_lock);
-	cfs_list_for_each_safe(l, tmp, &pool->prp_req_list) {
-		req = cfs_list_entry(l, struct ptlrpc_request, rq_list);
-		cfs_list_del(&req->rq_list);
+	list_for_each_safe(l, tmp, &pool->prp_req_list) {
+		req = list_entry(l, struct ptlrpc_request, rq_list);
+		list_del(&req->rq_list);
 		LASSERT(req->rq_reqbuf);
 		LASSERT(req->rq_reqbuf_len == pool->prp_rq_size);
 		OBD_FREE_LARGE(req->rq_reqbuf, pool->prp_rq_size);
@@ -454,7 +454,7 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
         while (size < pool->prp_rq_size)
                 size <<= 1;
 
-        LASSERTF(cfs_list_empty(&pool->prp_req_list) ||
+	LASSERTF(list_empty(&pool->prp_req_list) ||
                  size == pool->prp_rq_size,
                  "Trying to change pool size with nonempty pool "
                  "from %d to %d bytes\n", pool->prp_rq_size, size);
@@ -478,7 +478,7 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
                 req->rq_reqbuf_len = size;
                 req->rq_pool = pool;
 		spin_lock(&pool->prp_lock);
-		cfs_list_add_tail(&req->rq_list, &pool->prp_req_list);
+		list_add_tail(&req->rq_list, &pool->prp_req_list);
 	}
 	spin_unlock(&pool->prp_lock);
 	return;
@@ -495,30 +495,30 @@ EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
  */
 struct ptlrpc_request_pool *
 ptlrpc_init_rq_pool(int num_rq, int msgsize,
-                    void (*populate_pool)(struct ptlrpc_request_pool *, int))
+		    void (*populate_pool)(struct ptlrpc_request_pool *, int))
 {
-        struct ptlrpc_request_pool *pool;
+	struct ptlrpc_request_pool *pool;
 
-        OBD_ALLOC(pool, sizeof (struct ptlrpc_request_pool));
-        if (!pool)
-                return NULL;
+	OBD_ALLOC(pool, sizeof(struct ptlrpc_request_pool));
+	if (!pool)
+		return NULL;
 
-        /* Request next power of two for the allocation, because internally
-           kernel would do exactly this */
+	/* Request next power of two for the allocation, because internally
+	   kernel would do exactly this */
 
 	spin_lock_init(&pool->prp_lock);
-        CFS_INIT_LIST_HEAD(&pool->prp_req_list);
-        pool->prp_rq_size = msgsize + SPTLRPC_MAX_PAYLOAD;
-        pool->prp_populate = populate_pool;
+	INIT_LIST_HEAD(&pool->prp_req_list);
+	pool->prp_rq_size = msgsize + SPTLRPC_MAX_PAYLOAD;
+	pool->prp_populate = populate_pool;
 
-        populate_pool(pool, num_rq);
+	populate_pool(pool, num_rq);
 
-        if (cfs_list_empty(&pool->prp_req_list)) {
-                /* have not allocated a single request for the pool */
-                OBD_FREE(pool, sizeof (struct ptlrpc_request_pool));
-                pool = NULL;
-        }
-        return pool;
+	if (list_empty(&pool->prp_req_list)) {
+		/* have not allocated a single request for the pool */
+		OBD_FREE(pool, sizeof(struct ptlrpc_request_pool));
+		pool = NULL;
+	}
+	return pool;
 }
 EXPORT_SYMBOL(ptlrpc_init_rq_pool);
 
@@ -540,14 +540,14 @@ ptlrpc_prep_req_from_pool(struct ptlrpc_request_pool *pool)
 	 * in writeout path, where this matters, this is safe to do, because
 	 * nothing is lost in this case, and when some in-flight requests
 	 * complete, this code will be called again. */
-	if (unlikely(cfs_list_empty(&pool->prp_req_list))) {
+	if (unlikely(list_empty(&pool->prp_req_list))) {
 		spin_unlock(&pool->prp_lock);
 		return NULL;
 	}
 
-	request = cfs_list_entry(pool->prp_req_list.next, struct ptlrpc_request,
-				 rq_list);
-	cfs_list_del_init(&request->rq_list);
+	request = list_entry(pool->prp_req_list.next, struct ptlrpc_request,
+			     rq_list);
+	list_del_init(&request->rq_list);
 	spin_unlock(&pool->prp_lock);
 
         LASSERT(request->rq_reqbuf);
@@ -570,9 +570,9 @@ static void __ptlrpc_free_req_to_pool(struct ptlrpc_request *request)
 	struct ptlrpc_request_pool *pool = request->rq_pool;
 
 	spin_lock(&pool->prp_lock);
-	LASSERT(cfs_list_empty(&request->rq_list));
+	LASSERT(list_empty(&request->rq_list));
 	LASSERT(!request->rq_receiving_reply);
-	cfs_list_add_tail(&request->rq_list, &pool->prp_req_list);
+	list_add_tail(&request->rq_list, &pool->prp_req_list);
 	spin_unlock(&pool->prp_lock);
 }
 
@@ -623,13 +623,13 @@ static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
         ptlrpc_at_set_req_timeout(request);
 
 	spin_lock_init(&request->rq_lock);
-	CFS_INIT_LIST_HEAD(&request->rq_list);
-	CFS_INIT_LIST_HEAD(&request->rq_timed_list);
-	CFS_INIT_LIST_HEAD(&request->rq_replay_list);
-	CFS_INIT_LIST_HEAD(&request->rq_ctx_chain);
-	CFS_INIT_LIST_HEAD(&request->rq_set_chain);
-	CFS_INIT_LIST_HEAD(&request->rq_history_list);
-	CFS_INIT_LIST_HEAD(&request->rq_exp_list);
+	INIT_LIST_HEAD(&request->rq_list);
+	INIT_LIST_HEAD(&request->rq_timed_list);
+	INIT_LIST_HEAD(&request->rq_replay_list);
+	INIT_LIST_HEAD(&request->rq_ctx_chain);
+	INIT_LIST_HEAD(&request->rq_set_chain);
+	INIT_LIST_HEAD(&request->rq_history_list);
+	INIT_LIST_HEAD(&request->rq_exp_list);
 	init_waitqueue_head(&request->rq_reply_waitq);
 	init_waitqueue_head(&request->rq_set_waitq);
 	request->rq_xid = ptlrpc_next_xid();
@@ -863,13 +863,13 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 	if (!set)
 		RETURN(NULL);
 	atomic_set(&set->set_refcount, 1);
-	CFS_INIT_LIST_HEAD(&set->set_requests);
+	INIT_LIST_HEAD(&set->set_requests);
 	init_waitqueue_head(&set->set_waitq);
 	atomic_set(&set->set_new_count, 0);
 	atomic_set(&set->set_remaining, 0);
 	spin_lock_init(&set->set_new_req_lock);
-	CFS_INIT_LIST_HEAD(&set->set_new_requests);
-	CFS_INIT_LIST_HEAD(&set->set_cblist);
+	INIT_LIST_HEAD(&set->set_new_requests);
+	INIT_LIST_HEAD(&set->set_cblist);
 	set->set_max_inflight = UINT_MAX;
 	set->set_producer     = NULL;
 	set->set_producer_arg = NULL;
@@ -915,33 +915,33 @@ EXPORT_SYMBOL(ptlrpc_prep_fcset);
  */
 void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
 {
-        cfs_list_t       *tmp;
-        cfs_list_t       *next;
-        int               expected_phase;
-        int               n = 0;
-        ENTRY;
+	struct list_head	*tmp;
+	struct list_head	*next;
+	int			 expected_phase;
+	int			 n = 0;
+	ENTRY;
 
-        /* Requests on the set should either all be completed, or all be new */
+	/* Requests on the set should either all be completed, or all be new */
 	expected_phase = (atomic_read(&set->set_remaining) == 0) ?
-                         RQ_PHASE_COMPLETE : RQ_PHASE_NEW;
-        cfs_list_for_each (tmp, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_set_chain);
+			 RQ_PHASE_COMPLETE : RQ_PHASE_NEW;
+	list_for_each(tmp, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(tmp, struct ptlrpc_request,
+				   rq_set_chain);
 
-                LASSERT(req->rq_phase == expected_phase);
-                n++;
-        }
+		LASSERT(req->rq_phase == expected_phase);
+		n++;
+	}
 
 	LASSERTF(atomic_read(&set->set_remaining) == 0 ||
 		 atomic_read(&set->set_remaining) == n, "%d / %d\n",
 		 atomic_read(&set->set_remaining), n);
 
-        cfs_list_for_each_safe(tmp, next, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_set_chain);
-                cfs_list_del_init(&req->rq_set_chain);
+	list_for_each_safe(tmp, next, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(tmp, struct ptlrpc_request,
+				   rq_set_chain);
+		list_del_init(&req->rq_set_chain);
 
 		LASSERT(req->rq_phase == expected_phase);
 
@@ -973,17 +973,17 @@ EXPORT_SYMBOL(ptlrpc_set_destroy);
 int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
                       set_interpreter_func fn, void *data)
 {
-        struct ptlrpc_set_cbdata *cbdata;
+	struct ptlrpc_set_cbdata *cbdata;
 
-        OBD_ALLOC_PTR(cbdata);
-        if (cbdata == NULL)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_PTR(cbdata);
+	if (cbdata == NULL)
+		RETURN(-ENOMEM);
 
-        cbdata->psc_interpret = fn;
-        cbdata->psc_data = data;
-        cfs_list_add_tail(&cbdata->psc_item, &set->set_cblist);
+	cbdata->psc_interpret = fn;
+	cbdata->psc_data = data;
+	list_add_tail(&cbdata->psc_item, &set->set_cblist);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_set_add_cb);
 
@@ -994,10 +994,10 @@ EXPORT_SYMBOL(ptlrpc_set_add_cb);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
                         struct ptlrpc_request *req)
 {
-	LASSERT(cfs_list_empty(&req->rq_set_chain));
+	LASSERT(list_empty(&req->rq_set_chain));
 
 	/* The set takes over the caller's request reference */
-	cfs_list_add_tail(&req->rq_set_chain, &set->set_requests);
+	list_add_tail(&req->rq_set_chain, &set->set_requests);
 	req->rq_set = set;
 	atomic_inc(&set->set_remaining);
 	req->rq_queued_time = cfs_time_current();
@@ -1032,7 +1032,7 @@ void ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
 	 */
 	req->rq_set = set;
 	req->rq_queued_time = cfs_time_current();
-	cfs_list_add_tail(&req->rq_set_chain, &set->set_new_requests);
+	list_add_tail(&req->rq_set_chain, &set->set_new_requests);
 	count = atomic_inc_return(&set->set_new_count);
 	spin_unlock(&set->set_new_req_lock);
 
@@ -1385,12 +1385,12 @@ static int after_reply(struct ptlrpc_request *req)
 
 		ptlrpc_free_committed(imp);
 
-		if (!cfs_list_empty(&imp->imp_replay_list)) {
+		if (!list_empty(&imp->imp_replay_list)) {
 			struct ptlrpc_request *last;
 
-			last = cfs_list_entry(imp->imp_replay_list.prev,
-					      struct ptlrpc_request,
-					      rq_replay_list);
+			last = list_entry(imp->imp_replay_list.prev,
+					  struct ptlrpc_request,
+					  rq_replay_list);
 			/*
 			 * Requests with rq_replay stay on the list even if no
 			 * commit is expected.
@@ -1438,8 +1438,8 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 			  "(%s != %s)", lustre_msg_get_status(req->rq_reqmsg),
 			  ptlrpc_import_state_name(req->rq_send_state),
 			  ptlrpc_import_state_name(imp->imp_state));
-		LASSERT(cfs_list_empty(&req->rq_list));
-		cfs_list_add_tail(&req->rq_list, &imp->imp_delayed_list);
+		LASSERT(list_empty(&req->rq_list));
+		list_add_tail(&req->rq_list, &imp->imp_delayed_list);
 		atomic_inc(&req->rq_import->imp_inflight);
 		spin_unlock(&imp->imp_lock);
 		RETURN(0);
@@ -1452,8 +1452,8 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 		RETURN(rc);
 	}
 
-	LASSERT(cfs_list_empty(&req->rq_list));
-	cfs_list_add_tail(&req->rq_list, &imp->imp_sending_list);
+	LASSERT(list_empty(&req->rq_list));
+	list_add_tail(&req->rq_list, &imp->imp_sending_list);
 	atomic_inc(&req->rq_import->imp_inflight);
 	spin_unlock(&imp->imp_lock);
 
@@ -1524,20 +1524,20 @@ static inline int ptlrpc_set_producer(struct ptlrpc_request_set *set)
  */
 int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 {
-        cfs_list_t *tmp, *next;
+	struct list_head *tmp, *next;
         int force_timer_recalc = 0;
         ENTRY;
 
 	if (atomic_read(&set->set_remaining) == 0)
                 RETURN(1);
 
-        cfs_list_for_each_safe(tmp, next, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_set_chain);
-                struct obd_import *imp = req->rq_import;
-                int unregistered = 0;
-                int rc = 0;
+	list_for_each_safe(tmp, next, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(tmp, struct ptlrpc_request,
+				   rq_set_chain);
+		struct obd_import *imp = req->rq_import;
+		int unregistered = 0;
+		int rc = 0;
 
 		/* This schedule point is mainly for the ptlrpcd caller of this
 		 * function.  Most ptlrpc sets are not long-lived and unbounded
@@ -1674,8 +1674,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 				if (ptlrpc_import_delay_req(imp, req, &status)){
 					/* put on delay list - only if we wait
 					 * recovery finished - before send */
-					cfs_list_del_init(&req->rq_list);
-					cfs_list_add_tail(&req->rq_list,
+					list_del_init(&req->rq_list);
+					list_add_tail(&req->rq_list,
 							  &imp->
 							  imp_delayed_list);
 					spin_unlock(&imp->imp_lock);
@@ -1698,8 +1698,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					GOTO(interpret, req->rq_status);
 				}
 
-				cfs_list_del_init(&req->rq_list);
-				cfs_list_add_tail(&req->rq_list,
+				list_del_init(&req->rq_list);
+				list_add_tail(&req->rq_list,
 						  &imp->imp_sending_list);
 
 				spin_unlock(&imp->imp_lock);
@@ -1867,8 +1867,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		 * may happen in the case of marking it erroneous for the case
 		 * ptlrpc_import_delay_req(req, status) find it impossible to
 		 * allow sending this rpc and returns *status != 0. */
-		if (!cfs_list_empty(&req->rq_list)) {
-			cfs_list_del_init(&req->rq_list);
+		if (!list_empty(&req->rq_list)) {
+			list_del_init(&req->rq_list);
 			atomic_dec(&imp->imp_inflight);
 		}
 		spin_unlock(&imp->imp_lock);
@@ -1883,7 +1883,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
 			/* free the request that has just been completed
 			 * in order not to pollute set->set_requests */
-			cfs_list_del_init(&req->rq_set_chain);
+			list_del_init(&req->rq_set_chain);
 			spin_lock(&req->rq_lock);
 			req->rq_set = NULL;
 			req->rq_invalid_rqset = 0;
@@ -1979,20 +1979,20 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
  */
 int ptlrpc_expired_set(void *data)
 {
-        struct ptlrpc_request_set *set = data;
-        cfs_list_t                *tmp;
-        time_t                     now = cfs_time_current_sec();
-        ENTRY;
+	struct ptlrpc_request_set	*set = data;
+	struct list_head		*tmp;
+	time_t				now = cfs_time_current_sec();
+	ENTRY;
 
-        LASSERT(set != NULL);
+	LASSERT(set != NULL);
 
-        /*
-         * A timeout expired. See which reqs it applies to...
-         */
-        cfs_list_for_each (tmp, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_set_chain);
+	/*
+	 * A timeout expired. See which reqs it applies to...
+	 */
+	list_for_each(tmp, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(tmp, struct ptlrpc_request,
+				   rq_set_chain);
 
                 /* don't expire request waiting for context */
                 if (req->rq_wait_ctx)
@@ -2039,23 +2039,22 @@ EXPORT_SYMBOL(ptlrpc_mark_interrupted);
  */
 void ptlrpc_interrupted_set(void *data)
 {
-        struct ptlrpc_request_set *set = data;
-        cfs_list_t *tmp;
+	struct ptlrpc_request_set *set = data;
+	struct list_head *tmp;
 
-        LASSERT(set != NULL);
-        CDEBUG(D_RPCTRACE, "INTERRUPTED SET %p\n", set);
+	LASSERT(set != NULL);
+	CDEBUG(D_RPCTRACE, "INTERRUPTED SET %p\n", set);
 
-        cfs_list_for_each(tmp, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_set_chain);
+	list_for_each(tmp, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
-                if (req->rq_phase != RQ_PHASE_RPC &&
-                    req->rq_phase != RQ_PHASE_UNREGISTERING)
-                        continue;
+		if (req->rq_phase != RQ_PHASE_RPC &&
+		    req->rq_phase != RQ_PHASE_UNREGISTERING)
+			continue;
 
-                ptlrpc_mark_interrupted(req);
-        }
+		ptlrpc_mark_interrupted(req);
+	}
 }
 EXPORT_SYMBOL(ptlrpc_interrupted_set);
 
@@ -2064,15 +2063,15 @@ EXPORT_SYMBOL(ptlrpc_interrupted_set);
  */
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
-        cfs_list_t            *tmp;
-        time_t                 now = cfs_time_current_sec();
-        int                    timeout = 0;
-        struct ptlrpc_request *req;
-        int                    deadline;
-        ENTRY;
+	struct list_head	*tmp;
+	time_t			 now = cfs_time_current_sec();
+	int			 timeout = 0;
+	struct ptlrpc_request	*req;
+	int			 deadline;
+	ENTRY;
 
-        cfs_list_for_each(tmp, &set->set_requests) {
-                req = cfs_list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+	list_for_each(tmp, &set->set_requests) {
+		req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /*
                  * Request in-flight?
@@ -2118,7 +2117,7 @@ EXPORT_SYMBOL(ptlrpc_set_next_timeout);
  */
 int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 {
-        cfs_list_t            *tmp;
+	struct list_head            *tmp;
         struct ptlrpc_request *req;
         struct l_wait_info     lwi;
         int                    rc, timeout;
@@ -2127,14 +2126,14 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 	if (set->set_producer)
 		(void)ptlrpc_set_producer(set);
 	else
-		cfs_list_for_each(tmp, &set->set_requests) {
-			req = cfs_list_entry(tmp, struct ptlrpc_request,
-					     rq_set_chain);
+		list_for_each(tmp, &set->set_requests) {
+			req = list_entry(tmp, struct ptlrpc_request,
+					 rq_set_chain);
 			if (req->rq_phase == RQ_PHASE_NEW)
 				(void)ptlrpc_send_new_req(req);
 		}
 
-        if (cfs_list_empty(&set->set_requests))
+	if (list_empty(&set->set_requests))
                 RETURN(0);
 
         do {
@@ -2193,9 +2192,9 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                  * I don't really care if we go once more round the loop in
                  * the error cases -eeb. */
 		if (rc == 0 && atomic_read(&set->set_remaining) == 0) {
-                        cfs_list_for_each(tmp, &set->set_requests) {
-                                req = cfs_list_entry(tmp, struct ptlrpc_request,
-                                                     rq_set_chain);
+			list_for_each(tmp, &set->set_requests) {
+				req = list_entry(tmp, struct ptlrpc_request,
+						 rq_set_chain);
 				spin_lock(&req->rq_lock);
 				req->rq_invalid_rqset = 1;
 				spin_unlock(&req->rq_lock);
@@ -2206,8 +2205,8 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 	LASSERT(atomic_read(&set->set_remaining) == 0);
 
         rc = set->set_rc; /* rq_status of already freed requests if any */
-        cfs_list_for_each(tmp, &set->set_requests) {
-                req = cfs_list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+	list_for_each(tmp, &set->set_requests) {
+		req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 LASSERT(req->rq_phase == RQ_PHASE_COMPLETE);
                 if (req->rq_status != 0)
@@ -2222,9 +2221,9 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 struct ptlrpc_set_cbdata *cbdata, *n;
                 int err;
 
-                cfs_list_for_each_entry_safe(cbdata, n,
+		list_for_each_entry_safe(cbdata, n,
                                          &set->set_cblist, psc_item) {
-                        cfs_list_del_init(&cbdata->psc_item);
+			list_del_init(&cbdata->psc_item);
                         err = cbdata->psc_interpret(set, cbdata->psc_data, rc);
                         if (err && !rc)
                                 rc = err;
@@ -2254,9 +2253,9 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 
         LASSERTF(!request->rq_receiving_reply, "req %p\n", request);
         LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
-        LASSERTF(cfs_list_empty(&request->rq_list), "req %p\n", request);
-        LASSERTF(cfs_list_empty(&request->rq_set_chain), "req %p\n", request);
-        LASSERTF(cfs_list_empty(&request->rq_exp_list), "req %p\n", request);
+	LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
+	LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
+	LASSERTF(list_empty(&request->rq_exp_list), "req %p\n", request);
         LASSERTF(!request->rq_replay, "req %p\n", request);
 
         req_capsule_fini(&request->rq_pill);
@@ -2266,11 +2265,11 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_import != NULL) {
 		if (!locked)
 			spin_lock(&request->rq_import->imp_lock);
-		cfs_list_del_init(&request->rq_replay_list);
+		list_del_init(&request->rq_replay_list);
 		if (!locked)
 			spin_unlock(&request->rq_import->imp_lock);
         }
-        LASSERTF(cfs_list_empty(&request->rq_replay_list), "req %p\n", request);
+	LASSERTF(list_empty(&request->rq_replay_list), "req %p\n", request);
 
 	if (atomic_read(&request->rq_refcount) != 0) {
 		DEBUG_REQ(D_ERROR, request,
@@ -2453,7 +2452,7 @@ static void ptlrpc_free_request(struct ptlrpc_request *req)
 
 	if (req->rq_commit_cb != NULL)
 		req->rq_commit_cb(req);
-	cfs_list_del_init(&req->rq_replay_list);
+	list_del_init(&req->rq_replay_list);
 
 	__ptlrpc_req_finished(req, 1);
 }
@@ -2466,7 +2465,7 @@ void ptlrpc_request_committed(struct ptlrpc_request *req, int force)
 	struct obd_import 	*imp = req->rq_import;
 
 	spin_lock(&imp->imp_lock);
-	if (cfs_list_empty(&req->rq_replay_list)) {
+	if (list_empty(&req->rq_replay_list)) {
 		spin_unlock(&imp->imp_lock);
 		return;
 	}
@@ -2512,7 +2511,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
         imp->imp_last_transno_checked = imp->imp_peer_committed_transno;
         imp->imp_last_generation_checked = imp->imp_generation;
 
-	cfs_list_for_each_entry_safe(req, saved, &imp->imp_replay_list,
+	list_for_each_entry_safe(req, saved, &imp->imp_replay_list,
 				     rq_replay_list) {
                 /* XXX ok to remove when 1357 resolved - rread 05/29/03  */
                 LASSERT(req != last_req);
@@ -2535,7 +2534,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
 		if (req->rq_replay) {
 			DEBUG_REQ(D_RPCTRACE, req, "keeping (FL_REPLAY)");
-			cfs_list_move_tail(&req->rq_replay_list,
+			list_move_tail(&req->rq_replay_list,
 					   &imp->imp_committed_list);
 			continue;
 		}
@@ -2549,7 +2548,7 @@ free_req:
 	if (skip_committed_list)
 		GOTO(out, 0);
 
-	cfs_list_for_each_entry_safe(req, saved, &imp->imp_committed_list,
+	list_for_each_entry_safe(req, saved, &imp->imp_committed_list,
 				     rq_replay_list) {
 		LASSERT(req->rq_transno != 0);
 		if (req->rq_import_generation < imp->imp_generation) {
@@ -2638,7 +2637,7 @@ EXPORT_SYMBOL(ptlrpc_request_addref);
 void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                                       struct obd_import *imp)
 {
-	cfs_list_t *tmp;
+	struct list_head *tmp;
 
 	assert_spin_locked(&imp->imp_lock);
 
@@ -2651,19 +2650,19 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
            as resent replayed requests. */
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
-        /* don't re-add requests that have been replayed */
-        if (!cfs_list_empty(&req->rq_replay_list))
-                return;
+	/* don't re-add requests that have been replayed */
+	if (!list_empty(&req->rq_replay_list))
+		return;
 
-        lustre_msg_add_flags(req->rq_reqmsg, MSG_REPLAY);
+	lustre_msg_add_flags(req->rq_reqmsg, MSG_REPLAY);
 
-        LASSERT(imp->imp_replayable);
-        /* Balanced in ptlrpc_free_committed, usually. */
-        ptlrpc_request_addref(req);
-        cfs_list_for_each_prev(tmp, &imp->imp_replay_list) {
-                struct ptlrpc_request *iter =
-                        cfs_list_entry(tmp, struct ptlrpc_request,
-                                       rq_replay_list);
+	LASSERT(imp->imp_replayable);
+	/* Balanced in ptlrpc_free_committed, usually. */
+	ptlrpc_request_addref(req);
+	list_for_each_prev(tmp, &imp->imp_replay_list) {
+		struct ptlrpc_request *iter = list_entry(tmp,
+							 struct ptlrpc_request,
+							 rq_replay_list);
 
                 /* We may have duplicate transnos if we create and then
                  * open a file, or for closes retained if to match creating
@@ -2680,11 +2679,11 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                                 continue;
                 }
 
-                cfs_list_add(&req->rq_replay_list, &iter->rq_replay_list);
-                return;
-        }
+		list_add(&req->rq_replay_list, &iter->rq_replay_list);
+		return;
+	}
 
-        cfs_list_add(&req->rq_replay_list, &imp->imp_replay_list);
+	list_add(&req->rq_replay_list, &imp->imp_replay_list);
 }
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 
@@ -2868,22 +2867,23 @@ EXPORT_SYMBOL(ptlrpc_replay_req);
  */
 void ptlrpc_abort_inflight(struct obd_import *imp)
 {
-        cfs_list_t *tmp, *n;
-        ENTRY;
+	struct list_head *tmp, *n;
+	ENTRY;
 
-        /* Make sure that no new requests get processed for this import.
-         * ptlrpc_{queue,set}_wait must (and does) hold imp_lock while testing
-         * this flag and then putting requests on sending_list or delayed_list.
-         */
+	/* Make sure that no new requests get processed for this import.
+	 * ptlrpc_{queue,set}_wait must (and does) hold imp_lock while testing
+	 * this flag and then putting requests on sending_list or delayed_list.
+	 */
 	spin_lock(&imp->imp_lock);
 
-        /* XXX locking?  Maybe we should remove each request with the list
-         * locked?  Also, how do we know if the requests on the list are
-         * being freed at this time?
-         */
-        cfs_list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(tmp, struct ptlrpc_request, rq_list);
+	/* XXX locking?  Maybe we should remove each request with the list
+	 * locked?  Also, how do we know if the requests on the list are
+	 * being freed at this time?
+	 */
+	list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+		struct ptlrpc_request *req = list_entry(tmp,
+							struct ptlrpc_request,
+							rq_list);
 
                 DEBUG_REQ(D_RPCTRACE, req, "inflight");
 
@@ -2896,9 +2896,9 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
 		spin_unlock(&req->rq_lock);
 	}
 
-	cfs_list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+	list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
 		struct ptlrpc_request *req =
-			cfs_list_entry(tmp, struct ptlrpc_request, rq_list);
+			list_entry(tmp, struct ptlrpc_request, rq_list);
 
 		DEBUG_REQ(D_RPCTRACE, req, "aborting waiting req");
 
@@ -2927,14 +2927,14 @@ EXPORT_SYMBOL(ptlrpc_abort_inflight);
  */
 void ptlrpc_abort_set(struct ptlrpc_request_set *set)
 {
-        cfs_list_t *tmp, *pos;
+	struct list_head *tmp, *pos;
 
-        LASSERT(set != NULL);
+	LASSERT(set != NULL);
 
-        cfs_list_for_each_safe(pos, tmp, &set->set_requests) {
-                struct ptlrpc_request *req =
-                        cfs_list_entry(pos, struct ptlrpc_request,
-                                       rq_set_chain);
+	list_for_each_safe(pos, tmp, &set->set_requests) {
+		struct ptlrpc_request *req =
+			list_entry(pos, struct ptlrpc_request,
+				   rq_set_chain);
 
 		spin_lock(&req->rq_lock);
 		if (req->rq_phase != RQ_PHASE_RPC) {
@@ -3131,11 +3131,11 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
 	req->rq_pill.rc_fmt = (void *)&worker_format;
 
 	spin_lock_init(&req->rq_lock);
-	CFS_INIT_LIST_HEAD(&req->rq_list);
-	CFS_INIT_LIST_HEAD(&req->rq_replay_list);
-	CFS_INIT_LIST_HEAD(&req->rq_set_chain);
-	CFS_INIT_LIST_HEAD(&req->rq_history_list);
-	CFS_INIT_LIST_HEAD(&req->rq_exp_list);
+	INIT_LIST_HEAD(&req->rq_list);
+	INIT_LIST_HEAD(&req->rq_replay_list);
+	INIT_LIST_HEAD(&req->rq_set_chain);
+	INIT_LIST_HEAD(&req->rq_history_list);
+	INIT_LIST_HEAD(&req->rq_exp_list);
 	init_waitqueue_head(&req->rq_reply_waitq);
 	init_waitqueue_head(&req->rq_set_waitq);
 	atomic_set(&req->rq_refcount, 1);

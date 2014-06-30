@@ -87,7 +87,7 @@ static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	if (head == NULL)
 		return -ENOMEM;
 
-	CFS_INIT_LIST_HEAD(&head->fh_list);
+	INIT_LIST_HEAD(&head->fh_list);
 	policy->pol_private = head;
 	return 0;
 }
@@ -106,7 +106,7 @@ static void nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
 	struct nrs_fifo_head *head = policy->pol_private;
 
 	LASSERT(head != NULL);
-	LASSERT(cfs_list_empty(&head->fh_list));
+	LASSERT(list_empty(&head->fh_list));
 
 	OBD_FREE_PTR(head);
 }
@@ -166,8 +166,8 @@ struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_fifo_head	  *head = policy->pol_private;
 	struct ptlrpc_nrs_request *nrq;
 
-	nrq = unlikely(cfs_list_empty(&head->fh_list)) ? NULL :
-	      cfs_list_entry(head->fh_list.next, struct ptlrpc_nrs_request,
+	nrq = unlikely(list_empty(&head->fh_list)) ? NULL :
+	      list_entry(head->fh_list.next, struct ptlrpc_nrs_request,
 			     nr_u.fifo.fr_list);
 
 	if (likely(!peek && nrq != NULL)) {
@@ -175,7 +175,7 @@ struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
 							  struct ptlrpc_request,
 							  rq_nrq);
 
-		cfs_list_del_init(&nrq->nr_u.fifo.fr_list);
+		list_del_init(&nrq->nr_u.fifo.fr_list);
 
 		CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: "LPU64
 		       "\n", policy->pol_desc->pd_name,
@@ -205,7 +205,7 @@ static int nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
 	 * Only used for debugging
 	 */
 	nrq->nr_u.fifo.fr_sequence = head->fh_sequence++;
-	cfs_list_add_tail(&nrq->nr_u.fifo.fr_list, &head->fh_list);
+	list_add_tail(&nrq->nr_u.fifo.fr_list, &head->fh_list);
 
 	return 0;
 }
@@ -219,8 +219,8 @@ static int nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
 static void nrs_fifo_req_del(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
 {
-	LASSERT(!cfs_list_empty(&nrq->nr_u.fifo.fr_list));
-	cfs_list_del_init(&nrq->nr_u.fifo.fr_list);
+	LASSERT(!list_empty(&nrq->nr_u.fifo.fr_list));
+	list_del_init(&nrq->nr_u.fifo.fr_list);
 }
 
 /**

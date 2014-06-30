@@ -420,8 +420,8 @@ struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
 		ctx->cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_UPTODATE;
 		ctx->cc_vcred.vc_uid = 0;
 		spin_lock_init(&ctx->cc_lock);
-		CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
-		CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
+		INIT_LIST_HEAD(&ctx->cc_req_list);
+		INIT_LIST_HEAD(&ctx->cc_gc_chain);
 
 		plsec->pls_ctx = ctx;
 		atomic_inc(&plsec->pls_base.ps_nctx);
@@ -489,7 +489,7 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
 	sec->ps_import = class_import_get(imp);
 	sec->ps_flvr = *sf;
 	spin_lock_init(&sec->ps_lock);
-        CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
+	INIT_LIST_HEAD(&sec->ps_gc_list);
         sec->ps_gc_interval = 0;
         sec->ps_gc_next = 0;
 

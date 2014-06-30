@@ -261,20 +261,21 @@ int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
 EXPORT_SYMBOL(lustre_pack_request);
 
 #if RS_DEBUG
-CFS_LIST_HEAD(ptlrpc_rs_debug_lru);
+struct list_head ptlrpc_rs_debug_lru =
+	LIST_HEAD_INIT(ptlrpc_rs_debug_lru);
 spinlock_t ptlrpc_rs_debug_lock;
 
 #define PTLRPC_RS_DEBUG_LRU_ADD(rs)					\
 do {									\
 	spin_lock(&ptlrpc_rs_debug_lock);				\
-	cfs_list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);	\
+	list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);	\
 	spin_unlock(&ptlrpc_rs_debug_lock);				\
 } while (0)
 
 #define PTLRPC_RS_DEBUG_LRU_DEL(rs)					\
 do {									\
 	spin_lock(&ptlrpc_rs_debug_lock);				\
-	cfs_list_del(&(rs)->rs_debug_list);				\
+	list_del(&(rs)->rs_debug_list);				\
 	spin_unlock(&ptlrpc_rs_debug_lock);				\
 } while (0)
 #else
@@ -290,7 +291,7 @@ lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt)
 	spin_lock(&svcpt->scp_rep_lock);
 
 	/* See if we have anything in a pool, and wait if nothing */
-	while (cfs_list_empty(&svcpt->scp_rep_idle)) {
+	while (list_empty(&svcpt->scp_rep_idle)) {
 		struct l_wait_info	lwi;
 		int			rc;
 
@@ -299,15 +300,15 @@ lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt)
 		 * bail out instead of waiting infinitely */
 		lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
 		rc = l_wait_event(svcpt->scp_rep_waitq,
-				  !cfs_list_empty(&svcpt->scp_rep_idle), &lwi);
+				  !list_empty(&svcpt->scp_rep_idle), &lwi);
 		if (rc != 0)
 			goto out;
 		spin_lock(&svcpt->scp_rep_lock);
 	}
 
-	rs = cfs_list_entry(svcpt->scp_rep_idle.next,
+	rs = list_entry(svcpt->scp_rep_idle.next,
 			    struct ptlrpc_reply_state, rs_list);
-	cfs_list_del(&rs->rs_list);
+	list_del(&rs->rs_list);
 
 	spin_unlock(&svcpt->scp_rep_lock);
 
@@ -324,7 +325,7 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 	struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
 
 	spin_lock(&svcpt->scp_rep_lock);
-	cfs_list_add(&rs->rs_list, &svcpt->scp_rep_idle);
+	list_add(&rs->rs_list, &svcpt->scp_rep_idle);
 	spin_unlock(&svcpt->scp_rep_lock);
 	wake_up(&svcpt->scp_rep_waitq);
 }
@@ -354,9 +355,9 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 	rs->rs_cb_id.cbid_fn = reply_out_callback;
 	rs->rs_cb_id.cbid_arg = rs;
 	rs->rs_svcpt = req->rq_rqbd->rqbd_svcpt;
-	CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
-	CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
-	CFS_INIT_LIST_HEAD(&rs->rs_list);
+	INIT_LIST_HEAD(&rs->rs_exp_list);
+	INIT_LIST_HEAD(&rs->rs_obd_list);
+	INIT_LIST_HEAD(&rs->rs_list);
 	spin_lock_init(&rs->rs_lock);
 
         req->rq_replen = msg_len;
@@ -519,8 +520,8 @@ void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 	LASSERT(!rs->rs_scheduled);
 	LASSERT(rs->rs_export == NULL);
 	LASSERT(rs->rs_nlocks == 0);
-	LASSERT(cfs_list_empty(&rs->rs_exp_list));
-	LASSERT(cfs_list_empty(&rs->rs_obd_list));
+	LASSERT(list_empty(&rs->rs_exp_list));
+	LASSERT(list_empty(&rs->rs_obd_list));
 
 	sptlrpc_svc_free_rs(rs);
 }

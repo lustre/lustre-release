@@ -56,11 +56,11 @@
 #ifdef __KERNEL__
 
 static struct mutex sec_gc_mutex;
-static CFS_LIST_HEAD(sec_gc_list);
 static spinlock_t sec_gc_list_lock;
+static struct list_head sec_gc_list;
 
-static CFS_LIST_HEAD(sec_gc_ctx_list);
 static spinlock_t sec_gc_ctx_list_lock;
+static struct list_head sec_gc_ctx_list;
 
 static struct ptlrpc_thread sec_gc_thread;
 static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
@@ -70,12 +70,12 @@ void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
 {
         LASSERT(sec->ps_policy->sp_cops->gc_ctx);
         LASSERT(sec->ps_gc_interval > 0);
-        LASSERT(cfs_list_empty(&sec->ps_gc_list));
+	LASSERT(list_empty(&sec->ps_gc_list));
 
         sec->ps_gc_next = cfs_time_current_sec() + sec->ps_gc_interval;
 
 	spin_lock(&sec_gc_list_lock);
-	cfs_list_add_tail(&sec_gc_list, &sec->ps_gc_list);
+	list_add_tail(&sec_gc_list, &sec->ps_gc_list);
 	spin_unlock(&sec_gc_list_lock);
 
 	CDEBUG(D_SEC, "added sec %p(%s)\n", sec, sec->ps_policy->sp_name);
@@ -84,7 +84,7 @@ EXPORT_SYMBOL(sptlrpc_gc_add_sec);
 
 void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 {
-	if (cfs_list_empty(&sec->ps_gc_list))
+	if (list_empty(&sec->ps_gc_list))
 		return;
 
 	might_sleep();
@@ -93,7 +93,7 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 	atomic_inc(&sec_gc_wait_del);
 
 	spin_lock(&sec_gc_list_lock);
-	cfs_list_del_init(&sec->ps_gc_list);
+	list_del_init(&sec->ps_gc_list);
 	spin_unlock(&sec_gc_list_lock);
 
 	/* barrier */
@@ -108,12 +108,12 @@ EXPORT_SYMBOL(sptlrpc_gc_del_sec);
 
 void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx)
 {
-	LASSERT(cfs_list_empty(&ctx->cc_gc_chain));
+	LASSERT(list_empty(&ctx->cc_gc_chain));
 
 	CDEBUG(D_SEC, "hand over ctx %p(%u->%s)\n",
 	       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 	spin_lock(&sec_gc_ctx_list_lock);
-	cfs_list_add(&ctx->cc_gc_chain, &sec_gc_ctx_list);
+	list_add(&ctx->cc_gc_chain, &sec_gc_ctx_list);
 	spin_unlock(&sec_gc_ctx_list_lock);
 
 	thread_add_flags(&sec_gc_thread, SVC_SIGNAL);
@@ -127,10 +127,10 @@ static void sec_process_ctx_list(void)
 
 	spin_lock(&sec_gc_ctx_list_lock);
 
-	while (!cfs_list_empty(&sec_gc_ctx_list)) {
-		ctx = cfs_list_entry(sec_gc_ctx_list.next,
+	while (!list_empty(&sec_gc_ctx_list)) {
+		ctx = list_entry(sec_gc_ctx_list.next,
 				     struct ptlrpc_cli_ctx, cc_gc_chain);
-		cfs_list_del_init(&ctx->cc_gc_chain);
+		list_del_init(&ctx->cc_gc_chain);
 		spin_unlock(&sec_gc_ctx_list_lock);
 
 		LASSERT(ctx->cc_sec);
@@ -188,7 +188,7 @@ again:
 		 * another issue here is we wakeup as fixed interval instead of
 		 * according to each sec's expiry time */
 		mutex_lock(&sec_gc_mutex);
-		cfs_list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
+		list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
 			/* if someone is waiting to be deleted, let it
 			 * proceed as soon as possible. */
 			if (atomic_read(&sec_gc_wait_del)) {
@@ -227,6 +227,9 @@ int sptlrpc_gc_init(void)
 	mutex_init(&sec_gc_mutex);
 	spin_lock_init(&sec_gc_list_lock);
 	spin_lock_init(&sec_gc_ctx_list_lock);
+
+	INIT_LIST_HEAD(&sec_gc_list);
+	INIT_LIST_HEAD(&sec_gc_ctx_list);
 
 	/* initialize thread control */
 	memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));

@@ -65,7 +65,7 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
 
         conn->c_peer = peer;
         conn->c_self = self;
-        CFS_INIT_HLIST_NODE(&conn->c_hash);
+	INIT_HLIST_NODE(&conn->c_hash);
 	atomic_set(&conn->c_refcount, 1);
         if (uuid)
                 obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
@@ -175,61 +175,61 @@ EXPORT_SYMBOL(ptlrpc_connection_fini);
 static unsigned
 conn_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
 {
-        return cfs_hash_djb2_hash(key, sizeof(lnet_process_id_t), mask);
+	return cfs_hash_djb2_hash(key, sizeof(lnet_process_id_t), mask);
 }
 
 static int
-conn_keycmp(const void *key, cfs_hlist_node_t *hnode)
+conn_keycmp(const void *key, struct hlist_node *hnode)
 {
-        struct ptlrpc_connection *conn;
-        const lnet_process_id_t *conn_key;
+	struct ptlrpc_connection *conn;
+	const lnet_process_id_t *conn_key;
 
-        LASSERT(key != NULL);
-        conn_key = (lnet_process_id_t*)key;
-        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	LASSERT(key != NULL);
+	conn_key = (lnet_process_id_t *)key;
+	conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 
-        return conn_key->nid == conn->c_peer.nid &&
+	return conn_key->nid == conn->c_peer.nid &&
                conn_key->pid == conn->c_peer.pid;
 }
 
 static void *
-conn_key(cfs_hlist_node_t *hnode)
+conn_key(struct hlist_node *hnode)
 {
-        struct ptlrpc_connection *conn;
-        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        return &conn->c_peer;
+	struct ptlrpc_connection *conn;
+	conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	return &conn->c_peer;
 }
 
 static void *
-conn_object(cfs_hlist_node_t *hnode)
+conn_object(struct hlist_node *hnode)
 {
-        return cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	return hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 }
 
 static void
-conn_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+conn_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
-        struct ptlrpc_connection *conn;
+	struct ptlrpc_connection *conn;
 
-        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 	atomic_inc(&conn->c_refcount);
 }
 
 static void
-conn_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+conn_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
-        struct ptlrpc_connection *conn;
+	struct ptlrpc_connection *conn;
 
-        conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 	atomic_dec(&conn->c_refcount);
 }
 
 static void
-conn_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+conn_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct ptlrpc_connection *conn;
 
-	conn = cfs_hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+	conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
 	/*
 	 * Nothing should be left. Connection user put it and
 	 * connection also was deleted from table by this time
@@ -242,11 +242,11 @@ conn_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 }
 
 static cfs_hash_ops_t conn_hash_ops = {
-        .hs_hash        = conn_hashfn,
-        .hs_keycmp      = conn_keycmp,
-        .hs_key         = conn_key,
-        .hs_object      = conn_object,
-        .hs_get         = conn_get,
-        .hs_put_locked  = conn_put_locked,
-        .hs_exit        = conn_exit,
+	.hs_hash	= conn_hashfn,
+	.hs_keycmp	= conn_keycmp,
+	.hs_key		= conn_key,
+	.hs_object	= conn_object,
+	.hs_get		= conn_get,
+	.hs_put_locked	= conn_put_locked,
+	.hs_exit	= conn_exit,
 };

@@ -520,8 +520,8 @@ again:
 
 		pol_idx = 0;
 
-		cfs_list_for_each_entry(policy, &nrs->nrs_policy_list,
-					pol_list) {
+		list_for_each_entry(policy, &nrs->nrs_policy_list,
+				    pol_list) {
 			LASSERT(pol_idx < num_pols);
 
 			nrs_policy_get_info_locked(policy, &tmp);
@@ -737,7 +737,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 				    struct ptlrpc_srh_iterator *srhi,
 				    __u64 seq)
 {
-	cfs_list_t		*e;
+	struct list_head	*e;
 	struct ptlrpc_request	*req;
 
 	if (srhi->srhi_req != NULL &&
@@ -753,7 +753,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 			 "%s:%d: seek seq "LPU64", request seq "LPU64"\n",
 			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
 			 srhi->srhi_seq, srhi->srhi_req->rq_history_seq);
-		LASSERTF(!cfs_list_empty(&svcpt->scp_hist_reqs),
+		LASSERTF(!list_empty(&svcpt->scp_hist_reqs),
 			 "%s:%d: seek offset "LPU64", request seq "LPU64", "
 			 "last culled "LPU64"\n",
 			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
@@ -765,7 +765,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 	}
 
 	while (e != &svcpt->scp_hist_reqs) {
-                req = cfs_list_entry(e, struct ptlrpc_request, rq_history_list);
+		req = list_entry(e, struct ptlrpc_request, rq_history_list);
 
                 if (req->rq_history_seq >= seq) {
                         srhi->srhi_seq = req->rq_history_seq;

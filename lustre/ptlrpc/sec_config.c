@@ -499,23 +499,23 @@ static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
  **********************************/
 
 struct sptlrpc_conf_tgt {
-        cfs_list_t              sct_list;
+	struct list_head              sct_list;
         char                    sct_name[MAX_OBD_NAME];
         struct sptlrpc_rule_set sct_rset;
 };
 
 struct sptlrpc_conf {
-        cfs_list_t              sc_list;
-        char                    sc_fsname[MTI_NAME_MAXLEN];
-        unsigned int            sc_modified;  /* modified during updating */
-        unsigned int            sc_updated:1, /* updated copy from MGS */
-                                sc_local:1;   /* local copy from target */
-        struct sptlrpc_rule_set sc_rset;      /* fs general rules */
-        cfs_list_t              sc_tgts;      /* target-specific rules */
+	struct list_head	sc_list;
+	char			sc_fsname[MTI_NAME_MAXLEN];
+	unsigned int		sc_modified;	/* modified during updating */
+	unsigned int		sc_updated:1,	/* updated copy from MGS */
+				sc_local:1;	/* local copy from target */
+	struct sptlrpc_rule_set	sc_rset;	/* fs general rules */
+	struct list_head	sc_tgts;	/* target-specific rules */
 };
 
 static struct mutex sptlrpc_conf_lock;
-static CFS_LIST_HEAD(sptlrpc_confs);
+static struct list_head sptlrpc_confs;
 
 static inline int is_hex(char c)
 {
@@ -550,29 +550,29 @@ static void target2fsname(const char *tgt, char *fsname, int buflen)
 
 static void sptlrpc_conf_free_rsets(struct sptlrpc_conf *conf)
 {
-        struct sptlrpc_conf_tgt *conf_tgt, *conf_tgt_next;
+	struct sptlrpc_conf_tgt *conf_tgt, *conf_tgt_next;
 
-        sptlrpc_rule_set_free(&conf->sc_rset);
+	sptlrpc_rule_set_free(&conf->sc_rset);
 
-        cfs_list_for_each_entry_safe(conf_tgt, conf_tgt_next,
-                                     &conf->sc_tgts, sct_list) {
-                sptlrpc_rule_set_free(&conf_tgt->sct_rset);
-                cfs_list_del(&conf_tgt->sct_list);
-                OBD_FREE_PTR(conf_tgt);
-        }
-        LASSERT(cfs_list_empty(&conf->sc_tgts));
+	list_for_each_entry_safe(conf_tgt, conf_tgt_next,
+				 &conf->sc_tgts, sct_list) {
+		sptlrpc_rule_set_free(&conf_tgt->sct_rset);
+		list_del(&conf_tgt->sct_list);
+		OBD_FREE_PTR(conf_tgt);
+	}
+	LASSERT(list_empty(&conf->sc_tgts));
 
-        conf->sc_updated = 0;
-        conf->sc_local = 0;
+	conf->sc_updated = 0;
+	conf->sc_local = 0;
 }
 
 static void sptlrpc_conf_free(struct sptlrpc_conf *conf)
 {
-        CDEBUG(D_SEC, "free sptlrpc conf %s\n", conf->sc_fsname);
+	CDEBUG(D_SEC, "free sptlrpc conf %s\n", conf->sc_fsname);
 
-        sptlrpc_conf_free_rsets(conf);
-        cfs_list_del(&conf->sc_list);
-        OBD_FREE_PTR(conf);
+	sptlrpc_conf_free_rsets(conf);
+	list_del(&conf->sc_list);
+	OBD_FREE_PTR(conf);
 }
 
 static
@@ -582,7 +582,7 @@ struct sptlrpc_conf_tgt *sptlrpc_conf_get_tgt(struct sptlrpc_conf *conf,
 {
         struct sptlrpc_conf_tgt *conf_tgt;
 
-        cfs_list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
+	list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
                 if (strcmp(conf_tgt->sct_name, name) == 0)
                         return conf_tgt;
         }
@@ -594,7 +594,7 @@ struct sptlrpc_conf_tgt *sptlrpc_conf_get_tgt(struct sptlrpc_conf *conf,
         if (conf_tgt) {
 		strlcpy(conf_tgt->sct_name, name, sizeof(conf_tgt->sct_name));
                 sptlrpc_rule_set_init(&conf_tgt->sct_rset);
-                cfs_list_add(&conf_tgt->sct_list, &conf->sc_tgts);
+		list_add(&conf_tgt->sct_list, &conf->sc_tgts);
         }
 
         return conf_tgt;
@@ -606,7 +606,7 @@ struct sptlrpc_conf *sptlrpc_conf_get(const char *fsname,
 {
         struct sptlrpc_conf *conf;
 
-        cfs_list_for_each_entry(conf, &sptlrpc_confs, sc_list) {
+	list_for_each_entry(conf, &sptlrpc_confs, sc_list) {
                 if (strcmp(conf->sc_fsname, fsname) == 0)
                         return conf;
         }
@@ -624,8 +624,8 @@ struct sptlrpc_conf *sptlrpc_conf_get(const char *fsname,
 		return NULL;
 	}
         sptlrpc_rule_set_init(&conf->sc_rset);
-        CFS_INIT_LIST_HEAD(&conf->sc_tgts);
-        cfs_list_add(&conf->sc_list, &sptlrpc_confs);
+	INIT_LIST_HEAD(&conf->sc_tgts);
+	list_add(&conf->sc_list, &sptlrpc_confs);
 
         CDEBUG(D_SEC, "create sptlrpc conf %s\n", conf->sc_fsname);
         return conf;
@@ -997,7 +997,7 @@ static int sptlrpc_record_rules(struct llog_handle *llh,
 
         sptlrpc_record_rule_set(llh, conf->sc_fsname, &conf->sc_rset);
 
-        cfs_list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
+	list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
                 sptlrpc_record_rule_set(llh, conf_tgt->sct_name,
                                         &conf_tgt->sct_rset);
         }
@@ -1224,18 +1224,18 @@ EXPORT_SYMBOL(sptlrpc_conf_target_get_rules);
 
 int  sptlrpc_conf_init(void)
 {
+	INIT_LIST_HEAD(&sptlrpc_confs);
 	mutex_init(&sptlrpc_conf_lock);
-        return 0;
+	return 0;
 }
 
 void sptlrpc_conf_fini(void)
 {
-        struct sptlrpc_conf  *conf, *conf_next;
+	struct sptlrpc_conf  *conf, *conf_next;
 
 	mutex_lock(&sptlrpc_conf_lock);
-        cfs_list_for_each_entry_safe(conf, conf_next, &sptlrpc_confs, sc_list) {
-                sptlrpc_conf_free(conf);
-        }
-        LASSERT(cfs_list_empty(&sptlrpc_confs));
+	list_for_each_entry_safe(conf, conf_next, &sptlrpc_confs, sc_list)
+		sptlrpc_conf_free(conf);
+	LASSERT(list_empty(&sptlrpc_confs));
 	mutex_unlock(&sptlrpc_conf_lock);
 }

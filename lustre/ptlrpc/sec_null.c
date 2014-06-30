@@ -426,7 +426,7 @@ static struct ptlrpc_sec_policy null_policy = {
 
 static void null_init_internal(void)
 {
-	static CFS_HLIST_HEAD(__list);
+	static HLIST_HEAD(__list);
 
 	null_sec.ps_policy = &null_policy;
 	atomic_set(&null_sec.ps_refcount, 1);	/* always busy */
@@ -438,11 +438,11 @@ static void null_init_internal(void)
 	null_sec.ps_dying = 0;
 	spin_lock_init(&null_sec.ps_lock);
 	atomic_set(&null_sec.ps_nctx, 1);	/* for "null_cli_ctx" */
-	CFS_INIT_LIST_HEAD(&null_sec.ps_gc_list);
+	INIT_LIST_HEAD(&null_sec.ps_gc_list);
 	null_sec.ps_gc_interval = 0;
 	null_sec.ps_gc_next = 0;
 
-	cfs_hlist_add_head(&null_cli_ctx.cc_cache, &__list);
+	hlist_add_head(&null_cli_ctx.cc_cache, &__list);
 	atomic_set(&null_cli_ctx.cc_refcount, 1);	/* for hash */
 	null_cli_ctx.cc_sec = &null_sec;
 	null_cli_ctx.cc_ops = &null_ctx_ops;
@@ -451,8 +451,8 @@ static void null_init_internal(void)
 				PTLRPC_CTX_UPTODATE;
 	null_cli_ctx.cc_vcred.vc_uid = 0;
 	spin_lock_init(&null_cli_ctx.cc_lock);
-	CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
-	CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
+	INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
+	INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
 }
 
 int sptlrpc_null_init(void)

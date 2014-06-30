@@ -112,47 +112,47 @@ static unsigned nrs_crrn_hop_hash(cfs_hash_t *hs, const void *key,
 	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
 }
 
-static int nrs_crrn_hop_keycmp(const void *key, cfs_hlist_node_t *hnode)
+static int nrs_crrn_hop_keycmp(const void *key, struct hlist_node *hnode)
 {
 	lnet_nid_t		*nid = (lnet_nid_t *)key;
-	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
+	struct nrs_crrn_client	*cli = hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
 	return *nid == cli->cc_nid;
 }
 
-static void *nrs_crrn_hop_key(cfs_hlist_node_t *hnode)
+static void *nrs_crrn_hop_key(struct hlist_node *hnode)
 {
-	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
+	struct nrs_crrn_client	*cli = hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
 	return &cli->cc_nid;
 }
 
-static void *nrs_crrn_hop_object(cfs_hlist_node_t *hnode)
+static void *nrs_crrn_hop_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct nrs_crrn_client, cc_hnode);
+	return hlist_entry(hnode, struct nrs_crrn_client, cc_hnode);
 }
 
-static void nrs_crrn_hop_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void nrs_crrn_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
-	struct nrs_crrn_client *cli = cfs_hlist_entry(hnode,
+	struct nrs_crrn_client *cli = hlist_entry(hnode,
 						      struct nrs_crrn_client,
 						      cc_hnode);
 	atomic_inc(&cli->cc_ref);
 }
 
-static void nrs_crrn_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void nrs_crrn_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
 {
-	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
+	struct nrs_crrn_client	*cli = hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
 	atomic_dec(&cli->cc_ref);
 }
 
-static void nrs_crrn_hop_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void nrs_crrn_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
-	struct nrs_crrn_client	*cli = cfs_hlist_entry(hnode,
+	struct nrs_crrn_client	*cli = hlist_entry(hnode,
 						       struct nrs_crrn_client,
 						       cc_hnode);
 	LASSERTF(atomic_read(&cli->cc_ref) == 0,
