@@ -247,8 +247,8 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
-	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
-	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+	    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
+	     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
 	down(&obj->oo_guard);
@@ -596,8 +596,8 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_db);
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
-	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
-	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+	    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
+	     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
@@ -739,8 +739,8 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(oh->ot_tx != NULL);
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
-	    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
-	     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+	    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
+	     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
 	down(&obj->oo_guard);
@@ -770,8 +770,8 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 		const char *name = nvpair_name(nvp);
 
 		if (!osd_obj2dev(obj)->od_posix_acl &&
-		    (!strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
-		     !strcmp(name, POSIX_ACL_XATTR_DEFAULT)))
+		    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
+		     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 			continue;
 
 		len = strlen(nvpair_name(nvp));
@@ -824,8 +824,8 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	while ((rc = -udmu_zap_cursor_retrieve_key(env, zc, oti->oti_key,
 						MAXNAMELEN)) == 0) {
 		if (!osd_obj2dev(obj)->od_posix_acl &&
-		    (!strcmp(oti->oti_key, POSIX_ACL_XATTR_ACCESS) ||
-		     !strcmp(oti->oti_key, POSIX_ACL_XATTR_DEFAULT))) {
+		    (strcmp(oti->oti_key, POSIX_ACL_XATTR_ACCESS) == 0 ||
+		     strcmp(oti->oti_key, POSIX_ACL_XATTR_DEFAULT) == 0)) {
 			zap_cursor_advance(zc);
 			continue;
 		}
