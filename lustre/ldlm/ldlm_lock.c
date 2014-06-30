@@ -1756,6 +1756,8 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         ldlm_grant_lock(lock, NULL);
 		GOTO(out, rc = ELDLM_OK);
 #ifdef HAVE_SERVER_SUPPORT
+	} else if (*flags & LDLM_FL_RESENT) {
+		GOTO(out, rc = ELDLM_OK);
         } else if (*flags & LDLM_FL_REPLAY) {
                 if (*flags & LDLM_FL_BLOCK_CONV) {
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);

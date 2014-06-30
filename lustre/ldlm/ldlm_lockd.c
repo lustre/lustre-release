@@ -900,6 +900,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
         total_enqueue_wait = cfs_time_sub(cfs_time_current_sec(),
                                           lock->l_last_activity);
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_OST_LDLM_REPLY_NET)) {
+		LDLM_DEBUG(lock, "dropping CP AST");
+		RETURN(0);
+	}
+
         req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,
                                     &RQF_LDLM_CP_CALLBACK);
         if (req == NULL)
@@ -1232,10 +1237,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         }
 #endif
 
-	if (unlikely(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
-		flags |= LDLM_FL_RESENT;
-
-	if (unlikely(flags & (LDLM_FL_REPLAY | LDLM_FL_RESENT))) {
+	if (unlikely((flags & LDLM_FL_REPLAY) ||
+		     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))) {
                 /* Find an existing lock in the per-export lock hash */
 		/* In the function below, .hs_keycmp resolves to
 		 * ldlm_export_lock_keycmp() */
@@ -1245,9 +1248,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 if (lock != NULL) {
                         DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie "
                                   LPX64, lock->l_handle.h_cookie);
+			flags |= LDLM_FL_RESENT;
                         GOTO(existing_lock, rc = 0);
-		} else {
-			flags &= ~LDLM_FL_RESENT;
 		}
         }
 
