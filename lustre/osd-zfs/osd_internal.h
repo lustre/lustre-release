@@ -192,8 +192,8 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 
 struct osd_thandle {
 	struct thandle		 ot_super;
-	cfs_list_t		 ot_dcb_list;
-	cfs_list_t		 ot_sa_list;
+	struct list_head	 ot_dcb_list;
+	struct list_head	 ot_sa_list;
 	struct semaphore	 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
@@ -215,12 +215,12 @@ struct osd_seq {
 	uint64_t	 *os_compat_dirs;
 	int		 os_subdir_count; /* subdir count for each seq */
 	obd_seq		 os_seq;	  /* seq number */
-	cfs_list_t	 os_seq_list;     /* list to seq_list */
+	struct list_head os_seq_list;     /* list to seq_list */
 };
 
 struct osd_seq_list {
-	rwlock_t	 osl_seq_list_lock;     /* lock for seq_list */
-	cfs_list_t	 osl_seq_list;      /* list head for seq */
+	rwlock_t	 osl_seq_list_lock;	/* lock for seq_list */
+	struct list_head osl_seq_list;		/* list head for seq */
 	struct semaphore osl_seq_init_sem;
 };
 
@@ -242,7 +242,7 @@ struct osd_device {
 	unsigned long		 od_capa_timeout;
 	__u32			 od_capa_alg;
 	struct lustre_capa_key	*od_capa_keys;
-	cfs_hlist_head_t	*od_capa_hash;
+	struct hlist_head	*od_capa_hash;
 
 	cfs_proc_dir_entry_t	*od_proc_entry;
 	struct lprocfs_stats	*od_stats;
@@ -296,7 +296,7 @@ struct osd_object {
 	dmu_buf_t		*oo_db;
 	sa_handle_t		*oo_sa_hdl;
 	nvlist_t		*oo_sa_xattr;
-	cfs_list_t		 oo_sa_linkage;
+	struct list_head	 oo_sa_linkage;
 
 	struct rw_semaphore	 oo_sem;
 

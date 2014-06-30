@@ -270,7 +270,7 @@ static struct osd_seq *osd_seq_find_locked(struct osd_seq_list *seq_list,
 {
 	struct osd_seq *osd_seq;
 
-	cfs_list_for_each_entry(osd_seq, &seq_list->osl_seq_list, os_seq_list) {
+	list_for_each_entry(osd_seq, &seq_list->osl_seq_list, os_seq_list) {
 		if (osd_seq->os_seq == seq)
 			return osd_seq;
 	}
@@ -317,7 +317,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 	if (osd_seq == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	CFS_INIT_LIST_HEAD(&osd_seq->os_seq_list);
+	INIT_LIST_HEAD(&osd_seq->os_seq_list);
 	osd_seq->os_seq = seq;
 
 	/* Init subdir count to be 32, but each seq can have
@@ -349,7 +349,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 	}
 
 	write_lock(&seq_list->osl_seq_list_lock);
-	cfs_list_add(&osd_seq->os_seq_list, &seq_list->osl_seq_list);
+	list_add(&osd_seq->os_seq_list, &seq_list->osl_seq_list);
 	write_unlock(&seq_list->osl_seq_list_lock);
 out:
 	up(&seq_list->osl_seq_init_sem);
@@ -625,7 +625,7 @@ static void osd_ost_seq_init(const struct lu_env *env, struct osd_device *osd)
 {
 	struct osd_seq_list *osl = &osd->od_seq_list;
 
-	CFS_INIT_LIST_HEAD(&osl->osl_seq_list);
+	INIT_LIST_HEAD(&osl->osl_seq_list);
 	rwlock_init(&osl->osl_seq_list_lock);
 	sema_init(&osl->osl_seq_init_sem, 1);
 }
@@ -636,9 +636,9 @@ static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
 	struct osd_seq		*osd_seq, *tmp;
 
 	write_lock(&osl->osl_seq_list_lock);
-	cfs_list_for_each_entry_safe(osd_seq, tmp, &osl->osl_seq_list,
-				     os_seq_list) {
-		cfs_list_del(&osd_seq->os_seq_list);
+	list_for_each_entry_safe(osd_seq, tmp, &osl->osl_seq_list,
+				 os_seq_list) {
+		list_del(&osd_seq->os_seq_list);
 		OBD_FREE(osd_seq->os_compat_dirs,
 			 sizeof(uint64_t) * osd_seq->os_subdir_count);
 		OBD_FREE(osd_seq, sizeof(*osd_seq));

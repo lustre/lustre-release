@@ -148,7 +148,7 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	dt_txn_hook_commit(th);
 
 	/* call per-transaction callbacks if any */
-	cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
+	list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
 		dcb->dcb_func(NULL, th, dcb, error);
 
 	/* Unlike ldiskfs, zfs updates space accounting at commit time.
@@ -173,7 +173,7 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 	struct osd_thandle *oh;
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
-	cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
+	list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
 
 	return 0;
 }
@@ -297,8 +297,8 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	}
 
 	oh->ot_tx = tx;
-	CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
-	CFS_INIT_LIST_HEAD(&oh->ot_sa_list);
+	INIT_LIST_HEAD(&oh->ot_dcb_list);
+	INIT_LIST_HEAD(&oh->ot_sa_list);
 	sema_init(&oh->ot_sa_lock, 1);
 	memset(&oh->ot_quota_trans, 0, sizeof(oh->ot_quota_trans));
 	th = &oh->ot_super;

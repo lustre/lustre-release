@@ -117,13 +117,13 @@ osd_object_sa_init(struct osd_object *obj, udmu_objset_t *uos)
 static void
 osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh)
 {
-	if (!cfs_list_empty(&obj->oo_sa_linkage))
+	if (!list_empty(&obj->oo_sa_linkage))
 		return;
 
 	down(&oh->ot_sa_lock);
 	write_lock(&obj->oo_attr_lock);
-	if (likely(cfs_list_empty(&obj->oo_sa_linkage)))
-		cfs_list_add(&obj->oo_sa_linkage, &oh->ot_sa_list);
+	if (likely(list_empty(&obj->oo_sa_linkage)))
+		list_add(&obj->oo_sa_linkage, &oh->ot_sa_list);
 	write_unlock(&obj->oo_attr_lock);
 	up(&oh->ot_sa_lock);
 }
@@ -136,12 +136,12 @@ void osd_object_sa_dirty_rele(struct osd_thandle *oh)
 	struct osd_object *obj;
 
 	down(&oh->ot_sa_lock);
-	while (!cfs_list_empty(&oh->ot_sa_list)) {
-		obj = cfs_list_entry(oh->ot_sa_list.next,
+	while (!list_empty(&oh->ot_sa_list)) {
+		obj = list_entry(oh->ot_sa_list.next,
 				     struct osd_object, oo_sa_linkage);
 		sa_spill_rele(obj->oo_sa_hdl);
 		write_lock(&obj->oo_attr_lock);
-		cfs_list_del_init(&obj->oo_sa_linkage);
+		list_del_init(&obj->oo_sa_linkage);
 		write_unlock(&obj->oo_attr_lock);
 	}
 	up(&oh->ot_sa_lock);
@@ -294,7 +294,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 		dt_object_init(&mo->oo_dt, NULL, d);
 		mo->oo_dt.do_ops = &osd_obj_ops;
 		l->lo_ops = &osd_lu_obj_ops;
-		CFS_INIT_LIST_HEAD(&mo->oo_sa_linkage);
+		INIT_LIST_HEAD(&mo->oo_sa_linkage);
 		init_rwsem(&mo->oo_sem);
 		sema_init(&mo->oo_guard, 1);
 		rwlock_init(&mo->oo_attr_lock);
@@ -674,7 +674,7 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 			obj->oo_sa_xattr = NULL;
 		}
 		sa_buf_rele(obj->oo_db, osd_obj_tag);
-		cfs_list_del(&obj->oo_sa_linkage);
+		list_del(&obj->oo_sa_linkage);
 		obj->oo_db = NULL;
 	}
 }
