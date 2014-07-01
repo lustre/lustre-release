@@ -539,25 +539,15 @@ load_modules_local() {
 	$LCTL modules > $OGDB/ogdb-$HOSTNAME
 
 	# 'mount' doesn't look in $PATH, just sbin
-	local mount_lustre=$LUSTRE/utils/mount.lustre
-	if [ -f $mount_lustre ]; then
-		local sbin_mount=/sbin/mount.lustre
-		if grep -qe "$sbin_mount " /proc/mounts; then
-			cmp $mount_lustre $sbin_mount || umount $sbin_mount
+	local MOUNT_LUSTRE=$LUSTRE/utils/mount.lustre
+	if [ -f $MOUNT_LUSTRE ]; then
+		if grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+			cmp $MOUNT_LUSTRE /sbin/mount.lustre ||
+				umount /sbin/mount.lustre
 		fi
-		if ! grep -qe "$sbin_mount " /proc/mounts; then
-			if [ ! -s "$sbin_mount" ]; then
-				cat <<- EOF > "$sbin_mount"
-				#!/bin/sh
-				#STUB MARK
-				echo "This $sbin_mount just a mountpoint." 1>&2
-				echo "It is never supposed to be run." 1>&2
-				logger -p emerg -- "using stub $sbin_mount $@"
-				exit 1
-				EOF
-				chmod a+x $sbin_mount
-			fi
-			mount --bind $mount_lustre $sbin_mount
+		if ! grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+			[ ! -f /sbin/mount.lustre ] && touch /sbin/mount.lustre
+			mount --bind $MOUNT_LUSTRE /sbin/mount.lustre
 		fi
 	fi
 }
@@ -603,17 +593,16 @@ unload_modules() {
 		fi
 	fi
 
-	local sbin_mount=/sbin/mount.lustre
-	if grep -qe "$sbin_mount " /proc/mounts; then
-		umount $sbin_mount || true
-		[ -s $sbin_mount ] && ! grep -q "STUB MARK" $sbin_mount ||
-			rm -f $sbin_mount
-	fi
+    if grep -qe "/sbin/mount\.lustre" /proc/mounts; then
+        umount /sbin/mount.lustre || true
+        [ -w /sbin/mount.lustre -a ! -s /sbin/mount.lustre ] && \
+            rm -f /sbin/mount.lustre || true
+    fi
 
-	check_mem_leak || return 254
+    check_mem_leak || return 254
 
-	echo "modules unloaded."
-	return 0
+    echo "modules unloaded."
+    return 0
 }
 
 fs_log_size() {
@@ -4119,6 +4108,10 @@ check_and_cleanup_lustre() {
 	if [ "$I_MOUNTED" = "yes" ]; then
 		cleanupall -f || error "cleanup failed"
 		unset I_MOUNTED
+	fi
+
+	if grep -qe "/sbin/mount\.lustre " /proc/mounts; then
+		umount /sbin/mount.lustre
 	fi
 }
 
