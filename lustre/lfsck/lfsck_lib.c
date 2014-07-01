@@ -2687,7 +2687,7 @@ unlock:
 		if (for_ost)
 			head = &lfsck->li_ost_descs.ltd_orphan;
 		else
-			head = &lfsck->li_ost_descs.ltd_orphan;
+			head = &lfsck->li_mdt_descs.ltd_orphan;
 
 		list_for_each_entry(ltd, head, ltd_orphan_list) {
 			if (ltd->ltd_tgt == tgt) {
