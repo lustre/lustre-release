@@ -330,9 +330,10 @@ struct hsm_copytool_private;
 struct hsm_copyaction_private;
 
 extern int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
-				       const char *mnt, int flags,
-				       int archive_count, int *archives);
+				       const char *mnt, int archive_count,
+				       int *archives, int rfd_flags);
 extern int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
+extern int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct);
 extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
 				   struct hsm_action_list **hal, int *msgsize);
 extern void llapi_hsm_action_list_free(struct hsm_action_list **hal);

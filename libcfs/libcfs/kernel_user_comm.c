@@ -51,15 +51,24 @@
  * @param link Private descriptor for pipe/socket.
  * @param groups KUC broadcast group to listen to
  *          (can be null for unicast to this pid)
+ * @param rfd_flags flags for read side of pipe (e.g. O_NONBLOCK)
  */
-int libcfs_ukuc_start(lustre_kernelcomm *link, int group)
+int libcfs_ukuc_start(lustre_kernelcomm *link, int group, int rfd_flags)
 {
 	int pfd[2];
+	int rc;
 
 	link->lk_rfd = link->lk_wfd = LK_NOFD;
 
 	if (pipe(pfd) < 0)
 		return -errno;
+
+	if (fcntl(pfd[0], F_SETFL, rfd_flags) < 0) {
+		rc = -errno;
+		close(pfd[0]);
+		close(pfd[1]);
+		return rc;
+	}
 
 	memset(link, 0, sizeof(*link));
 	link->lk_rfd = pfd[0];
@@ -78,6 +87,15 @@ int libcfs_ukuc_stop(lustre_kernelcomm *link)
         rc = close(link->lk_rfd);
 	link->lk_rfd = link->lk_wfd = LK_NOFD;
 	return rc;
+}
+
+/** Returns the file descriptor for the read side of the pipe,
+ *  to be used with poll/select.
+ * @param link Private descriptor for pipe/socket.
+ */
+int libcfs_ukuc_get_rfd(lustre_kernelcomm *link)
+{
+	return link->lk_rfd;
 }
 
 #define lhsz sizeof(*kuch)
