@@ -1166,8 +1166,6 @@ restart:
 		cio->cui_fd  = LUSTRE_FPRIVATE(file);
 		vio->cui_io_subtype = args->via_io_subtype;
 
-		ll_cl_add(file, env, io);
-
                 switch (vio->cui_io_subtype) {
                 case IO_NORMAL:
                         cio->cui_iov = args->u.normal.via_iov;
@@ -1191,12 +1189,15 @@ restart:
                         CERROR("Unknow IO type - %u\n", vio->cui_io_subtype);
                         LBUG();
                 }
+
+		ll_cl_add(file, env, io);
                 result = cl_io_loop(env, io);
+		ll_cl_remove(file, env);
+
 		if (args->via_io_subtype == IO_NORMAL)
 			up_read(&lli->lli_trunc_sem);
 		if (write_mutex_locked)
 			mutex_unlock(&lli->lli_write_mutex);
-		ll_cl_remove(file, env);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
