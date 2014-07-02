@@ -109,12 +109,13 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (pool && val > cli->cl_max_rpcs_in_flight)
                 pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_max_rpcs_in_flight = val;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	cli->cl_max_rpcs_in_flight = val;
+	client_adjust_max_dirty(cli);
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        LPROCFS_CLIMP_EXIT(dev);
-        return count;
+	LPROCFS_CLIMP_EXIT(dev);
+	return count;
 }
 
 static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
@@ -125,11 +126,11 @@ static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
         long val;
         int mult;
 
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        val = cli->cl_dirty_max;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	val = cli->cl_dirty_max_pages;
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        mult = 1 << 20;
+	mult = 1 << (20 - PAGE_CACHE_SHIFT);
         return lprocfs_read_frac_helper(page, count, val, mult);
 }
 
@@ -151,7 +152,7 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
 		return -ERANGE;
 
 	client_obd_list_lock(&cli->cl_loi_list_lock);
-	cli->cl_dirty_max = (obd_count)(pages_number << PAGE_CACHE_SHIFT);
+	cli->cl_dirty_max_pages = pages_number;
 	osc_wake_cache_waiters(cli);
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
@@ -208,7 +209,8 @@ static int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off,
         int rc;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        rc = snprintf(page, count, "%lu\n", cli->cl_dirty);
+	rc = snprintf(page, count, "%lu\n",
+		      cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
@@ -490,6 +492,7 @@ static int lprocfs_osc_wr_max_pages_per_rpc(struct file *file,
 	}
 	client_obd_list_lock(&cli->cl_loi_list_lock);
 	cli->cl_max_pages_per_rpc = val;
+	client_adjust_max_dirty(cli);
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 
 	LPROCFS_CLIMP_EXIT(dev);

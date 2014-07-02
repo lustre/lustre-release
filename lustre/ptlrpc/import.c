@@ -1147,9 +1147,10 @@ finish:
                 else
                         imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
-                LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
-                        (cli->cl_max_pages_per_rpc > 0));
-        }
+		LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
+			(cli->cl_max_pages_per_rpc > 0));
+		client_adjust_max_dirty(cli);
+	}
 
 out:
 	imp->imp_connect_tried = 1;

@@ -339,12 +339,12 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
                      sizeof(server_uuid)));
 
-        cli->cl_dirty = 0;
-        cli->cl_avail_grant = 0;
-	/* FIXME: Should limit this for the sum of all cl_dirty_max. */
-	cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-	if (cli->cl_dirty_max >> PAGE_CACHE_SHIFT > totalram_pages / 8)
-		cli->cl_dirty_max = totalram_pages << (PAGE_CACHE_SHIFT - 3);
+	cli->cl_dirty_pages = 0;
+	cli->cl_avail_grant = 0;
+	/* FIXME: Should limit this for the sum of all cl_dirty_max_pages. */
+	/* cl_dirty_max_pages may be changed at connect time in
+	 * ptlrpc_connect_interpret(). */
+	client_adjust_max_dirty(cli);
         CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
