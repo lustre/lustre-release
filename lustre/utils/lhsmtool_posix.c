@@ -1763,8 +1763,9 @@ static int ct_run(void)
 		llapi_error_callback_set(llapi_hsm_log_error);
 	}
 
-	rc = llapi_hsm_copytool_register(&ctdata, opt.o_mnt, 0,
-					 opt.o_archive_cnt, opt.o_archive_id);
+	rc = llapi_hsm_copytool_register(&ctdata, opt.o_mnt,
+					 opt.o_archive_cnt,
+					 opt.o_archive_id, 0);
 	if (rc < 0) {
 		CT_ERROR(rc, "cannot start copytool interface");
 		return rc;
@@ -1785,8 +1786,6 @@ static int ct_run(void)
 		if (rc == -ESHUTDOWN) {
 			CT_TRACE("shutting down");
 			break;
-		} else if (rc == -EAGAIN) {
-			continue; /* msg not for us */
 		} else if (rc < 0) {
 			CT_WARN("cannot receive action list: %s",
 				strerror(-rc));

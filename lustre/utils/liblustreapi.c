@@ -4130,7 +4130,7 @@ int llapi_changelog_start(void **priv, int flags, const char *device,
         cp->flags = flags;
 
         /* Set up the receiver */
-        rc = libcfs_ukuc_start(&cp->kuc, 0 /* no group registration */);
+	rc = libcfs_ukuc_start(&cp->kuc, 0 /* no group registration */, 0);
         if (rc < 0)
                 goto out_free;
 

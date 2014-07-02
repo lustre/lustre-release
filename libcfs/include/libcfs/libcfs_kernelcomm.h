@@ -112,8 +112,9 @@ typedef struct lustre_kernelcomm {
 } __attribute__((packed)) lustre_kernelcomm;
 
 /* Userspace methods */
-extern int libcfs_ukuc_start(lustre_kernelcomm *l, int groups);
+extern int libcfs_ukuc_start(lustre_kernelcomm *l, int groups, int rfd_flags);
 extern int libcfs_ukuc_stop(lustre_kernelcomm *l);
+int libcfs_ukuc_get_rfd(lustre_kernelcomm *link);
 extern int libcfs_ukuc_msg_get(lustre_kernelcomm *l, char *buf, int maxsize,
                                int transport);
 

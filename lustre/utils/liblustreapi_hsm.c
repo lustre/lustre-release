@@ -641,13 +641,13 @@ out_free:
 /** Register a copytool
  * \param[out] priv Opaque private control structure
  * \param mnt Lustre filesystem mount point
- * \param flags Open flags, currently unused (e.g. O_NONBLOCK)
  * \param archive_count
  * \param archives Which archive numbers this copytool is responsible for
+ * \param rfd_flags flags applied to read fd of pipe (e.g. O_NONBLOCK)
  */
 int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
-				const char *mnt, int flags, int archive_count,
-				int *archives)
+				const char *mnt, int archive_count,
+				int *archives, int rfd_flags)
 {
 	struct hsm_copytool_private	*ct;
 	int				 rc;
@@ -712,7 +712,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		ct->archives |= (1 << (archives[rc] - 1));
 	}
 
-	rc = libcfs_ukuc_start(&ct->kuc, KUC_GRP_HSM);
+	rc = libcfs_ukuc_start(&ct->kuc, KUC_GRP_HSM, rfd_flags);
 	if (rc < 0)
 		goto out_err;
 
@@ -794,6 +794,19 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	return 0;
 }
 
+/** Returns a file descriptor to poll/select on.
+ * \param ct Opaque private control structure
+ * \retval -EINVAL on error
+ * \retval the file descriptor for reading HSM events from the kernel
+ */
+int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct)
+{
+	if (ct == NULL || ct->magic != CT_PRIV_MAGIC)
+		return -EINVAL;
+
+	return libcfs_ukuc_get_rfd(&ct->kuc);
+}
+
 /** Wait for the next hsm_action_list
  * \param ct Opaque private control structure
  * \param halh Action list handle, will be allocated here
@@ -818,6 +831,7 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 
 	kuch = ct->kuch;
 
+repeat:
 	rc = libcfs_ukuc_msg_get(&ct->kuc, (char *)kuch,
 				 HAL_MAXSIZE + sizeof(*kuch),
 				 KUC_TRANSPORT_HSM);
@@ -861,9 +875,8 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 				  " ignoring this request."
 				  " Mask of served archive is 0x%.8X",
 				  hal->hal_archive_id, ct->archives);
-		rc = -EAGAIN;
 
-		goto out_err;
+		goto repeat;
 	}
 
 	*halh = hal;
