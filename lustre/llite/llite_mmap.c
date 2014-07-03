@@ -317,6 +317,8 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 		vio->u.fault.ft_vma       = vma;
 		vio->u.fault.ft_vmpage    = NULL;
 		vio->u.fault.fault.ft_vmf = vmf;
+		vio->u.fault.fault.ft_flags = 0;
+		vio->u.fault.fault.ft_flags_valid = 0;
 
 		/* May call ll_readpage() */
 		ll_cl_add(vma->vm_file, env, io);
@@ -325,7 +327,11 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 		ll_cl_remove(vma->vm_file, env);
 
-		fault_ret = vio->u.fault.fault.ft_flags;
+		/* ft_flags are only valid if we reached
+		 * the call to filemap_fault */
+		if (vio->u.fault.fault.ft_flags_valid)
+			fault_ret = vio->u.fault.fault.ft_flags;
+
 		vmpage = vio->u.fault.ft_vmpage;
 		if (result != 0 && vmpage != NULL) {
 			page_cache_release(vmpage);

@@ -841,6 +841,7 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
         struct vm_fault *vmf = cfio->fault.ft_vmf;
 
         cfio->fault.ft_flags = filemap_fault(cfio->ft_vma, vmf);
+	cfio->fault.ft_flags_valid = 1;
 
         if (vmf->page) {
                 LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
