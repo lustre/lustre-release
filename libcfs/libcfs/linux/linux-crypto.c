@@ -243,13 +243,14 @@ EXPORT_SYMBOL(cfs_crypto_hash_update);
 /**
  * Finish hash calculation, copy hash digest to buffer, clean up hash descriptor
  *
- * \param[in] hdesc	hash descriptor
- * \param[out] hash	pointer to hash buffer to store hash digest
- * \param[in,out] hash_len pointer to hash buffer size, if \a hdesc = NULL
- *			only free \a hdesc instead of computing the hash
+ * \param[in]	hdesc		hash descriptor
+ * \param[out]	hash		pointer to hash buffer to store hash digest
+ * \param[in,out] hash_len	pointer to hash buffer size, if \a hash == NULL
+ *				or hash_len == NULL only free \a hdesc instead
+ *				of computing the hash
  *
- * \retval		-ENOSPC if \a hash = NULL, or \a hash_len < digest size
  * \retval		0 for success
+ * \retval		-EOVERFLOW if hash_len is too small for the hash digest
  * \retval		negative errno for other errors from lower layers
  */
 int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
@@ -258,15 +259,18 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
 	int     size = crypto_hash_digestsize(((struct hash_desc *)hdesc)->tfm);
 	int     err;
 
-	if (hash_len == NULL) {
+	if (hash == NULL || hash_len == NULL) {
 		err = 0;
 		goto free;
 	}
-	if (hash == NULL || *hash_len < size) {
-		err = -ENOSPC;
+	if (*hash_len < size) {
+		err = -EOVERFLOW;
 		goto free;
 	}
+
 	err = crypto_hash_final((struct hash_desc *)hdesc, hash);
+	if (err == 0)
+		*hash_len = size;
 free:
 	crypto_free_hash(((struct hash_desc *)hdesc)->tfm);
 	kfree(hdesc);
@@ -286,26 +290,51 @@ EXPORT_SYMBOL(cfs_crypto_hash_final);
  * \param[in] buf	data buffer on which to compute the hash
  * \param[in] buf_len	length of \buf on which to compute hash
  */
-static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg,
-					const unsigned char *buf,
-					unsigned int buf_len)
+static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg)
 {
+	int			buf_len = max(PAGE_SIZE, 1048576UL);
+	void			*buf;
 	unsigned long		start, end;
 	int			bcount, err = 0;
-	int			sec = 1; /* do test only 1 sec */
-	unsigned char		hash[64];
+	struct page		*page;
+	unsigned char		hash[CFS_CRYPTO_HASH_DIGESTSIZE_MAX];
 	unsigned int		hash_len = sizeof(hash);
 
-	for (start = jiffies, end = start + sec * HZ, bcount = 0;
-	     time_before(jiffies, end); bcount++) {
-		err = cfs_crypto_hash_digest(hash_alg, buf, buf_len, NULL, 0,
-					     hash, &hash_len);
+	page = alloc_page(GFP_KERNEL);
+	if (page == NULL) {
+		err = -ENOMEM;
+		goto out_err;
+	}
+
+	buf = kmap(page);
+	memset(buf, 0xAD, PAGE_SIZE);
+	kunmap(page);
+
+	for (start = jiffies, end = start + HZ, bcount = 0;
+	     time_before(jiffies, end) && err == 0; bcount++) {
+		struct cfs_crypto_hash_desc *hdesc;
+		int i;
+
+		hdesc = cfs_crypto_hash_init(hash_alg, NULL, 0);
+		if (IS_ERR(hdesc)) {
+			err = PTR_ERR(hdesc);
+			break;
+		}
+
+		for (i = 0; i < buf_len / PAGE_SIZE; i++) {
+			err = cfs_crypto_hash_update_page(hdesc, page, 0,
+							  PAGE_SIZE);
+			if (err != 0)
+				break;
+		}
+
+		err = cfs_crypto_hash_final(hdesc, hash, &hash_len);
 		if (err != 0)
 			break;
-
 	}
 	end = jiffies;
-
+	__free_page(page);
+out_err:
 	if (err != 0) {
 		cfs_crypto_hash_speeds[hash_alg] = err;
 		CDEBUG(D_INFO, "Crypto hash algorithm %s test error: rc = %d\n",
@@ -364,22 +393,10 @@ EXPORT_SYMBOL(cfs_crypto_hash_speed);
 static int cfs_crypto_test_hashes(void)
 {
 	enum cfs_crypto_hash_alg hash_alg;
-	unsigned char		*data;
-	/* Data block size for testing hash. Use bulk RPC size. */
-	unsigned int		 data_len = 1024 * 1024;
-
-	data = vmalloc(data_len);
-	if (data == NULL) {
-		CERROR("Failed to allocate buffer for hash speed test\n");
-		return -ENOMEM;
-	}
-
-	memset(data, 0xAD, data_len);
 
 	for (hash_alg = 0; hash_alg < CFS_HASH_ALG_MAX; hash_alg++)
-		cfs_crypto_performance_test(hash_alg, data, data_len);
+		cfs_crypto_performance_test(hash_alg);
 
-	vfree(data);
 	return 0;
 }
 

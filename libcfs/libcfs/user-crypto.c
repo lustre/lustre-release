@@ -272,12 +272,12 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *desc,
 	LASSERT(type != NULL);
 	size = type->cht_size;
 
-	if (hash_len == NULL) {
+	if (hash == NULL || hash_len == NULL) {
 		err = 0;
 		goto free;
 	}
-	if (hash == NULL || *hash_len < size) {
-		err = -ENOMEM;
+	if (*hash_len < size) {
+		err = -EOVERFLOW;
 		goto free;
 	}
 

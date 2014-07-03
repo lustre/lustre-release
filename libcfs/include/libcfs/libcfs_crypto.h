@@ -115,7 +115,8 @@ char *cfs_crypto_hash_name(enum cfs_crypto_hash_alg hash_alg)
  * \retval		hash algorithm digest size in bytes
  * \retval		0 if hash algorithm type is unknown
  */
-static inline int cfs_crypto_hash_digestsize(enum cfs_crypto_hash_alg hash_alg)
+static inline
+unsigned int cfs_crypto_hash_digestsize(enum cfs_crypto_hash_alg hash_alg)
 {
 	const struct cfs_crypto_hash_type *ht;
 
