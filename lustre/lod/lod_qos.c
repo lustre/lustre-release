@@ -1958,24 +1958,28 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 
 		if (v1->lmm_pattern == 0)
 			v1->lmm_pattern = LOV_PATTERN_RAID0;
-		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_RAID0) {
+		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_RAID0 &&
+		    lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT) {
 			CDEBUG(D_LAYOUT, "%s: invalid pattern: %x\n",
 			       lod2obd(d)->obd_name, v1->lmm_pattern);
 			GOTO(free_comp, rc = -EINVAL);
 		}
 
 		lod_comp->llc_pattern = v1->lmm_pattern;
-
 		lod_comp->llc_stripe_size = desc->ld_default_stripe_size;
 		if (v1->lmm_stripe_size)
 			lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 
 		lod_comp->llc_stripe_count = desc->ld_default_stripe_count;
-		if (v1->lmm_stripe_count)
+		if (v1->lmm_stripe_count ||
+		    lov_pattern(v1->lmm_pattern) == LOV_PATTERN_MDT)
 			lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_obj_set_pool(lo, i, pool_name);
+
+		LASSERT(ergo(lov_pattern(lod_comp->llc_pattern) ==
+			     LOV_PATTERN_MDT, lod_comp->llc_stripe_count == 0));
 
 		if (pool_name == NULL)
 			continue;
@@ -2049,6 +2053,10 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 
 	/* A released component is being created */
 	if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+		RETURN(0);
+
+	/* A Data-on-MDT component is being created */
+	if (lov_pattern(lod_comp->llc_pattern) == LOV_PATTERN_MDT)
 		RETURN(0);
 
 	if (likely(lod_comp->llc_stripe == NULL)) {

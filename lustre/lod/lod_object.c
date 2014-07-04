@@ -3634,6 +3634,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		}
 
 		if (v1->lmm_pattern != LOV_PATTERN_RAID0 &&
+		    v1->lmm_pattern != LOV_PATTERN_MDT &&
 		    v1->lmm_pattern != 0) {
 			lod_free_def_comp_entries(lds);
 			RETURN(-EINVAL);
@@ -3648,6 +3649,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
+		lod_comp->llc_pattern = v1->lmm_pattern;
 
 		pool = NULL;
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
@@ -3758,10 +3760,11 @@ static void lod_striping_from_default(struct lod_object *lo,
 						&lds->lds_def_comp_entries[i];
 
 			CDEBUG(D_LAYOUT, "Inherite from default: size:%hu "
-			       "nr:%u offset:%u %s\n",
+			       "nr:%u offset:%u pattern %#x %s\n",
 			       def_comp->llc_stripe_size,
 			       def_comp->llc_stripe_count,
 			       def_comp->llc_stripe_offset,
+			       def_comp->llc_pattern,
 			       def_comp->llc_pool ?: "");
 
 			*obj_comp = *def_comp;
@@ -3782,7 +3785,8 @@ static void lod_striping_from_default(struct lod_object *lo,
 			if (!lo->ldo_is_composite)
 				continue;
 
-			if (obj_comp->llc_stripe_count <= 0)
+			if (obj_comp->llc_stripe_count <= 0 &&
+			    obj_comp->llc_pattern != LOV_PATTERN_MDT)
 				obj_comp->llc_stripe_count =
 					desc->ld_default_stripe_count;
 			if (obj_comp->llc_stripe_size <= 0)
@@ -4328,6 +4332,9 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+			lod_comp_set_init(lod_comp);
+
+		if (lov_pattern(lod_comp->llc_pattern) == LOV_PATTERN_MDT)
 			lod_comp_set_init(lod_comp);
 
 		if (lod_comp->llc_stripe == NULL)
