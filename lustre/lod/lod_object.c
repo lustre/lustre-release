@@ -1149,16 +1149,16 @@ static int lod_attr_set(const struct lu_env *env,
 	 */
 	LASSERT(lo->ldo_stripe);
 	for (i = 0; i < lo->ldo_stripenr; i++) {
-		if (likely(lo->ldo_stripe[i] != NULL)) {
-			if (dt_object_exists(lo->ldo_stripe[i]) == 0)
-				continue;
+		if (unlikely(lo->ldo_stripe[i] == NULL))
+			continue;
+		if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
+		    (dt_object_exists(lo->ldo_stripe[i]) == 0))
+			continue;
 
-			rc = dt_attr_set(env, lo->ldo_stripe[i], attr,
-					 handle, capa);
-			if (rc != 0) {
-				CERROR("failed declaration: %d\n", rc);
-				break;
-			}
+		rc = dt_attr_set(env, lo->ldo_stripe[i], attr, handle, capa);
+		if (rc != 0) {
+			CERROR("failed declaration: %d\n", rc);
+			break;
 		}
 	}
 

@@ -237,7 +237,9 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		LASSERT(attr);
 		osi->osi_setattr.lsr_uid = attr->la_uid;
 		osi->osi_setattr.lsr_gid = attr->la_gid;
-		osi->osi_setattr.lsr_valid = attr->la_valid;
+		osi->osi_setattr.lsr_valid =
+			((attr->la_valid & LA_UID) ? OBD_MD_FLUID : 0) |
+			((attr->la_valid & LA_GID) ? OBD_MD_FLGID : 0);
 		break;
 	default:
 		LBUG();
@@ -483,8 +485,9 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_SETATTR64_REC);
 
-	/* lsr_valid can only be 0 or LA_UID/GID set */
-	if ((rec->lsr_valid & ~(LA_UID | LA_GID)) != 0) {
+	/* lsr_valid can only be 0 or have OBD_MD_{FLUID,FLGID} set,
+	 * so no bits other than these should be set. */
+	if ((rec->lsr_valid & ~(OBD_MD_FLUID | OBD_MD_FLGID)) != 0) {
 		CERROR("%s: invalid setattr record, lsr_valid:"LPU64"\n",
 		       d->opd_obd->obd_name, rec->lsr_valid);
 		/* return 0 so that sync thread can continue processing
@@ -504,14 +507,10 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
 	/* old setattr record (prior 2.6.0) doesn't have 'valid' stored,
 	 * we assume that both UID and GID are valid in that case. */
-	if (rec->lsr_valid == 0) {
+	if (rec->lsr_valid == 0)
 		body->oa.o_valid |= (OBD_MD_FLUID | OBD_MD_FLGID);
-	} else {
-		if (rec->lsr_valid & LA_UID)
-			body->oa.o_valid |= OBD_MD_FLUID;
-		if (rec->lsr_valid & LA_GID)
-			body->oa.o_valid |= OBD_MD_FLGID;
-	}
+	else
+		body->oa.o_valid |= rec->lsr_valid;
 
 	osp_sync_send_new_rpc(d, req);
 	RETURN(1);
