@@ -2052,7 +2052,8 @@ mount.lustre</title>
                 <para> <literal>recovery_time_soft=<replaceable>timeout</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  Allows <literal>timeout</literal> seconds for clients to reconnect for recovery after a server crash. This timeout is incrementally extended if it is about to expire and the server is still handling new connections from recoverable clients. The default soft recovery timeout is 300 seconds (5 minutes).</para>
+                <para>  Allows <literal>timeout</literal> seconds for clients to reconnect for recovery after a server crash. This timeout is incrementally extended if it is about to expire and the server is still handling new connections from recoverable clients.</para>
+		<para>  The default soft recovery timeout is 3 times the value of the Lustre timeout parameter (see <xref linkend="section_c24_nt5_dl"/>). The default Lustre timeout is 100 seconds, which would make the soft recovery timeout default to 300 seconds (5 minutes). The soft recovery timeout is set at mount time and will not change if the Lustre timeout is changed after mount time.</para>
               </entry>
             </row>
             <row>
@@ -2060,7 +2061,8 @@ mount.lustre</title>
                 <para> <literal>recovery_time_hard=<replaceable>timeout</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  The server is allowed to incrementally extend its timeout up to a hard maximum of <literal>timeout</literal> seconds. The default hard recovery timeout is set to 900 seconds (15 minutes).</para>
+                <para>  The server is allowed to incrementally extend its timeout up to a hard maximum of <literal>timeout</literal> seconds.</para>
+		<para>  The default hard recovery timeout is 9 times the value of the Lustre timeout parameter (see <xref linkend="section_c24_nt5_dl"/>). The default Lustre timeout is 100 seconds, which would make the hard recovery timeout default to 900 seconds (15 minutes). The hard recovery timeout is set at mount time and will not change if the Lustre timeout is changed after mount time.</para>
               </entry>
             </row>
             <row>
