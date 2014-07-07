@@ -282,6 +282,9 @@ check_options() {
     fi
 
     case $TARGET in
+        3.10-rhel7)
+            CANONICAL_TARGET="rhel7"
+            ;;
         2.6-rhel6)
             CANONICAL_TARGET="rhel6"
             ;;

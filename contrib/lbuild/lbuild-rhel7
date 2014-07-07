@@ -1,0 +1,16 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+source ${LBUILD_DIR}/lbuild-rhel
+
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN+=".0"
+
+find_linux_rpm-rhel7() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${TARGET_ARCH}"}
+
+    find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+
+}
