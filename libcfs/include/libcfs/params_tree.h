@@ -179,13 +179,14 @@ seq_open(struct file *file, const struct seq_operations *fops)
 {
 	struct seq_file *p = file->param_private;
 
-	if (!p) {
+	if (p == NULL) {
 		LIBCFS_ALLOC(p, sizeof(*p));
-		if (!p)
+		if (p == NULL)
 			return -ENOMEM;
 		file->param_private = p;
+	} else {
+		memset(p, 0, sizeof(*p));
 	}
-	memset(p, 0, sizeof(*p));
 	p->op = fops;
 	return 0;
 }

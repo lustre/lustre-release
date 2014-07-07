@@ -340,8 +340,6 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
                 return -ENOMEM;
         }
 
-	memset(peer, 0, sizeof(*peer));		/* zero flags etc */
-
 	peer->ibp_ni = ni;
 	peer->ibp_nid = nid;
 	peer->ibp_error = 0;
