@@ -46,4 +46,32 @@ int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 int get_param(const char *param_path, char *result,
 	      unsigned int result_size);
 
+#define LLAPI_LAYOUT_MAGIC 0x11AD1107 /* LLAPILOT */
+
+/* Helper functions for testing validity of stripe attributes. */
+
+static inline bool llapi_stripe_size_is_aligned(uint64_t size)
+{
+	return (size & (LOV_MIN_STRIPE_SIZE - 1)) == 0;
+}
+
+static inline bool llapi_stripe_size_is_too_big(uint64_t size)
+{
+	return size >= (1ULL << 32);
+}
+
+static inline bool llapi_stripe_count_is_valid(int64_t count)
+{
+	return count >= -1 && count <= LOV_MAX_STRIPE_COUNT;
+}
+
+static inline bool llapi_stripe_index_is_valid(int64_t index)
+{
+	return index >= -1 && index <= LOV_V1_INSANE_STRIPE_COUNT;
+}
+
+/* Compatibility macro for legacy llapi functions that use "offset"
+ * terminology instead of the preferred "index". */
+#define llapi_stripe_offset_is_valid(os) llapi_stripe_index_is_valid(os)
+
 #endif /* _LUSTREAPI_INTERNAL_H_ */

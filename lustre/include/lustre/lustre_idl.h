@@ -1699,7 +1699,6 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define XATTR_USER_PREFIX       "user."
 #define XATTR_TRUSTED_PREFIX    "trusted."
 #define XATTR_SECURITY_PREFIX   "security."
-#define XATTR_LUSTRE_PREFIX     "lustre."
 
 #define XATTR_NAME_LOV          "trusted.lov"
 #define XATTR_NAME_LMA          "trusted.lma"

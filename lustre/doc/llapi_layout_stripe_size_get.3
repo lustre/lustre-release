@@ -1,0 +1,51 @@
+.TH llapi_layout_stripe_size_get 3 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout_stripe_size_get, llapi_layout_stripe_size_set \- get or set the
+stripe count of a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_stripe_size_get(const struct llapi_layout *" layout ",
+.BI "                                 uint64_t *" stripe_size );
+.PP
+.BI "int llapi_layout_stripe_size_set(struct llapi_layout *" layout ",
+.BI "                                 uint64_t " stripe_size );
+.fi
+.SH DESCRIPTION
+.PP
+The stripe size indicates how much data to write to one OST before
+moving to the next OST.
+.PP
+.B llapi_layout_stripe_size_get()
+stores into
+.I stripe_size
+the stripe size of
+.IR layout .
+.PP
+.B llapi_layout_stripe_size_get()
+sets the stripe size of
+.I layout
+to
+.IR stripe_size .
+.PP
+A
+.I stripe_size
+value of
+.B LLAPI_LAYOUT_DEFAULT
+means that the default stripe size will be used.
+.SH RETURN VALUES
+.B llapi_layout_stripe_size_get()
+and
+.B llapi_layout_stripe_size_set()
+return 0 on success, or -1 if an error occurred (in which case, errno is
+set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)

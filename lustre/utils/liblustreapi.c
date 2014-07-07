@@ -56,6 +56,7 @@
 #include <dirent.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <sys/xattr.h>
@@ -86,6 +87,11 @@ void llapi_msg_set_level(int level)
                 llapi_msg_level = LLAPI_MSG_MAX;
         else
                 llapi_msg_level = level;
+}
+
+int llapi_msg_get_level(void)
+{
+	return llapi_msg_level;
 }
 
 static void error_callback_default(enum llapi_message_level level, int err,
@@ -248,26 +254,26 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 				"larger than expected (%u)", page_size,
 				LOV_MIN_STRIPE_SIZE);
 	}
-	if ((stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+	if (!llapi_stripe_size_is_aligned(stripe_size)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %llu, "
 				"must be an even multiple of %d bytes",
 				stripe_size, page_size);
 		return rc;
 	}
-	if (stripe_offset < -1) {
+	if (!llapi_stripe_offset_is_valid(stripe_offset)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
 				stripe_offset);
 		return rc;
 	}
-	if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
+	if (!llapi_stripe_count_is_valid(stripe_count)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe count %d",
 				stripe_count);
 		return rc;
 	}
-	if (stripe_size >= (1ULL << 32)) {
+	if (llapi_stripe_size_is_too_big(stripe_size)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 				"warning: stripe size 4G or larger "
@@ -4621,4 +4627,29 @@ out_close:
 	close(fd1);
 out:
 	return rc;
+}
+
+/**
+ * Attempt to open a file with Lustre file identifier \a fid
+ * and return an open file descriptor.
+ *
+ * \param[in] lustre_dir	path within Lustre filesystem containing \a fid
+ * \param[in] fid		Lustre file identifier of file to open
+ * \param[in] flags		open() flags
+ *
+ * \retval			non-negative file descriptor on successful open
+ * \retval			-1 if an error occurred
+ */
+int llapi_open_by_fid(const char *lustre_dir, const lustre_fid *fid, int flags)
+{
+	char mntdir[PATH_MAX];
+	char path[PATH_MAX];
+	int rc;
+
+	rc = llapi_search_mounts(lustre_dir, 0, mntdir, NULL);
+	if (rc != 0)
+		return -1;
+
+	snprintf(path, sizeof(path), "%s/.lustre/fid/"DFID, mntdir, PFID(fid));
+	return open(path, flags);
 }

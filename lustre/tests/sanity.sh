@@ -1991,6 +1991,24 @@ test_27C() { #LU-2871
 }
 run_test 27C "check full striping across all OSTs"
 
+test_27D() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	local POOL=${POOL:-testpool}
+	local first_ost=0
+	local last_ost=$(($OSTCOUNT - 1))
+	local ost_step=1
+	local ost_list=$(seq $first_ost $ost_step $last_ost)
+	local ost_range="$first_ost $last_ost $ost_step"
+
+	mkdir -p $DIR/$tdir
+	pool_add $POOL || error "pool_add failed"
+	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
+	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT ||
+		error "llapi_layout_test failed"
+	cleanup_pools || error "cleanup_pools failed"
+}
+run_test 27D "validate llapi_layout API"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
@@ -10950,251 +10968,6 @@ test_187b() {
 	rm -f $file1
 }
 run_test 187b "Test data version change on volatile file"
-
-# OST pools tests
-check_file_in_pool()
-{
-	local file=$1
-	local pool=$2
-	local tlist="$3"
-	local res=$($GETSTRIPE $file | grep 0x | cut -f2)
-	for i in $res
-	do
-		for t in $tlist ; do
-			[ "$i" -eq "$t" ] && continue 2
-		done
-
-		echo "pool list: $tlist"
-		echo "striping: $res"
-		error_noexit "$file not allocated in $pool"
-		return 1
-	done
-	return 0
-}
-
-pool_add() {
-	echo "Creating new pool"
-	local pool=$1
-
-	create_pool $FSNAME.$pool ||
-		{ error_noexit "No pool created, result code $?"; return 1; }
-	[ $($LFS pool_list $FSNAME | grep -c $pool) -eq 1 ] ||
-		{ error_noexit "$pool not in lfs pool_list"; return 2; }
-}
-
-pool_add_targets() {
-	echo "Adding targets to pool"
-	local pool=$1
-	local first=$2
-	local last=$3
-	local step=${4:-1}
-
-	local list=$(seq $first $step $last)
-
-	local t=$(for i in $list; do printf "$FSNAME-OST%04x_UUID " $i; done)
-	do_facet mgs $LCTL pool_add \
-			$FSNAME.$pool $FSNAME-OST[$first-$last/$step]
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool \
-			| sort -u | tr '\n' ' ' " "$t" || { 
-		error_noexit "Add to pool failed"
-		return 1
-	}
-	local lfscount=$($LFS pool_list $FSNAME.$pool | grep -c "\-OST")
-	local addcount=$(((last - first) / step + 1))
-	[ $lfscount -eq $addcount ] || {
-		error_noexit "lfs pool_list bad ost count" \
-						"$lfscount != $addcount"
-		return 2
-	}
-}
-
-pool_set_dir() {
-	local pool=$1
-	local tdir=$2
-	echo "Setting pool on directory $tdir"
-
-	$SETSTRIPE -c 2 -p $pool $tdir && return 0
-
-	error_noexit "Cannot set pool $pool to $tdir"
-	return 1
-}
-
-pool_check_dir() {
-	local pool=$1
-	local tdir=$2
-	echo "Checking pool on directory $tdir"
-
-	local res=$($GETSTRIPE --pool $tdir | sed "s/\s*$//")
-	[ "$res" = "$pool" ] && return 0
-
-	error_noexit "Pool on '$tdir' is '$res', not '$pool'"
-	return 1
-}
-
-pool_dir_rel_path() {
-	echo "Testing relative path works well"
-	local pool=$1
-	local tdir=$2
-	local root=$3
-
-	mkdir -p $root/$tdir/$tdir
-	cd $root/$tdir
-	pool_set_dir $pool $tdir          || return 1
-	pool_set_dir $pool ./$tdir        || return 2
-	pool_set_dir $pool ../$tdir       || return 3
-	pool_set_dir $pool ../$tdir/$tdir || return 4
-	rm -rf $tdir; cd - > /dev/null
-}
-
-pool_alloc_files() {
-	echo "Checking files allocation from directory pool"
-	local pool=$1
-	local tdir=$2
-	local count=$3
-	local tlist="$4"
-
-	local failed=0
-	for i in $(seq -w 1 $count)
-	do
-		local file=$tdir/file-$i
-		touch $file
-		check_file_in_pool $file $pool "$tlist" || \
-			failed=$((failed + 1))
-	done
-	[ "$failed" = 0 ] && return 0
-
-	error_noexit "$failed files not allocated in $pool"
-	return 1
-}
-
-pool_create_files() {
-	echo "Creating files in pool"
-	local pool=$1
-	local tdir=$2
-	local count=$3
-	local tlist="$4"
-
-	mkdir -p $tdir
-	local failed=0
-	for i in $(seq -w 1 $count)
-	do
-		local file=$tdir/spoo-$i
-		$SETSTRIPE -p $pool $file
-		check_file_in_pool $file $pool "$tlist" || \
-			failed=$((failed + 1))
-	done
-	[ "$failed" = 0 ] && return 0
-
-	error_noexit "$failed files not allocated in $pool"
-	return 1
-}
-
-pool_lfs_df() {
-	echo "Checking 'lfs df' output"
-	local pool=$1
-
-	local t=$($LCTL get_param -n lov.$FSNAME-clilov-*.pools.$pool |
-			tr '\n' ' ')
-	local res=$($LFS df --pool $FSNAME.$pool |
-			awk '{print $1}' |
-			grep "$FSNAME-OST" |
-			tr '\n' ' ')
-	[ "$res" = "$t" ] && return 0
-
-	error_noexit "Pools OSTs '$t' is not '$res' that lfs df reports"
-	return 1
-}
-
-pool_file_rel_path() {
-	echo "Creating files in a pool with relative pathname"
-	local pool=$1
-	local tdir=$2
-
-	mkdir -p $tdir ||
-		{ error_noexit "unable to create $tdir"; return 1 ; }
-	local file="/..$tdir/$tfile-1"
-	$SETSTRIPE -p $pool $file ||
-		{ error_noexit "unable to create $file" ; return 2 ; }
-
-	cd $tdir
-	$SETSTRIPE -p $pool $tfile-2 || {
-		error_noexit "unable to create $tfile-2 in $tdir"
-		return 3
-	}
-}
-
-pool_remove_first_target() {
-	echo "Removing first target from a pool"
-	local pool=$1
-
-	local pname="lov.$FSNAME-*.pools.$pool"
-	local t=$($LCTL get_param -n $pname | head -n1)
-	do_facet mgs $LCTL pool_remove $FSNAME.$pool $t
-	wait_update $HOSTNAME "lctl get_param -n $pname | grep $t" "" || {
-		error_noexit "$t not removed from $FSNAME.$pool"
-		return 1
-	}
-}
-
-pool_remove_all_targets() {
-	echo "Removing all targets from pool"
-	local pool=$1
-	local file=$2
-	local pname="lov.$FSNAME-*.pools.$pool"
-	for t in $($LCTL get_param -n $pname | sort -u)
-	do
-		do_facet mgs $LCTL pool_remove $FSNAME.$pool $t
-	done
-	wait_update $HOSTNAME "lctl get_param -n $pname" "" || {
-		error_noexit "Pool $FSNAME.$pool cannot be drained"
-		return 1
-	}
-	# striping on an empty/nonexistant pool should fall back
-	# to "pool of everything"
-	touch $file || {
-		error_noexit "failed to use fallback striping for empty pool"
-		return 2
-	}
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $pool $file 2>/dev/null && {
-		error_noexit "expected failure when creating file" \
-							"with empty pool"
-		return 3
-	}
-	return 0
-}
-
-pool_remove() {
-	echo "Destroying pool"
-	local pool=$1
-	local file=$2
-
-	do_facet mgs $LCTL pool_destroy $FSNAME.$pool
-
-	sleep 2
-	# striping on an empty/nonexistant pool should fall back 
-	# to "pool of everything"
-	touch $file || {
-		error_noexit "failed to use fallback striping for missing pool"
-		return 1
-	}
-	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $pool $file 2>/dev/null && {
-		error_noexit "expected failure when creating file" \
-							"with missing pool"
-		return 2
-	}
-
-	# get param should return err once pool is gone
-	if wait_update $HOSTNAME "lctl get_param -n \
-		lov.$FSNAME-*.pools.$pool 2>/dev/null || echo foo" "foo"
-	then
-		remove_pool_from_list $FSNAME.$pool
-		return 0
-	fi
-	error_noexit "Pool $FSNAME.$pool is not destroyed"
-	return 3
-}
 
 test_200() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

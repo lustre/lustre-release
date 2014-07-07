@@ -1,0 +1,142 @@
+.TH llapi_layout_get_by_fd 3 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout_get_by_fd, llapi_layout_get_by_fid, llapi_layout_get_by_path, \-
+obtain the layout of a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "struct llapi_layout *llapi_layout_get_by_fd(int "fd ", uint32_t " flags );
+.PP
+.BI "struct llapi_layout *llapi_layout_get_by_fid(const char *"lustre_path ,
+.BI "                                             const lustre_fid *"fid ,
+.BI "                                             uint32_t " flags );
+.PP
+.BI "struct llapi_layout *llapi_layout_get_by_path(const char *"path ,
+.BI "                                              uint32_t " flags );
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_layout_get_by_fd() ,
+.BR llapi_layout_get_by_fid() ,
+and
+.BR llapi_layout_get_by_path()
+return a pointer to a newly-allocated
+.B struct llapi_layout
+containing the layout information for the file referenced by
+.IR fd ,
+.IR fid ,
+or
+.IR path .
+The
+.B struct llapi_layout
+is an opaque entity containing the layout information for a file in a
+Lustre filesystem.  Its internal structure should not be directly
+accessed by an application.  See
+.BR llapi_layout (7).
+The pointer should be freed with
+.B llapi_layout_free()
+when it is no longer needed.
+.PP
+For
+.BR llapi_layout_get_by_fd() ,
+.I fd
+is a valid open file descriptor for a file or directory in a Lustre
+filesystem.
+.PP
+For
+.BR llapi_layout_get_by_fid() ,
+the path named by
+.I lustre_path
+serves to identify the Lustre filesystem containing the file
+represented by
+.IR fid .
+It is typically the filesystem root, but may also be any path beneath
+the root.  Use the function
+.BR llapi_path2fid (3)
+to obtain a
+.B lustre_fid
+associated with a given path.
+.PP
+The function
+.B llapi_layout_get_by_path()
+accepts a
+.I path
+argument that names a file or directory in a Lustre filesystem.
+.PP
+Zero or more flags may be bitwise-or'd together in
+.I flags
+to control how a layout is retrieved.  Currently
+.B llapi_layout_get_by_path()
+accepts only one flag, and
+.B llapi_layout_get_by_fd()
+and
+.B llapi_layout_get_by_fid()
+do not accept any flags. The list of flags is as follows:
+.TP 5
+.SM LAYOUT_GET_EXPECTED
+Unspecified attribute values are replaced by the literal default values
+that will be assigned when the file is created or first written to.
+A default value is inherited from the parent directory if the attribute
+is specified there, otherwise it is inherited from the filesystem root.
+This flag is only recognized by
+.BR llapi_layout_get_by_path() .
+Unspecified attributes may belong to directories and never-written-to
+files.
+.sp
+By default, layouts report the abstract value
+.B LLAPI_LAYOUT_DEFAULT
+to indicate an unspecified attribute.  Use
+.B LAYOUT_GET_EXPECTED
+to discover the expected literal values for new files in a given
+directory.  Do not use it if you need to distinguish between specified
+and unspecified attributes.  The flag has no effect if
+.I path
+names a file or directory with a fully specified layout.
+.sp
+For concreteness, consider a Lustre filesystem with a default stripe
+size of 1048576 and a default stripe count of 1.  A user sets the stripe
+count for directory D to 2 (thus overriding the filesystem-wide
+default) but leaves the stripe size unspecified.  Newly created files in
+D inherit a stripe count of 2 from D and a stripe size of 1048576 from
+the filesystem default.  The layout of D returned by
+.B llapi_layout_get_by_path(D, 0)
+has the abstract stripe size value
+.BR LLAPI_LAYOUT_DEFAULT ,
+since stripe size is unspecified, while
+.B llapi_layout_get_by_path(D, LAYOUT_GET_EXPECTED)
+reports the literal value 1048576.  Both forms report a stripe count
+of 2, since that attribute is specified.
+.SH RETURN VALUES
+.LP
+.BR llapi_layout_get_by_fd() ,
+.BR llapi_layout_get_by_fid() ,
+and
+.B llapi_layout_get_by_path()
+return a valid pointer on success or
+.B NULL
+on failure with
+.B errno
+set to an approporiate error code.
+.SH ERRORS
+.TP 15
+.SM ENOMEM
+Insufficient storage space is available.
+.TP
+.SM ENOTTY
+File does not reside on a Lustre filesystem.
+.TP
+.SM ENOENT
+.I path
+does not exist.
+.TP
+.SM EINVAL
+An invalid argument was specified.
+.TP
+.SM EINTR
+The kernel returned less than the expected amount of data.
+.SH "SEE ALSO"
+.BR llapi_layout_file_open (3),
+.BR llapi_path2fid (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)

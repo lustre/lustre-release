@@ -1,0 +1,124 @@
+.TH llapi_layout 7 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout \- abstract interface to the layout of a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.SH DESCRIPTION
+.LP
+The
+.B llapi_layout
+family of functions functions provides an abstract interface to
+manipulating the layout information of a file in a Lustre filesystem.
+Layouts are represented by the opaque data type
+.B llapi_layout_t
+which is passed as a handle to the various functions.
+.PP
+A layout has a number of attributes that describe how a file's data are
+stored in the filesystem.  These include stripe count, stripe size, RAID
+pattern, pool name, and the OST index associated with each stripe. Refer
+to the Lustre Operations Manual for detailed descriptions of these
+attributes.  For each attribute, there exists a pair of functions with
+the suffixes
+.B _get
+and
+.B _set
+that are used to read and assign the attribute value in a given layout.
+.PP
+Using this interface to create a file might consist of the following steps.
+.IP \[bu]
+Allocate a layout with
+.BR llapi_layout_alloc() .
+.IP \[bu]
+Assign attribute values using the
+.B llapi_layout_*_set()
+functions.
+.IP \[bu]
+Create the file using
+.BR llapi_layout_file_create() .
+.IP \[bu]
+Free the layout memory using
+.BR llapi_layout_free() .
+.PP
+Similarly, these steps might be used to read a file layout:
+.IP \[bu]
+Obtain the layout with
+.BR llapi_layout_get_by_path() ,
+.BR llapi_layout_get_by_fd() ,
+or
+.BR llapi_layout_get_by_fid() .
+.IP \[bu]
+Read attribute values using the
+.B llapi_layout_*_get()
+functions.
+.IP \[bu]
+Free the layout memory using
+.BR llapi_layout_free() .
+.SH "EXAMPLE"
+.nf
+#include <errno.h>
+#include <string.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+	int             fd;
+	struct llapi_layout *layout;
+	uint64_t        count = 2;
+	uint64_t        size = 1048576;
+	char            *path;
+
+	if (argc != 2)
+		return -1;
+
+	path = argv[1];
+	layout = llapi_layout_alloc();
+	llapi_layout_stripe_count_set(layout, count);
+	llapi_layout_stripe_size_set(layout, size);
+	fd = llapi_layout_file_create(path, 0, 0640, layout);
+	if (fd < 0) {
+		fprintf(stderr, "cannot create %s: %s\\n", path,
+			strerror(errno));
+		return -1;
+	}
+	close(fd);
+	llapi_layout_free(layout);
+
+	layout = llapi_layout_get_by_path(path, 0);
+	llapi_layout_stripe_size_get(layout, &size),
+	llapi_layout_stripe_count_get(layout, &count);
+	printf("%s with stripe size %llu, striped across %llu OSTs,"
+	       " has been created!\\n", path, size, count);
+	llapi_layout_free(layout);
+	return 0;
+}
+.fi
+.SH "BUGS"
+Setting the OST index number is only supported for stripe number 0.
+
+The RAID pattern may only be set to 0.
+.SH "SEE ALSO"
+.BR open (2),
+.BR lustre (7),
+.BR lustreapi (7),
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_create (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout_free (3),
+.BR llapi_layout_get_by_fd (3),
+.BR llapi_layout_get_by_fid (3),
+.BR llapi_layout_get_by_path (3),
+.BR llapi_layout_ost_index_get (3),
+.BR llapi_layout_ost_index_set (3),
+.BR llapi_layout_pattern_get (3),
+.BR llapi_layout_pattern_set (3),
+.BR llapi_layout_pool_name_get (3),
+.BR llapi_layout_pool_name_set (3),
+.BR llapi_layout_stripe_count_get (3),
+.BR llapi_layout_stripe_count_set (3),
+.BR llapi_layout_stripe_size_get (3),
+.BR llapi_layout_stripe_size_set (3),
+.BR lfs (1)

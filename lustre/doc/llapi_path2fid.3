@@ -1,0 +1,42 @@
+.TH llapi_path2fid 3 "2014 Mar 18" "Lustre User API"
+.SH NAME
+llapi_path2fid \- translate a path name to a Lustre FID
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_path2fid(const char *"path ", lustre_fid *"fid );
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_path2fid()
+stores the Lustre file identifier (FID) for the file or directory named
+by
+.I path
+into
+.IR fid .
+The
+.I fid
+may be then be passed to other llapi functions that expect the
+.B lustre_fid
+data type.
+.SH RETURN VALUES
+.LP
+.B llapi_path2fid()
+returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOTTY
+.I path
+does not reside on a Lustre filesystem.
+.TP
+.SM -ENOENT
+.I path
+does not exist.
+.TP
+.SM -EINVAL
+An invalid argument was specified.
+.SH "SEE ALSO"
+.BR llapi_layout_get_by_fid (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)

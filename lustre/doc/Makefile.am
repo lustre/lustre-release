@@ -44,7 +44,16 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 \
 	lustre_rsync.8 lfs_migrate.1 lhbadm.8 ldev.8 ldev.conf.5 nids.5 \
 	lfs-hsm.1 llapi_hsm_state_get.3 llapi_hsm_state_set.3 \
 	lustre_routes_config.8 lustre_routes_conversion.8 \
-	lfs-setdirstripe.1 lfs-mkdir.1 lfs-getdirstripe.1
+	lfs-setdirstripe.1 lfs-mkdir.1 lfs-getdirstripe.1 \
+	llapi_layout.7 llapi_layout_alloc.3 llapi_layout_file_create.3 \
+	llapi_layout_file_open.3 llapi_layout_free.3 llapi_layout_get_by_fd.3 \
+	llapi_layout_get_by_fid.3 llapi_layout_get_by_path.3 \
+	llapi_layout_ost_index_get.3 llapi_layout_ost_index_set.3 \
+	llapi_layout_pattern_get.3 llapi_layout_pattern_set.3 \
+	llapi_layout_pool_name_get.3 llapi_layout_pool_name_set.3 \
+	llapi_layout_stripe_count_get.3 llapi_layout_stripe_count_set.3 \
+	llapi_layout_stripe_size_get.3
+
 SERVER_MANFILES = mkfs.lustre.8 tunefs.lustre.8
 
 if SERVER

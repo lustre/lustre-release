@@ -1,0 +1,61 @@
+.TH llapi_layout_pattern_get 3 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout_pattern_get, llapi_layout_pattern_set \- get or set the
+RAID striping pattern of a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_pattern_get(const struct llapi_layout *" layout ", uint64_t *" pattern );
+.PP
+.BI "int llapi_layout_pattern_set(struct llapi_layout *" layout ", uint64_t " pattern );
+.fi
+.SH DESCRIPTION
+.PP
+.B llapi_layout_pattern_get()
+stores into
+.I pattern
+the RAID striping pattern used by layout
+.IR layout .
+.PP
+.B llapi_layout_pattern_set()
+sets the RAID striping pattern of
+.I layout
+to
+.IR pattern .
+Currently the only supported RAID pattern is RAID0.  If
+.I pattern
+is not a supported RAID pattern the return value will be -1 and errno will
+be set to
+.BR EOPNOTSUPP .
+.PP
+A
+.I pattern
+value of
+.B LLAPI_LAYOUT_DEFAULT
+means that the filesystem default RAID pattern will be used.
+.PP
+A
+.I pattern
+value of
+.B LLAPI_LAYOUT_RAID0
+means that the RAID0 pattern will be used.
+.SH RETURN VALUES
+.LP
+.B llapi_layout_pattern_get()
+and
+.B llapi_layout_pattern_set()
+return 0 on success, or -1 if an error occurred (in which case, errno is
+set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.TP 15
+.SM EOPNOTSUPP
+An unsupported RAID pattern was specified.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)

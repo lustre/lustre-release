@@ -1,0 +1,74 @@
+.TH llapi_layout_pool_name_get 3 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout_pool_name_get, llapi_layout_pool_name_set \- get or set the
+OST pool name of a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_pool_name_get(const struct llapi_layout *" layout ",
+.BI "                               char *" pool_name ", size_t " n ");
+.sp
+.BI "int llapi_layout_pool_name_set(struct llapi_layout *" layout ",
+.BI "                               const char *" pool_name );
+.fi
+.SH DESCRIPTION
+.PP
+.B llapi_layout_pool_name_get()
+stores into
+.I pool_name
+up to
+.I n
+characters of the name of the pool of OSTS associated with
+.IR layout .
+.PP
+.B llapi_layout_pool_name_set()
+sets the OST pool name of
+.I  layout
+to
+.IR pool_name .
+If
+.I pool_name
+uses "fsname.pool" notation to qualify the pool name
+with a filesystem name, the "fsname." portion will be silently
+discarded before storing the value.
+.PP
+.B llapi_layout_pool_name_set()
+does not validate that
+.I pool_name
+names an existing non-empty pool, since it is not known a priori which
+filesystem
+.I layout
+will be applied to. However, the function
+.B llapi_layout_file_create()
+will fail if given a
+.I layout
+with a pool that does not exist or contains no OSTs.
+.SH RETURN VALUES
+.LP
+.B llapi_layout_pool_name_get()
+and
+.B llapi_layout_pool_name_set()
+return 0 on success, or -1 if an error occurred (in which case, errno is
+set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.SH NOTES
+.PP
+A pool defines a set of OSTs from which objects may be allocated
+to store a file in a Lustre filesystem.
+Pools are created by the filesystem administrator using the
+.BR lctl (1)
+command.  This API allows an application to create a file within an
+existing pool, or to query the name of a pool that a file was created
+in. It does not provide an interface for creating or destroying pools.
+Refer to the Lustre Operations Manual for detailed background material
+about OST pools.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7),
+.BR lctl (1)

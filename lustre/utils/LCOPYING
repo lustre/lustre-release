@@ -1,7 +1,8 @@
 This licence file applies to new library files:
 lustre/utils/liblustreapi_hsm.c
+lustre/utils/liblustreapi_layout.c
 lustre/utils/lustreapi_internal.h
-------------------------------------------------------------------------------- 
+-------------------------------------------------------------------------------
 		  GNU LESSER GENERAL PUBLIC LICENSE
                        Version 2.1, February 1999
 

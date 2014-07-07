@@ -1,0 +1,102 @@
+.TH llapi_layout_file_open 3 "2013 Oct 31" "Lustre User API"
+.SH NAME
+llapi_layout_file_open, llapi_layout_file_create \- open and apply a layout to a Lustre file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_file_open(char *" path ", int " open_flags ", int " mode ,
+.BI "                           const struct llapi_layout *" layout );
+.PP
+.BI "int llapi_layout_file_create(char *" path ", int " open_flags ", int " mode ,
+.BI "                             const struct llapi_layout *" layout );
+.fi
+.SH DESCRIPTION
+.LP
+The functions
+.B llapi_layout_file_open()
+and
+.B llapi_layout_file_create()
+open and possibly create a file at
+.I path
+with the permissions specified in
+.I mode
+using the Lustre layout attributes in
+.IR layout .
+The returned file descriptor may be used in subsequent system calls
+.RB ( read (2),
+.BR write (2),
+.BR lseek (2),
+etc.), and closed with
+.BR close (2).
+One access mode and zero or more file creation flags and file status
+flags may be bitwise-or'd in
+.IR open_flags .
+See
+.BR open (2).
+If
+.I layout
+is non-NULL and
+.I path
+is not on a Lustre filesystem this function will fail and set
+.B errno
+to
+.BR ENOTTY .
+.PP
+The function call
+.PP
+.B "    llapi_layout_file_create(path, open_flags, mode, layout)"
+.PP
+shall be equivalent to:
+.PP
+.B "    llapi_layout_file_open(path, open_flags|O_CREAT|O_EXCL, mode, layout)"
+.PP
+The
+.I layout
+and
+.I mode
+will not be applied to a file which already exists. Callers requiring a
+guarantee that the opened file is created with the specified
+.I layout
+and
+.I mode
+should use
+.BR llapi_layout_file_create() .
+.PP
+A
+.B NULL
+.I layout
+may be specified, in which case the standard Lustre behavior for
+assigning layouts to newly-created files will apply.
+.PP
+If the pool name attribute of
+.I layout
+has been set, it must refer to an OST pool that exists and contains one
+or more OSTs, otherwise these functions will fail and set
+.B errno
+to
+.BR EINVAL .
+See
+.BR llapi_layout_pool_name_set (3).
+.SH RETURN VALUES
+.LP
+.B llapi_layout_file_open()
+and
+.B llapi_layout_file_create()
+return a new file descriptor, or -1 if an error occurred (in which
+case, errno is set appropriately).
+.SH ERRORS
+.TP 15
+.SM ENOTTY
+.I path
+does not reside on a Lustre filesystem.
+.TP
+.SM EINVAL
+An invalid argument was specified.
+.SH "SEE ALSO"
+.BR llapi_layout (7),
+.BR liblustreapi (7),
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_pool_name_set (3),
+.BR open (2),
+.BR close (2)
