@@ -45,14 +45,8 @@ void *
 cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
 	       size_t nr_bytes, unsigned int flags)
 {
-	void    *ptr;
-
-	ptr = kmalloc_node(nr_bytes, flags,
-			   cfs_cpt_spread_node(cptab, cpt));
-	if (ptr != NULL && (flags & __GFP_ZERO) != 0)
-		memset(ptr, 0, nr_bytes);
-
-	return ptr;
+	return kmalloc_node(nr_bytes, flags,
+			    cfs_cpt_spread_node(cptab, cpt));
 }
 EXPORT_SYMBOL(cfs_cpt_malloc);
 
