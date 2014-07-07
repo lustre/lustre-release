@@ -2062,6 +2062,14 @@ mount.lustre</title>
                 <para>  The server is allowed to incrementally extend its timeout up to a hard maximum of <literal>timeout</literal> seconds. The default hard recovery timeout is set to 900 seconds (15 minutes).</para>
               </entry>
             </row>
+            <row>
+              <entry>
+                <para> <literal>noscrub</literal></para>
+              </entry>
+              <entry>
+		      <para>Typically the MDT will detect restoration from a file-level backup during mount. This mount option prevents the OI Scrub from starting automatically when the MDT is mounted. Manually starting LFSCK after mounting provides finer control over the starting conditions. This mount option also prevents OI scrub from occurring automatically when OI inconsistency is detected (see <xref linkend="dbdoclet.lfsck_auto_scrub"/>)</para>
+              </entry>
+            </row>
           </tbody>
         </tgroup>
       </informaltable>

@@ -124,7 +124,11 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         <section>
             <title>Manually Starting LFSCK</title>
             <section>
-                <title>Synopsis</title>
+                <title>Description</title>
+		<para>LFSCK can be started after the MDT is mounted using the <literal>lctl lfsck_start</literal> command.</para>
+            </section>
+            <section>
+                <title>Usage</title>
                 <screen>lctl lfsck_start -M | --device <replaceable>[MDT,OST]_device</replaceable> \
                     [-A | --all] \
                     [-c | --create_ostobj <replaceable>[on | off]</replaceable>] \
@@ -138,10 +142,6 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
                     [-w | --window_size <replaceable>size</replaceable>]
                 </screen>
-            </section>
-            <section>
-                <title>Description</title>
-                <para>This command is used by LFSCK after the MDT is mounted.</para>
             </section>
             <section>
                 <title>Options</title>
@@ -268,15 +268,15 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         <section>
             <title>Manually Stopping LFSCK</title>
             <section>
-                <title>Synopsis</title>
+                <title>Description</title>
+		<para>To stop LFSCK when the MDT is mounted, use the <literal>lctl lfsck_stop</literal> command.</para>
+            </section>
+            <section>
+                <title>Usage</title>
                 <screen>lctl lfsck_stop -M | --device <replaceable>[MDT,OST]_device</replaceable> \
                     [-A | --all] \
                     [-h | --help]
                 </screen>
-            </section>
-            <section>
-                <title>Description</title>
-                <para>This command is used by LFSCK after the MDT is mounted.</para>
             </section>
             <section>
                 <title>Options</title>
@@ -330,14 +330,14 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         <title>LFSCK status interface</title>
         <section>
             <title>LFSCK status of OI Scrub via <literal>procfs</literal></title>
-            <section >
-                <title>Synopsis</title>
-                <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
-                </screen>
-            </section>
             <section>
                 <title>Description</title>
-                <para>For each LFSCK component there is a dedicated procfs interface to trace corresponding LFSCK component status. For OI Scrub, the interface is the OSD layer procfs interface, named <literal>oi_scrub</literal>. To display OI Scrub status, the standard <literal>lctl get_param</literal> command is used as described in the synopsis.</para>
+                <para>For each LFSCK component there is a dedicated procfs interface to trace the corresponding LFSCK component status. For OI Scrub, the interface is the OSD layer procfs interface, named <literal>oi_scrub</literal>. To display OI Scrub status, the standard <literal>lctl get_param</literal> command is used as shown in the usage below.</para>
+            </section>
+            <section >
+                <title>Usage</title>
+                <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
+                </screen>
             </section>
             <section>
                 <title>Output</title>
@@ -412,14 +412,14 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
         <section condition='l24'>
             <title>LFSCK status of namespace via <literal>procfs</literal></title>
-            <section >
-                <title>Synopsis</title>
-                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace
-                </screen>
-            </section>
             <section>
                 <title>Description</title>
-                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the synopsis.</para>
+                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component, <literal>lctl get_param</literal> should be used as described in the usage below.</para>
+            </section>
+            <section >
+                <title>Usage</title>
+                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace
+                </screen>
             </section>
             <section>
                 <title>Output</title>
@@ -520,15 +520,15 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
         <section condition='l26'>
             <title>LFSCK status of layout via <literal>procfs</literal></title>
+            <section>
+                <title>Description</title>
+                <para>The <literal>layout</literal> component is responsible for checking and repairing MDT-OST inconsistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_layout</literal>, and in the OBD layer, named <literal>lfsck_layout</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the usage below.</para>
+            </section>
             <section >
-                <title>Synopsis</title>
+                <title>Usage</title>
                 <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_layout
 lctl get_param -n obdfilter.<replaceable>FSNAME</replaceable>-<replaceable>OST_device</replaceable>.lfsck_layout
                 </screen>
-            </section>
-            <section>
-                <title>Description</title>
-                <para>The <literal>layout</literal> component is responsible for checking and repairing MDT-OST inconsistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_layout</literal>, and in the OBD layer, named <literal>lfsck_layout</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the synopsis.</para>
             </section>
             <section>
                 <title>Output</title>
@@ -611,13 +611,13 @@ lctl get_param -n obdfilter.<replaceable>FSNAME</replaceable>-<replaceable>OST_d
         <section condition='l26'>
             <title>Rate control</title>
             <section>
-                <title>Synopsis</title>
-                <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=N
-lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=N</screen>
+                <title>Description</title>
+		<para>The LFSCK upper speed limit can be changed using <literal>lctl set_param</literal> as shown in the usage below.</para>
             </section>
             <section>
-                <title>Description</title>
-                <para>Change the LFSCK upper speed limit.</para>
+                <title>Usage</title>
+                <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=<replaceable>N</replaceable>
+lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=<replaceable>N</replaceable></screen>
             </section>
             <section>
                 <title>Values</title>
@@ -647,16 +647,18 @@ lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=N</screen>
                 </informaltable>
             </section>
         </section>
-        <section>
-            <title>Mount options</title>
-            <section>
-                <title>Synopsis</title>
-                <screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_device}.auto_scrub=N
-                </screen>
-            </section>
+        <section xml:id="dbdoclet.lfsck_auto_scrub">
+            <title>Auto scrub</title>
             <section>
                 <title>Description</title>
-                <para>Typically, the MDT will detect restoration from a file-level backup during mount. For convenience an mount option <literal>noscrub</literal> is provided for MDTs. <literal>noscrub</literal> prevents the OI Scrub starting automatically when the MDT is mounted. The administrator can start LFSCK manually after the MDT is mounted with <literal>lctl</literal>. Manually starting LFSCK after mounting provides finer control over the starting conditions.</para>
+		<para>The <literal>auto_scrub</literal> parameter controls whether OI scrub will be triggered when an inconsistency is detected during OI lookup. It can be set as described in the usage and values sections below.</para>
+		<para>There is also a <literal>noscrub</literal> mount option (see <xref linkend="dbdoclet.50438219_12635"/>) which can be used to disable automatic OI scrub upon detection of a file-level backup at mount time. If the <literal>noscrub</literal> mount option is specified, <literal>auto_scrub</literal> will also be disabled, so OI scrub will not be triggered when an OI inconsistency is detected. Auto scrub can be renabled after the mount using the command shown in the usage. Manually starting LFSCK after mounting provides finer control over the starting conditions.</para>
+            </section>
+            <section>
+                <title>Usage</title>
+		<screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_device}.auto_scrub=<replaceable>N</replaceable>
+                </screen>
+		<para>where <replaceable>N</replaceable> is an integer as described below.</para>
             </section>
             <section>
                 <title>Values</title>
@@ -678,7 +680,7 @@ lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=N</screen>
                                     <para>positive integer</para>
                                 </entry>
                                 <entry>
-                                    <para>Manually start OI Scrub if needed.</para>
+                                    <para>Automatically start OI Scrub if inconsistency is detected during OI lookup.</para>
                                 </entry>
                             </row>
                         </tbody>
