@@ -71,38 +71,38 @@
 #define MAXOPT 4096
 #define MAX_RETRIES 99
 
-int          verbose = 0;
-char         *progname = NULL;
+int	verbose;
+int	version;
+char	*progname;
 
 void usage(FILE *out)
 {
-        fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
-        fprintf(out, "\nThis mount helper should only be invoked via the "
-                "mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
-        fprintf(out, "usage: %s [-fhnv] [-o <mntopt>] <device> <mountpt>\n",
-                progname);
-        fprintf(out,
-                "\t<device>: the disk device, or for a client:\n"
-                "\t\t<mgmtnid>[:<altmgtnid>...]:/<filesystem>-client\n"
-                "\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
-                "\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
-                "\t-f|--fake: fake mount (updates /etc/mtab)\n"
-                "\t-o force|--force: force mount even if already in /etc/mtab\n"
-                "\t-h|--help: print this usage message\n"
-                "\t-n|--nomtab: do not update /etc/mtab after mount\n"
-                "\t-v|--verbose: print verbose config settings\n"
-                "\t<mntopt>: one or more comma separated of:\n"
-                "\t\t(no)flock,(no)user_xattr,(no)acl\n"
-                "\t\tabort_recov: abort server recovery handling\n"
-                "\t\tnosvc: only start MGC/MGS obds\n"
-                "\t\tnomgs: only start target obds, using existing MGS\n"
-                "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
-                "inactive OSTs (e.g. lustre-OST0001)\n"
-                "\t\tretry=<num>: number of times mount is retried by client\n"
-                "\t\tmd_stripe_cache_size=<num>: set the raid stripe cache "
-                "size for the underlying raid if present\n"
-                );
-        exit((out != stdout) ? EINVAL : 0);
+	fprintf(out, "\nThis mount helper should only be invoked via the "
+		"mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
+	fprintf(out, "usage: %s [-fhnvV] [-o <mntopt>] <device> <mountpt>\n",
+		progname);
+	fprintf(out,
+		"\t<device>: the disk device, or for a client:\n"
+		"\t\t<mgmtnid>[:<altmgtnid>...]:/<filesystem>-client\n"
+		"\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
+		"\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
+		"\t-f|--fake: fake mount (updates /etc/mtab)\n"
+		"\t-o force|--force: force mount even if already in /etc/mtab\n"
+		"\t-h|--help: print this usage message\n"
+		"\t-n|--nomtab: do not update /etc/mtab after mount\n"
+		"\t-v|--verbose: print verbose config settings\n"
+		"\t-V|--version: output build version of the utility and exit\n"
+		"\t<mntopt>: one or more comma separated of:\n"
+		"\t\t(no)flock,(no)user_xattr,(no)acl\n"
+		"\t\tabort_recov: abort server recovery handling\n"
+		"\t\tnosvc: only start MGC/MGS obds\n"
+		"\t\tnomgs: only start target obds, using existing MGS\n"
+		"\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
+		"inactive OSTs (e.g. lustre-OST0001)\n"
+		"\t\tretry=<num>: number of times mount is retried by client\n"
+		"\t\tmd_stripe_cache_size=<num>: set the raid stripe cache "
+		"size for the underlying raid if present\n");
+	exit((out != stdout) ? EINVAL : 0);
 }
 
 /* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
@@ -508,6 +508,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		{"nomtab", 0, 0, 'n'},
 		{"options", 1, 0, 'o'},
 		{"verbose", 0, 0, 'v'},
+		{"version", 0, 0, 'V'},
 		{0, 0, 0, 0}
 	};
 	char real_path[PATH_MAX] = {'\0'};
@@ -517,7 +518,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	char *ptr;
 	int opt, rc;
 
-	while ((opt = getopt_long(argc, argv, "fhno:v",
+	while ((opt = getopt_long(argc, argv, "fhno:vV",
 				  long_opt, NULL)) != EOF){
 		switch (opt) {
 		case 1:
@@ -541,6 +542,11 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		case 'v':
 			++verbose;
 			break;
+		case 'V':
+			++version;
+			fprintf(stdout, "%s %s\n", progname,
+				LUSTRE_VERSION_STRING);
+			return 0;
 		default:
 			fprintf(stderr, "%s: unknown option '%c'\n",
 					progname, opt);
@@ -614,7 +620,7 @@ int main(int argc, char *const argv[])
 		return rc;
 
 	rc = parse_opts(argc, argv, &mop);
-	if (rc)
+	if (rc || version)
 		return rc;
 
         if (verbose) {

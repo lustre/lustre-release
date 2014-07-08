@@ -47,11 +47,6 @@
 #include <libcfs/libcfsutil.h>
 #include <lustre/lustre_idl.h>
 
-static int jt_quit(int argc, char **argv) {
-        Parser_quit(argc, argv);
-        return 0;
-}
-
 static int jt_noop(int argc, char **argv) {
         return 0;
 }
@@ -80,11 +75,13 @@ command_t cmdlist[] = {
         {"lustre_build_version", jt_get_version, 0,
          "print the build version of lustre\n"
          "usage: lustre_build_version"},
-        {"exit", jt_quit, 0, "quit"},
-        {"quit", jt_quit, 0, "quit"},
+	{"exit", Parser_quit, 0, "quit"},
+	{"quit", Parser_quit, 0, "quit"},
+	{"--version", Parser_version, 0,
+	 "output build version of the utility and exit"},
 
-        /* Network configuration commands */
-        {"===== network config =====", jt_noop, 0, "network config"},
+	/* Network configuration commands */
+	{"===== network config =====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0,"run <command> after setting network to <net>\n"
          "usage: --net <tcp/elan/o2ib/...> <command>"},
         {"network", jt_ptl_network, 0, "configure LNET"
@@ -464,7 +461,7 @@ int lctl_main(int argc, char **argv)
         if (dbg_initialize(argc, argv) < 0)
                 exit(3);
 
-        Parser_init("lctl > ", cmdlist);
+	Parser_init("lctl > ", cmdlist);
 
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);

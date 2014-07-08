@@ -340,6 +340,8 @@ command_t cmdlist[] = {
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
+	{"--version", Parser_version, 0,
+	 "output build version of the utility and exit"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -3862,7 +3864,7 @@ int main(int argc, char **argv)
 
         setlinebuf(stdout);
 
-        Parser_init("lfs > ", cmdlist);
+	Parser_init("lfs > ", cmdlist);
 
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);

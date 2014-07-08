@@ -68,7 +68,8 @@ typedef struct network {
 	int	port;
 } network_t;
 
-int  Parser_quit(int argc, char **argv);
+int Parser_quit(int argc, char **argv);
+int Parser_version(int argc, char **argv);
 void Parser_init(char *, command_t *);	/* Set prompt and load command list */
 int Parser_commands(void);			/* Start the command parser */
 void Parser_qhelp(int, char **);	/* Quick help routine */

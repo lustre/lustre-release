@@ -44,7 +44,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .RB [ path ]
 .br
-.B path2fid <path> ...
+.B lfs path2fid <path> ...
 .br
 .B lfs pool_list <filesystem>[.<pool>] | <pathname>
 .br
@@ -84,12 +84,14 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs data_version [-n] \fB<filename>\fR
 .br
+.B lfs --version
+.br
 .B lfs help
 .SH DESCRIPTION
 .B lfs
 can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
 .SH OPTIONS
-The various options supported by lctl are listed and explained below:
+The various options supported by lfs are listed and explained below:
 .TP
 .B changelog
 Show the metadata changes on an MDT.  Start and end points are optional.  The --follow option will block on new changes; this option is only valid when run direclty on the MDT node.
@@ -283,6 +285,9 @@ then it will allow creating remote directories that have parents other than
 MDT0000. This is restricted to avoid creating directory trees that have
 intermediate path components on a series different MDTs and become unavailable
 if any of the intermediate MDTs are offline.
+.TP
+.B --version
+Output the build version of the lfs utility. Use "lctl lustre_build_version" to get the version of the Lustre kernel modules
 .TP
 .B help 
 Provides brief help on the various arguments

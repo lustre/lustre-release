@@ -18,6 +18,7 @@
  *
  */
 
+#include <lustre_ver.h>
 #include <libcfs/libcfsutil.h>
 
 static command_t * top_level;           /* Top level of commands, initialized by
@@ -766,4 +767,11 @@ int Parser_quit(int argc, char **argv)
         argv = argv;
         done = 1;
         return 0;
+}
+
+int Parser_version(int argc, char **argv)
+{
+	fprintf(stdout, "%s %s\n", program_invocation_short_name,
+		LUSTRE_VERSION_STRING);
+	return 0;
 }

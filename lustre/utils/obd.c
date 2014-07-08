@@ -932,11 +932,10 @@ int jt_get_version(int argc, char **argv)
         if (rc)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(-rc));
-        else
-                printf("Lustre version: %s\n", version);
+	else
+		printf("Lustre version: %s\n", version);
 
-        printf("lctl   version: %s\n", BUILD_VERSION);
-        return rc;
+	return rc;
 }
 
 static void print_obd_line(char *s)
