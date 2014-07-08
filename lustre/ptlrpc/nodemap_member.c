@@ -272,14 +272,25 @@ out:
 	return 0;
 }
 
+/* Mutex used to serialize calls to reclassify_nodemap_lock */
 DEFINE_MUTEX(reclassify_nodemap_lock);
 
 /**
- * Reclassify the members of a nodemap after range changes or activation,
- * based on the member export's NID and the nodemap's new NID ranges. Exports
- * that are no longer classified as being part of this nodemap are moved to the
- * nodemap whose NID ranges contain the export's NID, and their locks are
- * revoked.
+ * Reclassify the members of a nodemap after range changes or activation.
+ * This function reclassifies the members of a nodemap based on the member
+ * export's NID and the nodemap's new NID ranges. Exports that are no longer
+ * classified as being part of this nodemap are moved to the nodemap whose
+ * NID ranges contain the export's NID, and their locks are revoked.
+ *
+ * Calls to this function are serialized due to a potential deadlock: Say there
+ * is a nodemap A and a nodemap B that both need to reclassify their members.
+ * If there is a member in nodemap A that should be in nodemap B, reclassify
+ * will attempt to add the member to nodemap B. If nodemap B is also
+ * reclassifying its members, then its hash is locked and nodemap A's attempt
+ * to add will block and wait for nodemap B's reclassify to finish. If
+ * nodemap B's reclassify then attempts to reclassify a member that should be
+ * in nodemap A, it will also try add the member to nodemap A's locked hash,
+ * causing a deadlock.
  *
  * \param	nodemap		nodemap with members to reclassify
  */
