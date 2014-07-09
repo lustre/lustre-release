@@ -703,26 +703,25 @@ do {									      \
 #define OBD_CPT_ALLOC_PTR(ptr, cptab, cpt)				      \
 	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof *(ptr))
 
-# define __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)			      \
+# define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
-		vmalloc(size) :					      \
-		cfs_cpt_vmalloc(cptab, cpt, size);			      \
+		vzalloc(size) :					      \
+		cfs_cpt_vzalloc(cptab, cpt, size);			      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
 		       (int)(size));                                          \
 		CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
 		       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
 	} else {                                                              \
-		memset(ptr, 0, size);                                         \
 		OBD_ALLOC_POST(ptr, size, "vmalloced");                       \
 	}                                                                     \
 } while(0)
 
 # define OBD_VMALLOC(ptr, size)						      \
-	 __OBD_VMALLOC_VEROBSE(ptr, NULL, 0, size)
+	 __OBD_VMALLOC_VERBOSE(ptr, NULL, 0, size)
 # define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
-	 __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)
+	 __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)
 
 #ifdef __KERNEL__
 

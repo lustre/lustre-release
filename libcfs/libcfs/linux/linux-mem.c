@@ -51,11 +51,11 @@ cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
 EXPORT_SYMBOL(cfs_cpt_malloc);
 
 void *
-cfs_cpt_vmalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
+cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
 {
-	return vmalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
+	return vzalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
 }
-EXPORT_SYMBOL(cfs_cpt_vmalloc);
+EXPORT_SYMBOL(cfs_cpt_vzalloc);
 
 struct page *
 cfs_page_cpt_alloc(struct cfs_cpt_table *cptab, int cpt, unsigned int flags)

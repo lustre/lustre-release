@@ -172,7 +172,6 @@ do {									    \
 		CERROR("LNET: %d total bytes allocated by lnet\n",	    \
 		       libcfs_kmem_read());				    \
 	} else {							    \
-		memset((ptr), 0, (size));				    \
 		libcfs_kmem_inc((ptr), (size));				    \
 		CDEBUG(D_MALLOC, "alloc '" #ptr "': %d at %p (tot %d).\n",  \
 		       (int)(size), (ptr), libcfs_kmem_read());		    \
@@ -181,12 +180,13 @@ do {									    \
 
 /**
  * allocate memory with GFP flags @mask
+ * The allocated memory is zeroed-out.
  */
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)				    \
 do {									    \
 	LIBCFS_ALLOC_PRE((size), (mask));				    \
 	(ptr) = (size) <= LIBCFS_VMALLOC_SIZE ?				    \
-		kmalloc((size), (mask)) : vmalloc(size);	    \
+		kzalloc((size), (mask)) : vzalloc(size);		    \
 	LIBCFS_ALLOC_POST((ptr), (size));				    \
 } while (0)
 
@@ -206,13 +206,14 @@ do {									    \
  * allocate memory for specified CPU partition
  *   \a cptab != NULL, \a cpt is CPU partition id of \a cptab
  *   \a cptab == NULL, \a cpt is HW NUMA node id
+ * The allocated memory is zeroed-out.
  */
 #define LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, mask)		    \
 do {									    \
 	LIBCFS_ALLOC_PRE((size), (mask));				    \
 	(ptr) = (size) <= LIBCFS_VMALLOC_SIZE ?				    \
-		cfs_cpt_malloc((cptab), (cpt), (size), (mask)) :	    \
-		cfs_cpt_vmalloc((cptab), (cpt), (size));		    \
+		cfs_cpt_malloc((cptab), (cpt), (size), (mask) | __GFP_ZERO) : \
+		cfs_cpt_vzalloc((cptab), (cpt), (size));		    \
 	LIBCFS_ALLOC_POST((ptr), (size));				    \
 } while (0)
 

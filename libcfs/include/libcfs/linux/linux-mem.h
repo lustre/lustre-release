@@ -97,7 +97,7 @@
 
 extern void *cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
 			    size_t nr_bytes, unsigned int flags);
-extern void *cfs_cpt_vmalloc(struct cfs_cpt_table *cptab, int cpt,
+extern void *cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt,
 			     size_t nr_bytes);
 extern struct page *cfs_page_cpt_alloc(struct cfs_cpt_table *cptab,
 				      int cpt, unsigned int flags);
