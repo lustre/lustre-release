@@ -419,7 +419,7 @@ static int qsd_upd_thread(void *arg)
 	struct lu_env		*env;
 	int			 qtype, rc = 0;
 	bool			 uptodate;
-	struct lquota_entry	*lqe, *tmp;
+	struct lquota_entry	*lqe;
 	__u64			 cur_time;
 	ENTRY;
 
@@ -452,8 +452,9 @@ static int qsd_upd_thread(void *arg)
 
 		spin_lock(&qsd->qsd_adjust_lock);
 		cur_time = cfs_time_current_64();
-		cfs_list_for_each_entry_safe(lqe, tmp, &qsd->qsd_adjust_list,
-					     lqe_link) {
+		while (!list_empty(&qsd->qsd_adjust_list)) {
+			lqe = list_entry(qsd->qsd_adjust_list.next,
+					 struct lquota_entry, lqe_link);
 			/* deferred items are sorted by time */
 			if (!cfs_time_beforeq_64(lqe->lqe_adjust_time,
 						 cur_time))
