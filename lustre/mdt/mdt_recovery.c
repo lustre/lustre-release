@@ -234,6 +234,26 @@ void mdt_reconstruct_generic(struct mdt_thread_info *mti,
         return mdt_req_from_lcd(req, ted->ted_lcd);
 }
 
+/**
+ * Generate fake attributes for a non-existing object
+ *
+ * While the client was waiting for the reply, the original transaction
+ * got committed and corresponding rep-ack lock got released, then another
+ * client was able to destroy the object. But we still need to send some
+ * attributes back. So we fake them and set nlink=0, so the client will
+ * be able to detect a non-existing object and drop it from the cache
+ * immediately.
+ *
+ * \param[out] ma	attributes to fill
+ */
+static void mdt_fake_ma(struct md_attr *ma)
+{
+	ma->ma_valid = MA_INODE;
+	memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
+	ma->ma_attr.la_valid = LA_NLINK;
+	ma->ma_attr.la_mode = S_IFREG;
+}
+
 static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                                    struct mdt_lock_handle *lhc)
 {
@@ -266,7 +286,9 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         mti->mti_attr.ma_need = MA_INODE;
         mti->mti_attr.ma_valid = 0;
 	rc = mdt_attr_get_complex(mti, child, &mti->mti_attr);
-	if (rc == -EREMOTE) {
+	if (rc == -ENOENT) {
+		mdt_fake_ma(&mti->mti_attr);
+	} else if (rc == -EREMOTE) {
 		/* object was created on remote server */
 		if (!mdt_is_dne_client(exp))
 			/* Return -EIO for old client */
@@ -310,7 +332,10 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 
         mti->mti_attr.ma_need = MA_INODE;
         mti->mti_attr.ma_valid = 0;
-	mdt_attr_get_complex(mti, obj, &mti->mti_attr);
+
+	rc = mdt_attr_get_complex(mti, obj, &mti->mti_attr);
+	if (rc == -ENOENT)
+		mdt_fake_ma(&mti->mti_attr);
         mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
                            mdt_object_fid(obj));
         if (mti->mti_ioepoch && (mti->mti_ioepoch->flags & MF_EPOCH_OPEN)) {
