@@ -624,12 +624,16 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	const struct lu_env *env = info->mti_env;
 	struct md_object    *next = mdt_object_child(o);
 	struct lu_buf       *buf = &info->mti_buf;
-	u32                  mode = lu_object_attr(&next->mo_lu);
 	int                  need = ma->ma_need;
 	int                  rc = 0, rc2;
+	u32                  mode;
 	ENTRY;
 
 	ma->ma_valid = 0;
+
+	if (mdt_object_exists(o) == 0)
+		GOTO(out, rc = -ENOENT);
+	mode = lu_object_attr(&next->mo_lu);
 
 	if (need & MA_INODE) {
 		ma->ma_need = MA_INODE;
