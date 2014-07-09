@@ -436,12 +436,10 @@ again:
 	rc = ptlrpc_queue_wait(req);
 	obd_put_request_slot(&exp->exp_obd->u.cli);
 	if (rc != 0) {
-		if (rc == -EWOULDBLOCK || rc == -ESHUTDOWN) {
-			/* For no_delay req(see above), EWOULDBLOCK and
-			 * ESHUTDOWN means the connection is being evicted,
-			 * but this seq lookup should not return error,
-			 * since it would cause unecessary failure of the
-			 * application, instead it should retry here */
+		if (imp->imp_state != LUSTRE_IMP_CLOSED) {
+			/* Since LWP is not replayable, so it will keep
+			 * trying unless umount happens, otherwise it would
+			 * cause unecessary failure of the application. */
 			ptlrpc_req_finished(req);
 			rc = 0;
 			goto again;
