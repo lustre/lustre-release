@@ -573,27 +573,35 @@ int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd)
 {
 	int rc;
 
+	rwlock_init(&ofd->ofd_seq_list_lock);
+	INIT_LIST_HEAD(&ofd->ofd_seq_list);
+	ofd->ofd_seq_count = 0;
+
 	rc = ofd_fid_init(env, ofd);
 	if (rc != 0) {
 		CERROR("%s: fid init error: rc = %d\n", ofd_name(ofd), rc);
-		return rc;
+		GOTO(out, rc);
 	}
 
 	rc = ofd_fld_init(env, ofd_name(ofd), ofd);
 	if (rc < 0) {
 		CERROR("%s: Can't init fld, rc %d\n", ofd_name(ofd), rc);
-		return rc;
+		GOTO(out_fid, rc);
 	}
 
 	rc = ofd_register_seq_exp(ofd);
 	if (rc < 0) {
 		CERROR("%s: Can't init seq exp, rc %d\n", ofd_name(ofd), rc);
-		return rc;
+		GOTO(out_fld, rc);
 	}
 
-	rwlock_init(&ofd->ofd_seq_list_lock);
-	INIT_LIST_HEAD(&ofd->ofd_seq_list);
-	ofd->ofd_seq_count = 0;
+	RETURN(0);
+
+out_fld:
+	ofd_fld_fini(env, ofd);
+out_fid:
+	ofd_fid_fini(env, ofd);
+out:
 	return rc;
 }
 
@@ -621,10 +629,10 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 
 	rc = ofd_seqs_init(env, ofd);
 	if (rc)
-		GOTO(out_hc, rc);
+		GOTO(out, rc);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
-		RETURN (-ENOENT);
+		GOTO(out_seqs, rc = -ENOENT);
 
 	lu_local_obj_fid(&info->fti_fid, OFD_HEALTH_CHECK_OID);
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
@@ -635,13 +643,14 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	fo = dt_find_or_create(env, ofd->ofd_osd, &info->fti_fid,
 			       &info->fti_dof, &info->fti_attr);
 	if (IS_ERR(fo))
-		GOTO(out, rc = PTR_ERR(fo));
+		GOTO(out_seqs, rc = PTR_ERR(fo));
 
 	ofd->ofd_health_check_file = fo;
 
 	RETURN(0);
-out_hc:
-	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
+
+out_seqs:
+	ofd_seqs_fini(env, ofd);
 out:
 	return rc;
 }
