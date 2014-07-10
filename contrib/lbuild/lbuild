@@ -1038,6 +1038,7 @@ build_lustre() {
 }
 
 build_lustre_dkms() {
+    [ -n "$MPSS_VERSION" ] && return 0
     local ver=$(eval echo  $(awk '/LUSTRE_VERSION_STRING/ {print $3}'  lustre/include/lustre_ver.h))
     echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
     ./configure --enable-dist || return 255
