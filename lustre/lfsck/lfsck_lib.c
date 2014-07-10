@@ -1568,7 +1568,7 @@ static int lfsck_stop_notify(const struct lu_env *env,
 					     &lfsck->li_list_double_scan);
 	if (com != NULL)
 		lfsck_component_get(com);
-	spin_lock(&lfsck->li_lock);
+	spin_unlock(&lfsck->li_lock);
 
 	if (com != NULL) {
 		if (com->lc_ops->lfsck_stop_notify != NULL) {

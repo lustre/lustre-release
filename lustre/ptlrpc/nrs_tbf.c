@@ -307,6 +307,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	spin_lock(&head->th_rule_lock);
 	tmp_rule = nrs_tbf_rule_find_nolock(head, start->tc_name);
 	if (tmp_rule) {
+		spin_unlock(&head->th_rule_lock);
 		nrs_tbf_rule_put(tmp_rule);
 		nrs_tbf_rule_put(rule);
 		return -EEXIST;
