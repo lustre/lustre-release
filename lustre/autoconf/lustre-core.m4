@@ -1419,7 +1419,7 @@ kiocb_ki_left, [
 #
 # LC_VFS_RENAME_5ARGS
 #
-# 3.13 has vfs_renane with 5 args
+# 3.13 has vfs_rename with 5 args
 #
 AC_DEFUN([LC_VFS_RENAME_5ARGS], [
 LB_CHECK_COMPILE([if Linux kernel has 'vfs_rename' with 5 args],
@@ -1436,7 +1436,7 @@ vfs_rename_5args, [
 #
 # LC_VFS_UNLINK_3ARGS
 #
-# 3.13 has vfs_renane with 3 args
+# 3.13 has vfs_unlink with 3 args
 #
 AC_DEFUN([LC_VFS_UNLINK_3ARGS], [
 LB_CHECK_COMPILE([if Linux kernel has 'vfs_unlink' with 3 args],
@@ -1468,6 +1468,23 @@ have_bvec_iter, [
 		[kernel has struct bvec_iter])
 ])
 ]) # LC_HAVE_BVEC_ITER
+
+#
+# LC_VFS_RENAME_6ARGS
+#
+# 3.15 has vfs_rename with 6 args
+#
+AC_DEFUN([LC_VFS_RENAME_6ARGS], [
+LB_CHECK_COMPILE([if Linux kernel has 'vfs_rename' with 6 args],
+vfs_rename_6args, [
+	#include <linux/fs.h>
+],[
+	vfs_rename(NULL, NULL, NULL, NULL, NULL, NULL);
+], [
+	AC_DEFINE(HAVE_VFS_RENAME_6ARGS, 1,
+		[kernel has vfs_rename with 6 args])
+])
+]) # LC_VFS_RENAME_6ARGS
 
 #
 # LC_PROG_LINUX
@@ -1589,6 +1606,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.14
 	LC_HAVE_BVEC_ITER
+
+	# 3.15
+	LC_VFS_RENAME_6ARGS
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

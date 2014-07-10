@@ -342,6 +342,8 @@ static inline struct dentry *d_make_root(struct inode *root)
 
 #ifdef HAVE_VFS_RENAME_5ARGS
 #define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL)
+#elif defined HAVE_VFS_RENAME_6ARGS
+#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL, 0)
 #else
 #define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d)
 #endif
