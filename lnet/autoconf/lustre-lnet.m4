@@ -551,6 +551,27 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_TCP_SENDPAGE
 
 #
+# LN_CONFIG_SK_DATA_READY
+#
+# 2.6.36 tcp_sendpage() first parameter is 'struct sock' instead of 'struct socket'.
+#
+AC_DEFUN([LN_CONFIG_SK_DATA_READY], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'sk_data_ready' takes only one argument],
+sk_data_ready, [
+	#include <linux/net.h>
+	#include <net/sock.h>
+],[
+	((struct sock *)0)->sk_data_ready(NULL);
+],[
+	AC_DEFINE(HAVE_SK_DATA_READY_ONE_ARG, 1,
+		[sk_data_ready uses only one argument])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_CONFIG_SK_DATA_READY
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -569,6 +590,8 @@ LN_CONFIG_GNILND
 LN_CONFIG_MX
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
+# 3.15
+LN_CONFIG_SK_DATA_READY
 ]) # LN_PROG_LINUX
 
 #

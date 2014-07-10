@@ -959,25 +959,33 @@ extern void ksocknal_write_callback (ksock_conn_t *conn);
  * socket call back in Linux
  */
 static void
-ksocknal_data_ready (struct sock *sk, int n)
+#ifdef HAVE_SK_DATA_READY_ONE_ARG
+ksocknal_data_ready(struct sock *sk)
+#else
+ksocknal_data_ready(struct sock *sk, int n)
+#endif
 {
-        ksock_conn_t  *conn;
-        ENTRY;
+	ksock_conn_t  *conn;
+	ENTRY;
 
         /* interleave correctly with closing sockets... */
         LASSERT(!in_irq());
 	read_lock(&ksocknal_data.ksnd_global_lock);
 
-        conn = sk->sk_user_data;
-        if (conn == NULL) {             /* raced with ksocknal_terminate_conn */
-                LASSERT (sk->sk_data_ready != &ksocknal_data_ready);
-                sk->sk_data_ready (sk, n);
-        } else
-                ksocknal_read_callback(conn);
+	conn = sk->sk_user_data;
+	if (conn == NULL) {	/* raced with ksocknal_terminate_conn */
+		LASSERT(sk->sk_data_ready != &ksocknal_data_ready);
+#ifdef HAVE_SK_DATA_READY_ONE_ARG
+		sk->sk_data_ready(sk);
+#else
+		sk->sk_data_ready(sk, n);
+#endif
+	} else
+		ksocknal_read_callback(conn);
 
 	read_unlock(&ksocknal_data.ksnd_global_lock);
 
-        EXIT;
+	EXIT;
 }
 
 static void
