@@ -408,11 +408,6 @@ AC_CHECK_FUNCS([strlcpy])
 # libcfs/libcfs/user-prim.c, missing for RHEL5 and earlier userspace
 AC_CHECK_FUNCS([strlcat])
 
-AC_CHECK_TYPE([umode_t],
-	[AC_DEFINE(HAVE_UMODE_T, 1, [umode_t is defined])],
-	[],
-	[#include <asm/types.h>])
-
 # --------  Check for required packages  --------------
 
 AC_MSG_NOTICE([LibCFS required packages checks

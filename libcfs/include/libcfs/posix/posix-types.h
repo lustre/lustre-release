@@ -46,10 +46,6 @@
 # include <linux/types.h>
 #endif
 #include <stdbool.h> /* for bool */
-#ifndef HAVE_UMODE_T
-typedef unsigned short umode_t;
-#else
-#endif
 
 #ifndef _LINUX_TYPES_H
 /*
