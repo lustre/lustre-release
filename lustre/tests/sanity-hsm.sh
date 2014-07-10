@@ -4090,6 +4090,56 @@ test_404() {
 }
 run_test 404 "Inactive MDT does not block requests for active MDTs"
 
+test_405() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local striped_dir=$DIR/$tdir/striped_dir
+
+	# create striped dir on all of MDTs
+	$LFS mkdir -i 0 -c $MDSCOUNT $striped_dir || error "lfs mkdir"
+
+	local fid1=$(make_small_sync $striped_dir/${tfile}_0)
+	local fid2=$(make_small_sync $striped_dir/${tfile}_1)
+	local fid3=$(make_small_sync $striped_dir/${tfile}_2)
+	local fid4=$(make_small_sync $striped_dir/${tfile}_3)
+
+	local idx1=$($LFS getstripe -M $striped_dir/${tfile}_0)
+	local idx2=$($LFS getstripe -M $striped_dir/${tfile}_1)
+	local idx3=$($LFS getstripe -M $striped_dir/${tfile}_2)
+	local idx4=$($LFS getstripe -M $striped_dir/${tfile}_3)
+
+	# check that compound requests are shunt to the rights MDTs
+	$LFS hsm_archive $striped_dir/${tfile}_0 $striped_dir/${tfile}_1  \
+			 $striped_dir/${tfile}_2 $striped_dir/${tfile}_3 ||
+		error "lfs hsm_archive"
+
+	wait_request_state $fid1 ARCHIVE SUCCEED $idx1 &&
+		echo "archive successful on $fid1"
+	wait_request_state $fid2 ARCHIVE SUCCEED $idx2 &&
+		echo "archive successful on $fid2"
+	wait_request_state $fid3 ARCHIVE SUCCEED $idx3 &&
+		echo "archive successful on $fid3"
+	wait_request_state $fid4 ARCHIVE SUCCEED $idx4 &&
+		echo "archive successful on $fid4"
+
+	$LFS hsm_release $striped_dir/${tfile}_0 || error "lfs hsm_release 1"
+	$LFS hsm_release $striped_dir/${tfile}_1 || error "lfs hsm_release 2"
+	$LFS hsm_release $striped_dir/${tfile}_2 || error "lfs hsm_release 3"
+	$LFS hsm_release $striped_dir/${tfile}_3 || error "lfs hsm_release 4"
+
+	cat $striped_dir/${tfile}_0 > /dev/null || error "cat ${tfile}_0 failed"
+	cat $striped_dir/${tfile}_1 > /dev/null || error "cat ${tfile}_1 failed"
+	cat $striped_dir/${tfile}_2 > /dev/null || error "cat ${tfile}_2 failed"
+	cat $striped_dir/${tfile}_3 > /dev/null || error "cat ${tfile}_3 failed"
+
+	copytool_cleanup
+}
+run_test 405 "archive and release under striped directory"
+
 copytool_cleanup
 
 complete $SECONDS

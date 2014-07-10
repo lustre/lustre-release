@@ -85,6 +85,7 @@ struct options {
 	enum ct_action		 o_action;
 	char			*o_event_fifo;
 	char			*o_mnt;
+	int			 o_mnt_fd;
 	char			*o_hsm_root;
 	char			*o_src; /* for import, or rebind */
 	char			*o_dst; /* for import, or rebind */
@@ -331,6 +332,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	}
 
 	opt.o_mnt = argv[optind];
+	opt.o_mnt_fd = -1;
 
 	CT_TRACE("action=%d src=%s dst=%s mount_point=%s",
 		 opt.o_action, opt.o_src, opt.o_dst, opt.o_mnt);
@@ -1084,7 +1086,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	int				 hp_flags = 0;
 	int				 src_fd = -1;
 	int				 dst_fd = -1;
-	int				 mdt_index = -1; /* Not implemented */
+	int				 mdt_index = -1;
 	int				 open_flags = 0;
 	bool				 set_lovea;
 	struct lu_fid			 dfid;
@@ -1096,6 +1098,13 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 	/* build backend file name from released file FID */
 	ct_path_archive(src, sizeof(src), opt.o_hsm_root, &hai->hai_fid);
 
+	rc = llapi_get_mdt_index_by_fid(opt.o_mnt_fd, &hai->hai_fid,
+					&mdt_index);
+	if (rc < 0) {
+		CT_ERROR(rc, "cannot get mdt index "DFID"",
+			 PFID(&hai->hai_fid));
+		return rc;
+	}
 	/* restore loads and sets the LOVEA w/o interpreting it to avoid
 	 * dependency on the structure format. */
 	rc = ct_load_stripe(src, lov_buf, &lov_size);
@@ -1861,6 +1870,14 @@ static int ct_setup(void)
 		return rc;
 	}
 
+	opt.o_mnt_fd = open(opt.o_mnt, O_RDONLY);
+	if (opt.o_mnt_fd < 0) {
+		rc = -errno;
+		CT_ERROR(rc, "cannot open mount point at '%s'",
+			 opt.o_mnt);
+		return rc;
+	}
+
 	return rc;
 }
 
@@ -1868,13 +1885,22 @@ static int ct_cleanup(void)
 {
 	int	rc;
 
-	if (arc_fd < 0)
-		return 0;
+	if (opt.o_mnt_fd >= 0) {
+		rc = close(opt.o_mnt_fd);
+		if (rc < 0) {
+			rc = -errno;
+			CT_ERROR(rc, "cannot close mount point");
+			return rc;
+		}
+	}
 
-	if (close(arc_fd) < 0) {
-		rc = -errno;
-		CT_ERROR(rc, "cannot close archive root directory");
-		return rc;
+	if (arc_fd >= 0) {
+		rc = close(arc_fd);
+		if (rc < 0) {
+			rc = -errno;
+			CT_ERROR(rc, "cannot close archive root directory");
+			return rc;
+		}
 	}
 
 	return 0;

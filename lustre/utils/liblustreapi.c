@@ -4362,6 +4362,20 @@ static int fid_from_lma(const char *path, const int fd, lustre_fid *fid)
 	return 0;
 }
 
+int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
+			       int *mdt_index)
+{
+	int	rc;
+
+	rc = ioctl(fd, LL_IOC_FID2MDTIDX, fid);
+	if (rc < 0)
+		return -errno;
+
+	*mdt_index = rc;
+
+	return rc;
+}
+
 int llapi_fd2fid(const int fd, lustre_fid *fid)
 {
 	int rc;
