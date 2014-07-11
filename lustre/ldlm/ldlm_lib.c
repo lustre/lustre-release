@@ -1072,7 +1072,7 @@ dont_check_exports:
         if (rc)
                 GOTO(out, rc);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 51, 0)
 	/* 2.2.0 clients always swab nidtbl entries due to a bug, so server
 	 * will do the swabbing for if the client is using the same endianness.
 	 *

@@ -767,7 +767,7 @@ static void lprocfs_param_pattern(const char *cmd, const char *path, char *buf,
                 if (!warned) {
                         fprintf(stderr, "%s: specifying parameters via "
                                 "full paths is deprecated.\n", cmd);
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 50, 0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 51, 0)
 #warning "remove deprecated full path tunable access"
 #endif
                         warned = 1;
