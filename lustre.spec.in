@@ -136,7 +136,7 @@ Lustre file system, server and network drivers for Linux %{kversion}.
 %package osd-ldiskfs
 Summary: osd-ldiskfs contains both ldiskfs and its osd interface in Lustre.
 Requires: lustre-modules = %{version}
-Requires: modutils >= 2.4.10
+Requires: module-init-tools >= 3.9
 Requires: ldiskfsprogs >= 1.42.7.wc1
 Provides: lustre-osd
 Obsoletes: lustre-ldiskfs
