@@ -666,8 +666,9 @@ restart:
 			/*
 			 * Normally called under two situations:
 			 * 1. NFS export.
-			 * 2. revalidate with IT_OPEN (revalidate doesn't
-			 *    execute this intent any more).
+			 * 2. A race/condition on MDS resulting in no open
+			 *    handle to be returned from LOOKUP|OPEN request,
+			 *    for example if the target entry was a symlink.
 			 *
 			 * Always fetch MDS_OPEN_LOCK if this is not setstripe.
 			 *
