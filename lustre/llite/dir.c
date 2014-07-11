@@ -136,7 +136,7 @@
  * After client receives reply, several pages will be integrated into dir page
  * in PAGE_CACHE_SIZE (if PAGE_CACHE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted. See
- * lmv_adjust_dirpages().
+ * mdc_adjust_dirpages().
  *
  */
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
